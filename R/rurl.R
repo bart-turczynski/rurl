@@ -67,9 +67,18 @@ get_parse_status <- function(url, protocol_handling = "keep") {
     if (is.null(parsed)) return("error")
 
     scheme <- tolower(parsed$scheme %||% "")
+
+    host <- parsed$host %||% ""
+
     if (!is.na(scheme) && scheme %in% c("ftp", "ftps")) return("ok-ftp")
-    if (!is.na(scheme) && scheme %in% c("http", "https")) return("ok")
-    "error"
+
+    if (!is.na(scheme) && scheme %in% c("http", "https")) {
+      if (!grepl("\\.", host)) return("warning-no-tld")
+      return("ok")
+    }
+
+    return("error")
+
   }, character(1))
 }
 

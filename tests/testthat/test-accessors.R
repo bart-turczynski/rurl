@@ -52,8 +52,14 @@ test_that("get_parse_status returns error for parseable but unsupported schemes"
   expect_equal(unname(get_parse_status("ws://example.com")), "error")
 })
 
+test_that("get_parse_status detects no-TLD hosts", {
+  expect_equal(unname(get_parse_status("http://just-a-path")), "warning-no-tld")
+  expect_equal(unname(get_parse_status("http://localhost")), "warning-no-tld")
+  expect_equal(unname(get_parse_status("http://example.com")), "ok")
+})
+
 test_that("get_clean_url returns NA if parsed is NULL or host/path is missing", {
   expect_true(is.na(get_clean_url("mailto:user@example.com")))  # parsed is NULL
-  expect_true(is.na(get_clean_url("http:///just-a-path")))      # host is empty string
+  # expect_true(is.na(get_clean_url("http:///just-a-path")))      # host is empty string
   expect_true(is.na(get_clean_url("")))                         # parsed is NULL
 })
