@@ -2,10 +2,10 @@
 % Please edit documentation in R/rurl.R
 \name{get_domain}
 \alias{get_domain}
-\title{Get the domain (e.g., example.co.uk)}
+\title{Get domain names}
 \usage{
 get_domain(url, protocol_handling = "keep")
 }
 \description{
-Get the domain (e.g., example.co.uk)
+Get domain names
 }
