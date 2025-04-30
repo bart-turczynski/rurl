@@ -1,7 +1,7 @@
 Package: rurl
 Type: Package
 Title: Lightweight URL Parsing and Cleaning Tools
-Version: 0.1.1
+Version: 0.1.2
 Authors@R: 
     person("Bart", "Turczynski", email = "bartek+rurl@turczynski.pl", role = c("aut", "cre"))
 Description: A lightweight toolkit for extracting structured information from URLs.
