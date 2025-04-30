@@ -74,3 +74,10 @@ test_that("get_scheme returns NA when parsing fails", {
   expect_true(is.na(get_scheme("mailto:user@example.com")))
   expect_true(is.na(get_scheme("not a url")))
 })
+
+test_that("get_host extracts host or returns NA", {
+  expect_equal(unname(get_host("http://example.com/path")), "example.com")
+  expect_equal(unname(get_host("https://sub.domain.org/")), "sub.domain.org")
+  expect_true(is.na(get_host("mailto:user@example.com")))
+  expect_true(is.na(get_host("not a url")))
+})
