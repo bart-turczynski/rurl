@@ -10,11 +10,8 @@ It includes helpers to:
 ## Installation
 
 ```r
-# Install from GitHub (if private, use your GitHub PAT)
-# devtools::install_github("yourusername/rurl")
-
-# If local
-devtools::install("path/to/rurl")
+# Install from GitHub
+# devtools::install_github("bart-turczynski/rurl")
 ```
 
 ## Example
