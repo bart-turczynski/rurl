@@ -2,10 +2,10 @@
 % Please edit documentation in R/rurl.R
 \name{get_path}
 \alias{get_path}
-\title{Get the path of the URL}
+\title{Get URL paths}
 \usage{
 get_path(url, protocol_handling = "keep")
 }
 \description{
-Get the path of the URL
+Get URL paths
 }

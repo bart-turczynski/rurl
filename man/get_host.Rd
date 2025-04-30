@@ -2,10 +2,10 @@
 % Please edit documentation in R/rurl.R
 \name{get_host}
 \alias{get_host}
-\title{Get the host of the URL}
+\title{Get URL hosts}
 \usage{
 get_host(url, protocol_handling = "keep")
 }
 \description{
-Get the host of the URL
+Get URL hosts
 }
