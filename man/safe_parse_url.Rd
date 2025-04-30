@@ -10,7 +10,7 @@ safe_parse_url(
 )
 }
 \arguments{
-\item{url}{A character string}
+\item{url}{A character vector}
 
 \item{protocol_handling}{One of "keep", "none", "strip", "http", or "https"}
 }
