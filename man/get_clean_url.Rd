@@ -2,10 +2,10 @@
 % Please edit documentation in R/rurl.R
 \name{get_clean_url}
 \alias{get_clean_url}
-\title{Get the cleaned URL (scheme://host/path)}
+\title{Get cleaned URLs}
 \usage{
 get_clean_url(url, protocol_handling = "keep")
 }
 \description{
-Get the cleaned URL (scheme://host/path)
+Get cleaned URLs
 }
