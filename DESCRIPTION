@@ -6,7 +6,7 @@ Authors@R:
     person("Bart", "Turczynski", email = "bartek+rurl@turczynski.pl", role = c("aut", "cre"))
 Description: A lightweight toolkit for extracting structured information from URLs.
     Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs.
-License: MIT
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
