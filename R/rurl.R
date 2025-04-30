@@ -1,10 +1,9 @@
-
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
 
 #' Parse a URL safely with scheme handling
 #'
-#' @param url A character string
+#' @param url A character vector
 #' @param protocol_handling One of "keep", "none", "strip", "http", or "https"
 #' @return A named list or NULL on error
 #' @keywords internal
@@ -15,74 +14,88 @@ safe_parse_url <- function(url, protocol_handling = c("keep", "none", "strip", "
   has_protocol <- grepl("^https?://", url, ignore.case = TRUE)
 
   parse_url <- switch(protocol_handling,
-    keep  = if (!has_protocol) paste0("http://", url) else url,
-    none  = if (!has_protocol) paste0("http://", url) else url,
-    strip = paste0("http://", sub("^https?://", "", url, ignore.case = TRUE)),
-    http  = paste0("http://", sub("^https?://", "", url, ignore.case = TRUE)),
-    https = paste0("https://", sub("^https?://", "", url, ignore.case = TRUE))
+                      keep  = if (!has_protocol) paste0("http://", url) else url,
+                      none  = if (!has_protocol) paste0("http://", url) else url,
+                      strip = paste0("http://", sub("^https?://", "", url, ignore.case = TRUE)),
+                      http  = paste0("http://", sub("^https?://", "", url, ignore.case = TRUE)),
+                      https = paste0("https://", sub("^https?://", "", url, ignore.case = TRUE))
   )
 
   result <- tryCatch(curl::curl_parse_url(parse_url), error = function(e) NULL)
   if (is.null(result)) return(NULL)
 
   result$scheme <- switch(protocol_handling,
-    none  = if (!has_protocol) NA_character_ else result$scheme,
-    strip = NA_character_,
-    http  = "http",
-    https = "https",
-    keep  = result$scheme
+                          none  = if (!has_protocol) NA_character_ else result$scheme,
+                          strip = NA_character_,
+                          http  = "http",
+                          https = "https",
+                          keep  = result$scheme
   )
 
   result
 }
 
-#' Get the parse status of a URL
+# Vectorized accessors
+
+#' Get parse status for URLs
 #' @export
 get_parse_status <- function(url, protocol_handling = "keep") {
-  parsed <- safe_parse_url(url, protocol_handling)
-  if (is.null(parsed)) "error" else "ok"
+  vapply(url, function(u) {
+    parsed <- safe_parse_url(u, protocol_handling)
+    if (is.null(parsed)) "error" else "ok"
+  }, character(1))
 }
 
-#' Get the cleaned URL (scheme://host/path)
+#' Get cleaned URLs
 #' @export
 get_clean_url <- function(url, protocol_handling = "keep") {
-  parsed <- safe_parse_url(url, protocol_handling)
-  if (is.null(parsed) || is.null(parsed$host) || is.null(parsed$path)) return(NA_character_)
-  if (!is.null(parsed$scheme)) {
-    paste0(parsed$scheme, "://", parsed$host, parsed$path)
-  } else {
-    paste0(parsed$host, parsed$path)
-  }
+  vapply(url, function(u) {
+    parsed <- safe_parse_url(u, protocol_handling)
+    if (is.null(parsed) || is.null(parsed$host) || is.null(parsed$path)) return(NA_character_)
+    if (!is.null(parsed$scheme)) {
+      paste0(parsed$scheme, "://", parsed$host, parsed$path)
+    } else {
+      paste0(parsed$host, parsed$path)
+    }
+  }, character(1))
 }
 
-#' Get the domain (e.g., example.co.uk)
+#' Get domain names
 #' @export
 get_domain <- function(url, protocol_handling = "keep") {
-  parsed <- safe_parse_url(url, protocol_handling)
-  if (is.null(parsed) || is.null(parsed$host)) return(NA_character_)
-  psl::apex_domain(parsed$host)
+  vapply(url, function(u) {
+    parsed <- safe_parse_url(u, protocol_handling)
+    if (is.null(parsed) || is.null(parsed$host)) return(NA_character_)
+    psl::apex_domain(parsed$host)
+  }, character(1))
 }
 
-#' Get the scheme of the URL
+#' Get URL schemes
 #' @export
 get_scheme <- function(url, protocol_handling = "keep") {
-  parsed <- safe_parse_url(url, protocol_handling)
-  if (is.null(parsed)) return(NA_character_)
-  parsed$scheme %||% NA_character_
+  vapply(url, function(u) {
+    parsed <- safe_parse_url(u, protocol_handling)
+    if (is.null(parsed)) return(NA_character_)
+    parsed$scheme %||% NA_character_
+  }, character(1))
 }
 
-#' Get the host of the URL
+#' Get URL hosts
 #' @export
 get_host <- function(url, protocol_handling = "keep") {
-  parsed <- safe_parse_url(url, protocol_handling)
-  if (is.null(parsed)) return(NA_character_)
-  parsed$host %||% NA_character_
+  vapply(url, function(u) {
+    parsed <- safe_parse_url(u, protocol_handling)
+    if (is.null(parsed)) return(NA_character_)
+    parsed$host %||% NA_character_
+  }, character(1))
 }
 
-#' Get the path of the URL
+#' Get URL paths
 #' @export
 get_path <- function(url, protocol_handling = "keep") {
-  parsed <- safe_parse_url(url, protocol_handling)
-  if (is.null(parsed)) return(NA_character_)
-  parsed$path %||% NA_character_
+  vapply(url, function(u) {
+    parsed <- safe_parse_url(u, protocol_handling)
+    if (is.null(parsed)) return(NA_character_)
+    parsed$path %||% NA_character_
+  }, character(1))
 }

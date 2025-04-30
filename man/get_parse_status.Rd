@@ -2,10 +2,10 @@
 % Please edit documentation in R/rurl.R
 \name{get_parse_status}
 \alias{get_parse_status}
-\title{Get the parse status of a URL}
+\title{Get parse status for URLs}
 \usage{
 get_parse_status(url, protocol_handling = "keep")
 }
 \description{
-Get the parse status of a URL
+Get parse status for URLs
 }

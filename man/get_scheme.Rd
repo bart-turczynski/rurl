@@ -2,10 +2,10 @@
 % Please edit documentation in R/rurl.R
 \name{get_scheme}
 \alias{get_scheme}
-\title{Get the scheme of the URL}
+\title{Get URL schemes}
 \usage{
 get_scheme(url, protocol_handling = "keep")
 }
 \description{
-Get the scheme of the URL
+Get URL schemes
 }
