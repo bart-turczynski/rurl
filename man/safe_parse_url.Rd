@@ -10,39 +10,25 @@ safe_parse_url(
 )
 }
 \arguments{
-\item{url}{A character string (scalar)}
+\item{url}{A character vector containing one or more URLs to be parsed.}
 
-\item{protocol_handling}{One of "keep", "none", "strip", "http", or "https"}
+\item{protocol_handling}{One of "keep", "none", "strip", "http", or "https".
+\itemize{
+\item "keep" preserves the existing protocol if it exists.
+\item "none" does not add any protocol.
+\item "strip" removes any existing protocol.
+\item "http" and "https" will add these protocols if none exist.
+}}
 }
 \value{
-A named list or NULL on error
-
-A named list or NULL
+A named list with components such as \code{scheme}, \code{host}, \code{path}, or \code{NULL} if parsing fails.
 }
 \description{
-Parse a URL safely with scheme handling
+This function parses a URL safely, handling different protocols such as http(s), ftp, and ftps.
+If no scheme is present, it assumes "http://". Other schemes will return NULL.
 }
-\keyword{Accepts}
-\keyword{All}
-\keyword{If}
-\keyword{NULL.}
-\keyword{Parse}
-\keyword{URL}
-\keyword{a}
-\keyword{assumes}
-\keyword{ftp,}
-\keyword{ftps.}
-\keyword{handling}
-\keyword{http(s),}
-\keyword{http://}
+\examples{
+safe_parse_url("http://example.com", "http")
+safe_parse_url("example.com", "keep")
+}
 \keyword{internal}
-\keyword{is}
-\keyword{no}
-\keyword{only}
-\keyword{other}
-\keyword{present,}
-\keyword{return}
-\keyword{safely}
-\keyword{scheme}
-\keyword{schemes}
-\keyword{with}

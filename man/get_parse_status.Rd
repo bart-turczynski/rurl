@@ -6,11 +6,21 @@
 \usage{
 get_parse_status(url, protocol_handling = "keep")
 }
-\description{
-Returns:
-\itemize{
-\item "ok" for http(s)
-\item "ok-ftp" for ftp
-\item "error" for anything else (mailto, file, missing, etc.)
+\arguments{
+\item{url}{A character vector of URLs to be parsed.}
 }
+\value{
+A character vector with the parse status of each URL:
+\itemize{
+\item "ok" for http(s) URLs.
+\item "ok-ftp" for ftp and ftps URLs.
+\item "error" for unsupported schemes (mailto, file, etc.) or invalid URLs.
+}
+}
+\description{
+Get the parse status of URLs
+}
+\examples{
+get_parse_status(c("http://example.com", "ftp://example.com", "mailto:user@example.com"))
+get_parse_status(c("http://example.com", "not-a-url"))
 }

@@ -6,6 +6,44 @@
 \usage{
 get_domain(url, protocol_handling = "keep")
 }
+\arguments{
+\item{url}{A character vector containing URLs from which to extract the domain.}
+
+\item{protocol_handling}{A character string specifying how to handle protocols.
+Can be one of "keep", "none", "strip", "http", "https".
+The protocol is preserved if it exists, and "http://" is
+added if missing. If "none", no protocol is added. If
+"http://" or "https://" the given protocol is added
+or changed to the one indicated.}
+}
+\value{
+A character vector with domain names extracted from the given URLs.
+}
 \description{
-Get domain names
+This function extracts the domain name from a given URL. It returns only the
+domain part of the URL (e.g., "example.com" from "http://example.com").
+#' Note the domain is determined based on Public Suffix List at
+https://publicsuffix.org/list/public_suffix_list.dat Which may not give intuitive results
+sometimes. For example, blogpost.com is treated as a TLD but wordpress.org is not.
+}
+\details{
+For example:
+
+get_domain("https://test.wordpress.org")
+https://test.wordpress.org
+"wordpress.org"
+
+But:
+
+get_domain("https://test.blogspot.com")
+https://test.blogspot.com
+"test.blogspot.com"
+
+Deciding what is a "proper" domain name is an ambitious yet futile task.
+I gave up and decided to use something that already exists and is respected.
+}
+\examples{
+get_domain("http://example.com/path")
+get_domain("https://sub.domain.org/")
+get_domain("ftp://ftp.example.com")
 }
