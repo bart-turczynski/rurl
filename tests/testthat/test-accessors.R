@@ -41,3 +41,14 @@ test_that("get_parse_status rejects unsupported or malformed schemes", {
   expect_equal(unname(get_parse_status("data:text/plain,hello")), "error")
   expect_equal(unname(get_parse_status("htp://fake.com")), "error")      # Misspelled http
 })
+
+test_that("safe_parse_url returns NULL for NA, non-character, or empty input", {
+  expect_null(safe_parse_url(NA_character_))
+  expect_null(safe_parse_url(""))
+  expect_null(safe_parse_url(12345))
+})
+
+test_that("get_parse_status returns error for parseable but unsupported schemes", {
+  expect_equal(unname(get_parse_status("ws://example.com")), "error")
+})
+
