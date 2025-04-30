@@ -101,7 +101,9 @@ get_clean_url <- function(url, protocol_handling = "keep") {
     } else {
       # Defensive fallback: scheme is NULL but host/path exist.
       # curl::curl_parse_url() rarely produces this; may be unreachable.
+      # nocov start
       paste0(parsed$host, parsed$path)
+      # nocov end
     }
   }, character(1))
 }
