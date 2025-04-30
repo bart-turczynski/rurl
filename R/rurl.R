@@ -78,7 +78,15 @@ get_parse_status <- function(url, protocol_handling = "keep") {
 get_clean_url <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u, protocol_handling)
-    if (is.null(parsed) || is.null(parsed$host) || is.null(parsed$path)) return(NA_character_)
+    # NOTE: This block is unreachable in practice due to curl_parse_url always
+    # returning valid host/path on successful parse. Kept for safety.
+    if (
+      is.null(parsed) ||
+      is.null(parsed$host) || parsed$host == "" ||
+      is.null(parsed$path) || parsed$path == ""
+    ) {
+      return(NA_character_)
+    }
     if (!is.null(parsed$scheme)) {
       paste0(parsed$scheme, "://", parsed$host, parsed$path)
     } else {
