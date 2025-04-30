@@ -1,0 +1,17 @@
+Package: rurl
+Type: Package
+Title: Lightweight URL Parsing and Cleaning Tools
+Version: 0.0.1
+Authors@R: 
+    person("Bart", "Turczynski", email = "bartek+rurl@turczynski.pl", role = c("aut", "cre"))
+Description: A lightweight toolkit for extracting structured information from URLs.
+    Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs.
+License: MIT
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    curl,
+    psl,
+    stringr
