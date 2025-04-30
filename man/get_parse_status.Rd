@@ -2,10 +2,15 @@
 % Please edit documentation in R/rurl.R
 \name{get_parse_status}
 \alias{get_parse_status}
-\title{Get parse status for URLs}
+\title{Get the parse status of URLs}
 \usage{
 get_parse_status(url, protocol_handling = "keep")
 }
 \description{
-Get parse status for URLs
+Returns:
+\itemize{
+\item "ok" for http(s)
+\item "ok-ftp" for ftp
+\item "error" for anything else (mailto, file, missing, etc.)
+}
 }

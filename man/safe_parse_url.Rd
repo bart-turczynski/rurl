@@ -10,14 +10,39 @@ safe_parse_url(
 )
 }
 \arguments{
-\item{url}{A character vector}
+\item{url}{A character string (scalar)}
 
 \item{protocol_handling}{One of "keep", "none", "strip", "http", or "https"}
 }
 \value{
 A named list or NULL on error
+
+A named list or NULL
 }
 \description{
 Parse a URL safely with scheme handling
 }
+\keyword{Accepts}
+\keyword{All}
+\keyword{If}
+\keyword{NULL.}
+\keyword{Parse}
+\keyword{URL}
+\keyword{a}
+\keyword{assumes}
+\keyword{ftp,}
+\keyword{ftps.}
+\keyword{handling}
+\keyword{http(s),}
+\keyword{http://}
 \keyword{internal}
+\keyword{is}
+\keyword{no}
+\keyword{only}
+\keyword{other}
+\keyword{present,}
+\keyword{return}
+\keyword{safely}
+\keyword{scheme}
+\keyword{schemes}
+\keyword{with}
