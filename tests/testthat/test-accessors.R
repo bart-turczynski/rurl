@@ -63,3 +63,14 @@ test_that("get_clean_url returns NA if parsed is NULL or host/path is missing", 
   # expect_true(is.na(get_clean_url("http:///just-a-path")))      # host is empty string
   expect_true(is.na(get_clean_url("")))                         # parsed is NULL
 })
+
+test_that("get_domain returns NA when parsed or host is missing", {
+  expect_true(is.na(get_domain("mailto:user@example.com")))
+  expect_true(is.na(get_domain("http:///nohost")))
+  expect_true(is.na(get_domain("not a url")))
+})
+
+test_that("get_scheme returns NA when parsing fails", {
+  expect_true(is.na(get_scheme("mailto:user@example.com")))
+  expect_true(is.na(get_scheme("not a url")))
+})
