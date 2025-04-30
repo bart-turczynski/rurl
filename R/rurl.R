@@ -97,6 +97,8 @@ get_clean_url <- function(url, protocol_handling = "keep") {
     if (!is.null(parsed$scheme)) {
       paste0(parsed$scheme, "://", parsed$host, parsed$path)
     } else {
+      # Defensive fallback: scheme is NULL but host/path exist.
+      # curl::curl_parse_url() rarely produces this; may be unreachable.
       paste0(parsed$host, parsed$path)
     }
   }, character(1))
