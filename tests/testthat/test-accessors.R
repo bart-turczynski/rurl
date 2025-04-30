@@ -81,3 +81,10 @@ test_that("get_host extracts host or returns NA", {
   expect_true(is.na(get_host("mailto:user@example.com")))
   expect_true(is.na(get_host("not a url")))
 })
+
+test_that("get_path extracts path or returns NA", {
+  expect_equal(unname(get_path("http://example.com/test")), "/test")
+  expect_equal(unname(get_path("https://x.org/hello/world")), "/hello/world")
+  expect_true(is.na(get_path("mailto:user@example.com")))
+  expect_true(is.na(get_path("not a url")))
+})
