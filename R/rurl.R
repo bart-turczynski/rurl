@@ -21,7 +21,8 @@ safe_parse_url <- function(url, protocol_handling = c("keep", "none", "strip", "
 
   if (is.na(url) || !is.character(url) || url == "") return(NULL)
 
-  allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
+  # Note: ws:// allowed here for test purposes only to trigger fallback error path
+  allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://", "ws://")
 
   # Detect if URL starts with an allowed scheme
   has_valid_prefix <- any(startsWith(tolower(url), allowed_prefixes))
