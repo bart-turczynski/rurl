@@ -15,3 +15,5 @@ Imports:
     curl,
     psl,
     stringr
+URL: https://github.com/bart-turczynski/rurl
+BugReports: https://github.com/bart-turczynski/rurl/issues
