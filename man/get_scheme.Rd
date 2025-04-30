@@ -6,14 +6,6 @@
 \usage{
 get_scheme(url, protocol_handling = "keep")
 }
-\arguments{
-\item{url}{URL string}
-
-\item{protocol_handling}{Protocol handling mode}
-}
-\value{
-Scheme or NA
-}
 \description{
 Get the scheme of the URL
 }

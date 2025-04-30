@@ -6,14 +6,6 @@
 \usage{
 get_host(url, protocol_handling = "keep")
 }
-\arguments{
-\item{url}{URL string}
-
-\item{protocol_handling}{Protocol handling mode}
-}
-\value{
-Host or NA
-}
 \description{
 Get the host of the URL
 }
