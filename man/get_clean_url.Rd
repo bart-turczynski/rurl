@@ -6,14 +6,6 @@
 \usage{
 get_clean_url(url, protocol_handling = "keep")
 }
-\arguments{
-\item{url}{URL string}
-
-\item{protocol_handling}{Protocol handling mode}
-}
-\value{
-A cleaned URL or NA
-}
 \description{
 Get the cleaned URL (scheme://host/path)
 }

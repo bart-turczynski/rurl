@@ -6,14 +6,6 @@
 \usage{
 get_parse_status(url, protocol_handling = "keep")
 }
-\arguments{
-\item{url}{URL string}
-
-\item{protocol_handling}{Protocol handling mode}
-}
-\value{
-"ok" or "error"
-}
 \description{
 Get the parse status of a URL
 }

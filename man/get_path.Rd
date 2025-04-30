@@ -6,14 +6,6 @@
 \usage{
 get_path(url, protocol_handling = "keep")
 }
-\arguments{
-\item{url}{URL string}
-
-\item{protocol_handling}{Protocol handling mode}
-}
-\value{
-Path or NA
-}
 \description{
 Get the path of the URL
 }

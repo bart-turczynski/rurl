@@ -6,14 +6,6 @@
 \usage{
 get_domain(url, protocol_handling = "keep")
 }
-\arguments{
-\item{url}{URL string}
-
-\item{protocol_handling}{Protocol handling mode}
-}
-\value{
-Apex domain or NA
-}
 \description{
 Get the domain (e.g., example.co.uk)
 }
