@@ -1,3 +1,5 @@
+# rurl 0.1.1
+
 # rurl 0.1.0
 
 - All `get_*()` functions are now vectorized and work on character vectors.
