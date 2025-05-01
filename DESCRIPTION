@@ -19,7 +19,8 @@ Imports:
 URL: https://github.com/bart-turczynski/rurl, https://publicsuffix.org
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    mockery
 Config/testthat/edition: 3
 Depends: 
     R (>= 3.5)
