@@ -1,8 +1,21 @@
-# rurl 0.2.0
+## rurl 0.2.0
 
-# rurl 0.1.3
+This release adds robust support for internationalized domain names (IDNs),
+improves punycode handling, and ensures accurate extraction of TLDs and
+registered domains.
 
-## Improvements
+### ✅ Highlights
+- Accurate TLD extraction for both ASCII and Unicode domains
+- Graceful fallback when `urltools` is unavailable
+- NFC normalization with `stringi`
+- 100% test coverage with edge cases and punycode validation
+- Improved internal helpers and clearer test diagnostics
+
+🧪 Passes all tests: 103/103
+
+3# rurl 0.1.3
+
+### Improvements
 
 - Removed the dependency on the `psl` package.
 - Implemented an internal registered domain extraction using the Public Suffix List.
@@ -13,14 +26,14 @@
 - Tested on macOS, Windows, and Linux via rhub and win-builder.  
 - CRAN checks pass with 0 errors/warnings and only standard notes.
 
-## Documentation
+### Documentation
 
 - README updated to reflect the use of the PSL and internal domain logic.
 - LICENSE and attribution clarified for MIT + Mozilla Public Suffix List.
 
-# rurl 0.1.2
+## rurl 0.1.2
 
-## Stabilization & Coverage
+### Stabilization & Coverage
 
 - Achieved **100% test coverage**.
 - Added examples to all exported functions.
@@ -28,9 +41,7 @@
 - Cleaned up `NAMESPACE` and removed unnecessary functions like `hello()`.
 - Refined URL parsing logic and improved output consistency.
 
-# rurl 0.1.1
-
-# rurl 0.1.0
+## rurl 0.1.0
 
 - All `get_*()` functions are now vectorized and work on character vectors.
 - Deprecated scalar-only behavior.
