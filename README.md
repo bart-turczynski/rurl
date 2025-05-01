@@ -35,12 +35,13 @@ get_scheme("example.com", protocol_handling = "none")
 
 This package includes a processed copy of the [Public Suffix List
 (PSL)](https://publicsuffix.org/), used to extract top-level domains.  
-It is updated manually via data-raw/update_psl.R. The original list is
+It is updated manually via `data-raw/update_psl.R`. The original list is
 maintained by Mozilla and hosted at:
 <https://publicsuffix.org/list/public_suffix_list.dat> The data is
 included in accordance with the [Mozilla Public License
 2.0](https://github.com/publicsuffix/list/blob/main/LICENSE) and is
-never downloaded at runtime. See inst/LICENSE.psl for full license text.
+never downloaded at runtime. See `inst/LICENSE.psl` for full license
+text.
 
 ## License
 
