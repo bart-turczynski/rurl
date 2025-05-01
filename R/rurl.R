@@ -4,25 +4,28 @@
 #' Parse a URL safely with scheme handling
 #'
 #' @param url A character vector containing one or more URLs to be parsed.
-#' @param protocol_handling A character string specifying how to handle protocols.
-#'                          Can be one of "keep", "none", "strip", "http", "https".
-#'                          The protocol is preserved if it exists, and "http://" is
-#'                          added if missing. If "none", no protocol is added. If
-#'                          "http://" or "https://" the given protocol is added
-#'                          or changed to the one indicated.
-#' @return A named list with components such as `scheme`, `host`, `path`, or `NULL` if parsing fails.
+#' @param protocol_handling A character string specifying how to handle
+#'   protocols. Can be one of "keep", "none", "strip", "http", "https". The
+#'   protocol is preserved if it exists, and "http://" is added if missing. If
+#'   "none", no protocol is added. If "http://" or "https://" the given protocol
+#'   is added or changed to the one indicated.
+#' @return A named list with components such as `scheme`, `host`, `path`, or `NULL`
+#'                          if parsing fails.
 #' @keywords internal
 #' @description
-#' This function parses a URL safely, handling different protocols such as http(s), ftp, and ftps.
-#' If no scheme is present, it assumes "http://". Other schemes will return NULL.
+#' This function parses a URL safely, handling different protocols such as
+#' http(s), ftp, and ftps. If no scheme is present, it assumes "http://". Other
+#' schemes will return NULL.
 #' @export
 #' @examples
 #' safe_parse_url("http://example.com", "http")
 #' safe_parse_url("example.com", "keep")
-safe_parse_url <- function(url, protocol_handling = c("keep", "none", "strip", "http", "https")) {
+safe_parse_url <- function(url,
+                           protocol_handling = c("keep", "none", "strip", "http", "https")) {
   protocol_handling <- match.arg(protocol_handling)
 
-  if (is.na(url) || !is.character(url) || url == "") return(NULL)
+  if (is.na(url) || !is.character(url) || url == "")
+    return(NULL)
 
   # Note: ws:// allowed here for test purposes only to trigger fallback error path
   allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://", "ws://")
@@ -34,7 +37,8 @@ safe_parse_url <- function(url, protocol_handling = c("keep", "none", "strip", "
   looks_like_protocol <- grepl("^[a-zA-Z][a-zA-Z0-9+.-]*:", url)
 
   # ❌ Reject if a scheme exists but it's not in our whitelist
-  if (looks_like_protocol && !has_valid_prefix) return(NULL)
+  if (looks_like_protocol && !has_valid_prefix)
+    return(NULL)
 
   # ✅ Only prepend http:// if no scheme at all
   if (!looks_like_protocol) {
@@ -42,14 +46,20 @@ safe_parse_url <- function(url, protocol_handling = c("keep", "none", "strip", "
   }
 
   result <- tryCatch(curl::curl_parse_url(url), error = function(e) NULL)
-  if (is.null(result)) return(NULL)
 
-  result$scheme <- switch(protocol_handling,
-                          none  = if (!has_valid_prefix) NA_character_ else result$scheme,
-                          strip = NA_character_,
-                          http  = "http",
-                          https = "https",
-                          keep  = result$scheme
+  if (is.null(result))
+    return(NULL)
+
+  result$scheme <- switch(
+    protocol_handling,
+    none  = if (!has_valid_prefix)
+      NA_character_
+    else
+      result$scheme,
+    strip = NA_character_,
+    http  = "http",
+    https = "https",
+    keep  = result$scheme
   )
 
   result
@@ -75,20 +85,24 @@ safe_parse_url <- function(url, protocol_handling = c("keep", "none", "strip", "
 get_parse_status <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u, protocol_handling)
-    if (is.null(parsed)) return("error")
+    if (is.null(parsed))
+      return("error")
 
     scheme <- tolower(parsed$scheme %||% "")
 
     host <- parsed$host %||% ""
 
-    if (!is.na(scheme) && scheme %in% c("ftp", "ftps")) return("ok-ftp")
+    if (!is.na(scheme) &&
+          scheme %in% c("ftp", "ftps"))
+      return("ok-ftp")
 
     if (!is.na(scheme) && scheme %in% c("http", "https")) {
-      if (!grepl("\\.", host)) return("warning-no-tld")
+      if (!grepl("\\.", host))
+        return("warning-no-tld")
       return("ok")
     }
 
-    return("error")
+    "error"
 
   }, character(1))
 }
@@ -96,7 +110,8 @@ get_parse_status <- function(url, protocol_handling = "keep") {
 #' Get cleaned URLs
 #'
 #' This function returns the cleaned version of the URLs by ensuring that the
-#' URLs are valid and, if necessary, prepends "http://" when the protocol is missing.
+#' URLs are valid and, if necessary, prepends "http://" when the protocol is
+#' missing.
 #'
 #' @param url A character vector containing URLs to be parsed. This can include URLs
 #'            without a scheme (e.g., "example.com") or URLs with a scheme
@@ -119,11 +134,9 @@ get_clean_url <- function(url, protocol_handling = "keep") {
     parsed <- safe_parse_url(u, protocol_handling)
     # NOTE: This block is unreachable in practice due to curl_parse_url always
     # returning valid host/path on successful parse. Kept for safety.
-    if (
-      is.null(parsed) ||
-      is.null(parsed$host) || parsed$host == "" ||
-      is.null(parsed$path) || parsed$path == ""
-    ) {
+    if (is.null(parsed) ||
+          is.null(parsed$host) || parsed$host == "" ||
+          is.null(parsed$path) || parsed$path == "") {
       return(NA_character_)
     }
     if (!is.null(parsed$scheme)) {
@@ -144,12 +157,14 @@ get_clean_url <- function(url, protocol_handling = "keep") {
 .get_registered_domain <- function(hostname) {
   parts <- strsplit(hostname, "\\.")[[1]]
   n <- length(parts)
-  if (n < 2) return(NA_character_)
+  if (n < 2)
+    return(NA_character_)
 
   # Extract rule types from PSL
   exception_rules <- sub("^!", "", grep("^!", psl_clean, value = TRUE))
   wildcard_rules  <- sub("^\\*\\.", "", grep("^\\*\\.", psl_clean, value = TRUE))
-  normal_rules    <- setdiff(psl_clean, c(paste0("!", exception_rules), paste0("*.", wildcard_rules)))
+  normal_rules    <- setdiff(psl_clean, c(paste0("!", exception_rules),
+                                          paste0("*.", wildcard_rules)))
 
   # 1. Exception rules (take precedence)
   for (i in seq_len(n)) {
@@ -176,7 +191,8 @@ get_clean_url <- function(url, protocol_handling = "keep") {
     # Wildcard match: candidate must match a known *.domain suffix
     if (i < n) {
       wildcard_candidate <- paste(parts[i:n], collapse = ".")
-      if (wildcard_candidate %in% wildcard_rules && n - i > best_match_len) {
+      if (wildcard_candidate %in% wildcard_rules &&
+            n - i > best_match_len) {
         best_match_len <- n - i
       }
     }
@@ -186,19 +202,21 @@ get_clean_url <- function(url, protocol_handling = "keep") {
     return(paste(tail(parts, 2), collapse = "."))
   }
 
-  if (n <= best_match_len) return(NA_character_)
+  if (n <= best_match_len)
+    return(NA_character_)
 
   # Return: label before suffix + suffix itself
-  return(paste(parts[(n - best_match_len):n], collapse = "."))
+  paste(parts[(n - best_match_len):n], collapse = ".")
 }
 
 #' Get domain names
 #'
 #' This function extracts the domain name from a given URL. It returns only the
-#' domain part of the URL (e.g., "example.com" from "http://example.com").
-#' #' Note the domain is determined based on Public Suffix List at
-#' https://publicsuffix.org/list/public_suffix_list.dat Which may not give intuitive results
-#' sometimes. For example, blogspot.com is treated as a TLD but wordpress.org is not.
+#' domain part of the URL (e.g., "example.com" from "http://example.com"). #'
+#' Note the domain is determined based on Public Suffix List at
+#' https://publicsuffix.org/list/public_suffix_list.dat Which may not give
+#' intuitive results sometimes. For example, blogspot.com is treated as a TLD
+#' but wordpress.org is not.
 #'
 #' For example:
 #'
@@ -231,7 +249,8 @@ get_clean_url <- function(url, protocol_handling = "keep") {
 get_domain <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u, protocol_handling)
-    if (is.null(parsed) || is.null(parsed$host)) return(NA_character_)
+    if (is.null(parsed) || is.null(parsed$host))
+      return(NA_character_)
     .get_registered_domain(parsed$host)
   }, character(1))
 }
@@ -248,7 +267,7 @@ get_domain <- function(url, protocol_handling = "keep") {
 #'                          added if missing. If "none", no protocol is added. If
 #'                          "http://" or "https://" the given protocol is added
 #'                          or changed to the one indicated.
-#' @return A character vector with the scheme (e.g., "http", "https", "ftp") of each URL.
+#' @return A character vector with the scheme (e.g., "http") of each URL.
 #' @export
 #' @examples
 #' get_scheme("http://example.com")
@@ -257,7 +276,8 @@ get_domain <- function(url, protocol_handling = "keep") {
 get_scheme <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u, protocol_handling)
-    if (is.null(parsed)) return(NA_character_)
+    if (is.null(parsed))
+      return(NA_character_)
     parsed$scheme %||% NA_character_
   }, character(1))
 }
@@ -275,10 +295,10 @@ get_scheme <- function(url, protocol_handling = "keep") {
 #'                          "http://" or "https://" the given protocol is added
 #'                          or changed to the one indicated.
 #' @return A character vector with the host of each URL.
-#' In layman's terms, the host
-#' being the part of the address "between the protocol and first slash / end
-#' of the string if no slash is present, e.g., test.wordpress.org, www.r-project.org.
-#' Note the host and the domain may be the same thing but for different reasons.
+#' In layman's terms, the host being the part of the address "between the
+#' protocol and first slash / end of the string if no slash is present, e.g.,
+#' test.wordpress.org, www.r-project.org. Note the host and the domain may be
+#' the same thing but for different reasons.
 #' @export
 #' @examples
 #' get_host("http://example.com")
@@ -287,7 +307,8 @@ get_scheme <- function(url, protocol_handling = "keep") {
 get_host <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u, protocol_handling)
-    if (is.null(parsed)) return(NA_character_)
+    if (is.null(parsed))
+      return(NA_character_)
     parsed$host %||% NA_character_
   }, character(1))
 }
@@ -314,7 +335,8 @@ get_host <- function(url, protocol_handling = "keep") {
 get_path <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u, protocol_handling)
-    if (is.null(parsed)) return(NA_character_)
+    if (is.null(parsed))
+      return(NA_character_)
     parsed$path %||% NA_character_
   }, character(1))
 }

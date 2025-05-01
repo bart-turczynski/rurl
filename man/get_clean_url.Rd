@@ -23,7 +23,8 @@ A character vector of cleaned URLs.
 }
 \description{
 This function returns the cleaned version of the URLs by ensuring that the
-URLs are valid and, if necessary, prepends "http://" when the protocol is missing.
+URLs are valid and, if necessary, prepends "http://" when the protocol is
+missing.
 }
 \examples{
 get_clean_url("example.com")
