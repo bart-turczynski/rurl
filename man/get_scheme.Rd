@@ -17,7 +17,7 @@ added if missing. If "none", no protocol is added. If
 or changed to the one indicated.}
 }
 \value{
-A character vector with the scheme (e.g., "http", "https", "ftp") of each URL.
+A character vector with the scheme (e.g., "http") of each URL.
 }
 \description{
 This function extracts the scheme (protocol) of a given URL. It returns the

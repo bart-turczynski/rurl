@@ -18,10 +18,10 @@ or changed to the one indicated.}
 }
 \value{
 A character vector with the host of each URL.
-In layman's terms, the host
-being the part of the address "between the protocol and first slash / end
-of the string if no slash is present, e.g., test.wordpress.org, www.r-project.org.
-Note the host and the domain may be the same thing but for different reasons.
+In layman's terms, the host being the part of the address "between the
+protocol and first slash / end of the string if no slash is present, e.g.,
+test.wordpress.org, www.r-project.org. Note the host and the domain may be
+the same thing but for different reasons.
 }
 \description{
 This function extracts the host (domain) of a given URL. It returns the host

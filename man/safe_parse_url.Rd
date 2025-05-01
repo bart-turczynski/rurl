@@ -12,19 +12,20 @@ safe_parse_url(
 \arguments{
 \item{url}{A character vector containing one or more URLs to be parsed.}
 
-\item{protocol_handling}{A character string specifying how to handle protocols.
-Can be one of "keep", "none", "strip", "http", "https".
-The protocol is preserved if it exists, and "http://" is
-added if missing. If "none", no protocol is added. If
-"http://" or "https://" the given protocol is added
-or changed to the one indicated.}
+\item{protocol_handling}{A character string specifying how to handle
+protocols. Can be one of "keep", "none", "strip", "http", "https". The
+protocol is preserved if it exists, and "http://" is added if missing. If
+"none", no protocol is added. If "http://" or "https://" the given protocol
+is added or changed to the one indicated.}
 }
 \value{
-A named list with components such as \code{scheme}, \code{host}, \code{path}, or \code{NULL} if parsing fails.
+A named list with components such as \code{scheme}, \code{host}, \code{path}, or \code{NULL}
+if parsing fails.
 }
 \description{
-This function parses a URL safely, handling different protocols such as http(s), ftp, and ftps.
-If no scheme is present, it assumes "http://". Other schemes will return NULL.
+This function parses a URL safely, handling different protocols such as
+http(s), ftp, and ftps. If no scheme is present, it assumes "http://". Other
+schemes will return NULL.
 }
 \examples{
 safe_parse_url("http://example.com", "http")
