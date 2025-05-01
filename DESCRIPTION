@@ -1,6 +1,6 @@
 Package: rurl
 Type: Package
-Title: Lightweight URL Parsing and Cleaning Tools
+Title: rurl: Tools to Parse and Clean URLs in R
 Version: 0.1.3
 Language: en-US
 Authors@R: 
