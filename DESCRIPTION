@@ -6,6 +6,8 @@ Authors@R:
     person("Bart", "Turczynski", email = "bartek+rurl@turczynski.pl", role = c("aut", "cre"))
 Description: A lightweight toolkit for extracting structured information from URLs.
     Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs.
+    The package includes a processed copy of the Public Suffix List from
+    https//publicsuffix.org for domain extraction.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
@@ -14,8 +16,10 @@ RoxygenNote: 7.3.2
 Imports:
     curl,
     psl
-URL: https://github.com/bart-turczynski/rurl
+URL: https://github.com/bart-turczynski/rurl https://publicsuffix.org
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+Depends: 
+    R (>= 3.5)
