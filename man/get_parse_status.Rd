@@ -8,6 +8,13 @@ get_parse_status(url, protocol_handling = "keep")
 }
 \arguments{
 \item{url}{A character vector of URLs to be parsed.}
+
+\item{protocol_handling}{A character string specifying how to handle protocols.
+Can be one of "keep", "none", "strip", "http", "https".
+The protocol is preserved if it exists, and "http://" is
+added if missing. If "none", no protocol is added. If
+"http://" or "https://" the given protocol is added
+or changed to the one indicated.}
 }
 \value{
 A character vector with the parse status of each URL:
