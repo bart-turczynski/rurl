@@ -1,0 +1,11 @@
+citHeader("To cite the rurl package in publications, use:")
+
+bibentry(
+  bibtype = "Manual",
+  title = "rurl: Tools to Parse and Clean URLs in R",
+  author = person("Bart", "Turczynski", role = c("aut", "cre"),
+                  email = "bartek+rurl@turczynski.pl"),
+  year = "2025",
+  note = "R package version 0.1.3",
+  url = "https://github.com/bart-turczynski/rurl"
+)
