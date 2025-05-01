@@ -7,6 +7,9 @@
 - Added internal `update_psl.R` script to fetch and process the PSL during development.
 - Improved test coverage to 100%.
 - Cleaned up exports and internal helpers.
+- Updated ignores.
+- Tested on macOS, Windows, and Linux via rhub and win-builder.  
+- CRAN checks pass with 0 errors/warnings and only standard notes.
 
 ## Documentation
 
