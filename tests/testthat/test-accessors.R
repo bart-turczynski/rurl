@@ -36,10 +36,10 @@ test_that("get_parse_status validates allowed schemes only", {
 test_that("get_parse_status rejects unsupported or malformed schemes", {
   expect_equal(unname(get_parse_status("mailto:x@example.com")), "error")
   expect_equal(unname(get_parse_status("file:///home/user/file.txt")), "error")
-  expect_equal(unname(get_parse_status("ftp:example.com")), "error")     # Missing slashes
+  expect_equal(unname(get_parse_status("ftp:example.com")), "error")
   expect_equal(unname(get_parse_status("s3://bucket-name")), "error")
   expect_equal(unname(get_parse_status("data:text/plain,hello")), "error")
-  expect_equal(unname(get_parse_status("htp://fake.com")), "error")      # Misspelled http
+  expect_equal(unname(get_parse_status("htp://fake.com")), "error")
 })
 
 test_that("safe_parse_url returns NULL for NA, non-character, or empty input", {
@@ -59,9 +59,9 @@ test_that("get_parse_status detects no-TLD hosts", {
 })
 
 test_that("get_clean_url returns NA if parsed is NULL or host/path is missing", {
-  expect_true(is.na(get_clean_url("mailto:user@example.com")))  # parsed is NULL
+  expect_true(is.na(get_clean_url("mailto:user@example.com")))
   # expect_true(is.na(get_clean_url("http:///just-a-path")))      # host is empty string
-  expect_true(is.na(get_clean_url("")))                         # parsed is NULL
+  expect_true(is.na(get_clean_url("")))
 })
 
 test_that("get_domain returns NA when parsed or host is missing", {
@@ -95,7 +95,7 @@ test_that(".get_registered_domain handles known cases correctly", {
   expect_equal(.get_registered_domain("sub.dev-builder.code.com"), "dev-builder.code.com")
   expect_equal(.get_registered_domain("city.kawasaki.jp"), "city.kawasaki.jp")
   expect_equal(.get_registered_domain("foo.bar.city.kawasaki.jp"), "city.kawasaki.jp")
-  expect_equal(.get_registered_domain("unknown.tld"), "unknown.tld")  # fallback
+  expect_equal(.get_registered_domain("unknown.tld"), "unknown.tld")
   expect_equal(.get_registered_domain("localhost"), NA_character_)
 })
 

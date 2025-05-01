@@ -28,7 +28,7 @@ safe_parse_url <- function(url,
     return(NULL)
 
   # Note: ws:// allowed here for test purposes only to trigger fallback error path
-  allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://", "ws://")
+  allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
 
   # Detect if URL starts with an allowed scheme
   has_valid_prefix <- any(startsWith(tolower(url), allowed_prefixes))
@@ -212,7 +212,7 @@ get_clean_url <- function(url, protocol_handling = "keep") {
 #' Get domain names
 #'
 #' This function extracts the domain name from a given URL. It returns only the
-#' domain part of the URL (e.g., "example.com" from "http://example.com"). #'
+#' domain part of the URL, e.g., "example.com" from "http://example.com".
 #' Note the domain is determined based on Public Suffix List at
 #' https://publicsuffix.org/list/public_suffix_list.dat Which may not give
 #' intuitive results sometimes. For example, blogspot.com is treated as a TLD
