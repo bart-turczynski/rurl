@@ -1,8 +1,26 @@
-.Rproj.user
+# macOS system files
+.DS_Store
+
+# Quarto project files
+.quarto
+
+# R history and session data
 .Rhistory
 .RData
 .Ruserdata
-.Rdata
+
+# RStudio project files and user settings
+.Rproj.user/
+*.Rproj
+
+# OAuth credentials (e.g., for API access)
 .httr-oauth
-.DS_Store
-.quarto
+
+# Files created by roxygen2 (documentation files)
+man/*.Rd
+
+# Build artifacts created by R CMD check
+*.tar.gz
+
+# R package build ignore file
+.Rbuildignore
