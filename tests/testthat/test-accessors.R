@@ -103,3 +103,9 @@ test_that(".get_registered_domain handles suffix-only domains", {
   expect_true(is.na(.get_registered_domain("com")))
   expect_true(is.na(.get_registered_domain("co.uk")))
 })
+
+test_that("get_parse_status falls through to final error", {
+  mock_parse <- function(...) list(scheme = "gopher", host = "example.com")
+  mockery::stub(get_parse_status, "safe_parse_url", mock_parse)
+  expect_identical(unname(get_parse_status("whatever")), "error")
+})

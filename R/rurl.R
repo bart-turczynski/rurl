@@ -102,7 +102,7 @@ get_parse_status <- function(url, protocol_handling = "keep") {
       return("ok")
     }
 
-    "error"
+    return("error")
 
   }, character(1))
 }
