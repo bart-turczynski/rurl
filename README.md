@@ -1,22 +1,24 @@
+rurl
+================
+
 # rurl
 
-`rurl` is a lightweight R package for parsing and extracting parts of URLs.
+`rurl` is a lightweight R package for parsing and extracting parts of
+URLs.
 
-It includes helpers to:
-- Get cleaned URLs
-- Extract domains, paths, schemes, and hosts
-- Normalize or strip protocols
+It includes helpers to: - Get cleaned URLs - Extract domains, paths,
+schemes, and hosts - Normalize or strip protocols
 
 ## Installation
 
-```r
+``` r
 # Install from GitHub
 # devtools::install_github("bart-turczynski/rurl")
 ```
 
 ## Example
 
-```r
+``` r
 library(rurl)
 
 get_clean_url("example.com/path")
@@ -28,6 +30,18 @@ get_domain("https://sub.example.co.uk/page")
 get_scheme("example.com", protocol_handling = "none")
 #> NA
 ```
+
+## Data Sources
+
+This package includes a processed copy of the [Public Suffix List
+(PSL)](https://publicsuffix.org/), used to extract top-level domains.  
+It is updated manually via data-raw/update_psl.R. The original list is
+maintained by Mozilla and hosted at:
+<https://publicsuffix.org/list/public_suffix_list.dat>
+
+The data is included in accordance with the [PSL
+license](https://github.com/publicsuffix/list/blob/master/LICENSE) and
+is never downloaded at runtime.
 
 ## License
 
