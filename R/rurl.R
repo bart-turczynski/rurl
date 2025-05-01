@@ -138,6 +138,60 @@ get_clean_url <- function(url, protocol_handling = "keep") {
   }, character(1))
 }
 
+# Internal helper to extract the registered domain from a hostname
+# Uses the public suffix list to remove known suffixes and return the main domain.
+#' @importFrom utils tail
+.get_registered_domain <- function(hostname) {
+  parts <- strsplit(hostname, "\\.")[[1]]
+  n <- length(parts)
+  if (n < 2) return(NA_character_)
+
+  # Extract rule types from PSL
+  exception_rules <- sub("^!", "", grep("^!", psl_clean, value = TRUE))
+  wildcard_rules  <- sub("^\\*\\.", "", grep("^\\*\\.", psl_clean, value = TRUE))
+  normal_rules    <- setdiff(psl_clean, c(paste0("!", exception_rules), paste0("*.", wildcard_rules)))
+
+  # 1. Exception rules (take precedence)
+  for (i in seq_len(n)) {
+    candidate <- paste(parts[i:n], collapse = ".")
+    exception_rule <- paste0("!", candidate)
+
+    if (exception_rule %in% psl_clean) {
+      # Exception match: treat the exception domain as *not* a suffix
+      # So return one label above it
+      return(candidate)
+    }
+  }
+
+  # 2. Track best match length
+  best_match_len <- 0
+
+  for (i in seq_len(n)) {
+    candidate <- paste(parts[i:n], collapse = ".")
+
+    if (candidate %in% normal_rules && n - i + 1 > best_match_len) {
+      best_match_len <- n - i + 1
+    }
+
+    # Wildcard match: candidate must match a known *.domain suffix
+    if (i < n) {
+      wildcard_candidate <- paste(parts[i:n], collapse = ".")
+      if (wildcard_candidate %in% wildcard_rules && n - i > best_match_len) {
+        best_match_len <- n - i
+      }
+    }
+  }
+
+  if (best_match_len == 0) {
+    return(paste(tail(parts, 2), collapse = "."))
+  }
+
+  if (n <= best_match_len) return(NA_character_)
+
+  # Return: label before suffix + suffix itself
+  return(paste(parts[(n - best_match_len):n], collapse = "."))
+}
+
 #' Get domain names
 #'
 #' This function extracts the domain name from a given URL. It returns only the
@@ -178,7 +232,7 @@ get_domain <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u, protocol_handling)
     if (is.null(parsed) || is.null(parsed$host)) return(NA_character_)
-    psl::apex_domain(parsed$host)
+    .get_registered_domain(parsed$host)
   }, character(1))
 }
 

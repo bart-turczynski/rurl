@@ -14,8 +14,7 @@ LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Imports:
-    curl,
-    psl
+    curl
 URL: https://github.com/bart-turczynski/rurl https://publicsuffix.org
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 
