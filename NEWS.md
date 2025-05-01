@@ -13,7 +13,7 @@ registered domains.
 
 🧪 Passes all tests: 103/103
 
-3# rurl 0.1.3
+## rurl 0.1.3
 
 ### Improvements
 
