@@ -198,7 +198,7 @@ get_clean_url <- function(url, protocol_handling = "keep") {
 #' domain part of the URL (e.g., "example.com" from "http://example.com").
 #' #' Note the domain is determined based on Public Suffix List at
 #' https://publicsuffix.org/list/public_suffix_list.dat Which may not give intuitive results
-#' sometimes. For example, blogpost.com is treated as a TLD but wordpress.org is not.
+#' sometimes. For example, blogspot.com is treated as a TLD but wordpress.org is not.
 #'
 #' For example:
 #'
