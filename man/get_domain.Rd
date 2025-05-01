@@ -21,7 +21,7 @@ A character vector with domain names extracted from the given URLs.
 }
 \description{
 This function extracts the domain name from a given URL. It returns only the
-domain part of the URL (e.g., "example.com" from "http://example.com"). #'
+domain part of the URL, e.g., "example.com" from "http://example.com".
 Note the domain is determined based on Public Suffix List at
 https://publicsuffix.org/list/public_suffix_list.dat Which may not give
 intuitive results sometimes. For example, blogspot.com is treated as a TLD
