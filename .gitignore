@@ -27,3 +27,4 @@ man/*.Rd
 
 # R package build ignore file
 .Rbuildignore
+*.pdf
