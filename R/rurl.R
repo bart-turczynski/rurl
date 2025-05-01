@@ -4,17 +4,18 @@
 #' Parse a URL safely with scheme handling
 #'
 #' @param url A character vector containing one or more URLs to be parsed.
-#' @param protocol_handling One of "keep", "none", "strip", "http", or "https".
-#'   - "keep" preserves the existing protocol if it exists.
-#'   - "none" does not add any protocol.
-#'   - "strip" removes any existing protocol.
-#'   - "http" and "https" will add these protocols if none exist.
+#' @param protocol_handling A character string specifying how to handle protocols.
+#'                          Can be one of "keep", "none", "strip", "http", "https".
+#'                          The protocol is preserved if it exists, and "http://" is
+#'                          added if missing. If "none", no protocol is added. If
+#'                          "http://" or "https://" the given protocol is added
+#'                          or changed to the one indicated.
 #' @return A named list with components such as `scheme`, `host`, `path`, or `NULL` if parsing fails.
 #' @keywords internal
 #' @description
 #' This function parses a URL safely, handling different protocols such as http(s), ftp, and ftps.
 #' If no scheme is present, it assumes "http://". Other schemes will return NULL.
-#'
+#' @export
 #' @examples
 #' safe_parse_url("http://example.com", "http")
 #' safe_parse_url("example.com", "keep")
@@ -57,6 +58,12 @@ safe_parse_url <- function(url, protocol_handling = c("keep", "none", "strip", "
 #' Get the parse status of URLs
 #'
 #' @param url A character vector of URLs to be parsed.
+#' @param protocol_handling A character string specifying how to handle protocols.
+#'                          Can be one of "keep", "none", "strip", "http", "https".
+#'                          The protocol is preserved if it exists, and "http://" is
+#'                          added if missing. If "none", no protocol is added. If
+#'                          "http://" or "https://" the given protocol is added
+#'                          or changed to the one indicated.
 #' @return A character vector with the parse status of each URL:
 #'   - "ok" for http(s) URLs.
 #'   - "ok-ftp" for ftp and ftps URLs.
@@ -101,6 +108,7 @@ get_parse_status <- function(url, protocol_handling = "keep") {
 #'                          "http://" or "https://" the given protocol is added
 #'                          or changed to the one indicated.
 #' @return A character vector of cleaned URLs.
+#' @export
 #' @examples
 #' get_clean_url("example.com")
 #' get_clean_url("http://example.com")
@@ -161,7 +169,7 @@ get_clean_url <- function(url, protocol_handling = "keep") {
 #'                          "http://" or "https://" the given protocol is added
 #'                          or changed to the one indicated.
 #' @return A character vector with domain names extracted from the given URLs.
-#'
+#' @export
 #' @examples
 #' get_domain("http://example.com/path")
 #' get_domain("https://sub.domain.org/")
@@ -187,6 +195,7 @@ get_domain <- function(url, protocol_handling = "keep") {
 #'                          "http://" or "https://" the given protocol is added
 #'                          or changed to the one indicated.
 #' @return A character vector with the scheme (e.g., "http", "https", "ftp") of each URL.
+#' @export
 #' @examples
 #' get_scheme("http://example.com")
 #' get_scheme("ftp://example.com")
@@ -216,6 +225,7 @@ get_scheme <- function(url, protocol_handling = "keep") {
 #' being the part of the address "between the protocol and first slash / end
 #' of the string if no slash is present, e.g., test.wordpress.org, www.r-project.org.
 #' Note the host and the domain may be the same thing but for different reasons.
+#' @export
 #' @examples
 #' get_host("http://example.com")
 #' get_host("ftp://example.com")
@@ -242,6 +252,7 @@ get_host <- function(url, protocol_handling = "keep") {
 #'                          or changed to the one indicated.
 #' @return A character vector with the path of each URL. If no path exists, it will
 #'         return an empty string.
+#' @export
 #' @examples
 #' get_path("http://example.com/path/to/resource")
 #' get_path("ftp://example.com/another/path")

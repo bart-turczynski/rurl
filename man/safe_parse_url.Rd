@@ -12,13 +12,12 @@ safe_parse_url(
 \arguments{
 \item{url}{A character vector containing one or more URLs to be parsed.}
 
-\item{protocol_handling}{One of "keep", "none", "strip", "http", or "https".
-\itemize{
-\item "keep" preserves the existing protocol if it exists.
-\item "none" does not add any protocol.
-\item "strip" removes any existing protocol.
-\item "http" and "https" will add these protocols if none exist.
-}}
+\item{protocol_handling}{A character string specifying how to handle protocols.
+Can be one of "keep", "none", "strip", "http", "https".
+The protocol is preserved if it exists, and "http://" is
+added if missing. If "none", no protocol is added. If
+"http://" or "https://" the given protocol is added
+or changed to the one indicated.}
 }
 \value{
 A named list with components such as \code{scheme}, \code{host}, \code{path}, or \code{NULL} if parsing fails.
