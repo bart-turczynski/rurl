@@ -33,4 +33,4 @@ man/*.Rd
 revdep/
 
 # Github
-.github/
+# .github/
