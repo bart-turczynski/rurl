@@ -88,3 +88,18 @@ test_that("get_path extracts path or returns NA", {
   expect_true(is.na(get_path("mailto:user@example.com")))
   expect_true(is.na(get_path("not a url")))
 })
+
+test_that(".get_registered_domain handles known cases correctly", {
+  expect_equal(.get_registered_domain("example.com"), "example.com")
+  expect_equal(.get_registered_domain("sub.example.co.uk"), "example.co.uk")
+  expect_equal(.get_registered_domain("sub.dev-builder.code.com"), "dev-builder.code.com")
+  expect_equal(.get_registered_domain("city.kawasaki.jp"), "city.kawasaki.jp")
+  expect_equal(.get_registered_domain("foo.bar.city.kawasaki.jp"), "city.kawasaki.jp")
+  expect_equal(.get_registered_domain("unknown.tld"), "unknown.tld")  # fallback
+  expect_equal(.get_registered_domain("localhost"), NA_character_)
+})
+
+test_that(".get_registered_domain handles suffix-only domains", {
+  expect_true(is.na(.get_registered_domain("com")))
+  expect_true(is.na(.get_registered_domain("co.uk")))
+})
