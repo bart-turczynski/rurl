@@ -43,6 +43,16 @@ included in accordance with the [Mozilla Public License
 never downloaded at runtime. See `inst/LICENSE.psl` for full license
 text.
 
+To refresh it:
+
+``` r
+# From the root of the package:
+source("data-raw/update_psl.R")
+```
+
+This regenerates the internal `sysdata.rda` file used for domain
+parsing.
+
 ## License
 
 MIT © 2025 Bart Turczynski
