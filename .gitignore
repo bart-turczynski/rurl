@@ -31,3 +31,5 @@ revdep/
 
 # Github
 # .github/
+.Rproj.user
+.Rdata
