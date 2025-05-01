@@ -60,7 +60,6 @@ test_that("get_parse_status detects no-TLD hosts", {
 
 test_that("get_clean_url returns NA if parsed is NULL or host/path is missing", {
   expect_true(is.na(get_clean_url("mailto:user@example.com")))
-  # expect_true(is.na(get_clean_url("http:///just-a-path")))      # host is empty string
   expect_true(is.na(get_clean_url("")))
 })
 
