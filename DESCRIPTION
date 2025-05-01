@@ -1,6 +1,6 @@
 Package: rurl
 Type: Package
-Title: rurl: Tools to Parse and Clean URLs in R
+Title: Rurl: Tools to Parse and Clean URLs in R
 Version: 0.1.3
 Language: en-US
 Authors@R: 
@@ -8,10 +8,9 @@ Authors@R:
 Description: A lightweight toolkit for extracting structured information from URLs.
     Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs.
     The package includes a processed copy of the Public Suffix List from
-    https://publicsuffix.org for domain extraction.
+    <https://publicsuffix.org> for domain extraction.
 License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Imports:
