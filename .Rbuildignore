@@ -3,4 +3,5 @@
 ^LICENSE\.md$
 ^README\.Rmd$
 ^data-raw$
-^\\.github($|/)
+^\.github$
+^\.git$
