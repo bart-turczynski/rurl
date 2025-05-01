@@ -151,11 +151,10 @@ get_clean_url <- function(url, protocol_handling = "keep") {
   }, character(1))
 }
 
-# Internal helper to extract the registered domain from a hostname
-# Uses the public suffix list to remove known suffixes and return the main domain.
-#' @importFrom utils tail
+
 .get_registered_domain <- function(hostname) {
   parts <- strsplit(hostname, "\\.")[[1]]
+  parts <- parts[nzchar(parts)]  # Remove empty labels (e.g., from ".com")
   n <- length(parts)
   if (n < 2)
     return(NA_character_)
@@ -199,7 +198,7 @@ get_clean_url <- function(url, protocol_handling = "keep") {
   }
 
   if (best_match_len == 0) {
-    return(paste(tail(parts, 2), collapse = "."))
+    return(paste(utils::tail(parts, 2), collapse = "."))
   }
 
   if (n <= best_match_len)
@@ -339,4 +338,95 @@ get_path <- function(url, protocol_handling = "keep") {
       return(NA_character_)
     parsed$path %||% NA_character_
   }, character(1))
+}
+
+# Internal helper to encode hostnames using IDNA (Punycode)
+.normalize_and_punycode <- function(host) {
+  if (is.na(host) || !nzchar(host)) return(host)
+  host <- stringi::stri_trans_nfc(host)  # Normalize Unicode
+
+  # Skip punycode encoding if ASCII-only
+  if (all(charToRaw(host) <= as.raw(127))) return(host)
+
+  tryCatch(
+    urltools::puny_encode(host),
+    error = function(e) NA_character_
+  )
+}
+
+.punycode_to_unicode <- function(domain) {
+  parts <- strsplit(domain, "\\.")[[1]]
+  decoded <- vapply(parts, function(part) {
+    tryCatch(urltools::puny_decode(part), error = function(e) part)
+  }, character(1))
+  paste(decoded, collapse = ".")
+}
+
+
+#' Extract the top-level domain (TLD) from a URL
+#'
+#' @param url A character vector of URLs.
+#' @param source Which TLD source to use: "all", "icann", or "private".
+#' @return A character vector of TLDs.
+#' @export
+#' @examples
+#' get_tld("https://sub.example.co.uk")
+#' get_tld("https://παράδειγμα.ελ")
+#' get_tld("http://münchen.de")
+get_tld <- function(url, source = c("all", "private", "icann")) {
+  source <- match.arg(source)
+  tlds <- switch(
+    source,
+    all     = tld_all,
+    private = tld_private,
+    icann   = tld_icann
+  )
+
+  vapply(url, function(u) {
+    if (is.na(u) || !nzchar(u)) return(NA_character_)
+
+    # Extract host
+    host <- get_host(u)
+    if (is.na(host) || !nzchar(host)) return(NA_character_)
+
+    # Normalize to NFC and lowercase
+    host <- stringi::stri_trans_nfc(host)
+    host <- tolower(host)
+
+    # Puny-encode only if non-ASCII
+    encoded_host <- if (any(charToRaw(host) > as.raw(127))) {
+      tryCatch(urltools::puny_encode(host), error = function(e) host)
+    } else {
+      host
+    }
+
+    # Split domain parts
+    parts <- strsplit(encoded_host, "\\.")[[1]]
+    n <- length(parts)
+
+    # Match from longest candidate to shortest
+    for (i in seq_len(n - 1)) {
+      candidate <- paste(parts[i:n], collapse = ".")
+      if (candidate %in% tlds) {
+        return(iconv(.punycode_to_unicode(candidate), to = "UTF-8", sub = ""))
+      }
+    }
+
+    # Fallback: try last part only
+    last <- parts[n]
+    if (last %in% tlds) return(iconv(.punycode_to_unicode(last), to = "UTF-8", sub = ""))
+
+    NA_character_
+  }, character(1))
+}
+
+.to_ascii <- function(host) {
+  if (is.na(host) || !nzchar(host)) return(host)
+  if (all(charToRaw(host) <= as.raw(127))) return(host)  # ASCII-only shortcut
+
+  if (requireNamespace("urltools", quietly = TRUE)) {
+    tryCatch(urltools::puny_encode(host), error = function(e) host)
+  } else {
+    host
+  }
 }

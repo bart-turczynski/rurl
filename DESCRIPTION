@@ -14,7 +14,9 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Imports:
-    curl
+    curl,
+    stringi,
+    urltools
 URL: https://github.com/bart-turczynski/rurl, https://publicsuffix.org
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 
