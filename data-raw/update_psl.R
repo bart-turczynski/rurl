@@ -41,7 +41,7 @@ add_punycode <- function(x) {
 tld_icann   <- sort_by_depth(unique(add_punycode(tld_icann)))
 tld_private <- sort_by_depth(unique(add_punycode(tld_private)))
 tld_all     <- sort_by_depth(unique(c(tld_icann, tld_private)))
-
+clean_tlds <- tld_all
 # Save internal data
 usethis::use_data(
   psl_clean, tld_icann, tld_private, clean_tlds,

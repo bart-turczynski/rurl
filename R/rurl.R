@@ -1,6 +1,6 @@
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
-
+utils::globalVariables(c("psl_clean", "tld_all", "tld_private", "tld_icann"))
 #' Parse a URL safely with scheme handling
 #'
 #' @param url A character vector containing one or more URLs to be parsed.
@@ -371,8 +371,6 @@ get_path <- function(url, protocol_handling = "keep") {
 #' @export
 #' @examples
 #' get_tld("https://sub.example.co.uk")
-#' get_tld("https://παράδειγμα.ελ")
-#' get_tld("http://münchen.de")
 get_tld <- function(url, source = c("all", "private", "icann")) {
   source <- match.arg(source)
   tlds <- switch(
