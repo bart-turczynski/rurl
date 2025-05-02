@@ -21,7 +21,7 @@ Imports:
     curl,
     stringi,
     urltools
-URL: https://github.com/bart-turczynski/rurl, https://publicsuffix.org
+URL: https://github.com/bart-turczynski/rurl
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 
     testthat (>= 3.0.0),

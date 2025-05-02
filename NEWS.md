@@ -1,17 +1,20 @@
 ## rurl 0.2.0
 
+* First version for a potential CRAN submission.
+* Fully tested across macOS, Windows, and Linux.
+* Achieved 100% unit test coverage.
+* Improved README and documentation.
+
 This release adds robust support for internationalized domain names (IDNs),
 improves punycode handling, and ensures accurate extraction of TLDs and
 registered domains.
 
-### ✅ Highlights
+### ighlights
 - Accurate TLD extraction for both ASCII and Unicode domains
 - Graceful fallback when `urltools` is unavailable
 - NFC normalization with `stringi`
 - 100% test coverage with edge cases and punycode validation
 - Improved internal helpers and clearer test diagnostics
-
-🧪 Passes all tests: 103/103
 
 ## rurl 0.1.3
 

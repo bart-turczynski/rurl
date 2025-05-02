@@ -3,8 +3,10 @@ rurl
 
 # rurl
 
-`rurl` is a lightweight R package for parsing and extracting parts of
-URLs.
+`rurl` is a small, pipe-friendly, and vectorized R package that helps
+you construct and parse URLs from components. It is designed to make
+HTTP endpoint generation readable, composable, and easy to integrate
+into modern R workflows.
 
 It includes helpers to: - Get cleaned URLs - Extract domains, paths,
 schemes, and hosts - Normalize or strip protocols
