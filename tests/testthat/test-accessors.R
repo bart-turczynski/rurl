@@ -89,18 +89,18 @@ test_that("get_path extracts path or returns NA", {
 })
 
 test_that(".get_registered_domain handles known cases correctly", {
-  expect_equal(.get_registered_domain("example.com"), "example.com")
-  expect_equal(.get_registered_domain("sub.example.co.uk"), "example.co.uk")
-  expect_equal(.get_registered_domain("sub.dev-builder.code.com"), "dev-builder.code.com")
-  expect_equal(.get_registered_domain("city.kawasaki.jp"), "city.kawasaki.jp")
-  expect_equal(.get_registered_domain("foo.bar.city.kawasaki.jp"), "city.kawasaki.jp")
-  expect_equal(.get_registered_domain("unknown.tld"), "unknown.tld")
-  expect_equal(.get_registered_domain("localhost"), NA_character_)
+  expect_equal(rurl:::.get_registered_domain("example.com"), "example.com")
+  expect_equal(rurl:::.get_registered_domain("sub.example.co.uk"), "example.co.uk")
+  expect_equal(rurl:::.get_registered_domain("sub.dev-builder.code.com"), "dev-builder.code.com")
+  expect_equal(rurl:::.get_registered_domain("city.kawasaki.jp"), "city.kawasaki.jp")
+  expect_equal(rurl:::.get_registered_domain("foo.bar.city.kawasaki.jp"), "city.kawasaki.jp")
+  expect_equal(rurl:::.get_registered_domain("unknown.tld"), "unknown.tld")
+  expect_equal(rurl:::.get_registered_domain("localhost"), NA_character_)
 })
 
 test_that(".get_registered_domain handles suffix-only domains", {
-  expect_true(is.na(.get_registered_domain("com")))
-  expect_true(is.na(.get_registered_domain("co.uk")))
+  expect_true(is.na(rurl:::.get_registered_domain("com")))
+  expect_true(is.na(rurl:::.get_registered_domain("co.uk")))
 })
 
 test_that("get_parse_status falls through to final error", {
@@ -172,13 +172,13 @@ test_that("get_tld handles edge cases and unexpected inputs gracefully", {
 
   # Weird but valid cases
   expect_identical(unname(get_tld(".com")), "com")
-  expect_true(is.na(.get_registered_domain(".com")))
+  expect_true(is.na(rurl:::.get_registered_domain(".com")))
   expect_identical(unname(get_tld("example")), NA_character_)
   expect_identical(unname(get_tld("example..com")), "com")
 })
 
 test_that(".to_ascii falls back gracefully", {
-  expect_equal(.to_ascii("ascii-only.com"), "ascii-only.com")
+  expect_equal(rurl:::.to_ascii("ascii-only.com"), "ascii-only.com")
 })
 
 test_that(".to_ascii handles edge cases and punycode encoding", {
@@ -198,26 +198,25 @@ test_that(".to_ascii falls back gracefully when urltools is unavailable", {
   skip_if_not_installed("mockery")
 
   # Redefine the function inside a local to safely stub
-  local_fn <- .to_ascii
+  local_fn <- rurl:::.to_ascii
   mockery::stub(local_fn, "requireNamespace", FALSE)
 
   expect_identical(unname(local_fn("δοκιμή.δοκιμή")), "δοκιμή.δοκιμή")
 })
 
 test_that(".normalize_and_punycode handles Unicode normalization and punycode encoding", {
-  expect_match(unname(.normalize_and_punycode("παράδειγμα.ελ")), "^xn--")
-  expect_identical(unname(.normalize_and_punycode("ascii-only.com")), "ascii-only.com")
+  expect_match(unname(rurl:::.normalize_and_punycode("παράδειγμα.ελ")), "^xn--")
+  expect_identical(unname(rurl:::.normalize_and_punycode("ascii-only.com")), "ascii-only.com")
 })
 
 test_that(".normalize_and_punycode returns NA_character_ on error", {
-  skip_if_not_installed("mockery")
+  fail_encode <- function(x) stop("fail")
 
-  # Force error in puny_encode
-  mockery::stub(.normalize_and_punycode, "urltools::puny_encode", function(x) stop("fail"))
-  expect_identical(unname(.normalize_and_punycode("παράδειγμα.ελ")), NA_character_)
+  result <- rurl:::.normalize_and_punycode("παράδειγμα.ελ", encode_fn = fail_encode)
+  expect_identical(unname(result), NA_character_)
 })
 
 test_that(".normalize_and_punycode handles NA and empty input", {
-  expect_identical(unname(.normalize_and_punycode(NA_character_)), NA_character_)
-  expect_identical(unname(.normalize_and_punycode("")), "")
+  expect_identical(unname(rurl:::.normalize_and_punycode(NA_character_)), NA_character_)
+  expect_identical(unname(rurl:::.normalize_and_punycode("")), "")
 })
