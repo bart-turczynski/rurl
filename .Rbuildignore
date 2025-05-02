@@ -7,3 +7,6 @@
 ^\.github$
 ^\.git$
 ^data-raw$
+^doc$
+^Meta$
+^cran-comments\.md$

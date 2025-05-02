@@ -30,3 +30,6 @@ revdep/
 # .github/
 .Rproj.user
 .Rdata
+inst/doc
+/doc/
+/Meta/
