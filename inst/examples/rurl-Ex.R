@@ -9,3 +9,6 @@ get_domain("http://example.com/path")
 
 # Example 4: Get host of a URL
 get_host("http://example.com/path")
+
+# Example 5: Get TLD
+get_tld("example.com.pl")
