@@ -19,8 +19,8 @@ protocol is preserved if it exists, and "http://" is added if missing. If
 is added or changed to the one indicated.}
 }
 \value{
-A named list with components such as \code{scheme}, \code{host}, \code{path}, or \code{NULL}
-if parsing fails.
+A named list with components such as `scheme`, `host`, `path`, or `NULL`
+                         if parsing fails.
 }
 \description{
 This function parses a URL safely, handling different protocols such as
