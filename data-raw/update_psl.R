@@ -30,6 +30,11 @@ icann_end   <- grep("// ===END ICANN DOMAINS===", psl_raw)
 private_start <- grep("// ===BEGIN PRIVATE DOMAINS===", psl_raw)
 private_end   <- grep("// ===END PRIVATE DOMAINS===", psl_raw)
 
+# Extract and process
+tld_icann   <- sort_by_depth(clean_lines(psl_raw[(icann_start + 1):(icann_end - 1)]))
+tld_private <- sort_by_depth(clean_lines(psl_raw[(private_start + 1):(private_end - 1)]))
+tld_all     <- sort_by_depth(unique(c(tld_icann, tld_private)))
+
 # Add punycode-encoded versions of each TLD
 add_punycode <- function(x) {
   puny <- urltools::puny_encode(x)
