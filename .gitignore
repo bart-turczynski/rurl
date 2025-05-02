@@ -39,4 +39,4 @@ doc/*
 # But do NOT ignore the vignette source
 !doc/getting-started.Rmd
 
-^CRAN-SUBMISSION$
+CRAN-SUBMISSION
