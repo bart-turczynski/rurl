@@ -25,7 +25,10 @@ URL: https://github.com/bart-turczynski/rurl
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 
     testthat (>= 3.0.0),
-    mockery
+    mockery,
+    knitr,
+    rmarkdown
 Config/testthat/edition: 3
 Depends: 
     R (>= 3.5)
+VignetteBuilder: knitr

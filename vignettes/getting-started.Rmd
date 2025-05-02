@@ -1,0 +1,83 @@
+---
+title: "Getting Started with rurl"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with rurl}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(rurl)
+```
+
+# Introduction
+
+The `rurl` package provides tools to parse, normalize, and extract information
+from URLs using a consistent and safe API.  
+It is fully vectorized and uses a bundled copy of the
+[Public Suffix List](https://publicsuffix.org) for accurate domain handling.
+
+# Safe URL Parsing
+
+Use `safe_parse_url()` to parse URLs robustly:
+
+```{r}
+safe_parse_url("https://sub.example.co.uk/path?q=1")
+```
+
+The `protocol_handling` argument controls how schemes are handled:
+
+- `"keep"` (default; keeps the current protocol or preppends http:// if missin)
+- `"none"` (doesn't add, remove, or change protocols)
+- `"strip"` (removes protocols)
+- `"http"` (changes protocols to http:// or adds it if missing)
+- `"https"` (changes protocols to https:// or adds it if missing)
+
+# Extracting URL Components
+
+```{r}
+get_scheme("https://sub.example.com")
+get_host("https://sub.example.com")
+get_path("https://sub.example.com/path/to/page")
+```
+
+Each function works on vectors of URLs and gracefully handles `NA`.
+
+# Domain and TLD Parsing
+
+These functions rely on the Public Suffix List:
+
+```{r}
+get_domain("https://a.b.example.co.uk")
+```
+
+Extracting TLDs from different sources:
+
+```{r}
+get_tld("https://foo.blogspot.com")
+```
+
+Sources include:
+- `"all"` (default; will match to the longest available TLD)
+- `"private"` (only extract private TLDs)
+- `"icann"` (only extract ICANN TLDs)
+
+# Vectorization and Edge Cases
+
+All core functions support vectors and handle malformed inputs safely:
+
+```{r}
+urls <- c("example.com", "http://example.com", NA)
+get_clean_url(urls)
+```
+
+# Summary
+
+- Vectorized functions for parsing and cleaning URLs
+- Uses the Public Suffix List for domain logic
+- Unicode/punycode support
