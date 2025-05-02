@@ -16,6 +16,7 @@ RoxygenNote: 7.3.2
 Collate:
     'rurl.R'
 Imports:
+    utils,
     curl,
     stringi,
     urltools

@@ -1,6 +1,12 @@
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
-
+utils::globalVariables(c(
+  "psl_clean",
+  "tld_icann",
+  "tld_private",
+  "tld_all",
+  "punycode_df"
+))
 #' Parse a URL safely with scheme handling
 #'
 #' @param url A character vector containing one or more URLs to be parsed.
@@ -341,7 +347,7 @@ get_path <- function(url, protocol_handling = "keep") {
 }
 
 # Internal helper to encode hostnames using IDNA (Punycode)
-.normalize_and_punycode <- function(host) {
+.normalize_and_punycode <- function(host, encode_fn = urltools::puny_encode) {
   if (is.na(host) || !nzchar(host)) return(host)
   host <- stringi::stri_trans_nfc(host)  # Normalize Unicode
 
@@ -349,7 +355,7 @@ get_path <- function(url, protocol_handling = "keep") {
   if (all(charToRaw(host) <= as.raw(127))) return(host)
 
   tryCatch(
-    urltools::puny_encode(host),
+    encode_fn(host),
     error = function(e) NA_character_
   )
 }
@@ -372,9 +378,6 @@ get_path <- function(url, protocol_handling = "keep") {
 #' @examples
 #' \dontrun{
 #' get_tld("https://sub.example.co.uk")
-#' get_tld("https://παράδειγμα.ελ")
-#' get_tld("http://münchen.de")
-#' }
 get_tld <- function(url, source = c("all", "private", "icann")) {
   source <- match.arg(source)
   tlds <- switch(
