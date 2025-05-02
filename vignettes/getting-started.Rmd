@@ -32,7 +32,7 @@ safe_parse_url("https://sub.example.co.uk/path?q=1")
 
 The `protocol_handling` argument controls how schemes are handled:
 
-- `"keep"` (default; keeps the current protocol or preppends http:// if missin)
+- `"keep"` (default; keeps the current protocol or prepends http:// if missing)
 - `"none"` (doesn't add, remove, or change protocols)
 - `"strip"` (removes protocols)
 - `"http"` (changes protocols to http:// or adds it if missing)
