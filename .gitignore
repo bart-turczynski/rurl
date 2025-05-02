@@ -40,3 +40,4 @@ doc/*
 !doc/getting-started.Rmd
 
 CRAN-SUBMISSION
+cran-comments.md
