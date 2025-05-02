@@ -16,9 +16,6 @@
 # OAuth credentials (e.g., for API access)
 .httr-oauth
 
-# Files created by roxygen2 (documentation files)
-man/*.Rd
-
 # Build artifacts created by R CMD check
 *.tar.gz
 
