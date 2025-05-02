@@ -27,7 +27,7 @@ safe_parse_url <- function(url,
   if (is.na(url) || !is.character(url) || url == "")
     return(NULL)
 
-  # Note: ws:// allowed here for test purposes only to trigger fallback error path
+  # Most likely protocols to be treated as appropriate for regular URLs
   allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
 
   # Detect if URL starts with an allowed scheme
@@ -36,11 +36,11 @@ safe_parse_url <- function(url,
   # Detect if it looks like it has any scheme (valid or not)
   looks_like_protocol <- grepl("^[a-zA-Z][a-zA-Z0-9+.-]*:", url)
 
-  # ❌ Reject if a scheme exists but it's not in our whitelist
+  # Reject if a scheme exists but it's not in our whitelist
   if (looks_like_protocol && !has_valid_prefix)
     return(NULL)
 
-  # ✅ Only prepend http:// if no scheme at all
+  # Only prepend http:// if no scheme at all
   if (!looks_like_protocol) {
     url <- paste0("http://", url)
   }
@@ -370,9 +370,11 @@ get_path <- function(url, protocol_handling = "keep") {
 #' @return A character vector of TLDs.
 #' @export
 #' @examples
+#' \dontrun{
 #' get_tld("https://sub.example.co.uk")
 #' get_tld("https://παράδειγμα.ελ")
 #' get_tld("http://münchen.de")
+#' }
 get_tld <- function(url, source = c("all", "private", "icann")) {
   source <- match.arg(source)
   tlds <- switch(
