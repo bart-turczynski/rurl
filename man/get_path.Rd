@@ -18,7 +18,7 @@ or changed to the one indicated.}
 }
 \value{
 A character vector with the path of each URL. If no path exists, it will
-return an empty string.
+        return an empty string.
 }
 \description{
 This function extracts the path component of a given URL. The path refers to the

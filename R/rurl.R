@@ -376,6 +376,7 @@ get_path <- function(url, protocol_handling = "keep") {
 #' @return A character vector of TLDs.
 #' @export
 #' @examples
+#' get_tld("example.com")
 get_tld <- function(url, source = c("all", "private", "icann")) {
   source <- match.arg(source)
   tlds <- switch(

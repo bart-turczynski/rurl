@@ -18,11 +18,9 @@ or changed to the one indicated.}
 }
 \value{
 A character vector with the parse status of each URL:
-\itemize{
-\item "ok" for http(s) URLs.
-\item "ok-ftp" for ftp and ftps URLs.
-\item "error" for unsupported schemes (mailto, file, etc.) or invalid URLs.
-}
+  - "ok" for http(s) URLs.
+  - "ok-ftp" for ftp and ftps URLs.
+  - "error" for unsupported schemes (mailto, file, etc.) or invalid URLs.
 }
 \description{
 Get the parse status of URLs

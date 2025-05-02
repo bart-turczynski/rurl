@@ -11,10 +11,11 @@ Description: A lightweight toolkit for extracting structured information from UR
     <https://publicsuffix.org> for domain extraction.
 License: MIT + file LICENSE
 Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
+Roxygen: list(roclets = c("collate", "namespace", "rd"))
 RoxygenNote: 7.3.2
 Collate:
     'rurl.R'
+    'zzz.R'
 Imports:
     utils,
     curl,
