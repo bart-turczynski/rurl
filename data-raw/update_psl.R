@@ -44,7 +44,7 @@ tld_all     <- sort_by_depth(unique(c(tld_icann, tld_private)))
 
 # Save internal data
 usethis::use_data(
-  psl_clean, tld_icann, tld_private, clean_tlds,
+  psl_clean, tld_icann, tld_private, tld_all,
   internal = TRUE, overwrite = TRUE
 )
 
