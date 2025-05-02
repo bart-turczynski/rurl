@@ -79,10 +79,8 @@ punycode_df <- as.data.frame(punycode_df, stringsAsFactors = FALSE)
 punycode_df <- punycode_df[!is.na(punycode_df$unicode) & nzchar(punycode_df$unicode), ]
 punycode_df <- unique(punycode_df)
 
-# Save it as internal data
-usethis::use_data(punycode_df, internal = TRUE, overwrite = TRUE)
 # Save internal data
 usethis::use_data(
-  psl_clean, tld_icann, tld_private, tld_all,
+  psl_clean, tld_icann, tld_private, tld_all, punycode_df,
   internal = TRUE, overwrite = TRUE
 )

@@ -1,6 +1,12 @@
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
-utils::globalVariables(c("psl_clean", "tld_all", "tld_private", "tld_icann"))
+utils::globalVariables(c(
+  "psl_clean",
+  "tld_icann",
+  "tld_private",
+  "tld_all",
+  "punycode_df"
+))
 #' Parse a URL safely with scheme handling
 #'
 #' @param url A character vector containing one or more URLs to be parsed.
@@ -36,11 +42,11 @@ safe_parse_url <- function(url,
   # Detect if it looks like it has any scheme (valid or not)
   looks_like_protocol <- grepl("^[a-zA-Z][a-zA-Z0-9+.-]*:", url)
 
-  # ❌ Reject if a scheme exists but it's not in our whitelist
+  # Reject if a scheme exists but it's not in our whitelist
   if (looks_like_protocol && !has_valid_prefix)
     return(NULL)
 
-  # ✅ Only prepend http:// if no scheme at all
+  # Only prepend http:// if no scheme at all
   if (!looks_like_protocol) {
     url <- paste0("http://", url)
   }
@@ -341,7 +347,7 @@ get_path <- function(url, protocol_handling = "keep") {
 }
 
 # Internal helper to encode hostnames using IDNA (Punycode)
-.normalize_and_punycode <- function(host) {
+.normalize_and_punycode <- function(host, encode_fn = urltools::puny_encode) {
   if (is.na(host) || !nzchar(host)) return(host)
   host <- stringi::stri_trans_nfc(host)  # Normalize Unicode
 
@@ -349,7 +355,7 @@ get_path <- function(url, protocol_handling = "keep") {
   if (all(charToRaw(host) <= as.raw(127))) return(host)
 
   tryCatch(
-    urltools::puny_encode(host),
+    encode_fn(host),
     error = function(e) NA_character_
   )
 }
