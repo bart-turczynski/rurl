@@ -9,7 +9,7 @@ This release adds robust support for internationalized domain names (IDNs),
 improves punycode handling, and ensures accurate extraction of TLDs and
 registered domains.
 
-### ighlights
+### Highlights
 - Accurate TLD extraction for both ASCII and Unicode domains
 - Graceful fallback when `urltools` is unavailable
 - NFC normalization with `stringi`
