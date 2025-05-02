@@ -33,3 +33,8 @@ revdep/
 inst/doc
 /doc/
 /Meta/
+# Ignore everything in doc/
+doc/*
+
+# But do NOT ignore the vignette source
+!doc/getting-started.Rmd
