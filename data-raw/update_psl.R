@@ -81,3 +81,8 @@ punycode_df <- unique(punycode_df)
 
 # Save it as internal data
 usethis::use_data(punycode_df, internal = TRUE, overwrite = TRUE)
+# Save internal data
+usethis::use_data(
+  psl_clean, tld_icann, tld_private, tld_all,
+  internal = TRUE, overwrite = TRUE
+)
