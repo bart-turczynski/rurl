@@ -35,8 +35,8 @@ The `protocol_handling` argument controls how schemes are handled:
 - `"keep"` (default; keeps the current protocol or prepends http:// if missing)
 - `"none"` (doesn't add, remove, or change protocols)
 - `"strip"` (removes protocols)
-- `"http"` (changes protocols to http:// or adds it if missing)
-- `"https"` (changes protocols to https:// or adds it if missing)
+- `"http"` (changes protocols to `http://` or adds it if missing)
+- `"https"` (changes protocols to `https://` or adds it if missing)
 
 # Extracting URL Components
 
