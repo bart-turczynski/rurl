@@ -145,14 +145,11 @@ get_clean_url <- function(url, protocol_handling = "keep") {
           is.null(parsed$path) || parsed$path == "") {
       return(NA_character_)
     }
-    if (!is.null(parsed$scheme)) {
+    if (!is.null(parsed$scheme) && !is.na(parsed$scheme)) {
       paste0(parsed$scheme, "://", parsed$host, parsed$path)
     } else {
-      # Defensive fallback: scheme is NULL but host/path exist.
-      # curl::curl_parse_url() rarely produces this; may be unreachable.
-      # nocov start
+      # Handles cases where scheme is NULL or NA (e.g. from protocol_handling = 'none')
       paste0(parsed$host, parsed$path)
-      # nocov end
     }
   }, character(1))
 }
