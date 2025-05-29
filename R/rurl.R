@@ -372,51 +372,25 @@ get_path <- function(url, protocol_handling = "keep") {
 #' Extract the top-level domain (TLD) from a URL
 #'
 #' @param url A character vector of URLs.
-#' @param source Which TLD source to use: "all", "icann", or "private".
+#' @param source Which TLD source to use: "all", "icann", or "private". Defaults to "all".
+#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to "keep".
+#' @param www_handling See \code{\link{safe_parse_url}}. Defaults to "none".
 #' @return A character vector of TLDs.
 #' @export
 #' @examples
-#' get_tld("example.com")
-get_tld <- function(url, source = c("all", "private", "icann")) {
-  source <- match.arg(source)
-  tlds <- switch(
-    source,
-    all     = tld_all,
-    private = tld_private,
-    icann   = tld_icann
-  )
-
+#' get_tld("www.example.co.uk", source = "all")
+get_tld <- function(url,
+                    source = c("all", "private", "icann"),
+                    protocol_handling = "keep",
+                    www_handling = "none") {
+  # source is matched by safe_parse_url, which calls .get_tld_from_host where it's also matched.
   vapply(url, function(u) {
-    if (is.na(u) || !nzchar(u)) return(NA_character_)
-
-    # Extract host
-    host <- get_host(u)
-    if (is.na(host) || !nzchar(host)) return(NA_character_)
-
-    # Normalize to NFC and lowercase
-    host <- stringi::stri_trans_nfc(host)
-    host <- tolower(host)
-
-    # Puny-encode only if non-ASCII
-    encoded_host <- if (any(charToRaw(host) > as.raw(127))) {
-      tryCatch(urltools::puny_encode(host), error = function(e) host)
-    } else {
-      host
-    }
-
-    # Split domain parts
-    parts <- strsplit(encoded_host, "\\.")[[1]]
-    n <- length(parts)
-
-    # Match from longest candidate to shortest, but never the whole host
-    for (i in 2:n) {
-      candidate <- paste(parts[i:n], collapse = ".")
-      if (candidate %in% tlds) {
-        return(iconv(.punycode_to_unicode(candidate), to = "UTF-8", sub = ""))
-      }
-    }
-
-    NA_character_
+    parsed <- safe_parse_url(u,
+                             protocol_handling = protocol_handling,
+                             www_handling = www_handling,
+                             tld_source = source)
+    if (is.null(parsed)) return(NA_character_)
+    parsed$tld %||% NA_character_
   }, character(1))
 }
 
@@ -478,33 +452,48 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   paste(parts[(n - best_match_len):n], collapse = ".")
 }
 
-# Internal helper to extract TLD from a host using PSL
-.get_tld_from_host <- function(host, tld_source = c("all", "private", "icann")) {
-  tld_source <- match.arg(tld_source)
-  if (is.na(host) || !nzchar(host)) return(NA_character_)
-  host_nfc <- stringi::stri_trans_nfc(tolower(host))
-  host_puny <- .normalize_and_punycode(host_nfc)
-  if (is.na(host_puny) || !nzchar(host_puny)) return(NA_character_)
-  selected_tlds <- switch(
-    tld_source,
+# Internal helper to extract TLD from a host using PSL (Revised to match original get_tld logic)
+.get_tld_from_host <- function(host_input, tld_source_name = c("all", "private", "icann")) {
+  tld_source_name <- match.arg(tld_source_name)
+
+  if (is.na(host_input) || !nzchar(host_input)) {
+    return(NA_character_)
+  }
+
+  temp_host <- stringi::stri_trans_nfc(tolower(host_input))
+  encoded_host <- .normalize_and_punycode(temp_host) # Uses urltools::puny_encode, returns NA on error
+
+  if (is.na(encoded_host) || !nzchar(encoded_host)) {
+    return(NA_character_)
+  }
+
+  current_tld_list <- switch(
+    tld_source_name,
     all = tld_all,
     private = tld_private,
     icann = tld_icann
+    # No default needed due to match.arg
   )
-  host_parts <- strsplit(host_puny, "\\.")[[1]]
-  n_parts <- length(host_parts)
-  # Try all suffixes, longest first, but never the whole host
-  if (n_parts >= 2) {
-    for (i in 2:n_parts) {
-      candidate_tld <- paste(host_parts[i:n_parts], collapse = ".")
-      if (candidate_tld %in% selected_tlds) {
-        return(.punycode_to_unicode(candidate_tld))
+
+  host_parts <- strsplit(encoded_host, "\\.")[[1]]
+  num_parts <- length(host_parts)
+
+  if (num_parts > 1) {
+    for (k in seq_len(num_parts - 1)) {
+      current_candidate_tld <- paste(host_parts[k:num_parts], collapse = ".")
+      if (current_candidate_tld %in% current_tld_list) {
+        return(.punycode_to_unicode(current_candidate_tld))
       }
     }
   }
-  # Fallback: try last label
-  if (n_parts > 0 && host_parts[n_parts] %in% selected_tlds) {
-    return(.punycode_to_unicode(host_parts[n_parts]))
+
+  if (num_parts > 0) {
+    last_part_as_tld <- host_parts[num_parts]
+    if (last_part_as_tld %in% current_tld_list) {
+      return(.punycode_to_unicode(last_part_as_tld))
+    }
   }
-  NA_character_
+
+  return(NA_character_)
 }
+
