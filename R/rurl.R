@@ -278,14 +278,34 @@ get_clean_url <- function(url,
   if (is.na(domain)) return(NA_character_)
   parts <- strsplit(domain, "\\.")[[1]]
   decoded_parts <- vapply(parts, function(part) {
-    raw_decoded_label <- tryCatch(urltools::puny_decode(part), error = function(e) part)
-    
-    laundered_label <- iconv(raw_decoded_label, from = "", to = "UTF-8", sub = "byte")
+    # Decode Punycode label to Unicode (UTF-8)
+    # urltools::puny_decode should return a UTF-8 string or the original if not Punycode/error
+    decoded_label <- tryCatch(urltools::puny_decode(part), error = function(e) part)
 
-    cleaned_of_byte_subs <- gsub("<[0-9a-fA-F]{2}>", "", laundered_label)
+    # If decoding failed and returned the original part, and that part is already valid UTF-8 (e.g. an ASCII label),
+    # or if decoding succeeded, decoded_label should be UTF-8.
+    # The main goal is to remove invalid byte sequences or characters not suitable for domains.
+
+    # Remove any explicit byte substitution characters that might appear from bad conversions elsewhere
+    # (though ideally not from puny_decode directly if it returns clean UTF-8)
+    cleaned_label <- gsub("<[0-9a-fA-F]{2}>", "", decoded_label)
     
-    final_cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", cleaned_of_byte_subs, perl = TRUE)
+    # Remove any characters that are not letters, numbers, or hyphens.
+    # This is a stricter cleaning step.
+    # Using stringi::stri_replace_all_regex for Unicode-aware character classes might be more robust
+    # but sticking to base R for now.
+    # The \p{L} and \p{N} are Unicode properties for letters and numbers.
+    final_cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", cleaned_label, perl = TRUE)
     
+    # If the label becomes empty after cleaning (e.g., was purely invalid chars), treat as error for that part?
+    # For now, allow empty labels if cleaning results in them, paste will handle it.
+    # However, valid domain labels shouldn't typically become empty.
+    if (!nzchar(final_cleaned_label) && nzchar(decoded_label)) {
+        # If cleaning made a non-empty label empty, something might be too aggressive.
+        # Fallback to a simpler clean or the decoded_label if it seems mostly okay.
+        # This part is tricky; for now, accept the aggressive cleaning.
+    }
+
     return(final_cleaned_label)
   }, character(1))
   paste(decoded_parts, collapse = ".")
