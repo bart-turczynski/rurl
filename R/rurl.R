@@ -161,19 +161,28 @@ safe_parse_url <- function(url,
     clean_url <- paste0(scheme_part, final_host, raw_path)
   }
 
-  parse_status <- "error" 
-  if (!is.null(parsed_curl)) {
-    current_scheme_lower <- tolower(final_scheme %||% "")
-    if (current_scheme_lower %in% c("ftp", "ftps")) {
-      parse_status <- "ok-ftp"
-    } else if (current_scheme_lower %in% c("http", "https")) {
-      if (is.na(final_host) || final_host == "" || (!is_ip_host && !grepl("\\.", final_host))) {
-        parse_status <- "warning-no-tld"
-      } else {
-        parse_status <- "ok"
+  # Initialize parse_status
+  parse_status <- "error" # Default to error
+
+  if (!is.null(parsed_curl)) { # Ensure basic parsing by curl was successful
+    host_is_structurally_ok <- !is.na(final_host) && final_host != "" &&
+                               (is_ip_host || grepl("\\.", final_host))
+
+    if (host_is_structurally_ok) {
+      parse_status <- "ok"
+      
+      if (protocol_handling != "strip" && !is.na(final_scheme)) {
+        current_scheme_lower <- tolower(final_scheme)
+        if (current_scheme_lower %in% c("ftp", "ftps")) {
+          parse_status <- "ok-ftp"
+        }
       }
+    } else if (!is.na(final_host) && final_host != "" && !is_ip_host && !grepl("\\.", final_host)) {
+      parse_status <- "warning-no-tld"
     }
   }
+
+  # Override to "error" for fundamentally unparseable or disallowed original schemes
   if(is.null(parsed_curl) || (original_looks_like_protocol && !original_has_allowed_scheme)) {
     parse_status <- "error"
   }
