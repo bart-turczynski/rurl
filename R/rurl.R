@@ -269,9 +269,14 @@ get_clean_url <- function(url,
   if (is.na(domain)) return(NA_character_)
   parts <- strsplit(domain, "\\.")[[1]]
   decoded_parts <- vapply(parts, function(part) {
-    decoded_label <- tryCatch(urltools::puny_decode(part), error = function(e) part)
-    # Clean the decoded label: keep only Unicode letters, numbers, and hyphens.
-    cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", decoded_label, perl = TRUE)
+    raw_decoded_label <- tryCatch(urltools::puny_decode(part), error = function(e) part)
+    
+    # Step 1: Immediately try to ensure the raw decoded label is valid UTF-8
+    utf8_label <- iconv(raw_decoded_label, from = "", to = "UTF-8", sub = "byte")
+
+    # Step 2: Clean the (now hopefully) UTF-8 label
+    cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", utf8_label, perl = TRUE)
+    
     return(cleaned_label)
   }, character(1))
   paste(decoded_parts, collapse = ".")
