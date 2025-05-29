@@ -396,8 +396,8 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   vapply(url, function(u) {
     if (is.na(u) || !nzchar(u)) return(NA_character_)
 
-    # Extract host using the existing get_host, which relies on the original safe_parse_url behavior
-    host <- get_host(u) # This call is key - uses the get_host that depends on the simple safe_parse_url
+    # MODIFIED: Call the dedicated legacy host extraction path
+    host <- ._legacy_get_host_for_get_tld_only(u)
     if (is.na(host) || !nzchar(host)) return(NA_character_)
 
     # Normalize to NFC and lowercase
@@ -534,5 +534,51 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   }
 
   return(NA_character_)
+}
+
+# Original safe_parse_url, renamed for use by legacy get_host
+._legacy_safe_parse_url_for_get_tld_only <- function(url,
+                           protocol_handling = c("keep", "none", "strip", "http", "https")) {
+  protocol_handling <- match.arg(protocol_handling)
+
+  if (is.na(url) || !is.character(url) || url == "")
+    return(NULL)
+
+  allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
+  has_valid_prefix <- any(startsWith(tolower(url), allowed_prefixes))
+  looks_like_protocol <- grepl("^[a-zA-Z][a-zA-Z0-9+.-]*:", url)
+
+  if (looks_like_protocol && !has_valid_prefix)
+    return(NULL)
+
+  if (!looks_like_protocol) {
+    url <- paste0("http://", url)
+  }
+
+  result <- tryCatch(curl::curl_parse_url(url), error = function(e) NULL)
+
+  if (is.null(result))
+    return(NULL)
+
+  result$scheme <- switch(
+    protocol_handling,
+    none  = if (!has_valid_prefix) NA_character_ else result$scheme,
+    strip = NA_character_,
+    http  = "http",
+    https = "https",
+    keep  = result$scheme
+  )
+  result
+}
+
+# Original get_host, renamed and modified to call legacy safe_parse_url
+._legacy_get_host_for_get_tld_only <- function(url, protocol_handling = "keep") {
+  # protocol_handling is part of the original signature, match.arg if needed by legacy_safe_parse_url
+  # Forcing "keep" as it was the implicit original behavior for get_host feeding get_tld
+  protocol_handling <- "keep" 
+  parsed <- ._legacy_safe_parse_url_for_get_tld_only(url, protocol_handling)
+  if (is.null(parsed))
+    return(NA_character_)
+  parsed$host %||% NA_character_
 }
 
