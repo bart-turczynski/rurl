@@ -209,6 +209,13 @@ test_that(".normalize_and_punycode handles Unicode normalization and punycode en
   expect_identical(unname(rurl:::.normalize_and_punycode("ascii-only.com")), "ascii-only.com")
 })
 
+test_that(".normalize_and_punycode returns NA_character_ on error", {
+  fail_encode <- function(x) stop("fail")
+
+  result <- rurl:::.normalize_and_punycode("παράδειγμα.ελ", encode_fn = fail_encode)
+  expect_identical(unname(result), NA_character_)
+})
+
 test_that(".normalize_and_punycode handles NA and empty input", {
   expect_identical(unname(rurl:::.normalize_and_punycode(NA_character_)), NA_character_)
   expect_identical(unname(rurl:::.normalize_and_punycode("")), "")
