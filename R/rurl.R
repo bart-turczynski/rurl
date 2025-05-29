@@ -271,13 +271,13 @@ get_clean_url <- function(url,
   decoded_parts <- vapply(parts, function(part) {
     raw_decoded_label <- tryCatch(urltools::puny_decode(part), error = function(e) part)
     
-    # Step 1: Immediately try to ensure the raw decoded label is valid UTF-8
-    utf8_label <- iconv(raw_decoded_label, from = "", to = "UTF-8", sub = "byte")
+    laundered_label <- iconv(raw_decoded_label, from = "", to = "UTF-8", sub = "byte")
 
-    # Step 2: Clean the (now hopefully) UTF-8 label
-    cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", utf8_label, perl = TRUE)
+    cleaned_of_byte_subs <- gsub("<[0-9a-fA-F]{2}>", "", laundered_label)
     
-    return(cleaned_label)
+    final_cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", cleaned_of_byte_subs, perl = TRUE)
+    
+    return(final_cleaned_label)
   }, character(1))
   paste(decoded_parts, collapse = ".")
 }
