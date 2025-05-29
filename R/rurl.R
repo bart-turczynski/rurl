@@ -144,7 +144,14 @@ safe_parse_url <- function(url,
       if (!is.na(derived_domain_encoded)) {
         domain <- .punycode_to_unicode(derived_domain_encoded)
       }
-      tld <- .get_tld_from_host(final_host, tld_source)
+      # TLD derivation using the original logic helper
+      selected_tlds_list <- switch(
+        tld_source, # tld_source is the arg to safe_parse_url
+        all = tld_all,
+        private = tld_private,
+        icann = tld_icann
+      )
+      tld <- ._extract_tld_original_logic(final_host, selected_tlds_list)
     }
   }
 
@@ -452,45 +459,41 @@ get_tld <- function(url,
   paste(parts[(n - best_match_len):n], collapse = ".")
 }
 
-# Internal helper to extract TLD from a host using PSL (Revised to match original get_tld logic)
-.get_tld_from_host <- function(host_input, tld_source_name = c("all", "private", "icann")) {
-  tld_source_name <- match.arg(tld_source_name)
-
-  if (is.na(host_input) || !nzchar(host_input)) {
+# Internal helper using the exact original get_tld logic for TLD extraction
+._extract_tld_original_logic <- function(host_to_process, current_tld_list) {
+  if (is.na(host_to_process) || !nzchar(host_to_process)) {
     return(NA_character_)
   }
 
-  temp_host <- stringi::stri_trans_nfc(tolower(host_input))
-  encoded_host <- .normalize_and_punycode(temp_host) # Uses urltools::puny_encode, returns NA on error
+  # Normalize to NFC and lowercase first, then punycode with .normalize_and_punycode
+  # .normalize_and_punycode itself also does NFC, so direct tolower is fine.
+  normalized_host <- stringi::stri_trans_nfc(tolower(host_to_process))
+  encoded_host <- .normalize_and_punycode(normalized_host) # This handles puny-encoding and returns NA on error
 
   if (is.na(encoded_host) || !nzchar(encoded_host)) {
     return(NA_character_)
   }
 
-  current_tld_list <- switch(
-    tld_source_name,
-    all = tld_all,
-    private = tld_private,
-    icann = tld_icann
-    # No default needed due to match.arg
-  )
+  parts <- strsplit(encoded_host, "\\.")[[1]]
+  n <- length(parts)
 
-  host_parts <- strsplit(encoded_host, "\\.")[[1]]
-  num_parts <- length(host_parts)
-
-  if (num_parts > 1) {
-    for (k in seq_len(num_parts - 1)) {
-      current_candidate_tld <- paste(host_parts[k:num_parts], collapse = ".")
-      if (current_candidate_tld %in% current_tld_list) {
-        return(.punycode_to_unicode(current_candidate_tld))
+  # Original loop: Match from (n-1) labels down to 1 label that forms the suffix
+  # This means the first candidate is parts[1:n] if n > 1, then parts[2:n], etc.
+  if (n > 1) { # Only loop if there are at least two parts
+    for (i in seq_len(n - 1)) { # i goes from 1 to n-1
+      # Candidate starts from parts[i] to parts[n]
+      candidate <- paste(parts[i:n], collapse = ".")
+      if (candidate %in% current_tld_list) {
+        return(.punycode_to_unicode(candidate))
       }
     }
   }
 
-  if (num_parts > 0) {
-    last_part_as_tld <- host_parts[num_parts]
-    if (last_part_as_tld %in% current_tld_list) {
-      return(.punycode_to_unicode(last_part_as_tld))
+  # Fallback: try the last part only
+  if (n > 0) { # Ensure there is at least one part
+    last_candidate <- parts[n]
+    if (last_candidate %in% current_tld_list) {
+      return(.punycode_to_unicode(last_candidate))
     }
   }
 
