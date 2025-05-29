@@ -280,32 +280,28 @@ get_clean_url <- function(url,
   decoded_parts <- vapply(parts, function(part) {
     # Decode Punycode label to Unicode (UTF-8)
     # urltools::puny_decode should return a UTF-8 string or the original if not Punycode/error
-    decoded_label <- tryCatch(urltools::puny_decode(part), error = function(e) part)
+    decoded_label_from_puny <- tryCatch(urltools::puny_decode(part), error = function(e) part)
 
-    # If decoding failed and returned the original part, and that part is already valid UTF-8 (e.g. an ASCII label),
-    # or if decoding succeeded, decoded_label should be UTF-8.
-    # The main goal is to remove invalid byte sequences or characters not suitable for domains.
+    # Ensure the string is valid UTF-8 and substitute invalid byte sequences.
+    # urltools::puny_decode is expected to output UTF-8, but let's be robust.
+    # Using iconv to validate and clean. sub="byte" will represent invalid bytes as <XX>.
+    # Alternatively, sub="" or sub="?" could be used to remove/replace them.
+    valid_utf8_label <- iconv(decoded_label_from_puny, from = "UTF-8", to = "UTF-8", sub = "byte")
+    
+    # If iconv failed (e.g. input was so mangled it couldn't be processed), it might return NA.
+    # Fallback to the output from puny_decode if iconv results in NA and original wasn't NA.
+    if (is.na(valid_utf8_label) && !is.na(decoded_label_from_puny)) {
+        valid_utf8_label <- decoded_label_from_puny # Or a safer fallback like an empty string or "?"
+    }
+    # Ensure it's not NA before gsub
+    if (is.na(valid_utf8_label)) valid_utf8_label <- "" # Or handle error appropriately
 
-    # Remove any explicit byte substitution characters that might appear from bad conversions elsewhere
-    # (though ideally not from puny_decode directly if it returns clean UTF-8)
-    cleaned_label <- gsub("<[0-9a-fA-F]{2}>", "", decoded_label)
+    # Remove any explicit byte substitution characters that might appear from iconv or elsewhere.
+    cleaned_label <- gsub("<[0-9a-fA-F]{2}>", "", valid_utf8_label)
     
     # Remove any characters that are not letters, numbers, or hyphens.
-    # This is a stricter cleaning step.
-    # Using stringi::stri_replace_all_regex for Unicode-aware character classes might be more robust
-    # but sticking to base R for now.
-    # The \p{L} and \p{N} are Unicode properties for letters and numbers.
     final_cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", cleaned_label, perl = TRUE)
     
-    # If the label becomes empty after cleaning (e.g., was purely invalid chars), treat as error for that part?
-    # For now, allow empty labels if cleaning results in them, paste will handle it.
-    # However, valid domain labels shouldn't typically become empty.
-    if (!nzchar(final_cleaned_label) && nzchar(decoded_label)) {
-        # If cleaning made a non-empty label empty, something might be too aggressive.
-        # Fallback to a simpler clean or the decoded_label if it seems mostly okay.
-        # This part is tricky; for now, accept the aggressive cleaning.
-    }
-
     return(final_cleaned_label)
   }, character(1))
   paste(decoded_parts, collapse = ".")
