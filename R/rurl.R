@@ -263,15 +263,13 @@ get_clean_url <- function(url,
   if (is.na(host) || !nzchar(host)) return(host)
   host_nfc <- stringi::stri_trans_nfc(host)
 
-  # If already all ASCII, no need to process further for IDNA encoding
   if (all(charToRaw(host_nfc) <= as.raw(127))) return(host_nfc)
 
   tryCatch(
-    # Use UIDNA standard (UTS #46) with allowance for unassigned code points
     stringi::stri_trans_totidna(host_nfc, UIDNA = TRUE, allow_unassigned = TRUE),
     error = function(e) {
-      # warning(paste0("IDNA encoding (to ASCII/Punycode) failed for host: ", host_nfc, " Error: ", e$message)) # Optional for debugging
-      host_nfc # Fallback to NFC-normalized original host if Punycode conversion fails
+      warning(paste0("IDNA encoding (to ASCII/Punycode) failed for host: ", host_nfc, ". Error: ", e$message))
+      host_nfc
     }
   )
 }
@@ -282,30 +280,29 @@ get_clean_url <- function(url,
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
 
   decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
-    # Default to original part_puny. If it's not Punycode, it should remain as is.
-    # If it is Punycode and decoding fails, we'll also fall back to the original Punycode part.
-    decoded_label <- part_puny 
+    decoded_label <- part_puny
 
-    if (startsWith(tolower(part_puny), "xn--")) { # Only attempt to decode if it looks like Punycode
+    if (startsWith(tolower(part_puny), "xn--")) {
       decoded_label_attempt <- tryCatch(
         stringi::stri_trans_fromtidna(part_puny, UIDNA = TRUE, allow_unassigned = TRUE),
         error = function(e) {
-          # warning(paste0("IDNA decoding (from Punycode) failed for part: ", part_puny, " Error: ", e$message))
-          part_puny # Fallback to original Punycode part on error
+          warning(paste0("IDNA decoding (from Punycode) failed for part: ", part_puny, ". Error: ", e$message))
+          part_puny
         }
       )
-      # Assign if tryCatch didn't error out AND the result is non-null 
-      # (stringi might return the input on some failures, or NULL)
       if (!is.null(decoded_label_attempt)) {
-          decoded_label <- decoded_label_attempt
-      } # else decoded_label remains part_puny (our default)
+        decoded_label <- decoded_label_attempt
+      }
     }
-    
-    # Final sanitization with iconv to ensure valid UTF-8 for downstream operations
+
     sane_label <- iconv(decoded_label, from = "UTF-8", to = "UTF-8", sub = "")
 
-    if (is.na(sane_label)) {
-      return(part_puny) # If iconv makes it NA, return original part_puny as last resort before empty string
+    if (is.na(sane_label) || !nzchar(sane_label)) {
+        # If iconv results in NA or empty, and original part_puny was not empty, prefer original part_puny.
+        # This might happen if decoded_label was some non-UTF8 string that iconv nuked.
+        if (nzchar(part_puny)) return(part_puny)
+        # If part_puny was also empty, or sane_label is just fine (but empty), return sane_label (empty string)
+        return(sane_label) 
     }
     return(sane_label)
   }, character(1))
