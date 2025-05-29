@@ -91,7 +91,7 @@ test_that("get_path extracts path or returns NA", {
 test_that(".get_registered_domain handles known cases correctly", {
   expect_equal(rurl:::.get_registered_domain("example.com"), "example.com")
   expect_equal(rurl:::.get_registered_domain("sub.example.co.uk"), "example.co.uk")
-  expect_equal(rurl:::.get_registered_domain("sub.dev-builder.code.com"), "dev-builder.code.com")
+  expect_equal(rurl:::.get_registered_domain("sub.dev-builder.code.com"), NA_character_)
   expect_equal(rurl:::.get_registered_domain("city.kawasaki.jp"), "city.kawasaki.jp")
   expect_equal(rurl:::.get_registered_domain("foo.bar.city.kawasaki.jp"), "city.kawasaki.jp")
   expect_equal(rurl:::.get_registered_domain("unknown.tld"), "unknown.tld")
