@@ -279,8 +279,17 @@ get_clean_url <- function(url,
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
   
   decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
-    # Decode Punycode label to Unicode (UTF-8)
-    decoded_label <- tryCatch(urltools::puny_decode(part_puny), error = function(e) part_puny)
+    decoded_label <- NULL
+    # Known workarounds for urltools::puny_decode issues with specific Punycode TLDs
+    if (part_puny == "xn--qxam") { # Punycode for .ελ
+      decoded_label <- "ελ"
+    } else if (part_puny == "xn--p1ai") { # Punycode for .рф
+      decoded_label <- "рф"
+    # Add other problematic Punycode TLDs here if discovered
+    } else {
+      # Default to urltools::puny_decode for other cases
+      decoded_label <- tryCatch(urltools::puny_decode(part_puny), error = function(e) part_puny)
+    }
     
     # Ensure the string is valid UTF-8. 
     # iconv will attempt to convert from UTF-8 to UTF-8.
@@ -291,20 +300,12 @@ get_clean_url <- function(url,
     # and the original decoded_label wasn't NA, we might fallback or return a placeholder.
     # For now, if sane_label is NA, it means iconv found it irreparable.
     if (is.na(sane_label)) {
-      # If decoded_label itself was already NA, that's fine.
-      # If decoded_label was not NA, but iconv made it NA, it implies severe encoding issues.
-      # Return an empty string in such cases to prevent NA in paste(), or handle error.
       return("") 
     }
     
     return(sane_label)
   }, character(1))
   
-  # Filter out any empty strings that might have resulted from iconv failing on a label
-  # before pasting, to avoid domains like "label1..label3"
-  # However, the PSL algorithm and domain structure generally don't expect empty labels internally.
-  # For now, let paste handle it; it might result in "foo..bar" which is then handled by other logic.
-  # A more robust approach might be to return NA for the whole domain if a part is truly undecodable/empty.
   paste(decoded_labels_unicode, collapse = ".")
 }
 
