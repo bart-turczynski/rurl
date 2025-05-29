@@ -408,17 +408,13 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
     parts <- strsplit(encoded_host, "\\.")[[1]]
     n <- length(parts)
 
-    # Match from longest candidate to shortest
-    for (i in seq_len(n - 1)) {
+    # Match from longest candidate to shortest, but never the whole host
+    for (i in 2:n) {
       candidate <- paste(parts[i:n], collapse = ".")
       if (candidate %in% tlds) {
         return(iconv(.punycode_to_unicode(candidate), to = "UTF-8", sub = ""))
       }
     }
-
-    # Fallback: try last part only
-    last <- parts[n]
-    if (last %in% tlds) return(iconv(.punycode_to_unicode(last), to = "UTF-8", sub = ""))
 
     NA_character_
   }, character(1))
