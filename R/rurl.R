@@ -153,12 +153,19 @@ safe_parse_url <- function(url,
       )
       host_parts <- strsplit(encoded_host_for_derivation, "\\.")[[1]]
       n_parts <- length(host_parts)
-      for (i in seq_len(n_parts)) { 
+      tld <- NA_character_
+      # Only consider suffixes shorter than the full host
+      for (i in seq_len(n_parts - 1)) {
         candidate_tld <- paste(host_parts[i:n_parts], collapse = ".")
         if (candidate_tld %in% selected_tlds) {
           tld <- .punycode_to_unicode(candidate_tld)
-          break 
+          break
         }
+      }
+      # Fallback: try last part only (rightmost label)
+      if (is.na(tld) && n_parts > 0) {
+        last <- host_parts[n_parts]
+        if (last %in% selected_tlds) tld <- .punycode_to_unicode(last)
       }
     }
   }
