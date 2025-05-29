@@ -257,84 +257,41 @@ get_clean_url <- function(url,
   }, character(1))
 }
 
-# Internal helper to derive registered domain using Public Suffix List
-# Expects hostname_encoded to be already NFC-normalized, lowercased, and Punycode-encoded if non-ASCII.
-# This function's logic needs to be robust and match standard PSL algorithm.
-# The psl_clean data should contain Punycode for IDN rules.
-.get_registered_domain <- function(hostname_encoded) {
-  if (is.na(hostname_encoded) || hostname_encoded == "") return(NA_character_)
+# Internal helper to encode hostnames using IDNA (Punycode)
+# Accepts encode_fn for testability and fallback
+.normalize_and_punycode <- function(host, encode_fn = urltools::puny_encode) {
+  if (is.na(host) || !nzchar(host)) return(host)
+  host <- stringi::stri_trans_nfc(host)  # Normalize Unicode
 
-  parts <- strsplit(hostname_encoded, "\\.")[[1]]
-  n <- length(parts)
-  if (n < 1) return(NA_character_) 
+  # Skip punycode encoding if ASCII-only
+  if (all(charToRaw(host) <= as.raw(127))) return(host)
 
-  exception_rules <- sub("^!", "", grep("^!", psl_clean, value = TRUE))
-  wildcard_rules  <- sub("^\\*\\.", "", grep("^\\*\\.", psl_clean, value = TRUE)) 
-  normal_rules    <- setdiff(psl_clean, c(paste0("!", exception_rules), paste0("*.", wildcard_rules)))
-
-  # PSL matching logic according to the algorithm:
-  # 1. If the hostname matches an exception rule (e.g., !example.com), then the registrable part is example.com itself.
-  for (i in seq_len(n)) {
-    candidate_domain <- paste(parts[i:n], collapse = ".")
-    if (candidate_domain %in% exception_rules) {
-      # This means candidate_domain is a registrable domain, not a public suffix.
-      # The public suffix is one level above this, if such a level exists and is in PSL.
-      # For www.parliament.uk, if !parliament.uk is the rule, parliament.uk is registrable.
-      return(candidate_domain) 
-    }
-  }
-
-  # 2. Match against the normal and wildcard rules to find the longest public suffix.
-  longest_public_suffix_match <- ""
-  for (i in seq_len(n)) {
-    candidate_suffix <- paste(parts[i:n], collapse = ".")
-    
-    # Check normal rules
-    if (candidate_suffix %in% normal_rules) {
-      if (nchar(candidate_suffix) > nchar(longest_public_suffix_match)) {
-        longest_public_suffix_match <- candidate_suffix
-      }
-    }
-    
-    # Check wildcard rules (e.g. *.ck means anything.ck -> .ck is public suffix, so ck is public suffix base)
-    # If host is a.b.c, and candidate_suffix is b.c, and c is a wildcard_rule (*.c)
-    # then b.c is the public suffix.
-    if (i > 1) { # Wildcard must have something before it.
-        # Current candidate_suffix is parts[i:n]. Base for wildcard is parts[(i+1):n]
-        possible_wildcard_base <- paste(parts[(i+1):n], collapse=".")
-        if (possible_wildcard_base %in% wildcard_rules) {
-            # The candidate_suffix (parts[i:n]) is the actual public suffix under this rule.
-            if (nchar(candidate_suffix) > nchar(longest_public_suffix_match)) {
-                longest_public_suffix_match <- candidate_suffix
-            }
-        }
-    }
-  }
-
-  if (longest_public_suffix_match == "") {
-    if (n >= 2) return(paste(parts[(n - 1):n], collapse = "."))
-    return(NA_character_)
-  }
-
-  if (longest_public_suffix_match == hostname_encoded) {
-    return(NA_character_)
-  }
-
-  num_public_suffix_parts <- length(strsplit(longest_public_suffix_match, "\\.")[[1]])
-  num_host_parts <- n
-  
-  # The registered domain is the public suffix plus one preceding label.
-  # Index of that label is (num_host_parts - num_public_suffix_parts)
-  required_label_index <- num_host_parts - num_public_suffix_parts
-  
-  if (required_label_index < 1) {
-      # This implies the public suffix is as long or longer than the host, which shouldn't happen if longest_public_suffix_match != hostname_encoded
-      return(NA_character_)
-  }
-  
-  return(paste(parts[required_label_index:num_host_parts], collapse = "."))
+  tryCatch(
+    encode_fn(host),
+    error = function(e) NA_character_
+  )
 }
 
+# Internal helper to decode Punycode domain parts to Unicode
+.punycode_to_unicode <- function(domain) {
+  if (is.na(domain)) return(NA_character_)
+  parts <- strsplit(domain, "\\.")[[1]]
+  decoded <- vapply(parts, function(part) {
+    tryCatch(urltools::puny_decode(part), error = function(e) part)
+  }, character(1))
+  paste(decoded, collapse = ".")
+}
+
+# Internal helper to convert host to ASCII using Punycode, fallback if urltools is unavailable
+.to_ascii <- function(host) {
+  if (is.na(host) || !nzchar(host)) return(host)
+  if (all(charToRaw(host) <= as.raw(127))) return(host)  # ASCII-only shortcut
+  if (requireNamespace("urltools", quietly = TRUE)) {
+    tryCatch(urltools::puny_encode(host), error = function(e) host)
+  } else {
+    host
+  }
+}
 
 #' Get domain names
 #'
@@ -427,35 +384,6 @@ get_path <- function(url, protocol_handling = "keep") {
   }, character(1))
 }
 
-# Internal helper to encode hostnames using IDNA (Punycode)
-# Input host should be already lowercased. Normalizes to NFC first, then Punycodes if non-ASCII.
-.normalize_and_punycode <- function(host) {
-  if (is.na(host) || !nzchar(host)) return(host)
-  host_nfc <- stringi::stri_trans_nfc(host)
-
-  if (all(charToRaw(host_nfc) <= as.raw(127))) return(host_nfc)
-
-  tryCatch(
-    urltools::puny_encode(host_nfc),
-    error = function(e) NA_character_
-  )
-}
-
-# Internal helper to decode Punycode domain parts to Unicode
-.punycode_to_unicode <- function(domain) {
-  if (is.na(domain)) return(NA_character_)
-  parts <- strsplit(domain, "\\.")[[1]]
-  decoded_parts <- vapply(parts, function(part) {
-    if (startsWith(tolower(part), "xn--")) {
-      tryCatch(urltools::puny_decode(part), error = function(e) part)
-    } else {
-      part
-    }
-  }, character(1))
-  paste(decoded_parts, collapse = ".")
-}
-
-
 #' Extract the top-level domain (TLD) from a URL
 #'
 #' @param url A character vector of URLs.
@@ -478,4 +406,62 @@ get_tld <- function(url,
     if (is.null(parsed)) return(NA_character_)
     parsed$tld %||% NA_character_
   }, character(1))
+}
+
+# Internal helper to derive registered domain using Public Suffix List
+# Expects hostname_encoded to be already NFC-normalized, lowercased, and Punycode-encoded if non-ASCII.
+.get_registered_domain <- function(hostname) {
+  parts <- strsplit(hostname, "\\.")[[1]]
+  parts <- parts[nzchar(parts)]  # Remove empty labels (e.g., from ".com")
+  n <- length(parts)
+  if (n < 2)
+    return(NA_character_)
+
+  # Extract rule types from PSL
+  exception_rules <- sub("^!", "", grep("^!", psl_clean, value = TRUE))
+  wildcard_rules  <- sub("^\\*\\.", "", grep("^\\*\\.", psl_clean, value = TRUE))
+  normal_rules    <- setdiff(psl_clean, c(paste0("!", exception_rules),
+                                          paste0("*.", wildcard_rules)))
+
+  # 1. Exception rules (take precedence)
+  for (i in seq_len(n)) {
+    candidate <- paste(parts[i:n], collapse = ".")
+    exception_rule <- paste0("!", candidate)
+
+    if (exception_rule %in% psl_clean) {
+      # Exception match: treat the exception domain as *not* a suffix
+      # So return one label above it
+      return(candidate)
+    }
+  }
+
+  # 2. Track best match length
+  best_match_len <- 0
+
+  for (i in seq_len(n)) {
+    candidate <- paste(parts[i:n], collapse = ".")
+
+    if (candidate %in% normal_rules && n - i + 1 > best_match_len) {
+      best_match_len <- n - i + 1
+    }
+
+    # Wildcard match: candidate must match a known *.domain suffix
+    if (i < n) {
+      wildcard_candidate <- paste(parts[i:n], collapse = ".")
+      if (wildcard_candidate %in% wildcard_rules &&
+            n - i > best_match_len) {
+        best_match_len <- n - i
+      }
+    }
+  }
+
+  if (best_match_len == 0) {
+    return(paste(utils::tail(parts, 2), collapse = "."))
+  }
+
+  if (n <= best_match_len)
+    return(NA_character_)
+
+  # Return: label before suffix + suffix itself
+  paste(parts[(n - best_match_len):n], collapse = ".")
 }
