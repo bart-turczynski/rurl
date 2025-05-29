@@ -268,10 +268,13 @@ get_clean_url <- function(url,
 .punycode_to_unicode <- function(domain) {
   if (is.na(domain)) return(NA_character_)
   parts <- strsplit(domain, "\\.")[[1]]
-  decoded <- vapply(parts, function(part) {
-    tryCatch(urltools::puny_decode(part), error = function(e) part)
+  decoded_parts <- vapply(parts, function(part) {
+    decoded_label <- tryCatch(urltools::puny_decode(part), error = function(e) part)
+    # Clean the decoded label: keep only Unicode letters, numbers, and hyphens.
+    cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", decoded_label, perl = TRUE)
+    return(cleaned_label)
   }, character(1))
-  paste(decoded, collapse = ".")
+  paste(decoded_parts, collapse = ".")
 }
 
 # Internal helper to convert host to ASCII using Punycode, fallback if urltools is unavailable
