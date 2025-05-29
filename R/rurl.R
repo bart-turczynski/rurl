@@ -512,14 +512,23 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   }
 
   if (best_match_len == 0) {
+    # No PSL rule matched. Fallback to TLD being last part, domain is penultimate + last.
+    # Assumes n >= 2 at this point due to the function's initial `if (n < 2)` check.
     return(paste(utils::tail(parts, 2), collapse = "."))
   }
 
-  if (n <= best_match_len)
+  # If hostname is a public suffix itself (or shorter than the matched public suffix),
+  # it cannot be a "registered domain" by the eTLD+1 definition.
+  if (n <= best_match_len) {
     return(NA_character_)
+  }
 
-  # Return: label before suffix + suffix itself
-  paste(parts[(n - best_match_len):n], collapse = ".")
+  # Standard case: n > best_match_len
+  # The registered domain is the public suffix (best_match_len parts) 
+  # plus one additional label to the left.
+  # So, we take (best_match_len + 1) parts from the end of the hostname.
+  # The starting index for these parts is (n - (best_match_len + 1) + 1) = (n - best_match_len).
+  return(paste(parts[(n - best_match_len):n], collapse = "."))
 }
 
 # Internal helper using the exact original get_tld logic for TLD extraction
