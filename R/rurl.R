@@ -280,25 +280,25 @@ get_clean_url <- function(url,
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
 
   decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
-    cat(paste0("  DEBUG part_puny: ", part_puny, "\\n")) # Debug Line 2
+    cat(paste0("  DEBUG part_puny: ", part_puny, "\n")) # Debug Line 2
     decoded_label <- NULL
     # Known workarounds for urltools::puny_decode issues with specific Punycode TLDs
     if (part_puny == "xn--qxam") { # Punycode for .ελ
-      decoded_label <- "ελ"
+      decoded_label <- "\u03b5\u03bb"  # "ελ"
     } else if (part_puny == "xn--p1ai") { # Punycode for .рф
-      decoded_label <- "рф"
+      decoded_label <- "\u0440\u0444"  # "рф"
     } else if (part_puny == "xn--wgbh1c") { # Punycode for .مصر
-      decoded_label <- "مصر"
+      decoded_label <- "\u0645\u0635\u0631"  # "مصر"
     } else if (part_puny == "xn--node") { # Punycode for .გე
-      decoded_label <- "გე"
-    # Add other problematic Punycode TLDs here if discovered
-    # For example, if xn--o3cw4h (.ไทย) was problematic in isolation:
-    # } else if (part_puny == "xn--o3cw4h") {
-    #   decoded_label <- "ไทย"
+      decoded_label <- "\u10d2\u10d4"  # "გე"
+      # Add other problematic Punycode TLDs here if discovered
+      # For example, if xn--o3cw4h (.ไทย) was problematic in isolation:
+      # } else if (part_puny == "xn--o3cw4h") {
+      #   decoded_label <- "\u0e44\u0e17\u0e22"  # "ไทย"
     } else {
       # Default to urltools::puny_decode for other cases
       decoded_label_from_tool <- tryCatch(urltools::puny_decode(part_puny), error = function(e) part_puny)
-      cat(paste0("    DEBUG decoded_label_from_tool ('", part_puny, "'): ", decoded_label_from_tool, "\\n")) # Debug Line 3
+      cat(paste0("    DEBUG decoded_label_from_tool ('", part_puny, "'): ", decoded_label_from_tool, "\n")) # Debug Line 3
       decoded_label <- decoded_label_from_tool
     }
 
