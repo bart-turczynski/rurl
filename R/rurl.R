@@ -158,11 +158,11 @@ safe_parse_url <- function(url,
       best_tld <- NA_character_
       best_len <- 0
       if (n_parts >= 2) {
-        for (i in 2:n_parts) {
-          candidate_tld <- paste(host_parts[i:n_parts], collapse = ".")
-          if (candidate_tld %in% selected_tlds && (n_parts - i + 1) > best_len) {
+        for (i in seq_len(n_parts - 1)) {
+          candidate_tld <- paste(host_parts[(n_parts - i + 1):n_parts], collapse = ".")
+          if (candidate_tld %in% selected_tlds && i > best_len) {
             best_tld <- candidate_tld
-            best_len <- n_parts - i + 1
+            best_len <- i
           }
         }
       }
