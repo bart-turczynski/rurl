@@ -274,37 +274,38 @@ get_clean_url <- function(url,
 }
 
 # Internal helper to decode Punycode domain parts to Unicode
-.punycode_to_unicode <- function(domain) {
-  if (is.na(domain)) return(NA_character_)
-  parts <- strsplit(domain, "\\.")[[1]]
-  decoded_parts <- vapply(parts, function(part) {
+.punycode_to_unicode <- function(domain_puny) {
+  if (is.na(domain_puny)) return(NA_character_)
+  parts_puny <- strsplit(domain_puny, "\\.")[[1]]
+  
+  decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
     # Decode Punycode label to Unicode (UTF-8)
-    # urltools::puny_decode should return a UTF-8 string or the original if not Punycode/error
-    decoded_label_from_puny <- tryCatch(urltools::puny_decode(part), error = function(e) part)
-
-    # Ensure the string is valid UTF-8 and substitute invalid byte sequences.
-    # urltools::puny_decode is expected to output UTF-8, but let's be robust.
-    # Using iconv to validate and clean. sub="byte" will represent invalid bytes as <XX>.
-    # Alternatively, sub="" or sub="?" could be used to remove/replace them.
-    valid_utf8_label <- iconv(decoded_label_from_puny, from = "UTF-8", to = "UTF-8", sub = "byte")
+    decoded_label <- tryCatch(urltools::puny_decode(part_puny), error = function(e) part_puny)
     
-    # If iconv failed (e.g. input was so mangled it couldn't be processed), it might return NA.
-    # Fallback to the output from puny_decode if iconv results in NA and original wasn't NA.
-    if (is.na(valid_utf8_label) && !is.na(decoded_label_from_puny)) {
-        valid_utf8_label <- decoded_label_from_puny # Or a safer fallback like an empty string or "?"
+    # Ensure the string is valid UTF-8. 
+    # iconv will attempt to convert from UTF-8 to UTF-8.
+    # sub="" will try to discard non-translatable characters/invalid byte sequences.
+    sane_label <- iconv(decoded_label, from = "UTF-8", to = "UTF-8", sub = "")
+    
+    # If iconv failed and returned NA (e.g., for a completely malformed string)
+    # and the original decoded_label wasn't NA, we might fallback or return a placeholder.
+    # For now, if sane_label is NA, it means iconv found it irreparable.
+    if (is.na(sane_label)) {
+      # If decoded_label itself was already NA, that's fine.
+      # If decoded_label was not NA, but iconv made it NA, it implies severe encoding issues.
+      # Return an empty string in such cases to prevent NA in paste(), or handle error.
+      return("") 
     }
-    # Ensure it's not NA before gsub
-    if (is.na(valid_utf8_label)) valid_utf8_label <- "" # Or handle error appropriately
-
-    # Remove any explicit byte substitution characters that might appear from iconv or elsewhere.
-    cleaned_label <- gsub("<[0-9a-fA-F]{2}>", "", valid_utf8_label)
     
-    # Remove any characters that are not letters, numbers, or hyphens.
-    final_cleaned_label <- gsub("[^\\p{L}\\p{N}-]", "", cleaned_label, perl = TRUE)
-    
-    return(final_cleaned_label)
+    return(sane_label)
   }, character(1))
-  paste(decoded_parts, collapse = ".")
+  
+  # Filter out any empty strings that might have resulted from iconv failing on a label
+  # before pasting, to avoid domains like "label1..label3"
+  # However, the PSL algorithm and domain structure generally don't expect empty labels internally.
+  # For now, let paste handle it; it might result in "foo..bar" which is then handled by other logic.
+  # A more robust approach might be to return NA for the whole domain if a part is truly undecodable/empty.
+  paste(decoded_labels_unicode, collapse = ".")
 }
 
 # Internal helper to convert host to ASCII using Punycode, fallback if urltools is unavailable
