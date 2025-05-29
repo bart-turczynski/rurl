@@ -4,23 +4,19 @@
 \alias{get_parse_status}
 \title{Get the parse status of URLs}
 \usage{
-get_parse_status(url, protocol_handling = "keep")
+get_parse_status(url, protocol_handling = "keep", www_handling = "none")
 }
 \arguments{
 \item{url}{A character vector of URLs to be parsed.}
 
 \item{protocol_handling}{A character string specifying how to handle protocols.
-Can be one of "keep", "none", "strip", "http", "https".
-The protocol is preserved if it exists, and "http://" is
-added if missing. If "none", no protocol is added. If
-"http://" or "https://" the given protocol is added
-or changed to the one indicated.}
+See \code{\link{safe_parse_url}} for details. Defaults to "keep".}
+
+\item{www_handling}{A character string specifying how to handle "www" prefixes.
+See \code{\link{safe_parse_url}} for details. Defaults to "none".}
 }
 \value{
-A character vector with the parse status of each URL:
-  - "ok" for http(s) URLs.
-  - "ok-ftp" for ftp and ftps URLs.
-  - "error" for unsupported schemes (mailto, file, etc.) or invalid URLs.
+A character vector with the parse status of each URL.
 }
 \description{
 Get the parse status of URLs

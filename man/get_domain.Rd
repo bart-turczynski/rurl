@@ -4,47 +4,22 @@
 \alias{get_domain}
 \title{Get domain names}
 \usage{
-get_domain(url, protocol_handling = "keep")
+get_domain(url, protocol_handling = "keep", www_handling = "none")
 }
 \arguments{
-\item{url}{A character vector containing URLs from which to extract the domain.}
+\item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{A character string specifying how to handle protocols.
-Can be one of "keep", "none", "strip", "http", "https".
-The protocol is preserved if it exists, and "http://" is
-added if missing. If "none", no protocol is added. If
-"http://" or "https://" the given protocol is added
-or changed to the one indicated.}
+\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
+
+\item{www_handling}{See \code{\link{safe_parse_url}}. Defaults to "none".}
 }
 \value{
-A character vector with domain names extracted from the given URLs.
+A character vector of domain names.
 }
 \description{
-This function extracts the domain name from a given URL. It returns only the
-domain part of the URL, e.g., "example.com" from "http://example.com".
-Note the domain is determined based on Public Suffix List at
-https://publicsuffix.org/list/public_suffix_list.dat Which may not give
-intuitive results sometimes. For example, blogspot.com is treated as a TLD
-but wordpress.org is not.
-}
-\details{
-For example:
-
-get_domain("https://test.wordpress.org")
-https://test.wordpress.org
-"wordpress.org"
-
-But:
-
-get_domain("https://test.blogspot.com")
-https://test.blogspot.com
-"test.blogspot.com"
-
-Deciding what is a "proper" domain name is an ambitious yet futile task.
-I gave up and decided to use something that already exists and is respected.
+Extracts the registered domain name from a URL (e.g., "example.com").
+Relies on the Public Suffix List.
 }
 \examples{
-get_domain("http://example.com/path")
-get_domain("https://sub.domain.org/")
-get_domain("ftp://ftp.example.com")
+get_domain("http://www.example.co.uk/path")
 }

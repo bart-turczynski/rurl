@@ -7,25 +7,16 @@
 get_path(url, protocol_handling = "keep")
 }
 \arguments{
-\item{url}{A character vector containing URLs from which to extract the path.}
+\item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{A character string specifying how to handle protocols.
-Can be one of "keep", "none", "strip", "http", "https".
-The protocol is preserved if it exists, and "http://" is
-added if missing. If "none", no protocol is added. If
-"http://" or "https://" the given protocol is added
-or changed to the one indicated.}
+\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
 }
 \value{
-A character vector with the path of each URL. If no path exists, it will
-        return an empty string.
+A character vector of URL paths.
 }
 \description{
-This function extracts the path component of a given URL. The path refers to the
-part of the URL that follows the domain, such as "/path/to/resource".
+Extracts the path component of a URL.
 }
 \examples{
-get_path("http://example.com/path/to/resource")
-get_path("ftp://example.com/another/path")
-get_path("https://example.com")
+get_path("http://example.com/some/path?query=1")
 }

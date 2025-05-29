@@ -103,7 +103,14 @@ safe_parse_url <- function(url,
     keep = raw_scheme
   )
 
-  is_ip_host <- if (is.na(raw_host) || raw_host == "") FALSE else urltools::is_ip(raw_host)
+  # Use regex for IP detection (IPv4 and IPv6)
+  is_ip_host <- if (is.na(raw_host) || raw_host == "") FALSE else {
+    # IPv4: 1.2.3.4
+    ipv4 <- grepl("^\\d{1,3}(\\.\\d{1,3}){3}$", raw_host)
+    # IPv6: [2001:db8::1] or 2001:db8::1
+    ipv6 <- grepl("^\\[?[0-9a-fA-F:]+\\]?$", raw_host) && grepl(":", raw_host)
+    ipv4 || ipv6
+  }
   final_host <- raw_host
 
   if (!is_ip_host && !is.na(raw_host) && raw_host != "") {

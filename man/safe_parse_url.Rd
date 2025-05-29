@@ -2,33 +2,68 @@
 % Please edit documentation in R/rurl.R
 \name{safe_parse_url}
 \alias{safe_parse_url}
-\title{Parse a URL safely with scheme handling}
+\title{Parse a URL comprehensively, extracting and deriving all relevant components.}
 \usage{
 safe_parse_url(
   url,
-  protocol_handling = c("keep", "none", "strip", "http", "https")
+  protocol_handling = c("keep", "none", "strip", "http", "https"),
+  www_handling = c("none", "strip", "keep"),
+  tld_source = c("all", "private", "icann")
 )
 }
 \arguments{
 \item{url}{A character vector containing one or more URLs to be parsed.}
 
 \item{protocol_handling}{A character string specifying how to handle
-protocols. Can be one of "keep", "none", "strip", "http", "https". The
-protocol is preserved if it exists, and "http://" is added if missing. If
-"none", no protocol is added. If "http://" or "https://" the given protocol
-is added or changed to the one indicated.}
+protocols. Defaults to "keep".
+\itemize{
+  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If no scheme, "http://" is added.}
+  \item{"none": If a scheme exists, it's used. If no scheme, then no scheme is used (scheme component will be NA).}
+  \item{"strip": Any existing scheme is removed (scheme component will be NA).}
+  \item{"http": The scheme is forced to be "http".}
+  \item{"https": The scheme is forced to be "https".}
+}}
+
+\item{www_handling}{A character string specifying how to handle "www"
+and "www[number]" prefixes in the host. Defaults to "none".
+\itemize{
+  \item{"none": (Default) Leaves the host's www prefix (or lack thereof) untouched.}
+  \item{"strip": Removes any "www." or "www[number]." prefix.}
+  \item{"keep": Ensures the host starts with "www.". If it has "www[number].", it's normalized to "www.". If no www prefix, "www." is added. An empty input host remains empty.}
+}}
+
+\item{tld_source}{Which TLD source to use for TLD extraction: "all", "icann",
+or "private". Defaults to "all".}
 }
 \value{
-A named list with components such as `scheme`, `host`, `path`, or `NULL`
-                         if parsing fails.
+A named list with the following components:
+  \itemize{
+    \item `original_url`: The original URL string provided.
+    \item `scheme`: The scheme (e.g., "http", "https").
+    \item `host`: The host (e.g., "www.example.com"). NA if the host becomes empty after processing.
+    \item `port`: The port number.
+    \item `path`: The path component (e.g., "/path/to/resource").
+    \item `query`: The query string (e.g., "name=value").
+    \item `fragment`: The fragment identifier (e.g., "section").
+    \item `user`: The user name for authentication.
+    \item `password`: The password for authentication.
+    \item `domain`: The registered domain name (e.g., "example.com"). NA if host is an IP, empty, or derivation fails.
+    \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP, empty, or derivation fails.
+    \item `is_ip_host`: Logical, TRUE if the host is an IP address.
+    \item `clean_url`: The URL reconstructed from scheme, host, and path after processing. NA if host is empty/NA.
+    \item `parse_status`: Character string indicating parsing outcome ("ok", "ok-ftp", "error", "warning-no-tld").
+  }
+  Returns `NULL` if the URL is fundamentally unparseable (e.g., NA, empty) or uses a disallowed scheme.
 }
 \description{
-This function parses a URL safely, handling different protocols such as
-http(s), ftp, and ftps. If no scheme is present, it assumes "http://". Other
-schemes will return NULL.
+This function serves as the core URL processing engine. It parses a URL,
+handles protocol and www prefix modifications, detects IP addresses,
+and derives components like the registered domain and top-level domain (TLD).
 }
 \examples{
-safe_parse_url("http://example.com", "http")
-safe_parse_url("example.com", "keep")
+safe_parse_url("http://www.example.com/path?q=1#frag", protocol_handling = "keep")
+safe_parse_url("example.com", protocol_handling = "none", www_handling = "keep")
+safe_parse_url("192.168.1.1/test")
+safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
 }
 \keyword{internal}

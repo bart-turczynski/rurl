@@ -4,31 +4,25 @@
 \alias{get_clean_url}
 \title{Get cleaned URLs}
 \usage{
-get_clean_url(url, protocol_handling = "keep")
+get_clean_url(url, protocol_handling = "keep", www_handling = "none")
 }
 \arguments{
-\item{url}{A character vector containing URLs to be parsed. This can include URLs
-without a scheme (e.g., "example.com") or URLs with a scheme
-(e.g., "http://example.com").}
+\item{url}{A character vector containing URLs to be parsed.}
 
 \item{protocol_handling}{A character string specifying how to handle protocols.
-Can be one of "keep", "none", "strip", "http", "https".
-The protocol is preserved if it exists, and "http://" is
-added if missing. If "none", no protocol is added. If
-"http://" or "https://" the given protocol is added
-or changed to the one indicated.}
+See \code{\link{safe_parse_url}} for details. Defaults to "keep".}
+
+\item{www_handling}{A character string specifying how to handle "www" prefixes.
+See \code{\link{safe_parse_url}} for details. Defaults to "none".}
 }
 \value{
 A character vector of cleaned URLs.
 }
 \description{
-This function returns the cleaned version of the URLs by ensuring that the
-URLs are valid and, if necessary, prepends "http://" when the protocol is
-missing.
+This function returns the cleaned version of the URLs after applying
+protocol and www handling rules.
 }
 \examples{
 get_clean_url("example.com")
-get_clean_url("http://example.com")
-get_clean_url("https://example.com")
-get_clean_url("ftp://example.com")
+get_clean_url("http://example.com", www_handling = "strip")
 }

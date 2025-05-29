@@ -4,12 +4,21 @@
 \alias{get_tld}
 \title{Extract the top-level domain (TLD) from a URL}
 \usage{
-get_tld(url, source = c("all", "private", "icann"))
+get_tld(
+  url,
+  source = c("all", "private", "icann"),
+  protocol_handling = "keep",
+  www_handling = "none"
+)
 }
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{source}{Which TLD source to use: "all", "icann", or "private".}
+\item{source}{Which TLD source to use: "all", "icann", or "private". Defaults to "all".}
+
+\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
+
+\item{www_handling}{See \code{\link{safe_parse_url}}. Defaults to "none".}
 }
 \value{
 A character vector of TLDs.
@@ -18,5 +27,5 @@ A character vector of TLDs.
 Extract the top-level domain (TLD) from a URL
 }
 \examples{
-get_tld("example.com")
+get_tld("www.example.co.uk", source = "all")
 }
