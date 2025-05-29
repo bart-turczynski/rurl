@@ -484,19 +484,29 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   # 2. Track best match length
   best_match_len <- 0
 
-  for (i in seq_len(n)) {
-    candidate <- paste(parts[i:n], collapse = ".")
+  for (i in seq_len(n)) { # i is the start index of a suffix candidate in parts
+    candidate_suffix_str <- paste(parts[i:n], collapse = ".")
+    num_parts_in_candidate_suffix <- n - i + 1
 
-    if (candidate %in% normal_rules && n - i + 1 > best_match_len) {
-      best_match_len <- n - i + 1
+    # 1. Check if candidate_suffix_str is an exact match in normal_rules
+    if (candidate_suffix_str %in% normal_rules) {
+      if (num_parts_in_candidate_suffix > best_match_len) {
+        best_match_len <- num_parts_in_candidate_suffix
+      }
     }
 
-    # Wildcard match: candidate must match a known *.domain suffix
-    if (i < n) {
-      wildcard_candidate <- paste(parts[i:n], collapse = ".")
-      if (wildcard_candidate %in% wildcard_rules &&
-            n - i > best_match_len) {
-        best_match_len <- n - i
+    # 2. Check if candidate_suffix_str matches a wildcard rule.
+    #    A wildcard rule means "*." + some_suffix_in_wildcard_rules.
+    #    So, candidate_suffix_str must be of form "label." + some_suffix_in_wildcard_rules.
+    #    e.g., candidate_suffix_str = "somerset.sch.uk", and "sch.uk" is in wildcard_rules.
+    if (num_parts_in_candidate_suffix > 1) { # Must have at least "label.wildcard_part"
+      # The part that would be in wildcard_rules is parts[(i+1):n]
+      potential_wildcard_match_part <- paste(parts[(i+1):n], collapse=".")
+      if (potential_wildcard_match_part %in% wildcard_rules) {
+        # If it matches, then the current candidate_suffix_str (parts[i:n]) is the public suffix.
+        if (num_parts_in_candidate_suffix > best_match_len) {
+          best_match_len <- num_parts_in_candidate_suffix
+        }
       }
     }
   }
