@@ -515,8 +515,8 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
     for (i in seq_len(n - 1)) {
       candidate <- paste(parts[i:n], collapse = ".")
       if (candidate %in% current_tld_list) {
-        # Ensure proper UTF-8 encoding for the final TLD string
-        return(iconv(.punycode_to_unicode(candidate), from = "UTF-8", to = "UTF-8", sub = ""))
+        decoded_tld <- .punycode_to_unicode(candidate)
+        return(iconv(decoded_tld, from = "", to = "UTF-8", sub = "")) 
       }
     }
   }
@@ -524,8 +524,8 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   if (n > 0) {
     last_candidate <- parts[n]
     if (last_candidate %in% current_tld_list) {
-      # Ensure proper UTF-8 encoding for the final TLD string
-      return(iconv(.punycode_to_unicode(last_candidate), from = "UTF-8", to = "UTF-8", sub = ""))
+      decoded_tld <- .punycode_to_unicode(last_candidate)
+      return(iconv(decoded_tld, from = "", to = "UTF-8", sub = ""))
     }
   }
 
