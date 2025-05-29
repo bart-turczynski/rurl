@@ -8,7 +8,7 @@ test_cases <- list(
   list(unicode_domain = "παράδειγμα.ελ", label1_uni = "παράδειγμα", tld_uni = "ελ"),
   list(unicode_domain = "δοκιμή.ελ",      label1_uni = "δοκιμή",      tld_uni = "ελ"),
   list(unicode_domain = "τεστ.ελ",        label1_uni = "τεστ",        tld_uni = "ελ"),
-  list(unicode_domain = "α.ελ",           label1_uni = "α",            tld_uni = "ελ"), 
+  list(unicode_domain = "α.ελ",           label1_uni = "α",            tld_uni = "ελ"),
 
   # Russian (Problematic)
   list(unicode_domain = "тест.рф",        label1_uni = "тест",        tld_uni = "рф"),
@@ -17,7 +17,7 @@ test_cases <- list(
   # Chinese (Previously OK)
   list(unicode_domain = "例子.中国",      label1_uni = "例子",        tld_uni = "中国"),
   list(unicode_domain = "公司.中国",      label1_uni = "公司",        tld_uni = "中国"),
-  
+
   # Korean (Previously OK)
   list(unicode_domain = "회사.한국",      label1_uni = "회사",        tld_uni = "한국"),
   list(unicode_domain = "정보.한국",      label1_uni = "정보",        tld_uni = "한국"),
@@ -36,22 +36,22 @@ test_cases <- list(
 # Function to perform and print tests for a single case
 run_diag_tests <- function(case) {
   cat(paste0("\n--- Testing: ", case$unicode_domain, " ---\n"))
-  
+
   label1_puny <- NA
   tld_puny <- NA
   full_domain_puny <- NA
-  
+
   cat("1. urltools::puny_encode results:\n")
   tryCatch({
     label1_puny <- urltools::puny_encode(case$label1_uni)
     cat(paste0("  Label 1 ('", case$label1_uni, "') -> Punycode: ", label1_puny, "\n"))
   }, error = function(e) cat(paste0("  Error encoding label 1 ", case$label1_uni, ": ", e$message, "\n")))
-  
+
   tryCatch({
     tld_puny <- urltools::puny_encode(case$tld_uni)
     cat(paste0("  TLD     ('", case$tld_uni, "') -> Punycode: ", tld_puny, "\n"))
   }, error = function(e) cat(paste0("  Error encoding TLD ", case$tld_uni, ": ", e$message, "\n")))
-  
+
   if (!is.na(label1_puny) && !is.na(tld_puny)) {
     full_domain_puny <- paste0(label1_puny, ".", tld_puny)
     cat(paste0("  Full Punycode Domain Constructed: ", full_domain_puny, "\n"))
@@ -63,7 +63,7 @@ run_diag_tests <- function(case) {
         if (is.na(full_domain_puny)) full_domain_puny <- full_domain_puny_alt
     }, error = function(e) cat(paste0("  Error encoding full unicode domain ", case$unicode_domain, ": ", e$message, "\n")))
   }
-  
+
   cat("\n2. urltools::puny_decode on individual Punycode labels (RAW and SANITIZED by iconv):")
   if (!is.na(label1_puny)) {
     cat("\n  Label 1 ('", label1_puny, "'):\n")
@@ -104,7 +104,7 @@ run_diag_tests <- function(case) {
       }
     }, error = function(e) cat(paste0("    Error decoding full Punycode ", full_domain_puny, ": ", e$message, "\n")))
   }
-  
+
   cat("\n4. rurl function tests (using current .punycode_to_unicode with hardcoded workarounds for .ελ, .рф):\n")
   cat("  Using Unicode domain string ('", case$unicode_domain, "'):\n")
   tryCatch({
@@ -118,7 +118,7 @@ run_diag_tests <- function(case) {
           cat(paste0("      WARNING: rurl::get_domain on Unicode string MISMATCH! Expected: ", case$unicode_domain, " vs Got: ", rurl_domain_uni, "\n"))
       }
   }, error = function(e) cat(paste0("    Error with rurl functions on Unicode: ", e$message, "\n")))
-  
+
   if (!is.na(full_domain_puny)) {
     cat("  Using full Punycode domain string ('", full_domain_puny, "'):\n")
     tryCatch({
@@ -147,9 +147,9 @@ for (case in test_cases) {
 
 cat("IDN Diagnostic Tests Finished.\n")
 
-# Note: 
+# Note:
 # The `expected` domain for rurl::get_domain in these simple two-label cases should be the full unicode_domain itself,
 # assuming the TLD is in the PSL and there are no other rules making the TLD itself a registered domain.
 # For example, if '.ελ' is a TLD, then 'παράδειγμα.ελ' is the registered domain.
 # This script does not use safe_parse_url directly but tests the underlying accessors.
-# The behavior of safe_parse_url might differ slightly due to its more complex parsing logic for full URLs. 
+# The behavior of safe_parse_url might differ slightly due to its more complex parsing logic for full URLs.
