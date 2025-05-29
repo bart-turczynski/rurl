@@ -144,33 +144,7 @@ safe_parse_url <- function(url,
       if (!is.na(derived_domain_encoded)) {
         domain <- .punycode_to_unicode(derived_domain_encoded)
       }
-
-      selected_tlds <- switch(
-        tld_source,
-        all = tld_all,
-        private = tld_private,
-        icann = tld_icann
-      )
-      host_parts <- strsplit(encoded_host_for_derivation, "\\.")[[1]]
-      n_parts <- length(host_parts)
-      tld <- NA_character_
-      # Find the longest matching TLD suffix (never the whole host)
-      best_tld <- NA_character_
-      best_len <- 0
-      if (n_parts >= 2) {
-        for (i in seq_len(n_parts - 1)) {
-          candidate_tld <- paste(host_parts[(n_parts - i + 1):n_parts], collapse = ".")
-          if (candidate_tld %in% selected_tlds && i > best_len) {
-            best_tld <- candidate_tld
-            best_len <- i
-          }
-        }
-      }
-      if (!is.na(best_tld)) {
-        tld <- .punycode_to_unicode(best_tld)
-      } else if (n_parts > 0 && host_parts[n_parts] %in% selected_tlds) {
-        tld <- .punycode_to_unicode(host_parts[n_parts])
-      }
+      tld <- .get_tld_from_host(final_host, tld_source)
     }
   }
 
@@ -475,4 +449,38 @@ get_tld <- function(url,
 
   # Return: label before suffix + suffix itself
   paste(parts[(n - best_match_len):n], collapse = ".")
+}
+
+# Internal helper to extract TLD from a host using PSL
+.get_tld_from_host <- function(host, tld_source = c("all", "private", "icann")) {
+  tld_source <- match.arg(tld_source)
+  if (is.na(host) || !nzchar(host)) return(NA_character_)
+  host_nfc <- stringi::stri_trans_nfc(tolower(host))
+  host_puny <- .normalize_and_punycode(host_nfc)
+  if (is.na(host_puny) || !nzchar(host_puny)) return(NA_character_)
+  selected_tlds <- switch(
+    tld_source,
+    all = tld_all,
+    private = tld_private,
+    icann = tld_icann
+  )
+  host_parts <- strsplit(host_puny, "\\.")[[1]]
+  n_parts <- length(host_parts)
+  best_tld <- NA_character_
+  best_len <- 0
+  if (n_parts >= 2) {
+    for (i in seq_len(n_parts - 1)) {
+      candidate_tld <- paste(host_parts[(n_parts - i + 1):n_parts], collapse = ".")
+      if (candidate_tld %in% selected_tlds && i > best_len) {
+        best_tld <- candidate_tld
+        best_len <- i
+      }
+    }
+  }
+  if (!is.na(best_tld)) {
+    return(.punycode_to_unicode(best_tld))
+  } else if (n_parts > 0 && host_parts[n_parts] %in% selected_tlds) {
+    return(.punycode_to_unicode(host_parts[n_parts]))
+  }
+  NA_character_
 }
