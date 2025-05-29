@@ -548,20 +548,18 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   n <- length(parts)
 
   if (n > 1) {
-    for (i in seq_len(n - 1)) {
-      candidate <- paste(parts[i:n], collapse = ".")
-      if (candidate %in% current_tld_list) {
-        decoded_tld <- .punycode_to_unicode(candidate)
-        return(iconv(decoded_tld, from = "", to = "UTF-8", sub = "")) 
+    for (i in seq_len(n - 1)) { # Checks suffixes of length n down to 2
+      candidate <- paste(parts[i:n], collapse = ".") # Candidate is Punycode
+      if (candidate %in% current_tld_list) { # current_tld_list should also be Punycode
+        return(.punycode_to_unicode(candidate)) # Decodes matched Punycode TLD
       }
     }
   }
 
-  if (n > 0) {
-    last_candidate <- parts[n]
-    if (last_candidate %in% current_tld_list) {
-      decoded_tld <- .punycode_to_unicode(last_candidate)
-      return(iconv(decoded_tld, from = "", to = "UTF-8", sub = ""))
+  if (n > 0) { # Fallback to last part
+    last_candidate <- parts[n] # Punycode
+    if (last_candidate %in% current_tld_list) { # Check against Punycode TLD list
+      return(.punycode_to_unicode(last_candidate))
     }
   }
 
