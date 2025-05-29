@@ -501,10 +501,8 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
     return(NA_character_)
   }
 
-  # Normalize to NFC and lowercase first, then punycode with .normalize_and_punycode
-  # .normalize_and_punycode itself also does NFC, so direct tolower is fine.
   normalized_host <- stringi::stri_trans_nfc(tolower(host_to_process))
-  encoded_host <- .normalize_and_punycode(normalized_host) # This handles puny-encoding and returns NA on error
+  encoded_host <- .normalize_and_punycode(normalized_host)
 
   if (is.na(encoded_host) || !nzchar(encoded_host)) {
     return(NA_character_)
@@ -513,23 +511,21 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   parts <- strsplit(encoded_host, "\\.")[[1]]
   n <- length(parts)
 
-  # Original loop: Match from (n-1) labels down to 1 label that forms the suffix
-  # This means the first candidate is parts[1:n] if n > 1, then parts[2:n], etc.
-  if (n > 1) { # Only loop if there are at least two parts
-    for (i in seq_len(n - 1)) { # i goes from 1 to n-1
-      # Candidate starts from parts[i] to parts[n]
+  if (n > 1) {
+    for (i in seq_len(n - 1)) {
       candidate <- paste(parts[i:n], collapse = ".")
       if (candidate %in% current_tld_list) {
-        return(.punycode_to_unicode(candidate))
+        # Ensure proper UTF-8 encoding for the final TLD string
+        return(iconv(.punycode_to_unicode(candidate), from = "UTF-8", to = "UTF-8", sub = ""))
       }
     }
   }
 
-  # Fallback: try the last part only
-  if (n > 0) { # Ensure there is at least one part
+  if (n > 0) {
     last_candidate <- parts[n]
     if (last_candidate %in% current_tld_list) {
-      return(.punycode_to_unicode(last_candidate))
+      # Ensure proper UTF-8 encoding for the final TLD string
+      return(iconv(.punycode_to_unicode(last_candidate), from = "UTF-8", to = "UTF-8", sub = ""))
     }
   }
 
