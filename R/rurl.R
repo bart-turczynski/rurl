@@ -261,15 +261,17 @@ get_clean_url <- function(url,
 # Internal helper to encode hostnames using IDNA (Punycode)
 .normalize_and_punycode <- function(host) {
   if (is.na(host) || !nzchar(host)) return(host)
-  host <- stringi::stri_trans_nfc(host)
+  host_nfc <- stringi::stri_trans_nfc(host)
 
-  if (all(charToRaw(host) <= as.raw(127))) return(host)
+  # If already all ASCII, no need to process further for IDNA encoding
+  if (all(charToRaw(host_nfc) <= as.raw(127))) return(host_nfc)
 
   tryCatch(
-    stringi::stri_trans_totidna(host, FALSE, FALSE, FALSE), # USE_STD3_RULES = FALSE, CheckHyphens = FALSE, CheckBidi = FALSE 
+    # Use UIDNA standard (UTS #46) with allowance for unassigned code points
+    stringi::stri_trans_totidna(host_nfc, UIDNA = TRUE, allow_unassigned = TRUE),
     error = function(e) {
-      # warning(paste0("IDNA encoding failed for host: ", host, " Error: ", e$message)) # Optional: for deeper debugging
-      NA_character_ # Fallback if stringi fails
+      # warning(paste0("IDNA encoding (to ASCII/Punycode) failed for host: ", host_nfc, " Error: ", e$message)) # Optional for debugging
+      host_nfc # Fallback to NFC-normalized original host if Punycode conversion fails
     }
   )
 }
@@ -280,32 +282,30 @@ get_clean_url <- function(url,
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
 
   decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
-    decoded_label <- part_puny # Default to original part if not Punycode or if decoding fails
+    # Default to original part_puny. If it's not Punycode, it should remain as is.
+    # If it is Punycode and decoding fails, we'll also fall back to the original Punycode part.
+    decoded_label <- part_puny 
 
-    if (startsWith(tolower(part_puny), "xn--")) {
+    if (startsWith(tolower(part_puny), "xn--")) { # Only attempt to decode if it looks like Punycode
       decoded_label_attempt <- tryCatch(
-        stringi::stri_trans_fromtidna(part_puny, FALSE), # USE_STD3_RULES = FALSE
+        stringi::stri_trans_fromtidna(part_puny, UIDNA = TRUE, allow_unassigned = TRUE),
         error = function(e) {
-          # warning(paste0("IDNA decoding failed for part: ", part_puny, " Error: ", e$message)) # Optional
+          # warning(paste0("IDNA decoding (from Punycode) failed for part: ", part_puny, " Error: ", e$message))
           part_puny # Fallback to original Punycode part on error
         }
       )
-      # If error didn't occur and result is different, assign it.
-      # This handles cases where tryCatch returns the original on error, 
-      # or if stringi::stri_trans_fromtidna itself returns the input on some failures.
-      if (!is.null(decoded_label_attempt) && !identical(decoded_label_attempt, part_puny)) {
+      # Assign if tryCatch didn't error out AND the result is non-null 
+      # (stringi might return the input on some failures, or NULL)
+      if (!is.null(decoded_label_attempt)) {
           decoded_label <- decoded_label_attempt
-      } else if (is.null(decoded_label_attempt)) { # tryCatch somehow yielded NULL
-          decoded_label <- part_puny # fallback
-      }
+      } # else decoded_label remains part_puny (our default)
     }
     
     # Final sanitization with iconv to ensure valid UTF-8 for downstream operations
-    # and to remove any lingering problematic byte sequences if any step above produced them.
     sane_label <- iconv(decoded_label, from = "UTF-8", to = "UTF-8", sub = "")
 
     if (is.na(sane_label)) {
-      return("") # Should be rare if previous steps handle errors by returning original strings
+      return(part_puny) # If iconv makes it NA, return original part_puny as last resort before empty string
     }
     return(sane_label)
   }, character(1))
