@@ -29,7 +29,7 @@ test_cases <- list(
   list(unicode_domain = "शब्द.भारत",      label1_uni = "शब्द",       tld_uni = "भारत"),     # Devanagari (India)
   list(unicode_domain = "բառ.հայ",        label1_uni = "բառ",         tld_uni = "հայ"),       # Armenian (Armenia)
   list(unicode_domain = "სიტყვა.გე",     label1_uni = "სიტყვა",    tld_uni = "გე"),        # Georgian (Georgia)
-  list(unicode_domain = " சொல்.சிங்கப்பூர்",label1_uni = "சொல்",      tld_uni = "சிங்கப்பூர்") # Tamil (Singapore)
+  list(unicode_domain = "சொல்.சிங்கப்பூர்",label1_uni = "சொல்",      tld_uni = "சிங்கப்பூர்") # Tamil (Singapore)
   # Note: Add more single-label TLDs if direct TLD decoding is the main focus for urltools test.
 )
 
