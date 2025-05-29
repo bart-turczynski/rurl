@@ -261,18 +261,15 @@ get_clean_url <- function(url,
 # Internal helper to encode hostnames using IDNA (Punycode)
 .normalize_and_punycode <- function(host) {
   if (is.na(host) || !nzchar(host)) return(host)
-  host <- stringi::stri_trans_nfc(host)  # Normalize Unicode
+  host <- stringi::stri_trans_nfc(host)
 
-  # Skip punycode encoding if ASCII-only
   if (all(charToRaw(host) <= as.raw(127))) return(host)
 
   tryCatch(
-    stringi::stri_trans_totidna(host, T), # USE_STD3_RULES=TRUE, CheckSTD3ASCIIRules=TRUE
+    stringi::stri_trans_totidna(host, FALSE, FALSE, FALSE), # USE_STD3_RULES = FALSE, CheckHyphens = FALSE, CheckBidi = FALSE 
     error = function(e) {
-      # Basic fallback: if stringi fails (e.g. dev version issue or truly invalid for IDNA),
-      # try to return original host, or NA if it seems safer.
-      # For now, returning NA might be safer to signal a conversion problem.
-      NA_character_
+      # warning(paste0("IDNA encoding failed for host: ", host, " Error: ", e$message)) # Optional: for deeper debugging
+      NA_character_ # Fallback if stringi fails
     }
   )
 }
@@ -283,30 +280,37 @@ get_clean_url <- function(url,
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
 
   decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
-    decoded_label <- NULL
-    # We now rely on stringi for robust decoding
-    if (startsWith(tolower(part_puny), "xn--")) { # Only attempt to decode if it looks like Punycode
-        decoded_label <- tryCatch(
-            stringi::stri_trans_fromtidna(part_puny, T), # USE_STD3_RULES=TRUE, CheckSTD3ASCIIRules=TRUE
-            error = function(e) part_puny # If error, return original part_puny
-        )
-    } else { # Not Punycode, so should already be Unicode (or ASCII)
-        decoded_label <- part_puny
-    }
+    decoded_label <- part_puny # Default to original part if not Punycode or if decoding fails
 
-    # Ensure the string is valid UTF-8.
-    # iconv will attempt to convert from UTF-8 to UTF-8.
-    # sub="" will try to discard non-translatable characters/invalid byte sequences.
+    if (startsWith(tolower(part_puny), "xn--")) {
+      decoded_label_attempt <- tryCatch(
+        stringi::stri_trans_fromtidna(part_puny, FALSE), # USE_STD3_RULES = FALSE
+        error = function(e) {
+          # warning(paste0("IDNA decoding failed for part: ", part_puny, " Error: ", e$message)) # Optional
+          part_puny # Fallback to original Punycode part on error
+        }
+      )
+      # If error didn't occur and result is different, assign it.
+      # This handles cases where tryCatch returns the original on error, 
+      # or if stringi::stri_trans_fromtidna itself returns the input on some failures.
+      if (!is.null(decoded_label_attempt) && !identical(decoded_label_attempt, part_puny)) {
+          decoded_label <- decoded_label_attempt
+      } else if (is.null(decoded_label_attempt)) { # tryCatch somehow yielded NULL
+          decoded_label <- part_puny # fallback
+      }
+    }
+    
+    # Final sanitization with iconv to ensure valid UTF-8 for downstream operations
+    # and to remove any lingering problematic byte sequences if any step above produced them.
     sane_label <- iconv(decoded_label, from = "UTF-8", to = "UTF-8", sub = "")
 
     if (is.na(sane_label)) {
-      return("")
+      return("") # Should be rare if previous steps handle errors by returning original strings
     }
     return(sane_label)
   }, character(1))
 
-  result_unicode <- paste(decoded_labels_unicode, collapse = ".")
-  return(result_unicode)
+  paste(decoded_labels_unicode, collapse = ".")
 }
 
 # Internal helper to convert host to ASCII using Punycode
