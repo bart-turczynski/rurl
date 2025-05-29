@@ -372,24 +372,55 @@ get_path <- function(url, protocol_handling = "keep") {
 #' Extract the top-level domain (TLD) from a URL
 #'
 #' @param url A character vector of URLs.
-#' @param source Which TLD source to use: "all", "icann", or "private". Defaults to "all".
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to "keep".
-#' @param www_handling See \code{\link{safe_parse_url}}. Defaults to "none".
+#' @param source Which TLD source to use: "all", "icann", or "private".
 #' @return A character vector of TLDs.
 #' @export
 #' @examples
-#' get_tld("www.example.co.uk", source = "all")
-get_tld <- function(url,
-                    source = c("all", "private", "icann"),
-                    protocol_handling = "keep",
-                    www_handling = "none") {
+#' get_tld("example.com")
+get_tld <- function(url, source = c("all", "private", "icann")) {
+  source <- match.arg(source)
+  tlds <- switch(
+    source,
+    all     = tld_all,
+    private = tld_private,
+    icann   = tld_icann
+  )
+
   vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-                             protocol_handling = protocol_handling,
-                             www_handling = www_handling,
-                             tld_source = source) 
-    if (is.null(parsed)) return(NA_character_)
-    parsed$tld %||% NA_character_
+    if (is.na(u) || !nzchar(u)) return(NA_character_)
+
+    # Extract host
+    host <- get_host(u)
+    if (is.na(host) || !nzchar(host)) return(NA_character_)
+
+    # Normalize to NFC and lowercase
+    host <- stringi::stri_trans_nfc(host)
+    host <- tolower(host)
+
+    # Puny-encode only if non-ASCII
+    encoded_host <- if (any(charToRaw(host) > as.raw(127))) {
+      tryCatch(urltools::puny_encode(host), error = function(e) host)
+    } else {
+      host
+    }
+
+    # Split domain parts
+    parts <- strsplit(encoded_host, "\\.")[[1]]
+    n <- length(parts)
+
+    # Match from longest candidate to shortest
+    for (i in seq_len(n - 1)) {
+      candidate <- paste(parts[i:n], collapse = ".")
+      if (candidate %in% tlds) {
+        return(iconv(.punycode_to_unicode(candidate), to = "UTF-8", sub = ""))
+      }
+    }
+
+    # Fallback: try last part only
+    last <- parts[n]
+    if (last %in% tlds) return(iconv(.punycode_to_unicode(last), to = "UTF-8", sub = ""))
+
+    NA_character_
   }, character(1))
 }
 
