@@ -276,37 +276,52 @@ get_clean_url <- function(url,
 # Internal helper to decode Punycode domain parts to Unicode
 .punycode_to_unicode <- function(domain_puny) {
   if (is.na(domain_puny)) return(NA_character_)
+  # cat(paste0("DEBUG .punycode_to_unicode input: ", domain_puny, "\\n")) # Debug Line 1
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
   
   decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
+    # cat(paste0("  DEBUG part_puny: ", part_puny, "\\n")) # Debug Line 2
     decoded_label <- NULL
     # Known workarounds for urltools::puny_decode issues with specific Punycode TLDs
     if (part_puny == "xn--qxam") { # Punycode for .ελ
       decoded_label <- "ελ"
     } else if (part_puny == "xn--p1ai") { # Punycode for .рф
       decoded_label <- "рф"
+    } else if (part_puny == "xn--wgbh1c") { # Punycode for .مصر
+      decoded_label <- "مصر"
+    } else if (part_puny == "xn--node") { # Punycode for .გე
+      decoded_label <- "გე"
     # Add other problematic Punycode TLDs here if discovered
+    # For example, if xn--o3cw4h (.ไทย) was problematic in isolation:
+    # } else if (part_puny == "xn--o3cw4h") { 
+    #   decoded_label <- "ไทย" 
     } else {
       # Default to urltools::puny_decode for other cases
-      decoded_label <- tryCatch(urltools::puny_decode(part_puny), error = function(e) part_puny)
+      decoded_label_from_tool <- tryCatch(urltools::puny_decode(part_puny), error = function(e) part_puny)
+      # cat(paste0("    DEBUG decoded_label_from_tool ('", part_puny, "'): ", decoded_label_from_tool, "\\n")) # Debug Line 3
+      decoded_label <- decoded_label_from_tool
     }
     
     # Ensure the string is valid UTF-8. 
     # iconv will attempt to convert from UTF-8 to UTF-8.
     # sub="" will try to discard non-translatable characters/invalid byte sequences.
     sane_label <- iconv(decoded_label, from = "UTF-8", to = "UTF-8", sub = "")
+    # cat(paste0("    DEBUG sane_label for ('", part_puny, "') (original decoded: '", decoded_label, "'): ", sane_label, "\\n")) # Debug Line 4
     
     # If iconv failed and returned NA (e.g., for a completely malformed string)
     # and the original decoded_label wasn't NA, we might fallback or return a placeholder.
     # For now, if sane_label is NA, it means iconv found it irreparable.
     if (is.na(sane_label)) {
+      # cat(paste0("    DEBUG sane_label was NA for part_puny: ", part_puny, " (decoded_label was: ", decoded_label,") - returning empty string\\n")) # Debug Line 5
       return("") 
     }
     
     return(sane_label)
   }, character(1))
   
-  paste(decoded_labels_unicode, collapse = ".")
+  result_unicode <- paste(decoded_labels_unicode, collapse = ".")
+  # cat(paste0("  DEBUG .punycode_to_unicode result: ", result_unicode, "\\n")) # Debug Line 6
+  return(result_unicode)
 }
 
 # Internal helper to convert host to ASCII using Punycode, fallback if urltools is unavailable
