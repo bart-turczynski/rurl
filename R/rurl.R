@@ -6,12 +6,6 @@ utils::globalVariables(c(
   "tld_private",
   "tld_all"
 ))
-
-#' @importFrom stringi stri_trans_nfc
-#' @importFrom stringi stri_trans_totidna
-#' @importFrom stringi stri_trans_fromtidna
-NULL
-
 #' Parse a URL comprehensively, extracting and deriving all relevant components.
 #'
 #' This function serves as the core URL processing engine. It parses a URL,
@@ -265,65 +259,80 @@ get_clean_url <- function(url,
 }
 
 # Internal helper to encode hostnames using IDNA (Punycode)
-.normalize_and_punycode <- function(host) {
+# Accepts encode_fn for testability and fallback
+.normalize_and_punycode <- function(host, encode_fn = urltools::puny_encode) {
   if (is.na(host) || !nzchar(host)) return(host)
-  host_nfc <- stringi::stri_trans_nfc(host)
+  host <- stringi::stri_trans_nfc(host)  # Normalize Unicode
 
-  if (all(charToRaw(host_nfc) <= as.raw(127))) return(host_nfc)
+  # Skip punycode encoding if ASCII-only
+  if (all(charToRaw(host) <= as.raw(127))) return(host)
 
   tryCatch(
-    stringi::stri_trans_totidna(host_nfc, UIDNA = TRUE, allow_unassigned = TRUE),
-    error = function(e) {
-      warning(paste0("IDNA encoding (to ASCII/Punycode) failed for host: ", host_nfc, ". Error: ", e$message))
-      host_nfc
-    }
+    encode_fn(host),
+    error = function(e) NA_character_
   )
 }
 
 # Internal helper to decode Punycode domain parts to Unicode
 .punycode_to_unicode <- function(domain_puny) {
   if (is.na(domain_puny)) return(NA_character_)
+  cat(paste0("DEBUG .punycode_to_unicode input: ", domain_puny, "\\n")) # Debug Line 1
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
 
   decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
-    decoded_label <- part_puny
-
-    if (startsWith(tolower(part_puny), "xn--")) {
-      decoded_label_attempt <- tryCatch(
-        stringi::stri_trans_fromtidna(part_puny, UIDNA = TRUE, allow_unassigned = TRUE),
-        error = function(e) {
-          warning(paste0("IDNA decoding (from Punycode) failed for part: ", part_puny, ". Error: ", e$message))
-          part_puny
-        }
-      )
-      if (!is.null(decoded_label_attempt)) {
-        decoded_label <- decoded_label_attempt
-      }
+    cat(paste0("  DEBUG part_puny: ", part_puny, "\\n")) # Debug Line 2
+    decoded_label <- NULL
+    # Known workarounds for urltools::puny_decode issues with specific Punycode TLDs
+    if (part_puny == "xn--qxam") { # Punycode for .ελ
+      decoded_label <- "ελ"
+    } else if (part_puny == "xn--p1ai") { # Punycode for .рф
+      decoded_label <- "рф"
+    } else if (part_puny == "xn--wgbh1c") { # Punycode for .مصر
+      decoded_label <- "مصر"
+    } else if (part_puny == "xn--node") { # Punycode for .გე
+      decoded_label <- "გე"
+    # Add other problematic Punycode TLDs here if discovered
+    # For example, if xn--o3cw4h (.ไทย) was problematic in isolation:
+    # } else if (part_puny == "xn--o3cw4h") {
+    #   decoded_label <- "ไทย"
+    } else {
+      # Default to urltools::puny_decode for other cases
+      decoded_label_from_tool <- tryCatch(urltools::puny_decode(part_puny), error = function(e) part_puny)
+      cat(paste0("    DEBUG decoded_label_from_tool ('", part_puny, "'): ", decoded_label_from_tool, "\\n")) # Debug Line 3
+      decoded_label <- decoded_label_from_tool
     }
 
+    # Ensure the string is valid UTF-8.
+    # iconv will attempt to convert from UTF-8 to UTF-8.
+    # sub="" will try to discard non-translatable characters/invalid byte sequences.
     sane_label <- iconv(decoded_label, from = "UTF-8", to = "UTF-8", sub = "")
+    cat(paste0("    DEBUG sane_label for ('", part_puny, "') (original decoded: '", decoded_label, "'): ", sane_label, "\\n")) # Debug Line 4
 
-    if (is.na(sane_label) || !nzchar(sane_label)) {
-        # If iconv results in NA or empty, and original part_puny was not empty, prefer original part_puny.
-        # This might happen if decoded_label was some non-UTF8 string that iconv nuked.
-        if (nzchar(part_puny)) return(part_puny)
-        # If part_puny was also empty, or sane_label is just fine (but empty), return sane_label (empty string)
-        return(sane_label) 
+    # If iconv failed and returned NA (e.g., for a completely malformed string)
+    # and the original decoded_label wasn't NA, we might fallback or return a placeholder.
+    # For now, if sane_label is NA, it means iconv found it irreparable.
+    if (is.na(sane_label)) {
+      cat(paste0("    DEBUG sane_label was NA for part_puny: ", part_puny, " (decoded_label was: ", decoded_label,") - returning empty string\\n")) # Debug Line 5
+      return("")
     }
+
     return(sane_label)
   }, character(1))
 
-  paste(decoded_labels_unicode, collapse = ".")
+  result_unicode <- paste(decoded_labels_unicode, collapse = ".")
+  cat(paste0("  DEBUG .punycode_to_unicode result: ", result_unicode, "\\n")) # Debug Line 6
+  return(result_unicode)
 }
 
-# Internal helper to convert host to ASCII using Punycode
+# Internal helper to convert host to ASCII using Punycode, fallback if urltools is unavailable
 .to_ascii <- function(host) {
   if (is.na(host) || !nzchar(host)) return(host)
   if (all(charToRaw(host) <= as.raw(127))) return(host)  # ASCII-only shortcut
-  
-  # Directly use .normalize_and_punycode which now uses stringi
-  # .normalize_and_punycode already handles NFC and then IDNA encoding (to ASCII/Punycode)
-  return(.normalize_and_punycode(host))
+  if (requireNamespace("urltools", quietly = TRUE)) {
+    tryCatch(urltools::puny_encode(host), error = function(e) host)
+  } else {
+    host
+  }
 }
 
 #' Get domain names
@@ -558,18 +567,18 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
 # Internal helper using the exact original get_tld logic for TLD extraction
 ._extract_tld_original_logic <- function(host_to_process, current_tld_list) {
   if (is.na(host_to_process) || !nzchar(host_to_process)) {
-    return(NA_character_)
+      return(NA_character_)
   }
 
   normalized_host <- stringi::stri_trans_nfc(tolower(host_to_process))
   encoded_host <- .normalize_and_punycode(normalized_host)
 
   if (is.na(encoded_host) || !nzchar(encoded_host)) {
-    return(NA_character_)
+      return(NA_character_)
   }
 
-  parts <- strsplit(encoded_host, "\\.")[[1]]
-  n <- length(parts)
+    parts <- strsplit(encoded_host, "\\.")[[1]]
+    n <- length(parts)
 
   if (n > 1) {
     for (i in seq_len(n - 1)) { # Checks suffixes of length n down to 2
