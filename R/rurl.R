@@ -118,7 +118,7 @@ safe_parse_url <- function(url,
       final_host <- sub("^(www[0-9]*\\.)(.*)", "\\2", raw_host, ignore.case = TRUE)
     } else if (www_handling == "keep") {
       # Ensure www. prefix, normalizing www[n]. -> www., adding if absent. Empty host stays empty.
-      if (raw_host == "") { 
+      if (raw_host == "") {
         final_host <- ""
       } else {
         current_host_lower <- tolower(raw_host)
@@ -170,7 +170,7 @@ safe_parse_url <- function(url,
 
     if (host_is_structurally_ok) {
       parse_status <- "ok"
-      
+
       if (protocol_handling != "strip" && !is.na(final_scheme)) {
         current_scheme_lower <- tolower(final_scheme)
         if (current_scheme_lower %in% c("ftp", "ftps")) {
@@ -224,7 +224,7 @@ get_parse_status <- function(url,
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
-                             tld_source = "all") 
+                             tld_source = "all")
     if (is.null(parsed)) return("error")
     parsed$parse_status %||% "error"
   }, character(1))
@@ -252,15 +252,14 @@ get_clean_url <- function(url,
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
-                             tld_source = "all") 
+                             tld_source = "all")
     if (is.null(parsed)) return(NA_character_)
     parsed$clean_url %||% NA_character_
   }, character(1))
 }
 
 # Internal helper to encode hostnames using IDNA (Punycode)
-# Accepts encode_fn for testability and fallback
-.normalize_and_punycode <- function(host, encode_fn = urltools::puny_encode) {
+.normalize_and_punycode <- function(host) {
   if (is.na(host) || !nzchar(host)) return(host)
   host <- stringi::stri_trans_nfc(host)  # Normalize Unicode
 
@@ -268,71 +267,56 @@ get_clean_url <- function(url,
   if (all(charToRaw(host) <= as.raw(127))) return(host)
 
   tryCatch(
-    encode_fn(host),
-    error = function(e) NA_character_
+    stringi::stri_trans_totidna(host, T), # USE_STD3_RULES=TRUE, CheckSTD3ASCIIRules=TRUE
+    error = function(e) {
+      # Basic fallback: if stringi fails (e.g. dev version issue or truly invalid for IDNA),
+      # try to return original host, or NA if it seems safer.
+      # For now, returning NA might be safer to signal a conversion problem.
+      NA_character_
+    }
   )
 }
 
 # Internal helper to decode Punycode domain parts to Unicode
 .punycode_to_unicode <- function(domain_puny) {
   if (is.na(domain_puny)) return(NA_character_)
-  # cat(paste0("DEBUG .punycode_to_unicode input: ", domain_puny, "\\n")) # Debug Line 1
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
-  
+
   decoded_labels_unicode <- vapply(parts_puny, function(part_puny) {
-    # cat(paste0("  DEBUG part_puny: ", part_puny, "\\n")) # Debug Line 2
     decoded_label <- NULL
-    # Known workarounds for urltools::puny_decode issues with specific Punycode TLDs
-    if (part_puny == "xn--qxam") { # Punycode for .ελ
-      decoded_label <- "ελ"
-    } else if (part_puny == "xn--p1ai") { # Punycode for .рф
-      decoded_label <- "рф"
-    } else if (part_puny == "xn--wgbh1c") { # Punycode for .مصر
-      decoded_label <- "مصر"
-    } else if (part_puny == "xn--node") { # Punycode for .გე
-      decoded_label <- "გე"
-    # Add other problematic Punycode TLDs here if discovered
-    # For example, if xn--o3cw4h (.ไทย) was problematic in isolation:
-    # } else if (part_puny == "xn--o3cw4h") { 
-    #   decoded_label <- "ไทย" 
-    } else {
-      # Default to urltools::puny_decode for other cases
-      decoded_label_from_tool <- tryCatch(urltools::puny_decode(part_puny), error = function(e) part_puny)
-      # cat(paste0("    DEBUG decoded_label_from_tool ('", part_puny, "'): ", decoded_label_from_tool, "\\n")) # Debug Line 3
-      decoded_label <- decoded_label_from_tool
+    # We now rely on stringi for robust decoding
+    if (startsWith(tolower(part_puny), "xn--")) { # Only attempt to decode if it looks like Punycode
+        decoded_label <- tryCatch(
+            stringi::stri_trans_fromtidna(part_puny, T), # USE_STD3_RULES=TRUE, CheckSTD3ASCIIRules=TRUE
+            error = function(e) part_puny # If error, return original part_puny
+        )
+    } else { # Not Punycode, so should already be Unicode (or ASCII)
+        decoded_label <- part_puny
     }
-    
-    # Ensure the string is valid UTF-8. 
+
+    # Ensure the string is valid UTF-8.
     # iconv will attempt to convert from UTF-8 to UTF-8.
     # sub="" will try to discard non-translatable characters/invalid byte sequences.
     sane_label <- iconv(decoded_label, from = "UTF-8", to = "UTF-8", sub = "")
-    # cat(paste0("    DEBUG sane_label for ('", part_puny, "') (original decoded: '", decoded_label, "'): ", sane_label, "\\n")) # Debug Line 4
-    
-    # If iconv failed and returned NA (e.g., for a completely malformed string)
-    # and the original decoded_label wasn't NA, we might fallback or return a placeholder.
-    # For now, if sane_label is NA, it means iconv found it irreparable.
+
     if (is.na(sane_label)) {
-      # cat(paste0("    DEBUG sane_label was NA for part_puny: ", part_puny, " (decoded_label was: ", decoded_label,") - returning empty string\\n")) # Debug Line 5
-      return("") 
+      return("")
     }
-    
     return(sane_label)
   }, character(1))
-  
+
   result_unicode <- paste(decoded_labels_unicode, collapse = ".")
-  # cat(paste0("  DEBUG .punycode_to_unicode result: ", result_unicode, "\\n")) # Debug Line 6
   return(result_unicode)
 }
 
-# Internal helper to convert host to ASCII using Punycode, fallback if urltools is unavailable
+# Internal helper to convert host to ASCII using Punycode
 .to_ascii <- function(host) {
   if (is.na(host) || !nzchar(host)) return(host)
   if (all(charToRaw(host) <= as.raw(127))) return(host)  # ASCII-only shortcut
-  if (requireNamespace("urltools", quietly = TRUE)) {
-    tryCatch(urltools::puny_encode(host), error = function(e) host)
-  } else {
-    host
-  }
+  
+  # Directly use .normalize_and_punycode which now uses stringi
+  # .normalize_and_punycode already handles NFC and then IDNA encoding (to ASCII/Punycode)
+  return(.normalize_and_punycode(host))
 }
 
 #' Get domain names
@@ -354,7 +338,7 @@ get_domain <- function(url,
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
-                             tld_source = "all") 
+                             tld_source = "all")
     if (is.null(parsed)) return(NA_character_)
     parsed$domain %||% NA_character_
   }, character(1))
@@ -374,8 +358,8 @@ get_scheme <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
-                             www_handling = "none", 
-                             tld_source = "all")   
+                             www_handling = "none",
+                             tld_source = "all")
     if (is.null(parsed)) return(NA_character_)
     parsed$scheme %||% NA_character_
   }, character(1))
@@ -399,7 +383,7 @@ get_host <- function(url,
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
-                             tld_source = "all") 
+                             tld_source = "all")
     if (is.null(parsed)) return(NA_character_)
     parsed$host %||% NA_character_
   }, character(1))
@@ -419,8 +403,8 @@ get_path <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
-                             www_handling = "none", 
-                             tld_source = "all")   
+                             www_handling = "none",
+                             tld_source = "all")
     if (is.null(parsed)) return(NA_character_)
     parsed$path %||% NA_character_
   }, character(1))
@@ -457,7 +441,7 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
     # Puny-encode only if non-ASCII (original logic's conditional punycode)
     # Using .to_ascii which encapsulates this conditional punycode logic robustly
     encoded_host <- .to_ascii(host_lower) # .to_ascii handles NA and no-op for ASCII
-    
+
     if (is.na(encoded_host) || !nzchar(encoded_host)) return(NA_character_) # Added safety check
 
     # Split domain parts
@@ -557,7 +541,7 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   }
 
   # Standard case: n > best_match_len
-  # The registered domain is the public suffix (best_match_len parts) 
+  # The registered domain is the public suffix (best_match_len parts)
   # plus one additional label to the left.
   # So, we take (best_match_len + 1) parts from the end of the hostname.
   # The starting index for these parts is (n - (best_match_len + 1) + 1) = (n - best_match_len).
@@ -638,7 +622,7 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
 ._legacy_get_host_for_get_tld_only <- function(url, protocol_handling = "keep") {
   # protocol_handling is part of the original signature, match.arg if needed by legacy_safe_parse_url
   # Forcing "keep" as it was the implicit original behavior for get_host feeding get_tld
-  protocol_handling <- "keep" 
+  protocol_handling <- "keep"
   parsed <- ._legacy_safe_parse_url_for_get_tld_only(url, protocol_handling)
   if (is.null(parsed))
     return(NA_character_)
