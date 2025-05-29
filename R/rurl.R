@@ -6,6 +6,12 @@ utils::globalVariables(c(
   "tld_private",
   "tld_all"
 ))
+
+#' @importFrom stringi stri_trans_nfc
+#' @importFrom stringi stri_trans_totidna
+#' @importFrom stringi stri_trans_fromtidna
+NULL
+
 #' Parse a URL comprehensively, extracting and deriving all relevant components.
 #'
 #' This function serves as the core URL processing engine. It parses a URL,
