@@ -466,20 +466,15 @@ get_tld <- function(url,
   )
   host_parts <- strsplit(host_puny, "\\.")[[1]]
   n_parts <- length(host_parts)
-  best_tld <- NA_character_
-  best_len <- 0
-  if (n_parts >= 2) {
-    for (i in seq_len(n_parts - 1)) {
-      candidate_tld <- paste(host_parts[(n_parts - i + 1):n_parts], collapse = ".")
-      if (candidate_tld %in% selected_tlds && i > best_len) {
-        best_tld <- candidate_tld
-        best_len <- i
-      }
+  # Try all suffixes, longest first
+  for (i in seq_len(n_parts - 1)) {
+    candidate_tld <- paste(host_parts[(n_parts - i):n_parts], collapse = ".")
+    if (candidate_tld %in% selected_tlds) {
+      return(.punycode_to_unicode(candidate_tld))
     }
   }
-  if (!is.na(best_tld)) {
-    return(.punycode_to_unicode(best_tld))
-  } else if (n_parts > 0 && host_parts[n_parts] %in% selected_tlds) {
+  # Fallback: try last label
+  if (n_parts > 0 && host_parts[n_parts] %in% selected_tlds) {
     return(.punycode_to_unicode(host_parts[n_parts]))
   }
   NA_character_
