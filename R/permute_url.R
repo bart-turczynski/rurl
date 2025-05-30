@@ -8,7 +8,7 @@
 #' as the protocol and with or without the trailing slash.
 #'
 #' @param urls A character vector of URLs.
-#' @return A data.frame with two columns: `OriginalURL` (the input URL) and
+#' @return A data.frame with two columns: `URL` (the input URL) and
 #'   `Permutation` (the generated URL variant).
 #' @importFrom curl curl_parse_url
 #' @export
@@ -23,7 +23,7 @@ permute_url <- function(urls) {
   for (original_url_input in urls) {
     if (is.na(original_url_input) || !nzchar(trimws(original_url_input))) {
       all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        OriginalURL = original_url_input,
+        URL = original_url_input,
         Permutation = NA_character_,
         stringsAsFactors = FALSE
       )
@@ -45,7 +45,7 @@ permute_url <- function(urls) {
 
     if (is.null(parsed_curl) || is.na(raw_host) || !nzchar(trimws(raw_host))) {
       all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        OriginalURL = original_url_input,
+        URL = original_url_input,
         Permutation = NA_character_,
         stringsAsFactors = FALSE
       )
@@ -56,7 +56,7 @@ permute_url <- function(urls) {
     
     if (!nzchar(trimws(stripped_bare_host))) {
         all_permutations[[length(all_permutations) + 1]] <- data.frame(
-            OriginalURL = original_url_input,
+            URL = original_url_input,
             Permutation = NA_character_,
             stringsAsFactors = FALSE
         )
@@ -64,12 +64,14 @@ permute_url <- function(urls) {
     }
 
     raw_path <- parsed_curl$path %||% ""
-    # Ensure query and fragment are NA_character_ if NULL, then check for content
     safe_query <- parsed_curl$query %||% NA_character_
     safe_fragment <- parsed_curl$fragment %||% NA_character_
 
     query_part <- if (!is.na(safe_query) && nzchar(safe_query)) paste0("?", safe_query) else ""
     fragment_part <- if (!is.na(safe_fragment) && nzchar(safe_fragment)) paste0("#", safe_fragment) else ""
+    
+    # Construct the full path + query + fragment string
+    path_query_fragment <- paste0(raw_path, query_part, fragment_part)
 
     host_prefixes <- c("", "www.") 
     schemes <- c("", "http://", "https://")
@@ -84,16 +86,30 @@ permute_url <- function(urls) {
       if (!nzchar(current_perm_host)) next
       
       for (s in schemes) {
-        url_variant1 <- paste0(s, current_perm_host, raw_path, query_part, fragment_part)
-        current_url_perms_set <- c(current_url_perms_set, url_variant1)
+        # Variant 1: No added slash (respects original path structure)
+        # If raw_path is "/", it remains "/". If "/path", remains "/path". If "", remains "".
+        url_no_added_slash <- paste0(s, current_perm_host, path_query_fragment)
+        current_url_perms_set <- c(current_url_perms_set, url_no_added_slash)
 
-        if (raw_path == "") {
-          url_variant2 <- paste0(s, current_perm_host, "/", query_part, fragment_part)
-          current_url_perms_set <- c(current_url_perms_set, url_variant2)
-        } else if (substr(raw_path, nchar(raw_path), nchar(raw_path)) != "/") {
-          url_variant2 <- paste0(s, current_perm_host, raw_path, "/", query_part, fragment_part)
-          current_url_perms_set <- c(current_url_perms_set, url_variant2)
+        # Variant 2: With an added trailing slash (if applicable)
+        # Logic: 
+        #   - If raw_path is empty (e.g. "example.com"), add "/" -> "example.com/"
+        #   - If raw_path is not empty and does not end with "/" (e.g. "/path"), add "/" -> "/path/"
+        #   - If raw_path already ends with "/" (e.g. "/path/"), this variant is covered by url_no_added_slash
+        
+        path_for_slash_variant <- raw_path
+        added_slash_path_query_fragment <- ""
+
+        if (path_for_slash_variant == "") {
+          added_slash_path_query_fragment <- paste0("/", query_part, fragment_part)
+          url_with_added_slash <- paste0(s, current_perm_host, added_slash_path_query_fragment)
+          current_url_perms_set <- c(current_url_perms_set, url_with_added_slash)
+        } else if (substr(path_for_slash_variant, nchar(path_for_slash_variant), nchar(path_for_slash_variant)) != "/") {
+          added_slash_path_query_fragment <- paste0(path_for_slash_variant, "/", query_part, fragment_part)
+          url_with_added_slash <- paste0(s, current_perm_host, added_slash_path_query_fragment)
+          current_url_perms_set <- c(current_url_perms_set, url_with_added_slash)
         }
+        # If path_for_slash_variant already ends with "/", url_no_added_slash is sufficient.
       }
     }
 
@@ -104,13 +120,13 @@ permute_url <- function(urls) {
 
     if (length(unique_permutations) > 0) {
       all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        OriginalURL = original_url_input,
+        URL = original_url_input,
         Permutation = unique_permutations,
         stringsAsFactors = FALSE
       )
     } else {
        all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        OriginalURL = original_url_input,
+        URL = original_url_input,
         Permutation = NA_character_,
         stringsAsFactors = FALSE
       )
@@ -118,7 +134,7 @@ permute_url <- function(urls) {
   }
 
   if (length(all_permutations) == 0) {
-    return(data.frame(OriginalURL = character(0), Permutation = character(0), stringsAsFactors = FALSE))
+    return(data.frame(URL = character(0), Permutation = character(0), stringsAsFactors = FALSE))
   }
 
   final_df <- do.call(rbind, all_permutations)
