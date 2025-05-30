@@ -80,9 +80,6 @@ permute_url <- function(urls) {
 
     for (hp in host_prefixes) {
       current_perm_host <- paste0(hp, stripped_bare_host)
-      if (hp == "www." && grepl("^www\\.", stripped_bare_host, ignore.case = TRUE)){
-          current_perm_host <- stripped_bare_host 
-      }
       if (!nzchar(current_perm_host)) next 
       
       for (s in schemes) {
