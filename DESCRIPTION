@@ -15,6 +15,7 @@ Roxygen: list(roclets = c("collate", "namespace", "rd"))
 RoxygenNote: 7.3.2
 Collate:
     'rurl.R'
+    'permute_url.R'
     'zzz.R'
 Imports:
     utils,
