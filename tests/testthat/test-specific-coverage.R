@@ -4,7 +4,7 @@ test_that("permute_url hits line ~122 (else for empty unique_permutations)", {
   # Target: R/permute_url.R lines ~121-124
   input_url <- "example.com"
 
-  original_gsub <- base::gsub # Save original in case of issues with mockery's auto-reset
+  original_gsub <- base::gsub # Save original
   mock_gsub <- function(pattern, replacement, x, ...) {
     if (identical(pattern, "^(https?://)?(www[.])?$") && identical(replacement, "")) {
       return(rep("", length(x)))
@@ -12,14 +12,11 @@ test_that("permute_url hits line ~122 (else for empty unique_permutations)", {
     return(original_gsub(pattern, replacement, x, ...))
   }
 
-  # Attempt to mock gsub within the rurl namespace
-  mockery::stub(where = asNamespace("rurl"), what = "gsub", how = mock_gsub, depth = 1)
+  # Use testthat::local_mock
+  testthat::local_mock(gsub = mock_gsub, .env = asNamespace("rurl"))
   
   result <- permute_url(input_url)
   
-  # Restore original gsub if necessary, though testthat should handle scope
-  # assignInNamespace("gsub", original_gsub, ns = "base") # This is risky, rely on mockery
-
   expect_equal(nrow(result), 1, info = "Expected 1 row for NA permutation")
   expect_equal(result$URL, input_url, info = "URL should match input")
   expect_true(is.na(result$Permutation), info = "Permutation should be NA")
@@ -37,14 +34,12 @@ test_that("permute_url hits line ~82 (next if !nzchar(current_perm_host))", {
     return(original_nzchar(x))
   }
 
-  mockery::stub(where = asNamespace("rurl"), what = "nzchar", how = mock_nzchar, depth = 1)
+  # Use testthat::local_mock
+  testthat::local_mock(nzchar = mock_nzchar, .env = asNamespace("rurl"))
   
   result <- permute_url(input_url)
 
   # Expected: only "www.domain.com" based permutations are generated.
-  # These are "www.domain.com", "www.domain.com/", 
-  # "http://www.domain.com", "http://www.domain.com/",
-  # "https://www.domain.com", "https://www.domain.com/"
   expect_equal(nrow(result), 6, info = "Expected 6 permutations for www-only variants")
   expect_false(any(grepl(paste0("^http(s)?://domain\\.com"), result$Permutation)), info = "No non-www permutations with scheme")
   expect_false(any(grepl("^domain\\.com", result$Permutation)), info = "No raw non-www permutations")
@@ -84,7 +79,8 @@ test_that(".punycode_to_unicode hits line ~316 (return '' if iconv returns NA)",
     return(original_iconv(x, from, to, sub))
   }
   
-  mockery::stub(where = asNamespace("rurl"), what = "iconv", how = mock_iconv, depth = 1)
+  # Use testthat::local_mock
+  testthat::local_mock(iconv = mock_iconv, .env = asNamespace("rurl"))
   
   result <- rurl:::.punycode_to_unicode(input_domain_part)
   expect_equal(result, "", info = "Expected empty string when iconv returns NA")
@@ -105,7 +101,7 @@ test_that("._extract_tld_original_logic hits line ~577 (return NA_character_)", 
     return(original_normalize_and_punycode(host, encode_fn = encode_fn))
   }
   
-  # Mock .normalize_and_punycode within the rurl namespace
+  # assignInNamespace is used here as it directly targets an internal package function.
   assignInNamespace(".normalize_and_punycode", mock_norm_puny_na, ns = "rurl")
   
   result_na <- rurl:::._extract_tld_original_logic(host_na_case, rurl:::tld_all)
