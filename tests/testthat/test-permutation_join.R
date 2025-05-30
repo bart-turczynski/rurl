@@ -238,15 +238,19 @@ test_that("flatten_perms warns when inner DF is missing 'Permutations' column", 
 })
 
 test_that("validate_input catches inner DF missing 'Permutations' column", {
- A_inner_missing_perm_col <- data.frame(URL = "http://test.com", stringsAsFactors = FALSE)
- bad_perm_df <- data.frame(NotTheRightName = "a.com", stringsAsFactors = FALSE)
- A_inner_missing_perm_col$Permutation <- list(bad_perm_df)
+  A_inner_missing_perm_col <- data.frame(URL = "http://test.com", stringsAsFactors = FALSE)
+  bad_perm_df <- data.frame(NotTheRightName = "a.com", stringsAsFactors = FALSE) # Non-empty
+  A_inner_missing_perm_col$Permutation <- list(bad_perm_df)
  
- expect_warning(
-   res <- permutation_join(A_inner_missing_perm_col, empty_df_input),
-   "must have a 'Permutations' column" # Partial match, regex by default
- )
- expect_null(res) 
+  # Construct the exact expected message from validate_input
+  expected_msg <- "Data.frame at element 1 of 'Permutation' in 'A' is non-empty and must have a 'Permutations' column."
+
+  expect_warning(
+    res <- permutation_join(A_inner_missing_perm_col, empty_df_input),
+    regexp = expected_msg,
+    fixed = TRUE 
+  )
+  expect_null(res) 
 })
 
 test_that("permutation_join handles data.frames with zero rows correctly in lists", {
