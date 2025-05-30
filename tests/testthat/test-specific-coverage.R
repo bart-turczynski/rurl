@@ -13,7 +13,9 @@ test_that("permute_url hits line ~122 (else for empty unique_permutations)", {
     if (identical(pattern, "^(https?://)?(www[.])?$") && identical(replacement, "")) {
       return(rep("", length(x)))
     }
-    return(.real_base_gsub(pattern, replacement, x, ...)) # Call saved base::gsub
+    # Retrieve and call the true base::gsub for the passthrough case
+    true_base_gsub <- get("gsub", envir = baseenv(), inherits = FALSE)
+    return(true_base_gsub(pattern, replacement, x, ...))
   }
 
   testthat::local_mock(gsub = mock_gsub)
@@ -33,9 +35,13 @@ test_that("permute_url hits line ~82 (next if !nzchar(current_perm_host))", {
     if (identical(x, "domain.com")) { 
       return(FALSE)
     }
-    return(.real_base_nzchar(x)) # Call saved base::nzchar
+    # Retrieve and call the true base::nzchar for the passthrough case
+    true_base_nzchar <- get("nzchar", envir = baseenv(), inherits = FALSE)
+    return(true_base_nzchar(x))
   }
 
+  # If local_mock for nzchar continues to fail with "old_fun", this test may need to be skipped
+  # or nzchar's mockability re-evaluated for this environment.
   testthat::local_mock(nzchar = mock_nzchar)
   
   result <- permute_url(input_url)
@@ -75,7 +81,9 @@ test_that(".punycode_to_unicode hits line ~316 (return '' if iconv returns NA)",
     if (identical(x, input_domain_part)) {
       return(NA_character_)
     }
-    return(.real_base_iconv(x, from, to, sub)) # Call saved base::iconv
+    # Retrieve and call the true base::iconv for the passthrough case
+    true_base_iconv <- get("iconv", envir = baseenv(), inherits = FALSE)
+    return(true_base_iconv(x, from, to, sub))
   }
   
   testthat::local_mock(iconv = mock_iconv)
