@@ -1,5 +1,10 @@
 # Test cases for specific line coverage using mockery
 
+# Save original base functions before any mocking starts
+.real_base_gsub <- base::gsub
+.real_base_nzchar <- base::nzchar
+.real_base_iconv <- base::iconv
+
 test_that("permute_url hits line ~122 (else for empty unique_permutations)", {
   # Target: R/permute_url.R lines ~121-124
   input_url <- "example.com"
@@ -8,10 +13,10 @@ test_that("permute_url hits line ~122 (else for empty unique_permutations)", {
     if (identical(pattern, "^(https?://)?(www[.])?$") && identical(replacement, "")) {
       return(rep("", length(x)))
     }
-    return(base::gsub(pattern, replacement, x, ...)) # Call base::gsub directly
+    return(.real_base_gsub(pattern, replacement, x, ...)) # Call saved base::gsub
   }
 
-  testthat::local_mock(gsub = mock_gsub) # Removed .env
+  testthat::local_mock(gsub = mock_gsub)
   
   result <- permute_url(input_url)
   
@@ -28,10 +33,10 @@ test_that("permute_url hits line ~82 (next if !nzchar(current_perm_host))", {
     if (identical(x, "domain.com")) { 
       return(FALSE)
     }
-    return(base::nzchar(x)) # Call base::nzchar directly
+    return(.real_base_nzchar(x)) # Call saved base::nzchar
   }
 
-  testthat::local_mock(nzchar = mock_nzchar) # Removed .env
+  testthat::local_mock(nzchar = mock_nzchar)
   
   result <- permute_url(input_url)
 
@@ -70,10 +75,10 @@ test_that(".punycode_to_unicode hits line ~316 (return '' if iconv returns NA)",
     if (identical(x, input_domain_part)) {
       return(NA_character_)
     }
-    return(base::iconv(x, from, to, sub)) # Call base::iconv directly
+    return(.real_base_iconv(x, from, to, sub)) # Call saved base::iconv
   }
   
-  testthat::local_mock(iconv = mock_iconv) # Removed .env
+  testthat::local_mock(iconv = mock_iconv)
   
   result <- rurl:::.punycode_to_unicode(input_domain_part)
   expect_equal(result, "", info = "Expected empty string when iconv returns NA")
