@@ -64,7 +64,6 @@ permute_url <- function(urls) {
         next
     }
 
-    # path from curl_parse_url can be "" or "/" for root, or e.g. "/foo"
     raw_path_from_curl <- parsed_curl$path %||% ""
     safe_query <- parsed_curl$query %||% NA_character_
     safe_fragment <- parsed_curl$fragment %||% NA_character_
@@ -81,26 +80,20 @@ permute_url <- function(urls) {
     for (hp in host_prefixes) {
       current_perm_host <- paste0(hp, stripped_bare_host)
       if (hp == "www." && grepl("^www\\.", stripped_bare_host, ignore.case = TRUE)){
-          current_perm_host <- stripped_bare_host # Should not happen if sub() is correct
+          current_perm_host <- stripped_bare_host 
       }
-      if (!nzchar(current_perm_host)) next # Should be caught by earlier checks
+      if (!nzchar(current_perm_host)) next 
       
-      base_for_permutations <- paste0(s, current_perm_host) # scheme + www.host or host
-
       for (s in schemes) {
         current_base_schemed_host <- paste0(s, current_perm_host)
 
         # 1. Permutation with NO path component (just host, then query/fragment)
-        # e.g., example.com?query=1
         current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, query_fragment_suffix))
 
         # 2. Permutation with a SINGLE SLASH path component, then query/fragment
-        # e.g., example.com/?query=1
         current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, "/", query_fragment_suffix))
 
         # 3. If raw_path_from_curl was something more specific than "" or "/", include it and its slashed version.
-        # This handles inputs like "example.com/page" or "example.com/page/".
-        # The unique() later will remove redundancies if raw_path_from_curl was "" or "/".
         if (nzchar(raw_path_from_curl) && raw_path_from_curl != "/") {
           # 3a. Original path as is
           current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, raw_path_from_curl, query_fragment_suffix))
@@ -114,7 +107,6 @@ permute_url <- function(urls) {
     }
 
     unique_permutations <- unique(current_url_perms_set)
-    # Filters:
     unique_permutations <- unique_permutations[nzchar(trimws(gsub("^(https?://)?(www[.])?", "", unique_permutations, perl = TRUE)))]
     unique_permutations <- unique_permutations[!unique_permutations %in% c("http://", "https://", "http://www.", "https://www.", "www.", "")]
     unique_permutations <- unique_permutations[nzchar(trimws(unique_permutations))]
