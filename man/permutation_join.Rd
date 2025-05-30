@@ -7,13 +7,13 @@
 permutation_join(A, B)
 }
 \arguments{
-\item{A}{A data frame or tibble. It must contain at least two columns:
+\item{A}{A data frame. It must contain at least two columns:
 \code{URL} (character, the original URL) and \code{Permutation} (list,
 where each element is a data frame of permutations). Each data frame
 within the \code{Permutation} list must have a column named \code{Permutations}
 (which will be renamed to \code{Perm}).}
 
-\item{B}{A data frame or tibble, with the same structure as \code{A}.}
+\item{B}{A data frame, with the same structure as \code{A}.}
 }
 \value{
 A single data frame combining the processed permutations from both
@@ -45,45 +45,28 @@ perms_df_b1 <- data.frame(Permutations = c("http://test.net/x", "http://test.net
 B_data <- data.frame(URL = c("http://test.net"), stringsAsFactors = FALSE)
 B_data$Permutation <- list(perms_df_b1)
 
-# Perform the permutation join
-if (requireNamespace("tibble", quietly = TRUE)) {
-  A_data_tbl <- tibble::as_tibble(A_data)
-  # Ensure list column of data.frames is handled correctly for tibbles
-  A_data_tbl$Permutation <- list(tibble::as_tibble(perms_df_a1), tibble::as_tibble(perms_df_a2))
-  
-  B_data_tbl <- tibble::as_tibble(B_data)
-  B_data_tbl$Permutation <- list(tibble::as_tibble(perms_df_b1))
-  
-  joined_data_tbl <- permutation_join(A_data_tbl, B_data_tbl)
-  if (!is.null(joined_data_tbl)) {
-    print(head(joined_data_tbl))
-    print(table(joined_data_tbl$SourceSet))
-  }
-}
-
-# Using base data.frames
+# Perform the permutation join using base data.frames
 joined_data_df <- permutation_join(A_data, B_data)
 if (!is.null(joined_data_df)) {
   print(head(joined_data_df))
   print(table(joined_data_df$SourceSet))
 }
 
-
 # Example with empty input for B
-empty_df <- data.frame(URL = character(0), stringsAsFactors = FALSE)
-# Create a list column correctly for a 0-row data frame
-empty_df$Permutation <- vector("list", 0) 
-# Alternatively, and perhaps more robustly for type consistency with non-empty:
-# empty_df <- data.frame(URL = character(0), Permutation = I(list()))
+empty_df_B <- data.frame(URL = character(0), stringsAsFactors = FALSE)
+empty_df_B$Permutation <- vector("list", 0)
 
-joined_with_empty <- permutation_join(A_data, empty_df)
-if (!is.null(joined_with_empty)) {
- print(head(joined_with_empty))
- print(table(joined_with_empty$SourceSet))
+joined_with_empty_B <- permutation_join(A_data, empty_df_B)
+if (!is.null(joined_with_empty_B)) {
+ print(head(joined_with_empty_B))
+ print(table(joined_with_empty_B$SourceSet))
 }
 
 # Example with both inputs empty
-joined_empty_both <- permutation_join(empty_df, empty_df)
+empty_df_A <- data.frame(URL = character(0), stringsAsFactors = FALSE)
+empty_df_A$Permutation <- vector("list", 0)
+
+joined_empty_both <- permutation_join(empty_df_A, empty_df_B)
 if (!is.null(joined_empty_both)) {
  print(head(joined_empty_both)) # Should be an empty data frame with defined columns
  print(dim(joined_empty_both))
