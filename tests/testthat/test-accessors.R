@@ -288,7 +288,6 @@ test_that(".punycode_to_unicode handles various inputs and known TLDs", {
   current_env <- environment()
   mockery::stub(where = rurl:::.punycode_to_unicode, what = "iconv", how = function(x, from, to, sub) NA_character_, depth = 1)
   expect_equal(rurl:::.punycode_to_unicode("test"), "")
-  mockery::stub_reset() # Clear stubs for iconv specifically for .punycode_to_unicode
 })
 
 test_that("Internal TLD/legacy helpers handle NA/empty/error conditions", {
@@ -308,22 +307,18 @@ test_that("Internal TLD/legacy helpers handle NA/empty/error conditions", {
   # and ._extract_tld_original_logic returns "com".
   mockery::stub(where = rurl:::._extract_tld_original_logic, what = ".normalize_and_punycode", how = function(...) NA_character_, depth = 1)
   expect_equal(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all), NA_character_)
-  mockery::stub_reset() # Clear stubs for .normalize_and_punycode
 
   # Test the case where .normalize_and_punycode returns empty string
   mockery::stub(where = rurl:::._extract_tld_original_logic, what = ".normalize_and_punycode", how = function(...) "", depth = 1)
   expect_equal(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all), NA_character_)
-  mockery::stub_reset() # Clear stubs for .normalize_and_punycode
 
   # get_tld (line 461 - if encoded_host is NA from .to_ascii)
   # Let's mock .to_ascii directly for get_tld
   mockery::stub(where = get_tld, what = ".to_ascii", how = function(...) NA_character_, depth = 1)
   expect_equal(unname(get_tld("somehost.com")), NA_character_)
-  mockery::stub_reset() # Clear stubs for .to_ascii
 
   mockery::stub(where = get_tld, what = ".to_ascii", how = function(...) "", depth = 1) # test with empty string from .to_ascii
   expect_equal(unname(get_tld("somehost.com")), NA_character_)
-  mockery::stub_reset() # Clear stubs for .to_ascii
 })
 
 test_that("permute_url handles specific error/edge conditions from parsing", {
