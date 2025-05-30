@@ -220,3 +220,94 @@ test_that(".normalize_and_punycode handles NA and empty input", {
   expect_identical(unname(rurl:::.normalize_and_punycode(NA_character_)), NA_character_)
   expect_identical(unname(rurl:::.normalize_and_punycode("")), "")
 })
+
+test_that("permute_url generates expected permutations for various URL types", {
+  # Case 1: Root domain
+  input_root <- "test.com"
+  expected_perms_root <- sort(c(
+    "test.com", "test.com/",
+    "http://test.com", "http://test.com/",
+    "https://test.com", "https://test.com/",
+    "www.test.com", "www.test.com/",
+    "http://www.test.com", "http://www.test.com/",
+    "https://www.test.com", "https://www.test.com/"
+  ))
+  result_root <- permute_url(input_root)
+  expect_equal(nrow(result_root), 12)
+  expect_equal(sort(result_root$Permutation), expected_perms_root)
+  expect_true(all(result_root$URL == input_root))
+
+  # Case 2: Domain with a specific path and query parameters
+  input_path <- "test.com/folder/subfolder/path?parameter=value"
+  expected_perms_path <- sort(c(
+    "test.com/folder/subfolder/path?parameter=value",
+    "test.com/folder/subfolder/path/?parameter=value",
+    "http://test.com/folder/subfolder/path?parameter=value",
+    "http://test.com/folder/subfolder/path/?parameter=value",
+    "https://test.com/folder/subfolder/path?parameter=value",
+    "https://test.com/folder/subfolder/path/?parameter=value",
+    "www.test.com/folder/subfolder/path?parameter=value",
+    "www.test.com/folder/subfolder/path/?parameter=value",
+    "http://www.test.com/folder/subfolder/path?parameter=value",
+    "http://www.test.com/folder/subfolder/path/?parameter=value",
+    "https://www.test.com/folder/subfolder/path?parameter=value",
+    "https://www.test.com/folder/subfolder/path/?parameter=value"
+  ))
+  result_path <- permute_url(input_path)
+  expect_equal(nrow(result_path), 12)
+  expect_equal(sort(result_path$Permutation), expected_perms_path)
+  expect_true(all(result_path$URL == input_path))
+
+  # Case 3: Internationalized Domain Name (IDN)
+  input_idn <- "παράδειγμα.ελ"
+  expected_perms_idn <- sort(c(
+    "παράδειγμα.ελ", "παράδειγμα.ελ/",
+    "http://παράδειγμα.ελ", "http://παράδειγμα.ελ/",
+    "https://παράδειγμα.ελ", "https://παράδειγμα.ελ/",
+    "www.παράδειγμα.ελ", "www.παράδειγμα.ελ/",
+    "http://www.παράδειγμα.ελ", "http://www.παράδειγμα.ελ/",
+    "https://www.παράδειγμα.ελ", "https://www.παράδειγμα.ελ/"
+  ))
+  result_idn <- permute_url(input_idn)
+  expect_equal(nrow(result_idn), 12)
+  expect_equal(sort(result_idn$Permutation), expected_perms_idn)
+  expect_true(all(result_idn$URL == input_idn))
+  
+  # Case 4: URL with existing scheme and www
+  input_full <- "http://www.another.com/test/page.html"
+  expected_perms_full <- sort(c(
+    "another.com/test/page.html", "another.com/test/page.html/",
+    "http://another.com/test/page.html", "http://another.com/test/page.html/",
+    "https://another.com/test/page.html", "https://another.com/test/page.html/",
+    "www.another.com/test/page.html", "www.another.com/test/page.html/",
+    "http://www.another.com/test/page.html", "http://www.another.com/test/page.html/",
+    "https://www.another.com/test/page.html", "https://www.another.com/test/page.html/"
+  ))
+  result_full <- permute_url(input_full)
+  expect_equal(nrow(result_full), 12)
+  expect_equal(sort(result_full$Permutation), expected_perms_full)
+  expect_true(all(result_full$URL == input_full))
+  
+  # Case 5: Empty input vector
+  expect_equal(nrow(permute_url(character(0))), 0)
+  expect_equal(colnames(permute_url(character(0))), c("URL", "Permutation"))
+
+  # Case 6: NA input
+  result_na <- permute_url(NA_character_)
+  expect_equal(nrow(result_na), 1)
+  expect_true(is.na(result_na$Permutation))
+  expect_true(is.na(result_na$URL))
+  
+  # Case 7: Empty string input
+  result_empty_str <- permute_url("")
+  expect_equal(nrow(result_empty_str), 1)
+  expect_true(is.na(result_empty_str$Permutation))
+  expect_equal(result_empty_str$URL, "")
+  
+  # Case 8: Multiple URLs including one that would result in NA
+  input_multiple <- c("ok.com", "")
+  result_multiple <- permute_url(input_multiple)
+  expect_equal(nrow(result_multiple), 12 + 1) # 12 for ok.com, 1 for empty string
+  expect_equal(sum(result_multiple$URL == "ok.com"), 12)
+  expect_true(is.na(result_multiple$Permutation[result_multiple$URL == ""]))
+})
