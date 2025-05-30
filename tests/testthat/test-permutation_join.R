@@ -90,72 +90,80 @@ test_that("permutation_join handles both inputs empty", {
 # --- Input Validation Tests ---
 
 test_that("permutation_join returns NULL and warns for NULL inputs", {
-  expect_warning(res_A_null <- permutation_join(NULL, B_valid), "Input 'A' is NULL.")
+  res_A_null <- expect_warning(permutation_join(NULL, B_valid), "Input 'A' is NULL.")
   expect_null(res_A_null)
   
-  expect_warning(res_B_null <- permutation_join(A_valid, NULL), "Input 'B' is NULL.")
+  res_B_null <- expect_warning(permutation_join(A_valid, NULL), "Input 'B' is NULL.")
   expect_null(res_B_null)
   
-  expect_warning(res_both_null <- permutation_join(NULL, NULL), "Input 'A' is NULL.") # First validation fails
+  # For both NULL, the first validation (for A) will trigger and return NULL
+  res_both_null <- expect_warning(permutation_join(NULL, NULL), "Input 'A' is NULL.")
   expect_null(res_both_null)
 })
 
 test_that("permutation_join returns NULL and warns for non-data.frame inputs", {
-  expect_warning(res_A_invalid <- permutation_join(list(), B_valid), "Input 'A' is not a data.frame or tibble.", fixed = TRUE)
+  res_A_invalid <- expect_warning(permutation_join(list(), B_valid), "Input 'A' is not a data.frame or tibble.", fixed = TRUE)
   expect_null(res_A_invalid)
   
-  expect_warning(res_B_invalid <- permutation_join(A_valid, "not_a_df"), "Input 'B' is not a data.frame or tibble.", fixed = TRUE)
+  res_B_invalid <- expect_warning(permutation_join(A_valid, "not_a_df"), "Input 'B' is not a data.frame or tibble.", fixed = TRUE)
   expect_null(res_B_invalid)
 })
 
 test_that("permutation_join returns NULL and warns for missing required columns", {
   A_no_URL <- A_valid[, "Permutation", drop = FALSE]
-  expect_warning(permutation_join(A_no_URL, B_valid), "Input 'A' is missing required column(s): URL", fixed = TRUE)
-  expect_null(permutation_join(A_no_URL, B_valid))
+  res_A_no_URL <- expect_warning(permutation_join(A_no_URL, B_valid), "Input 'A' is missing required column(s): URL", fixed = TRUE)
+  expect_null(res_A_no_URL)
   
   A_no_Permutation <- A_valid[, "URL", drop = FALSE]
-  expect_warning(permutation_join(A_no_Permutation, B_valid), "Input 'A' is missing required column(s): Permutation", fixed = TRUE)
-  expect_null(permutation_join(A_no_Permutation, B_valid))
+  res_A_no_Perm <- expect_warning(permutation_join(A_no_Permutation, B_valid), "Input 'A' is missing required column(s): Permutation", fixed = TRUE)
+  expect_null(res_A_no_Perm)
 })
 
 test_that("permutation_join returns NULL and warns for incorrect column types", {
   A_URL_not_char <- A_valid
   A_URL_not_char$URL <- 1:nrow(A_URL_not_char)
-  expect_warning(permutation_join(A_URL_not_char, B_valid), "Column 'URL' in input 'A' must be character.", fixed = TRUE)
-  expect_null(permutation_join(A_URL_not_char, B_valid))
+  res_A_URL_type <- expect_warning(permutation_join(A_URL_not_char, B_valid), "Column 'URL' in input 'A' must be character.", fixed = TRUE)
+  expect_null(res_A_URL_type)
   
   A_Perm_not_list <- A_valid
   A_Perm_not_list$Permutation <- "not_a_list"
-  expect_warning(permutation_join(A_Perm_not_list, B_valid), "Column 'Permutation' in input 'A' must be a list.", fixed = TRUE)
-  expect_null(permutation_join(A_Perm_not_list, B_valid))
+  res_A_Perm_type <- expect_warning(permutation_join(A_Perm_not_list, B_valid), "Column 'Permutation' in input 'A' must be a list.", fixed = TRUE)
+  expect_null(res_A_Perm_type)
 })
 
 test_that("permutation_join returns NULL for invalid Permutation list elements", {
   A_perm_elem_not_df <- A_valid
   A_perm_elem_not_df$Permutation[[1]] <- "not_a_df"
-  expect_warning(permutation_join(A_perm_elem_not_df, B_valid),
+  res_A_perm_elem_type <- expect_warning(permutation_join(A_perm_elem_not_df, B_valid),
                  "Element 1 of 'Permutation' in 'A' is not a data.frame.", fixed = TRUE)
-  expect_null(permutation_join(A_perm_elem_not_df, B_valid))
+  expect_null(res_A_perm_elem_type)
 
   A_perm_elem_missing_col <- A_valid
   df_no_perms_col <- data.frame(NotPermutations = "abc", stringsAsFactors = FALSE)
   A_perm_elem_missing_col$Permutation[[1]] <- df_no_perms_col
-  expect_warning(permutation_join(A_perm_elem_missing_col, B_valid),
+  res_A_perm_elem_missing <- expect_warning(permutation_join(A_perm_elem_missing_col, B_valid),
                  paste0("Data.frame at element 1 of 'Permutation' in 'A'",
                         " is non-empty and must have a 'Permutations' column."), fixed = TRUE)
-  expect_null(permutation_join(A_perm_elem_missing_col, B_valid))
+  expect_null(res_A_perm_elem_missing)
 })
 
 # --- Tests for flatten_perms (via permutation_join) ---
 
 test_that("flatten_perms handles Permutation list with NULL elements", {
-  A_with_null_perm <- A_valid
-  A_with_null_perm$Permutation[[2]] <- NULL # Second URL's permutations are NULL
+  # Create a fresh copy for this test to avoid side effects
+  A_data_for_null_test <- data.frame(URL = c("http://example.com", "http://sample.org"),
+                                     stringsAsFactors = FALSE)
+  # Explicitly create the list for Permutation column
+  A_data_for_null_test$Permutation <- list(
+    data.frame(Permutations = c("http://ex.com/p1", "http://ex.com/p2"), OtherColA = 1:2, stringsAsFactors = FALSE), # Valid first element
+    NULL # Second element is NULL
+  )
   
-  result <- permutation_join(A_with_null_perm, empty_df_input)
+  result <- permutation_join(A_data_for_null_test, empty_df_input)
   expect_false(is.null(result))
-  expect_equal(nrow(result), 2) # Should only process the first element of A_valid (perms_df_a1_valid)
-  expect_equal(result$Source, rep("http://example.com", 2))
+  expect_equal(nrow(result), 2) # Should only process the first element
+  expect_equal(result$Source, rep("http://example.com", 2)) # Source should be from the first URL
+  expect_named(result, c("Perm", "OtherColA", "Source", "SourceSet"), ignore.order = TRUE)
 })
 
 test_that("flatten_perms handles Permutation list with empty data.frames", {
@@ -200,6 +208,21 @@ test_that("flatten_perms warns when inner DF is missing 'Permutations' column", 
  expect_equal(nrow(result), 0) 
 })
 
+test_that("validate_input catches inner DF missing 'Permutations' column", {
+ A_inner_missing_perm_col <- data.frame(URL = "http://test.com", stringsAsFactors = FALSE)
+ bad_perm_df <- data.frame(NotTheRightName = "a.com", stringsAsFactors = FALSE)
+ A_inner_missing_perm_col$Permutation <- list(bad_perm_df)
+ 
+ expected_warning_msg <- paste0("Data.frame at element 1 of 'Permutation' in 'A'",
+                                " is non-empty and must have a 'Permutations' column.")
+  
+ res <- expect_warning(
+   permutation_join(A_inner_missing_perm_col, empty_df_input),
+   expected_warning_msg,
+   fixed = TRUE 
+ )
+ expect_null(res) 
+})
 
 test_that("permutation_join handles data.frames with zero rows correctly in lists", {
   A_zero_row_list_element <- data.frame(URL = "http://example.com", stringsAsFactors = FALSE)
