@@ -4,16 +4,14 @@ test_that("permute_url hits line ~122 (else for empty unique_permutations)", {
   # Target: R/permute_url.R lines ~121-124
   input_url <- "example.com"
 
-  original_gsub <- base::gsub # Save original
   mock_gsub <- function(pattern, replacement, x, ...) {
     if (identical(pattern, "^(https?://)?(www[.])?$") && identical(replacement, "")) {
       return(rep("", length(x)))
     }
-    return(original_gsub(pattern, replacement, x, ...))
+    return(base::gsub(pattern, replacement, x, ...)) # Call base::gsub directly
   }
 
-  # Use testthat::local_mock
-  testthat::local_mock(gsub = mock_gsub, .env = asNamespace("rurl"))
+  testthat::local_mock(gsub = mock_gsub) # Removed .env
   
   result <- permute_url(input_url)
   
@@ -26,20 +24,17 @@ test_that("permute_url hits line ~82 (next if !nzchar(current_perm_host))", {
   # Target: R/permute_url.R line ~82
   input_url <- "domain.com"
 
-  original_nzchar <- base::nzchar
   mock_nzchar <- function(x) {
     if (identical(x, "domain.com")) { 
       return(FALSE)
     }
-    return(original_nzchar(x))
+    return(base::nzchar(x)) # Call base::nzchar directly
   }
 
-  # Use testthat::local_mock
-  testthat::local_mock(nzchar = mock_nzchar, .env = asNamespace("rurl"))
+  testthat::local_mock(nzchar = mock_nzchar) # Removed .env
   
   result <- permute_url(input_url)
 
-  # Expected: only "www.domain.com" based permutations are generated.
   expect_equal(nrow(result), 6, info = "Expected 6 permutations for www-only variants")
   expect_false(any(grepl(paste0("^http(s)?://domain\\.com"), result$Permutation)), info = "No non-www permutations with scheme")
   expect_false(any(grepl("^domain\\.com", result$Permutation)), info = "No raw non-www permutations")
@@ -71,16 +66,14 @@ test_that(".punycode_to_unicode hits line ~316 (return '' if iconv returns NA)",
   # Target: R/rurl.R line ~316
   input_domain_part <- "test"
   
-  original_iconv <- base::iconv
   mock_iconv <- function(x, from, to, sub) {
     if (identical(x, input_domain_part)) {
       return(NA_character_)
     }
-    return(original_iconv(x, from, to, sub))
+    return(base::iconv(x, from, to, sub)) # Call base::iconv directly
   }
   
-  # Use testthat::local_mock
-  testthat::local_mock(iconv = mock_iconv, .env = asNamespace("rurl"))
+  testthat::local_mock(iconv = mock_iconv) # Removed .env
   
   result <- rurl:::.punycode_to_unicode(input_domain_part)
   expect_equal(result, "", info = "Expected empty string when iconv returns NA")
@@ -89,7 +82,6 @@ test_that(".punycode_to_unicode hits line ~316 (return '' if iconv returns NA)",
 test_that("._extract_tld_original_logic hits line ~577 (return NA_character_)", {
   # Target: R/rurl.R line ~577
   
-  # Save the original internal function
   original_normalize_and_punycode <- rurl:::.normalize_and_punycode
 
   # Strategy 1: Mock .normalize_and_punycode to return NA_character_
@@ -101,7 +93,6 @@ test_that("._extract_tld_original_logic hits line ~577 (return NA_character_)", 
     return(original_normalize_and_punycode(host, encode_fn = encode_fn))
   }
   
-  # assignInNamespace is used here as it directly targets an internal package function.
   assignInNamespace(".normalize_and_punycode", mock_norm_puny_na, ns = "rurl")
   
   result_na <- rurl:::._extract_tld_original_logic(host_na_case, rurl:::tld_all)
@@ -121,6 +112,5 @@ test_that("._extract_tld_original_logic hits line ~577 (return NA_character_)", 
   result_empty <- rurl:::._extract_tld_original_logic(host_empty_case, rurl:::tld_all)
   expect_equal(result_empty, NA_character_, info = "Expected NA when .normalize_and_punycode returns empty string")
 
-  # Restore the original function to avoid affecting other tests
   assignInNamespace(".normalize_and_punycode", original_normalize_and_punycode, ns = "rurl")
 }) 
