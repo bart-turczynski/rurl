@@ -10,7 +10,7 @@ permute_url(urls)
 \item{urls}{A character vector of URLs.}
 }
 \value{
-A data.frame with two columns: `OriginalURL` (the input URL) and
+A data.frame with two columns: `URL` (the input URL) and
   `Permutation` (the generated URL variant).
 }
 \description{
@@ -25,4 +25,6 @@ as the protocol and with or without the trailing slash.
 \examples{
 permute_url("example.com/path?query=1")
 permute_url(c("http://www.test.co.uk/one", "another.com/two/"))
+permute_url("example.com")
+permute_url("test.com/folder/subfolder/path?parameter=value")
 }
