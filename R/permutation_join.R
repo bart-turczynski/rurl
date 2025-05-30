@@ -132,8 +132,8 @@ permutation_join <- function(A, B) {
     list_of_dfs <- lapply(seq_len(nrow(tbl)), function(i) {
       inner_df_orig <- tbl$Permutation[[i]]
       
-      if (is.null(inner_df_orig) || nrow(inner_df_orig) == 0) {
-        return(NULL) # Skipped by Filter(Negate(is.null), ...)
+      if (is.null(inner_df_orig)) { # Only skip truly NULL elements
+        return(NULL)
       }
       
       current_df <- as.data.frame(inner_df_orig) # Ensure it's a data.frame
@@ -142,9 +142,29 @@ permutation_join <- function(A, B) {
         warning(paste("Column 'Permutations' not found in list element ", i ," of 'Permutation' for URL: '",
                       tbl$URL[i], "' in SourceSet: '", source_name,
                       "'. Skipping this element."), call. = FALSE)
-        return(NULL)
+        return(NULL) # Return NULL if 'Permutations' column is missing, to be filtered
+      }
+
+      # If inner_df_orig is a 0-row data.frame but HAS the 'Permutations' column:
+      if (nrow(current_df) == 0) {
+        # It's a 0-row df, but its column structure (including 'Permutations' and others like 'ColX') is valuable.
+        # We need to add Source, SourceSet and rename Permutations to Perm.
+        # These assignments will create 0-length vectors if current_df is 0-row.
+        current_df$Source <- if (nrow(tbl) > 0) tbl$URL[i] else character(0) 
+        current_df$SourceSet <- source_name 
+        
+        # Rename Permutations to Perm. Already checked 'Permutations' exists.
+        names(current_df)[names(current_df) == "Permutations"] <- "Perm"
+        
+        # Ensure the standard columns are present if they were not in the 0-row df (e.g. if Permutations was the only col)
+        # This might be redundant if the 0-row df template is good, but ensures robustness.
+        if(!("Perm" %in% names(current_df))) current_df$Perm <- character(0)
+        if(!("Source" %in% names(current_df))) current_df$Source <- if (nrow(tbl) > 0) tbl$URL[i] else character(0)
+        if(!("SourceSet" %in% names(current_df))) current_df$SourceSet <- source_name
+        return(current_df) # Return the 0-row df with correct columns
       }
       
+      # For non-empty data frames (original logic)
       current_df$Source <- tbl$URL[i]
       current_df$SourceSet <- source_name
       names(current_df)[names(current_df) == "Permutations"] <- "Perm"
