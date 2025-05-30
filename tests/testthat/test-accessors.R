@@ -221,6 +221,172 @@ test_that(".normalize_and_punycode handles NA and empty input", {
   expect_identical(unname(rurl:::.normalize_and_punycode("")), "")
 })
 
+test_that("safe_parse_url handles www_handling options correctly", {
+  # www_handling = "strip"
+  expect_equal(safe_parse_url("http://www.example.com", www_handling = "strip")$host, "example.com")
+  expect_equal(safe_parse_url("http://www123.example.com", www_handling = "strip")$host, "example.com")
+  expect_equal(safe_parse_url("http://example.com", www_handling = "strip")$host, "example.com") # No www to strip
+  # Test with IP, strip should not apply
+  expect_equal(safe_parse_url("http://1.2.3.4", www_handling = "strip")$host, "1.2.3.4")
+
+  # www_handling = "keep"
+  expect_equal(safe_parse_url("http://example.com", www_handling = "keep")$host, "www.example.com")
+  expect_equal(safe_parse_url("http://www123.example.com", www_handling = "keep")$host, "www.example.com")
+  expect_equal(safe_parse_url("http://www.example.com", www_handling = "keep")$host, "www.example.com")
+  # Test with empty raw_host for keep - should remain empty or NA
+  # safe_parse_url with an effectively empty host after protocol strip might be tricky to set up directly
+  # Let's test the helper directly if possible, or ensure this path is hit. 
+  # For safe_parse_url, if the input is just "http://", parsed_curl$host might be NA or empty.
+  # If input is "", it returns NULL early. If input is "http://", host is NA.
+  expect_true(is.na(safe_parse_url("http://", www_handling = "keep")$host)) 
+  # Test with IP, keep should not apply
+  expect_equal(safe_parse_url("http://1.2.3.4", www_handling = "keep")$host, "1.2.3.4")
+  
+  # www_handling = "none" (default, for completeness)
+  expect_equal(safe_parse_url("http://www.example.com", www_handling = "none")$host, "www.example.com")
+  expect_equal(safe_parse_url("http://www123.example.com", www_handling = "none")$host, "www123.example.com")
+  expect_equal(safe_parse_url("http://example.com", www_handling = "none")$host, "example.com")
+})
+
+test_that("safe_parse_url handles specific error conditions", {
+  # Test for line 187: original_looks_like_protocol && !original_has_allowed_scheme
+  # This condition should lead to parse_status = "error" (and NULL return from safe_parse_url itself)
+  expect_null(safe_parse_url("gopher://example.com")) # Assuming gopher is not in allowed_prefixes
+  # To be more robust, let's check parse_status via get_parse_status for this case
+  expect_equal(get_parse_status("gopher://example.com"), "error")
+})
+
+test_that(".punycode_to_unicode handles various inputs and known TLDs", {
+  # Test NA input (line 278)
+  expect_na(rurl:::.punycode_to_unicode(NA_character_))
+
+  # Test specific Punycode TLDs that have workarounds
+  # .ελ (xn--qxam) is already covered by existing get_tld tests indirectly if they pass.
+  # Let's ensure direct test too for the function itself.
+  expect_equal(rurl:::.punycode_to_unicode("xn--qxam"), "ελ") # .ελ
+  
+  # .рф (xn--p1ai) - Line 289
+  expect_equal(rurl:::.punycode_to_unicode("xn--p1ai"), "рф")
+  expect_equal(rurl:::.punycode_to_unicode("сайт.xn--p1ai"), "сайт.рф")
+  
+  # .مصر (xn--wgbh1c) - Line 291
+  expect_equal(rurl:::.punycode_to_unicode("xn--wgbh1c"), "مصر")
+  expect_equal(rurl:::.punycode_to_unicode("موقع.xn--wgbh1c"), "موقع.مصر")
+
+  # .გე (xn--node) - Line 293
+  expect_equal(rurl:::.punycode_to_unicode("xn--node"), "გე")
+  expect_equal(rurl:::.punycode_to_unicode("საიტი.xn--node"), "საიტი.გე")
+
+  # Test standard punycode decoding via urltools::puny_decode pathway
+  expect_equal(rurl:::.punycode_to_unicode("xn--mnchen-3ya.de"), "münchen.de")
+  expect_equal(rurl:::.punycode_to_unicode("xn--ls8h.com"), "例子.com") # 例子.com
+
+  # Test for line 316 (is.na(sane_label) path)
+  # This requires decoded_label to be something that iconv(..., sub="") turns into NA.
+  # This is hard to achieve reliably as iconv usually returns "" for bad chars with sub="".
+  # A direct mock of iconv might be needed for full confidence, or find a string that urltools::puny_decode
+  # produces which iconv then fails on. For now, this path remains hard to hit naturally.
+  # One potential (though unlikely) scenario is if puny_decode itself returns a string with an embedded null
+  # that somehow passes as non-NA to the iconv line but iconv treats as invalid.
+  # Let's try a known invalid UTF-8 sequence that might be passed if puny_decode was hypothetically bypassed or failed creatively.
+  # This specific test is more about exploring than guaranteeing coverage of that exact NA branch from iconv.
+  # The primary defense is that urltools::puny_decode should produce valid unicode strings or the original part.
+  if (requireNamespace("stringi", quietly = TRUE)) {
+     # Create a string that is invalid UTF-8. 
+     # For example, an isolated surrogate pair half, or an overlong sequence.
+     # This may not trigger the specific NA from iconv, as iconv might just make it "".
+     # isolated_surrogate <- stringi::stri_enc_fromutf32(as.integer(0xD800))
+     # expect_equal(rurl:::.punycode_to_unicode(isolated_surrogate), "") # Expected if iconv maps to ""
+  }
+  # The line is more of a safeguard. If decoded_label is NA, iconv(NA, ...) is NA.
+  # If decoded_label from puny_decode is invalid in a way iconv makes NA, it hits.
+  # We assume puny_decode usually doesn't do this for valid punycode.
+})
+
+test_that("Internal TLD/legacy helpers handle NA/empty/error conditions", {
+  # ._legacy_safe_parse_url_for_get_tld_only (lines 607-608, 614-615)
+  expect_null(rurl:::._legacy_safe_parse_url_for_get_tld_only(""))
+  expect_null(rurl:::._legacy_safe_parse_url_for_get_tld_only(123))
+  expect_null(rurl:::._legacy_safe_parse_url_for_get_tld_only("gopher://example.com")) # Disallowed scheme
+
+  # ._extract_tld_original_logic (lines 570, 577)
+  expect_na(rurl:::._extract_tld_original_logic(NA_character_, rurl:::tld_all))
+  expect_na(rurl:::._extract_tld_original_logic("", rurl:::tld_all))
+  # To hit line 577 (encoded_host is NA), mock .normalize_and_punycode
+  mockery::stub(rurl:::._extract_tld_original_logic, ".normalize_and_punycode", function(...) NA_character_) 
+  expect_na(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all))
+  # Test the case where .normalize_and_punycode returns empty string
+  mockery::stub(rurl:::._extract_tld_original_logic, ".normalize_and_punycode", function(...) "") 
+  expect_na(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all))
+
+  # get_tld (line 461 - if encoded_host is NA from .to_ascii)
+  # This requires .to_ascii to return NA. .to_ascii calls urltools::puny_encode.
+  # If urltools::puny_encode fails on an input and returns NA (or input if it can't requireNamespace)
+  # We need a host that causes puny_encode to error. This is hard to guarantee.
+  # However, if .to_ascii returns NA, get_tld should return NA.
+  # Let's mock .to_ascii directly for get_tld
+  mockery::stub(get_tld, ".to_ascii", function(...) NA_character_)
+  expect_na(get_tld("somehost.com"))
+  mockery::stub(get_tld, ".to_ascii", function(...) "") # test with empty string from .to_ascii
+  expect_na(get_tld("somehost.com"))
+})
+
+test_that("permute_url handles specific error/edge conditions from parsing", {
+  # Lines 49-54: is.null(parsed_curl) or is.na(raw_host)
+  # curl_parse_url("http://") gives host=NA
+  res_http_only <- permute_url("http://")
+  expect_equal(nrow(res_http_only), 1)
+  expect_true(is.na(res_http_only$Permutation))
+  expect_equal(res_http_only$URL, "http://")
+  
+  # What if curl_parse_url itself returns NULL? 
+  # This would happen if url_to_parse is truly unparseable by curl's C library.
+  # e.g. a very bad string. safe_parse_url would return NULL from the start.
+  # permute_url prepends "http://" if no scheme, so it's harder to make curl_parse_url return NULL
+  # unless the original string + "http://" is still malformed for curl.
+  # Example: very long string, or control characters.
+  # For now, the http:// case covers is.na(raw_host).
+
+  # Lines 60-65: !nzchar(trimws(stripped_bare_host))
+  # Input "www." -> stripped_bare_host becomes ""
+  res_www_only <- permute_url("www.")
+  expect_equal(nrow(res_www_only), 1)
+  expect_true(is.na(res_www_only$Permutation))
+  expect_equal(res_www_only$URL, "www.")
+  
+  res_www_num_only <- permute_url("www123.")
+  expect_equal(nrow(res_www_num_only), 1)
+  expect_true(is.na(res_www_num_only$Permutation))
+  expect_equal(res_www_num_only$URL, "www123.")
+
+  # Lines 125-129: length(unique_permutations) == 0 (else branch)
+  # Input "a" (after filters, might become empty)
+  # The filters in permute_url are quite strict:
+  # unique_permutations <- unique_permutations[nzchar(trimws(gsub("^(https?://)?(www[.])?", "", unique_permutations, perl = TRUE)))]
+  # unique_permutations <- unique_permutations[!unique_permutations %in% c("http://", "https://", "http://www.", "https://www.", "www.", "")]
+  # unique_permutations <- unique_permutations[nzchar(trimws(unique_permutations))]
+  # For input "a", permutations like "a", "a/", "http://a", etc. are generated.
+  # gsub removes scheme/www -> "a" or "a/". These pass nzchar.
+  # They don't match the specific remnants.
+  # So for "a", it will likely produce results.
+  # To hit this, we need all generated permutations to be filtered out.
+  # Consider an input that *only* produces things like "http://" or "www." or empty after initial processing.
+  # This should be caught by earlier NA returns if host becomes empty.  
+  # Let's re-check permute_url("http://") - it results in raw_host=NA, so returns NA perm early.
+  # Let's try an input that is just a scheme after prepending, e.g. if original_url_input was very odd.
+  # This branch is hard to hit if the initial host checks are robust.
+  # The current NA returns for invalid hosts (like from "http://" or "www.") cover most scenarios
+  # where permutations would be empty or invalid.
+  # The example permute_url("") already covers one path to this (via early next). 
+  # The else branch implies permutations were generated but *all* got filtered.  
+  # This means stripped_bare_host was valid, but all scheme/www/path combos were filtered.
+  # Example: If stripped_bare_host was such that all its permutations like "www.host" or "scheme://host" 
+  # were *exactly* the strings in the filter list. (e.g. host = "")
+  # If stripped_bare_host is "", it's caught by `if (!nzchar(trimws(stripped_bare_host)))`
+  # So this specific `else` branch on line 125 seems very hard to reach if prior checks are done.
+  # It's a defensive catch-all. We can accept it might not be hit if logic is sound.
+})
+
 test_that("permute_url generates expected permutations for various URL types", {
   # Case 1: Root domain
   input_root <- "test.com"
