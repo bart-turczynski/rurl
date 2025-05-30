@@ -258,35 +258,29 @@ permutation_join <- function(A, B) {
   all_final_names <- union(names(flat_A), names(flat_B))
   
   align_df_for_final_rbind <- function(df, target_names) {
-    for (col_name in setdiff(target_names, names(df))) {
-      # When adding a new column to df, assign NA. 
-      # If df is 0-row, df[[col_name]] <- NA will create a 0-length logical column.
-      # This is generally fine for rbind, which will coerce types if the other df has rows and data.
-      df[[col_name]] <- NA 
-    }
-    # Ensure all target columns exist, then select and order them.
-    # This also handles df having columns not in target_names (they are dropped).
-    existing_target_names_in_df <- intersect(target_names, names(df))
-    missing_target_names_in_df <- setdiff(target_names, names(df))
-    
-    # Create a new list for constructing the dataframe to avoid direct modification issues with 0-row df
+    # Create a new list for constructing the dataframe
     new_df_list <- vector("list", length(target_names))
     names(new_df_list) <- target_names
     
+    current_df_nrows <- nrow(df) # Get nrow once
+
     for(col_name in target_names){
         if(col_name %in% names(df)){
             new_df_list[[col_name]] <- df[[col_name]]
         } else {
-            # This column is missing from df, should have been added by the loop above with NA
-            # but to be safe, for 0-row df, ensure it's a 0-length logical
-            new_df_list[[col_name]] <- if(nrow(df) == 0) logical(0) else NA
+            # This column is missing from df, needs to be added.
+            # Assign a vector of the correct length (0 if df is 0-row, nrow(df) if df has rows)
+            # Use logical NA which is generally safe for subsequent rbind type coercion.
+            new_df_list[[col_name]] <- if(current_df_nrows == 0) logical(0) else rep(NA, current_df_nrows)
         }
     }
-    # Convert list to data.frame. For 0-row, ensure it's 0 rows.
-    # For >0 rows, set row names from original df.
-    if (nrow(df) == 0) {
+    
+    # Convert list to data.frame. 
+    if (current_df_nrows == 0) {
+        # For 0-row, as.data.frame(list_with_0_length_vectors) works.
         return(as.data.frame(new_df_list, stringsAsFactors = FALSE))
     } else {
+        # For >0 rows, set row names from original df.
         return(as.data.frame(new_df_list, stringsAsFactors = FALSE, row.names = rownames(df)))
     }
   }
