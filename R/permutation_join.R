@@ -147,21 +147,26 @@ permutation_join <- function(A, B) {
 
       # If inner_df_orig is a 0-row data.frame but HAS the 'Permutations' column:
       if (nrow(current_df) == 0) {
-        # It's a 0-row df, but its column structure (including 'Permutations' and others like 'ColX') is valuable.
-        # We need to add Source, SourceSet and rename Permutations to Perm.
-        # These assignments will create 0-length vectors if current_df is 0-row.
-        current_df$Source <- if (nrow(tbl) > 0) tbl$URL[i] else character(0) 
-        current_df$SourceSet <- source_name 
+        # It's a 0-row df, its column structure (including 'Permutations' and others like 'ColX') is valuable.
+        # Add Source, SourceSet as 0-length character vectors.
+        current_df$Source <- character(0) 
+        current_df$SourceSet <- character(0) # source_name is a single string, so use character(0)
         
         # Rename Permutations to Perm. Already checked 'Permutations' exists.
-        names(current_df)[names(current_df) == "Permutations"] <- "Perm"
+        current_df_names <- names(current_df)
+        current_df_names[current_df_names == "Permutations"] <- "Perm"
+        names(current_df) <- current_df_names
         
-        # Ensure the standard columns are present if they were not in the 0-row df (e.g. if Permutations was the only col)
-        # This might be redundant if the 0-row df template is good, but ensures robustness.
-        if(!("Perm" %in% names(current_df))) current_df$Perm <- character(0)
-        if(!("Source" %in% names(current_df))) current_df$Source <- if (nrow(tbl) > 0) tbl$URL[i] else character(0)
-        if(!("SourceSet" %in% names(current_df))) current_df$SourceSet <- source_name
-        return(current_df) # Return the 0-row df with correct columns
+        # Ensure standard columns are present and are 0-length characters of the correct type.
+        # This is important if 'Permutations' was the only column, it becomes 'Perm'.
+        if("Perm" %in% names(current_df)) {
+            current_df$Perm <- as.character(current_df$Perm) # Ensure it is character
+        } else {
+            current_df$Perm <- character(0) # Add if somehow missing after rename logic
+        }
+        # Source and SourceSet already set to character(0).
+
+        return(current_df) # Return the 0-row df with correct columns and types
       }
       
       # For non-empty data frames (original logic)
