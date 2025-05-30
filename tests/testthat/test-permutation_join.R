@@ -140,7 +140,7 @@ test_that("permutation_join returns NULL and warns for missing required columns"
 
 test_that("permutation_join returns NULL and warns for incorrect column types", {
   A_URL_not_char <- A_valid
-  A_URL_not_char$URL <- 1:nrow(A_URL_not_char)
+  A_URL_not_char$URL <- seq_len(nrow(A_URL_not_char))
   expect_warning(
     res_A_URL_type <- permutation_join(A_URL_not_char, B_valid),
     "Column 'URL' in input 'A' must be character.", fixed = TRUE
