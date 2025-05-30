@@ -223,45 +223,72 @@ permutation_join <- function(A, B) {
   flat_A <- flatten_perms(A, "SetA")
   flat_B <- flatten_perms(B, "SetB")
 
-  # Combine the results
-  # If one is empty (0 rows), return the other.
-  # The flatten_perms ensures even empty results have a base structure.
-  if (nrow(flat_A) == 0 && nrow(flat_B) == 0) {
-    # Both are empty. Determine combined column structure.
-    # Default to core columns if no other columns are present in inputs.
-    # This typically means they returned the empty_base_df from flatten_perms.
-    # rbind of two identical empty_base_df is fine.
-    # If they had different "other" columns that became all NA, names() would reflect them.
+  has_A_rows <- nrow(flat_A) > 0
+  has_B_rows <- nrow(flat_B) > 0
+
+  if (!has_A_rows && !has_B_rows) { # Both are 0-row
     all_cols <- union(names(flat_A), names(flat_B))
-    if (length(all_cols) == 0) all_cols <- names(data.frame(Perm=character(),Source=character(),SourceSet=character()))
+    if (length(all_cols) == 0) all_cols <- c("Perm", "Source", "SourceSet") # Fallback
 
     empty_res <- data.frame(matrix(ncol = length(all_cols), nrow = 0))
     colnames(empty_res) <- all_cols
-    # Ensure types for key columns for consistency
-    if("Perm" %in% all_cols) empty_res$Perm <- character(0)
-    if("Source" %in% all_cols) empty_res$Source <- character(0)
-    if("SourceSet" %in% all_cols) empty_res$SourceSet <- character(0)
+    
+    # Ensure correct types for 0-row dataframe columns based on what was in flat_A/flat_B
+    for(col_name in all_cols) {
+        # If column already exists and has a type (e.g. from data.frame(matrix(...)) it might be logical)
+        # we prefer the type from original flat_A or flat_B if possible.
+        if (col_name %in% names(flat_A)) { # flat_A might have specific 0-length type like integer(0)
+            empty_res[[col_name]] <- flat_A[[col_name]]
+        } else if (col_name %in% names(flat_B)) {
+            empty_res[[col_name]] <- flat_B[[col_name]]
+        } else { # Fallback for columns not in flat_A/flat_B (shouldn't happen if all_cols from them)
+            # Ensure standard columns are character if they ended up here without type
+            if (col_name == "Perm" && !is.character(empty_res[[col_name]])) empty_res[[col_name]] <- character(0)
+            if (col_name == "Source" && !is.character(empty_res[[col_name]])) empty_res[[col_name]] <- character(0)
+            if (col_name == "SourceSet" && !is.character(empty_res[[col_name]])) empty_res[[col_name]] <- character(0)
+            # For other unknown columns, default to logical(0) if type is not set by data.frame(matrix())
+            if (is.null(empty_res[[col_name]])) empty_res[[col_name]] <- logical(0)
+        }
+    }
     return(empty_res)
-
-  } else if (nrow(flat_A) == 0) {
-    if ("SourceSet" %in% names(flat_B)) flat_B$SourceSet <- as.factor(flat_B$SourceSet)
-    return(flat_B)
-  } else if (nrow(flat_B) == 0) {
-    if ("SourceSet" %in% names(flat_A)) flat_A$SourceSet <- as.factor(flat_A$SourceSet)
-    return(flat_A)
   }
-
-  # Both flat_A and flat_B have rows.
-  # Align columns before final rbind.
+  
+  # If we reach here, at least one of flat_A or flat_B might have rows, 
+  # OR one/both are 0-row but carry column structure that needs to be merged.
   all_final_names <- union(names(flat_A), names(flat_B))
   
   align_df_for_final_rbind <- function(df, target_names) {
-    # Add missing columns
     for (col_name in setdiff(target_names, names(df))) {
+      # When adding a new column to df, assign NA. 
+      # If df is 0-row, df[[col_name]] <- NA will create a 0-length logical column.
+      # This is generally fine for rbind, which will coerce types if the other df has rows and data.
       df[[col_name]] <- NA 
     }
-    # Select and order columns
-    df[, target_names, drop = FALSE]
+    # Ensure all target columns exist, then select and order them.
+    # This also handles df having columns not in target_names (they are dropped).
+    existing_target_names_in_df <- intersect(target_names, names(df))
+    missing_target_names_in_df <- setdiff(target_names, names(df))
+    
+    # Create a new list for constructing the dataframe to avoid direct modification issues with 0-row df
+    new_df_list <- vector("list", length(target_names))
+    names(new_df_list) <- target_names
+    
+    for(col_name in target_names){
+        if(col_name %in% names(df)){
+            new_df_list[[col_name]] <- df[[col_name]]
+        } else {
+            # This column is missing from df, should have been added by the loop above with NA
+            # but to be safe, for 0-row df, ensure it's a 0-length logical
+            new_df_list[[col_name]] <- if(nrow(df) == 0) logical(0) else NA
+        }
+    }
+    # Convert list to data.frame. For 0-row, ensure it's 0 rows.
+    # For >0 rows, set row names from original df.
+    if (nrow(df) == 0) {
+        return(as.data.frame(new_df_list, stringsAsFactors = FALSE))
+    } else {
+        return(as.data.frame(new_df_list, stringsAsFactors = FALSE, row.names = rownames(df)))
+    }
   }
 
   flat_A_aligned <- align_df_for_final_rbind(flat_A, all_final_names)
@@ -270,7 +297,12 @@ permutation_join <- function(A, B) {
   result <- rbind(flat_A_aligned, flat_B_aligned)
   
   if ("SourceSet" %in% names(result)) {
-    result$SourceSet <- as.factor(result$SourceSet)
+    if (nrow(result) > 0) {
+        result$SourceSet <- as.factor(result$SourceSet)
+    } else {
+        # Ensure it's a factor with 0 levels or specific levels if desired
+        result$SourceSet <- factor(character(0)) 
+    }
   }
 
   return(result)
