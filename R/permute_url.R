@@ -41,8 +41,6 @@ permute_url <- function(urls) {
       error = function(e) NULL
     )
 
-    # Use .GlobalEnv$`%||%` or ensure it's available if this file were sourced alone
-    # For package context, it's fine as it is defined in rurl.R
     raw_host <- parsed_curl$host %||% NA_character_
 
     if (is.null(parsed_curl) || is.na(raw_host) || !nzchar(trimws(raw_host))) {
@@ -66,8 +64,12 @@ permute_url <- function(urls) {
     }
 
     raw_path <- parsed_curl$path %||% ""
-    query_part <- if (!is.na(parsed_curl$query) && nzchar(parsed_curl$query)) paste0("?", parsed_curl$query) else ""
-    fragment_part <- if (!is.na(parsed_curl$fragment) && nzchar(parsed_curl$fragment)) paste0("#", parsed_curl$fragment) else ""
+    # Ensure query and fragment are NA_character_ if NULL, then check for content
+    safe_query <- parsed_curl$query %||% NA_character_
+    safe_fragment <- parsed_curl$fragment %||% NA_character_
+
+    query_part <- if (!is.na(safe_query) && nzchar(safe_query)) paste0("?", safe_query) else ""
+    fragment_part <- if (!is.na(safe_fragment) && nzchar(safe_fragment)) paste0("#", safe_fragment) else ""
 
     host_prefixes <- c("", "www.") 
     schemes <- c("", "http://", "https://")
