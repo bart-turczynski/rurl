@@ -16,6 +16,7 @@
 #' permute_url("example.com/path?query=1")
 #' permute_url(c("http://www.test.co.uk/one", "another.com/two/"))
 #' permute_url("example.com")
+#' permute_url("test.com/folder/subfolder/path?parameter=value")
 permute_url <- function(urls) {
   all_permutations <- list()
 
@@ -87,18 +88,21 @@ permute_url <- function(urls) {
       for (s in schemes) {
         current_base_schemed_host <- paste0(s, current_perm_host)
 
-        # 1. Permutation with NO path component (just host, then query/fragment)
-        current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, query_fragment_suffix))
+        # Check if the path from curl indicates a root domain or a specific path
+        is_root_domain_path <- (raw_path_from_curl == "" || raw_path_from_curl == "/")
 
-        # 2. Permutation with a SINGLE SLASH path component, then query/fragment
-        current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, "/", query_fragment_suffix))
-
-        # 3. If raw_path_from_curl was something more specific than "" or "/", include it and its slashed version.
-        if (nzchar(raw_path_from_curl) && raw_path_from_curl != "/") {
-          # 3a. Original path as is
+        if (is_root_domain_path) {
+          # Case 1: Input was effectively a root domain (e.g., "test.com" or "test.com/")
+          # 1a. Permutation with NO path component (just host, then query/fragment)
+          current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, query_fragment_suffix))
+          # 1b. Permutation with a SINGLE SLASH path component, then query/fragment
+          current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, "/", query_fragment_suffix))
+        } else {
+          # Case 2: Input had a specific path (e.g., "test.com/folder/subfolder")
+          # 2a. Use the original path as is
           current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, raw_path_from_curl, query_fragment_suffix))
           
-          # 3b. Original path with a trailing slash (if it doesn't already have one)
+          # 2b. Use the original path but ensure it has a trailing slash (if it doesn't already)
           if (substr(raw_path_from_curl, nchar(raw_path_from_curl), nchar(raw_path_from_curl)) != "/") {
             current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, raw_path_from_curl, "/", query_fragment_suffix))
           }
