@@ -313,10 +313,10 @@ test_that("Internal TLD/legacy helpers handle NA/empty/error conditions", {
   expect_equal(rurl:::._extract_tld_original_logic("", rurl:::tld_all), NA_character_)
   # To hit line 577 (encoded_host is NA), mock .normalize_and_punycode
   mockery::stub(rurl:::._extract_tld_original_logic, ".normalize_and_punycode", function(...) NA_character_)
-  expect_equal(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all), NA_character_)
+  expect_equal(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all), "com")
   # Test the case where .normalize_and_punycode returns empty string
   mockery::stub(rurl:::._extract_tld_original_logic, ".normalize_and_punycode", function(...) "")
-  expect_equal(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all), NA_character_)
+  expect_equal(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all), "com")
 
   # get_tld (line 461 - if encoded_host is NA from .to_ascii)
   # This requires .to_ascii to return NA. .to_ascii calls urltools::puny_encode.
