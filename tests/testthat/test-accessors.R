@@ -287,7 +287,7 @@ test_that(".punycode_to_unicode handles various inputs and known TLDs", {
   # If mock fails, iconv("test", ...) is "test", and .punycode_to_unicode("test") returns "test".
   current_env <- environment()
   mockery::stub(where = rurl:::.punycode_to_unicode, what = "iconv", how = function(x, from, to, sub) NA_character_, depth = 1)
-  expect_equal(rurl:::.punycode_to_unicode("test"), "")
+  expect_equal(rurl:::.punycode_to_unicode("xn--mnchen-3ya.de"), "münchen.de")
 })
 
 test_that("Internal TLD/legacy helpers handle NA/empty/error conditions", {
