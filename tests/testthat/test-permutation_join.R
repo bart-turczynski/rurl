@@ -242,14 +242,16 @@ test_that("validate_input catches inner DF missing 'Permutations' column", {
   bad_perm_df <- data.frame(NotTheRightName = "a.com", stringsAsFactors = FALSE) # Non-empty
   A_inner_missing_perm_col$Permutation <- list(bad_perm_df)
  
-  # Construct the exact expected message from validate_input
-  expected_msg <- "Data.frame at element 1 of 'Permutation' in 'A' is non-empty and must have a 'Permutations' column."
+  # Exact warning message expected from validate_input
+  expected_glob_pattern <- "Data.frame at element 1 of 'Permutation' in 'A' is non-empty and must have a 'Permutations' column."
 
+  # Test that the warning is thrown AND that the function returns NULL
   expect_warning(
     res <- permutation_join(A_inner_missing_perm_col, empty_df_input),
-    regexp = expected_msg,
-    fixed = TRUE 
+    regexp = glob2rx(expected_glob_pattern, trim.head = TRUE, trim.tail = TRUE)
   )
+  # After expect_warning, 'res' should hold the value returned by permutation_join if no error,
+  # which is NULL in this case because validate_input returns FALSE.
   expect_null(res) 
 })
 
