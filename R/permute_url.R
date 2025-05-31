@@ -22,17 +22,20 @@ permute_url <- function(urls) {
 
   # %||% is defined globally in R/rurl.R
 
-  for (original_url_input in urls) {
-    original_url_input <- iconv(original_url_input, "UTF-8", "UTF-8", sub = "byte")
+  for (original_url_raw in urls) {
+    # Sanitize the input URL immediately
+    original_url_input <- iconv(original_url_raw, from = "", to = "UTF-8", sub = "byte")
 
     if (is.na(original_url_input) || !nzchar(trimws(original_url_input))) {
       all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        URL = original_url_input,
+        URL = original_url_raw, # Store raw original URL
         Permutation = NA_character_,
         stringsAsFactors = FALSE
       )
       next
     }
+
+    # original_url_input is now the sanitized version for further processing
 
     has_scheme <- grepl("^[a-zA-Z][a-zA-Z0-9+.-]*://", original_url_input)
     url_to_parse <- original_url_input
@@ -45,11 +48,13 @@ permute_url <- function(urls) {
       error = function(e) NULL
     )
 
-    raw_host <- parsed_curl$host %||% NA_character_
+    # Sanitize components from curl_parse_url
+    raw_host_from_curl <- parsed_curl$host %||% NA_character_
+    raw_host <- iconv(raw_host_from_curl, from = "", to = "UTF-8", sub = "byte")
 
     if (is.null(parsed_curl) || is.na(raw_host) || !nzchar(trimws(raw_host))) {
       all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        URL = original_url_input,
+        URL = original_url_raw, # Store raw original URL
         Permutation = NA_character_,
         stringsAsFactors = FALSE
       )
@@ -57,19 +62,26 @@ permute_url <- function(urls) {
     }
 
     stripped_bare_host <- sub("^(www[0-9]*\\.)", "", raw_host, ignore.case = TRUE)
+    # No need to sanitize stripped_bare_host again if raw_host is clean and sub() is safe.
     
     if (!nzchar(trimws(stripped_bare_host))) {
         all_permutations[[length(all_permutations) + 1]] <- data.frame(
-            URL = original_url_input,
+            URL = original_url_raw, # Store raw original URL
             Permutation = NA_character_,
             stringsAsFactors = FALSE
         )
         next
     }
 
-    raw_path_from_curl <- parsed_curl$path %||% ""
-    safe_query <- parsed_curl$query %||% NA_character_
-    safe_fragment <- parsed_curl$fragment %||% NA_character_
+    # Sanitize other curl components
+    raw_path_from_curl_orig <- parsed_curl$path %||% ""
+    raw_path_from_curl <- iconv(raw_path_from_curl_orig, from = "", to = "UTF-8", sub = "byte")
+
+    safe_query_orig <- parsed_curl$query %||% NA_character_
+    safe_query <- iconv(safe_query_orig, from = "", to = "UTF-8", sub = "byte")
+
+    safe_fragment_orig <- parsed_curl$fragment %||% NA_character_
+    safe_fragment <- iconv(safe_fragment_orig, from = "", to = "UTF-8", sub = "byte")
 
     query_part <- if (!is.na(safe_query) && nzchar(safe_query)) paste0("?", safe_query) else ""
     fragment_part <- if (!is.na(safe_fragment) && nzchar(safe_fragment)) paste0("#", safe_fragment) else ""
@@ -116,13 +128,13 @@ permute_url <- function(urls) {
 
     if (length(unique_permutations) > 0) {
       all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        URL = original_url_input,
+        URL = original_url_raw, # Store raw original URL
         Permutation = unique_permutations,
         stringsAsFactors = FALSE
       )
     } else {
        all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        URL = original_url_input,
+        URL = original_url_raw, # Store raw original URL
         Permutation = NA_character_,
         stringsAsFactors = FALSE
       )
