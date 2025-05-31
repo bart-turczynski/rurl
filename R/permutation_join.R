@@ -297,13 +297,16 @@ permutation_join <- function(A, B) {
   # Final processing for SourceSet
   if ("SourceSet" %in% names(result)) {
     if (nrow(result) > 0) {
-      present_levels <- unique(result$SourceSet)
+      present_levels <- unique(as.character(result$SourceSet)) # Ensure character for unique
       # Define the desired order of levels
       all_possible_levels <- c("SetA", "SetB") 
       # Determine actual levels present in the data, maintaining desired order
-      final_levels <- intersect(all_possible_levels, unique(c(present_levels, all_possible_levels)))
-      # If no standard levels found but there are other levels, use those (should not happen ideally)
-      if(length(final_levels) == 0 && length(present_levels) > 0) final_levels <- present_levels
+      final_levels <- all_possible_levels[all_possible_levels %in% present_levels]
+      
+      # Fallback: if no standard levels found but there are other levels (should not happen here)
+      if(length(final_levels) == 0 && length(present_levels) > 0) {
+        final_levels <- present_levels 
+      }
       
       result$SourceSet <- factor(result$SourceSet, levels = final_levels)
     } else {
