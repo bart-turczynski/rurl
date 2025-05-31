@@ -229,10 +229,12 @@ permutation_join <- function(data_A, data_B,
   # --- Select and Arrange Output Columns ---
   if (nrow(final_joined_data) > 0) {
     # Use the original URLs from A and B, but name columns after the input data.frame variable names
-    result <- data.frame(stringsAsFactors = FALSE)
-    result[[name_A]] <- final_joined_data$OriginalURL_A
-    result[[name_B]] <- final_joined_data$OriginalURL_B
-    result[["JoinKey"]] <- final_joined_data$OriginalURL_A
+    result <- data.frame(
+      setNames(list(final_joined_data$OriginalURL_A), name_A),
+      setNames(list(final_joined_data$OriginalURL_B), name_B),
+      JoinKey = final_joined_data$OriginalURL_A,
+      stringsAsFactors = FALSE
+    )
     # Add any other columns from A and B (with suffixes)
     all_current_names <- names(final_joined_data)
     extra_cols <- setdiff(all_current_names, c("OriginalURL_A", "OriginalURL_B", "JoinKey", id_col_A, id_col_B, perm_key_B))
