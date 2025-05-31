@@ -1,9 +1,10 @@
-#' Permutation Join of Two URL Sets
+#' Permutation Join of Two URL Sets (Base R Version)
 #'
 #' Performs a join between two data frames based on URL permutations.
 #' It identifies rows in `data_A` and `data_B` that can be linked because
 #' a URL in one is a permutation of a URL in the other (considering variations
 #' in scheme, www prefix, and trailing slashes).
+#' This version aims to use primarily base R functions.
 #'
 #' @param data_A A data frame containing URLs for the left side of the join.
 #' @param data_B A data frame containing URLs for the right side of the join.
@@ -17,7 +18,7 @@
 #' @param suffix_B Character string, suffix to add to `data_B` column names
 #'   in the output if they conflict with `data_A` column names. Defaults to "_B".
 #'
-#' @return A tibble representing the join. Each row signifies a unique pair of
+#' @return A data frame representing the join. Each row signifies a unique pair of
 #'   rows (one from `data_A`, one from `data_B`) linked by a common URL
 #'   permutation. The output includes:
 #'   \itemize{
@@ -26,37 +27,32 @@
 #'     \item `JoinKey`: An example of the common permuted URL string that
 #'           established the link.
 #'     \item All other original columns from `data_A` and `data_B`, with
-#'           suffixes applied by `dplyr::inner_join` to resolve name conflicts
+#'           suffixes applied by `base::merge` to resolve name conflicts
 #'           if necessary.
 #'   }
-#'   Returns an empty tibble with the expected structure if no matches are found
+#'   Returns an empty data frame with the expected structure if no matches are found
 #'   or if inputs are invalid/empty.
 #'
 #' @export
-#' @importFrom dplyr mutate row_number select rename inner_join distinct everything
-#' @importFrom tidyr unnest
-#' @importFrom rlang := .data
-#'
 #' @examples
 #' # Create dummy data for permute_url if not loaded (for example context)
-#' if (!exists("permute_url")) {
+#' if (!exists("permute_url", mode = "function")) {
 #'   permute_url <- function(urls) {
-#'     if (length(urls) == 0) return(data.frame(URL=character(), Permutation=character()))
-#'     # Simplified mock: returns original and original with/without trailing slash
-#'     res <- lapply(urls, function(u) {
-#'       if (is.na(u) || u == "") return(data.frame(URL=u, Permutation=NA_character_))
-#'       p1 <- u
-#'       p2 <- if (grepl("/$", u)) sub("/$", "", u) else paste0(u, "/")
-#'       unique_perms <- unique(c(p1,p2))
-#'       # permute_url actually returns scheme/www variants too
-#'       # For this mock, just a few for structure.
-#'       # True permute_url returns a data.frame with 'URL' (original)
-#'       # and 'Permutation' (the permutation string)
-#'       # Let's mock 2 permutations: original and stripped protocol/www
-#'       stripped_u <- gsub("^(https?://)?(www\\\\.)?", "", u)
-#'       return(data.frame(URL = rep(u, 2), Permutation = c(stripped_u, paste0(stripped_u,"/"))))
+#'     if (!is.character(urls)) urls <- as.character(urls)
+#'     if (length(urls) == 0) return(data.frame(URL=character(), Permutation=character(),
+#'                                              stringsAsFactors = FALSE))
+#'     all_perms_list <- lapply(urls, function(u) {
+#'       if (is.na(u) || u == "") {
+#'         return(data.frame(URL=u, Permutation=NA_character_,
+#'                           stringsAsFactors = FALSE))
+#'       }
+#'       # Simplified mock for example purposes
+#'       stripped_u <- gsub("^(https?://)?(www\\.)?", "", u)
+#'       perms <- unique(c(stripped_u, paste0(stripped_u, "/")))
+#'       return(data.frame(URL = rep(u, length(perms)), Permutation = perms,
+#'                         stringsAsFactors = FALSE))
 #'     })
-#'     do.call(rbind, res)
+#'     return(do.call(rbind, all_perms_list))
 #'   }
 #' }
 #'
@@ -64,16 +60,20 @@
 #'   ID_A = 1:2,
 #'   URL_A_col = c("http://example.com/path", "www.test.com/another/"),
 #'   DataA = LETTERS[1:2],
+#'   SharedCol = c("val1", "val2"),
 #'   stringsAsFactors = FALSE
 #' )
 #' dfB <- data.frame(
 #'   ID_B = 1:3,
 #'   URL_B_col = c("example.com/path/", "test.com/another", "unrelated.org"),
 #'   DataB = letters[24:26], # x, y, z
+#'   SharedCol = c("val_x", "val_y", "val_z"),
 #'   stringsAsFactors = FALSE
 #' )
 #'
-#' # joined_result <- permutation_join(dfA, dfB, col_A = "URL_A_col", col_B = "URL_B_col")
+#' # To run example (make sure permute_url is defined as above or from package)
+#' # joined_result <- permutation_join(dfA, dfB, col_A = "URL_A_col", col_B = "URL_B_col",
+#' #                                 suffix_A = ".dfA", suffix_B = ".dfB")
 #' # print(joined_result)
 #'
 #' # Example with default "URL" column name
@@ -88,151 +88,184 @@ permutation_join <- function(data_A, data_B,
   # --- Input Validation ---
   if (!is.data.frame(data_A) || !is.data.frame(data_B)) {
     warning("Inputs 'data_A' and 'data_B' must be data frames.", call. = FALSE)
-    return(dplyr::tibble()) # Return empty tibble
+    return(data.frame()) # Return empty data.frame
   }
   if (!col_A %in% names(data_A)) {
     warning(paste0("Column '", col_A, "' not found in data_A."), call. = FALSE)
-    return(dplyr::tibble())
+    return(data.frame())
   }
   if (!col_B %in% names(data_B)) {
     warning(paste0("Column '", col_B, "' not found in data_B."), call. = FALSE)
-    return(dplyr::tibble())
+    return(data.frame())
   }
+
+  # Define expected output structure for empty results
+  empty_output_template <- data.frame(
+    OriginalURL_A = character(0),
+    OriginalURL_B = character(0),
+    JoinKey = character(0),
+    stringsAsFactors = FALSE
+  )
+  # Attempt to add other columns from inputs to the template for empty results
+  # This is best-effort for a more informative empty return.
+  # Names from data_A (excluding col_A, adding suffix if needed later)
+  other_cols_A <- setdiff(names(data_A), col_A)
+  for(oca in other_cols_A) empty_output_template[[paste0(oca, suffix_A)]] <- character(0)
+  # Names from data_B (excluding col_B, adding suffix if needed later)
+  other_cols_B <- setdiff(names(data_B), col_B)
+  for(ocb in other_cols_B) empty_output_template[[paste0(ocb, suffix_B)]] <- character(0)
+  # Ensure unique columns in template in case of original name clashes resolved by suffix
+  empty_output_template <- empty_output_template[, unique(names(empty_output_template)), drop = FALSE]
+
+
   if (nrow(data_A) == 0 || nrow(data_B) == 0) {
-    # Define expected output columns for empty result
-    # This is tricky without knowing actual column names from data_A/data_B
-    # For now, return a generic empty tibble or one with core expected names
-    return(dplyr::tibble(
-      OriginalURL_A = character(0),
-      OriginalURL_B = character(0),
-      JoinKey = character(0)
-      # ... and potentially other columns if we could infer them
-    ))
+    return(empty_output_template)
   }
 
+  # --- Internal Helper Function to Prepare Data (Base R) ---
+  .prepare_data_for_join_base <- function(df, url_col_name_str,
+                                          desired_original_url_col_name_str,
+                                          internal_id_col_name_str) {
+    df_copy <- df # Work on a copy
+    df_copy[[internal_id_col_name_str]] <- seq_len(nrow(df_copy))
 
-  # --- Internal Helper Function to Prepare Data ---
-  .prepare_data_for_join <- function(df, url_col_name,
-                                     desired_original_url_col_name,
-                                     temp_id_col_name_str,
-                                     final_id_col_name_str) {
+    all_perms_list <- vector("list", nrow(df_copy))
 
-    # Ensure rlang := syntax works with string names for new columns
-    temp_id_sym <- rlang::sym(temp_id_col_name_str)
-    final_id_sym <- rlang::sym(final_id_col_name_str)
-    desired_orig_url_sym <- rlang::sym(desired_original_url_col_name)
+    for (i in seq_len(nrow(df_copy))) {
+      current_row_url <- df_copy[[url_col_name_str]][i]
+      
+      # permute_url should return a data.frame with columns "URL" (original input to it)
+      # and "Permutation" (the permuted string).
+      perms_df_for_row <- permute_url(current_row_url)
 
-    df_with_id <- df %>%
-      dplyr::mutate({{temp_id_sym}} := dplyr::row_number())
+      if (is.data.frame(perms_df_for_row) && nrow(perms_df_for_row) > 0) {
+        # Keep the original URL from *this specific row* of df_copy,
+        # not the one permute_url might return in its 'URL' column if it processed a vector.
+        perms_df_for_row[[desired_original_url_col_name_str]] <- current_row_url
+        
+        # Rename the column containing the actual permutation strings to "JoinKey"
+        names(perms_df_for_row)[names(perms_df_for_row) == "Permutation"] <- "JoinKey"
+        
+        # Add the internal ID of the original row from df_copy
+        perms_df_for_row[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]][i]
+        
+        # Select only necessary columns for the expanded part
+        # The original 'URL' column from permute_url output is not strictly needed here
+        # as we have desired_original_url_col_name_str
+        all_perms_list[[i]] <- perms_df_for_row[, c(internal_id_col_name_str, desired_original_url_col_name_str, "JoinKey"), drop = FALSE]
+      } else {
+        # Handle case where permute_url returns empty/NA or not a proper data.frame
+        # Create a 0-row df with expected columns to avoid rbind errors
+        temp_empty_df <- data.frame(
+            stringsAsFactors = FALSE
+        )
+        temp_empty_df[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]][i] # or integer(0) if not linking to row
+        temp_empty_df[[desired_original_url_col_name_str]] <- current_row_url # or character(0)
+        temp_empty_df[["JoinKey"]] <- NA_character_ # or character(0)
+        all_perms_list[[i]] <- temp_empty_df[0, , drop = FALSE] # ensure 0 rows
+      }
+    }
 
-    # Generate permutations and link back to original row
-    # .data[[url_col_name]] correctly accesses the url column by string name
-    prepared_df <- df_with_id %>%
-      dplyr::select({{temp_id_sym}}, .current_url_for_permute = .data[[url_col_name]]) %>%
-      dplyr::rowwise() %>%
-      dplyr::mutate(.list_of_perms_df = list(permute_url(.current_url_for_permute))) %>%
-      dplyr::ungroup() %>%
-      tidyr::unnest(.list_of_perms_df) %>% # Columns: temp_id_sym, .current_url_for_permute, URL (from permute_url), Permutation
-      dplyr::rename(
-        JoinKey = Permutation,
-        {{desired_orig_url_sym}} := .current_url_for_permute # This is the original URL from this specific row
-      ) %>%
-      dplyr::select({{temp_id_sym}}, {{desired_orig_url_sym}}, JoinKey) %>%
-      dplyr::left_join(df_with_id, by = temp_id_col_name_str) %>% # Join by string name
-      dplyr::rename({{final_id_sym}} := {{temp_id_sym}}) # Final rename for the ID column
-
-    return(prepared_df)
+    expanded_data <- do.call(rbind, all_perms_list)
+    if (is.null(expanded_data) || nrow(expanded_data) == 0) {
+        # Create an empty data frame with the correct column names if all_perms_list was empty or all elements were NULL/0-row
+        empty_df <- data.frame(stringsAsFactors = FALSE)
+        empty_df[[internal_id_col_name_str]] <- integer(0)
+        empty_df[[desired_original_url_col_name_str]] <- character(0)
+        empty_df[["JoinKey"]] <- character(0)
+        return(empty_df)
+    }
+    
+    # Merge back with original df to get all original columns
+    # Ensure df_copy has the internal_id_col_name_str with unique values for merge
+    # The internal_id_col_name_str in expanded_data links to rows in df_copy
+    
+    # Select all columns from df_copy *except* the original url_col_name_str IF it is not also an ID or other wanted col.
+    # This is to avoid duplicating the URL column if it's already captured as desired_original_url_col_name_str.
+    # However, merge will handle suffixes if url_col_name_str is still present.
+    # Simpler: let merge handle all columns from df_copy.
+    
+    # Add a suffix to df_copy columns (except the ID) to prevent clashes with expanded_data before merge
+    # This is not standard for merge; merge itself handles suffixes on output.
+    # So, directly merge.
+    
+    # df_copy should only contain the id and its original columns.
+    # expanded_data has id, OriginalURL_X, JoinKey.
+    # We want to attach all original columns from df_copy to expanded_data.
+    
+    # Prepare df_copy for merge: only id and its other columns
+    df_original_cols_with_id <- df_copy # df_copy has id and all original cols
+    
+    # Merge expanded_data (id, OriginalURL_X, JoinKey) with all original columns from df_original_cols_with_id
+    # common column for merge is internal_id_col_name_str
+    final_expanded_df <- merge(
+      expanded_data, # x: has internal_id_col_name_str, desired_original_url_col_name_str, JoinKey
+      df_original_cols_with_id, # y: has internal_id_col_name_str and all original columns of df
+      by = internal_id_col_name_str,
+      all.x = TRUE, # Keep all permutation rows
+      all.y = FALSE  # Don't keep original rows that had no valid permutations (already handled by expanded_data construction)
+    )
+    
+    return(final_expanded_df)
   }
 
   # --- Process data_A ---
-  data_A_expanded <- .prepare_data_for_join(
-    df = data_A,
-    url_col_name = col_A,
-    desired_original_url_col_name = "OriginalURL_A",
-    temp_id_col_name_str = ".id_A_temp_rurl", # Use distinct temp names
-    final_id_col_name_str = ".row_id_A_rurl"
+  id_col_A <- ".id_A_rurl_join"
+  data_A_expanded <- .prepare_data_for_join_base(
+    df = data_A, url_col_name_str = col_A,
+    desired_original_url_col_name_str = "OriginalURL_A",
+    internal_id_col_name_str = id_col_A
   )
 
   # --- Process data_B ---
-  data_B_expanded <- .prepare_data_for_join(
-    df = data_B,
-    url_col_name = col_B,
-    desired_original_url_col_name = "OriginalURL_B",
-    temp_id_col_name_str = ".id_B_temp_rurl",
-    final_id_col_name_str = ".row_id_B_rurl"
+  id_col_B <- ".id_B_rurl_join"
+  data_B_expanded <- .prepare_data_for_join_base(
+    df = data_B, url_col_name_str = col_B,
+    desired_original_url_col_name_str = "OriginalURL_B",
+    internal_id_col_name_str = id_col_B
   )
   
-  # Handle cases where one or both expansions are empty
   if (nrow(data_A_expanded) == 0 || nrow(data_B_expanded) == 0) {
-    return(dplyr::tibble(
-      OriginalURL_A = character(0),
-      OriginalURL_B = character(0),
-      JoinKey = character(0)
-      # Ideally, add other columns from data_A and data_B with NA values
-      # This is complex to do generically for all possible columns.
-      # A simpler approach for now is to return the core columns empty.
-    ))
+    return(empty_output_template)
   }
 
-
   # --- Join Expanded DataFrames ---
-  # Suffixes are applied to non-join columns that are present in both
-  # data_A_expanded and data_B_expanded and have the same name.
-  # OriginalURL_A, OriginalURL_B, .row_id_A_rurl, .row_id_B_rurl are unique.
-  joined_data_raw <- dplyr::inner_join(
-    data_A_expanded,
-    data_B_expanded,
+  joined_data_raw <- merge(
+    data_A_expanded, data_B_expanded,
     by = "JoinKey",
-    suffix = c(suffix_A, suffix_B)
+    suffixes = c(suffix_A, suffix_B),
+    all = FALSE # Inner join behavior
   )
 
   # --- Deduplicate Connections ---
-  # Keep one row per unique pair of original input rows that connected.
   if (nrow(joined_data_raw) > 0) {
-    final_joined_data <- joined_data_raw %>%
-      dplyr::distinct(.row_id_A_rurl, .row_id_B_rurl, .keep_all = TRUE)
+    # Create a composite key for deduplication based on original row IDs
+    dedup_key <- paste(joined_data_raw[[id_col_A]], joined_data_raw[[id_col_B]], sep = "_rurl_sep_")
+    final_joined_data <- joined_data_raw[!duplicated(dedup_key), , drop = FALSE]
   } else {
-    final_joined_data <- joined_data_raw # Empty, but keep structure
+    final_joined_data <- joined_data_raw
   }
-
 
   # --- Select and Arrange Output Columns ---
   if (nrow(final_joined_data) > 0) {
-    # Define core columns that must exist if join was successful
-    core_cols <- c("OriginalURL_A", "OriginalURL_B", "JoinKey")
+    # Define core columns in desired order
+    core_output_cols <- c("OriginalURL_A", "OriginalURL_B", "JoinKey")
     
-    # Ensure core columns are present (should be if nrow > 0)
-    # This also helps in selecting them first.
-    # Other columns are all remaining columns from the join.
-    # We also remove the internal row ID columns.
+    # Get all other columns, excluding the internal ID columns
+    all_current_names <- names(final_joined_data)
+    other_cols <- setdiff(all_current_names, c(core_output_cols, id_col_A, id_col_B))
     
-    # Get all names, then arrange
-    all_names <- names(final_joined_data)
+    # Combine and ensure unique names (though suffixes from merge should handle most)
+    final_col_order <- unique(c(core_output_cols, other_cols))
     
-    # Identify original A columns (those not from B and not core/id)
-    # This is complex due to suffixes. The `everything()` selector
-    # along with explicit ordering of known columns is usually best.
-
-    result <- final_joined_data %>%
-      dplyr::select(
-        OriginalURL_A,
-        OriginalURL_B,
-        JoinKey,
-        dplyr::everything(), # Puts all other columns after the specified ones
-        -.row_id_A_rurl,
-        -.row_id_B_rurl
-      )
+    # Ensure all selected columns actually exist to prevent errors
+    final_col_order_existing <- final_col_order[final_col_order %in% all_current_names]
+    
+    result <- final_joined_data[, final_col_order_existing, drop = FALSE]
+    
   } else {
-    # Return an empty tibble with the expected core column structure
-    # and try to infer other columns if possible (difficult generically)
-    # For now, a defined empty structure.
-    result <- dplyr::tibble(
-      OriginalURL_A = character(0),
-      OriginalURL_B = character(0),
-      JoinKey = character(0)
-      # Add other common columns if schema is fixed or known, otherwise this is safest.
-    )
+    result <- empty_output_template # Use the template for 0-row results
   }
 
-  return(dplyr::as_tibble(result)) # Ensure it's a tibble
+  return(result)
 } 
