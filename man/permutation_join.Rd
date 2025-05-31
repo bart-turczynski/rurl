@@ -2,74 +2,103 @@
 % Please edit documentation in R/permutation_join.R
 \name{permutation_join}
 \alias{permutation_join}
-\title{Permutation Join of Two URL Sets}
+\title{Permutation Join of Two URL Sets (Base R Version)}
 \usage{
-permutation_join(A, B)
+permutation_join(
+  data_A,
+  data_B,
+  col_A = "URL",
+  col_B = "URL",
+  suffix_A = "_A",
+  suffix_B = "_B"
+)
 }
 \arguments{
-\item{A}{A data frame. It must contain at least two columns:
-\code{URL} (character, the original URL) and \code{Permutation} (list,
-where each element is a data frame of permutations). Each data frame
-within the \code{Permutation} list must have a column named \code{Permutations}
-(which will be renamed to \code{Perm}).}
+\item{data_A}{A data frame containing URLs for the left side of the join.}
 
-\item{B}{A data frame, with the same structure as \code{A}.}
+\item{data_B}{A data frame containing URLs for the right side of the join.}
+
+\item{col_A}{Character string, the name of the column in `data_A` that
+contains URLs. Defaults to "URL".}
+
+\item{col_B}{Character string, the name of the column in `data_B` that
+contains URLs. Defaults to "URL".}
+
+\item{suffix_A}{Character string, suffix to add to `data_A` column names
+in the output if they conflict with `data_B` column names (excluding
+join keys and specially created columns like OriginalURL_A). Defaults to "_A".}
+
+\item{suffix_B}{Character string, suffix to add to `data_B` column names
+in the output if they conflict with `data_A` column names. Defaults to "_B".}
 }
 \value{
-A single data frame combining the processed permutations from both
-  A and B. The resulting data frame will have columns including \code{Perm}
-  (the permutation), \code{Source} (the original URL from which the
-  permutation was derived), \code{SourceSet} (a factor indicating origin,
-  e.g., "SetA" or "SetB"), and any other columns originally present in the
-  innermost permutation data frames. Returns \code{NULL} if inputs are invalid.
+A data frame representing the join. Each row signifies a unique pair of
+  rows (one from `data_A`, one from `data_B`) linked by a common URL
+  permutation. The output includes:
+  \itemize{
+    \item `OriginalURL_A`: The URL from the linking row in `data_A`.
+    \item `OriginalURL_B`: The URL from the linking row in `data_B`.
+    \item `JoinKey`: The specific permutation derived from `data_A`'s URL
+          that matched a permutation from `data_B`'s URL.
+    \item All other original columns from `data_A` and `data_B`, with
+          suffixes applied by `base::merge` to resolve name conflicts
+          if necessary.
+  }
+  Returns an empty data frame with the expected structure if no matches are found
+  or if inputs are invalid/empty.
 }
 \description{
-This function takes two datasets, A and B, each containing URLs and their
-permutations, flattens them, and then joins them into a single data frame.
-Each permutation is augmented with information about its original URL (Source)
-and a label indicating whether it came from dataset A or B (SourceSet).
+Performs a join between two data frames based on URL permutations.
+It identifies rows in `data_A` and `data_B` that can be linked because
+a URL in one is a permutation of a URL in the other (considering variations
+in scheme, www prefix, and trailing slashes).
+This version aims to use primarily base R functions.
 }
 \examples{
-# Example Data for A
-perms_df_a1 <- data.frame(Permutations = c("http://ex.com/p1", "http://ex.com/p2"),
-                          OtherCol = 1:2, stringsAsFactors = FALSE)
-perms_df_a2 <- data.frame(Permutations = c("http://samp.org/a", "http://samp.org/b"),
-                          OtherCol = 3:4, stringsAsFactors = FALSE)
-A_data <- data.frame(URL = c("http://example.com", "http://sample.org"),
-                     stringsAsFactors = FALSE)
-A_data$Permutation <- list(perms_df_a1, perms_df_a2)
-
-# Example Data for B
-perms_df_b1 <- data.frame(Permutations = c("http://test.net/x", "http://test.net/y"),
-                          AnotherCol = c("foo", "bar"), stringsAsFactors = FALSE)
-B_data <- data.frame(URL = c("http://test.net"), stringsAsFactors = FALSE)
-B_data$Permutation <- list(perms_df_b1)
-
-# Perform the permutation join using base data.frames
-joined_data_df <- permutation_join(A_data, B_data)
-if (!is.null(joined_data_df)) {
-  print(head(joined_data_df))
-  print(table(joined_data_df$SourceSet))
+# Create dummy data for permute_url if not loaded (for example context)
+if (!exists("permute_url", mode = "function")) {
+  permute_url <- function(urls) {
+    if (!is.character(urls)) urls <- as.character(urls)
+    if (length(urls) == 0) return(data.frame(URL=character(), Permutation=character(),
+                                             stringsAsFactors = FALSE))
+    all_perms_list <- lapply(urls, function(u) {
+      if (is.na(u) || u == "") {
+        return(data.frame(URL=u, Permutation=NA_character_,
+                          stringsAsFactors = FALSE))
+      }
+      # Simplified mock for example purposes
+      stripped_u <- gsub("^(https?://)?(www\\\\.)?", "", u)
+      perms <- unique(c(stripped_u, paste0(stripped_u, "/")))
+      return(data.frame(URL = rep(u, length(perms)), Permutation = perms,
+                        stringsAsFactors = FALSE))
+    })
+    return(do.call(rbind, all_perms_list))
+  }
 }
 
-# Example with empty input for B
-empty_df_B <- data.frame(URL = character(0), stringsAsFactors = FALSE)
-empty_df_B$Permutation <- vector("list", 0)
+dfA <- data.frame(
+  ID_A = 1:2,
+  URL_A_col = c("http://example.com/path", "www.test.com/another/"),
+  DataA = LETTERS[1:2],
+  SharedCol = c("val1", "val2"),
+  stringsAsFactors = FALSE
+)
+dfB <- data.frame(
+  ID_B = 1:3,
+  URL_B_col = c("example.com/path/", "test.com/another", "unrelated.org"),
+  DataB = letters[24:26], # x, y, z
+  SharedCol = c("val_x", "val_y", "val_z"),
+  stringsAsFactors = FALSE
+)
 
-joined_with_empty_B <- permutation_join(A_data, empty_df_B)
-if (!is.null(joined_with_empty_B)) {
- print(head(joined_with_empty_B))
- print(table(joined_with_empty_B$SourceSet))
-}
+# To run example (make sure permute_url is defined as above or from package)
+# joined_result <- permutation_join(dfA, dfB, col_A = "URL_A_col", col_B = "URL_B_col",
+#                                 suffix_A = ".dfA", suffix_B = ".dfB")
+# print(joined_result)
 
-# Example with both inputs empty
-empty_df_A <- data.frame(URL = character(0), stringsAsFactors = FALSE)
-empty_df_A$Permutation <- vector("list", 0)
-
-joined_empty_both <- permutation_join(empty_df_A, empty_df_B)
-if (!is.null(joined_empty_both)) {
- print(head(joined_empty_both)) # Should be an empty data frame with defined columns
- print(dim(joined_empty_both))
-}
-
+# Example with default "URL" column name
+dfA_std <- data.frame(URL = "site.com/page", ValA = 10, stringsAsFactors = FALSE)
+dfB_std <- data.frame(URL = "https://www.site.com/page/", ValB = 20, stringsAsFactors = FALSE)
+# joined_std <- permutation_join(dfA_std, dfB_std)
+# print(joined_std)
 }
