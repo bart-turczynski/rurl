@@ -23,6 +23,8 @@ permute_url <- function(urls) {
   # %||% is defined globally in R/rurl.R
 
   for (original_url_input in urls) {
+    original_url_input <- iconv(original_url_input, "UTF-8", "UTF-8", sub = "byte")
+
     if (is.na(original_url_input) || !nzchar(trimws(original_url_input))) {
       all_permutations[[length(all_permutations) + 1]] <- data.frame(
         URL = original_url_input,
