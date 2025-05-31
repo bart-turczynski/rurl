@@ -1,320 +1,238 @@
 #' Permutation Join of Two URL Sets
 #'
-#' This function takes two datasets, A and B, each containing URLs and their
-#' permutations, flattens them, and then joins them into a single data frame.
-#' Each permutation is augmented with information about its original URL (Source)
-#' and a label indicating whether it came from dataset A or B (SourceSet).
+#' Performs a join between two data frames based on URL permutations.
+#' It identifies rows in `data_A` and `data_B` that can be linked because
+#' a URL in one is a permutation of a URL in the other (considering variations
+#' in scheme, www prefix, and trailing slashes).
 #'
-#' @param A A data frame. It must contain at least two columns:
-#'   \code{URL} (character, the original URL) and \code{Permutation} (list,
-#'   where each element is a data frame of permutations). Each data frame
-#'   within the \code{Permutation} list must have a column named \code{Permutations}
-#'   (which will be renamed to \code{Perm}).
-#' @param B A data frame, with the same structure as \code{A}.
+#' @param data_A A data frame containing URLs for the left side of the join.
+#' @param data_B A data frame containing URLs for the right side of the join.
+#' @param col_A Character string, the name of the column in `data_A` that
+#'   contains URLs. Defaults to "URL".
+#' @param col_B Character string, the name of the column in `data_B` that
+#'   contains URLs. Defaults to "URL".
+#' @param suffix_A Character string, suffix to add to `data_A` column names
+#'   in the output if they conflict with `data_B` column names (excluding
+#'   join keys and specially created columns like OriginalURL_A). Defaults to "_A".
+#' @param suffix_B Character string, suffix to add to `data_B` column names
+#'   in the output if they conflict with `data_A` column names. Defaults to "_B".
 #'
-#' @return A single data frame combining the processed permutations from both
-#'   A and B. The resulting data frame will have columns including \code{Perm}
-#'   (the permutation), \code{Source} (the original URL from which the
-#'   permutation was derived), \code{SourceSet} (a factor indicating origin,
-#'   e.g., "SetA" or "SetB"), and any other columns originally present in the
-#'   innermost permutation data frames. Returns \code{NULL} if inputs are invalid.
+#' @return A tibble representing the join. Each row signifies a unique pair of
+#'   rows (one from `data_A`, one from `data_B`) linked by a common URL
+#'   permutation. The output includes:
+#'   \itemize{
+#'     \item `OriginalURL_A`: The URL from the linking row in `data_A`.
+#'     \item `OriginalURL_B`: The URL from the linking row in `data_B`.
+#'     \item `JoinKey`: An example of the common permuted URL string that
+#'           established the link.
+#'     \item All other original columns from `data_A` and `data_B`, with
+#'           suffixes applied by `dplyr::inner_join` to resolve name conflicts
+#'           if necessary.
+#'   }
+#'   Returns an empty tibble with the expected structure if no matches are found
+#'   or if inputs are invalid/empty.
 #'
 #' @export
+#' @importFrom dplyr mutate row_number select rename inner_join distinct everything
+#' @importFrom tidyr unnest
+#' @importFrom rlang := .data
+#'
 #' @examples
-#' # Example Data for A
-#' perms_df_a1 <- data.frame(Permutations = c("http://ex.com/p1", "http://ex.com/p2"),
-#'                           OtherCol = 1:2, stringsAsFactors = FALSE)
-#' perms_df_a2 <- data.frame(Permutations = c("http://samp.org/a", "http://samp.org/b"),
-#'                           OtherCol = 3:4, stringsAsFactors = FALSE)
-#' A_data <- data.frame(URL = c("http://example.com", "http://sample.org"),
-#'                      stringsAsFactors = FALSE)
-#' A_data$Permutation <- list(perms_df_a1, perms_df_a2)
-#'
-#' # Example Data for B
-#' perms_df_b1 <- data.frame(Permutations = c("http://test.net/x", "http://test.net/y"),
-#'                           AnotherCol = c("foo", "bar"), stringsAsFactors = FALSE)
-#' B_data <- data.frame(URL = c("http://test.net"), stringsAsFactors = FALSE)
-#' B_data$Permutation <- list(perms_df_b1)
-#'
-#' # Perform the permutation join using base data.frames
-#' joined_data_df <- permutation_join(A_data, B_data)
-#' if (!is.null(joined_data_df)) {
-#'   print(head(joined_data_df))
-#'   print(table(joined_data_df$SourceSet))
+#' # Create dummy data for permute_url if not loaded (for example context)
+#' if (!exists("permute_url")) {
+#'   permute_url <- function(urls) {
+#'     if (length(urls) == 0) return(data.frame(URL=character(), Permutation=character()))
+#'     # Simplified mock: returns original and original with/without trailing slash
+#'     res <- lapply(urls, function(u) {
+#'       if (is.na(u) || u == "") return(data.frame(URL=u, Permutation=NA_character_))
+#'       p1 <- u
+#'       p2 <- if (grepl("/$", u)) sub("/$", "", u) else paste0(u, "/")
+#'       unique_perms <- unique(c(p1,p2))
+#'       # permute_url actually returns scheme/www variants too
+#'       # For this mock, just a few for structure.
+#'       # True permute_url returns a data.frame with 'URL' (original)
+#'       # and 'Permutation' (the permutation string)
+#'       # Let's mock 2 permutations: original and stripped protocol/www
+#'       stripped_u <- gsub("^(https?://)?(www\\\\.)?", "", u)
+#'       return(data.frame(URL = rep(u, 2), Permutation = c(stripped_u, paste0(stripped_u,"/"))))
+#'     })
+#'     do.call(rbind, res)
+#'   }
 #' }
 #'
-#' # Example with empty input for B
-#' empty_df_B <- data.frame(URL = character(0), stringsAsFactors = FALSE)
-#' empty_df_B$Permutation <- vector("list", 0)
+#' dfA <- data.frame(
+#'   ID_A = 1:2,
+#'   URL_A_col = c("http://example.com/path", "www.test.com/another/"),
+#'   DataA = LETTERS[1:2],
+#'   stringsAsFactors = FALSE
+#' )
+#' dfB <- data.frame(
+#'   ID_B = 1:3,
+#'   URL_B_col = c("example.com/path/", "test.com/another", "unrelated.org"),
+#'   DataB = letters[24:26], # x, y, z
+#'   stringsAsFactors = FALSE
+#' )
 #'
-#' joined_with_empty_B <- permutation_join(A_data, empty_df_B)
-#' if (!is.null(joined_with_empty_B)) {
-#'  print(head(joined_with_empty_B))
-#'  print(table(joined_with_empty_B$SourceSet))
-#' }
+#' # joined_result <- permutation_join(dfA, dfB, col_A = "URL_A_col", col_B = "URL_B_col")
+#' # print(joined_result)
 #'
-#' # Example with both inputs empty
-#' empty_df_A <- data.frame(URL = character(0), stringsAsFactors = FALSE)
-#' empty_df_A$Permutation <- vector("list", 0)
-#'
-#' joined_empty_both <- permutation_join(empty_df_A, empty_df_B)
-#' if (!is.null(joined_empty_both)) {
-#'  print(head(joined_empty_both)) # Should be an empty data frame with defined columns
-#'  print(dim(joined_empty_both))
-#' }
-#'
-permutation_join <- function(A, B) {
+#' # Example with default "URL" column name
+#' dfA_std <- data.frame(URL = "site.com/page", ValA = 10, stringsAsFactors = FALSE)
+#' dfB_std <- data.frame(URL = "https://www.site.com/page/", ValB = 20, stringsAsFactors = FALSE)
+#' # joined_std <- permutation_join(dfA_std, dfB_std)
+#' # print(joined_std)
+permutation_join <- function(data_A, data_B,
+                             col_A = "URL", col_B = "URL",
+                             suffix_A = "_A", suffix_B = "_B") {
 
-  # --- Input Validation Helper ---
-  validate_input <- function(tbl, tbl_name) {
-    if (is.null(tbl)) {
-      warning(paste0("Input '", tbl_name, "' is NULL."))
-      return(FALSE)
-    }
-    if (!is.data.frame(tbl)) {
-      warning(paste0("Input '", tbl_name, "' is not a data.frame or tibble."))
-      return(FALSE)
-    }
-    required_cols <- c("URL", "Permutation")
-    if (!all(required_cols %in% names(tbl))) {
-      missing_cols <- setdiff(required_cols, names(tbl))
-      warning(paste0("Input '", tbl_name, "' is missing required column(s): ",
-                     paste(missing_cols, collapse = ", ")))
-      return(FALSE)
-    }
-    if (!is.character(tbl$URL)) {
-        warning(paste0("Column 'URL' in input '", tbl_name, "' must be character."))
-        return(FALSE)
-    }
-    if (!is.list(tbl$Permutation)) {
-      warning(paste0("Column 'Permutation' in input '", tbl_name, "' must be a list."))
-      return(FALSE)
-    }
-    if (nrow(tbl) > 0) {
-        for (i in seq_len(nrow(tbl))) {
-            perm_element <- tbl$Permutation[[i]]
-            if (is.null(perm_element)) { # Allow NULL elements if they are skipped later
-                 next # Or treat as error: return(FALSE) with warning
-            }
-            if (!is.data.frame(perm_element)) {
-                warning(paste0("Element ", i, " of 'Permutation' in '", tbl_name, "' is not a data.frame."))
-                return(FALSE)
-            }
-            # Allow empty data.frames in the list, flatten_perms handles them
-            if (nrow(perm_element) > 0 && !("Permutations" %in% names(perm_element))) {
-                warning(paste0("Data.frame at element ", i, " of 'Permutation' in '", tbl_name,
-                               "' is non-empty and must have a 'Permutations' column."))
-                return(FALSE)
-            }
-        }
-    }
-    return(TRUE)
+  # --- Input Validation ---
+  if (!is.data.frame(data_A) || !is.data.frame(data_B)) {
+    warning("Inputs 'data_A' and 'data_B' must be data frames.", call. = FALSE)
+    return(dplyr::tibble()) # Return empty tibble
+  }
+  if (!col_A %in% names(data_A)) {
+    warning(paste0("Column '", col_A, "' not found in data_A."), call. = FALSE)
+    return(dplyr::tibble())
+  }
+  if (!col_B %in% names(data_B)) {
+    warning(paste0("Column '", col_B, "' not found in data_B."), call. = FALSE)
+    return(dplyr::tibble())
+  }
+  if (nrow(data_A) == 0 || nrow(data_B) == 0) {
+    # Define expected output columns for empty result
+    # This is tricky without knowing actual column names from data_A/data_B
+    # For now, return a generic empty tibble or one with core expected names
+    return(dplyr::tibble(
+      OriginalURL_A = character(0),
+      OriginalURL_B = character(0),
+      JoinKey = character(0)
+      # ... and potentially other columns if we could infer them
+    ))
   }
 
-  if (!validate_input(A, "A") || !validate_input(B, "B")) {
-    return(NULL)
+
+  # --- Internal Helper Function to Prepare Data ---
+  .prepare_data_for_join <- function(df, url_col_name,
+                                     desired_original_url_col_name,
+                                     temp_id_col_name_str,
+                                     final_id_col_name_str) {
+
+    # Ensure rlang := syntax works with string names for new columns
+    temp_id_sym <- rlang::sym(temp_id_col_name_str)
+    final_id_sym <- rlang::sym(final_id_col_name_str)
+    desired_orig_url_sym <- rlang::sym(desired_original_url_col_name)
+
+    df_with_id <- df %>%
+      dplyr::mutate({{temp_id_sym}} := dplyr::row_number())
+
+    # Generate permutations and link back to original row
+    # .data[[url_col_name]] correctly accesses the url column by string name
+    prepared_df <- df_with_id %>%
+      dplyr::select({{temp_id_sym}}, .current_url_for_permute = .data[[url_col_name]]) %>%
+      dplyr::rowwise() %>%
+      dplyr::mutate(.list_of_perms_df = list(permute_url(.current_url_for_permute))) %>%
+      dplyr::ungroup() %>%
+      tidyr::unnest(.list_of_perms_df) %>% # Columns: temp_id_sym, .current_url_for_permute, URL (from permute_url), Permutation
+      dplyr::rename(
+        JoinKey = Permutation,
+        {{desired_orig_url_sym}} := .current_url_for_permute # This is the original URL from this specific row
+      ) %>%
+      dplyr::select({{temp_id_sym}}, {{desired_orig_url_sym}}, JoinKey) %>%
+      dplyr::left_join(df_with_id, by = temp_id_col_name_str) %>% # Join by string name
+      dplyr::rename({{final_id_sym}} := {{temp_id_sym}}) # Final rename for the ID column
+
+    return(prepared_df)
   }
 
-  # --- Helper to flatten a tibble of permuted URLs ---
-  flatten_perms <- function(tbl, source_name) {
-    # Define a canonical empty data frame structure for this helper's output
-    # This is used if tbl is empty or results in no processable data.
-    # Other columns will be added by rbind if they exist in actual data.
-    empty_base_df <- data.frame(Perm = character(0),
-                                Source = character(0),
-                                SourceSet = character(0),
-                                stringsAsFactors = FALSE)
+  # --- Process data_A ---
+  data_A_expanded <- .prepare_data_for_join(
+    df = data_A,
+    url_col_name = col_A,
+    desired_original_url_col_name = "OriginalURL_A",
+    temp_id_col_name_str = ".id_A_temp_rurl", # Use distinct temp names
+    final_id_col_name_str = ".row_id_A_rurl"
+  )
 
-    if (nrow(tbl) == 0) {
-      return(empty_base_df)
-    }
-
-    list_of_dfs <- lapply(seq_len(nrow(tbl)), function(i) {
-      inner_df_orig <- tbl$Permutation[[i]]
-      
-      if (is.null(inner_df_orig)) { # Only skip truly NULL elements
-        return(NULL)
-      }
-      
-      current_df <- as.data.frame(inner_df_orig) # Ensure it's a data.frame
-      
-      # Only warn and skip if non-empty AND missing 'Permutations' column.
-      # 0-row DFs missing 'Permutations' will proceed and have 'Perm' added later.
-      if (nrow(current_df) > 0 && !("Permutations" %in% names(current_df))) {
-        warning(paste("Column 'Permutations' not found in list element ", i ," of 'Permutation' for URL: '",
-                      tbl$URL[i], "' in SourceSet: '", source_name,
-                      "'. Skipping this element."), call. = FALSE)
-        return(NULL) # Return NULL if 'Permutations' column is missing, to be filtered
-      }
-
-      # If inner_df_orig is a 0-row data.frame but HAS the 'Permutations' column (or doesn't, it will be added):
-      if (nrow(current_df) == 0) {
-        # It's a 0-row df, its column structure (including 'Permutations' and others like 'ColX') is valuable.
-        # Add Source, SourceSet as 0-length character vectors.
-        current_df$Source <- character(0) 
-        current_df$SourceSet <- character(0) # source_name is a single string, so use character(0)
-        
-        # Rename Permutations to Perm. Already checked 'Permutations' exists.
-        current_df_names <- names(current_df)
-        current_df_names[current_df_names == "Permutations"] <- "Perm"
-        names(current_df) <- current_df_names
-        
-        # Ensure standard columns are present and are 0-length characters of the correct type.
-        # This is important if 'Permutations' was the only column, it becomes 'Perm'.
-        if("Perm" %in% names(current_df)) {
-            current_df$Perm <- as.character(current_df$Perm) # Ensure it is character
-        } else {
-            current_df$Perm <- character(0) # Add if somehow missing after rename logic
-        }
-        # Source and SourceSet already set to character(0).
-
-        return(current_df) # Return the 0-row df with correct columns and types
-      }
-      
-      # For non-empty data frames (original logic)
-      current_df$Source <- tbl$URL[i]
-      current_df$SourceSet <- source_name
-      names(current_df)[names(current_df) == "Permutations"] <- "Perm"
-      return(current_df)
-    })
-    
-    list_of_dfs <- Filter(Negate(is.null), list_of_dfs)
-
-    if (length(list_of_dfs) == 0) {
-      return(empty_base_df)
-    }
-    
-    # Robust rbind: find all unique column names and add missing ones with NAs
-    all_names <- unique(unlist(lapply(list_of_dfs, names)))
-    
-    processed_list_of_dfs <- lapply(list_of_dfs, function(df_item) {
-      missing_cols <- setdiff(all_names, names(df_item))
-      if (length(missing_cols) > 0) {
-          for (col_name in missing_cols) {
-            df_item[[col_name]] <- NA # Use logical NA, rbind will coerce
-          }
-      }
-      # Ensure column order for rbind, and select only existing columns from all_names
-      # This handles cases where a df_item might have extra cols not in all_names (should not happen here)
-      df_item[, intersect(all_names, names(df_item)), drop = FALSE]
-    })
-    
-    # Re-align all dataframes to have all columns from all_names, then rbind
-    # This is the robust part for base R rbind.
-    final_processed_list <- lapply(processed_list_of_dfs, function(df_item) {
-        current_item_names <- names(df_item)
-        # Add columns from all_names that are missing in df_item
-        for(col_to_add in setdiff(all_names, current_item_names)) {
-            df_item[[col_to_add]] <- NA
-        }
-        # Ensure order
-        df_item[, all_names, drop = FALSE]
-    })
-
-    result_df <- do.call(rbind, final_processed_list)
-    
-    # Ensure core columns have consistent types if they became all NAs
-    if ("Perm" %in% names(result_df)) result_df$Perm <- as.character(result_df$Perm)
-    if ("Source" %in% names(result_df)) result_df$Source <- as.character(result_df$Source)
-    if ("SourceSet" %in% names(result_df)) result_df$SourceSet <- as.character(result_df$SourceSet)
-    
-    return(result_df)
-  }
-
-  # Helper to align columns for final rbind, ensuring all DFs have the same set of columns
-  # with NAs for missing ones, and respecting types from other_df_for_types if provided for 0-row DFs.
-  align_df_for_final_rbind <- function(df_to_align, target_names, other_df_for_types = NULL) {
-    new_df_list <- list()
-    current_df_nrows <- nrow(df_to_align)
-
-    for (col_name in target_names) {
-      if (col_name %in% names(df_to_align)) {
-        new_df_list[[col_name]] <- df_to_align[[col_name]]
-      } else {
-        # Column is missing from df_to_align
-        col_val <- NA # Default NA, becomes logical(0) for 0-row DFs via as.data.frame
-        if (current_df_nrows == 0 && !is.null(other_df_for_types) && col_name %in% names(other_df_for_types)) {
-            # Get a 0-length vector of the correct type from other_df_for_types
-             # Ensure it's a 0-length vector of that type
-            col_prototype <- other_df_for_types[[col_name]]
-            if (length(col_prototype) > 0) col_val <- col_prototype[0] else col_val <- col_prototype
-
-        } else if (current_df_nrows > 0) {
-            col_val <- rep(NA, current_df_nrows)
-        }
-        new_df_list[[col_name]] <- col_val
-      }
-    }
-    # For 0-row, as.data.frame(list_with_0_length_vectors_or_NAs) works.
-    # stringsAsFactors=FALSE is important to prevent char cols becoming factors here.
-    # row.names handling for 0-row data frames needs to be NULL.
-    return(as.data.frame(new_df_list, stringsAsFactors = FALSE, row.names = if(current_df_nrows > 0) base::rownames(df_to_align) else NULL))
-  }
-
-  # Process A and B
-  flat_A <- flatten_perms(A, "SetA")
-  flat_B <- flatten_perms(B, "SetB")
-
-  has_A_rows <- nrow(flat_A) > 0
-  has_B_rows <- nrow(flat_B) > 0
-
-  result <- NULL # Initialize result
-
-  if (!has_A_rows && !has_B_rows) {
-    all_cols <- union(names(flat_A), names(flat_B))
-    core_cols <- c("Perm", "Source", "SourceSet")
-    all_cols <- union(all_cols, core_cols)
-
-    typed_empty_cols_list <- list()
-    for (col_name in all_cols) {
-      # Prioritize type from flat_A or flat_B if they are 0-length and typed
-      if (col_name %in% names(flat_A) && length(flat_A[[col_name]]) == 0) {
-        typed_empty_cols_list[[col_name]] <- flat_A[[col_name]]
-      } else if (col_name %in% names(flat_B) && length(flat_B[[col_name]]) == 0) {
-        typed_empty_cols_list[[col_name]] <- flat_B[[col_name]]
-      } else { # Default types for core columns, otherwise logical(0)
-        if (col_name == "Perm") typed_empty_cols_list[[col_name]] <- character(0)
-        else if (col_name == "Source") typed_empty_cols_list[[col_name]] <- character(0)
-        else if (col_name == "SourceSet") typed_empty_cols_list[[col_name]] <- character(0) # Will be factor later
-        else typed_empty_cols_list[[col_name]] <- logical(0) 
-      }
-    }
-    result <- as.data.frame(typed_empty_cols_list, stringsAsFactors = FALSE)
+  # --- Process data_B ---
+  data_B_expanded <- .prepare_data_for_join(
+    df = data_B,
+    url_col_name = col_B,
+    desired_original_url_col_name = "OriginalURL_B",
+    temp_id_col_name_str = ".id_B_temp_rurl",
+    final_id_col_name_str = ".row_id_B_rurl"
+  )
   
-  } else if (!has_A_rows) { # Only A is 0-row, B has rows
-    all_final_names <- union(names(flat_A), names(flat_B))
-    result <- align_df_for_final_rbind(flat_B, all_final_names, flat_A)
-
-  } else if (!has_B_rows) { # Only B is 0-row, A has rows
-    all_final_names <- union(names(flat_A), names(flat_B))
-    result <- align_df_for_final_rbind(flat_A, all_final_names, flat_B)
-
-  } else { # Both have rows
-    all_final_names <- union(names(flat_A), names(flat_B))
-    flat_A_aligned <- align_df_for_final_rbind(flat_A, all_final_names) 
-    flat_B_aligned <- align_df_for_final_rbind(flat_B, all_final_names)
-    result <- rbind(flat_A_aligned, flat_B_aligned)
+  # Handle cases where one or both expansions are empty
+  if (nrow(data_A_expanded) == 0 || nrow(data_B_expanded) == 0) {
+    return(dplyr::tibble(
+      OriginalURL_A = character(0),
+      OriginalURL_B = character(0),
+      JoinKey = character(0)
+      # Ideally, add other columns from data_A and data_B with NA values
+      # This is complex to do generically for all possible columns.
+      # A simpler approach for now is to return the core columns empty.
+    ))
   }
 
-  # Final processing for SourceSet
-  if ("SourceSet" %in% names(result)) {
-    if (nrow(result) > 0) {
-      present_levels <- unique(as.character(result$SourceSet)) # Ensure character for unique
-      # Define the desired order of levels
-      all_possible_levels <- c("SetA", "SetB") 
-      # Determine actual levels present in the data, maintaining desired order
-      final_levels <- all_possible_levels[all_possible_levels %in% present_levels]
-      
-      # Fallback: if no standard levels found but there are other levels (should not happen here)
-      if(length(final_levels) == 0 && length(present_levels) > 0) {
-        final_levels <- present_levels 
-      }
-      
-      result$SourceSet <- factor(result$SourceSet, levels = final_levels)
-    } else {
-      # For 0-row data.frame, SourceSet should be a factor with 0 levels.
-      result$SourceSet <- factor(character(0), levels = character(0))
-    }
+
+  # --- Join Expanded DataFrames ---
+  # Suffixes are applied to non-join columns that are present in both
+  # data_A_expanded and data_B_expanded and have the same name.
+  # OriginalURL_A, OriginalURL_B, .row_id_A_rurl, .row_id_B_rurl are unique.
+  joined_data_raw <- dplyr::inner_join(
+    data_A_expanded,
+    data_B_expanded,
+    by = "JoinKey",
+    suffix = c(suffix_A, suffix_B)
+  )
+
+  # --- Deduplicate Connections ---
+  # Keep one row per unique pair of original input rows that connected.
+  if (nrow(joined_data_raw) > 0) {
+    final_joined_data <- joined_data_raw %>%
+      dplyr::distinct(.row_id_A_rurl, .row_id_B_rurl, .keep_all = TRUE)
+  } else {
+    final_joined_data <- joined_data_raw # Empty, but keep structure
   }
-  return(result)
+
+
+  # --- Select and Arrange Output Columns ---
+  if (nrow(final_joined_data) > 0) {
+    # Define core columns that must exist if join was successful
+    core_cols <- c("OriginalURL_A", "OriginalURL_B", "JoinKey")
+    
+    # Ensure core columns are present (should be if nrow > 0)
+    # This also helps in selecting them first.
+    # Other columns are all remaining columns from the join.
+    # We also remove the internal row ID columns.
+    
+    # Get all names, then arrange
+    all_names <- names(final_joined_data)
+    
+    # Identify original A columns (those not from B and not core/id)
+    # This is complex due to suffixes. The `everything()` selector
+    # along with explicit ordering of known columns is usually best.
+
+    result <- final_joined_data %>%
+      dplyr::select(
+        OriginalURL_A,
+        OriginalURL_B,
+        JoinKey,
+        dplyr::everything(), # Puts all other columns after the specified ones
+        -.row_id_A_rurl,
+        -.row_id_B_rurl
+      )
+  } else {
+    # Return an empty tibble with the expected core column structure
+    # and try to infer other columns if possible (difficult generically)
+    # For now, a defined empty structure.
+    result <- dplyr::tibble(
+      OriginalURL_A = character(0),
+      OriginalURL_B = character(0),
+      JoinKey = character(0)
+      # Add other common columns if schema is fixed or known, otherwise this is safest.
+    )
+  }
+
+  return(dplyr::as_tibble(result)) # Ensure it's a tibble
 } 
