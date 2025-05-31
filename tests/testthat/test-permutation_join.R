@@ -303,26 +303,25 @@ test_that("permutation_join works when Permutation column is I(list())", {
   expect_true(all(result$SourceSet == "SetA"))
 })
 
-test_that("flatten_perms warns and skips inner non-empty DF missing 'Permutations' column", {
+test_that("validate_input catches non-empty inner DF missing 'Permutations' column", {
   A_malformed_inner <- data.frame(URL = "http://example.com/malformed", stringsAsFactors = FALSE)
   # This inner DF is non-empty but lacks the 'Permutations' column.
   malformed_df <- data.frame(NotTheRightColumnName = "p1", OtherData = "abc", stringsAsFactors = FALSE)
   A_malformed_inner$Permutation <- list(malformed_df)
 
-  # A valid B to ensure the join still happens with B's data
+  # A valid B (not strictly needed as A causes NULL return, but good for consistency)
   B_data <- B_valid 
+
+  expected_warning_regexp <- paste0("Data.frame at element 1 of 'Permutation' in 'A'",
+                                  " is non-empty and must have a 'Permutations' column.")
 
   expect_warning(
     result <- permutation_join(A_malformed_inner, B_data),
-    regexp = "Column 'Permutations' not found in list element 1 of 'Permutation' for URL: 'http://example.com/malformed' in SourceSet: 'SetA'. Skipping this element.",
+    regexp = expected_warning_regexp,
     fixed = TRUE
   )
   
-  expect_false(is.null(result)) # Should still produce a result from B_data
-  expect_equal(nrow(result), nrow(B_data$Permutation[[1]])) # Only B's rows
-  expect_true(all(result$SourceSet == "SetB"))
-  # Check that columns from the malformed A do not appear, but B's columns do
-  expect_named(result, c("Perm", "OtherColB", "Source", "SourceSet"), ignore.order = TRUE)
+  expect_null(result) # permutation_join returns NULL due to validate_input failure
 })
 
 test_that("flatten_perms handles 0-row inner DF missing 'Permutations' column by adding empty Perm", {

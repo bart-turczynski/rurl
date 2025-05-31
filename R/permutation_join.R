@@ -138,14 +138,16 @@ permutation_join <- function(A, B) {
       
       current_df <- as.data.frame(inner_df_orig) # Ensure it's a data.frame
       
-      if (!("Permutations" %in% names(current_df))) {
+      # Only warn and skip if non-empty AND missing 'Permutations' column.
+      # 0-row DFs missing 'Permutations' will proceed and have 'Perm' added later.
+      if (nrow(current_df) > 0 && !("Permutations" %in% names(current_df))) {
         warning(paste("Column 'Permutations' not found in list element ", i ," of 'Permutation' for URL: '",
                       tbl$URL[i], "' in SourceSet: '", source_name,
                       "'. Skipping this element."), call. = FALSE)
         return(NULL) # Return NULL if 'Permutations' column is missing, to be filtered
       }
 
-      # If inner_df_orig is a 0-row data.frame but HAS the 'Permutations' column:
+      # If inner_df_orig is a 0-row data.frame but HAS the 'Permutations' column (or doesn't, it will be added):
       if (nrow(current_df) == 0) {
         # It's a 0-row df, its column structure (including 'Permutations' and others like 'ColX') is valuable.
         # Add Source, SourceSet as 0-length character vectors.
