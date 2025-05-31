@@ -33,6 +33,7 @@
 #'   Returns an empty data frame with the expected structure if no matches are found
 #'   or if inputs are invalid/empty.
 #'
+#' @importFrom stats setNames
 #' @export
 #' @examples
 #' # Create dummy data for permute_url if not loaded (for example context)
