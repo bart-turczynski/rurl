@@ -1,4 +1,3 @@
-
 # --- Helper Data for Tests ---
 
 # Basic valid data for A
@@ -81,9 +80,13 @@ test_that("permutation_join handles both inputs empty", {
   expect_equal(nrow(result), 0)
   expect_true(is.character(result$Perm)) # Should be character(0)
   expect_true(is.character(result$Source)) # Should be character(0)
-  # Line 298 makes SourceSet a 0-level factor for 0-row results
-  expect_s3_class(result$SourceSet, "factor") 
-  expect_equal(length(levels(result$SourceSet)), 0)
+  
+  # Check SourceSet specifically
+  expect_true("SourceSet" %in% names(result)) # Ensure column exists
+  if ("SourceSet" %in% names(result)) {
+    expect_s3_class(result$SourceSet, "factor") 
+    expect_equal(length(levels(result$SourceSet)), 0)
+  }
 })
 
 # --- Input Validation Tests ---
@@ -198,12 +201,12 @@ test_that("flatten_perms handles Permutation list with NULL elements", {
 test_that("flatten_perms handles Permutation list with empty data.frames", {
   A_with_empty_df_perm <- A_valid
   empty_inner_df <- data.frame(Permutations = character(0), OtherColA = character(0), stringsAsFactors = FALSE)
-  A_with_empty_df_perm$Permutation[[1]] <- empty_inner_df
+  A_with_empty_df_perm$Permutation[[1]] <- empty_inner_df # Modify first element of the copied A_valid
   
   result <- permutation_join(A_with_empty_df_perm, empty_df_input) # B is empty for simplicity
   expect_false(is.null(result))
-  expect_equal(nrow(result), 2) # Processes perms_df_a2_valid (2 rows)
-  expect_equal(result$Source, rep("http://sample.org", 2))
+  expect_equal(nrow(result), 2) # Processes perms_df_a2_valid (2 rows) from the second element of A_with_empty_df_perm
+  expect_equal(result$Source, rep("http://sample.org", 2)) # Source corresponds to the second URL
 })
 
 test_that("flatten_perms handles inner DFs with varying columns (becomes NA)", {
@@ -241,7 +244,8 @@ test_that("validate_input catches inner DF missing 'Permutations' column", {
 
 test_that("permutation_join handles data.frames with zero rows correctly in lists", {
   A_zero_row_list_element <- data.frame(URL = "http://example.com", stringsAsFactors = FALSE)
-  A_zero_row_list_element$Permutation <- list(data.frame(Permutations = character(0), ColX = integer(0)))
+  # Permutation for this one URL is a 0-row data.frame but with a ColX
+  A_zero_row_list_element$Permutation <- list(data.frame(Permutations = character(0), ColX = integer(0), stringsAsFactors = FALSE))
   
   B_data <- B_valid # Use a valid B
   
@@ -249,33 +253,41 @@ test_that("permutation_join handles data.frames with zero rows correctly in list
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
   # Should only contain rows from B_data, as A's entry was an empty permutation df
-  expect_equal(nrow(result), nrow(B_valid$Permutation[[1]]))
+  expect_equal(nrow(result), nrow(B_valid$Permutation[[1]])) # 2 rows from B
   expect_true(all(result$SourceSet == "SetB"))
+  # ColX from A should exist (as all NA) and ColOtherB from B should exist
   expect_named(result, c("Perm", "OtherColB", "Source", "SourceSet", "ColX"), ignore.order = TRUE)
-  expect_true(all(is.na(result$ColX)))
+  expect_true(all(is.na(result$ColX[result$SourceSet == "SetB"]))) # ColX is NA for rows from B
 })
 
 test_that("permutation_join handles 0-row inputs with differing unique columns correctly", {
   # Test for lines 242-243: ensures types are taken from flat_A/flat_B if a col is unique to one of them
-  A_0row_unique_col <- data.frame(URL = character(0), stringsAsFactors = FALSE)
-  A_0row_unique_col$Permutation <- list(data.frame(Permutations = character(0), ColA = integer(0)))
+  # Main dataframes A and B have 1 row each. Their *Permutation* list element is a 0-row data.frame.
+  A_df <- data.frame(URL = "urlA_0row_inner", stringsAsFactors = FALSE) # 1 row
+  A_df$Permutation <- list( # List of 1 element for the 1 row in A_df
+    data.frame(Permutations = character(0), ColA = integer(0), stringsAsFactors = FALSE) # The 0-row permutation df
+  )
   
-  B_0row_unique_col <- data.frame(URL = character(0), stringsAsFactors = FALSE)
-  B_0row_unique_col$Permutation <- list(data.frame(Permutations = character(0), ColB = numeric(0))) # different type for ColB
+  B_df <- data.frame(URL = "urlB_0row_inner", stringsAsFactors = FALSE) # 1 row
+  B_df$Permutation <- list( # List of 1 element for the 1 row in B_df
+    data.frame(Permutations = character(0), ColB = numeric(0), stringsAsFactors = FALSE) # The 0-row permutation df
+  )
 
-  result <- permutation_join(A_0row_unique_col, B_0row_unique_col)
+  result <- permutation_join(A_df, B_df)
   
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
-  expect_equal(nrow(result), 0)
+  expect_equal(nrow(result), 0) # Resulting data.frame has 0 rows because inner perms were 0-row
   expect_named(result, c("Perm", "Source", "SourceSet", "ColA", "ColB"), ignore.order = TRUE)
   
-  # Check types of the 0-length columns
+  # Check types of the 0-length columns in the 0-row result data.frame
   expect_true(is.character(result$Perm))
   expect_true(is.character(result$Source))
-  expect_s3_class(result$SourceSet, "factor") # due to line 298
-  expect_true(is.integer(result$ColA)) # Preserved from A_0row_unique_col
-  expect_true(is.numeric(result$ColB) && !is.integer(result$ColB)) # Preserved from B_0row_unique_col (numeric but not integer)
+  if ("SourceSet" %in% names(result)) { # SourceSet is factor due to line 298
+      expect_s3_class(result$SourceSet, "factor")
+  }
+  expect_true(is.integer(result$ColA)) # Preserved from A_df$Permutation[[1]]
+  expect_true(is.numeric(result$ColB) && !is.integer(result$ColB)) # Preserved from B_df$Permutation[[1]]
 })
 
 test_that("permutation_join works when Permutation column is I(list())", {
@@ -303,37 +315,44 @@ test_that("flatten_perms returns empty_base_df if all inner perms are NULL or be
   # So, the primary way to hit line 182 is via all NULLs in the Permutation list for a non-empty main DF.
 })
 
-test_that("flatten_perms handles heterogeneous columns within one source's Permutation list", {
-  perms_df_a_col1 <- data.frame(Permutations = "p1.1", ColExtra1 = "val1", stringsAsFactors = FALSE)
-  perms_df_a_col2 <- data.frame(Permutations = "p1.2", ColExtra2 = "val2", stringsAsFactors = FALSE)
-  A_hetero_inner_perms <- data.frame(URL = "url_A_hetero", stringsAsFactors = FALSE)
-  A_hetero_inner_perms$Permutation <- list(perms_df_a_col1, perms_df_a_col2)
+test_that("permutation_join handles rows with heterogeneous permutation columns", {
+  # Test case where different rows within ONE input table (A) have permutation data.frames
+  # that contain different "other" columns. This tests the NA-padding within flatten_perms.
+  A_data_hetero_rows <- data.frame(URL = c("urlA_row1", "urlA_row2"), stringsAsFactors = FALSE) # 2 rows
+  perms_A_row1 <- data.frame(Permutations = "pA.1", ColExtra1 = "val1_A", stringsAsFactors = FALSE)
+  perms_A_row2 <- data.frame(Permutations = "pA.2", ColExtra2 = "val2_A", stringsAsFactors = FALSE)
+  A_data_hetero_rows$Permutation <- list(perms_A_row1, perms_A_row2) # List of 2 DFs, one for each URL in A
 
-  # Combine with a simple B to make the structure clear
-  perms_df_b_simple <- data.frame(Permutations = "pB.1", ColExtraB = "valB", stringsAsFactors = FALSE)
-  B_simple <- data.frame(URL = "url_B_simple", stringsAsFactors = FALSE)
+  # Combine with a simple B to make the structure clear and ensure B's columns are also handled
+  perms_df_b_simple <- data.frame(Permutations = "pB.1", ColExtraB = "valB_B", stringsAsFactors = FALSE)
+  B_simple <- data.frame(URL = "url_B_simple", stringsAsFactors = FALSE) # 1 row
   B_simple$Permutation <- list(perms_df_b_simple)
 
-  result <- permutation_join(A_hetero_inner_perms, B_simple)
+  result <- permutation_join(A_data_hetero_rows, B_simple)
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
+  # Expected columns: Perm, Source, SourceSet (core), ColExtra1 (from A), ColExtra2 (from A), ColExtraB (from B)
   expect_named(result, c("Perm", "Source", "SourceSet", "ColExtra1", "ColExtra2", "ColExtraB"), ignore.order = TRUE)
-  expect_equal(nrow(result), 3) # 2 from A, 1 from B
+  expect_equal(nrow(result), 3) # 1 from A_row1, 1 from A_row2, 1 from B_simple
 
-  # Check A's contributions
-  row_A1 <- result[result$Source == "url_A_hetero" & result$Perm == "p1.1", ]
-  expect_equal(row_A1$ColExtra1, "val1")
+  # Check A's first row contribution (urlA_row1)
+  row_A1 <- result[result$Source == "urlA_row1", ]
+  expect_equal(row_A1$Perm, "pA.1")
+  expect_equal(row_A1$ColExtra1, "val1_A")
   expect_true(is.na(row_A1$ColExtra2))
   expect_true(is.na(row_A1$ColExtraB))
 
-  row_A2 <- result[result$Source == "url_A_hetero" & result$Perm == "p1.2", ]
+  # Check A's second row contribution (urlA_row2)
+  row_A2 <- result[result$Source == "urlA_row2", ]
+  expect_equal(row_A2$Perm, "pA.2")
   expect_true(is.na(row_A2$ColExtra1))
-  expect_equal(row_A2$ColExtra2, "val2")
+  expect_equal(row_A2$ColExtra2, "val2_A")
   expect_true(is.na(row_A2$ColExtraB))
 
-  # Check B's contribution
-  row_B1 <- result[result$Source == "url_B_simple" & result$Perm == "pB.1", ]
+  # Check B's contribution (url_B_simple)
+  row_B1 <- result[result$Source == "url_B_simple", ]
+  expect_equal(row_B1$Perm, "pB.1")
   expect_true(is.na(row_B1$ColExtra1))
   expect_true(is.na(row_B1$ColExtra2))
-  expect_equal(row_B1$ColExtraB, "valB")
+  expect_equal(row_B1$ColExtraB, "valB_B")
 }) 
