@@ -72,7 +72,7 @@ test_that("permutation_join handles one empty input correctly (A empty)", {
   result <- permutation_join(empty_df_input, B_valid)
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
-  expect_named(result, c("empty_df_input", "B_valid", "JoinKey", "OtherColB"), ignore.order = TRUE)
+  expect_named(result, c("empty_df_input", "B_valid", "JoinKey", "OtherColB"), ignore.order = TRUE) # OtherColA not present as empty_df_input has no other cols
   expect_equal(nrow(result), 0)
 })
 
@@ -80,7 +80,7 @@ test_that("permutation_join handles one empty input correctly (B empty)", {
   result <- permutation_join(A_valid, empty_df_input)
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
-  expect_named(result, c("A_valid", "empty_df_input", "JoinKey", "OtherColA"), ignore.order = TRUE)
+  expect_named(result, c("A_valid", "empty_df_input", "JoinKey", "OtherColA"), ignore.order = TRUE) # OtherColB not present
   expect_equal(nrow(result), 0)
 })
 
@@ -100,6 +100,8 @@ test_that("permutation_join returns empty data.frame and warns for NULL inputs",
     "Inputs 'data_A' and 'data_B' must be data frames."
   )
   expect_s3_class(res_A_null, "data.frame")
+  # Expect specific column names even for empty data.frame from warning path
+  expect_named(res_A_null, c("B_valid", "JoinKey", "OtherColB"), ignore.order = TRUE)
   expect_equal(nrow(res_A_null), 0)
 
   expect_warning(
@@ -107,6 +109,7 @@ test_that("permutation_join returns empty data.frame and warns for NULL inputs",
     "Inputs 'data_A' and 'data_B' must be data frames."
   )
   expect_s3_class(res_B_null, "data.frame")
+  expect_named(res_B_null, c("A_valid", "JoinKey", "OtherColA"), ignore.order = TRUE)
   expect_equal(nrow(res_B_null), 0)
 
   expect_warning(
@@ -114,6 +117,7 @@ test_that("permutation_join returns empty data.frame and warns for NULL inputs",
     "Inputs 'data_A' and 'data_B' must be data frames."
   )
   expect_s3_class(res_both_null, "data.frame")
+  expect_named(res_both_null, character(0)) # No column info if both NULL
   expect_equal(nrow(res_both_null), 0)
 })
 
@@ -123,6 +127,7 @@ test_that("permutation_join warns for non-data.frame inputs", {
     "Inputs 'data_A' and 'data_B' must be data frames."
   )
   expect_s3_class(res_A_invalid, "data.frame")
+  expect_named(res_A_invalid, c("B_valid", "JoinKey", "OtherColB"), ignore.order = TRUE)
   expect_equal(nrow(res_A_invalid), 0)
   
   expect_warning(
@@ -130,24 +135,32 @@ test_that("permutation_join warns for non-data.frame inputs", {
     "Inputs 'data_A' and 'data_B' must be data frames."
   )
   expect_s3_class(res_B_invalid, "data.frame")
+  expect_named(res_B_invalid, c("A_valid", "JoinKey", "OtherColA"), ignore.order = TRUE)
   expect_equal(nrow(res_B_invalid), 0)
 })
 
 test_that("permutation_join warns for missing URL columns in inputs", {
   A_no_URL <- data.frame(SomeCol = "val1", stringsAsFactors = FALSE)
+  # Correct deparsed name for A_no_URL
+  name_A_no_URL <- deparse(substitute(A_no_URL))
+
   expect_warning(
     res_A_no_URL <- permutation_join(A_no_URL, B_valid),
     "Column 'URL' not found in data_A.", fixed = TRUE
   )
   expect_s3_class(res_A_no_URL, "data.frame")
+  # Column names should include B_valid's details and the attempted name for A
+  expect_named(res_A_no_URL, c(name_A_no_URL, "B_valid", "JoinKey", "OtherColB"), ignore.order = TRUE)
   expect_equal(nrow(res_A_no_URL), 0)
 
   B_no_URL <- data.frame(SomeOtherCol = "val2", stringsAsFactors = FALSE)
+  name_B_no_URL <- deparse(substitute(B_no_URL))
   expect_warning(
     res_B_no_URL <- permutation_join(A_valid, B_no_URL),
     "Column 'URL' not found in data_B.", fixed = TRUE
   )
   expect_s3_class(res_B_no_URL, "data.frame")
+  expect_named(res_B_no_URL, c("A_valid", name_B_no_URL, "JoinKey", "OtherColA"), ignore.order = TRUE)
   expect_equal(nrow(res_B_no_URL), 0)
 })
 
@@ -166,27 +179,6 @@ test_that("permutation_join handles custom URL column names", {
     expect_equal(result$ValA[1], 10)
     expect_equal(result$ValB[1], 20)
   }
-})
-
-test_that("permutation_join returns empty data.frame and warns for NULL inputs", {
-  expect_warning(
-    res_A_null <- permutation_join(NULL, B_valid),
-    "Inputs 'data_A' and 'data_B' must be data frames."
-  )
-  expect_s3_class(res_A_null, "data.frame")
-  expect_equal(nrow(res_A_null), 0)
-  expect_warning(
-    res_B_null <- permutation_join(A_valid, NULL),
-    "Inputs 'data_A' and 'data_B' must be data frames."
-  )
-  expect_s3_class(res_B_null, "data.frame")
-  expect_equal(nrow(res_B_null), 0)
-  expect_warning(
-    res_both_null <- permutation_join(NULL, NULL),
-    "Inputs 'data_A' and 'data_B' must be data frames."
-  )
-  expect_s3_class(res_both_null, "data.frame")
-  expect_equal(nrow(res_both_null), 0)
 })
 
 # --- Input Validation Tests ---
