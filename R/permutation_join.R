@@ -102,6 +102,15 @@ permutation_join <- function(data_A, data_B,
     warning(paste0("Column '", col_B, "' not found in data_B."), call. = FALSE)
     return(data.frame())
   }
+  # Check URL column types
+  if (!is.character(data_A[[col_A]]) && !is.factor(data_A[[col_A]])) {
+    warning(paste0("Column '", col_A, "' in data_A must be character or factor."), call. = FALSE)
+    return(data.frame())
+  }
+  if (!is.character(data_B[[col_B]]) && !is.factor(data_B[[col_B]])) {
+    warning(paste0("Column '", col_B, "' in data_B must be character or factor."), call. = FALSE)
+    return(data.frame())
+  }
 
   # Define expected output structure for empty results
   empty_output_template <- data.frame(
@@ -228,22 +237,50 @@ permutation_join <- function(data_A, data_B,
 
   # --- Select and Arrange Output Columns ---
   if (nrow(final_joined_data) > 0) {
-    # Use the original URLs from A and B, but name columns after the input data.frame variable names
+    # Initialize result with core columns directly from final_joined_data
     result <- data.frame(
       setNames(list(final_joined_data$OriginalURL_A), name_A),
       setNames(list(final_joined_data$OriginalURL_B), name_B),
-      JoinKey = final_joined_data$OriginalURL_A,
+      JoinKey = final_joined_data$OriginalURL_A, # JoinKey is Original URL from A
       stringsAsFactors = FALSE
     )
-    # Add any other columns from A and B (with suffixes)
-    all_current_names <- names(final_joined_data)
-    extra_cols <- setdiff(all_current_names, c("OriginalURL_A", "OriginalURL_B", "JoinKey", id_col_A, id_col_B, perm_key_B))
-    for (col in extra_cols) {
-      result[[col]] <- final_joined_data[[col]]
-    }
-  } else {
-    result <- empty_output_template 
-  }
 
+    # Add any other columns from A and B, applying user-defined suffixes
+    original_other_cols_A <- setdiff(names(data_A), col_A)
+    for (col_name_orig_A in original_other_cols_A) {
+      col_in_merged_A <- NULL
+      if (col_name_orig_A %in% names(final_joined_data)) {
+        col_in_merged_A <- col_name_orig_A
+      } else if (paste0(col_name_orig_A, ".x") %in% names(final_joined_data)) {
+        col_in_merged_A <- paste0(col_name_orig_A, ".x")
+      }
+      
+      if (!is.null(col_in_merged_A)) {
+        result[[paste0(col_name_orig_A, suffix_A)]] <- final_joined_data[[col_in_merged_A]]
+      }
+    }
+
+    original_other_cols_B <- setdiff(names(data_B), col_B)
+    for (col_name_orig_B in original_other_cols_B) {
+      col_in_merged_B <- NULL
+      if (col_name_orig_B %in% names(final_joined_data)) {
+        col_in_merged_B <- col_name_orig_B
+      } else if (paste0(col_name_orig_B, ".y") %in% names(final_joined_data)) {
+        col_in_merged_B <- paste0(col_name_orig_B, ".y")
+      }
+      
+      if (!is.null(col_in_merged_B)) {
+        result[[paste0(col_name_orig_B, suffix_B)]] <- final_joined_data[[col_in_merged_B]]
+      }
+    }
+    
+    # Ensure column order is consistent if possible, starting with defined ones
+    # This is a basic reordering, might need refinement for perfect match with template
+    # preferred_order <- names(empty_output_template)
+    # result <- result[, intersect(preferred_order, names(result)), drop = FALSE]
+
+  } else {
+    result <- empty_output_template
+  }
   return(result)
 } 

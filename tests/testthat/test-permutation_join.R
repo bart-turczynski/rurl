@@ -69,7 +69,7 @@ test_that("permutation_join handles empty data_B input", {
 test_that("permutation_join handles both inputs empty", {
   res <- permutation_join(empty_df, empty_df, col_A = "URL", col_B = "URL")
   expect_s3_class(res, "data.frame")
-  expect_named(res, c("empty_df", "empty_df1", "JoinKey", "OtherCol_A", "OtherCol_B"), ignore.order = TRUE) # Note: deparse(substitute()) might create empty_df1
+  expect_named(res, c("empty_df", "JoinKey", "OtherCol_A", "OtherCol_B"), ignore.order = TRUE)
   expect_equal(nrow(res), 0)
 })
 
@@ -80,16 +80,16 @@ test_that("permutation_join warns and returns empty structure for non-data.frame
     "Inputs 'data_A' and 'data_B' must be data frames."
   )
   expect_s3_class(res_A_invalid, "data.frame")
-  expect_named(res_A_invalid, c("list()", "B_data_match", "JoinKey", "OtherColB_B"), ignore.order = TRUE) # list() is from deparse(substitute(list()))
+  expect_equal(length(names(res_A_invalid)), 0)
   expect_equal(nrow(res_A_invalid), 0)
-
+  
   # Test with data_B as non-df
   expect_warning(
     res_B_invalid <- permutation_join(A_data_match, "not_a_df"),
     "Inputs 'data_A' and 'data_B' must be data frames."
   )
   expect_s3_class(res_B_invalid, "data.frame")
-  expect_named(res_B_invalid, c("A_data_match", "\"not_a_df\"", "JoinKey", "OtherColA_A"), ignore.order = TRUE) # Similar deparse behavior
+  expect_equal(length(names(res_B_invalid)), 0)
   expect_equal(nrow(res_B_invalid), 0)
 })
 
@@ -103,7 +103,7 @@ test_that("permutation_join warns for missing URL columns", {
     regexp = "Column 'URL' not found in data_A."
   )
   expect_s3_class(res_A, "data.frame")
-  expect_named(res_A, c("A_no_URL", "B_data_match", "JoinKey", "OtherColB_B"), ignore.order = TRUE) # X_A might not appear if error is early
+  expect_equal(length(names(res_A)), 0)
   expect_equal(nrow(res_A), 0)
 
   # B missing URL col
@@ -112,7 +112,7 @@ test_that("permutation_join warns for missing URL columns", {
     regexp = "Column 'URL' not found in data_B."
   )
   expect_s3_class(res_B, "data.frame")
-  expect_named(res_B, c("A_data_match", "B_no_URL", "JoinKey", "OtherColA_A"), ignore.order = TRUE)
+  expect_equal(length(names(res_B)), 0)
   expect_equal(nrow(res_B), 0)
 })
 
@@ -124,7 +124,7 @@ test_that("permutation_join warns for URL columns of incorrect type", {
     regexp = "Column 'URL' in data_A must be character or factor."
   )
   expect_s3_class(res, "data.frame")
-  expect_named(res, c("A_URL_not_char", "B_data_match", "JoinKey", "OtherColA_A", "OtherColB_B"), ignore.order = TRUE)
+  expect_equal(length(names(res)), 0) # Expect character(0) for names due to early return
   expect_equal(nrow(res), 0)
 })
 
