@@ -24,8 +24,8 @@
 #'   \itemize{
 #'     \item `OriginalURL_A`: The URL from the linking row in `data_A`.
 #'     \item `OriginalURL_B`: The URL from the linking row in `data_B`.
-#'     \item `JoinKey`: An example of the common permuted URL string that
-#'           established the link.
+#'     \item `JoinKey`: The specific permutation derived from `data_A`'s URL
+#'           that matched a permutation from `data_B`'s URL.
 #'     \item All other original columns from `data_A` and `data_B`, with
 #'           suffixes applied by `base::merge` to resolve name conflicts
 #'           if necessary.
@@ -120,7 +120,8 @@ permutation_join <- function(data_A, data_B,
   # --- Internal Helper Function to Prepare Data (Base R) ---
   .prepare_data_for_join_base <- function(df, url_col_name_str,
                                           desired_original_url_col_name_str,
-                                          internal_id_col_name_str) {
+                                          internal_id_col_name_str,
+                                          permutation_key_col_name_str) {
     df_copy <- df 
     df_copy[[internal_id_col_name_str]] <- seq_len(nrow(df_copy))
 
@@ -132,14 +133,14 @@ permutation_join <- function(data_A, data_B,
 
       if (is.data.frame(perms_df_for_row) && nrow(perms_df_for_row) > 0) {
         perms_df_for_row[[desired_original_url_col_name_str]] <- current_row_url
-        names(perms_df_for_row)[names(perms_df_for_row) == "Permutation"] <- "JoinKey"
+        names(perms_df_for_row)[names(perms_df_for_row) == "Permutation"] <- permutation_key_col_name_str
         perms_df_for_row[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]][i]
-        all_perms_list[[i]] <- perms_df_for_row[, c(internal_id_col_name_str, desired_original_url_col_name_str, "JoinKey"), drop = FALSE]
+        all_perms_list[[i]] <- perms_df_for_row[, c(internal_id_col_name_str, desired_original_url_col_name_str, permutation_key_col_name_str), drop = FALSE]
       } else {
         temp_empty_df <- data.frame(stringsAsFactors = FALSE)
         temp_empty_df[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]][i] 
         temp_empty_df[[desired_original_url_col_name_str]] <- current_row_url 
-        temp_empty_df[["JoinKey"]] <- NA_character_ 
+        temp_empty_df[[permutation_key_col_name_str]] <- NA_character_
         all_perms_list[[i]] <- temp_empty_df[0, , drop = FALSE] 
       }
     }
@@ -149,7 +150,7 @@ permutation_join <- function(data_A, data_B,
         empty_df <- data.frame(stringsAsFactors = FALSE)
         empty_df[[internal_id_col_name_str]] <- integer(0)
         empty_df[[desired_original_url_col_name_str]] <- character(0)
-        empty_df[["JoinKey"]] <- character(0)
+        empty_df[[permutation_key_col_name_str]] <- character(0)
         return(empty_df)
     }
     
@@ -187,18 +188,22 @@ permutation_join <- function(data_A, data_B,
 
   # --- Process data_A ---
   id_col_A <- ".id_A_rurl_join"
+  perm_key_A <- ".PermKey_A_temp_rurl"
   data_A_expanded <- .prepare_data_for_join_base(
     df = data_A, url_col_name_str = col_A,
     desired_original_url_col_name_str = "OriginalURL_A",
-    internal_id_col_name_str = id_col_A
+    internal_id_col_name_str = id_col_A,
+    permutation_key_col_name_str = perm_key_A
   )
 
   # --- Process data_B ---
   id_col_B <- ".id_B_rurl_join"
+  perm_key_B <- ".PermKey_B_temp_rurl"
   data_B_expanded <- .prepare_data_for_join_base(
     df = data_B, url_col_name_str = col_B,
     desired_original_url_col_name_str = "OriginalURL_B",
-    internal_id_col_name_str = id_col_B
+    internal_id_col_name_str = id_col_B,
+    permutation_key_col_name_str = perm_key_B
   )
   
   if (nrow(data_A_expanded) == 0 || nrow(data_B_expanded) == 0) {
@@ -208,13 +213,27 @@ permutation_join <- function(data_A, data_B,
   # --- Join Expanded DataFrames ---
   joined_data_raw <- merge(
     data_A_expanded, data_B_expanded,
-    by = "JoinKey",
+    by.x = perm_key_A,
+    by.y = perm_key_B,
     suffixes = c(suffix_A, suffix_B),
     all = FALSE # Inner join behavior
   )
 
   # --- Deduplicate Connections ---
   if (nrow(joined_data_raw) > 0) {
+    # The permutation from A (perm_key_A) is now the basis for the displayed join key
+    # It might have a suffix if perm_key_A was also a column name in data_B_expanded after its own processing (unlikely with temp names)
+    # However, merge by.x, by.y should mean perm_key_A from data_A_expanded is the column used.
+    # Let's ensure we refer to it correctly. After the merge, the column from by.x is present.
+    # No, merge creates a column from by.x and by.y if names are different. If same, it uses one.
+    # If by.x and by.y are different, both might be there, or one is chosen. 
+    # Standard merge behavior with by.x, by.y: the columns used for merging are NOT duplicated.
+    # The values in perm_key_A (from x) that matched perm_key_B (from y) form the basis.
+    # The column perm_key_A itself from data_A_expanded is part of joined_data_raw.
+
+    # Rename perm_key_A to JoinKey for clarity in the output
+    names(joined_data_raw)[names(joined_data_raw) == perm_key_A] <- "JoinKey"
+    
     dedup_key <- paste(joined_data_raw[[id_col_A]], joined_data_raw[[id_col_B]], sep = "_rurl_sep_")
     final_joined_data <- joined_data_raw[!duplicated(dedup_key), , drop = FALSE]
   } else {
@@ -225,7 +244,7 @@ permutation_join <- function(data_A, data_B,
   if (nrow(final_joined_data) > 0) {
     core_output_cols <- c("OriginalURL_A", "OriginalURL_B", "JoinKey")
     all_current_names <- names(final_joined_data)
-    other_cols <- setdiff(all_current_names, c(core_output_cols, id_col_A, id_col_B))
+    other_cols <- setdiff(all_current_names, c(core_output_cols, id_col_A, id_col_B, perm_key_B))
     final_col_order <- unique(c(core_output_cols, other_cols))
     final_col_order_existing <- final_col_order[final_col_order %in% all_current_names]
     result <- final_joined_data[, final_col_order_existing, drop = FALSE]
