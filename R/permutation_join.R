@@ -106,15 +106,10 @@ permutation_join <- function(data_A, data_B,
     JoinKey = character(0),
     stringsAsFactors = FALSE
   )
-  # Attempt to add other columns from inputs to the template for empty results
-  # This is best-effort for a more informative empty return.
-  # Names from data_A (excluding col_A, adding suffix if needed later)
   other_cols_A <- setdiff(names(data_A), col_A)
   for(oca in other_cols_A) empty_output_template[[paste0(oca, suffix_A)]] <- character(0)
-  # Names from data_B (excluding col_B, adding suffix if needed later)
   other_cols_B <- setdiff(names(data_B), col_B)
   for(ocb in other_cols_B) empty_output_template[[paste0(ocb, suffix_B)]] <- character(0)
-  # Ensure unique columns in template in case of original name clashes resolved by suffix
   empty_output_template <- empty_output_template[, unique(names(empty_output_template)), drop = FALSE]
 
 
@@ -126,49 +121,31 @@ permutation_join <- function(data_A, data_B,
   .prepare_data_for_join_base <- function(df, url_col_name_str,
                                           desired_original_url_col_name_str,
                                           internal_id_col_name_str) {
-    df_copy <- df # Work on a copy
+    df_copy <- df 
     df_copy[[internal_id_col_name_str]] <- seq_len(nrow(df_copy))
 
     all_perms_list <- vector("list", nrow(df_copy))
 
     for (i in seq_len(nrow(df_copy))) {
       current_row_url <- df_copy[[url_col_name_str]][i]
-      
-      # permute_url should return a data.frame with columns "URL" (original input to it)
-      # and "Permutation" (the permuted string).
       perms_df_for_row <- permute_url(current_row_url)
 
       if (is.data.frame(perms_df_for_row) && nrow(perms_df_for_row) > 0) {
-        # Keep the original URL from *this specific row* of df_copy,
-        # not the one permute_url might return in its 'URL' column if it processed a vector.
         perms_df_for_row[[desired_original_url_col_name_str]] <- current_row_url
-        
-        # Rename the column containing the actual permutation strings to "JoinKey"
         names(perms_df_for_row)[names(perms_df_for_row) == "Permutation"] <- "JoinKey"
-        
-        # Add the internal ID of the original row from df_copy
         perms_df_for_row[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]][i]
-        
-        # Select only necessary columns for the expanded part
-        # The original 'URL' column from permute_url output is not strictly needed here
-        # as we have desired_original_url_col_name_str
         all_perms_list[[i]] <- perms_df_for_row[, c(internal_id_col_name_str, desired_original_url_col_name_str, "JoinKey"), drop = FALSE]
       } else {
-        # Handle case where permute_url returns empty/NA or not a proper data.frame
-        # Create a 0-row df with expected columns to avoid rbind errors
-        temp_empty_df <- data.frame(
-            stringsAsFactors = FALSE
-        )
-        temp_empty_df[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]][i] # or integer(0) if not linking to row
-        temp_empty_df[[desired_original_url_col_name_str]] <- current_row_url # or character(0)
-        temp_empty_df[["JoinKey"]] <- NA_character_ # or character(0)
-        all_perms_list[[i]] <- temp_empty_df[0, , drop = FALSE] # ensure 0 rows
+        temp_empty_df <- data.frame(stringsAsFactors = FALSE)
+        temp_empty_df[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]][i] 
+        temp_empty_df[[desired_original_url_col_name_str]] <- current_row_url 
+        temp_empty_df[["JoinKey"]] <- NA_character_ 
+        all_perms_list[[i]] <- temp_empty_df[0, , drop = FALSE] 
       }
     }
 
     expanded_data <- do.call(rbind, all_perms_list)
     if (is.null(expanded_data) || nrow(expanded_data) == 0) {
-        # Create an empty data frame with the correct column names if all_perms_list was empty or all elements were NULL/0-row
         empty_df <- data.frame(stringsAsFactors = FALSE)
         empty_df[[internal_id_col_name_str]] <- integer(0)
         empty_df[[desired_original_url_col_name_str]] <- character(0)
@@ -176,34 +153,33 @@ permutation_join <- function(data_A, data_B,
         return(empty_df)
     }
     
-    # Merge back with original df to get all original columns
-    # Ensure df_copy has the internal_id_col_name_str with unique values for merge
-    # The internal_id_col_name_str in expanded_data links to rows in df_copy
-    
-    # Select all columns from df_copy *except* the original url_col_name_str IF it is not also an ID or other wanted col.
-    # This is to avoid duplicating the URL column if it's already captured as desired_original_url_col_name_str.
-    # However, merge will handle suffixes if url_col_name_str is still present.
-    # Simpler: let merge handle all columns from df_copy.
-    
-    # Add a suffix to df_copy columns (except the ID) to prevent clashes with expanded_data before merge
-    # This is not standard for merge; merge itself handles suffixes on output.
-    # So, directly merge.
-    
-    # df_copy should only contain the id and its original columns.
-    # expanded_data has id, OriginalURL_X, JoinKey.
-    # We want to attach all original columns from df_copy to expanded_data.
-    
-    # Prepare df_copy for merge: only id and its other columns
-    df_original_cols_with_id <- df_copy # df_copy has id and all original cols
-    
-    # Merge expanded_data (id, OriginalURL_X, JoinKey) with all original columns from df_original_cols_with_id
-    # common column for merge is internal_id_col_name_str
+    cols_to_keep_from_original <- setdiff(names(df_copy), url_col_name_str)
+    if (!internal_id_col_name_str %in% cols_to_keep_from_original) {
+        cols_to_keep_from_original <- c(internal_id_col_name_str, cols_to_keep_from_original)
+    }
+    cols_to_keep_from_original <- unique(cols_to_keep_from_original)
+
+    # Ensure that if cols_to_keep_from_original is only the id_col, it still works
+    if(length(cols_to_keep_from_original) == 0 && internal_id_col_name_str %in% names(df_copy)){
+        # This case should ideally not happen if df_copy has rows and id was added.
+        # If df had only one col (the url_col_name_str), then setdiff makes it empty.
+        # We must at least keep the id column for merging.
+        df_original_other_cols_with_id <- df_copy[, internal_id_col_name_str, drop = FALSE]
+    } else if (length(cols_to_keep_from_original) > 0) {
+        df_original_other_cols_with_id <- df_copy[, cols_to_keep_from_original, drop = FALSE]
+    } else {
+        # Fallback: if df_copy became empty or had no valid columns to select (highly unlikely)
+        # create a minimal df with just the ID for merging structure.
+        df_original_other_cols_with_id <- data.frame(stringsAsFactors = FALSE)
+        df_original_other_cols_with_id[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]]
+    }
+        
     final_expanded_df <- merge(
-      expanded_data, # x: has internal_id_col_name_str, desired_original_url_col_name_str, JoinKey
-      df_original_cols_with_id, # y: has internal_id_col_name_str and all original columns of df
+      expanded_data, 
+      df_original_other_cols_with_id,
       by = internal_id_col_name_str,
-      all.x = TRUE, # Keep all permutation rows
-      all.y = FALSE  # Don't keep original rows that had no valid permutations (already handled by expanded_data construction)
+      all.x = TRUE,
+      all.y = FALSE 
     )
     
     return(final_expanded_df)
@@ -239,7 +215,6 @@ permutation_join <- function(data_A, data_B,
 
   # --- Deduplicate Connections ---
   if (nrow(joined_data_raw) > 0) {
-    # Create a composite key for deduplication based on original row IDs
     dedup_key <- paste(joined_data_raw[[id_col_A]], joined_data_raw[[id_col_B]], sep = "_rurl_sep_")
     final_joined_data <- joined_data_raw[!duplicated(dedup_key), , drop = FALSE]
   } else {
@@ -248,23 +223,14 @@ permutation_join <- function(data_A, data_B,
 
   # --- Select and Arrange Output Columns ---
   if (nrow(final_joined_data) > 0) {
-    # Define core columns in desired order
     core_output_cols <- c("OriginalURL_A", "OriginalURL_B", "JoinKey")
-    
-    # Get all other columns, excluding the internal ID columns
     all_current_names <- names(final_joined_data)
     other_cols <- setdiff(all_current_names, c(core_output_cols, id_col_A, id_col_B))
-    
-    # Combine and ensure unique names (though suffixes from merge should handle most)
     final_col_order <- unique(c(core_output_cols, other_cols))
-    
-    # Ensure all selected columns actually exist to prevent errors
     final_col_order_existing <- final_col_order[final_col_order %in% all_current_names]
-    
     result <- final_joined_data[, final_col_order_existing, drop = FALSE]
-    
   } else {
-    result <- empty_output_template # Use the template for 0-row results
+    result <- empty_output_template 
   }
 
   return(result)
