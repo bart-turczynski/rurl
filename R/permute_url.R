@@ -119,7 +119,7 @@ permute_url <- function(urls) {
           # Version 2: The path with the alternative trailing slash state
           if (endsWith(raw_path_from_curl, "/")) {
             # Original path ended with a slash, so create version without it
-            path_alternative <- sub("/$", "", raw_path_from_curl)
+            path_alternative <- substr(raw_path_from_curl, 1, nchar(raw_path_from_curl) - 1)
           } else {
             # Original path did not end with a slash, so create version with it
             path_alternative <- paste0(raw_path_from_curl, "/")
