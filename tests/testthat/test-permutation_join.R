@@ -5,12 +5,16 @@ perms_df_a1_valid <- data.frame(Permutations = c("http://ex.com/p1", "http://ex.
                                 OtherColA = 1:2, stringsAsFactors = FALSE)
 perms_df_a2_valid <- data.frame(Permutations = c("http://samp.org/a", "http://samp.org/b"),
                                 OtherColA = 3:4, stringsAsFactors = FALSE)
-A_valid <- data.frame(URL = c("http://example.com", "http://sample.org"), OtherColA = 1:2, stringsAsFactors = FALSE)
+A_valid <- data.frame(URL = c("http://example.com", "http://sample.org"), 
+                    OtherColA = c("valA1", "valA2"), 
+                    stringsAsFactors = FALSE)
 
 # Basic valid data for B (with a different "other" column)
 perms_df_b1_valid <- data.frame(Permutations = c("http://test.net/x", "http://test.net/y"),
                                 OtherColB = c("foo", "bar"), stringsAsFactors = FALSE)
-B_valid <- data.frame(URL = c("http://test.net", "http://example.com/"), OtherColB = c("foo", "bar"), stringsAsFactors = FALSE)
+B_valid <- data.frame(URL = c("http://test.net", "http://example.com/"), # One matching, one not
+                    OtherColB = c("valB1", "valB2"), 
+                    stringsAsFactors = FALSE)
 
 # Empty data frame structure (matching expected output of flatten_perms for empty inputs)
 empty_df_input <- data.frame(URL = character(0), stringsAsFactors = FALSE)
@@ -29,7 +33,10 @@ test_that("permutation_join works with valid basic inputs and finds a match", {
         if (is.na(u) || u == "") return(data.frame(URL=u, Permutation=NA_character_, stringsAsFactors = FALSE))
         stripped_u <- gsub("^(https?://)?(www\\.)?", "", u)
         stripped_u_slash <- gsub("/$", "", stripped_u)
+        # Ensure a trailing slash variant is included for matching
         perms <- unique(c(stripped_u_slash, paste0(stripped_u_slash, "/")))
+        # Ensure the permutation itself doesn't have http/www for basic matching
+        perms <- gsub("^(https?://)?(www\\.)?", "", perms)
         return(data.frame(URL = rep(u, length(perms)), Permutation = perms, stringsAsFactors = FALSE))
       })
       return(do.call(rbind, all_perms_list))
@@ -43,19 +50,21 @@ test_that("permutation_join works with valid basic inputs and finds a match", {
   expect_named(result, c("A_valid", "B_valid", "JoinKey", "OtherColA", "OtherColB"), ignore.order = TRUE)
   # A_valid[1] ("http://example.com") should match B_valid[2] ("http://example.com/")
   expect_equal(nrow(result), 1)
-  expect_equal(result$A_valid[1], "http://example.com")
-  expect_equal(result$B_valid[1], "http://example.com/")
-  expect_equal(result$JoinKey[1], "http://example.com") # Original URL from A
-  expect_equal(result$OtherColA[1], 1) # From A_valid
-  expect_equal(result$OtherColB[1], "bar") # From B_valid corresponding to the match
+  if(nrow(result) == 1){
+    expect_equal(result$A_valid[1], "http://example.com")
+    expect_equal(result$B_valid[1], "http://example.com/")
+    expect_equal(result$JoinKey[1], "http://example.com") # Original URL from A
+    expect_equal(result$OtherColA[1], "valA1") # From A_valid
+    expect_equal(result$OtherColB[1], "valB2") # From B_valid corresponding to the match
+  }
 })
 
 test_that("permutation_join returns empty for no matches", {
-  A_no_match <- data.frame(URL = "http://nomatch.com", stringsAsFactors = FALSE)
-  B_no_match <- data.frame(URL = "http://anothernomatch.com", stringsAsFactors = FALSE)
+  A_no_match <- data.frame(URL = "http://nomatchA.com", OtherColA = "valX", stringsAsFactors = FALSE)
+  B_no_match <- data.frame(URL = "http://nomatchB.com", OtherColB = "valY", stringsAsFactors = FALSE)
   result <- permutation_join(A_no_match, B_no_match)
   expect_s3_class(result, "data.frame")
-  expect_named(result, c("A_no_match", "B_no_match", "JoinKey"), ignore.order = TRUE)
+  expect_named(result, c("A_no_match", "B_no_match", "JoinKey", "OtherColA", "OtherColB"), ignore.order = TRUE)
   expect_equal(nrow(result), 0)
 })
 
@@ -76,12 +85,12 @@ test_that("permutation_join handles one empty input correctly (B empty)", {
 })
 
 test_that("permutation_join handles both inputs empty", {
-  result <- permutation_join(empty_df_input, empty_df_input)
-  expect_false(is.null(result))
+  # Define names for empty inputs to make deparse(substitute()) predictable
+  left_empty <- data.frame(URL = character(0), stringsAsFactors = FALSE)
+  right_empty <- data.frame(URL = character(0), stringsAsFactors = FALSE)
+  result <- permutation_join(left_empty, right_empty)
   expect_s3_class(result, "data.frame")
-  # Column names can be tricky with deparse(substitute()) for identical empty inputs
-  # Check if the essential structure for an empty join is there.
-  expect_true("JoinKey" %in% names(result)) 
+  expect_named(result, c("left_empty", "right_empty", "JoinKey"), ignore.order = TRUE)
   expect_equal(nrow(result), 0)
 })
 
@@ -92,9 +101,6 @@ test_that("permutation_join returns empty data.frame and warns for NULL inputs",
   )
   expect_s3_class(res_A_null, "data.frame")
   expect_equal(nrow(res_A_null), 0)
-  # Test for expected columns in empty dataframe
-  # name_B <- deparse(substitute(B_valid)) # This would be 'B_valid'
-  # expect_named(res_A_null, c("NULL", name_B, "JoinKey", "OtherColB"), ignore.order=TRUE) # deparse(substitute(NULL)) is "NULL"
 
   expect_warning(
     res_B_null <- permutation_join(A_valid, NULL),
@@ -127,19 +133,19 @@ test_that("permutation_join warns for non-data.frame inputs", {
   expect_equal(nrow(res_B_invalid), 0)
 })
 
-test_that("permutation_join warns for missing URL columns", {
-  A_no_URL <- data.frame(SomeCol = 1, stringsAsFactors = FALSE)
+test_that("permutation_join warns for missing URL columns in inputs", {
+  A_no_URL <- data.frame(SomeCol = "val1", stringsAsFactors = FALSE)
   expect_warning(
     res_A_no_URL <- permutation_join(A_no_URL, B_valid),
-    "Column 'URL' not found in data_A."
+    "Column 'URL' not found in data_A.", fixed = TRUE
   )
   expect_s3_class(res_A_no_URL, "data.frame")
   expect_equal(nrow(res_A_no_URL), 0)
 
-  B_no_URL <- data.frame(SomeCol = "b", stringsAsFactors = FALSE)
+  B_no_URL <- data.frame(SomeOtherCol = "val2", stringsAsFactors = FALSE)
   expect_warning(
     res_B_no_URL <- permutation_join(A_valid, B_no_URL),
-    "Column 'URL' not found in data_B."
+    "Column 'URL' not found in data_B.", fixed = TRUE
   )
   expect_s3_class(res_B_no_URL, "data.frame")
   expect_equal(nrow(res_B_no_URL), 0)
@@ -153,11 +159,13 @@ test_that("permutation_join handles custom URL column names", {
   expect_s3_class(result, "data.frame")
   expect_named(result, c("A_custom_col", "B_custom_col", "JoinKey", "ValA", "ValB"), ignore.order = TRUE)
   expect_equal(nrow(result), 1)
-  expect_equal(result$A_custom_col[1], "http://custom.com")
-  expect_equal(result$B_custom_col[1], "http://custom.com/")
-  expect_equal(result$JoinKey[1], "http://custom.com")
-  expect_equal(result$ValA[1], 10)
-  expect_equal(result$ValB[1], 20)
+  if(nrow(result) == 1){
+    expect_equal(result$A_custom_col[1], "http://custom.com")
+    expect_equal(result$B_custom_col[1], "http://custom.com/")
+    expect_equal(result$JoinKey[1], "http://custom.com")
+    expect_equal(result$ValA[1], 10)
+    expect_equal(result$ValB[1], 20)
+  }
 })
 
 test_that("permutation_join returns empty data.frame and warns for NULL inputs", {
