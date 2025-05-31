@@ -24,93 +24,80 @@ empty_df_input$Permutation <- vector("list", 0)
 
 test_that("permutation_join works with valid basic inputs", {
   result <- permutation_join(A_valid, B_valid)
-
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
-  expect_named(result, c("Perm", "OtherColA", "Source", "SourceSet", "OtherColB"), ignore.order = TRUE)
+  expect_named(result, c("A_valid", "B_valid", "JoinKey", "OtherColA", "OtherColB"), ignore.order = TRUE)
   expect_equal(nrow(result), 6) # 4 from A, 2 from B
-  expect_s3_class(result$SourceSet, "factor")
-  expect_equal(levels(result$SourceSet), c("SetA", "SetB"))
-  expect_equal(sum(result$SourceSet == "SetA"), 4)
-  expect_equal(sum(result$SourceSet == "SetB"), 2)
-
-  # Check specific values if necessary, e.g. first perm from A
-  expect_equal(result$Perm[1], "http://ex.com/p1")
-  expect_equal(result$Source[1], "http://example.com")
+  # Check specific values if necessary, e.g. first row from A
+  expect_equal(result$A_valid[1], "http://example.com")
+  expect_true(is.na(result$B_valid[1]))
+  expect_equal(result$JoinKey[1], "http://example.com")
   expect_equal(result$OtherColA[1], 1)
   expect_true(is.na(result$OtherColB[1]))
-
   # Check specific values from B
-  expect_equal(result$Perm[5], "http://test.net/x")
-  expect_equal(result$Source[5], "http://test.net")
+  expect_true(is.na(result$A_valid[5]))
+  expect_equal(result$B_valid[5], "http://test.net")
+  expect_equal(result$JoinKey[5], "http://test.net")
   expect_equal(result$OtherColB[5], "foo")
   expect_true(is.na(result$OtherColA[5]))
 })
 
 test_that("permutation_join handles one empty input correctly (A empty)", {
   result <- permutation_join(empty_df_input, B_valid)
-
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
-  expect_named(result, c("Perm", "OtherColB", "Source", "SourceSet"), ignore.order = TRUE)
+  expect_named(result, c("empty_df_input", "B_valid", "JoinKey", "OtherColB"), ignore.order = TRUE)
   expect_equal(nrow(result), 2) # 0 from A, 2 from B
-  expect_s3_class(result$SourceSet, "factor")
-  expect_equal(levels(result$SourceSet), c("SetB"))
-  expect_equal(sum(result$SourceSet == "SetB"), 2)
+  expect_true(all(is.na(result$empty_df_input)))
+  expect_equal(result$B_valid, rep("http://test.net", 2))
+  expect_equal(result$JoinKey, rep("http://test.net", 2))
+  expect_equal(result$OtherColB, c("foo", "bar"))
 })
 
 test_that("permutation_join handles one empty input correctly (B empty)", {
   result <- permutation_join(A_valid, empty_df_input)
-
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
-  expect_named(result, c("Perm", "OtherColA", "Source", "SourceSet"), ignore.order = TRUE)
+  expect_named(result, c("A_valid", "empty_df_input", "JoinKey", "OtherColA"), ignore.order = TRUE)
   expect_equal(nrow(result), 4) # 4 from A, 0 from B
-  expect_s3_class(result$SourceSet, "factor")
-  expect_equal(levels(result$SourceSet), c("SetA"))
-  expect_equal(sum(result$SourceSet == "SetA"), 4)
+  expect_equal(result$A_valid, rep(c("http://example.com", "http://example.com", "http://sample.org", "http://sample.org"), length.out = 4))
+  expect_true(all(is.na(result$empty_df_input)))
+  expect_equal(result$JoinKey, result$A_valid)
+  expect_equal(result$OtherColA, c(1, 2, 3, 4))
 })
 
 test_that("permutation_join handles both inputs empty", {
   result <- permutation_join(empty_df_input, empty_df_input)
-  
   expect_false(is.null(result))
   expect_s3_class(result, "data.frame")
-  expect_named(result, c("Perm", "Source", "SourceSet"), ignore.order = TRUE)
+  expect_named(result, c("empty_df_input", "empty_df_input.1", "JoinKey"), ignore.order = TRUE)
   expect_equal(nrow(result), 0)
-  expect_true(is.character(result$Perm)) # Should be character(0)
-  expect_true(is.character(result$Source)) # Should be character(0)
-  
-  # Check SourceSet specifically
-  expect_true("SourceSet" %in% names(result)) # Ensure column exists
-  if ("SourceSet" %in% names(result)) {
-    expect_true(is.factor(result$SourceSet), label = "result$SourceSet should be a factor in 'both empty' test")
-    if(is.factor(result$SourceSet)) { # Guarding level check
-      expect_equal(length(levels(result$SourceSet)), 0)
-    }
-  }
+  expect_true(is.character(result$JoinKey))
+  expect_true(is.character(result$empty_df_input))
+  expect_true(is.character(result$empty_df_input.1))
 })
 
 # --- Input Validation Tests ---
 
-test_that("permutation_join returns NULL and warns for NULL inputs", {
+test_that("permutation_join returns empty data.frame and warns for NULL inputs", {
   expect_warning(
     res_A_null <- permutation_join(NULL, B_valid),
-    "Input 'A' is NULL."
+    "Inputs 'data_A' and 'data_B' must be data frames."
   )
-  expect_null(res_A_null)
-  
+  expect_s3_class(res_A_null, "data.frame")
+  expect_equal(nrow(res_A_null), 0)
   expect_warning(
     res_B_null <- permutation_join(A_valid, NULL),
-    "Input 'B' is NULL."
+    "Inputs 'data_A' and 'data_B' must be data frames."
   )
-  expect_null(res_B_null)
-  
+  expect_s3_class(res_B_null, "data.frame")
+  expect_equal(nrow(res_B_null), 0)
   expect_warning(
-    res_both_null <- permutation_join(NULL, NULL), # First validation (for A) will trigger
-    "Input 'A' is NULL."
+    res_both_null <- permutation_join(NULL, NULL),
+    "Inputs 'data_A' and 'data_B' must be data frames."
   )
-  expect_null(res_both_null)
+  expect_s3_class(res_both_null, "data.frame")
+  expect_equal(nrow(res_both_null), 0)
 })
 
 test_that("permutation_join returns NULL and warns for non-data.frame inputs", {
