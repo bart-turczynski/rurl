@@ -303,6 +303,49 @@ test_that("permutation_join works when Permutation column is I(list())", {
   expect_true(all(result$SourceSet == "SetA"))
 })
 
+test_that("flatten_perms warns and skips inner non-empty DF missing 'Permutations' column", {
+  A_malformed_inner <- data.frame(URL = "http://example.com/malformed", stringsAsFactors = FALSE)
+  # This inner DF is non-empty but lacks the 'Permutations' column.
+  malformed_df <- data.frame(NotTheRightColumnName = "p1", OtherData = "abc", stringsAsFactors = FALSE)
+  A_malformed_inner$Permutation <- list(malformed_df)
+
+  # A valid B to ensure the join still happens with B's data
+  B_data <- B_valid 
+
+  expect_warning(
+    result <- permutation_join(A_malformed_inner, B_data),
+    regexp = "Column 'Permutations' not found in list element 1 of 'Permutation' for URL: 'http://example.com/malformed' in SourceSet: 'SetA'. Skipping this element.",
+    fixed = TRUE
+  )
+  
+  expect_false(is.null(result)) # Should still produce a result from B_data
+  expect_equal(nrow(result), nrow(B_data$Permutation[[1]])) # Only B's rows
+  expect_true(all(result$SourceSet == "SetB"))
+  # Check that columns from the malformed A do not appear, but B's columns do
+  expect_named(result, c("Perm", "OtherColB", "Source", "SourceSet"), ignore.order = TRUE)
+})
+
+test_that("flatten_perms handles 0-row inner DF missing 'Permutations' column by adding empty Perm", {
+  A_0row_no_perm_col <- data.frame(URL = "http://example.com/0row_no_perm", stringsAsFactors = FALSE)
+  # This inner DF is 0-row and lacks the 'Permutations' column.
+  zero_row_missing_perm_df <- data.frame(SomeOtherCol = character(0), stringsAsFactors = FALSE)
+  A_0row_no_perm_col$Permutation <- list(zero_row_missing_perm_df)
+
+  # B is empty for simplicity, focusing on how A is processed
+  result <- permutation_join(A_0row_no_perm_col, empty_df_input)
+
+  expect_false(is.null(result))
+  expect_equal(nrow(result), 0) # 0-row inner df results in 0 rows in output for this source
+  # Key: 'Perm' column should exist, along with 'Source', 'SourceSet', and 'SomeOtherCol'.
+  expect_named(result, c("Perm", "Source", "SourceSet", "SomeOtherCol"), ignore.order = TRUE)
+  expect_true(is.character(result$Perm)) # Should be character(0)
+  expect_true(is.character(result$Source))
+  expect_true(is.character(result$SomeOtherCol)) # Type preserved from the 0-row df
+  if ("SourceSet" %in% names(result)) {
+    expect_true(is.factor(result$SourceSet)) # Should be factor(character(0))
+  }
+})
+
 test_that("flatten_perms returns empty_base_df if all inner perms are NULL or become NULL", {
   A_all_perms_become_null <- data.frame(URL = c("url1", "url2"), stringsAsFactors = FALSE)
   A_all_perms_become_null$Permutation <- list(NULL, NULL) # All are NULL
