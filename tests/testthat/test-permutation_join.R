@@ -220,23 +220,6 @@ test_that("flatten_perms handles inner DFs with varying columns (becomes NA)", {
   expect_false(any(is.na(result[result$SourceSet == "SetB", "OtherColB"])))
 })
 
-test_that("flatten_perms warns when inner DF is missing 'Permutations' column", {
- A_inner_missing_perm_col <- data.frame(URL = "http://test.com", stringsAsFactors = FALSE)
- bad_perm_df <- data.frame(NotTheRightName = "a.com", stringsAsFactors = FALSE)
- A_inner_missing_perm_col$Permutation <- list(bad_perm_df)
- 
- expect_warning(
-   result <- permutation_join(A_inner_missing_perm_col, empty_df_input),
-   # The warning message comes from paste() so it might be complex, using a partial match and fixed = FALSE (default) is safer
-   # However, the original code uses paste0 which suggests no complex regex from the warning itself.
-   # Let's try fixed=TRUE for the specific part, if it fails, we might need more precise matching or allow regex.
-   "Column 'Permutations' not found in list element  1  of 'Permutation' for URL: 'http://test.com' in SourceSet: 'SetA'. Skipping this element.",
-   fixed = TRUE 
- )
- expect_false(is.null(result)) 
- expect_equal(nrow(result), 0) 
-})
-
 test_that("validate_input catches inner DF missing 'Permutations' column", {
   A_inner_missing_perm_col <- data.frame(URL = "http://test.com", stringsAsFactors = FALSE)
   bad_perm_df <- data.frame(NotTheRightName = "a.com", stringsAsFactors = FALSE) # Non-empty
