@@ -219,6 +219,36 @@ permutation_join <- function(A, B) {
     return(result_df)
   }
 
+  # Helper to align columns for final rbind, ensuring all DFs have the same set of columns
+  # with NAs for missing ones, and respecting types from other_df_for_types if provided for 0-row DFs.
+  align_df_for_final_rbind <- function(df_to_align, target_names, other_df_for_types = NULL) {
+    new_df_list <- list()
+    current_df_nrows <- nrow(df_to_align)
+
+    for (col_name in target_names) {
+      if (col_name %in% names(df_to_align)) {
+        new_df_list[[col_name]] <- df_to_align[[col_name]]
+      } else {
+        # Column is missing from df_to_align
+        col_val <- NA # Default NA, becomes logical(0) for 0-row DFs via as.data.frame
+        if (current_df_nrows == 0 && !is.null(other_df_for_types) && col_name %in% names(other_df_for_types)) {
+            # Get a 0-length vector of the correct type from other_df_for_types
+             # Ensure it's a 0-length vector of that type
+            col_prototype <- other_df_for_types[[col_name]]
+            if (length(col_prototype) > 0) col_val <- col_prototype[0] else col_val <- col_prototype
+
+        } else if (current_df_nrows > 0) {
+            col_val <- rep(NA, current_df_nrows)
+        }
+        new_df_list[[col_name]] <- col_val
+      }
+    }
+    # For 0-row, as.data.frame(list_with_0_length_vectors_or_NAs) works.
+    # stringsAsFactors=FALSE is important to prevent char cols becoming factors here.
+    # row.names handling for 0-row data frames needs to be NULL.
+    return(as.data.frame(new_df_list, stringsAsFactors = FALSE, row.names = if(current_df_nrows > 0) base::rownames(df_to_align) else NULL))
+  }
+
   # Process A and B
   flat_A <- flatten_perms(A, "SetA")
   flat_B <- flatten_perms(B, "SetB")
@@ -226,78 +256,60 @@ permutation_join <- function(A, B) {
   has_A_rows <- nrow(flat_A) > 0
   has_B_rows <- nrow(flat_B) > 0
 
-  if (!has_A_rows && !has_B_rows) { # Both are 0-row
+  result <- NULL # Initialize result
+
+  if (!has_A_rows && !has_B_rows) {
     all_cols <- union(names(flat_A), names(flat_B))
-    if (length(all_cols) == 0) all_cols <- c("Perm", "Source", "SourceSet") # Fallback
+    core_cols <- c("Perm", "Source", "SourceSet")
+    all_cols <- union(all_cols, core_cols)
 
-    empty_res <- data.frame(matrix(ncol = length(all_cols), nrow = 0))
-    colnames(empty_res) <- all_cols
-    
-    # Ensure correct types for 0-row dataframe columns based on what was in flat_A/flat_B
-    for(col_name in all_cols) {
-        # If column already exists and has a type (e.g. from data.frame(matrix(...)) it might be logical)
-        # we prefer the type from original flat_A or flat_B if possible.
-        if (col_name %in% names(flat_A)) { # flat_A might have specific 0-length type like integer(0)
-            empty_res[[col_name]] <- flat_A[[col_name]]
-        } else if (col_name %in% names(flat_B)) {
-            empty_res[[col_name]] <- flat_B[[col_name]]
-        } else { # Fallback for columns not in flat_A/flat_B (shouldn't happen if all_cols from them)
-            # Ensure standard columns are character if they ended up here without type
-            if (col_name == "Perm" && !is.character(empty_res[[col_name]])) empty_res[[col_name]] <- character(0)
-            if (col_name == "Source" && !is.character(empty_res[[col_name]])) empty_res[[col_name]] <- character(0)
-            if (col_name == "SourceSet" && !is.character(empty_res[[col_name]])) empty_res[[col_name]] <- character(0)
-            # For other unknown columns, default to logical(0) if type is not set by data.frame(matrix())
-            if (is.null(empty_res[[col_name]])) empty_res[[col_name]] <- logical(0)
-        }
+    typed_empty_cols_list <- list()
+    for (col_name in all_cols) {
+      # Prioritize type from flat_A or flat_B if they are 0-length and typed
+      if (col_name %in% names(flat_A) && length(flat_A[[col_name]]) == 0) {
+        typed_empty_cols_list[[col_name]] <- flat_A[[col_name]]
+      } else if (col_name %in% names(flat_B) && length(flat_B[[col_name]]) == 0) {
+        typed_empty_cols_list[[col_name]] <- flat_B[[col_name]]
+      } else { # Default types for core columns, otherwise logical(0)
+        if (col_name == "Perm") typed_empty_cols_list[[col_name]] <- character(0)
+        else if (col_name == "Source") typed_empty_cols_list[[col_name]] <- character(0)
+        else if (col_name == "SourceSet") typed_empty_cols_list[[col_name]] <- character(0) # Will be factor later
+        else typed_empty_cols_list[[col_name]] <- logical(0) 
+      }
     }
-    return(empty_res)
-  }
+    result <- as.data.frame(typed_empty_cols_list, stringsAsFactors = FALSE)
   
-  # If we reach here, at least one of flat_A or flat_B might have rows, 
-  # OR one/both are 0-row but carry column structure that needs to be merged.
-  all_final_names <- union(names(flat_A), names(flat_B))
-  
-  align_df_for_final_rbind <- function(df, target_names) {
-    # Create a new list for constructing the dataframe
-    new_df_list <- vector("list", length(target_names))
-    names(new_df_list) <- target_names
-    
-    current_df_nrows <- nrow(df) # Get nrow once
+  } else if (!has_A_rows) { # Only A is 0-row, B has rows
+    all_final_names <- union(names(flat_A), names(flat_B))
+    result <- align_df_for_final_rbind(flat_B, all_final_names, flat_A)
 
-    for(col_name in target_names){
-        if(col_name %in% names(df)){
-            new_df_list[[col_name]] <- df[[col_name]]
-        } else {
-            # This column is missing from df, needs to be added.
-            # Assign a vector of the correct length (0 if df is 0-row, nrow(df) if df has rows)
-            # Use logical NA which is generally safe for subsequent rbind type coercion.
-            new_df_list[[col_name]] <- if(current_df_nrows == 0) logical(0) else rep(NA, current_df_nrows)
-        }
-    }
-    
-    # Convert list to data.frame. 
-    if (current_df_nrows == 0) {
-        # For 0-row, as.data.frame(list_with_0_length_vectors) works.
-        return(as.data.frame(new_df_list, stringsAsFactors = FALSE))
-    } else {
-        # For >0 rows, set row names from original df.
-        return(as.data.frame(new_df_list, stringsAsFactors = FALSE, row.names = rownames(df)))
-    }
+  } else if (!has_B_rows) { # Only B is 0-row, A has rows
+    all_final_names <- union(names(flat_A), names(flat_B))
+    result <- align_df_for_final_rbind(flat_A, all_final_names, flat_B)
+
+  } else { # Both have rows
+    all_final_names <- union(names(flat_A), names(flat_B))
+    flat_A_aligned <- align_df_for_final_rbind(flat_A, all_final_names) 
+    flat_B_aligned <- align_df_for_final_rbind(flat_B, all_final_names)
+    result <- rbind(flat_A_aligned, flat_B_aligned)
   }
 
-  flat_A_aligned <- align_df_for_final_rbind(flat_A, all_final_names)
-  flat_B_aligned <- align_df_for_final_rbind(flat_B, all_final_names)
-  
-  result <- rbind(flat_A_aligned, flat_B_aligned)
-  
+  # Final processing for SourceSet
   if ("SourceSet" %in% names(result)) {
     if (nrow(result) > 0) {
-        result$SourceSet <- as.factor(result$SourceSet)
+      present_levels <- unique(result$SourceSet)
+      # Define the desired order of levels
+      all_possible_levels <- c("SetA", "SetB") 
+      # Determine actual levels present in the data, maintaining desired order
+      final_levels <- intersect(all_possible_levels, unique(c(present_levels, all_possible_levels)))
+      # If no standard levels found but there are other levels, use those (should not happen ideally)
+      if(length(final_levels) == 0 && length(present_levels) > 0) final_levels <- present_levels
+      
+      result$SourceSet <- factor(result$SourceSet, levels = final_levels)
     } else {
-        # Ensure it's a factor with 0 levels or specific levels if desired
-        result$SourceSet <- factor(character(0)) 
+      # For 0-row data.frame, SourceSet should be a factor with 0 levels.
+      result$SourceSet <- factor(character(0), levels = character(0))
     }
   }
-
   return(result)
 } 
