@@ -84,8 +84,10 @@ test_that("permutation_join handles both inputs empty", {
   # Check SourceSet specifically
   expect_true("SourceSet" %in% names(result)) # Ensure column exists
   if ("SourceSet" %in% names(result)) {
-    expect_s3_class(result$SourceSet, "factor") 
-    expect_equal(length(levels(result$SourceSet)), 0)
+    expect_true(is.factor(result$SourceSet), label = "result$SourceSet should be a factor in 'both empty' test")
+    if(is.factor(result$SourceSet)) { # Guarding level check
+      expect_equal(length(levels(result$SourceSet)), 0)
+    }
   }
 })
 
@@ -284,7 +286,8 @@ test_that("permutation_join handles 0-row inputs with differing unique columns c
   expect_true(is.character(result$Perm))
   expect_true(is.character(result$Source))
   if ("SourceSet" %in% names(result)) { # SourceSet is factor due to line 298
-      expect_s3_class(result$SourceSet, "factor")
+      expect_true(is.factor(result$SourceSet), label = "result$SourceSet should be a factor in 0-row unique cols test")
+      # No explicit level check here, but if it's a factor(character(0)), levels length is 0.
   }
   expect_true(is.integer(result$ColA)) # Preserved from A_df$Permutation[[1]]
   expect_true(is.numeric(result$ColB) && !is.integer(result$ColB)) # Preserved from B_df$Permutation[[1]]
