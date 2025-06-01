@@ -4,7 +4,12 @@
 \alias{get_domain}
 \title{Get domain names}
 \usage{
-get_domain(url, protocol_handling = "keep", www_handling = "none")
+get_domain(
+  url,
+  protocol_handling = "keep",
+  www_handling = "none",
+  subdomain_levels_to_keep = NULL
+)
 }
 \arguments{
 \item{url}{A character vector of URLs.}
@@ -12,6 +17,17 @@ get_domain(url, protocol_handling = "keep", www_handling = "none")
 \item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
 
 \item{www_handling}{See \code{\link{safe_parse_url}}. Defaults to "none".}
+
+\item{subdomain_levels_to_keep}{An integer or NULL. Determines how many levels of subdomains are kept,
+in addition to any 'www.' prefix handled by `www_handling`.
+\itemize{
+  \item{`NULL`: (Default) No specific subdomain stripping is performed beyond `www_handling`.}
+  \item{`0`: All subdomains are stripped. If `www_handling` preserved or added 'www.',
+       it remains (e.g., 'www.sub.example.com' becomes 'www.example.com'; 'sub.example.com' becomes 'example.com').}
+  \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
+       in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
+       'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
+}}
 }
 \value{
 A character vector of domain names.

@@ -10,7 +10,8 @@ safe_parse_url(
   www_handling = c("none", "strip", "keep", "if_no_subdomain"),
   tld_source = c("all", "private", "icann"),
   case_handling = c("lower", "keep", "upper"),
-  trailing_slash_handling = c("none", "keep", "strip")
+  trailing_slash_handling = c("none", "keep", "strip"),
+  subdomain_levels_to_keep = NULL
 )
 }
 \arguments{
@@ -52,6 +53,17 @@ trailing slashes in the path component of the cleaned URL. Defaults to "none".
   \item{"none": (Default) No specific handling is applied. Path remains as is after initial parsing.}
   \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
   \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
+}}
+
+\item{subdomain_levels_to_keep}{An integer or NULL. Determines how many levels of subdomains are kept,
+in addition to any 'www.' prefix handled by `www_handling`.
+\itemize{
+  \item{`NULL`: (Default) No specific subdomain stripping is performed beyond `www_handling`.}
+  \item{`0`: All subdomains are stripped. If `www_handling` preserved or added 'www.',
+       it remains (e.g., 'www.sub.example.com' becomes 'www.example.com'; 'sub.example.com' becomes 'example.com').}
+  \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
+       in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
+       'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
 }}
 }
 \value{
