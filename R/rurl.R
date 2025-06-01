@@ -95,7 +95,7 @@ safe_parse_url <- function(url,
   }
 
   allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
-  original_url_lower <- tolower(url)
+  original_url_lower <- stringi::stri_trans_tolower(url)
   original_has_allowed_scheme <- any(startsWith(original_url_lower, allowed_prefixes))
   original_looks_like_protocol <- grepl("^[a-zA-Z][a-zA-Z0-9+.-]*:", url)
 
@@ -126,14 +126,14 @@ safe_parse_url <- function(url,
   # Apply trailing slash handling to raw_path
   if (!is.na(raw_path) && nzchar(raw_path)) { # Only process if path is not NA and not empty
     if (trailing_slash_handling == "strip") {
-      if (raw_path != "/" && endsWith(raw_path, "/")) {
-        raw_path <- substr(raw_path, 1, nchar(raw_path) - 1)
+      if (raw_path != "/" && stringi::stri_endswith_fixed(raw_path, "/")) {
+        raw_path <- stringi::stri_sub(raw_path, 1, stringi::stri_length(raw_path) - 1)
       }
     } else if (trailing_slash_handling == "keep") {
-      if (raw_path != "/" && !endsWith(raw_path, "/")) {
+      if (raw_path != "/" && !stringi::stri_endswith_fixed(raw_path, "/")) {
         raw_path <- paste0(raw_path, "/")
       }
-      # If raw_path is just "/", endsWith(raw_path, "/") is true, so it's kept.
+      # If raw_path is just "/", stringi::stri_endswith_fixed(raw_path, "/") is true, so it's kept.
       # If curl_parse_url returns empty string for path (should be "/" for root),
       # this logic might need adjustment, but current assumption is it's at least "/" or non-empty.
       # For an initially empty path (e.g. urltools::url_parse("http://a.com")$path is "")
@@ -164,15 +164,15 @@ safe_parse_url <- function(url,
 
   if (!is_ip_host && !is.na(raw_host) && raw_host != "") {
     if (www_handling == "strip") {
-      final_host <- sub("^(www[0-9]*\\.)(.*)", "\\2", raw_host, ignore.case = TRUE)
+      final_host <- stringi::stri_replace_first_regex(raw_host, "^(www[0-9]*\\.)(.*)", "$2", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
     } else if (www_handling == "keep") {
       # Ensure www. prefix, normalizing www[n]. -> www., adding if absent. Empty host stays empty.
       if (raw_host == "") {
         final_host <- ""
       } else {
-        current_host_lower <- tolower(raw_host)
-        if (grepl("^www[0-9]*\\.", current_host_lower)) { # Starts with www. or www[n].
-          bare_host_part <- sub("^www[0-9]*\\.(.*)", "\\1", raw_host, ignore.case = TRUE)
+        current_host_lower <- stringi::stri_trans_tolower(raw_host)
+        if (grepl("^www[0-9]*\\.", current_host_lower)) { # grepl is fine for this pattern
+          bare_host_part <- stringi::stri_replace_first_regex(raw_host, "^www[0-9]*\\.(.*)", "$1", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
           final_host <- paste0("www.", bare_host_part)
         } else { # Does not start with any www prefix
           final_host <- paste0("www.", raw_host)
@@ -184,19 +184,19 @@ safe_parse_url <- function(url,
       } else {
         # Step 1: Tentatively normalize any existing www[n]. prefix to www.
         candidate_host <- raw_host
-        if (grepl("^www[0-9]*\\.", tolower(raw_host))) {
-          bare_part <- sub("^www[0-9]*\\.(.*)", "\\1", raw_host, ignore.case = TRUE)
+        if (grepl("^www[0-9]*\\.", stringi::stri_trans_tolower(raw_host))) {
+          bare_part <- stringi::stri_replace_first_regex(raw_host, "^www[0-9]*\\.(.*)", "$1", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
           candidate_host <- paste0("www.", bare_part)
         }
         # Now, candidate_host is raw_host (if no www[n]. originally) or www.rest_of_host (if www[n]. was normalized).
 
         # Step 2: Check if candidate_host is effectively a "bare domain"
         host_for_domain_check <- candidate_host
-        if (startsWith(tolower(candidate_host), "www.")) {
-          host_for_domain_check <- sub("^www\\.(.*)", "\\1", candidate_host, ignore.case = TRUE)
+        if (stringi::stri_startswith_fixed(stringi::stri_trans_tolower(candidate_host), "www.")) {
+          host_for_domain_check <- stringi::stri_replace_first_regex(candidate_host, "^www\\.(.*)", "$1", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
         }
 
-        temp_host_nfc_lc <- stringi::stri_trans_nfc(tolower(host_for_domain_check))
+        temp_host_nfc_lc <- stringi::stri_trans_nfc(stringi::stri_trans_tolower(host_for_domain_check))
         temp_host_puny <- .normalize_and_punycode(temp_host_nfc_lc)
 
         temp_derived_domain_puny <- NA_character_
@@ -208,9 +208,9 @@ safe_parse_url <- function(url,
         if (is.na(temp_derived_domain_unicode) || temp_derived_domain_unicode == "") {
           final_host <- candidate_host # Default to (potentially www-normalized) host
         } else {
-          if (tolower(host_for_domain_check) == temp_derived_domain_unicode) {
+          if (stringi::stri_trans_tolower(host_for_domain_check) == temp_derived_domain_unicode) {
             # It's a bare domain structure. Ensure it has "www.".
-            if (!startsWith(tolower(candidate_host), "www.")) {
+            if (!stringi::stri_startswith_fixed(stringi::stri_trans_tolower(candidate_host), "www.")) {
               final_host <- paste0("www.", candidate_host)
             } else {
               final_host <- candidate_host # Already has www.
@@ -228,7 +228,7 @@ safe_parse_url <- function(url,
   tld <- NA_character_
 
   if (!is_ip_host && !is.na(final_host) && final_host != "") {
-    host_for_derivation <- stringi::stri_trans_nfc(tolower(final_host))
+    host_for_derivation <- stringi::stri_trans_nfc(stringi::stri_trans_tolower(final_host))
     encoded_host_for_derivation <- .normalize_and_punycode(host_for_derivation)
 
     if (!is.na(encoded_host_for_derivation) && encoded_host_for_derivation != "") {
@@ -257,8 +257,8 @@ safe_parse_url <- function(url,
   if (!is.na(clean_url)) {
     clean_url <- switch(
       case_handling,
-      lower = tolower(clean_url),
-      upper = toupper(clean_url),
+      lower = stringi::stri_trans_tolower(clean_url),
+      upper = stringi::stri_trans_toupper(clean_url),
       keep = clean_url # Default is to keep original casing
     )
   }
@@ -274,7 +274,7 @@ safe_parse_url <- function(url,
       parse_status <- "ok"
 
       if (protocol_handling != "strip" && !is.na(final_scheme)) {
-        current_scheme_lower <- tolower(final_scheme)
+        current_scheme_lower <- stringi::stri_trans_tolower(final_scheme)
         if (current_scheme_lower %in% c("ftp", "ftps")) {
           parse_status <- "ok-ftp"
         }
@@ -393,7 +393,8 @@ get_clean_url <- function(url,
   host <- stringi::stri_trans_nfc(host)  # Normalize Unicode
 
   # Skip punycode encoding if ASCII-only
-  if (all(charToRaw(host) <= as.raw(127))) return(host)
+  # Using stri_enc_isascii which is more direct for this check
+  if (stringi::stri_enc_isascii(host)) return(host)
 
   tryCatch(
     encode_fn(host),
@@ -588,7 +589,7 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
 
     # Normalize to NFC and lowercase
     host_normalized <- stringi::stri_trans_nfc(host)
-    host_lower <- tolower(host_normalized)
+    host_lower <- stringi::stri_trans_tolower(host_normalized)
 
     # Puny-encode only if non-ASCII (original logic's conditional punycode)
     # Using .to_ascii which encapsulates this conditional punycode logic robustly
@@ -706,7 +707,7 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
       return(NA_character_)
   }
 
-  normalized_host <- stringi::stri_trans_nfc(tolower(host_to_process))
+  normalized_host <- stringi::stri_trans_nfc(stringi::stri_trans_tolower(host_to_process))
   encoded_host <- .normalize_and_punycode(normalized_host)
 
   if (is.na(encoded_host) || !nzchar(encoded_host)) {
