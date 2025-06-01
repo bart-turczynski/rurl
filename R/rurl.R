@@ -28,6 +28,7 @@ utils::globalVariables(c(
 #'     \item{"none": (Default) Leaves the host's www prefix (or lack thereof) untouched.}
 #'     \item{"strip": Removes any "www." or "www[number]." prefix.}
 #'     \item{"keep": Ensures the host starts with "www.". If it has "www[number].", it's normalized to "www.". If no www prefix, "www." is added. An empty input host remains empty.}
+#'     \item{"if_no_subdomain": If the host is a bare registered domain (e.g., "example.com"), "www." is added. If the host already has a "www." or "www[number]." prefix, it is normalized to "www." (e.g., "www1.example.com" becomes "www.example.com"; "www1.sub.example.com" becomes "www.sub.example.com"). If a non-www subdomain exists (e.g., "sub.example.com" or the normalized "www.sub.example.com"), the host is not further altered. An empty input host remains empty.}
 #'   }
 #' @param tld_source Which TLD source to use for TLD extraction: "all", "icann",
 #'   or "private". Defaults to "all".
@@ -68,12 +69,16 @@ utils::globalVariables(c(
 #' @examples
 #' safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")
 #' safe_parse_url("Example.com/Another", protocol_handling = "none", www_handling = "keep", case_handling = "upper", trailing_slash_handling = "keep")
+#' safe_parse_url("example.com", www_handling = "if_no_subdomain") # -> www.example.com
+#' safe_parse_url("sub.example.com", www_handling = "if_no_subdomain") # -> sub.example.com
+#' safe_parse_url("www1.example.com", www_handling = "if_no_subdomain") # -> www.example.com
+#' safe_parse_url("www1.sub.example.com", www_handling = "if_no_subdomain") # -> www.sub.example.com
 #' safe_parse_url("http://www.example.com/path/", trailing_slash_handling = "strip")
 #' safe_parse_url("192.168.1.1/test")
 #' safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
 safe_parse_url <- function(url,
                            protocol_handling = c("keep", "none", "strip", "http", "https"),
-                           www_handling = c("none", "strip", "keep"),
+                           www_handling = c("none", "strip", "keep", "if_no_subdomain"),
                            tld_source = c("all", "private", "icann"),
                            case_handling = c("lower", "keep", "upper"),
                            trailing_slash_handling = c("none", "keep", "strip")) {
@@ -171,6 +176,49 @@ safe_parse_url <- function(url,
           final_host <- paste0("www.", bare_host_part)
         } else { # Does not start with any www prefix
           final_host <- paste0("www.", raw_host)
+        }
+      }
+    } else if (www_handling == "if_no_subdomain") {
+      if (raw_host == "") { # Handle empty host case explicitly similar to "keep"
+        final_host <- ""
+      } else {
+        # Step 1: Tentatively normalize any existing www[n]. prefix to www.
+        candidate_host <- raw_host
+        if (grepl("^www[0-9]*\\.", tolower(raw_host))) {
+          bare_part <- sub("^www[0-9]*\\.(.*)", "\\1", raw_host, ignore.case = TRUE)
+          candidate_host <- paste0("www.", bare_part)
+        }
+        # Now, candidate_host is raw_host (if no www[n]. originally) or www.rest_of_host (if www[n]. was normalized).
+
+        # Step 2: Check if candidate_host is effectively a "bare domain"
+        host_for_domain_check <- candidate_host
+        if (startsWith(tolower(candidate_host), "www.")) {
+          host_for_domain_check <- sub("^www\\.(.*)", "\\1", candidate_host, ignore.case = TRUE)
+        }
+
+        temp_host_nfc_lc <- stringi::stri_trans_nfc(tolower(host_for_domain_check))
+        temp_host_puny <- .normalize_and_punycode(temp_host_nfc_lc)
+
+        temp_derived_domain_puny <- NA_character_
+        if (!is.na(temp_host_puny) && temp_host_puny != "") {
+          temp_derived_domain_puny <- .get_registered_domain(temp_host_puny)
+        }
+        temp_derived_domain_unicode <- .punycode_to_unicode(temp_derived_domain_puny)
+
+        if (is.na(temp_derived_domain_unicode) || temp_derived_domain_unicode == "") {
+          final_host <- candidate_host # Default to (potentially www-normalized) host
+        } else {
+          if (tolower(host_for_domain_check) == temp_derived_domain_unicode) {
+            # It's a bare domain structure. Ensure it has "www.".
+            if (!startsWith(tolower(candidate_host), "www.")) {
+              final_host <- paste0("www.", candidate_host)
+            } else {
+              final_host <- candidate_host # Already has www.
+            }
+          } else {
+            # It's a subdomain structure, or something like "co.uk". Use the normalized candidate_host.
+            final_host <- candidate_host
+          }
         }
       }
     }
