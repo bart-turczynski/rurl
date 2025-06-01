@@ -32,11 +32,18 @@ utils::globalVariables(c(
 #' @param tld_source Which TLD source to use for TLD extraction: "all", "icann",
 #'   or "private". Defaults to "all".
 #' @param case_handling A character string specifying how to handle the case of
-#'                      the cleaned URL. Defaults to "keep".
+#'                      the cleaned URL. Defaults to "lower".
 #'   \itemize{
-#'     \item{"keep": (Default) Preserves the original casing.}
-#'     \item{"lower": Converts the cleaned URL to lowercase.}
+#'     \item{"keep": Preserves the original casing.}
+#'     \item{"lower": (Default) Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
+#'   }
+#' @param trailing_slash_handling A character string specifying how to handle
+#'   trailing slashes in the path component of the cleaned URL. Defaults to "none".
+#'   \itemize{
+#'     \item{"none": (Default) No specific handling is applied. Path remains as is after initial parsing.}
+#'     \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
+#'     \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 #'   }
 #' @return A named list with the following components:
 #'   \itemize{
@@ -60,18 +67,21 @@ utils::globalVariables(c(
 #' @export
 #' @examples
 #' safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")
-#' safe_parse_url("Example.com", protocol_handling = "none", www_handling = "keep", case_handling = "upper")
+#' safe_parse_url("Example.com/Another", protocol_handling = "none", www_handling = "keep", case_handling = "upper", trailing_slash_handling = "keep")
+#' safe_parse_url("http://www.example.com/path/", trailing_slash_handling = "strip")
 #' safe_parse_url("192.168.1.1/test")
 #' safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
 safe_parse_url <- function(url,
                            protocol_handling = c("keep", "none", "strip", "http", "https"),
                            www_handling = c("none", "strip", "keep"),
                            tld_source = c("all", "private", "icann"),
-                           case_handling = c("keep", "lower", "upper")) {
+                           case_handling = c("lower", "keep", "upper"),
+                           trailing_slash_handling = c("none", "keep", "strip")) {
   protocol_handling <- match.arg(protocol_handling)
   www_handling <- match.arg(www_handling)
   tld_source <- match.arg(tld_source)
   case_handling <- match.arg(case_handling)
+  trailing_slash_handling <- match.arg(trailing_slash_handling)
 
   original_input_url <- url
 
@@ -102,6 +112,26 @@ safe_parse_url <- function(url,
   raw_scheme <- parsed_curl$scheme %||% NA_character_
   raw_host <- parsed_curl$host %||% NA_character_
   raw_path <- parsed_curl$path %||% NA_character_
+
+  # Apply trailing slash handling to raw_path
+  if (!is.na(raw_path) && nzchar(raw_path)) { # Only process if path is not NA and not empty
+    if (trailing_slash_handling == "strip") {
+      if (raw_path != "/" && endsWith(raw_path, "/")) {
+        raw_path <- substr(raw_path, 1, nchar(raw_path) - 1)
+      }
+    } else if (trailing_slash_handling == "keep") {
+      if (raw_path != "/" && !endsWith(raw_path, "/")) {
+        raw_path <- paste0(raw_path, "/")
+      }
+      # If raw_path is just "/", endsWith(raw_path, "/") is true, so it's kept.
+      # If curl_parse_url returns empty string for path (should be "/" for root),
+      # this logic might need adjustment, but current assumption is it's at least "/" or non-empty.
+      # For an initially empty path (e.g. urltools::url_parse("http://a.com")$path is "")
+      # we should add a slash if not already there.
+      # However, curl::curl_parse gives "/" for "http://a.com"
+    }
+    # If trailing_slash_handling == "none", raw_path is unchanged.
+  }
 
   final_scheme <- switch(
     protocol_handling,
@@ -244,7 +274,8 @@ get_parse_status <- function(url,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
                              tld_source = "all",
-                             case_handling = "keep") # Default to keep for internal calls not exposing this
+                             case_handling = "lower",
+                             trailing_slash_handling = "none")
     if (is.null(parsed)) return("error")
     parsed$parse_status %||% "error"
   }, character(1))
@@ -253,7 +284,7 @@ get_parse_status <- function(url,
 #' Get cleaned URLs
 #'
 #' This function returns the cleaned version of the URLs after applying
-#' protocol, www, and case handling rules.
+#' protocol, www, case, and trailing slash handling rules.
 #'
 #' @param url A character vector containing URLs to be parsed.
 #' @param protocol_handling A character string specifying how to handle protocols.
@@ -261,29 +292,38 @@ get_parse_status <- function(url,
 #' @param www_handling A character string specifying how to handle "www" prefixes.
 #'                     See \code{\link{safe_parse_url}} for details. Defaults to "none".
 #' @param case_handling A character string specifying how to handle the case of
-#'                      the cleaned URL. Defaults to "keep".
+#'                      the cleaned URL. Defaults to "lower".
 #'   \itemize{
-#'     \item{"keep": (Default) Preserves the original casing.}
-#'     \item{"lower": Converts the cleaned URL to lowercase.}
+#'     \item{"keep": Preserves the original casing.}
+#'     \item{"lower": (Default) Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
+#'   }
+#' @param trailing_slash_handling A character string specifying how to handle
+#'   trailing slashes in the path component of the cleaned URL. Defaults to "none".
+#'   \itemize{
+#'     \item{"none": (Default) No specific handling is applied. Path remains as is after initial parsing.}
+#'     \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
+#'     \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 #'   }
 #' @return A character vector of cleaned URLs.
 #' @export
 #' @examples
-#' get_clean_url("Example.COM/Path")
-#' get_clean_url("Example.COM/Path", case_handling = "lower")
-#' get_clean_url("Example.COM/Path", case_handling = "upper")
+#' get_clean_url("Example.COM/Path") # Default lower, default no slash change
+#' get_clean_url("Example.COM/Path", case_handling = "keep", trailing_slash_handling = "keep")
+#' get_clean_url("Example.COM/Path/", case_handling = "upper", trailing_slash_handling = "strip")
 #' get_clean_url("http://example.com", www_handling = "strip")
 get_clean_url <- function(url,
                           protocol_handling = "keep",
                           www_handling = "none",
-                          case_handling = "keep") {
+                          case_handling = "lower",
+                          trailing_slash_handling = "none") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
                              tld_source = "all",
-                             case_handling = case_handling)
+                             case_handling = case_handling,
+                             trailing_slash_handling = trailing_slash_handling)
     if (is.null(parsed)) return(NA_character_)
     parsed$clean_url %||% NA_character_
   }, character(1))
@@ -386,7 +426,8 @@ get_domain <- function(url,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
                              tld_source = "all",
-                             case_handling = "keep") # Default to keep
+                             case_handling = "lower",
+                             trailing_slash_handling = "none")
     if (is.null(parsed)) return(NA_character_)
     parsed$domain %||% NA_character_
   }, character(1))
@@ -408,7 +449,8 @@ get_scheme <- function(url, protocol_handling = "keep") {
                              protocol_handling = protocol_handling,
                              www_handling = "none", # Consistent with other get_* funcs
                              tld_source = "all",
-                             case_handling = "keep") # Default to keep
+                             case_handling = "lower",
+                             trailing_slash_handling = "none")
     if (is.null(parsed)) return(NA_character_)
     parsed$scheme %||% NA_character_
   }, character(1))
@@ -433,7 +475,8 @@ get_host <- function(url,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
                              tld_source = "all",
-                             case_handling = "keep") # Default to keep
+                             case_handling = "lower",
+                             trailing_slash_handling = "none")
     if (is.null(parsed)) return(NA_character_)
     parsed$host %||% NA_character_
   }, character(1))
@@ -455,7 +498,8 @@ get_path <- function(url, protocol_handling = "keep") {
                              protocol_handling = protocol_handling,
                              www_handling = "none", # Consistent with other get_* funcs
                              tld_source = "all",
-                             case_handling = "keep") # Default to keep
+                             case_handling = "lower",
+                             trailing_slash_handling = "none")
     if (is.null(parsed)) return(NA_character_)
     parsed$path %||% NA_character_
   }, character(1))
