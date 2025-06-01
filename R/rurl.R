@@ -46,6 +46,16 @@ utils::globalVariables(c(
 #'     \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
 #'     \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 #'   }
+#' @param subdomain_levels_to_keep An integer or NULL. Determines how many levels of subdomains are kept,
+#'   in addition to any 'www.' prefix handled by `www_handling`.
+#'   \itemize{
+#'     \item{`NULL`: (Default) No specific subdomain stripping is performed beyond `www_handling`.}
+#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or added 'www.',
+#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com'; 'sub.example.com' becomes 'example.com').}
+#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
+#'          in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
+#'          'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
+#'   }
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -81,12 +91,17 @@ safe_parse_url <- function(url,
                            www_handling = c("none", "strip", "keep", "if_no_subdomain"),
                            tld_source = c("all", "private", "icann"),
                            case_handling = c("lower", "keep", "upper"),
-                           trailing_slash_handling = c("none", "keep", "strip")) {
+                           trailing_slash_handling = c("none", "keep", "strip"),
+                           subdomain_levels_to_keep = NULL) {
   protocol_handling <- match.arg(protocol_handling)
   www_handling <- match.arg(www_handling)
   tld_source <- match.arg(tld_source)
   case_handling <- match.arg(case_handling)
   trailing_slash_handling <- match.arg(trailing_slash_handling)
+
+  if (!is.null(subdomain_levels_to_keep) && (!is.numeric(subdomain_levels_to_keep) || subdomain_levels_to_keep < 0 || subdomain_levels_to_keep %% 1 != 0)) {
+    stop("subdomain_levels_to_keep must be NULL or a non-negative integer.", call. = FALSE)
+  }
 
   original_input_url <- url
 
@@ -247,6 +262,59 @@ safe_parse_url <- function(url,
     }
   }
 
+  # Apply subdomain_levels_to_keep logic
+  if (!is.null(subdomain_levels_to_keep) && !is_ip_host && !is.na(domain) && domain != "" && !is.na(final_host) && final_host != "") {
+    current_host_lower <- stringi::stri_trans_tolower(final_host)
+    domain_lower <- stringi::stri_trans_tolower(domain)
+    www_prefix_str <- "www."
+
+    has_www_prefix <- stringi::stri_startswith_fixed(current_host_lower, www_prefix_str)
+    
+    host_part_to_analyze <- final_host
+    if (has_www_prefix) {
+      # Get the part of the host after "www."
+      host_part_to_analyze <- stringi::stri_sub(final_host, stringi::stri_length(www_prefix_str) + 1)
+    }
+    
+    host_part_to_analyze_lower <- stringi::stri_trans_tolower(host_part_to_analyze)
+
+    if (host_part_to_analyze_lower == domain_lower) {
+      # No subdomains other than potentially www, or host is just the domain.
+      # final_host is already correct (it's original final_host after www_handling)
+    } else if (stringi::stri_endswith_fixed(host_part_to_analyze_lower, paste0(".", domain_lower))) {
+      # There are subdomains in host_part_to_analyze
+      subdomain_component_string <- stringi::stri_sub(
+        host_part_to_analyze, 
+        1, 
+        stringi::stri_length(host_part_to_analyze) - stringi::stri_length(domain_lower) - 1
+      )
+      
+      sub_labels <- strsplit(subdomain_component_string, "\\\\.")[[1]]
+      
+      kept_sub_labels_string <- ""
+      if (subdomain_levels_to_keep > 0) {
+        num_sub_labels_to_keep <- min(length(sub_labels), subdomain_levels_to_keep)
+        if (num_sub_labels_to_keep > 0) {
+          actual_kept_labels <- tail(sub_labels, num_sub_labels_to_keep)
+          kept_sub_labels_string <- paste(actual_kept_labels, collapse = ".")
+        }
+      } # if subdomain_levels_to_keep is 0, kept_sub_labels_string remains ""
+
+      reconstructed_host_part <- domain_lower # Start with domain
+      if (nzchar(kept_sub_labels_string)) {
+        reconstructed_host_part <- paste0(kept_sub_labels_string, ".", domain_lower)
+      }
+      
+      if (has_www_prefix) {
+        final_host <- paste0(www_prefix_str, reconstructed_host_part)
+      } else {
+        final_host <- reconstructed_host_part
+      }
+    }
+    # If host_part_to_analyze_lower does not end with .domain_lower (e.g. host is "com" and domain is "example.com")
+    # or other edge cases, final_host remains as it was after www_handling. This ensures robustness.
+  }
+
   clean_url <- NA_character_
   if (!is.na(final_host) && final_host != "") {
     scheme_part <- if (!is.na(final_scheme)) paste0(final_scheme, "://") else ""
@@ -318,6 +386,16 @@ safe_parse_url <- function(url,
 #'                          See \code{\link{safe_parse_url}} for details. Defaults to "keep".
 #' @param www_handling A character string specifying how to handle "www" prefixes.
 #'                     See \code{\link{safe_parse_url}} for details. Defaults to "none".
+#' @param subdomain_levels_to_keep An integer or NULL. Determines how many levels of subdomains are kept,
+#'   in addition to any 'www.' prefix handled by `www_handling`.
+#'   \itemize{
+#'     \item{`NULL`: (Default) No specific subdomain stripping is performed beyond `www_handling`.}
+#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or added 'www.',
+#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com'; 'sub.example.com' becomes 'example.com').}
+#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
+#'          in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
+#'          'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
+#'   }
 #' @return A character vector with the parse status of each URL.
 #' @export
 #' @examples
@@ -325,14 +403,16 @@ safe_parse_url <- function(url,
 #' get_parse_status(c("http://example.com", "not-a-url"))
 get_parse_status <- function(url,
                              protocol_handling = "keep",
-                             www_handling = "none") {
+                             www_handling = "none",
+                             subdomain_levels_to_keep = NULL) {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
                              tld_source = "all",
                              case_handling = "lower",
-                             trailing_slash_handling = "none")
+                             trailing_slash_handling = "none",
+                             subdomain_levels_to_keep = subdomain_levels_to_keep)
     if (is.null(parsed)) return("error")
     parsed$parse_status %||% "error"
   }, character(1))
@@ -362,6 +442,16 @@ get_parse_status <- function(url,
 #'     \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
 #'     \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 #'   }
+#' @param subdomain_levels_to_keep An integer or NULL. Determines how many levels of subdomains are kept,
+#'   in addition to any 'www.' prefix handled by `www_handling`.
+#'   \itemize{
+#'     \item{`NULL`: (Default) No specific subdomain stripping is performed beyond `www_handling`.}
+#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or added 'www.',
+#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com'; 'sub.example.com' becomes 'example.com').}
+#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
+#'          in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
+#'          'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
+#'   }
 #' @return A character vector of cleaned URLs.
 #' @export
 #' @examples
@@ -373,14 +463,16 @@ get_clean_url <- function(url,
                           protocol_handling = "keep",
                           www_handling = "none",
                           case_handling = "lower",
-                          trailing_slash_handling = "none") {
+                          trailing_slash_handling = "none",
+                          subdomain_levels_to_keep = NULL) {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
                              tld_source = "all",
                              case_handling = case_handling,
-                             trailing_slash_handling = trailing_slash_handling)
+                             trailing_slash_handling = trailing_slash_handling,
+                             subdomain_levels_to_keep = subdomain_levels_to_keep)
     if (is.null(parsed)) return(NA_character_)
     parsed$clean_url %||% NA_character_
   }, character(1))
@@ -472,20 +564,32 @@ get_clean_url <- function(url,
 #' @param url A character vector of URLs.
 #' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to "keep".
 #' @param www_handling See \code{\link{safe_parse_url}}. Defaults to "none".
+#' @param subdomain_levels_to_keep An integer or NULL. Determines how many levels of subdomains are kept,
+#'   in addition to any 'www.' prefix handled by `www_handling`.
+#'   \itemize{
+#'     \item{`NULL`: (Default) No specific subdomain stripping is performed beyond `www_handling`.}
+#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or added 'www.',
+#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com'; 'sub.example.com' becomes 'example.com').}
+#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
+#'          in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
+#'          'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
+#'   }
 #' @return A character vector of domain names.
 #' @export
 #' @examples
 #' get_domain("http://www.example.co.uk/path")
 get_domain <- function(url,
                        protocol_handling = "keep",
-                       www_handling = "none") {
+                       www_handling = "none",
+                       subdomain_levels_to_keep = NULL) {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
                              tld_source = "all",
                              case_handling = "lower",
-                             trailing_slash_handling = "none")
+                             trailing_slash_handling = "none",
+                             subdomain_levels_to_keep = subdomain_levels_to_keep)
     if (is.null(parsed)) return(NA_character_)
     parsed$domain %||% NA_character_
   }, character(1))
@@ -508,7 +612,8 @@ get_scheme <- function(url, protocol_handling = "keep") {
                              www_handling = "none", # Consistent with other get_* funcs
                              tld_source = "all",
                              case_handling = "lower",
-                             trailing_slash_handling = "none")
+                             trailing_slash_handling = "none",
+                             subdomain_levels_to_keep = NULL) # Scheme not affected by subdomain levels
     if (is.null(parsed)) return(NA_character_)
     parsed$scheme %||% NA_character_
   }, character(1))
@@ -521,20 +626,32 @@ get_scheme <- function(url, protocol_handling = "keep") {
 #' @param url A character vector of URLs.
 #' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to "keep".
 #' @param www_handling See \code{\link{safe_parse_url}}. Defaults to "none".
+#' @param subdomain_levels_to_keep An integer or NULL. Determines how many levels of subdomains are kept,
+#'   in addition to any 'www.' prefix handled by `www_handling`.
+#'   \itemize{
+#'     \item{`NULL`: (Default) No specific subdomain stripping is performed beyond `www_handling`.}
+#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or added 'www.',
+#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com'; 'sub.example.com' becomes 'example.com').}
+#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
+#'          in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
+#'          'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
+#'   }
 #' @return A character vector of URL hosts.
 #' @export
 #' @examples
 #' get_host("http://sub.example.com:8080")
 get_host <- function(url,
                      protocol_handling = "keep",
-                     www_handling = "none") {
+                     www_handling = "none",
+                     subdomain_levels_to_keep = NULL) {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
                              tld_source = "all",
-                             case_handling = "lower",
-                             trailing_slash_handling = "none")
+                             case_handling = "lower", # host is case-sensitive by spec, but often normalized
+                             trailing_slash_handling = "none",
+                             subdomain_levels_to_keep = subdomain_levels_to_keep)
     if (is.null(parsed)) return(NA_character_)
     parsed$host %||% NA_character_
   }, character(1))
@@ -557,7 +674,8 @@ get_path <- function(url, protocol_handling = "keep") {
                              www_handling = "none", # Consistent with other get_* funcs
                              tld_source = "all",
                              case_handling = "lower",
-                             trailing_slash_handling = "none")
+                             trailing_slash_handling = "none",
+                             subdomain_levels_to_keep = NULL) # Path not affected by subdomain levels
     if (is.null(parsed)) return(NA_character_)
     parsed$path %||% NA_character_
   }, character(1))
