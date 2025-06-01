@@ -1,4 +1,18 @@
-# rurl 0.3.0
+## rurl 0.3.0
+
+This release adds powerful new capabilities for URL normalization, variant generation, and dataset joining based on flexible URL permutations. It significantly improves robustness in handling malformed or inconsistent URLs.
+
+### Highlights
+
+- New `case_handling` and `trailing_slash_handling` parameters in `safe_parse_url()` and `get_clean_url()` provide greater control over URL formatting.
+- Added `permute_url()` for generating variant forms of URLs (scheme, www-prefix, trailing slash).
+- Introduced `permutation_join()` for joining datasets where URLs differ only in formatting.
+- Improved handling of non-standard or malformed schemes like `htp://`.
+- Fixed parsing for schemeless URLs with ports (e.g., `example.com:8080/path`).
+- More reliable fallback when `curl::curl_parse_url()` fails internally.
+- Corrected regular expressions for IPv6 parsing.
+
+---
 
 ## rurl 0.2.0
 
