@@ -31,6 +31,13 @@ utils::globalVariables(c(
 #'   }
 #' @param tld_source Which TLD source to use for TLD extraction: "all", "icann",
 #'   or "private". Defaults to "all".
+#' @param case_handling A character string specifying how to handle the case of
+#'                      the cleaned URL. Defaults to "keep".
+#'   \itemize{
+#'     \item{"keep": (Default) Preserves the original casing.}
+#'     \item{"lower": Converts the cleaned URL to lowercase.}
+#'     \item{"upper": Converts the cleaned URL to uppercase.}
+#'   }
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -45,24 +52,26 @@ utils::globalVariables(c(
 #'     \item `domain`: The registered domain name (e.g., "example.com"). NA if host is an IP, empty, or derivation fails.
 #'     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP, empty, or derivation fails.
 #'     \item `is_ip_host`: Logical, TRUE if the host is an IP address.
-#'     \item `clean_url`: The URL reconstructed from scheme, host, and path after processing. NA if host is empty/NA.
+#'     \item `clean_url`: The URL reconstructed from scheme, host, and path after processing, with case handling applied. NA if host is empty/NA.
 #'     \item `parse_status`: Character string indicating parsing outcome ("ok", "ok-ftp", "error", "warning-no-tld").
 #'   }
 #'   Returns `NULL` if the URL is fundamentally unparseable (e.g., NA, empty) or uses a disallowed scheme.
 #' @keywords internal
 #' @export
 #' @examples
-#' safe_parse_url("http://www.example.com/path?q=1#frag", protocol_handling = "keep")
-#' safe_parse_url("example.com", protocol_handling = "none", www_handling = "keep")
+#' safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")
+#' safe_parse_url("Example.com", protocol_handling = "none", www_handling = "keep", case_handling = "upper")
 #' safe_parse_url("192.168.1.1/test")
 #' safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
 safe_parse_url <- function(url,
                            protocol_handling = c("keep", "none", "strip", "http", "https"),
                            www_handling = c("none", "strip", "keep"),
-                           tld_source = c("all", "private", "icann")) {
+                           tld_source = c("all", "private", "icann"),
+                           case_handling = c("keep", "lower", "upper")) {
   protocol_handling <- match.arg(protocol_handling)
   www_handling <- match.arg(www_handling)
   tld_source <- match.arg(tld_source)
+  case_handling <- match.arg(case_handling)
 
   original_input_url <- url
 
@@ -108,7 +117,7 @@ safe_parse_url <- function(url,
     # IPv4: 1.2.3.4
     ipv4 <- grepl("^\\d{1,3}(\\.\\d{1,3}){3}$", raw_host)
     # IPv6: [2001:db8::1] or 2001:db8::1
-    ipv6 <- grepl("^\\[?[0-9a-fA-F:]+\\]?$", raw_host) && grepl(":", raw_host)
+    ipv6 <- grepl("^\\\\[?[0-9a-fA-F:]+\\\\]?$", raw_host) && grepl(":", raw_host)
     ipv4 || ipv6
   }
   final_host <- raw_host
@@ -159,6 +168,16 @@ safe_parse_url <- function(url,
   if (!is.na(final_host) && final_host != "") {
     scheme_part <- if (!is.na(final_scheme)) paste0(final_scheme, "://") else ""
     clean_url <- paste0(scheme_part, final_host, raw_path)
+  }
+
+  # Apply case handling to clean_url
+  if (!is.na(clean_url)) {
+    clean_url <- switch(
+      case_handling,
+      lower = tolower(clean_url),
+      upper = toupper(clean_url),
+      keep = clean_url # Default is to keep original casing
+    )
   }
 
   # Initialize parse_status
@@ -224,7 +243,8 @@ get_parse_status <- function(url,
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
-                             tld_source = "all")
+                             tld_source = "all",
+                             case_handling = "keep") # Default to keep for internal calls not exposing this
     if (is.null(parsed)) return("error")
     parsed$parse_status %||% "error"
   }, character(1))
@@ -233,26 +253,37 @@ get_parse_status <- function(url,
 #' Get cleaned URLs
 #'
 #' This function returns the cleaned version of the URLs after applying
-#' protocol and www handling rules.
+#' protocol, www, and case handling rules.
 #'
 #' @param url A character vector containing URLs to be parsed.
 #' @param protocol_handling A character string specifying how to handle protocols.
 #'                          See \code{\link{safe_parse_url}} for details. Defaults to "keep".
 #' @param www_handling A character string specifying how to handle "www" prefixes.
 #'                     See \code{\link{safe_parse_url}} for details. Defaults to "none".
+#' @param case_handling A character string specifying how to handle the case of
+#'                      the cleaned URL. Defaults to "keep".
+#'   \itemize{
+#'     \item{"keep": (Default) Preserves the original casing.}
+#'     \item{"lower": Converts the cleaned URL to lowercase.}
+#'     \item{"upper": Converts the cleaned URL to uppercase.}
+#'   }
 #' @return A character vector of cleaned URLs.
 #' @export
 #' @examples
-#' get_clean_url("example.com")
+#' get_clean_url("Example.COM/Path")
+#' get_clean_url("Example.COM/Path", case_handling = "lower")
+#' get_clean_url("Example.COM/Path", case_handling = "upper")
 #' get_clean_url("http://example.com", www_handling = "strip")
 get_clean_url <- function(url,
                           protocol_handling = "keep",
-                          www_handling = "none") {
+                          www_handling = "none",
+                          case_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
-                             tld_source = "all")
+                             tld_source = "all",
+                             case_handling = case_handling)
     if (is.null(parsed)) return(NA_character_)
     parsed$clean_url %||% NA_character_
   }, character(1))
@@ -354,7 +385,8 @@ get_domain <- function(url,
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
-                             tld_source = "all")
+                             tld_source = "all",
+                             case_handling = "keep") # Default to keep
     if (is.null(parsed)) return(NA_character_)
     parsed$domain %||% NA_character_
   }, character(1))
@@ -374,8 +406,9 @@ get_scheme <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
-                             www_handling = "none",
-                             tld_source = "all")
+                             www_handling = "none", # Consistent with other get_* funcs
+                             tld_source = "all",
+                             case_handling = "keep") # Default to keep
     if (is.null(parsed)) return(NA_character_)
     parsed$scheme %||% NA_character_
   }, character(1))
@@ -399,7 +432,8 @@ get_host <- function(url,
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
                              www_handling = www_handling,
-                             tld_source = "all")
+                             tld_source = "all",
+                             case_handling = "keep") # Default to keep
     if (is.null(parsed)) return(NA_character_)
     parsed$host %||% NA_character_
   }, character(1))
@@ -419,8 +453,9 @@ get_path <- function(url, protocol_handling = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
-                             www_handling = "none",
-                             tld_source = "all")
+                             www_handling = "none", # Consistent with other get_* funcs
+                             tld_source = "all",
+                             case_handling = "keep") # Default to keep
     if (is.null(parsed)) return(NA_character_)
     parsed$path %||% NA_character_
   }, character(1))
