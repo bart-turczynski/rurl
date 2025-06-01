@@ -7,7 +7,7 @@
 safe_parse_url(
   url,
   protocol_handling = c("keep", "none", "strip", "http", "https"),
-  www_handling = c("none", "strip", "keep"),
+  www_handling = c("none", "strip", "keep", "if_no_subdomain"),
   tld_source = c("all", "private", "icann"),
   case_handling = c("lower", "keep", "upper"),
   trailing_slash_handling = c("none", "keep", "strip")
@@ -32,6 +32,7 @@ and "www[number]" prefixes in the host. Defaults to "none".
   \item{"none": (Default) Leaves the host's www prefix (or lack thereof) untouched.}
   \item{"strip": Removes any "www." or "www[number]." prefix.}
   \item{"keep": Ensures the host starts with "www.". If it has "www[number].", it's normalized to "www.". If no www prefix, "www." is added. An empty input host remains empty.}
+  \item{"if_no_subdomain": If the host is a bare registered domain (e.g., "example.com"), "www." is added. If the host already has a "www." or "www[number]." prefix, it is normalized to "www." (e.g., "www1.example.com" becomes "www.example.com"; "www1.sub.example.com" becomes "www.sub.example.com"). If a non-www subdomain exists (e.g., "sub.example.com" or the normalized "www.sub.example.com"), the host is not further altered. An empty input host remains empty.}
 }}
 
 \item{tld_source}{Which TLD source to use for TLD extraction: "all", "icann",
@@ -81,6 +82,10 @@ and derives components like the registered domain and top-level domain (TLD).
 \examples{
 safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")
 safe_parse_url("Example.com/Another", protocol_handling = "none", www_handling = "keep", case_handling = "upper", trailing_slash_handling = "keep")
+safe_parse_url("example.com", www_handling = "if_no_subdomain") # -> www.example.com
+safe_parse_url("sub.example.com", www_handling = "if_no_subdomain") # -> sub.example.com
+safe_parse_url("www1.example.com", www_handling = "if_no_subdomain") # -> www.example.com
+safe_parse_url("www1.sub.example.com", www_handling = "if_no_subdomain") # -> www.sub.example.com
 safe_parse_url("http://www.example.com/path/", trailing_slash_handling = "strip")
 safe_parse_url("192.168.1.1/test")
 safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
