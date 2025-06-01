@@ -109,6 +109,7 @@ safe_parse_url <- function(url,
 
   parsed_curl <- tryCatch(curl::curl_parse_url(url_to_parse), error = function(e) NULL)
 
+  # If curl_parse_url failed, parsed_curl will be NULL. Return NULL immediately.
   if (is.null(parsed_curl)) {
     return(NULL)
   }
