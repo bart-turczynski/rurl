@@ -101,5 +101,9 @@ safe_parse_url("www1.sub.example.com", www_handling = "if_no_subdomain") # -> ww
 safe_parse_url("http://www.example.com/path/", trailing_slash_handling = "strip")
 safe_parse_url("192.168.1.1/test")
 safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
+safe_parse_url("http://deep.sub.domain.example.com", subdomain_levels_to_keep = 0)
+safe_parse_url("http://deep.sub.domain.example.com", subdomain_levels_to_keep = 1)
+safe_parse_url("http://www.deep.sub.domain.example.com", www_handling = "keep", subdomain_levels_to_keep = 0)
+safe_parse_url("http://www.deep.sub.domain.example.com", www_handling = "keep", subdomain_levels_to_keep = 1)
 }
 \keyword{internal}

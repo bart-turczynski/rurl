@@ -116,6 +116,23 @@ get_parse_status("mailto:test@example.com")
 #> [1] "error"
 get_parse_status("http://example.com")
 #> [1] "ok"
+
+# Handling Subdomain Levels
+
+Functions like `get_host()` and `get_clean_url()` also support the `subdomain_levels_to_keep` argument.
+This provides control over how many subdomain levels are kept in the host *after* `www_handling`.
+
+# `NULL` (default): keeps all subdomains (beyond www handling).
+# `0`: strips all subdomains (e.g., `one.two.example.com` becomes `example.com`).
+# `N > 0`: keeps N levels of subdomains (e.g., `one.two.example.com` with N=1 becomes `two.example.com`).
+
+# With `www_handling = "strip"` and `subdomain_levels_to_keep = 1`:
+get_host("http://www.three.two.one.example.com", www_handling = "strip", subdomain_levels_to_keep = 1)
+#> [1] "one.example.com"
+
+# With `subdomain_levels_to_keep = 0` (default `www_handling` is `"none"`):
+get_clean_url("http://www.deep.sub.example.com/path", subdomain_levels_to_keep = 0)
+#> [1] "http://www.example.com/path"
 ```
 
 ## Data Sources

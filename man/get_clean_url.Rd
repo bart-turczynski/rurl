@@ -61,4 +61,10 @@ get_clean_url("Example.COM/Path") # Default lower, default no slash change
 get_clean_url("Example.COM/Path", case_handling = "keep", trailing_slash_handling = "keep")
 get_clean_url("Example.COM/Path/", case_handling = "upper", trailing_slash_handling = "strip")
 get_clean_url("http://example.com", www_handling = "strip")
+get_clean_url("http://deep.sub.domain.example.com/path", subdomain_levels_to_keep = 0)
+# -> "http://example.com/path"
+get_clean_url("http://www.deep.sub.domain.example.com/path", subdomain_levels_to_keep = 1, www_handling = "strip")
+# -> "http://domain.example.com/path"
+get_clean_url("http://www.deep.sub.domain.example.com/path", subdomain_levels_to_keep = 1, www_handling = "keep")
+# -> "http://www.domain.example.com/path"
 }

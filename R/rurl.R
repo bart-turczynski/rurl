@@ -87,6 +87,10 @@ utils::globalVariables(c(
 #' safe_parse_url("http://www.example.com/path/", trailing_slash_handling = "strip")
 #' safe_parse_url("192.168.1.1/test")
 #' safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
+#' safe_parse_url("http://deep.sub.domain.example.com", subdomain_levels_to_keep = 0)
+#' safe_parse_url("http://deep.sub.domain.example.com", subdomain_levels_to_keep = 1)
+#' safe_parse_url("http://www.deep.sub.domain.example.com", www_handling = "keep", subdomain_levels_to_keep = 0)
+#' safe_parse_url("http://www.deep.sub.domain.example.com", www_handling = "keep", subdomain_levels_to_keep = 1)
 safe_parse_url <- function(url,
                            protocol_handling = c("keep", "none", "strip", "http", "https"),
                            www_handling = c("none", "strip", "keep", "if_no_subdomain"),
@@ -436,6 +440,12 @@ get_parse_status <- function(url,
 #' get_clean_url("Example.COM/Path", case_handling = "keep", trailing_slash_handling = "keep")
 #' get_clean_url("Example.COM/Path/", case_handling = "upper", trailing_slash_handling = "strip")
 #' get_clean_url("http://example.com", www_handling = "strip")
+#' get_clean_url("http://deep.sub.domain.example.com/path", subdomain_levels_to_keep = 0)
+#' # -> "http://example.com/path"
+#' get_clean_url("http://www.deep.sub.domain.example.com/path", subdomain_levels_to_keep = 1, www_handling = "strip")
+#' # -> "http://domain.example.com/path"
+#' get_clean_url("http://www.deep.sub.domain.example.com/path", subdomain_levels_to_keep = 1, www_handling = "keep")
+#' # -> "http://www.domain.example.com/path"
 get_clean_url <- function(url,
                           protocol_handling = "keep",
                           www_handling = "none",
@@ -611,6 +621,11 @@ get_scheme <- function(url, protocol_handling = "keep") {
 #' @export
 #' @examples
 #' get_host("http://sub.example.com:8080")
+#' get_host("http://www.two.one.example.com", subdomain_levels_to_keep = 1) # Result: "www.one.example.com"
+#' get_host("http://www.two.one.example.com", www_handling = "strip", subdomain_levels_to_keep = 1) # Result: "one.example.com"
+#' get_host("http://www.two.one.example.com", www_handling = "keep", subdomain_levels_to_keep = 1) # Result: "www.one.example.com"
+#' get_host("http://three.two.one.example.com", subdomain_levels_to_keep = 0) # Result: "example.com"
+#' get_host("http://www.three.two.one.example.com", subdomain_levels_to_keep = 0) # Result: "www.example.com"
 get_host <- function(url,
                      protocol_handling = "keep",
                      www_handling = "none",
