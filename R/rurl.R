@@ -74,6 +74,7 @@ utils::globalVariables(c(
 #'     \item `parse_status`: Character string indicating parsing outcome ("ok", "ok-ftp", "error", "warning-no-tld").
 #'   }
 #'   Returns `NULL` if the URL is fundamentally unparseable (e.g., NA, empty) or uses a disallowed scheme.
+#' @importFrom utils tail
 #' @keywords internal
 #' @export
 #' @examples
