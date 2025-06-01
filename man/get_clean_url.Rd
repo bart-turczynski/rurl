@@ -8,7 +8,8 @@ get_clean_url(
   url,
   protocol_handling = "keep",
   www_handling = "none",
-  case_handling = "keep"
+  case_handling = "lower",
+  trailing_slash_handling = "none"
 )
 }
 \arguments{
@@ -21,11 +22,19 @@ See \code{\link{safe_parse_url}} for details. Defaults to "keep".}
 See \code{\link{safe_parse_url}} for details. Defaults to "none".}
 
 \item{case_handling}{A character string specifying how to handle the case of
-                   the cleaned URL. Defaults to "keep".
+                   the cleaned URL. Defaults to "lower".
 \itemize{
-  \item{"keep": (Default) Preserves the original casing.}
-  \item{"lower": Converts the cleaned URL to lowercase.}
+  \item{"keep": Preserves the original casing.}
+  \item{"lower": (Default) Converts the cleaned URL to lowercase.}
   \item{"upper": Converts the cleaned URL to uppercase.}
+}}
+
+\item{trailing_slash_handling}{A character string specifying how to handle
+trailing slashes in the path component of the cleaned URL. Defaults to "none".
+\itemize{
+  \item{"none": (Default) No specific handling is applied. Path remains as is after initial parsing.}
+  \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
+  \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 }}
 }
 \value{
@@ -33,11 +42,11 @@ A character vector of cleaned URLs.
 }
 \description{
 This function returns the cleaned version of the URLs after applying
-protocol, www, and case handling rules.
+protocol, www, case, and trailing slash handling rules.
 }
 \examples{
-get_clean_url("Example.COM/Path")
-get_clean_url("Example.COM/Path", case_handling = "lower")
-get_clean_url("Example.COM/Path", case_handling = "upper")
+get_clean_url("Example.COM/Path") # Default lower, default no slash change
+get_clean_url("Example.COM/Path", case_handling = "keep", trailing_slash_handling = "keep")
+get_clean_url("Example.COM/Path/", case_handling = "upper", trailing_slash_handling = "strip")
 get_clean_url("http://example.com", www_handling = "strip")
 }

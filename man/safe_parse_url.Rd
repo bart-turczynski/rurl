@@ -9,7 +9,8 @@ safe_parse_url(
   protocol_handling = c("keep", "none", "strip", "http", "https"),
   www_handling = c("none", "strip", "keep"),
   tld_source = c("all", "private", "icann"),
-  case_handling = c("keep", "lower", "upper")
+  case_handling = c("lower", "keep", "upper"),
+  trailing_slash_handling = c("none", "keep", "strip")
 )
 }
 \arguments{
@@ -37,11 +38,19 @@ and "www[number]" prefixes in the host. Defaults to "none".
 or "private". Defaults to "all".}
 
 \item{case_handling}{A character string specifying how to handle the case of
-                   the cleaned URL. Defaults to "keep".
+                   the cleaned URL. Defaults to "lower".
 \itemize{
-  \item{"keep": (Default) Preserves the original casing.}
-  \item{"lower": Converts the cleaned URL to lowercase.}
+  \item{"keep": Preserves the original casing.}
+  \item{"lower": (Default) Converts the cleaned URL to lowercase.}
   \item{"upper": Converts the cleaned URL to uppercase.}
+}}
+
+\item{trailing_slash_handling}{A character string specifying how to handle
+trailing slashes in the path component of the cleaned URL. Defaults to "none".
+\itemize{
+  \item{"none": (Default) No specific handling is applied. Path remains as is after initial parsing.}
+  \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
+  \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 }}
 }
 \value{
@@ -71,7 +80,8 @@ and derives components like the registered domain and top-level domain (TLD).
 }
 \examples{
 safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")
-safe_parse_url("Example.com", protocol_handling = "none", www_handling = "keep", case_handling = "upper")
+safe_parse_url("Example.com/Another", protocol_handling = "none", www_handling = "keep", case_handling = "upper", trailing_slash_handling = "keep")
+safe_parse_url("http://www.example.com/path/", trailing_slash_handling = "strip")
 safe_parse_url("192.168.1.1/test")
 safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
 }
