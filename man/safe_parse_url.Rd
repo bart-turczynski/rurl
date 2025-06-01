@@ -8,7 +8,8 @@ safe_parse_url(
   url,
   protocol_handling = c("keep", "none", "strip", "http", "https"),
   www_handling = c("none", "strip", "keep"),
-  tld_source = c("all", "private", "icann")
+  tld_source = c("all", "private", "icann"),
+  case_handling = c("keep", "lower", "upper")
 )
 }
 \arguments{
@@ -34,6 +35,14 @@ and "www[number]" prefixes in the host. Defaults to "none".
 
 \item{tld_source}{Which TLD source to use for TLD extraction: "all", "icann",
 or "private". Defaults to "all".}
+
+\item{case_handling}{A character string specifying how to handle the case of
+                   the cleaned URL. Defaults to "keep".
+\itemize{
+  \item{"keep": (Default) Preserves the original casing.}
+  \item{"lower": Converts the cleaned URL to lowercase.}
+  \item{"upper": Converts the cleaned URL to uppercase.}
+}}
 }
 \value{
 A named list with the following components:
@@ -50,7 +59,7 @@ A named list with the following components:
     \item `domain`: The registered domain name (e.g., "example.com"). NA if host is an IP, empty, or derivation fails.
     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP, empty, or derivation fails.
     \item `is_ip_host`: Logical, TRUE if the host is an IP address.
-    \item `clean_url`: The URL reconstructed from scheme, host, and path after processing. NA if host is empty/NA.
+    \item `clean_url`: The URL reconstructed from scheme, host, and path after processing, with case handling applied. NA if host is empty/NA.
     \item `parse_status`: Character string indicating parsing outcome ("ok", "ok-ftp", "error", "warning-no-tld").
   }
   Returns `NULL` if the URL is fundamentally unparseable (e.g., NA, empty) or uses a disallowed scheme.
@@ -61,8 +70,8 @@ handles protocol and www prefix modifications, detects IP addresses,
 and derives components like the registered domain and top-level domain (TLD).
 }
 \examples{
-safe_parse_url("http://www.example.com/path?q=1#frag", protocol_handling = "keep")
-safe_parse_url("example.com", protocol_handling = "none", www_handling = "keep")
+safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")
+safe_parse_url("Example.com", protocol_handling = "none", www_handling = "keep", case_handling = "upper")
 safe_parse_url("192.168.1.1/test")
 safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
 }

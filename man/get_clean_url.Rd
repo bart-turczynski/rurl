@@ -4,7 +4,12 @@
 \alias{get_clean_url}
 \title{Get cleaned URLs}
 \usage{
-get_clean_url(url, protocol_handling = "keep", www_handling = "none")
+get_clean_url(
+  url,
+  protocol_handling = "keep",
+  www_handling = "none",
+  case_handling = "keep"
+)
 }
 \arguments{
 \item{url}{A character vector containing URLs to be parsed.}
@@ -14,15 +19,25 @@ See \code{\link{safe_parse_url}} for details. Defaults to "keep".}
 
 \item{www_handling}{A character string specifying how to handle "www" prefixes.
 See \code{\link{safe_parse_url}} for details. Defaults to "none".}
+
+\item{case_handling}{A character string specifying how to handle the case of
+                   the cleaned URL. Defaults to "keep".
+\itemize{
+  \item{"keep": (Default) Preserves the original casing.}
+  \item{"lower": Converts the cleaned URL to lowercase.}
+  \item{"upper": Converts the cleaned URL to uppercase.}
+}}
 }
 \value{
 A character vector of cleaned URLs.
 }
 \description{
 This function returns the cleaned version of the URLs after applying
-protocol and www handling rules.
+protocol, www, and case handling rules.
 }
 \examples{
-get_clean_url("example.com")
+get_clean_url("Example.COM/Path")
+get_clean_url("Example.COM/Path", case_handling = "lower")
+get_clean_url("Example.COM/Path", case_handling = "upper")
 get_clean_url("http://example.com", www_handling = "strip")
 }
