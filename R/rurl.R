@@ -94,7 +94,11 @@ safe_parse_url <- function(url,
   original_has_allowed_scheme <- any(startsWith(original_url_lower, allowed_prefixes))
   original_looks_like_protocol <- grepl("^[a-zA-Z][a-zA-Z0-9+.-]*:", url)
 
-  if (original_looks_like_protocol && !original_has_allowed_scheme) {
+  # Only return NULL for unallowed schemes if we intend to keep/use the original scheme.
+  # If protocol_handling is 'strip', 'http', or 'https', we'll attempt to fix it.
+  if ((protocol_handling == "keep" || protocol_handling == "none") &&
+      original_looks_like_protocol &&
+      !original_has_allowed_scheme) {
     return(NULL)
   }
 
@@ -231,8 +235,12 @@ safe_parse_url <- function(url,
     }
   }
 
-  # Override to "error" for fundamentally unparseable or disallowed original schemes
-  if(is.null(parsed_curl) || (original_looks_like_protocol && !original_has_allowed_scheme)) {
+  # Override to "error" for fundamentally unparseable original schemes
+  # or if the original scheme was disallowed AND we weren't trying to fix it.
+  if (is.null(parsed_curl) ||
+      ((protocol_handling == "keep" || protocol_handling == "none") &&
+       original_looks_like_protocol &&
+       !original_has_allowed_scheme)) {
     parse_status <- "error"
   }
 
