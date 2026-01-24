@@ -11,6 +11,7 @@ utils::globalVariables(c(
 #' This function serves as the core URL processing engine. It parses a URL,
 #' handles protocol and www prefix modifications, detects IP addresses,
 #' and derives components like the registered domain and top-level domain (TLD).
+#' Results are memoized for performance when processing large datasets.
 #'
 #' @param url A character vector containing one or more URLs to be parsed.
 #' @param protocol_handling A character string specifying how to handle
@@ -98,21 +99,60 @@ safe_parse_url <- function(url,
                            case_handling = c("lower", "keep", "upper"),
                            trailing_slash_handling = c("none", "keep", "strip"),
                            subdomain_levels_to_keep = NULL) {
+  # Match arguments early for cache key generation
   protocol_handling <- match.arg(protocol_handling)
   www_handling <- match.arg(www_handling)
   tld_source <- match.arg(tld_source)
   case_handling <- match.arg(case_handling)
   trailing_slash_handling <- match.arg(trailing_slash_handling)
 
+  # Early return for invalid input
+  if (is.na(url) || !is.character(url) || url == "") {
+    return(NULL)
+  }
+
+  # Validate subdomain_levels_to_keep
   if (!is.null(subdomain_levels_to_keep) && (!is.numeric(subdomain_levels_to_keep) || subdomain_levels_to_keep < 0 || subdomain_levels_to_keep %% 1 != 0)) {
     stop("subdomain_levels_to_keep must be NULL or a non-negative integer.", call. = FALSE)
   }
 
-  original_input_url <- url
+  # Generate cache key
+  subdomain_key <- if (is.null(subdomain_levels_to_keep)) "NULL" else as.character(subdomain_levels_to_keep)
+  cache_key <- paste(url, protocol_handling, www_handling, tld_source,
+                     case_handling, trailing_slash_handling, subdomain_key, sep = "\x1F")
 
-  if (is.na(url) || !is.character(url) || url == "") {
-    return(NULL)
+  # Check cache
+  if (exists(cache_key, envir = .rurl_cache$full_parse, inherits = FALSE)) {
+    return(get(cache_key, envir = .rurl_cache$full_parse, inherits = FALSE))
   }
+
+  # Call the implementation
+  result <- ._safe_parse_url_impl(
+    url = url,
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    tld_source = tld_source,
+    case_handling = case_handling,
+    trailing_slash_handling = trailing_slash_handling,
+    subdomain_levels_to_keep = subdomain_levels_to_keep
+  )
+
+  # Cache the result
+  assign(cache_key, result, envir = .rurl_cache$full_parse)
+
+  result
+}
+
+# Internal implementation of safe_parse_url (not memoized)
+# Arguments are already validated by the memoizing wrapper
+._safe_parse_url_impl <- function(url,
+                           protocol_handling,
+                           www_handling,
+                           tld_source,
+                           case_handling,
+                           trailing_slash_handling,
+                           subdomain_levels_to_keep) {
+  original_input_url <- url
 
   allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
   original_url_lower <- stringi::stri_trans_tolower(url)
@@ -244,13 +284,14 @@ safe_parse_url <- function(url,
       if (!is.na(derived_domain_encoded)) {
         domain <- .punycode_to_unicode(derived_domain_encoded)
       }
-      selected_tlds_list <- switch(
+      # Use pre-computed hash sets for O(1) lookup
+      selected_tld_set <- switch(
         tld_source,
-        all = tld_all,
-        private = tld_private,
-        icann = tld_icann
+        all = .tld_all_set,
+        private = .tld_private_set,
+        icann = .tld_icann_set
       )
-      tld <- ._extract_tld_original_logic(final_host, selected_tlds_list)
+      tld <- ._extract_tld_original_logic(final_host, selected_tld_set, tld_source)
     }
   }
 
@@ -526,17 +567,6 @@ get_clean_url <- function(url,
   return(result_unicode)
 }
 
-# Internal helper to convert host to ASCII using Punycode, fallback if urltools is unavailable
-.to_ascii <- function(host) {
-  if (is.na(host) || !nzchar(host)) return(host)
-  if (all(charToRaw(host) <= as.raw(127))) return(host)  # ASCII-only shortcut
-  if (requireNamespace("urltools", quietly = TRUE)) {
-    tryCatch(urltools::puny_encode(host), error = function(e) host)
-  } else {
-    host
-  }
-}
-
 #' Get domain names
 #'
 #' Extracts the registered domain name from a URL (e.g., "example.com").
@@ -669,6 +699,9 @@ get_path <- function(url, protocol_handling = "keep") {
 
 #' Extract the top-level domain (TLD) from a URL
 #'
+#' Uses safe_parse_url internally to extract the TLD, benefiting from
+#' all memoization layers for improved performance.
+#'
 #' @param url A character vector of URLs.
 #' @param source Which TLD source to use: "all", "icann", or "private".
 #' @return A character vector of TLDs.
@@ -677,70 +710,51 @@ get_path <- function(url, protocol_handling = "keep") {
 #' get_tld("example.com")
 get_tld <- function(url, source = c("all", "private", "icann")) {
   source <- match.arg(source)
-  tlds <- switch(
-    source,
-    all     = tld_all,
-    private = tld_private,
-    icann   = tld_icann
-  )
 
   vapply(url, function(u) {
-    if (is.na(u) || !nzchar(u)) return(NA_character_)
-
-    host <- ._legacy_get_host_for_get_tld_only(u)
-    if (is.na(host) || !nzchar(host)) return(NA_character_)
-
-    normalized_host <- stringi::stri_trans_nfc(host)
-    host_lower <- stringi::stri_trans_tolower(normalized_host)
-
-    encoded_host <- .to_ascii(host_lower)
-
-    if (is.na(encoded_host) || !nzchar(encoded_host)) return(NA_character_)
-
-    parts <- strsplit(encoded_host, "\\.")[[1]]
-    n <- length(parts)
-
-    if (n > 1) {
-        for (i in seq_len(n - 1)) {
-            candidate <- paste(parts[i:n], collapse = ".")
-            if (candidate %in% tlds) {
-                return(.punycode_to_unicode(candidate))
-            }
-        }
-    }
-
-    if (n > 0) {
-        last <- parts[n]
-        if (last %in% tlds) {
-            return(.punycode_to_unicode(last))
-        }
-    }
-
-    NA_character_
+    parsed <- safe_parse_url(u,
+                             protocol_handling = "keep",
+                             www_handling = "none",
+                             tld_source = source,
+                             case_handling = "lower",
+                             trailing_slash_handling = "none",
+                             subdomain_levels_to_keep = NULL)
+    if (is.null(parsed)) return(NA_character_)
+    parsed$tld %||% NA_character_
   }, character(1))
 }
 
 # Internal helper to derive registered domain using Public Suffix List
 # Expects hostname_encoded to be already NFC-normalized, lowercased, and Punycode-encoded if non-ASCII.
+# Uses pre-computed hash sets from .onLoad for O(1) lookups instead of linear %in% searches.
+# Results are memoized for performance.
 .get_registered_domain <- function(hostname) {
+  # Check cache first
+  if (exists(hostname, envir = .rurl_cache$domain, inherits = FALSE)) {
+    return(get(hostname, envir = .rurl_cache$domain, inherits = FALSE))
+  }
+
+  result <- ._get_registered_domain_impl(hostname)
+
+  # Cache the result
+  assign(hostname, result, envir = .rurl_cache$domain)
+  result
+}
+
+# Internal implementation of .get_registered_domain (not memoized)
+._get_registered_domain_impl <- function(hostname) {
   parts <- strsplit(hostname, "\\.")[[1]]
   parts <- parts[nzchar(parts)]  # Remove empty labels (e.g., from ".com")
   n <- length(parts)
   if (n < 2)
     return(NA_character_)
 
-  # Extract rule types from PSL
-  exception_rules <- sub("^!", "", grep("^!", psl_clean, value = TRUE))
-  wildcard_rules  <- sub("^\\*\\.", "", grep("^\\*\\.", psl_clean, value = TRUE))
-  normal_rules    <- setdiff(psl_clean, c(paste0("!", exception_rules),
-                                          paste0("*.", wildcard_rules)))
-
   # 1. Exception rules (take precedence)
+  # Uses .psl_exception_set (environment) for O(1) lookup
   for (i in seq_len(n)) {
     candidate <- paste(parts[i:n], collapse = ".")
-    exception_rule <- paste0("!", candidate)
 
-    if (exception_rule %in% psl_clean) {
+    if (.in_set(candidate, .psl_exception_set)) {
       # Exception match: treat the exception domain as *not* a suffix
       # So return one label above it
       return(candidate)
@@ -748,28 +762,26 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   }
 
   # 2. Track best match length
-  best_match_len <- 0
+  best_match_len <- 0L
 
   for (i in seq_len(n)) { # i is the start index of a suffix candidate in parts
     candidate_suffix_str <- paste(parts[i:n], collapse = ".")
-    num_parts_in_candidate_suffix <- n - i + 1
+    num_parts_in_candidate_suffix <- n - i + 1L
 
-    # 1. Check if candidate_suffix_str is an exact match in normal_rules
-    if (candidate_suffix_str %in% normal_rules) {
+    # Check if candidate_suffix_str is an exact match in normal_rules
+    # Uses .psl_normal_set (environment) for O(1) lookup
+    if (.in_set(candidate_suffix_str, .psl_normal_set)) {
       if (num_parts_in_candidate_suffix > best_match_len) {
         best_match_len <- num_parts_in_candidate_suffix
       }
     }
 
-    # 2. Check if candidate_suffix_str matches a wildcard rule.
-    #    A wildcard rule means "*." + some_suffix_in_wildcard_rules.
-    #    So, candidate_suffix_str must be of form "label." + some_suffix_in_wildcard_rules.
-    #    e.g., candidate_suffix_str = "somerset.sch.uk", and "sch.uk" is in wildcard_rules.
-    if (num_parts_in_candidate_suffix > 1) { # Must have at least "label.wildcard_part"
-      # The part that would be in wildcard_rules is parts[(i+1):n]
-      potential_wildcard_match_part <- paste(parts[(i+1):n], collapse=".")
-      if (potential_wildcard_match_part %in% wildcard_rules) {
-        # If it matches, then the current candidate_suffix_str (parts[i:n]) is the public suffix.
+    # Check if candidate_suffix_str matches a wildcard rule.
+    # A wildcard rule means "*." + some_suffix_in_wildcard_rules.
+    # Uses .psl_wildcard_set (environment) for O(1) lookup
+    if (num_parts_in_candidate_suffix > 1L) { # Must have at least "label.wildcard_part"
+      potential_wildcard_match_part <- paste(parts[(i+1L):n], collapse = ".")
+      if (.in_set(potential_wildcard_match_part, .psl_wildcard_set)) {
         if (num_parts_in_candidate_suffix > best_match_len) {
           best_match_len <- num_parts_in_candidate_suffix
         }
@@ -777,10 +789,9 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
     }
   }
 
-  if (best_match_len == 0) {
+  if (best_match_len == 0L) {
     # No PSL rule matched. Fallback to TLD being last part, domain is penultimate + last.
-    # Assumes n >= 2 at this point due to the function's initial `if (n < 2)` check.
-    return(paste(utils::tail(parts, 2), collapse = "."))
+    return(paste(utils::tail(parts, 2L), collapse = "."))
   }
 
   # If hostname is a public suffix itself (or shorter than the matched public suffix),
@@ -792,39 +803,56 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   # Standard case: n > best_match_len
   # The registered domain is the public suffix (best_match_len parts)
   # plus one additional label to the left.
-  # So, we take (best_match_len + 1) parts from the end of the hostname.
-  # The starting index for these parts is (n - (best_match_len + 1) + 1) = (n - best_match_len).
   return(paste(parts[(n - best_match_len):n], collapse = "."))
 }
 
 # Internal helper using the exact original get_tld logic for TLD extraction
-._extract_tld_original_logic <- function(host_to_process, current_tld_list) {
+# Uses hash set (environment) for O(1) lookup instead of linear %in% search.
+# Results are memoized for performance.
+._extract_tld_original_logic <- function(host_to_process, current_tld_set, tld_source_id = "all") {
   if (is.na(host_to_process) || !nzchar(host_to_process)) {
-      return(NA_character_)
+    return(NA_character_)
   }
 
+  # Generate cache key including both host and source
+  cache_key <- paste(host_to_process, tld_source_id, sep = "\x1F")
+
+  # Check cache
+  if (exists(cache_key, envir = .rurl_cache$tld, inherits = FALSE)) {
+    return(get(cache_key, envir = .rurl_cache$tld, inherits = FALSE))
+  }
+
+  result <- ._extract_tld_impl(host_to_process, current_tld_set)
+
+  # Cache the result
+  assign(cache_key, result, envir = .rurl_cache$tld)
+  result
+}
+
+# Internal implementation of TLD extraction (not memoized)
+._extract_tld_impl <- function(host_to_process, current_tld_set) {
   normalized_host <- stringi::stri_trans_nfc(stringi::stri_trans_tolower(host_to_process))
   encoded_host <- .normalize_and_punycode(normalized_host)
 
   if (is.na(encoded_host) || !nzchar(encoded_host)) {
-      return(NA_character_)
+    return(NA_character_)
   }
 
-    parts <- strsplit(encoded_host, "\\.")[[1]]
-    n <- length(parts)
+  parts <- strsplit(encoded_host, "\\.")[[1]]
+  n <- length(parts)
 
-  if (n > 1) {
-    for (i in seq_len(n - 1)) { # Checks suffixes of length n down to 2
+  if (n > 1L) {
+    for (i in seq_len(n - 1L)) { # Checks suffixes of length n down to 2
       candidate <- paste(parts[i:n], collapse = ".") # Candidate is Punycode
-      if (candidate %in% current_tld_list) { # current_tld_list should also be Punycode
+      if (.in_set(candidate, current_tld_set)) { # O(1) lookup
         return(.punycode_to_unicode(candidate)) # Decodes matched Punycode TLD
       }
     }
   }
 
-  if (n > 0) { # Fallback to last part
+  if (n > 0L) { # Fallback to last part
     last_candidate <- parts[n] # Punycode
-    if (last_candidate %in% current_tld_list) { # Check against Punycode TLD list
+    if (.in_set(last_candidate, current_tld_set)) { # O(1) lookup
       return(.punycode_to_unicode(last_candidate))
     }
   }
@@ -832,50 +860,4 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   return(NA_character_)
 }
 
-# Original safe_parse_url, renamed for use by legacy get_host
-._legacy_safe_parse_url_for_get_tld_only <- function(url,
-                           protocol_handling = c("keep", "none", "strip", "http", "https")) {
-  protocol_handling <- match.arg(protocol_handling)
-
-  if (is.na(url) || !is.character(url) || url == "")
-    return(NULL)
-
-  allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
-  has_valid_prefix <- any(startsWith(tolower(url), allowed_prefixes))
-  looks_like_protocol <- stringi::stri_detect_regex(url, "^[a-zA-Z][a-zA-Z0-9+.-]*:")
-  if (is.na(looks_like_protocol)) looks_like_protocol <- FALSE
-
-  if (looks_like_protocol && !has_valid_prefix)
-    return(NULL)
-
-  if (!looks_like_protocol) {
-    url <- paste0("http://", url)
-  }
-
-  result <- tryCatch(curl::curl_parse_url(url), error = function(e) NULL)
-
-  if (is.null(result))
-    return(NULL)
-
-  result$scheme <- switch(
-    protocol_handling,
-    none  = if (!has_valid_prefix) NA_character_ else result$scheme,
-    strip = NA_character_,
-    http  = "http",
-    https = "https",
-    keep  = result$scheme
-  )
-  result
-}
-
-# Original get_host, renamed and modified to call legacy safe_parse_url
-._legacy_get_host_for_get_tld_only <- function(url, protocol_handling = "keep") {
-  # protocol_handling is part of the original signature, match.arg if needed by legacy_safe_parse_url
-  # Forcing "keep" as it was the implicit original behavior for get_host feeding get_tld
-  protocol_handling <- "keep"
-  parsed <- ._legacy_safe_parse_url_for_get_tld_only(url, protocol_handling)
-  if (is.null(parsed))
-    return(NA_character_)
-  parsed$host %||% NA_character_
-}
 

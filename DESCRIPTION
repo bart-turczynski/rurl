@@ -12,7 +12,7 @@ Description: A lightweight toolkit for extracting structured information from UR
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(roclets = c("collate", "namespace", "rd"))
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Collate:
     'rurl.R'
     'permute_url.R'
