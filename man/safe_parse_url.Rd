@@ -90,6 +90,7 @@ A named list with the following components:
 This function serves as the core URL processing engine. It parses a URL,
 handles protocol and www prefix modifications, detects IP addresses,
 and derives components like the registered domain and top-level domain (TLD).
+Results are memoized for performance when processing large datasets.
 }
 \examples{
 safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")

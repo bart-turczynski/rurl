@@ -77,7 +77,12 @@ permute_url <- function(urls) {
     raw_path_from_curl_orig <- parsed_curl$path %||% ""
     raw_path_from_curl <- iconv(raw_path_from_curl_orig, from = "", to = "UTF-8", sub = "byte")
 
+    # Handle both old curl (query as string) and new curl (params as named list)
     safe_query_orig <- parsed_curl$query %||% NA_character_
+    if (is.na(safe_query_orig) && !is.null(parsed_curl$params) && length(parsed_curl$params) > 0) {
+      # Reconstruct query string from params
+      safe_query_orig <- paste(names(parsed_curl$params), parsed_curl$params, sep = "=", collapse = "&")
+    }
     safe_query <- iconv(safe_query_orig, from = "", to = "UTF-8", sub = "byte")
 
     safe_fragment_orig <- parsed_curl$fragment %||% NA_character_

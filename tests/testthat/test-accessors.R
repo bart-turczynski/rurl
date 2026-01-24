@@ -177,33 +177,6 @@ test_that("get_tld handles edge cases and unexpected inputs gracefully", {
   expect_identical(unname(get_tld("example..com")), "com")
 })
 
-test_that(".to_ascii falls back gracefully", {
-  expect_equal(rurl:::.to_ascii("ascii-only.com"), "ascii-only.com")
-})
-
-test_that(".to_ascii handles edge cases and punycode encoding", {
-  # NA and empty string handling
-  expect_identical(unname(rurl:::.to_ascii(NA_character_)), NA_character_)
-  expect_identical(unname(rurl:::.to_ascii("")), "")
-
-  # ASCII-only domain should be returned unchanged
-  expect_identical(unname(rurl:::.to_ascii("ascii-only.com")), "ascii-only.com")
-
-  # Punycode encoding for non-ASCII domains
-  result <- rurl:::.to_ascii("παράδειγμα.ελ")
-  expect_true(grepl("^xn--", result))
-})
-
-test_that(".to_ascii falls back gracefully when urltools is unavailable", {
-  skip_if_not_installed("mockery")
-
-  # Redefine the function inside a local to safely stub
-  local_fn <- rurl:::.to_ascii
-  mockery::stub(local_fn, "requireNamespace", FALSE)
-
-  expect_identical(unname(local_fn("δοκιμή.δοκιμή")), "δοκιμή.δοκιμή")
-})
-
 test_that(".normalize_and_punycode handles Unicode normalization and punycode encoding", {
   expect_match(unname(rurl:::.normalize_and_punycode("παράδειγμα.ελ")), "^xn--")
   expect_identical(unname(rurl:::.normalize_and_punycode("ascii-only.com")), "ascii-only.com")
@@ -290,35 +263,14 @@ test_that(".punycode_to_unicode handles various inputs and known TLDs", {
   expect_equal(rurl:::.punycode_to_unicode("xn--mnchen-3ya.de"), "münchen.de")
 })
 
-test_that("Internal TLD/legacy helpers handle NA/empty/error conditions", {
-  # ._legacy_safe_parse_url_for_get_tld_only (lines 607-608, 614-615)
-  expect_null(rurl:::._legacy_safe_parse_url_for_get_tld_only(""))
-  expect_null(rurl:::._legacy_safe_parse_url_for_get_tld_only(123))
-  expect_null(rurl:::._legacy_safe_parse_url_for_get_tld_only("gopher://example.com")) # Disallowed scheme
+test_that("Internal TLD helpers handle NA/empty/error conditions", {
+  # ._extract_tld_original_logic handles NA and empty input
+  expect_equal(rurl:::._extract_tld_original_logic(NA_character_, rurl:::.tld_all_set, "all"), NA_character_)
+  expect_equal(rurl:::._extract_tld_original_logic("", rurl:::.tld_all_set, "all"), NA_character_)
 
-  # ._extract_tld_original_logic (lines 570, 577)
-  expect_equal(rurl:::._extract_tld_original_logic(NA_character_, rurl:::tld_all), NA_character_)
-  expect_equal(rurl:::._extract_tld_original_logic("", rurl:::tld_all), NA_character_)
-
-  # To hit line 577 (encoded_host is NA), mock .normalize_and_punycode
-  # Note: The following stub might not be effective in all test environments.
-  # The logic in ._extract_tld_original_logic for when .normalize_and_punycode returns NA is: return(NA_character_).
-  # If mock fails, .normalize_and_punycode("somehost.com") is "somehost.com",
-  # and ._extract_tld_original_logic returns "com".
-  mockery::stub(where = rurl:::._extract_tld_original_logic, what = ".normalize_and_punycode", how = function(...) NA_character_, depth = 1)
-  expect_equal(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all), "com")
-
-  # Test the case where .normalize_and_punycode returns empty string
-  mockery::stub(where = rurl:::._extract_tld_original_logic, what = ".normalize_and_punycode", how = function(...) "", depth = 1)
-  expect_equal(rurl:::._extract_tld_original_logic("somehost.com", rurl:::tld_all), "com")
-
-  # get_tld (line 461 - if encoded_host is NA from .to_ascii)
-  # Let's mock .to_ascii directly for get_tld
-  mockery::stub(where = get_tld, what = ".to_ascii", how = function(...) NA_character_, depth = 1)
-  expect_equal(unname(get_tld("somehost.com")), NA_character_)
-
-  mockery::stub(where = get_tld, what = ".to_ascii", how = function(...) "", depth = 1) # test with empty string from .to_ascii
-  expect_equal(unname(get_tld("somehost.com")), NA_character_)
+  # get_tld returns NA for edge cases (uses safe_parse_url internally now)
+  expect_equal(unname(get_tld("")), NA_character_)
+  expect_equal(unname(get_tld(NA_character_)), NA_character_)
 })
 
 test_that("permute_url handles specific error/edge conditions from parsing", {

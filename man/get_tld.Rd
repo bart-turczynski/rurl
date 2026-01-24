@@ -15,7 +15,8 @@ get_tld(url, source = c("all", "private", "icann"))
 A character vector of TLDs.
 }
 \description{
-Extract the top-level domain (TLD) from a URL
+Uses safe_parse_url internally to extract the TLD, benefiting from
+all memoization layers for improved performance.
 }
 \examples{
 get_tld("example.com")
