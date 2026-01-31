@@ -8,9 +8,11 @@ get_clean_url(
   url,
   protocol_handling = "keep",
   www_handling = "none",
-  case_handling = "lower",
+  case_handling = "keep",
   trailing_slash_handling = "none",
-  subdomain_levels_to_keep = NULL
+  subdomain_levels_to_keep = NULL,
+  host_encoding = "keep",
+  path_encoding = "keep"
 )
 }
 \arguments{
@@ -23,11 +25,12 @@ See \code{\link{safe_parse_url}} for details. Defaults to "keep".}
 See \code{\link{safe_parse_url}} for details. Defaults to "none".}
 
 \item{case_handling}{A character string specifying how to handle the case of
-                   the cleaned URL. Defaults to "lower".
+                   the cleaned URL. Defaults to "keep".
 \itemize{
-  \item{"keep": Preserves the original casing.}
-  \item{"lower": (Default) Converts the cleaned URL to lowercase.}
+  \item{"keep": (Default) Preserves the original casing.}
+  \item{"lower": Converts the cleaned URL to lowercase.}
   \item{"upper": Converts the cleaned URL to uppercase.}
+  \item{"lower_host": Lowercase scheme and host only.}
 }}
 
 \item{trailing_slash_handling}{A character string specifying how to handle
@@ -48,6 +51,10 @@ in addition to any 'www.' prefix handled by `www_handling`.
        in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
        'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
 }}
+
+\item{host_encoding}{How to present the host in the cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".}
+
+\item{path_encoding}{How to treat percent-encoding in the path for the cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".}
 }
 \value{
 A character vector of cleaned URLs.

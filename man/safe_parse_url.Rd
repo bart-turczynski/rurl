@@ -9,9 +9,11 @@ safe_parse_url(
   protocol_handling = c("keep", "none", "strip", "http", "https"),
   www_handling = c("none", "strip", "keep", "if_no_subdomain"),
   tld_source = c("all", "private", "icann"),
-  case_handling = c("lower", "keep", "upper"),
+  case_handling = c("keep", "lower", "upper", "lower_host"),
   trailing_slash_handling = c("none", "keep", "strip"),
-  subdomain_levels_to_keep = NULL
+  subdomain_levels_to_keep = NULL,
+  host_encoding = c("keep", "idna", "unicode"),
+  path_encoding = c("keep", "encode", "decode")
 )
 }
 \arguments{
@@ -40,11 +42,12 @@ and "www[number]" prefixes in the host. Defaults to "none".
 or "private". Defaults to "all".}
 
 \item{case_handling}{A character string specifying how to handle the case of
-                   the cleaned URL. Defaults to "lower".
+                   the cleaned URL. Defaults to "keep".
 \itemize{
-  \item{"keep": Preserves the original casing.}
-  \item{"lower": (Default) Converts the cleaned URL to lowercase.}
+  \item{"keep": (Default) Preserves casing of the reconstructed URL.}
+  \item{"lower": Converts the cleaned URL to lowercase.}
   \item{"upper": Converts the cleaned URL to uppercase.}
+  \item{"lower_host": Lowercases scheme+host only; path (and any retained userinfo) stay as-is.}
 }}
 
 \item{trailing_slash_handling}{A character string specifying how to handle
@@ -64,6 +67,20 @@ in addition to any 'www.' prefix handled by `www_handling`.
   \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
        in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
        'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
+}}
+
+\item{host_encoding}{How to present the host in `clean_url`. Defaults to "keep".
+\itemize{
+  \item{"keep": Leave host as parsed/normalized by curl (typically lowercase for ASCII).}
+  \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the cleaned URL.}
+  \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+}}
+
+\item{path_encoding}{How to handle percent-encoding in the path for `clean_url`. Defaults to "keep".
+\itemize{
+  \item{"keep": Leave the path percent-encoding untouched.}
+  \item{"encode": Normalize by decoding first, then percent-encoding each segment (slashes preserved).}
+  \item{"decode": Percent-decode UTF-8 sequences in the path.}
 }}
 }
 \value{

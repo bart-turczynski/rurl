@@ -230,6 +230,33 @@ test_that("safe_parse_url handles www_handling options correctly", {
   expect_equal(safe_parse_url("http://example.com", www_handling = "none")$host, "example.com")
 })
 
+test_that("case_handling lower_host keeps path casing", {
+  res <- safe_parse_url(
+    "http://Example.COM/Some/Path/",
+    case_handling = "lower_host",
+    path_encoding = "keep"
+  )
+  expect_equal(res$clean_url, "http://example.com/Some/Path/")
+})
+
+test_that("path_encoding decode and encode work as expected", {
+  res_decode <- safe_parse_url("http://example.com/a%20b", path_encoding = "decode", case_handling = "keep")
+  expect_equal(res_decode$path, "/a b")
+  expect_equal(res_decode$clean_url, "http://example.com/a b")
+
+  res_encode <- safe_parse_url("http://example.com/a%20b", path_encoding = "encode", case_handling = "keep")
+  expect_equal(res_encode$path, "/a%20b")
+  expect_equal(res_encode$clean_url, "http://example.com/a%20b")
+})
+
+test_that("host_encoding handles IDNA round-trips", {
+  res_idna <- safe_parse_url("http://münich.com/path", host_encoding = "idna", case_handling = "keep")
+  expect_match(res_idna$clean_url, "xn--")
+
+  res_unicode <- safe_parse_url("http://xn--mnich-kva.com/path", host_encoding = "unicode", case_handling = "keep")
+  expect_equal(res_unicode$clean_url, "http://münich.com/path")
+})
+
 test_that("safe_parse_url handles specific error conditions", {
   # Test for line 187: original_looks_like_protocol && !original_has_allowed_scheme
   # This condition should lead to parse_status = "error" (and NULL return from safe_parse_url itself)
