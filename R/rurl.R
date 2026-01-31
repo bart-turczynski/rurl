@@ -34,11 +34,12 @@ utils::globalVariables(c(
 #' @param tld_source Which TLD source to use for TLD extraction: "all", "icann",
 #'   or "private". Defaults to "all".
 #' @param case_handling A character string specifying how to handle the case of
-#'                      the cleaned URL. Defaults to "lower".
+#'                      the cleaned URL. Defaults to "keep".
 #'   \itemize{
-#'     \item{"keep": Preserves the original casing.}
-#'     \item{"lower": (Default) Converts the cleaned URL to lowercase.}
+#'     \item{"keep": (Default) Preserves casing of the reconstructed URL.}
+#'     \item{"lower": Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
+#'     \item{"lower_host": Lowercases scheme+host only; path (and any retained userinfo) stay as-is.}
 #'   }
 #' @param trailing_slash_handling A character string specifying how to handle
 #'   trailing slashes in the path component of the cleaned URL. Defaults to "none".
@@ -46,6 +47,18 @@ utils::globalVariables(c(
 #'     \item{"none": (Default) No specific handling is applied. Path remains as is after initial parsing.}
 #'     \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
 #'     \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
+#'   }
+#' @param host_encoding How to present the host in `clean_url`. Defaults to "keep".
+#'   \itemize{
+#'     \item{"keep": Leave host as parsed/normalized by curl (typically lowercase for ASCII).}
+#'     \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the cleaned URL.}
+#'     \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+#'   }
+#' @param path_encoding How to handle percent-encoding in the path for `clean_url`. Defaults to "keep".
+#'   \itemize{
+#'     \item{"keep": Leave the path percent-encoding untouched.}
+#'     \item{"encode": Normalize by decoding first, then percent-encoding each segment (slashes preserved).}
+#'     \item{"decode": Percent-decode UTF-8 sequences in the path.}
 #'   }
 #' @param subdomain_levels_to_keep An integer or NULL. Determines how many levels of subdomains are kept,
 #'   in addition to any 'www.' prefix handled by `www_handling`.
@@ -76,6 +89,7 @@ utils::globalVariables(c(
 #'   }
 #'   Returns `NULL` if the URL is fundamentally unparseable (e.g., NA, empty) or uses a disallowed scheme.
 #' @importFrom utils tail
+#' @importFrom curl curl_parse_url curl_escape curl_unescape
 #' @keywords internal
 #' @export
 #' @examples
@@ -114,15 +128,19 @@ safe_parse_url <- function(url,
                            protocol_handling = c("keep", "none", "strip", "http", "https"),
                            www_handling = c("none", "strip", "keep", "if_no_subdomain"),
                            tld_source = c("all", "private", "icann"),
-                           case_handling = c("lower", "keep", "upper"),
+                           case_handling = c("keep", "lower", "upper", "lower_host"),
                            trailing_slash_handling = c("none", "keep", "strip"),
-                           subdomain_levels_to_keep = NULL) {
+                           subdomain_levels_to_keep = NULL,
+                           host_encoding = c("keep", "idna", "unicode"),
+                           path_encoding = c("keep", "encode", "decode")) {
   # Match arguments early for cache key generation
   protocol_handling <- match.arg(protocol_handling)
   www_handling <- match.arg(www_handling)
   tld_source <- match.arg(tld_source)
   case_handling <- match.arg(case_handling)
   trailing_slash_handling <- match.arg(trailing_slash_handling)
+  host_encoding <- match.arg(host_encoding)
+  path_encoding <- match.arg(path_encoding)
 
   # Early return for invalid input
   if (is.na(url) || !is.character(url) || url == "") {
@@ -137,7 +155,8 @@ safe_parse_url <- function(url,
   # Generate cache key
   subdomain_key <- if (is.null(subdomain_levels_to_keep)) "NULL" else as.character(subdomain_levels_to_keep)
   cache_key <- paste(url, protocol_handling, www_handling, tld_source,
-                     case_handling, trailing_slash_handling, subdomain_key, sep = "\x1F")
+                     case_handling, trailing_slash_handling, subdomain_key,
+                     host_encoding, path_encoding, sep = "\x1F")
   cache_key <- stringi::stri_escape_unicode(enc2utf8(cache_key))
 
   # Check cache
@@ -153,7 +172,9 @@ safe_parse_url <- function(url,
     tld_source = tld_source,
     case_handling = case_handling,
     trailing_slash_handling = trailing_slash_handling,
-    subdomain_levels_to_keep = subdomain_levels_to_keep
+    subdomain_levels_to_keep = subdomain_levels_to_keep,
+    host_encoding = host_encoding,
+    path_encoding = path_encoding
   )
 
   # Cache the result
@@ -170,8 +191,13 @@ safe_parse_url <- function(url,
                            tld_source,
                            case_handling,
                            trailing_slash_handling,
-                           subdomain_levels_to_keep) {
+                           subdomain_levels_to_keep,
+                           host_encoding = "keep",
+                           path_encoding = "keep") {
   original_input_url <- url
+
+  host_encoding <- match.arg(host_encoding, c("keep", "idna", "unicode"))
+  path_encoding <- match.arg(path_encoding, c("keep", "encode", "decode"))
 
   allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
   original_url_lower <- stringi::stri_trans_tolower(url)
@@ -204,14 +230,16 @@ safe_parse_url <- function(url,
     raw_query <- paste(names(parsed_curl$params), parsed_curl$params, sep = "=", collapse = "&")
   }
 
-  if (!is.na(raw_path) && nzchar(raw_path)) {
+  path_final <- raw_path
+
+  if (!is.na(path_final) && nzchar(path_final)) {
     if (trailing_slash_handling == "strip") {
-      if (raw_path != "/" && stringi::stri_endswith_fixed(raw_path, "/")) {
-        raw_path <- stringi::stri_sub(raw_path, 1, stringi::stri_length(raw_path) - 1)
+      if (path_final != "/" && stringi::stri_endswith_fixed(path_final, "/")) {
+        path_final <- stringi::stri_sub(path_final, 1, stringi::stri_length(path_final) - 1)
       }
     } else if (trailing_slash_handling == "keep") {
-      if (raw_path != "/" && !stringi::stri_endswith_fixed(raw_path, "/")) {
-        raw_path <- paste0(raw_path, "/")
+      if (path_final != "/" && !stringi::stri_endswith_fixed(path_final, "/")) {
+        path_final <- paste0(path_final, "/")
       }
     }
   }
@@ -236,6 +264,30 @@ safe_parse_url <- function(url,
     ipv4 || ipv6
   }
   final_host <- raw_host
+
+  # Path percent-encoding handling (performed after trailing slash logic)
+  if (!is.na(path_final)) {
+    if (path_encoding == "decode") {
+      path_final <- tryCatch(curl::curl_unescape(path_final), error = function(e) path_final)
+    } else if (path_encoding == "encode") {
+      path_final <- (function(p) {
+        if (is.na(p)) return(p)
+        decoded <- tryCatch(curl::curl_unescape(p), error = function(e) p)
+        has_leading <- stringi::stri_startswith_fixed(decoded, "/")
+        has_trailing <- stringi::stri_endswith_fixed(decoded, "/")
+        segments <- strsplit(decoded, "/", fixed = TRUE)[[1]]
+        encoded_segments <- vapply(segments, function(seg) curl::curl_escape(seg), character(1))
+        recomposed <- paste(encoded_segments, collapse = "/")
+        if (has_leading && !stringi::stri_startswith_fixed(recomposed, "/")) {
+          recomposed <- paste0("/", recomposed)
+        }
+        if (has_trailing && !stringi::stri_endswith_fixed(recomposed, "/")) {
+          recomposed <- paste0(recomposed, "/")
+        }
+        recomposed
+      })(path_final)
+    }
+  }
 
   if (!is_ip_host && !is.na(raw_host) && raw_host != "") {
     if (www_handling == "strip") {
@@ -364,18 +416,34 @@ safe_parse_url <- function(url,
     }
   }
 
-  clean_url <- NA_character_
-  if (!is.na(final_host) && final_host != "") {
-    scheme_part <- if (!is.na(final_scheme)) paste0(final_scheme, "://") else ""
-    clean_url <- paste0(scheme_part, final_host, raw_path)
+  host_for_clean <- final_host
+  if (!is.na(host_for_clean) && host_for_clean != "" && !is_ip_host) {
+    if (host_encoding == "idna") {
+      encoded_host <- .normalize_and_punycode(host_for_clean)
+      if (!is.na(encoded_host)) host_for_clean <- encoded_host
+    } else if (host_encoding == "unicode") {
+      decoded_host <- .punycode_to_unicode(host_for_clean)
+      if (!is.na(decoded_host) && decoded_host != "") host_for_clean <- decoded_host
+    }
   }
 
-  if (!is.na(clean_url)) {
+  clean_url <- NA_character_
+  if (!is.na(host_for_clean) && host_for_clean != "") {
+    scheme_part <- if (!is.na(final_scheme)) paste0(final_scheme, "://") else ""
+    path_part <- if (!is.na(path_final)) path_final else ""
+    clean_url_pre_case <- paste0(scheme_part, host_for_clean, path_part)
+
     clean_url <- switch(
       case_handling,
-      lower = stringi::stri_trans_tolower(clean_url),
-      upper = stringi::stri_trans_toupper(clean_url),
-      keep = clean_url
+      lower = stringi::stri_trans_tolower(clean_url_pre_case),
+      upper = stringi::stri_trans_toupper(clean_url_pre_case),
+      lower_host = {
+        scheme_lower <- if (!is.na(final_scheme)) stringi::stri_trans_tolower(final_scheme) else NA_character_
+        scheme_lower_part <- if (!is.na(scheme_lower)) paste0(scheme_lower, "://") else ""
+        host_lower <- stringi::stri_trans_tolower(host_for_clean)
+        paste0(scheme_lower_part, host_lower, path_part)
+      },
+      keep = clean_url_pre_case
     )
   }
 
@@ -411,7 +479,7 @@ safe_parse_url <- function(url,
     scheme = final_scheme,
     host = if (is.na(final_host) || final_host == "") NA_character_ else final_host,
     port = parsed_curl$port %||% NA_integer_,
-    path = raw_path,
+    path = path_final,
     query = raw_query %||% NA_character_,
     fragment = parsed_curl$fragment %||% NA_character_,
     user = parsed_curl$user %||% NA_character_,
@@ -474,11 +542,12 @@ get_parse_status <- function(url,
 #' @param www_handling A character string specifying how to handle "www" prefixes.
 #'                     See \code{\link{safe_parse_url}} for details. Defaults to "none".
 #' @param case_handling A character string specifying how to handle the case of
-#'                      the cleaned URL. Defaults to "lower".
+#'                      the cleaned URL. Defaults to "keep".
 #'   \itemize{
-#'     \item{"keep": Preserves the original casing.}
-#'     \item{"lower": (Default) Converts the cleaned URL to lowercase.}
+#'     \item{"keep": (Default) Preserves the original casing.}
+#'     \item{"lower": Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
+#'     \item{"lower_host": Lowercase scheme and host only.}
 #'   }
 #' @param trailing_slash_handling A character string specifying how to handle
 #'   trailing slashes in the path component of the cleaned URL. Defaults to "none".
@@ -487,6 +556,8 @@ get_parse_status <- function(url,
 #'     \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
 #'     \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 #'   }
+#' @param host_encoding How to present the host in the cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".
+#' @param path_encoding How to treat percent-encoding in the path for the cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".
 #' @param subdomain_levels_to_keep An integer or NULL. Determines how many levels of subdomains are kept,
 #'   in addition to any 'www.' prefix handled by `www_handling`.
 #'   \itemize{
@@ -521,9 +592,11 @@ get_parse_status <- function(url,
 get_clean_url <- function(url,
                           protocol_handling = "keep",
                           www_handling = "none",
-                          case_handling = "lower",
+                          case_handling = "keep",
                           trailing_slash_handling = "none",
-                          subdomain_levels_to_keep = NULL) {
+                          subdomain_levels_to_keep = NULL,
+                          host_encoding = "keep",
+                          path_encoding = "keep") {
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
                              protocol_handling = protocol_handling,
@@ -531,7 +604,9 @@ get_clean_url <- function(url,
                              tld_source = "all",
                              case_handling = case_handling,
                              trailing_slash_handling = trailing_slash_handling,
-                             subdomain_levels_to_keep = subdomain_levels_to_keep)
+                             subdomain_levels_to_keep = subdomain_levels_to_keep,
+                             host_encoding = host_encoding,
+                             path_encoding = path_encoding)
     if (is.null(parsed)) return(NA_character_)
     parsed$clean_url %||% NA_character_
   }, character(1))

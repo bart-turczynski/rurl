@@ -11,7 +11,7 @@ manipulation and HTTP endpoint generation readable, composable, and easy to
 integrate into modern R workflows.
 
 It includes helpers to:
-- Get cleaned URLs with fine-grained control over protocols, 'www' prefixes, letter casing, and trailing slashes.
+- Get cleaned URLs with fine-grained control over protocols, 'www' prefixes, casing, trailing slashes, host IDNA vs Unicode, and path percent-encoding.
 - Extract domains, paths, schemes, hosts, and top-level domains (TLDs).
 - Normalize, strip, or enforce specific protocols.
 - Handle 'www' prefixes in hostnames.
@@ -33,10 +33,12 @@ library(rurl)
 # Example of detailed parsing and transformation
 parsed_details <- safe_parse_url(
   "Http://Www.Example.Com/Some/Path/?Query=1#Frag",
-  protocol_handling = "https",      # Force https
-  www_handling = "strip",         # Remove www
-  case_handling = "lower",        # Convert to lowercase (new default)
-  trailing_slash_handling = "strip" # Remove trailing slash
+  protocol_handling = "https",       # Force https
+  www_handling = "strip",            # Remove www
+  case_handling = "lower_host",      # Lowercase scheme+host only
+  trailing_slash_handling = "strip", # Remove trailing slash
+  host_encoding = "idna",            # Punycode host if non-ASCII
+  path_encoding = "keep"             # Leave path encoding as-is
 )
 
 # The cleaned URL (scheme, host, path only by default)
@@ -68,15 +70,15 @@ Most other exported functions are convenient wrappers around `safe_parse_url()` 
 library(rurl)
 
 # Get cleaned URL with specific handling
-# Note: case_handling defaults to "lower", trailing_slash_handling to "none"
+# Note: case_handling defaults to "keep", trailing_slash_handling to "none"
 
 get_clean_url("Http://Example.Com/MyPath/")
-#> [1] "http://example.com/mypath/"
+#> [1] "http://example.com/MyPath/"
 
 get_clean_url("Http://Example.Com/MyPath/",
-              case_handling = "keep",
+              case_handling = "lower",
               trailing_slash_handling = "strip")
-#> [1] "Http://example.com/MyPath"
+#> [1] "http://example.com/mypath"
 
 get_clean_url("ftp://Sub.Example.ORG/anotherPath",
               protocol_handling = "strip", # Removes ftp://
@@ -131,6 +133,93 @@ get_host("http://www.three.two.one.example.com", www_handling = "strip", subdoma
 get_clean_url("http://www.deep.sub.example.com/path", subdomain_levels_to_keep = 0)
 #> [1] "http://www.example.com/path"
 
+# Host encoding and path encoding
+get_clean_url("http://münich.com/a b",
+              host_encoding = "idna",
+              path_encoding = "encode",
+              case_handling = "lower_host")
+#> [1] "http://xn--mnich-kva.com/a%20b"
+get_clean_url("http://xn--mnich-kva.com/a%20b",
+              host_encoding = "unicode",
+              path_encoding = "decode",
+              case_handling = "keep")
+#> [1] "http://münich.com/a b"
+
+```
+
+## Option Reference With Examples
+
+Below is a quick, runnable tour of every option exposed by `safe_parse_url()`/`get_clean_url()`. All examples use `safe_parse_url()` for clarity; the same arguments work in `get_clean_url()`.
+
+```r
+# Protocol handling: keep | none | strip | http | https
+safe_parse_url("Example.com/path")$clean_url
+# keep (default) -> "http://example.com/path" (scheme added)
+safe_parse_url("https://Example.com/path", protocol_handling = "none")$clean_url
+# none -> "https://example.com/path" (keeps existing, won't add if missing)
+safe_parse_url("https://Example.com/path", protocol_handling = "strip")$clean_url
+# strip -> "example.com/path"
+safe_parse_url("Example.com/path", protocol_handling = "http")$clean_url
+# http -> "http://example.com/path"
+safe_parse_url("Example.com/path", protocol_handling = "https")$clean_url
+# https -> "https://example.com/path"
+
+# www handling: none | strip | keep | if_no_subdomain
+safe_parse_url("http://www1.example.com", www_handling = "none")$clean_url
+# "http://www1.example.com"
+safe_parse_url("http://www1.example.com", www_handling = "strip")$clean_url
+# "http://example.com"
+safe_parse_url("http://example.com", www_handling = "keep")$clean_url
+# "http://www.example.com"
+safe_parse_url("http://sub.example.com", www_handling = "if_no_subdomain")$clean_url
+# "http://sub.example.com" (subdomain preserved)
+safe_parse_url("http://example.com", www_handling = "if_no_subdomain")$clean_url
+# "http://www.example.com" (www added only when no other subdomain)
+
+# Case handling: keep | lower | upper | lower_host
+safe_parse_url("Http://Www.Example.Com/Some/Path")$clean_url
+# keep (default) -> host lowercased by curl, path kept as-is
+safe_parse_url("Http://Www.Example.Com/Some/Path", case_handling = "lower")$clean_url
+# "http://www.example.com/some/path"
+safe_parse_url("Http://Www.Example.Com/Some/Path", case_handling = "upper")$clean_url
+# "HTTP://WWW.EXAMPLE.COM/SOME/PATH"
+safe_parse_url("Http://Www.Example.Com/Some/Path", case_handling = "lower_host")$clean_url
+# "http://www.example.com/Some/Path"
+
+# Trailing slash handling: none | keep | strip
+safe_parse_url("http://example.com/path", trailing_slash_handling = "none")$clean_url
+# "http://example.com/path"
+safe_parse_url("http://example.com/path", trailing_slash_handling = "keep")$clean_url
+# "http://example.com/path/"
+safe_parse_url("http://example.com/path/", trailing_slash_handling = "strip")$clean_url
+# "http://example.com/path"
+
+# Host encoding: keep | idna | unicode
+safe_parse_url("http://münich.com/path", host_encoding = "keep")$clean_url
+# "http://münich.com/path" (UTF-8 host if locale supports it)
+safe_parse_url("http://münich.com/path", host_encoding = "idna")$clean_url
+# "http://xn--mnich-kva.com/path"
+safe_parse_url("http://xn--mnich-kva.com/path", host_encoding = "unicode")$clean_url
+# "http://münich.com/path"
+
+# Path encoding: keep | encode | decode
+safe_parse_url("http://example.com/a%20b", path_encoding = "keep")$clean_url
+# "http://example.com/a%20b"
+safe_parse_url("http://example.com/a%20b", path_encoding = "decode")$clean_url
+# "http://example.com/a b"
+safe_parse_url("http://example.com/a b", path_encoding = "encode")$clean_url
+# "http://example.com/a%20b"
+
+# Subdomain levels to keep: NULL | 0 | N>0
+safe_parse_url("http://www.deep.sub.example.com/path",
+               subdomain_levels_to_keep = NULL)$clean_url
+# "http://www.deep.sub.example.com/path" (all kept after www handling)
+safe_parse_url("http://www.deep.sub.example.com/path",
+               subdomain_levels_to_keep = 0)$clean_url
+# "http://www.example.com/path"
+safe_parse_url("http://www.deep.sub.example.com/path",
+               subdomain_levels_to_keep = 1)$clean_url
+# "http://www.sub.example.com/path"
 ```
 
 ## Data Sources
