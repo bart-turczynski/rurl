@@ -79,8 +79,18 @@ utils::globalVariables(c(
 #' @keywords internal
 #' @export
 #' @examples
-#' safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")
-#' safe_parse_url("Example.com/Another", protocol_handling = "none", www_handling = "keep", case_handling = "upper", trailing_slash_handling = "keep")
+#' safe_parse_url(
+#'   "http://www.Example.com/Path?q=1#Frag",
+#'   protocol_handling = "keep",
+#'   case_handling = "lower"
+#' )
+#' safe_parse_url(
+#'   "Example.com/Another",
+#'   protocol_handling = "none",
+#'   www_handling = "keep",
+#'   case_handling = "upper",
+#'   trailing_slash_handling = "keep"
+#' )
 #' safe_parse_url("example.com", www_handling = "if_no_subdomain") # -> www.example.com
 #' safe_parse_url("sub.example.com", www_handling = "if_no_subdomain") # -> sub.example.com
 #' safe_parse_url("www1.example.com", www_handling = "if_no_subdomain") # -> www.example.com
@@ -90,8 +100,16 @@ utils::globalVariables(c(
 #' safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
 #' safe_parse_url("http://deep.sub.domain.example.com", subdomain_levels_to_keep = 0)
 #' safe_parse_url("http://deep.sub.domain.example.com", subdomain_levels_to_keep = 1)
-#' safe_parse_url("http://www.deep.sub.domain.example.com", www_handling = "keep", subdomain_levels_to_keep = 0)
-#' safe_parse_url("http://www.deep.sub.domain.example.com", www_handling = "keep", subdomain_levels_to_keep = 1)
+#' safe_parse_url(
+#'   "http://www.deep.sub.domain.example.com",
+#'   www_handling = "keep",
+#'   subdomain_levels_to_keep = 0
+#' )
+#' safe_parse_url(
+#'   "http://www.deep.sub.domain.example.com",
+#'   www_handling = "keep",
+#'   subdomain_levels_to_keep = 1
+#' )
 safe_parse_url <- function(url,
                            protocol_handling = c("keep", "none", "strip", "http", "https"),
                            www_handling = c("none", "strip", "keep", "if_no_subdomain"),
@@ -120,6 +138,7 @@ safe_parse_url <- function(url,
   subdomain_key <- if (is.null(subdomain_levels_to_keep)) "NULL" else as.character(subdomain_levels_to_keep)
   cache_key <- paste(url, protocol_handling, www_handling, tld_source,
                      case_handling, trailing_slash_handling, subdomain_key, sep = "\x1F")
+  cache_key <- stringi::stri_escape_unicode(enc2utf8(cache_key))
 
   # Check cache
   if (exists(cache_key, envir = .rurl_cache$full_parse, inherits = FALSE)) {
@@ -180,6 +199,10 @@ safe_parse_url <- function(url,
   raw_scheme <- parsed_curl$scheme %||% NA_character_
   raw_host <- parsed_curl$host %||% NA_character_
   raw_path <- parsed_curl$path %||% NA_character_
+  raw_query <- parsed_curl$query %||% NA_character_
+  if (is.na(raw_query) && !is.null(parsed_curl$params) && length(parsed_curl$params) > 0) {
+    raw_query <- paste(names(parsed_curl$params), parsed_curl$params, sep = "=", collapse = "&")
+  }
 
   if (!is.na(raw_path) && nzchar(raw_path)) {
     if (trailing_slash_handling == "strip") {
@@ -389,7 +412,7 @@ safe_parse_url <- function(url,
     host = if (is.na(final_host) || final_host == "") NA_character_ else final_host,
     port = parsed_curl$port %||% NA_integer_,
     path = raw_path,
-    query = parsed_curl$query %||% NA_character_,
+    query = raw_query %||% NA_character_,
     fragment = parsed_curl$fragment %||% NA_character_,
     user = parsed_curl$user %||% NA_character_,
     password = parsed_curl$password %||% NA_character_,
@@ -483,9 +506,17 @@ get_parse_status <- function(url,
 #' get_clean_url("http://example.com", www_handling = "strip")
 #' get_clean_url("http://deep.sub.domain.example.com/path", subdomain_levels_to_keep = 0)
 #' # -> "http://example.com/path"
-#' get_clean_url("http://www.deep.sub.domain.example.com/path", subdomain_levels_to_keep = 1, www_handling = "strip")
+#' get_clean_url(
+#'   "http://www.deep.sub.domain.example.com/path",
+#'   subdomain_levels_to_keep = 1,
+#'   www_handling = "strip"
+#' )
 #' # -> "http://domain.example.com/path"
-#' get_clean_url("http://www.deep.sub.domain.example.com/path", subdomain_levels_to_keep = 1, www_handling = "keep")
+#' get_clean_url(
+#'   "http://www.deep.sub.domain.example.com/path",
+#'   subdomain_levels_to_keep = 1,
+#'   www_handling = "keep"
+#' )
 #' # -> "http://www.domain.example.com/path"
 get_clean_url <- function(url,
                           protocol_handling = "keep",
@@ -651,11 +682,28 @@ get_scheme <- function(url, protocol_handling = "keep") {
 #' @export
 #' @examples
 #' get_host("http://sub.example.com:8080")
-#' get_host("http://www.two.one.example.com", subdomain_levels_to_keep = 1) # Result: "www.one.example.com"
-#' get_host("http://www.two.one.example.com", www_handling = "strip", subdomain_levels_to_keep = 1) # Result: "one.example.com"
-#' get_host("http://www.two.one.example.com", www_handling = "keep", subdomain_levels_to_keep = 1) # Result: "www.one.example.com"
-#' get_host("http://three.two.one.example.com", subdomain_levels_to_keep = 0) # Result: "example.com"
-#' get_host("http://www.three.two.one.example.com", subdomain_levels_to_keep = 0) # Result: "www.example.com"
+#' get_host(
+#'   "http://www.two.one.example.com",
+#'   subdomain_levels_to_keep = 1
+#' ) # Result: "www.one.example.com"
+#' get_host(
+#'   "http://www.two.one.example.com",
+#'   www_handling = "strip",
+#'   subdomain_levels_to_keep = 1
+#' ) # Result: "one.example.com"
+#' get_host(
+#'   "http://www.two.one.example.com",
+#'   www_handling = "keep",
+#'   subdomain_levels_to_keep = 1
+#' ) # Result: "www.one.example.com"
+#' get_host(
+#'   "http://three.two.one.example.com",
+#'   subdomain_levels_to_keep = 0
+#' ) # Result: "example.com"
+#' get_host(
+#'   "http://www.three.two.one.example.com",
+#'   subdomain_levels_to_keep = 0
+#' ) # Result: "www.example.com"
 get_host <- function(url,
                      protocol_handling = "keep",
                      www_handling = "none",
@@ -816,6 +864,7 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
 
   # Generate cache key including both host and source
   cache_key <- paste(host_to_process, tld_source_id, sep = "\x1F")
+  cache_key <- stringi::stri_escape_unicode(enc2utf8(cache_key))
 
   # Check cache
   if (exists(cache_key, envir = .rurl_cache$tld, inherits = FALSE)) {
@@ -859,5 +908,3 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
 
   return(NA_character_)
 }
-
-

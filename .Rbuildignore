@@ -3,6 +3,7 @@
 ^LICENSE\.md$
 ^README\.Rmd$
 ^README\.md$
+^README\.html$
 ^data-raw$
 ^\.github$
 ^\.git$
@@ -10,3 +11,4 @@
 ^Meta$
 ^cran-comments\.md$
 ^CRAN-SUBMISSION$
+^CLAUDE\.md$

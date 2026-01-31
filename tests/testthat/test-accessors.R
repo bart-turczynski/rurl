@@ -105,7 +105,16 @@ test_that(".get_registered_domain handles suffix-only domains", {
 
 test_that("get_parse_status falls through to final error", {
   mock_parse <- function(...) list(scheme = "gopher", host = "example.com")
-  mockery::stub(get_parse_status, "safe_parse_url", mock_parse)
+  ns <- asNamespace("rurl")
+  original <- get("safe_parse_url", envir = ns)
+  unlockBinding("safe_parse_url", ns)
+  assign("safe_parse_url", mock_parse, envir = ns)
+  lockBinding("safe_parse_url", ns)
+  on.exit({
+    unlockBinding("safe_parse_url", ns)
+    assign("safe_parse_url", original, envir = ns)
+    lockBinding("safe_parse_url", ns)
+  })
   expect_identical(unname(get_parse_status("whatever")), "error")
 })
 
@@ -252,15 +261,6 @@ test_that(".punycode_to_unicode handles various inputs and known TLDs", {
 
   # Test standard punycode decoding via urltools::puny_decode pathway
   expect_equal(rurl:::.punycode_to_unicode("xn--mnchen-3ya.de"), "münchen.de")
-
-  # Test for line 316 (is.na(sane_label) path by mocking iconv)
-  # Note: The following stub might not be effective in all test environments,
-  # leading to this test failing if the real iconv is called.
-  # The logic in .punycode_to_unicode for when iconv returns NA is: return("").
-  # If mock fails, iconv("test", ...) is "test", and .punycode_to_unicode("test") returns "test".
-  current_env <- environment()
-  mockery::stub(where = rurl:::.punycode_to_unicode, what = "iconv", how = function(x, from, to, sub) NA_character_, depth = 1)
-  expect_equal(rurl:::.punycode_to_unicode("xn--mnchen-3ya.de"), "münchen.de")
 })
 
 test_that("Internal TLD helpers handle NA/empty/error conditions", {
@@ -367,6 +367,7 @@ test_that("permute_url generates expected permutations for various URL types", {
   expect_true(all(result_path$URL == input_path))
 
   # Case 3: Internationalized Domain Name (IDN)
+  testthat::skip_if_not(l10n_info()[["UTF-8"]], "IDN permutations require UTF-8 locale")
   input_idn <- "παράδειγμα.ελ"
   expected_perms_idn <- sort(c(
     "παράδειγμα.ελ", "παράδειγμα.ελ/",
