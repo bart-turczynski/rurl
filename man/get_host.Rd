@@ -37,9 +37,26 @@ Extracts the host component of a URL.
 }
 \examples{
 get_host("http://sub.example.com:8080")
-get_host("http://www.two.one.example.com", subdomain_levels_to_keep = 1) # Result: "www.one.example.com"
-get_host("http://www.two.one.example.com", www_handling = "strip", subdomain_levels_to_keep = 1) # Result: "one.example.com"
-get_host("http://www.two.one.example.com", www_handling = "keep", subdomain_levels_to_keep = 1) # Result: "www.one.example.com"
-get_host("http://three.two.one.example.com", subdomain_levels_to_keep = 0) # Result: "example.com"
-get_host("http://www.three.two.one.example.com", subdomain_levels_to_keep = 0) # Result: "www.example.com"
+get_host(
+  "http://www.two.one.example.com",
+  subdomain_levels_to_keep = 1
+) # Result: "www.one.example.com"
+get_host(
+  "http://www.two.one.example.com",
+  www_handling = "strip",
+  subdomain_levels_to_keep = 1
+) # Result: "one.example.com"
+get_host(
+  "http://www.two.one.example.com",
+  www_handling = "keep",
+  subdomain_levels_to_keep = 1
+) # Result: "www.one.example.com"
+get_host(
+  "http://three.two.one.example.com",
+  subdomain_levels_to_keep = 0
+) # Result: "example.com"
+get_host(
+  "http://www.three.two.one.example.com",
+  subdomain_levels_to_keep = 0
+) # Result: "www.example.com"
 }

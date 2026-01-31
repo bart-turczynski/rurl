@@ -18,148 +18,79 @@
 #' permute_url("example.com")
 #' permute_url("test.com/folder/subfolder/path?parameter=value")
 permute_url <- function(urls) {
-  all_permutations <- list()
+  if (length(urls) == 0) {
+    return(data.frame(URL = character(0), Permutation = character(0), stringsAsFactors = FALSE))
+  }
 
-  # %||% is defined globally in R/rurl.R
-
-  for (original_url_raw in urls) {
-    # Sanitize the input URL immediately
-    original_url_input <- iconv(original_url_raw, from = "", to = "UTF-8", sub = "byte")
+  all_permutations <- lapply(urls, function(original_url_raw) {
+    original_url_input <- enc2utf8(original_url_raw)
 
     if (is.na(original_url_input) || !nzchar(trimws(original_url_input))) {
-      all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        URL = original_url_raw, # Store raw original URL
-        Permutation = NA_character_,
-        stringsAsFactors = FALSE
-      )
-      next
+      return(data.frame(URL = original_url_raw, Permutation = NA_character_, stringsAsFactors = FALSE))
     }
 
-    # original_url_input is now the sanitized version for further processing
-
-    has_scheme <- grepl("^[a-zA-Z][a-zA-Z0-9+.-]*://", original_url_input)
-    url_to_parse <- original_url_input
-    if (!has_scheme) {
-      url_to_parse <- paste0("http://", original_url_input)
-    }
-
-    parsed_curl <- tryCatch(
-      curl::curl_parse_url(url_to_parse),
-      error = function(e) NULL
+    parsed <- ._safe_parse_url_impl(
+      url = original_url_input,
+      protocol_handling = "keep",
+      www_handling = "none",
+      tld_source = "all",
+      case_handling = "keep",
+      trailing_slash_handling = "none",
+      subdomain_levels_to_keep = NULL
     )
 
-    # Sanitize components from curl_parse_url
-    raw_host_from_curl <- parsed_curl$host %||% NA_character_
-    raw_host <- iconv(raw_host_from_curl, from = "", to = "UTF-8", sub = "byte")
-
-    if (is.null(parsed_curl) || is.na(raw_host) || !nzchar(trimws(raw_host))) {
-      all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        URL = original_url_raw, # Store raw original URL
-        Permutation = NA_character_,
-        stringsAsFactors = FALSE
-      )
-      next
+    if (is.null(parsed) || is.na(parsed$host) || !nzchar(trimws(parsed$host))) {
+      return(data.frame(URL = original_url_raw, Permutation = NA_character_, stringsAsFactors = FALSE))
     }
 
-    stripped_bare_host <- sub("^(www[0-9]*\\.)", "", raw_host, ignore.case = TRUE)
-    # No need to sanitize stripped_bare_host again if raw_host is clean and sub() is safe.
-    
-    if (!nzchar(trimws(stripped_bare_host))) {
-        all_permutations[[length(all_permutations) + 1]] <- data.frame(
-            URL = original_url_raw, # Store raw original URL
-            Permutation = NA_character_,
-            stringsAsFactors = FALSE
-        )
-        next
+    host_base <- parsed$host
+    bare_host <- sub("^(www[0-9]*\\.)", "", host_base, ignore.case = TRUE)
+    if (!nzchar(trimws(bare_host))) {
+      return(data.frame(URL = original_url_raw, Permutation = NA_character_, stringsAsFactors = FALSE))
     }
+    host_variants <- c(bare_host, paste0("www.", bare_host))
+    host_variants <- unique(host_variants[nzchar(trimws(host_variants))])
 
-    # Sanitize other curl components
-    raw_path_from_curl_orig <- parsed_curl$path %||% ""
-    raw_path_from_curl <- iconv(raw_path_from_curl_orig, from = "", to = "UTF-8", sub = "byte")
-
-    # Handle both old curl (query as string) and new curl (params as named list)
-    safe_query_orig <- parsed_curl$query %||% NA_character_
-    if (is.na(safe_query_orig) && !is.null(parsed_curl$params) && length(parsed_curl$params) > 0) {
-      # Reconstruct query string from params
-      safe_query_orig <- paste(names(parsed_curl$params), parsed_curl$params, sep = "=", collapse = "&")
-    }
-    safe_query <- iconv(safe_query_orig, from = "", to = "UTF-8", sub = "byte")
-
-    safe_fragment_orig <- parsed_curl$fragment %||% NA_character_
-    safe_fragment <- iconv(safe_fragment_orig, from = "", to = "UTF-8", sub = "byte")
-
-    query_part <- if (!is.na(safe_query) && nzchar(safe_query)) paste0("?", safe_query) else ""
-    fragment_part <- if (!is.na(safe_fragment) && nzchar(safe_fragment)) paste0("#", safe_fragment) else ""
+    raw_path <- parsed$path %||% ""
+    query_part <- if (!is.na(parsed$query %||% NA_character_) && nzchar(parsed$query)) paste0("?", parsed$query) else ""
+    fragment_part <- if (!is.na(parsed$fragment %||% NA_character_) && nzchar(parsed$fragment)) paste0("#", parsed$fragment) else ""
     query_fragment_suffix <- paste0(query_part, fragment_part)
 
-    host_prefixes <- c("", "www.") 
     schemes <- c("", "http://", "https://")
+    is_root_domain_path <- raw_path %in% c("", "/")
 
-    current_url_perms_set <- character()
-
-    for (hp in host_prefixes) {
-      current_perm_host <- paste0(hp, stripped_bare_host)
-      if (!nzchar(current_perm_host)) next 
-      
+    current_perms <- character()
+    for (h in host_variants) {
       for (s in schemes) {
-        current_base_schemed_host <- paste0(s, current_perm_host)
-
-        # Check if the path from curl indicates a root domain or a specific path
-        is_root_domain_path <- (raw_path_from_curl == "" || raw_path_from_curl == "/")
-
+        base <- paste0(s, h)
         if (is_root_domain_path) {
-          # Case 1: Input was effectively a root domain
-          # Permutation with NO path component (host only, then query/fragment)
-          current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, query_fragment_suffix))
-          
-          # Permutation with a SINGLE SLASH path component, then query/fragment
-          current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, "/", query_fragment_suffix))
+          current_perms <- c(current_perms, paste0(base, query_fragment_suffix))
+          current_perms <- c(current_perms, paste0(base, "/", query_fragment_suffix))
         } else {
-          # Case 2: Input had a specific path (e.g., "test.com/folder/subfolder")
-          # This means raw_path_from_curl is not "" and not "/"
-
-          # Version 1: The path as it is (e.g., /path or /path/)
-          current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, raw_path_from_curl, query_fragment_suffix))
-
-          # Version 2: The path with the alternative trailing slash state
-          if (endsWith(raw_path_from_curl, "/")) {
-            # Original path ended with a slash, so create version without it
-            path_alternative <- substr(raw_path_from_curl, 1, nchar(raw_path_from_curl) - 1)
-          } else {
-            # Original path did not end with a slash, so create version with it
-            path_alternative <- paste0(raw_path_from_curl, "/")
-          }
-          current_url_perms_set <- c(current_url_perms_set, paste0(current_base_schemed_host, path_alternative, query_fragment_suffix))
+          current_perms <- c(current_perms, paste0(base, raw_path, query_fragment_suffix))
+          alt_path <- if (endsWith(raw_path, "/")) substr(raw_path, 1, nchar(raw_path) - 1) else paste0(raw_path, "/")
+          current_perms <- c(current_perms, paste0(base, alt_path, query_fragment_suffix))
         }
       }
     }
 
-    unique_permutations <- unique(current_url_perms_set)
+    unique_permutations <- unique(current_perms)
     unique_permutations <- unique_permutations[nzchar(trimws(gsub("^(https?://)?(www[.])?", "", unique_permutations, perl = TRUE)))]
     unique_permutations <- unique_permutations[!unique_permutations %in% c("http://", "https://", "http://www.", "https://www.", "www.", "")]
     unique_permutations <- unique_permutations[nzchar(trimws(unique_permutations))]
 
-    if (length(unique_permutations) > 0) {
-      all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        URL = original_url_raw, # Store raw original URL
-        Permutation = unique_permutations,
-        stringsAsFactors = FALSE
-      )
-    } else {
-       all_permutations[[length(all_permutations) + 1]] <- data.frame(
-        URL = original_url_raw, # Store raw original URL
-        Permutation = NA_character_,
-        stringsAsFactors = FALSE
-      )
+    if (length(unique_permutations) == 0) {
+      unique_permutations <- NA_character_
     }
-  }
 
-  if (length(all_permutations) == 0) {
-    return(data.frame(URL = character(0), Permutation = character(0), stringsAsFactors = FALSE))
-  }
+    data.frame(
+      URL = original_url_raw,
+      Permutation = unique_permutations,
+      stringsAsFactors = FALSE
+    )
+  })
 
-  final_df <- do.call(rbind, all_permutations)
-  final_df <- unique(final_df) 
-  rownames(final_df) <- NULL   
-  return(final_df)
-} 
+  final_df <- unique(do.call(rbind, all_permutations))
+  rownames(final_df) <- NULL
+  final_df
+}

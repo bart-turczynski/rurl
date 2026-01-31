@@ -93,8 +93,18 @@ and derives components like the registered domain and top-level domain (TLD).
 Results are memoized for performance when processing large datasets.
 }
 \examples{
-safe_parse_url("http://www.Example.com/Path?q=1#Frag", protocol_handling = "keep", case_handling = "lower")
-safe_parse_url("Example.com/Another", protocol_handling = "none", www_handling = "keep", case_handling = "upper", trailing_slash_handling = "keep")
+safe_parse_url(
+  "http://www.Example.com/Path?q=1#Frag",
+  protocol_handling = "keep",
+  case_handling = "lower"
+)
+safe_parse_url(
+  "Example.com/Another",
+  protocol_handling = "none",
+  www_handling = "keep",
+  case_handling = "upper",
+  trailing_slash_handling = "keep"
+)
 safe_parse_url("example.com", www_handling = "if_no_subdomain") # -> www.example.com
 safe_parse_url("sub.example.com", www_handling = "if_no_subdomain") # -> sub.example.com
 safe_parse_url("www1.example.com", www_handling = "if_no_subdomain") # -> www.example.com
@@ -104,7 +114,15 @@ safe_parse_url("192.168.1.1/test")
 safe_parse_url("ftp://user:pass@ftp.example.co.uk:21/file.txt")
 safe_parse_url("http://deep.sub.domain.example.com", subdomain_levels_to_keep = 0)
 safe_parse_url("http://deep.sub.domain.example.com", subdomain_levels_to_keep = 1)
-safe_parse_url("http://www.deep.sub.domain.example.com", www_handling = "keep", subdomain_levels_to_keep = 0)
-safe_parse_url("http://www.deep.sub.domain.example.com", www_handling = "keep", subdomain_levels_to_keep = 1)
+safe_parse_url(
+  "http://www.deep.sub.domain.example.com",
+  www_handling = "keep",
+  subdomain_levels_to_keep = 0
+)
+safe_parse_url(
+  "http://www.deep.sub.domain.example.com",
+  www_handling = "keep",
+  subdomain_levels_to_keep = 1
+)
 }
 \keyword{internal}
