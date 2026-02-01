@@ -202,17 +202,28 @@ safe_parse_url <- function(url,
   allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
   original_url_lower <- stringi::stri_trans_tolower(url)
   original_has_allowed_scheme <- any(startsWith(original_url_lower, allowed_prefixes))
-  original_looks_like_protocol <- stringi::stri_detect_regex(url, "^[a-zA-Z][a-zA-Z0-9+.-]*:")
-  if (is.na(original_looks_like_protocol)) original_looks_like_protocol <- FALSE
+
+  scheme_match <- stringi::stri_match_first_regex(url, "^([a-zA-Z][a-zA-Z0-9+.-]*):")
+  scheme_candidate <- if (!is.na(scheme_match[1, 2])) scheme_match[1, 2] else NA_character_
+  original_looks_like_protocol <- !is.na(scheme_candidate)
+  has_explicit_scheme_with_slashes <- stringi::stri_detect_regex(url, "^([a-zA-Z][a-zA-Z0-9+.-]*):\\/\\/")
+  if (is.na(has_explicit_scheme_with_slashes)) has_explicit_scheme_with_slashes <- FALSE
+
+  looks_like_host_port <- FALSE
+  if (original_looks_like_protocol && !original_has_allowed_scheme && !has_explicit_scheme_with_slashes) {
+    looks_like_host_port <- stringi::stri_detect_regex(url, "^[^/]+:[0-9]+($|/)")
+    if (is.na(looks_like_host_port)) looks_like_host_port <- FALSE
+  }
 
   if ((protocol_handling == "keep" || protocol_handling == "none") &&
       original_looks_like_protocol &&
-      !original_has_allowed_scheme) {
+      !original_has_allowed_scheme &&
+      !looks_like_host_port) {
     return(NULL)
   }
 
   url_to_parse <- url
-  if (!original_looks_like_protocol) {
+  if (!original_looks_like_protocol || looks_like_host_port) {
     url_to_parse <- paste0("http://", url)
   }
 
@@ -427,24 +438,51 @@ safe_parse_url <- function(url,
     }
   }
 
-  clean_url <- NA_character_
-  if (!is.na(host_for_clean) && host_for_clean != "") {
-    scheme_part <- if (!is.na(final_scheme)) paste0(final_scheme, "://") else ""
-    path_part <- if (!is.na(path_final)) path_final else ""
-    clean_url_pre_case <- paste0(scheme_part, host_for_clean, path_part)
+  host_output <- host_for_clean
+  path_output <- path_final
+  scheme_output <- final_scheme
 
-    clean_url <- switch(
+  if (!is.na(host_output) && host_output != "") {
+    host_output <- switch(
       case_handling,
-      lower = stringi::stri_trans_tolower(clean_url_pre_case),
-      upper = stringi::stri_trans_toupper(clean_url_pre_case),
-      lower_host = {
-        scheme_lower <- if (!is.na(final_scheme)) stringi::stri_trans_tolower(final_scheme) else NA_character_
-        scheme_lower_part <- if (!is.na(scheme_lower)) paste0(scheme_lower, "://") else ""
-        host_lower <- stringi::stri_trans_tolower(host_for_clean)
-        paste0(scheme_lower_part, host_lower, path_part)
-      },
-      keep = clean_url_pre_case
+      lower = stringi::stri_trans_tolower(host_output),
+      upper = stringi::stri_trans_toupper(host_output),
+      lower_host = stringi::stri_trans_tolower(host_output),
+      keep = {
+        if (stringi::stri_enc_isascii(host_output)) {
+          stringi::stri_trans_tolower(host_output)
+        } else {
+          host_output
+        }
+      }
     )
+  }
+
+  if (!is.na(path_output)) {
+    path_output <- switch(
+      case_handling,
+      lower = stringi::stri_trans_tolower(path_output),
+      upper = stringi::stri_trans_toupper(path_output),
+      lower_host = path_output,
+      keep = path_output
+    )
+  }
+
+  if (!is.na(scheme_output)) {
+    scheme_output <- switch(
+      case_handling,
+      lower = stringi::stri_trans_tolower(scheme_output),
+      upper = stringi::stri_trans_toupper(scheme_output),
+      lower_host = stringi::stri_trans_tolower(scheme_output),
+      keep = scheme_output
+    )
+  }
+
+  clean_url <- NA_character_
+  if (!is.na(host_output) && host_output != "") {
+    scheme_part <- if (!is.na(scheme_output)) paste0(scheme_output, "://") else ""
+    path_part <- if (!is.na(path_output)) path_output else ""
+    clean_url <- paste0(scheme_part, host_output, path_part)
   }
 
   parse_status <- "error"
@@ -476,10 +514,10 @@ safe_parse_url <- function(url,
 
   list(
     original_url = original_input_url,
-    scheme = final_scheme,
-    host = if (is.na(final_host) || final_host == "") NA_character_ else final_host,
+    scheme = scheme_output,
+    host = if (is.na(host_output) || host_output == "") NA_character_ else host_output,
     port = parsed_curl$port %||% NA_integer_,
-    path = path_final,
+    path = path_output,
     query = raw_query %||% NA_character_,
     fragment = parsed_curl$fragment %||% NA_character_,
     user = parsed_curl$user %||% NA_character_,

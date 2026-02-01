@@ -88,7 +88,7 @@ get_clean_url("ftp://Sub.Example.ORG/anotherPath",
               www_handling = "keep",       # Ensures www.
               case_handling = "upper",     # Converts to uppercase
               trailing_slash_handling = "keep") # Ensures trailing slash
-#> [1] "WWW.EXAMPLE.ORG/ANOTHERPATH/"
+#> [1] "WWW.SUB.EXAMPLE.ORG/ANOTHERPATH/"
 
 get_clean_url("example.com:8080/path", trailing_slash_handling = "keep")
 #> [1] "http://example.com/path/" # Port is not part of clean_url by default
@@ -118,12 +118,15 @@ get_parse_status("mailto:test@example.com")
 #> [1] "error"
 get_parse_status("http://example.com")
 #> [1] "ok"
+```
 
 # Handling Subdomain Levels
 
-Functions like `get_host()` and `get_clean_url()` also support the `subdomain_levels_to_keep` argument.
-This provides control over how many subdomain levels are kept in the host *after* `www_handling`.
+Functions like `get_host()` and `get_clean_url()` also support the
+`subdomain_levels_to_keep` argument. This provides control over how many
+subdomain levels are kept in the host *after* `www_handling`.
 
+``` r
 # `NULL` (default): keeps all subdomains (beyond www handling).
 # `0`: strips all subdomains (e.g., `one.two.example.com` becomes `example.com`).
 # `N > 0`: keeps N levels of subdomains (e.g., `one.two.example.com` with N=1 becomes `two.example.com`).

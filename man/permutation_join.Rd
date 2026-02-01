@@ -10,7 +10,8 @@ permutation_join(
   col_A = "URL",
   col_B = "URL",
   suffix_A = "_A",
-  suffix_B = "_B"
+  suffix_B = "_B",
+  ...
 )
 }
 \arguments{
@@ -30,6 +31,11 @@ join keys and specially created columns like OriginalURL_A). Defaults to "_A".}
 
 \item{suffix_B}{Character string, suffix to add to `data_B` column names
 in the output if they conflict with `data_A` column names. Defaults to "_B".}
+
+\item{...}{Additional arguments forwarded to [permute_url()], enabling control
+over all URL cleaning/permutation options (e.g., `protocol_handling`,
+`www_handling`, `case_handling`, `trailing_slash_handling`,
+`subdomain_levels_to_keep`, `host_encoding`, `path_encoding`).}
 }
 \value{
 A data frame representing the join. Each row signifies a unique pair of
@@ -51,7 +57,8 @@ A data frame representing the join. Each row signifies a unique pair of
 Performs a join between two data frames based on URL permutations.
 It identifies rows in `data_A` and `data_B` that can be linked because
 a URL in one is a permutation of a URL in the other (considering variations
-in scheme, www prefix, and trailing slashes).
+across all supported cleaning options such as scheme, www handling, case,
+trailing slashes, subdomain stripping, and host/path encoding).
 This version aims to use primarily base R functions.
 }
 \examples{

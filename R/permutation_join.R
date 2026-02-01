@@ -3,7 +3,8 @@
 #' Performs a join between two data frames based on URL permutations.
 #' It identifies rows in `data_A` and `data_B` that can be linked because
 #' a URL in one is a permutation of a URL in the other (considering variations
-#' in scheme, www prefix, and trailing slashes).
+#' across all supported cleaning options such as scheme, www handling, case,
+#' trailing slashes, subdomain stripping, and host/path encoding).
 #' This version aims to use primarily base R functions.
 #'
 #' @param data_A A data frame containing URLs for the left side of the join.
@@ -17,6 +18,10 @@
 #'   join keys and specially created columns like OriginalURL_A). Defaults to "_A".
 #' @param suffix_B Character string, suffix to add to `data_B` column names
 #'   in the output if they conflict with `data_A` column names. Defaults to "_B".
+#' @param ... Additional arguments forwarded to [permute_url()], enabling control
+#'   over all URL cleaning/permutation options (e.g., `protocol_handling`,
+#'   `www_handling`, `case_handling`, `trailing_slash_handling`,
+#'   `subdomain_levels_to_keep`, `host_encoding`, `path_encoding`).
 #'
 #' @return A data frame representing the join. Each row signifies a unique pair of
 #'   rows (one from `data_A`, one from `data_B`) linked by a common URL
@@ -84,7 +89,8 @@
 #' # print(joined_std)
 permutation_join <- function(data_A, data_B,
                              col_A = "URL", col_B = "URL",
-                             suffix_A = "_A", suffix_B = "_B") {
+                             suffix_A = "_A", suffix_B = "_B",
+                             ...) {
 
   # --- Capture argument names for output columns ---
   name_A <- deparse(substitute(data_A))
@@ -134,7 +140,8 @@ permutation_join <- function(data_A, data_B,
   .prepare_data_for_join_base <- function(df, url_col_name_str,
                                           desired_original_url_col_name_str,
                                           internal_id_col_name_str,
-                                          permutation_key_col_name_str) {
+                                          permutation_key_col_name_str,
+                                          ...) {
     df_copy <- df 
     df_copy[[internal_id_col_name_str]] <- seq_len(nrow(df_copy))
 
@@ -142,7 +149,7 @@ permutation_join <- function(data_A, data_B,
 
     for (i in seq_len(nrow(df_copy))) {
       current_row_url <- df_copy[[url_col_name_str]][i]
-      perms_df_for_row <- permute_url(current_row_url)
+      perms_df_for_row <- permute_url(current_row_url, ...)
 
       if (is.data.frame(perms_df_for_row) && nrow(perms_df_for_row) > 0) {
         perms_df_for_row[[desired_original_url_col_name_str]] <- current_row_url
@@ -199,7 +206,8 @@ permutation_join <- function(data_A, data_B,
     df = data_A, url_col_name_str = col_A,
     desired_original_url_col_name_str = "OriginalURL_A",
     internal_id_col_name_str = id_col_A,
-    permutation_key_col_name_str = perm_key_A
+    permutation_key_col_name_str = perm_key_A,
+    ...
   )
 
   # --- Process data_B ---
@@ -209,7 +217,8 @@ permutation_join <- function(data_A, data_B,
     df = data_B, url_col_name_str = col_B,
     desired_original_url_col_name_str = "OriginalURL_B",
     internal_id_col_name_str = id_col_B,
-    permutation_key_col_name_str = perm_key_B
+    permutation_key_col_name_str = perm_key_B,
+    ...
   )
   
   if (nrow(data_A_expanded) == 0 || nrow(data_B_expanded) == 0) {
@@ -222,7 +231,8 @@ permutation_join <- function(data_A, data_B,
     by.x = perm_key_A,
     by.y = perm_key_B,
     suffixes = c(suffix_A, suffix_B),
-    all = FALSE # Inner join behavior
+    all = FALSE, # Inner join behavior
+    sort = FALSE # Preserve permutation generation order for deterministic JoinKey
   )
 
   # --- Deduplicate Connections ---
@@ -242,7 +252,7 @@ permutation_join <- function(data_A, data_B,
     result <- data.frame(
       setNames(list(final_joined_data$OriginalURL_A), name_A),
       setNames(list(final_joined_data$OriginalURL_B), name_B),
-      JoinKey = final_joined_data$OriginalURL_A, # JoinKey is Original URL from A
+      JoinKey = final_joined_data$JoinKey,
       stringsAsFactors = FALSE
     )
 

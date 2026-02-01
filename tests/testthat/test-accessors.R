@@ -6,6 +6,20 @@ test_that("get_clean_url returns expected values", {
   )
 })
 
+test_that("get_clean_url lowercases host but preserves path casing by default", {
+  expect_equal(
+    unname(get_clean_url("Http://Example.Com/MyPath/")),
+    "http://example.com/MyPath/"
+  )
+})
+
+test_that("get_clean_url handles host:port without explicit scheme", {
+  expect_equal(
+    unname(get_clean_url("example.com:8080/path", trailing_slash_handling = "keep")),
+    "http://example.com/path/"
+  )
+})
+
 test_that("get_domain works with subdomains", {
   expect_equal(unname(get_domain("https://sub.example.co.uk")), "example.co.uk")
   expect_equal(unname(get_domain("http://localhost")), NA_character_)
@@ -77,6 +91,7 @@ test_that("get_scheme returns NA when parsing fails", {
 test_that("get_host extracts host or returns NA", {
   expect_equal(unname(get_host("http://example.com/path")), "example.com")
   expect_equal(unname(get_host("https://sub.domain.org/")), "sub.domain.org")
+  expect_equal(unname(get_host("Http://User:Pass@MyHost.Com:8080/SomeWhere")), "myhost.com")
   expect_true(is.na(get_host("mailto:user@example.com")))
   expect_true(is.na(get_host("not a url")))
 })
@@ -84,6 +99,7 @@ test_that("get_host extracts host or returns NA", {
 test_that("get_path extracts path or returns NA", {
   expect_equal(unname(get_path("http://example.com/test")), "/test")
   expect_equal(unname(get_path("https://x.org/hello/world")), "/hello/world")
+  expect_equal(unname(get_path("HTTP://EXAMPLE.NET/A/B/C/?p=1")), "/a/b/c/")
   expect_true(is.na(get_path("mailto:user@example.com")))
   expect_true(is.na(get_path("not a url")))
 })
@@ -359,6 +375,15 @@ test_that("permute_url handles specific error/edge conditions from parsing", {
 test_that("permute_url generates expected permutations for various URL types", {
   # Case 1: Root domain
   input_root <- "test.com"
+  perm_args <- list(
+    protocol_handling = c("strip", "http", "https"),
+    www_handling = c("strip", "keep"),
+    case_handling = "keep",
+    trailing_slash_handling = c("none", "keep"),
+    subdomain_levels_to_keep = list(NULL),
+    host_encoding = "keep",
+    path_encoding = "keep"
+  )
   expected_perms_root <- sort(c(
     "test.com", "test.com/",
     "http://test.com", "http://test.com/",
@@ -367,7 +392,7 @@ test_that("permute_url generates expected permutations for various URL types", {
     "http://www.test.com", "http://www.test.com/",
     "https://www.test.com", "https://www.test.com/"
   ))
-  result_root <- permute_url(input_root)
+  result_root <- do.call(permute_url, c(list(input_root), perm_args))
   expect_equal(nrow(result_root), 12)
   expect_equal(sort(result_root$Permutation), expected_perms_root)
   expect_true(all(result_root$URL == input_root))
@@ -388,7 +413,7 @@ test_that("permute_url generates expected permutations for various URL types", {
     "https://www.test.com/folder/subfolder/path?parameter=value",
     "https://www.test.com/folder/subfolder/path/?parameter=value"
   ))
-  result_path <- permute_url(input_path)
+  result_path <- do.call(permute_url, c(list(input_path), perm_args))
   expect_equal(nrow(result_path), 12)
   expect_equal(sort(result_path$Permutation), expected_perms_path)
   expect_true(all(result_path$URL == input_path))
@@ -404,7 +429,7 @@ test_that("permute_url generates expected permutations for various URL types", {
     "http://www.παράδειγμα.ελ", "http://www.παράδειγμα.ελ/",
     "https://www.παράδειγμα.ελ", "https://www.παράδειγμα.ελ/"
   ))
-  result_idn <- permute_url(input_idn)
+  result_idn <- do.call(permute_url, c(list(input_idn), perm_args))
   expect_equal(nrow(result_idn), 12)
   expect_equal(sort(result_idn$Permutation), expected_perms_idn)
   expect_true(all(result_idn$URL == input_idn))
@@ -419,7 +444,7 @@ test_that("permute_url generates expected permutations for various URL types", {
     "http://www.another.com/test/page.html", "http://www.another.com/test/page.html/",
     "https://www.another.com/test/page.html", "https://www.another.com/test/page.html/"
   ))
-  result_full <- permute_url(input_full)
+  result_full <- do.call(permute_url, c(list(input_full), perm_args))
   expect_equal(nrow(result_full), 12)
   expect_equal(sort(result_full$Permutation), expected_perms_full)
   expect_true(all(result_full$URL == input_full))
@@ -442,7 +467,7 @@ test_that("permute_url generates expected permutations for various URL types", {
 
   # Case 8: Multiple URLs including one that would result in NA
   input_multiple <- c("ok.com", "")
-  result_multiple <- permute_url(input_multiple)
+  result_multiple <- do.call(permute_url, c(list(input_multiple), perm_args))
   expect_equal(nrow(result_multiple), 12 + 1) # 12 for ok.com, 1 for empty string
   expect_equal(sum(result_multiple$URL == "ok.com"), 12)
   expect_true(is.na(result_multiple$Permutation[result_multiple$URL == ""]))

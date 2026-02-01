@@ -29,7 +29,7 @@ empty_df <- data.frame(URL = character(0), OtherCol = character(0), stringsAsFac
 # --- Test Cases ---
 
 test_that("permutation_join works with a basic match", {
-  res <- permutation_join(A_data_match, B_data_match)
+  res <- permutation_join(A_data_match, B_data_match, protocol_handling = c("http", "https"))
 
   expect_s3_class(res, "data.frame")
   expect_named(res, c("A_data_match", "B_data_match", "JoinKey", "OtherColA_A", "OtherColB_B"), ignore.order = TRUE)
@@ -132,7 +132,7 @@ test_that("permutation_join handles custom URL column names", {
   A_custom_col <- data.frame(MyURL_A = "http://example.com/custom_a", OtherColA = "valA", stringsAsFactors = FALSE)
   B_custom_col <- data.frame(MyURL_B = "http://example.com/custom_a", OtherColB = "valB", stringsAsFactors = FALSE)
 
-  res <- permutation_join(A_custom_col, B_custom_col, col_A = "MyURL_A", col_B = "MyURL_B")
+  res <- permutation_join(A_custom_col, B_custom_col, col_A = "MyURL_A", col_B = "MyURL_B", protocol_handling = c("http", "https"))
 
   expect_s3_class(res, "data.frame")
   expect_named(res, c("A_custom_col", "B_custom_col", "JoinKey", "OtherColA_A", "OtherColB_B"), ignore.order = TRUE)
@@ -143,7 +143,7 @@ test_that("permutation_join handles custom URL column names", {
 })
 
 test_that("permutation_join handles custom suffixes", {
-  res <- permutation_join(A_data_match, B_data_match, suffix_A = ".left", suffix_B = ".right")
+  res <- permutation_join(A_data_match, B_data_match, suffix_A = ".left", suffix_B = ".right", protocol_handling = c("http", "https"))
   expect_named(res, c("A_data_match", "B_data_match", "JoinKey", "OtherColA.left", "OtherColB.right"), ignore.order = TRUE)
   expect_equal(nrow(res), 1)
   expect_equal(res$"OtherColA.left"[1], "valA1")
