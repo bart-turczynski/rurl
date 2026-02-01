@@ -4,27 +4,71 @@
 \alias{permute_url}
 \title{Permute URL Variants}
 \usage{
-permute_url(urls)
+permute_url(
+  urls,
+  protocol_handling = eval(formals(safe_parse_url)$protocol_handling),
+  www_handling = eval(formals(safe_parse_url)$www_handling),
+  case_handling = eval(formals(safe_parse_url)$case_handling),
+  trailing_slash_handling = eval(formals(safe_parse_url)$trailing_slash_handling),
+  subdomain_levels_to_keep = list(NULL),
+  host_encoding = eval(formals(safe_parse_url)$host_encoding),
+  path_encoding = eval(formals(safe_parse_url)$path_encoding)
+)
 }
 \arguments{
 \item{urls}{A character vector of URLs.}
+
+\item{protocol_handling}{Vector of protocol options passed to
+[safe_parse_url()]. Defaults to all supported values.}
+
+\item{www_handling}{Vector of www-handling options passed to
+[safe_parse_url()]. Defaults to all supported values.}
+
+\item{case_handling}{Vector of case-handling options passed to
+[safe_parse_url()]. Defaults to all supported values.}
+
+\item{trailing_slash_handling}{Vector of trailing-slash options passed to
+[safe_parse_url()]. Defaults to all supported values.}
+
+\item{subdomain_levels_to_keep}{Vector or list of values for
+`subdomain_levels_to_keep`. Use `NULL` to keep all subdomains (default).
+Values must be non-negative integers or `NULL`.}
+
+\item{host_encoding}{Vector of host-encoding options passed to
+[safe_parse_url()]. Defaults to all supported values.}
+
+\item{path_encoding}{Vector of path-encoding options passed to
+[safe_parse_url()]. Defaults to all supported values.}
 }
 \value{
 A data.frame with two columns: `URL` (the input URL) and
   `Permutation` (the generated URL variant).
 }
 \description{
-Generates various permutations of a URL, altering scheme, www prefix, and trailing slash.
+Generates permutations of a URL across all supported cleaning options
+(scheme handling, www handling, case handling, trailing slashes,
+subdomain stripping, host encoding, and path encoding).
 }
 \details{
-As an SEO expert I need to create altenative variants of URLs for joining data.frames,
-comparing reports, etc. Various tools may report URLs in various formats:
-with or without the protocol, with or without www, and with http or https
-as the protocol and with or without the trailing slash.
+Each argument can be supplied as a single value or a vector of values; the
+Cartesian product of all supplied values is evaluated, and duplicates are
+removed from the final result. Use narrower argument sets to reduce the
+number of generated variants for large datasets.
 }
 \examples{
-permute_url("example.com/path?query=1")
-permute_url(c("http://www.test.co.uk/one", "another.com/two/"))
-permute_url("example.com")
-permute_url("test.com/folder/subfolder/path?parameter=value")
+# Generate a compact set of permutations
+permute_url(
+  "Example.com/path",
+  protocol_handling = c("http", "https"),
+  www_handling = c("none", "keep"),
+  trailing_slash_handling = c("none", "keep"),
+  case_handling = c("keep", "lower")
+)
+
+# Include punycode/unicode host variants (ASCII punycode input)
+permute_url(
+  "xn--hxajbheg2az3al.xn--qxam", # punycode for a Greek IDN
+  host_encoding = c("keep", "idna", "unicode"),
+  path_encoding = c("keep", "encode")
+)
 }
