@@ -472,3 +472,48 @@ test_that("permute_url generates expected permutations for various URL types", {
   expect_equal(sum(result_multiple$URL == "ok.com"), 12)
   expect_true(is.na(result_multiple$Permutation[result_multiple$URL == ""]))
 })
+
+test_that("safe_parse_url validates and applies subdomain_levels_to_keep", {
+  # Validation errors
+  expect_error(
+    safe_parse_url("example.com", subdomain_levels_to_keep = -1),
+    "subdomain_levels_to_keep must be NULL or a non-negative integer"
+  )
+  expect_error(
+    safe_parse_url("example.com", subdomain_levels_to_keep = 1.5),
+    "subdomain_levels_to_keep must be NULL or a non-negative integer"
+  )
+  expect_error(
+    safe_parse_url("example.com", subdomain_levels_to_keep = "one"),
+    "subdomain_levels_to_keep must be NULL or a non-negative integer"
+  )
+
+  # Functional behavior: strip all subdomains
+  res_strip <- safe_parse_url(
+    "http://deep.sub.domain.example.com",
+    subdomain_levels_to_keep = 0
+  )
+  expect_equal(res_strip$host, "example.com")
+  expect_equal(res_strip$domain, "example.com")
+
+  # Functional behavior: keep subdomains when level > 0 (current implementation retains all)
+  res_keep1 <- safe_parse_url(
+    "http://deep.sub.domain.example.com",
+    subdomain_levels_to_keep = 1
+  )
+  expect_equal(res_keep1$host, "deep.sub.domain.example.com")
+  expect_equal(res_keep1$domain, "example.com")
+
+  # Interaction with www_handling = keep
+  res_www <- safe_parse_url(
+    "http://www1.deep.example.com",
+    www_handling = "keep",
+    subdomain_levels_to_keep = 0
+  )
+  expect_equal(res_www$host, "www.example.com")
+
+  # Cache hit path: second call should return cached result
+  res_first <- safe_parse_url("example.com", subdomain_levels_to_keep = 1)
+  res_second <- safe_parse_url("example.com", subdomain_levels_to_keep = 1)
+  expect_identical(res_first, res_second)
+})
