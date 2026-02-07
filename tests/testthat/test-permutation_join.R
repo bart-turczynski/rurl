@@ -128,6 +128,18 @@ test_that("permutation_join warns for URL columns of incorrect type", {
   expect_equal(nrow(res), 0)
 })
 
+test_that("permutation_join warns for data_B URL column of incorrect type", {
+  B_URL_not_char <- data.frame(URL = 321, OtherColB = "valB", stringsAsFactors = FALSE)
+
+  expect_warning(
+    res <- permutation_join(A_data_match, B_URL_not_char),
+    regexp = "Column 'URL' in data_B must be character or factor."
+  )
+  expect_s3_class(res, "data.frame")
+  expect_equal(length(names(res)), 0)
+  expect_equal(nrow(res), 0)
+})
+
 test_that("permutation_join handles custom URL column names", {
   A_custom_col <- data.frame(MyURL_A = "http://example.com/custom_a", OtherColA = "valA", stringsAsFactors = FALSE)
   B_custom_col <- data.frame(MyURL_B = "http://example.com/custom_a", OtherColB = "valB", stringsAsFactors = FALSE)
@@ -140,6 +152,24 @@ test_that("permutation_join handles custom URL column names", {
   expect_equal(res$A_custom_col[1], "http://example.com/custom_a")
   expect_equal(res$JoinKey[1], "http://example.com/custom_a")
   expect_equal(res$OtherColA_A[1], "valA")
+})
+
+test_that("permutation_join handles overlapping column names with .x/.y merge suffixes", {
+  A_dup <- data.frame(URL = "http://example.com/path", Shared = "left", stringsAsFactors = FALSE)
+  B_dup <- data.frame(URL = "example.com/path/", Shared = "right", stringsAsFactors = FALSE)
+
+  res <- permutation_join(
+    A_dup, B_dup,
+    suffix_A = ".x", suffix_B = ".y",
+    protocol_handling = c("http", "https"),
+    trailing_slash_handling = "strip"
+  )
+
+  expect_s3_class(res, "data.frame")
+  expect_equal(nrow(res), 1)
+  expect_true(all(c("Shared.x", "Shared.y") %in% names(res)))
+  expect_equal(res$Shared.x, "left")
+  expect_equal(res$Shared.y, "right")
 })
 
 test_that("permutation_join handles custom suffixes", {
