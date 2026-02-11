@@ -8,7 +8,8 @@ get_domain(
   url,
   protocol_handling = "keep",
   www_handling = "none",
-  subdomain_levels_to_keep = NULL
+  subdomain_levels_to_keep = NULL,
+  source = c("all", "private", "icann")
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ in addition to any 'www.' prefix handled by `www_handling`.
        in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
        'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
 }}
+
+\item{source}{Which PSL source to use: "all", "private", or "icann".}
 }
 \value{
 A character vector of domain names.

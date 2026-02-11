@@ -8,7 +8,8 @@ get_host(
   url,
   protocol_handling = "keep",
   www_handling = "none",
-  subdomain_levels_to_keep = NULL
+  subdomain_levels_to_keep = NULL,
+  case_handling = c("lower", "keep", "upper", "lower_host")
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ in addition to any 'www.' prefix handled by `www_handling`.
        in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
        'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
 }}
+
+\item{case_handling}{How to handle casing of the returned host. Defaults to "lower".}
 }
 \value{
 A character vector of URL hosts.

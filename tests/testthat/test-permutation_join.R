@@ -73,6 +73,26 @@ test_that("permutation_join handles both inputs empty", {
   expect_equal(nrow(res), 0)
 })
 
+test_that("permutation_join preserves column types for empty results", {
+  empty_A <- data.frame(
+    URL = character(0),
+    Num = integer(0),
+    Flag = logical(0),
+    stringsAsFactors = FALSE
+  )
+  empty_B <- data.frame(
+    URL = character(0),
+    Score = numeric(0),
+    stringsAsFactors = FALSE
+  )
+
+  res <- permutation_join(empty_A, empty_B)
+  expect_s3_class(res, "data.frame")
+  expect_true(is.integer(res$Num_A))
+  expect_true(is.logical(res$Flag_A))
+  expect_true(is.double(res$Score_B))
+})
+
 test_that("permutation_join warns and returns empty structure for non-data.frame inputs", {
   # Test with data_A as non-df
   expect_warning(
@@ -234,4 +254,102 @@ test_that("permutation_join works with piped inputs", {
   # (e.g. OtherColA_A or OtherColA_., OtherColB_B)
   expect_true(any(grepl("OtherColA", names(result))))
   expect_true(any(grepl("OtherColB", names(result))))
-}) 
+})
+
+test_that("permutation_join selects deterministic best JoinKey", {
+  A <- data.frame(URL = "http://example.com/page", stringsAsFactors = FALSE)
+  B <- data.frame(URL = "https://www.example.com/page/", stringsAsFactors = FALSE)
+
+  res <- permutation_join(
+    A, B,
+    protocol_handling = c("https", "http"),
+    www_handling = c("keep", "strip"),
+    trailing_slash_handling = c("keep", "strip")
+  )
+
+  expect_equal(nrow(res), 1)
+  expect_equal(res$JoinKey[1], "https://www.example.com/page/")
+})
+
+test_that("permutation_join can return all matches", {
+  A <- data.frame(URL = "http://example.com/page", stringsAsFactors = FALSE)
+  B <- data.frame(URL = "https://www.example.com/page/", stringsAsFactors = FALSE)
+
+  res_all <- permutation_join(
+    A, B,
+    keep = "all",
+    protocol_handling = c("https", "http"),
+    www_handling = c("keep", "strip"),
+    trailing_slash_handling = c("keep", "strip")
+  )
+
+  expect_true(nrow(res_all) > 1)
+  expect_true(length(unique(res_all$JoinKey)) > 1)
+})
+
+test_that("permutation_join can include join rank", {
+  A <- data.frame(URL = "http://example.com/page", stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://example.com/page/", stringsAsFactors = FALSE)
+
+  res <- permutation_join(
+    A, B,
+    include_join_rank = TRUE,
+    protocol_handling = c("http", "https"),
+    www_handling = c("none", "strip"),
+    case_handling = "keep",
+    trailing_slash_handling = c("keep", "strip"),
+    index_page_handling = "keep",
+    path_normalization = "none",
+    scheme_relative_handling = "keep",
+    subdomain_levels_to_keep = list(NULL),
+    host_encoding = "keep",
+    path_encoding = "keep"
+  )
+
+  expect_true("JoinKeyRank" %in% names(res))
+  expect_equal(nrow(res), 1)
+  expect_true(is.integer(res$JoinKeyRank) || is.numeric(res$JoinKeyRank))
+})
+
+test_that("permutation_join warns when include_rank is passed in dots", {
+  A <- data.frame(URL = "http://example.com/page", stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://example.com/page/", stringsAsFactors = FALSE)
+
+  expect_warning(
+    permutation_join(
+      A, B,
+      include_rank = TRUE,
+      protocol_handling = "http",
+      www_handling = "none",
+      case_handling = "keep",
+      trailing_slash_handling = "keep",
+      index_page_handling = "keep",
+      path_normalization = "none",
+      scheme_relative_handling = "keep",
+      subdomain_levels_to_keep = list(NULL),
+      host_encoding = "keep",
+      path_encoding = "keep"
+    ),
+    "include_rank"
+  )
+})
+
+test_that("permutation_join handles empty permutation outputs", {
+  A <- data.frame(URL = "http://example.com/page", stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://example.com/page/", stringsAsFactors = FALSE)
+
+  ns <- asNamespace("rurl")
+  orig <- get("permute_url", envir = ns)
+  was_locked <- bindingIsLocked("permute_url", ns)
+  if (was_locked) unlockBinding("permute_url", ns)
+  withr::defer({
+    assign("permute_url", orig, envir = ns)
+    if (was_locked) lockBinding("permute_url", ns)
+  }, testthat::teardown_env())
+
+  assign("permute_url", function(...) data.frame(), envir = ns)
+
+  res <- permutation_join(A, B)
+  expect_s3_class(res, "data.frame")
+  expect_equal(nrow(res), 0)
+})

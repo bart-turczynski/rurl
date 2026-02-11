@@ -6,10 +6,10 @@ test_that("get_clean_url returns expected values", {
   )
 })
 
-test_that("get_clean_url lowercases host but preserves path casing by default", {
+test_that("get_clean_url preserves host casing by default", {
   expect_equal(
     unname(get_clean_url("Http://Example.Com/MyPath/")),
-    "http://example.com/MyPath/"
+    "http://Example.Com/MyPath/"
   )
 })
 
@@ -62,6 +62,29 @@ test_that("safe_parse_url returns NULL for NA, non-character, or empty input", {
   expect_null(safe_parse_url(12345))
 })
 
+test_that("safe_parse_url enforces scalar input", {
+  expect_error(
+    safe_parse_url(c("example.com", "test.com")),
+    "single URL"
+  )
+})
+
+test_that("safe_parse_urls returns a data.frame with expected fields", {
+  res <- safe_parse_urls(c("example.com", "//example.org/path", NA_character_))
+  expect_s3_class(res, "data.frame")
+  expect_true(all(c("original_url", "host", "clean_url", "parse_status") %in% names(res)))
+  expect_equal(res$host[1], "example.com")
+  expect_equal(res$clean_url[2], "http://example.org/path")
+  expect_equal(res$parse_status[3], "error")
+})
+
+test_that("safe_parse_url handles protocol-relative URLs", {
+  res <- safe_parse_url("//example.com/path")
+  expect_equal(res$clean_url, "http://example.com/path")
+  expect_true(is.na(res$scheme))
+  expect_equal(res$parse_status, "ok-scheme-relative")
+})
+
 test_that("get_parse_status returns error for parseable but unsupported schemes", {
   expect_equal(unname(get_parse_status("ws://example.com")), "error")
 })
@@ -96,12 +119,49 @@ test_that("get_host extracts host or returns NA", {
   expect_true(is.na(get_host("not a url")))
 })
 
+test_that("get_host respects case_handling", {
+  expect_equal(unname(get_host("http://Example.Com", case_handling = "upper")), "EXAMPLE.COM")
+})
+
 test_that("get_path extracts path or returns NA", {
   expect_equal(unname(get_path("http://example.com/test")), "/test")
   expect_equal(unname(get_path("https://x.org/hello/world")), "/hello/world")
   expect_equal(unname(get_path("HTTP://EXAMPLE.NET/A/B/C/?p=1")), "/a/b/c/")
   expect_true(is.na(get_path("mailto:user@example.com")))
   expect_true(is.na(get_path("not a url")))
+})
+
+test_that("get_path respects case_handling", {
+  expect_equal(unname(get_path("http://example.com/MyPath", case_handling = "keep")), "/MyPath")
+})
+
+test_that("get_query returns string or parsed list", {
+  expect_equal(unname(get_query("http://example.com/path?a=1&b=2")), "a=1&b=2")
+  parsed <- get_query("http://example.com/path?a=1&a=2&b=3", format = "list")
+  expect_true(is.list(parsed))
+  expect_equal(parsed[[1]]$a, c("1", "2"))
+  expect_equal(parsed[[1]]$b, "3")
+})
+
+test_that("get_fragment, get_port, get_user, get_password, get_userinfo work", {
+  expect_equal(unname(get_fragment("http://example.com/path#frag")), "frag")
+  expect_equal(unname(get_port("http://example.com:8080/path")), 8080L)
+  expect_equal(unname(get_user("http://user:pass@example.com")), "user")
+  expect_equal(unname(get_password("http://user:pass@example.com")), "pass")
+  expect_equal(unname(get_userinfo("http://user:pass@example.com")), "user:pass")
+})
+
+test_that("get_domain respects PSL source options", {
+  expect_equal(unname(get_domain("http://sub.blogspot.com", source = "all")), "sub.blogspot.com")
+  expect_equal(unname(get_domain("http://sub.blogspot.com", source = "private")), "sub.blogspot.com")
+  expect_equal(unname(get_domain("http://sub.blogspot.com", source = "icann")), "blogspot.com")
+})
+
+test_that("get_subdomain returns expected values", {
+  expect_equal(unname(get_subdomain("http://www.blog.example.co.uk")), "blog")
+  expect_equal(unname(get_subdomain("http://www.blog.example.co.uk", include_www = TRUE)), "www.blog")
+  labels <- get_subdomain("http://www.blog.example.co.uk", format = "labels")
+  expect_equal(labels[[1]], c("blog"))
 })
 
 test_that(".get_registered_domain handles known cases correctly", {
@@ -263,6 +323,40 @@ test_that("path_encoding decode and encode work as expected", {
   res_encode <- safe_parse_url("http://example.com/a%20b", path_encoding = "encode", case_handling = "keep")
   expect_equal(res_encode$path, "/a%20b")
   expect_equal(res_encode$clean_url, "http://example.com/a%20b")
+})
+
+test_that("path_normalization collapses slashes and resolves dot segments", {
+  res_slashes <- safe_parse_url("http://example.com//a///b", path_normalization = "collapse_slashes", case_handling = "keep")
+  expect_equal(res_slashes$path, "/a/b")
+
+  res_dot <- safe_parse_url("http://example.com/a/b/../c", path_normalization = "dot_segments", case_handling = "keep")
+  expect_equal(res_dot$path, "/a/c")
+})
+
+test_that("index_page_handling strips index/default pages", {
+  res_strip <- safe_parse_url("http://example.com/index.html", index_page_handling = "strip", trailing_slash_handling = "strip")
+  expect_equal(res_strip$path, "/")
+  expect_equal(res_strip$clean_url, "http://example.com")
+
+  res_strip_keep <- safe_parse_url("http://example.com/index.html/", index_page_handling = "strip", trailing_slash_handling = "keep")
+  expect_equal(res_strip_keep$path, "/")
+  expect_equal(res_strip_keep$clean_url, "http://example.com/")
+})
+
+test_that("trailing_slash_handling strips root slash in clean_url", {
+  res_strip <- safe_parse_url("http://example.com", trailing_slash_handling = "strip")
+  expect_equal(res_strip$path, "/")
+  expect_equal(res_strip$clean_url, "http://example.com")
+})
+
+test_that("scheme_relative_handling https forces https output", {
+  res_https <- safe_parse_url("//example.com/path", scheme_relative_handling = "https")
+  expect_equal(res_https$scheme, "https")
+  expect_equal(res_https$clean_url, "https://example.com/path")
+})
+
+test_that("scheme_relative_handling error rejects scheme-relative URLs", {
+  expect_null(safe_parse_url("//example.com/path", scheme_relative_handling = "error"))
 })
 
 test_that("host_encoding handles IDNA round-trips", {
@@ -471,6 +565,26 @@ test_that("permute_url generates expected permutations for various URL types", {
   expect_equal(nrow(result_multiple), 12 + 1) # 12 for ok.com, 1 for empty string
   expect_equal(sum(result_multiple$URL == "ok.com"), 12)
   expect_true(is.na(result_multiple$Permutation[result_multiple$URL == ""]))
+})
+
+test_that("permute_url validates option values strictly", {
+  expect_error(
+    permute_url("example.com", protocol_handling = "bogus"),
+    "Invalid values"
+  )
+})
+
+test_that("permute_url errors on mixed valid and invalid option values", {
+  expect_error(
+    permute_url("example.com", protocol_handling = c("http", "bogus")),
+    "Invalid values"
+  )
+})
+
+test_that("permute_url can include permutation rank", {
+  res <- permute_url("example.com", protocol_handling = "http", include_rank = TRUE)
+  expect_true("PermutationRank" %in% names(res))
+  expect_true(is.integer(res$PermutationRank) || is.numeric(res$PermutationRank))
 })
 
 test_that("safe_parse_url validates and applies subdomain_levels_to_keep", {

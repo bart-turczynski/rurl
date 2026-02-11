@@ -4,12 +4,18 @@
 \alias{get_path}
 \title{Get URL paths}
 \usage{
-get_path(url, protocol_handling = "keep")
+get_path(
+  url,
+  protocol_handling = "keep",
+  case_handling = c("lower", "keep", "upper", "lower_host")
+)
 }
 \arguments{
 \item{url}{A character vector of URLs.}
 
 \item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
+
+\item{case_handling}{How to handle casing of the returned path. Defaults to "lower".}
 }
 \value{
 A character vector of URL paths.

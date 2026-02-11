@@ -11,13 +11,17 @@ safe_parse_url(
   tld_source = c("all", "private", "icann"),
   case_handling = c("keep", "lower", "upper", "lower_host"),
   trailing_slash_handling = c("none", "keep", "strip"),
+  index_page_handling = c("keep", "strip"),
+  path_normalization = c("none", "collapse_slashes", "dot_segments", "both"),
+  scheme_relative_handling = c("keep", "http", "https", "error"),
   subdomain_levels_to_keep = NULL,
   host_encoding = c("keep", "idna", "unicode"),
   path_encoding = c("keep", "encode", "decode")
 )
 }
 \arguments{
-\item{url}{A character vector containing one or more URLs to be parsed.}
+\item{url}{A single URL string to be parsed. For vectors, use
+\code{\link{safe_parse_urls}}.}
 
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
@@ -58,6 +62,28 @@ trailing slashes in the path component of the cleaned URL. Defaults to "none".
   \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 }}
 
+\item{index_page_handling}{A character string specifying how to handle index/default pages. Defaults to "keep".
+\itemize{
+  \item{"keep": (Default) Leave index/default page segments untouched.}
+  \item{"strip": Remove a trailing index.* or default.* segment (case-insensitive).}
+}}
+
+\item{path_normalization}{How to normalize path structure. Defaults to "none".
+\itemize{
+  \item{"none": (Default) No normalization.}
+  \item{"collapse_slashes": Collapse duplicate slashes in the path.}
+  \item{"dot_segments": Resolve . and .. segments per RFC 3986.}
+  \item{"both": Apply both collapse_slashes and dot_segments.}
+}}
+
+\item{scheme_relative_handling}{How to handle URLs starting with "//". Defaults to "keep".
+\itemize{
+  \item{"keep": Parse using http but return scheme as NA and set status to "ok-scheme-relative".}
+  \item{"http": Assume http for parsing and output.}
+  \item{"https": Assume https for parsing and output.}
+  \item{"error": Treat scheme-relative URLs as invalid.}
+}}
+
 \item{subdomain_levels_to_keep}{An integer or NULL. Determines how many levels of subdomains are kept,
 in addition to any 'www.' prefix handled by `www_handling`.
 \itemize{
@@ -71,7 +97,7 @@ in addition to any 'www.' prefix handled by `www_handling`.
 
 \item{host_encoding}{How to present the host in `clean_url`. Defaults to "keep".
 \itemize{
-  \item{"keep": Leave host as parsed/normalized by curl (typically lowercase for ASCII).}
+  \item{"keep": Leave host as parsed by curl (may preserve original case).}
   \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the cleaned URL.}
   \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
 }}
@@ -99,7 +125,7 @@ A named list with the following components:
     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP, empty, or derivation fails.
     \item `is_ip_host`: Logical, TRUE if the host is an IP address.
     \item `clean_url`: The URL reconstructed from scheme, host, and path after processing, with case handling applied. NA if host is empty/NA.
-    \item `parse_status`: Character string indicating parsing outcome ("ok", "ok-ftp", "error", "warning-no-tld").
+    \item `parse_status`: Character string indicating parsing outcome ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld").
   }
   Returns `NULL` if the URL is fundamentally unparseable (e.g., NA, empty) or uses a disallowed scheme.
 }
@@ -141,5 +167,8 @@ safe_parse_url(
   www_handling = "keep",
   subdomain_levels_to_keep = 1
 )
+}
+\seealso{
+\code{\link{safe_parse_urls}}
 }
 \keyword{internal}

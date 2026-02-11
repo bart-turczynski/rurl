@@ -10,6 +10,9 @@ get_clean_url(
   www_handling = "none",
   case_handling = "keep",
   trailing_slash_handling = "none",
+  index_page_handling = "keep",
+  path_normalization = "none",
+  scheme_relative_handling = "keep",
   subdomain_levels_to_keep = NULL,
   host_encoding = "keep",
   path_encoding = "keep"
@@ -41,6 +44,12 @@ trailing slashes in the path component of the cleaned URL. Defaults to "none".
   \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
 }}
 
+\item{index_page_handling}{How to handle index/default pages. See \code{\link{safe_parse_url}}.}
+
+\item{path_normalization}{How to normalize path structure. See \code{\link{safe_parse_url}}.}
+
+\item{scheme_relative_handling}{How to handle URLs starting with "//". See \code{\link{safe_parse_url}}.}
+
 \item{subdomain_levels_to_keep}{An integer or NULL. Determines how many levels of subdomains are kept,
 in addition to any 'www.' prefix handled by `www_handling`.
 \itemize{
@@ -64,7 +73,7 @@ This function returns the cleaned version of the URLs after applying
 protocol, www, case, and trailing slash handling rules.
 }
 \examples{
-get_clean_url("Example.COM/Path") # Default lower, default no slash change
+get_clean_url("Example.COM/Path") # Default keep, default no slash change
 get_clean_url("Example.COM/Path", case_handling = "keep", trailing_slash_handling = "keep")
 get_clean_url("Example.COM/Path/", case_handling = "upper", trailing_slash_handling = "strip")
 get_clean_url("http://example.com", www_handling = "strip")

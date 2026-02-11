@@ -11,6 +11,8 @@ permutation_join(
   col_B = "URL",
   suffix_A = "_A",
   suffix_B = "_B",
+  keep = c("best", "all"),
+  include_join_rank = FALSE,
   ...
 )
 }
@@ -31,6 +33,13 @@ join keys and specially created columns like OriginalURL_A). Defaults to "_A".}
 
 \item{suffix_B}{Character string, suffix to add to `data_B` column names
 in the output if they conflict with `data_A` column names. Defaults to "_B".}
+
+\item{keep}{Controls how matches are returned. `"best"` keeps one row per
+input pair using deterministic `JoinKey` ranking. `"all"` returns all
+matches.}
+
+\item{include_join_rank}{Logical. If TRUE, includes a `JoinKeyRank` column
+in the output.}
 
 \item{...}{Additional arguments forwarded to [permute_url()], enabling control
 over all URL cleaning/permutation options (e.g., `protocol_handling`,

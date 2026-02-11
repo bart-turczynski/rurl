@@ -2,6 +2,7 @@
 #'
 #' Generates permutations of a URL across all supported cleaning options
 #' (scheme handling, www handling, case handling, trailing slashes,
+#' index/default handling, path normalization, scheme-relative handling,
 #' subdomain stripping, host encoding, and path encoding).
 #'
 #' Each argument can be supplied as a single value or a vector of values; the
@@ -18,6 +19,12 @@
 #'   [safe_parse_url()]. Defaults to all supported values.
 #' @param trailing_slash_handling Vector of trailing-slash options passed to
 #'   [safe_parse_url()]. Defaults to all supported values.
+#' @param index_page_handling Vector of index/default handling options passed to
+#'   [safe_parse_url()]. Defaults to all supported values.
+#' @param path_normalization Vector of path normalization options passed to
+#'   [safe_parse_url()]. Defaults to all supported values.
+#' @param scheme_relative_handling Vector of scheme-relative handling options passed to
+#'   [safe_parse_url()]. Defaults to all supported values.
 #' @param subdomain_levels_to_keep Vector or list of values for
 #'   `subdomain_levels_to_keep`. Use `NULL` to keep all subdomains (default).
 #'   Values must be non-negative integers or `NULL`.
@@ -25,8 +32,11 @@
 #'   [safe_parse_url()]. Defaults to all supported values.
 #' @param path_encoding Vector of path-encoding options passed to
 #'   [safe_parse_url()]. Defaults to all supported values.
-#' @return A data.frame with two columns: `URL` (the input URL) and
-#'   `Permutation` (the generated URL variant).
+#' @param include_rank Logical. If TRUE, includes `PermutationRank` in the
+#'   output, indicating priority based on the order of option values.
+#' @return A data.frame with columns `URL` (the input URL) and
+#'   `Permutation` (the generated URL variant). If `include_rank = TRUE`,
+#'   an additional `PermutationRank` column is included.
 #' @export
 #' @examples
 #' # Generate a compact set of permutations
@@ -49,12 +59,20 @@ permute_url <- function(urls,
                         www_handling = eval(formals(safe_parse_url)$www_handling),
                         case_handling = eval(formals(safe_parse_url)$case_handling),
                         trailing_slash_handling = eval(formals(safe_parse_url)$trailing_slash_handling),
+                        index_page_handling = eval(formals(safe_parse_url)$index_page_handling),
+                        path_normalization = eval(formals(safe_parse_url)$path_normalization),
+                        scheme_relative_handling = eval(formals(safe_parse_url)$scheme_relative_handling),
                         subdomain_levels_to_keep = list(NULL),
                         host_encoding = eval(formals(safe_parse_url)$host_encoding),
-                        path_encoding = eval(formals(safe_parse_url)$path_encoding)) {
+                        path_encoding = eval(formals(safe_parse_url)$path_encoding),
+                        include_rank = FALSE) {
 
   if (length(urls) == 0) {
-    return(data.frame(URL = character(0), Permutation = character(0), stringsAsFactors = FALSE))
+    empty_df <- data.frame(URL = character(0), Permutation = character(0), stringsAsFactors = FALSE)
+    if (isTRUE(include_rank)) {
+      empty_df$PermutationRank <- integer(0)
+    }
+    return(empty_df)
   }
 
   urls <- as.character(urls)
@@ -64,11 +82,16 @@ permute_url <- function(urls,
     if (length(arg_values) == 0) {
       stop(paste0("Argument '", arg_name, "' must have at least one value."), call. = FALSE)
     }
-    resolved <- allowed[allowed %in% arg_values]
-    if (length(resolved) == 0) {
-      stop(paste0("Argument '", arg_name, "' must be a subset of: ", paste(allowed, collapse = ", "), "."), call. = FALSE)
+    invalid <- setdiff(arg_values, allowed)
+    if (length(invalid) > 0) {
+      stop(paste0(
+        "Argument '", arg_name, "' must be a subset of: ",
+        paste(allowed, collapse = ", "), ". Invalid values: ",
+        paste(invalid, collapse = ", "), "."
+      ), call. = FALSE)
     }
-    unique(resolved)
+    resolved <- arg_values[arg_values %in% allowed]
+    resolved[!duplicated(resolved)]
   }
 
   # Helper: normalise subdomain options to a list while validating values
@@ -89,6 +112,9 @@ permute_url <- function(urls,
   www_handling <- validate_choice(www_handling, eval(safe_defaults$www_handling), "www_handling")
   case_handling <- validate_choice(case_handling, eval(safe_defaults$case_handling), "case_handling")
   trailing_slash_handling <- validate_choice(trailing_slash_handling, eval(safe_defaults$trailing_slash_handling), "trailing_slash_handling")
+  index_page_handling <- validate_choice(index_page_handling, eval(safe_defaults$index_page_handling), "index_page_handling")
+  path_normalization <- validate_choice(path_normalization, eval(safe_defaults$path_normalization), "path_normalization")
+  scheme_relative_handling <- validate_choice(scheme_relative_handling, eval(safe_defaults$scheme_relative_handling), "scheme_relative_handling")
   host_encoding <- validate_choice(host_encoding, eval(safe_defaults$host_encoding), "host_encoding")
   path_encoding <- validate_choice(path_encoding, eval(safe_defaults$path_encoding), "path_encoding")
   subdomain_levels_to_keep <- normalize_subdomains(subdomain_levels_to_keep)
@@ -98,6 +124,9 @@ permute_url <- function(urls,
     www_handling = www_handling,
     case_handling = case_handling,
     trailing_slash_handling = trailing_slash_handling,
+    index_page_handling = index_page_handling,
+    path_normalization = path_normalization,
+    scheme_relative_handling = scheme_relative_handling,
     host_encoding = host_encoding,
     path_encoding = path_encoding,
     KEEP.OUT.ATTRS = FALSE,
@@ -106,9 +135,6 @@ permute_url <- function(urls,
 
   arg_combinations <- vector("list", nrow(base_grid) * max(1, length(subdomain_levels_to_keep)))
   idx <- 1L
-  if (nrow(base_grid) == 0) {
-    stop("No permutations generated because argument grids are empty.", call. = FALSE)
-  }
   for (i in seq_len(nrow(base_grid))) {
     for (sd in subdomain_levels_to_keep) {
       arg_combinations[[idx]] <- list(
@@ -116,6 +142,9 @@ permute_url <- function(urls,
         www_handling = base_grid$www_handling[[i]],
         case_handling = base_grid$case_handling[[i]],
         trailing_slash_handling = base_grid$trailing_slash_handling[[i]],
+        index_page_handling = base_grid$index_page_handling[[i]],
+        path_normalization = base_grid$path_normalization[[i]],
+        scheme_relative_handling = base_grid$scheme_relative_handling[[i]],
         subdomain_levels_to_keep = sd,
         host_encoding = base_grid$host_encoding[[i]],
         path_encoding = base_grid$path_encoding[[i]]
@@ -155,13 +184,15 @@ permute_url <- function(urls,
     raw_path_baseline <- baseline_parsed$path %||% ""
     is_root_path <- raw_path_baseline %in% c("", "/")
 
-    perms <- vapply(arg_combinations, function(arg_set) {
+    perms <- vapply(seq_along(arg_combinations), function(i) {
+      arg_set <- arg_combinations[[i]]
       parsed <- do.call(
         safe_parse_url,
         c(list(url = original_url_input),
           arg_set[c(
             "protocol_handling", "www_handling", "case_handling",
             "trailing_slash_handling", "subdomain_levels_to_keep",
+            "index_page_handling", "path_normalization", "scheme_relative_handling",
             "host_encoding", "path_encoding"
           )])
       )
@@ -173,27 +204,54 @@ permute_url <- function(urls,
       paste0(clean, query_part, fragment_part)
     }, character(1), USE.NAMES = FALSE)
 
-    perms <- unique(perms)
-    perms <- perms[!is.na(perms)]
-    perms <- perms[nzchar(trimws(perms))]
-    perms <- perms[nzchar(trimws(gsub("^(https?://)?(www[0-9]*\\.)?", "", perms, perl = TRUE)))]
-    invalid_strings <- c("http://", "https://", "http://www.", "https://www.", "www.", "http://www/", "https://www/", "www/", "/", "")
-    perms <- perms[!perms %in% invalid_strings]
-    if (is_root_path && length(perms) > 0) {
-      toggled <- ifelse(endsWith(perms, "/"), sub("/+$", "", perms), paste0(perms, "/"))
-      perms <- unique(c(perms, toggled))
-    }
-    perms <- perms[nzchar(trimws(perms))]
-
-    if (length(perms) == 0) {
-      perms <- NA_character_
-    }
-
-    data.frame(
-      URL = original_url_raw,
+    perm_ranks <- seq_along(arg_combinations)
+    perms_df <- data.frame(
       Permutation = perms,
+      PermutationRank = perm_ranks,
       stringsAsFactors = FALSE
     )
+
+    perms_df <- perms_df[!is.na(perms_df$Permutation), , drop = FALSE]
+    perms_df <- perms_df[nzchar(trimws(perms_df$Permutation)), , drop = FALSE]
+    perms_df <- perms_df[nzchar(trimws(gsub("^(https?://)?(www[0-9]*\\.)?", "", perms_df$Permutation, perl = TRUE))), , drop = FALSE]
+    invalid_strings <- c("http://", "https://", "http://www.", "https://www.", "www.", "http://www/", "https://www/", "www/", "/", "")
+    perms_df <- perms_df[!perms_df$Permutation %in% invalid_strings, , drop = FALSE]
+    if (nrow(perms_df) > 0) {
+      perms_df <- perms_df[!duplicated(perms_df$Permutation), , drop = FALSE]
+    }
+
+    if (is_root_path && nrow(perms_df) > 0) {
+      toggled <- ifelse(endsWith(perms_df$Permutation, "/"),
+                        sub("/+$", "", perms_df$Permutation),
+                        paste0(perms_df$Permutation, "/"))
+      toggled_df <- data.frame(
+        Permutation = toggled,
+        PermutationRank = length(arg_combinations) + seq_along(toggled),
+        stringsAsFactors = FALSE
+      )
+      toggled_df <- toggled_df[!toggled_df$Permutation %in% perms_df$Permutation, , drop = FALSE]
+      if (nrow(toggled_df) > 0) {
+        perms_df <- rbind(perms_df, toggled_df)
+      }
+    }
+    perms_df <- perms_df[nzchar(trimws(perms_df$Permutation)), , drop = FALSE]
+
+    if (nrow(perms_df) == 0) {
+      perms_df <- data.frame(
+        Permutation = NA_character_,
+        PermutationRank = NA_integer_,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    perms_df$URL <- original_url_raw
+    perms_df <- perms_df[, c("URL", "Permutation", "PermutationRank"), drop = FALSE]
+
+    if (!isTRUE(include_rank)) {
+      perms_df$PermutationRank <- NULL
+    }
+
+    perms_df
   })
 
   final_df <- unique(do.call(rbind, all_permutations))

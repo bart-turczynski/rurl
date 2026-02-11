@@ -63,6 +63,13 @@ print(parsed_details$clean_url)
 # $parse_status: "ok"
 ```
 
+For vectors, use `safe_parse_urls()` to return a data frame:
+
+``` r
+parsed_df <- safe_parse_urls(c("example.com", "https://www.example.com/path"))
+print(parsed_df$clean_url)
+```
+
 Most other exported functions are convenient wrappers around
 `safe_parse_url()` to extract specific parts of a URL or just the
 `clean_url` string.
@@ -76,7 +83,7 @@ library(rurl)
 # Note: case_handling defaults to "keep", trailing_slash_handling to "none"
 
 get_clean_url("Http://Example.Com/MyPath/")
-#> [1] "http://example.com/MyPath/"
+#> [1] "http://Example.Com/MyPath/"
 
 get_clean_url("Http://Example.Com/MyPath/",
               case_handling = "lower",

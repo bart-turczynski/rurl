@@ -10,9 +10,13 @@ permute_url(
   www_handling = eval(formals(safe_parse_url)$www_handling),
   case_handling = eval(formals(safe_parse_url)$case_handling),
   trailing_slash_handling = eval(formals(safe_parse_url)$trailing_slash_handling),
+  index_page_handling = eval(formals(safe_parse_url)$index_page_handling),
+  path_normalization = eval(formals(safe_parse_url)$path_normalization),
+  scheme_relative_handling = eval(formals(safe_parse_url)$scheme_relative_handling),
   subdomain_levels_to_keep = list(NULL),
   host_encoding = eval(formals(safe_parse_url)$host_encoding),
-  path_encoding = eval(formals(safe_parse_url)$path_encoding)
+  path_encoding = eval(formals(safe_parse_url)$path_encoding),
+  include_rank = FALSE
 )
 }
 \arguments{
@@ -30,6 +34,15 @@ permute_url(
 \item{trailing_slash_handling}{Vector of trailing-slash options passed to
 [safe_parse_url()]. Defaults to all supported values.}
 
+\item{index_page_handling}{Vector of index/default handling options passed to
+[safe_parse_url()]. Defaults to all supported values.}
+
+\item{path_normalization}{Vector of path normalization options passed to
+[safe_parse_url()]. Defaults to all supported values.}
+
+\item{scheme_relative_handling}{Vector of scheme-relative handling options passed to
+[safe_parse_url()]. Defaults to all supported values.}
+
 \item{subdomain_levels_to_keep}{Vector or list of values for
 `subdomain_levels_to_keep`. Use `NULL` to keep all subdomains (default).
 Values must be non-negative integers or `NULL`.}
@@ -39,14 +52,19 @@ Values must be non-negative integers or `NULL`.}
 
 \item{path_encoding}{Vector of path-encoding options passed to
 [safe_parse_url()]. Defaults to all supported values.}
+
+\item{include_rank}{Logical. If TRUE, includes `PermutationRank` in the
+output, indicating priority based on the order of option values.}
 }
 \value{
-A data.frame with two columns: `URL` (the input URL) and
-  `Permutation` (the generated URL variant).
+A data.frame with columns `URL` (the input URL) and
+  `Permutation` (the generated URL variant). If `include_rank = TRUE`,
+  an additional `PermutationRank` column is included.
 }
 \description{
 Generates permutations of a URL across all supported cleaning options
 (scheme handling, www handling, case handling, trailing slashes,
+index/default handling, path normalization, scheme-relative handling,
 subdomain stripping, host encoding, and path encoding).
 }
 \details{

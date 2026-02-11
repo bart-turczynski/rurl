@@ -15,6 +15,7 @@ Roxygen: list(roclets = c("collate", "namespace", "rd"))
 RoxygenNote: 7.3.3
 Collate:
     'rurl.R'
+    'canonical_join.R'
     'permute_url.R'
     'permutation_join.R'
     'zzz.R'
@@ -28,7 +29,8 @@ BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    withr
 Config/testthat/edition: 3
 Depends: 
     R (>= 3.5)
