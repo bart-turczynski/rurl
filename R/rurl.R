@@ -540,55 +540,47 @@ safe_parse_urls <- function(url,
     if (www_handling == "strip") {
       final_host <- stringi::stri_replace_first_regex(raw_host, "^(www[0-9]*\\.)(.*)", "$2", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
     } else if (www_handling == "keep") {
-      if (raw_host == "") {
-        final_host <- ""
+      current_host_lower <- stringi::stri_trans_tolower(raw_host)
+      if (stringi::stri_detect_regex(current_host_lower, "^www[0-9]*\\.")) {
+        match_res <- stringi::stri_match_first_regex(raw_host, "^(www[0-9]*\\.)(.*)", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
+        bare_host_part <- if (!is.na(match_res[1,3])) match_res[1,3] else raw_host
+        final_host <- paste0("www.", bare_host_part)
       } else {
-        current_host_lower <- stringi::stri_trans_tolower(raw_host)
-        if (stringi::stri_detect_regex(current_host_lower, "^www[0-9]*\\.")) {
-          match_res <- stringi::stri_match_first_regex(raw_host, "^(www[0-9]*\\.)(.*)", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
-          bare_host_part <- if (!is.na(match_res[1,3])) match_res[1,3] else raw_host
-          final_host <- paste0("www.", bare_host_part)
-        } else {
-          final_host <- paste0("www.", raw_host)
-        }
+        final_host <- paste0("www.", raw_host)
       }
     } else if (www_handling == "if_no_subdomain") {
-      if (raw_host == "") {
-        final_host <- ""
+      candidate_host <- raw_host
+      if (stringi::stri_detect_regex(stringi::stri_trans_tolower(raw_host), "^www[0-9]*\\.")) {
+        match_res <- stringi::stri_match_first_regex(raw_host, "^(www[0-9]*\\.)(.*)", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
+        bare_part <- if (!is.na(match_res[1,3])) match_res[1,3] else raw_host
+        candidate_host <- paste0("www.", bare_part)
+      }
+      host_for_domain_check <- candidate_host
+      if (stringi::stri_startswith_fixed(stringi::stri_trans_tolower(candidate_host), "www.")) {
+        match_res_bare <- stringi::stri_match_first_regex(candidate_host, "^www\\.(.*)", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
+        host_for_domain_check <- if (!is.na(match_res_bare[1,2])) match_res_bare[1,2] else candidate_host
+      }
+
+      temp_host_nfc_lc <- stringi::stri_trans_nfc(stringi::stri_trans_tolower(host_for_domain_check))
+      temp_host_puny <- .normalize_and_punycode(temp_host_nfc_lc)
+
+      temp_derived_domain_puny <- NA_character_
+      if (!is.na(temp_host_puny) && temp_host_puny != "") {
+        temp_derived_domain_puny <- .get_registered_domain(temp_host_puny)
+      }
+      temp_derived_domain_unicode <- .punycode_to_unicode(temp_derived_domain_puny)
+
+      if (is.na(temp_derived_domain_unicode) || temp_derived_domain_unicode == "") {
+        final_host <- candidate_host
       } else {
-        candidate_host <- raw_host
-        if (stringi::stri_detect_regex(stringi::stri_trans_tolower(raw_host), "^www[0-9]*\\.")) {
-          match_res <- stringi::stri_match_first_regex(raw_host, "^(www[0-9]*\\.)(.*)", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
-          bare_part <- if (!is.na(match_res[1,3])) match_res[1,3] else raw_host
-          candidate_host <- paste0("www.", bare_part)
-        }
-        host_for_domain_check <- candidate_host
-        if (stringi::stri_startswith_fixed(stringi::stri_trans_tolower(candidate_host), "www.")) {
-          match_res_bare <- stringi::stri_match_first_regex(candidate_host, "^www\\.(.*)", opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE))
-          host_for_domain_check <- if (!is.na(match_res_bare[1,2])) match_res_bare[1,2] else candidate_host
-        }
-
-        temp_host_nfc_lc <- stringi::stri_trans_nfc(stringi::stri_trans_tolower(host_for_domain_check))
-        temp_host_puny <- .normalize_and_punycode(temp_host_nfc_lc)
-
-        temp_derived_domain_puny <- NA_character_
-        if (!is.na(temp_host_puny) && temp_host_puny != "") {
-          temp_derived_domain_puny <- .get_registered_domain(temp_host_puny)
-        }
-        temp_derived_domain_unicode <- .punycode_to_unicode(temp_derived_domain_puny)
-
-        if (is.na(temp_derived_domain_unicode) || temp_derived_domain_unicode == "") {
-          final_host <- candidate_host
-        } else {
-          if (stringi::stri_trans_tolower(host_for_domain_check) == temp_derived_domain_unicode) {
-            if (!stringi::stri_startswith_fixed(stringi::stri_trans_tolower(candidate_host), "www.")) {
-              final_host <- paste0("www.", candidate_host)
-            } else {
-              final_host <- candidate_host
-            }
+        if (stringi::stri_trans_tolower(host_for_domain_check) == temp_derived_domain_unicode) {
+          if (!stringi::stri_startswith_fixed(stringi::stri_trans_tolower(candidate_host), "www.")) {
+            final_host <- paste0("www.", candidate_host)
           } else {
             final_host <- candidate_host
           }
+        } else {
+          final_host <- candidate_host
         }
       }
     }

@@ -353,3 +353,26 @@ test_that("permutation_join handles empty permutation outputs", {
   expect_s3_class(res, "data.frame")
   expect_equal(nrow(res), 0)
 })
+
+test_that("permutation_join fills missing permutation rank", {
+  A <- data.frame(URL = "http://example.com/page", stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://example.com/page", stringsAsFactors = FALSE)
+
+  ns <- asNamespace("rurl")
+  orig <- get("permute_url", envir = ns)
+  was_locked <- bindingIsLocked("permute_url", ns)
+  if (was_locked) unlockBinding("permute_url", ns)
+  withr::defer({
+    assign("permute_url", orig, envir = ns)
+    if (was_locked) lockBinding("permute_url", ns)
+  }, testthat::teardown_env())
+
+  assign("permute_url", function(url, ...) {
+    data.frame(Permutation = url, stringsAsFactors = FALSE)
+  }, envir = ns)
+
+  res <- permutation_join(A, B, include_join_rank = TRUE)
+  expect_s3_class(res, "data.frame")
+  expect_true("JoinKeyRank" %in% names(res))
+  expect_true(all(is.na(res$JoinKeyRank)))
+})
