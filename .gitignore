@@ -18,6 +18,9 @@
 
 # Build artifacts created by R CMD check
 *.tar.gz
+.tmp/
+covr_report.html
+covr_zero.rds
 
 # R package build ignore file
 .Rbuildignore
