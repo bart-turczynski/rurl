@@ -602,224 +602,181 @@ padding-top: 0px;
 <body>
 
 <h1 id="rurl">rurl</h1>
-<h1 id="rurl-1">rurl</h1>
-<p><code>rurl</code> is a small, pipe-friendly, and vectorized R package
-that helps you construct, parse, and clean URLs from various components.
-It is designed to make URL manipulation and HTTP endpoint generation
-readable, composable, and easy to integrate into modern R workflows.</p>
-<p>It includes helpers to: - Get cleaned URLs with fine-grained control
-over protocols, ‘www’ prefixes, casing, trailing slashes, host IDNA vs
-Unicode, and path percent-encoding. - Extract domains, paths, schemes,
-hosts, and top-level domains (TLDs). - Normalize, strip, or enforce
-specific protocols. - Handle ‘www’ prefixes in hostnames.</p>
+<p><code>rurl</code> is a lightweight, vectorized toolkit for URL
+parsing, normalization, extraction, permutation, and matching in R.</p>
+<p>Current package capabilities include:</p>
+<ul>
+<li>Robust parsing via <code>safe_parse_url()</code> and
+<code>safe_parse_urls()</code></li>
+<li>URL normalization with fine-grained controls for protocol,
+<code>www</code>, case, trailing slashes, index pages, path
+normalization, scheme-relative URLs, host encoding, and path
+encoding</li>
+<li>URL component extractors (<code>get_*</code> helpers)</li>
+<li>Variant generation with <code>permute_url()</code></li>
+<li>URL-based joins with <code>canonical_join()</code> and
+<code>permutation_join()</code></li>
+<li>Built-in memoization caches with
+<code>rurl_clear_caches()</code></li>
+</ul>
 <h2 id="installation">Installation</h2>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># Install from GitHub</span></span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="co"># devtools::install_github(&quot;bart-turczynski/rurl&quot;)</span></span></code></pre></div>
-<h2 id="core-functionality">Core Functionality</h2>
-<p>The primary workhorse of the package is
-<code>safe_parse_url()</code>. This function comprehensively parses a
-URL and allows for various transformations. It returns a detailed list
-of URL components and a cleaned URL string.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># install.packages(&quot;remotes&quot;)</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>remotes<span class="sc">::</span><span class="fu">install_github</span>(<span class="st">&quot;bart-turczynski/rurl&quot;</span>)</span></code></pre></div>
+<h2 id="function-overview">Function Overview</h2>
+<ul>
+<li>Parsing and normalization: <code>safe_parse_url()</code>,
+<code>safe_parse_urls()</code>, <code>get_clean_url()</code></li>
+<li>Accessors: <code>get_scheme()</code>, <code>get_host()</code>,
+<code>get_subdomain()</code>, <code>get_domain()</code>,
+<code>get_tld()</code>, <code>get_path()</code>,
+<code>get_query()</code>, <code>get_fragment()</code>,
+<code>get_port()</code>, <code>get_user()</code>,
+<code>get_password()</code>, <code>get_userinfo()</code>,
+<code>get_parse_status()</code></li>
+<li>Permutations: <code>permute_url()</code></li>
+<li>Matching/joining:
+<ul>
+<li><code>canonical_join()</code> for deterministic canonical-key
+joins</li>
+<li><code>permutation_join()</code> for broader matching across
+generated variants</li>
+</ul></li>
+<li>Cache control: <code>rurl_clear_caches()</code></li>
+</ul>
+<h2 id="quick-start">Quick Start</h2>
+<p><code>safe_parse_url()</code> is the core workhorse. It returns
+parsed components and a normalized <code>clean_url</code>.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(rurl)</span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co"># Example of detailed parsing and transformation</span></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>parsed_details <span class="ot">&lt;-</span> <span class="fu">safe_parse_url</span>(</span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>  <span class="st">&quot;Http://Www.Example.Com/Some/Path/?Query=1#Frag&quot;</span>,</span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  <span class="at">protocol_handling =</span> <span class="st">&quot;https&quot;</span>,       <span class="co"># Force https</span></span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="at">www_handling =</span> <span class="st">&quot;strip&quot;</span>,            <span class="co"># Remove www</span></span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>  <span class="at">case_handling =</span> <span class="st">&quot;lower_host&quot;</span>,      <span class="co"># Lowercase scheme+host only</span></span>
-<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>  <span class="at">trailing_slash_handling =</span> <span class="st">&quot;strip&quot;</span>, <span class="co"># Remove trailing slash</span></span>
-<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>  <span class="at">host_encoding =</span> <span class="st">&quot;idna&quot;</span>,            <span class="co"># Punycode host if non-ASCII</span></span>
-<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>  <span class="at">path_encoding =</span> <span class="st">&quot;keep&quot;</span>             <span class="co"># Leave path encoding as-is</span></span>
-<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>)</span>
-<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a></span>
-<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co"># The cleaned URL (scheme, host, path only by default)</span></span>
-<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="fu">print</span>(parsed_details<span class="sc">$</span>clean_url)</span>
-<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="co">#&gt; [1] &quot;https://example.com/some/path&quot;</span></span>
-<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a></span>
-<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="co"># Full list of parsed and derived components</span></span>
-<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a><span class="co"># print(parsed_details)</span></span>
-<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a><span class="co"># Output would include:</span></span>
-<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="co"># $original_url: &quot;Http://Www.Example.Com/Some/Path/?Query=1#Frag&quot;</span></span>
-<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a><span class="co"># $scheme: &quot;https&quot;</span></span>
-<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="co"># $host: &quot;example.com&quot;</span></span>
-<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="co"># $port: NULL (or parsed port if present and not stripped)</span></span>
-<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="co"># $path: &quot;/some/path&quot; (after trailing slash handling)</span></span>
-<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="co"># $query: &quot;Query=1&quot;</span></span>
-<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a><span class="co"># $fragment: &quot;Frag&quot;</span></span>
-<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a><span class="co"># $domain: &quot;example.com&quot;</span></span>
-<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a><span class="co"># $tld: &quot;com&quot;</span></span>
-<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a><span class="co"># $is_ip_host: FALSE</span></span>
-<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a><span class="co"># $clean_url: &quot;https://example.com/some/path&quot;</span></span>
-<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a><span class="co"># $parse_status: &quot;ok&quot;</span></span></code></pre></div>
-<p>Most other exported functions are convenient wrappers around
-<code>safe_parse_url()</code> to extract specific parts of a URL or just
-the <code>clean_url</code> string.</p>
-<h2 id="examples-of-helper-functions">Examples of Helper Functions</h2>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">library</span>(rurl)</span>
-<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="co"># Get cleaned URL with specific handling</span></span>
-<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co"># Note: case_handling defaults to &quot;keep&quot;, trailing_slash_handling to &quot;none&quot;</span></span>
-<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a></span>
-<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;Http://Example.Com/MyPath/&quot;</span>)</span>
-<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://example.com/MyPath/&quot;</span></span>
-<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a></span>
-<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;Http://Example.Com/MyPath/&quot;</span>,</span>
-<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>              <span class="at">case_handling =</span> <span class="st">&quot;lower&quot;</span>,</span>
-<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>              <span class="at">trailing_slash_handling =</span> <span class="st">&quot;strip&quot;</span>)</span>
-<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://example.com/mypath&quot;</span></span>
-<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a></span>
-<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;ftp://Sub.Example.ORG/anotherPath&quot;</span>,</span>
-<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a>              <span class="at">protocol_handling =</span> <span class="st">&quot;strip&quot;</span>, <span class="co"># Removes ftp://</span></span>
-<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a>              <span class="at">www_handling =</span> <span class="st">&quot;keep&quot;</span>,       <span class="co"># Ensures www.</span></span>
-<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a>              <span class="at">case_handling =</span> <span class="st">&quot;upper&quot;</span>,     <span class="co"># Converts to uppercase</span></span>
-<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a>              <span class="at">trailing_slash_handling =</span> <span class="st">&quot;keep&quot;</span>) <span class="co"># Ensures trailing slash</span></span>
-<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="co">#&gt; [1] &quot;WWW.EXAMPLE.ORG/ANOTHERPATH/&quot;</span></span>
-<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a></span>
-<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;example.com:8080/path&quot;</span>, <span class="at">trailing_slash_handling =</span> <span class="st">&quot;keep&quot;</span>)</span>
-<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://example.com/path/&quot; # Port is not part of clean_url by default</span></span>
-<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a></span>
-<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a><span class="co"># Extracting specific components</span></span>
-<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a><span class="fu">get_domain</span>(<span class="st">&quot;https://sub.example.co.uk/page&quot;</span>)</span>
-<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a><span class="co">#&gt; [1] &quot;example.co.uk&quot;</span></span>
-<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a></span>
-<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a><span class="fu">get_scheme</span>(<span class="st">&quot;Example.com/Test&quot;</span>, <span class="at">protocol_handling =</span> <span class="st">&quot;https&quot;</span>)</span>
-<span id="cb3-29"><a href="#cb3-29" tabindex="-1"></a><span class="co">#&gt; [1] &quot;https&quot;</span></span>
-<span id="cb3-30"><a href="#cb3-30" tabindex="-1"></a></span>
-<span id="cb3-31"><a href="#cb3-31" tabindex="-1"></a><span class="fu">get_scheme</span>(<span class="st">&quot;Example.com/Test&quot;</span>, <span class="at">protocol_handling =</span> <span class="st">&quot;none&quot;</span>) <span class="co"># No scheme forced or kept</span></span>
-<span id="cb3-32"><a href="#cb3-32" tabindex="-1"></a><span class="co">#&gt; [1] NA</span></span>
-<span id="cb3-33"><a href="#cb3-33" tabindex="-1"></a></span>
-<span id="cb3-34"><a href="#cb3-34" tabindex="-1"></a><span class="co"># Host is lowercased due to default case_handling in the underlying safe_parse_url call</span></span>
-<span id="cb3-35"><a href="#cb3-35" tabindex="-1"></a><span class="fu">get_host</span>(<span class="st">&quot;Http://User:Pass@MyHost.Com:8080/SomeWhere&quot;</span>)</span>
-<span id="cb3-36"><a href="#cb3-36" tabindex="-1"></a><span class="co">#&gt; [1] &quot;myhost.com&quot;</span></span>
-<span id="cb3-37"><a href="#cb3-37" tabindex="-1"></a></span>
-<span id="cb3-38"><a href="#cb3-38" tabindex="-1"></a><span class="co"># Path is lowercased; trailing slash from input is preserved with trailing_slash_handling = &quot;none&quot; (default)</span></span>
-<span id="cb3-39"><a href="#cb3-39" tabindex="-1"></a><span class="fu">get_path</span>(<span class="st">&quot;HTTP://EXAMPLE.NET/A/B/C/?p=1&quot;</span>)</span>
-<span id="cb3-40"><a href="#cb3-40" tabindex="-1"></a><span class="co">#&gt; [1] &quot;/a/b/c/&quot;</span></span>
-<span id="cb3-41"><a href="#cb3-41" tabindex="-1"></a></span>
-<span id="cb3-42"><a href="#cb3-42" tabindex="-1"></a><span class="fu">get_tld</span>(<span class="st">&quot;www.sub.example.co.uk&quot;</span>)</span>
-<span id="cb3-43"><a href="#cb3-43" tabindex="-1"></a><span class="co">#&gt; [1] &quot;co.uk&quot;</span></span>
-<span id="cb3-44"><a href="#cb3-44" tabindex="-1"></a></span>
-<span id="cb3-45"><a href="#cb3-45" tabindex="-1"></a><span class="fu">get_parse_status</span>(<span class="st">&quot;mailto:test@example.com&quot;</span>)</span>
-<span id="cb3-46"><a href="#cb3-46" tabindex="-1"></a><span class="co">#&gt; [1] &quot;error&quot;</span></span>
-<span id="cb3-47"><a href="#cb3-47" tabindex="-1"></a><span class="fu">get_parse_status</span>(<span class="st">&quot;http://example.com&quot;</span>)</span>
-<span id="cb3-48"><a href="#cb3-48" tabindex="-1"></a><span class="co">#&gt; [1] &quot;ok&quot;</span></span>
-<span id="cb3-49"><a href="#cb3-49" tabindex="-1"></a></span>
-<span id="cb3-50"><a href="#cb3-50" tabindex="-1"></a><span class="co"># Handling Subdomain Levels</span></span>
-<span id="cb3-51"><a href="#cb3-51" tabindex="-1"></a></span>
-<span id="cb3-52"><a href="#cb3-52" tabindex="-1"></a>Functions like <span class="st">`</span><span class="at">get_host()</span><span class="st">`</span> and <span class="st">`</span><span class="at">get_clean_url()</span><span class="st">`</span> also support the <span class="st">`</span><span class="at">subdomain_levels_to_keep</span><span class="st">`</span> argument.</span>
-<span id="cb3-53"><a href="#cb3-53" tabindex="-1"></a>This provides control over how many subdomain levels are kept <span class="cf">in</span> the host <span class="sc">*</span>after<span class="sc">*</span> <span class="st">`</span><span class="at">www_handling</span><span class="st">`</span>.</span>
-<span id="cb3-54"><a href="#cb3-54" tabindex="-1"></a></span>
-<span id="cb3-55"><a href="#cb3-55" tabindex="-1"></a><span class="co"># `NULL` (default): keeps all subdomains (beyond www handling).</span></span>
-<span id="cb3-56"><a href="#cb3-56" tabindex="-1"></a><span class="co"># `0`: strips all subdomains (e.g., `one.two.example.com` becomes `example.com`).</span></span>
-<span id="cb3-57"><a href="#cb3-57" tabindex="-1"></a><span class="co"># `N &gt; 0`: keeps N levels of subdomains (e.g., `one.two.example.com` with N=1 becomes `two.example.com`).</span></span>
-<span id="cb3-58"><a href="#cb3-58" tabindex="-1"></a></span>
-<span id="cb3-59"><a href="#cb3-59" tabindex="-1"></a><span class="co"># With `www_handling = &quot;strip&quot;` and `subdomain_levels_to_keep = 1`:</span></span>
-<span id="cb3-60"><a href="#cb3-60" tabindex="-1"></a><span class="fu">get_host</span>(<span class="st">&quot;http://www.three.two.one.example.com&quot;</span>, <span class="at">www_handling =</span> <span class="st">&quot;strip&quot;</span>, <span class="at">subdomain_levels_to_keep =</span> <span class="dv">1</span>)</span>
-<span id="cb3-61"><a href="#cb3-61" tabindex="-1"></a><span class="co">#&gt; [1] &quot;one.example.com&quot;</span></span>
-<span id="cb3-62"><a href="#cb3-62" tabindex="-1"></a></span>
-<span id="cb3-63"><a href="#cb3-63" tabindex="-1"></a><span class="co"># With `subdomain_levels_to_keep = 0` (default `www_handling` is `&quot;none&quot;`):</span></span>
-<span id="cb3-64"><a href="#cb3-64" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;http://www.deep.sub.example.com/path&quot;</span>, <span class="at">subdomain_levels_to_keep =</span> <span class="dv">0</span>)</span>
-<span id="cb3-65"><a href="#cb3-65" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://www.example.com/path&quot;</span></span>
-<span id="cb3-66"><a href="#cb3-66" tabindex="-1"></a></span>
-<span id="cb3-67"><a href="#cb3-67" tabindex="-1"></a><span class="co"># Host encoding and path encoding</span></span>
-<span id="cb3-68"><a href="#cb3-68" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;http://münich.com/a b&quot;</span>,</span>
-<span id="cb3-69"><a href="#cb3-69" tabindex="-1"></a>              <span class="at">host_encoding =</span> <span class="st">&quot;idna&quot;</span>,</span>
-<span id="cb3-70"><a href="#cb3-70" tabindex="-1"></a>              <span class="at">path_encoding =</span> <span class="st">&quot;encode&quot;</span>,</span>
-<span id="cb3-71"><a href="#cb3-71" tabindex="-1"></a>              <span class="at">case_handling =</span> <span class="st">&quot;lower_host&quot;</span>)</span>
-<span id="cb3-72"><a href="#cb3-72" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://xn--mnich-kva.com/a%20b&quot;</span></span>
-<span id="cb3-73"><a href="#cb3-73" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;http://xn--mnich-kva.com/a%20b&quot;</span>,</span>
-<span id="cb3-74"><a href="#cb3-74" tabindex="-1"></a>              <span class="at">host_encoding =</span> <span class="st">&quot;unicode&quot;</span>,</span>
-<span id="cb3-75"><a href="#cb3-75" tabindex="-1"></a>              <span class="at">path_encoding =</span> <span class="st">&quot;decode&quot;</span>,</span>
-<span id="cb3-76"><a href="#cb3-76" tabindex="-1"></a>              <span class="at">case_handling =</span> <span class="st">&quot;keep&quot;</span>)</span>
-<span id="cb3-77"><a href="#cb3-77" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://münich.com/a b&quot;</span></span></code></pre></div>
-<h2 id="option-reference-with-examples">Option Reference With
-Examples</h2>
-<p>Below is a quick, runnable tour of every option exposed by
-<code>safe_parse_url()</code>/<code>get_clean_url()</code>. All examples
-use <code>safe_parse_url()</code> for clarity; the same arguments work
-in <code>get_clean_url()</code>.</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="co"># Protocol handling: keep | none | strip | http | https</span></span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;Example.com/path&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co"># keep (default) -&gt; &quot;http://example.com/path&quot; (scheme added)</span></span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;https://Example.com/path&quot;</span>, <span class="at">protocol_handling =</span> <span class="st">&quot;none&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co"># none -&gt; &quot;https://example.com/path&quot; (keeps existing, won&#39;t add if missing)</span></span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;https://Example.com/path&quot;</span>, <span class="at">protocol_handling =</span> <span class="st">&quot;strip&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co"># strip -&gt; &quot;example.com/path&quot;</span></span>
-<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;Example.com/path&quot;</span>, <span class="at">protocol_handling =</span> <span class="st">&quot;http&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co"># http -&gt; &quot;http://example.com/path&quot;</span></span>
-<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;Example.com/path&quot;</span>, <span class="at">protocol_handling =</span> <span class="st">&quot;https&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co"># https -&gt; &quot;https://example.com/path&quot;</span></span>
-<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a></span>
-<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co"># www handling: none | strip | keep | if_no_subdomain</span></span>
-<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://www1.example.com&quot;</span>, <span class="at">www_handling =</span> <span class="st">&quot;none&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="co"># &quot;http://www1.example.com&quot;</span></span>
-<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://www1.example.com&quot;</span>, <span class="at">www_handling =</span> <span class="st">&quot;strip&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a><span class="co"># &quot;http://example.com&quot;</span></span>
-<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://example.com&quot;</span>, <span class="at">www_handling =</span> <span class="st">&quot;keep&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a><span class="co"># &quot;http://www.example.com&quot;</span></span>
-<span id="cb4-20"><a href="#cb4-20" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://sub.example.com&quot;</span>, <span class="at">www_handling =</span> <span class="st">&quot;if_no_subdomain&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-21"><a href="#cb4-21" tabindex="-1"></a><span class="co"># &quot;http://sub.example.com&quot; (subdomain preserved)</span></span>
-<span id="cb4-22"><a href="#cb4-22" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://example.com&quot;</span>, <span class="at">www_handling =</span> <span class="st">&quot;if_no_subdomain&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-23"><a href="#cb4-23" tabindex="-1"></a><span class="co"># &quot;http://www.example.com&quot; (www added only when no other subdomain)</span></span>
-<span id="cb4-24"><a href="#cb4-24" tabindex="-1"></a></span>
-<span id="cb4-25"><a href="#cb4-25" tabindex="-1"></a><span class="co"># Case handling: keep | lower | upper | lower_host</span></span>
-<span id="cb4-26"><a href="#cb4-26" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;Http://Www.Example.Com/Some/Path&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-27"><a href="#cb4-27" tabindex="-1"></a><span class="co"># keep (default) -&gt; host lowercased by curl, path kept as-is</span></span>
-<span id="cb4-28"><a href="#cb4-28" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;Http://Www.Example.Com/Some/Path&quot;</span>, <span class="at">case_handling =</span> <span class="st">&quot;lower&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-29"><a href="#cb4-29" tabindex="-1"></a><span class="co"># &quot;http://www.example.com/some/path&quot;</span></span>
-<span id="cb4-30"><a href="#cb4-30" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;Http://Www.Example.Com/Some/Path&quot;</span>, <span class="at">case_handling =</span> <span class="st">&quot;upper&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-31"><a href="#cb4-31" tabindex="-1"></a><span class="co"># &quot;HTTP://WWW.EXAMPLE.COM/SOME/PATH&quot;</span></span>
-<span id="cb4-32"><a href="#cb4-32" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;Http://Www.Example.Com/Some/Path&quot;</span>, <span class="at">case_handling =</span> <span class="st">&quot;lower_host&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-33"><a href="#cb4-33" tabindex="-1"></a><span class="co"># &quot;http://www.example.com/Some/Path&quot;</span></span>
-<span id="cb4-34"><a href="#cb4-34" tabindex="-1"></a></span>
-<span id="cb4-35"><a href="#cb4-35" tabindex="-1"></a><span class="co"># Trailing slash handling: none | keep | strip</span></span>
-<span id="cb4-36"><a href="#cb4-36" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://example.com/path&quot;</span>, <span class="at">trailing_slash_handling =</span> <span class="st">&quot;none&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-37"><a href="#cb4-37" tabindex="-1"></a><span class="co"># &quot;http://example.com/path&quot;</span></span>
-<span id="cb4-38"><a href="#cb4-38" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://example.com/path&quot;</span>, <span class="at">trailing_slash_handling =</span> <span class="st">&quot;keep&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-39"><a href="#cb4-39" tabindex="-1"></a><span class="co"># &quot;http://example.com/path/&quot;</span></span>
-<span id="cb4-40"><a href="#cb4-40" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://example.com/path/&quot;</span>, <span class="at">trailing_slash_handling =</span> <span class="st">&quot;strip&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-41"><a href="#cb4-41" tabindex="-1"></a><span class="co"># &quot;http://example.com/path&quot;</span></span>
-<span id="cb4-42"><a href="#cb4-42" tabindex="-1"></a></span>
-<span id="cb4-43"><a href="#cb4-43" tabindex="-1"></a><span class="co"># Host encoding: keep | idna | unicode</span></span>
-<span id="cb4-44"><a href="#cb4-44" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://münich.com/path&quot;</span>, <span class="at">host_encoding =</span> <span class="st">&quot;keep&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-45"><a href="#cb4-45" tabindex="-1"></a><span class="co"># &quot;http://münich.com/path&quot; (UTF-8 host if locale supports it)</span></span>
-<span id="cb4-46"><a href="#cb4-46" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://münich.com/path&quot;</span>, <span class="at">host_encoding =</span> <span class="st">&quot;idna&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-47"><a href="#cb4-47" tabindex="-1"></a><span class="co"># &quot;http://xn--mnich-kva.com/path&quot;</span></span>
-<span id="cb4-48"><a href="#cb4-48" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://xn--mnich-kva.com/path&quot;</span>, <span class="at">host_encoding =</span> <span class="st">&quot;unicode&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-49"><a href="#cb4-49" tabindex="-1"></a><span class="co"># &quot;http://münich.com/path&quot;</span></span>
-<span id="cb4-50"><a href="#cb4-50" tabindex="-1"></a></span>
-<span id="cb4-51"><a href="#cb4-51" tabindex="-1"></a><span class="co"># Path encoding: keep | encode | decode</span></span>
-<span id="cb4-52"><a href="#cb4-52" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://example.com/a%20b&quot;</span>, <span class="at">path_encoding =</span> <span class="st">&quot;keep&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-53"><a href="#cb4-53" tabindex="-1"></a><span class="co"># &quot;http://example.com/a%20b&quot;</span></span>
-<span id="cb4-54"><a href="#cb4-54" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://example.com/a%20b&quot;</span>, <span class="at">path_encoding =</span> <span class="st">&quot;decode&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-55"><a href="#cb4-55" tabindex="-1"></a><span class="co"># &quot;http://example.com/a b&quot;</span></span>
-<span id="cb4-56"><a href="#cb4-56" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://example.com/a b&quot;</span>, <span class="at">path_encoding =</span> <span class="st">&quot;encode&quot;</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-57"><a href="#cb4-57" tabindex="-1"></a><span class="co"># &quot;http://example.com/a%20b&quot;</span></span>
-<span id="cb4-58"><a href="#cb4-58" tabindex="-1"></a></span>
-<span id="cb4-59"><a href="#cb4-59" tabindex="-1"></a><span class="co"># Subdomain levels to keep: NULL | 0 | N&gt;0</span></span>
-<span id="cb4-60"><a href="#cb4-60" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://www.deep.sub.example.com/path&quot;</span>,</span>
-<span id="cb4-61"><a href="#cb4-61" tabindex="-1"></a>               <span class="at">subdomain_levels_to_keep =</span> <span class="cn">NULL</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-62"><a href="#cb4-62" tabindex="-1"></a><span class="co"># &quot;http://www.deep.sub.example.com/path&quot; (all kept after www handling)</span></span>
-<span id="cb4-63"><a href="#cb4-63" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://www.deep.sub.example.com/path&quot;</span>,</span>
-<span id="cb4-64"><a href="#cb4-64" tabindex="-1"></a>               <span class="at">subdomain_levels_to_keep =</span> <span class="dv">0</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-65"><a href="#cb4-65" tabindex="-1"></a><span class="co"># &quot;http://www.example.com/path&quot;</span></span>
-<span id="cb4-66"><a href="#cb4-66" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;http://www.deep.sub.example.com/path&quot;</span>,</span>
-<span id="cb4-67"><a href="#cb4-67" tabindex="-1"></a>               <span class="at">subdomain_levels_to_keep =</span> <span class="dv">1</span>)<span class="sc">$</span>clean_url</span>
-<span id="cb4-68"><a href="#cb4-68" tabindex="-1"></a><span class="co"># &quot;http://www.sub.example.com/path&quot;</span></span></code></pre></div>
-<h2 id="data-sources">Data Sources</h2>
-<p>This package includes a processed copy of the <a href="https://publicsuffix.org/">Public Suffix List (PSL)</a>, used to
-extract registered domains and top-level domains. It is updated manually
-via <code>data-raw/update_psl.R</code>. The original list is maintained
-by Mozilla and hosted at: <a href="https://publicsuffix.org/list/public_suffix_list.dat">https://publicsuffix.org/list/public_suffix_list.dat</a>
-The data is included in accordance with the <a href="https://github.com/publicsuffix/list/blob/main/LICENSE">Mozilla
-Public License 2.0</a> and is never downloaded at runtime. See
-<code>inst/LICENSE.psl</code> for full license text.</p>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>parsed <span class="ot">&lt;-</span> <span class="fu">safe_parse_url</span>(</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>  <span class="st">&quot;HTTP://www.Example.com/a//b/../index.html?x=1#frag&quot;</span>,</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>  <span class="at">protocol_handling =</span> <span class="st">&quot;https&quot;</span>,</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  <span class="at">www_handling =</span> <span class="st">&quot;strip&quot;</span>,</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="at">case_handling =</span> <span class="st">&quot;lower_host&quot;</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>  <span class="at">trailing_slash_handling =</span> <span class="st">&quot;strip&quot;</span>,</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>  <span class="at">index_page_handling =</span> <span class="st">&quot;strip&quot;</span>,</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>  <span class="at">path_normalization =</span> <span class="st">&quot;both&quot;</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>  <span class="at">host_encoding =</span> <span class="st">&quot;idna&quot;</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>  <span class="at">path_encoding =</span> <span class="st">&quot;encode&quot;</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>)</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>parsed<span class="sc">$</span>clean_url</span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="co">#&gt; [1] &quot;https://example.com/a&quot;</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a>parsed<span class="sc">$</span>parse_status</span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="co">#&gt; [1] &quot;ok&quot;</span></span></code></pre></div>
+<p>Scheme-relative URL handling is configurable:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;//example.com/path&quot;</span>, <span class="at">scheme_relative_handling =</span> <span class="st">&quot;keep&quot;</span>)<span class="sc">$</span>parse_status</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="co">#&gt; [1] &quot;ok-scheme-relative&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="fu">safe_parse_url</span>(<span class="st">&quot;//example.com/path&quot;</span>, <span class="at">scheme_relative_handling =</span> <span class="st">&quot;https&quot;</span>)<span class="sc">$</span>clean_url</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co">#&gt; [1] &quot;https://example.com/path&quot;</span></span></code></pre></div>
+<p>For vectors, use <code>safe_parse_urls()</code>:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">safe_parse_urls</span>(<span class="fu">c</span>(<span class="st">&quot;example.com&quot;</span>, <span class="st">&quot;https://www.example.com/path&quot;</span>))[, <span class="fu">c</span>(<span class="st">&quot;original_url&quot;</span>, <span class="st">&quot;clean_url&quot;</span>, <span class="st">&quot;parse_status&quot;</span>)]</span></code></pre></div>
+<h2 id="normalization-controls">Normalization Controls</h2>
+<p><code>safe_parse_url()</code> and <code>get_clean_url()</code>
+support these controls:</p>
+<ul>
+<li><code>protocol_handling</code>: <code>keep</code>,
+<code>none</code>, <code>strip</code>, <code>http</code>,
+<code>https</code></li>
+<li><code>www_handling</code>: <code>none</code>, <code>strip</code>,
+<code>keep</code>, <code>if_no_subdomain</code></li>
+<li><code>case_handling</code>: <code>keep</code>, <code>lower</code>,
+<code>upper</code>, <code>lower_host</code></li>
+<li><code>trailing_slash_handling</code>: <code>none</code>,
+<code>keep</code>, <code>strip</code></li>
+<li><code>index_page_handling</code>: <code>keep</code>,
+<code>strip</code></li>
+<li><code>path_normalization</code>: <code>none</code>,
+<code>collapse_slashes</code>, <code>dot_segments</code>,
+<code>both</code></li>
+<li><code>scheme_relative_handling</code>: <code>keep</code>,
+<code>http</code>, <code>https</code>, <code>error</code></li>
+<li><code>host_encoding</code>: <code>keep</code>, <code>idna</code>,
+<code>unicode</code></li>
+<li><code>path_encoding</code>: <code>keep</code>, <code>encode</code>,
+<code>decode</code></li>
+<li><code>subdomain_levels_to_keep</code>: <code>NULL</code>,
+<code>0</code>, or <code>N &gt; 0</code></li>
+</ul>
+<p>Subdomain retention is applied after <code>www_handling</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">get_host</span>(<span class="st">&quot;http://www.three.two.one.example.com&quot;</span>, <span class="at">www_handling =</span> <span class="st">&quot;strip&quot;</span>, <span class="at">subdomain_levels_to_keep =</span> <span class="dv">1</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="co">#&gt; [1] &quot;one.example.com&quot;</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;http://www.deep.sub.example.com/path&quot;</span>, <span class="at">subdomain_levels_to_keep =</span> <span class="dv">0</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://www.example.com/path&quot;</span></span></code></pre></div>
+<p>Host and path encoding controls:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;http://münich.com/a b&quot;</span>,</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>              <span class="at">host_encoding =</span> <span class="st">&quot;idna&quot;</span>,</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>              <span class="at">path_encoding =</span> <span class="st">&quot;encode&quot;</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>              <span class="at">case_handling =</span> <span class="st">&quot;lower_host&quot;</span>)</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://xn--mnich-kva.com/a%20b&quot;</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="fu">get_clean_url</span>(<span class="st">&quot;http://xn--mnich-kva.com/a%20b&quot;</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>              <span class="at">host_encoding =</span> <span class="st">&quot;unicode&quot;</span>,</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>              <span class="at">path_encoding =</span> <span class="st">&quot;decode&quot;</span>,</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>              <span class="at">case_handling =</span> <span class="st">&quot;keep&quot;</span>)</span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt; [1] &quot;http://münich.com/a b&quot;</span></span></code></pre></div>
+<h2 id="accessors">Accessors</h2>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>u <span class="ot">&lt;-</span> <span class="st">&quot;https://user:pass@www.blog.example.co.uk/path/to/page?a=1&amp;b=2#frag&quot;</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="fu">get_scheme</span>(u)</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="fu">get_host</span>(u)</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="fu">get_subdomain</span>(u)</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="fu">get_domain</span>(u)</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="fu">get_tld</span>(u)</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="fu">get_path</span>(u)</span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="fu">get_query</span>(u)</span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="fu">get_query</span>(u, <span class="at">format =</span> <span class="st">&quot;list&quot;</span>)</span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="fu">get_fragment</span>(u)</span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="fu">get_port</span>(u)</span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="fu">get_user</span>(u)</span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="fu">get_password</span>(u)</span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="fu">get_userinfo</span>(u)</span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a><span class="fu">get_parse_status</span>(<span class="fu">c</span>(u, <span class="st">&quot;mailto:test@example.com&quot;</span>))</span></code></pre></div>
+<h2 id="permutations-and-url-joins">Permutations and URL Joins</h2>
+<p>Generate variants with <code>permute_url()</code>:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">permute_url</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="st">&quot;Example.com/path&quot;</span>,</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="at">protocol_handling =</span> <span class="fu">c</span>(<span class="st">&quot;http&quot;</span>, <span class="st">&quot;https&quot;</span>),</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="at">www_handling =</span> <span class="fu">c</span>(<span class="st">&quot;none&quot;</span>, <span class="st">&quot;keep&quot;</span>),</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="at">trailing_slash_handling =</span> <span class="fu">c</span>(<span class="st">&quot;none&quot;</span>, <span class="st">&quot;keep&quot;</span>),</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>  <span class="at">include_rank =</span> <span class="cn">TRUE</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a>)</span></code></pre></div>
+<p><code>canonical_join()</code> matches on one canonicalized key per
+URL and is the preferred option for large datasets:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>A <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">URL =</span> <span class="fu">c</span>(<span class="st">&quot;http://Example.com/Page&quot;</span>, <span class="st">&quot;http://example.com/Other&quot;</span>),</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>                <span class="at">ValA =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>, <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>B <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">URL =</span> <span class="fu">c</span>(<span class="st">&quot;https://www.example.com/Page/&quot;</span>, <span class="st">&quot;http://example.com/Miss&quot;</span>),</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>                <span class="at">ValB =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>), <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="fu">canonical_join</span>(</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a>  A, B,</span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a>  <span class="at">protocol_handling =</span> <span class="st">&quot;strip&quot;</span>,</span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a>  <span class="at">www_handling =</span> <span class="st">&quot;strip&quot;</span>,</span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a>  <span class="at">case_handling =</span> <span class="st">&quot;lower_host&quot;</span>,</span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a>  <span class="at">trailing_slash_handling =</span> <span class="st">&quot;strip&quot;</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a>)</span></code></pre></div>
+<p><code>permutation_join()</code> matches rows when any generated
+permutation overlaps:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">permutation_join</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  A, B,</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="at">keep =</span> <span class="st">&quot;best&quot;</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="at">include_join_rank =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="at">protocol_handling =</span> <span class="fu">c</span>(<span class="st">&quot;http&quot;</span>, <span class="st">&quot;https&quot;</span>),</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="at">www_handling =</span> <span class="fu">c</span>(<span class="st">&quot;none&quot;</span>, <span class="st">&quot;keep&quot;</span>),</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>  <span class="at">trailing_slash_handling =</span> <span class="fu">c</span>(<span class="st">&quot;none&quot;</span>, <span class="st">&quot;keep&quot;</span>)</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a>)</span></code></pre></div>
+<h2 id="caching">Caching</h2>
+<p><code>rurl</code> memoizes parse/domain/TLD work to speed repeated
+operations over large URL vectors. To clear caches in a long-running
+session:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">rurl_clear_caches</span>()</span></code></pre></div>
+<h2 id="public-suffix-list-data">Public Suffix List Data</h2>
+<p><code>rurl</code> ships with a processed copy of the <a href="https://publicsuffix.org/">Public Suffix List (PSL)</a> and never
+downloads it at runtime.</p>
 <p>To refresh it:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># From the root of the package:</span></span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">source</span>(<span class="st">&quot;data-raw/update_psl.R&quot;</span>)</span></code></pre></div>
-<p>This regenerates the internal <code>sysdata.rda</code> file used for
-domain parsing.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">source</span>(<span class="st">&quot;data-raw/update_psl.R&quot;</span>)</span></code></pre></div>
+<p>This regenerates internal data used for domain and TLD
+extraction.</p>
 <h2 id="license">License</h2>
 <p>MIT © 2025 Bart Turczynski</p>
 

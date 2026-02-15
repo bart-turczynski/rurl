@@ -3,151 +3,114 @@ title: "rurl"
 output: github_document
 ---
 
-# rurl
+`rurl` is a lightweight, vectorized toolkit for URL parsing, normalization,
+extraction, permutation, and matching in R.
 
-`rurl` is a small, pipe-friendly, and vectorized R package that helps you
-construct, parse, and clean URLs from various components. It is designed to make URL
-manipulation and HTTP endpoint generation readable, composable, and easy to
-integrate into modern R workflows.
+Current package capabilities include:
 
-It includes helpers to:
-- Get cleaned URLs with fine-grained control over protocols, 'www' prefixes, casing, trailing slashes, host IDNA vs Unicode, and path percent-encoding.
-- Extract domains, paths, schemes, hosts, and top-level domains (TLDs).
-- Normalize, strip, or enforce specific protocols.
-- Handle 'www' prefixes in hostnames.
+- Robust parsing via `safe_parse_url()` and `safe_parse_urls()`
+- URL normalization with fine-grained controls for protocol, `www`, case,
+  trailing slashes, index pages, path normalization, scheme-relative URLs,
+  host encoding, and path encoding
+- URL component extractors (`get_*` helpers)
+- Variant generation with `permute_url()`
+- URL-based joins with `canonical_join()` and `permutation_join()`
+- Built-in memoization caches with `rurl_clear_caches()`
 
 ## Installation
 
 ```r
-# Install from GitHub
-# devtools::install_github("bart-turczynski/rurl")
+# install.packages("remotes")
+remotes::install_github("bart-turczynski/rurl")
 ```
 
-## Core Functionality
+## Function Overview
 
-The primary workhorse of the package is `safe_parse_url()`. This function comprehensively parses a URL and allows for various transformations. It returns a detailed list of URL components and a cleaned URL string.
+- Parsing and normalization: `safe_parse_url()`, `safe_parse_urls()`,
+  `get_clean_url()`
+- Accessors: `get_scheme()`, `get_host()`, `get_subdomain()`, `get_domain()`,
+  `get_tld()`, `get_path()`, `get_query()`, `get_fragment()`, `get_port()`,
+  `get_user()`, `get_password()`, `get_userinfo()`, `get_parse_status()`
+- Permutations: `permute_url()`
+- Matching/joining:
+  - `canonical_join()` for deterministic canonical-key joins
+  - `permutation_join()` for broader matching across generated variants
+- Cache control: `rurl_clear_caches()`
+
+## Quick Start
+
+`safe_parse_url()` is the core workhorse. It returns parsed components and a
+normalized `clean_url`.
 
 ```r
 library(rurl)
 
-# Example of detailed parsing and transformation
-parsed_details <- safe_parse_url(
-  "Http://Www.Example.Com/Some/Path/?Query=1#Frag",
-  protocol_handling = "https",       # Force https
-  www_handling = "strip",            # Remove www
-  case_handling = "lower_host",      # Lowercase scheme+host only
-  trailing_slash_handling = "strip", # Remove trailing slash
-  host_encoding = "idna",            # Punycode host if non-ASCII
-  path_encoding = "keep"             # Leave path encoding as-is
+parsed <- safe_parse_url(
+  "HTTP://www.Example.com/a//b/../index.html?x=1#frag",
+  protocol_handling = "https",
+  www_handling = "strip",
+  case_handling = "lower_host",
+  trailing_slash_handling = "strip",
+  index_page_handling = "strip",
+  path_normalization = "both",
+  host_encoding = "idna",
+  path_encoding = "encode"
 )
 
-# The cleaned URL (scheme, host, path only by default)
-print(parsed_details$clean_url)
-#> [1] "https://example.com/some/path"
-
-# Full list of parsed and derived components
-# print(parsed_details)
-# Output would include:
-# $original_url: "Http://Www.Example.Com/Some/Path/?Query=1#Frag"
-# $scheme: "https"
-# $host: "example.com"
-# $port: NULL (or parsed port if present and not stripped)
-# $path: "/some/path" (after trailing slash handling)
-# $query: "Query=1"
-# $fragment: "Frag"
-# $domain: "example.com"
-# $tld: "com"
-# $is_ip_host: FALSE
-# $clean_url: "https://example.com/some/path"
-# $parse_status: "ok"
-```
-
-For vectors, use `safe_parse_urls()` to return a data frame:
-
-```r
-parsed_df <- safe_parse_urls(c("example.com", "https://www.example.com/path"))
-print(parsed_df$clean_url)
-```
-
-Most other exported functions are convenient wrappers around `safe_parse_url()` to extract specific parts of a URL or just the `clean_url` string.
-
-## Examples of Helper Functions
-
-```r
-library(rurl)
-
-# Get cleaned URL with specific handling
-# Note: case_handling defaults to "keep", trailing_slash_handling to "none"
-
-get_clean_url("Http://Example.Com/MyPath/")
-#> [1] "http://Example.Com/MyPath/"
-
-get_clean_url("Http://Example.Com/MyPath/",
-              case_handling = "lower",
-              trailing_slash_handling = "strip")
-#> [1] "http://example.com/mypath"
-
-get_clean_url("ftp://Sub.Example.ORG/anotherPath",
-              protocol_handling = "strip", # Removes ftp://
-              www_handling = "keep",       # Ensures www.
-              case_handling = "upper",     # Converts to uppercase
-              trailing_slash_handling = "keep") # Ensures trailing slash
-#> [1] "WWW.SUB.EXAMPLE.ORG/ANOTHERPATH/"
-
-get_clean_url("example.com:8080/path", trailing_slash_handling = "keep")
-#> [1] "http://example.com/path/" # Port is not part of clean_url by default
-
-# Extracting specific components
-get_domain("https://sub.example.co.uk/page")
-#> [1] "example.co.uk"
-
-get_scheme("Example.com/Test", protocol_handling = "https")
-#> [1] "https"
-
-get_scheme("Example.com/Test", protocol_handling = "none") # No scheme forced or kept
-#> [1] NA
-
-# Host is lowercased due to default case_handling in the underlying safe_parse_url call
-get_host("Http://User:Pass@MyHost.Com:8080/SomeWhere")
-#> [1] "myhost.com"
-
-# Path is lowercased; trailing slash from input is preserved with trailing_slash_handling = "none" (default)
-get_path("HTTP://EXAMPLE.NET/A/B/C/?p=1")
-#> [1] "/a/b/c/"
-
-get_tld("www.sub.example.co.uk")
-#> [1] "co.uk"
-
-get_parse_status("mailto:test@example.com")
-#> [1] "error"
-get_parse_status("http://example.com")
+parsed$clean_url
+#> [1] "https://example.com/a"
+parsed$parse_status
 #> [1] "ok"
 ```
 
-# Handling Subdomain Levels
+Scheme-relative URL handling is configurable:
 
-Functions like `get_host()` and `get_clean_url()` also support the `subdomain_levels_to_keep` argument.
-This provides control over how many subdomain levels are kept in the host *after* `www_handling`.
+```r
+safe_parse_url("//example.com/path", scheme_relative_handling = "keep")$parse_status
+#> [1] "ok-scheme-relative"
+safe_parse_url("//example.com/path", scheme_relative_handling = "https")$clean_url
+#> [1] "https://example.com/path"
+```
 
-``` r
-# `NULL` (default): keeps all subdomains (beyond www handling).
-# `0`: strips all subdomains (e.g., `one.two.example.com` becomes `example.com`).
-# `N > 0`: keeps N levels of subdomains (e.g., `one.two.example.com` with N=1 becomes `two.example.com`).
+For vectors, use `safe_parse_urls()`:
 
-# With `www_handling = "strip"` and `subdomain_levels_to_keep = 1`:
+```r
+safe_parse_urls(c("example.com", "https://www.example.com/path"))[, c("original_url", "clean_url", "parse_status")]
+```
+
+## Normalization Controls
+
+`safe_parse_url()` and `get_clean_url()` support these controls:
+
+- `protocol_handling`: `keep`, `none`, `strip`, `http`, `https`
+- `www_handling`: `none`, `strip`, `keep`, `if_no_subdomain`
+- `case_handling`: `keep`, `lower`, `upper`, `lower_host`
+- `trailing_slash_handling`: `none`, `keep`, `strip`
+- `index_page_handling`: `keep`, `strip`
+- `path_normalization`: `none`, `collapse_slashes`, `dot_segments`, `both`
+- `scheme_relative_handling`: `keep`, `http`, `https`, `error`
+- `host_encoding`: `keep`, `idna`, `unicode`
+- `path_encoding`: `keep`, `encode`, `decode`
+- `subdomain_levels_to_keep`: `NULL`, `0`, or `N > 0`
+
+Subdomain retention is applied after `www_handling`:
+
+```r
 get_host("http://www.three.two.one.example.com", www_handling = "strip", subdomain_levels_to_keep = 1)
 #> [1] "one.example.com"
-
-# With `subdomain_levels_to_keep = 0` (default `www_handling` is `"none"`):
 get_clean_url("http://www.deep.sub.example.com/path", subdomain_levels_to_keep = 0)
 #> [1] "http://www.example.com/path"
+```
 
-# Host encoding and path encoding
+Host and path encoding controls:
+
+```r
 get_clean_url("http://münich.com/a b",
               host_encoding = "idna",
               path_encoding = "encode",
               case_handling = "lower_host")
 #> [1] "http://xn--mnich-kva.com/a%20b"
+
 get_clean_url("http://xn--mnich-kva.com/a%20b",
               host_encoding = "unicode",
               path_encoding = "decode",
@@ -155,96 +118,94 @@ get_clean_url("http://xn--mnich-kva.com/a%20b",
 #> [1] "http://münich.com/a b"
 ```
 
-## Option Reference With Examples
-
-Below is a quick, runnable tour of every option exposed by `safe_parse_url()`/`get_clean_url()`. All examples use `safe_parse_url()` for clarity; the same arguments work in `get_clean_url()`.
+## Accessors
 
 ```r
-# Protocol handling: keep | none | strip | http | https
-safe_parse_url("Example.com/path")$clean_url
-# keep (default) -> "http://example.com/path" (scheme added)
-safe_parse_url("https://Example.com/path", protocol_handling = "none")$clean_url
-# none -> "https://example.com/path" (keeps existing, won't add if missing)
-safe_parse_url("https://Example.com/path", protocol_handling = "strip")$clean_url
-# strip -> "example.com/path"
-safe_parse_url("Example.com/path", protocol_handling = "http")$clean_url
-# http -> "http://example.com/path"
-safe_parse_url("Example.com/path", protocol_handling = "https")$clean_url
-# https -> "https://example.com/path"
+u <- "https://user:pass@www.blog.example.co.uk/path/to/page?a=1&b=2#frag"
 
-# www handling: none | strip | keep | if_no_subdomain
-safe_parse_url("http://www1.example.com", www_handling = "none")$clean_url
-# "http://www1.example.com"
-safe_parse_url("http://www1.example.com", www_handling = "strip")$clean_url
-# "http://example.com"
-safe_parse_url("http://example.com", www_handling = "keep")$clean_url
-# "http://www.example.com"
-safe_parse_url("http://sub.example.com", www_handling = "if_no_subdomain")$clean_url
-# "http://sub.example.com" (subdomain preserved)
-safe_parse_url("http://example.com", www_handling = "if_no_subdomain")$clean_url
-# "http://www.example.com" (www added only when no other subdomain)
-
-# Case handling: keep | lower | upper | lower_host
-safe_parse_url("Http://Www.Example.Com/Some/Path")$clean_url
-# keep (default) -> host lowercased by curl, path kept as-is
-safe_parse_url("Http://Www.Example.Com/Some/Path", case_handling = "lower")$clean_url
-# "http://www.example.com/some/path"
-safe_parse_url("Http://Www.Example.Com/Some/Path", case_handling = "upper")$clean_url
-# "HTTP://WWW.EXAMPLE.COM/SOME/PATH"
-safe_parse_url("Http://Www.Example.Com/Some/Path", case_handling = "lower_host")$clean_url
-# "http://www.example.com/Some/Path"
-
-# Trailing slash handling: none | keep | strip
-safe_parse_url("http://example.com/path", trailing_slash_handling = "none")$clean_url
-# "http://example.com/path"
-safe_parse_url("http://example.com/path", trailing_slash_handling = "keep")$clean_url
-# "http://example.com/path/"
-safe_parse_url("http://example.com/path/", trailing_slash_handling = "strip")$clean_url
-# "http://example.com/path"
-
-# Host encoding: keep | idna | unicode
-safe_parse_url("http://münich.com/path", host_encoding = "keep")$clean_url
-# "http://münich.com/path" (UTF-8 host if locale supports it)
-safe_parse_url("http://münich.com/path", host_encoding = "idna")$clean_url
-# "http://xn--mnich-kva.com/path"
-safe_parse_url("http://xn--mnich-kva.com/path", host_encoding = "unicode")$clean_url
-# "http://münich.com/path"
-
-# Path encoding: keep | encode | decode
-safe_parse_url("http://example.com/a%20b", path_encoding = "keep")$clean_url
-# "http://example.com/a%20b"
-safe_parse_url("http://example.com/a%20b", path_encoding = "decode")$clean_url
-# "http://example.com/a b"
-safe_parse_url("http://example.com/a b", path_encoding = "encode")$clean_url
-# "http://example.com/a%20b"
-
-# Subdomain levels to keep: NULL | 0 | N>0
-safe_parse_url("http://www.deep.sub.example.com/path",
-               subdomain_levels_to_keep = NULL)$clean_url
-# "http://www.deep.sub.example.com/path" (all kept after www handling)
-safe_parse_url("http://www.deep.sub.example.com/path",
-               subdomain_levels_to_keep = 0)$clean_url
-# "http://www.example.com/path"
-safe_parse_url("http://www.deep.sub.example.com/path",
-               subdomain_levels_to_keep = 1)$clean_url
-# "http://www.sub.example.com/path"
+get_scheme(u)
+get_host(u)
+get_subdomain(u)
+get_domain(u)
+get_tld(u)
+get_path(u)
+get_query(u)
+get_query(u, format = "list")
+get_fragment(u)
+get_port(u)
+get_user(u)
+get_password(u)
+get_userinfo(u)
+get_parse_status(c(u, "mailto:test@example.com"))
 ```
 
-## Data Sources
+## Permutations and URL Joins
 
-This package includes a processed copy of the [Public Suffix List (PSL)](https://publicsuffix.org/), used to extract registered domains and top-level domains.
-It is updated manually via `data-raw/update_psl.R`. The original list is maintained by Mozilla and hosted at:
-https://publicsuffix.org/list/public_suffix_list.dat
-The data is included in accordance with the [Mozilla Public License 2.0](https://github.com/publicsuffix/list/blob/main/LICENSE) and is never downloaded at runtime. See `inst/LICENSE.psl` for full license text.
+Generate variants with `permute_url()`:
+
+```r
+permute_url(
+  "Example.com/path",
+  protocol_handling = c("http", "https"),
+  www_handling = c("none", "keep"),
+  trailing_slash_handling = c("none", "keep"),
+  include_rank = TRUE
+)
+```
+
+`canonical_join()` matches on one canonicalized key per URL and is the
+preferred option for large datasets:
+
+```r
+A <- data.frame(URL = c("http://Example.com/Page", "http://example.com/Other"),
+                ValA = 1:2, stringsAsFactors = FALSE)
+B <- data.frame(URL = c("https://www.example.com/Page/", "http://example.com/Miss"),
+                ValB = c("x", "y"), stringsAsFactors = FALSE)
+
+canonical_join(
+  A, B,
+  protocol_handling = "strip",
+  www_handling = "strip",
+  case_handling = "lower_host",
+  trailing_slash_handling = "strip"
+)
+```
+
+`permutation_join()` matches rows when any generated permutation overlaps:
+
+```r
+permutation_join(
+  A, B,
+  keep = "best",
+  include_join_rank = TRUE,
+  protocol_handling = c("http", "https"),
+  www_handling = c("none", "keep"),
+  trailing_slash_handling = c("none", "keep")
+)
+```
+
+## Caching
+
+`rurl` memoizes parse/domain/TLD work to speed repeated operations over large URL
+vectors. To clear caches in a long-running session:
+
+```r
+rurl_clear_caches()
+```
+
+## Public Suffix List Data
+
+`rurl` ships with a processed copy of the
+[Public Suffix List (PSL)](https://publicsuffix.org/) and never downloads it at
+runtime.
 
 To refresh it:
 
 ```r
-# From the root of the package:
 source("data-raw/update_psl.R")
 ```
 
-This regenerates the internal `sysdata.rda` file used for domain parsing.
+This regenerates internal data used for domain and TLD extraction.
 
 ## License
 
