@@ -22,7 +22,8 @@ get_subdomain(
 
 \item{source}{Which PSL source to use: "all", "private", or "icann".}
 
-\item{include_www}{Logical; if FALSE (default), removes a leading www/www[0-9]* label.}
+\item{include_www}{Logical; if FALSE (default), removes a leading
+www/www[0-9]* label only when it is the sole subdomain label.}
 
 \item{format}{Return format: "string" (default) or "labels" for a character vector of labels.}
 }

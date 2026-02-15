@@ -249,7 +249,7 @@ test_that("get_subdomain handles edge cases and formats", {
 
   res_labels <- get_subdomain("http://www.blog.example.co.uk", source = "all", format = "labels")
   expect_true(is.list(res_labels))
-  expect_equal(res_labels[[1]], "blog")
+  expect_equal(res_labels[[1]], c("www", "blog"))
 })
 
 test_that("get_subdomain with non-all source uses derived domain", {

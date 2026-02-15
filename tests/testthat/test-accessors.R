@@ -158,10 +158,12 @@ test_that("get_domain respects PSL source options", {
 })
 
 test_that("get_subdomain returns expected values", {
-  expect_equal(unname(get_subdomain("http://www.blog.example.co.uk")), "blog")
+  expect_equal(unname(get_subdomain("http://www.blog.example.co.uk")), "www.blog")
   expect_equal(unname(get_subdomain("http://www.blog.example.co.uk", include_www = TRUE)), "www.blog")
+  expect_true(is.na(unname(get_subdomain("http://www.example.co.uk"))))
+  expect_equal(unname(get_subdomain("http://www.example.co.uk", include_www = TRUE)), "www")
   labels <- get_subdomain("http://www.blog.example.co.uk", format = "labels")
-  expect_equal(labels[[1]], c("blog"))
+  expect_equal(labels[[1]], c("www", "blog"))
 })
 
 test_that(".get_registered_domain handles known cases correctly", {

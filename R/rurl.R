@@ -1408,7 +1408,8 @@ get_userinfo <- function(url, protocol_handling = "keep") {
 #' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to "keep".
 #' @param www_handling See \code{\link{safe_parse_url}}. Defaults to "none".
 #' @param source Which PSL source to use: "all", "private", or "icann".
-#' @param include_www Logical; if FALSE (default), removes a leading www/www[0-9]* label.
+#' @param include_www Logical; if FALSE (default), removes a leading
+#'   www/www[0-9]* label only when it is the sole subdomain label.
 #' @param format Return format: "string" (default) or "labels" for a character vector of labels.
 #' @return A character vector (format="string") or list of label vectors (format="labels").
 #' @export
@@ -1454,7 +1455,7 @@ get_subdomain <- function(url,
     if (!nzchar(sub_part)) return(character(0))
 
     labels <- strsplit(sub_part, "\\.")[[1]]
-    if (!include_www && length(labels) > 0 && grepl("^www[0-9]*$", labels[1])) {
+    if (!include_www && length(labels) == 1 && grepl("^www[0-9]*$", labels[1])) {
       labels <- labels[-1]
     }
     labels
