@@ -1,7 +1,7 @@
 Package: rurl
 Type: Package
 Title: Rurl: Tools to Parse and Clean URLs in R
-Version: 0.3.0
+Version: 1.0.0
 Language: en-US
 Authors@R: 
     person("Bart", "Turczynski", email = "bartek+rurl@turczynski.pl", role = c("aut", "cre"))

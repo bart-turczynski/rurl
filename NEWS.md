@@ -3,7 +3,7 @@
 - Published first stable GitHub release tag: `v1`.
 - Release notes added in `RELEASE_NOTES_v1.md`.
 - GitHub release page: <https://github.com/bart-turczynski/rurl/releases/tag/v1>
-- Package version for this release remains `0.3.0` (see `DESCRIPTION`).
+- Package version for this release is `1.0.0` (see `DESCRIPTION`).
 
 ---
 

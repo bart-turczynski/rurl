@@ -1,7 +1,7 @@
 # rurl v1 Release Notes
 
 This is the first stable GitHub release of `rurl`, published as `v1`.
-It reflects the current package implementation (version `0.3.0` in `DESCRIPTION`).
+It reflects package version `1.0.0` as declared in `DESCRIPTION`.
 
 ## What `rurl` Provides
 
@@ -29,7 +29,7 @@ Core capabilities:
 
 ## Included in This Release
 
-This `v1` release includes all current functionality from package release `0.3.0`, including:
+This `v1` release includes the current `1.0.0` functionality, including:
 
 - Flexible normalization controls (`case_handling`, `trailing_slash_handling`, and related options)
 - URL permutation generation for robust matching workflows
@@ -47,5 +47,5 @@ remotes::install_github("bart-turczynski/rurl")
 ## Notes
 
 - This release tag is `v1`.
-- The R package version remains `0.3.0` as declared in `DESCRIPTION`.
+- The R package version for this release is `1.0.0`.
 - For full historical package changes, see `NEWS.md`.
