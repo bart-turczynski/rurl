@@ -1,3 +1,12 @@
+## rurl v1 (GitHub Release) - 2026-02-16
+
+- Published first stable GitHub release tag: `v1`.
+- Release notes added in `RELEASE_NOTES_v1.md`.
+- GitHub release page: <https://github.com/bart-turczynski/rurl/releases/tag/v1>
+- Package version for this release remains `0.3.0` (see `DESCRIPTION`).
+
+---
+
 ## rurl 0.3.0
 
 This release adds powerful new capabilities for URL normalization, variant generation, and dataset joining based on flexible URL permutations. It significantly improves robustness in handling malformed or inconsistent URLs.
