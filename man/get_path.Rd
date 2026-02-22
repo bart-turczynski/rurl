@@ -13,9 +13,11 @@ get_path(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
+\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to
+"keep".}
 
-\item{case_handling}{How to handle casing of the returned path. Defaults to "lower".}
+\item{case_handling}{How to handle casing of the returned path. Defaults to
+"lower".}
 }
 \value{
 A character vector of URL paths.

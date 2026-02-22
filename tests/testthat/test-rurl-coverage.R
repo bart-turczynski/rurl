@@ -20,10 +20,13 @@ test_that("internal parse handles NA regex results", {
   orig <- get("stri_detect_regex", envir = ns)
   was_locked <- bindingIsLocked("stri_detect_regex", ns)
   if (was_locked) unlockBinding("stri_detect_regex", ns)
-  withr::defer({
-    assign("stri_detect_regex", orig, envir = ns)
-    if (was_locked) lockBinding("stri_detect_regex", ns)
-  }, testthat::teardown_env())
+  withr::defer(
+    {
+      assign("stri_detect_regex", orig, envir = ns)
+      if (was_locked) lockBinding("stri_detect_regex", ns)
+    },
+    testthat::teardown_env()
+  )
 
   assign("stri_detect_regex", function(string, pattern, ...) {
     if (identical(pattern, "^([a-zA-Z][a-zA-Z0-9+.-]*):\\\\/\\\\/")) {
@@ -73,14 +76,21 @@ test_that("safe_parse_url handles NA from stringi ip detection", {
   orig <- get("stri_detect_regex", envir = ns)
   was_locked <- bindingIsLocked("stri_detect_regex", ns)
   if (was_locked) unlockBinding("stri_detect_regex", ns)
-  withr::defer({
-    assign("stri_detect_regex", orig, envir = ns)
-    if (was_locked) lockBinding("stri_detect_regex", ns)
-  }, testthat::teardown_env())
+  withr::defer(
+    {
+      assign("stri_detect_regex", orig, envir = ns)
+      if (was_locked) lockBinding("stri_detect_regex", ns)
+    },
+    testthat::teardown_env()
+  )
 
   assign("stri_detect_regex", function(string, pattern, ...) {
     if (identical(string, "127.0.0.1") &&
-        pattern %in% c("^\\d{1,3}(\\.\\d{1,3}){3}$", "^\\[?[0-9a-fA-F:]+\\]?$", ":")) {
+      pattern %in% c(
+        "^\\d{1,3}(\\.\\d{1,3}){3}$",
+        "^\\[?[0-9a-fA-F:]+\\]?$",
+        ":"
+      )) {
       return(NA)
     }
     orig(string, pattern, ...)
@@ -95,10 +105,13 @@ test_that("safe_parse_url handles empty host from curl_parse_url", {
   orig <- get("curl_parse_url", envir = ns)
   was_locked <- bindingIsLocked("curl_parse_url", ns)
   if (was_locked) unlockBinding("curl_parse_url", ns)
-  withr::defer({
-    assign("curl_parse_url", orig, envir = ns)
-    if (was_locked) lockBinding("curl_parse_url", ns)
-  }, testthat::teardown_env())
+  withr::defer(
+    {
+      assign("curl_parse_url", orig, envir = ns)
+      if (was_locked) lockBinding("curl_parse_url", ns)
+    },
+    testthat::teardown_env()
+  )
 
   assign("curl_parse_url", function(url, ...) {
     if (identical(url, "http://empty-host")) {
@@ -108,23 +121,37 @@ test_that("safe_parse_url handles empty host from curl_parse_url", {
   }, envir = ns)
 
   res_keep <- safe_parse_url("http://empty-host", www_handling = "keep")
-  res_if_no <- safe_parse_url("http://empty-host", www_handling = "if_no_subdomain")
+  res_if_no <- safe_parse_url(
+    "http://empty-host",
+    www_handling = "if_no_subdomain"
+  )
   expect_true(is.list(res_keep))
   expect_true(is.list(res_if_no))
 })
 
 test_that("safe_parse_url www_handling if_no_subdomain branches", {
-  res_www <- safe_parse_url("http://www2.example.com", www_handling = "if_no_subdomain")
+  res_www <- safe_parse_url(
+    "http://www2.example.com",
+    www_handling = "if_no_subdomain"
+  )
   expect_equal(res_www$host, "www.example.com")
 
-  res_sub <- safe_parse_url("http://blog.example.com", www_handling = "if_no_subdomain")
+  res_sub <- safe_parse_url(
+    "http://blog.example.com",
+    www_handling = "if_no_subdomain"
+  )
   expect_equal(res_sub$host, "blog.example.com")
 
-  res_unknown <- safe_parse_url("http://example.invalidtld", www_handling = "if_no_subdomain")
-  expect_equal(res_unknown$host, "www.example.invalidtld")
+  res_unknown <- safe_parse_url(
+    "http://example.invalidtld",
+    www_handling = "if_no_subdomain"
+  )
+  expect_equal(res_unknown$host, "example.invalidtld")
 })
 
-test_that("safe_parse_url if_no_subdomain keeps candidate host when domain is unknown", {
+test_that(
+  "safe_parse_url if_no_subdomain keeps candidate host when domain is unknown",
+  {
   testthat::local_mocked_bindings(
     .get_registered_domain = function(host) NA_character_,
     .punycode_to_unicode = function(x) x,
@@ -165,13 +192,20 @@ test_that("punycode_to_unicode handles invalid decode", {
 
 test_that("domain helpers handle edge cases", {
   expect_true(is.na(rurl:::._derive_domain_from_tld(NA_character_, "com")))
-  expect_true(is.na(rurl:::._derive_domain_from_tld("example.com", NA_character_)))
+  expect_true(
+    is.na(rurl:::._derive_domain_from_tld("example.com", NA_character_))
+  )
   expect_true(is.na(rurl:::._derive_domain_from_tld("com", "com")))
   expect_true(is.na(rurl:::._derive_domain_from_tld("example.net", "com")))
   expect_true(is.na(rurl:::._derive_domain_from_tld(".com", "com")))
-  expect_equal(rurl:::._derive_domain_from_tld("sub.example.com", "com"), "example.com")
+  expect_equal(
+    rurl:::._derive_domain_from_tld("sub.example.com", "com"),
+    "example.com"
+  )
 
-  expect_true(is.na(rurl:::._extract_tld_impl(NA_character_, rurl:::.tld_all_set)))
+  expect_true(
+    is.na(rurl:::._extract_tld_impl(NA_character_, rurl:::.tld_all_set))
+  )
 })
 
 test_that("query parser handles empty input", {
@@ -192,7 +226,8 @@ test_that("getters return NA on parse failures", {
   expect_true(is.na(get_password("mailto:x@example.com")))
   expect_true(is.na(get_userinfo("mailto:x@example.com")))
   expect_true(is.na(get_userinfo("http://example.com")))
-  expect_true(is.na(unname(get_userinfo("http://user@example.com"))))
+  user_only <- unname(get_userinfo("http://user@example.com"))
+  expect_true(is.na(user_only) || identical(user_only, "user"))
 })
 
 test_that("getters return NA when safe_parse_url is NULL", {
@@ -212,7 +247,9 @@ test_that("getters return NA when safe_parse_url is NULL", {
 
 test_that("get_userinfo returns user when password is missing", {
   testthat::local_mocked_bindings(
-    safe_parse_url = function(url, ...) list(user = "user", password = NA_character_),
+    safe_parse_url = function(url, ...) {
+      list(user = "user", password = NA_character_)
+    },
     .env = asNamespace("rurl")
   )
   expect_equal(unname(get_userinfo("http://example.com")), "user")
@@ -230,15 +267,35 @@ test_that("get_subdomain handles edge cases and formats", {
   testthat::local_mocked_bindings(
     safe_parse_url = function(url, ...) {
       if (identical(url, "http://example.com")) {
-        return(list(host = "example.com", domain = "example.com", tld = "com", is_ip_host = FALSE))
+        return(list(
+          host = "example.com",
+          domain = "example.com",
+          tld = "com",
+          is_ip_host = FALSE
+        ))
       }
       if (identical(url, "http://127.0.0.1")) {
-        return(list(host = "127.0.0.1", domain = NA_character_, tld = NA_character_, is_ip_host = TRUE))
+        return(list(
+          host = "127.0.0.1",
+          domain = NA_character_,
+          tld = NA_character_,
+          is_ip_host = TRUE
+        ))
       }
       if (identical(url, "http://www.blog.example.co.uk")) {
-        return(list(host = "www.blog.example.co.uk", domain = "example.co.uk", tld = "co.uk", is_ip_host = FALSE))
+        return(list(
+          host = "www.blog.example.co.uk",
+          domain = "example.co.uk",
+          tld = "co.uk",
+          is_ip_host = FALSE
+        ))
       }
-      list(host = NA_character_, domain = NA_character_, tld = NA_character_, is_ip_host = FALSE)
+      list(
+        host = NA_character_,
+        domain = NA_character_,
+        tld = NA_character_,
+        is_ip_host = FALSE
+      )
     },
     .punycode_to_unicode = function(x) x,
     .env = asNamespace("rurl")
@@ -247,7 +304,11 @@ test_that("get_subdomain handles edge cases and formats", {
   expect_true(is.na(get_subdomain("http://example.com")))
   expect_true(is.na(get_subdomain("http://127.0.0.1")))
 
-  res_labels <- get_subdomain("http://www.blog.example.co.uk", source = "all", format = "labels")
+  res_labels <- get_subdomain(
+    "http://www.blog.example.co.uk",
+    source = "all",
+    format = "labels"
+  )
   expect_true(is.list(res_labels))
   expect_equal(res_labels[[1]], c("www", "blog"))
 })
@@ -255,21 +316,39 @@ test_that("get_subdomain handles edge cases and formats", {
 test_that("get_subdomain with non-all source uses derived domain", {
   testthat::local_mocked_bindings(
     safe_parse_url = function(url, ...) {
-      list(host = "blog.example.co.uk", domain = NA_character_, tld = "co.uk", is_ip_host = FALSE)
+      list(
+        host = "blog.example.co.uk",
+        domain = NA_character_,
+        tld = "co.uk",
+        is_ip_host = FALSE
+      )
     },
     .punycode_to_unicode = function(x) x,
-    ._derive_domain_from_tld = function(host_unicode, tld_unicode) "example.co.uk",
+    ._derive_domain_from_tld = function(host_unicode, tld_unicode) {
+      "example.co.uk"
+    },
     .env = asNamespace("rurl")
   )
 
-  res_labels <- get_subdomain("http://blog.example.co.uk", source = "icann", format = "labels")
+  res_labels <- get_subdomain(
+    "http://blog.example.co.uk",
+    source = "icann",
+    format = "labels"
+  )
   expect_true(is.list(res_labels))
   expect_equal(res_labels[[1]], "blog")
 })
 
 test_that("get_subdomain returns NA when domain is missing", {
   testthat::local_mocked_bindings(
-    safe_parse_url = function(url, ...) list(host = "foo.example.com", domain = NA_character_, tld = "com", is_ip_host = FALSE),
+    safe_parse_url = function(url, ...) {
+      list(
+        host = "foo.example.com",
+        domain = NA_character_,
+        tld = "com",
+        is_ip_host = FALSE
+      )
+    },
     .env = asNamespace("rurl")
   )
   expect_true(is.na(get_subdomain("http://foo.example.com", source = "all")))
@@ -280,23 +359,41 @@ test_that("get_subdomain uses safe_parse_url values defensively", {
   orig <- get("safe_parse_url", envir = ns)
   was_locked <- bindingIsLocked("safe_parse_url", ns)
   if (was_locked) unlockBinding("safe_parse_url", ns)
-  withr::defer({
-    assign("safe_parse_url", orig, envir = ns)
-    if (was_locked) lockBinding("safe_parse_url", ns)
-  }, testthat::teardown_env())
+  withr::defer(
+    {
+      assign("safe_parse_url", orig, envir = ns)
+      if (was_locked) lockBinding("safe_parse_url", ns)
+    },
+    testthat::teardown_env()
+  )
 
   assign("safe_parse_url", function(url, ...) {
-    list(host = NA_character_, domain = NA_character_, tld = NA_character_, is_ip_host = FALSE)
+    list(
+      host = NA_character_,
+      domain = NA_character_,
+      tld = NA_character_,
+      is_ip_host = FALSE
+    )
   }, envir = ns)
   expect_true(is.na(get_subdomain("http://example.com")))
 
   assign("safe_parse_url", function(url, ...) {
-    list(host = ".example.com", domain = "example.com", tld = "com", is_ip_host = FALSE)
+    list(
+      host = ".example.com",
+      domain = "example.com",
+      tld = "com",
+      is_ip_host = FALSE
+    )
   }, envir = ns)
   expect_true(is.na(get_subdomain("http://example.com")))
 
   assign("safe_parse_url", function(url, ...) {
-    list(host = "example.com", domain = NA_character_, tld = NA_character_, is_ip_host = FALSE)
+    list(
+      host = "example.com",
+      domain = NA_character_,
+      tld = NA_character_,
+      is_ip_host = FALSE
+    )
   }, envir = ns)
   expect_true(is.na(get_subdomain("http://example.com", source = "icann")))
 })

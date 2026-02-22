@@ -40,8 +40,8 @@ permute_url(
 \item{path_normalization}{Vector of path normalization options passed to
 [safe_parse_url()]. Defaults to all supported values.}
 
-\item{scheme_relative_handling}{Vector of scheme-relative handling options passed to
-[safe_parse_url()]. Defaults to all supported values.}
+\item{scheme_relative_handling}{Vector of scheme-relative handling options
+passed to [safe_parse_url()]. Defaults to all supported values.}
 
 \item{subdomain_levels_to_keep}{Vector or list of values for
 `subdomain_levels_to_keep`. Use `NULL` to keep all subdomains (default).

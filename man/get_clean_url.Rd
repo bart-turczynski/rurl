@@ -21,11 +21,15 @@ get_clean_url(
 \arguments{
 \item{url}{A character vector containing URLs to be parsed.}
 
-\item{protocol_handling}{A character string specifying how to handle protocols.
-See \code{\link{safe_parse_url}} for details. Defaults to "keep".}
+\item{protocol_handling}{A character string specifying how to handle
+protocols.
+                         See \code{\link{safe_parse_url}} for details.
+                         Defaults to "keep".}
 
-\item{www_handling}{A character string specifying how to handle "www" prefixes.
-See \code{\link{safe_parse_url}} for details. Defaults to "none".}
+\item{www_handling}{A character string specifying how to handle "www"
+prefixes.
+                    See \code{\link{safe_parse_url}} for details. Defaults
+                    to "none".}
 
 \item{case_handling}{A character string specifying how to handle the case of
                    the cleaned URL. Defaults to "keep".
@@ -37,33 +41,49 @@ See \code{\link{safe_parse_url}} for details. Defaults to "none".}
 }}
 
 \item{trailing_slash_handling}{A character string specifying how to handle
-trailing slashes in the path component of the cleaned URL. Defaults to "none".
+trailing slashes in the path component of the cleaned URL. Defaults to
+"none".
 \itemize{
-  \item{"none": (Default) No specific handling is applied. Path remains as is after initial parsing.}
-  \item{"keep": Ensures a trailing slash. If a path exists and doesn't end with one, it's added. If path is just "/", it's kept.}
-  \item{"strip": Removes a trailing slash if present, unless the path is solely "/".}
+  \item{"none": (Default) No specific handling is applied. Path remains as
+  is after initial parsing.}
+  \item{"keep": Ensures a trailing slash. If a path exists and doesn't end
+  with one, it's added. If path is just "/", it's kept.}
+  \item{"strip": Removes a trailing slash if present, unless the path is
+  solely "/".}
 }}
 
-\item{index_page_handling}{How to handle index/default pages. See \code{\link{safe_parse_url}}.}
+\item{index_page_handling}{How to handle index/default pages. See
+\code{\link{safe_parse_url}}.}
 
-\item{path_normalization}{How to normalize path structure. See \code{\link{safe_parse_url}}.}
+\item{path_normalization}{How to normalize path structure. See
+\code{\link{safe_parse_url}}.}
 
-\item{scheme_relative_handling}{How to handle URLs starting with "//". See \code{\link{safe_parse_url}}.}
+\item{scheme_relative_handling}{How to handle URLs starting with "//". See
+\code{\link{safe_parse_url}}.}
 
-\item{subdomain_levels_to_keep}{An integer or NULL. Determines how many levels of subdomains are kept,
-in addition to any 'www.' prefix handled by `www_handling`.
-\itemize{
-  \item{`NULL`: (Default) No specific subdomain stripping is performed beyond `www_handling`.}
-  \item{`0`: All subdomains are stripped. If `www_handling` preserved or added 'www.',
-       it remains (e.g., 'www.sub.example.com' becomes 'www.example.com'; 'sub.example.com' becomes 'example.com').}
-  \item{`N > 0`: Keeps up to N levels of subdomains, counted from right-to-left (closest to the registered domain),
-       in addition to any 'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes 'one.example.com';
-       'www.three.two.one.example.com' (post www_handling) becomes 'www.one.example.com'.}
-}}
+\item{subdomain_levels_to_keep}{An integer or NULL. Determines how many
+levels of subdomains are kept,
+  in addition to any 'www.' prefix handled by `www_handling`.
+  \itemize{
+    \item{`NULL`: (Default) No specific subdomain stripping is performed
+    beyond `www_handling`.}
+    \item{`0`: All subdomains are stripped. If `www_handling` preserved or
+    added 'www.',
+         it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
+         'sub.example.com' becomes 'example.com').}
+    \item{`N > 0`: Keeps up to N levels of subdomains, counted from
+    right-to-left (closest to the registered domain),
+         in addition to any 'www.' prefix. E.g., if N=1,
+         'three.two.one.example.com' becomes 'one.example.com';
+         'www.three.two.one.example.com' (post www_handling) becomes
+         'www.one.example.com'.}
+  }}
 
-\item{host_encoding}{How to present the host in the cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".}
+\item{host_encoding}{How to present the host in the cleaned URL. See
+\code{\link{safe_parse_url}}. Defaults to "keep".}
 
-\item{path_encoding}{How to treat percent-encoding in the path for the cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".}
+\item{path_encoding}{How to treat percent-encoding in the path for the
+cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".}
 }
 \value{
 A character vector of cleaned URLs.
@@ -74,10 +94,21 @@ protocol, www, case, and trailing slash handling rules.
 }
 \examples{
 get_clean_url("Example.COM/Path") # Default keep, default no slash change
-get_clean_url("Example.COM/Path", case_handling = "keep", trailing_slash_handling = "keep")
-get_clean_url("Example.COM/Path/", case_handling = "upper", trailing_slash_handling = "strip")
+get_clean_url(
+  "Example.COM/Path",
+  case_handling = "keep",
+  trailing_slash_handling = "keep"
+)
+get_clean_url(
+  "Example.COM/Path/",
+  case_handling = "upper",
+  trailing_slash_handling = "strip"
+)
 get_clean_url("http://example.com", www_handling = "strip")
-get_clean_url("http://deep.sub.domain.example.com/path", subdomain_levels_to_keep = 0)
+get_clean_url(
+  "http://deep.sub.domain.example.com/path",
+  subdomain_levels_to_keep = 0
+)
 # -> "http://example.com/path"
 get_clean_url(
   "http://www.deep.sub.domain.example.com/path",

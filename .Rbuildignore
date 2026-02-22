@@ -12,3 +12,10 @@
 ^cran-comments\.md$
 ^CRAN-SUBMISSION$
 ^CLAUDE\.md$
+^\.claude$
+^lib$
+^memoization\.md$
+^RELEASE_NOTES_v1\.md$
+^report\.html$
+^LOCAL_WORKFLOW_NOTES\.md$
+^\.lintr$

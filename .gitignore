@@ -45,3 +45,5 @@ doc/*
 CRAN-SUBMISSION
 cran-comments.md
 memoization.md
+report.html
+LOCAL_WORKFLOW_NOTES.md

@@ -14,11 +14,14 @@ get_query(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
+\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to
+"keep".}
 
-\item{format}{Return format: "string" (default) or "list" for parsed elements.}
+\item{format}{Return format: "string" (default) or "list" for parsed
+elements.}
 
-\item{decode}{Logical; if TRUE and format="list", percent-decodes keys/values.}
+\item{decode}{Logical; if TRUE and format="list", percent-decodes
+keys/values.}
 }
 \value{
 A character vector (format="string") or list (format="list").

@@ -16,7 +16,8 @@ get_subdomain(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
+\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to
+"keep".}
 
 \item{www_handling}{See \code{\link{safe_parse_url}}. Defaults to "none".}
 
@@ -25,10 +26,12 @@ get_subdomain(
 \item{include_www}{Logical; if FALSE (default), removes a leading
 www/www[0-9]* label only when it is the sole subdomain label.}
 
-\item{format}{Return format: "string" (default) or "labels" for a character vector of labels.}
+\item{format}{Return format: "string" (default) or "labels" for a character
+vector of labels.}
 }
 \value{
-A character vector (format="string") or list of label vectors (format="labels").
+A character vector (format="string") or list of label vectors
+(format="labels").
 }
 \description{
 Extracts the subdomain component of a URL.

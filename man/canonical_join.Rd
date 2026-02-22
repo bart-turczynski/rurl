@@ -39,7 +39,8 @@ contains URLs. Defaults to "URL".}
 
 \item{collision}{How to handle duplicate canonical keys within inputs.
 \code{"first"} keeps the first row per key, \code{"all"} keeps all rows
-(many-to-many), and \code{"error"} stops on duplicates. Defaults to \code{"first"}.}
+(many-to-many), and \code{"error"} stops on duplicates. Defaults to
+\code{"first"}.}
 
 \item{on_parse_error}{How to handle URLs that fail canonicalization.
 \code{"keep"} retains them as unmatched rows (for left/right/full joins),
@@ -48,8 +49,9 @@ Defaults to \code{"keep"}.}
 
 \item{...}{Additional arguments forwarded to \code{\link{safe_parse_urls}},
 controlling canonicalization (e.g., \code{protocol_handling},
-\code{www_handling}, \code{trailing_slash_handling}, \code{index_page_handling},
-\code{path_normalization}, \code{scheme_relative_handling}, \code{host_encoding},
+\code{www_handling}, \code{trailing_slash_handling},
+\code{index_page_handling}, \code{path_normalization},
+\code{scheme_relative_handling}, \code{host_encoding},
 \code{path_encoding}).}
 }
 \value{
@@ -60,19 +62,24 @@ A data frame representing the join. The output includes:
     \item All other columns from \code{data_A} and \code{data_B} with
           suffixes applied.
   }
-  Returns an empty data frame with the expected structure if no matches are found
-  or if inputs are invalid.
+  Returns an empty data frame with the expected structure if no matches
+  are found or if inputs are invalid.
 }
 \description{
 Performs a join between two data frames by canonicalizing URLs to a shared
-"clean" format using \code{\link{safe_parse_urls}} and then matching on that key.
+"clean" format using \code{\link{safe_parse_urls}} and then matching on
+that key.
 This avoids permutation expansion and is suitable for large crawl exports.
 }
 \examples{
-A <- data.frame(URL = c("http://Example.com/Page", "http://example.com/Other"),
-                ValA = 1:2, stringsAsFactors = FALSE)
-B <- data.frame(URL = c("https://www.example.com/Page/", "http://example.com/Miss"),
-                ValB = c("x", "y"), stringsAsFactors = FALSE)
+A <- data.frame(
+  URL = c("http://Example.com/Page", "http://example.com/Other"),
+  ValA = 1:2, stringsAsFactors = FALSE
+)
+B <- data.frame(
+  URL = c("https://www.example.com/Page/", "http://example.com/Miss"),
+  ValB = c("x", "y"), stringsAsFactors = FALSE
+)
 
 canonical_join(
   A, B,

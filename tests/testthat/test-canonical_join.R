@@ -149,7 +149,10 @@ test_that("canonical_join collision = error stops on duplicates", {
 
 test_that("canonical_join validates inputs and columns", {
   expect_warning(
-    res <- canonical_join(list(), data.frame(URL = "a", stringsAsFactors = FALSE)),
+    res <- canonical_join(
+      list(),
+      data.frame(URL = "a", stringsAsFactors = FALSE)
+    ),
     "data frames"
   )
   expect_s3_class(res, "data.frame")
@@ -157,16 +160,19 @@ test_that("canonical_join validates inputs and columns", {
 
   expect_warning(
     res2 <- canonical_join(data.frame(X = "a", stringsAsFactors = FALSE),
-                           data.frame(URL = "b", stringsAsFactors = FALSE),
-                           col_A = "URL"),
+      data.frame(URL = "b", stringsAsFactors = FALSE),
+      col_A = "URL"
+    ),
     "not found"
   )
   expect_s3_class(res2, "data.frame")
   expect_equal(nrow(res2), 0)
 
   expect_warning(
-    res3 <- canonical_join(data.frame(URL = 1, stringsAsFactors = FALSE),
-                           data.frame(URL = "b", stringsAsFactors = FALSE)),
+    res3 <- canonical_join(
+      data.frame(URL = 1, stringsAsFactors = FALSE),
+      data.frame(URL = "b", stringsAsFactors = FALSE)
+    ),
     "must be character"
   )
   expect_s3_class(res3, "data.frame")
@@ -174,16 +180,19 @@ test_that("canonical_join validates inputs and columns", {
 
   expect_warning(
     res4 <- canonical_join(data.frame(URL = "a", stringsAsFactors = FALSE),
-                           data.frame(X = "b", stringsAsFactors = FALSE),
-                           col_B = "URL"),
+      data.frame(X = "b", stringsAsFactors = FALSE),
+      col_B = "URL"
+    ),
     "not found"
   )
   expect_s3_class(res4, "data.frame")
   expect_equal(nrow(res4), 0)
 
   expect_warning(
-    res5 <- canonical_join(data.frame(URL = "a", stringsAsFactors = FALSE),
-                           data.frame(URL = 1, stringsAsFactors = FALSE)),
+    res5 <- canonical_join(
+      data.frame(URL = "a", stringsAsFactors = FALSE),
+      data.frame(URL = 1, stringsAsFactors = FALSE)
+    ),
     "must be character"
   )
   expect_s3_class(res5, "data.frame")
@@ -191,8 +200,16 @@ test_that("canonical_join validates inputs and columns", {
 })
 
 test_that("canonical_join returns empty structure on no matches", {
-  A <- data.frame(URL = "http://example.com/a", ValA = 1, stringsAsFactors = FALSE)
-  B <- data.frame(URL = "http://example.com/b", ValB = "x", stringsAsFactors = FALSE)
+  A <- data.frame(
+    URL = "http://example.com/a",
+    ValA = 1,
+    stringsAsFactors = FALSE
+  )
+  B <- data.frame(
+    URL = "http://example.com/b",
+    ValB = "x",
+    stringsAsFactors = FALSE
+  )
 
   res <- canonical_join(
     A, B,

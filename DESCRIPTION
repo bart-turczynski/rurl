@@ -23,7 +23,7 @@ Imports:
     utils,
     curl,
     stringi,
-    urltools
+    punycoder
 URL: https://github.com/bart-turczynski/rurl
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 

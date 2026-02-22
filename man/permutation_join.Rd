@@ -29,10 +29,12 @@ contains URLs. Defaults to "URL".}
 
 \item{suffix_A}{Character string, suffix to add to `data_A` column names
 in the output if they conflict with `data_B` column names (excluding
-join keys and specially created columns like OriginalURL_A). Defaults to "_A".}
+join keys and specially created columns like OriginalURL_A). Defaults to
+"_A".}
 
 \item{suffix_B}{Character string, suffix to add to `data_B` column names
-in the output if they conflict with `data_A` column names. Defaults to "_B".}
+in the output if they conflict with `data_A` column names. Defaults to
+"_B".}
 
 \item{keep}{Controls how matches are returned. `"best"` keeps one row per
 input pair using deterministic `JoinKey` ranking. `"all"` returns all
@@ -41,13 +43,15 @@ matches.}
 \item{include_join_rank}{Logical. If TRUE, includes a `JoinKeyRank` column
 in the output.}
 
-\item{...}{Additional arguments forwarded to [permute_url()], enabling control
+\item{...}{Additional arguments forwarded to [permute_url()], enabling
+control
 over all URL cleaning/permutation options (e.g., `protocol_handling`,
 `www_handling`, `case_handling`, `trailing_slash_handling`,
 `subdomain_levels_to_keep`, `host_encoding`, `path_encoding`).}
 }
 \value{
-A data frame representing the join. Each row signifies a unique pair of
+A data frame representing the join. Each row signifies a unique
+  pair of
   rows (one from `data_A`, one from `data_B`) linked by a common URL
   permutation. The output includes:
   \itemize{
@@ -59,8 +63,8 @@ A data frame representing the join. Each row signifies a unique pair of
           suffixes applied by `base::merge` to resolve name conflicts
           if necessary.
   }
-  Returns an empty data frame with the expected structure if no matches are found
-  or if inputs are invalid/empty.
+  Returns an empty data frame with the expected structure if no matches
+  are found or if inputs are invalid/empty.
 }
 \description{
 Performs a join between two data frames based on URL permutations.
@@ -75,18 +79,26 @@ This version aims to use primarily base R functions.
 if (!exists("permute_url", mode = "function")) {
   permute_url <- function(urls) {
     if (!is.character(urls)) urls <- as.character(urls)
-    if (length(urls) == 0) return(data.frame(URL=character(), Permutation=character(),
-                                             stringsAsFactors = FALSE))
+    if (length(urls) == 0) {
+      return(data.frame(
+        URL = character(), Permutation = character(),
+        stringsAsFactors = FALSE
+      ))
+    }
     all_perms_list <- lapply(urls, function(u) {
       if (is.na(u) || u == "") {
-        return(data.frame(URL=u, Permutation=NA_character_,
-                          stringsAsFactors = FALSE))
+        return(data.frame(
+          URL = u, Permutation = NA_character_,
+          stringsAsFactors = FALSE
+        ))
       }
       # Simplified mock for example purposes
       stripped_u <- gsub("^(https?://)?(www\\\\.)?", "", u)
       perms <- unique(c(stripped_u, paste0(stripped_u, "/")))
-      return(data.frame(URL = rep(u, length(perms)), Permutation = perms,
-                        stringsAsFactors = FALSE))
+      return(data.frame(
+        URL = rep(u, length(perms)), Permutation = perms,
+        stringsAsFactors = FALSE
+      ))
     })
     return(do.call(rbind, all_perms_list))
   }
@@ -108,13 +120,18 @@ dfB <- data.frame(
 )
 
 # To run example (make sure permute_url is defined as above or from package)
-# joined_result <- permutation_join(dfA, dfB, col_A = "URL_A_col", col_B = "URL_B_col",
+# joined_result <- permutation_join(
+#   dfA, dfB, col_A = "URL_A_col", col_B = "URL_B_col",
 #                                 suffix_A = ".dfA", suffix_B = ".dfB")
 # print(joined_result)
 
 # Example with default "URL" column name
-dfA_std <- data.frame(URL = "site.com/page", ValA = 10, stringsAsFactors = FALSE)
-dfB_std <- data.frame(URL = "https://www.site.com/page/", ValB = 20, stringsAsFactors = FALSE)
+dfA_std <- data.frame(
+  URL = "site.com/page", ValA = 10, stringsAsFactors = FALSE
+)
+dfB_std <- data.frame(
+  URL = "https://www.site.com/page/", ValB = 20, stringsAsFactors = FALSE
+)
 # joined_std <- permutation_join(dfA_std, dfB_std)
 # print(joined_std)
 }

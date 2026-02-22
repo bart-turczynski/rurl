@@ -9,7 +9,8 @@ get_fragment(url, protocol_handling = "keep")
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to "keep".}
+\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to
+"keep".}
 }
 \value{
 A character vector of fragments.

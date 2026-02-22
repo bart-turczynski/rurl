@@ -88,27 +88,61 @@ test_that("permute_url drops permutations when clean_url is missing", {
   orig <- get("safe_parse_url", envir = ns)
   was_locked <- bindingIsLocked("safe_parse_url", ns)
   if (was_locked) unlockBinding("safe_parse_url", ns)
-  withr::defer({
-    assign("safe_parse_url", orig, envir = ns)
-    if (was_locked) lockBinding("safe_parse_url", ns)
-  }, testthat::teardown_env())
+  withr::defer(
+    {
+      assign("safe_parse_url", orig, envir = ns)
+      if (was_locked) lockBinding("safe_parse_url", ns)
+    },
+    testthat::teardown_env()
+  )
 
   assign("safe_parse_url", function(url,
-                                    protocol_handling = c("keep", "none", "strip", "http", "https"),
-                                    www_handling = c("none", "strip", "keep", "if_no_subdomain"),
+                                    protocol_handling = c(
+                                      "keep", "none", "strip", "http", "https"
+                                    ),
+                                    www_handling = c(
+                                      "none", "strip", "keep", "if_no_subdomain"
+                                    ),
                                     tld_source = c("all", "private", "icann"),
-                                    case_handling = c("keep", "lower", "upper", "lower_host"),
-                                    trailing_slash_handling = c("none", "keep", "strip"),
+                                    case_handling = c(
+                                      "keep", "lower", "upper", "lower_host"
+                                    ),
+                                    trailing_slash_handling = c(
+                                      "none", "keep", "strip"
+                                    ),
                                     index_page_handling = c("keep", "strip"),
-                                    path_normalization = c("none", "collapse_slashes", "dot_segments", "both"),
-                                    scheme_relative_handling = c("keep", "http", "https", "error"),
+                                    path_normalization = c(
+                                      "none",
+                                      "collapse_slashes",
+                                      "dot_segments",
+                                      "both"
+                                    ),
+                                    scheme_relative_handling = c(
+                                      "keep", "http", "https", "error"
+                                    ),
                                     subdomain_levels_to_keep = NULL,
-                                    host_encoding = c("keep", "idna", "unicode"),
-                                    path_encoding = c("keep", "encode", "decode")) {
+                                    host_encoding = c(
+                                      "keep", "idna", "unicode"
+                                    ),
+                                    path_encoding = c(
+                                      "keep", "encode", "decode"
+                                    )) {
     if (identical(protocol_handling, "keep")) {
-      return(list(host = "example.com", path = "/", clean_url = "http://example.com", query = NA_character_, fragment = NA_character_))
+      return(list(
+        host = "example.com",
+        path = "/",
+        clean_url = "http://example.com",
+        query = NA_character_,
+        fragment = NA_character_
+      ))
     }
-    list(host = "example.com", path = "/", clean_url = NA_character_, query = NA_character_, fragment = NA_character_)
+    list(
+      host = "example.com",
+      path = "/",
+      clean_url = NA_character_,
+      query = NA_character_,
+      fragment = NA_character_
+    )
   }, envir = ns)
 
   res <- permute_url(

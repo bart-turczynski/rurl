@@ -66,9 +66,16 @@ test_that(".onLoad populates PSL and TLD hash sets", {
   psl <- rurl:::psl_clean
   wildcard_rules <- sub("^\\*\\.", "", grep("^\\*\\.", psl, value = TRUE))
   exception_rules <- sub("^!", "", grep("^!", psl, value = TRUE))
-  normal_rules <- setdiff(psl, c(paste0("!", exception_rules), paste0("*.", wildcard_rules)))
-  if (length(wildcard_rules) == 0 || length(exception_rules) == 0 || length(normal_rules) == 0) {
-    testthat::skip("PSL data does not contain expected rule types to validate .onLoad sets.")
+  normal_rules <- setdiff(
+    psl,
+    c(paste0("!", exception_rules), paste0("*.", wildcard_rules))
+  )
+  if (length(wildcard_rules) == 0 ||
+      length(exception_rules) == 0 ||
+      length(normal_rules) == 0) {
+    testthat::skip(
+      "PSL data does not contain expected rule types to validate .onLoad sets."
+    )
   }
 
   # Exception rules (stored without the leading "!")

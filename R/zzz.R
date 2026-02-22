@@ -32,6 +32,16 @@ utils::globalVariables(c(
   # Get the package namespace to access internal data from sysdata.rda
   ns <- asNamespace(pkgname)
 
+  normalize_tld_data <- function(x) {
+    x <- enc2utf8(as.character(x))
+    x <- trimws(x)
+    x <- sub("^\\*\\.", "", x)
+    x <- sub("^!", "", x)
+    x <- sub("^\\.+", "", x)
+    x <- x[nzchar(x)]
+    unique(x)
+  }
+
   # Pre-compute PSL rule sets from psl_clean (loaded from sysdata.rda)
   # This is the key optimization - do this once at load time, not on every call
   if (exists("psl_clean", envir = ns, inherits = FALSE)) {
@@ -40,7 +50,9 @@ utils::globalVariables(c(
     # Extract exception rules (prefixed with !)
     exception_rules <- sub("^!", "", grep("^!", psl_data, value = TRUE))
     # Extract wildcard base rules (prefixed with *.)
-    wildcard_rules <- sub("^\\*\\.", "", grep("^\\*\\.", psl_data, value = TRUE))
+    wildcard_rules <- sub(
+      "^\\*\\.", "", grep("^\\*\\.", psl_data, value = TRUE)
+    )
     # Normal rules are everything else
     normal_rules <- setdiff(
       psl_data,
@@ -62,19 +74,23 @@ utils::globalVariables(c(
 
   # Pre-compute TLD sets for O(1) lookup
   if (exists("tld_all", envir = ns, inherits = FALSE)) {
-    tld_data <- get("tld_all", envir = ns, inherits = FALSE)
+    tld_data <- normalize_tld_data(get("tld_all", envir = ns, inherits = FALSE))
     for (tld in tld_data) {
       assign(tld, TRUE, envir = .tld_all_set)
     }
   }
   if (exists("tld_icann", envir = ns, inherits = FALSE)) {
-    tld_data <- get("tld_icann", envir = ns, inherits = FALSE)
+    tld_data <- normalize_tld_data(
+      get("tld_icann", envir = ns, inherits = FALSE)
+    )
     for (tld in tld_data) {
       assign(tld, TRUE, envir = .tld_icann_set)
     }
   }
   if (exists("tld_private", envir = ns, inherits = FALSE)) {
-    tld_data <- get("tld_private", envir = ns, inherits = FALSE)
+    tld_data <- normalize_tld_data(
+      get("tld_private", envir = ns, inherits = FALSE)
+    )
     for (tld in tld_data) {
       assign(tld, TRUE, envir = .tld_private_set)
     }

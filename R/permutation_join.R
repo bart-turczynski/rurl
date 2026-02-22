@@ -15,20 +15,24 @@
 #'   contains URLs. Defaults to "URL".
 #' @param suffix_A Character string, suffix to add to `data_A` column names
 #'   in the output if they conflict with `data_B` column names (excluding
-#'   join keys and specially created columns like OriginalURL_A). Defaults to "_A".
+#'   join keys and specially created columns like OriginalURL_A). Defaults to
+#'   "_A".
 #' @param suffix_B Character string, suffix to add to `data_B` column names
-#'   in the output if they conflict with `data_A` column names. Defaults to "_B".
+#'   in the output if they conflict with `data_A` column names. Defaults to
+#'   "_B".
 #' @param keep Controls how matches are returned. `"best"` keeps one row per
 #'   input pair using deterministic `JoinKey` ranking. `"all"` returns all
 #'   matches.
 #' @param include_join_rank Logical. If TRUE, includes a `JoinKeyRank` column
 #'   in the output.
-#' @param ... Additional arguments forwarded to [permute_url()], enabling control
+#' @param ... Additional arguments forwarded to [permute_url()], enabling
+#'   control
 #'   over all URL cleaning/permutation options (e.g., `protocol_handling`,
 #'   `www_handling`, `case_handling`, `trailing_slash_handling`,
 #'   `subdomain_levels_to_keep`, `host_encoding`, `path_encoding`).
 #'
-#' @return A data frame representing the join. Each row signifies a unique pair of
+#' @return A data frame representing the join. Each row signifies a unique
+#'   pair of
 #'   rows (one from `data_A`, one from `data_B`) linked by a common URL
 #'   permutation. The output includes:
 #'   \itemize{
@@ -40,8 +44,8 @@
 #'           suffixes applied by `base::merge` to resolve name conflicts
 #'           if necessary.
 #'   }
-#'   Returns an empty data frame with the expected structure if no matches are found
-#'   or if inputs are invalid/empty.
+#'   Returns an empty data frame with the expected structure if no matches
+#'   are found or if inputs are invalid/empty.
 #'
 #' @importFrom stats setNames
 #' @export
@@ -50,18 +54,26 @@
 #' if (!exists("permute_url", mode = "function")) {
 #'   permute_url <- function(urls) {
 #'     if (!is.character(urls)) urls <- as.character(urls)
-#'     if (length(urls) == 0) return(data.frame(URL=character(), Permutation=character(),
-#'                                              stringsAsFactors = FALSE))
+#'     if (length(urls) == 0) {
+#'       return(data.frame(
+#'         URL = character(), Permutation = character(),
+#'         stringsAsFactors = FALSE
+#'       ))
+#'     }
 #'     all_perms_list <- lapply(urls, function(u) {
 #'       if (is.na(u) || u == "") {
-#'         return(data.frame(URL=u, Permutation=NA_character_,
-#'                           stringsAsFactors = FALSE))
+#'         return(data.frame(
+#'           URL = u, Permutation = NA_character_,
+#'           stringsAsFactors = FALSE
+#'         ))
 #'       }
 #'       # Simplified mock for example purposes
 #'       stripped_u <- gsub("^(https?://)?(www\\.)?", "", u)
 #'       perms <- unique(c(stripped_u, paste0(stripped_u, "/")))
-#'       return(data.frame(URL = rep(u, length(perms)), Permutation = perms,
-#'                         stringsAsFactors = FALSE))
+#'       return(data.frame(
+#'         URL = rep(u, length(perms)), Permutation = perms,
+#'         stringsAsFactors = FALSE
+#'       ))
 #'     })
 #'     return(do.call(rbind, all_perms_list))
 #'   }
@@ -83,13 +95,18 @@
 #' )
 #'
 #' # To run example (make sure permute_url is defined as above or from package)
-#' # joined_result <- permutation_join(dfA, dfB, col_A = "URL_A_col", col_B = "URL_B_col",
+#' # joined_result <- permutation_join(
+#' #   dfA, dfB, col_A = "URL_A_col", col_B = "URL_B_col",
 #' #                                 suffix_A = ".dfA", suffix_B = ".dfB")
 #' # print(joined_result)
 #'
 #' # Example with default "URL" column name
-#' dfA_std <- data.frame(URL = "site.com/page", ValA = 10, stringsAsFactors = FALSE)
-#' dfB_std <- data.frame(URL = "https://www.site.com/page/", ValB = 20, stringsAsFactors = FALSE)
+#' dfA_std <- data.frame(
+#'   URL = "site.com/page", ValA = 10, stringsAsFactors = FALSE
+#' )
+#' dfB_std <- data.frame(
+#'   URL = "https://www.site.com/page/", ValB = 20, stringsAsFactors = FALSE
+#' )
 #' # joined_std <- permutation_join(dfA_std, dfB_std)
 #' # print(joined_std)
 permutation_join <- function(data_A, data_B,
@@ -98,7 +115,6 @@ permutation_join <- function(data_A, data_B,
                              keep = c("best", "all"),
                              include_join_rank = FALSE,
                              ...) {
-
   # --- Capture argument names for output columns ---
   name_A <- deparse(substitute(data_A))
   name_B <- deparse(substitute(data_B))
@@ -107,7 +123,13 @@ permutation_join <- function(data_A, data_B,
   dot_args <- list(...)
   if ("include_rank" %in% names(dot_args)) {
     dot_args$include_rank <- NULL
-    warning("Argument 'include_rank' is controlled internally by permutation_join() and will be ignored.", call. = FALSE)
+    warning(
+      paste0(
+        "Argument 'include_rank' is controlled internally by ",
+        "permutation_join() and will be ignored."
+      ),
+      call. = FALSE
+    )
   }
 
   # --- Input Validation ---
@@ -125,11 +147,17 @@ permutation_join <- function(data_A, data_B,
   }
   # Check URL column types
   if (!is.character(data_A[[col_A]]) && !is.factor(data_A[[col_A]])) {
-    warning(paste0("Column '", col_A, "' in data_A must be character or factor."), call. = FALSE)
+    warning(
+      paste0("Column '", col_A, "' in data_A must be character or factor."),
+      call. = FALSE
+    )
     return(data.frame())
   }
   if (!is.character(data_B[[col_B]]) && !is.factor(data_B[[col_B]])) {
-    warning(paste0("Column '", col_B, "' in data_B must be character or factor."), call. = FALSE)
+    warning(
+      paste0("Column '", col_B, "' in data_B must be character or factor."),
+      call. = FALSE
+    )
     return(data.frame())
   }
 
@@ -142,11 +170,18 @@ permutation_join <- function(data_A, data_B,
     empty_cols[["JoinKeyRank"]] <- integer(0)
   }
   other_cols_A <- setdiff(names(data_A), col_A)
-  for (oca in other_cols_A) empty_cols[[paste0(oca, suffix_A)]] <- data_A[0, oca, drop = TRUE]
+  for (oca in other_cols_A) {
+    empty_cols[[paste0(oca, suffix_A)]] <- data_A[0, oca, drop = TRUE]
+  }
   other_cols_B <- setdiff(names(data_B), col_B)
-  for (ocb in other_cols_B) empty_cols[[paste0(ocb, suffix_B)]] <- data_B[0, ocb, drop = TRUE]
+  for (ocb in other_cols_B) {
+    empty_cols[[paste0(ocb, suffix_B)]] <- data_B[0, ocb, drop = TRUE]
+  }
   empty_output_template <- data.frame(empty_cols, stringsAsFactors = FALSE)
-  empty_output_template <- empty_output_template[, unique(names(empty_output_template)), drop = FALSE]
+  empty_output_template <- empty_output_template[
+    , unique(names(empty_output_template)),
+    drop = FALSE
+  ]
 
   if (nrow(data_A) == 0 || nrow(data_B) == 0) {
     return(empty_output_template)
@@ -159,7 +194,7 @@ permutation_join <- function(data_A, data_B,
                                           permutation_key_col_name_str,
                                           permutation_rank_col_name_str,
                                           dot_args) {
-    df_copy <- df 
+    df_copy <- df
     df_copy[[internal_id_col_name_str]] <- seq_len(nrow(df_copy))
 
     all_perms_list <- vector("list", nrow(df_copy))
@@ -173,13 +208,27 @@ permutation_join <- function(data_A, data_B,
 
       if (is.data.frame(perms_df_for_row) && nrow(perms_df_for_row) > 0) {
         perms_df_for_row[[desired_original_url_col_name_str]] <- current_row_url
-        names(perms_df_for_row)[names(perms_df_for_row) == "Permutation"] <- permutation_key_col_name_str
+        names(perms_df_for_row)[
+          names(perms_df_for_row) == "Permutation"
+        ] <- permutation_key_col_name_str
         if (!"PermutationRank" %in% names(perms_df_for_row)) {
           perms_df_for_row$PermutationRank <- NA_integer_
         }
-        names(perms_df_for_row)[names(perms_df_for_row) == "PermutationRank"] <- permutation_rank_col_name_str
-        perms_df_for_row[[internal_id_col_name_str]] <- df_copy[[internal_id_col_name_str]][i]
-        all_perms_list[[i]] <- perms_df_for_row[, c(internal_id_col_name_str, desired_original_url_col_name_str, permutation_key_col_name_str, permutation_rank_col_name_str), drop = FALSE]
+        names(perms_df_for_row)[
+          names(perms_df_for_row) == "PermutationRank"
+        ] <- permutation_rank_col_name_str
+        perms_df_for_row[[internal_id_col_name_str]] <-
+          df_copy[[internal_id_col_name_str]][i]
+        all_perms_list[[i]] <- perms_df_for_row[
+          ,
+          c(
+            internal_id_col_name_str,
+            desired_original_url_col_name_str,
+            permutation_key_col_name_str,
+            permutation_rank_col_name_str
+          ),
+          drop = FALSE
+        ]
       } else {
         temp_empty_df <- data.frame(stringsAsFactors = FALSE)
         temp_empty_df[[internal_id_col_name_str]] <- integer(0)
@@ -192,23 +241,29 @@ permutation_join <- function(data_A, data_B,
 
     expanded_data <- do.call(rbind, all_perms_list)
     if (is.null(expanded_data) || nrow(expanded_data) == 0) {
-        empty_df <- data.frame(stringsAsFactors = FALSE)
-        empty_df[[internal_id_col_name_str]] <- integer(0)
-        empty_df[[desired_original_url_col_name_str]] <- character(0)
-        empty_df[[permutation_key_col_name_str]] <- character(0)
-        empty_df[[permutation_rank_col_name_str]] <- integer(0)
-        return(empty_df)
+      empty_df <- data.frame(stringsAsFactors = FALSE)
+      empty_df[[internal_id_col_name_str]] <- integer(0)
+      empty_df[[desired_original_url_col_name_str]] <- character(0)
+      empty_df[[permutation_key_col_name_str]] <- character(0)
+      empty_df[[permutation_rank_col_name_str]] <- integer(0)
+      return(empty_df)
     }
-    
-    cols_to_keep_from_original <- unique(c(internal_id_col_name_str, setdiff(names(df_copy), url_col_name_str)))
-    df_original_other_cols_with_id <- df_copy[, cols_to_keep_from_original, drop = FALSE]
-        
+
+    cols_to_keep_from_original <- unique(c(
+      internal_id_col_name_str,
+      setdiff(names(df_copy), url_col_name_str)
+    ))
+    df_original_other_cols_with_id <- df_copy[
+      , cols_to_keep_from_original,
+      drop = FALSE
+    ]
+
     final_expanded_df <- merge(
-      expanded_data, 
+      expanded_data,
       df_original_other_cols_with_id,
       by = internal_id_col_name_str,
       all.x = TRUE,
-      all.y = FALSE 
+      all.y = FALSE
     )
     return(final_expanded_df)
   }
@@ -238,7 +293,7 @@ permutation_join <- function(data_A, data_B,
     permutation_rank_col_name_str = rank_col_B,
     dot_args = dot_args
   )
-  
+
   if (nrow(data_A_expanded) == 0 || nrow(data_B_expanded) == 0) {
     return(empty_output_template)
   }
@@ -250,7 +305,8 @@ permutation_join <- function(data_A, data_B,
     by.y = perm_key_B,
     suffixes = c(suffix_A, suffix_B),
     all = FALSE, # Inner join behavior
-    sort = FALSE # Preserve permutation generation order for deterministic JoinKey
+    # Preserve permutation generation order for deterministic JoinKey.
+    sort = FALSE
   )
 
   # --- Deduplicate Connections ---
@@ -259,14 +315,27 @@ permutation_join <- function(data_A, data_B,
     names(joined_data_raw)[names(joined_data_raw) == perm_key_A] <- "JoinKey"
 
     # Compute deterministic join rank
-    joined_data_raw$JoinKeyRank <- pmin(joined_data_raw[[rank_col_A]], joined_data_raw[[rank_col_B]], na.rm = TRUE)
+    joined_data_raw$JoinKeyRank <- pmin(
+      joined_data_raw[[rank_col_A]],
+      joined_data_raw[[rank_col_B]],
+      na.rm = TRUE
+    )
 
-    ord <- order(joined_data_raw$JoinKeyRank, joined_data_raw$JoinKey, na.last = TRUE)
+    ord <- order(
+      joined_data_raw$JoinKeyRank, joined_data_raw$JoinKey, na.last = TRUE
+    )
     joined_data_raw <- joined_data_raw[ord, , drop = FALSE]
 
     if (keep == "best") {
-      dedup_key <- paste(joined_data_raw[[id_col_A]], joined_data_raw[[id_col_B]], sep = "_rurl_sep_")
-      final_joined_data <- joined_data_raw[!duplicated(dedup_key), , drop = FALSE]
+      dedup_key <- paste(
+        joined_data_raw[[id_col_A]],
+        joined_data_raw[[id_col_B]],
+        sep = "_rurl_sep_"
+      )
+      final_joined_data <- joined_data_raw[
+        !duplicated(dedup_key), ,
+        drop = FALSE
+      ]
     } else {
       final_joined_data <- joined_data_raw
     }
@@ -296,9 +365,10 @@ permutation_join <- function(data_A, data_B,
       } else if (paste0(col_name_orig_A, ".x") %in% names(final_joined_data)) {
         col_in_merged_A <- paste0(col_name_orig_A, ".x")
       }
-      
+
       if (!is.null(col_in_merged_A)) {
-        result[[paste0(col_name_orig_A, suffix_A)]] <- final_joined_data[[col_in_merged_A]]
+        result[[paste0(col_name_orig_A, suffix_A)]] <-
+          final_joined_data[[col_in_merged_A]]
       }
     }
 
@@ -310,19 +380,14 @@ permutation_join <- function(data_A, data_B,
       } else if (paste0(col_name_orig_B, ".y") %in% names(final_joined_data)) {
         col_in_merged_B <- paste0(col_name_orig_B, ".y")
       }
-      
+
       if (!is.null(col_in_merged_B)) {
-        result[[paste0(col_name_orig_B, suffix_B)]] <- final_joined_data[[col_in_merged_B]]
+        result[[paste0(col_name_orig_B, suffix_B)]] <-
+          final_joined_data[[col_in_merged_B]]
       }
     }
-    
-    # Ensure column order is consistent if possible, starting with defined ones
-    # This is a basic reordering, might need refinement for perfect match with template
-    # preferred_order <- names(empty_output_template)
-    # result <- result[, intersect(preferred_order, names(result)), drop = FALSE]
-
   } else {
     result <- empty_output_template
   }
   return(result)
-} 
+}
