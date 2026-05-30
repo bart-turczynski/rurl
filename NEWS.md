@@ -1,3 +1,30 @@
+## rurl 1.0.0.9000 (development)
+
+### Bug fixes
+
+- `safe_parse_url()` now returns `port` as an integer (or `NA_integer_`), and
+  `safe_parse_urls()` no longer errors on URLs that contain an explicit port
+  (e.g. `http://example.com:8080/path`). Previously the scalar parser returned
+  the port as a character string and the vectorized parser aborted.
+  (RURL-fxyzanfg)
+- Bracketed IPv6 hosts (e.g. `http://[2001:db8::1]/`) are now correctly detected
+  as IP hosts: `is_ip_host` is `TRUE`, `parse_status` is `"ok"`, and no
+  TLD/domain derivation is attempted — matching how IPv4 hosts were already
+  handled. An over-escaped detection pattern previously prevented this.
+  (RURL-jpqjndld)
+
+### Behavior changes (potentially breaking)
+
+- `subdomain_levels_to_keep = N` (for `N > 0`) now keeps the `N` rightmost
+  subdomain labels as documented, instead of silently retaining all subdomains.
+  For example, `safe_parse_url("http://deep.sub.domain.example.com",
+  subdomain_levels_to_keep = 1)` now returns host `domain.example.com` (was
+  `deep.sub.domain.example.com`). `N = 0` (strip all) is unchanged. Code that
+  relied on the previous no-op behavior for `N > 0` will see different output.
+  (RURL-szumhumv)
+
+---
+
 ## rurl v1 (GitHub Release) - 2026-02-16
 
 - Published first stable GitHub release tag: `v1`.

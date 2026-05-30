@@ -645,14 +645,36 @@ test_that("safe_parse_url validates and applies subdomain_levels_to_keep", {
   expect_equal(res_strip$host, "example.com")
   expect_equal(res_strip$domain, "example.com")
 
-  # Functional behavior: keep subdomains when level > 0 (current implementation
-  # retains all)
+  # Functional behavior: keep N rightmost subdomain labels (counted from the
+  # registered domain outward), per documented behavior.
   res_keep1 <- safe_parse_url(
     "http://deep.sub.domain.example.com",
     subdomain_levels_to_keep = 1
   )
-  expect_equal(res_keep1$host, "deep.sub.domain.example.com")
+  expect_equal(res_keep1$host, "domain.example.com")
   expect_equal(res_keep1$domain, "example.com")
+
+  res_keep2 <- safe_parse_url(
+    "http://deep.sub.domain.example.com",
+    subdomain_levels_to_keep = 2
+  )
+  expect_equal(res_keep2$host, "sub.domain.example.com")
+
+  # Requesting more levels than available keeps all subdomains (capped).
+  res_keep_over <- safe_parse_url(
+    "http://deep.sub.domain.example.com",
+    subdomain_levels_to_keep = 9
+  )
+  expect_equal(res_keep_over$host, "deep.sub.domain.example.com")
+
+  # www is preserved by www_handling = "keep" and is orthogonal to the
+  # subdomain level count.
+  res_www_keep1 <- safe_parse_url(
+    "http://www.deep.sub.domain.example.com",
+    www_handling = "keep",
+    subdomain_levels_to_keep = 1
+  )
+  expect_equal(res_www_keep1$host, "www.domain.example.com")
 
   # Interaction with www_handling = keep
   res_www <- safe_parse_url(
@@ -666,4 +688,31 @@ test_that("safe_parse_url validates and applies subdomain_levels_to_keep", {
   res_first <- safe_parse_url("example.com", subdomain_levels_to_keep = 1)
   res_second <- safe_parse_url("example.com", subdomain_levels_to_keep = 1)
   expect_identical(res_first, res_second)
+})
+
+test_that("port is returned as integer and vectorizes without error", {
+  # Regression: curl returns port as character; the parser must coerce so that
+  # scalar, vector, and accessor paths all yield integer / NA_integer_.
+  res <- safe_parse_url("http://example.com:8080/path")
+  expect_identical(res$port, 8080L)
+
+  vec <- safe_parse_urls(c("http://example.com", "http://example.com:8080"))
+  expect_identical(vec$port, c(NA_integer_, 8080L))
+
+  expect_identical(unname(get_port("http://example.com:8080/path")), 8080L)
+  expect_identical(unname(get_port("http://example.com/path")), NA_integer_)
+})
+
+test_that("bracketed IPv6 hosts are detected as IP hosts", {
+  # Regression: the IPv6 detector regex was over-escaped and never matched, so
+  # IPv6 hosts fell through to TLD derivation and got a spurious warning.
+  res <- safe_parse_url("http://[2001:db8::1]/x")
+  expect_true(res$is_ip_host)
+  expect_equal(res$parse_status, "ok")
+  expect_true(is.na(res$domain))
+  expect_true(is.na(res$tld))
+  expect_identical(unname(get_domain("http://[2001:db8::1]/x")), NA_character_)
+  expect_identical(unname(get_tld("http://[2001:db8::1]/x")), NA_character_)
+  # IPv4 parity (already worked; guards against regressions).
+  expect_true(safe_parse_url("http://192.168.1.1/x")$is_ip_host)
 })

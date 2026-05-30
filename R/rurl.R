@@ -699,7 +699,7 @@ safe_parse_urls <- function(url,
     ipv4 <- stringi::stri_detect_regex(raw_host, "^\\d{1,3}(\\.\\d{1,3}){3}$")
     # IPv6: [2001:db8::1] or 2001:db8::1
     ipv6 <- stringi::stri_detect_regex(
-      raw_host, "^\\\\[?[0-9a-fA-F:]+\\\\]?$"
+      raw_host, "^\\[?[0-9a-fA-F:]+\\]?$"
     ) && stringi::stri_detect_regex(raw_host, ":")
     if (is.na(ipv4)) ipv4 <- FALSE # Add NA check
     if (is.na(ipv6)) ipv6 <- FALSE # Add NA check
@@ -866,7 +866,7 @@ safe_parse_urls <- function(url,
           stringi::stri_length(domain_lower) - 1
       )
 
-      sub_labels <- strsplit(subdomain_component_string, "\\\\.")[[1]]
+      sub_labels <- strsplit(subdomain_component_string, "\\.")[[1]]
 
       kept_sub_labels_string <- ""
       if (subdomain_levels_to_keep > 0) {
@@ -1012,7 +1012,7 @@ safe_parse_urls <- function(url,
     } else {
       host_output
     },
-    port = parsed_curl$port %||% NA_integer_,
+    port = suppressWarnings(as.integer(parsed_curl$port %||% NA_integer_)),
     path = path_output,
     query = raw_query %||% NA_character_,
     fragment = parsed_curl$fragment %||% NA_character_,
