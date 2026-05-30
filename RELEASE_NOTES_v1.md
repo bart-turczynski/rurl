@@ -5,7 +5,7 @@ It reflects package version `1.0.0` as declared in `DESCRIPTION`.
 
 ## What `rurl` Provides
 
-`rurl` is a vectorized R toolkit for URL parsing, normalization, extraction, permutation, and matching.
+`rurl` is a vectorized R toolkit for URL parsing, normalization, extraction, and matching.
 
 Core capabilities:
 
@@ -21,10 +21,7 @@ Core capabilities:
   - host encoding (IDNA/Unicode)
   - path encoding
 - URL component accessors (`get_*` helpers)
-- URL permutation with `permute_url()`
-- Dataset joins based on canonical or permuted URLs:
-  - `canonical_join()`
-  - `permutation_join()`
+- Dataset joins based on canonical URLs with `canonical_join()`
 - Built-in memoization caches with `rurl_clear_caches()`
 
 ## Included in This Release
@@ -32,8 +29,7 @@ Core capabilities:
 This `v1` release includes the current `1.0.0` functionality, including:
 
 - Flexible normalization controls (`case_handling`, `trailing_slash_handling`, and related options)
-- URL permutation generation for robust matching workflows
-- Canonical and permutation-based URL joins
+- Canonical URL joins
 - Improved handling of malformed schemes and schemeless URLs with ports
 - Safer parsing fallbacks and improved IPv6 parsing reliability
 

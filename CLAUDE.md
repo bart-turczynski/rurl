@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`rurl` is an R package for parsing, normalizing, and cleaning URLs. It provides vectorized, pipe-friendly functions with fine-grained control over protocols, www prefixes, case handling, and trailing slashes. Uses the Public Suffix List (PSL) for accurate domain/TLD extraction.
+`rurl` is an R package for parsing, normalizing, cleaning, and joining URLs. It provides vectorized, pipe-friendly functions with fine-grained control over protocols, www prefixes, case handling, and trailing slashes. Uses the Public Suffix List (PSL) for accurate domain/TLD extraction.
 
 ## Build and Test Commands
 
@@ -30,8 +30,7 @@ source("data-raw/update_psl.R")
 ### Core Files
 
 - **R/rurl.R** - Main parsing logic: `safe_parse_url()` and all `get_*()` accessor functions
-- **R/permute_url.R** - URL permutation generation (`permute_url()`)
-- **R/permutation_join.R** - Dataset joining by URL permutations (`permutation_join()`)
+- **R/canonical_join.R** - Dataset joining by canonicalized URL keys (`canonical_join()`)
 - **R/zzz.R** - Package initialization (`.onLoad`), pre-computes PSL hash sets and initializes caches
 
 ### Key Internal Functions (R/rurl.R)
@@ -67,7 +66,7 @@ source("data-raw/update_psl.R")
 
 - `curl` - URL parsing via `curl_parse_url()`
 - `stringi` - Unicode string manipulation (recently migrated from base `grep`)
-- `urltools` - Punycode encoding/decoding
+- `punycoder` - Punycode encoding/decoding
 
 ## Test Framework
 

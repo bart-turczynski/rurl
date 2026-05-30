@@ -3,7 +3,7 @@
 #' Performs a join between two data frames by canonicalizing URLs to a shared
 #' "clean" format using \code{\link{safe_parse_urls}} and then matching on
 #' that key.
-#' This avoids permutation expansion and is suitable for large crawl exports.
+#' This is suitable for large crawl exports.
 #'
 #' @param data_A A data frame containing URLs for the left side of the join.
 #' @param data_B A data frame containing URLs for the right side of the join.

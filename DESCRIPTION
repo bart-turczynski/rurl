@@ -16,8 +16,6 @@ RoxygenNote: 7.3.3
 Collate:
     'rurl.R'
     'canonical_join.R'
-    'permute_url.R'
-    'permutation_join.R'
     'zzz.R'
 Imports:
     utils,

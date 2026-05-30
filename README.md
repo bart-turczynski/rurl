@@ -2,7 +2,7 @@ rurl
 ================
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
-normalization, extraction, permutation, and matching in R.
+normalization, extraction, and matching in R.
 
 Current package capabilities include:
 
@@ -11,8 +11,7 @@ Current package capabilities include:
   case, trailing slashes, index pages, path normalization,
   scheme-relative URLs, host encoding, and path encoding
 - URL component extractors (`get_*` helpers)
-- Variant generation with `permute_url()`
-- URL-based joins with `canonical_join()` and `permutation_join()`
+- URL-based joins with `canonical_join()`
 - Built-in memoization caches with `rurl_clear_caches()`
 
 ## Installation
@@ -30,10 +29,8 @@ remotes::install_github("bart-turczynski/rurl")
   `get_domain()`, `get_tld()`, `get_path()`, `get_query()`,
   `get_fragment()`, `get_port()`, `get_user()`, `get_password()`,
   `get_userinfo()`, `get_parse_status()`
-- Permutations: `permute_url()`
-- Matching/joining:
-  - `canonical_join()` for deterministic canonical-key joins
-  - `permutation_join()` for broader matching across generated variants
+- Matching/joining: `canonical_join()` for deterministic canonical-key
+  joins
 - Cache control: `rurl_clear_caches()`
 
 ## Quick Start
@@ -139,19 +136,7 @@ get_userinfo(u)
 get_parse_status(c(u, "mailto:test@example.com"))
 ```
 
-## Permutations and URL Joins
-
-Generate variants with `permute_url()`:
-
-``` r
-permute_url(
-  "Example.com/path",
-  protocol_handling = c("http", "https"),
-  www_handling = c("none", "keep"),
-  trailing_slash_handling = c("none", "keep"),
-  include_rank = TRUE
-)
-```
+## URL Joins
 
 `canonical_join()` matches on one canonicalized key per URL and is the
 preferred option for large datasets:
@@ -168,20 +153,6 @@ canonical_join(
   www_handling = "strip",
   case_handling = "lower_host",
   trailing_slash_handling = "strip"
-)
-```
-
-`permutation_join()` matches rows when any generated permutation
-overlaps:
-
-``` r
-permutation_join(
-  A, B,
-  keep = "best",
-  include_join_rank = TRUE,
-  protocol_handling = c("http", "https"),
-  www_handling = c("none", "keep"),
-  trailing_slash_handling = c("none", "keep")
 )
 ```
 
