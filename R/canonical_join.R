@@ -42,6 +42,7 @@
 #'   Returns an empty data frame with the expected structure if no matches
 #'   are found or if inputs are invalid.
 #'
+#' @importFrom stats setNames
 #' @export
 #' @examples
 #' A <- data.frame(
