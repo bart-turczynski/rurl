@@ -516,8 +516,9 @@ safe_parse_urls <- function(url,
   cache_key <- stringi::stri_escape_unicode(enc2utf8(cache_key))
 
   # Check cache
-  if (exists(cache_key, envir = .rurl_cache$full_parse, inherits = FALSE)) {
-    return(get(cache_key, envir = .rurl_cache$full_parse, inherits = FALSE))
+  cached <- .cache_get("full_parse", cache_key)
+  if (!identical(cached, .rurl_cache_sentinel)) {
+    return(cached)
   }
 
   # Call the implementation
@@ -537,7 +538,7 @@ safe_parse_urls <- function(url,
   )
 
   # Cache the result
-  assign(cache_key, result, envir = .rurl_cache$full_parse)
+  .cache_set("full_parse", cache_key, result)
 
   result
 }
@@ -2080,14 +2081,15 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
 # Results are memoized for performance.
 .get_registered_domain <- function(hostname) {
   # Check cache first
-  if (exists(hostname, envir = .rurl_cache$domain, inherits = FALSE)) {
-    return(get(hostname, envir = .rurl_cache$domain, inherits = FALSE))
+  cached <- .cache_get("domain", hostname)
+  if (!identical(cached, .rurl_cache_sentinel)) {
+    return(cached)
   }
 
   result <- ._get_registered_domain_impl(hostname)
 
   # Cache the result
-  assign(hostname, result, envir = .rurl_cache$domain)
+  .cache_set("domain", hostname, result)
   result
 }
 
@@ -2192,14 +2194,15 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   cache_key <- stringi::stri_escape_unicode(enc2utf8(cache_key))
 
   # Check cache
-  if (exists(cache_key, envir = .rurl_cache$tld, inherits = FALSE)) {
-    return(get(cache_key, envir = .rurl_cache$tld, inherits = FALSE))
+  cached <- .cache_get("tld", cache_key)
+  if (!identical(cached, .rurl_cache_sentinel)) {
+    return(cached)
   }
 
   result <- ._extract_tld_impl(host_to_process, current_tld_set)
 
   # Cache the result
-  assign(cache_key, result, envir = .rurl_cache$tld)
+  .cache_set("tld", cache_key, result)
   result
 }
 

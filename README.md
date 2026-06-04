@@ -12,7 +12,7 @@ Current package capabilities include:
   scheme-relative URLs, host encoding, and path encoding
 - URL component extractors (`get_*` helpers)
 - URL-based joins with `canonical_join()`
-- Built-in memoization caches with `rurl_clear_caches()`
+- Built-in memoization caches with introspection and configuration (`rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`)
 
 ## Installation
 
@@ -31,7 +31,7 @@ remotes::install_github("bart-turczynski/rurl")
   `get_userinfo()`, `get_parse_status()`
 - Matching/joining: `canonical_join()` for deterministic canonical-key
   joins
-- Cache control: `rurl_clear_caches()`
+- Cache control: `rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`
 
 ## Quick Start
 
@@ -166,11 +166,19 @@ canonical_join(
 ## Caching
 
 `rurl` memoizes parse/domain/TLD work to speed repeated operations over
-large URL vectors. To clear caches in a long-running session:
+large URL vectors. Inspect, clear, and configure the caches:
 
 ``` r
-rurl_clear_caches()
+rurl_cache_info()                       # entries / enabled / max per cache
+rurl_clear_caches()                     # free memory in a long-running session
+rurl_cache_config(max_full_parse = 1e5) # bound the full-parse cache
+rurl_cache_config(domain = FALSE)       # disable a cache entirely
 ```
+
+The `full_parse` cache is unbounded by default (`max_full_parse = Inf`); set
+a bound to cap its peak memory. The `domain` and `tld` caches grow with the
+number of unique hosts and can be disabled for workloads with very many of
+them.
 
 ## Public Suffix List Data
 

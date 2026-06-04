@@ -1,5 +1,17 @@
 ## rurl 1.0.0.9000 (development)
 
+### New features
+
+- Cache introspection and configuration. `rurl_cache_info()` reports the entry
+  count, enabled state, and any bound for each memoization cache
+  (`full_parse`, `domain`, `tld`). `rurl_cache_config()` enables or disables
+  individual caches and sets an optional `max_full_parse` bound on the
+  full-parse cache (default `Inf`, preserving the previous unbounded
+  behavior); when the bound is reached the cache is reset so peak memory stays
+  bounded. The `domain` and `tld` caches remain unbounded by design — they
+  grow with the number of unique hosts, not with URL/option combinations — and
+  can be disabled for workloads with very many unique hosts. (RURL-iuotpaqs)
+
 ### Bug fixes
 
 - `safe_parse_url()` now returns `port` as an integer (or `NA_integer_`), and
