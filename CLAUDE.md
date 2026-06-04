@@ -78,3 +78,5 @@ Uses testthat 3.0.0+ with edition 3 config. Test files are in `tests/testthat/`.
 - PSL data is shipped in `R/sysdata.rda` and never downloaded at runtime
 - All core functions are fully vectorized
 - Cache environments are initialized in `.onLoad` and persist for the R session
+
+@FP_CLAUDE.md

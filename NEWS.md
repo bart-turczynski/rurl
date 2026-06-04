@@ -1,3 +1,65 @@
+## rurl 1.0.0.9000 (development)
+
+### New features
+
+- `canonical_join()` gains `name_A` / `name_B` arguments to set the output
+  original-URL column names explicitly. They default to `NULL`, preserving the
+  previous `deparse(substitute())` behavior; supply them for stable names when
+  piping or passing anonymous inputs (e.g. `canonical_join(df[df$x > 1, ],
+  get_b())`), which otherwise produced unstable column names. (RURL-fsygrelr)
+- `canonical_join()` gains a `join_parse_status` argument controlling which
+  parse statuses yield joinable keys. The default `"ok"` preserves the previous
+  behavior (only `ok*` statuses join); `"ok_or_warning"` additionally treats
+  the parseable-but-suspicious `warning-*` statuses (`warning-no-tld`,
+  `warning-invalid-tld`, `warning-public-suffix`) as joinable, at the cost of
+  more potential false-positive matches. (RURL-edqdrvfu)
+
+- Cache introspection and configuration. `rurl_cache_info()` reports the entry
+  count, enabled state, and any bound for each memoization cache
+  (`full_parse`, `domain`, `tld`). `rurl_cache_config()` enables or disables
+  individual caches and sets an optional `max_full_parse` bound on the
+  full-parse cache (default `Inf`, preserving the previous unbounded
+  behavior); when the bound is reached the cache is reset so peak memory stays
+  bounded. The `domain` and `tld` caches remain unbounded by design — they
+  grow with the number of unique hosts, not with URL/option combinations — and
+  can be disabled for workloads with very many unique hosts. (RURL-iuotpaqs)
+
+### Bug fixes
+
+- `safe_parse_url()` now returns `port` as an integer (or `NA_integer_`), and
+  `safe_parse_urls()` no longer errors on URLs that contain an explicit port
+  (e.g. `http://example.com:8080/path`). Previously the scalar parser returned
+  the port as a character string and the vectorized parser aborted.
+  (RURL-fxyzanfg)
+- Bracketed IPv6 hosts (e.g. `http://[2001:db8::1]/`) are now correctly detected
+  as IP hosts: `is_ip_host` is `TRUE`, `parse_status` is `"ok"`, and no
+  TLD/domain derivation is attempted — matching how IPv4 hosts were already
+  handled. An over-escaped detection pattern previously prevented this.
+  (RURL-jpqjndld)
+
+### Behavior changes (potentially breaking)
+
+- `subdomain_levels_to_keep = N` (for `N > 0`) now keeps the `N` rightmost
+  subdomain labels as documented, instead of silently retaining all subdomains.
+  For example, `safe_parse_url("http://deep.sub.domain.example.com",
+  subdomain_levels_to_keep = 1)` now returns host `domain.example.com` (was
+  `deep.sub.domain.example.com`). `N = 0` (strip all) is unchanged. Code that
+  relied on the previous no-op behavior for `N > 0` will see different output.
+  (RURL-szumhumv)
+
+### Documentation
+
+- Documented `clean_url` composition: it is a normalized canonical key built
+  from scheme, host, and path only. Port, query, fragment, and userinfo are
+  intentionally excluded, and with `path_encoding = "decode"` the path is shown
+  decoded (human-readable, not guaranteed URL-safe). This matches the existing
+  behavior and the key used by `canonical_join()` — no behavior change.
+  Corrected a `lower_host` description that implied userinfo could be retained
+  in `clean_url`, and fixed a README example whose input contained a literal
+  space (now percent-encoded) so it parses as documented. (RURL-jnboujtd)
+
+---
+
 ## rurl v1 (GitHub Release) - 2026-02-16
 
 - Published first stable GitHub release tag: `v1`.

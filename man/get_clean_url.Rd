@@ -37,7 +37,8 @@ prefixes.
   \item{"keep": (Default) Preserves the original casing.}
   \item{"lower": Converts the cleaned URL to lowercase.}
   \item{"upper": Converts the cleaned URL to uppercase.}
-  \item{"lower_host": Lowercase scheme and host only.}
+  \item{"lower_host": Lowercases scheme and host only; the path keeps its
+  original casing.}
 }}
 
 \item{trailing_slash_handling}{A character string specifying how to handle
@@ -90,7 +91,11 @@ A character vector of cleaned URLs.
 }
 \description{
 This function returns the cleaned version of the URLs after applying
-protocol, www, case, and trailing slash handling rules.
+protocol, www, case, and trailing slash handling rules. The result is a
+normalized canonical key composed of scheme, host, and path only; port,
+query, fragment, and userinfo are intentionally excluded (use
+\code{\link{get_port}}, \code{\link{get_query}}, \code{\link{get_fragment}},
+or \code{\link{get_userinfo}} for those).
 }
 \examples{
 get_clean_url("Example.COM/Path") # Default keep, default no slash change

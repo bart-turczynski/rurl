@@ -52,8 +52,8 @@ utils::globalVariables(c(
 #'     \item{"keep": (Default) Preserves casing of the reconstructed URL.}
 #'     \item{"lower": Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
-#'     \item{"lower_host": Lowercases scheme+host only; path (and any retained
-#'     userinfo) stay as-is.}
+#'     \item{"lower_host": Lowercases scheme and host only; the path keeps its
+#'     original casing.}
 #'   }
 #' @param trailing_slash_handling A character string specifying how to handle
 #'   trailing slashes in the path component of the cleaned URL. Defaults to
@@ -140,8 +140,13 @@ utils::globalVariables(c(
 #'     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP,
 #'     empty, or derivation fails.
 #'     \item `is_ip_host`: Logical, TRUE if the host is an IP address.
-#'     \item `clean_url`: The URL reconstructed from scheme, host, and path
-#'     after processing, with case handling applied. NA if host is empty/NA.
+#'     \item `clean_url`: A normalized canonical key reconstructed from
+#'     scheme, host, and path only, after processing and with case handling
+#'     applied. Port, query, fragment, and userinfo are intentionally
+#'     excluded (use the dedicated components above to retrieve them). With
+#'     `path_encoding = "decode"` the path is shown decoded, so `clean_url`
+#'     is human-readable rather than guaranteed URL-safe. NA if host is
+#'     empty/NA.
 #'     \item `parse_status`: Character string indicating parsing outcome
 #'       ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
 #'       "warning-invalid-tld", "warning-public-suffix").
@@ -511,8 +516,9 @@ safe_parse_urls <- function(url,
   cache_key <- stringi::stri_escape_unicode(enc2utf8(cache_key))
 
   # Check cache
-  if (exists(cache_key, envir = .rurl_cache$full_parse, inherits = FALSE)) {
-    return(get(cache_key, envir = .rurl_cache$full_parse, inherits = FALSE))
+  cached <- .cache_get("full_parse", cache_key)
+  if (!identical(cached, .rurl_cache_sentinel)) {
+    return(cached)
   }
 
   # Call the implementation
@@ -532,7 +538,7 @@ safe_parse_urls <- function(url,
   )
 
   # Cache the result
-  assign(cache_key, result, envir = .rurl_cache$full_parse)
+  .cache_set("full_parse", cache_key, result)
 
   result
 }
@@ -556,6 +562,118 @@ safe_parse_urls <- function(url,
   host_encoding <- match.arg(host_encoding, c("keep", "idna", "unicode"))
   path_encoding <- match.arg(path_encoding, c("keep", "encode", "decode"))
 
+  # Phase 1: scheme detection and input preparation for curl
+  prep <- .prepare_url_for_curl(
+    url, protocol_handling, scheme_relative_handling
+  )
+  if (is.null(prep)) {
+    return(NULL)
+  }
+
+  # Phase 2: parse with curl, then pull out raw components
+  parsed_curl <- .parse_with_curl(prep$url_to_parse)
+  if (is.null(parsed_curl)) {
+    return(NULL)
+  }
+  raw <- .extract_raw_components(parsed_curl)
+  raw_host <- raw$host
+  raw_query <- raw$query
+
+  # Phase 3: path normalization (decode, slashes/dots, index, trailing, encode)
+  path_final <- .normalize_path(
+    raw$path,
+    path_encoding = path_encoding,
+    path_normalization = path_normalization,
+    index_page_handling = index_page_handling,
+    trailing_slash_handling = trailing_slash_handling
+  )
+
+  # Phase 4: final scheme per protocol policy
+  final_scheme <- .derive_final_scheme(
+    protocol_handling, prep$original_looks_like_protocol, raw$scheme
+  )
+
+  # Phase 5: IP host detection
+  is_ip_host <- .detect_ip_host(raw_host)
+
+  # Phase 6: www prefix policy
+  final_host <- .apply_www_policy(raw_host, www_handling, is_ip_host)
+
+  # Phase 7: registered-domain and TLD derivation
+  domain_tld <- .derive_domain_tld(final_host, is_ip_host, tld_source)
+  domain <- domain_tld$domain
+  tld <- domain_tld$tld
+
+  # Phase 8: subdomain-level policy
+  final_host <- .apply_subdomain_policy(
+    final_host, domain, subdomain_levels_to_keep, is_ip_host
+  )
+
+  # Phase 9: host encoding (idna / unicode)
+  host_for_clean <- .apply_host_encoding(final_host, host_encoding, is_ip_host)
+
+  # Phase 10: case policy applied to host, path, and scheme
+  cased <- .apply_case_policy(
+    host_for_clean, path_final, final_scheme, case_handling
+  )
+  host_output <- cased$host
+  path_output <- cased$path
+  scheme_output <- cased$scheme
+
+  # Phase 11: clean URL reconstruction
+  clean_url <- .build_clean_url(
+    scheme_output, host_output, path_output, trailing_slash_handling
+  )
+
+  # Phase 12: parse-status assignment
+  parse_status <- .derive_parse_status(
+    parsed_curl = parsed_curl,
+    final_host = final_host,
+    is_ip_host = is_ip_host,
+    tld = tld,
+    domain = domain,
+    protocol_handling = protocol_handling,
+    final_scheme = final_scheme,
+    original_looks_like_protocol = prep$original_looks_like_protocol,
+    original_has_allowed_scheme = prep$original_has_allowed_scheme,
+    is_scheme_relative = prep$is_scheme_relative,
+    scheme_relative_handling = scheme_relative_handling
+  )
+
+  # Phase 13: assemble the typed result list
+  .assemble_parse_result(
+    original_input_url = original_input_url,
+    scheme_output = scheme_output,
+    host_output = host_output,
+    parsed_curl = parsed_curl,
+    path_output = path_output,
+    raw_query = raw_query,
+    domain = domain,
+    tld = tld,
+    is_ip_host = is_ip_host,
+    clean_url = clean_url,
+    parse_status = parse_status,
+    is_scheme_relative = prep$is_scheme_relative,
+    scheme_relative_handling = scheme_relative_handling
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Decomposed phase helpers for ._safe_parse_url_impl().
+#
+# Each helper owns one normalization phase and can be reasoned about and
+# tested independently. The code inside is moved verbatim from the original
+# monolithic implementation (the only behavior changes are the separately
+# tracked port/IPv6/subdomain bug fixes). None of these are memoized; the
+# memoizing wrapper ._safe_parse_url_scalar() caches the whole result.
+# ---------------------------------------------------------------------------
+
+# Phase 1: scheme detection, supported-scheme policy, and building the string
+# handed to curl. Returns NULL when the URL must be rejected (scheme-relative
+# with "error" handling, or an unsupported explicit scheme under keep/none).
+.prepare_url_for_curl <- function(url,
+                                  protocol_handling,
+                                  scheme_relative_handling) {
   allowed_prefixes <- c("http://", "https://", "ftp://", "ftps://")
   original_url_lower <- stringi::stri_trans_tolower(url)
   original_has_allowed_scheme <- any(
@@ -618,18 +736,26 @@ safe_parse_urls <- function(url,
     url_to_parse <- paste0("http://", url)
   }
 
-  parsed_curl <- tryCatch(
+  list(
+    url_to_parse = url_to_parse,
+    original_looks_like_protocol = original_looks_like_protocol,
+    original_has_allowed_scheme = original_has_allowed_scheme,
+    is_scheme_relative = is_scheme_relative,
+    looks_like_host_port = looks_like_host_port
+  )
+}
+
+# Phase 2a: parse the prepared URL with curl, returning NULL on failure.
+.parse_with_curl <- function(url_to_parse) {
+  tryCatch(
     curl::curl_parse_url(url_to_parse),
     error = function(e) NULL
   )
+}
 
-  if (is.null(parsed_curl)) {
-    return(NULL)
-  }
-
-  raw_scheme <- parsed_curl$scheme %||% NA_character_
-  raw_host <- parsed_curl$host %||% NA_character_
-  raw_path <- parsed_curl$path %||% NA_character_
+# Phase 2b: pull the raw components used downstream out of the curl result,
+# reconstructing the query string from params when curl did not surface one.
+.extract_raw_components <- function(parsed_curl) {
   raw_query <- parsed_curl$query %||% NA_character_
   if (is.na(raw_query) &&
     !is.null(parsed_curl$params) &&
@@ -641,11 +767,24 @@ safe_parse_urls <- function(url,
       collapse = "&"
     )
   }
+  list(
+    scheme = parsed_curl$scheme %||% NA_character_,
+    host = parsed_curl$host %||% NA_character_,
+    path = parsed_curl$path %||% NA_character_,
+    query = raw_query
+  )
+}
 
-  path_final <- raw_path
+# Phase 3: path decoding, slash/dot normalization, index stripping, trailing
+# slash policy, and optional percent-encoding.
+.normalize_path <- function(raw_path,
+                            path_encoding,
+                            path_normalization,
+                            index_page_handling,
+                            trailing_slash_handling) {
+  path_work <- raw_path
 
   # Decode path if requested, before normalization/index handling
-  path_work <- path_final
   if (!is.na(path_work) && path_encoding %in% c("decode", "encode")) {
     path_work <- tryCatch(
       curl::curl_unescape(path_work),
@@ -683,36 +822,46 @@ safe_parse_urls <- function(url,
     }
   }
 
-  final_scheme <- switch(protocol_handling,
+  # Path percent-encoding handling (performed after normalization/index logic)
+  if (!is.na(path_work) && path_encoding == "encode") {
+    path_work <- ._encode_path_segments(path_work)
+  }
+
+  path_work
+}
+
+# Phase 4: resolve the final scheme according to protocol policy.
+.derive_final_scheme <- function(protocol_handling,
+                                 original_looks_like_protocol,
+                                 raw_scheme) {
+  switch(protocol_handling,
     none = if (original_looks_like_protocol) raw_scheme else NA_character_,
     strip = NA_character_,
     http = "http",
     https = "https",
     keep = raw_scheme
   )
+}
 
-  # Use regex for IP detection (IPv4 and IPv6)
-  is_ip_host <- if (is.na(raw_host) || raw_host == "") {
-    FALSE
-  } else {
-    # IPv4: 1.2.3.4
-    ipv4 <- stringi::stri_detect_regex(raw_host, "^\\d{1,3}(\\.\\d{1,3}){3}$")
-    # IPv6: [2001:db8::1] or 2001:db8::1
-    ipv6 <- stringi::stri_detect_regex(
-      raw_host, "^\\\\[?[0-9a-fA-F:]+\\\\]?$"
-    ) && stringi::stri_detect_regex(raw_host, ":")
-    if (is.na(ipv4)) ipv4 <- FALSE # Add NA check
-    if (is.na(ipv6)) ipv6 <- FALSE # Add NA check
-    ipv4 || ipv6
+# Phase 5: detect whether the host is an IP literal (IPv4 or IPv6).
+.detect_ip_host <- function(raw_host) {
+  if (is.na(raw_host) || raw_host == "") {
+    return(FALSE)
   }
+  # IPv4: 1.2.3.4
+  ipv4 <- stringi::stri_detect_regex(raw_host, "^\\d{1,3}(\\.\\d{1,3}){3}$")
+  # IPv6: [2001:db8::1] or 2001:db8::1
+  ipv6 <- stringi::stri_detect_regex(
+    raw_host, "^\\[?[0-9a-fA-F:]+\\]?$"
+  ) && stringi::stri_detect_regex(raw_host, ":")
+  if (is.na(ipv4)) ipv4 <- FALSE # Add NA check
+  if (is.na(ipv6)) ipv6 <- FALSE # Add NA check
+  ipv4 || ipv6
+}
+
+# Phase 6: apply the www-prefix policy to a (non-IP) host.
+.apply_www_policy <- function(raw_host, www_handling, is_ip_host) {
   final_host <- raw_host
-
-  # Path percent-encoding handling (performed after normalization/index logic)
-  if (!is.na(path_work) && path_encoding == "encode") {
-    path_work <- ._encode_path_segments(path_work)
-  }
-  path_final <- path_work
-
   if (!is_ip_host && !is.na(raw_host) && raw_host != "") {
     if (www_handling == "strip") {
       final_host <- stringi::stri_replace_first_regex(
@@ -799,7 +948,12 @@ safe_parse_urls <- function(url,
       }
     }
   }
+  final_host
+}
 
+# Phase 7: derive the registered domain (Unicode) and TLD from the host using
+# the Public Suffix List.
+.derive_domain_tld <- function(final_host, is_ip_host, tld_source) {
   domain <- NA_character_
   tld <- NA_character_
 
@@ -829,6 +983,12 @@ safe_parse_urls <- function(url,
     }
   }
 
+  list(domain = domain, tld = tld)
+}
+
+# Phase 8: keep only the requested number of subdomain levels.
+.apply_subdomain_policy <- function(final_host, domain,
+                                    subdomain_levels_to_keep, is_ip_host) {
   if (!is.null(subdomain_levels_to_keep) &&
     !is_ip_host &&
     !is.na(domain) &&
@@ -866,7 +1026,7 @@ safe_parse_urls <- function(url,
           stringi::stri_length(domain_lower) - 1
       )
 
-      sub_labels <- strsplit(subdomain_component_string, "\\\\.")[[1]]
+      sub_labels <- strsplit(subdomain_component_string, "\\.")[[1]]
 
       kept_sub_labels_string <- ""
       if (subdomain_levels_to_keep > 0) {
@@ -893,7 +1053,11 @@ safe_parse_urls <- function(url,
       }
     }
   }
+  final_host
+}
 
+# Phase 9: re-encode the (non-IP) host to IDNA/Punycode or Unicode on request.
+.apply_host_encoding <- function(final_host, host_encoding, is_ip_host) {
   host_for_clean <- final_host
   if (!is.na(host_for_clean) && host_for_clean != "" && !is_ip_host) {
     if (host_encoding == "idna") {
@@ -906,7 +1070,12 @@ safe_parse_urls <- function(url,
       }
     }
   }
+  host_for_clean
+}
 
+# Phase 10: apply the case policy to host, path, and scheme.
+.apply_case_policy <- function(host_for_clean, path_final, final_scheme,
+                               case_handling) {
   host_output <- host_for_clean
   path_output <- path_final
   scheme_output <- final_scheme
@@ -938,6 +1107,12 @@ safe_parse_urls <- function(url,
     )
   }
 
+  list(host = host_output, path = path_output, scheme = scheme_output)
+}
+
+# Phase 11: reconstruct the canonical "clean" URL from cased components.
+.build_clean_url <- function(scheme_output, host_output, path_output,
+                             trailing_slash_handling) {
   clean_url <- NA_character_
   if (!is.na(host_output) && host_output != "") {
     scheme_part <- if (!is.na(scheme_output)) {
@@ -951,7 +1126,17 @@ safe_parse_urls <- function(url,
     }
     clean_url <- paste0(scheme_part, host_output, path_part)
   }
+  clean_url
+}
 
+# Phase 12: classify the parse outcome (ok / ok-ftp / warning-* / error /
+# ok-scheme-relative).
+.derive_parse_status <- function(parsed_curl, final_host, is_ip_host, tld,
+                                 domain, protocol_handling, final_scheme,
+                                 original_looks_like_protocol,
+                                 original_has_allowed_scheme,
+                                 is_scheme_relative,
+                                 scheme_relative_handling) {
   parse_status <- "error"
 
   if (!is.null(parsed_curl)) {
@@ -999,6 +1184,15 @@ safe_parse_urls <- function(url,
     parse_status <- "ok-scheme-relative"
   }
 
+  parse_status
+}
+
+# Phase 13: coerce types and assemble the result list returned to callers.
+.assemble_parse_result <- function(original_input_url, scheme_output,
+                                   host_output, parsed_curl, path_output,
+                                   raw_query, domain, tld, is_ip_host,
+                                   clean_url, parse_status, is_scheme_relative,
+                                   scheme_relative_handling) {
   scheme_return <- scheme_output
   if (is_scheme_relative && scheme_relative_handling == "keep") {
     scheme_return <- NA_character_
@@ -1012,7 +1206,7 @@ safe_parse_urls <- function(url,
     } else {
       host_output
     },
-    port = parsed_curl$port %||% NA_integer_,
+    port = suppressWarnings(as.integer(parsed_curl$port %||% NA_integer_)),
     path = path_output,
     query = raw_query %||% NA_character_,
     fragment = parsed_curl$fragment %||% NA_character_,
@@ -1024,6 +1218,60 @@ safe_parse_urls <- function(url,
     clean_url = clean_url,
     parse_status = parse_status
   )
+}
+
+# Shared extraction path for the get_* accessors.
+#
+# Parses each URL once via the memoized safe_parse_url() and pulls a single
+# field out of the result, collapsing the identical vapply/null-guard loop
+# that every simple accessor used to carry. The parse-option arguments mirror
+# safe_parse_url()'s own defaults so callers override only what differs.
+#
+# - field: name of the result element to return, or NULL to hand the whole
+#   parsed list to `transform` (used by the multi-field accessors).
+# - null_value: returned when the URL fails to parse (and used as the default
+#   when the field itself is absent).
+# - fun_value: the vapply() template controlling the output type.
+# - transform: applied to the extracted value (or parsed list when field=NULL).
+.extract_from_urls <- function(url,
+                               field,
+                               null_value = NA_character_,
+                               fun_value = character(1),
+                               transform = identity,
+                               protocol_handling = "keep",
+                               www_handling = "none",
+                               tld_source = "all",
+                               case_handling = "keep",
+                               trailing_slash_handling = "none",
+                               index_page_handling = "keep",
+                               path_normalization = "none",
+                               scheme_relative_handling = "keep",
+                               subdomain_levels_to_keep = NULL,
+                               host_encoding = "keep",
+                               path_encoding = "keep") {
+  vapply(url, function(u) {
+    parsed <- safe_parse_url(u,
+      protocol_handling = protocol_handling,
+      www_handling = www_handling,
+      tld_source = tld_source,
+      case_handling = case_handling,
+      trailing_slash_handling = trailing_slash_handling,
+      index_page_handling = index_page_handling,
+      path_normalization = path_normalization,
+      scheme_relative_handling = scheme_relative_handling,
+      subdomain_levels_to_keep = subdomain_levels_to_keep,
+      host_encoding = host_encoding,
+      path_encoding = path_encoding
+    )
+    if (is.null(parsed)) {
+      return(null_value)
+    }
+    if (is.null(field)) {
+      transform(parsed)
+    } else {
+      transform(parsed[[field]] %||% null_value)
+    }
+  }, fun_value)
 }
 
 #' Get the parse status of URLs
@@ -1065,26 +1313,23 @@ get_parse_status <- function(url,
                              protocol_handling = "keep",
                              www_handling = "none",
                              subdomain_levels_to_keep = NULL) {
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = www_handling,
-      tld_source = "all",
-      case_handling = "lower",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = subdomain_levels_to_keep
-    )
-    if (is.null(parsed)) {
-      return("error")
-    }
-    parsed$parse_status %||% "error"
-  }, character(1))
+  .extract_from_urls(url, "parse_status",
+    null_value = "error",
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    case_handling = "lower",
+    subdomain_levels_to_keep = subdomain_levels_to_keep
+  )
 }
 
 #' Get cleaned URLs
 #'
 #' This function returns the cleaned version of the URLs after applying
-#' protocol, www, case, and trailing slash handling rules.
+#' protocol, www, case, and trailing slash handling rules. The result is a
+#' normalized canonical key composed of scheme, host, and path only; port,
+#' query, fragment, and userinfo are intentionally excluded (use
+#' \code{\link{get_port}}, \code{\link{get_query}}, \code{\link{get_fragment}},
+#' or \code{\link{get_userinfo}} for those).
 #'
 #' @param url A character vector containing URLs to be parsed.
 #' @param protocol_handling A character string specifying how to handle
@@ -1101,7 +1346,8 @@ get_parse_status <- function(url,
 #'     \item{"keep": (Default) Preserves the original casing.}
 #'     \item{"lower": Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
-#'     \item{"lower_host": Lowercase scheme and host only.}
+#'     \item{"lower_host": Lowercases scheme and host only; the path keeps its
+#'     original casing.}
 #'   }
 #' @param trailing_slash_handling A character string specifying how to handle
 #'   trailing slashes in the path component of the cleaned URL. Defaults to
@@ -1184,25 +1430,18 @@ get_clean_url <- function(url,
                           subdomain_levels_to_keep = NULL,
                           host_encoding = "keep",
                           path_encoding = "keep") {
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = www_handling,
-      tld_source = "all",
-      case_handling = case_handling,
-      trailing_slash_handling = trailing_slash_handling,
-      index_page_handling = index_page_handling,
-      path_normalization = path_normalization,
-      scheme_relative_handling = scheme_relative_handling,
-      subdomain_levels_to_keep = subdomain_levels_to_keep,
-      host_encoding = host_encoding,
-      path_encoding = path_encoding
-    )
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    parsed$clean_url %||% NA_character_
-  }, character(1))
+  .extract_from_urls(url, "clean_url",
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    case_handling = case_handling,
+    trailing_slash_handling = trailing_slash_handling,
+    index_page_handling = index_page_handling,
+    path_normalization = path_normalization,
+    scheme_relative_handling = scheme_relative_handling,
+    subdomain_levels_to_keep = subdomain_levels_to_keep,
+    host_encoding = host_encoding,
+    path_encoding = path_encoding
+  )
 }
 
 # Internal helper to encode hostnames using IDNA (Punycode)
@@ -1458,27 +1697,23 @@ get_domain <- function(url,
                        subdomain_levels_to_keep = NULL,
                        source = c("all", "private", "icann")) {
   source <- match.arg(source)
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = www_handling,
-      tld_source = source,
-      case_handling = "lower",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = subdomain_levels_to_keep
-    )
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    if (source == "all") {
-      return(parsed$domain %||% NA_character_)
-    }
-    if (isTRUE(parsed$is_ip_host)) {
-      return(NA_character_)
-    }
-    host_unicode <- .punycode_to_unicode(parsed$host %||% NA_character_)
-    ._derive_domain_from_tld(host_unicode, parsed$tld %||% NA_character_)
-  }, character(1))
+  .extract_from_urls(url, NULL,
+    transform = function(parsed) {
+      if (source == "all") {
+        return(parsed$domain %||% NA_character_)
+      }
+      if (isTRUE(parsed$is_ip_host)) {
+        return(NA_character_)
+      }
+      host_unicode <- .punycode_to_unicode(parsed$host %||% NA_character_)
+      ._derive_domain_from_tld(host_unicode, parsed$tld %||% NA_character_)
+    },
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    tld_source = source,
+    case_handling = "lower",
+    subdomain_levels_to_keep = subdomain_levels_to_keep
+  )
 }
 
 #' Get URL schemes
@@ -1493,20 +1728,11 @@ get_domain <- function(url,
 #' @examples
 #' get_scheme("https://example.com")
 get_scheme <- function(url, protocol_handling = "keep") {
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = "none", # Consistent with other get_* funcs
-      tld_source = "all",
-      case_handling = "lower",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    ) # Scheme not affected by subdomain levels
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    parsed$scheme %||% NA_character_
-  }, character(1))
+  # Scheme is unaffected by www/subdomain handling.
+  .extract_from_urls(url, "scheme",
+    protocol_handling = protocol_handling,
+    case_handling = "lower"
+  )
 }
 
 #' Get URL hosts
@@ -1570,20 +1796,12 @@ get_host <- function(url,
                        "lower", "keep", "upper", "lower_host"
                      )) {
   case_handling <- match.arg(case_handling)
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = www_handling,
-      tld_source = "all",
-      case_handling = case_handling,
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = subdomain_levels_to_keep
-    )
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    parsed$host %||% NA_character_
-  }, character(1))
+  .extract_from_urls(url, "host",
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    case_handling = case_handling,
+    subdomain_levels_to_keep = subdomain_levels_to_keep
+  )
 }
 
 #' Get URL paths
@@ -1605,20 +1823,11 @@ get_path <- function(
   case_handling = c("lower", "keep", "upper", "lower_host")
 ) {
   case_handling <- match.arg(case_handling)
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = "none", # Consistent with other get_* funcs
-      tld_source = "all",
-      case_handling = case_handling,
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    ) # Path not affected by subdomain levels
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    parsed$path %||% NA_character_
-  }, character(1))
+  # Path is unaffected by www/subdomain handling.
+  .extract_from_urls(url, "path",
+    protocol_handling = protocol_handling,
+    case_handling = case_handling
+  )
 }
 
 #' Get URL query strings
@@ -1644,20 +1853,9 @@ get_query <- function(url,
   format <- match.arg(format)
 
   if (format == "string") {
-    return(vapply(url, function(u) {
-      parsed <- safe_parse_url(u,
-        protocol_handling = protocol_handling,
-        www_handling = "none",
-        tld_source = "all",
-        case_handling = "keep",
-        trailing_slash_handling = "none",
-        subdomain_levels_to_keep = NULL
-      )
-      if (is.null(parsed)) {
-        return(NA_character_)
-      }
-      parsed$query %||% NA_character_
-    }, character(1)))
+    return(.extract_from_urls(url, "query",
+      protocol_handling = protocol_handling
+    ))
   }
 
   lapply(url, function(u) {
@@ -1688,20 +1886,7 @@ get_query <- function(url,
 #' @examples
 #' get_fragment("http://example.com/path#section")
 get_fragment <- function(url, protocol_handling = "keep") {
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = "none",
-      tld_source = "all",
-      case_handling = "keep",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    )
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    parsed$fragment %||% NA_character_
-  }, character(1))
+  .extract_from_urls(url, "fragment", protocol_handling = protocol_handling)
 }
 
 #' Get URL ports
@@ -1716,24 +1901,12 @@ get_fragment <- function(url, protocol_handling = "keep") {
 #' @examples
 #' get_port("http://example.com:8080/path")
 get_port <- function(url, protocol_handling = "keep") {
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = "none",
-      tld_source = "all",
-      case_handling = "keep",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    )
-    if (is.null(parsed)) {
-      return(NA_integer_)
-    }
-    port_val <- parsed$port %||% NA_integer_
-    if (is.na(port_val)) {
-      return(NA_integer_)
-    }
-    as.integer(port_val)
-  }, integer(1))
+  .extract_from_urls(url, "port",
+    null_value = NA_integer_,
+    fun_value = integer(1),
+    transform = as.integer,
+    protocol_handling = protocol_handling
+  )
 }
 
 #' Get URL user names
@@ -1746,20 +1919,7 @@ get_port <- function(url, protocol_handling = "keep") {
 #' @return A character vector of user names.
 #' @export
 get_user <- function(url, protocol_handling = "keep") {
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = "none",
-      tld_source = "all",
-      case_handling = "keep",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    )
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    parsed$user %||% NA_character_
-  }, character(1))
+  .extract_from_urls(url, "user", protocol_handling = protocol_handling)
 }
 
 #' Get URL passwords
@@ -1772,20 +1932,7 @@ get_user <- function(url, protocol_handling = "keep") {
 #' @return A character vector of passwords.
 #' @export
 get_password <- function(url, protocol_handling = "keep") {
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = "none",
-      tld_source = "all",
-      case_handling = "keep",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    )
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    parsed$password %||% NA_character_
-  }, character(1))
+  .extract_from_urls(url, "password", protocol_handling = protocol_handling)
 }
 
 #' Get URL userinfo
@@ -1798,28 +1945,20 @@ get_password <- function(url, protocol_handling = "keep") {
 #' @return A character vector of userinfo values.
 #' @export
 get_userinfo <- function(url, protocol_handling = "keep") {
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = "none",
-      tld_source = "all",
-      case_handling = "keep",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    )
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    user <- parsed$user %||% NA_character_
-    password <- parsed$password %||% NA_character_
-    if (is.na(user) || !nzchar(user)) {
-      return(NA_character_)
-    }
-    if (is.na(password) || !nzchar(password)) {
-      return(user)
-    }
-    paste0(user, ":", password)
-  }, character(1))
+  .extract_from_urls(url, NULL,
+    transform = function(parsed) {
+      user <- parsed$user %||% NA_character_
+      password <- parsed$password %||% NA_character_
+      if (is.na(user) || !nzchar(user)) {
+        return(NA_character_)
+      }
+      if (is.na(password) || !nzchar(password)) {
+        return(user)
+      }
+      paste0(user, ":", password)
+    },
+    protocol_handling = protocol_handling
+  )
 }
 
 #' Get URL subdomains
@@ -1928,21 +2067,10 @@ get_subdomain <- function(url,
 #' get_tld("example.com")
 get_tld <- function(url, source = c("all", "private", "icann")) {
   source <- match.arg(source)
-
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = "keep",
-      www_handling = "none",
-      tld_source = source,
-      case_handling = "lower",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    )
-    if (is.null(parsed)) {
-      return(NA_character_)
-    }
-    parsed$tld %||% NA_character_
-  }, character(1))
+  .extract_from_urls(url, "tld",
+    tld_source = source,
+    case_handling = "lower"
+  )
 }
 
 # Internal helper to derive registered domain using Public Suffix List
@@ -1953,14 +2081,15 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
 # Results are memoized for performance.
 .get_registered_domain <- function(hostname) {
   # Check cache first
-  if (exists(hostname, envir = .rurl_cache$domain, inherits = FALSE)) {
-    return(get(hostname, envir = .rurl_cache$domain, inherits = FALSE))
+  cached <- .cache_get("domain", hostname)
+  if (!identical(cached, .rurl_cache_sentinel)) {
+    return(cached)
   }
 
   result <- ._get_registered_domain_impl(hostname)
 
   # Cache the result
-  assign(hostname, result, envir = .rurl_cache$domain)
+  .cache_set("domain", hostname, result)
   result
 }
 
@@ -2065,14 +2194,15 @@ get_tld <- function(url, source = c("all", "private", "icann")) {
   cache_key <- stringi::stri_escape_unicode(enc2utf8(cache_key))
 
   # Check cache
-  if (exists(cache_key, envir = .rurl_cache$tld, inherits = FALSE)) {
-    return(get(cache_key, envir = .rurl_cache$tld, inherits = FALSE))
+  cached <- .cache_get("tld", cache_key)
+  if (!identical(cached, .rurl_cache_sentinel)) {
+    return(cached)
   }
 
   result <- ._extract_tld_impl(host_to_process, current_tld_set)
 
   # Cache the result
-  assign(cache_key, result, envir = .rurl_cache$tld)
+  .cache_set("tld", cache_key, result)
   result
 }
 
