@@ -222,3 +222,67 @@ test_that("canonical_join returns empty structure on no matches", {
   expect_equal(nrow(res), 0)
   expect_true(all(c("A", "B", "JoinKey") %in% names(res)))
 })
+
+test_that("canonical_join uses explicit name_A / name_B for output columns", {
+  A <- data.frame(URL = "http://example.com/a", ValA = 1, stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://example.com/a", ValB = "x", stringsAsFactors = FALSE)
+
+  res <- canonical_join(
+    A, B,
+    name_A = "left_url", name_B = "right_url",
+    protocol_handling = "strip"
+  )
+
+  expect_equal(nrow(res), 1)
+  expect_true(all(c("left_url", "right_url", "JoinKey") %in% names(res)))
+  expect_equal(res$left_url[1], "http://example.com/a")
+  expect_equal(res$right_url[1], "http://example.com/a")
+})
+
+test_that("canonical_join yields stable names for piped / anonymous inputs", {
+  make_a <- function() {
+    data.frame(URL = "http://example.com/a", ValA = 1, stringsAsFactors = FALSE)
+  }
+  make_b <- function() {
+    data.frame(URL = "http://example.com/a", ValB = "x", stringsAsFactors = FALSE)
+  }
+
+  # Without explicit names, deparse(substitute()) yields the call expression,
+  # which data.frame() then mangles into a non-syntactic name — unstable.
+  res_default <- canonical_join(make_a(), make_b(), protocol_handling = "strip")
+  expect_true("make_a.." %in% names(res_default))
+  expect_true("make_b.." %in% names(res_default))
+
+  # Explicit names are stable regardless of the input expression.
+  res_named <- canonical_join(
+    make_a(), make_b(),
+    name_A = "A", name_B = "B",
+    protocol_handling = "strip"
+  )
+  expect_true(all(c("A", "B") %in% names(res_named)))
+})
+
+test_that("canonical_join join_parse_status defaults to ok-only", {
+  A <- data.frame(URL = "http://internalhost/path", ValA = 1, stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://internalhost/path", ValB = "x", stringsAsFactors = FALSE)
+
+  # warning-no-tld hosts are not joinable by default.
+  res <- canonical_join(A, B, name_A = "A", name_B = "B", join = "inner")
+  expect_equal(nrow(res), 0)
+})
+
+test_that("canonical_join join_parse_status = 'ok_or_warning' joins warning statuses", {
+  A <- data.frame(URL = "http://internalhost/path", ValA = 1, stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://internalhost/path", ValB = "x", stringsAsFactors = FALSE)
+
+  res <- canonical_join(
+    A, B,
+    name_A = "A", name_B = "B",
+    join = "inner",
+    join_parse_status = "ok_or_warning"
+  )
+  expect_equal(nrow(res), 1)
+  expect_equal(res$JoinKey[1], "http://internalhost/path")
+  expect_equal(res$ValA[1], 1)
+  expect_equal(res$ValB[1], "x")
+})

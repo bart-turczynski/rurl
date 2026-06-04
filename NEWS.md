@@ -2,6 +2,18 @@
 
 ### New features
 
+- `canonical_join()` gains `name_A` / `name_B` arguments to set the output
+  original-URL column names explicitly. They default to `NULL`, preserving the
+  previous `deparse(substitute())` behavior; supply them for stable names when
+  piping or passing anonymous inputs (e.g. `canonical_join(df[df$x > 1, ],
+  get_b())`), which otherwise produced unstable column names. (RURL-fsygrelr)
+- `canonical_join()` gains a `join_parse_status` argument controlling which
+  parse statuses yield joinable keys. The default `"ok"` preserves the previous
+  behavior (only `ok*` statuses join); `"ok_or_warning"` additionally treats
+  the parseable-but-suspicious `warning-*` statuses (`warning-no-tld`,
+  `warning-invalid-tld`, `warning-public-suffix`) as joinable, at the cost of
+  more potential false-positive matches. (RURL-edqdrvfu)
+
 - Cache introspection and configuration. `rurl_cache_info()` reports the entry
   count, enabled state, and any bound for each memoization cache
   (`full_parse`, `domain`, `tld`). `rurl_cache_config()` enables or disables

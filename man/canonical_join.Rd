@@ -11,9 +11,12 @@ canonical_join(
   col_B = "URL",
   suffix_A = "_A",
   suffix_B = "_B",
+  name_A = NULL,
+  name_B = NULL,
   join = c("inner", "left", "right", "full"),
   collision = c("first", "all", "error"),
   on_parse_error = c("keep", "drop", "error"),
+  join_parse_status = c("ok", "ok_or_warning"),
   ...
 )
 }
@@ -34,6 +37,17 @@ contains URLs. Defaults to "URL".}
 \item{suffix_B}{Character string, suffix to append to \code{data_B} columns
 (excluding the URL column) in the output. Defaults to "_B".}
 
+\item{name_A}{Character string, the name of the output column holding the
+original \code{data_A} URLs. Defaults to \code{NULL}, in which case the
+name is derived from the \code{data_A} argument expression via
+\code{deparse(substitute())}. Supply an explicit value for stable output
+names when piping or passing anonymous inputs (e.g.
+\code{canonical_join(df[df$x > 1, ], get_b())}).}
+
+\item{name_B}{Character string, the name of the output column holding the
+original \code{data_B} URLs. Defaults to \code{NULL}; behaves like
+\code{name_A} for \code{data_B}.}
+
 \item{join}{Join type: \code{"inner"}, \code{"left"}, \code{"right"}, or
 \code{"full"}. Defaults to \code{"inner"}.}
 
@@ -47,6 +61,15 @@ contains URLs. Defaults to "URL".}
 \code{"drop"} removes them before joining, and \code{"error"} stops.
 Defaults to \code{"keep"}.}
 
+\item{join_parse_status}{Which parse statuses yield joinable canonical keys.
+\code{"ok"} (default) joins only rows whose \code{parse_status} begins with
+\code{"ok"} (\code{"ok"}, \code{"ok-ftp"}, \code{"ok-scheme-relative"}).
+\code{"ok_or_warning"} additionally treats parseable-but-suspicious
+\code{warning-*} statuses (\code{"warning-no-tld"},
+\code{"warning-invalid-tld"}, \code{"warning-public-suffix"}) as joinable.
+Joining on warning statuses can increase false-positive matches between
+distinct hosts that both fail TLD derivation.}
+
 \item{...}{Additional arguments forwarded to \code{\link{safe_parse_urls}},
 controlling canonicalization (e.g., \code{protocol_handling},
 \code{www_handling}, \code{trailing_slash_handling},
@@ -57,7 +80,8 @@ controlling canonicalization (e.g., \code{protocol_handling},
 \value{
 A data frame representing the join. The output includes:
   \itemize{
-    \item The original URL columns (named after the input objects).
+    \item The original URL columns (named via \code{name_A} / \code{name_B},
+          or after the input expressions when those are \code{NULL}).
     \item \code{JoinKey}: the canonicalized URL used for matching.
     \item All other columns from \code{data_A} and \code{data_B} with
           suffixes applied.
