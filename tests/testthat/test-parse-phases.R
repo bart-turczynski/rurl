@@ -1,0 +1,237 @@
+# Unit tests for the decomposed phase helpers behind ._safe_parse_url_impl().
+# These exercise each normalization phase in isolation so behavior changes can
+# be localized to a single phase rather than the former ~486-line monolith.
+
+test_that(".prepare_url_for_curl prefixes scheme-less hosts with http://", {
+  prep <- rurl:::.prepare_url_for_curl("example.com", "keep", "keep")
+  expect_equal(prep$url_to_parse, "http://example.com")
+  expect_false(prep$original_looks_like_protocol)
+  expect_false(prep$original_has_allowed_scheme)
+  expect_false(prep$is_scheme_relative)
+})
+
+test_that(".prepare_url_for_curl keeps supported explicit schemes as-is", {
+  prep <- rurl:::.prepare_url_for_curl("https://example.com/p", "keep", "keep")
+  expect_equal(prep$url_to_parse, "https://example.com/p")
+  expect_true(prep$original_looks_like_protocol)
+  expect_true(prep$original_has_allowed_scheme)
+})
+
+test_that(".prepare_url_for_curl treats host:port as a host, not a scheme", {
+  prep <- rurl:::.prepare_url_for_curl("example.com:8080/p", "keep", "keep")
+  expect_true(prep$looks_like_host_port)
+  expect_equal(prep$url_to_parse, "http://example.com:8080/p")
+})
+
+test_that(".prepare_url_for_curl rejects unsupported schemes under keep/none", {
+  expect_null(rurl:::.prepare_url_for_curl("mailto:a@b.com", "keep", "keep"))
+  expect_null(rurl:::.prepare_url_for_curl("mailto:a@b.com", "none", "keep"))
+})
+
+test_that(".prepare_url_for_curl honors scheme-relative handling", {
+  expect_null(
+    rurl:::.prepare_url_for_curl("//cdn.example.com", "keep", "error")
+  )
+  prep_http <- rurl:::.prepare_url_for_curl("//cdn.example.com", "keep", "http")
+  expect_true(prep_http$is_scheme_relative)
+  expect_equal(prep_http$url_to_parse, "http://cdn.example.com")
+  prep_keep <- rurl:::.prepare_url_for_curl("//cdn.example.com", "keep", "keep")
+  expect_equal(prep_keep$url_to_parse, "http://cdn.example.com")
+})
+
+test_that(".parse_with_curl returns NULL on unparseable input", {
+  expect_true(is.null(rurl:::.parse_with_curl("ht!tp://")) ||
+    is.list(rurl:::.parse_with_curl("ht!tp://")))
+  expect_type(rurl:::.parse_with_curl("http://example.com"), "list")
+})
+
+test_that(".extract_raw_components rebuilds query from params", {
+  parsed <- curl::curl_parse_url("http://example.com/p?a=1&b=2")
+  raw <- rurl:::.extract_raw_components(parsed)
+  expect_equal(raw$host, "example.com")
+  expect_match(raw$query, "a=1")
+  expect_match(raw$query, "b=2")
+})
+
+test_that(".normalize_path applies decode, normalization, index, trailing", {
+  expect_equal(
+    rurl:::.normalize_path(
+      "//a///b", "keep", "collapse_slashes", "keep", "none"
+    ),
+    "/a/b"
+  )
+  expect_equal(
+    rurl:::.normalize_path("/a/b/../c", "keep", "dot_segments", "keep", "none"),
+    "/a/c"
+  )
+  expect_equal(
+    rurl:::.normalize_path("/dir/index.html", "keep", "none", "strip", "none"),
+    "/dir"
+  )
+  expect_equal(
+    rurl:::.normalize_path("/dir/sub", "keep", "none", "keep", "strip"),
+    "/dir/sub"
+  )
+  expect_equal(
+    rurl:::.normalize_path("/dir/sub/", "keep", "none", "keep", "strip"),
+    "/dir/sub"
+  )
+  expect_equal(
+    rurl:::.normalize_path("/dir/sub", "keep", "none", "keep", "keep"),
+    "/dir/sub/"
+  )
+  expect_true(is.na(rurl:::.normalize_path(
+    NA_character_, "keep", "both", "strip", "strip"
+  )))
+})
+
+test_that(".derive_final_scheme respects protocol policy", {
+  expect_equal(rurl:::.derive_final_scheme("keep", TRUE, "ftp"), "ftp")
+  expect_equal(rurl:::.derive_final_scheme("http", TRUE, "ftp"), "http")
+  expect_equal(rurl:::.derive_final_scheme("https", TRUE, "ftp"), "https")
+  expect_true(is.na(rurl:::.derive_final_scheme("strip", TRUE, "ftp")))
+  expect_equal(rurl:::.derive_final_scheme("none", TRUE, "ftp"), "ftp")
+  expect_true(is.na(rurl:::.derive_final_scheme("none", FALSE, "ftp")))
+})
+
+test_that(".detect_ip_host recognizes IPv4 and IPv6, rejects names", {
+  expect_true(rurl:::.detect_ip_host("192.168.0.1"))
+  expect_true(rurl:::.detect_ip_host("[2001:db8::1]"))
+  expect_true(rurl:::.detect_ip_host("2001:db8::1"))
+  expect_true(rurl:::.detect_ip_host("[::1]"))
+  expect_false(rurl:::.detect_ip_host("example.com"))
+  expect_false(rurl:::.detect_ip_host(NA_character_))
+  expect_false(rurl:::.detect_ip_host(""))
+})
+
+test_that(".apply_www_policy strips, keeps, and leaves IP hosts untouched", {
+  expect_equal(rurl:::.apply_www_policy("www.example.com", "strip", FALSE),
+    "example.com")
+  expect_equal(rurl:::.apply_www_policy("example.com", "keep", FALSE),
+    "www.example.com")
+  expect_equal(rurl:::.apply_www_policy("example.com", "none", FALSE),
+    "example.com")
+  expect_equal(rurl:::.apply_www_policy("192.168.0.1", "strip", TRUE),
+    "192.168.0.1")
+})
+
+test_that(".derive_domain_tld extracts registered domain and TLD", {
+  dt <- rurl:::.derive_domain_tld("a.b.example.co.uk", FALSE, "all")
+  expect_equal(dt$domain, "example.co.uk")
+  expect_equal(dt$tld, "co.uk")
+  ip <- rurl:::.derive_domain_tld("192.168.0.1", TRUE, "all")
+  expect_true(is.na(ip$domain))
+  expect_true(is.na(ip$tld))
+})
+
+test_that(".apply_subdomain_policy keeps the requested number of levels", {
+  expect_equal(
+    rurl:::.apply_subdomain_policy(
+      "a.b.c.example.com", "example.com", 0, FALSE
+    ),
+    "example.com"
+  )
+  expect_equal(
+    rurl:::.apply_subdomain_policy(
+      "a.b.c.example.com", "example.com", 1, FALSE
+    ),
+    "c.example.com"
+  )
+  expect_equal(
+    rurl:::.apply_subdomain_policy(
+      "a.b.c.example.com", "example.com", 2, FALSE
+    ),
+    "b.c.example.com"
+  )
+  # NULL means "leave untouched"
+  expect_equal(
+    rurl:::.apply_subdomain_policy(
+      "a.b.example.com", "example.com", NULL, FALSE
+    ),
+    "a.b.example.com"
+  )
+})
+
+test_that(".apply_host_encoding round-trips IDNA and Unicode for names", {
+  expect_equal(
+    rurl:::.apply_host_encoding("bücher.example", "idna", FALSE),
+    "xn--bcher-kva.example"
+  )
+  expect_equal(
+    rurl:::.apply_host_encoding("xn--bcher-kva.example", "unicode", FALSE),
+    "bücher.example"
+  )
+  expect_equal(rurl:::.apply_host_encoding("example.com", "keep", FALSE),
+    "example.com")
+})
+
+test_that(".apply_case_policy lowercases, uppercases, keeps as configured", {
+  lo <- rurl:::.apply_case_policy("EXAMPLE.COM", "/P", "HTTP", "lower")
+  expect_equal(lo$host, "example.com")
+  expect_equal(lo$path, "/p")
+  expect_equal(lo$scheme, "http")
+  lh <- rurl:::.apply_case_policy("EXAMPLE.COM", "/P", "HTTP", "lower_host")
+  expect_equal(lh$host, "example.com")
+  expect_equal(lh$path, "/P")
+  up <- rurl:::.apply_case_policy("example.com", "/p", "http", "upper")
+  expect_equal(up$host, "EXAMPLE.COM")
+})
+
+test_that(".build_clean_url reconstructs scheme/host/path", {
+  expect_equal(
+    rurl:::.build_clean_url("https", "example.com", "/p", "none"),
+    "https://example.com/p"
+  )
+  expect_equal(
+    rurl:::.build_clean_url(NA_character_, "example.com", "/p", "none"),
+    "example.com/p"
+  )
+  expect_equal(
+    rurl:::.build_clean_url("http", "example.com", "/", "strip"),
+    "http://example.com"
+  )
+  expect_true(is.na(
+    rurl:::.build_clean_url("http", NA_character_, "/p", "none")
+  ))
+})
+
+test_that(".derive_parse_status classifies outcomes", {
+  parsed <- curl::curl_parse_url("http://example.com")
+  expect_equal(
+    rurl:::.derive_parse_status(parsed, "example.com", FALSE, "com",
+      "example.com", "keep", "http", TRUE, TRUE, FALSE, "keep"),
+    "ok"
+  )
+  expect_equal(
+    rurl:::.derive_parse_status(parsed, "203.0.113.1", TRUE, NA_character_,
+      NA_character_, "keep", "http", FALSE, TRUE, FALSE, "keep"),
+    "ok"
+  )
+  expect_equal(
+    rurl:::.derive_parse_status(parsed, "files.example.com", FALSE, "com",
+      "example.com", "keep", "ftp", TRUE, TRUE, FALSE, "keep"),
+    "ok-ftp"
+  )
+  expect_equal(
+    rurl:::.derive_parse_status(parsed, "localhost", FALSE, NA_character_,
+      NA_character_, "keep", "http", FALSE, TRUE, FALSE, "keep"),
+    "warning-no-tld"
+  )
+  expect_equal(
+    rurl:::.derive_parse_status(parsed, "example.com", FALSE, "com",
+      "example.com", "keep", "http", TRUE, TRUE, TRUE, "keep"),
+    "ok-scheme-relative"
+  )
+})
+
+test_that(".assemble_parse_result coerces port to integer", {
+  parsed <- curl::curl_parse_url("http://example.com:8080/p")
+  res <- rurl:::.assemble_parse_result(
+    "http://example.com:8080/p", "http", "example.com", parsed, "/p",
+    NA_character_, "example.com", "com", FALSE,
+    "http://example.com:8080/p", "ok", FALSE, "keep"
+  )
+  expect_type(res$port, "integer")
+  expect_equal(res$port, 8080L)
+  expect_equal(res$host, "example.com")
+})
