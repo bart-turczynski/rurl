@@ -23,6 +23,17 @@
   relied on the previous no-op behavior for `N > 0` will see different output.
   (RURL-szumhumv)
 
+### Documentation
+
+- Documented `clean_url` composition: it is a normalized canonical key built
+  from scheme, host, and path only. Port, query, fragment, and userinfo are
+  intentionally excluded, and with `path_encoding = "decode"` the path is shown
+  decoded (human-readable, not guaranteed URL-safe). This matches the existing
+  behavior and the key used by `canonical_join()` — no behavior change.
+  Corrected a `lower_host` description that implied userinfo could be retained
+  in `clean_url`, and fixed a README example whose input contained a literal
+  space (now percent-encoded) so it parses as documented. (RURL-jnboujtd)
+
 ---
 
 ## rurl v1 (GitHub Release) - 2026-02-16

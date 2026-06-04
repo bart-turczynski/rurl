@@ -59,6 +59,13 @@ parsed$parse_status
 #> [1] "ok"
 ```
 
+`clean_url` is a normalized canonical key built from **scheme, host, and path
+only**. Port, query, fragment, and userinfo are intentionally excluded — read
+them from the dedicated components (`get_port()`, `get_query()`,
+`get_fragment()`, `get_userinfo()`) instead. With `path_encoding = "decode"`
+the path is shown decoded, so `clean_url` is human-readable rather than
+guaranteed URL-safe.
+
 Scheme-relative URL handling is configurable:
 
 ```r
@@ -101,7 +108,7 @@ get_clean_url("http://www.deep.sub.example.com/path", subdomain_levels_to_keep =
 Host and path encoding controls:
 
 ```r
-get_clean_url("http://münich.com/a b",
+get_clean_url("http://münich.com/a%20b",
               host_encoding = "idna",
               path_encoding = "encode",
               case_handling = "lower_host")

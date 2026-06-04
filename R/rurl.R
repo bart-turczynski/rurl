@@ -52,8 +52,8 @@ utils::globalVariables(c(
 #'     \item{"keep": (Default) Preserves casing of the reconstructed URL.}
 #'     \item{"lower": Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
-#'     \item{"lower_host": Lowercases scheme+host only; path (and any retained
-#'     userinfo) stay as-is.}
+#'     \item{"lower_host": Lowercases scheme and host only; the path keeps its
+#'     original casing.}
 #'   }
 #' @param trailing_slash_handling A character string specifying how to handle
 #'   trailing slashes in the path component of the cleaned URL. Defaults to
@@ -140,8 +140,13 @@ utils::globalVariables(c(
 #'     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP,
 #'     empty, or derivation fails.
 #'     \item `is_ip_host`: Logical, TRUE if the host is an IP address.
-#'     \item `clean_url`: The URL reconstructed from scheme, host, and path
-#'     after processing, with case handling applied. NA if host is empty/NA.
+#'     \item `clean_url`: A normalized canonical key reconstructed from
+#'     scheme, host, and path only, after processing and with case handling
+#'     applied. Port, query, fragment, and userinfo are intentionally
+#'     excluded (use the dedicated components above to retrieve them). With
+#'     `path_encoding = "decode"` the path is shown decoded, so `clean_url`
+#'     is human-readable rather than guaranteed URL-safe. NA if host is
+#'     empty/NA.
 #'     \item `parse_status`: Character string indicating parsing outcome
 #'       ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
 #'       "warning-invalid-tld", "warning-public-suffix").
@@ -1319,7 +1324,11 @@ get_parse_status <- function(url,
 #' Get cleaned URLs
 #'
 #' This function returns the cleaned version of the URLs after applying
-#' protocol, www, case, and trailing slash handling rules.
+#' protocol, www, case, and trailing slash handling rules. The result is a
+#' normalized canonical key composed of scheme, host, and path only; port,
+#' query, fragment, and userinfo are intentionally excluded (use
+#' \code{\link{get_port}}, \code{\link{get_query}}, \code{\link{get_fragment}},
+#' or \code{\link{get_userinfo}} for those).
 #'
 #' @param url A character vector containing URLs to be parsed.
 #' @param protocol_handling A character string specifying how to handle
@@ -1336,7 +1345,8 @@ get_parse_status <- function(url,
 #'     \item{"keep": (Default) Preserves the original casing.}
 #'     \item{"lower": Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
-#'     \item{"lower_host": Lowercase scheme and host only.}
+#'     \item{"lower_host": Lowercases scheme and host only; the path keeps its
+#'     original casing.}
 #'   }
 #' @param trailing_slash_handling A character string specifying how to handle
 #'   trailing slashes in the path component of the cleaned URL. Defaults to
