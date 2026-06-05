@@ -13,6 +13,8 @@
 ^CRAN-SUBMISSION$
 ^CLAUDE\.md$
 ^\.claude$
+^\.fp$
+^FP_CLAUDE\.md$
 ^lib$
 ^memoization\.md$
 ^RELEASE_NOTES_v1\.md$

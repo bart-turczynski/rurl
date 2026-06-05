@@ -13,7 +13,12 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(roclets = c("collate", "namespace", "rd"))
 Collate:
-    'rurl.R'
+    'utils.R'
+    'domain.R'
+    'path-query.R'
+    'parse-phases.R'
+    'parse.R'
+    'accessors.R'
     'canonical_join.R'
     'zzz.R'
 Imports:
