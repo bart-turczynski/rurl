@@ -8,10 +8,14 @@
   }
   host <- stringi::stri_trans_nfc(host) # Normalize Unicode
 
+  # Fall back to a non-strict encode so malformed-but-encodable hosts can still
+  # produce output instead of NA. (strict must be passed explicitly: punycoder
+  # sets options(punycoder.strict = TRUE) in .onLoad, so the unqualified retry
+  # would re-run with the identical strict = TRUE and always fail the same way.)
   encoded <- tryCatch(
     encode_fn(host, strict = TRUE),
     error = function(e) {
-      tryCatch(encode_fn(host), error = function(e2) NA_character_)
+      tryCatch(encode_fn(host, strict = FALSE), error = function(e2) NA_character_)
     }
   )
 
@@ -36,16 +40,12 @@
   }
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
 
+  # No strict-retry here: the first attempt is already the lenient strict =
+  # FALSE decode, and a strict = TRUE retry (punycoder's getOption default) is
+  # only ever stricter, so it can never recover what strict = FALSE rejected.
   decoded_labels <- tryCatch(
     decode_fn(parts_puny, strict = FALSE),
-    error = function(e) {
-      # nocov start
-      tryCatch(
-        decode_fn(parts_puny),
-        error = function(e2) rep(NA_character_, length(parts_puny))
-      )
-      # nocov end
-    }
+    error = function(e) rep(NA_character_, length(parts_puny)) # nocov
   )
 
   if (!is.character(decoded_labels) ||
