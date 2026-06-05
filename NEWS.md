@@ -1,4 +1,4 @@
-## rurl 1.0.0.9000 (development)
+## rurl 1.1.0
 
 ### New features
 

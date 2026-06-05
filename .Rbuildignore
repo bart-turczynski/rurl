@@ -21,3 +21,4 @@
 ^report\.html$
 ^LOCAL_WORKFLOW_NOTES\.md$
 ^\.lintr$
+^\.tmp$
