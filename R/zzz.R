@@ -38,6 +38,8 @@ utils::globalVariables(c(
   .rurl_cache$full_parse <<- new.env(parent = emptyenv())
   .rurl_cache$domain <<- new.env(parent = emptyenv())
   .rurl_cache$tld <<- new.env(parent = emptyenv())
+  .rurl_cache$puny_encode <<- new.env(parent = emptyenv())
+  .rurl_cache$puny_decode <<- new.env(parent = emptyenv())
 
   # Initialize cache configuration to the historical defaults. Use assign()
   # so we mutate the .rurl_config environment in place rather than rebinding
@@ -46,6 +48,8 @@ utils::globalVariables(c(
   assign("full_parse_enabled", TRUE, envir = .rurl_config)
   assign("domain_enabled", TRUE, envir = .rurl_config)
   assign("tld_enabled", TRUE, envir = .rurl_config)
+  assign("puny_encode_enabled", TRUE, envir = .rurl_config)
+  assign("puny_decode_enabled", TRUE, envir = .rurl_config)
   assign("full_parse_max", Inf, envir = .rurl_config)
 
   # Get the package namespace to access internal data from sysdata.rda
@@ -132,6 +136,8 @@ rurl_clear_caches <- function() {
   .rurl_cache$full_parse <- new.env(parent = emptyenv())
   .rurl_cache$domain <- new.env(parent = emptyenv())
   .rurl_cache$tld <- new.env(parent = emptyenv())
+  .rurl_cache$puny_encode <- new.env(parent = emptyenv())
+  .rurl_cache$puny_decode <- new.env(parent = emptyenv())
   invisible(NULL)
 }
 
@@ -140,7 +146,9 @@ rurl_clear_caches <- function() {
   switch(cache_name,
     full_parse = .rurl_config$full_parse_enabled,
     domain = .rurl_config$domain_enabled,
-    tld = .rurl_config$tld_enabled
+    tld = .rurl_config$tld_enabled,
+    puny_encode = .rurl_config$puny_encode_enabled,
+    puny_decode = .rurl_config$puny_decode_enabled
   )
 }
 
@@ -185,8 +193,8 @@ rurl_clear_caches <- function() {
 #' along with whether the cache is enabled and any configured entry bound.
 #'
 #' @return A data.frame with one row per cache (\code{full_parse},
-#'   \code{domain}, \code{tld}) and columns \code{entries}, \code{enabled},
-#'   and \code{max_entries}.
+#'   \code{domain}, \code{tld}, \code{puny_encode}, \code{puny_decode}) and
+#'   columns \code{entries}, \code{enabled}, and \code{max_entries}.
 #' @seealso \code{\link{rurl_cache_config}}, \code{\link{rurl_clear_caches}}
 #' @export
 #' @examples
@@ -194,18 +202,22 @@ rurl_clear_caches <- function() {
 #' rurl_cache_info()
 rurl_cache_info <- function() {
   data.frame(
-    cache = c("full_parse", "domain", "tld"),
+    cache = c("full_parse", "domain", "tld", "puny_encode", "puny_decode"),
     entries = c(
       length(.rurl_cache$full_parse),
       length(.rurl_cache$domain),
-      length(.rurl_cache$tld)
+      length(.rurl_cache$tld),
+      length(.rurl_cache$puny_encode),
+      length(.rurl_cache$puny_decode)
     ),
     enabled = c(
       .rurl_config$full_parse_enabled,
       .rurl_config$domain_enabled,
-      .rurl_config$tld_enabled
+      .rurl_config$tld_enabled,
+      .rurl_config$puny_encode_enabled,
+      .rurl_config$puny_decode_enabled
     ),
-    max_entries = c(.rurl_config$full_parse_max, Inf, Inf),
+    max_entries = c(.rurl_config$full_parse_max, Inf, Inf, Inf, Inf),
     stringsAsFactors = FALSE
   )
 }
@@ -221,11 +233,15 @@ rurl_cache_info <- function() {
 #' \code{full_parse} reaches \code{max_full_parse} entries, it is reset before
 #' the next new entry is stored, so its peak size never exceeds the bound; the
 #' default of \code{Inf} preserves the historical unbounded behavior. The
-#' \code{domain} and \code{tld} caches are unbounded by design.
+#' \code{domain}, \code{tld}, \code{puny_encode}, and \code{puny_decode} caches
+#' are unbounded by design (each stays small — bounded by the number of unique
+#' hosts/labels seen, not URL+option combinations).
 #'
 #' @param full_parse Logical; enable/disable the full URL parse cache.
 #' @param domain Logical; enable/disable the registered-domain cache.
 #' @param tld Logical; enable/disable the TLD-extraction cache.
+#' @param puny_encode Logical; enable/disable the IDNA/Punycode encode cache.
+#' @param puny_decode Logical; enable/disable the Punycode decode cache.
 #' @param max_full_parse A single number (\eqn{\ge 1}) or \code{Inf} bounding
 #'   the \code{full_parse} cache.
 #' @return Invisibly, the updated \code{\link{rurl_cache_info}} data.frame.
@@ -238,6 +254,8 @@ rurl_cache_info <- function() {
 rurl_cache_config <- function(full_parse = NULL,
                               domain = NULL,
                               tld = NULL,
+                              puny_encode = NULL,
+                              puny_decode = NULL,
                               max_full_parse = NULL) {
   if (!is.null(full_parse)) {
     .rurl_config$full_parse_enabled <- isTRUE(full_parse)
@@ -247,6 +265,12 @@ rurl_cache_config <- function(full_parse = NULL,
   }
   if (!is.null(tld)) {
     .rurl_config$tld_enabled <- isTRUE(tld)
+  }
+  if (!is.null(puny_encode)) {
+    .rurl_config$puny_encode_enabled <- isTRUE(puny_encode)
+  }
+  if (!is.null(puny_decode)) {
+    .rurl_config$puny_decode_enabled <- isTRUE(puny_decode)
   }
   if (!is.null(max_full_parse)) {
     if (!is.numeric(max_full_parse) ||

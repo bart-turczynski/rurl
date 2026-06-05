@@ -6,16 +6,32 @@
   if (is.na(host) || !nzchar(host)) {
     return(host)
   }
-  host <- stringi::stri_trans_nfc(host) # Normalize Unicode
+
+  # Memoize on the raw host so repeated calls within a vector parse (the same
+  # host hits this across phases 6/7/9) and duplicate hosts across URLs collapse
+  # to one R->C++ crossing. Bypass when a non-default encode_fn is injected so
+  # test doubles never read or pollute the shared cache.
+  use_cache <- identical(encode_fn, punycoder::puny_encode)
+  if (use_cache) {
+    cached <- .cache_get("puny_encode", host)
+    if (!identical(cached, .rurl_cache_sentinel)) {
+      return(cached)
+    }
+  }
+
+  host_nfc <- stringi::stri_trans_nfc(host) # Normalize Unicode
 
   # Fall back to a non-strict encode so malformed-but-encodable hosts can still
   # produce output instead of NA. (strict must be passed explicitly: punycoder
   # sets options(punycoder.strict = TRUE) in .onLoad, so the unqualified retry
   # would re-run with the identical strict = TRUE and always fail the same way.)
   encoded <- tryCatch(
-    encode_fn(host, strict = TRUE),
+    encode_fn(host_nfc, strict = TRUE),
     error = function(e) {
-      tryCatch(encode_fn(host, strict = FALSE), error = function(e2) NA_character_)
+      tryCatch(
+        encode_fn(host_nfc, strict = FALSE),
+        error = function(e2) NA_character_
+      )
     }
   )
 
@@ -23,6 +39,9 @@
     # nocov start
     return(NA_character_)
     # nocov end
+  }
+  if (use_cache) {
+    .cache_set("puny_encode", host, encoded)
   }
   encoded
 }
@@ -38,6 +57,17 @@
   if (!nzchar(domain_puny)) {
     return("")
   }
+
+  # Memoize on the punycode input (see .normalize_and_punycode); bypass when a
+  # non-default decode_fn is injected so test doubles stay isolated.
+  use_cache <- identical(decode_fn, punycoder::puny_decode)
+  if (use_cache) {
+    cached <- .cache_get("puny_decode", domain_puny)
+    if (!identical(cached, .rurl_cache_sentinel)) {
+      return(cached)
+    }
+  }
+
   parts_puny <- strsplit(domain_puny, "\\.")[[1]]
 
   # No strict-retry here: the first attempt is already the lenient strict =
@@ -61,7 +91,11 @@
   sane_labels <- iconv(decoded_labels, from = "UTF-8", to = "UTF-8", sub = "")
   sane_labels[is.na(sane_labels)] <- ""
 
-  paste(sane_labels, collapse = ".")
+  result <- paste(sane_labels, collapse = ".")
+  if (use_cache) {
+    .cache_set("puny_decode", domain_puny, result)
+  }
+  result
 }
 
 # Internal helper to derive a registered domain from host + TLD
