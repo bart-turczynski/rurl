@@ -289,17 +289,7 @@ safe_parse_url <- function(url,
 #' data.frame with one row per input URL.
 #'
 #' @param url A character vector of URLs to be parsed.
-#' @param protocol_handling See \code{\link{safe_parse_url}}.
-#' @param www_handling See \code{\link{safe_parse_url}}.
-#' @param tld_source See \code{\link{safe_parse_url}}.
-#' @param case_handling See \code{\link{safe_parse_url}}.
-#' @param trailing_slash_handling See \code{\link{safe_parse_url}}.
-#' @param index_page_handling See \code{\link{safe_parse_url}}.
-#' @param path_normalization See \code{\link{safe_parse_url}}.
-#' @param scheme_relative_handling See \code{\link{safe_parse_url}}.
-#' @param subdomain_levels_to_keep See \code{\link{safe_parse_url}}.
-#' @param host_encoding See \code{\link{safe_parse_url}}.
-#' @param path_encoding See \code{\link{safe_parse_url}}.
+#' @inheritParams safe_parse_url
 #' @return A data.frame with one row per URL and the same fields returned by
 #'   \code{\link{safe_parse_url}}. Invalid inputs return NA fields with
 #'   \code{parse_status = "error"}.
@@ -1277,31 +1267,7 @@ safe_parse_urls <- function(url,
 #' Get the parse status of URLs
 #'
 #' @param url A character vector of URLs to be parsed.
-#' @param protocol_handling A character string specifying how to handle
-#' protocols.
-#'                          See \code{\link{safe_parse_url}} for details.
-#'                          Defaults to "keep".
-#' @param www_handling A character string specifying how to handle "www"
-#' prefixes.
-#'                     See \code{\link{safe_parse_url}} for details. Defaults
-#'                     to "none".
-#' @param subdomain_levels_to_keep An integer or NULL. Determines how many
-#' levels of subdomains are kept,
-#'   in addition to any 'www.' prefix handled by `www_handling`.
-#'   \itemize{
-#'     \item{`NULL`: (Default) No specific subdomain stripping is performed
-#'     beyond `www_handling`.}
-#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or
-#'     added 'www.',
-#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
-#'          'sub.example.com' becomes 'example.com').}
-#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from
-#'     right-to-left (closest to the registered domain),
-#'          in addition to any 'www.' prefix. E.g., if N=1,
-#'          'three.two.one.example.com' becomes 'one.example.com';
-#'          'www.three.two.one.example.com' (post www_handling) becomes
-#'          'www.one.example.com'.}
-#'   }
+#' @inheritParams safe_parse_url
 #' @return A character vector with the parse status of each URL.
 #' @export
 #' @examples
@@ -1332,61 +1298,7 @@ get_parse_status <- function(url,
 #' or \code{\link{get_userinfo}} for those).
 #'
 #' @param url A character vector containing URLs to be parsed.
-#' @param protocol_handling A character string specifying how to handle
-#' protocols.
-#'                          See \code{\link{safe_parse_url}} for details.
-#'                          Defaults to "keep".
-#' @param www_handling A character string specifying how to handle "www"
-#' prefixes.
-#'                     See \code{\link{safe_parse_url}} for details. Defaults
-#'                     to "none".
-#' @param case_handling A character string specifying how to handle the case of
-#'                      the cleaned URL. Defaults to "keep".
-#'   \itemize{
-#'     \item{"keep": (Default) Preserves the original casing.}
-#'     \item{"lower": Converts the cleaned URL to lowercase.}
-#'     \item{"upper": Converts the cleaned URL to uppercase.}
-#'     \item{"lower_host": Lowercases scheme and host only; the path keeps its
-#'     original casing.}
-#'   }
-#' @param trailing_slash_handling A character string specifying how to handle
-#'   trailing slashes in the path component of the cleaned URL. Defaults to
-#'   "none".
-#'   \itemize{
-#'     \item{"none": (Default) No specific handling is applied. Path remains as
-#'     is after initial parsing.}
-#'     \item{"keep": Ensures a trailing slash. If a path exists and doesn't end
-#'     with one, it's added. If path is just "/", it's kept.}
-#'     \item{"strip": Removes a trailing slash if present, unless the path is
-#'     solely "/".}
-#'   }
-#' @param index_page_handling How to handle index/default pages. See
-#' \code{\link{safe_parse_url}}.
-#' @param path_normalization How to normalize path structure. See
-#' \code{\link{safe_parse_url}}.
-#' @param scheme_relative_handling How to handle URLs starting with "//". See
-#' \code{\link{safe_parse_url}}.
-#' @param host_encoding How to present the host in the cleaned URL. See
-#' \code{\link{safe_parse_url}}. Defaults to "keep".
-#' @param path_encoding How to treat percent-encoding in the path for the
-#' cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".
-#' @param subdomain_levels_to_keep An integer or NULL. Determines how many
-#' levels of subdomains are kept,
-#'   in addition to any 'www.' prefix handled by `www_handling`.
-#'   \itemize{
-#'     \item{`NULL`: (Default) No specific subdomain stripping is performed
-#'     beyond `www_handling`.}
-#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or
-#'     added 'www.',
-#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
-#'          'sub.example.com' becomes 'example.com').}
-#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from
-#'     right-to-left (closest to the registered domain),
-#'          in addition to any 'www.' prefix. E.g., if N=1,
-#'          'three.two.one.example.com' becomes 'one.example.com';
-#'          'www.three.two.one.example.com' (post www_handling) becomes
-#'          'www.one.example.com'.}
-#'   }
+#' @inheritParams safe_parse_url
 #' @return A character vector of cleaned URLs.
 #' @export
 #' @examples
@@ -1666,26 +1578,7 @@ get_clean_url <- function(url,
 #' Relies on the Public Suffix List.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
-#' @param www_handling See \code{\link{safe_parse_url}}. Defaults to "none".
-#' @param subdomain_levels_to_keep An integer or NULL. Determines how many
-#' levels of subdomains are kept,
-#'   in addition to any 'www.' prefix handled by `www_handling`.
-#'   \itemize{
-#'     \item{`NULL`: (Default) No specific subdomain stripping is performed
-#'     beyond `www_handling`.}
-#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or
-#'     added 'www.',
-#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
-#'          'sub.example.com' becomes 'example.com').}
-#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from
-#'     right-to-left (closest to the registered domain),
-#'          in addition to any 'www.' prefix. E.g., if N=1,
-#'          'three.two.one.example.com' becomes 'one.example.com';
-#'          'www.three.two.one.example.com' (post www_handling) becomes
-#'          'www.one.example.com'.}
-#'   }
+#' @inheritParams safe_parse_url
 #' @param source Which PSL source to use: "all", "private", or "icann".
 #' @return A character vector of domain names.
 #' @export
@@ -1721,8 +1614,7 @@ get_domain <- function(url,
 #' Extracts the scheme (protocol) of a URL.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
+#' @inheritParams safe_parse_url
 #' @return A character vector of URL schemes.
 #' @export
 #' @examples
@@ -1740,26 +1632,7 @@ get_scheme <- function(url, protocol_handling = "keep") {
 #' Extracts the host component of a URL.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
-#' @param www_handling See \code{\link{safe_parse_url}}. Defaults to "none".
-#' @param subdomain_levels_to_keep An integer or NULL. Determines how many
-#' levels of subdomains are kept,
-#'   in addition to any 'www.' prefix handled by `www_handling`.
-#'   \itemize{
-#'     \item{`NULL`: (Default) No specific subdomain stripping is performed
-#'     beyond `www_handling`.}
-#'     \item{`0`: All subdomains are stripped. If `www_handling` preserved or
-#'     added 'www.',
-#'          it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
-#'          'sub.example.com' becomes 'example.com').}
-#'     \item{`N > 0`: Keeps up to N levels of subdomains, counted from
-#'     right-to-left (closest to the registered domain),
-#'          in addition to any 'www.' prefix. E.g., if N=1,
-#'          'three.two.one.example.com' becomes 'one.example.com';
-#'          'www.three.two.one.example.com' (post www_handling) becomes
-#'          'www.one.example.com'.}
-#'   }
+#' @inheritParams safe_parse_url
 #' @param case_handling How to handle casing of the returned host. Defaults to
 #' "lower".
 #' @return A character vector of URL hosts.
@@ -1809,8 +1682,7 @@ get_host <- function(url,
 #' Extracts the path component of a URL.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
+#' @inheritParams safe_parse_url
 #' @param case_handling How to handle casing of the returned path. Defaults to
 #' "lower".
 #' @return A character vector of URL paths.
@@ -1835,8 +1707,7 @@ get_path <- function(
 #' Extracts the query component of a URL, optionally parsing it into a list.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
+#' @inheritParams safe_parse_url
 #' @param format Return format: "string" (default) or "list" for parsed
 #' elements.
 #' @param decode Logical; if TRUE and format="list", percent-decodes
@@ -1879,8 +1750,7 @@ get_query <- function(url,
 #' Extracts the fragment component of a URL.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
+#' @inheritParams safe_parse_url
 #' @return A character vector of fragments.
 #' @export
 #' @examples
@@ -1894,8 +1764,7 @@ get_fragment <- function(url, protocol_handling = "keep") {
 #' Extracts the port component of a URL.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
+#' @inheritParams safe_parse_url
 #' @return An integer vector of ports.
 #' @export
 #' @examples
@@ -1914,8 +1783,7 @@ get_port <- function(url, protocol_handling = "keep") {
 #' Extracts the user component of a URL.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
+#' @inheritParams safe_parse_url
 #' @return A character vector of user names.
 #' @export
 get_user <- function(url, protocol_handling = "keep") {
@@ -1927,8 +1795,7 @@ get_user <- function(url, protocol_handling = "keep") {
 #' Extracts the password component of a URL.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
+#' @inheritParams safe_parse_url
 #' @return A character vector of passwords.
 #' @export
 get_password <- function(url, protocol_handling = "keep") {
@@ -1940,8 +1807,7 @@ get_password <- function(url, protocol_handling = "keep") {
 #' Extracts the userinfo component of a URL (user or user:password).
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
+#' @inheritParams safe_parse_url
 #' @return A character vector of userinfo values.
 #' @export
 get_userinfo <- function(url, protocol_handling = "keep") {
@@ -1966,9 +1832,7 @@ get_userinfo <- function(url, protocol_handling = "keep") {
 #' Extracts the subdomain component of a URL.
 #'
 #' @param url A character vector of URLs.
-#' @param protocol_handling See \code{\link{safe_parse_url}}. Defaults to
-#' "keep".
-#' @param www_handling See \code{\link{safe_parse_url}}. Defaults to "none".
+#' @inheritParams safe_parse_url
 #' @param source Which PSL source to use: "all", "private", or "icann".
 #' @param include_www Logical; if FALSE (default), removes a leading
 #'   www/www[0-9]* label only when it is the sole subdomain label.

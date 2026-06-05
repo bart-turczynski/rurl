@@ -15,10 +15,36 @@ get_host(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to
-"keep".}
+\item{protocol_handling}{A character string specifying how to handle
+protocols. Defaults to "keep".
+\itemize{
+  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
+  no scheme, "http://" is added.}
+  \item{"none": If a scheme exists, it's used. If no scheme, then no
+  scheme is used (scheme component will be NA).}
+  \item{"strip": Any existing scheme is removed (scheme component will be
+  NA).}
+  \item{"http": The scheme is forced to be "http".}
+  \item{"https": The scheme is forced to be "https".}
+}}
 
-\item{www_handling}{See \code{\link{safe_parse_url}}. Defaults to "none".}
+\item{www_handling}{A character string specifying how to handle "www"
+and "www[number]" prefixes in the host. Defaults to "none".
+\itemize{
+  \item{"none": (Default) Leaves the host's www prefix (or lack thereof)
+  untouched.}
+  \item{"strip": Removes any "www." or "www[number]." prefix.}
+  \item{"keep": Ensures the host starts with "www.". If it has
+  "www[number].", it's normalized to "www.". If no www prefix, "www." is
+  added. An empty input host remains empty.}
+  \item{"if_no_subdomain": If the host is a bare registered domain (e.g.,
+  "example.com"), "www." is added. If the host already has a "www." or
+  "www[number]." prefix, it is normalized to "www." (e.g.,
+  "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
+  becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
+  "sub.example.com" or the normalized "www.sub.example.com"), the host is
+  not further altered. An empty input host remains empty.}
+}}
 
 \item{subdomain_levels_to_keep}{An integer or NULL. Determines how many
 levels of subdomains are kept,

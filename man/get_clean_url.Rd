@@ -22,19 +22,40 @@ get_clean_url(
 \item{url}{A character vector containing URLs to be parsed.}
 
 \item{protocol_handling}{A character string specifying how to handle
-protocols.
-                         See \code{\link{safe_parse_url}} for details.
-                         Defaults to "keep".}
+protocols. Defaults to "keep".
+\itemize{
+  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
+  no scheme, "http://" is added.}
+  \item{"none": If a scheme exists, it's used. If no scheme, then no
+  scheme is used (scheme component will be NA).}
+  \item{"strip": Any existing scheme is removed (scheme component will be
+  NA).}
+  \item{"http": The scheme is forced to be "http".}
+  \item{"https": The scheme is forced to be "https".}
+}}
 
 \item{www_handling}{A character string specifying how to handle "www"
-prefixes.
-                    See \code{\link{safe_parse_url}} for details. Defaults
-                    to "none".}
+and "www[number]" prefixes in the host. Defaults to "none".
+\itemize{
+  \item{"none": (Default) Leaves the host's www prefix (or lack thereof)
+  untouched.}
+  \item{"strip": Removes any "www." or "www[number]." prefix.}
+  \item{"keep": Ensures the host starts with "www.". If it has
+  "www[number].", it's normalized to "www.". If no www prefix, "www." is
+  added. An empty input host remains empty.}
+  \item{"if_no_subdomain": If the host is a bare registered domain (e.g.,
+  "example.com"), "www." is added. If the host already has a "www." or
+  "www[number]." prefix, it is normalized to "www." (e.g.,
+  "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
+  becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
+  "sub.example.com" or the normalized "www.sub.example.com"), the host is
+  not further altered. An empty input host remains empty.}
+}}
 
 \item{case_handling}{A character string specifying how to handle the case of
                    the cleaned URL. Defaults to "keep".
 \itemize{
-  \item{"keep": (Default) Preserves the original casing.}
+  \item{"keep": (Default) Preserves casing of the reconstructed URL.}
   \item{"lower": Converts the cleaned URL to lowercase.}
   \item{"upper": Converts the cleaned URL to uppercase.}
   \item{"lower_host": Lowercases scheme and host only; the path keeps its
@@ -53,14 +74,32 @@ trailing slashes in the path component of the cleaned URL. Defaults to
   solely "/".}
 }}
 
-\item{index_page_handling}{How to handle index/default pages. See
-\code{\link{safe_parse_url}}.}
+\item{index_page_handling}{A character string specifying how to handle
+index/default pages. Defaults to "keep".
+  \itemize{
+    \item{"keep": (Default) Leave index/default page segments untouched.}
+    \item{"strip": Remove a trailing index.* or default.* segment
+    (case-insensitive).}
+  }}
 
-\item{path_normalization}{How to normalize path structure. See
-\code{\link{safe_parse_url}}.}
+\item{path_normalization}{How to normalize path structure. Defaults to
+"none".
+  \itemize{
+    \item{"none": (Default) No normalization.}
+    \item{"collapse_slashes": Collapse duplicate slashes in the path.}
+    \item{"dot_segments": Resolve . and .. segments per RFC 3986.}
+    \item{"both": Apply both collapse_slashes and dot_segments.}
+  }}
 
-\item{scheme_relative_handling}{How to handle URLs starting with "//". See
-\code{\link{safe_parse_url}}.}
+\item{scheme_relative_handling}{How to handle URLs starting with "//".
+Defaults to "keep".
+  \itemize{
+    \item{"keep": Parse using http but return scheme as NA and set status to
+    "ok-scheme-relative".}
+    \item{"http": Assume http for parsing and output.}
+    \item{"https": Assume https for parsing and output.}
+    \item{"error": Treat scheme-relative URLs as invalid.}
+  }}
 
 \item{subdomain_levels_to_keep}{An integer or NULL. Determines how many
 levels of subdomains are kept,
@@ -80,11 +119,23 @@ levels of subdomains are kept,
          'www.one.example.com'.}
   }}
 
-\item{host_encoding}{How to present the host in the cleaned URL. See
-\code{\link{safe_parse_url}}. Defaults to "keep".}
+\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+"keep".
+  \itemize{
+    \item{"keep": Leave host as parsed by curl (may preserve original case).}
+    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+    cleaned URL.}
+    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+  }}
 
-\item{path_encoding}{How to treat percent-encoding in the path for the
-cleaned URL. See \code{\link{safe_parse_url}}. Defaults to "keep".}
+\item{path_encoding}{How to handle percent-encoding in the path for
+`clean_url`. Defaults to "keep".
+  \itemize{
+    \item{"keep": Leave the path percent-encoding untouched.}
+    \item{"encode": Normalize by decoding first, then percent-encoding each
+    segment (slashes preserved).}
+    \item{"decode": Percent-decode UTF-8 sequences in the path.}
+  }}
 }
 \value{
 A character vector of cleaned URLs.

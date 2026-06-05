@@ -13,8 +13,18 @@ get_path(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{See \code{\link{safe_parse_url}}. Defaults to
-"keep".}
+\item{protocol_handling}{A character string specifying how to handle
+protocols. Defaults to "keep".
+\itemize{
+  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
+  no scheme, "http://" is added.}
+  \item{"none": If a scheme exists, it's used. If no scheme, then no
+  scheme is used (scheme component will be NA).}
+  \item{"strip": Any existing scheme is removed (scheme component will be
+  NA).}
+  \item{"http": The scheme is forced to be "http".}
+  \item{"https": The scheme is forced to be "https".}
+}}
 
 \item{case_handling}{How to handle casing of the returned path. Defaults to
 "lower".}
