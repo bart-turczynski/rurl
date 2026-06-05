@@ -236,31 +236,8 @@ safe_parse_url <- function(url,
     )
   }
 
-  # Match arguments early for cache key generation
-  protocol_handling <- match.arg(protocol_handling)
-  www_handling <- match.arg(www_handling)
-  tld_source <- match.arg(tld_source)
-  case_handling <- match.arg(case_handling)
-  trailing_slash_handling <- match.arg(trailing_slash_handling)
-  index_page_handling <- match.arg(index_page_handling)
-  path_normalization <- match.arg(path_normalization)
-  scheme_relative_handling <- match.arg(scheme_relative_handling)
-  host_encoding <- match.arg(host_encoding)
-  path_encoding <- match.arg(path_encoding)
-
-  # Validate subdomain_levels_to_keep
-  if (!is.null(subdomain_levels_to_keep) &&
-    (!is.numeric(subdomain_levels_to_keep) ||
-      subdomain_levels_to_keep < 0 ||
-      subdomain_levels_to_keep %% 1 != 0)) {
-    stop(
-      "subdomain_levels_to_keep must be NULL or a non-negative integer.",
-      call. = FALSE
-    )
-  }
-
-  ._safe_parse_url_scalar(
-    url = url,
+  # Validate and normalize options once (match.arg + subdomain check)
+  opts <- .parse_options(
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = tld_source,
@@ -273,6 +250,8 @@ safe_parse_url <- function(url,
     host_encoding = host_encoding,
     path_encoding = path_encoding
   )
+
+  do.call(._safe_parse_url_scalar, c(list(url = url), opts))
 }
 
 # Vectorized wrapper for safe_parse_url
@@ -314,28 +293,20 @@ safe_parse_urls <- function(url,
                             subdomain_levels_to_keep = NULL,
                             host_encoding = c("keep", "idna", "unicode"),
                             path_encoding = c("keep", "encode", "decode")) {
-  # Match arguments once for performance
-  protocol_handling <- match.arg(protocol_handling)
-  www_handling <- match.arg(www_handling)
-  tld_source <- match.arg(tld_source)
-  case_handling <- match.arg(case_handling)
-  trailing_slash_handling <- match.arg(trailing_slash_handling)
-  index_page_handling <- match.arg(index_page_handling)
-  path_normalization <- match.arg(path_normalization)
-  scheme_relative_handling <- match.arg(scheme_relative_handling)
-  host_encoding <- match.arg(host_encoding)
-  path_encoding <- match.arg(path_encoding)
-
-  # Validate subdomain_levels_to_keep
-  if (!is.null(subdomain_levels_to_keep) &&
-    (!is.numeric(subdomain_levels_to_keep) ||
-      subdomain_levels_to_keep < 0 ||
-      subdomain_levels_to_keep %% 1 != 0)) {
-    stop(
-      "subdomain_levels_to_keep must be NULL or a non-negative integer.",
-      call. = FALSE
-    )
-  }
+  # Validate and normalize options once (match.arg + subdomain check)
+  opts <- .parse_options(
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    tld_source = tld_source,
+    case_handling = case_handling,
+    trailing_slash_handling = trailing_slash_handling,
+    index_page_handling = index_page_handling,
+    path_normalization = path_normalization,
+    scheme_relative_handling = scheme_relative_handling,
+    subdomain_levels_to_keep = subdomain_levels_to_keep,
+    host_encoding = host_encoding,
+    path_encoding = path_encoding
+  )
 
   urls <- url
   if (length(urls) == 0) {
@@ -347,20 +318,7 @@ safe_parse_urls <- function(url,
 
   urls_list <- as.list(urls)
   parsed_list <- lapply(urls_list, function(u) {
-    ._safe_parse_url_scalar(
-      url = u,
-      protocol_handling = protocol_handling,
-      www_handling = www_handling,
-      tld_source = tld_source,
-      case_handling = case_handling,
-      trailing_slash_handling = trailing_slash_handling,
-      index_page_handling = index_page_handling,
-      path_normalization = path_normalization,
-      scheme_relative_handling = scheme_relative_handling,
-      subdomain_levels_to_keep = subdomain_levels_to_keep,
-      host_encoding = host_encoding,
-      path_encoding = path_encoding
-    )
+    do.call(._safe_parse_url_scalar, c(list(url = u), opts))
   })
 
   # Build a rectangular data.frame, filling NULLs with error rows
@@ -405,6 +363,81 @@ safe_parse_urls <- function(url,
   do.call(data.frame, cols)
 }
 
+# Validate and normalize the parsing options shared by safe_parse_url() and
+# safe_parse_urls(). Runs every match.arg() once and validates
+# subdomain_levels_to_keep, returning a list keyed by option name. The formal
+# defaults below are the single source of the allowed choices, so match.arg()
+# resolves them here rather than in each public function.
+.parse_options <- function(protocol_handling = c(
+                             "keep", "none", "strip", "http", "https"
+                           ),
+                           www_handling = c(
+                             "none", "strip", "keep", "if_no_subdomain"
+                           ),
+                           tld_source = c("all", "private", "icann"),
+                           case_handling = c(
+                             "keep", "lower", "upper", "lower_host"
+                           ),
+                           trailing_slash_handling = c("none", "keep", "strip"),
+                           index_page_handling = c("keep", "strip"),
+                           path_normalization = c(
+                             "none", "collapse_slashes", "dot_segments", "both"
+                           ),
+                           scheme_relative_handling = c(
+                             "keep", "http", "https", "error"
+                           ),
+                           subdomain_levels_to_keep = NULL,
+                           host_encoding = c("keep", "idna", "unicode"),
+                           path_encoding = c("keep", "encode", "decode")) {
+  # match.arg first (matches the original error precedence), then validate
+  # subdomain_levels_to_keep.
+  opts <- list(
+    protocol_handling = match.arg(protocol_handling),
+    www_handling = match.arg(www_handling),
+    tld_source = match.arg(tld_source),
+    case_handling = match.arg(case_handling),
+    trailing_slash_handling = match.arg(trailing_slash_handling),
+    index_page_handling = match.arg(index_page_handling),
+    path_normalization = match.arg(path_normalization),
+    scheme_relative_handling = match.arg(scheme_relative_handling),
+    host_encoding = match.arg(host_encoding),
+    path_encoding = match.arg(path_encoding)
+  )
+
+  if (!is.null(subdomain_levels_to_keep) &&
+    (!is.numeric(subdomain_levels_to_keep) ||
+      subdomain_levels_to_keep < 0 ||
+      subdomain_levels_to_keep %% 1 != 0)) {
+    stop(
+      "subdomain_levels_to_keep must be NULL or a non-negative integer.",
+      call. = FALSE
+    )
+  }
+  # Single-bracket list() assignment keeps the element when the value is NULL
+  # ($<- NULL would drop it).
+  opts["subdomain_levels_to_keep"] <- list(subdomain_levels_to_keep)
+  opts
+}
+
+# Build the memoization cache key for one URL from validated options. Single
+# source of the field set, order, separator, and Unicode escaping so the key
+# format cannot drift across call sites.
+.parse_cache_key <- function(url, opts) {
+  subdomain_key <- if (is.null(opts$subdomain_levels_to_keep)) {
+    "NULL"
+  } else {
+    as.character(opts$subdomain_levels_to_keep)
+  }
+  cache_key <- paste(url, opts$protocol_handling, opts$www_handling,
+    opts$tld_source, opts$case_handling, opts$trailing_slash_handling,
+    opts$index_page_handling, opts$path_normalization,
+    opts$scheme_relative_handling, subdomain_key,
+    opts$host_encoding, opts$path_encoding,
+    sep = "\x1F"
+  )
+  stringi::stri_escape_unicode(enc2utf8(cache_key))
+}
+
 # Internal scalar helper that handles caching and calls the implementation
 ._safe_parse_url_scalar <- function(url,
                                     protocol_handling,
@@ -423,19 +456,21 @@ safe_parse_urls <- function(url,
     return(NULL)
   }
 
-  # Generate cache key
-  subdomain_key <- if (is.null(subdomain_levels_to_keep)) {
-    "NULL"
-  } else {
-    as.character(subdomain_levels_to_keep)
-  }
-  cache_key <- paste(url, protocol_handling, www_handling, tld_source,
-    case_handling, trailing_slash_handling, index_page_handling,
-    path_normalization, scheme_relative_handling, subdomain_key,
-    host_encoding, path_encoding,
-    sep = "\x1F"
-  )
-  cache_key <- stringi::stri_escape_unicode(enc2utf8(cache_key))
+  # Generate cache key. opts is reassembled locally here; threading it down
+  # from the public functions is deferred (see RURL-zovqibtt stage 4).
+  cache_key <- .parse_cache_key(url, list(
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    tld_source = tld_source,
+    case_handling = case_handling,
+    trailing_slash_handling = trailing_slash_handling,
+    index_page_handling = index_page_handling,
+    path_normalization = path_normalization,
+    scheme_relative_handling = scheme_relative_handling,
+    subdomain_levels_to_keep = subdomain_levels_to_keep,
+    host_encoding = host_encoding,
+    path_encoding = path_encoding
+  ))
 
   # Check cache
   cached <- .cache_get("full_parse", cache_key)
