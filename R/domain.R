@@ -151,31 +151,48 @@
   result
 }
 
+# Split a host into its non-empty labels for PSL matching.
+#
+# Shared preamble for the registered-domain and TLD extraction paths so both
+# normalize hosts identically: strips a single trailing dot, rejects empty
+# labels, and requires at least two labels. Returns the label vector, or NULL
+# when the host cannot yield a registered domain / TLD (callers map NULL to
+# NA_character_).
+.host_labels <- function(host) {
+  if (is.na(host) || !nzchar(host)) {
+    return(NULL)
+  }
+
+  host_core <- if (stringi::stri_endswith_fixed(host, ".")) {
+    stringi::stri_sub(host, 1, stringi::stri_length(host) - 1)
+  } else {
+    host
+  }
+
+  if (!nzchar(host_core)) {
+    return(NULL)
+  }
+
+  parts <- strsplit(host_core, "\\.")[[1]]
+  if (any(!nzchar(parts))) {
+    return(NULL)
+  }
+
+  if (length(parts) < 2L) {
+    return(NULL)
+  }
+
+  parts
+}
+
 # Internal implementation of .get_registered_domain (not memoized)
 ._get_registered_domain_impl <- function(hostname) {
-  if (is.na(hostname) || !nzchar(hostname)) {
-    return(NA_character_)
-  }
-
-  hostname_core <- if (stringi::stri_endswith_fixed(hostname, ".")) {
-    stringi::stri_sub(hostname, 1, stringi::stri_length(hostname) - 1)
-  } else {
-    hostname
-  }
-
-  if (!nzchar(hostname_core)) {
-    return(NA_character_)
-  }
-
-  parts <- strsplit(hostname_core, "\\.")[[1]]
-  if (any(!nzchar(parts))) {
+  parts <- .host_labels(hostname)
+  if (is.null(parts)) {
     return(NA_character_)
   }
 
   n <- length(parts)
-  if (n < 2) {
-    return(NA_character_)
-  }
 
   # 1. Exception rules (take precedence)
   # Uses .psl_exception_set (environment) for O(1) lookup
@@ -271,29 +288,12 @@
   )
   encoded_host <- .normalize_and_punycode(normalized_host)
 
-  if (is.na(encoded_host) || !nzchar(encoded_host)) {
-    return(NA_character_)
-  }
-
-  encoded_host_core <- if (stringi::stri_endswith_fixed(encoded_host, ".")) {
-    stringi::stri_sub(encoded_host, 1, stringi::stri_length(encoded_host) - 1)
-  } else {
-    encoded_host
-  }
-
-  if (!nzchar(encoded_host_core)) {
-    return(NA_character_)
-  }
-
-  parts <- strsplit(encoded_host_core, "\\.")[[1]]
-  if (any(!nzchar(parts))) {
+  parts <- .host_labels(encoded_host)
+  if (is.null(parts)) {
     return(NA_character_)
   }
 
   n <- length(parts)
-  if (n < 2L) {
-    return(NA_character_)
-  }
 
   if (n > 1L) {
     for (i in seq_len(n - 1L)) { # Checks suffixes of length n down to 2
