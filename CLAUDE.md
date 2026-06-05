@@ -68,6 +68,26 @@ source("data-raw/update_psl.R")
 - `stringi` - Unicode string manipulation (recently migrated from base `grep`)
 - `punycoder` - Punycode encoding/decoding
 
+### Intentional base-R string exceptions
+
+The migration to `stringi` is deliberately *not* total. The following base-R
+string calls are retained on purpose — do not "finish the migration" for
+consistency alone:
+
+- **`strsplit()`** (host-label splits on `"\\."`, and the `fixed = TRUE`
+  splits in `path-query.R`) is **not** equivalent to
+  `stringi::stri_split_fixed()`. `strsplit("a.b.", ".")` drops the trailing
+  empty (`c("a", "b")`) and returns `character(0)` for `""`, whereas
+  `stri_split_fixed` keeps the trailing `""` and returns `""`. Swapping them
+  would change parsing behavior, so the base calls stay.
+- **Genuine regexes** (`gsub("/+", …)`, `sub("/?[^/]*$", …)`,
+  `regexpr`/`regmatches` in `._remove_dot_segments`, `grepl("^www[0-9]*$", …)`,
+  the status-pattern `grepl` in `canonical_join.R`) operate on ASCII
+  delimiters/anchors where `stringi` offers no correctness or Unicode benefit.
+- **`R/zzz.R` PSL hash-set construction** (`sub`/`grep` over the suffix list at
+  `.onLoad`) is PSL-processing-adjacent and left untouched per the PSL
+  constraint above.
+
 ## Test Framework
 
 Uses testthat 3.0.0+ with edition 3 config. Test files are in `tests/testthat/`.
