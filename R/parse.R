@@ -339,23 +339,10 @@ safe_parse_urls <- function(url,
 
   urls <- url
   if (length(urls) == 0) {
-    return(data.frame(
-      original_url = character(0),
-      scheme = character(0),
-      host = character(0),
-      port = integer(0),
-      path = character(0),
-      query = character(0),
-      fragment = character(0),
-      user = character(0),
-      password = character(0),
-      domain = character(0),
-      tld = character(0),
-      is_ip_host = logical(0),
-      clean_url = character(0),
-      parse_status = character(0),
-      stringsAsFactors = FALSE
-    ))
+    cols <- lapply(.spu_result_fields, function(f) f$template[0])
+    names(cols) <- vapply(.spu_result_fields, function(f) f$name, character(1))
+    cols$stringsAsFactors <- FALSE
+    return(do.call(data.frame, cols))
   }
 
   urls_list <- as.list(urls)
@@ -393,22 +380,10 @@ safe_parse_urls <- function(url,
   }, character(1))
 
   empty_row <- function(orig) {
-    list(
-      original_url = orig,
-      scheme = NA_character_,
-      host = NA_character_,
-      port = NA_integer_,
-      path = NA_character_,
-      query = NA_character_,
-      fragment = NA_character_,
-      user = NA_character_,
-      password = NA_character_,
-      domain = NA_character_,
-      tld = NA_character_,
-      is_ip_host = NA,
-      clean_url = NA_character_,
-      parse_status = "error"
-    )
+    row <- lapply(.spu_result_fields, function(f) f$default)
+    names(row) <- vapply(.spu_result_fields, function(f) f$name, character(1))
+    row$original_url <- orig
+    row
   }
 
   normalized_list <- lapply(seq_along(parsed_list), function(i) {
@@ -418,53 +393,16 @@ safe_parse_urls <- function(url,
     parsed_list[[i]]
   })
 
-  data.frame(
-    original_url = vapply(
+  cols <- lapply(.spu_result_fields, function(f) {
+    vapply(
       normalized_list,
-      function(x) x$original_url %||% NA_character_,
-      character(1)
-    ),
-    scheme = vapply(
-      normalized_list, function(x) x$scheme %||% NA_character_, character(1)
-    ),
-    host = vapply(
-      normalized_list, function(x) x$host %||% NA_character_, character(1)
-    ),
-    port = vapply(
-      normalized_list, function(x) x$port %||% NA_integer_, integer(1)
-    ),
-    path = vapply(
-      normalized_list, function(x) x$path %||% NA_character_, character(1)
-    ),
-    query = vapply(
-      normalized_list, function(x) x$query %||% NA_character_, character(1)
-    ),
-    fragment = vapply(
-      normalized_list, function(x) x$fragment %||% NA_character_, character(1)
-    ),
-    user = vapply(
-      normalized_list, function(x) x$user %||% NA_character_, character(1)
-    ),
-    password = vapply(
-      normalized_list, function(x) x$password %||% NA_character_, character(1)
-    ),
-    domain = vapply(
-      normalized_list, function(x) x$domain %||% NA_character_, character(1)
-    ),
-    tld = vapply(
-      normalized_list, function(x) x$tld %||% NA_character_, character(1)
-    ),
-    is_ip_host = vapply(
-      normalized_list, function(x) x$is_ip_host %||% NA, logical(1)
-    ),
-    clean_url = vapply(
-      normalized_list, function(x) x$clean_url %||% NA_character_, character(1)
-    ),
-    parse_status = vapply(
-      normalized_list, function(x) x$parse_status %||% "error", character(1)
-    ),
-    stringsAsFactors = FALSE
-  )
+      function(x) x[[f$name]] %||% f$default,
+      f$template
+    )
+  })
+  names(cols) <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  cols$stringsAsFactors <- FALSE
+  do.call(data.frame, cols)
 }
 
 # Internal scalar helper that handles caching and calls the implementation
