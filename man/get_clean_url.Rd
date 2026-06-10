@@ -8,7 +8,7 @@ get_clean_url(
   url,
   protocol_handling = "keep",
   www_handling = "none",
-  case_handling = "keep",
+  case_handling = "lower_host",
   trailing_slash_handling = "none",
   index_page_handling = "keep",
   path_normalization = "none",
@@ -53,13 +53,16 @@ and "www[number]" prefixes in the host. Defaults to "none".
 }}
 
 \item{case_handling}{A character string specifying how to handle the case of
-                   the cleaned URL. Defaults to "keep".
+                   the cleaned URL. Defaults to "lower_host", the
+                   RFC 3986 \S6.2.2.1 normalization (scheme and host are
+                   case-insensitive and folded to lowercase; the path is
+                   case-sensitive and preserved).
 \itemize{
-  \item{"keep": (Default) Preserves casing of the reconstructed URL.}
+  \item{"lower_host": (Default) Lowercases scheme and host only; the path
+  keeps its original casing.}
+  \item{"keep": Preserves casing of the reconstructed URL.}
   \item{"lower": Converts the cleaned URL to lowercase.}
   \item{"upper": Converts the cleaned URL to uppercase.}
-  \item{"lower_host": Lowercases scheme and host only; the path keeps its
-  original casing.}
 }}
 
 \item{trailing_slash_handling}{A character string specifying how to handle
@@ -149,7 +152,7 @@ query, fragment, and userinfo are intentionally excluded (use
 or \code{\link{get_userinfo}} for those).
 }
 \examples{
-get_clean_url("Example.COM/Path") # Default keep, default no slash change
+get_clean_url("Example.COM/Path") # Default lower_host: host folds, path kept
 get_clean_url(
   "Example.COM/Path",
   case_handling = "keep",

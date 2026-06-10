@@ -87,7 +87,7 @@ safe_parse_urls(c("example.com", "https://www.example.com/path"))[, c("original_
 
 - `protocol_handling`: `keep`, `none`, `strip`, `http`, `https`
 - `www_handling`: `none`, `strip`, `keep`, `if_no_subdomain`
-- `case_handling`: `keep`, `lower`, `upper`, `lower_host`
+- `case_handling`: `lower_host` (default), `keep`, `lower`, `upper`
 - `trailing_slash_handling`: `none`, `keep`, `strip`
 - `index_page_handling`: `keep`, `strip`
 - `path_normalization`: `none`, `collapse_slashes`, `dot_segments`,

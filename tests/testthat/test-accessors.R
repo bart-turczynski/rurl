@@ -6,9 +6,18 @@ test_that("get_clean_url returns expected values", {
   )
 })
 
-test_that("get_clean_url preserves host casing by default", {
+test_that("get_clean_url lowercases scheme + host but keeps path by default", {
+  # Default is "lower_host" (RFC 3986 6.2.2.1): scheme and host fold to
+  # lowercase, the case-sensitive path is preserved.
   expect_equal(
     unname(get_clean_url("Http://Example.Com/MyPath/")),
+    "http://example.com/MyPath/"
+  )
+})
+
+test_that("get_clean_url preserves all casing with case_handling = 'keep'", {
+  expect_equal(
+    unname(get_clean_url("Http://Example.Com/MyPath/", case_handling = "keep")),
     "http://Example.Com/MyPath/"
   )
 })
@@ -149,7 +158,8 @@ test_that("get_host respects case_handling", {
 test_that("get_path extracts path or returns NA", {
   expect_equal(unname(get_path("http://example.com/test")), "/test")
   expect_equal(unname(get_path("https://x.org/hello/world")), "/hello/world")
-  expect_equal(unname(get_path("HTTP://EXAMPLE.NET/A/B/C/?p=1")), "/a/b/c/")
+  # Default "lower_host" preserves path casing (paths are case-sensitive).
+  expect_equal(unname(get_path("HTTP://EXAMPLE.NET/A/B/C/?p=1")), "/A/B/C/")
   expect_true(is.na(get_path("mailto:user@example.com")))
   expect_true(is.na(get_path("not a url")))
 })
