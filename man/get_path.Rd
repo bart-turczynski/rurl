@@ -7,7 +7,7 @@
 get_path(
   url,
   protocol_handling = "keep",
-  case_handling = c("lower", "keep", "upper", "lower_host")
+  case_handling = c("lower_host", "keep", "lower", "upper")
 )
 }
 \arguments{
@@ -27,7 +27,8 @@ protocols. Defaults to "keep".
 }}
 
 \item{case_handling}{How to handle casing of the returned path. Defaults to
-"lower".}
+"lower_host", which preserves the path's original casing (paths are
+case-sensitive per RFC 3986 \S6.2.2.1). Use "lower"/"upper" to force a case.}
 }
 \value{
 A character vector of URL paths.

@@ -9,7 +9,7 @@ safe_parse_urls(
   protocol_handling = c("keep", "none", "strip", "http", "https"),
   www_handling = c("none", "strip", "keep", "if_no_subdomain"),
   tld_source = c("all", "private", "icann"),
-  case_handling = c("keep", "lower", "upper", "lower_host"),
+  case_handling = c("lower_host", "keep", "lower", "upper"),
   trailing_slash_handling = c("none", "keep", "strip"),
   index_page_handling = c("keep", "strip"),
   path_normalization = c("none", "collapse_slashes", "dot_segments", "both"),
@@ -57,13 +57,16 @@ and "www[number]" prefixes in the host. Defaults to "none".
 or "private". Defaults to "all".}
 
 \item{case_handling}{A character string specifying how to handle the case of
-                   the cleaned URL. Defaults to "keep".
+                   the cleaned URL. Defaults to "lower_host", the
+                   RFC 3986 \S6.2.2.1 normalization (scheme and host are
+                   case-insensitive and folded to lowercase; the path is
+                   case-sensitive and preserved).
 \itemize{
-  \item{"keep": (Default) Preserves casing of the reconstructed URL.}
+  \item{"lower_host": (Default) Lowercases scheme and host only; the path
+  keeps its original casing.}
+  \item{"keep": Preserves casing of the reconstructed URL.}
   \item{"lower": Converts the cleaned URL to lowercase.}
   \item{"upper": Converts the cleaned URL to uppercase.}
-  \item{"lower_host": Lowercases scheme and host only; the path keeps its
-  original casing.}
 }}
 
 \item{trailing_slash_handling}{A character string specifying how to handle

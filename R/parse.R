@@ -41,13 +41,16 @@
 #' @param tld_source Which TLD source to use for TLD extraction: "all", "icann",
 #'   or "private". Defaults to "all".
 #' @param case_handling A character string specifying how to handle the case of
-#'                      the cleaned URL. Defaults to "keep".
+#'                      the cleaned URL. Defaults to "lower_host", the
+#'                      RFC 3986 \S6.2.2.1 normalization (scheme and host are
+#'                      case-insensitive and folded to lowercase; the path is
+#'                      case-sensitive and preserved).
 #'   \itemize{
-#'     \item{"keep": (Default) Preserves casing of the reconstructed URL.}
+#'     \item{"lower_host": (Default) Lowercases scheme and host only; the path
+#'     keeps its original casing.}
+#'     \item{"keep": Preserves casing of the reconstructed URL.}
 #'     \item{"lower": Converts the cleaned URL to lowercase.}
 #'     \item{"upper": Converts the cleaned URL to uppercase.}
-#'     \item{"lower_host": Lowercases scheme and host only; the path keeps its
-#'     original casing.}
 #'   }
 #' @param trailing_slash_handling A character string specifying how to handle
 #'   trailing slashes in the path component of the cleaned URL. Defaults to
@@ -214,7 +217,7 @@ safe_parse_url <- function(url,
                            ),
                            tld_source = c("all", "private", "icann"),
                            case_handling = c(
-                             "keep", "lower", "upper", "lower_host"
+                             "lower_host", "keep", "lower", "upper"
                            ),
                            trailing_slash_handling = c("none", "keep", "strip"),
                            index_page_handling = c("keep", "strip"),
@@ -278,7 +281,7 @@ safe_parse_urls <- function(url,
                             ),
                             tld_source = c("all", "private", "icann"),
                             case_handling = c(
-                              "keep", "lower", "upper", "lower_host"
+                              "lower_host", "keep", "lower", "upper"
                             ),
                             trailing_slash_handling = c(
                               "none", "keep", "strip"
@@ -376,7 +379,7 @@ safe_parse_urls <- function(url,
                            ),
                            tld_source = c("all", "private", "icann"),
                            case_handling = c(
-                             "keep", "lower", "upper", "lower_host"
+                             "lower_host", "keep", "lower", "upper"
                            ),
                            trailing_slash_handling = c("none", "keep", "strip"),
                            index_page_handling = c("keep", "strip"),

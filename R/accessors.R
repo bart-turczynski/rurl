@@ -21,7 +21,7 @@
                                protocol_handling = "keep",
                                www_handling = "none",
                                tld_source = "all",
-                               case_handling = "keep",
+                               case_handling = "lower_host",
                                trailing_slash_handling = "none",
                                index_page_handling = "keep",
                                path_normalization = "none",
@@ -92,7 +92,7 @@ get_parse_status <- function(url,
 #' @return A character vector of cleaned URLs.
 #' @export
 #' @examples
-#' get_clean_url("Example.COM/Path") # Default keep, default no slash change
+#' get_clean_url("Example.COM/Path") # Default lower_host: host folds, path kept
 #' get_clean_url(
 #'   "Example.COM/Path",
 #'   case_handling = "keep",
@@ -124,7 +124,7 @@ get_parse_status <- function(url,
 get_clean_url <- function(url,
                           protocol_handling = "keep",
                           www_handling = "none",
-                          case_handling = "keep",
+                          case_handling = "lower_host",
                           trailing_slash_handling = "none",
                           index_page_handling = "keep",
                           path_normalization = "none",
@@ -258,7 +258,8 @@ get_host <- function(url,
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @param case_handling How to handle casing of the returned path. Defaults to
-#' "lower".
+#' "lower_host", which preserves the path's original casing (paths are
+#' case-sensitive per RFC 3986 \S6.2.2.1). Use "lower"/"upper" to force a case.
 #' @return A character vector of URL paths.
 #' @export
 #' @examples
@@ -266,7 +267,7 @@ get_host <- function(url,
 get_path <- function(
   url,
   protocol_handling = "keep",
-  case_handling = c("lower", "keep", "upper", "lower_host")
+  case_handling = c("lower_host", "keep", "lower", "upper")
 ) {
   case_handling <- match.arg(case_handling)
   # Path is unaffected by www/subdomain handling.

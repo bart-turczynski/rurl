@@ -1,3 +1,18 @@
+## rurl 1.2.0
+
+### Behavior changes
+
+- The package-wide default for `case_handling` is now `"lower_host"` (was
+  `"keep"` for `safe_parse_url()`, `safe_parse_urls()`, `get_clean_url()`, and
+  the `get_*()` accessors, and `"lower"` for `get_path()`). This is the
+  RFC 3986 §6.2.2.1 normalization: the case-insensitive scheme and host fold to
+  lowercase while the case-sensitive path is preserved. With the previous
+  defaults, hosts such as `WWW.Example.COM` and `www.example.com` did not fold
+  to one identity, and `get_path()` silently lowercased paths (two pages that
+  differ only by path casing collapsed to one). Pass `case_handling = "keep"`
+  to restore the previous reconstruction, or `"lower"` to lowercase the whole
+  URL including the path. (RURL-lzepdnmm)
+
 ## rurl 1.1.0
 
 ### New features

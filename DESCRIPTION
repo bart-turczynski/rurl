@@ -1,7 +1,7 @@
 Package: rurl
 Type: Package
 Title: Parse, Clean, and Normalize URLs
-Version: 1.1.0
+Version: 1.2.0
 Language: en-US
 Authors@R: 
     person("Bart", "Turczynski", email = "bartek+rurl@turczynski.pl", role = c("aut", "cre"))
