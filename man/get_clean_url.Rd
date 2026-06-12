@@ -54,7 +54,7 @@ and "www[number]" prefixes in the host. Defaults to "none".
 
 \item{case_handling}{A character string specifying how to handle the case of
                    the cleaned URL. Defaults to "lower_host", the
-                   RFC 3986 \S6.2.2.1 normalization (scheme and host are
+                   RFC 3986 §6.2.2.1 normalization (scheme and host are
                    case-insensitive and folded to lowercase; the path is
                    case-sensitive and preserved).
 \itemize{

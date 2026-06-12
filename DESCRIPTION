@@ -25,7 +25,7 @@ Imports:
     utils,
     curl,
     stringi,
-    punycoder
+    punycoder (>= 1.0.0)
 URL: https://github.com/bart-turczynski/rurl
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 

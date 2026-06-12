@@ -21,6 +21,7 @@
 *.Rcheck/
 .tmp/
 covr_report.html
+coverage.html
 covr_zero.rds
 
 # R package build ignore file

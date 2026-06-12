@@ -1,6 +1,13 @@
 rurl
 ================
 
+<!-- badges: start -->
+
+[![R-CMD-check](https://github.com/bart-turczynski/rurl/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/R-CMD-check.yaml)
+[![CRAN
+status](https://www.r-pkg.org/badges/version/rurl)](https://CRAN.R-project.org/package=rurl)
+<!-- badges: end -->
+
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
 normalization, extraction, and matching in R.
 
@@ -12,11 +19,16 @@ Current package capabilities include:
   scheme-relative URLs, host encoding, and path encoding
 - URL component extractors (`get_*` helpers)
 - URL-based joins with `canonical_join()`
-- Built-in memoization caches with introspection and configuration (`rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`)
+- Built-in memoization caches with introspection and configuration
+  (`rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`)
 
 ## Installation
 
 ``` r
+# From CRAN
+install.packages("rurl")
+
+# Development version from GitHub
 # install.packages("remotes")
 remotes::install_github("bart-turczynski/rurl")
 ```
@@ -31,7 +43,8 @@ remotes::install_github("bart-turczynski/rurl")
   `get_userinfo()`, `get_parse_status()`
 - Matching/joining: `canonical_join()` for deterministic canonical-key
   joins
-- Cache control: `rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`
+- Cache control: `rurl_cache_info()`, `rurl_cache_config()`,
+  `rurl_clear_caches()`
 
 ## Quick Start
 
@@ -59,12 +72,12 @@ parsed$parse_status
 #> [1] "ok"
 ```
 
-`clean_url` is a normalized canonical key built from **scheme, host, and path
-only**. Port, query, fragment, and userinfo are intentionally excluded — read
-them from the dedicated components (`get_port()`, `get_query()`,
-`get_fragment()`, `get_userinfo()`) instead. With `path_encoding = "decode"`
-the path is shown decoded, so `clean_url` is human-readable rather than
-guaranteed URL-safe.
+`clean_url` is a normalized canonical key built from **scheme, host, and
+path only**. Port, query, fragment, and userinfo are intentionally
+excluded — read them from the dedicated components (`get_port()`,
+`get_query()`, `get_fragment()`, `get_userinfo()`) instead. With
+`path_encoding = "decode"` the path is shown decoded, so `clean_url` is
+human-readable rather than guaranteed URL-safe.
 
 Scheme-relative URL handling is configurable:
 
@@ -175,10 +188,10 @@ rurl_cache_config(max_full_parse = 1e5) # bound the full-parse cache
 rurl_cache_config(domain = FALSE)       # disable a cache entirely
 ```
 
-The `full_parse` cache is unbounded by default (`max_full_parse = Inf`); set
-a bound to cap its peak memory. The `domain` and `tld` caches grow with the
-number of unique hosts and can be disabled for workloads with very many of
-them.
+The `full_parse` cache is unbounded by default (`max_full_parse = Inf`);
+set a bound to cap its peak memory. The `domain` and `tld` caches grow
+with the number of unique hosts and can be disabled for workloads with
+very many of them.
 
 ## Public Suffix List Data
 

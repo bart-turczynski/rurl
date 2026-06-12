@@ -1,5 +1,10 @@
 ## rurl 1.2.0
 
+### Dependencies
+
+- `punycoder` (used for IDNA/Punycode encoding and decoding) is now on CRAN.
+  `DESCRIPTION` requires `punycoder (>= 1.0.0)`.
+
 ### Behavior changes
 
 - The package-wide default for `case_handling` is now `"lower_host"` (was

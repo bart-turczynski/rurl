@@ -1,0 +1,36 @@
+# Lightweight guard against NEWS/DESCRIPTION version drift.
+# The top NEWS.md heading must be either "(development version)" or exactly
+# match the DESCRIPTION Version. This catches a stale heading left in place at
+# release time.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+name: news-version.yaml
+
+permissions: read-all
+
+jobs:
+  news-version:
+    runs-on: ubuntu-latest
+    name: NEWS/version consistency
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check top NEWS heading matches DESCRIPTION version
+        run: |
+          set -euo pipefail
+          version="$(grep -E '^Version:' DESCRIPTION | head -n1 | sed -E 's/^Version:[[:space:]]*//')"
+          # First top-level NEWS heading, e.g. "## rurl 1.2.0" or
+          # "## rurl (development version)". Strip the package-name prefix.
+          heading="$(grep -m1 -E '^##? ' NEWS.md | sed -E 's/^#+[[:space:]]+rurl[[:space:]]*//')"
+          echo "DESCRIPTION Version : '$version'"
+          echo "Top NEWS heading    : '$heading'"
+          if [ "$heading" = "(development version)" ] || [ "$heading" = "$version" ]; then
+            echo "OK: NEWS heading and version are consistent."
+          else
+            echo "::error::Top NEWS.md heading ('$heading') is neither '(development version)' nor the DESCRIPTION Version ('$version'). Update NEWS.md before release."
+            exit 1
+          fi

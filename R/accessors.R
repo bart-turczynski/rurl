@@ -259,7 +259,7 @@ get_host <- function(url,
 #' @inheritParams safe_parse_url
 #' @param case_handling How to handle casing of the returned path. Defaults to
 #' "lower_host", which preserves the path's original casing (paths are
-#' case-sensitive per RFC 3986 \S6.2.2.1). Use "lower"/"upper" to force a case.
+#' case-sensitive per RFC 3986 §6.2.2.1). Use "lower"/"upper" to force a case.
 #' @return A character vector of URL paths.
 #' @export
 #' @examples
