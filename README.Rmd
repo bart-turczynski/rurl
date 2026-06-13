@@ -3,6 +3,11 @@ title: "rurl"
 output: github_document
 ---
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/bart-turczynski/rurl/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/R-CMD-check.yaml)
+[![CRAN status](https://www.r-pkg.org/badges/version/rurl)](https://CRAN.R-project.org/package=rurl)
+<!-- badges: end -->
+
 `rurl` is a lightweight, vectorized toolkit for URL parsing, normalization,
 extraction, and matching in R.
 
@@ -19,6 +24,10 @@ Current package capabilities include:
 ## Installation
 
 ```r
+# From CRAN
+install.packages("rurl")
+
+# Development version from GitHub
 # install.packages("remotes")
 remotes::install_github("bart-turczynski/rurl")
 ```

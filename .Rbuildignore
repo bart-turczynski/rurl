@@ -22,3 +22,7 @@
 ^LOCAL_WORKFLOW_NOTES\.md$
 ^\.lintr$
 ^\.tmp$
+^\.Rhistory$
+^\.DS_Store$
+^CONTRIBUTING\.md$
+^.*coverage\.html$
