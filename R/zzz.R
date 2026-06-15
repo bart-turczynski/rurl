@@ -177,8 +177,9 @@ rurl_clear_caches <- function() {
   }
   env <- .rurl_cache[[cache_name]]
   if (cache_name == "full_parse" && is.finite(.rurl_config$full_parse_max)) {
-    if (length(env) >= .rurl_config$full_parse_max &&
-      !exists(key, envir = env, inherits = FALSE)) {
+    cache_full_for_new_key <- length(env) >= .rurl_config$full_parse_max &&
+      !exists(key, envir = env, inherits = FALSE)
+    if (cache_full_for_new_key) {
       .rurl_cache$full_parse <- new.env(parent = emptyenv())
       env <- .rurl_cache$full_parse
     }
@@ -273,10 +274,11 @@ rurl_cache_config <- function(full_parse = NULL,
     .rurl_config$puny_decode_enabled <- isTRUE(puny_decode)
   }
   if (!is.null(max_full_parse)) {
-    if (!is.numeric(max_full_parse) ||
+    invalid_max_full_parse <- !is.numeric(max_full_parse) ||
       length(max_full_parse) != 1L ||
       is.na(max_full_parse) ||
-      max_full_parse < 1) {
+      max_full_parse < 1
+    if (invalid_max_full_parse) {
       stop(
         "max_full_parse must be a single number >= 1 (or Inf).",
         call. = FALSE

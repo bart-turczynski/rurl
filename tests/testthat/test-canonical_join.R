@@ -224,8 +224,12 @@ test_that("canonical_join returns empty structure on no matches", {
 })
 
 test_that("canonical_join uses explicit name_A / name_B for output columns", {
-  A <- data.frame(URL = "http://example.com/a", ValA = 1, stringsAsFactors = FALSE)
-  B <- data.frame(URL = "http://example.com/a", ValB = "x", stringsAsFactors = FALSE)
+  A <- data.frame(
+    URL = "http://example.com/a", ValA = 1, stringsAsFactors = FALSE
+  )
+  B <- data.frame(
+    URL = "http://example.com/a", ValB = "x", stringsAsFactors = FALSE
+  )
 
   res <- canonical_join(
     A, B,
@@ -241,10 +245,14 @@ test_that("canonical_join uses explicit name_A / name_B for output columns", {
 
 test_that("canonical_join yields stable names for piped / anonymous inputs", {
   make_a <- function() {
-    data.frame(URL = "http://example.com/a", ValA = 1, stringsAsFactors = FALSE)
+    data.frame(
+      URL = "http://example.com/a", ValA = 1, stringsAsFactors = FALSE
+    )
   }
   make_b <- function() {
-    data.frame(URL = "http://example.com/a", ValB = "x", stringsAsFactors = FALSE)
+    data.frame(
+      URL = "http://example.com/a", ValB = "x", stringsAsFactors = FALSE
+    )
   }
 
   # Without explicit names, deparse(substitute()) yields the call expression,
@@ -263,17 +271,25 @@ test_that("canonical_join yields stable names for piped / anonymous inputs", {
 })
 
 test_that("canonical_join join_parse_status defaults to ok-only", {
-  A <- data.frame(URL = "http://internalhost/path", ValA = 1, stringsAsFactors = FALSE)
-  B <- data.frame(URL = "http://internalhost/path", ValB = "x", stringsAsFactors = FALSE)
+  A <- data.frame(
+    URL = "http://internalhost/path", ValA = 1, stringsAsFactors = FALSE
+  )
+  B <- data.frame(
+    URL = "http://internalhost/path", ValB = "x", stringsAsFactors = FALSE
+  )
 
   # warning-no-tld hosts are not joinable by default.
   res <- canonical_join(A, B, name_A = "A", name_B = "B", join = "inner")
   expect_equal(nrow(res), 0)
 })
 
-test_that("canonical_join join_parse_status = 'ok_or_warning' joins warning statuses", {
-  A <- data.frame(URL = "http://internalhost/path", ValA = 1, stringsAsFactors = FALSE)
-  B <- data.frame(URL = "http://internalhost/path", ValB = "x", stringsAsFactors = FALSE)
+test_that("canonical_join 'ok_or_warning' joins warning statuses", {
+  A <- data.frame(
+    URL = "http://internalhost/path", ValA = 1, stringsAsFactors = FALSE
+  )
+  B <- data.frame(
+    URL = "http://internalhost/path", ValB = "x", stringsAsFactors = FALSE
+  )
 
   res <- canonical_join(
     A, B,

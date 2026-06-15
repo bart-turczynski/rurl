@@ -70,9 +70,10 @@ test_that(".onLoad populates PSL and TLD hash sets", {
     psl,
     c(paste0("!", exception_rules), paste0("*.", wildcard_rules))
   )
-  if (length(wildcard_rules) == 0 ||
-      length(exception_rules) == 0 ||
-      length(normal_rules) == 0) {
+  missing_rule_types <- length(wildcard_rules) == 0 ||
+    length(exception_rules) == 0 ||
+    length(normal_rules) == 0
+  if (missing_rule_types) {
     testthat::skip(
       "PSL data does not contain expected rule types to validate .onLoad sets."
     )

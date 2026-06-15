@@ -30,12 +30,12 @@
   } else {
     NA_character_
   }
-  original_looks_like_protocol <- !is.na(scheme_candidate)
-  has_explicit_scheme_with_slashes <- stringi::stri_detect_regex(
+  looks_like_protocol <- !is.na(scheme_candidate)
+  has_scheme_slashes <- stringi::stri_detect_regex(
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):\\/\\/"
   )
-  if (is.na(has_explicit_scheme_with_slashes)) {
-    has_explicit_scheme_with_slashes <- FALSE
+  if (is.na(has_scheme_slashes)) {
+    has_scheme_slashes <- FALSE
   }
 
   is_scheme_relative <- stringi::stri_startswith_fixed(url, "//")
@@ -44,14 +44,15 @@
   }
   if (is_scheme_relative && scheme_relative_handling %in% c("http", "https")) {
     # Treat scheme-relative URLs as having an inferred scheme for handling logic
-    original_looks_like_protocol <- TRUE
+    looks_like_protocol <- TRUE
     original_has_allowed_scheme <- TRUE
   }
 
   looks_like_host_port <- FALSE
-  if (original_looks_like_protocol &&
+  maybe_host_port <- looks_like_protocol &&
     !original_has_allowed_scheme &&
-    !has_explicit_scheme_with_slashes) {
+    !has_scheme_slashes
+  if (maybe_host_port) {
     looks_like_host_port <- stringi::stri_detect_regex(
       url, "^[^/]+:[0-9]+($|/)"
     )
@@ -60,10 +61,12 @@
     }
   }
 
-  if ((protocol_handling == "keep" || protocol_handling == "none") &&
-    original_looks_like_protocol &&
+  protocol_kept <- protocol_handling == "keep" || protocol_handling == "none"
+  bare_protocol_kept <- protocol_kept &&
+    looks_like_protocol &&
     !original_has_allowed_scheme &&
-    !looks_like_host_port) {
+    !looks_like_host_port
+  if (bare_protocol_kept) {
     return(NULL)
   }
 
@@ -74,13 +77,13 @@
     } else {
       url_to_parse <- paste0("http:", url)
     }
-  } else if (!original_looks_like_protocol || looks_like_host_port) {
+  } else if (!looks_like_protocol || looks_like_host_port) {
     url_to_parse <- paste0("http://", url)
   }
 
   list(
     url_to_parse = url_to_parse,
-    original_looks_like_protocol = original_looks_like_protocol,
+    looks_like_protocol = looks_like_protocol,
     original_has_allowed_scheme = original_has_allowed_scheme,
     is_scheme_relative = is_scheme_relative,
     looks_like_host_port = looks_like_host_port
@@ -99,9 +102,10 @@
 # reconstructing the query string from params when curl did not surface one.
 .extract_raw_components <- function(parsed_curl) {
   raw_query <- parsed_curl$query %||% NA_character_
-  if (is.na(raw_query) &&
+  rebuild_query_from_params <- is.na(raw_query) &&
     !is.null(parsed_curl$params) &&
-    length(parsed_curl$params) > 0) {
+    length(parsed_curl$params) > 0
+  if (rebuild_query_from_params) {
     raw_query <- paste(
       names(parsed_curl$params),
       parsed_curl$params,
@@ -174,10 +178,10 @@
 
 # Phase 4: resolve the final scheme according to protocol policy.
 .derive_final_scheme <- function(protocol_handling,
-                                 original_looks_like_protocol,
+                                 looks_like_protocol,
                                  raw_scheme) {
   switch(protocol_handling,
-    none = if (original_looks_like_protocol) raw_scheme else NA_character_,
+    none = if (looks_like_protocol) raw_scheme else NA_character_,
     strip = NA_character_,
     http = "http",
     https = "https",
@@ -271,15 +275,18 @@
         temp_derived_domain_puny
       )
 
-      if (is.na(temp_derived_domain_unicode) ||
-        temp_derived_domain_unicode == "") {
+      no_derived_domain <- is.na(temp_derived_domain_unicode) ||
+        temp_derived_domain_unicode == ""
+      if (no_derived_domain) {
         final_host <- candidate_host
       } else {
-        if (stringi::stri_trans_tolower(host_for_domain_check) ==
-          temp_derived_domain_unicode) {
-          if (!stringi::stri_startswith_fixed(
+        host_lc <- stringi::stri_trans_tolower(host_for_domain_check)
+        host_equals_domain <- host_lc == temp_derived_domain_unicode
+        if (host_equals_domain) {
+          candidate_has_www <- stringi::stri_startswith_fixed(
             stringi::stri_trans_tolower(candidate_host), "www."
-          )) {
+          )
+          if (!candidate_has_www) {
             final_host <- paste0("www.", candidate_host)
           } else {
             final_host <- candidate_host
@@ -305,8 +312,9 @@
     )
     encoded_host_for_derivation <- .normalize_and_punycode(host_for_derivation)
 
-    if (!is.na(encoded_host_for_derivation) &&
-      encoded_host_for_derivation != "") {
+    have_encoded_host <- !is.na(encoded_host_for_derivation) &&
+      encoded_host_for_derivation != ""
+    if (have_encoded_host) {
       derived_domain_encoded <- .get_registered_domain(
         encoded_host_for_derivation
       )
@@ -331,12 +339,13 @@
 # Phase 8: keep only the requested number of subdomain levels.
 .apply_subdomain_policy <- function(final_host, domain,
                                     subdomain_levels_to_keep, is_ip_host) {
-  if (!is.null(subdomain_levels_to_keep) &&
+  can_trim_subdomains <- !is.null(subdomain_levels_to_keep) &&
     !is_ip_host &&
     !is.na(domain) &&
     domain != "" &&
     !is.na(final_host) &&
-    final_host != "") {
+    final_host != ""
+  if (can_trim_subdomains) {
     current_host_lower <- stringi::stri_trans_tolower(final_host)
     domain_lower <- stringi::stri_trans_tolower(domain)
     www_prefix_str <- "www."
@@ -475,7 +484,7 @@
 # ok-scheme-relative).
 .derive_parse_status <- function(parsed_curl, final_host, is_ip_host, tld,
                                  domain, protocol_handling, final_scheme,
-                                 original_looks_like_protocol,
+                                 looks_like_protocol,
                                  original_has_allowed_scheme,
                                  is_scheme_relative,
                                  scheme_relative_handling) {
@@ -502,9 +511,10 @@
         }
       }
 
-      if (parse_status == "ok" &&
+      ok_with_scheme <- parse_status == "ok" &&
         protocol_handling != "strip" &&
-        !is.na(final_scheme)) {
+        !is.na(final_scheme)
+      if (ok_with_scheme) {
         current_scheme_lower <- stringi::stri_trans_tolower(final_scheme)
         if (current_scheme_lower %in% c("ftp", "ftps")) {
           parse_status <- "ok-ftp"
@@ -513,16 +523,18 @@
     }
   }
 
-  if (is.null(parsed_curl) ||
-    ((protocol_handling == "keep" || protocol_handling == "none") &&
-      original_looks_like_protocol &&
-      !original_has_allowed_scheme)) {
+  protocol_kept <- protocol_handling == "keep" || protocol_handling == "none"
+  unsupported_scheme_kept <- protocol_kept &&
+    looks_like_protocol &&
+    !original_has_allowed_scheme
+  if (is.null(parsed_curl) || unsupported_scheme_kept) {
     parse_status <- "error"
   }
 
-  if (is_scheme_relative &&
+  kept_scheme_relative <- is_scheme_relative &&
     scheme_relative_handling == "keep" &&
-    parse_status == "ok") {
+    parse_status == "ok"
+  if (kept_scheme_relative) {
     parse_status <- "ok-scheme-relative"
   }
 

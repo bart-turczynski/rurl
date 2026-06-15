@@ -13,29 +13,34 @@ test_that(".extract_from_urls returns null_value for unparseable URLs", {
   expect_true(is.na(rurl:::.extract_from_urls("mailto:a@b.com", "host")))
   expect_equal(
     rurl:::.extract_from_urls("mailto:a@b.com", "parse_status",
-      null_value = "error"),
+      null_value = "error"
+    ),
     c("mailto:a@b.com" = "error")
   )
 })
 
 test_that(".extract_from_urls honors fun_value and transform (port path)", {
   res <- rurl:::.extract_from_urls("http://example.com:8080/", "port",
-    null_value = NA_integer_, fun_value = integer(1), transform = as.integer)
+    null_value = NA_integer_, fun_value = integer(1), transform = as.integer
+  )
   expect_type(res, "integer")
   expect_equal(unname(res), 8080L)
 })
 
 test_that(".extract_from_urls with field=NULL hands over the parsed list", {
   res <- rurl:::.extract_from_urls("http://u:p@example.com", NULL,
-    transform = function(parsed) parsed$user %||% NA_character_)
+    transform = function(parsed) parsed$user %||% NA_character_
+  )
   expect_equal(unname(res), "u")
 })
 
 test_that("character accessors keep character type and input names", {
   urls <- c("http://www.example.com/Path", "ftp://example.org")
-  for (fn in list(get_scheme, get_host, get_path, get_query, get_fragment,
-                  get_user, get_password, get_userinfo, get_domain, get_tld,
-                  get_clean_url, get_parse_status)) {
+  for (fn in list(
+    get_scheme, get_host, get_path, get_query, get_fragment,
+    get_user, get_password, get_userinfo, get_domain, get_tld,
+    get_clean_url, get_parse_status
+  )) {
     out <- fn(urls)
     expect_type(out, "character")
     expect_equal(names(out), urls)

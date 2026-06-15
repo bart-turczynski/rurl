@@ -102,8 +102,9 @@ test_that("safe_parse_url handles protocol-relative URLs", {
 test_that(
   "get_parse_status returns error for parseable but unsupported schemes",
   {
-  expect_equal(unname(get_parse_status("ws://example.com")), "error")
-})
+    expect_equal(unname(get_parse_status("ws://example.com")), "error")
+  }
+)
 
 test_that("get_parse_status detects no-TLD hosts", {
   expect_equal(unname(get_parse_status("http://just-a-path")), "warning-no-tld")
@@ -122,9 +123,10 @@ test_that("get_parse_status detects no-TLD hosts", {
 test_that(
   "get_clean_url returns NA if parsed is NULL or host/path is missing",
   {
-  expect_true(is.na(get_clean_url("mailto:user@example.com")))
-  expect_true(is.na(get_clean_url("")))
-})
+    expect_true(is.na(get_clean_url("mailto:user@example.com")))
+    expect_true(is.na(get_clean_url("")))
+  }
+)
 
 test_that("get_domain returns NA when parsed or host is missing", {
   expect_true(is.na(get_domain("mailto:user@example.com")))
@@ -375,15 +377,16 @@ test_that("get_tld handles edge cases and unexpected inputs gracefully", {
 test_that(
   ".normalize_and_punycode handles Unicode normalization and punycode encoding",
   {
-  expect_match(
-    unname(rurl:::.normalize_and_punycode("παράδειγμα.ελ")),
-    "^xn--"
-  )
-  expect_identical(
-    unname(rurl:::.normalize_and_punycode("ascii-only.com")),
-    "ascii-only.com"
-  )
-})
+    expect_match(
+      unname(rurl:::.normalize_and_punycode("παράδειγμα.ελ")),
+      "^xn--"
+    )
+    expect_identical(
+      unname(rurl:::.normalize_and_punycode("ascii-only.com")),
+      "ascii-only.com"
+    )
+  }
+)
 
 test_that(".normalize_and_punycode returns NA_character_ on error", {
   fail_encode <- function(x) stop("fail")
@@ -404,7 +407,7 @@ test_that(".normalize_and_punycode handles NA and empty input", {
 })
 
 test_that("safe_parse_url handles www_handling options correctly", {
-  # www_handling = "strip"
+  # www_handling strip mode
   expect_equal(
     safe_parse_url("http://www.example.com", www_handling = "strip")$host,
     "example.com"
@@ -423,7 +426,7 @@ test_that("safe_parse_url handles www_handling options correctly", {
     "1.2.3.4"
   )
 
-  # www_handling = "keep"
+  # www_handling keep mode
   expect_equal(
     safe_parse_url("http://example.com", www_handling = "keep")$host,
     "www.example.com"
@@ -568,11 +571,9 @@ test_that("host_encoding handles IDNA round-trips", {
 })
 
 test_that("safe_parse_url handles specific error conditions", {
-  # Test for line 187: original_looks_like_protocol &&
-  # !original_has_allowed_scheme
-  # This condition should lead to parse_status = "error" (and NULL return from
-  # safe_parse_url itself)
-  # Assuming gopher is not in allowed_prefixes.
+  # A URL that looks like it has a protocol but whose scheme is not allowed
+  # should yield parse_status "error" (and a NULL return from safe_parse_url
+  # itself), assuming gopher is not in allowed_prefixes.
   expect_null(unname(safe_parse_url("gopher://example.com")))
   # To be more robust, let's check parse_status via get_parse_status for this
   # case

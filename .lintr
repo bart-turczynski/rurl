@@ -1,11 +1,15 @@
 linters: linters_with_defaults(
-  line_length_linter = line_length_linter(80),
-  object_name_linter = NULL,
-  object_length_linter = NULL,
-  indentation_linter = NULL,
-  return_linter = NULL,
-  commented_code_linter = NULL,
-  object_usage_linter = NULL,
-  pipe_consistency_linter = NULL
- )
-exclusions: list("man", "README.Rmd", "README.md")
+    # Cucumber step files and testthat helpers use a DSL (when/then/context,
+    # expect_*) that the static usage linter misreads as undefined globals.
+    # Disable it here so the scaffold lints clean out of the box; re-enable it
+    # once the package has real code if you want the extra coverage.
+    object_usage_linter = NULL,
+    # API stability: the exported canonical_join() takes data_A/data_B,
+    # col_A/col_B, suffix_A/suffix_B, name_A/name_B parameters whose mixed-case
+    # _A/_B suffixes are part of its published signature. Renaming them to
+    # satisfy snake_case would be a breaking change to the public API, so the
+    # name linter stays off (it would also flag the deliberate ._-prefixed
+    # internal helpers and the test DSL variables).
+    object_name_linter = NULL
+  )
+encoding: "UTF-8"
