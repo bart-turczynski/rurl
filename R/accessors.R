@@ -1,4 +1,5 @@
-# Accessors: public get_*() functions and the shared .extract_from_urls() helper.
+# Accessors: public get_*() functions and the shared
+# .extract_from_urls() helper.
 
 # Shared extraction path for the get_* accessors.
 #
@@ -473,9 +474,10 @@ get_subdomain <- function(url,
     }
 
     labels <- strsplit(sub_part, "\\.")[[1]]
-    if (!include_www &&
+    drop_www_label <- !include_www &&
       length(labels) == 1 &&
-      grepl("^www[0-9]*$", labels[1])) {
+      grepl("^www[0-9]*$", labels[1])
+    if (drop_www_label) {
       labels <- labels[-1]
     }
     labels

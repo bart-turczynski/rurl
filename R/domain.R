@@ -1,4 +1,5 @@
-# Domain/TLD derivation (PSL) and punycode helpers. DO NOT modify punycode logic.
+# Domain/TLD derivation (PSL) and punycode helpers.
+# DO NOT modify punycode logic.
 
 # Internal helper to encode hostnames using IDNA (Punycode)
 # Accepts encode_fn for testability and fallback
@@ -78,8 +79,9 @@
     error = function(e) rep(NA_character_, length(parts_puny)) # nocov
   )
 
-  if (!is.character(decoded_labels) ||
-    length(decoded_labels) != length(parts_puny)) {
+  decoded_labels_invalid <- !is.character(decoded_labels) ||
+    length(decoded_labels) != length(parts_puny)
+  if (decoded_labels_invalid) {
     # nocov start
     decoded_labels <- rep(NA_character_, length(parts_puny))
     # nocov end
@@ -249,7 +251,7 @@
   # Standard case: n > best_match_len
   # The registered domain is the public suffix (best_match_len parts)
   # plus one additional label to the left.
-  return(paste(parts[(n - best_match_len):n], collapse = "."))
+  paste(parts[(n - best_match_len):n], collapse = ".")
 }
 
 # Internal helper using the exact original get_tld logic for TLD extraction
@@ -311,5 +313,5 @@
     }
   }
 
-  return(NA_character_)
+  NA_character_
 }

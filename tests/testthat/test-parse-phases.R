@@ -5,7 +5,7 @@
 test_that(".prepare_url_for_curl prefixes scheme-less hosts with http://", {
   prep <- rurl:::.prepare_url_for_curl("example.com", "keep", "keep")
   expect_equal(prep$url_to_parse, "http://example.com")
-  expect_false(prep$original_looks_like_protocol)
+  expect_false(prep$looks_like_protocol)
   expect_false(prep$original_has_allowed_scheme)
   expect_false(prep$is_scheme_relative)
 })
@@ -13,7 +13,7 @@ test_that(".prepare_url_for_curl prefixes scheme-less hosts with http://", {
 test_that(".prepare_url_for_curl keeps supported explicit schemes as-is", {
   prep <- rurl:::.prepare_url_for_curl("https://example.com/p", "keep", "keep")
   expect_equal(prep$url_to_parse, "https://example.com/p")
-  expect_true(prep$original_looks_like_protocol)
+  expect_true(prep$looks_like_protocol)
   expect_true(prep$original_has_allowed_scheme)
 })
 
@@ -40,8 +40,8 @@ test_that(".prepare_url_for_curl honors scheme-relative handling", {
 })
 
 test_that(".parse_with_curl returns NULL on unparseable input", {
-  expect_true(is.null(rurl:::.parse_with_curl("ht!tp://")) ||
-    is.list(rurl:::.parse_with_curl("ht!tp://")))
+  parsed <- rurl:::.parse_with_curl("ht!tp://")
+  expect_true(is.null(parsed) || is.list(parsed))
   expect_type(rurl:::.parse_with_curl("http://example.com"), "list")
 })
 
@@ -105,14 +105,22 @@ test_that(".detect_ip_host recognizes IPv4 and IPv6, rejects names", {
 })
 
 test_that(".apply_www_policy strips, keeps, and leaves IP hosts untouched", {
-  expect_equal(rurl:::.apply_www_policy("www.example.com", "strip", FALSE),
-    "example.com")
-  expect_equal(rurl:::.apply_www_policy("example.com", "keep", FALSE),
-    "www.example.com")
-  expect_equal(rurl:::.apply_www_policy("example.com", "none", FALSE),
-    "example.com")
-  expect_equal(rurl:::.apply_www_policy("192.168.0.1", "strip", TRUE),
-    "192.168.0.1")
+  expect_equal(
+    rurl:::.apply_www_policy("www.example.com", "strip", FALSE),
+    "example.com"
+  )
+  expect_equal(
+    rurl:::.apply_www_policy("example.com", "keep", FALSE),
+    "www.example.com"
+  )
+  expect_equal(
+    rurl:::.apply_www_policy("example.com", "none", FALSE),
+    "example.com"
+  )
+  expect_equal(
+    rurl:::.apply_www_policy("192.168.0.1", "strip", TRUE),
+    "192.168.0.1"
+  )
 })
 
 test_that(".derive_domain_tld extracts registered domain and TLD", {
@@ -161,8 +169,10 @@ test_that(".apply_host_encoding round-trips IDNA and Unicode for names", {
     rurl:::.apply_host_encoding("xn--bcher-kva.example", "unicode", FALSE),
     "bücher.example"
   )
-  expect_equal(rurl:::.apply_host_encoding("example.com", "keep", FALSE),
-    "example.com")
+  expect_equal(
+    rurl:::.apply_host_encoding("example.com", "keep", FALSE),
+    "example.com"
+  )
 })
 
 test_that(".apply_case_policy lowercases, uppercases, keeps as configured", {
@@ -198,28 +208,38 @@ test_that(".build_clean_url reconstructs scheme/host/path", {
 test_that(".derive_parse_status classifies outcomes", {
   parsed <- curl::curl_parse_url("http://example.com")
   expect_equal(
-    rurl:::.derive_parse_status(parsed, "example.com", FALSE, "com",
-      "example.com", "keep", "http", TRUE, TRUE, FALSE, "keep"),
+    rurl:::.derive_parse_status(
+      parsed, "example.com", FALSE, "com",
+      "example.com", "keep", "http", TRUE, TRUE, FALSE, "keep"
+    ),
     "ok"
   )
   expect_equal(
-    rurl:::.derive_parse_status(parsed, "203.0.113.1", TRUE, NA_character_,
-      NA_character_, "keep", "http", FALSE, TRUE, FALSE, "keep"),
+    rurl:::.derive_parse_status(
+      parsed, "203.0.113.1", TRUE, NA_character_,
+      NA_character_, "keep", "http", FALSE, TRUE, FALSE, "keep"
+    ),
     "ok"
   )
   expect_equal(
-    rurl:::.derive_parse_status(parsed, "files.example.com", FALSE, "com",
-      "example.com", "keep", "ftp", TRUE, TRUE, FALSE, "keep"),
+    rurl:::.derive_parse_status(
+      parsed, "files.example.com", FALSE, "com",
+      "example.com", "keep", "ftp", TRUE, TRUE, FALSE, "keep"
+    ),
     "ok-ftp"
   )
   expect_equal(
-    rurl:::.derive_parse_status(parsed, "localhost", FALSE, NA_character_,
-      NA_character_, "keep", "http", FALSE, TRUE, FALSE, "keep"),
+    rurl:::.derive_parse_status(
+      parsed, "localhost", FALSE, NA_character_,
+      NA_character_, "keep", "http", FALSE, TRUE, FALSE, "keep"
+    ),
     "warning-no-tld"
   )
   expect_equal(
-    rurl:::.derive_parse_status(parsed, "example.com", FALSE, "com",
-      "example.com", "keep", "http", TRUE, TRUE, TRUE, "keep"),
+    rurl:::.derive_parse_status(
+      parsed, "example.com", FALSE, "com",
+      "example.com", "keep", "http", TRUE, TRUE, TRUE, "keep"
+    ),
     "ok-scheme-relative"
   )
 })

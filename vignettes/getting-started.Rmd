@@ -137,13 +137,13 @@ get_clean_url(
   subdomain_levels_to_keep = 0,
   www_handling = "keep"
 )
-# Expected: "http://www.example.com/some/path"
+# yields http://www.example.com/some/path
 
 get_clean_url(
   "http://deep.sub.example.com/some/path",
   subdomain_levels_to_keep = 1
 )
-# Expected: "http://sub.example.com/some/path"
+# yields http://sub.example.com/some/path
 ```
 
 Note that `get_domain()` also accepts `subdomain_levels_to_keep`,

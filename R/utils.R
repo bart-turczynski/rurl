@@ -10,19 +10,19 @@
 # type template (its zero-length form `template[0]` types the empty frame).
 .spu_result_fields <- list(
   list(name = "original_url", default = NA_character_, template = character(1)),
-  list(name = "scheme",       default = NA_character_, template = character(1)),
-  list(name = "host",         default = NA_character_, template = character(1)),
-  list(name = "port",         default = NA_integer_,   template = integer(1)),
-  list(name = "path",         default = NA_character_, template = character(1)),
-  list(name = "query",        default = NA_character_, template = character(1)),
-  list(name = "fragment",     default = NA_character_, template = character(1)),
-  list(name = "user",         default = NA_character_, template = character(1)),
-  list(name = "password",     default = NA_character_, template = character(1)),
-  list(name = "domain",       default = NA_character_, template = character(1)),
-  list(name = "tld",          default = NA_character_, template = character(1)),
-  list(name = "is_ip_host",   default = NA,            template = logical(1)),
-  list(name = "clean_url",    default = NA_character_, template = character(1)),
-  list(name = "parse_status", default = "error",       template = character(1))
+  list(name = "scheme", default = NA_character_, template = character(1)),
+  list(name = "host", default = NA_character_, template = character(1)),
+  list(name = "port", default = NA_integer_, template = integer(1)),
+  list(name = "path", default = NA_character_, template = character(1)),
+  list(name = "query", default = NA_character_, template = character(1)),
+  list(name = "fragment", default = NA_character_, template = character(1)),
+  list(name = "user", default = NA_character_, template = character(1)),
+  list(name = "password", default = NA_character_, template = character(1)),
+  list(name = "domain", default = NA_character_, template = character(1)),
+  list(name = "tld", default = NA_character_, template = character(1)),
+  list(name = "is_ip_host", default = NA, template = logical(1)),
+  list(name = "clean_url", default = NA_character_, template = character(1)),
+  list(name = "parse_status", default = "error", template = character(1))
 )
 
 utils::globalVariables(c(

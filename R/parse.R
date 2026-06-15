@@ -326,9 +326,10 @@ safe_parse_urls <- function(url,
 
   # Build a rectangular data.frame, filling NULLs with error rows
   original_url_vec <- vapply(urls_list, function(u) {
-    if (is.null(u) ||
+    is_missing_url <- is.null(u) ||
       length(u) == 0 ||
-      (is.atomic(u) && length(u) == 1 && is.na(u))) {
+      (is.atomic(u) && length(u) == 1 && is.na(u))
+    if (is_missing_url) {
       return(NA_character_)
     }
     if (is.character(u)) {
@@ -371,27 +372,33 @@ safe_parse_urls <- function(url,
 # subdomain_levels_to_keep, returning a list keyed by option name. The formal
 # defaults below are the single source of the allowed choices, so match.arg()
 # resolves them here rather than in each public function.
-.parse_options <- function(protocol_handling = c(
-                             "keep", "none", "strip", "http", "https"
-                           ),
-                           www_handling = c(
-                             "none", "strip", "keep", "if_no_subdomain"
-                           ),
-                           tld_source = c("all", "private", "icann"),
-                           case_handling = c(
-                             "lower_host", "keep", "lower", "upper"
-                           ),
-                           trailing_slash_handling = c("none", "keep", "strip"),
-                           index_page_handling = c("keep", "strip"),
-                           path_normalization = c(
-                             "none", "collapse_slashes", "dot_segments", "both"
-                           ),
-                           scheme_relative_handling = c(
-                             "keep", "http", "https", "error"
-                           ),
+# Allowed choices for the parsing options. Hoisted to constants so the
+# .parse_options() signature does not need multi-line default vectors;
+# match.arg() resolves each formal's default to the matching constant.
+.opt_protocol_handling <- c("keep", "none", "strip", "http", "https")
+.opt_www_handling <- c("none", "strip", "keep", "if_no_subdomain")
+.opt_tld_source <- c("all", "private", "icann")
+.opt_case_handling <- c("lower_host", "keep", "lower", "upper")
+.opt_trailing_slash_handling <- c("none", "keep", "strip")
+.opt_index_page_handling <- c("keep", "strip")
+.opt_path_normalization <- c("none", "collapse_slashes", "dot_segments", "both")
+.opt_scheme_relative_handling <- c("keep", "http", "https", "error")
+.opt_host_encoding <- c("keep", "idna", "unicode")
+.opt_path_encoding <- c("keep", "encode", "decode")
+
+.parse_options <- function(protocol_handling = .opt_protocol_handling,
+                           www_handling = .opt_www_handling,
+                           tld_source = .opt_tld_source,
+                           case_handling = .opt_case_handling,
+                           trailing_slash_handling =
+                             .opt_trailing_slash_handling,
+                           index_page_handling = .opt_index_page_handling,
+                           path_normalization = .opt_path_normalization,
+                           scheme_relative_handling =
+                             .opt_scheme_relative_handling,
                            subdomain_levels_to_keep = NULL,
-                           host_encoding = c("keep", "idna", "unicode"),
-                           path_encoding = c("keep", "encode", "decode")) {
+                           host_encoding = .opt_host_encoding,
+                           path_encoding = .opt_path_encoding) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep.
   opts <- list(
@@ -407,10 +414,12 @@ safe_parse_urls <- function(url,
     path_encoding = match.arg(path_encoding)
   )
 
-  if (!is.null(subdomain_levels_to_keep) &&
-    (!is.numeric(subdomain_levels_to_keep) ||
-      subdomain_levels_to_keep < 0 ||
-      subdomain_levels_to_keep %% 1 != 0)) {
+  bad_subdomain_value <- !is.numeric(subdomain_levels_to_keep) ||
+    subdomain_levels_to_keep < 0 ||
+    subdomain_levels_to_keep %% 1 != 0
+  invalid_subdomain_levels <-
+    !is.null(subdomain_levels_to_keep) && bad_subdomain_value
+  if (invalid_subdomain_levels) {
     stop(
       "subdomain_levels_to_keep must be NULL or a non-negative integer.",
       call. = FALSE
@@ -550,7 +559,7 @@ safe_parse_urls <- function(url,
 
   # Phase 4: final scheme per protocol policy
   final_scheme <- .derive_final_scheme(
-    protocol_handling, prep$original_looks_like_protocol, raw$scheme
+    protocol_handling, prep$looks_like_protocol, raw$scheme
   )
 
   # Phase 5: IP host detection
@@ -594,7 +603,7 @@ safe_parse_urls <- function(url,
     domain = domain,
     protocol_handling = protocol_handling,
     final_scheme = final_scheme,
-    original_looks_like_protocol = prep$original_looks_like_protocol,
+    looks_like_protocol = prep$looks_like_protocol,
     original_has_allowed_scheme = prep$original_has_allowed_scheme,
     is_scheme_relative = prep$is_scheme_relative,
     scheme_relative_handling = scheme_relative_handling

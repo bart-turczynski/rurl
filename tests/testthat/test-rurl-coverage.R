@@ -152,15 +152,19 @@ test_that("safe_parse_url www_handling if_no_subdomain branches", {
 test_that(
   "safe_parse_url if_no_subdomain keeps candidate host when domain is unknown",
   {
-  testthat::local_mocked_bindings(
-    .get_registered_domain = function(host) NA_character_,
-    .punycode_to_unicode = function(x) x,
-    .env = asNamespace("rurl")
-  )
+    testthat::local_mocked_bindings(
+      .get_registered_domain = function(host) NA_character_,
+      .punycode_to_unicode = function(x) x,
+      .env = asNamespace("rurl")
+    )
 
-  res <- safe_parse_url("http://example.com", www_handling = "if_no_subdomain")
-  expect_equal(res$host, "example.com")
-})
+    res <- safe_parse_url(
+      "http://example.com",
+      www_handling = "if_no_subdomain"
+    )
+    expect_equal(res$host, "example.com")
+  }
+)
 
 test_that("internal path helpers cover edge cases", {
   expect_equal(rurl:::._collapse_path_slashes(NA_character_), NA_character_)
