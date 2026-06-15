@@ -50,5 +50,8 @@ jobs:
           needs: check
       - uses: r-lib/actions/check-r-package@v2
         with:
+          # Fast gate runs a standard check; the strict --as-cran pass lives in
+          # full-check.yml (and the local pre-push hook).
+          args: '"--no-manual"'
           upload-snapshots: true
           build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'

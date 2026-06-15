@@ -56,5 +56,8 @@ jobs:
           needs: check
       - uses: r-lib/actions/check-r-package@v2
         with:
+          # The strict CRAN-grade pass: --as-cran across every platform. This is
+          # what CRAN itself runs, so it is the gate before a release.
+          args: 'c("--no-manual", "--as-cran")'
           upload-snapshots: true
           build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
