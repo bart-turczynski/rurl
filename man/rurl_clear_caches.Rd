@@ -11,7 +11,7 @@ Invisibly returns NULL.
 }
 \description{
 Clears the memoization caches used by rurl functions. This is useful
-if you need to free memory or if you've updated the PSL data.
+if you need to free memory.
 }
 \examples{
 rurl_clear_caches()

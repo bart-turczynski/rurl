@@ -24,10 +24,3 @@
   list(name = "clean_url", default = NA_character_, template = character(1)),
   list(name = "parse_status", default = "error", template = character(1))
 )
-
-utils::globalVariables(c(
-  "psl_clean",
-  "tld_icann",
-  "tld_private",
-  "tld_all"
-))

@@ -262,17 +262,11 @@
         }
       }
 
-      temp_host_nfc_lc <- stringi::stri_trans_nfc(
-        stringi::stri_trans_tolower(host_for_domain_check)
-      )
-      temp_host_puny <- .normalize_and_punycode(temp_host_nfc_lc)
-
-      temp_derived_domain_puny <- NA_character_
-      if (!is.na(temp_host_puny) && temp_host_puny != "") {
-        temp_derived_domain_puny <- .get_registered_domain(temp_host_puny)
-      }
-      temp_derived_domain_unicode <- .punycode_to_unicode(
-        temp_derived_domain_puny
+      # The www heuristic always uses the all-section registered domain to
+      # decide whether the host is itself an apex (eTLD+1) and thus eligible to
+      # gain a leading "www.". pslr canonicalizes the host internally.
+      temp_derived_domain_unicode <- .psl_registered_domain(
+        host_for_domain_check, "all"
       )
 
       no_derived_domain <- is.na(temp_derived_domain_unicode) ||
@@ -307,30 +301,11 @@
   tld <- NA_character_
 
   if (!is_ip_host && !is.na(final_host) && final_host != "") {
-    host_for_derivation <- stringi::stri_trans_nfc(
-      stringi::stri_trans_tolower(final_host)
-    )
-    encoded_host_for_derivation <- .normalize_and_punycode(host_for_derivation)
-
-    have_encoded_host <- !is.na(encoded_host_for_derivation) &&
-      encoded_host_for_derivation != ""
-    if (have_encoded_host) {
-      derived_domain_encoded <- .get_registered_domain(
-        encoded_host_for_derivation
-      )
-      if (!is.na(derived_domain_encoded)) {
-        domain <- .punycode_to_unicode(derived_domain_encoded)
-      }
-      # Use pre-computed hash sets for O(1) lookup
-      selected_tld_set <- switch(tld_source,
-        all = .tld_all_set,
-        private = .tld_private_set,
-        icann = .tld_icann_set
-      )
-      tld <- ._extract_tld_original_logic(
-        final_host, selected_tld_set, tld_source
-      )
-    }
+    # Both the registered domain and the TLD honor the requested section, so a
+    # given parse is internally consistent (the domain always ends in the TLD).
+    # pslr canonicalizes the host (case/NFC/IDNA) internally.
+    domain <- .psl_registered_domain(final_host, tld_source)
+    tld <- .psl_public_suffix(final_host, tld_source)
   }
 
   list(domain = domain, tld = tld)

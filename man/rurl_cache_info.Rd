@@ -8,8 +8,8 @@ rurl_cache_info()
 }
 \value{
 A data.frame with one row per cache (\code{full_parse},
-  \code{domain}, \code{tld}, \code{puny_encode}, \code{puny_decode}) and
-  columns \code{entries}, \code{enabled}, and \code{max_entries}.
+  \code{puny_encode}, \code{puny_decode}) and columns \code{entries},
+  \code{enabled}, and \code{max_entries}.
 }
 \description{
 Reports the number of entries currently held in each memoization cache,

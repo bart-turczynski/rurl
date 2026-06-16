@@ -1,13 +1,10 @@
-# Global variables declaration for R CMD check
-utils::globalVariables(c(
-  "psl_clean",
-  "tld_all",
-  "tld_private",
-  "tld_icann"
-))
-
-# Package-level variables for caches and pre-computed data
-# These are initialized in .onLoad
+# Package initialization and the rurl memoization caches.
+#
+# Public Suffix List matching and data now live in the pslr package (queried via
+# the .psl_* helpers in domain.R); rurl no longer ships PSL data or builds its
+# own rule/TLD hash sets here. The caches below only memoize rurl's own work:
+# full URL parses and the Punycode encode/decode round-trips used to reconstruct
+# hosts. (PSL query results are cached inside pslr itself.)
 
 # Memoization caches
 .rurl_cache <- new.env(parent = emptyenv())
@@ -22,22 +19,10 @@ utils::globalVariables(c(
 # NA, so a hit storing NULL is never mistaken for a miss.
 .rurl_cache_sentinel <- new.env(parent = emptyenv())
 
-# Pre-computed PSL rule sets as environments for O(1) lookup
-.psl_exception_set <- new.env(parent = emptyenv())
-.psl_wildcard_set <- new.env(parent = emptyenv())
-.psl_normal_set <- new.env(parent = emptyenv())
-
-# TLD sets as environments for O(1) lookup
-.tld_all_set <- new.env(parent = emptyenv())
-.tld_icann_set <- new.env(parent = emptyenv())
-.tld_private_set <- new.env(parent = emptyenv())
-
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
   # Initialize memoization caches
   .rurl_cache$full_parse <<- new.env(parent = emptyenv())
-  .rurl_cache$domain <<- new.env(parent = emptyenv())
-  .rurl_cache$tld <<- new.env(parent = emptyenv())
   .rurl_cache$puny_encode <<- new.env(parent = emptyenv())
   .rurl_cache$puny_decode <<- new.env(parent = emptyenv())
 
@@ -46,78 +31,9 @@ utils::globalVariables(c(
   # the (locked) namespace binding, mirroring how the cache environments above
   # are populated by reference.
   assign("full_parse_enabled", TRUE, envir = .rurl_config)
-  assign("domain_enabled", TRUE, envir = .rurl_config)
-  assign("tld_enabled", TRUE, envir = .rurl_config)
   assign("puny_encode_enabled", TRUE, envir = .rurl_config)
   assign("puny_decode_enabled", TRUE, envir = .rurl_config)
   assign("full_parse_max", Inf, envir = .rurl_config)
-
-  # Get the package namespace to access internal data from sysdata.rda
-  ns <- asNamespace(pkgname)
-
-  normalize_tld_data <- function(x) {
-    x <- enc2utf8(as.character(x))
-    x <- trimws(x)
-    x <- sub("^\\*\\.", "", x)
-    x <- sub("^!", "", x)
-    x <- sub("^\\.+", "", x)
-    x <- x[nzchar(x)]
-    unique(x)
-  }
-
-  # Pre-compute PSL rule sets from psl_clean (loaded from sysdata.rda)
-  # This is the key optimization - do this once at load time, not on every call
-  if (exists("psl_clean", envir = ns, inherits = FALSE)) {
-    psl_data <- get("psl_clean", envir = ns, inherits = FALSE)
-
-    # Extract exception rules (prefixed with !)
-    exception_rules <- sub("^!", "", grep("^!", psl_data, value = TRUE))
-    # Extract wildcard base rules (prefixed with *.)
-    wildcard_rules <- sub(
-      "^\\*\\.", "", grep("^\\*\\.", psl_data, value = TRUE)
-    )
-    # Normal rules are everything else
-    normal_rules <- setdiff(
-      psl_data,
-      c(paste0("!", exception_rules), paste0("*.", wildcard_rules))
-    )
-
-    # Convert to environments (hash sets) for O(1) lookup
-    # Using environment as hash: assign TRUE for each key
-    for (rule in exception_rules) {
-      assign(rule, TRUE, envir = .psl_exception_set)
-    }
-    for (rule in wildcard_rules) {
-      assign(rule, TRUE, envir = .psl_wildcard_set)
-    }
-    for (rule in normal_rules) {
-      assign(rule, TRUE, envir = .psl_normal_set)
-    }
-  }
-
-  # Pre-compute TLD sets for O(1) lookup
-  if (exists("tld_all", envir = ns, inherits = FALSE)) {
-    tld_data <- normalize_tld_data(get("tld_all", envir = ns, inherits = FALSE))
-    for (tld in tld_data) {
-      assign(tld, TRUE, envir = .tld_all_set)
-    }
-  }
-  if (exists("tld_icann", envir = ns, inherits = FALSE)) {
-    tld_data <- normalize_tld_data(
-      get("tld_icann", envir = ns, inherits = FALSE)
-    )
-    for (tld in tld_data) {
-      assign(tld, TRUE, envir = .tld_icann_set)
-    }
-  }
-  if (exists("tld_private", envir = ns, inherits = FALSE)) {
-    tld_data <- normalize_tld_data(
-      get("tld_private", envir = ns, inherits = FALSE)
-    )
-    for (tld in tld_data) {
-      assign(tld, TRUE, envir = .tld_private_set)
-    }
-  }
 
   invisible()
 }
@@ -125,7 +41,7 @@ utils::globalVariables(c(
 #' Clear all rurl caches
 #'
 #' Clears the memoization caches used by rurl functions. This is useful
-#' if you need to free memory or if you've updated the PSL data.
+#' if you need to free memory.
 #'
 #' @return Invisibly returns NULL.
 #' @export
@@ -134,8 +50,6 @@ utils::globalVariables(c(
 rurl_clear_caches <- function() {
   # Clear memoization caches by replacing with fresh environments
   .rurl_cache$full_parse <- new.env(parent = emptyenv())
-  .rurl_cache$domain <- new.env(parent = emptyenv())
-  .rurl_cache$tld <- new.env(parent = emptyenv())
   .rurl_cache$puny_encode <- new.env(parent = emptyenv())
   .rurl_cache$puny_decode <- new.env(parent = emptyenv())
   invisible(NULL)
@@ -145,8 +59,6 @@ rurl_clear_caches <- function() {
 .cache_enabled <- function(cache_name) {
   switch(cache_name,
     full_parse = .rurl_config$full_parse_enabled,
-    domain = .rurl_config$domain_enabled,
-    tld = .rurl_config$tld_enabled,
     puny_encode = .rurl_config$puny_encode_enabled,
     puny_decode = .rurl_config$puny_decode_enabled
   )
@@ -169,8 +81,9 @@ rurl_clear_caches <- function() {
 # Store `value` under `key` in the named cache, respecting the enable switch
 # and (for full_parse) the max-entry bound. When adding a new key to a full
 # full_parse cache, the cache is reset first so peak memory never exceeds the
-# configured maximum. domain/tld are unbounded by design (they stay small —
-# bounded by the number of unique hosts, not URL+option combinations).
+# configured maximum. puny_encode/puny_decode are unbounded by design (they
+# stay small — bounded by the number of unique hosts/labels, not URL+option
+# combinations).
 .cache_set <- function(cache_name, key, value) {
   if (!.cache_enabled(cache_name)) {
     return(invisible(NULL))
@@ -194,8 +107,8 @@ rurl_clear_caches <- function() {
 #' along with whether the cache is enabled and any configured entry bound.
 #'
 #' @return A data.frame with one row per cache (\code{full_parse},
-#'   \code{domain}, \code{tld}, \code{puny_encode}, \code{puny_decode}) and
-#'   columns \code{entries}, \code{enabled}, and \code{max_entries}.
+#'   \code{puny_encode}, \code{puny_decode}) and columns \code{entries},
+#'   \code{enabled}, and \code{max_entries}.
 #' @seealso \code{\link{rurl_cache_config}}, \code{\link{rurl_clear_caches}}
 #' @export
 #' @examples
@@ -203,22 +116,18 @@ rurl_clear_caches <- function() {
 #' rurl_cache_info()
 rurl_cache_info <- function() {
   data.frame(
-    cache = c("full_parse", "domain", "tld", "puny_encode", "puny_decode"),
+    cache = c("full_parse", "puny_encode", "puny_decode"),
     entries = c(
       length(.rurl_cache$full_parse),
-      length(.rurl_cache$domain),
-      length(.rurl_cache$tld),
       length(.rurl_cache$puny_encode),
       length(.rurl_cache$puny_decode)
     ),
     enabled = c(
       .rurl_config$full_parse_enabled,
-      .rurl_config$domain_enabled,
-      .rurl_config$tld_enabled,
       .rurl_config$puny_encode_enabled,
       .rurl_config$puny_decode_enabled
     ),
-    max_entries = c(.rurl_config$full_parse_max, Inf, Inf, Inf, Inf),
+    max_entries = c(.rurl_config$full_parse_max, Inf, Inf),
     stringsAsFactors = FALSE
   )
 }
@@ -234,13 +143,11 @@ rurl_cache_info <- function() {
 #' \code{full_parse} reaches \code{max_full_parse} entries, it is reset before
 #' the next new entry is stored, so its peak size never exceeds the bound; the
 #' default of \code{Inf} preserves the historical unbounded behavior. The
-#' \code{domain}, \code{tld}, \code{puny_encode}, and \code{puny_decode} caches
-#' are unbounded by design (each stays small — bounded by the number of unique
-#' hosts/labels seen, not URL+option combinations).
+#' \code{puny_encode} and \code{puny_decode} caches are unbounded by design
+#' (each stays small — bounded by the number of unique hosts/labels seen, not
+#' URL+option combinations).
 #'
 #' @param full_parse Logical; enable/disable the full URL parse cache.
-#' @param domain Logical; enable/disable the registered-domain cache.
-#' @param tld Logical; enable/disable the TLD-extraction cache.
 #' @param puny_encode Logical; enable/disable the IDNA/Punycode encode cache.
 #' @param puny_decode Logical; enable/disable the Punycode decode cache.
 #' @param max_full_parse A single number (\eqn{\ge 1}) or \code{Inf} bounding
@@ -250,22 +157,14 @@ rurl_cache_info <- function() {
 #' @export
 #' @examples
 #' rurl_cache_config(max_full_parse = 10000)
-#' rurl_cache_config(domain = FALSE)
+#' rurl_cache_config(puny_encode = FALSE)
 #' rurl_cache_config() # inspect current configuration
 rurl_cache_config <- function(full_parse = NULL,
-                              domain = NULL,
-                              tld = NULL,
                               puny_encode = NULL,
                               puny_decode = NULL,
                               max_full_parse = NULL) {
   if (!is.null(full_parse)) {
     .rurl_config$full_parse_enabled <- isTRUE(full_parse)
-  }
-  if (!is.null(domain)) {
-    .rurl_config$domain_enabled <- isTRUE(domain)
-  }
-  if (!is.null(tld)) {
-    .rurl_config$tld_enabled <- isTRUE(tld)
   }
   if (!is.null(puny_encode)) {
     .rurl_config$puny_encode_enabled <- isTRUE(puny_encode)
@@ -287,9 +186,4 @@ rurl_cache_config <- function(full_parse = NULL,
     .rurl_config$full_parse_max <- max_full_parse
   }
   invisible(rurl_cache_info())
-}
-
-# Helper function to check if a key exists in a hash set (environment)
-.in_set <- function(key, set_env) {
-  exists(key, envir = set_env, inherits = FALSE)
 }
