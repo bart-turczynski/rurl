@@ -30,6 +30,10 @@
                                subdomain_levels_to_keep = NULL,
                                host_encoding = "keep",
                                path_encoding = "keep") {
+  if (!is.character(url)) {
+    stop("`url` must be a character vector of URL strings; pass the URL, not a parsed object.",
+         call. = FALSE)
+  }
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
       protocol_handling = protocol_handling,
@@ -291,6 +295,10 @@ get_query <- function(url,
                       decode = TRUE) {
   format <- match.arg(format)
 
+  if (!is.character(url)) {
+    stop("`url` must be a character vector of URL strings; pass the URL, not a parsed object.",
+         call. = FALSE)
+  }
   if (format == "string") {
     return(.extract_from_urls(url, "query",
       protocol_handling = protocol_handling
@@ -421,6 +429,10 @@ get_subdomain <- function(url,
   source <- match.arg(source)
   format <- match.arg(format)
 
+  if (!is.character(url)) {
+    stop("`url` must be a character vector of URL strings; pass the URL, not a parsed object.",
+         call. = FALSE)
+  }
   results <- lapply(url, function(u) {
     parsed <- safe_parse_url(u,
       protocol_handling = protocol_handling,
