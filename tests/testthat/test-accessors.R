@@ -740,3 +740,33 @@ test_that("bracketed IPv6 hosts are detected as IP hosts", {
   # IPv4 parity (already worked; guards against regressions).
   expect_true(safe_parse_url("http://192.168.1.1/x")$is_ip_host)
 })
+
+test_that("get_*() accessors error when passed a parsed object instead of a string", {
+  # Use a hand-constructed list so the test does not depend on safe_parse_url()
+  # being callable in the current R environment.
+  p <- list(
+    scheme = "https", host = "example.com", port = NA_integer_,
+    path = "/x", query = NA_character_, fragment = NA_character_,
+    user = NA_character_, password = NA_character_, domain = "example.com",
+    tld = "com", is_ip_host = FALSE, clean_url = "https://example.com/x",
+    parse_status = "ok", original_url = "https://example.com/x"
+  )
+
+  # .extract_from_urls path
+  expect_error(get_host(p), "character vector")
+  expect_error(get_clean_url(p), "character vector")
+  expect_error(get_domain(p), "character vector")
+  expect_error(get_scheme(p), "character vector")
+  expect_error(get_path(p), "character vector")
+  expect_error(get_fragment(p), "character vector")
+  expect_error(get_port(p), "character vector")
+  expect_error(get_user(p), "character vector")
+  expect_error(get_password(p), "character vector")
+  expect_error(get_userinfo(p), "character vector")
+  expect_error(get_tld(p), "character vector")
+  expect_error(get_parse_status(p), "character vector")
+
+  # lapply paths
+  expect_error(get_query(p), "character vector")
+  expect_error(get_subdomain(p), "character vector")
+})
