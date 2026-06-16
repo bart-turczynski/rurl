@@ -20,39 +20,52 @@ devtools::document()
 
 # Full package check
 R CMD check .
-
-# Update Public Suffix List (regenerates R/sysdata.rda)
-source("data-raw/update_psl.R")
 ```
+
+PSL data is no longer maintained in this repo. Domain/TLD extraction is
+delegated to the `pslr` package, which owns the list, its parsing, and any
+refresh (`pslr::psl_refresh()`).
 
 ## Architecture
 
 ### Core Files
 
-- **R/rurl.R** - Main parsing logic: `safe_parse_url()` and all `get_*()` accessor functions
+- **R/parse.R** / **R/parse-phases.R** - Main parsing logic: `safe_parse_url()` and the per-phase helpers
+- **R/accessors.R** - Public `get_*()` accessor functions over `safe_parse_url()`
+- **R/domain.R** - Punycode helpers and the `pslr` query seam (`.psl_registered_domain()`, `.psl_public_suffix()`)
 - **R/canonical_join.R** - Dataset joining by canonicalized URL keys (`canonical_join()`)
-- **R/zzz.R** - Package initialization (`.onLoad`), pre-computes PSL hash sets and initializes caches
+- **R/zzz.R** - Package initialization (`.onLoad`) and the memoization caches
 
-### Key Internal Functions (R/rurl.R)
+### Key Internal Functions
 
-- `.normalize_and_punycode()` - IDNA/Punycode encoding with NFC normalization
-- `.punycode_to_unicode()` - Punycode decoding with hardcoded workarounds for problematic TLDs
-- `.get_registered_domain()` - Derives registered domain using PSL rules (memoized)
-- `._extract_tld_original_logic()` - TLD extraction using Public Suffix List (memoized)
+- `.normalize_and_punycode()` (R/domain.R) - IDNA/Punycode encoding with NFC normalization, used for host reconstruction
+- `.punycode_to_unicode()` (R/domain.R) - Punycode decoding with hardcoded workarounds for problematic TLDs
+- `.psl_registered_domain()` / `.psl_public_suffix()` (R/domain.R) - thin wrappers over `pslr::registrable_domain()` / `pslr::public_suffix()`
+
+### PSL delegation contract (R/domain.R)
+
+`rurl` calls `pslr` with a fixed contract:
+
+- `source` `"all"` / `"icann"` / `"private"` maps 1:1 onto `pslr` `section`.
+- `output = "unicode"` always (preserves rurl's historical decoded-IDN output;
+  pslr defaults to ASCII A-labels).
+- `unknown = "na"` so an unknown TLD yields `NA` rather than pslr's implicit `*`.
+- `invalid = "na"` so malformed hosts yield `NA` instead of erroring.
+- Never use pslr session-global list switching (`psl_use()`) to implement
+  per-request behavior (per the pslr PRD §12).
 
 ### Data Flow
 
 1. `safe_parse_url()` is the primary workhorse - all `get_*()` functions are wrappers around it
 2. Results are memoized for performance (~8x speedup for repeated URLs)
 3. URL is parsed via `curl::curl_parse_url()` with fallback for malformed URLs
-4. Host is normalized and Punycode-encoded via `.normalize_and_punycode()`
-5. Domain/TLD extracted using PSL rules loaded as hash sets (O(1) lookup) at package init
+4. Host is normalized and Punycode-encoded via `.normalize_and_punycode()` for reconstruction
+5. Domain/TLD derived via the `pslr` seam (`.psl_registered_domain()` / `.psl_public_suffix()`); pslr canonicalizes the host internally
 
 ### Performance Optimizations
 
-- **Multi-layer memoization**: `safe_parse_url()`, `.get_registered_domain()`, and TLD extraction are all cached
-- **Hash sets for PSL rules**: Pre-computed at `.onLoad` for O(1) lookups instead of linear `%in%` searches
-- **Cache management**: Use `rurl_clear_caches()` to free memory or reset after PSL updates
+- **Memoization**: `safe_parse_url()` and the Punycode encode/decode round-trips are cached in rurl; `pslr` caches its own PSL query results
+- **Cache management**: Use `rurl_clear_caches()` to free memory; `rurl_cache_config()` covers `full_parse`, `puny_encode`, `puny_decode`
 
 ## Critical Constraints
 
@@ -60,13 +73,14 @@ source("data-raw/update_psl.R")
 
 1. **Punycode functions** - `.normalize_and_punycode()`, `.punycode_to_unicode()`, and all hardcoded workarounds for problematic TLDs (Greek .ελ, Russian .рф, etc.)
 
-2. **PSL processing logic** - The logic in `data-raw/update_psl.R` for processing the Public Suffix List must be preserved exactly
+2. **PSL semantics live in `pslr`** - do not reintroduce an embedded matcher or bundled list in this package; query `pslr` through the R/domain.R seam.
 
 ## Dependencies
 
 - `curl` - URL parsing via `curl_parse_url()`
 - `stringi` - Unicode string manipulation (recently migrated from base `grep`)
-- `punycoder` - Punycode encoding/decoding
+- `punycoder` (>= 1.1.0) - Punycode encoding/decoding
+- `pslr` (>= 1.0.1) - Public Suffix List matching (domain/TLD extraction)
 
 ### Intentional base-R string exceptions
 
@@ -84,9 +98,6 @@ consistency alone:
   `regexpr`/`regmatches` in `._remove_dot_segments`, `grepl("^www[0-9]*$", …)`,
   the status-pattern `grepl` in `canonical_join.R`) operate on ASCII
   delimiters/anchors where `stringi` offers no correctness or Unicode benefit.
-- **`R/zzz.R` PSL hash-set construction** (`sub`/`grep` over the suffix list at
-  `.onLoad`) is PSL-processing-adjacent and left untouched per the PSL
-  constraint above.
 
 ## Test Framework
 
@@ -95,7 +106,7 @@ Uses testthat 3.0.0+ with edition 3 config. Test files are in `tests/testthat/`.
 ## Development Notes
 
 - The `memoization.md` file contains the original design for performance optimization (now implemented)
-- PSL data is shipped in `R/sysdata.rda` and never downloaded at runtime
+- PSL data and refresh live in `pslr`; `rurl` ships no list of its own
 - All core functions are fully vectorized
 - Cache environments are initialized in `.onLoad` and persist for the R session
 

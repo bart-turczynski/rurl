@@ -1,3 +1,42 @@
+## rurl 1.3.0
+
+### Dependencies
+
+- Public Suffix List matching is now delegated to the `pslr` package
+  (`Imports: pslr (>= 1.0.1)`). `rurl` no longer ships its own processed copy of
+  the list (`R/sysdata.rda`) or its embedded matcher, and `data-raw/update_psl.R`
+  has been removed. `punycoder` is now required at `>= 1.1.0`.
+
+### Behavior changes (PSL correctness)
+
+The embedded matcher used through 1.2.0 was not fully spec-correct. Delegating
+to `pslr` fixes the following; outputs change accordingly:
+
+- **Wildcard rules (`*.`)** are now honored by TLD extraction. For example
+  `get_tld("a.b.kobe.jp")` is now `"b.kobe.jp"` (was `"kobe.jp"`).
+- **Exception rules (`!`)** are now honored by TLD extraction. For example
+  `get_tld("www.ck")` is now `"ck"` (was `"www.ck"`), and `get_tld("foo.ck")`
+  is now `"foo.ck"` (was `"ck"`).
+- **IDN hosts** now resolve a registered domain in every section. For example
+  `get_domain("example.рф")` is now `"example.рф"` (was `NA`).
+- `safe_parse_url()` / `safe_parse_urls()` now derive the `domain` field using
+  the requested `tld_source` rather than always using the combined list, so
+  `domain` and `tld` are consistent within a parse. Under
+  `tld_source = "private"` (or `"icann"`), a host with no suffix in that section
+  now has `domain = NA`; consequently `subdomain_levels_to_keep` is a no-op for
+  such hosts (there is no registered domain to trim toward). The default
+  `tld_source = "all"` is unaffected.
+- Hosts under an unknown TLD continue to return `NA` for both domain and TLD
+  (`rurl` queries `pslr` with `unknown = "na"`), rather than treating an unknown
+  single label as a public suffix.
+
+### Cache changes
+
+- The per-host `domain` and `tld` memoization caches have been removed; `pslr`
+  caches its own query results. `rurl_cache_config()` and `rurl_cache_info()`
+  now cover only `full_parse`, `puny_encode`, and `puny_decode`, and the
+  `domain` / `tld` arguments to `rurl_cache_config()` no longer exist.
+
 ## rurl 1.2.0
 
 ### Dependencies

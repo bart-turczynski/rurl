@@ -225,31 +225,46 @@ test_that("get_subdomain returns expected values", {
   expect_equal(labels[[1]], c("www", "blog"))
 })
 
-test_that(".get_registered_domain handles known cases correctly", {
-  expect_equal(rurl:::.get_registered_domain("example.com"), "example.com")
+test_that(".psl_registered_domain handles known cases correctly", {
+  expect_equal(rurl:::.psl_registered_domain("example.com"), "example.com")
   expect_equal(
-    rurl:::.get_registered_domain("sub.example.co.uk"),
+    rurl:::.psl_registered_domain("sub.example.co.uk"),
     "example.co.uk"
   )
   expect_equal(
-    rurl:::.get_registered_domain("sub.dev-builder.code.com"),
+    rurl:::.psl_registered_domain("sub.dev-builder.code.com"),
     NA_character_
   )
   expect_equal(
-    rurl:::.get_registered_domain("city.kawasaki.jp"),
+    rurl:::.psl_registered_domain("city.kawasaki.jp"),
     "city.kawasaki.jp"
   )
   expect_equal(
-    rurl:::.get_registered_domain("foo.bar.city.kawasaki.jp"),
+    rurl:::.psl_registered_domain("foo.bar.city.kawasaki.jp"),
     "city.kawasaki.jp"
   )
-  expect_equal(rurl:::.get_registered_domain("unknown.tld"), NA_character_)
-  expect_equal(rurl:::.get_registered_domain("localhost"), NA_character_)
+  expect_equal(rurl:::.psl_registered_domain("unknown.tld"), NA_character_)
+  expect_equal(rurl:::.psl_registered_domain("localhost"), NA_character_)
 })
 
-test_that(".get_registered_domain handles suffix-only domains", {
-  expect_true(is.na(rurl:::.get_registered_domain("com")))
-  expect_true(is.na(rurl:::.get_registered_domain("co.uk")))
+test_that(".psl_registered_domain handles suffix-only domains", {
+  expect_true(is.na(rurl:::.psl_registered_domain("com")))
+  expect_true(is.na(rurl:::.psl_registered_domain("co.uk")))
+})
+
+test_that("PSL seam helpers handle NA/empty/section edge cases", {
+  expect_true(is.na(rurl:::.psl_registered_domain(NA_character_, "all")))
+  expect_true(is.na(rurl:::.psl_registered_domain("", "all")))
+  expect_equal(
+    rurl:::.psl_registered_domain("sub.example.com", "all"),
+    "example.com"
+  )
+  # example.net is ICANN-only, so under the private section it has no suffix.
+  expect_true(is.na(rurl:::.psl_registered_domain("example.net", "private")))
+
+  expect_true(is.na(rurl:::.psl_public_suffix(NA_character_, "all")))
+  expect_true(is.na(rurl:::.psl_public_suffix("", "all")))
+  expect_equal(rurl:::.psl_public_suffix("sub.example.com", "all"), "com")
 })
 
 test_that("get_parse_status falls through to final error", {
@@ -369,7 +384,7 @@ test_that("get_tld handles edge cases and unexpected inputs gracefully", {
 
   # Weird but valid cases
   expect_identical(unname(get_tld(".com")), NA_character_)
-  expect_true(is.na(rurl:::.get_registered_domain(".com")))
+  expect_true(is.na(rurl:::.psl_registered_domain(".com")))
   expect_identical(unname(get_tld("example")), NA_character_)
   expect_identical(unname(get_tld("example..com")), NA_character_)
 })
@@ -616,15 +631,13 @@ test_that(".punycode_to_unicode handles various inputs and known TLDs", {
 })
 
 test_that("Internal TLD helpers handle NA/empty/error conditions", {
-  # ._extract_tld_original_logic handles NA and empty input
+  # .psl_public_suffix handles NA and empty input
   expect_equal(
-    rurl:::._extract_tld_original_logic(
-      NA_character_, rurl:::.tld_all_set, "all"
-    ),
+    rurl:::.psl_public_suffix(NA_character_, "all"),
     NA_character_
   )
   expect_equal(
-    rurl:::._extract_tld_original_logic("", rurl:::.tld_all_set, "all"),
+    rurl:::.psl_public_suffix("", "all"),
     NA_character_
   )
 

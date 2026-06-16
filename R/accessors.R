@@ -165,17 +165,9 @@ get_domain <- function(url,
                        subdomain_levels_to_keep = NULL,
                        source = c("all", "private", "icann")) {
   source <- match.arg(source)
-  .extract_from_urls(url, NULL,
-    transform = function(parsed) {
-      if (source == "all") {
-        return(parsed$domain %||% NA_character_)
-      }
-      if (isTRUE(parsed$is_ip_host)) {
-        return(NA_character_)
-      }
-      host_unicode <- .punycode_to_unicode(parsed$host %||% NA_character_)
-      ._derive_domain_from_tld(host_unicode, parsed$tld %||% NA_character_)
-    },
+  # parsed$domain is the registered domain for the requested section (pslr
+  # resolves it consistently with the TLD), so every source reads one field.
+  .extract_from_urls(url, "domain",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = source,
@@ -447,11 +439,8 @@ get_subdomain <- function(url,
       return(character(0))
     }
 
-    domain_val <- if (source == "all") {
-      parsed$domain %||% NA_character_
-    } else {
-      ._derive_domain_from_tld(host_unicode, parsed$tld %||% NA_character_)
-    }
+    # parsed$domain already reflects the requested section (see get_domain()).
+    domain_val <- parsed$domain %||% NA_character_
 
     if (is.na(domain_val) || !nzchar(domain_val)) {
       return(character(0))

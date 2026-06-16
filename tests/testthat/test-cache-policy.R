@@ -1,12 +1,15 @@
 # Tests for cache introspection (rurl_cache_info), configuration
 # (rurl_cache_config), and the full_parse bounding policy.
+#
+# PSL query results are cached inside pslr now, so rurl only memoizes its own
+# full_parse and Punycode encode/decode work.
 
 # Restore the default cache configuration and empty the caches. Called at the
 # start of every test so they are independent, and once at the end so no
 # modified global state leaks into other test files.
 reset_caches <- function() {
   rurl_cache_config(
-    full_parse = TRUE, domain = TRUE, tld = TRUE,
+    full_parse = TRUE,
     puny_encode = TRUE, puny_decode = TRUE, max_full_parse = Inf
   )
   rurl_clear_caches()
@@ -18,12 +21,12 @@ test_that("rurl_cache_info reports the caches with expected columns", {
   expect_s3_class(info, "data.frame")
   expect_equal(
     info$cache,
-    c("full_parse", "domain", "tld", "puny_encode", "puny_decode")
+    c("full_parse", "puny_encode", "puny_decode")
   )
   expect_named(info, c("cache", "entries", "enabled", "max_entries"))
-  expect_equal(info$entries, c(0, 0, 0, 0, 0))
+  expect_equal(info$entries, c(0, 0, 0))
   expect_true(all(info$enabled))
-  expect_equal(info$max_entries, c(Inf, Inf, Inf, Inf, Inf))
+  expect_equal(info$max_entries, c(Inf, Inf, Inf))
 })
 
 test_that("cache info reflects entries after parsing and clearing resets it", {
@@ -33,10 +36,9 @@ test_that("cache info reflects entries after parsing and clearing resets it", {
   )))
   info <- rurl_cache_info()
   expect_gt(info$entries[info$cache == "full_parse"], 0)
-  expect_gt(info$entries[info$cache == "domain"], 0)
 
   rurl_clear_caches()
-  expect_equal(rurl_cache_info()$entries, c(0, 0, 0, 0, 0))
+  expect_equal(rurl_cache_info()$entries, c(0, 0, 0))
 })
 
 test_that("disabled full_parse cache does not store results", {
@@ -51,7 +53,9 @@ test_that("disabling caches preserves correctness", {
   reset_caches()
   enabled <- safe_parse_url("https://www.sub.example.co.uk:8080/a/?q=1")
   reset_caches()
-  rurl_cache_config(full_parse = FALSE, domain = FALSE, tld = FALSE)
+  rurl_cache_config(
+    full_parse = FALSE, puny_encode = FALSE, puny_decode = FALSE
+  )
   disabled <- safe_parse_url("https://www.sub.example.co.uk:8080/a/?q=1")
   expect_identical(disabled, enabled)
   reset_caches()
@@ -104,11 +108,11 @@ test_that("rurl_cache_config validates max_full_parse", {
 
 test_that("rurl_cache_config() with no args reports without changing state", {
   reset_caches()
-  rurl_cache_config(domain = FALSE, max_full_parse = 1234)
+  rurl_cache_config(puny_encode = FALSE, max_full_parse = 1234)
   before <- rurl_cache_config()
   after <- rurl_cache_info()
   expect_identical(before, after)
-  expect_false(after$enabled[after$cache == "domain"])
+  expect_false(after$enabled[after$cache == "puny_encode"])
   expect_equal(after$max_entries[1], 1234)
   reset_caches()
 })

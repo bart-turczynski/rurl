@@ -195,16 +195,15 @@ very many of them.
 
 ## Public Suffix List Data
 
-`rurl` ships with a processed copy of the [Public Suffix List
-(PSL)](https://publicsuffix.org/) and never downloads it at runtime.
+Domain and TLD extraction is delegated to the
+[`pslr`](https://CRAN.R-project.org/package=pslr) package, which implements the
+[Public Suffix List (PSL)](https://publicsuffix.org/) with correct handling of
+wildcard (`*.`) and exception (`!`) rules and IDN hosts. `rurl` maps its
+`source` argument (`"all"`, `"icann"`, `"private"`) onto the corresponding
+`pslr` section and always returns domains/TLDs in Unicode form.
 
-To refresh it:
-
-``` r
-source("data-raw/update_psl.R")
-```
-
-This regenerates internal data used for domain and TLD extraction.
+`pslr` ships its own bundled copy of the list and can refresh it via
+`pslr::psl_refresh()`; see the `pslr` documentation for details.
 
 ## License
 

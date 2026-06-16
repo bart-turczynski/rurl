@@ -6,8 +6,6 @@
 \usage{
 rurl_cache_config(
   full_parse = NULL,
-  domain = NULL,
-  tld = NULL,
   puny_encode = NULL,
   puny_decode = NULL,
   max_full_parse = NULL
@@ -15,10 +13,6 @@ rurl_cache_config(
 }
 \arguments{
 \item{full_parse}{Logical; enable/disable the full URL parse cache.}
-
-\item{domain}{Logical; enable/disable the registered-domain cache.}
-
-\item{tld}{Logical; enable/disable the TLD-extraction cache.}
 
 \item{puny_encode}{Logical; enable/disable the IDNA/Punycode encode cache.}
 
@@ -41,13 +35,13 @@ place until \code{\link{rurl_clear_caches}} is called). When
 \code{full_parse} reaches \code{max_full_parse} entries, it is reset before
 the next new entry is stored, so its peak size never exceeds the bound; the
 default of \code{Inf} preserves the historical unbounded behavior. The
-\code{domain}, \code{tld}, \code{puny_encode}, and \code{puny_decode} caches
-are unbounded by design (each stays small — bounded by the number of unique
-hosts/labels seen, not URL+option combinations).
+\code{puny_encode} and \code{puny_decode} caches are unbounded by design
+(each stays small — bounded by the number of unique hosts/labels seen, not
+URL+option combinations).
 }
 \examples{
 rurl_cache_config(max_full_parse = 10000)
-rurl_cache_config(domain = FALSE)
+rurl_cache_config(puny_encode = FALSE)
 rurl_cache_config() # inspect current configuration
 }
 \seealso{

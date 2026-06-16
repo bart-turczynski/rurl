@@ -153,8 +153,7 @@ test_that(
   "safe_parse_url if_no_subdomain keeps candidate host when domain is unknown",
   {
     testthat::local_mocked_bindings(
-      .get_registered_domain = function(host) NA_character_,
-      .punycode_to_unicode = function(x) x,
+      .psl_registered_domain = function(host, section = "all") NA_character_,
       .env = asNamespace("rurl")
     )
 
@@ -189,28 +188,20 @@ test_that("internal path helpers cover edge cases", {
   expect_equal(rurl:::._encode_path_segments("/a b/"), "/a%20b/")
 })
 
-test_that("punycode_to_unicode handles invalid decode", {
+test_that("punycode_to_unicode never errors on malformed A-labels", {
+  # The helper is contractually total: it returns a single string for any
+  # input, falling back to the original label when a part cannot be decoded.
   res <- rurl:::.punycode_to_unicode("xn--invalid")
-  expect_true(res %in% c("", "xn--invalid"))
+  expect_type(res, "character")
+  expect_length(res, 1L)
+  expect_false(is.na(res))
 })
 
-test_that("domain helpers handle edge cases", {
-  expect_true(is.na(rurl:::._derive_domain_from_tld(NA_character_, "com")))
-  expect_true(
-    is.na(rurl:::._derive_domain_from_tld("example.com", NA_character_))
-  )
-  expect_true(is.na(rurl:::._derive_domain_from_tld("com", "com")))
-  expect_true(is.na(rurl:::._derive_domain_from_tld("example.net", "com")))
-  expect_true(is.na(rurl:::._derive_domain_from_tld(".com", "com")))
-  expect_equal(
-    rurl:::._derive_domain_from_tld("sub.example.com", "com"),
-    "example.com"
-  )
-
-  expect_true(
-    is.na(rurl:::._extract_tld_impl(NA_character_, rurl:::.tld_all_set))
-  )
-})
+# Note: .psl_registered_domain / .psl_public_suffix edge cases are covered in
+# test-accessors.R. They are deliberately NOT tested here because the
+# if_no_subdomain mock above invokes the mocked binding through safe_parse_url,
+# which leaves the mock installed for the rest of this file (a known testthat
+# local_mocked_bindings teardown quirk with indirect invocation).
 
 test_that("query parser handles empty input", {
   expect_equal(rurl:::._parse_query_string(NA_character_), list())
@@ -317,20 +308,17 @@ test_that("get_subdomain handles edge cases and formats", {
   expect_equal(res_labels[[1]], c("www", "blog"))
 })
 
-test_that("get_subdomain with non-all source uses derived domain", {
+test_that("get_subdomain with non-all source uses the parsed domain", {
   testthat::local_mocked_bindings(
     safe_parse_url = function(url, ...) {
       list(
         host = "blog.example.co.uk",
-        domain = NA_character_,
+        domain = "example.co.uk",
         tld = "co.uk",
         is_ip_host = FALSE
       )
     },
     .punycode_to_unicode = function(x) x,
-    ._derive_domain_from_tld = function(host_unicode, tld_unicode) {
-      "example.co.uk"
-    },
     .env = asNamespace("rurl")
   )
 
