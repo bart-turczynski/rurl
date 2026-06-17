@@ -1,23 +1,15 @@
-# Full cross-platform R CMD check matrix. Deliberately NOT on every PR: runs on
-# merges to main, on PRs touching compiled/build files, weekly, and on demand.
-# Fast per-PR feedback (lint + one Ubuntu check) lives in verify.yml.
+# Full cross-platform R CMD check matrix (macOS = 10x, Windows = 2x Actions
+# minute multipliers). Runs ONLY on demand (workflow_dispatch) or when preparing
+# a CRAN submission (release tags matching 'v*'). Routine merges to main and PRs
+# do NOT trigger it. Fast per-PR feedback (lint + one Ubuntu check) lives in
+# verify.yml.
 name: Full platform check
 
 on:
+  # CRAN-submission prep: release tags matching 'v*'.
   push:
-    branches: [main]
-  pull_request:
-    paths:
-      - 'src/**'
-      - 'configure'
-      - 'configure.win'
-      - 'cleanup'
-      - '**/Makevars'
-      - '**/Makevars.*'
-      - 'DESCRIPTION'
-      - '.github/workflows/full-check.yml'
-  schedule:
-    - cron: '41 5 * * 1'
+    tags: ['v*']
+  # On demand.
   workflow_dispatch:
 
 permissions: read-all
