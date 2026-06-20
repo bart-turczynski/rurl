@@ -95,146 +95,36 @@ canonical_join <- function(data_A, data_B,
   on_parse_error <- match.arg(on_parse_error)
   join_parse_status <- match.arg(join_parse_status)
 
-  if (!is.data.frame(data_A) || !is.data.frame(data_B)) {
-    warning("Inputs 'data_A' and 'data_B' must be data frames.", call. = FALSE)
-    return(data.frame())
-  }
-  if (!col_A %in% names(data_A)) {
-    warning("Column '", col_A, "' not found in data_A.", call. = FALSE)
-    return(data.frame())
-  }
-  if (!col_B %in% names(data_B)) {
-    warning("Column '", col_B, "' not found in data_B.", call. = FALSE)
-    return(data.frame())
-  }
-  if (!is.character(data_A[[col_A]]) && !is.factor(data_A[[col_A]])) {
-    warning(
-      "Column '", col_A, "' in data_A must be character or factor.",
-      call. = FALSE
-    )
-    return(data.frame())
-  }
-  if (!is.character(data_B[[col_B]]) && !is.factor(data_B[[col_B]])) {
-    warning(
-      "Column '", col_B, "' in data_B must be character or factor.",
-      call. = FALSE
-    )
+  if (!.cj_validate_inputs(data_A, data_B, col_A, col_B)) {
     return(data.frame())
   }
 
-  # Expected output structure for empty results, preserving column types
-  empty_cols <- list()
-  empty_cols[[name_A]] <- data_A[0, col_A, drop = TRUE]
-  empty_cols[[name_B]] <- data_B[0, col_B, drop = TRUE]
-  empty_cols[["JoinKey"]] <- character(0)
-  other_cols_A <- setdiff(names(data_A), col_A)
-  for (oca in other_cols_A) {
-    empty_cols[[paste0(oca, suffix_A)]] <- data_A[0, oca, drop = TRUE]
-  }
-  other_cols_B <- setdiff(names(data_B), col_B)
-  for (ocb in other_cols_B) {
-    empty_cols[[paste0(ocb, suffix_B)]] <- data_B[0, ocb, drop = TRUE]
-  }
-  empty_output_template <- data.frame(empty_cols, stringsAsFactors = FALSE)
-  empty_output_template <- empty_output_template[
-    , unique(names(empty_output_template)),
-    drop = FALSE
-  ]
-
-  # Parse URLs into canonical keys
-  parsed_A <- safe_parse_urls(as.character(data_A[[col_A]]), ...)
-  parsed_B <- safe_parse_urls(as.character(data_B[[col_B]]), ...)
-
-  key_A <- parsed_A$clean_url %||% rep(NA_character_, nrow(data_A))
-  key_B <- parsed_B$clean_url %||% rep(NA_character_, nrow(data_B))
-  status_A <- parsed_A$parse_status %||% rep("error", nrow(data_A))
-  status_B <- parsed_B$parse_status %||% rep("error", nrow(data_B))
-
-  ok_A <- !is.na(key_A) & nzchar(key_A) &
-    .is_joinable_status(status_A, join_parse_status)
-  ok_B <- !is.na(key_B) & nzchar(key_B) &
-    .is_joinable_status(status_B, join_parse_status)
-
-  if (on_parse_error == "error" && (!all(ok_A) || !all(ok_B))) {
-    stop("canonical_join() encountered URL parsing errors.", call. = FALSE)
-  }
-
-  # Optionally drop rows that failed to parse
-  data_A_work <- data_A
-  data_B_work <- data_B
-  if (on_parse_error == "drop") {
-    data_A_work <- data_A_work[ok_A, , drop = FALSE]
-    data_B_work <- data_B_work[ok_B, , drop = FALSE]
-    key_A <- key_A[ok_A]
-    key_B <- key_B[ok_B]
-    ok_A <- ok_A[ok_A]
-    ok_B <- ok_B[ok_B]
-  }
-
-  # Handle duplicate keys
-  if (collision != "all") {
-    dup_A <- duplicated(key_A) & ok_A
-    dup_B <- duplicated(key_B) & ok_B
-    if (collision == "error" && (any(dup_A) || any(dup_B))) {
-      stop(
-        "canonical_join() found duplicate canonical keys. ",
-        "Use collision = \"all\" or \"first\".",
-        call. = FALSE
-      )
-    }
-    if (collision == "first") {
-      keep_A <- !ok_A | !duplicated(key_A)
-      keep_B <- !ok_B | !duplicated(key_B)
-      data_A_work <- data_A_work[keep_A, , drop = FALSE]
-      data_B_work <- data_B_work[keep_B, , drop = FALSE]
-      key_A <- key_A[keep_A]
-      key_B <- key_B[keep_B]
-      ok_A <- ok_A[keep_A]
-      ok_B <- ok_B[keep_B]
-    }
-  }
-
-  # Internal join keys (avoid matching NA rows when on_parse_error = "keep")
-  join_key_A <- key_A
-  join_key_B <- key_B
-  if (on_parse_error == "keep") {
-    join_key_A <- ifelse(
-      ok_A, key_A, paste0(".__rurl_na_A__", seq_len(nrow(data_A_work)))
-    )
-    join_key_B <- ifelse(
-      ok_B, key_B, paste0(".__rurl_na_B__", seq_len(nrow(data_B_work)))
-    )
-  }
-
-  df_A_join <- data.frame(
-    .join_key = join_key_A,
-    .join_key_out_A = ifelse(ok_A, key_A, NA_character_),
-    .orig_url_A = data_A_work[[col_A]],
-    stringsAsFactors = FALSE
+  empty_output_template <- .cj_empty_template(
+    data_A, data_B, col_A, col_B, name_A, name_B, suffix_A, suffix_B
   )
-  other_cols_A <- setdiff(names(data_A_work), col_A)
-  for (oca in other_cols_A) {
-    df_A_join[[paste0(oca, suffix_A)]] <- data_A_work[[oca]]
-  }
 
-  df_B_join <- data.frame(
-    .join_key = join_key_B,
-    .join_key_out_B = ifelse(ok_B, key_B, NA_character_),
-    .orig_url_B = data_B_work[[col_B]],
-    stringsAsFactors = FALSE
+  # Parse URLs into canonical keys, then resolve drop/collision policy.
+  side_A <- .cj_side_state(
+    safe_parse_urls(as.character(data_A[[col_A]]), ...),
+    data_A, join_parse_status
   )
-  other_cols_B <- setdiff(names(data_B_work), col_B)
-  for (ocb in other_cols_B) {
-    df_B_join[[paste0(ocb, suffix_B)]] <- data_B_work[[ocb]]
-  }
+  side_B <- .cj_side_state(
+    safe_parse_urls(as.character(data_B[[col_B]]), ...),
+    data_B, join_parse_status
+  )
 
-  all_x <- join %in% c("left", "full")
-  all_y <- join %in% c("right", "full")
+  sides <- .cj_resolve_sides(side_A, side_B, on_parse_error, collision)
+  side_A <- sides$A
+  side_B <- sides$B
+
+  df_A_join <- .cj_build_join_df(side_A, col_A, suffix_A, on_parse_error, "A")
+  df_B_join <- .cj_build_join_df(side_B, col_B, suffix_B, on_parse_error, "B")
+
   joined <- merge(
     df_A_join, df_B_join,
     by = ".join_key",
-    all.x = all_x,
-    all.y = all_y,
+    all.x = join %in% c("left", "full"),
+    all.y = join %in% c("right", "full"),
     sort = FALSE
   )
 
@@ -242,6 +132,137 @@ canonical_join <- function(data_A, data_B,
     return(empty_output_template)
   }
 
+  .cj_assemble_result(joined, name_A, name_B)
+}
+
+# Validate canonical_join() inputs, emitting the same warnings as before and
+# returning FALSE (so the caller returns an empty data.frame) on any failure.
+.cj_validate_inputs <- function(data_A, data_B, col_A, col_B) {
+  if (!is.data.frame(data_A) || !is.data.frame(data_B)) {
+    warning("Inputs 'data_A' and 'data_B' must be data frames.", call. = FALSE)
+    return(FALSE)
+  }
+  .cj_validate_column(data_A, col_A, "data_A") &&
+    .cj_validate_column(data_B, col_B, "data_B")
+}
+
+# Validate one side's URL column: it must exist and be character or factor.
+.cj_validate_column <- function(data, col, which) {
+  if (!col %in% names(data)) {
+    warning("Column '", col, "' not found in ", which, ".", call. = FALSE)
+    return(FALSE)
+  }
+  if (!is.character(data[[col]]) && !is.factor(data[[col]])) {
+    warning(
+      "Column '", col, "' in ", which, " must be character or factor.",
+      call. = FALSE
+    )
+    return(FALSE)
+  }
+  TRUE
+}
+
+# Apply the on_parse_error and collision policies to both sides, stopping on
+# the "error" variants and returning the (possibly filtered) sides.
+.cj_resolve_sides <- function(side_A, side_B, on_parse_error, collision) {
+  if (on_parse_error == "error" && (!all(side_A$ok) || !all(side_B$ok))) {
+    stop("canonical_join() encountered URL parsing errors.", call. = FALSE)
+  }
+  if (on_parse_error == "drop") {
+    side_A <- .cj_drop_unparsed(side_A)
+    side_B <- .cj_drop_unparsed(side_B)
+  }
+  if (collision != "all") {
+    has_dup <- any(duplicated(side_A$key) & side_A$ok) ||
+      any(duplicated(side_B$key) & side_B$ok)
+    if (collision == "error" && has_dup) {
+      stop(
+        "canonical_join() found duplicate canonical keys. ",
+        "Use collision = \"all\" or \"first\".",
+        call. = FALSE
+      )
+    }
+    if (collision == "first") {
+      side_A <- .cj_keep_first(side_A)
+      side_B <- .cj_keep_first(side_B)
+    }
+  }
+  list(A = side_A, B = side_B)
+}
+
+# Expected output structure for empty results, preserving column types.
+.cj_empty_template <- function(data_A, data_B, col_A, col_B,
+                               name_A, name_B, suffix_A, suffix_B) {
+  empty_cols <- list()
+  empty_cols[[name_A]] <- data_A[0, col_A, drop = TRUE]
+  empty_cols[[name_B]] <- data_B[0, col_B, drop = TRUE]
+  empty_cols[["JoinKey"]] <- character(0)
+  for (oca in setdiff(names(data_A), col_A)) {
+    empty_cols[[paste0(oca, suffix_A)]] <- data_A[0, oca, drop = TRUE]
+  }
+  for (ocb in setdiff(names(data_B), col_B)) {
+    empty_cols[[paste0(ocb, suffix_B)]] <- data_B[0, ocb, drop = TRUE]
+  }
+  template <- data.frame(empty_cols, stringsAsFactors = FALSE)
+  template[, unique(names(template)), drop = FALSE]
+}
+
+# Per-side parse state: the working data frame plus the canonical key vector
+# and the joinable-row mask. Bundling these keeps the drop/collision steps to
+# a single object per side.
+.cj_side_state <- function(parsed, data, join_parse_status) {
+  n <- nrow(data)
+  key <- parsed$clean_url %||% rep(NA_character_, n)
+  status <- parsed$parse_status %||% rep("error", n)
+  ok <- !is.na(key) & nzchar(key) &
+    .is_joinable_status(status, join_parse_status)
+  list(data = data, key = key, ok = ok)
+}
+
+# Drop rows that failed to parse (on_parse_error = "drop").
+.cj_drop_unparsed <- function(side) {
+  keep <- side$ok
+  side$data <- side$data[keep, , drop = FALSE]
+  side$key <- side$key[keep]
+  side$ok <- side$ok[keep]
+  side
+}
+
+# Keep the first row per canonical key (collision = "first"); NA-key rows are
+# all retained.
+.cj_keep_first <- function(side) {
+  keep <- !side$ok | !duplicated(side$key)
+  side$data <- side$data[keep, , drop = FALSE]
+  side$key <- side$key[keep]
+  side$ok <- side$ok[keep]
+  side
+}
+
+# Build one side's join data frame: the internal match key, the emitted key,
+# the original URL, and the suffixed payload columns. NA-key rows get a unique
+# sentinel match key when on_parse_error = "keep" so they never match.
+.cj_build_join_df <- function(side, col, suffix, on_parse_error, side_tag) {
+  data_work <- side$data
+  join_key <- side$key
+  if (on_parse_error == "keep") {
+    join_key <- ifelse(
+      side$ok, side$key,
+      paste0(".__rurl_na_", side_tag, "__", seq_len(nrow(data_work)))
+    )
+  }
+  df <- data.frame(.join_key = join_key, stringsAsFactors = FALSE)
+  df[[paste0(".join_key_out_", side_tag)]] <-
+    ifelse(side$ok, side$key, NA_character_)
+  df[[paste0(".orig_url_", side_tag)]] <- data_work[[col]]
+  for (oc in setdiff(names(data_work), col)) {
+    df[[paste0(oc, suffix)]] <- data_work[[oc]]
+  }
+  df
+}
+
+# Assemble the public result from the merged frame: coalesce the emitted key
+# across sides, restore the original URL column names, and drop internals.
+.cj_assemble_result <- function(joined, name_A, name_B) {
   join_key_out <- joined$.join_key_out_A
   if (!is.null(joined$.join_key_out_B)) {
     na_idx <- is.na(join_key_out)
@@ -264,8 +285,7 @@ canonical_join <- function(data_A, data_B,
     ".orig_url_A",
     ".orig_url_B"
   )
-  other_cols <- setdiff(names(joined), drop_cols)
-  for (col_name in other_cols) {
+  for (col_name in setdiff(names(joined), drop_cols)) {
     result[[col_name]] <- joined[[col_name]]
   }
 

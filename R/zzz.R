@@ -204,40 +204,48 @@ rurl_cache_config <- function(full_parse = NULL,
                               puny_encode = NULL,
                               puny_decode = NULL,
                               max_full_parse = NULL) {
-  .require_flag <- function(value, name) {
-    if (!is.logical(value) || length(value) != 1L || is.na(value)) {
-      stop(
-        sprintf("%s must be a single non-NA logical (TRUE or FALSE).", name),
-        call. = FALSE
-      )
-    }
-    value
-  }
   if (!is.null(full_parse)) {
-    .rurl_config$full_parse_enabled <- .require_flag(full_parse, "full_parse")
+    .rurl_config$full_parse_enabled <-
+      .cache_flag_or_stop(full_parse, "full_parse")
   }
   if (!is.null(puny_encode)) {
     .rurl_config$puny_encode_enabled <-
-      .require_flag(puny_encode, "puny_encode")
+      .cache_flag_or_stop(puny_encode, "puny_encode")
   }
   if (!is.null(puny_decode)) {
     .rurl_config$puny_decode_enabled <-
-      .require_flag(puny_decode, "puny_decode")
+      .cache_flag_or_stop(puny_decode, "puny_decode")
   }
   if (!is.null(max_full_parse)) {
-    invalid_max_full_parse <- !is.numeric(max_full_parse) ||
-      length(max_full_parse) != 1L ||
-      is.na(max_full_parse) ||
-      max_full_parse < 1 ||
-      !(is.infinite(max_full_parse) ||
-          max_full_parse %% 1 == 0)
-    if (invalid_max_full_parse) {
-      stop(
-        "max_full_parse must be a single integer >= 1 (or Inf).",
-        call. = FALSE
-      )
-    }
-    .rurl_config$full_parse_max <- max_full_parse
+    .rurl_config$full_parse_max <- .validate_max_full_parse(max_full_parse)
   }
   invisible(rurl_cache_info())
+}
+
+# Validate a single enable/disable flag, returning it or stopping with the
+# field-named error used by rurl_cache_config().
+.cache_flag_or_stop <- function(value, name) {
+  if (!is.logical(value) || length(value) != 1L || is.na(value)) {
+    stop(
+      sprintf("%s must be a single non-NA logical (TRUE or FALSE).", name),
+      call. = FALSE
+    )
+  }
+  value
+}
+
+# Validate the full_parse cache bound: a single integer >= 1, or Inf.
+.validate_max_full_parse <- function(max_full_parse) {
+  invalid <- !is.numeric(max_full_parse) ||
+    length(max_full_parse) != 1L ||
+    is.na(max_full_parse) ||
+    max_full_parse < 1 ||
+    !(is.infinite(max_full_parse) || max_full_parse %% 1 == 0)
+  if (invalid) {
+    stop(
+      "max_full_parse must be a single integer >= 1 (or Inf).",
+      call. = FALSE
+    )
+  }
+  max_full_parse
 }

@@ -473,6 +473,74 @@ get_userinfo <- function(url, protocol_handling = "keep") {
   )
 }
 
+# Derive the subdomain labels for a single URL. Parses the host with a fixed
+# normalization policy, strips the registered-domain suffix, and (unless
+# include_www) drops a lone leading www/www[0-9]* label. Returns character(0)
+# when there is no subdomain (IP host, empty host/domain, suffix mismatch).
+.subdomain_labels <- function(u, protocol_handling, www_handling, source,
+                              include_www, host_encoding) {
+  parsed <- safe_parse_url(u,
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    tld_source = source,
+    case_handling = "lower",
+    trailing_slash_handling = "none",
+    subdomain_levels_to_keep = NULL,
+    host_encoding = host_encoding
+  )
+  hd <- .subdomain_host_domain(parsed)
+  if (is.null(hd)) {
+    return(character(0))
+  }
+
+  suffix <- paste0(".", hd$domain)
+  if (!stringi::stri_endswith_fixed(hd$host, suffix)) {
+    return(character(0))
+  }
+
+  sub_part <- stringi::stri_sub(
+    hd$host,
+    1,
+    stringi::stri_length(hd$host) - stringi::stri_length(suffix)
+  )
+  if (!nzchar(sub_part)) {
+    return(character(0))
+  }
+
+  labels <- strsplit(sub_part, ".", fixed = TRUE)[[1]]
+  drop_www_label <- !include_www &&
+    length(labels) == 1 &&
+    grepl("^www[0-9]*$", labels[1])
+  if (drop_www_label) {
+    labels <- labels[-1]
+  }
+  labels
+}
+
+# Extract the lowercased (host, domain) pair to compare for the suffix strip,
+# or NULL when there is no usable subdomain candidate (IP host, empty host or
+# domain). Both honor host_encoding, so they share one spelling and the
+# suffix-strip in .subdomain_labels() matches directly (no forced Unicode
+# decode). parsed$domain already reflects the requested section (see
+# get_domain()).
+.subdomain_host_domain <- function(parsed) {
+  if (is.null(parsed) || isTRUE(parsed$is_ip_host)) {
+    return(NULL)
+  }
+  host_str <- parsed$host %||% NA_character_
+  if (is.na(host_str) || !nzchar(host_str)) {
+    return(NULL)
+  }
+  domain_val <- parsed$domain %||% NA_character_
+  if (is.na(domain_val) || !nzchar(domain_val)) {
+    return(NULL)
+  }
+  list(
+    host = stringi::stri_trans_tolower(host_str),
+    domain = stringi::stri_trans_tolower(domain_val)
+  )
+}
+
 #' Get URL subdomains
 #'
 #' Extracts the subdomain component of a URL.
@@ -508,59 +576,13 @@ get_subdomain <- function(url,
       call. = FALSE
     )
   }
-  results <- lapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = www_handling,
-      tld_source = source,
-      case_handling = "lower",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL,
-      host_encoding = host_encoding
-    )
-    if (is.null(parsed) || isTRUE(parsed$is_ip_host)) {
-      return(character(0))
-    }
-
-    # Both host and domain honor host_encoding, so they share one spelling and
-    # the suffix-strip below matches directly (no forced Unicode decode).
-    host_str <- parsed$host %||% NA_character_
-    if (is.na(host_str) || !nzchar(host_str)) {
-      return(character(0))
-    }
-
-    # parsed$domain already reflects the requested section (see get_domain()).
-    domain_val <- parsed$domain %||% NA_character_
-
-    if (is.na(domain_val) || !nzchar(domain_val)) {
-      return(character(0))
-    }
-
-    host_lc <- stringi::stri_trans_tolower(host_str)
-    domain_lc <- stringi::stri_trans_tolower(domain_val)
-    suffix <- paste0(".", domain_lc)
-    if (!stringi::stri_endswith_fixed(host_lc, suffix)) {
-      return(character(0))
-    }
-
-    sub_part <- stringi::stri_sub(
-      host_lc,
-      1,
-      stringi::stri_length(host_lc) - stringi::stri_length(suffix)
-    )
-    if (!nzchar(sub_part)) {
-      return(character(0))
-    }
-
-    labels <- strsplit(sub_part, ".", fixed = TRUE)[[1]]
-    drop_www_label <- !include_www &&
-      length(labels) == 1 &&
-      grepl("^www[0-9]*$", labels[1])
-    if (drop_www_label) {
-      labels <- labels[-1]
-    }
-    labels
-  })
+  results <- lapply(url, .subdomain_labels,
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    source = source,
+    include_www = include_www,
+    host_encoding = host_encoding
+  )
 
   if (format == "labels") {
     return(results)
