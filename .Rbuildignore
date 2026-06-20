@@ -25,5 +25,7 @@
 ^\.Rhistory$
 ^\.DS_Store$
 ^CONTRIBUTING\.md$
+^_scratch$
+^worklog$
 ^.*coverage\.html$
 ^\.positai$

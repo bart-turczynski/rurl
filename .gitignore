@@ -20,6 +20,8 @@
 *.tar.gz
 *.Rcheck/
 .tmp/
+_scratch/
+worklog/
 covr_report.html
 coverage.html
 covr_zero.rds
