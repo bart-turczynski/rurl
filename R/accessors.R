@@ -66,6 +66,10 @@
 #'
 #' @param url A character vector of URLs to be parsed.
 #' @inheritParams safe_parse_url
+#' @param source Which PSL source to use: "all", "private", or "icann".
+#'   Warning statuses such as \code{warning-no-tld}, \code{warning-invalid-tld},
+#'   and \code{warning-public-suffix} depend on which PSL section is consulted,
+#'   so pass \code{source = "icann"} to use only ICANN-managed TLDs.
 #' @return A character vector with the parse status of each URL.
 #' @export
 #' @examples
@@ -73,14 +77,18 @@
 #'   c("http://example.com", "ftp://example.com", "mailto:user@example.com")
 #' )
 #' get_parse_status(c("http://example.com", "not-a-url"))
+#' get_parse_status("http://example.com", source = "icann")
 get_parse_status <- function(url,
                              protocol_handling = "keep",
                              www_handling = "none",
-                             subdomain_levels_to_keep = NULL) {
+                             subdomain_levels_to_keep = NULL,
+                             source = c("all", "private", "icann")) {
+  source <- match.arg(source)
   .extract_from_urls(url, "parse_status",
     null_value = "error",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
+    tld_source = source,
     case_handling = "lower",
     subdomain_levels_to_keep = subdomain_levels_to_keep
   )

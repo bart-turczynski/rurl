@@ -80,10 +80,7 @@
   .reg_exposed("get_parse_status", "protocol_handling"),
   .reg_exposed("get_parse_status", "www_handling"),
   .reg_exposed("get_parse_status", "subdomain_levels_to_keep"),
-  .reg_omitted(
-    "get_parse_status", "tld_source",
-    "gap: tld_source not yet threaded through get_parse_status"
-  ),
+  .reg_exposed("get_parse_status", "tld_source", alias = "source"),
   .reg_omitted(
     "get_parse_status", "case_handling",
     "forced to 'lower' internally; not user-controllable for parse_status"
