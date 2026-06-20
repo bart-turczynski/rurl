@@ -137,3 +137,22 @@
     invalid = "na"
   )
 }
+
+# Full canonical decomposition of a host, in Unicode. Vectorized; returns a
+# data.frame with one row per input host and columns `subdomain`, `domain`,
+# `suffix`, `registrable_domain` (plus the canonicalized `host`). Used to make
+# STRUCTURAL policy decisions (subdomain presence, registrable boundary,
+# subdomain label count) on a single canonical spelling so that an A-label and
+# its Unicode equivalent take the same branch. pslr canonicalizes the host
+# (case / NFC / IDNA) internally, so the decomposition is identical for both
+# spellings. Same fixed contract as the other PSL seams: Unicode output, unknown
+# TLDs and invalid hosts become NA rather than `*` / errors.
+.psl_suffix_extract <- function(host, section = "all") {
+  pslr::suffix_extract(
+    host,
+    section = section,
+    output = "unicode",
+    unknown = "na",
+    invalid = "na"
+  )
+}
