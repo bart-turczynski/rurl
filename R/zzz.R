@@ -9,21 +9,29 @@
 # Internal registry: one entry per memoization cache, in the canonical order
 # that public functions (rurl_cache_info, rurl_clear_caches, .cache_enabled)
 # must preserve.
+#
+# `max_field` is optional: when present it names the .rurl_config field holding
+# the cache's configured max-entry bound; when NULL the cache is unbounded
+# (max_entries reported as Inf). This lets rurl_cache_info() read max_entries
+# uniformly instead of special-casing full_parse.
 .CACHE_REGISTRY <- list(
   list(
     name = "full_parse",
     default_enabled = TRUE,
-    config_field = "full_parse_enabled"
+    config_field = "full_parse_enabled",
+    max_field = "full_parse_max"
   ),
   list(
     name = "puny_encode",
     default_enabled = TRUE,
-    config_field = "puny_encode_enabled"
+    config_field = "puny_encode_enabled",
+    max_field = NULL
   ),
   list(
     name = "puny_decode",
     default_enabled = TRUE,
-    config_field = "puny_decode_enabled"
+    config_field = "puny_decode_enabled",
+    max_field = NULL
   )
 )
 
@@ -133,18 +141,28 @@ rurl_clear_caches <- function() {
 #' rurl_cache_info()
 rurl_cache_info <- function() {
   data.frame(
-    cache = c("full_parse", "puny_encode", "puny_decode"),
-    entries = c(
-      length(.rurl_cache$full_parse),
-      length(.rurl_cache$puny_encode),
-      length(.rurl_cache$puny_decode)
+    cache = vapply(.CACHE_REGISTRY, function(e) e$name, character(1L)),
+    entries = vapply(
+      .CACHE_REGISTRY,
+      function(e) length(.rurl_cache[[e$name]]),
+      integer(1L)
     ),
-    enabled = c(
-      .rurl_config$full_parse_enabled,
-      .rurl_config$puny_encode_enabled,
-      .rurl_config$puny_decode_enabled
+    enabled = vapply(
+      .CACHE_REGISTRY,
+      function(e) get(e$config_field, envir = .rurl_config, inherits = FALSE),
+      logical(1L)
     ),
-    max_entries = c(.rurl_config$full_parse_max, Inf, Inf),
+    max_entries = vapply(
+      .CACHE_REGISTRY,
+      function(e) {
+        if (is.null(e$max_field)) {
+          Inf
+        } else {
+          get(e$max_field, envir = .rurl_config, inherits = FALSE)
+        }
+      },
+      numeric(1L)
+    ),
     stringsAsFactors = FALSE
   )
 }

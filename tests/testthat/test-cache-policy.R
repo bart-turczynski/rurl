@@ -131,5 +131,24 @@ test_that("rurl_cache_config() with no args reports without changing state", {
   reset_caches()
 })
 
+test_that("rurl_cache_info is registry-driven: order, columns, types, max", {
+  reset_caches()
+  info <- rurl_cache_info()
+  # Row order matches the canonical cache registry order.
+  expect_equal(info$cache, c("full_parse", "puny_encode", "puny_decode"))
+  expect_named(info, c("cache", "entries", "enabled", "max_entries"))
+  # Column types are preserved.
+  expect_type(info$cache, "character")
+  expect_type(info$entries, "integer")
+  expect_type(info$enabled, "logical")
+  expect_type(info$max_entries, "double")
+
+  # max_entries reflects the configured full_parse bound; puny caches stay Inf.
+  rurl_cache_config(max_full_parse = 4321)
+  bounded <- rurl_cache_info()
+  expect_equal(bounded$max_entries, c(4321, Inf, Inf))
+  reset_caches()
+})
+
 # Final safety net: make sure default config is restored for later test files.
 reset_caches()
