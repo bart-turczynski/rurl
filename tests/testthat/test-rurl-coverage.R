@@ -168,10 +168,22 @@ test_that(
   "safe_parse_url if_no_subdomain keeps candidate host when domain is unknown",
   {
     testthat::local_mocked_bindings(
-      .psl_registered_domain = function(host, section = "all") NA_character_,
+      .psl_suffix_extract = function(host, section = "all") {
+        data.frame(
+          host = host,
+          subdomain = NA_character_,
+          domain = NA_character_,
+          suffix = NA_character_,
+          registrable_domain = NA_character_,
+          stringsAsFactors = FALSE
+        )
+      },
       .env = asNamespace("rurl")
     )
 
+    # The full-parse cache may already hold "http://example.com" from an earlier
+    # test (resolved with the real PSL); clear it so the mock is exercised.
+    rurl_clear_caches()
     res <- safe_parse_url(
       "http://example.com",
       www_handling = "if_no_subdomain"

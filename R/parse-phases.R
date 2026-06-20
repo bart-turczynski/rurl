@@ -280,20 +280,24 @@
         }
       }
 
-      # The www heuristic always uses the all-section registered domain to
-      # decide whether the host is itself an apex (eTLD+1) and thus eligible to
-      # gain a leading "www.". pslr canonicalizes the host internally.
-      temp_derived_domain_unicode <- .psl_registered_domain(
-        host_for_domain_check, "all"
-      )
+      # The www heuristic always uses the all-section decomposition to decide
+      # whether the host is itself an apex (eTLD+1) and thus eligible to gain a
+      # leading "www.". The STRUCTURAL decision (is there a subdomain? is there
+      # a registrable domain at all?) is made on pslr's canonical decomposition
+      # so an A-label host and its Unicode equivalent take the same branch;
+      # only the *decision* is canonicalized, the emitted host below still uses
+      # the input spelling (candidate_host).
+      decomp <- .psl_suffix_extract(host_for_domain_check, "all")
+      derived_domain <- decomp$registrable_domain[[1]]
+      derived_subdomain <- decomp$subdomain[[1]]
 
-      no_derived_domain <- is.na(temp_derived_domain_unicode) ||
-        temp_derived_domain_unicode == ""
+      no_derived_domain <- is.na(derived_domain) || derived_domain == ""
       if (no_derived_domain) {
         final_host <- candidate_host
       } else {
-        host_lc <- stringi::stri_trans_tolower(host_for_domain_check)
-        host_equals_domain <- host_lc == temp_derived_domain_unicode
+        # Apex iff the canonical decomposition has no subdomain labels.
+        host_equals_domain <- !is.na(derived_subdomain) &&
+          derived_subdomain == ""
         if (host_equals_domain) {
           candidate_has_www <- stringi::stri_startswith_fixed(
             stringi::stri_trans_tolower(candidate_host), "www."
@@ -340,7 +344,6 @@
     final_host != ""
   if (can_trim_subdomains) {
     current_host_lower <- stringi::stri_trans_tolower(final_host)
-    domain_lower <- stringi::stri_trans_tolower(domain)
     www_prefix_str <- "www."
 
     has_www_prefix <- stringi::stri_startswith_fixed(
@@ -354,46 +357,57 @@
       )
     }
 
-    host_part_to_analyze_lower <- stringi::stri_trans_tolower(
-      host_part_to_analyze
-    )
+    # STRUCTURAL decision on the canonical decomposition: how many subdomain
+    # labels does this host have, and where is the registrable boundary? Doing
+    # this on pslr's canonical spelling makes an A-label host and its Unicode
+    # equivalent yield the same label counts (and thus the same trim), instead
+    # of depending on a raw-host string-compare that only matches one spelling.
+    decomp <- .psl_suffix_extract(host_part_to_analyze, "all")
+    derived_subdomain <- decomp$subdomain[[1]]
 
-    if (host_part_to_analyze_lower == domain_lower) {
-      # no-op
-    } else if (stringi::stri_endswith_fixed(
-      host_part_to_analyze_lower, paste0(".", domain_lower)
-    )) {
-      subdomain_component_string <- stringi::stri_sub(
-        host_part_to_analyze,
-        1,
-        stringi::stri_length(host_part_to_analyze) -
-          stringi::stri_length(domain_lower) - 1
-      )
+    # Number of subdomain labels per the canonical decomposition (""=none). We
+    # trim by *label count* and reconstruct from the raw host's OWN labels so
+    # the input's A-label-vs-Unicode spelling is preserved in the output; only
+    # the structural decision (how many labels to drop) is canonicalized.
+    has_subdomain <- !is.na(derived_subdomain) && nzchar(derived_subdomain)
+    if (has_subdomain) {
+      num_sub_labels <- length(strsplit(derived_subdomain, "\\.")[[1]])
+      raw_labels <- strsplit(host_part_to_analyze, "\\.")[[1]]
 
-      sub_labels <- strsplit(subdomain_component_string, "\\.")[[1]]
-
-      kept_sub_labels_string <- ""
-      if (subdomain_levels_to_keep > 0) {
-        num_sub_labels_to_keep <- min(
-          length(sub_labels), subdomain_levels_to_keep
+      # Defensive: only act when the raw host actually has at least as many
+      # labels as the subdomain reported (it always should, since both describe
+      # the same logical host); otherwise leave the host untouched.
+      if (length(raw_labels) > num_sub_labels) {
+        # The registrable-domain portion is lowercased (matching the historical
+        # reconstruction, which built from the lowercased registered domain),
+        # while the kept subdomain labels preserve the input's case/spelling.
+        # We lowercase the raw registrable labels rather than substituting
+        # pslr's Unicode domain so that an A-label input keeps its A-label
+        # spelling and a Unicode input keeps its Unicode spelling.
+        registrable_labels <- stringi::stri_trans_tolower(
+          utils::tail(raw_labels, length(raw_labels) - num_sub_labels)
         )
-        if (num_sub_labels_to_keep > 0) {
-          actual_kept_labels <- tail(sub_labels, num_sub_labels_to_keep)
-          kept_sub_labels_string <- paste(actual_kept_labels, collapse = ".")
+        sub_labels <- utils::head(raw_labels, num_sub_labels)
+
+        kept_sub_labels <- character(0)
+        if (subdomain_levels_to_keep > 0) {
+          num_sub_labels_to_keep <- min(
+            length(sub_labels), subdomain_levels_to_keep
+          )
+          if (num_sub_labels_to_keep > 0) {
+            kept_sub_labels <- utils::tail(sub_labels, num_sub_labels_to_keep)
+          }
         }
-      }
 
-      reconstructed_host_part <- domain_lower
-      if (nzchar(kept_sub_labels_string)) {
-        reconstructed_host_part <- paste0(
-          kept_sub_labels_string, ".", domain_lower
+        reconstructed_host_part <- paste(
+          c(kept_sub_labels, registrable_labels), collapse = "."
         )
-      }
 
-      if (has_www_prefix) {
-        final_host <- paste0(www_prefix_str, reconstructed_host_part)
-      } else {
-        final_host <- reconstructed_host_part
+        if (has_www_prefix) {
+          final_host <- paste0(www_prefix_str, reconstructed_host_part)
+        } else {
+          final_host <- reconstructed_host_part
+        }
       }
     }
   }
