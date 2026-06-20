@@ -150,13 +150,10 @@ canonical_join <- function(data_A, data_B,
   status_A <- parsed_A$parse_status %||% rep("error", nrow(data_A))
   status_B <- parsed_B$parse_status %||% rep("error", nrow(data_B))
 
-  status_pattern <- if (join_parse_status == "ok_or_warning") {
-    "^(ok|warning)"
-  } else {
-    "^ok"
-  }
-  ok_A <- !is.na(key_A) & nzchar(key_A) & grepl(status_pattern, status_A)
-  ok_B <- !is.na(key_B) & nzchar(key_B) & grepl(status_pattern, status_B)
+  ok_A <- !is.na(key_A) & nzchar(key_A) &
+    .is_joinable_status(status_A, join_parse_status)
+  ok_B <- !is.na(key_B) & nzchar(key_B) &
+    .is_joinable_status(status_B, join_parse_status)
 
   if (on_parse_error == "error" && (any(!ok_A) || any(!ok_B))) {
     stop("canonical_join() encountered URL parsing errors.", call. = FALSE)
