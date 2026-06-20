@@ -7,7 +7,11 @@
 get_path(
   url,
   protocol_handling = "keep",
-  case_handling = c("lower_host", "keep", "lower", "upper")
+  case_handling = c("lower_host", "keep", "lower", "upper"),
+  trailing_slash_handling = c("none", "keep", "strip"),
+  index_page_handling = c("keep", "strip"),
+  path_normalization = c("none", "collapse_slashes", "dot_segments", "both"),
+  path_encoding = c("keep", "encode", "decode")
 )
 }
 \arguments{
@@ -29,6 +33,44 @@ protocols. Defaults to "keep".
 \item{case_handling}{How to handle casing of the returned path. Defaults to
 "lower_host", which preserves the path's original casing (paths are
 case-sensitive per RFC 3986 §6.2.2.1). Use "lower"/"upper" to force a case.}
+
+\item{trailing_slash_handling}{A character string specifying how to handle
+trailing slashes in the path component of the cleaned URL. Defaults to
+"none".
+\itemize{
+  \item{"none": (Default) No specific handling is applied. Path remains as
+  is after initial parsing.}
+  \item{"keep": Ensures a trailing slash. If a path exists and doesn't end
+  with one, it's added. If path is just "/", it's kept.}
+  \item{"strip": Removes a trailing slash if present, unless the path is
+  solely "/".}
+}}
+
+\item{index_page_handling}{A character string specifying how to handle
+index/default pages. Defaults to "keep".
+  \itemize{
+    \item{"keep": (Default) Leave index/default page segments untouched.}
+    \item{"strip": Remove a trailing index.* or default.* segment
+    (case-insensitive).}
+  }}
+
+\item{path_normalization}{How to normalize path structure. Defaults to
+"none".
+  \itemize{
+    \item{"none": (Default) No normalization.}
+    \item{"collapse_slashes": Collapse duplicate slashes in the path.}
+    \item{"dot_segments": Resolve . and .. segments per RFC 3986.}
+    \item{"both": Apply both collapse_slashes and dot_segments.}
+  }}
+
+\item{path_encoding}{How to handle percent-encoding in the path for
+`clean_url`. Defaults to "keep".
+  \itemize{
+    \item{"keep": Leave the path percent-encoding untouched.}
+    \item{"encode": Normalize by decoding first, then percent-encoding each
+    segment (slashes preserved).}
+    \item{"decode": Percent-decode UTF-8 sequences in the path.}
+  }}
 }
 \value{
 A character vector of URL paths.

@@ -4,7 +4,7 @@
 \alias{get_scheme}
 \title{Get URL schemes}
 \usage{
-get_scheme(url, protocol_handling = "keep")
+get_scheme(url, protocol_handling = "keep", scheme_relative_handling = "keep")
 }
 \arguments{
 \item{url}{A character vector of URLs.}
@@ -21,6 +21,16 @@ protocols. Defaults to "keep".
   \item{"http": The scheme is forced to be "http".}
   \item{"https": The scheme is forced to be "https".}
 }}
+
+\item{scheme_relative_handling}{How to handle URLs starting with "//".
+Defaults to "keep".
+  \itemize{
+    \item{"keep": Parse using http but return scheme as NA and set status to
+    "ok-scheme-relative".}
+    \item{"http": Assume http for parsing and output.}
+    \item{"https": Assume https for parsing and output.}
+    \item{"error": Treat scheme-relative URLs as invalid.}
+  }}
 }
 \value{
 A character vector of URL schemes.

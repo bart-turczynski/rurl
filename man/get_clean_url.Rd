@@ -8,6 +8,7 @@ get_clean_url(
   url,
   protocol_handling = "keep",
   www_handling = "none",
+  source = c("all", "private", "icann"),
   case_handling = "lower_host",
   trailing_slash_handling = "none",
   index_page_handling = "keep",
@@ -51,6 +52,10 @@ and "www[number]" prefixes in the host. Defaults to "none".
   "sub.example.com" or the normalized "www.sub.example.com"), the host is
   not further altered. An empty input host remains empty.}
 }}
+
+\item{source}{Which PSL source to use: "all", "private", or "icann".
+Subdomain trimming depends on which section is consulted, so pass
+\code{source = "icann"} to exclude private suffixes (e.g. github.io).}
 
 \item{case_handling}{A character string specifying how to handle the case of
                    the cleaned URL. Defaults to "lower_host", the

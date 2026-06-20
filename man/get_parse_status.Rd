@@ -8,7 +8,8 @@ get_parse_status(
   url,
   protocol_handling = "keep",
   www_handling = "none",
-  subdomain_levels_to_keep = NULL
+  subdomain_levels_to_keep = NULL,
+  source = c("all", "private", "icann")
 )
 }
 \arguments{
@@ -62,6 +63,11 @@ levels of subdomains are kept,
          'www.three.two.one.example.com' (post www_handling) becomes
          'www.one.example.com'.}
   }}
+
+\item{source}{Which PSL source to use: "all", "private", or "icann".
+Warning statuses such as \code{warning-no-tld}, \code{warning-invalid-tld},
+and \code{warning-public-suffix} depend on which PSL section is consulted,
+so pass \code{source = "icann"} to use only ICANN-managed TLDs.}
 }
 \value{
 A character vector with the parse status of each URL.
@@ -74,4 +80,5 @@ get_parse_status(
   c("http://example.com", "ftp://example.com", "mailto:user@example.com")
 )
 get_parse_status(c("http://example.com", "not-a-url"))
+get_parse_status("http://example.com", source = "icann")
 }
