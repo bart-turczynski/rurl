@@ -16,7 +16,6 @@
 ^\.fp$
 ^FP_CLAUDE\.md$
 ^lib$
-^memoization\.md$
 ^RELEASE_NOTES_v1\.md$
 ^report\.html$
 ^LOCAL_WORKFLOW_NOTES\.md$

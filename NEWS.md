@@ -34,6 +34,12 @@ existing calls are unaffected.
   `.is_warning_status()`, `.is_joinable_status()`).
 - Cache touchpoints in `R/zzz.R` now driven from a single `.CACHE_REGISTRY`
   instead of repeating cache names by hand.
+- Cleared the `lintr`/`goodpractice` findings across `R/` and the tests
+  (e.g. `fixed = TRUE` dot splits, condition-message construction, dropped
+  unnecessary lambdas) with no behavior change.
+- `.lintr` now mirrors `goodpractice`'s linter set, so a local
+  `lintr::lint_package()` matches the `goodpractice` report; intentional
+  test-idiom deviations are documented in the config header.
 
 ## rurl 1.3.0
 
