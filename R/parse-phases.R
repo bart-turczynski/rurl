@@ -463,36 +463,36 @@
                                  original_has_allowed_scheme,
                                  is_scheme_relative,
                                  scheme_relative_handling) {
-  parse_status <- "error"
+  parse_status <- .STATUS_ERROR
 
   if (!is.null(parsed_curl)) {
     host_is_present <- !is.na(final_host) && final_host != ""
 
     if (host_is_present) {
       if (is_ip_host) {
-        parse_status <- "ok"
+        parse_status <- .STATUS_OK
       } else {
         host_has_dot <- stringi::stri_detect_fixed(final_host, ".")
         if (is.na(host_has_dot)) host_has_dot <- FALSE
 
         if (!host_has_dot) {
-          parse_status <- "warning-no-tld"
+          parse_status <- .STATUS_WARN_NO_TLD
         } else if (is.na(tld) || !nzchar(tld)) {
-          parse_status <- "warning-invalid-tld"
+          parse_status <- .STATUS_WARN_INVALID_TLD
         } else if (is.na(domain) || !nzchar(domain)) {
-          parse_status <- "warning-public-suffix"
+          parse_status <- .STATUS_WARN_PUBLIC_SUFFIX
         } else {
-          parse_status <- "ok"
+          parse_status <- .STATUS_OK
         }
       }
 
-      ok_with_scheme <- parse_status == "ok" &&
+      ok_with_scheme <- parse_status == .STATUS_OK &&
         protocol_handling != "strip" &&
         !is.na(final_scheme)
       if (ok_with_scheme) {
         current_scheme_lower <- stringi::stri_trans_tolower(final_scheme)
         if (current_scheme_lower %in% c("ftp", "ftps")) {
-          parse_status <- "ok-ftp"
+          parse_status <- .STATUS_OK_FTP
         }
       }
     }
@@ -503,14 +503,14 @@
     looks_like_protocol &&
     !original_has_allowed_scheme
   if (is.null(parsed_curl) || unsupported_scheme_kept) {
-    parse_status <- "error"
+    parse_status <- .STATUS_ERROR
   }
 
   kept_scheme_relative <- is_scheme_relative &&
     scheme_relative_handling == "keep" &&
-    parse_status == "ok"
+    parse_status == .STATUS_OK
   if (kept_scheme_relative) {
-    parse_status <- "ok-scheme-relative"
+    parse_status <- .STATUS_OK_SCHEME_REL
   }
 
   parse_status
