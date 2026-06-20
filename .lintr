@@ -1,15 +1,87 @@
+# This config is intentionally aligned with the linter set that
+# `goodpractice::gp()` runs (goodpractice:::linters_to_lint()), so a local
+# `lintr::lint_package()` surfaces the same findings as the goodpractice report
+# used in review/CI. Regenerate this list after a goodpractice upgrade.
+#
+# Documented deviations from the goodpractice set (test-idiom / public-API
+# reasons):
+#   * object_name_linter / object_usage_linter: not part of the goodpractice
+#     set and deliberately NOT added. canonical_join()'s data_A/col_A/suffix_A/
+#     name_A (and _B) parameters are published API whose mixed-case suffixes
+#     would trip object_name_linter, as would the ._-prefixed internal helpers
+#     and testthat DSL; object_usage_linter misreads the expect_* DSL.
+#   * expect_identical_linter: off. The suite relies on expect_equal()'s numeric
+#     tolerance (e.g. expect_equal(nrow(x), 2) compares integer vs double) and
+#     its string-encoding normalization for IDN output, both of which
+#     identical() rejects. A wholesale swap would mean retyping every literal
+#     for no behavioral gain.
+#   * implicit_assignment_linter: off. Tests use the standard
+#     `expect_warning(res <- f(), "msg")` idiom to capture both the warning and
+#     the return value (expect_warning() returns the condition, not the value).
+#   * library_require_linter: off. tests/testthat.R and the vignette setup chunk
+#     legitimately call library().
+#   * undesirable_operator_linter: configured to keep flagging `<<-`/`->>` but
+#     allow `:::`, which tests use to reach internal (unexported) functions.
 linters: linters_with_defaults(
-    # Cucumber step files and testthat helpers use a DSL (when/then/context,
-    # expect_*) that the static usage linter misreads as undefined globals.
-    # Disable it here so the scaffold lints clean out of the box; re-enable it
-    # once the package has real code if you want the extra coverage.
-    object_usage_linter = NULL,
-    # API stability: the exported canonical_join() takes data_A/data_B,
-    # col_A/col_B, suffix_A/suffix_B, name_A/name_B parameters whose mixed-case
-    # _A/_B suffixes are part of its published signature. Renaming them to
-    # satisfy snake_case would be a breaking change to the public API, so the
-    # name linter stays off (it would also flag the deliberate ._-prefixed
-    # internal helpers and the test DSL variables).
-    object_name_linter = NULL
+    defaults = list(),
+    undesirable_operator_linter = lintr::undesirable_operator_linter(
+      op = lintr::default_undesirable_operators[c("->>", "<<-")]
+    ),
+    assignment_linter = lintr::assignment_linter(),
+    line_length_linter = lintr::line_length_linter(80),
+    package_hooks_linter = lintr::package_hooks_linter(),
+    semicolon_linter = lintr::semicolon_linter(allow_compound = TRUE),
+    attach_detach_linter = lintr::undesirable_function_linter(fun = lintr::default_undesirable_functions[c("attach", "detach")]),
+    setwd_linter = lintr::undesirable_function_linter(fun = lintr::default_undesirable_functions["setwd"]),
+    sapply_linter = lintr::undesirable_function_linter(fun = lintr::default_undesirable_functions["sapply"]),
+    installed_packages_linter = lintr::undesirable_function_linter(fun = c(installed.packages = "it can be very slow; use find.package() or system.file() instead.")),
+    seq_linter = lintr::seq_linter(),
+    any_duplicated_linter = lintr::any_duplicated_linter(),
+    any_is_na_linter = lintr::any_is_na_linter(),
+    class_equals_linter = lintr::class_equals_linter(),
+    condition_message_linter = lintr::condition_message_linter(),
+    duplicate_argument_linter = lintr::duplicate_argument_linter(),
+    equals_na_linter = lintr::equals_na_linter(),
+    fixed_regex_linter = lintr::fixed_regex_linter(),
+    for_loop_index_linter = lintr::for_loop_index_linter(),
+    length_test_linter = lintr::length_test_linter(),
+    matrix_apply_linter = lintr::matrix_apply_linter(),
+    missing_argument_linter = lintr::missing_argument_linter(),
+    nrow_subset_linter = lintr::nrow_subset_linter(),
+    redundant_equals_linter = lintr::redundant_equals_linter(),
+    redundant_ifelse_linter = lintr::redundant_ifelse_linter(),
+    regex_subset_linter = lintr::regex_subset_linter(),
+    sort_linter = lintr::sort_linter(),
+    system_file_linter = lintr::system_file_linter(),
+    terminal_close_linter = lintr::terminal_close_linter(),
+    which_grepl_linter = lintr::which_grepl_linter(),
+    boolean_arithmetic_linter = lintr::boolean_arithmetic_linter(),
+    comparison_negation_linter = lintr::comparison_negation_linter(),
+    consecutive_assertion_linter = lintr::consecutive_assertion_linter(),
+    if_not_else_linter = lintr::if_not_else_linter(),
+    ifelse_censor_linter = lintr::ifelse_censor_linter(),
+    inner_combine_linter = lintr::inner_combine_linter(),
+    length_levels_linter = lintr::length_levels_linter(),
+    literal_coercion_linter = lintr::literal_coercion_linter(),
+    nested_ifelse_linter = lintr::nested_ifelse_linter(),
+    nested_pipe_linter = lintr::nested_pipe_linter(),
+    numeric_leading_zero_linter = lintr::numeric_leading_zero_linter(),
+    outer_negation_linter = lintr::outer_negation_linter(),
+    paste_linter = lintr::paste_linter(),
+    scalar_in_linter = lintr::scalar_in_linter(),
+    strings_as_factors_linter = lintr::strings_as_factors_linter(),
+    unnecessary_concatenation_linter = lintr::unnecessary_concatenation_linter(),
+    unnecessary_lambda_linter = lintr::unnecessary_lambda_linter(),
+    unreachable_code_linter = lintr::unreachable_code_linter(),
+    conjunct_test_linter = lintr::conjunct_test_linter(),
+    expect_comparison_linter = lintr::expect_comparison_linter(),
+    expect_length_linter = lintr::expect_length_linter(),
+    expect_named_linter = lintr::expect_named_linter(),
+    expect_not_linter = lintr::expect_not_linter(),
+    expect_null_linter = lintr::expect_null_linter(),
+    expect_s3_class_linter = lintr::expect_s3_class_linter(),
+    expect_s4_class_linter = lintr::expect_s4_class_linter(),
+    expect_true_false_linter = lintr::expect_true_false_linter(),
+    expect_type_linter = lintr::expect_type_linter()
   )
 encoding: "UTF-8"
