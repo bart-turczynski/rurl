@@ -10,9 +10,22 @@
   warning statuses can be queried under a specific PSL section.
 - `get_clean_url()` and `get_host()` gain `source` (mapped to `tld_source`).
 - `get_host()` gains `host_encoding`.
+- `get_domain()`, `get_tld()`, and `get_subdomain()` gain `host_encoding`,
+  mirroring `get_host()`.
 
 All new arguments default to the same values as `safe_parse_url()`, so
 existing calls are unaffected.
+
+### Behavior change
+
+- The domain-family accessors (`get_domain()`, `get_tld()`,
+  `get_subdomain()`) now follow `host_encoding` (default `"keep"`) instead
+  of always returning Unicode. Under `"keep"` the emitted domain/TLD/
+  subdomain mirrors the input host's own spelling: an A-label (`xn--…`)
+  host yields A-label parts, a Unicode host yields Unicode parts. Pass
+  `host_encoding = "unicode"` for the previous always-decoded output, or
+  `"idna"` to force A-labels. This makes the domain accessors consistent
+  with `get_host()`, whose `host_encoding` already defaulted to `"keep"`.
 
 ### Internal
 

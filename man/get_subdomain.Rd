@@ -10,7 +10,8 @@ get_subdomain(
   www_handling = "none",
   source = c("all", "private", "icann"),
   include_www = FALSE,
-  format = c("string", "labels")
+  format = c("string", "labels"),
+  host_encoding = c("keep", "idna", "unicode")
 )
 }
 \arguments{
@@ -54,6 +55,15 @@ www/www[0-9]* label only when it is the sole subdomain label.}
 
 \item{format}{Return format: "string" (default) or "labels" for a character
 vector of labels.}
+
+\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+"keep".
+  \itemize{
+    \item{"keep": Leave host as parsed by curl (may preserve original case).}
+    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+    cleaned URL.}
+    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+  }}
 }
 \value{
 A character vector (format="string") or list of label vectors

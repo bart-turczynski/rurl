@@ -58,10 +58,29 @@ test_that("source selection maps to the pslr section", {
   )
 })
 
-test_that("output is Unicode by default even though pslr defaults to ASCII", {
-  expect_identical(unname(get_tld("https://example.xn--p1ai/x")), "рф")
+test_that("domain/TLD spelling follows host_encoding (default keep)", {
+  # keep (default) mirrors the input spelling: an A-label host stays A-label.
   expect_identical(
-    unname(get_domain("https://shop.example.xn--p1ai/x")), "example.рф"
+    unname(get_tld("https://example.xn--p1ai/x")), "xn--p1ai"
+  )
+  expect_identical(
+    unname(get_domain("https://shop.example.xn--p1ai/x")), "example.xn--p1ai"
+  )
+  # unicode decodes; idna forces A-labels.
+  expect_identical(
+    unname(get_tld("https://example.xn--p1ai/x", host_encoding = "unicode")),
+    "рф"
+  )
+  expect_identical(
+    unname(get_domain(
+      "https://shop.example.xn--p1ai/x", host_encoding = "unicode"
+    )),
+    "example.рф"
+  )
+  # A Unicode host keeps Unicode under keep, and idna re-encodes it.
+  expect_identical(unname(get_tld("https://example.рф/x")), "рф")
+  expect_identical(
+    unname(get_tld("https://example.рф/x", host_encoding = "idna")), "xn--p1ai"
   )
 })
 

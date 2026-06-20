@@ -104,8 +104,13 @@
 # own source selection and output contract onto pslr's query API:
 #
 #   * source "all" / "icann" / "private"  -> pslr `section` of the same name.
-#   * output is always Unicode (`output = "unicode"`), preserving rurl's
+#   * output defaults to Unicode (`output = "unicode"`), preserving rurl's
 #     historical decoded-IDN output even though pslr defaults to ASCII A-labels.
+#     Structural/decision callers (the www and subdomain-trim heuristics) keep
+#     this default so an A-label host and its Unicode form take the same branch.
+#     The emitted-value path (.derive_domain_tld -> parsed$domain / $tld) instead
+#     selects the spelling from host_encoding: "unicode", "ascii" ("idna"), or
+#     the input's own spelling ("keep", the default; see .host_is_ace()).
 #   * `unknown = "na"` so a host under an unknown TLD yields NA, matching rurl's
 #     long-standing "no PSL match => NA" behavior rather than pslr's default
 #     implicit `*` rule (which treats any unknown single label as a suffix).
@@ -116,23 +121,39 @@
 # lower/mixed case, or A-label); pslr canonicalizes via punycoder internally, so
 # callers no longer need to NFC-normalize or Punycode-encode the host first.
 
-# Registered (eTLD+1) domain for a host, in Unicode. Vectorized.
-.psl_registered_domain <- function(host, section = "all") {
+# TRUE if any label of `host` is an ACE label (the "xn--" A-label prefix). Used
+# by the "keep" host_encoding to decide whether a derived domain/TLD should
+# mirror the input's punycode spelling (ASCII A-labels) rather than be decoded
+# to Unicode. Scalar input.
+.host_is_ace <- function(host) {
+  if (length(host) != 1L || is.na(host) || !nzchar(host)) {
+    return(FALSE)
+  }
+  grepl("(^|\\.)xn--", host, ignore.case = TRUE)
+}
+
+# Registered (eTLD+1) domain for a host. Vectorized. `output` selects the
+# spelling: "unicode" (default, preserving rurl's historical decoded-IDN output)
+# or "ascii" (lowercase A-labels). The structural callers that only need a
+# canonical decomposition keep the Unicode default; the emitted-value path
+# (.derive_domain_tld) overrides it to honor host_encoding.
+.psl_registered_domain <- function(host, section = "all", output = "unicode") {
   pslr::registrable_domain(
     host,
     section = section,
-    output = "unicode",
+    output = output,
     unknown = "na",
     invalid = "na"
   )
 }
 
-# Public suffix (TLD) for a host, in Unicode. Vectorized.
-.psl_public_suffix <- function(host, section = "all") {
+# Public suffix (TLD) for a host. Vectorized. `output` as in
+# .psl_registered_domain().
+.psl_public_suffix <- function(host, section = "all", output = "unicode") {
   pslr::public_suffix(
     host,
     section = section,
-    output = "unicode",
+    output = output,
     unknown = "na",
     invalid = "na"
   )

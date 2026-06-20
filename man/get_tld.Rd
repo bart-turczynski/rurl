@@ -4,12 +4,25 @@
 \alias{get_tld}
 \title{Extract the top-level domain (TLD) from a URL}
 \usage{
-get_tld(url, source = c("all", "private", "icann"))
+get_tld(
+  url,
+  source = c("all", "private", "icann"),
+  host_encoding = c("keep", "idna", "unicode")
+)
 }
 \arguments{
 \item{url}{A character vector of URLs.}
 
 \item{source}{Which TLD source to use: "all", "icann", or "private".}
+
+\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+"keep".
+  \itemize{
+    \item{"keep": Leave host as parsed by curl (may preserve original case).}
+    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+    cleaned URL.}
+    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+  }}
 }
 \value{
 A character vector of TLDs.

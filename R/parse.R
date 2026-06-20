@@ -536,7 +536,9 @@ safe_parse_urls <- function(url,
   final_host <- .apply_www_policy(raw_host, www_handling, is_ip_host)
 
   # Phase 7: registered-domain and TLD derivation
-  domain_tld <- .derive_domain_tld(final_host, is_ip_host, tld_source)
+  domain_tld <- .derive_domain_tld(
+    final_host, is_ip_host, tld_source, host_encoding
+  )
   domain <- domain_tld$domain
   tld <- domain_tld$tld
 

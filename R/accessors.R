@@ -184,8 +184,10 @@ get_domain <- function(url,
                        protocol_handling = "keep",
                        www_handling = "none",
                        subdomain_levels_to_keep = NULL,
-                       source = c("all", "private", "icann")) {
+                       source = c("all", "private", "icann"),
+                       host_encoding = c("keep", "idna", "unicode")) {
   source <- match.arg(source)
+  host_encoding <- match.arg(host_encoding)
   # parsed$domain is the registered domain for the requested section (pslr
   # resolves it consistently with the TLD), so every source reads one field.
   .extract_from_urls(url, "domain",
@@ -193,7 +195,8 @@ get_domain <- function(url,
     www_handling = www_handling,
     tld_source = source,
     case_handling = "lower",
-    subdomain_levels_to_keep = subdomain_levels_to_keep
+    subdomain_levels_to_keep = subdomain_levels_to_keep,
+    host_encoding = host_encoding
   )
 }
 
@@ -485,9 +488,11 @@ get_subdomain <- function(url,
                           www_handling = "none",
                           source = c("all", "private", "icann"),
                           include_www = FALSE,
-                          format = c("string", "labels")) {
+                          format = c("string", "labels"),
+                          host_encoding = c("keep", "idna", "unicode")) {
   source <- match.arg(source)
   format <- match.arg(format)
+  host_encoding <- match.arg(host_encoding)
 
   if (!is.character(url)) {
     stop(
@@ -503,14 +508,17 @@ get_subdomain <- function(url,
       tld_source = source,
       case_handling = "lower",
       trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
+      subdomain_levels_to_keep = NULL,
+      host_encoding = host_encoding
     )
     if (is.null(parsed) || isTRUE(parsed$is_ip_host)) {
       return(character(0))
     }
 
-    host_unicode <- .punycode_to_unicode(parsed$host %||% NA_character_)
-    if (is.na(host_unicode) || !nzchar(host_unicode)) {
+    # Both host and domain honor host_encoding, so they share one spelling and
+    # the suffix-strip below matches directly (no forced Unicode decode).
+    host_str <- parsed$host %||% NA_character_
+    if (is.na(host_str) || !nzchar(host_str)) {
       return(character(0))
     }
 
@@ -521,7 +529,7 @@ get_subdomain <- function(url,
       return(character(0))
     }
 
-    host_lc <- stringi::stri_trans_tolower(host_unicode)
+    host_lc <- stringi::stri_trans_tolower(host_str)
     domain_lc <- stringi::stri_trans_tolower(domain_val)
     suffix <- paste0(".", domain_lc)
     if (!stringi::stri_endswith_fixed(host_lc, suffix)) {
@@ -566,14 +574,18 @@ get_subdomain <- function(url,
 #'
 #' @param url A character vector of URLs.
 #' @param source Which TLD source to use: "all", "icann", or "private".
+#' @inheritParams safe_parse_url
 #' @return A character vector of TLDs.
 #' @export
 #' @examples
 #' get_tld("example.com")
-get_tld <- function(url, source = c("all", "private", "icann")) {
+get_tld <- function(url, source = c("all", "private", "icann"),
+                    host_encoding = c("keep", "idna", "unicode")) {
   source <- match.arg(source)
+  host_encoding <- match.arg(host_encoding)
   .extract_from_urls(url, "tld",
     tld_source = source,
-    case_handling = "lower"
+    case_handling = "lower",
+    host_encoding = host_encoding
   )
 }
