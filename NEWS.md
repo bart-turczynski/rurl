@@ -1,3 +1,27 @@
+## rurl 1.4.0
+
+### Accessor improvements
+
+- `get_path()` gains `path_normalization`, `index_page_handling`,
+  `trailing_slash_handling`, and `path_encoding` arguments, matching
+  the corresponding options of `safe_parse_url()`.
+- `get_scheme()` gains `scheme_relative_handling`.
+- `get_parse_status()` gains `source` (mapped to `tld_source`) so
+  warning statuses can be queried under a specific PSL section.
+- `get_clean_url()` and `get_host()` gain `source` (mapped to `tld_source`).
+- `get_host()` gains `host_encoding`.
+
+All new arguments default to the same values as `safe_parse_url()`, so
+existing calls are unaffected.
+
+### Internal
+
+- Parse-status string literals replaced by named constants
+  (`R/status-constants.R`) and predicates (`.is_ok_status()`,
+  `.is_warning_status()`, `.is_joinable_status()`).
+- Cache touchpoints in `R/zzz.R` now driven from a single `.CACHE_REGISTRY`
+  instead of repeating cache names by hand.
+
 ## rurl 1.3.0
 
 ### Dependencies

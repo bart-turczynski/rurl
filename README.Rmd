@@ -180,30 +180,25 @@ canonical_join(
 vectors. Inspect, clear, and configure the caches:
 
 ```r
-rurl_cache_info()                       # entries / enabled / max per cache
-rurl_clear_caches()                     # free memory in a long-running session
-rurl_cache_config(max_full_parse = 1e5) # bound the full-parse cache
-rurl_cache_config(domain = FALSE)       # disable a cache entirely
+rurl_cache_info()                          # entries / enabled / max per cache
+rurl_clear_caches()                        # free memory in a long-running session
+rurl_cache_config(max_full_parse = 1e5)    # bound the full-parse cache
+rurl_cache_config(puny_encode = FALSE)     # disable a cache entirely
 ```
 
-The `full_parse` cache is unbounded by default (`max_full_parse = Inf`); set a
-bound to cap its peak memory. The `domain` and `tld` caches grow with the
-number of unique hosts and can be disabled for workloads with very many of
-them.
+`rurl_cache_config()` covers three caches: `full_parse`, `puny_encode`, and
+`puny_decode`. The `full_parse` cache is unbounded by default
+(`max_full_parse = Inf`); set a bound to cap its peak memory. The
+`puny_encode` and `puny_decode` caches are unbounded by design and can be
+disabled for workloads with very many unique hosts.
 
-## Public Suffix List Data
+## Public Suffix List
 
-`rurl` ships with a processed copy of the
-[Public Suffix List (PSL)](https://publicsuffix.org/) and never downloads it at
-runtime.
-
-To refresh it:
-
-```r
-source("data-raw/update_psl.R")
-```
-
-This regenerates internal data used for domain and TLD extraction.
+Domain and TLD extraction is delegated to the
+[`pslr`](https://github.com/bart-turczynski/pslr) package, which owns the
+Public Suffix List and its refresh cycle. `rurl` ships no embedded copy of the
+list. To update the PSL, call `pslr::psl_refresh()` (see the `pslr`
+documentation for details).
 
 ## License
 
