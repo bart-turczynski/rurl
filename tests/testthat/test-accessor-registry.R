@@ -219,10 +219,7 @@
     "scheme_relative_handling does not affect the host component"
   ),
   .reg_exposed("get_host", "subdomain_levels_to_keep"),
-  .reg_gap(
-    "get_host", "host_encoding",
-    fill_slice = "RURL-lipzdisu"
-  ),
+  .reg_exposed("get_host", "host_encoding"),
   .reg_omitted(
     "get_host", "path_encoding",
     "path_encoding does not affect the host component"

@@ -261,15 +261,18 @@ get_host <- function(url,
                      subdomain_levels_to_keep = NULL,
                      case_handling = c(
                        "lower", "keep", "upper", "lower_host"
-                     )) {
+                     ),
+                     host_encoding = c("keep", "idna", "unicode")) {
   source <- match.arg(source)
   case_handling <- match.arg(case_handling)
+  host_encoding <- match.arg(host_encoding)
   .extract_from_urls(url, "host",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = source,
     case_handling = case_handling,
-    subdomain_levels_to_keep = subdomain_levels_to_keep
+    subdomain_levels_to_keep = subdomain_levels_to_keep,
+    host_encoding = host_encoding
   )
 }
 

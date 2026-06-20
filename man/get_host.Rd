@@ -10,7 +10,8 @@ get_host(
   www_handling = "none",
   source = c("all", "private", "icann"),
   subdomain_levels_to_keep = NULL,
-  case_handling = c("lower", "keep", "upper", "lower_host")
+  case_handling = c("lower", "keep", "upper", "lower_host"),
+  host_encoding = c("keep", "idna", "unicode")
 )
 }
 \arguments{
@@ -71,6 +72,15 @@ levels of subdomains are kept,
 
 \item{case_handling}{How to handle casing of the returned host. Defaults to
 "lower".}
+
+\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+"keep".
+  \itemize{
+    \item{"keep": Leave host as parsed by curl (may preserve original case).}
+    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+    cleaned URL.}
+    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+  }}
 }
 \value{
 A character vector of URL hosts.
