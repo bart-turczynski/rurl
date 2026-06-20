@@ -29,7 +29,7 @@ Imports:
     pslr (>= 1.0.1)
 Remotes:
     bart-turczynski/pslr
-URL: https://github.com/bart-turczynski/rurl
+URL: https://CRAN.R-project.org/package=rurl, https://github.com/bart-turczynski/rurl
 BugReports: https://github.com/bart-turczynski/rurl/issues
 Suggests: 
     testthat (>= 3.0.0),
