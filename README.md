@@ -28,8 +28,8 @@ Current package capabilities include:
 # From CRAN
 install.packages("rurl")
 
-# Development version from GitHub
-# install.packages("remotes")
+# Development version (requires pslr from GitHub)
+remotes::install_github("bart-turczynski/pslr")
 remotes::install_github("bart-turczynski/rurl")
 ```
 
@@ -196,7 +196,7 @@ very many of them.
 ## Public Suffix List Data
 
 Domain and TLD extraction is delegated to the
-[`pslr`](https://CRAN.R-project.org/package=pslr) package, which implements the
+[`pslr`](https://github.com/bart-turczynski/pslr) package, which implements the
 [Public Suffix List (PSL)](https://publicsuffix.org/) with correct handling of
 wildcard (`*.`) and exception (`!`) rules and IDN hosts. `rurl` maps its
 `source` argument (`"all"`, `"icann"`, `"private"`) onto the corresponding
