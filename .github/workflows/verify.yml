@@ -55,3 +55,30 @@ jobs:
           args: '"--no-manual"'
           upload-snapshots: true
           build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
+
+  coverage:
+    needs: check
+    runs-on: ubuntu-latest
+    name: Test coverage
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr, any::xml2
+          needs: coverage
+      - name: Measure coverage
+        run: |
+          cov <- covr::package_coverage(quiet = FALSE)
+          covr::to_cobertura(cov)
+        shell: Rscript {0}
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./cobertura.xml
+          plugin: noop
+          disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}

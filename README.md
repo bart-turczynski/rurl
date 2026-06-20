@@ -3,9 +3,15 @@ rurl
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/bart-turczynski/rurl/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/R-CMD-check.yaml)
+[![Verify](https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/rurl)](https://CRAN.R-project.org/package=rurl)
+[![CRAN
+downloads](https://cranlogs.r-pkg.org/badges/rurl)](https://CRAN.R-project.org/package=rurl)
+[![Codecov
+coverage](https://codecov.io/gh/bart-turczynski/rurl/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bart-turczynski/rurl)
+[![Lifecycle:
+stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
@@ -207,4 +213,4 @@ wildcard (`*.`) and exception (`!`) rules and IDN hosts. `rurl` maps its
 
 ## License
 
-MIT © 2025 Bart Turczynski
+MIT © 2026 Bart Turczynski
