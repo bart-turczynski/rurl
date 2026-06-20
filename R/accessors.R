@@ -31,8 +31,11 @@
                                host_encoding = "keep",
                                path_encoding = "keep") {
   if (!is.character(url)) {
-    stop("`url` must be a character vector of URL strings; pass the URL, not a parsed object.",
-         call. = FALSE)
+    stop(
+      "`url` must be a character vector of URL strings; ",
+      "pass the URL, not a parsed object.",
+      call. = FALSE
+    )
   }
   vapply(url, function(u) {
     parsed <- safe_parse_url(u,
@@ -296,8 +299,11 @@ get_query <- function(url,
   format <- match.arg(format)
 
   if (!is.character(url)) {
-    stop("`url` must be a character vector of URL strings; pass the URL, not a parsed object.",
-         call. = FALSE)
+    stop(
+      "`url` must be a character vector of URL strings; ",
+      "pass the URL, not a parsed object.",
+      call. = FALSE
+    )
   }
   if (format == "string") {
     return(.extract_from_urls(url, "query",
@@ -430,8 +436,11 @@ get_subdomain <- function(url,
   format <- match.arg(format)
 
   if (!is.character(url)) {
-    stop("`url` must be a character vector of URL strings; pass the URL, not a parsed object.",
-         call. = FALSE)
+    stop(
+      "`url` must be a character vector of URL strings; ",
+      "pass the URL, not a parsed object.",
+      call. = FALSE
+    )
   }
   results <- lapply(url, function(u) {
     parsed <- safe_parse_url(u,

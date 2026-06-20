@@ -741,7 +741,7 @@ test_that("bracketed IPv6 hosts are detected as IP hosts", {
   expect_true(safe_parse_url("http://192.168.1.1/x")$is_ip_host)
 })
 
-test_that("get_*() accessors error when passed a parsed object instead of a string", {
+test_that("get_*() accessors error if passed a parsed object, not a string", {
   # Use a hand-constructed list so the test does not depend on safe_parse_url()
   # being callable in the current R environment.
   p <- list(
