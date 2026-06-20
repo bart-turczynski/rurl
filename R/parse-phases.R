@@ -245,7 +245,10 @@
         bare_host_part <- if (!is.na(match_res[1, 3])) {
           match_res[1, 3]
         } else {
-          raw_host
+          # Unreachable: detection above already confirmed the "^www[0-9]*\\."
+          # prefix, so group 2 (.*) always matches (possibly empty) and is never
+          # NA. Kept as a defensive fallback.
+          raw_host # nocov
         }
         final_host <- paste0("www.", bare_host_part)
       } else {
@@ -276,7 +279,10 @@
         host_for_domain_check <- if (!is.na(match_res_bare[1, 2])) {
           match_res_bare[1, 2]
         } else {
-          candidate_host
+          # Unreachable: the startsWith("www.") check above guarantees the
+          # "^www\\.(.*)" match, so group 1 (.*) always matches (possibly empty)
+          # and is never NA. Kept as a defensive fallback.
+          candidate_host # nocov
         }
       }
 
