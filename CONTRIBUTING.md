@@ -11,11 +11,13 @@
 ## Constraints
 
 - Do not alter the Punycode helpers (`.normalize_and_punycode()`,
-  `.punycode_to_unicode()`) or their hardcoded TLD workarounds, and preserve the
-  PSL-processing logic in `data-raw/update_psl.R` exactly. See `CLAUDE.md` for
-  the full list of protected areas and the intentional base-R string exceptions.
-- The Public Suffix List data is shipped in `R/sysdata.rda` and never downloaded
-  at runtime. Refresh it only via `source("data-raw/update_psl.R")`.
+  `.punycode_to_unicode()`) or their hardcoded TLD workarounds. See `CLAUDE.md`
+  for the full list of protected areas and the intentional base-R string
+  exceptions.
+- Public Suffix List data, its parsing, and its refresh (`pslr::psl_refresh()`)
+  live in the `pslr` package. `rurl` ships no PSL list of its own and queries
+  `pslr` through the `R/domain.R` seam. See `CLAUDE.md` for the delegation
+  contract.
 
 ## Validation
 

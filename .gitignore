@@ -51,7 +51,7 @@ report.html
 LOCAL_WORKFLOW_NOTES.md
 
 # HTML widget assets (generated; excluded from package build via .Rbuildignore)
-^lib/
+/lib/
 
 # Fiberplane local issue tracking
 .fp/
