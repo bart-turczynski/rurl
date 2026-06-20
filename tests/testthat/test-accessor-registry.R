@@ -13,6 +13,16 @@
 #   3. No registry cell references an option absent from safe_parse_url().
 #   4. "gap" and "by-design-omitted" cells are allowed without checking
 #      the accessor signature.
+#
+# List/vector-shaped variants (RURL-ckbxkluz):
+#   get_query(format = "list") and get_subdomain(format = "labels") return
+#   non-scalar shapes. The format switch only changes the return shape, not
+#   which safe_parse_url() options are threaded, so the scalar cells above
+#   already pin their option symmetry. Two extra assertions cover the format
+#   dimension itself:
+#   5. Each list-shaped accessor exposes a `format` selector that offers the
+#      non-scalar value.
+#   6. Each list-shaped accessor carries full option coverage in the registry.
 
 # ---------------------------------------------------------------------------
 # Registry helpers
@@ -663,6 +673,57 @@ test_that("registry: all accessor x option cells are present", {
         length(matching) == 1L,
         label = paste0(
           "Registry must have exactly one entry for ", acc, " x ", opt
+        )
+      )
+    }
+  }
+})
+
+# ---------------------------------------------------------------------------
+# List/vector-shaped accessor variants (RURL-ckbxkluz)
+#
+# These accessors switch return shape via a `format` argument. The non-scalar
+# branch threads the same safe_parse_url() options as the scalar branch, so the
+# option symmetry is already pinned by the cells above. What the scalar oracle
+# misses is the `format` selector itself: if the non-scalar value were dropped
+# or renamed, no test above would notice. These two variants close that gap.
+# ---------------------------------------------------------------------------
+
+.accessor_list_variants <- list(
+  list(accessor = "get_query", format_value = "list"),
+  list(accessor = "get_subdomain", format_value = "labels")
+)
+
+test_that("list-shaped accessors expose a `format` selector with the non-scalar value", {
+  for (v in .accessor_list_variants) {
+    accessor_fn <- get(v$accessor, envir = asNamespace("rurl"))
+    fn_formals <- formals(accessor_fn)
+    expect_true(
+      "format" %in% names(fn_formals),
+      label = paste0(v$accessor, "() should have a `format` formal")
+    )
+    choices <- eval(fn_formals$format)
+    expect_true(
+      v$format_value %in% choices,
+      label = paste0(
+        v$accessor, "() `format` should offer '", v$format_value, "'"
+      )
+    )
+  }
+})
+
+test_that("list-shaped accessors carry full option coverage in the registry", {
+  for (v in .accessor_list_variants) {
+    for (opt in .spu_options) {
+      matching <- Filter(
+        function(x) x$accessor == v$accessor && x$option == opt,
+        .accessor_registry
+      )
+      expect_true(
+        length(matching) == 1L,
+        label = paste0(
+          "Registry must cover ", v$accessor, " (format = '",
+          v$format_value, "') x ", opt
         )
       )
     }
