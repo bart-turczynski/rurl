@@ -44,7 +44,7 @@ test_that("internal parse handles NA regex results", {
   )
 
   assign("stri_detect_regex", function(string, pattern, ...) {
-    if (identical(pattern, "^([a-zA-Z][a-zA-Z0-9+.-]*):\\\\/\\\\/")) {
+    if (identical(pattern, "^([a-zA-Z][a-zA-Z0-9+.-]*):\\/\\/")) {
       return(NA)
     }
     if (identical(pattern, "^[^/]+:[0-9]+($|/)")) {
@@ -222,6 +222,65 @@ test_that("punycode_to_unicode never errors on malformed A-labels", {
   expect_type(res, "character")
   expect_length(res, 1L)
   expect_false(is.na(res))
+})
+
+test_that("punycode_to_unicode returns empty string for empty input", {
+  # Empty (but non-NA) input short-circuits to "" before any decode attempt.
+  expect_identical(rurl:::.punycode_to_unicode(""), "")
+})
+
+test_that(".host_is_ace returns FALSE for NA, empty, and non-scalar hosts", {
+  expect_false(rurl:::.host_is_ace(NA_character_))
+  expect_false(rurl:::.host_is_ace(""))
+  expect_false(rurl:::.host_is_ace(character(0)))
+  expect_false(rurl:::.host_is_ace(c("xn--a", "xn--b")))
+  # Sanity: a genuine A-label host still reports TRUE.
+  expect_true(rurl:::.host_is_ace("xn--mnchen-3ya.de"))
+})
+
+test_that(".cache_enabled returns FALSE for an unknown cache name", {
+  expect_false(rurl:::.cache_enabled("not-a-real-cache"))
+})
+
+test_that("derive_parse_status coerces NA host-has-dot to no-TLD warning", {
+  # stri_detect_fixed(final_host, ".") can in principle return NA; the
+  # defensive guard coerces that to FALSE so the host is treated as dotless
+  # (warning-no-tld) instead of erroring on `if (NA)`.
+  ns <- asNamespace("stringi")
+  orig <- get("stri_detect_fixed", envir = ns)
+  was_locked <- bindingIsLocked("stri_detect_fixed", ns)
+  if (was_locked) unlockBinding("stri_detect_fixed", ns)
+  withr::defer(
+    {
+      assign("stri_detect_fixed", orig, envir = ns)
+      if (was_locked) lockBinding("stri_detect_fixed", ns)
+    },
+    testthat::teardown_env()
+  )
+
+  assign("stri_detect_fixed", function(str, pattern, ...) {
+    if (identical(str, "example.com") && identical(pattern, ".")) {
+      return(NA)
+    }
+    orig(str, pattern, ...)
+  }, envir = ns)
+
+  rurl_clear_caches()
+  res <- rurl:::._safe_parse_url_impl(
+    url = "example.com",
+    protocol_handling = "keep",
+    www_handling = "none",
+    tld_source = "all",
+    case_handling = "keep",
+    trailing_slash_handling = "none",
+    index_page_handling = "keep",
+    path_normalization = "none",
+    scheme_relative_handling = "keep",
+    subdomain_levels_to_keep = NULL,
+    host_encoding = "keep",
+    path_encoding = "keep"
+  )
+  expect_equal(res$parse_status, rurl:::.STATUS_WARN_NO_TLD)
 })
 
 # Note: .psl_registered_domain / .psl_public_suffix edge cases are covered in

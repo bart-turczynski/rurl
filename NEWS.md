@@ -40,6 +40,12 @@ existing calls are unaffected.
 - `.lintr` now mirrors `goodpractice`'s linter set, so a local
   `lintr::lint_package()` matches the `goodpractice` report; intentional
   test-idiom deviations are documented in the config header.
+- Restored 100% line coverage: added targeted tests for the
+  `.punycode_to_unicode("")`, `.host_is_ace()`, and `.cache_enabled()`
+  guard branches and the `derive_parse_status()` NA-host-dot fallback
+  (and fixed an over-escaped regex literal that left the scheme-slash NA
+  guard untested). The two genuinely unreachable `www`-prefix
+  regex-capture fallbacks are now marked `# nocov` with justification.
 - Reduced the cyclomatic complexity of `canonical_join()` (47→7),
   `get_subdomain()` (26→6), `rurl_cache_config()` (23→5), and
   `safe_parse_urls()` (19→3) by extracting named sub-helpers (e.g.
