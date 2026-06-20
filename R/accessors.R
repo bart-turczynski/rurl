@@ -267,13 +267,25 @@ get_host <- function(url,
 get_path <- function(
   url,
   protocol_handling = "keep",
-  case_handling = c("lower_host", "keep", "lower", "upper")
+  case_handling = c("lower_host", "keep", "lower", "upper"),
+  trailing_slash_handling = c("none", "keep", "strip"),
+  index_page_handling = c("keep", "strip"),
+  path_normalization = c("none", "collapse_slashes", "dot_segments", "both"),
+  path_encoding = c("keep", "encode", "decode")
 ) {
   case_handling <- match.arg(case_handling)
+  trailing_slash_handling <- match.arg(trailing_slash_handling)
+  index_page_handling <- match.arg(index_page_handling)
+  path_normalization <- match.arg(path_normalization)
+  path_encoding <- match.arg(path_encoding)
   # Path is unaffected by www/subdomain handling.
   .extract_from_urls(url, "path",
     protocol_handling = protocol_handling,
-    case_handling = case_handling
+    case_handling = case_handling,
+    trailing_slash_handling = trailing_slash_handling,
+    index_page_handling = index_page_handling,
+    path_normalization = path_normalization,
+    path_encoding = path_encoding
   )
 }
 

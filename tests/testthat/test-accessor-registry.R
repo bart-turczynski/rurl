@@ -251,18 +251,9 @@
     "tld_source does not affect the path component"
   ),
   .reg_exposed("get_path", "case_handling"),
-  .reg_gap(
-    "get_path", "trailing_slash_handling",
-    fill_slice = "RURL-lipzdisu"
-  ),
-  .reg_gap(
-    "get_path", "index_page_handling",
-    fill_slice = "RURL-lipzdisu"
-  ),
-  .reg_gap(
-    "get_path", "path_normalization",
-    fill_slice = "RURL-lipzdisu"
-  ),
+  .reg_exposed("get_path", "trailing_slash_handling"),
+  .reg_exposed("get_path", "index_page_handling"),
+  .reg_exposed("get_path", "path_normalization"),
   .reg_omitted(
     "get_path", "scheme_relative_handling",
     "scheme_relative_handling does not affect the path component"
@@ -275,10 +266,7 @@
     "get_path", "host_encoding",
     "host_encoding does not affect the path component"
   ),
-  .reg_gap(
-    "get_path", "path_encoding",
-    fill_slice = "RURL-lipzdisu"
-  ),
+  .reg_exposed("get_path", "path_encoding"),
 
   # ---- get_query ---------------------------------------------------------
   .reg_exposed("get_query", "protocol_handling"),
