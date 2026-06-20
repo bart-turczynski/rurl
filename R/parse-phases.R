@@ -198,14 +198,28 @@
   if (is.na(raw_host) || raw_host == "") {
     return(FALSE)
   }
-  # IPv4: 1.2.3.4
-  ipv4 <- stringi::stri_detect_regex(raw_host, "^\\d{1,3}(\\.\\d{1,3}){3}$")
-  # IPv6: [2001:db8::1] or 2001:db8::1
-  ipv6 <- stringi::stri_detect_regex(
-    raw_host, "^\\[?[0-9a-fA-F:]+\\]?$"
-  ) && stringi::stri_detect_regex(raw_host, ":")
-  if (is.na(ipv4)) ipv4 <- FALSE # Add NA check
-  if (is.na(ipv6)) ipv6 <- FALSE # Add NA check
+  # IPv4: exactly four dot-separated octets, each an integer in 0..255.
+  ipv4 <- FALSE
+  if (isTRUE(stringi::stri_detect_regex(
+    raw_host, "^\\d{1,3}(\\.\\d{1,3}){3}$"
+  ))) {
+    labels <- strsplit(raw_host, ".", fixed = TRUE)[[1]]
+    octets <- suppressWarnings(as.integer(labels))
+    ipv4 <- length(octets) == 4L &&
+      !anyNA(octets) &&
+      all(octets >= 0L & octets <= 255L)
+  }
+  # IPv6: [2001:db8::1] or 2001:db8::1. Require balanced brackets when present
+  # (reject if exactly one of '[' / ']' appears). Conservative hex/colon check
+  # otherwise; a full RFC 4291 validator is out of scope.
+  has_open <- stringi::stri_detect_fixed(raw_host, "[")
+  has_close <- stringi::stri_detect_fixed(raw_host, "]")
+  ipv6 <- FALSE
+  if (has_open == has_close) {
+    ipv6 <- isTRUE(stringi::stri_detect_regex(
+      raw_host, "^\\[?[0-9a-fA-F:]+\\]?$"
+    )) && isTRUE(stringi::stri_detect_regex(raw_host, ":"))
+  }
   ipv4 || ipv6
 }
 

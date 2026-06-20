@@ -104,6 +104,15 @@ test_that(".detect_ip_host recognizes IPv4 and IPv6, rejects names", {
   expect_false(rurl:::.detect_ip_host(""))
 })
 
+test_that(".detect_ip_host rejects invalid IP literals", {
+  # IPv4 octets out of range
+  expect_false(rurl:::.detect_ip_host("999.999.999.999"))
+  expect_false(rurl:::.detect_ip_host("256.0.0.1"))
+  # Unbalanced IPv6 brackets
+  expect_false(rurl:::.detect_ip_host("[2001:db8"))
+  expect_false(rurl:::.detect_ip_host("2001:db8]"))
+})
+
 test_that(".apply_www_policy strips, keeps, and leaves IP hosts untouched", {
   expect_equal(
     rurl:::.apply_www_policy("www.example.com", "strip", FALSE),
