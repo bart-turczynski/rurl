@@ -13,6 +13,21 @@ test_that("safe_parse_urls validates subdomain_levels_to_keep", {
     safe_parse_urls("example.com", subdomain_levels_to_keep = -1),
     "non-negative"
   )
+  expect_error(
+    safe_parse_urls("example.com", subdomain_levels_to_keep = c(1, 2)),
+    "non-negative integer"
+  )
+  expect_error(
+    safe_parse_urls("example.com", subdomain_levels_to_keep = NA_real_),
+    "non-negative integer"
+  )
+  expect_error(
+    safe_parse_urls("example.com", subdomain_levels_to_keep = 1.5),
+    "non-negative integer"
+  )
+  expect_no_error(
+    safe_parse_urls("example.com", subdomain_levels_to_keep = 1)
+  )
 })
 
 test_that("internal parse handles NA regex results", {
