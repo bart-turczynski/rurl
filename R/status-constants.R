@@ -12,6 +12,6 @@
 }
 .is_warning_status <- function(s) startsWith(s, "warning-")
 .is_joinable_status <- function(s, mode = "ok_or_warning") {
-  if (mode == "ok_or_warning") .is_ok_status(s) || .is_warning_status(s)
+  if (mode == "ok_or_warning") .is_ok_status(s) | .is_warning_status(s)
   else .is_ok_status(s)
 }
