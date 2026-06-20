@@ -48,7 +48,7 @@
 # NA, so a hit storing NULL is never mistaken for a miss.
 .rurl_cache_sentinel <- new.env(parent = emptyenv())
 
-#' @keywords internal
+#' @noRd
 .onLoad <- function(libname, pkgname) {
   # Initialize memoization caches from registry. Subassignment mutates the
   # .rurl_cache environment in place (reference semantics), exactly as
