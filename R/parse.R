@@ -313,44 +313,16 @@ safe_parse_urls <- function(url,
 
   urls <- url
   if (length(urls) == 0) {
-    cols <- lapply(.spu_result_fields, function(f) f$template[0])
-    names(cols) <- vapply(.spu_result_fields, function(f) f$name, character(1))
-    cols$stringsAsFactors <- FALSE
-    return(do.call(data.frame, cols))
+    return(.spu_empty_result())
   }
 
   urls_list <- as.list(urls)
   parsed_list <- lapply(urls_list, ._safe_parse_url_scalar, opts)
 
   # Build a rectangular data.frame, filling NULLs with error rows
-  original_url_vec <- vapply(urls_list, function(u) {
-    is_missing_url <- is.null(u) ||
-      length(u) == 0 ||
-      (is.atomic(u) && length(u) == 1 && is.na(u))
-    if (is_missing_url) {
-      return(NA_character_)
-    }
-    if (is.character(u)) {
-      return(u)
-    }
-    if (is.atomic(u) && length(u) == 1) {
-      return(as.character(u))
-    }
-    NA_character_
-  }, character(1))
-
-  empty_row <- function(orig) {
-    row <- lapply(.spu_result_fields, function(f) f$default)
-    names(row) <- vapply(.spu_result_fields, function(f) f$name, character(1))
-    row$original_url <- orig
-    row
-  }
-
+  original_url_vec <- vapply(urls_list, .spu_coerce_original, character(1))
   normalized_list <- lapply(seq_along(parsed_list), function(i) {
-    if (is.null(parsed_list[[i]])) {
-      return(empty_row(original_url_vec[[i]]))
-    }
-    parsed_list[[i]]
+    parsed_list[[i]] %||% .spu_empty_row(original_url_vec[[i]])
   })
 
   cols <- lapply(.spu_result_fields, function(f) {
@@ -363,6 +335,40 @@ safe_parse_urls <- function(url,
   names(cols) <- vapply(.spu_result_fields, function(f) f$name, character(1))
   cols$stringsAsFactors <- FALSE
   do.call(data.frame, cols)
+}
+
+# Empty (zero-row) result data.frame with the canonical column set/types.
+.spu_empty_result <- function() {
+  cols <- lapply(.spu_result_fields, function(f) f$template[0])
+  names(cols) <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  cols$stringsAsFactors <- FALSE
+  do.call(data.frame, cols)
+}
+
+# Coerce one input element to the scalar `original_url` value: NA for missing
+# or non-scalar inputs, the string itself for character, else as.character().
+.spu_coerce_original <- function(u) {
+  is_missing_url <- is.null(u) ||
+    length(u) == 0 ||
+    (is.atomic(u) && length(u) == 1 && is.na(u))
+  if (is_missing_url) {
+    return(NA_character_)
+  }
+  if (is.character(u)) {
+    return(u)
+  }
+  if (is.atomic(u) && length(u) == 1) {
+    return(as.character(u))
+  }
+  NA_character_
+}
+
+# An all-defaults result row (parse_status = "error") carrying the original URL.
+.spu_empty_row <- function(orig) {
+  row <- lapply(.spu_result_fields, function(f) f$default)
+  names(row) <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  row$original_url <- orig
+  row
 }
 
 # Validate and normalize the parsing options shared by safe_parse_url() and

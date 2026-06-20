@@ -40,6 +40,13 @@ existing calls are unaffected.
 - `.lintr` now mirrors `goodpractice`'s linter set, so a local
   `lintr::lint_package()` matches the `goodpractice` report; intentional
   test-idiom deviations are documented in the config header.
+- Reduced the cyclomatic complexity of `canonical_join()` (47→7),
+  `get_subdomain()` (26→6), `rurl_cache_config()` (23→5), and
+  `safe_parse_urls()` (19→3) by extracting named sub-helpers (e.g.
+  `.cj_validate_inputs()`/`.cj_resolve_sides()`/`.cj_build_join_df()`,
+  `.subdomain_labels()`, `.validate_max_full_parse()`,
+  `.spu_coerce_original()`). No behavior change; no function in the package
+  now exceeds the `goodpractice` cyclocomp threshold of 15.
 
 ## rurl 1.3.0
 
