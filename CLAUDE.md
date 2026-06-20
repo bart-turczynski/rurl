@@ -39,7 +39,7 @@ refresh (`pslr::psl_refresh()`).
 ### Key Internal Functions
 
 - `.normalize_and_punycode()` (R/domain.R) - IDNA/Punycode encoding with NFC normalization, used for host reconstruction
-- `.punycode_to_unicode()` (R/domain.R) - Punycode decoding with hardcoded workarounds for problematic TLDs
+- `.punycode_to_unicode()` (R/domain.R) - per-label Punycode decoding to Unicode (lenient `puny_decode` + `iconv` sanitization)
 - `.psl_registered_domain()` / `.psl_public_suffix()` (R/domain.R) - thin wrappers over `pslr::registrable_domain()` / `pslr::public_suffix()`
 
 ### PSL delegation contract (R/domain.R)
@@ -71,7 +71,9 @@ refresh (`pslr::psl_refresh()`).
 
 **DO NOT ALTER the following:**
 
-1. **Punycode functions** - `.normalize_and_punycode()`, `.punycode_to_unicode()`, and all hardcoded workarounds for problematic TLDs (Greek .ελ, Russian .рф, etc.)
+1. **Punycode functions** - `.normalize_and_punycode()` (host -> A-label, used by `host_encoding = "idna"`) and `.punycode_to_unicode()` (A-label -> Unicode, used by `host_encoding = "unicode"` and `get_host()`). These render the host reversibly while *preserving case* (the case policy is a separate later phase) and *tolerating* malformed-but-encodable hosts (lenient `strict = FALSE` fallback). They no longer carry per-TLD hardcoded workarounds — those were removed during the pslr migration; plain `punycoder::puny_encode`/`puny_decode` handle .ελ / .рф correctly.
+
+   **Decision (RURL-ntdnoywx, 2026-06-20): keep these helpers; do NOT replace them with `punycoder::host_normalize()`.** `host_normalize()` is purpose-built for canonical *comparison* form (which is exactly why `pslr` applies it before PSL matching), not for rurl's reversible host *rendering*. It is not a drop-in for either helper: (a) it is one-directional with no inverse, so it cannot replace `.punycode_to_unicode()` at all; (b) on the encode path it force-lowercases (colliding with rurl's separate case policy, breaking `case_handling = "keep"`/`"upper"`) and returns `NA` for hosts rurl currently tolerates — STD3 `_`, leading/trailing hyphens, `--` in label positions 3-4 (CheckHyphens), and over-DNS-length labels. Characterization diff lives in the issue. Revisit only if rurl gains a dedicated "canonical match key" surface where lowercasing + UTS-46 strictness are desired.
 
 2. **PSL semantics live in `pslr`** - do not reintroduce an embedded matcher or bundled list in this package; query `pslr` through the R/domain.R seam.
 
