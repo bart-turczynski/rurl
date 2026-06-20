@@ -175,9 +175,13 @@ rurl_cache_info <- function() {
 #'
 #' Disabling a cache stops new writes to it (existing entries are left in
 #' place until \code{\link{rurl_clear_caches}} is called). When
-#' \code{full_parse} reaches \code{max_full_parse} entries, it is reset before
-#' the next new entry is stored, so its peak size never exceeds the bound; the
-#' default of \code{Inf} preserves the historical unbounded behavior. The
+#' \code{full_parse} reaches \code{max_full_parse} entries, the \emph{entire}
+#' cache is cleared before the next new entry is stored, so its peak size never
+#' exceeds the bound. This is a hard reset-watermark, not an LRU or FIFO
+#' eviction policy: \code{max_full_parse} caps peak memory, but is \emph{not} a
+#' working-set size — once the bound is hit the cache empties completely and
+#' rebuilds from scratch. The default of \code{Inf} preserves the historical
+#' unbounded behavior. The
 #' \code{puny_encode} and \code{puny_decode} caches are unbounded by design
 #' (each stays small — bounded by the number of unique hosts/labels seen, not
 #' URL+option combinations).

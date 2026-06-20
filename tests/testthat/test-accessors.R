@@ -427,6 +427,24 @@ test_that(".normalize_and_punycode returns NA_character_ on error", {
   expect_identical(unname(result), NA_character_)
 })
 
+test_that(".normalize_and_punycode recovers via non-strict retry", {
+  # Force the strict encode to fail, then succeed on the non-strict retry,
+  # exercising the inner tryCatch recovery branch (strict error -> non-strict
+  # success). A non-default encode_fn bypasses the shared cache by design.
+  strict_fail_encode <- function(x, strict = TRUE) {
+    if (isTRUE(strict)) {
+      stop("strict encode failed")
+    }
+    "recovered-host.example"
+  }
+
+  result <- rurl:::.normalize_and_punycode(
+    "παράδειγμα.ελ",
+    encode_fn = strict_fail_encode
+  )
+  expect_identical(unname(result), "recovered-host.example")
+})
+
 test_that(".normalize_and_punycode handles NA and empty input", {
   expect_identical(
     unname(rurl:::.normalize_and_punycode(NA_character_)),

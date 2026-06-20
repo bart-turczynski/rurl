@@ -184,8 +184,9 @@ canonical_join(
 
 ## Caching
 
-`rurl` memoizes parse/domain/TLD work to speed repeated operations over
-large URL vectors. Inspect, clear, and configure the caches:
+`rurl` memoizes URL parsing and punycode round-trips to speed repeated
+operations over large URL vectors; PSL query caching lives in `pslr`.
+Inspect, clear, and configure the caches:
 
 ``` r
 rurl_cache_info()                          # entries / enabled / max per cache
