@@ -343,9 +343,26 @@ get_query <- function(url,
     )
   }
   if (format == "string") {
-    return(.extract_from_urls(url, "query",
+    raw <- .extract_from_urls(url, "query",
       protocol_handling = protocol_handling
-    ))
+    )
+    # The parse result now carries a RAW (percent-encoded) query so the list
+    # form can split safely; the string form historically returns the decoded
+    # query, so decode here to keep that output unchanged.
+    if (decode) {
+      raw <- vapply(
+        raw,
+        function(q) {
+          if (is.na(q)) {
+            NA_character_
+          } else {
+            tryCatch(curl::curl_unescape(q), error = function(e) q)
+          }
+        },
+        character(1)
+      )
+    }
+    return(raw)
   }
 
   lapply(url, function(u) {

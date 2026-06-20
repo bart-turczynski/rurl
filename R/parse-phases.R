@@ -106,9 +106,13 @@
     !is.null(parsed_curl$params) &&
     length(parsed_curl$params) > 0
   if (rebuild_query_from_params) {
+    # curl_parse_url() always decodes params, so a literal "&"/"=" inside a
+    # value is indistinguishable from a delimiter once joined. Re-encode each
+    # key/value so the reconstructed query is a faithful RAW (percent-encoded)
+    # string; downstream parsers split on raw "&"/"=" then decode per-pair.
     raw_query <- paste(
-      names(parsed_curl$params),
-      parsed_curl$params,
+      vapply(names(parsed_curl$params), curl::curl_escape, character(1)),
+      vapply(unname(parsed_curl$params), curl::curl_escape, character(1)),
       sep = "=",
       collapse = "&"
     )
