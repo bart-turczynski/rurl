@@ -181,6 +181,20 @@ test_that("get_query returns string or parsed list", {
   expect_equal(parsed[[1]]$b, "3")
 })
 
+test_that("get_query(format = 'list') preserves encoded '&' (%26) in values", {
+  # Regression: an encoded ampersand inside a value must not be treated as a
+  # pair delimiter when splitting the query string.
+  expect_equal(
+    get_query("http://example.com/?a=1%262", format = "list")[[1]],
+    list(a = "1&2")
+  )
+  # Scalar (string) form must be unaffected by the fix.
+  expect_equal(
+    unname(get_query("http://example.com/?a=1%262")),
+    "a=1&2"
+  )
+})
+
 test_that("get_fragment, get_port, get_user, get_password, get_userinfo work", {
   expect_equal(unname(get_fragment("http://example.com/path#frag")), "frag")
   expect_equal(unname(get_port("http://example.com:8080/path")), 8080L)
