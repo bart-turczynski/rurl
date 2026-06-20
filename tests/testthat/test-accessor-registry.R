@@ -113,10 +113,7 @@
   # ---- get_clean_url -----------------------------------------------------
   .reg_exposed("get_clean_url", "protocol_handling"),
   .reg_exposed("get_clean_url", "www_handling"),
-  .reg_omitted(
-    "get_clean_url", "tld_source",
-    "gap: tld_source not yet threaded through get_clean_url"
-  ),
+  .reg_exposed("get_clean_url", "tld_source", alias = "source"),
   .reg_exposed("get_clean_url", "case_handling"),
   .reg_exposed("get_clean_url", "trailing_slash_handling"),
   .reg_exposed("get_clean_url", "index_page_handling"),
@@ -203,10 +200,7 @@
   # ---- get_host ----------------------------------------------------------
   .reg_exposed("get_host", "protocol_handling"),
   .reg_exposed("get_host", "www_handling"),
-  .reg_gap(
-    "get_host", "tld_source",
-    fill_slice = "RURL-lipzdisu"
-  ),
+  .reg_exposed("get_host", "tld_source", alias = "source"),
   .reg_exposed("get_host", "case_handling"),
   .reg_omitted(
     "get_host", "trailing_slash_handling",

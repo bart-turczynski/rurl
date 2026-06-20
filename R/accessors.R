@@ -105,6 +105,9 @@ get_parse_status <- function(url,
 #'
 #' @param url A character vector containing URLs to be parsed.
 #' @inheritParams safe_parse_url
+#' @param source Which PSL source to use: "all", "private", or "icann".
+#'   Subdomain trimming depends on which section is consulted, so pass
+#'   \code{source = "icann"} to exclude private suffixes (e.g. github.io).
 #' @return A character vector of cleaned URLs.
 #' @export
 #' @examples
@@ -140,6 +143,7 @@ get_parse_status <- function(url,
 get_clean_url <- function(url,
                           protocol_handling = "keep",
                           www_handling = "none",
+                          source = c("all", "private", "icann"),
                           case_handling = "lower_host",
                           trailing_slash_handling = "none",
                           index_page_handling = "keep",
@@ -148,9 +152,11 @@ get_clean_url <- function(url,
                           subdomain_levels_to_keep = NULL,
                           host_encoding = "keep",
                           path_encoding = "keep") {
+  source <- match.arg(source)
   .extract_from_urls(url, "clean_url",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
+    tld_source = source,
     case_handling = case_handling,
     trailing_slash_handling = trailing_slash_handling,
     index_page_handling = index_page_handling,
@@ -217,6 +223,9 @@ get_scheme <- function(url, protocol_handling = "keep",
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
+#' @param source Which PSL source to use: "all", "private", or "icann".
+#'   Subdomain trimming depends on which section is consulted, so pass
+#'   \code{source = "icann"} to exclude private suffixes (e.g. github.io).
 #' @param case_handling How to handle casing of the returned host. Defaults to
 #' "lower".
 #' @return A character vector of URL hosts.
@@ -248,14 +257,17 @@ get_scheme <- function(url, protocol_handling = "keep",
 get_host <- function(url,
                      protocol_handling = "keep",
                      www_handling = "none",
+                     source = c("all", "private", "icann"),
                      subdomain_levels_to_keep = NULL,
                      case_handling = c(
                        "lower", "keep", "upper", "lower_host"
                      )) {
+  source <- match.arg(source)
   case_handling <- match.arg(case_handling)
   .extract_from_urls(url, "host",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
+    tld_source = source,
     case_handling = case_handling,
     subdomain_levels_to_keep = subdomain_levels_to_keep
   )

@@ -8,6 +8,7 @@ get_host(
   url,
   protocol_handling = "keep",
   www_handling = "none",
+  source = c("all", "private", "icann"),
   subdomain_levels_to_keep = NULL,
   case_handling = c("lower", "keep", "upper", "lower_host")
 )
@@ -45,6 +46,10 @@ and "www[number]" prefixes in the host. Defaults to "none".
   "sub.example.com" or the normalized "www.sub.example.com"), the host is
   not further altered. An empty input host remains empty.}
 }}
+
+\item{source}{Which PSL source to use: "all", "private", or "icann".
+Subdomain trimming depends on which section is consulted, so pass
+\code{source = "icann"} to exclude private suffixes (e.g. github.io).}
 
 \item{subdomain_levels_to_keep}{An integer or NULL. Determines how many
 levels of subdomains are kept,
