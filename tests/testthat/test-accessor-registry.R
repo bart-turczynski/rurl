@@ -189,10 +189,7 @@
     "get_scheme", "path_normalization",
     "path_normalization does not affect the scheme component"
   ),
-  .reg_gap(
-    "get_scheme", "scheme_relative_handling",
-    fill_slice = "RURL-lipzdisu"
-  ),
+  .reg_exposed("get_scheme", "scheme_relative_handling"),
   .reg_omitted(
     "get_scheme", "subdomain_levels_to_keep",
     "subdomain_levels_to_keep only modifies the host; scheme is unaffected"

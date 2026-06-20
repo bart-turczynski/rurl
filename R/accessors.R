@@ -193,10 +193,12 @@ get_domain <- function(url,
 #' @export
 #' @examples
 #' get_scheme("https://example.com")
-get_scheme <- function(url, protocol_handling = "keep") {
+get_scheme <- function(url, protocol_handling = "keep",
+                       scheme_relative_handling = "keep") {
   # Scheme is unaffected by www/subdomain handling.
   .extract_from_urls(url, "scheme",
     protocol_handling = protocol_handling,
+    scheme_relative_handling = scheme_relative_handling,
     case_handling = "lower"
   )
 }
