@@ -376,9 +376,59 @@ test_that("get_tld handles internationalized domain names (IDNs)", {
   expect_identical(unname(get_tld("石川.jp")), "石川.jp")
   expect_identical(unname(get_tld("münchen.de")), "de")
   expect_identical(unname(get_tld("παράδειγμα.ελ")), "ελ")
-  expect_identical(unname(get_tld("xn--hxajbheg2az3al.xn--qxam")), "ελ")
   expect_identical(unname(get_tld("中国.中国")), "中国")
-  expect_identical(unname(get_tld("xn--fiqs8s.xn--fiqs8s")), "中国")
+  # Default host_encoding = "keep" mirrors the input spelling: an A-label host
+  # yields an A-label TLD.
+  expect_identical(
+    unname(get_tld("xn--hxajbheg2az3al.xn--qxam")), "xn--qxam"
+  )
+  expect_identical(unname(get_tld("xn--fiqs8s.xn--fiqs8s")), "xn--fiqs8s")
+  # host_encoding = "unicode" decodes A-label hosts back to Unicode.
+  expect_identical(
+    unname(get_tld("xn--hxajbheg2az3al.xn--qxam", host_encoding = "unicode")),
+    "ελ"
+  )
+  expect_identical(
+    unname(get_tld("xn--fiqs8s.xn--fiqs8s", host_encoding = "unicode")), "中国"
+  )
+})
+
+test_that("domain accessors honor host_encoding (keep/idna/unicode)", {
+  uni <- "https://café.münchen.de/x"
+  ace <- "https://xn--caf-dma.xn--mnchen-3ya.de/x"
+
+  # keep: mirror the input spelling on both directions.
+  expect_identical(unname(get_domain(uni)), "münchen.de")
+  expect_identical(unname(get_domain(ace)), "xn--mnchen-3ya.de")
+  expect_identical(unname(get_subdomain(uni)), "café")
+  expect_identical(unname(get_subdomain(ace)), "xn--caf-dma")
+
+  # idna: force A-labels regardless of input spelling.
+  expect_identical(
+    unname(get_domain(uni, host_encoding = "idna")), "xn--mnchen-3ya.de"
+  )
+  expect_identical(
+    unname(get_subdomain(uni, host_encoding = "idna")), "xn--caf-dma"
+  )
+  expect_identical(
+    unname(get_tld(ace, host_encoding = "idna")), "de"
+  )
+
+  # unicode: decode regardless of input spelling.
+  expect_identical(
+    unname(get_domain(ace, host_encoding = "unicode")), "münchen.de"
+  )
+  expect_identical(
+    unname(get_subdomain(ace, host_encoding = "unicode")), "café"
+  )
+
+  # A pure-ASCII host is identical across all three encodings.
+  for (enc in c("keep", "idna", "unicode")) {
+    expect_identical(
+      unname(get_domain("https://sub.example.co.uk/", host_encoding = enc)),
+      "example.co.uk"
+    )
+  }
 })
 
 test_that("get_tld handles edge cases and unexpected inputs gracefully", {
@@ -390,10 +440,15 @@ test_that("get_tld handles edge cases and unexpected inputs gracefully", {
   expect_identical(unname(get_tld("http://192.168.1.1")), NA_character_)
   expect_identical(unname(get_tld("ftp://example.com")), "com")
 
-  # IDN edge cases
-  expect_identical(unname(get_tld("xn--fiqs8s.xn--fiqs8s")), "中国")
+  # IDN edge cases (host_encoding = "unicode" decodes A-labels)
+  expect_identical(
+    unname(get_tld("xn--fiqs8s.xn--fiqs8s", host_encoding = "unicode")), "中国"
+  )
   expect_identical(unname(get_tld("中国.中国")), "中国")
-  expect_identical(unname(get_tld("xn--hxajbheg2az3al.xn--qxam")), "ελ")
+  expect_identical(
+    unname(get_tld("xn--hxajbheg2az3al.xn--qxam", host_encoding = "unicode")),
+    "ελ"
+  )
   expect_identical(unname(get_tld("παράδειγμα.ελ")), "ελ")
 
   # Weird but valid cases

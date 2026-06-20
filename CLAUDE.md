@@ -47,8 +47,11 @@ refresh (`pslr::psl_refresh()`).
 `rurl` calls `pslr` with a fixed contract:
 
 - `source` `"all"` / `"icann"` / `"private"` maps 1:1 onto `pslr` `section`.
-- `output = "unicode"` always (preserves rurl's historical decoded-IDN output;
-  pslr defaults to ASCII A-labels).
+- `output = "unicode"` by default (preserves rurl's historical decoded-IDN
+  output; pslr defaults to ASCII A-labels). Structural/decision callers keep
+  this default; the emitted domain/TLD path (`.derive_domain_tld()`) instead
+  selects the spelling from `host_encoding` (`keep`/`idna`/`unicode`), so
+  `get_domain()`/`get_tld()`/`get_subdomain()` mirror `get_host()`.
 - `unknown = "na"` so an unknown TLD yields `NA` rather than pslr's implicit `*`.
 - `invalid = "na"` so malformed hosts yield `NA` instead of erroring.
 - Never use pslr session-global list switching (`psl_use()`) to implement

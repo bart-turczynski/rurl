@@ -9,7 +9,8 @@ get_domain(
   protocol_handling = "keep",
   www_handling = "none",
   subdomain_levels_to_keep = NULL,
-  source = c("all", "private", "icann")
+  source = c("all", "private", "icann"),
+  host_encoding = c("keep", "idna", "unicode")
 )
 }
 \arguments{
@@ -65,6 +66,15 @@ levels of subdomains are kept,
   }}
 
 \item{source}{Which PSL source to use: "all", "private", or "icann".}
+
+\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+"keep".
+  \itemize{
+    \item{"keep": Leave host as parsed by curl (may preserve original case).}
+    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+    cleaned URL.}
+    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+  }}
 }
 \value{
 A character vector of domain names.

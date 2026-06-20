@@ -316,18 +316,29 @@
   final_host
 }
 
-# Phase 7: derive the registered domain (Unicode) and TLD from the host using
-# the Public Suffix List.
-.derive_domain_tld <- function(final_host, is_ip_host, tld_source) {
+# Phase 7: derive the registered domain and TLD from the host using the Public
+# Suffix List. `host_encoding` selects the emitted spelling, mirroring
+# get_host(): "unicode" decodes IDNs, "idna" emits ASCII A-labels, and "keep"
+# (the default) follows the input host's own spelling — ASCII if it arrived as
+# an A-label, Unicode otherwise.
+.derive_domain_tld <- function(final_host, is_ip_host, tld_source,
+                               host_encoding = "keep") {
   domain <- NA_character_
   tld <- NA_character_
 
   if (!is_ip_host && !is.na(final_host) && final_host != "") {
-    # Both the registered domain and the TLD honor the requested section, so a
-    # given parse is internally consistent (the domain always ends in the TLD).
-    # pslr canonicalizes the host (case/NFC/IDNA) internally.
-    domain <- .psl_registered_domain(final_host, tld_source)
-    tld <- .psl_public_suffix(final_host, tld_source)
+    psl_output <- switch(host_encoding,
+      idna = "ascii",
+      unicode = "unicode",
+      keep = if (.host_is_ace(final_host)) "ascii" else "unicode",
+      "unicode"
+    )
+    # Both the registered domain and the TLD honor the requested section and
+    # output spelling, so a given parse is internally consistent (the domain
+    # always ends in the TLD, in one spelling). pslr canonicalizes the host
+    # (case/NFC/IDNA) internally.
+    domain <- .psl_registered_domain(final_host, tld_source, psl_output)
+    tld <- .psl_public_suffix(final_host, tld_source, psl_output)
   }
 
   list(domain = domain, tld = tld)
