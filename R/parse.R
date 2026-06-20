@@ -414,11 +414,13 @@ safe_parse_urls <- function(url,
     path_encoding = match.arg(path_encoding)
   )
 
-  bad_subdomain_value <- !is.numeric(subdomain_levels_to_keep) ||
-    subdomain_levels_to_keep < 0 ||
-    subdomain_levels_to_keep %% 1 != 0
+  valid_subdomain_value <- is.numeric(subdomain_levels_to_keep) &&
+    length(subdomain_levels_to_keep) == 1L &&
+    !is.na(subdomain_levels_to_keep) &&
+    subdomain_levels_to_keep >= 0 &&
+    subdomain_levels_to_keep %% 1 == 0
   invalid_subdomain_levels <-
-    !is.null(subdomain_levels_to_keep) && bad_subdomain_value
+    !is.null(subdomain_levels_to_keep) && !valid_subdomain_value
   if (invalid_subdomain_levels) {
     stop(
       "subdomain_levels_to_keep must be NULL or a non-negative integer.",
