@@ -103,6 +103,20 @@ test_that("rurl_cache_config validates max_full_parse", {
   expect_error(rurl_cache_config(max_full_parse = -5), "max_full_parse")
   expect_error(rurl_cache_config(max_full_parse = c(1, 2)), "max_full_parse")
   expect_error(rurl_cache_config(max_full_parse = "lots"), "max_full_parse")
+  expect_error(rurl_cache_config(max_full_parse = 1.5), "max_full_parse")
+  expect_no_error(rurl_cache_config(max_full_parse = Inf))
+  expect_no_error(rurl_cache_config(max_full_parse = 2L))
+  expect_no_error(rurl_cache_config(max_full_parse = 3e9))
+  reset_caches()
+})
+
+test_that("rurl_cache_config validates logical enable flags", {
+  reset_caches()
+  expect_error(rurl_cache_config(full_parse = "no"), "full_parse")
+  expect_error(rurl_cache_config(full_parse = 1), "full_parse")
+  expect_error(rurl_cache_config(full_parse = c(TRUE, FALSE)), "full_parse")
+  expect_no_error(rurl_cache_config(full_parse = TRUE))
+  expect_no_error(rurl_cache_config(full_parse = FALSE))
   reset_caches()
 })
 
