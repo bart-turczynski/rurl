@@ -28,3 +28,7 @@ A character vector of userinfo values.
 \description{
 Extracts the userinfo component of a URL (user or user:password).
 }
+\examples{
+get_userinfo("ftp://alice:secret@ftp.example.com/file.txt")
+get_userinfo("ftp://alice@ftp.example.com/file.txt")
+}

@@ -67,7 +67,7 @@ test_that("internal parse handles NA regex results", {
     host_encoding = "keep",
     path_encoding = "keep"
   )
-  expect_true(is.list(res))
+  expect_type(res, "list")
 
   res2 <- rurl:::._safe_parse_url_impl(
     url = "foo:123",
@@ -112,7 +112,7 @@ test_that("safe_parse_url handles NA from stringi ip detection", {
   }, envir = ns)
 
   parsed <- safe_parse_url("http://127.0.0.1", www_handling = "none")
-  expect_true(is.list(parsed))
+  expect_type(parsed, "list")
 })
 
 test_that("safe_parse_url handles empty host from curl_parse_url", {
@@ -140,8 +140,8 @@ test_that("safe_parse_url handles empty host from curl_parse_url", {
     "http://empty-host",
     www_handling = "if_no_subdomain"
   )
-  expect_true(is.list(res_keep))
-  expect_true(is.list(res_if_no))
+  expect_type(res_keep, "list")
+  expect_type(res_if_no, "list")
 })
 
 test_that("safe_parse_url www_handling if_no_subdomain branches", {
@@ -331,7 +331,7 @@ test_that("get_subdomain handles edge cases and formats", {
     source = "all",
     format = "labels"
   )
-  expect_true(is.list(res_labels))
+  expect_type(res_labels, "list")
   expect_equal(res_labels[[1]], c("www", "blog"))
 })
 
@@ -354,7 +354,7 @@ test_that("get_subdomain with non-all source uses the parsed domain", {
     source = "icann",
     format = "labels"
   )
-  expect_true(is.list(res_labels))
+  expect_type(res_labels, "list")
   expect_equal(res_labels[[1]], "blog")
 })
 

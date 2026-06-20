@@ -81,8 +81,8 @@ test_that("canonical_join keeps parse errors when requested", {
   )
 
   expect_equal(nrow(res), 2)
-  expect_true(any(is.na(res$JoinKey)))
-  expect_true(any(is.na(res$B)))
+  expect_true(anyNA(res$JoinKey))
+  expect_true(anyNA(res$B))
 })
 
 test_that("canonical_join supports right/full joins and parse-error handling", {
@@ -107,7 +107,7 @@ test_that("canonical_join supports right/full joins and parse-error handling", {
 
   expect_equal(nrow(res_right), 2)
   expect_true(any(res_right$JoinKey == "example.com/b"))
-  expect_true(any(is.na(res_right$A)))
+  expect_true(anyNA(res_right$A))
 
   res_drop <- canonical_join(
     A, B,

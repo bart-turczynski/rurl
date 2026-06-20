@@ -75,11 +75,7 @@
   has_leading <- stringi::stri_startswith_fixed(path, "/")
   has_trailing <- stringi::stri_endswith_fixed(path, "/")
   segments <- strsplit(path, "/", fixed = TRUE)[[1]]
-  encoded_segments <- vapply(
-    segments,
-    function(seg) curl::curl_escape(seg),
-    character(1)
-  )
+  encoded_segments <- vapply(segments, curl::curl_escape, character(1))
   recomposed <- paste(encoded_segments, collapse = "/")
   if (has_leading && !stringi::stri_startswith_fixed(recomposed, "/")) {
     recomposed <- paste0("/", recomposed)

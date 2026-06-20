@@ -30,17 +30,26 @@ refresh (`pslr::psl_refresh()`).
 
 ### Core Files
 
-- **R/parse.R** / **R/parse-phases.R** - Main parsing logic: `safe_parse_url()` and the per-phase helpers
-- **R/accessors.R** - Public `get_*()` accessor functions over `safe_parse_url()`
-- **R/domain.R** - Punycode helpers and the `pslr` query seam (`.psl_registered_domain()`, `.psl_public_suffix()`)
+The `Collate` order in `DESCRIPTION` is authoritative; the load order is
+`status-constants.R` → `utils.R` → `domain.R` → `path-query.R` →
+`parse-phases.R` → `parse.R` → `accessors.R` → `canonical_join.R` → `zzz.R`.
+
+- **R/parse.R** / **R/parse-phases.R** - Main parsing logic: `safe_parse_url()`, the scalar/vector wrappers and option validation (`parse.R`) and the 13 decomposed per-phase helpers `.prepare_url_for_curl()` … `.assemble_parse_result()` (`parse-phases.R`)
+- **R/accessors.R** - Public `get_*()` accessor functions, all built on the shared `.extract_from_urls()` helper over `safe_parse_url()`
+- **R/domain.R** - Punycode helpers and the `pslr` query seam (`.psl_registered_domain()`, `.psl_public_suffix()`, `.psl_suffix_extract()`, `.host_is_ace()`)
+- **R/path-query.R** - Low-level path normalization (`._collapse_path_slashes()`, `._remove_dot_segments()`, `._strip_index_page()`, `._encode_path_segments()`) and query-string parsing (`._parse_query_string()`)
 - **R/canonical_join.R** - Dataset joining by canonicalized URL keys (`canonical_join()`)
-- **R/zzz.R** - Package initialization (`.onLoad`) and the memoization caches
+- **R/status-constants.R** - The `.STATUS_*` parse-status constants and the `.is_*_status()` predicates (incl. `.is_joinable_status()` used by `canonical_join()`)
+- **R/utils.R** - The `%||%` null-coalescing operator and `.spu_result_fields` (the single source of truth for `safe_parse_urls()` result columns)
+- **R/zzz.R** - Package initialization (`.onLoad`), the cache registry (`.CACHE_REGISTRY`), the memoization caches, and the public cache API (`rurl_clear_caches()`, `rurl_cache_info()`, `rurl_cache_config()`)
 
 ### Key Internal Functions
 
 - `.normalize_and_punycode()` (R/domain.R) - IDNA/Punycode encoding with NFC normalization, used for host reconstruction
 - `.punycode_to_unicode()` (R/domain.R) - per-label Punycode decoding to Unicode (lenient `puny_decode` + `iconv` sanitization)
 - `.psl_registered_domain()` / `.psl_public_suffix()` (R/domain.R) - thin wrappers over `pslr::registrable_domain()` / `pslr::public_suffix()`
+- `.psl_suffix_extract()` (R/domain.R) - full canonical decomposition (`subdomain` / `domain` / `suffix` / `registrable_domain`) via `pslr::suffix_extract()`, used to make STRUCTURAL policy decisions (www-prefix and subdomain-trim heuristics) on one canonical spelling
+- `.host_is_ace()` (R/domain.R) - TRUE if any host label is an `xn--` A-label; drives the `host_encoding = "keep"` spelling choice in `.derive_domain_tld()`
 
 ### PSL delegation contract (R/domain.R)
 
@@ -93,12 +102,14 @@ The migration to `stringi` is deliberately *not* total. The following base-R
 string calls are retained on purpose — do not "finish the migration" for
 consistency alone:
 
-- **`strsplit()`** (host-label splits on `"\\."`, and the `fixed = TRUE`
-  splits in `path-query.R`) is **not** equivalent to
-  `stringi::stri_split_fixed()`. `strsplit("a.b.", ".")` drops the trailing
-  empty (`c("a", "b")`) and returns `character(0)` for `""`, whereas
+- **`strsplit()`** (host-label and subdomain splits on `"."`, and the path
+  splits in `path-query.R`, all with `fixed = TRUE`) is **not** equivalent to
+  `stringi::stri_split_fixed()`. `strsplit("a.b.", ".", fixed = TRUE)` drops the
+  trailing empty (`c("a", "b")`) and returns `character(0)` for `""`, whereas
   `stri_split_fixed` keeps the trailing `""` and returns `""`. Swapping them
-  would change parsing behavior, so the base calls stay.
+  would change parsing behavior, so the base calls stay. (The dot splits use
+  `fixed = TRUE` rather than the regex `"\\."` — verified identical for the
+  trailing-empty behavior — so `fixed_regex_linter` stays quiet too.)
 - **Genuine regexes** (`gsub("/+", …)`, `sub("/?[^/]*$", …)`,
   `regexpr`/`regmatches` in `._remove_dot_segments`, `grepl("^www[0-9]*$", …)`,
   the status-pattern `grepl` in `canonical_join.R`) operate on ASCII
@@ -110,7 +121,6 @@ Uses testthat 3.0.0+ with edition 3 config. Test files are in `tests/testthat/`.
 
 ## Development Notes
 
-- The `memoization.md` file contains the original design for performance optimization (now implemented)
 - PSL data and refresh live in `pslr`; `rurl` ships no list of its own
 - All core functions are fully vectorized
 - Cache environments are initialized in `.onLoad` and persist for the R session

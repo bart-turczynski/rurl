@@ -11,9 +11,9 @@ test_that("rurl_clear_caches resets memoization environments", {
 
   rurl_clear_caches()
 
-  expect_true(is.environment(rurl:::.rurl_cache$full_parse))
-  expect_true(is.environment(rurl:::.rurl_cache$puny_encode))
-  expect_true(is.environment(rurl:::.rurl_cache$puny_decode))
+  expect_type(rurl:::.rurl_cache$full_parse, "environment")
+  expect_type(rurl:::.rurl_cache$puny_encode, "environment")
+  expect_type(rurl:::.rurl_cache$puny_decode, "environment")
   expect_false(identical(old_envs$full, rurl:::.rurl_cache$full_parse))
   expect_false(identical(old_envs$puny_encode, rurl:::.rurl_cache$puny_encode))
   expect_false(identical(old_envs$puny_decode, rurl:::.rurl_cache$puny_decode))

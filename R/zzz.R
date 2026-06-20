@@ -50,9 +50,11 @@
 
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
-  # Initialize memoization caches from registry
+  # Initialize memoization caches from registry. Subassignment mutates the
+  # .rurl_cache environment in place (reference semantics), exactly as
+  # rurl_clear_caches() does, so a plain <- suffices — no <<- rebind needed.
   for (entry in .CACHE_REGISTRY) {
-    .rurl_cache[[entry$name]] <<- new.env(parent = emptyenv())
+    .rurl_cache[[entry$name]] <- new.env(parent = emptyenv())
     assign(entry$config_field, entry$default_enabled, envir = .rurl_config)
   }
 

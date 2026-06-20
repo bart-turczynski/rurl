@@ -302,10 +302,10 @@
           candidate_has_www <- stringi::stri_startswith_fixed(
             stringi::stri_trans_tolower(candidate_host), "www."
           )
-          if (!candidate_has_www) {
-            final_host <- paste0("www.", candidate_host)
-          } else {
+          if (candidate_has_www) {
             final_host <- candidate_host
+          } else {
+            final_host <- paste0("www.", candidate_host)
           }
         } else {
           final_host <- candidate_host
@@ -382,8 +382,10 @@
     # the structural decision (how many labels to drop) is canonicalized.
     has_subdomain <- !is.na(derived_subdomain) && nzchar(derived_subdomain)
     if (has_subdomain) {
-      num_sub_labels <- length(strsplit(derived_subdomain, "\\.")[[1]])
-      raw_labels <- strsplit(host_part_to_analyze, "\\.")[[1]]
+      num_sub_labels <- length(
+        strsplit(derived_subdomain, ".", fixed = TRUE)[[1]]
+      )
+      raw_labels <- strsplit(host_part_to_analyze, ".", fixed = TRUE)[[1]]
 
       # Defensive: only act when the raw host actually has at least as many
       # labels as the subdomain reported (it always should, since both describe

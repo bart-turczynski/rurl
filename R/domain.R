@@ -69,7 +69,7 @@
     }
   }
 
-  parts_puny <- strsplit(domain_puny, "\\.")[[1]]
+  parts_puny <- strsplit(domain_puny, ".", fixed = TRUE)[[1]]
 
   # No strict-retry here: the first attempt is already the lenient strict =
   # FALSE decode, and a strict = TRUE retry (punycoder's getOption default) is
@@ -108,9 +108,10 @@
 #     historical decoded-IDN output even though pslr defaults to ASCII A-labels.
 #     Structural/decision callers (the www and subdomain-trim heuristics) keep
 #     this default so an A-label host and its Unicode form take the same branch.
-#     The emitted-value path (.derive_domain_tld -> parsed$domain / $tld) instead
-#     selects the spelling from host_encoding: "unicode", "ascii" ("idna"), or
-#     the input's own spelling ("keep", the default; see .host_is_ace()).
+#     The emitted-value path (.derive_domain_tld -> parsed$domain / $tld)
+#     instead selects the spelling from host_encoding: "unicode", "ascii"
+#     ("idna"), or the input's own spelling ("keep", the default; see
+#     .host_is_ace()).
 #   * `unknown = "na"` so a host under an unknown TLD yields NA, matching rurl's
 #     long-standing "no PSL match => NA" behavior rather than pslr's default
 #     implicit `*` rule (which treats any unknown single label as a suffix).
