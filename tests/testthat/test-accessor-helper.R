@@ -6,7 +6,7 @@ test_that(".extract_from_urls pulls a single field and preserves names", {
   res <- rurl:::.extract_from_urls(urls, "host")
   expect_type(res, "character")
   expect_equal(unname(res), c("example.com", "sub.example.org"))
-  expect_equal(names(res), urls)
+  expect_named(res, urls)
 })
 
 test_that(".extract_from_urls returns null_value for unparseable URLs", {
@@ -43,7 +43,7 @@ test_that("character accessors keep character type and input names", {
   )) {
     out <- fn(urls)
     expect_type(out, "character")
-    expect_equal(names(out), urls)
+    expect_named(out, urls)
     expect_length(out, 2)
   }
 })

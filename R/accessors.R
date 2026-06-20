@@ -425,6 +425,8 @@ get_port <- function(url, protocol_handling = "keep") {
 #' @inheritParams safe_parse_url
 #' @return A character vector of user names.
 #' @export
+#' @examples
+#' get_user("ftp://alice:secret@ftp.example.com/file.txt")
 get_user <- function(url, protocol_handling = "keep") {
   .extract_from_urls(url, "user", protocol_handling = protocol_handling)
 }
@@ -437,6 +439,8 @@ get_user <- function(url, protocol_handling = "keep") {
 #' @inheritParams safe_parse_url
 #' @return A character vector of passwords.
 #' @export
+#' @examples
+#' get_password("ftp://alice:secret@ftp.example.com/file.txt")
 get_password <- function(url, protocol_handling = "keep") {
   .extract_from_urls(url, "password", protocol_handling = protocol_handling)
 }
@@ -449,6 +453,9 @@ get_password <- function(url, protocol_handling = "keep") {
 #' @inheritParams safe_parse_url
 #' @return A character vector of userinfo values.
 #' @export
+#' @examples
+#' get_userinfo("ftp://alice:secret@ftp.example.com/file.txt")
+#' get_userinfo("ftp://alice@ftp.example.com/file.txt")
 get_userinfo <- function(url, protocol_handling = "keep") {
   .extract_from_urls(url, NULL,
     transform = function(parsed) {
@@ -545,7 +552,7 @@ get_subdomain <- function(url,
       return(character(0))
     }
 
-    labels <- strsplit(sub_part, "\\.")[[1]]
+    labels <- strsplit(sub_part, ".", fixed = TRUE)[[1]]
     drop_www_label <- !include_www &&
       length(labels) == 1 &&
       grepl("^www[0-9]*$", labels[1])

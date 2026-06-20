@@ -320,9 +320,7 @@ safe_parse_urls <- function(url,
   }
 
   urls_list <- as.list(urls)
-  parsed_list <- lapply(urls_list, function(u) {
-    ._safe_parse_url_scalar(u, opts)
-  })
+  parsed_list <- lapply(urls_list, ._safe_parse_url_scalar, opts)
 
   # Build a rectangular data.frame, filling NULLs with error rows
   original_url_vec <- vapply(urls_list, function(u) {

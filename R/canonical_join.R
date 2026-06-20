@@ -100,23 +100,23 @@ canonical_join <- function(data_A, data_B,
     return(data.frame())
   }
   if (!col_A %in% names(data_A)) {
-    warning(paste0("Column '", col_A, "' not found in data_A."), call. = FALSE)
+    warning("Column '", col_A, "' not found in data_A.", call. = FALSE)
     return(data.frame())
   }
   if (!col_B %in% names(data_B)) {
-    warning(paste0("Column '", col_B, "' not found in data_B."), call. = FALSE)
+    warning("Column '", col_B, "' not found in data_B.", call. = FALSE)
     return(data.frame())
   }
   if (!is.character(data_A[[col_A]]) && !is.factor(data_A[[col_A]])) {
     warning(
-      paste0("Column '", col_A, "' in data_A must be character or factor."),
+      "Column '", col_A, "' in data_A must be character or factor.",
       call. = FALSE
     )
     return(data.frame())
   }
   if (!is.character(data_B[[col_B]]) && !is.factor(data_B[[col_B]])) {
     warning(
-      paste0("Column '", col_B, "' in data_B must be character or factor."),
+      "Column '", col_B, "' in data_B must be character or factor.",
       call. = FALSE
     )
     return(data.frame())
@@ -155,7 +155,7 @@ canonical_join <- function(data_A, data_B,
   ok_B <- !is.na(key_B) & nzchar(key_B) &
     .is_joinable_status(status_B, join_parse_status)
 
-  if (on_parse_error == "error" && (any(!ok_A) || any(!ok_B))) {
+  if (on_parse_error == "error" && (!all(ok_A) || !all(ok_B))) {
     stop("canonical_join() encountered URL parsing errors.", call. = FALSE)
   }
 
@@ -177,10 +177,8 @@ canonical_join <- function(data_A, data_B,
     dup_B <- duplicated(key_B) & ok_B
     if (collision == "error" && (any(dup_A) || any(dup_B))) {
       stop(
-        paste0(
-          "canonical_join() found duplicate canonical keys. ",
-          "Use collision = \"all\" or \"first\"."
-        ),
+        "canonical_join() found duplicate canonical keys. ",
+        "Use collision = \"all\" or \"first\".",
         call. = FALSE
       )
     }

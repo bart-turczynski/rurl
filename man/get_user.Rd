@@ -28,3 +28,6 @@ A character vector of user names.
 \description{
 Extracts the user component of a URL.
 }
+\examples{
+get_user("ftp://alice:secret@ftp.example.com/file.txt")
+}

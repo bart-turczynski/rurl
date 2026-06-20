@@ -28,3 +28,6 @@ A character vector of passwords.
 \description{
 Extracts the password component of a URL.
 }
+\examples{
+get_password("ftp://alice:secret@ftp.example.com/file.txt")
+}

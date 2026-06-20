@@ -176,7 +176,7 @@ test_that("get_path respects case_handling", {
 test_that("get_query returns string or parsed list", {
   expect_equal(unname(get_query("http://example.com/path?a=1&b=2")), "a=1&b=2")
   parsed <- get_query("http://example.com/path?a=1&a=2&b=3", format = "list")
-  expect_true(is.list(parsed))
+  expect_type(parsed, "list")
   expect_equal(parsed[[1]]$a, c("1", "2"))
   expect_equal(parsed[[1]]$b, "3")
 })
@@ -548,7 +548,7 @@ test_that("safe_parse_url handles www_handling options correctly", {
   # For safe_parse_url, if the input is just "http://", parsed_curl$host might
   # be NA or empty.
   # If input is "", it returns NULL early. If input is "http://", host is NA.
-  expect_true(is.null(safe_parse_url("http://", www_handling = "keep")$host))
+  expect_null(safe_parse_url("http://", www_handling = "keep")$host)
   # Test with IP, keep should not apply
   expect_equal(
     safe_parse_url("http://1.2.3.4", www_handling = "keep")$host,

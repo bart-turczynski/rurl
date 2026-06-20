@@ -635,8 +635,11 @@ test_that("registry: every by-design-omitted cell has a non-empty reason", {
     .accessor_registry
   )
   for (cell in omitted_cells) {
+    # Computed outside expect_true() so the NULL-guarding && (nzchar() errors on
+    # NULL) is not split across assertions; the label keeps the failure clear.
+    has_non_empty_reason <- !is.null(cell$reason) && nzchar(cell$reason)
     expect_true(
-      !is.null(cell$reason) && nzchar(cell$reason),
+      has_non_empty_reason,
       label = paste0(
         cell$accessor, "/", cell$option,
         " by-design-omitted entry must have a non-empty reason"
@@ -669,9 +672,9 @@ test_that("registry: all accessor x option cells are present", {
         function(x) x$accessor == acc && x$option == opt,
         .accessor_registry
       )
-      expect_true(
-        length(matching) == 1L,
-        label = paste0(
+      expect_identical(
+        length(matching), 1L,
+        info = paste0(
           "Registry must have exactly one entry for ", acc, " x ", opt
         )
       )
@@ -694,7 +697,7 @@ test_that("registry: all accessor x option cells are present", {
   list(accessor = "get_subdomain", format_value = "labels")
 )
 
-test_that("list-shaped accessors expose a `format` selector with the non-scalar value", {
+test_that("list-shaped accessors expose a `format` selector for non-scalars", {
   for (v in .accessor_list_variants) {
     accessor_fn <- get(v$accessor, envir = asNamespace("rurl"))
     fn_formals <- formals(accessor_fn)
@@ -719,9 +722,9 @@ test_that("list-shaped accessors carry full option coverage in the registry", {
         function(x) x$accessor == v$accessor && x$option == opt,
         .accessor_registry
       )
-      expect_true(
-        length(matching) == 1L,
-        label = paste0(
+      expect_identical(
+        length(matching), 1L,
+        info = paste0(
           "Registry must cover ", v$accessor, " (format = '",
           v$format_value, "') x ", opt
         )
