@@ -254,7 +254,7 @@ safe_parse_url <- function(url,
     path_encoding = path_encoding
   )
 
-  do.call(._safe_parse_url_scalar, c(list(url = url), opts))
+  ._safe_parse_url_scalar(url, opts)
 }
 
 # Vectorized wrapper for safe_parse_url
@@ -321,7 +321,7 @@ safe_parse_urls <- function(url,
 
   urls_list <- as.list(urls)
   parsed_list <- lapply(urls_list, function(u) {
-    do.call(._safe_parse_url_scalar, c(list(url = u), opts))
+    ._safe_parse_url_scalar(u, opts)
   })
 
   # Build a rectangular data.frame, filling NULLs with error rows
@@ -452,39 +452,17 @@ safe_parse_urls <- function(url,
   stringi::stri_escape_unicode(enc2utf8(cache_key))
 }
 
-# Internal scalar helper that handles caching and calls the implementation
-._safe_parse_url_scalar <- function(url,
-                                    protocol_handling,
-                                    www_handling,
-                                    tld_source,
-                                    case_handling,
-                                    trailing_slash_handling,
-                                    index_page_handling,
-                                    path_normalization,
-                                    scheme_relative_handling,
-                                    subdomain_levels_to_keep,
-                                    host_encoding,
-                                    path_encoding) {
+# Internal scalar helper that handles caching and calls the implementation.
+# Receives the validated `opts` list (from .parse_options()) and reuses it
+# directly for the cache key and the implementation call.
+._safe_parse_url_scalar <- function(url, opts) {
   # Early return for invalid input
   if (is.na(url) || !is.character(url) || url == "") {
     return(NULL)
   }
 
-  # Generate cache key. opts is reassembled locally here; threading it down
-  # from the public functions is deferred (see RURL-zovqibtt stage 4).
-  cache_key <- .parse_cache_key(url, list(
-    protocol_handling = protocol_handling,
-    www_handling = www_handling,
-    tld_source = tld_source,
-    case_handling = case_handling,
-    trailing_slash_handling = trailing_slash_handling,
-    index_page_handling = index_page_handling,
-    path_normalization = path_normalization,
-    scheme_relative_handling = scheme_relative_handling,
-    subdomain_levels_to_keep = subdomain_levels_to_keep,
-    host_encoding = host_encoding,
-    path_encoding = path_encoding
-  ))
+  # Generate cache key from the already-validated opts.
+  cache_key <- .parse_cache_key(url, opts)
 
   # Check cache
   cached <- .cache_get("full_parse", cache_key)
@@ -492,21 +470,8 @@ safe_parse_urls <- function(url,
     return(cached)
   }
 
-  # Call the implementation
-  result <- ._safe_parse_url_impl(
-    url = url,
-    protocol_handling = protocol_handling,
-    www_handling = www_handling,
-    tld_source = tld_source,
-    case_handling = case_handling,
-    trailing_slash_handling = trailing_slash_handling,
-    index_page_handling = index_page_handling,
-    path_normalization = path_normalization,
-    scheme_relative_handling = scheme_relative_handling,
-    subdomain_levels_to_keep = subdomain_levels_to_keep,
-    host_encoding = host_encoding,
-    path_encoding = path_encoding
-  )
+  # Call the implementation with the validated opts.
+  result <- do.call(._safe_parse_url_impl, c(list(url = url), opts))
 
   # Cache the result
   .cache_set("full_parse", cache_key, result)
@@ -530,8 +495,8 @@ safe_parse_urls <- function(url,
                                   path_encoding = "keep") {
   original_input_url <- url
 
-  host_encoding <- match.arg(host_encoding, c("keep", "idna", "unicode"))
-  path_encoding <- match.arg(path_encoding, c("keep", "encode", "decode"))
+  # host_encoding/path_encoding are already validated upstream by
+  # .parse_options(); no re-validation here.
 
   # Phase 1: scheme detection and input preparation for curl
   prep <- .prepare_url_for_curl(
