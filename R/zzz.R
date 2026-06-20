@@ -6,6 +6,27 @@
 # full URL parses and the Punycode encode/decode round-trips used to reconstruct
 # hosts. (PSL query results are cached inside pslr itself.)
 
+# Internal registry: one entry per memoization cache, in the canonical order
+# that public functions (rurl_cache_info, rurl_clear_caches, .cache_enabled)
+# must preserve.
+.CACHE_REGISTRY <- list(
+  list(
+    name = "full_parse",
+    default_enabled = TRUE,
+    config_field = "full_parse_enabled"
+  ),
+  list(
+    name = "puny_encode",
+    default_enabled = TRUE,
+    config_field = "puny_encode_enabled"
+  ),
+  list(
+    name = "puny_decode",
+    default_enabled = TRUE,
+    config_field = "puny_decode_enabled"
+  )
+)
+
 # Memoization caches
 .rurl_cache <- new.env(parent = emptyenv())
 
@@ -21,18 +42,16 @@
 
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
-  # Initialize memoization caches
-  .rurl_cache$full_parse <<- new.env(parent = emptyenv())
-  .rurl_cache$puny_encode <<- new.env(parent = emptyenv())
-  .rurl_cache$puny_decode <<- new.env(parent = emptyenv())
+  # Initialize memoization caches from registry
+  for (entry in .CACHE_REGISTRY) {
+    .rurl_cache[[entry$name]] <<- new.env(parent = emptyenv())
+    assign(entry$config_field, entry$default_enabled, envir = .rurl_config)
+  }
 
   # Initialize cache configuration to the historical defaults. Use assign()
   # so we mutate the .rurl_config environment in place rather than rebinding
   # the (locked) namespace binding, mirroring how the cache environments above
   # are populated by reference.
-  assign("full_parse_enabled", TRUE, envir = .rurl_config)
-  assign("puny_encode_enabled", TRUE, envir = .rurl_config)
-  assign("puny_decode_enabled", TRUE, envir = .rurl_config)
   assign("full_parse_max", Inf, envir = .rurl_config)
 
   invisible()
@@ -49,19 +68,17 @@
 #' rurl_clear_caches()
 rurl_clear_caches <- function() {
   # Clear memoization caches by replacing with fresh environments
-  .rurl_cache$full_parse <- new.env(parent = emptyenv())
-  .rurl_cache$puny_encode <- new.env(parent = emptyenv())
-  .rurl_cache$puny_decode <- new.env(parent = emptyenv())
+  for (entry in .CACHE_REGISTRY) {
+    .rurl_cache[[entry$name]] <- new.env(parent = emptyenv())
+  }
   invisible(NULL)
 }
 
 # Whether a named cache is currently enabled.
 .cache_enabled <- function(cache_name) {
-  switch(cache_name,
-    full_parse = .rurl_config$full_parse_enabled,
-    puny_encode = .rurl_config$puny_encode_enabled,
-    puny_decode = .rurl_config$puny_decode_enabled
-  )
+  entry <- Filter(function(e) e$name == cache_name, .CACHE_REGISTRY)
+  if (length(entry) == 0L) return(FALSE)
+  get(entry[[1L]]$config_field, envir = .rurl_config, inherits = FALSE)
 }
 
 # Look up `key` in the named cache. Returns the stored value (which may be
