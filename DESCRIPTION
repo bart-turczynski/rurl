@@ -30,13 +30,15 @@ Imports:
     pslr (>= 1.0.1)
 Remotes:
     bart-turczynski/pslr
-URL: https://CRAN.R-project.org/package=rurl, https://github.com/bart-turczynski/rurl
+URL: https://bart-turczynski.github.io/rurl/, https://github.com/bart-turczynski/rurl,
+    https://CRAN.R-project.org/package=rurl
 BugReports: https://github.com/bart-turczynski/rurl/issues
-Suggests: 
+Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
-    withr
+    withr,
+    pkgdown
 Config/testthat/edition: 3
 Depends: 
     R (>= 3.5)

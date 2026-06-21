@@ -1,0 +1,58 @@
+url: https://bart-turczynski.github.io/rurl/
+
+template:
+  bootstrap: 5
+
+home:
+  title: "rurl — Parse, Clean, and Normalize URLs"
+  description: >
+    A lightweight toolkit for extracting structured information from URLs.
+    Includes vectorized, pipe-friendly functions for parsing, normalizing protocols,
+    extracting domains, and constructing clean URLs. Domain and public-suffix
+    extraction is delegated to the pslr package.
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fab fa-github
+      href: https://github.com/bart-turczynski/rurl
+
+reference:
+  - title: "Parsing"
+    desc: "Parse one or many URLs into structured components."
+    contents:
+      - safe_parse_url
+      - safe_parse_urls
+
+  - title: "Accessors"
+    desc: "Extract individual URL components from character vectors."
+    contents:
+      - get_clean_url
+      - get_parse_status
+      - get_scheme
+      - get_host
+      - get_domain
+      - get_tld
+      - get_subdomain
+      - get_path
+      - get_query
+      - get_fragment
+      - get_port
+      - get_user
+      - get_password
+      - get_userinfo
+
+  - title: "Joining"
+    desc: "Join datasets on canonicalized URL keys."
+    contents:
+      - canonical_join
+
+  - title: "Cache management"
+    desc: "Inspect and control the memoization caches."
+    contents:
+      - rurl_cache_info
+      - rurl_cache_config
+      - rurl_clear_caches
