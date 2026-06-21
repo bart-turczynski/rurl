@@ -3,12 +3,14 @@ Type: Package
 Title: Parse, Clean, and Normalize URLs
 Version: 1.4.0
 Language: en-US
-Authors@R: 
-    person("Bart", "Turczynski", email = "bartek+rurl@turczynski.pl", role = c("aut", "cre"))
+Authors@R:
+    person("Bart", "Turczynski", email = "bartek+rurl@turczynski.pl", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-8788-7980"))
 Description: A lightweight toolkit for extracting structured information from URLs.
     Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs.
     Domain and public-suffix extraction is delegated to the 'pslr' package,
     which implements the Public Suffix List from <https://publicsuffix.org>.
+    Punycode and IDNA encoding is handled by the 'punycoder' package.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(roclets = c("collate", "namespace", "rd"))

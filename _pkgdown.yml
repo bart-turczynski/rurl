@@ -3,6 +3,10 @@ url: https://bart-turczynski.github.io/rurl/
 template:
   bootstrap: 5
 
+authors:
+  "Bart Turczynski":
+    href: https://turczynski.pl
+
 home:
   title: "rurl — Parse, Clean, and Normalize URLs"
   description: >
@@ -19,6 +23,16 @@ navbar:
     github:
       icon: fab fa-github
       href: https://github.com/bart-turczynski/rurl
+
+footer:
+  structure:
+    left: developed_by
+    right: [built_with, related]
+  components:
+    related: >
+      Related:
+      <a href="https://bart-turczynski.github.io/pslr/">pslr</a> ·
+      <a href="https://github.com/bart-turczynski/punycoder">punycoder</a>
 
 reference:
   - title: "Parsing"
