@@ -15,7 +15,7 @@
   `CLAUDE.md` for the full list of protected areas and the intentional
   base-R string exceptions.
 - Public Suffix List data, its parsing, and its refresh
-  ([`pslr::psl_refresh()`](https://rdrr.io/pkg/pslr/man/psl_refresh.html))
+  ([`pslr::psl_refresh()`](https://bart-turczynski.github.io/pslr/reference/psl_refresh.html))
   live in the `pslr` package. `rurl` ships no PSL list of its own and
   queries `pslr` through the `R/domain.R` seam. See `CLAUDE.md` for the
   delegation contract.

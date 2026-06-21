@@ -30,7 +30,7 @@ R CMD check .
 PSL data is no longer maintained in this repo. Domain/TLD extraction is
 delegated to the `pslr` package, which owns the list, its parsing, and
 any refresh
-([`pslr::psl_refresh()`](https://rdrr.io/pkg/pslr/man/psl_refresh.html)).
+([`pslr::psl_refresh()`](https://bart-turczynski.github.io/pslr/reference/psl_refresh.html)).
 
 ## Architecture
 
@@ -79,12 +79,12 @@ The `Collate` order in `DESCRIPTION` is authoritative; the load order is
   Unicode (lenient `puny_decode` + `iconv` sanitization)
 - `.psl_registered_domain()` / `.psl_public_suffix()` (R/domain.R) -
   thin wrappers over
-  [`pslr::registrable_domain()`](https://rdrr.io/pkg/pslr/man/registrable_domain.html)
+  [`pslr::registrable_domain()`](https://bart-turczynski.github.io/pslr/reference/registrable_domain.html)
   /
-  [`pslr::public_suffix()`](https://rdrr.io/pkg/pslr/man/public_suffix.html)
+  [`pslr::public_suffix()`](https://bart-turczynski.github.io/pslr/reference/public_suffix.html)
 - `.psl_suffix_extract()` (R/domain.R) - full canonical decomposition
   (`subdomain` / `domain` / `suffix` / `registrable_domain`) via
-  [`pslr::suffix_extract()`](https://rdrr.io/pkg/pslr/man/suffix_extract.html),
+  [`pslr::suffix_extract()`](https://bart-turczynski.github.io/pslr/reference/suffix_extract.html),
   used to make STRUCTURAL policy decisions (www-prefix and
   subdomain-trim heuristics) on one canonical spelling
 - `.host_is_ace()` (R/domain.R) - TRUE if any host label is an `xn--`

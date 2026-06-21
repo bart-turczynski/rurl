@@ -233,8 +233,21 @@ Domain and TLD extraction is delegated to the
 [`pslr`](https://github.com/bart-turczynski/pslr) package, which owns
 the Public Suffix List and its refresh cycle. `rurl` ships no embedded
 copy of the list. To update the PSL, call
-[`pslr::psl_refresh()`](https://rdrr.io/pkg/pslr/man/psl_refresh.html)
+[`pslr::psl_refresh()`](https://bart-turczynski.github.io/pslr/reference/psl_refresh.html)
 (see the `pslr` documentation for details).
+
+## Related packages
+
+`rurl` is part of a small ecosystem of R packages by the same author:
+
+- **[pslr](https://bart-turczynski.github.io/pslr/)** — the Public
+  Suffix List engine that powers `rurl`’s domain and TLD extraction. Use
+  it directly when you need raw eTLD / registrable-domain queries
+  without full URL parsing.
+- **[punycoder](https://github.com/bart-turczynski/punycoder)** — the
+  Punycode and IDNA codec that `rurl` uses for internationalized host
+  handling. Useful on its own for host normalization and Unicode ↔︎ ACE
+  round-trips.
 
 ## License
 

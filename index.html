@@ -237,7 +237,18 @@
 <div class="section level2">
 <h2 id="public-suffix-list">Public Suffix List<a class="anchor" aria-label="anchor" href="#public-suffix-list"></a>
 </h2>
-<p>Domain and TLD extraction is delegated to the <a href="https://github.com/bart-turczynski/pslr" class="external-link"><code>pslr</code></a> package, which owns the Public Suffix List and its refresh cycle. <code>rurl</code> ships no embedded copy of the list. To update the PSL, call <code><a href="https://rdrr.io/pkg/pslr/man/psl_refresh.html" class="external-link">pslr::psl_refresh()</a></code> (see the <code>pslr</code> documentation for details).</p>
+<p>Domain and TLD extraction is delegated to the <a href="https://github.com/bart-turczynski/pslr" class="external-link"><code>pslr</code></a> package, which owns the Public Suffix List and its refresh cycle. <code>rurl</code> ships no embedded copy of the list. To update the PSL, call <code><a href="https://bart-turczynski.github.io/pslr/reference/psl_refresh.html" class="external-link">pslr::psl_refresh()</a></code> (see the <code>pslr</code> documentation for details).</p>
+</div>
+<div class="section level2">
+<h2 id="related-packages">Related packages<a class="anchor" aria-label="anchor" href="#related-packages"></a>
+</h2>
+<p><code>rurl</code> is part of a small ecosystem of R packages by the same author:</p>
+<ul>
+<li>
+<strong><a href="https://bart-turczynski.github.io/pslr/" class="external-link">pslr</a></strong> — the Public Suffix List engine that powers <code>rurl</code>’s domain and TLD extraction. Use it directly when you need raw eTLD / registrable-domain queries without full URL parsing.</li>
+<li>
+<strong><a href="https://github.com/bart-turczynski/punycoder" class="external-link">punycoder</a></strong> — the Punycode and IDNA codec that <code>rurl</code> uses for internationalized host handling. Useful on its own for host normalization and Unicode ↔︎ ACE round-trips.</li>
+</ul>
 </div>
 <div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
@@ -279,7 +290,8 @@
 <div class="developers">
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
-<li>Bart Turczynski <br><small class="roles"> Author, maintainer </small>   </li>
+<li>
+<a href="https://turczynski.pl" class="external-link">Bart Turczynski</a> <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0002-8788-7980" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
 </ul>
 </div>
 
@@ -299,11 +311,11 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Bart Turczynski.</p>
+  <p>Developed by <a href="https://turczynski.pl" class="external-link">Bart Turczynski</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0. Related: <a href="https://bart-turczynski.github.io/pslr/" class="external-link">pslr</a> · <a href="https://github.com/bart-turczynski/punycoder" class="external-link">punycoder</a></p>
 </div>
 
     </footer>

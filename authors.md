@@ -2,7 +2,8 @@
 
 ## Authors
 
-- **Bart Turczynski**. Author, maintainer.
+- **[Bart Turczynski](https://turczynski.pl)**. Author, maintainer.
+  [](https://orcid.org/0000-0002-8788-7980)
 
 ## Citation
 

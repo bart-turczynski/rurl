@@ -225,3 +225,15 @@ output, such as the `clean_url`.
 - Vectorized functions for parsing and cleaning URLs
 - Uses the Public Suffix List for domain logic
 - Unicode/punycode support
+
+## See also
+
+`rurl` is built on two sibling packages that are also available
+standalone:
+
+- **[pslr](https://bart-turczynski.github.io/pslr/)** — Public Suffix
+  List engine. Use it directly for eTLD and registrable-domain queries
+  when you do not need full URL parsing.
+- **[punycoder](https://github.com/bart-turczynski/punycoder)** —
+  Punycode and IDNA codec for internationalized domain names. Useful for
+  host normalization and Unicode ↔︎ ACE encoding outside the URL context.
