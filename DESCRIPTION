@@ -29,9 +29,7 @@ Imports:
     curl,
     stringi,
     punycoder (>= 1.1.0),
-    pslr (>= 1.0.1)
-Remotes:
-    bart-turczynski/pslr
+    pslr (>= 1.0.2)
 URL: https://bart-turczynski.github.io/rurl/, https://github.com/bart-turczynski/rurl,
     https://CRAN.R-project.org/package=rurl
 BugReports: https://github.com/bart-turczynski/rurl/issues
@@ -43,6 +41,6 @@ Suggests:
     pkgdown
 Config/testthat/edition: 3
 Depends: 
-    R (>= 3.5)
+    R (>= 4.0.0)
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0
