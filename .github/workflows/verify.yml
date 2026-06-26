@@ -1,6 +1,8 @@
-# Fast verification gate: lint + a single Ubuntu R CMD check, on every push to
-# main and every PR. Full cross-platform coverage lives in full-check.yml.
-name: Verify
+# Fast verification gate: lint + a single Ubuntu R CMD check + coverage, on
+# every push to main and every PR. Full cross-platform coverage lives in
+# full-check.yml. Named "R-CMD-check" so tooling that discovers CI by the
+# conventional workflow name (e.g. pkgcheck's `cmd|coverage` heuristic) sees it.
+name: R-CMD-check
 
 on:
   push:
