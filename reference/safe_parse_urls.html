@@ -73,11 +73,11 @@ data.frame with one row per input URL.</p>
 <dt id="arg-protocol-handling">protocol_handling<a class="anchor" aria-label="anchor" href="#arg-protocol-handling"></a></dt>
 <dd><p>A character string specifying how to handle
 protocols. Defaults to "keep".</p><ul><li><p>"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-  no scheme, "http://" is added.</p></li>
+no scheme, "http://" is added.</p></li>
 <li><p>"none": If a scheme exists, it's used. If no scheme, then no
-  scheme is used (scheme component will be NA).</p></li>
+scheme is used (scheme component will be NA).</p></li>
 <li><p>"strip": Any existing scheme is removed (scheme component will be
-  NA).</p></li>
+NA).</p></li>
 <li><p>"http": The scheme is forced to be "http".</p></li>
 <li><p>"https": The scheme is forced to be "https".</p></li>
 </ul></dd>
@@ -85,19 +85,19 @@ protocols. Defaults to "keep".</p><ul><li><p>"keep": If a scheme exists (http, h
 
 <dt id="arg-www-handling">www_handling<a class="anchor" aria-label="anchor" href="#arg-www-handling"></a></dt>
 <dd><p>A character string specifying how to handle "www"
-and "www[number]" prefixes in the host. Defaults to "none".</p><ul><li><p>"none": (Default) Leaves the host's www prefix (or lack thereof)
-  untouched.</p></li>
-<li><p>"strip": Removes any "www." or "www[number]." prefix.</p></li>
+and <code>www[number]</code> prefixes in the host. Defaults to "none".</p><ul><li><p>"none": (Default) Leaves the host's www prefix (or lack thereof)
+untouched.</p></li>
+<li><p>"strip": Removes any "www." or <code>www[number].</code> prefix.</p></li>
 <li><p>"keep": Ensures the host starts with "www.". If it has
-  "www[number].", it's normalized to "www.". If no www prefix, "www." is
-  added. An empty input host remains empty.</p></li>
+<code>www[number].</code>, it's normalized to "www.". If no www prefix, "www." is
+added. An empty input host remains empty.</p></li>
 <li><p>"if_no_subdomain": If the host is a bare registered domain (e.g.,
-  "example.com"), "www." is added. If the host already has a "www." or
-  "www[number]." prefix, it is normalized to "www." (e.g.,
-  "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
-  becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
-  "sub.example.com" or the normalized "www.sub.example.com"), the host is
-  not further altered. An empty input host remains empty.</p></li>
+"example.com"), "www." is added. If the host already has a "www." or
+<code>www[number].</code> prefix, it is normalized to "www." (e.g.,
+"www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
+becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
+"sub.example.com" or the normalized "www.sub.example.com"), the host is
+not further altered. An empty input host remains empty.</p></li>
 </ul></dd>
 
 
@@ -108,11 +108,11 @@ or "private". Defaults to "all".</p></dd>
 
 <dt id="arg-case-handling">case_handling<a class="anchor" aria-label="anchor" href="#arg-case-handling"></a></dt>
 <dd><p>A character string specifying how to handle the case of
-                   the cleaned URL. Defaults to "lower_host", the
-                   RFC 3986 §6.2.2.1 normalization (scheme and host are
-                   case-insensitive and folded to lowercase; the path is
-                   case-sensitive and preserved).</p><ul><li><p>"lower_host": (Default) Lowercases scheme and host only; the path
-  keeps its original casing.</p></li>
+the cleaned URL. Defaults to "lower_host", the
+RFC 3986 §6.2.2.1 normalization (scheme and host are
+case-insensitive and folded to lowercase; the path is
+case-sensitive and preserved).</p><ul><li><p>"lower_host": (Default) Lowercases scheme and host only; the path
+keeps its original casing.</p></li>
 <li><p>"keep": Preserves casing of the reconstructed URL.</p></li>
 <li><p>"lower": Converts the cleaned URL to lowercase.</p></li>
 <li><p>"upper": Converts the cleaned URL to uppercase.</p></li>
@@ -123,11 +123,11 @@ or "private". Defaults to "all".</p></dd>
 <dd><p>A character string specifying how to handle
 trailing slashes in the path component of the cleaned URL. Defaults to
 "none".</p><ul><li><p>"none": (Default) No specific handling is applied. Path remains as
-  is after initial parsing.</p></li>
+is after initial parsing.</p></li>
 <li><p>"keep": Ensures a trailing slash. If a path exists and doesn't end
-  with one, it's added. If path is just "/", it's kept.</p></li>
+with one, it's added. If path is just "/", it's kept.</p></li>
 <li><p>"strip": Removes a trailing slash if present, unless the path is
-  solely "/".</p></li>
+solely "/".</p></li>
 </ul></dd>
 
 
@@ -135,7 +135,7 @@ trailing slashes in the path component of the cleaned URL. Defaults to
 <dd><p>A character string specifying how to handle
 index/default pages. Defaults to "keep".</p><ul><li><p>"keep": (Default) Leave index/default page segments untouched.</p></li>
 <li><p>"strip": Remove a trailing index.* or default.* segment
-    (case-insensitive).</p></li>
+(case-insensitive).</p></li>
 </ul></dd>
 
 
@@ -151,7 +151,7 @@ index/default pages. Defaults to "keep".</p><ul><li><p>"keep": (Default) Leave i
 <dt id="arg-scheme-relative-handling">scheme_relative_handling<a class="anchor" aria-label="anchor" href="#arg-scheme-relative-handling"></a></dt>
 <dd><p>How to handle URLs starting with "//".
 Defaults to "keep".</p><ul><li><p>"keep": Parse using http but return scheme as NA and set status to
-    "ok-scheme-relative".</p></li>
+"ok-scheme-relative".</p></li>
 <li><p>"http": Assume http for parsing and output.</p></li>
 <li><p>"https": Assume https for parsing and output.</p></li>
 <li><p>"error": Treat scheme-relative URLs as invalid.</p></li>
@@ -161,35 +161,35 @@ Defaults to "keep".</p><ul><li><p>"keep": Parse using http but return scheme as 
 <dt id="arg-subdomain-levels-to-keep">subdomain_levels_to_keep<a class="anchor" aria-label="anchor" href="#arg-subdomain-levels-to-keep"></a></dt>
 <dd><p>An integer or NULL. Determines how many
 levels of subdomains are kept,
-  in addition to any 'www.' prefix handled by `www_handling`.</p><ul><li><p>`NULL`: (Default) No specific subdomain stripping is performed
-    beyond `www_handling`.</p></li>
-<li><p>`0`: All subdomains are stripped. If `www_handling` preserved or
-    added 'www.',
-         it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
-         'sub.example.com' becomes 'example.com').</p></li>
-<li><p>`N &gt; 0`: Keeps up to N levels of subdomains, counted from
-    right-to-left (closest to the registered domain),
-         in addition to any 'www.' prefix. E.g., if N=1,
-         'three.two.one.example.com' becomes 'one.example.com';
-         'www.three.two.one.example.com' (post www_handling) becomes
-         'www.one.example.com'.</p></li>
+in addition to any 'www.' prefix handled by <code>www_handling</code>.</p><ul><li><p><code>NULL</code>: (Default) No specific subdomain stripping is performed
+beyond <code>www_handling</code>.</p></li>
+<li><p><code>0</code>: All subdomains are stripped. If <code>www_handling</code> preserved or
+added 'www.',
+it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
+'sub.example.com' becomes 'example.com').</p></li>
+<li><p><code>N &gt; 0</code>: Keeps up to N levels of subdomains, counted from
+right-to-left (closest to the registered domain),
+in addition to any 'www.' prefix. E.g., if N=1,
+'three.two.one.example.com' becomes 'one.example.com';
+'www.three.two.one.example.com' (post www_handling) becomes
+'www.one.example.com'.</p></li>
 </ul></dd>
 
 
 <dt id="arg-host-encoding">host_encoding<a class="anchor" aria-label="anchor" href="#arg-host-encoding"></a></dt>
-<dd><p>How to present the host in `clean_url`. Defaults to
+<dd><p>How to present the host in <code>clean_url</code>. Defaults to
 "keep".</p><ul><li><p>"keep": Leave host as parsed by curl (may preserve original case).</p></li>
 <li><p>"idna": Convert Unicode host labels to Punycode (IDNA) for the
-    cleaned URL.</p></li>
+cleaned URL.</p></li>
 <li><p>"unicode": Decode Punycode labels to Unicode for the cleaned URL.</p></li>
 </ul></dd>
 
 
 <dt id="arg-path-encoding">path_encoding<a class="anchor" aria-label="anchor" href="#arg-path-encoding"></a></dt>
 <dd><p>How to handle percent-encoding in the path for
-`clean_url`. Defaults to "keep".</p><ul><li><p>"keep": Leave the path percent-encoding untouched.</p></li>
+<code>clean_url</code>. Defaults to "keep".</p><ul><li><p>"keep": Leave the path percent-encoding untouched.</p></li>
 <li><p>"encode": Normalize by decoding first, then percent-encoding each
-    segment (slashes preserved).</p></li>
+segment (slashes preserved).</p></li>
 <li><p>"decode": Percent-decode UTF-8 sequences in the path.</p></li>
 </ul></dd>
 
@@ -197,8 +197,8 @@ levels of subdomains are kept,
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data.frame with one row per URL and the same fields returned by
-  <code><a href="safe_parse_url.html">safe_parse_url</a></code>. Invalid inputs return NA fields with
-  <code>parse_status = "error"</code>.</p>
+<code><a href="safe_parse_url.html">safe_parse_url</a></code>. Invalid inputs return NA fields with
+<code>parse_status = "error"</code>.</p>
     </div>
 
     <div class="section level2">

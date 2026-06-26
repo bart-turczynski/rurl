@@ -49,21 +49,21 @@ safe_parse_urls(
 
 - www_handling:
 
-  A character string specifying how to handle "www" and "www\[number\]"
+  A character string specifying how to handle "www" and `www[number]`
   prefixes in the host. Defaults to "none".
 
   - "none": (Default) Leaves the host's www prefix (or lack thereof)
     untouched.
 
-  - "strip": Removes any "www." or "www\[number\]." prefix.
+  - "strip": Removes any "www." or `www[number].` prefix.
 
   - "keep": Ensures the host starts with "www.". If it has
-    "www\[number\].", it's normalized to "www.". If no www prefix,
-    "www." is added. An empty input host remains empty.
+    `www[number].`, it's normalized to "www.". If no www prefix, "www."
+    is added. An empty input host remains empty.
 
   - "if_no_subdomain": If the host is a bare registered domain (e.g.,
     "example.com"), "www." is added. If the host already has a "www." or
-    "www\[number\]." prefix, it is normalized to "www." (e.g.,
+    `www[number].` prefix, it is normalized to "www." (e.g.,
     "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
     becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
     "sub.example.com" or the normalized "www.sub.example.com"), the host
@@ -142,16 +142,16 @@ safe_parse_urls(
 - subdomain_levels_to_keep:
 
   An integer or NULL. Determines how many levels of subdomains are kept,
-  in addition to any 'www.' prefix handled by \`www_handling\`.
+  in addition to any 'www.' prefix handled by `www_handling`.
 
-  - \`NULL\`: (Default) No specific subdomain stripping is performed
-    beyond \`www_handling\`.
+  - `NULL`: (Default) No specific subdomain stripping is performed
+    beyond `www_handling`.
 
-  - \`0\`: All subdomains are stripped. If \`www_handling\` preserved or
+  - `0`: All subdomains are stripped. If `www_handling` preserved or
     added 'www.', it remains (e.g., 'www.sub.example.com' becomes
     'www.example.com'; 'sub.example.com' becomes 'example.com').
 
-  - \`N \> 0\`: Keeps up to N levels of subdomains, counted from
+  - `N > 0`: Keeps up to N levels of subdomains, counted from
     right-to-left (closest to the registered domain), in addition to any
     'www.' prefix. E.g., if N=1, 'three.two.one.example.com' becomes
     'one.example.com'; 'www.three.two.one.example.com' (post
@@ -159,7 +159,7 @@ safe_parse_urls(
 
 - host_encoding:
 
-  How to present the host in \`clean_url\`. Defaults to "keep".
+  How to present the host in `clean_url`. Defaults to "keep".
 
   - "keep": Leave host as parsed by curl (may preserve original case).
 
@@ -170,7 +170,7 @@ safe_parse_urls(
 
 - path_encoding:
 
-  How to handle percent-encoding in the path for \`clean_url\`. Defaults
+  How to handle percent-encoding in the path for `clean_url`. Defaults
   to "keep".
 
   - "keep": Leave the path percent-encoding untouched.

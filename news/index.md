@@ -2,6 +2,14 @@
 
 ## rurl 1.4.0
 
+### Dependencies
+
+- The `pslr` dependency floor is now `>= 1.0.2` and the `punycoder`
+  floor is `>= 1.2.0`. Those releases form the coordinated
+  `punycoder 1.2.0` host-normalization API pair, so a fresh install
+  pulls a compatible set; `rurl` should be submitted after both
+  dependency updates are on CRAN.
+
 ### Accessor improvements
 
 - [`get_path()`](https://bart-turczynski.github.io/rurl/reference/get_path.md)
@@ -58,9 +66,8 @@ so existing calls are unaffected.
   (e.g. `fixed = TRUE` dot splits, condition-message construction,
   dropped unnecessary lambdas) with no behavior change.
 - `.lintr` now mirrors `goodpractice`’s linter set, so a local
-  [`lintr::lint_package()`](https://lintr.r-lib.org/reference/lint.html)
-  matches the `goodpractice` report; intentional test-idiom deviations
-  are documented in the config header.
+  `lintr::lint_package()` matches the `goodpractice` report; intentional
+  test-idiom deviations are documented in the config header.
 - Restored 100% line coverage: added targeted tests for the
   `.punycode_to_unicode("")`, `.host_is_ace()`, and `.cache_enabled()`
   guard branches and the `derive_parse_status()` NA-host-dot fallback
@@ -80,6 +87,23 @@ so existing calls are unaffected.
   `.subdomain_labels()`, `.validate_max_full_parse()`,
   `.spu_coerce_original()`). No behavior change; no function in the
   package now exceeds the `goodpractice` cyclocomp threshold of 15.
+
+### Documentation & metadata
+
+- Added package-level documentation
+  ([`?rurl`](https://bart-turczynski.github.io/rurl/reference/rurl-package.md)
+  / `man/rurl-package.Rd`) via a `"_PACKAGE"` sentinel, so the
+  maintainer ORCID, package URLs, and the cross-promotion of
+  `pslr`/`punycoder` now render on a help/landing page.
+- Enabled roxygen2 markdown (`Roxygen: list(markdown = TRUE)`),
+  regenerating all `man/*.Rd` (inline backticks now render as
+  `\code{}`).
+- Fixed the stale `inst/CITATION`: it now reads the version from package
+  metadata (was hardcoded `0.2.0`), uses the correct title, and carries
+  the maintainer ORCID. Added a root `CITATION.cff`.
+- Added `X-schema.org-keywords`, the r-universe URL, and a
+  `codemeta.json` for discoverability.
+- Maintainer email simplified to `bartek@turczynski.pl`.
 
 ## rurl 1.3.0
 

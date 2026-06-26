@@ -65,11 +65,11 @@
 <dt id="arg-protocol-handling">protocol_handling<a class="anchor" aria-label="anchor" href="#arg-protocol-handling"></a></dt>
 <dd><p>A character string specifying how to handle
 protocols. Defaults to "keep".</p><ul><li><p>"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-  no scheme, "http://" is added.</p></li>
+no scheme, "http://" is added.</p></li>
 <li><p>"none": If a scheme exists, it's used. If no scheme, then no
-  scheme is used (scheme component will be NA).</p></li>
+scheme is used (scheme component will be NA).</p></li>
 <li><p>"strip": Any existing scheme is removed (scheme component will be
-  NA).</p></li>
+NA).</p></li>
 <li><p>"http": The scheme is forced to be "http".</p></li>
 <li><p>"https": The scheme is forced to be "https".</p></li>
 </ul></dd>
@@ -77,19 +77,19 @@ protocols. Defaults to "keep".</p><ul><li><p>"keep": If a scheme exists (http, h
 
 <dt id="arg-www-handling">www_handling<a class="anchor" aria-label="anchor" href="#arg-www-handling"></a></dt>
 <dd><p>A character string specifying how to handle "www"
-and "www[number]" prefixes in the host. Defaults to "none".</p><ul><li><p>"none": (Default) Leaves the host's www prefix (or lack thereof)
-  untouched.</p></li>
-<li><p>"strip": Removes any "www." or "www[number]." prefix.</p></li>
+and <code>www[number]</code> prefixes in the host. Defaults to "none".</p><ul><li><p>"none": (Default) Leaves the host's www prefix (or lack thereof)
+untouched.</p></li>
+<li><p>"strip": Removes any "www." or <code>www[number].</code> prefix.</p></li>
 <li><p>"keep": Ensures the host starts with "www.". If it has
-  "www[number].", it's normalized to "www.". If no www prefix, "www." is
-  added. An empty input host remains empty.</p></li>
+<code>www[number].</code>, it's normalized to "www.". If no www prefix, "www." is
+added. An empty input host remains empty.</p></li>
 <li><p>"if_no_subdomain": If the host is a bare registered domain (e.g.,
-  "example.com"), "www." is added. If the host already has a "www." or
-  "www[number]." prefix, it is normalized to "www." (e.g.,
-  "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
-  becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
-  "sub.example.com" or the normalized "www.sub.example.com"), the host is
-  not further altered. An empty input host remains empty.</p></li>
+"example.com"), "www." is added. If the host already has a "www." or
+<code>www[number].</code> prefix, it is normalized to "www." (e.g.,
+"www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
+becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
+"sub.example.com" or the normalized "www.sub.example.com"), the host is
+not further altered. An empty input host remains empty.</p></li>
 </ul></dd>
 
 
@@ -99,7 +99,7 @@ and "www[number]" prefixes in the host. Defaults to "none".</p><ul><li><p>"none"
 
 <dt id="arg-include-www">include_www<a class="anchor" aria-label="anchor" href="#arg-include-www"></a></dt>
 <dd><p>Logical; if FALSE (default), removes a leading
-www/www[0-9]* label only when it is the sole subdomain label.</p></dd>
+<code>www</code>/<code>www[0-9]*</code> label only when it is the sole subdomain label.</p></dd>
 
 
 <dt id="arg-format">format<a class="anchor" aria-label="anchor" href="#arg-format"></a></dt>
@@ -108,10 +108,10 @@ vector of labels.</p></dd>
 
 
 <dt id="arg-host-encoding">host_encoding<a class="anchor" aria-label="anchor" href="#arg-host-encoding"></a></dt>
-<dd><p>How to present the host in `clean_url`. Defaults to
+<dd><p>How to present the host in <code>clean_url</code>. Defaults to
 "keep".</p><ul><li><p>"keep": Leave host as parsed by curl (may preserve original case).</p></li>
 <li><p>"idna": Convert Unicode host labels to Punycode (IDNA) for the
-    cleaned URL.</p></li>
+cleaned URL.</p></li>
 <li><p>"unicode": Decode Punycode labels to Unicode for the cleaned URL.</p></li>
 </ul></dd>
 

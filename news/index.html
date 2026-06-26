@@ -39,6 +39,10 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.4.0" id="rurl-140">rurl 1.4.0<a class="anchor" aria-label="anchor" href="#rurl-140"></a></h2>
 <div class="section level3">
+<h3 id="dependencies-1-4-0">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies-1-4-0"></a></h3>
+<ul><li>The <code>pslr</code> dependency floor is now <code>&gt;= 1.0.2</code> and the <code>punycoder</code> floor is <code>&gt;= 1.2.0</code>. Those releases form the coordinated <code>punycoder 1.2.0</code> host-normalization API pair, so a fresh install pulls a compatible set; <code>rurl</code> should be submitted after both dependency updates are on CRAN.</li>
+</ul></div>
+<div class="section level3">
 <h3 id="accessor-improvements-1-4-0">Accessor improvements<a class="anchor" aria-label="anchor" href="#accessor-improvements-1-4-0"></a></h3>
 <ul><li>
 <code><a href="../reference/get_path.html">get_path()</a></code> gains <code>path_normalization</code>, <code>index_page_handling</code>, <code>trailing_slash_handling</code>, and <code>path_encoding</code> arguments, matching the corresponding options of <code><a href="../reference/safe_parse_url.html">safe_parse_url()</a></code>.</li>
@@ -64,9 +68,17 @@
 <li>Cache touchpoints in <code>R/zzz.R</code> now driven from a single <code>.CACHE_REGISTRY</code> instead of repeating cache names by hand.</li>
 <li>Cleared the <code>lintr</code>/<code>goodpractice</code> findings across <code>R/</code> and the tests (e.g. <code>fixed = TRUE</code> dot splits, condition-message construction, dropped unnecessary lambdas) with no behavior change.</li>
 <li>
-<code>.lintr</code> now mirrors <code>goodpractice</code>’s linter set, so a local <code><a href="https://lintr.r-lib.org/reference/lint.html" class="external-link">lintr::lint_package()</a></code> matches the <code>goodpractice</code> report; intentional test-idiom deviations are documented in the config header.</li>
+<code>.lintr</code> now mirrors <code>goodpractice</code>’s linter set, so a local <code>lintr::lint_package()</code> matches the <code>goodpractice</code> report; intentional test-idiom deviations are documented in the config header.</li>
 <li>Restored 100% line coverage: added targeted tests for the <code>.punycode_to_unicode("")</code>, <code>.host_is_ace()</code>, and <code>.cache_enabled()</code> guard branches and the <code>derive_parse_status()</code> NA-host-dot fallback (and fixed an over-escaped regex literal that left the scheme-slash NA guard untested). The two genuinely unreachable <code>www</code>-prefix regex-capture fallbacks are now marked <code># nocov</code> with justification.</li>
 <li>Reduced the cyclomatic complexity of <code><a href="../reference/canonical_join.html">canonical_join()</a></code> (47→7), <code><a href="../reference/get_subdomain.html">get_subdomain()</a></code> (26→6), <code><a href="../reference/rurl_cache_config.html">rurl_cache_config()</a></code> (23→5), and <code><a href="../reference/safe_parse_urls.html">safe_parse_urls()</a></code> (19→3) by extracting named sub-helpers (e.g. <code>.cj_validate_inputs()</code>/<code>.cj_resolve_sides()</code>/<code>.cj_build_join_df()</code>, <code>.subdomain_labels()</code>, <code>.validate_max_full_parse()</code>, <code>.spu_coerce_original()</code>). No behavior change; no function in the package now exceeds the <code>goodpractice</code> cyclocomp threshold of 15.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation--metadata-1-4-0">Documentation &amp; metadata<a class="anchor" aria-label="anchor" href="#documentation--metadata-1-4-0"></a></h3>
+<ul><li>Added package-level documentation (<code><a href="../reference/rurl-package.html">?rurl</a></code> / <code>man/rurl-package.Rd</code>) via a <code>"_PACKAGE"</code> sentinel, so the maintainer ORCID, package URLs, and the cross-promotion of <code>pslr</code>/<code>punycoder</code> now render on a help/landing page.</li>
+<li>Enabled roxygen2 markdown (<code>Roxygen: list(markdown = TRUE)</code>), regenerating all <code>man/*.Rd</code> (inline backticks now render as <code>\code{}</code>).</li>
+<li>Fixed the stale <code>inst/CITATION</code>: it now reads the version from package metadata (was hardcoded <code>0.2.0</code>), uses the correct title, and carries the maintainer ORCID. Added a root <code>CITATION.cff</code>.</li>
+<li>Added <code>X-schema.org-keywords</code>, the r-universe URL, and a <code>codemeta.json</code> for discoverability.</li>
+<li>Maintainer email simplified to <code>bartek@turczynski.pl</code>.</li>
 </ul></div>
 </div>
     <div class="section level2">

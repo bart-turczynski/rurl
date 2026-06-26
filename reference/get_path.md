@@ -84,7 +84,7 @@ get_path(
 
 - path_encoding:
 
-  How to handle percent-encoding in the path for \`clean_url\`. Defaults
+  How to handle percent-encoding in the path for `clean_url`. Defaults
   to "keep".
 
   - "keep": Leave the path percent-encoding untouched.

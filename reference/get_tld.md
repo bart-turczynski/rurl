@@ -25,7 +25,7 @@ get_tld(
 
 - host_encoding:
 
-  How to present the host in \`clean_url\`. Defaults to "keep".
+  How to present the host in `clean_url`. Defaults to "keep".
 
   - "keep": Leave host as parsed by curl (may preserve original case).
 

@@ -65,11 +65,11 @@
 <dt id="arg-protocol-handling">protocol_handling<a class="anchor" aria-label="anchor" href="#arg-protocol-handling"></a></dt>
 <dd><p>A character string specifying how to handle
 protocols. Defaults to "keep".</p><ul><li><p>"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-  no scheme, "http://" is added.</p></li>
+no scheme, "http://" is added.</p></li>
 <li><p>"none": If a scheme exists, it's used. If no scheme, then no
-  scheme is used (scheme component will be NA).</p></li>
+scheme is used (scheme component will be NA).</p></li>
 <li><p>"strip": Any existing scheme is removed (scheme component will be
-  NA).</p></li>
+NA).</p></li>
 <li><p>"http": The scheme is forced to be "http".</p></li>
 <li><p>"https": The scheme is forced to be "https".</p></li>
 </ul></dd>
@@ -85,11 +85,11 @@ case-sensitive per RFC 3986 §6.2.2.1). Use "lower"/"upper" to force a case.</p>
 <dd><p>A character string specifying how to handle
 trailing slashes in the path component of the cleaned URL. Defaults to
 "none".</p><ul><li><p>"none": (Default) No specific handling is applied. Path remains as
-  is after initial parsing.</p></li>
+is after initial parsing.</p></li>
 <li><p>"keep": Ensures a trailing slash. If a path exists and doesn't end
-  with one, it's added. If path is just "/", it's kept.</p></li>
+with one, it's added. If path is just "/", it's kept.</p></li>
 <li><p>"strip": Removes a trailing slash if present, unless the path is
-  solely "/".</p></li>
+solely "/".</p></li>
 </ul></dd>
 
 
@@ -97,7 +97,7 @@ trailing slashes in the path component of the cleaned URL. Defaults to
 <dd><p>A character string specifying how to handle
 index/default pages. Defaults to "keep".</p><ul><li><p>"keep": (Default) Leave index/default page segments untouched.</p></li>
 <li><p>"strip": Remove a trailing index.* or default.* segment
-    (case-insensitive).</p></li>
+(case-insensitive).</p></li>
 </ul></dd>
 
 
@@ -112,9 +112,9 @@ index/default pages. Defaults to "keep".</p><ul><li><p>"keep": (Default) Leave i
 
 <dt id="arg-path-encoding">path_encoding<a class="anchor" aria-label="anchor" href="#arg-path-encoding"></a></dt>
 <dd><p>How to handle percent-encoding in the path for
-`clean_url`. Defaults to "keep".</p><ul><li><p>"keep": Leave the path percent-encoding untouched.</p></li>
+<code>clean_url</code>. Defaults to "keep".</p><ul><li><p>"keep": Leave the path percent-encoding untouched.</p></li>
 <li><p>"encode": Normalize by decoding first, then percent-encoding each
-    segment (slashes preserved).</p></li>
+segment (slashes preserved).</p></li>
 <li><p>"decode": Percent-decode UTF-8 sequences in the path.</p></li>
 </ul></dd>
 

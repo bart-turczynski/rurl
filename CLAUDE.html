@@ -55,7 +55,11 @@
 <span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">document</span>()</span>
 <span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a></span>
 <span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="co"># Full package check</span></span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>R CMD check .</span></code></pre></div>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>R CMD check .</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="co"># Lint (must stay clean — see .lintr below)</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>lintr<span class="sc">::</span><span class="fu">lint_package</span>()</span></code></pre></div>
+<p><code>.lintr</code> is deliberately kept in sync with the linter set <code>goodpractice::gp()</code> runs, so a local <code>lintr::lint_package()</code> reproduces the findings surfaced in review/CI. The header of <code>.lintr</code> documents every intentional deviation (e.g. <code>object_name_linter</code>/<code>expect_identical_linter</code> off for published mixed-case API params and testthat idioms) — read it before “fixing” a lint or adding a linter. CI runs in <code>.github/workflows/</code> (<code>verify</code> is the headline gate; also <code>full-check</code>, <code>pkgdown</code>, <code>rhub</code>, <code>news-version</code>).</p>
 <p>PSL data is no longer maintained in this repo. Domain/TLD extraction is delegated to the <code>pslr</code> package, which owns the list, its parsing, and any refresh (<code><a href="https://bart-turczynski.github.io/pslr/reference/psl_refresh.html" class="external-link">pslr::psl_refresh()</a></code>).</p>
 </div>
 <div class="section level2">
@@ -131,8 +135,8 @@
 <h2 id="critical-constraints">Critical Constraints<a class="anchor" aria-label="anchor" href="#critical-constraints"></a></h2>
 <p><strong>DO NOT ALTER the following:</strong></p>
 <ol style="list-style-type: decimal"><li>
-<p><strong>Punycode functions</strong> - <code>.normalize_and_punycode()</code> (host -&gt; A-label, used by <code>host_encoding = "idna"</code>) and <code>.punycode_to_unicode()</code> (A-label -&gt; Unicode, used by <code>host_encoding = "unicode"</code> and <code><a href="reference/get_host.html">get_host()</a></code>). These render the host reversibly while <em>preserving case</em> (the case policy is a separate later phase) and <em>tolerating</em> malformed-but-encodable hosts (lenient <code>strict = FALSE</code> fallback). They no longer carry per-TLD hardcoded workarounds — those were removed during the pslr migration; plain <code><a href="https://rdrr.io/pkg/punycoder/man/puny_encode.html" class="external-link">punycoder::puny_encode</a></code>/<code>puny_decode</code> handle .ελ / .рф correctly.</p>
-<p><strong>Decision (RURL-ntdnoywx, 2026-06-20): keep these helpers; do NOT replace them with <code><a href="https://rdrr.io/pkg/punycoder/man/host_normalize.html" class="external-link">punycoder::host_normalize()</a></code>.</strong> <code>host_normalize()</code> is purpose-built for canonical <em>comparison</em> form (which is exactly why <code>pslr</code> applies it before PSL matching), not for rurl’s reversible host <em>rendering</em>. It is not a drop-in for either helper: (a) it is one-directional with no inverse, so it cannot replace <code>.punycode_to_unicode()</code> at all; (b) on the encode path it force-lowercases (colliding with rurl’s separate case policy, breaking <code>case_handling = "keep"</code>/<code>"upper"</code>) and returns <code>NA</code> for hosts rurl currently tolerates — STD3 <code>_</code>, leading/trailing hyphens, <code>--</code> in label positions 3-4 (CheckHyphens), and over-DNS-length labels. Characterization diff lives in the issue. Revisit only if rurl gains a dedicated “canonical match key” surface where lowercasing + UTS-46 strictness are desired.</p>
+<p><strong>Punycode functions</strong> - <code>.normalize_and_punycode()</code> (host -&gt; A-label, used by <code>host_encoding = "idna"</code>) and <code>.punycode_to_unicode()</code> (A-label -&gt; Unicode, used by <code>host_encoding = "unicode"</code> and <code><a href="reference/get_host.html">get_host()</a></code>). These render the host reversibly while <em>preserving case</em> (the case policy is a separate later phase) and <em>tolerating</em> malformed-but-encodable hosts (lenient <code>strict = FALSE</code> fallback). They no longer carry per-TLD hardcoded workarounds — those were removed during the pslr migration; plain <code><a href="https://bart-turczynski.github.io/punycoder/reference/puny_encode.html" class="external-link">punycoder::puny_encode</a></code>/<code>puny_decode</code> handle .ελ / .рф correctly.</p>
+<p><strong>Decision (RURL-ntdnoywx, 2026-06-20): keep these helpers; do NOT replace them with <code><a href="https://bart-turczynski.github.io/punycoder/reference/host_normalize.html" class="external-link">punycoder::host_normalize()</a></code>.</strong> <code>host_normalize()</code> is purpose-built for canonical <em>comparison</em> form (which is exactly why <code>pslr</code> applies it before PSL matching), not for rurl’s reversible host <em>rendering</em>. It is not a drop-in for either helper: (a) it is one-directional with no inverse, so it cannot replace <code>.punycode_to_unicode()</code> at all; (b) on the encode path it force-lowercases (colliding with rurl’s separate case policy, breaking <code>case_handling = "keep"</code>/<code>"upper"</code>) and returns <code>NA</code> for hosts rurl currently tolerates — STD3 <code>_</code>, leading/trailing hyphens, <code>--</code> in label positions 3-4 (CheckHyphens), and over-DNS-length labels. Characterization diff lives in the issue. Revisit only if rurl gains a dedicated “canonical match key” surface where lowercasing + UTS-46 strictness are desired.</p>
 </li>
 <li><p><strong>PSL semantics live in <code>pslr</code></strong> - do not reintroduce an embedded matcher or bundled list in this package; query <code>pslr</code> through the R/domain.R seam.</p></li>
 </ol></div>
@@ -144,9 +148,9 @@
 <li>
 <code>stringi</code> - Unicode string manipulation (recently migrated from base <code>grep</code>)</li>
 <li>
-<code>punycoder</code> (&gt;= 1.1.0) - Punycode encoding/decoding</li>
+<code>punycoder</code> (&gt;= 1.2.0) - Punycode encoding/decoding</li>
 <li>
-<code>pslr</code> (&gt;= 1.0.1) - Public Suffix List matching (domain/TLD extraction)</li>
+<code>pslr</code> (&gt;= 1.0.2) - Public Suffix List matching (domain/TLD extraction)</li>
 </ul><div class="section level3">
 <h3 id="intentional-base-r-string-exceptions">Intentional base-R string exceptions<a class="anchor" aria-label="anchor" href="#intentional-base-r-string-exceptions"></a></h3>
 <p>The migration to <code>stringi</code> is deliberately <em>not</em> total. The following base-R string calls are retained on purpose — do not “finish the migration” for consistency alone:</p>

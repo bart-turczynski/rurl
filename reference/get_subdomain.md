@@ -42,21 +42,21 @@ get_subdomain(
 
 - www_handling:
 
-  A character string specifying how to handle "www" and "www\[number\]"
+  A character string specifying how to handle "www" and `www[number]`
   prefixes in the host. Defaults to "none".
 
   - "none": (Default) Leaves the host's www prefix (or lack thereof)
     untouched.
 
-  - "strip": Removes any "www." or "www\[number\]." prefix.
+  - "strip": Removes any "www." or `www[number].` prefix.
 
   - "keep": Ensures the host starts with "www.". If it has
-    "www\[number\].", it's normalized to "www.". If no www prefix,
-    "www." is added. An empty input host remains empty.
+    `www[number].`, it's normalized to "www.". If no www prefix, "www."
+    is added. An empty input host remains empty.
 
   - "if_no_subdomain": If the host is a bare registered domain (e.g.,
     "example.com"), "www." is added. If the host already has a "www." or
-    "www\[number\]." prefix, it is normalized to "www." (e.g.,
+    `www[number].` prefix, it is normalized to "www." (e.g.,
     "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
     becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
     "sub.example.com" or the normalized "www.sub.example.com"), the host
@@ -68,7 +68,7 @@ get_subdomain(
 
 - include_www:
 
-  Logical; if FALSE (default), removes a leading www/www\[0-9\]\* label
+  Logical; if FALSE (default), removes a leading `www`/`www[0-9]*` label
   only when it is the sole subdomain label.
 
 - format:
@@ -78,7 +78,7 @@ get_subdomain(
 
 - host_encoding:
 
-  How to present the host in \`clean_url\`. Defaults to "keep".
+  How to present the host in `clean_url`. Defaults to "keep".
 
   - "keep": Leave host as parsed by curl (may preserve original case).
 

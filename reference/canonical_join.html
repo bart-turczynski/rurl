@@ -158,12 +158,12 @@ controlling canonicalization (e.g., <code>protocol_handling</code>,
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame representing the join. The output includes:</p><ul><li><p>The original URL columns (named via <code>name_A</code> / <code>name_B</code>,
-          or after the input expressions when those are <code>NULL</code>).</p></li>
+or after the input expressions when those are <code>NULL</code>).</p></li>
 <li><p><code>JoinKey</code>: the canonicalized URL used for matching.</p></li>
 <li><p>All other columns from <code>data_A</code> and <code>data_B</code> with
-          suffixes applied.</p></li>
+suffixes applied.</p></li>
 </ul><p>Returns an empty data frame with the expected structure if no matches
-  are found or if inputs are invalid.</p>
+are found or if inputs are invalid.</p>
     </div>
 
     <div class="section level2">
