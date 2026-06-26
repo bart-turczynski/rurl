@@ -20,7 +20,18 @@ devtools::document()
 
 # Full package check
 R CMD check .
+
+# Lint (must stay clean — see .lintr below)
+lintr::lint_package()
 ```
+
+`.lintr` is deliberately kept in sync with the linter set
+`goodpractice::gp()` runs, so a local `lintr::lint_package()` reproduces the
+findings surfaced in review/CI. The header of `.lintr` documents every
+intentional deviation (e.g. `object_name_linter`/`expect_identical_linter`
+off for published mixed-case API params and testthat idioms) — read it before
+"fixing" a lint or adding a linter. CI runs in `.github/workflows/` (`verify`
+is the headline gate; also `full-check`, `pkgdown`, `rhub`, `news-version`).
 
 PSL data is no longer maintained in this repo. Domain/TLD extraction is
 delegated to the `pslr` package, which owns the list, its parsing, and any
@@ -93,8 +104,8 @@ The `Collate` order in `DESCRIPTION` is authoritative; the load order is
 
 - `curl` - URL parsing via `curl_parse_url()`
 - `stringi` - Unicode string manipulation (recently migrated from base `grep`)
-- `punycoder` (>= 1.1.0) - Punycode encoding/decoding
-- `pslr` (>= 1.0.1) - Public Suffix List matching (domain/TLD extraction)
+- `punycoder` (>= 1.2.0) - Punycode encoding/decoding
+- `pslr` (>= 1.0.2) - Public Suffix List matching (domain/TLD extraction)
 
 ### Intentional base-R string exceptions
 

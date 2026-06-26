@@ -2,10 +2,10 @@
 
 ### Dependencies
 
-- The `pslr` dependency floor is now `>= 1.0.2`. That release keeps `pslr`
-  compatible with the coordinated `punycoder 1.2.0` host-normalization API
-  change, so `rurl` should be submitted after both dependency updates are on
-  CRAN.
+- The `pslr` dependency floor is now `>= 1.0.2` and the `punycoder` floor is
+  `>= 1.2.0`. Those releases form the coordinated `punycoder 1.2.0`
+  host-normalization API pair, so a fresh install pulls a compatible set;
+  `rurl` should be submitted after both dependency updates are on CRAN.
 
 ### Accessor improvements
 
