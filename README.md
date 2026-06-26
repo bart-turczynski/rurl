@@ -216,6 +216,11 @@ copy of the list. To update the PSL, call `pslr::psl_refresh()` (see the
 - **[pslr](https://bart-turczynski.github.io/pslr/)** — the Public Suffix List engine that powers `rurl`'s domain and TLD extraction. Use it directly when you need raw eTLD / registrable-domain queries without full URL parsing.
 - **[punycoder](https://bart-turczynski.github.io/punycoder/)** — the Punycode and IDNA codec that `rurl` uses for internationalized host handling. Useful on its own for host normalization and Unicode ↔ ACE round-trips.
 
+## Citation
+
+If you use `rurl` in your work, please cite it. Run `citation("rurl")` for
+the current citation, or see [`CITATION.cff`](CITATION.cff).
+
 ## Code of Conduct
 
 Please note that this package is released with a [Contributor Code of

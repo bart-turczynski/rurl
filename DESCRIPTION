@@ -45,6 +45,9 @@ Suggests:
     rmarkdown,
     withr,
     pkgdown
+Remotes:
+    bart-turczynski/pslr,
+    bart-turczynski/punycoder
 Config/testthat/edition: 3
 Depends: 
     R (>= 4.0.0)
