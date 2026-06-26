@@ -255,71 +255,72 @@
         final_host <- paste0("www.", raw_host)
       }
     } else if (www_handling == "if_no_subdomain") {
-      candidate_host <- raw_host
-      if (stringi::stri_detect_regex(
-        stringi::stri_trans_tolower(raw_host), "^www[0-9]*\\."
-      )) {
-        match_res <- stringi::stri_match_first_regex(
-          raw_host,
-          "^(www[0-9]*\\.)(.*)",
-          opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE)
-        )
-        bare_part <- if (!is.na(match_res[1, 3])) match_res[1, 3] else raw_host
-        candidate_host <- paste0("www.", bare_part)
-      }
-      host_for_domain_check <- candidate_host
-      if (stringi::stri_startswith_fixed(
-        stringi::stri_trans_tolower(candidate_host), "www."
-      )) {
-        match_res_bare <- stringi::stri_match_first_regex(
-          candidate_host,
-          "^www\\.(.*)",
-          opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE)
-        )
-        host_for_domain_check <- if (!is.na(match_res_bare[1, 2])) {
-          match_res_bare[1, 2]
-        } else {
-          # Unreachable: the startsWith("www.") check above guarantees the
-          # "^www\\.(.*)" match, so group 1 (.*) always matches (possibly empty)
-          # and is never NA. Kept as a defensive fallback.
-          candidate_host # nocov
-        }
-      }
-
-      # The www heuristic always uses the all-section decomposition to decide
-      # whether the host is itself an apex (eTLD+1) and thus eligible to gain a
-      # leading "www.". The STRUCTURAL decision (is there a subdomain? is there
-      # a registrable domain at all?) is made on pslr's canonical decomposition
-      # so an A-label host and its Unicode equivalent take the same branch;
-      # only the *decision* is canonicalized, the emitted host below still uses
-      # the input spelling (candidate_host).
-      decomp <- .psl_suffix_extract(host_for_domain_check, "all")
-      derived_domain <- decomp$registrable_domain[[1]]
-      derived_subdomain <- decomp$subdomain[[1]]
-
-      no_derived_domain <- is.na(derived_domain) || derived_domain == ""
-      if (no_derived_domain) {
-        final_host <- candidate_host
-      } else {
-        # Apex iff the canonical decomposition has no subdomain labels.
-        host_equals_domain <- !is.na(derived_subdomain) &&
-          derived_subdomain == ""
-        if (host_equals_domain) {
-          candidate_has_www <- stringi::stri_startswith_fixed(
-            stringi::stri_trans_tolower(candidate_host), "www."
-          )
-          if (candidate_has_www) {
-            final_host <- candidate_host
-          } else {
-            final_host <- paste0("www.", candidate_host)
-          }
-        } else {
-          final_host <- candidate_host
-        }
-      }
+      final_host <- .apply_www_if_no_subdomain(raw_host)
     }
   }
   final_host
+}
+
+# Phase 6 (www_handling = "if_no_subdomain"): add a leading "www." only when the
+# host is itself an apex (registrable domain with no subdomain labels). Split
+# out of .apply_www_policy() because it is a self-contained sub-policy with its
+# own canonicalization step. Returns the (possibly www-prefixed) host.
+.apply_www_if_no_subdomain <- function(raw_host) {
+  candidate_host <- raw_host
+  if (stringi::stri_detect_regex(
+    stringi::stri_trans_tolower(raw_host), "^www[0-9]*\\."
+  )) {
+    match_res <- stringi::stri_match_first_regex(
+      raw_host,
+      "^(www[0-9]*\\.)(.*)",
+      opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE)
+    )
+    bare_part <- if (!is.na(match_res[1, 3])) match_res[1, 3] else raw_host
+    candidate_host <- paste0("www.", bare_part)
+  }
+  host_for_domain_check <- candidate_host
+  if (stringi::stri_startswith_fixed(
+    stringi::stri_trans_tolower(candidate_host), "www."
+  )) {
+    match_res_bare <- stringi::stri_match_first_regex(
+      candidate_host,
+      "^www\\.(.*)",
+      opts_regex = stringi::stri_opts_regex(case_insensitive = TRUE)
+    )
+    host_for_domain_check <- if (!is.na(match_res_bare[1, 2])) {
+      match_res_bare[1, 2]
+    } else {
+      # Unreachable: the startsWith("www.") check above guarantees the
+      # "^www\\.(.*)" match, so group 1 (.*) always matches (possibly empty)
+      # and is never NA. Kept as a defensive fallback.
+      candidate_host # nocov
+    }
+  }
+
+  # The www heuristic always uses the all-section decomposition to decide
+  # whether the host is itself an apex (eTLD+1) and thus eligible to gain a
+  # leading "www.". The STRUCTURAL decision (is there a subdomain? is there
+  # a registrable domain at all?) is made on pslr's canonical decomposition
+  # so an A-label host and its Unicode equivalent take the same branch;
+  # only the *decision* is canonicalized, the emitted host below still uses
+  # the input spelling (candidate_host).
+  decomp <- .psl_suffix_extract(host_for_domain_check, "all")
+  derived_domain <- decomp$registrable_domain[[1]]
+  derived_subdomain <- decomp$subdomain[[1]]
+
+  no_derived_domain <- is.na(derived_domain) || derived_domain == ""
+  if (no_derived_domain) {
+    return(candidate_host)
+  }
+  # Apex iff the canonical decomposition has no subdomain labels.
+  host_equals_domain <- !is.na(derived_subdomain) && derived_subdomain == ""
+  if (!host_equals_domain) {
+    return(candidate_host)
+  }
+  candidate_has_www <- stringi::stri_startswith_fixed(
+    stringi::stri_trans_tolower(candidate_host), "www."
+  )
+  if (candidate_has_www) candidate_host else paste0("www.", candidate_host)
 }
 
 # Phase 7: derive the registered domain and TLD from the host using the Public
