@@ -20,14 +20,14 @@ get_path(
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
 \itemize{
-  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-  no scheme, "http://" is added.}
-  \item{"none": If a scheme exists, it's used. If no scheme, then no
-  scheme is used (scheme component will be NA).}
-  \item{"strip": Any existing scheme is removed (scheme component will be
-  NA).}
-  \item{"http": The scheme is forced to be "http".}
-  \item{"https": The scheme is forced to be "https".}
+\item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
+no scheme, "http://" is added.}
+\item{"none": If a scheme exists, it's used. If no scheme, then no
+scheme is used (scheme component will be NA).}
+\item{"strip": Any existing scheme is removed (scheme component will be
+NA).}
+\item{"http": The scheme is forced to be "http".}
+\item{"https": The scheme is forced to be "https".}
 }}
 
 \item{case_handling}{How to handle casing of the returned path. Defaults to
@@ -38,39 +38,39 @@ case-sensitive per RFC 3986 §6.2.2.1). Use "lower"/"upper" to force a case.}
 trailing slashes in the path component of the cleaned URL. Defaults to
 "none".
 \itemize{
-  \item{"none": (Default) No specific handling is applied. Path remains as
-  is after initial parsing.}
-  \item{"keep": Ensures a trailing slash. If a path exists and doesn't end
-  with one, it's added. If path is just "/", it's kept.}
-  \item{"strip": Removes a trailing slash if present, unless the path is
-  solely "/".}
+\item{"none": (Default) No specific handling is applied. Path remains as
+is after initial parsing.}
+\item{"keep": Ensures a trailing slash. If a path exists and doesn't end
+with one, it's added. If path is just "/", it's kept.}
+\item{"strip": Removes a trailing slash if present, unless the path is
+solely "/".}
 }}
 
 \item{index_page_handling}{A character string specifying how to handle
 index/default pages. Defaults to "keep".
-  \itemize{
-    \item{"keep": (Default) Leave index/default page segments untouched.}
-    \item{"strip": Remove a trailing index.* or default.* segment
-    (case-insensitive).}
-  }}
+\itemize{
+\item{"keep": (Default) Leave index/default page segments untouched.}
+\item{"strip": Remove a trailing index.* or default.* segment
+(case-insensitive).}
+}}
 
 \item{path_normalization}{How to normalize path structure. Defaults to
 "none".
-  \itemize{
-    \item{"none": (Default) No normalization.}
-    \item{"collapse_slashes": Collapse duplicate slashes in the path.}
-    \item{"dot_segments": Resolve . and .. segments per RFC 3986.}
-    \item{"both": Apply both collapse_slashes and dot_segments.}
-  }}
+\itemize{
+\item{"none": (Default) No normalization.}
+\item{"collapse_slashes": Collapse duplicate slashes in the path.}
+\item{"dot_segments": Resolve . and .. segments per RFC 3986.}
+\item{"both": Apply both collapse_slashes and dot_segments.}
+}}
 
 \item{path_encoding}{How to handle percent-encoding in the path for
-`clean_url`. Defaults to "keep".
-  \itemize{
-    \item{"keep": Leave the path percent-encoding untouched.}
-    \item{"encode": Normalize by decoding first, then percent-encoding each
-    segment (slashes preserved).}
-    \item{"decode": Percent-decode UTF-8 sequences in the path.}
-  }}
+\code{clean_url}. Defaults to "keep".
+\itemize{
+\item{"keep": Leave the path percent-encoding untouched.}
+\item{"encode": Normalize by decoding first, then percent-encoding each
+segment (slashes preserved).}
+\item{"decode": Percent-decode UTF-8 sequences in the path.}
+}}
 }
 \value{
 A character vector of URL paths.

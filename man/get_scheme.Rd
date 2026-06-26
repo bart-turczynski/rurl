@@ -12,25 +12,25 @@ get_scheme(url, protocol_handling = "keep", scheme_relative_handling = "keep")
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
 \itemize{
-  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-  no scheme, "http://" is added.}
-  \item{"none": If a scheme exists, it's used. If no scheme, then no
-  scheme is used (scheme component will be NA).}
-  \item{"strip": Any existing scheme is removed (scheme component will be
-  NA).}
-  \item{"http": The scheme is forced to be "http".}
-  \item{"https": The scheme is forced to be "https".}
+\item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
+no scheme, "http://" is added.}
+\item{"none": If a scheme exists, it's used. If no scheme, then no
+scheme is used (scheme component will be NA).}
+\item{"strip": Any existing scheme is removed (scheme component will be
+NA).}
+\item{"http": The scheme is forced to be "http".}
+\item{"https": The scheme is forced to be "https".}
 }}
 
 \item{scheme_relative_handling}{How to handle URLs starting with "//".
 Defaults to "keep".
-  \itemize{
-    \item{"keep": Parse using http but return scheme as NA and set status to
-    "ok-scheme-relative".}
-    \item{"http": Assume http for parsing and output.}
-    \item{"https": Assume https for parsing and output.}
-    \item{"error": Treat scheme-relative URLs as invalid.}
-  }}
+\itemize{
+\item{"keep": Parse using http but return scheme as NA and set status to
+"ok-scheme-relative".}
+\item{"http": Assume http for parsing and output.}
+\item{"https": Assume https for parsing and output.}
+\item{"error": Treat scheme-relative URLs as invalid.}
+}}
 }
 \value{
 A character vector of URL schemes.

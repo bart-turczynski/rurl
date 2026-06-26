@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "rurl: Parse, Clean, and Normalize URLs"
+version: 1.4.0
+abstract: >-
+  A lightweight toolkit for extracting structured information from URLs.
+  Includes vectorized, pipe-friendly functions for parsing, normalizing
+  protocols, extracting domains, and constructing clean URLs. Domain and
+  public-suffix extraction is delegated to the pslr package; Punycode and
+  IDNA encoding is handled by the punycoder package.
+authors:
+  - family-names: Turczynski
+    given-names: Bart
+    orcid: "https://orcid.org/0000-0002-8788-7980"
+repository-code: "https://github.com/bart-turczynski/rurl"
+url: "https://bart-turczynski.github.io/rurl/"
+license: MIT
+keywords:
+  - URL parsing
+  - URL normalization
+  - URL cleaning
+  - domain extraction
+  - public suffix
+  - TLD extraction
+  - IDNA
+  - Punycode
+  - URI
+  - web scraping
+  - SEO

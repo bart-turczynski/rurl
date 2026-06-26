@@ -61,6 +61,20 @@ existing calls are unaffected.
   `.spu_coerce_original()`). No behavior change; no function in the package
   now exceeds the `goodpractice` cyclocomp threshold of 15.
 
+### Documentation & metadata
+
+- Added package-level documentation (`?rurl` / `man/rurl-package.Rd`) via a
+  `"_PACKAGE"` sentinel, so the maintainer ORCID, package URLs, and the
+  cross-promotion of `pslr`/`punycoder` now render on a help/landing page.
+- Enabled roxygen2 markdown (`Roxygen: list(markdown = TRUE)`), regenerating
+  all `man/*.Rd` (inline backticks now render as `\code{}`).
+- Fixed the stale `inst/CITATION`: it now reads the version from package
+  metadata (was hardcoded `0.2.0`), uses the correct title, and carries the
+  maintainer ORCID. Added a root `CITATION.cff`.
+- Added `X-schema.org-keywords`, the r-universe URL, and a `codemeta.json`
+  for discoverability.
+- Maintainer email simplified to `bartek@turczynski.pl`.
+
 ## rurl 1.3.0
 
 ### Dependencies

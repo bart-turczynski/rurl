@@ -29,3 +29,5 @@
 ^worklog$
 ^.*coverage\.html$
 ^\.positai$
+^codemeta\.json$
+^CITATION\.cff$

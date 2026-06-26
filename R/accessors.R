@@ -549,7 +549,7 @@ get_userinfo <- function(url, protocol_handling = "keep") {
 #' @inheritParams safe_parse_url
 #' @param source Which PSL source to use: "all", "private", or "icann".
 #' @param include_www Logical; if FALSE (default), removes a leading
-#'   www/www[0-9]* label only when it is the sole subdomain label.
+#'   `www`/`www[0-9]*` label only when it is the sole subdomain label.
 #' @param format Return format: "string" (default) or "labels" for a character
 #' vector of labels.
 #' @return A character vector (format="string") or list of label vectors

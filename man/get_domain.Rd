@@ -19,62 +19,62 @@ get_domain(
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
 \itemize{
-  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-  no scheme, "http://" is added.}
-  \item{"none": If a scheme exists, it's used. If no scheme, then no
-  scheme is used (scheme component will be NA).}
-  \item{"strip": Any existing scheme is removed (scheme component will be
-  NA).}
-  \item{"http": The scheme is forced to be "http".}
-  \item{"https": The scheme is forced to be "https".}
+\item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
+no scheme, "http://" is added.}
+\item{"none": If a scheme exists, it's used. If no scheme, then no
+scheme is used (scheme component will be NA).}
+\item{"strip": Any existing scheme is removed (scheme component will be
+NA).}
+\item{"http": The scheme is forced to be "http".}
+\item{"https": The scheme is forced to be "https".}
 }}
 
 \item{www_handling}{A character string specifying how to handle "www"
-and "www[number]" prefixes in the host. Defaults to "none".
+and \code{www[number]} prefixes in the host. Defaults to "none".
 \itemize{
-  \item{"none": (Default) Leaves the host's www prefix (or lack thereof)
-  untouched.}
-  \item{"strip": Removes any "www." or "www[number]." prefix.}
-  \item{"keep": Ensures the host starts with "www.". If it has
-  "www[number].", it's normalized to "www.". If no www prefix, "www." is
-  added. An empty input host remains empty.}
-  \item{"if_no_subdomain": If the host is a bare registered domain (e.g.,
-  "example.com"), "www." is added. If the host already has a "www." or
-  "www[number]." prefix, it is normalized to "www." (e.g.,
-  "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
-  becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
-  "sub.example.com" or the normalized "www.sub.example.com"), the host is
-  not further altered. An empty input host remains empty.}
+\item{"none": (Default) Leaves the host's www prefix (or lack thereof)
+untouched.}
+\item{"strip": Removes any "www." or \verb{www[number].} prefix.}
+\item{"keep": Ensures the host starts with "www.". If it has
+\verb{www[number].}, it's normalized to "www.". If no www prefix, "www." is
+added. An empty input host remains empty.}
+\item{"if_no_subdomain": If the host is a bare registered domain (e.g.,
+"example.com"), "www." is added. If the host already has a "www." or
+\verb{www[number].} prefix, it is normalized to "www." (e.g.,
+"www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
+becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
+"sub.example.com" or the normalized "www.sub.example.com"), the host is
+not further altered. An empty input host remains empty.}
 }}
 
 \item{subdomain_levels_to_keep}{An integer or NULL. Determines how many
 levels of subdomains are kept,
-  in addition to any 'www.' prefix handled by `www_handling`.
-  \itemize{
-    \item{`NULL`: (Default) No specific subdomain stripping is performed
-    beyond `www_handling`.}
-    \item{`0`: All subdomains are stripped. If `www_handling` preserved or
-    added 'www.',
-         it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
-         'sub.example.com' becomes 'example.com').}
-    \item{`N > 0`: Keeps up to N levels of subdomains, counted from
-    right-to-left (closest to the registered domain),
-         in addition to any 'www.' prefix. E.g., if N=1,
-         'three.two.one.example.com' becomes 'one.example.com';
-         'www.three.two.one.example.com' (post www_handling) becomes
-         'www.one.example.com'.}
-  }}
+in addition to any 'www.' prefix handled by \code{www_handling}.
+\itemize{
+\item{\code{NULL}: (Default) No specific subdomain stripping is performed
+beyond \code{www_handling}.}
+\item{\code{0}: All subdomains are stripped. If \code{www_handling} preserved or
+added 'www.',
+it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
+'sub.example.com' becomes 'example.com').}
+\item{\code{N > 0}: Keeps up to N levels of subdomains, counted from
+right-to-left (closest to the registered domain),
+in addition to any 'www.' prefix. E.g., if N=1,
+'three.two.one.example.com' becomes 'one.example.com';
+'www.three.two.one.example.com' (post www_handling) becomes
+'www.one.example.com'.}
+}}
 
 \item{source}{Which PSL source to use: "all", "private", or "icann".}
 
-\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+\item{host_encoding}{How to present the host in \code{clean_url}. Defaults to
 "keep".
-  \itemize{
-    \item{"keep": Leave host as parsed by curl (may preserve original case).}
-    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
-    cleaned URL.}
-    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
-  }}
+\itemize{
+\item{"keep": Leave host as parsed by curl (may preserve original case).}
+\item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+cleaned URL.}
+\item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+}}
 }
 \value{
 A character vector of domain names.
