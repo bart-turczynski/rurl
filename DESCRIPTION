@@ -28,7 +28,7 @@ Imports:
     utils,
     curl,
     stringi,
-    punycoder (>= 1.1.0),
+    punycoder (>= 1.2.0),
     pslr (>= 1.0.2)
 URL: https://bart-turczynski.github.io/rurl/, https://github.com/bart-turczynski/rurl,
     https://CRAN.R-project.org/package=rurl
