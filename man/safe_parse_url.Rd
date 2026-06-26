@@ -26,156 +26,156 @@ safe_parse_url(
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
 \itemize{
-  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-  no scheme, "http://" is added.}
-  \item{"none": If a scheme exists, it's used. If no scheme, then no
-  scheme is used (scheme component will be NA).}
-  \item{"strip": Any existing scheme is removed (scheme component will be
-  NA).}
-  \item{"http": The scheme is forced to be "http".}
-  \item{"https": The scheme is forced to be "https".}
+\item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
+no scheme, "http://" is added.}
+\item{"none": If a scheme exists, it's used. If no scheme, then no
+scheme is used (scheme component will be NA).}
+\item{"strip": Any existing scheme is removed (scheme component will be
+NA).}
+\item{"http": The scheme is forced to be "http".}
+\item{"https": The scheme is forced to be "https".}
 }}
 
 \item{www_handling}{A character string specifying how to handle "www"
-and "www[number]" prefixes in the host. Defaults to "none".
+and \code{www[number]} prefixes in the host. Defaults to "none".
 \itemize{
-  \item{"none": (Default) Leaves the host's www prefix (or lack thereof)
-  untouched.}
-  \item{"strip": Removes any "www." or "www[number]." prefix.}
-  \item{"keep": Ensures the host starts with "www.". If it has
-  "www[number].", it's normalized to "www.". If no www prefix, "www." is
-  added. An empty input host remains empty.}
-  \item{"if_no_subdomain": If the host is a bare registered domain (e.g.,
-  "example.com"), "www." is added. If the host already has a "www." or
-  "www[number]." prefix, it is normalized to "www." (e.g.,
-  "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
-  becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
-  "sub.example.com" or the normalized "www.sub.example.com"), the host is
-  not further altered. An empty input host remains empty.}
+\item{"none": (Default) Leaves the host's www prefix (or lack thereof)
+untouched.}
+\item{"strip": Removes any "www." or \verb{www[number].} prefix.}
+\item{"keep": Ensures the host starts with "www.". If it has
+\verb{www[number].}, it's normalized to "www.". If no www prefix, "www." is
+added. An empty input host remains empty.}
+\item{"if_no_subdomain": If the host is a bare registered domain (e.g.,
+"example.com"), "www." is added. If the host already has a "www." or
+\verb{www[number].} prefix, it is normalized to "www." (e.g.,
+"www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
+becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
+"sub.example.com" or the normalized "www.sub.example.com"), the host is
+not further altered. An empty input host remains empty.}
 }}
 
 \item{tld_source}{Which TLD source to use for TLD extraction: "all", "icann",
 or "private". Defaults to "all".}
 
 \item{case_handling}{A character string specifying how to handle the case of
-                   the cleaned URL. Defaults to "lower_host", the
-                   RFC 3986 §6.2.2.1 normalization (scheme and host are
-                   case-insensitive and folded to lowercase; the path is
-                   case-sensitive and preserved).
+the cleaned URL. Defaults to "lower_host", the
+RFC 3986 §6.2.2.1 normalization (scheme and host are
+case-insensitive and folded to lowercase; the path is
+case-sensitive and preserved).
 \itemize{
-  \item{"lower_host": (Default) Lowercases scheme and host only; the path
-  keeps its original casing.}
-  \item{"keep": Preserves casing of the reconstructed URL.}
-  \item{"lower": Converts the cleaned URL to lowercase.}
-  \item{"upper": Converts the cleaned URL to uppercase.}
+\item{"lower_host": (Default) Lowercases scheme and host only; the path
+keeps its original casing.}
+\item{"keep": Preserves casing of the reconstructed URL.}
+\item{"lower": Converts the cleaned URL to lowercase.}
+\item{"upper": Converts the cleaned URL to uppercase.}
 }}
 
 \item{trailing_slash_handling}{A character string specifying how to handle
 trailing slashes in the path component of the cleaned URL. Defaults to
 "none".
 \itemize{
-  \item{"none": (Default) No specific handling is applied. Path remains as
-  is after initial parsing.}
-  \item{"keep": Ensures a trailing slash. If a path exists and doesn't end
-  with one, it's added. If path is just "/", it's kept.}
-  \item{"strip": Removes a trailing slash if present, unless the path is
-  solely "/".}
+\item{"none": (Default) No specific handling is applied. Path remains as
+is after initial parsing.}
+\item{"keep": Ensures a trailing slash. If a path exists and doesn't end
+with one, it's added. If path is just "/", it's kept.}
+\item{"strip": Removes a trailing slash if present, unless the path is
+solely "/".}
 }}
 
 \item{index_page_handling}{A character string specifying how to handle
 index/default pages. Defaults to "keep".
-  \itemize{
-    \item{"keep": (Default) Leave index/default page segments untouched.}
-    \item{"strip": Remove a trailing index.* or default.* segment
-    (case-insensitive).}
-  }}
+\itemize{
+\item{"keep": (Default) Leave index/default page segments untouched.}
+\item{"strip": Remove a trailing index.* or default.* segment
+(case-insensitive).}
+}}
 
 \item{path_normalization}{How to normalize path structure. Defaults to
 "none".
-  \itemize{
-    \item{"none": (Default) No normalization.}
-    \item{"collapse_slashes": Collapse duplicate slashes in the path.}
-    \item{"dot_segments": Resolve . and .. segments per RFC 3986.}
-    \item{"both": Apply both collapse_slashes and dot_segments.}
-  }}
+\itemize{
+\item{"none": (Default) No normalization.}
+\item{"collapse_slashes": Collapse duplicate slashes in the path.}
+\item{"dot_segments": Resolve . and .. segments per RFC 3986.}
+\item{"both": Apply both collapse_slashes and dot_segments.}
+}}
 
 \item{scheme_relative_handling}{How to handle URLs starting with "//".
 Defaults to "keep".
-  \itemize{
-    \item{"keep": Parse using http but return scheme as NA and set status to
-    "ok-scheme-relative".}
-    \item{"http": Assume http for parsing and output.}
-    \item{"https": Assume https for parsing and output.}
-    \item{"error": Treat scheme-relative URLs as invalid.}
-  }}
+\itemize{
+\item{"keep": Parse using http but return scheme as NA and set status to
+"ok-scheme-relative".}
+\item{"http": Assume http for parsing and output.}
+\item{"https": Assume https for parsing and output.}
+\item{"error": Treat scheme-relative URLs as invalid.}
+}}
 
 \item{subdomain_levels_to_keep}{An integer or NULL. Determines how many
 levels of subdomains are kept,
-  in addition to any 'www.' prefix handled by `www_handling`.
-  \itemize{
-    \item{`NULL`: (Default) No specific subdomain stripping is performed
-    beyond `www_handling`.}
-    \item{`0`: All subdomains are stripped. If `www_handling` preserved or
-    added 'www.',
-         it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
-         'sub.example.com' becomes 'example.com').}
-    \item{`N > 0`: Keeps up to N levels of subdomains, counted from
-    right-to-left (closest to the registered domain),
-         in addition to any 'www.' prefix. E.g., if N=1,
-         'three.two.one.example.com' becomes 'one.example.com';
-         'www.three.two.one.example.com' (post www_handling) becomes
-         'www.one.example.com'.}
-  }}
+in addition to any 'www.' prefix handled by \code{www_handling}.
+\itemize{
+\item{\code{NULL}: (Default) No specific subdomain stripping is performed
+beyond \code{www_handling}.}
+\item{\code{0}: All subdomains are stripped. If \code{www_handling} preserved or
+added 'www.',
+it remains (e.g., 'www.sub.example.com' becomes 'www.example.com';
+'sub.example.com' becomes 'example.com').}
+\item{\code{N > 0}: Keeps up to N levels of subdomains, counted from
+right-to-left (closest to the registered domain),
+in addition to any 'www.' prefix. E.g., if N=1,
+'three.two.one.example.com' becomes 'one.example.com';
+'www.three.two.one.example.com' (post www_handling) becomes
+'www.one.example.com'.}
+}}
 
-\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+\item{host_encoding}{How to present the host in \code{clean_url}. Defaults to
 "keep".
-  \itemize{
-    \item{"keep": Leave host as parsed by curl (may preserve original case).}
-    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
-    cleaned URL.}
-    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
-  }}
+\itemize{
+\item{"keep": Leave host as parsed by curl (may preserve original case).}
+\item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+cleaned URL.}
+\item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+}}
 
 \item{path_encoding}{How to handle percent-encoding in the path for
-`clean_url`. Defaults to "keep".
-  \itemize{
-    \item{"keep": Leave the path percent-encoding untouched.}
-    \item{"encode": Normalize by decoding first, then percent-encoding each
-    segment (slashes preserved).}
-    \item{"decode": Percent-decode UTF-8 sequences in the path.}
-  }}
+\code{clean_url}. Defaults to "keep".
+\itemize{
+\item{"keep": Leave the path percent-encoding untouched.}
+\item{"encode": Normalize by decoding first, then percent-encoding each
+segment (slashes preserved).}
+\item{"decode": Percent-decode UTF-8 sequences in the path.}
+}}
 }
 \value{
 A named list with the following components:
-  \itemize{
-    \item `original_url`: The original URL string provided.
-    \item `scheme`: The scheme (e.g., "http", "https").
-    \item `host`: The host (e.g., "www.example.com"). NA if the host becomes
-    empty after processing.
-    \item `port`: The port number.
-    \item `path`: The path component (e.g., "/path/to/resource").
-    \item `query`: The query string (e.g., "name=value").
-    \item `fragment`: The fragment identifier (e.g., "section").
-    \item `user`: The user name for authentication.
-    \item `password`: The password for authentication.
-    \item `domain`: The registered domain name (e.g., "example.com"). NA if
-    host is an IP, empty, or derivation fails.
-    \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP,
-    empty, or derivation fails.
-    \item `is_ip_host`: Logical, TRUE if the host is an IP address.
-    \item `clean_url`: A normalized canonical key reconstructed from
-    scheme, host, and path only, after processing and with case handling
-    applied. Port, query, fragment, and userinfo are intentionally
-    excluded (use the dedicated components above to retrieve them). With
-    `path_encoding = "decode"` the path is shown decoded, so `clean_url`
-    is human-readable rather than guaranteed URL-safe. NA if host is
-    empty/NA.
-    \item `parse_status`: Character string indicating parsing outcome
-      ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
-      "warning-invalid-tld", "warning-public-suffix").
-  }
-  Returns `NULL` if the URL is fundamentally unparseable (e.g., NA, empty)
-  or uses a disallowed scheme.
+\itemize{
+\item \code{original_url}: The original URL string provided.
+\item \code{scheme}: The scheme (e.g., "http", "https").
+\item \code{host}: The host (e.g., "www.example.com"). NA if the host becomes
+empty after processing.
+\item \code{port}: The port number.
+\item \code{path}: The path component (e.g., "/path/to/resource").
+\item \code{query}: The query string (e.g., "name=value").
+\item \code{fragment}: The fragment identifier (e.g., "section").
+\item \code{user}: The user name for authentication.
+\item \code{password}: The password for authentication.
+\item \code{domain}: The registered domain name (e.g., "example.com"). NA if
+host is an IP, empty, or derivation fails.
+\item \code{tld}: The top-level domain (e.g., "com"). NA if host is an IP,
+empty, or derivation fails.
+\item \code{is_ip_host}: Logical, TRUE if the host is an IP address.
+\item \code{clean_url}: A normalized canonical key reconstructed from
+scheme, host, and path only, after processing and with case handling
+applied. Port, query, fragment, and userinfo are intentionally
+excluded (use the dedicated components above to retrieve them). With
+\code{path_encoding = "decode"} the path is shown decoded, so \code{clean_url}
+is human-readable rather than guaranteed URL-safe. NA if host is
+empty/NA.
+\item \code{parse_status}: Character string indicating parsing outcome
+("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
+"warning-invalid-tld", "warning-public-suffix").
+}
+Returns \code{NULL} if the URL is fundamentally unparseable (e.g., NA, empty)
+or uses a disallowed scheme.
 }
 \description{
 This function serves as the core URL processing engine. It parses a URL,

@@ -79,15 +79,15 @@ controlling canonicalization (e.g., \code{protocol_handling},
 }
 \value{
 A data frame representing the join. The output includes:
-  \itemize{
-    \item The original URL columns (named via \code{name_A} / \code{name_B},
-          or after the input expressions when those are \code{NULL}).
-    \item \code{JoinKey}: the canonicalized URL used for matching.
-    \item All other columns from \code{data_A} and \code{data_B} with
-          suffixes applied.
-  }
-  Returns an empty data frame with the expected structure if no matches
-  are found or if inputs are invalid.
+\itemize{
+\item The original URL columns (named via \code{name_A} / \code{name_B},
+or after the input expressions when those are \code{NULL}).
+\item \code{JoinKey}: the canonicalized URL used for matching.
+\item All other columns from \code{data_A} and \code{data_B} with
+suffixes applied.
+}
+Returns an empty data frame with the expected structure if no matches
+are found or if inputs are invalid.
 }
 \description{
 Performs a join between two data frames by canonicalizing URLs to a shared

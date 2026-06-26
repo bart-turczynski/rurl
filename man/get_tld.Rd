@@ -15,14 +15,14 @@ get_tld(
 
 \item{source}{Which TLD source to use: "all", "icann", or "private".}
 
-\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+\item{host_encoding}{How to present the host in \code{clean_url}. Defaults to
 "keep".
-  \itemize{
-    \item{"keep": Leave host as parsed by curl (may preserve original case).}
-    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
-    cleaned URL.}
-    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
-  }}
+\itemize{
+\item{"keep": Leave host as parsed by curl (may preserve original case).}
+\item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+cleaned URL.}
+\item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+}}
 }
 \value{
 A character vector of TLDs.

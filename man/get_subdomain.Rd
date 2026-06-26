@@ -20,50 +20,50 @@ get_subdomain(
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
 \itemize{
-  \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-  no scheme, "http://" is added.}
-  \item{"none": If a scheme exists, it's used. If no scheme, then no
-  scheme is used (scheme component will be NA).}
-  \item{"strip": Any existing scheme is removed (scheme component will be
-  NA).}
-  \item{"http": The scheme is forced to be "http".}
-  \item{"https": The scheme is forced to be "https".}
+\item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
+no scheme, "http://" is added.}
+\item{"none": If a scheme exists, it's used. If no scheme, then no
+scheme is used (scheme component will be NA).}
+\item{"strip": Any existing scheme is removed (scheme component will be
+NA).}
+\item{"http": The scheme is forced to be "http".}
+\item{"https": The scheme is forced to be "https".}
 }}
 
 \item{www_handling}{A character string specifying how to handle "www"
-and "www[number]" prefixes in the host. Defaults to "none".
+and \code{www[number]} prefixes in the host. Defaults to "none".
 \itemize{
-  \item{"none": (Default) Leaves the host's www prefix (or lack thereof)
-  untouched.}
-  \item{"strip": Removes any "www." or "www[number]." prefix.}
-  \item{"keep": Ensures the host starts with "www.". If it has
-  "www[number].", it's normalized to "www.". If no www prefix, "www." is
-  added. An empty input host remains empty.}
-  \item{"if_no_subdomain": If the host is a bare registered domain (e.g.,
-  "example.com"), "www." is added. If the host already has a "www." or
-  "www[number]." prefix, it is normalized to "www." (e.g.,
-  "www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
-  becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
-  "sub.example.com" or the normalized "www.sub.example.com"), the host is
-  not further altered. An empty input host remains empty.}
+\item{"none": (Default) Leaves the host's www prefix (or lack thereof)
+untouched.}
+\item{"strip": Removes any "www." or \verb{www[number].} prefix.}
+\item{"keep": Ensures the host starts with "www.". If it has
+\verb{www[number].}, it's normalized to "www.". If no www prefix, "www." is
+added. An empty input host remains empty.}
+\item{"if_no_subdomain": If the host is a bare registered domain (e.g.,
+"example.com"), "www." is added. If the host already has a "www." or
+\verb{www[number].} prefix, it is normalized to "www." (e.g.,
+"www1.example.com" becomes "www.example.com"; "www1.sub.example.com"
+becomes "www.sub.example.com"). If a non-www subdomain exists (e.g.,
+"sub.example.com" or the normalized "www.sub.example.com"), the host is
+not further altered. An empty input host remains empty.}
 }}
 
 \item{source}{Which PSL source to use: "all", "private", or "icann".}
 
 \item{include_www}{Logical; if FALSE (default), removes a leading
-www/www[0-9]* label only when it is the sole subdomain label.}
+\code{www}/\verb{www[0-9]*} label only when it is the sole subdomain label.}
 
 \item{format}{Return format: "string" (default) or "labels" for a character
 vector of labels.}
 
-\item{host_encoding}{How to present the host in `clean_url`. Defaults to
+\item{host_encoding}{How to present the host in \code{clean_url}. Defaults to
 "keep".
-  \itemize{
-    \item{"keep": Leave host as parsed by curl (may preserve original case).}
-    \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
-    cleaned URL.}
-    \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
-  }}
+\itemize{
+\item{"keep": Leave host as parsed by curl (may preserve original case).}
+\item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
+cleaned URL.}
+\item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+}}
 }
 \value{
 A character vector (format="string") or list of label vectors

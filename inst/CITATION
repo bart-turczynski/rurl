@@ -1,11 +1,17 @@
 citHeader("To cite the rurl package in publications, use:")
 
+year <- sub("-.*", "", meta$Date)
+if (!length(year) || is.na(year) || !nzchar(year)) {
+  year <- format(Sys.Date(), "%Y")
+}
+note <- sprintf("R package version %s", meta$Version)
+
 bibentry(
   bibtype = "Manual",
-  title = "rurl: Tools to Parse and Clean URLs in R",
-  author = person("Bart", "Turczynski", role = c("aut", "cre"),
-                  email = "bartek+rurl@turczynski.pl"),
-  year = "2025",
-  note = "R package version 0.2.0",
-  url = "https://github.com/bart-turczynski/rurl"
+  title   = "{rurl}: Parse, Clean, and Normalize URLs",
+  author  = person("Bart", "Turczynski",
+                   comment = c(ORCID = "0000-0002-8788-7980")),
+  year    = year,
+  note    = note,
+  url     = "https://CRAN.R-project.org/package=rurl"
 )
