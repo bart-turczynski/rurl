@@ -236,6 +236,13 @@ copy of the list. To update the PSL, call
 [`pslr::psl_refresh()`](https://bart-turczynski.github.io/pslr/reference/psl_refresh.html)
 (see the `pslr` documentation for details).
 
+## Acknowledgments
+
+These packages build on data, libraries, and prior work from many
+others. See
+[ACKNOWLEDGMENTS.md](https://bart-turczynski.github.io/rurl/ACKNOWLEDGMENTS.md)
+for the full list of thanks.
+
 ## Related packages
 
 `rurl` is part of a small ecosystem of R packages by the same author:
