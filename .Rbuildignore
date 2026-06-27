@@ -32,3 +32,4 @@
 ^codemeta\.json$
 ^CITATION\.cff$
 ^ACKNOWLEDGMENTS\.md$
+^\.zenodo\.json$

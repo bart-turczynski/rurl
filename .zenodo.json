@@ -1,0 +1,67 @@
+{
+  "upload_type": "software",
+  "title": "rurl: Parse, Clean, and Normalize URLs",
+  "version": "1.4.0",
+  "language": "eng",
+  "access_right": "open",
+  "license": "MIT",
+  "description": "<p>A lightweight, vectorized toolkit for extracting structured information from URLs in R. Includes pipe-friendly functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs. Domain and public-suffix extraction is delegated to the <code>pslr</code> package, which implements the Public Suffix List from publicsuffix.org. Punycode and IDNA encoding is handled by the <code>punycoder</code> package.</p>",
+  "creators": [
+    {
+      "name": "Turczynski, Bart",
+      "orcid": "0000-0002-8788-7980"
+    }
+  ],
+  "keywords": [
+    "URL parsing",
+    "URL parser",
+    "URL normalization",
+    "URL cleaning",
+    "domain extraction",
+    "public suffix",
+    "TLD extraction",
+    "IDNA",
+    "Punycode",
+    "URI",
+    "web scraping",
+    "SEO",
+    "R",
+    "rstats",
+    "CRAN"
+  ],
+  "notes": "Part of a three-package ecosystem for URL handling in R: rurl (URL parsing/normalization), pslr (Public Suffix List matching), and punycoder (Punycode/IDNA). The Public Suffix List data bundled in pslr is licensed under the Mozilla Public License 2.0, separately from the MIT-licensed package code.",
+  "related_identifiers": [
+    {
+      "identifier": "https://CRAN.R-project.org/package=rurl",
+      "relation": "isIdenticalTo",
+      "resource_type": "software",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://bart-turczynski.github.io/rurl/",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-softwaredocumentation",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://CRAN.R-project.org/package=pslr",
+      "relation": "requires",
+      "resource_type": "software",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://CRAN.R-project.org/package=punycoder",
+      "relation": "requires",
+      "resource_type": "software",
+      "scheme": "url"
+    }
+  ],
+  "references": [
+    "Berners-Lee, T., Fielding, R., & Masinter, L. (2005). RFC 3986: Uniform Resource Identifier (URI): Generic Syntax. IETF.",
+    "WHATWG. URL Living Standard. https://url.spec.whatwg.org/",
+    "Costello, A. (2003). RFC 3492: Punycode: A Bootstring encoding of Unicode for Internationalized Domain Names in Applications (IDNA). IETF.",
+    "Klensin, J. (2010). RFC 5890 & RFC 5891: Internationalized Domain Names for Applications (IDNA2008). IETF.",
+    "Unicode Consortium. UTS #46: Unicode IDNA Compatibility Processing. https://www.unicode.org/reports/tr46/",
+    "Mozilla Foundation and contributors. Public Suffix List. https://publicsuffix.org/"
+  ]
+}
