@@ -12,6 +12,7 @@ downloads](https://cranlogs.r-pkg.org/badges/rurl)](https://CRAN.R-project.org/p
 coverage](https://codecov.io/gh/bart-turczynski/rurl/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bart-turczynski/rurl)
 [![Lifecycle:
 stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20972584.svg)](https://doi.org/10.5281/zenodo.20972584)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
@@ -225,6 +226,12 @@ See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for the full list of thanks.
 
 If you use `rurl` in your work, please cite it. Run `citation("rurl")` for
 the current citation, or see [`CITATION.cff`](CITATION.cff).
+
+Each release is archived on Zenodo. Cite the concept DOI
+[10.5281/zenodo.20972584](https://doi.org/10.5281/zenodo.20972584) to refer
+to the software in general (it always resolves to the latest version), or the
+version-specific DOI shown on the [Zenodo
+record](https://doi.org/10.5281/zenodo.20972584) for a particular release.
 
 ## Code of Conduct
 

@@ -1,7 +1,7 @@
 {
   "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
   "@type": "SoftwareSourceCode",
-  "identifier": "rurl",
+  "identifier": ["rurl", "https://doi.org/10.5281/zenodo.20972584"],
   "description": "A lightweight toolkit for extracting structured information from URLs. Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs. Domain and public-suffix extraction is delegated to the 'pslr' package, which implements the Public Suffix List from <https://publicsuffix.org>. Punycode and IDNA encoding is handled by the 'punycoder' package.",
   "name": "rurl: Parse, Clean, and Normalize URLs",
   "relatedLink": ["https://bart-turczynski.github.io/rurl/", "https://CRAN.R-project.org/package=rurl", "https://bart-turczynski.r-universe.dev"],
@@ -171,6 +171,7 @@
   "citation": [
     {
       "@type": "SoftwareSourceCode",
+      "identifier": "https://doi.org/10.5281/zenodo.20972584",
       "datePublished": "2026",
       "author": [
         {
