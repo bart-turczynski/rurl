@@ -66,8 +66,9 @@ so existing calls are unaffected.
   (e.g. `fixed = TRUE` dot splits, condition-message construction,
   dropped unnecessary lambdas) with no behavior change.
 - `.lintr` now mirrors `goodpractice`’s linter set, so a local
-  `lintr::lint_package()` matches the `goodpractice` report; intentional
-  test-idiom deviations are documented in the config header.
+  [`lintr::lint_package()`](https://lintr.r-lib.org/reference/lint.html)
+  matches the `goodpractice` report; intentional test-idiom deviations
+  are documented in the config header.
 - Restored 100% line coverage: added targeted tests for the
   `.punycode_to_unicode("")`, `.host_is_ace()`, and `.cache_enabled()`
   guard branches and the `derive_parse_status()` NA-host-dot fallback
