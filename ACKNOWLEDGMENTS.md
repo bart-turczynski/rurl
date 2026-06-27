@@ -66,10 +66,18 @@ knowing about.
 - **publicsuffix** (Go) —
   <https://pkg.go.dev/golang.org/x/net/publicsuffix>
 - **publicsuffix-go** (Go) — <https://github.com/weppos/publicsuffix-go>
+- **psl** (Rust) — <https://crates.io/crates/psl>
 - **tldextract** (Python) —
   <https://github.com/john-kurkowski/tldextract>
 - **publicsuffixlist** (Python) —
   <https://pypi.org/project/publicsuffixlist/>
+- **public_suffix** (Ruby) —
+  <https://github.com/weppos/publicsuffix-ruby>
+- **php-domain-parser** (PHP) —
+  <https://github.com/jeremykendall/php-domain-parser>
+- **tldts** (JS/TS) — <https://github.com/remusao/tldts>
+- **Guava `InternetDomainName`** (Java) —
+  <https://github.com/google/guava>
 
 ## A note on licenses
 
