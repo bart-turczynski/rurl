@@ -13,6 +13,7 @@ coverage](https://codecov.io/gh/bart-turczynski/rurl/branch/main/graph/badge.svg
 [![Lifecycle:
 stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20972584.svg)](https://doi.org/10.5281/zenodo.20972584)
+[![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
