@@ -31,9 +31,10 @@ lintr::lint_package()
 ```
 
 `.lintr` is deliberately kept in sync with the linter set
-`goodpractice::gp()` runs, so a local `lintr::lint_package()` reproduces
-the findings surfaced in review/CI. The header of `.lintr` documents
-every intentional deviation
+`goodpractice::gp()` runs, so a local
+[`lintr::lint_package()`](https://lintr.r-lib.org/reference/lint.html)
+reproduces the findings surfaced in review/CI. The header of `.lintr`
+documents every intentional deviation
 (e.g. `object_name_linter`/`expect_identical_linter` off for published
 mixed-case API params and testthat idioms) — read it before “fixing” a
 lint or adding a linter. CI runs in `.github/workflows/` (`verify` is
