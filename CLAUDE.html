@@ -33,7 +33,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>CLAUDE.md</h1>
-      <small class="dont-index">Source: <a href="https://github.com/bart-turczynski/rurl/blob/v1.4.0/CLAUDE.md" class="external-link"><code>CLAUDE.md</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/bart-turczynski/rurl/blob/main/CLAUDE.md" class="external-link"><code>CLAUDE.md</code></a></small>
     </div>
 
 <div id="claudemd" class="section level1">
@@ -59,7 +59,7 @@
 <span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a></span>
 <span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="co"># Lint (must stay clean — see .lintr below)</span></span>
 <span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>lintr<span class="sc">::</span><span class="fu">lint_package</span>()</span></code></pre></div>
-<p><code>.lintr</code> is deliberately kept in sync with the linter set <code>goodpractice::gp()</code> runs, so a local <code><a href="https://lintr.r-lib.org/reference/lint.html" class="external-link">lintr::lint_package()</a></code> reproduces the findings surfaced in review/CI. The header of <code>.lintr</code> documents every intentional deviation (e.g. <code>object_name_linter</code>/<code>expect_identical_linter</code> off for published mixed-case API params and testthat idioms) — read it before “fixing” a lint or adding a linter. CI runs in <code>.github/workflows/</code> (<code>verify</code> is the headline gate; also <code>full-check</code>, <code>pkgdown</code>, <code>rhub</code>, <code>news-version</code>).</p>
+<p><code>.lintr</code> is deliberately kept in sync with the linter set <code>goodpractice::gp()</code> runs, so a local <code>lintr::lint_package()</code> reproduces the findings surfaced in review/CI. The header of <code>.lintr</code> documents every intentional deviation (e.g. <code>object_name_linter</code>/<code>expect_identical_linter</code> off for published mixed-case API params and testthat idioms) — read it before “fixing” a lint or adding a linter. CI runs in <code>.github/workflows/</code> (<code>verify</code> is the headline gate; also <code>full-check</code>, <code>pkgdown</code>, <code>rhub</code>, <code>news-version</code>).</p>
 <p>PSL data is no longer maintained in this repo. Domain/TLD extraction is delegated to the <code>pslr</code> package, which owns the list, its parsing, and any refresh (<code><a href="https://bart-turczynski.github.io/pslr/reference/psl_refresh.html" class="external-link">pslr::psl_refresh()</a></code>).</p>
 </div>
 <div class="section level2">

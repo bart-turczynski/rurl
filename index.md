@@ -262,6 +262,13 @@ If you use `rurl` in your work, please cite it. Run `citation("rurl")`
 for the current citation, or see
 [`CITATION.cff`](https://bart-turczynski.github.io/rurl/CITATION.cff).
 
+Each release is archived on Zenodo. Cite the concept DOI
+[10.5281/zenodo.20972584](https://doi.org/10.5281/zenodo.20972584) to
+refer to the software in general (it always resolves to the latest
+version), or the version-specific DOI shown on the [Zenodo
+record](https://doi.org/10.5281/zenodo.20972584) for a particular
+release.
+
 ## Code of Conduct
 
 Please note that this package is released with a [Contributor Code of
