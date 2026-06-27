@@ -13,5 +13,6 @@ bibentry(
                    comment = c(ORCID = "0000-0002-8788-7980")),
   year    = year,
   note    = note,
+  doi     = "10.5281/zenodo.20972584",
   url     = "https://CRAN.R-project.org/package=rurl"
 )
