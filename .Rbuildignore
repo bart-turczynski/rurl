@@ -31,3 +31,4 @@
 ^\.positai$
 ^codemeta\.json$
 ^CITATION\.cff$
+^ACKNOWLEDGMENTS\.md$
