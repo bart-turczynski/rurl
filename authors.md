@@ -8,7 +8,7 @@
 ## Citation
 
 Source:
-[`inst/CITATION`](https://github.com/bart-turczynski/rurl/blob/main/inst/CITATION)
+[`inst/CITATION`](https://github.com/bart-turczynski/rurl/blob/v1.4.0/inst/CITATION)
 
 Turczynski B (2026). *rurl: Parse, Clean, and Normalize URLs*. R package
 version 1.4.0, <https://CRAN.R-project.org/package=rurl>.
