@@ -104,6 +104,20 @@ test_that(".detect_ip_host recognizes IPv4 and IPv6, rejects names", {
   expect_false(rurl:::.detect_ip_host(""))
 })
 
+test_that(".detect_ip_host recognizes IPv6 with embedded dotted-quad IPv4", {
+  # RFC 4291 §2.2 form 3 / §2.5.5: a trailing dotted-quad is part of the
+  # IPv6 grammar and must classify as an IP literal, not a registered name
+  # (RURL-tvfpeocg).
+  expect_true(rurl:::.detect_ip_host("[::ffff:127.0.0.1]"))
+  expect_true(rurl:::.detect_ip_host("::ffff:127.0.0.1"))
+  expect_true(rurl:::.detect_ip_host("[::ffff:0:127.0.0.1]"))
+  expect_true(rurl:::.detect_ip_host("[64:ff9b::8.8.8.8]"))
+  expect_true(rurl:::.detect_ip_host("[::127.0.0.1]"))
+  # A malformed embedded tail (octet out of range) must not be accepted.
+  expect_false(rurl:::.detect_ip_host("[::ffff:999.0.0.1]"))
+  expect_false(rurl:::.detect_ip_host("[::ffff:256.0.0.1]"))
+})
+
 test_that(".detect_ip_host rejects invalid IP literals", {
   # IPv4 octets out of range
   expect_false(rurl:::.detect_ip_host("999.999.999.999"))

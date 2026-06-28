@@ -209,16 +209,33 @@
       !anyNA(octets) &&
       all(octets >= 0L & octets <= 255L)
   }
-  # IPv6: [2001:db8::1] or 2001:db8::1. Require balanced brackets when present
-  # (reject if exactly one of '[' / ']' appears). Conservative hex/colon check
-  # otherwise; a full RFC 4291 validator is out of scope.
+  # IPv6: [2001:db8::1] or 2001:db8::1, optionally with an embedded dotted-quad
+  # IPv4 tail (RFC 4291 §2.2 form 3 / §2.5.5, e.g. ::ffff:127.0.0.1). Require
+  # balanced brackets when present (reject if exactly one of '[' / ']' appears).
+  # Conservative hex/colon check otherwise; a full RFC 4291 validator is out of
+  # scope.
   has_open <- stringi::stri_detect_fixed(raw_host, "[")
   has_close <- stringi::stri_detect_fixed(raw_host, "]")
   ipv6 <- FALSE
   if (has_open == has_close) {
-    ipv6 <- isTRUE(stringi::stri_detect_regex(
-      raw_host, "^\\[?[0-9a-fA-F:]+\\]?$"
-    )) && isTRUE(stringi::stri_detect_regex(raw_host, ":"))
+    # An embedded dotted-quad tail (`...:a.b.c.d`) is part of the IPv6 grammar;
+    # validate the four octets like the pure-IPv4 branch so a malformed tail is
+    # not silently accepted.
+    tail <- stringi::stri_match_first_regex(
+      raw_host, "^\\[?[0-9a-fA-F:]+:(\\d{1,3}(?:\\.\\d{1,3}){3})\\]?$"
+    )
+    if (!is.na(tail[1, 1])) {
+      octets <- suppressWarnings(
+        as.integer(strsplit(tail[1, 2], ".", fixed = TRUE)[[1]])
+      )
+      ipv6 <- length(octets) == 4L &&
+        !anyNA(octets) &&
+        all(octets >= 0L & octets <= 255L)
+    } else {
+      ipv6 <- isTRUE(stringi::stri_detect_regex(
+        raw_host, "^\\[?[0-9a-fA-F:]+\\]?$"
+      )) && isTRUE(stringi::stri_detect_regex(raw_host, ":"))
+    }
   }
   ipv4 || ipv6
 }
