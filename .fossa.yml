@@ -8,8 +8,9 @@
 #   feature not available on this account. So there is intentionally no
 #   `project.policy` binding here. The flagged findings are all benign for an
 #   MIT project (see .fossa/POLICY.md for the per-dependency rationale); the
-#   chosen disposition is to keep FOSSA INFORMATIONAL — i.e. not a required
-#   status check that blocks deploys — rather than to suppress findings.
+#   chosen disposition is to keep FOSSA INFORMATIONAL. (Verified: main has no
+#   branch protection/rulesets and FOSSA posts no status check, so it already
+#   gates nothing — the red is internal to the FOSSA dashboard only.)
 #   The path excludes below still apply when the FOSSA CLI is run; the hosted
 #   GitHub-App integration may ignore this file entirely.
 version: 3
