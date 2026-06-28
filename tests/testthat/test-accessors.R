@@ -828,6 +828,22 @@ test_that("bracketed IPv6 hosts are detected as IP hosts", {
   expect_true(safe_parse_url("http://192.168.1.1/x")$is_ip_host)
 })
 
+test_that("IPv6 literals with embedded dotted-quad IPv4 are detected", {
+  # RURL-tvfpeocg: ::ffff:127.0.0.1 and friends used to fall through to the
+  # TLD path (is_ip_host = FALSE, warning-invalid-tld). Both the dotted and
+  # hex spellings of the same address must now classify identically.
+  for (u in c(
+    "http://[::ffff:127.0.0.1]/", "http://[::ffff:7f00:1]/",
+    "http://[::ffff:0808:0808]/", "http://[64:ff9b::8.8.8.8]/",
+    "http://[::127.0.0.1]/"
+  )) {
+    res <- safe_parse_url(u)
+    expect_true(res$is_ip_host, info = u)
+    expect_equal(res$parse_status, "ok", info = u)
+    expect_true(is.na(res$tld), info = u)
+  }
+})
+
 test_that("get_*() accessors error if passed a parsed object, not a string", {
   # Use a hand-constructed list so the test does not depend on safe_parse_url()
   # being callable in the current R environment.
