@@ -1,5 +1,20 @@
 # Changelog
 
+## rurl 1.4.1
+
+### Bug fixes
+
+- [`safe_parse_url()`](https://bart-turczynski.github.io/rurl/reference/safe_parse_url.md)/[`safe_parse_urls()`](https://bart-turczynski.github.io/rurl/reference/safe_parse_urls.md)
+  now recognize IPv6 address literals that carry an embedded dotted-quad
+  IPv4 tail (RFC 4291 §2.2 form 3 / §2.5.5, e.g. `[::ffff:127.0.0.1]`,
+  `[64:ff9b::8.8.8.8]`). Previously these fell through to the
+  registered-name path, returning `is_ip_host = FALSE` and a spurious
+  `warning-invalid-tld` status; they now report `is_ip_host = TRUE` and
+  `parse_status = "ok"`. Both the dotted and hex-hextet spellings of the
+  same address (`[::ffff:0808:0808]` vs `[::ffff:7f00:1]`) now classify
+  identically. A malformed embedded tail (octet out of range) is still
+  rejected. (RURL-tvfpeocg)
+
 ## rurl 1.4.0
 
 ### Dependencies
