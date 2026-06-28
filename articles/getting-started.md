@@ -149,43 +149,43 @@ Here are some examples demonstrating its effect on
 ``` r
 
 get_host(
-  "http://www.three.two.one.example.com",
+  "www.three.two.one.example.com",
   subdomain_levels_to_keep = 0
 ) # www_handling default is "none"
-#> http://www.three.two.one.example.com 
-#>                    "www.example.com"
+#> www.three.two.one.example.com 
+#>             "www.example.com"
 # Expected: "www.example.com"
 
 get_host(
-  "http://three.two.one.example.com",
+  "three.two.one.example.com",
   www_handling = "strip",
   subdomain_levels_to_keep = 0
 )
-#> http://three.two.one.example.com 
-#>                    "example.com"
+#> three.two.one.example.com 
+#>             "example.com"
 # Expected: "example.com"
 
-get_host("http://www.three.two.one.example.com", subdomain_levels_to_keep = 1)
-#> http://www.three.two.one.example.com 
-#>                "www.one.example.com"
+get_host("www.three.two.one.example.com", subdomain_levels_to_keep = 1)
+#> www.three.two.one.example.com 
+#>         "www.one.example.com"
 # Expected: "www.one.example.com"
 
 get_host(
-  "http://three.two.one.example.com",
+  "three.two.one.example.com",
   www_handling = "strip",
   subdomain_levels_to_keep = 1
 )
-#> http://three.two.one.example.com 
-#>                "one.example.com"
+#> three.two.one.example.com 
+#>         "one.example.com"
 # Expected: "one.example.com"
 
 get_host(
-  "http://www.three.two.one.example.com",
+  "www.three.two.one.example.com",
   www_handling = "keep",
   subdomain_levels_to_keep = 2
 )
-#> http://www.three.two.one.example.com 
-#>            "www.two.one.example.com"
+#> www.three.two.one.example.com 
+#>     "www.two.one.example.com"
 # Expected: "www.two.one.example.com"
 ```
 
