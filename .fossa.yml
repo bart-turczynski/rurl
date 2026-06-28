@@ -1,0 +1,29 @@
+# .fossa.yml — FOSSA CLI configuration for rurl
+# Schema: https://github.com/fossas/fossa-cli/blob/master/docs/references/files/fossa-yml.md
+#
+# SCOPE OF THIS FILE
+#   .fossa.yml controls WHAT gets scanned (project identity + path/target
+#   filtering). It does NOT — and cannot — encode license allow/deny or
+#   per-issue "ignore" rules. Those live in a FOSSA *Policy* (web UI / API).
+#   The checked-in source of truth for our allow-list decisions and their
+#   rationale is .fossa/POLICY.md; bind that policy by name under
+#   `project.policy` below (the string must match the policy name in FOSSA).
+version: 3
+
+project:
+  id: git+github.com/bart-turczynski/rurl
+  name: rurl
+  # Named policy that encodes the rurl allow-list (see .fossa/POLICY.md).
+  # Create/rename it in FOSSA → Policies; this string must match exactly.
+  policy: rurl-cran-permissive
+
+paths:
+  exclude:
+    # Rendered pkgdown site: bundles third-party web assets (Bootstrap, jQuery,
+    # Font Awesome's SIL-OFL font + CC-BY icons) that raise license findings
+    # unrelated to the package. Generated output, never distributed as source.
+    - docs
+    # R CMD check scratch output — build artifacts, never distributed.
+    - '**/*.Rcheck'
+    # testthat snapshots / fixtures — not shipped to users.
+    - tests/testthat/_snaps
