@@ -75,17 +75,22 @@ Each flagged dependency, the finding, the scope, and the disposition.
 ## How this is handled (free tier — no custom policies)
 
 Custom policies are paywalled, so the findings cannot be approved/allowed
-server-side for this account. The disposition:
+server-side for this account.
 
-1. **Make FOSSA non-blocking.** Remove the FOSSA check from required status
-   checks (GitHub → Settings → Branches → branch protection for `main`), so a
-   flag no longer fails the deploy. FOSSA stays informational; this file is the
-   justification. *(If FOSSA were wired in via a workflow we control, the
-   equivalent is `continue-on-error: true` on that step — but there is no FOSSA
-   step in `.github/workflows/`, so the blocker is the GitHub-App status check.)*
-2. **Optional:** per-issue "Ignore" in the FOSSA UI *may* be available on the
-   free tier — if so it can be used for individual findings, but it is manual
-   and findings can reappear on re-scan. Not relied upon here.
+**Verified: FOSSA gates nothing in GitHub.** `main` has no branch protection
+and no rulesets, and FOSSA posts no commit status/check to the repo. The red
+"failing" state is internal to the FOSSA dashboard (its default policy flags
+copyleft); it does not block merges, the gh-pages/pkgdown deploy, or
+`R-CMD-check` — all of which pass. There is therefore nothing to "unblock."
+
+Disposition:
+
+1. **Treat FOSSA as informational.** Since the red is cosmetic and internal to
+   FOSSA, and every finding is benign for an MIT project, no action is required
+   to keep deploying. This file is the justification.
+2. **Optional — disconnect FOSSA.** If the red dashboard is unwanted, remove the
+   `rurl` project in FOSSA or de-scope the FOSSA GitHub App for this repo. At
+   the free tier with all-benign findings it adds little here.
 3. FOSSA last resolved `pslr 1.0.1`; current is `1.0.2` — a fresh scan should
    reconcile the version.
 
