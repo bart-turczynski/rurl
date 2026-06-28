@@ -34,6 +34,34 @@ jobs:
         run: lintr::lint_package()
         shell: Rscript {0}
 
+  readme:
+    runs-on: ubuntu-latest
+    name: README in sync with README.Rmd
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-pandoc@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # devtools::build_readme() installs the package and re-renders
+          # README.Rmd (its code chunks are static, but build_readme still
+          # builds + installs the package before rendering).
+          extra-packages: any::devtools
+          needs: check
+      - name: Re-render README.md from README.Rmd
+        run: devtools::build_readme()
+        shell: Rscript {0}
+      - name: Fail if README.md is out of date
+        run: |
+          if ! git diff --exit-code -- README.md; then
+            echo "::error file=README.md::README.md is out of sync with README.Rmd. Run devtools::build_readme() and commit the result."
+            exit 1
+          fi
+
   check:
     needs: lint
     runs-on: ubuntu-latest
