@@ -14,6 +14,10 @@ coverage](https://codecov.io/gh/bart-turczynski/rurl/branch/main/graph/badge.svg
 stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20972584.svg)](https://doi.org/10.5281/zenodo.20972584)
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
+[![FOSSA
+Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=security)
+[![FOSSA
+Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=license)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
@@ -213,26 +217,34 @@ copy of the list. To update the PSL, call `pslr::psl_refresh()` (see the
 
 ## Acknowledgments
 
-These packages build on data, libraries, and prior work from many others.
-See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for the full list of thanks.
+These packages build on data, libraries, and prior work from many
+others. See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for the full list
+of thanks.
 
 ## Related packages
 
 `rurl` is part of a small ecosystem of R packages by the same author:
 
-- **[pslr](https://bart-turczynski.github.io/pslr/)** — the Public Suffix List engine that powers `rurl`'s domain and TLD extraction. Use it directly when you need raw eTLD / registrable-domain queries without full URL parsing.
-- **[punycoder](https://bart-turczynski.github.io/punycoder/)** — the Punycode and IDNA codec that `rurl` uses for internationalized host handling. Useful on its own for host normalization and Unicode ↔ ACE round-trips.
+- **[pslr](https://bart-turczynski.github.io/pslr/)** — the Public
+  Suffix List engine that powers `rurl`’s domain and TLD extraction. Use
+  it directly when you need raw eTLD / registrable-domain queries
+  without full URL parsing.
+- **[punycoder](https://bart-turczynski.github.io/punycoder/)** — the
+  Punycode and IDNA codec that `rurl` uses for internationalized host
+  handling. Useful on its own for host normalization and Unicode ↔ ACE
+  round-trips.
 
 ## Citation
 
-If you use `rurl` in your work, please cite it. Run `citation("rurl")` for
-the current citation, or see [`CITATION.cff`](CITATION.cff).
+If you use `rurl` in your work, please cite it. Run `citation("rurl")`
+for the current citation, or see [`CITATION.cff`](CITATION.cff).
 
 Each release is archived on Zenodo. Cite the concept DOI
-[10.5281/zenodo.20972584](https://doi.org/10.5281/zenodo.20972584) to refer
-to the software in general (it always resolves to the latest version), or the
-version-specific DOI shown on the [Zenodo
-record](https://doi.org/10.5281/zenodo.20972584) for a particular release.
+[10.5281/zenodo.20972584](https://doi.org/10.5281/zenodo.20972584) to
+refer to the software in general (it always resolves to the latest
+version), or the version-specific DOI shown on the [Zenodo
+record](https://doi.org/10.5281/zenodo.20972584) for a particular
+release.
 
 ## Code of Conduct
 
