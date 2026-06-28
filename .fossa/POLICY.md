@@ -1,11 +1,14 @@
-# FOSSA policy — source of truth for `rurl`
+# FOSSA license findings — rationale for `rurl`
 
-This file is the **reviewable, version-controlled record** of the license
-allow-list / issue-resolution decisions for `rurl`. FOSSA enforces these
-server-side in a named **Policy** (`rurl-cran-permissive`, referenced from
-`.fossa.yml → project.policy`). `.fossa.yml` cannot hold these rules itself —
-keep this file and the FOSSA policy in sync, and update this file in the same
-PR whenever a policy rule changes.
+This file is the **reviewable, version-controlled record** of why each FOSSA
+license finding for `rurl` is acceptable.
+
+Custom FOSSA **Policies** are a paid feature not available on this account, so
+these decisions are **not** enforced server-side and `.fossa.yml` binds no
+policy. Instead, the chosen disposition is to treat FOSSA as **informational**
+(not a required, deploy-blocking status check), because — as documented below —
+none of the findings are a real licensing risk for an MIT project. This file is
+the written justification for that decision.
 
 ## Project license
 
@@ -69,20 +72,25 @@ Each flagged dependency, the finding, the scope, and the disposition.
 - **Disposition:** test framework only; never distributed at runtime.
 - **Action:** exclude the dev/test scope from the gate, or ignore this issue.
 
-## How to apply (FOSSA UI)
+## How this is handled (free tier — no custom policies)
 
-1. **Policies → create/edit** `rurl-cran-permissive`. Add the allow-list
-   licenses above to the approved set.
-2. For the dev-only `Suggests` (`knitr`, `rmarkdown`, `testthat`): prefer a
-   **scope exclusion** (dev/test) over per-issue ignores so future dev-tool
-   churn doesn't re-trip the gate.
-3. For `stringi` autoconf-exception findings and `pslr` MPL-2.0: approve the
-   licenses, or resolve the specific issues with a link back to this file.
-4. Re-scan. FOSSA last resolved `pslr 1.0.1`; current is `1.0.2` — a fresh
-   scan should reconcile the version.
+Custom policies are paywalled, so the findings cannot be approved/allowed
+server-side for this account. The disposition:
+
+1. **Make FOSSA non-blocking.** Remove the FOSSA check from required status
+   checks (GitHub → Settings → Branches → branch protection for `main`), so a
+   flag no longer fails the deploy. FOSSA stays informational; this file is the
+   justification. *(If FOSSA were wired in via a workflow we control, the
+   equivalent is `continue-on-error: true` on that step — but there is no FOSSA
+   step in `.github/workflows/`, so the blocker is the GitHub-App status check.)*
+2. **Optional:** per-issue "Ignore" in the FOSSA UI *may* be available on the
+   free tier — if so it can be used for individual findings, but it is manual
+   and findings can reappear on re-scan. Not relied upon here.
+3. FOSSA last resolved `pslr 1.0.1`; current is `1.0.2` — a fresh scan should
+   reconcile the version.
 
 ## Notes
-- Keep this file in sync with the FOSSA policy; treat it as the human-readable
-  diff of any policy change.
+- If a paid plan with policies is ever adopted, the allow-list table above maps
+  directly onto a named policy; bind it via `project.policy` in `.fossa.yml`.
 - Anything genuinely runtime + strong-copyleft (GPL/AGPL without exception,
   in `Imports`) is **not** covered here and must be reviewed, not auto-allowed.

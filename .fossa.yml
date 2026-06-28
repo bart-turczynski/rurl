@@ -4,18 +4,19 @@
 # SCOPE OF THIS FILE
 #   .fossa.yml controls WHAT gets scanned (project identity + path/target
 #   filtering). It does NOT — and cannot — encode license allow/deny or
-#   per-issue "ignore" rules. Those live in a FOSSA *Policy* (web UI / API).
-#   The checked-in source of truth for our allow-list decisions and their
-#   rationale is .fossa/POLICY.md; bind that policy by name under
-#   `project.policy` below (the string must match the policy name in FOSSA).
+#   per-issue "ignore" rules. Those live in a FOSSA *Policy*, which is a PAID
+#   feature not available on this account. So there is intentionally no
+#   `project.policy` binding here. The flagged findings are all benign for an
+#   MIT project (see .fossa/POLICY.md for the per-dependency rationale); the
+#   chosen disposition is to keep FOSSA INFORMATIONAL — i.e. not a required
+#   status check that blocks deploys — rather than to suppress findings.
+#   The path excludes below still apply when the FOSSA CLI is run; the hosted
+#   GitHub-App integration may ignore this file entirely.
 version: 3
 
 project:
   id: git+github.com/bart-turczynski/rurl
   name: rurl
-  # Named policy that encodes the rurl allow-list (see .fossa/POLICY.md).
-  # Create/rename it in FOSSA → Policies; this string must match exactly.
-  policy: rurl-cran-permissive
 
 paths:
   exclude:
