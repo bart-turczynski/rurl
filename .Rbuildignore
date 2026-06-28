@@ -33,3 +33,5 @@
 ^CITATION\.cff$
 ^ACKNOWLEDGMENTS\.md$
 ^\.zenodo\.json$
+^\.fossa\.yml$
+^\.fossa$
