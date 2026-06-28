@@ -98,32 +98,42 @@ _after_ initial `www_handling` has been applied.
 
 Here are some examples demonstrating its effect on `get_host()`:
 
+<!--
+The hosts below are deliberately written *without* an `http://` scheme.
+`get_host()` returns the identical value either way (it parses schemeless
+hosts), but a bare `http://three.two.one.example.com` would be treated as a
+real link by URL checkers (`urlchecker`, rOpenSci's `pkgcheck`) and fail to
+resolve, because subdomains of the reserved `example.com` do not resolve.
+Keeping these schemeless avoids a spurious "broken URL" finding. Do not add
+`http://` back.
+-->
+
 ```{r}
 get_host(
-  "http://www.three.two.one.example.com",
+  "www.three.two.one.example.com",
   subdomain_levels_to_keep = 0
 ) # www_handling default is "none"
 # Expected: "www.example.com"
 
 get_host(
-  "http://three.two.one.example.com",
+  "three.two.one.example.com",
   www_handling = "strip",
   subdomain_levels_to_keep = 0
 )
 # Expected: "example.com"
 
-get_host("http://www.three.two.one.example.com", subdomain_levels_to_keep = 1)
+get_host("www.three.two.one.example.com", subdomain_levels_to_keep = 1)
 # Expected: "www.one.example.com"
 
 get_host(
-  "http://three.two.one.example.com",
+  "three.two.one.example.com",
   www_handling = "strip",
   subdomain_levels_to_keep = 1
 )
 # Expected: "one.example.com"
 
 get_host(
-  "http://www.three.two.one.example.com",
+  "www.three.two.one.example.com",
   www_handling = "keep",
   subdomain_levels_to_keep = 2
 )
