@@ -18,6 +18,8 @@ stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://
 Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=security)
 [![FOSSA
 Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=license)
+[![OpenSSF Best
+Practices](https://www.bestpractices.dev/projects/13394/badge)](https://www.bestpractices.dev/projects/13394)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
