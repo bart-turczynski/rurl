@@ -46,7 +46,7 @@
 <div class="section level3">
 <h3 id="infrastructure-1-4-1">Infrastructure<a class="anchor" aria-label="anchor" href="#infrastructure-1-4-1"></a></h3>
 <ul><li>Added a dependency vulnerability audit against the Sonatype OSS Index via <code>oysteR</code> (new <code>Suggests</code>). <code>tests/testthat/test-security.R</code> runs <code>oysteR::expect_secure("rurl")</code> and a dedicated <code>security-audit.yml</code> workflow (weekly + on demand) executes it with OSS Index credentials; the test skips cleanly without credentials, offline, or on CRAN. (RURL-tyfshnat)</li>
-<li>Added a second, token-free dependency vulnerability audit against the OSV database (<a href="https://osv.dev" class="external-link uri">https://osv.dev</a>) via <code>rosv</code> (new <code>Suggests</code>). <code>tests/testthat/test-osv.R</code> checks rurl’s runtime dependency closure (recursive <code>Depends</code> + <code>Imports</code>) at installed versions, and a dedicated <code>osv-audit.yml</code> workflow (weekly + on demand) executes it with no secrets; the test skips cleanly offline or on CRAN. (RURL-ttkwljva)</li>
+<li>Added a second, token-free dependency vulnerability audit against the OSV database (<a href="https://osv.dev" class="external-link uri">https://osv.dev</a>) via <code>rosv</code> (new <code>Suggests</code>). <code>tests/testthat/test-osv.R</code> checks the runtime dependency closure of rurl (recursive <code>Depends</code> + <code>Imports</code>) at installed versions, and a dedicated <code>osv-audit.yml</code> workflow (weekly + on demand) executes it with no secrets; the test skips cleanly offline or on CRAN. (RURL-ttkwljva)</li>
 </ul></div>
 </div>
     <div class="section level2">

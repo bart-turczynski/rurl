@@ -248,8 +248,8 @@ for the full list of thanks.
 `rurl` is part of a small ecosystem of R packages by the same author:
 
 - **[pslr](https://bart-turczynski.github.io/pslr/)** — the Public
-  Suffix List engine that powers `rurl`’s domain and TLD extraction. Use
-  it directly when you need raw eTLD / registrable-domain queries
+  Suffix List engine that powers domain and TLD extraction in `rurl`.
+  Use it directly when you need raw eTLD / registrable-domain queries
   without full URL parsing.
 - **[punycoder](https://bart-turczynski.github.io/punycoder/)** — the
   Punycode and IDNA codec that `rurl` uses for internationalized host
