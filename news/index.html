@@ -43,6 +43,10 @@
 <ul><li>
 <code><a href="../reference/safe_parse_url.html">safe_parse_url()</a></code>/<code><a href="../reference/safe_parse_urls.html">safe_parse_urls()</a></code> now recognize IPv6 address literals that carry an embedded dotted-quad IPv4 tail (RFC 4291 §2.2 form 3 / §2.5.5, e.g. <code>[::ffff:127.0.0.1]</code>, <code>[64:ff9b::8.8.8.8]</code>). Previously these fell through to the registered-name path, returning <code>is_ip_host = FALSE</code> and a spurious <code>warning-invalid-tld</code> status; they now report <code>is_ip_host = TRUE</code> and <code>parse_status = "ok"</code>. Both the dotted and hex-hextet spellings of the same address (<code>[::ffff:0808:0808]</code> vs <code>[::ffff:7f00:1]</code>) now classify identically. A malformed embedded tail (octet out of range) is still rejected. (RURL-tvfpeocg)</li>
 </ul></div>
+<div class="section level3">
+<h3 id="infrastructure-1-4-1">Infrastructure<a class="anchor" aria-label="anchor" href="#infrastructure-1-4-1"></a></h3>
+<ul><li>Added a dependency vulnerability audit against the Sonatype OSS Index via <code>oysteR</code> (new <code>Suggests</code>). <code>tests/testthat/test-security.R</code> runs <code>oysteR::expect_secure("rurl")</code> and a dedicated <code>security-audit.yml</code> workflow (weekly + on demand) executes it with OSS Index credentials; the test skips cleanly without credentials, offline, or on CRAN. (RURL-tyfshnat)</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.4.0" id="rurl-140">rurl 1.4.0<a class="anchor" aria-label="anchor" href="#rurl-140"></a></h2>

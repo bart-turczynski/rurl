@@ -15,6 +15,15 @@
   identically. A malformed embedded tail (octet out of range) is still
   rejected. (RURL-tvfpeocg)
 
+### Infrastructure
+
+- Added a dependency vulnerability audit against the Sonatype OSS Index
+  via `oysteR` (new `Suggests`). `tests/testthat/test-security.R` runs
+  `oysteR::expect_secure("rurl")` and a dedicated `security-audit.yml`
+  workflow (weekly + on demand) executes it with OSS Index credentials;
+  the test skips cleanly without credentials, offline, or on CRAN.
+  (RURL-tyfshnat)
+
 ## rurl 1.4.0
 
 ### Dependencies
