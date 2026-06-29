@@ -21,7 +21,7 @@
   cleanly without credentials, offline, or on CRAN. (RURL-tyfshnat)
 - Added a second, token-free dependency vulnerability audit against the OSV
   database (<https://osv.dev>) via `rosv` (new `Suggests`).
-  `tests/testthat/test-osv.R` checks rurl's runtime dependency closure
+  `tests/testthat/test-osv.R` checks the runtime dependency closure of rurl
   (recursive `Depends` + `Imports`) at installed versions, and a dedicated
   `osv-audit.yml` workflow (weekly + on demand) executes it with no secrets;
   the test skips cleanly offline or on CRAN. (RURL-ttkwljva)
