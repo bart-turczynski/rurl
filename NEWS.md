@@ -19,6 +19,12 @@
   `oysteR::expect_secure("rurl")` and a dedicated `security-audit.yml` workflow
   (weekly + on demand) executes it with OSS Index credentials; the test skips
   cleanly without credentials, offline, or on CRAN. (RURL-tyfshnat)
+- Added a second, token-free dependency vulnerability audit against the OSV
+  database (<https://osv.dev>) via `rosv` (new `Suggests`).
+  `tests/testthat/test-osv.R` checks rurl's runtime dependency closure
+  (recursive `Depends` + `Imports`) at installed versions, and a dedicated
+  `osv-audit.yml` workflow (weekly + on demand) executes it with no secrets;
+  the test skips cleanly offline or on CRAN. (RURL-ttkwljva)
 
 ## rurl 1.4.0
 

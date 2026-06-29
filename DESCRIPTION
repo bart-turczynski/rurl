@@ -45,7 +45,8 @@ Suggests:
     rmarkdown,
     withr,
     pkgdown,
-    oysteR
+    oysteR,
+    rosv
 Remotes:
     bart-turczynski/pslr,
     bart-turczynski/punycoder
