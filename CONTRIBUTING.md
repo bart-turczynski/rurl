@@ -22,7 +22,9 @@
 
 ## Validation
 
-- Run `devtools::test()` locally for every change.
+- Run
+  [`devtools::test()`](https://devtools.r-lib.org/reference/test.html)
+  locally for every change.
 - For packaging changes, run `R CMD check --as-cran` before release
   work.
 - New prose in `DESCRIPTION`, `.Rd`, README, or vignettes should pass
