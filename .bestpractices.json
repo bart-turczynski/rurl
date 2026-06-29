@@ -185,8 +185,8 @@
   "dynamic_analysis_unsafe_status": "N/A",
   "dynamic_analysis_unsafe_justification": "rurl is a pure-R package with no compiled code of its own (no src/ directory), so it contains no memory-unsafe C/C++ code to fuzz; the ASAN/valgrind runs still cover its compiled dependencies.",
 
-  "dynamic_analysis_enable_assertions_status": "?",
-  "dynamic_analysis_enable_assertions_justification": "Suggested criterion; rurl has no project-authored compiled code, so there are no build-time or run-time assertions to enable. Left unknown -- the BadgeApp does not accept N/A for this field.",
+  "dynamic_analysis_enable_assertions_status": "Met",
+  "dynamic_analysis_enable_assertions_justification": "rurl's automated test suite uses testthat, whose expectations (expect_*) are assertions checked at runtime during dynamic analysis on every CI run: https://github.com/bart-turczynski/rurl/tree/main/tests/testthat . The rhub workflow additionally runs the package under the clang-ASAN/UBSAN and valgrind configurations, enabling runtime memory and undefined-behavior assertions when checking the package and its compiled dependencies: https://github.com/bart-turczynski/rurl/blob/main/.github/workflows/rhub.yaml",
 
   "dynamic_analysis_fixed_status": "Met",
   "dynamic_analysis_fixed_justification": "Any issues surfaced by the sanitizer or valgrind runs are fixed before release.",
