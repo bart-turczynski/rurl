@@ -22,6 +22,8 @@ Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fbart-turczynski%2F
 Practices](https://www.bestpractices.dev/projects/13394/badge)](https://www.bestpractices.dev/projects/13394)
 [![Security
 audit](https://github.com/bart-turczynski/rurl/actions/workflows/security-audit.yml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/security-audit.yml)
+[![OSV
+audit](https://github.com/bart-turczynski/rurl/actions/workflows/osv-audit.yml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/osv-audit.yml)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
