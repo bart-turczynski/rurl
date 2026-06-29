@@ -15,8 +15,10 @@ on:
       config:
         description: 'A comma separated list of R-hub platforms to use.'
         type: string
-        # Prefer explicit currently-supported macOS target.
-        default: 'linux,windows,ubuntu-release,macos-arm64'
+        # Explicit currently-supported macOS target, plus the clang-ASAN/UBSAN
+        # and valgrind containers used for dynamic analysis (memory / undefined-
+        # behavior checks) before releases.
+        default: 'linux,windows,ubuntu-release,macos-arm64,clang-asan,valgrind'
       name:
         description: 'Run name. You can leave this empty now.'
         type: string
