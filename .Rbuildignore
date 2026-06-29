@@ -35,3 +35,5 @@
 ^\.zenodo\.json$
 ^\.fossa\.yml$
 ^\.fossa$
+^\.bestpractices\.json$
+^SECURITY\.md$
