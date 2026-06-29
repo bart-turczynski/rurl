@@ -66,7 +66,7 @@
   "report_tracker_justification": "GitHub Issues serve as the bug tracker: https://github.com/bart-turczynski/rurl/issues",
 
   "report_process_status": "Met",
-  "report_process_justification": "Users submit bug reports through the GitHub issue tracker; the process is described in CONTRIBUTING.md: https://github.com/bart-turczynski/rurl/issues",
+  "report_process_justification": "Users submit bug reports through the GitHub issue tracker: https://github.com/bart-turczynski/rurl/issues",
 
   "report_responses_status": "Met",
   "report_responses_justification": "Maintainer responds to issue reports on the tracker: https://github.com/bart-turczynski/rurl/issues",
