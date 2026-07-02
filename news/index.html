@@ -39,6 +39,15 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="rurl-development-version">rurl (development version)<a class="anchor" aria-label="anchor" href="#rurl-development-version"></a></h2>
 <div class="section level3">
+<h3 id="performance-development-version">Performance<a class="anchor" aria-label="anchor" href="#performance-development-version"></a></h3>
+<ul><li>
+<code><a href="../reference/safe_parse_urls.html">safe_parse_urls()</a></code> now de-duplicates its input, parsing each unique URL only once (with cross-call reuse via the <code>full_parse</code> cache) and expanding the results back with <code><a href="https://rdrr.io/r/base/match.html" class="external-link">match()</a></code>. Repeated / duplicate URLs cost only the match, so warm and duplicate-heavy inputs are dramatically faster. <code><a href="../reference/safe_parse_url.html">safe_parse_url()</a></code> (scalar) shares the same cached code path. (RURL-ohepgzyf)</li>
+</ul></div>
+<div class="section level3">
+<h3 id="behavior-changes-development-version">Behavior changes<a class="anchor" aria-label="anchor" href="#behavior-changes-development-version"></a></h3>
+<ul><li>The <code>full_parse</code> memoization cache is now bounded by default at 100000 unique url × option combinations (previously <code>Inf</code>), so parsing millions of unique URLs can no longer grow the cache without limit. Override with <code>rurl_cache_config(max_full_parse = Inf)</code> to restore the previous unbounded behavior; the reset-watermark semantics are unchanged. (RURL-ohepgzyf)</li>
+</ul></div>
+<div class="section level3">
 <h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
 <ul><li>path/fragment/userinfo are no longer percent-decoded during parsing; <code>path_encoding = 'keep'</code> now honors its contract (leaves the path byte-for-byte); the raw query is preserved (<code>?flag</code> stays <code>flag</code>, not <code>flag=</code>). NOTE: <code>clean_url</code> values change for URLs containing percent-encoded path bytes — since <code>clean_url</code> is a <code>canonical_join</code> key, <code>/a%2Fb</code> and <code>/a/b</code> no longer collide. (RURL-yuozrhop)</li>
 </ul></div>

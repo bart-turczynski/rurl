@@ -91,8 +91,9 @@ cache is cleared before the next new entry is stored, so its peak size never
 exceeds the bound. This is a hard reset-watermark, not an LRU or FIFO
 eviction policy: <code>max_full_parse</code> caps peak memory, but is <em>not</em> a
 working-set size — once the bound is hit the cache empties completely and
-rebuilds from scratch. The default of <code>Inf</code> preserves the historical
-unbounded behavior. The
+rebuilds from scratch. The default bound is <code>100000</code> unique url ×
+option combinations (set <code>max_full_parse = Inf</code> for the historical
+unbounded behavior). The
 <code>puny_encode</code> and <code>puny_decode</code> caches are unbounded by design
 (each stays small — bounded by the number of unique hosts/labels seen, not
 URL+option combinations).</p>

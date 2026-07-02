@@ -49,8 +49,9 @@ is called). When `full_parse` reaches `max_full_parse` entries, the
 peak size never exceeds the bound. This is a hard reset-watermark, not
 an LRU or FIFO eviction policy: `max_full_parse` caps peak memory, but
 is *not* a working-set size — once the bound is hit the cache empties
-completely and rebuilds from scratch. The default of `Inf` preserves the
-historical unbounded behavior. The `puny_encode` and `puny_decode`
+completely and rebuilds from scratch. The default bound is `100000`
+unique url × option combinations (set `max_full_parse = Inf` for the
+historical unbounded behavior). The `puny_encode` and `puny_decode`
 caches are unbounded by design (each stays small — bounded by the number
 of unique hosts/labels seen, not URL+option combinations).
 
