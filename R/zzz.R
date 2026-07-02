@@ -58,11 +58,13 @@
     assign(entry$config_field, entry$default_enabled, envir = .rurl_config)
   }
 
-  # Initialize cache configuration to the historical defaults. Use assign()
-  # so we mutate the .rurl_config environment in place rather than rebinding
-  # the (locked) namespace binding, mirroring how the cache environments above
-  # are populated by reference.
-  assign("full_parse_max", Inf, envir = .rurl_config)
+  # Initialize cache configuration. Use assign() so we mutate the .rurl_config
+  # environment in place rather than rebinding the (locked) namespace binding,
+  # mirroring how the cache environments above are populated by reference. The
+  # full_parse cache is bounded by default (100000 unique url x option combos)
+  # so parsing millions of unique URLs cannot grow it without limit; override
+  # with rurl_cache_config(max_full_parse = ...).
+  assign("full_parse_max", 100000L, envir = .rurl_config)
 
   invisible()
 }
@@ -128,6 +130,38 @@ rurl_clear_caches <- function() {
   invisible(NULL)
 }
 
+# Batch lookup: return a list aligned to `keys`, each element the stored value
+# (which may be NULL) or .rurl_cache_sentinel on a miss / when the cache is
+# disabled. One mget() over the whole key vector powers the vector-level warm
+# path in ._parse_urls_cached(). `keys` must already be unique.
+.cache_get_many <- function(cache_name, keys) {
+  n <- length(keys)
+  if (n == 0L) {
+    return(list())
+  }
+  if (!.cache_enabled(cache_name)) {
+    return(rep(list(.rurl_cache_sentinel), n))
+  }
+  env <- .rurl_cache[[cache_name]]
+  mget(
+    keys,
+    envir = env,
+    inherits = FALSE,
+    ifnotfound = list(.rurl_cache_sentinel)
+  )
+}
+
+# Batch store: assign each value under its key. Delegates to .cache_set() per
+# key so the enable switch, the reset-watermark bound, and the NULL-caching
+# semantics are applied identically to the scalar path (peak size still never
+# exceeds max_full_parse, even mid-batch).
+.cache_set_many <- function(cache_name, keys, values) {
+  for (i in seq_along(keys)) {
+    .cache_set(cache_name, keys[[i]], values[[i]])
+  }
+  invisible(NULL)
+}
+
 #' Inspect the rurl memoization caches
 #'
 #' Reports the number of entries currently held in each memoization cache,
@@ -182,8 +216,9 @@ rurl_cache_info <- function() {
 #' exceeds the bound. This is a hard reset-watermark, not an LRU or FIFO
 #' eviction policy: \code{max_full_parse} caps peak memory, but is \emph{not} a
 #' working-set size — once the bound is hit the cache empties completely and
-#' rebuilds from scratch. The default of \code{Inf} preserves the historical
-#' unbounded behavior. The
+#' rebuilds from scratch. The default bound is \code{100000} unique url ×
+#' option combinations (set \code{max_full_parse = Inf} for the historical
+#' unbounded behavior). The
 #' \code{puny_encode} and \code{puny_decode} caches are unbounded by design
 #' (each stays small — bounded by the number of unique hosts/labels seen, not
 #' URL+option combinations).
