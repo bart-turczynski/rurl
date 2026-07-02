@@ -30,14 +30,21 @@ NA).}
 \item{format}{Return format: "string" (default) or "list" for parsed
 elements.}
 
-\item{decode}{Logical; if TRUE and format="list", percent-decodes
-keys/values.}
+\item{decode}{Logical; if TRUE (default), percent-decodes the query
+(the whole string for format="string", keys/values for format="list").
+Set FALSE to return the raw query as written in the URL.}
 }
 \value{
 A character vector (format="string") or list (format="list").
 }
 \description{
 Extracts the query component of a URL, optionally parsing it into a list.
+}
+\details{
+The underlying parse preserves the raw query string byte-for-byte (a bare
+key such as \code{?flag} stays \code{flag}, not \verb{flag=}). By default this accessor
+still percent-decodes for readability (\code{decode = TRUE}); pass
+\code{decode = FALSE} to obtain the raw query exactly as written in the URL.
 }
 \examples{
 get_query("http://example.com/path?a=1&b=2")

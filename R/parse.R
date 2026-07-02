@@ -98,7 +98,9 @@
 #' @param path_encoding How to handle percent-encoding in the path for
 #' `clean_url`. Defaults to "keep".
 #'   \itemize{
-#'     \item{"keep": Leave the path percent-encoding untouched.}
+#'     \item{"keep": Leave the path percent-encoding untouched (the path is
+#'     preserved byte-for-byte as written in the URL, so `%2F` stays `%2F`
+#'     rather than decoding into a path-separating `/`).}
 #'     \item{"encode": Normalize by decoding first, then percent-encoding each
 #'     segment (slashes preserved).}
 #'     \item{"decode": Percent-decode UTF-8 sequences in the path.}
@@ -128,10 +130,14 @@
 #'     empty after processing.
 #'     \item `port`: The port number.
 #'     \item `path`: The path component (e.g., "/path/to/resource").
-#'     \item `query`: The query string (e.g., "name=value").
-#'     \item `fragment`: The fragment identifier (e.g., "section").
-#'     \item `user`: The user name for authentication.
-#'     \item `password`: The password for authentication.
+#'     \item `query`: The raw query string as written in the URL, preserved
+#'     byte-for-byte (e.g., "name=value"); not percent-decoded.
+#'     \item `fragment`: The fragment identifier as written in the URL
+#'     (e.g., "section"); not percent-decoded.
+#'     \item `user`: The user name for authentication, as written in the URL;
+#'     not percent-decoded.
+#'     \item `password`: The password for authentication, as written in the
+#'     URL; not percent-decoded.
 #'     \item `domain`: The registered domain name (e.g., "example.com"). NA if
 #'     host is an IP, empty, or derivation fails.
 #'     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP,

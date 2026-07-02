@@ -139,7 +139,9 @@ cleaned URL.}
 \item{path_encoding}{How to handle percent-encoding in the path for
 \code{clean_url}. Defaults to "keep".
 \itemize{
-\item{"keep": Leave the path percent-encoding untouched.}
+\item{"keep": Leave the path percent-encoding untouched (the path is
+preserved byte-for-byte as written in the URL, so \verb{\%2F} stays \verb{\%2F}
+rather than decoding into a path-separating \code{/}).}
 \item{"encode": Normalize by decoding first, then percent-encoding each
 segment (slashes preserved).}
 \item{"decode": Percent-decode UTF-8 sequences in the path.}
@@ -154,10 +156,14 @@ A named list with the following components:
 empty after processing.
 \item \code{port}: The port number.
 \item \code{path}: The path component (e.g., "/path/to/resource").
-\item \code{query}: The query string (e.g., "name=value").
-\item \code{fragment}: The fragment identifier (e.g., "section").
-\item \code{user}: The user name for authentication.
-\item \code{password}: The password for authentication.
+\item \code{query}: The raw query string as written in the URL, preserved
+byte-for-byte (e.g., "name=value"); not percent-decoded.
+\item \code{fragment}: The fragment identifier as written in the URL
+(e.g., "section"); not percent-decoded.
+\item \code{user}: The user name for authentication, as written in the URL;
+not percent-decoded.
+\item \code{password}: The password for authentication, as written in the
+URL; not percent-decoded.
 \item \code{domain}: The registered domain name (e.g., "example.com"). NA if
 host is an IP, empty, or derivation fails.
 \item \code{tld}: The top-level domain (e.g., "com"). NA if host is an IP,

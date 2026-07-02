@@ -139,7 +139,9 @@ cleaned URL.}
 \item{path_encoding}{How to handle percent-encoding in the path for
 \code{clean_url}. Defaults to "keep".
 \itemize{
-\item{"keep": Leave the path percent-encoding untouched.}
+\item{"keep": Leave the path percent-encoding untouched (the path is
+preserved byte-for-byte as written in the URL, so \verb{\%2F} stays \verb{\%2F}
+rather than decoding into a path-separating \code{/}).}
 \item{"encode": Normalize by decoding first, then percent-encoding each
 segment (slashes preserved).}
 \item{"decode": Percent-decode UTF-8 sequences in the path.}

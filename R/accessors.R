@@ -321,12 +321,18 @@ get_path <- function(
 #'
 #' Extracts the query component of a URL, optionally parsing it into a list.
 #'
+#' The underlying parse preserves the raw query string byte-for-byte (a bare
+#' key such as `?flag` stays `flag`, not `flag=`). By default this accessor
+#' still percent-decodes for readability (`decode = TRUE`); pass
+#' `decode = FALSE` to obtain the raw query exactly as written in the URL.
+#'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @param format Return format: "string" (default) or "list" for parsed
 #' elements.
-#' @param decode Logical; if TRUE and format="list", percent-decodes
-#' keys/values.
+#' @param decode Logical; if TRUE (default), percent-decodes the query
+#' (the whole string for format="string", keys/values for format="list").
+#' Set FALSE to return the raw query as written in the URL.
 #' @return A character vector (format="string") or list (format="list").
 #' @export
 #' @examples
@@ -386,7 +392,8 @@ get_query <- function(url,
 
 #' Get URL fragments
 #'
-#' Extracts the fragment component of a URL.
+#' Extracts the fragment component of a URL. The value is returned raw, exactly
+#' as written in the URL (not percent-decoded).
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -419,7 +426,8 @@ get_port <- function(url, protocol_handling = "keep") {
 
 #' Get URL user names
 #'
-#' Extracts the user component of a URL.
+#' Extracts the user component of a URL. The value is returned raw, exactly as
+#' written in the URL (not percent-decoded).
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -433,7 +441,8 @@ get_user <- function(url, protocol_handling = "keep") {
 
 #' Get URL passwords
 #'
-#' Extracts the password component of a URL.
+#' Extracts the password component of a URL. The value is returned raw, exactly
+#' as written in the URL (not percent-decoded).
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url

@@ -1,3 +1,14 @@
+## rurl (development version)
+
+### Bug fixes
+
+- path/fragment/userinfo are no longer percent-decoded during parsing;
+  `path_encoding = 'keep'` now honors its contract (leaves the path
+  byte-for-byte); the raw query is preserved (`?flag` stays `flag`, not
+  `flag=`). NOTE: `clean_url` values change for URLs containing
+  percent-encoded path bytes — since `clean_url` is a `canonical_join` key,
+  `/a%2Fb` and `/a/b` no longer collide. (RURL-yuozrhop)
+
 ## rurl 1.4.1
 
 ### Bug fixes

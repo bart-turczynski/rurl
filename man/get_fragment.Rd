@@ -26,7 +26,8 @@ NA).}
 A character vector of fragments.
 }
 \description{
-Extracts the fragment component of a URL.
+Extracts the fragment component of a URL. The value is returned raw, exactly
+as written in the URL (not percent-decoded).
 }
 \examples{
 get_fragment("http://example.com/path#section")
