@@ -40,13 +40,18 @@
 <h2 class="pkg-version" data-toc-text="development version" id="rurl-development-version">rurl (development version)<a class="anchor" aria-label="anchor" href="#rurl-development-version"></a></h2>
 <div class="section level3">
 <h3 id="performance-development-version">Performance<a class="anchor" aria-label="anchor" href="#performance-development-version"></a></h3>
-<ul><li>
-<code><a href="../reference/safe_parse_urls.html">safe_parse_urls()</a></code> now de-duplicates its input, parsing each unique URL only once (with cross-call reuse via the <code>full_parse</code> cache) and expanding the results back with <code><a href="https://rdrr.io/r/base/match.html" class="external-link">match()</a></code>. Repeated / duplicate URLs cost only the match, so warm and duplicate-heavy inputs are dramatically faster. <code><a href="../reference/safe_parse_url.html">safe_parse_url()</a></code> (scalar) shares the same cached code path. (RURL-ohepgzyf)</li>
+<ul><li><p><code><a href="../reference/safe_parse_urls.html">safe_parse_urls()</a></code> now de-duplicates its input, parsing each unique URL only once (with cross-call reuse via the <code>full_parse</code> cache) and expanding the results back with <code><a href="https://rdrr.io/r/base/match.html" class="external-link">match()</a></code>. Repeated / duplicate URLs cost only the match, so warm and duplicate-heavy inputs are dramatically faster. <code><a href="../reference/safe_parse_url.html">safe_parse_url()</a></code> (scalar) shares the same cached code path. (RURL-ohepgzyf)</p></li>
+<li><p>Query-string parsing (<code>get_query(format = "list")</code>) is now linear in the number of key/value pairs (previously quadratic from incremental list growth), so URLs with very long query strings parse faster. Output is unchanged. (RURL-actrnerd)</p></li>
 </ul></div>
 <div class="section level3">
 <h3 id="behavior-changes-development-version">Behavior changes<a class="anchor" aria-label="anchor" href="#behavior-changes-development-version"></a></h3>
 <ul><li><p>Accessor results (<code>get_*()</code>) are no longer named by the input URLs. The <code>get_*()</code> functions now parse their input in a single vectorized pass and return plain unnamed vectors (or lists), instead of vectors carrying a <code>names</code> attribute of the input URLs. Wrap in <code>stats::setNames(x, url)</code> if you relied on the old names. (RURL-zpatukuq)</p></li>
 <li><p>The <code>full_parse</code> memoization cache is now bounded by default at 100000 unique url × option combinations (previously <code>Inf</code>), so parsing millions of unique URLs can no longer grow the cache without limit. Override with <code>rurl_cache_config(max_full_parse = Inf)</code> to restore the previous unbounded behavior; the reset-watermark semantics are unchanged. (RURL-ohepgzyf)</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="behavior-changes-development-version-1">Behavior changes<a class="anchor" aria-label="anchor" href="#behavior-changes-development-version-1"></a></h3>
+<ul><li>
+<code><a href="../reference/safe_parse_urls.html">safe_parse_urls()</a></code> now accepts a factor input, coercing it to its character labels up front (matching <code><a href="../reference/canonical_join.html">canonical_join()</a></code>), instead of returning an all-<code>error</code> row for every element. (RURL-actrnerd)</li>
 </ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>

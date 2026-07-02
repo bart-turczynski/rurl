@@ -13,6 +13,11 @@
   [`safe_parse_url()`](https://bart-turczynski.github.io/rurl/reference/safe_parse_url.md)
   (scalar) shares the same cached code path. (RURL-ohepgzyf)
 
+- Query-string parsing (`get_query(format = "list")`) is now linear in
+  the number of key/value pairs (previously quadratic from incremental
+  list growth), so URLs with very long query strings parse faster.
+  Output is unchanged. (RURL-actrnerd)
+
 ### Behavior changes
 
 - Accessor results (`get_*()`) are no longer named by the input URLs.
@@ -28,6 +33,15 @@
   Override with `rurl_cache_config(max_full_parse = Inf)` to restore the
   previous unbounded behavior; the reset-watermark semantics are
   unchanged. (RURL-ohepgzyf)
+
+### Behavior changes
+
+- [`safe_parse_urls()`](https://bart-turczynski.github.io/rurl/reference/safe_parse_urls.md)
+  now accepts a factor input, coercing it to its character labels up
+  front (matching
+  [`canonical_join()`](https://bart-turczynski.github.io/rurl/reference/canonical_join.md)),
+  instead of returning an all-`error` row for every element.
+  (RURL-actrnerd)
 
 ### Bug fixes
 
