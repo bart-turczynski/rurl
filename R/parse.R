@@ -326,20 +326,32 @@ safe_parse_urls <- function(url,
   # parseable -- it becomes NA for the engine (an "error" row), exactly as the
   # scalar pipeline returned NULL for it -- but its original_url is still the
   # coerced input string. This preserves the historical column semantics without
-  # a per-URL loop. (URL-level de-duplication + memoization is T4's job; here
-  # the engine simply runs once over the whole vector.)
-  urls_list <- as.list(url)
-  original_url_vec <- vapply(urls_list, .spu_coerce_original, character(1))
-  parse_input <- vapply(
-    urls_list,
-    function(u) if (is.character(u) && length(u) == 1L) u else NA_character_,
-    character(1)
-  )
+  # a per-URL loop.
+  if (is.character(url)) {
+    # Fast path: a plain character vector needs no per-element coercion --
+    # every element is already a length-1 character (NA included), so both the
+    # original_url column and the parse input equal the input verbatim. This is
+    # the overwhelmingly common shape and keeps the warm/duplicate path O(1) per
+    # element instead of two vapply() closures over the whole vector.
+    original_url_vec <- url
+    parse_input <- url
+  } else {
+    urls_list <- as.list(url)
+    original_url_vec <- vapply(urls_list, .spu_coerce_original, character(1))
+    parse_input <- vapply(
+      urls_list,
+      function(u) if (is.character(u) && length(u) == 1L) u else NA_character_,
+      character(1)
+    )
+  }
 
-  engine_cols <- ._parse_urls_vec(parse_input, opts)
-
+  # De-duplicate + memoize at the unique-URL level: unique parse inputs are
+  # parsed once (with cross-call reuse via the full_parse cache), then expanded
+  # back to every row. Duplicates cost only the match() inside
+  # ._parse_urls_cached(). original_url is restored per row afterwards so it
+  # reflects the input element even for duplicates / NA / non-character rows.
   field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
-  cols <- engine_cols[field_names]
+  cols <- ._parse_urls_cached(parse_input, opts)[field_names]
   cols$original_url <- original_url_vec
   cols$stringsAsFactors <- FALSE
   do.call(data.frame, cols)
@@ -437,16 +449,17 @@ safe_parse_urls <- function(url,
   opts
 }
 
-# Build the memoization cache key for one URL from validated options. Single
-# source of the field set, order, separator, and Unicode escaping so the key
-# format cannot drift across call sites.
-.parse_cache_key <- function(url, opts) {
+# Build memoization cache keys for a vector of URLs from validated options.
+# Single source of the field set, order, separator, and Unicode escaping so the
+# key format cannot drift across call sites. The scalar opts recycle across the
+# `urls` vector in one paste(), and one stri_escape_unicode() escapes them all.
+.parse_cache_keys <- function(urls, opts) {
   subdomain_key <- if (is.null(opts$subdomain_levels_to_keep)) {
     "NULL"
   } else {
     as.character(opts$subdomain_levels_to_keep)
   }
-  cache_key <- paste(url, opts$protocol_handling, opts$www_handling,
+  cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
     opts$tld_source, opts$case_handling, opts$trailing_slash_handling,
     opts$index_page_handling, opts$path_normalization,
     opts$scheme_relative_handling, subdomain_key,
@@ -456,39 +469,124 @@ safe_parse_urls <- function(url,
   stringi::stri_escape_unicode(enc2utf8(cache_key))
 }
 
-# Internal scalar helper that handles caching and calls the implementation.
-# Receives the validated `opts` list (from .parse_options()) and reuses it
-# directly for the cache key and the implementation call.
+# Scalar cache key: the n = 1 case of .parse_cache_keys(), retained for
+# compatibility with existing call sites and tests.
+.parse_cache_key <- function(url, opts) {
+  .parse_cache_keys(url, opts)
+}
+
+# Internal scalar helper that handles caching and calls the shared cached
+# vector path (n = 1). Receives the validated `opts` list (from
+# .parse_options()) and reuses it directly. Returns NULL for a NULL-equivalent
+# row (invalid / rejected / curl failure) or the row as a named list
+# (byte-identical to the historical .assemble_parse_result() output).
 ._safe_parse_url_scalar <- function(url, opts) {
-  # Early return for invalid input
+  # Early return for invalid input (never cached, matching the historical
+  # scalar pipeline that returned NULL for these before touching the cache).
   if (is.na(url) || !is.character(url) || url == "") {
     return(NULL)
   }
 
-  # Generate cache key from the already-validated opts.
-  cache_key <- .parse_cache_key(url, opts)
+  # Scalar parse is the n = 1 case of the shared cached vector path, so the
+  # per-URL cache behavior comes from the same code as safe_parse_urls().
+  cols <- ._parse_urls_cached(url, opts)
+  if (attr(cols, "null_row")[1L]) {
+    return(NULL)
+  }
+  field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  lapply(cols[field_names], function(column) column[[1L]])
+}
 
-  # Check cache
-  cached <- .cache_get("full_parse", cache_key)
-  if (!identical(cached, .rurl_cache_sentinel)) {
-    return(cached)
+# Shared cached vector parse path for safe_parse_url() (n = 1) and
+# safe_parse_urls(). `parse_input` is a character vector (NA marks elements the
+# caller could not coerce to a parseable string). Returns the list of 14 columns
+# named by .spu_result_fields (canonical order) plus a `null_row` logical
+# attribute -- the rows the scalar pipeline would have returned NULL for.
+#
+# The full_parse cache is keyed and stored at the UNIQUE-URL level: unique parse
+# inputs are looked up in one batch, misses parsed once by the vector engine and
+# stored, then all rows are expanded via match(). Duplicate rows cost only the
+# match(). Each cache value is either an unnamed length-14 list of the row's
+# fields (canonical .spu_result_fields order) or NULL for a null row, so
+# NULL-caching semantics are preserved and hit reconstruction stays a builtin
+# `[[` gather (no per-element closure). NA / "" inputs are treated as null rows
+# and are NEVER cached (mirroring the scalar early return), so cache-entry
+# counts reflect real unique URLs only.
+._parse_urls_cached <- function(parse_input, opts) {
+  field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  n_fields <- length(.spu_result_fields)
+  uniq <- unique(parse_input)
+  m <- length(uniq)
+
+  # Only a real URL string (non-NA, non-empty) participates in the cache.
+  cacheable <- !is.na(uniq) & nzchar(uniq)
+  keys <- rep(NA_character_, m)
+  if (any(cacheable)) {
+    keys[cacheable] <- .parse_cache_keys(uniq[cacheable], opts)
   }
 
-  # Scalar parse is the n = 1 case of the vector engine: run it on the single
-  # URL, then return NULL for a NULL-equivalent row (invalid / rejected / curl
-  # failure) or the row as a named list (byte-identical to the historical
-  # .assemble_parse_result() output).
-  engine_cols <- ._parse_urls_vec(url, opts)
-  result <- if (attr(engine_cols, "null_row")[1L]) {
-    NULL
-  } else {
-    lapply(engine_cols, function(column) column[[1L]])
+  # Batch cache lookup over the cacheable keys.
+  cached <- rep(list(.rurl_cache_sentinel), m)
+  if (any(cacheable)) {
+    cached[cacheable] <- .cache_get_many("full_parse", keys[cacheable])
+  }
+  hit <- !vapply(cached, identical, logical(1), .rurl_cache_sentinel)
+
+  # Unique-level columns, initialized to the null-row defaults.
+  cols_uniq <- lapply(.spu_result_fields, function(f) rep(f$default, m))
+  names(cols_uniq) <- field_names
+  null_uniq <- rep(TRUE, m)
+
+  # Fill cache hits. A hit value is an unnamed length-14 list (populated row) or
+  # NULL (cached null row -- keep the defaults). Non-null rows are gathered a
+  # field at a time with the builtin `[[`, so reconstruction avoids a closure
+  # per hit.
+  if (any(hit)) {
+    hit_idx <- which(hit)
+    is_null_hit <- vapply(cached[hit_idx], is.null, logical(1))
+    null_uniq[hit_idx] <- is_null_hit
+    nn_idx <- hit_idx[!is_null_hit]
+    if (length(nn_idx) > 0L) {
+      nn_vals <- cached[nn_idx]
+      for (j in seq_len(n_fields)) {
+        cols_uniq[[j]][nn_idx] <- vapply(
+          nn_vals, `[[`, .spu_result_fields[[j]]$template, j
+        )
+      }
+    }
   }
 
-  # Cache the result
-  .cache_set("full_parse", cache_key, result)
+  # Parse the misses (includes NA / "" inputs, which the engine turns into null
+  # rows) and populate their columns.
+  need_idx <- which(!hit)
+  if (length(need_idx) > 0L) {
+    engine_cols <- ._parse_urls_vec(uniq[need_idx], opts)
+    null_uniq[need_idx] <- attr(engine_cols, "null_row")
+    for (nm in field_names) {
+      cols_uniq[[nm]][need_idx] <- engine_cols[[nm]]
+    }
 
-  result
+    # Store the freshly parsed, cacheable rows: the unnamed length-14 field
+    # list, or NULL for a null row. NA / "" are never cached.
+    store_idx <- need_idx[cacheable[need_idx]]
+    if (length(store_idx) > 0L) {
+      store_vals <- lapply(store_idx, function(i) {
+        if (null_uniq[i]) {
+          NULL
+        } else {
+          unname(lapply(cols_uniq, `[[`, i))
+        }
+      })
+      .cache_set_many("full_parse", keys[store_idx], store_vals)
+    }
+  }
+
+  # Expand the unique rows back to every input position.
+  pos <- match(parse_input, uniq)
+  cols <- lapply(cols_uniq, function(col) col[pos])
+  names(cols) <- field_names
+  attr(cols, "null_row") <- null_uniq[pos]
+  cols
 }
 
 # Internal vector engine: parse a character vector of URLs into a list of the

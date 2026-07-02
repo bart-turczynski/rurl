@@ -17,6 +17,12 @@
 #   vector cold  (20k / ~5k unique): ~3,100 URLs/s
 #   vector warm  (20k, all cached):  ~34,700 URLs/s
 #   scalar accessor loop (5k get_domain): ~790 URLs/s
+#
+# After T4 (RURL-ohepgzyf: unique()+match() de-dup + vector-level memoization):
+#   vector cold  (20k / ~5k unique): ~29,000 URLs/s (only 5k unique are parsed)
+#   vector warm  (20k, all cached):  ~250,000 URLs/s (>1M/s once JIT-warmed)
+#   20k all-duplicates-of-100:       ~6,000,000 URLs/s (duplicates cost match())
+#   scalar accessor loop unchanged (per-call wrapper overhead is T5's target).
 # Update these numbers when the refactor lands so drift is reviewable.
 # ----------------------------------------------------------------------------
 

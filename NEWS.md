@@ -1,5 +1,21 @@
 ## rurl (development version)
 
+### Performance
+
+- `safe_parse_urls()` now de-duplicates its input, parsing each unique URL only
+  once (with cross-call reuse via the `full_parse` cache) and expanding the
+  results back with `match()`. Repeated / duplicate URLs cost only the match,
+  so warm and duplicate-heavy inputs are dramatically faster. `safe_parse_url()`
+  (scalar) shares the same cached code path. (RURL-ohepgzyf)
+
+### Behavior changes
+
+- The `full_parse` memoization cache is now bounded by default at 100000 unique
+  url × option combinations (previously `Inf`), so parsing millions of unique
+  URLs can no longer grow the cache without limit. Override with
+  `rurl_cache_config(max_full_parse = Inf)` to restore the previous unbounded
+  behavior; the reset-watermark semantics are unchanged. (RURL-ohepgzyf)
+
 ### Bug fixes
 
 - path/fragment/userinfo are no longer percent-decoded during parsing;
