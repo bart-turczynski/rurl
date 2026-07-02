@@ -99,6 +99,12 @@ get_parse_status <- function(url,
                              subdomain_levels_to_keep = NULL,
                              source = c("all", "private", "icann")) {
   source <- match.arg(source)
+  # case_handling does not affect the parse_status output (it is derived from
+  # curl success, host, domain and TLD, none of which depend on the clean_url
+  # case policy). "lower" is kept here purely as an explicit, stable profile;
+  # it is intentionally NOT aligned to .extract_from_urls()'s "lower_host"
+  # default, so this accessor keeps its own memoization key rather than risk a
+  # cache-key/output perturbation for a micro-optimization (RURL-actrnerd).
   .extract_from_urls(url, "parse_status",
     null_value = "error",
     protocol_handling = protocol_handling,
@@ -205,6 +211,10 @@ get_domain <- function(url,
   host_encoding <- match.arg(host_encoding)
   # parsed$domain is the registered domain for the requested section (pslr
   # resolves it consistently with the TLD), so every source reads one field.
+  # case_handling is immaterial to the domain output (the registered domain is
+  # derived from the normalized host, independent of the clean_url case policy);
+  # "lower" is retained as an explicit, stable profile rather than aligned to
+  # the "lower_host" default to avoid a cache-key/output change (RURL-actrnerd).
   .extract_from_urls(url, "domain",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
@@ -628,6 +638,10 @@ get_tld <- function(url, source = c("all", "private", "icann"),
                     host_encoding = c("keep", "idna", "unicode")) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
+  # case_handling is immaterial to the tld output (the TLD is derived from the
+  # normalized host, independent of the clean_url case policy); "lower" is
+  # retained as an explicit, stable profile rather than aligned to the
+  # "lower_host" default to avoid a cache-key/output change (RURL-actrnerd).
   .extract_from_urls(url, "tld",
     tld_source = source,
     case_handling = "lower",

@@ -8,6 +8,18 @@ test_that("safe_parse_urls handles empty and non-character inputs", {
   expect_equal(res_num$parse_status, "error")
 })
 
+test_that("safe_parse_urls accepts factor input by coercing to labels", {
+  # Factor input is coerced to its character labels up front, so it parses
+  # identically to the equivalent character vector rather than yielding an
+  # all-error row (regression: factors previously fell through as non-char).
+  f <- factor(c("http://example.com", "https://www.example.com/path"))
+  res_factor <- safe_parse_urls(f)
+  res_char <- safe_parse_urls(as.character(f))
+  expect_equal(res_factor, res_char)
+  expect_equal(res_factor$parse_status, c("ok", "ok"))
+  expect_equal(res_factor$original_url, as.character(f))
+})
+
 test_that("safe_parse_urls validates subdomain_levels_to_keep", {
   expect_error(
     safe_parse_urls("example.com", subdomain_levels_to_keep = -1),
@@ -294,6 +306,46 @@ test_that("query parser handles empty input", {
   parsed <- rurl:::._parse_query_string("a=1&&b=2")
   expect_equal(parsed$a, "1")
   expect_equal(parsed$b, "2")
+})
+
+test_that("query parser groups repeated keys in first-seen order (linear)", {
+  # Repeated keys collect their values in occurrence order.
+  expect_equal(rurl:::._parse_query_string("x=1&x=2"), list(x = c("1", "2")))
+  # first-seen key order preserved even when a repeat is interleaved.
+  expect_equal(
+    rurl:::._parse_query_string("b=1&a=2&b=3"),
+    list(b = c("1", "3"), a = "2")
+  )
+})
+
+test_that("query parser preserves '=' split and empty-value semantics", {
+  # Value re-joins the tail with "=" (strsplit fixed=TRUE trailing-empty drop).
+  expect_equal(rurl:::._parse_query_string("a=b=c"), list(a = "b=c"))
+  expect_equal(rurl:::._parse_query_string("a==b"), list(a = "=b"))
+  # A bare flag and a trailing "=" both yield an empty value.
+  expect_equal(rurl:::._parse_query_string("flag"), list(flag = ""))
+  expect_equal(rurl:::._parse_query_string("x="), list(x = ""))
+  expect_equal(rurl:::._parse_query_string("x=="), list(x = ""))
+  expect_equal(rurl:::._parse_query_string(""), list())
+})
+
+test_that("query parser percent-decodes both sides unless decode = FALSE", {
+  decoded <- rurl:::._parse_query_string("%20=%3D", decode = TRUE)
+  expect_named(decoded, " ")
+  expect_equal(decoded[[1]], "=")
+  raw <- rurl:::._parse_query_string("%20=%3D", decode = FALSE)
+  expect_named(raw, "%20")
+  expect_equal(raw[[1]], "%3D")
+  # A lone "%" is tolerated (not an error) and left as-is.
+  expect_equal(rurl:::._parse_query_string("%"), list(`%` = ""))
+})
+
+test_that("encode_path_segments handles empty and multi-segment paths", {
+  # Empty-segment behavior: "" stays "", character(0) recomposes to "".
+  expect_equal(rurl:::._encode_path_segments(""), "")
+  expect_equal(rurl:::._encode_path_segments("/"), "/")
+  # Every segment is escaped by the single vectorized curl_escape() call.
+  expect_equal(rurl:::._encode_path_segments("/a b/c d"), "/a%20b/c%20d")
 })
 
 test_that("getters return NA on parse failures", {
