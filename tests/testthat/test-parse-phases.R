@@ -45,12 +45,14 @@ test_that(".parse_with_curl returns NULL on unparseable input", {
   expect_type(rurl:::.parse_with_curl("http://example.com"), "list")
 })
 
-test_that(".extract_raw_components rebuilds query from params", {
-  parsed <- curl::curl_parse_url("http://example.com/p?a=1&b=2")
+test_that(".extract_raw_components takes the raw query verbatim", {
+  # T2 (RURL-yuozrhop): with params = FALSE, curl surfaces the raw query
+  # string directly, so .extract_raw_components takes it byte-for-byte (a bare
+  # key keeps no trailing "=") rather than rebuilding it from decoded params.
+  parsed <- rurl:::.parse_with_curl("http://example.com/p?a=1&b=2&flag")
   raw <- rurl:::.extract_raw_components(parsed)
   expect_equal(raw$host, "example.com")
-  expect_match(raw$query, "a=1")
-  expect_match(raw$query, "b=2")
+  expect_equal(raw$query, "a=1&b=2&flag")
 })
 
 test_that(".normalize_path applies decode, normalization, index, trailing", {

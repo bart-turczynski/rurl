@@ -26,7 +26,8 @@ NA).}
 A character vector of passwords.
 }
 \description{
-Extracts the password component of a URL.
+Extracts the password component of a URL. The value is returned raw, exactly
+as written in the URL (not percent-decoded).
 }
 \examples{
 get_password("ftp://alice:secret@ftp.example.com/file.txt")

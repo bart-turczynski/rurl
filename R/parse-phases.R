@@ -91,37 +91,29 @@
 }
 
 # Phase 2a: parse the prepared URL with curl, returning NULL on failure.
+# `decode = FALSE, params = FALSE` are load-bearing: with curl's defaults
+# (`decode = TRUE, params = TRUE`) curl percent-decodes the path/query/fragment/
+# userinfo before rurl sees them (so `path_encoding = "keep"` could not keep,
+# and `%2F` structurally merged path segments) and splits the query into
+# decoded params (losing the raw query byte-for-byte). Parsing raw lets rurl own
+# every encoding decision downstream. curl never percent-decodes the host.
 .parse_with_curl <- function(url_to_parse) {
   tryCatch(
-    curl::curl_parse_url(url_to_parse),
+    curl::curl_parse_url(url_to_parse, decode = FALSE, params = FALSE),
     error = function(e) NULL
   )
 }
 
-# Phase 2b: pull the raw components used downstream out of the curl result,
-# reconstructing the query string from params when curl did not surface one.
+# Phase 2b: pull the raw components used downstream out of the curl result.
+# With `params = FALSE` (see .parse_with_curl) `parsed_curl$query` is already
+# the raw (percent-encoded) query string, so it is taken verbatim; downstream
+# parsers split on raw "&"/"=" then decode per-pair. scheme/host/path as-is.
 .extract_raw_components <- function(parsed_curl) {
-  raw_query <- parsed_curl$query %||% NA_character_
-  rebuild_query_from_params <- is.na(raw_query) &&
-    !is.null(parsed_curl$params) &&
-    length(parsed_curl$params) > 0
-  if (rebuild_query_from_params) {
-    # curl_parse_url() always decodes params, so a literal "&"/"=" inside a
-    # value is indistinguishable from a delimiter once joined. Re-encode each
-    # key/value so the reconstructed query is a faithful RAW (percent-encoded)
-    # string; downstream parsers split on raw "&"/"=" then decode per-pair.
-    raw_query <- paste(
-      vapply(names(parsed_curl$params), curl::curl_escape, character(1)),
-      vapply(unname(parsed_curl$params), curl::curl_escape, character(1)),
-      sep = "=",
-      collapse = "&"
-    )
-  }
   list(
     scheme = parsed_curl$scheme %||% NA_character_,
     host = parsed_curl$host %||% NA_character_,
     path = parsed_curl$path %||% NA_character_,
-    query = raw_query
+    query = parsed_curl$query %||% NA_character_
   )
 }
 
@@ -607,6 +599,9 @@
     port = suppressWarnings(as.integer(parsed_curl$port %||% NA_integer_)),
     path = path_output,
     query = raw_query %||% NA_character_,
+    # fragment/user/password are returned raw (as written in the URL): with
+    # `decode = FALSE` (see .parse_with_curl) curl no longer percent-decodes
+    # them, keeping them consistent with the raw path/query.
     fragment = parsed_curl$fragment %||% NA_character_,
     user = parsed_curl$user %||% NA_character_,
     password = parsed_curl$password %||% NA_character_,

@@ -26,7 +26,8 @@ NA).}
 A character vector of user names.
 }
 \description{
-Extracts the user component of a URL.
+Extracts the user component of a URL. The value is returned raw, exactly as
+written in the URL (not percent-decoded).
 }
 \examples{
 get_user("ftp://alice:secret@ftp.example.com/file.txt")

@@ -80,3 +80,24 @@ test_that("safe_parse_urls() agrees row-for-row with safe_parse_url()", {
     }
   }
 })
+
+# T2 (RURL-yuozrhop) correctness property: with curl parsed raw
+# (decode = FALSE, params = FALSE), the raw components round-trip the input
+# byte-for-byte. For URLs with a scheme + host + path + query and no
+# default-port / userinfo / fragment weirdness,
+# paste0(scheme, "://", host, path, "?", query) reconstructs the original.
+# This is the guarantee the old decode=TRUE parse silently broke (percent-
+# decoded paths, %2F merged segments, bare query keys gained "=").
+test_that("raw scheme/host/path/query round-trip the input byte-for-byte", {
+  urls <- c(
+    "http://example.com/a%20b/c%2Fd?x=1%262&flag",
+    "https://sub.example.co.uk/p/a%2Fth?q=%E2%9C%93&flag",
+    "http://example.com/plain/path?a=1&b=2",
+    "https://example.org/%7Euser/file.txt?key=val%20ue"
+  )
+  for (u in urls) {
+    p <- safe_parse_url(u, path_encoding = "keep", case_handling = "keep")
+    rebuilt <- paste0(p$scheme, "://", p$host, p$path, "?", p$query)
+    expect_identical(rebuilt, u, info = u)
+  }
+})
