@@ -317,28 +317,30 @@ safe_parse_urls <- function(url,
     path_encoding = path_encoding
   )
 
-  urls <- url
-  if (length(urls) == 0) {
+  if (length(url) == 0) {
     return(.spu_empty_result())
   }
 
-  urls_list <- as.list(urls)
-  parsed_list <- lapply(urls_list, ._safe_parse_url_scalar, opts)
-
-  # Build a rectangular data.frame, filling NULLs with error rows
+  # Coerce to a character vector to parse and, separately, the original_url
+  # column. A non-character element (or a non-scalar list element) is not
+  # parseable -- it becomes NA for the engine (an "error" row), exactly as the
+  # scalar pipeline returned NULL for it -- but its original_url is still the
+  # coerced input string. This preserves the historical column semantics without
+  # a per-URL loop. (URL-level de-duplication + memoization is T4's job; here
+  # the engine simply runs once over the whole vector.)
+  urls_list <- as.list(url)
   original_url_vec <- vapply(urls_list, .spu_coerce_original, character(1))
-  normalized_list <- lapply(seq_along(parsed_list), function(i) {
-    parsed_list[[i]] %||% .spu_empty_row(original_url_vec[[i]])
-  })
+  parse_input <- vapply(
+    urls_list,
+    function(u) if (is.character(u) && length(u) == 1L) u else NA_character_,
+    character(1)
+  )
 
-  cols <- lapply(.spu_result_fields, function(f) {
-    vapply(
-      normalized_list,
-      function(x) x[[f$name]] %||% f$default,
-      f$template
-    )
-  })
-  names(cols) <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  engine_cols <- ._parse_urls_vec(parse_input, opts)
+
+  field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  cols <- engine_cols[field_names]
+  cols$original_url <- original_url_vec
   cols$stringsAsFactors <- FALSE
   do.call(data.frame, cols)
 }
@@ -367,14 +369,6 @@ safe_parse_urls <- function(url,
     return(as.character(u))
   }
   NA_character_
-}
-
-# An all-defaults result row (parse_status = "error") carrying the original URL.
-.spu_empty_row <- function(orig) {
-  row <- lapply(.spu_result_fields, function(f) f$default)
-  names(row) <- vapply(.spu_result_fields, function(f) f$name, character(1))
-  row$original_url <- orig
-  row
 }
 
 # Validate and normalize the parsing options shared by safe_parse_url() and
@@ -480,13 +474,182 @@ safe_parse_urls <- function(url,
     return(cached)
   }
 
-  # Call the implementation with the validated opts.
-  result <- do.call(._safe_parse_url_impl, c(list(url = url), opts))
+  # Scalar parse is the n = 1 case of the vector engine: run it on the single
+  # URL, then return NULL for a NULL-equivalent row (invalid / rejected / curl
+  # failure) or the row as a named list (byte-identical to the historical
+  # .assemble_parse_result() output).
+  engine_cols <- ._parse_urls_vec(url, opts)
+  result <- if (attr(engine_cols, "null_row")[1L]) {
+    NULL
+  } else {
+    lapply(engine_cols, function(column) column[[1L]])
+  }
 
   # Cache the result
   .cache_set("full_parse", cache_key, result)
 
   result
+}
+
+# Internal vector engine: parse a character vector of URLs into a list of the
+# 14 columns named by .spu_result_fields, plus a `null_row` attribute marking
+# the rows the scalar pipeline would have returned NULL for (invalid input,
+# phase-1 rejection, or curl failure). Options are the validated `opts` list
+# (from .parse_options()); every per-phase switch/if is selected once here and
+# the phase helpers run over whole vectors. All pslr/punycode traffic is batched
+# to one call per phase (over unique hosts). This is the single production parse
+# path for both safe_parse_url() and safe_parse_urls(); ._safe_parse_url_impl()
+# below is the equivalent scalar orchestrator kept for its unit coverage.
+._parse_urls_vec <- function(urls, opts) {
+  n <- length(urls)
+
+  # Input-level validity: parseable only if a non-NA, non-empty character
+  # scalar (callers map non-character input to NA before the engine).
+  valid <- !is.na(urls) & nzchar(urls)
+
+  # Phase 1: scheme detection and curl-input preparation.
+  prep <- .prepare_urls_for_curl_vec(
+    urls, opts$protocol_handling, opts$scheme_relative_handling
+  )
+
+  # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
+  parseable <- valid & !prep$rejected
+  parsed_list <- vector("list", n)
+  parse_idx <- which(parseable)
+  if (length(parse_idx) > 0L) {
+    parsed_list[parse_idx] <- lapply(
+      prep$url_to_parse[parse_idx], .parse_with_curl
+    )
+  }
+  curl_ok <- parseable & !vapply(parsed_list, is.null, logical(1))
+  null_row <- !curl_ok
+
+  # Pull raw components into columns (mirrors .extract_raw_components() and the
+  # port/fragment/user/password fields of .assemble_parse_result(), using `$`
+  # exactly as the scalar code does).
+  raw_scheme <- vapply(parsed_list, function(p) {
+    if (is.null(p)) NA_character_ else p$scheme %||% NA_character_
+  }, character(1), USE.NAMES = FALSE)
+  raw_host <- vapply(parsed_list, function(p) {
+    if (is.null(p)) NA_character_ else p$host %||% NA_character_
+  }, character(1), USE.NAMES = FALSE)
+  raw_path <- vapply(parsed_list, function(p) {
+    if (is.null(p)) NA_character_ else p$path %||% NA_character_
+  }, character(1), USE.NAMES = FALSE)
+  raw_query <- vapply(parsed_list, function(p) {
+    if (is.null(p)) NA_character_ else p$query %||% NA_character_
+  }, character(1), USE.NAMES = FALSE)
+  raw_fragment <- vapply(parsed_list, function(p) {
+    if (is.null(p)) NA_character_ else p$fragment %||% NA_character_
+  }, character(1), USE.NAMES = FALSE)
+  raw_user <- vapply(parsed_list, function(p) {
+    if (is.null(p)) NA_character_ else p$user %||% NA_character_
+  }, character(1), USE.NAMES = FALSE)
+  raw_password <- vapply(parsed_list, function(p) {
+    if (is.null(p)) NA_character_ else p$password %||% NA_character_
+  }, character(1), USE.NAMES = FALSE)
+  raw_port <- vapply(parsed_list, function(p) {
+    if (is.null(p)) {
+      NA_integer_
+    } else {
+      suppressWarnings(as.integer(p$port %||% NA_integer_))
+    }
+  }, integer(1), USE.NAMES = FALSE)
+
+  # Phase 3: path normalization.
+  path_final <- .normalize_path_vec(
+    raw_path, opts$path_encoding, opts$path_normalization,
+    opts$index_page_handling, opts$trailing_slash_handling
+  )
+
+  # Phase 4: final scheme per protocol policy.
+  final_scheme <- .derive_final_scheme_vec(
+    opts$protocol_handling, prep$looks_like_protocol, raw_scheme
+  )
+
+  # Phase 5: IP host detection.
+  is_ip_host <- .detect_ip_host_vec(raw_host)
+
+  # Phase 6: www-prefix policy.
+  final_host <- .apply_www_policy_vec(raw_host, opts$www_handling, is_ip_host)
+
+  # Phase 7: registered-domain and TLD derivation (batched pslr calls).
+  domain_tld <- .derive_domain_tld_vec(
+    final_host, is_ip_host, opts$tld_source, opts$host_encoding
+  )
+  domain <- domain_tld$domain
+  tld <- domain_tld$tld
+
+  # Phase 8: subdomain-level policy.
+  final_host <- .apply_subdomain_policy_vec(
+    final_host, domain, opts$subdomain_levels_to_keep, is_ip_host
+  )
+
+  # Phase 9: host encoding (idna / unicode).
+  host_for_clean <- .apply_host_encoding_vec(
+    final_host, opts$host_encoding, is_ip_host
+  )
+
+  # Phase 10: case policy applied to host, path, and scheme.
+  cased <- .apply_case_policy_vec(
+    host_for_clean, path_final, final_scheme, opts$case_handling
+  )
+
+  # Phase 11: clean URL reconstruction.
+  clean_url <- .build_clean_url_vec(
+    cased$scheme, cased$host, cased$path, opts$trailing_slash_handling
+  )
+
+  # Phase 12: parse-status assignment.
+  parse_status <- .derive_parse_status_vec(
+    curl_ok = curl_ok,
+    final_host = final_host,
+    is_ip_host = is_ip_host,
+    tld = tld,
+    domain = domain,
+    protocol_handling = opts$protocol_handling,
+    final_scheme = final_scheme,
+    looks_like_protocol = prep$looks_like_protocol,
+    original_has_allowed_scheme = prep$original_has_allowed_scheme,
+    is_scheme_relative = prep$is_scheme_relative,
+    scheme_relative_handling = opts$scheme_relative_handling
+  )
+
+  # Phase 13: assemble the 14 typed columns.
+  cols <- .assemble_parse_result_vec(
+    original_url = urls,
+    scheme_output = cased$scheme,
+    host_output = cased$host,
+    port = raw_port,
+    path_output = cased$path,
+    raw_query = raw_query,
+    fragment = raw_fragment,
+    user = raw_user,
+    password = raw_password,
+    domain = domain,
+    tld = tld,
+    is_ip_host = is_ip_host,
+    clean_url = clean_url,
+    parse_status = parse_status,
+    is_scheme_relative = prep$is_scheme_relative,
+    scheme_relative_handling = opts$scheme_relative_handling
+  )
+
+  # Rows the scalar pipeline returned NULL for become all-default "error" rows
+  # (like .spu_empty_row()); original_url is left as the input. Non-null rows
+  # keep every computed column -- including the unsupported-scheme rows whose
+  # parse_status is "error" but whose other components are populated.
+  if (any(null_row)) {
+    for (f in .spu_result_fields) {
+      if (f$name == "original_url") {
+        next
+      }
+      cols[[f$name]][null_row] <- f$default
+    }
+  }
+
+  attr(cols, "null_row") <- null_row
+  cols
 }
 
 # Internal implementation of safe_parse_url (not memoized)

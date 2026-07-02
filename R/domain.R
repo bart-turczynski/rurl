@@ -2,22 +2,17 @@
 # DO NOT modify punycode logic.
 
 # Internal helper to encode hostnames using IDNA (Punycode)
-# Accepts encode_fn for testability and fallback
+# Accepts encode_fn for testability and fallback. With the default encode_fn
+# (production) it delegates to the vectorized .normalize_and_punycode_vec() so
+# there is a single implementation; a non-default encode_fn (test double) takes
+# the scalar path below, bypassing the shared cache by design.
 .normalize_and_punycode <- function(host, encode_fn = punycoder::puny_encode) {
-  if (is.na(host) || !nzchar(host)) {
-    return(host)
+  if (identical(encode_fn, punycoder::puny_encode)) {
+    return(.normalize_and_punycode_vec(host))
   }
 
-  # Memoize on the raw host so repeated calls within a vector parse (the same
-  # host hits this across phases 6/7/9) and duplicate hosts across URLs collapse
-  # to one R->C++ crossing. Bypass when a non-default encode_fn is injected so
-  # test doubles never read or pollute the shared cache.
-  use_cache <- identical(encode_fn, punycoder::puny_encode)
-  if (use_cache) {
-    cached <- .cache_get("puny_encode", host)
-    if (!identical(cached, .rurl_cache_sentinel)) {
-      return(cached)
-    }
+  if (is.na(host) || !nzchar(host)) {
+    return(host)
   }
 
   host_nfc <- stringi::stri_trans_nfc(host) # Normalize Unicode
@@ -41,32 +36,92 @@
     return(NA_character_)
     # nocov end
   }
-  if (use_cache) {
-    .cache_set("puny_encode", host, encoded)
-  }
   encoded
 }
 
-# Internal helper to decode Punycode domain parts to Unicode
+# Vectorized IDNA/Punycode host encoder. Batch analogue of
+# .normalize_and_punycode() that preserves its exact per-host semantics:
+# NA/empty hosts pass through unchanged; each remaining host is NFC-normalized
+# then Punycode-encoded, strictly first and falling back to a lenient
+# (strict = FALSE) encode only for the hosts the strict pass rejects, and to NA
+# only when even the lenient encode errors (matching the scalar case preserving,
+# malformed-tolerant contract). Hosts are de-duplicated and memoized in the
+# puny_encode cache, so each unique unmemoized host costs one R->C++ crossing.
+# Always uses punycoder::puny_encode; the scalar wrapper keeps the encode_fn
+# injection seam for test doubles.
+.normalize_and_punycode_vec <- function(host) {
+  result <- host
+  process <- !is.na(host) & nzchar(host)
+  if (!any(process)) {
+    return(unname(result))
+  }
+
+  h <- host[process]
+  uniq_hosts <- unique(h)
+  hit <- logical(length(uniq_hosts))
+  encoded_uniq <- rep(NA_character_, length(uniq_hosts))
+  for (k in seq_along(uniq_hosts)) {
+    cached <- .cache_get("puny_encode", uniq_hosts[k])
+    if (!identical(cached, .rurl_cache_sentinel)) {
+      hit[k] <- TRUE
+      encoded_uniq[k] <- cached
+    }
+  }
+
+  miss_idx <- which(!hit)
+  if (length(miss_idx) > 0L) {
+    nfc <- stringi::stri_trans_nfc(uniq_hosts[miss_idx])
+    encoded <- tryCatch(
+      punycoder::puny_encode(nfc, strict = TRUE),
+      error = function(e) NULL
+    )
+    if (!is.character(encoded) || length(encoded) != length(nfc)) {
+      # A label made the strict batch throw: reproduce the scalar per-host
+      # strict -> lenient -> NA fallback exactly, element by element.
+      encoded <- vapply(
+        nfc,
+        function(x) {
+          tryCatch(
+            punycoder::puny_encode(x, strict = TRUE),
+            error = function(e) {
+              tryCatch(
+                punycoder::puny_encode(x, strict = FALSE),
+                error = function(e2) NA_character_
+              )
+            }
+          )
+        },
+        character(1),
+        USE.NAMES = FALSE
+      )
+    }
+    for (j in seq_along(miss_idx)) {
+      encoded_uniq[miss_idx[j]] <- encoded[j]
+      .cache_set("puny_encode", uniq_hosts[miss_idx[j]], encoded[j])
+    }
+  }
+
+  result[process] <- encoded_uniq[match(h, uniq_hosts)]
+  unname(result)
+}
+
+# Internal helper to decode Punycode domain parts to Unicode. With the default
+# decode_fn (production) it delegates to the vectorized
+# .punycode_to_unicode_vec() so there is a single implementation; a non-default
+# decode_fn (test double) takes the scalar path below, bypassing the cache.
 .punycode_to_unicode <- function(
   domain_puny,
   decode_fn = punycoder::puny_decode
 ) {
+  if (identical(decode_fn, punycoder::puny_decode)) {
+    return(.punycode_to_unicode_vec(domain_puny))
+  }
+
   if (is.na(domain_puny)) {
     return(NA_character_)
   }
   if (!nzchar(domain_puny)) {
     return("")
-  }
-
-  # Memoize on the punycode input (see .normalize_and_punycode); bypass when a
-  # non-default decode_fn is injected so test doubles stay isolated.
-  use_cache <- identical(decode_fn, punycoder::puny_decode)
-  if (use_cache) {
-    cached <- .cache_get("puny_decode", domain_puny)
-    if (!identical(cached, .rurl_cache_sentinel)) {
-      return(cached)
-    }
   }
 
   parts_puny <- strsplit(domain_puny, ".", fixed = TRUE)[[1]]
@@ -93,11 +148,84 @@
   sane_labels <- iconv(decoded_labels, from = "UTF-8", to = "UTF-8", sub = "")
   sane_labels[is.na(sane_labels)] <- ""
 
-  result <- paste(sane_labels, collapse = ".")
-  if (use_cache) {
-    .cache_set("puny_decode", domain_puny, result)
+  paste(sane_labels, collapse = ".")
+}
+
+# Vectorized Punycode -> Unicode decoder. Batch analogue of
+# .punycode_to_unicode() preserving its exact per-host semantics: NA -> NA,
+# "" -> "", and any other host decoded per label with the lenient
+# (strict = FALSE) decode, an undecodable label falling back to its original
+# spelling, iconv sanitizing to valid UTF-8, and the labels rejoined with ".".
+# All hosts are split to labels once and decoded in a single flattened
+# puny_decode call (regrouped by contiguous offsets, not split(), to avoid
+# factor-level ordering pitfalls); on a batch throw or shape mismatch it falls
+# back to a per-host decode that mirrors the scalar contract. De-duplicated and
+# memoized in the puny_decode cache. Always uses punycoder::puny_decode; the
+# scalar wrapper keeps the decode_fn injection seam for test doubles.
+.punycode_to_unicode_vec <- function(domain_puny) {
+  result <- rep(NA_character_, length(domain_puny))
+  result[!is.na(domain_puny) & !nzchar(domain_puny)] <- ""
+  process <- !is.na(domain_puny) & nzchar(domain_puny)
+  if (!any(process)) {
+    return(unname(result))
   }
-  result
+
+  d <- domain_puny[process]
+  uniq_hosts <- unique(d)
+  hit <- logical(length(uniq_hosts))
+  decoded_uniq <- rep(NA_character_, length(uniq_hosts))
+  for (k in seq_along(uniq_hosts)) {
+    cached <- .cache_get("puny_decode", uniq_hosts[k])
+    if (!identical(cached, .rurl_cache_sentinel)) {
+      hit[k] <- TRUE
+      decoded_uniq[k] <- cached
+    }
+  }
+
+  miss_idx <- which(!hit)
+  if (length(miss_idx) > 0L) {
+    miss_hosts <- uniq_hosts[miss_idx]
+    parts_list <- strsplit(miss_hosts, ".", fixed = TRUE)
+    lens <- lengths(parts_list)
+    flat <- unlist(parts_list, use.names = FALSE)
+
+    decoded_flat <- tryCatch(
+      punycoder::puny_decode(flat, strict = FALSE),
+      error = function(e) NULL
+    )
+    if (!is.character(decoded_flat) || length(decoded_flat) != length(flat)) {
+      # Batch decode threw or returned an unexpected shape: fall back to the
+      # scalar per-host contract (a failed host decodes to its original labels).
+      decoded_list <- lapply(parts_list, function(p) {
+        dl <- tryCatch(
+          punycoder::puny_decode(p, strict = FALSE),
+          error = function(e) rep(NA_character_, length(p)) # nocov
+        )
+        if (!is.character(dl) || length(dl) != length(p)) {
+          rep(NA_character_, length(p)) # nocov
+        } else {
+          dl
+        }
+      })
+      decoded_flat <- unlist(decoded_list, use.names = FALSE)
+    }
+
+    na_lab <- is.na(decoded_flat)
+    decoded_flat[na_lab] <- flat[na_lab]
+    sane <- iconv(decoded_flat, from = "UTF-8", to = "UTF-8", sub = "")
+    sane[is.na(sane)] <- ""
+
+    ends <- cumsum(lens)
+    starts <- ends - lens + 1L
+    for (j in seq_along(miss_idx)) {
+      rejoined <- paste(sane[starts[j]:ends[j]], collapse = ".")
+      decoded_uniq[miss_idx[j]] <- rejoined
+      .cache_set("puny_decode", miss_hosts[j], rejoined)
+    }
+  }
+
+  result[process] <- decoded_uniq[match(d, uniq_hosts)]
+  unname(result)
 }
 
 # Public Suffix List queries are delegated to the pslr package. rurl maps its
@@ -131,6 +259,15 @@
     return(FALSE)
   }
   grepl("(^|\\.)xn--", host, ignore.case = TRUE)
+}
+
+# Vectorized .host_is_ace(): TRUE per element when any label is an ACE A-label.
+# NA or empty hosts are FALSE. Used by the vectorized domain/TLD phase to pick
+# the emitted spelling under host_encoding = "keep".
+.host_is_ace_vec <- function(host) {
+  res <- grepl("(^|\\.)xn--", host, ignore.case = TRUE)
+  res[is.na(host) | !nzchar(host)] <- FALSE
+  res
 }
 
 # Registered (eTLD+1) domain for a host. Vectorized. `output` selects the
