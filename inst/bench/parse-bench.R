@@ -23,6 +23,17 @@
 #   vector warm  (20k, all cached):  ~250,000 URLs/s (>1M/s once JIT-warmed)
 #   20k all-duplicates-of-100:       ~6,000,000 URLs/s (duplicates cost match())
 #   scalar accessor loop unchanged (per-call wrapper overhead is T5's target).
+#
+# After T7 (RURL-dkwrebdt: parse/present split -- full_parse caches Stage A):
+#   Multi-profile scenario, 20k URLs / ~18k unique, cold caches, 5 accessors
+#   each with a DIFFERENT presentation profile (Apple silicon, R 4.6.0):
+#     before (main):  single parse 5.65s | 5 accessors 80.2s (14.2x the floor)
+#     after  (T7):    single parse 7.09s | 5 accessors  6.3s (0.89x the floor)
+#   -> ~12.7x faster on the multi-profile workload; the accessors now add no
+#   core cost beyond a single parse (they share one Stage A cache entry per
+#   URL and re-run only Stage B). The single-parse floor is ~25% slower because
+#   Stage A derives the domain/TLD in both spellings so host_encoding stays a
+#   Stage-B choice; this is paid once and amortized across every profile.
 # Update these numbers when the refactor lands so drift is reviewable.
 # ----------------------------------------------------------------------------
 
@@ -33,10 +44,18 @@ if (!requireNamespace("rurl", quietly = TRUE) &&
 if (exists("safe_parse_urls", mode = "function")) {
   spu <- get("safe_parse_urls")
   gd <- get("get_domain")
+  gh <- get("get_host")
+  gt <- get("get_tld")
+  gc <- get("get_clean_url")
+  gs <- get("get_subdomain")
   clear_caches <- get("rurl_clear_caches")
 } else {
   spu <- rurl::safe_parse_urls
   gd <- rurl::get_domain
+  gh <- rurl::get_host
+  gt <- rurl::get_tld
+  gc <- rurl::get_clean_url
+  gs <- rurl::get_subdomain
   clear_caches <- rurl::rurl_clear_caches
 }
 
@@ -95,5 +114,38 @@ clear_caches()
 timed_rate("scalar accessor loop (get_domain)", length(unique_urls), {
   suppressWarnings(for (u in unique_urls) gd(u))
 })
+
+# Multi-profile accessor workload (RURL-dkwrebdt): the rurl-mcp pattern -- call
+# several accessors, each with a DIFFERENT presentation profile, on the same
+# URLs. Before the parse/present split each profile produced a different
+# full_parse key, so every accessor re-ran the whole parse core (curl + PSL).
+# After the split, all five share ONE Stage A cache entry per URL (they differ
+# only in Stage-B presentation: case / host_encoding / trailing slash), so the
+# core is computed once and the floor is a single safe_parse_urls() cold pass.
+five_profiles_cold <- function(urls) {
+  gh(urls, host_encoding = "unicode")
+  gd(urls, host_encoding = "idna")
+  gt(urls)
+  gc(urls, case_handling = "upper", trailing_slash_handling = "strip")
+  gs(urls)
+  invisible(NULL)
+}
+
+cat("\nmulti-profile (5 accessors, distinct profiles, same URLs):\n")
+clear_caches()
+floor_rate <- timed_rate(
+  "single safe_parse_urls cold (floor)", length(big),
+  suppressWarnings(spu(big))
+)
+clear_caches()
+five_rate <- timed_rate(
+  "5 accessors cold (different profiles)", length(big),
+  suppressWarnings(five_profiles_cold(big))
+)
+cat(sprintf(
+  "  -> 5-accessor cold vs single-parse floor: %.2fx of floor time",
+  floor_rate / five_rate
+))
+cat(" (1.0x == accessors add no core cost beyond one parse)\n")
 
 invisible(NULL)

@@ -457,21 +457,20 @@ safe_parse_urls <- function(url,
   opts
 }
 
-# Build memoization cache keys for a vector of URLs from validated options.
-# Single source of the field set, order, separator, and Unicode escaping so the
-# key format cannot drift across call sites. The scalar opts recycle across the
-# `urls` vector in one paste(), and one stri_escape_unicode() escapes them all.
+# Build Stage A memoization cache keys for a vector of URLs from validated
+# options. Stage A is the option-INDEPENDENT parse core (RURL-dkwrebdt), so the
+# key covers ONLY the options that actually change that core: the two scheme
+# policies that decide what curl parses (protocol_handling,
+# scheme_relative_handling), the www policy that shapes the post-www host fed to
+# the PSL decomposition (www_handling), and the PSL section (tld_source). Every
+# other option (case, trailing slash, index page, path normalization, path/host
+# encoding, subdomain levels) is a pure Stage-B presentation transform and is
+# deliberately EXCLUDED, so profiles differing only in presentation share one
+# cache entry. Single source of the field set, order, separator, and Unicode
+# escaping so the key format cannot drift across call sites.
 .parse_cache_keys <- function(urls, opts) {
-  subdomain_key <- if (is.null(opts$subdomain_levels_to_keep)) {
-    "NULL"
-  } else {
-    as.character(opts$subdomain_levels_to_keep)
-  }
   cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
-    opts$tld_source, opts$case_handling, opts$trailing_slash_handling,
-    opts$index_page_handling, opts$path_normalization,
-    opts$scheme_relative_handling, subdomain_key,
-    opts$host_encoding, opts$path_encoding,
+    opts$tld_source, opts$scheme_relative_handling,
     sep = "\x1F"
   )
   stringi::stri_escape_unicode(enc2utf8(cache_key))
@@ -511,18 +510,27 @@ safe_parse_urls <- function(url,
 # named by .spu_result_fields (canonical order) plus a `null_row` logical
 # attribute -- the rows the scalar pipeline would have returned NULL for.
 #
-# The full_parse cache is keyed and stored at the UNIQUE-URL level: unique parse
-# inputs are looked up in one batch, misses parsed once by the vector engine and
-# stored, then all rows are expanded via match(). Duplicate rows cost only the
-# match(). Each cache value is either an unnamed length-14 list of the row's
-# fields (canonical .spu_result_fields order) or NULL for a null row, so
-# NULL-caching semantics are preserved and hit reconstruction stays a builtin
-# `[[` gather (no per-element closure). NA / "" inputs are treated as null rows
-# and are NEVER cached (mirroring the scalar early return), so cache-entry
-# counts reflect real unique URLs only.
+# Parse/present split (RURL-dkwrebdt): the full_parse cache stores STAGE A --
+# the option-independent parse core (curl components, IP detection, post-www
+# host, and the PSL decomposition in both spellings) -- keyed by
+# url x protocol x www x tld_source x scheme_relative only. STAGE B
+# (._parse_stage_b_vec) then derives the 14 presented columns from the cached
+# Stage A plus the presentation options and is NEVER cached. So two accessor
+# profiles that differ only in presentation (case, path handling, host_encoding
+# spelling, subdomain levels, ...) share one cache entry and re-run only the
+# cheap Stage B: the expensive curl + PSL work is done once per URL regardless
+# of how many option profiles ask for it.
+#
+# Cache mechanics mirror the previous full-result cache: keyed/stored at the
+# UNIQUE-URL level (one batch lookup, misses computed once, all rows expanded
+# via match()); each value is either an unnamed Stage A field list
+# (.spu_stage_a_fields order) or NULL for a null row, so NULL-caching semantics
+# hold and hit reconstruction is a builtin `[[` gather. NA / "" inputs are null
+# rows and are NEVER cached, so cache-entry counts still reflect real unique
+# URLs only.
 ._parse_urls_cached <- function(parse_input, opts) {
-  field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
-  n_fields <- length(.spu_result_fields)
+  a_fields <- vapply(.spu_stage_a_fields, function(f) f$name, character(1))
+  n_a_fields <- length(.spu_stage_a_fields)
   uniq <- unique(parse_input)
   m <- length(uniq)
 
@@ -540,15 +548,15 @@ safe_parse_urls <- function(url,
   }
   hit <- !vapply(cached, identical, logical(1), .rurl_cache_sentinel)
 
-  # Unique-level columns, initialized to the null-row defaults.
-  cols_uniq <- lapply(.spu_result_fields, function(f) rep(f$default, m))
-  names(cols_uniq) <- field_names
+  # Unique-level Stage A columns, initialized to the null-row defaults.
+  a_uniq <- lapply(.spu_stage_a_fields, function(f) rep(f$default, m))
+  names(a_uniq) <- a_fields
   null_uniq <- rep(TRUE, m)
 
-  # Fill cache hits. A hit value is an unnamed length-14 list (populated row) or
-  # NULL (cached null row -- keep the defaults). Non-null rows are gathered a
-  # field at a time with the builtin `[[`, so reconstruction avoids a closure
-  # per hit.
+  # Fill cache hits. A hit value is an unnamed Stage A field list (populated
+  # row) or NULL (cached null row -- keep the defaults). Non-null rows are
+  # gathered a field at a time with the builtin `[[`, so reconstruction avoids a
+  # closure per hit.
   if (any(hit)) {
     hit_idx <- which(hit)
     is_null_hit <- vapply(cached[hit_idx], is.null, logical(1))
@@ -556,25 +564,25 @@ safe_parse_urls <- function(url,
     nn_idx <- hit_idx[!is_null_hit]
     if (length(nn_idx) > 0L) {
       nn_vals <- cached[nn_idx]
-      for (j in seq_len(n_fields)) {
-        cols_uniq[[j]][nn_idx] <- vapply(
-          nn_vals, `[[`, .spu_result_fields[[j]]$template, j
+      for (j in seq_len(n_a_fields)) {
+        a_uniq[[j]][nn_idx] <- vapply(
+          nn_vals, `[[`, .spu_stage_a_fields[[j]]$template, j
         )
       }
     }
   }
 
-  # Parse the misses (includes NA / "" inputs, which the engine turns into null
-  # rows) and populate their columns.
+  # Compute Stage A for the misses (includes NA / "" inputs, which the engine
+  # turns into null rows) and populate their columns.
   need_idx <- which(!hit)
   if (length(need_idx) > 0L) {
-    engine_cols <- ._parse_urls_vec(uniq[need_idx], opts)
-    null_uniq[need_idx] <- attr(engine_cols, "null_row")
-    for (nm in field_names) {
-      cols_uniq[[nm]][need_idx] <- engine_cols[[nm]]
+    a_cols <- ._parse_stage_a_vec(uniq[need_idx], opts)
+    null_uniq[need_idx] <- attr(a_cols, "null_row")
+    for (nm in a_fields) {
+      a_uniq[[nm]][need_idx] <- a_cols[[nm]]
     }
 
-    # Store the freshly parsed, cacheable rows: the unnamed length-14 field
+    # Store the freshly computed, cacheable Stage A rows: the unnamed field
     # list, or NULL for a null row. NA / "" are never cached.
     store_idx <- need_idx[cacheable[need_idx]]
     if (length(store_idx) > 0L) {
@@ -582,31 +590,51 @@ safe_parse_urls <- function(url,
         if (null_uniq[i]) {
           NULL
         } else {
-          unname(lapply(cols_uniq, `[[`, i))
+          unname(lapply(a_uniq, `[[`, i))
         }
       })
       .cache_set_many("full_parse", keys[store_idx], store_vals)
     }
   }
 
+  # Stage B: derive the 14 presented columns from the unique Stage A rows plus
+  # the presentation options. Runs on every call (never cached); curl_ok is the
+  # complement of the null rows.
+  cols_uniq <- ._parse_stage_b_vec(a_uniq, uniq, !null_uniq, opts)
+
+  # Null rows collapse to the all-default "error" row (original_url is left as
+  # the unique input and restored per row by the caller). This matches the tail
+  # of the previous single-stage engine.
+  if (any(null_uniq)) {
+    for (f in .spu_result_fields) {
+      if (f$name == "original_url") {
+        next
+      }
+      cols_uniq[[f$name]][null_uniq] <- f$default
+    }
+  }
+
   # Expand the unique rows back to every input position.
   pos <- match(parse_input, uniq)
+  field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
   cols <- lapply(cols_uniq, function(col) col[pos])
   names(cols) <- field_names
   attr(cols, "null_row") <- null_uniq[pos]
   cols
 }
 
-# Internal vector engine: parse a character vector of URLs into a list of the
-# 14 columns named by .spu_result_fields, plus a `null_row` attribute marking
-# the rows the scalar pipeline would have returned NULL for (invalid input,
-# phase-1 rejection, or curl failure). Options are the validated `opts` list
-# (from .parse_options()); every per-phase switch/if is selected once here and
-# the phase helpers run over whole vectors. All pslr/punycode traffic is batched
-# to one call per phase (over unique hosts). This is the single production parse
-# path for both safe_parse_url() and safe_parse_urls(); ._safe_parse_url_impl()
-# below is the equivalent scalar orchestrator kept for its unit coverage.
-._parse_urls_vec <- function(urls, opts) {
+# Stage A (vector): the option-INDEPENDENT parse core (RURL-dkwrebdt). Runs the
+# expensive, presentation-independent phases -- scheme detection + curl input
+# prep (1), the curl parse and raw-component extraction (2), final-scheme policy
+# (4), IP detection (5), the www-prefix policy that shapes the host (6), and the
+# registered-domain / TLD derivation (7) computed in BOTH the ascii and unicode
+# spellings so host_encoding stays a Stage-B choice. Returns the Stage A columns
+# named by .spu_stage_a_fields plus a `null_row` attribute (invalid input,
+# phase-1 rejection, or curl failure). Its output for a given URL depends only
+# on opts$protocol_handling / www_handling / tld_source /
+# scheme_relative_handling (the full_parse cache key), so it is memoized once
+# and reused across every presentation profile.
+._parse_stage_a_vec <- function(urls, opts) {
   n <- length(urls)
 
   # Input-level validity: parseable only if a non-NA, non-empty character
@@ -662,12 +690,6 @@ safe_parse_urls <- function(url,
     }
   }, integer(1), USE.NAMES = FALSE)
 
-  # Phase 3: path normalization.
-  path_final <- .normalize_path_vec(
-    raw_path, opts$path_encoding, opts$path_normalization,
-    opts$index_page_handling, opts$trailing_slash_handling
-  )
-
   # Phase 4: final scheme per protocol policy.
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
@@ -676,19 +698,84 @@ safe_parse_urls <- function(url,
   # Phase 5: IP host detection.
   is_ip_host <- .detect_ip_host_vec(raw_host)
 
-  # Phase 6: www-prefix policy.
+  # Phase 6: www-prefix policy shapes the host fed to the PSL decomposition.
   final_host <- .apply_www_policy_vec(raw_host, opts$www_handling, is_ip_host)
 
-  # Phase 7: registered-domain and TLD derivation (batched pslr calls).
-  domain_tld <- .derive_domain_tld_vec(
-    final_host, is_ip_host, opts$tld_source, opts$host_encoding
+  # Phase 7: registered-domain and TLD derivation (batched pslr calls), computed
+  # in BOTH spellings. "idna" forces ascii A-labels and "unicode" forces
+  # decoded Unicode for every eligible host, so Stage B can reproduce every
+  # host_encoding spelling (keep / idna / unicode) by SELECTING between the two
+  # columns per row -- no further pslr call. host_is_ace drives the per-host
+  # choice for the "keep" spelling, mirroring .derive_domain_tld_vec()'s own
+  # logic exactly.
+  dt_ascii <- .derive_domain_tld_vec(
+    final_host, is_ip_host, opts$tld_source, "idna"
   )
-  domain <- domain_tld$domain
-  tld <- domain_tld$tld
+  dt_unicode <- .derive_domain_tld_vec(
+    final_host, is_ip_host, opts$tld_source, "unicode"
+  )
+  host_is_ace <- .host_is_ace_vec(final_host)
 
-  # Phase 8: subdomain-level policy.
+  cols <- list(
+    final_scheme = final_scheme,
+    final_host = final_host,
+    is_ip_host = is_ip_host,
+    raw_path = raw_path,
+    raw_query = raw_query,
+    raw_fragment = raw_fragment,
+    raw_user = raw_user,
+    raw_password = raw_password,
+    raw_port = raw_port,
+    domain_ascii = dt_ascii$domain,
+    domain_unicode = dt_unicode$domain,
+    tld_ascii = dt_ascii$tld,
+    tld_unicode = dt_unicode$tld,
+    host_is_ace = host_is_ace,
+    looks_like_protocol = prep$looks_like_protocol,
+    original_has_allowed_scheme = prep$original_has_allowed_scheme,
+    is_scheme_relative = prep$is_scheme_relative
+  )
+  attr(cols, "null_row") <- null_row
+  cols
+}
+
+# Stage B (vector): the presentation transform (RURL-dkwrebdt). A pure,
+# never-cached function of the cached Stage A columns (`a`), the per-row
+# original URL, `curl_ok` (the complement of Stage A's null rows), and the
+# validated presentation options. Runs the option-dependent phases -- path
+# normalization (3), subdomain-level trimming (8), host encoding (9), case
+# policy (10), clean-URL assembly (11), parse-status (12), and result assembly
+# (13) -- selecting the domain/TLD spelling from Stage A's two spellings.
+# Returns the 14 columns named by .spu_result_fields (null-row error defaults
+# are applied by the caller). Every option EXCLUDED from the cache key is
+# consumed here, so switching presentation profiles re-runs only this cheap
+# stage.
+._parse_stage_b_vec <- function(a, original_url, curl_ok, opts) {
+  is_ip_host <- a$is_ip_host
+
+  # Select the domain/TLD spelling exactly as .derive_domain_tld_vec() would for
+  # this host_encoding: idna -> ascii, unicode -> unicode, keep -> ascii for
+  # ACE (xn--) hosts else unicode. domain/tld emptiness (used by parse-status)
+  # is spelling-independent, so status is unaffected by the choice.
+  use_ascii <- if (opts$host_encoding == "idna") {
+    rep(TRUE, length(a$host_is_ace))
+  } else if (opts$host_encoding == "unicode") {
+    rep(FALSE, length(a$host_is_ace))
+  } else {
+    a$host_is_ace
+  }
+  domain <- ifelse(use_ascii, a$domain_ascii, a$domain_unicode)
+  tld <- ifelse(use_ascii, a$tld_ascii, a$tld_unicode)
+
+  # Phase 3: path normalization.
+  path_final <- .normalize_path_vec(
+    a$raw_path, opts$path_encoding, opts$path_normalization,
+    opts$index_page_handling, opts$trailing_slash_handling
+  )
+
+  # Phase 8: subdomain-level policy (may trim labels from the host).
   final_host <- .apply_subdomain_policy_vec(
-    final_host, domain, opts$subdomain_levels_to_keep, is_ip_host
+    a$final_host, domain, opts$subdomain_levels_to_keep, is_ip_host
   )
 
   # Phase 9: host encoding (idna / unicode).
@@ -698,7 +785,7 @@ safe_parse_urls <- function(url,
 
   # Phase 10: case policy applied to host, path, and scheme.
   cased <- .apply_case_policy_vec(
-    host_for_clean, path_final, final_scheme, opts$case_handling
+    host_for_clean, path_final, a$final_scheme, opts$case_handling
   )
 
   # Phase 11: clean URL reconstruction.
@@ -706,7 +793,8 @@ safe_parse_urls <- function(url,
     cased$scheme, cased$host, cased$path, opts$trailing_slash_handling
   )
 
-  # Phase 12: parse-status assignment.
+  # Phase 12: parse-status assignment (uses the post-subdomain-trim host,
+  # exactly as the previous single-stage engine did).
   parse_status <- .derive_parse_status_vec(
     curl_ok = curl_ok,
     final_host = final_host,
@@ -714,48 +802,32 @@ safe_parse_urls <- function(url,
     tld = tld,
     domain = domain,
     protocol_handling = opts$protocol_handling,
-    final_scheme = final_scheme,
-    looks_like_protocol = prep$looks_like_protocol,
-    original_has_allowed_scheme = prep$original_has_allowed_scheme,
-    is_scheme_relative = prep$is_scheme_relative,
+    final_scheme = a$final_scheme,
+    looks_like_protocol = a$looks_like_protocol,
+    original_has_allowed_scheme = a$original_has_allowed_scheme,
+    is_scheme_relative = a$is_scheme_relative,
     scheme_relative_handling = opts$scheme_relative_handling
   )
 
   # Phase 13: assemble the 14 typed columns.
-  cols <- .assemble_parse_result_vec(
-    original_url = urls,
+  .assemble_parse_result_vec(
+    original_url = original_url,
     scheme_output = cased$scheme,
     host_output = cased$host,
-    port = raw_port,
+    port = a$raw_port,
     path_output = cased$path,
-    raw_query = raw_query,
-    fragment = raw_fragment,
-    user = raw_user,
-    password = raw_password,
+    raw_query = a$raw_query,
+    fragment = a$raw_fragment,
+    user = a$raw_user,
+    password = a$raw_password,
     domain = domain,
     tld = tld,
     is_ip_host = is_ip_host,
     clean_url = clean_url,
     parse_status = parse_status,
-    is_scheme_relative = prep$is_scheme_relative,
+    is_scheme_relative = a$is_scheme_relative,
     scheme_relative_handling = opts$scheme_relative_handling
   )
-
-  # Rows the scalar pipeline returned NULL for become all-default "error" rows
-  # (like .spu_empty_row()); original_url is left as the input. Non-null rows
-  # keep every computed column -- including the unsupported-scheme rows whose
-  # parse_status is "error" but whose other components are populated.
-  if (any(null_row)) {
-    for (f in .spu_result_fields) {
-      if (f$name == "original_url") {
-        next
-      }
-      cols[[f$name]][null_row] <- f$default
-    }
-  }
-
-  attr(cols, "null_row") <- null_row
-  cols
 }
 
 # Internal implementation of safe_parse_url (not memoized)

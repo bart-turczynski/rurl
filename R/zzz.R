@@ -3,8 +3,10 @@
 # Public Suffix List matching and data now live in the pslr package (queried via
 # the .psl_* helpers in domain.R); rurl no longer ships PSL data or builds its
 # own rule/TLD hash sets here. The caches below only memoize rurl's own work:
-# full URL parses and the Punycode encode/decode round-trips used to reconstruct
-# hosts. (PSL query results are cached inside pslr itself.)
+# the option-independent parse core (Stage A -- see ._parse_urls_cached; still
+# named the "full_parse" cache for API stability) and the Punycode encode/decode
+# round-trips used to reconstruct hosts. (PSL query results are cached inside
+# pslr itself.)
 
 # Internal registry: one entry per memoization cache, in the canonical order
 # that public functions (rurl_cache_info, rurl_clear_caches, .cache_enabled)
@@ -72,9 +74,10 @@ names(.CACHE_CONFIG_FIELDS) <- vapply(
   # Initialize cache configuration. Use assign() so we mutate the .rurl_config
   # environment in place rather than rebinding the (locked) namespace binding,
   # mirroring how the cache environments above are populated by reference. The
-  # full_parse cache is bounded by default (100000 unique url x option combos)
-  # so parsing millions of unique URLs cannot grow it without limit; override
-  # with rurl_cache_config(max_full_parse = ...).
+  # full_parse cache is bounded by default (100000 unique url x core-option
+  # combos, i.e. protocol/scheme handling, www_handling, and tld_source) so
+  # parsing millions of unique URLs cannot grow it without limit; override with
+  # rurl_cache_config(max_full_parse = ...).
   assign("full_parse_max", 100000L, envir = .rurl_config)
 
   invisible()
@@ -232,7 +235,9 @@ rurl_cache_info <- function() {
 #' eviction policy: \code{max_full_parse} caps peak memory, but is \emph{not} a
 #' working-set size — once the bound is hit the cache empties completely and
 #' rebuilds from scratch. The default bound is \code{100000} unique url ×
-#' option combinations (set \code{max_full_parse = Inf} for the historical
+#' core-option combinations (the cache stores the option-independent parse core,
+#' keyed by url, protocol/scheme handling, \code{www_handling}, and
+#' \code{tld_source}; set \code{max_full_parse = Inf} for the historical
 #' unbounded behavior). The
 #' \code{puny_encode} and \code{puny_decode} caches are unbounded by design
 #' (each stays small — bounded by the number of unique hosts/labels seen, not

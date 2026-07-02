@@ -5,7 +5,9 @@
 # vectorized implementation: they accept and return length-n column vectors
 # (options are validated scalars per call, so every switch()/if hoists OUTSIDE
 # the vector ops -- each phase is straight-line vectorized code selected once).
-# The vector engine ._parse_urls_vec() (parse.R) chains them.
+# The vector engine chains them in two stages (parse.R): ._parse_stage_a_vec()
+# runs the option-independent, cacheable phases and ._parse_stage_b_vec() runs
+# the presentation phases over the cached Stage A columns.
 #
 # The scalar helpers of the same base name are kept as thin wrappers that
 # delegate to their `*_vec` counterpart on a length-1 input, so the per-phase

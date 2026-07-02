@@ -2,6 +2,19 @@
 
 ### Performance
 
+- The parse pipeline is split into an option-independent core (Stage A: curl
+  components, IP detection, the post-www host, and the PSL domain/TLD
+  decomposition) and a presentation stage (Stage B: path handling, case,
+  host-encoding spelling, subdomain trimming, clean-URL assembly, status). The
+  `full_parse` cache now stores Stage A, keyed only by URL, protocol/scheme
+  handling, `www_handling`, and `tld_source`. Calling several accessors with
+  different presentation profiles on the same URLs (e.g. `get_host()`,
+  `get_domain()`, `get_tld()`, `get_clean_url()`, `get_subdomain()`) now shares
+  one cache entry per URL and re-runs only the cheap Stage B, so the expensive
+  curl + PSL work happens once instead of once per profile. Output is unchanged.
+  Cache memory per URL also drops to a single (option-independent) entry.
+  (RURL-dkwrebdt)
+
 - `safe_parse_urls()` now de-duplicates its input, parsing each unique URL only
   once (with cross-call reuse via the `full_parse` cache) and expanding the
   results back with `match()`. Repeated / duplicate URLs cost only the match,
