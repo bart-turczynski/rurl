@@ -317,6 +317,14 @@ safe_parse_urls <- function(url,
     path_encoding = path_encoding
   )
 
+  # Coerce factors to their labels up front so factor input parses as the
+  # character strings it represents rather than falling through to the
+  # non-character branch below and yielding an all-error row (canonical_join()
+  # applies the same as.character() coercion to its key columns).
+  if (is.factor(url)) {
+    url <- as.character(url)
+  }
+
   if (length(url) == 0) {
     return(.spu_empty_result())
   }

@@ -35,6 +35,17 @@
   )
 )
 
+# Precomputed cache-name -> config-field lookup, derived once from the registry
+# at build time. .cache_enabled() is on the per-URL hot path, so this replaces
+# the former Filter() linear scan of .CACHE_REGISTRY on every cache get/set with
+# a single named-vector index.
+.CACHE_CONFIG_FIELDS <- vapply(
+  .CACHE_REGISTRY, function(e) e$config_field, character(1L)
+)
+names(.CACHE_CONFIG_FIELDS) <- vapply(
+  .CACHE_REGISTRY, function(e) e$name, character(1L)
+)
+
 # Memoization caches
 .rurl_cache <- new.env(parent = emptyenv())
 
@@ -86,11 +97,15 @@ rurl_clear_caches <- function() {
   invisible(NULL)
 }
 
-# Whether a named cache is currently enabled.
+# Whether a named cache is currently enabled. Uses the precomputed
+# .CACHE_CONFIG_FIELDS lookup (single-bracket index yields NA for an unknown
+# name, preserving the former Filter()-empty -> FALSE contract).
 .cache_enabled <- function(cache_name) {
-  entry <- Filter(function(e) e$name == cache_name, .CACHE_REGISTRY)
-  if (length(entry) == 0L) return(FALSE)
-  get(entry[[1L]]$config_field, envir = .rurl_config, inherits = FALSE)
+  field <- .CACHE_CONFIG_FIELDS[cache_name]
+  if (is.na(field)) {
+    return(FALSE)
+  }
+  get(field, envir = .rurl_config, inherits = FALSE)
 }
 
 # Look up `key` in the named cache. Returns the stored value (which may be

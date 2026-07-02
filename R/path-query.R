@@ -75,7 +75,10 @@
   has_leading <- stringi::stri_startswith_fixed(path, "/")
   has_trailing <- stringi::stri_endswith_fixed(path, "/")
   segments <- strsplit(path, "/", fixed = TRUE)[[1]]
-  encoded_segments <- vapply(segments, curl::curl_escape, character(1))
+  # curl_escape() is vectorized: one call escapes every segment (and returns
+  # character(0) for a character(0) input), so paste() recomposes identically
+  # to the former per-segment vapply().
+  encoded_segments <- curl::curl_escape(segments)
   recomposed <- paste(encoded_segments, collapse = "/")
   if (has_leading && !stringi::stri_startswith_fixed(recomposed, "/")) {
     recomposed <- paste0("/", recomposed)
@@ -86,31 +89,53 @@
   recomposed
 }
 
-# Internal helper to parse query strings into a list
+# Internal helper to parse query strings into a list.
+#
+# Linear in the number of pairs: the former version grew the result list with a
+# per-pair `result[[key]] <- c(result[[key]], value)` plus an `%in% names()`
+# membership scan, which is O(k^2) in the pair count. This splits once, decodes
+# each side with a single vectorized curl_unescape(), and groups by key with
+# split(), preserving first-seen key order and per-key value order.
+#
+# Byte-for-byte compatible with the old parser: the "=" split keeps
+# strsplit(fixed = TRUE) semantics (trailing empties dropped, so "x=" and "x=="
+# both yield an empty value; "a=b=c" and "a==b" re-join the tail with "="), and
+# empty inter-"&" segments are skipped.
 ._parse_query_string <- function(query, decode = TRUE) {
   if (is.na(query) || !nzchar(query)) {
     return(list())
   }
   parts <- strsplit(query, "&", fixed = TRUE)[[1]]
-  result <- list()
-
-  for (part in parts) {
-    if (!nzchar(part)) next
-    kv <- strsplit(part, "=", fixed = TRUE)[[1]]
-    key <- kv[1]
-    value <- if (length(kv) > 1) paste(kv[-1], collapse = "=") else ""
-
-    if (decode) {
-      key <- tryCatch(curl::curl_unescape(key), error = function(e) key)
-      value <- tryCatch(curl::curl_unescape(value), error = function(e) value)
-    }
-
-    if (key %in% names(result)) {
-      result[[key]] <- c(result[[key]], value)
-    } else {
-      result[[key]] <- value
-    }
+  parts <- parts[nzchar(parts)]
+  if (length(parts) == 0L) {
+    return(list())
   }
 
-  result
+  kv <- strsplit(parts, "=", fixed = TRUE)
+  keys <- vapply(kv, function(p) p[1L], character(1), USE.NAMES = FALSE)
+  values <- vapply(
+    kv,
+    function(p) if (length(p) > 1L) paste(p[-1L], collapse = "=") else "",
+    character(1),
+    USE.NAMES = FALSE
+  )
+
+  if (decode) {
+    keys <- .query_unescape(keys)
+    values <- .query_unescape(values)
+  }
+
+  # Group values by decoded key, preserving first-seen key order. split()
+  # keeps each group's original value order, so repeated keys collect their
+  # values in occurrence order exactly as the former c() accumulation did.
+  first_seen <- keys[!duplicated(keys)]
+  grouped <- split(values, factor(keys, levels = first_seen))
+  lapply(grouped, unname)
+}
+
+# Percent-decode a character vector in one vectorized curl_unescape() call,
+# falling back to the raw input if the call errors (mirrors the former
+# per-element tryCatch guard).
+.query_unescape <- function(x) {
+  tryCatch(curl::curl_unescape(x), error = function(e) x)
 }
