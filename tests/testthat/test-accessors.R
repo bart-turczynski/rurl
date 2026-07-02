@@ -282,18 +282,11 @@ test_that("PSL seam helpers handle NA/empty/section edge cases", {
 })
 
 test_that("get_parse_status falls through to final error", {
-  mock_parse <- function(...) list(scheme = "gopher", host = "example.com")
-  ns <- asNamespace("rurl")
-  original <- get("safe_parse_url", envir = ns)
-  unlockBinding("safe_parse_url", ns)
-  assign("safe_parse_url", mock_parse, envir = ns)
-  lockBinding("safe_parse_url", ns)
-  on.exit({
-    unlockBinding("safe_parse_url", ns)
-    assign("safe_parse_url", original, envir = ns)
-    lockBinding("safe_parse_url", ns)
-  })
-  expect_identical(unname(get_parse_status("whatever")), "error")
+  # A disallowed scheme (gopher) is rejected in phase 1, so the row is a null
+  # row and get_parse_status reports its "error" null_value. (Previously this
+  # mocked safe_parse_url to return a schemeless list; accessors now route
+  # through the vector engine, so the contract is exercised with a real input.)
+  expect_identical(get_parse_status("gopher://example.com"), "error")
 })
 
 test_that("get_tld matches correct TLDs across sources", {

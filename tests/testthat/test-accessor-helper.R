@@ -1,12 +1,12 @@
 # Tests for the shared accessor extraction path (.extract_from_urls) and the
 # public return types/names it must preserve across all get_* accessors.
 
-test_that(".extract_from_urls pulls a single field and preserves names", {
+test_that(".extract_from_urls pulls a single field and returns unnamed", {
   urls <- c("http://example.com/p", "https://sub.example.org")
   res <- rurl:::.extract_from_urls(urls, "host")
   expect_type(res, "character")
-  expect_equal(unname(res), c("example.com", "sub.example.org"))
-  expect_named(res, urls)
+  expect_equal(res, c("example.com", "sub.example.org"))
+  expect_null(names(res))
 })
 
 test_that(".extract_from_urls returns null_value for unparseable URLs", {
@@ -15,7 +15,7 @@ test_that(".extract_from_urls returns null_value for unparseable URLs", {
     rurl:::.extract_from_urls("mailto:a@b.com", "parse_status",
       null_value = "error"
     ),
-    c("mailto:a@b.com" = "error")
+    "error"
   )
 })
 
@@ -34,7 +34,7 @@ test_that(".extract_from_urls with field=NULL hands over the parsed list", {
   expect_equal(unname(res), "u")
 })
 
-test_that("character accessors keep character type and input names", {
+test_that("character accessors keep character type and are unnamed", {
   urls <- c("http://www.example.com/Path", "ftp://example.org")
   for (fn in list(
     get_scheme, get_host, get_path, get_query, get_fragment,
@@ -43,16 +43,16 @@ test_that("character accessors keep character type and input names", {
   )) {
     out <- fn(urls)
     expect_type(out, "character")
-    expect_named(out, urls)
+    expect_null(names(out))
     expect_length(out, 2)
   }
 })
 
-test_that("get_port returns a named integer vector", {
+test_that("get_port returns an unnamed integer vector", {
   out <- get_port(c("http://example.com:8080", "http://example.com"))
   expect_type(out, "integer")
-  expect_equal(unname(out), c(8080L, NA_integer_))
-  expect_equal(names(out)[1], "http://example.com:8080")
+  expect_equal(out, c(8080L, NA_integer_))
+  expect_null(names(out))
 })
 
 test_that("get_query(format='list') still returns a list", {

@@ -327,13 +327,12 @@ test_that("getters return NA when safe_parse_url is NULL", {
 })
 
 test_that("get_userinfo returns user when password is missing", {
-  testthat::local_mocked_bindings(
-    safe_parse_url = function(url, ...) {
-      list(user = "user", password = NA_character_)
-    },
-    .env = asNamespace("rurl")
+  # Real userinfo with a user and no password. (Previously mocked
+  # safe_parse_url; accessors now route through the vector engine.)
+  expect_equal(
+    get_userinfo("ftp://alice@ftp.example.com/file.txt"),
+    "alice"
   )
-  expect_equal(unname(get_userinfo("http://example.com")), "user")
 })
 
 test_that("get_domain returns NA for ip hosts in non-all source", {
@@ -418,18 +417,12 @@ test_that("get_subdomain with non-all source uses the parsed domain", {
 })
 
 test_that("get_subdomain returns NA when domain is missing", {
-  testthat::local_mocked_bindings(
-    safe_parse_url = function(url, ...) {
-      list(
-        host = "foo.example.com",
-        domain = NA_character_,
-        tld = "com",
-        is_ip_host = FALSE
-      )
-    },
-    .env = asNamespace("rurl")
+  # An unknown TLD yields a NA registered domain (pslr unknown = "na"), so the
+  # suffix strip has nothing to match and the subdomain is NA. (Previously
+  # mocked safe_parse_url; accessors now route through the vector engine.)
+  expect_true(
+    is.na(get_subdomain("http://foo.example.invalidtldxyz", source = "all"))
   )
-  expect_true(is.na(get_subdomain("http://foo.example.com", source = "all")))
 })
 
 test_that("get_subdomain uses safe_parse_url values defensively", {

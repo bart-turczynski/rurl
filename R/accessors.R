@@ -3,17 +3,27 @@
 
 # Shared extraction path for the get_* accessors.
 #
-# Parses each URL once via the memoized safe_parse_url() and pulls a single
-# field out of the result, collapsing the identical vapply/null-guard loop
-# that every simple accessor used to carry. The parse-option arguments mirror
-# safe_parse_url()'s own defaults so callers override only what differs.
+# Validates `url` once, parses the whole vector in a single pass through the
+# cached vector engine (`._parse_urls_cached()`, the same unique+match+memoized
+# path `safe_parse_urls()` uses), then pulls one column out. This replaces the
+# old per-element `vapply(url, safe_parse_url, ...)` loop, which re-ran option
+# validation for every element and returned a vector NAMED by the input URLs.
+# Results are now UNNAMED (a deliberate behavior change; see NEWS).
 #
-# - field: name of the result element to return, or NULL to hand the whole
-#   parsed list to `transform` (used by the multi-field accessors).
-# - null_value: returned when the URL fails to parse (and used as the default
-#   when the field itself is absent).
-# - fun_value: the vapply() template controlling the output type.
-# - transform: applied to the extracted value (or parsed list when field=NULL).
+# The parse-option arguments mirror safe_parse_url()'s own defaults so callers
+# override only what differs.
+#
+# - field: name of the result column to return, or NULL to hand the whole
+#   column list to `transform` (used by the multi-column accessors, which
+#   combine several columns vectorized and are responsible for their own
+#   null-row handling).
+# - null_value: written into the rows that failed to parse (the engine already
+#   fills those with each field's default; this pins the accessor's contract
+#   exactly regardless of the column default).
+# - fun_value: retained for the helper's documented signature; the output type
+#   now follows `transform`/the extracted column rather than a vapply template.
+# - transform: applied (vectorized) to the extracted column, or to the whole
+#   column list when field=NULL.
 .extract_from_urls <- function(url,
                                field,
                                null_value = NA_character_,
@@ -37,29 +47,34 @@
       call. = FALSE
     )
   }
-  vapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = www_handling,
-      tld_source = tld_source,
-      case_handling = case_handling,
-      trailing_slash_handling = trailing_slash_handling,
-      index_page_handling = index_page_handling,
-      path_normalization = path_normalization,
-      scheme_relative_handling = scheme_relative_handling,
-      subdomain_levels_to_keep = subdomain_levels_to_keep,
-      host_encoding = host_encoding,
-      path_encoding = path_encoding
-    )
-    if (is.null(parsed)) {
-      return(null_value)
-    }
-    if (is.null(field)) {
-      transform(parsed)
-    } else {
-      transform(parsed[[field]] %||% null_value)
-    }
-  }, fun_value)
+  # Validate + normalize the option profile once (match.arg + subdomain check),
+  # then parse the entire vector through the shared cached engine in one call.
+  opts <- .parse_options(
+    protocol_handling = protocol_handling,
+    www_handling = www_handling,
+    tld_source = tld_source,
+    case_handling = case_handling,
+    trailing_slash_handling = trailing_slash_handling,
+    index_page_handling = index_page_handling,
+    path_normalization = path_normalization,
+    scheme_relative_handling = scheme_relative_handling,
+    subdomain_levels_to_keep = subdomain_levels_to_keep,
+    host_encoding = host_encoding,
+    path_encoding = path_encoding
+  )
+  cols <- ._parse_urls_cached(url, opts)
+
+  if (is.null(field)) {
+    # Multi-column accessors receive the column list and return a full vector.
+    return(unname(transform(cols)))
+  }
+
+  # Single-column accessors: apply the (vectorized) transform, then pin the
+  # null rows to null_value so the accessor's absent/unparseable contract holds
+  # exactly even if a column default ever diverged from it.
+  result <- transform(cols[[field]])
+  result[attr(cols, "null_row")] <- null_value
+  unname(result)
 }
 
 #' Get the parse status of URLs
@@ -359,6 +374,9 @@ get_query <- function(url,
     # form can split safely; the string form historically returns the decoded
     # query, so decode here to keep that output unchanged.
     if (decode) {
+      # Per-element decode keeps the historical byte-for-byte fallback (a query
+      # that fails to unescape is returned raw); USE.NAMES = FALSE so the result
+      # stays unnamed like every other accessor.
       raw <- vapply(
         raw,
         function(q) {
@@ -368,26 +386,22 @@ get_query <- function(url,
             tryCatch(curl::curl_unescape(q), error = function(e) q)
           }
         },
-        character(1)
+        character(1),
+        USE.NAMES = FALSE
       )
     }
     return(raw)
   }
 
-  lapply(url, function(u) {
-    parsed <- safe_parse_url(u,
-      protocol_handling = protocol_handling,
-      www_handling = "none",
-      tld_source = "all",
-      case_handling = "keep",
-      trailing_slash_handling = "none",
-      subdomain_levels_to_keep = NULL
-    )
-    if (is.null(parsed)) {
-      return(list())
-    }
-    ._parse_query_string(parsed$query %||% NA_character_, decode = decode)
-  })
+  # format = "list": pull the raw query column in one engine pass (case = "keep"
+  # matches the historical per-element profile so cache keys are unchanged),
+  # then parse each element. Null rows carry NA, and ._parse_query_string(NA)
+  # returns list() -- exactly what the old per-element NULL branch returned.
+  raw <- .extract_from_urls(url, "query",
+    protocol_handling = protocol_handling,
+    case_handling = "keep"
+  )
+  lapply(raw, ._parse_query_string, decode = decode)
 }
 
 #' Get URL fragments
@@ -467,87 +481,78 @@ get_password <- function(url, protocol_handling = "keep") {
 #' get_userinfo("ftp://alice@ftp.example.com/file.txt")
 get_userinfo <- function(url, protocol_handling = "keep") {
   .extract_from_urls(url, NULL,
-    transform = function(parsed) {
-      user <- parsed$user %||% NA_character_
-      password <- parsed$password %||% NA_character_
-      if (is.na(user) || !nzchar(user)) {
-        return(NA_character_)
-      }
-      if (is.na(password) || !nzchar(password)) {
-        return(user)
-      }
-      paste0(user, ":", password)
+    transform = function(cols) {
+      # Vectorized user[:password]: NA when there is no user (covers null rows,
+      # whose user column is NA), user alone when the password is absent/empty,
+      # and user:password otherwise -- matching the old scalar branch row-wise.
+      user <- cols$user
+      password <- cols$password
+      has_user <- !is.na(user) & nzchar(user)
+      has_password <- !is.na(password) & nzchar(password)
+      out <- rep(NA_character_, length(user))
+      out[has_user] <- user[has_user]
+      combine <- has_user & has_password
+      out[combine] <- paste0(user[combine], ":", password[combine])
+      out
     },
     protocol_handling = protocol_handling
   )
 }
 
-# Derive the subdomain labels for a single URL. Parses the host with a fixed
-# normalization policy, strips the registered-domain suffix, and (unless
-# include_www) drops a lone leading www/www[0-9]* label. Returns character(0)
-# when there is no subdomain (IP host, empty host/domain, suffix mismatch).
-.subdomain_labels <- function(u, protocol_handling, www_handling, source,
-                              include_www, host_encoding) {
-  parsed <- safe_parse_url(u,
-    protocol_handling = protocol_handling,
-    www_handling = www_handling,
-    tld_source = source,
-    case_handling = "lower",
-    trailing_slash_handling = "none",
-    subdomain_levels_to_keep = NULL,
-    host_encoding = host_encoding
-  )
-  hd <- .subdomain_host_domain(parsed)
-  if (is.null(hd)) {
-    return(character(0))
+# Derive the subdomain labels for a vector of parsed rows, from the engine's
+# host + domain + is_ip_host columns. For each row: lowercase host and domain,
+# strip the ".<domain>" suffix, split the remaining prefix into labels, and
+# (unless include_www) drop a lone leading www/www[0-9]* label. A row yields
+# character(0) when there is no subdomain -- IP host, empty/NA host or domain
+# (which includes null/unparseable rows, whose columns are NA), suffix
+# mismatch, or an empty prefix. host and domain honor host_encoding upstream,
+# so they share one spelling and the suffix strip matches directly (no forced
+# Unicode decode); domain already reflects the requested section.
+.subdomain_labels_vec <- function(host, domain, is_ip_host, include_www) {
+  n <- length(host)
+  result <- rep(list(character(0)), n)
+
+  host_l <- stringi::stri_trans_tolower(host)
+  domain_l <- stringi::stri_trans_tolower(domain)
+  # Candidate rows: real host + domain and not an IP host. is_ip_host is TRUE
+  # only for genuine IPs; FALSE or NA (null rows) is treated as non-IP, and the
+  # host/domain NA checks then exclude the null rows anyway.
+  not_ip <- is.na(is_ip_host) | !is_ip_host
+  usable <- not_ip &
+    !is.na(host_l) & nzchar(host_l) &
+    !is.na(domain_l) & nzchar(domain_l)
+  if (!any(usable)) {
+    return(result)
   }
 
-  suffix <- paste0(".", hd$domain)
-  if (!stringi::stri_endswith_fixed(hd$host, suffix)) {
-    return(character(0))
-  }
+  suffix <- character(n)
+  suffix[usable] <- paste0(".", domain_l[usable])
+  ends <- logical(n)
+  ends[usable] <- stringi::stri_endswith_fixed(host_l[usable], suffix[usable])
 
+  take <- which(ends)
   sub_part <- stringi::stri_sub(
-    hd$host,
+    host_l[take],
     1,
-    stringi::stri_length(hd$host) - stringi::stri_length(suffix)
+    stringi::stri_length(host_l[take]) - stringi::stri_length(suffix[take])
   )
-  if (!nzchar(sub_part)) {
-    return(character(0))
+  have_sub <- take[nzchar(sub_part)]
+  if (length(have_sub) == 0L) {
+    return(result)
   }
 
-  labels <- strsplit(sub_part, ".", fixed = TRUE)[[1]]
-  drop_www_label <- !include_www &&
-    length(labels) == 1 &&
-    grepl("^www[0-9]*$", labels[1])
-  if (drop_www_label) {
-    labels <- labels[-1]
+  # One list-vectorized split over the rows that actually carry a prefix.
+  labels_list <- strsplit(sub_part[nzchar(sub_part)], ".", fixed = TRUE)
+  if (!include_www) {
+    lone_www <- vapply(
+      labels_list,
+      function(labels) length(labels) == 1L && grepl("^www[0-9]*$", labels[1]),
+      logical(1)
+    )
+    labels_list[lone_www] <- lapply(labels_list[lone_www], `[`, -1L)
   }
-  labels
-}
-
-# Extract the lowercased (host, domain) pair to compare for the suffix strip,
-# or NULL when there is no usable subdomain candidate (IP host, empty host or
-# domain). Both honor host_encoding, so they share one spelling and the
-# suffix-strip in .subdomain_labels() matches directly (no forced Unicode
-# decode). parsed$domain already reflects the requested section (see
-# get_domain()).
-.subdomain_host_domain <- function(parsed) {
-  if (is.null(parsed) || isTRUE(parsed$is_ip_host)) {
-    return(NULL)
-  }
-  host_str <- parsed$host %||% NA_character_
-  if (is.na(host_str) || !nzchar(host_str)) {
-    return(NULL)
-  }
-  domain_val <- parsed$domain %||% NA_character_
-  if (is.na(domain_val) || !nzchar(domain_val)) {
-    return(NULL)
-  }
-  list(
-    host = stringi::stri_trans_tolower(host_str),
-    domain = stringi::stri_trans_tolower(domain_val)
-  )
+  result[have_sub] <- labels_list
+  result
 }
 
 #' Get URL subdomains
@@ -578,18 +583,20 @@ get_subdomain <- function(url,
   format <- match.arg(format)
   host_encoding <- match.arg(host_encoding)
 
-  if (!is.character(url)) {
-    stop(
-      "`url` must be a character vector of URL strings; ",
-      "pass the URL, not a parsed object.",
-      call. = FALSE
-    )
-  }
-  results <- lapply(url, .subdomain_labels,
+  # One engine pass with the deliberate subdomain profile (case = "lower" so the
+  # suffix comparison is case-insensitive; host_encoding shared by host+domain),
+  # then vectorized label derivation. field = NULL hands the column list to the
+  # transform, which returns the per-row label list.
+  results <- .extract_from_urls(url, NULL,
+    transform = function(cols) {
+      .subdomain_labels_vec(
+        cols$host, cols$domain, cols$is_ip_host, include_www
+      )
+    },
     protocol_handling = protocol_handling,
     www_handling = www_handling,
-    source = source,
-    include_www = include_www,
+    tld_source = source,
+    case_handling = "lower",
     host_encoding = host_encoding
   )
 
@@ -602,7 +609,7 @@ get_subdomain <- function(url,
       return(NA_character_)
     }
     paste(labels, collapse = ".")
-  }, character(1))
+  }, character(1), USE.NAMES = FALSE)
 }
 
 #' Extract the top-level domain (TLD) from a URL
