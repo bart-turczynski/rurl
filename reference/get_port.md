@@ -40,6 +40,5 @@ An integer vector of ports.
 
 ``` r
 get_port("http://example.com:8080/path")
-#> http://example.com:8080/path 
-#>                         8080 
+#> [1] 8080
 ```

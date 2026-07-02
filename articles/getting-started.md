@@ -74,14 +74,11 @@ The `protocol_handling` argument controls how schemes are handled:
 ``` r
 
 get_scheme("https://sub.example.com")
-#> https://sub.example.com 
-#>                 "https"
+#> [1] "https"
 get_host("https://sub.example.com")
-#> https://sub.example.com 
-#>       "sub.example.com"
+#> [1] "sub.example.com"
 get_path("https://sub.example.com/path/to/page")
-#> https://sub.example.com/path/to/page 
-#>                      "/path/to/page"
+#> [1] "/path/to/page"
 ```
 
 Each function works on vectors of URLs and gracefully handles `NA`.
@@ -93,8 +90,7 @@ These functions rely on the Public Suffix List:
 ``` r
 
 get_domain("https://a.b.example.co.uk")
-#> https://a.b.example.co.uk 
-#>           "example.co.uk"
+#> [1] "example.co.uk"
 ```
 
 Extracting TLDs from different sources:
@@ -102,8 +98,7 @@ Extracting TLDs from different sources:
 ``` r
 
 get_tld("https://foo.blogspot.com")
-#> https://foo.blogspot.com 
-#>           "blogspot.com"
+#> [1] "blogspot.com"
 ```
 
 Sources include: - `"all"` (default; will match to the longest available
@@ -118,8 +113,7 @@ All core functions support vectors and handle malformed inputs safely:
 
 urls <- c("example.com", "http://example.com", NA)
 get_clean_url(urls)
-#>           example.com    http://example.com                  <NA> 
-#> "http://example.com/" "http://example.com/"                    NA
+#> [1] "http://example.com/" "http://example.com/" NA
 ```
 
 ## Advanced Host Manipulation with `subdomain_levels_to_keep`
@@ -152,8 +146,7 @@ get_host(
   "www.three.two.one.example.com",
   subdomain_levels_to_keep = 0
 ) # www_handling default is "none"
-#> www.three.two.one.example.com 
-#>             "www.example.com"
+#> [1] "www.example.com"
 # Expected: "www.example.com"
 
 get_host(
@@ -161,13 +154,11 @@ get_host(
   www_handling = "strip",
   subdomain_levels_to_keep = 0
 )
-#> three.two.one.example.com 
-#>             "example.com"
+#> [1] "example.com"
 # Expected: "example.com"
 
 get_host("www.three.two.one.example.com", subdomain_levels_to_keep = 1)
-#> www.three.two.one.example.com 
-#>         "www.one.example.com"
+#> [1] "www.one.example.com"
 # Expected: "www.one.example.com"
 
 get_host(
@@ -175,8 +166,7 @@ get_host(
   www_handling = "strip",
   subdomain_levels_to_keep = 1
 )
-#> three.two.one.example.com 
-#>         "one.example.com"
+#> [1] "one.example.com"
 # Expected: "one.example.com"
 
 get_host(
@@ -184,8 +174,7 @@ get_host(
   www_handling = "keep",
   subdomain_levels_to_keep = 2
 )
-#> www.three.two.one.example.com 
-#>     "www.two.one.example.com"
+#> [1] "www.two.one.example.com"
 # Expected: "www.two.one.example.com"
 ```
 
@@ -199,16 +188,14 @@ get_clean_url(
   subdomain_levels_to_keep = 0,
   www_handling = "keep"
 )
-#> http://www.deep.sub.example.com/some/path 
-#>        "http://www.example.com/some/path"
+#> [1] "http://www.example.com/some/path"
 # yields http://www.example.com/some/path
 
 get_clean_url(
   "http://deep.sub.example.com/some/path",
   subdomain_levels_to_keep = 1
 )
-#> http://deep.sub.example.com/some/path 
-#>    "http://sub.example.com/some/path"
+#> [1] "http://sub.example.com/some/path"
 # yields http://sub.example.com/some/path
 ```
 

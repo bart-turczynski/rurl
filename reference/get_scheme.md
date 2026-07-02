@@ -53,6 +53,5 @@ A character vector of URL schemes.
 
 ``` r
 get_scheme("https://example.com")
-#> https://example.com 
-#>             "https" 
+#> [1] "https"
 ```

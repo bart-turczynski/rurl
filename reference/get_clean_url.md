@@ -198,46 +198,39 @@ A character vector of cleaned URLs.
 
 ``` r
 get_clean_url("Example.COM/Path") # Default lower_host: host folds, path kept
-#>          Example.COM/Path 
-#> "http://example.com/Path" 
+#> [1] "http://example.com/Path"
 get_clean_url(
   "Example.COM/Path",
   case_handling = "keep",
   trailing_slash_handling = "keep"
 )
-#>           Example.COM/Path 
-#> "http://Example.COM/Path/" 
+#> [1] "http://Example.COM/Path/"
 get_clean_url(
   "Example.COM/Path/",
   case_handling = "upper",
   trailing_slash_handling = "strip"
 )
-#>         Example.COM/Path/ 
-#> "HTTP://EXAMPLE.COM/PATH" 
+#> [1] "HTTP://EXAMPLE.COM/PATH"
 get_clean_url("http://example.com", www_handling = "strip")
-#>    http://example.com 
-#> "http://example.com/" 
+#> [1] "http://example.com/"
 get_clean_url(
   "http://deep.sub.domain.example.com/path",
   subdomain_levels_to_keep = 0
 )
-#> http://deep.sub.domain.example.com/path 
-#>               "http://example.com/path" 
+#> [1] "http://example.com/path"
 # -> "http://example.com/path"
 get_clean_url(
   "http://www.deep.sub.domain.example.com/path",
   subdomain_levels_to_keep = 1,
   www_handling = "strip"
 )
-#> http://www.deep.sub.domain.example.com/path 
-#>            "http://domain.example.com/path" 
+#> [1] "http://domain.example.com/path"
 # -> "http://domain.example.com/path"
 get_clean_url(
   "http://www.deep.sub.domain.example.com/path",
   subdomain_levels_to_keep = 1,
   www_handling = "keep"
 )
-#> http://www.deep.sub.domain.example.com/path 
-#>        "http://www.domain.example.com/path" 
+#> [1] "http://www.domain.example.com/path"
 # -> "http://www.domain.example.com/path"
 ```

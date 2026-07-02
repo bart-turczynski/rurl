@@ -109,38 +109,32 @@ A character vector of URL hosts.
 
 ``` r
 get_host("http://sub.example.com:8080")
-#> http://sub.example.com:8080 
-#>           "sub.example.com" 
+#> [1] "sub.example.com"
 get_host(
   "http://www.two.one.example.com",
   subdomain_levels_to_keep = 1
 ) # Result: "www.one.example.com"
-#> http://www.two.one.example.com 
-#>          "www.one.example.com" 
+#> [1] "www.one.example.com"
 get_host(
   "http://www.two.one.example.com",
   www_handling = "strip",
   subdomain_levels_to_keep = 1
 ) # Result: "one.example.com"
-#> http://www.two.one.example.com 
-#>              "one.example.com" 
+#> [1] "one.example.com"
 get_host(
   "http://www.two.one.example.com",
   www_handling = "keep",
   subdomain_levels_to_keep = 1
 ) # Result: "www.one.example.com"
-#> http://www.two.one.example.com 
-#>          "www.one.example.com" 
+#> [1] "www.one.example.com"
 get_host(
   "http://three.two.one.example.com",
   subdomain_levels_to_keep = 0
 ) # Result: "example.com"
-#> http://three.two.one.example.com 
-#>                    "example.com" 
+#> [1] "example.com"
 get_host(
   "http://www.three.two.one.example.com",
   subdomain_levels_to_keep = 0
 ) # Result: "www.example.com"
-#> http://www.three.two.one.example.com 
-#>                    "www.example.com" 
+#> [1] "www.example.com"
 ```

@@ -23,8 +23,7 @@ A data.frame with one row per cache (`full_parse`, `puny_encode`,
 
 ``` r
 get_domain("https://www.example.com")
-#> https://www.example.com 
-#>           "example.com" 
+#> [1] "example.com"
 rurl_cache_info()
 #>         cache entries enabled max_entries
 #> 1  full_parse      34    TRUE       10000

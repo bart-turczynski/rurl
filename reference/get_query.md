@@ -63,8 +63,7 @@ accessor still percent-decodes for readability (`decode = TRUE`); pass
 
 ``` r
 get_query("http://example.com/path?a=1&b=2")
-#> http://example.com/path?a=1&b=2 
-#>                       "a=1&b=2" 
+#> [1] "a=1&b=2"
 get_query("http://example.com/path?a=1&b=2", format = "list")
 #> [[1]]
 #> [[1]]$a

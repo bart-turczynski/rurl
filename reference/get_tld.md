@@ -42,6 +42,5 @@ A character vector of TLDs.
 
 ``` r
 get_tld("example.com")
-#> example.com 
-#>       "com" 
+#> [1] "com"
 ```

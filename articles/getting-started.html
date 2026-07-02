@@ -144,14 +144,11 @@ adds it if missing)</li>
 </h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/get_scheme.html">get_scheme</a></span><span class="op">(</span><span class="st">"https://sub.example.com"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; https://sub.example.com </span></span>
-<span><span class="co">#&gt;                 "https"</span></span>
+<span><span class="co">#&gt; [1] "https"</span></span>
 <span><span class="fu"><a href="../reference/get_host.html">get_host</a></span><span class="op">(</span><span class="st">"https://sub.example.com"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; https://sub.example.com </span></span>
-<span><span class="co">#&gt;       "sub.example.com"</span></span>
+<span><span class="co">#&gt; [1] "sub.example.com"</span></span>
 <span><span class="fu"><a href="../reference/get_path.html">get_path</a></span><span class="op">(</span><span class="st">"https://sub.example.com/path/to/page"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; https://sub.example.com/path/to/page </span></span>
-<span><span class="co">#&gt;                      "/path/to/page"</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] "/path/to/page"</span></span></code></pre></div>
 <p>Each function works on vectors of URLs and gracefully handles
 <code>NA</code>.</p>
 </div>
@@ -161,13 +158,11 @@ adds it if missing)</li>
 <p>These functions rely on the Public Suffix List:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/get_domain.html">get_domain</a></span><span class="op">(</span><span class="st">"https://a.b.example.co.uk"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; https://a.b.example.co.uk </span></span>
-<span><span class="co">#&gt;           "example.co.uk"</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] "example.co.uk"</span></span></code></pre></div>
 <p>Extracting TLDs from different sources:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/get_tld.html">get_tld</a></span><span class="op">(</span><span class="st">"https://foo.blogspot.com"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; https://foo.blogspot.com </span></span>
-<span><span class="co">#&gt;           "blogspot.com"</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] "blogspot.com"</span></span></code></pre></div>
 <p>Sources include: - <code>"all"</code> (default; will match to the
 longest available TLD) - <code>"private"</code> (only extract private
 TLDs) - <code>"icann"</code> (only extract ICANN TLDs)</p>
@@ -180,8 +175,7 @@ safely:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">urls</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"example.com"</span>, <span class="st">"http://example.com"</span>, <span class="cn">NA</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/get_clean_url.html">get_clean_url</a></span><span class="op">(</span><span class="va">urls</span><span class="op">)</span></span>
-<span><span class="co">#&gt;           example.com    http://example.com                  &lt;NA&gt; </span></span>
-<span><span class="co">#&gt; "http://example.com/" "http://example.com/"                    NA</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] "http://example.com/" "http://example.com/" NA</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="advanced-host-manipulation-with-subdomain_levels_to_keep">Advanced Host Manipulation with
@@ -223,8 +217,7 @@ Keeping these schemeless avoids a spurious "broken URL" finding. Do not add
 <span>  <span class="st">"www.three.two.one.example.com"</span>,</span>
 <span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">0</span></span>
 <span><span class="op">)</span> <span class="co"># www_handling default is "none"</span></span>
-<span><span class="co">#&gt; www.three.two.one.example.com </span></span>
-<span><span class="co">#&gt;             "www.example.com"</span></span>
+<span><span class="co">#&gt; [1] "www.example.com"</span></span>
 <span><span class="co"># Expected: "www.example.com"</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/get_host.html">get_host</a></span><span class="op">(</span></span>
@@ -232,13 +225,11 @@ Keeping these schemeless avoids a spurious "broken URL" finding. Do not add
 <span>  www_handling <span class="op">=</span> <span class="st">"strip"</span>,</span>
 <span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">0</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; three.two.one.example.com </span></span>
-<span><span class="co">#&gt;             "example.com"</span></span>
+<span><span class="co">#&gt; [1] "example.com"</span></span>
 <span><span class="co"># Expected: "example.com"</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/get_host.html">get_host</a></span><span class="op">(</span><span class="st">"www.three.two.one.example.com"</span>, subdomain_levels_to_keep <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="co">#&gt; www.three.two.one.example.com </span></span>
-<span><span class="co">#&gt;         "www.one.example.com"</span></span>
+<span><span class="co">#&gt; [1] "www.one.example.com"</span></span>
 <span><span class="co"># Expected: "www.one.example.com"</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/get_host.html">get_host</a></span><span class="op">(</span></span>
@@ -246,8 +237,7 @@ Keeping these schemeless avoids a spurious "broken URL" finding. Do not add
 <span>  www_handling <span class="op">=</span> <span class="st">"strip"</span>,</span>
 <span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">1</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; three.two.one.example.com </span></span>
-<span><span class="co">#&gt;         "one.example.com"</span></span>
+<span><span class="co">#&gt; [1] "one.example.com"</span></span>
 <span><span class="co"># Expected: "one.example.com"</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/get_host.html">get_host</a></span><span class="op">(</span></span>
@@ -255,8 +245,7 @@ Keeping these schemeless avoids a spurious "broken URL" finding. Do not add
 <span>  www_handling <span class="op">=</span> <span class="st">"keep"</span>,</span>
 <span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">2</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; www.three.two.one.example.com </span></span>
-<span><span class="co">#&gt;     "www.two.one.example.com"</span></span>
+<span><span class="co">#&gt; [1] "www.two.one.example.com"</span></span>
 <span><span class="co"># Expected: "www.two.one.example.com"</span></span></code></pre></div>
 <p>And its effect on <code><a href="../reference/get_clean_url.html">get_clean_url()</a></code>:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
@@ -265,16 +254,14 @@ Keeping these schemeless avoids a spurious "broken URL" finding. Do not add
 <span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  www_handling <span class="op">=</span> <span class="st">"keep"</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; http://www.deep.sub.example.com/some/path </span></span>
-<span><span class="co">#&gt;        "http://www.example.com/some/path"</span></span>
+<span><span class="co">#&gt; [1] "http://www.example.com/some/path"</span></span>
 <span><span class="co"># yields http://www.example.com/some/path</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/get_clean_url.html">get_clean_url</a></span><span class="op">(</span></span>
 <span>  <span class="st">"http://deep.sub.example.com/some/path"</span>,</span>
 <span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">1</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; http://deep.sub.example.com/some/path </span></span>
-<span><span class="co">#&gt;    "http://sub.example.com/some/path"</span></span>
+<span><span class="co">#&gt; [1] "http://sub.example.com/some/path"</span></span>
 <span><span class="co"># yields http://sub.example.com/some/path</span></span></code></pre></div>
 <p>Note that <code><a href="../reference/get_domain.html">get_domain()</a></code> also accepts
 <code>subdomain_levels_to_keep</code>, but it does not change the

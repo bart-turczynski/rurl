@@ -15,6 +15,13 @@
 
 ### Behavior changes
 
+- Accessor results (`get_*()`) are no longer named by the input URLs.
+  The `get_*()` functions now parse their input in a single vectorized
+  pass and return plain unnamed vectors (or lists), instead of vectors
+  carrying a `names` attribute of the input URLs. Wrap in
+  `stats::setNames(x, url)` if you relied on the old names.
+  (RURL-zpatukuq)
+
 - The `full_parse` memoization cache is now bounded by default at 100000
   unique url × option combinations (previously `Inf`), so parsing
   millions of unique URLs can no longer grow the cache without limit.

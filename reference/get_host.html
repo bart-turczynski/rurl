@@ -139,40 +139,34 @@ cleaned URL.</p></li>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">get_host</span><span class="op">(</span><span class="st">"http://sub.example.com:8080"</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://sub.example.com:8080 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>           "sub.example.com" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "sub.example.com"</span>
 <span class="r-in"><span><span class="fu">get_host</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"http://www.two.one.example.com"</span>,</span></span>
 <span class="r-in"><span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">1</span></span></span>
 <span class="r-in"><span><span class="op">)</span> <span class="co"># Result: "www.one.example.com"</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://www.two.one.example.com </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>          "www.one.example.com" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "www.one.example.com"</span>
 <span class="r-in"><span><span class="fu">get_host</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"http://www.two.one.example.com"</span>,</span></span>
 <span class="r-in"><span>  www_handling <span class="op">=</span> <span class="st">"strip"</span>,</span></span>
 <span class="r-in"><span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">1</span></span></span>
 <span class="r-in"><span><span class="op">)</span> <span class="co"># Result: "one.example.com"</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://www.two.one.example.com </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>              "one.example.com" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "one.example.com"</span>
 <span class="r-in"><span><span class="fu">get_host</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"http://www.two.one.example.com"</span>,</span></span>
 <span class="r-in"><span>  www_handling <span class="op">=</span> <span class="st">"keep"</span>,</span></span>
 <span class="r-in"><span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">1</span></span></span>
 <span class="r-in"><span><span class="op">)</span> <span class="co"># Result: "www.one.example.com"</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://www.two.one.example.com </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>          "www.one.example.com" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "www.one.example.com"</span>
 <span class="r-in"><span><span class="fu">get_host</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"http://three.two.one.example.com"</span>,</span></span>
 <span class="r-in"><span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">0</span></span></span>
 <span class="r-in"><span><span class="op">)</span> <span class="co"># Result: "example.com"</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://three.two.one.example.com </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                    "example.com" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "example.com"</span>
 <span class="r-in"><span><span class="fu">get_host</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"http://www.three.two.one.example.com"</span>,</span></span>
 <span class="r-in"><span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">0</span></span></span>
 <span class="r-in"><span><span class="op">)</span> <span class="co"># Result: "www.example.com"</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://www.three.two.one.example.com </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                    "www.example.com" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "www.example.com"</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

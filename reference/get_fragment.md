@@ -41,6 +41,5 @@ A character vector of fragments.
 
 ``` r
 get_fragment("http://example.com/path#section")
-#> http://example.com/path#section 
-#>                       "section" 
+#> [1] "section"
 ```

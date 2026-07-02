@@ -217,47 +217,40 @@ segment (slashes preserved).</p></li>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">get_clean_url</span><span class="op">(</span><span class="st">"Example.COM/Path"</span><span class="op">)</span> <span class="co"># Default lower_host: host folds, path kept</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>          Example.COM/Path </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> "http://example.com/Path" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://example.com/Path"</span>
 <span class="r-in"><span><span class="fu">get_clean_url</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"Example.COM/Path"</span>,</span></span>
 <span class="r-in"><span>  case_handling <span class="op">=</span> <span class="st">"keep"</span>,</span></span>
 <span class="r-in"><span>  trailing_slash_handling <span class="op">=</span> <span class="st">"keep"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>           Example.COM/Path </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> "http://Example.COM/Path/" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://Example.COM/Path/"</span>
 <span class="r-in"><span><span class="fu">get_clean_url</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"Example.COM/Path/"</span>,</span></span>
 <span class="r-in"><span>  case_handling <span class="op">=</span> <span class="st">"upper"</span>,</span></span>
 <span class="r-in"><span>  trailing_slash_handling <span class="op">=</span> <span class="st">"strip"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>         Example.COM/Path/ </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> "HTTP://EXAMPLE.COM/PATH" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "HTTP://EXAMPLE.COM/PATH"</span>
 <span class="r-in"><span><span class="fu">get_clean_url</span><span class="op">(</span><span class="st">"http://example.com"</span>, www_handling <span class="op">=</span> <span class="st">"strip"</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    http://example.com </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> "http://example.com/" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://example.com/"</span>
 <span class="r-in"><span><span class="fu">get_clean_url</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"http://deep.sub.domain.example.com/path"</span>,</span></span>
 <span class="r-in"><span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">0</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://deep.sub.domain.example.com/path </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>               "http://example.com/path" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://example.com/path"</span>
 <span class="r-in"><span><span class="co"># -&gt; "http://example.com/path"</span></span></span>
 <span class="r-in"><span><span class="fu">get_clean_url</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"http://www.deep.sub.domain.example.com/path"</span>,</span></span>
 <span class="r-in"><span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">1</span>,</span></span>
 <span class="r-in"><span>  www_handling <span class="op">=</span> <span class="st">"strip"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://www.deep.sub.domain.example.com/path </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>            "http://domain.example.com/path" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://domain.example.com/path"</span>
 <span class="r-in"><span><span class="co"># -&gt; "http://domain.example.com/path"</span></span></span>
 <span class="r-in"><span><span class="fu">get_clean_url</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"http://www.deep.sub.domain.example.com/path"</span>,</span></span>
 <span class="r-in"><span>  subdomain_levels_to_keep <span class="op">=</span> <span class="fl">1</span>,</span></span>
 <span class="r-in"><span>  www_handling <span class="op">=</span> <span class="st">"keep"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> http://www.deep.sub.domain.example.com/path </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>        "http://www.domain.example.com/path" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://www.domain.example.com/path"</span>
 <span class="r-in"><span><span class="co"># -&gt; "http://www.domain.example.com/path"</span></span></span>
 </code></pre></div>
     </div>

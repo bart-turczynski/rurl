@@ -40,9 +40,7 @@ A character vector of userinfo values.
 
 ``` r
 get_userinfo("ftp://alice:secret@ftp.example.com/file.txt")
-#> ftp://alice:secret@ftp.example.com/file.txt 
-#>                              "alice:secret" 
+#> [1] "alice:secret"
 get_userinfo("ftp://alice@ftp.example.com/file.txt")
-#> ftp://alice@ftp.example.com/file.txt 
-#>                              "alice" 
+#> [1] "alice"
 ```

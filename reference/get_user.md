@@ -41,6 +41,5 @@ A character vector of user names.
 
 ``` r
 get_user("ftp://alice:secret@ftp.example.com/file.txt")
-#> ftp://alice:secret@ftp.example.com/file.txt 
-#>                                     "alice" 
+#> [1] "alice"
 ```

@@ -95,12 +95,9 @@ A character vector with the parse status of each URL.
 get_parse_status(
   c("http://example.com", "ftp://example.com", "mailto:user@example.com")
 )
-#>      http://example.com       ftp://example.com mailto:user@example.com 
-#>                    "ok"                "ok-ftp"                 "error" 
+#> [1] "ok"     "ok-ftp" "error" 
 get_parse_status(c("http://example.com", "not-a-url"))
-#> http://example.com          not-a-url 
-#>               "ok"   "warning-no-tld" 
+#> [1] "ok"             "warning-no-tld"
 get_parse_status("http://example.com", source = "icann")
-#> http://example.com 
-#>               "ok" 
+#> [1] "ok"
 ```

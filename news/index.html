@@ -45,7 +45,8 @@
 </ul></div>
 <div class="section level3">
 <h3 id="behavior-changes-development-version">Behavior changes<a class="anchor" aria-label="anchor" href="#behavior-changes-development-version"></a></h3>
-<ul><li>The <code>full_parse</code> memoization cache is now bounded by default at 100000 unique url × option combinations (previously <code>Inf</code>), so parsing millions of unique URLs can no longer grow the cache without limit. Override with <code>rurl_cache_config(max_full_parse = Inf)</code> to restore the previous unbounded behavior; the reset-watermark semantics are unchanged. (RURL-ohepgzyf)</li>
+<ul><li><p>Accessor results (<code>get_*()</code>) are no longer named by the input URLs. The <code>get_*()</code> functions now parse their input in a single vectorized pass and return plain unnamed vectors (or lists), instead of vectors carrying a <code>names</code> attribute of the input URLs. Wrap in <code>stats::setNames(x, url)</code> if you relied on the old names. (RURL-zpatukuq)</p></li>
+<li><p>The <code>full_parse</code> memoization cache is now bounded by default at 100000 unique url × option combinations (previously <code>Inf</code>), so parsing millions of unique URLs can no longer grow the cache without limit. Override with <code>rurl_cache_config(max_full_parse = Inf)</code> to restore the previous unbounded behavior; the reset-watermark semantics are unchanged. (RURL-ohepgzyf)</p></li>
 </ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>

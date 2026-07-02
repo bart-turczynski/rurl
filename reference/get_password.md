@@ -41,6 +41,5 @@ A character vector of passwords.
 
 ``` r
 get_password("ftp://alice:secret@ftp.example.com/file.txt")
-#> ftp://alice:secret@ftp.example.com/file.txt 
-#>                                    "secret" 
+#> [1] "secret"
 ```

@@ -103,6 +103,5 @@ A character vector of domain names.
 
 ``` r
 get_domain("http://www.example.co.uk/path")
-#> http://www.example.co.uk/path 
-#>               "example.co.uk" 
+#> [1] "example.co.uk"
 ```

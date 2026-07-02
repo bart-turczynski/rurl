@@ -104,6 +104,5 @@ A character vector of URL paths.
 
 ``` r
 get_path("http://example.com/some/path?query=1")
-#> http://example.com/some/path?query=1 
-#>                         "/some/path" 
+#> [1] "/some/path"
 ```
