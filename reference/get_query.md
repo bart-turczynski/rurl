@@ -44,11 +44,20 @@ get_query(
 
 - decode:
 
-  Logical; if TRUE and format="list", percent-decodes keys/values.
+  Logical; if TRUE (default), percent-decodes the query (the whole
+  string for format="string", keys/values for format="list"). Set FALSE
+  to return the raw query as written in the URL.
 
 ## Value
 
 A character vector (format="string") or list (format="list").
+
+## Details
+
+The underlying parse preserves the raw query string byte-for-byte (a
+bare key such as `?flag` stays `flag`, not `flag=`). By default this
+accessor still percent-decodes for readability (`decode = TRUE`); pass
+`decode = FALSE` to obtain the raw query exactly as written in the URL.
 
 ## Examples
 

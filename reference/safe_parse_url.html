@@ -13,7 +13,7 @@ Results are memoized for performance when processing large datasets."></head><bo
 
     <a class="navbar-brand me-2" href="../index.html">rurl</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.1.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -194,7 +194,9 @@ cleaned URL.</p></li>
 
 <dt id="arg-path-encoding">path_encoding<a class="anchor" aria-label="anchor" href="#arg-path-encoding"></a></dt>
 <dd><p>How to handle percent-encoding in the path for
-<code>clean_url</code>. Defaults to "keep".</p><ul><li><p>"keep": Leave the path percent-encoding untouched.</p></li>
+<code>clean_url</code>. Defaults to "keep".</p><ul><li><p>"keep": Leave the path percent-encoding untouched (the path is
+preserved byte-for-byte as written in the URL, so <code>%2F</code> stays <code>%2F</code>
+rather than decoding into a path-separating <code>/</code>).</p></li>
 <li><p>"encode": Normalize by decoding first, then percent-encoding each
 segment (slashes preserved).</p></li>
 <li><p>"decode": Percent-decode UTF-8 sequences in the path.</p></li>
@@ -209,10 +211,14 @@ segment (slashes preserved).</p></li>
 empty after processing.</p></li>
 <li><p><code>port</code>: The port number.</p></li>
 <li><p><code>path</code>: The path component (e.g., "/path/to/resource").</p></li>
-<li><p><code>query</code>: The query string (e.g., "name=value").</p></li>
-<li><p><code>fragment</code>: The fragment identifier (e.g., "section").</p></li>
-<li><p><code>user</code>: The user name for authentication.</p></li>
-<li><p><code>password</code>: The password for authentication.</p></li>
+<li><p><code>query</code>: The raw query string as written in the URL, preserved
+byte-for-byte (e.g., "name=value"); not percent-decoded.</p></li>
+<li><p><code>fragment</code>: The fragment identifier as written in the URL
+(e.g., "section"); not percent-decoded.</p></li>
+<li><p><code>user</code>: The user name for authentication, as written in the URL;
+not percent-decoded.</p></li>
+<li><p><code>password</code>: The password for authentication, as written in the
+URL; not percent-decoded.</p></li>
 <li><p><code>domain</code>: The registered domain name (e.g., "example.com"). NA if
 host is an IP, empty, or derivation fails.</p></li>
 <li><p><code>tld</code>: The top-level domain (e.g., "com"). NA if host is an IP,

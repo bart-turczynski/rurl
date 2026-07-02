@@ -173,7 +173,9 @@ safe_parse_urls(
   How to handle percent-encoding in the path for `clean_url`. Defaults
   to "keep".
 
-  - "keep": Leave the path percent-encoding untouched.
+  - "keep": Leave the path percent-encoding untouched (the path is
+    preserved byte-for-byte as written in the URL, so `%2F` stays `%2F`
+    rather than decoding into a path-separating `/`).
 
   - "encode": Normalize by decoding first, then percent-encoding each
     segment (slashes preserved).

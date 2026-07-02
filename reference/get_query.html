@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rurl</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.1.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -78,13 +78,21 @@ elements.</p></dd>
 
 
 <dt id="arg-decode">decode<a class="anchor" aria-label="anchor" href="#arg-decode"></a></dt>
-<dd><p>Logical; if TRUE and format="list", percent-decodes
-keys/values.</p></dd>
+<dd><p>Logical; if TRUE (default), percent-decodes the query
+(the whole string for format="string", keys/values for format="list").
+Set FALSE to return the raw query as written in the URL.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A character vector (format="string") or list (format="list").</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>The underlying parse preserves the raw query string byte-for-byte (a bare
+key such as <code>?flag</code> stays <code>flag</code>, not <code>flag=</code>). By default this accessor
+still percent-decodes for readability (<code>decode = TRUE</code>); pass
+<code>decode = FALSE</code> to obtain the raw query exactly as written in the URL.</p>
     </div>
 
     <div class="section level2">

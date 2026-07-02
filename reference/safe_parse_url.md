@@ -176,7 +176,9 @@ safe_parse_url(
   How to handle percent-encoding in the path for `clean_url`. Defaults
   to "keep".
 
-  - "keep": Leave the path percent-encoding untouched.
+  - "keep": Leave the path percent-encoding untouched (the path is
+    preserved byte-for-byte as written in the URL, so `%2F` stays `%2F`
+    rather than decoding into a path-separating `/`).
 
   - "encode": Normalize by decoding first, then percent-encoding each
     segment (slashes preserved).
@@ -198,13 +200,17 @@ A named list with the following components:
 
 - `path`: The path component (e.g., "/path/to/resource").
 
-- `query`: The query string (e.g., "name=value").
+- `query`: The raw query string as written in the URL, preserved
+  byte-for-byte (e.g., "name=value"); not percent-decoded.
 
-- `fragment`: The fragment identifier (e.g., "section").
+- `fragment`: The fragment identifier as written in the URL (e.g.,
+  "section"); not percent-decoded.
 
-- `user`: The user name for authentication.
+- `user`: The user name for authentication, as written in the URL; not
+  percent-decoded.
 
-- `password`: The password for authentication.
+- `password`: The password for authentication, as written in the URL;
+  not percent-decoded.
 
 - `domain`: The registered domain name (e.g., "example.com"). NA if host
   is an IP, empty, or derivation fails.
