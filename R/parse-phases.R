@@ -770,6 +770,7 @@
                                      domain, protocol_handling, final_scheme,
                                      looks_like_protocol,
                                      original_has_allowed_scheme,
+                                     looks_like_host_port,
                                      is_scheme_relative,
                                      scheme_relative_handling) {
   n <- length(final_host)
@@ -801,7 +802,13 @@
 
   protocol_kept <- protocol_handling == "keep" || protocol_handling == "none"
   if (protocol_kept) {
-    unsupported <- looks_like_protocol & !original_has_allowed_scheme
+    # host:port inputs match the scheme regex (`example.com:` looks like a
+    # scheme) but Phase 1 already recognizes and parses them as host:port, so
+    # they must not be demoted here (RURL-aldwnots) -- mirrors Phase 1's own
+    # `bare_protocol_kept` exclusion.
+    unsupported <- looks_like_protocol &
+      !original_has_allowed_scheme &
+      !looks_like_host_port
     status[unsupported] <- .STATUS_ERROR
   }
   status[!curl_ok] <- .STATUS_ERROR
@@ -818,6 +825,7 @@
                                  domain, protocol_handling, final_scheme,
                                  looks_like_protocol,
                                  original_has_allowed_scheme,
+                                 looks_like_host_port,
                                  is_scheme_relative,
                                  scheme_relative_handling) {
   .derive_parse_status_vec(
@@ -830,6 +838,7 @@
     final_scheme = final_scheme,
     looks_like_protocol = looks_like_protocol,
     original_has_allowed_scheme = original_has_allowed_scheme,
+    looks_like_host_port = looks_like_host_port,
     is_scheme_relative = is_scheme_relative,
     scheme_relative_handling = scheme_relative_handling
   )

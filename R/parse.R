@@ -752,6 +752,7 @@ safe_parse_urls <- function(url,
     looks_like_protocol = prep$looks_like_protocol,
     original_has_allowed_scheme = prep$original_has_allowed_scheme,
     is_scheme_relative = prep$is_scheme_relative,
+    looks_like_host_port = prep$looks_like_host_port,
     scheme_less_userinfo = prep$scheme_less_userinfo
   )
   attr(cols, "null_row") <- null_row
@@ -824,6 +825,7 @@ safe_parse_urls <- function(url,
     final_scheme = a$final_scheme,
     looks_like_protocol = a$looks_like_protocol,
     original_has_allowed_scheme = a$original_has_allowed_scheme,
+    looks_like_host_port = a$looks_like_host_port,
     is_scheme_relative = a$is_scheme_relative,
     scheme_relative_handling = opts$scheme_relative_handling
   )
@@ -954,6 +956,7 @@ safe_parse_urls <- function(url,
     final_scheme = final_scheme,
     looks_like_protocol = prep$looks_like_protocol,
     original_has_allowed_scheme = prep$original_has_allowed_scheme,
+    looks_like_host_port = prep$looks_like_host_port,
     is_scheme_relative = prep$is_scheme_relative,
     scheme_relative_handling = scheme_relative_handling
   )
