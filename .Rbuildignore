@@ -37,3 +37,4 @@
 ^\.fossa$
 ^\.bestpractices\.json$
 ^SECURITY\.md$
+^SECURITY-INSIGHTS\.yml$

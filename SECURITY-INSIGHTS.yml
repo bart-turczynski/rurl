@@ -1,0 +1,116 @@
+header:
+  schema-version: 2.2.0
+  last-updated: '2026-07-03'
+  last-reviewed: '2026-07-03'
+  url: https://github.com/bart-turczynski/rurl/raw/main/SECURITY-INSIGHTS.yml
+  comment: |
+    OpenSSF Security Insights self-report for rurl, a CRAN R package for
+    parsing, normalizing, cleaning, and joining URLs. Maintained alongside
+    SECURITY.md (human-readable policy) and .bestpractices.json (OpenSSF Best
+    Practices badge self-assessment).
+
+project:
+  name: rurl
+  homepage: https://bart-turczynski.github.io/rurl/
+  administrators:
+    - name: Bart Turczynski
+      email: bartek@turczynski.pl
+      social: https://orcid.org/0000-0002-8788-7980
+      primary: true
+  documentation:
+    quickstart-guide: https://bart-turczynski.github.io/rurl/
+    detailed-guide: https://bart-turczynski.github.io/rurl/reference/index.html
+    release-process: https://github.com/bart-turczynski/rurl/blob/main/CONTRIBUTING.md
+  repositories:
+    - name: rurl
+      url: https://github.com/bart-turczynski/rurl
+      comment: |
+        Sole repository for the rurl package. Domain/public-suffix extraction is
+        delegated to the sibling pslr package and Punycode/IDNA to punycoder.
+  vulnerability-reporting:
+    reports-accepted: true
+    bug-bounty-available: false
+    contact:
+      name: Bart Turczynski
+      email: bartek@turczynski.pl
+      primary: true
+    policy: https://github.com/bart-turczynski/rurl/blob/main/SECURITY.md
+    in-scope:
+      - Unsafe handling of untrusted URL input passed to the parsing and
+        normalization functions.
+    out-of-scope:
+      - Vulnerabilities in dependencies (curl, stringi, punycoder, pslr); report
+        those upstream.
+    comment: |
+      Please do not report vulnerabilities through public GitHub issues. Use
+      GitHub private vulnerability reporting (repository Security tab -> "Report
+      a vulnerability"), or email the maintainer if that channel is unavailable.
+      Acknowledgment is targeted within 7 days. rurl is a pure-R library that
+      makes no network connections of its own and handles no credentials.
+
+repository:
+  url: https://github.com/bart-turczynski/rurl
+  status: active
+  bug-fixes-only: false
+  accepts-change-request: true
+  accepts-automated-change-request: false
+  no-third-party-packages: false
+  core-team:
+    - name: Bart Turczynski
+      email: bartek@turczynski.pl
+      social: https://orcid.org/0000-0002-8788-7980
+      primary: true
+  documentation:
+    contributing-guide: https://github.com/bart-turczynski/rurl/blob/main/CONTRIBUTING.md
+    security-policy: https://github.com/bart-turczynski/rurl/blob/main/SECURITY.md
+  license:
+    url: https://github.com/bart-turczynski/rurl/blob/main/LICENSE
+    expression: MIT
+  release:
+    changelog: https://github.com/bart-turczynski/rurl/blob/main/NEWS.md
+    automated-pipeline: false
+    distribution-points:
+      - uri: https://CRAN.R-project.org/package=rurl
+        comment: Canonical release channel (CRAN).
+      - uri: https://github.com/bart-turczynski/rurl/releases
+        comment: Tagged GitHub Releases mirroring each CRAN version.
+      - uri: https://bart-turczynski.r-universe.dev
+        comment: R-universe build.
+  security:
+    assessments:
+      self:
+        evidence: https://www.bestpractices.dev/projects/13394
+        date: '2026-07-03'
+        comment: |
+          Ongoing OpenSSF Best Practices badge self-assessment, tracked in
+          .bestpractices.json at the repository root.
+    champions:
+      - name: Bart Turczynski
+        email: bartek@turczynski.pl
+        primary: true
+    tools:
+      - name: rosv (OSV)
+        type: SCA
+        rulesets:
+          - default
+        integration:
+          adhoc: true
+          ci: true
+          release: false
+        results: {}
+        comment: |
+          Weekly and on-push audit of the runtime dependency closure against the
+          OSV database (osv.dev). No account or secrets required. See
+          .github/workflows/osv-audit.yml.
+      - name: oysteR (Sonatype OSS Index)
+        type: SCA
+        rulesets:
+          - default
+        integration:
+          adhoc: true
+          ci: true
+          release: false
+        results: {}
+        comment: |
+          Weekly and on-push audit of declared dependencies against the Sonatype
+          OSS Index. See .github/workflows/security-audit.yml.
