@@ -80,20 +80,19 @@
 #'     \item{"strip": Remove a trailing index.* or default.* segment
 #'     (case-insensitive).}
 #'   }
-#' @param path_normalization How to normalize path *slash* structure. Defaults
-#' to "none". Note that RFC 3986 dot-segment resolution (\code{.} and \code{..},
-#' including their percent-encoded forms \code{\%2e}/\code{\%2E}) is applied
-#' \emph{unconditionally} by the underlying parser (libcurl) before rurl sees
-#' the path, so \code{/a/../b} always yields \code{/b} — this cannot be disabled
-#' and the \code{"dot_segments"}/\code{"both"} settings only make rurl's own
-#' resolver redundant with what already happened. This option therefore
-#' meaningfully controls only slash collapsing.
+#' @param path_normalization How to normalize path structure. Defaults to
+#' "none". rurl owns dot-segment resolution: the path is read from the input
+#' verbatim (not from libcurl's pre-normalized path), so \code{"none"} preserves
+#' \code{.} / \code{..} segments (\code{/a/../b} stays \code{/a/../b}) and only
+#' the settings below change them. Resolution follows RFC 3986 section 5.2.4 and
+#' acts on \emph{literal} \code{.}/\code{..} segments only — a percent-encoded
+#' \code{\%2e} is a normal path byte, never a dot segment, so it is never
+#' treated as traversal.
 #'   \itemize{
-#'     \item{"none": (Default) No slash collapsing. (Dot segments are still
-#'     resolved upstream, as noted above.)}
+#'     \item{"none": (Default) No normalization; dot and slash structure is
+#'     preserved exactly as written.}
 #'     \item{"collapse_slashes": Collapse duplicate slashes in the path.}
-#'     \item{"dot_segments": Resolve . and .. segments per RFC 3986 (already
-#'     applied upstream; retained for explicitness).}
+#'     \item{"dot_segments": Resolve . and .. segments per RFC 3986.}
 #'     \item{"both": Apply both collapse_slashes and dot_segments.}
 #'   }
 #' @param scheme_relative_handling How to handle URLs starting with "//".
@@ -117,13 +116,13 @@
 #' `clean_url`. Defaults to "keep".
 #'   \itemize{
 #'     \item{"keep": Leave the path percent-encoding untouched (the path is
-#'     preserved byte-for-byte as written in the URL, so `%2F` stays `%2F`
-#'     rather than decoding into a path-separating `/`). One exception is out of
-#'     rurl's hands: the underlying parser (libcurl) normalizes percent-encoding
-#'     hex digits to uppercase, so `%2f` is returned as `%2F`. This is an
-#'     RFC 3986 (section 6.2.2.1) case canonicalization — the two forms are
-#'     equivalent — and it makes such paths compare equal in
-#'     \code{\link{canonical_join}}.}
+#'     preserved as written in the URL, so `%2F` stays `%2F` rather than
+#'     decoding into a path-separating `/`). The one normalization applied is
+#'     percent-hex case: the two hex digits of each `%XX` triplet are
+#'     uppercased, so `%2f` becomes `%2F`. This is an RFC 3986 (section 6.2.2.1)
+#'     canonicalization — the two forms are equivalent — and it makes such paths
+#'     compare equal in \code{\link{canonical_join}}. Use "encode" to
+#'     additionally normalize which bytes are encoded.}
 #'     \item{"encode": Normalize by decoding first, then percent-encoding each
 #'     segment (slashes preserved).}
 #'     \item{"decode": Percent-decode UTF-8 sequences in the path.}
@@ -695,9 +694,17 @@ safe_parse_urls <- function(url,
   raw_host <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$host %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
-  raw_path <- vapply(parsed_list, function(p) {
+  # Path is re-derived from the prepared input (not curl's normalized $path) so
+  # dot segments survive to path_normalization; see .extract_raw_path_vec().
+  curl_path <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$path %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
+  raw_path <- curl_path
+  if (any(curl_ok)) {
+    raw_path[curl_ok] <- .extract_raw_path_vec(
+      prep$url_to_parse[curl_ok], curl_path[curl_ok]
+    )
+  }
   # query/fragment/userinfo are raw pass-throughs; .blank_to_na() maps a
   # present-but-empty "" component to NA so output is stable across libcurl
   # versions (see .blank_to_na in utils.R).
@@ -906,7 +913,7 @@ safe_parse_urls <- function(url,
   if (is.null(parsed_curl)) {
     return(NULL)
   }
-  raw <- .extract_raw_components(parsed_curl)
+  raw <- .extract_raw_components(parsed_curl, prep$url_to_parse)
   raw_host <- raw$host
   raw_query <- raw$query
 

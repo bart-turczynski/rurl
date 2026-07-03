@@ -49,10 +49,35 @@ test_that(".extract_raw_components takes the raw query verbatim", {
   # T2 (RURL-yuozrhop): with params = FALSE, curl surfaces the raw query
   # string directly, so .extract_raw_components takes it byte-for-byte (a bare
   # key keeps no trailing "=") rather than rebuilding it from decoded params.
-  parsed <- rurl:::.parse_with_curl("http://example.com/p?a=1&b=2&flag")
-  raw <- rurl:::.extract_raw_components(parsed)
+  prepared <- "http://example.com/p?a=1&b=2&flag"
+  parsed <- rurl:::.parse_with_curl(prepared)
+  raw <- rurl:::.extract_raw_components(parsed, prepared)
   expect_equal(raw$host, "example.com")
   expect_equal(raw$query, "a=1&b=2&flag")
+})
+
+test_that(".extract_raw_path_vec preserves dot segments and uppercases hex", {
+  # Raw path comes from the prepared input, not curl's normalized $path, so RFC
+  # 3986 dot segments (and encoded %2e forms) survive to path_normalization;
+  # only percent-hex case is replayed from libcurl (section 6.2.2.1).
+  ext <- function(prepared) {
+    curl_path <- rurl:::.parse_with_curl(prepared)$path
+    rurl:::.extract_raw_path_vec(prepared, curl_path)
+  }
+  expect_equal(ext("http://ex.com/a/../b"), "/a/../b")
+  expect_equal(ext("http://ex.com/a/%2e%2e/b"), "/a/%2E%2E/b")
+  expect_equal(ext("http://ex.com/a%2fb"), "/a%2Fb")
+  expect_equal(ext("http://ex.com/a//b"), "/a//b")
+  # No path component -> fall back to curl's canonical "/".
+  expect_equal(ext("http://ex.com"), "/")
+  expect_equal(ext("http://ex.com?x=1"), "/")
+  # Query/fragment slashes never leak into the path.
+  expect_equal(ext("http://ex.com/p?x=/y#/z"), "/p")
+  # Vectorized, NA-safe.
+  expect_equal(
+    rurl:::.extract_raw_path_vec(c(NA, "http://ex.com/a"), c(NA, "/a")),
+    c(NA, "/a")
+  )
 })
 
 test_that(".normalize_path applies decode, normalization, index, trailing", {

@@ -228,15 +228,79 @@
   )
 }
 
+# Uppercase the two hex digits of every %XX percent-triplet, leaving the rest of
+# the string untouched (`%2f` -> `%2F`). This reproduces the one path
+# normalization rurl WANTS to keep from libcurl's `$path` (RFC 3986 section
+# 6.2.2.1 case canonicalization, so `%2f`/`%2F` compare equal in canonical_join)
+# on a raw path extracted from the input. Malformed `%` (not followed by two hex
+# digits) is left as-is. `\U\1` (perl) uppercases just the captured pair.
+.uppercase_percent_hex <- function(x) {
+  na <- is.na(x)
+  if (all(na)) {
+    return(x)
+  }
+  x[!na] <- gsub("%([0-9a-fA-F]{2})", "%\\U\\1", x[!na], perl = TRUE)
+  x
+}
+
+# Recover the raw request path from the prepared URL string (the exact bytes
+# curl was handed), rather than `parsed_curl$path`. libcurl's `$path` applies
+# two normalizations even under `decode = FALSE`: it uppercases percent-hex
+# (wanted; see .uppercase_percent_hex) AND it resolves RFC 3986 dot segments,
+# INCLUDING percent-encoded ones (`/a/%2e%2e/b` -> `/b`). The latter is
+# unwanted: it makes `path_normalization = "none"` non-lossless and silently
+# collapses encoded-dot paths some servers treat as distinct. Extracting from
+# the input lets rurl own dot-segment resolution (`._remove_dot_segments`,
+# literal `.`/`..` only, per RFC 3986 section 5.2.4 -- an encoded `%2e` is NOT a
+# dot segment), gated by `path_normalization`. The one libcurl normalization
+# rurl replays is hex-case.
+#
+# Extraction (every parseable prepared row carries an explicit `scheme://`
+# authority -- opaque/unsupported schemes are rejected upstream): strip the
+# scheme, then the path is the run from the first literal `/` (after the
+# authority, which cannot contain one) up to the first `?`/`#`. When the
+# authority is followed directly by `?`, `#`, or end-of-string there is no path,
+# so fall back to curl's `$path` (the canonical "/" trailing-slash expects).
+.extract_raw_path_vec <- function(prepared, curl_path) {
+  out <- curl_path
+  ok <- !is.na(prepared) & !is.na(curl_path)
+  if (!any(ok)) {
+    return(out)
+  }
+  body <- stringi::stri_replace_first_regex(
+    prepared[ok], "^[a-zA-Z][a-zA-Z0-9+.-]*://", ""
+  )
+  first <- stringi::stri_locate_first_regex(body, "[/?#]")[, 1L]
+  has_path <- !is.na(first) &
+    stringi::stri_sub(body, first, first) == "/"
+  raw <- curl_path[ok]
+  if (any(has_path)) {
+    bp <- body[has_path]
+    start <- first[has_path]
+    tail <- stringi::stri_sub(bp, start)
+    stop_rel <- stringi::stri_locate_first_regex(tail, "[?#]")[, 1L]
+    end <- ifelse(
+      is.na(stop_rel), stringi::stri_length(bp), start + stop_rel - 2L
+    )
+    raw[has_path] <- stringi::stri_sub(bp, start, end)
+  }
+  out[ok] <- .uppercase_percent_hex(raw)
+  out
+}
+
 # Phase 2b: pull the raw components used downstream out of the curl result.
 # With `params = FALSE` (see .parse_with_curl) `parsed_curl$query` is already
 # the raw (percent-encoded) query string, so it is taken verbatim; downstream
-# parsers split on raw "&"/"=" then decode per-pair. scheme/host/path as-is.
-.extract_raw_components <- function(parsed_curl) {
+# parsers split on raw "&"/"=" then decode per-pair. scheme/host as-is. The path
+# is re-derived from the prepared input by .extract_raw_path_vec() (see there)
+# so dot segments survive to `path_normalization`.
+.extract_raw_components <- function(parsed_curl, prepared) {
   list(
     scheme = parsed_curl$scheme %||% NA_character_,
     host = parsed_curl$host %||% NA_character_,
-    path = parsed_curl$path %||% NA_character_,
+    path = .extract_raw_path_vec(
+      prepared, parsed_curl$path %||% NA_character_
+    ),
     # .blank_to_na(): present-but-empty query "" -> NA (libcurl-version stable).
     query = .blank_to_na(parsed_curl$query %||% NA_character_)
   )
