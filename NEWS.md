@@ -40,6 +40,14 @@
   `rurl_cache_config(max_full_parse = Inf)` to restore the previous unbounded
   behavior; the reset-watermark semantics are unchanged. (RURL-ohepgzyf)
 
+- A present-but-empty `query`, `fragment`, `user`, or `password` component
+  (e.g. the query of `"https://example.com/?"`) is now reported as `NA`
+  consistently. `curl::curl_parse_url()` returns such components as `NULL` on
+  some libcurl versions and `""` on others; both now normalize to `NA`, so
+  output no longer depends on the installed libcurl version. This matches the
+  behavior already produced on platforms where curl returned `NULL`.
+  (RURL-dkwrebdt)
+
 ### Behavior changes
 
 - `safe_parse_urls()` now accepts a factor input, coercing it to its character

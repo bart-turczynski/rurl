@@ -131,13 +131,14 @@
 #'     \item `port`: The port number.
 #'     \item `path`: The path component (e.g., "/path/to/resource").
 #'     \item `query`: The raw query string as written in the URL, preserved
-#'     byte-for-byte (e.g., "name=value"); not percent-decoded.
+#'     byte-for-byte (e.g., "name=value"); not percent-decoded. A present-but-
+#'     empty query (e.g. from a trailing "?") is reported as NA.
 #'     \item `fragment`: The fragment identifier as written in the URL
-#'     (e.g., "section"); not percent-decoded.
+#'     (e.g., "section"); not percent-decoded. Empty is reported as NA.
 #'     \item `user`: The user name for authentication, as written in the URL;
-#'     not percent-decoded.
+#'     not percent-decoded. Empty is reported as NA.
 #'     \item `password`: The password for authentication, as written in the
-#'     URL; not percent-decoded.
+#'     URL; not percent-decoded. Empty is reported as NA.
 #'     \item `domain`: The registered domain name (e.g., "example.com"). NA if
 #'     host is an IP, empty, or derivation fails.
 #'     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP,
@@ -670,18 +671,21 @@ safe_parse_urls <- function(url,
   raw_path <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$path %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
-  raw_query <- vapply(parsed_list, function(p) {
+  # query/fragment/userinfo are raw pass-throughs; .blank_to_na() maps a
+  # present-but-empty "" component to NA so output is stable across libcurl
+  # versions (see .blank_to_na in utils.R).
+  raw_query <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$query %||% NA_character_
-  }, character(1), USE.NAMES = FALSE)
-  raw_fragment <- vapply(parsed_list, function(p) {
+  }, character(1), USE.NAMES = FALSE))
+  raw_fragment <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$fragment %||% NA_character_
-  }, character(1), USE.NAMES = FALSE)
-  raw_user <- vapply(parsed_list, function(p) {
+  }, character(1), USE.NAMES = FALSE))
+  raw_user <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$user %||% NA_character_
-  }, character(1), USE.NAMES = FALSE)
-  raw_password <- vapply(parsed_list, function(p) {
+  }, character(1), USE.NAMES = FALSE))
+  raw_password <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$password %||% NA_character_
-  }, character(1), USE.NAMES = FALSE)
+  }, character(1), USE.NAMES = FALSE))
   raw_port <- vapply(parsed_list, function(p) {
     if (is.null(p)) {
       NA_integer_

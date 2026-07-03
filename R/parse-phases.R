@@ -145,7 +145,8 @@
     scheme = parsed_curl$scheme %||% NA_character_,
     host = parsed_curl$host %||% NA_character_,
     path = parsed_curl$path %||% NA_character_,
-    query = parsed_curl$query %||% NA_character_
+    # .blank_to_na(): present-but-empty query "" -> NA (libcurl-version stable).
+    query = .blank_to_na(parsed_curl$query %||% NA_character_)
   )
 }
 
@@ -799,10 +800,11 @@
     host_output = host_output,
     port = suppressWarnings(as.integer(parsed_curl$port %||% NA_integer_)),
     path_output = path_output,
-    raw_query = raw_query %||% NA_character_,
-    fragment = parsed_curl$fragment %||% NA_character_,
-    user = parsed_curl$user %||% NA_character_,
-    password = parsed_curl$password %||% NA_character_,
+    # .blank_to_na(): present-but-empty raw components "" -> NA (see utils.R).
+    raw_query = .blank_to_na(raw_query %||% NA_character_),
+    fragment = .blank_to_na(parsed_curl$fragment %||% NA_character_),
+    user = .blank_to_na(parsed_curl$user %||% NA_character_),
+    password = .blank_to_na(parsed_curl$password %||% NA_character_),
     domain = domain,
     tld = tld,
     is_ip_host = is_ip_host,

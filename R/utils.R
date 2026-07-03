@@ -3,6 +3,17 @@
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
 
+# Coerce present-but-empty ("") raw components to NA, vectorized. curl's
+# `curl_parse_url()` is inconsistent across libcurl versions for a present-but-
+# empty component (e.g. the query of "https://example.com/?"): older libcurl
+# returns NULL (-> NA via %||%), newer returns "". This normalizes "" -> NA so
+# rurl's raw query/fragment/userinfo output is deterministic across libcurl
+# versions, matching the long-shipped "empty component == absent" behavior.
+.blank_to_na <- function(x) {
+  x[!is.na(x) & x == ""] <- NA_character_
+  x
+}
+
 # Field spec for safe_parse_urls() result columns. Single source of truth that
 # keeps the empty-frame template, the per-row error fallback, and the populated
 # frame in sync with safe_parse_url()'s result fields. Each entry carries the
