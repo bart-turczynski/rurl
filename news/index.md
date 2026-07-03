@@ -2,6 +2,33 @@
 
 ## rurl (development version)
 
+### New features
+
+- [`safe_parse_url()`](https://bart-turczynski.github.io/rurl/reference/safe_parse_url.md)
+  and
+  [`safe_parse_urls()`](https://bart-turczynski.github.io/rurl/reference/safe_parse_urls.md)
+  gain opt-in query-string handling for `clean_url` (RURL-mzbnubrx). New
+  `query_handling` option: `"drop"` (default — `clean_url` stays
+  query-free, exactly as before), `"filter"` (keep contentful params,
+  drop known trackers such as `utm_*`, `fbclid`, `gclid` via a built-in
+  denylist), `"allow"` (keep only names in `params_keep`), and `"keep"`
+  (keep every param, canonicalized). Supporting options: `params_keep`,
+  `params_drop` (glob-aware, `*`-only), `sort_params`,
+  `empty_param_handling`, `params_case_sensitive`, and `decode_plus`.
+  The raw `query` result field is untouched — it always reports the
+  faithful original. All defaults preserve current output. Because
+  [`canonical_join()`](https://bart-turczynski.github.io/rurl/reference/canonical_join.md)
+  forwards `...` to
+  [`safe_parse_urls()`](https://bart-turczynski.github.io/rurl/reference/safe_parse_urls.md),
+  these options also flow into the join key, so a non-`"drop"` mode
+  makes `?id=1`/`?id=2` stop collapsing while `utm`-only differences
+  still collapse under `"filter"`.
+- The `clean_url` query is deliberately **exempt from `case_handling`**
+  (query values are case-sensitive — tokens, IDs, signatures). Under
+  `case_handling = "lower"` or `"upper"` the scheme/host/path fold but
+  the appended query keeps its original case, so `clean_url` is no
+  longer uniformly cased in those modes.
+
 ### Breaking changes
 
 - `path_normalization = "none"` (the default) is now genuinely lossless

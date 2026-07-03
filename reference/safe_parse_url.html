@@ -64,7 +64,14 @@ Results are memoized for performance when processing large datasets.</p>
 <span>  scheme_relative_handling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"keep"</span>, <span class="st">"http"</span>, <span class="st">"https"</span>, <span class="st">"error"</span><span class="op">)</span>,</span>
 <span>  subdomain_levels_to_keep <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  host_encoding <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"keep"</span>, <span class="st">"idna"</span>, <span class="st">"unicode"</span><span class="op">)</span>,</span>
-<span>  path_encoding <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"keep"</span>, <span class="st">"encode"</span>, <span class="st">"decode"</span><span class="op">)</span></span>
+<span>  path_encoding <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"keep"</span>, <span class="st">"encode"</span>, <span class="st">"decode"</span><span class="op">)</span>,</span>
+<span>  query_handling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"drop"</span>, <span class="st">"filter"</span>, <span class="st">"allow"</span>, <span class="st">"keep"</span><span class="op">)</span>,</span>
+<span>  params_keep <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  params_drop <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  sort_params <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  empty_param_handling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"keep"</span>, <span class="st">"drop"</span><span class="op">)</span>,</span>
+<span>  params_case_sensitive <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  decode_plus <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -224,6 +231,66 @@ segment (slashes preserved).</p></li>
 <li><p>"decode": Percent-decode UTF-8 sequences in the path.</p></li>
 </ul></dd>
 
+
+<dt id="arg-query-handling">query_handling<a class="anchor" aria-label="anchor" href="#arg-query-handling"></a></dt>
+<dd><p>A character string controlling whether (and how) the
+query string is included in <code>clean_url</code>. Defaults to "drop", which preserves
+the historical query-free <code>clean_url</code>. The raw <code>query</code> result field is never
+affected by this option — it always reports the faithful original query.</p><ul><li><p>"drop": (Default) <code>clean_url</code> carries no query, exactly as before.</p></li>
+<li><p>"filter": Keep contentful params, dropping known trackers via a
+built-in denylist (e.g. <code>utm_*</code>, <code>fbclid</code>, <code>gclid</code>). <code>params_drop</code>
+extends the denylist; <code>params_keep</code> rescues names (winning over both the
+denylist and empty-dropping).</p></li>
+<li><p>"allow": Keep only params whose names match <code>params_keep</code>; all
+others are dropped. Here <code>params_keep</code> is an inclusion criterion only,
+not an empty-rescue.</p></li>
+<li><p>"keep": Keep every param, re-encoded into canonical form (not the
+verbatim original — that stays on the <code>query</code> field).</p></li>
+</ul><p>In every non-"drop" mode the surviving query is re-encoded canonically
+(uppercase percent-hex, spaces as <code>%20</code>) and appended after the path. The
+query is intentionally EXEMPT from <code>case_handling</code> (query values are
+case-sensitive — tokens, IDs, signatures), so under
+<code>case_handling = "lower"</code> or <code>"upper"</code> the <code>clean_url</code> is no longer
+uniformly cased: scheme/host/path fold but the query keeps its original
+case. Because <code>clean_url</code> is the <code><a href="canonical_join.html">canonical_join</a></code> key, any
+non-"drop" mode also brings the query into that join key (so <code>?id=1</code> and
+<code>?id=2</code> stop collapsing, while <code>utm</code>-only differences still collapse under
+"filter").</p></dd>
+
+
+<dt id="arg-params-keep">params_keep<a class="anchor" aria-label="anchor" href="#arg-params-keep"></a></dt>
+<dd><p>Character vector of parameter-name globs (only <code>*</code> is
+special), or <code>NULL</code> (default). In "filter" mode this is the rescue list; in
+"allow" mode it is the allowlist. Ignored in "drop"/"keep".</p></dd>
+
+
+<dt id="arg-params-drop">params_drop<a class="anchor" aria-label="anchor" href="#arg-params-drop"></a></dt>
+<dd><p>Character vector of parameter-name globs to add to the
+built-in denylist in "filter" mode, or <code>NULL</code> (default). Ignored in
+"drop"/"allow"/"keep".</p></dd>
+
+
+<dt id="arg-sort-params">sort_params<a class="anchor" aria-label="anchor" href="#arg-sort-params"></a></dt>
+<dd><p>Logical (default <code>FALSE</code>). When <code>TRUE</code>, surviving params
+are stably sorted by decoded key. Active in "filter"/"allow"/"keep".</p></dd>
+
+
+<dt id="arg-empty-param-handling">empty_param_handling<a class="anchor" aria-label="anchor" href="#arg-empty-param-handling"></a></dt>
+<dd><p>One of "keep" (default) or "drop". "drop" removes
+empty-valued params (e.g. <code>?ref=</code>), except those rescued by <code>params_keep</code>
+in "filter" mode.</p></dd>
+
+
+<dt id="arg-params-case-sensitive">params_case_sensitive<a class="anchor" aria-label="anchor" href="#arg-params-case-sensitive"></a></dt>
+<dd><p>Logical (default <code>FALSE</code>). Controls whether the
+denylist and <code>params_keep</code>/<code>params_drop</code> matching is case-sensitive.</p></dd>
+
+
+<dt id="arg-decode-plus">decode_plus<a class="anchor" aria-label="anchor" href="#arg-decode-plus"></a></dt>
+<dd><p>Logical (default <code>FALSE</code>). When <code>TRUE</code>, <code>+</code> in query
+values is treated as a space (HTML-form decoding) before percent-decoding.
+<code>FALSE</code> keeps <code>+</code> literal (RFC 3986 generic behavior).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -248,9 +315,12 @@ host is an IP, empty, or derivation fails.</p></li>
 empty, or derivation fails.</p></li>
 <li><p><code>is_ip_host</code>: Logical, TRUE if the host is an IP address.</p></li>
 <li><p><code>clean_url</code>: A normalized canonical key reconstructed from
-scheme, host, and path only, after processing and with case handling
-applied. Port, query, fragment, and userinfo are intentionally
-excluded (use the dedicated components above to retrieve them). With
+scheme, host, and path, after processing and with case handling
+applied. The query is included only when <code>query_handling != "drop"</code>
+(the default is "drop", so by default the query is excluded); when
+included it is filtered/canonicalized per the query options and appended
+case-unfolded. Port, fragment, and userinfo are always excluded (use the
+dedicated components above to retrieve them). With
 <code>path_encoding = "decode"</code> the path is shown decoded, so <code>clean_url</code>
 is human-readable rather than guaranteed URL-safe. NA if host is
 empty/NA.</p></li>

@@ -19,7 +19,14 @@ safe_parse_urls(
   scheme_relative_handling = c("keep", "http", "https", "error"),
   subdomain_levels_to_keep = NULL,
   host_encoding = c("keep", "idna", "unicode"),
-  path_encoding = c("keep", "encode", "decode")
+  path_encoding = c("keep", "encode", "decode"),
+  query_handling = c("drop", "filter", "allow", "keep"),
+  params_keep = NULL,
+  params_drop = NULL,
+  sort_params = FALSE,
+  empty_param_handling = c("keep", "drop"),
+  params_case_sensitive = FALSE,
+  decode_plus = FALSE
 )
 ```
 
@@ -203,6 +210,74 @@ safe_parse_urls(
     segment (slashes preserved).
 
   - "decode": Percent-decode UTF-8 sequences in the path.
+
+- query_handling:
+
+  A character string controlling whether (and how) the query string is
+  included in `clean_url`. Defaults to "drop", which preserves the
+  historical query-free `clean_url`. The raw `query` result field is
+  never affected by this option — it always reports the faithful
+  original query.
+
+  - "drop": (Default) `clean_url` carries no query, exactly as before.
+
+  - "filter": Keep contentful params, dropping known trackers via a
+    built-in denylist (e.g. `utm_*`, `fbclid`, `gclid`). `params_drop`
+    extends the denylist; `params_keep` rescues names (winning over both
+    the denylist and empty-dropping).
+
+  - "allow": Keep only params whose names match `params_keep`; all
+    others are dropped. Here `params_keep` is an inclusion criterion
+    only, not an empty-rescue.
+
+  - "keep": Keep every param, re-encoded into canonical form (not the
+    verbatim original — that stays on the `query` field).
+
+  In every non-"drop" mode the surviving query is re-encoded canonically
+  (uppercase percent-hex, spaces as `%20`) and appended after the path.
+  The query is intentionally EXEMPT from `case_handling` (query values
+  are case-sensitive — tokens, IDs, signatures), so under
+  `case_handling = "lower"` or `"upper"` the `clean_url` is no longer
+  uniformly cased: scheme/host/path fold but the query keeps its
+  original case. Because `clean_url` is the
+  [`canonical_join`](https://bart-turczynski.github.io/rurl/reference/canonical_join.md)
+  key, any non-"drop" mode also brings the query into that join key (so
+  `?id=1` and `?id=2` stop collapsing, while `utm`-only differences
+  still collapse under "filter").
+
+- params_keep:
+
+  Character vector of parameter-name globs (only `*` is special), or
+  `NULL` (default). In "filter" mode this is the rescue list; in "allow"
+  mode it is the allowlist. Ignored in "drop"/"keep".
+
+- params_drop:
+
+  Character vector of parameter-name globs to add to the built-in
+  denylist in "filter" mode, or `NULL` (default). Ignored in
+  "drop"/"allow"/"keep".
+
+- sort_params:
+
+  Logical (default `FALSE`). When `TRUE`, surviving params are stably
+  sorted by decoded key. Active in "filter"/"allow"/"keep".
+
+- empty_param_handling:
+
+  One of "keep" (default) or "drop". "drop" removes empty-valued params
+  (e.g. `?ref=`), except those rescued by `params_keep` in "filter"
+  mode.
+
+- params_case_sensitive:
+
+  Logical (default `FALSE`). Controls whether the denylist and
+  `params_keep`/`params_drop` matching is case-sensitive.
+
+- decode_plus:
+
+  Logical (default `FALSE`). When `TRUE`, `+` in query values is treated
+  as a space (HTML-form decoding) before percent-decoding. `FALSE` keeps
+  `+` literal (RFC 3986 generic behavior).
 
 ## Value
 
