@@ -157,13 +157,14 @@ empty after processing.
 \item \code{port}: The port number.
 \item \code{path}: The path component (e.g., "/path/to/resource").
 \item \code{query}: The raw query string as written in the URL, preserved
-byte-for-byte (e.g., "name=value"); not percent-decoded.
+byte-for-byte (e.g., "name=value"); not percent-decoded. A present-but-
+empty query (e.g. from a trailing "?") is reported as NA.
 \item \code{fragment}: The fragment identifier as written in the URL
-(e.g., "section"); not percent-decoded.
+(e.g., "section"); not percent-decoded. Empty is reported as NA.
 \item \code{user}: The user name for authentication, as written in the URL;
-not percent-decoded.
+not percent-decoded. Empty is reported as NA.
 \item \code{password}: The password for authentication, as written in the
-URL; not percent-decoded.
+URL; not percent-decoded. Empty is reported as NA.
 \item \code{domain}: The registered domain name (e.g., "example.com"). NA if
 host is an IP, empty, or derivation fails.
 \item \code{tld}: The top-level domain (e.g., "com"). NA if host is an IP,

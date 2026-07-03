@@ -38,7 +38,9 @@ exceeds the bound. This is a hard reset-watermark, not an LRU or FIFO
 eviction policy: \code{max_full_parse} caps peak memory, but is \emph{not} a
 working-set size — once the bound is hit the cache empties completely and
 rebuilds from scratch. The default bound is \code{100000} unique url ×
-option combinations (set \code{max_full_parse = Inf} for the historical
+core-option combinations (the cache stores the option-independent parse core,
+keyed by url, protocol/scheme handling, \code{www_handling}, and
+\code{tld_source}; set \code{max_full_parse = Inf} for the historical
 unbounded behavior). The
 \code{puny_encode} and \code{puny_decode} caches are unbounded by design
 (each stays small — bounded by the number of unique hosts/labels seen, not

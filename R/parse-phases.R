@@ -5,7 +5,9 @@
 # vectorized implementation: they accept and return length-n column vectors
 # (options are validated scalars per call, so every switch()/if hoists OUTSIDE
 # the vector ops -- each phase is straight-line vectorized code selected once).
-# The vector engine ._parse_urls_vec() (parse.R) chains them.
+# The vector engine chains them in two stages (parse.R): ._parse_stage_a_vec()
+# runs the option-independent, cacheable phases and ._parse_stage_b_vec() runs
+# the presentation phases over the cached Stage A columns.
 #
 # The scalar helpers of the same base name are kept as thin wrappers that
 # delegate to their `*_vec` counterpart on a length-1 input, so the per-phase
@@ -143,7 +145,8 @@
     scheme = parsed_curl$scheme %||% NA_character_,
     host = parsed_curl$host %||% NA_character_,
     path = parsed_curl$path %||% NA_character_,
-    query = parsed_curl$query %||% NA_character_
+    # .blank_to_na(): present-but-empty query "" -> NA (libcurl-version stable).
+    query = .blank_to_na(parsed_curl$query %||% NA_character_)
   )
 }
 
@@ -797,10 +800,11 @@
     host_output = host_output,
     port = suppressWarnings(as.integer(parsed_curl$port %||% NA_integer_)),
     path_output = path_output,
-    raw_query = raw_query %||% NA_character_,
-    fragment = parsed_curl$fragment %||% NA_character_,
-    user = parsed_curl$user %||% NA_character_,
-    password = parsed_curl$password %||% NA_character_,
+    # .blank_to_na(): present-but-empty raw components "" -> NA (see utils.R).
+    raw_query = .blank_to_na(raw_query %||% NA_character_),
+    fragment = .blank_to_na(parsed_curl$fragment %||% NA_character_),
+    user = .blank_to_na(parsed_curl$user %||% NA_character_),
+    password = .blank_to_na(parsed_curl$password %||% NA_character_),
     domain = domain,
     tld = tld,
     is_ip_host = is_ip_host,
