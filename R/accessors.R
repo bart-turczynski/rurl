@@ -762,3 +762,151 @@ get_tld <- function(url, source = c("all", "private", "icann"),
     host_encoding = host_encoding
   )
 }
+
+#' Summarize query parameters across a set of URLs
+#'
+#' Tabulates which query parameters appear across a vector of URLs and what
+#' values they take, with a `would_drop` column previewing what
+#' \code{query_handling = "filter"} would remove. Useful for auditing a URL set
+#' before choosing a cleaning policy: see the trackers before you strip them.
+#'
+#' Parameter names are grouped \emph{faithfully} (case-sensitively and by their
+#' decoded spelling), so `utm_source` and `UTM_SOURCE` are reported as separate
+#' rows. The `would_drop` preview, by contrast, honours `params_case_sensitive`:
+#' with the default `params_case_sensitive = FALSE`, `UTM_SOURCE` matches the
+#' built-in denylist and shows `would_drop = TRUE`; set it to `TRUE` and the
+#' upper-case spelling no longer matches. The raw `query` field is only read,
+#' never mutated.
+#'
+#' @param urls A character vector of URLs.
+#' @param level One of "param" (default) for one row per distinct parameter
+#'   name, or "value" for one row per distinct (parameter, value) pair.
+#' @inheritParams safe_parse_url
+#' @return A flat (long) `data.frame`. For `level = "param"`: `param`, `n`
+#'   (total occurrences), `n_urls` (distinct URLs containing the param),
+#'   `example_value`, `example_url`, `would_drop`. For `level = "value"`:
+#'   `param`, `value`, `n`, `n_urls`, `example_url`, `would_drop`. The
+#'   `example_*` columns and the param-level `would_drop` reflect the
+#'   first-seen occurrence (deterministic given input order). Returns a
+#'   zero-row `data.frame` with the level's columns when no URL carries a query.
+#' @export
+#' @examples
+#' urls <- c(
+#'   "http://example.com/?utm_source=nl&id=42",
+#'   "http://example.com/watch?v=abc&utm_source=x",
+#'   "http://example.com/?id=99"
+#' )
+#' query_param_summary(urls)
+#' query_param_summary(urls, level = "value")
+#' # Preview a custom policy:
+#' query_param_summary(urls, params_drop = "id")
+query_param_summary <- function(urls,
+                                level = c("param", "value"),
+                                params_keep = NULL,
+                                params_drop = NULL,
+                                params_case_sensitive = FALSE,
+                                empty_param_handling = c("keep", "drop"),
+                                decode_plus = FALSE) {
+  level <- match.arg(level)
+  empty_param_handling <- match.arg(empty_param_handling)
+
+  if (!is.character(urls)) {
+    stop(
+      "`urls` must be a character vector of URL strings; ",
+      "pass the URL, not a parsed object.",
+      call. = FALSE
+    )
+  }
+
+  # Read the faithful raw query for every URL in one engine pass, then decompose
+  # each into decoded ordered pairs. would_drop is a FILTER-mode preview: the
+  # same ._select_params() the cleaner uses, so denylist u params_drop minus
+  # params_keep, plus empty-dropping, all honouring params_case_sensitive.
+  raw <- .extract_from_urls(urls, "query", protocol_handling = "keep")
+
+  per_url <- lapply(seq_along(raw), function(i) {
+    query <- raw[i]
+    if (is.na(query)) {
+      return(NULL)
+    }
+    pairs <- ._parse_query_pairs(query)
+    if (length(pairs$key) == 0L) {
+      return(NULL)
+    }
+    key_opaque <- .token_is_opaque(pairs$key)
+    val_opaque <- .token_is_opaque(pairs$value)
+    dec_key <- .decode_query_tokens(pairs$key, key_opaque, FALSE, decode_plus)
+    dec_val <- .decode_query_tokens(pairs$value, val_opaque, TRUE, decode_plus)
+    surv <- ._select_params(
+      dec_key, dec_val, "filter", params_keep, params_drop,
+      params_case_sensitive, empty_param_handling, "builtin"
+    )
+    list(
+      url_idx = rep.int(i, length(dec_key)),
+      param = dec_key, value = dec_val, would_drop = !surv
+    )
+  })
+  per_url <- per_url[!vapply(per_url, is.null, logical(1))]
+
+  cols_param <- c("param", "n", "n_urls", "example_value", "example_url",
+    "would_drop")
+  cols_value <- c("param", "value", "n", "n_urls", "example_url", "would_drop")
+  if (length(per_url) == 0L) {
+    empty_cols <- if (level == "param") cols_param else cols_value
+    return(.empty_query_summary(empty_cols))
+  }
+
+  url_idx <- unlist(lapply(per_url, `[[`, "url_idx"), use.names = FALSE)
+  param <- unlist(lapply(per_url, `[[`, "param"), use.names = FALSE)
+  value <- unlist(lapply(per_url, `[[`, "value"), use.names = FALSE)
+  would_drop <- unlist(lapply(per_url, `[[`, "would_drop"), use.names = FALSE)
+
+  # Group occurrences preserving first-seen order. At value level the group key
+  # combines the param and value FACTOR CODES (pure integers, so the "."
+  # separator can never collide) to key each distinct (param, value) pair.
+  if (level == "param") {
+    group_key <- param
+  } else {
+    group_key <- paste(
+      as.integer(factor(param)), as.integer(factor(value)),
+      sep = "."
+    )
+  }
+  levels_seen <- group_key[!duplicated(group_key)]
+  groups <- split(seq_along(group_key), factor(group_key, levels = levels_seen))
+
+  first <- vapply(groups, `[`, integer(1), 1L, USE.NAMES = FALSE)
+  n <- unname(lengths(groups))
+  n_urls <- vapply(
+    groups, function(ix) length(unique(url_idx[ix])), integer(1),
+    USE.NAMES = FALSE
+  )
+
+  out <- data.frame(
+    param = param[first],
+    n = as.integer(n),
+    n_urls = n_urls,
+    example_url = urls[url_idx[first]],
+    would_drop = would_drop[first],
+    stringsAsFactors = FALSE,
+    row.names = NULL
+  )
+  if (level == "param") {
+    out$example_value <- value[first]
+    return(out[, cols_param])
+  }
+  out$value <- value[first]
+  out[, cols_value]
+}
+
+# A zero-row query-summary data.frame with the given columns typed to match a
+# populated result (character/integer/logical), so callers get a stable shape
+# even when no URL carries a query.
+.empty_query_summary <- function(cols) {
+  proto <- list(
+    param = character(0), value = character(0), n = integer(0),
+    n_urls = integer(0), example_value = character(0),
+    example_url = character(0), would_drop = logical(0)
+  )
+  data.frame(proto[cols], stringsAsFactors = FALSE)
+}
