@@ -1,11 +1,10 @@
 # Get cleaned URLs
 
 This function returns the cleaned version of the URLs after applying
-protocol, www, case, and trailing slash handling rules. The result is a
-normalized canonical key composed of scheme, host, and path only; port,
-query, fragment, and userinfo are intentionally excluded (use
+protocol, www, case, and trailing slash handling rules. By default the
+result is a normalized canonical key composed of scheme, host, and path
+only; port, fragment, and userinfo are always excluded (use
 [`get_port`](https://bart-turczynski.github.io/rurl/reference/get_port.md),
-[`get_query`](https://bart-turczynski.github.io/rurl/reference/get_query.md),
 [`get_fragment`](https://bart-turczynski.github.io/rurl/reference/get_fragment.md),
 or
 [`get_userinfo`](https://bart-turczynski.github.io/rurl/reference/get_userinfo.md)
@@ -26,7 +25,14 @@ get_clean_url(
   scheme_relative_handling = "keep",
   subdomain_levels_to_keep = NULL,
   host_encoding = "keep",
-  path_encoding = "keep"
+  path_encoding = "keep",
+  query_handling = c("drop", "filter", "allow", "keep"),
+  params_keep = NULL,
+  params_drop = NULL,
+  params_case_sensitive = FALSE,
+  sort_params = FALSE,
+  empty_param_handling = c("keep", "drop"),
+  decode_plus = FALSE
 )
 ```
 
@@ -212,9 +218,91 @@ get_clean_url(
 
   - "decode": Percent-decode UTF-8 sequences in the path.
 
+- query_handling:
+
+  A character string controlling whether (and how) the query string is
+  included in `clean_url`. Defaults to "drop", which preserves the
+  historical query-free `clean_url`. The raw `query` result field is
+  never affected by this option — it always reports the faithful
+  original query.
+
+  - "drop": (Default) `clean_url` carries no query, exactly as before.
+
+  - "filter": Keep contentful params, dropping known trackers via a
+    built-in denylist (e.g. `utm_*`, `fbclid`, `gclid`). `params_drop`
+    extends the denylist; `params_keep` rescues names (winning over both
+    the denylist and empty-dropping).
+
+  - "allow": Keep only params whose names match `params_keep`; all
+    others are dropped. Here `params_keep` is an inclusion criterion
+    only, not an empty-rescue.
+
+  - "keep": Keep every param, re-encoded into canonical form (not the
+    verbatim original — that stays on the `query` field).
+
+  In every non-"drop" mode the surviving query is re-encoded canonically
+  (uppercase percent-hex, spaces as `%20`) and appended after the path.
+  The query is intentionally EXEMPT from `case_handling` (query values
+  are case-sensitive — tokens, IDs, signatures), so under
+  `case_handling = "lower"` or `"upper"` the `clean_url` is no longer
+  uniformly cased: scheme/host/path fold but the query keeps its
+  original case. Because `clean_url` is the
+  [`canonical_join`](https://bart-turczynski.github.io/rurl/reference/canonical_join.md)
+  key, any non-"drop" mode also brings the query into that join key (so
+  `?id=1` and `?id=2` stop collapsing, while `utm`-only differences
+  still collapse under "filter").
+
+- params_keep:
+
+  Character vector of parameter-name globs (only `*` is special), or
+  `NULL` (default). In "filter" mode this is the rescue list; in "allow"
+  mode it is the allowlist. Ignored in "drop"/"keep".
+
+- params_drop:
+
+  Character vector of parameter-name globs to add to the built-in
+  denylist in "filter" mode, or `NULL` (default). Ignored in
+  "drop"/"allow"/"keep".
+
+- params_case_sensitive:
+
+  Logical (default `FALSE`). Controls whether the denylist and
+  `params_keep`/`params_drop` matching is case-sensitive.
+
+- sort_params:
+
+  Logical (default `FALSE`). When `TRUE`, surviving params are stably
+  sorted by decoded key. Active in "filter"/"allow"/"keep".
+
+- empty_param_handling:
+
+  One of "keep" (default) or "drop". "drop" removes empty-valued params
+  (e.g. `?ref=`), except those rescued by `params_keep` in "filter"
+  mode.
+
+- decode_plus:
+
+  Logical (default `FALSE`). When `TRUE`, `+` in query values is treated
+  as a space (HTML-form decoding) before percent-decoding. `FALSE` keeps
+  `+` literal (RFC 3986 generic behavior).
+
 ## Value
 
 A character vector of cleaned URLs.
+
+## Details
+
+The query string is dropped by default (`query_handling = "drop"`), so
+the historical scheme/host/path output is byte-identical. Pass
+`query_handling = "keep"`, `"filter"`, or `"allow"` (with the companion
+`params_*` / `sort_params` / `empty_param_handling` / `decode_plus`
+arguments) to retain a shaped query on the cleaned URL; the engine is
+the same one
+[`safe_parse_url`](https://bart-turczynski.github.io/rurl/reference/safe_parse_url.md)
+and
+[`get_query`](https://bart-turczynski.github.io/rurl/reference/get_query.md)
+use, so `get_clean_url(u, query_handling = "filter")` equals
+`safe_parse_url(u, query_handling = "filter")$clean_url`.
 
 ## Examples
 
@@ -255,4 +343,15 @@ get_clean_url(
 )
 #> [1] "http://www.domain.example.com/path"
 # -> "http://www.domain.example.com/path"
+# Query dropped by default (byte-identical to earlier releases):
+get_clean_url("http://example.com/p?utm_source=nl&id=42")
+#> [1] "http://example.com/p"
+# -> "http://example.com/p"
+# Strip trackers, keep contentful params:
+get_clean_url(
+  "http://example.com/p?utm_source=nl&id=42",
+  query_handling = "filter"
+)
+#> [1] "http://example.com/p?id=42"
+# -> "http://example.com/p?id=42"
 ```

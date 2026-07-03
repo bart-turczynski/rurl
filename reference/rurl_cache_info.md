@@ -26,7 +26,7 @@ get_domain("https://www.example.com")
 #> [1] "example.com"
 rurl_cache_info()
 #>         cache entries enabled max_entries
-#> 1  full_parse      36    TRUE       10000
+#> 1  full_parse      37    TRUE       10000
 #> 2 puny_encode       0   FALSE         Inf
 #> 3 puny_decode       0    TRUE         Inf
 ```
