@@ -108,6 +108,14 @@
 
 ### Bug fixes
 
+- Scheme-less `host:port` input (e.g. `"example.com:8080/x"`) is no
+  longer reported as `parse_status = "error"`. It parses correctly
+  (valid host, path, and `clean_url`) but the status-derivation phase
+  mistook `example.com:` for an unsupported scheme and demoted it,
+  contradicting the emitted components. It now reports `"ok"`, restoring
+  the invariant that a present `clean_url` implies a non-error status.
+  Genuinely unsupported/opaque schemes (`mailto:`, `user:pass@host`)
+  still return `"error"`. (RURL-aldwnots)
 - path/fragment/userinfo are no longer percent-decoded during parsing;
   `path_encoding = 'keep'` now honors its contract (leaves the path
   byte-for-byte); the raw query is preserved (`?flag` stays `flag`, not

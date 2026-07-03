@@ -64,7 +64,8 @@
 </ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
-<ul><li>path/fragment/userinfo are no longer percent-decoded during parsing; <code>path_encoding = 'keep'</code> now honors its contract (leaves the path byte-for-byte); the raw query is preserved (<code>?flag</code> stays <code>flag</code>, not <code>flag=</code>). NOTE: <code>clean_url</code> values change for URLs containing percent-encoded path bytes — since <code>clean_url</code> is a <code>canonical_join</code> key, <code>/a%2Fb</code> and <code>/a/b</code> no longer collide. (RURL-yuozrhop)</li>
+<ul><li>Scheme-less <code>host:port</code> input (e.g. <code>"example.com:8080/x"</code>) is no longer reported as <code>parse_status = "error"</code>. It parses correctly (valid host, path, and <code>clean_url</code>) but the status-derivation phase mistook <code>example.com:</code> for an unsupported scheme and demoted it, contradicting the emitted components. It now reports <code>"ok"</code>, restoring the invariant that a present <code>clean_url</code> implies a non-error status. Genuinely unsupported/opaque schemes (<code>mailto:</code>, <code>user:pass@host</code>) still return <code>"error"</code>. (RURL-aldwnots)</li>
+<li>path/fragment/userinfo are no longer percent-decoded during parsing; <code>path_encoding = 'keep'</code> now honors its contract (leaves the path byte-for-byte); the raw query is preserved (<code>?flag</code> stays <code>flag</code>, not <code>flag=</code>). NOTE: <code>clean_url</code> values change for URLs containing percent-encoded path bytes — since <code>clean_url</code> is a <code>canonical_join</code> key, <code>/a%2Fb</code> and <code>/a/b</code> no longer collide. (RURL-yuozrhop)</li>
 </ul></div>
 </div>
     <div class="section level2">
