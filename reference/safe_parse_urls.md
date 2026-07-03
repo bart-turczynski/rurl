@@ -125,13 +125,22 @@ safe_parse_urls(
 
 - path_normalization:
 
-  How to normalize path structure. Defaults to "none".
+  How to normalize path *slash* structure. Defaults to "none". Note that
+  RFC 3986 dot-segment resolution (`.` and `..`, including their
+  percent-encoded forms `%2e`/`%2E`) is applied *unconditionally* by the
+  underlying parser (libcurl) before rurl sees the path, so `/a/../b`
+  always yields `/b` — this cannot be disabled and the
+  `"dot_segments"`/`"both"` settings only make rurl's own resolver
+  redundant with what already happened. This option therefore
+  meaningfully controls only slash collapsing.
 
-  - "none": (Default) No normalization.
+  - "none": (Default) No slash collapsing. (Dot segments are still
+    resolved upstream, as noted above.)
 
   - "collapse_slashes": Collapse duplicate slashes in the path.
 
-  - "dot_segments": Resolve . and .. segments per RFC 3986.
+  - "dot_segments": Resolve . and .. segments per RFC 3986 (already
+    applied upstream; retained for explicitness).
 
   - "both": Apply both collapse_slashes and dot_segments.
 
@@ -184,7 +193,13 @@ safe_parse_urls(
 
   - "keep": Leave the path percent-encoding untouched (the path is
     preserved byte-for-byte as written in the URL, so `%2F` stays `%2F`
-    rather than decoding into a path-separating `/`).
+    rather than decoding into a path-separating `/`). One exception is
+    out of rurl's hands: the underlying parser (libcurl) normalizes
+    percent-encoding hex digits to uppercase, so `%2f` is returned as
+    `%2F`. This is an RFC 3986 (section 6.2.2.1) case canonicalization —
+    the two forms are equivalent — and it makes such paths compare equal
+    in
+    [`canonical_join`](https://bart-turczynski.github.io/rurl/reference/canonical_join.md).
 
   - "encode": Normalize by decoding first, then percent-encoding each
     segment (slashes preserved).
