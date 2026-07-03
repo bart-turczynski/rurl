@@ -101,6 +101,17 @@
   percent-encoded path bytes — since `clean_url` is a `canonical_join` key,
   `/a%2Fb` and `/a/b` no longer collide. (RURL-yuozrhop)
 
+### Documentation
+
+- Clarified the `path_normalization` and `path_encoding` docs to describe the
+  normalization the underlying parser (libcurl) applies before rurl sees the
+  path: RFC 3986 dot-segment resolution (`.`/`..`, including `%2e`/`%2E`) is
+  unconditional and cannot be disabled — so `path_normalization = "none"` still
+  resolves `/a/../b` to `/b` — and percent-encoding hex digits are normalized to
+  uppercase (`%2f` → `%2F`), an RFC 3986 §6.2.2.1 case canonicalization that
+  makes such paths compare equal in `canonical_join()`. Behavior is unchanged;
+  only the documentation now matches it. (RURL-mxoprhsy)
+
 ## rurl 1.4.1
 
 ### Bug fixes
