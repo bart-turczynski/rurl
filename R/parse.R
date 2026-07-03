@@ -144,6 +144,48 @@
 #'          'www.three.two.one.example.com' (post www_handling) becomes
 #'          'www.one.example.com'.}
 #'   }
+#' @param query_handling A character string controlling whether (and how) the
+#' query string is included in `clean_url`. Defaults to "drop", which preserves
+#' the historical query-free `clean_url`. The raw `query` result field is never
+#' affected by this option — it always reports the faithful original query.
+#'   \itemize{
+#'     \item{"drop": (Default) `clean_url` carries no query, exactly as before.}
+#'     \item{"filter": Keep contentful params, dropping known trackers via a
+#'     built-in denylist (e.g. `utm_*`, `fbclid`, `gclid`). `params_drop`
+#'     extends the denylist; `params_keep` rescues names (winning over both the
+#'     denylist and empty-dropping).}
+#'     \item{"allow": Keep only params whose names match `params_keep`; all
+#'     others are dropped. Here `params_keep` is an inclusion criterion only,
+#'     not an empty-rescue.}
+#'     \item{"keep": Keep every param, re-encoded into canonical form (not the
+#'     verbatim original — that stays on the `query` field).}
+#'   }
+#'   In every non-"drop" mode the surviving query is re-encoded canonically
+#'   (uppercase percent-hex, spaces as `%20`) and appended after the path. The
+#'   query is intentionally EXEMPT from `case_handling` (query values are
+#'   case-sensitive — tokens, IDs, signatures), so under
+#'   `case_handling = "lower"` or `"upper"` the `clean_url` is no longer
+#'   uniformly cased: scheme/host/path fold but the query keeps its original
+#'   case. Because `clean_url` is the \code{\link{canonical_join}} key, any
+#'   non-"drop" mode also brings the query into that join key (so `?id=1` and
+#'   `?id=2` stop collapsing, while `utm`-only differences still collapse under
+#'   "filter").
+#' @param params_keep Character vector of parameter-name globs (only `*` is
+#'   special), or `NULL` (default). In "filter" mode this is the rescue list; in
+#'   "allow" mode it is the allowlist. Ignored in "drop"/"keep".
+#' @param params_drop Character vector of parameter-name globs to add to the
+#'   built-in denylist in "filter" mode, or `NULL` (default). Ignored in
+#'   "drop"/"allow"/"keep".
+#' @param sort_params Logical (default `FALSE`). When `TRUE`, surviving params
+#'   are stably sorted by decoded key. Active in "filter"/"allow"/"keep".
+#' @param empty_param_handling One of "keep" (default) or "drop". "drop" removes
+#'   empty-valued params (e.g. `?ref=`), except those rescued by `params_keep`
+#'   in "filter" mode.
+#' @param params_case_sensitive Logical (default `FALSE`). Controls whether the
+#'   denylist and `params_keep`/`params_drop` matching is case-sensitive.
+#' @param decode_plus Logical (default `FALSE`). When `TRUE`, `+` in query
+#'   values is treated as a space (HTML-form decoding) before percent-decoding.
+#'   `FALSE` keeps `+` literal (RFC 3986 generic behavior).
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -167,9 +209,12 @@
 #'     empty, or derivation fails.
 #'     \item `is_ip_host`: Logical, TRUE if the host is an IP address.
 #'     \item `clean_url`: A normalized canonical key reconstructed from
-#'     scheme, host, and path only, after processing and with case handling
-#'     applied. Port, query, fragment, and userinfo are intentionally
-#'     excluded (use the dedicated components above to retrieve them). With
+#'     scheme, host, and path, after processing and with case handling
+#'     applied. The query is included only when `query_handling != "drop"`
+#'     (the default is "drop", so by default the query is excluded); when
+#'     included it is filtered/canonicalized per the query options and appended
+#'     case-unfolded. Port, fragment, and userinfo are always excluded (use the
+#'     dedicated components above to retrieve them). With
 #'     `path_encoding = "decode"` the path is shown decoded, so `clean_url`
 #'     is human-readable rather than guaranteed URL-safe. NA if host is
 #'     empty/NA.
@@ -262,7 +307,16 @@ safe_parse_url <- function(url,
                            ),
                            subdomain_levels_to_keep = NULL,
                            host_encoding = c("keep", "idna", "unicode"),
-                           path_encoding = c("keep", "encode", "decode")) {
+                           path_encoding = c("keep", "encode", "decode"),
+                           query_handling = c(
+                             "drop", "filter", "allow", "keep"
+                           ),
+                           params_keep = NULL,
+                           params_drop = NULL,
+                           sort_params = FALSE,
+                           empty_param_handling = c("keep", "drop"),
+                           params_case_sensitive = FALSE,
+                           decode_plus = FALSE) {
   # Enforce scalar input to keep behavior explicit and predictable
   if (length(url) != 1) {
     stop(
@@ -284,7 +338,14 @@ safe_parse_url <- function(url,
     scheme_relative_handling = scheme_relative_handling,
     subdomain_levels_to_keep = subdomain_levels_to_keep,
     host_encoding = host_encoding,
-    path_encoding = path_encoding
+    path_encoding = path_encoding,
+    query_handling = query_handling,
+    params_keep = params_keep,
+    params_drop = params_drop,
+    sort_params = sort_params,
+    empty_param_handling = empty_param_handling,
+    params_case_sensitive = params_case_sensitive,
+    decode_plus = decode_plus
   )
 
   ._safe_parse_url_scalar(url, opts)
@@ -328,7 +389,16 @@ safe_parse_urls <- function(url,
                             ),
                             subdomain_levels_to_keep = NULL,
                             host_encoding = c("keep", "idna", "unicode"),
-                            path_encoding = c("keep", "encode", "decode")) {
+                            path_encoding = c("keep", "encode", "decode"),
+                            query_handling = c(
+                              "drop", "filter", "allow", "keep"
+                            ),
+                            params_keep = NULL,
+                            params_drop = NULL,
+                            sort_params = FALSE,
+                            empty_param_handling = c("keep", "drop"),
+                            params_case_sensitive = FALSE,
+                            decode_plus = FALSE) {
   # Validate and normalize options once (match.arg + subdomain check)
   opts <- .parse_options(
     protocol_handling = protocol_handling,
@@ -341,7 +411,14 @@ safe_parse_urls <- function(url,
     scheme_relative_handling = scheme_relative_handling,
     subdomain_levels_to_keep = subdomain_levels_to_keep,
     host_encoding = host_encoding,
-    path_encoding = path_encoding
+    path_encoding = path_encoding,
+    query_handling = query_handling,
+    params_keep = params_keep,
+    params_drop = params_drop,
+    sort_params = sort_params,
+    empty_param_handling = empty_param_handling,
+    params_case_sensitive = params_case_sensitive,
+    decode_plus = decode_plus
   )
 
   # Coerce factors to their labels up front so factor input parses as the
@@ -436,6 +513,29 @@ safe_parse_urls <- function(url,
 .opt_scheme_relative_handling <- c("keep", "http", "https", "error")
 .opt_host_encoding <- c("keep", "idna", "unicode")
 .opt_path_encoding <- c("keep", "encode", "decode")
+.opt_query_handling <- c("drop", "filter", "allow", "keep")
+.opt_empty_param_handling <- c("keep", "drop")
+
+# Validate a params_keep / params_drop argument: NULL or a character vector of
+# glob patterns. Returns it unchanged (NULL passes through) or errors.
+.validate_param_patterns <- function(x, arg_name) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  if (!is.character(x)) {
+    stop(arg_name, " must be NULL or a character vector.", call. = FALSE)
+  }
+  x
+}
+
+# Validate a scalar logical flag (sort_params / params_case_sensitive /
+# decode_plus). Returns it unchanged or errors.
+.validate_flag <- function(x, arg_name) {
+  if (!is.logical(x) || length(x) != 1L || is.na(x)) {
+    stop(arg_name, " must be a single logical (TRUE or FALSE).", call. = FALSE)
+  }
+  x
+}
 
 .parse_options <- function(protocol_handling = .opt_protocol_handling,
                            www_handling = .opt_www_handling,
@@ -449,9 +549,16 @@ safe_parse_urls <- function(url,
                              .opt_scheme_relative_handling,
                            subdomain_levels_to_keep = NULL,
                            host_encoding = .opt_host_encoding,
-                           path_encoding = .opt_path_encoding) {
+                           path_encoding = .opt_path_encoding,
+                           query_handling = .opt_query_handling,
+                           params_keep = NULL,
+                           params_drop = NULL,
+                           sort_params = FALSE,
+                           empty_param_handling = .opt_empty_param_handling,
+                           params_case_sensitive = FALSE,
+                           decode_plus = FALSE) {
   # match.arg first (matches the original error precedence), then validate
-  # subdomain_levels_to_keep.
+  # subdomain_levels_to_keep and the query options.
   opts <- list(
     protocol_handling = match.arg(protocol_handling),
     www_handling = match.arg(www_handling),
@@ -462,7 +569,16 @@ safe_parse_urls <- function(url,
     path_normalization = match.arg(path_normalization),
     scheme_relative_handling = match.arg(scheme_relative_handling),
     host_encoding = match.arg(host_encoding),
-    path_encoding = match.arg(path_encoding)
+    path_encoding = match.arg(path_encoding),
+    query_handling = match.arg(query_handling),
+    empty_param_handling = match.arg(empty_param_handling),
+    params_keep = .validate_param_patterns(params_keep, "params_keep"),
+    params_drop = .validate_param_patterns(params_drop, "params_drop"),
+    sort_params = .validate_flag(sort_params, "sort_params"),
+    params_case_sensitive = .validate_flag(
+      params_case_sensitive, "params_case_sensitive"
+    ),
+    decode_plus = .validate_flag(decode_plus, "decode_plus")
   )
 
   valid_subdomain_value <- is.numeric(subdomain_levels_to_keep) &&
@@ -491,10 +607,18 @@ safe_parse_urls <- function(url,
 # scheme_relative_handling), the www policy that shapes the post-www host fed to
 # the PSL decomposition (www_handling), and the PSL section (tld_source). Every
 # other option (case, trailing slash, index page, path normalization, path/host
-# encoding, subdomain levels) is a pure Stage-B presentation transform and is
-# deliberately EXCLUDED, so profiles differing only in presentation share one
-# cache entry. Single source of the field set, order, separator, and Unicode
-# escaping so the key format cannot drift across call sites.
+# encoding, subdomain levels, and ALL seven query options) is a pure Stage-B
+# presentation transform and is deliberately EXCLUDED, so profiles differing
+# only in presentation share one cache entry. In particular the query engine
+# (query_handling / params_keep / params_drop / sort_params /
+# empty_param_handling / params_case_sensitive / decode_plus) reads only the
+# cached raw query and shapes clean_url in Stage B, which is recomputed on every
+# call -- so there is no memoized clean_url to go stale and the query options
+# need not enter the key. (The PRD's self-delimiting cache-key serializer for
+# the vector query options predates the parse/present split (RURL-dkwrebdt) that
+# made clean_url a never-cached Stage-B output; it is obsolete here.) Single
+# source of the field set, order, separator, and Unicode escaping so the key
+# format cannot drift across call sites.
 .parse_cache_keys <- function(urls, opts) {
   cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
     opts$tld_source, opts$scheme_relative_handling,
@@ -828,9 +952,18 @@ safe_parse_urls <- function(url,
     host_for_clean, path_final, a$final_scheme, opts$case_handling
   )
 
-  # Phase 11: clean URL reconstruction.
+  # Query filtering: derive the canonical query to append to clean_url per
+  # query_handling (default "drop" => "" for every row, i.e. the historical
+  # query-free clean_url). Fed from the raw query (Stage A) and the query
+  # options only; deliberately EXEMPT from case_handling (query values are
+  # case-sensitive -- see .apply_case_policy_vec, which folds scheme/host/path
+  # only), so it is computed here and appended AFTER the cased components.
+  clean_query <- .filter_query_vec(a$raw_query, opts)
+
+  # Phase 11: clean URL reconstruction (with the filtered query appended).
   clean_url <- .build_clean_url_vec(
-    cased$scheme, cased$host, cased$path, opts$trailing_slash_handling
+    cased$scheme, cased$host, cased$path, opts$trailing_slash_handling,
+    query = clean_query
   )
 
   # Phase 12: parse-status assignment (uses the post-subdomain-trim host,
