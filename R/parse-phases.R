@@ -18,22 +18,88 @@
 # and extracts the raw columns itself.
 # ---------------------------------------------------------------------------
 
-# Phase 1 (vector): scheme detection, supported-scheme policy, and building the
-# string handed to curl. Returns the five per-URL columns plus a logical
-# `rejected` column marking rows the scalar pipeline returned NULL for
-# (scheme-relative under "error" handling, or a bare unsupported scheme under
-# keep/none).
+# Phase 1 helper (vector): classify the host token of each raw input for the
+# host-shape gate. rurl only fabricates a scheme for URL-shaped input, so we
+# must isolate and inspect the host before curl sees it. Returns, per element:
+#   has_userinfo    - an '@' appears in the authority (user[:pass]@host)
+#   is_localhost    - the bare host is an allowlisted single-label host
+#   is_dotted_name  - >= 2 non-empty dot-separated labels (example.com, a.b.c)
+#   is_ipish        - the host is an IP *attempt*: all-decimal / 0x-hex / octal
+#                     / short-form groups, or anything containing ':' (IPv6)
+#   is_canonical_ip - a valid IPv4 dotted-quad or bracketed IPv6 per the strict
+#                     detector (rejects leading-zero octets and coerced forms)
+# Purely a function of the input string; used to drive rejection in Phase 1.
+.classify_input_host_vec <- function(url) {
+  # Strip a leading "scheme://" or scheme-relative "//", then the path/query/
+  # fragment, to isolate the authority (userinfo + host + port).
+  s <- stringi::stri_replace_first_regex(url, "^[a-zA-Z][a-zA-Z0-9+.-]*://", "")
+  s <- stringi::stri_replace_first_regex(s, "^//", "")
+  authority <- stringi::stri_replace_first_regex(s, "[/?#].*$", "")
+
+  has_userinfo <- stringi::stri_detect_fixed(authority, "@")
+  has_userinfo[is.na(has_userinfo)] <- FALSE
+
+  # Host = authority after any userinfo, minus the port. Bracketed IPv6 keeps
+  # its "[...]"; otherwise drop a single trailing ":port".
+  host_ui <- stringi::stri_replace_first_regex(authority, "^.*@", "")
+  bracketed <- stringi::stri_startswith_fixed(host_ui, "[")
+  bracketed[is.na(bracketed)] <- FALSE
+  host_token <- ifelse(
+    bracketed,
+    stringi::stri_replace_first_regex(host_ui, "^(\\[[^\\]]*\\]).*$", "$1"),
+    stringi::stri_replace_first_regex(host_ui, ":[^:]*$", "")
+  )
+
+  host_lower <- stringi::stri_trans_tolower(host_token)
+  is_localhost <- host_lower %in% .SPECIAL_SINGLE_LABEL_HOSTS
+
+  is_dotted_name <- stringi::stri_detect_regex(host_token, "^[^.]+(\\.[^.]+)+$")
+  is_dotted_name[is.na(is_dotted_name)] <- FALSE
+
+  # inet_aton IP attempts: dotted groups each all-decimal or 0x-hex (12345,
+  # 0x7f000001, 017700000001, 192.168, 1.2.3.4, 256.1.1.1, 1.2.3.4.5), plus any
+  # ':' host (IPv6, incl. bracketed).
+  ipv4ish <- stringi::stri_detect_regex(
+    host_token, "^(0[xX][0-9a-fA-F]+|[0-9]+)(\\.(0[xX][0-9a-fA-F]+|[0-9]+))*$"
+  )
+  ipv4ish[is.na(ipv4ish)] <- FALSE
+  ipv6ish <- stringi::stri_detect_fixed(host_token, ":")
+  ipv6ish[is.na(ipv6ish)] <- FALSE
+  is_ipish <- ipv4ish | ipv6ish
+
+  # Canonical per the strict detector (Phase 5): rejects leading-zero octets,
+  # out-of-range/wrong-arity, and integer/hex/octal coercion; accepts 1.2.3.4
+  # and [::1].
+  is_canonical_ip <- .detect_ip_host_vec(host_token)
+
+  list(
+    has_userinfo = has_userinfo,
+    is_localhost = is_localhost,
+    is_dotted_name = is_dotted_name,
+    is_ipish = is_ipish,
+    is_canonical_ip = is_canonical_ip
+  )
+}
+
+# Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
+# gate, and building the string handed to curl. Returns the per-URL columns plus
+# a logical `rejected` column marking rows the scalar pipeline returned NULL for
+# (scheme-relative under "error" handling; a bare unsupported scheme under
+# keep/none; a scheme-less input that is not host-shaped (D1); or an IP attempt
+# that is not a canonical literal (D2/D3)) and a `scheme_less_userinfo` flag
+# (D5). An input's supported scheme is decided against .SUPPORTED_SCHEMES.
 .prepare_urls_for_curl_vec <- function(url,
                                        protocol_handling,
                                        scheme_relative_handling) {
   n <- length(url)
   url_lower <- stringi::stri_trans_tolower(url)
 
-  # any(startsWith(., allowed_prefixes)) per element, without a loop.
-  original_has_allowed_scheme <- startsWith(url_lower, "http://") |
-    startsWith(url_lower, "https://") |
-    startsWith(url_lower, "ftp://") |
-    startsWith(url_lower, "ftps://")
+  # A scheme-bearing input is "allowed" only if its scheme is one rurl supports
+  # (.SUPPORTED_SCHEMES). any(startsWith(., "<scheme>://")) per row, no loop.
+  allowed_prefixes <- paste0(.SUPPORTED_SCHEMES, "://")
+  original_has_allowed_scheme <- Reduce(
+    `|`, lapply(allowed_prefixes, function(p) startsWith(url_lower, p))
+  )
   original_has_allowed_scheme[is.na(original_has_allowed_scheme)] <- FALSE
 
   scheme_match <- stringi::stri_match_first_regex(
@@ -77,6 +143,32 @@
     rejected <- rejected | bare_protocol_kept
   }
 
+  # Host-shape classification (D1/D2/D5).
+  cls <- .classify_input_host_vec(url)
+
+  # D2/D3: an IP attempt that is not a canonical literal is a coerced/malformed
+  # IP. Applies to every row (scheme-bearing too), so http://12345 and
+  # http://192.168.010.1 are rejected as well as their scheme-less forms.
+  rejected <- rejected | (cls$is_ipish & !cls$is_canonical_ip)
+
+  # Rows that get an inferred http:// (scheme-less, non-scheme-relative).
+  add_http <- !is_scheme_relative &
+    (!looks_like_protocol | looks_like_host_port)
+
+  # D1: only fabricate a scheme when the token is host-shaped -- a canonical IP,
+  # localhost, a dotted name, or an explicit host:port. Otherwise the input is
+  # not a URL (asdfghjkl, "hello world", /relative/path, bare 12345).
+  host_like <- cls$is_canonical_ip |
+    cls$is_localhost |
+    cls$is_dotted_name |
+    looks_like_host_port
+  rejected <- rejected | (add_http & !host_like)
+
+  # D5: scheme-less input carrying userinfo (user@example.com). Not rejected --
+  # host/domain/tld/user still resolve -- but Stage B suppresses clean_url and
+  # sets warning-userinfo. Only flagged for otherwise-parseable host-like rows.
+  scheme_less_userinfo <- add_http & host_like & cls$has_userinfo & !rejected
+
   url_to_parse <- url
   if (scheme_relative_handling %in% c("http", "https")) {
     url_to_parse[is_scheme_relative] <- paste0(
@@ -87,8 +179,6 @@
       "http:", url[is_scheme_relative]
     )
   }
-  add_http <- !is_scheme_relative &
-    (!looks_like_protocol | looks_like_host_port)
   url_to_parse[add_http] <- paste0("http://", url[add_http])
 
   list(
@@ -97,6 +187,7 @@
     original_has_allowed_scheme = original_has_allowed_scheme,
     is_scheme_relative = is_scheme_relative,
     looks_like_host_port = looks_like_host_port,
+    scheme_less_userinfo = scheme_less_userinfo,
     rejected = rejected
   )
 }
@@ -117,7 +208,8 @@
     looks_like_protocol = cols$looks_like_protocol[1L],
     original_has_allowed_scheme = cols$original_has_allowed_scheme[1L],
     is_scheme_relative = cols$is_scheme_relative[1L],
-    looks_like_host_port = cols$looks_like_host_port[1L]
+    looks_like_host_port = cols$looks_like_host_port[1L],
+    scheme_less_userinfo = cols$scheme_less_userinfo[1L]
   )
 }
 
@@ -271,27 +363,26 @@
 }
 
 # Phase 5 (vector): detect whether each host is an IP literal (IPv4 or IPv6).
-# Preserves the scalar semantics exactly: NA/"" hosts are FALSE; IPv4 requires
-# four dot-separated octets each in 0..255 (shape regex then integer range, so
-# zero-padded octets like "007" are accepted just as the scalar code accepts
-# them); IPv6 requires balanced brackets and either a valid embedded dotted-quad
-# tail or a conservative hex/colon match.
+# NA/"" hosts are FALSE; IPv4 requires four dot-separated CANONICAL octets --
+# 0..255 with NO leading zeros (D3: a leading zero is octal in inet_aton, so
+# "192.168.010.1" silently means "192.168.8.1"; rurl refuses to guess and treats
+# zero-padded octets as non-IP); IPv6 requires balanced brackets and either a
+# valid embedded canonical dotted-quad tail or a conservative hex/colon match.
+# This is the single strict IP validator, reused by the Phase-1 host-shape gate
+# (.classify_input_host_vec) against the input token.
 .detect_ip_host_vec <- function(raw_host) {
   n <- length(raw_host)
   valid_h <- !is.na(raw_host) & raw_host != ""
 
+  # Canonical IPv4 octet: 0..255, no leading zeros (rejects 00, 01, 007, 010).
+  oct <- "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])"
+
   # IPv4.
   ipv4 <- rep(FALSE, n)
-  shape4 <- stringi::stri_detect_regex(raw_host, "^\\d{1,3}(\\.\\d{1,3}){3}$")
-  shape4[is.na(shape4)] <- FALSE
-  shape4 <- valid_h & shape4
-  if (any(shape4)) {
-    m <- stringi::stri_match_first_regex(
-      raw_host[shape4], "^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$"
-    )
-    octets <- matrix(suppressWarnings(as.integer(m[, 2L:5L])), ncol = 4L)
-    ipv4[shape4] <- rowSums(octets > 255L) == 0L
-  }
+  ipv4_re <- paste0("^", oct, "(\\.", oct, "){3}$")
+  match4 <- stringi::stri_detect_regex(raw_host, ipv4_re)
+  match4[is.na(match4)] <- FALSE
+  ipv4 <- valid_h & match4
 
   # IPv6.
   ipv6 <- rep(FALSE, n)
@@ -301,17 +392,12 @@
   balanced[is.na(balanced)] <- FALSE
 
   tail_match <- stringi::stri_match_first_regex(
-    raw_host, "^\\[?[0-9a-fA-F:]+:(\\d{1,3}(?:\\.\\d{1,3}){3})\\]?$"
+    raw_host,
+    paste0("^\\[?[0-9a-fA-F:]+:(", oct, "(?:\\.", oct, "){3})\\]?$")
   )
+  # The tail regex already enforces canonical octets, so a match is sufficient.
   has_tail <- balanced & !is.na(tail_match[, 1L])
-  if (any(has_tail)) {
-    mo <- stringi::stri_match_first_regex(
-      tail_match[has_tail, 2L],
-      "^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$"
-    )
-    octets <- matrix(suppressWarnings(as.integer(mo[, 2L:5L])), ncol = 4L)
-    ipv6[has_tail] <- rowSums(octets > 255L) == 0L
-  }
+  ipv6[has_tail] <- TRUE
 
   # Conservative check for balanced hosts without an embedded dotted-quad tail.
   no_tail <- balanced & !has_tail
