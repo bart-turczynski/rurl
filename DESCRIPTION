@@ -18,6 +18,7 @@ Collate:
     'rurl-package.R'
     'status-constants.R'
     'utils.R'
+    'query-denylist.R'
     'domain.R'
     'path-query.R'
     'parse-phases.R'

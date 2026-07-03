@@ -18,6 +18,19 @@
 # are in the PSL; .local/.test/.invalid/.example -> warning-invalid-tld).
 .SPECIAL_SINGLE_LABEL_HOSTS <- "localhost"
 
+# Convert a glob to an anchored regex where ONLY '*' is special (matches any
+# run of characters). Every other character -- including '.', '?', '[' -- is
+# escaped to a literal, so a query param named "a.b" or "a[0]" matches only
+# itself and a literal '*' in a pattern is unsupported (documented). Used to
+# compile the built-in denylist and user params_keep/params_drop into matchers.
+# Implementation: escape every non-word char (so '*' becomes the two-char '\*'),
+# then turn that escaped star back into the regex '.*', then anchor.
+.glob_to_regex <- function(glob) {
+  escaped <- stringi::stri_replace_all_regex(glob, "([^A-Za-z0-9_])", "\\\\$1")
+  escaped <- gsub("\\*", ".*", escaped, fixed = TRUE)
+  paste0("^", escaped, "$")
+}
+
 # Coerce present-but-empty ("") raw components to NA, vectorized. curl's
 # `curl_parse_url()` is inconsistent across libcurl versions for a present-but-
 # empty component (e.g. the query of "https://example.com/?"): older libcurl
