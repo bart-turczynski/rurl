@@ -32,6 +32,72 @@ test_that("get_clean_url handles host:port without explicit scheme", {
   )
 })
 
+test_that("get_clean_url drops the query by default (byte-identical)", {
+  # query_handling defaults to "drop", so a query-bearing URL cleans to the
+  # historical scheme/host/path key with no "?".
+  expect_equal(
+    unname(get_clean_url("http://example.com/p?utm_source=nl&id=42")),
+    "http://example.com/p"
+  )
+})
+
+test_that("get_clean_url forwards the query engine (parity w/ safe_parse)", {
+  urls <- c(
+    "http://example.com/p?utm_source=nl&id=42",
+    "https://Example.COM/Path/?b=2&a=1&fbclid=xyz",
+    "http://e.com/nopath",
+    "http://e.com/?ref=&keep=1",
+    "not-a-url"
+  )
+  # For every engine mode + companion arg, the accessor must equal the
+  # safe_parse_url(...)$clean_url it wraps.
+  profiles <- list(
+    list(query_handling = "keep"),
+    list(query_handling = "drop"),
+    list(query_handling = "filter"),
+    list(query_handling = "filter", params_drop = "id"),
+    list(query_handling = "filter", params_keep = "fbclid"),
+    list(query_handling = "allow", params_keep = "a"),
+    list(query_handling = "filter", sort_params = TRUE),
+    list(query_handling = "filter", empty_param_handling = "drop"),
+    list(query_handling = "keep", decode_plus = TRUE),
+    list(query_handling = "filter", params_case_sensitive = TRUE)
+  )
+  for (p in profiles) {
+    via_accessor <- unname(do.call(get_clean_url, c(list(urls), p)))
+    via_engine <- vapply(
+      urls,
+      function(u) {
+        # Scalar safe_parse_url returns clean_url = NULL on an unparseable
+        # input; the accessor pins those null rows to NA (its documented
+        # contract), so normalize length-0 to NA before comparing.
+        cu <- do.call(safe_parse_url, c(list(u), p))$clean_url
+        if (length(cu) == 0L) NA_character_ else cu
+      },
+      character(1),
+      USE.NAMES = FALSE
+    )
+    expect_equal(via_accessor, via_engine, info = p$query_handling)
+  }
+})
+
+test_that("get_clean_url filter mode keeps a shaped query on the clean URL", {
+  expect_equal(
+    unname(get_clean_url(
+      "http://example.com/p?utm_source=nl&id=42",
+      query_handling = "filter"
+    )),
+    "http://example.com/p?id=42"
+  )
+})
+
+test_that("get_clean_url validates the query enum args early", {
+  expect_error(get_clean_url("http://e.com/?a=1", query_handling = "bogus"))
+  expect_error(
+    get_clean_url("http://e.com/?a=1", empty_param_handling = "bogus")
+  )
+})
+
 test_that("get_domain works with subdomains", {
   expect_equal(unname(get_domain("https://sub.example.co.uk")), "example.co.uk")
   expect_equal(unname(get_domain("http://localhost")), NA_character_)
