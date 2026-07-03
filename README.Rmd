@@ -27,6 +27,8 @@ Current package capabilities include:
 - URL normalization with fine-grained controls for protocol, `www`, case,
   trailing slashes, index pages, path normalization, scheme-relative URLs,
   host encoding, and path encoding
+- Opt-in query-string handling: drop trackers, keep contentful params, and
+  audit params across a URL set with `query_param_summary()`
 - URL component extractors (`get_*` helpers)
 - URL-based joins with `canonical_join()`
 - Built-in memoization caches with introspection and configuration (`rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`)
@@ -49,6 +51,7 @@ remotes::install_github("bart-turczynski/rurl")
 - Accessors: `get_scheme()`, `get_host()`, `get_subdomain()`, `get_domain()`,
   `get_tld()`, `get_path()`, `get_query()`, `get_fragment()`, `get_port()`,
   `get_user()`, `get_password()`, `get_userinfo()`, `get_parse_status()`
+- Query introspection: `query_param_summary()`
 - Matching/joining: `canonical_join()` for deterministic canonical-key joins
 - Cache control: `rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`
 
@@ -78,24 +81,12 @@ parsed$parse_status
 #> [1] "ok"
 ```
 
-`clean_url` is a normalized canonical key built from **scheme, host, and path**
-by default. Port, fragment, and userinfo are always excluded — read them from
-the dedicated components (`get_port()`, `get_fragment()`, `get_userinfo()`)
-instead. The query is dropped by default too, but you can opt in to a shaped
-query on the cleaned URL by passing `query_handling` (and its `params_*` /
-`sort_params` / `empty_param_handling` / `decode_plus` companions) to either
-`safe_parse_url()` or `get_clean_url()`:
-
-```r
-get_clean_url("http://example.com/p?utm_source=nl&id=42") # query dropped
-#> [1] "http://example.com/p"
-get_clean_url(
-  "http://example.com/p?utm_source=nl&id=42",
-  query_handling = "filter" # strip trackers, keep contentful params
-)
-#> [1] "http://example.com/p?id=42"
-```
-
+`clean_url` is a normalized canonical key built from **scheme, host, and path**.
+By default the query is dropped and port, fragment, and userinfo are always
+excluded — read them from the dedicated components (`get_port()`,
+`get_query()`, `get_fragment()`, `get_userinfo()`) instead. The query can be
+selectively kept on `clean_url` via `query_handling` on either
+`safe_parse_url()` or `get_clean_url()` (see [Query handling](#query-handling)).
 With `path_encoding = "decode"` the path is shown decoded, so `clean_url` is
 human-readable rather than guaranteed URL-safe.
 
@@ -128,6 +119,8 @@ safe_parse_urls(c("example.com", "https://www.example.com/path"))[, c("original_
 - `host_encoding`: `keep`, `idna`, `unicode`
 - `path_encoding`: `keep`, `encode`, `decode`
 - `subdomain_levels_to_keep`: `NULL`, `0`, or `N > 0`
+- `query_handling`: `drop` (default), `filter`, `allow`, `keep` (see
+  [Query handling](#query-handling))
 
 Subdomain retention is applied after `www_handling`:
 
@@ -173,6 +166,67 @@ get_user(u)
 get_password(u)
 get_userinfo(u)
 get_parse_status(c(u, "mailto:test@example.com"))
+```
+
+## Query handling
+
+By default `clean_url` is query-free (`query_handling = "drop"`), so a tracker
+like `?utm_source=` never changes the canonical key. Opt in to keep contentful
+params while stripping known trackers (`utm_*`, `fbclid`, `gclid`, …) via a
+built-in denylist:
+
+```r
+# "filter": keep contentful params, drop known trackers
+get_clean_url("https://youtube.com/watch?v=dQw4w9&utm_source=nl",
+              query_handling = "filter")
+#> [1] "https://youtube.com/watch?v=dQw4w9"
+
+# "allow": keep ONLY the names you list (params_keep is the allowlist)
+get_clean_url("https://shop.com/p?id=42&ref=abc&fbclid=xyz",
+              query_handling = "allow", params_keep = "id")
+#> [1] "https://shop.com/p?id=42"
+
+# "keep": keep every param, canonicalized (optionally sorted)
+get_clean_url("https://ex.com/?b=2&a=1",
+              query_handling = "keep", sort_params = TRUE)
+#> [1] "https://ex.com/?a=1&b=2"
+```
+
+The same engine arguments flow through `safe_parse_urls()` (and therefore
+`canonical_join()`), so filtering also shapes the join key — `?v=1` and `?v=2`
+stay distinct while `utm`-only differences still collapse under `"filter"`:
+
+```r
+safe_parse_urls(c("https://ex.com/?v=1&utm_source=x", "https://ex.com/?v=2"),
+                query_handling = "filter")[, c("original_url", "clean_url")]
+#>                       original_url           clean_url
+#> 1 https://ex.com/?v=1&utm_source=x https://ex.com/?v=1
+#> 2              https://ex.com/?v=2 https://ex.com/?v=2
+```
+
+`get_query()` takes the same arguments (defaulting to `query_handling = "keep"`)
+to pull a cleaned query directly:
+
+```r
+get_query("https://youtube.com/watch?v=dQw4w9&utm_source=nl",
+          query_handling = "filter")
+#> [1] "v=dQw4w9"
+```
+
+Audit a URL set before choosing a policy with `query_param_summary()`, whose
+`would_drop` column previews what `"filter"` would remove:
+
+```r
+urls <- c(
+  "https://ex.com/?utm_source=nl&id=42",
+  "https://ex.com/watch?v=abc&utm_source=x",
+  "https://ex.com/?id=99"
+)
+query_param_summary(urls)
+#>        param n n_urls example_value                             example_url would_drop
+#> 1 utm_source 2      2            nl     https://ex.com/?utm_source=nl&id=42       TRUE
+#> 2         id 2      2            42     https://ex.com/?utm_source=nl&id=42      FALSE
+#> 3          v 1      1           abc https://ex.com/watch?v=abc&utm_source=x      FALSE
 ```
 
 ## URL Joins
