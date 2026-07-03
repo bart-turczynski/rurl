@@ -8,7 +8,14 @@ get_query(
   url,
   protocol_handling = "keep",
   format = c("string", "list"),
-  decode = TRUE
+  decode = TRUE,
+  query_handling = c("keep", "drop", "filter", "allow"),
+  params_keep = NULL,
+  params_drop = NULL,
+  params_case_sensitive = FALSE,
+  sort_params = FALSE,
+  empty_param_handling = c("keep", "drop"),
+  decode_plus = FALSE
 )
 }
 \arguments{
@@ -42,7 +49,58 @@ elements.}
 
 \item{decode}{Logical; if TRUE (default), percent-decodes the query
 (the whole string for format="string", keys/values for format="list").
-Set FALSE to return the raw query as written in the URL.}
+Set FALSE to obtain the query as written: the raw query for the default
+\code{query_handling = "keep"}, or the canonical re-encoded form (uppercase hex,
+\verb{\%20}, \verb{\%26}/\verb{\%3D}) once any filtering is requested.}
+
+\item{query_handling}{A character string controlling whether (and how) the
+query string is included in \code{clean_url}. Defaults to "drop", which preserves
+the historical query-free \code{clean_url}. The raw \code{query} result field is never
+affected by this option — it always reports the faithful original query.
+\itemize{
+\item{"drop": (Default) \code{clean_url} carries no query, exactly as before.}
+\item{"filter": Keep contentful params, dropping known trackers via a
+built-in denylist (e.g. \verb{utm_*}, \code{fbclid}, \code{gclid}). \code{params_drop}
+extends the denylist; \code{params_keep} rescues names (winning over both the
+denylist and empty-dropping).}
+\item{"allow": Keep only params whose names match \code{params_keep}; all
+others are dropped. Here \code{params_keep} is an inclusion criterion only,
+not an empty-rescue.}
+\item{"keep": Keep every param, re-encoded into canonical form (not the
+verbatim original — that stays on the \code{query} field).}
+}
+In every non-"drop" mode the surviving query is re-encoded canonically
+(uppercase percent-hex, spaces as \verb{\%20}) and appended after the path. The
+query is intentionally EXEMPT from \code{case_handling} (query values are
+case-sensitive — tokens, IDs, signatures), so under
+\code{case_handling = "lower"} or \code{"upper"} the \code{clean_url} is no longer
+uniformly cased: scheme/host/path fold but the query keeps its original
+case. Because \code{clean_url} is the \code{\link{canonical_join}} key, any
+non-"drop" mode also brings the query into that join key (so \code{?id=1} and
+\code{?id=2} stop collapsing, while \code{utm}-only differences still collapse under
+"filter").}
+
+\item{params_keep}{Character vector of parameter-name globs (only \code{*} is
+special), or \code{NULL} (default). In "filter" mode this is the rescue list; in
+"allow" mode it is the allowlist. Ignored in "drop"/"keep".}
+
+\item{params_drop}{Character vector of parameter-name globs to add to the
+built-in denylist in "filter" mode, or \code{NULL} (default). Ignored in
+"drop"/"allow"/"keep".}
+
+\item{params_case_sensitive}{Logical (default \code{FALSE}). Controls whether the
+denylist and \code{params_keep}/\code{params_drop} matching is case-sensitive.}
+
+\item{sort_params}{Logical (default \code{FALSE}). When \code{TRUE}, surviving params
+are stably sorted by decoded key. Active in "filter"/"allow"/"keep".}
+
+\item{empty_param_handling}{One of "keep" (default) or "drop". "drop" removes
+empty-valued params (e.g. \verb{?ref=}), except those rescued by \code{params_keep}
+in "filter" mode.}
+
+\item{decode_plus}{Logical (default \code{FALSE}). When \code{TRUE}, \code{+} in query
+values is treated as a space (HTML-form decoding) before percent-decoding.
+\code{FALSE} keeps \code{+} literal (RFC 3986 generic behavior).}
 }
 \value{
 A character vector (format="string") or list (format="list").
@@ -55,8 +113,27 @@ The underlying parse preserves the raw query string byte-for-byte (a bare
 key such as \code{?flag} stays \code{flag}, not \verb{flag=}). By default this accessor
 still percent-decodes for readability (\code{decode = TRUE}); pass
 \code{decode = FALSE} to obtain the raw query exactly as written in the URL.
+
+The filtering arguments (\code{query_handling}, \code{params_keep}, \code{params_drop},
+\code{params_case_sensitive}, \code{sort_params}, \code{empty_param_handling},
+\code{decode_plus}) share the engine used by \code{\link{get_clean_url}}, but
+default to \code{query_handling = "keep"} here: an accessor returns the query as
+found unless you ask it to filter. When no filtering or reordering is
+requested (the default profile), the output is byte-for-byte identical to
+earlier releases; once you opt in, the surviving params are selected first
+and only then rendered per \code{format}/\code{decode}.
 }
 \examples{
 get_query("http://example.com/path?a=1&b=2")
 get_query("http://example.com/path?a=1&b=2", format = "list")
+# Drop trackers, keep contentful params:
+get_query(
+  "http://example.com/?utm_source=nl&id=42",
+  query_handling = "filter"
+)
+# Canonical (re-encoded) form:
+get_query(
+  "http://example.com/?a=1\%262",
+  query_handling = "keep", decode = FALSE
+)
 }

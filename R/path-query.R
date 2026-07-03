@@ -125,9 +125,15 @@
     values <- .query_unescape(values)
   }
 
-  # Group values by decoded key, preserving first-seen key order. split()
-  # keeps each group's original value order, so repeated keys collect their
-  # values in occurrence order exactly as the former c() accumulation did.
+  .group_query_pairs(keys, values)
+}
+
+# Group parallel key/value vectors into a named list, one entry per distinct
+# key (first-seen order), each holding its values in occurrence order. split()
+# over a factor with first-seen levels keeps each group's original order, so
+# repeated keys collect their values exactly as a c() accumulation would.
+# Shared by ._parse_query_string() and get_query()'s filtered list output.
+.group_query_pairs <- function(keys, values) {
   first_seen <- keys[!duplicated(keys)]
   grouped <- split(values, factor(keys, levels = first_seen))
   lapply(grouped, unname)
@@ -251,6 +257,52 @@
   surv | keep_hit
 }
 
+# Tokenize a raw query, decode for matching, select the surviving pairs per the
+# filter args, and (optionally) stably sort by decoded key. Returns the
+# surviving pairs in output order -- both the raw and decoded key/value plus the
+# opacity flags -- or NULL when there is no query or nothing survives. Shared by
+# ._filter_query_params() (canonical render) and get_query() (decoded / list
+# render) so the selection + ordering logic lives in exactly one place. Callers
+# must handle query_handling = "drop" themselves (it never reaches here).
+._query_surviving_pairs <- function(query,
+                                    query_handling,
+                                    params_keep,
+                                    params_drop,
+                                    params_case_sensitive,
+                                    sort_params,
+                                    empty_param_handling,
+                                    decode_plus,
+                                    denylist_source) {
+  pairs <- ._parse_query_pairs(query)
+  if (length(pairs$key) == 0L) {
+    return(NULL)
+  }
+
+  key_opaque <- .token_is_opaque(pairs$key)
+  val_opaque <- .token_is_opaque(pairs$value)
+  dec_key <- .decode_query_tokens(pairs$key, key_opaque, FALSE, decode_plus)
+  dec_val <- .decode_query_tokens(pairs$value, val_opaque, TRUE, decode_plus)
+
+  idx <- which(._select_params(
+    dec_key, dec_val, query_handling, params_keep, params_drop,
+    params_case_sensitive, empty_param_handling, denylist_source
+  ))
+  if (length(idx) == 0L) {
+    return(NULL)
+  }
+  if (sort_params) {
+    # Stable sort by decoded key (radix is stable, so repeated keys keep their
+    # original relative order).
+    idx <- idx[order(dec_key[idx], method = "radix")]
+  }
+
+  list(
+    raw_key = pairs$key[idx], raw_value = pairs$value[idx],
+    dec_key = dec_key[idx], dec_value = dec_val[idx],
+    key_opaque = key_opaque[idx], val_opaque = val_opaque[idx]
+  )
+}
+
 # Filter + canonicalize one raw query string's pairs per query_handling and
 # return a canonical (re-encoded) query WITHOUT the leading '?', or "" when
 # nothing survives. Scalar (one query in, one query out); the vector engine
@@ -270,36 +322,19 @@
   if (identical(query_handling, "drop")) {
     return("")
   }
-  pairs <- ._parse_query_pairs(query)
-  if (length(pairs$key) == 0L) {
+  sp <- ._query_surviving_pairs(
+    query, query_handling, params_keep, params_drop, params_case_sensitive,
+    sort_params, empty_param_handling, decode_plus, denylist_source
+  )
+  if (is.null(sp)) {
     return("")
-  }
-
-  key_opaque <- .token_is_opaque(pairs$key)
-  val_opaque <- .token_is_opaque(pairs$value)
-  dec_key <- .decode_query_tokens(pairs$key, key_opaque, FALSE, decode_plus)
-  dec_val <- .decode_query_tokens(pairs$value, val_opaque, TRUE, decode_plus)
-
-  idx <- which(._select_params(
-    dec_key, dec_val, query_handling, params_keep, params_drop,
-    params_case_sensitive, empty_param_handling, denylist_source
-  ))
-  if (length(idx) == 0L) {
-    return("")
-  }
-  if (sort_params) {
-    # Stable sort by decoded key (radix is stable, so repeated keys keep their
-    # original relative order).
-    idx <- idx[order(dec_key[idx], method = "radix")]
   }
 
   # Re-encode key and value separately. Opaque tokens emit their raw bytes; the
   # curl_escape() of an opaque token is computed but discarded by ifelse().
-  enc_key <- ifelse(
-    key_opaque[idx], pairs$key[idx], curl::curl_escape(dec_key[idx])
-  )
+  enc_key <- ifelse(sp$key_opaque, sp$raw_key, curl::curl_escape(sp$dec_key))
   enc_val <- ifelse(
-    val_opaque[idx], pairs$value[idx], curl::curl_escape(dec_val[idx])
+    sp$val_opaque, sp$raw_value, curl::curl_escape(sp$dec_value)
   )
   paste(paste0(enc_key, "=", enc_val), collapse = "&")
 }

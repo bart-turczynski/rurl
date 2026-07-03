@@ -195,6 +195,226 @@ test_that("get_query(format = 'list') preserves encoded '&' (%26) in values", {
   )
 })
 
+test_that("get_query defaults reproduce the faithful raw-query edges", {
+  # The fast path must keep the edges the canonical engine normalizes away.
+  expect_equal(unname(get_query("http://e.com/?flag")), "flag") # not flag=
+  expect_equal(unname(get_query("http://e.com/?a=b&")), "a=b&") # trailing &
+  expect_equal(unname(get_query("http://e.com/?a&b=2")), "a&b=2")
+  expect_true(is.na(get_query("http://e.com/nopath"))) # no query -> NA
+  # Fast path (default) and identity engine invocation agree on a plain query.
+  expect_equal(
+    unname(get_query("http://e.com/?a=1&b=2", sort_params = TRUE)),
+    "a=1&b=2"
+  )
+})
+
+test_that("get_query filter mode drops trackers and keeps contentful params", {
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?utm_source=nl&id=42&fbclid=xyz",
+      query_handling = "filter"
+    )),
+    "id=42"
+  )
+  # params_drop extends the denylist; params_keep rescues over it.
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?keepme=1&junk=2",
+      query_handling = "filter", params_drop = "junk"
+    )),
+    "keepme=1"
+  )
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?utm_source=nl&id=42",
+      query_handling = "filter", params_keep = "utm_source"
+    )),
+    "utm_source=nl&id=42"
+  )
+})
+
+test_that("get_query allow mode keeps only params_keep matches", {
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?a=1&id=2&b=3",
+      query_handling = "allow", params_keep = "id"
+    )),
+    "id=2"
+  )
+  # Glob support (only '*').
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?p_a=1&p_b=2&q=3",
+      query_handling = "allow", params_keep = "p_*"
+    )),
+    "p_a=1&p_b=2"
+  )
+  # No match -> empty query, but a present query is "" (not NA).
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?a=1", query_handling = "allow", params_keep = "zzz"
+    )),
+    ""
+  )
+})
+
+test_that("get_query drop mode empties the query but preserves the NA row", {
+  expect_equal(
+    unname(get_query("http://e.com/?a=1&b=2", query_handling = "drop")),
+    ""
+  )
+  expect_true(is.na(get_query("http://e.com/nopath", query_handling = "drop")))
+  expect_equal(
+    get_query("http://e.com/?a=1", query_handling = "drop", format = "list"),
+    list(list())
+  )
+})
+
+test_that("get_query drop-empty rescues via params_keep", {
+  expect_equal(
+    unname(get_query("http://e.com/?a=&b=2", empty_param_handling = "drop")),
+    "b=2"
+  )
+  # In filter mode params_keep rescues an empty param over empty-dropping.
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?ref=&b=2",
+      query_handling = "filter",
+      empty_param_handling = "drop", params_keep = "ref"
+    )),
+    "ref=&b=2"
+  )
+  # In allow mode params_keep is inclusion-only: an allowed empty still drops.
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?ref=&b=2",
+      query_handling = "allow",
+      empty_param_handling = "drop", params_keep = c("ref", "b")
+    )),
+    "b=2"
+  )
+})
+
+test_that("get_query sort_params stably sorts by decoded key", {
+  expect_equal(
+    unname(get_query("http://e.com/?c=3&a=1&b=2", sort_params = TRUE)),
+    "a=1&b=2&c=3"
+  )
+  # Stable: repeated keys keep their original relative order.
+  expect_equal(
+    unname(get_query("http://e.com/?b=1&a=x&b=2", sort_params = TRUE)),
+    "a=x&b=1&b=2"
+  )
+})
+
+test_that("get_query decode = FALSE renders the canonical re-encoded form", {
+  # Uppercase hex, unreserved decoded, reserved re-encoded.
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?a=%2f&b=%41", sort_params = TRUE, decode = FALSE
+    )),
+    "a=%2F&b=A"
+  )
+  # decode = TRUE gives the readable decoded spelling.
+  expect_equal(
+    unname(get_query("http://e.com/?a=%2f&b=%41", sort_params = TRUE)),
+    "a=/&b=A"
+  )
+  # %26 inside a value: decoded shows '&', canonical re-encodes it.
+  expect_equal(
+    unname(get_query("http://e.com/?a=x%26y", query_handling = "filter")),
+    "a=x&y"
+  )
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?a=x%26y", query_handling = "filter", decode = FALSE
+    )),
+    "a=x%26y"
+  )
+})
+
+test_that("get_query passes opaque tokens through byte-for-byte", {
+  # Malformed %zz and a lone % are opaque: unchanged in both render modes.
+  expect_equal(
+    unname(get_query("http://e.com/?a=%zz", query_handling = "filter")),
+    "a=%ZZ"
+  )
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?a=%zz", query_handling = "filter", decode = FALSE
+    )),
+    "a=%ZZ"
+  )
+  expect_equal(
+    unname(get_query("http://e.com/?a=50%", query_handling = "filter")),
+    "a=50%"
+  )
+})
+
+test_that("get_query decode_plus converts '+' to space in values only", {
+  expect_equal(
+    unname(get_query("http://e.com/?q=a+b", decode_plus = TRUE)),
+    "q=a b"
+  )
+  expect_equal(
+    unname(get_query("http://e.com/?q=a+b", decode_plus = FALSE)),
+    "q=a+b"
+  )
+  # Canonical form (engine active): '+' -> %20 under decode_plus, else the
+  # literal '+' re-encoded to %2B. decode_plus = TRUE alone activates the
+  # engine; the decode_plus = FALSE case needs another opt-in (sort_params) to
+  # leave the raw-passthrough fast path.
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?q=a+b", decode = FALSE, decode_plus = TRUE
+    )),
+    "q=a%20b"
+  )
+  expect_equal(
+    unname(get_query(
+      "http://e.com/?q=a+b", decode = FALSE, decode_plus = FALSE,
+      sort_params = TRUE
+    )),
+    "q=a%2Bb"
+  )
+  # The default keep path with decode = FALSE returns the raw query verbatim.
+  expect_equal(
+    unname(get_query("http://e.com/?q=a+b", decode = FALSE)),
+    "q=a+b"
+  )
+})
+
+test_that("get_query filter mode works for format = 'list'", {
+  # Multi-valued surviving param expands; grouping preserves order.
+  expect_equal(
+    get_query(
+      "http://e.com/?utm_source=x&id=1&id=2",
+      query_handling = "filter", format = "list"
+    )[[1]],
+    list(id = c("1", "2"))
+  )
+  # decode = FALSE keeps the raw spelling in the list.
+  expect_equal(
+    get_query(
+      "http://e.com/?a=%26&b=1",
+      sort_params = TRUE, format = "list", decode = FALSE
+    )[[1]],
+    list(a = "%26", b = "1")
+  )
+})
+
+test_that("get_query is vectorized across the engine path", {
+  urls <- c(
+    "http://e.com/?utm_source=x&id=1",
+    "http://e.com/nopath",
+    "http://e.com/?fbclid=y"
+  )
+  expect_equal(
+    unname(get_query(urls, query_handling = "filter")),
+    c("id=1", NA, "")
+  )
+})
+
 test_that("get_fragment, get_port, get_user, get_password, get_userinfo work", {
   expect_equal(unname(get_fragment("http://example.com/path#frag")), "frag")
   expect_equal(unname(get_port("http://example.com:8080/path")), 8080L)

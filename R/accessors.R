@@ -362,17 +362,47 @@ get_path <- function(
 #' elements.
 #' @param decode Logical; if TRUE (default), percent-decodes the query
 #' (the whole string for format="string", keys/values for format="list").
-#' Set FALSE to return the raw query as written in the URL.
+#' Set FALSE to obtain the query as written: the raw query for the default
+#' `query_handling = "keep"`, or the canonical re-encoded form (uppercase hex,
+#' `%20`, `%26`/`%3D`) once any filtering is requested.
+#' @details
+#' The filtering arguments (`query_handling`, `params_keep`, `params_drop`,
+#' `params_case_sensitive`, `sort_params`, `empty_param_handling`,
+#' `decode_plus`) share the engine used by \code{\link{get_clean_url}}, but
+#' default to `query_handling = "keep"` here: an accessor returns the query as
+#' found unless you ask it to filter. When no filtering or reordering is
+#' requested (the default profile), the output is byte-for-byte identical to
+#' earlier releases; once you opt in, the surviving params are selected first
+#' and only then rendered per `format`/`decode`.
 #' @return A character vector (format="string") or list (format="list").
 #' @export
 #' @examples
 #' get_query("http://example.com/path?a=1&b=2")
 #' get_query("http://example.com/path?a=1&b=2", format = "list")
+#' # Drop trackers, keep contentful params:
+#' get_query(
+#'   "http://example.com/?utm_source=nl&id=42",
+#'   query_handling = "filter"
+#' )
+#' # Canonical (re-encoded) form:
+#' get_query(
+#'   "http://example.com/?a=1%262",
+#'   query_handling = "keep", decode = FALSE
+#' )
 get_query <- function(url,
                       protocol_handling = "keep",
                       format = c("string", "list"),
-                      decode = TRUE) {
+                      decode = TRUE,
+                      query_handling = c("keep", "drop", "filter", "allow"),
+                      params_keep = NULL,
+                      params_drop = NULL,
+                      params_case_sensitive = FALSE,
+                      sort_params = FALSE,
+                      empty_param_handling = c("keep", "drop"),
+                      decode_plus = FALSE) {
   format <- match.arg(format)
+  query_handling <- match.arg(query_handling)
+  empty_param_handling <- match.arg(empty_param_handling)
 
   if (!is.character(url)) {
     stop(
@@ -381,42 +411,121 @@ get_query <- function(url,
       call. = FALSE
     )
   }
-  if (format == "string") {
-    raw <- .extract_from_urls(url, "query",
-      protocol_handling = protocol_handling
-    )
-    # The parse result now carries a RAW (percent-encoded) query so the list
-    # form can split safely; the string form historically returns the decoded
-    # query, so decode here to keep that output unchanged.
-    if (decode) {
-      # Per-element decode keeps the historical byte-for-byte fallback (a query
-      # that fails to unescape is returned raw); USE.NAMES = FALSE so the result
-      # stays unnamed like every other accessor.
-      raw <- vapply(
-        raw,
-        function(q) {
-          if (is.na(q)) {
-            NA_character_
-          } else {
-            tryCatch(curl::curl_unescape(q), error = function(e) q)
-          }
-        },
-        character(1),
-        USE.NAMES = FALSE
+
+  # Fast path: when no filtering or reordering is requested the engine is an
+  # identity transform, so reproduce the historical output byte-for-byte. This
+  # is the only path that preserves the faithful raw-query edges the canonical
+  # engine deliberately normalizes away (a bare `?flag` staying `flag` not
+  # `flag=`, a trailing `?a=b&` keeping its `&`). params_keep/params_drop are
+  # ignored under query_handling = "keep", so they do not disqualify it.
+  engine_active <- !(identical(query_handling, "keep") &&
+    !sort_params &&
+    identical(empty_param_handling, "keep") &&
+    !decode_plus)
+
+  if (!engine_active) {
+    if (format == "string") {
+      raw <- .extract_from_urls(url, "query",
+        protocol_handling = protocol_handling
       )
+      # The parse result carries a RAW (percent-encoded) query so the list form
+      # can split safely; the string form historically returns the decoded
+      # query, so decode here to keep that output unchanged.
+      if (decode) {
+        # Per-element decode keeps the historical byte-for-byte fallback (a
+        # query that fails to unescape is returned raw); USE.NAMES = FALSE so
+        # the result stays unnamed like every other accessor.
+        raw <- vapply(
+          raw,
+          function(q) {
+            if (is.na(q)) {
+              NA_character_
+            } else {
+              tryCatch(curl::curl_unescape(q), error = function(e) q)
+            }
+          },
+          character(1),
+          USE.NAMES = FALSE
+        )
+      }
+      return(raw)
     }
-    return(raw)
+
+    # format = "list": pull the raw query column in one engine pass (case =
+    # "keep" matches the historical per-element profile so cache keys are
+    # unchanged), then parse each element. Null rows carry NA, and
+    # ._parse_query_string(NA) returns list() -- exactly what the old
+    # per-element NULL branch returned.
+    raw <- .extract_from_urls(url, "query",
+      protocol_handling = protocol_handling,
+      case_handling = "keep"
+    )
+    return(lapply(raw, ._parse_query_string, decode = decode))
   }
 
-  # format = "list": pull the raw query column in one engine pass (case = "keep"
-  # matches the historical per-element profile so cache keys are unchanged),
-  # then parse each element. Null rows carry NA, and ._parse_query_string(NA)
-  # returns list() -- exactly what the old per-element NULL branch returned.
-  raw <- .extract_from_urls(url, "query",
-    protocol_handling = protocol_handling,
-    case_handling = "keep"
-  )
-  lapply(raw, ._parse_query_string, decode = decode)
+  # Engine path: filtering and/or reordering is in effect. Pull the faithful raw
+  # query column (the `query` field is never mutated by the engine), then select
+  # the surviving pairs before rendering. NA rows (no query) render as NA /
+  # list(); a present query whose params are all filtered out renders as "" /
+  # list(), matching the empty-query contract.
+  raw <- .extract_from_urls(url, "query", protocol_handling = protocol_handling)
+  na_row <- is.na(raw)
+
+  surviving <- function(query) {
+    ._query_surviving_pairs(
+      query, query_handling, params_keep, params_drop, params_case_sensitive,
+      sort_params, empty_param_handling, decode_plus, "builtin"
+    )
+  }
+
+  if (format == "string") {
+    out <- vapply(seq_along(raw), function(i) {
+      if (na_row[i]) {
+        return(NA_character_)
+      }
+      if (!decode) {
+        # Canonical re-encoded form -- exactly the clean_url query renderer.
+        return(._filter_query_params(
+          raw[i],
+          query_handling = query_handling,
+          params_keep = params_keep,
+          params_drop = params_drop,
+          params_case_sensitive = params_case_sensitive,
+          sort_params = sort_params,
+          empty_param_handling = empty_param_handling,
+          decode_plus = decode_plus
+        ))
+      }
+      if (identical(query_handling, "drop")) {
+        return("")
+      }
+      sp <- surviving(raw[i])
+      if (is.null(sp)) {
+        return("")
+      }
+      # Decoded, readable form: opaque tokens are already passed through raw by
+      # .decode_query_tokens(), so `%zz` stays `%zz`.
+      paste(paste0(sp$dec_key, "=", sp$dec_value), collapse = "&")
+    }, character(1), USE.NAMES = FALSE)
+    return(out)
+  }
+
+  # format = "list": grouped named list of the surviving pairs. decode selects
+  # the decoded or raw spelling; grouping matches ._parse_query_string exactly.
+  lapply(seq_along(raw), function(i) {
+    if (na_row[i] || identical(query_handling, "drop")) {
+      return(list())
+    }
+    sp <- surviving(raw[i])
+    if (is.null(sp)) {
+      return(list())
+    }
+    if (decode) {
+      .group_query_pairs(sp$dec_key, sp$dec_value)
+    } else {
+      .group_query_pairs(sp$raw_key, sp$raw_value)
+    }
+  })
 }
 
 #' Get URL fragments
