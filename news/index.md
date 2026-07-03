@@ -4,6 +4,24 @@
 
 ### Performance
 
+- The parse pipeline is split into an option-independent core (Stage A:
+  curl components, IP detection, the post-www host, and the PSL
+  domain/TLD decomposition) and a presentation stage (Stage B: path
+  handling, case, host-encoding spelling, subdomain trimming, clean-URL
+  assembly, status). The `full_parse` cache now stores Stage A, keyed
+  only by URL, protocol/scheme handling, `www_handling`, and
+  `tld_source`. Calling several accessors with different presentation
+  profiles on the same URLs
+  (e.g. [`get_host()`](https://bart-turczynski.github.io/rurl/reference/get_host.md),
+  [`get_domain()`](https://bart-turczynski.github.io/rurl/reference/get_domain.md),
+  [`get_tld()`](https://bart-turczynski.github.io/rurl/reference/get_tld.md),
+  [`get_clean_url()`](https://bart-turczynski.github.io/rurl/reference/get_clean_url.md),
+  [`get_subdomain()`](https://bart-turczynski.github.io/rurl/reference/get_subdomain.md))
+  now shares one cache entry per URL and re-runs only the cheap Stage B,
+  so the expensive curl + PSL work happens once instead of once per
+  profile. Output is unchanged. Cache memory per URL also drops to a
+  single (option-independent) entry. (RURL-dkwrebdt)
+
 - [`safe_parse_urls()`](https://bart-turczynski.github.io/rurl/reference/safe_parse_urls.md)
   now de-duplicates its input, parsing each unique URL only once (with
   cross-call reuse via the `full_parse` cache) and expanding the results
@@ -33,6 +51,15 @@
   Override with `rurl_cache_config(max_full_parse = Inf)` to restore the
   previous unbounded behavior; the reset-watermark semantics are
   unchanged. (RURL-ohepgzyf)
+
+- A present-but-empty `query`, `fragment`, `user`, or `password`
+  component (e.g. the query of `"https://example.com/?"`) is now
+  reported as `NA` consistently.
+  [`curl::curl_parse_url()`](https://jeroen.r-universe.dev/curl/reference/curl_parse_url.html)
+  returns such components as `NULL` on some libcurl versions and `""` on
+  others; both now normalize to `NA`, so output no longer depends on the
+  installed libcurl version. This matches the behavior already produced
+  on platforms where curl returned `NULL`. (RURL-dkwrebdt)
 
 ### Behavior changes
 

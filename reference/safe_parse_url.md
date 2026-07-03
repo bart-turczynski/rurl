@@ -201,16 +201,17 @@ A named list with the following components:
 - `path`: The path component (e.g., "/path/to/resource").
 
 - `query`: The raw query string as written in the URL, preserved
-  byte-for-byte (e.g., "name=value"); not percent-decoded.
+  byte-for-byte (e.g., "name=value"); not percent-decoded. A
+  present-but- empty query (e.g. from a trailing "?") is reported as NA.
 
 - `fragment`: The fragment identifier as written in the URL (e.g.,
-  "section"); not percent-decoded.
+  "section"); not percent-decoded. Empty is reported as NA.
 
 - `user`: The user name for authentication, as written in the URL; not
-  percent-decoded.
+  percent-decoded. Empty is reported as NA.
 
 - `password`: The password for authentication, as written in the URL;
-  not percent-decoded.
+  not percent-decoded. Empty is reported as NA.
 
 - `domain`: The registered domain name (e.g., "example.com"). NA if host
   is an IP, empty, or derivation fails.

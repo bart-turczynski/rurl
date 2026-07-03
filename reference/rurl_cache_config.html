@@ -92,7 +92,9 @@ exceeds the bound. This is a hard reset-watermark, not an LRU or FIFO
 eviction policy: <code>max_full_parse</code> caps peak memory, but is <em>not</em> a
 working-set size — once the bound is hit the cache empties completely and
 rebuilds from scratch. The default bound is <code>100000</code> unique url ×
-option combinations (set <code>max_full_parse = Inf</code> for the historical
+core-option combinations (the cache stores the option-independent parse core,
+keyed by url, protocol/scheme handling, <code>www_handling</code>, and
+<code>tld_source</code>; set <code>max_full_parse = Inf</code> for the historical
 unbounded behavior). The
 <code>puny_encode</code> and <code>puny_decode</code> caches are unbounded by design
 (each stays small — bounded by the number of unique hosts/labels seen, not

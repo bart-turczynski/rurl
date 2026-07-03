@@ -212,13 +212,14 @@ empty after processing.</p></li>
 <li><p><code>port</code>: The port number.</p></li>
 <li><p><code>path</code>: The path component (e.g., "/path/to/resource").</p></li>
 <li><p><code>query</code>: The raw query string as written in the URL, preserved
-byte-for-byte (e.g., "name=value"); not percent-decoded.</p></li>
+byte-for-byte (e.g., "name=value"); not percent-decoded. A present-but-
+empty query (e.g. from a trailing "?") is reported as NA.</p></li>
 <li><p><code>fragment</code>: The fragment identifier as written in the URL
-(e.g., "section"); not percent-decoded.</p></li>
+(e.g., "section"); not percent-decoded. Empty is reported as NA.</p></li>
 <li><p><code>user</code>: The user name for authentication, as written in the URL;
-not percent-decoded.</p></li>
+not percent-decoded. Empty is reported as NA.</p></li>
 <li><p><code>password</code>: The password for authentication, as written in the
-URL; not percent-decoded.</p></li>
+URL; not percent-decoded. Empty is reported as NA.</p></li>
 <li><p><code>domain</code>: The registered domain name (e.g., "example.com"). NA if
 host is an IP, empty, or derivation fails.</p></li>
 <li><p><code>tld</code>: The top-level domain (e.g., "com"). NA if host is an IP,
