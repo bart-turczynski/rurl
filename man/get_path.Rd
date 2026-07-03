@@ -64,12 +64,20 @@ index/default pages. Defaults to "keep".
 (case-insensitive).}
 }}
 
-\item{path_normalization}{How to normalize path structure. Defaults to
-"none".
+\item{path_normalization}{How to normalize path \emph{slash} structure. Defaults
+to "none". Note that RFC 3986 dot-segment resolution (\code{.} and \code{..},
+including their percent-encoded forms \code{\%2e}/\code{\%2E}) is applied
+\emph{unconditionally} by the underlying parser (libcurl) before rurl sees
+the path, so \code{/a/../b} always yields \code{/b} — this cannot be disabled
+and the \code{"dot_segments"}/\code{"both"} settings only make rurl's own
+resolver redundant with what already happened. This option therefore
+meaningfully controls only slash collapsing.
 \itemize{
-\item{"none": (Default) No normalization.}
+\item{"none": (Default) No slash collapsing. (Dot segments are still
+resolved upstream, as noted above.)}
 \item{"collapse_slashes": Collapse duplicate slashes in the path.}
-\item{"dot_segments": Resolve . and .. segments per RFC 3986.}
+\item{"dot_segments": Resolve . and .. segments per RFC 3986 (already
+applied upstream; retained for explicitness).}
 \item{"both": Apply both collapse_slashes and dot_segments.}
 }}
 
@@ -78,7 +86,12 @@ index/default pages. Defaults to "keep".
 \itemize{
 \item{"keep": Leave the path percent-encoding untouched (the path is
 preserved byte-for-byte as written in the URL, so \verb{\%2F} stays \verb{\%2F}
-rather than decoding into a path-separating \code{/}).}
+rather than decoding into a path-separating \code{/}). One exception is out of
+rurl's hands: the underlying parser (libcurl) normalizes percent-encoding
+hex digits to uppercase, so \verb{\%2f} is returned as \verb{\%2F}. This is an
+RFC 3986 (section 6.2.2.1) case canonicalization — the two forms are
+equivalent — and it makes such paths compare equal in
+\code{\link{canonical_join}}.}
 \item{"encode": Normalize by decoding first, then percent-encoding each
 segment (slashes preserved).}
 \item{"decode": Percent-decode UTF-8 sequences in the path.}
