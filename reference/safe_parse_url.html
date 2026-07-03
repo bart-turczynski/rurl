@@ -13,7 +13,7 @@ Results are memoized for performance when processing large datasets."></head><bo
 
     <a class="navbar-brand me-2" href="../index.html">rurl</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -939,6 +939,36 @@ or uses a disallowed scheme.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $parse_status</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "ok"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-in"><span><span class="co"># Query handling: keep contentful params, drop known trackers.</span></span></span>
+<span class="r-in"><span><span class="fu">safe_parse_url</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="st">"http://example.com/watch?v=abc&amp;utm_source=nl"</span>,</span></span>
+<span class="r-in"><span>  query_handling <span class="op">=</span> <span class="st">"filter"</span></span></span>
+<span class="r-in"><span><span class="op">)</span><span class="op">$</span><span class="va">clean_url</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://example.com/watch?v=abc"</span>
+<span class="r-in"><span><span class="co"># -&gt; "http://example.com/watch?v=abc"</span></span></span>
+<span class="r-in"><span><span class="co"># params_keep is a RESCUE in "filter" (wins over the denylist) ...</span></span></span>
+<span class="r-in"><span><span class="fu">safe_parse_url</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="st">"http://example.com/?utm_source=nl&amp;id=1"</span>,</span></span>
+<span class="r-in"><span>  query_handling <span class="op">=</span> <span class="st">"filter"</span>, params_keep <span class="op">=</span> <span class="st">"utm_source"</span></span></span>
+<span class="r-in"><span><span class="op">)</span><span class="op">$</span><span class="va">clean_url</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://example.com/?utm_source=nl&amp;id=1"</span>
+<span class="r-in"><span><span class="co"># -&gt; "http://example.com/?utm_source=nl&amp;id=1"</span></span></span>
+<span class="r-in"><span><span class="co"># ... but an ALLOWLIST in "allow" (only listed names survive).</span></span></span>
+<span class="r-in"><span><span class="fu">safe_parse_url</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="st">"http://example.com/?a=1&amp;id=2"</span>,</span></span>
+<span class="r-in"><span>  query_handling <span class="op">=</span> <span class="st">"allow"</span>, params_keep <span class="op">=</span> <span class="st">"id"</span></span></span>
+<span class="r-in"><span><span class="op">)</span><span class="op">$</span><span class="va">clean_url</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://example.com/?id=2"</span>
+<span class="r-in"><span><span class="co"># -&gt; "http://example.com/?id=2"</span></span></span>
+<span class="r-in"><span><span class="co"># "allow" empty-handling asymmetry: params_keep does NOT rescue empties, so</span></span></span>
+<span class="r-in"><span><span class="co"># an allowed empty param still drops under empty_param_handling = "drop".</span></span></span>
+<span class="r-in"><span><span class="fu">safe_parse_url</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="st">"http://example.com/?id=&amp;keep=1"</span>,</span></span>
+<span class="r-in"><span>  query_handling <span class="op">=</span> <span class="st">"allow"</span>, params_keep <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"id"</span>, <span class="st">"keep"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  empty_param_handling <span class="op">=</span> <span class="st">"drop"</span></span></span>
+<span class="r-in"><span><span class="op">)</span><span class="op">$</span><span class="va">clean_url</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "http://example.com/?keep=1"</span>
+<span class="r-in"><span><span class="co"># -&gt; "http://example.com/?keep=1"</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

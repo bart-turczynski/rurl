@@ -945,4 +945,34 @@ safe_parse_url(
 #> $parse_status
 #> [1] "ok"
 #> 
+# Query handling: keep contentful params, drop known trackers.
+safe_parse_url(
+  "http://example.com/watch?v=abc&utm_source=nl",
+  query_handling = "filter"
+)$clean_url
+#> [1] "http://example.com/watch?v=abc"
+# -> "http://example.com/watch?v=abc"
+# params_keep is a RESCUE in "filter" (wins over the denylist) ...
+safe_parse_url(
+  "http://example.com/?utm_source=nl&id=1",
+  query_handling = "filter", params_keep = "utm_source"
+)$clean_url
+#> [1] "http://example.com/?utm_source=nl&id=1"
+# -> "http://example.com/?utm_source=nl&id=1"
+# ... but an ALLOWLIST in "allow" (only listed names survive).
+safe_parse_url(
+  "http://example.com/?a=1&id=2",
+  query_handling = "allow", params_keep = "id"
+)$clean_url
+#> [1] "http://example.com/?id=2"
+# -> "http://example.com/?id=2"
+# "allow" empty-handling asymmetry: params_keep does NOT rescue empties, so
+# an allowed empty param still drops under empty_param_handling = "drop".
+safe_parse_url(
+  "http://example.com/?id=&keep=1",
+  query_handling = "allow", params_keep = c("id", "keep"),
+  empty_param_handling = "drop"
+)$clean_url
+#> [1] "http://example.com/?keep=1"
+# -> "http://example.com/?keep=1"
 ```

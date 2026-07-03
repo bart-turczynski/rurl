@@ -1,6 +1,6 @@
 # Changelog
 
-## rurl (development version)
+## rurl 2.0.0
 
 ### New features
 
@@ -32,6 +32,26 @@
   only via `safe_parse_url(u, query_handling = "filter")$clean_url`.
   Defaults are unchanged (`query_handling = "drop"`), so existing output
   is byte-identical.
+- [`get_query()`](https://bart-turczynski.github.io/rurl/reference/get_query.md)
+  gains the same query-filter engine arguments (`query_handling`,
+  `params_keep`, `params_drop`, `params_case_sensitive`, `sort_params`,
+  `empty_param_handling`, `decode_plus`), so a cleaned query can be
+  pulled directly without going through `clean_url` (RURL-srcyvrhn). It
+  defaults to `query_handling = "keep"` (an accessor returns the query
+  as found unless you ask it to filter), and the filter runs before
+  rendering: `decode = TRUE` gives the readable decoded form,
+  `decode = FALSE` the canonical re-encoded form. Every existing default
+  is byte-for-byte unchanged.
+- New
+  [`query_param_summary()`](https://bart-turczynski.github.io/rurl/reference/query_param_summary.md)
+  introspection function tabulates the query parameters across a set of
+  URLs — which names appear, what values they take, `n`/`n_urls` counts,
+  and a `would_drop` column previewing what `query_handling = "filter"`
+  would remove (RURL-qrcymsij). Returns a flat (long) `data.frame` at
+  `level = "param"` or `level = "value"`. Param names are grouped
+  faithfully (case-sensitively) while `would_drop` honours
+  `params_case_sensitive`, so you can audit a URL set before choosing a
+  policy.
 - The `clean_url` query is deliberately **exempt from `case_handling`**
   (query values are case-sensitive — tokens, IDs, signatures). Under
   `case_handling = "lower"` or `"upper"` the scheme/host/path fold but
