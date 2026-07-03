@@ -47,7 +47,14 @@
 <span>  <span class="va">url</span>,</span>
 <span>  protocol_handling <span class="op">=</span> <span class="st">"keep"</span>,</span>
 <span>  format <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"string"</span>, <span class="st">"list"</span><span class="op">)</span>,</span>
-<span>  decode <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  decode <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  query_handling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"keep"</span>, <span class="st">"drop"</span>, <span class="st">"filter"</span>, <span class="st">"allow"</span><span class="op">)</span>,</span>
+<span>  params_keep <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  params_drop <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  params_case_sensitive <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  sort_params <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  empty_param_handling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"keep"</span>, <span class="st">"drop"</span><span class="op">)</span>,</span>
+<span>  decode_plus <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -90,7 +97,69 @@ elements.</p></dd>
 <dt id="arg-decode">decode<a class="anchor" aria-label="anchor" href="#arg-decode"></a></dt>
 <dd><p>Logical; if TRUE (default), percent-decodes the query
 (the whole string for format="string", keys/values for format="list").
-Set FALSE to return the raw query as written in the URL.</p></dd>
+Set FALSE to obtain the query as written: the raw query for the default
+<code>query_handling = "keep"</code>, or the canonical re-encoded form (uppercase hex,
+<code>%20</code>, <code>%26</code>/<code>%3D</code>) once any filtering is requested.</p></dd>
+
+
+<dt id="arg-query-handling">query_handling<a class="anchor" aria-label="anchor" href="#arg-query-handling"></a></dt>
+<dd><p>A character string controlling whether (and how) the
+query string is included in <code>clean_url</code>. Defaults to "drop", which preserves
+the historical query-free <code>clean_url</code>. The raw <code>query</code> result field is never
+affected by this option — it always reports the faithful original query.</p><ul><li><p>"drop": (Default) <code>clean_url</code> carries no query, exactly as before.</p></li>
+<li><p>"filter": Keep contentful params, dropping known trackers via a
+built-in denylist (e.g. <code>utm_*</code>, <code>fbclid</code>, <code>gclid</code>). <code>params_drop</code>
+extends the denylist; <code>params_keep</code> rescues names (winning over both the
+denylist and empty-dropping).</p></li>
+<li><p>"allow": Keep only params whose names match <code>params_keep</code>; all
+others are dropped. Here <code>params_keep</code> is an inclusion criterion only,
+not an empty-rescue.</p></li>
+<li><p>"keep": Keep every param, re-encoded into canonical form (not the
+verbatim original — that stays on the <code>query</code> field).</p></li>
+</ul><p>In every non-"drop" mode the surviving query is re-encoded canonically
+(uppercase percent-hex, spaces as <code>%20</code>) and appended after the path. The
+query is intentionally EXEMPT from <code>case_handling</code> (query values are
+case-sensitive — tokens, IDs, signatures), so under
+<code>case_handling = "lower"</code> or <code>"upper"</code> the <code>clean_url</code> is no longer
+uniformly cased: scheme/host/path fold but the query keeps its original
+case. Because <code>clean_url</code> is the <code><a href="canonical_join.html">canonical_join</a></code> key, any
+non-"drop" mode also brings the query into that join key (so <code>?id=1</code> and
+<code>?id=2</code> stop collapsing, while <code>utm</code>-only differences still collapse under
+"filter").</p></dd>
+
+
+<dt id="arg-params-keep">params_keep<a class="anchor" aria-label="anchor" href="#arg-params-keep"></a></dt>
+<dd><p>Character vector of parameter-name globs (only <code>*</code> is
+special), or <code>NULL</code> (default). In "filter" mode this is the rescue list; in
+"allow" mode it is the allowlist. Ignored in "drop"/"keep".</p></dd>
+
+
+<dt id="arg-params-drop">params_drop<a class="anchor" aria-label="anchor" href="#arg-params-drop"></a></dt>
+<dd><p>Character vector of parameter-name globs to add to the
+built-in denylist in "filter" mode, or <code>NULL</code> (default). Ignored in
+"drop"/"allow"/"keep".</p></dd>
+
+
+<dt id="arg-params-case-sensitive">params_case_sensitive<a class="anchor" aria-label="anchor" href="#arg-params-case-sensitive"></a></dt>
+<dd><p>Logical (default <code>FALSE</code>). Controls whether the
+denylist and <code>params_keep</code>/<code>params_drop</code> matching is case-sensitive.</p></dd>
+
+
+<dt id="arg-sort-params">sort_params<a class="anchor" aria-label="anchor" href="#arg-sort-params"></a></dt>
+<dd><p>Logical (default <code>FALSE</code>). When <code>TRUE</code>, surviving params
+are stably sorted by decoded key. Active in "filter"/"allow"/"keep".</p></dd>
+
+
+<dt id="arg-empty-param-handling">empty_param_handling<a class="anchor" aria-label="anchor" href="#arg-empty-param-handling"></a></dt>
+<dd><p>One of "keep" (default) or "drop". "drop" removes
+empty-valued params (e.g. <code>?ref=</code>), except those rescued by <code>params_keep</code>
+in "filter" mode.</p></dd>
+
+
+<dt id="arg-decode-plus">decode_plus<a class="anchor" aria-label="anchor" href="#arg-decode-plus"></a></dt>
+<dd><p>Logical (default <code>FALSE</code>). When <code>TRUE</code>, <code>+</code> in query
+values is treated as a space (HTML-form decoding) before percent-decoding.
+<code>FALSE</code> keeps <code>+</code> literal (RFC 3986 generic behavior).</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -103,6 +172,14 @@ Set FALSE to return the raw query as written in the URL.</p></dd>
 key such as <code>?flag</code> stays <code>flag</code>, not <code>flag=</code>). By default this accessor
 still percent-decodes for readability (<code>decode = TRUE</code>); pass
 <code>decode = FALSE</code> to obtain the raw query exactly as written in the URL.</p>
+<p>The filtering arguments (<code>query_handling</code>, <code>params_keep</code>, <code>params_drop</code>,
+<code>params_case_sensitive</code>, <code>sort_params</code>, <code>empty_param_handling</code>,
+<code>decode_plus</code>) share the engine used by <code><a href="get_clean_url.html">get_clean_url</a></code>, but
+default to <code>query_handling = "keep"</code> here: an accessor returns the query as
+found unless you ask it to filter. When no filtering or reordering is
+requested (the default profile), the output is byte-for-byte identical to
+earlier releases; once you opt in, the surviving params are selected first
+and only then rendered per <code>format</code>/<code>decode</code>.</p>
     </div>
 
     <div class="section level2">
@@ -118,6 +195,18 @@ still percent-decodes for readability (<code>decode = TRUE</code>); pass
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "2"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-in"><span><span class="co"># Drop trackers, keep contentful params:</span></span></span>
+<span class="r-in"><span><span class="fu">get_query</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="st">"http://example.com/?utm_source=nl&amp;id=42"</span>,</span></span>
+<span class="r-in"><span>  query_handling <span class="op">=</span> <span class="st">"filter"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "id=42"</span>
+<span class="r-in"><span><span class="co"># Canonical (re-encoded) form:</span></span></span>
+<span class="r-in"><span><span class="fu">get_query</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="st">"http://example.com/?a=1%262"</span>,</span></span>
+<span class="r-in"><span>  query_handling <span class="op">=</span> <span class="st">"keep"</span>, decode <span class="op">=</span> <span class="cn">FALSE</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "a=1%262"</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
