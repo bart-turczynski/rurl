@@ -1,0 +1,17 @@
+id,input,path_encoding,path_normalization,expected,note
+enc-slash-upper,http://ex.com/foo%2Fbar,keep,none,http://ex.com/foo%2Fbar,encoded slash kept as a byte (not a separator)
+enc-slash-lower,http://ex.com/foo%2fbar,keep,none,http://ex.com/foo%2Fbar,hex uppercased (RFC 3986 6.2.2.1)
+dbl-enc-slash,http://ex.com/foo%252Fbar,keep,none,http://ex.com/foo%252Fbar,double-encoding preserved and distinct from %2F
+enc-dot-none,http://ex.com/foo/%2e/bar,keep,none,http://ex.com/foo/%2E/bar,encoded dot preserved (rurl != WHATWG which would resolve)
+enc-dotdot-none,http://ex.com/foo/%2e%2e/bar,keep,none,http://ex.com/foo/%2E%2E/bar,encoded dotdot preserved; no silent traversal
+enc-dotdot-resolve,http://ex.com/foo/%2e%2e/bar,keep,dot_segments,http://ex.com/foo/%2E%2E/bar,%2e is a byte not a dot segment (RFC 3986 5.2.4)
+lit-dotdot-none,http://ex.com/foo/../bar,keep,none,http://ex.com/foo/../bar,literal dotdot preserved under none
+lit-dotdot-resolve,http://ex.com/foo/../bar,keep,dot_segments,http://ex.com/bar,literal dotdot resolved when requested
+lit-dot-resolve,http://ex.com/foo/./bar,keep,dot_segments,http://ex.com/foo/bar,literal single dot resolved when requested
+enc-space,http://ex.com/a%20b,keep,none,http://ex.com/a%20b,encoded space preserved
+enc-ascii-keep,http://ex.com/%41%42,keep,none,http://ex.com/%41%42,encoded unreserved bytes preserved under keep
+enc-ascii-decode,http://ex.com/%41%42,decode,none,http://ex.com/AB,decode resolves %41%42 to AB
+plus-path,http://ex.com/a+b,keep,none,http://ex.com/a+b,literal plus untouched in path
+backslash-path,http://ex.com/foo\bar,keep,none,http://ex.com/foo\bar,backslash kept (rurl != WHATWG which maps it to /)
+dbl-slash-none,http://ex.com/a//b,keep,none,http://ex.com/a//b,empty path segment preserved under none
+dbl-slash-collapse,http://ex.com/a//b,keep,collapse_slashes,http://ex.com/a/b,duplicate slashes collapsed when requested
