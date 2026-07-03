@@ -83,6 +83,10 @@
     template = logical(1)
   ),
   list(name = "is_scheme_relative", default = FALSE, template = logical(1)),
+  # host:port input (RURL-aldwnots): matches the scheme regex but is a valid
+  # host:port form, so it must be excluded from the unsupported-scheme demotion
+  # in parse-status derivation. Cached with the rest of Stage A.
+  list(name = "looks_like_host_port", default = FALSE, template = logical(1)),
   # Scheme-less input carrying userinfo (D5): drives the warning-userinfo status
   # and the NA clean_url in Stage B. Cached with the rest of Stage A.
   list(name = "scheme_less_userinfo", default = FALSE, template = logical(1))

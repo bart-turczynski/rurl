@@ -235,38 +235,72 @@ test_that(".derive_parse_status classifies outcomes", {
   expect_equal(
     rurl:::.derive_parse_status(
       parsed, "example.com", FALSE, "com",
-      "example.com", "keep", "http", TRUE, TRUE, FALSE, "keep"
+      "example.com", "keep", "http", TRUE, TRUE, FALSE, FALSE, "keep"
     ),
     "ok"
   )
   expect_equal(
     rurl:::.derive_parse_status(
       parsed, "203.0.113.1", TRUE, NA_character_,
-      NA_character_, "keep", "http", FALSE, TRUE, FALSE, "keep"
+      NA_character_, "keep", "http", FALSE, TRUE, FALSE, FALSE, "keep"
     ),
     "ok"
   )
   expect_equal(
     rurl:::.derive_parse_status(
       parsed, "files.example.com", FALSE, "com",
-      "example.com", "keep", "ftp", TRUE, TRUE, FALSE, "keep"
+      "example.com", "keep", "ftp", TRUE, TRUE, FALSE, FALSE, "keep"
     ),
     "ok-ftp"
   )
   expect_equal(
     rurl:::.derive_parse_status(
       parsed, "localhost", FALSE, NA_character_,
-      NA_character_, "keep", "http", FALSE, TRUE, FALSE, "keep"
+      NA_character_, "keep", "http", FALSE, TRUE, FALSE, FALSE, "keep"
     ),
     "warning-no-tld"
   )
   expect_equal(
     rurl:::.derive_parse_status(
       parsed, "example.com", FALSE, "com",
-      "example.com", "keep", "http", TRUE, TRUE, TRUE, "keep"
+      "example.com", "keep", "http", TRUE, TRUE, FALSE, TRUE, "keep"
     ),
     "ok-scheme-relative"
   )
+})
+
+test_that(".derive_parse_status keeps host:port off scheme demotion", {
+  # RURL-aldwnots: a scheme-less host:port matches the scheme regex
+  # (looks_like_protocol = TRUE, original_has_allowed_scheme = FALSE) but is a
+  # valid host:port form (looks_like_host_port = TRUE), so it must stay "ok"
+  # rather than being demoted to "error".
+  parsed <- curl::curl_parse_url("http://example.com:8080/x")
+  expect_equal(
+    rurl:::.derive_parse_status(
+      parsed, "example.com", FALSE, "com",
+      "example.com", "keep", "http", TRUE, FALSE, TRUE, FALSE, "keep"
+    ),
+    "ok"
+  )
+  # A genuinely unsupported scheme (looks_like_host_port = FALSE) still demotes.
+  expect_equal(
+    rurl:::.derive_parse_status(
+      parsed, "example.com", FALSE, "com",
+      "example.com", "keep", "http", TRUE, FALSE, FALSE, FALSE, "keep"
+    ),
+    "error"
+  )
+})
+
+test_that("get_parse_status agrees with clean_url for scheme-less host:port", {
+  # RURL-aldwnots end-to-end: a present clean_url must not co-occur with an
+  # "error" status.
+  expect_equal(get_parse_status("example.com:8080/x"), "ok")
+  expect_equal(get_host("example.com:8080/x"), "example.com")
+  expect_equal(get_clean_url("example.com:8080/x"), "http://example.com/x")
+  # mailto: / user:pass@host stay error (genuinely unsupported / opaque).
+  expect_equal(get_parse_status("mailto:a@b.com"), "error")
+  expect_equal(get_parse_status("user:pass@example.com"), "error")
 })
 
 test_that(".assemble_parse_result coerces port to integer", {
