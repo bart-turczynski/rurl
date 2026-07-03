@@ -91,11 +91,26 @@ parsed$parse_status
 ```
 
 `clean_url` is a normalized canonical key built from **scheme, host, and
-path only**. Port, query, fragment, and userinfo are intentionally
-excluded — read them from the dedicated components (`get_port()`,
-`get_query()`, `get_fragment()`, `get_userinfo()`) instead. With
-`path_encoding = "decode"` the path is shown decoded, so `clean_url` is
-human-readable rather than guaranteed URL-safe.
+path** by default. Port, fragment, and userinfo are always excluded —
+read them from the dedicated components (`get_port()`, `get_fragment()`,
+`get_userinfo()`) instead. The query is dropped by default too, but you
+can opt in to a shaped query on the cleaned URL by passing
+`query_handling` (and its `params_*` / `sort_params` /
+`empty_param_handling` / `decode_plus` companions) to either
+`safe_parse_url()` or `get_clean_url()`:
+
+``` r
+get_clean_url("http://example.com/p?utm_source=nl&id=42") # query dropped
+#> [1] "http://example.com/p"
+get_clean_url(
+  "http://example.com/p?utm_source=nl&id=42",
+  query_handling = "filter" # strip trackers, keep contentful params
+)
+#> [1] "http://example.com/p?id=42"
+```
+
+With `path_encoding = "decode"` the path is shown decoded, so
+`clean_url` is human-readable rather than guaranteed URL-safe.
 
 Scheme-relative URL handling is configurable:
 

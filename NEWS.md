@@ -15,6 +15,13 @@
   `...` to `safe_parse_urls()`, these options also flow into the join key, so a
   non-`"drop"` mode makes `?id=1`/`?id=2` stop collapsing while `utm`-only
   differences still collapse under `"filter"`.
+- `get_clean_url()` gains the seven query-filter arguments (`query_handling`,
+  `params_keep`, `params_drop`, `params_case_sensitive`, `sort_params`,
+  `empty_param_handling`, `decode_plus`), reaching full parity with the parse
+  engine (RURL-hinwkvho). A filtered cleaned URL is now available directly —
+  `get_clean_url(u, query_handling = "filter")` — instead of only via
+  `safe_parse_url(u, query_handling = "filter")$clean_url`. Defaults are
+  unchanged (`query_handling = "drop"`), so existing output is byte-identical.
 - The `clean_url` query is deliberately **exempt from `case_handling`** (query
   values are case-sensitive — tokens, IDs, signatures). Under
   `case_handling = "lower"` or `"upper"` the scheme/host/path fold but the

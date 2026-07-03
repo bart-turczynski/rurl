@@ -39,7 +39,14 @@
                                scheme_relative_handling = "keep",
                                subdomain_levels_to_keep = NULL,
                                host_encoding = "keep",
-                               path_encoding = "keep") {
+                               path_encoding = "keep",
+                               query_handling = "drop",
+                               params_keep = NULL,
+                               params_drop = NULL,
+                               params_case_sensitive = FALSE,
+                               sort_params = FALSE,
+                               empty_param_handling = "keep",
+                               decode_plus = FALSE) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -60,7 +67,14 @@
     scheme_relative_handling = scheme_relative_handling,
     subdomain_levels_to_keep = subdomain_levels_to_keep,
     host_encoding = host_encoding,
-    path_encoding = path_encoding
+    path_encoding = path_encoding,
+    query_handling = query_handling,
+    params_keep = params_keep,
+    params_drop = params_drop,
+    params_case_sensitive = params_case_sensitive,
+    sort_params = sort_params,
+    empty_param_handling = empty_param_handling,
+    decode_plus = decode_plus
   )
   cols <- ._parse_urls_cached(url, opts)
 
@@ -123,11 +137,20 @@ get_parse_status <- function(url,
 #' Get cleaned URLs
 #'
 #' This function returns the cleaned version of the URLs after applying
-#' protocol, www, case, and trailing slash handling rules. The result is a
-#' normalized canonical key composed of scheme, host, and path only; port,
-#' query, fragment, and userinfo are intentionally excluded (use
-#' \code{\link{get_port}}, \code{\link{get_query}}, \code{\link{get_fragment}},
-#' or \code{\link{get_userinfo}} for those).
+#' protocol, www, case, and trailing slash handling rules. By default the result
+#' is a normalized canonical key composed of scheme, host, and path only; port,
+#' fragment, and userinfo are always excluded (use \code{\link{get_port}},
+#' \code{\link{get_fragment}}, or \code{\link{get_userinfo}} for those).
+#'
+#' The query string is dropped by default (\code{query_handling = "drop"}), so
+#' the historical scheme/host/path output is byte-identical. Pass
+#' \code{query_handling = "keep"}, \code{"filter"}, or \code{"allow"} (with the
+#' companion \code{params_*} / \code{sort_params} / \code{empty_param_handling}
+#' / \code{decode_plus} arguments) to retain a shaped query on the cleaned URL;
+#' the engine is the same one \code{\link{safe_parse_url}} and
+#' \code{\link{get_query}} use, so
+#' \code{get_clean_url(u, query_handling = "filter")} equals
+#' \code{safe_parse_url(u, query_handling = "filter")$clean_url}.
 #'
 #' @param url A character vector containing URLs to be parsed.
 #' @inheritParams safe_parse_url
@@ -166,6 +189,15 @@ get_parse_status <- function(url,
 #'   www_handling = "keep"
 #' )
 #' # -> "http://www.domain.example.com/path"
+#' # Query dropped by default (byte-identical to earlier releases):
+#' get_clean_url("http://example.com/p?utm_source=nl&id=42")
+#' # -> "http://example.com/p"
+#' # Strip trackers, keep contentful params:
+#' get_clean_url(
+#'   "http://example.com/p?utm_source=nl&id=42",
+#'   query_handling = "filter"
+#' )
+#' # -> "http://example.com/p?id=42"
 get_clean_url <- function(url,
                           protocol_handling = "keep",
                           www_handling = "none",
@@ -177,8 +209,17 @@ get_clean_url <- function(url,
                           scheme_relative_handling = "keep",
                           subdomain_levels_to_keep = NULL,
                           host_encoding = "keep",
-                          path_encoding = "keep") {
+                          path_encoding = "keep",
+                          query_handling = c("drop", "filter", "allow", "keep"),
+                          params_keep = NULL,
+                          params_drop = NULL,
+                          params_case_sensitive = FALSE,
+                          sort_params = FALSE,
+                          empty_param_handling = c("keep", "drop"),
+                          decode_plus = FALSE) {
   source <- match.arg(source)
+  query_handling <- match.arg(query_handling)
+  empty_param_handling <- match.arg(empty_param_handling)
   .extract_from_urls(url, "clean_url",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
@@ -190,7 +231,14 @@ get_clean_url <- function(url,
     scheme_relative_handling = scheme_relative_handling,
     subdomain_levels_to_keep = subdomain_levels_to_keep,
     host_encoding = host_encoding,
-    path_encoding = path_encoding
+    path_encoding = path_encoding,
+    query_handling = query_handling,
+    params_keep = params_keep,
+    params_drop = params_drop,
+    params_case_sensitive = params_case_sensitive,
+    sort_params = sort_params,
+    empty_param_handling = empty_param_handling,
+    decode_plus = decode_plus
   )
 }
 
