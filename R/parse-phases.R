@@ -796,10 +796,53 @@
   )
 }
 
+# Query-filter (vector): map the scalar query engine (._filter_query_params,
+# path-query.R) over each row's raw query, returning the canonical, re-encoded
+# query WITHOUT a leading "?" per row -- or "" where nothing survives or the
+# query is absent. "drop" (the default) short-circuits to "" for every row,
+# preserving the historical query-free clean_url. Only non-NA/non-empty raw
+# queries reach the scalar engine, so the common (query-less) URL pays nothing.
+#
+# This is a Stage B (presentation) transform: it depends only on the raw query
+# (a Stage A column) and the query options, never on the expensive parse core.
+# Like clean_url itself it is recomputed on every call and never cached, which
+# is exactly why the query options are excluded from the full_parse cache key
+# (see .parse_cache_keys, parse.R).
+.filter_query_vec <- function(raw_query, opts) {
+  n <- length(raw_query)
+  out <- rep("", n)
+  if (identical(opts$query_handling, "drop")) {
+    return(out)
+  }
+  idx <- which(!is.na(raw_query) & nzchar(raw_query))
+  if (length(idx) == 0L) {
+    return(out)
+  }
+  # vapply passes the query options straight through to ._filter_query_params()
+  # as trailing named args (the raw query is its first positional argument).
+  out[idx] <- vapply(
+    raw_query[idx], ._filter_query_params, character(1),
+    query_handling = opts$query_handling,
+    params_keep = opts$params_keep,
+    params_drop = opts$params_drop,
+    params_case_sensitive = opts$params_case_sensitive,
+    sort_params = opts$sort_params,
+    empty_param_handling = opts$empty_param_handling,
+    decode_plus = opts$decode_plus,
+    USE.NAMES = FALSE
+  )
+  out
+}
+
 # Phase 11 (vector): reconstruct the canonical "clean" URL from cased
-# components. NA/empty host yields NA.
+# components, then append the filtered query. NA/empty host yields NA.
+# `query` is a per-row canonical query WITHOUT a leading "?" (from
+# .filter_query_vec); "" means no query for that row. It is appended AFTER the
+# cased scheme/host/path because query values are case-exempt (see
+# ._parse_stage_b_vec). NULL `query` (the scalar wrapper and the phase unit
+# tests) appends nothing, so clean_url stays scheme+host+path only.
 .build_clean_url_vec <- function(scheme_output, host_output, path_output,
-                                 trailing_slash_handling) {
+                                 trailing_slash_handling, query = NULL) {
   n <- length(host_output)
   clean_url <- rep(NA_character_, n)
   has_host <- !is.na(host_output) & host_output != ""
@@ -815,10 +858,16 @@
   clean_url[has_host] <- paste0(
     scheme_part[has_host], host_output[has_host], path_part[has_host]
   )
+  if (!is.null(query)) {
+    q_present <- has_host & !is.na(query) & nzchar(query)
+    clean_url[q_present] <- paste0(clean_url[q_present], "?", query[q_present])
+  }
   clean_url
 }
 
-# Phase 11 (scalar wrapper): delegates to .build_clean_url_vec().
+# Phase 11 (scalar wrapper): delegates to .build_clean_url_vec(). Keeps the
+# historical query-free signature (no `query` arg), so the scalar orchestrator
+# and phase unit tests reconstruct scheme+host+path only.
 .build_clean_url <- function(scheme_output, host_output, path_output,
                              trailing_slash_handling) {
   .build_clean_url_vec(
