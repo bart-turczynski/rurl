@@ -17,11 +17,21 @@ get_parse_status(
 
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
+Regardless of this option, rurl only processes authority-based URLs whose
+scheme is one of http, https, ftp, or ftps; a scheme-bearing input with any
+other scheme (e.g. \code{mailto:}, \code{tel:}, \code{ws:}) yields
+\code{parse_status = "error"}. Scheme inference (below) also requires the
+input to be host-shaped: a scheme-less string that is not a host (e.g.
+\code{"asdfghjkl"}, \code{"12345"}, \code{"/path"}) or is a non-canonical
+IP literal (integer/hex/octal/short forms, or leading-zero octets like
+\code{"192.168.010.1"}) is rejected as \code{"error"} rather than having a
+scheme fabricated for it.
 \itemize{
-\item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-no scheme, "http://" is added.}
-\item{"none": If a scheme exists, it's used. If no scheme, then no
-scheme is used (scheme component will be NA).}
+\item{"keep": If a supported scheme exists (http, https, ftp, ftps), it's
+used. If no scheme and the input is host-shaped, "http://" is added;
+otherwise the input is not a URL and yields \code{"error"}.}
+\item{"none": If a supported scheme exists, it's used. If no scheme, then
+no scheme is used (scheme component will be NA).}
 \item{"strip": Any existing scheme is removed (scheme component will be
 NA).}
 \item{"http": The scheme is forced to be "http".}
@@ -70,7 +80,12 @@ and \code{warning-public-suffix} depend on which PSL section is consulted,
 so pass \code{source = "icann"} to use only ICANN-managed TLDs.}
 }
 \value{
-A character vector with the parse status of each URL.
+A character vector with the parse status of each URL: one of
+\code{"ok"}, \code{"ok-ftp"}, \code{"ok-scheme-relative"},
+\code{"warning-no-tld"}, \code{"warning-invalid-tld"},
+\code{"warning-public-suffix"}, \code{"warning-userinfo"} (a scheme-less
+input carrying userinfo, e.g. \code{"user@example.com"}), or
+\code{"error"}. See \code{\link{safe_parse_url}} for the full semantics.
 }
 \description{
 Get the parse status of URLs

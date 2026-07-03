@@ -6,6 +6,11 @@
 .STATUS_WARN_NO_TLD      <- "warning-no-tld"
 .STATUS_WARN_INVALID_TLD <- "warning-invalid-tld"
 .STATUS_WARN_PUBLIC_SUFFIX <- "warning-public-suffix"
+# Scheme-less input carrying userinfo (e.g. "user@example.com"): host/domain/tld
+# and user still resolve, but rurl refuses to fabricate a canonical clean_url
+# from an ambiguous, email-shaped, scheme-less string (clean_url is NA). Its NA
+# key makes it non-joinable in canonical_join() regardless of join mode.
+.STATUS_WARN_USERINFO    <- "warning-userinfo"
 
 .is_ok_status      <- function(s) {
   s %in% c(.STATUS_OK, .STATUS_OK_FTP, .STATUS_OK_SCHEME_REL)

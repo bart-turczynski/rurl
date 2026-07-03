@@ -3,6 +3,21 @@
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
 
+# The URL schemes rurl supports. rurl's domain is authority-based (hierarchical)
+# URLs -- these all share the "scheme://host[:port]/path" structure rurl parses,
+# normalizes, and rebuilds. ftps is FTP-over-TLS (the https-analogue for ftp),
+# not the unrelated SSH-based sftp. This is the single source of truth: a
+# scheme-bearing input whose scheme is not here is rejected (opaque schemes like
+# mailto:/tel:/data:, and unrecognized schemes like ws:/ssh:/typos). Adding a
+# scheme is a one-line change here.
+.SUPPORTED_SCHEMES <- c("http", "https", "ftp", "ftps")
+
+# Bare single-label hosts (no dot) accepted from scheme-less input. Only
+# `localhost` is a genuine resolvable single-label host; other RFC 6761/2606
+# reserved names are dotted suffixes handled by the normal path (.onion/.arpa
+# are in the PSL; .local/.test/.invalid/.example -> warning-invalid-tld).
+.SPECIAL_SINGLE_LABEL_HOSTS <- "localhost"
+
 # Coerce present-but-empty ("") raw components to NA, vectorized. curl's
 # `curl_parse_url()` is inconsistent across libcurl versions for a present-but-
 # empty component (e.g. the query of "https://example.com/?"): older libcurl
@@ -67,5 +82,8 @@
     name = "original_has_allowed_scheme", default = FALSE,
     template = logical(1)
   ),
-  list(name = "is_scheme_relative", default = FALSE, template = logical(1))
+  list(name = "is_scheme_relative", default = FALSE, template = logical(1)),
+  # Scheme-less input carrying userinfo (D5): drives the warning-userinfo status
+  # and the NA clean_url in Stage B. Cached with the rest of Stage A.
+  list(name = "scheme_less_userinfo", default = FALSE, template = logical(1))
 )

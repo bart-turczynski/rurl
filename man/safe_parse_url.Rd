@@ -25,11 +25,21 @@ safe_parse_url(
 
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
+Regardless of this option, rurl only processes authority-based URLs whose
+scheme is one of http, https, ftp, or ftps; a scheme-bearing input with any
+other scheme (e.g. \code{mailto:}, \code{tel:}, \code{ws:}) yields
+\code{parse_status = "error"}. Scheme inference (below) also requires the
+input to be host-shaped: a scheme-less string that is not a host (e.g.
+\code{"asdfghjkl"}, \code{"12345"}, \code{"/path"}) or is a non-canonical
+IP literal (integer/hex/octal/short forms, or leading-zero octets like
+\code{"192.168.010.1"}) is rejected as \code{"error"} rather than having a
+scheme fabricated for it.
 \itemize{
-\item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-no scheme, "http://" is added.}
-\item{"none": If a scheme exists, it's used. If no scheme, then no
-scheme is used (scheme component will be NA).}
+\item{"keep": If a supported scheme exists (http, https, ftp, ftps), it's
+used. If no scheme and the input is host-shaped, "http://" is added;
+otherwise the input is not a URL and yields \code{"error"}.}
+\item{"none": If a supported scheme exists, it's used. If no scheme, then
+no scheme is used (scheme component will be NA).}
 \item{"strip": Any existing scheme is removed (scheme component will be
 NA).}
 \item{"http": The scheme is forced to be "http".}
@@ -179,7 +189,11 @@ is human-readable rather than guaranteed URL-safe. NA if host is
 empty/NA.
 \item \code{parse_status}: Character string indicating parsing outcome
 ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
-"warning-invalid-tld", "warning-public-suffix").
+"warning-invalid-tld", "warning-public-suffix", "warning-userinfo").
+"warning-userinfo" marks a scheme-less input carrying userinfo (e.g.
+"user@example.com"): host/domain/tld/user still resolve, but
+\code{clean_url} is NA (rurl will not fabricate a canonical URL from an
+ambiguous, email-shaped, scheme-less string).
 }
 Returns \code{NULL} if the URL is fundamentally unparseable (e.g., NA, empty)
 or uses a disallowed scheme.

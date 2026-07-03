@@ -11,11 +11,21 @@
 #'   \code{\link{safe_parse_urls}}.
 #' @param protocol_handling A character string specifying how to handle
 #'   protocols. Defaults to "keep".
+#'   Regardless of this option, rurl only processes authority-based URLs whose
+#'   scheme is one of http, https, ftp, or ftps; a scheme-bearing input with any
+#'   other scheme (e.g. \code{mailto:}, \code{tel:}, \code{ws:}) yields
+#'   \code{parse_status = "error"}. Scheme inference (below) also requires the
+#'   input to be host-shaped: a scheme-less string that is not a host (e.g.
+#'   \code{"asdfghjkl"}, \code{"12345"}, \code{"/path"}) or is a non-canonical
+#'   IP literal (integer/hex/octal/short forms, or leading-zero octets like
+#'   \code{"192.168.010.1"}) is rejected as \code{"error"} rather than having a
+#'   scheme fabricated for it.
 #'   \itemize{
-#'     \item{"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-#'     no scheme, "http://" is added.}
-#'     \item{"none": If a scheme exists, it's used. If no scheme, then no
-#'     scheme is used (scheme component will be NA).}
+#'     \item{"keep": If a supported scheme exists (http, https, ftp, ftps), it's
+#'     used. If no scheme and the input is host-shaped, "http://" is added;
+#'     otherwise the input is not a URL and yields \code{"error"}.}
+#'     \item{"none": If a supported scheme exists, it's used. If no scheme, then
+#'     no scheme is used (scheme component will be NA).}
 #'     \item{"strip": Any existing scheme is removed (scheme component will be
 #'     NA).}
 #'     \item{"http": The scheme is forced to be "http".}
@@ -153,7 +163,11 @@
 #'     empty/NA.
 #'     \item `parse_status`: Character string indicating parsing outcome
 #'       ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
-#'       "warning-invalid-tld", "warning-public-suffix").
+#'       "warning-invalid-tld", "warning-public-suffix", "warning-userinfo").
+#'       "warning-userinfo" marks a scheme-less input carrying userinfo (e.g.
+#'       "user@example.com"): host/domain/tld/user still resolve, but
+#'       \code{clean_url} is NA (rurl will not fabricate a canonical URL from an
+#'       ambiguous, email-shaped, scheme-less string).
 #'   }
 #'   Returns `NULL` if the URL is fundamentally unparseable (e.g., NA, empty)
 #'   or uses a disallowed scheme.
@@ -737,7 +751,8 @@ safe_parse_urls <- function(url,
     host_is_ace = host_is_ace,
     looks_like_protocol = prep$looks_like_protocol,
     original_has_allowed_scheme = prep$original_has_allowed_scheme,
-    is_scheme_relative = prep$is_scheme_relative
+    is_scheme_relative = prep$is_scheme_relative,
+    scheme_less_userinfo = prep$scheme_less_userinfo
   )
   attr(cols, "null_row") <- null_row
   cols
@@ -814,7 +829,7 @@ safe_parse_urls <- function(url,
   )
 
   # Phase 13: assemble the 14 typed columns.
-  .assemble_parse_result_vec(
+  result <- .assemble_parse_result_vec(
     original_url = original_url,
     scheme_output = cased$scheme,
     host_output = cased$host,
@@ -832,6 +847,16 @@ safe_parse_urls <- function(url,
     is_scheme_relative = a$is_scheme_relative,
     scheme_relative_handling = opts$scheme_relative_handling
   )
+
+  # D5: scheme-less userinfo (user@example.com). host/domain/tld/user still
+  # resolve, but rurl refuses to fabricate a canonical clean_url from an
+  # ambiguous, email-shaped, scheme-less string: NA clean_url + the warning.
+  slu <- a$scheme_less_userinfo & curl_ok
+  if (any(slu)) {
+    result$clean_url[slu] <- NA_character_
+    result$parse_status[slu] <- .STATUS_WARN_USERINFO
+  }
+  result
 }
 
 # Internal implementation of safe_parse_url (not memoized)
@@ -932,6 +957,13 @@ safe_parse_urls <- function(url,
     is_scheme_relative = prep$is_scheme_relative,
     scheme_relative_handling = scheme_relative_handling
   )
+
+  # D5: scheme-less userinfo (user@example.com) -- suppress the fabricated
+  # clean_url and flag warning-userinfo (host/domain/tld/user still resolve).
+  if (isTRUE(prep$scheme_less_userinfo)) {
+    clean_url <- NA_character_
+    parse_status <- .STATUS_WARN_USERINFO
+  }
 
   # Phase 13: assemble the typed result list
   .assemble_parse_result(

@@ -85,7 +85,12 @@
 #'   Warning statuses such as \code{warning-no-tld}, \code{warning-invalid-tld},
 #'   and \code{warning-public-suffix} depend on which PSL section is consulted,
 #'   so pass \code{source = "icann"} to use only ICANN-managed TLDs.
-#' @return A character vector with the parse status of each URL.
+#' @return A character vector with the parse status of each URL: one of
+#'   \code{"ok"}, \code{"ok-ftp"}, \code{"ok-scheme-relative"},
+#'   \code{"warning-no-tld"}, \code{"warning-invalid-tld"},
+#'   \code{"warning-public-suffix"}, \code{"warning-userinfo"} (a scheme-less
+#'   input carrying userinfo, e.g. \code{"user@example.com"}), or
+#'   \code{"error"}. See \code{\link{safe_parse_url}} for the full semantics.
 #' @export
 #' @examples
 #' get_parse_status(
