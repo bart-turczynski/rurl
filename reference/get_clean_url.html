@@ -163,18 +163,17 @@ index/default pages. Defaults to "keep".</p><ul><li><p>"keep": (Default) Leave i
 
 
 <dt id="arg-path-normalization">path_normalization<a class="anchor" aria-label="anchor" href="#arg-path-normalization"></a></dt>
-<dd><p>How to normalize path <em>slash</em> structure. Defaults
-to "none". Note that RFC 3986 dot-segment resolution (<code>.</code> and <code>..</code>,
-including their percent-encoded forms <code>%2e</code>/<code>%2E</code>) is applied
-<em>unconditionally</em> by the underlying parser (libcurl) before rurl sees
-the path, so <code>/a/../b</code> always yields <code>/b</code> — this cannot be disabled
-and the <code>"dot_segments"</code>/<code>"both"</code> settings only make rurl's own
-resolver redundant with what already happened. This option therefore
-meaningfully controls only slash collapsing.</p><ul><li><p>"none": (Default) No slash collapsing. (Dot segments are still
-resolved upstream, as noted above.)</p></li>
+<dd><p>How to normalize path structure. Defaults to
+"none". rurl owns dot-segment resolution: the path is read from the input
+verbatim (not from libcurl's pre-normalized path), so <code>"none"</code> preserves
+<code>.</code> / <code>..</code> segments (<code>/a/../b</code> stays <code>/a/../b</code>) and only
+the settings below change them. Resolution follows RFC 3986 section 5.2.4 and
+acts on <em>literal</em> <code>.</code>/<code>..</code> segments only — a percent-encoded
+<code>%2e</code> is a normal path byte, never a dot segment, so it is never
+treated as traversal.</p><ul><li><p>"none": (Default) No normalization; dot and slash structure is
+preserved exactly as written.</p></li>
 <li><p>"collapse_slashes": Collapse duplicate slashes in the path.</p></li>
-<li><p>"dot_segments": Resolve . and .. segments per RFC 3986 (already
-applied upstream; retained for explicitness).</p></li>
+<li><p>"dot_segments": Resolve . and .. segments per RFC 3986.</p></li>
 <li><p>"both": Apply both collapse_slashes and dot_segments.</p></li>
 </ul></dd>
 
@@ -219,13 +218,13 @@ cleaned URL.</p></li>
 <dt id="arg-path-encoding">path_encoding<a class="anchor" aria-label="anchor" href="#arg-path-encoding"></a></dt>
 <dd><p>How to handle percent-encoding in the path for
 <code>clean_url</code>. Defaults to "keep".</p><ul><li><p>"keep": Leave the path percent-encoding untouched (the path is
-preserved byte-for-byte as written in the URL, so <code>%2F</code> stays <code>%2F</code>
-rather than decoding into a path-separating <code>/</code>). One exception is out of
-rurl's hands: the underlying parser (libcurl) normalizes percent-encoding
-hex digits to uppercase, so <code>%2f</code> is returned as <code>%2F</code>. This is an
-RFC 3986 (section 6.2.2.1) case canonicalization — the two forms are
-equivalent — and it makes such paths compare equal in
-<code><a href="canonical_join.html">canonical_join</a></code>.</p></li>
+preserved as written in the URL, so <code>%2F</code> stays <code>%2F</code> rather than
+decoding into a path-separating <code>/</code>). The one normalization applied is
+percent-hex case: the two hex digits of each <code>%XX</code> triplet are
+uppercased, so <code>%2f</code> becomes <code>%2F</code>. This is an RFC 3986 (section 6.2.2.1)
+canonicalization — the two forms are equivalent — and it makes such paths
+compare equal in <code><a href="canonical_join.html">canonical_join</a></code>. Use "encode" to
+additionally normalize which bytes are encoded.</p></li>
 <li><p>"encode": Normalize by decoding first, then percent-encoding each
 segment (slashes preserved).</p></li>
 <li><p>"decode": Percent-decode UTF-8 sequences in the path.</p></li>
