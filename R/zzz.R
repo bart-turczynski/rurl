@@ -80,6 +80,10 @@ names(.CACHE_CONFIG_FIELDS) <- vapply(
   # rurl_cache_config(max_full_parse = ...).
   assign("full_parse_max", 100000L, envir = .rurl_config)
 
+  # Register the built-in query-denylist source. A future backend package
+  # registers additional named sources here the same way (see query-denylist.R).
+  .register_query_denylist("builtin", .QUERY_DENYLIST_BUILTIN)
+
   invisible()
 }
 
