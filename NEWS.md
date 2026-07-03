@@ -2,6 +2,19 @@
 
 ### Breaking changes
 
+- `path_normalization = "none"` (the default) is now genuinely lossless for
+  path structure (RURL-chdrlyci). The request path is read from the input
+  verbatim rather than from libcurl's pre-normalized path, so `.`/`..` segments
+  are preserved: `"http://ex.com/a/../b"` now yields `clean_url`
+  `"http://ex.com/a/../b"` instead of `"http://ex.com/b"`. Because `clean_url`
+  is a `canonical_join` key, dot-segment paths that previously collided no
+  longer do — pass `path_normalization = "dot_segments"` (or `"both"`) to
+  resolve them. rurl now owns dot-segment resolution (RFC 3986 §5.2.4, literal
+  `.`/`..` only), so a percent-encoded `%2e` is treated as an ordinary path
+  byte and is **never** resolved as traversal — closing the silent
+  `"/a/%2e%2e/b"` → `"/b"` rewrite libcurl used to perform. Percent-hex case is
+  still canonicalized to uppercase (`%2f` → `%2F`) under `"keep"`, so encoded
+  paths remain join-equivalent.
 - Non-compliant input handling is now consistent and strict (RURL-muwpjsmn).
   rurl no longer fabricates an `http://` URL for scheme-less input that is not
   host-shaped: nonsense tokens (`"asdfghjkl"`, `"example"`), free text

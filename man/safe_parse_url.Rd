@@ -100,20 +100,19 @@ index/default pages. Defaults to "keep".
 (case-insensitive).}
 }}
 
-\item{path_normalization}{How to normalize path \emph{slash} structure. Defaults
-to "none". Note that RFC 3986 dot-segment resolution (\code{.} and \code{..},
-including their percent-encoded forms \code{\%2e}/\code{\%2E}) is applied
-\emph{unconditionally} by the underlying parser (libcurl) before rurl sees
-the path, so \code{/a/../b} always yields \code{/b} — this cannot be disabled
-and the \code{"dot_segments"}/\code{"both"} settings only make rurl's own
-resolver redundant with what already happened. This option therefore
-meaningfully controls only slash collapsing.
+\item{path_normalization}{How to normalize path structure. Defaults to
+"none". rurl owns dot-segment resolution: the path is read from the input
+verbatim (not from libcurl's pre-normalized path), so \code{"none"} preserves
+\code{.} / \code{..} segments (\code{/a/../b} stays \code{/a/../b}) and only
+the settings below change them. Resolution follows RFC 3986 section 5.2.4 and
+acts on \emph{literal} \code{.}/\code{..} segments only — a percent-encoded
+\code{\%2e} is a normal path byte, never a dot segment, so it is never
+treated as traversal.
 \itemize{
-\item{"none": (Default) No slash collapsing. (Dot segments are still
-resolved upstream, as noted above.)}
+\item{"none": (Default) No normalization; dot and slash structure is
+preserved exactly as written.}
 \item{"collapse_slashes": Collapse duplicate slashes in the path.}
-\item{"dot_segments": Resolve . and .. segments per RFC 3986 (already
-applied upstream; retained for explicitness).}
+\item{"dot_segments": Resolve . and .. segments per RFC 3986.}
 \item{"both": Apply both collapse_slashes and dot_segments.}
 }}
 
@@ -158,13 +157,13 @@ cleaned URL.}
 \code{clean_url}. Defaults to "keep".
 \itemize{
 \item{"keep": Leave the path percent-encoding untouched (the path is
-preserved byte-for-byte as written in the URL, so \verb{\%2F} stays \verb{\%2F}
-rather than decoding into a path-separating \code{/}). One exception is out of
-rurl's hands: the underlying parser (libcurl) normalizes percent-encoding
-hex digits to uppercase, so \verb{\%2f} is returned as \verb{\%2F}. This is an
-RFC 3986 (section 6.2.2.1) case canonicalization — the two forms are
-equivalent — and it makes such paths compare equal in
-\code{\link{canonical_join}}.}
+preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
+decoding into a path-separating \code{/}). The one normalization applied is
+percent-hex case: the two hex digits of each \verb{\%XX} triplet are
+uppercased, so \verb{\%2f} becomes \verb{\%2F}. This is an RFC 3986 (section 6.2.2.1)
+canonicalization — the two forms are equivalent — and it makes such paths
+compare equal in \code{\link{canonical_join}}. Use "encode" to
+additionally normalize which bytes are encoded.}
 \item{"encode": Normalize by decoding first, then percent-encoding each
 segment (slashes preserved).}
 \item{"decode": Percent-decode UTF-8 sequences in the path.}
