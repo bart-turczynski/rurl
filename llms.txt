@@ -324,6 +324,13 @@ Extract individual URL components from character vectors.
 - [`get_userinfo()`](https://bart-turczynski.github.io/rurl/reference/get_userinfo.md)
   : Get URL userinfo
 
+## Query introspection
+
+Audit query parameters across a set of URLs.
+
+- [`query_param_summary()`](https://bart-turczynski.github.io/rurl/reference/query_param_summary.md)
+  : Summarize query parameters across a set of URLs
+
 ## Joining
 
 Join datasets on canonicalized URL keys.

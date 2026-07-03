@@ -22,6 +22,8 @@ Accessors:
 Cleaning and joining:
 [`get_clean_url()`](https://bart-turczynski.github.io/rurl/reference/get_clean_url.md),
 [`canonical_join()`](https://bart-turczynski.github.io/rurl/reference/canonical_join.md).
+Query introspection:
+[`query_param_summary()`](https://bart-turczynski.github.io/rurl/reference/query_param_summary.md).
 Cache management:
 [`rurl_clear_caches()`](https://bart-turczynski.github.io/rurl/reference/rurl_clear_caches.md),
 [`rurl_cache_info()`](https://bart-turczynski.github.io/rurl/reference/rurl_cache_info.md),
