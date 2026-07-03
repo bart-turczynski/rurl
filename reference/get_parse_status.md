@@ -23,13 +23,22 @@ get_parse_status(
 - protocol_handling:
 
   A character string specifying how to handle protocols. Defaults to
-  "keep".
+  "keep". Regardless of this option, rurl only processes authority-based
+  URLs whose scheme is one of http, https, ftp, or ftps; a
+  scheme-bearing input with any other scheme (e.g. `mailto:`, `tel:`,
+  `ws:`) yields `parse_status = "error"`. Scheme inference (below) also
+  requires the input to be host-shaped: a scheme-less string that is not
+  a host (e.g. `"asdfghjkl"`, `"12345"`, `"/path"`) or is a
+  non-canonical IP literal (integer/hex/octal/short forms, or
+  leading-zero octets like `"192.168.010.1"`) is rejected as `"error"`
+  rather than having a scheme fabricated for it.
 
-  - "keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-    no scheme, "http://" is added.
+  - "keep": If a supported scheme exists (http, https, ftp, ftps), it's
+    used. If no scheme and the input is host-shaped, "http://" is added;
+    otherwise the input is not a URL and yields `"error"`.
 
-  - "none": If a scheme exists, it's used. If no scheme, then no scheme
-    is used (scheme component will be NA).
+  - "none": If a supported scheme exists, it's used. If no scheme, then
+    no scheme is used (scheme component will be NA).
 
   - "strip": Any existing scheme is removed (scheme component will be
     NA).
@@ -87,7 +96,13 @@ get_parse_status(
 
 ## Value
 
-A character vector with the parse status of each URL.
+A character vector with the parse status of each URL: one of `"ok"`,
+`"ok-ftp"`, `"ok-scheme-relative"`, `"warning-no-tld"`,
+`"warning-invalid-tld"`, `"warning-public-suffix"`, `"warning-userinfo"`
+(a scheme-less input carrying userinfo, e.g. `"user@example.com"`), or
+`"error"`. See
+[`safe_parse_url`](https://bart-turczynski.github.io/rurl/reference/safe_parse_url.md)
+for the full semantics.
 
 ## Examples
 
@@ -97,7 +112,7 @@ get_parse_status(
 )
 #> [1] "ok"     "ok-ftp" "error" 
 get_parse_status(c("http://example.com", "not-a-url"))
-#> [1] "ok"             "warning-no-tld"
+#> [1] "ok"    "error"
 get_parse_status("http://example.com", source = "icann")
 #> [1] "ok"
 ```

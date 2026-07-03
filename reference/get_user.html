@@ -9,7 +9,7 @@ written in the URL (not percent-decoded)."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">rurl</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,10 +59,20 @@ written in the URL (not percent-decoded).</p>
 
 <dt id="arg-protocol-handling">protocol_handling<a class="anchor" aria-label="anchor" href="#arg-protocol-handling"></a></dt>
 <dd><p>A character string specifying how to handle
-protocols. Defaults to "keep".</p><ul><li><p>"keep": If a scheme exists (http, https, ftp, ftps), it's used. If
-no scheme, "http://" is added.</p></li>
-<li><p>"none": If a scheme exists, it's used. If no scheme, then no
-scheme is used (scheme component will be NA).</p></li>
+protocols. Defaults to "keep".
+Regardless of this option, rurl only processes authority-based URLs whose
+scheme is one of http, https, ftp, or ftps; a scheme-bearing input with any
+other scheme (e.g. <code>mailto:</code>, <code>tel:</code>, <code>ws:</code>) yields
+<code>parse_status = "error"</code>. Scheme inference (below) also requires the
+input to be host-shaped: a scheme-less string that is not a host (e.g.
+<code>"asdfghjkl"</code>, <code>"12345"</code>, <code>"/path"</code>) or is a non-canonical
+IP literal (integer/hex/octal/short forms, or leading-zero octets like
+<code>"192.168.010.1"</code>) is rejected as <code>"error"</code> rather than having a
+scheme fabricated for it.</p><ul><li><p>"keep": If a supported scheme exists (http, https, ftp, ftps), it's
+used. If no scheme and the input is host-shaped, "http://" is added;
+otherwise the input is not a URL and yields <code>"error"</code>.</p></li>
+<li><p>"none": If a supported scheme exists, it's used. If no scheme, then
+no scheme is used (scheme component will be NA).</p></li>
 <li><p>"strip": Any existing scheme is removed (scheme component will be
 NA).</p></li>
 <li><p>"http": The scheme is forced to be "http".</p></li>

@@ -12,13 +12,13 @@ Source:
 
 Turczynski B (2026). *rurl: Parse, Clean, and Normalize URLs*.
 [doi:10.5281/zenodo.20972584](https://doi.org/10.5281/zenodo.20972584).
-R package version 1.4.1.9000, <https://CRAN.R-project.org/package=rurl>.
+R package version 1.5.0.9000, <https://CRAN.R-project.org/package=rurl>.
 
     @Manual{,
       title = {{rurl}: Parse, Clean, and Normalize URLs},
       author = {Bart Turczynski},
       year = {2026},
-      note = {R package version 1.4.1.9000},
+      note = {R package version 1.5.0.9000},
       doi = {10.5281/zenodo.20972584},
       url = {https://CRAN.R-project.org/package=rurl},
     }

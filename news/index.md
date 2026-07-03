@@ -2,6 +2,42 @@
 
 ## rurl (development version)
 
+### Breaking changes
+
+- Non-compliant input handling is now consistent and strict
+  (RURL-muwpjsmn). rurl no longer fabricates an `http://` URL for
+  scheme-less input that is not host-shaped: nonsense tokens
+  (`"asdfghjkl"`, `"example"`), free text (`"hello world"`), and path
+  fragments (`"/relative/path"`) now return `parse_status = "error"`
+  with `clean_url = NA`, matching the behavior of inputs that already
+  errored. An **explicit** supported scheme is still trusted, so
+  `"http://asdfghjkl/"` remains `warning-no-tld`. Scheme-less
+  `localhost` is accepted (the one allowlisted single-label host).
+- IP literals are validated strictly against the *input* rather than
+  trusting libcurl’s legacy `inet_aton` coercion. Integer, hexadecimal,
+  octal, and short-form numbers (`"12345"` → `0.0.48.57`,
+  `"0x7f000001"`, `"192.168"`), out-of-range or wrong-arity dotted
+  numbers (`"256.1.1.1"`, `"1.2.3.4.5"`), and **leading-zero (octal)
+  octets** (`"192.168.010.1"`, which silently means `192.168.8.1`) now
+  return `"error"` instead of a coerced address. Canonical literals
+  (`"1.2.3.4"`, `"[::1]"`) are unaffected. `.detect_ip_host_vec()` is
+  correspondingly tightened to reject zero-padded octets.
+- Only `http`, `https`, `ftp`, and `ftps` are supported schemes (now a
+  single source of truth, `.SUPPORTED_SCHEMES`). Scheme-bearing input
+  with any other scheme — opaque (`mailto:`, `tel:`, `data:`) or
+  authority-based but unsupported (`ws://`, `ssh://`, `redis://`) —
+  returns `"error"`.
+- New `parse_status` value `"warning-userinfo"` for scheme-less input
+  carrying userinfo (e.g. `"user@example.com"`):
+  `host`/`domain`/`tld`/`user` still resolve, but `clean_url` is `NA`
+  (rurl will not fabricate a canonical URL from an ambiguous,
+  email-shaped, scheme-less string). Such rows are non-joinable in
+  [`canonical_join()`](https://bart-turczynski.github.io/rurl/reference/canonical_join.md).
+  Input with an explicit scheme (`"http://user@example.com"`) is
+  unchanged. Scheme-less `user:pass@host` (indistinguishable from
+  `scheme:opaque`) remains `"error"`; use the scheme-relative form
+  `//user:pass@host` to parse it.
+
 ### Performance
 
 - The parse pipeline is split into an option-independent core (Stage A:
