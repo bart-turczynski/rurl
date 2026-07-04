@@ -207,6 +207,18 @@
 #'     host is an IP, empty, or derivation fails.
 #'     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP,
 #'     empty, or derivation fails.
+#'     \item `domain_ascii`, `domain_unicode`: The registered domain in both
+#'     canonical spellings, independent of `host_encoding`. For an
+#'     internationalized domain, `domain_ascii` is the Punycode/A-label form
+#'     (e.g., "xn--mnchen-3ya.de") and `domain_unicode` the decoded Unicode form
+#'     (e.g., "münchen.de"); for an ASCII-only domain the two are equal.
+#'     Unlike `domain` (which follows `host_encoding`, a rendering choice),
+#'     these are stable identity keys — a Unicode host and its A-label share
+#'     one `domain_ascii` — so consumers can build an encoding-independent key
+#'     from a single parse. NA under the same conditions as `domain`.
+#'     \item `tld_ascii`, `tld_unicode`: The public suffix (TLD) in both
+#'     canonical spellings, the `tld` analogue of `domain_ascii`/
+#'     `domain_unicode`. NA under the same conditions as `tld`.
 #'     \item `is_ip_host`: Logical, TRUE if the host is an IP address.
 #'     \item `clean_url`: A normalized canonical key reconstructed from
 #'     scheme, host, and path, after processing and with case handling
@@ -1022,6 +1034,13 @@ safe_parse_urls <- function(url,
     password = a$raw_password,
     domain = domain,
     tld = tld,
+    # Encoding-independent identity spellings (RURL-owrdsivt): surfaced straight
+    # from Stage A's cached both-spelling decomposition, unaffected by
+    # host_encoding (which only selects `domain`/`tld` above).
+    domain_ascii = a$domain_ascii,
+    domain_unicode = a$domain_unicode,
+    tld_ascii = a$tld_ascii,
+    tld_unicode = a$tld_unicode,
     is_ip_host = is_ip_host,
     clean_url = clean_url,
     parse_status = parse_status,
@@ -1096,12 +1115,20 @@ safe_parse_urls <- function(url,
   # Phase 6: www prefix policy
   final_host <- .apply_www_policy(raw_host, www_handling, is_ip_host)
 
-  # Phase 7: registered-domain and TLD derivation
+  # Phase 7: registered-domain and TLD derivation. `domain`/`tld` follow
+  # host_encoding (a rendering choice); the two fixed spellings (idna/unicode)
+  # are also derived so the encoding-independent identity columns
+  # (domain_ascii/domain_unicode/tld_ascii/tld_unicode, RURL-owrdsivt) can be
+  # emitted -- mirroring Stage A's both-spelling derivation.
   domain_tld <- .derive_domain_tld(
     final_host, is_ip_host, tld_source, host_encoding
   )
   domain <- domain_tld$domain
   tld <- domain_tld$tld
+  dt_ascii <- .derive_domain_tld(final_host, is_ip_host, tld_source, "idna")
+  dt_unicode <- .derive_domain_tld(
+    final_host, is_ip_host, tld_source, "unicode"
+  )
 
   # Phase 8: subdomain-level policy
   final_host <- .apply_subdomain_policy(
@@ -1157,6 +1184,10 @@ safe_parse_urls <- function(url,
     raw_query = raw_query,
     domain = domain,
     tld = tld,
+    domain_ascii = dt_ascii$domain,
+    domain_unicode = dt_unicode$domain,
+    tld_ascii = dt_ascii$tld,
+    tld_unicode = dt_unicode$tld,
     is_ip_host = is_ip_host,
     clean_url = clean_url,
     parse_status = parse_status,
