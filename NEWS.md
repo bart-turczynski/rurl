@@ -1,3 +1,22 @@
+## rurl 2.1.0
+
+### New features
+
+- `safe_parse_url()` and `safe_parse_urls()` gain four additive result columns —
+  `domain_ascii`, `domain_unicode`, `tld_ascii`, and `tld_unicode` — exposing
+  the registrable domain and public suffix in **both** canonical spellings,
+  independent of `host_encoding` (RURL-owrdsivt). `host_encoding` is a
+  *rendering* choice, so the existing `domain`/`tld` columns follow it (under
+  the default `"keep"`, a Unicode host and its Punycode A-label render
+  differently and do not compare equal). The new columns are stable *identity*
+  keys instead: `http://münchen.de` and `http://xn--mnchen-3ya.de` share one
+  `domain_ascii` (`"xn--mnchen-3ya.de"`) and one `domain_unicode`
+  (`"münchen.de"`), so a consumer can build an encoding-independent key from a
+  single parse rather than re-parsing with a forced `host_encoding`. For
+  ASCII-only hosts the two spellings are equal; IP hosts and null rows yield
+  `NA`. The values were already computed internally, so this is purely additive
+  and existing `domain`/`tld` semantics are unchanged.
+
 ## rurl 2.0.0
 
 ### New features

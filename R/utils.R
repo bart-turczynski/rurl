@@ -59,6 +59,17 @@
   list(name = "password", default = NA_character_, template = character(1)),
   list(name = "domain", default = NA_character_, template = character(1)),
   list(name = "tld", default = NA_character_, template = character(1)),
+  # Encoding-independent identity spellings (RURL-owrdsivt): the registrable
+  # domain / public suffix in BOTH canonical spellings, regardless of
+  # host_encoding. `domain`/`tld` above still follow host_encoding (a rendering
+  # choice); these four are stable identity keys so a Unicode host and its
+  # A-label share one domain_ascii (and one domain_unicode) without re-parsing.
+  list(name = "domain_ascii", default = NA_character_, template = character(1)),
+  list(
+    name = "domain_unicode", default = NA_character_, template = character(1)
+  ),
+  list(name = "tld_ascii", default = NA_character_, template = character(1)),
+  list(name = "tld_unicode", default = NA_character_, template = character(1)),
   list(name = "is_ip_host", default = NA, template = logical(1)),
   list(name = "clean_url", default = NA_character_, template = character(1)),
   list(name = "parse_status", default = "error", template = character(1))

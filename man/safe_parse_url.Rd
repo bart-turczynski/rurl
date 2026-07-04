@@ -247,6 +247,18 @@ URL; not percent-decoded. Empty is reported as NA.
 host is an IP, empty, or derivation fails.
 \item \code{tld}: The top-level domain (e.g., "com"). NA if host is an IP,
 empty, or derivation fails.
+\item \code{domain_ascii}, \code{domain_unicode}: The registered domain in both
+canonical spellings, independent of \code{host_encoding}. For an
+internationalized domain, \code{domain_ascii} is the Punycode/A-label form
+(e.g., "xn--mnchen-3ya.de") and \code{domain_unicode} the decoded Unicode form
+(e.g., "münchen.de"); for an ASCII-only domain the two are equal.
+Unlike \code{domain} (which follows \code{host_encoding}, a rendering choice),
+these are stable identity keys — a Unicode host and its A-label share
+one \code{domain_ascii} — so consumers can build an encoding-independent key
+from a single parse. NA under the same conditions as \code{domain}.
+\item \code{tld_ascii}, \code{tld_unicode}: The public suffix (TLD) in both
+canonical spellings, the \code{tld} analogue of \code{domain_ascii}/
+\code{domain_unicode}. NA under the same conditions as \code{tld}.
 \item \code{is_ip_host}: Logical, TRUE if the host is an IP address.
 \item \code{clean_url}: A normalized canonical key reconstructed from
 scheme, host, and path, after processing and with case handling

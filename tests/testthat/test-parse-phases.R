@@ -332,7 +332,8 @@ test_that(".assemble_parse_result coerces port to integer", {
   parsed <- curl::curl_parse_url("http://example.com:8080/p")
   res <- rurl:::.assemble_parse_result(
     "http://example.com:8080/p", "http", "example.com", parsed, "/p",
-    NA_character_, "example.com", "com", FALSE,
+    NA_character_, "example.com", "com", "example.com", "example.com",
+    "com", "com", FALSE,
     "http://example.com:8080/p", "ok", FALSE, "keep"
   )
   expect_type(res$port, "integer")

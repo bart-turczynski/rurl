@@ -962,7 +962,9 @@
 # The engine applies error-row defaults for NULL-equivalent rows afterward.
 .assemble_parse_result_vec <- function(original_url, scheme_output, host_output,
                                        port, path_output, raw_query, fragment,
-                                       user, password, domain, tld, is_ip_host,
+                                       user, password, domain, tld,
+                                       domain_ascii, domain_unicode,
+                                       tld_ascii, tld_unicode, is_ip_host,
                                        clean_url, parse_status,
                                        is_scheme_relative,
                                        scheme_relative_handling) {
@@ -989,6 +991,10 @@
     password = password,
     domain = domain,
     tld = tld,
+    domain_ascii = domain_ascii,
+    domain_unicode = domain_unicode,
+    tld_ascii = tld_ascii,
+    tld_unicode = tld_unicode,
     is_ip_host = is_ip_host,
     clean_url = clean_url,
     parse_status = parse_status
@@ -999,7 +1005,9 @@
 # object, then delegates to .assemble_parse_result_vec().
 .assemble_parse_result <- function(original_input_url, scheme_output,
                                    host_output, parsed_curl, path_output,
-                                   raw_query, domain, tld, is_ip_host,
+                                   raw_query, domain, tld,
+                                   domain_ascii, domain_unicode,
+                                   tld_ascii, tld_unicode, is_ip_host,
                                    clean_url, parse_status, is_scheme_relative,
                                    scheme_relative_handling) {
   .assemble_parse_result_vec(
@@ -1015,6 +1023,10 @@
     password = .blank_to_na(parsed_curl$password %||% NA_character_),
     domain = domain,
     tld = tld,
+    domain_ascii = domain_ascii,
+    domain_unicode = domain_unicode,
+    tld_ascii = tld_ascii,
+    tld_unicode = tld_unicode,
     is_ip_host = is_ip_host,
     clean_url = clean_url,
     parse_status = parse_status,
