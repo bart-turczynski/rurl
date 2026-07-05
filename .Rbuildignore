@@ -13,6 +13,8 @@
 ^cran-comments\.md$
 ^CRAN-SUBMISSION$
 ^CLAUDE\.md$
+^ARCHITECTURE\.md$
+^design$
 ^\.claude$
 ^\.fp$
 ^FP_CLAUDE\.md$
