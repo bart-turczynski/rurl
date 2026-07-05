@@ -93,8 +93,10 @@ pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
 selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
 also lowercases the path, which neither standard sanctions). Added as the
 last argument so existing positional calls keep their meaning; always
-pass it by name. The selector does \strong{not} govern default ports,
-backslash handling, IDNA, query handling, or relative-URL resolution.}
+pass it by name. The selector does \strong{not} govern whether \code{port_handling}
+may be set, only the default-port elision described above; it also does
+not govern backslash handling, IDNA, query handling, or relative-URL
+resolution.}
 }
 \value{
 A character vector with the parse status of each URL: one of

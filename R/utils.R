@@ -22,6 +22,14 @@
 # allowlist.
 .WHATWG_SPECIAL_SCHEMES <- c("http", "https", "ftp")
 
+# Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts).
+# Only http/https/ftp have a WHATWG-defined default; ftps (rurl's own
+# FTP-over-TLS addition, not a WHATWG special scheme per D2) has none, so a
+# port on ftps never matches this table -- it is never elided under
+# port_handling = "keep" and always registers as the non-default-port
+# diagnostic fact, regardless of url_standard.
+.SCHEME_DEFAULT_PORTS <- c(http = 80L, https = 443L, ftp = 21L)
+
 # Bare single-label hosts (no dot) accepted from scheme-less input. Only
 # `localhost` is a genuine resolvable single-label host; other RFC 6761/2606
 # reserved names are dotted suffixes handled by the normal path (.onion/.arpa

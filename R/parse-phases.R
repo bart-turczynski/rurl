@@ -951,15 +951,62 @@
   out
 }
 
+# Look up the WHATWG default port for a (possibly mixed-case) scheme vector
+# (PRD v2 D1, RURL-qdlvldts). Case-folds before the table lookup since `scheme`
+# may carry the caller's original casing (case_handling need not be
+# "lower_host") -- mirrors the ftp-status scheme fold in
+# .derive_parse_status_vec(). Returns NA for a scheme with no WHATWG default
+# (ftps, NA, or anything outside .SCHEME_DEFAULT_PORTS).
+.scheme_default_port_vec <- function(scheme) {
+  unname(.SCHEME_DEFAULT_PORTS[stringi::stri_trans_tolower(scheme)])
+}
+
+# Phase 11 port component (PRD v2 D1, RURL-qdlvldts): "" (excluded) or
+# ":<port>" per the standalone `port_handling` knob and, only for "keep",
+# `url_standard`'s WHATWG default-port elision. `scheme` keys the default-port
+# table only -- it is never rendered here (the caller already embeds the
+# cased scheme in `scheme_part`).
+.build_port_part_vec <- function(scheme, port, port_handling, url_standard) {
+  n <- length(scheme)
+  port_part <- rep("", n)
+  if (is.null(port) ||
+        port_handling %in% c("exclude", "strip_all")) {
+    return(port_part)
+  }
+  has_port <- !is.na(port)
+  if (!any(has_port)) {
+    return(port_part)
+  }
+
+  default_port <- .scheme_default_port_vec(scheme)
+  is_default <- has_port & !is.na(default_port) & port == default_port
+
+  if (identical(port_handling, "strip_default")) {
+    keep <- has_port & !is_default
+  } else {
+    scheme_lc <- stringi::stri_trans_tolower(scheme)
+    elide <- has_port & is_default & identical(url_standard, "whatwg") &
+      scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
+    keep <- has_port & !elide
+  }
+  port_part[keep] <- paste0(":", port[keep])
+  port_part
+}
+
 # Phase 11 (vector): reconstruct the canonical "clean" URL from cased
 # components, then append the filtered query. NA/empty host yields NA.
 # `query` is a per-row canonical query WITHOUT a leading "?" (from
 # .filter_query_vec); "" means no query for that row. It is appended AFTER the
 # cased scheme/host/path because query values are case-exempt (see
 # ._parse_stage_b_vec). NULL `query` (the scalar wrapper and the phase unit
-# tests) appends nothing, so clean_url stays scheme+host+path only.
+# tests) appends nothing, so clean_url stays scheme+host+path only. `port` is
+# the raw (unfiltered) port column; NULL (the scalar wrapper and phase unit
+# tests) or `port_handling = "exclude"` (the default) keeps clean_url
+# port-free, exactly as before.
 .build_clean_url_vec <- function(scheme_output, host_output, path_output,
-                                 trailing_slash_handling, query = NULL) {
+                                 trailing_slash_handling, query = NULL,
+                                 port = NULL, port_handling = "exclude",
+                                 url_standard = NULL) {
   n <- length(host_output)
   clean_url <- rep(NA_character_, n)
   has_host <- !is.na(host_output) & host_output != ""
@@ -968,12 +1015,16 @@
   }
 
   scheme_part <- ifelse(!is.na(scheme_output), paste0(scheme_output, "://"), "")
+  port_part <- .build_port_part_vec(
+    scheme_output, port, port_handling, url_standard
+  )
   path_part <- ifelse(!is.na(path_output), path_output, "")
   if (trailing_slash_handling == "strip") {
     path_part[path_part == "/"] <- ""
   }
   clean_url[has_host] <- paste0(
-    scheme_part[has_host], host_output[has_host], path_part[has_host]
+    scheme_part[has_host], host_output[has_host], port_part[has_host],
+    path_part[has_host]
   )
   if (!is.null(query)) {
     q_present <- has_host & !is.na(query) & nzchar(query)
@@ -983,12 +1034,15 @@
 }
 
 # Phase 11 (scalar wrapper): delegates to .build_clean_url_vec(). Keeps the
-# historical query-free signature (no `query` arg), so the scalar orchestrator
-# and phase unit tests reconstruct scheme+host+path only.
+# historical query-free signature (no `query` arg) as the default, so the
+# scalar orchestrator and phase unit tests reconstruct scheme+host+path only
+# unless a caller explicitly opts into the port arguments.
 .build_clean_url <- function(scheme_output, host_output, path_output,
-                             trailing_slash_handling) {
+                             trailing_slash_handling, port = NULL,
+                             port_handling = "exclude", url_standard = NULL) {
   .build_clean_url_vec(
-    scheme_output, host_output, path_output, trailing_slash_handling
+    scheme_output, host_output, path_output, trailing_slash_handling,
+    port = port, port_handling = port_handling, url_standard = url_standard
   )
 }
 

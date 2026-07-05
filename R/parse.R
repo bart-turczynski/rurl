@@ -186,6 +186,23 @@
 #' @param decode_plus Logical (default `FALSE`). When `TRUE`, `+` in query
 #'   values is treated as a space (HTML-form decoding) before percent-decoding.
 #'   `FALSE` keeps `+` literal (RFC 3986 generic behavior).
+#' @param port_handling A character string controlling whether the port
+#' appears in `clean_url`. Defaults to "exclude", today's only historical
+#' behavior. This knob is standalone and standard-independent (editorial, like
+#' `www_handling`) -- `url_standard` never governs whether it may be set, only
+#' (for `"keep"`) whether a default port gets elided underneath it.
+#'   \itemize{
+#'     \item{"exclude": (Default) The port never appears in `clean_url`.}
+#'     \item{"strip_all": Explicit alias of "exclude".}
+#'     \item{"keep": Include the port when present. Under
+#'     `url_standard = "whatwg"`, a port matching its WHATWG-special scheme's
+#'     default (http:80, https:443, ftp:21) is elided even under "keep"; under
+#'     `"rfc3986"` or no selector, the port is kept verbatim (RFC 3986 has no
+#'     default-port concept). `ftps` has no WHATWG default, so its port is
+#'     never elided.}
+#'     \item{"strip_default": Keep only non-default ports (using the same
+#'     scheme-default table), independent of `url_standard`.}
+#'   }
 #' @param url_standard Optional top-level standard profile: `NULL` (default),
 #'   `"rfc3986"`, or `"whatwg"`. With `NULL` the behavior is exactly what the
 #'   individual low-level options select (fully backward compatible). When set,
@@ -199,8 +216,10 @@
 #'   selector — `"keep"`, `"lower"`, and `"upper"` all conflict, since `"lower"`
 #'   also lowercases the path, which neither standard sanctions). Added as the
 #'   last argument so existing positional calls keep their meaning; always
-#'   pass it by name. The selector does **not** govern default ports,
-#'   backslash handling, IDNA, query handling, or relative-URL resolution.
+#'   pass it by name. The selector does **not** govern whether `port_handling`
+#'   may be set, only the default-port elision described above; it also does
+#'   not govern backslash handling, IDNA, query handling, or relative-URL
+#'   resolution.
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -240,8 +259,10 @@
 #'     applied. The query is included only when `query_handling != "drop"`
 #'     (the default is "drop", so by default the query is excluded); when
 #'     included it is filtered/canonicalized per the query options and appended
-#'     case-unfolded. Port, fragment, and userinfo are always excluded (use the
-#'     dedicated components above to retrieve them). With
+#'     case-unfolded. The port is included only when
+#'     `port_handling != "exclude"` (the default is "exclude", so by default
+#'     the port is excluded, as before); fragment and userinfo are always
+#'     excluded (use the dedicated components above to retrieve them). With
 #'     `path_encoding = "decode"` the path is shown decoded, so `clean_url`
 #'     is human-readable rather than guaranteed URL-safe. NA if host is
 #'     empty/NA.
@@ -370,6 +391,9 @@ safe_parse_url <- function(url,
                            empty_param_handling = c("keep", "drop"),
                            params_case_sensitive = FALSE,
                            decode_plus = FALSE,
+                           port_handling = c(
+                             "exclude", "keep", "strip_default", "strip_all"
+                           ),
                            url_standard = NULL) {
   # Enforce scalar input to keep behavior explicit and predictable
   if (length(url) != 1) {
@@ -414,6 +438,7 @@ safe_parse_url <- function(url,
     empty_param_handling = empty_param_handling,
     params_case_sensitive = params_case_sensitive,
     decode_plus = decode_plus,
+    port_handling = port_handling,
     url_standard = url_standard
   )
 
@@ -468,6 +493,9 @@ safe_parse_urls <- function(url,
                             empty_param_handling = c("keep", "drop"),
                             params_case_sensitive = FALSE,
                             decode_plus = FALSE,
+                            port_handling = c(
+                              "exclude", "keep", "strip_default", "strip_all"
+                            ),
                             url_standard = NULL) {
   # url_standard (RURL-eqzkkohm): validate + conflict-check the governed knobs
   # the caller explicitly supplied (see safe_parse_url() for the rationale).
@@ -501,6 +529,7 @@ safe_parse_urls <- function(url,
     empty_param_handling = empty_param_handling,
     params_case_sensitive = params_case_sensitive,
     decode_plus = decode_plus,
+    port_handling = port_handling,
     url_standard = url_standard
   )
 
@@ -598,6 +627,15 @@ safe_parse_urls <- function(url,
 .opt_path_encoding <- c("keep", "encode", "decode")
 .opt_query_handling <- c("drop", "filter", "allow", "keep")
 .opt_empty_param_handling <- c("keep", "drop")
+# Standalone, standard-independent editorial knob (PRD v2 D1, RURL-qdlvldts):
+# "exclude" (default) is today's only behavior -- port never appears in
+# clean_url. "keep" includes the port, subject to url_standard's own
+# default-port elision when url_standard = "whatwg" (see
+# .build_port_part_vec(), R/parse-phases.R). "strip_default" keeps only
+# non-default ports, independent of url_standard. "strip_all" is an explicit
+# alias of "exclude". Lives alongside www_handling/trailing_slash_handling in
+# the cleanup-knob tier -- NOT part of .URL_STANDARD_PROFILES.
+.opt_port_handling <- c("exclude", "keep", "strip_default", "strip_all")
 
 # --- url_standard selector (RURL-eqzkkohm) -----------------------------------
 #
@@ -781,6 +819,7 @@ safe_parse_urls <- function(url,
                            empty_param_handling = .opt_empty_param_handling,
                            params_case_sensitive = FALSE,
                            decode_plus = FALSE,
+                           port_handling = .opt_port_handling,
                            url_standard = NULL) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep and the query options.
@@ -797,6 +836,7 @@ safe_parse_urls <- function(url,
     path_encoding = match.arg(path_encoding),
     query_handling = match.arg(query_handling),
     empty_param_handling = match.arg(empty_param_handling),
+    port_handling = match.arg(port_handling),
     params_keep = .validate_param_patterns(params_keep, "params_keep"),
     params_drop = .validate_param_patterns(params_drop, "params_drop"),
     sort_params = .validate_flag(sort_params, "sort_params"),
@@ -1235,7 +1275,8 @@ safe_parse_urls <- function(url,
   # Phase 11: clean URL reconstruction (with the filtered query appended).
   clean_url <- .build_clean_url_vec(
     cased$scheme, cased$host, cased$path, opts$trailing_slash_handling,
-    query = clean_query
+    query = clean_query, port = a$raw_port, port_handling = opts$port_handling,
+    url_standard = opts$url_standard
   )
 
   # Phase 12: parse-status assignment (uses the post-subdomain-trim host,
