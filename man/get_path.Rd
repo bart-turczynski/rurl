@@ -11,7 +11,8 @@ get_path(
   trailing_slash_handling = c("none", "keep", "strip"),
   index_page_handling = c("keep", "strip"),
   path_normalization = c("none", "collapse_slashes", "dot_segments", "both"),
-  path_encoding = c("keep", "encode", "decode")
+  path_encoding = c("keep", "encode", "decode"),
+  url_standard = NULL
 )
 }
 \arguments{
@@ -95,6 +96,19 @@ additionally normalize which bytes are encoded.}
 segment (slashes preserved).}
 \item{"decode": Percent-decode UTF-8 sequences in the path.}
 }}
+
+\item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
+\code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
+individual low-level options select (fully backward compatible). When set,
+it selects a coherent set of standard-conformant behaviors for the axes it
+governs — path percent/dot handling and the host IPv4/reg-name model — so
+callers do not have to hand-assemble the low-level knobs. Passing a
+governed low-level knob (\code{path_encoding} or \code{path_normalization}) with a
+value the selected profile would not choose is an error; passing the value
+the profile would pick is accepted. Added as the last argument so existing
+positional calls keep their meaning; always pass it by name. The v1
+selector does \strong{not} govern default ports, backslash handling, IDNA,
+query handling, or relative-URL resolution.}
 }
 \value{
 A character vector of URL paths.

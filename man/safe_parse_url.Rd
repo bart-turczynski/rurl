@@ -23,7 +23,8 @@ safe_parse_url(
   sort_params = FALSE,
   empty_param_handling = c("keep", "drop"),
   params_case_sensitive = FALSE,
-  decode_plus = FALSE
+  decode_plus = FALSE,
+  url_standard = NULL
 )
 }
 \arguments{
@@ -224,6 +225,19 @@ denylist and \code{params_keep}/\code{params_drop} matching is case-sensitive.}
 \item{decode_plus}{Logical (default \code{FALSE}). When \code{TRUE}, \code{+} in query
 values is treated as a space (HTML-form decoding) before percent-decoding.
 \code{FALSE} keeps \code{+} literal (RFC 3986 generic behavior).}
+
+\item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
+\code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
+individual low-level options select (fully backward compatible). When set,
+it selects a coherent set of standard-conformant behaviors for the axes it
+governs — path percent/dot handling and the host IPv4/reg-name model — so
+callers do not have to hand-assemble the low-level knobs. Passing a
+governed low-level knob (\code{path_encoding} or \code{path_normalization}) with a
+value the selected profile would not choose is an error; passing the value
+the profile would pick is accepted. Added as the last argument so existing
+positional calls keep their meaning; always pass it by name. The v1
+selector does \strong{not} govern default ports, backslash handling, IDNA,
+query handling, or relative-URL resolution.}
 }
 \value{
 A named list with the following components:

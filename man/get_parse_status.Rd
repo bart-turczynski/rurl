@@ -9,7 +9,8 @@ get_parse_status(
   protocol_handling = "keep",
   www_handling = "none",
   subdomain_levels_to_keep = NULL,
-  source = c("all", "private", "icann")
+  source = c("all", "private", "icann"),
+  url_standard = NULL
 )
 }
 \arguments{
@@ -78,6 +79,19 @@ in addition to any 'www.' prefix. E.g., if N=1,
 Warning statuses such as \code{warning-no-tld}, \code{warning-invalid-tld},
 and \code{warning-public-suffix} depend on which PSL section is consulted,
 so pass \code{source = "icann"} to use only ICANN-managed TLDs.}
+
+\item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
+\code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
+individual low-level options select (fully backward compatible). When set,
+it selects a coherent set of standard-conformant behaviors for the axes it
+governs — path percent/dot handling and the host IPv4/reg-name model — so
+callers do not have to hand-assemble the low-level knobs. Passing a
+governed low-level knob (\code{path_encoding} or \code{path_normalization}) with a
+value the selected profile would not choose is an error; passing the value
+the profile would pick is accepted. Added as the last argument so existing
+positional calls keep their meaning; always pass it by name. The v1
+selector does \strong{not} govern default ports, backslash handling, IDNA,
+query handling, or relative-URL resolution.}
 }
 \value{
 A character vector with the parse status of each URL: one of

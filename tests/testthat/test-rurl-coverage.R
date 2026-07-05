@@ -51,8 +51,7 @@ test_that("internal parse handles NA regex results", {
     {
       assign("stri_detect_regex", orig, envir = ns)
       if (was_locked) lockBinding("stri_detect_regex", ns)
-    },
-    testthat::teardown_env()
+    }
   )
 
   assign("stri_detect_regex", function(string, pattern, ...) {
@@ -107,8 +106,7 @@ test_that("safe_parse_url handles NA from stringi ip detection", {
     {
       assign("stri_detect_regex", orig, envir = ns)
       if (was_locked) lockBinding("stri_detect_regex", ns)
-    },
-    testthat::teardown_env()
+    }
   )
 
   assign("stri_detect_regex", function(string, pattern, ...) {
@@ -136,8 +134,7 @@ test_that("safe_parse_url handles empty host from curl_parse_url", {
     {
       assign("curl_parse_url", orig, envir = ns)
       if (was_locked) lockBinding("curl_parse_url", ns)
-    },
-    testthat::teardown_env()
+    }
   )
 
   assign("curl_parse_url", function(url, ...) {
@@ -189,8 +186,7 @@ test_that(
           registrable_domain = NA_character_,
           stringsAsFactors = FALSE
         )
-      },
-      .env = asNamespace("rurl")
+      }
     )
 
     # The full-parse cache may already hold "http://example.com" from an earlier
@@ -266,8 +262,7 @@ test_that("derive_parse_status coerces NA host-has-dot to no-TLD warning", {
     {
       assign("stri_detect_fixed", orig, envir = ns)
       if (was_locked) lockBinding("stri_detect_fixed", ns)
-    },
-    testthat::teardown_env()
+    }
   )
 
   assign("stri_detect_fixed", function(str, pattern, ...) {
@@ -365,8 +360,7 @@ test_that("getters return NA on parse failures", {
 
 test_that("getters return NA when safe_parse_url is NULL", {
   testthat::local_mocked_bindings(
-    safe_parse_url = function(url, ...) NULL,
-    .env = asNamespace("rurl")
+    safe_parse_url = function(url, ...) NULL
   )
 
   expect_true(is.na(get_query("http://example.com")))
@@ -389,8 +383,7 @@ test_that("get_userinfo returns user when password is missing", {
 
 test_that("get_domain returns NA for ip hosts in non-all source", {
   testthat::local_mocked_bindings(
-    safe_parse_url = function(url, ...) list(is_ip_host = TRUE),
-    .env = asNamespace("rurl")
+    safe_parse_url = function(url, ...) list(is_ip_host = TRUE)
   )
   expect_true(is.na(get_domain("http://127.0.0.1", source = "icann")))
 })
@@ -429,8 +422,7 @@ test_that("get_subdomain handles edge cases and formats", {
         is_ip_host = FALSE
       )
     },
-    .punycode_to_unicode = function(x) x,
-    .env = asNamespace("rurl")
+    .punycode_to_unicode = function(x) x
   )
 
   expect_true(is.na(get_subdomain("http://example.com")))
@@ -455,8 +447,7 @@ test_that("get_subdomain with non-all source uses the parsed domain", {
         is_ip_host = FALSE
       )
     },
-    .punycode_to_unicode = function(x) x,
-    .env = asNamespace("rurl")
+    .punycode_to_unicode = function(x) x
   )
 
   res_labels <- get_subdomain(
@@ -478,45 +469,40 @@ test_that("get_subdomain returns NA when domain is missing", {
 })
 
 test_that("get_subdomain uses safe_parse_url values defensively", {
-  ns <- asNamespace("rurl")
-  orig <- get("safe_parse_url", envir = ns)
-  was_locked <- bindingIsLocked("safe_parse_url", ns)
-  if (was_locked) unlockBinding("safe_parse_url", ns)
-  withr::defer(
-    {
-      assign("safe_parse_url", orig, envir = ns)
-      if (was_locked) lockBinding("safe_parse_url", ns)
-    },
-    testthat::teardown_env()
+  # Use local_mocked_bindings (like the tests above) rather than a manual
+  # assign()/defer into the namespace: the manual mock previously deferred its
+  # restore to testthat::teardown_env(), which leaves the stub installed for
+  # every LATER test file. Any file that calls safe_parse_url() directly (e.g.
+  # test-url-standard-scaffold.R) then saw the stub instead of the real engine.
+  # local_mocked_bindings restores at the end of THIS test_that. Re-calling it
+  # re-points the binding for the remaining assertions.
+  testthat::local_mocked_bindings(
+    safe_parse_url = function(url, ...) {
+      list(
+        host = NA_character_, domain = NA_character_,
+        tld = NA_character_, is_ip_host = FALSE
+      )
+    }
   )
-
-  assign("safe_parse_url", function(url, ...) {
-    list(
-      host = NA_character_,
-      domain = NA_character_,
-      tld = NA_character_,
-      is_ip_host = FALSE
-    )
-  }, envir = ns)
   expect_true(is.na(get_subdomain("http://example.com")))
 
-  assign("safe_parse_url", function(url, ...) {
-    list(
-      host = ".example.com",
-      domain = "example.com",
-      tld = "com",
-      is_ip_host = FALSE
-    )
-  }, envir = ns)
+  testthat::local_mocked_bindings(
+    safe_parse_url = function(url, ...) {
+      list(
+        host = ".example.com", domain = "example.com",
+        tld = "com", is_ip_host = FALSE
+      )
+    }
+  )
   expect_true(is.na(get_subdomain("http://example.com")))
 
-  assign("safe_parse_url", function(url, ...) {
-    list(
-      host = "example.com",
-      domain = NA_character_,
-      tld = NA_character_,
-      is_ip_host = FALSE
-    )
-  }, envir = ns)
+  testthat::local_mocked_bindings(
+    safe_parse_url = function(url, ...) {
+      list(
+        host = "example.com", domain = NA_character_,
+        tld = NA_character_, is_ip_host = FALSE
+      )
+    }
+  )
   expect_true(is.na(get_subdomain("http://example.com", source = "icann")))
 })

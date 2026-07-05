@@ -186,6 +186,18 @@
 #' @param decode_plus Logical (default `FALSE`). When `TRUE`, `+` in query
 #'   values is treated as a space (HTML-form decoding) before percent-decoding.
 #'   `FALSE` keeps `+` literal (RFC 3986 generic behavior).
+#' @param url_standard Optional top-level standard profile: `NULL` (default),
+#'   `"rfc3986"`, or `"whatwg"`. With `NULL` the behavior is exactly what the
+#'   individual low-level options select (fully backward compatible). When set,
+#'   it selects a coherent set of standard-conformant behaviors for the axes it
+#'   governs — path percent/dot handling and the host IPv4/reg-name model — so
+#'   callers do not have to hand-assemble the low-level knobs. Passing a
+#'   governed low-level knob (`path_encoding` or `path_normalization`) with a
+#'   value the selected profile would not choose is an error; passing the value
+#'   the profile would pick is accepted. Added as the last argument so existing
+#'   positional calls keep their meaning; always pass it by name. The v1
+#'   selector does **not** govern default ports, backslash handling, IDNA,
+#'   query handling, or relative-URL resolution.
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -354,7 +366,8 @@ safe_parse_url <- function(url,
                            sort_params = FALSE,
                            empty_param_handling = c("keep", "drop"),
                            params_case_sensitive = FALSE,
-                           decode_plus = FALSE) {
+                           decode_plus = FALSE,
+                           url_standard = NULL) {
   # Enforce scalar input to keep behavior explicit and predictable
   if (length(url) != 1) {
     stop(
@@ -363,6 +376,18 @@ safe_parse_url <- function(url,
       call. = FALSE
     )
   }
+
+  # url_standard (RURL-eqzkkohm): validate, then conflict-check the governed
+  # low-level knobs the caller EXPLICITLY supplied (missing() must be evaluated
+  # here, in the public frame). match.arg() resolves partial matches before the
+  # comparison so an abbreviated-but-compatible value is accepted.
+  url_standard <- .validate_url_standard(url_standard)
+  .check_url_standard_conflicts(url_standard, .governed_supplied(
+    path_encoding =
+      if (missing(path_encoding)) NULL else match.arg(path_encoding),
+    path_normalization =
+      if (missing(path_normalization)) NULL else match.arg(path_normalization)
+  ))
 
   # Validate and normalize options once (match.arg + subdomain check)
   opts <- .parse_options(
@@ -383,7 +408,8 @@ safe_parse_url <- function(url,
     sort_params = sort_params,
     empty_param_handling = empty_param_handling,
     params_case_sensitive = params_case_sensitive,
-    decode_plus = decode_plus
+    decode_plus = decode_plus,
+    url_standard = url_standard
   )
 
   ._safe_parse_url_scalar(url, opts)
@@ -436,7 +462,18 @@ safe_parse_urls <- function(url,
                             sort_params = FALSE,
                             empty_param_handling = c("keep", "drop"),
                             params_case_sensitive = FALSE,
-                            decode_plus = FALSE) {
+                            decode_plus = FALSE,
+                            url_standard = NULL) {
+  # url_standard (RURL-eqzkkohm): validate + conflict-check the governed knobs
+  # the caller explicitly supplied (see safe_parse_url() for the rationale).
+  url_standard <- .validate_url_standard(url_standard)
+  .check_url_standard_conflicts(url_standard, .governed_supplied(
+    path_encoding =
+      if (missing(path_encoding)) NULL else match.arg(path_encoding),
+    path_normalization =
+      if (missing(path_normalization)) NULL else match.arg(path_normalization)
+  ))
+
   # Validate and normalize options once (match.arg + subdomain check)
   opts <- .parse_options(
     protocol_handling = protocol_handling,
@@ -456,7 +493,8 @@ safe_parse_urls <- function(url,
     sort_params = sort_params,
     empty_param_handling = empty_param_handling,
     params_case_sensitive = params_case_sensitive,
-    decode_plus = decode_plus
+    decode_plus = decode_plus,
+    url_standard = url_standard
   )
 
   # Coerce factors to their labels up front so factor input parses as the
@@ -554,6 +592,137 @@ safe_parse_urls <- function(url,
 .opt_query_handling <- c("drop", "filter", "allow", "keep")
 .opt_empty_param_handling <- c("keep", "drop")
 
+# --- url_standard selector (RURL-eqzkkohm) -----------------------------------
+#
+# `url_standard` is the top-level coherent-profile selector: NULL (today's
+# behavior, exactly) or one of the two governed standards. It is threaded
+# through every public parse/accessor function and stored on `opts` so later
+# tickets can consume it in Stage A/B. In THIS ticket (T1, RURL-bbojhnhu) the
+# profile->behavior mapping is a deliberate NO-OP: the argument exists,
+# validates, and conflict-checks, but path/host output is byte-for-byte
+# unchanged. T3/T4/T5 replace the placeholder behavior WITHOUT changing the
+# conflict matrix defined below.
+.url_standard_choices <- c("rfc3986", "whatwg")
+
+# Final conflict matrix (PRD §5, D3) -- FIXED now so the profile tickets do not
+# move what T1's tests assert. For each governed knob it records the value the
+# selected profile "would choose". `path_encoding`'s required value is a
+# profile-internal mode with NO public enum equivalent (rurl has no public
+# unreserved-only or WHATWG-preserve `path_encoding` value), so ANY explicit
+# public `path_encoding` conflicts with a set `url_standard`.
+# `path_normalization` resolves dot segments under both profiles, so its
+# value is "dot_segments" (v1 profiles do not collapse slashes, so "both"
+# conflicts).
+# Host IPv4 behavior is governed too, but it is not exposed as a public knob, so
+# it contributes no conflict-checkable argument here.
+.URL_STANDARD_PROFILES <- list(
+  rfc3986 = list(
+    path_encoding = ".rfc3986_unreserved",
+    path_normalization = "dot_segments"
+  ),
+  whatwg = list(
+    path_encoding = ".whatwg_preserve",
+    path_normalization = "dot_segments"
+  )
+)
+
+# Public choice sets for the governed knobs, used to resolve partial matches
+# (e.g. path_normalization = "dot" -> "dot_segments") before the conflict check
+# so a legitimate abbreviated value is not mistaken for a conflicting one.
+.url_standard_governed_choices <- list(
+  path_encoding = .opt_path_encoding,
+  path_normalization = .opt_path_normalization
+)
+
+# Validate `url_standard`: NULL (default) or one of the allowed profile names.
+# Returns the value unchanged (NULL passes through) or errors.
+.validate_url_standard <- function(url_standard) {
+  if (is.null(url_standard)) {
+    return(NULL)
+  }
+  valid <- is.character(url_standard) &&
+    length(url_standard) == 1L &&
+    !is.na(url_standard) &&
+    url_standard %in% .url_standard_choices
+  if (!valid) {
+    stop(
+      "url_standard must be NULL, \"rfc3986\", or \"whatwg\".",
+      call. = FALSE
+    )
+  }
+  url_standard
+}
+
+# Collect the governed knobs a caller EXPLICITLY supplied: each argument is
+# either the resolved value or NULL (not supplied). Drops the NULLs, leaving a
+# named list keyed by knob name.
+.governed_supplied <- function(...) {
+  args <- list(...)
+  args[!vapply(args, is.null, logical(1))]
+}
+
+# Resolve each supplied governed value against its public choice set so partial
+# matches compare as their canonical spelling. A value outside the set (or an
+# internal profile sentinel) is left untouched so it still registers as a
+# conflict.
+.resolve_governed_values <- function(supplied) {
+  for (knob in names(supplied)) {
+    choices <- .url_standard_governed_choices[[knob]]
+    if (!is.null(choices)) {
+      supplied[[knob]] <- tryCatch(
+        match.arg(supplied[[knob]], choices),
+        error = function(e) supplied[[knob]]
+      )
+    }
+  }
+  supplied
+}
+
+# Conflict check (PRD §5, D3): when `url_standard` is set, every governed knob
+# the caller EXPLICITLY supplied must equal the value the selected profile would
+# choose; a different value errors. `supplied` is a named list of resolved
+# governed values (from .governed_supplied()). No-op when url_standard is NULL
+# or nothing governed was supplied.
+.check_url_standard_conflicts <- function(url_standard, supplied) {
+  if (is.null(url_standard) || length(supplied) == 0L) {
+    return(invisible(NULL))
+  }
+  profile <- .URL_STANDARD_PROFILES[[url_standard]]
+  for (knob in names(supplied)) {
+    required <- profile[[knob]]
+    if (is.null(required)) {
+      next
+    }
+    if (!identical(supplied[[knob]], required)) {
+      stop(
+        sprintf(
+          paste0(
+            "url_standard = \"%s\" governs `%s`; remove the explicit `%s` ",
+            "argument (the profile sets it) or drop url_standard."
+          ),
+          url_standard, knob, knob
+        ),
+        call. = FALSE
+      )
+    }
+  }
+  invisible(NULL)
+}
+
+# Conflict check across a `...` seam (canonical_join()), where missing() cannot
+# tell which knobs the caller supplied. Reads the governed knob names straight
+# from the captured dots list, validates url_standard, and applies the same
+# conflict rule.
+.check_url_standard_conflicts_dots <- function(dots) {
+  url_standard <- .validate_url_standard(dots$url_standard)
+  if (is.null(url_standard)) {
+    return(invisible(NULL))
+  }
+  governed <- names(.URL_STANDARD_PROFILES[[url_standard]])
+  supplied <- .resolve_governed_values(dots[intersect(names(dots), governed)])
+  .check_url_standard_conflicts(url_standard, supplied)
+}
+
 # Validate a params_keep / params_drop argument: NULL or a character vector of
 # glob patterns. Returns it unchanged (NULL passes through) or errors.
 .validate_param_patterns <- function(x, arg_name) {
@@ -594,7 +763,8 @@ safe_parse_urls <- function(url,
                            sort_params = FALSE,
                            empty_param_handling = .opt_empty_param_handling,
                            params_case_sensitive = FALSE,
-                           decode_plus = FALSE) {
+                           decode_plus = FALSE,
+                           url_standard = NULL) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep and the query options.
   opts <- list(
@@ -635,6 +805,11 @@ safe_parse_urls <- function(url,
   # Single-bracket list() assignment keeps the element when the value is NULL
   # ($<- NULL would drop it).
   opts["subdomain_levels_to_keep"] <- list(subdomain_levels_to_keep)
+  # url_standard (RURL-eqzkkohm): validated + stored on opts so later tickets
+  # can consume it in Stage A/B. Re-validated defensively; the public wrappers
+  # already validate (and run the missing()-based conflict check they alone can
+  # see). Single-bracket assignment keeps a NULL element.
+  opts["url_standard"] <- list(.validate_url_standard(url_standard))
   opts
 }
 
