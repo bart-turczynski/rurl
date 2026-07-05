@@ -12,6 +12,16 @@
 # scheme is a one-line change here.
 .SUPPORTED_SCHEMES <- c("http", "https", "ftp", "ftps")
 
+# The WHATWG "special scheme" subset of .SUPPORTED_SCHEMES (PRD v2 D7,
+# RURL-jlvyjwog). WHATWG defines http/https/ftp/ws/wss/file as special; rurl
+# never expands its allowlist to ws/wss/file (non-goal, PRD v2 §3), so within
+# rurl's own scheme set only http/https/ftp qualify. ftp**s** is rurl's own
+# addition (FTP-over-TLS) and is NOT a WHATWG special scheme. This table backs
+# get_scheme_class() and will back the port (D1) / backslash (D2) axes those
+# tickets add -- it does not itself change scheme handling or grow the
+# allowlist.
+.WHATWG_SPECIAL_SCHEMES <- c("http", "https", "ftp")
+
 # Bare single-label hosts (no dot) accepted from scheme-less input. Only
 # `localhost` is a genuine resolvable single-label host; other RFC 6761/2606
 # reserved names are dotted suffixes handled by the normal path (.onion/.arpa

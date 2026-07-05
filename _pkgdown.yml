@@ -61,10 +61,11 @@ reference:
 
   - title: "Standard diagnostics"
     desc: >
-      Companion helpers for the url_standard selector: host classification and
-      non-fatal validation/safety facts.
+      Companion helpers for the url_standard selector: host classification,
+      scheme classification, and non-fatal validation/safety facts.
     contents:
       - get_host_type
+      - get_scheme_class
       - get_url_diagnostics
 
   - title: "Query introspection"

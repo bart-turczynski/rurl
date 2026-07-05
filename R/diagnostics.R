@@ -42,6 +42,13 @@
 # `2130706433` is `reg-name` under rfc3986 and `ipv4` under whatwg.
 .HOST_TYPES <- c("domain", "ipv4", "ipv6", "reg-name", "missing")
 
+# The scheme_class vocabulary (PRD v2 §5 D7, RURL-jlvyjwog). get_scheme_class()
+# emits exactly one of these per URL. Unlike host_type, the classification
+# itself (which scheme is WHATWG-special) does not differ between "rfc3986"
+# and "whatwg" -- it is a static fact about the resolved scheme, gated by
+# url_standard the same way host_type is gated (NA with no selector at all).
+.SCHEME_CLASSES <- c("special", "non-special", "missing-or-error")
+
 # --- Diagnostics accumulator -------------------------------------------------
 #
 # A per-URL list of character vectors (one URL can carry several tokens). The

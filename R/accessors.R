@@ -953,6 +953,60 @@ get_url_diagnostics <- function(url, url_standard = NULL) {
   diagnostics
 }
 
+#' Classify the scheme of each URL as WHATWG special or not
+#'
+#' Companion helper for the \code{url_standard} selector: reports whether each
+#' URL's resolved scheme is a WHATWG \dQuote{special scheme} (\code{"special"}),
+#' one rurl supports but WHATWG does not treat specially (\code{"non-special"}),
+#' or absent/unparseable (\code{"missing-or-error"} -- an unsupported scheme, a
+#' scheme-relative URL under the default \code{scheme_relative_handling =
+#' "keep"}, or an input that failed to parse at all).
+#'
+#' Unlike \code{\link{get_host_type}}, the classification itself does not vary
+#' between \code{"rfc3986"} and \code{"whatwg"} -- \dQuote{special scheme} is a
+#' WHATWG concept describing a fixed property of the scheme string, not
+#' something RFC 3986 redefines. \code{url_standard} instead gates whether the
+#' metadata is exposed at all, mirroring \code{get_host_type()}'s contract:
+#' pass \code{NULL} (the default) and every element is \code{NA}.
+#'
+#' Within rurl's allowlist (\code{http}/\code{https}/\code{ftp}/\code{ftps}),
+#' \code{http}, \code{https}, and \code{ftp} are WHATWG special schemes;
+#' \code{ftps} (FTP-over-TLS, rurl's own addition) is not. This is metadata
+#' only -- it does not add \code{ws}/\code{wss}/\code{file} to rurl's allowed
+#' schemes and does not change what \code{\link{safe_parse_url}} accepts.
+#'
+#' @param url A character vector of URLs.
+#' @param url_standard Standard profile gating the classification: \code{NULL}
+#'   (default; no classification, returns \code{NA}), \code{"rfc3986"}, or
+#'   \code{"whatwg"}.
+#' @return A character vector the same length as \code{url}, each element one
+#'   of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"},
+#'   or \code{NA} when no selector is given.
+#' @seealso \code{\link{get_host_type}}, \code{\link{get_scheme}}
+#' @export
+#' @examples
+#' get_scheme_class("http://example.com/", url_standard = "whatwg")
+#' get_scheme_class("ftps://example.com/", url_standard = "whatwg")
+#' get_scheme_class("//example.com/path", url_standard = "whatwg")
+get_scheme_class <- function(url, url_standard = NULL) {
+  if (!is.character(url)) {
+    stop(
+      "`url` must be a character vector of URL strings; ",
+      "pass the URL, not a parsed object.",
+      call. = FALSE
+    )
+  }
+  url_standard <- .validate_url_standard(url_standard)
+  if (is.null(url_standard)) {
+    return(rep(NA_character_, length(url)))
+  }
+  scheme <- get_scheme(url)
+  out <- rep("missing-or-error", length(url))
+  out[!is.na(scheme) & !(scheme %in% .WHATWG_SPECIAL_SCHEMES)] <- "non-special"
+  out[scheme %in% .WHATWG_SPECIAL_SCHEMES] <- "special"
+  out
+}
+
 #' Summarize query parameters across a set of URLs
 #'
 #' Tabulates which query parameters appear across a vector of URLs and what
