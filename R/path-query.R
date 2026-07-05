@@ -75,6 +75,101 @@
   path
 }
 
+# Internal helper: an atom-aware dot-segment remover for the
+# `url_standard = "whatwg"` path profile (RURL-bbmuehsx, PRD S6.1). WHATWG
+# preserves percent-encoded unreserved bytes in path identity -- it must NOT
+# run a general percent-decode before dot-segment removal (unlike RFC mode).
+# Instead this recognizes a WHATWG dot atom (literal "." or encoded "%2e"/
+# "%2E") wherever the RFC 3986 S5.2.4 algorithm matches a literal "." or "..",
+# so "%2e", ".%2e", "%2e.", and "%2e%2e" resolve exactly like their literal
+# counterparts while any percent-triplet that is NOT part of a whole dot
+# segment (e.g. "%2eb") is left untouched as ordinary path data.
+._remove_dot_segments_whatwg <- function(path) {
+  if (is.na(path) || !nzchar(path)) {
+    return(path)
+  }
+
+  dot <- "(?:\\.|%2[eE])"
+  dotdot <- paste0(dot, "{2}")
+  match_len <- function(pattern, x) {
+    m <- regexpr(pattern, x, perl = TRUE)
+    if (m == -1L) NA_integer_ else attr(m, "match.length")
+  }
+
+  input <- path
+  output <- ""
+
+  while (nzchar(input)) {
+    len <- match_len(paste0("^", dotdot, "/"), input)
+    if (!is.na(len)) {
+      input <- stringi::stri_sub(input, len + 1)
+      next
+    }
+    len <- match_len(paste0("^", dot, "/"), input)
+    if (!is.na(len)) {
+      input <- stringi::stri_sub(input, len + 1)
+      next
+    }
+    len <- match_len(paste0("^/", dot, "/"), input)
+    if (!is.na(len)) {
+      input <- paste0("/", stringi::stri_sub(input, len + 1))
+      next
+    }
+    len <- match_len(paste0("^/", dot, "$"), input)
+    if (!is.na(len)) {
+      input <- "/"
+      next
+    }
+    len <- match_len(paste0("^/", dotdot, "/"), input)
+    if (!is.na(len)) {
+      input <- paste0("/", stringi::stri_sub(input, len + 1))
+      output <- sub("/?[^/]*$", "", output)
+      next
+    }
+    len <- match_len(paste0("^/", dotdot, "$"), input)
+    if (!is.na(len)) {
+      input <- "/"
+      output <- sub("/?[^/]*$", "", output)
+      next
+    }
+    len <- match_len(paste0("^", dot, "$"), input)
+    if (!is.na(len)) {
+      input <- ""
+      next
+    }
+    len <- match_len(paste0("^", dotdot, "$"), input)
+    if (!is.na(len)) {
+      input <- ""
+      next
+    }
+    match <- regexpr("^(/?[^/]*)", input, perl = TRUE)
+    segment <- regmatches(input, match)
+    output <- paste0(output, segment)
+    input <- substring(input, attr(match, "match.length") + 1)
+  }
+
+  output
+}
+
+# Internal helper: canonicalize percent-triplet hex case (`%2f` -> `%2F`) for
+# the `url_standard = "whatwg"` path profile (RURL-bbmuehsx, PRD S6.1). Unlike
+# the RFC mode's `.rfc_unreserved_normalize()`, this never decodes ANY
+# percent-triplet -- WHATWG preserves percent-encoded unreserved bytes in path
+# identity (`/%41%42` stays `/%41%42`) -- it only stabilizes hex-digit case so
+# `%2f`/`%2F` compare equal in canonical keys.
+.whatwg_preserve_normalize <- function(path) {
+  if (is.na(path) || !nzchar(path)) {
+    return(path)
+  }
+  m <- gregexpr("%[0-9A-Fa-f]{2}", path, perl = TRUE)
+  matches <- regmatches(path, m)[[1]]
+  if (length(matches) == 0L) {
+    return(path)
+  }
+  regmatches(path, m) <- list(toupper(matches))
+  path
+}
+
 # Internal helper to strip index/default pages from the end of a path
 ._strip_index_page <- function(path) {
   if (is.na(path) || !nzchar(path)) {

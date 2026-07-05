@@ -816,9 +816,8 @@ safe_parse_urls <- function(url,
   # profile requires, so this cannot silently override a caller's conflicting
   # choice -- it only fills in the profile value when the caller left the
   # knob at its default. RURL-gjltzwmp wires the "rfc3986" path_encoding
-  # sentinel (".rfc3986_unreserved") into .normalize_path_vec(); the
-  # "whatwg" sentinel (".whatwg_preserve") remains an inert placeholder for
-  # RURL-bbmuehsx.
+  # sentinel (".rfc3986_unreserved") into .normalize_path_vec(); RURL-bbmuehsx
+  # wires the "whatwg" sentinel (".whatwg_preserve") the same way.
   if (!is.null(opts$url_standard)) {
     profile <- .URL_STANDARD_PROFILES[[opts$url_standard]]
     opts$path_encoding <- profile$path_encoding

@@ -377,6 +377,18 @@
         USE.NAMES = FALSE
       )
     }
+  } else if (path_encoding == ".whatwg_preserve") {
+    # url_standard = "whatwg" (RURL-bbmuehsx, PRD S6.1): never decode -- only
+    # canonicalize percent-triplet hex case. Dot-segment resolution below uses
+    # the encoded-dot-aware remover, so encoded dot segments (%2e/%2e%2e) still
+    # resolve without a general decode.
+    mask <- !is.na(path_work) & stringi::stri_detect_fixed(path_work, "%")
+    if (any(mask)) {
+      path_work[mask] <- vapply(
+        path_work[mask], .whatwg_preserve_normalize, character(1),
+        USE.NAMES = FALSE
+      )
+    }
   }
 
   # Slash collapsing.
@@ -385,14 +397,28 @@
     path_work[mask] <- gsub("/+", "/", path_work[mask], perl = TRUE)
   }
 
-  # Dot-segment resolution (RFC 3986). ._remove_dot_segments() is identity for
-  # paths without a "." / ".." segment, so only those are processed.
+  # Dot-segment resolution (RFC 3986 S5.2.4), or -- under the "whatwg" path
+  # profile (RURL-bbmuehsx) -- the encoded-dot-aware variant that recognizes
+  # "%2e"/"%2E" alongside literal "." without a general path decode. Both
+  # removers are identity for paths without a matching dot segment, so only
+  # candidate rows are processed.
   if (path_normalization %in% c("dot_segments", "both")) {
+    is_whatwg <- identical(path_encoding, ".whatwg_preserve")
+    dot_remover <- if (is_whatwg) {
+      ._remove_dot_segments_whatwg
+    } else {
+      ._remove_dot_segments
+    }
+    detect_pattern <- if (is_whatwg) {
+      "(?i)(^|/)(\\.|%2e){1,2}(/|$)"
+    } else {
+      "(^|/)\\.{1,2}(/|$)"
+    }
     mask <- !is.na(path_work) & nzchar(path_work) &
-      stringi::stri_detect_regex(path_work, "(^|/)\\.{1,2}(/|$)")
+      stringi::stri_detect_regex(path_work, detect_pattern)
     if (any(mask)) {
       path_work[mask] <- vapply(
-        path_work[mask], ._remove_dot_segments, character(1), USE.NAMES = FALSE
+        path_work[mask], dot_remover, character(1), USE.NAMES = FALSE
       )
     }
   }
