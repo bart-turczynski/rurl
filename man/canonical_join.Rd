@@ -75,7 +75,10 @@ controlling canonicalization (e.g., \code{protocol_handling},
 \code{www_handling}, \code{trailing_slash_handling},
 \code{index_page_handling}, \code{path_normalization},
 \code{scheme_relative_handling}, \code{host_encoding},
-\code{path_encoding}).}
+\code{path_encoding}, and the \code{url_standard} selector). When
+\code{url_standard} is set, forwarding a governed low-level knob it would
+override (e.g. \code{path_encoding}) is an error, exactly as in
+\code{\link{safe_parse_url}}.}
 }
 \value{
 A data frame representing the join. The output includes:

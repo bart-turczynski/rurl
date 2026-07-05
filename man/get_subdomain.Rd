@@ -11,7 +11,8 @@ get_subdomain(
   source = c("all", "private", "icann"),
   include_www = FALSE,
   format = c("string", "labels"),
-  host_encoding = c("keep", "idna", "unicode")
+  host_encoding = c("keep", "idna", "unicode"),
+  url_standard = NULL
 )
 }
 \arguments{
@@ -74,6 +75,19 @@ vector of labels.}
 cleaned URL.}
 \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
 }}
+
+\item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
+\code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
+individual low-level options select (fully backward compatible). When set,
+it selects a coherent set of standard-conformant behaviors for the axes it
+governs — path percent/dot handling and the host IPv4/reg-name model — so
+callers do not have to hand-assemble the low-level knobs. Passing a
+governed low-level knob (\code{path_encoding} or \code{path_normalization}) with a
+value the selected profile would not choose is an error; passing the value
+the profile would pick is accepted. Added as the last argument so existing
+positional calls keep their meaning; always pass it by name. The v1
+selector does \strong{not} govern default ports, backslash handling, IDNA,
+query handling, or relative-URL resolution.}
 }
 \value{
 A character vector (format="string") or list of label vectors

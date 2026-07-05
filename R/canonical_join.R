@@ -47,7 +47,10 @@
 #'   \code{www_handling}, \code{trailing_slash_handling},
 #'   \code{index_page_handling}, \code{path_normalization},
 #'   \code{scheme_relative_handling}, \code{host_encoding},
-#'   \code{path_encoding}).
+#'   \code{path_encoding}, and the \code{url_standard} selector). When
+#'   \code{url_standard} is set, forwarding a governed low-level knob it would
+#'   override (e.g. \code{path_encoding}) is an error, exactly as in
+#'   \code{\link{safe_parse_url}}.
 #'
 #' @return A data frame representing the join. The output includes:
 #'   \itemize{
@@ -94,6 +97,12 @@ canonical_join <- function(data_A, data_B,
   collision <- match.arg(collision)
   on_parse_error <- match.arg(on_parse_error)
   join_parse_status <- match.arg(join_parse_status)
+
+  # url_standard (RURL-eqzkkohm) is forwarded to safe_parse_urls() via `...`,
+  # where missing() cannot see which governed knobs the caller supplied. Detect
+  # them by name in the captured dots and run the same conflict check up front,
+  # so a conflicting profile + explicit knob fails fast here.
+  .check_url_standard_conflicts_dots(list(...))
 
   if (!.cj_validate_inputs(data_A, data_B, col_A, col_B)) {
     return(data.frame())

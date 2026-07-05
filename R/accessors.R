@@ -46,7 +46,8 @@
                                params_case_sensitive = FALSE,
                                sort_params = FALSE,
                                empty_param_handling = "keep",
-                               decode_plus = FALSE) {
+                               decode_plus = FALSE,
+                               url_standard = NULL) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -74,7 +75,8 @@
     params_case_sensitive = params_case_sensitive,
     sort_params = sort_params,
     empty_param_handling = empty_param_handling,
-    decode_plus = decode_plus
+    decode_plus = decode_plus,
+    url_standard = url_standard
   )
   cols <- ._parse_urls_cached(url, opts)
 
@@ -116,8 +118,10 @@ get_parse_status <- function(url,
                              protocol_handling = "keep",
                              www_handling = "none",
                              subdomain_levels_to_keep = NULL,
-                             source = c("all", "private", "icann")) {
+                             source = c("all", "private", "icann"),
+                             url_standard = NULL) {
   source <- match.arg(source)
+  url_standard <- .validate_url_standard(url_standard)
   # case_handling does not affect the parse_status output (it is derived from
   # curl success, host, domain and TLD, none of which depend on the clean_url
   # case policy). "lower" is kept here purely as an explicit, stable profile;
@@ -130,7 +134,8 @@ get_parse_status <- function(url,
     www_handling = www_handling,
     tld_source = source,
     case_handling = "lower",
-    subdomain_levels_to_keep = subdomain_levels_to_keep
+    subdomain_levels_to_keep = subdomain_levels_to_keep,
+    url_standard = url_standard
   )
 }
 
@@ -216,10 +221,26 @@ get_clean_url <- function(url,
                           params_case_sensitive = FALSE,
                           sort_params = FALSE,
                           empty_param_handling = c("keep", "drop"),
-                          decode_plus = FALSE) {
+                          decode_plus = FALSE,
+                          url_standard = NULL) {
   source <- match.arg(source)
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
+  url_standard <- .validate_url_standard(url_standard)
+  # get_clean_url()'s governed formals default to scalars, so match.arg() needs
+  # the explicit choice sets to resolve/validate a supplied value.
+  .check_url_standard_conflicts(url_standard, .governed_supplied(
+    path_encoding = if (missing(path_encoding)) {
+      NULL
+    } else {
+      match.arg(path_encoding, .opt_path_encoding)
+    },
+    path_normalization = if (missing(path_normalization)) {
+      NULL
+    } else {
+      match.arg(path_normalization, .opt_path_normalization)
+    }
+  ))
   .extract_from_urls(url, "clean_url",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
@@ -238,7 +259,8 @@ get_clean_url <- function(url,
     params_case_sensitive = params_case_sensitive,
     sort_params = sort_params,
     empty_param_handling = empty_param_handling,
-    decode_plus = decode_plus
+    decode_plus = decode_plus,
+    url_standard = url_standard
   )
 }
 
@@ -259,9 +281,11 @@ get_domain <- function(url,
                        www_handling = "none",
                        subdomain_levels_to_keep = NULL,
                        source = c("all", "private", "icann"),
-                       host_encoding = c("keep", "idna", "unicode")) {
+                       host_encoding = c("keep", "idna", "unicode"),
+                       url_standard = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
+  url_standard <- .validate_url_standard(url_standard)
   # parsed$domain is the registered domain for the requested section (pslr
   # resolves it consistently with the TLD), so every source reads one field.
   # case_handling is immaterial to the domain output (the registered domain is
@@ -274,7 +298,8 @@ get_domain <- function(url,
     tld_source = source,
     case_handling = "lower",
     subdomain_levels_to_keep = subdomain_levels_to_keep,
-    host_encoding = host_encoding
+    host_encoding = host_encoding,
+    url_standard = url_standard
   )
 }
 
@@ -343,17 +368,20 @@ get_host <- function(url,
                      case_handling = c(
                        "lower", "keep", "upper", "lower_host"
                      ),
-                     host_encoding = c("keep", "idna", "unicode")) {
+                     host_encoding = c("keep", "idna", "unicode"),
+                     url_standard = NULL) {
   source <- match.arg(source)
   case_handling <- match.arg(case_handling)
   host_encoding <- match.arg(host_encoding)
+  url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, "host",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = source,
     case_handling = case_handling,
     subdomain_levels_to_keep = subdomain_levels_to_keep,
-    host_encoding = host_encoding
+    host_encoding = host_encoding,
+    url_standard = url_standard
   )
 }
 
@@ -377,8 +405,18 @@ get_path <- function(
   trailing_slash_handling = c("none", "keep", "strip"),
   index_page_handling = c("keep", "strip"),
   path_normalization = c("none", "collapse_slashes", "dot_segments", "both"),
-  path_encoding = c("keep", "encode", "decode")
+  path_encoding = c("keep", "encode", "decode"),
+  url_standard = NULL
 ) {
+  # url_standard validation + conflict check must read missing() BEFORE the
+  # match.arg() reassignments below (assignment can make missing() FALSE).
+  url_standard <- .validate_url_standard(url_standard)
+  .check_url_standard_conflicts(url_standard, .governed_supplied(
+    path_encoding =
+      if (missing(path_encoding)) NULL else match.arg(path_encoding),
+    path_normalization =
+      if (missing(path_normalization)) NULL else match.arg(path_normalization)
+  ))
   case_handling <- match.arg(case_handling)
   trailing_slash_handling <- match.arg(trailing_slash_handling)
   index_page_handling <- match.arg(index_page_handling)
@@ -391,7 +429,8 @@ get_path <- function(
     trailing_slash_handling = trailing_slash_handling,
     index_page_handling = index_page_handling,
     path_normalization = path_normalization,
-    path_encoding = path_encoding
+    path_encoding = path_encoding,
+    url_standard = url_standard
   )
 }
 
@@ -750,10 +789,12 @@ get_subdomain <- function(url,
                           source = c("all", "private", "icann"),
                           include_www = FALSE,
                           format = c("string", "labels"),
-                          host_encoding = c("keep", "idna", "unicode")) {
+                          host_encoding = c("keep", "idna", "unicode"),
+                          url_standard = NULL) {
   source <- match.arg(source)
   format <- match.arg(format)
   host_encoding <- match.arg(host_encoding)
+  url_standard <- .validate_url_standard(url_standard)
 
   # One engine pass with the deliberate subdomain profile (case = "lower" so the
   # suffix comparison is case-insensitive; host_encoding shared by host+domain),
@@ -769,7 +810,8 @@ get_subdomain <- function(url,
     www_handling = www_handling,
     tld_source = source,
     case_handling = "lower",
-    host_encoding = host_encoding
+    host_encoding = host_encoding,
+    url_standard = url_standard
   )
 
   if (format == "labels") {
@@ -797,9 +839,11 @@ get_subdomain <- function(url,
 #' @examples
 #' get_tld("example.com")
 get_tld <- function(url, source = c("all", "private", "icann"),
-                    host_encoding = c("keep", "idna", "unicode")) {
+                    host_encoding = c("keep", "idna", "unicode"),
+                    url_standard = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
+  url_standard <- .validate_url_standard(url_standard)
   # case_handling is immaterial to the tld output (the TLD is derived from the
   # normalized host, independent of the clean_url case policy); "lower" is
   # retained as an explicit, stable profile rather than aligned to the
@@ -807,7 +851,8 @@ get_tld <- function(url, source = c("all", "private", "icann"),
   .extract_from_urls(url, "tld",
     tld_source = source,
     case_handling = "lower",
-    host_encoding = host_encoding
+    host_encoding = host_encoding,
+    url_standard = url_standard
   )
 }
 
