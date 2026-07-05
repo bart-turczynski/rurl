@@ -16,7 +16,7 @@ test_that("the diagnostics vocabulary matches the PRD §7 table verbatim", {
       "ipv4-number-form", "ipv4-non-dotted", "ipv4-short-form",
       "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero",
       "ipv4-out-of-range", "encoded-dot-segment", "encoded-reserved-path-byte",
-      "explicit-default-port", "non-default-port"
+      "explicit-default-port", "non-default-port", "invalid-reverse-solidus"
     )
   )
   # No duplicates, no stray whitespace.
