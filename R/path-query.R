@@ -45,6 +45,36 @@
   output
 }
 
+# Internal helper: decode ONLY unreserved percent-encoded octets (RFC 3986
+# section 6.2.2.2: ALPHA / DIGIT / "-" / "." / "_" / "~"), used by the
+# `url_standard = "rfc3986"` path profile (RURL-gjltzwmp). Reserved and
+# non-ASCII percent-triplets (`%2F`, `%3F`, `%23`, `%C3`, ...) are left
+# encoded -- this is deliberately not a full percent-decode. Any triplet left
+# encoded has its hex digits canonicalized to uppercase, so `%2f`/`%2F`
+# compare equal in canonical keys.
+.rfc_unreserved_normalize <- function(path) {
+  if (is.na(path) || !nzchar(path)) {
+    return(path)
+  }
+  m <- gregexpr("%[0-9A-Fa-f]{2}", path, perl = TRUE)
+  matches <- regmatches(path, m)[[1]]
+  if (length(matches) == 0L) {
+    return(path)
+  }
+  codes <- strtoi(substring(matches, 2L), base = 16L)
+  is_unreserved <- (codes >= 65L & codes <= 90L) | # A-Z
+    (codes >= 97L & codes <= 122L) | # a-z
+    (codes >= 48L & codes <= 57L) | # 0-9
+    codes %in% c(45L, 46L, 95L, 126L) # - . _ ~
+  replacement <- ifelse(
+    is_unreserved,
+    vapply(codes, function(code) rawToChar(as.raw(code)), character(1)),
+    toupper(matches)
+  )
+  regmatches(path, m) <- list(replacement)
+  path
+}
+
 # Internal helper to strip index/default pages from the end of a path
 ._strip_index_page <- function(path) {
   if (is.na(path) || !nzchar(path)) {

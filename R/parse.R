@@ -810,6 +810,20 @@ safe_parse_urls <- function(url,
   # already validate (and run the missing()-based conflict check they alone can
   # see). Single-bracket assignment keeps a NULL element.
   opts["url_standard"] <- list(.validate_url_standard(url_standard))
+  # Apply the selected profile's governed values (PRD S5, D3). The conflict
+  # checkers above (run by the public wrappers, before this function is
+  # called) already guarantee any EXPLICIT governed knob equals what the
+  # profile requires, so this cannot silently override a caller's conflicting
+  # choice -- it only fills in the profile value when the caller left the
+  # knob at its default. RURL-gjltzwmp wires the "rfc3986" path_encoding
+  # sentinel (".rfc3986_unreserved") into .normalize_path_vec(); the
+  # "whatwg" sentinel (".whatwg_preserve") remains an inert placeholder for
+  # RURL-bbmuehsx.
+  if (!is.null(opts$url_standard)) {
+    profile <- .URL_STANDARD_PROFILES[[opts$url_standard]]
+    opts$path_encoding <- profile$path_encoding
+    opts$path_normalization <- profile$path_normalization
+  }
   opts
 }
 
