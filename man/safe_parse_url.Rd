@@ -303,10 +303,10 @@ scheme, host, and path, after processing and with case handling
 applied. The query is included only when \code{query_handling != "drop"}
 (the default is "drop", so by default the query is excluded); when
 included it is filtered/canonicalized per the query options and appended
-case-unfolded. The port is included only when \code{port_handling != "exclude"}
-(the default is "exclude", so by default the port is excluded, as
-before); fragment and userinfo are always excluded (use the dedicated
-components above to retrieve them). With
+case-unfolded. The port is included only when
+\code{port_handling != "exclude"} (the default is "exclude", so by default
+the port is excluded, as before); fragment and userinfo are always
+excluded (use the dedicated components above to retrieve them). With
 \code{path_encoding = "decode"} the path is shown decoded, so \code{clean_url}
 is human-readable rather than guaranteed URL-safe. NA if host is
 empty/NA.
