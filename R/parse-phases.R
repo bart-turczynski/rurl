@@ -77,7 +77,13 @@
     is_localhost = is_localhost,
     is_dotted_name = is_dotted_name,
     is_ipish = is_ipish,
-    is_canonical_ip = is_canonical_ip
+    is_canonical_ip = is_canonical_ip,
+    # Original (pre-curl) host token and the IPv4-attempt flag, surfaced for the
+    # url_standard host model (RURL-luwvkwhd): libcurl coerces numeric IPv4
+    # forms itself, so the model reads the original token to keep an RFC 3986
+    # reg-name uncoerced and to compute shape-keyed diagnostics.
+    host_token = host_token,
+    is_ipv4ish = ipv4ish
   )
 }
 
@@ -90,7 +96,8 @@
 # (D5). An input's supported scheme is decided against .SUPPORTED_SCHEMES.
 .prepare_urls_for_curl_vec <- function(url,
                                        protocol_handling,
-                                       scheme_relative_handling) {
+                                       scheme_relative_handling,
+                                       url_standard = NULL) {
   n <- length(url)
   url_lower <- stringi::stri_trans_tolower(url)
 
@@ -149,7 +156,18 @@
   # D2/D3: an IP attempt that is not a canonical literal is a coerced/malformed
   # IP. Applies to every row (scheme-bearing too), so http://12345 and
   # http://192.168.010.1 are rejected as well as their scheme-less forms.
-  rejected <- rejected | (cls$is_ipish & !cls$is_canonical_ip)
+  #
+  # url_standard host model (RURL-luwvkwhd): under a selector, a numeric IPv4
+  # attempt is parsed faithfully instead of rejected -- RFC 3986 keeps it as a
+  # reg-name, WHATWG coerces it (and only the post-curl model, not this gate,
+  # decides WHATWG-fatal cases like 256.1.1.1 / 1.2.3.4.5). So the reject is
+  # suppressed for the ipv4-ish attempts; non-canonical IPv6 (ipv6ish) stays
+  # rejected in both modes. NULL selector keeps the historical hard reject.
+  bad_ip <- cls$is_ipish & !cls$is_canonical_ip
+  if (!is.null(url_standard)) {
+    bad_ip <- bad_ip & !cls$is_ipv4ish
+  }
+  rejected <- rejected | bad_ip
 
   # Rows that get an inferred http:// (scheme-less, non-scheme-relative).
   add_http <- !is_scheme_relative &
@@ -157,11 +175,16 @@
 
   # D1: only fabricate a scheme when the token is host-shaped -- a canonical IP,
   # localhost, a dotted name, or an explicit host:port. Otherwise the input is
-  # not a URL (asdfghjkl, "hello world", /relative/path, bare 12345).
+  # not a URL (asdfghjkl, "hello world", /relative/path, bare 12345). Under a
+  # selector, a numeric IPv4 attempt (bare 2130706433, 0x7f000001) is host-like
+  # too, so scheme-less numeric hosts reach the host model rather than D1.
   host_like <- cls$is_canonical_ip |
     cls$is_localhost |
     cls$is_dotted_name |
     looks_like_host_port
+  if (!is.null(url_standard)) {
+    host_like <- host_like | cls$is_ipv4ish
+  }
   rejected <- rejected | (add_http & !host_like)
 
   # D5: scheme-less input carrying userinfo (user@example.com). Not rejected --
@@ -188,7 +211,11 @@
     is_scheme_relative = is_scheme_relative,
     looks_like_host_port = looks_like_host_port,
     scheme_less_userinfo = scheme_less_userinfo,
-    rejected = rejected
+    rejected = rejected,
+    # Original host token + IPv4-attempt flag for the url_standard host model
+    # (RURL-luwvkwhd), consumed by ._parse_stage_a_vec()'s model phase.
+    input_host = cls$host_token,
+    is_ipv4_attempt = cls$is_ipv4ish
   )
 }
 
@@ -479,6 +506,56 @@
 # Phase 5 (scalar wrapper): delegates to .detect_ip_host_vec().
 .detect_ip_host <- function(raw_host) {
   .detect_ip_host_vec(raw_host)
+}
+
+# Phase 5b (vector): the url_standard host IPv4/reg-name model (RURL-luwvkwhd,
+# PRD §6.2). A no-op when url_standard is NULL (returns curl's host / IP flag
+# unchanged, never fatal), so the default pipeline is byte-for-byte unaffected
+# (AC #1).
+#
+# libcurl already coerces numeric IPv4 forms itself (2130706433 -> 127.0.0.1,
+# 192.168.010.1 -> 192.168.8.1) and keeps out-of-range / over-arity forms
+# literal (256.1.1.1, 1.2.3.4.5). So `curl_host` is the coerced spelling and
+# `input_host` (the original pre-curl token) is the un-coerced one. For an
+# IPv4 attempt (`is_attempt`):
+#   - rfc3986: parse faithfully as a reg-name -- restore the original token and
+#     treat it as an IP only if the ORIGINAL was already a canonical quad.
+#     Never fatal (every such token is a valid RFC 3986 reg-name).
+#   - whatwg: adopt curl's coercion; it is a valid WHATWG IPv4 exactly when
+#     curl's output is a canonical dotted-quad. When it is not (out-of-range or
+#     > 4 parts, which curl leaves literal), the WHATWG IPv4 parser rejects it,
+#     so the row is fatal.
+# Non-attempt hosts (ordinary names, IPv6, missing) pass through untouched.
+# Returns updated `host`, `is_ip`, and a `fatal` mask the caller folds into the
+# null-row set.
+.apply_host_standard_model_vec <- function(input_host, curl_host, is_ip_curl,
+                                           url_standard, is_attempt) {
+  n <- length(curl_host)
+  host <- curl_host
+  is_ip <- is_ip_curl
+  fatal <- rep(FALSE, n)
+  if (is.null(url_standard)) {
+    return(list(host = host, is_ip = is_ip, fatal = fatal))
+  }
+
+  att <- is_attempt & !is.na(is_attempt)
+  if (!any(att)) {
+    return(list(host = host, is_ip = is_ip, fatal = fatal))
+  }
+
+  if (identical(url_standard, "rfc3986")) {
+    # Reg-name: keep the original token; IP only if it was already canonical.
+    input_canonical <- .detect_ip_host_vec(input_host)
+    host[att] <- input_host[att]
+    is_ip[att] <- input_canonical[att]
+  } else {
+    # WHATWG: trust curl's IPv4 coercion; fatal when it is not canonical.
+    curl_canonical <- .detect_ip_host_vec(curl_host)
+    is_ip[att] <- curl_canonical[att]
+    fatal[att] <- !curl_canonical[att]
+  }
+
+  list(host = host, is_ip = is_ip, fatal = fatal)
 }
 
 # Phase 6 (vector): apply the www-prefix policy to (non-IP) hosts.
