@@ -47,6 +47,7 @@
                                sort_params = FALSE,
                                empty_param_handling = "keep",
                                decode_plus = FALSE,
+                               port_handling = "exclude",
                                url_standard = NULL) {
   if (!is.character(url)) {
     stop(
@@ -76,6 +77,7 @@
     sort_params = sort_params,
     empty_param_handling = empty_param_handling,
     decode_plus = decode_plus,
+    port_handling = port_handling,
     url_standard = url_standard
   )
   cols <- ._parse_urls_cached(url, opts)
@@ -143,9 +145,10 @@ get_parse_status <- function(url,
 #'
 #' This function returns the cleaned version of the URLs after applying
 #' protocol, www, case, and trailing slash handling rules. By default the result
-#' is a normalized canonical key composed of scheme, host, and path only; port,
-#' fragment, and userinfo are always excluded (use \code{\link{get_port}},
-#' \code{\link{get_fragment}}, or \code{\link{get_userinfo}} for those).
+#' is a normalized canonical key composed of scheme, host, and path only; port
+#' is dropped (\code{port_handling = "exclude"}), and fragment/userinfo are
+#' always excluded (use \code{\link{get_port}}, \code{\link{get_fragment}}, or
+#' \code{\link{get_userinfo}} for those).
 #'
 #' The query string is dropped by default (\code{query_handling = "drop"}), so
 #' the historical scheme/host/path output is byte-identical. Pass
@@ -156,6 +159,11 @@ get_parse_status <- function(url,
 #' \code{\link{get_query}} use, so
 #' \code{get_clean_url(u, query_handling = "filter")} equals
 #' \code{safe_parse_url(u, query_handling = "filter")$clean_url}.
+#'
+#' The port is included only when \code{port_handling != "exclude"}; see
+#' \code{\link{safe_parse_url}} for the full \code{port_handling} semantics,
+#' including how \code{url_standard = "whatwg"} elides a default port even
+#' under \code{port_handling = "keep"}.
 #'
 #' @param url A character vector containing URLs to be parsed.
 #' @inheritParams safe_parse_url
@@ -222,10 +230,14 @@ get_clean_url <- function(url,
                           sort_params = FALSE,
                           empty_param_handling = c("keep", "drop"),
                           decode_plus = FALSE,
+                          port_handling = c(
+                            "exclude", "keep", "strip_default", "strip_all"
+                          ),
                           url_standard = NULL) {
   source <- match.arg(source)
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
+  port_handling <- match.arg(port_handling)
   url_standard <- .validate_url_standard(url_standard)
   # get_clean_url()'s governed formals default to scalars, so match.arg() needs
   # the explicit choice sets to resolve/validate a supplied value.
@@ -265,6 +277,7 @@ get_clean_url <- function(url,
     sort_params = sort_params,
     empty_param_handling = empty_param_handling,
     decode_plus = decode_plus,
+    port_handling = port_handling,
     url_standard = url_standard
   )
 }

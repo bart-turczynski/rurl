@@ -33,7 +33,9 @@
   "ipv4-leading-zero",
   "ipv4-out-of-range",
   "encoded-dot-segment",
-  "encoded-reserved-path-byte"
+  "encoded-reserved-path-byte",
+  "explicit-default-port",
+  "non-default-port"
 )
 
 # The host_type vocabulary (PRD §6.3). get_host_type() emits exactly one of
@@ -161,6 +163,28 @@
       raw_path, "(?i)(^|/)(%2e|\\.%2e|%2e\\.|%2e%2e)(/|$)"
     )
   diag <- .diag_add(diag, has_encoded_dot, "encoded-dot-segment")
+
+  # --- port diagnostics (RURL-qdlvldts, PRD v2 D1, §5.3) ---------------------
+  # `explicit-default-port` / `non-default-port` are facts about the raw
+  # (unfiltered) port versus the resolved scheme's WHATWG default port table
+  # (.SCHEME_DEFAULT_PORTS) -- fired in BOTH standard modes (facts not policy,
+  # the same pattern as the ipv4-* host tokens above), independent of the
+  # standalone `port_handling` presentation knob. A scheme with no defined
+  # default (ftps, or an absent/rejected scheme) can never match, so any port
+  # present on it always registers as `non-default-port`.
+  raw_port <- a$raw_port
+  if (is.null(raw_port)) {
+    raw_port <- rep(NA_integer_, n)
+  }
+  final_scheme <- a$final_scheme
+  if (is.null(final_scheme)) {
+    final_scheme <- rep(NA_character_, n)
+  }
+  has_port <- live & !is.na(raw_port)
+  default_port <- .scheme_default_port_vec(final_scheme)
+  is_default_port <- has_port & !is.na(default_port) & raw_port == default_port
+  diag <- .diag_add(diag, is_default_port, "explicit-default-port")
+  diag <- .diag_add(diag, has_port & !is_default_port, "non-default-port")
 
   list(host_type = host_type, diagnostics = diag)
 }

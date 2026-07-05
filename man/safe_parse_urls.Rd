@@ -24,6 +24,7 @@ safe_parse_urls(
   empty_param_handling = c("keep", "drop"),
   params_case_sensitive = FALSE,
   decode_plus = FALSE,
+  port_handling = c("exclude", "keep", "strip_default", "strip_all"),
   url_standard = NULL
 )
 }
@@ -225,6 +226,24 @@ denylist and \code{params_keep}/\code{params_drop} matching is case-sensitive.}
 values is treated as a space (HTML-form decoding) before percent-decoding.
 \code{FALSE} keeps \code{+} literal (RFC 3986 generic behavior).}
 
+\item{port_handling}{A character string controlling whether the port
+appears in \code{clean_url}. Defaults to "exclude", today's only historical
+behavior. This knob is standalone and standard-independent (editorial, like
+\code{www_handling}) -- \code{url_standard} never governs whether it may be set, only
+(for \code{"keep"}) whether a default port gets elided underneath it.
+\itemize{
+\item{"exclude": (Default) The port never appears in \code{clean_url}.}
+\item{"strip_all": Explicit alias of "exclude".}
+\item{"keep": Include the port when present. Under
+\code{url_standard = "whatwg"}, a port matching its WHATWG-special scheme's
+default (http:80, https:443, ftp:21) is elided even under "keep"; under
+\code{"rfc3986"} or no selector, the port is kept verbatim (RFC 3986 has no
+default-port concept). \code{ftps} has no WHATWG default, so its port is
+never elided.}
+\item{"strip_default": Keep only non-default ports (using the same
+scheme-default table), independent of \code{url_standard}.}
+}}
+
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
 \code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
 individual low-level options select (fully backward compatible). When set,
@@ -238,8 +257,10 @@ pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
 selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
 also lowercases the path, which neither standard sanctions). Added as the
 last argument so existing positional calls keep their meaning; always
-pass it by name. The selector does \strong{not} govern default ports,
-backslash handling, IDNA, query handling, or relative-URL resolution.}
+pass it by name. The selector does \strong{not} govern whether \code{port_handling}
+may be set, only the default-port elision described above; it also does
+not govern backslash handling, IDNA, query handling, or relative-URL
+resolution.}
 }
 \value{
 A data.frame with one row per URL and the same fields returned by

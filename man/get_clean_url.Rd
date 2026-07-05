@@ -24,6 +24,7 @@ get_clean_url(
   sort_params = FALSE,
   empty_param_handling = c("keep", "drop"),
   decode_plus = FALSE,
+  port_handling = c("exclude", "keep", "strip_default", "strip_all"),
   url_standard = NULL
 )
 }
@@ -226,6 +227,24 @@ in "filter" mode.}
 values is treated as a space (HTML-form decoding) before percent-decoding.
 \code{FALSE} keeps \code{+} literal (RFC 3986 generic behavior).}
 
+\item{port_handling}{A character string controlling whether the port
+appears in \code{clean_url}. Defaults to "exclude", today's only historical
+behavior. This knob is standalone and standard-independent (editorial, like
+\code{www_handling}) -- \code{url_standard} never governs whether it may be set, only
+(for \code{"keep"}) whether a default port gets elided underneath it.
+\itemize{
+\item{"exclude": (Default) The port never appears in \code{clean_url}.}
+\item{"strip_all": Explicit alias of "exclude".}
+\item{"keep": Include the port when present. Under
+\code{url_standard = "whatwg"}, a port matching its WHATWG-special scheme's
+default (http:80, https:443, ftp:21) is elided even under "keep"; under
+\code{"rfc3986"} or no selector, the port is kept verbatim (RFC 3986 has no
+default-port concept). \code{ftps} has no WHATWG default, so its port is
+never elided.}
+\item{"strip_default": Keep only non-default ports (using the same
+scheme-default table), independent of \code{url_standard}.}
+}}
+
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
 \code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
 individual low-level options select (fully backward compatible). When set,
@@ -239,8 +258,10 @@ pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
 selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
 also lowercases the path, which neither standard sanctions). Added as the
 last argument so existing positional calls keep their meaning; always
-pass it by name. The selector does \strong{not} govern default ports,
-backslash handling, IDNA, query handling, or relative-URL resolution.}
+pass it by name. The selector does \strong{not} govern whether \code{port_handling}
+may be set, only the default-port elision described above; it also does
+not govern backslash handling, IDNA, query handling, or relative-URL
+resolution.}
 }
 \value{
 A character vector of cleaned URLs.
@@ -248,9 +269,10 @@ A character vector of cleaned URLs.
 \description{
 This function returns the cleaned version of the URLs after applying
 protocol, www, case, and trailing slash handling rules. By default the result
-is a normalized canonical key composed of scheme, host, and path only; port,
-fragment, and userinfo are always excluded (use \code{\link{get_port}},
-\code{\link{get_fragment}}, or \code{\link{get_userinfo}} for those).
+is a normalized canonical key composed of scheme, host, and path only; port
+is dropped (\code{port_handling = "exclude"}), and fragment/userinfo are
+always excluded (use \code{\link{get_port}}, \code{\link{get_fragment}}, or
+\code{\link{get_userinfo}} for those).
 }
 \details{
 The query string is dropped by default (\code{query_handling = "drop"}), so
@@ -262,6 +284,11 @@ the engine is the same one \code{\link{safe_parse_url}} and
 \code{\link{get_query}} use, so
 \code{get_clean_url(u, query_handling = "filter")} equals
 \code{safe_parse_url(u, query_handling = "filter")$clean_url}.
+
+The port is included only when \code{port_handling != "exclude"}; see
+\code{\link{safe_parse_url}} for the full \code{port_handling} semantics,
+including how \code{url_standard = "whatwg"} elides a default port even
+under \code{port_handling = "keep"}.
 }
 \examples{
 get_clean_url("Example.COM/Path") # Default lower_host: host folds, path kept
