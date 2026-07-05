@@ -87,6 +87,106 @@
   )
 }
 
+# Phase 1 helper (vector): WHATWG literal backslash-as-slash recognition
+# (RURL-ledntyab, PRD v2 D2, §5.2). Under url_standard = "whatwg", for schemes
+# in .WHATWG_SPECIAL_SCHEMES (http/https/ftp -- NOT ftps, which WHATWG does not
+# define as special), a literal backslash is treated identically to a forward
+# slash everywhere the WHATWG state machine checks for one: the scheme-relative
+# "//" marker, the authority/path boundary, and path-segment separators. This
+# must run BEFORE curl ever sees the URL (libcurl never treats "\" as a
+# separator), so it rewrites the raw string here in Phase 1, ahead of every
+# other scheme/host regex in this function -- once rewritten, the existing
+# "://"/"//" detection, host classification, and curl handoff need no further
+# changes to see the WHATWG-recognized slashes.
+#
+# The leading run right after "scheme:" is handled as its own case (mirroring
+# the WHATWG "special authority slashes"/"special authority ignore slashes"
+# states) rather than a blind 1:1 "\" -> "/" substitution: that run -- of ANY
+# length and ANY mix of "/" and "\" -- is collapsed to exactly "//" before
+# authority parsing continues, so a single "\" (RURL-ledntyab's own acceptance
+# case "http:\host\path"), a double "\\" ("http:\\host\path"), and an
+# already-canonical "//" all normalize the same way. A run of length 0 (no
+# separator at all, e.g. "http:path") is not an authority-introducing form
+# under WHATWG and is left untouched -- out of scope here. AFTER that leading
+# run, a literal "\" remains a plain 1:1 "\" -> "/" rewrite (path-segment
+# separators, and the authority/path boundary when it isn't part of the run).
+#
+# Recognition only, no decoding: `%5C` (a percent-encoded backslash) is inert
+# literal text here, never treated as a separator -- it contains no actual
+# backslash byte. The query and fragment are never touched: only the span from
+# just after "scheme:" up to the first literal "?"/"#" is eligible, so a
+# backslash inside `?q=a\b#frag\c` stays untouched even on a rewritten row.
+#
+# Returns `url` (rewritten for eligible rows, unchanged otherwise) and
+# `backslash_rewritten`, a logical mask marking rows where a literal "\" byte
+# actually participated in a rewrite (in the leading run or the remainder) --
+# used to emit the `invalid-reverse-solidus` diagnostic. A leading run that was
+# ALREADY all forward slashes (a plain "http://", or the spec-accurate
+# multi-slash collapse of e.g. "http:///host") changes no backslash, so it does
+# NOT set this flag even though the string may still be rewritten.
+.rewrite_whatwg_backslashes_vec <- function(url, url_standard) {
+  n <- length(url)
+  no_op <- list(url = url, backslash_rewritten = rep(FALSE, n))
+  if (!identical(url_standard, "whatwg")) {
+    return(no_op)
+  }
+
+  scheme_match <- stringi::stri_match_first_regex(
+    url, "^([a-zA-Z][a-zA-Z0-9+.-]*):"
+  )
+  scheme_lower <- stringi::stri_trans_tolower(scheme_match[, 2L])
+  eligible <- !is.na(scheme_lower) & scheme_lower %in% .WHATWG_SPECIAL_SCHEMES
+  if (!any(eligible)) {
+    return(no_op)
+  }
+
+  colon_len <- stringi::stri_length(scheme_match[, 1L])
+  rest <- stringi::stri_sub(url, colon_len + 1L)
+
+  # The query/fragment boundary is the first literal '?' or '#' -- an
+  # unencoded delimiter byte, so it is safe to locate before any rewriting.
+  qf_start <- stringi::stri_locate_first_regex(rest, "[?#]")[, 1L]
+  before <- ifelse(
+    is.na(qf_start), rest, stringi::stri_sub(rest, 1L, qf_start - 1L)
+  )
+  after <- ifelse(is.na(qf_start), "", stringi::stri_sub(rest, qf_start))
+
+  # Leading run of one or more '/'/'\' right after "scheme:" -- the
+  # authority-introducing marker, of any length/composition.
+  run <- stringi::stri_match_first_regex(before, "^[/\\\\]+")[, 1L]
+  has_run <- !is.na(run)
+
+  run_len <- ifelse(has_run, stringi::stri_length(run), 0L)
+  remainder <- ifelse(has_run, stringi::stri_sub(before, run_len + 1L), before)
+
+  # Beyond the leading run, a literal backslash is a plain separator: rewrite
+  # it 1:1 to '/' (path segments, and the authority/path boundary when the
+  # authority had no run of its own, e.g. "http://host\path").
+  rewritten_remainder <- stringi::stri_replace_all_fixed(remainder, "\\", "/")
+
+  # No run at all -> leave `before` untouched (out of scope, see above).
+  # Otherwise: collapse the run to exactly "//" and splice the (possibly
+  # rewritten) remainder back on.
+  rewritten_before <- ifelse(
+    has_run, paste0("//", rewritten_remainder), before
+  )
+
+  run_had_backslash <- has_run & stringi::stri_detect_fixed(run, "\\")
+  run_had_backslash[is.na(run_had_backslash)] <- FALSE
+  remainder_had_backslash <- has_run &
+    stringi::stri_detect_fixed(remainder, "\\")
+  remainder_had_backslash[is.na(remainder_had_backslash)] <- FALSE
+  changed <- eligible & (run_had_backslash | remainder_had_backslash)
+  changed[is.na(changed)] <- FALSE
+
+  url_out <- url
+  url_out[eligible] <- paste0(
+    scheme_match[eligible, 1L], rewritten_before[eligible], after[eligible]
+  )
+
+  list(url = url_out, backslash_rewritten = changed)
+}
+
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
 # gate, and building the string handed to curl. Returns the per-URL columns plus
 # a logical `rejected` column marking rows the scalar pipeline returned NULL for
@@ -99,6 +199,14 @@
                                        scheme_relative_handling,
                                        url_standard = NULL) {
   n <- length(url)
+
+  # WHATWG literal backslash recognition (RURL-ledntyab) runs first: for
+  # eligible rows it rewrites "\" to "/" ahead of every scheme/host regex
+  # below, so the rest of this function sees an already-normalized string.
+  # A no-op (byte-for-byte `url` unchanged) unless url_standard == "whatwg".
+  bs <- .rewrite_whatwg_backslashes_vec(url, url_standard)
+  url <- bs$url
+
   url_lower <- stringi::stri_trans_tolower(url)
 
   # A scheme-bearing input is "allowed" only if its scheme is one rurl supports
@@ -215,7 +323,11 @@
     # Original host token + IPv4-attempt flag for the url_standard host model
     # (RURL-luwvkwhd), consumed by ._parse_stage_a_vec()'s model phase.
     input_host = cls$host_token,
-    is_ipv4_attempt = cls$is_ipv4ish
+    is_ipv4_attempt = cls$is_ipv4ish,
+    # WHATWG backslash recognition (RURL-ledntyab): TRUE where a literal "\"
+    # was actually reinterpreted as "/", consumed by the url_standard
+    # diagnostics seam to emit `invalid-reverse-solidus`.
+    backslash_rewritten = bs$backslash_rewritten
   )
 }
 

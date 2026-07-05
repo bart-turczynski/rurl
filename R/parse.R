@@ -1209,7 +1209,11 @@ safe_parse_urls <- function(url,
     # widens no public output. The url_standard metadata seam
     # (.derive_url_metadata_vec) reads it off the direct ._parse_stage_a_vec()
     # call to compute shape-keyed host diagnostics (RURL-luwvkwhd / T2 seam).
-    input_host = prep$input_host
+    input_host = prep$input_host,
+    # WHATWG backslash recognition (RURL-ledntyab): NOT a cached Stage-A field
+    # either, read the same way by the metadata seam to emit
+    # `invalid-reverse-solidus` only where a rewrite actually happened.
+    backslash_rewritten = prep$backslash_rewritten
   )
   attr(cols, "null_row") <- null_row
   cols

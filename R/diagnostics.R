@@ -35,7 +35,8 @@
   "encoded-dot-segment",
   "encoded-reserved-path-byte",
   "explicit-default-port",
-  "non-default-port"
+  "non-default-port",
+  "invalid-reverse-solidus"
 )
 
 # The host_type vocabulary (PRD §6.3). get_host_type() emits exactly one of
@@ -185,6 +186,20 @@
   is_default_port <- has_port & !is.na(default_port) & raw_port == default_port
   diag <- .diag_add(diag, is_default_port, "explicit-default-port")
   diag <- .diag_add(diag, has_port & !is_default_port, "non-default-port")
+
+  # --- backslash diagnostics (RURL-ledntyab, PRD v2 D2, §5.2) ----------------
+  # `invalid-reverse-solidus` fires exactly where Phase 1's WHATWG recognizer
+  # (.rewrite_whatwg_backslashes_vec) actually reinterpreted a literal "\" as a
+  # "/" -- never merely because a backslash is present, and never under
+  # rfc3986 / no selector / a non-special scheme (ftps), where backslash stays
+  # inert and the flag is always FALSE.
+  backslash_rewritten <- a$backslash_rewritten
+  if (is.null(backslash_rewritten)) {
+    backslash_rewritten <- rep(FALSE, n)
+  }
+  diag <- .diag_add(
+    diag, live & backslash_rewritten, "invalid-reverse-solidus"
+  )
 
   list(host_type = host_type, diagnostics = diag)
 }
