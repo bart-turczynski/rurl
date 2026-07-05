@@ -1,3 +1,60 @@
+## rurl 2.2.0
+
+### New features
+
+- New `url_standard` selector on `safe_parse_url()`, `safe_parse_urls()`, the
+  `get_*()` accessors, and `canonical_join()`: `NULL` (default), `"rfc3986"`, or
+  `"whatwg"` (RURL-eqzkkohm, RURL-uyjheruh). It selects a coherent set of
+  standard-conformant behaviors for the axes it governs — path percent/dot
+  handling, the host IPv4/reg-name model, and `case_handling` — so callers no
+  longer hand-assemble the low-level knobs to approximate a standard. Passing a
+  governed low-level knob (`path_encoding`, `path_normalization`,
+  `case_handling`) with a value the selected profile would not choose is an
+  error (also across `canonical_join()`'s `...`). **`url_standard = NULL` is
+  fully backward compatible** — byte-for-byte identical output and unchanged
+  result shape; there is no default flip. Under `"rfc3986"` only unreserved path
+  bytes are decoded (`%2F` stays encoded) and numeric-looking non-IPv4 hosts are
+  parsed as `reg-name`; under `"whatwg"` encoded unreserved bytes are preserved
+  and valid numeric IPv4 forms are coerced per the WHATWG host model.
+- New standalone `port_handling` option controlling whether the port appears in
+  `clean_url`: `"exclude"` (default, today's behavior), `"keep"`,
+  `"strip_default"`, `"strip_all"` (RURL-qdlvldts). It is editorial and
+  standard-independent; under `url_standard = "whatwg"`, `"keep"` elides a port
+  matching its special scheme's default (http:80, https:443, ftp:21).
+- Under `url_standard = "whatwg"`, a literal backslash is recognized as a path
+  separator for WHATWG-special schemes (`http`/`https`/`ftp`, not `ftps`), as
+  browsers do (RURL-ledntyab). `%5C` is never treated as a separator, and
+  `"rfc3986"` / no selector leave backslashes inert.
+- New `resolve_url(relative_or_absolute, base_url, url_standard = NULL, ...)`:
+  RFC 3986 §5 reference resolution (empty / fragment-only / query-only /
+  scheme-relative / absolute-path / relative-path merge) composed over the same
+  parsing machinery, returning the canonical `clean_url` of the resolved
+  reference (RURL-wrfcildb). Vectorized, with the base recycled.
+
+### Diagnostics and classification helpers
+
+- New companion helpers, gated on `url_standard` (return `NA` with no selector),
+  surface metadata **without** widening the parse result shape:
+  `get_host_type()` (domain / ipv4 / ipv6 / reg-name / missing),
+  `get_scheme_class()` (WHATWG special / non-special / missing-or-error), and
+  `get_url_diagnostics()` (RURL-csdrxdoj, RURL-jlvyjwog).
+- Diagnostics vocabulary: `ipv4-*` numeric-host tokens, `encoded-dot-segment`,
+  `encoded-reserved-path-byte`, `explicit-default-port` / `non-default-port`,
+  `invalid-reverse-solidus`, and the DNS/UTS-46 tokens `domain-label-too-long`,
+  `domain-name-too-long`, `domain-empty-label`, `domain-hyphen-violation`,
+  `domain-std3-violation` (RURL-vowqpmdg). Diagnostics are **facts, not policy**:
+  a token describing an input shape fires identically under both standards, so a
+  link-graph builder can ignore them while an SSRF/allowlist guard rejects on
+  them.
+
+### Documentation
+
+- New `url_standard` vignette walking through RFC 3986 vs WHATWG on the canonical
+  cases (`%41%42`, `%2F`, `2130706433`), the diagnostics, and the migration
+  notes (pin `url_standard = "whatwg"` for WHATWG-aligned link identity on the
+  governed axes; the interim `path_encoding = "keep"` stopgap is a collision fix,
+  not a full standard profile).
+
 ## rurl 2.1.0
 
 ### New features
