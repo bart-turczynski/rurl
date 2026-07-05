@@ -59,6 +59,14 @@ reference:
       - get_password
       - get_userinfo
 
+  - title: "Standard diagnostics"
+    desc: >
+      Companion helpers for the url_standard selector: host classification and
+      non-fatal validation/safety facts.
+    contents:
+      - get_host_type
+      - get_url_diagnostics
+
   - title: "Query introspection"
     desc: "Audit query parameters across a set of URLs."
     contents:
