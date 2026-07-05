@@ -43,12 +43,14 @@ refresh (`pslr::psl_refresh()`).
 
 The `Collate` order in `DESCRIPTION` is authoritative; the load order is
 `status-constants.R` → `utils.R` → `domain.R` → `path-query.R` →
-`parse-phases.R` → `parse.R` → `accessors.R` → `canonical_join.R` → `zzz.R`.
+`parse-phases.R` → `parse.R` → `diagnostics.R` → `accessors.R` →
+`canonical_join.R` → `zzz.R`.
 
 - **R/parse.R** / **R/parse-phases.R** - Main parsing logic: `safe_parse_url()`, the scalar/vector wrappers and option validation (`parse.R`) and the 13 decomposed per-phase helpers `.prepare_url_for_curl()` … `.assemble_parse_result()` (`parse-phases.R`)
 - **R/accessors.R** - Public `get_*()` accessor functions, all built on the shared `.extract_from_urls()` helper over `safe_parse_url()`
 - **R/domain.R** - Punycode helpers and the `pslr` query seam (`.psl_registered_domain()`, `.psl_public_suffix()`, `.psl_suffix_extract()`, `.host_is_ace()`)
 - **R/path-query.R** - Low-level path normalization (`._collapse_path_slashes()`, `._remove_dot_segments()`, `._strip_index_page()`, `._encode_path_segments()`) and query-string parsing (`._parse_query_string()`)
+- **R/diagnostics.R** - `url_standard` diagnostics + `host_type` infrastructure: the vocab constants (`.URL_DIAGNOSTICS`, `.HOST_TYPES`), the per-URL diagnostics accumulator (`.diag_new()` / `.diag_add()`), the single emit seam the host/path profile tickets fill (`.derive_url_metadata_vec()`), and the companion-helper engine (`._url_metadata_vec()`). Metadata is surfaced ONLY through the `get_host_type()` / `get_url_diagnostics()` helpers — never as widened `safe_parse_urls()` columns / `safe_parse_url()` fields (PRD §6.3)
 - **R/canonical_join.R** - Dataset joining by canonicalized URL keys (`canonical_join()`)
 - **R/status-constants.R** - The `.STATUS_*` parse-status constants and the `.is_*_status()` predicates (incl. `.is_joinable_status()` used by `canonical_join()`)
 - **R/utils.R** - The `%||%` null-coalescing operator and `.spu_result_fields` (the single source of truth for `safe_parse_urls()` result columns)

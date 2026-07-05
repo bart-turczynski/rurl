@@ -856,6 +856,91 @@ get_tld <- function(url, source = c("all", "private", "icann"),
   )
 }
 
+#' Classify the host of each URL under a standard profile
+#'
+#' Companion helper for the \code{url_standard} selector: reports the host
+#' \emph{type} of each URL as exactly one of \code{"domain"}, \code{"ipv4"},
+#' \code{"ipv6"}, \code{"reg-name"}, or \code{"missing"}. Unlike a raw host
+#' string, \code{host_type} is a function of \emph{both} the host and the
+#' selected standard: the numeric host \code{2130706433} is a \code{"reg-name"}
+#' under \code{"rfc3986"} but an \code{"ipv4"} address under \code{"whatwg"}.
+#' Callers reading the result must therefore know which selector produced it.
+#'
+#' The metadata is intentionally exposed through this helper rather than as a
+#' column on \code{\link{safe_parse_urls}} or a field on
+#' \code{\link{safe_parse_url}}, so that passing no selector leaves every
+#' existing function's output shape unchanged.
+#'
+#' @param url A character vector of URLs.
+#' @param url_standard Standard profile governing host interpretation:
+#'   \code{NULL} (default; no classification, returns \code{NA}),
+#'   \code{"rfc3986"}, or \code{"whatwg"}.
+#' @return A character vector the same length as \code{url}, each element one of
+#'   the \code{host_type} tokens above, or \code{NA} when no selector is given.
+#' @seealso \code{\link{get_url_diagnostics}}, \code{\link{safe_parse_url}}
+#' @export
+#' @examples
+#' get_host_type("http://example.com/", url_standard = "rfc3986")
+#' get_host_type("http://2130706433/", url_standard = "whatwg")
+get_host_type <- function(url, url_standard = NULL) {
+  if (!is.character(url)) {
+    stop(
+      "`url` must be a character vector of URL strings; ",
+      "pass the URL, not a parsed object.",
+      call. = FALSE
+    )
+  }
+  opts <- .parse_options(url_standard = url_standard)
+  ._url_metadata_vec(url, opts)$host_type
+}
+
+#' Report non-fatal diagnostics for each URL under a standard profile
+#'
+#' Companion helper for the \code{url_standard} selector: reports the
+#' non-fatal validation/safety \emph{facts} rurl observed while parsing each
+#' URL (for example an IPv4 host written in a numeric or non-decimal shorthand,
+#' or a path segment carrying an encoded reserved byte). Diagnostics are facts,
+#' not policy: they are emitted keyed to host/path \emph{shape} in both
+#' standard modes so a security-sensitive consumer can reject a footgun URL
+#' regardless of which selector it chose, while a link-graph consumer can ignore
+#' them. See \code{vignette} / the package NEWS for the full token vocabulary.
+#'
+#' A single URL can carry several diagnostics, so the return shape is not a
+#' plain scalar-per-URL vector (see \emph{Value}). \code{parse_status} stays
+#' coarse; diagnostics are never encoded into it.
+#'
+#' @param url A character vector of URLs.
+#' @param url_standard Standard profile governing interpretation: \code{NULL}
+#'   (default; no diagnostics), \code{"rfc3986"}, or \code{"whatwg"}.
+#' @return For a length-1 \code{url}, a character vector of zero or more
+#'   diagnostic tokens for that URL. For a length-n \code{url} (including
+#'   \code{n == 0}), a list of length n whose i-th element is the character
+#'   vector of that URL's tokens (\code{character(0)} when it has none).
+#' @seealso \code{\link{get_host_type}}, \code{\link{safe_parse_url}}
+#' @export
+#' @examples
+#' get_url_diagnostics("http://example.com/", url_standard = "rfc3986")
+#' get_url_diagnostics(
+#'   c("http://example.com/", "http://2130706433/"),
+#'   url_standard = "whatwg"
+#' )
+get_url_diagnostics <- function(url, url_standard = NULL) {
+  if (!is.character(url)) {
+    stop(
+      "`url` must be a character vector of URL strings; ",
+      "pass the URL, not a parsed object.",
+      call. = FALSE
+    )
+  }
+  opts <- .parse_options(url_standard = url_standard)
+  diagnostics <- ._url_metadata_vec(url, opts)$diagnostics
+  # length-1 url -> the bare token vector; length-n (incl. 0) -> list of n.
+  if (length(url) == 1L) {
+    return(diagnostics[[1L]])
+  }
+  diagnostics
+}
+
 #' Summarize query parameters across a set of URLs
 #'
 #' Tabulates which query parameters appear across a vector of URLs and what
