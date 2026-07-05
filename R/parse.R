@@ -216,10 +216,13 @@
 #'   selector — `"keep"`, `"lower"`, and `"upper"` all conflict, since `"lower"`
 #'   also lowercases the path, which neither standard sanctions). Added as the
 #'   last argument so existing positional calls keep their meaning; always
-#'   pass it by name. The selector does **not** govern whether `port_handling`
-#'   may be set, only the default-port elision described above; it also does
-#'   not govern backslash handling, IDNA, query handling, or relative-URL
-#'   resolution.
+#'   pass it by name. Under `"whatwg"` the selector additionally recognizes a
+#'   literal backslash as a path separator for WHATWG-special schemes
+#'   (`http`/`https`/`ftp`) and elides a default port under `port_handling =
+#'   "keep"`; see \code{\link{resolve_url}} for `url_standard`-governed
+#'   reference resolution. The selector does **not** govern whether
+#'   `port_handling` may be set (it is a standalone editorial knob), nor does it
+#'   govern IDNA rendering or query handling.
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.

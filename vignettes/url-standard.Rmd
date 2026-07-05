@@ -1,0 +1,148 @@
+---
+title: "Standard-conformant parsing with url_standard"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Standard-conformant parsing with url_standard}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(rurl)
+```
+
+## Why a selector?
+
+`rurl` exposes many low-level normalization knobs (`path_encoding`,
+`path_normalization`, `case_handling`, the host model, …). Assembling a coherent
+"RFC 3986-conformant" or "WHATWG-conformant" profile by hand means getting
+several of them consistent at once, and getting one wrong yields subtly
+non-conformant output.
+
+The `url_standard` selector does that assembly for you. It takes one of three
+values:
+
+- `NULL` (default) — today's behavior, exactly. Fully backward compatible:
+  byte-for-byte identical output and unchanged result shape.
+- `"rfc3986"` — the RFC 3986 profile.
+- `"whatwg"` — the WHATWG URL Standard profile (on the axes `rurl` governs).
+
+There is **no default flip**: the selector is purely additive, and `NULL`
+callers are unaffected. It is accepted by `safe_parse_url()`,
+`safe_parse_urls()`, the `get_*()` accessors, `canonical_join()`, and
+`resolve_url()`.
+
+## The canonical cases
+
+### Encoded unreserved bytes (`%41%42`)
+
+`%41%42` is the percent-encoding of the ASCII letters `AB` — both *unreserved*
+bytes. RFC 3986 §6.2.2.2 says unreserved percent-encodings should be decoded to
+their literal form; WHATWG preserves them.
+
+```{r unreserved}
+get_path("http://example.com/%41%42", url_standard = "rfc3986")
+get_path("http://example.com/%41%42", url_standard = "whatwg")
+```
+
+### Encoded reserved bytes (`%2F`)
+
+`%2F` is an encoded `/` — a *reserved* byte. Neither standard decodes it into a
+path-separating slash (that would change the path structure), so it stays
+encoded under both; only the hex case is canonicalized.
+
+```{r reserved}
+get_path("http://example.com/a%2Fb", url_standard = "rfc3986")
+get_path("http://example.com/a%2fb", url_standard = "whatwg")
+```
+
+### Whole-number IPv4 (`2130706433`)
+
+`2130706433` is the 32-bit integer form of `127.0.0.1`. WHATWG coerces it to a
+dotted-decimal address; RFC 3986 has no such rule, so it is treated as a
+registered name — but a diagnostic fires under **both** standards so a caller
+can tell the host was a numeric shorthand.
+
+```{r ipv4}
+get_host("http://2130706433/", url_standard = "whatwg")
+get_host_type("http://2130706433/", url_standard = "whatwg")
+get_url_diagnostics("http://2130706433/", url_standard = "rfc3986")
+```
+
+## Diagnostics are facts, not policy
+
+`url_standard` also unlocks three companion helpers. They return `NA` unless you
+pass a selector, and — importantly — they never widen the parse result shape:
+metadata is surfaced only through these helpers, never as new columns or fields.
+
+```{r helpers}
+get_host_type("http://example.com/", url_standard = "whatwg")
+get_scheme_class(c("http://a/", "ftps://a/"), url_standard = "whatwg")
+get_url_diagnostics("http://0x7f.1/", url_standard = "whatwg")
+```
+
+A diagnostic describes a *shape* of the input; it does not decide what to do
+about it. A link-graph builder can ignore `ipv4-*` tokens when computing keys,
+while an SSRF/allowlist guard can reject any host that carries one. Because they
+are facts, the same token fires under both standards.
+
+## Ports and backslashes
+
+`port_handling` controls whether the port appears in `clean_url`. It is a
+standalone editorial knob (independent of `url_standard`), but under `"whatwg"`
+its `"keep"` value elides a port that matches its special scheme's default.
+
+```{r ports}
+get_clean_url("http://example.com:80/p", port_handling = "keep")
+get_clean_url("http://example.com:80/p", port_handling = "keep",
+              url_standard = "whatwg")
+get_clean_url("http://example.com:8080/p", port_handling = "keep",
+              url_standard = "whatwg")
+```
+
+Under `"whatwg"`, a literal backslash is recognized as a path separator for the
+WHATWG-special schemes (`http`/`https`/`ftp`), as browsers do. `%5C` is never
+treated as a separator, and `"rfc3986"` leaves backslashes inert.
+
+```{r backslash}
+get_clean_url("http://example.com/a\\b", url_standard = "whatwg")
+get_clean_url("http://example.com/a\\b", url_standard = "rfc3986")
+```
+
+## Resolving references
+
+`resolve_url()` implements RFC 3986 §5 reference resolution — turning a relative
+link and a base URL into an absolute URL — and then canonicalizes the result
+with the same machinery, so `url_standard` and the other options flow straight
+through.
+
+```{r resolve}
+resolve_url("../g", "http://a/b/c/d;p?q")
+resolve_url("//other.example/p", "http://a/b/c")
+resolve_url(c("g", "../h"), "http://a/b/c/")
+```
+
+## Migration notes
+
+- **Pin `url_standard = "whatwg"`** for WHATWG-aligned link identity on the
+  governed axes (path percent/dot handling, the host IPv4/reg-name model). This
+  collapses a hand-tuned multi-knob profile down to one argument. It is
+  deliberately narrower than "browser-faithful": IDNA rendering and query
+  handling are not governed by the selector.
+- **`path_encoding = "keep"` is a stopgap, not a profile.** If you adopted
+  `path_encoding = "keep"` earlier to stop `%2F` reserved-byte false joins, keep
+  in mind it is a collision fix, not behavior-equivalent to `"whatwg"`: it
+  leaves `%41%42` encoded but does not resolve encoded dot segments and does not
+  change host numeric parsing. Prefer the selector once you can.
+
+## What the selector does not govern
+
+The selector governs path percent/dot handling, the host IPv4/reg-name model,
+`case_handling`, default-port elision (under `port_handling = "keep"`), and
+WHATWG backslash recognition. It does **not** govern IDNA rendering
+(`host_encoding`) or query handling (owned by the query options), and it does
+not expand the allowed scheme set beyond `http`/`https`/`ftp`/`ftps`.
