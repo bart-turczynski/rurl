@@ -239,6 +239,11 @@ get_clean_url <- function(url,
       NULL
     } else {
       match.arg(path_normalization, .opt_path_normalization)
+    },
+    case_handling = if (missing(case_handling)) {
+      NULL
+    } else {
+      match.arg(case_handling, .opt_case_handling)
     }
   ))
   .extract_from_urls(url, "clean_url",
@@ -371,9 +376,14 @@ get_host <- function(url,
                      host_encoding = c("keep", "idna", "unicode"),
                      url_standard = NULL) {
   source <- match.arg(source)
-  case_handling <- match.arg(case_handling)
   host_encoding <- match.arg(host_encoding)
   url_standard <- .validate_url_standard(url_standard)
+  # missing() must be read before match.arg() reassigns case_handling below.
+  .check_url_standard_conflicts(url_standard, .governed_supplied(
+    case_handling =
+      if (missing(case_handling)) NULL else match.arg(case_handling)
+  ))
+  case_handling <- match.arg(case_handling)
   .extract_from_urls(url, "host",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
@@ -415,7 +425,9 @@ get_path <- function(
     path_encoding =
       if (missing(path_encoding)) NULL else match.arg(path_encoding),
     path_normalization =
-      if (missing(path_normalization)) NULL else match.arg(path_normalization)
+      if (missing(path_normalization)) NULL else match.arg(path_normalization),
+    case_handling =
+      if (missing(case_handling)) NULL else match.arg(case_handling)
   ))
   case_handling <- match.arg(case_handling)
   trailing_slash_handling <- match.arg(trailing_slash_handling)

@@ -190,14 +190,17 @@
 #'   `"rfc3986"`, or `"whatwg"`. With `NULL` the behavior is exactly what the
 #'   individual low-level options select (fully backward compatible). When set,
 #'   it selects a coherent set of standard-conformant behaviors for the axes it
-#'   governs — path percent/dot handling and the host IPv4/reg-name model — so
-#'   callers do not have to hand-assemble the low-level knobs. Passing a
-#'   governed low-level knob (`path_encoding` or `path_normalization`) with a
-#'   value the selected profile would not choose is an error; passing the value
-#'   the profile would pick is accepted. Added as the last argument so existing
-#'   positional calls keep their meaning; always pass it by name. The v1
-#'   selector does **not** govern default ports, backslash handling, IDNA,
-#'   query handling, or relative-URL resolution.
+#'   governs — path percent/dot handling, the host IPv4/reg-name model, and
+#'   `case_handling` — so callers do not have to hand-assemble the low-level
+#'   knobs. Passing a governed low-level knob (`path_encoding`,
+#'   `path_normalization`, or `case_handling`) with a value the selected
+#'   profile would not choose is an error; passing the value the profile would
+#'   pick is accepted (only `case_handling = "lower_host"` is accepted under a
+#'   selector — `"keep"`, `"lower"`, and `"upper"` all conflict, since `"lower"`
+#'   also lowercases the path, which neither standard sanctions). Added as the
+#'   last argument so existing positional calls keep their meaning; always
+#'   pass it by name. The selector does **not** govern default ports,
+#'   backslash handling, IDNA, query handling, or relative-URL resolution.
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -386,7 +389,9 @@ safe_parse_url <- function(url,
     path_encoding =
       if (missing(path_encoding)) NULL else match.arg(path_encoding),
     path_normalization =
-      if (missing(path_normalization)) NULL else match.arg(path_normalization)
+      if (missing(path_normalization)) NULL else match.arg(path_normalization),
+    case_handling =
+      if (missing(case_handling)) NULL else match.arg(case_handling)
   ))
 
   # Validate and normalize options once (match.arg + subdomain check)
@@ -471,7 +476,9 @@ safe_parse_urls <- function(url,
     path_encoding =
       if (missing(path_encoding)) NULL else match.arg(path_encoding),
     path_normalization =
-      if (missing(path_normalization)) NULL else match.arg(path_normalization)
+      if (missing(path_normalization)) NULL else match.arg(path_normalization),
+    case_handling =
+      if (missing(case_handling)) NULL else match.arg(case_handling)
   ))
 
   # Validate and normalize options once (match.arg + subdomain check)
@@ -613,16 +620,25 @@ safe_parse_urls <- function(url,
 # `path_normalization` resolves dot segments under both profiles, so its
 # value is "dot_segments" (v1 profiles do not collapse slashes, so "both"
 # conflicts).
+# `case_handling` (PRD v2 §5 D5, RURL-mevmyhxz): both profiles require
+# "lower_host" -- it already matches RFC 3986 sec 6.2.2.1 and WHATWG
+# scheme/host casing, and lowercases scheme+host only. "lower" also
+# lowercases the path (R/parse-phases.R .apply_case_policy_vec), which
+# neither spec sanctions, so it conflicts like "keep"/"upper" rather than
+# being treated as a superset of "lower_host". No new casing logic -- this
+# is a conflict-matrix entry only.
 # Host IPv4 behavior is governed too, but it is not exposed as a public knob, so
 # it contributes no conflict-checkable argument here.
 .URL_STANDARD_PROFILES <- list(
   rfc3986 = list(
     path_encoding = ".rfc3986_unreserved",
-    path_normalization = "dot_segments"
+    path_normalization = "dot_segments",
+    case_handling = "lower_host"
   ),
   whatwg = list(
     path_encoding = ".whatwg_preserve",
-    path_normalization = "dot_segments"
+    path_normalization = "dot_segments",
+    case_handling = "lower_host"
   )
 )
 
@@ -631,7 +647,8 @@ safe_parse_urls <- function(url,
 # so a legitimate abbreviated value is not mistaken for a conflicting one.
 .url_standard_governed_choices <- list(
   path_encoding = .opt_path_encoding,
-  path_normalization = .opt_path_normalization
+  path_normalization = .opt_path_normalization,
+  case_handling = .opt_case_handling
 )
 
 # Validate `url_standard`: NULL (default) or one of the allowed profile names.

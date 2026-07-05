@@ -91,14 +91,17 @@ cleaned URL.}
 \code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
 individual low-level options select (fully backward compatible). When set,
 it selects a coherent set of standard-conformant behaviors for the axes it
-governs — path percent/dot handling and the host IPv4/reg-name model — so
-callers do not have to hand-assemble the low-level knobs. Passing a
-governed low-level knob (\code{path_encoding} or \code{path_normalization}) with a
-value the selected profile would not choose is an error; passing the value
-the profile would pick is accepted. Added as the last argument so existing
-positional calls keep their meaning; always pass it by name. The v1
-selector does \strong{not} govern default ports, backslash handling, IDNA,
-query handling, or relative-URL resolution.}
+governs — path percent/dot handling, the host IPv4/reg-name model, and
+\code{case_handling} — so callers do not have to hand-assemble the low-level
+knobs. Passing a governed low-level knob (\code{path_encoding},
+\code{path_normalization}, or \code{case_handling}) with a value the selected
+profile would not choose is an error; passing the value the profile would
+pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
+selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
+also lowercases the path, which neither standard sanctions). Added as the
+last argument so existing positional calls keep their meaning; always
+pass it by name. The selector does \strong{not} govern default ports,
+backslash handling, IDNA, query handling, or relative-URL resolution.}
 }
 \value{
 A character vector of domain names.
