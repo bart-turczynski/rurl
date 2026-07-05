@@ -26,6 +26,7 @@ Collate:
     'diagnostics.R'
     'accessors.R'
     'canonical_join.R'
+    'resolve.R'
     'zzz.R'
 Imports:
     utils,

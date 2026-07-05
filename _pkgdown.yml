@@ -73,6 +73,11 @@ reference:
     contents:
       - query_param_summary
 
+  - title: "Resolution"
+    desc: "Resolve relative or absolute references against a base URL."
+    contents:
+      - resolve_url
+
   - title: "Joining"
     desc: "Join datasets on canonicalized URL keys."
     contents:
