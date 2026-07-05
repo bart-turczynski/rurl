@@ -11,6 +11,15 @@
 # profiles, so fixture expectations use rurl's canonical spelling rather than
 # a WPT/browser's byte-for-byte href (PRD §9.2 / Open Q4 note) -- this is
 # documented per-row in `notes` where it applies.
+#
+# Most RFC-side rows are derived from RFC 3986 grammar/normalization prose
+# (there is no RFC equivalent of WPT's machine-checkable corpus). The
+# `path-rfc-5-4-*` rows are the exception: RFC 3986 §5.4's "abnormal examples"
+# table gives worked reference-resolution vectors against a base URI, and two
+# of them (`/./g`, `/../g`) use an absolute-path reference, which §5.3 routes
+# straight to `remove_dot_segments()` with no base merge -- so those two are
+# genuine RFC-text-verbatim, base-independent dot-segment vectors, not a
+# hand-derivation.
 
 # --- Golden fixture table (PRD §9.1) ----------------------------------------
 
