@@ -63,6 +63,7 @@ The `Collate` order in `DESCRIPTION` is authoritative; the load order is
 - `.psl_registered_domain()` / `.psl_public_suffix()` (R/domain.R) - thin wrappers over `pslr::registrable_domain()` / `pslr::public_suffix()`
 - `.psl_suffix_extract()` (R/domain.R) - full canonical decomposition (`subdomain` / `domain` / `suffix` / `registrable_domain`) via `pslr::suffix_extract()`, used to make STRUCTURAL policy decisions (www-prefix and subdomain-trim heuristics) on one canonical spelling
 - `.host_is_ace()` (R/domain.R) - TRUE if any host label is an `xn--` A-label; drives the `host_encoding = "keep"` spelling choice in `.derive_domain_tld()`
+- `.apply_host_standard_model_vec()` (R/parse-phases.R, Phase 5b) - the `url_standard` host IPv4/reg-name model (RURL-luwvkwhd). No-op when `url_standard` is NULL. Under a selector it stops the Phase-1 hard reject of numeric hosts: RFC 3986 restores the original token as a reg-name (libcurl coerced it), WHATWG keeps libcurl's IPv4 coercion and marks out-of-range / >4-part hosts fatal. `url_standard` is therefore Stage-A-affecting and enters `.parse_cache_keys()` (PRD §5.1, option (a))
 
 ### PSL delegation contract (R/domain.R)
 

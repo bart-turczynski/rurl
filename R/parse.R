@@ -833,8 +833,14 @@ safe_parse_urls <- function(url,
 # source of the field set, order, separator, and Unicode escaping so the key
 # format cannot drift across call sites.
 .parse_cache_keys <- function(urls, opts) {
+  # url_standard is Stage-A-affecting (RURL-luwvkwhd, PRD §5.1): it changes IP
+  # detection / host rejection / final host in Stage A, so it MUST enter the key
+  # or a second call under a different standard would return a stale cached host
+  # (AC #9). Option (a) from the PRD: one extra cache entry per URL per standard
+  # actually used. NULL maps to "" so the no-selector key is stable.
   cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
     opts$tld_source, opts$scheme_relative_handling,
+    opts$url_standard %||% "",
     sep = "\x1F"
   )
   stringi::stri_escape_unicode(enc2utf8(cache_key))
@@ -1005,9 +1011,12 @@ safe_parse_urls <- function(url,
   # scalar (callers map non-character input to NA before the engine).
   valid <- !is.na(urls) & nzchar(urls)
 
-  # Phase 1: scheme detection and curl-input preparation.
+  # Phase 1: scheme detection and curl-input preparation. url_standard is passed
+  # so the host-shape gate parses numeric IPv4 attempts faithfully instead of
+  # rejecting them under a selector (RURL-luwvkwhd).
   prep <- .prepare_urls_for_curl_vec(
-    urls, opts$protocol_handling, opts$scheme_relative_handling
+    urls, opts$protocol_handling, opts$scheme_relative_handling,
+    opts$url_standard
   )
 
   # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
@@ -1070,11 +1079,25 @@ safe_parse_urls <- function(url,
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
   )
 
-  # Phase 5: IP host detection.
+  # Phase 5: IP host detection (on curl's host, which may be a coerced IPv4).
   is_ip_host <- .detect_ip_host_vec(raw_host)
 
+  # Phase 5b: url_standard host IPv4/reg-name model (RURL-luwvkwhd). No-op when
+  # url_standard is NULL. Under a selector it restores the RFC reg-name spelling
+  # (or keeps curl's WHATWG coercion) and marks WHATWG-fatal numeric hosts,
+  # which are folded into the null-row set so they present as parse errors.
+  model <- .apply_host_standard_model_vec(
+    prep$input_host, raw_host, is_ip_host, opts$url_standard,
+    prep$is_ipv4_attempt
+  )
+  model_host <- model$host
+  is_ip_host <- model$is_ip
+  null_row <- null_row | model$fatal
+
   # Phase 6: www-prefix policy shapes the host fed to the PSL decomposition.
-  final_host <- .apply_www_policy_vec(raw_host, opts$www_handling, is_ip_host)
+  final_host <- .apply_www_policy_vec(
+    model_host, opts$www_handling, is_ip_host
+  )
 
   # Phase 7: registered-domain and TLD derivation (batched pslr calls), computed
   # in BOTH spellings. "idna" forces ascii A-labels and "unicode" forces
@@ -1110,7 +1133,13 @@ safe_parse_urls <- function(url,
     original_has_allowed_scheme = prep$original_has_allowed_scheme,
     is_scheme_relative = prep$is_scheme_relative,
     looks_like_host_port = prep$looks_like_host_port,
-    scheme_less_userinfo = prep$scheme_less_userinfo
+    scheme_less_userinfo = prep$scheme_less_userinfo,
+    # Original (pre-curl) host token: NOT a cached Stage-A field (absent from
+    # .spu_stage_a_fields) and never surfaced in the 14-column result, so it
+    # widens no public output. The url_standard metadata seam
+    # (.derive_url_metadata_vec) reads it off the direct ._parse_stage_a_vec()
+    # call to compute shape-keyed host diagnostics (RURL-luwvkwhd / T2 seam).
+    input_host = prep$input_host
   )
   attr(cols, "null_row") <- null_row
   cols

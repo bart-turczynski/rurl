@@ -81,14 +81,17 @@ test_that("get_host_type is NA-equivalent with no selector", {
   expect_identical(get_host_type(u, url_standard = NULL), res)
 })
 
-test_that("get_host_type is empty in T2 even with a selector", {
-  # T2 ships the helper empty; the host model (RURL-luwvkwhd) fills it in.
+test_that("get_host_type classifies per selector (host model, RURL-luwvkwhd)", {
+  # The host model fills the T2 surface: host_type is an (host, url_standard)
+  # function. Full table coverage lives in test-url-standard-host.R; this pins
+  # the helper wiring returns one token per URL, not NA, under a selector.
   u <- c("http://example.com/", "http://2130706433/")
-  for (std in c("rfc3986", "whatwg")) {
-    res <- get_host_type(u, url_standard = std)
-    expect_length(res, length(u))
-    expect_true(all(is.na(res)))
-  }
+  expect_identical(
+    get_host_type(u, url_standard = "rfc3986"), c("domain", "reg-name")
+  )
+  expect_identical(
+    get_host_type(u, url_standard = "whatwg"), c("domain", "ipv4")
+  )
 })
 
 test_that("get_host_type validates input and length-0", {
@@ -113,9 +116,14 @@ test_that("get_url_diagnostics returns a length-n list for a vector url", {
   res <- get_url_diagnostics(u, url_standard = "whatwg")
   expect_type(res, "list")
   expect_length(res, length(u))
-  expect_true(all(vapply(res, identical, logical(1), character(0))))
-  # NULL selector matches the same empty list shape.
-  expect_identical(get_url_diagnostics(u, url_standard = NULL), res)
+  # A clean host and an unparseable input carry no tokens; the numeric host
+  # does (full token tables live in test-url-standard-host.R).
+  expect_identical(res[[1L]], character(0))
+  expect_setequal(res[[2L]], c("ipv4-number-form", "ipv4-non-dotted"))
+  expect_identical(res[[3L]], character(0))
+  # NULL selector: every element is empty (no metadata surface without one).
+  null_res <- get_url_diagnostics(u, url_standard = NULL)
+  expect_true(all(vapply(null_res, identical, logical(1), character(0))))
 })
 
 test_that("get_url_diagnostics handles length-0 and validates input", {
