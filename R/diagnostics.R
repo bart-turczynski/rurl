@@ -36,7 +36,12 @@
   "encoded-reserved-path-byte",
   "explicit-default-port",
   "non-default-port",
-  "invalid-reverse-solidus"
+  "invalid-reverse-solidus",
+  "domain-label-too-long",
+  "domain-name-too-long",
+  "domain-empty-label",
+  "domain-hyphen-violation",
+  "domain-std3-violation"
 )
 
 # The host_type vocabulary (PRD §6.3). get_host_type() emits exactly one of
@@ -200,6 +205,31 @@
   diag <- .diag_add(
     diag, live & backslash_rewritten, "invalid-reverse-solidus"
   )
+
+  # --- DNS-length / UTS-46 diagnostics (RURL-vowqpmdg, T5 design lock) -------
+  # Delegates to punycoder::host_normalize() via the .punycoder_host_probe()
+  # seam (domain.R) for 3 of the 5 facts, plus 2 rurl-owned structural
+  # detectors (empty-label, length subtyping); see that seam's header comment
+  # for the full design. Facts, not policy (same pattern as every other block
+  # above): fired identically in BOTH standard modes, keyed to host SHAPE
+  # alone. Probed against `final_host` (the resolved, pre-Stage-B host
+  # spelling -- host_normalize() accepts either Unicode or ASCII/punycode
+  # input and reads the same case-preserving spelling verbatim; confirmed
+  # empirically for an IDN host at this point in the pipeline). IP literals
+  # are excluded from the probe: `use_std3` flags a bracketed IPv6 literal's
+  # "[", "]", ":" as violations (verified empirically), which would
+  # misclassify every IPv6 host as a STD3 violation, and DNS-length/UTS-46
+  # rules are meaningless for an IP literal in the first place.
+  probe_host <- final_host
+  probe_host[!(live & !host_missing & !is_ip)] <- NA_character_
+  host_probe <- .punycoder_host_probe(probe_host)
+  diag <- .diag_add(diag, host_probe$label_too_long, "domain-label-too-long")
+  diag <- .diag_add(diag, host_probe$name_too_long, "domain-name-too-long")
+  diag <- .diag_add(diag, host_probe$empty_label, "domain-empty-label")
+  diag <- .diag_add(
+    diag, host_probe$hyphen_violation, "domain-hyphen-violation"
+  )
+  diag <- .diag_add(diag, host_probe$std3_violation, "domain-std3-violation")
 
   list(host_type = host_type, diagnostics = diag)
 }

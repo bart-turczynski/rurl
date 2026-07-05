@@ -315,3 +315,138 @@
     invalid = "na"
   )
 }
+
+# --- punycoder DNS-length / UTS-46 diagnostic probe --------------------------
+#
+# Delegates the url_standard DNS-length/UTS-46 diagnostic seam (T6,
+# RURL-vowqpmdg) entirely to `punycoder::host_normalize()`; rurl owns only the
+# two structural detectors (empty-label, length subtyping) that
+# `host_normalize()` cannot itself express as an isolated flag. The algorithm
+# is a LOCKED design from T5 (RURL-kqmpbwye) -- see
+# `_scratch/T5-dns-uts46-probe-design-lock.md` for the full empirical
+# derivation and `tests/testthat/test-punycoder-host-probe-characterization.R`
+# for the version-drift tripwire pinning these exact `host_normalize()` call
+# shapes against the currently-installed punycoder. Do not re-derive the
+# design below without reading that doc first.
+#
+# Design summary:
+#   * An ALL-STRICT baseline with one flag relaxed at a time is ambiguous (a
+#     host failing 2-of-3 checks is indistinguishable from one failing
+#     3-of-3). The correct design inverts this: an ALL-RELAXED baseline, then
+#     exactly one flag ENABLED per isolated call. Each isolated call's
+#     NA/non-NA reading is then an independent fact about that one check
+#     alone, regardless of how many OTHER checks are simultaneously failing.
+#   * The 3 isolated calls (`call_a`/`call_b`/`call_c`, one per flag) are only
+#     trustworthy when `baseline` is non-NA; a NA baseline means a structural
+#     problem outside all 3 flags (only "domain-empty-label" in practice, e.g.
+#     "a..com"), never "fails all 3 checks".
+#   * `domain-empty-label` is a direct strsplit check, not a probe call: it is
+#     cheaper than a scoped `validate_domain()` call and does not compete with
+#     `host_normalize()`'s ambiguity at all (it never inspects other rules).
+#   * Length subtyping (label-too-long vs. name-too-long, independent and
+#     co-firing facts) reuses `baseline`'s own ACE-encoded (xn--...) output --
+#     never the raw input host -- because DNS length limits apply to the
+#     punycode-encoded label, not the raw Unicode codepoint count (boundary
+#     verified exactly at 63/253 octets on the ACE form). A scoped
+#     `validate_domain()` call was considered and rejected for this: it
+#     collapses both length facts to a single code when they co-occur.
+#   * `domain-std3-violation` (isolated `use_std3`) is a verified STRICT
+#     SUPERSET of WHATWG's forbidden-host-code-point set: it also rejects
+#     non-LDH ASCII punctuation (`_ + ~ * $`) that WHATWG does not itself
+#     forbid at the host-code-point level. Its meaning is "this host violates
+#     STD3 ASCII hostname rules", never narrowly "contains a WHATWG-forbidden
+#     code point".
+#
+# Callers are responsible for restricting `host` to the rows worth probing --
+# in particular, excluding IP literals. `use_std3` treats a bracketed IPv6
+# literal's "[", "]", ":" as violations (verified empirically), which would
+# misclassify every IPv6 host as a STD3 violation, and DNS-length/UTS-46
+# rules are meaningless for an IP literal in the first place. NA/empty
+# elements are treated as "nothing to probe" and read FALSE for every fact
+# (mirrors the empty-label-is-ambiguous-NA guard, without polluting a logical
+# vector with NA via `nzchar(NA)`).
+#
+# Vectorized; not deduplicated/cached (callers already dedup at the URL
+# level via ._url_metadata_vec()'s unique(url), and T5's benchmark found the
+# 4-call probe cost negligible -- ~12 microseconds/host -- so no cheaper
+# design is required here).
+#
+# Returns a list of 5 parallel logical vectors, same length as `host`:
+#   label_too_long, name_too_long, empty_label, hyphen_violation,
+#   std3_violation.
+.punycoder_host_probe <- function(host) {
+  n <- length(host)
+  label_too_long <- rep(FALSE, n)
+  name_too_long <- rep(FALSE, n)
+  empty_label <- rep(FALSE, n)
+  hyphen_violation <- rep(FALSE, n)
+  std3_violation <- rep(FALSE, n)
+  out <- list(
+    label_too_long = label_too_long,
+    name_too_long = name_too_long,
+    empty_label = empty_label,
+    hyphen_violation = hyphen_violation,
+    std3_violation = std3_violation
+  )
+
+  probe_idx <- which(!is.na(host) & nzchar(host))
+  if (length(probe_idx) == 0L) {
+    return(out)
+  }
+
+  h <- host[probe_idx]
+
+  # domain-empty-label: direct structural detector, no host_normalize() call.
+  # strsplit(..., fixed = TRUE) drops a trailing "" for a trailing dot
+  # ("a.com." -> c("a", "com")), which is exactly the FQDN-tolerant behavior
+  # host_normalize() itself exhibits -- do not swap for stringi's
+  # stri_split_fixed(), which keeps the trailing "" and would misfire on a
+  # valid trailing-root-dot FQDN (rurl house convention; see CLAUDE.md).
+  labels_list <- strsplit(h, ".", fixed = TRUE)
+  out$empty_label[probe_idx] <- vapply(
+    labels_list,
+    function(labels) !all(nzchar(labels)) || length(labels) == 0L,
+    logical(1)
+  )
+
+  # Accepted design (T5): all-relaxed baseline, then one flag enabled at a
+  # time. Only rows where the baseline succeeds feed the 3 isolated calls.
+  baseline <- punycoder::host_normalize(
+    h, check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
+  )
+  baseline_ok <- which(!is.na(baseline))
+  if (length(baseline_ok) == 0L) {
+    return(out)
+  }
+
+  ok_idx <- probe_idx[baseline_ok]
+  hb <- h[baseline_ok]
+
+  call_a <- punycoder::host_normalize(
+    hb, check_hyphens = TRUE, use_std3 = FALSE, verify_dns_length = FALSE
+  )
+  call_b <- punycoder::host_normalize(
+    hb, check_hyphens = FALSE, use_std3 = TRUE, verify_dns_length = FALSE
+  )
+  call_c <- punycoder::host_normalize(
+    hb, check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = TRUE
+  )
+
+  out$hyphen_violation[ok_idx] <- is.na(call_a)
+  out$std3_violation[ok_idx] <- is.na(call_b)
+
+  # Length subtyping: only meaningful where call_c genuinely failed. Both
+  # facts are independent booleans and can co-fire on the same host.
+  length_failed <- which(is.na(call_c))
+  if (length(length_failed) > 0L) {
+    base_ace <- baseline[baseline_ok][length_failed]
+    len_idx <- ok_idx[length_failed]
+    ace_labels <- strsplit(base_ace, ".", fixed = TRUE)
+    out$label_too_long[len_idx] <- vapply(
+      ace_labels, function(x) any(nchar(x) > 63L), logical(1)
+    )
+    out$name_too_long[len_idx] <- nchar(sub("[.]$", "", base_ace)) > 253L
+  }
+
+  out
+}
