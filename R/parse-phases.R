@@ -363,6 +363,20 @@
       }
       path_work[mask] <- decoded
     }
+  } else if (path_encoding == ".rfc3986_unreserved") {
+    # url_standard = "rfc3986" (RURL-gjltzwmp, PRD S6.1): decode ONLY
+    # unreserved percent-encoded octets, and do it BEFORE dot-segment removal
+    # -- ordering is normative, not incidental. Decoding first folds an
+    # encoded dot (%2E / %2E%2E) to a literal "."/".." segment, which the
+    # dot_segments step below then resolves via the existing literal matcher.
+    # Reserved bytes (%2F, %3F, %23, ...) are never decoded here.
+    mask <- !is.na(path_work) & stringi::stri_detect_fixed(path_work, "%")
+    if (any(mask)) {
+      path_work[mask] <- vapply(
+        path_work[mask], .rfc_unreserved_normalize, character(1),
+        USE.NAMES = FALSE
+      )
+    }
   }
 
   # Slash collapsing.

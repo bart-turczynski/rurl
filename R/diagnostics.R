@@ -133,7 +133,27 @@
   # --- path diagnostics (RURL-gjltzwmp / RURL-bbmuehsx, PRD §6.1, §7) ---------
   # Emit `encoded-dot-segment` when an encoded-dot segment is recognized/removed
   # and `encoded-reserved-path-byte` when the clean path preserves an encoded
-  # reserved byte (%2F / %3F / %23). Reads a$raw_path and opts$url_standard.
+  # reserved byte (%2F / %3F / %23). Both v1 profiles ALWAYS resolve dot
+  # segments and NEVER decode reserved bytes (PRD §6.1), so -- like the ipv4-*
+  # host tokens above -- these are shape facts keyed to the raw path alone,
+  # fired identically in RFC and WHATWG mode (PRD "path-diagnostic triggers"
+  # note), independent of which profile's transform actually performed the
+  # removal.
+  raw_path <- a$raw_path
+  if (is.null(raw_path)) {
+    raw_path <- rep(NA_character_, n)
+  }
+  has_path <- live & !is.na(raw_path)
+
+  has_reserved_byte <- has_path &
+    stringi::stri_detect_regex(raw_path, "(?i)%(2f|3f|23)")
+  diag <- .diag_add(diag, has_reserved_byte, "encoded-reserved-path-byte")
+
+  has_encoded_dot <- has_path &
+    stringi::stri_detect_regex(
+      raw_path, "(?i)(^|/)(%2e|\\.%2e|%2e\\.|%2e%2e)(/|$)"
+    )
+  diag <- .diag_add(diag, has_encoded_dot, "encoded-dot-segment")
 
   list(host_type = host_type, diagnostics = diag)
 }

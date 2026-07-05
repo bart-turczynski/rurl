@@ -1,9 +1,11 @@
 # Scaffold tests for the url_standard selector (RURL-bbojhnhu, epic
-# RURL-eqzkkohm). In this ticket the profile->behavior mapping is a deliberate
-# NO-OP: the argument exists, validates, conflict-checks, and threads through
-# every public entry point, but path/host output is byte-for-byte unchanged.
-# T3/T4/T5 replace the placeholder behavior WITHOUT changing the conflict matrix
-# these tests assert, and reuse the AC#1 corpus gate below.
+# RURL-eqzkkohm). T1 shipped the argument as a deliberate NO-OP: it validates,
+# conflict-checks, and threads through every public entry point, but does not
+# change path/host output. T3 (RURL-gjltzwmp)/T4 (RURL-luwvkwhd)/T5
+# (RURL-bbmuehsx) replace the placeholder behavior WITHOUT changing the
+# conflict matrix these tests assert (still covered below), and reuse the
+# AC#1 corpus gate below (which remains the release-safety invariant: NULL
+# stays byte-for-byte inert forever).
 
 # --- AC #1: url_standard = NULL is byte-for-byte inert (no output/shape drift)
 
@@ -122,16 +124,25 @@ test_that("no conflict without url_standard or with the selector alone", {
   expect_silent(safe_parse_urls(u, url_standard = "whatwg"))
 })
 
-test_that("accepted-value profile run stays a no-op in T1", {
-  # An accepted governed value (dot_segments) with a selector behaves exactly
-  # like the same low-level knob without the selector, since the profile is a
-  # T1 no-op.
-  u <- c("http://ex.com/a/../b", "http://ex.com/%2e%2e/c")
+test_that("rfc3986 path profile is no longer a no-op (RURL-gjltzwmp)", {
+  # Literal dot segments resolve identically either way (that part of the
+  # matrix predates T3), but the profile's unreserved-only percent decode is
+  # new behavior: %41%42 folds to "AB" under the selector, and is left alone
+  # by the equivalent explicit low-level knob.
   expect_identical(
-    safe_parse_urls(u, url_standard = "rfc3986",
-      path_normalization = "dot_segments"),
-    safe_parse_urls(u, path_normalization = "dot_segments")
+    safe_parse_urls("http://ex.com/a/../b", url_standard = "rfc3986")$path,
+    safe_parse_urls("http://ex.com/a/../b",
+      path_normalization = "dot_segments")$path
   )
+  expect_identical(
+    safe_parse_url("http://ex.com/%41%42", url_standard = "rfc3986")$path,
+    "/AB"
+  )
+  expect_false(identical(
+    safe_parse_url("http://ex.com/%41%42",
+      path_normalization = "dot_segments")$path,
+    "/AB"
+  ))
 })
 
 # --- Conflict matrix through the get_path()/get_clean_url() seams
