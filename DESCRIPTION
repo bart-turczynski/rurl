@@ -51,8 +51,8 @@ Suggests:
     oysteR,
     rosv
 Remotes:
-    bart-turczynski/pslr,
-    bart-turczynski/punycoder
+    bart-turczynski/pslr@v1.0.2,
+    bart-turczynski/punycoder@v1.2.0
 Config/testthat/edition: 3
 Depends: 
     R (>= 4.0.0)
