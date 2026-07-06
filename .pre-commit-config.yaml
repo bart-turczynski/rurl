@@ -1,0 +1,38 @@
+# Pre-commit gate, mirroring CI. Install with `pre-commit install` (pre-commit
+# hooks) and `pre-commit install --hook-type pre-push` (the verify hook below).
+#
+# air (the R formatter) is intentionally NOT wired up here: this package has not
+# adopted air (no air.toml), so enabling it would reformat the whole source tree
+# in one churny pass. Adopting air is a separate, opt-in slice.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=5120']
+      # tests/testthat/fixtures/ holds byte-sensitive conformance corpora
+      # (encoding, parse, and URL-standard CSVs), so the whitespace/EOF fixers
+      # must not rewrite them.
+      - id: end-of-file-fixer
+        exclude: '^tests/testthat/fixtures/'
+      - id: trailing-whitespace
+        exclude: '^tests/testthat/fixtures/'
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: mixed-line-ending
+        exclude: '^tests/testthat/fixtures/'
+      - id: check-case-conflict
+  - repo: local
+    hooks:
+      # Mirrors the CI verify gate: lintr then R CMD check --as-cran, failing on
+      # any WARNING. Runs on push (not per commit) since a full check is slow.
+      - id: verify
+        name: verify (mirrors CI)
+        entry: Rscript -e
+        args:
+          - 'lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }; rcmdcheck::rcmdcheck(args = "--as-cran", error_on = "warning")'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+        verbose: true
