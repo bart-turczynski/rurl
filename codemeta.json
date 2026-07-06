@@ -1,20 +1,20 @@
 {
   "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
   "@type": "SoftwareSourceCode",
-  "identifier": ["rurl", "https://doi.org/10.5281/zenodo.20972584"],
+  "identifier": "rurl",
   "description": "A lightweight toolkit for extracting structured information from URLs. Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs. Domain and public-suffix extraction is delegated to the 'pslr' package, which implements the Public Suffix List from <https://publicsuffix.org>. Punycode and IDNA encoding is handled by the 'punycoder' package.",
   "name": "rurl: Parse, Clean, and Normalize URLs",
   "relatedLink": ["https://bart-turczynski.github.io/rurl/", "https://CRAN.R-project.org/package=rurl", "https://bart-turczynski.r-universe.dev"],
   "codeRepository": "https://github.com/bart-turczynski/rurl",
   "issueTracker": "https://github.com/bart-turczynski/rurl/issues",
   "license": "https://spdx.org/licenses/MIT",
-  "version": "1.4.0",
+  "version": "2.2.0",
   "programmingLanguage": {
     "@type": "ComputerLanguage",
     "name": "R",
     "url": "https://r-project.org"
   },
-  "runtimePlatform": "R version 4.6.0 (2026-04-24)",
+  "runtimePlatform": "R version 4.6.1 (2026-06-24)",
   "provider": {
     "@id": "https://cran.r-project.org",
     "@type": "Organization",
@@ -100,6 +100,30 @@
         "url": "https://cran.r-project.org"
       },
       "sameAs": "https://CRAN.R-project.org/package=pkgdown"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "oysteR",
+      "name": "oysteR",
+      "provider": {
+        "@id": "https://cran.r-project.org",
+        "@type": "Organization",
+        "name": "Comprehensive R Archive Network (CRAN)",
+        "url": "https://cran.r-project.org"
+      },
+      "sameAs": "https://CRAN.R-project.org/package=oysteR"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "rosv",
+      "name": "rosv",
+      "provider": {
+        "@id": "https://cran.r-project.org",
+        "@type": "Organization",
+        "name": "Comprehensive R Archive Network (CRAN)",
+        "url": "https://cran.r-project.org"
+      },
+      "sameAs": "https://CRAN.R-project.org/package=rosv"
     }
   ],
   "softwareRequirements": {
@@ -143,7 +167,7 @@
         "name": "Comprehensive R Archive Network (CRAN)",
         "url": "https://cran.r-project.org"
       },
-      "sameAs": "https://CRAN.R-project.org/package=punycoder"
+      "sameAs": "https://github.com/bart-turczynski/punycoder"
     },
     "5": {
       "@type": "SoftwareApplication",
@@ -156,7 +180,7 @@
         "name": "Comprehensive R Archive Network (CRAN)",
         "url": "https://cran.r-project.org"
       },
-      "sameAs": "https://CRAN.R-project.org/package=pslr"
+      "sameAs": "https://github.com/bart-turczynski/pslr"
     },
     "6": {
       "@type": "SoftwareApplication",
@@ -167,11 +191,10 @@
     "SystemRequirements": null
   },
   "keywords": ["url-parsing", "url-parser", "url-normalization", "url-cleaning", "url-cleaner", "url-checker", "domain-extraction", "domain-name-detection", "domain-name-checker", "public-suffix", "tld", "tlds", "tld-extraction", "tld-checker", "tld-verification", "idna", "punycode", "uri", "url", "seo", "web-scraping", "r", "rstats", "r-stats", "r-package"],
-  "fileSize": "337.793KB",
+  "fileSize": "1047.076KB",
   "citation": [
     {
       "@type": "SoftwareSourceCode",
-      "identifier": "https://doi.org/10.5281/zenodo.20972584",
       "datePublished": "2026",
       "author": [
         {
@@ -182,12 +205,15 @@
         }
       ],
       "name": "{rurl}: Parse, Clean, and Normalize URLs",
+      "identifier": "10.5281/zenodo.20972584",
       "url": "https://CRAN.R-project.org/package=rurl",
-      "description": "R package version 1.4.0"
+      "description": "R package version 2.2.0",
+      "@id": "https://doi.org/10.5281/zenodo.20972584",
+      "sameAs": "https://doi.org/10.5281/zenodo.20972584"
     }
   ],
   "releaseNotes": "https://github.com/bart-turczynski/rurl/blob/main/NEWS.md",
   "readme": "https://github.com/bart-turczynski/rurl/blob/main/README.md",
-  "contIntegration": ["https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml", "https://app.codecov.io/gh/bart-turczynski/rurl"],
+  "contIntegration": ["https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml", "https://app.codecov.io/gh/bart-turczynski/rurl", "https://github.com/bart-turczynski/rurl/actions/workflows/security-audit.yml", "https://github.com/bart-turczynski/rurl/actions/workflows/osv-audit.yml"],
   "developmentStatus": "https://lifecycle.r-lib.org/articles/stages.html#stable"
 }
