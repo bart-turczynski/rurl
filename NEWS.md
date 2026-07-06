@@ -4,7 +4,7 @@
 
 - New `url_standard` selector on `safe_parse_url()`, `safe_parse_urls()`, the
   `get_*()` accessors, and `canonical_join()`: `NULL` (default), `"rfc3986"`, or
-  `"whatwg"` (RURL-eqzkkohm, RURL-uyjheruh). It selects a coherent set of
+  `"whatwg"`. It selects a coherent set of
   standard-conformant behaviors for the axes it governs — path percent/dot
   handling, the host IPv4/reg-name model, and `case_handling` — so callers no
   longer hand-assemble the low-level knobs to approximate a standard. Passing a
@@ -18,18 +18,18 @@
   and valid numeric IPv4 forms are coerced per the WHATWG host model.
 - New standalone `port_handling` option controlling whether the port appears in
   `clean_url`: `"exclude"` (default, today's behavior), `"keep"`,
-  `"strip_default"`, `"strip_all"` (RURL-qdlvldts). It is editorial and
+  `"strip_default"`, `"strip_all"`. It is editorial and
   standard-independent; under `url_standard = "whatwg"`, `"keep"` elides a port
   matching its special scheme's default (http:80, https:443, ftp:21).
 - Under `url_standard = "whatwg"`, a literal backslash is recognized as a path
   separator for WHATWG-special schemes (`http`/`https`/`ftp`, not `ftps`), as
-  browsers do (RURL-ledntyab). `%5C` is never treated as a separator, and
+  browsers do. `%5C` is never treated as a separator, and
   `"rfc3986"` / no selector leave backslashes inert.
 - New `resolve_url(relative_or_absolute, base_url, url_standard = NULL, ...)`:
   RFC 3986 §5 reference resolution (empty / fragment-only / query-only /
   scheme-relative / absolute-path / relative-path merge) composed over the same
   parsing machinery, returning the canonical `clean_url` of the resolved
-  reference (RURL-wrfcildb). Vectorized, with the base recycled.
+  reference. Vectorized, with the base recycled.
 
 ### Diagnostics and classification helpers
 
@@ -37,12 +37,12 @@
   surface metadata **without** widening the parse result shape:
   `get_host_type()` (domain / ipv4 / ipv6 / reg-name / missing),
   `get_scheme_class()` (WHATWG special / non-special / missing-or-error), and
-  `get_url_diagnostics()` (RURL-csdrxdoj, RURL-jlvyjwog).
+  `get_url_diagnostics()`.
 - Diagnostics vocabulary: `ipv4-*` numeric-host tokens, `encoded-dot-segment`,
   `encoded-reserved-path-byte`, `explicit-default-port` / `non-default-port`,
   `invalid-reverse-solidus`, and the DNS/UTS-46 tokens `domain-label-too-long`,
   `domain-name-too-long`, `domain-empty-label`, `domain-hyphen-violation`,
-  `domain-std3-violation` (RURL-vowqpmdg). Diagnostics are **facts, not policy**:
+  `domain-std3-violation`. Diagnostics are **facts, not policy**:
   a token describing an input shape fires identically under both standards, so a
   link-graph builder can ignore them while an SSRF/allowlist guard rejects on
   them.
@@ -62,7 +62,7 @@
 - `safe_parse_url()` and `safe_parse_urls()` gain four additive result columns —
   `domain_ascii`, `domain_unicode`, `tld_ascii`, and `tld_unicode` — exposing
   the registrable domain and public suffix in **both** canonical spellings,
-  independent of `host_encoding` (RURL-owrdsivt). `host_encoding` is a
+  independent of `host_encoding`. `host_encoding` is a
   *rendering* choice, so the existing `domain`/`tld` columns follow it (under
   the default `"keep"`, a Unicode host and its Punycode A-label render
   differently and do not compare equal). The new columns are stable *identity*
@@ -79,7 +79,7 @@
 ### New features
 
 - `safe_parse_url()` and `safe_parse_urls()` gain opt-in query-string handling
-  for `clean_url` (RURL-mzbnubrx). New `query_handling` option:
+  for `clean_url`. New `query_handling` option:
   `"drop"` (default — `clean_url` stays query-free, exactly as before),
   `"filter"` (keep contentful params, drop known trackers such as `utm_*`,
   `fbclid`, `gclid` via a built-in denylist), `"allow"` (keep only names in
@@ -94,14 +94,14 @@
 - `get_clean_url()` gains the seven query-filter arguments (`query_handling`,
   `params_keep`, `params_drop`, `params_case_sensitive`, `sort_params`,
   `empty_param_handling`, `decode_plus`), reaching full parity with the parse
-  engine (RURL-hinwkvho). A filtered cleaned URL is now available directly —
+  engine. A filtered cleaned URL is now available directly —
   `get_clean_url(u, query_handling = "filter")` — instead of only via
   `safe_parse_url(u, query_handling = "filter")$clean_url`. Defaults are
   unchanged (`query_handling = "drop"`), so existing output is byte-identical.
 - `get_query()` gains the same query-filter engine arguments
   (`query_handling`, `params_keep`, `params_drop`, `params_case_sensitive`,
   `sort_params`, `empty_param_handling`, `decode_plus`), so a cleaned query can
-  be pulled directly without going through `clean_url` (RURL-srcyvrhn). It
+  be pulled directly without going through `clean_url`. It
   defaults to `query_handling = "keep"` (an accessor returns the query as found
   unless you ask it to filter), and the filter runs before rendering:
   `decode = TRUE` gives the readable decoded form, `decode = FALSE` the
@@ -109,7 +109,7 @@
 - New `query_param_summary()` introspection function tabulates the query
   parameters across a set of URLs — which names appear, what values they take,
   `n`/`n_urls` counts, and a `would_drop` column previewing what
-  `query_handling = "filter"` would remove (RURL-qrcymsij). Returns a flat
+  `query_handling = "filter"` would remove. Returns a flat
   (long) `data.frame` at `level = "param"` or `level = "value"`. Param names
   are grouped faithfully (case-sensitively) while `would_drop` honours
   `params_case_sensitive`, so you can audit a URL set before choosing a policy.
@@ -122,7 +122,7 @@
 ### Breaking changes
 
 - `path_normalization = "none"` (the default) is now genuinely lossless for
-  path structure (RURL-chdrlyci). The request path is read from the input
+  path structure. The request path is read from the input
   verbatim rather than from libcurl's pre-normalized path, so `.`/`..` segments
   are preserved: `"http://ex.com/a/../b"` now yields `clean_url`
   `"http://ex.com/a/../b"` instead of `"http://ex.com/b"`. Because `clean_url`
@@ -134,7 +134,7 @@
   `"/a/%2e%2e/b"` → `"/b"` rewrite libcurl used to perform. Percent-hex case is
   still canonicalized to uppercase (`%2f` → `%2F`) under `"keep"`, so encoded
   paths remain join-equivalent.
-- Non-compliant input handling is now consistent and strict (RURL-muwpjsmn).
+- Non-compliant input handling is now consistent and strict.
   rurl no longer fabricates an `http://` URL for scheme-less input that is not
   host-shaped: nonsense tokens (`"asdfghjkl"`, `"example"`), free text
   (`"hello world"`), and path fragments (`"/relative/path"`) now return
@@ -176,18 +176,17 @@
   one cache entry per URL and re-runs only the cheap Stage B, so the expensive
   curl + PSL work happens once instead of once per profile. Output is unchanged.
   Cache memory per URL also drops to a single (option-independent) entry.
-  (RURL-dkwrebdt)
 
 - `safe_parse_urls()` now de-duplicates its input, parsing each unique URL only
   once (with cross-call reuse via the `full_parse` cache) and expanding the
   results back with `match()`. Repeated / duplicate URLs cost only the match,
   so warm and duplicate-heavy inputs are dramatically faster. `safe_parse_url()`
-  (scalar) shares the same cached code path. (RURL-ohepgzyf)
+  (scalar) shares the same cached code path.
 
 - Query-string parsing (`get_query(format = "list")`) is now linear in the
   number of key/value pairs (previously quadratic from incremental list
   growth), so URLs with very long query strings parse faster. Output is
-  unchanged. (RURL-actrnerd)
+  unchanged.
 
 ### Behavior changes
 
@@ -195,13 +194,13 @@
   `get_*()` functions now parse their input in a single vectorized pass and
   return plain unnamed vectors (or lists), instead of vectors carrying a
   `names` attribute of the input URLs. Wrap in `stats::setNames(x, url)` if you
-  relied on the old names. (RURL-zpatukuq)
+  relied on the old names.
 
 - The `full_parse` memoization cache is now bounded by default at 100000 unique
   url × option combinations (previously `Inf`), so parsing millions of unique
   URLs can no longer grow the cache without limit. Override with
   `rurl_cache_config(max_full_parse = Inf)` to restore the previous unbounded
-  behavior; the reset-watermark semantics are unchanged. (RURL-ohepgzyf)
+  behavior; the reset-watermark semantics are unchanged.
 
 - A present-but-empty `query`, `fragment`, `user`, or `password` component
   (e.g. the query of `"https://example.com/?"`) is now reported as `NA`
@@ -209,13 +208,12 @@
   some libcurl versions and `""` on others; both now normalize to `NA`, so
   output no longer depends on the installed libcurl version. This matches the
   behavior already produced on platforms where curl returned `NULL`.
-  (RURL-dkwrebdt)
 
 ### Behavior changes
 
 - `safe_parse_urls()` now accepts a factor input, coercing it to its character
   labels up front (matching `canonical_join()`), instead of returning an
-  all-`error` row for every element. (RURL-actrnerd)
+  all-`error` row for every element.
 
 ### Bug fixes
 
@@ -225,13 +223,13 @@
   an unsupported scheme and demoted it, contradicting the emitted components.
   It now reports `"ok"`, restoring the invariant that a present `clean_url`
   implies a non-error status. Genuinely unsupported/opaque schemes
-  (`mailto:`, `user:pass@host`) still return `"error"`. (RURL-aldwnots)
+  (`mailto:`, `user:pass@host`) still return `"error"`.
 - path/fragment/userinfo are no longer percent-decoded during parsing;
   `path_encoding = 'keep'` now honors its contract (leaves the path
   byte-for-byte); the raw query is preserved (`?flag` stays `flag`, not
   `flag=`). NOTE: `clean_url` values change for URLs containing
   percent-encoded path bytes — since `clean_url` is a `canonical_join` key,
-  `/a%2Fb` and `/a/b` no longer collide. (RURL-yuozrhop)
+  `/a%2Fb` and `/a/b` no longer collide.
 
 ### Documentation
 
@@ -242,7 +240,7 @@
   resolves `/a/../b` to `/b` — and percent-encoding hex digits are normalized to
   uppercase (`%2f` → `%2F`), an RFC 3986 §6.2.2.1 case canonicalization that
   makes such paths compare equal in `canonical_join()`. Behavior is unchanged;
-  only the documentation now matches it. (RURL-mxoprhsy)
+  only the documentation now matches it.
 
 ## rurl 1.4.1
 
@@ -256,7 +254,7 @@
   and `parse_status = "ok"`. Both the dotted and hex-hextet spellings of the
   same address (`[::ffff:0808:0808]` vs `[::ffff:7f00:1]`) now classify
   identically. A malformed embedded tail (octet out of range) is still
-  rejected. (RURL-tvfpeocg)
+  rejected.
 
 ### Infrastructure
 
@@ -264,13 +262,13 @@
   `oysteR` (new `Suggests`). `tests/testthat/test-security.R` runs
   `oysteR::expect_secure("rurl")` and a dedicated `security-audit.yml` workflow
   (weekly + on demand) executes it with OSS Index credentials; the test skips
-  cleanly without credentials, offline, or on CRAN. (RURL-tyfshnat)
+  cleanly without credentials, offline, or on CRAN.
 - Added a second, token-free dependency vulnerability audit against the OSV
   database (<https://osv.dev>) via `rosv` (new `Suggests`).
   `tests/testthat/test-osv.R` checks the runtime dependency closure of rurl
   (recursive `Depends` + `Imports`) at installed versions, and a dedicated
   `osv-audit.yml` workflow (weekly + on demand) executes it with no secrets;
-  the test skips cleanly offline or on CRAN. (RURL-ttkwljva)
+  the test skips cleanly offline or on CRAN.
 
 ## rurl 1.4.0
 
@@ -406,7 +404,7 @@ to `pslr` fixes the following; outputs change accordingly:
   to one identity, and `get_path()` silently lowercased paths (two pages that
   differ only by path casing collapsed to one). Pass `case_handling = "keep"`
   to restore the previous reconstruction, or `"lower"` to lowercase the whole
-  URL including the path. (RURL-lzepdnmm)
+  URL including the path.
 
 ## rurl 1.1.0
 
@@ -416,13 +414,13 @@ to `pslr` fixes the following; outputs change accordingly:
   original-URL column names explicitly. They default to `NULL`, preserving the
   previous `deparse(substitute())` behavior; supply them for stable names when
   piping or passing anonymous inputs (e.g. `canonical_join(df[df$x > 1, ],
-  get_b())`), which otherwise produced unstable column names. (RURL-fsygrelr)
+  get_b())`), which otherwise produced unstable column names.
 - `canonical_join()` gains a `join_parse_status` argument controlling which
   parse statuses yield joinable keys. The default `"ok"` preserves the previous
   behavior (only `ok*` statuses join); `"ok_or_warning"` additionally treats
   the parseable-but-suspicious `warning-*` statuses (`warning-no-tld`,
   `warning-invalid-tld`, `warning-public-suffix`) as joinable, at the cost of
-  more potential false-positive matches. (RURL-edqdrvfu)
+  more potential false-positive matches.
 
 - Cache introspection and configuration. `rurl_cache_info()` reports the entry
   count, enabled state, and any bound for each memoization cache
@@ -432,7 +430,7 @@ to `pslr` fixes the following; outputs change accordingly:
   behavior); when the bound is reached the cache is reset so peak memory stays
   bounded. The `domain` and `tld` caches remain unbounded by design — they
   grow with the number of unique hosts, not with URL/option combinations — and
-  can be disabled for workloads with very many unique hosts. (RURL-iuotpaqs)
+  can be disabled for workloads with very many unique hosts.
 
 ### Bug fixes
 
@@ -440,12 +438,10 @@ to `pslr` fixes the following; outputs change accordingly:
   `safe_parse_urls()` no longer errors on URLs that contain an explicit port
   (e.g. `http://example.com:8080/path`). Previously the scalar parser returned
   the port as a character string and the vectorized parser aborted.
-  (RURL-fxyzanfg)
 - Bracketed IPv6 hosts (e.g. `http://[2001:db8::1]/`) are now correctly detected
   as IP hosts: `is_ip_host` is `TRUE`, `parse_status` is `"ok"`, and no
   TLD/domain derivation is attempted — matching how IPv4 hosts were already
   handled. An over-escaped detection pattern previously prevented this.
-  (RURL-jpqjndld)
 
 ### Behavior changes (potentially breaking)
 
@@ -455,7 +451,6 @@ to `pslr` fixes the following; outputs change accordingly:
   subdomain_levels_to_keep = 1)` now returns host `domain.example.com` (was
   `deep.sub.domain.example.com`). `N = 0` (strip all) is unchanged. Code that
   relied on the previous no-op behavior for `N > 0` will see different output.
-  (RURL-szumhumv)
 
 ### Documentation
 
@@ -466,7 +461,7 @@ to `pslr` fixes the following; outputs change accordingly:
   behavior and the key used by `canonical_join()` — no behavior change.
   Corrected a `lower_host` description that implied userinfo could be retained
   in `clean_url`, and fixed a README example whose input contained a literal
-  space (now percent-encoded) so it parses as documented. (RURL-jnboujtd)
+  space (now percent-encoded) so it parses as documented.
 
 ---
 
