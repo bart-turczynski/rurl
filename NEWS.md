@@ -1,3 +1,15 @@
+## rurl 2.2.1
+
+### Packaging
+
+- Pin the sibling `Remotes:` to release tags (`pslr@v1.0.2`,
+  `punycoder@v1.2.0`) to match the `Imports` version floors. The Remotes
+  previously tracked each sibling's default branch; once `pslr`'s development
+  head began pinning `punycoder@v1.2.0`, `pak` saw two conflicting sources for
+  `punycoder` and could not solve the dependency graph, breaking a fresh
+  install / CI resolution of `rurl` and of any package depending on it. No
+  user-facing code change.
+
 ## rurl 2.2.0
 
 ### New features
