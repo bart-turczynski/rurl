@@ -27,6 +27,8 @@
 ^\.Rhistory$
 ^\.DS_Store$
 ^CONTRIBUTING\.md$
+^CODE_OF_CONDUCT\.md$
+^\.pre-commit-config\.yaml$
 ^_scratch$
 ^worklog$
 ^.*coverage\.html$
