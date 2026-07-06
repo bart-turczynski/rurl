@@ -17,9 +17,12 @@ home:
 
 navbar:
   structure:
-    left: [intro, reference, articles, news]
+    left: [intro, reference, articles, news, acknowledgments]
     right: [search, github]
   components:
+    acknowledgments:
+      text: Acknowledgments
+      href: https://github.com/bart-turczynski/rurl/blob/main/ACKNOWLEDGMENTS.md
     github:
       icon: fab fa-github
       href: https://github.com/bart-turczynski/rurl

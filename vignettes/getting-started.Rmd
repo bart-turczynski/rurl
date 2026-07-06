@@ -177,3 +177,15 @@ such as the `clean_url`.
 
 - **[pslr](https://bart-turczynski.github.io/pslr/)** — Public Suffix List engine. Use it directly for eTLD and registrable-domain queries when you do not need full URL parsing.
 - **[punycoder](https://github.com/bart-turczynski/punycoder)** — Punycode and IDNA codec for internationalized domain names. Useful for host normalization and Unicode ↔ ACE encoding outside the URL context.
+
+# Acknowledgments
+
+`rurl` builds on prior art (notably
+[urltools](https://github.com/Ironholds/urltools)) and follows published
+standards throughout — RFC 3986, the WHATWG URL Standard, the Public Suffix
+List, and UTS #46 for internationalized hosts — while leaning on `curl`,
+`stringi`, and the sibling `punycoder` and `pslr` packages.
+
+The full list of credits — prior art, dependencies, the standards this code
+implements, and the data sources it serves — is in
+[`ACKNOWLEDGMENTS.md`](https://github.com/bart-turczynski/rurl/blob/main/ACKNOWLEDGMENTS.md).
