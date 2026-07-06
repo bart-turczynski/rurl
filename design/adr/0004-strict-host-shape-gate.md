@@ -2,7 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026 (rurl 1.5.0)
-- **Tracking:** RURL-muwpjsmn; host model under RURL-luwvkwhd
+- **Tracking:** RURL-muwpjsmn; host model under RURL-luwvkwhd. WHATWG-conformance
+  scope boundaries recorded from the WPT-failure triage (RURL-zjbzdmdr); the one
+  known gap is tracked as a bug (RURL-cdjnhnvf).
 
 ## Context
 
@@ -40,3 +42,33 @@ marks out-of-range / >4-part hosts fatal.
 - **Standing rule:** keep the allowed-scheme set closed
   (`http`/`https`/`ftp`/`ftps`); do not add `ws`/`wss`/`file` for the
   SEO/crawl audience.
+
+## Documented scope boundaries (WHATWG conformance)
+
+The WPT-failure triage (RURL-zjbzdmdr; the 202 R-representable `failure` cases
+from WHATWG `url/resources/urltestdata.json`) established where rurl's `whatwg`
+profile deliberately does **not** reproduce WHATWG's hard-reject behavior. These
+are intentional boundaries, not defects — recorded here so the paper can cite
+"known, documented limitation":
+
+- **Forbidden host code points are surfaced, not rejected.** WHATWG's
+  forbidden-host-code-point set (`|`, DEL, U+FFFD, U+00AD, …) triggers hard
+  failure. rurl instead renders the host reversibly (ADR 0002) and flags it
+  (`warning-no-tld` + diagnostics, ADR 0006) rather than refusing the URL.
+  Forbidden-code-point *rejection* is not a governed axis (ADR 0007). The
+  UTS-46-*ignored* code points among these (e.g. U+00AD soft hyphen) fall under
+  the DNS/UTS-46 probe (RURL-rxbhotzu), which flags rather than maps-and-fails.
+- **RFC 3986 reg-name permissiveness is by design.** Under `rfc3986`, numeric
+  and near-out-of-charset hosts are kept as reg-names (RFC 3986 has no
+  numeric-host special case). This is an expected profile divergence from
+  `whatwg`, not a defect.
+- **NUL bytes cannot round-trip.** R strings cannot hold a `U+0000`; a URL with
+  an embedded NUL is truncated at the NUL before rurl (or the corpus tooling)
+  sees it. Inherent R limitation — documented as a can't-represent case, not a
+  parse decision.
+
+**Known gap (a bug, not a boundary):** the WHATWG "out-of-range / >4-part hosts
+fatal" rule above is currently gated on libcurl's IPv4 coercion, so obfuscated
+numeric forms libcurl leaves as reg-names (hex `0x4`, octal/leading-zero `09`,
+short/>4-part dotted, trailing-dot) slip through as `warning-invalid-tld`
+instead of rejecting. Tracked and to be fixed under **RURL-cdjnhnvf**.
