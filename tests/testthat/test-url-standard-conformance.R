@@ -108,6 +108,47 @@ test_that("PRD §9.3 required regression assertions hold", {
   )
 })
 
+# --- RURL-cdjnhnvf: WHATWG "ends in a number" hosts that libcurl leaves as
+# reg-names (mixed reg-name/number, hex/octal final labels, trailing-dot forms,
+# >4 parts) must reject under whatwg -- not slip through as warning-invalid-tld.
+# rfc3986/NULL keep the reg-name (RFC 3986 has no numeric-host rule).
+
+test_that("WHATWG rejects obfuscated numeric hosts libcurl leaves literal", {
+  bucket_a <- c(
+    "http://foo.09", "http://foo.0x4", "http://0x1.2.3.4.5",
+    "http://0x1.2.3.4.5.", "http://0x100.2.3.4.", "http://1.2.3.08",
+    "http://1.2.3.08.", "http://\U0001F4A9.123"
+  )
+  for (u in bucket_a) {
+    expect_identical(
+      get_parse_status(u, url_standard = "whatwg"), "error",
+      label = paste("whatwg must reject", u)
+    )
+    expect_true(
+      is.na(get_clean_url(u, url_standard = "whatwg")),
+      label = paste("whatwg clean_url NA for", u)
+    )
+    # rfc3986 is unchanged: a numeric-looking reg-name with no valid TLD.
+    expect_identical(
+      get_parse_status(u, url_standard = "rfc3986"), "warning-invalid-tld",
+      label = paste("rfc3986 keeps reg-name for", u)
+    )
+    expect_false(
+      is.na(get_clean_url(u, url_standard = "rfc3986")),
+      label = paste("rfc3986 clean_url non-NA for", u)
+    )
+  }
+
+  # Guardrails: valid numeric hosts still parse, and reg-names whose final
+  # label is NOT a number are untouched (no false rejections).
+  expect_identical(get_parse_status("http://2130706433/",
+    url_standard = "whatwg"), "ok")
+  expect_identical(get_parse_status("http://192.168.010.1/",
+    url_standard = "whatwg"), "ok")
+  expect_identical(get_parse_status("http://foo.0x4g",
+    url_standard = "whatwg"), "warning-invalid-tld")
+})
+
 # --- get_path()/get_host() honor the selector consistently with get_clean_url
 # (AC #8): spot-check the remaining accessors on a representative fixture row.
 

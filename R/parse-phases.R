@@ -660,6 +660,33 @@
   .detect_ip_host_vec(raw_host)
 }
 
+# Phase 5b helper (vector): the WHATWG "ends in a number" checker
+# (https://url.spec.whatwg.org/#ends-in-a-number-checker) -- the trigger that
+# forces a host through the WHATWG IPv4 parser. Drops a single trailing dot,
+# then returns TRUE when the FINAL label is a decimal integer (all ASCII digits,
+# so leading-zero "09"/"08" count) or a hex literal ("0x"/"0X" + hex digits).
+# Those are exactly the labels the IPv4 number parser accepts, so a TRUE host
+# MUST parse to a valid IPv4 address or the whole host parse fails -- there is
+# no reg-name fallback. This is broader than the all-numeric-parts is_ipv4ish
+# flag: it also fires on mixed reg-name/number hosts (foo.09), hex/octal final
+# labels (foo.0x4), trailing-dot forms (1.2.3.08.), and >4-part hosts libcurl
+# leaves literal (0x1.2.3.4.5.). NA/"" hosts are FALSE.
+.host_ends_in_number_vec <- function(host) {
+  n <- length(host)
+  ok <- !is.na(host) & host != ""
+  if (!any(ok)) {
+    return(rep(FALSE, n))
+  }
+  # Drop one trailing "." (a single empty final part), then take the last label.
+  trimmed <- stringi::stri_replace_first_regex(host, "\\.$", "")
+  last <- stringi::stri_replace_first_regex(trimmed, "^.*\\.", "")
+  is_dec <- stringi::stri_detect_regex(last, "^[0-9]+$")
+  is_hex <- stringi::stri_detect_regex(last, "^0[xX][0-9a-fA-F]*$")
+  is_dec[is.na(is_dec)] <- FALSE
+  is_hex[is.na(is_hex)] <- FALSE
+  ok & (is_dec | is_hex)
+}
+
 # Phase 5b (vector): the url_standard host IPv4/reg-name model (RURL-luwvkwhd,
 # PRD §6.2). A no-op when url_standard is NULL (returns curl's host / IP flag
 # unchanged, never fatal), so the default pipeline is byte-for-byte unaffected
@@ -690,21 +717,28 @@
     return(list(host = host, is_ip = is_ip, fatal = fatal))
   }
 
-  att <- is_attempt & !is.na(is_attempt)
-  if (!any(att)) {
-    return(list(host = host, is_ip = is_ip, fatal = fatal))
-  }
-
   if (identical(url_standard, "rfc3986")) {
     # Reg-name: keep the original token; IP only if it was already canonical.
-    input_canonical <- .detect_ip_host_vec(input_host)
-    host[att] <- input_host[att]
-    is_ip[att] <- input_canonical[att]
+    # RFC 3986 has no numeric-host special case, so the all-numeric is_ipv4ish
+    # attempt set is the right (and unchanged) trigger here.
+    att <- is_attempt & !is.na(is_attempt)
+    if (any(att)) {
+      input_canonical <- .detect_ip_host_vec(input_host)
+      host[att] <- input_host[att]
+      is_ip[att] <- input_canonical[att]
+    }
   } else {
-    # WHATWG: trust curl's IPv4 coercion; fatal when it is not canonical.
-    curl_canonical <- .detect_ip_host_vec(curl_host)
-    is_ip[att] <- curl_canonical[att]
-    fatal[att] <- !curl_canonical[att]
+    # WHATWG: a host that "ends in a number" MUST parse as IPv4 or the whole
+    # host parse fails -- independent of whether libcurl chose to coerce it.
+    # This trigger (not is_ipv4ish) closes the gap where obfuscated/mixed forms
+    # libcurl leaves as reg-names (foo.09, foo.0x4, 1.2.3.08., 0x1.2.3.4.5.)
+    # bypassed the gate and were wrongly accepted with warning-invalid-tld.
+    att <- .host_ends_in_number_vec(input_host)
+    if (any(att)) {
+      curl_canonical <- .detect_ip_host_vec(curl_host)
+      is_ip[att] <- curl_canonical[att]
+      fatal[att] <- !curl_canonical[att]
+    }
   }
 
   list(host = host, is_ip = is_ip, fatal = fatal)
