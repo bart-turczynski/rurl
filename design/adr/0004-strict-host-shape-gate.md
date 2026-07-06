@@ -4,7 +4,7 @@
 - **Date:** 2026 (rurl 1.5.0)
 - **Tracking:** RURL-muwpjsmn; host model under RURL-luwvkwhd. WHATWG-conformance
   scope boundaries recorded from the WPT-failure triage (RURL-zjbzdmdr); the one
-  known gap is tracked as a bug (RURL-cdjnhnvf).
+  known numeric-host gap was fixed under RURL-cdjnhnvf.
 
 ## Context
 
@@ -31,7 +31,12 @@ The `url_standard` selector then governs the numeric-host model on top of this
 gate (`.apply_host_standard_model_vec()`): under a selector the Phase-1 hard
 reject of numeric hosts is lifted — RFC 3986 restores the original token as a
 reg-name (undoing libcurl's coercion), WHATWG keeps libcurl's IPv4 coercion and
-marks out-of-range / >4-part hosts fatal.
+marks out-of-range / >4-part hosts fatal. The WHATWG fatal decision is driven by
+WHATWG's own "ends in a number" trigger (`.host_ends_in_number_vec()`: the final
+host label, after dropping one trailing dot, is a decimal integer or a hex
+literal) — **not** by whether libcurl chose to coerce the host. Any such host
+must parse to a canonical IPv4 or the whole host parse fails; there is no
+reg-name fallback under `whatwg` (RURL-cdjnhnvf).
 
 ## Consequences
 
@@ -67,8 +72,14 @@ are intentional boundaries, not defects — recorded here so the paper can cite
   sees it. Inherent R limitation — documented as a can't-represent case, not a
   parse decision.
 
-**Known gap (a bug, not a boundary):** the WHATWG "out-of-range / >4-part hosts
-fatal" rule above is currently gated on libcurl's IPv4 coercion, so obfuscated
-numeric forms libcurl leaves as reg-names (hex `0x4`, octal/leading-zero `09`,
-short/>4-part dotted, trailing-dot) slip through as `warning-invalid-tld`
-instead of rejecting. Tracked and to be fixed under **RURL-cdjnhnvf**.
+**Resolved (RURL-cdjnhnvf):** the WHATWG numeric-host rule was previously gated
+on libcurl's IPv4 coercion, so obfuscated forms libcurl leaves as reg-names (hex
+`0x4`, octal/leading-zero `09`, mixed `foo.09`, short/>4-part dotted, trailing-dot
+`1.2.3.08.`) slipped through as `warning-invalid-tld` instead of rejecting — a
+conformance gap on a governed axis (ADR 0007), surfaced by the WPT-failure
+import (all 18 bucket-A cases). The fix re-anchors the WHATWG fatal decision on
+WHATWG's "ends in a number" trigger (see Decision above) rather than libcurl's
+coercion choice, so every such host now rejects under `whatwg`; `rfc3986`/`NULL`
+reg-name behavior is unchanged. Regression fixtures live in
+`tests/testthat/fixtures/url-standard-conformance.csv`
+(`host-ends-in-number-*`).

@@ -1,3 +1,21 @@
+## rurl 2.2.2
+
+### Bug fixes
+
+- `url_standard = "whatwg"` now rejects obfuscated numeric hosts that libcurl
+  leaves as registered names. WHATWG parses any host whose final label is a
+  number (decimal, or a `0x` hex literal) as an IPv4 address and fails the whole
+  host parse when that IPv4 parse is invalid. Previously rurl only applied this
+  rule to forms libcurl had already coerced to an IPv4 literal, so mixed
+  reg-name/number hosts (`http://foo.09`, `http://foo.0x4`), leading-zero /
+  invalid-octal octets (`http://1.2.3.08`), and `>4`-part or trailing-dot forms
+  (`http://0x1.2.3.4.5`, `http://1.2.3.08.`) slipped through as
+  `warning-invalid-tld` instead of `error`. They now return
+  `parse_status = "error"` under `"whatwg"`, matching the WHATWG URL Standard
+  and the web-platform-tests failure corpus. `url_standard = "rfc3986"` and the
+  default (`NULL`) are unchanged — RFC 3986 has no numeric-host rule, so these
+  remain valid registered names there.
+
 ## rurl 2.2.1
 
 ### Packaging
