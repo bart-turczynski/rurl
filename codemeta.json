@@ -167,7 +167,7 @@
         "name": "Comprehensive R Archive Network (CRAN)",
         "url": "https://cran.r-project.org"
       },
-      "sameAs": "https://github.com/bart-turczynski/punycoder"
+      "sameAs": "https://CRAN.R-project.org/package=punycoder"
     },
     "5": {
       "@type": "SoftwareApplication",
@@ -180,7 +180,7 @@
         "name": "Comprehensive R Archive Network (CRAN)",
         "url": "https://cran.r-project.org"
       },
-      "sameAs": "https://github.com/bart-turczynski/pslr"
+      "sameAs": "https://CRAN.R-project.org/package=pslr"
     },
     "6": {
       "@type": "SoftwareApplication",
@@ -191,7 +191,7 @@
     "SystemRequirements": null
   },
   "keywords": ["url-parsing", "url-parser", "url-normalization", "url-cleaning", "url-cleaner", "url-checker", "domain-extraction", "domain-name-detection", "domain-name-checker", "public-suffix", "tld", "tlds", "tld-extraction", "tld-checker", "tld-verification", "idna", "punycode", "uri", "url", "seo", "web-scraping", "r", "rstats", "r-stats", "r-package"],
-  "fileSize": "1047.076KB",
+  "fileSize": "1047.09KB",
   "citation": [
     {
       "@type": "SoftwareSourceCode",
