@@ -83,7 +83,7 @@ test_that("WPT failure divergences are pinned to the documented boundary set", {
   expect_true(all(wpt$rurl_whatwg_status == "error"))
 })
 
-test_that("IPv4-obfuscation divergences pin to the UTS-46 separator set", {
+test_that("IPv4-obfuscation vectors all match the WHATWG oracle", {
   fx <- read_vectors()
   ip <- fx[fx$source == "ip-obfuscation", , drop = FALSE]
 
@@ -91,19 +91,14 @@ test_that("IPv4-obfuscation divergences pin to the UTS-46 separator set", {
   # (obfuscation technique from cujanovic/SSRF-Testing + JorianWoltjer/ipobf,
   # NOT vendored). Oracle is the WHATWG IPv4 parser: octal/hex/dword/short/mixed
   # forms must canonicalize, overflow/zone-id forms must fail. rurl handles all
-  # of those correctly (validating RURL-cdjnhnvf) EXCEPT the Unicode alternative
-  # separators, which UTS-46 domain-to-ASCII should map to '.' before the IPv4
-  # parse. rurl leaves them a literal reg-name -> a tracked candidate-bug in the
-  # divergence ledger, pinned here as a WATCH list (not an approval).
+  # of them correctly, including the three Unicode alternative separators
+  # (U+3002/U+FF0E/U+FF61): the whatwg profile now maps them to '.' in the
+  # authority before the IPv4 parse (UTS-46 domain-to-ASCII), so
+  # `http://127。0。0。1/` coerces to `http://127.0.0.1/` rather than being kept
+  # as a literal reg-name. FIXED in RURL-odsmwsxu, rurl 2.3.0 -- the divergence
+  # set is now empty (ipobf-011/012/013 dropped out).
   diverging_ids <- ip$id[ip$diverges == "yes"]
-  expect_setequal(
-    diverging_ids,
-    c("ipobf-011", "ipobf-012", "ipobf-013")
-  )
-  # The divergence shape: accepted with warning-no-tld as a literal reg-name
-  # instead of coercing to the canonical dotted-quad.
-  expect_true(all(ip$rurl_whatwg_status[ip$diverges == "yes"] ==
-    "warning-no-tld"))
+  expect_setequal(diverging_ids, character(0))
   # Non-diverging accept rows must equal the recorded conformant WHATWG
   # serialization; the failure rows must genuinely reject (NA clean).
   ok_rows <- ip[ip$diverges == "no" & ip$standard_expectation != "failure", ,

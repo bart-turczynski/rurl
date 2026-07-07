@@ -27,6 +27,18 @@
   concept, so these stay permissive registered names there. The reversible-host
   and Punycode helpers are untouched (ADR 0002); this is a separate reject gate.
 
+- `url_standard = "whatwg"` now maps the three UTS-46 alternative full-stop code
+  points — U+3002 (ideographic), U+FF0E (fullwidth), and U+FF61 (halfwidth
+  ideographic) — to ASCII `.` in the authority before parsing, matching
+  WHATWG domain-to-ASCII. Previously a Unicode-dot host such as
+  `http://127。0。0。1/` was kept as a literal registered name (`warning-no-tld`);
+  it now coerces to the canonical dotted-quad `http://127.0.0.1/`, closing an
+  SSRF-relevant loopback/metadata obfuscation that browsers resolve. IDN names
+  have their separators normalized the same way (`例え。jp` → `例え.jp`). The
+  mapping is scoped to the authority: a full-stop variant in the path, query, or
+  fragment is left literal. `url_standard = "rfc3986"` and the default (`NULL`)
+  are unchanged — RFC 3986 has no UTS-46 mapping, so these bytes stay literal.
+
 ### Diagnostics
 
 - New `get_url_diagnostics()` token `control-char-stripped`, emitted under
