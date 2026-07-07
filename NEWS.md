@@ -44,6 +44,17 @@
 - New `get_url_diagnostics()` token `control-char-stripped`, emitted under
   `"whatwg"` on any URL from which an ASCII tab/LF/CR was removed.
 
+### Documentation
+
+- Clarified `path_encoding` as the readable-vs-browser path *presentation*
+  choice (the analog of `host_encoding`): the default `"keep"` is a faithful
+  passthrough that forces neither form, `"encode"` renders the
+  browser/percent-encoded path (`/école` → `/%C3%A9cole`, `/"path"` →
+  `/%22path%22`), and `"decode"` renders the readable path. No behavior change —
+  the knob already existed; the docs now make the choice discoverable and note
+  that a `url_standard` profile does not switch the path to the browser-encoded
+  rendering (a readable path stays readable).
+
 ## rurl 2.2.2
 
 ### Bug fixes

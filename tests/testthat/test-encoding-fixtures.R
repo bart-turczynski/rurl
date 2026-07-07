@@ -33,6 +33,46 @@ test_that("path/encoding fixtures match explicit expectations", {
   }
 })
 
+test_that("path_encoding picks readable vs browser path form (ada-003/022)", {
+  # The presentation choice the WHATWG-vs-readable divergence (ada-003 /ecole,
+  # ada-022 /"quoted") comes down to. é is U+00E9; its UTF-8 percent-encoding is
+  # %C3%A9. The default "keep" is a faithful passthrough -- it forces NEITHER
+  # readable nor encoded; "encode" renders the browser/percent-encoded form;
+  # "decode" renders the readable form. (Source is UTF-8; see DESCRIPTION.)
+  readable <- "http://ex.com/école"
+  encoded <- "http://ex.com/%C3%A9cole"
+
+  # A readable (non-ASCII) path: keep leaves it readable; encode -> browser.
+  expect_identical(get_clean_url(readable, path_encoding = "keep"), readable)
+  expect_identical(get_clean_url(readable, path_encoding = "encode"), encoded)
+
+  # A percent-encoded path: keep preserves the bytes; decode -> readable;
+  # encode -> the normalized browser form.
+  expect_identical(get_clean_url(encoded, path_encoding = "keep"), encoded)
+  expect_identical(get_clean_url(encoded, path_encoding = "decode"), readable)
+  expect_identical(get_clean_url(encoded, path_encoding = "encode"), encoded)
+
+  # ada-022: ASCII bytes outside the path-safe set (double quotes).
+  expect_identical(
+    get_clean_url("http://ex.com/\"quoted\"", path_encoding = "keep"),
+    "http://ex.com/\"quoted\""
+  )
+  expect_identical(
+    get_clean_url("http://ex.com/\"quoted\"", path_encoding = "encode"),
+    "http://ex.com/%22quoted%22"
+  )
+})
+
+test_that("url_standard does not force path percent-encoding by default", {
+  # A profile governs path IDENTITY (dot/percent handling) but must NOT silently
+  # switch the path to the browser/percent-encoded rendering: the readable
+  # default survives. (Combining an explicit path_encoding WITH a profile is a
+  # separate, larger change -- the profile currently governs path_encoding.)
+  readable <- "http://ex.com/école"
+  expect_identical(get_clean_url(readable, url_standard = "whatwg"), readable)
+  expect_identical(get_clean_url(readable, url_standard = "rfc3986"), readable)
+})
+
 test_that("raw query fidelity honors the decode flag", {
   # get_query returns the raw query string; decode=FALSE keeps percent-encoding
   # (hex uppercased), decode=TRUE percent-decodes.
