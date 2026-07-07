@@ -1,0 +1,964 @@
+cross-parser URL-parsing disagreement harness (RURL-wncwfasl)
+==========================================================================
+  R              4.6.0
+  platform       aarch64-apple-darwin23
+  libcurl        8.14.1
+  rurl           2.3.0
+  curl           7.1.0
+  adaR           0.3.5
+  urltools       1.7.3.1
+  pslr           1.0.2.9000
+  punycoder      1.2.0
+
+  corpus         328 inputs across 28 axes
+  participants   rurl(rfc3986), rurl(whatwg), curl, adaR, urltools
+  output dir     /Users/bartturczynski/Projects/rurl/analysis/disagreement
+
+per-axis divergence summary (most-divergent first):
+                      axis n_inputs n_divergent ratio  diverging_components
+       ext-wpt-urltestdata      198         198  1.00 scheme,host,port,path
+        ext-ip-obfuscation       23          23  1.00 scheme,host,port,path
+           ext-youarealiar        9           9  1.00 scheme,host,port,path
+               dot-segment        8           8  1.00                  path
+                ipv4-octal        7           7  1.00 scheme,host,port,path
+        ipv4-whole-decimal        6           6  1.00 scheme,host,port,path
+                  ipv4-hex        4           4  1.00 scheme,host,port,path
+                     other        4           4  1.00 scheme,host,port,path
+            pct-unreserved        3           3  1.00                  path
+              pct-reserved        3           3  1.00                  path
+           ipv4-short-form        3           3  1.00                  host
+             ipv4-overflow        3           3  1.00 scheme,host,port,path
+        backslash-as-slash        1           1  1.00 scheme,host,port,path
+      default-port-elision        1           1  1.00                  port
+         idn-punycode-host        1           1  1.00                  host
+                    c0-tab        1           1  1.00 scheme,host,port,path
+            non-ascii-path        1           1  1.00                  path
+             space-in-path        1           1  1.00                  path
+           ipv4-over-arity        1           1  1.00 scheme,host,port,path
+ ext-ada-extra-urltestdata       20          19  0.95 scheme,host,port,path
+        ext-equivocal-urls       10           6  0.60 scheme,host,port,path
+         host-trailing-dot        1           0  0.00                      
+          idn-unicode-host        1           0  0.00                      
+                empty-path        1           0  0.00                      
+                www-prefix        1           0  0.00                      
+                  userinfo        1           0  0.00                      
+            ipv4-canonical        1           0  0.00                      
+   ext-ada-verifydnslength       14           0  0.00                      
+
+divergent inputs: 303 of 328 (92%)
+
+disagreement matrix (divergent rows only; cell = scheme|host|port|path,
+  or <status> when the parser did not accept the input):
+
+ input                                                                    axis                      divergent_components 
+ http://ex.com/%41%42                                                     pct-unreserved            path                 
+ http://ex.com/a%2Fb                                                      pct-reserved              path                 
+ http://2130706433/                                                       ipv4-whole-decimal        host                 
+ http://0x7f.0.0.1/                                                       ipv4-hex                  host                 
+ http://0177.0.0.1/                                                       ipv4-octal                host                 
+ http://127.1/                                                            ipv4-short-form           host                 
+ http://999999999999/                                                     ipv4-overflow             scheme,host,port,path
+ http:\\\\example.com\\a                                                  backslash-as-slash        scheme,host,port,path
+ http://ex.com:80/                                                        default-port-elision      port                 
+ http://xn--mnchen-3ya.de/                                                idn-punycode-host         host                 
+ http://ex.com/a/./b/../c                                                 dot-segment               path                 
+ http://ex\tample.com/                                                    c0-tab                    scheme,host,port,path
+ http://ex.com/a%3Fb                                                      pct-reserved              path                 
+ http://ex.com/a%23b                                                      pct-reserved              path                 
+ http://ex.com/%7euser                                                    pct-unreserved            path                 
+ http://ex.com/%4a%6A                                                     pct-unreserved            path                 
+ http://ex.com/%2e%2e/a                                                   dot-segment               path                 
+ http://ex.com/a/%2E./b                                                   dot-segment               path                 
+ http://ex.com/a/.%2e/b                                                   dot-segment               path                 
+ http://ex.com/%2e/a                                                      dot-segment               path                 
+ http://ex.com/a/../b/./c                                                 dot-segment               path                 
+ http://ex.com/caf%C3%A9                                                  non-ascii-path            path                 
+ http://ex.com/%20foo                                                     space-in-path             path                 
+ http://256/                                                              ipv4-whole-decimal        host                 
+ http://999999999/                                                        ipv4-whole-decimal        host                 
+ http://4294967295/                                                       ipv4-whole-decimal        host                 
+ http://4294967296/                                                       ipv4-whole-decimal        scheme,host,port,path
+ http://0/                                                                ipv4-whole-decimal        host                 
+ http://0x7f000001/                                                       ipv4-hex                  host                 
+ http://0xffffffff/                                                       ipv4-hex                  host                 
+ http://0xffffffff1/                                                      ipv4-hex                  scheme,host,port,path
+ http://017700000001/                                                     ipv4-octal                host                 
+ http://192.168.010.1/                                                    ipv4-octal                host                 
+ http://00.00.00.00/                                                      ipv4-octal                host                 
+ http://0000000000000000000000000000000000000000177.0.0.1/                ipv4-octal                host                 
+ http://1.2.3.08/                                                         ipv4-octal                scheme,host,port,path
+ http://09.2.3.4/                                                         ipv4-octal                scheme,host,port,path
+ http://192.168/                                                          ipv4-short-form           host                 
+ http://192.168.257/                                                      ipv4-short-form           host                 
+ http://256.1.1.1/                                                        ipv4-overflow             scheme,host,port,path
+ http://192.168.0.257/                                                    ipv4-overflow             scheme,host,port,path
+ http://1.2.3.4.5/                                                        ipv4-over-arity           scheme,host,port,path
+ http://ex.com/./g                                                        dot-segment               path                 
+ http://ex.com/../g                                                       dot-segment               path                 
+ http://foo.09                                                            other                     scheme,host,port,path
+ http://foo.0x4                                                           other                     scheme,host,port,path
+ http://0x1.2.3.4.5                                                       other                     scheme,host,port,path
+ http://1.2.3.08                                                          other                     scheme,host,port,path
+ file://example:1/                                                        ext-wpt-urltestdata       scheme,host,port,path
+ file://example:test/                                                     ext-wpt-urltestdata       scheme,host,port,path
+ file://example%/                                                         ext-wpt-urltestdata       scheme,host,port,path
+ file://[example]/                                                        ext-wpt-urltestdata       scheme,host,port,path
+ http://user:pass@/                                                       ext-wpt-urltestdata       scheme,host,port,path
+ http://foo:-80/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http:/:@/www.example.com                                                 ext-wpt-urltestdata       scheme,host,port,path
+ http://user@/www.example.com                                             ext-wpt-urltestdata       scheme,host,port,path
+ http:@/www.example.com                                                   ext-wpt-urltestdata       scheme,host,port,path
+ http:/@/www.example.com                                                  ext-wpt-urltestdata       scheme,host,port,path
+ http://@/www.example.com                                                 ext-wpt-urltestdata       scheme,host,port,path
+ https:@/www.example.com                                                  ext-wpt-urltestdata       scheme,host,port,path
+ http:a:b@/www.example.com                                                ext-wpt-urltestdata       scheme,host,port,path
+ http:/a:b@/www.example.com                                               ext-wpt-urltestdata       scheme,host,port,path
+ http://a:b@/www.example.com                                              ext-wpt-urltestdata       scheme,host,port,path
+ http::@/www.example.com                                                  ext-wpt-urltestdata       scheme,host,port,path
+ http:@:www.example.com                                                   ext-wpt-urltestdata       scheme,host,port,path
+ http:/@:www.example.com                                                  ext-wpt-urltestdata       scheme,host,port,path
+ http://@:www.example.com                                                 ext-wpt-urltestdata       scheme,host,port,path
+ https://�                                                                ext-wpt-urltestdata       scheme,host,port,path
+ https://%EF%BF%BD                                                        ext-wpt-urltestdata       scheme,host,port,path
+ https://x x:12                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://[www.google.com]/                                                 ext-wpt-urltestdata       scheme,host,port,path
+ sc://@/                                                                  ext-wpt-urltestdata       scheme,host,port,path
+ sc://te@s:t@/                                                            ext-wpt-urltestdata       scheme,host,port,path
+ sc://:/                                                                  ext-wpt-urltestdata       scheme,host,port,path
+ sc://:12/                                                                ext-wpt-urltestdata       scheme,host,port,path
+ sc://a b/                                                                ext-wpt-urltestdata       scheme,host,port,path
+ sc://a<b                                                                 ext-wpt-urltestdata       scheme,host,port,path
+ sc://a>b                                                                 ext-wpt-urltestdata       scheme,host,port,path
+ sc://a[b/                                                                ext-wpt-urltestdata       scheme,host,port,path
+ sc://a\\b/                                                               ext-wpt-urltestdata       scheme,host,port,path
+ sc://a]b/                                                                ext-wpt-urltestdata       scheme,host,port,path
+ sc://a^b                                                                 ext-wpt-urltestdata       scheme,host,port,path
+ sc://a|b/                                                                ext-wpt-urltestdata       scheme,host,port,path
+ http://a\001b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\002b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\003b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\004b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\005b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\006b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\ab/                                                             ext-wpt-urltestdata       scheme,host,port,path
+ http://a\bb/                                                             ext-wpt-urltestdata       scheme,host,port,path
+ http://a\vb/                                                             ext-wpt-urltestdata       scheme,host,port,path
+ http://a\fb/                                                             ext-wpt-urltestdata       scheme,host,port,path
+ http://a\016b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\017b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\020b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\021b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\022b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\023b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\024b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\025b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\026b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\027b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\030b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\031b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\032b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\033b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\034b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\035b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\036b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a\037b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://a b/                                                              ext-wpt-urltestdata       scheme,host,port,path
+ http://a%b/                                                              ext-wpt-urltestdata       scheme,host,port,path
+ http://a<b                                                               ext-wpt-urltestdata       scheme,host,port,path
+ http://a>b                                                               ext-wpt-urltestdata       scheme,host,port,path
+ http://a[b/                                                              ext-wpt-urltestdata       scheme,host,port,path
+ http://a]b/                                                              ext-wpt-urltestdata       scheme,host,port,path
+ http://a^b                                                               ext-wpt-urltestdata       scheme,host,port,path
+ http://a|b/                                                              ext-wpt-urltestdata       scheme,host,port,path
+ http://a\177b/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%00st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%01st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%02st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%03st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%04st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%05st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%06st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%07st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%08st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%09st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%0Ast/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%0Bst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%0Cst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%0Dst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%0Est/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%0Fst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%10st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%11st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%12st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%13st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%14st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%15st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%16st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%17st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%18st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%19st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%1Ast/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%1Bst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%1Cst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%1Dst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%1Est/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%1Fst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%20st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%23st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%25st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%2Fst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%3Ast/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%3Cst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%3Est/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%3Fst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%40st/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%5Bst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%5Cst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%5Dst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%7Cst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://ho%7Fst/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ ftp://example.com%80/                                                    ext-wpt-urltestdata       scheme,host,port,path
+ ftp://example.com%A0/                                                    ext-wpt-urltestdata       scheme,host,port,path
+ https://example.com%80/                                                  ext-wpt-urltestdata       scheme,host,port,path
+ https://example.com%A0/                                                  ext-wpt-urltestdata       scheme,host,port,path
+ https://0x100000000/test                                                 ext-wpt-urltestdata       scheme,host,port,path
+ https://256.0.0.1/test                                                   ext-wpt-urltestdata       scheme,host,port,path
+ file://%43%3A                                                            ext-wpt-urltestdata       scheme,host,port,path
+ file://%43%7C                                                            ext-wpt-urltestdata       scheme,host,port,path
+ file://%43|                                                              ext-wpt-urltestdata       scheme,host,port,path
+ file://C%7C                                                              ext-wpt-urltestdata       scheme,host,port,path
+ file://%43%7C/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ https://%43%7C/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ asdf://%43|/                                                             ext-wpt-urltestdata       scheme,host,port,path
+ \\\\\\.\\Y:                                                              ext-wpt-urltestdata       scheme,host,port,path
+ \\\\\\.\\y:                                                              ext-wpt-urltestdata       scheme,host,port,path
+ https://[0::0::0]                                                        ext-wpt-urltestdata       scheme,host,port,path
+ https://[0:.0]                                                           ext-wpt-urltestdata       scheme,host,port,path
+ https://[0:0:]                                                           ext-wpt-urltestdata       scheme,host,port,path
+ https://[0:1:2:3:4:5:6:7.0.0.0.1]                                        ext-wpt-urltestdata       scheme,host,port,path
+ https://[0:1.00.0.0.0]                                                   ext-wpt-urltestdata       scheme,host,port,path
+ https://[0:1.290.0.0.0]                                                  ext-wpt-urltestdata       scheme,host,port,path
+ https://[0:1.23.23]                                                      ext-wpt-urltestdata       scheme,host,port,path
+ http://?                                                                 ext-wpt-urltestdata       scheme,host,port,path
+ http://#                                                                 ext-wpt-urltestdata       scheme,host,port,path
+ non-special://[:80/                                                      ext-wpt-urltestdata       scheme,host,port,path
+ http://[::127.0.0.0.1]                                                   ext-wpt-urltestdata       scheme,host,port,path
+ a                                                                        ext-wpt-urltestdata       scheme,host,port,path
+ a/                                                                       ext-wpt-urltestdata       scheme,host,port,path
+ a//                                                                      ext-wpt-urltestdata       scheme,host,port,path
+ file://­/p                                                               ext-wpt-urltestdata       scheme,host,port,path
+ file://%C2%AD/p                                                          ext-wpt-urltestdata       scheme,host,port,path
+ #                                                                        ext-wpt-urltestdata       scheme,host,port,path
+ ?                                                                        ext-wpt-urltestdata       scheme,host,port,path
+ http://0..0x300/                                                         ext-wpt-urltestdata       scheme,host,port,path
+ http://0..0x300./                                                        ext-wpt-urltestdata       scheme,host,port,path
+ http://1.2.3.08.                                                         ext-wpt-urltestdata       scheme,host,port,path
+ http://1.2.3.09                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://09.2.3.4                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://09.2.3.4.                                                         ext-wpt-urltestdata       scheme,host,port,path
+ http://01.2.3.4.5                                                        ext-wpt-urltestdata       scheme,host,port,path
+ http://01.2.3.4.5.                                                       ext-wpt-urltestdata       scheme,host,port,path
+ http://0x100.2.3.4                                                       ext-wpt-urltestdata       scheme,host,port,path
+ http://0x100.2.3.4.                                                      ext-wpt-urltestdata       scheme,host,port,path
+ http://0x1.2.3.4.5.                                                      ext-wpt-urltestdata       scheme,host,port,path
+ http://foo.1.2.3.4                                                       ext-wpt-urltestdata       scheme,host,port,path
+ http://foo.1.2.3.4.                                                      ext-wpt-urltestdata       scheme,host,port,path
+ http://foo.2.3.4                                                         ext-wpt-urltestdata       scheme,host,port,path
+ http://foo.2.3.4.                                                        ext-wpt-urltestdata       scheme,host,port,path
+ http://foo.09.                                                           ext-wpt-urltestdata       scheme,host,port,path
+ http://foo.0x4.                                                          ext-wpt-urltestdata       scheme,host,port,path
+ http://0999999999999999999/                                              ext-wpt-urltestdata       scheme,host,port,path
+ http://foo.0x                                                            ext-wpt-urltestdata       scheme,host,port,path
+ http://foo.0XFfFfFfFfFfFfFfFfFfAcE123                                    ext-wpt-urltestdata       scheme,host,port,path
+ http://💩.123/                                                           ext-wpt-urltestdata       scheme,host,port,path
+ https://\uffffy                                                          ext-wpt-urltestdata       scheme,host,port,path
+                                                                          ext-wpt-urltestdata       scheme,host,port,path
+ https://­/                                                               ext-wpt-urltestdata       scheme,host,port,path
+ https://%C2%AD/                                                          ext-wpt-urltestdata       scheme,host,port,path
+ data://:443                                                              ext-wpt-urltestdata       scheme,host,port,path
+ data://test:test                                                         ext-wpt-urltestdata       scheme,host,port,path
+ data://[:1]                                                              ext-wpt-urltestdata       scheme,host,port,path
+ javascript://:443                                                        ext-wpt-urltestdata       scheme,host,port,path
+ javascript://test:test                                                   ext-wpt-urltestdata       scheme,host,port,path
+ javascript://[:1]                                                        ext-wpt-urltestdata       scheme,host,port,path
+ mailto://:443                                                            ext-wpt-urltestdata       scheme,host,port,path
+ mailto://test:test                                                       ext-wpt-urltestdata       scheme,host,port,path
+ mailto://[:1]                                                            ext-wpt-urltestdata       scheme,host,port,path
+ intent://:443                                                            ext-wpt-urltestdata       scheme,host,port,path
+ intent://test:test                                                       ext-wpt-urltestdata       scheme,host,port,path
+ intent://[:1]                                                            ext-wpt-urltestdata       scheme,host,port,path
+ urn://:443                                                               ext-wpt-urltestdata       scheme,host,port,path
+ urn://test:test                                                          ext-wpt-urltestdata       scheme,host,port,path
+ urn://[:1]                                                               ext-wpt-urltestdata       scheme,host,port,path
+ turn://:443                                                              ext-wpt-urltestdata       scheme,host,port,path
+ turn://test:test                                                         ext-wpt-urltestdata       scheme,host,port,path
+ turn://[:1]                                                              ext-wpt-urltestdata       scheme,host,port,path
+ stun://:443                                                              ext-wpt-urltestdata       scheme,host,port,path
+ stun://test:test                                                         ext-wpt-urltestdata       scheme,host,port,path
+ stun://[:1]                                                              ext-wpt-urltestdata       scheme,host,port,path
+ non-special://host\\a                                                    ext-wpt-urltestdata       scheme,host,port,path
+ http://0x7f.0x0.0x0.0x1/                                                 ext-ip-obfuscation        host                 
+ http://0x7f.0x00.0x00.0x01/                                              ext-ip-obfuscation        host                 
+ http://0x7f.1/                                                           ext-ip-obfuscation        host                 
+ http://0x7f.00.0.1/                                                      ext-ip-obfuscation        host                 
+ http://0x7f.256/                                                         ext-ip-obfuscation        host                 
+ http://0177.00.00.01/                                                    ext-ip-obfuscation        host                 
+ http://0177.000.0000.00001/                                              ext-ip-obfuscation        host                 
+ http://0177.0x0.1/                                                       ext-ip-obfuscation        host                 
+ http://127.0.1/                                                          ext-ip-obfuscation        host                 
+ http://127。0。0。1/                                                     ext-ip-obfuscation        host                 
+ http://127．0．0．1/                                                     ext-ip-obfuscation        host                 
+ http://127｡0｡0｡1/                                                        ext-ip-obfuscation        host                 
+ http://0xa9fea9fe/                                                       ext-ip-obfuscation        host                 
+ http://0xa9.0xfe.0xa9.0xfe/                                              ext-ip-obfuscation        host                 
+ http://2852039166/                                                       ext-ip-obfuscation        host                 
+ http://0251.0376.0251.0376/                                              ext-ip-obfuscation        host                 
+ http://0xa9.254.0xa9.0376/                                               ext-ip-obfuscation        host                 
+ http://[::ffff:127.0.0.1]/                                               ext-ip-obfuscation        host                 
+ http://[::127.0.0.1]/                                                    ext-ip-obfuscation        host                 
+ http://256.256.256.1/                                                    ext-ip-obfuscation        scheme,host,port,path
+ http://0xffffffff.0/                                                     ext-ip-obfuscation        scheme,host,port,path
+ http://6442450945/                                                       ext-ip-obfuscation        scheme,host,port,path
+ http://[::ffff:127.0.0.1%2523]/                                          ext-ip-obfuscation        scheme,host,port,path
+ https://lemire.me/école                                                  ext-ada-extra-urltestdata path                 
+ example.com`x.example.com                                                ext-ada-extra-urltestdata scheme,host,port,path
+ http://Yağız.com                                                         ext-ada-extra-urltestdata host                 
+ fs:/hello.eth                                                            ext-ada-extra-urltestdata scheme,host,port,path
+ http://///\\'                                                            ext-ada-extra-urltestdata scheme,host,port,path
+ http://[0:0:0:0:0:0:0:0                                                  ext-ada-extra-urltestdata scheme,host,port,path
+ http://0:0:0:0:0:0:0:0]                                                  ext-ada-extra-urltestdata scheme,host,port,path
+ mailto:a@b.com                                                           ext-ada-extra-urltestdata scheme,host,port,path
+ scheme:example.com                                                       ext-ada-extra-urltestdata scheme,host,port,path
+ scheme:example.com/path                                                  ext-ada-extra-urltestdata scheme,host,port,path
+ scheme://example.com:-1                                                  ext-ada-extra-urltestdata scheme,host,port,path
+ scheme://example.com:+1                                                  ext-ada-extra-urltestdata scheme,host,port,path
+ schéme://example.com                                                     ext-ada-extra-urltestdata scheme,host,port,path
+ scheme://username@@@@example.com                                         ext-ada-extra-urltestdata scheme,host,port,path
+ file://localhost/path/to/file.txt                                        ext-ada-extra-urltestdata scheme,host,port,path
+ file://localhost:8098/path/to/file.txt                                   ext-ada-extra-urltestdata scheme,host,port,path
+ data:space    ?test#test                                                 ext-ada-extra-urltestdata scheme,host,port,path
+ https://example.com/"quoted"                                             ext-ada-extra-urltestdata path                 
+ a:b#                                                                     ext-ada-extra-urltestdata scheme,host,port,path
+ http://google.com:80\\@yahoo.com                                         ext-youarealiar           host,port,path       
+ https://user:pass@xdavidhu.me\test.corp.google.com                       ext-youarealiar           scheme,host,port,path
+ http://127.0.0.\n1:6379?SET\ntest\nfailure12:80                          ext-youarealiar           scheme,host,port,path
+ https:/\\/\\/\\github.com/foo/bar                                        ext-youarealiar           scheme,host,port,path
+ http://ヒ:キ@ヒ.abc.ニ/ヒ                                                ext-youarealiar           path                 
+ https:///evil.com                                                        ext-youarealiar           host,path            
+ http://example.com:80\\@localhost:8080/secret.txt                        ext-youarealiar           host,port,path       
+ foo://///////bar.com/                                                    ext-youarealiar           scheme,host,port,path
+ www.php.net:80/index.php?test=1                                          ext-youarealiar           scheme,host,port,path
+ https://n.pr\\@e.gg                                                      ext-equivocal-urls        host,path            
+ https://n.pr][e.gg                                                       ext-equivocal-urls        scheme,host,port,path
+ https://n.pr#@e.gg                                                       ext-equivocal-urls        host                 
+ https://n.pr%2ee.gg                                                      ext-equivocal-urls        host                 
+ https://n.pr\ne.gg                                                       ext-equivocal-urls        scheme,host,port,path
+ https://malware.testing.google.test\\testing\\malware\\*@letsencrypt.org ext-equivocal-urls        host,path            
+ rurl(rfc3986)                                                                   rurl(whatwg)                                                                               
+ http|ex.com||/AB                                                                http|ex.com||/%41%42                                                                       
+ http|ex.com||/a%2Fb                                                             http|ex.com||/a%2Fb                                                                        
+ http|2130706433||/ [warning-no-tld]                                             http|127.0.0.1||/                                                                          
+ http|0x7f.0.0.1||/ [warning-invalid-tld]                                        http|127.0.0.1||/                                                                          
+ http|0177.0.0.1||/ [warning-invalid-tld]                                        http|127.0.0.1||/                                                                          
+ http|127.1||/ [warning-invalid-tld]                                             http|127.0.0.1||/                                                                          
+ http|999999999999||/ [warning-no-tld]                                           <error>                                                                                    
+ <error>                                                                         http|example.com||/a                                                                       
+ http|ex.com|80|/                                                                http|ex.com|80|/                                                                           
+ http|xn--mnchen-3ya.de||/                                                       http|xn--mnchen-3ya.de||/                                                                  
+ http|ex.com||/a/c                                                               http|ex.com||/a/c                                                                          
+ <error>                                                                         http|example.com||/                                                                        
+ http|ex.com||/a%3Fb                                                             http|ex.com||/a%3Fb                                                                        
+ http|ex.com||/a%23b                                                             http|ex.com||/a%23b                                                                        
+ http|ex.com||/~user                                                             http|ex.com||/%7Euser                                                                      
+ http|ex.com||/Jj                                                                http|ex.com||/%4A%6A                                                                       
+ http|ex.com||/a                                                                 http|ex.com||/a                                                                            
+ http|ex.com||/b                                                                 http|ex.com||/b                                                                            
+ http|ex.com||/b                                                                 http|ex.com||/b                                                                            
+ http|ex.com||/a                                                                 http|ex.com||/a                                                                            
+ http|ex.com||/b/c                                                               http|ex.com||/b/c                                                                          
+ http|ex.com||/caf%C3%A9                                                         http|ex.com||/caf%C3%A9                                                                    
+ http|ex.com||/%20foo                                                            http|ex.com||/%20foo                                                                       
+ http|256||/ [warning-no-tld]                                                    http|0.0.1.0||/                                                                            
+ http|999999999||/ [warning-no-tld]                                              http|59.154.201.255||/                                                                     
+ http|4294967295||/ [warning-no-tld]                                             http|255.255.255.255||/                                                                    
+ http|4294967296||/ [warning-no-tld]                                             <error>                                                                                    
+ http|0||/ [warning-no-tld]                                                      http|0.0.0.0||/                                                                            
+ http|0x7f000001||/ [warning-no-tld]                                             http|127.0.0.1||/                                                                          
+ http|0xffffffff||/ [warning-no-tld]                                             http|255.255.255.255||/                                                                    
+ http|0xffffffff1||/ [warning-no-tld]                                            <error>                                                                                    
+ http|017700000001||/ [warning-no-tld]                                           http|127.0.0.1||/                                                                          
+ http|192.168.010.1||/ [warning-invalid-tld]                                     http|192.168.8.1||/                                                                        
+ http|00.00.00.00||/ [warning-invalid-tld]                                       http|0.0.0.0||/                                                                            
+ http|0000000000000000000000000000000000000000177.0.0.1||/ [warning-invalid-tld] http|127.0.0.1||/                                                                          
+ http|1.2.3.08||/ [warning-invalid-tld]                                          <error>                                                                                    
+ http|09.2.3.4||/ [warning-invalid-tld]                                          <error>                                                                                    
+ http|192.168||/ [warning-invalid-tld]                                           http|192.0.0.168||/                                                                        
+ http|192.168.257||/ [warning-invalid-tld]                                       http|192.168.1.1||/                                                                        
+ http|256.1.1.1||/ [warning-invalid-tld]                                         <error>                                                                                    
+ http|192.168.0.257||/ [warning-invalid-tld]                                     <error>                                                                                    
+ http|1.2.3.4.5||/ [warning-invalid-tld]                                         <error>                                                                                    
+ http|ex.com||/g                                                                 http|ex.com||/g                                                                            
+ http|ex.com||/g                                                                 http|ex.com||/g                                                                            
+ http|foo.09||/ [warning-invalid-tld]                                            <error>                                                                                    
+ http|foo.0x4||/ [warning-invalid-tld]                                           <error>                                                                                    
+ http|0x1.2.3.4.5||/ [warning-invalid-tld]                                       <error>                                                                                    
+ http|1.2.3.08||/ [warning-invalid-tld]                                          <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ https|�||/ [warning-no-tld]                                                     <error>                                                                                    
+ https|�||/ [warning-no-tld]                                                     <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ http|a|b||/ [warning-no-tld]                                                    <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ http|ho|st||/ [warning-no-tld]                                                  <error>                                                                                    
+ http|ho\177st||/ [warning-no-tld]                                               <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ https|0x100000000||/test [warning-no-tld]                                       <error>                                                                                    
+ https|256.0.0.1||/test [warning-invalid-tld]                                    <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ https|c|||/ [warning-no-tld]                                                    <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ http|0..0x300||/ [warning-invalid-tld]                                          <error>                                                                                    
+ http|0..0x300.||/ [warning-invalid-tld]                                         <error>                                                                                    
+ http|1.2.3.08.||/ [warning-invalid-tld]                                         <error>                                                                                    
+ http|1.2.3.09||/ [warning-invalid-tld]                                          <error>                                                                                    
+ http|09.2.3.4||/ [warning-invalid-tld]                                          <error>                                                                                    
+ http|09.2.3.4.||/ [warning-invalid-tld]                                         <error>                                                                                    
+ http|01.2.3.4.5||/ [warning-invalid-tld]                                        <error>                                                                                    
+ http|01.2.3.4.5.||/ [warning-invalid-tld]                                       <error>                                                                                    
+ http|0x100.2.3.4||/ [warning-invalid-tld]                                       <error>                                                                                    
+ http|0x100.2.3.4.||/ [warning-invalid-tld]                                      <error>                                                                                    
+ http|0x1.2.3.4.5.||/ [warning-invalid-tld]                                      <error>                                                                                    
+ http|foo.1.2.3.4||/ [warning-invalid-tld]                                       <error>                                                                                    
+ http|foo.1.2.3.4.||/ [warning-invalid-tld]                                      <error>                                                                                    
+ http|foo.2.3.4||/ [warning-invalid-tld]                                         <error>                                                                                    
+ http|foo.2.3.4.||/ [warning-invalid-tld]                                        <error>                                                                                    
+ http|foo.09.||/ [warning-invalid-tld]                                           <error>                                                                                    
+ http|foo.0x4.||/ [warning-invalid-tld]                                          <error>                                                                                    
+ http|0999999999999999999||/ [warning-no-tld]                                    <error>                                                                                    
+ http|foo.0x||/ [warning-invalid-tld]                                            <error>                                                                                    
+ http|foo.0xfffffffffffffffffface123||/ [warning-invalid-tld]                    <error>                                                                                    
+ http|💩.123||/ [warning-invalid-tld]                                            <error>                                                                                    
+ https|\uffffy||/ [warning-no-tld]                                               <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ https|­||/ [warning-no-tld]                                                     <error>                                                                                    
+ https|­||/ [warning-no-tld]                                                     <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ http|0x7f.0x0.0x0.0x1||/ [warning-invalid-tld]                                  http|127.0.0.1||/                                                                          
+ http|0x7f.0x00.0x00.0x01||/ [warning-invalid-tld]                               http|127.0.0.1||/                                                                          
+ http|0x7f.1||/ [warning-invalid-tld]                                            http|127.0.0.1||/                                                                          
+ http|0x7f.00.0.1||/ [warning-invalid-tld]                                       http|127.0.0.1||/                                                                          
+ http|0x7f.256||/ [warning-invalid-tld]                                          http|127.0.1.0||/                                                                          
+ http|0177.00.00.01||/ [warning-invalid-tld]                                     http|127.0.0.1||/                                                                          
+ http|0177.000.0000.00001||/ [warning-invalid-tld]                               http|127.0.0.1||/                                                                          
+ http|0177.0x0.1||/ [warning-invalid-tld]                                        http|127.0.0.1||/                                                                          
+ http|127.0.1||/ [warning-invalid-tld]                                           http|127.0.0.1||/                                                                          
+ http|127。0。0。1||/ [warning-no-tld]                                           http|127.0.0.1||/                                                                          
+ http|127．0．0．1||/ [warning-no-tld]                                           http|127.0.0.1||/                                                                          
+ http|127｡0｡0｡1||/ [warning-no-tld]                                              http|127.0.0.1||/                                                                          
+ http|0xa9fea9fe||/ [warning-no-tld]                                             http|169.254.169.254||/                                                                    
+ http|0xa9.0xfe.0xa9.0xfe||/ [warning-invalid-tld]                               http|169.254.169.254||/                                                                    
+ http|2852039166||/ [warning-no-tld]                                             http|169.254.169.254||/                                                                    
+ http|0251.0376.0251.0376||/ [warning-invalid-tld]                               http|169.254.169.254||/                                                                    
+ http|0xa9.254.0xa9.0376||/ [warning-invalid-tld]                                http|169.254.169.254||/                                                                    
+ http|[::ffff:127.0.0.1]||/                                                      http|[::ffff:127.0.0.1]||/                                                                 
+ http|[::127.0.0.1]||/                                                           http|[::127.0.0.1]||/                                                                      
+ http|256.256.256.1||/ [warning-invalid-tld]                                     <error>                                                                                    
+ http|0xffffffff.0||/ [warning-invalid-tld]                                      <error>                                                                                    
+ http|6442450945||/ [warning-no-tld]                                             <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ https|lemire.me||/école                                                         https|lemire.me||/école                                                                    
+ <error>                                                                         <error>                                                                                    
+ http|yağız.com||/                                                               http|yağız.com||/                                                                          
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ https|example.com||/"quoted"                                                    https|example.com||/"quoted"                                                               
+ <error>                                                                         <error>                                                                                    
+ http|yahoo.com||/                                                               http|google.com|80|/@yahoo.com                                                             
+ <error>                                                                         https|xdavidhu.meest.corp.google.com||/                                                    
+ <error>                                                                         http|127.0.0.1|6379|/                                                                      
+ <error>                                                                         https|github.com||/foo/bar                                                                 
+ http|ヒ.abc.ニ||/ヒ [warning-invalid-tld]                                       http|ヒ.abc.ニ||/ヒ [warning-invalid-tld]                                                  
+ https|evil.com||/evil.com                                                       https|evil.com||/                                                                          
+ http|localhost|8080|/secret.txt [warning-no-tld]                                http|example.com|80|/@localhost:8080/secret.txt                                            
+ <error>                                                                         <error>                                                                                    
+ http|www.php.net|80|/index.php                                                  http|www.php.net|80|/index.php                                                             
+ https|e.gg||/                                                                   https|n.pr||/@e.gg                                                                         
+ <error>                                                                         <error>                                                                                    
+ https|n.pr||/                                                                   https|n.pr||/                                                                              
+ https|n.pr.e.gg||/                                                              https|n.pr.e.gg||/                                                                         
+ <error>                                                                         https|n.pre.gg||/                                                                          
+ https|letsencrypt.org||/                                                        https|malware.testing.google.test||/testing/malware/*@letsencrypt.org [warning-invalid-tld]
+ curl                                   adaR                                                                  urltools                                                 
+ http|ex.com||/AB                       http|ex.com||/%41%42                                                  http|ex.com||/%41%42                                     
+ http|ex.com||/a/b                      http|ex.com||/a%2Fb                                                   http|ex.com||/a%2Fb                                      
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|2130706433||/                                       
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0x7f.0.0.1||/                                       
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0177.0.0.1||/                                       
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|127.1||/                                            
+ http|999999999999||/                   <reject>                                                              http|999999999999||/                                     
+ <error>                                http|example.com||/a                                                  |http|\\\\example.com\\a|/                               
+ http|ex.com|80|/                       http|ex.com||/                                                        http|ex.com|80|/                                         
+ http|xn--mnchen-3ya.de||/              http|münchen.de||/                                                    http|xn--mnchen-3ya.de||/                                
+ http|ex.com||/a/c                      http|ex.com||/a/c                                                     http|ex.com||/a/./b/../c                                 
+ <error>                                http|example.com||/                                                   http|ex\tample.com||/                                    
+ http|ex.com||/a?b                      http|ex.com||/a%3Fb                                                   http|ex.com||/a%3Fb                                      
+ http|ex.com||/a#b                      http|ex.com||/a%23b                                                   http|ex.com||/a%23b                                      
+ http|ex.com||/~user                    http|ex.com||/%7euser                                                 http|ex.com||/%7euser                                    
+ http|ex.com||/Jj                       http|ex.com||/%4a%6A                                                  http|ex.com||/%4a%6A                                     
+ http|ex.com||/a                        http|ex.com||/a                                                       http|ex.com||/%2e%2e/a                                   
+ http|ex.com||/b                        http|ex.com||/b                                                       http|ex.com||/a/%2E./b                                   
+ http|ex.com||/b                        http|ex.com||/b                                                       http|ex.com||/a/.%2e/b                                   
+ http|ex.com||/a                        http|ex.com||/a                                                       http|ex.com||/%2e/a                                      
+ http|ex.com||/b/c                      http|ex.com||/b/c                                                     http|ex.com||/a/../b/./c                                 
+ http|ex.com||/café                     http|ex.com||/caf%C3%A9                                               http|ex.com||/caf%C3%A9                                  
+ http|ex.com||/ foo                     http|ex.com||/%20foo                                                  http|ex.com||/%20foo                                     
+ http|0.0.1.0||/                        http|0.0.1.0||/                                                       http|256||/                                              
+ http|59.154.201.255||/                 http|59.154.201.255||/                                                http|999999999||/                                        
+ http|255.255.255.255||/                http|255.255.255.255||/                                               http|4294967295||/                                       
+ http|4294967296||/                     <reject>                                                              http|4294967296||/                                       
+ http|0.0.0.0||/                        http|0.0.0.0||/                                                       http|0||/                                                
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0x7f000001||/                                       
+ http|255.255.255.255||/                http|255.255.255.255||/                                               http|0xffffffff||/                                       
+ http|0xffffffff1||/                    <reject>                                                              http|0xffffffff1||/                                      
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|017700000001||/                                     
+ http|192.168.8.1||/                    http|192.168.8.1||/                                                   http|192.168.010.1||/                                    
+ http|0.0.0.0||/                        http|0.0.0.0||/                                                       http|00.00.00.00||/                                      
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0000000000000000000000000000000000000000177.0.0.1||/
+ http|1.2.3.08||/                       <reject>                                                              http|1.2.3.08||/                                         
+ http|09.2.3.4||/                       <reject>                                                              http|09.2.3.4||/                                         
+ http|192.0.0.168||/                    http|192.0.0.168||/                                                   http|192.168||/                                          
+ http|192.168.1.1||/                    http|192.168.1.1||/                                                   http|192.168.257||/                                      
+ http|256.1.1.1||/                      <reject>                                                              http|256.1.1.1||/                                        
+ http|192.168.0.257||/                  <reject>                                                              http|192.168.0.257||/                                    
+ http|1.2.3.4.5||/                      <reject>                                                              http|1.2.3.4.5||/                                        
+ http|ex.com||/g                        http|ex.com||/g                                                       http|ex.com||/./g                                        
+ http|ex.com||/g                        http|ex.com||/g                                                       http|ex.com||/../g                                       
+ http|foo.09||/                         <reject>                                                              http|foo.09||/                                           
+ http|foo.0x4||/                        <reject>                                                              http|foo.0x4||/                                          
+ http|0x1.2.3.4.5||/                    <reject>                                                              http|0x1.2.3.4.5||/                                      
+ http|1.2.3.08||/                       <reject>                                                              http|1.2.3.08||/                                         
+ <error>                                <reject>                                                              file|example|1|/                                         
+ <error>                                <reject>                                                              file|example|test|/                                      
+ <error>                                <reject>                                                              file|example%||/                                         
+ <error>                                <reject>                                                              file|||/                                                 
+ <error>                                <reject>                                                              http|||/                                                 
+ <error>                                <reject>                                                              http|foo|-80|/                                           
+ <error>                                <reject>                                                              |||/www.example.com                                      
+ <error>                                <reject>                                                              http|||/www.example.com                                  
+ <error>                                <reject>                                                              |||/www.example.com                                      
+ <error>                                <reject>                                                              |||/www.example.com                                      
+ <error>                                <reject>                                                              http|||/www.example.com                                  
+ <error>                                <reject>                                                              |||/www.example.com                                      
+ <error>                                <reject>                                                              |||/www.example.com                                      
+ <error>                                <reject>                                                              |||/www.example.com                                      
+ <error>                                <reject>                                                              http|||/www.example.com                                  
+ <error>                                <reject>                                                              |||/www.example.com                                      
+ <error>                                <reject>                                                              ||www.example.com|/                                      
+ <error>                                <reject>                                                              ||www.example.com|/                                      
+ <error>                                <reject>                                                              http||www.example.com|/                                  
+ https|�||/                             <reject>                                                              https|�||/                                               
+ https|�||/                             <reject>                                                              https|%ef%bf%bd||/                                       
+ <error>                                <reject>                                                              https|x x|12|/                                           
+ <error>                                <reject>                                                              http|||/                                                 
+ <error>                                <reject>                                                              sc|||/                                                   
+ <error>                                <reject>                                                              sc|s|t@|/                                                
+ <error>                                <reject>                                                              sc|||/                                                   
+ <error>                                <reject>                                                              sc||12|/                                                 
+ <error>                                <reject>                                                              sc|a b||/                                                
+ <error>                                <reject>                                                              sc|a<b||/                                                
+ <error>                                <reject>                                                              sc|a>b||/                                                
+ <error>                                <reject>                                                              sc|a[b||/                                                
+ <error>                                <reject>                                                              sc|a\\b||/                                               
+ <error>                                <reject>                                                              sc|a]b||/                                                
+ <error>                                <reject>                                                              sc|a^b||/                                                
+ sc|a|b||/                              <reject>                                                              sc|a|b||/                                                
+ <error>                                <reject>                                                              http|a\001b||/                                           
+ <error>                                <reject>                                                              http|a\002b||/                                           
+ <error>                                <reject>                                                              http|a\003b||/                                           
+ <error>                                <reject>                                                              http|a\004b||/                                           
+ <error>                                <reject>                                                              http|a\005b||/                                           
+ <error>                                <reject>                                                              http|a\006b||/                                           
+ <error>                                <reject>                                                              http|a\ab||/                                             
+ <error>                                <reject>                                                              http|a\bb||/                                             
+ <error>                                <reject>                                                              http|a\vb||/                                             
+ <error>                                <reject>                                                              http|a\fb||/                                             
+ <error>                                <reject>                                                              http|a\016b||/                                           
+ <error>                                <reject>                                                              http|a\017b||/                                           
+ <error>                                <reject>                                                              http|a\020b||/                                           
+ <error>                                <reject>                                                              http|a\021b||/                                           
+ <error>                                <reject>                                                              http|a\022b||/                                           
+ <error>                                <reject>                                                              http|a\023b||/                                           
+ <error>                                <reject>                                                              http|a\024b||/                                           
+ <error>                                <reject>                                                              http|a\025b||/                                           
+ <error>                                <reject>                                                              http|a\026b||/                                           
+ <error>                                <reject>                                                              http|a\027b||/                                           
+ <error>                                <reject>                                                              http|a\030b||/                                           
+ <error>                                <reject>                                                              http|a\031b||/                                           
+ <error>                                <reject>                                                              http|a\032b||/                                           
+ <error>                                <reject>                                                              http|a\033b||/                                           
+ <error>                                <reject>                                                              http|a\034b||/                                           
+ <error>                                <reject>                                                              http|a\035b||/                                           
+ <error>                                <reject>                                                              http|a\036b||/                                           
+ <error>                                <reject>                                                              http|a\037b||/                                           
+ <error>                                <reject>                                                              http|a b||/                                              
+ <error>                                <reject>                                                              http|a%b||/                                              
+ <error>                                <reject>                                                              http|a<b||/                                              
+ <error>                                <reject>                                                              http|a>b||/                                              
+ <error>                                <reject>                                                              http|a[b||/                                              
+ <error>                                <reject>                                                              http|a]b||/                                              
+ <error>                                <reject>                                                              http|a^b||/                                              
+ http|a|b||/                            <reject>                                                              http|a|b||/                                              
+ <error>                                <reject>                                                              http|a\177b||/                                           
+ <error>                                <reject>                                                              http|ho%00st||/                                          
+ <error>                                <reject>                                                              http|ho%01st||/                                          
+ <error>                                <reject>                                                              http|ho%02st||/                                          
+ <error>                                <reject>                                                              http|ho%03st||/                                          
+ <error>                                <reject>                                                              http|ho%04st||/                                          
+ <error>                                <reject>                                                              http|ho%05st||/                                          
+ <error>                                <reject>                                                              http|ho%06st||/                                          
+ <error>                                <reject>                                                              http|ho%07st||/                                          
+ <error>                                <reject>                                                              http|ho%08st||/                                          
+ <error>                                <reject>                                                              http|ho%09st||/                                          
+ <error>                                <reject>                                                              http|ho%0ast||/                                          
+ <error>                                <reject>                                                              http|ho%0bst||/                                          
+ <error>                                <reject>                                                              http|ho%0cst||/                                          
+ <error>                                <reject>                                                              http|ho%0dst||/                                          
+ <error>                                <reject>                                                              http|ho%0est||/                                          
+ <error>                                <reject>                                                              http|ho%0fst||/                                          
+ <error>                                <reject>                                                              http|ho%10st||/                                          
+ <error>                                <reject>                                                              http|ho%11st||/                                          
+ <error>                                <reject>                                                              http|ho%12st||/                                          
+ <error>                                <reject>                                                              http|ho%13st||/                                          
+ <error>                                <reject>                                                              http|ho%14st||/                                          
+ <error>                                <reject>                                                              http|ho%15st||/                                          
+ <error>                                <reject>                                                              http|ho%16st||/                                          
+ <error>                                <reject>                                                              http|ho%17st||/                                          
+ <error>                                <reject>                                                              http|ho%18st||/                                          
+ <error>                                <reject>                                                              http|ho%19st||/                                          
+ <error>                                <reject>                                                              http|ho%1ast||/                                          
+ <error>                                <reject>                                                              http|ho%1bst||/                                          
+ <error>                                <reject>                                                              http|ho%1cst||/                                          
+ <error>                                <reject>                                                              http|ho%1dst||/                                          
+ <error>                                <reject>                                                              http|ho%1est||/                                          
+ <error>                                <reject>                                                              http|ho%1fst||/                                          
+ <error>                                <reject>                                                              http|ho%20st||/                                          
+ <error>                                <reject>                                                              http|ho%23st||/                                          
+ <error>                                <reject>                                                              http|ho%25st||/                                          
+ <error>                                <reject>                                                              http|ho%2fst||/                                          
+ <error>                                <reject>                                                              http|ho%3ast||/                                          
+ <error>                                <reject>                                                              http|ho%3cst||/                                          
+ <error>                                <reject>                                                              http|ho%3est||/                                          
+ <error>                                <reject>                                                              http|ho%3fst||/                                          
+ <error>                                <reject>                                                              http|ho%40st||/                                          
+ <error>                                <reject>                                                              http|ho%5bst||/                                          
+ <error>                                <reject>                                                              http|ho%5cst||/                                          
+ <error>                                <reject>                                                              http|ho%5dst||/                                          
+ http|ho|st||/                          <reject>                                                              http|ho%7cst||/                                          
+ http|ho\177st||/                       <reject>                                                              http|ho%7fst||/                                          
+ <error>                                <reject>                                                              ftp|example.com%80||/                                    
+ <error>                                <reject>                                                              ftp|example.com%a0||/                                    
+ <error>                                <reject>                                                              https|example.com%80||/                                  
+ <error>                                <reject>                                                              https|example.com%a0||/                                  
+ https|0x100000000||/test               <reject>                                                              https|0x100000000||/test                                 
+ https|256.0.0.1||/test                 <reject>                                                              https|256.0.0.1||/test                                   
+ <error>                                <reject>                                                              file|%43%3a||/                                           
+ <error>                                <reject>                                                              file|%43%7c||/                                           
+ <error>                                <reject>                                                              file|%43|||/                                             
+ <error>                                <reject>                                                              file|c%7c||/                                             
+ <error>                                <reject>                                                              file|%43%7c||/                                           
+ https|C|||/                            <reject>                                                              https|%43%7c||/                                          
+ asdf|C|||/                             <reject>                                                              asdf|%43|||/                                             
+ <error>                                <reject>                                                              |\\\\\\.\\y||/                                           
+ <error>                                <reject>                                                              |\\\\\\.\\y||/                                           
+ <error>                                <reject>                                                              https|0::0::0||/                                         
+ <error>                                <reject>                                                              https|0:.0||/                                            
+ <error>                                <reject>                                                              https|0:0:||/                                            
+ <error>                                <reject>                                                              https|0:1:2:3:4:5:6:7.0.0.0.1||/                         
+ <error>                                <reject>                                                              https|0:1.00.0.0.0||/                                    
+ <error>                                <reject>                                                              https|0:1.290.0.0.0||/                                   
+ <error>                                <reject>                                                              https|0:1.23.23||/                                       
+ <error>                                <reject>                                                              http|||/                                                 
+ <error>                                <reject>                                                              http|||/                                                 
+ <error>                                <reject>                                                              non-special|[|80|/                                       
+ <error>                                <reject>                                                              http|::127.0.0.0.1||/                                    
+ <error>                                <reject>                                                              |a||/                                                    
+ <error>                                <reject>                                                              |a||/                                                    
+ <error>                                <reject>                                                              |a||/                                                    
+ <error>                                <reject>                                                              file|­||/p                                               
+ <error>                                <reject>                                                              file|%c2%ad||/p                                          
+ <error>                                <reject>                                                              |||/                                                     
+ <error>                                <reject>                                                              |||/                                                     
+ http|0..0x300||/                       <reject>                                                              http|0..0x300||/                                         
+ http|0..0x300.||/                      <reject>                                                              http|0..0x300.||/                                        
+ http|1.2.3.08.||/                      <reject>                                                              http|1.2.3.08.||/                                        
+ http|1.2.3.09||/                       <reject>                                                              http|1.2.3.09||/                                         
+ http|09.2.3.4||/                       <reject>                                                              http|09.2.3.4||/                                         
+ http|09.2.3.4.||/                      <reject>                                                              http|09.2.3.4.||/                                        
+ http|01.2.3.4.5||/                     <reject>                                                              http|01.2.3.4.5||/                                       
+ http|01.2.3.4.5.||/                    <reject>                                                              http|01.2.3.4.5.||/                                      
+ http|0x100.2.3.4||/                    <reject>                                                              http|0x100.2.3.4||/                                      
+ http|0x100.2.3.4.||/                   <reject>                                                              http|0x100.2.3.4.||/                                     
+ http|0x1.2.3.4.5.||/                   <reject>                                                              http|0x1.2.3.4.5.||/                                     
+ http|foo.1.2.3.4||/                    <reject>                                                              http|foo.1.2.3.4||/                                      
+ http|foo.1.2.3.4.||/                   <reject>                                                              http|foo.1.2.3.4.||/                                     
+ http|foo.2.3.4||/                      <reject>                                                              http|foo.2.3.4||/                                        
+ http|foo.2.3.4.||/                     <reject>                                                              http|foo.2.3.4.||/                                       
+ http|foo.09.||/                        <reject>                                                              http|foo.09.||/                                          
+ http|foo.0x4.||/                       <reject>                                                              http|foo.0x4.||/                                         
+ http|0999999999999999999||/            <reject>                                                              http|0999999999999999999||/                              
+ http|foo.0x||/                         <reject>                                                              http|foo.0x||/                                           
+ http|foo.0XFfFfFfFfFfFfFfFfFfAcE123||/ <reject>                                                              http|foo.0xfffffffffffffffffface123||/                   
+ http|💩.123||/                         <reject>                                                              http|💩.123||/                                           
+ https|\uffffy||/                       <reject>                                                              https|\uffffy||/                                         
+ <error>                                <reject>                                                              |||/                                                     
+ https|­||/                             <reject>                                                              https|­||/                                               
+ https|­||/                             <reject>                                                              https|%c2%ad||/                                          
+ <error>                                <reject>                                                              data||443|/                                              
+ <error>                                <reject>                                                              data|test|test|/                                         
+ <error>                                <reject>                                                              data|:1||/                                               
+ <error>                                <reject>                                                              javascript||443|/                                        
+ <error>                                <reject>                                                              javascript|test|test|/                                   
+ <error>                                <reject>                                                              javascript|:1||/                                         
+ <error>                                <reject>                                                              mailto||443|/                                            
+ <error>                                <reject>                                                              mailto|test|test|/                                       
+ <error>                                <reject>                                                              mailto|:1||/                                             
+ <error>                                <reject>                                                              intent||443|/                                            
+ <error>                                <reject>                                                              intent|test|test|/                                       
+ <error>                                <reject>                                                              intent|:1||/                                             
+ <error>                                <reject>                                                              urn||443|/                                               
+ <error>                                <reject>                                                              urn|test|test|/                                          
+ <error>                                <reject>                                                              urn|:1||/                                                
+ <error>                                <reject>                                                              turn||443|/                                              
+ <error>                                <reject>                                                              turn|test|test|/                                         
+ <error>                                <reject>                                                              turn|:1||/                                               
+ <error>                                <reject>                                                              stun||443|/                                              
+ <error>                                <reject>                                                              stun|test|test|/                                         
+ <error>                                <reject>                                                              stun|:1||/                                               
+ <error>                                <reject>                                                              non-special|host\\a||/                                   
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0x7f.0x0.0x0.0x1||/                                 
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0x7f.0x00.0x00.0x01||/                              
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0x7f.1||/                                           
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0x7f.00.0.1||/                                      
+ http|127.0.1.0||/                      http|127.0.1.0||/                                                     http|0x7f.256||/                                         
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0177.00.00.01||/                                    
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0177.000.0000.00001||/                              
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0177.0x0.1||/                                       
+ http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|127.0.1||/                                          
+ http|127。0。0。1||/                   http|127.0.0.1||/                                                     http|127。0。0。1||/                                     
+ http|127．0．0．1||/                   http|127.0.0.1||/                                                     http|127．0．0．1||/                                     
+ http|127｡0｡0｡1||/                      http|127.0.0.1||/                                                     http|127｡0｡0｡1||/                                        
+ http|169.254.169.254||/                http|169.254.169.254||/                                               http|0xa9fea9fe||/                                       
+ http|169.254.169.254||/                http|169.254.169.254||/                                               http|0xa9.0xfe.0xa9.0xfe||/                              
+ http|169.254.169.254||/                http|169.254.169.254||/                                               http|2852039166||/                                       
+ http|169.254.169.254||/                http|169.254.169.254||/                                               http|0251.0376.0251.0376||/                              
+ http|169.254.169.254||/                http|169.254.169.254||/                                               http|0xa9.254.0xa9.0376||/                               
+ http|[::ffff:127.0.0.1]||/             http|[::ffff:7f00:1]||/                                               http|||/                                                 
+ http|[::127.0.0.1]||/                  http|[::7f00:1]||/                                                    http|||/                                                 
+ http|256.256.256.1||/                  <reject>                                                              http|256.256.256.1||/                                    
+ http|0xffffffff.0||/                   <reject>                                                              http|0xffffffff.0||/                                     
+ http|6442450945||/                     <reject>                                                              http|6442450945||/                                       
+ http|[::ffff:127.0.0.1]||/             <reject>                                                              http|||/                                                 
+ https|lemire.me||/école                https|lemire.me||/%C3%A9cole                                          https|lemire.me||/école                                  
+ <error>                                <reject>                                                              |example.com`x.example.com||/                            
+ http|Yağız.com||/                      http|yağız.com||/                                                     http|yağız.com||/                                        
+ fs|hello.eth||/                        fs|||/hello.eth                                                       |fs||/hello.eth                                          
+ <error>                                http|'||/                                                             http|||//\\'                                             
+ <error>                                <reject>                                                              http|[0|0:0:0:0:0:0:0|/                                  
+ <error>                                <reject>                                                              http|0|0:0:0:0:0:0:0]|/                                  
+ <error>                                mailto|||/a@b.com                                                     |b.com||/                                                
+ <error>                                scheme|||/example.com                                                 |scheme|example.com|/                                    
+ <error>                                scheme|||/example.com/path                                            |scheme|example.com|/path                                
+ <error>                                <reject>                                                              scheme|example.com|-1|/                                  
+ <error>                                <reject>                                                              scheme|example.com|+1|/                                  
+ <error>                                <reject>                                                              schéme|example.com||/                                    
+ <error>                                scheme|example.com||/                                                 scheme|@@@example.com||/                                 
+ file|||/path/to/file.txt               file|||/path/to/file.txt                                              file|localhost||/path/to/file.txt                        
+ <error>                                <reject>                                                              file|localhost|8098|/path/to/file.txt                    
+ <error>                                data|||/space   %20                                                   |data|space    |/                                        
+ https|example.com||/"quoted"           https|example.com||/%22quoted%22                                      https|example.com||/"quoted"                             
+ <error>                                a|||/b                                                                |a|b|/                                                   
+ http|yahoo.com||/                      http|google.com||/@yahoo.com                                          http|yahoo.com||/                                        
+ <error>                                https|xdavidhu.meest.corp.google.com||/                               https|xdavidhu.me\test.corp.google.com||/                
+ <error>                                http|127.0.0.1|6379|/                                                 http|127.0.0.\n1|6379|/                                  
+ <error>                                https|github.com||/foo/bar                                            |https||/\\/\\/\\github.com/foo/bar                      
+ http|ヒ.abc.ニ||/ヒ                    http|ヒ.abc.ニ||/%E3%83%92                                            http|ヒ.abc.ニ||/ヒ                                      
+ https|evil.com||/                      https|evil.com||/                                                     https|||/evil.com                                        
+ http|localhost|8080|/secret.txt        http|example.com||/@localhost:8080/secret.txt                         http|localhost|8080|/secret.txt                          
+ <error>                                foo|||///////bar.com/                                                 foo|||//////bar.com/                                     
+ <error>                                www.php.net|||/80/index.php                                           |www.php.net|80|/index.php                               
+ https|e.gg||/                          https|n.pr||/@e.gg                                                    https|e.gg||/                                            
+ <error>                                <reject>                                                              https|n.pr][e.gg||/                                      
+ https|n.pr||/                          https|n.pr||/                                                         https|e.gg||/                                            
+ https|n.pr.e.gg||/                     https|n.pr.e.gg||/                                                    https|n.pr%2ee.gg||/                                     
+ <error>                                https|n.pre.gg||/                                                     https|n.pr\ne.gg||/                                      
+ https|letsencrypt.org||/               https|malware.testing.google.test||/testing/malware/*@letsencrypt.org https|letsencrypt.org||/                                 

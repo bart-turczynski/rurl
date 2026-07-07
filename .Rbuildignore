@@ -30,6 +30,7 @@
 ^CODE_OF_CONDUCT\.md$
 ^\.pre-commit-config\.yaml$
 ^_scratch$
+^analysis$
 ^worklog$
 ^.*coverage\.html$
 ^\.positai$
