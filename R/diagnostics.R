@@ -37,6 +37,7 @@
   "explicit-default-port",
   "non-default-port",
   "invalid-reverse-solidus",
+  "control-char-stripped",
   "domain-label-too-long",
   "domain-name-too-long",
   "domain-empty-label",
@@ -204,6 +205,20 @@
   }
   diag <- .diag_add(
     diag, live & backslash_rewritten, "invalid-reverse-solidus"
+  )
+
+  # --- control-char strip diagnostic (RURL-tyetpjym) -------------------------
+  # `control-char-stripped` fires exactly where Phase 1's WHATWG control-char
+  # stripper (.strip_whatwg_control_chars_vec) actually removed an ASCII tab/LF/
+  # CR from the input -- surfacing the mutation as a FACT (ADR 0006) rather than
+  # silently stripping. Always FALSE under rfc3986 / no selector (that profile
+  # rejects such bytes instead of stripping).
+  control_char_stripped <- a$control_char_stripped
+  if (is.null(control_char_stripped)) {
+    control_char_stripped <- rep(FALSE, n)
+  }
+  diag <- .diag_add(
+    diag, live & control_char_stripped, "control-char-stripped"
   )
 
   # --- DNS-length / UTS-46 diagnostics (RURL-vowqpmdg, T5 design lock) -------
