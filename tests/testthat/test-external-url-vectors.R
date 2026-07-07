@@ -148,3 +148,27 @@ test_that("Ada extra-urltestdata divergences pin to the documented set", {
   fail_rows <- ada[ada$standard_expectation == "failure", , drop = FALSE]
   expect_true(all(is.na(fail_rows$rurl_whatwg_clean)))
 })
+
+test_that("Ada verify_dns_length: rurl accepts, host-length probe matches", {
+  fx <- read_vectors()
+  dl <- fx[fx$source == "ada-verifydnslength", , drop = FALSE]
+  expect_gt(nrow(dl), 0)
+
+  # These test Ada's OPTIONAL verify_dns_length mode (RFC 1035), NOT the core
+  # WHATWG URL Standard (which runs UTS-46 with VerifyDnsLength=false and so
+  # accepts over-length / empty-label hosts). rurl is WHATWG-URL-conformant: it
+  # accepts every one -> no divergence from the standard oracle.
+  expect_true(all(dl$diverges == "no"))
+  expect_false(anyNA(dl$rurl_whatwg_clean))
+
+  # The payoff: rurl's host-length probe (RURL-vowqpmdg / T5) surfaces the RFC
+  # 1035 violation as a diagnostic FACT (ADR 0006). It must fire EXACTLY on the
+  # rows Ada's verify_dns_length rejects, and stay silent on the ok rows.
+  dns_diag <- c("domain-label-too-long", "domain-name-too-long",
+    "domain-empty-label")
+  diag <- get_url_diagnostics(dl$input, url_standard = "whatwg")
+  probe_fires <- vapply(diag, function(d) length(intersect(d, dns_diag)) > 0L,
+    logical(1))
+  ada_rejects <- grepl("failure", dl$paper_claimed_behavior, fixed = TRUE)
+  expect_identical(probe_fires, ada_rejects)
+})
