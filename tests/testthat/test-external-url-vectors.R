@@ -79,8 +79,10 @@ oracle_nonconformance_ids <- function() {
     "ada-003", "ada-022",
     # scheme inference / UTS-46 case fold / IPv6 re-serialization
     "yal-009", "eq-U8", "ipobf-019", "ipobf-020",
-    # libcurl host allowed-set boundary (RURL-dxwxeamq / ada-008)
-    "ada-008"
+    # scheme inference (ADR 0004) makes rurl accept a scheme-less host-shaped
+    # input the scheme-less WHATWG oracle rejects; the host-charset shim
+    # (RURL-dxwxeamq / ADR 0009) then keeps its backtick host
+    "ada-005"
   )
 }
 
@@ -123,10 +125,11 @@ test_that("dual-standard oracle: classes and invariants hold", {
   expect_true(all(is.na(fx$rfc3986_expected[nr])))
 
   # parser-boundary rows all cite the ADR / ticket that justifies the deviation.
+  # Every documented nonconformance is now a parser-boundary row (ada-008 no
+  # longer diverges -- the host-charset shim, RURL-dxwxeamq, made it conform).
   pb <- fx$divergence_class == "parser-boundary"
   expect_false(anyNA(fx$oracle_ref[pb]))
-  expect_setequal(fx$id[pb],
-    setdiff(oracle_nonconformance_ids(), "ada-008"))
+  expect_setequal(fx$id[pb], oracle_nonconformance_ids())
 })
 
 test_that("rurl conforms to the spec oracle except at documented boundaries", {
@@ -233,14 +236,17 @@ test_that("Ada extra-urltestdata divergences pin to the documented set", {
   # rows, each triaged in the divergence ledger: 8 closed-scheme rejections and
   # `a:b#` (boundary-by-design, ADR 0004 -- only http/https/ftp(s) supported),
   # the IDNA host `Yağız.com` (boundary-by-design, ADR 0002 -- Unicode host kept
-  # reversible, punycode is a separate phase), the backslash-normalization row
-  # `http://///\\'` (candidate-bug -- WHATWG maps \\ to / for special schemes),
-  # and two path percent-encoding rows (needs-investigation). WATCH list, not an
-  # approval list.
+  # reversible, punycode is a separate phase), the scheme-less backtick host
+  # `example.com``x.example.com` (ada-005: rurl infers http:// per ADR 0004 and
+  # keeps the backtick via the host-charset shim, RURL-dxwxeamq; the scheme-less
+  # WHATWG oracle fails for want of a base), and two path percent-encoding rows
+  # (needs-investigation). The backslash row `http://///\\'` (ada-008) NO LONGER
+  # diverges -- the shim made rurl(whatwg) reproduce Ada's `http://'/`. WATCH
+  # list, not an approval list.
   diverging_ids <- ada$id[ada$diverges == "yes"]
   expect_setequal(
     diverging_ids,
-    c("ada-003", "ada-006", "ada-007", "ada-008", "ada-012", "ada-013",
+    c("ada-003", "ada-005", "ada-006", "ada-007", "ada-012", "ada-013",
       "ada-014", "ada-018", "ada-019", "ada-021", "ada-022", "ada-023")
   )
   # Every non-diverging Ada row: accept rows must equal Ada's href, failure rows
@@ -248,7 +254,12 @@ test_that("Ada extra-urltestdata divergences pin to the documented set", {
   ok_rows <- ada[ada$diverges == "no" & ada$standard_expectation != "failure", ,
     drop = FALSE]
   expect_identical(ok_rows$rurl_whatwg_clean, ok_rows$standard_expectation)
-  fail_rows <- ada[ada$standard_expectation == "failure", , drop = FALSE]
+  # Non-diverging must-fail rows genuinely reject. Diverging must-fail rows are
+  # the documented exceptions (e.g. ada-005: rurl infers a scheme and keeps the
+  # backtick host, so it accepts where the scheme-less oracle fails) and are
+  # excluded here -- their divergence is already pinned by diverging_ids above.
+  fail_rows <- ada[ada$standard_expectation == "failure" &
+    ada$diverges == "no", , drop = FALSE]
   expect_true(all(is.na(fail_rows$rurl_whatwg_clean)))
 })
 

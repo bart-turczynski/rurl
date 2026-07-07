@@ -166,6 +166,92 @@ test_that("get_parse_status/domain/tld/subdomain honor the standard (AC #8)", {
   )
 })
 
+# --- RURL-dxwxeamq / ADR 0009: WHATWG host-charset shim ----------------------
+# libcurl's host allowed-set is narrower than WHATWG's; it rejects 15 ASCII
+# code points WHATWG keeps in the host. Under whatwg the shim accepts them (curl
+# parses a filler-substituted host for structure; rurl restores the true host);
+# under rfc3986/NULL the row stays dropped (curl's stricter charset carries).
+
+test_that("whatwg host-charset shim accepts all 15 curl-rejected points", {
+  gap <- c("!", "\"", "$", "&", "'", "(", ")", "*",
+           "+", ",", ";", "=", "`", "{", "}")
+  for (ch in gap) {
+    u <- paste0("http://a", ch, "b.example.com/")
+    # whatwg: parses, host preserved byte-for-byte, shim diagnostic fires.
+    expect_identical(
+      get_host(u, url_standard = "whatwg"),
+      paste0("a", ch, "b.example.com"),
+      label = paste("whatwg host preserved for", ch)
+    )
+    expect_identical(
+      get_clean_url(u, url_standard = "whatwg"), u,
+      label = paste("whatwg clean_url preserved for", ch)
+    )
+    expect_true(
+      "host-charset-shimmed" %in%
+        get_url_diagnostics(u, url_standard = "whatwg"),
+      label = paste("host-charset-shimmed fires for", ch)
+    )
+    expect_identical(
+      get_host_type(u, url_standard = "whatwg"), "reg-name",
+      label = paste("whatwg host_type reg-name for", ch)
+    )
+    # rfc3986 / NULL: curl's stricter charset is inherited -> the row is dropped
+    # (no shim), so clean_url is NA and the diagnostic never fires.
+    expect_true(
+      is.na(get_clean_url(u, url_standard = "rfc3986")),
+      label = paste("rfc3986 drops", ch)
+    )
+    expect_true(
+      is.na(get_clean_url(u, url_standard = NULL)),
+      label = paste("NULL selector drops", ch)
+    )
+    expect_false(
+      "host-charset-shimmed" %in%
+        get_url_diagnostics(u, url_standard = "rfc3986"),
+      label = paste("no shim diagnostic under rfc3986 for", ch)
+    )
+  }
+})
+
+test_that("host-charset shim excludes % and does not widen the forbidden set", {
+  # % (U+0025) is a forbidden domain code point -- WHATWG drops it too, so it is
+  # deliberately NOT in the shim set and stays rejected under whatwg.
+  expect_true(is.na(get_clean_url("http://a%b.example.com/",
+    url_standard = "whatwg")))
+  # | and ^ are forbidden host code points -> still fatal under whatwg.
+  expect_identical(get_parse_status("http://a|b.example.com/",
+    url_standard = "whatwg"), "error")
+  expect_identical(get_parse_status("http://a^b.example.com/",
+    url_standard = "whatwg"), "error")
+})
+
+test_that("host-charset shim is scoped to the host, not path/query/fragment", {
+  # A gap byte outside the authority is ordinary content: not shimmed, and the
+  # host (clean, curl-accepted) parses normally with no shim diagnostic.
+  for (u in c("http://example.com/a'b", "http://example.com/p?q=a'b",
+              "http://example.com/p#a'b")) {
+    expect_identical(get_host(u, url_standard = "whatwg"), "example.com",
+      label = paste("host untouched for", u))
+    expect_false(
+      "host-charset-shimmed" %in%
+        get_url_diagnostics(u, url_standard = "whatwg"),
+      label = paste("no shim diagnostic for", u)
+    )
+  }
+})
+
+test_that("host-charset shim preserves userinfo and port structure", {
+  # The shim substitutes only within the host span; userinfo and port survive.
+  u <- "http://user:pw@a'b.example.com:8443/p"
+  expect_identical(get_host(u, url_standard = "whatwg"), "a'b.example.com")
+  p <- safe_parse_url(u, url_standard = "whatwg")
+  expect_identical(p$user, "user")
+  expect_identical(p$password, "pw")
+  expect_identical(p$port, 8443L)
+  expect_identical(p$path, "/p")
+})
+
 # --- Dual-standard divergence_class label (Part 3a, RURL-moselrwp) -----------
 # The golden table already carries a per-standard oracle (one row per
 # input x url_standard). `divergence_class` labels each row so both oracle
