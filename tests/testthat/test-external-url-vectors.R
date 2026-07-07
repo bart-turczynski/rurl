@@ -70,23 +70,17 @@ test_that("WPT failure divergences are pinned to the documented boundary set", {
     drop = FALSE]
 
   # WPT oracle is WHATWG: every runnable row MUST reject. rurl's WHATWG profile
-  # rejects all but these 9 forbidden-host-code-point rows, tracked as open
-  # divergences in the ledger (some documented-boundary, some candidate-bug).
-  # This is a WATCH list, not an approval list: new acceptances (regressions) or
-  # newly fixed rows must update it deliberately, with a ledger triage note.
+  # now rejects ALL of them -- there are no remaining divergences. The 9
+  # forbidden-host-code-point rows that previously slipped through as
+  # warning-no-tld (bare `|`, DEL, U+FFFD, U+FFFF, UTS-46-ignored soft-hyphen)
+  # are now fatal under whatwg (RURL-jfuqpwvh, flipping the ADR 0004 boundary
+  # into a governed axis per ADR 0007). This stays a WATCH list: any new
+  # acceptance (a regression) must update it deliberately with a ledger note.
   diverging_ids <- wpt$id[wpt$diverges == "yes"]
-  expect_setequal(
-    diverging_ids,
-    c("wpt-fail-038", "wpt-fail-039", "wpt-fail-118", "wpt-fail-164",
-      "wpt-fail-165", "wpt-fail-184", "wpt-fail-242", "wpt-fail-244",
-      "wpt-fail-245")
-  )
-  # All diverging rows are the same documented shape: accepted as a reg-name
-  # with warning-no-tld rather than hard-rejected.
-  expect_true(all(wpt$rurl_whatwg_status[wpt$diverges == "yes"] ==
-    "warning-no-tld"))
-  # And every non-diverging runnable WPT row is genuinely rejected (NA clean).
-  expect_true(all(is.na(wpt$rurl_whatwg_clean[wpt$diverges == "no"])))
+  expect_setequal(diverging_ids, character(0))
+  # Every runnable WPT row is genuinely rejected under whatwg (NA clean).
+  expect_true(all(is.na(wpt$rurl_whatwg_clean)))
+  expect_true(all(wpt$rurl_whatwg_status == "error"))
 })
 
 test_that("IPv4-obfuscation divergences pin to the UTS-46 separator set", {

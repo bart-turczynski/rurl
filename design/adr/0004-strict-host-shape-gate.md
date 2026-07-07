@@ -56,13 +56,22 @@ profile deliberately does **not** reproduce WHATWG's hard-reject behavior. These
 are intentional boundaries, not defects — recorded here so the paper can cite
 "known, documented limitation":
 
-- **Forbidden host code points are surfaced, not rejected.** WHATWG's
-  forbidden-host-code-point set (`|`, DEL, U+FFFD, U+00AD, …) triggers hard
-  failure. rurl instead renders the host reversibly (ADR 0002) and flags it
-  (`warning-no-tld` + diagnostics, ADR 0006) rather than refusing the URL.
-  Forbidden-code-point *rejection* is not a governed axis (ADR 0007). The
-  UTS-46-*ignored* code points among these (e.g. U+00AD soft hyphen) fall under
-  the DNS/UTS-46 probe (RURL-rxbhotzu), which flags rather than maps-and-fails.
+- **Forbidden host code points: rejected under `whatwg`, surfaced under
+  `rfc3986` (REVISED — RURL-jfuqpwvh, rurl 2.3.0).** WHATWG's
+  forbidden-host/domain-code-point set (`|`, `^`, DEL, U+FFFD, U+FFFF, the
+  UTS-46-*ignored* U+00AD soft hyphen, …) triggers hard failure. The `whatwg`
+  profile now reproduces that: a resolved reg-name host carrying an ASCII
+  forbidden code point, or a non-ASCII host that fails UTS-46 domain-to-ASCII
+  (a disallowed code point, or an ignored-to-empty label), is fatal
+  (`parse_status = "error"`). This makes forbidden-code-point rejection a
+  **governed axis** under `whatwg` (ADR 0007). Under `rfc3986` (and the default
+  `NULL`) rurl keeps RFC reg-name permissiveness — it renders the host reversibly
+  (ADR 0002) and flags it (`warning-no-tld` + diagnostics, ADR 0006) rather than
+  refusing the URL — an intended profile divergence. This supersedes the
+  original decision (rurl ≤ 2.2.x surfaced these in *both* profiles); the change
+  is confined to the opt-in `whatwg` selector, so the default is unaffected.
+  Detection deliberately does NOT touch the punycode/reversible-host helpers
+  (ADR 0002); it is a separate reject gate keyed on the resolved host string.
 - **RFC 3986 reg-name permissiveness is by design.** Under `rfc3986`, numeric
   and near-out-of-charset hosts are kept as reg-names (RFC 3986 has no
   numeric-host special case). This is an expected profile divergence from

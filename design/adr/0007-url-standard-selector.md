@@ -33,6 +33,13 @@ Governed axes ship in two waves:
   `resolve_url()` (RFC 3986 §5 reference resolution composed over
   `safe_parse_urls()` — a shared standard-agnostic base-merge plus delegation,
   not a new divergence axis).
+- **Pre-benchmark hardening (RURL-moselrwp, rurl 2.3.0):** two host-acceptance
+  axes added under `whatwg` (both Stage-A-affecting; both a no-op under `NULL`):
+  ASCII tab/LF/CR **stripping** before parse (RURL-tyetpjym) and
+  forbidden-host/domain-code-point **rejection** (RURL-jfuqpwvh — see ADR 0004,
+  which this supersedes for that axis). Under `rfc3986` the control chars still
+  reject and the forbidden code points stay permissive reg-names, so both remain
+  genuine profile-divergence axes, not default changes.
 
 ## Consequences
 
