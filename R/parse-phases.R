@@ -215,6 +215,63 @@
   list(url = url_out, control_char_stripped = had)
 }
 
+# WHATWG / UTS-46 alternative full-stop mapping (RURL-odsmwsxu). UTS-46
+# domain-to-ASCII -- the "map" step the WHATWG host parser runs for special
+# schemes -- maps three alternative full-stop code points to ASCII "." before a
+# host is split into labels: U+3002 (ideographic full stop), U+FF0E (fullwidth
+# full stop), and U+FF61 (halfwidth ideographic full stop). rurl hands the raw
+# string to libcurl, which does NOT apply UTS-46, so a Unicode-dot host like
+# "127。0。0。1" reaches curl with its separators intact, is never split into
+# numeric labels, and so never coerces to the canonical dotted-quad (an
+# SSRF-relevant loopback/metadata obfuscation -- browsers coerce). The upstream
+# host-shape gate is no help either: .classify_input_host_vec()'s ipv4-attempt
+# test splits on ASCII "." only, so a literal-Unicode-dot host is not even seen
+# as an IPv4 attempt. Mapping the three code points to "." here, BEFORE curl,
+# lets the existing IPv4 coercion and label handling see "127.0.0.1" (and, for
+# names, "例え。jp" -> "例え.jp").
+#
+# SCOPED TO THE AUTHORITY ONLY. A full-stop variant in the path/query/fragment
+# is legitimate content (e.g. a path "/文書。pdf") and MUST NOT be rewritten, so
+# only the authority span -- between the "//" that introduces it and the first
+# "/", "?" or "#" -- is eligible. The whole authority (userinfo + host + port)
+# is mapped rather than the host alone: a variant full stop in userinfo is a
+# negligible edge (userinfo is not itself a domain) and not worth splitting the
+# authority to exclude. Opaque "scheme:foo" inputs (no "//") carry no authority
+# and are left untouched; a backslash run has already been collapsed to "//"
+# upstream, so this sees the normalized form. Runs ONLY under url_standard ==
+# "whatwg" (RFC 3986 has no UTS-46 mapping -- these bytes stay literal), and is
+# a byte-for-byte no-op otherwise. Recognition only: a percent-encoded form
+# ("%E3%80%82") is inert literal text, never mapped. No diagnostic is emitted --
+# this is ordinary WHATWG host normalization (like host-lowercasing), not a
+# lossy repair of malformed input.
+.map_whatwg_domain_separators_vec <- function(url, url_standard) {
+  no_op <- list(url = url)
+  if (!identical(url_standard, "whatwg")) {
+    return(no_op)
+  }
+  m <- stringi::stri_match_first_regex(
+    url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)?(//)([^/?#]*)(.*)$"
+  )
+  authority <- m[, 4L]
+  eligible <- !is.na(authority) &
+    stringi::stri_detect_regex(authority, "[\\u3002\\uFF0E\\uFF61]")
+  eligible[is.na(eligible)] <- FALSE
+  if (!any(eligible)) {
+    return(no_op)
+  }
+  scheme <- ifelse(is.na(m[, 2L]), "", m[, 2L])
+  mapped_authority <- stringi::stri_replace_all_regex(
+    authority, "[\\u3002\\uFF0E\\uFF61]", "."
+  )
+  url_out <- url
+  url_out[eligible] <- paste0(
+    scheme[eligible], m[eligible, 3L], mapped_authority[eligible],
+    m[eligible, 5L]
+  )
+  no_op$url <- url_out
+  no_op
+}
+
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
 # gate, and building the string handed to curl. Returns the per-URL columns plus
 # a logical `rejected` column marking rows the scalar pipeline returned NULL for
@@ -241,6 +298,14 @@
   # A no-op (byte-for-byte `url` unchanged) unless url_standard == "whatwg".
   bs <- .rewrite_whatwg_backslashes_vec(url, url_standard)
   url <- bs$url
+
+  # WHATWG UTS-46 alternative full-stop mapping (RURL-odsmwsxu) runs next: for
+  # eligible rows it maps U+3002/U+FF0E/U+FF61 to ASCII "." in the AUTHORITY
+  # only, so a Unicode-dot host coerces through the existing IPv4/label handling
+  # (and IDN names normalize their separators) instead of reaching curl as an
+  # un-splittable literal. A no-op unless url_standard == "whatwg".
+  sep <- .map_whatwg_domain_separators_vec(url, url_standard)
+  url <- sep$url
 
   url_lower <- stringi::stri_trans_tolower(url)
 
