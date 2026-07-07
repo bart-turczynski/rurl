@@ -112,8 +112,12 @@
 #'     cleaned URL.}
 #'     \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
 #'   }
-#' @param path_encoding How to handle percent-encoding in the path for
-#' `clean_url`. Defaults to "keep".
+#' @param path_encoding How to present the path percent-encoding in `clean_url`
+#' — the readable-vs-browser rendering choice (the path analog of
+#' `host_encoding`; a presentation knob that does not change which path a URL
+#' denotes). Defaults to "keep". When `url_standard` is set, the profile governs
+#' the path percent/dot handling and `path_encoding` cannot also be supplied,
+#' but the profile never switches a readable path to the browser-encoded form.
 #'   \itemize{
 #'     \item{"keep": Leave the path percent-encoding untouched (the path is
 #'     preserved as written in the URL, so `%2F` stays `%2F` rather than
@@ -123,9 +127,11 @@
 #'     canonicalization — the two forms are equivalent — and it makes such paths
 #'     compare equal in \code{\link{canonical_join}}. Use "encode" to
 #'     additionally normalize which bytes are encoded.}
-#'     \item{"encode": Normalize by decoding first, then percent-encoding each
-#'     segment (slashes preserved).}
-#'     \item{"decode": Percent-decode UTF-8 sequences in the path.}
+#'     \item{"encode": The browser/percent-encoded rendering. Decodes the path
+#'     first, then percent-encodes each segment (slashes preserved), so a
+#'     readable non-ASCII path is emitted in its percent-encoded UTF-8 form.}
+#'     \item{"decode": The readable rendering. Percent-decodes UTF-8 sequences
+#'     in the path, so a percent-encoded segment is shown as readable text.}
 #'   }
 #' @param subdomain_levels_to_keep An integer or NULL. Determines how many
 #' levels of subdomains are kept,

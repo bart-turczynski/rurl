@@ -110,7 +110,7 @@ Each cell below is `scheme|host|port|path` from the frozen matrix.
 | `http://999999999999/` | `999999999999` *(warning-no-tld)* | `<error>` | `999999999999` | `<reject>` | `999999999999` | Out-of-range integer host. WHATWG MUST **reject**; rurl(whatwg) and adaR do. curl, urltools and the RFC profile accept it as a reg-name — the SSRF-relevant accept-vs-reject split. |
 | `http://ex.com:80/` | `…\|80\|` | `…\|80\|` | `…\|80\|` | `…\|\|` (elided) | `…\|80\|` | Default-port elision is a WHATWG **serializer** choice. **adaR alone** drops `:80`; rurl keeps it verbatim (elision is a separate normalization phase, not parsing). |
 | `http://xn--mnchen-3ya.de/` | `xn--mnchen-3ya.de` | `xn--mnchen-3ya.de` | `xn--mnchen-3ya.de` | `münchen.de` | `xn--mnchen-3ya.de` | IDNA rendering. **adaR alone** presents Unicode; rurl keeps the ASCII/A-label and exposes Unicode via `host_encoding` (facts-not-policy, ADR 0002). |
-| `https://lemire.me/école` | `/école` | `/école` | `/école` | `/%C3%A9cole` | `/école` | Readable vs percent-encoded **path**. **adaR alone** percent-encodes; rurl's readable default is caveat 3 → feature `RURL-ndrgrwcz`. |
+| `https://lemire.me/école` | `/école` | `/école` | `/école` | `/%C3%A9cole` | `/école` | Readable vs percent-encoded **path**. **adaR alone** percent-encodes; rurl's readable *default* is user-pickable — `path_encoding = "encode"` opts into the browser form (`RURL-ndrgrwcz`, caveat 3). |
 | `http://ex.com/a/./b/../c` | `/a/c` | `/a/c` | `/a/c` | `/a/c` | `/a/./b/../c` | Dot-segment resolution (RFC §5.2.4 / WHATWG). **urltools alone** leaves segments unresolved — a correctness divergence. |
 | `http:\\example.com\a` | `<error>` | `example.com/a` | `<error>` | `example.com/a` | mangled | WHATWG special-scheme treats `\`→`/`; RFC rejects. rurl(whatwg) **matches the WHATWG reference (adaR)**; the RFC profile and curl reject. |
 | `http://ex⇥ample.com/` (tab) | `<error>` | `example.com` | `<error>` | `example.com` | keeps tab | WHATWG strips ASCII tab/CR/LF before parsing. rurl(whatwg) **matches adaR**; the RFC profile rejects; urltools silently keeps the control char. |
@@ -133,8 +133,15 @@ table settle them:
    Ligatures / circled digits / zero-width code points pass through (ADR 0002).
 2. **ada-008 / host allowed-set:** libcurl's host allowed-set is narrower than
    WHATWG's (e.g. curl rejects an apostrophe in a host) → `RURL-dxwxeamq`.
-3. **Readable-path default:** rurl keeps non-ASCII paths readable; WHATWG /
-   adaR percent-encode. Dominates the adaR path-agreement gap → `RURL-ndrgrwcz`.
+3. **Readable-path default (user-pickable, no longer a limitation):** by
+   *default* rurl keeps non-ASCII paths readable (`/école`) where WHATWG / adaR
+   percent-encode (`/%C3%A9cole`) — this default dominates the adaR
+   path-agreement gap in the table above. It is a presentation choice, not a
+   limitation: `path_encoding = "encode"` renders the browser/percent-encoded
+   form and `"decode"` the readable form (the analog of `host_encoding`),
+   shipped by `RURL-ndrgrwcz`. The one residual gap — combining an explicit
+   `path_encoding` *with* a `url_standard` profile, which currently conflicts —
+   is queued as `RURL-sjnqhwtl` (needs a PRD/ADR delta first).
 4. **Parked, needs-investigation:** `eq-U8` (U+0130 fold), `yal-009` (scheme
    inference), `ipobf-019/020` (IPv6 re-serialization).
 
