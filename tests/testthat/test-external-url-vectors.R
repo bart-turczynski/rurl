@@ -118,3 +118,33 @@ test_that("IPv4-obfuscation divergences pin to the UTS-46 separator set", {
   fail_rows <- ip[ip$standard_expectation == "failure", , drop = FALSE]
   expect_true(all(is.na(fail_rows$rurl_whatwg_clean)))
 })
+
+test_that("Ada extra-urltestdata divergences pin to the documented set", {
+  fx <- read_vectors()
+  ada <- fx[fx$source == "ada-extra-urltestdata" & fx$runnable == "yes", ,
+    drop = FALSE]
+
+  # Ada's beyond-WPT vectors (Apache-2.0), oracle = WHATWG. rurl agrees on every
+  # must-fail row (rejecting all of them, sometimes for a stricter reason such
+  # as the closed scheme set) and on the `http://./` accept. It diverges on 12
+  # rows, each triaged in the divergence ledger: 8 closed-scheme rejections and
+  # `a:b#` (boundary-by-design, ADR 0004 -- only http/https/ftp(s) supported),
+  # the IDNA host `Yağız.com` (boundary-by-design, ADR 0002 -- Unicode host kept
+  # reversible, punycode is a separate phase), the backslash-normalization row
+  # `http://///\\'` (candidate-bug -- WHATWG maps \\ to / for special schemes),
+  # and two path percent-encoding rows (needs-investigation). WATCH list, not an
+  # approval list.
+  diverging_ids <- ada$id[ada$diverges == "yes"]
+  expect_setequal(
+    diverging_ids,
+    c("ada-003", "ada-006", "ada-007", "ada-008", "ada-012", "ada-013",
+      "ada-014", "ada-018", "ada-019", "ada-021", "ada-022", "ada-023")
+  )
+  # Every non-diverging Ada row: accept rows must equal Ada's href, failure rows
+  # must genuinely reject.
+  ok_rows <- ada[ada$diverges == "no" & ada$standard_expectation != "failure", ,
+    drop = FALSE]
+  expect_identical(ok_rows$rurl_whatwg_clean, ok_rows$standard_expectation)
+  fail_rows <- ada[ada$standard_expectation == "failure", , drop = FALSE]
+  expect_true(all(is.na(fail_rows$rurl_whatwg_clean)))
+})
