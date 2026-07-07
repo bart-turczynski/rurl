@@ -187,6 +187,34 @@
   list(url = url_out, backslash_rewritten = changed)
 }
 
+# WHATWG control-character stripping (RURL-tyetpjym). The WHATWG basic URL
+# parser's very first step removes EVERY ASCII tab (U+0009), LF (U+000A), and CR
+# (U+000D) from the input, everywhere in the string, before any component is
+# parsed. rurl otherwise rejects a control char in the authority (libcurl
+# errors) -- correct under RFC 3986, which has no strip step and requires such
+# bytes to be percent-encoded -- so this runs ONLY under url_standard ==
+# "whatwg" and is a byte-for-byte no-op otherwise. Stripping is not silent: the
+# returned `control_char_stripped` mask (rows where a byte was removed) drives
+# the `control-char-stripped` diagnostic (ADR 0006 -- surface the mutation as a
+# FACT). Only tab/LF/CR are removed; other C0 controls are left for libcurl.
+# Resolves the control-char-in-authority family: c0-tab probe, eq-U6 (LF),
+# yal-002 (TAB), yal-003 (CR/LF), which WHATWG strips-and-accepts.
+.strip_whatwg_control_chars_vec <- function(url, url_standard) {
+  n <- length(url)
+  no_op <- list(url = url, control_char_stripped = rep(FALSE, n))
+  if (!identical(url_standard, "whatwg")) {
+    return(no_op)
+  }
+  had <- stringi::stri_detect_regex(url, "[\\t\\n\\r]")
+  had[is.na(had)] <- FALSE
+  if (!any(had)) {
+    return(no_op)
+  }
+  url_out <- url
+  url_out[had] <- stringi::stri_replace_all_regex(url[had], "[\\t\\n\\r]", "")
+  list(url = url_out, control_char_stripped = had)
+}
+
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
 # gate, and building the string handed to curl. Returns the per-URL columns plus
 # a logical `rejected` column marking rows the scalar pipeline returned NULL for
@@ -200,7 +228,14 @@
                                        url_standard = NULL) {
   n <- length(url)
 
-  # WHATWG literal backslash recognition (RURL-ledntyab) runs first: for
+  # WHATWG control-character stripping (RURL-tyetpjym) runs FIRST -- it is the
+  # WHATWG parser's step 1 (remove all ASCII tab/LF/CR), so every scheme/host
+  # regex and the backslash recognizer below see the already-stripped string.
+  # A no-op (byte-for-byte `url` unchanged) unless url_standard == "whatwg".
+  cc <- .strip_whatwg_control_chars_vec(url, url_standard)
+  url <- cc$url
+
+  # WHATWG literal backslash recognition (RURL-ledntyab) runs next: for
   # eligible rows it rewrites "\" to "/" ahead of every scheme/host regex
   # below, so the rest of this function sees an already-normalized string.
   # A no-op (byte-for-byte `url` unchanged) unless url_standard == "whatwg".
@@ -327,7 +362,10 @@
     # WHATWG backslash recognition (RURL-ledntyab): TRUE where a literal "\"
     # was actually reinterpreted as "/", consumed by the url_standard
     # diagnostics seam to emit `invalid-reverse-solidus`.
-    backslash_rewritten = bs$backslash_rewritten
+    backslash_rewritten = bs$backslash_rewritten,
+    # WHATWG control-char strip (RURL-tyetpjym): TRUE where a tab/LF/CR was
+    # removed, consumed by the diagnostics seam to emit `control-char-stripped`.
+    control_char_stripped = cc$control_char_stripped
   )
 }
 

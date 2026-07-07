@@ -1,3 +1,25 @@
+## rurl 2.3.0
+
+### Bug fixes
+
+- `url_standard = "whatwg"` now strips ASCII tab (`U+0009`), LF (`U+000A`), and
+  CR (`U+000D`) from the input before parsing, matching the WHATWG URL
+  Standard's first parse step. Previously rurl rejected a control character in
+  the authority (libcurl errors), so adversarial hosts that browsers accept
+  after stripping — `http://ex<TAB>ample.com/` → `example.com`,
+  `https://n.pr<LF>e.gg` → `n.pre.gg`, and CRLF-injection shapes like
+  `http://127.0.0.<CR><LF>1:6379…` → `127.0.0.1` — returned `error`. They now
+  parse under `"whatwg"`. The strip is **not silent**: it fires a new
+  `control-char-stripped` diagnostic (see `get_url_diagnostics()`), keeping with
+  the facts-not-policy design. `url_standard = "rfc3986"` and the default
+  (`NULL`) are unchanged — RFC 3986 has no strip step and requires such bytes to
+  be percent-encoded, so they still reject.
+
+### Diagnostics
+
+- New `get_url_diagnostics()` token `control-char-stripped`, emitted under
+  `"whatwg"` on any URL from which an ASCII tab/LF/CR was removed.
+
 ## rurl 2.2.2
 
 ### Bug fixes

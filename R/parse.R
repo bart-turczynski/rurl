@@ -1216,7 +1216,10 @@ safe_parse_urls <- function(url,
     # WHATWG backslash recognition (RURL-ledntyab): NOT a cached Stage-A field
     # either, read the same way by the metadata seam to emit
     # `invalid-reverse-solidus` only where a rewrite actually happened.
-    backslash_rewritten = prep$backslash_rewritten
+    backslash_rewritten = prep$backslash_rewritten,
+    # WHATWG control-char strip (RURL-tyetpjym): same seam, emits
+    # `control-char-stripped` only where a tab/LF/CR was actually removed.
+    control_char_stripped = prep$control_char_stripped
   )
   attr(cols, "null_row") <- null_row
   cols

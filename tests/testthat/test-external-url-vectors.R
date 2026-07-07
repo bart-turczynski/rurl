@@ -158,32 +158,44 @@ test_that("yoU-aRe-a-Liar paper divergences pin to the documented set", {
   # (class C; bytes verified against wspr-ncsu/urlparsing-framework, BSD-3). The
   # oracle is the paper's `whatwg-url` reference column. rurl reproduces both
   # sides of the SOP equivocation across profiles and agrees with the WHATWG
-  # reference on the plain hostname-confusion rows; it diverges on 5, each
+  # reference on the plain hostname-confusion rows; it diverges on 3, each
   # triaged in the divergence ledger (NOT blessed):
-  #   yal-002/003 control chars in the authority -- rurl rejects where WHATWG
-  #     strips ASCII tab/CR/LF and accepts (needs-investigation);
   #   yal-005 non-ASCII host -- kept reversibly Unicode (boundary, ADR 0002);
   #   yal-008 `foo://` -- outside the closed scheme set (boundary, ADR 0004);
   #   yal-009 `www.php.net:80/...` -- rurl infers http + host vs WHATWG scheme
   #     parse (needs-investigation).
+  # yal-002/003 (control chars in the authority) NO LONGER diverge: the whatwg
+  # profile now strips ASCII tab/CR/LF before parsing (RURL-tyetpjym), matching
+  # WHATWG, and surfaces the mutation via the `control-char-stripped` diagnostic
+  # (asserted below). rfc3986 still rejects them (RFC has no strip step).
   diverging_ids <- yal$id[yal$diverges == "yes"]
   expect_setequal(
     diverging_ids,
-    c("yal-002", "yal-003", "yal-005", "yal-008", "yal-009")
+    c("yal-005", "yal-008", "yal-009")
   )
 
-  # The two control-character rows reject in BOTH profiles (rurl does not
-  # silently strip tab/CR/LF from the authority).
+  # The two control-character rows now PARSE under whatwg (tab/CR/LF stripped)
+  # but still REJECT under rfc3986 (which requires percent-encoding). The whatwg
+  # parse must fire the `control-char-stripped` diagnostic on both.
   ctrl <- yal[yal$id %in% c("yal-002", "yal-003"), , drop = FALSE]
-  expect_true(all(ctrl$rurl_whatwg_status == "error"))
-  expect_true(all(is.na(ctrl$rurl_whatwg_clean)))
+  expect_true(all(ctrl$rurl_rfc_status == "error"))
+  expect_true(all(is.na(ctrl$rurl_rfc_clean)))
+  expect_false(anyNA(ctrl$rurl_whatwg_clean))
+  ctrl_diag <- get_url_diagnostics(ctrl$input, url_standard = "whatwg")
+  expect_true(all(vapply(
+    ctrl_diag, function(d) "control-char-stripped" %in% d, logical(1)
+  )))
 
-  # Non-diverging hostname-confusion rows: rurl's WHATWG clean_url must contain
-  # the WHATWG-reference host (google.com / github.com / example.com / evil).
+  # Non-diverging hostname rows: rurl's WHATWG clean_url must contain the
+  # WHATWG-reference host. The oracle is spelled either `host=X` (rows where
+  # rurl's exact serialization is the point) or `accept:host=X (why)` (the
+  # control-char rows, where the point is accept-not-reject).
   host_rows <- yal[yal$diverges == "no", , drop = FALSE]
-  expect_true(all(grepl("^host=", host_rows$standard_expectation)))
   for (i in seq_len(nrow(host_rows))) {
-    host <- sub("^host=", "", host_rows$standard_expectation[i])
+    exp <- host_rows$standard_expectation[i]
+    expect_true(grepl("^(accept:)?host=", exp))
+    host <- sub("^(accept:)?host=", "", exp)
+    host <- sub(" \\(.*\\)$", "", host)
     expect_false(is.na(host_rows$rurl_whatwg_clean[i]))
     expect_true(grepl(host, host_rows$rurl_whatwg_clean[i], fixed = TRUE))
   }
@@ -198,13 +210,14 @@ test_that("Equivocal URLs paper divergences pin to the documented set", {
   # released, hand-transcribed from the PDF text layer). Oracle = the paper's
   # `NodeJS WHATWG` reference column. These URLs are equivocal by design (>=2
   # DNS-compatible hosts). rurl reproduces both options across profiles and
-  # agrees with the WHATWG reference on all but 2 rows:
-  #   eq-U6 LF in host -- rurl rejects the control char where WHATWG strips it
-  #     (needs-investigation; same family as yal-002/003);
+  # agrees with the WHATWG reference on all but 1 row:
   #   eq-U8 İ@ -- rurl takes the clean userinfo parse (host e.gg) vs the paper's
   #     dotted-İ host folding (defensible; needs-investigation).
+  # eq-U6 (LF in host) NO LONGER diverges: the whatwg profile now strips the
+  # ASCII newline before parsing (RURL-tyetpjym) -> host n.pre.gg, matching the
+  # WHATWG reference, with a `control-char-stripped` diagnostic.
   diverging_ids <- eq$id[eq$diverges == "yes" & !is.na(eq$diverges)]
-  expect_setequal(diverging_ids, c("eq-U6", "eq-U8"))
+  expect_setequal(diverging_ids, "eq-U8")
 
   # U1 (NUL) and U7 (invalid-UTF-8 octets) are non-runnable provenance rows:
   # no input, no rurl output, no divergence verdict.
