@@ -189,6 +189,45 @@ test_that("yoU-aRe-a-Liar paper divergences pin to the documented set", {
   }
 })
 
+test_that("Equivocal URLs paper divergences pin to the documented set", {
+  fx <- read_vectors()
+  eq <- fx[fx$source == "equivocal-urls", , drop = FALSE]
+  expect_gt(nrow(eq), 0)
+
+  # Reynolds et al. (ESORICS'22), Table 3 + Section 6 (class C; no artifact was
+  # released, hand-transcribed from the PDF text layer). Oracle = the paper's
+  # `NodeJS WHATWG` reference column. These URLs are equivocal by design (>=2
+  # DNS-compatible hosts). rurl reproduces both options across profiles and
+  # agrees with the WHATWG reference on all but 2 rows:
+  #   eq-U6 LF in host -- rurl rejects the control char where WHATWG strips it
+  #     (needs-investigation; same family as yal-002/003);
+  #   eq-U8 İ@ -- rurl takes the clean userinfo parse (host e.gg) vs the paper's
+  #     dotted-İ host folding (defensible; needs-investigation).
+  diverging_ids <- eq$id[eq$diverges == "yes" & !is.na(eq$diverges)]
+  expect_setequal(diverging_ids, c("eq-U6", "eq-U8"))
+
+  # U1 (NUL) and U7 (invalid-UTF-8 octets) are non-runnable provenance rows:
+  # no input, no rurl output, no divergence verdict.
+  norun <- eq[eq$runnable == "no", , drop = FALSE]
+  expect_setequal(norun$id, c("eq-U1", "eq-U7"))
+  expect_true(all(is.na(norun$input)))
+  expect_true(all(is.na(norun$rurl_whatwg_status)))
+  expect_true(all(is.na(norun$diverges)))
+
+  # Headline result: rurl reproduces BOTH sides of the hostname equivocation
+  # across profiles (whatwg vs rfc) for the backslash row and the GSB
+  # web-interface evasion row.
+  u2 <- eq[eq$id == "eq-U2", ]
+  expect_true(grepl("n.pr", u2$rurl_whatwg_clean, fixed = TRUE))   # Option B
+  expect_true(grepl("e.gg", u2$rurl_rfc_clean, fixed = TRUE))      # Option A
+  bs <- eq[eq$id == "eq-bs", ]
+  # whatwg -> browser side (malware host); rfc -> classifier side (letsencrypt).
+  expect_true(grepl("malware.testing.google.test", bs$rurl_whatwg_clean,
+    fixed = TRUE))
+  expect_true(grepl("letsencrypt.org", bs$rurl_rfc_clean, fixed = TRUE))
+  expect_false(grepl("malware", bs$rurl_rfc_clean, fixed = TRUE))
+})
+
 test_that("Ada verify_dns_length: rurl accepts, host-length probe matches", {
   fx <- read_vectors()
   dl <- fx[fx$source == "ada-verifydnslength", , drop = FALSE]
