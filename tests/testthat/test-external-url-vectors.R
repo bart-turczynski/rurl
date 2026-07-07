@@ -149,6 +149,46 @@ test_that("Ada extra-urltestdata divergences pin to the documented set", {
   expect_true(all(is.na(fail_rows$rurl_whatwg_clean)))
 })
 
+test_that("yoU-aRe-a-Liar paper divergences pin to the documented set", {
+  fx <- read_vectors()
+  yal <- fx[fx$source == "youarealiar", , drop = FALSE]
+  expect_gt(nrow(yal), 0)
+
+  # Curated headline divergences from Ajmani et al. (SecWeb'22), Section V/VI
+  # (class C; bytes verified against wspr-ncsu/urlparsing-framework, BSD-3). The
+  # oracle is the paper's `whatwg-url` reference column. rurl reproduces both
+  # sides of the SOP equivocation across profiles and agrees with the WHATWG
+  # reference on the plain hostname-confusion rows; it diverges on 5, each
+  # triaged in the divergence ledger (NOT blessed):
+  #   yal-002/003 control chars in the authority -- rurl rejects where WHATWG
+  #     strips ASCII tab/CR/LF and accepts (needs-investigation);
+  #   yal-005 non-ASCII host -- kept reversibly Unicode (boundary, ADR 0002);
+  #   yal-008 `foo://` -- outside the closed scheme set (boundary, ADR 0004);
+  #   yal-009 `www.php.net:80/...` -- rurl infers http + host vs WHATWG scheme
+  #     parse (needs-investigation).
+  diverging_ids <- yal$id[yal$diverges == "yes"]
+  expect_setequal(
+    diverging_ids,
+    c("yal-002", "yal-003", "yal-005", "yal-008", "yal-009")
+  )
+
+  # The two control-character rows reject in BOTH profiles (rurl does not
+  # silently strip tab/CR/LF from the authority).
+  ctrl <- yal[yal$id %in% c("yal-002", "yal-003"), , drop = FALSE]
+  expect_true(all(ctrl$rurl_whatwg_status == "error"))
+  expect_true(all(is.na(ctrl$rurl_whatwg_clean)))
+
+  # Non-diverging hostname-confusion rows: rurl's WHATWG clean_url must contain
+  # the WHATWG-reference host (google.com / github.com / example.com / evil).
+  host_rows <- yal[yal$diverges == "no", , drop = FALSE]
+  expect_true(all(grepl("^host=", host_rows$standard_expectation)))
+  for (i in seq_len(nrow(host_rows))) {
+    host <- sub("^host=", "", host_rows$standard_expectation[i])
+    expect_false(is.na(host_rows$rurl_whatwg_clean[i]))
+    expect_true(grepl(host, host_rows$rurl_whatwg_clean[i], fixed = TRUE))
+  }
+})
+
 test_that("Ada verify_dns_length: rurl accepts, host-length probe matches", {
   fx <- read_vectors()
   dl <- fx[fx$source == "ada-verifydnslength", , drop = FALSE]
