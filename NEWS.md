@@ -39,10 +39,31 @@
   fragment is left literal. `url_standard = "rfc3986"` and the default (`NULL`)
   are unchanged — RFC 3986 has no UTS-46 mapping, so these bytes stay literal.
 
+- `url_standard = "whatwg"` now **accepts** the 15 ASCII host code points that
+  libcurl rejects but the WHATWG URL Standard keeps in the host —
+  `! " $ & ' ( ) * + , ; = ` { }`. rurl delegates host parsing to libcurl, whose
+  host allowed-set is narrower than WHATWG's, so a host such as `http://a'b/`
+  (the residual behind the ada-008 boundary case) previously returned `error`.
+  A special-scheme URL whose host carries one of these code points now parses,
+  with the host preserved byte-for-byte (`http://a'b.example.com/` keeps
+  `a'b.example.com`). The fix is a pre-parse shim that lets libcurl read the URL
+  structure and then restores the true host, so every downstream check —
+  including the forbidden-host-code-point reject — still runs on the real host:
+  `%` (a forbidden domain code point) and `|`/`^` stay rejected. It fires a new
+  `host-charset-shimmed` diagnostic. `url_standard = "rfc3986"` and the default
+  (`NULL`) are unchanged — they inherit libcurl's stricter charset and still
+  reject. The reversible-host and Punycode helpers are untouched (ADR 0002); see
+  ADR 0009. This first slice covers WHATWG special schemes (http/https/ftp);
+  ftps and opaque hosts remain a documented follow-up.
+
 ### Diagnostics
 
 - New `get_url_diagnostics()` token `control-char-stripped`, emitted under
   `"whatwg"` on any URL from which an ASCII tab/LF/CR was removed.
+
+- New `get_url_diagnostics()` token `host-charset-shimmed`, emitted under
+  `"whatwg"` on any URL whose host carried a libcurl-rejected-but-WHATWG-valid
+  code point (`! " $ & ' ( ) * + , ; = ` { }`) that the shim accepted.
 
 ### Documentation
 

@@ -51,7 +51,9 @@ Records in **[`design/adr/`](design/adr/)**; accepted specs live in
 0002 (keep the Punycode helpers), 0003 (parse/present Stage split), 0004 (strict
 host-shape gate), 0005 (base-R string exceptions), 0006 (diagnostics as
 companion helpers only), 0007 (`url_standard` selector), 0008 (this docs home +
-PRD graduation policy). Design PRDs are drafted in gitignored `_scratch/` and
+PRD graduation policy), 0009 (`whatwg` host-charset shim — accept the 15 ASCII
+host code points libcurl rejects but WHATWG keeps). Design PRDs are drafted in
+gitignored `_scratch/` and
 graduate to `design/prd/` once accepted and depended upon (ADR 0008).
 
 ## Critical Constraints

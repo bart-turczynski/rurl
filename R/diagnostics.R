@@ -38,6 +38,7 @@
   "non-default-port",
   "invalid-reverse-solidus",
   "control-char-stripped",
+  "host-charset-shimmed",
   "domain-label-too-long",
   "domain-name-too-long",
   "domain-empty-label",
@@ -219,6 +220,20 @@
   }
   diag <- .diag_add(
     diag, live & control_char_stripped, "control-char-stripped"
+  )
+
+  # --- host-charset shim diagnostic (RURL-dxwxeamq, ADR 0009) ----------------
+  # `host-charset-shimmed` fires exactly where Phase 1's shim
+  # (.shim_whatwg_host_charset_vec) accepted a host code point libcurl rejects
+  # but WHATWG keeps (! " $ & ' ( ) * + , ; = ` { }) -- surfacing the accepted
+  # boundary as a FACT (ADR 0006). Always FALSE under rfc3986 / no selector
+  # (that profile inherits libcurl's stricter charset and drops such rows).
+  host_charset_shimmed <- a$host_charset_shimmed
+  if (is.null(host_charset_shimmed)) {
+    host_charset_shimmed <- rep(FALSE, n)
+  }
+  diag <- .diag_add(
+    diag, live & host_charset_shimmed, "host-charset-shimmed"
   )
 
   # --- DNS-length / UTS-46 diagnostics (RURL-vowqpmdg, T5 design lock) -------

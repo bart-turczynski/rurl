@@ -32,6 +32,20 @@
 # (IPv6 literals legitimately contain "[" "]" ":"). See ADR 0004/0007.
 .WHATWG_FORBIDDEN_HOST_CP <- "[\\u0001-\\u001f\\u007f #%/:<>?@\\[\\]\\\\^|]"
 
+# WHATWG host-charset shim code points (RURL-dxwxeamq, ADR 0009). The 15 ASCII
+# code points libcurl rejects in a host ("Bad hostname") that the WHATWG URL
+# Standard keeps verbatim in the host (ada-confirmed): ! " $ & ' ( ) * + , ; = `
+# { }. libcurl's host allowed-set is narrower than WHATWG's; without the shim
+# the whole row is dropped. These are all NON-forbidden (none appears in
+# .WHATWG_FORBIDDEN_HOST_CP) and NON-structural (none delimits userinfo/port/
+# path/query/fragment), so the host span is locatable before substitution.
+# U+0025 "%" is DELIBERATELY EXCLUDED -- it is a forbidden domain code point
+# (WHATWG drops it too), so libcurl rejecting it is correct. An ICU regex class.
+.WHATWG_HOST_CHARSET_SHIM_CP <- paste0(
+  "[\\u0021\\u0022\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
+  "\\u002b\\u002c\\u003b\\u003d\\u0060\\u007b\\u007d]"
+)
+
 # Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts).
 # Only http/https/ftp have a WHATWG-defined default; ftps (rurl's own
 # FTP-over-TLS addition, not a WHATWG special scheme per D2) has none, so a

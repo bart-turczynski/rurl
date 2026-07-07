@@ -1119,6 +1119,16 @@ safe_parse_urls <- function(url,
   raw_host <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$host %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
+  # WHATWG host-charset shim restore (RURL-dxwxeamq, ADR 0009). For rows the
+  # shim sanitized (Phase 1 replaced a curl-rejected-but-WHATWG-valid host code
+  # point with filler so curl could parse the structure), curl's `$host` is a
+  # placeholder; overwrite it with the captured true host BEFORE IP detection
+  # and the host model, so every downstream gate validates the real host. No-op
+  # unless url_standard == "whatwg" (the mask is all-FALSE otherwise).
+  restore <- curl_ok & prep$host_charset_shimmed
+  if (any(restore)) {
+    raw_host[restore] <- prep$shimmed_true_host[restore]
+  }
   # Path is re-derived from the prepared input (not curl's normalized $path) so
   # dot segments survive to path_normalization; see .extract_raw_path_vec().
   curl_path <- vapply(parsed_list, function(p) {
@@ -1225,7 +1235,11 @@ safe_parse_urls <- function(url,
     backslash_rewritten = prep$backslash_rewritten,
     # WHATWG control-char strip (RURL-tyetpjym): same seam, emits
     # `control-char-stripped` only where a tab/LF/CR was actually removed.
-    control_char_stripped = prep$control_char_stripped
+    control_char_stripped = prep$control_char_stripped,
+    # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009): same seam, emits
+    # `host-charset-shimmed` where a curl-rejected-but-WHATWG-valid host code
+    # point was accepted via the shim + true-host restore above.
+    host_charset_shimmed = prep$host_charset_shimmed
   )
   attr(cols, "null_row") <- null_row
   cols
