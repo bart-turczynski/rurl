@@ -88,3 +88,33 @@ test_that("WPT failure divergences are pinned to the documented boundary set", {
   # And every non-diverging runnable WPT row is genuinely rejected (NA clean).
   expect_true(all(is.na(wpt$rurl_whatwg_clean[wpt$diverges == "no"])))
 })
+
+test_that("IPv4-obfuscation divergences pin to the UTS-46 separator set", {
+  fx <- read_vectors()
+  ip <- fx[fx$source == "ip-obfuscation", , drop = FALSE]
+
+  # These are hand-generated arithmetic encodings of a few target IPs
+  # (obfuscation technique from cujanovic/SSRF-Testing + JorianWoltjer/ipobf,
+  # NOT vendored). Oracle is the WHATWG IPv4 parser: octal/hex/dword/short/mixed
+  # forms must canonicalize, overflow/zone-id forms must fail. rurl handles all
+  # of those correctly (validating RURL-cdjnhnvf) EXCEPT the Unicode alternative
+  # separators, which UTS-46 domain-to-ASCII should map to '.' before the IPv4
+  # parse. rurl leaves them a literal reg-name -> a tracked candidate-bug in the
+  # divergence ledger, pinned here as a WATCH list (not an approval).
+  diverging_ids <- ip$id[ip$diverges == "yes"]
+  expect_setequal(
+    diverging_ids,
+    c("ipobf-011", "ipobf-012", "ipobf-013")
+  )
+  # The divergence shape: accepted with warning-no-tld as a literal reg-name
+  # instead of coercing to the canonical dotted-quad.
+  expect_true(all(ip$rurl_whatwg_status[ip$diverges == "yes"] ==
+    "warning-no-tld"))
+  # Non-diverging accept rows must equal the recorded conformant WHATWG
+  # serialization; the failure rows must genuinely reject (NA clean).
+  ok_rows <- ip[ip$diverges == "no" & ip$standard_expectation != "failure", ,
+    drop = FALSE]
+  expect_identical(ok_rows$rurl_whatwg_clean, ok_rows$standard_expectation)
+  fail_rows <- ip[ip$standard_expectation == "failure", , drop = FALSE]
+  expect_true(all(is.na(fail_rows$rurl_whatwg_clean)))
+})
