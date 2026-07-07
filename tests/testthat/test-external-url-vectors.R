@@ -19,6 +19,18 @@
 # recorded output and the divergence set so BOTH a regression (a new must-fail
 # input starts being accepted) AND progress (a tracked divergence gets fixed)
 # force a deliberate, reviewed update here.
+#
+# Part 3a (RURL-moselrwp) adds a DUAL-STANDARD expected-outcome oracle:
+# `rfc3986_expected` + `whatwg_expected` record what each STANDARD requires
+# (clean_url / "failure" / "accept" sentinel), `oracle_ref` cites the RFC 3986
+# section(s) / WHATWG algorithm step(s) it is derived from, and
+# `divergence_class` buckets each row (aligned / spec-divergent /
+# parser-boundary / both-reject / not-runnable). This is orthogonal to
+# `diverges` (which flags rurl vs the row's SOURCE oracle): `divergence_class`
+# is standard-vs-standard.
+# The `aligned` bucket is deliberately un-cited (tiered): where RFC, WHATWG, and
+# rurl (both profiles) all agree, a self-consistency invariant stands in for a
+# hand-derived oracle, so citation effort concentrates on the diverging rows.
 
 fixture_path <- testthat::test_path("fixtures", "external-url-vectors.csv")
 
@@ -38,7 +50,9 @@ test_that("external-url-vectors fixture is well-formed", {
       "input_json", "standard", "standard_expectation",
       "paper_claimed_behavior", "runnable", "rurl_rfc_status",
       "rurl_rfc_clean", "rurl_whatwg_status", "rurl_whatwg_clean",
-      "diverges", "notes")
+      "diverges", "notes",
+      # Part 3a dual-standard expected-outcome oracle (RURL-moselrwp).
+      "rfc3986_expected", "whatwg_expected", "oracle_ref", "divergence_class")
   )
   expect_identical(anyDuplicated(fx$id), 0L)
   expect_true(all(fx$source_class %in% c("A", "B", "C")))
@@ -48,6 +62,106 @@ test_that("external-url-vectors fixture is well-formed", {
   runnable <- fx$runnable == "yes"
   expect_false(anyNA(fx$input[runnable]))
   expect_true(all(is.na(fx$rurl_whatwg_status[!runnable])))
+})
+
+# Documented rurl deviations from the spec oracle (parser boundaries, each
+# backed by an ADR / tracked ticket in oracle_ref). For these rows rurl's
+# behavior is pinned by the per-source characterization tests below and is NOT
+# expected to equal the spec oracle -- so the conformance check skips them.
+oracle_nonconformance_ids <- function() {
+  c(
+    # closed scheme set (ADR 0004) -- specs accept, rurl rejects
+    "ada-007", "ada-012", "ada-013", "ada-014", "ada-018", "ada-019",
+    "ada-021", "ada-023", "yal-008",
+    # reversible Unicode host default (ADR 0002)
+    "ada-006", "yal-005",
+    # readable-path default (RURL-ndrgrwcz)
+    "ada-003", "ada-022",
+    # scheme inference / UTS-46 case fold / IPv6 re-serialization
+    "yal-009", "eq-U8", "ipobf-019", "ipobf-020",
+    # libcurl host allowed-set boundary (RURL-dxwxeamq / ada-008)
+    "ada-008"
+  )
+}
+
+test_that("dual-standard oracle: classes and invariants hold", {
+  fx <- read_vectors()
+
+  # every row carries a class; the classes are the closed set.
+  expect_false(anyNA(fx$divergence_class))
+  expect_true(all(fx$divergence_class %in% c(
+    "aligned", "spec-divergent", "parser-boundary", "both-reject",
+    "not-runnable"
+  )))
+
+  # spec-divergent <=> the two standards' expected outcomes differ (both cited).
+  sd <- fx$divergence_class == "spec-divergent"
+  expect_true(all(fx$rfc3986_expected[sd] != fx$whatwg_expected[sd]))
+  expect_false(anyNA(fx$rfc3986_expected[sd]))
+  expect_false(anyNA(fx$whatwg_expected[sd]))
+  expect_false(anyNA(fx$oracle_ref[sd]))
+
+  # both-reject: both oracles are "failure".
+  br <- fx$divergence_class == "both-reject"
+  expect_true(all(fx$rfc3986_expected[br] == "failure"))
+  expect_true(all(fx$whatwg_expected[br] == "failure"))
+
+  # aligned is the TIERED bucket: no per-row oracle, and rurl must be
+  # self-consistent (both profiles accept and agree on the clean_url) -- that
+  # self-consistency IS the assertion that stands in for a hand-cited oracle.
+  al <- fx$divergence_class == "aligned"
+  expect_true(all(is.na(fx$rfc3986_expected[al])))
+  expect_true(all(is.na(fx$whatwg_expected[al])))
+  expect_true(all(is.na(fx$oracle_ref[al])))
+  expect_identical(fx$rurl_rfc_clean[al], fx$rurl_whatwg_clean[al])
+  expect_false(anyNA(fx$rurl_rfc_clean[al]))
+
+  # not-runnable rows carry no oracle value (source view stays in
+  # standard_expectation).
+  nr <- fx$divergence_class == "not-runnable"
+  expect_true(all(fx$runnable[nr] != "yes"))
+  expect_true(all(is.na(fx$rfc3986_expected[nr])))
+
+  # parser-boundary rows all cite the ADR / ticket that justifies the deviation.
+  pb <- fx$divergence_class == "parser-boundary"
+  expect_false(anyNA(fx$oracle_ref[pb]))
+  expect_setequal(fx$id[pb],
+    setdiff(oracle_nonconformance_ids(), "ada-008"))
+})
+
+test_that("rurl conforms to the spec oracle except at documented boundaries", {
+  fx <- read_vectors()
+  fx <- fx[fx$runnable == "yes", , drop = FALSE]
+  skip_ids <- oracle_nonconformance_ids()
+  chk <- fx[!(fx$id %in% skip_ids), , drop = FALSE]
+
+  # helper: does rurl's (status, clean) match a spec oracle cell?
+  conforms <- function(oracle, status, clean) {
+    ifelse(
+      oracle == "failure", status == "error",
+      # a concrete clean_url oracle: rurl must reproduce it exactly.
+      !is.na(clean) & clean == oracle
+    )
+  }
+
+  # every checked row's oracle is either "failure" or a concrete clean_url
+  # (the "accept" sentinel only appears on skipped boundary rows).
+  expect_false(any(chk$rfc3986_expected == "accept", na.rm = TRUE))
+  expect_false(any(chk$whatwg_expected == "accept", na.rm = TRUE))
+
+  rfc_ok <- conforms(chk$rfc3986_expected, chk$rurl_rfc_status,
+    chk$rurl_rfc_clean)
+  wha_ok <- conforms(chk$whatwg_expected, chk$rurl_whatwg_status,
+    chk$rurl_whatwg_clean)
+  # NA oracle (aligned rows) is covered by the invariant test above; only assert
+  # where an oracle value exists.
+  rfc_ok[is.na(chk$rfc3986_expected)] <- TRUE
+  wha_ok[is.na(chk$whatwg_expected)] <- TRUE
+
+  expect_true(all(rfc_ok),
+    info = paste("RFC oracle mismatch:", toString(chk$id[!rfc_ok])))
+  expect_true(all(wha_ok),
+    info = paste("WHATWG oracle mismatch:", toString(chk$id[!wha_ok])))
 })
 
 test_that("rurl output on external vectors matches recorded characterization", {
