@@ -275,6 +275,24 @@ if (file.exists(fixture)) {
   message("NOTE: conformance fixture not found at ", fixture,
           " -- running curated probes only.")
 }
+
+# (3) External adversarial/conformance vectors imported from third-party suites
+#     (RURL-dbazixkr). Runnable rows only; axis is the coarse source label so
+#     the per-axis summary keeps imported cases separable from curated probes.
+ext_fixture <- file.path("tests", "testthat", "fixtures",
+                         "external-url-vectors.csv")
+if (file.exists(ext_fixture)) {
+  ef <- utils::read.csv(ext_fixture, stringsAsFactors = FALSE,
+                        na.strings = "NA")
+  ef <- ef[!is.na(ef$input) & ef$runnable == "yes", , drop = FALSE]
+  corpus <- rbind(corpus, data.frame(
+    axis = paste0("ext-", ef$source),
+    input = ef$input,
+    source_reference = ef$source_reference,
+    stringsAsFactors = FALSE
+  ))
+}
+
 corpus <- corpus[!duplicated(corpus$input), , drop = FALSE]
 inputs <- corpus$input
 
