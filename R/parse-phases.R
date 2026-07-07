@@ -777,6 +777,40 @@
       is_ip[att] <- curl_canonical[att]
       fatal[att] <- !curl_canonical[att]
     }
+
+    # WHATWG forbidden host/domain code points (RURL-jfuqpwvh). A special-scheme
+    # host is a DOMAIN: WHATWG fails the host parse if domain-to-ASCII produces
+    # a forbidden domain code point, or if domain-to-ASCII itself fails (a
+    # disallowed / ignored-to-empty code point). rurl previously accepted these
+    # as reg-names with warning-no-tld; the whatwg profile now rejects them
+    # (flips the ADR 0004 boundary; governed axis per ADR 0007). Two narrow
+    # signals on the resolved reg-name host (IP literals excluded):
+    #   (B) an ASCII forbidden code point survives to the host (| ^ DEL space %
+    #       and structural bytes) -- a cheap charclass, catches what UTS-46
+    #       leaves intact (or, for DEL, silently drops);
+    #   (A) a NON-ASCII host fails UTS-46 domain-to-ASCII (U+FFFD/U+FFFF
+    #       noncharacters, a soft-hyphen-only label collapsing to empty) -- one
+    #       vectorized punycoder::host_normalize() over just the non-ASCII rows.
+    reg <- !is_ip & !is.na(host) & host != ""
+    if (any(reg)) {
+      bad_cp <- reg &
+        stringi::stri_detect_regex(host, .WHATWG_FORBIDDEN_HOST_CP)
+      bad_cp[is.na(bad_cp)] <- FALSE
+      fatal <- fatal | bad_cp
+
+      nonascii <- reg & !bad_cp &
+        stringi::stri_detect_regex(host, "[^\\u0001-\\u007f]")
+      nonascii[is.na(nonascii)] <- FALSE
+      if (any(nonascii)) {
+        norm <- punycoder::host_normalize(
+          host[nonascii], check_hyphens = FALSE, use_std3 = FALSE,
+          verify_dns_length = FALSE
+        )
+        bad_uts46 <- rep(FALSE, n)
+        bad_uts46[nonascii] <- is.na(norm)
+        fatal <- fatal | bad_uts46
+      }
+    }
   }
 
   list(host = host, is_ip = is_ip, fatal = fatal)

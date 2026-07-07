@@ -15,6 +15,18 @@
   (`NULL`) are unchanged — RFC 3986 has no strip step and requires such bytes to
   be percent-encoded, so they still reject.
 
+- `url_standard = "whatwg"` now **rejects** WHATWG forbidden host/domain code
+  points instead of accepting them as registered names with `warning-no-tld`. A
+  special-scheme host is a domain, and WHATWG fails the host parse when
+  domain-to-ASCII yields a forbidden code point (`|`, `^`, DEL, space, …) or when
+  domain-to-ASCII itself fails (a disallowed code point such as U+FFFD/U+FFFF, or
+  a UTS-46-ignored code point like the U+00AD soft hyphen collapsing a label to
+  empty). These now return `parse_status = "error"` under `"whatwg"`, matching
+  the web-platform-tests failure corpus. `url_standard = "rfc3986"` and the
+  default (`NULL`) are unchanged — RFC 3986 has no forbidden-host-code-point
+  concept, so these stay permissive registered names there. The reversible-host
+  and Punycode helpers are untouched (ADR 0002); this is a separate reject gate.
+
 ### Diagnostics
 
 - New `get_url_diagnostics()` token `control-char-stripped`, emitted under

@@ -22,6 +22,16 @@
 # allowlist.
 .WHATWG_SPECIAL_SCHEMES <- c("http", "https", "ftp")
 
+# WHATWG forbidden host/domain code points (RURL-jfuqpwvh) that can survive to a
+# resolved reg-name host and must fail the host parse under url_standard =
+# "whatwg". An ICU regex character class covering: C0 controls U+0001-U+001F and
+# DEL U+007F, and the printable forbidden bytes space # % / : < > ? @ [ ] \ ^ |.
+# NUL (U+0000) is excluded (an R string cannot hold it); tab/LF/CR are already
+# stripped upstream (.strip_whatwg_control_chars_vec, RURL-tyetpjym). Hyphen and
+# underscore are LEGAL and deliberately absent. Applied only to non-IP hosts
+# (IPv6 literals legitimately contain "[" "]" ":"). See ADR 0004/0007.
+.WHATWG_FORBIDDEN_HOST_CP <- "[\\u0001-\\u001f\\u007f #%/:<>?@\\[\\]\\\\^|]"
+
 # Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts).
 # Only http/https/ftp have a WHATWG-defined default; ftps (rurl's own
 # FTP-over-TLS addition, not a WHATWG special scheme per D2) has none, so a

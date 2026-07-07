@@ -36,8 +36,8 @@
 "wpt-fail-035","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case",NA,"""http://GOO\u00a0\u3000goo.com""","whatwg","failure",NA,"no-relative-resolution",NA,NA,NA,NA,NA,NA
 "wpt-fail-036","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case",NA,"""http://\ufdd0zyx.com""","whatwg","failure",NA,"no-relative-resolution",NA,NA,NA,NA,NA,NA
 "wpt-fail-037","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case",NA,"""http://%ef%b7%90zyx.com""","whatwg","failure",NA,"no-relative-resolution",NA,NA,NA,NA,NA,NA
-"wpt-fail-038","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://�","""https://\ufffd""","whatwg","failure",NA,"yes","warning-no-tld","https://�/","warning-no-tld","https://�/","yes",NA
-"wpt-fail-039","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://%EF%BF%BD","""https://%EF%BF%BD""","whatwg","failure",NA,"yes","warning-no-tld","https://�/","warning-no-tld","https://�/","yes",NA
+"wpt-fail-038","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://�","""https://\ufffd""","whatwg","failure",NA,"yes","warning-no-tld","https://�/","error",NA,"no",NA
+"wpt-fail-039","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://%EF%BF%BD","""https://%EF%BF%BD""","whatwg","failure",NA,"yes","warning-no-tld","https://�/","error",NA,"no",NA
 "wpt-fail-040","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case",NA,"""http://\uff05\uff14\uff11.com""","whatwg","failure",NA,"no-relative-resolution",NA,NA,NA,NA,NA,NA
 "wpt-fail-041","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case",NA,"""http://%ef%bc%85%ef%bc%94%ef%bc%91.com""","whatwg","failure",NA,"no-relative-resolution",NA,NA,NA,NA,NA,NA
 "wpt-fail-042","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case",NA,"""http://\uff05\uff10\uff10.com""","whatwg","failure",NA,"no-relative-resolution",NA,NA,NA,NA,NA,NA
@@ -116,7 +116,7 @@
 "wpt-fail-115","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://a[b/","""http://a[b/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-116","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://a]b/","""http://a]b/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-117","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://a^b","""http://a^b""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
-"wpt-fail-118","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://a|b/","""http://a|b/""","whatwg","failure",NA,"yes","warning-no-tld","http://a|b/","warning-no-tld","http://a|b/","yes",NA
+"wpt-fail-118","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://a|b/","""http://a|b/""","whatwg","failure",NA,"yes","warning-no-tld","http://a|b/","error",NA,"no",NA
 "wpt-fail-119","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ab/","""http://a\u007fb/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-120","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%00st/","""http://ho%00st/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-121","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%01st/","""http://ho%01st/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
@@ -162,8 +162,8 @@
 "wpt-fail-161","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%5Bst/","""http://ho%5Bst/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-162","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%5Cst/","""http://ho%5Cst/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-163","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%5Dst/","""http://ho%5Dst/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
-"wpt-fail-164","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%7Cst/","""http://ho%7Cst/""","whatwg","failure",NA,"yes","warning-no-tld","http://ho|st/","warning-no-tld","http://ho|st/","yes",NA
-"wpt-fail-165","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%7Fst/","""http://ho%7Fst/""","whatwg","failure",NA,"yes","warning-no-tld","http://host/","warning-no-tld","http://host/","yes",NA
+"wpt-fail-164","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%7Cst/","""http://ho%7Cst/""","whatwg","failure",NA,"yes","warning-no-tld","http://ho|st/","error",NA,"no",NA
+"wpt-fail-165","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://ho%7Fst/","""http://ho%7Fst/""","whatwg","failure",NA,"yes","warning-no-tld","http://host/","error",NA,"no",NA
 "wpt-fail-166","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","ftp://example.com%80/","""ftp://example.com%80/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-167","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","ftp://example.com%A0/","""ftp://example.com%A0/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-168","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://example.com%80/","""https://example.com%80/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
@@ -182,7 +182,7 @@
 "wpt-fail-181","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","file://%43|","""file://%43|""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-182","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","file://C%7C","""file://C%7C""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-183","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","file://%43%7C/","""file://%43%7C/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
-"wpt-fail-184","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://%43%7C/","""https://%43%7C/""","whatwg","failure",NA,"yes","warning-no-tld","https://c|/","warning-no-tld","https://c|/","yes",NA
+"wpt-fail-184","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://%43%7C/","""https://%43%7C/""","whatwg","failure",NA,"yes","warning-no-tld","https://c|/","error",NA,"no",NA
 "wpt-fail-185","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","asdf://%43|/","""asdf://%43|/""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-186","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","\\\.\Y:","""\\\\\\.\\Y:""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-187","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","\\\.\y:","""\\\\\\.\\y:""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
@@ -240,10 +240,10 @@
 "wpt-fail-239","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://foo.0XFfFfFfFfFfFfFfFfFfAcE123","""http://foo.0XFfFfFfFfFfFfFfFfFfAcE123""","whatwg","failure",NA,"yes","warning-invalid-tld","http://foo.0xfffffffffffffffffface123/","error",NA,"no",NA
 "wpt-fail-240","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","http://💩.123/","""http://\ud83d\udca9.123/""","whatwg","failure",NA,"yes","warning-invalid-tld","http://💩.123/","error",NA,"no",NA
 "wpt-fail-241","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case",NA,"""https://\u0000y""","whatwg","failure",NA,"no-nul-byte-r-cannot-represent",NA,NA,NA,NA,NA,NA
-"wpt-fail-242","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://￿y","""https://\uffffy""","whatwg","failure",NA,"yes","warning-no-tld","https://￿y/","warning-no-tld","https://￿y/","yes",NA
+"wpt-fail-242","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://￿y","""https://\uffffy""","whatwg","failure",NA,"yes","warning-no-tld","https://￿y/","error",NA,"no",NA
 "wpt-fail-243","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","","""""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
-"wpt-fail-244","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://­/","""https://\u00ad/""","whatwg","failure",NA,"yes","warning-no-tld","https://­/","warning-no-tld","https://­/","yes",NA
-"wpt-fail-245","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://%C2%AD/","""https://%C2%AD/""","whatwg","failure",NA,"yes","warning-no-tld","https://­/","warning-no-tld","https://­/","yes",NA
+"wpt-fail-244","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://­/","""https://\u00ad/""","whatwg","failure",NA,"yes","warning-no-tld","https://­/","error",NA,"no",NA
+"wpt-fail-245","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","https://%C2%AD/","""https://%C2%AD/""","whatwg","failure",NA,"yes","warning-no-tld","https://­/","error",NA,"no",NA
 "wpt-fail-246","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","data://:443","""data://:443""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-247","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","data://test:test","""data://test:test""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
 "wpt-fail-248","A","wpt-urltestdata","WPT url/resources/urltestdata.json (BSD-3-Clause) failure case","data://[:1]","""data://[:1]""","whatwg","failure",NA,"yes","error",NA,"error",NA,"no",NA
