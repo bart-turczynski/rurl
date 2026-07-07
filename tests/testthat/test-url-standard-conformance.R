@@ -165,3 +165,39 @@ test_that("get_parse_status/domain/tld/subdomain honor the standard (AC #8)", {
     get_parse_status(u, url_standard = "rfc3986"), "warning-invalid-tld"
   )
 })
+
+# --- Dual-standard divergence_class label (Part 3a, RURL-moselrwp) -----------
+# The golden table already carries a per-standard oracle (one row per
+# input x url_standard). `divergence_class` labels each row so both oracle
+# fixtures (this one and external-url-vectors.csv) are queryable the same way.
+
+test_that("conformance divergence_class is consistent with the paired oracle", {
+  path <- testthat::test_path("fixtures", "url-standard-conformance.csv")
+  fx <- utils::read.csv(
+    path, stringsAsFactors = FALSE, colClasses = "character", na.strings = "NA"
+  )
+  expect_true("divergence_class" %in% names(fx))
+  expect_false(anyNA(fx$divergence_class))
+  expect_true(all(fx$divergence_class %in% c(
+    "aligned", "spec-divergent", "whatwg-only", "rfc3986-only"
+  )))
+
+  # For every input, the class must agree with the actual paired expectations:
+  # spec-divergent iff the rfc3986 and whatwg rows disagree; aligned iff they
+  # agree; *-only iff the counterpart standard is absent.
+  for (inp in unique(fx$input)) {
+    rr <- fx$expected_clean_url[fx$input == inp & fx$url_standard == "rfc3986"]
+    wr <- fx$expected_clean_url[fx$input == inp & fx$url_standard == "whatwg"]
+    cls <- unique(fx$divergence_class[fx$input == inp])
+    expect_length(cls, 1L)
+    if (length(rr) == 0L) {
+      expect_identical(cls, "whatwg-only")
+    } else if (length(wr) == 0L) {
+      expect_identical(cls, "rfc3986-only")
+    } else if (identical(rr[1], wr[1])) {
+      expect_identical(cls, "aligned")
+    } else {
+      expect_identical(cls, "spec-divergent")
+    }
+  }
+})
