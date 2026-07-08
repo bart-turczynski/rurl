@@ -330,54 +330,67 @@
   no_op
 }
 
-# WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009). libcurl's host allowed-set
-# is NARROWER than WHATWG's: it rejects 15 ASCII code points
-# (.WHATWG_HOST_CHARSET_SHIM_CP: ! " $ & ' ( ) * + , ; = ` { }) that WHATWG
-# keeps verbatim in the host. Because curl_parse_url() then errors, the WHOLE
-# row is dropped -- not just the host. This shim lets curl parse the STRUCTURE
-# of such rows by replacing each gap code point in the HOST span 1:1 with a
-# benign filler letter ("a"). A 1:1 letter swap is length- and delimiter-
-# preserving, so curl returns byte-identical scheme/userinfo/port/path/query/
-# fragment; only its `$host` is a placeholder. The caller (._parse_stage_a_vec)
-# RESTORES the true host (returned here as `shimmed_true_host`) onto curl's
-# `$host` before the host model runs, so every downstream gate -- including the
-# WHATWG forbidden-code-point reject (.WHATWG_FORBIDDEN_HOST_CP), which passes
-# all 15 (they are not forbidden) and still rejects | ^ % -- validates the REAL
-# host. The shim widens only curl's charset veto; it bypasses no rurl host
-# validation (ADR 0004) and leaves the reversible-host/punycode helpers
-# untouched (ADR 0002).
+# Decode percent-triplets in a WHATWG host just far enough for the host model to
+# see the real code points after curl has parsed the URL's structure. A
+# malformed or NUL-containing sequence maps to a C0 sentinel so the WHATWG
+# forbidden-host gate rejects the row; no successful output depends on that
+# placeholder.
+.whatwg_percent_decode_host <- function(host) {
+  if (is.na(host) || !nzchar(host) ||
+      !grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)) {
+    return(host)
+  }
+  tryCatch(utils::URLdecode(host), error = function(e) "\u0001")
+}
+
+# Host shim (RURL-dxwxeamq, ADR 0009; extended by RURL-rgjpcbuk). libcurl's
+# host handling is too eager for selector mode in two ways:
 #
-# SCOPED TO SPECIAL SCHEMES (slice 1, ADR 0009 open-question #4): only rows
-# whose scheme is in .WHATWG_SPECIAL_SCHEMES (http/https/ftp/file) -- the
-# scheme-less host-like inputs have already had "http://" fabricated by this
-# point, so they are in scope. ftps and non-special/opaque hosts (which WHATWG
-# percent-encodes rather than keeps literal) are a documented follow-up. Runs
-# ONLY under url_standard == "whatwg"; a byte-for-byte no-op otherwise (RFC
-# 3986 keeps libcurl's stricter charset). Recognition of literal bytes only --
-# a percent-encoded form (`%21`) is inert text, never a gap byte. Returns `url`
-# (host-sanitized for shimmed rows), a `host_charset_shimmed` mask (rows a gap
-# byte was actually replaced in -> drives the `host-charset-shimmed`
-# diagnostic, ADR 0006), and `shimmed_true_host` (the captured pre-shim host,
-# NA otherwise).
+# * WHATWG accepts 15 literal ASCII code points that libcurl rejects in a host
+#   ("Bad hostname"). The shim replaces those bytes 1:1 with filler so curl can
+#   parse structure, then restores the true host before the host model runs.
+# * libcurl percent-decodes host triplets before validation. That rejects the
+#   encoded spelling of the same selector-valid gap bytes, such as `%60`. The
+#   shim masks those host percent-triplets as three filler letters (`aaa`), then
+#   restores the profile-correct host spelling: WHATWG percent-decoded, RFC
+#   unreserved-decoded while preserving the encoded gap triplet.
+#
+# The replacement is length- and delimiter-preserving, so curl returns
+# byte-identical scheme/userinfo/port/path/query/fragment; only `$host` is a
+# placeholder. The caller restores `shimmed_true_host` before IP detection and
+# forbidden-code-point checks, so the shim widens no validation gate.
+#
+# Literal host-character widening remains WHATWG-only and special-scheme-scoped
+# (http/https/ftp/file). RFC 3986 only uses the percent-triplet path, and only
+# for authority-based supported schemes; literal curl-rejected host bytes keep
+# their historical RFC/NULL rejection behavior.
 .shim_whatwg_host_charset_vec <- function(url, url_standard) {
   n <- length(url)
   no_op <- list(
     url = url,
+    restore_host_shimmed = rep(FALSE, n),
     host_charset_shimmed = rep(FALSE, n),
     shimmed_true_host = rep(NA_character_, n)
   )
-  if (!identical(url_standard, "whatwg")) {
+  if (!identical(url_standard, "whatwg") &&
+      !identical(url_standard, "rfc3986")) {
     return(no_op)
   }
 
-  # Split "scheme://" authority "rest". Gap chars are non-structural, so the
-  # authority boundary (first /?#) is safe to locate before any substitution.
+  # Split "scheme://" authority "rest". Literal gap chars and percent-triplets
+  # are non-structural, so the authority boundary (first /?#) is safe to locate
+  # before any substitution.
   m <- stringi::stri_match_first_regex(
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):(//)([^/?#]*)(.*)$"
   )
   scheme_lower <- stringi::stri_trans_tolower(m[, 2L])
   authority <- m[, 4L]
-  eligible <- !is.na(authority) & scheme_lower %in% .WHATWG_SPECIAL_SCHEMES
+  authority_schemes <- if (identical(url_standard, "whatwg")) {
+    .WHATWG_SPECIAL_SCHEMES
+  } else {
+    setdiff(.SUPPORTED_SCHEMES, "file")
+  }
+  eligible <- !is.na(authority) & scheme_lower %in% authority_schemes
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
     return(no_op)
@@ -394,17 +407,58 @@
     stringi::stri_replace_first_regex(after_ui, ":[^:]*$", "")
   )
 
-  has_gap <- eligible &
+  has_pct <- grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)
+  has_pct[is.na(has_pct)] <- FALSE
+  invalid_pct <- grepl("%(?![0-9A-Fa-f]{2})", host, perl = TRUE)
+  invalid_pct[is.na(invalid_pct)] <- FALSE
+
+  model_host <- host
+  pct_ok <- eligible & has_pct & !invalid_pct
+  pct_decoded_host <- host
+  if (any(pct_ok)) {
+    pct_decoded_host[pct_ok] <- vapply(
+      host[pct_ok], .whatwg_percent_decode_host, character(1),
+      USE.NAMES = FALSE
+    )
+    if (identical(url_standard, "whatwg")) {
+      model_host[pct_ok] <- pct_decoded_host[pct_ok]
+    } else {
+      model_host[pct_ok] <- vapply(
+        host[pct_ok], .rfc_unreserved_normalize, character(1),
+        USE.NAMES = FALSE
+      )
+    }
+  }
+
+  literal_gap <- eligible &
     stringi::stri_detect_regex(host, .WHATWG_HOST_CHARSET_SHIM_CP)
-  has_gap[is.na(has_gap)] <- FALSE
-  if (!any(has_gap)) {
+  literal_gap[is.na(literal_gap)] <- FALSE
+  decoded_gap <- eligible &
+    stringi::stri_detect_regex(model_host, .WHATWG_HOST_CHARSET_SHIM_CP)
+  decoded_gap[is.na(decoded_gap)] <- FALSE
+  pct_gap <- eligible & pct_ok &
+    stringi::stri_detect_regex(pct_decoded_host, .WHATWG_HOST_CHARSET_SHIM_CP)
+  pct_gap[is.na(pct_gap)] <- FALSE
+
+  pct_mask <- if (identical(url_standard, "whatwg")) {
+    pct_ok & decoded_gap
+  } else {
+    pct_gap & !literal_gap
+  }
+  literal_mask <- identical(url_standard, "whatwg") & literal_gap
+  restore <- eligible & (pct_mask | literal_mask)
+  restore[is.na(restore)] <- FALSE
+  if (!any(restore)) {
     return(no_op)
   }
 
-  # Filler swap is 1:1, so lengths are preserved; rebuild the authority from the
-  # (unchanged-length) userinfo prefix + filled host + port suffix.
-  filled_host <- stringi::stri_replace_all_regex(
-    host, .WHATWG_HOST_CHARSET_SHIM_CP, "a"
+  # Filler swaps preserve length: `%HH` -> `aaa`, literal gaps -> `a`.
+  filled_host <- host
+  filled_host[pct_mask] <- gsub(
+    "%[0-9A-Fa-f]{2}", "aaa", filled_host[pct_mask], perl = TRUE
+  )
+  filled_host[literal_mask] <- stringi::stri_replace_all_regex(
+    filled_host[literal_mask], .WHATWG_HOST_CHARSET_SHIM_CP, "a"
   )
   ui_prefix <- stringi::stri_sub(
     authority, 1L, stringi::stri_length(authority) -
@@ -414,16 +468,17 @@
   new_authority <- paste0(ui_prefix, filled_host, port_suffix)
 
   url_out <- url
-  url_out[has_gap] <- paste0(
-    m[has_gap, 2L], ":", m[has_gap, 3L], new_authority[has_gap],
-    m[has_gap, 5L]
+  url_out[restore] <- paste0(
+    m[restore, 2L], ":", m[restore, 3L], new_authority[restore],
+    m[restore, 5L]
   )
   true_host <- rep(NA_character_, n)
-  true_host[has_gap] <- host[has_gap]
+  true_host[restore] <- model_host[restore]
 
   list(
     url = url_out,
-    host_charset_shimmed = has_gap,
+    restore_host_shimmed = restore,
+    host_charset_shimmed = identical(url_standard, "whatwg") & decoded_gap,
     shimmed_true_host = true_host
   )
 }
@@ -679,7 +734,7 @@
   at <- .encode_excess_authority_at_vec(url_to_parse, url_standard)
   url_to_parse <- at$url
 
-  # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009) runs LAST -- after scheme
+  # Host shim (RURL-dxwxeamq / RURL-rgjpcbuk) runs LAST -- after scheme
   # fabrication and authority userinfo repair, so scheme-less host-like inputs
   # (now "http://..") are in scope and repeated "@" no longer blocks curl from
   # parsing an otherwise valid host.
@@ -705,11 +760,11 @@
     # WHATWG control-char strip (RURL-tyetpjym): TRUE where a tab/LF/CR was
     # removed, consumed by the diagnostics seam to emit `control-char-stripped`.
     control_char_stripped = cc$control_char_stripped,
-    # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009): TRUE where a
-    # libcurl-rejected-but-WHATWG-valid host code point was replaced with a
-    # filler so curl could parse the structure; `shimmed_true_host` carries the
-    # captured pre-shim host that ._parse_stage_a_vec() restores onto curl's
-    # `$host`. Drives the `host-charset-shimmed` diagnostic.
+    # Host shim: TRUE where curl saw filler bytes in the host and Stage A must
+    # restore `shimmed_true_host`.
+    restore_host_shimmed = shim$restore_host_shimmed,
+    # WHATWG host-charset shim diagnostic: TRUE where a libcurl-rejected but
+    # WHATWG-valid host code point was accepted via filler substitution.
     host_charset_shimmed = shim$host_charset_shimmed,
     shimmed_true_host = shim$shimmed_true_host,
     rfc3986_path_rootless = rfc_rootless$is_path_rootless,
