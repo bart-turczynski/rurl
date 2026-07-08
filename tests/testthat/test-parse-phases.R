@@ -56,17 +56,17 @@ test_that(".extract_raw_components takes the raw query verbatim", {
   expect_equal(raw$query, "a=1&b=2&flag")
 })
 
-test_that(".extract_raw_path_vec preserves dot segments and uppercases hex", {
+test_that(".extract_raw_path_vec preserves dot segments and percent case", {
   # Raw path comes from the prepared input, not curl's normalized $path, so RFC
   # 3986 dot segments (and encoded %2e forms) survive to path_normalization;
-  # only percent-hex case is replayed from libcurl (section 6.2.2.1).
+  # percent-triplet case is preserved for the later presentation phase.
   ext <- function(prepared) {
     curl_path <- rurl:::.parse_with_curl(prepared)$path
     rurl:::.extract_raw_path_vec(prepared, curl_path)
   }
   expect_equal(ext("http://ex.com/a/../b"), "/a/../b")
-  expect_equal(ext("http://ex.com/a/%2e%2e/b"), "/a/%2E%2E/b")
-  expect_equal(ext("http://ex.com/a%2fb"), "/a%2Fb")
+  expect_equal(ext("http://ex.com/a/%2e%2e/b"), "/a/%2e%2e/b")
+  expect_equal(ext("http://ex.com/a%2fb"), "/a%2fb")
   expect_equal(ext("http://ex.com/a//b"), "/a//b")
   # Empty-authority special schemes are reinterpreted by curl as host-bearing
   # URLs. Keep curl's coherent path so the promoted host is not duplicated.

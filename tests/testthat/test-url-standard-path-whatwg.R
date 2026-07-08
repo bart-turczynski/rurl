@@ -1,10 +1,9 @@
 # WHATWG path profile: preserve unreserved + encoded-dot recognizer
 # (RURL-bbmuehsx, epic RURL-eqzkkohm; PRD §6.1). Under
 # `url_standard = "whatwg"` rurl NEVER decodes percent-encoded bytes (reserved
-# or unreserved) -- it only canonicalizes percent-triplet hex case -- and
-# resolves dot segments via a new encoded-dot recognizer that treats
-# "."/"%2e"/"%2E" (and their double-dot combinations) as dot segments without
-# a general path decode.
+# or unreserved), preserves percent-triplet spelling, and resolves dot segments
+# via an encoded-dot recognizer that treats "."/"%2e"/"%2E" (and their
+# double-dot combinations) as dot segments without a general path decode.
 
 eq <- function(a, b, ...) {
   identical(get_clean_url(a, ...), get_clean_url(b, ...))
@@ -17,7 +16,7 @@ test_that("get_path matches the whatwg behavior matrix", {
     c("/a/../b/./c", "/b/c"),
     c("/%2e%2e/a", "/a"),
     c("/%41%42", "/%41%42"),
-    c("/%7euser", "/%7Euser"),
+    c("/%7euser", "/%7euser"),
     c("/%20foo", "/%20foo"),
     c("/caf%C3%A9", "/caf%C3%A9"),
     c("/a%2Fb", "/a%2Fb"),
@@ -69,17 +68,17 @@ test_that("encoded-dot forms resolve like their literal counterparts", {
 
 test_that("a partial encoded-dot inside a larger segment is left as data", {
   expect_identical(get_path("http://ex.com/%2eab", url_standard = "whatwg"),
-    "/%2Eab")
+    "/%2eab")
   expect_identical(get_path("http://ex.com/ab%2e", url_standard = "whatwg"),
-    "/ab%2E")
+    "/ab%2e")
 })
 
-test_that("mixed hex case is canonicalized to uppercase", {
+test_that("mixed hex case is preserved", {
   expect_identical(
     get_path("http://ex.com/%41%62", url_standard = "whatwg"), "/%41%62"
   )
   expect_identical(
-    get_path("http://ex.com/a%2fb", url_standard = "whatwg"), "/a%2Fb"
+    get_path("http://ex.com/a%2fb", url_standard = "whatwg"), "/a%2fb"
   )
 })
 

@@ -107,7 +107,9 @@ also lowercases the path, which neither standard sanctions). Added as the
 last argument so existing positional calls keep their meaning; always
 pass it by name. Under \code{"whatwg"} the selector additionally recognizes a
 literal backslash as a path separator for WHATWG-special schemes
-(\code{http}/\code{https}/\code{ftp}) and elides a default port under \code{port_handling = "keep"}; see \code{\link{resolve_url}} for \code{url_standard}-governed
+(\code{http}/\code{https}/\code{ftp}) and nulls default ports in parse output; use
+\code{port_handling = "strip_default"} for spec-style clean URL port rendering.
+See \code{\link{resolve_url}} for \code{url_standard}-governed
 reference resolution. The selector does \strong{not} govern whether
 \code{port_handling} may be set (it is a standalone editorial knob), nor does it
 govern \code{path_encoding} (an orthogonal path-presentation knob that layers

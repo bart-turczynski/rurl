@@ -33,17 +33,16 @@ is genuine: **the spec output cannot be reached by any knob.**
 
 | Metric | Result |
 |---|---|
-| WHATWG — success **accepted** | 145/176 (82%) |
-| WHATWG — success **full-component parity** | **120/176 (68%)** |
+| WHATWG — success **accepted** | 173/176 (98%) |
+| WHATWG — success **full-component parity** | **173/176 (98%)** |
 | WHATWG — failure **correctly rejected** | 202/202 (100%) |
-| WHATWG — overall acceptance conformance | 347/378 (92%) |
+| WHATWG — overall acceptance conformance | 375/378 (99%) |
 | RFC 3986 — probes passed | 19/19 (100%) |
 
 rurl **never accepts a URL WHATWG rejects** among these 202 failure cases
-(100%). Every WHATWG shortfall is either **over-strict** (rejects/normalizes
-something the spec accepts) or a **serialization** difference — not a dangerous
-over-acceptance. The RFC probe set is now fully conformant for the covered
-grammar and normalization cases.
+(100%). The remaining WHATWG shortfall is **over-strictness**: three WPT-valid
+success rows are still rejected before component comparison. The RFC probe set
+is now fully conformant for the covered grammar and normalization cases.
 
 ## Where rurl falls short of the standard
 
@@ -53,23 +52,26 @@ rurl(rfc3986) now accepts reg-names containing the RFC 3986 §3.2.2
 (case folding, unreserved decode, `%2f`→`%2F` reserved-preserve, dot-segment
 resolution).
 
-### WHATWG — three buckets
-Component non-conformances among accepted cases: **path 22, port 3**;
-plus **31 over-strict rejections** (28 of them `file:`).
+### WHATWG — remaining buckets
+Component non-conformances among accepted cases: **0**; plus **3 over-strict
+rejections**. Query and fragment are now scored in the full-component metric and
+have no accepted-case mismatches.
 
-1. **`file:` scheme (28 rejects + 5 path rows).** rurl rejects `file:` URLs
-   WHATWG accepts — drive letters (`file:C|/m/`, `file:///Y:`), bare/empty
-   (`file:`, `file:.`, `file:?q=v`, `file:#frag`), backslash (`file:\\//`), and
-   host+drive (`file://example.net/C:/`, `file://[1::8]/C:/`) — and mis-resolves
-   several `file:` paths. Biggest single gap.
-2. **Default-port elision (systematic).** `http://foo:80/` keeps `:80`; WHATWG
-   nulls the default port (`.port === ""`). Every default-port URL diverges.
-3. **Path percent-encoding (22 rows), unreachable by any knob.**
-   `path_encoding="encode"` (a) over-encodes characters *outside* WHATWG's path
-   encode-set (`|`→`%7C`, `@`→`%40`, `(`→`%28`, `:`→`%3A`); (b) double-encodes
-   `%` (`foo%`→`/foo%25`, `%2`→`%252`); (c) decodes unreserved (`%41%7a`→`Az`,
-   `%2E`→`.`); (d) uppercases hex (`%3a`→`%3A`, `RURL-dkaycxvp`); (e) drops/breaks
-   on null and invalid-UTF-8 bytes (`%00%51`→dropped, `foo\t%91`→literal `NA`).
+1. **Over-strict rejected path/control rows.** Three WPT-valid success rows
+   still reject before component comparison; accepted success rows now have no
+   scheme, host, port, path, query, or fragment mismatches.
+2. **Default-port elision closed.** Under `url_standard = "whatwg"`, default
+   ports now serialize as absent in the parse result (`http://foo:80/` returns
+   `port = NA`, matching WHATWG's empty `.port`).
+3. **Path percent-encoding closed.** Under
+   `url_standard="whatwg", path_encoding="encode"`, rurl now uses the WHATWG
+   path encode set, preserves existing `%` spellings and hex case, avoids
+   double-encoding malformed percent runs, and percent-encodes literal Unicode
+   as UTF-8 bytes.
+4. **Query/fragment serialization closed.** The WHATWG profile now serializes
+   accepted query and fragment components with their component-specific encode
+   sets, and the harness scores WPT `search`/`hash` alongside the existing
+   scheme/host/port/path columns.
 
 ## Files
 

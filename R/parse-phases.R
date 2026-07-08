@@ -620,6 +620,72 @@
   )
 }
 
+# WHATWG path/query/fragment curl fallback. libcurl rejects some WPT-valid
+# bytes outside the authority (for example raw DEL, non-ASCII fragment bytes,
+# and C0 controls other than tab/LF/CR), while WHATWG serializes those
+# component bytes with the path/query/fragment percent-encode sets. This helper
+# prepares a curl-safe spelling of ONLY the post-authority components; Stage A
+# uses it as a fallback after the original curl parse fails, so already-accepted
+# readable paths keep their historical raw spelling under path_encoding="keep".
+.sanitize_whatwg_pqf_for_curl_vec <- function(url, url_standard) {
+  if (!identical(url_standard, "whatwg")) {
+    return(url)
+  }
+  vapply(url, .sanitize_whatwg_pqf_for_curl_one, character(1),
+    USE.NAMES = FALSE
+  )
+}
+
+.sanitize_whatwg_pqf_for_curl_one <- function(url) {
+  if (is.na(url) || !nzchar(url)) {
+    return(url)
+  }
+  m <- stringi::stri_match_first_regex(
+    url, "^([a-zA-Z][a-zA-Z0-9+.-]*://[^/?#]*)(.*)$"
+  )
+  if (is.na(m[1L, 1L])) {
+    return(url)
+  }
+
+  prefix <- m[1L, 2L]
+  rest <- m[1L, 3L]
+  scheme <- sub(":.*$", "", prefix)
+
+  hash <- regexpr("#", rest, fixed = TRUE)[1L]
+  qmark <- regexpr("?", rest, fixed = TRUE)[1L]
+  has_query <- qmark > 0L && (hash < 0L || qmark < hash)
+  has_fragment <- hash > 0L
+
+  path_end <- nchar(rest)
+  if (has_query) {
+    path_end <- min(path_end, qmark - 1L)
+  }
+  if (has_fragment) {
+    path_end <- min(path_end, hash - 1L)
+  }
+  path <- if (path_end > 0L) substr(rest, 1L, path_end) else ""
+
+  query <- NA_character_
+  if (has_query) {
+    query_end <- if (has_fragment) hash - 1L else nchar(rest)
+    query <- substr(rest, qmark + 1L, query_end)
+  }
+
+  fragment <- NA_character_
+  if (has_fragment) {
+    fragment <- substr(rest, hash + 1L, nchar(rest))
+  }
+
+  out <- paste0(prefix, .whatwg_path_percent_encode(path))
+  if (has_query) {
+    out <- paste0(out, "?", .whatwg_query_percent_encode(query, scheme))
+  }
+  if (has_fragment) {
+    out <- paste0(out, "#", .whatwg_fragment_percent_encode(fragment))
+  }
+  out
+}
+
 # RFC 3986 scheme + path-rootless support for special schemes without `//`
 # (RURL-pwsacxvo). In RFC 3986 section 3, an authority is present only when the
 # scheme-specific part starts with a literal `//`; otherwise `http:example.com`
@@ -699,7 +765,7 @@
 
   no_op$is_path_rootless[eligible] <- TRUE
   no_op$scheme[eligible] <- scheme[eligible]
-  no_op$path[eligible] <- .uppercase_percent_hex(parts[, "path"])
+  no_op$path[eligible] <- parts[, "path"]
   no_op$query[eligible] <- .blank_to_na(parts[, "query"])
   no_op$fragment[eligible] <- .blank_to_na(parts[, "fragment"])
   no_op
@@ -848,7 +914,7 @@
 
   out$ok[ok] <- TRUE
   out$host[ok] <- host
-  out$path[ok] <- .uppercase_percent_hex(path)
+  out$path[ok] <- path
   out$query[ok] <- .blank_to_na(parts[, "query"])
   out$fragment[ok] <- .blank_to_na(parts[, "fragment"])
   out
@@ -1034,9 +1100,13 @@
   # "@" no longer blocks curl from parsing an otherwise valid host.
   shim <- .shim_whatwg_host_charset_vec(url_to_parse, url_standard)
   url_to_parse <- shim$url
+  whatwg_pqf_url <- .sanitize_whatwg_pqf_for_curl_vec(
+    url_to_parse, url_standard
+  )
 
   list(
     url_to_parse = url_to_parse,
+    whatwg_pqf_url = whatwg_pqf_url,
     looks_like_protocol = looks_like_protocol,
     original_has_allowed_scheme = original_has_allowed_scheme,
     is_scheme_relative = is_scheme_relative,
@@ -1109,11 +1179,10 @@
 }
 
 # Uppercase the two hex digits of every %XX percent-triplet, leaving the rest of
-# the string untouched (`%2f` -> `%2F`). This reproduces the one path
-# normalization rurl WANTS to keep from libcurl's `$path` (RFC 3986 section
-# 6.2.2.1 case canonicalization, so `%2f`/`%2F` compare equal in canonical_join)
-# on a raw path extracted from the input. Malformed `%` (not followed by two hex
-# digits) is left as-is. `\U\1` (perl) uppercases just the captured pair.
+# the string untouched (`%2f` -> `%2F`). This keeps the historical no-selector
+# `path_encoding = "keep"` behavior and the RFC 3986 section 6.2.2.1 case
+# canonicalization path. Malformed `%` (not followed by two hex digits) is left
+# as-is. `\U\1` (perl) uppercases just the captured pair.
 .uppercase_percent_hex <- function(x) {
   na <- is.na(x)
   if (all(na)) {
@@ -1125,15 +1194,13 @@
 
 # Recover the raw request path from the prepared URL string (the exact bytes
 # curl was handed), rather than `parsed_curl$path`. libcurl's `$path` applies
-# two normalizations even under `decode = FALSE`: it uppercases percent-hex
-# (wanted; see .uppercase_percent_hex) AND it resolves RFC 3986 dot segments,
-# INCLUDING percent-encoded ones (`/a/%2e%2e/b` -> `/b`). The latter is
-# unwanted: it makes `path_normalization = "none"` non-lossless and silently
-# collapses encoded-dot paths some servers treat as distinct. Extracting from
-# the input lets rurl own dot-segment resolution (`._remove_dot_segments`,
-# literal `.`/`..` only, per RFC 3986 section 5.2.4 -- an encoded `%2e` is NOT a
-# dot segment), gated by `path_normalization`. The one libcurl normalization
-# rurl replays is hex-case.
+# two normalizations even under `decode = FALSE`: it uppercases percent-hex and
+# resolves RFC 3986 dot segments, INCLUDING percent-encoded ones
+# (`/a/%2e%2e/b` -> `/b`). Both are profile/presentation decisions, so raw
+# extraction stays byte-faithful and later phases apply the selected rules.
+# Extracting from the input lets rurl own dot-segment resolution
+# (`._remove_dot_segments`, literal `.`/`..` only, per RFC 3986 section 5.2.4 --
+# an encoded `%2e` is NOT a dot segment), gated by `path_normalization`.
 #
 # Extraction (every parseable prepared row carries an explicit `scheme://`
 # authority -- opaque/unsupported schemes are rejected upstream): strip the
@@ -1172,7 +1239,7 @@
     )
     raw[has_path] <- stringi::stri_sub(bp, start, end)
   }
-  out[ok] <- .uppercase_percent_hex(raw)
+  out[ok] <- raw
   out
 }
 
@@ -1214,15 +1281,17 @@
   #      default). Profile-internal; never a public argument.
   #   2. path PRESENTATION (`path_encoding`) -- the public keep/encode/decode
   #      readable-vs-browser rendering, which LAYERS on any identity mode.
-  # The presentation `decode`/`encode` full-decode runs FIRST (as it always
-  # has), then the identity mode; because a full decode leaves no percent
-  # triplets, the identity branches are no-ops when presentation already
-  # decoded, so the two axes compose without special-casing.
+  # Non-WHATWG presentation `decode`/`encode` full-decodes FIRST (as it always
+  # has), then the identity mode. WHATWG `encode` is deliberately different:
+  # the standard's path serializer preserves existing percent spellings, so it
+  # must not full-decode before encoding.
+  whatwg_encode <- path_encoding == "encode" &&
+    identical(path_identity, ".whatwg_preserve")
 
   # Presentation: decode path (before normalization/index handling) when the
   # public knob requests decode OR encode (encode decodes first, re-encodes
   # last).
-  if (path_encoding %in% c("decode", "encode")) {
+  if (path_encoding %in% c("decode", "encode") && !whatwg_encode) {
     mask <- !is.na(path_work)
     if (any(mask)) {
       decoded <- tryCatch(
@@ -1257,9 +1326,9 @@
         USE.NAMES = FALSE
       )
     }
-  } else if (path_identity == ".whatwg_preserve") {
-    # url_standard = "whatwg" (RURL-bbmuehsx, PRD S6.1): never decode -- only
-    # canonicalize percent-triplet hex case. Dot-segment resolution below uses
+  } else if (path_identity == ".whatwg_preserve" && !whatwg_encode) {
+    # url_standard = "whatwg" (RURL-bbmuehsx, PRD S6.1): never decode or
+    # canonicalize existing percent-triplets. Dot-segment resolution below uses
     # the encoded-dot-aware remover, so encoded dot segments (%2e/%2e%2e) still
     # resolve without a general decode.
     mask <- !is.na(path_work) & stringi::stri_detect_fixed(path_work, "%")
@@ -1268,6 +1337,14 @@
         path_work[mask], .whatwg_preserve_normalize, character(1),
         USE.NAMES = FALSE
       )
+    }
+  } else if (path_identity == "none" && path_encoding == "keep") {
+    # Preserve the historical no-selector `keep` contract after Stage A became
+    # byte-faithful: percent-triplet hex case is canonicalized here instead of
+    # during raw extraction.
+    mask <- !is.na(path_work) & stringi::stri_detect_fixed(path_work, "%")
+    if (any(mask)) {
+      path_work[mask] <- .uppercase_percent_hex(path_work[mask])
     }
   }
 
@@ -1328,7 +1405,15 @@
   }
 
   # Path percent-encoding (after normalization/index logic).
-  if (path_encoding == "encode") {
+  if (whatwg_encode) {
+    mask <- !is.na(path_work)
+    if (any(mask)) {
+      path_work[mask] <- vapply(
+        path_work[mask], .whatwg_path_percent_encode, character(1),
+        USE.NAMES = FALSE
+      )
+    }
+  } else if (path_encoding == "encode") {
     mask <- !is.na(path_work)
     if (any(mask)) {
       path_work[mask] <- vapply(
@@ -2051,12 +2136,45 @@
   unname(.SCHEME_DEFAULT_PORTS[stringi::stri_trans_tolower(scheme)])
 }
 
+# Phase 13 port output: WHATWG parsing nulls a port that equals the special
+# scheme's default, so the public parse-result `port` column must use that
+# effective value for parity. `port_handling = "keep"` is the explicit
+# non-parity escape hatch for callers that need to retain the syntactic port.
+.apply_port_output_policy_vec <- function(scheme, port, port_handling,
+                                          url_standard) {
+  if (is.null(port) ||
+      !identical(url_standard, "whatwg") ||
+      identical(port_handling, "keep")) {
+    return(port)
+  }
+
+  out <- port
+  has_port <- !is.na(out)
+  if (!any(has_port)) {
+    return(out)
+  }
+
+  default_port <- .scheme_default_port_vec(scheme)
+  scheme_lc <- stringi::stri_trans_tolower(scheme)
+  elide <- has_port &
+    !is.na(default_port) &
+    out == default_port &
+    scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
+  out[elide] <- NA_integer_
+  out
+}
+
 # Phase 11 port component (PRD v2 D1, RURL-qdlvldts): "" (excluded) or
-# ":<port>" per the standalone `port_handling` knob and, only for "keep",
-# `url_standard`'s WHATWG default-port elision. `scheme` keys the default-port
-# table only -- it is never rendered here (the caller already embeds the
-# cased scheme in `scheme_part`).
+# ":<port>" per the standalone `port_handling` knob. `strip_default` is the
+# WHATWG/RFC-style default-port elision renderer. `keep` is literal, including
+# under `url_standard = "whatwg"`; callers use it as an explicit non-parity
+# override when they need to retain a syntactic default port. `scheme` keys the
+# default-port table only -- it is never rendered here (the caller already
+# embeds the cased scheme in `scheme_part`).
 .build_port_part_vec <- function(scheme, port, port_handling, url_standard) {
+  # Retained for call-site stability; port rendering is selected entirely by
+  # `port_handling` now that `keep` is the literal override in every profile.
+  force(url_standard)
   n <- length(scheme)
   port_part <- rep("", n)
   if (is.null(port) ||
@@ -2074,10 +2192,7 @@
   if (identical(port_handling, "strip_default")) {
     keep <- has_port & !is_default
   } else {
-    scheme_lc <- stringi::stri_trans_tolower(scheme)
-    elide <- has_port & is_default & identical(url_standard, "whatwg") &
-      scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
-    keep <- has_port & !elide
+    keep <- has_port
   }
   port_part[keep] <- paste0(":", port[keep])
   port_part

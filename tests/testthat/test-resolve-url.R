@@ -109,11 +109,16 @@ test_that("query follows query_handling; merge is genuinely computed", {
 
 # --- url_standard pass-through: no divergent behavior of its own -------------
 
-test_that("port default-port elision flows from url_standard", {
+test_that("port rendering flows through safe_parse_urls", {
+  expect_identical(
+    resolve_url("/p", "http://a:80/b", port_handling = "strip_default",
+                url_standard = "whatwg"),
+    "http://a/p"
+  )
   expect_identical(
     resolve_url("/p", "http://a:80/b", port_handling = "keep",
                 url_standard = "whatwg"),
-    "http://a/p"
+    "http://a:80/p"
   )
   expect_identical(
     resolve_url("/p", "http://a:80/b", port_handling = "keep",

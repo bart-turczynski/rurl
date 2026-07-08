@@ -125,12 +125,11 @@
 #'   \itemize{
 #'     \item{"keep": Leave the path percent-encoding untouched (the path is
 #'     preserved as written in the URL, so `%2F` stays `%2F` rather than
-#'     decoding into a path-separating `/`). The one normalization applied is
-#'     percent-hex case: the two hex digits of each `%XX` triplet are
-#'     uppercased, so `%2f` becomes `%2F`. This is an RFC 3986 (section 6.2.2.1)
-#'     canonicalization — the two forms are equivalent — and it makes such paths
-#'     compare equal in \code{\link{canonical_join}}. Use "encode" to
-#'     additionally normalize which bytes are encoded.}
+#'     decoding into a path-separating `/`). With no `url_standard`, rurl keeps
+#'     its historical RFC-style percent-hex case canonicalization, so `%2f`
+#'     becomes `%2F`. Under `url_standard = "whatwg"`, existing percent-triplet
+#'     spelling is preserved byte-for-byte. Use "encode" to additionally
+#'     normalize which bytes are encoded.}
 #'     \item{"encode": The browser/percent-encoded rendering. Decodes the path
 #'     first, then percent-encodes each segment (slashes preserved), so a
 #'     readable non-ASCII path is emitted in its percent-encoded UTF-8 form.}
@@ -199,17 +198,13 @@
 #' @param port_handling A character string controlling whether the port
 #' appears in `clean_url`. Defaults to "exclude", today's only historical
 #' behavior. This knob is standalone and standard-independent (editorial, like
-#' `www_handling`) -- `url_standard` never governs whether it may be set, only
-#' (for `"keep"`) whether a default port gets elided underneath it.
+#' `www_handling`) -- `url_standard` never governs whether it may be set.
 #'   \itemize{
 #'     \item{"exclude": (Default) The port never appears in `clean_url`.}
 #'     \item{"strip_all": Explicit alias of "exclude".}
-#'     \item{"keep": Include the port when present. Under
-#'     `url_standard = "whatwg"`, a port matching its WHATWG-special scheme's
-#'     default (http:80, https:443, ftp:21) is elided even under "keep"; under
-#'     `"rfc3986"` or no selector, the port is kept verbatim (RFC 3986 has no
-#'     default-port concept). `ftps` has no WHATWG default, so its port is
-#'     never elided.}
+#'     \item{"keep": Include the syntactic port when present, including a
+#'     default port under `url_standard = "whatwg"`. This is an explicit
+#'     non-parity override for callers that need the input's port spelling.}
 #'     \item{"strip_default": Keep only non-default ports (using the same
 #'     scheme-default table), independent of `url_standard`.}
 #'   }
@@ -242,8 +237,9 @@
 #'   last argument so existing positional calls keep their meaning; always
 #'   pass it by name. Under `"whatwg"` the selector additionally recognizes a
 #'   literal backslash as a path separator for WHATWG-special schemes
-#'   (`http`/`https`/`ftp`) and elides a default port under `port_handling =
-#'   "keep"`; see \code{\link{resolve_url}} for `url_standard`-governed
+#'   (`http`/`https`/`ftp`) and nulls default ports in parse output; use
+#'   `port_handling = "strip_default"` for spec-style clean URL port rendering.
+#'   See \code{\link{resolve_url}} for `url_standard`-governed
 #'   reference resolution. The selector does **not** govern whether
 #'   `port_handling` may be set (it is a standalone editorial knob), nor does it
 #'   govern `path_encoding` (an orthogonal path-presentation knob that layers
@@ -666,11 +662,11 @@ safe_parse_urls <- function(url,
 # Standalone, standard-independent editorial knob (PRD v2 D1, RURL-qdlvldts):
 # "exclude" (default) is today's only behavior -- port never appears in
 # clean_url. "keep" includes the port, subject to url_standard's own
-# default-port elision when url_standard = "whatwg" (see
-# .build_port_part_vec(), R/parse-phases.R). "strip_default" keeps only
-# non-default ports, independent of url_standard. "strip_all" is an explicit
-# alias of "exclude". Lives alongside www_handling/trailing_slash_handling in
-# the cleanup-knob tier -- NOT part of .URL_STANDARD_PROFILES.
+# syntactic default ports. "strip_default" keeps only non-default ports,
+# independent of url_standard, and is the spec-style port renderer for clean
+# URLs. "strip_all" is an explicit alias of "exclude". Lives alongside
+# www_handling/trailing_slash_handling in the cleanup-knob tier -- NOT part of
+# .URL_STANDARD_PROFILES.
 .opt_port_handling <- c("exclude", "keep", "strip_default", "strip_all")
 
 # --- url_standard selector (RURL-eqzkkohm) -----------------------------------
@@ -1152,6 +1148,18 @@ safe_parse_urls <- function(url,
     )
   }
   curl_ok <- curl_parseable & !vapply(parsed_list, is.null, logical(1))
+  parsed_from_pqf_fallback <- rep(FALSE, n)
+  fallback_idx <- which(
+    curl_parseable & !curl_ok & prep$whatwg_pqf_url != prep$url_to_parse
+  )
+  if (length(fallback_idx) > 0L) {
+    parsed_list[fallback_idx] <- lapply(
+      prep$whatwg_pqf_url[fallback_idx], .parse_with_curl
+    )
+    fallback_ok <- !vapply(parsed_list[fallback_idx], is.null, logical(1))
+    parsed_from_pqf_fallback[fallback_idx[fallback_ok]] <- TRUE
+    curl_ok[fallback_idx[fallback_ok]] <- TRUE
+  }
   file_parse <- .parse_whatwg_file_urls_vec(
     prep$whatwg_file_input[whatwg_file], prep$backslash_rewritten[whatwg_file]
   )
@@ -1184,8 +1192,11 @@ safe_parse_urls <- function(url,
   }, character(1), USE.NAMES = FALSE)
   raw_path <- curl_path
   if (any(curl_ok)) {
+    prepared_for_components <- prep$url_to_parse
+    prepared_for_components[parsed_from_pqf_fallback] <-
+      prep$whatwg_pqf_url[parsed_from_pqf_fallback]
     raw_path[curl_ok] <- .extract_raw_path_vec(
-      prep$url_to_parse[curl_ok], curl_path[curl_ok]
+      prepared_for_components[curl_ok], curl_path[curl_ok]
     )
   }
   # query/fragment/userinfo are raw pass-throughs; .blank_to_na() maps a
@@ -1375,6 +1386,30 @@ safe_parse_urls <- function(url,
   # only), so it is computed here and appended AFTER the cased components.
   clean_query <- .filter_query_vec(a$raw_query, opts)
 
+  query_output <- a$raw_query
+  fragment_output <- a$raw_fragment
+  port_output <- .apply_port_output_policy_vec(
+    a$final_scheme, a$raw_port, opts$port_handling, opts$url_standard
+  )
+  if (identical(opts$url_standard, "whatwg")) {
+    q_idx <- which(!is.na(query_output))
+    if (length(q_idx) > 0L) {
+      query_output[q_idx] <- mapply(
+        .whatwg_query_percent_encode,
+        query_output[q_idx],
+        a$final_scheme[q_idx],
+        USE.NAMES = FALSE
+      )
+    }
+    f_idx <- which(!is.na(fragment_output))
+    if (length(f_idx) > 0L) {
+      fragment_output[f_idx] <- vapply(
+        fragment_output[f_idx], .whatwg_fragment_percent_encode, character(1),
+        USE.NAMES = FALSE
+      )
+    }
+  }
+
   # Phase 11: clean URL reconstruction (with the filtered query appended).
   clean_url <- .build_clean_url_vec(
     cased$scheme, cased$host, cased$path, opts$trailing_slash_handling,
@@ -1405,10 +1440,10 @@ safe_parse_urls <- function(url,
     original_url = original_url,
     scheme_output = cased$scheme,
     host_output = cased$host,
-    port = a$raw_port,
+    port = port_output,
     path_output = cased$path,
-    raw_query = a$raw_query,
-    fragment = a$raw_fragment,
+    raw_query = query_output,
+    fragment = fragment_output,
     user = a$raw_user,
     password = a$raw_password,
     domain = domain,

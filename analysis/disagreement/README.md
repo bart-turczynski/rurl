@@ -196,12 +196,14 @@ table settle them:
    **`RURL-dkaycxvp`**. The only residual `rurl(whatwg)` vs adaR path gap.
 4. **Closed by design / now controllable (no longer limitations):**
    *readable-path* rendering is the `path_encoding` axis (ADR 0011) and is no
-   longer scored; the *backtick-host* false-accept and *scheme inference* are
-   controllable via `scheme_policy = "require"` (ADR 0010), which this run
-   holds fixed.
-5. **Parked, needs-investigation:** `eq-U8` (U+0130 fold) and `ipobf-019/020`
-   (IPv6 re-serialization) → **`RURL-ajnnjzgs`**; `yal-009` (dotted-authority
-   scheme inference) → **`RURL-aneuhjre`**.
+   longer scored; the *backtick-host* false-accept, default *scheme inference*,
+   and `yal-009` dotted-authority scheme-confusion row are controllable via
+   `scheme_policy = "require"` (ADR 0010), which this run holds fixed.
+5. **Resolved decision (`RURL-ajnnjzgs`):** `eq-U8` stays an intentional
+   parser-boundary: `@` delimits userinfo and rurl drops userinfo rather than
+   aligning to the paper's WHATWG-ref U+0130 host fold. `ipobf-019/020` stay an
+   intentional spec-divergent profile split: RFC keeps the IPv6 literal, WHATWG
+   re-serializes the embedded IPv4 pieces.
 
 If any boundary is later closed, re-run (`_scratch/build-oracle-columns.R`
 regenerates the oracle columns, then re-freeze this directory).

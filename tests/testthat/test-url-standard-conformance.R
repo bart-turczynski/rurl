@@ -7,10 +7,9 @@
 # `input` string from that file in `source_reference` so a future re-pin can
 # re-locate them.
 #
-# Percent-triplet hex case is canonicalized (uppercased) by rurl in both
-# profiles, so fixture expectations use rurl's canonical spelling rather than
-# a WPT/browser's byte-for-byte href (PRD §9.2 / Open Q4 note) -- this is
-# documented per-row in `notes` where it applies.
+# Percent-triplet hex case is canonicalized by the RFC profile where RFC 3986
+# normalization applies. The WHATWG profile preserves existing percent spelling
+# byte-for-byte, matching the URL Standard serializer.
 #
 # Most RFC-side rows are derived from RFC 3986 grammar/normalization prose
 # (there is no RFC equivalent of WPT's machine-checkable corpus). The

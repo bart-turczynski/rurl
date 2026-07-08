@@ -34,11 +34,12 @@ something RFC 3986 redefines. \code{url_standard} instead gates whether the
 metadata is exposed at all, mirroring \code{get_host_type()}'s contract:
 pass \code{NULL} (the default) and every element is \code{NA}.
 
-Within rurl's allowlist (\code{http}/\code{https}/\code{ftp}/\code{ftps}),
-\code{http}, \code{https}, and \code{ftp} are WHATWG special schemes;
-\code{ftps} (FTP-over-TLS, rurl's own addition) is not. This is metadata
-only -- it does not add \code{ws}/\code{wss}/\code{file} to rurl's allowed
-schemes and does not change what \code{\link{safe_parse_url}} accepts.
+Within rurl's allowlist (\code{http}/\code{https}/\code{ftp}/\code{ftps}/
+\code{file}), \code{http}, \code{https}, \code{ftp}, and \code{file} are
+WHATWG special schemes; \code{ftps} (FTP-over-TLS, rurl's own addition) is
+not. This is metadata only -- it does not add \code{ws}/\code{wss} to
+rurl's allowed schemes and does not change what
+\code{\link{safe_parse_url}} accepts.
 }
 \examples{
 get_scheme_class("http://example.com/", url_standard = "whatwg")
