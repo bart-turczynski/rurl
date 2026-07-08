@@ -40,11 +40,28 @@
 #     path    -- leading "/" added when missing (urltools drops it on EVERY
 #                path -- a formatting quirk that would otherwise drown the real
 #                signal); dot-segment resolution is NOT normalized because that
-#                resolution difference is itself an axis.
+#                resolution difference is itself an axis. For SCORING ONLY (not
+#                the displayed cell), raw non-ASCII bytes and forbidden-ASCII
+#                chars are percent-encoded uniformly across parsers (canon_path)
+#                so a readable-vs-percent-encoded rendering of the SAME
+#                character ("/école" vs "/%C3%A9cole") is not counted as a
+#                divergence -- that is a presentation axis (rurl path_encoding,
+#                ADR 0011), not a parse disagreement. Already-encoded octets
+#                ("%41%42" vs "AB") and reserved delimiters ("%2F" vs "/") are
+#                left untouched because those ARE genuine standard/correctness
+#                divergences.
 #   A parser that rejects/errors on an input contributes the sentinel verdict
 #   "<reject>" / "<error>" for every component, so accept-vs-reject (the most
 #   important divergence, e.g. WHATWG rejecting an out-of-range integer host)
 #   is captured naturally by distinct-value counting.
+#
+#   HELD AXES (so the study measures url_standard divergence, not a different
+#   rurl axis): both rurl profiles are run with scheme_policy = "require"
+#   (ADR 0010). curl and adaR (given no base URL) also require an explicit
+#   scheme, so this aligns the acceptance posture across all five participants
+#   and stops rurl's http:// inference -- a SEPARATE axis -- from inflating
+#   accept-vs-reject divergence. It also removes the lone WHATWG false-accept
+#   (backtick host, ada-005), which is opt-out-able precisely here.
 # ----------------------------------------------------------------------------
 
 # ---- resolve rurl (installed or dev tree) ----------------------------------
@@ -77,6 +94,32 @@ norm_path <- function(x) {
   ifelse(startsWith(x, "/"), x, paste0("/", x))
 }
 
+# canon_path: SCORING-ONLY path canonicalizer (see COMPARISON MODEL header).
+# Percent-encodes raw non-ASCII bytes, C0 controls, and the WHATWG forbidden
+# path code points, uniformly, so "/école" and "/%C3%A9cole" compare equal --
+# readable-vs-encoded rendering of the SAME character is a presentation axis
+# (rurl path_encoding), not a disagreement. It deliberately does NOT touch
+# existing %XX sequences (so "%41%42" != "AB" and "%7e" != "%7E" survive) nor
+# reserved delimiters (so "%2F" != "/" survives). Applied only to the verdict
+# used for divergence counting; the displayed matrix cell keeps the raw path.
+.forbidden_path <- c(" ", "\"", "<", ">", "`", "{", "}", "|", "\\", "^")
+canon_path <- function(x) {
+  vapply(x, function(s) {
+    if (is.na(s) || !nzchar(s)) return(s)
+    bytes <- charToRaw(s)
+    enc <- vapply(bytes, function(b) {
+      iv <- as.integer(b)
+      ch <- rawToChar(b)
+      if (iv > 127L || iv < 32L || ch %in% .forbidden_path) {
+        sprintf("%%%02X", iv)
+      } else {
+        ch
+      }
+    }, character(1))
+    paste(enc, collapse = "")
+  }, character(1), USE.NAMES = FALSE)
+}
+
 # A parser "did not produce components" only when it truly rejected the input.
 # rurl warnings (warning-no-tld, warning-invalid-tld, ...) mean "parsed WITH a
 # caveat" -- the host/path are real and must be compared, not sentinel-ized;
@@ -97,7 +140,11 @@ empty_row <- function(n) {
 
 # ---- adapters: each maps a character vector of URLs to a normalized frame ---
 adapt_rurl <- function(urls, standard) {
-  df <- suppressWarnings(spu(urls, url_standard = standard))
+  # scheme_policy = "require": hold the scheme-inference axis fixed (see header
+  # HELD AXES). Matches curl/adaR no-base acceptance posture and drops the
+  # backtick-host false-accept, which is opt-out-able exactly here.
+  df <- suppressWarnings(spu(urls, url_standard = standard,
+                             scheme_policy = "require"))
   data.frame(
     scheme   = norm_scheme(df$scheme),
     host     = norm_host(df$host),
@@ -318,7 +365,10 @@ long <- do.call(rbind, lapply(names(runs), function(p) {
 verdict <- function(comp) {
   vapply(names(runs), function(p) {
     r <- runs[[p]]
-    ifelse(rejected(r$status), paste0("<", r$status, ">"), r[[comp]])
+    # path presentation is canonicalized for scoring only (see canon_path);
+    # every other component is compared verbatim.
+    val <- if (comp == "path") canon_path(r[[comp]]) else r[[comp]]
+    ifelse(rejected(r$status), paste0("<", r$status, ">"), val)
   }, character(length(inputs)))
   # returns a matrix: rows = inputs, cols = parsers
 }
