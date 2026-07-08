@@ -1141,15 +1141,18 @@ safe_parse_urls <- function(url,
 
   # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
   parseable <- valid & !prep$rejected
+  rfc3986_path_rootless <- parseable & prep$rfc3986_path_rootless
+  curl_parseable <- parseable & !rfc3986_path_rootless
   parsed_list <- vector("list", n)
-  parse_idx <- which(parseable)
+  parse_idx <- which(curl_parseable)
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
       prep$url_to_parse[parse_idx], .parse_with_curl
     )
   }
-  curl_ok <- parseable & !vapply(parsed_list, is.null, logical(1))
-  null_row <- !curl_ok
+  curl_ok <- curl_parseable & !vapply(parsed_list, is.null, logical(1))
+  parse_ok <- curl_ok | rfc3986_path_rootless
+  null_row <- !parse_ok
 
   # Pull raw components into columns (mirrors .extract_raw_components() and the
   # port/fragment/user/password fields of .assemble_parse_result(), using `$`
@@ -1203,6 +1206,18 @@ safe_parse_urls <- function(url,
       suppressWarnings(as.integer(p$port %||% NA_integer_))
     }
   }, integer(1), USE.NAMES = FALSE)
+
+  if (any(rfc3986_path_rootless)) {
+    raw_scheme[rfc3986_path_rootless] <-
+      prep$rfc3986_path_rootless_scheme[rfc3986_path_rootless]
+    raw_host[rfc3986_path_rootless] <- NA_character_
+    raw_path[rfc3986_path_rootless] <-
+      prep$rfc3986_path_rootless_path[rfc3986_path_rootless]
+    raw_query[rfc3986_path_rootless] <-
+      prep$rfc3986_path_rootless_query[rfc3986_path_rootless]
+    raw_fragment[rfc3986_path_rootless] <-
+      prep$rfc3986_path_rootless_fragment[rfc3986_path_rootless]
+  }
 
   # Phase 4: final scheme per protocol policy.
   final_scheme <- .derive_final_scheme_vec(
@@ -1264,6 +1279,7 @@ safe_parse_urls <- function(url,
     is_scheme_relative = prep$is_scheme_relative,
     looks_like_host_port = prep$looks_like_host_port,
     scheme_less_userinfo = prep$scheme_less_userinfo,
+    rfc3986_path_rootless = rfc3986_path_rootless,
     # Original (pre-curl) host token: NOT a cached Stage-A field (absent from
     # .spu_stage_a_fields) and never surfaced in the 14-column result, so it
     # widens no public output. The url_standard metadata seam
@@ -1365,7 +1381,8 @@ safe_parse_urls <- function(url,
     original_has_allowed_scheme = a$original_has_allowed_scheme,
     looks_like_host_port = a$looks_like_host_port,
     is_scheme_relative = a$is_scheme_relative,
-    scheme_relative_handling = opts$scheme_relative_handling
+    scheme_relative_handling = opts$scheme_relative_handling,
+    rfc3986_path_rootless = a$rfc3986_path_rootless
   )
 
   # Phase 13: assemble the 14 typed columns.
