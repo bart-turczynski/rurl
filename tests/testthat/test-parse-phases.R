@@ -68,6 +68,10 @@ test_that(".extract_raw_path_vec preserves dot segments and uppercases hex", {
   expect_equal(ext("http://ex.com/a/%2e%2e/b"), "/a/%2E%2E/b")
   expect_equal(ext("http://ex.com/a%2fb"), "/a%2Fb")
   expect_equal(ext("http://ex.com/a//b"), "/a//b")
+  # Empty-authority special schemes are reinterpreted by curl as host-bearing
+  # URLs. Keep curl's coherent path so the promoted host is not duplicated.
+  expect_equal(ext("http:///evil.com"), "/")
+  expect_equal(ext("http:///a/../b"), "/b")
   # No path component -> fall back to curl's canonical "/".
   expect_equal(ext("http://ex.com"), "/")
   expect_equal(ext("http://ex.com?x=1"), "/")

@@ -92,13 +92,15 @@
 # in .WHATWG_SPECIAL_SCHEMES (http/https/ftp/file -- NOT ftps, which WHATWG
 # does not define as special), a literal backslash is treated identically to a
 # forward slash everywhere the WHATWG state machine checks for one: the
-# scheme-relative
-# "//" marker, the authority/path boundary, and path-segment separators. This
-# must run BEFORE curl ever sees the URL (libcurl never treats "\" as a
-# separator), so it rewrites the raw string here in Phase 1, ahead of every
-# other scheme/host regex in this function -- once rewritten, the existing
-# "://"/"//" detection, host classification, and curl handoff need no further
-# changes to see the WHATWG-recognized slashes.
+# scheme-relative "//" marker, the authority/path boundary, and path-segment
+# separators. For rurl's authority-based special schemes (http/https/ftp), the
+# same pre-curl step also implements the WHATWG special-authority-slashes state
+# for inputs with no slash run at all: `http:example.com` is handed to curl as
+# `http://example.com`. This must run BEFORE curl ever sees the URL (libcurl
+# never treats "\" as a separator and rejects missing `//` authority forms), so
+# it rewrites the raw string here in Phase 1, ahead of every other scheme/host
+# regex in this function -- once rewritten, the existing "://"/"//" detection,
+# host classification, and curl handoff need no further changes.
 #
 # The leading run right after "scheme:" is handled as its own case (mirroring
 # the WHATWG "special authority slashes"/"special authority ignore slashes"
@@ -107,10 +109,11 @@
 # authority parsing continues, so a single "\" (RURL-ledntyab's own acceptance
 # case "http:\host\path"), a double "\\" ("http:\\host\path"), and an
 # already-canonical "//" all normalize the same way. A run of length 0 (no
-# separator at all, e.g. "http:path") is not an authority-introducing form
-# under WHATWG and is left untouched -- out of scope here. AFTER that leading
-# run, a literal "\" remains a plain 1:1 "\" -> "/" rewrite (path-segment
-# separators, and the authority/path boundary when it isn't part of the run).
+# separator at all, e.g. "http:host/path") is authority-introducing for the
+# http/https/ftp subset, but not for file (left to the file-state slice). AFTER
+# the authority marker, a literal "\" remains a plain 1:1 "\" -> "/" rewrite
+# (path-segment separators, and the authority/path boundary when it isn't part
+# of the run).
 #
 # Recognition only, no decoding: `%5C` (a percent-encoded backslash) is inert
 # literal text here, never treated as a separator -- it contains no actual
@@ -165,16 +168,20 @@
   # authority had no run of its own, e.g. "http://host\path").
   rewritten_remainder <- stringi::stri_replace_all_fixed(remainder, "\\", "/")
 
-  # No run at all -> leave `before` untouched (out of scope, see above).
-  # Otherwise: collapse the run to exactly "//" and splice the (possibly
-  # rewritten) remainder back on.
+  no_run_authority <- eligible & !has_run &
+    scheme_lower %in% .SPECIAL_AUTHORITY_SCHEMES &
+    !is.na(before) & before != ""
+
+  # No run at all is usually left untouched. For http/https/ftp under WHATWG,
+  # synthesize the missing authority marker. Otherwise: collapse an existing
+  # run to exactly "//" and splice the (possibly rewritten) remainder back on.
   rewritten_before <- ifelse(
-    has_run, paste0("//", rewritten_remainder), before
+    has_run | no_run_authority, paste0("//", rewritten_remainder), before
   )
 
   run_had_backslash <- has_run & stringi::stri_detect_fixed(run, "\\")
   run_had_backslash[is.na(run_had_backslash)] <- FALSE
-  remainder_had_backslash <- has_run &
+  remainder_had_backslash <- (has_run | no_run_authority) &
     stringi::stri_detect_fixed(remainder, "\\")
   remainder_had_backslash[is.na(remainder_had_backslash)] <- FALSE
   # file:///path carries an empty file authority. Collapsing an all-forward-
@@ -346,11 +353,12 @@
 # point, so they are in scope. ftps and non-special/opaque hosts (which WHATWG
 # percent-encodes rather than keeps literal) are a documented follow-up. Runs
 # ONLY under url_standard == "whatwg"; a byte-for-byte no-op otherwise (RFC
-# 3986 keeps libcurl's stricter charset). Recognition of literal bytes only -- a percent-
-# encoded form (`%21`) is inert text, never a gap byte. Returns `url` (host-
-# sanitized for shimmed rows), a `host_charset_shimmed` mask (rows a gap byte
-# was actually replaced in -> drives the `host-charset-shimmed` diagnostic,
-# ADR 0006), and `shimmed_true_host` (the captured pre-shim host, NA otherwise).
+# 3986 keeps libcurl's stricter charset). Recognition of literal bytes only --
+# a percent-encoded form (`%21`) is inert text, never a gap byte. Returns `url`
+# (host-sanitized for shimmed rows), a `host_charset_shimmed` mask (rows a gap
+# byte was actually replaced in -> drives the `host-charset-shimmed`
+# diagnostic, ADR 0006), and `shimmed_true_host` (the captured pre-shim host,
+# NA otherwise).
 .shim_whatwg_host_charset_vec <- function(url, url_standard) {
   n <- length(url)
   no_op <- list(
@@ -420,6 +428,91 @@
   )
 }
 
+# RFC 3986 scheme + path-rootless support for special schemes without `//`
+# (RURL-pwsacxvo). In RFC 3986 section 3, an authority is present only when the
+# scheme-specific part starts with a literal `//`; otherwise `http:example.com`
+# is `scheme = "http"`, no authority, `path = "example.com"`. libcurl rejects
+# these as malformed HTTP URLs, so selector mode records the components here and
+# Stage A installs them directly instead of going through curl.
+#
+# This slice is intentionally limited to host-shaped path-rootless
+# (`scheme:example.com[/...]`) for the http/https/ftp family that WHATWG treats
+# as recoverable authority URLs. Other RFC-valid path-rootless strings (for
+# example ones starting with `@` or `:`), single-slash (`scheme:/path`) forms,
+# and file-state variants are left outside this change. Literal backslash
+# remains inert/rejected under RFC 3986.
+.rfc3986_path_rootless_vec <- function(url, url_standard) {
+  n <- length(url)
+  no_op <- list(
+    is_path_rootless = rep(FALSE, n),
+    scheme = rep(NA_character_, n),
+    path = rep(NA_character_, n),
+    query = rep(NA_character_, n),
+    fragment = rep(NA_character_, n)
+  )
+  if (!identical(url_standard, "rfc3986")) {
+    return(no_op)
+  }
+
+  m <- stringi::stri_match_first_regex(
+    url, "^([a-zA-Z][a-zA-Z0-9+.-]*):(.*)$"
+  )
+  scheme <- m[, 2L]
+  rest <- m[, 3L]
+  scheme_lower <- stringi::stri_trans_tolower(scheme)
+  first_segment <- stringi::stri_replace_first_regex(rest, "[/?#].*$", "")
+  host_shaped_first_segment <- stringi::stri_detect_regex(
+    first_segment, "^[A-Za-z0-9._~-]+(\\.[A-Za-z0-9._~-]+)+$"
+  )
+  host_shaped_first_segment[is.na(host_shaped_first_segment)] <- FALSE
+  eligible <- !is.na(rest) &
+    scheme_lower %in% .SPECIAL_AUTHORITY_SCHEMES &
+    host_shaped_first_segment &
+    rest != "" &
+    !stringi::stri_startswith_fixed(rest, "/") &
+    !stringi::stri_startswith_fixed(rest, "\\") &
+    !stringi::stri_detect_fixed(rest, "\\")
+  eligible[is.na(eligible)] <- FALSE
+  if (!any(eligible)) {
+    return(no_op)
+  }
+
+  split <- lapply(rest[eligible], function(x) {
+    hash <- regexpr("#", x, fixed = TRUE)[1L]
+    qmark <- regexpr("?", x, fixed = TRUE)[1L]
+
+    end_path <- nchar(x)
+    if (qmark > 0L) {
+      end_path <- min(end_path, qmark - 1L)
+    }
+    if (hash > 0L) {
+      end_path <- min(end_path, hash - 1L)
+    }
+    path <- if (end_path > 0L) substr(x, 1L, end_path) else ""
+
+    query <- NA_character_
+    if (qmark > 0L && (hash < 0L || qmark < hash)) {
+      query_end <- if (hash > 0L) hash - 1L else nchar(x)
+      query <- substr(x, qmark + 1L, query_end)
+    }
+
+    fragment <- NA_character_
+    if (hash > 0L) {
+      fragment <- substr(x, hash + 1L, nchar(x))
+    }
+
+    c(path = path, query = query, fragment = fragment)
+  })
+  parts <- do.call(rbind, split)
+
+  no_op$is_path_rootless[eligible] <- TRUE
+  no_op$scheme[eligible] <- scheme[eligible]
+  no_op$path[eligible] <- .uppercase_percent_hex(parts[, "path"])
+  no_op$query[eligible] <- .blank_to_na(parts[, "query"])
+  no_op$fragment[eligible] <- .blank_to_na(parts[, "fragment"])
+  no_op
+}
+
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
 # gate, and building the string handed to curl. Returns the per-URL columns plus
 # a logical `rejected` column marking rows the scalar pipeline returned NULL for
@@ -470,6 +563,9 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):"
   )
   looks_like_protocol <- !is.na(scheme_match[, 2L])
+  rfc_rootless <- .rfc3986_path_rootless_vec(url, url_standard)
+  original_has_allowed_scheme <-
+    original_has_allowed_scheme | rfc_rootless$is_path_rootless
 
   has_scheme_slashes <- stringi::stri_detect_regex(
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):\\/\\/"
@@ -615,7 +711,12 @@
     # captured pre-shim host that ._parse_stage_a_vec() restores onto curl's
     # `$host`. Drives the `host-charset-shimmed` diagnostic.
     host_charset_shimmed = shim$host_charset_shimmed,
-    shimmed_true_host = shim$shimmed_true_host
+    shimmed_true_host = shim$shimmed_true_host,
+    rfc3986_path_rootless = rfc_rootless$is_path_rootless,
+    rfc3986_path_rootless_scheme = rfc_rootless$scheme,
+    rfc3986_path_rootless_path = rfc_rootless$path,
+    rfc3986_path_rootless_query = rfc_rootless$query,
+    rfc3986_path_rootless_fragment = rfc_rootless$fragment
   )
 }
 
@@ -636,7 +737,8 @@
     original_has_allowed_scheme = cols$original_has_allowed_scheme[1L],
     is_scheme_relative = cols$is_scheme_relative[1L],
     looks_like_host_port = cols$looks_like_host_port[1L],
-    scheme_less_userinfo = cols$scheme_less_userinfo[1L]
+    scheme_less_userinfo = cols$scheme_less_userinfo[1L],
+    rfc3986_path_rootless = cols$rfc3986_path_rootless[1L]
   )
 }
 
@@ -685,9 +787,14 @@
 # Extraction (every parseable prepared row carries an explicit `scheme://`
 # authority -- opaque/unsupported schemes are rejected upstream): strip the
 # scheme, then the path is the run from the first literal `/` (after the
-# authority, which cannot contain one) up to the first `?`/`#`. When the
-# authority is followed directly by `?`, `#`, or end-of-string there is no path,
-# so fall back to curl's `$path` (the canonical "/" trailing-slash expects).
+# authority, which cannot contain one) up to the first `?`/`#`. If the body
+# starts with `/`, the prepared URL had an empty authority (`scheme:///...`) and
+# curl may have promoted the following segment into `$host`; in that shape the
+# path from the prepared string is no longer the fetched path, so keep curl's
+# coherent `$path` instead of duplicating the promoted host into the path. When
+# the authority is followed directly by `?`, `#`, or end-of-string there is no
+# path, so fall back to curl's `$path` (the canonical "/" trailing-slash
+# expects).
 .extract_raw_path_vec <- function(prepared, curl_path) {
   out <- curl_path
   ok <- !is.na(prepared) & !is.na(curl_path)
@@ -698,8 +805,11 @@
     prepared[ok], "^[a-zA-Z][a-zA-Z0-9+.-]*://", ""
   )
   first <- stringi::stri_locate_first_regex(body, "[/?#]")[, 1L]
+  empty_authority <- stringi::stri_startswith_fixed(body, "/")
+  empty_authority[is.na(empty_authority)] <- FALSE
   has_path <- !is.na(first) &
-    stringi::stri_sub(body, first, first) == "/"
+    stringi::stri_sub(body, first, first) == "/" &
+    !empty_authority
   raw <- curl_path[ok]
   if (any(has_path)) {
     bp <- body[has_path]
@@ -1014,7 +1124,7 @@
   if (!is.na(m[1L, 1L])) {
     quad <- strsplit(m[1L, 3L], ".", fixed = TRUE)[[1L]]
     octets <- suppressWarnings(as.integer(quad))
-    if (length(octets) != 4L || any(is.na(octets)) ||
+    if (length(octets) != 4L || anyNA(octets) ||
         any(octets < 0L | octets > 255L)) {
       return(host)
     }
@@ -1051,12 +1161,12 @@
     hextets <- c(left, rep("0", zero_count), right)
   }
   if (length(hextets) != 8L ||
-      any(!grepl("^[0-9A-Fa-f]{1,4}$", hextets))) {
+      !all(grepl("^[0-9A-Fa-f]{1,4}$", hextets))) {
     return(host)
   }
 
   pieces <- suppressWarnings(strtoi(hextets, base = 16L))
-  if (any(is.na(pieces)) || any(pieces < 0L | pieces > 65535L)) {
+  if (anyNA(pieces) || any(pieces < 0L | pieces > 65535L)) {
     return(host)
   }
 
@@ -1676,16 +1786,22 @@
                                      original_has_allowed_scheme,
                                      looks_like_host_port,
                                      is_scheme_relative,
-                                     scheme_relative_handling) {
+                                     scheme_relative_handling,
+                                     rfc3986_path_rootless = NULL) {
   n <- length(final_host)
+  if (is.null(rfc3986_path_rootless)) {
+    rfc3986_path_rootless <- rep(FALSE, n)
+  }
   status <- rep(.STATUS_ERROR, n)
 
   scheme_lower <- stringi::stri_trans_tolower(final_scheme)
   is_file <- curl_ok & !is.na(scheme_lower) & scheme_lower == "file"
+  is_rfc3986_path_rootless <- curl_ok & rfc3986_path_rootless
   host_present <- curl_ok & !is.na(final_host) & final_host != ""
 
   status[host_present & is_ip_host] <- .STATUS_OK
   status[is_file] <- .STATUS_OK
+  status[is_rfc3986_path_rootless] <- .STATUS_OK
 
   non_ip <- host_present & !is_ip_host
   host_has_dot <- stringi::stri_detect_fixed(final_host, ".")
@@ -1733,7 +1849,8 @@
                                  original_has_allowed_scheme,
                                  looks_like_host_port,
                                  is_scheme_relative,
-                                 scheme_relative_handling) {
+                                 scheme_relative_handling,
+                                 rfc3986_path_rootless = NULL) {
   .derive_parse_status_vec(
     curl_ok = !is.null(parsed_curl),
     final_host = final_host,
@@ -1746,7 +1863,8 @@
     original_has_allowed_scheme = original_has_allowed_scheme,
     looks_like_host_port = looks_like_host_port,
     is_scheme_relative = is_scheme_relative,
-    scheme_relative_handling = scheme_relative_handling
+    scheme_relative_handling = scheme_relative_handling,
+    rfc3986_path_rootless = rfc3986_path_rootless
   )
 }
 

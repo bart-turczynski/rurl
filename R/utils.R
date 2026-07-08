@@ -19,6 +19,11 @@
 # rurl's own addition (FTP-over-TLS) and is NOT a WHATWG special scheme.
 .WHATWG_SPECIAL_SCHEMES <- c("http", "https", "ftp", "file")
 
+# Special schemes whose WHATWG no-slash authority recovery is shared by this
+# parser's authority-based URL model. `file` has a separate state machine and is
+# intentionally left to the existing file:// slice.
+.SPECIAL_AUTHORITY_SCHEMES <- c("http", "https", "ftp")
+
 # WHATWG forbidden host/domain code points (RURL-jfuqpwvh) that can survive to a
 # resolved reg-name host and must fail the host parse under url_standard =
 # "whatwg". An ICU regex character class covering: C0 controls U+0001-U+001F and
@@ -152,5 +157,9 @@
   list(name = "looks_like_host_port", default = FALSE, template = logical(1)),
   # Scheme-less input carrying userinfo (D5): drives the warning-userinfo status
   # and the NA clean_url in Stage B. Cached with the rest of Stage A.
-  list(name = "scheme_less_userinfo", default = FALSE, template = logical(1))
+  list(name = "scheme_less_userinfo", default = FALSE, template = logical(1)),
+  # RFC 3986 scheme + path-rootless special-scheme rows (`http:example.com`):
+  # parseable but hostless, so Stage B must not demote them to an error solely
+  # because no authority exists.
+  list(name = "rfc3986_path_rootless", default = FALSE, template = logical(1))
 )
