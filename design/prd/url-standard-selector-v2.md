@@ -344,3 +344,32 @@ not forgotten: `max_url_length` guards, URLPattern-style grouping,
    (depends on a-b-c-e existing first).
 3. Keep `max_url_length`, URLPattern grouping, and `explain_parse_url()` as
    separate, independently-schedulable tickets, not children of this epic.
+
+## 9. Delta — `path_encoding` un-governed (RURL-sjnqhwtl, 2026-07-08)
+
+Supersedes the §5 / D3 matrix entry for `path_encoding`. That entry (fixed
+under ADR 0007) recorded `path_encoding`'s required profile value as a
+profile-internal mode with no public enum equivalent, so **any** explicit
+public `path_encoding` conflicted with a set `url_standard`. That made
+`path_encoding` the one presentation knob that was *governed*, an asymmetry vs
+its named analog `host_encoding` (orthogonal — combines freely with any
+selector).
+
+**Resolution (ADR 0011): remove `path_encoding` from the conflict matrix.** The
+one argument slot conflated two axes — profile-set path *identity*
+normalization (`.rfc3986_unreserved` / `.whatwg_preserve`) and public
+`keep`/`encode`/`decode` *presentation*. Split them: identity moves to an
+internal `path_identity` (never a public arg, never conflict-checked);
+`path_encoding` becomes a pure presentation knob that layers on any profile,
+exactly like `host_encoding`. `path_normalization` and `case_handling` stay
+governed.
+
+Verified live before deciding: the shipped `encode` decodes reserved octets
+first (`/a%2Fb/c` → `/a/b/c`), so `encode` and `decode` are the same lossiness
+class and `encode` cannot be redefined (byte-compat). The split is therefore
+"`keep` = identity, `encode`/`decode` = lossy presentation, uniformly," not
+"encode-safe / decode-unsafe." The D5 rationale for refusing
+`case_handling = "lower"` does not transfer — that knob competes with the
+profile's own case decision; presentation competes with nothing the profile
+decides. Backward compatible (error → success only; `NULL` and profile +
+default `keep` unchanged). Retires benchmark caveat #3.

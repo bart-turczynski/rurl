@@ -1,3 +1,22 @@
+## rurl 2.5.0
+
+### New features
+
+- `path_encoding` (`"keep"` / `"encode"` / `"decode"`) is now an **orthogonal**
+  presentation knob that layers on any `url_standard` profile, mirroring
+  `host_encoding`. Previously, setting `url_standard` and an explicit
+  `path_encoding` together was an error (the profile "governed" the path
+  encoding). That asymmetry is gone: the profile now sets an internal path
+  *identity* mode, and the public `path_encoding` *presentation* applies on top.
+  So `get_path(u, url_standard = "whatwg", path_encoding = "encode")` emits the
+  WHATWG-parsed path in browser form (`/école` → `/%C3%A9cole`). Only `"keep"`
+  (the default) preserves a profile's canonical identity path verbatim;
+  `"encode"`/`"decode"` are presentation forms that may re-encode or decode
+  reserved octets (e.g. `%2F` ↔ `/`), independent of whether a profile is set.
+  Fully backward compatible — `url_standard = NULL` and profile + default
+  `"keep"` are byte-for-byte unchanged; only previously-rejected combinations
+  now compute. See ADR 0011.
+
 ## rurl 2.4.0
 
 ### New features

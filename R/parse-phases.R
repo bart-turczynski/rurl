@@ -688,10 +688,25 @@
                                 path_encoding,
                                 path_normalization,
                                 index_page_handling,
-                                trailing_slash_handling) {
+                                trailing_slash_handling,
+                                path_identity = "none") {
   path_work <- raw_path
 
-  # Decode path (before normalization/index handling) when requested.
+  # Two ORTHOGONAL axes (ADR 0011), applied as independent, composing steps:
+  #   1. path IDENTITY (`path_identity`) -- the url_standard profile's
+  #      normalization of which percent-octets are canonicalized in the path a
+  #      URL denotes (".rfc3986_unreserved" / ".whatwg_preserve"; "none" =
+  #      default). Profile-internal; never a public argument.
+  #   2. path PRESENTATION (`path_encoding`) -- the public keep/encode/decode
+  #      readable-vs-browser rendering, which LAYERS on any identity mode.
+  # The presentation `decode`/`encode` full-decode runs FIRST (as it always
+  # has), then the identity mode; because a full decode leaves no percent
+  # triplets, the identity branches are no-ops when presentation already
+  # decoded, so the two axes compose without special-casing.
+
+  # Presentation: decode path (before normalization/index handling) when the
+  # public knob requests decode OR encode (encode decodes first, re-encodes
+  # last).
   if (path_encoding %in% c("decode", "encode")) {
     mask <- !is.na(path_work)
     if (any(mask)) {
@@ -709,7 +724,11 @@
       }
       path_work[mask] <- decoded
     }
-  } else if (path_encoding == ".rfc3986_unreserved") {
+  }
+
+  # Identity: apply the profile's path-identity normalization (independent of
+  # the presentation step above).
+  if (path_identity == ".rfc3986_unreserved") {
     # url_standard = "rfc3986" (RURL-gjltzwmp, PRD S6.1): decode ONLY
     # unreserved percent-encoded octets, and do it BEFORE dot-segment removal
     # -- ordering is normative, not incidental. Decoding first folds an
@@ -723,7 +742,7 @@
         USE.NAMES = FALSE
       )
     }
-  } else if (path_encoding == ".whatwg_preserve") {
+  } else if (path_identity == ".whatwg_preserve") {
     # url_standard = "whatwg" (RURL-bbmuehsx, PRD S6.1): never decode -- only
     # canonicalize percent-triplet hex case. Dot-segment resolution below uses
     # the encoded-dot-aware remover, so encoded dot segments (%2e/%2e%2e) still
@@ -749,7 +768,7 @@
   # removers are identity for paths without a matching dot segment, so only
   # candidate rows are processed.
   if (path_normalization %in% c("dot_segments", "both")) {
-    is_whatwg <- identical(path_encoding, ".whatwg_preserve")
+    is_whatwg <- identical(path_identity, ".whatwg_preserve")
     dot_remover <- if (is_whatwg) {
       ._remove_dot_segments_whatwg
     } else {
@@ -811,10 +830,12 @@
                             path_encoding,
                             path_normalization,
                             index_page_handling,
-                            trailing_slash_handling) {
+                            trailing_slash_handling,
+                            path_identity = "none") {
   .normalize_path_vec(
     raw_path, path_encoding, path_normalization,
-    index_page_handling, trailing_slash_handling
+    index_page_handling, trailing_slash_handling,
+    path_identity = path_identity
   )
 }
 

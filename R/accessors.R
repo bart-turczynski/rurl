@@ -246,12 +246,8 @@ get_clean_url <- function(url,
   url_standard <- .validate_url_standard(url_standard)
   # get_clean_url()'s governed formals default to scalars, so match.arg() needs
   # the explicit choice sets to resolve/validate a supplied value.
+  # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
   .check_url_standard_conflicts(url_standard, .governed_supplied(
-    path_encoding = if (missing(path_encoding)) {
-      NULL
-    } else {
-      match.arg(path_encoding, .opt_path_encoding)
-    },
     path_normalization = if (missing(path_normalization)) {
       NULL
     } else {
@@ -445,9 +441,8 @@ get_path <- function(
   # url_standard validation + conflict check must read missing() BEFORE the
   # match.arg() reassignments below (assignment can make missing() FALSE).
   url_standard <- .validate_url_standard(url_standard)
+  # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
   .check_url_standard_conflicts(url_standard, .governed_supplied(
-    path_encoding =
-      if (missing(path_encoding)) NULL else match.arg(path_encoding),
     path_normalization =
       if (missing(path_normalization)) NULL else match.arg(path_normalization),
     case_handling =

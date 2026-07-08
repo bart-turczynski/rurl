@@ -53,7 +53,10 @@ host-shape gate), 0005 (base-R string exceptions), 0006 (diagnostics as
 companion helpers only), 0007 (`url_standard` selector), 0008 (this docs home +
 PRD graduation policy), 0009 (`whatwg` host-charset shim — accept the 15 ASCII
 host code points libcurl rejects but WHATWG keeps), 0010 (`scheme_policy` —
-the input-acceptance axis; `require` rejects scheme-less input). Design PRDs are drafted in
+the input-acceptance axis; `require` rejects scheme-less input), 0011
+(`path_encoding` is an orthogonal presentation axis, not governed by
+`url_standard` — un-governs it and splits path identity from presentation).
+Design PRDs are drafted in
 gitignored `_scratch/` and
 graduate to `design/prd/` once accepted and depended upon (ADR 0008).
 
