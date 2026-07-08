@@ -1,7 +1,7 @@
 # Tests for the WHATWG literal backslash-as-slash recognition vertical slice
 # (RURL-ledntyab, epic RURL-uyjheruh; PRD v2 D2, §5.2). Under
 # url_standard = "whatwg" and only for schemes in .WHATWG_SPECIAL_SCHEMES
-# (http/https/ftp -- NOT ftps), a literal "\" is treated identically to "/"
+# (http/https/ftp/file -- NOT ftps), a literal "\" is treated identically to "/"
 # wherever the WHATWG state machine checks for a slash: the scheme-relative
 # "//" marker, the authority/path boundary, and path-segment separators.
 # rfc3986, no selector, and any non-special scheme leave "\" fully inert.

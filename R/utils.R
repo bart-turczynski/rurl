@@ -4,23 +4,20 @@
 `%||%` <- function(x, y) if (!is.null(x)) x else y
 
 # The URL schemes rurl supports. rurl's domain is authority-based (hierarchical)
-# URLs -- these all share the "scheme://host[:port]/path" structure rurl parses,
-# normalizes, and rebuilds. ftps is FTP-over-TLS (the https-analogue for ftp),
-# not the unrelated SSH-based sftp. This is the single source of truth: a
-# scheme-bearing input whose scheme is not here is rejected (opaque schemes like
-# mailto:/tel:/data:, and unrecognized schemes like ws:/ssh:/typos). Adding a
-# scheme is a one-line change here.
-.SUPPORTED_SCHEMES <- c("http", "https", "ftp", "ftps")
+# URLs. http/https/ftp/ftps carry "scheme://host[:port]/path"; file is the
+# one supported hostless hierarchical scheme and is accepted only in the forms
+# libcurl can parse (`file:///...` and `file://localhost/...`). ftps is
+# FTP-over-TLS (the https-analogue for ftp), not the unrelated SSH-based sftp.
+# This is the single source of truth: a scheme-bearing input whose scheme is not
+# here is rejected (opaque schemes like mailto:/tel:/data:, and unrecognized
+# schemes like ws:/ssh:/typos).
+.SUPPORTED_SCHEMES <- c("http", "https", "ftp", "ftps", "file")
 
 # The WHATWG "special scheme" subset of .SUPPORTED_SCHEMES (PRD v2 D7,
-# RURL-jlvyjwog). WHATWG defines http/https/ftp/ws/wss/file as special; rurl
-# never expands its allowlist to ws/wss/file (non-goal, PRD v2 §3), so within
-# rurl's own scheme set only http/https/ftp qualify. ftp**s** is rurl's own
-# addition (FTP-over-TLS) and is NOT a WHATWG special scheme. This table backs
-# get_scheme_class() and will back the port (D1) / backslash (D2) axes those
-# tickets add -- it does not itself change scheme handling or grow the
-# allowlist.
-.WHATWG_SPECIAL_SCHEMES <- c("http", "https", "ftp")
+# RURL-jlvyjwog; file added by RURL-rutsdflg). WHATWG defines http/https/ftp/
+# ws/wss/file as special; rurl still does not support ws/wss. ftp**s** is
+# rurl's own addition (FTP-over-TLS) and is NOT a WHATWG special scheme.
+.WHATWG_SPECIAL_SCHEMES <- c("http", "https", "ftp", "file")
 
 # WHATWG forbidden host/domain code points (RURL-jfuqpwvh) that can survive to a
 # resolved reg-name host and must fail the host parse under url_standard =

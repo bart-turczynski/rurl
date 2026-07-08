@@ -89,6 +89,35 @@ test_that("host_type is an (host, url_standard) function", {
     url_standard = "rfc3986"), "reg-name")
 })
 
+test_that("WHATWG serializes embedded-IPv4 IPv6 literals", {
+  cases <- c(
+    "http://[::127.0.0.1]/" = "[::7f00:1]",
+    "http://[::ffff:127.0.0.1]/" = "[::ffff:7f00:1]",
+    "http://[0:0:0:0:0:0:0:1]/" = "[::1]"
+  )
+
+  for (u in names(cases)) {
+    expected_host <- unname(cases[[u]])
+    expect_identical(get_host(u, url_standard = "whatwg"), expected_host,
+      info = u)
+    expect_identical(get_clean_url(u, url_standard = "whatwg"),
+      paste0("http://", expected_host, "/"), info = u)
+    expect_identical(get_host_type(u, url_standard = "whatwg"), "ipv6",
+      info = u)
+  }
+})
+
+test_that("RFC 3986 keeps embedded-IPv4 IPv6 literal spelling", {
+  for (u in c("http://[::127.0.0.1]/", "http://[::ffff:127.0.0.1]/")) {
+    original_host <- sub("^http://(\\[[^]]+\\])/$", "\\1", u)
+    expect_identical(get_host(u, url_standard = "rfc3986"), original_host,
+      info = u)
+    expect_identical(get_clean_url(u, url_standard = "rfc3986"), u,
+      info = u)
+    expect_identical(get_host(u), original_host, info = u)
+  }
+})
+
 # --- Diagnostics: fire in BOTH modes keyed to shape -------------------------
 
 test_that("get_url_diagnostics matches the shape table in both modes", {

@@ -132,12 +132,15 @@ test_that("D6: user:pass@host (no //) is error, like scheme:opaque", {
 
 # D7/D8: supported scheme set -------------------------------------------------
 
-test_that("D7: only http/https/ftp/ftps are supported schemes", {
-  expect_identical(rurl:::.SUPPORTED_SCHEMES, c("http", "https", "ftp", "ftps"))
+test_that("D7: only http/https/ftp/ftps/file are supported schemes", {
+  expect_identical(
+    rurl:::.SUPPORTED_SCHEMES, c("http", "https", "ftp", "ftps", "file")
+  )
   expect_identical(unname(get_parse_status("http://example.com")), "ok")
   expect_identical(unname(get_parse_status("https://example.com")), "ok")
   expect_identical(unname(get_parse_status("ftp://example.com")), "ok-ftp")
   expect_identical(unname(get_parse_status("ftps://example.com")), "ok-ftp")
+  expect_identical(unname(get_parse_status("file:///tmp/a.txt")), "ok")
 })
 
 test_that("D7: unsupported hierarchical + opaque schemes are error", {

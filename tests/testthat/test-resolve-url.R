@@ -71,7 +71,8 @@ test_that("an absolute reference ignores the base entirely", {
 
 test_that("an unsupported-scheme absolute ref yields NA (rurl allowlist)", {
   # "g:h" resolves (per RFC) to the opaque "g:h", but rurl only canonicalizes
-  # http/https/ftp/ftps, so clean_url is NA -- same as parsing "g:h" directly.
+  # http/https/ftp/ftps/file, so clean_url is NA -- same as parsing "g:h"
+  # directly.
   expect_true(is.na(resolve_url("g:h", base)))
   expect_identical(resolve_url("g:h", base), get_clean_url("g:h"))
 })

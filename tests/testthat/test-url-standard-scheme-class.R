@@ -7,11 +7,13 @@
 # --- Vocabulary --------------------------------------------------------------
 
 test_that("the WHATWG special-scheme lookup covers exactly rurl's allowlist", {
-  expect_setequal(rurl:::.WHATWG_SPECIAL_SCHEMES, c("http", "https", "ftp"))
+  expect_setequal(
+    rurl:::.WHATWG_SPECIAL_SCHEMES, c("http", "https", "ftp", "file")
+  )
   # ftps (rurl's own FTP-over-TLS addition) is deliberately NOT special.
   expect_false("ftps" %in% rurl:::.WHATWG_SPECIAL_SCHEMES)
-  # No expansion to ws/wss/file (non-goal, PRD v2 §3).
-  expect_false(any(c("ws", "wss", "file") %in% rurl:::.WHATWG_SPECIAL_SCHEMES))
+  # No expansion to ws/wss (non-goal, PRD v2 §3).
+  expect_false(any(c("ws", "wss") %in% rurl:::.WHATWG_SPECIAL_SCHEMES))
   # Every special scheme is one rurl actually supports.
   expect_true(
     all(rurl:::.WHATWG_SPECIAL_SCHEMES %in% rurl:::.SUPPORTED_SCHEMES)
@@ -37,18 +39,18 @@ test_that("get_scheme_class is NA-equivalent with no selector", {
 
 # --- Classification under a selector ------------------------------------------
 
-test_that("get_scheme_class pins http/https/ftp as special", {
-  u <- c("http://ex.com/", "https://ex.com/", "ftp://ex.com/")
+test_that("get_scheme_class pins http/https/ftp/file as special", {
+  u <- c("http://ex.com/", "https://ex.com/", "ftp://ex.com/", "file:///x")
   expect_identical(
     get_scheme_class(u, url_standard = "whatwg"),
-    c("special", "special", "special")
+    c("special", "special", "special", "special")
   )
   # The classification is standard-invariant: same result under rfc3986 (D7 --
   # "special scheme" is a fixed WHATWG fact about the scheme string, not
   # something RFC 3986 redefines).
   expect_identical(
     get_scheme_class(u, url_standard = "rfc3986"),
-    c("special", "special", "special")
+    c("special", "special", "special", "special")
   )
 })
 
