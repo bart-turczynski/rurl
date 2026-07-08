@@ -1,3 +1,24 @@
+## rurl 2.4.0
+
+### New features
+
+- New `scheme_policy` argument (`"infer"` / `"require"`) on the parse and
+  accessor functions, controlling whether scheme-less, host-shaped input is
+  **accepted**. `"infer"` (default) keeps today's behavior byte-for-byte —
+  scheme-less input like `example.com` gains a fabricated `http://` (a
+  browser-omnibox-style affordance) and parses. `"require"` opts out of that
+  inference: scheme-less host-shaped input becomes `parse_status = "error"`,
+  giving a strict, pure-parser posture. This is a new axis, **orthogonal** to
+  `protocol_handling` (which only controls how the scheme is *presented* in
+  `clean_url`, not whether input is accepted) and to `url_standard` (which
+  controls *interpretation*). Scheme-relative `//host` input keeps its own
+  dedicated axis, `scheme_relative_handling`, and is **not** governed by
+  `scheme_policy`. See ADR 0010. One practical consequence: rurl's
+  scheme-inference divergences from a pure WHATWG parser (e.g. accepting a
+  scheme-less backtick host under `url_standard = "whatwg"` where Ada rejects
+  the scheme-less form for want of a base URL) are now opt-out-able — under
+  `scheme_policy = "require"` rurl rejects them too, matching Ada on that axis.
+
 ## rurl 2.3.0
 
 ### Bug fixes

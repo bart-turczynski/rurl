@@ -131,7 +131,12 @@ and `resolve_url()` is built on it. The pipeline is split into two stages
   components, detect IP hosts, apply the `url_standard` host model, derive
   domain/TLD via `pslr`. Its output is keyed by `.parse_cache_keys()` (the URL
   plus the small set of options that change *what is parsed*, notably
-  `url_standard`).
+  `url_standard` and `scheme_policy`). `scheme_policy` (ADR 0010) is the
+  input-*acceptance* axis: under `"require"` the scheme-less `add_http`
+  inference in `.prepare_urls_for_curl_vec()` is suppressed and those rows join
+  the reject set instead — orthogonal to `protocol_handling` (presentation) and
+  `url_standard` (interpretation); `//host` stays governed by
+  `scheme_relative_handling`.
 - **Stage B (`._parse_stage_b_vec`)** — the presentation layer: case policy,
   host encoding, www/subdomain policy, path normalization/encoding, query
   filtering, port rendering, and the final `clean_url` assembly. Stage B is

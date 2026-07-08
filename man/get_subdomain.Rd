@@ -12,6 +12,7 @@ get_subdomain(
   include_www = FALSE,
   format = c("string", "labels"),
   host_encoding = c("keep", "idna", "unicode"),
+  scheme_policy = c("infer", "require"),
   url_standard = NULL
 )
 }
@@ -74,6 +75,21 @@ vector of labels.}
 \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
 cleaned URL.}
 \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
+}}
+
+\item{scheme_policy}{Controls whether scheme-less, host-shaped input is
+\emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
+which only controls how the scheme is \emph{presented}, and from \code{url_standard},
+which controls interpretation). Defaults to "infer".
+\itemize{
+\item{"infer": (Default) Fabricate \verb{http://} for scheme-less host-shaped
+input (e.g. \code{example.com} parses as \verb{http://example.com}), a
+browser-omnibox-style affordance. This is the historical behavior.}
+\item{"require": Reject scheme-less input — a scheme-less host-shaped
+value becomes \code{parse_status = "error"} rather than gaining a fabricated
+scheme. Use this for a strict, pure-parser posture. Note this governs
+only bare host input; scheme-relative \verb{//host} input is governed
+separately by \code{scheme_relative_handling}.}
 }}
 
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),

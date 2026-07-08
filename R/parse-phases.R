@@ -379,7 +379,8 @@
 .prepare_urls_for_curl_vec <- function(url,
                                        protocol_handling,
                                        scheme_relative_handling,
-                                       url_standard = NULL) {
+                                       url_standard = NULL,
+                                       scheme_policy = "infer") {
   n <- length(url)
 
   # WHATWG control-character stripping (RURL-tyetpjym) runs FIRST -- it is the
@@ -491,6 +492,23 @@
     host_like <- host_like | cls$is_ipv4ish
   }
   rejected <- rejected | (add_http & !host_like)
+
+  # scheme_policy == "require" (RURL-vzgeurae): strict acceptance. Scheme
+  # inference (the `add_http` path -- fabricating "http://" for host-shaped
+  # scheme-less input) is rurl's browser-omnibox-style affordance, NOT a
+  # WHATWG/RFC parser behavior. Under "require" the user opts out of it: any row
+  # that WOULD receive a fabricated scheme is folded into the reject set instead
+  # (a parse_status = "error"), so rurl behaves like a pure parser on this axis.
+  # This is orthogonal to protocol_handling (which governs scheme
+  # *presentation*, not *acceptance*) and url_standard (which governs
+  # *interpretation*).
+  # Scheme-relative //host input is deliberately NOT governed here -- it has its
+  # own dedicated axis (scheme_relative_handling, incl. an "error" mode); this
+  # covers only the add_http inference path. Default "infer" leaves `rejected`
+  # untouched, so the historical behavior is byte-for-byte unchanged.
+  if (scheme_policy == "require") {
+    rejected <- rejected | add_http
+  }
 
   # D5: scheme-less input carrying userinfo (user@example.com). Not rejected --
   # host/domain/tld/user still resolve -- but Stage B suppresses clean_url and

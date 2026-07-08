@@ -209,6 +209,20 @@
 #'     \item{"strip_default": Keep only non-default ports (using the same
 #'     scheme-default table), independent of `url_standard`.}
 #'   }
+#' @param scheme_policy Controls whether scheme-less, host-shaped input is
+#' *accepted* (an input-acceptance axis, distinct from `protocol_handling`,
+#' which only controls how the scheme is *presented*, and from `url_standard`,
+#' which controls interpretation). Defaults to "infer".
+#'   \itemize{
+#'     \item{"infer": (Default) Fabricate `http://` for scheme-less host-shaped
+#'     input (e.g. `example.com` parses as `http://example.com`), a
+#'     browser-omnibox-style affordance. This is the historical behavior.}
+#'     \item{"require": Reject scheme-less input — a scheme-less host-shaped
+#'     value becomes `parse_status = "error"` rather than gaining a fabricated
+#'     scheme. Use this for a strict, pure-parser posture. Note this governs
+#'     only bare host input; scheme-relative `//host` input is governed
+#'     separately by `scheme_relative_handling`.}
+#'   }
 #' @param url_standard Optional top-level standard profile: `NULL` (default),
 #'   `"rfc3986"`, or `"whatwg"`. With `NULL` the behavior is exactly what the
 #'   individual low-level options select (fully backward compatible). When set,
@@ -403,6 +417,7 @@ safe_parse_url <- function(url,
                            port_handling = c(
                              "exclude", "keep", "strip_default", "strip_all"
                            ),
+                           scheme_policy = c("infer", "require"),
                            url_standard = NULL) {
   # Enforce scalar input to keep behavior explicit and predictable
   if (length(url) != 1) {
@@ -448,6 +463,7 @@ safe_parse_url <- function(url,
     params_case_sensitive = params_case_sensitive,
     decode_plus = decode_plus,
     port_handling = port_handling,
+    scheme_policy = scheme_policy,
     url_standard = url_standard
   )
 
@@ -505,6 +521,7 @@ safe_parse_urls <- function(url,
                             port_handling = c(
                               "exclude", "keep", "strip_default", "strip_all"
                             ),
+                            scheme_policy = c("infer", "require"),
                             url_standard = NULL) {
   # url_standard (RURL-eqzkkohm): validate + conflict-check the governed knobs
   # the caller explicitly supplied (see safe_parse_url() for the rationale).
@@ -539,6 +556,7 @@ safe_parse_urls <- function(url,
     params_case_sensitive = params_case_sensitive,
     decode_plus = decode_plus,
     port_handling = port_handling,
+    scheme_policy = scheme_policy,
     url_standard = url_standard
   )
 
@@ -632,6 +650,12 @@ safe_parse_urls <- function(url,
 .opt_index_page_handling <- c("keep", "strip")
 .opt_path_normalization <- c("none", "collapse_slashes", "dot_segments", "both")
 .opt_scheme_relative_handling <- c("keep", "http", "https", "error")
+# scheme_policy (RURL-vzgeurae): the input-*acceptance* axis for scheme-less
+# host-shaped input, orthogonal to protocol_handling (presentation) and
+# url_standard (interpretation). "infer" (default) fabricates "http://" for
+# scheme-less host-shaped input (today's behavior, byte-for-byte). "require"
+# rejects it (strict / pure-parser posture). See .prepare_urls_for_curl_vec().
+.opt_scheme_policy <- c("infer", "require")
 .opt_host_encoding <- c("keep", "idna", "unicode")
 .opt_path_encoding <- c("keep", "encode", "decode")
 .opt_query_handling <- c("drop", "filter", "allow", "keep")
@@ -829,6 +853,7 @@ safe_parse_urls <- function(url,
                            params_case_sensitive = FALSE,
                            decode_plus = FALSE,
                            port_handling = .opt_port_handling,
+                           scheme_policy = .opt_scheme_policy,
                            url_standard = NULL) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep and the query options.
@@ -846,6 +871,7 @@ safe_parse_urls <- function(url,
     query_handling = match.arg(query_handling),
     empty_param_handling = match.arg(empty_param_handling),
     port_handling = match.arg(port_handling),
+    scheme_policy = match.arg(scheme_policy),
     params_keep = .validate_param_patterns(params_keep, "params_keep"),
     params_drop = .validate_param_patterns(params_drop, "params_drop"),
     sort_params = .validate_flag(sort_params, "sort_params"),
@@ -917,9 +943,13 @@ safe_parse_urls <- function(url,
   # or a second call under a different standard would return a stale cached host
   # (AC #9). Option (a) from the PRD: one extra cache entry per URL per standard
   # actually used. NULL maps to "" so the no-selector key is stable.
+  # scheme_policy is Stage-A-affecting (RURL-vzgeurae): under "require" it folds
+  # scheme-less host-shaped rows into the reject set, changing what curl parses
+  # (and whether a row survives at all). So it MUST enter the key, or a second
+  # call under a different policy would reuse a stale cached row.
   cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
     opts$tld_source, opts$scheme_relative_handling,
-    opts$url_standard %||% "",
+    opts$url_standard %||% "", opts$scheme_policy,
     sep = "\x1F"
   )
   stringi::stri_escape_unicode(enc2utf8(cache_key))
@@ -1095,7 +1125,7 @@ safe_parse_urls <- function(url,
   # rejecting them under a selector (RURL-luwvkwhd).
   prep <- .prepare_urls_for_curl_vec(
     urls, opts$protocol_handling, opts$scheme_relative_handling,
-    opts$url_standard
+    opts$url_standard, opts$scheme_policy
   )
 
   # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
