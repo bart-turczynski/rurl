@@ -1,0 +1,20 @@
+id,input,rfc_section,expect,expected_host,expected_path,note
+rfc-regname-apostrophe,http://a'b.example/,3.2.2,accept,a'b.example,/,sub-delim ' is legal in reg-name
+rfc-regname-plus,http://a+b.example/,3.2.2,accept,a+b.example,/,sub-delim + legal in reg-name
+rfc-regname-semicolon,http://a;b.example/,3.2.2,accept,a;b.example,/,sub-delim ; legal in reg-name
+rfc-regname-equals,http://a=b.example/,3.2.2,accept,a=b.example,/,sub-delim = legal in reg-name
+rfc-regname-bang,http://a!b.example/,3.2.2,accept,a!b.example,/,sub-delim ! legal in reg-name
+rfc-regname-dollar,http://a$b.example/,3.2.2,accept,a$b.example,/,sub-delim $ legal in reg-name
+rfc-regname-comma,"http://a,b.example/",3.2.2,accept,"a,b.example",/,sub-delim comma legal in reg-name
+rfc-regname-star,http://a*b.example/,3.2.2,accept,a*b.example,/,sub-delim * legal in reg-name
+rfc-regname-amp,http://a&b.example/,3.2.2,accept,a&b.example,/,sub-delim & legal in reg-name
+rfc-regname-paren,http://a(b)c.example/,3.2.2,accept,a(b)c.example,/,sub-delims parens legal in reg-name
+rfc-case-host,http://EXAMPLE.COM/,6.2.2.1,accept,example.com,/,host is case-insensitive; normalize to lowercase
+rfc-case-scheme,HTTP://ex.example/,6.2.2.1,accept,ex.example,/,scheme is case-insensitive; normalize to lowercase
+rfc-pct-unreserved-tilde,http://ex.example/%7e,6.2.2.2,accept,ex.example,/~,percent-encoded unreserved must decode
+rfc-pct-unreserved-alpha,http://ex.example/%41%42,2.3,accept,ex.example,/AB,unreserved ALPHA must decode
+rfc-pct-reserved-slash,http://ex.example/a%2fb,2.2,accept,ex.example,/a%2Fb,reserved %2F stays data; hex uppercased
+rfc-pct-hexcase,http://ex.example/%3a,6.2.2.1,accept,ex.example,/%3A,percent-encoding hex normalized to uppercase
+rfc-dot-parent,http://ex.example/a/../b,5.2.4,accept,ex.example,/b,remove-dot-segments resolves ..
+rfc-dot-current,http://ex.example/./a,5.2.4,accept,ex.example,/a,remove-dot-segments resolves .
+rfc-dot-mixed,http://ex.example/a/./b/../c,5.2.4,accept,ex.example,/a/c,remove-dot-segments mixed
