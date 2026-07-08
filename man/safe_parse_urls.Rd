@@ -164,10 +164,14 @@ cleaned URL.}
 
 \item{path_encoding}{How to present the path percent-encoding in \code{clean_url}
 — the readable-vs-browser rendering choice (the path analog of
-\code{host_encoding}; a presentation knob that does not change which path a URL
-denotes). Defaults to "keep". When \code{url_standard} is set, the profile governs
-the path percent/dot handling and \code{path_encoding} cannot also be supplied,
-but the profile never switches a readable path to the browser-encoded form.
+\code{host_encoding}). Defaults to "keep". This is an orthogonal presentation
+knob: it is independent of \code{url_standard} and layers on top of any profile
+(e.g. \verb{url_standard = "whatwg", path_encoding = "encode"} emits the
+WHATWG-parsed path in browser form), exactly like \code{host_encoding}. Only
+"keep" preserves a profile's canonical identity path verbatim; "encode" and
+"decode" are presentation forms that may re-encode or decode reserved octets
+(so \verb{\%2F} may fold to a path-separating \code{/}), independent of whether a
+profile is set.
 \itemize{
 \item{"keep": Leave the path percent-encoding untouched (the path is
 preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
@@ -272,8 +276,8 @@ individual low-level options select (fully backward compatible). When set,
 it selects a coherent set of standard-conformant behaviors for the axes it
 governs — path percent/dot handling, the host IPv4/reg-name model, and
 \code{case_handling} — so callers do not have to hand-assemble the low-level
-knobs. Passing a governed low-level knob (\code{path_encoding},
-\code{path_normalization}, or \code{case_handling}) with a value the selected
+knobs. Passing a governed low-level knob (\code{path_normalization} or
+\code{case_handling}) with a value the selected
 profile would not choose is an error; passing the value the profile would
 pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
 selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
@@ -284,7 +288,8 @@ literal backslash as a path separator for WHATWG-special schemes
 (\code{http}/\code{https}/\code{ftp}) and elides a default port under \code{port_handling = "keep"}; see \code{\link{resolve_url}} for \code{url_standard}-governed
 reference resolution. The selector does \strong{not} govern whether
 \code{port_handling} may be set (it is a standalone editorial knob), nor does it
-govern IDNA rendering or query handling.}
+govern \code{path_encoding} (an orthogonal path-presentation knob that layers
+on any profile), IDNA rendering, or query handling.}
 }
 \value{
 A data.frame with one row per URL and the same fields returned by

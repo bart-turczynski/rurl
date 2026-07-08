@@ -89,14 +89,12 @@ test_that("a positional 2nd arg still binds to the historical parameter", {
 test_that("explicit governed knobs conflicting with the profile error", {
   u <- "http://ex.com/%41%42"
 
-  # path_encoding: the profile's required value is a profile-internal mode with
-  # no public enum equivalent, so ANY explicit public path_encoding conflicts.
+  # path_encoding is ORTHOGONAL (ADR 0011 / RURL-sjnqhwtl): it is a pure
+  # presentation knob, no longer governed, so every value LAYERS on any profile
+  # without error -- mirroring host_encoding.
   for (std in c("rfc3986", "whatwg")) {
     for (pe in c("keep", "encode", "decode")) {
-      expect_error(
-        safe_parse_url(u, url_standard = std, path_encoding = pe),
-        "governs `path_encoding`"
-      )
+      expect_silent(safe_parse_url(u, url_standard = std, path_encoding = pe))
     }
   }
 
@@ -149,10 +147,8 @@ test_that("rfc3986 path profile is no longer a no-op (RURL-gjltzwmp)", {
 
 test_that("get_path()/get_clean_url() enforce the conflict matrix", {
   u <- "http://ex.com/%41%42"
-  expect_error(
-    get_path(u, url_standard = "rfc3986", path_encoding = "decode"),
-    "governs `path_encoding`"
-  )
+  # path_encoding is orthogonal (ADR 0011): it layers on a profile, no error.
+  expect_silent(get_path(u, url_standard = "rfc3986", path_encoding = "decode"))
   expect_error(
     get_clean_url(u, url_standard = "whatwg", path_normalization = "both"),
     "governs `path_normalization`"
@@ -171,9 +167,9 @@ test_that("canonical_join() enforces the conflict matrix through `...`", {
   A <- data.frame(URL = "http://ex.com/a", ValA = 1L, stringsAsFactors = FALSE)
   B <- data.frame(URL = "http://ex.com/a", ValB = 2L, stringsAsFactors = FALSE)
 
-  expect_error(
-    canonical_join(A, B, url_standard = "rfc3986", path_encoding = "keep"),
-    "governs `path_encoding`"
+  # path_encoding is orthogonal (ADR 0011): it layers through the `...` seam.
+  expect_silent(
+    canonical_join(A, B, url_standard = "rfc3986", path_encoding = "keep")
   )
   expect_error(
     canonical_join(A, B, url_standard = "whatwg", path_normalization = "none"),

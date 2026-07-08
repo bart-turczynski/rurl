@@ -139,9 +139,11 @@ table settle them:
    path-agreement gap in the table above. It is a presentation choice, not a
    limitation: `path_encoding = "encode"` renders the browser/percent-encoded
    form and `"decode"` the readable form (the analog of `host_encoding`),
-   shipped by `RURL-ndrgrwcz`. The one residual gap — combining an explicit
-   `path_encoding` *with* a `url_standard` profile, which currently conflicts —
-   is queued as `RURL-sjnqhwtl` (needs a PRD/ADR delta first).
+   shipped by `RURL-ndrgrwcz`. The former residual gap — combining an explicit
+   `path_encoding` *with* a `url_standard` profile — is **closed**
+   (`RURL-sjnqhwtl`, ADR 0011): `path_encoding` is now an orthogonal
+   presentation knob that layers on any profile, so
+   `url_standard = "whatwg", path_encoding = "encode"` emits `/%C3%A9cole`.
 4. **Parked, needs-investigation:** `eq-U8` (U+0130 fold), `yal-009` (scheme
    inference), `ipobf-019/020` (IPv6 re-serialization).
 

@@ -109,8 +109,8 @@ individual low-level options select (fully backward compatible). When set,
 it selects a coherent set of standard-conformant behaviors for the axes it
 governs — path percent/dot handling, the host IPv4/reg-name model, and
 \code{case_handling} — so callers do not have to hand-assemble the low-level
-knobs. Passing a governed low-level knob (\code{path_encoding},
-\code{path_normalization}, or \code{case_handling}) with a value the selected
+knobs. Passing a governed low-level knob (\code{path_normalization} or
+\code{case_handling}) with a value the selected
 profile would not choose is an error; passing the value the profile would
 pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
 selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
@@ -121,7 +121,8 @@ literal backslash as a path separator for WHATWG-special schemes
 (\code{http}/\code{https}/\code{ftp}) and elides a default port under \code{port_handling = "keep"}; see \code{\link{resolve_url}} for \code{url_standard}-governed
 reference resolution. The selector does \strong{not} govern whether
 \code{port_handling} may be set (it is a standalone editorial knob), nor does it
-govern IDNA rendering or query handling.}
+govern \code{path_encoding} (an orthogonal path-presentation knob that layers
+on any profile), IDNA rendering, or query handling.}
 }
 \value{
 A character vector of domain names.

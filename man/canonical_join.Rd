@@ -77,8 +77,9 @@ controlling canonicalization (e.g., \code{protocol_handling},
 \code{scheme_relative_handling}, \code{host_encoding},
 \code{path_encoding}, and the \code{url_standard} selector). When
 \code{url_standard} is set, forwarding a governed low-level knob it would
-override (e.g. \code{path_encoding}) is an error, exactly as in
-\code{\link{safe_parse_url}}.}
+override (e.g. \code{path_normalization}) is an error, exactly as in
+\code{\link{safe_parse_url}}; the orthogonal \code{path_encoding} and
+\code{host_encoding} presentation knobs layer freely on any profile.}
 }
 \value{
 A data frame representing the join. The output includes:

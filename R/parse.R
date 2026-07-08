@@ -114,10 +114,14 @@
 #'   }
 #' @param path_encoding How to present the path percent-encoding in `clean_url`
 #' — the readable-vs-browser rendering choice (the path analog of
-#' `host_encoding`; a presentation knob that does not change which path a URL
-#' denotes). Defaults to "keep". When `url_standard` is set, the profile governs
-#' the path percent/dot handling and `path_encoding` cannot also be supplied,
-#' but the profile never switches a readable path to the browser-encoded form.
+#' `host_encoding`). Defaults to "keep". This is an orthogonal presentation
+#' knob: it is independent of `url_standard` and layers on top of any profile
+#' (e.g. `url_standard = "whatwg", path_encoding = "encode"` emits the
+#' WHATWG-parsed path in browser form), exactly like `host_encoding`. Only
+#' "keep" preserves a profile's canonical identity path verbatim; "encode" and
+#' "decode" are presentation forms that may re-encode or decode reserved octets
+#' (so `%2F` may fold to a path-separating `/`), independent of whether a
+#' profile is set.
 #'   \itemize{
 #'     \item{"keep": Leave the path percent-encoding untouched (the path is
 #'     preserved as written in the URL, so `%2F` stays `%2F` rather than
@@ -229,8 +233,8 @@
 #'   it selects a coherent set of standard-conformant behaviors for the axes it
 #'   governs — path percent/dot handling, the host IPv4/reg-name model, and
 #'   `case_handling` — so callers do not have to hand-assemble the low-level
-#'   knobs. Passing a governed low-level knob (`path_encoding`,
-#'   `path_normalization`, or `case_handling`) with a value the selected
+#'   knobs. Passing a governed low-level knob (`path_normalization` or
+#'   `case_handling`) with a value the selected
 #'   profile would not choose is an error; passing the value the profile would
 #'   pick is accepted (only `case_handling = "lower_host"` is accepted under a
 #'   selector — `"keep"`, `"lower"`, and `"upper"` all conflict, since `"lower"`
@@ -242,7 +246,8 @@
 #'   "keep"`; see \code{\link{resolve_url}} for `url_standard`-governed
 #'   reference resolution. The selector does **not** govern whether
 #'   `port_handling` may be set (it is a standalone editorial knob), nor does it
-#'   govern IDNA rendering or query handling.
+#'   govern `path_encoding` (an orthogonal path-presentation knob that layers
+#'   on any profile), IDNA rendering, or query handling.
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -433,9 +438,8 @@ safe_parse_url <- function(url,
   # here, in the public frame). match.arg() resolves partial matches before the
   # comparison so an abbreviated-but-compatible value is accepted.
   url_standard <- .validate_url_standard(url_standard)
+  # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
   .check_url_standard_conflicts(url_standard, .governed_supplied(
-    path_encoding =
-      if (missing(path_encoding)) NULL else match.arg(path_encoding),
     path_normalization =
       if (missing(path_normalization)) NULL else match.arg(path_normalization),
     case_handling =
@@ -526,9 +530,8 @@ safe_parse_urls <- function(url,
   # url_standard (RURL-eqzkkohm): validate + conflict-check the governed knobs
   # the caller explicitly supplied (see safe_parse_url() for the rationale).
   url_standard <- .validate_url_standard(url_standard)
+  # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
   .check_url_standard_conflicts(url_standard, .governed_supplied(
-    path_encoding =
-      if (missing(path_encoding)) NULL else match.arg(path_encoding),
     path_normalization =
       if (missing(path_normalization)) NULL else match.arg(path_normalization),
     case_handling =
@@ -682,15 +685,15 @@ safe_parse_urls <- function(url,
 # conflict matrix defined below.
 .url_standard_choices <- c("rfc3986", "whatwg")
 
-# Final conflict matrix (PRD §5, D3) -- FIXED now so the profile tickets do not
-# move what T1's tests assert. For each governed knob it records the value the
-# selected profile "would choose". `path_encoding`'s required value is a
-# profile-internal mode with NO public enum equivalent (rurl has no public
-# unreserved-only or WHATWG-preserve `path_encoding` value), so ANY explicit
-# public `path_encoding` conflicts with a set `url_standard`.
-# `path_normalization` resolves dot segments under both profiles, so its
-# value is "dot_segments" (v1 profiles do not collapse slashes, so "both"
-# conflicts).
+# Final conflict matrix (PRD §5, D3; amended by ADR 0011 / RURL-sjnqhwtl). For
+# each GOVERNED knob it records the value the selected profile "would choose".
+# `path_identity` is the profile's path IDENTITY-normalization mode (a
+# profile-internal sentinel with NO public enum equivalent) -- it is NOT a
+# public argument, so it is never conflict-checked. The public presentation
+# knob `path_encoding` (keep/encode/decode) is now ORTHOGONAL and un-governed:
+# it layers on any profile like `host_encoding` (ADR 0011). `path_normalization`
+# resolves dot segments under both profiles, so its value is "dot_segments"
+# (v1 profiles do not collapse slashes, so "both" conflicts).
 # `case_handling` (PRD v2 §5 D5, RURL-mevmyhxz): both profiles require
 # "lower_host" -- it already matches RFC 3986 sec 6.2.2.1 and WHATWG
 # scheme/host casing, and lowercases scheme+host only. "lower" also
@@ -702,22 +705,23 @@ safe_parse_urls <- function(url,
 # it contributes no conflict-checkable argument here.
 .URL_STANDARD_PROFILES <- list(
   rfc3986 = list(
-    path_encoding = ".rfc3986_unreserved",
+    path_identity = ".rfc3986_unreserved",
     path_normalization = "dot_segments",
     case_handling = "lower_host"
   ),
   whatwg = list(
-    path_encoding = ".whatwg_preserve",
+    path_identity = ".whatwg_preserve",
     path_normalization = "dot_segments",
     case_handling = "lower_host"
   )
 )
 
-# Public choice sets for the governed knobs, used to resolve partial matches
-# (e.g. path_normalization = "dot" -> "dot_segments") before the conflict check
-# so a legitimate abbreviated value is not mistaken for a conflicting one.
+# Public choice sets for the CONFLICT-CHECKABLE governed knobs, used to resolve
+# partial matches (e.g. path_normalization = "dot" -> "dot_segments") before the
+# conflict check so a legitimate abbreviated value is not mistaken for a
+# conflicting one. `path_identity` is absent: it is profile-internal, not a
+# public argument, so it is never supplied and never resolved here.
 .url_standard_governed_choices <- list(
-  path_encoding = .opt_path_encoding,
   path_normalization = .opt_path_normalization,
   case_handling = .opt_case_handling
 )
@@ -868,6 +872,10 @@ safe_parse_urls <- function(url,
     scheme_relative_handling = match.arg(scheme_relative_handling),
     host_encoding = match.arg(host_encoding),
     path_encoding = match.arg(path_encoding),
+    # Internal path IDENTITY mode (ADR 0011). "none" unless a url_standard
+    # profile sets it below; never a public argument. Kept distinct from the
+    # public presentation knob `path_encoding`.
+    path_identity = "none",
     query_handling = match.arg(query_handling),
     empty_param_handling = match.arg(empty_param_handling),
     port_handling = match.arg(port_handling),
@@ -907,12 +915,15 @@ safe_parse_urls <- function(url,
   # called) already guarantee any EXPLICIT governed knob equals what the
   # profile requires, so this cannot silently override a caller's conflicting
   # choice -- it only fills in the profile value when the caller left the
-  # knob at its default. RURL-gjltzwmp wires the "rfc3986" path_encoding
-  # sentinel (".rfc3986_unreserved") into .normalize_path_vec(); RURL-bbmuehsx
-  # wires the "whatwg" sentinel (".whatwg_preserve") the same way.
+  # knob at its default. The profile sets the internal path IDENTITY mode
+  # (`path_identity`) -- ".rfc3986_unreserved" (RURL-gjltzwmp) or
+  # ".whatwg_preserve" (RURL-bbmuehsx) -- which .normalize_path_vec() applies
+  # BEFORE the orthogonal public `path_encoding` presentation step. Presentation
+  # is un-governed (ADR 0011 / RURL-sjnqhwtl), so the profile never touches
+  # `opts$path_encoding`.
   if (!is.null(opts$url_standard)) {
     profile <- .URL_STANDARD_PROFILES[[opts$url_standard]]
-    opts$path_encoding <- profile$path_encoding
+    opts$path_identity <- profile$path_identity
     opts$path_normalization <- profile$path_normalization
   }
   opts
@@ -1306,7 +1317,8 @@ safe_parse_urls <- function(url,
   # Phase 3: path normalization.
   path_final <- .normalize_path_vec(
     a$raw_path, opts$path_encoding, opts$path_normalization,
-    opts$index_page_handling, opts$trailing_slash_handling
+    opts$index_page_handling, opts$trailing_slash_handling,
+    path_identity = opts$path_identity
   )
 
   # Phase 8: subdomain-level policy (may trim labels from the host).
