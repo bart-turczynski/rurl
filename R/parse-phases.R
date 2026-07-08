@@ -89,9 +89,10 @@
 
 # Phase 1 helper (vector): WHATWG literal backslash-as-slash recognition
 # (RURL-ledntyab, PRD v2 D2, §5.2). Under url_standard = "whatwg", for schemes
-# in .WHATWG_SPECIAL_SCHEMES (http/https/ftp -- NOT ftps, which WHATWG does not
-# define as special), a literal backslash is treated identically to a forward
-# slash everywhere the WHATWG state machine checks for one: the scheme-relative
+# in .WHATWG_SPECIAL_SCHEMES (http/https/ftp/file -- NOT ftps, which WHATWG
+# does not define as special), a literal backslash is treated identically to a
+# forward slash everywhere the WHATWG state machine checks for one: the
+# scheme-relative
 # "//" marker, the authority/path boundary, and path-segment separators. This
 # must run BEFORE curl ever sees the URL (libcurl never treats "\" as a
 # separator), so it rewrites the raw string here in Phase 1, ahead of every
@@ -176,6 +177,16 @@
   remainder_had_backslash <- has_run &
     stringi::stri_detect_fixed(remainder, "\\")
   remainder_had_backslash[is.na(remainder_had_backslash)] <- FALSE
+  # file:///path carries an empty file authority. Collapsing an all-forward-
+  # slash run from "///" to "//" would turn it into file://path, which libcurl
+  # treats as a non-local file host and rejects. Keep file rows byte-for-byte
+  # when no literal backslash is present; actual backslash repair still uses the
+  # shared special-scheme path above.
+  file_no_backslash <- scheme_lower == "file" & has_run &
+    !run_had_backslash & !remainder_had_backslash
+  file_no_backslash[is.na(file_no_backslash)] <- FALSE
+  rewritten_before[file_no_backslash] <- before[file_no_backslash]
+
   changed <- eligible & (run_had_backslash | remainder_had_backslash)
   changed[is.na(changed)] <- FALSE
 
@@ -272,6 +283,46 @@
   no_op
 }
 
+# Authority userinfo repair for selector profiles (RURL-zqhgezuq). libcurl
+# rejects authorities with more than one literal "@", while the WHATWG authority
+# state uses the LAST "@" as the userinfo/host delimiter and percent-encodes
+# earlier "@" bytes into userinfo. RFC 3986 does not admit a raw "@" inside
+# userinfo either, but recovering at the last delimiter is the only
+# host-preserving parse; selector profiles use it to avoid dropping the host.
+# `url_standard = NULL` remains a no-op for backward compatibility.
+.encode_excess_authority_at_vec <- function(url, url_standard) {
+  no_op <- list(url = url)
+  if (is.null(url_standard)) {
+    return(no_op)
+  }
+
+  m <- stringi::stri_match_first_regex(
+    url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)(.*)$"
+  )
+  authority <- m[, 4L]
+  at_count <- stringi::stri_count_fixed(authority, "@")
+  eligible <- !is.na(authority) & at_count > 1L
+  eligible[is.na(eligible)] <- FALSE
+  if (!any(eligible)) {
+    return(no_op)
+  }
+
+  repaired <- vapply(authority[eligible], function(a) {
+    at_pos <- gregexpr("@", a, fixed = TRUE)[[1L]]
+    last <- at_pos[length(at_pos)]
+    userinfo <- substr(a, 1L, last - 1L)
+    host_part <- substr(a, last, nchar(a))
+    paste0(gsub("@", "%40", userinfo, fixed = TRUE), host_part)
+  }, character(1), USE.NAMES = FALSE)
+
+  url_out <- url
+  url_out[eligible] <- paste0(
+    m[eligible, 2L], m[eligible, 3L], repaired, m[eligible, 5L]
+  )
+  no_op$url <- url_out
+  no_op
+}
+
 # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009). libcurl's host allowed-set
 # is NARROWER than WHATWG's: it rejects 15 ASCII code points
 # (.WHATWG_HOST_CHARSET_SHIM_CP: ! " $ & ' ( ) * + , ; = ` { }) that WHATWG
@@ -290,12 +341,12 @@
 # untouched (ADR 0002).
 #
 # SCOPED TO SPECIAL SCHEMES (slice 1, ADR 0009 open-question #4): only rows
-# whose scheme is in .WHATWG_SPECIAL_SCHEMES (http/https/ftp) -- the scheme-less
-# host-like inputs have already had "http://" fabricated by this point, so they
-# are in scope. ftps and non-special/opaque hosts (which WHATWG percent-encodes
-# rather than keeps literal) are a documented follow-up. Runs ONLY under
-# url_standard == "whatwg"; a byte-for-byte no-op otherwise (RFC 3986 keeps
-# libcurl's stricter charset). Recognition of literal bytes only -- a percent-
+# whose scheme is in .WHATWG_SPECIAL_SCHEMES (http/https/ftp/file) -- the
+# scheme-less host-like inputs have already had "http://" fabricated by this
+# point, so they are in scope. ftps and non-special/opaque hosts (which WHATWG
+# percent-encodes rather than keeps literal) are a documented follow-up. Runs
+# ONLY under url_standard == "whatwg"; a byte-for-byte no-op otherwise (RFC
+# 3986 keeps libcurl's stricter charset). Recognition of literal bytes only -- a percent-
 # encoded form (`%21`) is inert text, never a gap byte. Returns `url` (host-
 # sanitized for shimmed rows), a `host_charset_shimmed` mask (rows a gap byte
 # was actually replaced in -> drives the `host-charset-shimmed` diagnostic,
@@ -527,12 +578,15 @@
   }
   url_to_parse[add_http] <- paste0("http://", url[add_http])
 
+  # Authority userinfo repair (RURL-zqhgezuq): selector profiles recover the
+  # host at the last "@" and encode earlier "@" bytes in userinfo before curl.
+  at <- .encode_excess_authority_at_vec(url_to_parse, url_standard)
+  url_to_parse <- at$url
+
   # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009) runs LAST -- after scheme
-  # fabrication, so scheme-less host-like inputs (now "http://..") are in scope.
-  # For special-scheme rows whose host carries a code point libcurl rejects but
-  # WHATWG keeps, it sanitizes the host so curl parses the structure; the caller
-  # restores `shimmed_true_host` onto curl's `$host`. A no-op unless
-  # url_standard == "whatwg".
+  # fabrication and authority userinfo repair, so scheme-less host-like inputs
+  # (now "http://..") are in scope and repeated "@" no longer blocks curl from
+  # parsing an otherwise valid host.
   shim <- .shim_whatwg_host_charset_vec(url_to_parse, url_standard)
   url_to_parse <- shim$url
 
@@ -942,6 +996,128 @@
   ok & (is_dec | is_hex)
 }
 
+# Phase 5b helper (scalar): WHATWG IPv6 serializer for bracketed literals. The
+# WHATWG host parser stores IPv6 as eight 16-bit pieces; dotted-quad tails are
+# folded into two pieces before serialization, and the longest zero run is
+# compressed (`[::127.0.0.1]` -> `[::7f00:1]`). Invalid inputs return unchanged;
+# validation/fatal decisions stay with the existing host model.
+.serialize_whatwg_ipv6_host <- function(host) {
+  if (is.na(host) || !stringi::stri_detect_regex(host, "^\\[.*\\]$")) {
+    return(host)
+  }
+
+  inner <- stringi::stri_sub(host, 2L, -2L)
+  oct <- "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
+  m <- stringi::stri_match_first_regex(
+    inner, paste0("^(.*:)(", oct, "\\.", oct, "\\.", oct, "\\.", oct, ")$")
+  )
+  if (!is.na(m[1L, 1L])) {
+    quad <- strsplit(m[1L, 3L], ".", fixed = TRUE)[[1L]]
+    octets <- suppressWarnings(as.integer(quad))
+    if (length(octets) != 4L || any(is.na(octets)) ||
+        any(octets < 0L | octets > 255L)) {
+      return(host)
+    }
+    inner <- paste0(
+      m[1L, 2L],
+      as.hexmode(octets[1L] * 256L + octets[2L]), ":",
+      as.hexmode(octets[3L] * 256L + octets[4L])
+    )
+  }
+
+  parts <- strsplit(inner, "::", fixed = TRUE)[[1L]]
+  if (length(parts) > 2L) {
+    return(host)
+  }
+
+  split_side <- function(x) {
+    if (is.na(x) || x == "") {
+      return(character(0))
+    }
+    strsplit(x, ":", fixed = TRUE)[[1L]]
+  }
+  if (length(parts) == 1L) {
+    hextets <- split_side(parts[1L])
+    if (length(hextets) != 8L) {
+      return(host)
+    }
+  } else {
+    left <- split_side(parts[1L])
+    right <- split_side(parts[2L])
+    zero_count <- 8L - length(left) - length(right)
+    if (zero_count < 1L) {
+      return(host)
+    }
+    hextets <- c(left, rep("0", zero_count), right)
+  }
+  if (length(hextets) != 8L ||
+      any(!grepl("^[0-9A-Fa-f]{1,4}$", hextets))) {
+    return(host)
+  }
+
+  pieces <- suppressWarnings(strtoi(hextets, base = 16L))
+  if (any(is.na(pieces)) || any(pieces < 0L | pieces > 65535L)) {
+    return(host)
+  }
+
+  is_zero <- pieces == 0L
+  run <- rle(is_zero)
+  ends <- cumsum(run$lengths)
+  starts <- ends - run$lengths + 1L
+  zero_runs <- which(run$values & run$lengths > 1L)
+  compress_start <- NA_integer_
+  compress_len <- 0L
+  if (length(zero_runs) > 0L) {
+    best <- zero_runs[which.max(run$lengths[zero_runs])]
+    compress_start <- starts[best]
+    compress_len <- run$lengths[best]
+  }
+
+  rendered <- as.character(as.hexmode(pieces))
+  if (is.na(compress_start)) {
+    return(paste0("[", paste(rendered, collapse = ":"), "]"))
+  }
+
+  compress_end <- compress_start + compress_len - 1L
+  before <- if (compress_start > 1L) {
+    rendered[seq_len(compress_start - 1L)]
+  } else {
+    character(0)
+  }
+  after <- if (compress_end < 8L) {
+    rendered[(compress_end + 1L):8L]
+  } else {
+    character(0)
+  }
+
+  serialized <- if (length(before) == 0L && length(after) == 0L) {
+    "::"
+  } else if (length(before) == 0L) {
+    paste0("::", paste(after, collapse = ":"))
+  } else if (length(after) == 0L) {
+    paste0(paste(before, collapse = ":"), "::")
+  } else {
+    paste0(paste(before, collapse = ":"), "::", paste(after, collapse = ":"))
+  }
+  paste0("[", serialized, "]")
+}
+
+# Phase 5b helper (vector): delegates IPv6 WHATWG serialization to the scalar
+# parser only for bracketed rows that can change.
+.serialize_whatwg_ipv6_hosts_vec <- function(host) {
+  out <- host
+  elig <- !is.na(host) &
+    stringi::stri_detect_regex(host, "^\\[[0-9A-Fa-f:.]+\\]$")
+  elig[is.na(elig)] <- FALSE
+  if (any(elig)) {
+    out[elig] <- vapply(
+      host[elig], .serialize_whatwg_ipv6_host, character(1),
+      USE.NAMES = FALSE
+    )
+  }
+  out
+}
+
 # Phase 5b (vector): the url_standard host IPv4/reg-name model (RURL-luwvkwhd,
 # PRD §6.2). A no-op when url_standard is NULL (returns curl's host / IP flag
 # unchanged, never fatal), so the default pipeline is byte-for-byte unaffected
@@ -1028,6 +1204,11 @@
         fatal <- fatal | bad_uts46
       }
     }
+
+    # WHATWG IPv6 serializer (RURL-thjmzaam): bracketed IPv6 literals serialize
+    # as eight 16-bit pieces with zero compression; an embedded dotted-quad IPv4
+    # tail never remains dotted.
+    host <- .serialize_whatwg_ipv6_hosts_vec(host)
   }
 
   list(host = host, is_ip = is_ip, fatal = fatal)
@@ -1445,7 +1626,10 @@
   n <- length(host_output)
   clean_url <- rep(NA_character_, n)
   has_host <- !is.na(host_output) & host_output != ""
-  if (!any(has_host)) {
+  scheme_lc <- stringi::stri_trans_tolower(scheme_output)
+  is_file <- !is.na(scheme_lc) & scheme_lc == "file"
+  buildable <- has_host | is_file
+  if (!any(buildable)) {
     return(clean_url)
   }
 
@@ -1457,12 +1641,13 @@
   if (trailing_slash_handling == "strip") {
     path_part[path_part == "/"] <- ""
   }
-  clean_url[has_host] <- paste0(
-    scheme_part[has_host], host_output[has_host], port_part[has_host],
-    path_part[has_host]
+  host_part <- ifelse(has_host, host_output, "")
+  clean_url[buildable] <- paste0(
+    scheme_part[buildable], host_part[buildable], port_part[buildable],
+    path_part[buildable]
   )
   if (!is.null(query)) {
-    q_present <- has_host & !is.na(query) & nzchar(query)
+    q_present <- buildable & !is.na(query) & nzchar(query)
     clean_url[q_present] <- paste0(clean_url[q_present], "?", query[q_present])
   }
   clean_url
@@ -1495,9 +1680,12 @@
   n <- length(final_host)
   status <- rep(.STATUS_ERROR, n)
 
+  scheme_lower <- stringi::stri_trans_tolower(final_scheme)
+  is_file <- curl_ok & !is.na(scheme_lower) & scheme_lower == "file"
   host_present <- curl_ok & !is.na(final_host) & final_host != ""
 
   status[host_present & is_ip_host] <- .STATUS_OK
+  status[is_file] <- .STATUS_OK
 
   non_ip <- host_present & !is_ip_host
   host_has_dot <- stringi::stri_detect_fixed(final_host, ".")
@@ -1513,7 +1701,6 @@
 
   if (protocol_handling != "strip") {
     ftp_candidate <- host_present & status == .STATUS_OK & !is.na(final_scheme)
-    scheme_lower <- stringi::stri_trans_tolower(final_scheme)
     is_ftp <- ftp_candidate & scheme_lower %in% c("ftp", "ftps")
     is_ftp[is.na(is_ftp)] <- FALSE
     status[is_ftp] <- .STATUS_OK_FTP

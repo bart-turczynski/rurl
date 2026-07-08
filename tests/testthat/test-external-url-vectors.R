@@ -71,14 +71,14 @@ test_that("external-url-vectors fixture is well-formed", {
 oracle_nonconformance_ids <- function() {
   c(
     # closed scheme set (ADR 0004) -- specs accept, rurl rejects
-    "ada-007", "ada-012", "ada-013", "ada-014", "ada-018", "ada-019",
-    "ada-021", "ada-023", "yal-008",
+    "ada-007", "ada-012", "ada-013", "ada-014", "ada-018", "ada-021",
+    "ada-023", "yal-008",
     # reversible Unicode host default (ADR 0002)
     "ada-006", "yal-005",
     # readable-path default (RURL-ndrgrwcz)
     "ada-003", "ada-022",
-    # scheme inference / UTS-46 case fold / IPv6 re-serialization
-    "yal-009", "eq-U8", "ipobf-019", "ipobf-020",
+    # scheme inference / UTS-46 case fold
+    "yal-009", "eq-U8",
     # scheme inference (ADR 0004) makes rurl accept a scheme-less host-shaped
     # input the scheme-less WHATWG oracle rejects; the host-charset shim
     # (RURL-dxwxeamq / ADR 0009) then keeps its backtick host
@@ -232,9 +232,9 @@ test_that("Ada extra-urltestdata divergences pin to the documented set", {
 
   # Ada's beyond-WPT vectors (Apache-2.0), oracle = WHATWG. rurl agrees on every
   # must-fail row (rejecting all of them, sometimes for a stricter reason such
-  # as the closed scheme set) and on the `http://./` accept. It diverges on 12
-  # rows, each triaged in the divergence ledger: 8 closed-scheme rejections and
-  # `a:b#` (boundary-by-design, ADR 0004 -- only http/https/ftp(s) supported),
+  # as the closed scheme set) and on the `http://./` accept. It diverges on 11
+  # rows, each triaged in the divergence ledger: 7 closed-scheme/opaque
+  # rejections including `a:b#` (boundary-by-design, ADR 0004),
   # the IDNA host `Yağız.com` (boundary-by-design, ADR 0002 -- Unicode host kept
   # reversible, punycode is a separate phase), the scheme-less backtick host
   # `example.com``x.example.com` (ada-005: rurl infers http:// per ADR 0004 and
@@ -247,7 +247,7 @@ test_that("Ada extra-urltestdata divergences pin to the documented set", {
   expect_setequal(
     diverging_ids,
     c("ada-003", "ada-005", "ada-006", "ada-007", "ada-012", "ada-013",
-      "ada-014", "ada-018", "ada-019", "ada-021", "ada-022", "ada-023")
+      "ada-014", "ada-018", "ada-021", "ada-022", "ada-023")
   )
   # Every non-diverging Ada row: accept rows must equal Ada's href, failure rows
   # must genuinely reject.
