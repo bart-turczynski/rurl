@@ -1142,7 +1142,8 @@ safe_parse_urls <- function(url,
   # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
   parseable <- valid & !prep$rejected
   rfc3986_path_rootless <- parseable & prep$rfc3986_path_rootless
-  curl_parseable <- parseable & !rfc3986_path_rootless
+  whatwg_file <- parseable & prep$whatwg_file
+  curl_parseable <- parseable & !rfc3986_path_rootless & !whatwg_file
   parsed_list <- vector("list", n)
   parse_idx <- which(curl_parseable)
   if (length(parse_idx) > 0L) {
@@ -1151,7 +1152,12 @@ safe_parse_urls <- function(url,
     )
   }
   curl_ok <- curl_parseable & !vapply(parsed_list, is.null, logical(1))
-  parse_ok <- curl_ok | rfc3986_path_rootless
+  file_parse <- .parse_whatwg_file_urls_vec(
+    prep$whatwg_file_input[whatwg_file], prep$backslash_rewritten[whatwg_file]
+  )
+  file_ok <- rep(FALSE, n)
+  file_ok[whatwg_file] <- file_parse$ok
+  parse_ok <- curl_ok | rfc3986_path_rootless | file_ok
   null_row <- !parse_ok
 
   # Pull raw components into columns (mirrors .extract_raw_components() and the
@@ -1204,6 +1210,17 @@ safe_parse_urls <- function(url,
       suppressWarnings(as.integer(p$port %||% NA_integer_))
     }
   }, integer(1), USE.NAMES = FALSE)
+
+  if (any(whatwg_file)) {
+    raw_scheme[whatwg_file] <- "file"
+    raw_host[whatwg_file] <- file_parse$host
+    raw_path[whatwg_file] <- file_parse$path
+    raw_query[whatwg_file] <- file_parse$query
+    raw_fragment[whatwg_file] <- file_parse$fragment
+    raw_user[whatwg_file] <- NA_character_
+    raw_password[whatwg_file] <- NA_character_
+    raw_port[whatwg_file] <- NA_integer_
+  }
 
   if (any(rfc3986_path_rootless)) {
     raw_scheme[rfc3986_path_rootless] <-

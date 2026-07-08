@@ -78,6 +78,69 @@ test_that("WHATWG IDNA presentation applies UTS-46 ignored mappings", {
   )
 })
 
+test_that("WHATWG IDNA presentation applies UTS-46 compatibility mappings", {
+  urls <- c(
+    "https://①.com/",
+    "https://ﬃ.com/",
+    "https://Ａ.com/",
+    paste0(
+      "https://loC",
+      "\U0001D400\U0001D40B\U0001D407\U0001D428\U0001D42C\U0001D42D",
+      "/"
+    )
+  )
+  expected <- c(
+    "1.com",
+    "ffi.com",
+    "a.com",
+    "localhost"
+  )
+
+  for (i in seq_along(urls)) {
+    expect_identical(
+      get_host(urls[i], url_standard = "whatwg", host_encoding = "idna"),
+      expected[i],
+      info = urls[i]
+    )
+  }
+
+  expect_identical(
+    get_clean_url(
+      paste0(
+        "https://loC",
+        "\U0001D400\U0001D40B\U0001D407\U0001D428\U0001D42C\U0001D42D",
+        "/"
+      ),
+      url_standard = "whatwg",
+      host_encoding = "idna"
+    ),
+    "https://localhost/"
+  )
+})
+
+test_that("WHATWG rejects UTS-46 join controls that cannot normalize", {
+  urls <- c("https://\u200D.com/", "https://\u200C.com/")
+
+  expect_identical(
+    get_parse_status(urls, url_standard = "whatwg"),
+    c("error", "error")
+  )
+  expect_true(all(is.na(get_host(urls, url_standard = "whatwg"))))
+})
+
+test_that("RFC IDNA presentation remains the reversible punycode path", {
+  expect_identical(
+    get_host("https://①.com/", url_standard = "rfc3986",
+             host_encoding = "idna"),
+    "xn--orh.com"
+  )
+  expect_identical(
+    get_host("https://ﬃ.com/", url_standard = "rfc3986",
+             host_encoding = "idna"),
+    "xn--lm6c.com"
+  )
+})
+
 test_that("a canonical dotted-quad is IPv4 in both modes", {
   expect_identical(get_host(url_of("127.0.0.1"), url_standard = "rfc3986"),
     "127.0.0.1")

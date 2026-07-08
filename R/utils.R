@@ -5,9 +5,11 @@
 
 # The URL schemes rurl supports. rurl's domain is authority-based (hierarchical)
 # URLs. http/https/ftp/ftps carry "scheme://host[:port]/path"; file is the
-# one supported hostless hierarchical scheme and is accepted only in the forms
-# libcurl can parse (`file:///...` and `file://localhost/...`). ftps is
-# FTP-over-TLS (the https-analogue for ftp), not the unrelated SSH-based sftp.
+# one supported hostless hierarchical scheme. In the WHATWG profile, `file:`
+# has a small parser slice for drive-letter, host, and backslash state-machine
+# forms; default/RFC behavior remains limited to libcurl-parseable local forms.
+# ftps is FTP-over-TLS (the https-analogue for ftp), not the unrelated
+# SSH-based sftp.
 # This is the single source of truth: a scheme-bearing input whose scheme is not
 # here is rejected (opaque schemes like mailto:/tel:/data:, and unrecognized
 # schemes like ws:/ssh:/typos).

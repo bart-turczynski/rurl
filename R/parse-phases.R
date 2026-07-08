@@ -705,6 +705,155 @@
   no_op
 }
 
+.whatwg_file_split_rest <- function(rest) {
+  hash <- regexpr("#", rest, fixed = TRUE)[1L]
+  qmark <- regexpr("?", rest, fixed = TRUE)[1L]
+
+  end_path <- nchar(rest)
+  if (qmark > 0L) {
+    end_path <- min(end_path, qmark - 1L)
+  }
+  if (hash > 0L) {
+    end_path <- min(end_path, hash - 1L)
+  }
+  path <- if (end_path > 0L) substr(rest, 1L, end_path) else ""
+
+  query <- NA_character_
+  if (qmark > 0L && (hash < 0L || qmark < hash)) {
+    query_end <- if (hash > 0L) hash - 1L else nchar(rest)
+    query <- substr(rest, qmark + 1L, query_end)
+  }
+
+  fragment <- NA_character_
+  if (hash > 0L) {
+    fragment <- substr(rest, hash + 1L, nchar(rest))
+  }
+
+  c(path = path, query = query, fragment = fragment)
+}
+
+.whatwg_file_normalize_host <- function(host) {
+  if (is.na(host) || host == "") {
+    return(NA_character_)
+  }
+  if (stringi::stri_startswith_fixed(host, "[")) {
+    return(host)
+  }
+
+  decoded <- if (grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)) {
+    tryCatch(utils::URLdecode(host), error = function(e) host)
+  } else {
+    host
+  }
+  if (stringi::stri_detect_regex(decoded, .WHATWG_FORBIDDEN_HOST_CP)) {
+    return("\u0001")
+  }
+  normalized <- punycoder::host_normalize(
+    decoded, check_hyphens = FALSE, use_std3 = FALSE,
+    verify_dns_length = FALSE
+  )
+  if (!is.na(normalized)) {
+    decoded <- normalized
+  }
+  if (identical(stringi::stri_trans_tolower(decoded), "localhost")) {
+    return(NA_character_)
+  }
+  decoded
+}
+
+.whatwg_file_drive_path <- function(path) {
+  stringi::stri_replace_first_regex(path, "^/([A-Za-z])\\|(?=/|$)", "/$1:")
+}
+
+.parse_whatwg_file_urls_vec <- function(url, backslash_rewritten) {
+  n <- length(url)
+  out <- list(
+    ok = rep(FALSE, n),
+    host = rep(NA_character_, n),
+    path = rep(NA_character_, n),
+    query = rep(NA_character_, n),
+    fragment = rep(NA_character_, n)
+  )
+  if (n == 0L) {
+    return(out)
+  }
+
+  m <- stringi::stri_match_first_regex(
+    url, "^[Ff][Ii][Ll][Ee]:(.*)$"
+  )
+  rest <- m[, 2L]
+  ok <- !is.na(rest)
+  if (!any(ok)) {
+    return(out)
+  }
+
+  split <- lapply(rest[ok], .whatwg_file_split_rest)
+  parts <- do.call(rbind, split)
+  file_path_raw <- parts[, "path"]
+  file_path <- stringi::stri_replace_all_fixed(file_path_raw, "\\", "/")
+
+  host <- rep(NA_character_, length(file_path))
+  path <- file_path
+  has_authority <- stringi::stri_detect_regex(file_path_raw, "^[/\\\\]{2}")
+  has_authority[is.na(has_authority)] <- FALSE
+  if (any(has_authority)) {
+    after_marker <- stringi::stri_sub(file_path_raw[has_authority], 3L)
+    slash <- stringi::stri_locate_first_regex(after_marker, "[/\\\\]")[, 1L]
+    authority <- ifelse(
+      is.na(slash),
+      after_marker,
+      stringi::stri_sub(after_marker, 1L, slash - 1L)
+    )
+    auth_path <- ifelse(
+      is.na(slash), "/", stringi::stri_sub(after_marker, slash)
+    )
+    authority <- stringi::stri_replace_all_fixed(authority, "\\", "/")
+    auth_path <- stringi::stri_replace_all_fixed(auth_path, "\\", "/")
+
+    drive_authority <- stringi::stri_detect_regex(authority, "^[A-Za-z]\\|$")
+    drive_authority[is.na(drive_authority)] <- FALSE
+    if (any(drive_authority)) {
+      auth_path[drive_authority] <- paste0(
+        "/",
+        stringi::stri_sub(authority[drive_authority], 1L, 1L),
+        ":",
+        auth_path[drive_authority]
+      )
+      authority[drive_authority] <- ""
+    }
+
+    host[has_authority] <- vapply(
+      authority, .whatwg_file_normalize_host, character(1), USE.NAMES = FALSE
+    )
+    path[has_authority] <- auth_path
+  }
+
+  no_authority <- !has_authority
+  if (any(no_authority)) {
+    no_auth_idx <- which(no_authority)
+    path[no_auth_idx] <- ifelse(path[no_auth_idx] == "", "/", path[no_auth_idx])
+    needs_leading <- !stringi::stri_startswith_fixed(path[no_auth_idx], "/")
+    needs_leading[is.na(needs_leading)] <- FALSE
+    lead_idx <- no_auth_idx[needs_leading]
+    path[lead_idx] <- paste0("/", path[lead_idx])
+  }
+
+  path <- .whatwg_file_drive_path(path)
+  # A backslash-introduced empty file authority serializes with a double-slash
+  # path. `file:` and `file://` proper keep their ordinary single slash.
+  empty_backslash_authority <- has_authority & is.na(host) &
+    backslash_rewritten[ok] & path == "/"
+  empty_backslash_authority[is.na(empty_backslash_authority)] <- FALSE
+  path[empty_backslash_authority] <- "//"
+
+  out$ok[ok] <- TRUE
+  out$host[ok] <- host
+  out$path[ok] <- .uppercase_percent_hex(path)
+  out$query[ok] <- .blank_to_na(parts[, "query"])
+  out$fragment[ok] <- .blank_to_na(parts[, "fragment"])
+  out
+}
+
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
 # gate, and building the string handed to curl. Returns the per-URL columns plus
 # a logical `rejected` column marking rows the scalar pipeline returned NULL for
@@ -725,6 +874,7 @@
   # A no-op (byte-for-byte `url` unchanged) unless url_standard == "whatwg".
   cc <- .strip_whatwg_control_chars_vec(url, url_standard)
   url <- cc$url
+  whatwg_file_input <- url
 
   # WHATWG literal backslash recognition (RURL-ledntyab) runs next: for
   # eligible rows it rewrites "\" to "/" ahead of every scheme/host regex
@@ -742,6 +892,9 @@
   url <- sep$url
 
   url_lower <- stringi::stri_trans_tolower(url)
+  is_whatwg_file <- identical(url_standard, "whatwg") &
+    stringi::stri_detect_regex(whatwg_file_input, "^[Ff][Ii][Ll][Ee]:")
+  is_whatwg_file[is.na(is_whatwg_file)] <- FALSE
 
   # A scheme-bearing input is "allowed" only if its scheme is one rurl supports
   # (.SUPPORTED_SCHEMES). any(startsWith(., "<scheme>://")) per row, no loop.
@@ -750,6 +903,7 @@
     `|`, lapply(allowed_prefixes, function(p) startsWith(url_lower, p))
   )
   original_has_allowed_scheme[is.na(original_has_allowed_scheme)] <- FALSE
+  original_has_allowed_scheme <- original_has_allowed_scheme | is_whatwg_file
 
   scheme_match <- stringi::stri_match_first_regex(
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):"
@@ -911,7 +1065,9 @@
     rfc3986_path_rootless_scheme = rfc_rootless$scheme,
     rfc3986_path_rootless_path = rfc_rootless$path,
     rfc3986_path_rootless_query = rfc_rootless$query,
-    rfc3986_path_rootless_fragment = rfc_rootless$fragment
+    rfc3986_path_rootless_fragment = rfc_rootless$fragment,
+    whatwg_file = is_whatwg_file,
+    whatwg_file_input = whatwg_file_input
   )
 }
 
@@ -2011,7 +2167,7 @@
   status[is_file] <- .STATUS_OK
   status[is_rfc3986_path_rootless] <- .STATUS_OK
 
-  non_ip <- host_present & !is_ip_host
+  non_ip <- host_present & !is_ip_host & !is_file
   host_has_dot <- stringi::stri_detect_fixed(final_host, ".")
   host_has_dot[is.na(host_has_dot)] <- FALSE
   tld_empty <- is.na(tld) | !nzchar(tld)
