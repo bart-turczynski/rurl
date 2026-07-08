@@ -8,7 +8,7 @@
   "codeRepository": "https://github.com/bart-turczynski/rurl",
   "issueTracker": "https://github.com/bart-turczynski/rurl/issues",
   "license": "https://spdx.org/licenses/MIT",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "programmingLanguage": {
     "@type": "ComputerLanguage",
     "name": "R",
@@ -191,7 +191,7 @@
     "SystemRequirements": null
   },
   "keywords": ["url-parsing", "url-parser", "url-normalization", "url-cleaning", "url-cleaner", "url-checker", "domain-extraction", "domain-name-detection", "domain-name-checker", "public-suffix", "tld", "tlds", "tld-extraction", "tld-checker", "tld-verification", "idna", "punycode", "uri", "url", "seo", "web-scraping", "r", "rstats", "r-stats", "r-package"],
-  "fileSize": "1330.786KB",
+  "fileSize": "1338.831KB",
   "citation": [
     {
       "@type": "SoftwareSourceCode",
@@ -207,7 +207,7 @@
       "name": "{rurl}: Parse, Clean, and Normalize URLs",
       "identifier": "10.5281/zenodo.20972584",
       "url": "https://CRAN.R-project.org/package=rurl",
-      "description": "R package version 2.4.0",
+      "description": "R package version 2.5.0",
       "@id": "https://doi.org/10.5281/zenodo.20972584",
       "sameAs": "https://doi.org/10.5281/zenodo.20972584"
     }
