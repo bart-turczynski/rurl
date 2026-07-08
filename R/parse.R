@@ -1342,7 +1342,7 @@ safe_parse_urls <- function(url,
 
   # Phase 9: host encoding (idna / unicode).
   host_for_clean <- .apply_host_encoding_vec(
-    final_host, opts$host_encoding, is_ip_host
+    final_host, opts$host_encoding, is_ip_host, opts$url_standard
   )
 
   # Phase 10: case policy applied to host, path, and scheme.
@@ -1434,7 +1434,8 @@ safe_parse_urls <- function(url,
                                   scheme_relative_handling,
                                   subdomain_levels_to_keep,
                                   host_encoding = "keep",
-                                  path_encoding = "keep") {
+                                  path_encoding = "keep",
+                                  url_standard = NULL) {
   original_input_url <- url
 
   # host_encoding/path_encoding are already validated upstream by
@@ -1498,7 +1499,9 @@ safe_parse_urls <- function(url,
   )
 
   # Phase 9: host encoding (idna / unicode)
-  host_for_clean <- .apply_host_encoding(final_host, host_encoding, is_ip_host)
+  host_for_clean <- .apply_host_encoding(
+    final_host, host_encoding, is_ip_host, url_standard
+  )
 
   # Phase 10: case policy applied to host, path, and scheme
   cased <- .apply_case_policy(

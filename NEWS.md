@@ -17,6 +17,24 @@
   `"keep"` are byte-for-byte unchanged; only previously-rejected combinations
   now compute. See ADR 0011.
 
+### Bug fixes
+
+- `url_standard = "rfc3986"` now accepts literal RFC 3986 `reg-name`
+  sub-delimiters in hosts (`! $ & ' ( ) * + , ; =`). These URLs previously
+  inherited libcurl's narrower host character set and returned `error`; they now
+  parse as RFC-legal registered names while `url_standard = NULL` keeps the
+  historical curl behavior. This moves the RFC 3986 parity probe set from 9/19
+  to 19/19.
+
+- `url_standard = "whatwg"` now accepts WPT-valid IPv4 hosts with empty hex
+  zero parts, such as `https://0x.0x.0` and `https://0x.0x.0x.0x`, and
+  serializes them as `0.0.0.0`.
+
+- `url_standard = "whatwg"` with `host_encoding = "idna"` now applies UTS-46
+  ignored-code-point mappings during IDNA presentation, so
+  `https://a%C2%ADb/` serializes canonically as `https://ab/` instead of
+  punycoding the soft hyphen.
+
 ## rurl 2.4.0
 
 ### New features

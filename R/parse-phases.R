@@ -56,11 +56,12 @@
   is_dotted_name <- stringi::stri_detect_regex(host_token, "^[^.]+(\\.[^.]+)+$")
   is_dotted_name[is.na(is_dotted_name)] <- FALSE
 
-  # inet_aton IP attempts: dotted groups each all-decimal or 0x-hex (12345,
-  # 0x7f000001, 017700000001, 192.168, 1.2.3.4, 256.1.1.1, 1.2.3.4.5), plus any
-  # ':' host (IPv6, incl. bracketed).
+  # inet_aton / WHATWG IPv4 attempts: dotted groups each all-decimal or 0x-hex
+  # (12345, 0x7f000001, 0x, 017700000001, 192.168, 1.2.3.4, 256.1.1.1,
+  # 1.2.3.4.5), plus any ':' host (IPv6, incl. bracketed). WHATWG's IPv4
+  # number parser treats a bare "0x" prefix as zero after stripping the prefix.
   ipv4ish <- stringi::stri_detect_regex(
-    host_token, "^(0[xX][0-9a-fA-F]+|[0-9]+)(\\.(0[xX][0-9a-fA-F]+|[0-9]+))*$"
+    host_token, "^(0[xX][0-9a-fA-F]*|[0-9]+)(\\.(0[xX][0-9a-fA-F]*|[0-9]+))*$"
   )
   ipv4ish[is.na(ipv4ish)] <- FALSE
   ipv6ish <- stringi::stri_detect_fixed(host_token, ":")
@@ -330,6 +331,127 @@
   no_op
 }
 
+.parse_whatwg_ipv4_number <- function(part) {
+  if (grepl("^0[xX]", part)) {
+    digits <- sub("^0[xX]", "", part)
+    base <- 16
+  } else if (grepl("^0[0-9]+$", part)) {
+    digits <- substring(part, 2L)
+    base <- 8
+  } else {
+    digits <- part
+    base <- 10
+  }
+  if (!nzchar(digits)) {
+    return(0)
+  }
+
+  chars <- strsplit(digits, "", fixed = TRUE)[[1L]]
+  vals <- match(toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
+  if (anyNA(vals) || any(vals >= base)) {
+    return(NA_real_)
+  }
+  Reduce(function(acc, d) acc * base + d, vals, 0)
+}
+
+.parse_whatwg_ipv4_host <- function(host) {
+  if (is.na(host) || !nzchar(host)) {
+    return(NA_character_)
+  }
+
+  host <- stringi::stri_replace_first_regex(host, "\\.$", "")
+  parts <- strsplit(host, ".", fixed = TRUE)[[1L]]
+  if (length(parts) > 4L || any(parts == "")) {
+    return(NA_character_)
+  }
+
+  numbers <- vapply(
+    parts, .parse_whatwg_ipv4_number, numeric(1), USE.NAMES = FALSE
+  )
+  if (anyNA(numbers)) {
+    return(NA_character_)
+  }
+
+  k <- length(numbers)
+  if (k > 1L && any(numbers[-k] > 255)) {
+    return(NA_character_)
+  }
+  if (numbers[k] > 256^(5L - k) - 1) {
+    return(NA_character_)
+  }
+
+  ipv4 <- numbers[k]
+  if (k > 1L) {
+    for (i in seq_len(k - 1L)) {
+      ipv4 <- ipv4 + numbers[i] * 256^(4L - i)
+    }
+  }
+  octets <- vapply(3L:0L, function(pow) {
+    floor(ipv4 / 256^pow) %% 256
+  }, numeric(1), USE.NAMES = FALSE)
+  paste(octets, collapse = ".")
+}
+
+# WHATWG IPv4 canonicalization before curl. libcurl handles many numeric forms,
+# but rejects WPT-valid empty-hex-zero parts such as `0x.0x.0`; canonicalizing
+# valid WHATWG IPv4 hosts here lets curl parse the rest of the URL structure.
+# Invalid "ends in a number" hosts are left untouched and rejected either by
+# curl or by the later WHATWG host model.
+.rewrite_whatwg_ipv4_hosts_vec <- function(url, url_standard) {
+  no_op <- list(url = url)
+  if (!identical(url_standard, "whatwg")) {
+    return(no_op)
+  }
+
+  m <- stringi::stri_match_first_regex(
+    url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)(.*)$"
+  )
+  authority <- m[, 4L]
+  eligible <- !is.na(authority)
+  eligible[is.na(eligible)] <- FALSE
+  if (!any(eligible)) {
+    return(no_op)
+  }
+
+  after_ui <- stringi::stri_replace_first_regex(authority, "^.*@", "")
+  bracketed <- stringi::stri_startswith_fixed(after_ui, "[")
+  bracketed[is.na(bracketed)] <- FALSE
+  host <- ifelse(
+    bracketed,
+    stringi::stri_replace_first_regex(after_ui, "^(\\[[^\\]]*\\]).*$", "$1"),
+    stringi::stri_replace_first_regex(after_ui, ":[^:]*$", "")
+  )
+
+  attempt <- eligible & !bracketed & .host_ends_in_number_vec(host)
+  attempt[is.na(attempt)] <- FALSE
+  if (!any(attempt)) {
+    return(no_op)
+  }
+
+  parsed <- rep(NA_character_, length(url))
+  parsed[attempt] <- vapply(
+    host[attempt], .parse_whatwg_ipv4_host, character(1), USE.NAMES = FALSE
+  )
+  rewrite <- attempt & !is.na(parsed)
+  if (!any(rewrite)) {
+    return(no_op)
+  }
+
+  ui_prefix <- stringi::stri_sub(
+    authority, 1L, stringi::stri_length(authority) -
+      stringi::stri_length(after_ui)
+  )
+  port_suffix <- stringi::stri_sub(after_ui, stringi::stri_length(host) + 1L)
+  new_authority <- paste0(ui_prefix, parsed, port_suffix)
+
+  url_out <- url
+  url_out[rewrite] <- paste0(
+    m[rewrite, 2L], m[rewrite, 3L], new_authority[rewrite], m[rewrite, 5L]
+  )
+  no_op$url <- url_out
+  no_op
+}
+
 # Decode percent-triplets in a WHATWG host just far enough for the host model to
 # see the real code points after curl has parsed the URL's structure. A
 # malformed or NUL-containing sequence maps to a C0 sentinel so the WHATWG
@@ -343,12 +465,15 @@
   tryCatch(utils::URLdecode(host), error = function(e) "\u0001")
 }
 
-# Host shim (RURL-dxwxeamq, ADR 0009; extended by RURL-rgjpcbuk). libcurl's
-# host handling is too eager for selector mode in two ways:
+# Host shim (RURL-dxwxeamq, ADR 0009; extended by RURL-rgjpcbuk and
+# RURL-dnddogce). libcurl's host handling is too eager for selector mode in two
+# ways:
 #
 # * WHATWG accepts 15 literal ASCII code points that libcurl rejects in a host
 #   ("Bad hostname"). The shim replaces those bytes 1:1 with filler so curl can
 #   parse structure, then restores the true host before the host model runs.
+#   RFC 3986 uses the same seam for the 11 literal reg-name sub-delims it
+#   permits in section 3.2.2.
 # * libcurl percent-decodes host triplets before validation. That rejects the
 #   encoded spelling of the same selector-valid gap bytes, such as `%60`. The
 #   shim masks those host percent-triplets as three filler letters (`aaa`), then
@@ -360,10 +485,10 @@
 # placeholder. The caller restores `shimmed_true_host` before IP detection and
 # forbidden-code-point checks, so the shim widens no validation gate.
 #
-# Literal host-character widening remains WHATWG-only and special-scheme-scoped
-# (http/https/ftp/file). RFC 3986 only uses the percent-triplet path, and only
-# for authority-based supported schemes; literal curl-rejected host bytes keep
-# their historical RFC/NULL rejection behavior.
+# Literal host-character widening is selector-scoped: WHATWG gets its full
+# ada-confirmed gap set for special schemes; RFC 3986 gets only its reg-name
+# sub-delims for authority-based supported schemes. NULL keeps historical curl
+# behavior.
 .shim_whatwg_host_charset_vec <- function(url, url_standard) {
   n <- length(url)
   no_op <- list(
@@ -430,9 +555,12 @@
     }
   }
 
-  literal_gap <- eligible &
+  literal_gap_whatwg <- eligible &
     stringi::stri_detect_regex(host, .WHATWG_HOST_CHARSET_SHIM_CP)
-  literal_gap[is.na(literal_gap)] <- FALSE
+  literal_gap_whatwg[is.na(literal_gap_whatwg)] <- FALSE
+  literal_gap_rfc3986 <- eligible &
+    stringi::stri_detect_regex(host, .RFC3986_REG_NAME_SUB_DELIM_CP)
+  literal_gap_rfc3986[is.na(literal_gap_rfc3986)] <- FALSE
   decoded_gap <- eligible &
     stringi::stri_detect_regex(model_host, .WHATWG_HOST_CHARSET_SHIM_CP)
   decoded_gap[is.na(decoded_gap)] <- FALSE
@@ -443,9 +571,13 @@
   pct_mask <- if (identical(url_standard, "whatwg")) {
     pct_ok & decoded_gap
   } else {
-    pct_gap & !literal_gap
+    pct_gap
   }
-  literal_mask <- identical(url_standard, "whatwg") & literal_gap
+  literal_mask <- if (identical(url_standard, "whatwg")) {
+    literal_gap_whatwg
+  } else {
+    literal_gap_rfc3986
+  }
   restore <- eligible & (pct_mask | literal_mask)
   restore[is.na(restore)] <- FALSE
   if (!any(restore)) {
@@ -457,8 +589,13 @@
   filled_host[pct_mask] <- gsub(
     "%[0-9A-Fa-f]{2}", "aaa", filled_host[pct_mask], perl = TRUE
   )
+  literal_fill_cp <- if (identical(url_standard, "whatwg")) {
+    .WHATWG_HOST_CHARSET_SHIM_CP
+  } else {
+    .RFC3986_REG_NAME_SUB_DELIM_CP
+  }
   filled_host[literal_mask] <- stringi::stri_replace_all_regex(
-    filled_host[literal_mask], .WHATWG_HOST_CHARSET_SHIM_CP, "a"
+    filled_host[literal_mask], literal_fill_cp, "a"
   )
   ui_prefix <- stringi::stri_sub(
     authority, 1L, stringi::stri_length(authority) -
@@ -734,10 +871,13 @@
   at <- .encode_excess_authority_at_vec(url_to_parse, url_standard)
   url_to_parse <- at$url
 
+  ipv4 <- .rewrite_whatwg_ipv4_hosts_vec(url_to_parse, url_standard)
+  url_to_parse <- ipv4$url
+
   # Host shim (RURL-dxwxeamq / RURL-rgjpcbuk) runs LAST -- after scheme
-  # fabrication and authority userinfo repair, so scheme-less host-like inputs
-  # (now "http://..") are in scope and repeated "@" no longer blocks curl from
-  # parsing an otherwise valid host.
+  # fabrication, authority userinfo repair, and WHATWG IPv4 canonicalization,
+  # so scheme-less host-like inputs (now "http://..") are in scope and repeated
+  # "@" no longer blocks curl from parsing an otherwise valid host.
   shim <- .shim_whatwg_host_charset_vec(url_to_parse, url_standard)
   url_to_parse <- shim$url
 
@@ -1621,7 +1761,8 @@
 # this phase only selects the eligible rows and applies the scalar fallback
 # rule (keep the pre-encode host when the encode returns NA, or when the decode
 # returns NA / "").
-.apply_host_encoding_vec <- function(final_host, host_encoding, is_ip_host) {
+.apply_host_encoding_vec <- function(final_host, host_encoding, is_ip_host,
+                                     url_standard = NULL) {
   host_for_clean <- final_host
   if (host_encoding != "idna" && host_encoding != "unicode") {
     return(host_for_clean)
@@ -1633,7 +1774,18 @@
 
   subset <- final_host[elig]
   if (host_encoding == "idna") {
-    encoded <- .normalize_and_punycode_vec(subset)
+    if (identical(url_standard, "whatwg")) {
+      encoded <- punycoder::host_normalize(
+        subset, check_hyphens = FALSE, use_std3 = FALSE,
+        verify_dns_length = FALSE
+      )
+      retry <- is.na(encoded)
+      if (any(retry)) {
+        encoded[retry] <- .normalize_and_punycode_vec(subset[retry])
+      }
+    } else {
+      encoded <- .normalize_and_punycode_vec(subset)
+    }
     keep_orig <- is.na(encoded)
     encoded[keep_orig] <- subset[keep_orig]
     host_for_clean[elig] <- encoded
@@ -1647,8 +1799,9 @@
 }
 
 # Phase 9 (scalar wrapper): delegates to .apply_host_encoding_vec().
-.apply_host_encoding <- function(final_host, host_encoding, is_ip_host) {
-  .apply_host_encoding_vec(final_host, host_encoding, is_ip_host)
+.apply_host_encoding <- function(final_host, host_encoding, is_ip_host,
+                                 url_standard = NULL) {
+  .apply_host_encoding_vec(final_host, host_encoding, is_ip_host, url_standard)
 }
 
 # Phase 10 (vector): apply the case policy to host, path, and scheme.

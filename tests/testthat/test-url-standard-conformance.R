@@ -169,12 +169,14 @@ test_that("get_parse_status/domain/tld/subdomain honor the standard (AC #8)", {
 # --- RURL-dxwxeamq / ADR 0009: WHATWG host-charset shim ----------------------
 # libcurl's host allowed-set is narrower than WHATWG's; it rejects 15 ASCII
 # code points WHATWG keeps in the host. Under whatwg the shim accepts them (curl
-# parses a filler-substituted host for structure; rurl restores the true host);
-# under rfc3986/NULL the row stays dropped (curl's stricter charset carries).
+# parses a filler-substituted host for structure; rurl restores the true host).
+# RFC 3986 uses the same restore seam for its literal reg-name sub-delims;
+# NULL keeps curl's stricter charset.
 
-test_that("whatwg host-charset shim accepts all 15 curl-rejected points", {
+test_that("host-charset shim accepts selector-valid literal host bytes", {
   gap <- c("!", "\"", "$", "&", "'", "(", ")", "*",
            "+", ",", ";", "=", "`", "{", "}")
+  rfc_subdelims <- c("!", "$", "&", "'", "(", ")", "*", "+", ",", ";", "=")
   for (ch in gap) {
     u <- paste0("http://a", ch, "b.example.com/")
     # whatwg: parses, host preserved byte-for-byte, shim diagnostic fires.
@@ -196,12 +198,30 @@ test_that("whatwg host-charset shim accepts all 15 curl-rejected points", {
       get_host_type(u, url_standard = "whatwg"), "reg-name",
       label = paste("whatwg host_type reg-name for", ch)
     )
-    # rfc3986 / NULL: curl's stricter charset is inherited -> the row is dropped
-    # (no shim), so clean_url is NA and the diagnostic never fires.
-    expect_true(
-      is.na(get_clean_url(u, url_standard = "rfc3986")),
-      label = paste("rfc3986 drops", ch)
-    )
+    # rfc3986: only RFC 3986 reg-name sub-delims parse; the broader WHATWG-only
+    # set still rejects.
+    if (ch %in% rfc_subdelims) {
+      expect_identical(
+        get_host(u, url_standard = "rfc3986"),
+        paste0("a", ch, "b.example.com"),
+        label = paste("rfc3986 host preserved for", ch)
+      )
+      expect_identical(
+        get_clean_url(u, url_standard = "rfc3986"), u,
+        label = paste("rfc3986 clean_url preserved for", ch)
+      )
+      expect_identical(
+        get_host_type(u, url_standard = "rfc3986"), "reg-name",
+        label = paste("rfc3986 host_type reg-name for", ch)
+      )
+    } else {
+      expect_true(
+        is.na(get_clean_url(u, url_standard = "rfc3986")),
+        label = paste("rfc3986 drops", ch)
+      )
+    }
+
+    # NULL: curl's stricter charset is inherited unchanged.
     expect_true(
       is.na(get_clean_url(u, url_standard = NULL)),
       label = paste("NULL selector drops", ch)
@@ -277,6 +297,24 @@ test_that("percent-encoded host gap bytes follow each standard", {
   expect_false(
     "host-charset-shimmed" %in%
       get_url_diagnostics(u, url_standard = "rfc3986")
+  )
+})
+
+test_that("RFC host shim composes literal sub-delims with percent triplets", {
+  ok <- "http://a'b%60c.example.com/"
+  expect_identical(
+    get_host(ok, url_standard = "rfc3986"), "a'b%60c.example.com"
+  )
+  expect_identical(get_clean_url(ok, url_standard = "rfc3986"), ok)
+  expect_false(
+    "host-charset-shimmed" %in%
+      get_url_diagnostics(ok, url_standard = "rfc3986")
+  )
+
+  bad <- "http://a'b`c.example.com/"
+  expect_true(is.na(get_clean_url(bad, url_standard = "rfc3986")))
+  expect_identical(
+    get_host(bad, url_standard = "whatwg"), "a'b`c.example.com"
   )
 })
 

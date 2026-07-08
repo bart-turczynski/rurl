@@ -36,6 +36,48 @@ test_that("get_host keeps RFC reg-names and coerces WHATWG IPv4", {
   expect_identical(get_host(url_of("0"), url_standard = "whatwg"), "0.0.0.0")
 })
 
+test_that("WHATWG accepts empty-hex zero IPv4 parts", {
+  cases <- c(
+    "https://0x.0x.0" = "0.0.0.0",
+    "https://0x.0x.0x.0x" = "0.0.0.0"
+  )
+
+  for (u in names(cases)) {
+    expected <- unname(cases[[u]])
+    expect_identical(get_parse_status(u, url_standard = "whatwg"), "ok",
+      info = u)
+    expect_identical(get_host(u, url_standard = "whatwg"), expected,
+      info = u)
+    expect_identical(get_host_type(u, url_standard = "whatwg"), "ipv4",
+      info = u)
+    expect_identical(get_clean_url(u, url_standard = "whatwg"),
+      paste0("https://", expected, "/"), info = u)
+  }
+
+  expect_identical(get_host("https://0x.0x.0", url_standard = "rfc3986"),
+    "0x.0x.0")
+  expect_identical(get_host_type("https://0x.0x.0",
+    url_standard = "rfc3986"), "reg-name")
+})
+
+test_that("WHATWG IDNA presentation applies UTS-46 ignored mappings", {
+  u <- "https://a%C2%ADb/"
+
+  expect_identical(get_host(u, url_standard = "whatwg"), "a\u00adb")
+  expect_identical(
+    get_host(u, url_standard = "whatwg", host_encoding = "idna"), "ab"
+  )
+  expect_identical(
+    get_clean_url(u, url_standard = "whatwg", host_encoding = "idna"),
+    "https://ab/"
+  )
+
+  expect_identical(
+    get_host(u, url_standard = "rfc3986", host_encoding = "idna"),
+    "xn--ab-5da"
+  )
+})
+
 test_that("a canonical dotted-quad is IPv4 in both modes", {
   expect_identical(get_host(url_of("127.0.0.1"), url_standard = "rfc3986"),
     "127.0.0.1")

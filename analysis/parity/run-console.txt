@@ -6,29 +6,20 @@ standard-conformance parity harness (RURL-wncwfasl companion)
   output dir    : /Users/bartturczynski/Projects/rurl/analysis/parity
 
 == WHATWG (canonical-output config) ==
-  success accepted        : 143/176 (81%) 
-  success FULL parity     : 117/176 (66%) 
-    scheme 143/176 (81%) | host 142/176 (81%) | port 140/176 (80%) | path 121/176 (69%) 
-  failure correctly reject: 202/202 (100%) 
-  overall WHATWG acceptance conformance: 345/378 (91%) 
+  success accepted        : 145/176 (82%)
+  success FULL parity     : 120/176 (68%)
+    scheme 145/176 (82%) | host 145/176 (82%) | port 142/176 (81%) | path 123/176 (70%)
+  failure correctly reject: 202/202 (100%)
+  overall WHATWG acceptance conformance: 347/378 (92%)
 
 == RFC 3986 (probe set) ==
-  probes passed           : 9/19 (47%) 
-  FAILURES:
-   [rfc-regname-apostrophe S3.2.2] http://a'b.example/ -> status=error host= (want a'b.example) path= (want /)
-   [rfc-regname-plus S3.2.2] http://a+b.example/ -> status=error host= (want a+b.example) path= (want /)
-   [rfc-regname-semicolon S3.2.2] http://a;b.example/ -> status=error host= (want a;b.example) path= (want /)
-   [rfc-regname-equals S3.2.2] http://a=b.example/ -> status=error host= (want a=b.example) path= (want /)
-   [rfc-regname-bang S3.2.2] http://a!b.example/ -> status=error host= (want a!b.example) path= (want /)
-   [rfc-regname-dollar S3.2.2] http://a$b.example/ -> status=error host= (want a$b.example) path= (want /)
-   [rfc-regname-comma S3.2.2] http://a,b.example/ -> status=error host= (want a,b.example) path= (want /)
-   [rfc-regname-star S3.2.2] http://a*b.example/ -> status=error host= (want a*b.example) path= (want /)
-   [rfc-regname-amp S3.2.2] http://a&b.example/ -> status=error host= (want a&b.example) path= (want /)
-   [rfc-regname-paren S3.2.2] http://a(b)c.example/ -> status=error host= (want a(b)c.example) path= (want /)
+  probes passed           : 19/19 (100%)
 
 == WHATWG success: non-conformances by component ==
   scheme    0
-  host      1
+  host      0
   port      3
   path      22
-  (over-strict rejects of WPT-valid input: 33 )
+  (over-strict rejects of WPT-valid input: 31 )
+Warning message:
+In strsplit(path, "/", fixed = TRUE) : input string 1 is invalid UTF-8

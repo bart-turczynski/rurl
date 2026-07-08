@@ -48,6 +48,13 @@
   "\\u002b\\u002c\\u003b\\u003d\\u0060\\u007b\\u007d]"
 )
 
+# RFC 3986 reg-name sub-delims (RURL-dnddogce): the subset of libcurl-rejected
+# host bytes that RFC 3986 section 3.2.2 permits literally in a reg-name.
+.RFC3986_REG_NAME_SUB_DELIM_CP <- paste0(
+  "[\\u0021\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
+  "\\u002b\\u002c\\u003b\\u003d]"
+)
+
 # Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts).
 # Only http/https/ftp have a WHATWG-defined default; ftps (rurl's own
 # FTP-over-TLS addition, not a WHATWG special scheme per D2) has none, so a

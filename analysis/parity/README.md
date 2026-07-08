@@ -33,31 +33,29 @@ is genuine: **the spec output cannot be reached by any knob.**
 
 | Metric | Result |
 |---|---|
-| WHATWG — success **accepted** | 143/176 (81%) |
-| WHATWG — success **full-component parity** | **117/176 (66%)** |
+| WHATWG — success **accepted** | 145/176 (82%) |
+| WHATWG — success **full-component parity** | **120/176 (68%)** |
 | WHATWG — failure **correctly rejected** | 202/202 (100%) |
-| WHATWG — overall acceptance conformance | 345/378 (91%) |
-| RFC 3986 — probes passed | 9/19 (47%) |
+| WHATWG — overall acceptance conformance | 347/378 (92%) |
+| RFC 3986 — probes passed | 19/19 (100%) |
 
 rurl **never accepts a URL WHATWG rejects** among these 202 failure cases
 (100%). Every WHATWG shortfall is either **over-strict** (rejects/normalizes
 something the spec accepts) or a **serialization** difference — not a dangerous
-over-acceptance. The RFC score is low because ~half the probe set targets the
-single known bug (below); the normalization probes all pass.
+over-acceptance. The RFC probe set is now fully conformant for the covered
+grammar and normalization cases.
 
 ## Where rurl falls short of the standard
 
-### RFC 3986 — 10/10 failures are one bug (`RURL-…` reg-name)
-rurl(rfc3986) rejects every reg-name containing a **sub-delim**, which RFC 3986
-§3.2.2 explicitly permits (`! $ & ' ( ) * + , ; =`):
-`http://a'b.example/`, `a+b`, `a;b`, `a=b`, `a!b`, `a$b`, `a,b`, `a*b`, `a&b`,
-`a(b)c`. Cause: the strict host-shape gate (ADR 0004). All **normalization**
-probes pass (case folding, unreserved decode, `%2f`→`%2F` reserved-preserve,
-dot-segment resolution) — the RFC profile's normalization is to the letter.
+### RFC 3986 — covered probes fully pass
+rurl(rfc3986) now accepts reg-names containing the RFC 3986 §3.2.2
+**sub-delims** (`! $ & ' ( ) * + , ; =`) and passes the normalization probes
+(case folding, unreserved decode, `%2f`→`%2F` reserved-preserve, dot-segment
+resolution).
 
-### WHATWG — five buckets
-Component non-conformances among accepted cases: **path 22, port 3, host 1**;
-plus **33 over-strict rejections** (28 of them `file:`).
+### WHATWG — three buckets
+Component non-conformances among accepted cases: **path 22, port 3**;
+plus **31 over-strict rejections** (28 of them `file:`).
 
 1. **`file:` scheme (28 rejects + 5 path rows).** rurl rejects `file:` URLs
    WHATWG accepts — drive letters (`file:C|/m/`, `file:///Y:`), bare/empty
@@ -72,14 +70,6 @@ plus **33 over-strict rejections** (28 of them `file:`).
    `%` (`foo%`→`/foo%25`, `%2`→`%252`); (c) decodes unreserved (`%41%7a`→`Az`,
    `%2E`→`.`); (d) uppercases hex (`%3a`→`%3A`, `RURL-dkaycxvp`); (e) drops/breaks
    on null and invalid-UTF-8 bytes (`%00%51`→dropped, `foo\t%91`→literal `NA`).
-4. **Host parser (accept/reject, both directions).** rurl *rejects* IPv4-hex
-   forms WHATWG canonicalizes (`https://0x.0x.0`→`0.0.0.0`) and forbidden chars
-   WHATWG percent-encodes in path/query/fragment; rurl *accepts* 28 hosts WHATWG
-   rejects (numeric last-label routed to the failing IPv4 parser: `foo.09`,
-   `foo.0x4`; forbidden host code points `|`, `\x7f`, U+FFFD, U+00AD).
-5. **UTS-46 host mapping (`RURL-tvbvdjde`).** `https://a%C2%ADb/` (soft hyphen)
-   → WHATWG removes the ignored code point (`ab`); rurl punycodes it
-   (`xn--ab-5da`). Math-bold / other mapped forms are rejected outright.
 
 ## Files
 

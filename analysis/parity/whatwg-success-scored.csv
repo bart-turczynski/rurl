@@ -121,8 +121,8 @@ ag",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"http","http","host","host","9000","9000","/p
 "http://foo.bar/baz?qux#foo<bar",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"http","http","foo.bar","foo.bar","","","/baz","/baz","ok"
 "http://foo.bar/baz?qux#foo>bar",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"http","http","foo.bar","foo.bar","","","/baz","/baz","ok"
 "http://foo.bar/baz?qux#foo`bar",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"http","http","foo.bar","foo.bar","","","/baz","/baz","ok"
-"https://0x.0x.0",FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,"","https","","0.0.0.0","","","","/","error"
-"https://0x.0x.0x.0x",FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,"","https","","0.0.0.0","","","","/","error"
+"https://0x.0x.0",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","0.0.0.0","0.0.0.0","","","/","/","ok"
+"https://0x.0x.0x.0x",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","0.0.0.0","0.0.0.0","","","/","/","ok"
 "https://00.00.00.00",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","0.0.0.0","0.0.0.0","","","/","/","ok"
 "https://0000000000000000000000000000000000000000177.0.0.1",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","127.0.0.1","127.0.0.1","","","/","/","ok"
 "file:///C%3A/",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"file","file","","","","","/C%3A/","/C%3A/","ok"
@@ -180,5 +180,5 @@ ag",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"http","http","host","host","9000","9000","/p
 "https://x/?￿y",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","x","x","","","/","/","warning-no-tld"
 "https://x/?#￿y",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","x","x","","","/","/","warning-no-tld"
 "https://example.com/""quoted""",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","example.com","example.com","","","/%22quoted%22","/%22quoted%22","ok"
-"https://a%C2%ADb/",TRUE,TRUE,FALSE,TRUE,TRUE,FALSE,"https","https","xn--ab-5da","ab","","","/","/","warning-no-tld"
+"https://a%C2%ADb/",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","ab","ab","","","/","/","warning-no-tld"
 "https://xn--/",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,"https","https","xn--","xn--","","","/","/","warning-no-tld"
