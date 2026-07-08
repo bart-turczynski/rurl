@@ -25,6 +25,7 @@ safe_parse_urls(
   params_case_sensitive = FALSE,
   decode_plus = FALSE,
   port_handling = c("exclude", "keep", "strip_default", "strip_all"),
+  scheme_policy = c("infer", "require"),
   url_standard = NULL
 )
 }
@@ -248,6 +249,21 @@ default-port concept). \code{ftps} has no WHATWG default, so its port is
 never elided.}
 \item{"strip_default": Keep only non-default ports (using the same
 scheme-default table), independent of \code{url_standard}.}
+}}
+
+\item{scheme_policy}{Controls whether scheme-less, host-shaped input is
+\emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
+which only controls how the scheme is \emph{presented}, and from \code{url_standard},
+which controls interpretation). Defaults to "infer".
+\itemize{
+\item{"infer": (Default) Fabricate \verb{http://} for scheme-less host-shaped
+input (e.g. \code{example.com} parses as \verb{http://example.com}), a
+browser-omnibox-style affordance. This is the historical behavior.}
+\item{"require": Reject scheme-less input — a scheme-less host-shaped
+value becomes \code{parse_status = "error"} rather than gaining a fabricated
+scheme. Use this for a strict, pure-parser posture. Note this governs
+only bare host input; scheme-relative \verb{//host} input is governed
+separately by \code{scheme_relative_handling}.}
 }}
 
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),

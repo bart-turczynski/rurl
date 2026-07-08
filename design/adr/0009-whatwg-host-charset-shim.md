@@ -120,7 +120,12 @@ from the shim set, so it continues to reject under `whatwg` exactly as before.
   reject on the backtick after inferring `http://`) into a documented
   scheme-inference divergence: rurl infers a scheme (ADR 0004) and now keeps the
   backtick host, so it accepts where the scheme-less WHATWG oracle fails for want
-  of a base URL. Both are recorded in `tests/testthat/fixtures/`.
+  of a base URL. Both are recorded in `tests/testthat/fixtures/`. **Update (ADR
+  0010, rurl 2.4.0):** this ada-005 scheme-inference divergence is now
+  **opt-out-able** — under `scheme_policy = "require"` (RURL-vzgeurae) rurl
+  rejects the scheme-less form, matching Ada exactly on that axis. The
+  divergence documented here is therefore rurl's *default* leniency posture, not
+  a fixed behavior.
 
 ## Follow-up (deliberately out of this slice)
 

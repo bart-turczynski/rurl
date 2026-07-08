@@ -10,6 +10,7 @@ get_parse_status(
   www_handling = "none",
   subdomain_levels_to_keep = NULL,
   source = c("all", "private", "icann"),
+  scheme_policy = c("infer", "require"),
   url_standard = NULL
 )
 }
@@ -79,6 +80,21 @@ in addition to any 'www.' prefix. E.g., if N=1,
 Warning statuses such as \code{warning-no-tld}, \code{warning-invalid-tld},
 and \code{warning-public-suffix} depend on which PSL section is consulted,
 so pass \code{source = "icann"} to use only ICANN-managed TLDs.}
+
+\item{scheme_policy}{Controls whether scheme-less, host-shaped input is
+\emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
+which only controls how the scheme is \emph{presented}, and from \code{url_standard},
+which controls interpretation). Defaults to "infer".
+\itemize{
+\item{"infer": (Default) Fabricate \verb{http://} for scheme-less host-shaped
+input (e.g. \code{example.com} parses as \verb{http://example.com}), a
+browser-omnibox-style affordance. This is the historical behavior.}
+\item{"require": Reject scheme-less input — a scheme-less host-shaped
+value becomes \code{parse_status = "error"} rather than gaining a fabricated
+scheme. Use this for a strict, pure-parser posture. Note this governs
+only bare host input; scheme-relative \verb{//host} input is governed
+separately by \code{scheme_relative_handling}.}
+}}
 
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
 \code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
