@@ -1163,13 +1163,11 @@ safe_parse_urls <- function(url,
   raw_host <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$host %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
-  # WHATWG host-charset shim restore (RURL-dxwxeamq, ADR 0009). For rows the
-  # shim sanitized (Phase 1 replaced a curl-rejected-but-WHATWG-valid host code
-  # point with filler so curl could parse the structure), curl's `$host` is a
-  # placeholder; overwrite it with the captured true host BEFORE IP detection
-  # and the host model, so every downstream gate validates the real host. No-op
-  # unless url_standard == "whatwg" (the mask is all-FALSE otherwise).
-  restore <- curl_ok & prep$host_charset_shimmed
+  # Host shim restore (RURL-dxwxeamq / RURL-rgjpcbuk). For rows Phase 1
+  # sanitized so curl could parse the structure, curl's `$host` is a
+  # placeholder; overwrite it with the profile-correct host BEFORE IP detection
+  # and the host model, so every downstream gate validates the real host.
+  restore <- curl_ok & prep$restore_host_shimmed
   if (any(restore)) {
     raw_host[restore] <- prep$shimmed_true_host[restore]
   }

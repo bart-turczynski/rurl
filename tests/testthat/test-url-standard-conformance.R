@@ -252,6 +252,53 @@ test_that("host-charset shim preserves userinfo and port structure", {
   expect_identical(p$path, "/p")
 })
 
+test_that("percent-encoded host gap bytes follow each standard", {
+  u <- "http://ex.com%60x.example.com/"
+
+  expect_identical(
+    get_host(u, url_standard = "whatwg"), "ex.com`x.example.com"
+  )
+  expect_identical(
+    get_clean_url(u, url_standard = "whatwg"),
+    "http://ex.com`x.example.com/"
+  )
+  expect_true(
+    "host-charset-shimmed" %in%
+      get_url_diagnostics(u, url_standard = "whatwg")
+  )
+
+  expect_identical(
+    get_host(u, url_standard = "rfc3986"), "ex.com%60x.example.com"
+  )
+  expect_identical(
+    get_clean_url(u, url_standard = "rfc3986"),
+    "http://ex.com%60x.example.com/"
+  )
+  expect_false(
+    "host-charset-shimmed" %in%
+      get_url_diagnostics(u, url_standard = "rfc3986")
+  )
+})
+
+test_that("RFC host percent normalization decodes only unreserved octets", {
+  expect_identical(
+    get_host("http://ex.com%7Ex.example.com/", url_standard = "rfc3986"),
+    "ex.com~x.example.com"
+  )
+  expect_identical(
+    get_host("http://ex.com%2Dx.example.com/", url_standard = "rfc3986"),
+    "ex.com-x.example.com"
+  )
+  expect_identical(
+    get_host("http://ex%2Ecom.example.com/", url_standard = "rfc3986"),
+    "ex.com.example.com"
+  )
+  expect_identical(
+    get_host("http://ex.com%21x.example.com/", url_standard = "rfc3986"),
+    "ex.com%21x.example.com"
+  )
+})
+
 # --- Dual-standard divergence_class label (Part 3a, RURL-moselrwp) -----------
 # The golden table already carries a per-standard oracle (one row per
 # input x url_standard). `divergence_class` labels each row so both oracle
