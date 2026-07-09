@@ -35,7 +35,9 @@
 ^inst/bench/rfc3986-probes\.csv$
 ^inst/bench/make-wpt-fixture\.py$
 ^worklog$
+^_scratch$
 ^.*coverage\.html$
+^tools/coverage-report\.R$
 ^\.positai$
 ^codemeta\.json$
 ^CITATION\.cff$
