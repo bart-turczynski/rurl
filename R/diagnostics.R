@@ -226,8 +226,9 @@
   # `host-charset-shimmed` fires exactly where Phase 1's shim
   # (.shim_whatwg_host_charset_vec) accepted a host code point libcurl rejects
   # but WHATWG keeps (! " $ & ' ( ) * + , ; = ` { }) -- surfacing the accepted
-  # boundary as a FACT (ADR 0006). Always FALSE under rfc3986 / no selector
-  # (that profile inherits libcurl's stricter charset and drops such rows).
+  # WHATWG boundary as a FACT (ADR 0006). Always FALSE under rfc3986 / no
+  # selector; RFC 3986 sub-delim recovery is standards conformance, not this
+  # WHATWG diagnostic.
   host_charset_shimmed <- a$host_charset_shimmed
   if (is.null(host_charset_shimmed)) {
     host_charset_shimmed <- rep(FALSE, n)
@@ -268,9 +269,11 @@
 
 # ipv4-ish host token: dot-separated groups, each all-decimal or 0x-hex. Matches
 # the Phase-1 classifier's own `ipv4ish` test, so the diagnostics are keyed to
-# exactly the tokens the host model treats as IPv4 attempts.
+# exactly the tokens the host model treats as IPv4 attempts. WHATWG treats a
+# bare `0x` prefix as zero after stripping the prefix, so the hex digit run may
+# be empty.
 .RE_IPV4ISH <-
-  "^(0[xX][0-9a-fA-F]+|[0-9]+)(\\.(0[xX][0-9a-fA-F]+|[0-9]+))*$"
+  "^(0[xX][0-9a-fA-F]*|[0-9]+)(\\.(0[xX][0-9a-fA-F]*|[0-9]+))*$"
 
 # Parse one IPv4 part to its numeric value (as a double, so 32-bit values stay
 # exact) honoring the WHATWG radix rules: `0x`/`0X` prefix -> hex, a leading
@@ -289,7 +292,10 @@
   }
   chars <- strsplit(digits, "", fixed = TRUE)[[1]]
   vals <- match(toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
-  if (length(vals) == 0L || anyNA(vals) || any(vals >= base)) {
+  if (length(vals) == 0L) {
+    return(0)
+  }
+  if (anyNA(vals) || any(vals >= base)) {
     return(NA_real_)
   }
   Reduce(function(acc, d) acc * base + d, vals, 0)
@@ -307,7 +313,7 @@
   parts <- strsplit(token, ".", fixed = TRUE)[[1]]
   k <- length(parts)
 
-  is_hex <- grepl("^0[xX][0-9a-fA-F]+$", parts)
+  is_hex <- grepl("^0[xX][0-9a-fA-F]*$", parts)
   # Leading-zero decimal-shaped part (010, 0177, 08): an octal attempt.
   is_lead_zero <- grepl("^0[0-9]+$", parts)
   is_plain_dec <- !is_hex & !is_lead_zero

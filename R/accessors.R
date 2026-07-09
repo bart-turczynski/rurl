@@ -165,9 +165,7 @@ get_parse_status <- function(url,
 #' \code{safe_parse_url(u, query_handling = "filter")$clean_url}.
 #'
 #' The port is included only when \code{port_handling != "exclude"}; see
-#' \code{\link{safe_parse_url}} for the full \code{port_handling} semantics,
-#' including how \code{url_standard = "whatwg"} elides a default port even
-#' under \code{port_handling = "keep"}.
+#' \code{\link{safe_parse_url}} for the full \code{port_handling} semantics.
 #'
 #' @param url A character vector containing URLs to be parsed.
 #' @inheritParams safe_parse_url

@@ -5,9 +5,11 @@
 
 # The URL schemes rurl supports. rurl's domain is authority-based (hierarchical)
 # URLs. http/https/ftp/ftps carry "scheme://host[:port]/path"; file is the
-# one supported hostless hierarchical scheme and is accepted only in the forms
-# libcurl can parse (`file:///...` and `file://localhost/...`). ftps is
-# FTP-over-TLS (the https-analogue for ftp), not the unrelated SSH-based sftp.
+# one supported hostless hierarchical scheme. In the WHATWG profile, `file:`
+# has a small parser slice for drive-letter, host, and backslash state-machine
+# forms; default/RFC behavior remains limited to libcurl-parseable local forms.
+# ftps is FTP-over-TLS (the https-analogue for ftp), not the unrelated
+# SSH-based sftp.
 # This is the single source of truth: a scheme-bearing input whose scheme is not
 # here is rejected (opaque schemes like mailto:/tel:/data:, and unrecognized
 # schemes like ws:/ssh:/typos).
@@ -46,6 +48,13 @@
 .WHATWG_HOST_CHARSET_SHIM_CP <- paste0(
   "[\\u0021\\u0022\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
   "\\u002b\\u002c\\u003b\\u003d\\u0060\\u007b\\u007d]"
+)
+
+# RFC 3986 reg-name sub-delims (RURL-dnddogce): the subset of libcurl-rejected
+# host bytes that RFC 3986 section 3.2.2 permits literally in a reg-name.
+.RFC3986_REG_NAME_SUB_DELIM_CP <- paste0(
+  "[\\u0021\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
+  "\\u002b\\u002c\\u003b\\u003d]"
 )
 
 # Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts).

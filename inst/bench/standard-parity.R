@@ -56,6 +56,7 @@ wpt <- jsonlite::fromJSON(find_file("wpt-url-cases.json"),
 succ <- do.call(rbind, lapply(wpt$success, function(e) data.frame(
   input = e$input, protocol = e$protocol %||% "", hostname = e$hostname %||% "",
   port = e$port %||% "", pathname = e$pathname %||% "",
+  search = e$search %||% "", hash = e$hash %||% "",
   stringsAsFactors = FALSE)))
 fail_inputs <- vapply(wpt$failure, function(e) e$input, character(1))
 
@@ -65,20 +66,27 @@ cfg <- spu(succ$input, url_standard = "whatwg", scheme_policy = "require",
 cfg <- suppressWarnings(cfg)
 acc <- !rej(cfg$parse_status)
 exp_scheme <- sub(":$", "", succ$protocol)
+exp_query <- sub("^\\?", "", succ$search)
+exp_fragment <- sub("^#", "", succ$hash)
 s_ok <- acc & blank(cfg$scheme) == exp_scheme
 h_ok <- acc & blank(cfg$host) == succ$hostname
 p_ok <- acc & blank(cfg$port) == succ$port
 path_ok <- acc & blank(cfg$path) == succ$pathname
-full <- s_ok & h_ok & p_ok & path_ok
+query_ok <- acc & blank(cfg$query) == exp_query
+fragment_ok <- acc & blank(cfg$fragment) == exp_fragment
+full <- s_ok & h_ok & p_ok & path_ok & query_ok & fragment_ok
 
 succ_scored <- data.frame(
   input = succ$input, accepted = acc,
   scheme_ok = s_ok, host_ok = h_ok, port_ok = p_ok, path_ok = path_ok,
+  query_ok = query_ok, fragment_ok = fragment_ok,
   full_parity = full,
   rurl_scheme = blank(cfg$scheme), exp_scheme = exp_scheme,
   rurl_host = blank(cfg$host), exp_host = succ$hostname,
   rurl_port = blank(cfg$port), exp_port = succ$port,
   rurl_path = blank(cfg$path), exp_path = succ$pathname,
+  rurl_query = blank(cfg$query), exp_query = exp_query,
+  rurl_fragment = blank(cfg$fragment), exp_fragment = exp_fragment,
   rurl_status = cfg$parse_status, stringsAsFactors = FALSE)
 
 # ---- WHATWG failure: must reject ------------------------------------------
@@ -134,7 +142,8 @@ cat("== WHATWG (canonical-output config) ==\n")
 cat("  success accepted        :", pct(acc), "\n")
 cat("  success FULL parity     :", pct(full), "\n")
 cat("    scheme", pct(s_ok), "| host", pct(h_ok),
-    "| port", pct(p_ok), "| path", pct(path_ok), "\n")
+    "| port", pct(p_ok), "| path", pct(path_ok),
+    "| query", pct(query_ok), "| fragment", pct(fragment_ok), "\n")
 cat("  failure correctly reject:", pct(f_rejected), "\n")
 cat("  overall WHATWG acceptance conformance:",
     pct(c(acc, f_rejected)), "\n\n")
@@ -153,7 +162,8 @@ if (!all(r_pass)) {
 }
 
 cat("\n== WHATWG success: non-conformances by component ==\n")
-for (cc in c("scheme_ok", "host_ok", "port_ok", "path_ok")) {
+for (cc in c("scheme_ok", "host_ok", "port_ok", "path_ok",
+             "query_ok", "fragment_ok")) {
   bad <- acc & !succ_scored[[cc]]
   cat(sprintf("  %-9s %d\n", sub("_ok", "", cc, fixed = TRUE), sum(bad)))
 }

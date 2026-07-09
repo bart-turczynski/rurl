@@ -220,3 +220,23 @@ test_that("ada-005 scheme-inference divergence is opt-out-able (matches Ada)", {
   )
   expect_identical(rejected$parse_status, "error")
 })
+
+test_that("yal-009 dotted host-port inference is opt-out-able", {
+  # The yal-009 corpus row: WHATWG can read the dotted token before ":" as a
+  # scheme. rurl's default usability policy instead reads it as host:port and
+  # infers http, while strict parser mode rejects the scheme-less form.
+  yal009 <- "www.php.net:80/index.php?test=1"
+
+  inferred <- safe_parse_urls(yal009, url_standard = "whatwg")
+  expect_identical(inferred$parse_status, "ok")
+  expect_identical(inferred$scheme, "http")
+  expect_identical(inferred$host, "www.php.net")
+  expect_identical(inferred$path, "/index.php")
+  expect_identical(inferred$query, "test=1")
+
+  rejected <- safe_parse_urls(
+    yal009, url_standard = "whatwg", scheme_policy = "require"
+  )
+  expect_identical(rejected$parse_status, "error")
+  expect_true(is.na(rejected$clean_url))
+})

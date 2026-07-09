@@ -175,12 +175,11 @@ profile is set.
 \itemize{
 \item{"keep": Leave the path percent-encoding untouched (the path is
 preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
-decoding into a path-separating \code{/}). The one normalization applied is
-percent-hex case: the two hex digits of each \verb{\%XX} triplet are
-uppercased, so \verb{\%2f} becomes \verb{\%2F}. This is an RFC 3986 (section 6.2.2.1)
-canonicalization — the two forms are equivalent — and it makes such paths
-compare equal in \code{\link{canonical_join}}. Use "encode" to
-additionally normalize which bytes are encoded.}
+decoding into a path-separating \code{/}). With no \code{url_standard}, rurl keeps
+its historical RFC-style percent-hex case canonicalization, so \verb{\%2f}
+becomes \verb{\%2F}. Under \code{url_standard = "whatwg"}, existing percent-triplet
+spelling is preserved byte-for-byte. Use "encode" to additionally
+normalize which bytes are encoded.}
 \item{"encode": The browser/percent-encoded rendering. Decodes the path
 first, then percent-encodes each segment (slashes preserved), so a
 readable non-ASCII path is emitted in its percent-encoded UTF-8 form.}
@@ -240,17 +239,13 @@ values is treated as a space (HTML-form decoding) before percent-decoding.
 \item{port_handling}{A character string controlling whether the port
 appears in \code{clean_url}. Defaults to "exclude", today's only historical
 behavior. This knob is standalone and standard-independent (editorial, like
-\code{www_handling}) -- \code{url_standard} never governs whether it may be set, only
-(for \code{"keep"}) whether a default port gets elided underneath it.
+\code{www_handling}) -- \code{url_standard} never governs whether it may be set.
 \itemize{
 \item{"exclude": (Default) The port never appears in \code{clean_url}.}
 \item{"strip_all": Explicit alias of "exclude".}
-\item{"keep": Include the port when present. Under
-\code{url_standard = "whatwg"}, a port matching its WHATWG-special scheme's
-default (http:80, https:443, ftp:21) is elided even under "keep"; under
-\code{"rfc3986"} or no selector, the port is kept verbatim (RFC 3986 has no
-default-port concept). \code{ftps} has no WHATWG default, so its port is
-never elided.}
+\item{"keep": Include the syntactic port when present, including a
+default port under \code{url_standard = "whatwg"}. This is an explicit
+non-parity override for callers that need the input's port spelling.}
 \item{"strip_default": Keep only non-default ports (using the same
 scheme-default table), independent of \code{url_standard}.}
 }}
@@ -285,7 +280,9 @@ also lowercases the path, which neither standard sanctions). Added as the
 last argument so existing positional calls keep their meaning; always
 pass it by name. Under \code{"whatwg"} the selector additionally recognizes a
 literal backslash as a path separator for WHATWG-special schemes
-(\code{http}/\code{https}/\code{ftp}) and elides a default port under \code{port_handling = "keep"}; see \code{\link{resolve_url}} for \code{url_standard}-governed
+(\code{http}/\code{https}/\code{ftp}) and nulls default ports in parse output; use
+\code{port_handling = "strip_default"} for spec-style clean URL port rendering.
+See \code{\link{resolve_url}} for \code{url_standard}-governed
 reference resolution. The selector does \strong{not} govern whether
 \code{port_handling} may be set (it is a standalone editorial knob), nor does it
 govern \code{path_encoding} (an orthogonal path-presentation knob that layers

@@ -151,22 +151,11 @@
   output
 }
 
-# Internal helper: canonicalize percent-triplet hex case (`%2f` -> `%2F`) for
-# the `url_standard = "whatwg"` path profile (RURL-bbmuehsx, PRD S6.1). Unlike
-# the RFC mode's `.rfc_unreserved_normalize()`, this never decodes ANY
-# percent-triplet -- WHATWG preserves percent-encoded unreserved bytes in path
-# identity (`/%41%42` stays `/%41%42`) -- it only stabilizes hex-digit case so
-# `%2f`/`%2F` compare equal in canonical keys.
+# Internal helper for the `url_standard = "whatwg"` path profile (RURL-bbmuehsx,
+# PRD S6.1). Unlike the RFC mode's `.rfc_unreserved_normalize()`, this never
+# decodes or canonicalizes percent-triplets: WHATWG preserves existing percent
+# spellings in the path identity (`/%7e` stays `/%7e`).
 .whatwg_preserve_normalize <- function(path) {
-  if (is.na(path) || !nzchar(path)) {
-    return(path)
-  }
-  m <- gregexpr("%[0-9A-Fa-f]{2}", path, perl = TRUE)
-  matches <- regmatches(path, m)[[1]]
-  if (length(matches) == 0L) {
-    return(path)
-  }
-  regmatches(path, m) <- list(toupper(matches))
   path
 }
 
@@ -212,6 +201,82 @@
     recomposed <- paste0(recomposed, "/")
   }
   recomposed
+}
+
+# WHATWG component serializer core: encode C0 controls, non-ASCII UTF-8 bytes,
+# and the component-specific encode set, while preserving every existing
+# percent sign spelling so `%2e`, `%2E`, `%`, and `%2z` do not get decoded,
+# hex-normalized, or double-encoded.
+.whatwg_component_percent_encode <- function(x, encode_set) {
+  if (is.na(x) || !nzchar(x)) {
+    return(x)
+  }
+
+  bytes <- as.integer(charToRaw(enc2utf8(x)))
+  out <- character(length(bytes))
+  j <- 1L
+  i <- 1L
+  hex <- as.integer(charToRaw("0123456789ABCDEFabcdef"))
+
+  while (i <= length(bytes)) {
+    byte <- bytes[i]
+    if (byte == 0x25L) {
+      out[j] <- "%"
+      j <- j + 1L
+      if (i + 2L <= length(bytes) &&
+          bytes[i + 1L] %in% hex &&
+          bytes[i + 2L] %in% hex) {
+        out[j] <- rawToChar(as.raw(bytes[i + 1L]))
+        out[j + 1L] <- rawToChar(as.raw(bytes[i + 2L]))
+        j <- j + 2L
+        i <- i + 3L
+      } else {
+        i <- i + 1L
+      }
+      next
+    }
+
+    if (byte <= 0x1FL || byte >= 0x7FL || byte %in% encode_set) {
+      out[j] <- sprintf("%%%02X", byte)
+    } else {
+      out[j] <- rawToChar(as.raw(byte))
+    }
+    j <- j + 1L
+    i <- i + 1L
+  }
+
+  paste(out[seq_len(j - 1L)], collapse = "")
+}
+
+# WHATWG path serializer for `url_standard = "whatwg"` +
+# `path_encoding = "encode"`: uses the path percent-encode set
+# (`" # < > ? ` { }`).
+.whatwg_path_percent_encode <- function(path) {
+  .whatwg_component_percent_encode(
+    path,
+    c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x60L, 0x7BL, 0x7DL)
+  )
+}
+
+# WHATWG query serializer for special schemes: uses the special-query
+# percent-encode set (`" # < > '` plus C0/non-ASCII). rurl's WHATWG profile is
+# scoped to special schemes for WPT parity; non-special additions keep the
+# regular query set and therefore leave apostrophe literal.
+.whatwg_query_percent_encode <- function(query, scheme = NA_character_) {
+  encode_set <- c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL)
+  if (!is.na(scheme) &&
+      stringi::stri_trans_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES) {
+    encode_set <- c(encode_set, 0x27L)
+  }
+  .whatwg_component_percent_encode(query, encode_set)
+}
+
+# WHATWG fragment serializer: uses the fragment percent-encode set
+# (`" < > ` plus C0/non-ASCII).
+.whatwg_fragment_percent_encode <- function(fragment) {
+  .whatwg_component_percent_encode(
+    fragment, c(0x20L, 0x22L, 0x3CL, 0x3EL, 0x60L)
+  )
 }
 
 # Internal helper to parse query strings into a list.

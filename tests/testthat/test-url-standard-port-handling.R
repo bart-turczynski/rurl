@@ -1,7 +1,9 @@
 # Tests for the port_handling vertical slice (RURL-qdlvldts, epic
-# RURL-umnmmkce / parent RURL-uyjheruh; PRD v2 §5 D1). port_handling is a
-# standalone, standard-INDEPENDENT editorial knob (like www_handling); only
-# its "keep" value interacts with url_standard's WHATWG default-port elision.
+# RURL-umnmmkce / parent RURL-uyjheruh; PRD v2 §5 D1) and WHATWG parse-level
+# default-port elision (RURL-uvilvhnm). port_handling is a standalone,
+# standard-INDEPENDENT editorial knob (like www_handling): "strip_default"
+# gives spec-style clean URL rendering, while "keep" is the explicit literal
+# port override.
 
 # --- Defaults: byte-identical to pre-feature behavior ------------------------
 
@@ -39,7 +41,7 @@ test_that("strip_all is an explicit alias of exclude", {
 
 # --- get_port() stays faithful regardless of port_handling -------------------
 
-test_that("get_port is unaffected by port_handling", {
+test_that("get_port is raw and unaffected by port_handling without selector", {
   u <- c("http://example.com:8080/path", "http://example.com/path")
   expected <- c(8080L, NA_integer_)
   expect_identical(get_port(u), expected)
@@ -48,6 +50,29 @@ test_that("get_port is unaffected by port_handling", {
       safe_parse_urls(u, port_handling = ph)$port, expected
     )
   }
+})
+
+test_that("whatwg parse output nulls default ports unless explicitly kept", {
+  u <- c(
+    "http://example.com:80/path",
+    "https://example.com:443/path",
+    "ftp://example.com:21/path",
+    "http://example.com:8080/path",
+    "ftps://example.com:990/path"
+  )
+
+  expect_identical(
+    safe_parse_urls(u, url_standard = "whatwg")$port,
+    c(NA_integer_, NA_integer_, NA_integer_, 8080L, 990L)
+  )
+  expect_identical(
+    safe_parse_urls(u, url_standard = "whatwg", port_handling = "keep")$port,
+    c(80L, 443L, 21L, 8080L, 990L)
+  )
+  expect_identical(
+    safe_parse_urls(u, url_standard = "rfc3986")$port,
+    c(80L, 443L, 21L, 8080L, 990L)
+  )
 })
 
 # --- port_handling = "keep": verbatim under rfc3986 / no selector ------------
@@ -87,33 +112,54 @@ test_that("keep includes the port verbatim under rfc3986 (no elision)", {
   )
 })
 
-# --- port_handling = "keep" + url_standard = "whatwg": default-port elision --
+# --- port_handling = "strip_default": spec-style default-port elision --------
 
-test_that("whatwg elides the default port for each special scheme", {
+test_that("strip_default elides default ports for each special scheme", {
   expect_identical(
     get_clean_url(
       "http://example.com:80/path",
-      port_handling = "keep", url_standard = "whatwg"
+      port_handling = "strip_default", url_standard = "whatwg"
     ),
     "http://example.com/path"
   )
   expect_identical(
     get_clean_url(
       "https://example.com:443/path",
-      port_handling = "keep", url_standard = "whatwg"
+      port_handling = "strip_default", url_standard = "whatwg"
     ),
     "https://example.com/path"
   )
   expect_identical(
     get_clean_url(
       "ftp://example.com:21/path",
-      port_handling = "keep", url_standard = "whatwg"
+      port_handling = "strip_default", url_standard = "whatwg"
     ),
     "ftp://example.com/path"
   )
 })
 
-test_that("whatwg keeps a non-default port", {
+test_that("keep includes the port verbatim under whatwg as an override", {
+  expect_identical(
+    get_clean_url(
+      "http://example.com:80/path",
+      port_handling = "keep", url_standard = "whatwg"
+    ),
+    "http://example.com:80/path"
+  )
+  expect_identical(
+    get_clean_url(
+      "https://example.com:443/path",
+      port_handling = "keep", url_standard = "whatwg"
+    ),
+    "https://example.com:443/path"
+  )
+  expect_identical(
+    get_clean_url(
+      "ftp://example.com:21/path",
+      port_handling = "keep", url_standard = "whatwg"
+    ),
+    "ftp://example.com:21/path"
+  )
   expect_identical(
     get_clean_url(
       "http://example.com:8080/path",
@@ -290,7 +336,7 @@ test_that("switching port_handling on one URL never returns stale clean_url", {
   expect_identical(get_clean_url(u), "http://example.com/path")
   expect_identical(
     get_clean_url(u, port_handling = "keep", url_standard = "whatwg"),
-    "http://example.com/path"
+    "http://example.com:80/path"
   )
   expect_identical(
     get_clean_url(u, port_handling = "keep", url_standard = "rfc3986"),

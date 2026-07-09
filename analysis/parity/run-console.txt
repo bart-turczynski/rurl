@@ -6,29 +6,20 @@ standard-conformance parity harness (RURL-wncwfasl companion)
   output dir    : /Users/bartturczynski/Projects/rurl/analysis/parity
 
 == WHATWG (canonical-output config) ==
-  success accepted        : 143/176 (81%) 
-  success FULL parity     : 117/176 (66%) 
-    scheme 143/176 (81%) | host 142/176 (81%) | port 140/176 (80%) | path 121/176 (69%) 
+  success accepted        : 176/176 (100%) 
+  success FULL parity     : 176/176 (100%) 
+    scheme 176/176 (100%) | host 176/176 (100%) | port 176/176 (100%) | path 176/176 (100%) | query 176/176 (100%) | fragment 176/176 (100%) 
   failure correctly reject: 202/202 (100%) 
-  overall WHATWG acceptance conformance: 345/378 (91%) 
+  overall WHATWG acceptance conformance: 378/378 (100%) 
 
 == RFC 3986 (probe set) ==
-  probes passed           : 9/19 (47%) 
-  FAILURES:
-   [rfc-regname-apostrophe S3.2.2] http://a'b.example/ -> status=error host= (want a'b.example) path= (want /)
-   [rfc-regname-plus S3.2.2] http://a+b.example/ -> status=error host= (want a+b.example) path= (want /)
-   [rfc-regname-semicolon S3.2.2] http://a;b.example/ -> status=error host= (want a;b.example) path= (want /)
-   [rfc-regname-equals S3.2.2] http://a=b.example/ -> status=error host= (want a=b.example) path= (want /)
-   [rfc-regname-bang S3.2.2] http://a!b.example/ -> status=error host= (want a!b.example) path= (want /)
-   [rfc-regname-dollar S3.2.2] http://a$b.example/ -> status=error host= (want a$b.example) path= (want /)
-   [rfc-regname-comma S3.2.2] http://a,b.example/ -> status=error host= (want a,b.example) path= (want /)
-   [rfc-regname-star S3.2.2] http://a*b.example/ -> status=error host= (want a*b.example) path= (want /)
-   [rfc-regname-amp S3.2.2] http://a&b.example/ -> status=error host= (want a&b.example) path= (want /)
-   [rfc-regname-paren S3.2.2] http://a(b)c.example/ -> status=error host= (want a(b)c.example) path= (want /)
+  probes passed           : 19/19 (100%) 
 
 == WHATWG success: non-conformances by component ==
   scheme    0
-  host      1
-  port      3
-  path      22
-  (over-strict rejects of WPT-valid input: 33 )
+  host      0
+  port      0
+  path      0
+  query     0
+  fragment  0
+  (over-strict rejects of WPT-valid input: 0 )

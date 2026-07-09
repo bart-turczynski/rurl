@@ -77,7 +77,7 @@ oracle_nonconformance_ids <- function() {
     "ada-006", "yal-005",
     # readable-path default (RURL-ndrgrwcz)
     "ada-003", "ada-022",
-    # scheme inference / UTS-46 case fold
+    # scheme inference / U+0130 userinfo boundary
     "yal-009", "eq-U8",
     # scheme inference (ADR 0004) makes rurl accept a scheme-less host-shaped
     # input the scheme-less WHATWG oracle rejects; the host-charset shim
@@ -273,11 +273,11 @@ test_that("yoU-aRe-a-Liar paper divergences pin to the documented set", {
   # oracle is the paper's `whatwg-url` reference column. rurl reproduces both
   # sides of the SOP equivocation across profiles and agrees with the WHATWG
   # reference on the plain hostname-confusion rows; it diverges on 3, each
-  # triaged in the divergence ledger (NOT blessed):
+  # triaged in the divergence ledger:
   #   yal-005 non-ASCII host -- kept reversibly Unicode (boundary, ADR 0002);
   #   yal-008 `foo://` -- outside the closed scheme set (boundary, ADR 0004);
-  #   yal-009 `www.php.net:80/...` -- rurl infers http + host vs WHATWG scheme
-  #     parse (needs-investigation).
+  #   yal-009 `www.php.net:80/...` -- default usability inference reads host,
+  #     while scheme_policy = "require" rejects the scheme-less form.
   # yal-002/003 (control chars in the authority) NO LONGER diverge: the whatwg
   # profile now strips ASCII tab/CR/LF before parsing (RURL-tyetpjym), matching
   # WHATWG, and surfaces the mutation via the `control-char-stripped` diagnostic
@@ -326,7 +326,7 @@ test_that("Equivocal URLs paper divergences pin to the documented set", {
   # DNS-compatible hosts). rurl reproduces both options across profiles and
   # agrees with the WHATWG reference on all but 1 row:
   #   eq-U8 İ@ -- rurl takes the clean userinfo parse (host e.gg) vs the paper's
-  #     dotted-İ host folding (defensible; needs-investigation).
+  #     dotted-İ host folding (intentional parser-boundary; RURL-ajnnjzgs).
   # eq-U6 (LF in host) NO LONGER diverges: the whatwg profile now strips the
   # ASCII newline before parsing (RURL-tyetpjym) -> host n.pre.gg, matching the
   # WHATWG reference, with a `control-char-stripped` diagnostic.
