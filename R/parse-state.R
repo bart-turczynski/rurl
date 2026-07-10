@@ -145,39 +145,65 @@
   out
 }
 
-# WHATWG host FORM thin mapper (ADR 0012 D2). Resolves only the unambiguous
-# cases: NA host -> NA (no form for an absent host), IPv6 -> "ipv6", IPv4 ->
-# "ipv4", "" -> "empty". The domain-vs-opaque split needs the scheme
-# special-ness and the WHATWG/opaque host parse, so L4b POPULATES that; this
-# returns NA_character_ for a present non-IP host and L4b refines it.
-.whatwg_host_form <- function(host, is_ip_host_v6, is_ip_host_v4) {
+# WHATWG host FORM mapper (ADR 0012 D2, L4b POPULATED by RURL-yutinyhb).
+# Unambiguous cases: NA host -> NA (no form for an absent host), IPv6 -> "ipv6",
+# IPv4 -> "ipv4", "" -> "empty". The domain-vs-opaque split for a present non-IP
+# host needs the scheme special-ness, which the L3a signature did not carry; L4b
+# threads it through the OPTIONAL `is_special` argument. When `is_special` is
+# supplied (the L4b parser passes it), a present non-IP host resolves to
+# "domain" (special scheme) or "opaque" (non-special). When it is left at its
+# NA default (the L3a call shape) the present non-IP host stays NA -- so the
+# L3a representability tests are byte-for-byte unaffected. A "domain" here does
+# NOT imply the domain parser ran; the opaque parser (RURL-yutinyhb) only ever
+# passes is_special = FALSE, so it always yields "opaque".
+.whatwg_host_form <- function(host, is_ip_host_v6, is_ip_host_v4,
+                              is_special = NA) {
   n <- max(length(host), length(is_ip_host_v6), length(is_ip_host_v4))
   host <- rep_len(host, n)
   v6 <- rep_len(is_ip_host_v6, n)
   v4 <- rep_len(is_ip_host_v4, n)
+  is_special <- rep_len(is_special, n)
   v6 <- !is.na(v6) & v6
   v4 <- !is.na(v4) & v4
-  out <- rep(NA_character_, n) # NA host, and present non-IP host (L4b), stay NA
+  out <- rep(NA_character_, n) # NA host, and unresolved non-IP host, stay NA
   out[!is.na(host) & host == ""] <- "empty"
+  present_non_ip <- !is.na(host) & host != "" & !v4 & !v6
+  resolvable <- present_non_ip & !is.na(is_special)
+  out[resolvable & is_special] <- "domain"
+  out[resolvable & !is_special] <- "opaque"
   out[v4] <- "ipv4"
   out[v6] <- "ipv6"
   out
 }
 
-# RFC 3986 host FORM thin mapper (ADR 0012 D2). As with the WHATWG mapper this
-# resolves only the unambiguous cases (NA -> NA, IPv6 -> "ipv6", IPv4 ->
-# "ipv4", "" -> "empty"); the reg-name-vs-ipvfuture split (bracketed IPvFuture
-# detection) is L4b's job, so a present non-IP host returns NA_character_ here
-# and L4b POPULATES the final form.
-.rfc_host_form <- function(host, is_ip_host_v6, is_ip_host_v4) {
+# RFC 3986 host FORM mapper (ADR 0012 D2, L4b POPULATED by RURL-yutinyhb).
+# Unambiguous cases as above (NA -> NA, IPv6 -> "ipv6", IPv4 -> "ipv4",
+# "" -> "empty"). The reg-name-vs-ipvfuture split needs bracketed-IPvFuture
+# detection; L4b enables it with the OPTIONAL `resolve` flag. When `resolve` is
+# TRUE (the L4b parser passes it) a present non-IP host resolves to "ipvfuture"
+# iff it is a bracketed `[v...]` IP-literal, else "reg-name". When it is left at
+# its FALSE default (the L3a call shape) a present non-IP host stays NA -- so
+# the L3a representability tests are byte-for-byte unaffected. IPvFuture is
+# detected structurally from the host string (bracketed), NOT via punycode/UTS
+# #46: the RFC host path never routes through those (ADR 0002).
+.rfc_host_form <- function(host, is_ip_host_v6, is_ip_host_v4,
+                           resolve = FALSE) {
   n <- max(length(host), length(is_ip_host_v6), length(is_ip_host_v4))
   host <- rep_len(host, n)
   v6 <- rep_len(is_ip_host_v6, n)
   v4 <- rep_len(is_ip_host_v4, n)
   v6 <- !is.na(v6) & v6
   v4 <- !is.na(v4) & v4
-  out <- rep(NA_character_, n) # NA host, and present non-IP host (L4b), stay NA
+  out <- rep(NA_character_, n) # NA host, and unresolved non-IP host, stay NA
   out[!is.na(host) & host == ""] <- "empty"
+  present_non_ip <- !is.na(host) & host != "" & !v4 & !v6
+  if (isTRUE(resolve)) {
+    is_ipvf <- present_non_ip &
+      stringi::stri_detect_regex(host, .RFC3986_BRACKET_IPVFUTURE_RE)
+    is_ipvf[is.na(is_ipvf)] <- FALSE
+    out[present_non_ip & !is_ipvf] <- "reg-name"
+    out[is_ipvf] <- "ipvfuture"
+  }
   out[v4] <- "ipv4"
   out[v6] <- "ipv6"
   out
@@ -365,6 +391,14 @@
   "^v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+$"
 )
 
+# Bracketed IPvFuture IP-literal `"[" IPvFuture "]"` (RURL-yutinyhb). Used by
+# the `.rfc_host_form` mapper to distinguish an `ipvfuture` host FORM from
+# `reg-name` once L4b resolves a present non-IP RFC host (the bracket is part of
+# the stored host value then). Same inner grammar as `.RFC3986_IPVFUTURE_RE`.
+.RFC3986_BRACKET_IPVFUTURE_RE <- paste0(
+  "^\\[v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+\\]$"
+)
+
 # First 1-based index of the literal `ch` in `s`, or 0L when absent.
 .rfc3986_first_index <- function(s, ch) {
   pos <- stringi::stri_locate_first_fixed(s, ch)[1L, 1L]
@@ -504,4 +538,374 @@
   flagged <- !is.na(ok) & ok & has_non_ascii
   diagnostic[flagged] <- "unicode-outside-rfc3986-uri"
   list(ok = ok, diagnostic = diagnostic)
+}
+
+# --- Posture host/opaque parsers (ADR 0012 Layer 4b, RURL-yutinyhb) ----------
+#
+# The HOST/OPAQUE decomposition functions the (still-unexposed) `general`
+# acceptance will call. They are PURELY ADDITIVE: nothing here is wired into the
+# live Stage-A routing, public signatures, `.derive_parse_status_vec`, or the
+# Phase-11 serializer dispatch (that is the SEPARATE activation unit,
+# RURL-qbnelzku). Byte-identity of every existing output is therefore trivially
+# preserved. They NEVER route a non-special / opaque / reg-name host through the
+# punycode or domain.R helpers (ADR 0002 -- hard): the opaque host is UTF-8
+# percent-encoded, the RFC host is source-preserving, and ASCII case is kept in
+# both (case policy is a separate phase).
+#
+# `.parse_opaque_urls_vec(url, url_standard)` returns a COLUMNAR list (each
+# element length-n): decomposed components plus the internal STATE kinds. The
+# activation unit reads the posture-appropriate columns:
+#   - ok            : logical; FALSE = a host parse failure (forbidden-host cp,
+#                     or a malformed bracketed IP literal) OR an un-decomposable
+#                     input (missing scheme / NA). The four legal WHATWG shapes
+#                     and every legal RFC host are ok = TRUE.
+#   - scheme        : the source scheme spelling (case preserved; posture case
+#                     policy is applied later).
+#   - host          : NA (absent) / "" (empty) / value. WHATWG opaque hosts are
+#                     UTF-8 %-encoded; RFC hosts are source-preserving.
+#   - port          : NA (absent) / "" / digits (source-preserving string).
+#   - path          : the path body (opaque path is the whole remainder string).
+#   - query/fragment: NA (absent) / "" (empty-but-present) / value.
+#   - path_kind     : WHATWG list/opaque (`.whatwg_path_kind`); NA under RFC.
+#   - rfc_path_form : RFC abempty/absolute/rootless/empty (`.rfc_path_form`); NA
+#                     under WHATWG.
+#   - host_kind     : `.host_kind` (absent/empty/present).
+#   - authority_kind: absent (no `//`) / empty (a `//` whose authority component
+#                     is genuinely empty -- no userinfo, host, AND port) /
+#                     present (a `//` carrying content). This POPULATES the
+#                     `.authority_kind` vocab's reserved `empty` value, which
+#                     the pure L3a classifier could not emit (it did not model
+#                     userinfo/port). The L3a classifier is unchanged.
+#   - host_form     : via the `.whatwg_host_form` / `.rfc_host_form` mappers.
+
+# Split an authority component into userinfo / host / port (ADR 0012 Layer 4b).
+# userinfo is everything before the LAST `@` (WHATWG credentials rule; a valid
+# RFC authority carries at most one `@`, enforced separately by the L4a gate).
+# A bracketed IP-literal owns any `:` inside it -- only a trailing `:port` after
+# `]` is the port; a non-bracketed host's first `:` is the port delimiter.
+# authority == "" yields host == "" (empty), userinfo/port NA.
+.split_authority <- function(authority) {
+  userinfo <- NA_character_
+  hostport <- authority
+  at <- stringi::stri_locate_last_fixed(authority, "@")[1L, 1L]
+  if (!is.na(at)) {
+    userinfo <- substring(authority, 1L, at - 1L)
+    hostport <- substring(authority, at + 1L)
+  }
+  host <- hostport
+  port <- NA_character_
+  if (startsWith(hostport, "[")) {
+    rb <- stringi::stri_locate_first_fixed(hostport, "]")[1L, 1L]
+    if (!is.na(rb)) {
+      host <- substring(hostport, 1L, rb)
+      after <- substring(hostport, rb + 1L)
+      if (startsWith(after, ":")) {
+        port <- substring(after, 2L)
+      }
+    }
+  } else {
+    cpos <- stringi::stri_locate_first_fixed(hostport, ":")[1L, 1L]
+    if (!is.na(cpos)) {
+      host <- substring(hostport, 1L, cpos - 1L)
+      port <- substring(hostport, cpos + 1L)
+    }
+  }
+  list(userinfo = userinfo, host = host, port = port)
+}
+
+# WHATWG opaque-HOST parse of ONE non-special authority host (ADR 0012 D1 / A.1;
+# WHATWG #concept-opaque-host-parser). Preserve ASCII case, NO IDNA, NO IPv4
+# coercion, NO punycode/domain routing (ADR 0002). A bracketed host is an IPv6
+# literal -- the forbidden-host reject does NOT apply to it, but its inner form
+# must be a valid IPv6 address (WHATWG has no IPvFuture). A non-bracketed host
+# rejects the forbidden-HOST code points (`.WHATWG_FORBIDDEN_HOST_ONLY_CP`, NOT
+# the stricter forbidden-DOMAIN set), then is UTF-8 percent-encoded with the
+# C0-control set. `%` is NOT forbidden (a malformed `%` is an L5
+# validation-error fact, not a failure here). Returns list(ok, host, v6, v4).
+.whatwg_opaque_host_one <- function(host) {
+  if (startsWith(host, "[")) {
+    if (!endsWith(host, "]")) {
+      return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
+    }
+    inner <- substring(host, 2L, nchar(host) - 1L)
+    if (!isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPV6_RE))) {
+      return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
+    }
+    return(list(ok = TRUE, host = host, is_v6 = TRUE, is_v4 = FALSE))
+  }
+  forbidden <- stringi::stri_detect_regex(host, .WHATWG_FORBIDDEN_HOST_ONLY_CP)
+  if (isTRUE(forbidden)) {
+    return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
+  }
+  encoded <- .whatwg_component_percent_encode(host, integer(0))
+  list(ok = TRUE, host = encoded, is_v6 = FALSE, is_v4 = FALSE)
+}
+
+# RFC-3986 host parse of ONE authority host (ADR 0012 D1 / A.2). Source
+# preserving (the `rfc-syntax` posture disclaims normalization): preserve case,
+# NO punycode, NO percent-encoding. A bracketed host is an IP-literal -- inner
+# IPv6 or IPvFuture; a malformed inner is a host parse failure. A non-bracketed
+# host is `reg-name` or `IPv4address` (both accepted verbatim; the FORM split is
+# left to the mapper). Returns list(ok, host, is_v6, is_v4).
+.rfc_host_one <- function(host) {
+  if (startsWith(host, "[")) {
+    if (!endsWith(host, "]")) {
+      return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
+    }
+    inner <- substring(host, 2L, nchar(host) - 1L)
+    if (isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPV6_RE))) {
+      return(list(ok = TRUE, host = host, is_v6 = TRUE, is_v4 = FALSE))
+    }
+    if (isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPVFUTURE_RE))) {
+      return(list(ok = TRUE, host = host, is_v6 = FALSE, is_v4 = FALSE))
+    }
+    return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
+  }
+  is_v4 <- isTRUE(stringi::stri_detect_regex(
+    host, paste0("^", .RFC3986_IPV4_QUAD, "$")
+  ))
+  list(ok = TRUE, host = host, is_v6 = FALSE, is_v4 = is_v4)
+}
+
+# Decompose ONE scheme-bearing non-special / general input (ADR 0012 D1/D2,
+# Appendix A.1). See `.parse_opaque_urls_vec` for the column contract.
+.parse_opaque_url_one <- function(url, url_standard) {
+  na <- NA_character_
+  blank <- list(
+    ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
+    fragment = na, path_kind = na, rfc_path_form = na, host_kind = "absent",
+    authority_kind = "absent", query_kind = "absent",
+    fragment_kind = "absent", host_form = na
+  )
+  if (is.na(url)) {
+    return(blank)
+  }
+  m <- stringi::stri_match_first_regex(
+    url, "^([A-Za-z][A-Za-z0-9+.\\-]*):(.*)$"
+  )
+  if (is.na(m[1L, 1L])) {
+    return(blank) # not a scheme-bearing input -> cannot decompose
+  }
+  scheme <- m[1L, 2L]
+  remainder <- m[1L, 3L]
+  is_special <- stringi::stri_trans_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES
+  is_whatwg <- identical(url_standard, "whatwg")
+
+  # Query and fragment split on the FIRST `#`, then the FIRST `?` in what
+  # remains -- captured empty-but-present so `.presence_kind` can mark "empty".
+  query <- na
+  fragment <- na
+  rest <- remainder
+  hpos <- .rfc3986_first_index(rest, "#")
+  if (hpos > 0L) {
+    fragment <- substring(rest, hpos + 1L)
+    rest <- substring(rest, 1L, hpos - 1L)
+  }
+  qpos <- .rfc3986_first_index(rest, "?")
+  if (qpos > 0L) {
+    query <- substring(rest, qpos + 1L)
+    rest <- substring(rest, 1L, qpos - 1L)
+  }
+
+  path_kind <- na
+  rfc_path_form <- na
+  host <- na
+  port <- na
+  is_v6 <- FALSE
+  is_v4 <- FALSE
+  ok <- TRUE
+
+  # WHATWG opaque-path trigger: a non-special scheme whose remainder does not
+  # begin `/` (checked on the pre-split remainder, per WHATWG). Opaque paths
+  # carry no authority and host is absent. RFC has no opaque/list distinction.
+  if (is_whatwg) {
+    path_kind <- .whatwg_path_kind(is_special, remainder)
+  }
+
+  if (is_whatwg && identical(path_kind, "opaque")) {
+    path <- rest
+    authority_kind <- "absent"
+  } else if (startsWith(rest, "//")) {
+    after <- substring(rest, 3L)
+    spos <- .rfc3986_first_index(after, "/")
+    if (spos > 0L) {
+      authority <- substring(after, 1L, spos - 1L)
+      path <- substring(after, spos)
+    } else {
+      authority <- after
+      path <- ""
+    }
+    # Consistent with the L3a `.authority_kind()` classifier and ADR 0012 D2
+    # (lines 257-258, 270-271): any `//` is authority_kind "present" regardless
+    # of host emptiness. `foo:///bar` is (present, host_kind "empty"). The vocab
+    # `empty` value stays vestigial -- an empty host under a present `//` is
+    # host_kind's job, NOT authority_kind's, so the parser never emits it.
+    authority_kind <- .authority_kind(TRUE)
+    parts <- .split_authority(authority)
+    host <- parts$host
+    port <- parts$port
+    if (nzchar(host)) {
+      hp <- if (is_whatwg) {
+        .whatwg_opaque_host_one(host)
+      } else {
+        .rfc_host_one(host)
+      }
+      ok <- hp$ok
+      host <- hp$host
+      is_v6 <- hp$is_v6
+      is_v4 <- hp$is_v4
+    }
+    if (!is_whatwg) {
+      rfc_path_form <- .rfc_path_form(TRUE, path)
+    }
+  } else {
+    authority_kind <- "absent"
+    path <- rest
+    if (!is_whatwg) {
+      rfc_path_form <- .rfc_path_form(FALSE, path)
+    }
+  }
+
+  host_form <- if (is_whatwg) {
+    .whatwg_host_form(host, is_v6, is_v4, is_special = is_special)
+  } else {
+    .rfc_host_form(host, is_v6, is_v4, resolve = TRUE)
+  }
+
+  list(
+    ok = ok, scheme = scheme, host = host, port = port, path = path,
+    query = query, fragment = fragment, path_kind = path_kind,
+    rfc_path_form = rfc_path_form, host_kind = .host_kind(host),
+    authority_kind = authority_kind, query_kind = .presence_kind(query),
+    fragment_kind = .presence_kind(fragment), host_form = host_form
+  )
+}
+
+# Vectorized posture opaque/host parser (ADR 0012 Layer 4b). See the column
+# contract above. Pure: never touches curl, never routes through punycode /
+# domain.R (ADR 0002).
+.parse_opaque_urls_vec <- function(url, url_standard) {
+  n <- length(url)
+  chr_fields <- c(
+    "scheme", "host", "port", "path", "query", "fragment", "path_kind",
+    "rfc_path_form", "host_kind", "authority_kind", "query_kind",
+    "fragment_kind", "host_form"
+  )
+  if (n == 0L) {
+    out <- list(ok = logical(0))
+    for (f in chr_fields) {
+      out[[f]] <- character(0)
+    }
+    return(out)
+  }
+  rows <- lapply(url, .parse_opaque_url_one, url_standard = url_standard)
+  out <- list(ok = vapply(rows, `[[`, logical(1L), "ok", USE.NAMES = FALSE))
+  for (f in chr_fields) {
+    out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
+  }
+  out
+}
+
+# RFC 8089 `file:` overlay (ADR 0012 D1 / A.2, RURL-yutinyhb). A THIN overlay
+# for `url_standard = "rfc3986"` only -- the WHATWG `file:` path
+# (`.parse_whatwg_file_urls_vec`) is a SEPARATE state machine and is left
+# verbatim. RFC 8089: an absolute path, optionally under a `//` authority whose
+# normative value is empty / `localhost` / a host; userinfo/port/query/fragment
+# are NOT in the normative grammar (a violation is an L5 fact, NOT a parse
+# failure -- still parsed). Like WHATWG, `file://localhost/...` maps to an empty
+# host (RFC 8089 App. B treats `localhost` and the empty authority as the local
+# machine). No drive-letter or backslash rewriting (those are WHATWG-specific).
+.parse_rfc_file_url_one <- function(url) {
+  na <- NA_character_
+  blank <- list(
+    ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
+    fragment = na, rfc_path_form = na, host_kind = "absent",
+    authority_kind = "absent", query_kind = "absent",
+    fragment_kind = "absent", host_form = na
+  )
+  m <- stringi::stri_match_first_regex(url, "^([Ff][Ii][Ll][Ee]):(.*)$")
+  if (is.na(m[1L, 1L])) {
+    return(blank)
+  }
+  scheme <- m[1L, 2L]
+  rest <- m[1L, 3L]
+
+  query <- na
+  fragment <- na
+  hpos <- .rfc3986_first_index(rest, "#")
+  if (hpos > 0L) {
+    fragment <- substring(rest, hpos + 1L)
+    rest <- substring(rest, 1L, hpos - 1L)
+  }
+  qpos <- .rfc3986_first_index(rest, "?")
+  if (qpos > 0L) {
+    query <- substring(rest, qpos + 1L)
+    rest <- substring(rest, 1L, qpos - 1L)
+  }
+
+  host <- na
+  port <- na
+  is_v6 <- FALSE
+  is_v4 <- FALSE
+  if (startsWith(rest, "//")) {
+    after <- substring(rest, 3L)
+    spos <- .rfc3986_first_index(after, "/")
+    if (spos > 0L) {
+      authority <- substring(after, 1L, spos - 1L)
+      path <- substring(after, spos)
+    } else {
+      authority <- after
+      path <- ""
+    }
+    authority_kind <- if (nzchar(authority)) "present" else "empty"
+    parts <- .split_authority(authority)
+    host <- parts$host
+    port <- parts$port
+    # localhost (case-insensitive) collapses to an empty host, matching WHATWG.
+    if (!is.na(host) &&
+        identical(stringi::stri_trans_tolower(host), "localhost")) {
+      host <- ""
+    } else if (nzchar(host)) {
+      hp <- .rfc_host_one(host)
+      is_v6 <- hp$is_v6
+      is_v4 <- hp$is_v4
+      host <- hp$host
+    }
+    rfc_path_form <- .rfc_path_form(TRUE, path)
+  } else {
+    authority_kind <- "absent"
+    path <- rest
+    rfc_path_form <- .rfc_path_form(FALSE, path)
+  }
+
+  list(
+    ok = TRUE, scheme = scheme, host = host, port = port, path = path,
+    query = query, fragment = fragment, rfc_path_form = rfc_path_form,
+    host_kind = .host_kind(host), authority_kind = authority_kind,
+    query_kind = .presence_kind(query),
+    fragment_kind = .presence_kind(fragment),
+    host_form = .rfc_host_form(host, is_v6, is_v4, resolve = TRUE)
+  )
+}
+
+# Vectorized RFC 8089 `file:` overlay (ADR 0012 Layer 4b).
+.parse_rfc_file_urls_vec <- function(url) {
+  n <- length(url)
+  chr_fields <- c(
+    "scheme", "host", "port", "path", "query", "fragment", "rfc_path_form",
+    "host_kind", "authority_kind", "query_kind", "fragment_kind", "host_form"
+  )
+  if (n == 0L) {
+    out <- list(ok = logical(0))
+    for (f in chr_fields) {
+      out[[f]] <- character(0)
+    }
+    return(out)
+  }
+  rows <- lapply(url, .parse_rfc_file_url_one)
+  out <- list(ok = vapply(rows, `[[`, logical(1L), "ok", USE.NAMES = FALSE))
+  for (f in chr_fields) {
+    out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
+  }
+  out
 }
