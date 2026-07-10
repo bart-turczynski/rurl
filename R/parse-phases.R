@@ -2264,6 +2264,194 @@
   )
 }
 
+# --- Layer 3b posture serializers (ADR 0012 D2 / Appendix A.1, RURL-mgmviuta) -
+#
+# These render a clean_url-style string for the non-special / opaque /
+# empty-host / RFC-generic URL shapes that the (not-yet-public) `general`
+# acceptance will produce. They are PURELY ADDITIVE: L4b activates `general`
+# and wires them into the Phase-11 dispatch. Nothing here is called from the
+# live pipeline, so byte-identity of every existing output is automatic.
+# `.build_clean_url_vec` above is left verbatim as the special/host-present
+# serializer L4b keeps using.
+#
+# Both follow rurl's clean_url product contract: the FRAGMENT is EXCLUDED, and
+# an empty-but-PRESENT query serializes as a trailing "?". They take
+# already-parsed state as explicit args (the state vocabulary from
+# R/parse-state.R: host_kind, path_kind, query_kind, rfc_path_form) and use the
+# repo's pre-allocate + logical-mask assignment idiom.
+
+# WHATWG serializer (ADR 0012 A.1 #concept-url-serializer + D2). Keys authority
+# emission off the null-vs-empty host distinction and applies the four-condition
+# `/.` guard for a null-host list path. Reuses the existing byte-level encoders
+# (R/path-query.R): opaque paths take the C0-control set only
+# (`.whatwg_component_percent_encode(path, integer(0))`), list paths take the
+# path percent-encode set (`.whatwg_path_percent_encode`), and both already
+# preserve existing `%xx` spellings. `port` may be NULL (no port) or a vector.
+.serialize_whatwg_vec <- function(scheme, host, host_kind, path, path_kind,
+                                  query, query_kind, port, port_handling,
+                                  trailing_slash_handling) {
+  n <- max(
+    length(scheme), length(host), length(host_kind), length(path),
+    length(path_kind), length(query), length(query_kind)
+  )
+  scheme <- rep_len(scheme, n)
+  host <- rep_len(host, n)
+  host_kind <- rep_len(host_kind, n)
+  path <- rep_len(path, n)
+  path_kind <- rep_len(path_kind, n)
+  query <- rep_len(query, n)
+  query_kind <- rep_len(query_kind, n)
+  if (!is.null(port)) {
+    port <- rep_len(port, n)
+  }
+
+  scheme_prefix <- paste0(scheme, ":")
+  port_part <- .build_port_part_vec(scheme, port, port_handling, "whatwg")
+  is_opaque <- path_kind == "opaque"
+
+  # Per-row body encoding + the `/.` guard. The byte encoders are scalar
+  # (they walk one string), so this row loop is the vectorization seam; the
+  # structural assembly below stays mask-based.
+  path_body <- character(n)
+  guard <- rep("", n)
+  for (i in seq_len(n)) {
+    p <- path[i]
+    if (is.na(p)) {
+      path_body[i] <- ""
+      next
+    }
+    if (is_opaque[i]) {
+      # Opaque path: WHATWG C0-control percent-encode set (empty extra set ->
+      # encodes only C0/DEL/non-ASCII). No `/.` guard for opaque paths.
+      path_body[i] <- .whatwg_component_percent_encode(p, integer(0))
+      next
+    }
+    # List path. Optional trailing-slash strip mirrors .build_clean_url_vec
+    # (a lone "/" -> ""); it only ever touches a size-1 path, never the guard.
+    p_render <- p
+    strip_slash <- identical(trailing_slash_handling, "strip")
+    if (strip_slash && identical(p_render, "/")) {
+      p_render <- ""
+    }
+    path_body[i] <- .whatwg_path_percent_encode(p_render)
+
+    # Four-condition `/.` guard (ADR 0012 A.1 #concept-url-serializer): fires
+    # when host is null (host_kind "absent"), the path is a list (not opaque),
+    # its size is > 1, and its FIRST segment is empty -- i.e. the serialized
+    # path would begin with "//" and be misread as an authority.
+    #
+    # SEGMENT DERIVATION: rurl holds a list path as its serialized STRING (each
+    # WHATWG path segment rendered as "/" + segment, so a rooted list path
+    # always begins with "/"). To recover the WHATWG path-list segment view we
+    # split on "/" and DROP the leading "" element (the empty piece before the
+    # first "/"): strsplit("/bar") -> c("","bar") -> list c("bar") (size 1);
+    # strsplit("//bar") -> c("","","bar") -> list c("","bar") (size 2, first
+    # ""); strsplit("/") -> c("") -> list character(0) (size 0). strsplit drops
+    # a single TRAILING "" (a trailing-slash path), but the guard only inspects
+    # size>1 and the first segment, so that omission is immaterial here.
+    if (host_kind[i] == "absent") {
+      segs <- strsplit(p, "/", fixed = TRUE)[[1]]
+      segs <- segs[-1L]
+      if (length(segs) > 1L && !is.na(segs[1L]) && segs[1L] == "") {
+        guard[i] <- "/."
+      }
+    }
+  }
+
+  query_suffix <- .whatwg_query_suffix_vec(query, query_kind, scheme)
+
+  out <- character(n)
+  out[is_opaque] <- paste0(scheme_prefix[is_opaque], path_body[is_opaque])
+
+  # List path with an authority (host present OR empty-but-non-null): emit
+  # `//` + host (host may be "") + port. `foo:///bar` = "foo://" + "" + "/bar".
+  auth <- !is_opaque & host_kind != "absent"
+  host_str <- ifelse(is.na(host), "", host)
+  out[auth] <- paste0(
+    scheme_prefix[auth], "//", host_str[auth], port_part[auth], path_body[auth]
+  )
+
+  # List path with a null host (no authority): NO `//`; the `/.` guard, if it
+  # fired, sits between the scheme and the path. `foo:/bar` -> "foo:/bar".
+  noauth <- !is_opaque & host_kind == "absent"
+  out[noauth] <- paste0(
+    scheme_prefix[noauth], guard[noauth], path_body[noauth]
+  )
+
+  paste0(out, query_suffix)
+}
+
+# RFC 3986 generic serializer (ADR 0012 D1/D2, rfc-syntax posture). NO
+# normalization, NO opaque/list distinction, NO `/.` guard, NO dot-segment
+# removal, NO case folding: it is a faithful generic serialization that
+# preserves the source path bytes. `rfc_path_form` is informational under this
+# posture -- the path string is already in its final source-preserving shape,
+# so nothing structural keys off it here (force() marks it deliberately
+# consumed, mirroring .build_port_part_vec's force(url_standard)). The query is
+# preserved verbatim (no percent-encoder) under rfc-syntax's "preserve source"
+# disclaimer. `port` may be NULL or a vector.
+.serialize_rfc_generic_vec <- function(scheme, host, host_kind, path,
+                                       rfc_path_form, query, query_kind,
+                                       port, port_handling) {
+  force(rfc_path_form)
+  n <- max(
+    length(scheme), length(host), length(host_kind), length(path),
+    length(query), length(query_kind)
+  )
+  scheme <- rep_len(scheme, n)
+  host <- rep_len(host, n)
+  host_kind <- rep_len(host_kind, n)
+  path <- rep_len(path, n)
+  query <- rep_len(query, n)
+  query_kind <- rep_len(query_kind, n)
+  if (!is.null(port)) {
+    port <- rep_len(port, n)
+  }
+
+  scheme_prefix <- paste0(scheme, ":")
+  port_part <- .build_port_part_vec(scheme, port, port_handling, "rfc3986")
+  path_body <- ifelse(is.na(path), "", path) # source-preserving; no encoding
+
+  out <- character(n)
+  auth <- host_kind != "absent"
+  host_str <- ifelse(is.na(host), "", host)
+  out[auth] <- paste0(
+    scheme_prefix[auth], "//", host_str[auth], port_part[auth], path_body[auth]
+  )
+  out[!auth] <- paste0(scheme_prefix[!auth], path_body[!auth])
+
+  # rfc-syntax preserves source bytes: append the query delimiter/value
+  # verbatim rather than through a WHATWG percent-encoder. present -> "?query";
+  # empty -> bare "?"; absent -> nothing. Fragment always excluded.
+  query_suffix <- rep("", n)
+  is_present <- query_kind == "present"
+  query_suffix[is_present] <- paste0("?", ifelse(
+    is.na(query[is_present]), "", query[is_present]
+  ))
+  query_suffix[query_kind == "empty"] <- "?"
+
+  paste0(out, query_suffix)
+}
+
+# Shared WHATWG query suffix (ADR 0012 D2): present -> "?" + special-ness-keyed
+# percent-encode; empty -> bare "?"; absent -> nothing. Fragment excluded.
+.whatwg_query_suffix_vec <- function(query, query_kind, scheme) {
+  n <- length(query_kind)
+  suffix <- rep("", n)
+  for (i in seq_len(n)) {
+    if (query_kind[i] == "empty") {
+      suffix[i] <- "?"
+    } else if (query_kind[i] == "present") {
+      encoded <- .whatwg_query_percent_encode(query[i], scheme[i])
+      if (is.na(encoded)) {
+        encoded <- ""
+      }
+      suffix[i] <- paste0("?", encoded)
+    }
+  }
+  suffix
+}
+
 # Phase 12 (vector): classify the parse outcome (ok / ok-ftp / warning-* /
 # error / ok-scheme-relative). `curl_ok` is TRUE for rows curl parsed (the
 # scalar wrapper passes !is.null(parsed_curl)). Progressive mask assignment
