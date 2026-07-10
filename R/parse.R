@@ -1385,7 +1385,7 @@ safe_parse_urls <- function(url,
   port_output <- .apply_port_output_policy_vec(
     a$final_scheme, a$raw_port, opts$port_handling, opts$url_standard
   )
-  if (identical(opts$url_standard, "whatwg")) {
+  if (.is_whatwg(opts$url_standard)) {
     q_idx <- which(!is.na(query_output))
     if (length(q_idx) > 0L) {
       query_output[q_idx] <- mapply(

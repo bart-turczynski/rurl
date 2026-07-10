@@ -3,6 +3,17 @@
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
 
+# Single source of truth for the WHATWG standard-posture toggle (ADR 0012
+# Layer 0, RURL-dztjlfkc). Every posture-dependent branch tests membership in
+# the WHATWG profile through this predicate instead of an inline
+# `identical(url_standard, "whatwg")`, so later layers add posture-dependent
+# behavior in one place rather than scattering more identity checks. Returns a
+# length-1 logical -- identical truthiness to the inline check it replaces, so
+# it composes unchanged in negations and scalar-vs-vector `&`/`&&`/`||` uses.
+.is_whatwg <- function(url_standard) {
+  identical(url_standard, "whatwg")
+}
+
 # The URL schemes rurl supports. rurl's domain is authority-based (hierarchical)
 # URLs. http/https/ftp/ftps carry "scheme://host[:port]/path"; file is the
 # one supported hostless hierarchical scheme. In the WHATWG profile, `file:`
