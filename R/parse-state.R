@@ -182,3 +182,86 @@
   out[v6] <- "ipv6"
   out
 }
+
+# --- Stage-B eligibility matrix (ADR 0012 D2 / Layer 3c, RURL-jqlnnaiw) ------
+#
+# Per-row eligibility masks that gate the Stage-B semantic-transform pipeline
+# (._parse_stage_b_vec, R/parse.R). This is a PURE, vectorized classifier: it
+# takes already-classified per-row state (scheme string, WHATWG path_kind via
+# `.whatwg_path_kind`, host_kind via `.host_kind`, is_ip_host) plus the resolved
+# `scheme_acceptance`/`url_standard`, and returns three logical masks. It never
+# parses, never touches curl, and never routes through the punycode/domain
+# helpers (ADR 0002).
+#
+# CRITICAL BYTE-IDENTITY DESIGN: the ENTIRE restriction is gated on
+# `scheme_acceptance == "general"`. Under any other value (notably "web", the
+# only publicly reachable value and the default), ALL masks are TRUE -- the
+# previously supported web schemes (http/https/ftp/ftps/file) are GRANDFATHERED
+# and keep exactly today's Stage-B behavior (D2: "without changing existing
+# direct-selector results for the previously supported schemes"). This mirrors
+# L2's reject decoupling (`if (scheme_acceptance == "web")`, parse-phases.R):
+# byte-identity for web is BY CONSTRUCTION, not by hoping masks come out TRUE.
+#
+# Returns a list of three masks, each length-n:
+#   - path_eligible: hierarchical/path transforms (dot-segment normalization,
+#     index page, trailing slash, and the path case fold). D2 row "Hierarchical
+#     path transforms": never applied to a WHATWG opaque path; TRUE for list
+#     paths.
+#   - host_transform_eligible: host presentation (host_encoding IDNA/unicode),
+#     subdomain trimming, and the host case fold. D2 rows "Host presentation
+#     (host_encoding)" + "DNS/PSL derivation": a WHATWG *domain* host only. A
+#     domain host arises only under a special scheme; opaque hosts (non-special
+#     scheme), IP literals, and empty/absent hosts are NOT domain hosts.
+#   - semantic_transform_eligible: automatic semantic transforms beyond the
+#     standard (query filter/sort here; www/subdomain/scheme-force are Stage A
+#     or covered by the host mask). D2 row "Automatic semantic transforms":
+#     HTTP(S) only (ftp/file are special but not HTTP(S)). This FALSE case is
+#     the `transform-skipped-ineligible-scheme` signal L5 will surface.
+.stage_b_eligibility <- function(scheme_acceptance, scheme, url_standard,
+                                 path_kind, host_kind, is_ip_host) {
+  n <- max(
+    length(scheme), length(path_kind), length(host_kind), length(is_ip_host)
+  )
+  scheme <- rep_len(scheme, n)
+  path_kind <- rep_len(path_kind, n)
+  host_kind <- rep_len(host_kind, n)
+  is_ip_host <- rep_len(is_ip_host, n)
+
+  # Grandfather clause: any non-"general" acceptance (incl. "web", the default
+  # and only publicly reachable value) imposes NO restriction. All masks TRUE.
+  if (!identical(scheme_acceptance, "general")) {
+    all_true <- rep(TRUE, n)
+    return(list(
+      path_eligible = all_true,
+      host_transform_eligible = all_true,
+      semantic_transform_eligible = all_true
+    ))
+  }
+
+  # url_standard is part of the classifier signature (D2 keys eligibility off
+  # the selected posture); the D2 rows implemented below are posture-agnostic in
+  # `general` today, so it is accepted for forward-compatibility and to keep
+  # the signature stable for L4b/L5. `force` documents the deliberate non-use.
+  force(url_standard)
+
+  scheme_lc <- stringi::stri_trans_tolower(scheme)
+  is_special <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
+  is_http <- !is.na(scheme_lc) & scheme_lc %in% c("http", "https")
+  ip <- !is.na(is_ip_host) & is_ip_host
+
+  # D2 "Hierarchical path transforms": eligible for list paths, never for a
+  # WHATWG opaque path.
+  path_eligible <- path_kind != "opaque"
+  # D2 "Automatic semantic transforms": HTTP(S) only.
+  semantic_transform_eligible <- is_http
+  # D2 "Host presentation" + "DNS/PSL derivation": a WHATWG domain host only --
+  # present, non-IP host under a special scheme. Opaque hosts, IP literals, and
+  # empty/absent hosts are ineligible.
+  host_transform_eligible <- is_special & host_kind == "present" & !ip
+
+  list(
+    path_eligible = path_eligible,
+    host_transform_eligible = host_transform_eligible,
+    semantic_transform_eligible = semantic_transform_eligible
+  )
+}

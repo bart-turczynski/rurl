@@ -1379,27 +1379,86 @@ safe_parse_urls <- function(url,
   domain <- ifelse(use_ascii, a$domain_ascii, a$domain_unicode)
   tld <- ifelse(use_ascii, a$tld_ascii, a$tld_unicode)
 
+  # ADR 0012 D2 / Layer 3c (RURL-jqlnnaiw): per-row Stage-B eligibility masks.
+  # The ENTIRE restriction is gated on `scheme_acceptance == "general"`; under
+  # "web" (the default and only publicly reachable value) `.stage_b_eligibility`
+  # returns all-TRUE masks, so every revert mask below is EMPTY and every
+  # transform runs exactly as today -- byte-identity is BY CONSTRUCTION. We only
+  # compute the masks (and pay the classifier cost) under "general" so the web
+  # hot path is untouched; the predicate itself still returns all-TRUE for any
+  # non-"general" value (unit-tested) as the source of truth.
+  #
+  # DEFERRAL: www_handling (Stage A, Phase 6) and PSL domain/TLD derivation
+  # (Stage A) are NOT gated here -- Stage-A host handling for `general` is L4b's
+  # slice. This block gates only Stage-B path/host/query transforms.
+  general_acceptance <- identical(opts$scheme_acceptance, "general")
+  if (general_acceptance) {
+    scheme_lc <- stringi::stri_trans_tolower(a$final_scheme)
+    is_special_row <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
+    # path_kind via the L3a classifier. a$raw_path is the post-authority path;
+    # for special schemes path_kind is always "list" (so path_eligible TRUE),
+    # and opaque non-special inputs still error pre-Stage-B until L4b, so this
+    # proxy for the after-scheme remainder is exact for every row reachable
+    # today. L4b supplies the true opaque handling.
+    elig <- .stage_b_eligibility(
+      "general", a$final_scheme, opts$url_standard,
+      path_kind = .whatwg_path_kind(is_special_row, a$raw_path),
+      host_kind = .host_kind(a$final_host),
+      is_ip_host = is_ip_host
+    )
+  }
+
   # Phase 3: path normalization.
   path_final <- .normalize_path_vec(
     a$raw_path, opts$path_encoding, opts$path_normalization,
     opts$index_page_handling, opts$trailing_slash_handling,
     path_identity = opts$path_identity
   )
+  # D2 "Hierarchical path transforms": revert ineligible (opaque-path) rows to
+  # the pre-normalization baseline (a$raw_path). Presentation via path_encoding
+  # for opaque paths is ADR 0011's separate escape hatch (deferred to L3b/L4b);
+  # L3c only skips the hierarchical transforms here.
+  if (general_acceptance) {
+    revert <- !elig$path_eligible
+    path_final[revert] <- a$raw_path[revert]
+  }
 
   # Phase 8: subdomain-level policy (may trim labels from the host).
   final_host <- .apply_subdomain_policy_vec(
     a$final_host, domain, opts$subdomain_levels_to_keep, is_ip_host
   )
+  # D2 "Host presentation" / "DNS/PSL derivation": revert host-transform for
+  # ineligible (opaque/IP/empty/non-domain) hosts to the pre-trim host.
+  if (general_acceptance) {
+    revert <- !elig$host_transform_eligible
+    final_host[revert] <- a$final_host[revert]
+  }
 
   # Phase 9: host encoding (idna / unicode).
   host_for_clean <- .apply_host_encoding_vec(
     final_host, opts$host_encoding, is_ip_host, opts$url_standard
   )
+  # D2 "Host presentation (host_encoding)": revert ineligible hosts to the
+  # pre-encoding host (post-subdomain `final_host`).
+  if (general_acceptance) {
+    revert <- !elig$host_transform_eligible
+    host_for_clean[revert] <- final_host[revert]
+  }
 
   # Phase 10: case policy applied to host, path, and scheme.
   cased <- .apply_case_policy_vec(
     host_for_clean, path_final, a$final_scheme, opts$case_handling
   )
+  # D2 case split: SCHEME lowercasing is standards-required and ALWAYS applied
+  # (cased$scheme kept). The host case fold is gated on host_transform_eligible
+  # (a non-special opaque host is not lowercased); the path case fold is gated
+  # on path_eligible (an opaque path is not folded). Revert the ineligible rows
+  # to their pre-case baselines.
+  if (general_acceptance) {
+    cased$host[!elig$host_transform_eligible] <-
+      host_for_clean[!elig$host_transform_eligible]
+    cased$path[!elig$path_eligible] <- path_final[!elig$path_eligible]
+  }
 
   # Query filtering: derive the canonical query to append to clean_url per
   # query_handling (default "drop" => "" for every row, i.e. the historical
@@ -1408,6 +1467,19 @@ safe_parse_urls <- function(url,
   # case-sensitive -- see .apply_case_policy_vec, which folds scheme/host/path
   # only), so it is computed here and appended AFTER the cased components.
   clean_query <- .filter_query_vec(a$raw_query, opts)
+  # D2 "Automatic semantic transforms" (query filter/sort): HTTP(S) only under
+  # `general`. Skip the transform for ineligible rows -- pass the raw query
+  # through unchanged (NA -> "" to match .filter_query_vec's absent-query shape)
+  # rather than applying the filter/sort/drop policy. This is the
+  # `transform-skipped-ineligible-scheme` case L5 will surface.
+  if (general_acceptance) {
+    skip <- !elig$semantic_transform_eligible
+    if (any(skip)) {
+      rq <- a$raw_query[skip]
+      rq[is.na(rq)] <- ""
+      clean_query[skip] <- rq
+    }
+  }
 
   query_output <- a$raw_query
   fragment_output <- a$raw_fragment
