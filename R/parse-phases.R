@@ -931,7 +931,8 @@
                                        protocol_handling,
                                        scheme_relative_handling,
                                        url_standard = NULL,
-                                       scheme_policy = "infer") {
+                                       scheme_policy = "infer",
+                                       scheme_acceptance = "web") {
   n <- length(url)
 
   # WHATWG control-character stripping (RURL-tyetpjym) runs FIRST -- it is the
@@ -1007,12 +1008,20 @@
     looks_like_host_port[maybe_host_port] <- lhp[maybe_host_port]
   }
 
-  protocol_kept <- protocol_handling == "keep" || protocol_handling == "none"
-  if (protocol_kept) {
-    bare_protocol_kept <- looks_like_protocol &
+  # ADR 0012 D3 (Option B): the unsupported-scheme reject is armed on the
+  # scheme-ACCEPTANCE axis, NOT on protocol_handling. Under "web" a
+  # scheme-bearing token outside the curated allowlist is an error regardless
+  # of how the scheme would be presented (keep/none/strip/http/https). Under
+  # "general" this reject is suppressed -- general admits any valid scheme token
+  # and defers shaping to L3/L4 (unimplemented here). The
+  # `!looks_like_host_port` term stays so host:port inputs (`example.com:8080`,
+  # which match the scheme regex) are never demoted -- Phase 1 recognizes and
+  # parses them as host:port.
+  if (scheme_acceptance == "web") {
+    unsupported <- looks_like_protocol &
       !original_has_allowed_scheme &
       !looks_like_host_port
-    rejected <- rejected | bare_protocol_kept
+    rejected <- rejected | unsupported
   }
 
   # Host-shape classification (D1/D2/D5).
@@ -2266,7 +2275,8 @@
                                      looks_like_host_port,
                                      is_scheme_relative,
                                      scheme_relative_handling,
-                                     rfc3986_path_rootless = NULL) {
+                                     rfc3986_path_rootless = NULL,
+                                     scheme_acceptance = "web") {
   n <- length(final_host)
   if (is.null(rfc3986_path_rootless)) {
     rfc3986_path_rootless <- rep(FALSE, n)
@@ -2301,12 +2311,14 @@
     status[is_ftp] <- .STATUS_OK_FTP
   }
 
-  protocol_kept <- protocol_handling == "keep" || protocol_handling == "none"
-  if (protocol_kept) {
-    # host:port inputs match the scheme regex (`example.com:` looks like a
-    # scheme) but Phase 1 already recognizes and parses them as host:port, so
-    # they must not be demoted here (RURL-aldwnots) -- mirrors Phase 1's own
-    # `bare_protocol_kept` exclusion.
+  # ADR 0012 D3 (Option B): armed on the scheme-ACCEPTANCE axis, in lock-step
+  # with Phase 1 (.prepare_urls_for_curl_vec). Under "web" an unsupported
+  # scheme-bearing token is demoted to error regardless of protocol_handling;
+  # under "general" the demotion is suppressed. host:port inputs match the
+  # scheme regex (`example.com:` looks like a scheme) but Phase 1 already
+  # recognizes and parses them as host:port, so the `!looks_like_host_port`
+  # term keeps them from being demoted here (RURL-aldwnots).
+  if (scheme_acceptance == "web") {
     unsupported <- looks_like_protocol &
       !original_has_allowed_scheme &
       !looks_like_host_port

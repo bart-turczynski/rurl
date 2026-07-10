@@ -655,6 +655,16 @@ safe_parse_urls <- function(url,
 # scheme-less host-shaped input (today's behavior, byte-for-byte). "require"
 # rejects it (strict / pure-parser posture). See .prepare_urls_for_curl_vec().
 .opt_scheme_policy <- c("infer", "require")
+# scheme_acceptance (ADR 0012 D3): the scheme-*acceptance* axis, orthogonal to
+# protocol_handling (presentation) and url_standard (interpretation). "web"
+# (default) keeps the curated web-scheme allowlist -- scheme-bearing input
+# outside http/https/ftp/ftps/file is an error, now decoupled from
+# protocol_handling. "general" admits any syntactically valid scheme token and
+# defers interpretation to url_standard (hence D3's composition rule: general
+# requires a non-NULL url_standard). "general" is internal-only until the L3/L4
+# shapers land (ADR 0012 Layer-2 build-order gate); it is NOT on any public
+# signature yet.
+.opt_scheme_acceptance <- c("web", "general")
 .opt_host_encoding <- c("keep", "idna", "unicode")
 .opt_path_encoding <- c("keep", "encode", "decode")
 .opt_query_handling <- c("drop", "filter", "allow", "keep")
@@ -854,6 +864,7 @@ safe_parse_urls <- function(url,
                            decode_plus = FALSE,
                            port_handling = .opt_port_handling,
                            scheme_policy = .opt_scheme_policy,
+                           scheme_acceptance = .opt_scheme_acceptance,
                            url_standard = NULL) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep and the query options.
@@ -876,6 +887,7 @@ safe_parse_urls <- function(url,
     empty_param_handling = match.arg(empty_param_handling),
     port_handling = match.arg(port_handling),
     scheme_policy = match.arg(scheme_policy),
+    scheme_acceptance = match.arg(scheme_acceptance),
     params_keep = .validate_param_patterns(params_keep, "params_keep"),
     params_drop = .validate_param_patterns(params_drop, "params_drop"),
     sort_params = .validate_flag(sort_params, "sort_params"),
@@ -922,6 +934,18 @@ safe_parse_urls <- function(url,
     opts$path_identity <- profile$path_identity
     opts$path_normalization <- profile$path_normalization
   }
+  # ADR 0012 D3 composition rule: "general" acceptance admits any syntactically
+  # valid scheme token but defers *interpretation* to url_standard, so it is
+  # meaningless without one. Enforced AFTER profile expansion / explicit
+  # override resolution so opts$url_standard is final. "web" composes freely
+  # with any url_standard (incl. NULL).
+  if (opts$scheme_acceptance == "general" && is.null(opts$url_standard)) {
+    stop(
+      "scheme_acceptance = \"general\" requires an explicit url_standard ",
+      "(\"rfc3986\" or \"whatwg\"); it is NULL.",
+      call. = FALSE
+    )
+  }
   opts
 }
 
@@ -954,9 +978,14 @@ safe_parse_urls <- function(url,
   # scheme-less host-shaped rows into the reject set, changing what curl parses
   # (and whether a row survives at all). So it MUST enter the key, or a second
   # call under a different policy would reuse a stale cached row.
+  # scheme_acceptance is Stage-A-affecting (ADR 0012 D3): under "web" a
+  # scheme-bearing input outside the curated allowlist is folded into the
+  # reject set in Phase 1, whereas "general" admits it. So it changes which
+  # rows survive Stage A and MUST enter the key, or a second call under a
+  # different acceptance would reuse a stale cached row.
   cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
     opts$tld_source, opts$scheme_relative_handling,
-    opts$url_standard %||% "", opts$scheme_policy,
+    opts$url_standard %||% "", opts$scheme_policy, opts$scheme_acceptance,
     sep = "\x1F"
   )
   stringi::stri_escape_unicode(enc2utf8(cache_key))
@@ -1126,7 +1155,7 @@ safe_parse_urls <- function(url,
   # rejecting them under a selector (RURL-luwvkwhd).
   prep <- .prepare_urls_for_curl_vec(
     urls, opts$protocol_handling, opts$scheme_relative_handling,
-    opts$url_standard, opts$scheme_policy
+    opts$url_standard, opts$scheme_policy, opts$scheme_acceptance
   )
 
   # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
@@ -1426,7 +1455,8 @@ safe_parse_urls <- function(url,
     looks_like_host_port = a$looks_like_host_port,
     is_scheme_relative = a$is_scheme_relative,
     scheme_relative_handling = opts$scheme_relative_handling,
-    rfc3986_path_rootless = a$rfc3986_path_rootless
+    rfc3986_path_rootless = a$rfc3986_path_rootless,
+    scheme_acceptance = opts$scheme_acceptance
   )
 
   # Phase 13: assemble the 14 typed columns.
