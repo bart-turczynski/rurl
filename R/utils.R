@@ -55,6 +55,22 @@
 # (IPv6 literals legitimately contain "[" "]" ":"). See ADR 0004/0007.
 .WHATWG_FORBIDDEN_HOST_CP <- "[\\u0001-\\u001f\\u007f #%/:<>?@\\[\\]\\\\^|]"
 
+# WHATWG forbidden HOST code points (ADR 0012 L4b, RURL-yutinyhb). CORRECTNESS
+# TRAP: this is the OPAQUE-HOST set, deliberately DISTINCT from the stricter
+# forbidden-DOMAIN set above (`.WHATWG_FORBIDDEN_HOST_CP`). The domain set also
+# forbids `%`, all C0 controls (U+0001-U+001F), and DEL (U+007F); an opaque host
+# does NOT forbid those -- `%` is legal (and malformed `%` is a validation-error
+# fact for L5, never a parse failure), C0/DEL are percent-encoded by the C0
+# encoder rather than rejected, and NUL cannot occur in an R string. WHATWG's
+# full 17-member forbidden-host set is NUL TAB LF CR SP # / : < > ? @ [ \ ] ^ |;
+# TAB/LF/CR are already stripped upstream (.strip_whatwg_control_chars_vec) and
+# NUL is unrepresentable, so the effective reject class is the 13 printable code
+# points space # / : < > ? @ [ \ ] ^ | (backslash IS forbidden -- it is only
+# rewritten to `/` for SPECIAL schemes, never for the non-special/opaque hosts
+# this set gates). Applied ONLY to non-bracketed opaque hosts: a bracketed
+# IPv6 literal legitimately carries `[` `]` `:` and is checked separately.
+.WHATWG_FORBIDDEN_HOST_ONLY_CP <- "[\\u0020#/:<>?@\\[\\]\\\\^|]"
+
 # WHATWG host-charset shim code points (RURL-dxwxeamq, ADR 0009). The 15 ASCII
 # code points libcurl rejects in a host ("Bad hostname") that the WHATWG URL
 # Standard keeps verbatim in the host (ada-confirmed): ! " $ & ' ( ) * + , ; = `
