@@ -920,6 +920,59 @@
   out
 }
 
+# Bounded browser string fixer (RURL-jynceqrj, ADR 0012 Layer 6a; PRD Part 1).
+# A deterministic single pass, gated on fixup_posture == "browser", that repairs
+# the raw input string before any parsing. A byte-for-byte no-op for every other
+# posture (returns `url` untouched), so the default parse path is unchanged.
+#
+# Steps (each feeds the next):
+#   1. Outer C0/space trim -- strip leading/trailing U+0000..U+0020 from the
+#      whole input (WHATWG "C0 control or space"). Greenfield: there is no other
+#      outer trim in the parse path.
+#   2. `;`->`:` -- rewrite a leading `scheme;` to `scheme:` ONLY when the scheme
+#      token is in the recognized-scheme set. A `;` after any other token is
+#      left verbatim.
+#   3. `://` insertion -- insert `://` after `scheme:` for a scheme in the
+#      authority table that is missing its authority slashes (e.g.
+#      `http:example.com` -> `http://example.com`). Outside the set: verbatim.
+#
+# Both tables resolve to the SAME set = .WHATWG_SPECIAL_SCHEMES (referenced
+# directly, not copied). `ftps` is naturally excluded (it is not special under
+# WHATWG), so `ftps;host`/`ftps:host` stay verbatim -- no special-casing.
+# Step 4 (fallback `http`) is NOT here: it is the existing scheme_policy =
+# "infer" prepend seam (ADR 0012 D4).
+.apply_browser_fixup_vec <- function(url, fixup_posture) {
+  if (!identical(fixup_posture, "browser")) {
+    return(url)
+  }
+
+  # Step 1: outer C0/space trim (U+0000..U+0020 at either end). NA passes
+  # through stringi unchanged.
+  url <- stringi::stri_replace_first_regex(url, "^[\\x00-\\x20]+", "")
+  url <- stringi::stri_replace_first_regex(url, "[\\x00-\\x20]+$", "")
+
+  # Recognized-scheme set = authority table = .WHATWG_SPECIAL_SCHEMES. Schemes
+  # are case-insensitive; the ordered `;`/`:` delimiter after the alternation
+  # keeps a longer scheme (https) from being truncated to a shorter prefix
+  # (http) and keeps non-scheme tokens (httpx;) from matching.
+  scheme_alt <- paste(.WHATWG_SPECIAL_SCHEMES, collapse = "|")
+
+  # Step 2: leading `scheme;` -> `scheme:`, recognized schemes only. $1 keeps
+  # the matched scheme's original case.
+  url <- stringi::stri_replace_first_regex(
+    url, paste0("(?i)^(", scheme_alt, ");"), "$1:"
+  )
+
+  # Step 3: `scheme:` with no authority slashes -> `scheme://`, authority-table
+  # schemes only. The negative lookahead `(?!//)` leaves an already-slashed
+  # `scheme://` (incl. the step-2 output) untouched.
+  url <- stringi::stri_replace_first_regex(
+    url, paste0("(?i)^(", scheme_alt, "):(?!//)"), "$1://"
+  )
+
+  url
+}
+
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
 # gate, and building the string handed to curl. Returns the per-URL columns plus
 # a logical `rejected` column marking rows the scalar pipeline returned NULL for
@@ -932,8 +985,19 @@
                                        scheme_relative_handling,
                                        url_standard = NULL,
                                        scheme_policy = "infer",
-                                       scheme_acceptance = "web") {
+                                       scheme_acceptance = "web",
+                                       fixup_posture = "none") {
   n <- length(url)
+
+  # Bounded browser fixer (RURL-jynceqrj, ADR 0012 Layer 6a) runs BEFORE the
+  # standards-required WHATWG preprocessing below. It is a deterministic single
+  # pass that repairs the input STRING (outer C0/space trim, `;`->`:` and `://`
+  # insertion for recognized special schemes) so the fixed string flows through
+  # the ordinary parse path. A byte-for-byte no-op unless fixup_posture ==
+  # "browser". The step-4 fallback `http` prepend is NOT here: it is the
+  # existing scheme_policy = "infer" seam at the add_http mask below, shared
+  # with the default posture (ADR 0012 D4 -- one prepend impl).
+  url <- .apply_browser_fixup_vec(url, fixup_posture)
 
   # WHATWG control-character stripping (RURL-tyetpjym) runs FIRST -- it is the
   # WHATWG parser's step 1 (remove all ASCII tab/LF/CR), so every scheme/host

@@ -685,6 +685,17 @@ safe_parse_urls <- function(url,
 # shapers land (ADR 0012 Layer-2 build-order gate); it is NOT on any public
 # signature yet.
 .opt_scheme_acceptance <- c("web", "general")
+# --- fixup_posture (RURL-jynceqrj, ADR 0012 Layer 6a) -----------------------
+# The input-repair axis: "none" (default) never touches the string; "browser"
+# runs the bounded, deterministic single-pass string fixer BEFORE the WHATWG
+# parser (outer C0/space trim, `;`->`:` and `://` insertion for recognized
+# special schemes). This is the fix-up posture that the future public `browser`
+# profile will set (ADR 0012 standing rule 2); like `scheme_acceptance =
+# "general"`, it is internal-only until the L6b profile lands -- it is NOT on
+# any public signature yet. The step-4 fallback `http` prepend is NOT part of
+# this fixer: it is the existing `scheme_policy = "infer"` seam, shared with the
+# default posture (ADR 0012 D4 -- one prepend impl).
+.opt_fixup_posture <- c("none", "browser")
 .opt_host_encoding <- c("keep", "idna", "unicode")
 .opt_path_encoding <- c("keep", "encode", "decode")
 .opt_query_handling <- c("drop", "filter", "allow", "keep")
@@ -885,6 +896,7 @@ safe_parse_urls <- function(url,
                            port_handling = .opt_port_handling,
                            scheme_policy = .opt_scheme_policy,
                            scheme_acceptance = .opt_scheme_acceptance,
+                           fixup_posture = .opt_fixup_posture,
                            url_standard = NULL) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep and the query options.
@@ -908,6 +920,7 @@ safe_parse_urls <- function(url,
     port_handling = match.arg(port_handling),
     scheme_policy = match.arg(scheme_policy),
     scheme_acceptance = match.arg(scheme_acceptance),
+    fixup_posture = match.arg(fixup_posture),
     params_keep = .validate_param_patterns(params_keep, "params_keep"),
     params_drop = .validate_param_patterns(params_drop, "params_drop"),
     sort_params = .validate_flag(sort_params, "sort_params"),
@@ -1003,9 +1016,15 @@ safe_parse_urls <- function(url,
   # reject set in Phase 1, whereas "general" admits it. So it changes which
   # rows survive Stage A and MUST enter the key, or a second call under a
   # different acceptance would reuse a stale cached row.
+  # fixup_posture is Stage-A-affecting (RURL-jynceqrj, ADR 0012 Layer 6a):
+  # under "browser" the bounded string fixer rewrites the input (outer trim,
+  # `;`->`:`, `://` insertion) BEFORE curl sees it, so a fixed parse produces a
+  # different curl input than the unfixed one. It MUST enter the key, or a
+  # fixed parse would collide with an unfixed cached row (PRD Part 1).
   cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
     opts$tld_source, opts$scheme_relative_handling,
     opts$url_standard %||% "", opts$scheme_policy, opts$scheme_acceptance,
+    opts$fixup_posture,
     sep = "\x1F"
   )
   stringi::stri_escape_unicode(enc2utf8(cache_key))
@@ -1175,7 +1194,8 @@ safe_parse_urls <- function(url,
   # rejecting them under a selector (RURL-luwvkwhd).
   prep <- .prepare_urls_for_curl_vec(
     urls, opts$protocol_handling, opts$scheme_relative_handling,
-    opts$url_standard, opts$scheme_policy, opts$scheme_acceptance
+    opts$url_standard, opts$scheme_policy, opts$scheme_acceptance,
+    opts$fixup_posture
   )
 
   # ADR 0012 Layer 4b-2 (RURL-qbnelzku): general-acceptance routing. Under
