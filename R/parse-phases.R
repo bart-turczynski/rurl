@@ -2464,23 +2464,34 @@
                                      is_scheme_relative,
                                      scheme_relative_handling,
                                      rfc3986_path_rootless = NULL,
-                                     scheme_acceptance = "web") {
+                                     scheme_acceptance = "web",
+                                     is_general = NULL) {
   n <- length(final_host)
   if (is.null(rfc3986_path_rootless)) {
     rfc3986_path_rootless <- rep(FALSE, n)
+  }
+  # ADR 0012 D5 (RURL-qbnelzku): a general-routed opaque / non-special-authority
+  # row is `ok`, promoted BEFORE and EXEMPT FROM the reg-name host_has_dot / tld
+  # / domain WARN cascade -- an opaque or arbitrary-scheme host has no PSL
+  # domain, so it must NOT become warning-no-tld. Empty under "web" (no general
+  # row exists there), so this is a pure no-op for the default posture.
+  if (is.null(is_general)) {
+    is_general <- rep(FALSE, n)
   }
   status <- rep(.STATUS_ERROR, n)
 
   scheme_lower <- stringi::stri_trans_tolower(final_scheme)
   is_file <- curl_ok & !is.na(scheme_lower) & scheme_lower == "file"
   is_rfc3986_path_rootless <- curl_ok & rfc3986_path_rootless
+  is_general_ok <- curl_ok & is_general
   host_present <- curl_ok & !is.na(final_host) & final_host != ""
 
   status[host_present & is_ip_host] <- .STATUS_OK
   status[is_file] <- .STATUS_OK
   status[is_rfc3986_path_rootless] <- .STATUS_OK
+  status[is_general_ok] <- .STATUS_OK
 
-  non_ip <- host_present & !is_ip_host & !is_file
+  non_ip <- host_present & !is_ip_host & !is_file & !is_general_ok
   host_has_dot <- stringi::stri_detect_fixed(final_host, ".")
   host_has_dot[is.na(host_has_dot)] <- FALSE
   tld_empty <- is.na(tld) | !nzchar(tld)

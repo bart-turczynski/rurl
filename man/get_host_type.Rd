@@ -4,7 +4,12 @@
 \alias{get_host_type}
 \title{Classify the host of each URL under a standard profile}
 \usage{
-get_host_type(url, url_standard = NULL, scheme_policy = c("infer", "require"))
+get_host_type(
+  url,
+  url_standard = NULL,
+  scheme_policy = c("infer", "require"),
+  scheme_acceptance = c("web", "general")
+)
 }
 \arguments{
 \item{url}{A character vector of URLs.}
@@ -26,6 +31,23 @@ value becomes \code{parse_status = "error"} rather than gaining a fabricated
 scheme. Use this for a strict, pure-parser posture. Note this governs
 only bare host input; scheme-relative \verb{//host} input is governed
 separately by \code{scheme_relative_handling}.}
+}}
+
+\item{scheme_acceptance}{Which scheme \emph{tokens} may enter parsing (a
+scheme-acceptance axis, distinct from \code{scheme_policy}, which governs
+scheme-\emph{less} input, and from \code{url_standard}, which governs interpretation).
+Defaults to "web".
+\itemize{
+\item{"web": (Default) Only the curated web-scheme allowlist
+(\code{http}/\code{https}/\code{ftp}/\code{ftps}/\code{file}) is admitted; a scheme-bearing input
+outside it is \code{parse_status = "error"}. This is the historical,
+byte-for-byte compatible behavior.}
+\item{"general": Admit any syntactically valid scheme token and parse
+opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
+Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
+decides the interpretation; \code{general} with \code{url_standard = NULL} is an
+error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+derivation, and are never run through the IDNA/punycode helpers.}
 }}
 }
 \value{

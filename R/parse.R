@@ -222,6 +222,22 @@
 #'     only bare host input; scheme-relative `//host` input is governed
 #'     separately by `scheme_relative_handling`.}
 #'   }
+#' @param scheme_acceptance Which scheme *tokens* may enter parsing (a
+#' scheme-acceptance axis, distinct from `scheme_policy`, which governs
+#' scheme-*less* input, and from `url_standard`, which governs interpretation).
+#' Defaults to "web".
+#'   \itemize{
+#'     \item{"web": (Default) Only the curated web-scheme allowlist
+#'     (`http`/`https`/`ftp`/`ftps`/`file`) is admitted; a scheme-bearing input
+#'     outside it is `parse_status = "error"`. This is the historical,
+#'     byte-for-byte compatible behavior.}
+#'     \item{"general": Admit any syntactically valid scheme token and parse
+#'     opaque (`mailto:x`), non-special (`foo://host`), and RFC-generic URLs.
+#'     Requires an explicit `url_standard` (`"rfc3986"` or `"whatwg"`), which
+#'     decides the interpretation; `general` with `url_standard = NULL` is an
+#'     error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+#'     derivation, and are never run through the IDNA/punycode helpers.}
+#'   }
 #' @param url_standard Optional top-level standard profile: `NULL` (default),
 #'   `"rfc3986"`, or `"whatwg"`. With `NULL` the behavior is exactly what the
 #'   individual low-level options select (fully backward compatible). When set,
@@ -419,6 +435,7 @@ safe_parse_url <- function(url,
                              "exclude", "keep", "strip_default", "strip_all"
                            ),
                            scheme_policy = c("infer", "require"),
+                           scheme_acceptance = c("web", "general"),
                            url_standard = NULL) {
   # Enforce scalar input to keep behavior explicit and predictable
   if (length(url) != 1) {
@@ -464,6 +481,7 @@ safe_parse_url <- function(url,
     decode_plus = decode_plus,
     port_handling = port_handling,
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     url_standard = url_standard
   )
 
@@ -522,6 +540,7 @@ safe_parse_urls <- function(url,
                               "exclude", "keep", "strip_default", "strip_all"
                             ),
                             scheme_policy = c("infer", "require"),
+                            scheme_acceptance = c("web", "general"),
                             url_standard = NULL) {
   # url_standard (RURL-eqzkkohm): validate + conflict-check the governed knobs
   # the caller explicitly supplied (see safe_parse_url() for the rationale).
@@ -556,6 +575,7 @@ safe_parse_urls <- function(url,
     decode_plus = decode_plus,
     port_handling = port_handling,
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     url_standard = url_standard
   )
 
@@ -1158,11 +1178,24 @@ safe_parse_urls <- function(url,
     opts$url_standard, opts$scheme_policy, opts$scheme_acceptance
   )
 
+  # ADR 0012 Layer 4b-2 (RURL-qbnelzku): general-acceptance routing. Under
+  # scheme_acceptance == "general", `.general_parse_vec` decomposes the
+  # opaque / non-special-authority / RFC-generic / RFC-8089-file rows the
+  # posture routes OUT of libcurl. A pure no-op under "web" (empty mask, NA
+  # columns), so `general_route` is empty and every libcurl-path vector below
+  # stays bit-identical -- byte-identity by construction. These rows are cut
+  # from curl_parseable and their components installed directly (mirroring the
+  # whatwg_file / rfc3986_path_rootless blocks). Rows the gate/parser rejects
+  # (gen$ok = FALSE) simply never join parse_ok, so they present as errors.
+  gen <- .general_parse_vec(urls, opts$url_standard, opts$scheme_acceptance)
+  general_route <- valid & gen$general_parsed
+
   # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
   parseable <- valid & !prep$rejected
   rfc3986_path_rootless <- parseable & prep$rfc3986_path_rootless
   whatwg_file <- parseable & prep$whatwg_file
-  curl_parseable <- parseable & !rfc3986_path_rootless & !whatwg_file
+  curl_parseable <- parseable & !rfc3986_path_rootless & !whatwg_file &
+    !general_route
   parsed_list <- vector("list", n)
   parse_idx <- which(curl_parseable)
   if (length(parse_idx) > 0L) {
@@ -1188,7 +1221,9 @@ safe_parse_urls <- function(url,
   )
   file_ok <- rep(FALSE, n)
   file_ok[whatwg_file] <- file_parse$ok
-  parse_ok <- curl_ok | rfc3986_path_rootless | file_ok
+  # General-acceptance rows that parsed successfully (incl. the RFC gate).
+  general_ok <- general_route & gen$ok
+  parse_ok <- curl_ok | rfc3986_path_rootless | file_ok | general_ok
   null_row <- !parse_ok
 
   # Pull raw components into columns (mirrors .extract_raw_components() and the
@@ -1268,6 +1303,22 @@ safe_parse_urls <- function(url,
       prep$rfc3986_path_rootless_fragment[rfc3986_path_rootless]
   }
 
+  # ADR 0012 Layer 4b-2: install the general-routed components. host is the
+  # posture host verbatim (opaque UTF-8 %-encoded / RFC source-preserving,
+  # never punycode -- ADR 0002); query/fragment go through .blank_to_na so the
+  # public columns keep the empty->NA contract (the empty-vs-absent distinction
+  # is recovered in Stage B via `.general_parse_vec` for serialization).
+  if (any(general_ok)) {
+    raw_scheme[general_ok] <- gen$scheme[general_ok]
+    raw_host[general_ok] <- gen$host[general_ok]
+    raw_path[general_ok] <- gen$path[general_ok]
+    raw_query[general_ok] <- .blank_to_na(gen$query[general_ok])
+    raw_fragment[general_ok] <- .blank_to_na(gen$fragment[general_ok])
+    raw_user[general_ok] <- NA_character_
+    raw_password[general_ok] <- NA_character_
+    raw_port[general_ok] <- suppressWarnings(as.integer(gen$port[general_ok]))
+  }
+
   # Phase 4: final scheme per protocol policy.
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
@@ -1275,6 +1326,7 @@ safe_parse_urls <- function(url,
 
   # Phase 5: IP host detection (on curl's host, which may be a coerced IPv4).
   is_ip_host <- .detect_ip_host_vec(raw_host)
+  is_ip_pre_model <- is_ip_host
 
   # Phase 5b: url_standard host IPv4/reg-name model (RURL-luwvkwhd). No-op when
   # url_standard is NULL. Under a selector it restores the RFC reg-name spelling
@@ -1286,12 +1338,28 @@ safe_parse_urls <- function(url,
   )
   model_host <- model$host
   is_ip_host <- model$is_ip
-  null_row <- null_row | model$fatal
+  # The libcurl host model must never touch a general-routed host (parsed by
+  # the posture opaque/RFC parser, not libcurl): restore its host + IP verdict
+  # and exempt it from the model's WHATWG-fatal reject.
+  general_acceptance <- identical(opts$scheme_acceptance, "general")
+  if (general_acceptance && any(general_route)) {
+    model_host[general_route] <- raw_host[general_route]
+    is_ip_host[general_route] <- is_ip_pre_model[general_route]
+    null_row <- null_row | (model$fatal & !general_route)
+  } else {
+    null_row <- null_row | model$fatal
+  }
 
   # Phase 6: www-prefix policy shapes the host fed to the PSL decomposition.
   final_host <- .apply_www_policy_vec(
     model_host, opts$www_handling, is_ip_host
   )
+  # ADR 0012 D2 (the one edit inside the cached Stage-A path): a general
+  # non-special / opaque / reg-name / empty host does NOT get www-stripping.
+  # Empty mask under "web", so a strict no-op for every web/special row.
+  if (general_acceptance && any(general_route)) {
+    final_host[general_route] <- model_host[general_route]
+  }
 
   # Phase 7: registered-domain and TLD derivation (batched pslr calls), computed
   # in BOTH spellings. "idna" forces ascii A-labels and "unicode" forces
@@ -1300,13 +1368,22 @@ safe_parse_urls <- function(url,
   # columns per row -- no further pslr call. host_is_ace drives the per-host
   # choice for the "keep" spelling, mirroring .derive_domain_tld_vec()'s own
   # logic exactly.
+  # ADR 0012 D2: a general non-special / opaque / reg-name / empty host is NOT
+  # asserted to be a DNS name -- force its PSL input to NA so domain/tld resolve
+  # to NA and the host never enters the pslr / punycode helpers (ADR 0002).
+  # `psl_host` masks ONLY the general-routed rows; `final_host` (the public host
+  # column) keeps the opaque host verbatim. Empty mask under "web".
+  psl_host <- final_host
+  if (general_acceptance && any(general_route)) {
+    psl_host[general_route] <- NA_character_
+  }
   dt_ascii <- .derive_domain_tld_vec(
-    final_host, is_ip_host, opts$tld_source, "idna"
+    psl_host, is_ip_host, opts$tld_source, "idna"
   )
   dt_unicode <- .derive_domain_tld_vec(
-    final_host, is_ip_host, opts$tld_source, "unicode"
+    psl_host, is_ip_host, opts$tld_source, "unicode"
   )
-  host_is_ace <- .host_is_ace_vec(final_host)
+  host_is_ace <- .host_is_ace_vec(psl_host)
 
   cols <- list(
     final_scheme = final_scheme,
@@ -1395,16 +1472,28 @@ safe_parse_urls <- function(url,
   if (general_acceptance) {
     scheme_lc <- stringi::stri_trans_tolower(a$final_scheme)
     is_special_row <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
-    # path_kind via the L3a classifier. a$raw_path is the post-authority path;
-    # for special schemes path_kind is always "list" (so path_eligible TRUE),
-    # and opaque non-special inputs still error pre-Stage-B until L4b, so this
-    # proxy for the after-scheme remainder is exact for every row reachable
-    # today. L4b supplies the true opaque handling.
+    # ADR 0012 Layer 4b-2 (RURL-qbnelzku): re-run the pure general parser on the
+    # original URL to recover the state kinds Stage A did not thread through the
+    # cache (the cache stores only .spu_stage_a_fields). `gp` = the rows Stage A
+    # routed to the posture parser AND that parsed ok (curl_ok is the complement
+    # of Stage A's null rows). Cheap and deterministic; only the general posture
+    # pays for it.
+    gen_b <- .general_parse_vec(
+      original_url, opts$url_standard, opts$scheme_acceptance
+    )
+    gp <- gen_b$general_parsed & curl_ok
+    # path_kind / host_kind for eligibility: the L3a classifier proxy for the
+    # libcurl (special) rows, the TRUE parser kinds for the general-routed rows.
+    pk <- .whatwg_path_kind(is_special_row, a$raw_path)
+    hk <- .host_kind(a$final_host)
+    if (any(gp)) {
+      pk[gp] <- gen_b$path_kind[gp]
+      pk[gp & is.na(pk)] <- "list" # rfc posture: NA path_kind -> non-opaque
+      hk[gp] <- gen_b$host_kind[gp]
+    }
     elig <- .stage_b_eligibility(
       "general", a$final_scheme, opts$url_standard,
-      path_kind = .whatwg_path_kind(is_special_row, a$raw_path),
-      host_kind = .host_kind(a$final_host),
-      is_ip_host = is_ip_host
+      path_kind = pk, host_kind = hk, is_ip_host = is_ip_host
     )
   }
 
@@ -1511,6 +1600,31 @@ safe_parse_urls <- function(url,
     query = clean_query, port = a$raw_port, port_handling = opts$port_handling,
     url_standard = opts$url_standard
   )
+  # ADR 0012 Layer 4b-2 (RURL-qbnelzku): serializer dispatch. Under general the
+  # posture-serialized clean_url REPLACES the special/host-present builder for
+  # the general-routed rows -- WHATWG (opaque/list, null-vs-empty host, `/.`
+  # guard) or RFC generic (source-preserving). web/special rows keep
+  # `.build_clean_url_vec` verbatim; under "web" `gp` is empty (passthrough).
+  if (general_acceptance && any(gp)) {
+    if (.is_whatwg(opts$url_standard)) {
+      clean_url[gp] <- .serialize_whatwg_vec(
+        scheme = cased$scheme[gp], host = gen_b$host[gp],
+        host_kind = gen_b$host_kind[gp], path = gen_b$path[gp],
+        path_kind = gen_b$path_kind[gp], query = gen_b$query[gp],
+        query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
+        port_handling = opts$port_handling,
+        trailing_slash_handling = opts$trailing_slash_handling
+      )
+    } else {
+      clean_url[gp] <- .serialize_rfc_generic_vec(
+        scheme = cased$scheme[gp], host = gen_b$host[gp],
+        host_kind = gen_b$host_kind[gp], path = gen_b$path[gp],
+        rfc_path_form = gen_b$rfc_path_form[gp], query = gen_b$query[gp],
+        query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
+        port_handling = opts$port_handling
+      )
+    }
+  }
 
   # Phase 12: parse-status assignment (uses the post-subdomain-trim host,
   # exactly as the previous single-stage engine did).
@@ -1528,7 +1642,8 @@ safe_parse_urls <- function(url,
     is_scheme_relative = a$is_scheme_relative,
     scheme_relative_handling = opts$scheme_relative_handling,
     rfc3986_path_rootless = a$rfc3986_path_rootless,
-    scheme_acceptance = opts$scheme_acceptance
+    scheme_acceptance = opts$scheme_acceptance,
+    is_general = if (general_acceptance) gp else NULL
   )
 
   # Phase 13: assemble the 14 typed columns.

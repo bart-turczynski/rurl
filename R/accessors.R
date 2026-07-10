@@ -49,6 +49,7 @@
                                decode_plus = FALSE,
                                port_handling = "exclude",
                                scheme_policy = "infer",
+                               scheme_acceptance = "web",
                                url_standard = NULL) {
   if (!is.character(url)) {
     stop(
@@ -80,6 +81,7 @@
     decode_plus = decode_plus,
     port_handling = port_handling,
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     url_standard = url_standard
   )
   cols <- ._parse_urls_cached(url, opts)
@@ -124,6 +126,7 @@ get_parse_status <- function(url,
                              subdomain_levels_to_keep = NULL,
                              source = c("all", "private", "icann"),
                              scheme_policy = c("infer", "require"),
+                             scheme_acceptance = c("web", "general"),
                              url_standard = NULL) {
   source <- match.arg(source)
   url_standard <- .validate_url_standard(url_standard)
@@ -136,6 +139,7 @@ get_parse_status <- function(url,
   .extract_from_urls(url, "parse_status",
     null_value = "error",
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = source,
@@ -236,6 +240,7 @@ get_clean_url <- function(url,
                             "exclude", "keep", "strip_default", "strip_all"
                           ),
                           scheme_policy = c("infer", "require"),
+                          scheme_acceptance = c("web", "general"),
                           url_standard = NULL) {
   source <- match.arg(source)
   query_handling <- match.arg(query_handling)
@@ -278,6 +283,7 @@ get_clean_url <- function(url,
     decode_plus = decode_plus,
     port_handling = port_handling,
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     url_standard = url_standard
   )
 }
@@ -301,6 +307,7 @@ get_domain <- function(url,
                        source = c("all", "private", "icann"),
                        host_encoding = c("keep", "idna", "unicode"),
                        scheme_policy = c("infer", "require"),
+                       scheme_acceptance = c("web", "general"),
                        url_standard = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
@@ -313,6 +320,7 @@ get_domain <- function(url,
   # the "lower_host" default to avoid a cache-key/output change (RURL-actrnerd).
   .extract_from_urls(url, "domain",
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = source,
@@ -390,6 +398,7 @@ get_host <- function(url,
                      ),
                      host_encoding = c("keep", "idna", "unicode"),
                      scheme_policy = c("infer", "require"),
+                     scheme_acceptance = c("web", "general"),
                      url_standard = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
@@ -402,6 +411,7 @@ get_host <- function(url,
   case_handling <- match.arg(case_handling)
   .extract_from_urls(url, "host",
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = source,
@@ -434,6 +444,7 @@ get_path <- function(
   path_normalization = c("none", "collapse_slashes", "dot_segments", "both"),
   path_encoding = c("keep", "encode", "decode"),
   scheme_policy = c("infer", "require"),
+  scheme_acceptance = c("web", "general"),
   url_standard = NULL
 ) {
   # url_standard validation + conflict check must read missing() BEFORE the
@@ -454,6 +465,7 @@ get_path <- function(
   # Path is unaffected by www/subdomain handling.
   .extract_from_urls(url, "path",
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     protocol_handling = protocol_handling,
     case_handling = case_handling,
     trailing_slash_handling = trailing_slash_handling,
@@ -867,6 +879,7 @@ get_subdomain <- function(url,
                           format = c("string", "labels"),
                           host_encoding = c("keep", "idna", "unicode"),
                           scheme_policy = c("infer", "require"),
+                          scheme_acceptance = c("web", "general"),
                           url_standard = NULL) {
   source <- match.arg(source)
   format <- match.arg(format)
@@ -879,6 +892,7 @@ get_subdomain <- function(url,
   # transform, which returns the per-row label list.
   results <- .extract_from_urls(url, NULL,
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     transform = function(cols) {
       .subdomain_labels_vec(
         cols$host, cols$domain, cols$is_ip_host, include_www
@@ -919,6 +933,7 @@ get_subdomain <- function(url,
 get_tld <- function(url, source = c("all", "private", "icann"),
                     host_encoding = c("keep", "idna", "unicode"),
                     scheme_policy = c("infer", "require"),
+                    scheme_acceptance = c("web", "general"),
                     url_standard = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
@@ -929,6 +944,7 @@ get_tld <- function(url, source = c("all", "private", "icann"),
   # "lower_host" default to avoid a cache-key/output change (RURL-actrnerd).
   .extract_from_urls(url, "tld",
     scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     tld_source = source,
     case_handling = "lower",
     host_encoding = host_encoding,
@@ -964,7 +980,8 @@ get_tld <- function(url, source = c("all", "private", "icann"),
 #' get_host_type("http://example.com/", url_standard = "rfc3986")
 #' get_host_type("http://2130706433/", url_standard = "whatwg")
 get_host_type <- function(url, url_standard = NULL,
-                          scheme_policy = c("infer", "require")) {
+                          scheme_policy = c("infer", "require"),
+                          scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -973,7 +990,7 @@ get_host_type <- function(url, url_standard = NULL,
     )
   }
   opts <- .parse_options(url_standard = url_standard,
-    scheme_policy = scheme_policy)
+    scheme_policy = scheme_policy, scheme_acceptance = scheme_acceptance)
   ._url_metadata_vec(url, opts)$host_type
 }
 
@@ -1009,7 +1026,8 @@ get_host_type <- function(url, url_standard = NULL,
 #'   url_standard = "whatwg"
 #' )
 get_url_diagnostics <- function(url, url_standard = NULL,
-                                scheme_policy = c("infer", "require")) {
+                                scheme_policy = c("infer", "require"),
+                                scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -1018,7 +1036,7 @@ get_url_diagnostics <- function(url, url_standard = NULL,
     )
   }
   opts <- .parse_options(url_standard = url_standard,
-    scheme_policy = scheme_policy)
+    scheme_policy = scheme_policy, scheme_acceptance = scheme_acceptance)
   diagnostics <- ._url_metadata_vec(url, opts)$diagnostics
   # length-1 url -> the bare token vector; length-n (incl. 0) -> list of n.
   if (length(url) == 1L) {
