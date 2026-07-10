@@ -132,7 +132,7 @@
 .rewrite_whatwg_backslashes_vec <- function(url, url_standard) {
   n <- length(url)
   no_op <- list(url = url, backslash_rewritten = rep(FALSE, n))
-  if (!identical(url_standard, "whatwg")) {
+  if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
 
@@ -221,7 +221,7 @@
 .strip_whatwg_control_chars_vec <- function(url, url_standard) {
   n <- length(url)
   no_op <- list(url = url, control_char_stripped = rep(FALSE, n))
-  if (!identical(url_standard, "whatwg")) {
+  if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
   had <- stringi::stri_detect_regex(url, "[\\t\\n\\r]")
@@ -265,7 +265,7 @@
 # lossy repair of malformed input.
 .map_whatwg_domain_separators_vec <- function(url, url_standard) {
   no_op <- list(url = url)
-  if (!identical(url_standard, "whatwg")) {
+  if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
   m <- stringi::stri_match_first_regex(
@@ -399,7 +399,7 @@
 # curl or by the later WHATWG host model.
 .rewrite_whatwg_ipv4_hosts_vec <- function(url, url_standard) {
   no_op <- list(url = url)
-  if (!identical(url_standard, "whatwg")) {
+  if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
 
@@ -497,7 +497,7 @@
     host_charset_shimmed = rep(FALSE, n),
     shimmed_true_host = rep(NA_character_, n)
   )
-  if (!identical(url_standard, "whatwg") &&
+  if (!.is_whatwg(url_standard) &&
       !identical(url_standard, "rfc3986")) {
     return(no_op)
   }
@@ -510,7 +510,7 @@
   )
   scheme_lower <- stringi::stri_trans_tolower(m[, 2L])
   authority <- m[, 4L]
-  authority_schemes <- if (identical(url_standard, "whatwg")) {
+  authority_schemes <- if (.is_whatwg(url_standard)) {
     .WHATWG_SPECIAL_SCHEMES
   } else {
     setdiff(.SUPPORTED_SCHEMES, "file")
@@ -545,7 +545,7 @@
       host[pct_ok], .whatwg_percent_decode_host, character(1),
       USE.NAMES = FALSE
     )
-    if (identical(url_standard, "whatwg")) {
+    if (.is_whatwg(url_standard)) {
       model_host[pct_ok] <- pct_decoded_host[pct_ok]
     } else {
       model_host[pct_ok] <- vapply(
@@ -568,12 +568,12 @@
     stringi::stri_detect_regex(pct_decoded_host, .WHATWG_HOST_CHARSET_SHIM_CP)
   pct_gap[is.na(pct_gap)] <- FALSE
 
-  pct_mask <- if (identical(url_standard, "whatwg")) {
+  pct_mask <- if (.is_whatwg(url_standard)) {
     pct_ok & decoded_gap
   } else {
     pct_gap
   }
-  literal_mask <- if (identical(url_standard, "whatwg")) {
+  literal_mask <- if (.is_whatwg(url_standard)) {
     literal_gap_whatwg
   } else {
     literal_gap_rfc3986
@@ -589,7 +589,7 @@
   filled_host[pct_mask] <- gsub(
     "%[0-9A-Fa-f]{2}", "aaa", filled_host[pct_mask], perl = TRUE
   )
-  literal_fill_cp <- if (identical(url_standard, "whatwg")) {
+  literal_fill_cp <- if (.is_whatwg(url_standard)) {
     .WHATWG_HOST_CHARSET_SHIM_CP
   } else {
     .RFC3986_REG_NAME_SUB_DELIM_CP
@@ -615,7 +615,7 @@
   list(
     url = url_out,
     restore_host_shimmed = restore,
-    host_charset_shimmed = identical(url_standard, "whatwg") & decoded_gap,
+    host_charset_shimmed = .is_whatwg(url_standard) & decoded_gap,
     shimmed_true_host = true_host
   )
 }
@@ -628,7 +628,7 @@
 # uses it as a fallback after the original curl parse fails, so already-accepted
 # readable paths keep their historical raw spelling under path_encoding="keep".
 .sanitize_whatwg_pqf_for_curl_vec <- function(url, url_standard) {
-  if (!identical(url_standard, "whatwg")) {
+  if (!.is_whatwg(url_standard)) {
     return(url)
   }
   vapply(url, .sanitize_whatwg_pqf_for_curl_one, character(1),
@@ -958,7 +958,7 @@
   url <- sep$url
 
   url_lower <- stringi::stri_trans_tolower(url)
-  is_whatwg_file <- identical(url_standard, "whatwg") &
+  is_whatwg_file <- .is_whatwg(url_standard) &
     stringi::stri_detect_regex(whatwg_file_input, "^[Ff][Ii][Ll][Ee]:")
   is_whatwg_file[is.na(is_whatwg_file)] <- FALSE
 
@@ -2015,7 +2015,7 @@
 
   subset <- final_host[elig]
   if (host_encoding == "idna") {
-    if (identical(url_standard, "whatwg")) {
+    if (.is_whatwg(url_standard)) {
       encoded <- punycoder::host_normalize(
         subset, check_hyphens = FALSE, use_std3 = FALSE,
         verify_dns_length = FALSE
@@ -2143,7 +2143,7 @@
 .apply_port_output_policy_vec <- function(scheme, port, port_handling,
                                           url_standard) {
   if (is.null(port) ||
-      !identical(url_standard, "whatwg") ||
+      !.is_whatwg(url_standard) ||
       identical(port_handling, "keep")) {
     return(port)
   }
