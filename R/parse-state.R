@@ -265,3 +265,243 @@
     semantic_transform_eligible = semantic_transform_eligible
   )
 }
+
+# --- RFC 3986 generic-URI grammar gate (ADR 0012 Layer 4a, RURL-sxssynfu) ----
+#
+# `.rfc3986_generic_uri_ok()` is the INDEPENDENT normative acceptance contract
+# for the new RFC-general branch (ADR 0012 D1, lines 199-226). After scheme +
+# component-delimiter recognition it validates that the ASCII portion of the
+# input matches RFC 3986's generic `URI` grammar (RFC 3986 section 3). It is a
+# PURE, vectorized validator: it NEVER calls curl and never delegates to
+# libcurl's permissiveness (D1: "an INDEPENDENT gate, not a delegation to
+# libcurl"). It is deliberately ADDITIVE -- nothing here is wired into the live
+# parse pipeline (L4b does that), so byte-identity of every existing output is
+# trivially preserved.
+#
+# It is NOT wired to the punycode/domain helpers (ADR 0002) and does NOT touch
+# them. It is NOT an RFC 3987 (IRI) validator: directly-written non-ASCII scalar
+# values are the ONE tolerated syntax extension (ADR 0002 reversibility) --
+# carried through and flagged `unicode-outside-rfc3986-uri`, never advertised as
+# IRI conformance. That tolerance does NOT relax the surrounding ASCII grammar.
+#
+# Return value: list(ok = <logical>, diagnostic = <character>), each length-n.
+#   - ok        : TRUE = accepted by the generic URI grammar; FALSE = a generic
+#                 grammar violation; NA = NA input.
+#   - diagnostic: "unicode-outside-rfc3986-uri" iff the row is accepted AND
+#                 carries a directly-written non-ASCII scalar value; NA
+#                 otherwise (including every rejected row).
+#
+# DELIBERATE ABNF SIMPLIFICATIONS (documented per the task):
+#   * Component validation is per-component character-class + pct-encoding regex
+#     plus explicit delimiter checks, not a byte-perfect ABNF derivation. Every
+#     RURL-wncwfasl false-reject and every adversarial fixture is covered, and
+#     the adversarial rejects are rejected.
+#   * IPv4address is subsumed by `reg-name` for ACCEPTANCE (a dotted quad is a
+#     valid reg-name: digits + "." are unreserved), so a distinct IPv4 grammar
+#     is not needed for the gate's verdict.
+#   * IPv6 uses the canonical fully-expanded alternation (RFC 4291 textual
+#     forms incl. `::` compression + trailing embedded IPv4); zone identifiers
+#     are unsupported (RFC 9844 restored RFC 3986's zone-less `IP-literal`).
+#   * Scheme-specific restrictions are NOT generic gates (D1 rule 6): a
+#     comma-less `data:` or a `mailto:` with a fragment is an `ok` generic parse
+#     here; those are L5 scheme diagnostics, not gate failures.
+
+# character-class fragments (contents for a `[...]`), RFC 3986 section 2.2/2.3.
+.RFC3986_UNRESERVED <- "A-Za-z0-9._~\\-"
+.RFC3986_SUBDELIMS <- "!$&'()*+,;="
+# The ONE tolerated extension (ADR 0002 / D1 rule 5): directly-written non-ASCII
+# scalar values are admitted wherever a data character is admitted, then flagged
+# separately. Admitting them here does NOT relax the ASCII grammar -- an
+# otherwise-invalid ASCII portion still fails even with non-ASCII present.
+.RFC3986_NONASCII <- "\\x{0080}-\\x{10FFFF}"
+.RFC3986_PCT <- "%[0-9A-Fa-f]{2}"
+
+# Build an anchored "*(data / pct-encoded)" matcher whose data class is the
+# unreserved + sub-delims + non-ASCII set plus the component-specific `extra`
+# characters (e.g. ":" for userinfo, ":@/" for a path).
+.rfc3986_class_re <- function(extra) {
+  paste0(
+    "^(?:[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, extra,
+    .RFC3986_NONASCII, "]|", .RFC3986_PCT, ")*$"
+  )
+}
+
+# reg-name = *( unreserved / pct-encoded / sub-delims )                (S3.2.2)
+.RFC3986_HOST_RE <- .rfc3986_class_re("")
+# userinfo = *( unreserved / pct-encoded / sub-delims / ":" )          (S3.2.1)
+.RFC3986_USERINFO_RE <- .rfc3986_class_re(":")
+# path segments: pchar = unreserved / pct-encoded / sub-delims / ":" / "@",
+# joined by "/". A raw "@"/":" is a LEGAL pchar (why `mailto:a@b.com` accepts).
+.RFC3986_PATH_RE <- .rfc3986_class_re(":@/")
+# query / fragment = *( pchar / "/" / "?" )                        (S3.4/S3.5)
+.RFC3986_QF_RE <- .rfc3986_class_re(":@/?")
+# port = *DIGIT (empty port is legal); non-ASCII is NOT tolerated here (S3.2.3).
+.RFC3986_PORT_RE <- "^[0-9]*$"
+
+# IPv4address, and the full dotted quad, for embedded-IPv4 IPv6 forms (S3.2.2).
+.RFC3986_IPV4 <- "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
+.RFC3986_IPV4_QUAD <- paste0("(", .RFC3986_IPV4, "\\.){3}", .RFC3986_IPV4)
+
+# IPv6address (RFC 4291) -- the canonical fully-expanded alternation. ASCII-only
+# (no non-ASCII tolerance inside brackets); zone identifiers unsupported.
+.RFC3986_IPV6_RE <- paste0(
+  "^(",
+  "([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|",
+  "([0-9A-Fa-f]{1,4}:){1,7}:|",
+  "([0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|",
+  "([0-9A-Fa-f]{1,4}:){1,5}(:[0-9A-Fa-f]{1,4}){1,2}|",
+  "([0-9A-Fa-f]{1,4}:){1,4}(:[0-9A-Fa-f]{1,4}){1,3}|",
+  "([0-9A-Fa-f]{1,4}:){1,3}(:[0-9A-Fa-f]{1,4}){1,4}|",
+  "([0-9A-Fa-f]{1,4}:){1,2}(:[0-9A-Fa-f]{1,4}){1,5}|",
+  "[0-9A-Fa-f]{1,4}:(:[0-9A-Fa-f]{1,4}){1,6}|",
+  ":((:[0-9A-Fa-f]{1,4}){1,7}|:)|",
+  "::([Ff]{4}(:0{1,4})?:)?", .RFC3986_IPV4_QUAD, "|",
+  "([0-9A-Fa-f]{1,4}:){1,4}:", .RFC3986_IPV4_QUAD,
+  ")$"
+)
+
+# IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )     (S3.2.2)
+.RFC3986_IPVFUTURE_RE <- paste0(
+  "^v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+$"
+)
+
+# First 1-based index of the literal `ch` in `s`, or 0L when absent.
+.rfc3986_first_index <- function(s, ch) {
+  pos <- stringi::stri_locate_first_fixed(s, ch)[1L, 1L]
+  if (is.na(pos)) 0L else as.integer(pos)
+}
+
+# Whole-string match of a pre-built component regex (empty string matches the
+# "*(...)" productions -- an empty reg-name/userinfo/path/query/fragment/port is
+# legal). Returns a single TRUE/FALSE.
+.rfc3986_match <- function(s, re) {
+  isTRUE(stringi::stri_detect_regex(s, re))
+}
+
+# IP-literal inner form: IPv6address / IPvFuture (S3.2.2). Empty inner (`[]`) or
+# any malformation (non-hex, missing groups) -> FALSE.
+.rfc3986_valid_ip_literal <- function(inner) {
+  isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPV6_RE)) ||
+    isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPVFUTURE_RE))
+}
+
+# host [ ":" port ] (S3.2.2/S3.2.3). A bracketed IP-literal owns any ":" inside
+# it; only a trailing ":port" after "]" is a port. A non-bracketed host is a
+# reg-name (which forbids ":"), so the first ":" is the port delimiter.
+.rfc3986_valid_hostport <- function(hp) {
+  if (startsWith(hp, "[")) {
+    rb <- .rfc3986_first_index(hp, "]")
+    if (rb == 0L) {
+      return(FALSE) # bracket opened but never closed
+    }
+    if (!.rfc3986_valid_ip_literal(substring(hp, 2L, rb - 1L))) {
+      return(FALSE)
+    }
+    after <- substring(hp, rb + 1L)
+    if (!nzchar(after)) {
+      return(TRUE)
+    }
+    if (!startsWith(after, ":")) {
+      return(FALSE) # junk after the "]" that is not a port
+    }
+    return(.rfc3986_match(substring(after, 2L), .RFC3986_PORT_RE))
+  }
+  cpos <- .rfc3986_first_index(hp, ":")
+  if (cpos > 0L) {
+    if (!.rfc3986_match(substring(hp, cpos + 1L), .RFC3986_PORT_RE)) {
+      return(FALSE)
+    }
+    return(.rfc3986_match(substring(hp, 1L, cpos - 1L), .RFC3986_HOST_RE))
+  }
+  .rfc3986_match(hp, .RFC3986_HOST_RE)
+}
+
+# authority = [ userinfo "@" ] host [ ":" port ] (S3.2). userinfo and reg-name
+# both FORBID a raw "@" (it must be %40), so a valid authority carries AT MOST
+# ONE "@" -- its single userinfo/host separator. D1's headline reject: a
+# repeated raw "@" (`scheme://username@@@@example.com`) is a generic-grammar
+# FAILURE even though a permissive splitter can recover a host.
+.rfc3986_valid_authority <- function(authority) {
+  n_at <- stringi::stri_count_fixed(authority, "@")
+  if (n_at > 1L) {
+    return(FALSE)
+  }
+  if (n_at == 1L) {
+    apos <- .rfc3986_first_index(authority, "@")
+    userinfo <- substring(authority, 1L, apos - 1L)
+    if (!.rfc3986_match(userinfo, .RFC3986_USERINFO_RE)) {
+      return(FALSE)
+    }
+    return(.rfc3986_valid_hostport(substring(authority, apos + 1L)))
+  }
+  .rfc3986_valid_hostport(authority)
+}
+
+# hier-part (S3.3). Authority is present IFF the hier-part starts "//"; then the
+# rest is path-abempty. Otherwise it is path-absolute / path-rootless /
+# path-empty, all validated by the shared path matcher (segment ":" and "@" are
+# legal pchar, so a scheme-less rootless path like `example.com/path` is fine).
+.rfc3986_valid_hier_part <- function(hp) {
+  if (!startsWith(hp, "//")) {
+    return(.rfc3986_match(hp, .RFC3986_PATH_RE))
+  }
+  ap <- substring(hp, 3L)
+  spos <- .rfc3986_first_index(ap, "/")
+  if (spos > 0L) {
+    authority <- substring(ap, 1L, spos - 1L)
+    path <- substring(ap, spos)
+  } else {
+    authority <- ap
+    path <- ""
+  }
+  if (!.rfc3986_valid_authority(authority)) {
+    return(FALSE)
+  }
+  .rfc3986_match(path, .RFC3986_PATH_RE)
+}
+
+# Scalar core: TRUE / FALSE / NA for one input (see the wrapper's contract).
+.rfc3986_generic_uri_ok_one <- function(x) {
+  if (is.na(x)) {
+    return(NA)
+  }
+  # scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":" (S3.1). A missing
+  # scheme means the string is not a generic URI at all -> reject. Non-ASCII in
+  # the scheme position fails this ASCII-only match (scheme is never tolerant).
+  m <- stringi::stri_match_first_regex(x, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
+  if (is.na(m[1L, 1L])) {
+    return(FALSE)
+  }
+  rest <- substring(x, nchar(m[1L, 2L]) + 2L)
+  # fragment = everything after the FIRST "#" (S3.5).
+  hpos <- .rfc3986_first_index(rest, "#")
+  if (hpos > 0L) {
+    if (!.rfc3986_match(substring(rest, hpos + 1L), .RFC3986_QF_RE)) {
+      return(FALSE)
+    }
+    rest <- substring(rest, 1L, hpos - 1L)
+  }
+  # query = everything after the FIRST "?" in what remains (S3.4).
+  qpos <- .rfc3986_first_index(rest, "?")
+  if (qpos > 0L) {
+    if (!.rfc3986_match(substring(rest, qpos + 1L), .RFC3986_QF_RE)) {
+      return(FALSE)
+    }
+    rest <- substring(rest, 1L, qpos - 1L)
+  }
+  .rfc3986_valid_hier_part(rest)
+}
+
+# Vectorized public-internal gate. `diagnostic` fires ONLY on an accepted row
+# that carries a non-ASCII scalar value; a rejected row is never flagged (D1:
+# the Unicode tolerance never rescues an otherwise-invalid ASCII portion).
+.rfc3986_generic_uri_ok <- function(url) {
+  n <- length(url)
+  ok <- vapply(url, .rfc3986_generic_uri_ok_one, logical(1L), USE.NAMES = FALSE)
+  has_non_ascii <- stringi::stri_detect_regex(url, "\\P{ASCII}")
+  has_non_ascii[is.na(has_non_ascii)] <- FALSE
+  diagnostic <- rep(NA_character_, n)
+  flagged <- !is.na(ok) & ok & has_non_ascii
+  diagnostic[flagged] <- "unicode-outside-rfc3986-uri"
+  list(ok = ok, diagnostic = diagnostic)
+}
