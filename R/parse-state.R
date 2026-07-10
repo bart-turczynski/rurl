@@ -909,3 +909,129 @@
   }
   out
 }
+
+# --- General-acceptance routing + parse (ADR 0012 Layer 4b-2, RURL-qbnelzku) --
+#
+# The ACTIVATION seam that wires the L3a/L3b/L3c/L4a/L4b-1 building blocks into
+# the live pipeline. `.general_parsed_mask` decides WHICH rows the `general`
+# posture routes OUT of libcurl to the posture opaque/RFC/file parser;
+# `.general_parse_vec` performs that parse and reports the components, the parse
+# `ok` verdict (including D1's RFC generic-grammar gate), and the internal state
+# kinds. BOTH Stage A and Stage B call `.general_parse_vec` on the same URL
+# string, so the routing mask and state kinds are guaranteed consistent between
+# the two stages WITHOUT threading every state kind through the Stage-A cache
+# (the cache stores only `.spu_stage_a_fields`; these functions are pure and
+# re-run cheaply in Stage B for the routed rows only).
+#
+# CRITICAL BYTE-IDENTITY DESIGN: both are a pure no-op unless
+# `scheme_acceptance == "general"`. Under any other value (notably "web", the
+# default and, until this unit, the only publicly reachable value) the mask is
+# all-FALSE and the parse returns empty/NA columns, so the `general_route`
+# masks in Stage A/B are EMPTY, libcurl-path vectors are bit-identical, and no
+# new behavior runs. Byte-identity for web is BY CONSTRUCTION.
+#
+# ROUTING RULE (posture-keyed). A row is general-routed iff it is scheme-bearing
+# (`^scheme:`), is NOT a host:port form (`example.com:8080`, which Phase 1
+# parses as host:port), and its scheme is NOT one libcurl + the existing web
+# machinery
+# already handle for the posture:
+#   - whatwg  : keep the six WHATWG special schemes (http/https/ftp/ws/wss/file)
+#               on libcurl; route every other (non-special) scheme to the opaque
+#               parser. ws/wss stay on libcurl and parse as special (L1 default
+#               ports 80/443); ftps is non-special under WHATWG and routes here.
+#   - rfc3986 : keep http/https/ftp/ftps on libcurl (existing rfc3986 host model
+#               + path-rootless slice); route file to the RFC 8089 overlay and
+#               every other scheme to the RFC generic host parser.
+.general_parsed_mask <- function(url, url_standard, scheme_acceptance) {
+  n <- length(url)
+  if (!identical(scheme_acceptance, "general") || n == 0L) {
+    return(rep(FALSE, n))
+  }
+  m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
+  scheme_lc <- stringi::stri_trans_tolower(m[, 2L])
+  has_scheme <- !is.na(scheme_lc)
+  host_port <- stringi::stri_detect_regex(url, "^[^/]+:[0-9]+($|/)")
+  host_port[is.na(host_port)] <- FALSE
+  curl_scheme <- if (.is_whatwg(url_standard)) {
+    .WHATWG_SPECIAL_SCHEMES
+  } else {
+    c("http", "https", "ftp", "ftps")
+  }
+  gp <- has_scheme & !host_port & !(scheme_lc %in% curl_scheme)
+  gp[is.na(gp)] <- FALSE
+  gp
+}
+
+# Vectorized general-acceptance parse. Returns a columnar list, length-n:
+#   general_parsed : the routing mask (`.general_parsed_mask`).
+#   ok             : TRUE = successfully parsed AND (under rfc3986) accepted by
+#                    D1's generic-URI grammar gate; FALSE otherwise. Only
+#                    meaningful where `general_parsed` is TRUE.
+#   scheme/host/port/path/query/fragment : decomposed components (raw; the
+#                    public NA mapping and `.blank_to_na` are applied by the
+#                    caller). host is UTF-8 %-encoded (WHATWG opaque host) or
+#                    source-preserving (RFC), never routed through punycode /
+#                    domain.R (ADR 0002).
+#   path_kind/rfc_path_form/host_kind/authority_kind/query_kind/fragment_kind/
+#   host_form : the internal state kinds the L3b serializers and the
+#                    parse-status promotion consume.
+.general_parse_vec <- function(url, url_standard, scheme_acceptance) {
+  n <- length(url)
+  na <- rep(NA_character_, n)
+  out <- list(
+    general_parsed = rep(FALSE, n), ok = rep(FALSE, n),
+    scheme = na, host = na, port = na, path = na, query = na, fragment = na,
+    path_kind = na, rfc_path_form = na, host_kind = rep("absent", n),
+    authority_kind = rep("absent", n), query_kind = rep("absent", n),
+    fragment_kind = rep("absent", n), host_form = na
+  )
+  gp <- .general_parsed_mask(url, url_standard, scheme_acceptance)
+  out$general_parsed <- gp
+  if (!any(gp)) {
+    return(out)
+  }
+  is_whatwg <- .is_whatwg(url_standard)
+  scheme_lc <- stringi::stri_trans_tolower(
+    stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")[, 2L]
+  )
+
+  # D1 RFC generic-grammar gate: a general-routed row under rfc3986 must pass or
+  # it is a parse error (the tolerated non-ASCII extension does NOT cause
+  # failure; its diagnostic surfacing is L5, out of scope here).
+  gate_ok <- rep(TRUE, n)
+  if (identical(url_standard, "rfc3986")) {
+    g <- .rfc3986_generic_uri_ok(url[gp])
+    gk <- g$ok
+    gk[is.na(gk)] <- FALSE
+    gate_ok[gp] <- gk
+  }
+
+  # file under rfc3986 -> RFC 8089 overlay; everything else -> posture parser.
+  # (whatwg `file` is a special scheme and never reaches here -- it stays on the
+  # existing WHATWG file state machine.)
+  is_file <- gp & !is_whatwg & !is.na(scheme_lc) & scheme_lc == "file"
+  reg <- gp & !is_file
+
+  opaque_fields <- c(
+    "scheme", "host", "port", "path", "query", "fragment", "path_kind",
+    "rfc_path_form", "host_kind", "authority_kind", "query_kind",
+    "fragment_kind", "host_form"
+  )
+  if (any(reg)) {
+    p <- .parse_opaque_urls_vec(url[reg], url_standard)
+    for (f in opaque_fields) {
+      out[[f]][reg] <- p[[f]]
+    }
+    out$ok[reg] <- p$ok
+  }
+  if (any(is_file)) {
+    p <- .parse_rfc_file_urls_vec(url[is_file])
+    for (f in setdiff(opaque_fields, "path_kind")) {
+      out[[f]][is_file] <- p[[f]]
+    }
+    out$ok[is_file] <- p$ok
+  }
+
+  out$ok <- out$ok & gate_ok
+  out
+}
