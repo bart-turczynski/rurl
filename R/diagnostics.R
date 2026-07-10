@@ -43,7 +43,26 @@
   "domain-name-too-long",
   "domain-empty-label",
   "domain-hyphen-violation",
-  "domain-std3-violation"
+  "domain-std3-violation",
+  # --- Layer 5 SELECTED diagnostics (ADR 0012 D5, RURL-izsouyxs) -------------
+  # These are SELECTED facts, NOT a conformance oracle: absence of any of them
+  # NEVER implies conformance (D5). All fire only under scheme_acceptance =
+  # "general" (the general-parser branch); the WHATWG validation-error names are
+  # WHATWG-verbatim (deliberate mixed case for `invalid-URL-unit`). The
+  # per-scheme facts below are rurl-coined kebab tokens (no reserved names exist
+  # for them in ADR 0012 or the design PRDs; the email PRD's `userinfo-form`
+  # etc. govern the SEPARATE D7 scheme-less thread, not these).
+  "invalid-URL-unit",
+  "invalid-credentials",
+  "unicode-outside-rfc3986-uri",
+  "transform-skipped-ineligible-scheme",
+  "ws-fragment-forbidden",
+  "ws-userinfo-forbidden",
+  "mailto-fragment-discouraged",
+  "tel-missing-phone-context",
+  "data-missing-comma",
+  "file-non-absolute-path",
+  "file-forbidden-component"
 )
 
 # The host_type vocabulary (PRD §6.3). get_host_type() emits exactly one of
@@ -103,7 +122,7 @@
 # T2 ships it empty: NA host_type and no diagnostics for every row. Later
 # tickets add their emit rules in the marked blocks below WITHOUT changing the
 # return shape.
-.derive_url_metadata_vec <- function(a, opts, n) {
+.derive_url_metadata_vec <- function(a, opts, n, url = NULL) {
   host_type <- rep(NA_character_, n)
   diag <- .diag_new(n)
   null_row <- attr(a, "null_row")
@@ -262,6 +281,135 @@
   )
   diag <- .diag_add(diag, host_probe$std3_violation, "domain-std3-violation")
 
+  # --- Layer 5 SELECTED diagnostics (ADR 0012 D5 + Layer 5, RURL-izsouyxs) ---
+  # SELECTED facts, never a conformance oracle: absence of any token below does
+  # NOT imply the URL conforms to its scheme's RFC or to WHATWG (D5). Every fact
+  # here fires ONLY under scheme_acceptance == "general" (the new general-parser
+  # branch), so the default `web` posture -- and every existing get_url_
+  # diagnostics test, which uses `web` -- is untouched (no new failures, ADR
+  # 0006 companion-helper contract intact). Reached only through PURE RE-CALLS
+  # (.general_parse_vec / .rfc3986_generic_uri_ok / .stage_b_eligibility), the
+  # codebase's established Stage-B pattern; Stage A stays cacheable.
+  general <- identical(opts$scheme_acceptance, "general")
+  is_whatwg <- .is_whatwg(opts$url_standard)
+  is_rfc <- identical(opts$url_standard, "rfc3986")
+  if (general && !is.null(url)) {
+    scheme_lc <- stringi::stri_trans_tolower(a$final_scheme)
+
+    # `transform-skipped-ineligible-scheme`: mirror ._parse_stage_b_vec's
+    # eligibility computation exactly -- re-run the pure general parser to
+    # recover the state kinds, build the path/host-kind proxies the classifier
+    # needs, then read `!semantic_transform_eligible` (the non-HTTP(S) rows a
+    # global SEO transform would skip under general acceptance, ADR 0012 D2).
+    gen_b <- .general_parse_vec(url, opts$url_standard, opts$scheme_acceptance)
+    gp <- gen_b$general_parsed & live
+    is_special_row <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
+    pk <- .whatwg_path_kind(is_special_row, a$raw_path)
+    hk <- .host_kind(a$final_host)
+    if (any(gp)) {
+      pk[gp] <- gen_b$path_kind[gp]
+      pk[gp & is.na(pk)] <- "list"
+      hk[gp] <- gen_b$host_kind[gp]
+    }
+    elig <- .stage_b_eligibility(
+      "general", a$final_scheme, opts$url_standard,
+      path_kind = pk, host_kind = hk, is_ip_host = is_ip
+    )
+    diag <- .diag_add(
+      diag, live & !elig$semantic_transform_eligible,
+      "transform-skipped-ineligible-scheme"
+    )
+
+    # `unicode-outside-rfc3986-uri`: the sole D1 Unicode tolerance (rfc3986
+    # posture, a directly-written non-ASCII scalar value accepted by the generic
+    # grammar gate). The gate already returns the literal token in `$diagnostic`
+    # for exactly those rows; thread it out.
+    if (is_rfc) {
+      g <- .rfc3986_generic_uri_ok(url)
+      diag <- .diag_add(
+        diag, live & !is.na(g$diagnostic), "unicode-outside-rfc3986-uri"
+      )
+    }
+
+    # userinfo is carried by libcurl for the special-scheme route (http/https/
+    # ftp/ws/wss); the general parser sets user/password NA for opaque/RFC rows,
+    # so this bounded detection covers the WHATWG special-scheme routes.
+    has_userinfo <- !is.na(a$raw_user) | !is.na(a$raw_password)
+
+    if (is_whatwg) {
+      # `invalid-credentials` (WHATWG, verbatim): raised for ANY credentials in
+      # a URL -- not specifically the multiple-`@` case (ADR 0012 D5 / A.1).
+      diag <- .diag_add(diag, live & has_userinfo, "invalid-credentials")
+
+      # `invalid-URL-unit` (WHATWG, verbatim): the SINGLE error name covering
+      # BOTH a malformed `%`-escape AND a non-URL code point. Deliberately
+      # BOUNDED (a selected fact, not a full WHATWG validation engine): a `%`
+      # not followed by two hex digits, or a clearly non-URL ASCII code point
+      # (space " < > ` { } | ^). Backslash and C0 controls are excluded -- they
+      # are surfaced by `invalid-reverse-solidus` / `control-char-stripped`.
+      malformed_pct <- stringi::stri_detect_regex(url, "%(?![0-9A-Fa-f]{2})")
+      non_url_cp <- stringi::stri_detect_regex(url, "[ \"<>\\u0060{}|^]")
+      bad_unit <- malformed_pct | non_url_cp
+      bad_unit[is.na(bad_unit)] <- FALSE
+      diag <- .diag_add(diag, live & bad_unit, "invalid-URL-unit")
+
+      # ws/wss (RFC 6455 forbids both a fragment AND userinfo) -- TWO separate
+      # facts. ws/wss parse via the libcurl SPECIAL-scheme route under whatwg
+      # (they are in .WHATWG_SPECIAL_SCHEMES), NOT via .general_parse_vec, so
+      # read fragment/userinfo from the Stage-A columns for that route.
+      is_ws <- !is.na(scheme_lc) & scheme_lc %in% c("ws", "wss")
+      diag <- .diag_add(
+        diag, live & is_ws & !is.na(a$raw_fragment), "ws-fragment-forbidden"
+      )
+      diag <- .diag_add(
+        diag, live & is_ws & has_userinfo, "ws-userinfo-forbidden"
+      )
+    }
+
+    # Per-scheme facts on the general-routed opaque/RFC rows (`gp`). mailto/tel/
+    # data route to the general parser under BOTH postures; `file` routes there
+    # only under rfc3986 (whatwg `file` is a special scheme on the libcurl
+    # route), so the file facts are rfc-only.
+    gs <- stringi::stri_trans_tolower(gen_b$scheme)
+    # `mailto`: fragment present (RFC 6068 section 2 SHOULD NOT).
+    diag <- .diag_add(
+      diag, gp & gs == "mailto" & !is.na(gen_b$fragment),
+      "mailto-fragment-discouraged"
+    )
+    # `data`: missing the mandatory comma (RFC 2397).
+    data_has_comma <- !is.na(gen_b$path) &
+      stringi::stri_detect_fixed(gen_b$path, ",")
+    diag <- .diag_add(
+      diag, gp & gs == "data" & !data_has_comma, "data-missing-comma"
+    )
+    # `tel`: a LOCAL number (no leading "+") missing the required
+    # `;phone-context=` parameter (RFC 3966; parameter name case-insensitive).
+    tel_num <- gen_b$path
+    tel_global <- !is.na(tel_num) & startsWith(tel_num, "+")
+    tel_ctx <- !is.na(tel_num) &
+      stringi::stri_detect_regex(tel_num, "(?i);phone-context=")
+    diag <- .diag_add(
+      diag, gp & gs == "tel" & !tel_global & !tel_ctx,
+      "tel-missing-phone-context"
+    )
+    # `file` under rfc-syntax: non-absolute path; OR userinfo/port/query/
+    # fragment present (outside RFC 8089's grammar). userinfo is not surfaced by
+    # the RFC file parser, so this bounded fact covers port/query/fragment.
+    if (is_rfc) {
+      is_file <- gp & gs == "file"
+      diag <- .diag_add(
+        diag,
+        is_file & gen_b$rfc_path_form %in% c("rootless", "empty"),
+        "file-non-absolute-path"
+      )
+      file_forbidden <- !is.na(gen_b$port) | !is.na(gen_b$query) |
+        !is.na(gen_b$fragment)
+      diag <- .diag_add(
+        diag, is_file & file_forbidden, "file-forbidden-component"
+      )
+    }
+  }
+
   list(host_type = host_type, diagnostics = diag)
 }
 
@@ -379,7 +527,7 @@
   # Parse the host/path shape once per unique input, then expand per row.
   uniq <- unique(url)
   a <- ._parse_stage_a_vec(uniq, opts)
-  meta_uniq <- .derive_url_metadata_vec(a, opts, length(uniq))
+  meta_uniq <- .derive_url_metadata_vec(a, opts, length(uniq), url = uniq)
 
   pos <- match(url, uniq)
   list(

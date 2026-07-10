@@ -1009,6 +1009,34 @@ get_host_type <- function(url, url_standard = NULL,
 #' plain scalar-per-URL vector (see \emph{Value}). \code{parse_status} stays
 #' coarse; diagnostics are never encoded into it.
 #'
+#' @section Selected facts, not a conformance oracle: The diagnostics are
+#'   deliberately a \strong{selected} set of facts, \strong{not} a complete
+#'   validator. The \emph{absence} of a diagnostic never implies the URL
+#'   conforms to its scheme's specification or to WHATWG/RFC 3986. Full
+#'   per-standard conformance validation is out of scope (ADR 0012 D5).
+#'
+#'   With \code{scheme_acceptance = "general"} (the general-parser posture) a
+#'   further set of selected facts is reported. These fire \emph{only} under
+#'   \code{"general"}; the default \code{"web"} acceptance never emits them:
+#'   \itemize{
+#'     \item \code{invalid-URL-unit} / \code{invalid-credentials} --- WHATWG
+#'       validation errors (WHATWG-verbatim names) under the \code{"whatwg"}
+#'       posture: a malformed \code{\%}-escape or a non-URL code point, and any
+#'       credentials (userinfo) present. Bounded detection.
+#'     \item \code{unicode-outside-rfc3986-uri} --- under \code{"rfc3986"}, a
+#'       directly-written non-ASCII scalar value accepted by the sole RFC 3986
+#'       generic-grammar tolerance (not RFC 3987/IRI conformance).
+#'     \item \code{transform-skipped-ineligible-scheme} --- the scheme is
+#'       non-HTTP(S) and so ineligible for the SEO/semantic Stage-B transforms.
+#'     \item scheme-specific facts: \code{ws-fragment-forbidden} /
+#'       \code{ws-userinfo-forbidden} (RFC 6455),
+#'       \code{mailto-fragment-discouraged} (RFC 6068),
+#'       \code{tel-missing-phone-context} (RFC 3966),
+#'       \code{data-missing-comma} (RFC 2397), and, under \code{"rfc3986"},
+#'       \code{file-non-absolute-path} / \code{file-forbidden-component}
+#'       (RFC 8089).
+#'   }
+#'
 #' @param url A character vector of URLs.
 #' @param url_standard Standard profile governing interpretation: \code{NULL}
 #'   (default; no diagnostics), \code{"rfc3986"}, or \code{"whatwg"}.
