@@ -26,16 +26,24 @@
 # schemes like ws:/ssh:/typos).
 .SUPPORTED_SCHEMES <- c("http", "https", "ftp", "ftps", "file")
 
-# The WHATWG "special scheme" subset of .SUPPORTED_SCHEMES (PRD v2 D7,
-# RURL-jlvyjwog; file added by RURL-rutsdflg). WHATWG defines http/https/ftp/
-# ws/wss/file as special; rurl still does not support ws/wss. ftp**s** is
-# rurl's own addition (FTP-over-TLS) and is NOT a WHATWG special scheme.
-.WHATWG_SPECIAL_SCHEMES <- c("http", "https", "ftp", "file")
+# The WHATWG "special scheme" set (PRD v2 D7, RURL-jlvyjwog; file added by
+# RURL-rutsdflg; ws/wss added by RURL-qluqkdwl / ADR 0012 Layer 1). WHATWG
+# defines http/https/ftp/ws/wss/file as special, and all six are registered
+# here as WHATWG-special metadata. ws/wss are DELIBERATELY kept OUT of
+# .SUPPORTED_SCHEMES (the default-acceptance allowlist), so this metadata is
+# inert: ws/wss inputs still hard-error at the prefix gate, exactly like any
+# other unsupported scheme, until the Layer 2 acceptance axis exposes
+# scheme_acceptance = "general". ftp**s** is rurl's own addition (FTP-over-TLS)
+# and is NOT a WHATWG special scheme.
+.WHATWG_SPECIAL_SCHEMES <- c("http", "https", "ftp", "ws", "wss", "file")
 
 # Special schemes whose WHATWG no-slash authority recovery is shared by this
 # parser's authority-based URL model. `file` has a separate state machine and is
-# intentionally left to the existing file:// slice.
-.SPECIAL_AUTHORITY_SCHEMES <- c("http", "https", "ftp")
+# intentionally left to the existing file:// slice. ws/wss are registered here
+# too (RURL-qluqkdwl / ADR 0012 Layer 1) but stay inert -- absent from
+# .SUPPORTED_SCHEMES, no ws/wss input reaches this recovery path under the
+# default acceptance allowlist.
+.SPECIAL_AUTHORITY_SCHEMES <- c("http", "https", "ftp", "ws", "wss")
 
 # WHATWG forbidden host/domain code points (RURL-jfuqpwvh) that can survive to a
 # resolved reg-name host and must fail the host parse under url_standard =
@@ -68,13 +76,18 @@
   "\\u002b\\u002c\\u003b\\u003d]"
 )
 
-# Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts).
-# Only http/https/ftp have a WHATWG-defined default; ftps (rurl's own
-# FTP-over-TLS addition, not a WHATWG special scheme per D2) has none, so a
-# port on ftps never matches this table -- it is never elided under
-# port_handling = "keep" and always registers as the non-default-port
-# diagnostic fact, regardless of url_standard.
-.SCHEME_DEFAULT_PORTS <- c(http = 80L, https = 443L, ftp = 21L)
+# Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts;
+# ws/wss added by RURL-qluqkdwl / ADR 0012 Layer 1). WHATWG defines defaults
+# for http/https/ftp/ws/wss (80/443/21/80/443), all registered here. ws/wss are
+# inert: absent from .SUPPORTED_SCHEMES, no ws/wss row survives to consult this
+# table until the Layer 2 acceptance axis lands. ftps (rurl's own FTP-over-TLS
+# addition, not a WHATWG special scheme per D2) has none, so a port on ftps
+# never matches this table -- it is never elided under port_handling = "keep"
+# and always registers as the non-default-port diagnostic fact, regardless of
+# url_standard.
+.SCHEME_DEFAULT_PORTS <- c(
+  http = 80L, https = 443L, ftp = 21L, ws = 80L, wss = 443L
+)
 
 # Bare single-label hosts (no dot) accepted from scheme-less input. Only
 # `localhost` is a genuine resolvable single-label host; other RFC 6761/2606

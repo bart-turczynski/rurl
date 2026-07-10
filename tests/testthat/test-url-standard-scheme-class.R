@@ -6,18 +6,24 @@
 
 # --- Vocabulary --------------------------------------------------------------
 
-test_that("the WHATWG special-scheme lookup covers exactly rurl's allowlist", {
+test_that("the WHATWG special-scheme lookup covers the full WHATWG set", {
   expect_setequal(
-    rurl:::.WHATWG_SPECIAL_SCHEMES, c("http", "https", "ftp", "file")
+    rurl:::.WHATWG_SPECIAL_SCHEMES,
+    c("http", "https", "ftp", "ws", "wss", "file")
   )
   # ftps (rurl's own FTP-over-TLS addition) is deliberately NOT special.
   expect_false("ftps" %in% rurl:::.WHATWG_SPECIAL_SCHEMES)
-  # No expansion to ws/wss (non-goal, PRD v2 §3).
-  expect_false(any(c("ws", "wss") %in% rurl:::.WHATWG_SPECIAL_SCHEMES))
-  # Every special scheme is one rurl actually supports.
-  expect_true(
+  # ws/wss are registered as WHATWG-special metadata by ADR 0012 Layer 1
+  # (RURL-qluqkdwl) but remain OUT of .SUPPORTED_SCHEMES -- inert until the
+  # Layer 2 acceptance axis lands.
+  expect_true(all(c("ws", "wss") %in% rurl:::.WHATWG_SPECIAL_SCHEMES))
+  # The special-metadata set and the acceptance allowlist are deliberately
+  # split (ADR 0012 Layer 1, D4 byte-compat): ws/wss are special but NOT
+  # admitted, so the special set is no longer a subset of .SUPPORTED_SCHEMES.
+  expect_false(
     all(rurl:::.WHATWG_SPECIAL_SCHEMES %in% rurl:::.SUPPORTED_SCHEMES)
   )
+  expect_false(any(c("ws", "wss") %in% rurl:::.SUPPORTED_SCHEMES))
 })
 
 test_that("the scheme_class vocabulary is special/non-special/missing", {
