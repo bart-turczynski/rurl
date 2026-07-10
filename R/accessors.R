@@ -521,6 +521,21 @@ get_query <- function(url,
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
 
+  .check_character_url(url)
+
+  if (!.query_engine_active(query_handling, sort_params, empty_param_handling,
+    decode_plus)) {
+    return(.get_query_fast_path(url, protocol_handling, format, decode))
+  }
+
+  .get_query_engine_path(
+    url, protocol_handling, format, decode, query_handling, params_keep,
+    params_drop, params_case_sensitive, sort_params, empty_param_handling,
+    decode_plus
+  )
+}
+
+.check_character_url <- function(url) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -528,121 +543,152 @@ get_query <- function(url,
       call. = FALSE
     )
   }
+}
 
-  # Fast path: when no filtering or reordering is requested the engine is an
-  # identity transform, so reproduce the historical output byte-for-byte. This
-  # is the only path that preserves the faithful raw-query edges the canonical
-  # engine deliberately normalizes away (a bare `?flag` staying `flag` not
-  # `flag=`, a trailing `?a=b&` keeping its `&`). params_keep/params_drop are
-  # ignored under query_handling = "keep", so they do not disqualify it.
-  engine_active <- !(identical(query_handling, "keep") &&
+.query_engine_active <- function(query_handling, sort_params,
+                                 empty_param_handling, decode_plus) {
+  !(identical(query_handling, "keep") &&
     !sort_params &&
     identical(empty_param_handling, "keep") &&
     !decode_plus)
+}
 
-  if (!engine_active) {
-    if (format == "string") {
-      raw <- .extract_from_urls(url, "query",
-        protocol_handling = protocol_handling
-      )
-      # The parse result carries a RAW (percent-encoded) query so the list form
-      # can split safely; the string form historically returns the decoded
-      # query, so decode here to keep that output unchanged.
-      if (decode) {
-        # Per-element decode keeps the historical byte-for-byte fallback (a
-        # query that fails to unescape is returned raw); USE.NAMES = FALSE so
-        # the result stays unnamed like every other accessor.
-        raw <- vapply(
-          raw,
-          function(q) {
-            if (is.na(q)) {
-              NA_character_
-            } else {
-              tryCatch(curl::curl_unescape(q), error = function(e) q)
-            }
-          },
-          character(1),
-          USE.NAMES = FALSE
-        )
-      }
-      return(raw)
-    }
-
-    # format = "list": pull the raw query column in one engine pass (case =
-    # "keep" matches the historical per-element profile so cache keys are
-    # unchanged), then parse each element. Null rows carry NA, and
-    # ._parse_query_string(NA) returns list() -- exactly what the old
-    # per-element NULL branch returned.
+.get_query_fast_path <- function(url, protocol_handling, format, decode) {
+  if (identical(format, "string")) {
     raw <- .extract_from_urls(url, "query",
-      protocol_handling = protocol_handling,
-      case_handling = "keep"
+      protocol_handling = protocol_handling
     )
-    return(lapply(raw, ._parse_query_string, decode = decode))
-  }
-
-  # Engine path: filtering and/or reordering is in effect. Pull the faithful raw
-  # query column (the `query` field is never mutated by the engine), then select
-  # the surviving pairs before rendering. NA rows (no query) render as NA /
-  # list(); a present query whose params are all filtered out renders as "" /
-  # list(), matching the empty-query contract.
-  raw <- .extract_from_urls(url, "query", protocol_handling = protocol_handling)
-  na_row <- is.na(raw)
-
-  surviving <- function(query) {
-    ._query_surviving_pairs(
-      query, query_handling, params_keep, params_drop, params_case_sensitive,
-      sort_params, empty_param_handling, decode_plus, "builtin"
-    )
-  }
-
-  if (format == "string") {
-    out <- vapply(seq_along(raw), function(i) {
-      if (na_row[i]) {
-        return(NA_character_)
-      }
-      if (!decode) {
-        # Canonical re-encoded form -- exactly the clean_url query renderer.
-        return(._filter_query_params(
-          raw[i],
-          query_handling = query_handling,
-          params_keep = params_keep,
-          params_drop = params_drop,
-          params_case_sensitive = params_case_sensitive,
-          sort_params = sort_params,
-          empty_param_handling = empty_param_handling,
-          decode_plus = decode_plus
-        ))
-      }
-      if (identical(query_handling, "drop")) {
-        return("")
-      }
-      sp <- surviving(raw[i])
-      if (is.null(sp)) {
-        return("")
-      }
-      # Decoded, readable form: opaque tokens are already passed through raw by
-      # .decode_query_tokens(), so `%zz` stays `%zz`.
-      paste(paste0(sp$dec_key, "=", sp$dec_value), collapse = "&")
-    }, character(1), USE.NAMES = FALSE)
-    return(out)
-  }
-
-  # format = "list": grouped named list of the surviving pairs. decode selects
-  # the decoded or raw spelling; grouping matches ._parse_query_string exactly.
-  lapply(seq_along(raw), function(i) {
-    if (na_row[i] || identical(query_handling, "drop")) {
-      return(list())
-    }
-    sp <- surviving(raw[i])
-    if (is.null(sp)) {
-      return(list())
-    }
     if (decode) {
-      .group_query_pairs(sp$dec_key, sp$dec_value)
-    } else {
-      .group_query_pairs(sp$raw_key, sp$raw_value)
+      return(.decode_raw_query_strings(raw))
     }
+    return(raw)
+  }
+
+  raw <- .extract_from_urls(url, "query",
+    protocol_handling = protocol_handling,
+    case_handling = "keep"
+  )
+  lapply(raw, ._parse_query_string, decode = decode)
+}
+
+.decode_raw_query_strings <- function(raw) {
+  vapply(
+    raw,
+    function(q) {
+      if (is.na(q)) {
+        NA_character_
+      } else {
+        tryCatch(curl::curl_unescape(q), error = function(e) q)
+      }
+    },
+    character(1),
+    USE.NAMES = FALSE
+  )
+}
+
+.get_query_engine_path <- function(url, protocol_handling, format, decode,
+                                   query_handling, params_keep, params_drop,
+                                   params_case_sensitive, sort_params,
+                                   empty_param_handling, decode_plus) {
+  raw <- .extract_from_urls(url, "query", protocol_handling = protocol_handling)
+  if (identical(format, "string")) {
+    return(.get_query_engine_string(
+      raw, decode, query_handling, params_keep, params_drop,
+      params_case_sensitive, sort_params, empty_param_handling, decode_plus
+    ))
+  }
+
+  .get_query_engine_list(
+    raw, decode, query_handling, params_keep, params_drop,
+    params_case_sensitive, sort_params, empty_param_handling, decode_plus
+  )
+}
+
+.query_surviving_pairs <- function(query, query_handling, params_keep,
+                                   params_drop, params_case_sensitive,
+                                   sort_params, empty_param_handling,
+                                   decode_plus) {
+  ._query_surviving_pairs(
+    query, query_handling, params_keep, params_drop, params_case_sensitive,
+    sort_params, empty_param_handling, decode_plus, "builtin"
+  )
+}
+
+.get_query_engine_string <- function(raw, decode, query_handling, params_keep,
+                                     params_drop, params_case_sensitive,
+                                     sort_params, empty_param_handling,
+                                     decode_plus) {
+  vapply(seq_along(raw), function(i) {
+    if (is.na(raw[i])) {
+      return(NA_character_)
+    }
+    .get_query_engine_string_one(
+      raw[i], decode, query_handling, params_keep, params_drop,
+      params_case_sensitive, sort_params, empty_param_handling, decode_plus
+    )
+  }, character(1), USE.NAMES = FALSE)
+}
+
+.get_query_engine_string_one <- function(query, decode, query_handling,
+                                         params_keep, params_drop,
+                                         params_case_sensitive, sort_params,
+                                         empty_param_handling, decode_plus) {
+  if (!decode) {
+    return(._filter_query_params(
+      query,
+      query_handling = query_handling,
+      params_keep = params_keep,
+      params_drop = params_drop,
+      params_case_sensitive = params_case_sensitive,
+      sort_params = sort_params,
+      empty_param_handling = empty_param_handling,
+      decode_plus = decode_plus
+    ))
+  }
+  if (identical(query_handling, "drop")) {
+    return("")
+  }
+  sp <- .query_surviving_pairs(
+    query, query_handling, params_keep, params_drop, params_case_sensitive,
+    sort_params, empty_param_handling, decode_plus
+  )
+  if (is.null(sp)) {
+    return("")
+  }
+  paste(paste0(sp$dec_key, "=", sp$dec_value), collapse = "&")
+}
+
+.get_query_engine_list <- function(raw, decode, query_handling, params_keep,
+                                   params_drop, params_case_sensitive,
+                                   sort_params, empty_param_handling,
+                                   decode_plus) {
+  lapply(raw, function(query) {
+    if (is.na(query) || identical(query_handling, "drop")) {
+      return(list())
+    }
+    .get_query_engine_list_one(
+      query, decode, query_handling, params_keep, params_drop,
+      params_case_sensitive, sort_params, empty_param_handling, decode_plus
+    )
   })
+}
+
+.get_query_engine_list_one <- function(query, decode, query_handling,
+                                       params_keep, params_drop,
+                                       params_case_sensitive, sort_params,
+                                       empty_param_handling, decode_plus) {
+  sp <- .query_surviving_pairs(
+    query, query_handling, params_keep, params_drop, params_case_sensitive,
+    sort_params, empty_param_handling, decode_plus
+  )
+  if (is.null(sp)) {
+    return(list())
+  }
+  if (decode) {
+    .group_query_pairs(sp$dec_key, sp$dec_value)
+  } else {
+    .group_query_pairs(sp$raw_key, sp$raw_value)
+  }
 }
 
 #' Get URL fragments

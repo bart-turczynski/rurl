@@ -12,6 +12,9 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
   from [`adr/0000-adr-template.md`](adr/0000-adr-template.md).
 - [`prd/`](prd/) — accepted Product Requirement Documents that an epic or
   shipped feature depends on, graduated out of `_scratch/` so they survive.
+- [`goodpractice-triage.md`](goodpractice-triage.md) — standing triage for
+  `goodpractice::gp()` findings that are intentionally retained or queued as
+  scoped cleanup debt.
 
 See also [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the structural overview
 (load order, file map, data flow, seams, caches).

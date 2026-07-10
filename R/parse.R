@@ -962,12 +962,6 @@ safe_parse_urls <- function(url,
   stringi::stri_escape_unicode(enc2utf8(cache_key))
 }
 
-# Scalar cache key: the n = 1 case of .parse_cache_keys(), retained for
-# compatibility with existing call sites and tests.
-.parse_cache_key <- function(url, opts) {
-  .parse_cache_keys(url, opts)
-}
-
 # Internal scalar helper that handles caching and calls the shared cached
 # vector path (n = 1). Receives the validated `opts` list (from
 # .parse_options()) and reuses it directly. Returns NULL for a NULL-equivalent

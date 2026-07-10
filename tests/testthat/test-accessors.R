@@ -467,6 +467,14 @@ test_that("get_query filter mode works for format = 'list'", {
     )[[1]],
     list(a = "%26", b = "1")
   )
+  # A present query whose params are all filtered out becomes an empty list.
+  expect_equal(
+    get_query(
+      "http://e.com/?utm_source=x",
+      query_handling = "filter", format = "list"
+    )[[1]],
+    list()
+  )
 })
 
 test_that("get_query is vectorized across the engine path", {
