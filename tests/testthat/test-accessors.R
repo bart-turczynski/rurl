@@ -785,6 +785,18 @@ test_that(".normalize_and_punycode handles NA and empty input", {
     NA_character_
   )
   expect_identical(unname(rurl:::.normalize_and_punycode("")), "")
+
+  identity_encode <- function(x, strict = TRUE) x
+  expect_identical(
+    unname(rurl:::.normalize_and_punycode(
+      NA_character_, encode_fn = identity_encode
+    )),
+    NA_character_
+  )
+  expect_identical(
+    unname(rurl:::.normalize_and_punycode("", encode_fn = identity_encode)),
+    ""
+  )
 })
 
 test_that("safe_parse_url handles www_handling options correctly", {
@@ -994,6 +1006,62 @@ test_that(".punycode_to_unicode handles various inputs and known TLDs", {
 
   # Test standard punycode decoding via the default punycode backend
   expect_equal(rurl:::.punycode_to_unicode("xn--mnchen-3ya.de"), "münchen.de")
+})
+
+test_that(".punycode_to_unicode scalar seam handles decode test doubles", {
+  decode_map <- function(x, strict = FALSE) {
+    out <- x
+    out[x == "xn--p1ai"] <- "рф"
+    out[x == "bad"] <- NA_character_
+    out
+  }
+
+  expect_identical(
+    rurl:::.punycode_to_unicode(NA_character_, decode_fn = decode_map),
+    NA_character_
+  )
+  expect_identical(rurl:::.punycode_to_unicode("", decode_fn = decode_map), "")
+  expect_identical(
+    rurl:::.punycode_to_unicode("site.xn--p1ai", decode_fn = decode_map),
+    "site.рф"
+  )
+  expect_identical(
+    rurl:::.punycode_to_unicode("bad.xn--p1ai", decode_fn = decode_map),
+    "bad.рф"
+  )
+
+  wrong_shape_decode <- function(x, strict = FALSE) character(0)
+  expect_identical(
+    rurl:::.punycode_to_unicode(
+      "xn--p1ai.example", decode_fn = wrong_shape_decode
+    ),
+    "xn--p1ai.example"
+  )
+})
+
+test_that(".punycode_to_unicode_vec falls back after batch decode failure", {
+  rurl_clear_caches()
+  withr::defer(rurl_clear_caches())
+
+  decode_one <- function(x, strict = FALSE) {
+    if (length(x) > 1L) {
+      stop("batch decode failed")
+    }
+    out <- x
+    out[x == "xn--p1ai"] <- "рф"
+    out[x == "xn--wgbh1c"] <- "مصر"
+    out
+  }
+
+  testthat::local_mocked_bindings(
+    puny_decode = decode_one,
+    .package = "punycoder"
+  )
+
+  expect_identical(
+    rurl:::.punycode_to_unicode_vec(c("xn--p1ai", "xn--wgbh1c")),
+    c("рф", "مصر")
+  )
 })
 
 test_that("Internal TLD helpers handle NA/empty/error conditions", {

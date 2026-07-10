@@ -18,11 +18,20 @@ testthat::test_file("tests/testthat/test-accessors.R")
 # Build documentation (Roxygen2)
 devtools::document()
 
+# Rebuild README.md; requires pak metadata/network access for Remotes.
+devtools::build_readme()
+
 # Full package check
 R CMD check .
+# In network-restricted local sandboxes only, R may be unable to verify the
+# current time and emit a future-timestamp NOTE; rerun with normal network
+# access, or set `_R_CHECK_SYSTEM_CLOCK_=false` for that local check.
 
 # Lint (must stay clean — see .lintr below)
 lintr::lint_package()
+
+# HTML coverage report (defaults to _scratch/covr_report.html)
+Rscript tools/coverage-report.R
 ```
 
 `.lintr` is deliberately kept in sync with the linter set
