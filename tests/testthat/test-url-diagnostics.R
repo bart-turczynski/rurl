@@ -19,7 +19,14 @@ test_that("the diagnostics vocabulary matches the PRD §7 table verbatim", {
       "explicit-default-port", "non-default-port", "invalid-reverse-solidus",
       "control-char-stripped", "host-charset-shimmed",
       "domain-label-too-long", "domain-name-too-long", "domain-empty-label",
-      "domain-hyphen-violation", "domain-std3-violation"
+      "domain-hyphen-violation", "domain-std3-violation",
+      # Layer 5 SELECTED diagnostics (ADR 0012 D5, RURL-izsouyxs).
+      "invalid-URL-unit", "invalid-credentials",
+      "unicode-outside-rfc3986-uri", "transform-skipped-ineligible-scheme",
+      "ws-fragment-forbidden", "ws-userinfo-forbidden",
+      "mailto-fragment-discouraged", "tel-missing-phone-context",
+      "data-missing-comma", "file-non-absolute-path",
+      "file-forbidden-component"
     )
   )
   # No duplicates, no stray whitespace.
@@ -156,4 +163,152 @@ test_that("the helpers add no columns/fields to the parse result", {
 
   fields <- names(safe_parse_url("http://ex.com/", url_standard = "whatwg"))
   expect_false(any(c("host_type", "diagnostics") %in% fields))
+})
+
+# --- Layer 5 SELECTED diagnostics (ADR 0012 D5, RURL-izsouyxs) --------------
+# SELECTED facts, never a conformance oracle: absence of a token never implies
+# conformance. They fire ONLY under scheme_acceptance = "general"; the default
+# `web` posture stays silent for every one of them.
+
+gd <- function(u, standard = "whatwg") {
+  get_url_diagnostics(u, url_standard = standard, scheme_acceptance = "general")
+}
+
+test_that("the L5 facts are dormant under the default web acceptance", {
+  # Every L5 fact is general-only: an input that fires several under `general`
+  # fires none of them under the default `web` posture (only pre-existing
+  # facts, if any). This is what keeps existing get_url_diagnostics tests --
+  # all of which use `web` -- byte-stable.
+  l5 <- c(
+    "invalid-URL-unit", "invalid-credentials", "unicode-outside-rfc3986-uri",
+    "transform-skipped-ineligible-scheme", "ws-fragment-forbidden",
+    "ws-userinfo-forbidden", "mailto-fragment-discouraged",
+    "tel-missing-phone-context", "data-missing-comma",
+    "file-non-absolute-path", "file-forbidden-component"
+  )
+  web <- get_url_diagnostics("mailto:a@b.com#f", url_standard = "whatwg")
+  expect_length(intersect(web, l5), 0L)
+  web2 <- get_url_diagnostics("http://user@ex.com/%zz", url_standard = "whatwg")
+  expect_length(intersect(web2, l5), 0L)
+})
+
+test_that("transform-skipped-ineligible-scheme fires on non-HTTP(S) rows", {
+  # Non-HTTP(S) schemes are ineligible for the SEO/semantic transforms (D2).
+  expect_true(
+    "transform-skipped-ineligible-scheme" %in% gd("ftp://ex.com/x")
+  )
+  expect_true(
+    "transform-skipped-ineligible-scheme" %in% gd("mailto:a@b.com")
+  )
+  # ...and never on an eligible HTTP(S) row.
+  expect_false(
+    "transform-skipped-ineligible-scheme" %in% gd("http://ex.com/clean")
+  )
+  expect_false(
+    "transform-skipped-ineligible-scheme" %in% gd("https://ex.com/clean")
+  )
+})
+
+test_that("invalid-credentials fires for ANY userinfo under whatwg general", {
+  expect_true("invalid-credentials" %in% gd("http://user@ex.com/"))
+  expect_true("invalid-credentials" %in% gd("http://u:p@ex.com/"))
+  expect_false("invalid-credentials" %in% gd("http://ex.com/"))
+  # rfc3986 posture routes raw `@` to its own generic-grammar gate; the WHATWG
+  # credentials fact does not fire there.
+  expect_false("invalid-credentials" %in% gd("http://user@ex.com/", "rfc3986"))
+})
+
+test_that("invalid-URL-unit fires on malformed %-escapes and non-URL cps", {
+  expect_true("invalid-URL-unit" %in% gd("http://ex.com/%zz"))
+  expect_true("invalid-URL-unit" %in% gd("http://ex.com/a%2Gb"))
+  expect_true("invalid-URL-unit" %in% gd("http://ex.com/a b"))
+  expect_true("invalid-URL-unit" %in% gd("http://ex.com/a<b>c"))
+  # A well-formed percent triplet and a clean path do NOT fire it.
+  expect_false("invalid-URL-unit" %in% gd("http://ex.com/a%20b"))
+  expect_false("invalid-URL-unit" %in% gd("http://ex.com/clean"))
+  # A backslash is `invalid-reverse-solidus`, not `invalid-URL-unit`.
+  expect_false("invalid-URL-unit" %in% gd("http://ex.com/a\\b"))
+})
+
+test_that("unicode-outside-rfc3986-uri fires on the sole D1 tolerance", {
+  expect_true(
+    "unicode-outside-rfc3986-uri" %in% gd("http://ex.com/ä", "rfc3986")
+  )
+  # ASCII-only rfc3986 input does not fire it; nor does a whatwg parse.
+  expect_false(
+    "unicode-outside-rfc3986-uri" %in% gd("http://ex.com/x", "rfc3986")
+  )
+  expect_false(
+    "unicode-outside-rfc3986-uri" %in% gd("http://ex.com/ä", "whatwg")
+  )
+})
+
+test_that("ws/wss fragment and userinfo are two separate facts", {
+  frag_only <- gd("ws://host/#f")
+  expect_true("ws-fragment-forbidden" %in% frag_only)
+  expect_false("ws-userinfo-forbidden" %in% frag_only)
+
+  user_only <- gd("wss://user@host/")
+  expect_true("ws-userinfo-forbidden" %in% user_only)
+  expect_false("ws-fragment-forbidden" %in% user_only)
+  # WHATWG's generic credentials fact ALSO fires for the ws userinfo.
+  expect_true("invalid-credentials" %in% user_only)
+
+  both <- gd("ws://user@host/#frag")
+  expect_true(all(
+    c("ws-fragment-forbidden", "ws-userinfo-forbidden") %in% both
+  ))
+  # A clean ws URL carries neither ws fact.
+  clean <- gd("wss://host/path")
+  expect_false(any(
+    c("ws-fragment-forbidden", "ws-userinfo-forbidden") %in% clean
+  ))
+})
+
+test_that("mailto fragment is a selected fact (RFC 6068)", {
+  expect_true(
+    "mailto-fragment-discouraged" %in% gd("mailto:a@b.com#section")
+  )
+  expect_false("mailto-fragment-discouraged" %in% gd("mailto:a@b.com"))
+})
+
+test_that("data missing comma is a selected fact (RFC 2397)", {
+  expect_true("data-missing-comma" %in% gd("data:text/plain"))
+  expect_false("data-missing-comma" %in% gd("data:text/plain,hi"))
+  expect_false("data-missing-comma" %in% gd("data:,"))
+})
+
+test_that("tel missing phone-context is a selected fact (RFC 3966)", {
+  # A local number (no leading "+") without ;phone-context= fires.
+  expect_true("tel-missing-phone-context" %in% gd("tel:555-1234"))
+  # A global number (leading "+") is exempt.
+  expect_false("tel-missing-phone-context" %in% gd("tel:+1-800-555-1234"))
+  # A local number WITH ;phone-context= is exempt.
+  expect_false(
+    "tel-missing-phone-context" %in%
+      gd("tel:555-1234;phone-context=+1-555")
+  )
+})
+
+test_that("file rfc-syntax shape facts fire (RFC 8089)", {
+  # Non-absolute (rootless) path.
+  expect_true(
+    "file-non-absolute-path" %in% gd("file:relative/path", "rfc3986")
+  )
+  expect_false(
+    "file-non-absolute-path" %in% gd("file:/etc/hosts", "rfc3986")
+  )
+  # Query/fragment/port outside RFC 8089's grammar.
+  expect_true(
+    "file-forbidden-component" %in% gd("file:/p?q=1", "rfc3986")
+  )
+  expect_true(
+    "file-forbidden-component" %in% gd("file:/p#frag", "rfc3986")
+  )
+  expect_true(
+    "file-forbidden-component" %in% gd("file://h:8080/p", "rfc3986")
+  )
+  expect_false(
+    "file-forbidden-component" %in% gd("file:/ok/path", "rfc3986")
+  )
 })
