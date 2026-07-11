@@ -12,8 +12,12 @@
   source *before* percent-decoding, so `%2C` is never a recipient separator and
   an encoded quote/bracket (`%22`, `%5B`/`%5D`) still protects a raw comma.
   Facts only, never a gate, and no new `safe_parse_url` columns (ADR 0006 /
-  0012 D7). hfield (`to`/`cc`/`bcc`) address-lists and the SMTP wire-projection
-  facts (octet limits, SMTPUTF8) are out of scope for this slice.
+  0012 D7). An opt-in `smtp_wire = TRUE` argument adds the SMTP transport facts
+  that require a serialized wire projection — domain wire form (ASCII / A-label
+  / U-label / address-literal), the SMTPUTF8 envelope mode (RFC 6531/6530,
+  triggered by a non-ASCII local-part *or* a U-label domain), and the RFC 5321
+  64-octet local-part and 256-octet forward-path limits measured on UTF-8 wire
+  bytes. hfield (`to`/`cc`/`bcc`) address-lists remain out of scope.
 
 - New `scheme_acceptance` argument (`"web"` / `"general"`) on the parse and
   accessor functions, controlling **which URL shapes are accepted at all**.
