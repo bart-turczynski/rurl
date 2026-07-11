@@ -45,6 +45,21 @@
   `scheme_acceptance = "web"` the diagnostics surface is byte-identical to
   before. See ADR 0012.
 
+- New practical host-validation **policy** helpers `is_valid_host()` and
+  `check_hosts()`. rurl's `url_standard` profiles deliberately match the URL
+  *standards*, so hosts such as `a+b.example` (a valid RFC 3986 reg-name),
+  `_dmarc.example.com` (a valid DNS owner name), and `-example.com` all parse
+  successfully. These helpers answer the separate, product-level question of
+  whether a parsed host is usable as a practical **web** hostname, **dns** owner
+  name, **registrable** site host, or **seo**-safe host (plus the loosest
+  **url** rule). `is_valid_host(url, rule = "web")` returns a logical vector;
+  `check_hosts(url, rules = ...)` returns a tabular report with a logical column
+  per rule and a `reasons` list-column of the host facts observed. This is a
+  policy layer on top of parsing, not parser conformance and not a conformance
+  oracle: it never changes `parse_status`, never widens `safe_parse_url()`
+  (ADR 0006), and the absence of a `reasons` token is not a validity claim
+  (ADR 0012 D5). They default to `url_standard = "whatwg"`.
+
 ## rurl 2.5.0
 
 ### New features
