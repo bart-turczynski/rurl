@@ -191,7 +191,7 @@
     "SystemRequirements": null
   },
   "keywords": ["url-parsing", "url-parser", "url-normalization", "url-cleaning", "url-cleaner", "url-checker", "domain-extraction", "domain-name-detection", "domain-name-checker", "public-suffix", "tld", "tlds", "tld-extraction", "tld-checker", "tld-verification", "idna", "punycode", "uri", "url", "seo", "web-scraping", "r", "rstats", "r-stats", "r-package"],
-  "fileSize": "1592.825KB",
+  "fileSize": "1638.913KB",
   "citation": [
     {
       "@type": "SoftwareSourceCode",
