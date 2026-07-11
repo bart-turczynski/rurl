@@ -1,3 +1,41 @@
+## rurl 2.6.0
+
+### New features
+
+- New `scheme_acceptance` argument (`"web"` / `"general"`) on the parse and
+  accessor functions, controlling **which URL shapes are accepted at all**.
+  `"web"` (the default) keeps today's behavior byte-for-byte — only the
+  historical special-scheme web set parses. `"general"` turns rurl into a
+  general URL parser: opaque, non-special, RFC 3986-generic, and `file:` URLs
+  parse and round-trip, and `ws:` / `wss:` are recognized as WHATWG-special
+  schemes. This is a new axis, **orthogonal** to `url_standard` (which controls
+  *interpretation*) and `scheme_policy` (which controls input *leniency*). See
+  ADR 0012.
+
+- New `profile` argument (`"browser"` / `"whatwg"` / `"rfc-syntax"` / `"seo"`,
+  with `"canonical"` an alias of `"seo"`) on `safe_parse_url()`,
+  `safe_parse_urls()`, and `get_clean_url()`, plus a companion inspector
+  `url_profile()`. A profile is public sugar that bundles the acceptance,
+  interpretation, leniency, and canonicalization knobs the lower layers expose
+  under one **inspectable** name — `url_profile("browser")` returns the exact
+  `knob = value` set it resolves to. Explicit arguments always override the
+  profile (the "iron rule"), so a profile only fills slots you did not set
+  yourself. `"browser"` gives a browser-*like* posture (WHATWG interpretation,
+  general acceptance, scheme inference, and a bounded fixer for rurl's historical
+  scheme prepending); `"whatwg"` is the strict absolute-URL spec posture and
+  **rejects** scheme-less input; `"rfc-syntax"` parses RFC 3986 generic syntax as
+  *parsing*, not normalization (case and dot-segments preserved); `"seo"` names
+  rurl's origin-cleaning intent. `profile` is not supported by `canonical_join()`.
+  The default (`profile = NULL`) is byte-for-byte unchanged. See ADR 0012.
+
+- `get_url_diagnostics()` gains 11 additional companion facts, surfaced only
+  under `scheme_acceptance = "general"`, describing outcomes specific to
+  general-mode parsing (opaque paths, non-special authorities, and the RFC 3986
+  grammar gate). As with all diagnostics these are companion facts only —
+  `safe_parse_url()`'s columns are unchanged (ADR 0006) — and under the default
+  `scheme_acceptance = "web"` the diagnostics surface is byte-identical to
+  before. See ADR 0012.
+
 ## rurl 2.5.0
 
 ### New features
