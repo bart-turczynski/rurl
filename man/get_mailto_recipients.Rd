@@ -126,9 +126,9 @@ serialized wire projection of the address (octet-length limits per RFC 5321
 section 4.5.3.1, and the SMTPUTF8 envelope mode per RFC 6531/6530). These
 are octet facts on the UTF-8 wire bytes, distinct from the syntax
 classifications above and from DNS. When \code{smtp_wire = FALSE} (the
-default) the five \code{smtp_*} wire columns are still present but carry the
-\code{"unavailable"}/\code{NA} sentinel; the same sentinel is used for a
-recipient whose address cannot be projected (an invalid mailbox).
+default) the five \code{smtp_*} wire columns are still present but carry
+the \code{"unavailable"}/\code{NA} sentinel; the same sentinel is used for
+a recipient whose address cannot be projected (an invalid mailbox).
 }
 
 \section{Provenance-preserving parse}{

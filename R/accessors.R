@@ -830,14 +830,32 @@ get_port <- function(url, protocol_handling = "keep") {
 #' Extracts the user component of a URL. The value is returned raw, exactly as
 #' written in the URL (not percent-decoded).
 #'
+#' Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
+#' first recipient (its \code{addr-spec} local-part) is returned, mirroring how
+#' \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
+#' domain (ADR 0012 D7). Under the default \code{"web"} acceptance a
+#' \code{mailto:} URL is not parsed and this returns \code{NA}.
+#'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @return A character vector of user names.
+#' @seealso \code{\link{get_mailto_recipients}} for the full per-recipient list.
 #' @export
 #' @examples
 #' get_user("ftp://alice:secret@ftp.example.com/file.txt")
-get_user <- function(url, protocol_handling = "keep") {
-  .extract_from_urls(url, "user", protocol_handling = protocol_handling)
+#' get_user("mailto:jane@example.com",
+#'   scheme_acceptance = "general", url_standard = "rfc3986")
+get_user <- function(url, protocol_handling = "keep",
+                     scheme_policy = c("infer", "require"),
+                     scheme_acceptance = c("web", "general"),
+                     url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
+  .extract_from_urls(url, "user",
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
+  )
 }
 
 #' Get URL passwords
@@ -866,8 +884,15 @@ get_password <- function(url, protocol_handling = "keep") {
 #' @examples
 #' get_userinfo("ftp://alice:secret@ftp.example.com/file.txt")
 #' get_userinfo("ftp://alice@ftp.example.com/file.txt")
-get_userinfo <- function(url, protocol_handling = "keep") {
+get_userinfo <- function(url, protocol_handling = "keep",
+                         scheme_policy = c("infer", "require"),
+                         scheme_acceptance = c("web", "general"),
+                         url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, NULL,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard,
     transform = function(cols) {
       # Vectorized user[:password]: NA when there is no user (covers null rows,
       # whose user column is NA), user alone when the password is absent/empty,

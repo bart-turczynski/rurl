@@ -2,6 +2,19 @@
 
 ### New features
 
+- Under `scheme_acceptance = "general"`, the standard component accessors now
+  extract the web-y parts of a `mailto:` recipient: `get_host()`,
+  `get_domain()`, `get_tld()`, `get_subdomain()`, `get_user()`, and
+  `get_userinfo()` return the first recipient's domain / registrable domain /
+  public suffix / subdomain / local-part, decomposed by the same Public Suffix
+  List seam a web host uses (an email domain and an `http` host take identical
+  branches). This reuses the existing accessors rather than adding
+  email-specific equivalents, and unifies with the scheme-less `user@host`
+  behaviour. `get_user()` / `get_userinfo()` gain the `scheme_policy` /
+  `scheme_acceptance` / `url_standard` arguments to reach it. Extraction is
+  metadata only — a `mailto:` `clean_url` and round-trip are unchanged — and is
+  a strict no-op under the default `scheme_acceptance = "web"`. See ADR 0012 D7.
+
 - New companion helper `get_mailto_recipients()` reports structural,
   per-recipient **facts** about the positional recipient list of a `mailto:`
   URL (the comma-separated `addr-spec`s before `?`, RFC 6068 §2). It returns a

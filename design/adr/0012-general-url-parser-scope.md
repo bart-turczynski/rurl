@@ -510,6 +510,44 @@ conflict behavior. If an explicit argument overrides a profile, the inspector
 labels the resolved result `customized = TRUE`; rurl does not continue claiming
 that the result exactly matches the named profile.
 
+### D7 — mailto recipient parts are exposed through the standard accessors
+
+An email address contains web-y structure: the `addr-spec` right-hand side is a
+domain, and the left is the user. Rather than mint `mailto`/email-specific
+extraction functions, the **existing** accessors are adapted: under
+`scheme_acceptance = "general"`, a `mailto:` URL's first recipient decomposes so
+that `get_host` / `get_domain` / `get_tld` / `get_subdomain` / `get_user` /
+`get_userinfo` return the recipient's parts, decomposed by the **same PSL seam a
+web host uses** (an email domain and an `http` host take identical branches).
+This unifies with the pre-existing scheme-less `user@host` `warning-userinfo`
+path, which already resolves host/user through these accessors — turning that
+former convenience hack into a principled, spec-grounded feature.
+
+Rules:
+
+- **Extraction metadata only.** The recipient domain is populated as the
+  internal `host` in Stage A; Stage B still serializes general rows from its own
+  `gen_b` re-parse (host `NA` for `mailto`), so `clean_url` / round-trip is
+  byte-for-byte unchanged. `get_host`(mailto) and `clean_url`(mailto) are
+  independent.
+- **Deliberate carve-out of D2.** D2 masks a general/opaque host out of the PSL
+  decomposition because it is not asserted to be a DNS name. A `mailto` recipient
+  domain *is* a domain, so it is exempted from that mask and does flow through
+  pslr — the one place a general-routed host reaches the PSL seam.
+- **Domain-form RHS only.** An `address-literal` or invalid RHS yields `NA` host
+  (it is not a domain to decompose); the local-part still resolves as `user`.
+- **First recipient.** The 1-URL→1-value accessors extract the *first*
+  recipient; the full per-recipient breakdown (and the email/SMTP *facts*) is
+  `get_mailto_recipients()`'s job (email PRD). "First" is a convenience
+  selection, not a spec claim.
+- **Gated to general acceptance.** Under the default `web` acceptance `mailto`
+  does not parse, so every default-mode result is unchanged.
+
+Authority accessors are **not** taught to reach into recipients for their own
+sake — a `mailto` has no authority host and may carry N recipients; the domain
+is a property of a recipient, surfaced through the same accessor only because it
+is the same *kind* of value.
+
 ---
 
 ## Layered build plan (foundation first)
