@@ -229,3 +229,52 @@ test_that("smtp_wire must be a valid flag", {
       smtp_wire = "yes")
   )
 })
+
+# --- recipient extraction via the standard accessors (ADR 0012 D7) -----------
+
+test_that("mailto recipient parts extract through the standard accessors", {
+  ga <- list(scheme_acceptance = "general", url_standard = "rfc3986")
+  expect_identical(
+    do.call(get_host, c(list("mailto:jane@example.com"), ga)), "example.com"
+  )
+  expect_identical(
+    do.call(get_domain, c(list("mailto:jane@example.com"), ga)), "example.com"
+  )
+  expect_identical(
+    do.call(get_tld, c(list("mailto:jane@example.com"), ga)), "com"
+  )
+  expect_identical(
+    do.call(get_user, c(list("mailto:jane@example.com"), ga)), "jane"
+  )
+})
+
+test_that("a mailto recipient decomposes exactly like a web host (PSL)", {
+  ga <- list(scheme_acceptance = "general", url_standard = "rfc3986")
+  u <- "mailto:bob@mail.example.co.uk"
+  expect_identical(do.call(get_host, c(list(u), ga)), "mail.example.co.uk")
+  expect_identical(do.call(get_subdomain, c(list(u), ga)), "mail")
+  expect_identical(do.call(get_domain, c(list(u), ga)), "example.co.uk")
+  expect_identical(do.call(get_tld, c(list(u), ga)), "co.uk")
+})
+
+test_that("multi-recipient extraction uses the first recipient", {
+  ga <- list(scheme_acceptance = "general", url_standard = "rfc3986")
+  u <- "mailto:a@example.com,b@other.org"
+  expect_identical(do.call(get_host, c(list(u), ga)), "example.com")
+  expect_identical(do.call(get_user, c(list(u), ga)), "a")
+})
+
+test_that("extraction is a strict no-op under the default web acceptance", {
+  expect_true(is.na(get_host("mailto:jane@example.com")))
+  expect_true(is.na(get_user("mailto:jane@example.com")))
+  expect_true(is.na(get_domain("mailto:jane@example.com")))
+})
+
+test_that("extraction never disturbs the mailto clean_url / round-trip", {
+  ga <- list(scheme_acceptance = "general", url_standard = "rfc3986")
+  for (u in c("mailto:jane@example.com", "mailto:a@x.com,b@y.com",
+    "mailto:a@example.com?subject=hi")) {
+    expect_identical(do.call(get_clean_url, c(list(u), ga)), u)
+    expect_identical(do.call(get_parse_status, c(list(u), ga)), "ok")
+  }
+})

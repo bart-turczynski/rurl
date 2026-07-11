@@ -89,7 +89,10 @@ test_that("opaque scheme payload is carried verbatim under whatwg general", {
     "mailto:a@b.com", scheme_acceptance = "general", url_standard = "whatwg"
   )
   expect_identical(d$scheme, "mailto")
-  expect_true(is.na(d$host))
+  # ADR 0012 D7: the recipient domain is extracted as host (see the D7 tests in
+  # test-email-diagnostics.R), while the opaque payload is still carried
+  # verbatim in path and clean_url.
+  expect_identical(d$host, "b.com")
   expect_identical(d$path, "a@b.com")
   expect_identical(d$clean_url, "mailto:a@b.com")
 })
@@ -97,21 +100,24 @@ test_that("opaque scheme payload is carried verbatim under whatwg general", {
 # --- no DNS/PSL derivation and no punycode for opaque/non-special hosts ------
 
 test_that("opaque and non-special hosts get no domain/tld and no punycode", {
+  # A genuinely opaque / non-special reg-name host is NOT asserted to be a DNS
+  # name (ADR 0012 D2): no PSL derivation, no punycode. (mailto is the explicit
+  # D7 carve-out and is covered in test-email-diagnostics.R.)
   d <- safe_parse_urls(
-    c("mailto:a@b.com", "foo://host.example/x"),
+    "foo://host.example/x",
     scheme_acceptance = "general", url_standard = "whatwg"
   )
-  expect_true(all(is.na(d$domain)))
-  expect_true(all(is.na(d$tld)))
-  expect_true(all(is.na(d$domain_ascii)))
-  expect_true(all(is.na(d$tld_ascii)))
+  expect_true(is.na(d$domain))
+  expect_true(is.na(d$tld))
+  expect_true(is.na(d$domain_ascii))
+  expect_true(is.na(d$tld_ascii))
   # A non-special reg-name host is preserved verbatim (never IDNA/punycode).
-  expect_identical(d$host[2], "host.example")
+  expect_identical(d$host, "host.example")
   # via accessors as well
-  expect_true(all(is.na(get_domain(
-    c("mailto:a@b.com", "foo://host.example/x"),
+  expect_true(is.na(get_domain(
+    "foo://host.example/x",
     scheme_acceptance = "general", url_standard = "whatwg"
-  ))))
+  )))
 })
 
 # --- get_scheme_class / get_host_type companion helpers ---------------------

@@ -1619,6 +1619,21 @@ safe_parse_urls <- function(url,
     raw_port[general_ok] <- suppressWarnings(as.integer(gen$port[general_ok]))
   }
 
+  # ADR 0012 D7: a mailto: URL carries recipient addr-specs, not a URL
+  # authority. Expose the FIRST recipient's domain as `host` (so get_host /
+  # get_domain / get_tld / get_subdomain decompose it exactly like a web host)
+  # and its local-part as `user`. Extraction metadata ONLY: Stage B serializes
+  # the general rows from its own gen_b re-parse (host NA for mailto), so
+  # clean_url / round-trip is untouched. Domain-form RHS only; address-literal /
+  # invalid -> NA host.
+  is_mailto_gen <- general_ok & !is.na(raw_scheme) &
+    stringi::stri_trans_tolower(raw_scheme) == "mailto"
+  if (any(is_mailto_gen)) {
+    rp <- .mailto_first_recipient_parts(raw_path[is_mailto_gen])
+    raw_host[is_mailto_gen] <- rp$host
+    raw_user[is_mailto_gen] <- rp$user
+  }
+
   # Phase 4: final scheme per protocol policy.
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
@@ -1676,6 +1691,12 @@ safe_parse_urls <- function(url,
   psl_host <- final_host
   if (general_acceptance && any(general_route)) {
     psl_host[general_route] <- NA_character_
+    # ADR 0012 D7 carve-out of D2: a mailto recipient domain IS a domain, so it
+    # DOES flow through the PSL decomposition (unlike an opaque general host).
+    if (any(is_mailto_gen)) {
+      keep <- is_mailto_gen & !is.na(final_host)
+      psl_host[keep] <- final_host[keep]
+    }
   }
   dt_ascii <- .derive_domain_tld_vec(
     psl_host, is_ip_host, opts$tld_source, "idna"

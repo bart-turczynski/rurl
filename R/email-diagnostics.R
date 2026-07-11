@@ -348,6 +348,40 @@
   sum(nchar(x, type = "bytes"))
 }
 
+# --- Recipient extraction for the standard accessors (ADR 0012 D7) -----------
+
+# First-recipient web-y extraction for a mailto: positional `to`. Returns, per
+# input path, the recipient DOMAIN (decoded; only for a domain-form RHS -- NA
+# for an address-literal / invalid / absent RHS, which is not a domain to
+# decompose) as `host`, and the decoded local-part as `user` (whenever the
+# addr-spec is well-formed, independent of the RHS form). Multi-recipient: the
+# FIRST recipient (the full list is get_mailto_recipients()'s job). This feeds
+# the standard accessors (get_host/get_domain/get_tld/get_subdomain/get_user)
+# so a mailto recipient decomposes exactly like a web host; it is EXTRACTION
+# metadata only and never touches clean_url / round-trip serialization.
+.mailto_first_recipient_parts <- function(paths) {
+  n <- length(paths)
+  host <- rep(NA_character_, n)
+  user <- rep(NA_character_, n)
+  for (i in seq_len(n)) {
+    recips <- .email_split_recipients(paths[i])
+    if (length(recips) == 0L) {
+      next
+    }
+    split <- .email_split_addr_spec(recips[1L])
+    if (!split$ok) {
+      next
+    }
+    user[i] <- curl::curl_unescape(split$local)
+    dd <- curl::curl_unescape(split$domain)
+    if (.email_classify_mailto_domain(dd) %in%
+      c("ascii-dot-atom-text", "idna2008-domain")) {
+      host[i] <- dd
+    }
+  }
+  list(host = host, user = user)
+}
+
 # --- Public helper -----------------------------------------------------------
 
 #' Per-recipient email diagnostics for the mailto: positional recipient list
