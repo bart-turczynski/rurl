@@ -167,29 +167,53 @@ test_that("the helpers add no columns/fields to the parse result", {
 
 # --- Layer 5 SELECTED diagnostics (ADR 0012 D5, RURL-izsouyxs) --------------
 # SELECTED facts, never a conformance oracle: absence of a token never implies
-# conformance. They fire ONLY under scheme_acceptance = "general"; the default
-# `web` posture stays silent for every one of them.
+# conformance. Two of them -- invalid-credentials and invalid-URL-unit -- are
+# WHATWG-GENERIC and gate on the interpreting standard (url_standard =
+# "whatwg"), not the acceptance axis, so they also fire on the `web` accept path
+# (RURL-sgjzbqzk). Every OTHER L5 fact stays general-only. The true DEFAULT
+# (url_standard = NULL) stays silent for ALL of them -- that is the D4
+# byte-identity / CRAN lock.
 
 gd <- function(u, standard = "whatwg") {
   get_url_diagnostics(u, url_standard = standard, scheme_acceptance = "general")
 }
 
-test_that("the L5 facts are dormant under the default web acceptance", {
-  # Every L5 fact is general-only: an input that fires several under `general`
-  # fires none of them under the default `web` posture (only pre-existing
-  # facts, if any). This is what keeps existing get_url_diagnostics tests --
-  # all of which use `web` -- byte-stable.
-  l5 <- c(
-    "invalid-URL-unit", "invalid-credentials", "unicode-outside-rfc3986-uri",
-    "transform-skipped-ineligible-scheme", "ws-fragment-forbidden",
-    "ws-userinfo-forbidden", "mailto-fragment-discouraged",
-    "tel-missing-phone-context", "data-missing-comma",
-    "file-non-absolute-path", "file-forbidden-component"
-  )
+# The general-only L5 facts (everything except the two WHATWG-generic ones).
+l5_general_only <- c(
+  "unicode-outside-rfc3986-uri", "transform-skipped-ineligible-scheme",
+  "ws-fragment-forbidden", "ws-userinfo-forbidden",
+  "mailto-fragment-discouraged", "tel-missing-phone-context",
+  "data-missing-comma", "file-non-absolute-path", "file-forbidden-component"
+)
+l5_whatwg_generic <- c("invalid-credentials", "invalid-URL-unit")
+
+test_that("the general-only L5 facts stay dormant under web acceptance", {
+  # An input that fires several under `general` fires none of the general-only
+  # facts under the default `web` acceptance, even with url_standard = "whatwg".
   web <- get_url_diagnostics("mailto:a@b.com#f", url_standard = "whatwg")
-  expect_length(intersect(web, l5), 0L)
+  expect_length(intersect(web, l5_general_only), 0L)
   web2 <- get_url_diagnostics("http://user@ex.com/%zz", url_standard = "whatwg")
-  expect_length(intersect(web2, l5), 0L)
+  expect_length(intersect(web2, l5_general_only), 0L)
+})
+
+test_that("WHATWG-generic L5 facts fire under web + whatwg (RURL-sgjzbqzk)", {
+  # invalid-credentials / invalid-URL-unit gate on the interpreting standard,
+  # not acceptance -- so they fire on the pre-existing web/libcurl path under
+  # url_standard = "whatwg" (no scheme_acceptance = "general" needed).
+  web2 <- get_url_diagnostics("http://user@ex.com/%zz", url_standard = "whatwg")
+  expect_true("invalid-credentials" %in% web2)
+  expect_true("invalid-URL-unit" %in% web2)
+  # A clean web+whatwg URL fires neither.
+  clean <- get_url_diagnostics("http://ex.com/clean", url_standard = "whatwg")
+  expect_length(intersect(clean, l5_whatwg_generic), 0L)
+})
+
+test_that("the true default (url_standard = NULL) stays silent for all L5", {
+  # The D4 byte-identity / CRAN lock: the DEFAULT combination (web acceptance +
+  # url_standard = NULL) fires NONE of the L5 facts, generic ones included.
+  l5 <- c(l5_general_only, l5_whatwg_generic)
+  def <- get_url_diagnostics("http://user@ex.com/%zz")
+  expect_length(intersect(def, l5), 0L)
 })
 
 test_that("transform-skipped-ineligible-scheme fires on non-HTTP(S) rows", {

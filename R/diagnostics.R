@@ -283,16 +283,46 @@
 
   # --- Layer 5 SELECTED diagnostics (ADR 0012 D5 + Layer 5, RURL-izsouyxs) ---
   # SELECTED facts, never a conformance oracle: absence of any token below does
-  # NOT imply the URL conforms to its scheme's RFC or to WHATWG (D5). Every fact
-  # here fires ONLY under scheme_acceptance == "general" (the new general-parser
-  # branch), so the default `web` posture -- and every existing get_url_
-  # diagnostics test, which uses `web` -- is untouched (no new failures, ADR
-  # 0006 companion-helper contract intact). Reached only through PURE RE-CALLS
-  # (.general_parse_vec / .rfc3986_generic_uri_ok / .stage_b_eligibility), the
-  # codebase's established Stage-B pattern; Stage A stays cacheable.
+  # NOT imply the URL conforms to its scheme's RFC or to WHATWG (D5). Reached
+  # only through PURE RE-CALLS (.general_parse_vec / .rfc3986_generic_uri_ok /
+  # .stage_b_eligibility), the codebase's established Stage-B pattern; Stage A
+  # stays cacheable.
   general <- identical(opts$scheme_acceptance, "general")
   is_whatwg <- .is_whatwg(opts$url_standard)
   is_rfc <- identical(opts$url_standard, "rfc3986")
+
+  # WHATWG-GENERIC validation-error facts (invalid-credentials / invalid-URL-
+  # unit) gate on the INTERPRETING standard, not the acceptance axis (ADR 0012
+  # D5, RURL-sgjzbqzk). They are route-independent, string-level facts -- any
+  # credentials present; a malformed `%`-escape or a non-URL code point -- true
+  # of the input regardless of which parser ran, so they fire whenever
+  # url_standard is WHATWG, INCLUDING the default `web` acceptance path. The
+  # DEFAULT combo (web + url_standard = NULL) is untouched because is_whatwg is
+  # FALSE there, so the D4 byte-identity / CRAN contract holds. userinfo is
+  # carried by libcurl on the special-scheme route (http/https/ftp/ws/wss); the
+  # general parser sets user/password NA for opaque/RFC rows, so this bounded
+  # detection covers the WHATWG special-scheme routes. All OTHER Layer 5 facts
+  # stay general-gated below: they are parse-structural or ride the general
+  # parser (ws/wss are only admissible under general acceptance at all).
+  has_userinfo <- !is.na(a$raw_user) | !is.na(a$raw_password)
+  if (is_whatwg && !is.null(url)) {
+    # `invalid-credentials` (WHATWG, verbatim): raised for ANY credentials in a
+    # URL -- not specifically the multiple-`@` case (ADR 0012 D5 / A.1).
+    diag <- .diag_add(diag, live & has_userinfo, "invalid-credentials")
+
+    # `invalid-URL-unit` (WHATWG, verbatim): the SINGLE error name covering BOTH
+    # a malformed `%`-escape AND a non-URL code point. Deliberately BOUNDED (a
+    # selected fact, not a full WHATWG validation engine): a `%` not followed by
+    # two hex digits, or a clearly non-URL ASCII code point (space " < > ` { }
+    # | ^). Backslash and C0 controls are excluded -- they are surfaced by
+    # `invalid-reverse-solidus` / `control-char-stripped`.
+    malformed_pct <- stringi::stri_detect_regex(url, "%(?![0-9A-Fa-f]{2})")
+    non_url_cp <- stringi::stri_detect_regex(url, "[ \"<>\\u0060{}|^]")
+    bad_unit <- malformed_pct | non_url_cp
+    bad_unit[is.na(bad_unit)] <- FALSE
+    diag <- .diag_add(diag, live & bad_unit, "invalid-URL-unit")
+  }
+
   if (general && !is.null(url)) {
     scheme_lc <- stringi::stri_trans_tolower(a$final_scheme)
 
@@ -331,28 +361,7 @@
       )
     }
 
-    # userinfo is carried by libcurl for the special-scheme route (http/https/
-    # ftp/ws/wss); the general parser sets user/password NA for opaque/RFC rows,
-    # so this bounded detection covers the WHATWG special-scheme routes.
-    has_userinfo <- !is.na(a$raw_user) | !is.na(a$raw_password)
-
     if (is_whatwg) {
-      # `invalid-credentials` (WHATWG, verbatim): raised for ANY credentials in
-      # a URL -- not specifically the multiple-`@` case (ADR 0012 D5 / A.1).
-      diag <- .diag_add(diag, live & has_userinfo, "invalid-credentials")
-
-      # `invalid-URL-unit` (WHATWG, verbatim): the SINGLE error name covering
-      # BOTH a malformed `%`-escape AND a non-URL code point. Deliberately
-      # BOUNDED (a selected fact, not a full WHATWG validation engine): a `%`
-      # not followed by two hex digits, or a clearly non-URL ASCII code point
-      # (space " < > ` { } | ^). Backslash and C0 controls are excluded -- they
-      # are surfaced by `invalid-reverse-solidus` / `control-char-stripped`.
-      malformed_pct <- stringi::stri_detect_regex(url, "%(?![0-9A-Fa-f]{2})")
-      non_url_cp <- stringi::stri_detect_regex(url, "[ \"<>\\u0060{}|^]")
-      bad_unit <- malformed_pct | non_url_cp
-      bad_unit[is.na(bad_unit)] <- FALSE
-      diag <- .diag_add(diag, live & bad_unit, "invalid-URL-unit")
-
       # ws/wss (RFC 6455 forbids both a fragment AND userinfo) -- TWO separate
       # facts. ws/wss parse via the libcurl SPECIAL-scheme route under whatwg
       # (they are in .WHATWG_SPECIAL_SCHEMES), NOT via .general_parse_vec, so

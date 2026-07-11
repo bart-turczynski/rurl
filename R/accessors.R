@@ -1128,14 +1128,23 @@ get_host_type <- function(url, url_standard = NULL,
 #'   conforms to its scheme's specification or to WHATWG/RFC 3986. Full
 #'   per-standard conformance validation is out of scope (ADR 0012 D5).
 #'
+#'   Two WHATWG-generic facts gate on the \emph{interpreting standard}, not the
+#'   acceptance axis, so they are reported whenever \code{url_standard =
+#'   "whatwg"} --- including the default \code{"web"} acceptance path (they are
+#'   route-independent, string-level facts; RURL-sgjzbqzk):
+#'   \itemize{
+#'     \item \code{invalid-URL-unit} / \code{invalid-credentials} --- WHATWG
+#'       validation errors (WHATWG-verbatim names): a malformed \code{\%}-escape
+#'       or a non-URL code point, and any credentials (userinfo) present.
+#'       Bounded detection.
+#'   }
+#'   The default combination (\code{"web"} acceptance with \code{url_standard =
+#'   NULL}) emits no diagnostics at all, so it is unaffected.
+#'
 #'   With \code{scheme_acceptance = "general"} (the general-parser posture) a
 #'   further set of selected facts is reported. These fire \emph{only} under
 #'   \code{"general"}; the default \code{"web"} acceptance never emits them:
 #'   \itemize{
-#'     \item \code{invalid-URL-unit} / \code{invalid-credentials} --- WHATWG
-#'       validation errors (WHATWG-verbatim names) under the \code{"whatwg"}
-#'       posture: a malformed \code{\%}-escape or a non-URL code point, and any
-#'       credentials (userinfo) present. Bounded detection.
 #'     \item \code{unicode-outside-rfc3986-uri} --- under \code{"rfc3986"}, a
 #'       directly-written non-ASCII scalar value accepted by the sole RFC 3986
 #'       generic-grammar tolerance (not RFC 3987/IRI conformance).

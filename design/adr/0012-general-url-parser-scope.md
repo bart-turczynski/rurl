@@ -417,6 +417,22 @@ Report selected companion facts (WHATWG error names used verbatim):
   are reportable. Other WHATWG validation errors can accompany paths that
   explicitly return failure. *("valid-with-validation-errors" is NOT a WHATWG
   term — see A.1.)*
+  > **Gate: interpretation, not acceptance (RURL-sgjzbqzk).** These two facts are
+  > WHATWG-*generic* and gate on `url_standard = "whatwg"` **regardless of
+  > `scheme_acceptance`** — including the default `web` acceptance path — because
+  > they are route-independent, string-level facts (are there credentials? is
+  > there a malformed `%`-escape or a non-URL code point?), true of the input
+  > whichever parser ran. Gating them on the *acceptance* axis would be the very
+  > axis-confusion D1 exists to avoid. This does **not** touch the default
+  > combination (`web` + `url_standard = NULL`, where WHATWG interpretation is
+  > off), so the D4 byte-identity / CRAN lock is intact; only the explicitly
+  > opted-into `web + whatwg` output gains these two facts. Every *other* L5 fact
+  > below stays `scheme_acceptance = "general"`-gated: it is parse-structural or
+  > rides the general parser (ws/wss are only admissible under general acceptance
+  > at all). This changes no conformance posture — D5's "absence ≠ conformance,
+  > never an oracle" still holds; it is an axis-coherence fix, not a compliance
+  > change. (L5 originally shipped all facts general-gated for byte-stability;
+  > this follow-up narrows the gate for exactly these two.)
 - **RFC-general extension fact** — `unicode-outside-rfc3986-uri` fires when the
   sole D1 tolerance is used. Any other RFC generic-grammar violation remains a
   fatal parse error, so absence of this fact says nothing about scheme-specific
