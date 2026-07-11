@@ -177,8 +177,9 @@ snake_case forms of the kebab token names given here.
 - `mailto-local-part-form = dot-atom-text | quoted-string | invalid |
   indeterminate` (RFC 6068, post-single-percent-decode; per-recipient)
 - `userinfo-form` for the actual scheme-less inferred URI authority, plus an
-  independent `smtp-local-part-form` (and, if desired, an explicitly named
-  `rfc5322-addr-spec-form`) for the same source tested as an email candidate
+  independent `smtp-local-part-form` for the same source tested as an email
+  candidate. (An explicitly named `rfc5322-addr-spec-form` was considered and
+  **dropped from the first slice** — see Open questions.)
 - `mailto-domain-form = ascii-dot-atom-text | idna2008-domain | bracketed-domain
   | invalid | indeterminate` (RFC 6068 §2; per-recipient). `bracketed-domain` is
   mailto vocabulary here, not SMTP `address-literal`; a non-ASCII label is a
@@ -239,6 +240,22 @@ address-list parser, no DNS-resolution verdict, no deliverability.
   **Resolved 2026-07-11 (RURL-hxmdzxkd):** hybrid — URL-level facts extend
   `get_url_diagnostics()`; per-recipient facts get a dedicated structured helper
   `get_mailto_recipients()`. See *Public result shape (RESOLVED)*.
-- Which facts are default-on vs opt-in, given the wire-projection cost?
-- Naming: settle the `smtp-*` prefix set and the `mailto-*` vs `rfc5322-*`
-  split before any of these ships.
+- ~~Which facts are default-on vs opt-in, given the wire-projection cost?~~
+  **Resolved 2026-07-11 (RURL-hxmdzxkd):** tiered on cost. Pure-syntax facts
+  (no serialization) are **default-on**: `mailto_local_part_form`,
+  `mailto_domain_form`, `smtp_mailbox_rhs_syntax_form`, `userinfo-form`,
+  `public-suffix-known`. Facts requiring a **serialized wire projection** are
+  **opt-in** behind a single `smtp_wire = FALSE` flag on
+  `get_mailto_recipients()`: `smtp_local_part_length_ok`,
+  `smtp_direct_forward_path_fits`, `smtp_domain_wire_form`,
+  `smtp_envelope_address_requires_smtputf8` (and the URL-level
+  `smtp-envelope-wire-mode`). When `smtp_wire` is not requested those columns
+  take the `unavailable`/`unknown` sentinel — the default path never has to make
+  a wire-projection decision it could get wrong.
+- ~~Naming: settle the `smtp-*` prefix set and the `mailto-*` vs `rfc5322-*`
+  split before any of these ships.~~ **Resolved 2026-07-11 (RURL-hxmdzxkd):**
+  lock the `mailto-*`, `smtp-*`, and `userinfo-form` names as listed in the
+  vocabulary. **Drop `rfc5322-addr-spec-form` from the first slice** — a
+  standalone RFC 5322 `addr-spec` fact has no URL projection to anchor it and
+  invites exactly the unqualified "email-valid" verdict this PRD forbids. Add it
+  only if a downstream consumer asks.
