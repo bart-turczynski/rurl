@@ -75,11 +75,17 @@ controlling canonicalization (e.g., \code{protocol_handling},
 \code{www_handling}, \code{trailing_slash_handling},
 \code{index_page_handling}, \code{path_normalization},
 \code{scheme_relative_handling}, \code{host_encoding},
-\code{path_encoding}, and the \code{url_standard} selector). When
-\code{url_standard} is set, forwarding a governed low-level knob it would
-override (e.g. \code{path_normalization}) is an error, exactly as in
-\code{\link{safe_parse_url}}; the orthogonal \code{path_encoding} and
-\code{host_encoding} presentation knobs layer freely on any profile.}
+\code{path_encoding}, the \code{url_standard} selector, and the
+\code{profile} bundle). When \code{url_standard} is set, forwarding a
+governed low-level knob it would override (e.g. \code{path_normalization})
+is an error, exactly as in \code{\link{safe_parse_url}}; the orthogonal
+\code{path_encoding} and \code{host_encoding} presentation knobs layer
+freely on any profile. A \code{profile} (e.g. \code{"seo"},
+\code{"whatwg"}) may also be forwarded: like \code{\link{safe_parse_url}},
+it bundles several knobs, expands only into knobs you did not supply, and
+an explicit knob always overrides it (so the url_standard conflict check is
+skipped on the profile path). Inspect a bundle with
+\code{\link{url_profile}}.}
 }
 \value{
 A data frame representing the join. The output includes:
