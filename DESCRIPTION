@@ -24,6 +24,7 @@ Collate:
     'path-query.R'
     'parse-phases.R'
     'parse.R'
+    'profiles.R'
     'diagnostics.R'
     'accessors.R'
     'canonical_join.R'
