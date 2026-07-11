@@ -78,6 +78,15 @@ reference:
       - get_scheme_class
       - get_url_diagnostics
 
+  - title: "Host validation policy"
+    desc: >
+      Policy layer on top of standards-correct parsing: is a parsed host a
+      practical web hostname, DNS owner name, registrable site host, or
+      SEO-safe host? Never changes how a URL parses.
+    contents:
+      - is_valid_host
+      - check_hosts
+
   - title: "Query introspection"
     desc: "Audit query parameters across a set of URLs."
     contents:

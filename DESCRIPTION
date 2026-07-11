@@ -27,6 +27,7 @@ Collate:
     'profiles.R'
     'diagnostics.R'
     'accessors.R'
+    'host-policy.R'
     'canonical_join.R'
     'resolve.R'
     'zzz.R'
