@@ -50,7 +50,9 @@
                                port_handling = "exclude",
                                scheme_policy = "infer",
                                scheme_acceptance = "web",
-                               url_standard = NULL) {
+                               url_standard = NULL,
+                               fixup_posture = "none",
+                               profile_authorized = NULL) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -60,6 +62,8 @@
   }
   # Validate + normalize the option profile once (match.arg + subdomain check),
   # then parse the entire vector through the shared cached engine in one call.
+  # `fixup_posture` / `profile_authorized` default to inert values and are only
+  # non-default when a public named profile (ADR 0012 D6) sets them.
   opts <- .parse_options(
     protocol_handling = protocol_handling,
     www_handling = www_handling,
@@ -82,7 +86,9 @@
     port_handling = port_handling,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
-    url_standard = url_standard
+    url_standard = url_standard,
+    fixup_posture = fixup_posture,
+    profile_authorized = profile_authorized
   )
   cols <- ._parse_urls_cached(url, opts)
 
@@ -241,28 +247,37 @@ get_clean_url <- function(url,
                           ),
                           scheme_policy = c("infer", "require"),
                           scheme_acceptance = c("web", "general"),
-                          url_standard = NULL) {
+                          url_standard = NULL,
+                          profile = NULL) {
+  # Capture query_handling's supplied-ness BEFORE match.arg() reassigns it (an
+  # assignment to a formal clears its missing() status), so profile resolution
+  # can tell an explicit query_handling from the default (seo governs it).
+  query_handling_supplied <- !missing(query_handling)
   source <- match.arg(source)
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
   port_handling <- match.arg(port_handling)
   url_standard <- .validate_url_standard(url_standard)
+  profile <- .validate_profile(profile)
   # get_clean_url()'s governed formals default to scalars, so match.arg() needs
   # the explicit choice sets to resolve/validate a supplied value.
   # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
-  .check_url_standard_conflicts(url_standard, .governed_supplied(
-    path_normalization = if (missing(path_normalization)) {
-      NULL
-    } else {
-      match.arg(path_normalization, .opt_path_normalization)
-    },
-    case_handling = if (missing(case_handling)) {
-      NULL
-    } else {
-      match.arg(case_handling, .opt_case_handling)
-    }
-  ))
-  .extract_from_urls(url, "clean_url",
+  # The conflict matrix is skipped on the profile path (see safe_parse_url()).
+  if (is.null(profile)) {
+    .check_url_standard_conflicts(url_standard, .governed_supplied(
+      path_normalization = if (missing(path_normalization)) {
+        NULL
+      } else {
+        match.arg(path_normalization, .opt_path_normalization)
+      },
+      case_handling = if (missing(case_handling)) {
+        NULL
+      } else {
+        match.arg(case_handling, .opt_case_handling)
+      }
+    ))
+  }
+  extract_args <- list(url, "clean_url",
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = source,
@@ -286,6 +301,61 @@ get_clean_url <- function(url,
     scheme_acceptance = scheme_acceptance,
     url_standard = url_standard
   )
+  if (!is.null(profile)) {
+    extract_args <- .merge_profile_args(extract_args, .resolve_profile(
+      profile,
+      list(
+        url_standard = url_standard,
+        scheme_acceptance = if (missing(scheme_acceptance)) {
+          NULL
+        } else {
+          match.arg(scheme_acceptance, .opt_scheme_acceptance)
+        },
+        scheme_policy = if (missing(scheme_policy)) {
+          NULL
+        } else {
+          match.arg(scheme_policy, .opt_scheme_policy)
+        },
+        scheme_relative_handling = if (missing(scheme_relative_handling)) {
+          NULL
+        } else {
+          match.arg(scheme_relative_handling, .opt_scheme_relative_handling)
+        },
+        path_normalization = if (missing(path_normalization)) {
+          NULL
+        } else {
+          match.arg(path_normalization, .opt_path_normalization)
+        },
+        case_handling = if (missing(case_handling)) {
+          NULL
+        } else {
+          match.arg(case_handling, .opt_case_handling)
+        },
+        protocol_handling = if (missing(protocol_handling)) {
+          NULL
+        } else {
+          match.arg(protocol_handling, .opt_protocol_handling)
+        },
+        www_handling = if (missing(www_handling)) {
+          NULL
+        } else {
+          match.arg(www_handling, .opt_www_handling)
+        },
+        trailing_slash_handling = if (missing(trailing_slash_handling)) {
+          NULL
+        } else {
+          match.arg(trailing_slash_handling, .opt_trailing_slash_handling)
+        },
+        index_page_handling = if (missing(index_page_handling)) {
+          NULL
+        } else {
+          match.arg(index_page_handling, .opt_index_page_handling)
+        },
+        query_handling = if (query_handling_supplied) query_handling else NULL
+      )
+    ))
+  }
+  do.call(.extract_from_urls, extract_args)
 }
 
 #' Get domain names

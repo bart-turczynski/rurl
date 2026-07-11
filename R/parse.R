@@ -260,6 +260,21 @@
 #'   `port_handling` may be set (it is a standalone editorial knob), nor does it
 #'   govern `path_encoding` (an orthogonal path-presentation knob that layers
 #'   on any profile), IDNA rendering, or query handling.
+#' @param profile Optional named profile bundling several knobs at once: `NULL`
+#'   (default; behaves exactly as the individual arguments select, fully
+#'   backward compatible), `"browser"`, `"whatwg"`, `"rfc-syntax"`, `"seo"`, or
+#'   the `"seo"` alias `"canonical"`. A profile is **separate** from
+#'   `url_standard` (it bundles acceptance, interpretation, leniency, and
+#'   canonicalization together) and expands only into arguments you did not
+#'   supply explicitly — an explicit argument always overrides the profile.
+#'   `"browser"` is a browser-*like* fix-up posture (http-prepending; not
+#'   Chrome-faithful); `"whatwg"` is the absolute-URL no-base posture that
+#'   *rejects* scheme-less input (unlike a bare `url_standard = "whatwg"`);
+#'   `"rfc-syntax"` is RFC 3986 generic syntax as parsing, not normalization
+#'   (case and dot-segments are preserved); `"seo"`/`"canonical"` is rurl's
+#'   origin-cleaning intent (https, strip www / trailing slash / index page,
+#'   filter tracking params). Inspect the resolved bundle with
+#'   \code{\link{url_profile}}. Not supported by \code{\link{canonical_join}}.
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -436,7 +451,8 @@ safe_parse_url <- function(url,
                            ),
                            scheme_policy = c("infer", "require"),
                            scheme_acceptance = c("web", "general"),
-                           url_standard = NULL) {
+                           url_standard = NULL,
+                           profile = NULL) {
   # Enforce scalar input to keep behavior explicit and predictable
   if (length(url) != 1) {
     stop(
@@ -451,16 +467,26 @@ safe_parse_url <- function(url,
   # here, in the public frame). match.arg() resolves partial matches before the
   # comparison so an abbreviated-but-compatible value is accepted.
   url_standard <- .validate_url_standard(url_standard)
+  profile <- .validate_profile(profile)
   # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
-  .check_url_standard_conflicts(url_standard, .governed_supplied(
-    path_normalization =
-      if (missing(path_normalization)) NULL else match.arg(path_normalization),
-    case_handling =
-      if (missing(case_handling)) NULL else match.arg(case_handling)
-  ))
+  # On the profile path the conflict matrix is SKIPPED: a profile authorizes its
+  # own combination (e.g. `rfc-syntax` = rfc3986 + no normalization), and the
+  # iron rule lets explicit args override. Direct (profile = NULL) calls keep
+  # ADR 0007's conflict behavior unchanged.
+  if (is.null(profile)) {
+    .check_url_standard_conflicts(url_standard, .governed_supplied(
+      path_normalization = if (missing(path_normalization)) {
+        NULL
+      } else {
+        match.arg(path_normalization)
+      },
+      case_handling =
+        if (missing(case_handling)) NULL else match.arg(case_handling)
+    ))
+  }
 
   # Validate and normalize options once (match.arg + subdomain check)
-  opts <- .parse_options(
+  po_args <- list(
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = tld_source,
@@ -484,6 +510,44 @@ safe_parse_url <- function(url,
     scheme_acceptance = scheme_acceptance,
     url_standard = url_standard
   )
+  if (!is.null(profile)) {
+    po_args <- .merge_profile_args(po_args, .resolve_profile(profile, list(
+      url_standard = url_standard,
+      scheme_acceptance =
+        if (missing(scheme_acceptance)) NULL else match.arg(scheme_acceptance),
+      scheme_policy =
+        if (missing(scheme_policy)) NULL else match.arg(scheme_policy),
+      scheme_relative_handling = if (missing(scheme_relative_handling)) {
+        NULL
+      } else {
+        match.arg(scheme_relative_handling)
+      },
+      path_normalization = if (missing(path_normalization)) {
+        NULL
+      } else {
+        match.arg(path_normalization)
+      },
+      case_handling =
+        if (missing(case_handling)) NULL else match.arg(case_handling),
+      protocol_handling =
+        if (missing(protocol_handling)) NULL else match.arg(protocol_handling),
+      www_handling =
+        if (missing(www_handling)) NULL else match.arg(www_handling),
+      trailing_slash_handling = if (missing(trailing_slash_handling)) {
+        NULL
+      } else {
+        match.arg(trailing_slash_handling)
+      },
+      index_page_handling = if (missing(index_page_handling)) {
+        NULL
+      } else {
+        match.arg(index_page_handling)
+      },
+      query_handling =
+        if (missing(query_handling)) NULL else match.arg(query_handling)
+    )))
+  }
+  opts <- do.call(.parse_options, po_args)
 
   ._safe_parse_url_scalar(url, opts)
 }
@@ -541,20 +605,28 @@ safe_parse_urls <- function(url,
                             ),
                             scheme_policy = c("infer", "require"),
                             scheme_acceptance = c("web", "general"),
-                            url_standard = NULL) {
+                            url_standard = NULL,
+                            profile = NULL) {
   # url_standard (RURL-eqzkkohm): validate + conflict-check the governed knobs
   # the caller explicitly supplied (see safe_parse_url() for the rationale).
   url_standard <- .validate_url_standard(url_standard)
+  profile <- .validate_profile(profile)
   # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
-  .check_url_standard_conflicts(url_standard, .governed_supplied(
-    path_normalization =
-      if (missing(path_normalization)) NULL else match.arg(path_normalization),
-    case_handling =
-      if (missing(case_handling)) NULL else match.arg(case_handling)
-  ))
+  # The conflict matrix is skipped on the profile path (see safe_parse_url()).
+  if (is.null(profile)) {
+    .check_url_standard_conflicts(url_standard, .governed_supplied(
+      path_normalization = if (missing(path_normalization)) {
+        NULL
+      } else {
+        match.arg(path_normalization)
+      },
+      case_handling =
+        if (missing(case_handling)) NULL else match.arg(case_handling)
+    ))
+  }
 
   # Validate and normalize options once (match.arg + subdomain check)
-  opts <- .parse_options(
+  po_args <- list(
     protocol_handling = protocol_handling,
     www_handling = www_handling,
     tld_source = tld_source,
@@ -578,6 +650,44 @@ safe_parse_urls <- function(url,
     scheme_acceptance = scheme_acceptance,
     url_standard = url_standard
   )
+  if (!is.null(profile)) {
+    po_args <- .merge_profile_args(po_args, .resolve_profile(profile, list(
+      url_standard = url_standard,
+      scheme_acceptance =
+        if (missing(scheme_acceptance)) NULL else match.arg(scheme_acceptance),
+      scheme_policy =
+        if (missing(scheme_policy)) NULL else match.arg(scheme_policy),
+      scheme_relative_handling = if (missing(scheme_relative_handling)) {
+        NULL
+      } else {
+        match.arg(scheme_relative_handling)
+      },
+      path_normalization = if (missing(path_normalization)) {
+        NULL
+      } else {
+        match.arg(path_normalization)
+      },
+      case_handling =
+        if (missing(case_handling)) NULL else match.arg(case_handling),
+      protocol_handling =
+        if (missing(protocol_handling)) NULL else match.arg(protocol_handling),
+      www_handling =
+        if (missing(www_handling)) NULL else match.arg(www_handling),
+      trailing_slash_handling = if (missing(trailing_slash_handling)) {
+        NULL
+      } else {
+        match.arg(trailing_slash_handling)
+      },
+      index_page_handling = if (missing(index_page_handling)) {
+        NULL
+      } else {
+        match.arg(index_page_handling)
+      },
+      query_handling =
+        if (missing(query_handling)) NULL else match.arg(query_handling)
+    )))
+  }
+  opts <- do.call(.parse_options, po_args)
 
   # Coerce factors to their labels up front so factor input parses as the
   # character strings it represents rather than falling through to the
@@ -753,6 +863,163 @@ safe_parse_urls <- function(url,
   )
 )
 
+# --- public named profiles (ADR 0012 Layer 6 / D6, RURL-djmgzjmr) -------------
+#
+# A `profile` is the public sugar that bundles the parser knobs the earlier
+# layers built (acceptance + interpretation + leniency + canonicalization) under
+# one inspectable name. It is SEPARATE from `url_standard` (merging them is a
+# category error): a profile RESOLVES to a bundle of knob->value pairs, expands
+# only into slots the caller did not explicitly supply (explicit args override
+# the profile -- iron rule), and is inspectable via `url_profile()`.
+#
+# `.URL_PROFILES` mirrors `.URL_STANDARD_PROFILES` in shape/placement: each
+# entry is the resolved knob->value set for that profile. Only knobs the profile
+# actually governs appear; everything else flows from the caller's arguments (or
+# their defaults). The four bundles keep the "<= 4 profiles" claim true; `seo`
+# is primary with `canonical` an ALIAS (one bundle, not a fifth).
+#
+# `fixup_posture` and `path_identity` are NOT public wrapper formals (ADR 0012
+# standing rule 2 / ADR 0011); a profile is the ONLY seam that may set them.
+.URL_PROFILES <- list(
+  # honest home for the historical http-prepending: browser-*like*, not
+  # Chrome-faithful. NO https_upgrade knob (navigation-layer, out of scope).
+  browser = list(
+    url_standard = "whatwg",
+    scheme_acceptance = "general",
+    scheme_policy = "infer",
+    scheme_relative_handling = "http",
+    fixup_posture = "browser"
+  ),
+  # absolute-URL, no-base spec posture. Deliberately sets scheme_policy =
+  # "require", so it REJECTS scheme-less input a direct url_standard = "whatwg"
+  # call (default scheme_policy = "infer") would accept (ADR 0012 foot-gun).
+  whatwg = list(
+    url_standard = "whatwg",
+    scheme_acceptance = "general",
+    scheme_policy = "require",
+    scheme_relative_handling = "error"
+  ),
+  # Unicode-tolerant RFC-shaped generic syntax: PARSING, not normalization. The
+  # path_normalization/case_handling/path_identity entries are AUTHORIZED
+  # normalization exceptions (ADR 0012 lines 518-519), not conflicts with
+  # ADR 0007 -- they bypass the direct-user conflict matrix on the profile path
+  # only and win over the url_standard profile expansion in .parse_options().
+  `rfc-syntax` = list(
+    url_standard = "rfc3986",
+    scheme_acceptance = "general",
+    scheme_policy = "require",
+    scheme_relative_handling = "keep",
+    path_normalization = "none",
+    case_handling = "keep",
+    path_identity = "none"
+  ),
+  # rurl's ORIGIN cleaning intent, finally named. scheme_acceptance stays "web"
+  # (the default) -- the built-in semantic transforms are HTTP(S)-only, which
+  # the existing pipeline already enforces. Maps exactly onto get_clean_url()'s
+  # existing knobs; no new cleaning machinery.
+  seo = list(
+    scheme_acceptance = "web",
+    protocol_handling = "https",
+    www_handling = "strip",
+    trailing_slash_handling = "strip",
+    index_page_handling = "strip",
+    query_handling = "filter"
+  )
+)
+
+# Profile aliases: `canonical` resolves identically to `seo` (one bundle, keeps
+# the count at 4). This naming is a maintainer decision (RURL-djmgzjmr).
+.URL_PROFILE_ALIASES <- list(canonical = "seo")
+
+# Public choice set for the `profile` argument (bundle names + aliases).
+.url_profile_choices <- c(names(.URL_PROFILES), names(.URL_PROFILE_ALIASES))
+
+# Choice sets for the knobs a profile bundle may carry, keyed by knob name. Used
+# by url_profile() to validate/resolve caller-supplied overrides (the parse
+# wrappers validate via .parse_options()). `path_identity` and `fixup_posture`
+# are profile-internal / profile-only and are not caller-supplyable here.
+.profile_knob_choices <- list(
+  url_standard = .url_standard_choices,
+  scheme_acceptance = .opt_scheme_acceptance,
+  scheme_policy = .opt_scheme_policy,
+  scheme_relative_handling = .opt_scheme_relative_handling,
+  path_normalization = .opt_path_normalization,
+  case_handling = .opt_case_handling,
+  protocol_handling = .opt_protocol_handling,
+  www_handling = .opt_www_handling,
+  trailing_slash_handling = .opt_trailing_slash_handling,
+  index_page_handling = .opt_index_page_handling,
+  query_handling = .opt_query_handling
+)
+
+# Validate `profile`: NULL (default) or one of the allowed profile/alias names.
+# Returns the value unchanged (NULL passes through) or errors.
+.validate_profile <- function(profile) {
+  if (is.null(profile)) {
+    return(NULL)
+  }
+  valid <- is.character(profile) &&
+    length(profile) == 1L &&
+    !is.na(profile) &&
+    profile %in% .url_profile_choices
+  if (!valid) {
+    stop(
+      "profile must be NULL or one of: ",
+      toString(.url_profile_choices),
+      ".",
+      call. = FALSE
+    )
+  }
+  profile
+}
+
+# Resolve a profile to its final knob->value bundle. `supplied` is a named list
+# of knobs the caller EXPLICITLY supplied (already resolved to canonical
+# spellings); for each such knob that the bundle also sets, the caller's value
+# OVERRIDES the profile (iron rule) and the resolution is marked `customized`.
+# Alias names (canonical) are resolved first. Single source of truth shared by
+# the parse wrappers and the url_profile() inspector so they cannot diverge.
+.resolve_profile <- function(profile, supplied = list()) {
+  name <- profile
+  if (!is.null(.URL_PROFILE_ALIASES[[name]])) {
+    name <- .URL_PROFILE_ALIASES[[name]]
+  }
+  bundle <- .URL_PROFILES[[name]]
+  supplied <- supplied[!vapply(supplied, is.null, logical(1))]
+  overrides <- supplied[intersect(names(supplied), names(bundle))]
+  for (knob in names(overrides)) {
+    bundle[[knob]] <- overrides[[knob]]
+  }
+  list(
+    profile = name,
+    opts = bundle,
+    customized = length(overrides) > 0L
+  )
+}
+
+# Merge a resolved profile bundle into a parse-argument list (the arg list a
+# public wrapper passes to .parse_options() or .extract_from_urls()). Bundle
+# knobs that are formals of the target overwrite their entry; `fixup_posture`
+# (browser) is threaded even though it is not a public wrapper formal; and the
+# authorized path exceptions (path_normalization / path_identity) are handed
+# over as `profile_authorized` so they SURVIVE the url_standard profile
+# expansion inside .parse_options() (localized to the profile path).
+.merge_profile_args <- function(args, res) {
+  for (knob in intersect(names(res$opts), names(args))) {
+    args[[knob]] <- res$opts[[knob]]
+  }
+  if (!is.null(res$opts$fixup_posture)) {
+    args$fixup_posture <- res$opts$fixup_posture
+  }
+  auth <- res$opts[intersect(
+    names(res$opts), c("path_normalization", "path_identity")
+  )]
+  if (length(auth) > 0L) {
+    args$profile_authorized <- auth
+  }
+  args
+}
+
 # Public choice sets for the CONFLICT-CHECKABLE governed knobs, used to resolve
 # partial matches (e.g. path_normalization = "dot" -> "dot_segments") before the
 # conflict check so a legitimate abbreviated value is not mistaken for a
@@ -897,7 +1164,8 @@ safe_parse_urls <- function(url,
                            scheme_policy = .opt_scheme_policy,
                            scheme_acceptance = .opt_scheme_acceptance,
                            fixup_posture = .opt_fixup_posture,
-                           url_standard = NULL) {
+                           url_standard = NULL,
+                           profile_authorized = NULL) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep and the query options.
   opts <- list(
@@ -966,6 +1234,18 @@ safe_parse_urls <- function(url,
     profile <- .URL_STANDARD_PROFILES[[opts$url_standard]]
     opts$path_identity <- profile$path_identity
     opts$path_normalization <- profile$path_normalization
+  }
+  # Profile-authorized normalization exceptions (ADR 0012 D6, lines 518-519):
+  # a named profile (e.g. `rfc-syntax`) may authorize keeping the path verbatim
+  # even under a url_standard that would normally govern it. These win over the
+  # expansion above. Only the profile path passes this argument, so the
+  # direct-user conflict matrix (ADR 0007) is untouched for scheme-selector
+  # calls -- the localization is that `profile_authorized` is NULL unless a
+  # named profile set it.
+  if (!is.null(profile_authorized)) {
+    for (knob in names(profile_authorized)) {
+      opts[[knob]] <- profile_authorized[[knob]]
+    }
   }
   # ADR 0012 D3 composition rule: "general" acceptance admits any syntactically
   # valid scheme token but defers *interpretation* to url_standard, so it is

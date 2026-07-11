@@ -27,7 +27,8 @@ safe_parse_url(
   port_handling = c("exclude", "keep", "strip_default", "strip_all"),
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general"),
-  url_standard = NULL
+  url_standard = NULL,
+  profile = NULL
 )
 }
 \arguments{
@@ -306,6 +307,22 @@ reference resolution. The selector does \strong{not} govern whether
 \code{port_handling} may be set (it is a standalone editorial knob), nor does it
 govern \code{path_encoding} (an orthogonal path-presentation knob that layers
 on any profile), IDNA rendering, or query handling.}
+
+\item{profile}{Optional named profile bundling several knobs at once: \code{NULL}
+(default; behaves exactly as the individual arguments select, fully
+backward compatible), \code{"browser"}, \code{"whatwg"}, \code{"rfc-syntax"}, \code{"seo"}, or
+the \code{"seo"} alias \code{"canonical"}. A profile is \strong{separate} from
+\code{url_standard} (it bundles acceptance, interpretation, leniency, and
+canonicalization together) and expands only into arguments you did not
+supply explicitly — an explicit argument always overrides the profile.
+\code{"browser"} is a browser-\emph{like} fix-up posture (http-prepending; not
+Chrome-faithful); \code{"whatwg"} is the absolute-URL no-base posture that
+\emph{rejects} scheme-less input (unlike a bare \code{url_standard = "whatwg"});
+\code{"rfc-syntax"} is RFC 3986 generic syntax as parsing, not normalization
+(case and dot-segments are preserved); \code{"seo"}/\code{"canonical"} is rurl's
+origin-cleaning intent (https, strip www / trailing slash / index page,
+filter tracking params). Inspect the resolved bundle with
+\code{\link{url_profile}}. Not supported by \code{\link{canonical_join}}.}
 }
 \value{
 A named list with the following components:
