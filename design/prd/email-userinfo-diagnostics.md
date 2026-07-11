@@ -1,11 +1,12 @@
 # PRD: email / userinfo diagnostic vocabulary
 
 - **Status:** Accepted as a design note (graduated per ADR 0008) — records the
-  agreed email/userinfo fact vocabulary. NOT yet implementation-ready: the public
-  result shape for per-recipient facts is still open (the `indeterminate` value is
-  carried on every per-recipient enum). Resolve the result shape before building
-  the surface (tracked as RURL-hxmdzxkd).
-- **Date:** 2026-07-10
+  agreed email/userinfo fact vocabulary. **Implementation-ready as of
+  2026-07-11:** the public result shape is resolved (RURL-hxmdzxkd) — see
+  *Public result shape (RESOLVED)* below. The `indeterminate` value is still
+  carried on every per-recipient enum; implementation is spun out as a follow-up
+  ticket.
+- **Date:** 2026-07-10 (result-shape decision recorded 2026-07-11)
 - **Spun out of:** ADR 0012 (general URL parser) — this was §D7 + the email parts
   of Appendix A.2/A.4 in the full working draft. Split out so ADR 0012 is
   reviewable on its own; this thread is a **non-blocking follow-up slice** (does
@@ -105,27 +106,58 @@ model: **separate vocabularies, facts-not-gates, companion-helper only.**
 
 ---
 
-## Public result shape (OPEN — blocks implementation-readiness)
+## Public result shape (RESOLVED — 2026-07-11, RURL-hxmdzxkd)
 
-`get_url_diagnostics()` today returns **flat character tokens per URL**, but
-several facts below are **per-recipient** (a `mailto:` positional `to` can hold N
-`addr-spec`s). The PRD must pin cardinality before implementation. Two candidate
-shapes:
+**Decision: a dedicated structured helper for the per-recipient facts, with a
+hybrid split of the vocabulary.**
 
-- **(a) Indexed flat tokens** — stay within the existing helper: emit
-  `mailto-local-part-form[1]=…`, `mailto-local-part-form[2]=…`, one indexed token
-  per recipient, plus a `mailto-recipient-count=N` token. Cheapest; keeps the
-  flat contract; awkward to consume programmatically.
-- **(b) Dedicated structured helper** — e.g. `get_mailto_recipients()` returning
-  a list-column / data frame keyed by URL and recipient index. Cleaner for
-  callers; a new surface to design and maintain (still companion-only, ADR 0006 —
-  no `safe_parse_url` columns).
+The decisive constraint is that `get_url_diagnostics()` is **not a free-form
+token bag**: it is a *closed enum tested by set membership*. Every token it can
+emit is a fixed string in `.URL_DIAGNOSTICS` (R/diagnostics.R); `.diag_add()`
+rejects any token not on that list; and every downstream consumer (pagerankr,
+sitemapr, semantic) gates with `token %in% diags`. No token in the vocabulary
+carries a value or an index.
 
-Recommendation: **(a) for the first slice** (lowest surface, reuses the helper),
-with (b) reserved if callers need structured access. Whichever is chosen, the
-**empty positional `to`** (`mailto:?subject=x`) and the **all-`indeterminate`**
-cases must have defined output. This choice is a prerequisite for the vocabulary
-below being implementable.
+Two shapes were weighed:
+
+- **(a) Indexed flat tokens** — `mailto-local-part-form[1]=…`,
+  `mailto-recipient-count=N`, inside the existing helper. Rejected: it injects a
+  `key[i]=value` micro-syntax into an otherwise bare-enum vocabulary, breaks the
+  closed-enum contract `.diag_add()` enforces, and forces every membership-based
+  consumer to string-parse tokens. This is what the earlier draft flagged as
+  "awkward to consume programmatically," understated.
+- **(b) Dedicated structured helper** — **chosen.** The per-recipient facts are
+  inherently 2-D (URL × recipient × fact); that shape belongs in a data frame,
+  not a membership set.
+
+**Hybrid split (the resolved contract):**
+
+- **URL-level (whole-URL) facts stay as flat enum tokens in
+  `get_url_diagnostics()`** — they fit the existing idiom: `userinfo-form`,
+  `public-suffix-known`, and the whole-URL `smtp-envelope-wire-mode`. These are
+  added to `.URL_DIAGNOSTICS` as ordinary closed-enum tokens.
+- **Per-recipient facts go to a new companion helper `get_mailto_recipients()`**
+  returning a `data.frame` keyed by URL and recipient index (one row per
+  positional-`to` `addr-spec`), one column per per-recipient enum
+  (`mailto_local_part_form`, `mailto_domain_form`, `smtp_mailbox_rhs_syntax_form`,
+  `smtp_domain_wire_form`, `smtp_local_part_length_ok`,
+  `smtp_direct_forward_path_fits`, `smtp_envelope_address_requires_smtputf8`).
+  Still companion-only (ADR 0006) — **no `safe_parse_url` / `safe_parse_urls`
+  columns.** The token-vocabulary contract of `get_url_diagnostics()` is left
+  byte-for-byte unchanged for its existing tokens.
+
+**Defined edge cases (mandatory for the implementation ticket):**
+
+- **Empty positional `to`** (`mailto:?subject=x`, or a bare `mailto:`): zero
+  rows for that URL from `get_mailto_recipients()`.
+- **All-`indeterminate`** (lexer not implemented / could not resolve): one row
+  per recipient the lexer *could* delimit with every per-recipient enum set to
+  `indeterminate`; if even the recipient count is unresolvable, zero rows plus a
+  URL-level indeterminacy fact. The parser never invents a recipient or emits a
+  false verdict (see the lexer contract).
+- **Not a `mailto:` URL** (e.g. an inferred scheme-less `user@host`): zero rows;
+  the `userinfo-form` / `smtp-*` candidate facts for that source surface as
+  URL-level tokens in `get_url_diagnostics()`, not in the recipients frame.
 
 ## Proposed diagnostic vocabulary
 
@@ -134,6 +166,13 @@ Companion facts, no new columns, no rejects; **per-recipient for the positional
 grammar it was judged against. Every **per-recipient** form carries an
 `indeterminate` value for recipients the lexer could not resolve (see the lexer
 contract) — the parser never invents a recipient or emits a false verdict.
+
+**Routing (per the resolved result shape above):** facts tagged
+*per-recipient* below become columns of `get_mailto_recipients()` (one row per
+positional-`to` `addr-spec`); the *URL-level* facts (`userinfo-form`,
+`smtp-envelope-wire-mode`, `public-suffix-known`) become closed-enum tokens in
+`get_url_diagnostics()`. Column names in the recipients frame are the
+snake_case forms of the kebab token names given here.
 
 - `mailto-local-part-form = dot-atom-text | quoted-string | invalid |
   indeterminate` (RFC 6068, post-single-percent-decode; per-recipient)
@@ -196,7 +235,10 @@ address-list parser, no DNS-resolution verdict, no deliverability.
 
 ## Open questions
 
-- Surface via `get_url_diagnostics` extension (recommended) vs a dedicated helper?
+- ~~Surface via `get_url_diagnostics` extension vs a dedicated helper?~~
+  **Resolved 2026-07-11 (RURL-hxmdzxkd):** hybrid — URL-level facts extend
+  `get_url_diagnostics()`; per-recipient facts get a dedicated structured helper
+  `get_mailto_recipients()`. See *Public result shape (RESOLVED)*.
 - Which facts are default-on vs opt-in, given the wire-projection cost?
 - Naming: settle the `smtp-*` prefix set and the `mailto-*` vs `rfc5322-*`
   split before any of these ships.
