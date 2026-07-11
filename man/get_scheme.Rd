@@ -113,8 +113,8 @@ Extracts the scheme (protocol) of a URL.
 \details{
 By default (\code{scheme_acceptance = "web"}) only rurl's web-scheme
 allowlist parses, so an opaque scheme such as \code{mailto:} or \code{tel:}
-yields \code{NA}. Pass \code{scheme_acceptance = "general"} (which requires an
-explicit \code{url_standard}) to run the general parser, under which those
+yields \code{NA}. Pass \code{scheme_acceptance = "general"} (which requires
+an explicit \code{url_standard}) to run the general parser, under which those
 schemes resolve and their scheme string is returned.
 }
 \examples{

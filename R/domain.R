@@ -270,6 +270,23 @@
   res
 }
 
+# Strict IDNA2008 domain validity, vectorized. Unlike .normalize_and_punycode()
+# -- which is deliberately TOLERANT of malformed-but-encodable hosts (ADR 0002)
+# and therefore CANNOT be used to decide conformance -- this seam delegates to
+# punycoder's strict validator to answer a yes/no IDNA question. Used only by
+# the email/userinfo diagnostics (mailto_domain_form = idna2008-domain), never
+# by the parse/present pipeline. NA in -> NA out; TRUE only for a domain that
+# passes strict IDNA2008.
+.validate_idna_domain_vec <- function(host) {
+  res <- rep(NA, length(host))
+  ok_in <- !is.na(host) & nzchar(host)
+  if (any(ok_in)) {
+    v <- punycoder::validate_domain(host[ok_in], strict = TRUE)
+    res[ok_in] <- as.logical(v$valid)
+  }
+  res
+}
+
 # Registered (eTLD+1) domain for a host. Vectorized. `output` selects the
 # spelling: "unicode" (default, preserving rurl's historical decoded-IDN output)
 # or "ascii" (lowercase A-labels). The structural callers that only need a
