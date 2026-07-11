@@ -661,7 +661,10 @@ non-blocking, a classifier adjacent to parsing.
    web-focused (D4); `general` requires an explicit `url_standard`, admits any
    syntactically valid scheme token, and lets that posture validate the
    remainder. "Do not add `sftp`" means only "do not add it to the default
-   acceptance allowlist or claim a standards-backed default port."
+   acceptance allowlist or claim a standards-backed default port." `ftps` is the
+   one exception, grandfathered into the default allowlist for CRAN
+   byte-compatibility (it predates this epic) but with no standards-backed
+   default port — see Open Q2 (RURL-lvrfrkfa).
 2. `browser`/`omnibox` is a fix-up posture, never a `url_standard` value —
    acceptance, leniency, interpretation, and presentation remain separate policy
    axes with D3's explicit cross-axis validation.
@@ -832,9 +835,18 @@ recorded in those decisions, not relisted here.
    `clean_url`); **Codex** — `seo` primary, `canonical` alias (these transforms
    are policyful and may not preserve semantic equivalence, so `canonical` can
    overpromise). Maintainer call. *(Blocks L6b bundle wiring.)*
-2. **`sftp`/`ftps`.** Rec: keep OUT of the default allowlist + port table
-   (D4/D5); general acceptance admits their tokens. Confirm this is the intended
-   standing rule (it supersedes ADR 0004 wording).
+2. **`sftp`/`ftps`.** *Resolved (RURL-lvrfrkfa).* The standing rule is: **`sftp`
+   stays OUT of the default allowlist; `ftps` is grandfathered IN.** `ftps` has
+   shipped in `.SUPPORTED_SCHEMES` (`R/utils.R`:
+   `c('http','https','ftp','ftps','file')`) since before this epic, so removing
+   it would break the hard CRAN byte-identity constraint — it is retained for
+   backward compatibility, **not** because it has standards backing (no
+   URI-scheme RFC, absent from the IANA registry; RFC 4217 is protocol-only).
+   Consistently, `ftps` carries **no** default port (it is correctly absent from
+   `.SCHEME_DEFAULT_PORTS`). `sftp` is correctly absent from both the allowlist
+   and the port table. General acceptance admits both tokens. This standing rule
+   supersedes ADR 0004 wording; the earlier Open-Q2 recommendation to keep
+   `ftps` out is void.
 
 *Not a blocker (roadmap, not architecture):* whether `canonical`/`seo` — rurl's
 origin intent, nameless today — ships first among profiles even though the parser
