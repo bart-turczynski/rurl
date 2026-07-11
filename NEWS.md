@@ -2,6 +2,19 @@
 
 ### New features
 
+- New companion helper `get_mailto_recipients()` reports structural,
+  per-recipient **facts** about the positional recipient list of a `mailto:`
+  URL (the comma-separated `addr-spec`s before `?`, RFC 6068 §2). It returns a
+  `data.frame` with one row per recipient, classifying each against three
+  distinct, separately-named grammars — RFC 6068 `local-part` and domain form,
+  and the SMTP (RFC 5321) mailbox right-hand side — plus a non-validating
+  `public_suffix_known` flag. The positional list is tokenized on the raw
+  source *before* percent-decoding, so `%2C` is never a recipient separator and
+  an encoded quote/bracket (`%22`, `%5B`/`%5D`) still protects a raw comma.
+  Facts only, never a gate, and no new `safe_parse_url` columns (ADR 0006 /
+  0012 D7). hfield (`to`/`cc`/`bcc`) address-lists and the SMTP wire-projection
+  facts (octet limits, SMTPUTF8) are out of scope for this slice.
+
 - New `scheme_acceptance` argument (`"web"` / `"general"`) on the parse and
   accessor functions, controlling **which URL shapes are accepted at all**.
   `"web"` (the default) keeps today's behavior byte-for-byte — only the
