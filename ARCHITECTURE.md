@@ -118,7 +118,14 @@ ADR 0001). `rurl` calls `pslr` with a fixed contract:
   `*`.
 - `invalid = "na"` so malformed hosts yield `NA` instead of erroring.
 - Never use pslr session-global list switching (`psl_use()`) for per-request
-  behavior (pslr PRD §12).
+  behavior (pslr PRD §12). Per-request list selection instead flows through the
+  optional `engine` argument (RURL-mhibnqbd): the public functions accept a
+  `pslr::psl_engine()` snapshot, `.parse_options()` stores it on `opts`, and the
+  three wrappers thread it into `pslr::*(..., engine = engine)`. `engine = NULL`
+  (the default) OMITS the argument so pslr resolves against its session-global
+  default — byte-identical to the pre-engine behavior. (A `psl_engine()` holds a
+  C++ external pointer that does not serialize across sessions/workers; it is
+  never cached or sent to a worker — rebuild per process.)
 
 ## Data flow: the parse pipeline
 
@@ -131,7 +138,9 @@ and `resolve_url()` is built on it. The pipeline is split into two stages
   components, detect IP hosts, apply the `url_standard` host model, derive
   domain/TLD via `pslr`. Its output is keyed by `.parse_cache_keys()` (the URL
   plus the small set of options that change *what is parsed*, notably
-  `url_standard` and `scheme_policy`). `scheme_policy` (ADR 0010) is the
+  `url_standard` and `scheme_policy`, plus the per-request `engine` identity so
+  two engines over different lists never share a memoized domain/TLD —
+  `.engine_cache_token()`, `NULL` → `""`). `scheme_policy` (ADR 0010) is the
   input-*acceptance* axis: under `"require"` the scheme-less `add_http`
   inference in `.prepare_urls_for_curl_vec()` is suppressed and those rows join
   the reject set instead — orthogonal to `protocol_handling` (presentation) and

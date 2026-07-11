@@ -14,7 +14,8 @@ get_subdomain(
   host_encoding = c("keep", "idna", "unicode"),
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general"),
-  url_standard = NULL
+  url_standard = NULL,
+  engine = NULL
 )
 }
 \arguments{
@@ -132,6 +133,19 @@ reference resolution. The selector does \strong{not} govern whether
 \code{port_handling} may be set (it is a standalone editorial knob), nor does it
 govern \code{path_encoding} (an orthogonal path-presentation knob that layers
 on any profile), IDNA rendering, or query handling.}
+
+\item{engine}{Optional \pkg{pslr} engine controlling which Public Suffix List
+backs domain / TLD / subdomain extraction: \code{NULL} (default) resolves
+against \pkg{pslr}'s session-global default list — exactly the historical
+behavior — while a \code{pslr::psl_engine()} snapshot resolves against that
+specific list, per request, without mutating any global state (never call
+\code{pslr::psl_use()} for this). Use it to pin a particular list version or to
+load an alternate list via \code{pslr::psl_engine(source = "path", path = ...)}.
+\strong{Process-local:} an engine holds a C++ external pointer that does \strong{not}
+serialize across R sessions or parallel workers — build it in the process
+that uses it; never cache it to disk or send it to a worker (rebuild one
+per process instead). Only the domain-derived outputs (\code{domain}, \code{tld},
+and the subdomain-trimmed host / \code{clean_url}) depend on it.}
 }
 \value{
 A character vector (format="string") or list of label vectors

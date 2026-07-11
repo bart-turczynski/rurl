@@ -260,6 +260,18 @@
 #'   `port_handling` may be set (it is a standalone editorial knob), nor does it
 #'   govern `path_encoding` (an orthogonal path-presentation knob that layers
 #'   on any profile), IDNA rendering, or query handling.
+#' @param engine Optional \pkg{pslr} engine controlling which Public Suffix List
+#'   backs domain / TLD / subdomain extraction: `NULL` (default) resolves
+#'   against \pkg{pslr}'s session-global default list — exactly the historical
+#'   behavior — while a `pslr::psl_engine()` snapshot resolves against that
+#'   specific list, per request, without mutating any global state (never call
+#'   `pslr::psl_use()` for this). Use it to pin a particular list version or to
+#'   load an alternate list via `pslr::psl_engine(source = "path", path = ...)`.
+#'   **Process-local:** an engine holds a C++ external pointer that does **not**
+#'   serialize across R sessions or parallel workers — build it in the process
+#'   that uses it; never cache it to disk or send it to a worker (rebuild one
+#'   per process instead). Only the domain-derived outputs (`domain`, `tld`,
+#'   and the subdomain-trimmed host / `clean_url`) depend on it.
 #' @param profile Optional named profile bundling several knobs at once: `NULL`
 #'   (default; behaves exactly as the individual arguments select, fully
 #'   backward compatible), `"browser"`, `"whatwg"`, `"rfc-syntax"`, `"seo"`, or
@@ -452,6 +464,7 @@ safe_parse_url <- function(url,
                            scheme_policy = c("infer", "require"),
                            scheme_acceptance = c("web", "general"),
                            url_standard = NULL,
+                           engine = NULL,
                            profile = NULL) {
   # Enforce scalar input to keep behavior explicit and predictable
   if (length(url) != 1) {
@@ -508,7 +521,8 @@ safe_parse_url <- function(url,
     port_handling = port_handling,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
-    url_standard = url_standard
+    url_standard = url_standard,
+    engine = engine
   )
   if (!is.null(profile)) {
     po_args <- .merge_profile_args(po_args, .resolve_profile(profile, list(
@@ -606,6 +620,7 @@ safe_parse_urls <- function(url,
                             scheme_policy = c("infer", "require"),
                             scheme_acceptance = c("web", "general"),
                             url_standard = NULL,
+                            engine = NULL,
                             profile = NULL) {
   # url_standard (RURL-eqzkkohm): validate + conflict-check the governed knobs
   # the caller explicitly supplied (see safe_parse_url() for the rationale).
@@ -648,7 +663,8 @@ safe_parse_urls <- function(url,
     port_handling = port_handling,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
-    url_standard = url_standard
+    url_standard = url_standard,
+    engine = engine
   )
   if (!is.null(profile)) {
     po_args <- .merge_profile_args(po_args, .resolve_profile(profile, list(

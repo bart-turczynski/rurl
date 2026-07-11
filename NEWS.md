@@ -1,6 +1,22 @@
-## rurl 2.6.0
+## rurl 2.7.0
 
 ### New features
+
+- Domain, TLD, and subdomain extraction can now resolve against a caller-
+  supplied Public Suffix List **per request** via a new `engine` argument on
+  `safe_parse_url()`, `safe_parse_urls()`, `get_domain()`, `get_tld()`,
+  `get_subdomain()`, `get_host()`, and `get_clean_url()` (and, through `...`,
+  `canonical_join()`). Pass a `pslr::psl_engine()` snapshot to pin a specific
+  list version or load an alternate list — for example
+  `pslr::psl_engine(source = "path", path = ...)` — without mutating any global
+  state (`pslr::psl_use()` is never involved). The default, `engine = NULL`,
+  resolves against `pslr`'s session-global default list, exactly as before —
+  every existing call path is byte-identical. The engine identity is folded
+  into the parse cache key, so switching engines never reuses another engine's
+  memoized domain/TLD. Requires `pslr` (>= 1.1.0). **Process-local:** a
+  `psl_engine()` holds a C++ external pointer that does not serialize across R
+  sessions or parallel workers — build one in the process that uses it; never
+  cache it to disk or send it to a worker. (RURL-mhibnqbd; PSLR-onruvdfw.)
 
 - Under `scheme_acceptance = "general"`, the standard component accessors now
   extract the web-y parts of a `mailto:` recipient: `get_host()`,
