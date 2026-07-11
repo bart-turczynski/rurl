@@ -4,7 +4,7 @@
 \alias{url_profile}
 \title{Inspect a named parsing profile}
 \usage{
-url_profile(profile, ...)
+url_profile(profile = NULL, ...)
 }
 \arguments{
 \item{profile}{A single profile name: one of \code{"browser"},
