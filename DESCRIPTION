@@ -1,7 +1,7 @@
 Package: rurl
 Type: Package
 Title: Parse, Clean, and Normalize URLs
-Version: 2.6.0
+Version: 2.7.0
 Language: en-US
 Authors@R:
     person("Bart", "Turczynski", email = "bartek@turczynski.pl", role = c("aut", "cre"),
@@ -37,7 +37,7 @@ Imports:
     curl,
     stringi,
     punycoder (>= 1.2.0),
-    pslr (>= 1.0.2)
+    pslr (>= 1.1.0)
 URL: https://bart-turczynski.github.io/rurl/, https://github.com/bart-turczynski/rurl,
     https://CRAN.R-project.org/package=rurl, https://bart-turczynski.r-universe.dev
 BugReports: https://github.com/bart-turczynski/rurl/issues
@@ -55,7 +55,7 @@ Suggests:
     oysteR,
     rosv
 Remotes:
-    bart-turczynski/pslr@v1.0.2,
+    bart-turczynski/pslr@v1.1.0,
     bart-turczynski/punycoder@v1.2.0
 Config/testthat/edition: 3
 Depends: 

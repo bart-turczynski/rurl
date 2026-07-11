@@ -177,7 +177,7 @@ test_that(
   "safe_parse_url if_no_subdomain keeps candidate host when domain is unknown",
   {
     testthat::local_mocked_bindings(
-      .psl_suffix_extract = function(host, section = "all") {
+      .psl_suffix_extract = function(host, section = "all", engine = NULL) {
         data.frame(
           host = host,
           subdomain = NA_character_,

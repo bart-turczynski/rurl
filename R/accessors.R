@@ -52,6 +52,7 @@
                                scheme_acceptance = "web",
                                url_standard = NULL,
                                fixup_posture = "none",
+                               engine = NULL,
                                profile_authorized = NULL) {
   if (!is.character(url)) {
     stop(
@@ -88,6 +89,7 @@
     scheme_acceptance = scheme_acceptance,
     url_standard = url_standard,
     fixup_posture = fixup_posture,
+    engine = engine,
     profile_authorized = profile_authorized
   )
   cols <- ._parse_urls_cached(url, opts)
@@ -248,6 +250,7 @@ get_clean_url <- function(url,
                           scheme_policy = c("infer", "require"),
                           scheme_acceptance = c("web", "general"),
                           url_standard = NULL,
+                          engine = NULL,
                           profile = NULL) {
   # Capture query_handling's supplied-ness BEFORE match.arg() reassigns it (an
   # assignment to a formal clears its missing() status), so profile resolution
@@ -299,7 +302,8 @@ get_clean_url <- function(url,
     port_handling = port_handling,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
-    url_standard = url_standard
+    url_standard = url_standard,
+    engine = engine
   )
   if (!is.null(profile)) {
     extract_args <- .merge_profile_args(extract_args, .resolve_profile(
@@ -378,7 +382,8 @@ get_domain <- function(url,
                        host_encoding = c("keep", "idna", "unicode"),
                        scheme_policy = c("infer", "require"),
                        scheme_acceptance = c("web", "general"),
-                       url_standard = NULL) {
+                       url_standard = NULL,
+                       engine = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
   url_standard <- .validate_url_standard(url_standard)
@@ -397,7 +402,8 @@ get_domain <- function(url,
     case_handling = "lower",
     subdomain_levels_to_keep = subdomain_levels_to_keep,
     host_encoding = host_encoding,
-    url_standard = url_standard
+    url_standard = url_standard,
+    engine = engine
   )
 }
 
@@ -487,7 +493,8 @@ get_host <- function(url,
                      host_encoding = c("keep", "idna", "unicode"),
                      scheme_policy = c("infer", "require"),
                      scheme_acceptance = c("web", "general"),
-                     url_standard = NULL) {
+                     url_standard = NULL,
+                     engine = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
   url_standard <- .validate_url_standard(url_standard)
@@ -506,7 +513,8 @@ get_host <- function(url,
     case_handling = case_handling,
     subdomain_levels_to_keep = subdomain_levels_to_keep,
     host_encoding = host_encoding,
-    url_standard = url_standard
+    url_standard = url_standard,
+    engine = engine
   )
 }
 
@@ -993,7 +1001,8 @@ get_subdomain <- function(url,
                           host_encoding = c("keep", "idna", "unicode"),
                           scheme_policy = c("infer", "require"),
                           scheme_acceptance = c("web", "general"),
-                          url_standard = NULL) {
+                          url_standard = NULL,
+                          engine = NULL) {
   source <- match.arg(source)
   format <- match.arg(format)
   host_encoding <- match.arg(host_encoding)
@@ -1016,7 +1025,8 @@ get_subdomain <- function(url,
     tld_source = source,
     case_handling = "lower",
     host_encoding = host_encoding,
-    url_standard = url_standard
+    url_standard = url_standard,
+    engine = engine
   )
 
   if (format == "labels") {
@@ -1047,7 +1057,8 @@ get_tld <- function(url, source = c("all", "private", "icann"),
                     host_encoding = c("keep", "idna", "unicode"),
                     scheme_policy = c("infer", "require"),
                     scheme_acceptance = c("web", "general"),
-                    url_standard = NULL) {
+                    url_standard = NULL,
+                    engine = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
   url_standard <- .validate_url_standard(url_standard)
@@ -1061,7 +1072,8 @@ get_tld <- function(url, source = c("all", "private", "icann"),
     tld_source = source,
     case_handling = "lower",
     host_encoding = host_encoding,
-    url_standard = url_standard
+    url_standard = url_standard,
+    engine = engine
   )
 }
 
