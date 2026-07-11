@@ -1834,7 +1834,8 @@
 }
 
 # Phase 6 (vector): apply the www-prefix policy to (non-IP) hosts.
-.apply_www_policy_vec <- function(raw_host, www_handling, is_ip_host) {
+.apply_www_policy_vec <- function(raw_host, www_handling, is_ip_host,
+                                  engine = NULL) {
   final_host <- raw_host
   elig <- !is_ip_host & !is.na(raw_host) & raw_host != ""
   if (!any(elig)) {
@@ -1867,7 +1868,7 @@
       final_host[no_www] <- paste0("www.", raw_host[no_www])
     }
   } else if (www_handling == "if_no_subdomain") {
-    final_host[elig] <- .apply_www_if_no_subdomain_vec(raw_host[elig])
+    final_host[elig] <- .apply_www_if_no_subdomain_vec(raw_host[elig], engine)
   }
   final_host
 }
@@ -1877,7 +1878,7 @@
 # The STRUCTURAL decision uses pslr's canonical decomposition (batched over the
 # eligible hosts) so an A-label host and its Unicode equivalent take the same
 # branch; the emitted host keeps the input spelling (candidate_host).
-.apply_www_if_no_subdomain_vec <- function(raw_host) {
+.apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL) {
   ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
   lower <- stringi::stri_trans_tolower(raw_host)
 
@@ -1906,7 +1907,7 @@
     host_for_domain_check[cw] <- bare_host[cw]
   }
 
-  decomp <- .psl_suffix_extract(host_for_domain_check, "all")
+  decomp <- .psl_suffix_extract(host_for_domain_check, "all", engine)
   derived_domain <- decomp$registrable_domain
   derived_subdomain <- decomp$subdomain
 
@@ -1924,8 +1925,9 @@
 }
 
 # Phase 6 (scalar wrapper): delegates to .apply_www_policy_vec().
-.apply_www_policy <- function(raw_host, www_handling, is_ip_host) {
-  .apply_www_policy_vec(raw_host, www_handling, is_ip_host)
+.apply_www_policy <- function(raw_host, www_handling, is_ip_host,
+                              engine = NULL) {
+  .apply_www_policy_vec(raw_host, www_handling, is_ip_host, engine)
 }
 
 # Phase 7 (vector): derive the registered domain and TLD from each host using
@@ -1935,7 +1937,7 @@
 # mirroring get_host(): "unicode" decodes IDNs, "idna" emits ASCII A-labels, and
 # "keep" follows each input host's own spelling (ASCII if it is an A-label).
 .derive_domain_tld_vec <- function(final_host, is_ip_host, tld_source,
-                                   host_encoding = "keep") {
+                                   host_encoding = "keep", engine = NULL) {
   n <- length(final_host)
   domain <- rep(NA_character_, n)
   tld <- rep(NA_character_, n)
@@ -1961,19 +1963,19 @@
   ascii_mask <- spelling == "ascii"
   if (any(ascii_mask)) {
     dom_uniq[ascii_mask] <- .psl_registered_domain(
-      uniq_hosts[ascii_mask], tld_source, "ascii"
+      uniq_hosts[ascii_mask], tld_source, "ascii", engine
     )
     tld_uniq[ascii_mask] <- .psl_public_suffix(
-      uniq_hosts[ascii_mask], tld_source, "ascii"
+      uniq_hosts[ascii_mask], tld_source, "ascii", engine
     )
   }
   uni_mask <- !ascii_mask
   if (any(uni_mask)) {
     dom_uniq[uni_mask] <- .psl_registered_domain(
-      uniq_hosts[uni_mask], tld_source, "unicode"
+      uniq_hosts[uni_mask], tld_source, "unicode", engine
     )
     tld_uniq[uni_mask] <- .psl_public_suffix(
-      uniq_hosts[uni_mask], tld_source, "unicode"
+      uniq_hosts[uni_mask], tld_source, "unicode", engine
     )
   }
 
@@ -1985,8 +1987,10 @@
 
 # Phase 7 (scalar wrapper): delegates to .derive_domain_tld_vec().
 .derive_domain_tld <- function(final_host, is_ip_host, tld_source,
-                               host_encoding = "keep") {
-  .derive_domain_tld_vec(final_host, is_ip_host, tld_source, host_encoding)
+                               host_encoding = "keep", engine = NULL) {
+  .derive_domain_tld_vec(
+    final_host, is_ip_host, tld_source, host_encoding, engine
+  )
 }
 
 # Phase 8 (vector): keep only the requested number of subdomain levels. Only
@@ -1994,7 +1998,8 @@
 # is batched over the eligible hosts; the (variable-length) label reconstruction
 # runs via vapply on the affected hosts only.
 .apply_subdomain_policy_vec <- function(final_host, domain,
-                                        subdomain_levels_to_keep, is_ip_host) {
+                                        subdomain_levels_to_keep, is_ip_host,
+                                        engine = NULL) {
   if (is.null(subdomain_levels_to_keep)) {
     return(final_host)
   }
@@ -2014,7 +2019,7 @@
     host_part[has_www_prefix] <- stringi::stri_sub(fh[has_www_prefix], 5L)
   }
 
-  decomp <- .psl_suffix_extract(host_part, "all")
+  decomp <- .psl_suffix_extract(host_part, "all", engine)
   derived_subdomain <- decomp$subdomain
   has_subdomain <- !is.na(derived_subdomain) & nzchar(derived_subdomain)
 
@@ -2063,9 +2068,10 @@
 
 # Phase 8 (scalar wrapper): delegates to .apply_subdomain_policy_vec().
 .apply_subdomain_policy <- function(final_host, domain,
-                                    subdomain_levels_to_keep, is_ip_host) {
+                                    subdomain_levels_to_keep, is_ip_host,
+                                    engine = NULL) {
   .apply_subdomain_policy_vec(
-    final_host, domain, subdomain_levels_to_keep, is_ip_host
+    final_host, domain, subdomain_levels_to_keep, is_ip_host, engine
   )
 }
 

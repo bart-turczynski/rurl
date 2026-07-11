@@ -292,26 +292,43 @@
 # or "ascii" (lowercase A-labels). The structural callers that only need a
 # canonical decomposition keep the Unicode default; the emitted-value path
 # (.derive_domain_tld) overrides it to honor host_encoding.
-.psl_registered_domain <- function(host, section = "all", output = "unicode") {
-  pslr::registrable_domain(
+#
+# `engine` is the per-request pslr engine seam (RURL-mhibnqbd): NULL (the
+# default) OMITS the argument entirely so pslr resolves against its own
+# session-global default engine -- byte-identical to the pre-engine behavior --
+# while a `pslr::psl_engine()` snapshot resolves against that specific list.
+# NULL must not be forwarded: pslr rejects `engine = NULL` (it wants a
+# `psl_engine`), so the omit-when-NULL contract is load-bearing.
+.psl_registered_domain <- function(host, section = "all", output = "unicode",
+                                   engine = NULL) {
+  args <- list(
     host,
     section = section,
     output = output,
     unknown = "na",
     invalid = "na"
   )
+  if (!is.null(engine)) {
+    args$engine <- engine
+  }
+  do.call(pslr::registrable_domain, args)
 }
 
-# Public suffix (TLD) for a host. Vectorized. `output` as in
+# Public suffix (TLD) for a host. Vectorized. `output` / `engine` as in
 # .psl_registered_domain().
-.psl_public_suffix <- function(host, section = "all", output = "unicode") {
-  pslr::public_suffix(
+.psl_public_suffix <- function(host, section = "all", output = "unicode",
+                               engine = NULL) {
+  args <- list(
     host,
     section = section,
     output = output,
     unknown = "na",
     invalid = "na"
   )
+  if (!is.null(engine)) {
+    args$engine <- engine
+  }
+  do.call(pslr::public_suffix, args)
 }
 
 # Full canonical decomposition of a host, in Unicode. Vectorized; returns a
@@ -322,15 +339,20 @@
 # its Unicode equivalent take the same branch. pslr canonicalizes the host
 # (case / NFC / IDNA) internally, so the decomposition is identical for both
 # spellings. Same fixed contract as the other PSL seams: Unicode output, unknown
-# TLDs and invalid hosts become NA rather than `*` / errors.
-.psl_suffix_extract <- function(host, section = "all") {
-  pslr::suffix_extract(
+# TLDs and invalid hosts become NA rather than `*` / errors. `engine` as in
+# .psl_registered_domain(): NULL omits the arg (session-global default engine).
+.psl_suffix_extract <- function(host, section = "all", engine = NULL) {
+  args <- list(
     host,
     section = section,
     output = "unicode",
     unknown = "na",
     invalid = "na"
   )
+  if (!is.null(engine)) {
+    args$engine <- engine
+  }
+  do.call(pslr::suffix_extract, args)
 }
 
 # --- punycoder DNS-length / UTS-46 diagnostic probe --------------------------

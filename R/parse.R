@@ -1049,6 +1049,27 @@ safe_parse_urls <- function(url,
   url_standard
 }
 
+# Validate the optional per-request pslr engine (RURL-mhibnqbd). NULL means the
+# session-global default (unchanged behavior); otherwise it must be a
+# `psl_engine` object from `pslr::psl_engine()`. Returned unchanged so callers
+# store it verbatim. NOTE (process-local hazard): a psl_engine holds a C++
+# external pointer that does NOT serialize across R sessions or parallel
+# workers; it must be built in the process that uses it, never cached to disk
+# or sent to a worker.
+.validate_engine <- function(engine) {
+  if (is.null(engine)) {
+    return(NULL)
+  }
+  if (!inherits(engine, "psl_engine")) {
+    stop(
+      "engine must be NULL or a `psl_engine` object from ",
+      "`pslr::psl_engine()`.",
+      call. = FALSE
+    )
+  }
+  engine
+}
+
 # Collect the governed knobs a caller EXPLICITLY supplied: each argument is
 # either the resolved value or NULL (not supplied). Drops the NULLs, leaving a
 # named list keyed by knob name.
@@ -1165,6 +1186,7 @@ safe_parse_urls <- function(url,
                            scheme_acceptance = .opt_scheme_acceptance,
                            fixup_posture = .opt_fixup_posture,
                            url_standard = NULL,
+                           engine = NULL,
                            profile_authorized = NULL) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep and the query options.
@@ -1219,6 +1241,13 @@ safe_parse_urls <- function(url,
   # already validate (and run the missing()-based conflict check they alone can
   # see). Single-bracket assignment keeps a NULL element.
   opts["url_standard"] <- list(.validate_url_standard(url_standard))
+  # engine (RURL-mhibnqbd): the optional per-request pslr snapshot threaded into
+  # the domain/PSL derivation. NULL (the default) means "use pslr's session-
+  # global default engine" and keeps every call path byte-identical. Validated
+  # + stored with single-bracket assignment so a NULL element is retained. Its
+  # identity also enters the Stage-A cache key (.parse_cache_keys) so two calls
+  # under different engines never share a memoized domain/TLD.
+  opts["engine"] <- list(.validate_engine(engine))
   # Apply the selected profile's governed values (PRD S5, D3). The conflict
   # checkers above (run by the public wrappers, before this function is
   # called) already guarantee any EXPLICIT governed knob equals what the
@@ -1667,7 +1696,7 @@ safe_parse_urls <- function(url,
 
   # Phase 6: www-prefix policy shapes the host fed to the PSL decomposition.
   final_host <- .apply_www_policy_vec(
-    model_host, opts$www_handling, is_ip_host
+    model_host, opts$www_handling, is_ip_host, opts$engine
   )
   # ADR 0012 D2 (the one edit inside the cached Stage-A path): a general
   # non-special / opaque / reg-name / empty host does NOT get www-stripping.
@@ -1699,10 +1728,10 @@ safe_parse_urls <- function(url,
     }
   }
   dt_ascii <- .derive_domain_tld_vec(
-    psl_host, is_ip_host, opts$tld_source, "idna"
+    psl_host, is_ip_host, opts$tld_source, "idna", opts$engine
   )
   dt_unicode <- .derive_domain_tld_vec(
-    psl_host, is_ip_host, opts$tld_source, "unicode"
+    psl_host, is_ip_host, opts$tld_source, "unicode", opts$engine
   )
   host_is_ace <- .host_is_ace_vec(psl_host)
 
@@ -1835,7 +1864,7 @@ safe_parse_urls <- function(url,
 
   # Phase 8: subdomain-level policy (may trim labels from the host).
   final_host <- .apply_subdomain_policy_vec(
-    a$final_host, domain, opts$subdomain_levels_to_keep, is_ip_host
+    a$final_host, domain, opts$subdomain_levels_to_keep, is_ip_host, opts$engine
   )
   # D2 "Host presentation" / "DNS/PSL derivation": revert host-transform for
   # ineligible (opaque/IP/empty/non-domain) hosts to the pre-trim host.
@@ -2019,7 +2048,8 @@ safe_parse_urls <- function(url,
                                   subdomain_levels_to_keep,
                                   host_encoding = "keep",
                                   path_encoding = "keep",
-                                  url_standard = NULL) {
+                                  url_standard = NULL,
+                                  engine = NULL) {
   original_input_url <- url
 
   # host_encoding/path_encoding are already validated upstream by
@@ -2060,7 +2090,7 @@ safe_parse_urls <- function(url,
   is_ip_host <- .detect_ip_host(raw_host)
 
   # Phase 6: www prefix policy
-  final_host <- .apply_www_policy(raw_host, www_handling, is_ip_host)
+  final_host <- .apply_www_policy(raw_host, www_handling, is_ip_host, engine)
 
   # Phase 7: registered-domain and TLD derivation. `domain`/`tld` follow
   # host_encoding (a rendering choice); the two fixed spellings (idna/unicode)
@@ -2068,18 +2098,20 @@ safe_parse_urls <- function(url,
   # (domain_ascii/domain_unicode/tld_ascii/tld_unicode, RURL-owrdsivt) can be
   # emitted -- mirroring Stage A's both-spelling derivation.
   domain_tld <- .derive_domain_tld(
-    final_host, is_ip_host, tld_source, host_encoding
+    final_host, is_ip_host, tld_source, host_encoding, engine
   )
   domain <- domain_tld$domain
   tld <- domain_tld$tld
-  dt_ascii <- .derive_domain_tld(final_host, is_ip_host, tld_source, "idna")
+  dt_ascii <- .derive_domain_tld(
+    final_host, is_ip_host, tld_source, "idna", engine
+  )
   dt_unicode <- .derive_domain_tld(
-    final_host, is_ip_host, tld_source, "unicode"
+    final_host, is_ip_host, tld_source, "unicode", engine
   )
 
   # Phase 8: subdomain-level policy
   final_host <- .apply_subdomain_policy(
-    final_host, domain, subdomain_levels_to_keep, is_ip_host
+    final_host, domain, subdomain_levels_to_keep, is_ip_host, engine
   )
 
   # Phase 9: host encoding (idna / unicode)
