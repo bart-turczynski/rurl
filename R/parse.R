@@ -1310,6 +1310,35 @@ safe_parse_urls <- function(url,
 # made clean_url a never-cached Stage-B output; it is obsolete here.) Single
 # source of the field set, order, separator, and Unicode escaping so the key
 # format cannot drift across call sites.
+# Stable cache-key token for the per-request pslr engine (RURL-mhibnqbd). The
+# Stage-A parse core caches the PSL decomposition (domain/TLD in both
+# spellings), so an engine that resolves those against a DIFFERENT Public Suffix
+# List MUST key a distinct cache entry -- otherwise a second call under another
+# engine would reuse the first engine's memoized domain/TLD (a silent
+# correctness bug). NULL (the session-global default) returns "" so the
+# no-engine key stays byte-identical to the pre-engine format (mirroring how
+# `opts$url_standard %||% ""` handles its NULL). A non-NULL engine is keyed by
+# its snapshot identity (the sha256 of the PSL list content), which is stable
+# across engine objects built from the same list -- so two engines over the
+# same list share a cache entry (correct: identical PSL output) while different
+# lists never collide. If a future pslr ever drops that field, fall back to the
+# matcher's external-pointer address: per-object-unique and stable for the
+# object's lifetime, so it can never produce a cross-engine stale hit (only
+# less cross-object sharing).
+.engine_cache_token <- function(engine) {
+  if (is.null(engine)) {
+    return("")
+  }
+  id <- tryCatch(engine[["snapshot"]][["identity"]], error = function(e) NULL)
+  if (is.character(id) && length(id) == 1L && !is.na(id) && nzchar(id)) {
+    return(id)
+  }
+  paste0(
+    "engine-ptr:",
+    paste(utils::capture.output(print(engine[["matcher"]])), collapse = "")
+  )
+}
+
 .parse_cache_keys <- function(urls, opts) {
   # url_standard is Stage-A-affecting (RURL-luwvkwhd, PRD §5.1): it changes IP
   # detection / host rejection / final host in Stage A, so it MUST enter the key
@@ -1330,10 +1359,14 @@ safe_parse_urls <- function(url,
   # `;`->`:`, `://` insertion) BEFORE curl sees it, so a fixed parse produces a
   # different curl input than the unfixed one. It MUST enter the key, or a
   # fixed parse would collide with an unfixed cached row (PRD Part 1).
+  # engine is Stage-A-affecting (RURL-mhibnqbd): it resolves the memoized PSL
+  # decomposition against a specific list, so it MUST enter the key or a second
+  # call under a different engine would reuse a stale cached domain/TLD. NULL ->
+  # "" keeps the no-engine key byte-identical (see .engine_cache_token()).
   cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
     opts$tld_source, opts$scheme_relative_handling,
     opts$url_standard %||% "", opts$scheme_policy, opts$scheme_acceptance,
-    opts$fixup_posture,
+    opts$fixup_posture, .engine_cache_token(opts$engine),
     sep = "\x1F"
   )
   stringi::stri_escape_unicode(enc2utf8(cache_key))
