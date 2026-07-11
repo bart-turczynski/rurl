@@ -44,6 +44,13 @@ reference:
       - safe_parse_url
       - safe_parse_urls
 
+  - title: "Profiles"
+    desc: >
+      Inspect the named profile bundles that preset the acceptance,
+      interpretation, leniency, and canonicalization knobs.
+    contents:
+      - url_profile
+
   - title: "Accessors"
     desc: "Extract individual URL components from character vectors."
     contents:
