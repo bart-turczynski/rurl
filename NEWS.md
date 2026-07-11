@@ -12,6 +12,15 @@
   *interpretation*) and `scheme_policy` (which controls input *leniency*). See
   ADR 0012.
 
+- `get_scheme()` and `get_scheme_class()` now carry the `scheme_acceptance`
+  (and `scheme_policy` / `url_standard`) argument, completing the
+  `get_scheme` → `get_scheme_class` cascade for opaque and non-special
+  schemes. Under `scheme_acceptance = "general"`, `get_scheme("mailto:x",
+  url_standard = "rfc3986", scheme_acceptance = "general")` returns `"mailto"`
+  and `get_scheme_class()` classifies it as `"non-special"`; the default
+  `"web"` acceptance is unchanged (opaque schemes remain `NA` /
+  `"missing-or-error"`).
+
 - New `profile` argument (`"browser"` / `"whatwg"` / `"rfc-syntax"` / `"seo"`,
   with `"canonical"` an alias of `"seo"`) on `safe_parse_url()`,
   `safe_parse_urls()`, and `get_clean_url()`, plus a companion inspector

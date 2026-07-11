@@ -127,6 +127,54 @@ test_that("get_host_type is reachable with scheme_acceptance = general", {
   expect_false(is.na(ht))
 })
 
+test_that("get_scheme carries scheme_acceptance (opaque schemes resolve)", {
+  # Default web acceptance: an opaque scheme is outside the allowlist => NA.
+  expect_identical(get_scheme("mailto:jane@example.com"), NA_character_)
+  expect_identical(get_scheme("tel:+15551234567"), NA_character_)
+  # general acceptance admits the literal scheme (both standards).
+  expect_identical(
+    get_scheme("mailto:jane@example.com",
+      url_standard = "rfc3986", scheme_acceptance = "general"),
+    "mailto"
+  )
+  expect_identical(
+    get_scheme("ws://example.com/s",
+      url_standard = "whatwg", scheme_acceptance = "general"),
+    "ws"
+  )
+  # general still requires an explicit url_standard.
+  expect_error(
+    get_scheme("mailto:x", scheme_acceptance = "general"),
+    "requires an explicit url_standard"
+  )
+})
+
+test_that("get_scheme_class cascade returns non-special under general", {
+  # D2 cascade completed: with general acceptance the opaque scheme resolves,
+  # so get_scheme_class classifies it as non-special rather than
+  # missing-or-error (the reachable-today web default).
+  expect_identical(
+    get_scheme_class("mailto:jane@example.com", url_standard = "rfc3986"),
+    "missing-or-error"
+  )
+  expect_identical(
+    get_scheme_class("mailto:jane@example.com",
+      url_standard = "rfc3986", scheme_acceptance = "general"),
+    "non-special"
+  )
+  # Special schemes stay special under general acceptance.
+  expect_identical(
+    get_scheme_class("http://example.com/",
+      url_standard = "whatwg", scheme_acceptance = "general"),
+    "special"
+  )
+  expect_identical(
+    get_scheme_class("ws://example.com/s",
+      url_standard = "whatwg", scheme_acceptance = "general"),
+    "special"
+  )
+})
+
 # --- ws/wss special-scheme metadata activates under general (D4 / L1) --------
 
 test_that("ws/wss parse as special (ports 80/443) under whatwg general", {

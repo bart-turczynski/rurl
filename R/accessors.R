@@ -408,16 +408,34 @@ get_domain <- function(url,
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @return A character vector of URL schemes.
+#' @details
+#' By default (\code{scheme_acceptance = "web"}) only rurl's web-scheme
+#' allowlist parses, so an opaque scheme such as \code{mailto:} or \code{tel:}
+#' yields \code{NA}. Pass \code{scheme_acceptance = "general"} (which requires
+#' an explicit \code{url_standard}) to run the general parser, under which those
+#' schemes resolve and their scheme string is returned.
 #' @export
 #' @examples
 #' get_scheme("https://example.com")
+#' get_scheme(
+#'   "mailto:jane@example.com",
+#'   url_standard = "rfc3986", scheme_acceptance = "general"
+#' )
 get_scheme <- function(url, protocol_handling = "keep",
-                       scheme_relative_handling = "keep") {
-  # Scheme is unaffected by www/subdomain handling.
+                       scheme_relative_handling = "keep",
+                       scheme_policy = c("infer", "require"),
+                       scheme_acceptance = c("web", "general"),
+                       url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
+  # Scheme is unaffected by www/subdomain/case handling, so "lower" is pinned
+  # here as a stable profile and never conflicts with `url_standard`.
   .extract_from_urls(url, "scheme",
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
     protocol_handling = protocol_handling,
     scheme_relative_handling = scheme_relative_handling,
-    case_handling = "lower"
+    case_handling = "lower",
+    url_standard = url_standard
   )
 }
 
@@ -1170,16 +1188,29 @@ get_url_diagnostics <- function(url, url_standard = NULL,
 #' @param url_standard Standard profile gating the classification: \code{NULL}
 #'   (default; no classification, returns \code{NA}), \code{"rfc3986"}, or
 #'   \code{"whatwg"}.
+#' @inheritParams safe_parse_url
 #' @return A character vector the same length as \code{url}, each element one
 #'   of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"},
 #'   or \code{NA} when no selector is given.
+#' @details
+#' Under the default \code{scheme_acceptance = "web"} an opaque scheme such as
+#' \code{mailto:} is outside rurl's web allowlist and classifies as
+#' \code{"missing-or-error"}. Pass \code{scheme_acceptance = "general"} to run
+#' the general parser, under which such a scheme resolves and classifies as
+#' \code{"non-special"} (it is not a WHATWG special scheme).
 #' @seealso \code{\link{get_host_type}}, \code{\link{get_scheme}}
 #' @export
 #' @examples
 #' get_scheme_class("http://example.com/", url_standard = "whatwg")
 #' get_scheme_class("ftps://example.com/", url_standard = "whatwg")
 #' get_scheme_class("//example.com/path", url_standard = "whatwg")
-get_scheme_class <- function(url, url_standard = NULL) {
+#' get_scheme_class(
+#'   "mailto:jane@example.com",
+#'   url_standard = "rfc3986", scheme_acceptance = "general"
+#' )
+get_scheme_class <- function(url, url_standard = NULL,
+                             scheme_policy = c("infer", "require"),
+                             scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -1191,7 +1222,11 @@ get_scheme_class <- function(url, url_standard = NULL) {
   if (is.null(url_standard)) {
     return(rep(NA_character_, length(url)))
   }
-  scheme <- get_scheme(url)
+  scheme <- get_scheme(url,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
+  )
   out <- rep("missing-or-error", length(url))
   out[!is.na(scheme) & !(scheme %in% .WHATWG_SPECIAL_SCHEMES)] <- "non-special"
   out[scheme %in% .WHATWG_SPECIAL_SCHEMES] <- "special"

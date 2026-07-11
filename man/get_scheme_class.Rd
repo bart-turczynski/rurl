@@ -4,7 +4,12 @@
 \alias{get_scheme_class}
 \title{Classify the scheme of each URL as WHATWG special or not}
 \usage{
-get_scheme_class(url, url_standard = NULL)
+get_scheme_class(
+  url,
+  url_standard = NULL,
+  scheme_policy = c("infer", "require"),
+  scheme_acceptance = c("web", "general")
+)
 }
 \arguments{
 \item{url}{A character vector of URLs.}
@@ -12,6 +17,38 @@ get_scheme_class(url, url_standard = NULL)
 \item{url_standard}{Standard profile gating the classification: \code{NULL}
 (default; no classification, returns \code{NA}), \code{"rfc3986"}, or
 \code{"whatwg"}.}
+
+\item{scheme_policy}{Controls whether scheme-less, host-shaped input is
+\emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
+which only controls how the scheme is \emph{presented}, and from \code{url_standard},
+which controls interpretation). Defaults to "infer".
+\itemize{
+\item{"infer": (Default) Fabricate \verb{http://} for scheme-less host-shaped
+input (e.g. \code{example.com} parses as \verb{http://example.com}), a
+browser-omnibox-style affordance. This is the historical behavior.}
+\item{"require": Reject scheme-less input — a scheme-less host-shaped
+value becomes \code{parse_status = "error"} rather than gaining a fabricated
+scheme. Use this for a strict, pure-parser posture. Note this governs
+only bare host input; scheme-relative \verb{//host} input is governed
+separately by \code{scheme_relative_handling}.}
+}}
+
+\item{scheme_acceptance}{Which scheme \emph{tokens} may enter parsing (a
+scheme-acceptance axis, distinct from \code{scheme_policy}, which governs
+scheme-\emph{less} input, and from \code{url_standard}, which governs interpretation).
+Defaults to "web".
+\itemize{
+\item{"web": (Default) Only the curated web-scheme allowlist
+(\code{http}/\code{https}/\code{ftp}/\code{ftps}/\code{file}) is admitted; a scheme-bearing input
+outside it is \code{parse_status = "error"}. This is the historical,
+byte-for-byte compatible behavior.}
+\item{"general": Admit any syntactically valid scheme token and parse
+opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
+Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
+decides the interpretation; \code{general} with \code{url_standard = NULL} is an
+error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+derivation, and are never run through the IDNA/punycode helpers.}
+}}
 }
 \value{
 A character vector the same length as \code{url}, each element one
@@ -40,11 +77,21 @@ WHATWG special schemes; \code{ftps} (FTP-over-TLS, rurl's own addition) is
 not. This is metadata only -- it does not add \code{ws}/\code{wss} to
 rurl's allowed schemes and does not change what
 \code{\link{safe_parse_url}} accepts.
+
+Under the default \code{scheme_acceptance = "web"} an opaque scheme such as
+\code{mailto:} is outside rurl's web allowlist and classifies as
+\code{"missing-or-error"}. Pass \code{scheme_acceptance = "general"} to run
+the general parser, under which such a scheme resolves and classifies as
+\code{"non-special"} (it is not a WHATWG special scheme).
 }
 \examples{
 get_scheme_class("http://example.com/", url_standard = "whatwg")
 get_scheme_class("ftps://example.com/", url_standard = "whatwg")
 get_scheme_class("//example.com/path", url_standard = "whatwg")
+get_scheme_class(
+  "mailto:jane@example.com",
+  url_standard = "rfc3986", scheme_acceptance = "general"
+)
 }
 \seealso{
 \code{\link{get_host_type}}, \code{\link{get_scheme}}
