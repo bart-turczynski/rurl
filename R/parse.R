@@ -286,7 +286,8 @@
 #'   (case and dot-segments are preserved); `"seo"`/`"canonical"` is rurl's
 #'   origin-cleaning intent (https, strip www / trailing slash / index page,
 #'   filter tracking params). Inspect the resolved bundle with
-#'   \code{\link{url_profile}}. Not supported by \code{\link{canonical_join}}.
+#'   \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
+#'   (forwarded through its \code{...}).
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.

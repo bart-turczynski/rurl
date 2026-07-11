@@ -138,3 +138,50 @@ test_that("seo profile cleans origin URLs", {
   # seo strips the trailing slash (trailing_slash_handling = "strip")
   expect_identical(out, "https://example.com")
 })
+
+# --- profile across the canonical_join() `...` seam (RURL-cujzicqf) ----------
+
+test_that("canonical_join() forwards a profile bundle through `...`", {
+  A <- data.frame(
+    URL = "http://www.Example.com/Page/index.html?utm_source=x",
+    ValA = 1L, stringsAsFactors = FALSE
+  )
+  B <- data.frame(
+    URL = "https://example.com/Page",
+    ValB = 2L, stringsAsFactors = FALSE
+  )
+  # seo canonicalization (https + strip www / index / trailing slash / tracking
+  # params) makes the two rows share a key and join.
+  joined <- canonical_join(A, B, profile = "seo")
+  expect_identical(nrow(joined), 1L)
+  expect_identical(joined$JoinKey, "https://example.com/Page")
+})
+
+test_that("canonical_join() skips the conflict matrix on the profile path", {
+  A <- data.frame(URL = "http://ex.com/a", ValA = 1L, stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://ex.com/a", ValB = 2L, stringsAsFactors = FALSE)
+
+  # A profile authorizes its own combination, so an explicit governed knob that
+  # would conflict under a DIRECT url_standard call is accepted here (iron
+  # rule), exactly as in safe_parse_url(). This must NOT error.
+  expect_silent(
+    canonical_join(
+      A, B,
+      profile = "seo", url_standard = "whatwg", path_normalization = "none"
+    )
+  )
+  # Sanity: the same combination WITHOUT a profile still fails fast.
+  expect_error(
+    canonical_join(A, B, url_standard = "whatwg", path_normalization = "none"),
+    "governs `path_normalization`"
+  )
+})
+
+test_that("canonical_join() rejects an unknown profile up front", {
+  A <- data.frame(URL = "http://ex.com/a", ValA = 1L, stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://ex.com/a", ValB = 2L, stringsAsFactors = FALSE)
+  expect_error(
+    canonical_join(A, B, profile = "nope"),
+    "profile must be NULL or one of"
+  )
+})

@@ -80,8 +80,10 @@
   scheme prepending); `"whatwg"` is the strict absolute-URL spec posture and
   **rejects** scheme-less input; `"rfc-syntax"` parses RFC 3986 generic syntax as
   *parsing*, not normalization (case and dot-segments preserved); `"seo"` names
-  rurl's origin-cleaning intent. `profile` is not supported by `canonical_join()`.
-  The default (`profile = NULL`) is byte-for-byte unchanged. See ADR 0012.
+  rurl's origin-cleaning intent. `canonical_join()` also accepts `profile`,
+  forwarded through its `...` (like `url_standard`); on the profile path its
+  `url_standard` conflict check is skipped, matching `safe_parse_url()`. The
+  default (`profile = NULL`) is byte-for-byte unchanged. See ADR 0012.
 
 - `get_url_diagnostics()` gains 11 additional companion facts, surfaced only
   under `scheme_acceptance = "general"`, describing outcomes specific to

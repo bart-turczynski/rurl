@@ -47,11 +47,17 @@
 #'   \code{www_handling}, \code{trailing_slash_handling},
 #'   \code{index_page_handling}, \code{path_normalization},
 #'   \code{scheme_relative_handling}, \code{host_encoding},
-#'   \code{path_encoding}, and the \code{url_standard} selector). When
-#'   \code{url_standard} is set, forwarding a governed low-level knob it would
-#'   override (e.g. \code{path_normalization}) is an error, exactly as in
-#'   \code{\link{safe_parse_url}}; the orthogonal \code{path_encoding} and
-#'   \code{host_encoding} presentation knobs layer freely on any profile.
+#'   \code{path_encoding}, the \code{url_standard} selector, and the
+#'   \code{profile} bundle). When \code{url_standard} is set, forwarding a
+#'   governed low-level knob it would override (e.g. \code{path_normalization})
+#'   is an error, exactly as in \code{\link{safe_parse_url}}; the orthogonal
+#'   \code{path_encoding} and \code{host_encoding} presentation knobs layer
+#'   freely on any profile. A \code{profile} (e.g. \code{"seo"},
+#'   \code{"whatwg"}) may also be forwarded: like \code{\link{safe_parse_url}},
+#'   it bundles several knobs, expands only into knobs you did not supply, and
+#'   an explicit knob always overrides it (so the url_standard conflict check is
+#'   skipped on the profile path). Inspect a bundle with
+#'   \code{\link{url_profile}}.
 #'
 #' @return A data frame representing the join. The output includes:
 #'   \itemize{
@@ -99,11 +105,23 @@ canonical_join <- function(data_A, data_B,
   on_parse_error <- match.arg(on_parse_error)
   join_parse_status <- match.arg(join_parse_status)
 
-  # url_standard (RURL-eqzkkohm) is forwarded to safe_parse_urls() via `...`,
-  # where missing() cannot see which governed knobs the caller supplied. Detect
-  # them by name in the captured dots and run the same conflict check up front,
-  # so a conflicting profile + explicit knob fails fast here.
-  .check_url_standard_conflicts_dots(list(...))
+  # url_standard (RURL-eqzkkohm) and profile (RURL-djmgzjmr) both flow through
+  # `...` here -- canonical_join has no named parse formals, so missing() cannot
+  # see which knobs the caller supplied. Both are forwarded verbatim to
+  # safe_parse_urls() (each is a named formal there and resolves in its own
+  # frame); canonical_join only pre-runs the url_standard conflict check.
+  #
+  # On the PROFILE path that conflict matrix is SKIPPED, exactly as in
+  # safe_parse_url(): a profile authorizes its own knob combination (e.g.
+  # `rfc-syntax` = rfc3986 + no normalization), and the iron rule lets explicit
+  # knobs override. Direct (profile-less) calls keep ADR 0007's fail-fast
+  # behavior via .check_url_standard_conflicts_dots(). Validate the profile up
+  # front so a bad name fails here rather than deep in safe_parse_urls().
+  dots <- list(...)
+  profile <- .validate_profile(dots$profile)
+  if (is.null(profile)) {
+    .check_url_standard_conflicts_dots(dots)
+  }
 
   if (!.cj_validate_inputs(data_A, data_B, col_A, col_B)) {
     return(data.frame())

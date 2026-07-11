@@ -336,7 +336,8 @@ Chrome-faithful); \code{"whatwg"} is the absolute-URL no-base posture that
 (case and dot-segments are preserved); \code{"seo"}/\code{"canonical"} is rurl's
 origin-cleaning intent (https, strip www / trailing slash / index page,
 filter tracking params). Inspect the resolved bundle with
-\code{\link{url_profile}}. Not supported by \code{\link{canonical_join}}.}
+\code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
+(forwarded through its \code{...}).}
 }
 \value{
 A character vector of cleaned URLs.
