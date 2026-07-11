@@ -48,7 +48,9 @@
 
 # RFC 5322 quoted-string content (surrounding quotes already stripped):
 # qtext (%d33 / %d35-91 / %d93-126) or quoted-pair ("\" followed by VCHAR/WSP).
-.email_valid_quoted_content <- function(inner) {
+# With allow_utf8 = TRUE (the SMTPUTF8 projection), non-ASCII scalar values are
+# additionally admitted as qtext.
+.email_valid_quoted_content <- function(inner, allow_utf8 = FALSE) {
   cs <- strsplit(inner, "", fixed = TRUE)[[1L]]
   i <- 1L
   n <- length(cs)
@@ -67,14 +69,27 @@
       return(FALSE) # bare quote inside content
     } else {
       code <- utf8ToInt(enc2utf8(ch))[1L]
-      if (!(code == 33L || (code >= 35L && code <= 91L) ||
-        (code >= 93L && code <= 126L))) {
+      ok <- code == 33L || (code >= 35L && code <= 91L) ||
+        (code >= 93L && code <= 126L) || (allow_utf8 && code > 126L)
+      if (!ok) {
         return(FALSE)
       }
       i <- i + 1L
     }
   }
   TRUE
+}
+
+# SMTPUTF8 dot-atom: like dot-atom-text but non-ASCII scalar values are admitted
+# alongside ASCII atext (RFC 6531 extends atext with UTF8-non-ascii).
+.email_valid_smtputf8_dot_atom <- function(x) {
+  if (!nzchar(x) || startsWith(x, ".") || endsWith(x, ".") ||
+    grepl("..", x, fixed = TRUE)) {
+    return(FALSE)
+  }
+  ch <- strsplit(x, "", fixed = TRUE)[[1L]]
+  non_dot <- ch[ch != "."]
+  all(non_dot %in% .EMAIL_ATEXT_CHARS | .email_has_non_ascii(non_dot))
 }
 
 # RFC 5321 sub-domain labels: Let-dig [*Ldh-str Let-dig], ASCII, no
@@ -265,6 +280,74 @@
   if (.email_valid_smtp_domain(dec)) "domain" else "invalid"
 }
 
+# --- SMTP wire-projection facts (opt-in tier) --------------------------------
+#
+# These require an ACTUAL serialized wire projection of the address (RFC 5321
+# transport, RFC 6531 SMTPUTF8), not just syntax. Octet counts are measured on
+# the UTF-8 wire bytes, never on decoded character length. All are computed only
+# when the caller opts in with `smtp_wire = TRUE`; otherwise the columns carry
+# the "unavailable"/NA sentinel (see the helper).
+
+# The domain's wire form. `dd` is the once-decoded domain; `dform`/`sform` are
+# the already-computed mailto/SMTP-syntax classifications.
+.email_smtp_domain_wire_form <- function(dd, dform, sform) {
+  if (identical(sform, "address-literal")) {
+    "address-literal"
+  } else if (identical(dform, "idna2008-domain")) {
+    # A non-ASCII IDNA2008-valid domain projects to Unicode U-labels on the
+    # wire (which requires SMTPUTF8); its A-label projection would avoid it.
+    "u-label-domain"
+  } else if (identical(dform, "ascii-dot-atom-text") &&
+    identical(sform, "domain")) {
+    if (.host_is_ace(dd)) "a-label-domain" else "ascii-domain"
+  } else {
+    "unavailable"
+  }
+}
+
+# SMTP local-part wire mode, judged as an RFC 5321 / RFC 6531 mailbox local-part
+# (Dot-string / Quoted-string, optionally UTF8-extended) -- DELIBERATELY
+# independent of the RFC 6068 `mailto_local_part_form` verdict, since a bare
+# non-ASCII local-part is invalid RFC 6068 syntax yet is precisely the SMTPUTF8
+# trigger. Returns "ascii", "smtputf8", or "unavailable".
+.email_smtp_localpart_mode <- function(ld) {
+  if (is.na(ld) || !nzchar(ld)) {
+    return("unavailable")
+  }
+  ok <- if (nchar(ld) >= 2L && startsWith(ld, "\"") && endsWith(ld, "\"")) {
+    .email_valid_quoted_content(substring(ld, 2L, nchar(ld) - 1L),
+      allow_utf8 = TRUE)
+  } else {
+    .email_valid_smtputf8_dot_atom(ld)
+  }
+  if (!isTRUE(ok)) {
+    "unavailable"
+  } else if (isTRUE(.email_has_non_ascii(ld))) {
+    "smtputf8"
+  } else {
+    "ascii"
+  }
+}
+
+# Envelope wire mode for the whole address. SMTPUTF8 is required by a non-ASCII
+# local-part alone, OR by a domain sent as U-labels (RFC 6531 sections 3.4/3.2;
+# RFC 6530 section 4.2).
+.email_smtp_envelope_wire_mode <- function(local_mode, domain_wire_form) {
+  if (identical(domain_wire_form, "unavailable") ||
+    identical(local_mode, "unavailable")) {
+    "unavailable"
+  } else if (identical(local_mode, "smtputf8") ||
+    identical(domain_wire_form, "u-label-domain")) {
+    "smtputf8"
+  } else {
+    "ascii"
+  }
+}
+
+.email_octet_length <- function(x) {
+  sum(nchar(x, type = "bytes"))
+}
+
 # --- Public helper -----------------------------------------------------------
 
 #' Per-recipient email diagnostics for the mailto: positional recipient list
@@ -288,9 +371,17 @@
 #'   a conformance oracle and never a validator. A recipient's classification
 #'   never turns a parse into an error, and the absence of an \code{invalid}
 #'   value does not imply the address is deliverable or fully RFC-conformant.
-#'   No DNS resolution or deliverability check is performed. The SMTP
-#'   wire-projection facts (octet-length limits, SMTPUTF8) are a separate,
-#'   deferred tier and are not reported here.
+#'   No DNS resolution or deliverability check is performed.
+#'
+#' @section SMTP wire-projection facts (opt-in): Set \code{smtp_wire = TRUE} to
+#'   additionally compute the SMTP transport facts that require an actual
+#'   serialized wire projection of the address (octet-length limits per RFC 5321
+#'   section 4.5.3.1, and the SMTPUTF8 envelope mode per RFC 6531/6530). These
+#'   are octet facts on the UTF-8 wire bytes, distinct from the syntax
+#'   classifications above and from DNS. When \code{smtp_wire = FALSE} (the
+#'   default) the five \code{smtp_*} wire columns are still present but carry
+#'   the \code{"unavailable"}/\code{NA} sentinel; the same sentinel is used for
+#'   a recipient whose address cannot be projected (an invalid mailbox).
 #'
 #' @section Provenance-preserving parse: The positional list is tokenized on the
 #'   \strong{raw} (still percent-encoded) source before decoding, so an encoded
@@ -305,6 +396,9 @@
 #'   \code{mailto:} path is opaque, so this does not affect the classification;
 #'   it defaults to \code{"rfc3986"} because the general parser requires a
 #'   selector.
+#' @param smtp_wire Logical; when \code{TRUE}, compute the opt-in SMTP
+#'   wire-projection columns (see the corresponding section). Defaults to
+#'   \code{FALSE}.
 #' @inheritParams safe_parse_url
 #' @return A \code{data.frame} (always, including for length-1 or all-empty
 #'   input) with one row per positional-\code{to} recipient and columns:
@@ -326,6 +420,19 @@
 #'     \item{\code{public_suffix_known}}{\code{TRUE}/\code{FALSE} whether the
 #'       domain's public suffix is known to the PSL (non-validating);
 #'       \code{NA} when the RHS is not a domain form.}
+#'     \item{\code{smtp_domain_wire_form}}{(opt-in) \code{"ascii-domain"},
+#'       \code{"a-label-domain"}, \code{"u-label-domain"},
+#'       \code{"address-literal"}, or \code{"unavailable"}.}
+#'     \item{\code{smtp_envelope_wire_mode}}{(opt-in) \code{"ascii"},
+#'       \code{"smtputf8"}, or \code{"unavailable"}.}
+#'     \item{\code{smtp_envelope_address_requires_smtputf8}}{(opt-in) logical;
+#'       \code{NA} when no wire projection could be made.}
+#'     \item{\code{smtp_local_part_length_ok}}{(opt-in) logical, serialized
+#'       local-part at most 64 octets; \code{NA} when unavailable.}
+#'     \item{\code{smtp_direct_forward_path_fits}}{(opt-in) logical, the octet
+#'       length of \code{"<" + Mailbox + ">"} is at most 256; \code{NA} when
+#'       unavailable. The familiar 254 is the RFC 3696 EID 1690 derivation of
+#'       this path limit, not a standalone production.}
 #'   }
 #' @seealso \code{\link{get_url_diagnostics}}, \code{\link{safe_parse_url}}
 #' @export
@@ -336,9 +443,13 @@
 #'   "mailto:a@example.com,\"b,c\"@example.org",
 #'   scheme_acceptance = "general"
 #' )
+#' # opt-in SMTP wire-projection facts
+#' get_mailto_recipients("mailto:a@xn--mnchen-3ya.de",
+#'   scheme_acceptance = "general", smtp_wire = TRUE)
 get_mailto_recipients <- function(url, url_standard = "rfc3986",
                                   scheme_policy = c("infer", "require"),
-                                  scheme_acceptance = c("general", "web")) {
+                                  scheme_acceptance = c("general", "web"),
+                                  smtp_wire = FALSE) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -346,6 +457,7 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
       call. = FALSE
     )
   }
+  smtp_wire <- .validate_flag(smtp_wire, "smtp_wire")
   opts <- .parse_options(url_standard = url_standard,
     scheme_policy = scheme_policy, scheme_acceptance = scheme_acceptance)
 
@@ -356,6 +468,11 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
     mailto_domain_form = character(0),
     smtp_mailbox_rhs_syntax_form = character(0),
     public_suffix_known = logical(0),
+    smtp_domain_wire_form = character(0),
+    smtp_envelope_wire_mode = character(0),
+    smtp_envelope_address_requires_smtputf8 = logical(0),
+    smtp_local_part_length_ok = logical(0),
+    smtp_direct_forward_path_fits = logical(0),
     stringsAsFactors = FALSE
   )
   if (length(url) == 0L) {
@@ -373,37 +490,13 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
     if (length(recips) == 0L) {
       next
     }
-    lform <- character(length(recips))
-    dform <- character(length(recips))
-    sform <- character(length(recips))
-    psl <- logical(length(recips))
-    for (k in seq_along(recips)) {
-      split <- .email_split_addr_spec(recips[k])
-      if (!split$ok) {
-        lform[k] <- "invalid"
-        dform[k] <- "invalid"
-        sform[k] <- "invalid"
-        psl[k] <- NA
-        next
-      }
-      ld <- curl::curl_unescape(split$local)
-      dd <- curl::curl_unescape(split$domain)
-      lform[k] <- .email_classify_local(ld)
-      dform[k] <- .email_classify_mailto_domain(dd)
-      sform[k] <- .email_classify_smtp_rhs(dd)
-      psl[k] <- if (dform[k] %in% c("ascii-dot-atom-text", "idna2008-domain")) {
-        !is.na(.psl_public_suffix(dd))
-      } else {
-        NA
-      }
-    }
+    per <- lapply(recips, .email_recipient_facts, smtp_wire = smtp_wire)
     rows[[i]] <- data.frame(
       url = url[i],
       recipient_index = seq_along(recips),
-      mailto_local_part_form = lform,
-      mailto_domain_form = dform,
-      smtp_mailbox_rhs_syntax_form = sform,
-      public_suffix_known = psl,
+      do.call(rbind.data.frame, c(per, list(
+        stringsAsFactors = FALSE, make.row.names = FALSE
+      ))),
       stringsAsFactors = FALSE
     )
   }
@@ -412,4 +505,62 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
     return(empty)
   }
   do.call(rbind, c(rows, list(make.row.names = FALSE)))
+}
+
+# Classify one raw recipient token into the per-recipient fact columns (without
+# `url`/`recipient_index`, which the caller adds). Returns a one-row-ready named
+# list. The five smtp_* wire facts carry the "unavailable"/NA sentinel unless
+# `smtp_wire` is TRUE and the address projects.
+.email_recipient_facts <- function(raw_recipient, smtp_wire) {
+  out <- list(
+    mailto_local_part_form = "invalid",
+    mailto_domain_form = "invalid",
+    smtp_mailbox_rhs_syntax_form = "invalid",
+    public_suffix_known = NA,
+    smtp_domain_wire_form = "unavailable",
+    smtp_envelope_wire_mode = "unavailable",
+    smtp_envelope_address_requires_smtputf8 = NA,
+    smtp_local_part_length_ok = NA,
+    smtp_direct_forward_path_fits = NA
+  )
+  split <- .email_split_addr_spec(raw_recipient)
+  if (!split$ok) {
+    return(out)
+  }
+  ld <- curl::curl_unescape(split$local)
+  dd <- curl::curl_unescape(split$domain)
+  out$mailto_local_part_form <- .email_classify_local(ld)
+  out$mailto_domain_form <- .email_classify_mailto_domain(dd)
+  out$smtp_mailbox_rhs_syntax_form <- .email_classify_smtp_rhs(dd)
+  out$public_suffix_known <- if (out$mailto_domain_form %in%
+    c("ascii-dot-atom-text", "idna2008-domain")) {
+    !is.na(.psl_public_suffix(dd))
+  } else {
+    NA
+  }
+  if (!smtp_wire) {
+    return(out)
+  }
+
+  local_mode <- .email_smtp_localpart_mode(ld)
+  dwf <- .email_smtp_domain_wire_form(
+    dd, out$mailto_domain_form, out$smtp_mailbox_rhs_syntax_form
+  )
+  wire_mode <- .email_smtp_envelope_wire_mode(local_mode, dwf)
+  out$smtp_domain_wire_form <- dwf
+  out$smtp_envelope_wire_mode <- wire_mode
+  out$smtp_envelope_address_requires_smtputf8 <- if (
+    identical(wire_mode, "unavailable")) {
+    NA
+  } else {
+    identical(wire_mode, "smtputf8")
+  }
+  if (!identical(local_mode, "unavailable")) {
+    out$smtp_local_part_length_ok <- .email_octet_length(ld) <= 64L
+  }
+  if (!identical(wire_mode, "unavailable")) {
+    path <- paste0("<", ld, "@", dd, ">")
+    out$smtp_direct_forward_path_fits <- .email_octet_length(path) <= 256L
+  }
+  out
 }

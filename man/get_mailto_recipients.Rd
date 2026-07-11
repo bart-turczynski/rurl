@@ -8,7 +8,8 @@ get_mailto_recipients(
   url,
   url_standard = "rfc3986",
   scheme_policy = c("infer", "require"),
-  scheme_acceptance = c("general", "web")
+  scheme_acceptance = c("general", "web"),
+  smtp_wire = FALSE
 )
 }
 \arguments{
@@ -52,6 +53,10 @@ decides the interpretation; \code{general} with \code{url_standard = NULL} is an
 error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.}
 }}
+
+\item{smtp_wire}{Logical; when \code{TRUE}, compute the opt-in SMTP
+wire-projection columns (see the corresponding section). Defaults to
+\code{FALSE}.}
 }
 \value{
 A \code{data.frame} (always, including for length-1 or all-empty
@@ -74,6 +79,19 @@ independent of the mailto grammar and of DNS: \code{"domain"},
 \item{\code{public_suffix_known}}{\code{TRUE}/\code{FALSE} whether the
 domain's public suffix is known to the PSL (non-validating);
 \code{NA} when the RHS is not a domain form.}
+\item{\code{smtp_domain_wire_form}}{(opt-in) \code{"ascii-domain"},
+\code{"a-label-domain"}, \code{"u-label-domain"},
+\code{"address-literal"}, or \code{"unavailable"}.}
+\item{\code{smtp_envelope_wire_mode}}{(opt-in) \code{"ascii"},
+\code{"smtputf8"}, or \code{"unavailable"}.}
+\item{\code{smtp_envelope_address_requires_smtputf8}}{(opt-in) logical;
+\code{NA} when no wire projection could be made.}
+\item{\code{smtp_local_part_length_ok}}{(opt-in) logical, serialized
+local-part at most 64 octets; \code{NA} when unavailable.}
+\item{\code{smtp_direct_forward_path_fits}}{(opt-in) logical, the octet
+length of \code{"<" + Mailbox + ">"} is at most 256; \code{NA} when
+unavailable. The familiar 254 is the RFC 3696 EID 1690 derivation of
+this path limit, not a standalone production.}
 }
 }
 \description{
@@ -98,9 +116,19 @@ is not mailbox validity.
 a conformance oracle and never a validator. A recipient's classification
 never turns a parse into an error, and the absence of an \code{invalid}
 value does not imply the address is deliverable or fully RFC-conformant.
-No DNS resolution or deliverability check is performed. The SMTP
-wire-projection facts (octet-length limits, SMTPUTF8) are a separate,
-deferred tier and are not reported here.
+No DNS resolution or deliverability check is performed.
+}
+
+\section{SMTP wire-projection facts (opt-in)}{
+ Set \code{smtp_wire = TRUE} to
+additionally compute the SMTP transport facts that require an actual
+serialized wire projection of the address (octet-length limits per RFC 5321
+section 4.5.3.1, and the SMTPUTF8 envelope mode per RFC 6531/6530). These
+are octet facts on the UTF-8 wire bytes, distinct from the syntax
+classifications above and from DNS. When \code{smtp_wire = FALSE} (the
+default) the five \code{smtp_*} wire columns are still present but carry the
+\code{"unavailable"}/\code{NA} sentinel; the same sentinel is used for a
+recipient whose address cannot be projected (an invalid mailbox).
 }
 
 \section{Provenance-preserving parse}{
@@ -112,11 +140,15 @@ each field is then percent-decoded exactly once and classified.
 }
 
 \examples{
-get_mailto_recipients("mailto:jane@example.com", scheme_acceptance = "general")
+get_mailto_recipients("mailto:jane@example.com",
+  scheme_acceptance = "general")
 get_mailto_recipients(
   "mailto:a@example.com,\"b,c\"@example.org",
   scheme_acceptance = "general"
 )
+# opt-in SMTP wire-projection facts
+get_mailto_recipients("mailto:a@xn--mnchen-3ya.de",
+  scheme_acceptance = "general", smtp_wire = TRUE)
 }
 \seealso{
 \code{\link{get_url_diagnostics}}, \code{\link{safe_parse_url}}

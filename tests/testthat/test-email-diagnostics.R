@@ -130,7 +130,9 @@ test_that("the return shape is a stable data.frame for degenerate input", {
     z,
     c("url", "recipient_index", "mailto_local_part_form",
       "mailto_domain_form", "smtp_mailbox_rhs_syntax_form",
-      "public_suffix_known")
+      "public_suffix_known", "smtp_domain_wire_form",
+      "smtp_envelope_wire_mode", "smtp_envelope_address_requires_smtputf8",
+      "smtp_local_part_length_ok", "smtp_direct_forward_path_fits")
   )
 })
 
@@ -145,4 +147,85 @@ test_that("mixed vectors keep per-URL provenance and skip non-mailto rows", {
 
 test_that("non-character input is rejected", {
   expect_error(get_mailto_recipients(42), "must be a character vector")
+})
+
+# --- SMTP wire-projection tier (opt-in, RURL-nivxvldd) -----------------------
+
+test_that("wire columns are always present but sentinel by default", {
+  r <- get_mailto_recipients("mailto:a@example.com",
+    scheme_acceptance = "general")
+  expect_identical(ncol(r), 11L)
+  expect_identical(r$smtp_domain_wire_form, "unavailable")
+  expect_identical(r$smtp_envelope_wire_mode, "unavailable")
+  expect_true(is.na(r$smtp_envelope_address_requires_smtputf8))
+  expect_true(is.na(r$smtp_local_part_length_ok))
+  expect_true(is.na(r$smtp_direct_forward_path_fits))
+})
+
+test_that("an all-ASCII address needs no SMTPUTF8", {
+  r <- get_mailto_recipients("mailto:jane@example.com",
+    scheme_acceptance = "general", smtp_wire = TRUE)
+  expect_identical(r$smtp_domain_wire_form, "ascii-domain")
+  expect_identical(r$smtp_envelope_wire_mode, "ascii")
+  expect_false(r$smtp_envelope_address_requires_smtputf8)
+})
+
+test_that("a U-label domain requires SMTPUTF8; its A-label does not", {
+  u <- get_mailto_recipients("mailto:a@münchen.de",
+    scheme_acceptance = "general", smtp_wire = TRUE)
+  expect_identical(u$smtp_domain_wire_form, "u-label-domain")
+  expect_identical(u$smtp_envelope_wire_mode, "smtputf8")
+  expect_true(u$smtp_envelope_address_requires_smtputf8)
+
+  a <- get_mailto_recipients("mailto:a@xn--mnchen-3ya.de",
+    scheme_acceptance = "general", smtp_wire = TRUE)
+  expect_identical(a$smtp_domain_wire_form, "a-label-domain")
+  expect_false(a$smtp_envelope_address_requires_smtputf8)
+})
+
+test_that("a non-ASCII local-part alone requires SMTPUTF8, independent of the
+           (invalid) RFC 6068 verdict", {
+  r <- get_mailto_recipients("mailto:ünïcöde@example.com",
+    scheme_acceptance = "general", smtp_wire = TRUE)
+  expect_identical(r$mailto_local_part_form, "invalid")
+  expect_identical(r$smtp_domain_wire_form, "ascii-domain")
+  expect_true(r$smtp_envelope_address_requires_smtputf8)
+})
+
+test_that("a bracketed IPv4 literal projects as an ASCII address-literal", {
+  r <- get_mailto_recipients("mailto:x@[192.168.0.1]",
+    scheme_acceptance = "general", smtp_wire = TRUE)
+  expect_identical(r$smtp_domain_wire_form, "address-literal")
+  expect_identical(r$smtp_envelope_wire_mode, "ascii")
+})
+
+test_that("the 64-octet local-part limit is measured on wire octets", {
+  ok <- get_mailto_recipients(
+    paste0("mailto:", strrep("a", 64L), "@example.com"),
+    scheme_acceptance = "general", smtp_wire = TRUE
+  )
+  expect_true(ok$smtp_local_part_length_ok)
+  over <- get_mailto_recipients(
+    paste0("mailto:", strrep("a", 65L), "@example.com"),
+    scheme_acceptance = "general", smtp_wire = TRUE
+  )
+  expect_false(over$smtp_local_part_length_ok)
+})
+
+test_that("an unprojectable (mailto bracketed, non-literal) RHS is unavailable
+           but a valid local-part still gets its length", {
+  r <- get_mailto_recipients("mailto:user@%5Ba,b%5D",
+    scheme_acceptance = "general", smtp_wire = TRUE)
+  expect_identical(r$smtp_domain_wire_form, "unavailable")
+  expect_identical(r$smtp_envelope_wire_mode, "unavailable")
+  expect_true(is.na(r$smtp_envelope_address_requires_smtputf8))
+  expect_true(r$smtp_local_part_length_ok)
+  expect_true(is.na(r$smtp_direct_forward_path_fits))
+})
+
+test_that("smtp_wire must be a valid flag", {
+  expect_error(
+    get_mailto_recipients("mailto:a@b.com", scheme_acceptance = "general",
+      smtp_wire = "yes")
+  )
 })
