@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Group all GitHub Actions bumps into a single weekly PR to limit noise.
+  # This keeps the r-lib/actions and actions/* pins in verify.yml,
+  # full-check.yml, news-version.yaml, and rhub.yaml current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+  # No package-manager ecosystem: Dependabot has no CRAN support, and an R
+  # package declares its deps in DESCRIPTION (resolved against current CRAN),
+  # so there is nothing for Dependabot to bump beyond the Actions above.
