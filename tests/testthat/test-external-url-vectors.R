@@ -34,11 +34,26 @@
 
 fixture_path <- testthat::test_path("fixtures", "external-url-vectors.csv")
 
+# The adversarial `input` column cannot survive a round-trip through a raw CSV
+# cell on every platform: two rows embed raw CR/LF and 13 more carry C0 control
+# characters, so a non-UTF-8 locale (Windows) mis-decodes them and even a
+# UTF-8 read silently normalizes CRLF -> LF inside quoted fields. The fixture
+# therefore carries an ASCII-only, JSON-escaped `input_json` column as the
+# SOURCE OF TRUTH; `input` is the human-readable mirror. Reconstruct `input`
+# from it -- but ONLY for runnable rows: non-runnable rows are provenance-only
+# and must keep `input` NA (invariant asserted above).
 read_vectors <- function() {
-  utils::read.csv(
+  fx <- utils::read.csv(
     fixture_path, stringsAsFactors = FALSE, colClasses = "character",
-    na.strings = "NA"
+    na.strings = "NA", encoding = "UTF-8"
   )
+  testthat::skip_if_not_installed("jsonlite")
+  runnable <- fx$runnable == "yes"
+  fx$input[runnable] <- vapply(
+    fx$input_json[runnable], jsonlite::fromJSON,
+    character(1), USE.NAMES = FALSE
+  )
+  fx
 }
 
 test_that("external-url-vectors fixture is well-formed", {
