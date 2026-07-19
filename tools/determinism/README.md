@@ -21,6 +21,8 @@ Not a test, not run by CI, not shipped: `^tools/determinism$` is in
 | `corpus.R` | Generates the probe corpus. Base R only. |
 | `corpus.csv` | The generated corpus. **Committed and regenerable** — same discipline as the `inst/bench` oracles. |
 | `parse-dump.R` | Runs the corpus through `safe_parse_urls()` and dumps every output column. Base R + an installed `rurl` only. |
+| `curl-probe.R` | Runs the corpus through **libcurl alone**. Base R + the `curl` package only. What the Docker matrix runs — see [Multi-libcurl matrix](#multi-libcurl-matrix). |
+| `matrix/` | Docker runner that sweeps `curl-probe.R` across many libcurl versions, plus the divergence join. |
 | `out/` | Per-platform dump artifacts. **Gitignored** (`out/.gitignore`) — evidence, not source. |
 | `.gitattributes` | `*.csv -text`: never CRLF-translate the evidence. |
 
@@ -35,6 +37,9 @@ Rscript tools/determinism/parse-dump.R
 
 # ...or against the working tree instead of the installed rurl
 Rscript -e 'devtools::load_all(); source("tools/determinism/parse-dump.R")'
+
+# probe libcurl alone on this platform (no rurl needed)
+Rscript tools/determinism/curl-probe.R
 ```
 
 Both scripts are run from the repo root and have **zero runtime dependencies
@@ -172,3 +177,150 @@ tree's `DESCRIPTION` version.
 Diffing two platforms is a plain join on `id` + `url_standard`; because every
 cell is a canonical ASCII JSON literal, byte inequality *is* value inequality
 (no encoding, locale or line-ending noise).
+
+## Multi-libcurl matrix
+
+### Why two probe scripts
+
+| | `parse-dump.R` | `curl-probe.R` |
+| --- | --- | --- |
+| Calls | `safe_parse_urls()`, three `url_standard`s, 18 columns | `curl::curl_parse_url()` and nothing else |
+| Needs | `rurl` + `curl` + `pslr` + `punycoder` (+ ICU via `stringi`) | base R ≥ 3.6 + the `curl` package |
+| Answers | "what does a *user* see here?" | "what does *libcurl* do here?" |
+
+The matrix runs `curl-probe.R`, not `parse-dump.R`. Building the full `rurl`
+stack on a 2020-era distro means building `stringi` against that distro's ICU —
+slow, fragile, and it would add ICU as a second varying input to an experiment
+whose whole point is to isolate **one** variable. `curl-probe.R` needs one apt
+transaction (`r-base-core r-cran-curl`) on every image in the table below.
+
+The probe's call is byte-identical to `.parse_with_curl()` in
+`R/parse-phases.R`:
+
+```r
+curl::curl_parse_url(input, decode = FALSE, params = FALSE)
+```
+
+Do not "improve" those arguments. The probe is evidence about `rurl` only
+because it asks libcurl exactly what `rurl` asks it.
+
+### Running it
+
+```sh
+# whole matrix (builds + runs every image, collects into out/)
+tools/determinism/matrix/run-matrix.sh
+
+# one or more images only
+tools/determinism/matrix/run-matrix.sh ubuntu2204 debian12
+
+# the local host, as the reference point, through the same script
+Rscript tools/determinism/curl-probe.R
+
+# join every collected label into the divergence table
+Rscript tools/determinism/matrix/divergence.R
+```
+
+Needs Docker and network access to the distro archives — no secrets, no
+registry auth beyond anonymous pulls. Re-running overwrites the same per-label
+files, so the matrix is idempotent.
+
+An image that refuses to provision is **reported and skipped, never fatal**.
+The goal is version spread; one stubborn EOL distro must not block the sweep.
+The end-of-run summary lists provisioned vs skipped.
+
+### Images
+
+`matrix/Dockerfile` is parameterized on `BASE_IMAGE`. The distro supplies
+libcurl and R; the R `curl` package is **pinned** and built from a CRAN source
+tarball in every image (see below).
+
+| Name | Base image | libcurl | R | curl pkg |
+| --- | --- | --- | --- | --- |
+| `ubuntu2004` | `ubuntu:20.04` | 7.68.0 | 3.6.3 | 6.2.1 |
+| `ubuntu2204` | `ubuntu:22.04` | 7.81.0 | 4.1.2 | 6.2.1 |
+| `debian12` | `debian:12` | 7.88.1 | 4.2.2 | 6.2.1 |
+| `ubuntu2404` | `ubuntu:24.04` | 8.5.0 | 4.3.3 | 6.2.1 |
+| `debian13` | `debian:13` | 8.14.1 | 4.5.0 | 6.2.1 |
+| — (host) | local macOS | 8.14.1 | 4.6.0 | 7.1.0 |
+
+`curl_url()`, the API `curl_parse_url()` wraps, landed in libcurl 7.62.0
+(2018), so the sample starts just above the floor and runs to current. The
+image list is a means, not an end — substitute freely for more spread.
+`ubuntu:20.04` is EOL and no longer resolves on its live archive host;
+`run-matrix.sh` repoints its `sources.list` at old-releases via the `APT_PRE`
+build arg. `debian:11` (7.74) and `ubuntu:23.10` (8.2) were tried and
+**dropped**: their archive mirrors resolve but cannot satisfy
+`build-essential` + `libcurl4-openssl-dev`. Dropping an image is the intended
+outcome of the time-box, not a failure of the sweep.
+
+#### Why the curl package is pinned, not taken from the distro
+
+`r-cran-curl` is *not* usable here: `curl_parse_url()` was added in the R
+`curl` package 6.0.0, and the distro packages across this matrix range 4.3 →
+6.2.1 — only `debian:13`'s has the function at all. So the image installs
+`build-essential` + `libcurl4-openssl-dev` and builds a single pinned CRAN
+source tarball (`CURL_PKG_VERSION`, default 6.2.1) against whatever libcurl
+the base image ships. 6.2.1 is chosen because it builds unmodified on both R
+3.6.3 and R 4.5.
+
+That pin is what makes the sweep an experiment: across the five containers
+**libcurl is the only variable that moves**. R still varies (it does not
+implement URL parsing) and is recorded per label.
+
+**The macOS host row is confounded and must be treated as such.** It carries
+both a different libcurl *build* and a different curl package (7.1.0), so a
+macOS-only difference is not attributable to libcurl. Read the containers
+against each other; use macOS as a reference point, not as a matrix cell. Both
+versions are recorded in every `curlenv-<LABEL>.csv`: a divergence that tracks
+`curl_version_pkg` rather than `libcurl_version` is a confound, not a libcurl
+finding.
+
+### Label convention
+
+`<image-name>-libcurl<version>`, e.g. `ubuntu2204-libcurl7.81.0`. The
+`RURL_DETERMINISM_LABEL_PREFIX` env var supplies the image name;
+`matrix/entrypoint.sh` discovers the libcurl version **at run time** (never
+assumed from the table above) and composes the full label, which
+`curl-probe.R` then sanitizes to `[A-Za-z0-9._-]`. Setting
+`RURL_DETERMINISM_LABEL` directly overrides the whole thing — that is how the
+macOS host run is labelled.
+
+### `out/curl-<LABEL>.csv` schema
+
+`id, construct, input_json, curl_status,` then the 9 fields
+`curl_parse_url()` returns, in curl's own order: `url, scheme, user,
+password, host, port, path, query, fragment`.
+
+`curl_status` is `ok`, or `error: <msg>` / `warning: <msg>` (multiple
+conditions joined with ` | `). Conditions are captured as **data** — a
+container that dies mid-corpus yields no evidence. On an error every value
+column is the `null` sentinel. Fields an older `curl` package does not return
+are also `null`.
+
+Some libcurl builds return a field that is **not valid UTF-8** (libcurl
+percent-decodes the host, and `%80` / `%A0` are not UTF-8). That is a finding,
+not a harness bug, so it is neither fatal nor normalized away: the field is
+written as `<non-utf8-bytes:XX…>` (the raw bytes in lowercase hex, a sentinel
+no legitimate parse result can collide with) and `curl_status` becomes
+`warning: non-utf8 field(s): <names>`.
+
+### `out/curlenv-<LABEL>.csv` schema
+
+Tidy `key,value`, JSON-escaped like everything else: `label`, `probe`,
+`libcurl_version`, `libcurl_ssl_version`, `libcurl_ssl_backend`,
+`libcurl_protocols`, `libcurl_libidn`, `libcurl_libssh`, `libcurl_libz`,
+`r_version`, `r_platform`, `sysname`, `release`, `version`, `machine`,
+`locale`, `encoding`, `curl_version_pkg`, `run_utc`.
+
+### `out/curl-divergence.csv`
+
+`matrix/divergence.R` joins every `curl-<LABEL>.csv` in `out/` on `id` and
+keeps only the `(id, column)` pairs where **at least two labels disagree**:
+
+`id, construct, input_json, column, n_distinct,` then one column per label
+(labels sorted, names made syntactic). Sorted by `id` then by the fixed
+column order, so re-runs are byte-stable.
+
+It is deliberately raw — no bucketing, no interpretation, no prose. That is
+the downstream analysis unit's job. All labels present in `out/` participate,
+so drop or add a probe file to change the comparison set.
