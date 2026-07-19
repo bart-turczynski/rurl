@@ -54,9 +54,6 @@ Suggests:
     pkgdown,
     oysteR,
     rosv
-Remotes:
-    bart-turczynski/pslr@v1.1.0,
-    bart-turczynski/punycoder@v1.2.0
 Config/testthat/edition: 3
 Depends: 
     R (>= 4.0.0)
