@@ -124,6 +124,18 @@
         "url": "https://cran.r-project.org"
       },
       "sameAs": "https://CRAN.R-project.org/package=rosv"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "jsonlite",
+      "name": "jsonlite",
+      "provider": {
+        "@id": "https://cran.r-project.org",
+        "@type": "Organization",
+        "name": "Comprehensive R Archive Network (CRAN)",
+        "url": "https://cran.r-project.org"
+      },
+      "sameAs": "https://CRAN.R-project.org/package=jsonlite"
     }
   ],
   "softwareRequirements": {
@@ -191,7 +203,7 @@
     "SystemRequirements": null
   },
   "keywords": ["url-parsing", "url-parser", "url-normalization", "url-cleaning", "url-cleaner", "url-checker", "domain-extraction", "domain-name-detection", "domain-name-checker", "public-suffix", "tld", "tlds", "tld-extraction", "tld-checker", "tld-verification", "idna", "punycode", "uri", "url", "seo", "web-scraping", "r", "rstats", "r-stats", "r-package"],
-  "fileSize": "1715.706KB",
+  "fileSize": "1720.037KB",
   "citation": [
     {
       "@type": "SoftwareSourceCode",
