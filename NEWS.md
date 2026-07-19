@@ -244,6 +244,14 @@
   that a `url_standard` profile does not switch the path to the browser-encoded
   rendering (a readable path stays readable).
 
+### Packaging
+
+- Drop the development `Remotes:` field so `rurl` installs from CRAN alone. The
+  sibling floors `pslr (>= 1.1.0)` and `punycoder (>= 1.2.0)` now resolve
+  against their published CRAN releases (`pslr` 1.1.1, `punycoder` 1.2.1), so
+  the dev-tag pins that previously seeded `pak` are no longer needed. No
+  user-facing code change (PSLR-rmulngin).
+
 ## rurl 2.2.2
 
 ### Bug fixes
