@@ -344,3 +344,113 @@ test_that(".assemble_parse_result coerces port to integer", {
   expect_equal(res$port, 8080L)
   expect_equal(res$host, "example.com")
 })
+
+# --- Locale-invariance of URL-syntax case mapping (RURL-ugfpuotu) -----------
+# `stringi::stri_trans_tolower()` without `locale=` inherits the session locale.
+# Under Turkish/Azeri (`tr`, `az`) ICU correctly maps "I" -> "ı", which silently
+# corrupted URL SYNTAX: hosts became different domains and `FILE:` stopped being
+# recognized as a supported scheme. Syntax case mapping is now ASCII-only
+# (`.ascii_tolower()` / `.ascii_toupper()`), so it cannot move with the locale.
+#
+# The locale is forced through `stringi::stri_locale_set()` rather than
+# `withr::with_locale()` so the test exercises the exact mechanism (stringi's
+# default locale) without depending on the machine having a `tr_TR` system
+# locale installed -- ICU ships the `tr` tailoring itself, so this runs
+# everywhere, including CI.
+.with_turkish_stri_locale <- function(code) {
+  old <- suppressMessages(stringi::stri_locale_set("tr_TR"))
+  on.exit(
+    {
+      suppressMessages(stringi::stri_locale_set(old))
+      rurl_clear_caches()
+    },
+    add = TRUE
+  )
+  rurl_clear_caches()
+  force(code)
+}
+
+test_that(".ascii_tolower()/.ascii_toupper() ignore the session locale", {
+  .with_turkish_stri_locale({
+    # Guard: the hazard is actually armed in this session.
+    expect_identical(stringi::stri_trans_tolower("WIKI"), "wıkı")
+
+    expect_identical(
+      rurl:::.ascii_tolower("WIKI.EXAMPLE.COM"), "wiki.example.com"
+    )
+    expect_identical(
+      rurl:::.ascii_toupper("wiki.example.com"), "WIKI.EXAMPLE.COM"
+    )
+    expect_identical(rurl:::.ascii_tolower("FILE"), "file")
+    # Non-ASCII code points pass through untouched -- "ASCII lowercase".
+    expect_identical(rurl:::.ascii_tolower("ÄB"), "Äb")
+    # NA / empty / zero-length propagate like stri_trans_*.
+    expect_identical(rurl:::.ascii_tolower(c("A", NA, "")), c("a", NA, ""))
+    expect_identical(rurl:::.ascii_tolower(character(0)), character(0))
+  })
+})
+
+test_that("host and scheme normalization survive a Turkish session locale", {
+  .with_turkish_stri_locale({
+    # Host: the default case_handling = "lower_host" must not produce the
+    # dotless i, which would silently name a DIFFERENT domain.
+    expect_identical(get_host("https://WIKI.example.com/p"), "wiki.example.com")
+    expect_identical(
+      get_clean_url("https://WIKI.example.com/p"),
+      "https://wiki.example.com/p"
+    )
+
+    # Scheme: `file` is the only supported scheme containing "i", so scheme
+    # recognition against .SUPPORTED_SCHEMES broke for FILE: alone.
+    expect_identical(get_parse_status("FILE:///tmp/x"), "ok")
+    expect_identical(get_scheme("FILE:///tmp/x"), "file")
+    expect_identical(get_clean_url("FILE:///tmp/x"), "file:///tmp/x")
+    expect_identical(get_parse_status("FILE://localhost/tmp/x"), "ok")
+  })
+})
+
+test_that("case_handling = 'upper' on a host stays Unicode and locale-pinned", {
+  # Pins the direction split in `.apply_case_policy_vec()`: host LOWERING is
+  # protocol syntax (ASCII-only), but host UPPERCASING is a presentation
+  # transform -- no standard uppercases a host -- so it keeps full Unicode case
+  # mapping under the pinned non-tailoring locale. A future refactor that
+  # "unifies" the host branch on the ASCII helpers would produce the mixed-case
+  # "BüCHER.EXAMPLE" and fail here.
+  expect_identical(
+    get_host("https://bücher.example/", case_handling = "upper"),
+    "BÜCHER.EXAMPLE"
+  )
+
+  .with_turkish_stri_locale({
+    # Unicode-aware ...
+    expect_identical(
+      get_host("https://bücher.example/", case_handling = "upper"),
+      "BÜCHER.EXAMPLE"
+    )
+    # ... AND locale-invariant: Turkish would uppercase "i" to the dotted "İ".
+    expect_identical(
+      get_host("https://wiki.example.com/", case_handling = "upper"),
+      "WIKI.EXAMPLE.COM"
+    )
+  })
+})
+
+test_that("path case_handling is locale-pinned, not session-dependent", {
+  # The path keeps full Unicode case mapping (it is a user-requested transform
+  # of free text) but pins an explicit non-tailoring locale. NOTE: "root" and
+  # "und" do NOT override the ambient locale in stringi -- see
+  # .ASCII_SAFE_ICU_LOCALE in R/utils.R.
+  baseline <- safe_parse_url(
+    "https://example.com/PATH/WIKI", case_handling = "lower"
+  )$path
+  expect_identical(baseline, "/path/wiki")
+
+  .with_turkish_stri_locale({
+    expect_identical(
+      safe_parse_url(
+        "https://example.com/PATH/WIKI", case_handling = "lower"
+      )$path,
+      baseline
+    )
+  })
+})

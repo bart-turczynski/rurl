@@ -50,7 +50,7 @@
     stringi::stri_replace_first_regex(host_ui, ":[^:]*$", "")
   )
 
-  host_lower <- stringi::stri_trans_tolower(host_token)
+  host_lower <- .ascii_tolower(host_token)
   is_localhost <- host_lower %in% .SPECIAL_SINGLE_LABEL_HOSTS
 
   is_dotted_name <- stringi::stri_detect_regex(host_token, "^[^.]+(\\.[^.]+)+$")
@@ -139,7 +139,7 @@
   scheme_match <- stringi::stri_match_first_regex(
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):"
   )
-  scheme_lower <- stringi::stri_trans_tolower(scheme_match[, 2L])
+  scheme_lower <- .ascii_tolower(scheme_match[, 2L])
   eligible <- !is.na(scheme_lower) & scheme_lower %in% .WHATWG_SPECIAL_SCHEMES
   if (!any(eligible)) {
     return(no_op)
@@ -508,7 +508,7 @@
   m <- stringi::stri_match_first_regex(
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):(//)([^/?#]*)(.*)$"
   )
-  scheme_lower <- stringi::stri_trans_tolower(m[, 2L])
+  scheme_lower <- .ascii_tolower(m[, 2L])
   authority <- m[, 4L]
   authority_schemes <- if (.is_whatwg(url_standard)) {
     .WHATWG_SPECIAL_SCHEMES
@@ -717,7 +717,7 @@
   )
   scheme <- m[, 2L]
   rest <- m[, 3L]
-  scheme_lower <- stringi::stri_trans_tolower(scheme)
+  scheme_lower <- .ascii_tolower(scheme)
   first_segment <- stringi::stri_replace_first_regex(rest, "[/?#].*$", "")
   host_shaped_first_segment <- stringi::stri_detect_regex(
     first_segment, "^[A-Za-z0-9._~-]+(\\.[A-Za-z0-9._~-]+)+$"
@@ -821,7 +821,7 @@
   if (!is.na(normalized)) {
     decoded <- normalized
   }
-  if (identical(stringi::stri_trans_tolower(decoded), "localhost")) {
+  if (identical(.ascii_tolower(decoded), "localhost")) {
     return(NA_character_)
   }
   decoded
@@ -1022,7 +1022,7 @@
   sep <- .map_whatwg_domain_separators_vec(url, url_standard)
   url <- sep$url
 
-  url_lower <- stringi::stri_trans_tolower(url)
+  url_lower <- .ascii_tolower(url)
   is_whatwg_file <- .is_whatwg(url_standard) &
     stringi::stri_detect_regex(whatwg_file_input, "^[Ff][Ii][Ll][Ee]:")
   is_whatwg_file[is.na(is_whatwg_file)] <- FALSE
@@ -1848,7 +1848,7 @@
       raw_host[elig], "^(www[0-9]*\\.)(.*)", "$2", opts_regex = ci
     )
   } else if (www_handling == "keep") {
-    lower <- stringi::stri_trans_tolower(raw_host)
+    lower <- .ascii_tolower(raw_host)
     has_www <- stringi::stri_detect_regex(lower, "^www[0-9]*\\.")
     has_www[is.na(has_www)] <- FALSE
     hw <- elig & has_www
@@ -1880,7 +1880,7 @@
 # branch; the emitted host keeps the input spelling (candidate_host).
 .apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL) {
   ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
-  lower <- stringi::stri_trans_tolower(raw_host)
+  lower <- .ascii_tolower(raw_host)
 
   candidate_host <- raw_host
   has_www <- stringi::stri_detect_regex(lower, "^www[0-9]*\\.")
@@ -1895,7 +1895,7 @@
   }
 
   host_for_domain_check <- candidate_host
-  cand_lower <- stringi::stri_trans_tolower(candidate_host)
+  cand_lower <- .ascii_tolower(candidate_host)
   cw <- stringi::stri_startswith_fixed(cand_lower, "www.")
   cw[is.na(cw)] <- FALSE
   if (any(cw)) {
@@ -2011,7 +2011,7 @@
 
   idx <- which(can_trim)
   fh <- final_host[idx]
-  lower <- stringi::stri_trans_tolower(fh)
+  lower <- .ascii_tolower(fh)
   has_www_prefix <- stringi::stri_startswith_fixed(lower, "www.")
 
   host_part <- fh
@@ -2038,7 +2038,7 @@
       ns <- num_sub_labels[j]
       # The registrable-domain portion is lowercased (matching the historical
       # reconstruction); the kept subdomain labels preserve the input spelling.
-      registrable_labels <- stringi::stri_trans_tolower(
+      registrable_labels <- .ascii_tolower(
         utils::tail(raw_labels, length(raw_labels) - ns)
       )
       sub_labels <- utils::head(raw_labels, ns)
@@ -2127,32 +2127,71 @@
 # Phase 10 (vector): apply the case policy to host, path, and scheme.
 .apply_case_policy_vec <- function(host_output, path_output, scheme_output,
                                    case_handling) {
+  # The HOST branch splits by DIRECTION (RURL-ugfpuotu).
+  #
+  # LOWERING a host is protocol syntax: RFC 3986 section 6.2.2.1 and the WHATWG
+  # URL Standard both normalize hosts to lowercase, and WHATWG spells it "ASCII
+  # lowercase". So `lower` / `lower_host` use the ASCII-only helper, which takes
+  # locale, ICU version, and Unicode version out of the path entirely -- a
+  # Turkish/Azeri session can no longer map "I" -> "ı" and silently name a
+  # DIFFERENT domain. That is the bug being fixed here, and it is a LOWERING
+  # bug.
+  #
+  # UPPERCASING a host is not protocol syntax at all: no standard ever
+  # uppercases a host. `case_handling = "upper"` is a user-facing presentation
+  # transform rurl offers as a convenience, in the same category as the path
+  # branch below -- so the "syntax => ASCII-only" rule does not reach it, and
+  # full Unicode case mapping is kept (pinned to the same non-tailoring locale
+  # as the path branch, so it is still session-invariant). ASCII-only
+  # uppercasing would mangle a non-ASCII host into mixed case
+  # ("bücher.example" -> "BüCHER.EXAMPLE"), which serves nobody.
   h_mask <- !is.na(host_output) & host_output != ""
   if (any(h_mask)) {
     if (case_handling == "lower" || case_handling == "lower_host") {
-      host_output[h_mask] <- stringi::stri_trans_tolower(host_output[h_mask])
+      host_output[h_mask] <- .ascii_tolower(host_output[h_mask])
     } else if (case_handling == "upper") {
-      host_output[h_mask] <- stringi::stri_trans_toupper(host_output[h_mask])
+      host_output[h_mask] <- stringi::stri_trans_toupper(
+        host_output[h_mask],
+        locale = .ASCII_SAFE_ICU_LOCALE
+      )
     }
   }
 
+  # The PATH is the one component where `case_handling` is a USER-REQUESTED
+  # transformation of free text that may legitimately be non-ASCII, so full
+  # Unicode case mapping is kept here (unlike host LOWERING above and the scheme
+  # branch below, which are protocol SYNTAX and use ASCII-only mapping;
+  # RURL-ugfpuotu).
+  # The locale is pinned explicitly so the result does not vary with the R
+  # session's locale; see .ASCII_SAFE_ICU_LOCALE in R/utils.R for why "root" and
+  # "und" do NOT work here.
   p_mask <- !is.na(path_output)
   if (any(p_mask)) {
     if (case_handling == "lower") {
-      path_output[p_mask] <- stringi::stri_trans_tolower(path_output[p_mask])
+      path_output[p_mask] <- stringi::stri_trans_tolower(
+        path_output[p_mask],
+        locale = .ASCII_SAFE_ICU_LOCALE
+      )
     } else if (case_handling == "upper") {
-      path_output[p_mask] <- stringi::stri_trans_toupper(path_output[p_mask])
+      path_output[p_mask] <- stringi::stri_trans_toupper(
+        path_output[p_mask],
+        locale = .ASCII_SAFE_ICU_LOCALE
+      )
     }
   }
 
+  # The SCHEME stays ASCII-only in BOTH directions: a scheme is ASCII by grammar
+  # (RFC 3986 `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`), so there is no
+  # non-ASCII scheme for ASCII-only mapping to mangle, and both directions are
+  # syntax.
   s_mask <- !is.na(scheme_output)
   if (any(s_mask)) {
     if (case_handling == "lower" || case_handling == "lower_host") {
       scheme_output[s_mask] <-
-        stringi::stri_trans_tolower(scheme_output[s_mask])
+        .ascii_tolower(scheme_output[s_mask])
     } else if (case_handling == "upper") {
       scheme_output[s_mask] <-
-        stringi::stri_trans_toupper(scheme_output[s_mask])
+        .ascii_toupper(scheme_output[s_mask])
     }
   }
 
@@ -2212,7 +2251,7 @@
 # .derive_parse_status_vec(). Returns NA for a scheme with no WHATWG default
 # (ftps, NA, or anything outside .SCHEME_DEFAULT_PORTS).
 .scheme_default_port_vec <- function(scheme) {
-  unname(.SCHEME_DEFAULT_PORTS[stringi::stri_trans_tolower(scheme)])
+  unname(.SCHEME_DEFAULT_PORTS[.ascii_tolower(scheme)])
 }
 
 # Phase 13 port output: WHATWG parsing nulls a port that equals the special
@@ -2234,7 +2273,7 @@
   }
 
   default_port <- .scheme_default_port_vec(scheme)
-  scheme_lc <- stringi::stri_trans_tolower(scheme)
+  scheme_lc <- .ascii_tolower(scheme)
   elide <- has_port &
     !is.na(default_port) &
     out == default_port &
@@ -2294,7 +2333,7 @@
   n <- length(host_output)
   clean_url <- rep(NA_character_, n)
   has_host <- !is.na(host_output) & host_output != ""
-  scheme_lc <- stringi::stri_trans_tolower(scheme_output)
+  scheme_lc <- .ascii_tolower(scheme_output)
   is_file <- !is.na(scheme_lc) & scheme_lc == "file"
   buildable <- has_host | is_file
   if (!any(buildable)) {
@@ -2550,7 +2589,7 @@
   }
   status <- rep(.STATUS_ERROR, n)
 
-  scheme_lower <- stringi::stri_trans_tolower(final_scheme)
+  scheme_lower <- .ascii_tolower(final_scheme)
   is_file <- curl_ok & !is.na(scheme_lower) & scheme_lower == "file"
   is_rfc3986_path_rootless <- curl_ok & rfc3986_path_rootless
   is_general_ok <- curl_ok & is_general

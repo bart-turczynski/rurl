@@ -324,7 +324,7 @@
   }
 
   if (general && !is.null(url)) {
-    scheme_lc <- stringi::stri_trans_tolower(a$final_scheme)
+    scheme_lc <- .ascii_tolower(a$final_scheme)
 
     # `transform-skipped-ineligible-scheme`: mirror ._parse_stage_b_vec's
     # eligibility computation exactly -- re-run the pure general parser to
@@ -379,7 +379,7 @@
     # data route to the general parser under BOTH postures; `file` routes there
     # only under rfc3986 (whatwg `file` is a special scheme on the libcurl
     # route), so the file facts are rfc-only.
-    gs <- stringi::stri_trans_tolower(gen_b$scheme)
+    gs <- .ascii_tolower(gen_b$scheme)
     # `mailto`: fragment present (RFC 6068 section 2 SHOULD NOT).
     diag <- .diag_add(
       diag, gp & gs == "mailto" & !is.na(gen_b$fragment),

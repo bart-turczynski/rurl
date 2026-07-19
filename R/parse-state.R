@@ -270,7 +270,7 @@
   # the signature stable for L4b/L5. `force` documents the deliberate non-use.
   force(url_standard)
 
-  scheme_lc <- stringi::stri_trans_tolower(scheme)
+  scheme_lc <- .ascii_tolower(scheme)
   is_special <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
   is_http <- !is.na(scheme_lc) & scheme_lc %in% c("http", "https")
   ip <- !is.na(is_ip_host) & is_ip_host
@@ -688,7 +688,7 @@
   }
   scheme <- m[1L, 2L]
   remainder <- m[1L, 3L]
-  is_special <- stringi::stri_trans_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES
+  is_special <- .ascii_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES
   is_whatwg <- identical(url_standard, "whatwg")
 
   # Query and fragment split on the FIRST `#`, then the FIRST `?` in what
@@ -863,7 +863,7 @@
     port <- parts$port
     # localhost (case-insensitive) collapses to an empty host, matching WHATWG.
     if (!is.na(host) &&
-        identical(stringi::stri_trans_tolower(host), "localhost")) {
+        identical(.ascii_tolower(host), "localhost")) {
       host <- ""
     } else if (nzchar(host)) {
       hp <- .rfc_host_one(host)
@@ -948,7 +948,7 @@
     return(rep(FALSE, n))
   }
   m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
-  scheme_lc <- stringi::stri_trans_tolower(m[, 2L])
+  scheme_lc <- .ascii_tolower(m[, 2L])
   has_scheme <- !is.na(scheme_lc)
   host_port <- stringi::stri_detect_regex(url, "^[^/]+:[0-9]+($|/)")
   host_port[is.na(host_port)] <- FALSE
@@ -991,7 +991,7 @@
     return(out)
   }
   is_whatwg <- .is_whatwg(url_standard)
-  scheme_lc <- stringi::stri_trans_tolower(
+  scheme_lc <- .ascii_tolower(
     stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")[, 2L]
   )
 

@@ -516,7 +516,7 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   gen <- .general_parse_vec(url, opts$url_standard, opts$scheme_acceptance)
   is_mailto <- gen$general_parsed &
     !is.na(gen$scheme) &
-    stringi::stri_trans_tolower(gen$scheme) == "mailto"
+    .ascii_tolower(gen$scheme) == "mailto"
 
   rows <- vector("list", length(url))
   for (i in which(is_mailto)) {
