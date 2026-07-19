@@ -48,3 +48,4 @@
 ^\.bestpractices\.json$
 ^SECURITY\.md$
 ^SECURITY-INSIGHTS\.yml$
+^tools/determinism$

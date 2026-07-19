@@ -1,0 +1,2 @@
+# Determinism artifacts are byte-exact evidence: never CRLF-translate.
+*.csv -text
