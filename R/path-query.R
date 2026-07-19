@@ -265,7 +265,7 @@
 .whatwg_query_percent_encode <- function(query, scheme = NA_character_) {
   encode_set <- c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL)
   if (!is.na(scheme) &&
-      stringi::stri_trans_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES) {
+      .ascii_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES) {
     encode_set <- c(encode_set, 0x27L)
   }
   .whatwg_component_percent_encode(query, encode_set)

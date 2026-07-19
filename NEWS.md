@@ -108,6 +108,32 @@
   (ADR 0006), and the absence of a `reasons` token is not a validity claim
   (ADR 0012 D5). They default to `url_standard = "whatwg"`.
 
+### Bug fixes
+
+- **Scheme and host normalization no longer depends on the R session's
+  locale.** rurl lowercased URL syntax with `stringi::stri_trans_tolower()`
+  without an explicit `locale=`, so it inherited ICU's locale-tailored case
+  mapping. In a Turkish or Azeri session (`tr`, `az`; Lithuanian `lt` is a
+  milder variant) ICU correctly maps `I` to `ı` (dotless i) — correct
+  orthography, but wrong for protocol syntax. The visible symptoms: under the
+  default `case_handling = "lower_host"`, `https://WIKI.example.com/p` returned
+  the host `wıkı.example.com`, a **different domain** than the one requested;
+  and `FILE:///tmp/x` returned `parse_status = "error"`, because scheme
+  recognition folded `FILE` to `fıle`, which is not a supported scheme (`file`
+  is the only supported scheme containing the letter `i`, so `HTTPS:` and
+  friends were unaffected). Scheme and host case normalization is defined over
+  an ASCII grammar — RFC 3986 §6.2.2.1 and the WHATWG URL Standard's "ASCII
+  lowercase" — so every URL-syntax case-mapping site now uses ASCII-only
+  mapping, which removes locale, ICU version, and Unicode version from that
+  path entirely. The one place a caller explicitly asks for case transformation
+  of free text, `case_handling` applied to the **path**, keeps full Unicode case
+  mapping but now pins a non-tailoring locale, so its result is likewise stable
+  across sessions. `case_handling = "upper"` applied to the host is a
+  presentation transform rather than protocol syntax — no standard uppercases a
+  host — so it too keeps full Unicode case mapping under the pinned locale, and
+  its output is unchanged (`bücher.example` still uppercases to
+  `BÜCHER.EXAMPLE`). (RURL-ugfpuotu.)
+
 ## rurl 2.5.0
 
 ### New features

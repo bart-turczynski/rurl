@@ -124,6 +124,78 @@
   paste0("^", escaped, "$")
 }
 
+# ASCII-only case mapping for URL SYNTAX (RURL-ugfpuotu). Scheme and host case
+# normalization is defined over an ASCII grammar -- RFC 3986 section 6.2.2.1
+# ("scheme and host are case-insensitive and are therefore normalized to
+# lowercase", over the ASCII production) and the WHATWG URL Standard, which
+# says "ASCII lowercase" explicitly. Neither asks for LINGUISTIC, locale-
+# tailored folding.
+#
+# `stringi::stri_trans_tolower()` without `locale=` inherits the R session's
+# locale via `stri_locale_get()`. Under a Turkish/Azeri session (`tr`, `az`;
+# Lithuanian `lt` is a milder variant) ICU CORRECTLY maps "I" -> "ı" (dotless
+# i) -- correct orthography, catastrophic for URL syntax: "WIKI.example.com"
+# became "wıkı.example.com" (a different domain) and "FILE://" stopped matching
+# `.SUPPORTED_SCHEMES`. This is the classic Turkish-I hazard (cf. Java's
+# `toLowerCase()` without `Locale.ROOT`).
+#
+# Using `chartr()` over the two 26-letter ASCII alphabets removes ICU from the
+# syntax path entirely: no locale, no ICU version, no Unicode version. Non-ASCII
+# code points are passed through untouched, which is exactly what "ASCII
+# lowercase" specifies. This is a deliberate base-R string exception in the
+# sense of ADR 0005, not an unfinished stringi migration.
+#
+# NA and zero-length inputs propagate unchanged, matching `stri_trans_*`.
+#
+# `chartr()` is the fast path but it routes through `utf8towcs()`, which rejects
+# a few code points some platforms refuse to widen (e.g. the U+FFFF
+# noncharacter, which reaches this code from the hostile-input corpora). Those
+# rows must survive the parse exactly as they did under stringi, so the fallback
+# does the same 26 ASCII substitutions with `stri_replace_all_fixed()`
+# (case-sensitive literal matching -- no case folding, hence still no locale and
+# no ICU case tables). Sequential A->a ... Z->z cannot cascade because every
+# replacement is lowercase and every pattern uppercase.
+.ASCII_UPPER <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+.ASCII_LOWER <- "abcdefghijklmnopqrstuvwxyz"
+
+.ascii_tolower <- function(x) {
+  tryCatch(
+    chartr(.ASCII_UPPER, .ASCII_LOWER, x),
+    error = function(e) {
+      stringi::stri_replace_all_fixed(x, LETTERS, letters,
+        vectorize_all = FALSE
+      )
+    }
+  )
+}
+
+.ascii_toupper <- function(x) {
+  tryCatch(
+    chartr(.ASCII_LOWER, .ASCII_UPPER, x),
+    error = function(e) {
+      stringi::stri_replace_all_fixed(x, letters, LETTERS,
+        vectorize_all = FALSE
+      )
+    }
+  )
+}
+
+# Explicit non-tailoring ICU locale for the sites where the user has asked for
+# a PRESENTATION transform of text that may legitimately be non-ASCII, rather
+# than for protocol-syntax normalization: `case_handling` applied to the PATH,
+# and `case_handling = "upper"` applied to the HOST (both in
+# `.apply_case_policy_vec()`; no standard ever uppercases a host, so that
+# direction is presentation, not syntax). Unicode case mapping is wanted at
+# those sites; locale tailoring is not.
+#
+# TRAP (verified empirically under `LC_ALL=tr_TR.UTF-8`): the two values a
+# reviewer reaches for first, `locale = "root"` and `locale = "und"`, DO NOT
+# override the ambient locale in stringi -- both still yield "wıkı". Only a
+# concrete non-Turkish locale id does; "en_US_POSIX" is the POSIX/invariant
+# locale and is verified to yield "wiki" under a Turkish session. Do not
+# "simplify" this to "root"/"und": the obvious fix silently does nothing.
+.ASCII_SAFE_ICU_LOCALE <- "en_US_POSIX"
+
 # Coerce present-but-empty ("") raw components to NA, vectorized. curl's
 # `curl_parse_url()` is inconsistent across libcurl versions for a present-but-
 # empty component (e.g. the query of "https://example.com/?"): older libcurl

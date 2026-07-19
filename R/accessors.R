@@ -932,8 +932,8 @@ get_userinfo <- function(url, protocol_handling = "keep",
   n <- length(host)
   result <- rep(list(character(0)), n)
 
-  host_l <- stringi::stri_trans_tolower(host)
-  domain_l <- stringi::stri_trans_tolower(domain)
+  host_l <- .ascii_tolower(host)
+  domain_l <- .ascii_tolower(domain)
   # Candidate rows: real host + domain and not an IP host. is_ip_host is TRUE
   # only for genuine IPs; FALSE or NA (null rows) is treated as non-IP, and the
   # host/domain NA checks then exclude the null rows anyway.

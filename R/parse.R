@@ -1706,7 +1706,7 @@ safe_parse_urls <- function(url,
   # clean_url / round-trip is untouched. Domain-form RHS only; address-literal /
   # invalid -> NA host.
   is_mailto_gen <- general_ok & !is.na(raw_scheme) &
-    stringi::stri_trans_tolower(raw_scheme) == "mailto"
+    .ascii_tolower(raw_scheme) == "mailto"
   if (any(is_mailto_gen)) {
     rp <- .mailto_first_recipient_parts(raw_path[is_mailto_gen])
     raw_host[is_mailto_gen] <- rp$host
@@ -1870,7 +1870,7 @@ safe_parse_urls <- function(url,
   # slice. This block gates only Stage-B path/host/query transforms.
   general_acceptance <- identical(opts$scheme_acceptance, "general")
   if (general_acceptance) {
-    scheme_lc <- stringi::stri_trans_tolower(a$final_scheme)
+    scheme_lc <- .ascii_tolower(a$final_scheme)
     is_special_row <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
     # ADR 0012 Layer 4b-2 (RURL-qbnelzku): re-run the pure general parser on the
     # original URL to recover the state kinds Stage A did not thread through the
