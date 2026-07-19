@@ -53,7 +53,8 @@ Suggests:
     withr,
     pkgdown,
     oysteR,
-    rosv
+    rosv,
+    jsonlite
 Remotes:
     bart-turczynski/pslr@v1.1.0,
     bart-turczynski/punycoder@v1.2.0
