@@ -104,8 +104,12 @@ non-HTTP(S) and so ineligible for the SEO/semantic Stage-B transforms.
 \code{mailto-fragment-discouraged} (RFC 6068),
 \code{tel-missing-phone-context} (RFC 3966),
 \code{data-missing-comma} (RFC 2397), and, under \code{"rfc3986"},
-\code{file-non-absolute-path} / \code{file-forbidden-component}
-(RFC 8089).
+\code{file-non-absolute-path},
+\code{file-userinfo-extension} (userinfo, permitted by RFC 8089
+Appendix E.1's non-normative extended grammar), and
+\code{file-component-outside-rfc8089} (a query or fragment, which
+RFC 8089's grammar does not mention and which are therefore inherited
+generic RFC 3986 components).
 }
 }
 

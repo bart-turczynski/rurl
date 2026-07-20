@@ -1693,7 +1693,13 @@ safe_parse_urls <- function(url,
     raw_path[general_ok] <- gen$path[general_ok]
     raw_query[general_ok] <- .blank_to_na(gen$query[general_ok])
     raw_fragment[general_ok] <- .blank_to_na(gen$fragment[general_ok])
-    raw_user[general_ok] <- NA_character_
+    # userinfo is surfaced only by the RFC 8089 `file:` overlay, which has a
+    # production for it (App. E.1/F); every other general-routed row leaves
+    # `gen$userinfo` NA, so their output is unchanged (RURL-obsweger). Password
+    # stays NA: RFC 8089's production is `[ userinfo "@" ]` undivided, and
+    # App. E.1 warns that a password there is "a serious security exposure",
+    # so rurl does not manufacture a credentials split the RFC never draws.
+    raw_user[general_ok] <- .blank_to_na(gen$userinfo[general_ok])
     raw_password[general_ok] <- NA_character_
     raw_port[general_ok] <- suppressWarnings(as.integer(gen$port[general_ok]))
   }

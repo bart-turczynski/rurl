@@ -26,7 +26,7 @@ test_that("the diagnostics vocabulary matches the PRD §7 table verbatim", {
       "ws-fragment-forbidden", "ws-userinfo-forbidden",
       "mailto-fragment-discouraged", "tel-missing-phone-context",
       "data-missing-comma", "file-non-absolute-path",
-      "file-forbidden-component"
+      "file-userinfo-extension", "file-component-outside-rfc8089"
     )
   )
   # No duplicates, no stray whitespace.
@@ -183,7 +183,8 @@ l5_general_only <- c(
   "unicode-outside-rfc3986-uri", "transform-skipped-ineligible-scheme",
   "ws-fragment-forbidden", "ws-userinfo-forbidden",
   "mailto-fragment-discouraged", "tel-missing-phone-context",
-  "data-missing-comma", "file-non-absolute-path", "file-forbidden-component"
+  "data-missing-comma", "file-non-absolute-path",
+  "file-userinfo-extension", "file-component-outside-rfc8089"
 )
 l5_whatwg_generic <- c("invalid-credentials", "invalid-URL-unit")
 
@@ -322,17 +323,35 @@ test_that("file rfc-syntax shape facts fire (RFC 8089)", {
   expect_false(
     "file-non-absolute-path" %in% gd("file:/etc/hosts", "rfc3986")
   )
-  # Query/fragment/port outside RFC 8089's grammar.
+  # Query/fragment: RFC 8089 never mentions either, so they are inherited
+  # generic RFC 3986 components -- reported as a fact, NOT rejected. For the
+  # fragment, RFC 3986 S3.5 forbids scheme specs from restricting it at all
+  # (RFC 8118 S3 depends on this: file:///doc.pdf#page=2).
   expect_true(
-    "file-forbidden-component" %in% gd("file:/p?q=1", "rfc3986")
+    "file-component-outside-rfc8089" %in% gd("file:/p?q=1", "rfc3986")
   )
   expect_true(
-    "file-forbidden-component" %in% gd("file:/p#frag", "rfc3986")
-  )
-  expect_true(
-    "file-forbidden-component" %in% gd("file://h:8080/p", "rfc3986")
+    "file-component-outside-rfc8089" %in% gd("file:/p#frag", "rfc3986")
   )
   expect_false(
-    "file-forbidden-component" %in% gd("file:/ok/path", "rfc3986")
+    "file-component-outside-rfc8089" %in% gd("file:/ok/path", "rfc3986")
+  )
+  # userinfo IS admitted, by App. E.1/F's non-normative production, and is
+  # surfaced as a fact rather than discarded.
+  expect_true(
+    "file-userinfo-extension" %in% gd("file://u@h/p", "rfc3986")
+  )
+  expect_false(
+    "file-userinfo-extension" %in% gd("file://h/p", "rfc3986")
+  )
+  # A port is a parse FAILURE under Gate 2 (S2 admits none; no appendix
+  # supplies a production), so no ok row can carry one and no diagnostic
+  # describes it.
+  expect_identical(
+    safe_parse_urls(
+      "file://h:8080/p",
+      url_standard = "rfc3986", scheme_acceptance = "general"
+    )$parse_status,
+    "error"
   )
 })

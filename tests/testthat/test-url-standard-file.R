@@ -37,14 +37,80 @@ test_that("file URLs compose with accessors and scheme classification", {
   expect_identical(get_scheme_class(u, url_standard = "whatwg"), "special")
 })
 
-test_that("legacy and RFC file forms remain libcurl-scoped", {
+test_that("legacy and RFC file forms are parsed in-tree, not by libcurl", {
+  # These two inputs are the epic's known-divergent pair (RURL-gxqdmpcp): they
+  # returned "error" on Linux/macOS and "ok" on Windows from the SAME libcurl
+  # call, because libcurl's file: handling is a BUILD property. They are now
+  # decided by the in-tree RFC 8089 overlay, so the answer is the same on every
+  # platform. This test previously asserted the macOS half of that divergence.
   urls <- c("file://example.com/path", "file:///c:/Windows/System32")
 
-  expect_identical(get_parse_status(urls), c("error", "error"))
+  expect_identical(get_parse_status(urls), c("ok", "ok"))
   expect_identical(
-    get_parse_status(urls, url_standard = "rfc3986"), c("error", "error")
+    get_parse_status(urls, url_standard = "rfc3986"), c("ok", "ok")
   )
-  expect_true(all(is.na(get_clean_url(urls))))
+  # The NULL selector and "rfc3986" agree by construction: both route file: to
+  # the same overlay (RURL-obsweger decision (a)).
+  expect_identical(
+    get_clean_url(urls), get_clean_url(urls, url_standard = "rfc3986")
+  )
+  expect_identical(
+    get_clean_url(urls),
+    c("file://example.com/path", "file:///c:/Windows/System32")
+  )
+  # The drive-letter path keeps its leading slash. Windows libcurl returned
+  # path="c:/Windows/System32", which re-parses with host=c: -- one reason not
+  # to adopt the Windows answer wholesale.
+  expect_identical(get_path(urls)[2L], "/c:/Windows/System32")
+})
+
+test_that("file: Gate 1 rejects forms that are not valid RFC 3986", {
+  # RFC 8089 App. F gives ABNF to nonstandard forms that ESCAPE RFC 3986:
+  # `drive-letter = ALPHA ":" / ALPHA "|"`, but "|" is absent from `pchar`.
+  # Gate 1 rejects those; the whatwg profile repairs them instead.
+  bs <- paste0("file:///path", rawToChar(as.raw(92L)), "to")
+  for (std in list(NULL, "rfc3986")) {
+    status <- function(x) {
+      if (is.null(std)) {
+        get_parse_status(x)
+      } else {
+        get_parse_status(x, url_standard = std)
+      }
+    }
+    expect_identical(status("file://C|/x"), "error")
+    expect_identical(status(bs), "error")
+    expect_identical(status("file://[example]/"), "error")
+  }
+  # Percent-encoding is the LEGAL way to carry "|" in a reg-name, so the
+  # encoded form is accepted where the bare form is not. Confirmed against
+  # Ruby's URI::RFC3986_Parser, which draws the same line.
+  expect_identical(get_parse_status("file://C%7C"), "ok")
+  # WHATWG repairs rather than rejects (matches adaR / Node `new URL()`).
+  expect_identical(
+    get_path("file://C|/x", url_standard = "whatwg"), "/C:/x"
+  )
+})
+
+test_that("file: Gate 2 applies RFC 8089 S2's narrowing of the authority", {
+  # No port: S2's `file-auth = "localhost" / host` has none, and no appendix
+  # supplies a production for one -> parse failure.
+  expect_identical(get_parse_status("file://example.com:80/path"), "error")
+  expect_identical(
+    get_parse_status("file://example.com:80/path", url_standard = "rfc3986"),
+    "error"
+  )
+  # userinfo IS admitted, by App. E.1/F's production, and is surfaced as a
+  # fact rather than silently discarded.
+  u <- "file://user@example.com/path"
+  expect_identical(get_parse_status(u), "ok")
+  expect_identical(get_user(u), "user")
+  expect_identical(get_host(u), "example.com")
+  # query/fragment survive: RFC 8089 never mentions either, and RFC 3986 S3.5
+  # forbids scheme specs from restricting the fragment at all. RFC 8118 S3
+  # depends on this working (application/pdf `#page=`).
+  expect_identical(get_parse_status("file:///doc.pdf#page=2"), "ok")
+  expect_identical(get_fragment("file:///doc.pdf#page=2"), "page=2")
+  expect_identical(get_query("file:///data.csv?v=2"), "v=2")
 })
 
 test_that("WHATWG file parser accepts drive-letter and bare path forms", {

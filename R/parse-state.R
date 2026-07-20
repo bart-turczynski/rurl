@@ -806,20 +806,56 @@
   out
 }
 
-# RFC 8089 `file:` overlay (ADR 0012 D1 / A.2, RURL-yutinyhb). A THIN overlay
-# for `url_standard = "rfc3986"` only -- the WHATWG `file:` path
-# (`.parse_whatwg_file_urls_vec`) is a SEPARATE state machine and is left
-# verbatim. RFC 8089: an absolute path, optionally under a `//` authority whose
-# normative value is empty / `localhost` / a host; userinfo/port/query/fragment
-# are NOT in the normative grammar (a violation is an L5 fact, NOT a parse
-# failure -- still parsed). Like WHATWG, `file://localhost/...` maps to an empty
-# host (RFC 8089 App. B treats `localhost` and the empty authority as the local
-# machine). No drive-letter or backslash rewriting (those are WHATWG-specific).
+# RFC 8089 `file:` overlay (ADR 0012 D1 / A.2, RURL-yutinyhb; two-gate model
+# RURL-obsweger). A THIN overlay used wherever `file:` is routed out of libcurl
+# under the RFC model (`url_standard = "rfc3986"` and the NULL selector) -- the
+# WHATWG `file:` path (`.parse_whatwg_file_urls_vec`) is a SEPARATE state
+# machine and is left verbatim.
+#
+# RFC 8089 is a SPECIALIZATION of RFC 3986, not a parallel model: its normative
+# Section 2 grammar is built from RFC 3986's own productions and is a strict
+# SUBSET of them. Its Appendix E/F "nonstandard variations" are the opposite --
+# they partly escape the generic envelope (App. F's `drive-letter = ALPHA ":" /
+# ALPHA "|"` is not valid RFC 3986: `|` is absent from `pchar`). So acceptance
+# is decided by TWO gates, in order:
+#
+#   Gate 1 -- is the string a valid RFC 3986 URI at all? No -> parse failure.
+#     Rejects the backslash separator (App. E.4 states it is "forbidden by both
+#     [RFC1738] and [RFC3986]" and offers only a repair heuristic, never a
+#     production), the `ALPHA "|"` drive letter, and a literal `[example]` host.
+#     Verified against independent implementations: Ruby's URI::RFC3986_Parser
+#     rejects all three; Node/WHATWG repairs them (which is the `whatwg`
+#     profile's job here, not ours).
+#
+#   Gate 2 -- does RFC 8089 Section 2 narrow it further? Enforce that narrowing,
+#     UNLESS an Appendix F production restores the form AND the result is still
+#     RFC 3986-valid.
+#       port      -- REJECTED. Section 2's `file-auth = "localhost" / host`
+#                    has no port and NO appendix supplies one.
+#       userinfo  -- PARSED and surfaced as a fact. App. E.1/F supply
+#                    `file-auth = "localhost" / [ userinfo "@" ] host`, and
+#                    `userinfo` is an RFC 3986 production, so it stays inside
+#                    the envelope. Reported via `file-userinfo-extension`.
+#       query /   -- PARSED. RFC 8089 never mentions either (zero occurrences
+#       fragment     in the document), so they are inherited generic RFC 3986
+#                    components. For the fragment this is not merely silence:
+#                    RFC 3986 Section 3.5 states that fragment semantics "are
+#                    independent of the URI scheme and thus cannot be redefined
+#                    by scheme specifications" -- RFC 8089 could not have
+#                    restricted it. Real usage depends on this (RFC 8118
+#                    Section 3 defines `page=`/`nameddest=` fragments for
+#                    application/pdf, resolved by MEDIA TYPE exactly as 3986
+#                    Section 3.5 describes). Reported via
+#                    `file-component-outside-rfc8089`.
+#
+# Like WHATWG, `file://localhost/...` maps to an empty host (RFC 8089 App. B
+# treats `localhost` and the empty authority as the local machine). No
+# drive-letter or backslash rewriting (those are WHATWG-specific).
 .parse_rfc_file_url_one <- function(url) {
   na <- NA_character_
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
-    fragment = na, rfc_path_form = na, host_kind = "absent",
+    fragment = na, userinfo = na, rfc_path_form = na, host_kind = "absent",
     authority_kind = "absent", query_kind = "absent",
     fragment_kind = "absent", host_form = na
   )
@@ -845,6 +881,7 @@
 
   host <- na
   port <- na
+  userinfo <- na
   is_v6 <- FALSE
   is_v4 <- FALSE
   if (startsWith(rest, "//")) {
@@ -861,6 +898,13 @@
     parts <- .split_authority(authority)
     host <- parts$host
     port <- parts$port
+    userinfo <- parts$userinfo
+    # Gate 2: RFC 8089 Section 2 admits no port, and no appendix supplies a
+    # production for one. A port is therefore a parse FAILURE, not a fact.
+    # (Contrast userinfo, which App. E.1/F does supply a production for.)
+    if (!is.na(port)) {
+      return(blank)
+    }
     # localhost (case-insensitive) collapses to an empty host, matching WHATWG.
     if (!is.na(host) &&
         identical(.ascii_tolower(host), "localhost")) {
@@ -880,7 +924,8 @@
 
   list(
     ok = TRUE, scheme = scheme, host = host, port = port, path = path,
-    query = query, fragment = fragment, rfc_path_form = rfc_path_form,
+    query = query, fragment = fragment, userinfo = userinfo,
+    rfc_path_form = rfc_path_form,
     host_kind = .host_kind(host), authority_kind = authority_kind,
     query_kind = .presence_kind(query),
     fragment_kind = .presence_kind(fragment),
@@ -889,10 +934,17 @@
 }
 
 # Vectorized RFC 8089 `file:` overlay (ADR 0012 Layer 4b).
+#
+# Gate 1 lives HERE rather than in the caller so the overlay is self-contained:
+# it carries its own RFC 3986 validity contract wherever it is routed (general
+# acceptance, `rfc3986`, or the NULL selector), instead of depending on a caller
+# to have applied the generic gate first. Under `rfc3986` the caller's gate runs
+# too; that is idempotent, not a conflict.
 .parse_rfc_file_urls_vec <- function(url) {
   n <- length(url)
   chr_fields <- c(
-    "scheme", "host", "port", "path", "query", "fragment", "rfc_path_form",
+    "scheme", "host", "port", "path", "query", "fragment", "userinfo",
+    "rfc_path_form",
     "host_kind", "authority_kind", "query_kind", "fragment_kind", "host_form"
   )
   if (n == 0L) {
@@ -907,6 +959,11 @@
   for (f in chr_fields) {
     out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
   }
+  # Gate 1: a `file:` string that is not a valid RFC 3986 URI is a parse
+  # failure, whatever RFC 8089's appendices tolerate in the wild.
+  gate <- .rfc3986_generic_uri_ok(url)$ok
+  gate[is.na(gate)] <- FALSE
+  out$ok <- out$ok & gate
   out
 }
 
@@ -944,7 +1001,7 @@
 #               every other scheme to the RFC generic host parser.
 .general_parsed_mask <- function(url, url_standard, scheme_acceptance) {
   n <- length(url)
-  if (!identical(scheme_acceptance, "general") || n == 0L) {
+  if (n == 0L) {
     return(rep(FALSE, n))
   }
   m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
@@ -952,6 +1009,24 @@
   has_scheme <- !is.na(scheme_lc)
   host_port <- stringi::stri_detect_regex(url, "^[^/]+:[0-9]+($|/)")
   host_port[is.na(host_port)] <- FALSE
+
+  # RFC-model `file:` leaves libcurl on EVERY acceptance posture (RURL-obsweger,
+  # Tier 1 of the determinism epic). libcurl's `file:` handling is a BUILD
+  # property, not a version property: Windows builds enable drive-letter and
+  # `file://host` handling that Unix builds reject, so identical input yields
+  # `ok` on Windows and `error` on Linux/macOS. That is a DEREFERENCING concern
+  # ("can I open this on this machine") leaking into a PARSE, and a parser's
+  # output must not depend on the OS it runs on. Routing these rows to the
+  # in-tree RFC 8089 overlay -- which already shipped for `general` -- makes the
+  # answer platform-invariant by construction. The `whatwg` profile already had
+  # its own in-tree `file:` state machine and is untouched here.
+  rfc_file <- has_scheme & !host_port & !.is_whatwg(url_standard) &
+    !is.na(scheme_lc) & scheme_lc == "file"
+  rfc_file[is.na(rfc_file)] <- FALSE
+
+  if (!identical(scheme_acceptance, "general")) {
+    return(rfc_file)
+  }
   curl_scheme <- if (.is_whatwg(url_standard)) {
     .WHATWG_SPECIAL_SCHEMES
   } else {
@@ -959,7 +1034,7 @@
   }
   gp <- has_scheme & !host_port & !(scheme_lc %in% curl_scheme)
   gp[is.na(gp)] <- FALSE
-  gp
+  gp | rfc_file
 }
 
 # Vectorized general-acceptance parse. Returns a columnar list, length-n:
@@ -981,6 +1056,7 @@
   out <- list(
     general_parsed = rep(FALSE, n), ok = rep(FALSE, n),
     scheme = na, host = na, port = na, path = na, query = na, fragment = na,
+    userinfo = na,
     path_kind = na, rfc_path_form = na, host_kind = rep("absent", n),
     authority_kind = rep("absent", n), query_kind = rep("absent", n),
     fragment_kind = rep("absent", n), host_form = na
@@ -1026,7 +1102,10 @@
   }
   if (any(is_file)) {
     p <- .parse_rfc_file_urls_vec(url[is_file])
-    for (f in setdiff(opaque_fields, "path_kind")) {
+    # `userinfo` is file-only: RFC 8089 App. E.1/F supplies a production for it,
+    # so the overlay surfaces it as a fact. The opaque parser has no such column
+    # and its rows keep the NA initialized above, so opaque output is unchanged.
+    for (f in c(setdiff(opaque_fields, "path_kind"), "userinfo")) {
       out[[f]][is_file] <- p[[f]]
     }
     out$ok[is_file] <- p$ok
