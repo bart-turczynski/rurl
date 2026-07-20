@@ -388,14 +388,48 @@ and the Linux runners ship no Turkish locale at all. So:
 | --- | --- | --- |
 | Linux | `LANG`+`LC_ALL` in the step env — set before R is exec'd | `tr_TR.UTF-8`, after `sudo locale-gen tr_TR.UTF-8` |
 | macOS | `LANG`+`LC_ALL` in the step env | `tr_TR.UTF-8` — present in the base system |
-| Windows | `R_PROFILE_USER` → a generated `gha-locale.Rprofile`, the earliest R-side hook (runs at session start, before any package loads) | `Turkish_Turkey.utf8`, then `Turkish_Turkey.1254`, `Turkish`, `tr-TR`; aborts if none applies |
+| Windows | `R_PROFILE_USER` → a generated `gha-locale.Rprofile`, the earliest R-side hook (runs at session start, before any package loads) | `Turkish_Türkiye.utf8`, `tr-TR.UTF-8`, `tr_TR.UTF-8`, then the fallbacks `Turkish_Türkiye.1254`, `tr-TR`, `Turkish_Turkey.1254`, `Turkish`; aborts if none applies |
 
-`.utf8` is first on Windows on purpose: the axis under study is **case
-mapping**, and leading with a UTF-8 locale keeps a non-UTF-8 codepage from
-becoming a second uncontrolled variable. `default` sets nothing — it is the
-runner's own locale, and the honest baseline. The OS/locale `case` has a
-hard-failing fallback branch, so an unhandled pair can never quietly probe the
-default locale under a `tr` label.
+Every UTF-8 form comes first on purpose: the axis under study is **case
+mapping**, and a non-UTF-8 codepage would be a second uncontrolled variable.
+`default` sets nothing — it is the runner's own locale, and the honest
+baseline. The OS/locale `case` has a hard-failing fallback branch, so an
+unhandled pair can never quietly probe the default locale under a `tr` label.
+
+#### Two Windows facts, both measured on PR #181
+
+Neither is obvious and both cost a live run, so they are recorded here rather
+than left to be re-derived:
+
+1. **`Turkish_Turkey.*` does not exist.** Windows renamed the locale, so the
+   name is `Turkish_Türkiye` (U+00FC). The original candidate list asked for
+   `Turkish_Turkey.utf8`, got nothing, and fell through to bare `Turkish` —
+   which resolves to `Turkish_Türkiye.**1254**`, precisely the codepage
+   fallback the ordering was meant to avoid. The workflow file stays pure
+   ASCII, so the name is assembled with `intToUtf8(0x00FC)` inside the
+   generated Rprofile and referenced as the token `%TRTR%` in the candidate
+   list.
+2. **Setting the CRT locale is not enough — ICU ignores it.** With
+   `LC_CTYPE=Turkish_Türkiye.1254` in force, `stringi` still reported ICU
+   locale `en_US` and `stri_trans_tolower("WIKI") == "wiki"`. Unlike on Unix,
+   `stringi` on Windows does **not** derive its ICU default locale from the
+   R/CRT locale. Since `rurl` folds case through `stringi`/ICU, this is the
+   fault that actually matters: fixing (1) alone still leaves the axis dead.
+
+The lever for (2) is `stringi::stri_locale_set("tr_TR")` — it sets the default
+locale that every `stri_trans_*()` call without an explicit `locale=` uses,
+which is exactly the code path at risk. It is applied from a
+`packageEvent("stringi", "onLoad")` hook registered by the Rprofile, **not**
+inline in the Rprofile: the Rprofile runs before any package loads, so
+`stringi` is not loadable there (and in a libcurl-only cell is not installed at
+all). The hook fires when `stringi` appears, in whichever process loads it.
+
+This is a faithful simulation, not a cheat: on a genuinely Turkish Windows
+machine ICU reports `tr_TR` unprompted. The runner's OS locale cannot be
+changed, so the cell sets explicitly what that machine would supply — and
+**only** where the ambient mechanism did not already do it. Linux and macOS are
+left alone, `default` cells are never touched, and `icu_locale_source` records
+which happened.
 
 ### `out/locale-<LABEL>.csv` — is the axis actually armed?
 
@@ -405,14 +439,25 @@ tidy `key,value` and JSON-escaped like every other artifact:
 
 `label`, `locale_requested`, `locale_effective`, `encoding`,
 `base_tolower_WIKI`, `base_toupper_i`, `stringi_available`, `stringi_locale`,
-`stri_trans_tolower_WIKI`, `hazard_armed_base`, `hazard_armed_stringi`,
-`hazard_armed`, `run_utc`.
+`icu_locale_source`, `stri_trans_tolower_WIKI`, `hazard_armed_base`,
+`hazard_armed_stringi`, `hazard_armed`, `run_utc`.
 
 Armed means `tolower("WIKI")` yields `wıkı` (or `toupper("i")` yields
 `İ`). Both engines are recorded because they **disagree by platform** —
 macOS libc `tolower()` is not Turkish-aware while ICU is, so a macOS `tr` cell
 reports `hazard_armed_base=false, hazard_armed_stringi=true`. `rurl`'s own case
 folding goes through `stringi`/ICU, so `hazard_armed` is the disjunction.
+
+`icu_locale_source` says **how** ICU got its locale, so a natural repro stays
+distinguishable from a simulated one:
+
+| Value | Meaning |
+| --- | --- |
+| `ambient` | ICU was already Turkish (or no override was requested) — the environment did it. Linux and macOS `tr` cells, and every `default` cell. |
+| `explicit` | The `stringi` onLoad hook called `stri_locale_set()`. Expected on Windows `tr` cells. |
+| `explicit-late` | The hook did not fire; the assertion step set it as a belt. Treat as a harness defect worth looking at, not as evidence. |
+| `failed` | `stri_locale_set()` errored. The cell is unarmed. |
+| `none` | `stringi` is not installed (libcurl-only cell). |
 
 A `tr` cell that is **not** armed emits a `::warning::` and records
 `hazard_armed=false`. It does not fail the cell — but U4 must not read it as a

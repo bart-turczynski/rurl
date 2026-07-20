@@ -89,60 +89,118 @@ jobs:
       #
       #   Linux / macOS -- LANG + LC_ALL in the step environment, i.e. set in
       #     the process environment before R is exec'd. That is the verified
-      #     repro shape for the Turkish-I hazard.
+      #     repro shape for the Turkish-I hazard, and ICU picks it up too.
       #   Windows -- R takes its locale from the OS and ignores LANG/LC_ALL, so
       #     there is no pre-exec lever. The earliest available R-side hook is
       #     R_PROFILE_USER, which runs at session start BEFORE any package
-      #     loads (hence before stringi/ICU initializes). Candidates are tried
-      #     in order and the session aborts if none applies -- a wrong locale
-      #     must never be probed silently.
+      #     loads. Candidates are tried in order and the session aborts if none
+      #     applies -- a wrong locale must never be probed silently.
       #
-      # Either way, the "Assert the locale hazard is armed" step below verifies
-      # empirically that the case-mapping hazard is live and records that
-      # verdict as data. The mechanism is the belt; the assertion is the braces.
+      # ...and on Windows the CRT locale is NOT sufficient either. Measured on
+      # PR #181: with LC_CTYPE=Turkish_T<U+00FC>rkiye.1254, stringi still
+      # reported ICU locale en_US and stri_trans_tolower("WIKI") == "wiki".
+      # stringi on Windows does not derive its ICU default from the R/CRT
+      # locale the way it does on Unix, and rurl folds case through
+      # stringi/ICU -- so that is the fault that actually matters. The lever is
+      # stringi::stri_locale_set(), which sets the default locale every
+      # stri_trans_*() call without an explicit `locale=` uses. It is applied
+      # from a packageEvent("stringi", "onLoad") hook rather than inline in the
+      # Rprofile, because the Rprofile runs BEFORE any package loads and
+      # stringi is not loadable there (and in curl-probe-only cells is not even
+      # installed). The hook fires exactly when stringi appears, in whichever
+      # process loads it.
+      #
+      # This is a faithful simulation, not a cheat: on a genuinely Turkish
+      # Windows machine ICU reports tr_TR by itself. We cannot change the
+      # runner's OS locale, so we set explicitly what that machine would give
+      # us -- and only where the ambient mechanism did not already do it
+      # (Linux/macOS are left alone), and never in a `default` cell.
+      # locale-<LABEL>.csv records `icu_locale_source` so a natural repro stays
+      # distinguishable from a simulated one.
+      #
+      # The "Assert the locale hazard is armed" step below verifies empirically
+      # that the hazard is live and records that verdict as data. The mechanism
+      # is the belt; the assertion is the braces -- it is what caught the
+      # Windows false negative in the first place.
       - name: Resolve locale mechanism
         shell: bash
         run: |
           set -euo pipefail
           lang=""
           cands=""
+          icu=""
           case "${{ matrix.locale }}-${{ runner.os }}" in
             default-Linux|default-macOS|default-Windows)
-              # Runner default, untouched: the honest baseline.
+              # Runner default, untouched: the honest baseline. No ICU override.
               ;;
-            tr-Linux)   lang="tr_TR.UTF-8" ;;
-            tr-macOS)   lang="tr_TR.UTF-8" ;;
-            # R >= 4.2 on Windows is UCRT; ".utf8" is preferred so the locale
-            # axis stays about CASE MAPPING and does not also drag in a
-            # non-UTF-8 codepage. 1254 is the fallback, not the target.
-            tr-Windows) cands="Turkish_Turkey.utf8;Turkish_Turkey.1254;Turkish;tr-TR" ;;
+            tr-Linux)   lang="tr_TR.UTF-8"; icu="tr_TR" ;;
+            tr-macOS)   lang="tr_TR.UTF-8"; icu="tr_TR" ;;
+            # Windows renamed the Turkish locale: "Turkish_Turkey.*" does NOT
+            # exist (verified on windows-latest, PR #181) -- it is
+            # "Turkish_T<U+00FC>rkiye". %TRTR% is that name, expanded in R so
+            # this file stays pure ASCII. Every UTF-8 form comes first: the
+            # axis under study is CASE MAPPING, and a non-UTF-8 codepage would
+            # be a second uncontrolled variable. The .1254 / bare forms are
+            # last-resort fallbacks only.
+            tr-Windows)
+              cands="%TRTR%.utf8;tr-TR.UTF-8;tr_TR.UTF-8;%TRTR%.1254;tr-TR;Turkish_Turkey.1254;Turkish"
+              icu="tr_TR"
+              ;;
             *)
               echo "::error::unhandled locale/OS pair '${{ matrix.locale }}-${{ runner.os }}'"
               echo "Refusing to probe an unrequested locale under a labelled cell."
               exit 1
               ;;
           esac
-          # Always point R_PROFILE_USER at a real file: an empty value is not
-          # reliably ignored by R. Non-Windows cells get a no-op profile.
-          {
-            echo "# generated by .github/workflows/determinism-probe.yml"
-            if [ -n "$cands" ]; then
-              echo "local({"
-              echo "  cands <- strsplit(\"$cands\", \";\", fixed = TRUE)[[1]]"
-              echo "  got <- \"\""
-              echo "  for (l in cands) {"
-              echo "    got <- tryCatch(suppressWarnings(Sys.setlocale(\"LC_ALL\", l)),"
-              echo "                    error = function(e) \"\")"
-              echo "    if (nzchar(got)) break"
-              echo "  }"
-              echo "  if (!nzchar(got)) stop(\"could not set any of: $cands\")"
-              echo "  cat(\"Rprofile locale: \", got, \"\\n\", sep = \"\")"
-              echo "})"
-            fi
-          } > gha-locale.Rprofile
+          # The profile is STATIC and env-driven (quoted heredoc: no shell
+          # expansion, no quoting hazards), so a `default` cell runs it as a
+          # no-op. R_PROFILE_USER always points at a real file -- an empty
+          # value is not reliably ignored by R.
+          cat > gha-locale.Rprofile <<'RPROFILE'
+          # generated by .github/workflows/determinism-probe.yml -- do not edit
+          local({
+            cands <- Sys.getenv("RURL_LOCALE_CANDIDATES")
+            if (nzchar(cands)) {
+              tr_name <- paste0("Turkish_T", intToUtf8(0x00FC), "rkiye")
+              cands <- gsub("%TRTR%", tr_name,
+                            strsplit(cands, ";", fixed = TRUE)[[1]], fixed = TRUE)
+              got <- ""
+              for (l in cands) {
+                got <- tryCatch(suppressWarnings(Sys.setlocale("LC_ALL", l)),
+                                error = function(e) "")
+                if (nzchar(got)) break
+              }
+              if (!nzchar(got)) {
+                stop("Rprofile: could not set any of: ",
+                     paste(cands, collapse = ", "))
+              }
+              cat("Rprofile locale: ", got, "\n", sep = "")
+            }
+            icu <- Sys.getenv("RURL_ICU_LOCALE")
+            if (nzchar(icu)) {
+              setHook(packageEvent("stringi", "onLoad"), function(...) {
+                src <- tryCatch({
+                  cur <- as.character(stringi::stri_locale_get())
+                  if (isTRUE(grepl("^tr", cur))) {
+                    "ambient"
+                  } else {
+                    suppressMessages(stringi::stri_locale_set(icu))
+                    "explicit"
+                  }
+                }, error = function(e) "failed")
+                Sys.setenv(RURL_ICU_LOCALE_SOURCE = src)
+                cat("stringi ICU locale (", src, "): ",
+                    tryCatch(as.character(stringi::stri_locale_get()),
+                             error = function(e) "?"), "\n", sep = "")
+              })
+            }
+          })
+          RPROFILE
           cat gha-locale.Rprofile
           {
             echo "RURL_LANG=$lang"
+            echo "RURL_LOCALE_CANDIDATES=$cands"
+            echo "RURL_ICU_LOCALE=$icu"
             echo "RURL_RPROFILE=gha-locale.Rprofile"
           } >> "$GITHUB_ENV"
 
@@ -254,6 +312,25 @@ jobs:
           } else {
             NA_character_
           }
+          # How did ICU end up where it is? The Rprofile's stringi onLoad hook
+          # records ambient / explicit / failed. If it never fired (env unset),
+          # apply the override here as a belt and mark it distinctly, so a
+          # misfired hook is visible rather than silently unarmed.
+          icu_want <- Sys.getenv("RURL_ICU_LOCALE")
+          icu_src <- Sys.getenv("RURL_ICU_LOCALE_SOURCE", "")
+          if (has_stri && nzchar(icu_want) && !isTRUE(grepl("^tr", stri_loc))) {
+            ok <- tryCatch({
+              suppressMessages(stringi::stri_locale_set(icu_want))
+              TRUE
+            }, error = function(e) FALSE)
+            if (ok) {
+              icu_src <- "explicit-late"
+              stri_loc <- as.character(stringi::stri_locale_get())
+              stri_lower <- tryCatch(stringi::stri_trans_tolower("WIKI"),
+                                     error = function(e) NA_character_)
+            }
+          }
+          if (!nzchar(icu_src)) icu_src <- if (has_stri) "ambient" else "none"
           # Both engines are recorded because they disagree by platform: macOS
           # libc tolower() is not Turkish-aware while ICU is, and rurl's own
           # case folding goes through stringi/ICU. The axis is armed if EITHER
@@ -265,14 +342,15 @@ jobs:
           lgl <- function(x) if (isTRUE(x)) "true" else "false"
           keys <- c("label", "locale_requested", "locale_effective", "encoding",
                     "base_tolower_WIKI", "base_toupper_i", "stringi_available",
-                    "stringi_locale", "stri_trans_tolower_WIKI",
+                    "stringi_locale", "icu_locale_source",
+                    "stri_trans_tolower_WIKI",
                     "hazard_armed_base", "hazard_armed_stringi",
                     "hazard_armed", "run_utc")
           vals <- c(Sys.getenv("RURL_DETERMINISM_LABEL"), requested,
                     Sys.getlocale("LC_ALL"),
                     as.character(getOption("encoding")),
                     base_lower, base_upper, lgl(has_stri),
-                    stri_loc, stri_lower,
+                    stri_loc, icu_src, stri_lower,
                     lgl(armed_base), lgl(armed_stri), lgl(armed),
                     format(Sys.time(), "%Y-%m-%dT%H:%M:%S", tz = "UTC"))
           df <- data.frame(key = keys,
@@ -296,6 +374,7 @@ jobs:
             cat("::warning::", label, ": Turkish case-mapping hazard NOT armed",
                 " (base=", lgl(armed_base), ", stringi=", lgl(armed_stri),
                 ", locale=", Sys.getlocale("LC_CTYPE"),
+                ", icu=", as.character(stri_loc), "/", icu_src,
                 "); this tr cell duplicates the default cell\n", sep = "")
           }
 
