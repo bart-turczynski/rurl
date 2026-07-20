@@ -178,6 +178,39 @@
   its output is unchanged (`bücher.example` still uppercases to
   `BÜCHER.EXAMPLE`). (RURL-ugfpuotu.)
 
+### Internal
+
+- **The RFC 3986 conformance oracle has been audited and repaired.** No
+  behavior changed — but a published claim did. The `rfc3986_expected` column
+  of the external conformance fixture was transcribed from the WHATWG
+  web-platform-tests, whose must-fail expectations answer "what does the
+  *WHATWG* parser reject" — a different question from what RFC 3986 rejects. On
+  75 rows it therefore asserted the RFC rejects strings the RFC plainly accepts
+  (an empty `reg-name`, percent-encoded octets in a `reg-name`, which §3.2.2
+  does not decode for validity, and `path-rootless` forms misread as a
+  userinfo), and on 20 more it recorded rurl's tolerant *output* as though the
+  RFC had required it. Because rurl also declines most of the first 75 — by
+  **policy** (the ADR 0004 host-shape gate, the closed scheme set), not by
+  standard — the oracle and the implementation confirmed each other and the
+  test suite stayed green. Nothing was visibly wrong.
+
+  The underlying defect was the schema, not the cells: one `divergence_class`
+  column carried both how the two standards relate to each other *and* whether
+  rurl follows them, which made a policy rejection indistinguishable from a
+  conformance result. The two facts now sit on separate axes —
+  `divergence_class` is purely standard-versus-standard, and a new
+  `rurl_deviation` column names the ADR or ticket that owns each departure.
+  A new test checks the RFC column against a transcription of the RFC 3986 ABNF
+  itself, since a fixture cell cannot be validated by the parser it exists to
+  validate; the derivation is `tools/oracle-audit-rfc3986.R`, which scores every
+  row against two independent referees (that grammar and Ruby's
+  `URI::RFC3986_Parser`). They agree on all 282 runnable rows.
+
+  Honest picture on the 257 rows carrying an RFC oracle: rurl matches the
+  standard on 158 and departs on 99 — 81 where it rejects what RFC 3986 admits,
+  18 where it accepts what RFC 3986 does not. Each of the 99 now cites its
+  owner. (RURL-nknytzxz.)
+
 ## rurl 2.5.0
 
 ### New features

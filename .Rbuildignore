@@ -49,3 +49,4 @@
 ^SECURITY\.md$
 ^SECURITY-INSIGHTS\.yml$
 ^tools/determinism$
+^tools/oracle-audit-rfc3986\.R$

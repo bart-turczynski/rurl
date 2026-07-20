@@ -24,10 +24,25 @@
 # `rfc3986_expected` + `whatwg_expected` record what each STANDARD requires
 # (clean_url / "failure" / "accept" sentinel), `oracle_ref` cites the RFC 3986
 # section(s) / WHATWG algorithm step(s) it is derived from, and
-# `divergence_class` buckets each row (aligned / spec-divergent /
-# parser-boundary / both-reject / not-runnable). This is orthogonal to
+# `divergence_class` buckets each row (aligned / spec-divergent / both-accept /
+# both-reject / not-runnable). This is orthogonal to
 # `diverges` (which flags rurl vs the row's SOURCE oracle): `divergence_class`
 # is standard-vs-standard.
+#
+# RURL-nknytzxz then split the one thing this schema still conflated. The
+# `rfc3986_expected` cells were transcribed from WPT -- a WHATWG oracle -- so
+# on 75 rows they asserted "RFC 3986 rejects this" about strings the RFC
+# plainly accepts (empty reg-name, pct-encoded reg-name octets, path-rootless
+# read as userinfo), and on 20 more they recorded rurl's tolerant OUTPUT as if
+# the RFC mandated it. Because rurl ALSO declines the first 75 -- by policy,
+# not by standard -- oracle and implementation confirmed each other and the
+# suite stayed green. The repair: `divergence_class` is now purely
+# standard-vs-standard (the old `parser-boundary` value, which described rurl,
+# is retired), a new `rurl_deviation` column carries "rurl departs here, and
+# this ADR/ticket owns the decision", and the `oracle-vs-grammar` test below
+# checks the RFC column against a transcription of the RFC's own ABNF so the
+# co-confirmation trap cannot reopen. Derivation:
+# tools/oracle-audit-rfc3986.R.
 # The `aligned` bucket is deliberately un-cited (tiered): where RFC, WHATWG, and
 # rurl (both profiles) all agree, a self-consistency invariant stands in for a
 # hand-derived oracle, so citation effort concentrates on the diverging rows.
@@ -66,8 +81,10 @@ test_that("external-url-vectors fixture is well-formed", {
       "paper_claimed_behavior", "runnable", "rurl_rfc_status",
       "rurl_rfc_clean", "rurl_whatwg_status", "rurl_whatwg_clean",
       "diverges", "notes",
-      # Part 3a dual-standard expected-outcome oracle (RURL-moselrwp).
-      "rfc3986_expected", "whatwg_expected", "oracle_ref", "divergence_class")
+      # Part 3a dual-standard expected-outcome oracle (RURL-moselrwp),
+      # + rurl_deviation (RURL-nknytzxz).
+      "rfc3986_expected", "whatwg_expected", "oracle_ref", "divergence_class",
+      "rurl_deviation")
   )
   expect_identical(anyDuplicated(fx$id), 0L)
   expect_true(all(fx$source_class %in% c("A", "B", "C")))
@@ -79,39 +96,38 @@ test_that("external-url-vectors fixture is well-formed", {
   expect_true(all(is.na(fx$rurl_whatwg_status[!runnable])))
 })
 
-# Documented rurl deviations from the spec oracle (parser boundaries, each
-# backed by an ADR / tracked ticket in oracle_ref). For these rows rurl's
-# behavior is pinned by the per-source characterization tests below and is NOT
-# expected to equal the spec oracle -- so the conformance check skips them.
-oracle_nonconformance_ids <- function() {
-  c(
-    # closed scheme set (ADR 0004) -- specs accept, rurl rejects
-    "ada-007", "ada-012", "ada-013", "ada-014", "ada-018", "ada-021",
-    "ada-023", "yal-008",
-    # reversible Unicode host default (ADR 0002)
-    "ada-006", "yal-005",
-    # readable-path default (RURL-ndrgrwcz)
-    "ada-003", "ada-022",
-    # scheme inference / U+0130 userinfo boundary
-    "yal-009", "eq-U8",
-    # scheme inference (ADR 0004) makes rurl accept a scheme-less host-shaped
-    # input the scheme-less WHATWG oracle rejects; the host-charset shim
-    # (RURL-dxwxeamq / ADR 0009) then keeps its backtick host
-    "ada-005"
-  )
+# Documented rurl deviations from the spec oracle, read off the fixture's
+# `rurl_deviation` column: NA where rurl matches both spec oracles, otherwise
+# the ADR / tracked ticket that OWNS the decision to differ. For these rows
+# rurl's behavior is pinned by the per-source characterization tests below and
+# is NOT expected to equal the spec oracle -- so the conformance check skips
+# them.
+#
+# This used to be a hand-maintained id list, and `divergence_class` carried the
+# `parser-boundary` value to mark the same rows. That conflated two independent
+# facts -- how the two STANDARDS relate to each other, and whether RURL follows
+# them -- onto one axis, and it is what let RURL-nknytzxz hide: 75 rows where
+# rurl declined by POLICY were recorded as though the STANDARD required
+# failure, so the oracle and the implementation confirmed each other and the
+# test passed. The two facts now live in two columns and cannot collapse again.
+oracle_nonconformance_ids <- function(fx = read_vectors()) {
+  fx$id[!is.na(fx$rurl_deviation)]
 }
 
 test_that("dual-standard oracle: classes and invariants hold", {
   fx <- read_vectors()
 
   # every row carries a class; the classes are the closed set.
+  # `divergence_class` is STANDARD-vs-STANDARD only -- it says nothing about
+  # rurl, which is what `rurl_deviation` is for. (The old `parser-boundary`
+  # value mixed the two and is retired, RURL-nknytzxz.)
   expect_false(anyNA(fx$divergence_class))
   expect_true(all(fx$divergence_class %in% c(
-    "aligned", "spec-divergent", "parser-boundary", "both-reject",
-    "not-runnable"
+    "aligned", "spec-divergent", "both-accept", "both-reject", "not-runnable"
   )))
 
-  # spec-divergent <=> the two standards' expected outcomes differ (both cited).
+  # spec-divergent: the standards genuinely disagree -- either exactly one
+  # rejects, or both accept with DIFFERENT concrete serializations. Both cited.
   sd <- fx$divergence_class == "spec-divergent"
   expect_true(all(fx$rfc3986_expected[sd] != fx$whatwg_expected[sd]))
   expect_false(anyNA(fx$rfc3986_expected[sd]))
@@ -122,6 +138,19 @@ test_that("dual-standard oracle: classes and invariants hold", {
   br <- fx$divergence_class == "both-reject"
   expect_true(all(fx$rfc3986_expected[br] == "failure"))
   expect_true(all(fx$whatwg_expected[br] == "failure"))
+
+  # both-accept: neither oracle rejects, and they do not contradict each other.
+  # "accept" is a sentinel meaning "this standard admits the string" WITHOUT
+  # claiming a canonical serialization, so it never contradicts a concrete one.
+  ba <- fx$divergence_class == "both-accept"
+  expect_false(any(fx$rfc3986_expected[ba] == "failure"))
+  expect_false(any(fx$whatwg_expected[ba] == "failure"))
+  expect_false(anyNA(fx$oracle_ref[ba]))
+  concrete <- ba & fx$rfc3986_expected != "accept" &
+    fx$whatwg_expected != "accept"
+  expect_identical(
+    fx$rfc3986_expected[concrete], fx$whatwg_expected[concrete]
+  )
 
   # aligned is the TIERED bucket: no per-row oracle, and rurl must be
   # self-consistent (both profiles accept and agree on the clean_url) -- that
@@ -139,33 +168,38 @@ test_that("dual-standard oracle: classes and invariants hold", {
   expect_true(all(fx$runnable[nr] != "yes"))
   expect_true(all(is.na(fx$rfc3986_expected[nr])))
 
-  # parser-boundary rows all cite the ADR / ticket that justifies the deviation.
-  # Every documented nonconformance is now a parser-boundary row (ada-008 no
-  # longer diverges -- the host-charset shim, RURL-dxwxeamq, made it conform).
-  pb <- fx$divergence_class == "parser-boundary"
-  expect_false(anyNA(fx$oracle_ref[pb]))
-  expect_setequal(fx$id[pb], oracle_nonconformance_ids())
+  # a rurl_deviation is only meaningful against a stated oracle, and it must
+  # cite the ADR / ticket that owns the decision rather than merely asserting
+  # rurl is right.
+  dev <- !is.na(fx$rurl_deviation)
+  expect_true(all(fx$runnable[dev] == "yes"))
+  expect_false(anyNA(fx$oracle_ref[dev]))
+  expect_true(all(grepl("ADR [0-9]{4}|RURL-[a-z]+", fx$rurl_deviation[dev])))
+  # the two axes are independent: deviations occur in every class, so neither
+  # column can be reconstructed from the other. This is the invariant whose
+  # absence hid RURL-nknytzxz.
+  expect_gt(length(unique(fx$divergence_class[dev])), 1L)
 })
 
 test_that("rurl conforms to the spec oracle except at documented boundaries", {
   fx <- read_vectors()
   fx <- fx[fx$runnable == "yes", , drop = FALSE]
-  skip_ids <- oracle_nonconformance_ids()
+  skip_ids <- oracle_nonconformance_ids(fx)
   chk <- fx[!(fx$id %in% skip_ids), , drop = FALSE]
 
   # helper: does rurl's (status, clean) match a spec oracle cell?
   conforms <- function(oracle, status, clean) {
-    ifelse(
-      oracle == "failure", status == "error",
-      # a concrete clean_url oracle: rurl must reproduce it exactly.
-      !is.na(clean) & clean == oracle
-    )
+    accepted <- status != "error"
+    # a concrete clean_url oracle: rurl must reproduce it exactly. The "accept"
+    # sentinel means the standard admits the string but this fixture claims no
+    # canonical serialization, so only the verdict is asserted.
+    out <- !is.na(clean) & clean == oracle
+    sentinel <- !is.na(oracle) & oracle == "accept"
+    fails <- !is.na(oracle) & oracle == "failure"
+    out[sentinel] <- accepted[sentinel]
+    out[fails] <- !accepted[fails]
+    out
   }
-
-  # every checked row's oracle is either "failure" or a concrete clean_url
-  # (the "accept" sentinel only appears on skipped boundary rows).
-  expect_false(any(chk$rfc3986_expected == "accept", na.rm = TRUE))
-  expect_false(any(chk$whatwg_expected == "accept", na.rm = TRUE))
 
   rfc_ok <- conforms(chk$rfc3986_expected, chk$rurl_rfc_status,
     chk$rurl_rfc_clean)
@@ -180,6 +214,71 @@ test_that("rurl conforms to the spec oracle except at documented boundaries", {
     info = paste("RFC oracle mismatch:", toString(chk$id[!rfc_ok])))
   expect_true(all(wha_ok),
     info = paste("WHATWG oracle mismatch:", toString(chk$id[!wha_ok])))
+})
+
+test_that("the rfc3986 oracle agrees with the RFC 3986 grammar itself", {
+  # THE GUARD FOR RURL-nknytzxz. Everything else in this file checks rurl
+  # against the fixture; nothing checked the FIXTURE. That is how 75 rows came
+  # to assert "RFC 3986 rejects this" about strings the RFC plainly accepts:
+  # they were transcribed from the WHATWG web-platform-tests, rurl happened to
+  # reject them too (by policy -- ADR 0004's host-shape gate, the closed scheme
+  # set), oracle and implementation agreed, and the suite stayed green.
+  #
+  # A fixture cell cannot be validated by the parser it exists to validate. So
+  # the referee here is helper-rfc3986-abnf.R: the RFC's own grammar,
+  # transcribed from Appendix A, sharing no code with rurl. If the two ever
+  # disagree, either the cell is wrong or the transcription is -- and both are
+  # worth stopping for.
+  fx <- read_vectors()
+  fx <- fx[fx$runnable == "yes" & !is.na(fx$rfc3986_expected), , drop = FALSE]
+
+  grammar_rejects <- !rfc3986_abnf_accepts(fx$input)
+  oracle_rejects <- fx$rfc3986_expected == "failure"
+
+  # An oracle claiming the STANDARD rejects must be backed by the standard.
+  bad_reject <- oracle_rejects & !grammar_rejects
+  expect_false(any(bad_reject), info = paste(
+    "rfc3986_expected='failure' but the RFC 3986 grammar ACCEPTS:",
+    toString(fx$id[bad_reject]),
+    "-- if rurl declines these, that belongs in rurl_deviation, not here."
+  ))
+  # ...and one claiming it accepts must be a string the grammar admits.
+  bad_accept <- !oracle_rejects & grammar_rejects
+  expect_false(any(bad_accept), info = paste(
+    "rfc3986_expected is an accept but the RFC 3986 grammar REJECTS:",
+    toString(fx$id[bad_accept])
+  ))
+})
+
+test_that("the RFC 3986 grammar transcription is itself sound", {
+  # The guard above is only as good as the matcher, and a matcher that
+  # accepted everything would silently pass it. These are hand-checked
+  # positives and negatives, each naming the production at issue.
+  expect_true(all(rfc3986_abnf_accepts(c(
+    "http://example.com/a/b?q=1#f", # the ordinary case
+    "http://user:pass@/",           # S3.2.2 reg-name = *( ... ), may be empty
+    "sc://:12/",                    # empty host + S3.2.3 port = *DIGIT
+    "http://ho%00st/",              # pct-encoded octets not decoded here
+    "http:@/www.example.com",       # no "//" -> path-rootless, "@" is a pchar
+    "urn:isbn:0451450523",          # path-rootless, no authority
+    "http://[2001:db8::1]:80/",     # IP-literal + IPv6address
+    "http://[v7.aBc]/",             # IPvFuture
+    "http://1.2.3.4/",              # IPv4address
+    "a+b-c.d://x/"                  # S3.1 scheme = ALPHA *( ALPHA/DIGIT/+/-/. )
+  ))))
+  expect_false(any(rfc3986_abnf_accepts(c(
+    "http://a|b/",           # "|" is in no production
+    "http://a b/",           # raw SP
+    "http://é.com/",    # raw non-ASCII: S2.5 requires pct-encoding first
+    "http://a\\b/",          # backslash
+    "http://ho%zzst/",       # malformed pct-encoding
+    "http://[2001:db8::1::2]/", # two "::" -- not an IPv6address alternative
+    "http://[1.2.3.4]/",     # IPv4 is not valid INSIDE an IP-literal
+    "1http://x/",            # scheme must start with ALPHA
+    "//example.com/",        # network-path reference, not a URI (no scheme)
+    "example.com/x",         # relative reference, not a URI
+    "http://x/\001"          # raw C0 control
+  ))))
 })
 
 test_that("rurl output on external vectors matches recorded characterization", {
