@@ -17,7 +17,18 @@
 # a Turkish locale is where a locale-sensitive tolower()/toupper() breaks
 # scheme/host case folding, and it must stay fixed on every OS.
 #
-# Cost: 16 jobs incl. Windows (2x) and macOS (10x) minute multipliers. On demand
+# The CHARSET axis exists because the runners do NOT agree on a default:
+# ubuntu-latest ships LC_ALL=C, macos-latest en_US.UTF-8, windows-latest
+# English_United States.utf8. Comparing `default` cells across OSes therefore
+# confounds OS build with character set -- measured on the first two live
+# sweeps, where ubuntu tr vs ubuntu default differed by 146 lines that were
+# ENTIRELY C-vs-UTF-8 (host "<ef><bf><bf>y" as raw bytes vs the code point),
+# not the Turkish hazard. So the matrix is a deliberate `include:` list:
+# the OS x R (build) axis holds the charset fixed at UTF-8, and the charset
+# axis holds R fixed at release. `default` cells are kept as the honest
+# "what a user actually gets" baseline and are marked NOT cross-OS comparable.
+#
+# Cost: 17 jobs incl. Windows (2x) and macOS (10x) minute multipliers. On demand
 # only -- never on push to main.
 name: Determinism probe
 
@@ -34,7 +45,7 @@ on:
         default: true
   # Deliberately narrow: only the harness itself and this workflow. This sweep
   # never fails on a divergence, so as a PR check it yields ZERO automatic
-  # signal -- a human must download artifacts to learn anything. Firing 16 jobs
+  # signal -- a human must download artifacts to learn anything. Firing 17 jobs
   # on every parse-pipeline PR would be latency and noise for no gate.
   # Determinism regressions on parse changes are caught by DISPATCHING this
   # workflow manually, not by widening this filter.
@@ -57,27 +68,62 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        r: [release, devel, oldrel-1]
-        locale: [default, tr]
-        exclude:
-          # r-lib/actions/setup-r does not publish an R-devel build for macOS.
-          # Excluded explicitly rather than silently resolving to something else.
-          - os: macos-latest
-            r: devel
+        # DELIBERATE include list, NOT a cross product. A full os x r x locale
+        # cross would be 32 cells and would buy nothing: the R-version axis
+        # exists to reach the Windows libcurl BUILD, while the charset/locale
+        # axis is a per-OS property. They are crossed only at R release, where
+        # an interaction is plausible.
+        #
+        # macos-latest/devel is absent throughout: r-lib/actions/setup-r
+        # publishes no R-devel build for macOS. Omitted explicitly rather than
+        # silently resolving to something else.
+        include:
+          # --- BUILD AXIS: OS x R with the charset HELD AT UTF-8 -------------
+          # The only cross-OS comparison that is like-for-like. Any divergence
+          # here is an OS/R build property, not a character-set artifact.
+          - {os: ubuntu-latest, r: release, locale: utf8}
+          - {os: ubuntu-latest, r: devel, locale: utf8}
+          - {os: ubuntu-latest, r: oldrel-1, locale: utf8}
+          - {os: windows-latest, r: release, locale: utf8}
+          - {os: windows-latest, r: devel, locale: utf8}
+          - {os: windows-latest, r: oldrel-1, locale: utf8}
+          - {os: macos-latest, r: release, locale: utf8}
+          - {os: macos-latest, r: oldrel-1, locale: utf8}
+          # --- CHARSET/LOCALE AXIS: R HELD AT release ------------------------
+          # Together with the R-release utf8 cells above this gives c / utf8 /
+          # tr per OS with the build held constant: `c` isolates the non-UTF-8
+          # native encoding, `tr` isolates case mapping (both are UTF-8, so tr
+          # vs utf8 differs ONLY in language).
+          - {os: ubuntu-latest, r: release, locale: c}
+          - {os: windows-latest, r: release, locale: c}
+          - {os: macos-latest, r: release, locale: c}
+          - {os: ubuntu-latest, r: release, locale: tr}
+          - {os: windows-latest, r: release, locale: tr}
+          - {os: macos-latest, r: release, locale: tr}
+          # --- BASELINE: the runner as shipped -------------------------------
+          # NOT cross-OS comparable (each runner ships a different charset);
+          # its divergence from the same OS's `utf8` cell is the finding.
+          # locale-<LABEL>.csv records cross_os_comparable=false for these.
+          - {os: ubuntu-latest, r: release, locale: default}
+          - {os: windows-latest, r: release, locale: default}
+          - {os: macos-latest, r: release, locale: default}
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      # Unique per cell by construction (os x r x locale is the whole matrix),
-      # and already inside the [A-Za-z0-9._-] set both probe scripts sanitize
-      # to, so no two cells can collide after sanitization.
+      # The label IS the cell tuple (os, r, locale), and the include list has
+      # no duplicate tuple, so labels are unique by construction. Already
+      # inside the [A-Za-z0-9._-] set both probe scripts sanitize to, so no two
+      # cells can collide after sanitization either.
       RURL_DETERMINISM_LABEL: gha-${{ matrix.os }}-R${{ matrix.r }}-${{ matrix.locale }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate the Turkish locale (Linux only)
-        if: matrix.locale == 'tr' && runner.os == 'Linux'
+      # ubuntu-latest ships neither tr_TR.UTF-8 nor en_US.UTF-8 generated (its
+      # own default is LC_ALL=C), so both must be generated before they can be
+      # selected. `c` needs nothing generated -- "C" always exists.
+      - name: Generate the requested locale (Linux only)
+        if: runner.os == 'Linux' && (matrix.locale == 'tr' || matrix.locale == 'utf8')
         run: |
-          sudo locale-gen tr_TR.UTF-8
+          sudo locale-gen tr_TR.UTF-8 en_US.UTF-8
           sudo update-locale
 
       # The locale MUST be in place before R starts. A mid-session
@@ -129,12 +175,35 @@ jobs:
           lang=""
           cands=""
           icu=""
+          # What character set this cell is ASKING for: utf8 / non-utf8 /
+          # unspecified. Recorded as data and asserted after the probes run --
+          # a cell that did not get the charset it asked for is not a clean
+          # cross-OS comparison, however green it looks.
+          charset="unspecified"
           case "${{ matrix.locale }}-${{ runner.os }}" in
             default-Linux|default-macOS|default-Windows)
-              # Runner default, untouched: the honest baseline. No ICU override.
+              # Runner default, untouched: the honest baseline. No ICU override,
+              # no charset request -- and NOT cross-OS comparable, because each
+              # runner ships a different one (C / en_US.UTF-8 / .utf8).
               ;;
-            tr-Linux)   lang="tr_TR.UTF-8"; icu="tr_TR" ;;
-            tr-macOS)   lang="tr_TR.UTF-8"; icu="tr_TR" ;;
+            # The C locale. This is the whole point of the `c` cells, so the
+            # request must not be silently upgraded to a UTF-8 locale: "C" is
+            # the exact and only candidate, and the assertion step below fails
+            # the comparison (loudly, as a warning) if l10n_info() still says
+            # UTF-8.
+            c-Linux|c-macOS)   lang="C"; charset="non-utf8" ;;
+            c-Windows)         cands="C"; charset="non-utf8" ;;
+            # The fixed-UTF-8 charset used by the whole build axis.
+            utf8-Linux|utf8-macOS) lang="en_US.UTF-8"; charset="utf8" ;;
+            # Windows locale names are not what you would guess (see the tr
+            # case below), so this is an ordered candidate list too, UTF-8
+            # forms first; the .1252/bare fallbacks are last-resort only and
+            # would trip the charset assertion if they were ever reached.
+            utf8-Windows)
+              cands="English_United States.utf8;en-US.UTF-8;en_US.UTF-8;English_United States.1252;English"
+              charset="utf8"
+              ;;
+            tr-Linux|tr-macOS) lang="tr_TR.UTF-8"; icu="tr_TR"; charset="utf8" ;;
             # Windows renamed the Turkish locale: "Turkish_Turkey.*" does NOT
             # exist (verified on windows-latest, PR #181) -- it is
             # "Turkish_T<U+00FC>rkiye". %TRTR% is that name, expanded in R so
@@ -145,6 +214,7 @@ jobs:
             tr-Windows)
               cands="%TRTR%.utf8;tr-TR.UTF-8;tr_TR.UTF-8;%TRTR%.1254;tr-TR;Turkish_Turkey.1254;Turkish"
               icu="tr_TR"
+              charset="utf8"
               ;;
             *)
               echo "::error::unhandled locale/OS pair '${{ matrix.locale }}-${{ runner.os }}'"
@@ -201,6 +271,7 @@ jobs:
             echo "RURL_LANG=$lang"
             echo "RURL_LOCALE_CANDIDATES=$cands"
             echo "RURL_ICU_LOCALE=$icu"
+            echo "RURL_CHARSET_EXPECT=$charset"
             echo "RURL_RPROFILE=gha-locale.Rprofile"
           } >> "$GITHUB_ENV"
 
@@ -253,13 +324,14 @@ jobs:
           cat("effective locale: ", Sys.getlocale("LC_ALL"), "\n", sep = "")
           source("tools/determinism/parse-dump.R")
 
-      # Does the locale axis actually EXIST in this cell? A `tr` cell whose
-      # case-mapping hazard is not live is a false negative that looks like a
-      # pass, so the verdict is measured and written next to the dumps, in the
-      # harness's tidy key/value + JSON-escaped-ASCII shape, for EVERY cell
-      # (`default` cells are the control). Runs last so stringi, if the stack
-      # installed, is present to be probed.
-      - name: Assert the locale hazard is armed
+      # Do the locale and charset axes actually EXIST in this cell? A `tr` cell
+      # whose case-mapping hazard is not live, or a `c` cell that is actually
+      # in UTF-8, is a false negative that looks like a pass -- so both
+      # verdicts are measured and written next to the dumps, in the harness's
+      # tidy key/value + JSON-escaped-ASCII shape, for EVERY cell (`default`
+      # cells are the control). Runs last so stringi, if the stack installed,
+      # is present to be probed.
+      - name: Assert the locale and charset axes are armed
         if: always()
         continue-on-error: true
         shell: Rscript {0}
@@ -340,7 +412,34 @@ jobs:
           armed_stri <- has_stri && identical(stri_lower, tr_lower)
           armed <- armed_base || armed_stri
           lgl <- function(x) if (isTRUE(x)) "true" else "false"
+          # CHARSET, as first-class data. The analysis must be able to group
+          # cells by EFFECTIVE character set without parsing locale names --
+          # `en_US.UTF-8`, `English_United States.utf8` and `C.UTF-8` are all
+          # UTF-8 and none of them say so the same way. l10n_info() is the
+          # authority; the raw evidence is recorded alongside the verdict.
+          li <- l10n_info()
+          li_str <- paste(names(li),
+                          vapply(li, function(v)
+                                   paste(as.character(v), collapse = ","),
+                                 character(1)),
+                          sep = "=", collapse = "; ")
+          charset_utf8 <- isTRUE(li[["UTF-8"]])
+          charset_want <- Sys.getenv("RURL_CHARSET_EXPECT", "unspecified")
+          if (!nzchar(charset_want)) charset_want <- "unspecified"
+          # Same discipline as hazard_armed: did the cell GET what it asked
+          # for? NA (the `null` sentinel) when it asked for nothing.
+          charset_ok <- switch(charset_want,
+                               utf8 = charset_utf8,
+                               `non-utf8` = !charset_utf8,
+                               NA)
+          # `default` cells are the runner as shipped, and the runners disagree
+          # (ubuntu C, macOS en_US.UTF-8, Windows .utf8). Comparing them across
+          # OSes confounds OS build with charset, so they are marked here as
+          # off-limits for cross-OS diffs rather than left to be spotted.
+          comparable <- !identical(requested, "default")
           keys <- c("label", "locale_requested", "locale_effective", "encoding",
+                    "charset_expected", "charset_utf8", "charset_as_requested",
+                    "lc_ctype", "l10n_info", "cross_os_comparable",
                     "base_tolower_WIKI", "base_toupper_i", "stringi_available",
                     "stringi_locale", "icu_locale_source",
                     "stri_trans_tolower_WIKI",
@@ -349,6 +448,9 @@ jobs:
           vals <- c(Sys.getenv("RURL_DETERMINISM_LABEL"), requested,
                     Sys.getlocale("LC_ALL"),
                     as.character(getOption("encoding")),
+                    charset_want, lgl(charset_utf8),
+                    if (is.na(charset_ok)) NA_character_ else lgl(charset_ok),
+                    Sys.getlocale("LC_CTYPE"), li_str, lgl(comparable),
                     base_lower, base_upper, lgl(has_stri),
                     stri_loc, icu_src, stri_lower,
                     lgl(armed_base), lgl(armed_stri), lgl(armed),
@@ -376,6 +478,18 @@ jobs:
                 ", locale=", Sys.getlocale("LC_CTYPE"),
                 ", icu=", as.character(stri_loc), "/", icu_src,
                 "); this tr cell duplicates the default cell\n", sep = "")
+          }
+          # Same rule for the charset axis: never fail the cell, but never let
+          # it pass as a clean comparison either. A cell that asked for
+          # non-utf8 and got UTF-8 (or vice versa) is NOT like-for-like with
+          # the rest of its axis, and charset_as_requested=false says so.
+          if (isFALSE(charset_ok)) {
+            cat("::warning::", label, ": requested charset '", charset_want,
+                "' NOT in effect (charset_utf8=", lgl(charset_utf8),
+                ", LC_CTYPE=", Sys.getlocale("LC_CTYPE"),
+                ", l10n_info: ", li_str,
+                "); this cell is not a like-for-like charset comparison\n",
+                sep = "")
           }
 
       # Make a degraded cell visible IN THE ARTIFACT, not just in a log nobody
