@@ -762,6 +762,27 @@ safe_parse_urls <- function(url,
   do.call(data.frame, cols)
 }
 
+# Declare (not convert) the parsed host as UTF-8. `curl::curl_parse_url()` hands
+# back the host as raw bytes marked "unknown" (native), so under a non-UTF-8
+# LC_CTYPE (e.g. LC_ALL=C, which win-builder uses) downstream consumers --
+# `pslr` and `punycoder::host_normalize()` -- re-decode those bytes in the
+# session locale and disagree with a UTF-8 session: `pslr` returns NA (domain /
+# tld / *_ascii / *_unicode all NA) and `host_normalize()` flips the WHATWG
+# UTS-46 fatal gate. Marking the bytes UTF-8 makes the whole pipeline
+# locale-invariant. It must be `Encoding<-` and NOT `enc2utf8()`: `enc2utf8()`
+# *transcodes* from the session locale, which is the locale-sensitive step this
+# is fixing. Bytes are untouched; NA elements keep their NA-ness.
+.mark_host_utf8 <- function(x) {
+  if (length(x) == 0L) {
+    return(x)
+  }
+  ok <- !is.na(x)
+  if (any(ok)) {
+    Encoding(x[ok]) <- "UTF-8"
+  }
+  x
+}
+
 # Coerce one input element to the scalar `original_url` value: NA for missing
 # or non-scalar inputs, the string itself for character, else as.character().
 .spu_coerce_original <- function(u) {
@@ -1719,6 +1740,12 @@ safe_parse_urls <- function(url,
     raw_user[is_mailto_gen] <- rp$user
   }
 
+  # Every host source (curl, shim restore, `file:`, the general/opaque parser,
+  # mailto) has merged into `raw_host` by here, so this is the single vector-
+  # path chokepoint at which the host's encoding can be declared once for all
+  # downstream consumers (`pslr`, `punycoder::host_normalize()`).
+  raw_host <- .mark_host_utf8(raw_host)
+
   # Phase 4: final scheme per protocol policy.
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
@@ -2125,7 +2152,7 @@ safe_parse_urls <- function(url,
     return(NULL)
   }
   raw <- .extract_raw_components(parsed_curl, prep$url_to_parse)
-  raw_host <- raw$host
+  raw_host <- .mark_host_utf8(raw$host)
   raw_query <- raw$query
 
   # Phase 3: path normalization (decode, slashes/dots, index, trailing, encode)
