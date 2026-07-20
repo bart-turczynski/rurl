@@ -1429,7 +1429,13 @@ safe_parse_urls <- function(url,
     opts$fixup_posture, .engine_cache_token(opts$engine),
     sep = "\x1F"
   )
-  stringi::stri_escape_unicode(enc2utf8(cache_key))
+  # No enc2utf8()/escape here: enc2utf8() transcodes *from the session locale*,
+  # so the same URL could yield a different key under LC_ALL=C than under a
+  # UTF-8 session. The ASCII-safe, locale-invariant, injective rendering of a
+  # cache key is derived once in the cache layer itself (.cache_key_ascii(),
+  # zzz.R), which is the single seam every cache accessor goes through — so this
+  # key is returned as-is and never used as an environment name directly.
+  cache_key
 }
 
 # Internal scalar helper that handles caching and calls the shared cached

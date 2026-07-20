@@ -115,6 +115,60 @@ rurl_clear_caches <- function() {
   get(field, envir = .rurl_config, inherits = FALSE)
 }
 
+# Derive the pure-ASCII environment-variable name(s) used to index a cache.
+#
+# The caches are environments and the key is used as a *variable name*
+# (exists/get/assign/mget). R must render a variable name in the native
+# encoding, so a non-ASCII key (e.g. a UTF-8-declared IDN host, which is what
+# the parse path now produces) makes R attempt a native translation and emit
+# "unable to translate '<host>' to native encoding" under a non-UTF-8 LC_CTYPE
+# (C locale, win-builder). Deriving an ASCII key here — one seam beneath every
+# caller — removes the translation entirely rather than silencing the warning.
+#
+# Scheme: declare the encoding explicitly (never consult the session locale —
+# no enc2utf8()/iconv()-from-native, which is the locale sensitivity this epic
+# removes), then stringi::stri_escape_unicode(). That is total onto ASCII (every
+# non-ASCII code point becomes \uXXXX / \UXXXXXXXX) and injective (it is a
+# backslash escape whose own escape character is doubled, so it is invertible
+# and therefore collision-free). It is locale-invariant because the declaration,
+# not the locale, decides how the bytes are read; and it is vectorized C code,
+# so .cache_get_many()'s whole-vector warm path stays cheap.
+#
+# Bytes that are not valid UTF-8 (a latin1-ish string arriving undeclared) would
+# make stri_escape_unicode() error, so those fall back to a hex rendering of the
+# raw bytes — injective by construction, and disjoint from the escape range
+# because it is prefixed with "\\zz" and \z is not a sequence that
+# stri_escape_unicode() ever emits.
+.cache_key_ascii <- function(keys) {
+  enc <- Encoding(keys)
+  unknown <- enc == "unknown"
+  if (any(unknown)) {
+    enc[unknown] <- "UTF-8"
+    Encoding(keys) <- enc
+  }
+  # Only UTF-8-declared keys can carry invalid bytes here; latin1 is a total
+  # single-byte encoding and always converts.
+  risky <- enc == "UTF-8"
+  ok <- !risky | stringi::stri_enc_isutf8(keys)
+  if (all(ok)) {
+    return(stringi::stri_escape_unicode(keys))
+  }
+  out <- character(length(keys))
+  out[ok] <- stringi::stri_escape_unicode(keys[ok])
+  out[!ok] <- paste0(
+    "\\zz",
+    vapply(
+      keys[!ok],
+      function(k) {
+        paste(sprintf("%02x", as.integer(charToRaw(k))), collapse = "")
+      },
+      character(1L),
+      USE.NAMES = FALSE
+    )
+  )
+  out
+}
+
 # Look up `key` in the named cache. Returns the stored value (which may be
 # NULL), or .rurl_cache_sentinel on a miss / when the cache is disabled.
 .cache_get <- function(cache_name, key) {
@@ -122,6 +176,7 @@ rurl_clear_caches <- function() {
     return(.rurl_cache_sentinel)
   }
   env <- .rurl_cache[[cache_name]]
+  key <- .cache_key_ascii(key)
   if (exists(key, envir = env, inherits = FALSE)) {
     get(key, envir = env, inherits = FALSE)
   } else {
@@ -136,6 +191,13 @@ rurl_clear_caches <- function() {
 # stay small — bounded by the number of unique hosts/labels, not URL+option
 # combinations).
 .cache_set <- function(cache_name, key, value) {
+  .cache_set_derived(cache_name, .cache_key_ascii(key), value)
+}
+
+# Store `value` under an already-ASCII-derived `key` (see .cache_key_ascii()).
+# Split out so .cache_set_many() can derive the whole key vector in one
+# vectorized call instead of once per element on the cold parse path.
+.cache_set_derived <- function(cache_name, key, value) {
   if (!.cache_enabled(cache_name)) {
     return(invisible(NULL))
   }
@@ -165,6 +227,7 @@ rurl_clear_caches <- function() {
     return(rep(list(.rurl_cache_sentinel), n))
   }
   env <- .rurl_cache[[cache_name]]
+  keys <- .cache_key_ascii(keys)
   mget(
     keys,
     envir = env,
@@ -173,13 +236,18 @@ rurl_clear_caches <- function() {
   )
 }
 
-# Batch store: assign each value under its key. Delegates to .cache_set() per
-# key so the enable switch, the reset-watermark bound, and the NULL-caching
-# semantics are applied identically to the scalar path (peak size still never
-# exceeds max_full_parse, even mid-batch).
+# Batch store: assign each value under its key. Keys are ASCII-derived once for
+# the whole vector, then stored one at a time via .cache_set_derived() so the
+# enable switch, the reset-watermark bound, and the NULL-caching semantics are
+# applied identically to the scalar path (peak size still never exceeds
+# max_full_parse, even mid-batch).
 .cache_set_many <- function(cache_name, keys, values) {
+  if (length(keys) == 0L) {
+    return(invisible(NULL))
+  }
+  keys <- .cache_key_ascii(keys)
   for (i in seq_along(keys)) {
-    .cache_set(cache_name, keys[[i]], values[[i]])
+    .cache_set_derived(cache_name, keys[[i]], values[[i]])
   }
   invisible(NULL)
 }
