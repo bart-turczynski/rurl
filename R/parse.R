@@ -783,6 +783,28 @@ safe_parse_urls <- function(url,
   x
 }
 
+# Output-side counterpart of .mark_host_utf8(): declare (not convert) every
+# CHARACTER component of an assembled result as UTF-8, so what rurl RETURNS
+# carries the same encoding contract as what it parses. Without it, components
+# handed back from `pslr` / `punycoder` (domain / tld / *_ascii / *_unicode) and
+# the host-derived strings arrive marked "unknown" (native bytes), so in a
+# non-UTF-8 session they print wrong and `identical()` / joins on `domain` stay
+# locale-dependent. Applied UNIFORMLY to every character component rather than
+# only the ones that can carry non-ASCII: R ignores an encoding mark on a pure
+# ASCII string (`Encoding()` stays "unknown"), so marking the ASCII-by-
+# construction components (parse_status, *_ascii, scheme) is a literal no-op,
+# and uniformity avoids the bug this fixes -- a component marked in one accessor
+# and native in another. Non-character components (port, is_ip_host) are left
+# alone. Values, NA-ness, length, order, names and types are untouched.
+.mark_result_utf8 <- function(res) {
+  for (nm in names(res)) {
+    if (is.character(res[[nm]])) {
+      res[[nm]] <- .mark_host_utf8(res[[nm]])
+    }
+  }
+  res
+}
+
 # Coerce one input element to the scalar `original_url` value: NA for missing
 # or non-scalar inputs, the string itself for character, else as.character().
 .spu_coerce_original <- function(u) {
@@ -2114,7 +2136,9 @@ safe_parse_urls <- function(url,
     result$clean_url[slu] <- NA_character_
     result$parse_status[slu] <- .STATUS_WARN_USERINFO
   }
-  result
+
+  # Output-side encoding contract: declare the returned character columns UTF-8.
+  .mark_result_utf8(result)
 }
 
 # Internal implementation of safe_parse_url (not memoized)
@@ -2238,8 +2262,9 @@ safe_parse_urls <- function(url,
     parse_status <- .STATUS_WARN_USERINFO
   }
 
-  # Phase 13: assemble the typed result list
-  .assemble_parse_result(
+  # Phase 13: assemble the typed result list, then declare the returned
+  # character fields UTF-8 (the output-side encoding contract).
+  .mark_result_utf8(.assemble_parse_result(
     original_input_url = original_input_url,
     scheme_output = scheme_output,
     host_output = host_output,
@@ -2257,5 +2282,5 @@ safe_parse_urls <- function(url,
     parse_status = parse_status,
     is_scheme_relative = prep$is_scheme_relative,
     scheme_relative_handling = scheme_relative_handling
-  )
+  ))
 }
