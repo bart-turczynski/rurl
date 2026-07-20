@@ -87,6 +87,70 @@ jobs:
           upload-snapshots: true
           build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
 
+  # The locale-invariance gate (RURL-izzuenjx). rurl's output must not depend
+  # on the session's LC_CTYPE -- same input, same values AND same Encoding()
+  # marks -- so the suite has to actually RUN under a non-UTF-8 charset
+  # somewhere. It lives here rather than in full-check.yml because it is a
+  # one-job Linux cell (no matrix multiplier) guarding a class of defect that
+  # is cheap to reintroduce on any parse-path PR: the fast gate is where it
+  # earns its keep. It is deliberately NOT the determinism probe, which
+  # collects evidence across OS x R x charset and never fails a build.
+  locale:
+    needs: lint
+    runs-on: ubuntu-latest
+    name: Tests (LC_ALL=C)
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::testthat, any::pkgload
+          needs: check
+
+      # LC_ALL is set per-step, not job-wide, so dependency installation runs
+      # in the runner's normal environment and only the probed session is
+      # forced to C. It is exported before R is exec'd (never via a mid-session
+      # Sys.setlocale()): ICU, which stringi and therefore rurl's case folding
+      # sit on, picks its default locale at initialization, so a late switch
+      # can leave a cell looking green while probing the wrong charset.
+      - name: Assert the C locale actually took effect
+        env:
+          LC_ALL: C
+          LANG: C
+        shell: Rscript {0}
+        run: |
+          ctype <- Sys.getlocale("LC_CTYPE")
+          utf8 <- isTRUE(l10n_info()[["UTF-8"]])
+          cat("LC_CTYPE:      ", ctype, "\n", sep = "")
+          cat("l10n_info UTF-8:", utf8, "\n", sep = " ")
+          # A silently-UTF-8 cell is a gate that proves nothing, so the
+          # requested charset is asserted rather than assumed. "C" always
+          # exists on a Linux runner -- nothing needs generating -- so a
+          # mismatch here means the environment did not reach R at all.
+          if (!identical(ctype, "C") || utf8) {
+            stop("requested LC_CTYPE=C but got '", ctype,
+                 "' (UTF-8 = ", utf8, ")")
+          }
+
+      # testthat::test_local() fails the step on any test FAILURE
+      # (stop_on_failure). Warnings are reported but tolerated on purpose:
+      # under LC_ALL=C, pslr's own bundled_snapshot() emits "strings not
+      # representable in native encoding will be translated to UTF-8". That is
+      # UPSTREAM (PSLR-jzdhhugc) and rurl cannot fix it, so this cell must not
+      # be written to fail on it.
+      - name: Run the test suite under LC_ALL=C
+        env:
+          LC_ALL: C
+          LANG: C
+        shell: Rscript {0}
+        run: |
+          stopifnot(identical(Sys.getlocale("LC_CTYPE"), "C"))
+          testthat::test_local(reporter = "summary", stop_on_failure = TRUE)
+
   coverage:
     needs: check
     runs-on: ubuntu-latest
