@@ -1,0 +1,404 @@
+# Cross-platform parse-determinism probe (RURL-ttrcfneq).
+#
+# EVIDENCE COLLECTION, NOT A GATE. It runs tools/determinism/{curl-probe.R,
+# parse-dump.R} over the committed corpus and uploads the CSVs as artifacts;
+# divergence between cells is the finding, so a divergence must NEVER fail the
+# build. Only a probe that could not run at all fails.
+#
+# Why this exists alongside tools/determinism/matrix/ (the Docker sweep):
+# the Docker matrix varies libcurl VERSION on one OS. It cannot reach the axis
+# that actually broke win-builder -- every Linux libcurl rejects
+# file://example.com/path, so Windows accepting it is a property of the Windows
+# BUILD, not of a libcurl version. Only a real Windows runner probes that. R for
+# Windows bundles its own libcurl, so on Windows "R version" IS the libcurl
+# build axis -- hence release/devel/oldrel-1.
+#
+# The locale axis guards the ASCII-only case-mapping fix (RURL-ugfpuotu):
+# a Turkish locale is where a locale-sensitive tolower()/toupper() breaks
+# scheme/host case folding, and it must stay fixed on every OS.
+#
+# Cost: 16 jobs incl. Windows (2x) and macOS (10x) minute multipliers. On demand
+# only -- never on push to main.
+name: Determinism probe
+
+on:
+  # Primary entry point. NOTE: GitHub only offers workflow_dispatch for
+  # workflows that already exist on the DEFAULT branch, so before this file is
+  # merged the dispatch button does not exist -- the pull_request trigger below
+  # is what makes the first run happen at all.
+  workflow_dispatch:
+    inputs:
+      run_parse_dump:
+        description: 'Also run the full rurl stack probe (parse-dump.R)'
+        type: boolean
+        default: true
+  # Deliberately narrow: only the harness itself and this workflow. This sweep
+  # never fails on a divergence, so as a PR check it yields ZERO automatic
+  # signal -- a human must download artifacts to learn anything. Firing 16 jobs
+  # on every parse-pipeline PR would be latency and noise for no gate.
+  # Determinism regressions on parse changes are caught by DISPATCHING this
+  # workflow manually, not by widening this filter.
+  pull_request:
+    paths:
+      - 'tools/determinism/**'
+      - '.github/workflows/determinism-probe.yml'
+
+permissions: read-all
+
+concurrency:
+  # No cancel-in-progress: a half-collected sweep is worthless evidence.
+  group: determinism-probe-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }} / R ${{ matrix.r }} / locale ${{ matrix.locale }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        r: [release, devel, oldrel-1]
+        locale: [default, tr]
+        exclude:
+          # r-lib/actions/setup-r does not publish an R-devel build for macOS.
+          # Excluded explicitly rather than silently resolving to something else.
+          - os: macos-latest
+            r: devel
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      # Unique per cell by construction (os x r x locale is the whole matrix),
+      # and already inside the [A-Za-z0-9._-] set both probe scripts sanitize
+      # to, so no two cells can collide after sanitization.
+      RURL_DETERMINISM_LABEL: gha-${{ matrix.os }}-R${{ matrix.r }}-${{ matrix.locale }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate the Turkish locale (Linux only)
+        if: matrix.locale == 'tr' && runner.os == 'Linux'
+        run: |
+          sudo locale-gen tr_TR.UTF-8
+          sudo update-locale
+
+      # The locale MUST be in place before R starts. A mid-session
+      # Sys.setlocale() is NOT enough: ICU (via stringi) picks its default
+      # locale at initialization, so a late switch can leave
+      # stri_trans_tolower() behaving as if in the default locale -- the `tr`
+      # cells would then silently probe exactly what the `default` cells probe
+      # while looking green. Hence, per OS:
+      #
+      #   Linux / macOS -- LANG + LC_ALL in the step environment, i.e. set in
+      #     the process environment before R is exec'd. That is the verified
+      #     repro shape for the Turkish-I hazard, and ICU picks it up too.
+      #   Windows -- R takes its locale from the OS and ignores LANG/LC_ALL, so
+      #     there is no pre-exec lever. The earliest available R-side hook is
+      #     R_PROFILE_USER, which runs at session start BEFORE any package
+      #     loads. Candidates are tried in order and the session aborts if none
+      #     applies -- a wrong locale must never be probed silently.
+      #
+      # ...and on Windows the CRT locale is NOT sufficient either. Measured on
+      # PR #181: with LC_CTYPE=Turkish_T<U+00FC>rkiye.1254, stringi still
+      # reported ICU locale en_US and stri_trans_tolower("WIKI") == "wiki".
+      # stringi on Windows does not derive its ICU default from the R/CRT
+      # locale the way it does on Unix, and rurl folds case through
+      # stringi/ICU -- so that is the fault that actually matters. The lever is
+      # stringi::stri_locale_set(), which sets the default locale every
+      # stri_trans_*() call without an explicit `locale=` uses. It is applied
+      # from a packageEvent("stringi", "onLoad") hook rather than inline in the
+      # Rprofile, because the Rprofile runs BEFORE any package loads and
+      # stringi is not loadable there (and in curl-probe-only cells is not even
+      # installed). The hook fires exactly when stringi appears, in whichever
+      # process loads it.
+      #
+      # This is a faithful simulation, not a cheat: on a genuinely Turkish
+      # Windows machine ICU reports tr_TR by itself. We cannot change the
+      # runner's OS locale, so we set explicitly what that machine would give
+      # us -- and only where the ambient mechanism did not already do it
+      # (Linux/macOS are left alone), and never in a `default` cell.
+      # locale-<LABEL>.csv records `icu_locale_source` so a natural repro stays
+      # distinguishable from a simulated one.
+      #
+      # The "Assert the locale hazard is armed" step below verifies empirically
+      # that the hazard is live and records that verdict as data. The mechanism
+      # is the belt; the assertion is the braces -- it is what caught the
+      # Windows false negative in the first place.
+      - name: Resolve locale mechanism
+        shell: bash
+        run: |
+          set -euo pipefail
+          lang=""
+          cands=""
+          icu=""
+          case "${{ matrix.locale }}-${{ runner.os }}" in
+            default-Linux|default-macOS|default-Windows)
+              # Runner default, untouched: the honest baseline. No ICU override.
+              ;;
+            tr-Linux)   lang="tr_TR.UTF-8"; icu="tr_TR" ;;
+            tr-macOS)   lang="tr_TR.UTF-8"; icu="tr_TR" ;;
+            # Windows renamed the Turkish locale: "Turkish_Turkey.*" does NOT
+            # exist (verified on windows-latest, PR #181) -- it is
+            # "Turkish_T<U+00FC>rkiye". %TRTR% is that name, expanded in R so
+            # this file stays pure ASCII. Every UTF-8 form comes first: the
+            # axis under study is CASE MAPPING, and a non-UTF-8 codepage would
+            # be a second uncontrolled variable. The .1254 / bare forms are
+            # last-resort fallbacks only.
+            tr-Windows)
+              cands="%TRTR%.utf8;tr-TR.UTF-8;tr_TR.UTF-8;%TRTR%.1254;tr-TR;Turkish_Turkey.1254;Turkish"
+              icu="tr_TR"
+              ;;
+            *)
+              echo "::error::unhandled locale/OS pair '${{ matrix.locale }}-${{ runner.os }}'"
+              echo "Refusing to probe an unrequested locale under a labelled cell."
+              exit 1
+              ;;
+          esac
+          # The profile is STATIC and env-driven (quoted heredoc: no shell
+          # expansion, no quoting hazards), so a `default` cell runs it as a
+          # no-op. R_PROFILE_USER always points at a real file -- an empty
+          # value is not reliably ignored by R.
+          cat > gha-locale.Rprofile <<'RPROFILE'
+          # generated by .github/workflows/determinism-probe.yml -- do not edit
+          local({
+            cands <- Sys.getenv("RURL_LOCALE_CANDIDATES")
+            if (nzchar(cands)) {
+              tr_name <- paste0("Turkish_T", intToUtf8(0x00FC), "rkiye")
+              cands <- gsub("%TRTR%", tr_name,
+                            strsplit(cands, ";", fixed = TRUE)[[1]], fixed = TRUE)
+              got <- ""
+              for (l in cands) {
+                got <- tryCatch(suppressWarnings(Sys.setlocale("LC_ALL", l)),
+                                error = function(e) "")
+                if (nzchar(got)) break
+              }
+              if (!nzchar(got)) {
+                stop("Rprofile: could not set any of: ",
+                     paste(cands, collapse = ", "))
+              }
+              cat("Rprofile locale: ", got, "\n", sep = "")
+            }
+            icu <- Sys.getenv("RURL_ICU_LOCALE")
+            if (nzchar(icu)) {
+              setHook(packageEvent("stringi", "onLoad"), function(...) {
+                src <- tryCatch({
+                  cur <- as.character(stringi::stri_locale_get())
+                  if (isTRUE(grepl("^tr", cur))) {
+                    "ambient"
+                  } else {
+                    suppressMessages(stringi::stri_locale_set(icu))
+                    "explicit"
+                  }
+                }, error = function(e) "failed")
+                Sys.setenv(RURL_ICU_LOCALE_SOURCE = src)
+                cat("stringi ICU locale (", src, "): ",
+                    tryCatch(as.character(stringi::stri_locale_get()),
+                             error = function(e) "?"), "\n", sep = "")
+              })
+            }
+          })
+          RPROFILE
+          cat gha-locale.Rprofile
+          {
+            echo "RURL_LANG=$lang"
+            echo "RURL_LOCALE_CANDIDATES=$cands"
+            echo "RURL_ICU_LOCALE=$icu"
+            echo "RURL_RPROFILE=gha-locale.Rprofile"
+          } >> "$GITHUB_ENV"
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r }}
+          http-user-agent: ${{ matrix.r == 'devel' && 'release' || 'default' }}
+          use-public-rspm: true
+
+      # HARD requirement: curl-probe.R needs base R + `curl` and nothing else.
+      # If this fails the cell genuinely could not probe, and it should fail.
+      # Installed WITHOUT the probe locale, so a Turkish locale cannot perturb
+      # package installation itself.
+      - name: Install the curl package
+        run: install.packages("curl")
+        shell: Rscript {0}
+
+      - name: Probe libcurl only (curl-probe.R)
+        shell: Rscript {0}
+        env:
+          LANG: ${{ env.RURL_LANG }}
+          LC_ALL: ${{ env.RURL_LANG }}
+          R_PROFILE_USER: ${{ env.RURL_RPROFILE }}
+        run: |
+          cat("effective locale: ", Sys.getlocale("LC_ALL"), "\n", sep = "")
+          source("tools/determinism/curl-probe.R")
+
+      # Full rurl stack. Pinned STRUCTURALLY to this commit's source tree via
+      # `local::.` -- an unpinned matrix would measure rurl drift and
+      # misattribute it to libcurl. Never CRAN, never a floating version.
+      # Allowed to fail (e.g. stringi/ICU unbuildable on some R-devel cell): the
+      # cell then degrades to libcurl-only rather than losing all its evidence.
+      - name: Install rurl from this source tree
+        id: stack
+        if: github.event_name != 'workflow_dispatch' || inputs.run_parse_dump
+        continue-on-error: true
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: local::.
+
+      - name: Probe the full rurl stack (parse-dump.R)
+        if: (github.event_name != 'workflow_dispatch' || inputs.run_parse_dump) && steps.stack.outcome == 'success'
+        continue-on-error: true
+        shell: Rscript {0}
+        env:
+          LANG: ${{ env.RURL_LANG }}
+          LC_ALL: ${{ env.RURL_LANG }}
+          R_PROFILE_USER: ${{ env.RURL_RPROFILE }}
+        run: |
+          cat("effective locale: ", Sys.getlocale("LC_ALL"), "\n", sep = "")
+          source("tools/determinism/parse-dump.R")
+
+      # Does the locale axis actually EXIST in this cell? A `tr` cell whose
+      # case-mapping hazard is not live is a false negative that looks like a
+      # pass, so the verdict is measured and written next to the dumps, in the
+      # harness's tidy key/value + JSON-escaped-ASCII shape, for EVERY cell
+      # (`default` cells are the control). Runs last so stringi, if the stack
+      # installed, is present to be probed.
+      - name: Assert the locale hazard is armed
+        if: always()
+        continue-on-error: true
+        shell: Rscript {0}
+        env:
+          LANG: ${{ env.RURL_LANG }}
+          LC_ALL: ${{ env.RURL_LANG }}
+          R_PROFILE_USER: ${{ env.RURL_RPROFILE }}
+        run: |
+          # Minimal copy of the harness escaper: quoted, ASCII-only, non-ASCII
+          # as \uXXXX, bare `null` for NA. Same contract as env-<LABEL>.csv.
+          esc <- function(s) {
+            if (length(s) != 1L || is.na(s)) return("null")
+            cps <- utf8ToInt(enc2utf8(as.character(s)))
+            if (length(cps) == 0L) return("\"\"")
+            out <- vapply(cps, function(cp) {
+              if (cp == 34L) {
+                "\\\""
+              } else if (cp == 92L) {
+                "\\\\"
+              } else if (cp >= 32L && cp <= 126L) {
+                intToUtf8(cp)
+              } else if (cp <= 0xFFFFL) {
+                sprintf("\\u%04x", cp)
+              } else {
+                u <- cp - 0x10000L
+                sprintf("\\u%04x\\u%04x", 0xD800L + u %/% 0x400L,
+                        0xDC00L + u %% 0x400L)
+              }
+            }, character(1), USE.NAMES = FALSE)
+            paste0("\"", paste(out, collapse = ""), "\"")
+          }
+          # Built with intToUtf8(), never pasted as literals: this workflow file
+          # stays pure ASCII, like corpus.R.
+          dotless_i <- intToUtf8(0x0131)   # U+0131 LATIN SMALL LETTER DOTLESS I
+          dotted_I <- intToUtf8(0x0130)    # U+0130 LATIN CAPITAL I WITH DOT ABOVE
+          tr_lower <- paste0("w", dotless_i, "k", dotless_i)
+          requested <- "${{ matrix.locale }}"
+          base_lower <- tolower("WIKI")
+          base_upper <- toupper("i")
+          has_stri <- requireNamespace("stringi", quietly = TRUE)
+          stri_lower <- if (has_stri) {
+            tryCatch(stringi::stri_trans_tolower("WIKI"),
+                     error = function(e) NA_character_)
+          } else {
+            NA_character_
+          }
+          stri_loc <- if (has_stri) {
+            tryCatch(as.character(stringi::stri_locale_get()),
+                     error = function(e) NA_character_)
+          } else {
+            NA_character_
+          }
+          # How did ICU end up where it is? The Rprofile's stringi onLoad hook
+          # records ambient / explicit / failed. If it never fired (env unset),
+          # apply the override here as a belt and mark it distinctly, so a
+          # misfired hook is visible rather than silently unarmed.
+          icu_want <- Sys.getenv("RURL_ICU_LOCALE")
+          icu_src <- Sys.getenv("RURL_ICU_LOCALE_SOURCE", "")
+          if (has_stri && nzchar(icu_want) && !isTRUE(grepl("^tr", stri_loc))) {
+            ok <- tryCatch({
+              suppressMessages(stringi::stri_locale_set(icu_want))
+              TRUE
+            }, error = function(e) FALSE)
+            if (ok) {
+              icu_src <- "explicit-late"
+              stri_loc <- as.character(stringi::stri_locale_get())
+              stri_lower <- tryCatch(stringi::stri_trans_tolower("WIKI"),
+                                     error = function(e) NA_character_)
+            }
+          }
+          if (!nzchar(icu_src)) icu_src <- if (has_stri) "ambient" else "none"
+          # Both engines are recorded because they disagree by platform: macOS
+          # libc tolower() is not Turkish-aware while ICU is, and rurl's own
+          # case folding goes through stringi/ICU. The axis is armed if EITHER
+          # engine shows the hazard.
+          armed_base <- identical(base_lower, tr_lower) ||
+            identical(base_upper, dotted_I)
+          armed_stri <- has_stri && identical(stri_lower, tr_lower)
+          armed <- armed_base || armed_stri
+          lgl <- function(x) if (isTRUE(x)) "true" else "false"
+          keys <- c("label", "locale_requested", "locale_effective", "encoding",
+                    "base_tolower_WIKI", "base_toupper_i", "stringi_available",
+                    "stringi_locale", "icu_locale_source",
+                    "stri_trans_tolower_WIKI",
+                    "hazard_armed_base", "hazard_armed_stringi",
+                    "hazard_armed", "run_utc")
+          vals <- c(Sys.getenv("RURL_DETERMINISM_LABEL"), requested,
+                    Sys.getlocale("LC_ALL"),
+                    as.character(getOption("encoding")),
+                    base_lower, base_upper, lgl(has_stri),
+                    stri_loc, icu_src, stri_lower,
+                    lgl(armed_base), lgl(armed_stri), lgl(armed),
+                    format(Sys.time(), "%Y-%m-%dT%H:%M:%S", tz = "UTC"))
+          df <- data.frame(key = keys,
+                           value = vapply(vals, esc, character(1),
+                                          USE.NAMES = FALSE),
+                           stringsAsFactors = FALSE)
+          dir.create("tools/determinism/out", showWarnings = FALSE,
+                     recursive = TRUE)
+          label <- gsub("[^A-Za-z0-9._-]", "_",
+                        Sys.getenv("RURL_DETERMINISM_LABEL"))
+          path <- file.path("tools", "determinism", "out",
+                            paste0("locale-", label, ".csv"))
+          con <- file(path, open = "wb")               # binary: force LF
+          utils::write.csv(df, con, row.names = FALSE, quote = TRUE, eol = "\n")
+          close(con)
+          print(df)
+          # A `tr` cell that is not armed is a FINDING, not a build failure:
+          # warn loudly, record it, and still collect the evidence -- but never
+          # let it pass as a clean negative.
+          if (identical(requested, "tr") && !armed) {
+            cat("::warning::", label, ": Turkish case-mapping hazard NOT armed",
+                " (base=", lgl(armed_base), ", stringi=", lgl(armed_stri),
+                ", locale=", Sys.getlocale("LC_CTYPE"),
+                ", icu=", as.character(stri_loc), "/", icu_src,
+                "); this tr cell duplicates the default cell\n", sep = "")
+          }
+
+      # Make a degraded cell visible IN THE ARTIFACT, not just in a log nobody
+      # reads: downstream analysis must be able to tell "no rurl dump here"
+      # apart from "dump lost".
+      - name: Record a degraded cell
+        if: always() && steps.stack.outcome == 'failure'
+        shell: bash
+        run: |
+          mkdir -p tools/determinism/out
+          {
+            echo "label: $RURL_DETERMINISM_LABEL"
+            echo "parse-dump.R: SKIPPED"
+            echo "reason: full rurl stack install outcome=${{ steps.stack.outcome }}"
+          } > "tools/determinism/out/DEGRADED-$RURL_DETERMINISM_LABEL.txt"
+          echo "::warning::${RURL_DETERMINISM_LABEL}: full rurl stack unavailable; libcurl-only evidence collected"
+
+      - name: Upload probe artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # v4 forbids duplicate artifact names; the label is unique per cell.
+          name: determinism-${{ env.RURL_DETERMINISM_LABEL }}
+          path: tools/determinism/out/
+          if-no-files-found: error
+          retention-days: 90
