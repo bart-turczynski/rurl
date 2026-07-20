@@ -62,7 +62,16 @@
   "tel-missing-phone-context",
   "data-missing-comma",
   "file-non-absolute-path",
-  "file-forbidden-component"
+  # RFC 8089 `file:` facts (RURL-obsweger). These replace the former
+  # `file-forbidden-component`, whose name asserted something the RFCs
+  # contradict: of the four components it covered, `port` is now a parse
+  # failure (Section 2 admits none and no appendix supplies a production),
+  # while `userinfo` is expressly sanctioned by App. E.1/F and `query`/
+  # `fragment` are inherited generic RFC 3986 components -- for the fragment,
+  # RFC 3986 Section 3.5 forbids scheme specs from restricting it at all.
+  # Nothing was "forbidden" except the one case that is now an error.
+  "file-userinfo-extension",
+  "file-component-outside-rfc8089"
 )
 
 # The host_type vocabulary (PRD §6.3). get_host_type() emits exactly one of
@@ -401,9 +410,11 @@
       diag, gp & gs == "tel" & !tel_global & !tel_ctx,
       "tel-missing-phone-context"
     )
-    # `file` under rfc-syntax: non-absolute path; OR userinfo/port/query/
-    # fragment present (outside RFC 8089's grammar). userinfo is not surfaced by
-    # the RFC file parser, so this bounded fact covers port/query/fragment.
+    # `file` under rfc-syntax (RURL-obsweger two-gate model): a non-absolute
+    # path; userinfo present via App. E.1/F's non-normative production; or a
+    # query/fragment, which RFC 8089 never mentions and which are therefore
+    # inherited generic RFC 3986 components. `port` is NOT reported here -- it
+    # is a parse failure under Gate 2, so no `ok` row can carry one.
     if (is_rfc) {
       is_file <- gp & gs == "file"
       diag <- .diag_add(
@@ -411,10 +422,12 @@
         is_file & gen_b$rfc_path_form %in% c("rootless", "empty"),
         "file-non-absolute-path"
       )
-      file_forbidden <- !is.na(gen_b$port) | !is.na(gen_b$query) |
-        !is.na(gen_b$fragment)
       diag <- .diag_add(
-        diag, is_file & file_forbidden, "file-forbidden-component"
+        diag, is_file & !is.na(gen_b$userinfo), "file-userinfo-extension"
+      )
+      outside_8089 <- !is.na(gen_b$query) | !is.na(gen_b$fragment)
+      diag <- .diag_add(
+        diag, is_file & outside_8089, "file-component-outside-rfc8089"
       )
     }
   }
