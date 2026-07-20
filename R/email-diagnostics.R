@@ -143,7 +143,7 @@
 # share a role (so `%22`/`%5B`/`%5D`/`%5C` protect commas just like raw ones);
 # `%2C`/`%40` are DATA (role "other") and never act as separators.
 .email_unit_role <- function(u) {
-  up <- toupper(u)
+  up <- .ascii_toupper(u)
   if (identical(u, "\"") || identical(up, "%22")) {
     "quote"
   } else if (identical(u, "[") || identical(up, "%5B")) {

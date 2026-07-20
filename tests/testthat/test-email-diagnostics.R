@@ -278,3 +278,69 @@ test_that("extraction never disturbs the mailto clean_url / round-trip", {
     expect_identical(do.call(get_parse_status, c(list(u), ga)), "ok")
   }
 })
+
+# --- Locale-invariance of email unit-role case mapping (RURL-hckljpwh) ------
+# `.email_unit_role()` used base `toupper()` to fold a `%XX` triplet before
+# comparing it to the encoded delimiters (`%22` / `%5B` / `%5D` / `%5C`). That
+# is the same locale-tailored case mapping RURL-ugfpuotu removed from the URL
+# syntax path, and it carried a second, portable defect: base `toupper()`
+# routes through `utf8towcs()`, which REJECTS the code points the hostile-input
+# corpora carry (the U+FFFF noncharacter), so a mailto containing one raised
+# "invalid input in 'utf8towcs'" out of `get_mailto_recipients()`. The ASCII
+# helper's `stringi` fallback survives those rows, which is exactly why it
+# exists.
+#
+# Local twin of the same-named helper in test-parse-phases.R (testthat gives
+# each test file its own environment, so a helper cannot be shared between
+# them). The locale is forced through `stringi::stri_locale_set()` rather than
+# the system locale so the tailoring is available everywhere, including CI.
+.with_turkish_stri_locale <- function(code) {
+  old <- suppressMessages(stringi::stri_locale_set("tr_TR"))
+  on.exit(
+    {
+      suppressMessages(stringi::stri_locale_set(old))
+      rurl_clear_caches()
+    },
+    add = TRUE
+  )
+  rurl_clear_caches()
+  force(code)
+}
+
+test_that("a U+FFFF unit classifies as data instead of erroring", {
+  expect_identical(rurl:::.email_unit_role("￿"), "other")
+})
+
+test_that("get_mailto_recipients() survives a U+FFFF local part", {
+  r <- get_mailto_recipients("mailto:a￿b@example.com",
+    scheme_acceptance = "general")
+  expect_identical(nrow(r), 1L)
+  expect_identical(r$mailto_local_part_form, "invalid")
+})
+
+test_that("unit roles are stable under a Turkish session locale", {
+  .with_turkish_stri_locale({
+    # Guard: the tailoring is actually armed in this session.
+    expect_identical(stringi::stri_trans_tolower("WIKI"), "wıkı")
+
+    # Encoded delimiters fold ASCII-only, in either input case.
+    expect_identical(rurl:::.email_unit_role("%22"), "quote")
+    expect_identical(rurl:::.email_unit_role("%5b"), "bopen")
+    expect_identical(rurl:::.email_unit_role("%5d"), "bclose")
+    expect_identical(rurl:::.email_unit_role("%5c"), "bslash")
+    # `%2C` / `%40` stay DATA; raw delimiters keep their roles.
+    expect_identical(rurl:::.email_unit_role("%2c"), "other")
+    expect_identical(rurl:::.email_unit_role("%40"), "other")
+    expect_identical(rurl:::.email_unit_role(","), "comma")
+    expect_identical(rurl:::.email_unit_role("@"), "at")
+    # The dotless/dotted i pair is data whichever way a locale maps it.
+    expect_identical(rurl:::.email_unit_role("ı"), "other")
+    expect_identical(rurl:::.email_unit_role("İ"), "other")
+
+    r <- get_mailto_recipients(
+      "mailto:%22a,b%22@example.com,c@example.org",
+      scheme_acceptance = "general"
+    )
+    expect_identical(nrow(r), 2L)
+  })
+})

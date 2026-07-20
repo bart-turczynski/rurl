@@ -461,7 +461,7 @@
     base <- 10
   }
   chars <- strsplit(digits, "", fixed = TRUE)[[1]]
-  vals <- match(toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
+  vals <- match(.ascii_toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
   if (length(vals) == 0L) {
     return(0)
   }

@@ -347,7 +347,7 @@
   }
 
   chars <- strsplit(digits, "", fixed = TRUE)[[1L]]
-  vals <- match(toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
+  vals <- match(.ascii_toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
   if (anyNA(vals) || any(vals >= base)) {
     return(NA_real_)
   }
@@ -1256,12 +1256,26 @@
 # `path_encoding = "keep"` behavior and the RFC 3986 section 6.2.2.1 case
 # canonicalization path. Malformed `%` (not followed by two hex digits) is left
 # as-is. `\U\1` (perl) uppercases just the captured pair.
+#
+# The `\U` case mapping is locale-proof here (the captured pair is hex by
+# construction, and no locale case-maps `[0-9a-f]` outside `[0-9A-F]`), but the
+# ENCODING MARK of `gsub(perl = TRUE)` is not: handed native (`"unknown"`)
+# bytes it returns them still `"unknown"` under `LC_ALL=C` and marked `"UTF-8"`
+# under a UTF-8 session -- identical bytes, divergent mark, on every path/query
+# value that carries a non-ASCII byte. `.mark_host_utf8()` pins the mark the
+# same way the input and output chokepoints do: it DECLARES with `Encoding<-`
+# and never transcodes (`enc2utf8()` would re-decode in the session locale,
+# which is the locale sensitivity being removed). Pure-ASCII values are
+# unaffected -- R ignores a mark on them -- so this only touches the rows that
+# diverged.
 .uppercase_percent_hex <- function(x) {
   na <- is.na(x)
   if (all(na)) {
     return(x)
   }
-  x[!na] <- gsub("%([0-9a-fA-F]{2})", "%\\U\\1", x[!na], perl = TRUE)
+  x[!na] <- .mark_host_utf8(
+    gsub("%([0-9a-fA-F]{2})", "%\\U\\1", x[!na], perl = TRUE)
+  )
   x
 }
 

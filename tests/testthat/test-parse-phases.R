@@ -454,3 +454,22 @@ test_that("path case_handling is locale-pinned, not session-dependent", {
     )
   })
 })
+
+test_that(".uppercase_percent_hex() declares a locale-invariant UTF-8 mark", {
+  # `gsub(perl = TRUE)` hands back native ("unknown") bytes unchanged under
+  # `LC_ALL=C` but marks them "UTF-8" under a UTF-8 session -- identical bytes,
+  # divergent `Encoding()`. The helper now DECLARES the mark (never
+  # transcodes), so the result is the same object in every locale.
+  raw_bytes <- rawToChar(as.raw(c(0x2f, 0x70, 0x25, 0x32, 0x66, 0xc3, 0xbc)))
+  expect_identical(Encoding(raw_bytes), "unknown")
+
+  out <- rurl:::.uppercase_percent_hex(c(raw_bytes, "/plain%2f", NA))
+  expect_identical(Encoding(out), c("UTF-8", "unknown", "unknown"))
+  # Bytes are untouched apart from the hex uppercasing; NA stays NA.
+  expect_identical(
+    charToRaw(out[1]),
+    as.raw(c(0x2f, 0x70, 0x25, 0x32, 0x46, 0xc3, 0xbc))
+  )
+  expect_identical(out[2], "/plain%2F")
+  expect_true(is.na(out[3]))
+})

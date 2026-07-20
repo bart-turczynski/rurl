@@ -69,7 +69,7 @@
   replacement <- ifelse(
     is_unreserved,
     vapply(codes, function(code) rawToChar(as.raw(code)), character(1)),
-    toupper(matches)
+    .ascii_toupper(matches)
   )
   regmatches(path, m) <- list(replacement)
   path
