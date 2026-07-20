@@ -806,8 +806,18 @@
     return(host)
   }
 
+  # `utils::URLdecode()` rebuilds the string with `rawToChar()`, so the decoded
+  # octets come back marked "unknown" (native) -- an INPUT-side gap the host
+  # chokepoint in `.parse_urls_vec()` cannot cover, because the WHATWG `file:`
+  # parser is in-tree and produces this host itself. Under `LC_ALL=C` those
+  # bytes are then read as native characters, so `file://a%C2%ADb/p` (soft
+  # hyphen) missed the UTS-46 mapping that `file://a<U+00AD>b/p` gets and the
+  # row was rejected. `.mark_host_utf8()` DECLARES the decoded octets UTF-8
+  # (`Encoding<-`; never `enc2utf8()`, which would transcode from the session
+  # locale) so the forbidden-code-point gate and `host_normalize()` below see
+  # the same host in every locale.
   decoded <- if (grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)) {
-    tryCatch(utils::URLdecode(host), error = function(e) host)
+    .mark_host_utf8(tryCatch(utils::URLdecode(host), error = function(e) host))
   } else {
     host
   }
@@ -1244,11 +1254,33 @@
 # decoded params (losing the raw query byte-for-byte). Parsing raw lets rurl own
 # every encoding decision downstream. curl never percent-decodes the host.
 # curl is scalar-only, so the engine calls this once per URL in its single loop.
+#
+# The host validity check is a LOCALE-INVARIANCE gate, not a policy gate.
+# libcurl percent-decodes the host even under `decode = FALSE`, so
+# `http://example.com%80/` yields a host whose bytes (`example.com\x80`) are not
+# valid UTF-8 -- and `curl_parse_url()` itself then behaves differently by
+# session locale: its R-side `gsub(perl = TRUE)` percent-hex pass THROWS
+# ("input string 1 is invalid UTF-8") in a UTF-8 session but returns the raw
+# bytes under `LC_ALL=C`. rurl therefore accepted under `LC_ALL=C` a host it
+# rejects everywhere else, and those bytes -- declared UTF-8 at the host
+# chokepoint, as they must be -- later blew up inside `pslr`'s regex ops. Making
+# the reject explicit here pins curl's UTF-8-session outcome (a parse failure,
+# `NULL`) for every locale: a percent-decoded host that is not valid UTF-8 is
+# not a host any profile can carry. Only the HOST is affected -- libcurl leaves
+# path/query/fragment/userinfo percent-encoded, so `/%80` is untouched.
 .parse_with_curl <- function(url_to_parse) {
-  tryCatch(
+  parsed <- tryCatch(
     curl::curl_parse_url(url_to_parse, decode = FALSE, params = FALSE),
     error = function(e) NULL
   )
+  if (is.null(parsed)) {
+    return(NULL)
+  }
+  host <- parsed$host
+  if (length(host) == 1L && !is.na(host) && !validUTF8(host)) {
+    return(NULL)
+  }
+  parsed
 }
 
 # Uppercase the two hex digits of every %XX percent-triplet, leaving the rest of

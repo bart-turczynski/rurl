@@ -40,24 +40,42 @@ test_that("path_encoding = 'encode' renders the browser form under a profile", {
 })
 
 test_that("whatwg path_encoding = 'encode' uses the WHATWG path encode set", {
-  cases <- c(
-    "http://ex.com/w|m" = "/w|m",
-    "http://ex.com/@asdf%40" = "/@asdf%40",
-    "http://ex.com/jqueryui@1.2.3" = "/jqueryui@1.2.3",
-    "http://ex.com/foo%" = "/foo%",
-    "http://ex.com/foo%2" = "/foo%2",
-    "http://ex.com/foo%2zbar" = "/foo%2zbar",
-    "http://ex.com/foo%41%7a" = "/foo%41%7a",
-    "http://ex.com/foo%2Ehtml" = "/foo%2Ehtml",
-    "http://ex.com/%3a" = "/%3a",
-    "http://ex.com/\"quoted\"" = "/%22quoted%22",
-    "http://ex.com/école" = "/%C3%A9cole"
+  # Inputs are VALUES, not names: R translates a non-representable NAME to its
+  # `<U+00E9>` escape when it parses this file under a non-UTF-8 LC_CTYPE (the
+  # UTF-8 mark survives on a string value but not on a name), so a named-vector
+  # table silently handed rurl a different, ASCII-mangled input under
+  # `LC_ALL=C`. Same cases, same expectations, locale-invariant transport.
+  inputs <- c(
+    "http://ex.com/w|m",
+    "http://ex.com/@asdf%40",
+    "http://ex.com/jqueryui@1.2.3",
+    "http://ex.com/foo%",
+    "http://ex.com/foo%2",
+    "http://ex.com/foo%2zbar",
+    "http://ex.com/foo%41%7a",
+    "http://ex.com/foo%2Ehtml",
+    "http://ex.com/%3a",
+    "http://ex.com/\"quoted\"",
+    "http://ex.com/école"
   )
-  for (input in names(cases)) {
+  expected <- c(
+    "/w|m",
+    "/@asdf%40",
+    "/jqueryui@1.2.3",
+    "/foo%",
+    "/foo%2",
+    "/foo%2zbar",
+    "/foo%41%7a",
+    "/foo%2Ehtml",
+    "/%3a",
+    "/%22quoted%22",
+    "/%C3%A9cole"
+  )
+  for (i in seq_along(inputs)) {
     expect_identical(
-      get_path(input, url_standard = "whatwg", path_encoding = "encode"),
-      unname(cases[[input]]),
-      info = input
+      get_path(inputs[i], url_standard = "whatwg", path_encoding = "encode"),
+      expected[i],
+      info = inputs[i]
     )
   }
   expect_identical(

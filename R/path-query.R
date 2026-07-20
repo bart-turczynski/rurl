@@ -207,12 +207,24 @@
 # and the component-specific encode set, while preserving every existing
 # percent sign spelling so `%2e`, `%2E`, `%`, and `%2z` do not get decoded,
 # hex-normalized, or double-encoded.
+#
+# The byte extraction is the INPUT-side counterpart of the host chokepoint's
+# `.mark_host_utf8()`. This used to read `charToRaw(enc2utf8(x))`, and that
+# `enc2utf8()` was the locale sensitivity: a path/query/fragment carrying
+# non-ASCII arrives here marked "unknown" (native bytes -- the host chokepoint
+# covers the host only), so under `LC_ALL=C` `enc2utf8()` RE-DECODES those UTF-8
+# bytes as single native characters and `/école` serialized as
+# `/%3Cc3%3E%3Ca9%3Ecole` instead of `/%C3%A9cole`. `.mark_host_utf8()` DECLARES
+# instead (`Encoding<-`, bytes untouched) and `charToRaw()` then reads the exact
+# UTF-8 octets WHATWG's percent-encode set is defined over, in every locale. In
+# a UTF-8 session this is byte-for-byte the old behavior (`enc2utf8()` on
+# already-UTF-8 bytes is the identity).
 .whatwg_component_percent_encode <- function(x, encode_set) {
   if (is.na(x) || !nzchar(x)) {
     return(x)
   }
 
-  bytes <- as.integer(charToRaw(enc2utf8(x)))
+  bytes <- as.integer(charToRaw(.mark_host_utf8(x)))
   out <- character(length(bytes))
   j <- 1L
   i <- 1L
