@@ -44,6 +44,17 @@
   the RFCs contradict: of the four components it covered, only `port` was ever
   forbidden, and that is now a parse error rather than a diagnostic.
 
+- **Returned character components now carry an explicit `Encoding()` mark.**
+  Every character component returned by `safe_parse_url()`, `safe_parse_urls()`
+  and the accessors is declared UTF-8, so a value holding non-ASCII reports
+  `Encoding() == "UTF-8"` where it previously reported `"unknown"`. The
+  **bytes are unchanged** and `==` comparison is unaffected, but `identical()`
+  against an unmarked literal — and anything else that inspects the mark — can
+  change result. Pure-ASCII values still report `"unknown"`: that is simply how
+  R represents an ASCII string, not a missing declaration. This is the one part
+  of the locale-determinism fix below that is observable in a UTF-8 session;
+  everything else about that fix is a no-op there.
+
 ### New features
 
 - Domain, TLD, and subdomain extraction can now resolve against a caller-
@@ -153,6 +164,58 @@
   (ADR 0012 D5). They default to `url_standard = "whatwg"`.
 
 ### Bug fixes
+
+- **rurl's output no longer depends on the R session's character set.**
+  Parsing the same URL in a non-UTF-8 session — `LC_ALL=C`, or the non-UTF-8
+  Windows locale that win-builder and many CRAN Windows checks run in —
+  returned different, and in several cases simply wrong, results from the same
+  call in a UTF-8 session. rurl handed strings to `pslr`, to `punycoder`, to
+  its own percent-encoder and to its own cache layer without ever declaring
+  their encoding, and the operations downstream (`enc2utf8()`, `utf8towcs()`,
+  environment-name lookup, libcurl's own host handling) each re-read those
+  bytes in whatever `LC_CTYPE` the session happened to have. The symptoms, all
+  measured:
+
+  - `domain`, `tld`, `domain_ascii`, `domain_unicode`, `tld_ascii` and
+    `tld_unicode` came back **`NA` for every non-ASCII (IDN) host**:
+    `get_domain("http://bücher.münchen.de/p")` returned `NA` under `LC_ALL=C`
+    and `"münchen.de"` under UTF-8, because `pslr` received an undeclared
+    string and re-decoded it in the session locale.
+  - A non-ASCII path was **corrupted**, not merely marked differently:
+    `/école` percent-encoded to `/%3Cc3%3E%3Ca9%3Ecole` instead of
+    `/%C3%A9cole`, because the encoder transcoded from the session locale
+    before reading the octets WHATWG's percent-encode set is defined over.
+  - `get_mailto_recipients()` **errored** — `invalid input '<U+FFFF>' in
+    'utf8towcs'` — on a recipient whose local part contained U+FFFF.
+  - A host that libcurl percent-decodes to invalid UTF-8, such as
+    `http://example.com%80/`, was **accepted** under `LC_ALL=C` and rejected in
+    a UTF-8 session: `curl::curl_parse_url()` is itself locale-dependent on
+    those bytes. rurl now pins curl's UTF-8-session outcome in every locale.
+  - Some `file:` URLs with percent-encoded non-ASCII hosts, such as
+    `file://a%C2%ADb/p`, were rejected under `LC_ALL=C` although they parse in
+    a UTF-8 session, because the decoded host missed the UTS-46 mapping its
+    literal form gets.
+
+  Encoding is now **declared** — with `Encoding<-`, never with `enc2utf8()`,
+  which transcodes from the session locale and was the defect in most of these
+  paths — at the points where a string enters the pipeline and at the two
+  points where a result is assembled. The cache layer additionally derives an
+  ASCII-safe key one seam beneath its callers, since an environment name is
+  rendered in the native encoding; that also removes 347 "unable to translate
+  ... to native encoding" warnings from a non-UTF-8 check run, which is its own
+  hazard on CRAN. The ADR 0002 Punycode helpers are untouched: every fix sits
+  upstream or downstream of them.
+
+  A UTF-8 session is byte-for-byte unaffected by the whole change set — every
+  fix makes a non-UTF-8 session behave the way a UTF-8 session already did.
+  Measured over the full test suite, `LC_ALL=C` moves from 99 failures and 348
+  warnings to 0 failures and 1 warning; the one remaining warning is upstream
+  in `pslr` and is filed there as PSLR-jzdhhugc. A new test file states the
+  contract as executable assertions — `Encoding()` marks, `charToRaw()` byte
+  equality, and each of the regressions above as a named case — and a
+  `Tests (LC_ALL=C)` CI job, which asserts the character set it actually
+  received before running anything, now runs the suite in a non-UTF-8 locale on
+  every push. (RURL-vzqmwthu.)
 
 - **Scheme and host normalization no longer depends on the R session's
   locale.** rurl lowercased URL syntax with `stringi::stri_trans_tolower()`
