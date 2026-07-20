@@ -120,7 +120,7 @@ jobs:
       # cells can collide after sanitization either.
       RURL_DETERMINISM_LABEL: gha-${{ matrix.os }}-R${{ matrix.r }}-${{ matrix.locale }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # ubuntu-latest ships neither tr_TR.UTF-8 nor en_US.UTF-8 generated (its
       # own default is LC_ALL=C), so both must be generated before they can be
@@ -585,7 +585,7 @@ jobs:
 
       - name: Upload probe artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # v4 forbids duplicate artifact names; the label is unique per cell.
           name: determinism-${{ env.RURL_DETERMINISM_LABEL }}
