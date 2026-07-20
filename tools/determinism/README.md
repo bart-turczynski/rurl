@@ -24,7 +24,7 @@ runs it only on demand and only as evidence collection — never as a gate; see
 | `parse-dump.R` | Runs the corpus through `safe_parse_urls()` and dumps every output column. Base R + an installed `rurl` only. |
 | `curl-probe.R` | Runs the corpus through **libcurl alone**. Base R + the `curl` package only. What the Docker matrix runs — see [Multi-libcurl matrix](#multi-libcurl-matrix). |
 | `matrix/` | Docker runner that sweeps `curl-probe.R` across many libcurl versions, plus the divergence join. |
-| `../../.github/workflows/determinism-probe.yml` | On-demand GHA sweep over OS × R version × locale — the axes Docker cannot reach. See [GitHub Actions matrix](#github-actions-matrix). |
+| `../../.github/workflows/determinism-probe.yml` | On-demand GHA sweep over OS × R version × locale/charset — the axes Docker cannot reach. See [GitHub Actions matrix](#github-actions-matrix). |
 | `out/` | Per-platform dump artifacts. **Gitignored** (`out/.gitignore`) — evidence, not source. |
 | `.gitattributes` | `*.csv -text`: never CRLF-translate the evidence. |
 
@@ -343,25 +343,90 @@ the libcurl-build axis — which is why `release`/`devel`/`oldrel-1` are swept.
 The second axis the containers do not carry is **locale**. A Turkish locale is
 where a locale-sensitive `tolower()`/`toupper()` breaks scheme/host case
 folding (RURL-ugfpuotu); running it on all three OSes makes that fix a
-permanently guarded property rather than a one-platform assertion.
+permanently guarded property rather than a one-platform assertion. It is run at
+R `release` only — the fix is in `rurl`'s own code and is not R-version
+dependent, so crossing it with the build axis would triple the cost for no new
+information.
 
 | | Docker matrix | GHA matrix |
 | --- | --- | --- |
-| Varies | libcurl version | OS build × R version × locale |
+| Varies | libcurl version | OS build × R version × locale/charset |
 | Runs | `curl-probe.R` | `curl-probe.R` **and** `parse-dump.R` |
 | Windows | impossible | the point |
 
+### Why there is a charset axis
+
+The three runners **do not agree on a default character set**:
+
+| Runner | as-shipped locale | charset |
+| --- | --- | --- |
+| `ubuntu-latest` | `LC_ALL=C` | US-ASCII |
+| `macos-latest` | `en_US.UTF-8` | UTF-8 |
+| `windows-latest` | `English_United States.utf8` | UTF-8 |
+
+So a cross-OS comparison of `default` cells **confounds OS build with
+charset**. Measured on the first two live sweeps: ubuntu `tr` vs ubuntu
+`default` differed by 146 lines, and none of it was the Turkish hazard — it was
+C vs UTF-8:
+
+```
+default (LC_ALL=C):  host = "<ef><bf><bf>y"   <- raw bytes, not UTF-8-marked
+tr      (UTF-8):     host = "<U+FFFF>y"       <- the code point
+```
+
+Affected constructs: `external-vector` (44 rows), `idn-mixed-script` (18),
+`idn-invisible-codepoint` (18), `idn-noncharacter` (15), `idn-bidi` (15),
+`idn-label-separator` (12), `idn-astral-plane` (12), `idn-punycoded-label` (6),
+`known-divergent` (3), `idn-overlong-label` (3). ASCII-only constructs —
+including the `file://example.com/path` finding — are unaffected.
+
+Without this axis the analysis would attribute a **charset** difference to a
+**platform build**. Hence: the charset is made explicit and held constant
+wherever the matrix compares platforms.
+
 ### Cells
 
-`os × r × locale` = 3 × 3 × 2, minus the macOS/`devel` pair — `setup-r`
-publishes no R-devel build for macOS, so it is `exclude`d explicitly rather
-than silently resolving to something else. **16 jobs.**
+A deliberate `include:` list, **not** a cross product. A full `os × r ×
+locale` cross would be 32 cells and buy nothing: the R-version axis exists to
+reach the Windows libcurl *build*, while locale/charset is a per-OS property.
+They are crossed only at R `release`, where an interaction is plausible.
+`macos-latest`/`devel` is absent throughout — `setup-r` publishes no R-devel
+build for macOS. **17 jobs.**
 
-| OS | R | locale |
-| --- | --- | --- |
-| `ubuntu-latest` | `release`, `devel`, `oldrel-1` | `default`, `tr` |
-| `windows-latest` | `release`, `devel`, `oldrel-1` | `default`, `tr` |
-| `macos-latest` | `release`, `oldrel-1` | `default`, `tr` |
+| Axis | OS | R | locale | Label |
+| --- | --- | --- | --- | --- |
+| build | `ubuntu-latest` | `release` | `utf8` | `gha-ubuntu-latest-Rrelease-utf8` |
+| build | `ubuntu-latest` | `devel` | `utf8` | `gha-ubuntu-latest-Rdevel-utf8` |
+| build | `ubuntu-latest` | `oldrel-1` | `utf8` | `gha-ubuntu-latest-Roldrel-1-utf8` |
+| build | `windows-latest` | `release` | `utf8` | `gha-windows-latest-Rrelease-utf8` |
+| build | `windows-latest` | `devel` | `utf8` | `gha-windows-latest-Rdevel-utf8` |
+| build | `windows-latest` | `oldrel-1` | `utf8` | `gha-windows-latest-Roldrel-1-utf8` |
+| build | `macos-latest` | `release` | `utf8` | `gha-macos-latest-Rrelease-utf8` |
+| build | `macos-latest` | `oldrel-1` | `utf8` | `gha-macos-latest-Roldrel-1-utf8` |
+| charset | `ubuntu-latest` | `release` | `c` | `gha-ubuntu-latest-Rrelease-c` |
+| charset | `windows-latest` | `release` | `c` | `gha-windows-latest-Rrelease-c` |
+| charset | `macos-latest` | `release` | `c` | `gha-macos-latest-Rrelease-c` |
+| charset | `ubuntu-latest` | `release` | `tr` | `gha-ubuntu-latest-Rrelease-tr` |
+| charset | `windows-latest` | `release` | `tr` | `gha-windows-latest-Rrelease-tr` |
+| charset | `macos-latest` | `release` | `tr` | `gha-macos-latest-Rrelease-tr` |
+| baseline | `ubuntu-latest` | `release` | `default` | `gha-ubuntu-latest-Rrelease-default` |
+| baseline | `windows-latest` | `release` | `default` | `gha-windows-latest-Rrelease-default` |
+| baseline | `macos-latest` | `release` | `default` | `gha-macos-latest-Rrelease-default` |
+
+* **build axis** — 3 OS × 3 R at a *fixed UTF-8 charset*. The only like-for-like
+  cross-OS comparison: a divergence here is an OS/R build property.
+* **charset axis** — 3 OS × {`c`, `tr`} at R `release`. Combined with the R
+  `release` `utf8` cells above, this gives `c` / `utf8` / `tr` per OS with the
+  build held constant. `tr` is also UTF-8, so `tr` vs `utf8` differs **only** in
+  language (case mapping) and `c` vs `utf8` **only** in character set.
+* **baseline** — the runner as shipped. Its divergence from the same OS's
+  `utf8` cell is itself a finding ("what a user actually gets").
+
+> **`default` cells are NOT cross-OS comparable.** Each runner ships a
+> different charset, so diffing `gha-ubuntu-latest-Rrelease-default` against
+> `gha-macos-latest-Rrelease-default` measures charset, not platform. Every
+> cell records `cross_os_comparable` in `locale-<LABEL>.csv`; it is `false`
+> exactly for these three. Use the `utf8` cells for cross-OS work.
 
 `rurl` is pinned to the **checked-out source tree** (`local::.` via
 `setup-r-dependencies`), never CRAN. An unpinned matrix measures `rurl` drift
@@ -382,19 +447,30 @@ locale at initialization, so a late switch can leave `stri_trans_tolower()`
 behaving as if in the default locale — the `tr` cells would then probe exactly
 what the `default` cells probe, while looking green. `LANG`/`LC_ALL` are also
 not portable here: R on Windows takes its locale from the OS and ignores them,
-and the Linux runners ship no Turkish locale at all. So:
+and the Linux runners ship neither a Turkish nor an `en_US.UTF-8` locale
+generated. So, per `locale` value:
 
-| OS | Mechanism | `tr` value(s) |
-| --- | --- | --- |
-| Linux | `LANG`+`LC_ALL` in the step env — set before R is exec'd | `tr_TR.UTF-8`, after `sudo locale-gen tr_TR.UTF-8` |
-| macOS | `LANG`+`LC_ALL` in the step env | `tr_TR.UTF-8` — present in the base system |
-| Windows | `R_PROFILE_USER` → a generated `gha-locale.Rprofile`, the earliest R-side hook (runs at session start, before any package loads) | `Turkish_Türkiye.utf8`, `tr-TR.UTF-8`, `tr_TR.UTF-8`, then the fallbacks `Turkish_Türkiye.1254`, `tr-TR`, `Turkish_Turkey.1254`, `Turkish`; aborts if none applies |
+| locale | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| `default` | nothing set | nothing set | nothing set |
+| `c` | `LANG`+`LC_ALL=C` | `LANG`+`LC_ALL=C` | `Sys.setlocale("LC_ALL", "C")` — sole candidate |
+| `utf8` | `LANG`+`LC_ALL=en_US.UTF-8`, after `sudo locale-gen en_US.UTF-8` | `LANG`+`LC_ALL=en_US.UTF-8` — present in the base system | `English_United States.utf8`, `en-US.UTF-8`, `en_US.UTF-8`, then the fallbacks `English_United States.1252`, `English` |
+| `tr` | `LANG`+`LC_ALL=tr_TR.UTF-8`, after `sudo locale-gen tr_TR.UTF-8` | `LANG`+`LC_ALL=tr_TR.UTF-8` — present in the base system | `Turkish_Türkiye.utf8`, `tr-TR.UTF-8`, `tr_TR.UTF-8`, then the fallbacks `Turkish_Türkiye.1254`, `tr-TR`, `Turkish_Turkey.1254`, `Turkish` |
 
-Every UTF-8 form comes first on purpose: the axis under study is **case
-mapping**, and a non-UTF-8 codepage would be a second uncontrolled variable.
-`default` sets nothing — it is the runner's own locale, and the honest
-baseline. The OS/locale `case` has a hard-failing fallback branch, so an
-unhandled pair can never quietly probe the default locale under a `tr` label.
+Linux/macOS use `LANG`+`LC_ALL` **in the step env**, i.e. set before R is
+exec'd. Windows uses `R_PROFILE_USER` → a generated `gha-locale.Rprofile`, the
+earliest R-side hook (it runs at session start, before any package loads);
+candidates are tried in order and the session **aborts** if none applies.
+
+Every UTF-8 form comes first on purpose: on the `tr` axis the variable under
+study is **case mapping**, so a non-UTF-8 codepage would be a second
+uncontrolled variable — and reaching one of those fallbacks now trips the
+charset assertion below rather than passing quietly. Conversely the `c` cells
+ask for exactly `C` and nothing else: a silent upgrade to a UTF-8 locale would
+delete the axis. `default` sets nothing — it is the runner's own locale, and
+the honest baseline. The OS/locale `case` has a hard-failing fallback branch,
+so an unhandled pair can never quietly probe the default locale under a
+labelled cell.
 
 #### Two Windows facts, both measured on PR #181
 
@@ -431,16 +507,33 @@ changed, so the cell sets explicitly what that machine would supply — and
 left alone, `default` cells are never touched, and `icu_locale_source` records
 which happened.
 
-### `out/locale-<LABEL>.csv` — is the axis actually armed?
+### `out/locale-<LABEL>.csv` — are the axes actually armed?
 
 Mechanism is the belt; this is the braces. Every cell measures whether the
-Turkish case-mapping hazard is *live* and writes the verdict next to the dumps,
-tidy `key,value` and JSON-escaped like every other artifact:
+Turkish case-mapping hazard is *live* and whether it got the character set it
+asked for, and writes both verdicts next to the dumps, tidy `key,value` and
+JSON-escaped like every other artifact:
 
 `label`, `locale_requested`, `locale_effective`, `encoding`,
-`base_tolower_WIKI`, `base_toupper_i`, `stringi_available`, `stringi_locale`,
-`icu_locale_source`, `stri_trans_tolower_WIKI`, `hazard_armed_base`,
-`hazard_armed_stringi`, `hazard_armed`, `run_utc`.
+`charset_expected`, `charset_utf8`, `charset_as_requested`, `lc_ctype`,
+`l10n_info`, `cross_os_comparable`, `base_tolower_WIKI`, `base_toupper_i`,
+`stringi_available`, `stringi_locale`, `icu_locale_source`,
+`stri_trans_tolower_WIKI`, `hazard_armed_base`, `hazard_armed_stringi`,
+`hazard_armed`, `run_utc`.
+
+#### The charset keys
+
+| Key | Meaning |
+| --- | --- |
+| `charset_expected` | What the cell asked for: `utf8` (the `utf8` and `tr` cells), `non-utf8` (the `c` cells), `unspecified` (the `default` cells). |
+| `charset_utf8` | The **effective** character set, from `l10n_info()[["UTF-8"]]`: `true`/`false`. Group cells by this — never by parsing locale names, since `en_US.UTF-8`, `English_United States.utf8` and `C.UTF-8` are all UTF-8 and none of them say so the same way. |
+| `charset_as_requested` | `charset_utf8` vs `charset_expected`. `null` for `default` cells (they asked for nothing). `false` means the cell is **not** a like-for-like charset comparison. |
+| `lc_ctype` / `l10n_info` | The raw evidence behind the verdict: `Sys.getlocale("LC_CTYPE")` and the whole `l10n_info()` list serialized `k=v; k=v` (`MBCS`, `UTF-8`, `Latin-1`, `codeset` on Unix / `codepage`, `system.codepage` on Windows). |
+| `cross_os_comparable` | `false` exactly for the `default` cells, `true` otherwise. Do not diff a `false` cell against another OS. |
+
+A cell whose `charset_as_requested` is `false` emits a `::warning::` and is
+still collected — same discipline as `hazard_armed`: never fail the cell, never
+let it pass as a clean comparison.
 
 Armed means `tolower("WIKI")` yields `wıkı` (or `toupper("i")` yields
 `İ`). Both engines are recorded because they **disagree by platform** —
@@ -466,10 +559,11 @@ clean negative, because that cell measured nothing the `default` cell did not.
 
 ### Label convention
 
-`gha-<os>-R<rver>-<locale>`, e.g. `gha-windows-latest-Rdevel-tr`. Unique by
-construction (the label *is* the matrix tuple) and already within the
-`[A-Za-z0-9._-]` set both probes sanitize to, so no two cells can collide after
-sanitization and overwrite each other's evidence.
+`gha-<os>-R<rver>-<locale>`, e.g. `gha-windows-latest-Rdevel-utf8`. Unique by
+construction (the label *is* the cell tuple and the `include:` list carries no
+duplicate tuple) and already within the `[A-Za-z0-9._-]` set both probes
+sanitize to, so no two cells can collide after sanitization and overwrite each
+other's evidence. The full list is in [Cells](#cells).
 
 ### Running it, and collecting the results
 
@@ -495,9 +589,9 @@ safe because filenames already carry the label.
 Triggers: `workflow_dispatch`, plus a `pull_request` filtered to just
 `tools/determinism/**` and the workflow file. The filter is deliberately narrow:
 the sweep never fails on a divergence, so as a PR check it produces **no**
-automatic signal — a human has to download artifacts — and firing 16 jobs on
+automatic signal — a human has to download artifacts — and firing 17 jobs on
 every parse-pipeline PR would be latency and noise for no gate. Determinism
 regressions on parse changes are caught by **dispatching this workflow
 manually**, not by widening the filter. Deliberately **not** `push: [main]`
-either — 16 jobs across Windows (2×) and macOS (10×) minute multipliers is an
+either — 17 jobs across Windows (2×) and macOS (10×) minute multipliers is an
 on-demand probe, not a per-push gate.
