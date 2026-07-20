@@ -121,3 +121,54 @@ test_that("canonical_join equivalence follows the encoding contract", {
        path_normalization = "dot_segments")
   )
 })
+
+# Input-side locale invariance (RURL-pqrutnio). The host chokepoint declares the
+# parsed host UTF-8, but non-host values reach locale-sensitive operations by
+# other routes. Each case below diverged under `LC_ALL=C` before the fix; the
+# `Encoding<-` calls reproduce, IN ANY session, the "unknown"/native mark those
+# values carry in a non-UTF-8 session.
+test_that("path percent-encoding reads UTF-8 octets in any locale", {
+  # `.whatwg_component_percent_encode()` used `enc2utf8()`, which re-decodes
+  # native-marked bytes in the session locale: under LC_ALL=C `/école` came out
+  # as `/%3Cc3%3E%3Ca9%3Ecole`.
+  p <- "/école"
+  Encoding(p) <- "unknown"
+  expect_identical(rurl:::.whatwg_path_percent_encode(p), "/%C3%A9cole")
+
+  u <- "http://ex.com/école"
+  Encoding(u) <- "unknown"
+  expect_identical(
+    get_path(u, url_standard = "whatwg", path_encoding = "encode"),
+    "/%C3%A9cole"
+  )
+})
+
+test_that("a percent-decoded file: host is read as UTF-8 in any locale", {
+  # `utils::URLdecode()` hands back native-marked octets, so under LC_ALL=C the
+  # soft hyphen in `a%C2%ADb` missed its UTS-46 mapping and the row was
+  # rejected. Percent-encoded and literal spellings must agree.
+  expect_identical(
+    get_host("file://a%C2%ADb/p", url_standard = "whatwg"),
+    get_host("file://a\u00adb/p", url_standard = "whatwg")
+  )
+  expect_identical(get_host("file://a%C2%ADb/p", url_standard = "whatwg"), "ab")
+  expect_identical(
+    get_parse_status("file://a%C2%ADb/p", url_standard = "whatwg"), "ok"
+  )
+})
+
+test_that("a host that percent-decodes to invalid UTF-8 is rejected", {
+  # libcurl decodes the host even under `decode = FALSE`, and
+  # `curl_parse_url()` then throws in a UTF-8 session but returns raw bytes
+  # under LC_ALL=C -- where those bytes went on to break `pslr`'s regex ops.
+  for (std in list(NULL, "rfc3986", "whatwg")) {
+    expect_identical(
+      get_parse_status("http://example.com%80/", url_standard = std), "error"
+    )
+    expect_true(
+      is.na(get_host("ftp://example.com%80/", url_standard = std))
+    )
+  }
+  # Only the host is affected: an invalid-UTF-8 octet in the path is kept.
+  expect_identical(get_path("http://ex.com/%80"), "/%80")
+})
