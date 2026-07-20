@@ -43,8 +43,8 @@
 # They are deliberately scheme-agnostic -- they know nothing of RFC 8089's
 # narrowing of `file:`, of registrable domains, or of rurl's policy layer. So
 # "referee accepts" means "the generic URI grammar admits this string", NOT
-# "rurl is wrong to reject it". That gap is exactly the `parser-boundary`
-# bucket the fixture already has and does not apply to these rows.
+# "rurl is wrong to reject it". That gap is what the fixture's `rurl_deviation`
+# column records -- the axis this audit caused to be added.
 #
 # OUTPUT (CSV, into $RURL_AUDIT_OUT, default the gitignored _scratch/) --
 # the SCRIPT is the versioned artifact, the tables are regenerated:

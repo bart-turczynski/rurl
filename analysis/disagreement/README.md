@@ -199,9 +199,11 @@ table settle them:
    longer scored; the *backtick-host* false-accept, default *scheme inference*,
    and `yal-009` dotted-authority scheme-confusion row are controllable via
    `scheme_policy = "require"` (ADR 0010), which this run holds fixed.
-5. **Resolved decision (`RURL-ajnnjzgs`):** `eq-U8` stays an intentional
-   parser-boundary: `@` delimits userinfo and rurl drops userinfo rather than
-   aligning to the paper's WHATWG-ref U+0130 host fold. `ipobf-019/020` stay an
+5. **Resolved decision (`RURL-ajnnjzgs`):** `eq-U8` stays an intentional rurl
+   deviation (recorded in the fixture's `rurl_deviation` column since
+   RURL-nknytzxz, which retired the old `parser-boundary` class): `@` delimits
+   userinfo and rurl drops userinfo rather than aligning to the paper's
+   WHATWG-ref U+0130 host fold. `ipobf-019/020` stay an
    intentional spec-divergent profile split: RFC keeps the IPv6 literal, WHATWG
    re-serializes the embedded IPv4 pieces.
 
