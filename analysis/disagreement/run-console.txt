@@ -3,14 +3,14 @@ cross-parser URL-parsing disagreement harness (RURL-wncwfasl)
   R              4.6.0
   platform       aarch64-apple-darwin23
   libcurl        8.14.1
-  rurl           2.5.0
+  rurl           2.7.0
   curl           7.1.0
   adaR           0.3.5
   urltools       1.7.3.1
-  pslr           1.0.2
-  punycoder      1.2.0
+  pslr           1.1.1
+  punycoder      1.2.1
 
-  corpus         334 inputs across 28 axes
+  corpus         336 inputs across 28 axes
   participants   rurl(rfc3986), rurl(whatwg), curl, adaR, urltools
   output dir     /Users/bartturczynski/Projects/rurl/analysis/disagreement
 
@@ -18,7 +18,7 @@ per-axis divergence summary (most-divergent first):
                       axis n_inputs n_divergent ratio  diverging_components
        ext-wpt-urltestdata      198         198 1.000 scheme,host,port,path
         ext-ip-obfuscation       23          23 1.000 scheme,host,port,path
-                     other       10          10 1.000 scheme,host,port,path
+                     other       12          12 1.000 scheme,host,port,path
                dot-segment        8           8 1.000                  path
                 ipv4-octal        7           7 1.000 scheme,host,port,path
         ipv4-whole-decimal        6           6 1.000 scheme,host,port,path
@@ -45,7 +45,7 @@ per-axis divergence summary (most-divergent first):
             ipv4-canonical        1           0 0.000                      
    ext-ada-verifydnslength       14           0 0.000                      
 
-divergent inputs: 304 of 334 (91%)
+divergent inputs: 306 of 336 (91%)
 
 disagreement matrix (divergent rows only; cell = scheme|host|port|path,
   or <status> when the parser did not accept the input):
@@ -80,6 +80,8 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  http://0x7f000001/                                                       ipv4-hex                  host                 
  http://0xffffffff/                                                       ipv4-hex                  host                 
  http://0xffffffff1/                                                      ipv4-hex                  scheme,host,port,path
+ https://0x.0x.0                                                          other                     host                 
+ https://0x.0x.0x.0x                                                      other                     host                 
  http://017700000001/                                                     ipv4-octal                host                 
  http://192.168.010.1/                                                    ipv4-octal                host                 
  http://00.00.00.00/                                                      ipv4-octal                host                 
@@ -341,7 +343,7 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  file://localhost:8098/path/to/file.txt                                   ext-ada-extra-urltestdata scheme,host,port,path
  data:space    ?test#test                                                 ext-ada-extra-urltestdata scheme,host,port,path
  a:b#                                                                     ext-ada-extra-urltestdata scheme,host,port,path
- http://google.com:80\\@yahoo.com                                         ext-youarealiar           host,port,path       
+ http://google.com:80\\@yahoo.com                                         ext-youarealiar           host,path            
  https://user:pass@xdavidhu.me\test.corp.google.com                       ext-youarealiar           scheme,host,port,path
  http://127.0.0.\n1:6379?SET\ntest\nfailure12:80                          ext-youarealiar           scheme,host,port,path
  https:/\\/\\/\\github.com/foo/bar                                        ext-youarealiar           scheme,host,port,path
@@ -364,14 +366,14 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  http|127.1||/ [warning-invalid-tld]                                             http|127.0.0.1||/                                                                          
  http|999999999999||/ [warning-no-tld]                                           <error>                                                                                    
  <error>                                                                         http|example.com||/a                                                                       
- http|ex.com|80|/                                                                http|ex.com|80|/                                                                           
+ http|ex.com|80|/                                                                http|ex.com||/                                                                             
  http|xn--mnchen-3ya.de||/                                                       http|xn--mnchen-3ya.de||/                                                                  
  http|ex.com||/a/c                                                               http|ex.com||/a/c                                                                          
  <error>                                                                         http|example.com||/                                                                        
  http|ex.com||/a%3Fb                                                             http|ex.com||/a%3Fb                                                                        
  http|ex.com||/a%23b                                                             http|ex.com||/a%23b                                                                        
- http|ex.com||/~user                                                             http|ex.com||/%7Euser                                                                      
- http|ex.com||/Jj                                                                http|ex.com||/%4A%6A                                                                       
+ http|ex.com||/~user                                                             http|ex.com||/%7euser                                                                      
+ http|ex.com||/Jj                                                                http|ex.com||/%4a%6A                                                                       
  http|ex.com||/a                                                                 http|ex.com||/a                                                                            
  http|ex.com||/b                                                                 http|ex.com||/b                                                                            
  http|ex.com||/b                                                                 http|ex.com||/b                                                                            
@@ -385,6 +387,8 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  http|0x7f000001||/ [warning-no-tld]                                             http|127.0.0.1||/                                                                          
  http|0xffffffff||/ [warning-no-tld]                                             http|255.255.255.255||/                                                                    
  http|0xffffffff1||/ [warning-no-tld]                                            <error>                                                                                    
+ https|0x.0x.0||/ [warning-invalid-tld]                                          https|0.0.0.0||/                                                                           
+ https|0x.0x.0x.0x||/ [warning-invalid-tld]                                      https|0.0.0.0||/                                                                           
  http|017700000001||/ [warning-no-tld]                                           http|127.0.0.1||/                                                                          
  http|192.168.010.1||/ [warning-invalid-tld]                                     http|192.168.8.1||/                                                                        
  http|00.00.00.00||/ [warning-invalid-tld]                                       http|0.0.0.0||/                                                                            
@@ -402,11 +406,11 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  http|foo.0x4||/ [warning-invalid-tld]                                           <error>                                                                                    
  http|0x1.2.3.4.5||/ [warning-invalid-tld]                                       <error>                                                                                    
  http|1.2.3.08||/ [warning-invalid-tld]                                          <error>                                                                                    
- <error>                                                                         http|a!b.example.com||/ [warning-invalid-tld]                                              
- <error>                                                                         http|a'b.example.com||/ [warning-invalid-tld]                                              
- <error>                                                                         http|a+b.example.com||/ [warning-invalid-tld]                                              
- <error>                                                                         http|a=b.example.com||/ [warning-invalid-tld]                                              
- <error>                                                                         http|a;b.example.com||/ [warning-invalid-tld]                                              
+ http|a!b.example.com||/ [warning-invalid-tld]                                   http|a!b.example.com||/ [warning-invalid-tld]                                              
+ http|a'b.example.com||/ [warning-invalid-tld]                                   http|a'b.example.com||/ [warning-invalid-tld]                                              
+ http|a+b.example.com||/ [warning-invalid-tld]                                   http|a+b.example.com||/ [warning-invalid-tld]                                              
+ http|a=b.example.com||/ [warning-invalid-tld]                                   http|a=b.example.com||/ [warning-invalid-tld]                                              
+ http|a;b.example.com||/ [warning-invalid-tld]                                   http|a;b.example.com||/ [warning-invalid-tld]                                              
  http|ex.com%60x.example.com||/ [warning-invalid-tld]                            http|ex.com`x.example.com||/ [warning-invalid-tld]                                         
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
@@ -532,11 +536,11 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  <error>                                                                         <error>                                                                                    
  https|0x100000000||/test [warning-no-tld]                                       <error>                                                                                    
  https|256.0.0.1||/test [warning-invalid-tld]                                    <error>                                                                                    
+ file|%43%3a||/                                                                  <error>                                                                                    
+ file|%43%7c||/                                                                  <error>                                                                                    
  <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
+ file|c%7c||/                                                                    <error>                                                                                    
+ file|%43%7c||/                                                                  <error>                                                                                    
  https|c|||/ [warning-no-tld]                                                    <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
@@ -555,8 +559,8 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
+ file|­||/p                                                                      <error>                                                                                    
+ file|%c2%ad||/p                                                                 <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  http|0..0x300||/ [warning-invalid-tld]                                          <error>                                                                                    
@@ -646,12 +650,12 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
- http|yahoo.com||/                                                               http|google.com|80|/@yahoo.com                                                             
+ http|yahoo.com||/                                                               http|google.com||/@yahoo.com                                                               
  <error>                                                                         https|xdavidhu.meest.corp.google.com||/                                                    
  <error>                                                                         http|127.0.0.1|6379|/                                                                      
  <error>                                                                         https|github.com||/foo/bar                                                                 
  https|evil.com||/                                                               https|evil.com||/                                                                          
- http|localhost|8080|/secret.txt [warning-no-tld]                                http|example.com|80|/@localhost:8080/secret.txt                                            
+ http|localhost|8080|/secret.txt [warning-no-tld]                                http|example.com||/@localhost:8080/secret.txt                                              
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  https|e.gg||/                                                                   https|n.pr||/@e.gg                                                                         
@@ -690,6 +694,8 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|0x7f000001||/                                       
  http|255.255.255.255||/                http|255.255.255.255||/                                               http|0xffffffff||/                                       
  http|0xffffffff1||/                    <reject>                                                              http|0xffffffff1||/                                      
+ https|0x.0x.0||/                       https|0.0.0.0||/                                                      https|0x.0x.0||/                                         
+ https|0x.0x.0x.0x||/                   https|0.0.0.0||/                                                      https|0x.0x.0x.0x||/                                     
  http|127.0.0.1||/                      http|127.0.0.1||/                                                     http|017700000001||/                                     
  http|192.168.8.1||/                    http|192.168.8.1||/                                                   http|192.168.010.1||/                                    
  http|0.0.0.0||/                        http|0.0.0.0||/                                                       http|00.00.00.00||/                                      
@@ -965,3 +971,12 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  https|n.pr.e.gg||/                     https|n.pr.e.gg||/                                                    https|n.pr%2ee.gg||/                                     
  <error>                                https|n.pre.gg||/                                                     https|n.pr\ne.gg||/                                      
  https|letsencrypt.org||/               https|malware.testing.google.test||/testing/malware/*@letsencrypt.org https|letsencrypt.org||/                                 
+
+#### rurl(whatwg) vs adaR -- 10 divergent rows ####
+  by component: ACCEPT/REJECT=9  host=1 
+
+#### rurl(rfc3986) vs curl -- 52 divergent rows ####
+  by component: host=33  ACCEPT/REJECT=16  path=3 
+
+#### rurl(rfc3986) vs python-urllib -- 186 divergent rows ####
+  by component: ACCEPT/REJECT=160  host=14  path=11  host,path=1 

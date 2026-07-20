@@ -29,20 +29,33 @@ WHATWG success is scored in rurl's **canonical-output config**
 settings that ask rurl for the WHATWG serialization. A residual mismatch there
 is genuine: **the spec output cannot be reached by any knob.**
 
-## Headline (rurl 2.5.0, 2026-07-08)
+## Headline (rurl 2.7.0, 2026-07-20)
 
 | Metric | Result |
 |---|---|
-| WHATWG — success **accepted** | 173/176 (98%) |
-| WHATWG — success **full-component parity** | **173/176 (98%)** |
+| WHATWG — success **accepted** | 176/176 (100%) |
+| WHATWG — success **full-component parity** | **176/176 (100%)** |
 | WHATWG — failure **correctly rejected** | 202/202 (100%) |
-| WHATWG — overall acceptance conformance | 375/378 (99%) |
+| WHATWG — overall acceptance conformance | **378/378 (100%)** |
 | RFC 3986 — probes passed | 19/19 (100%) |
 
-rurl **never accepts a URL WHATWG rejects** among these 202 failure cases
-(100%). The remaining WHATWG shortfall is **over-strictness**: three WPT-valid
-success rows are still rejected before component comparison. The RFC probe set
-is now fully conformant for the covered grammar and normalization cases.
+rurl **never accepts a URL WHATWG rejects** among these 202 failure cases, and
+the three over-strict rejections noted in the 2026-07-08 run (rurl 2.5.0:
+173/176) are gone. Against this oracle the WHATWG profile is now fully
+conformant.
+
+> **Do not read the RFC row as "rurl is 100% RFC 3986 conformant."** This probe
+> set is 19 hand-authored rows and **every one of them is an accept case** — it
+> contains no rejection tests at all, so it cannot detect over-permissiveness
+> and barely constrains over-strictness. The honest RFC figure comes from the
+> audited conformance fixture (`RURL-nknytzxz`): of **257 rows carrying an RFC
+> 3986 oracle, rurl matches the standard on 158 and departs on 99** — 81 where
+> it rejects what the RFC admits (mostly deliberate policy: the ADR 0004
+> host-shape gate and the closed scheme set) and 18 where it accepts what the
+> RFC does not (ADR 0002 Unicode hosts, ADR 0011 readable paths, and the
+> `RURL-pfewxbhb` gate-coverage gap). Each of the 99 cites the ADR or ticket
+> that owns it. Growing this probe set with rejection cases is tracked on
+> `RURL-lyhcyvsa`.
 
 ## Where rurl falls short of the standard
 
@@ -52,10 +65,11 @@ rurl(rfc3986) now accepts reg-names containing the RFC 3986 §3.2.2
 (case folding, unreserved decode, `%2f`→`%2F` reserved-preserve, dot-segment
 resolution).
 
-### WHATWG — remaining buckets
-Component non-conformances among accepted cases: **0**; plus **3 over-strict
-rejections**. Query and fragment are now scored in the full-component metric and
-have no accepted-case mismatches.
+### WHATWG — no remaining buckets against this oracle
+Component non-conformances among accepted cases: **0**; over-strict rejections:
+**0** (was 3). Query and fragment are scored in the full-component metric and
+have no accepted-case mismatches. The buckets described below are retained as
+the record of what was closed, not as open items.
 
 1. **Over-strict rejected path/control rows.** Three WPT-valid success rows
    still reject before component comparison; accepted success rows now have no
