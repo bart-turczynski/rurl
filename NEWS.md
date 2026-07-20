@@ -1,5 +1,49 @@
 ## rurl 2.7.0
 
+### Breaking changes
+
+- **`file:` URLs are now parsed in rurl rather than by libcurl under
+  `url_standard = "rfc3986"` and the default (`NULL`) selector**, and are
+  decided by an explicit two-gate model. Previously these rows went to
+  `curl::curl_parse_url()`, whose `file:` behavior is a property of the libcurl
+  *build*: Windows builds enable drive-letter and `file://host` handling that
+  Unix builds reject, so identical input returned `ok` on Windows and `error`
+  on Linux/macOS. Parse output no longer depends on the operating system.
+  (`url_standard = "whatwg"` already had its own in-tree `file:` parser and is
+  unchanged.) The gates are:
+
+  - **Gate 1 — the string must be a valid RFC 3986 URI.** RFC 8089's normative
+    grammar is a strict *subset* of RFC 3986, but its Appendix E/F "nonstandard
+    variations" partly escape it: `drive-letter = ALPHA ":" / ALPHA "|"` is not
+    valid RFC 3986, because `|` is absent from `pchar`. So `file://C|/x`,
+    `file:///path\to\file` (Appendix E.4 calls the backslash "forbidden by both
+    [RFC1738] and [RFC3986]"), and a literal `file://[example]/` are now
+    errors. The percent-encoded forms remain valid — `file://C%7C` parses,
+    because percent-encoding is the legal way to carry `|` in a `reg-name`.
+  - **Gate 2 — RFC 8089 §2's narrowing of the authority is enforced.** A port
+    is now a parse error (`file://example.com:80/path`): §2's
+    `file-auth = "localhost" / host` has no port and no appendix supplies a
+    production for one. Userinfo is now *parsed* and surfaced in the `user`
+    column rather than silently discarded, because Appendix E.1/F does supply
+    `file-auth = "localhost" / [ userinfo "@" ] host`. Query and fragment are
+    unaffected: RFC 8089 never mentions either, so both are inherited generic
+    RFC 3986 components — and RFC 3986 §3.5 states fragment semantics "cannot
+    be redefined by scheme specifications", so RFC 8089 could not have
+    restricted the fragment even had it wanted to. `file:///doc.pdf#page=2`
+    therefore keeps working, which RFC 8118 §3 (`application/pdf`) depends on.
+
+  Verified against two independent implementations: Ruby's
+  `URI::RFC3986_Parser` draws the same accept/reject line on every applicable
+  case, and Node's WHATWG parser repairs exactly the forms the `whatwg` profile
+  repairs. (RURL-obsweger.)
+
+- The `file-forbidden-component` diagnostic is replaced by
+  **`file-userinfo-extension`** (userinfo present, permitted by RFC 8089
+  Appendix E.1's extended grammar) and **`file-component-outside-rfc8089`** (a
+  query or fragment, inherited from RFC 3986). The old name asserted something
+  the RFCs contradict: of the four components it covered, only `port` was ever
+  forbidden, and that is now a parse error rather than a diagnostic.
+
 ### New features
 
 - Domain, TLD, and subdomain extraction can now resolve against a caller-

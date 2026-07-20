@@ -1001,7 +1001,7 @@
 #               every other scheme to the RFC generic host parser.
 .general_parsed_mask <- function(url, url_standard, scheme_acceptance) {
   n <- length(url)
-  if (!identical(scheme_acceptance, "general") || n == 0L) {
+  if (n == 0L) {
     return(rep(FALSE, n))
   }
   m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
@@ -1009,6 +1009,24 @@
   has_scheme <- !is.na(scheme_lc)
   host_port <- stringi::stri_detect_regex(url, "^[^/]+:[0-9]+($|/)")
   host_port[is.na(host_port)] <- FALSE
+
+  # RFC-model `file:` leaves libcurl on EVERY acceptance posture (RURL-obsweger,
+  # Tier 1 of the determinism epic). libcurl's `file:` handling is a BUILD
+  # property, not a version property: Windows builds enable drive-letter and
+  # `file://host` handling that Unix builds reject, so identical input yields
+  # `ok` on Windows and `error` on Linux/macOS. That is a DEREFERENCING concern
+  # ("can I open this on this machine") leaking into a PARSE, and a parser's
+  # output must not depend on the OS it runs on. Routing these rows to the
+  # in-tree RFC 8089 overlay -- which already shipped for `general` -- makes the
+  # answer platform-invariant by construction. The `whatwg` profile already had
+  # its own in-tree `file:` state machine and is untouched here.
+  rfc_file <- has_scheme & !host_port & !.is_whatwg(url_standard) &
+    !is.na(scheme_lc) & scheme_lc == "file"
+  rfc_file[is.na(rfc_file)] <- FALSE
+
+  if (!identical(scheme_acceptance, "general")) {
+    return(rfc_file)
+  }
   curl_scheme <- if (.is_whatwg(url_standard)) {
     .WHATWG_SPECIAL_SCHEMES
   } else {
@@ -1016,7 +1034,7 @@
   }
   gp <- has_scheme & !host_port & !(scheme_lc %in% curl_scheme)
   gp[is.na(gp)] <- FALSE
-  gp
+  gp | rfc_file
 }
 
 # Vectorized general-acceptance parse. Returns a columnar list, length-n:
