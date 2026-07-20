@@ -420,44 +420,86 @@ The three runners **do not agree on a default character set**:
 | `windows-latest` | `English_United States.utf8` | UTF-8 |
 
 So a cross-OS comparison of `default` cells **confounds OS build with
-charset**. Measured on the first two live sweeps: ubuntu `tr` vs ubuntu
-`default` differed by 146 lines, and none of it was the Turkish hazard — it was
-C vs UTF-8, showing up as e.g.
+charset**. On the first two live sweeps that confound was large: ubuntu `tr` vs
+ubuntu `default` differed by 146 lines (149 on Windows), and none of it was the
+Turkish hazard — it was C vs UTF-8, showing up as e.g.
 
 ```
 default (LC_ALL=C):  host = "<ef><bf><bf>y"   <- raw bytes, not UTF-8-marked
 tr      (UTF-8):     host = "<U+FFFF>y"       <- the code point
 ```
 
-Affected constructs: `external-vector` (44 rows), `idn-mixed-script` (18),
+Affected constructs then: `external-vector` (44 rows), `idn-mixed-script` (18),
 `idn-invisible-codepoint` (18), `idn-noncharacter` (15), `idn-bidi` (15),
 `idn-label-separator` (12), `idn-astral-plane` (12), `idn-punycoded-label` (6),
 `known-divergent` (3), `idn-overlong-label` (3). ASCII-only constructs —
-including the `file://example.com/path` finding — are unaffected.
-
-> **The 146-line figure is SUPERSEDED and pending re-measurement
-> (RURL-ifhpjoqh). Do not quote it as a defect count.** It was never one
-> mechanism, and the rendering above is not by itself evidence of a `rurl`
-> bug — see the attribution below.
+including the `file://example.com/path` finding — were unaffected.
 
 #### What the 146 lines actually were
 
-Three distinct mechanisms were summed into one number:
+Three distinct mechanisms were summed into one number. That is why the figure
+was never a defect count, and why the rendering above was not by itself
+evidence of a `rurl` bug:
 
 | | Mechanism | Where | Status |
 | --- | --- | --- | --- |
-| **M1** | `rurl` handed an **unmarked** host to `pslr`, which re-decoded it in the session locale and returned `NA` — so `domain`, `tld` and the four `*_ascii` / `*_unicode` columns all came back `null` under `LC_ALL=C` | `R/parse.R` | **fixed** — `.mark_host_utf8()`, commit `e9defab` (RURL-lzyetido) |
-| **M2** | the same unmarked bytes reaching `punycoder::host_normalize()` on **invalid** UTF-8 flipped the WHATWG UTS-46 fatal gate (`"ex.com<80>"` under C vs `NA` under UTF-8), so `host`, `clean_url`, `scheme` and `parse_status` differed | `R/parse.R` | **fixed** — `.mark_host_utf8()`, commit `e9defab` (RURL-lzyetido); the output-side mark followed in `c6a0457` (RURL-gbpvripg) |
-| **M3** | **the harness's own rendering**: `json_escape_one()` called `enc2utf8()`, which transcodes from the session locale, so the *dump text* differed by locale even where `rurl`'s output did not | `parse-dump.R`, `corpus.R`, `curl-probe.R` | **fixed** — `utf8_codepoints()`, this file's *Locale invariance* section (RURL-cupshtnh) |
+| **M1** | `rurl` handed an **unmarked** host to `pslr`, which re-decoded it in the session locale and returned `NA` — so `domain`, `tld` and the four `*_ascii` / `*_unicode` columns all came back `null` under `LC_ALL=C` | `R/parse.R` | **fixed and verified** — `.mark_host_utf8()`, commit `e9defab` (RURL-lzyetido) |
+| **M2** | the same unmarked bytes reaching `punycoder::host_normalize()` on **invalid** UTF-8 flipped the WHATWG UTS-46 fatal gate (`"ex.com<80>"` under C vs `NA` under UTF-8), so `host`, `clean_url`, `scheme` and `parse_status` differed | `R/parse.R` | **fixed and verified** — `.mark_host_utf8()`, commit `e9defab` (RURL-lzyetido); the output-side mark followed in `c6a0457` (RURL-gbpvripg) |
+| **M3** | **the harness's own rendering**: `json_escape_one()` called `enc2utf8()`, which transcodes from the session locale, so the *dump text* differed by locale even where `rurl`'s output did not | `parse-dump.R`, `corpus.R`, `curl-probe.R` | **fixed and verified** — `utf8_codepoints()`, this file's *Locale invariance* section (RURL-cupshtnh) |
 
-The `host = "<ef><bf><bf>y"` rendering quoted above is an **M3** artifact:
+The `host = "<ef><bf><bf>y"` rendering quoted above was an **M3** artifact:
 that is what `enc2utf8()` did to the value under `LC_ALL=C`, not necessarily
 what `rurl` returned. The evidence partly measured the harness.
 
-M1 and M2 were real `rurl` defects and are fixed; M3 was never one. The
-honest post-fix figure is **not yet known** — re-measuring the charset axis on
-the repaired harness is its own unit (RURL-ifhpjoqh). Some genuine
-locale-sensitivity does remain on the input side (RURL-pqrutnio).
+M1 and M2 were real `rurl` defects; M3 was never one. Three further fixes
+landed alongside them: the last locale-tailored case sites pinned to ASCII
+(`62a24a9`, RURL-hckljpwh), the input-side encoding gaps closed (`d7181a1`,
+RURL-pqrutnio), and ASCII-safe cache keys (`0a339ce`, RURL-thwdukrr).
+
+#### The charset axis, re-measured
+
+Run **29787127184** (`determinism-probe.yml`, `main` @ `1cf200f`, 2026-07-20),
+all 17 cells green, no `DEGRADED-*` marker, `rurl` 2.7.0 / `pslr` 1.1.0 /
+`punycoder` 1.2.0, R 4.6.1 on the `release` cells. 1995 dump rows per cell,
+compared on `id` + `url_standard` across the 20 non-key columns:
+
+| Axis | Comparison | Was | Now |
+| --- | --- | --- | --- |
+| **charset** | `c` vs `utf8`, per OS, R `release` | 146 (ubuntu, macOS) / 149 (Windows) | **0 / 0 / 0** |
+| language | `tr` vs `utf8`, per OS, R `release` | 0 | 0 / 0 / 0 |
+| build | `utf8`, R `release`, each OS pair | 36, closed by RURL-obsweger | 0 / 0 / 0 |
+| R version | `utf8`, within OS, `release` vs `devel` / `oldrel-1` | 0 | 0 (all 5 pairs) |
+| baseline | `default` vs `utf8`, same OS | — | 0 / 0 / 0 |
+
+Not 0 divergent *rows* with surviving cell differences: **0 divergent cells**
+in every comparison above. In fact all 17 `dump-<LABEL>.csv` files are
+**byte-identical** — one MD5 (`3db0d6e9…`) across the whole sweep. The parse
+output no longer depends on OS, R version, language or character set at all.
+
+The `encoding_marks` column is the direct evidence for the marks themselves,
+and it carries signal: 30 distinct mark strings occur within a cell (including
+UTF-8 `8` marks on `host` / `domain` / `clean_url` families), and every one of
+them is identical row-for-row across the `c` and `utf8` cells on all three
+OSes. The declaration contract holds, not merely the rendering.
+
+`r_condition` is empty in all 1995 rows of all 17 cells, so the `pslr`
+native-encoding warning under `C` (PSLR-jzdhhugc) **did not surface anywhere in
+this sweep**; it is upstream and unmeasured here rather than shown absent in
+general.
+
+One residual charset difference does remain, and it is **not** in `rurl`:
+`curl-probe.R` diverges on 4 `external-vector` rows per OS
+(`ext-wpt-fail-166`–`169`, `ftp://example.com%80/` and friends). Under UTF-8 the
+R `curl` package rejects its own return value — `error: input string 1 is
+invalid UTF-8` — while under `C` it hands back the raw bytes, which the probe
+records as `<non-utf8-bytes:…>`. That is the `curl` package validating a
+percent-decoded host against the session encoding, upstream of anything `rurl`
+does. `rurl` returns `parse_status = "error"` for those rows under both
+charsets, which is why the dump is unaffected: the marks applied at the input
+chokepoint make the outcome the same either way. The libcurl-only probe also
+still diverges on the build axis (25 rows ubuntu vs Windows, 4 ubuntu vs
+macOS) — that is libcurl, and absorbing it is exactly what the `rurl` layer now
+does.
 
 Without this axis the analysis would attribute a **charset** difference to a
 **platform build**. Hence: the charset is made explicit and held constant
