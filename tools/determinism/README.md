@@ -11,8 +11,9 @@ surface, so the class gets fixed rather than the two cases that happened to
 fail. Once determinism is achieved it stays as the permanent regression
 harness that proves it.
 
-Not a test, not run by CI, not shipped: `^tools/determinism$` is in
-`.Rbuildignore`.
+Not a test and not shipped: `^tools/determinism$` is in `.Rbuildignore`. CI
+runs it only on demand and only as evidence collection — never as a gate; see
+[GitHub Actions matrix](#github-actions-matrix).
 
 ## Files
 
@@ -23,6 +24,7 @@ Not a test, not run by CI, not shipped: `^tools/determinism$` is in
 | `parse-dump.R` | Runs the corpus through `safe_parse_urls()` and dumps every output column. Base R + an installed `rurl` only. |
 | `curl-probe.R` | Runs the corpus through **libcurl alone**. Base R + the `curl` package only. What the Docker matrix runs — see [Multi-libcurl matrix](#multi-libcurl-matrix). |
 | `matrix/` | Docker runner that sweeps `curl-probe.R` across many libcurl versions, plus the divergence join. |
+| `../../.github/workflows/determinism-probe.yml` | On-demand GHA sweep over OS × R version × locale — the axes Docker cannot reach. See [GitHub Actions matrix](#github-actions-matrix). |
 | `out/` | Per-platform dump artifacts. **Gitignored** (`out/.gitignore`) — evidence, not source. |
 | `.gitattributes` | `*.csv -text`: never CRLF-translate the evidence. |
 
@@ -324,3 +326,133 @@ column order, so re-runs are byte-stable.
 It is deliberately raw — no bucketing, no interpretation, no prose. That is
 the downstream analysis unit's job. All labels present in `out/` participate,
 so drop or add a probe file to change the comparison set.
+
+## GitHub Actions matrix
+
+`.github/workflows/determinism-probe.yml`.
+
+### Why, given the Docker matrix already exists
+
+The Docker matrix varies **libcurl version on one OS**. It cannot reach the
+axis that broke win-builder: every Linux libcurl in the table above rejects
+`file://example.com/path`, so Windows accepting it is a property of the
+Windows **build**, not of a libcurl version. Only a real Windows runner probes
+that. R for Windows ships its own bundled libcurl, so there the R version *is*
+the libcurl-build axis — which is why `release`/`devel`/`oldrel-1` are swept.
+
+The second axis the containers do not carry is **locale**. A Turkish locale is
+where a locale-sensitive `tolower()`/`toupper()` breaks scheme/host case
+folding (RURL-ugfpuotu); running it on all three OSes makes that fix a
+permanently guarded property rather than a one-platform assertion.
+
+| | Docker matrix | GHA matrix |
+| --- | --- | --- |
+| Varies | libcurl version | OS build × R version × locale |
+| Runs | `curl-probe.R` | `curl-probe.R` **and** `parse-dump.R` |
+| Windows | impossible | the point |
+
+### Cells
+
+`os × r × locale` = 3 × 3 × 2, minus the macOS/`devel` pair — `setup-r`
+publishes no R-devel build for macOS, so it is `exclude`d explicitly rather
+than silently resolving to something else. **16 jobs.**
+
+| OS | R | locale |
+| --- | --- | --- |
+| `ubuntu-latest` | `release`, `devel`, `oldrel-1` | `default`, `tr` |
+| `windows-latest` | `release`, `devel`, `oldrel-1` | `default`, `tr` |
+| `macos-latest` | `release`, `oldrel-1` | `default`, `tr` |
+
+`rurl` is pinned to the **checked-out source tree** (`local::.` via
+`setup-r-dependencies`), never CRAN. An unpinned matrix measures `rurl` drift
+and misattributes it to libcurl; `rurl_version` in `env-<LABEL>.csv` records
+the pin but does not create it.
+
+`curl-probe.R` is the hard requirement — if it cannot run, the cell fails. The
+full stack is `continue-on-error`: a cell that cannot build `rurl` degrades to
+libcurl-only and writes `out/DEGRADED-<LABEL>.txt` into its artifact, so
+"no dump here" is distinguishable from "dump lost". A **divergence never fails
+the build** — divergence is the product, not the defect.
+
+### Setting the locale
+
+The locale must be in place **before R starts**. A mid-session
+`Sys.setlocale()` is not sufficient: ICU (via `stringi`) fixes its default
+locale at initialization, so a late switch can leave `stri_trans_tolower()`
+behaving as if in the default locale — the `tr` cells would then probe exactly
+what the `default` cells probe, while looking green. `LANG`/`LC_ALL` are also
+not portable here: R on Windows takes its locale from the OS and ignores them,
+and the Linux runners ship no Turkish locale at all. So:
+
+| OS | Mechanism | `tr` value(s) |
+| --- | --- | --- |
+| Linux | `LANG`+`LC_ALL` in the step env — set before R is exec'd | `tr_TR.UTF-8`, after `sudo locale-gen tr_TR.UTF-8` |
+| macOS | `LANG`+`LC_ALL` in the step env | `tr_TR.UTF-8` — present in the base system |
+| Windows | `R_PROFILE_USER` → a generated `gha-locale.Rprofile`, the earliest R-side hook (runs at session start, before any package loads) | `Turkish_Turkey.utf8`, then `Turkish_Turkey.1254`, `Turkish`, `tr-TR`; aborts if none applies |
+
+`.utf8` is first on Windows on purpose: the axis under study is **case
+mapping**, and leading with a UTF-8 locale keeps a non-UTF-8 codepage from
+becoming a second uncontrolled variable. `default` sets nothing — it is the
+runner's own locale, and the honest baseline. The OS/locale `case` has a
+hard-failing fallback branch, so an unhandled pair can never quietly probe the
+default locale under a `tr` label.
+
+### `out/locale-<LABEL>.csv` — is the axis actually armed?
+
+Mechanism is the belt; this is the braces. Every cell measures whether the
+Turkish case-mapping hazard is *live* and writes the verdict next to the dumps,
+tidy `key,value` and JSON-escaped like every other artifact:
+
+`label`, `locale_requested`, `locale_effective`, `encoding`,
+`base_tolower_WIKI`, `base_toupper_i`, `stringi_available`, `stringi_locale`,
+`stri_trans_tolower_WIKI`, `hazard_armed_base`, `hazard_armed_stringi`,
+`hazard_armed`, `run_utc`.
+
+Armed means `tolower("WIKI")` yields `wıkı` (or `toupper("i")` yields
+`İ`). Both engines are recorded because they **disagree by platform** —
+macOS libc `tolower()` is not Turkish-aware while ICU is, so a macOS `tr` cell
+reports `hazard_armed_base=false, hazard_armed_stringi=true`. `rurl`'s own case
+folding goes through `stringi`/ICU, so `hazard_armed` is the disjunction.
+
+A `tr` cell that is **not** armed emits a `::warning::` and records
+`hazard_armed=false`. It does not fail the cell — but U4 must not read it as a
+clean negative, because that cell measured nothing the `default` cell did not.
+`default` cells run the same assertion as the control.
+
+### Label convention
+
+`gha-<os>-R<rver>-<locale>`, e.g. `gha-windows-latest-Rdevel-tr`. Unique by
+construction (the label *is* the matrix tuple) and already within the
+`[A-Za-z0-9._-]` set both probes sanitize to, so no two cells can collide after
+sanitization and overwrite each other's evidence.
+
+### Running it, and collecting the results
+
+```sh
+# dispatch (only available once the workflow is on the default branch;
+# before that, the path-filtered pull_request trigger is what runs it)
+gh workflow run determinism-probe.yml
+
+# libcurl-only sweep, skipping the full rurl stack
+gh workflow run determinism-probe.yml -f run_parse_dump=false
+
+# pull every cell's artifact into out/, then join
+gh run download <run-id> --dir tools/determinism/out
+find tools/determinism/out -mindepth 2 -name '*.csv' -exec mv -n {} tools/determinism/out/ \;
+Rscript tools/determinism/matrix/divergence.R
+```
+
+Artifacts are one per cell, named `determinism-<LABEL>`, retained 90 days.
+`gh run download` unpacks each into its own subdirectory, hence the flatten
+step — `divergence.R` reads `out/curl-*.csv` at the top level. Flattening is
+safe because filenames already carry the label.
+
+Triggers: `workflow_dispatch`, plus a `pull_request` filtered to just
+`tools/determinism/**` and the workflow file. The filter is deliberately narrow:
+the sweep never fails on a divergence, so as a PR check it produces **no**
+automatic signal — a human has to download artifacts — and firing 16 jobs on
+every parse-pipeline PR would be latency and noise for no gate. Determinism
+regressions on parse changes are caught by **dispatching this workflow
+manually**, not by widening the filter. Deliberately **not** `push: [main]`
+either — 16 jobs across Windows (2×) and macOS (10×) minute multipliers is an
+on-demand probe, not a per-push gate.
