@@ -1,7 +1,7 @@
 "axis","n_inputs","n_divergent","ratio","diverging_components"
 "ext-wpt-urltestdata",198,198,1,"scheme,host,port,path"
 "ext-ip-obfuscation",23,23,1,"scheme,host,port,path"
-"other",10,10,1,"scheme,host,port,path"
+"other",12,12,1,"scheme,host,port,path"
 "dot-segment",8,8,1,"path"
 "ipv4-octal",7,7,1,"scheme,host,port,path"
 "ipv4-whole-decimal",6,6,1,"scheme,host,port,path"

@@ -18,15 +18,15 @@ or freeze a new committed run with `RURL_BENCH_OUT=analysis/disagreement Rscript
 
 | | |
 |---|---|
-| Date | 2026-07-08 |
-| rurl | **2.5.0** (dev tree via `load_all`; hardened per `RURL-moselrwp`) |
+| Date | 2026-07-20 (refreshed; previous run 2026-07-08 at rurl 2.5.0) |
+| rurl | **2.7.0** (dev tree via `load_all`; hardened per `RURL-moselrwp`) |
 | R | 4.6.0 (aarch64-apple-darwin23) |
 | libcurl | 8.14.1 (via `curl` 7.1.0) |
 | adaR | 0.3.5 (WHATWG reference) |
 | urltools | 1.7.3.1 |
-| pslr | 1.0.2 |
-| punycoder | 1.2.0 |
-| Corpus | 334 inputs across 28 axes |
+| pslr | 1.1.1 |
+| punycoder | 1.2.1 |
+| Corpus | 336 inputs across 28 axes |
 | Participants | `rurl(rfc3986)`, `rurl(whatwg)`, `curl`, `adaR`, `urltools` |
 
 Oracle: divergence is measured against the committed **dual RFC/WHATWG oracle**
@@ -82,62 +82,92 @@ Two rules keep the study from counting non-disagreements (added 2026-07-08):
 
 ## Headline result
 
-**304 of 334 inputs (91%) show at least one cross-parser divergence.** That
+**306 of 336 inputs (91%) show at least one cross-parser divergence.** That
 coarse figure is real but inflated by design: five parsers with distinct
 policies rarely *all* agree, and two of the five columns are rurl's own
 `rfc3986` and `whatwg` profiles, which are *built* to differ — that difference
 is the paper's point, not noise.
 
-The informative decomposition is pairwise. Full-tuple
-(`scheme|host|port|path`, path canonicalized) agreement rates:
+The informative decomposition is pairwise. Full-tuple agreement rate — the
+share of the 336 inputs on which two parsers produce the *identical*
+`scheme|host|port|path` tuple, with `canon_path()` applied and a shared
+`<reject>` sentinel so agreeing to reject counts as agreement:
 
 |                | rurl(rfc) | rurl(wg) | curl | adaR | urltools |
 |----------------|:---------:|:--------:|:----:|:----:|:--------:|
-| rurl(rfc3986)  | 1.000 | 0.695 | 0.877 | 0.138 | 0.347 |
-| rurl(whatwg)   | 0.695 | 1.000 | 0.760 | 0.290 | 0.126 |
-| curl           | 0.877 | 0.760 | 1.000 | 0.216 | 0.243 |
-| adaR           | 0.138 | 0.290 | 0.216 | 1.000 | 0.126 |
-| urltools       | 0.347 | 0.126 | 0.243 | 0.126 | 1.000 |
+| rurl(rfc3986)  | 1.000 | 0.685 | 0.845 | 0.655 | 0.384 |
+| rurl(whatwg)   | 0.685 | 1.000 | 0.753 | **0.970** | 0.128 |
+| curl           | 0.845 | 0.753 | 1.000 | 0.726 | 0.247 |
+| adaR           | 0.655 | 0.970 | 0.726 | 1.000 | 0.125 |
+| urltools       | 0.384 | 0.128 | 0.247 | 0.125 | 1.000 |
 
-The low **adaR** column is *not* host-shape disagreement — it is two single,
-documented axes that fire on nearly every non-ASCII row: adaR renders punycode
+> **Methodology note (2026-07-20).** This table is now computed with the
+> definition stated above, which makes it *consistent with the focused pairwise
+> section below*: 10 divergent rows out of 336 is exactly 0.970, and 52 out of
+> 336 is exactly 0.845. The 2026-07-08 table was produced ad hoc under a
+> different, unstated rule and did **not** reconcile with its own
+> `diverge-*.csv` counts (it reported rurl(whatwg) vs adaR as 0.290 while the
+> companion file listed only 15 divergent rows, i.e. 0.955). Prefer these
+> numbers; do not compare them cell-by-cell against the older run.
+
+Where rurl's WHATWG profile still differs from the WHATWG reference, it is one
+documented presentation axis plus the closed scheme set: adaR renders punycode
 hosts back to **Unicode** (`xn--mnchen-3ya.de` → `münchen.de`; a `host_encoding`
-presentation choice, ADR 0002) and **elides** the default port
-(`http://ex.com:80/` → `:80` dropped; a serializer choice). Once rejections and
-those two axes are set aside, rurl's WHATWG profile tracks the WHATWG reference
-tightly:
+choice, ADR 0002). The default-port axis called out in the previous run is gone
+— rurl now elides it too (`RURL-uvilvhnm`). Once rejections and that one axis
+are set aside, the profiles track each other tightly:
 
 * **rurl(whatwg) vs adaR** — accept/reject **concordance 0.973**; on the rows
-  where both accept, per-component agreement is scheme **1.00**, host **0.990**,
-  port 0.971, path **0.981**. The residual path gap is now just **two** rows —
-  the `%7e`→`%7E` percent-hex-case nit (`RURL-dkaycxvp`); école/quoted are no
-  longer counted (presentation).
-* **rurl(rfc3986) vs curl** — scheme **1.00**, port **1.00**, path 0.978; host
-  **0.759** — the gap is precisely the IPv4-obfuscation axis (curl runs the
+  where both accept, per-component agreement is scheme **1.00**, port **1.00**,
+  host **0.990**, path **0.971**. Port is now exact: default-port elision
+  (`RURL-uvilvhnm`) landed, and so did percent-hex case preservation
+  (`RURL-dkaycxvp`), so the two nits called out in the 2026-07-08 run are gone.
+* **rurl(rfc3986) vs curl** — scheme **1.00**, port **1.00**, path 0.964; host
+  **0.763** — the gap is precisely the IPv4-obfuscation axis (curl runs the
   IPv4 host parser; the RFC profile keeps the literal reg-name and flags it).
 
-Accept/reject posture over the corpus: `urltools` **never rejects** (334/334
+Accept/reject posture over the corpus: `urltools` **never rejects** (336/336
 accepted — its permissiveness is itself a finding); `rurl(whatwg)` is the
-strictest (231 rejected), `adaR` next (222), `curl` 193, `rurl(rfc3986)` 196.
+strictest (231 rejected), `adaR` next (222), `curl` 193, `rurl(rfc3986)` **185**
+(was 196 — see below; rurl(rfc) got *more permissive* by getting more correct).
 
 ## Focused pairwise divergences (exact spots)
 
 The three `diverge-*.csv` files list every divergent input for a pairing, with
 the differing component and both values. Highlights:
 
-**`rurl(whatwg)` vs `adaR`** (Ada / C++ WHATWG reference) — 15 rows:
-9 accept/reject (all the closed scheme set + `yal-009`), 3 port (default-port
-elision), 2 path (`%7e`→`%7E` hex-case, `RURL-dkaycxvp`), 1 host
-(punycode→Unicode). No host-shape or structural disagreement remains.
+**`rurl(whatwg)` vs `adaR`** (Ada / C++ WHATWG reference) — **10 rows** (was
+15): 9 accept/reject (all the closed scheme set + `yal-009`), 1 host
+(punycode→Unicode, ADR 0002). The 3 port rows and 2 path rows are **gone** —
+`RURL-uvilvhnm` and `RURL-dkaycxvp` both landed. What remains against the
+WHATWG reference is one deliberate presentation choice and the closed scheme
+set; no host-shape or structural disagreement at all.
 
-**`rurl(rfc3986)` vs `curl`** (libcurl / C) — 41 rows: **33 host** — every one
-an IPv4-obfuscation form (`http://2130706433/`, `http://0x7f.0.0.1/`,
+**`rurl(rfc3986)` vs `curl`** (libcurl / C) — **52 rows** (was 41): **33 host** —
+every one an IPv4-obfuscation form (`http://2130706433/`, `http://0x7f.0.0.1/`,
 `http://0177.0.0.1/`, …) where curl canonicalizes to dotted-quad and the RFC
-profile keeps the literal reg-name; 5 accept/reject; 3 path — including curl's
-`%2F`/`%3F`/`%23`-decode (`/a%2Fb`→`/a/b`), a real curl correctness divergence.
+profile keeps the literal reg-name; **16 accept/reject** (was 5); 3 path —
+including curl's `%2F`/`%3F`/`%23`-decode (`/a%2Fb`→`/a/b`), a real curl
+correctness divergence.
 
-**`rurl(rfc3986)` vs CPython `urllib.parse`** (non-R, separate ecosystem) — 192
-rows: **171 accept/reject**. `urllib.parse.urlsplit` is a permissive RFC
+**Read the +11 correctly: this pairing got worse because rurl got better.**
+Every added row is one where rurl(rfc3986) now *accepts* something RFC 3986
+admits and libcurl still rejects — the sub-delim reg-names of `RURL-dnddogce`
+(`http://a;b.example.com/`, `a!b`, `a'b`, `a+b`, `a=b`; §3.2.2 lists all of
+them under `sub-delims`) and the percent-encoded `file:` hosts unlocked by the
+two-gate model (`RURL-obsweger`; §3.2.2 does not decode a reg-name for
+validity). Per the standing parity directive, libcurl is a *heuristic toward*
+RFC 3986, not the standard itself, so divergence from it is not evidence of a
+rurl defect. The independent check that this is movement toward the RFC and not
+away from it is `tools/oracle-audit-rfc3986.R`, which refereed these same
+constructs against the RFC ABNF and Ruby's `URI::RFC3986_Parser` and found both
+accept them (`RURL-nknytzxz`).
+
+**`rurl(rfc3986)` vs CPython `urllib.parse`** (non-R, separate ecosystem) —
+**186 rows** (was 192): **160 accept/reject** (was 171). The drop is the same
+movement as above seen from the other side: `urllib.parse` never rejects, so
+rurl accepting more genuinely-valid RFC input closes the gap rather than
+widening it. `urllib.parse.urlsplit` is a permissive RFC
 *splitter* that **never rejects** — it accepts control characters in the host
 (`http://a\x01b/`), forbidden host code points (`http://a'b.example.com/`),
 empty authorities (`http://user:pass@/`), and mangled userinfo — where rurl's
