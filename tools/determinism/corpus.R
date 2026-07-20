@@ -33,12 +33,90 @@
 # runnable inside a container. The two copies must stay in sync; parse-dump.R
 # guards this by round-tripping every corpus.csv row through ITS copy.
 
+# LOCALE-INVARIANT code points (RURL-cupshtnh). enc2utf8() must NEVER appear
+# here: it TRANSCODES from the session locale, so the SAME bytes rendered
+# under LC_ALL=C and under en_US.UTF-8 produced different text and the
+# harness ended up measuring itself instead of rurl (it turned an unmarked
+# UTF-8 host into "<d0><b0>pple.com" under C, and threw on a
+# marked-but-invalid-UTF-8 value). This reads the BYTES and the declared
+# Encoding() mark only:
+#
+#   * bytes that form well-formed UTF-8 decode to their code points --
+#     whatever the session locale, and whatever mark the string carries;
+#   * every other byte becomes the lone low surrogate 0xDC00 + byte (the
+#     PEP-383 "surrogateescape" convention): deterministic, byte-reversible,
+#     written as ASCII \udcXX, and unreachable by decoding valid UTF-8, so it
+#     can never be confused with a genuine code point.
+#
+# The escaper is therefore TOTAL: invalid UTF-8 is RENDERED, never an error.
+# The corpus deliberately produces such values, and a dump that abandons a
+# row is worse evidence than one that records the bytes it saw.
+
+utf8_codepoints <- function(s) {
+  s8 <- s
+  Encoding(s8) <- "UTF-8"                # declare; never transcode
+  cps <- tryCatch(suppressWarnings(utf8ToInt(s8)),
+                  error = function(e) NA_integer_)
+  if (!anyNA(cps)) return(cps)
+  raw_codepoints(charToRaw(s))
+}
+
+# Strict UTF-8 decode of a raw vector. Truncated sequences, bad continuation
+# bytes, overlong forms, surrogates and anything above U+10FFFF are rejected
+# one byte at a time into the surrogateescape range.
+raw_codepoints <- function(b) {
+  n <- length(b)
+  if (n == 0L) return(integer(0))
+  v <- as.integer(b)
+  cps <- integer(n)
+  k <- 0L
+  i <- 1L
+  while (i <= n) {
+    b0 <- v[i]
+    len <- if (b0 <= 0x7fL) {
+      1L
+    } else if (b0 >= 0xc2L && b0 <= 0xdfL) {
+      2L
+    } else if (b0 >= 0xe0L && b0 <= 0xefL) {
+      3L
+    } else if (b0 >= 0xf0L && b0 <= 0xf4L) {
+      4L
+    } else {
+      0L
+    }
+    cp <- NA_integer_
+    if (len > 0L && i + len - 1L <= n) {
+      acc <- bitwAnd(b0, c(0x7fL, 0x1fL, 0x0fL, 0x07L)[len])
+      ok <- TRUE
+      for (j in seq_len(len - 1L)) {
+        cont <- v[i + j]
+        if (cont < 0x80L || cont > 0xbfL) {
+          ok <- FALSE
+          break
+        }
+        acc <- acc * 64L + (cont - 0x80L)
+      }
+      lo <- c(0L, 0x80L, 0x800L, 0x10000L)[len]
+      if (ok && acc >= lo && acc <= 0x10ffffL &&
+            (acc < 0xd800L || acc > 0xdfffL)) {
+        cp <- acc
+      }
+    }
+    k <- k + 1L
+    if (is.na(cp)) {
+      cps[k] <- 0xdc00L + b0
+      i <- i + 1L
+    } else {
+      cps[k] <- cp
+      i <- i + len
+    }
+  }
+  cps[seq_len(k)]
+}
+
 json_escape_one <- function(s) {
   if (is.na(s)) return("null")
-  cps <- utf8ToInt(enc2utf8(s))
-  if (length(cps) == 1L && is.na(cps)) {
-    stop("value is not valid UTF-8; cannot escape")
-  }
+  cps <- utf8_codepoints(s)
   if (length(cps) == 0L) return("\"\"")
   out <- character(length(cps))
   for (i in seq_along(cps)) {

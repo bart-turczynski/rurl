@@ -27,6 +27,12 @@
 # string "NA" (written "NA") and from "" (written ""). Files are LF-terminated
 # and pure ASCII by construction: C0 controls, CR/LF, astral and non-character
 # code points cannot survive a raw CSV cell.
+#
+# The rendering is derived from the value's BYTES, never from the session
+# locale -- see utf8_codepoints() below. A byte that is not part of
+# well-formed UTF-8 is written as \udcXX, and the per-value Encoding() mark is
+# recorded in the `encoding_marks` column, so a charset difference is DATA
+# rather than a silent difference in how the dump renders.
 # ----------------------------------------------------------------------------
 
 # ---- rurl loading (matches inst/bench/standard-parity.R) -------------------
@@ -46,12 +52,90 @@ spu <- if (exists("safe_parse_urls", mode = "function")) {
 # runnable inside a container. The self-test below round-trips every corpus row
 # through THIS copy, which also proves the two copies agree.
 
+# LOCALE-INVARIANT code points (RURL-cupshtnh). enc2utf8() must NEVER appear
+# here: it TRANSCODES from the session locale, so the SAME bytes rendered
+# under LC_ALL=C and under en_US.UTF-8 produced different text and the
+# harness ended up measuring itself instead of rurl (it turned an unmarked
+# UTF-8 host into "<d0><b0>pple.com" under C, and threw on a
+# marked-but-invalid-UTF-8 value). This reads the BYTES and the declared
+# Encoding() mark only:
+#
+#   * bytes that form well-formed UTF-8 decode to their code points --
+#     whatever the session locale, and whatever mark the string carries;
+#   * every other byte becomes the lone low surrogate 0xDC00 + byte (the
+#     PEP-383 "surrogateescape" convention): deterministic, byte-reversible,
+#     written as ASCII \udcXX, and unreachable by decoding valid UTF-8, so it
+#     can never be confused with a genuine code point.
+#
+# The escaper is therefore TOTAL: invalid UTF-8 is RENDERED, never an error.
+# The corpus deliberately produces such values, and a dump that abandons a
+# row is worse evidence than one that records the bytes it saw.
+
+utf8_codepoints <- function(s) {
+  s8 <- s
+  Encoding(s8) <- "UTF-8"                # declare; never transcode
+  cps <- tryCatch(suppressWarnings(utf8ToInt(s8)),
+                  error = function(e) NA_integer_)
+  if (!anyNA(cps)) return(cps)
+  raw_codepoints(charToRaw(s))
+}
+
+# Strict UTF-8 decode of a raw vector. Truncated sequences, bad continuation
+# bytes, overlong forms, surrogates and anything above U+10FFFF are rejected
+# one byte at a time into the surrogateescape range.
+raw_codepoints <- function(b) {
+  n <- length(b)
+  if (n == 0L) return(integer(0))
+  v <- as.integer(b)
+  cps <- integer(n)
+  k <- 0L
+  i <- 1L
+  while (i <= n) {
+    b0 <- v[i]
+    len <- if (b0 <= 0x7fL) {
+      1L
+    } else if (b0 >= 0xc2L && b0 <= 0xdfL) {
+      2L
+    } else if (b0 >= 0xe0L && b0 <= 0xefL) {
+      3L
+    } else if (b0 >= 0xf0L && b0 <= 0xf4L) {
+      4L
+    } else {
+      0L
+    }
+    cp <- NA_integer_
+    if (len > 0L && i + len - 1L <= n) {
+      acc <- bitwAnd(b0, c(0x7fL, 0x1fL, 0x0fL, 0x07L)[len])
+      ok <- TRUE
+      for (j in seq_len(len - 1L)) {
+        cont <- v[i + j]
+        if (cont < 0x80L || cont > 0xbfL) {
+          ok <- FALSE
+          break
+        }
+        acc <- acc * 64L + (cont - 0x80L)
+      }
+      lo <- c(0L, 0x80L, 0x800L, 0x10000L)[len]
+      if (ok && acc >= lo && acc <= 0x10ffffL &&
+            (acc < 0xd800L || acc > 0xdfffL)) {
+        cp <- acc
+      }
+    }
+    k <- k + 1L
+    if (is.na(cp)) {
+      cps[k] <- 0xdc00L + b0
+      i <- i + 1L
+    } else {
+      cps[k] <- cp
+      i <- i + len
+    }
+  }
+  cps[seq_len(k)]
+}
+
 json_escape_one <- function(s) {
   if (is.na(s)) return("null")
-  cps <- utf8ToInt(enc2utf8(s))
-  if (length(cps) == 1L && is.na(cps)) {
-    stop("value is not valid UTF-8; cannot escape")
-  }
+  cps <- utf8_codepoints(s)
   if (length(cps) == 0L) return("\"\"")
   out <- character(length(cps))
   for (i in seq_along(cps)) {
@@ -240,6 +324,31 @@ run_standard <- function(std) {
   list(res = res, cond = cond)
 }
 
+# ---- encoding marks, as DATA -----------------------------------------------
+# The charset axis used to be captured ONLY as the free-text `locale` /
+# `encoding` env keys, never per value -- so a lost or changed Encoding() mark
+# was invisible in the dump except through the escaper mangling it caused,
+# which is precisely the confound this harness exists to avoid.
+# `encoding_marks` records the mark of every output value: one character per
+# column, in OUT_COLS order.
+#
+#   8 = "UTF-8"   l = "latin1"   b = "bytes"   u = "unknown" (native)
+#   . = NA        ? = anything else a future R might return
+#
+# R does not mark a pure-ASCII string, so `u` is expected for ASCII values and
+# says nothing on its own; what matters is that the same input yields the same
+# mark string on every platform, locale and R version.
+
+MARK_CODES <- c(`UTF-8` = "8", latin1 = "l", bytes = "b", unknown = "u")
+
+mark_code <- function(x) {
+  x <- as.character(x)
+  code <- unname(MARK_CODES[Encoding(x)])
+  code[is.na(code)] <- "?"
+  code[is.na(x)] <- "."
+  code
+}
+
 standards <- list(default = NULL, rfc3986 = "rfc3986", whatwg = "whatwg")
 parts <- list()
 for (nm in names(standards)) {
@@ -256,6 +365,9 @@ for (nm in names(standards)) {
   for (k in OUT_COLS) {
     parts[[nm]][[k]] <- json_escape(as.character(r$res[[k]]))
   }
+  parts[[nm]][["encoding_marks"]] <- json_escape(
+    do.call(paste0, lapply(OUT_COLS, function(k) mark_code(r$res[[k]])))
+  )
   cat(sprintf("url_standard=%-8s rows=%d conditions=%d (%.1fs)\n",
               nm, nrow(parts[[nm]]), sum(nzchar(r$cond)),
               as.numeric(difftime(Sys.time(), t0, units = "secs"))))

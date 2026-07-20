@@ -22,8 +22,13 @@
 # English_United States.utf8. Comparing `default` cells across OSes therefore
 # confounds OS build with character set -- measured on the first two live
 # sweeps, where ubuntu tr vs ubuntu default differed by 146 lines that were
-# ENTIRELY C-vs-UTF-8 (host "<ef><bf><bf>y" as raw bytes vs the code point),
-# not the Turkish hazard. So the matrix is a deliberate `include:` list:
+# ENTIRELY C-vs-UTF-8, not the Turkish hazard. That 146 figure is SUPERSEDED
+# and pending re-measurement (RURL-ifhpjoqh): it summed three mechanisms, two
+# real rurl defects (both fixed, e9defab / c6a0457) and one artifact of the
+# harness's own enc2utf8() rendering -- which is where the quoted
+# host "<ef><bf><bf>y" came from. See tools/determinism/README.md, "What the
+# 146 lines actually were". The axis itself is unaffected, and the matrix
+# stays a deliberate `include:` list:
 # the OS x R (build) axis holds the charset fixed at UTF-8, and the charset
 # axis holds R fixed at release. `default` cells are kept as the honest
 # "what a user actually gets" baseline and are marked NOT cross-OS comparable.
@@ -342,9 +347,80 @@ jobs:
         run: |
           # Minimal copy of the harness escaper: quoted, ASCII-only, non-ASCII
           # as \uXXXX, bare `null` for NA. Same contract as env-<LABEL>.csv.
+          #
+          # LOCALE-INVARIANT, exactly like the three script copies
+          # (RURL-cupshtnh): the rendering is derived from the value's BYTES
+          # and its declared Encoding() mark, never from the session locale.
+          # enc2utf8() must NOT appear here -- it TRANSCODES from the locale,
+          # which is the one thing this file's cells deliberately vary, so the
+          # escaper itself would differ per cell and the sweep would measure
+          # its own harness. Declaring the mark changes no byte; utf8ToInt()
+          # then decodes the bytes as they are. Any byte that is not part of
+          # well-formed UTF-8 becomes the lone low surrogate 0xDC00 + byte
+          # (the PEP-383 "surrogateescape" convention, written \udcXX), so the
+          # function is TOTAL -- it renders invalid UTF-8 rather than
+          # stop()ping. ASCII values render byte-identically to every sweep
+          # already recorded, so historical locale-<LABEL>.csv cells stay
+          # comparable.
+          cps_of <- function(s) {
+            s8 <- s
+            Encoding(s8) <- "UTF-8"            # declare; never transcode
+            cps <- tryCatch(suppressWarnings(utf8ToInt(s8)),
+                            error = function(e) NA_integer_)
+            if (!anyNA(cps)) return(cps)
+            # Strict UTF-8 decode of the raw bytes: truncated sequences, bad
+            # continuation bytes, overlong forms, surrogates and anything
+            # above U+10FFFF are rejected one byte at a time.
+            v <- as.integer(charToRaw(s))
+            n <- length(v)
+            acc_out <- integer(n)
+            k <- 0L
+            i <- 1L
+            while (i <= n) {
+              b0 <- v[i]
+              len <- if (b0 <= 0x7fL) {
+                1L
+              } else if (b0 >= 0xc2L && b0 <= 0xdfL) {
+                2L
+              } else if (b0 >= 0xe0L && b0 <= 0xefL) {
+                3L
+              } else if (b0 >= 0xf0L && b0 <= 0xf4L) {
+                4L
+              } else {
+                0L
+              }
+              cp <- NA_integer_
+              if (len > 0L && i + len - 1L <= n) {
+                acc <- bitwAnd(b0, c(0x7fL, 0x1fL, 0x0fL, 0x07L)[len])
+                ok <- TRUE
+                for (j in seq_len(len - 1L)) {
+                  cont <- v[i + j]
+                  if (cont < 0x80L || cont > 0xbfL) {
+                    ok <- FALSE
+                    break
+                  }
+                  acc <- acc * 64L + (cont - 0x80L)
+                }
+                lo <- c(0L, 0x80L, 0x800L, 0x10000L)[len]
+                if (ok && acc >= lo && acc <= 0x10ffffL &&
+                      (acc < 0xd800L || acc > 0xdfffL)) {
+                  cp <- acc
+                }
+              }
+              k <- k + 1L
+              if (is.na(cp)) {
+                acc_out[k] <- 0xdc00L + b0
+                i <- i + 1L
+              } else {
+                acc_out[k] <- cp
+                i <- i + len
+              }
+            }
+            acc_out[seq_len(k)]
+          }
           esc <- function(s) {
             if (length(s) != 1L || is.na(s)) return("null")
-            cps <- utf8ToInt(enc2utf8(as.character(s)))
+            cps <- cps_of(as.character(s))
             if (length(cps) == 0L) return("\"\"")
             out <- vapply(cps, function(cp) {
               if (cp == 34L) {

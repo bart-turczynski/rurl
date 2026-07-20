@@ -75,6 +75,37 @@ Therefore:
   and `stop()`s loudly on any mismatch — which also proves the two copies
   agree.
 
+### Locale invariance (`utf8_codepoints()`)
+
+The escaper renders a value from its **bytes**, never from the session
+locale — `enc2utf8()` (and `iconv()` from the native encoding) **must never
+appear in this harness**. `enc2utf8()` *transcodes*: on a string whose
+`Encoding()` is `"unknown"` it re-reads the bytes in whatever the session
+locale is, so under `LC_ALL=C` an unmarked UTF-8 host rendered as
+`<d0>…` (`"<d0><b0>pple.com"`) while the identical bytes
+under `en_US.UTF-8` rendered as `аpple.com`, and on a
+marked-but-invalid-UTF-8 value it made the escaper `stop()`. The dump then
+diverged by locale *where rurl's output did not* — the harness measuring
+itself (RURL-cupshtnh, mechanism **M3** below).
+
+Instead:
+
+* the value's bytes are decoded as **strict UTF-8** (overlong forms,
+  surrogates, `> U+10FFFF`, bad continuations and truncated sequences all
+  rejected), independent of the session locale and of the string's mark;
+* any byte that is not part of a well-formed sequence is emitted as the lone
+  low surrogate `0xDC00 + byte` — the PEP-383 “surrogateescape” convention —
+  i.e. `\udcXX`. It is deterministic, byte-reversible, ASCII in the file, and
+  unreachable by decoding valid UTF-8, so it can never be mistaken for a real
+  code point. A `latin1`-marked value is therefore rendered by its bytes too;
+  nothing in the rurl stack produces one.
+* the escaper is consequently **total**: invalid UTF-8 is rendered, never an
+  error. The corpus deliberately produces such values, and a dump that
+  abandons a row is worse evidence than one that records the bytes it saw.
+
+The acceptance property: **the same input bytes produce the same dump text
+under `LC_ALL=C` and under `LC_ALL=en_US.UTF-8`.**
+
 ### NA sentinel
 
 Downstream analysis must tell three things apart, so:
@@ -128,7 +159,31 @@ Unicode inputs are built with `intToUtf8()` rather than pasted as literals, so
 `id, construct, input_json, url_standard, r_condition,` then all 18
 `safe_parse_urls()` output columns in order: `original_url, scheme, host,
 port, path, query, fragment, user, password, domain, tld, domain_ascii,
-domain_unicode, tld_ascii, tld_unicode, is_ip_host, clean_url, parse_status`.
+domain_unicode, tld_ascii, tld_unicode, is_ip_host, clean_url, parse_status`,
+and finally `encoding_marks`.
+
+`encoding_marks` records the per-value `Encoding()` mark **as data**: one
+character per output column, in the same order, JSON-escaped like every other
+cell.
+
+| Code | Mark |
+| --- | --- |
+| `8` | `"UTF-8"` |
+| `l` | `"latin1"` |
+| `b` | `"bytes"` |
+| `u` | `"unknown"` (native) |
+| `.` | the value is `NA` |
+| `?` | anything else a future R might return |
+
+It exists because the charset axis was otherwise captured *only* as the
+free-text `locale` / `encoding` keys in `env-*.csv`, never per value — so a
+lost or changed mark was invisible in the dump except through the rendering
+damage it caused, which is exactly the confound this harness exists to avoid
+(see *Locale invariance* above). R never marks a pure-ASCII string, so `u` is
+the expected code for ASCII values and means nothing on its own; what matters
+is that the same input yields the same mark string on every platform, locale
+and R version. A regression in rurl's UTF-8 declaration now shows up as a
+plain cell difference.
 
 Every row of the corpus appears three times, once per `url_standard`:
 `default` (the argument omitted entirely — legacy behavior), `rfc3986`, and
@@ -367,7 +422,7 @@ The three runners **do not agree on a default character set**:
 So a cross-OS comparison of `default` cells **confounds OS build with
 charset**. Measured on the first two live sweeps: ubuntu `tr` vs ubuntu
 `default` differed by 146 lines, and none of it was the Turkish hazard — it was
-C vs UTF-8:
+C vs UTF-8, showing up as e.g.
 
 ```
 default (LC_ALL=C):  host = "<ef><bf><bf>y"   <- raw bytes, not UTF-8-marked
@@ -380,9 +435,35 @@ Affected constructs: `external-vector` (44 rows), `idn-mixed-script` (18),
 `known-divergent` (3), `idn-overlong-label` (3). ASCII-only constructs —
 including the `file://example.com/path` finding — are unaffected.
 
+> **The 146-line figure is SUPERSEDED and pending re-measurement
+> (RURL-ifhpjoqh). Do not quote it as a defect count.** It was never one
+> mechanism, and the rendering above is not by itself evidence of a `rurl`
+> bug — see the attribution below.
+
+#### What the 146 lines actually were
+
+Three distinct mechanisms were summed into one number:
+
+| | Mechanism | Where | Status |
+| --- | --- | --- | --- |
+| **M1** | `rurl` handed an **unmarked** host to `pslr`, which re-decoded it in the session locale and returned `NA` — so `domain`, `tld` and the four `*_ascii` / `*_unicode` columns all came back `null` under `LC_ALL=C` | `R/parse.R` | **fixed** — `.mark_host_utf8()`, commit `e9defab` (RURL-lzyetido) |
+| **M2** | the same unmarked bytes reaching `punycoder::host_normalize()` on **invalid** UTF-8 flipped the WHATWG UTS-46 fatal gate (`"ex.com<80>"` under C vs `NA` under UTF-8), so `host`, `clean_url`, `scheme` and `parse_status` differed | `R/parse.R` | **fixed** — `.mark_host_utf8()`, commit `e9defab` (RURL-lzyetido); the output-side mark followed in `c6a0457` (RURL-gbpvripg) |
+| **M3** | **the harness's own rendering**: `json_escape_one()` called `enc2utf8()`, which transcodes from the session locale, so the *dump text* differed by locale even where `rurl`'s output did not | `parse-dump.R`, `corpus.R`, `curl-probe.R` | **fixed** — `utf8_codepoints()`, this file's *Locale invariance* section (RURL-cupshtnh) |
+
+The `host = "<ef><bf><bf>y"` rendering quoted above is an **M3** artifact:
+that is what `enc2utf8()` did to the value under `LC_ALL=C`, not necessarily
+what `rurl` returned. The evidence partly measured the harness.
+
+M1 and M2 were real `rurl` defects and are fixed; M3 was never one. The
+honest post-fix figure is **not yet known** — re-measuring the charset axis on
+the repaired harness is its own unit (RURL-ifhpjoqh). Some genuine
+locale-sensitivity does remain on the input side (RURL-pqrutnio).
+
 Without this axis the analysis would attribute a **charset** difference to a
 **platform build**. Hence: the charset is made explicit and held constant
-wherever the matrix compares platforms.
+wherever the matrix compares platforms. The axis keeps its value after the
+fixes: it is now what *proves* the marks hold (`encoding_marks` makes that
+directly diffable) rather than what merely exposed their absence.
 
 ### Cells
 
