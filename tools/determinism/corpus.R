@@ -421,6 +421,21 @@ add_seq("known-div", "known-divergent", c(
 # Read the ASCII-only input_json column (NOT the raw `input` column, which is
 # UTF-8 and mis-decodes on a Windows non-UTF-8 locale -- the very bug that
 # produced part of the win-builder failure). The fixture is never modified.
+#
+# `encoding = "UTF-8"`, NOT `fileEncoding = "UTF-8"`: the latter *transcodes*
+# the file from UTF-8 to the session's native encoding on read, and under a
+# non-UTF-8 locale (LC_ALL=C, the non-UTF-8 Windows default) that conversion
+# hits the raw UTF-8 `input` column, warns "invalid input found on input
+# connection", and SILENTLY TRUNCATES the read at the first offending row --
+# 282 runnable rows collapse to 19. `encoding = "UTF-8"` marks the bytes
+# instead of converting them, so the whole file is read identically in every
+# locale (RURL-qpuphdrz). The row-count assertion below turns any remaining
+# short read into a hard error rather than a silent shrink of the corpus that
+# is the denominator for every divergence figure the harness reports.
+
+# The corpus is a fixed, byte-identically-regenerable denominator: this count
+# must change only by a deliberate edit here, never by an unnoticed short read.
+EXPECTED_FIXTURE_RUNNABLE <- 282L
 
 fixture_path <- function() {
   cand <- c(
@@ -435,8 +450,16 @@ fixture_path <- function() {
 }
 
 fx <- utils::read.csv(fixture_path(), colClasses = "character",
-                      fileEncoding = "UTF-8", stringsAsFactors = FALSE)
+                      encoding = "UTF-8", stringsAsFactors = FALSE)
 fx <- fx[fx$runnable == "yes", , drop = FALSE]
+if (nrow(fx) != EXPECTED_FIXTURE_RUNNABLE) {
+  stop(sprintf(paste0("external fixture read %d runnable rows, expected %d. ",
+                      "A short read (e.g. a non-UTF-8 locale truncating the ",
+                      "UTF-8 fixture) would silently shrink the corpus; if ",
+                      "the fixture genuinely changed, update ",
+                      "EXPECTED_FIXTURE_RUNNABLE."),
+              nrow(fx), EXPECTED_FIXTURE_RUNNABLE))
+}
 for (i in seq_len(nrow(fx))) {
   add(paste0("ext-", fx$id[i]), "external-vector",
       json_unescape_one(fx$input_json[i]))
