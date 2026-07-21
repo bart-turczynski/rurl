@@ -103,3 +103,41 @@ test_that("rfc3986 rejects unsupported excess-slash empty authority", {
     get_parse_status("https:////evil.com", url_standard = "rfc3986"), "error"
   )
 })
+
+# --- WHATWG non-special empty-host + port validation (RURL-kknambrz, T2) -----
+# Under scheme_acceptance="general", url_standard="whatwg", the non-special
+# authority parser must reject an empty host that carries a (non-null) port
+# (WHATWG host-missing rule), while keeping an empty host with NO port legal for
+# non-special schemes. RFC-profile authority/port rules are a separate path
+# (sibling T4/T5) and must stay untouched.
+
+test_that("whatwg general rejects empty host with a port", {
+  bad <- c("data://:443", "sc://:12/")
+  res <- safe_parse_urls(
+    bad, scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_identical(res$parse_status, c("error", "error"))
+})
+
+test_that("whatwg general keeps empty host with no port accepted", {
+  # foo:///bar (empty host, no port) stays legal; data://: is empty host + a
+  # null (empty) port, which is also legal for a non-special scheme.
+  ok <- c("foo:///bar", "data://:")
+  res <- safe_parse_urls(
+    ok, scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_identical(res$parse_status, c("ok", "ok"))
+  expect_true(all(is.na(res$host)))
+  expect_true(all(is.na(res$port)))
+})
+
+test_that("rfc3986 general empty-host-with-port behavior is unchanged", {
+  # T2 is WHATWG-only: the RFC profile still accepts these (its reg-name/port
+  # rules are owned by sibling tickets), so the fix must not perturb it.
+  res <- safe_parse_urls(
+    c("data://:443", "sc://:12/"),
+    scheme_acceptance = "general", url_standard = "rfc3986"
+  )
+  expect_identical(res$parse_status, c("ok", "ok"))
+  expect_identical(res$port, c(443L, 12L))
+})
