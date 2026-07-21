@@ -51,6 +51,14 @@
 # With allow_utf8 = TRUE (the SMTPUTF8 projection), non-ASCII scalar values are
 # additionally admitted as qtext.
 .email_valid_quoted_content <- function(inner, allow_utf8 = FALSE) {
+  # Percent-decoded mailto content is UTF-8 (RFC 6068); declare that so the
+  # per-character split and utf8ToInt() below read code points, not raw bytes.
+  # This MUST be `Encoding<-` and NOT enc2utf8(): enc2utf8() transcodes *from
+  # the session locale*, so an unmarked string would decode differently under
+  # LC_ALL=C than under a UTF-8 session. Marking before strsplit() is also what
+  # makes the character split itself locale-invariant (a byte-split of a
+  # multi-byte scalar would otherwise leak into the code-point checks).
+  Encoding(inner) <- "UTF-8"
   cs <- strsplit(inner, "", fixed = TRUE)[[1L]]
   i <- 1L
   n <- length(cs)
@@ -60,7 +68,7 @@
       if (i == n) {
         return(FALSE) # dangling escape
       }
-      code <- utf8ToInt(enc2utf8(cs[i + 1L]))[1L]
+      code <- utf8ToInt(cs[i + 1L])[1L]
       if (!((code >= 33L && code <= 126L) || code == 32L || code == 9L)) {
         return(FALSE)
       }
@@ -68,7 +76,7 @@
     } else if (identical(ch, "\"")) {
       return(FALSE) # bare quote inside content
     } else {
-      code <- utf8ToInt(enc2utf8(ch))[1L]
+      code <- utf8ToInt(ch)[1L]
       ok <- code == 33L || (code >= 35L && code <= 91L) ||
         (code >= 93L && code <= 126L) || (allow_utf8 && code > 126L)
       if (!ok) {

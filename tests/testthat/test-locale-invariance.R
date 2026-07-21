@@ -161,6 +161,21 @@ test_that("a U+FFFF mailto local part does not error", {
   expect_identical(out$mailto_local_part_form, "invalid")
 })
 
+test_that("a non-ASCII quoted SMTPUTF8 local part classifies stably", {
+  # `.email_valid_quoted_content()` splits the percent-decoded local part into
+  # characters and reads each code point (RURL-iwtrwayz). Before it declared
+  # its input UTF-8, that split ran byte-wise under LC_ALL=C, so a multi-byte
+  # scalar leaked into the qtext check and the SMTPUTF8 verdict flipped by
+  # locale. `mailto:"<U+00E9>"@example.com`, percent-encoded, must project to
+  # `smtputf8` in every locale.
+  out <- get_mailto_recipients(
+    "mailto:%22%C3%A9%22@example.com",
+    scheme_acceptance = "general", smtp_wire = TRUE
+  )
+  expect_identical(out$smtp_envelope_wire_mode, "smtputf8")
+  expect_true(out$smtp_envelope_address_requires_smtputf8)
+})
+
 
 # --- 5. Meta-guard: no transcoding-from-native in the package ----------------
 
@@ -181,17 +196,17 @@ ns_callers <- function(fn) {
   counts[counts > 0L]
 }
 
-test_that("enc2utf8() is confined to the one known open site", {
-  # `enc2utf8()` transcodes FROM the session locale. It must not reappear
+test_that("enc2utf8() is gone from the whole namespace", {
+  # `enc2utf8()` transcodes FROM the session locale. It must not appear
   # anywhere in the parse path.
   #
-  # Two calls remain, both in `.email_valid_quoted_content()`
-  # (R/email-diagnostics.R:63,71). That is DELIBERATELY still open as
-  # RURL-iwtrwayz and is out of scope here -- so this guard asserts the exact
-  # expected set and count rather than pretending the count is zero. When
-  # RURL-iwtrwayz lands, this expectation becomes `integer(0)`-shaped.
+  # The last two calls lived in `.email_valid_quoted_content()`
+  # (R/email-diagnostics.R) and were removed by RURL-iwtrwayz: the function now
+  # declares its percent-decoded input UTF-8 with `Encoding<-` before the
+  # per-character split, so `utf8ToInt()` reads code points directly. Any new
+  # caller of `enc2utf8()` is a regression until proven otherwise.
   expect_identical(
-    ns_callers("enc2utf8"), c(.email_valid_quoted_content = 2L)
+    ns_callers("enc2utf8"), setNames(integer(0), character(0))
   )
 })
 
