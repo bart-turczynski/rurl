@@ -373,3 +373,31 @@ test_that("port_handling adds no new columns/fields to the parse result", {
   cols_after <- names(safe_parse_urls("http://example.com:8080/"))
   expect_identical(cols_after, cols_before)
 })
+
+# --- WHATWG non-special port validation (RURL-kknambrz, T2) ------------------
+# Under scheme_acceptance="general", url_standard="whatwg", a non-null port must
+# be ASCII digits only and <= 65535; an empty port (`:` then end/`/`/`?`/`#`) is
+# null and legal. Non-digit (`-`, `+`, letters) or overflow is a parse failure.
+# The RFC profile owns its own port grammar (sibling T4/T5) and is untouched.
+
+test_that("whatwg general rejects non-numeric / signed / overflow ports", {
+  bad <- c(
+    "data://test:test", "scheme://example.com:-1",
+    "scheme://example.com:+1", "scheme://example.com:99999"
+  )
+  res <- safe_parse_urls(
+    bad, scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_identical(res$parse_status, rep("error", length(bad)))
+})
+
+test_that("whatwg general accepts valid, empty, and boundary ports", {
+  ok <- c("foo://host:80/", "foo://host:/", "foo://host:65535/")
+  res <- safe_parse_urls(
+    ok, scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_identical(res$parse_status, c("ok", "ok", "ok"))
+  expect_identical(res$host, c("host", "host", "host"))
+  # An empty port after `:` is null; a valid one is carried as an integer.
+  expect_identical(res$port, c(80L, NA_integer_, 65535L))
+})

@@ -744,7 +744,25 @@
     parts <- .split_authority(authority)
     host <- parts$host
     port <- parts$port
-    if (nzchar(host)) {
+    if (is_whatwg) {
+      # WHATWG authority validation (ADR 0012 D2; #host-parser / #port-state).
+      # A non-null port (content after `:`) must be ASCII digits only and
+      # <= 65535; an empty port (`:` then end/`/`/`?`/`#`) is null -> legal.
+      # A non-digit (`-`, `+`, letters) or an out-of-range integer is failure.
+      # An empty host carrying a non-null port is the host-missing failure --
+      # an empty host with NO port stays legal for non-special schemes.
+      has_port <- !is.na(port) && nzchar(port)
+      if (has_port) {
+        if (!isTRUE(stringi::stri_detect_regex(port, "^[0-9]+$")) ||
+          suppressWarnings(as.numeric(port)) > 65535) {
+          ok <- FALSE
+        }
+        if (!nzchar(host)) {
+          ok <- FALSE
+        }
+      }
+    }
+    if (ok && nzchar(host)) {
       hp <- if (is_whatwg) {
         .whatwg_opaque_host_one(host)
       } else {
