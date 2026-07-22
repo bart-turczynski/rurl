@@ -114,7 +114,203 @@ if (file.exists(snap)) {
   }
 }
 
+## --- G1.1 registers: finding (RCON) + source-claim (S) -----------------------
+## Parses the two Markdown row-registers and enforces the reconciliation §9
+## bidirectional coverage: forward (§4 Sources, transferred into findings.md)
+## must equal the inverse (source-claims target_ref + parsed §9). Every frozen
+## finding is represented exactly once, multi-RCON links allowed. (RURL-jalwcgzk)
+reg_dir   <- file.path(root, "registers")
+recon     <- file.path(root, "protocol-review-reconciliation.md")
+sc_path   <- file.path(reg_dir, "source-claims.md")
+fd_path   <- file.path(reg_dir, "findings.md")
+sc_pat    <- rschemas$record_types$register$variants$`source-claim`$id_pattern
+fd_pat    <- rschemas$record_types$register$variants$finding$id_pattern
+sc_fields <- rschemas$record_types$register$variants$`source-claim`$row_fields
+fd_fields <- rschemas$record_types$register$variants$finding$row_fields
+env_fields <- yaml::read_yaml(file.path(sdir, "envelope.yaml"))$required_envelope_fields
+
+# Read the pipe-table under the "## Rows" heading of a register file.
+gv <- function(r, k) if (!is.null(names(r)) && k %in% names(r)) r[[k]] else NA_character_
+read_rows <- function(path) {
+  ln <- readLines(path, warn = FALSE)
+  h  <- which(grepl("^##\\s+Rows\\s*$", ln))
+  if (length(h) != 1) return(NULL)
+  nxt <- which(grepl("^##\\s", ln) & seq_along(ln) > h)
+  end <- if (length(nxt)) min(nxt) - 1L else length(ln)
+  body <- ln[(h + 1):end]
+  tbl  <- body[grepl("^\\|", body)]
+  if (length(tbl) < 3) return(NULL)
+  header <- trimws(strsplit(sub("^\\|", "", sub("\\|\\s*$", "", tbl[1])), "\\|")[[1]])
+  data <- tbl[-(1:2)]                                   # drop header + separator
+  data <- data[!grepl("^\\|[-:\\s|]*$", data)]
+  rows <- lapply(data, function(r) {
+    cells <- trimws(strsplit(sub("^\\|", "", sub("\\|\\s*$", "", r)), "\\|")[[1]])
+    stats::setNames(cells, header[seq_along(cells)])
+  })
+  list(header = header, rows = rows)
+}
+
+# Expand one "S<n> ..." report-group into canonical claim_ids.
+expand_group <- function(g) {
+  g <- trimws(g)
+  m <- regmatches(g, regexec("^S([0-9]+)[[:space:]]+(.*)$", g))[[1]]
+  if (length(m) < 3) stop(sprintf("unparseable report group: '%s'", g))
+  rn <- m[2]; rest <- m[3]
+  is_finding <- grepl("finding", rest)
+  rest <- gsub("findings?", "", rest)
+  rest <- gsub("[[:space:]]+and[[:space:]]+", ",", rest)
+  rest <- gsub("[[:space:]]+", "", rest)
+  items <- strsplit(rest, ",")[[1]]; items <- items[nzchar(items)]
+  out <- character(0)
+  for (it in items) {
+    if (rn == "2") {
+      mm <- regmatches(it, regexec("^S2-([0-9]+)(-S2-([0-9]+))?$", it))[[1]]
+      if (length(mm) < 2 || !nzchar(mm[2])) stop(sprintf("bad S2 item '%s'", it))
+      a <- as.integer(mm[2]); b <- if (nzchar(mm[4])) as.integer(mm[4]) else a
+      for (k in a:b) out <- c(out, sprintf("S2 S2-%02d", k))
+    } else if (rn == "9") {
+      mm <- regmatches(it, regexec("^([CHM])([0-9]+)(-([CHM])([0-9]+))?$", it))[[1]]
+      if (length(mm) < 3 || !nzchar(mm[2])) stop(sprintf("bad S9 item '%s'", it))
+      L <- mm[2]; a <- as.integer(mm[3]); b <- if (nzchar(mm[6])) as.integer(mm[6]) else a
+      for (k in a:b) out <- c(out, sprintf("S9 %s%d", L, k))
+    } else if (is_finding) {
+      mm <- regmatches(it, regexec("^([0-9]+)(-([0-9]+))?$", it))[[1]]
+      if (length(mm) < 2 || !nzchar(mm[2])) stop(sprintf("bad finding item '%s'", it))
+      a <- as.integer(mm[2]); b <- if (nzchar(mm[4])) as.integer(mm[4]) else a
+      for (k in a:b) out <- c(out, sprintf("S%s finding %d", rn, k))
+    } else {
+      mm <- regmatches(it, regexec("^F([0-9]+)(-F([0-9]+))?$", it))[[1]]
+      if (length(mm) < 2 || !nzchar(mm[2])) stop(sprintf("bad F item '%s'", it))
+      a <- as.integer(mm[2]); b <- if (nzchar(mm[4])) as.integer(mm[4]) else a
+      for (k in a:b) out <- c(out, sprintf("S%s F%d", rn, k))
+    }
+  }
+  out
+}
+expand_cell <- function(cell) {
+  cell <- sub("\\(.*$", "", trimws(cell))            # drop trailing parenthetical
+  parts <- strsplit(cell, ";")[[1]]; parts <- parts[nzchar(trimws(parts))]
+  unique(unlist(lapply(parts, expand_group)))
+}
+
+sc_reg <- if (file.exists(sc_path)) read_rows(sc_path) else NULL
+fd_reg <- if (file.exists(fd_path)) read_rows(fd_path) else NULL
+check(!is.null(sc_reg), "source-claims.md: no parseable Rows table")
+check(!is.null(fd_reg), "findings.md: no parseable Rows table")
+
+if (!is.null(sc_reg) && !is.null(fd_reg)) {
+  # envelope block present in each register
+  for (rf in list(list("source-claims.md", sc_path), list("findings.md", fd_path))) {
+    txt <- paste(readLines(rf[[2]], warn = FALSE), collapse = "\n")
+    for (ef in env_fields) {
+      check(grepl(sprintf("\\|\\s*%s\\s*\\|", ef), txt),
+            sprintf("[missing_required_fields] %s: envelope field '%s'", rf[[1]], ef))
+    }
+  }
+
+  # --- source-claim rows: schema, id pattern, states, uniqueness --------------
+  sc_rows <- sc_reg$rows
+  for (f in sc_fields) check(f %in% sc_reg$header,
+    sprintf("[missing_required_fields] source-claims.md: column '%s'", f))
+  sc_ids <- vapply(sc_rows, function(r) gv(r, "claim_id"), "")
+  for (id in sc_ids) check(grepl(sc_pat, id),
+    sprintf("source-claims.md: claim_id '%s' fails %s", id, sc_pat))
+  dup_sc <- unique(sc_ids[duplicated(sc_ids)])
+  check(length(dup_sc) == 0, sprintf("[duplicate_ids] source-claims: %s", paste(dup_sc, collapse = ", ")))
+  for (r in sc_rows) check((gv(r, "state")) %in% valid_states,
+    sprintf("[unknown_states] source-claims %s: '%s'", gv(r, "claim_id"), gv(r, "state")))
+  # §10 path-correction discipline: S4/S6 rows carry a correction, others "—"
+  for (r in sc_rows) {
+    rep <- sub("[[:space:]].*$", "", gv(r, "claim_id"))
+    pc  <- gv(r, "path_correction")
+    if (rep %in% c("S4", "S6")) {
+      check(grepl("§10", pc), sprintf("source-claims %s: missing §10 path_correction", gv(r, "claim_id")))
+    } else {
+      check(identical(pc, "—"), sprintf("source-claims %s: unexpected path_correction '%s'", gv(r, "claim_id"), pc))
+    }
+  }
+  # target_ref per claim (RCON set)
+  sc_target <- list()
+  for (r in sc_rows) {
+    refs <- regmatches(gv(r, "target_ref"), gregexpr("RCON-[0-9]+", gv(r, "target_ref")))[[1]]
+    check(length(refs) >= 1, sprintf("source-claims %s: no target_ref RCON", gv(r, "claim_id")))
+    sc_target[[gv(r, "claim_id")]] <- sort(unique(refs))
+  }
+
+  # --- finding rows: schema, id pattern, disposition --------------------------
+  fd_rows <- fd_reg$rows
+  for (f in fd_fields) check(f %in% fd_reg$header,
+    sprintf("[missing_required_fields] findings.md: column '%s'", f))
+  fd_ids <- vapply(fd_rows, function(r) gv(r, "finding_id"), "")
+  for (id in fd_ids) check(grepl(fd_pat, id),
+    sprintf("findings.md: finding_id '%s' fails %s", id, fd_pat))
+  dup_fd <- unique(fd_ids[duplicated(fd_ids)])
+  check(length(dup_fd) == 0, sprintf("[duplicate_ids] findings: %s", paste(dup_fd, collapse = ", ")))
+  for (r in fd_rows) check((gv(r, "disposition")) %in% valid_states,
+    sprintf("[unknown_states] findings %s: '%s'", gv(r, "finding_id"), gv(r, "disposition")))
+
+  # --- parse reconciliation §9 (ground-truth inverse) + §4 (forward) ----------
+  rl <- readLines(recon, warn = FALSE)
+  # §9 table rows: between the "## 9." heading and the next "## " heading.
+  s9 <- which(grepl("^## 9\\.", rl)); s9e <- which(grepl("^## 10\\.", rl))
+  block9 <- rl[(s9 + 1):(s9e - 1)]
+  trows <- block9[grepl("^\\|", block9) & grepl("RCON-", block9)]
+  gt_inv <- list()                                   # claim_id -> sorted RCON set
+  for (tr in trows) {
+    cells <- trimws(strsplit(sub("^\\|", "", sub("\\|\\s*$", "", tr)), "\\|")[[1]])
+    claims <- expand_cell(cells[1])
+    rcons  <- sort(unique(regmatches(cells[2], gregexpr("RCON-[0-9]+", cells[2]))[[1]]))
+    for (c in claims) gt_inv[[c]] <- sort(unique(c(gt_inv[[c]], rcons)))
+  }
+  # §4 Sources per RCON (forward), transferred verbatim into findings.md; also
+  # self-check the reconciliation's own §4 against §9.
+  gt_fwd <- list(); cur <- NA_character_
+  for (line in rl) {
+    hm <- regmatches(line, regexec("^### (RCON-[0-9]+)", line))[[1]]
+    if (length(hm) >= 2) cur <- hm[2]
+    if (grepl("^\\*\\*Sources:\\*\\*", line) && !is.na(cur)) {
+      gt_fwd[[cur]] <- sort(expand_cell(sub(".*\\*\\*Sources:\\*\\*", "", line)))
+      cur <- NA_character_
+    }
+  }
+
+  # invert §9 -> forward, and assert reconciliation §4 == inverse of §9
+  inv_of_9 <- list()
+  for (c in names(gt_inv)) for (rc in gt_inv[[c]]) inv_of_9[[rc]] <- sort(unique(c(inv_of_9[[rc]], c)))
+  for (rc in sort(union(names(gt_fwd), names(inv_of_9)))) {
+    check(identical(gt_fwd[[rc]] %||% character(0), inv_of_9[[rc]] %||% character(0)),
+          sprintf("reconciliation §4 Sources for %s disagree with §9 inverse", rc))
+  }
+
+  # --- completeness: register claim set == §9 claim set (bijection) -----------
+  check(setequal(sc_ids, names(gt_inv)),
+        sprintf("source-claims rows != §9 findings (rows=%d, §9=%d)", length(sc_ids), length(gt_inv)))
+  check(length(sc_ids) == length(gt_inv),
+        sprintf("source-claims exact count mismatch: %d vs §9 %d", length(sc_ids), length(gt_inv)))
+
+  # --- inverse check: source-claims target_ref == §9 inverse (per claim) ------
+  for (c in sc_ids) {
+    check(identical(sc_target[[c]] %||% character(0), gt_inv[[c]] %||% character(0)),
+          sprintf("source-claims %s target_ref != §9 inverse", c))
+  }
+
+  # --- forward check: findings.md sources expand == §9 forward (per RCON) -----
+  fd_src <- list()
+  for (r in fd_rows) fd_src[[gv(r, "finding_id")]] <- sort(expand_cell(gv(r, "sources")))
+  for (rc in sort(union(names(fd_src), names(inv_of_9)))) {
+    check(identical(fd_src[[rc]] %||% character(0), inv_of_9[[rc]] %||% character(0)),
+          sprintf("findings.md %s sources expand != §9 forward map", rc))
+    # every expanded source resolves to an actual source-claim row (no orphan)
+    for (c in fd_src[[rc]] %||% character(0))
+      check(c %in% sc_ids, sprintf("findings.md %s: source '%s' has no source-claim row", rc, c))
+  }
+  check(length(fd_ids) == 10L, sprintf("findings register expected 10 RCON rows, got %d", length(fd_ids)))
+}
+
 cat("validate-records.R\n")
+cat(sprintf("registers: source-claims=%d rows, findings=%d rows\n",
+            if (!is.null(sc_reg)) length(sc_reg$rows) else 0L,
+            if (!is.null(fd_reg)) length(fd_reg$rows) else 0L))
 cat(sprintf("owner-decision records: %d (%s)\n", length(records), paste(known, collapse = ", ")))
 cat(sprintf("checks passed: %d\n", pass))
 if (length(fail) > 0) {
