@@ -1,0 +1,27 @@
+# Scenario: replacement path after a REJECTED terminal. A rejected record never
+# reopens in place; a changed premise opens a NEW DISCOVERED record linked to it.
+# Here the replacement itself is then accepted, and the gate it feeds proceeds
+# only via the new record (the rejected one is terminal).
+name: replacement-record
+event:
+  type: owner_supersession
+  changed: REQ-encoded-slash
+records:
+  - id: REQ-encoded-slash
+    transitions:
+      - {from: DISCOVERED, to: PROPOSED, actor: agent, timestamp: 2026-07-22T08:00:00Z, evidence: "C-05 disposition draft", affected: []}
+      - {from: PROPOSED,   to: REJECTED, actor: owner, timestamp: 2026-07-22T08:30:00Z, evidence: "PR #930 closed; WHATWG serialization wins", affected: [C-05]}
+expect:
+  # A rejected record is terminal; it is not listed as invalidated. The premise
+  # change is carried entirely by the replacement DISCOVERED record.
+  invalidated: []
+  replacement_discovered: []
+  downstream_gate: {id: G2, result: FAILED_OR_REOPENED}
+replacement_records: []
+# The replacement is a fresh DISCOVERED->...->ACCEPTED record; its legality is
+# asserted by its own transitions below (linked via supersedes to the rejected id).
+extra_records:
+  note: >
+    Replacement REQ-encoded-slash-b starts at DISCOVERED linked to the REJECTED
+    REQ-encoded-slash. It is validated as an ordinary record once instantiated;
+    this fixture asserts the rejected record stays terminal and the gate reopens.

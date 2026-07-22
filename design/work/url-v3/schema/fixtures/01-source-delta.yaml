@@ -1,0 +1,21 @@
+# Scenario: a frozen source changes (source delta). Its dependent ACCEPTED
+# requirement must move to INVALIDATED, a replacement DISCOVERED record must open
+# linked to it, and the gate that rested on it must fail/reopen.
+name: source-delta
+event:
+  type: source_delta
+  changed: S1
+records:
+  - id: REQ-state-01
+    transitions:
+      - {from: DISCOVERED, to: PROPOSED, actor: agent,  timestamp: 2026-07-22T10:00:00Z, evidence: "draft REQ from S1 F1", affected: []}
+      - {from: PROPOSED,   to: ACCEPTED, actor: owner,  timestamp: 2026-07-22T10:05:00Z, evidence: "PR #900 merge abc123",  affected: [G3.1]}
+      - {from: ACCEPTED,   to: INVALIDATED, actor: owner, timestamp: 2026-07-22T11:00:00Z, evidence: "S1 sha256 changed def456", affected: [G3.1]}
+expect:
+  invalidated: [REQ-state-01]
+  replacement_discovered: [REQ-state-01b]
+  downstream_gate: {id: G3, result: FAILED_OR_REOPENED}
+replacement_records:
+  - id: REQ-state-01b
+    state: DISCOVERED
+    supersedes: REQ-state-01

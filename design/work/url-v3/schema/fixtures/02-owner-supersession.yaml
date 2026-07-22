@@ -1,0 +1,25 @@
+# Scenario: an owner decision is superseded by a new decision. The superseded
+# record moves to SUPERSEDED; a dependent that rested on it is INVALIDATED and a
+# replacement opens. The gate consuming the dependent must fail/reopen.
+name: owner-supersession
+event:
+  type: owner_supersession
+  changed: P2.1        # superseded by P2.1b
+records:
+  - id: P2.1
+    transitions:
+      - {from: PROPOSED, to: ACCEPTED,   actor: owner, timestamp: 2026-07-22T09:00:00Z, evidence: "PR #910 merge aaa111", affected: [C-02]}
+      - {from: ACCEPTED, to: SUPERSEDED, actor: owner, timestamp: 2026-07-22T12:00:00Z, evidence: "replaced by P2.1b (PR #911)", affected: [C-02]}
+  - id: REQ-fixer-order
+    transitions:
+      - {from: DISCOVERED, to: PROPOSED,    actor: agent, timestamp: 2026-07-22T09:10:00Z, evidence: "from P2.1 disposition", affected: []}
+      - {from: PROPOSED,   to: ACCEPTED,    actor: owner, timestamp: 2026-07-22T09:20:00Z, evidence: "PR #912 merge bbb222", affected: [G3.6]}
+      - {from: ACCEPTED,   to: INVALIDATED, actor: owner, timestamp: 2026-07-22T12:05:00Z, evidence: "upstream P2.1 SUPERSEDED", affected: [G3.6]}
+expect:
+  invalidated: [REQ-fixer-order]
+  replacement_discovered: [REQ-fixer-order-b]
+  downstream_gate: {id: G3, result: FAILED_OR_REOPENED}
+replacement_records:
+  - id: REQ-fixer-order-b
+    state: DISCOVERED
+    supersedes: REQ-fixer-order

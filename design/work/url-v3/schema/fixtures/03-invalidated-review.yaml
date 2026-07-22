@@ -1,0 +1,23 @@
+# Scenario: an accepted independent-review finding (G5) is invalidated because a
+# cited claim it relied on turned out stale. A VERIFIED record can go straight to
+# INVALIDATED; the review's gate reopens.
+name: invalidated-review
+event:
+  type: source_delta
+  changed: REQ-conformance-claim
+records:
+  - id: FIND-review-07
+    transitions:
+      - {from: DISCOVERED,  to: PROPOSED,    actor: reviewer, timestamp: 2026-07-22T13:00:00Z, evidence: "G5.2 citation review", affected: []}
+      - {from: PROPOSED,    to: ACCEPTED,    actor: owner,    timestamp: 2026-07-22T13:10:00Z, evidence: "PR #920 merge ccc333", affected: [G5.3]}
+      - {from: ACCEPTED,    to: TRANSFERRED, actor: reviewer, timestamp: 2026-07-22T13:20:00Z, evidence: "REQ-conformance-claim trace links validate", affected: [G5.3]}
+      - {from: TRANSFERRED, to: VERIFIED,    actor: verifier, timestamp: 2026-07-22T13:30:00Z, evidence: "fixture pass ddd444", affected: [G5.3]}
+      - {from: VERIFIED,    to: INVALIDATED, actor: verifier, timestamp: 2026-07-22T14:00:00Z, evidence: "cited REQ-conformance-claim stale", affected: [G5.3]}
+expect:
+  invalidated: [FIND-review-07]
+  replacement_discovered: [FIND-review-07b]
+  downstream_gate: {id: G5, result: FAILED_OR_REOPENED}
+replacement_records:
+  - id: FIND-review-07b
+    state: DISCOVERED
+    supersedes: FIND-review-07
