@@ -1,0 +1,84 @@
+# record-schemas.yaml — per-type schemas for the §6 artifact-2 authority records:
+# immutable owner decisions, accepted design records, and the four registers
+# (source-claim, decision, contradiction, finding). Produced by G0.3
+# (RURL-bufpkphu); consumed by tools/validate-records.R. Field lists are the
+# minimum required set; records may carry additional fields (e.g. P0.1's
+# owner_forge_identity). Import rule: P0.1-P0.3 validate against these schemas
+# WITHOUT any substance edit (reconciliation §6; P0.1 §Consequences).
+
+schema_version: "1.0.0"
+
+record_types:
+
+  owner-decision:
+    # P-tier owner decisions under design/work/url-v3/decisions/.
+    path_glob: design/work/url-v3/decisions/*.md
+    frontmatter: true
+    id_pattern: "^P[0-9]+(\\.[0-9]+)?$"
+    allowed_states: [DISCOVERED, PROPOSED, OPEN, CONFLICT, ACCEPTED, REJECTED, SUPERSEDED, INVALIDATED]
+    required_fields:
+      - id
+      - title
+      - tier
+      - type
+      - state
+      - schema_version
+      - owner
+      - approver
+      - authority
+      - proposed_by
+      - proposed_at
+      - accepted_at
+      - accepted_evidence
+      - source_baseline
+      - scope
+      - supersedes
+      - superseded_by
+      - depends_on
+      - affects
+      - tracker
+    reference_fields: [depends_on, supersedes, superseded_by]   # must resolve to known ids
+    append_only_when: ACCEPTED     # substance immutable once ACCEPTED (P0.1 §Decision6)
+
+  accepted-design:
+    # Accepted ADRs / durable PRDs referenced as authority (design/adr, design/prd).
+    # Present as authority only when cited; schema captured for forward records.
+    path_glob: design/adr/*.md
+    frontmatter: false             # existing ADRs use a prose "Status:" convention
+    id_pattern: "^(ADR-[0-9]{4}|[0-9]{4})$"
+    allowed_states: [PROPOSED, ACCEPTED, SUPERSEDED, REJECTED]
+    required_fields: [title, status]
+    reference_fields: []
+
+  register:
+    # Append-only row registers under design/work/url-v3/registers/. Each has a
+    # row-id column and a state column drawn from the lifecycle.
+    path_glob: design/work/url-v3/registers/*
+    row_based: true
+    variants:
+      source-claim:
+        id_pattern: "^S[0-9]+ .+$"     # e.g. "S1 F1"
+        row_fields: [claim_id, source, assertion, classification, target_ref]
+      decision:
+        id_pattern: "^(P[0-9]+(\\.[0-9]+)?|REQ-[a-z0-9]+)$"
+        row_fields: [decision_id, state, actor, timestamp, evidence]
+      contradiction:
+        id_pattern: "^C-[0-9]+$"
+        row_fields: [contradiction_id, state, competing_claims, disposition, owner_decision_ref]
+      finding:
+        id_pattern: "^RCON-[0-9]+$"
+        row_fields: [finding_id, severity, sources, disposition, verification_ref]
+    # snapshots.log is a machine register with its own fixed columnar shape.
+    special:
+      snapshots.log:
+        columns: [n, tag, commit_sha, timestamp]
+        append_only: true
+
+# Cross-type invariants enforced by validate-records.R:
+invariants:
+  - unique_ids_across_all_records
+  - every_reference_resolves           # depends_on/supersedes/superseded_by/*_ref
+  - state_in_lifecycle                 # against lifecycle.yaml
+  - accepted_decisions_are_append_only # substance hash stable once ACCEPTED
+  - single_writer_is_owner_for_accepted
+  - tracker_state_is_non_authoritative
