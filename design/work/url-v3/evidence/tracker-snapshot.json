@@ -1,0 +1,1108 @@
+[
+  {
+    "id": "avfqpnfuuzgnpevxxoxxovpvtawathmk",
+    "displayId": "RURL-avfqpnfu",
+    "title": "P5.2 — Decide determinism tolerance and exception policy for C-09",
+    "description": "Approve the determinism acceptance boundary and exception mechanism. This is the G2 owner disposition input; G4 implements the failing comparison and approved-exception check. (§5 C-09; §8 P5; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "bdyrryzswbrqktgoxozmnfwquatzvogq",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:41.159Z",
+    "updatedAt": "2026-07-22T14:14:41.159Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "bdyrryzswbrqktgoxozmnfwquatzvogq",
+    "displayId": "RURL-bdyrryzs",
+    "title": "P5 — Operational contract owner decisions (§8)",
+    "description": "Owner-decision tier for performance/memory budgets, cache semantics, curl-removal closure, oracle policy, determinism tolerance, migration window, and graduation gates.\n\nStable contradiction consumers: C-08 and C-09; C-12 also consumes oracle policy. C-10 remains a P0 release-boundary decision, with P5 only supplying downstream operational criteria.\n\nCreate atomic decision leaves under the G0.3 schema; accepted tracker status alone is non-normative. (§8 P5; RCON-09–RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "zlxluxyyegtgmkkmtsuueqlukgdgvoez",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:13:26.660Z",
+    "updatedAt": "2026-07-22T14:13:26.660Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "bufpkphudjuhjhcaknzerotvjovuqlmd",
+    "displayId": "RURL-bufpkphu",
+    "title": "G0.3 — Record schemas + lifecycle state machine (§6 authority records + transition table)",
+    "description": "§6 artifact 2 + lifecycle. Parent task for G0.3a common artifact envelope/validator and G0.3b invalidation/re-open semantics.\n\nDefine tracked schemas for immutable owner decisions, accepted designs, and source-claim, decision, contradiction, and finding registers. Encode all ten states and allowed transitions with actor, timestamp, evidence, and dependency IDs.\n\nImport/validate P0.1 without rewriting substance; enforce append-only accepted decisions, single writers, referential integrity, and non-authoritative tracker state.\n\nDone only when both child validators pass and the schemas can drive later leaf slicing. (§4 RCON-01; §6; §7 G0)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "jidfytjrkkqhptclhgbqeolovfcfhppg",
+    "dependencies": [
+      "rwrewsqpushwivzxccoswiuuaqxpufvp",
+      "fmjadknrdawpecmjpataalmeqnobblog",
+      "cmtootmskqfwdrvcexigjhznvxmsrexs"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:01.380Z",
+    "updatedAt": "2026-07-22T14:19:29.179Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "cavmtfftlskkpxlrjmcvnuegrmjsaxbw",
+    "displayId": "RURL-cavmtfft",
+    "title": "P2.4 — Decide standards and scheme admission boundary for C-11",
+    "description": "Decide how ADR 0012 supersedes ADR 0004, including where the older closed scheme set remains compatibility/default policy. This supplies the P2 admission portion of C-11; P4 supplies specializations. (§5 C-11; §8 P2; RCON-05)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:25.265Z",
+    "updatedAt": "2026-07-22T14:14:25.265Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "cmtootmskqfwdrvcexigjhznvxmsrexs",
+    "displayId": "RURL-cmtootms",
+    "title": "P0.3 — Tracker topology, snapshot boundary, mutation and single-writer rules",
+    "description": "What: Decide final epic placement, tracker export/query and as-of boundary, allowed mutations during review, tracker-to-record ID rules, and who may write each mutable control artifact.\n\nDone: an immutable accepted owner record exists; final topology is applied before snapshot freeze; tracker-only comments/status cannot become normative authority; reparenting and later mutations are auditable. (§4 RCON-01; §7 G0; §8 P0)",
+    "status": "done",
+    "priority": "high",
+    "parent": "oidmvnsdeqkmskagbytsckzuodqwjcnk",
+    "dependencies": [
+      "rwrewsqpushwivzxccoswiuuaqxpufvp",
+      "fmjadknrdawpecmjpataalmeqnobblog"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:12:02.226Z",
+    "updatedAt": "2026-07-22T17:51:22.338Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "49ec4a53-787a-4928-8206-8bc4f248012e",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Durable-commit association (squash-merge orphans branch commits, so recording SHAs here): record ratified by PR #199 squash-merge fedd55726771726b8981daed84208dee18df2ba5 into main (acceptance); lifecycle sealed PROPOSED->ACCEPTED by PR #200 squash-merge fabd6ea74b22dcd6f8b304cfc18276ffdffb74a0. Accepted record: design/work/url-v3/decisions/P0.3 tracker-topology-snapshot.md. Done: tracked + accepted per P0.1 approval mechanism.",
+        "createdAt": "2026-07-22T17:51:21.985Z"
+      }
+    ]
+  },
+  {
+    "id": "cqbdpmdyhckfafoivbeqntffiqktevrn",
+    "displayId": "RURL-cqbdpmdy",
+    "title": "C-05 — Dispose encoded-slash compatibility versus WHATWG serialization",
+    "description": "Apply the P2 output decision; classify legacy path-encoding behavior and keep the compatibility dial out of the standards serializer contract. (§5 C-05; §7 G2; RCON-03)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "smobrgucirfljyqjnmvoooabrkgahxhb"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:35.010Z",
+    "updatedAt": "2026-07-22T14:15:35.010Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "cshktlnbgjtmdkppjfvgkfgrjzosxxug",
+    "displayId": "RURL-cshktlnb",
+    "title": "G4.1 — Verify cache equivalence and documentation consistency (C-08)",
+    "description": "Implement executable positive/negative checks for the accepted cache contract: cached/uncached equivalence, bounds/eviction/clearing/version keys, and runtime-versus-documentation consistency.\n\nThis verifies the C-08 disposition; it must not choose cache semantics. (§5 C-08; §7 G4; RCON-09)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "jpgzrwsphmdhceiznqjyzqddotqmaxbk",
+    "dependencies": [
+      "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+      "sapahqcbbnvldfbsmdjvgmdswloecsjo"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:18:07.208Z",
+    "updatedAt": "2026-07-22T14:18:07.208Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "dmsgpcakklxrmbjmtktfnaqsgmheqgoa",
+    "displayId": "RURL-dmsgpcak",
+    "title": "G1.2 — Build §6 artifact 4 public-surface inventory registry",
+    "description": "Build artifact 4's inventory phase: every export, argument, behavior dial, default, interaction, vector/error behavior, documentation location, migration surface, and test family receives an inventory disposition.\n\nMissing/inaccessible evidence must be explicit. This issue constructs the registry at G1; a separate G3 issue closes it normatively against artifacts 3 and 5–10. (§6 artifact 4; §7 G1/G3; RCON-05)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+    "dependencies": [
+      "zyksymyadkslblkoipvlgwlnuojjymny"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:17:13.327Z",
+    "updatedAt": "2026-07-22T14:17:13.327Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "displayId": "RURL-dorofzmb",
+    "title": "Epic: rurl 3.0 protocol hardening — amend & re-review before product-spec draft",
+    "description": "Scope: §11 next frontier + §7 pre-draft gates. Product-spec drafting remains out of scope until durable G5 acceptance.\n\nTwo interlocking structures:\n- gate acceptance order G0→G1→G2→G3→G4→G5;\n- owner-decision tiers P0→P5, consumed through atomic durable records rather than tracker status.\n\nPHASING: schema-dependent leaf fan-out remains deferred until G0.3 and P0.3. Stable work is instantiated now: four atomic P0 decisions; P1–P5 containers; known contradiction decision leaves; C-01–C-12 dispositions; S1–S9 evidence transfer; artifact-wide validator/invalidation semantics; artifact-4 G1→G3 handoff; semantic cache closure; C-08/C-09/C-10 G4 verification; and dual G5 review.\n\nDURABILITY: authoritative manifest/registers/decisions/findings and ten-state lifecycle are tracked, schema-validated records. Accepted records are append-only; tracker-only decisions have no authority. The manifest separates source baseline 89be90b from the later frozen control-plane snapshot and hashes a tracker export.\n\nSEQUENCING: G2 resolves every contradiction before G3; G4 verifies already-approved policy. Any invalidated upstream record fails/reopens downstream acceptance.\n\nDepends on RURL-jairsufw. Placement remains provisional until P0.3 records final topology before snapshot freeze. (§1, §4–§11; RCON-01–RCON-10; C-01–C-12)",
+    "status": "todo",
+    "priority": "high",
+    "parent": null,
+    "dependencies": [
+      "jairsufwrmrbuxocqjoxzlvawuuxzkib"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:02:06.660Z",
+    "updatedAt": "2026-07-22T14:19:59.990Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "a03f99ef-d49d-4d85-9b97-9cb1a4a5a491",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Independent roadmap review fixes applied: split P0 and removed C-10 from G0 prerequisites; instantiated P1–P5 and contradiction-specific owner decisions; added C-01–C-12 dispositions with corrected cross-tier wiring; added evidence transfer, universal artifact validation, invalidation/re-open semantics, artifact-4 handoff, semantic cache closure, G2 acceptance, G4 verification-only leaves, and durable G5 review fan-in. Remaining schema-shaped leaf expansion stays deferred until G0.3/P0.3.",
+        "createdAt": "2026-07-22T14:19:59.989Z"
+      }
+    ]
+  },
+  {
+    "id": "euufcimpmtecpiqqnlqwfhtbseoddnlo",
+    "displayId": "RURL-euufcimp",
+    "title": "P5.1 — Decide authoritative cache contract for C-08",
+    "description": "Choose the authoritative cache default and semantic-transparency/documentation policy. This is the G2 owner disposition input; G3 closes the semantic contract and G4 implements the documentation-consistency gate. (§5 C-08; §8 P5; RCON-09)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "bdyrryzswbrqktgoxozmnfwquatzvogq",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:37.366Z",
+    "updatedAt": "2026-07-22T14:14:37.366Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "fmjadknrdawpecmjpataalmeqnobblog",
+    "displayId": "RURL-fmjadknr",
+    "title": "P0.2 — Durable workspace and manifest format",
+    "description": "What: Choose the tracked protocol workspace and machine-readable manifest format.\n\nDecision scope: canonical tracked paths, schema format/versioning, raw-evidence archive exception, stable identities, checksums, and how source-baseline versus control-plane snapshot revisions are represented.\n\nDone: an immutable accepted owner record exists under the P0.1 approval mechanism and names the affected G0 deliverables. (§4 RCON-01; §6 artifact 1; §8 P0)",
+    "status": "done",
+    "priority": "high",
+    "parent": "oidmvnsdeqkmskagbytsckzuodqwjcnk",
+    "dependencies": [
+      "rwrewsqpushwivzxccoswiuuaqxpufvp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:11:56.625Z",
+    "updatedAt": "2026-07-22T17:51:21.610Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "bef0b1c3-0a1e-43c7-9362-b77a7cf6655e",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Durable-commit association (squash-merge orphans branch commits, so recording SHAs here): record ratified by PR #199 squash-merge fedd55726771726b8981daed84208dee18df2ba5 into main (acceptance); lifecycle sealed PROPOSED->ACCEPTED by PR #200 squash-merge fabd6ea74b22dcd6f8b304cfc18276ffdffb74a0. Accepted record: design/work/url-v3/decisions/P0.2 workspace-manifest-format.md. Done: tracked + accepted per P0.1 approval mechanism.",
+        "createdAt": "2026-07-22T17:51:20.977Z"
+      }
+    ]
+  },
+  {
+    "id": "fsaladcxxowrljyyjnukgbyjyeyiwaax",
+    "displayId": "RURL-fsaladcx",
+    "title": "P5.3 — Decide oracle and claim policy needed by C-12",
+    "description": "Decide oracle authority, snapshot policy, and permissible conformance-claim granularity. This supplies the P5 portion of C-12; P2.2 supplies the output/serialization boundary. (§5 C-12; §8 P5; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "bdyrryzswbrqktgoxozmnfwquatzvogq",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:47.171Z",
+    "updatedAt": "2026-07-22T14:14:47.171Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "gdskpscfrrwygqfuwzuunduzrzcjxaqq",
+    "displayId": "RURL-gdskpscf",
+    "title": "P2.1 — Decide fixer/recovery ordering for C-02 and C-03",
+    "description": "Decide accepted browser-fixer versus shipped ordering and classify repeated-@ recovery as syntax, compatibility, or repair bound to an entry point. Produce atomic durable decisions for C-02 and C-03. (§5 C-02–C-03; §8 P2; RCON-04)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:07.845Z",
+    "updatedAt": "2026-07-22T14:14:07.845Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "hnyqemimjduuwbisudvnvdshvauvvogm",
+    "displayId": "RURL-hnyqemim",
+    "title": "P1 — State and public object owner decisions (§8)",
+    "description": "Owner-decision tier for canonical state/public object, scalar/vector result behavior, authority/credential/path/query/delimiter/source-byte state, and compatibility projections.\n\nCreate atomic decision leaves after G0.3 fixes the record schema. Stable cross-tier consumers already identified: C-07 requires P1 plus P2; artifact 3 and public-surface cells consume this tier at G3.\n\nEvery accepted outcome must be a durable owner record; completing this tracker container alone conveys no authority. (§8 P1; RCON-02, RCON-04)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "zlxluxyyegtgmkkmtsuueqlukgdgvoez",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:13:11.390Z",
+    "updatedAt": "2026-07-22T14:13:11.390Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "hvjufcvndscxkajixglbzmcrtbfefvij",
+    "displayId": "RURL-hvjufcvn",
+    "title": "C-11 — Apply ADR 0012 supersession to scheme admission precisely",
+    "description": "Jointly apply P2 admission and P4 specialization decisions; preserve ADR 0004 only where compatibility/default policy requires it. (§5 C-11; §7 G2; RCON-05, RCON-08)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "cavmtfftlskkpxlrjmcvnuegrmjsaxbw",
+      "vwtxvhgpeyikchszvjknwgftscitbwgj"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:16:03.244Z",
+    "updatedAt": "2026-07-22T14:16:03.244Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "hvrqjdaeiisozmglbnldtfzchulcgkbd",
+    "displayId": "RURL-hvrqjdae",
+    "title": "C-02 — Choose browser-fixer ordering and supersede the other claim",
+    "description": "Apply the P2 ordering decision to accepted prose and shipped evidence. Choose and trace one ordering; mark the other superseded or compatibility-only. (§5 C-02; §7 G2; RCON-04)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "gdskpscfrrwygqfuwzuunduzrzcjxaqq"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:23.221Z",
+    "updatedAt": "2026-07-22T14:15:23.221Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "ifivvurkptihcvpzlpwaiuwojfuhtnvb",
+    "displayId": "RURL-ifivvurk",
+    "title": "C-01 — Reconcile accepted wrappers with internal draft metadata",
+    "description": "Produce a typed disposition correcting durable metadata or marking stale status fields superseded; classify mixed claims assertion-by-assertion until corrected. Record authority, rationale, affected claims, and invalidated artifacts. (§5 C-01; §7 G2; RCON-01, RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "rwrewsqpushwivzxccoswiuuaqxpufvp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:18.916Z",
+    "updatedAt": "2026-07-22T14:15:18.916Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "iwahdugjtyztigywkbdmdbcwvblgcegm",
+    "displayId": "RURL-iwahdugj",
+    "title": "G0.3a — Common artifact envelope and validator for §6 artifacts 1–11",
+    "description": "Define the shared normative envelope required for every §6 artifact: schema/version, tracked location, owner/single writer, lifecycle state, dependencies, completion rule, input/output hashes, approval evidence, and exact validation command.\n\nImplement validation for duplicate IDs, broken references, unknown states, missing owner/approval/completion fields, and manifest hash drift.\n\nDone: artifacts 1–11 can be mechanically rejected when the universal §6 contract is incomplete. (§6; RCON-01–RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "bufpkphudjuhjhcaknzerotvjovuqlmd",
+    "dependencies": [
+      "rwrewsqpushwivzxccoswiuuaqxpufvp",
+      "fmjadknrdawpecmjpataalmeqnobblog",
+      "cmtootmskqfwdrvcexigjhznvxmsrexs"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:17:01.042Z",
+    "updatedAt": "2026-07-22T14:17:01.042Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "jalwcgzkimgwvurlngldqtogotqoumkz",
+    "displayId": "RURL-jalwcgzk",
+    "title": "G1.1 — Transfer S1–S9 evidence with bidirectional coverage validation",
+    "description": "Transfer—not summarize from memory—the detailed S1–S9 findings, owner questions, fixture families, matrix skeletons, and implementation paths into durable records.\n\nEach transfer records report identity/hash, stable finding ID and locator, target DEC/CON/REQ/FIX/matrix record, disposition state, and §10 canonical path correction where applicable.\n\nGenerate forward and inverse checks against §9 so every frozen finding is represented exactly once in the inverse grouping while allowing documented multi-RCON links. (§9–§10; RCON-01, RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+    "dependencies": [
+      "zyksymyadkslblkoipvlgwlnuojjymny"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:17:09.412Z",
+    "updatedAt": "2026-07-22T14:17:09.412Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "jcigtsdxlsnhvsvncyamqduvpzceykdt",
+    "displayId": "RURL-jcigtsdx",
+    "title": "C-08 — Dispose cache runtime/documentation contradiction",
+    "description": "At G2, choose the authoritative behavior and record the required correction. Do not wait for G4: G3 closes the cache semantics and G4 only implements/verifies the documentation-consistency gate. (§5 C-08; §7 G2–G4; RCON-09)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "euufcimpmtecpiqqnlqwfhtbseoddnlo"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:50.065Z",
+    "updatedAt": "2026-07-22T14:15:50.065Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "jidfytjrkkqhptclhgbqeolovfcfhppg",
+    "displayId": "RURL-jidfytjr",
+    "title": "G0 — Durable control plane & restore (RCON-01)",
+    "description": "§7 G0 + RCON-01 + §6 artifacts 1–2. This is a gate container; its process prerequisites are P0.1–P0.3 only. P0.4/C-10 does not block durability.\n\nExit:\n- protocol, manifest, registers, and required review inputs are tracked;\n- fresh-clone restore proves the declared source baseline and control-plane snapshot are recoverable without local memory;\n- one writer owns each mutable artifact and concurrent inputs are frozen;\n- tracker state is non-normative and points to validated tracked records.\n\nG0.4 is the fan-in restore drill and depends on G0.1–G0.3. (§4 RCON-01; §6; §7 G0)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [
+      "rwrewsqpushwivzxccoswiuuaqxpufvp",
+      "fmjadknrdawpecmjpataalmeqnobblog",
+      "cmtootmskqfwdrvcexigjhznvxmsrexs"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:03:59.955Z",
+    "updatedAt": "2026-07-22T14:12:50.453Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "jjzmxvkwjhvvrohawwsbzilvdgcblcga",
+    "displayId": "RURL-jjzmxvkw",
+    "title": "P3.1 — Decide v3 identity and canonical_join migration for C-06",
+    "description": "Decide the independent comparison-key boundary and migration of shipped canonical_join from clean_url identity. Produce an accepted durable owner record with affected claims and migration obligations. (§5 C-06; §8 P3; RCON-07)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oylalsrzlyuiyxcgzrimhhxluwayupsy",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:29.306Z",
+    "updatedAt": "2026-07-22T14:14:29.306Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "jpgzrwsphmdhceiznqjyzqddotqmaxbk",
+    "displayId": "RURL-jpgzrwsp",
+    "title": "G4 — Executable evidence (RCON-09/10, §6 artifact 11) [remaining leaves deferred]",
+    "description": "§7 G4 + §6 artifact 11. Depends on G3 contract closure.\n\nG4 verifies accepted contracts; it does not resolve contradictions or choose product policy. Instantiated leaves:\n- G4.1 cache equivalence and documentation consistency verifies C-08;\n- G4.2 failing determinism comparison and approved exceptions verifies C-09;\n- G4.3 release-rule verification verifies C-10.\n\nRemaining schema-shaped leaves: fixture/oracle catalog; metamorphic properties; claim traceability; benchmark/memory budgets; curl zero-reference gate; full-string/state/vector/mutation/join/migration coverage; exact CI commands.\n\nArtifact 11 receives the same §6 schema/owner/lifecycle/location/completion contract. (§6 artifact 11; §7 G4; RCON-09, RCON-10; C-08–C-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [
+      "utiaefwlgnoiveiytoiefxfdhlvicrjw"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:03.815Z",
+    "updatedAt": "2026-07-22T14:20:44.347Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "jptimbiyvbxshcifwzbgcpyosjigjvsw",
+    "displayId": "RURL-jptimbiy",
+    "title": "P2.3 — Decide validation verdicts and legacy status migration for C-07",
+    "description": "Decide validation verdict/fatality/annotation boundaries and migration of legacy parse_status. This supplies the P2 portion of C-07 and must agree with P1.1. Produce an accepted durable owner record. (§5 C-07; §8 P2; RCON-04)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:20.717Z",
+    "updatedAt": "2026-07-22T14:14:20.717Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "lqdxihdhtdvuvmfmrcsucgbtxuadqfwl",
+    "displayId": "RURL-lqdxihdh",
+    "title": "G5 — Independent re-review & acceptance (§7 G5)",
+    "description": "§7 G5. Depends on complete G4 evidence.\n\nInstantiated leaves:\n- context-free comprehensibility/completeness review;\n- independent evidence-aware citation/executable-claim review;\n- findings closure and final acceptance fan-in.\n\nBoth reviews bind exact protocol and manifest hashes. Every finding uses the durable lifecycle. Any material normative/source change invalidates both reviews and reopens final acceptance.\n\nOnly accepted G5.3 with objective yes/no evidence may unblock a successor product-spec draft. (§6 lifecycle; §7 G5; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [
+      "jpgzrwsphmdhceiznqjyzqddotqmaxbk"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:04.326Z",
+    "updatedAt": "2026-07-22T14:20:48.619Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "lxksxtdigedbejsfkpbxfclbswggjtlg",
+    "displayId": "RURL-lxksxtdi",
+    "title": "C-12 — Retire projection-based conformance claims and define rebuild boundary",
+    "description": "Jointly apply P2 output and P5 oracle decisions. Preserve historical projections as evidence only and define the full-state/full-string basis for rebuilt claims. (§5 C-12; §7 G2; RCON-03, RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "smobrgucirfljyqjnmvoooabrkgahxhb",
+      "fsaladcxxowrljyyjnukgbyjyeyiwaax"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:16:07.699Z",
+    "updatedAt": "2026-07-22T14:16:07.699Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "maeurghbhpnioflplbxmnyafghivbtbf",
+    "displayId": "RURL-maeurghb",
+    "title": "C-04 — Separate standard serialization from legacy clean output",
+    "description": "Apply the P2 output decision to ADR 0012 and shipped clean serializers; decide unimplemented versus superseded intent and preserve fragment policy explicitly. (§5 C-04; §7 G2; RCON-03)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "smobrgucirfljyqjnmvoooabrkgahxhb"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:31.338Z",
+    "updatedAt": "2026-07-22T14:15:31.338Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "mbzqthmknaanyclhnteqhwpwqlqkgddl",
+    "displayId": "RURL-mbzqthmk",
+    "title": "C-09 — Dispose evidence-only determinism workflow contradiction",
+    "description": "At G2, approve determinism tolerance, failure policy, and exception authority. G4 later implements the failing comparison and exception validation. (§5 C-09; §7 G2–G4; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "avfqpnfuuzgnpevxxoxxovpvtawathmk"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:54.636Z",
+    "updatedAt": "2026-07-22T14:15:54.636Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "milrimsqtqihibnewadlqjgnkbupqrzv",
+    "displayId": "RURL-milrimsq",
+    "title": "G5.3 — Review-finding closure and final protocol acceptance",
+    "description": "Fan-in for G5 acceptance.\n\nDispose every finding from both independent reviews in the durable finding register; verify closure state and objective yes/no evidence for every amended-protocol acceptance question; require the accepted protocol hash to equal the reviewed hash.\n\nAny material normative change invalidates both reviews and reopens this acceptance. Only this accepted durable gate record may unblock a successor product-spec draft. (§6 lifecycle; §7 G5; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "lqdxihdhtdvuvmfmrcsucgbtxuadqfwl",
+    "dependencies": [
+      "nhwdlvajxbushjrsmjrdjclvuuvilbxs",
+      "rplmmeciswystldursivefurivxxcefg"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:18:28.831Z",
+    "updatedAt": "2026-07-22T14:18:28.831Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "mlcpvscqxjtoudfcrttozsbzgkhwcmng",
+    "displayId": "RURL-mlcpvscq",
+    "title": "P0.4 — CRAN hold scope and exact v2/v3 release boundary (C-10)",
+    "description": "What: Dispose C-10 by naming the exact release line governed by the CRAN hold and reconciling it with the accepted v2.7 disposition.\n\nWhy: this is release authority, not a durability prerequisite.\n\nDone: a typed, durable owner decision records authority, rationale, affected claims/releases, and invalidated artifacts. G2 consumes the disposition; G4 verifies the resulting release rule. (§5 C-10; §8 P0; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oidmvnsdeqkmskagbytsckzuodqwjcnk",
+    "dependencies": [
+      "rwrewsqpushwivzxccoswiuuaqxpufvp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:12:05.937Z",
+    "updatedAt": "2026-07-22T14:12:05.937Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+    "displayId": "RURL-msqhcprb",
+    "title": "G1 — Baseline & inventory closure (§7 G1) [remaining leaves deferred]",
+    "description": "§7 G1 + inventory obligations from RCON-05/RCON-09. Depends on the objective G0.4 restore drill.\n\nInstantiated stable leaves:\n- G1.1 transfers S1–S9 detailed evidence with forward/inverse coverage checks;\n- G1.2 builds artifact 4's public-surface inventory phase.\n\nRemaining schema-shaped leaves are cut after G0.3/P0.3: curl inventory; accepted-claim, test-family, benchmark, migration, external-source and evidence-completeness inventories.\n\nExit: manifest pins both source and control-plane snapshots plus external inputs/checksums; every required surface has a disposition; missing evidence is explicit; all G1 children and validation commands pass. (§7 G1; §9–§10; RCON-01, RCON-05, RCON-09, RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [
+      "zyksymyadkslblkoipvlgwlnuojjymny"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:02.215Z",
+    "updatedAt": "2026-07-22T14:20:33.466Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "nhwdlvajxbushjrsmjrdjclvuuvilbxs",
+    "displayId": "RURL-nhwdlvaj",
+    "title": "G5.1 — Context-free amended-protocol review",
+    "description": "A reviewer without reconstruction context checks the frozen amended protocol for comprehensibility and completeness. Record reviewer identity, reviewed hash, findings, and objective disposition requirements. (§7 G5; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "lqdxihdhtdvuvmfmrcsucgbtxuadqfwl",
+    "dependencies": [
+      "jpgzrwsphmdhceiznqjyzqddotqmaxbk"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:18:19.974Z",
+    "updatedAt": "2026-07-22T14:18:19.974Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "nvdlazonamhnjknykczdwvykanoirgkc",
+    "displayId": "RURL-nvdlazon",
+    "title": "P1.1 — Decide v3 state/status model needed by C-07",
+    "description": "Decide the canonical state/public projection and legacy parse_status projection needed to distinguish syntax, policy, and optional facts. This supplies the P1 portion of C-07; P2 owns verdict/fatality behavior. Done only when an accepted durable owner record exists. (§5 C-07; §8 P1; RCON-02, RCON-04)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "hnyqemimjduuwbisudvnvdshvauvvogm",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:03.399Z",
+    "updatedAt": "2026-07-22T14:14:03.399Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "oidmvnsdeqkmskagbytsckzuodqwjcnk",
+    "displayId": "RURL-oidmvnsd",
+    "title": "P0 — Process & release authority (§8)",
+    "description": "§8 P0 container for four separately approved, durable owner decisions. The reconciliation answers none of them.\n\nChildren:\n- P0.1 bootstrap owner identity + approval mechanism\n- P0.2 durable workspace + manifest format\n- P0.3 Fiberplane topology + snapshot/mutation/single-writer rules\n- P0.4 CRAN hold scope + exact v2/v3 release boundary (C-10)\n\nP0 is a tier/container, not one atomic decision. G0 consumes P0.1–P0.3 only. P0.4 is disposition input for C-10 at G2 and downstream verification at G4; it does not block durability work.\n\nAuthority rule (§4 RCON-01; §6): each accepted child decision must exist as a tracked immutable owner record. Tracker status is work state only.",
+    "status": "todo",
+    "priority": "high",
+    "parent": "zlxluxyyegtgmkkmtsuueqlukgdgvoez",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:03:59.495Z",
+    "updatedAt": "2026-07-22T14:11:49.195Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "oknltruxkwmyehdusldeoozricvweity",
+    "displayId": "RURL-oknltrux",
+    "title": "G2 — Authority & contradiction closure (§5)",
+    "description": "§7 G2 + §5 contradiction register. Starts after G1, but passes only through child G2.A.\n\nC-01–C-12 are explicit disposition tasks with corrected owner routing. C-08/C-09/C-10 are policy-disposed here; G4 only implements/verifies their accepted outcomes. Cross-tier wiring is explicit for C-07, C-11, and C-12.\n\nExit: every known/new contradiction has a typed durable owner disposition; claim roles remain assertion-distinct; invalidation edges validate; no blocking OPEN/CONFLICT/INVALIDATED record remains; G2.A records input hashes and acceptance evidence. (§5; §6 lifecycle; §7 G2; C-01–C-12; RCON-01–RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:02.705Z",
+    "updatedAt": "2026-07-22T14:20:37.354Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "orrxacxhhulwhywiyvycfjqpbrslvbvn",
+    "displayId": "RURL-orrxacxh",
+    "title": "G4.2 — Implement failing determinism comparison and approved exceptions (C-09)",
+    "description": "Implement the accepted P5/C-09 policy as a failing cross-platform comparison with an explicit approved-exception registry, claim boundaries, exact local/CI commands, and positive/negative fixtures.\n\nThis verifies rather than resolves C-09. (§5 C-09; §7 G4; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "jpgzrwsphmdhceiznqjyzqddotqmaxbk",
+    "dependencies": [
+      "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+      "mbzqthmknaanyclhnteqhwpwqlqkgddl"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:18:11.869Z",
+    "updatedAt": "2026-07-22T14:18:11.869Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "oylalsrzlyuiyxcgzrimhhxluwayupsy",
+    "displayId": "RURL-oylalsrz",
+    "title": "P3 — Mutation, identity and joins owner decisions (§8)",
+    "description": "Owner-decision tier for mutation transactions/rollback, key equivalence/versioning/collisions, six-join semantics, and canonical_join migration.\n\nStable contradiction consumer: C-06. Contract artifacts 8–9 consume the remaining decisions at G3.\n\nCreate atomic decision leaves under the G0.3 schema; accepted tracker status alone is non-normative. (§8 P3; RCON-06–RCON-07)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "zlxluxyyegtgmkkmtsuueqlukgdgvoez",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:13:19.091Z",
+    "updatedAt": "2026-07-22T14:13:19.091Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "pyhmjqjskjziumbwvdobxnszrkhyjhsg",
+    "displayId": "RURL-pyhmjqjs",
+    "title": "C-06 — Separate comparison identity from clean_url join behavior",
+    "description": "Apply the P3 identity decision; record the independent v3 key contract direction and explicit canonical_join migration without reinterpreting shipped behavior as v3 intent. (§5 C-06; §7 G2; RCON-07)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "jjzmxvkwjhvvrohawwsbzilvdgcblcga"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:39.639Z",
+    "updatedAt": "2026-07-22T14:15:39.639Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "qcduzpexnmlttmycvpfqhkkdqxtecexv",
+    "displayId": "RURL-qcduzpex",
+    "title": "G0.2 — Machine-readable manifest (§6 artifact 1)",
+    "description": "§6 artifact 1.\n\nCreate the machine-readable manifest in the P0.2 format, including distinct source_baseline_commit and control_plane_snapshot_commit/tag fields; source inventory; hashed tracker export/query/as-of boundary; artifact hashes; tool versions; external revisions; and tested restore instructions.\n\nGive the manifest a schema, owner/single writer, lifecycle, completion rule, and tracked location. Done requires schema validation and referential integrity to owner decisions, findings, contradictions, and supersession records. (§4 RCON-01; §6 artifact 1; §7 G0–G1)",
+    "status": "in-progress",
+    "priority": "high",
+    "parent": "jidfytjrkkqhptclhgbqeolovfcfhppg",
+    "dependencies": [
+      "fmjadknrdawpecmjpataalmeqnobblog",
+      "cmtootmskqfwdrvcexigjhznvxmsrexs"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:00.908Z",
+    "updatedAt": "2026-07-22T18:11:01.000Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "rplmmeciswystldursivefurivxxcefg",
+    "displayId": "RURL-rplmmeci",
+    "title": "G5.2 — Evidence-aware citation and executable-claim review",
+    "description": "An independent evidence-aware reviewer checks every material citation and executable claim against the frozen manifest/baseline, including exact commands and oracle boundaries. Record reviewer identity, reviewed hash, findings, and evidence. (§7 G5; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "lqdxihdhtdvuvmfmrcsucgbtxuadqfwl",
+    "dependencies": [
+      "jpgzrwsphmdhceiznqjyzqddotqmaxbk"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:18:24.372Z",
+    "updatedAt": "2026-07-22T14:18:24.372Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "rwrewsqpushwivzxccoswiuuaqxpufvp",
+    "displayId": "RURL-rwrewsqp",
+    "title": "P0.1 — Bootstrap owner identity and durable approval mechanism",
+    "description": "What: Establish the minimal tracked bootstrap authority envelope needed before the general §6 record schema exists.\n\nWhy: P0 otherwise depends on G0.3 for the mechanism that makes P0 authoritative, recreating RCON-01.\n\nRequired record: exact decision text, owner/approver identity and authority, timestamp, source baseline, evidence, scope, supersession rule, and an explicit rule that tracker-only decisions have no authority.\n\nDone: the bootstrap record is tracked and approved; G0.3 is required to import and validate it without silently rewriting its substance. (§4 RCON-01; §6 artifact 2/lifecycle; §8 P0)",
+    "status": "done",
+    "priority": "high",
+    "parent": "oidmvnsdeqkmskagbytsckzuodqwjcnk",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:11:52.787Z",
+    "updatedAt": "2026-07-22T17:51:20.565Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "61a24889-6ade-4acf-a4d6-a31e0534844b",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Durable-commit association (squash-merge orphans branch commits, so recording SHAs here): record ratified by PR #199 squash-merge fedd55726771726b8981daed84208dee18df2ba5 into main (acceptance); lifecycle sealed PROPOSED->ACCEPTED by PR #200 squash-merge fabd6ea74b22dcd6f8b304cfc18276ffdffb74a0. Accepted record: design/work/url-v3/decisions/P0.1 owner-identity-approval.md. Done: tracked + accepted per P0.1 approval mechanism.",
+        "createdAt": "2026-07-22T17:51:20.154Z"
+      }
+    ]
+  },
+  {
+    "id": "rwyknzuejftzsyeiwyidmewbcttiehwe",
+    "displayId": "RURL-rwyknzue",
+    "title": "C-03 — Classify repeated-@ RFC recovery and bind it to an entry point",
+    "description": "Apply the P2 recovery decision: classify behavior as syntax, compatibility, or repair; bind it to an entry point; invalidate contradictory claims. (§5 C-03; §7 G2; RCON-04)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "gdskpscfrrwygqfuwzuunduzrzcjxaqq"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:27.366Z",
+    "updatedAt": "2026-07-22T14:15:27.366Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "sapahqcbbnvldfbsmdjvgmdswloecsjo",
+    "displayId": "RURL-sapahqcb",
+    "title": "G3.9 — Close semantic cache contract before executable evidence",
+    "description": "Define cache keys, bounds, eviction, clearing, external-data versioning, determinism, semantic transparency, and cached/uncached equivalence from the accepted C-08 disposition.\n\nG4 owns executable equivalence and documentation-consistency checks; it does not choose these semantics. (§4 RCON-09; §5 C-08; §7 G3–G4)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [
+      "uksahklpsribkedwoczbeeswupeoufzp",
+      "jcigtsdxlsnhvsvncyamqduvpzceykdt"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:17:26.581Z",
+    "updatedAt": "2026-07-22T14:17:26.581Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "sepfjagsgbrpcapgvttthavkhknrelng",
+    "displayId": "RURL-sepfjags",
+    "title": "G3.4 — Close public-surface registry across all contract artifacts",
+    "description": "Take the G1 artifact-4 inventory through normative closure: no unowned cells; every export/dial has defaults, interactions, vector/error behavior, documentation, migration, and test disposition; and all terms/status/state fields agree with artifacts 3 and 5–10.\n\nThis is the explicit G1→G3 handoff for §6 artifact 4, not duplicate authoring. (§6 artifact 4; §7 G3; RCON-05)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [
+      "uksahklpsribkedwoczbeeswupeoufzp",
+      "dmsgpcakklxrmbjmtktfnaqsgmheqgoa"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:17:22.351Z",
+    "updatedAt": "2026-07-22T14:17:22.351Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "smobrgucirfljyqjnmvoooabrkgahxhb",
+    "displayId": "RURL-smobrguc",
+    "title": "P2.2 — Decide serializer/clean-output boundaries for C-04, C-05 and C-12",
+    "description": "Decide fragment-preserving standard serialization versus legacy clean output; path-encoding compatibility; and the output boundary needed to rebuild historical conformance claims. C-12 also requires P5 oracle policy. Produce atomic durable decisions. (§5 C-04, C-05, C-12; §8 P2; RCON-03, RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:12.392Z",
+    "updatedAt": "2026-07-22T14:14:12.392Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
+    "displayId": "RURL-tnrybfzd",
+    "title": "P2 — Standards, admission, validation and outputs owner decisions (§8)",
+    "description": "Owner-decision tier for standards/scheme admission, strict/compatibility/repair ordering, validation verdicts, source reproduction, standard serialization, cleaning, and safe display.\n\nStable contradiction consumers: C-02–C-05, C-07, C-11, and C-12. Several are cross-tier rather than exclusively P2.\n\nCreate atomic decision leaves under the G0.3 schema; accepted tracker status alone is non-normative. (§8 P2; RCON-03–RCON-05, RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "zlxluxyyegtgmkkmtsuueqlukgdgvoez",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:13:15.338Z",
+    "updatedAt": "2026-07-22T14:13:15.338Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "tnzptfqrqrobhlclkatjultanmguibib",
+    "displayId": "RURL-tnzptfqr",
+    "title": "G4.3 — Verify owner-approved release rule for C-10",
+    "description": "Encode and verify the accepted C-10 release boundary, including the named release line, graduation criteria, and exact local/CI evidence.\n\nThis verifies rather than decides the CRAN hold. (§5 C-10; §7 G4; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "jpgzrwsphmdhceiznqjyzqddotqmaxbk",
+    "dependencies": [
+      "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+      "twxgvbasjwfxywzewnerkuqbeobmdsci"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:18:15.960Z",
+    "updatedAt": "2026-07-22T14:18:15.960Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "twxgvbasjwfxywzewnerkuqbeobmdsci",
+    "displayId": "RURL-twxgvbas",
+    "title": "C-10 — Dispose CRAN hold versus accepted v2.7 release boundary",
+    "description": "Consume P0.4 and record the named release line governed by the hold, authority, rationale, affected claims/releases, and invalidations. G4 later verifies the resulting release rule. (§5 C-10; §7 G2–G4; §8 P0; RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "mlcpvscqxjtoudfcrttozsbzgkhwcmng"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:58.817Z",
+    "updatedAt": "2026-07-22T14:15:58.817Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "uclnnukueiihafneazoinmosftjtsjmv",
+    "displayId": "RURL-uclnnuku",
+    "title": "C-07 — Dispose parse_status conflation and legacy projection",
+    "description": "Jointly apply P1 state/result and P2 verdict decisions. Separate syntax, policy, and optional facts while recording the legacy projection/migration. (§5 C-07; §7 G2; RCON-02, RCON-04)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp",
+      "nvdlazonamhnjknykczdwvykanoirgkc",
+      "jptimbiyvbxshcifwzbgcpyosjigjvsw"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:15:45.365Z",
+    "updatedAt": "2026-07-22T14:15:45.365Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "uksahklpsribkedwoczbeeswupeoufzp",
+    "displayId": "RURL-uksahklp",
+    "title": "G2.A — Authority and contradiction gate acceptance",
+    "description": "Acceptance fan-in for §7 G2.\n\nPass only when C-01–C-12 plus every newly discovered contradiction have typed durable dispositions; accepted/shipped/historical/proposed/superseded claims remain assertion-distinct; dependency edges propagate source changes; and no blocking OPEN/CONFLICT/INVALIDATED record remains.\n\nRecord exact input hashes and validation results. Any later invalidation fails/reopens this acceptance and blocks G3 onward. (§5; §6 lifecycle; §7 G2; C-01–C-12; RCON-01, RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "oknltruxkwmyehdusldeoozricvweity",
+    "dependencies": [
+      "ifivvurkptihcvpzlpwaiuwojfuhtnvb",
+      "hvrqjdaeiisozmglbnldtfzchulcgkbd",
+      "rwyknzuejftzsyeiwyidmewbcttiehwe",
+      "maeurghbhpnioflplbxmnyafghivbtbf",
+      "cqbdpmdyhckfafoivbeqntffiqktevrn",
+      "pyhmjqjskjziumbwvdobxnszrkhyjhsg",
+      "uclnnukueiihafneazoinmosftjtsjmv",
+      "jcigtsdxlsnhvsvncyamqduvpzceykdt",
+      "mbzqthmknaanyclhnteqhwpwqlqkgddl",
+      "twxgvbasjwfxywzewnerkuqbeobmdsci",
+      "hvjufcvndscxkajixglbzmcrtbfefvij",
+      "lxksxtdigedbejsfkpbxfclbswggjtlg"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:17:17.354Z",
+    "updatedAt": "2026-07-22T14:17:17.354Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "displayId": "RURL-utiaefwl",
+    "title": "G3 — Contract-matrix closure (§6 artifacts 3–10) [remaining leaves deferred]",
+    "description": "§7 G3 + §6 artifacts 3–10. Depends on durable G2.A acceptance, not merely the G2 header.\n\nDeferred contract-family leaves remain: canonical state; standard/profile/scheme; validation/intervention; five outputs; cleaning/mutation; key/six joins; host/annotations; cross-artifact consistency.\n\nInstantiated corrections:\n- G3.4 explicitly closes artifact 4 after its G1 inventory phase;\n- G3.9 closes semantic cache behavior from C-08 before G4 evidence.\n\nEvery artifact uses the common §6 envelope: schema, owner/single writer, lifecycle, tracked location, completion rule, hashes, and validator. Exit requires no unowned cells and cross-artifact agreement. (§6; §7 G3; RCON-02–RCON-09)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [
+      "uksahklpsribkedwoczbeeswupeoufzp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:03.282Z",
+    "updatedAt": "2026-07-22T14:20:41.230Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "vwtxvhgpeyikchszvjknwgftscitbwgj",
+    "displayId": "RURL-vwtxvhgp",
+    "title": "P4.1 — Decide scheme specialization posture needed by C-11",
+    "description": "Decide specialization/compatibility treatment for the closed web scheme set versus arbitrary general schemes, including affected FTP-family and scheme-relative posture. This supplies the P4 portion of C-11. (§5 C-11; §8 P4; RCON-05, RCON-08)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "ycowquulrnnzvrkwurgupakvjvemzaqa",
+    "dependencies": [
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "msqhcprboidyvnnjbhuetsxxubpxqlrp"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:14:33.386Z",
+    "updatedAt": "2026-07-22T14:14:33.386Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "vytzhgzhchbfmbiihdmnxfwbejhyiear",
+    "displayId": "RURL-vytzhgzh",
+    "title": "G0.3b — Gate invalidation, stale propagation and re-open semantics",
+    "description": "Define executable propagation from changed source/owner decisions to INVALIDATED dependent records, replacement DISCOVERED records, and failed/reopened downstream gate acceptance.\n\nTracker done state must not keep a gate accepted when its durable acceptance record is stale. Leaf preparation may overlap, but G0→G5 pass order remains strict.\n\nDone: transition fixtures cover source delta, owner supersession, invalidated review, replacement record, and downstream gate failure/reapproval. (§6 lifecycle; §7 G0–G5; RCON-01, RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "bufpkphudjuhjhcaknzerotvjovuqlmd",
+    "dependencies": [
+      "rwrewsqpushwivzxccoswiuuaqxpufvp",
+      "cmtootmskqfwdrvcexigjhznvxmsrexs"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:17:05.292Z",
+    "updatedAt": "2026-07-22T14:17:05.292Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "wmoncyuxespzjtopxeohfutogqegvbii",
+    "displayId": "RURL-wmoncyux",
+    "title": "G0.1 — Graduate protocol + frozen review bundle out of _scratch/ into a tracked workspace",
+    "description": "RCON-01 / §2 / §11 step 1.\n\nMove the reconstruction protocol, S1–S9, predecessor draft, and run state from ignored _scratch/ into the tracked workspace selected by P0.2. Preserve the §2 SHA-256 values byte-for-byte.\n\nWhen evidence is transferred, use §10 canonical tracked paths rather than stale report paths. Copying/freezing is not evidence transfer; the G1 transfer issue owns that work.\n\nDone: all required review inputs have tracked stable paths and verified hashes. (§2; §7 G0; §9–§10; RCON-01)",
+    "status": "done",
+    "priority": "high",
+    "parent": "jidfytjrkkqhptclhgbqeolovfcfhppg",
+    "dependencies": [
+      "fmjadknrdawpecmjpataalmeqnobblog"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:00.474Z",
+    "updatedAt": "2026-07-22T18:07:36.995Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "52d1651f-3f86-4ea9-8fb8-5f9f5728c96d",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Starting G0.1. Verified all 11 frozen inputs (S1-S9 + protocol + DRAFT PRD) in _scratch/ still hash byte-for-byte to reconciliation §2. Graduating verbatim into tracked design/work/url-v3/evidence/ per P0.2 §1-2; §10 stale-path corrections are deferred to the G1 transfer issue (RURL-jalwcgzk), not touched here.",
+        "createdAt": "2026-07-22T18:01:21.720Z"
+      },
+      {
+        "id": "adc94c18-796c-460c-b059-588539db2073",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Done. Merged as PR #201 (squash 78f1a56 into main). All 11 frozen inputs now tracked at design/work/url-v3/evidence/ with byte-for-byte SHA-256 matches to reconciliation §2; SHA256SUMS.txt + README.md added (non-source helpers). CI gating checks (lint, tests, R CMD check, pkgdown, README-sync, NEWS) all passed. Scope kept clean: §10 stale-path corrections deferred to G1 (RURL-jalwcgzk); manifest hash re-pinning deferred to G0.2 (RURL-qcduzpex).",
+        "createdAt": "2026-07-22T18:07:36.994Z"
+      }
+    ]
+  },
+  {
+    "id": "ycowquulrnnzvrkwurgupakvjvemzaqa",
+    "displayId": "RURL-ycowquul",
+    "title": "P4 — Scheme and host specialization owner decisions (§8)",
+    "description": "Owner-decision tier for credentials/mailto, FTP family, scheme-relative posture, host vocabulary, IDNA, PSL, DNS, and IP behavior.\n\nStable cross-tier contradiction consumer: C-11 requires both P2 admission and P4 specialization. Artifacts 5 and 10 consume the remaining decisions at G3.\n\nCreate atomic decision leaves under the G0.3 schema; accepted tracker status alone is non-normative. (§8 P4; RCON-05, RCON-08)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "zlxluxyyegtgmkkmtsuueqlukgdgvoez",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T14:13:22.846Z",
+    "updatedAt": "2026-07-22T14:13:22.846Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "zlxluxyyegtgmkkmtsuueqlukgdgvoez",
+    "displayId": "RURL-zlxluxyy",
+    "title": "Sub-epic: Owner decision queue (§8) — blockers, owner-assigned",
+    "description": "The §8 owner-decision queue, dependency-ordered; none is answered by the reconciliation.\n\nP0 is split into four atomic decisions so C-10 does not block durability. P1–P5 now exist as tier containers. Stable contradiction-specific decision leaves are instantiated; remaining product-cell decisions are cut under the G0.3 record schema.\n\nRules:\n- every accepted outcome is an immutable tracked owner record with approval evidence;\n- tracker status/comments are non-normative pointers;\n- cross-tier contradictions depend on every relevant decision rather than an exclusive tier bucket;\n- G2 consumes contradiction decisions; G3 consumes remaining contract-cell decisions; G4 implements verification.\n\nC-10 routes through P0 release authority. C-07 spans P1/P2, C-11 spans P2/P4, and C-12 spans P2/P5. (§5–§8; RCON-01–RCON-10)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:03:59.107Z",
+    "updatedAt": "2026-07-22T14:19:25.281Z",
+    "properties": {},
+    "comments": []
+  },
+  {
+    "id": "zyksymyadkslblkoipvlgwlnuojjymny",
+    "displayId": "RURL-zyksymya",
+    "title": "G0.4 — Fresh-clone restore drill (reconstruct baseline 89be90b without local memory)",
+    "description": "§7 G0 restore acceptance; depends on G0.1–G0.3.\n\nFrom a fresh clone with no local _scratch memory:\n- obtain the tracked control-plane snapshot;\n- follow the manifest to reconstruct source baseline 89be90bc…;\n- recover protocol, S1–S9, predecessor, and register state;\n- verify hashes, schema versions, tracker snapshot, references, and single-writer declarations.\n\nThis is the objective G0 fan-in signal and must not run before all three inputs are complete. (§4 RCON-01; §6 artifact 1; §7 G0)",
+    "status": "todo",
+    "priority": "high",
+    "parent": "jidfytjrkkqhptclhgbqeolovfcfhppg",
+    "dependencies": [
+      "wmoncyuxespzjtopxeohfutogqegvbii",
+      "qcduzpexnmlttmycvpfqhkkdqxtecexv",
+      "bufpkphudjuhjhcaknzerotvjovuqlmd",
+      "iwahdugjtyztigywkbdmdbcwvblgcegm",
+      "vytzhgzhchbfmbiihdmnxfwbejhyiear"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-22T11:04:01.779Z",
+    "updatedAt": "2026-07-22T14:19:33.410Z",
+    "properties": {},
+    "comments": []
+  }
+]
