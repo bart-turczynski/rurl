@@ -307,7 +307,100 @@ if (!is.null(sc_reg) && !is.null(fd_reg)) {
   check(length(fd_ids) == 10L, sprintf("findings register expected 10 RCON rows, got %d", length(fd_ids)))
 }
 
+## --- G1.2 register: public-surface-inventory (§6 artifact 4) -----------------
+## Parses the artifact-4 inventory register and enforces: PROPOSED envelope,
+## every row DISCOVERED with non-empty required columns, the 29-export NAMESPACE
+## bijection over exported-function/exported-data rows (mirrors G1.1's row-count
+## bijection), and the 18 public-output-field rows. (RURL-dmsgpcak)
+psi_path <- file.path(reg_dir, "public-surface-inventory.md")
+psi_reg  <- if (file.exists(psi_path)) read_rows(psi_path) else NULL
+check(!is.null(psi_reg), "public-surface-inventory.md: no parseable Rows table")
+psi_n <- 0L
+psi_checks_before <- pass + length(fail)
+if (!is.null(psi_reg)) {
+  ptxt <- paste(readLines(psi_path, warn = FALSE), collapse = "\n")
+  # envelope: every required field present, lifecycle_state == PROPOSED
+  for (ef in env_fields) {
+    check(grepl(sprintf("\\|\\s*%s\\s*\\|", ef), ptxt),
+          sprintf("[missing_required_fields] public-surface-inventory.md: envelope field '%s'", ef))
+  }
+  check(grepl("\\|\\s*lifecycle_state\\s*\\|\\s*PROPOSED\\s*\\|", ptxt),
+        "public-surface-inventory.md: lifecycle_state must be PROPOSED")
+
+  # required row columns present
+  psi_cols <- c("item_id", "kind", "arguments", "behavior_dials", "interactions",
+                "vector_error", "docs", "migration", "test_family", "state",
+                "disposition", "missing_evidence")
+  for (col in psi_cols) {
+    check(col %in% psi_reg$header,
+          sprintf("[missing_required_fields] public-surface-inventory.md: column '%s'", col))
+  }
+
+  psi_rows <- psi_reg$rows
+  psi_n <- length(psi_rows)
+  psi_kinds <- c("exported-function", "exported-data", "public-output-field",
+                 "curl-dependency", "migration-surface")
+  # every row: state == DISCOVERED, kind in the closed set, non-empty required cells
+  for (r in psi_rows) {
+    id <- gv(r, "item_id")
+    check(identical(gv(r, "state"), "DISCOVERED"),
+          sprintf("[unknown_states] public-surface-inventory %s: state '%s' != DISCOVERED", id, gv(r, "state")))
+    check(gv(r, "kind") %in% psi_kinds,
+          sprintf("public-surface-inventory %s: kind '%s' not in closed set", id, gv(r, "kind")))
+    for (col in psi_cols) {
+      check(!is.na(gv(r, col)) && nzchar(gv(r, col)),
+            sprintf("public-surface-inventory %s: empty required column '%s'", id, col))
+    }
+  }
+  # unique item_ids
+  psi_ids <- vapply(psi_rows, function(r) gv(r, "item_id"), "")
+  dup_psi <- unique(psi_ids[duplicated(psi_ids)])
+  check(length(dup_psi) == 0,
+        sprintf("[duplicate_ids] public-surface-inventory: %s", paste(dup_psi, collapse = ", ")))
+
+  # --- 29-export NAMESPACE bijection over exported-function/exported-data rows -
+  ns <- readLines("NAMESPACE", warn = FALSE)
+  ns_exports <- regmatches(ns, regexpr("(?<=^export\\()[^)]+", ns, perl = TRUE))
+  ns_exports <- sort(ns_exports[nzchar(ns_exports)])
+  is_export_row <- vapply(psi_rows,
+                          function(r) gv(r, "kind") %in% c("exported-function", "exported-data"), TRUE)
+  fn_ids <- sort(vapply(psi_rows[is_export_row], function(r) gv(r, "item_id"), ""))
+  check(length(ns_exports) == 29L,
+        sprintf("NAMESPACE expected 29 export() lines, got %d", length(ns_exports)))
+  check(length(fn_ids) == 29L,
+        sprintf("public-surface-inventory expected 29 export rows, got %d", length(fn_ids)))
+  check(setequal(fn_ids, ns_exports),
+        sprintf("public-surface-inventory export rows != NAMESPACE (rows=%d, NAMESPACE=%d)",
+                length(fn_ids), length(ns_exports)))
+  for (e in setdiff(ns_exports, fn_ids))
+    check(FALSE, sprintf("public-surface-inventory: missing export row '%s'", e))
+  for (e in setdiff(fn_ids, ns_exports))
+    check(FALSE, sprintf("public-surface-inventory: extra export row '%s' not in NAMESPACE", e))
+
+  # --- 18 public-output-field rows present, exact name set --------------------
+  pub_fields <- c("original_url", "scheme", "host", "port", "path", "query",
+                  "fragment", "user", "password", "domain", "tld", "domain_ascii",
+                  "domain_unicode", "tld_ascii", "tld_unicode", "is_ip_host",
+                  "clean_url", "parse_status")
+  is_field_row <- vapply(psi_rows, function(r) identical(gv(r, "kind"), "public-output-field"), TRUE)
+  field_ids <- sort(vapply(psi_rows[is_field_row], function(r) gv(r, "item_id"), ""))
+  check(length(field_ids) == 18L,
+        sprintf("public-surface-inventory expected 18 public-output-field rows, got %d", length(field_ids)))
+  check(setequal(field_ids, pub_fields),
+        sprintf("public-surface-inventory public-output-field rows != 18 known fields (got %d)", length(field_ids)))
+  for (f in setdiff(pub_fields, field_ids))
+    check(FALSE, sprintf("public-surface-inventory: missing public-output-field row '%s'", f))
+
+  # --- curl dependency + migration surface (§10) explicitly present -----------
+  n_curl <- sum(vapply(psi_rows, function(r) identical(gv(r, "kind"), "curl-dependency"), TRUE))
+  n_migr <- sum(vapply(psi_rows, function(r) identical(gv(r, "kind"), "migration-surface"), TRUE))
+  check(n_curl >= 1L, "public-surface-inventory: no curl-dependency row (§10 curl surface)")
+  check(n_migr >= 1L, "public-surface-inventory: no migration-surface row (§10 migration surface)")
+}
+psi_checks <- (pass + length(fail)) - psi_checks_before
+
 cat("validate-records.R\n")
+cat(sprintf("public-surface-inventory: %d rows, %d added checks\n", psi_n, psi_checks))
 cat(sprintf("registers: source-claims=%d rows, findings=%d rows\n",
             if (!is.null(sc_reg)) length(sc_reg$rows) else 0L,
             if (!is.null(fd_reg)) length(fd_reg$rows) else 0L))
