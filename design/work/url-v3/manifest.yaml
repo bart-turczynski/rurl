@@ -1,0 +1,202 @@
+# rurl 3.0 protocol-hardening manifest — §6 artifact 1.
+#
+# Format fixed by decision record P0.2 (§3); topology / snapshot boundary fixed
+# by P0.3; produced by gate task G0.2 (RURL-qcduzpex). Single-writer: the owner
+# (P0.3 §5) — acceptance is the owner merge that lands C1 (the two-phase seal,
+# P0.2 §3). Validate with:
+#   Rscript design/work/url-v3/tools/validate-manifest.R design/work/url-v3/manifest.yaml
+#
+# Self-reference rule (P0.2 §3): this file lists no hash of itself and no commit
+# embeds its own SHA. The snapshot keys hold the annotated tag name
+# v3/cp-snapshot-1; the tag→SHA binding is recorded, after C1 lands, in the
+# append-only register registers/snapshots.log by a separate seal PR.
+
+schema_version: "1.0.0"          # semver; the manifest schema version
+state: PROPOSED                  # PROPOSED -> ACCEPTED on the owner merge landing C1
+generated_at: "2026-07-22T18:14:26Z"
+
+owner: Bart Turczynski <bartek@turczynski.pl>
+single_writer: repository owner (sole); P0.3 §5
+proposed_by: Claude (agent)
+
+# Baseline vs snapshot are distinct and never conflated (P0.2 §3).
+source_baseline: 89be90b                 # immutable historical SHA the reviews analyzed
+control_plane_snapshot: v3/cp-snapshot-1 # annotated tag resolving to the C1 content commit
+repo_commit: v3/cp-snapshot-1            # same tag; the content commit this manifest describes
+
+# --- Frozen review bundle: 11 verbatim sources graduated by G0.1 (RURL-wmoncyux).
+# SHA-256 values equal reconciliation §2 byte-for-byte.
+sources:
+  - identity: S1
+    path: design/work/url-v3/evidence/S1-object-state-vector.md
+    sha256: dfde4d9d0b1bf0933732ce43b4d8dbed2bf191b1aadeb5a238d9330e4d0097be
+    frozen: true
+  - identity: S2
+    path: design/work/url-v3/evidence/S2-standards-validation-repair.md
+    sha256: b9301eecf2a7dcf41bf2b820e0fc0a6628e6e037a61db2ec011cbd40ed929bbd
+    frozen: true
+  - identity: S3
+    path: design/work/url-v3/evidence/S3-serialization-format-encoding.md
+    sha256: 3c2e1170b62fcb4a1b77a9e52aa494fcd6ed9d369cbd6c15c7271fc15ff1e980
+    frozen: true
+  - identity: S4
+    path: design/work/url-v3/evidence/S4-cleaning-mutation.md
+    sha256: 567d59cc3429fafb9fa4149aa77e5c12c67ebe9cb54bf0255a43fdd5aab09416
+    frozen: true
+  - identity: S5
+    path: design/work/url-v3/evidence/S5-keys-joins.md
+    sha256: bd1506841a495a77c827dd715d7fb7a31e6afb864a0ae138a304e92a62b182e9
+    frozen: true
+  - identity: S6
+    path: design/work/url-v3/evidence/S6-schemes-email.md
+    sha256: bc70876a6ec2af42411bc783ac30914893fa06a15cc275337ff982c2c0e05c99
+    frozen: true
+  - identity: S7
+    path: design/work/url-v3/evidence/S7-host-idna-psl-ip.md
+    sha256: 8fb62419099dbe25d5c8d70ebae050f41fec67f15b0d7f19714157acd1c55636
+    frozen: true
+  - identity: S8
+    path: design/work/url-v3/evidence/S8-performance-curl-conformance-migration.md
+    sha256: f1d3f985f67d4b90382866a839ce1d6cc9155cfa53f395a144fb9278de75571b
+    frozen: true
+  - identity: S9
+    path: design/work/url-v3/evidence/S9-process-red-team.md
+    sha256: fc308055fc5a1465f1da942dba910ad43cd5091cac5959315dbb7f9429effa76
+    frozen: true
+  - identity: PROTOCOL
+    path: design/work/url-v3/evidence/url-v3-spec-reconstruction-protocol.md
+    sha256: 10eb18b8a90d1219fd8f4f74cf8c73b39d11bd32ca005a02132bf07daf4defe5
+    frozen: true
+  - identity: DRAFT-PRD
+    path: design/work/url-v3/evidence/prd-url-object-grammar-DRAFT.md
+    sha256: b0141cf9cca0c0cf964c068d90d9f8da5e3264e61ebe1f504905b6513ee6de41
+    frozen: true
+
+# --- Frozen fp tracker export (canonical path + exact command fixed by P0.3 §2).
+tracker_snapshot:
+  identity: TRACKER
+  path: design/work/url-v3/evidence/tracker-snapshot.json
+  sha256: 9d519eaebfa85b599deefe82ed6c84eac1e379f9297e401fbdec0002c42f41f8
+  as_of_commit: v3/cp-snapshot-1
+  root: RURL-dorofzmb
+  issue_count: 57                # re-verified by the G0.4 restore drill
+  exporter: design/work/url-v3/tools/export-tracker-snapshot.sh
+  fp_version: "0.24.0"
+  completeness: >
+    Every issue reachable from RURL-dorofzmb (root included), each with status,
+    parent, dependencies, and comments. Live tracker drift after this snapshot
+    has no authority (P0.3 §2).
+
+# --- Owner-decision records (referential integrity target). Each must be
+# ACCEPTED; the validator cross-checks the record frontmatter state.
+decisions:
+  - id: P0.1
+    path: design/work/url-v3/decisions/P0.1-owner-identity-approval.md
+    sha256: 4fd9d0866f17262932a48a58d8446c036781eac6422718a385bb7de82588a8f7
+    state: ACCEPTED
+  - id: P0.2
+    path: design/work/url-v3/decisions/P0.2-workspace-manifest-format.md
+    sha256: 8717a86af44651e9c995949d0a504a9a05b23f6bc31036317fd9705fe00165d9
+    state: ACCEPTED
+  - id: P0.3
+    path: design/work/url-v3/decisions/P0.3-tracker-topology-snapshot.md
+    sha256: 0d9a6136c69547d276b19745dc3ceef4bb8e26c57905e321f9eec4cdb433367a
+    state: ACCEPTED
+
+# --- Other tracked control-plane artifacts (excludes manifest.yaml itself and
+# the frozen sources; decisions are inventoried above).
+artifacts:
+  - path: design/work/url-v3/protocol-review-reconciliation.md
+    sha256: faa9c3b76f662f9548de6e4c83e6f577379557ba04b612c7a7fbd950be5ebb42
+  - path: design/work/url-v3/evidence/README.md
+    sha256: adf3afd80fc8f7adf6a1c41a41340ed2d9dc25ee29a72881b9f907e292849486
+  - path: design/work/url-v3/evidence/SHA256SUMS.txt
+    sha256: 75c1d4406317526a5bc989a7cd26678fc2abf668930734eac8d9719601fe9c16
+  - path: design/work/url-v3/tools/export-tracker-snapshot.sh
+    sha256: 2eb9aa66e1ec38cba8fab639bea7d19c6b88279b4160140d46182a43155311a6
+  - path: design/work/url-v3/tools/validate-manifest.R
+    sha256: 55cd4dee00204c621c89e7cec67d85ad54c5adc0748111b7d866aaa2d35eb301
+
+# --- Registers (§6). Declared, not silently omitted. Absent registers name the
+# gate that creates them; present registers carry a hash the validator checks.
+registers:
+  - id: snapshots.log
+    present: false
+    path: design/work/url-v3/registers/snapshots.log
+    planned_gate: "G0.2 seal PR (phase c of the P0.2 §3 two-phase seal)"
+    note: >
+      Appended after C1 lands with the line
+      "1  v3/cp-snapshot-1  <C1 full SHA>  <UTC>"; it cannot exist before C1.
+  - id: contradictions
+    present: false
+    path: design/work/url-v3/registers/contradictions.md
+    planned_gate: "G2 (C-01..C-12 dispositions)"
+  - id: findings
+    present: false
+    path: design/work/url-v3/registers/findings.md
+    planned_gate: "G1.1 evidence transfer (RURL-jalwcgzk)"
+  - id: source-claims
+    present: false
+    path: design/work/url-v3/registers/source-claims.md
+    planned_gate: "G1.1 evidence transfer (RURL-jalwcgzk)"
+  - id: public-surface-inventory
+    present: false
+    path: design/work/url-v3/registers/public-surface-inventory.md
+    planned_gate: "G1.2 (§6 artifact 4; RURL-dmsgpcak)"
+
+# --- Pinned dependency provenance. Remote refs are the reproducibility
+# authority (Remotes pins at baseline 89be90b); installed_local records the
+# environment that generated this manifest.
+external_revisions:
+  pslr:
+    remote: bart-turczynski/pslr@v1.1.0
+    source: DESCRIPTION Remotes @ 89be90b
+    installed_local: 1.1.1
+  punycoder:
+    remote: bart-turczynski/punycoder@v1.2.0
+    source: DESCRIPTION Remotes @ 89be90b
+    installed_local: 1.2.1
+  curl:
+    remote: CRAN
+    installed_local: 7.1.0
+  stringi:
+    remote: CRAN
+    installed_local: 1.8.7
+  rurl_package_version: 2.7.0     # DESCRIPTION Version at the snapshot
+
+tool_versions:
+  R: 4.6.0
+  fp: 0.24.0
+  jq: 1.8.2
+  shasum: 6.02
+  os: darwin 26.4.1
+
+# --- Fresh-clone restore drill; exercised and asserted by G0.4 (RURL-zyksymya).
+restore_instructions: |
+  Reconstruct baseline authority from a fresh clone, without local memory.
+  NOTE: registers/snapshots.log is written by the seal PR *after* the tag, so it
+  lives on main (a descendant of C1), not at the tag commit. Read the log from
+  the default branch; do not check out the tag to read it.
+
+    1. Clone the repository (default branch = main, which carries the sealed
+       snapshots.log and this manifest):
+         git clone <repo-url> rurl && cd rurl
+    2. Read the snapshot binding (authority is the log line, not the movable
+       ref) and verify the tag resolves to that exact commit:
+         line=$(grep -E '^1[[:space:]]' design/work/url-v3/registers/snapshots.log)
+         sha=$(echo "$line" | awk '{print $3}')
+         test "$(git rev-parse v3/cp-snapshot-1^{commit})" = "$sha"
+    3. Verify the 11 frozen review sources:
+         (cd design/work/url-v3/evidence && shasum -a 256 -c SHA256SUMS.txt)
+       expect 11 x OK.
+    4. Verify the manifest schema + referential integrity + every recorded hash:
+         Rscript design/work/url-v3/tools/validate-manifest.R \
+                 design/work/url-v3/manifest.yaml
+       expect "VALIDATION PASSED".
+    5. The reviews' analysis baseline is source_baseline (89be90b); the
+       durability anchor is control_plane_snapshot (v3/cp-snapshot-1). These are
+       distinct commits and must never be conflated.
+
+# completion_rule: this manifest is complete when (a) the validator passes, and
+# (b) the seal binds C1 in registers/snapshots.log (the tag→SHA line). Until (b)
+# the snapshot keys resolve by tag name only; that is expected pre-seal.
