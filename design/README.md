@@ -12,6 +12,9 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
   from [`adr/0000-adr-template.md`](adr/0000-adr-template.md).
 - [`prd/`](prd/) — accepted Product Requirement Documents that an epic or
   shipped feature depends on, graduated out of `_scratch/` so they survive.
+- [`work/`](work/) — durable control-plane artifacts for active, multi-step
+  design work when a fresh clone must be able to recover the process state.
+  These documents must state their status explicitly and are not accepted PRDs.
 - [`goodpractice-triage.md`](goodpractice-triage.md) — standing triage for
   `goodpractice::gp()` findings that are intentionally retained or queued as
   scoped cleanup debt.
@@ -24,8 +27,9 @@ See also [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the structural overview
 PRDs are drafted and iterated in gitignored `_scratch/`. Once a PRD is
 **accepted and an epic/feature depends on it**, it graduates into `prd/` with a
 short provenance header so the durable spec travels with the code. Research
-notes, brainstorms, and handoffs stay ephemeral in `_scratch/`; the ADRs are
-the durable distillate of *why*, and the graduated PRD is the durable *what*.
+notes, brainstorms, and handoffs stay ephemeral in `_scratch/`; active process
+controls that must survive a handoff live in `work/`; the ADRs are the durable
+distillate of *why*, and the graduated PRD is the durable *what*.
 
 ## Writing an ADR
 
