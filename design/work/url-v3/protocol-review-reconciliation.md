@@ -365,12 +365,24 @@ one a schema, owner, lifecycle, completion rule, and tracked location:
 
 Recommended record lifecycle:
 
-`DISCOVERED -> PROPOSED -> CONFLICT | ACCEPTED | REJECTED -> TRANSFERRED -> VERIFIED`
+| State | Entry authority and required evidence | Allowed next state |
+|---|---|---|
+| `DISCOVERED` | Any investigator; frozen source identity, baseline, and evidence location recorded. | `PROPOSED`, `OPEN`, or `CONFLICT` |
+| `PROPOSED` | Artifact owner; atomic contract, consequences, dependencies, and verification method recorded. | `OPEN`, `CONFLICT`, `ACCEPTED`, or `REJECTED` |
+| `OPEN` | Artifact owner; unresolved owner question and blocking impact recorded. | `PROPOSED`, `ACCEPTED`, or `REJECTED` |
+| `CONFLICT` | Any investigator; competing classified assertions and required disposition recorded. | `PROPOSED`, `ACCEPTED`, or `REJECTED` |
+| `ACCEPTED` | Owner for a product decision, or the designated approver for a process/evidence record; durable approval evidence attached. | `TRANSFERRED`, `SUPERSEDED`, or `INVALIDATED` |
+| `REJECTED` | Same authority required for acceptance; rejection rationale and affected claims recorded. | Terminal; a changed premise creates a new `DISCOVERED` record linked to this one. |
+| `TRANSFERRED` | Artifact owner; an accepted assertion has a normative `REQ-*` record and all trace links validate. | `VERIFIED`, `SUPERSEDED`, or `INVALIDATED` |
+| `VERIFIED` | Designated verifier; required fixture, test, benchmark, or manual verification evidence passes. | `SUPERSEDED` or `INVALIDATED` |
+| `SUPERSEDED` | Original authority or successor decision; replacement record named. | Terminal annotation. |
+| `INVALIDATED` | Artifact owner or verifier; invalidating source or baseline delta named. | Terminal annotation. |
 
-`SUPERSEDED` and `INVALIDATED` are terminal annotations that must name the
-replacement or invalidating source change. Only the owner may create an
-`ACCEPTED` product decision. A finding closes only when its disposition and
-verification evidence are recorded.
+Every transition records actor, timestamp, evidence, and affected dependency
+IDs. A source or owner-decision change marks dependent records `INVALIDATED` and
+opens replacement records at `DISCOVERED`; it does not silently rewind or edit
+history. A rejected record never transfers into normative prose. A finding
+closes only when its disposition and verification evidence are recorded.
 
 ## 7. Pre-draft gate sequence
 
@@ -521,16 +533,26 @@ baseline:
 | Determinism is not currently a divergence gate | `.github/workflows/determinism-probe.yml` | Verified by explicit workflow comments and narrow triggers |
 | curl removal needs more than replacing the parser call | `DESCRIPTION`, `NAMESPACE`, `R/`, and tests | Verified: metadata imports plus parsing, path/query, accessor, email, and test references |
 
-Two evidence hygiene corrections apply when findings are transferred:
+The frozen reports contain the following shortened paths. Use these canonical
+tracked paths when findings are transferred:
 
-1. S4 uses shortened ADR paths that do not exist. The tracked files are
-   [`0011-path-encoding-orthogonal-presentation.md`](../../adr/0011-path-encoding-orthogonal-presentation.md)
-   and [`0012-general-url-parser-scope.md`](../../adr/0012-general-url-parser-scope.md).
-2. S9's Fiberplane status is a point-in-time observation. At the frozen review
-   collection boundary, RURL-ulatmylm was completed; this reconciliation is
-   tracked separately as RURL-jairsufw.
+| Report | Stale reference | Canonical tracked path |
+|---|---|---|
+| S4 | `design/adr/0003-two-stage-parse-architecture.md` | [`design/adr/0003-parse-present-stage-split.md`](../../adr/0003-parse-present-stage-split.md) |
+| S4 | `design/adr/0010-scheme-inference-policy.md` | [`design/adr/0010-scheme-policy-acceptance-axis.md`](../../adr/0010-scheme-policy-acceptance-axis.md) |
+| S4 | `design/adr/0011-path-encoding-orthogonality.md` | [`design/adr/0011-path-encoding-orthogonal-presentation.md`](../../adr/0011-path-encoding-orthogonal-presentation.md) |
+| S4 | `design/adr/0012-general-scheme-model-and-profile-strategy.md` | [`design/adr/0012-general-url-parser-scope.md`](../../adr/0012-general-url-parser-scope.md) |
+| S4 | `design/prd/browser-fixer.md` | [`design/prd/browser-fixer-and-url-search-classifier.md`](../../prd/browser-fixer-and-url-search-classifier.md) |
+| S4 | `design/prd/v2.md` | [`design/prd/url-standard-selector-v2.md`](../../prd/url-standard-selector-v2.md) |
+| S6 | `design/adr/0006-url-diagnostic-warnings.md` | [`design/adr/0006-diagnostics-companion-helpers-only.md`](../../adr/0006-diagnostics-companion-helpers-only.md) |
+| S6 | `design/adr/0007-url-standard-selection.md` | [`design/adr/0007-url-standard-selector.md`](../../adr/0007-url-standard-selector.md) |
+| S6 | `design/adr/0010-scheme-policy.md` | [`design/adr/0010-scheme-policy-acceptance-axis.md`](../../adr/0010-scheme-policy-acceptance-axis.md) |
 
-These corrections do not change either report's substantive findings.
+S9's Fiberplane status is a point-in-time observation. At the frozen review
+collection boundary, RURL-ulatmylm was completed; this reconciliation is tracked
+separately as RURL-jairsufw.
+
+These corrections do not change the reports' substantive findings.
 
 ## 11. Next frontier
 
