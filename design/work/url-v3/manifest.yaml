@@ -12,12 +12,14 @@
 # append-only register registers/snapshots.log by a separate seal PR.
 
 schema_version: "1.0.0"          # semver; the manifest schema version
-state: PROPOSED                  # PROPOSED -> ACCEPTED on the owner merge landing C1
+state: ACCEPTED                  # sealed against C1 by the two-phase seal (P0.2 §3)
 generated_at: "2026-07-22T18:14:26Z"
 
 owner: Bart Turczynski <bartek@turczynski.pl>
 single_writer: repository owner (sole); P0.3 §5
 proposed_by: Claude (agent)
+accepted_at: "2026-07-22T19:05:14Z"
+accepted_evidence: d139675281078d8bdc38fd40fcae034290fb75f9 (PR #202 squash-merge into main = C1; tag v3/cp-snapshot-1)
 
 # Baseline vs snapshot are distinct and never conflated (P0.2 §3).
 source_baseline: 89be90b                 # immutable historical SHA the reviews analyzed
@@ -121,12 +123,13 @@ artifacts:
 # gate that creates them; present registers carry a hash the validator checks.
 registers:
   - id: snapshots.log
-    present: false
+    present: true
     path: design/work/url-v3/registers/snapshots.log
-    planned_gate: "G0.2 seal PR (phase c of the P0.2 §3 two-phase seal)"
+    sha256: e9afe42b9aba35675bd25e197480af2c10534afd4d09943e2df7dd0f37982dab
     note: >
-      Appended after C1 lands with the line
-      "1  v3/cp-snapshot-1  <C1 full SHA>  <UTC>"; it cannot exist before C1.
+      Sealed. Line 1 binds tag v3/cp-snapshot-1 to C1
+      (d139675281078d8bdc38fd40fcae034290fb75f9). Append-only; a later snapshot
+      takes the next integer (P0.2 §3.3).
   - id: contradictions
     present: false
     path: design/work/url-v3/registers/contradictions.md
