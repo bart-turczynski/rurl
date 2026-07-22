@@ -1,0 +1,83 @@
+# envelope.yaml — the common normative envelope every §6 artifact (1-11) must
+# carry. Produced by G0.3a (RURL-iwahdugj); consumed by tools/validate-records.R.
+# An artifact missing any required envelope field is mechanically rejected — the
+# universal §6 contract is incomplete (RCON-01..RCON-10).
+
+schema_version: "1.0.0"
+
+# The §6 artifact set (reconciliation §6). Each artifact, when instantiated,
+# must satisfy the envelope below. `status: present` artifacts are validated
+# against their record; `status: planned` artifacts declare their creating gate.
+artifacts:
+  - number: 1
+    name: manifest
+    status: present
+    location: design/work/url-v3/manifest.yaml
+    validation_command: >
+      Rscript design/work/url-v3/tools/validate-manifest.R design/work/url-v3/manifest.yaml
+  - number: 2
+    name: authority-records
+    status: present
+    location: design/work/url-v3/decisions/ + design/work/url-v3/registers/
+    validation_command: >
+      Rscript design/work/url-v3/tools/validate-records.R
+  - number: 3
+    name: canonical-state-contract
+    status: planned
+    planned_gate: G3
+  - number: 4
+    name: public-surface-registry
+    status: planned
+    planned_gate: G1.2 (RURL-dmsgpcak)
+  - number: 5
+    name: standard-profile-scheme-matrices
+    status: planned
+    planned_gate: G3
+  - number: 6
+    name: validation-intervention-contract
+    status: planned
+    planned_gate: G3
+  - number: 7
+    name: output-contracts
+    status: planned
+    planned_gate: G3
+  - number: 8
+    name: cleaning-mutation-contracts
+    status: planned
+    planned_gate: G3
+  - number: 9
+    name: key-join-contracts
+    status: planned
+    planned_gate: G3
+  - number: 10
+    name: host-annotation-contracts
+    status: planned
+    planned_gate: G3
+  - number: 11
+    name: verification-contracts
+    status: planned
+    planned_gate: G4
+
+# The universal envelope. Every present §6 artifact/record must expose these,
+# either as YAML frontmatter (decision/design records) or as top-level manifest
+# keys, or as a register header block.
+required_envelope_fields:
+  - id                    # unique across the workspace
+  - schema_version        # semver
+  - tracked_location      # the artifact's own path (or dir for registers)
+  - owner                 # accountable identity
+  - single_writer         # who alone writes the accepted state
+  - lifecycle_state       # one of lifecycle.yaml:states
+  - dependencies          # list of upstream IDs (may be empty)
+  - completion_rule       # what makes the artifact done
+  - content_hash          # sha256 of the artifact (or per-input hashes)
+  - approval_evidence     # merge SHA once ACCEPTED (pending before)
+  - validation_command    # exact command that checks it
+
+# Rejection classes the G0.3a validator must detect (RURL-iwahdugj):
+rejection_classes:
+  - duplicate_ids
+  - broken_references          # dependency/supersession pointing at a missing id
+  - unknown_states             # lifecycle_state not in lifecycle.yaml
+  - missing_required_fields    # owner / approval / completion / envelope fields
+  - manifest_hash_drift        # on-disk sha256 != manifest-recorded sha256

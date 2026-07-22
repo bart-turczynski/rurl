@@ -1,0 +1,89 @@
+# lifecycle.yaml — the ten-state record lifecycle and its legal transitions,
+# encoded machine-readably. Source of truth = reconciliation §6 ("Recommended
+# record lifecycle") table. Produced by G0.3 (RURL-bufpkphu); consumed by the
+# G0.3b transition validator (tools/validate-transitions.R).
+#
+# Every transition records actor, timestamp, evidence, and affected dependency
+# IDs (enforced by the transition validator). A source or owner-decision change
+# marks dependent records INVALIDATED and opens replacement records at
+# DISCOVERED; it never silently rewinds or edits history.
+
+schema_version: "1.0.0"
+
+# The ten states. `terminal: true` states allow no onward transition (they carry
+# a terminal annotation only). `entry_authority` and `required_evidence` mirror
+# the §6 table.
+states:
+  DISCOVERED:
+    entry_authority: any-investigator
+    required_evidence: frozen source identity, baseline, and evidence location
+    terminal: false
+  PROPOSED:
+    entry_authority: artifact-owner
+    required_evidence: atomic contract, consequences, dependencies, verification method
+    terminal: false
+  OPEN:
+    entry_authority: artifact-owner
+    required_evidence: unresolved owner question and blocking impact
+    terminal: false
+  CONFLICT:
+    entry_authority: any-investigator
+    required_evidence: competing classified assertions and required disposition
+    terminal: false
+  ACCEPTED:
+    entry_authority: owner-or-designated-approver
+    required_evidence: durable approval evidence (merge commit SHA)
+    terminal: false
+  REJECTED:
+    entry_authority: owner-or-designated-approver
+    required_evidence: rejection rationale and affected claims
+    terminal: true
+    note: >
+      Terminal. A changed premise creates a new DISCOVERED record linked to this
+      one (it does not reopen the rejected record in place).
+  TRANSFERRED:
+    entry_authority: artifact-owner
+    required_evidence: normative REQ-* record exists and all trace links validate
+    terminal: false
+  VERIFIED:
+    entry_authority: designated-verifier
+    required_evidence: passing fixture, test, benchmark, or manual verification
+    terminal: false
+  SUPERSEDED:
+    entry_authority: original-authority-or-successor
+    required_evidence: replacement record named
+    terminal: true
+    note: Terminal annotation.
+  INVALIDATED:
+    entry_authority: artifact-owner-or-verifier
+    required_evidence: invalidating source or baseline delta named
+    terminal: true
+    note: Terminal annotation.
+
+# Allowed next states, keyed by current state. Empty list == terminal.
+transitions:
+  DISCOVERED: [PROPOSED, OPEN, CONFLICT]
+  PROPOSED:   [OPEN, CONFLICT, ACCEPTED, REJECTED]
+  OPEN:       [PROPOSED, ACCEPTED, REJECTED]
+  CONFLICT:   [PROPOSED, ACCEPTED, REJECTED]
+  ACCEPTED:   [TRANSFERRED, SUPERSEDED, INVALIDATED]
+  REJECTED:   []
+  TRANSFERRED: [VERIFIED, SUPERSEDED, INVALIDATED]
+  VERIFIED:   [SUPERSEDED, INVALIDATED]
+  SUPERSEDED: []
+  INVALIDATED: []
+
+# Every transition log entry must carry these fields (validated by G0.3b).
+transition_evidence_fields: [from, to, actor, timestamp, evidence, affected]
+
+# Propagation rules (G0.3b). A change to a source or an owner decision must
+# cascade to dependents; these names are asserted by the transition fixtures.
+propagation:
+  # When a record R that others depend_on changes (source delta or supersession):
+  on_upstream_change:
+    - dependents_move_to: INVALIDATED          # every ACCEPTED/TRANSFERRED/VERIFIED dependent
+    - open_replacement_at: DISCOVERED          # a new record, linked to the invalidated one
+    - downstream_gate: FAILED_OR_REOPENED      # any gate whose acceptance rested on the dependent
+  # Tracker `done` must never keep a gate accepted when its durable acceptance
+  # record is stale (INVALIDATED/SUPERSEDED). Tracker state is non-authoritative.
+  tracker_authority: none

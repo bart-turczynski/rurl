@@ -1,0 +1,28 @@
+# Scenario: downstream gate failure / reapproval. A gate (G4) was accepted on the
+# strength of a dependent record; that record later invalidates, so the gate's
+# acceptance must fail/reopen even though the tracker still marks it "done"
+# (tracker state is non-authoritative). After a replacement is accepted the gate
+# can be re-approved.
+name: downstream-gate-failure
+event:
+  type: source_delta
+  changed: REQ-cache-contract
+records:
+  - id: REQ-cache-contract
+    transitions:
+      - {from: DISCOVERED, to: PROPOSED,    actor: agent, timestamp: 2026-07-22T07:00:00Z, evidence: "C-08 cache contract", affected: []}
+      - {from: PROPOSED,   to: ACCEPTED,    actor: owner, timestamp: 2026-07-22T07:10:00Z, evidence: "PR #940 merge eee555", affected: [G4.1]}
+      - {from: ACCEPTED,   to: INVALIDATED, actor: verifier, timestamp: 2026-07-22T15:00:00Z, evidence: "cache runtime bound changed; contract stale", affected: [G4.1]}
+  - id: GATE-G4-accept
+    transitions:
+      - {from: DISCOVERED, to: PROPOSED,    actor: agent, timestamp: 2026-07-22T07:20:00Z, evidence: "G4 acceptance record", affected: []}
+      - {from: PROPOSED,   to: ACCEPTED,    actor: owner, timestamp: 2026-07-22T07:30:00Z, evidence: "PR #941 merge fff666", affected: []}
+      - {from: ACCEPTED,   to: INVALIDATED, actor: owner, timestamp: 2026-07-22T15:05:00Z, evidence: "upstream REQ-cache-contract INVALIDATED; gate reopens", affected: []}
+expect:
+  invalidated: [REQ-cache-contract, GATE-G4-accept]
+  replacement_discovered: [REQ-cache-contract-b]
+  downstream_gate: {id: G4, result: FAILED_OR_REOPENED}
+replacement_records:
+  - id: REQ-cache-contract-b
+    state: DISCOVERED
+    supersedes: REQ-cache-contract
