@@ -85,7 +85,8 @@ reported as shipped without implementation evidence.
 ### RCON-01 — The reconstruction control plane is not durable
 
 **Severity:** blocker
-**Sources:** S9 C1-C3, H1-H3, H7-H9, M1-M5; all reports indirectly
+**Sources:** S9 C1-C3, H1-H3, H7-H9, M1-M5 (every other report depends on this
+durability blocker indirectly, but contributes no finding-level citation here)
 
 The ignored protocol, reports, run state, and predecessor draft cannot be
 recovered from a fresh clone. There is no tracked manifest binding a commit,
@@ -488,29 +489,68 @@ dependency-ordered queue; none is answered by this document.
 
 ## 9. Finding coverage map
 
-Every severity-ranked finding in the nine reports is represented below. This
-map prevents consolidation from silently dropping a narrow review result.
+Every severity-ranked finding in the nine reports is represented below, so this
+map proves that consolidation dropped no narrow review result. It is the exact
+inverse of the per-finding **Sources** lists in section 4: each row states every
+RCON that draws on a finding, and the two tables agree by construction. Findings
+that share the same RCON set are grouped; a finding therefore appears in exactly
+one row.
 
 | Report findings | Reconciled location |
 |---|---|
-| S1 F1, F5-F7, F9, F11 | RCON-02 |
+| S1 F1, F9 | RCON-02 |
 | S1 F2 | RCON-03 |
-| S1 F3-F4, F8, F10 | RCON-05, RCON-09, RCON-10 |
-| S2 S2-01-S2-02, S2-05, S2-08-S2-09 | RCON-04 |
-| S2 S2-03, S2-06-S2-07 | RCON-03, RCON-10 |
+| S1 F3 | RCON-09 |
+| S1 F4 | RCON-05, RCON-09 |
+| S1 F5 | RCON-02, RCON-08 |
+| S1 F6-F7 | RCON-02, RCON-06, RCON-07 |
+| S1 F8 | RCON-05 |
+| S1 F10 | RCON-09, RCON-10 |
+| S1 F11 | RCON-02, RCON-09 |
+| S2 S2-01-S2-02, S2-09 | RCON-04 |
+| S2 S2-03, S2-07 | RCON-03, RCON-04, RCON-10 |
 | S2 S2-04 | RCON-05 |
-| S3 F1-F7 | RCON-02, RCON-03, RCON-10 |
-| S4 F1-F5, F11-F14 | RCON-03, RCON-04, RCON-06 |
-| S4 F6-F10, F15 | RCON-02, RCON-06, RCON-09 |
-| S5 findings 1-9 | RCON-03, RCON-07, RCON-09 |
-| S6 findings 1-4, 8-10 | RCON-03, RCON-05 |
-| S6 findings 5-7 | RCON-04, RCON-10 |
-| S7 F1-F3, F6-F10 | RCON-02, RCON-04, RCON-05, RCON-08 |
-| S7 F4-F5 | RCON-08 |
-| S8 findings 1, 6-8, 13 | RCON-10 |
-| S8 findings 2-5, 9-12 | RCON-05, RCON-09 |
+| S2 S2-05 | RCON-04, RCON-08 |
+| S2 S2-06, S2-08 | RCON-04, RCON-10 |
+| S3 F1 | RCON-03, RCON-10 |
+| S3 F2 | RCON-02, RCON-03 |
+| S3 F3, F7 | RCON-03 |
+| S3 F4 | RCON-02, RCON-03, RCON-06 |
+| S3 F5 | RCON-02, RCON-03, RCON-06, RCON-07 |
+| S3 F6 | RCON-03, RCON-07 |
+| S4 F1-F2, F12 | RCON-03, RCON-06 |
+| S4 F3 | RCON-03, RCON-04, RCON-06 |
+| S4 F4-F5 | RCON-03, RCON-05, RCON-06 |
+| S4 F6, F8-F10 | RCON-02, RCON-06 |
+| S4 F7 | RCON-02, RCON-04, RCON-06 |
+| S4 F11 | RCON-04, RCON-05, RCON-06 |
+| S4 F13 | RCON-03, RCON-06, RCON-07 |
+| S4 F14 | RCON-04, RCON-06, RCON-08 |
+| S4 F15 | RCON-04, RCON-06, RCON-09 |
+| S5 findings 1-2, 7-8 | RCON-07, RCON-09 |
+| S5 findings 3-6 | RCON-03, RCON-07 |
+| S5 finding 9 | RCON-07 |
+| S6 findings 1-2, 8 | RCON-05 |
+| S6 findings 3-4, 9 | RCON-03, RCON-05 |
+| S6 finding 5 | RCON-04, RCON-10 |
+| S6 finding 6 | RCON-04, RCON-08, RCON-10 |
+| S6 finding 7 | RCON-04, RCON-08 |
+| S6 finding 10 | RCON-05, RCON-10 |
+| S7 F1, F7 | RCON-02, RCON-05, RCON-08 |
+| S7 F2, F10 | RCON-02, RCON-08 |
+| S7 F3 | RCON-02, RCON-04, RCON-08 |
+| S7 F4 | RCON-08 |
+| S7 F5 | RCON-06, RCON-08 |
+| S7 F6 | RCON-04, RCON-05, RCON-08 |
+| S7 F8 | RCON-04, RCON-05, RCON-06, RCON-08 |
+| S7 F9 | RCON-04, RCON-08, RCON-10 |
+| S8 findings 1, 6-7, 13 | RCON-10 |
+| S8 findings 2-3, 5, 11-12 | RCON-09 |
+| S8 finding 4 | RCON-05, RCON-07, RCON-09 |
+| S8 finding 8 | RCON-05, RCON-07, RCON-10 |
+| S8 findings 9-10 | RCON-05, RCON-08, RCON-09 |
 | S9 C1-C3, H1-H3, H7-H9, M1-M5 | RCON-01 |
-| S9 H4-H6, H10-H11 | RCON-10 and gates G4-G5 |
+| S9 H4-H6, H10-H11 | RCON-10 (also feeds gates G4-G5) |
 
 The detailed owner questions, fixture families, and matrix skeletons remain in
 the frozen reports and must be transferred—not summarized from memory—when the
