@@ -399,8 +399,84 @@ if (!is.null(psi_reg)) {
 }
 psi_checks <- (pass + length(fail)) - psi_checks_before
 
+## --- G2 register: contradictions (§6 artifact 2) -----------------------------
+## Parses the artifact-2 contradiction register and enforces: PROPOSED envelope,
+## the required columns, the 12-row C-01..C-12 bijection (no missing/extra/dup),
+## every row disposition_state == DISCOVERED and disposition_type == pending,
+## related_rcon values all within RCON-01..RCON-10, and a non-empty
+## bound_owner_tier. SCAFFOLD gate: the typed disposition is a later owner
+## decision and is deliberately NOT asserted here. (RURL-oknltrux)
+con_path <- file.path(reg_dir, "contradictions.md")
+con_pat  <- rschemas$record_types$register$variants$contradiction$id_pattern
+con_reg  <- if (file.exists(con_path)) read_rows(con_path) else NULL
+check(!is.null(con_reg), "contradictions.md: no parseable Rows table")
+con_n <- 0L
+con_checks_before <- pass + length(fail)
+if (!is.null(con_reg)) {
+  ctxt <- paste(readLines(con_path, warn = FALSE), collapse = "\n")
+  # envelope: every required field present, lifecycle_state == PROPOSED
+  for (ef in env_fields) {
+    check(grepl(sprintf("\\|\\s*%s\\s*\\|", ef), ctxt),
+          sprintf("[missing_required_fields] contradictions.md: envelope field '%s'", ef))
+  }
+  check(grepl("\\|\\s*lifecycle_state\\s*\\|\\s*PROPOSED\\s*\\|", ctxt),
+        "contradictions.md: lifecycle_state must be PROPOSED")
+
+  # required row columns present
+  con_cols <- c("id", "contradiction", "required_disposition", "related_rcon",
+                "bound_owner_tier", "disposition_type", "disposition_state",
+                "authority", "affected_claims", "invalidated_artifacts",
+                "verification_ref")
+  for (col in con_cols) {
+    check(col %in% con_reg$header,
+          sprintf("[missing_required_fields] contradictions.md: column '%s'", col))
+  }
+
+  con_rows <- con_reg$rows
+  con_n <- length(con_rows)
+  # per-row: id pattern, DISCOVERED, pending, related_rcon in range, tier present
+  for (r in con_rows) {
+    id <- gv(r, "id")
+    check(grepl(con_pat, id),
+          sprintf("contradictions.md: id '%s' fails %s", id, con_pat))
+    check(identical(gv(r, "disposition_state"), "DISCOVERED"),
+          sprintf("[unknown_states] contradictions %s: disposition_state '%s' != DISCOVERED",
+                  id, gv(r, "disposition_state")))
+    check(identical(gv(r, "disposition_type"), "pending"),
+          sprintf("contradictions %s: disposition_type '%s' != pending (owner decides later)",
+                  id, gv(r, "disposition_type")))
+    check(!is.na(gv(r, "bound_owner_tier")) && nzchar(gv(r, "bound_owner_tier")),
+          sprintf("contradictions %s: empty bound_owner_tier", id))
+    rcons <- regmatches(gv(r, "related_rcon"),
+                        gregexpr("RCON-[0-9]+", gv(r, "related_rcon")))[[1]]
+    check(length(rcons) >= 1,
+          sprintf("contradictions %s: no related_rcon", id))
+    for (rc in rcons) {
+      n <- suppressWarnings(as.integer(sub("RCON-", "", rc)))
+      check(!is.na(n) && n >= 1L && n <= 10L,
+            sprintf("contradictions %s: related_rcon '%s' outside RCON-01..RCON-10", id, rc))
+    }
+  }
+  # 12-row C-01..C-12 bijection (no missing / extra / duplicate)
+  con_ids <- vapply(con_rows, function(r) gv(r, "id"), "")
+  dup_con <- unique(con_ids[duplicated(con_ids)])
+  check(length(dup_con) == 0,
+        sprintf("[duplicate_ids] contradictions: %s", paste(dup_con, collapse = ", ")))
+  con_expect <- sprintf("C-%02d", 1:12)
+  check(length(con_ids) == 12L,
+        sprintf("contradictions register expected 12 rows, got %d", length(con_ids)))
+  check(setequal(con_ids, con_expect),
+        sprintf("contradictions rows != C-01..C-12 (got %s)", paste(sort(con_ids), collapse = ", ")))
+  for (e in setdiff(con_expect, con_ids))
+    check(FALSE, sprintf("contradictions: missing row '%s'", e))
+  for (e in setdiff(con_ids, con_expect))
+    check(FALSE, sprintf("contradictions: extra row '%s' not in C-01..C-12", e))
+}
+con_checks <- (pass + length(fail)) - con_checks_before
+
 cat("validate-records.R\n")
 cat(sprintf("public-surface-inventory: %d rows, %d added checks\n", psi_n, psi_checks))
+cat(sprintf("contradictions: %d rows, %d added checks\n", con_n, con_checks))
 cat(sprintf("registers: source-claims=%d rows, findings=%d rows\n",
             if (!is.null(sc_reg)) length(sc_reg$rows) else 0L,
             if (!is.null(fd_reg)) length(fd_reg$rows) else 0L))
