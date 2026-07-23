@@ -104,6 +104,53 @@ decisions:
     path: design/work/url-v3/decisions/P0.3-tracker-topology-snapshot.md
     sha256: 0d9a6136c69547d276b19745dc3ceef4bb8e26c57905e321f9eec4cdb433367a
     state: ACCEPTED
+  # --- P-tier product decisions, ACCEPTED by owner squash-merge of PRs #209-#216
+  # (epic RURL-dorofzmb); each accepted_evidence = its PR's own squash SHA; paired
+  # records share their PR's SHA (#210 P1.1+P2.3, #212 P2.2+P5.3, #213 P2.4+P4.1).
+  - id: P0.4
+    path: design/work/url-v3/decisions/P0.4-cran-release-boundary.md
+    sha256: 15e488ef3976db1972b78fbba6d3b36fcf41c200c2b79e763a4eeb75953a9a57
+    state: ACCEPTED
+  - id: P1.1
+    path: design/work/url-v3/decisions/P1.1-v3-state-status-model.md
+    sha256: 656510b6d0c16991726ff7b41523712359f60921e1cc472d354f53b498a3cd29
+    state: ACCEPTED
+  - id: P2.3
+    path: design/work/url-v3/decisions/P2.3-validation-verdicts-migration.md
+    sha256: 1a1d1c4542a50a7c8310efc9055057c17c4ddbdaab2fb9988d08070253fa7a2e
+    state: ACCEPTED
+  - id: P2.1
+    path: design/work/url-v3/decisions/P2.1-fixer-recovery-ordering.md
+    sha256: 37c4d3b6f60e2e67b7f356978bb8d44f7eac580b3006b86c5544ce0bcb4597e5
+    state: ACCEPTED
+  - id: P2.2
+    path: design/work/url-v3/decisions/P2.2-serializer-clean-output.md
+    sha256: 01542610a8aaa7f0c1abdbfaae373f65d220446b4f8ae8e6f29cc721cd263c9a
+    state: ACCEPTED
+  - id: P5.3
+    path: design/work/url-v3/decisions/P5.3-oracle-claim-policy.md
+    sha256: 3ca407467ed17f8ad34fc8fb46dda79f7465bb0631bc81bd20f2d490036d1c82
+    state: ACCEPTED
+  - id: P2.4
+    path: design/work/url-v3/decisions/P2.4-scheme-admission-boundary.md
+    sha256: 6f414f297094b46bef2a5e6c4f32938264e1026e4425955ec2a98f5b921d5cd6
+    state: ACCEPTED
+  - id: P4.1
+    path: design/work/url-v3/decisions/P4.1-scheme-specialization-posture.md
+    sha256: 0d1e9a4d941b7398a935cbe66b91f174c7aecef768114964c6b1ee91b51b7cb2
+    state: ACCEPTED
+  - id: P3.1
+    path: design/work/url-v3/decisions/P3.1-identity-canonical-join.md
+    sha256: b1760889be4cf0d756cab48928211186a8395e5197b851cf692fdc9db919ad4e
+    state: ACCEPTED
+  - id: P5.1
+    path: design/work/url-v3/decisions/P5.1-cache-contract.md
+    sha256: 8420e6829675d3259ce3414a2c34a030b73ea113f101d7108add4b102076afc5
+    state: ACCEPTED
+  - id: P5.2
+    path: design/work/url-v3/decisions/P5.2-determinism-tolerance.md
+    sha256: 18787e57769adc0dd5adef707cb7737621bf1408e21798cc6ba2da6f9aa9bb02
+    state: ACCEPTED
 
 # --- Other tracked control-plane artifacts (excludes manifest.yaml itself and
 # the frozen sources; decisions are inventoried above).
