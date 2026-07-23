@@ -1,0 +1,54 @@
+# Lifecycle-aware control-plane gate for the rurl 3.0 protocol-hardening
+# governance workspace (design/work/url-v3/). The three validators
+# (validate-records / validate-manifest / validate-transitions) are the
+# deterministic truth of the §6 control plane, but they live under design/, not
+# in the package, so the R-CMD-check gate never ran them: a green package build
+# has never implied a green control plane. This workflow closes that gap.
+#
+# It does NOT relax any validator. ci-gate.R runs all three and applies exactly
+# one documented lifecycle tolerance: on a PR that ADDS PROPOSED owner-decision
+# records, validate-manifest's decisions-completeness failure is expected for
+# precisely those new files (a PROPOSED record cannot be in manifest.decisions[]
+# until the owner's seal-merge flips it ACCEPTED). Every other failure, in any
+# validator, is fatal. See design/work/url-v3/tools/ci-gate.R for the full
+# rationale and the fact-based (never branch-name) tolerance keying.
+name: control-plane
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: control-plane-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    name: Control-plane validators (lifecycle-aware)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so ci-gate.R can diff the PR against its base to find
+          # newly-added PROPOSED decision records (the lifecycle tolerance).
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install validator dependencies
+        shell: Rscript {0}
+        run: install.packages(c("yaml", "digest"))
+
+      - name: Run the lifecycle-aware control-plane gate
+        env:
+          # Empty on push to main (strict: all three validators must pass).
+          # On a pull_request it is the base-branch sha the diff runs against.
+          CI_GATE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: Rscript design/work/url-v3/tools/ci-gate.R
