@@ -377,6 +377,20 @@ should not suddenly emit `mailto:` rows. So:
 - The **default** (`url_standard = NULL`, `scheme_policy = "infer"`,
   `scheme_acceptance = "web"`) stays byte-for-byte compatible (hard CRAN
   constraint).
+
+  > **v3.0 amendment (P2.1 / P2.4, epic RURL-dorofzmb).** Exactly **one** of
+  > these three default axes changes at the 3.0 major boundary: **`scheme_policy`**
+  > flips from `infer` to `require` (the default posture becomes `strict`;
+  > scheme-less host-shaped input rejects by default). **Every other D4 constraint
+  > stands unchanged:** the general parser remains **opt-in** (`error → ok` is
+  > still a gated widening, never on by default); **`scheme_acceptance = "web"`
+  > and `url_standard = NULL` remain the default admission axes byte-for-byte**;
+  > **`ws`/`wss` stay general-only** and do not join the default allowlist;
+  > promoting any scheme into the default allowlist remains a deliberately
+  > versioned widening. The "byte-for-byte / hard CRAN constraint" framing is a
+  > **2.x-line** rule for the scheme-less-inference default only; the admission
+  > default it also describes is unaffected. See
+  > `design/work/url-v3/decisions/P2.4-*` §D-C.
 - General acceptance is selected by the `rfc-syntax`, `whatwg`, and `browser`
   profiles, or directly through `scheme_acceptance = "general"` together with an
   explicit standard; there is no separate `general` profile in the candidate set.
@@ -397,7 +411,11 @@ default posture for byte-compat, *and* the `browser` profile is its "honest
 home." To avoid maintaining two prepend implementations that can drift, Layer 6
 must express the default's prepend and the `browser` profile's fix-up through the
 **same** scheme-inference seam (`scheme_policy=infer`), not a parallel code path.
-See the fixer PRD.
+See the fixer PRD. **(v3.0 amendment:** at the 3.0 major boundary the *default*
+posture no longer prepends — it is `strict`/`require` — so http-prepend survives
+only through the `browser`/`infer`/`compatibility` selection of that same one
+seam. The shared-seam rule is unchanged; `infer` is simply no longer the default.
+See P2.1 / P2.4.**)**
 
 ### D5 — parse success ≠ validity; SELECTED diagnostics, not a conformance oracle
 

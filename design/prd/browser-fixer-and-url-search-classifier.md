@@ -4,6 +4,13 @@
   fixer (`fixup_posture`) and `profile="browser"` — shipped in rurl 2.6.0. Layer 7
   (the URL-vs-search classifier specified below) remains a pending follow-up
   (RURL-zdwfkaxd).
+- **v3.0 note (epic RURL-dorofzmb, P2.1 / P2.4):** the *global* default posture
+  flips to **`strict`** at the 3.0 major boundary (scheme-less input rejects by
+  default). **The browser fixer specified here is unchanged** — it still infers a
+  fallback `http` via the shared `scheme_policy=infer` seam; http-prepend is a
+  `browser`/`repair`/`infer` affordance, not the v3 default. Where this PRD says
+  the seam is "shared with the default posture," read "shared with the `infer`
+  posture (the 2.x default)." See the ADR 0010 / ADR 0012 D4 v3.0 amendments.
 - **Date:** 2026-07-10
 - **Spun out of:** ADR 0012 (general URL parser) — this was Layer 6's fixer spec,
   Layer 7 (URL-vs-search classifier), and Appendix A.3 (Chromium omnibox
@@ -47,7 +54,12 @@ A non-classifying fixer, run before the WHATWG parser under the `browser` bundle
   **authority table**.
 - **Fallback `http`** (NOT https — see Part 3) only on the existing
   scheme-inference path (`scheme_policy=infer`), so http-prepend lives in **one**
-  place shared with the default posture (ADR 0012 D4).
+  place shared with the `infer` posture (ADR 0012 D4). *(v3.0: `infer` was the
+  2.x default; at the 3.0 major boundary the global default is `strict` and
+  scheme-less input rejects by default. The browser fixer itself is unchanged and
+  still infers via this one seam — prepend is a `browser`/`repair`/`infer`
+  affordance, not the v3 default. See the ADR 0010 / ADR 0012 D4 v3.0
+  amendments and decisions/P2.1.)*
 
 ### The two tables (acceptance criteria — enumerated, ordered, exampled)
 
