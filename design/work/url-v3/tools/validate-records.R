@@ -496,9 +496,54 @@ if (!is.null(con_reg)) {
 }
 con_checks <- (pass + length(fail)) - con_checks_before
 
+## --- Gate-acceptance records: input-hash integrity (G2.A onward) --------------
+## Each design/work/url-v3/gates/*.md records the exact input hashes captured at
+## the gate's acceptance commit. The envelope state must be ACCEPTED, and every
+## '## Inputs' hash is recomputed here; a mismatch fails the record, which
+## reopens the gate acceptance and (via ci-gate) the control plane. This is the
+## machine half of the §7 G2 reopening rule. (RURL-uksahklp; §6 lifecycle.)
+gates_dir <- file.path(root, "gates")
+gate_n <- 0L
+gate_checks_before <- pass + length(fail)
+if (dir.exists(gates_dir)) {
+  for (gf in list.files(gates_dir, pattern = "\\.md$", full.names = TRUE)) {
+    gln <- readLines(gf, warn = FALSE)
+    st <- grep("^\\|\\s*state\\s*\\|", gln, value = TRUE)
+    check(length(st) == 1 && grepl("\\|\\s*ACCEPTED\\s*\\|", st[[1]]),
+          sprintf("gates: %s envelope state must be ACCEPTED", basename(gf)))
+    h <- which(grepl("^##\\s+Inputs\\s*$", gln))
+    check(length(h) == 1,
+          sprintf("gates: %s must have exactly one '## Inputs' section", basename(gf)))
+    if (length(h) == 1) {
+      nxt <- which(grepl("^##\\s", gln) & seq_along(gln) > h)
+      end <- if (length(nxt)) min(nxt) - 1L else length(gln)
+      tbl <- gln[(h + 1):end]
+      tbl <- tbl[grepl("^\\|", tbl) & !grepl("^\\|[-:[:space:]|]*$", tbl)]
+      rows <- if (length(tbl) >= 1) tbl[-1] else character(0)  # drop | path | sha256 | header
+      check(length(rows) >= 1, sprintf("gates: %s '## Inputs' has no rows", basename(gf)))
+      for (r in rows) {
+        cells <- trimws(strsplit(sub("^\\|", "", sub("\\|\\s*$", "", r)), "\\|")[[1]])
+        gate_n <- gate_n + 1L
+        p <- cells[[1]]
+        recorded <- if (length(cells) >= 2) cells[[2]] else ""
+        if (!file.exists(p)) {
+          check(FALSE, sprintf("gates: %s input missing: %s", basename(gf), p))
+        } else {
+          got <- sha256_of(p)
+          check(identical(got, recorded),
+                sprintf("gates: %s input hash drift for %s (recorded %s, got %s) — gate acceptance reopened",
+                        basename(gf), p, substr(recorded, 1, 12), substr(got, 1, 12)))
+        }
+      }
+    }
+  }
+}
+gate_checks <- (pass + length(fail)) - gate_checks_before
+
 cat("validate-records.R\n")
 cat(sprintf("public-surface-inventory: %d rows, %d added checks\n", psi_n, psi_checks))
 cat(sprintf("contradictions: %d rows, %d added checks\n", con_n, con_checks))
+cat(sprintf("gate-acceptance inputs: %d checked, %d added checks\n", gate_n, gate_checks))
 cat(sprintf("registers: source-claims=%d rows, findings=%d rows\n",
             if (!is.null(sc_reg)) length(sc_reg$rows) else 0L,
             if (!is.null(fd_reg)) length(fd_reg$rows) else 0L))
