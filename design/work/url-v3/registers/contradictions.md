@@ -2,8 +2,11 @@
 
 <!-- variant: contradiction (schema/record-schemas.yaml). Row-based register.
      G2 (RURL-oknltrux). Validated by tools/validate-records.R (contradictions
-     section). SCAFFOLD only: records the 12 §5 contradictions at DISCOVERED;
-     the typed disposition is a later product-owner decision, not made here. -->
+     section). FINALIZED: every §5 contradiction now carries an owner disposition
+     (§7 G2 exit), projected from the accepted P-tier — disposition_state
+     ACCEPTED, a typed disposition_type, and an owner_decision_ref naming the
+     accepted decision. The register envelope stays lifecycle_state PROPOSED until
+     the cp-snapshot-2 seal (the artifact's own manifest acceptance). -->
 
 
 ## Envelope
@@ -17,47 +20,53 @@
 | single_writer | repository owner (sole); P0.3 §5 |
 | lifecycle_state | PROPOSED |
 | dependencies | protocol-review-reconciliation.md §4,§5,§8; findings.md |
-| completion_rule | the 12-row C-01..C-12 bijection (no missing/extra/dup); every row disposition_state DISCOVERED + disposition_type pending; every row carries a bound_owner_tier and a related_rcon within RCON-01..RCON-10; validate-records.R passes |
+| completion_rule | the 12-row C-01..C-12 bijection (no missing/extra/dup); every row disposition_state ACCEPTED with a typed disposition_type in {ACCEPTED, REJECTED, SUPERSEDED, COMPATIBILITY-ONLY}, a non-placeholder owner_decision_ref, and filled affected_claims/invalidated_artifacts; every row carries a bound_owner_tier and a related_rcon within RCON-01..RCON-10; validate-records.R passes |
 | content_hash | derived from reconciliation §5 (C-01..C-12 verbatim) + §4/§8; RCON binding cross-checked against findings.md |
 | approval_evidence | pending — pins at v3/cp-snapshot-2 (NOT the sealed cp-snapshot-1 manifest) |
 | validation_command | Rscript design/work/url-v3/tools/validate-records.R |
 
 ## Purpose
 
-The §6 contradiction-register scaffold. It transfers the twelve contradictions
-from reconciliation §5 verbatim (their text and their *required* disposition)
-into typed rows, binds each to the owner-decision P-tier(s) that will dispose it
-(§8) and to the consolidated finding(s) it stems from (RCON-01..RCON-10, §4),
-and records every row at `disposition_state = DISCOVERED` with
-`disposition_type = pending`.
+The §6 contradiction register. It transfers the twelve contradictions from
+reconciliation §5 verbatim (their text and their *required* disposition) into
+typed rows, binds each to the owner-decision P-tier(s) that dispose it (§8) and
+to the consolidated finding(s) it stems from (RCON-01..RCON-10, §4).
 
-This register **records** the contradictions; it does not **decide** them. Each
-contradiction's actual typed disposition (`ACCEPTED`, `REJECTED`, `SUPERSEDED`,
-or `COMPATIBILITY-ONLY`) is a product-owner decision made later via a bound
-P-tier decision record, with authority, rationale, affected claims, and
-invalidated artifacts recorded then (reconciliation §5, §6 lifecycle). The
-`required_disposition` column is the §5-mandated *shape* of that later decision,
-transferred verbatim; it is not the decision. `affected_claims` and
-`invalidated_artifacts` are therefore `TBD at disposition`. A contradiction row
-closes only when its owner disposition and verification evidence are recorded
-(gate G2; reconciliation §6, §7 G2).
+G2 finalization (RURL-oknltrux): every row now carries an owner disposition,
+projected from the now-ACCEPTED P-tier. Each contradiction's typed disposition
+(`ACCEPTED`, `REJECTED`, `SUPERSEDED`, or `COMPATIBILITY-ONLY`) was decided by
+its bound P-tier decision record — with authority, rationale, affected claims,
+and invalidated artifacts recorded there (reconciliation §5, §6 lifecycle) —
+and is transcribed here: `disposition_type` = the primary typed decision,
+`disposition_state = ACCEPTED` (the disposition is owner-accepted, independent of
+`disposition_type`, which may itself be `REJECTED`/`SUPERSEDED`),
+`owner_decision_ref` = the accepted decision(s) at their acceptance SHA, and
+`affected_claims`/`invalidated_artifacts` filled from the record's consequences.
+Where a decision carries a compat-only *residue* alongside its primary type
+(C-03, C-07, C-10, C-11), the primary type is recorded here and the residue lives
+in the bound record via `owner_decision_ref`. The `required_disposition` column
+remains the §5-mandated *shape* of the decision, transferred verbatim. C-01 has
+no product P-tier: it is disposed by the owner's G2 process/evidence merge. A
+contradiction row closes when its owner disposition and verification evidence are
+recorded (gate G2; reconciliation §6, §7 G2); the register envelope itself seals
+into the manifest at cp-snapshot-2.
 
 ## Rows
 
-| id | contradiction | required_disposition | related_rcon | bound_owner_tier | disposition_type | disposition_state | authority | affected_claims | invalidated_artifacts | verification_ref |
-|---|---|---|---|---|---|---|---|---|---|---|
-| C-01 | Accepted URL-standard PRD wrappers call the documents accepted/shipped while their internal status fields still say draft. | Correct the durable metadata or record the status field as superseded; classify claims section by section until then. | RCON-01 | process (no P-tier) | pending | DISCOVERED | owner (process/evidence merge) | TBD at disposition | TBD at disposition | G2.A |
-| C-02 | Accepted browser-fixer prose and shipped phase ordering disagree. | Choose and trace one ordering; label the other superseded or compatibility-only. | RCON-03, RCON-04 | P2.1 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P2.1 decision record; G2.A |
-| C-03 | Direct RFC behavior recovers some repeated-`@` inputs while RFC-general rejects them. | Classify recovery as syntax, compatibility, or repair and bind it to an entry point. | RCON-03, RCON-04 | P2.1 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P2.1 decision record; G2.A |
-| C-04 | ADR 0012 requires fragment-preserving standard serialization while shipped clean serializers explicitly omit fragments. | Separate standard serialization from legacy clean output; decide whether the ADR work is unimplemented or superseded. | RCON-03 | P2.2 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P2.2 decision record; G2.A |
-| C-05 | ADR 0011 describes WHATWG encode behavior as lossy for encoded `/`, while shipped code preserves `%2F`. | Decide legacy compatibility and keep that dial out of the standards serializer contract. | RCON-03 | P2.2 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P2.2 decision record; G2.A |
-| C-06 | Accepted identity guidance separates identity from presentation, while shipped `canonical_join()` keys on `clean_url`. | Introduce the independent key contract and an explicit migration plan; do not reinterpret the shipped join as v3-compliant. | RCON-07 | P3.1 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P3.1 decision record; G2.A |
-| C-07 | `parse_status` includes PSL-derived warning states although v3 proposals describe syntax, policy, and optional facts as separate layers. | Decide the v3 status model and preserve or migrate legacy projections explicitly. | RCON-02, RCON-04 | P1.1, P2.3 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P1.1, P2.3 decision records; G2.A |
-| C-08 | Runtime initializes the full-parse cache with a 100,000-entry bound, while `README.Rmd` says it is unbounded by default. | Correct one side and add a documentation-consistency gate. | RCON-09 | P5.1 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P5.1 decision record; G2.A |
-| C-09 | The determinism workflow calls itself evidence collection, never fails on divergence, and runs automatically only for harness changes. | Add a separate failing acceptance comparison and approved-exception mechanism. | RCON-09, RCON-10 | P5.2 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P5.2 decision record; G2.A |
-| C-10 | The protocol prohibits CRAN release until curl-free v3, while accepted tracker history permits a v2.7 release after its determinism gate. | Name the release line governed by the hold and record the owner decision. | RCON-10 | P0.4 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P0.4 decision record; G2.A |
-| C-11 | Accepted general-parser scope allows arbitrary schemes, while older ADR 0004 records a closed web scheme set. | Apply ADR 0012's explicit supersession precisely and retain the old rule only where compatibility/default policy still calls for it. | RCON-05 | P2.4, P4.1 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P2.4, P4.1 decision records; G2.A |
-| C-12 | Historical drafts make strong conformance claims from projections while also acknowledging the missing faithful serialization surface. | Preserve them as historical evidence only; rebuild claims from full state and full-string outputs. | RCON-09, RCON-10 | P2.2, P5.3 | pending | DISCOVERED | owner | TBD at disposition | TBD at disposition | P2.2, P5.3 decision records; G2.A |
+| id | contradiction | required_disposition | related_rcon | bound_owner_tier | disposition_type | disposition_state | authority | owner_decision_ref | affected_claims | invalidated_artifacts | verification_ref |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| C-01 | Accepted URL-standard PRD wrappers call the documents accepted/shipped while their internal status fields still say draft. | Correct the durable metadata or record the status field as superseded; classify claims section by section until then. | RCON-01 | process (no P-tier) | ACCEPTED | ACCEPTED | owner (process/evidence merge) | process/G2 owner merge | accepted/shipped PRD-wrapper status vs stale draft internal status fields; durable metadata corrected by the P0.1 lifecycle-stamping discipline | none — stale draft status corrected in place under RCON-01 supersession-state discipline; no document overturned | G2.A |
+| C-02 | Accepted browser-fixer prose and shipped phase ordering disagree. | Choose and trace one ordering; label the other superseded or compatibility-only. | RCON-03, RCON-04 | P2.1 | SUPERSEDED | ACCEPTED | owner | P2.1@a4d1b45 | shipped browser-fixer phase ordering (complete fixer pass first, then WHATWG preprocessing as parser behavior) | browser-fixer PRD Part 1 interleaved bullet-list ordering (superseded by its own contiguous numbered ordering block) | P2.1 decision record; G2.A |
+| C-03 | Direct RFC behavior recovers some repeated-`@` inputs while RFC-general rejects them. | Classify recovery as syntax, compatibility, or repair and bind it to an entry point. | RCON-03, RCON-04 | P2.1 | ACCEPTED | ACCEPTED | owner | P2.1@a4d1b45 | repeated-@ recovery classified REPAIR; excluded from strict, retained under compatibility/repair postures only (compat-only sub-disposition on the direct-selector path) | none — recovery reclassified across postures; no artifact overturned by the classification | P2.1 decision record; G2.A |
+| C-04 | ADR 0012 requires fragment-preserving standard serialization while shipped clean serializers explicitly omit fragments. | Separate standard serialization from legacy clean output; decide whether the ADR work is unimplemented or superseded. | RCON-03 | P2.2 | ACCEPTED | ACCEPTED | owner | P2.2@8292c7f | standard serialization separated from clean output; ADR 0012 D2 fragment-preserving serializer unimplemented/scheduled, not superseded | none — ADR 0012 D2 applied not overturned; clean serializers legitimately keep omitting fragments | P2.2 decision record; G2.A |
+| C-05 | ADR 0011 describes WHATWG encode behavior as lossy for encoded `/`, while shipped code preserves `%2F`. | Decide legacy compatibility and keep that dial out of the standards serializer contract. | RCON-03 | P2.2 | COMPATIBILITY-ONLY | ACCEPTED | owner | P2.2@8292c7f | shipped WHATWG %2F preservation retained as a clean/display path_encoding dial, kept out of the standard serializer contract | none — legacy %2F compat retained; ADR 0011 presentation-axis classification applied not overturned | P2.2 decision record; G2.A |
+| C-06 | Accepted identity guidance separates identity from presentation, while shipped `canonical_join()` keys on `clean_url`. | Introduce the independent key contract and an explicit migration plan; do not reinterpret the shipped join as v3-compliant. | RCON-07 | P3.1 | COMPATIBILITY-ONLY | ACCEPTED | owner | P3.1@3b89b94 | shipped clean_url-keyed canonical_join() typed legacy with a deprecation window; independent identity key get_url_key() introduced | none — ADR 0011/0012 identity-before-presentation invariant upheld; clean_url-as-join-identity reframed legacy not superseded | P3.1 decision record; G2.A |
+| C-07 | `parse_status` includes PSL-derived warning states although v3 proposals describe syntax, policy, and optional facts as separate layers. | Decide the v3 status model and preserve or migrate legacy projections explicitly. | RCON-02, RCON-04 | P1.1, P2.3 | ACCEPTED | ACCEPTED | owner | P1.1+P2.3@a7e0a59 | v3 three-layer verdict model (syntax/policy/optional PSL-annotation) adopted; legacy parse_status kept byte-identical as a lossy compat projection | none — additive; parse_status byte-identical, ADR 0006 amended to add get_parse_verdicts companion with no parse-frame widening | P1.1, P2.3 decision records; G2.A |
+| C-08 | Runtime initializes the full-parse cache with a 100,000-entry bound, while `README.Rmd` says it is unbounded by default. | Correct one side and add a documentation-consistency gate. | RCON-09 | P5.1 | ACCEPTED | ACCEPTED | owner | P5.1@d254ff1 | runtime full_parse 100,000-entry bounded default is authoritative; a documentation-consistency gate is added to the verify chain | README.Rmd unbounded-by-default sentence — factually wrong, corrected to the 100,000 bounded default | P5.1 decision record; G2.A |
+| C-09 | The determinism workflow calls itself evidence collection, never fails on divergence, and runs automatically only for harness changes. | Add a separate failing acceptance comparison and approved-exception mechanism. | RCON-09, RCON-10 | P5.2 | ACCEPTED | ACCEPTED | owner | P5.2@71b43bb | new failing determinism acceptance gate, zero-unapproved-divergence tolerance, and an approved-exception register; shipped probe stays non-gating | none — additive gate; determinism-probe.yml keeps its evidence-collection non-gating posture | P5.2 decision record; G2.A |
+| C-10 | The protocol prohibits CRAN release until curl-free v3, while accepted tracker history permits a v2.7 release after its determinism gate. | Name the release line governed by the hold and record the owner decision. | RCON-10 | P0.4 | ACCEPTED | ACCEPTED | owner | P0.4@7bc5358 | curl-free-before-CRAN hold scoped to the v3 (3.0.0) line; v2.7 curl-bearing release governed by its own determinism gate on the v2.x line | none — protocol CRAN sentence scoped/annotated not superseded; v2.7 epic release disposition preserved | P0.4 decision record; G2.A |
+| C-11 | Accepted general-parser scope allows arbitrary schemes, while older ADR 0004 records a closed web scheme set. | Apply ADR 0012's explicit supersession precisely and retain the old rule only where compatibility/default policy still calls for it. | RCON-05 | P2.4, P4.1 | SUPERSEDED | ACCEPTED | owner | P2.4+P4.1@b017e87 | ADR 0004 closed web scheme set superseded as a parser cap; retained compat-only as the default web allowlist; general admits any valid scheme token | ADR 0004 closed-scheme standing rule — superseded by ADR 0012 (P2.4 records the already-accepted supersession) | P2.4, P4.1 decision records; G2.A |
+| C-12 | Historical drafts make strong conformance claims from projections while also acknowledging the missing faithful serialization surface. | Preserve them as historical evidence only; rebuild claims from full state and full-string outputs. | RCON-09, RCON-10 | P2.2, P5.3 | COMPATIBILITY-ONLY | ACCEPTED | owner | P2.2+P5.3@8292c7f | historical projection-based conformance claims preserved as evidence and retired as live oracles; v3 claims rebuilt on the FSSS full-string + parse→serialize→parse | none — projection history re-classified (retained) not deleted; ADR 0012 parity-not-oracle stance applied; FSSS is a new surface | P2.2, P5.3 decision records; G2.A |
 
 ## Provenance
 

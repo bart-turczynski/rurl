@@ -400,12 +400,18 @@ if (!is.null(psi_reg)) {
 psi_checks <- (pass + length(fail)) - psi_checks_before
 
 ## --- G2 register: contradictions (§6 artifact 2) -----------------------------
-## Parses the artifact-2 contradiction register and enforces: PROPOSED envelope,
-## the required columns, the 12-row C-01..C-12 bijection (no missing/extra/dup),
-## every row disposition_state == DISCOVERED and disposition_type == pending,
-## related_rcon values all within RCON-01..RCON-10, and a non-empty
-## bound_owner_tier. SCAFFOLD gate: the typed disposition is a later owner
-## decision and is deliberately NOT asserted here. (RURL-oknltrux)
+## Parses the artifact-2 contradiction register and enforces: PROPOSED envelope
+## (the register artifact itself is not sealed into the manifest until
+## cp-snapshot-2), the required columns, the 12-row C-01..C-12 bijection (no
+## missing/extra/dup), related_rcon values all within RCON-01..RCON-10, and a
+## non-empty bound_owner_tier.
+##
+## G2 FINALIZATION (RURL-oknltrux): every contradiction now carries an owner
+## disposition (§7 G2 exit), projected from the accepted P-tier. So each row is
+## asserted DISPOSED, not scaffold: disposition_state == ACCEPTED, a typed
+## disposition_type in {ACCEPTED, REJECTED, SUPERSEDED, COMPATIBILITY-ONLY}
+## (§5 intro), a non-placeholder owner_decision_ref naming the accepted decision,
+## and affected_claims / invalidated_artifacts filled (no "TBD at disposition").
 con_path <- file.path(reg_dir, "contradictions.md")
 con_pat  <- rschemas$record_types$register$variants$contradiction$id_pattern
 con_reg  <- if (file.exists(con_path)) read_rows(con_path) else NULL
@@ -425,8 +431,8 @@ if (!is.null(con_reg)) {
   # required row columns present
   con_cols <- c("id", "contradiction", "required_disposition", "related_rcon",
                 "bound_owner_tier", "disposition_type", "disposition_state",
-                "authority", "affected_claims", "invalidated_artifacts",
-                "verification_ref")
+                "authority", "owner_decision_ref", "affected_claims",
+                "invalidated_artifacts", "verification_ref")
   for (col in con_cols) {
     check(col %in% con_reg$header,
           sprintf("[missing_required_fields] contradictions.md: column '%s'", col))
@@ -434,17 +440,33 @@ if (!is.null(con_reg)) {
 
   con_rows <- con_reg$rows
   con_n <- length(con_rows)
-  # per-row: id pattern, DISCOVERED, pending, related_rcon in range, tier present
+  disp_types <- c("ACCEPTED", "REJECTED", "SUPERSEDED", "COMPATIBILITY-ONLY")
+  # per-row: id pattern, DISPOSED shape, related_rcon in range, tier present
   for (r in con_rows) {
     id <- gv(r, "id")
     check(grepl(con_pat, id),
           sprintf("contradictions.md: id '%s' fails %s", id, con_pat))
-    check(identical(gv(r, "disposition_state"), "DISCOVERED"),
-          sprintf("[unknown_states] contradictions %s: disposition_state '%s' != DISCOVERED",
+    # G2: every contradiction is owner-disposed (§7 G2). The row's
+    # disposition_state is the lifecycle state of the disposition itself
+    # (ACCEPTED = owner-accepted), independent of disposition_type (which may
+    # itself be REJECTED — the claim is rejected, but that rejection is accepted).
+    check(identical(gv(r, "disposition_state"), "ACCEPTED"),
+          sprintf("[unknown_states] contradictions %s: disposition_state '%s' != ACCEPTED (G2 disposition)",
                   id, gv(r, "disposition_state")))
-    check(identical(gv(r, "disposition_type"), "pending"),
-          sprintf("contradictions %s: disposition_type '%s' != pending (owner decides later)",
-                  id, gv(r, "disposition_type")))
+    check(gv(r, "disposition_type") %in% disp_types,
+          sprintf("contradictions %s: disposition_type '%s' not in {%s}",
+                  id, gv(r, "disposition_type"), paste(disp_types, collapse = ", ")))
+    odr <- gv(r, "owner_decision_ref")
+    check(!is.na(odr) && nzchar(odr) &&
+            !grepl("TBD|pending", odr, ignore.case = TRUE),
+          sprintf("contradictions %s: owner_decision_ref must name the accepted decision (got '%s')",
+                  id, odr %||% "<NA>"))
+    for (col in c("affected_claims", "invalidated_artifacts")) {
+      v <- gv(r, col)
+      check(!is.na(v) && nzchar(v) && !grepl("TBD at disposition", v, fixed = TRUE),
+            sprintf("contradictions %s: %s still scaffold placeholder ('%s')",
+                    id, col, v %||% "<NA>"))
+    }
     check(!is.na(gv(r, "bound_owner_tier")) && nzchar(gv(r, "bound_owner_tier")),
           sprintf("contradictions %s: empty bound_owner_tier", id))
     rcons <- regmatches(gv(r, "related_rcon"),
