@@ -49,6 +49,17 @@ scheme-less host-shaped input. Two values:
   (the `add_http` set) is folded into the reject set instead, yielding
   `parse_status = "error"`.
 
+> **v3.0 amendment (P2.1 / P2.4, epic RURL-dorofzmb).** `"infer"`-as-**default**
+> above is the **2.x** rule. At the **3.0 major boundary** the public default
+> flips to **`scheme_policy = "require"`** (the `strict` posture): scheme-less
+> host-shaped input **rejects by default**, and `infer` becomes opt-in (via the
+> `compatibility` posture, the `browser`/`repair` posture, or an explicit
+> `scheme_policy = "infer"`). The "byte-for-byte / hard constraint" framing in
+> the Decision and Consequences is scoped to the **2.x line** — a 3.0 major
+> release is precisely where that constraint is lifted for this axis. The
+> `infer`/`require` mechanism and the three-axis orthogonality are unchanged.
+> See `design/work/url-v3/decisions/P2.1-*`, `P2.4-*`.
+
 **Mechanism.** In `.prepare_urls_for_curl_vec()`, after `add_http` is computed
 and the D1 gate has run, one line under `scheme_policy == "require"` adds the
 `add_http` rows to `rejected`. It is placed *before* the `scheme_less_userinfo`
@@ -78,9 +89,10 @@ keeps `//host` single-governed and the two axes independent — verified: under
 
 ## Consequences
 
-- **Default unchanged.** `"infer"` is byte-for-byte the historical behavior; the
+- **Default unchanged (2.x; flipped to `require` at 3.0 — see the v3.0
+  amendment above).** `"infer"` is byte-for-byte the historical behavior; the
   full pre-existing suite stays green. Backward compatibility (a hard constraint
-  for the CRAN-published package) is preserved.
+  for the CRAN-published package) is preserved on the 2.x line.
 - **Strict users get real control** — the maintainer's original set-protocol
   intent, extended to "reject if absent."
 - **Scheme-inference divergences are now opt-out-able.** With `scheme_policy =
