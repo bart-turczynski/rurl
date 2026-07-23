@@ -12,18 +12,19 @@
 # append-only register registers/snapshots.log by a separate seal PR.
 
 schema_version: "1.0.0"          # semver; the manifest schema version
-# cp-snapshot-2 re-seal in progress (two-phase, P0.2 §3). This PR is the PROPOSED
-# phase-1 sweep; the owner's phase-2 seal (a separate PR, after the tag) flips
-# state -> ACCEPTED, fills accepted_at/accepted_evidence = C2, and appends the
-# n=2 line to registers/snapshots.log. v3/cp-snapshot-1 -> d139675 never moves.
-state: PROPOSED
+# cp-snapshot-2 SEALED (two-phase, P0.2 §3). Phase-1 sweep = C2 (owner-merged,
+# 3f3c17a4ac62bca0ce7334f7e49266c60616a9b2); tag v3/cp-snapshot-2 -> C2. This
+# phase-2 seal (a descendant of C2) flips state -> ACCEPTED, fills accepted_at/
+# accepted_evidence = C2, and appends the n=2 line to registers/snapshots.log.
+# v3/cp-snapshot-1 -> d139675 never moves.
+state: ACCEPTED
 generated_at: "2026-07-23T21:51:02Z"
 
 owner: Bart Turczynski <bartek@turczynski.pl>
 single_writer: repository owner (sole); P0.3 §5
 proposed_by: Claude (agent)
-accepted_at: pending                     # owner seal at v3/cp-snapshot-2 (phase 2)
-accepted_evidence: pending — owner phase-2 seal binds C2 (merge SHA) + tag v3/cp-snapshot-2 + snapshots.log n=2
+accepted_at: "2026-07-23T23:16:57Z"      # owner merge of C2 (phase-1 sweep) at v3/cp-snapshot-2
+accepted_evidence: C2 = 3f3c17a4ac62bca0ce7334f7e49266c60616a9b2 (owner-merged phase-1 sweep); tag v3/cp-snapshot-2 -> C2; registers/snapshots.log n=2 binds tag -> C2
 
 # Baseline vs snapshot are distinct and never conflated (P0.2 §3).
 source_baseline: 89be90b                 # immutable historical SHA the reviews analyzed (S1-S9 frozen)
@@ -203,11 +204,12 @@ registers:
   - id: snapshots.log
     present: true
     path: design/work/url-v3/registers/snapshots.log
-    sha256: e9afe42b9aba35675bd25e197480af2c10534afd4d09943e2df7dd0f37982dab
+    sha256: 1a8c4223686150e81ce406fd8afa54e98f51d17036990c5e27cb49c9d692a5d9
     note: >
       Sealed. Line 1 binds tag v3/cp-snapshot-1 to C1
-      (d139675281078d8bdc38fd40fcae034290fb75f9). Append-only; a later snapshot
-      takes the next integer (P0.2 §3.3).
+      (d139675281078d8bdc38fd40fcae034290fb75f9); line 2 binds tag
+      v3/cp-snapshot-2 to C2 (3f3c17a4ac62bca0ce7334f7e49266c60616a9b2).
+      Append-only; a later snapshot takes the next integer (P0.2 §3.3).
   # --- Registers built by G1.1/G1.2/G2, swept present:true at cp-snapshot-2.
   # Their envelopes carry lifecycle_state PROPOSED; the seal is this present:true
   # hash-pin, not an envelope flip (§6 registers are row-append artifacts).
