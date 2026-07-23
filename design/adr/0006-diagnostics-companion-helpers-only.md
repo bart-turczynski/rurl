@@ -22,6 +22,18 @@ Surface metadata **only** through dedicated companion helpers —
 explicit `url_standard` argument (NULL → `NA`, opt-in). Never widen the parse
 result columns/fields.
 
+> **v3.0 amendment (P2.3, epic RURL-dorofzmb).** A fourth companion helper is
+> authorized: **`get_parse_verdicts()`**, exposing the layered L1 syntax / L2
+> policy / L3 annotation **parse** verdicts (P2.3). The central rule is
+> unchanged — it adds **no** columns/fields to `safe_parse_url()` /
+> `safe_parse_urls()`. One deliberate difference from the three helpers above:
+> `get_parse_verdicts()` is **defined at `url_standard = NULL`** (its L1/L2
+> verdicts describe the parse that actually occurred under the active settings),
+> so it is **not** `NULL → NA`-gated; only its L3 annotation follows the opt-in
+> pattern. "Verdict" here is the **parse** verdict, distinct from the future
+> URL-vs-search **classifier** verdict (browser-fixer PRD Part 2), which reserves
+> its own naming.
+
 ## Consequences
 
 - The parse result shape is stable; adding a new diagnostic never changes it.
