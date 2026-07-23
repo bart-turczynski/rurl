@@ -4,7 +4,7 @@
     "displayId": "RURL-avfqpnfu",
     "title": "P5.2 — Decide determinism tolerance and exception policy for C-09",
     "description": "Approve the determinism acceptance boundary and exception mechanism. This is the G2 owner disposition input; G4 implements the failing comparison and approved-exception check. (§5 C-09; §8 P5; RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "bdyrryzswbrqktgoxozmnfwquatzvogq",
     "dependencies": [
@@ -14,9 +14,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:41.159Z",
-    "updatedAt": "2026-07-22T14:14:41.159Z",
+    "updatedAt": "2026-07-23T17:05:17.275Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "7ebfd969-b9d4-4ee6-a718-7906ccd3c7b1",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P5.2 DRAFTED as PROPOSED — PR opened, NOT merged, awaiting owner batch-ratification. Disposes C-09: (1) a FAILING determinism acceptance gate additive to the non-gating determinism-probe.yml — compares canonical parse-dump projection over cross_os_comparable cells, runs on all parse-perturbing surfaces (R/**, DESCRIPTION, NAMESPACE, tools/determinism/**, dep bumps) + schedule + as pre-graduation gate for curl-free 3.0; DEGRADED cell = failure. (2) Tolerance = byte-exact ZERO unapproved divergence (no fuzzy threshold; frozen 2026-07-20 sweep already achieves single-MD5). (3) Append-only determinism-exceptions register (id/owner/justification/scope/signature/expiry/tracking/state) consumed by the gate; new/uncovered divergence fails. Mirrors P5.3 ledger; cache→P5.1, engine→P0.4. Grounded in S8, §10.",
+        "createdAt": "2026-07-22T22:39:26.112Z"
+      }
+    ]
   },
   {
     "id": "bdyrryzswbrqktgoxozmnfwquatzvogq",
@@ -39,7 +46,7 @@
     "displayId": "RURL-bufpkphu",
     "title": "G0.3 — Record schemas + lifecycle state machine (§6 authority records + transition table)",
     "description": "§6 artifact 2 + lifecycle. Parent task for G0.3a common artifact envelope/validator and G0.3b invalidation/re-open semantics.\n\nDefine tracked schemas for immutable owner decisions, accepted designs, and source-claim, decision, contradiction, and finding registers. Encode all ten states and allowed transitions with actor, timestamp, evidence, and dependency IDs.\n\nImport/validate P0.1 without rewriting substance; enforce append-only accepted decisions, single writers, referential integrity, and non-authoritative tracker state.\n\nDone only when both child validators pass and the schemas can drive later leaf slicing. (§4 RCON-01; §6; §7 G0)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "jidfytjrkkqhptclhgbqeolovfcfhppg",
     "dependencies": [
@@ -50,16 +57,29 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T11:04:01.380Z",
-    "updatedAt": "2026-07-22T14:19:29.179Z",
+    "updatedAt": "2026-07-22T19:29:32.118Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "a6b4b1ff-4df4-46b5-a11b-d8b62c0ba7ff",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Schemas landed in PR #204: schema/lifecycle.yaml (ten-state machine + transitions + propagation), envelope.yaml (universal §6 envelope + rejection classes + artifact 1-11 inventory), record-schemas.yaml (owner-decision/accepted-design/registers), README.md. P0.1-P0.3 import & validate unchanged. Both child validators pass (see G0.3a/G0.3b).",
+        "createdAt": "2026-07-22T19:24:07.142Z"
+      },
+      {
+        "id": "bf45a5e1-a1d5-447f-8fb8-7fe7eb44f556",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Done. PR #204 squash-merged into main (324eb1d). All three control-plane validators pass on main: validate-manifest.R, validate-records.R (105 checks, P0.1-P0.3 unchanged), validate-transitions.R (180 checks, 5 fixtures). Both child validators (G0.3a/G0.3b) green -> completion rule met. Schemas now drive G1-G5 leaf slicing. G0.3 artifacts pinned into cp-snapshot-2 at the next durability checkpoint.",
+        "createdAt": "2026-07-22T19:29:32.116Z"
+      }
+    ]
   },
   {
     "id": "cavmtfftlskkpxlrjmcvnuegrmjsaxbw",
     "displayId": "RURL-cavmtfft",
     "title": "P2.4 — Decide standards and scheme admission boundary for C-11",
     "description": "Decide how ADR 0012 supersedes ADR 0004, including where the older closed scheme set remains compatibility/default policy. This supplies the P2 admission portion of C-11; P4 supplies specializations. (§5 C-11; §8 P2; RCON-05)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
     "dependencies": [
@@ -69,9 +89,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:25.265Z",
-    "updatedAt": "2026-07-22T14:14:25.265Z",
+    "updatedAt": "2026-07-23T17:05:15.720Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "ec81905e-fa36-4ec1-a128-bcfab0b7c63a",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P2.4 DRAFTED as PROPOSED — co-located with P4.1 on the C-11 PR (joint disposition). C-11 admission: ADR 0004 closed set SUPERSEDED by ADR 0012 as a parser cap, retained COMPATIBILITY-ONLY as the default web allowlist (.SUPPORTED_SCHEMES). Lattice ADMIT-WEB/ADMIT-GENERAL; v3 default web/infer/NULL preserved (flip deferred to P2.1/O1); 6-point D-D interface for P4.1. Grounded in ADR 0012/0004/0010, RCON-05, S6, verified code. 5 open questions (incl. stale R/parse.R comment → code-cleanup slice). NOT merged; awaiting owner batch-ratification.",
+        "createdAt": "2026-07-22T22:18:30.110Z"
+      }
+    ]
   },
   {
     "id": "cmtootmskqfwdrvcexigjhznvxmsrexs",
@@ -104,7 +131,7 @@
     "displayId": "RURL-cqbdpmdy",
     "title": "C-05 — Dispose encoded-slash compatibility versus WHATWG serialization",
     "description": "Apply the P2 output decision; classify legacy path-encoding behavior and keep the compatibility dial out of the standards serializer contract. (§5 C-05; §7 G2; RCON-03)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -114,7 +141,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:35.010Z",
-    "updatedAt": "2026-07-22T14:15:35.010Z",
+    "updatedAt": "2026-07-23T21:41:46.499Z",
     "properties": {},
     "comments": []
   },
@@ -142,7 +169,7 @@
     "displayId": "RURL-dmsgpcak",
     "title": "G1.2 — Build §6 artifact 4 public-surface inventory registry",
     "description": "Build artifact 4's inventory phase: every export, argument, behavior dial, default, interaction, vector/error behavior, documentation location, migration surface, and test family receives an inventory disposition.\n\nMissing/inaccessible evidence must be explicit. This issue constructs the registry at G1; a separate G3 issue closes it normatively against artifacts 3 and 5–10. (§6 artifact 4; §7 G1/G3; RCON-05)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "msqhcprboidyvnnjbhuetsxxubpxqlrp",
     "dependencies": [
@@ -151,9 +178,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:17:13.327Z",
-    "updatedAt": "2026-07-22T14:17:13.327Z",
+    "updatedAt": "2026-07-22T20:51:07.329Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "18395517-4f66-4611-83ad-bb32bf7f87a7",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G1.2 done — public-surface inventory register (§6 artifact 4) merged via PR #207 (squash 7b6f09f). 51 DISCOVERED rows: 29-export NAMESPACE bijection + 18 public-output fields + 3 curl-dependency + 1 migration-surface; validate-records.R +746 checks (records now 1635). Register PROPOSED, pins at v3/cp-snapshot-2. Closes G1 inventory phase; G3 closes it normatively.",
+        "createdAt": "2026-07-22T20:51:07.328Z"
+      }
+    ]
   },
   {
     "id": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
@@ -169,7 +203,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T11:02:06.660Z",
-    "updatedAt": "2026-07-22T14:19:59.990Z",
+    "updatedAt": "2026-07-23T14:17:20.595Z",
     "properties": {},
     "comments": [
       {
@@ -177,6 +211,12 @@
         "author": "142225707+bart-turczynski@users.noreply.github.com",
         "content": "Independent roadmap review fixes applied: split P0 and removed C-10 from G0 prerequisites; instantiated P1–P5 and contradiction-specific owner decisions; added C-01–C-12 dispositions with corrected cross-tier wiring; added evidence transfer, universal artifact validation, invalidation/re-open semantics, artifact-4 handoff, semantic cache closure, G2 acceptance, G4 verification-only leaves, and durable G5 review fan-in. Remaining schema-shaped leaf expansion stays deferred until G0.3/P0.3.",
         "createdAt": "2026-07-22T14:19:59.989Z"
+      },
+      {
+        "id": "093d8a2d-fbff-47da-b51c-278d119ec193",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Authoritative design docs governing this epic's product decisions (consult BEFORE re-opening any posture/behavior question):\n\n- design/prd/browser-fixer-and-url-search-classifier.md — the posture model (Accepted, graduated per ADR 0008). Settles: http-prepend = single scheme_policy=infer seam (ADR 0012 D4); 'browser' is the fix-up/repair posture that reaches it (fixer step 4); strict = seam off, scheme-less rejects; credentials preserved by design (line 172).\n- design/adr/0012-general-url-parser-scope.md — general parser scope, scheme admission, D4 one-prepend seam, D6 profiles.\n- design/adr/0010-scheme-policy-acceptance-axis.md — scheme_policy / scheme_acceptance axes.\n- design/work/url-v3/protocol-review-reconciliation.md — the reconciliation authority (RCON, C-01..C-12, gates G0-G5, P0-P5 queue).\n\nOwner directive (2026-07-23): merge the P-tier decision PRs 'in the shape defined in the PRD'; when unsure what to build, look up these documents rather than asking questions the PRD already answers.",
+        "createdAt": "2026-07-23T14:17:20.594Z"
       }
     ]
   },
@@ -185,7 +225,7 @@
     "displayId": "RURL-euufcimp",
     "title": "P5.1 — Decide authoritative cache contract for C-08",
     "description": "Choose the authoritative cache default and semantic-transparency/documentation policy. This is the G2 owner disposition input; G3 closes the semantic contract and G4 implements the documentation-consistency gate. (§5 C-08; §8 P5; RCON-09)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "bdyrryzswbrqktgoxozmnfwquatzvogq",
     "dependencies": [
@@ -195,9 +235,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:37.366Z",
-    "updatedAt": "2026-07-22T14:14:37.366Z",
+    "updatedAt": "2026-07-23T17:05:16.942Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "3a79305c-f9f6-434f-8686-493a68d50834",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P5.1 DRAFTED as PROPOSED — PR opened, NOT merged, awaiting owner batch-ratification. v3 cache contract: 3 caches (full_parse bounded-100k/reset-watermark, puny_encode/decode unbounded-by-design), semantic-transparency invariant (byte-identical results across cold/warm/enabled/disabled/bounded/evicted/scalar-vector-chunked; only time+memory differ) — the invariant P5.3's oracle checks. C-08 = code-authoritative: 100k runtime default is truth (memory-safety; unbounded = OOM/DoS risk; man/help already correct), stale README corrected (deferred to G4-tier impl task), + documentation-consistency gate that fails on runtime-vs-docs divergence → G4. Grounded in S8, §10, R/zzz.R:81.",
+        "createdAt": "2026-07-22T22:32:53.004Z"
+      }
+    ]
   },
   {
     "id": "fmjadknrdawpecmjpataalmeqnobblog",
@@ -229,7 +276,7 @@
     "displayId": "RURL-fsaladcx",
     "title": "P5.3 — Decide oracle and claim policy needed by C-12",
     "description": "Decide oracle authority, snapshot policy, and permissible conformance-claim granularity. This supplies the P5 portion of C-12; P2.2 supplies the output/serialization boundary. (§5 C-12; §8 P5; RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "bdyrryzswbrqktgoxozmnfwquatzvogq",
     "dependencies": [
@@ -239,16 +286,23 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:47.171Z",
-    "updatedAt": "2026-07-22T14:14:47.171Z",
+    "updatedAt": "2026-07-23T17:05:17.603Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "582449f4-3f37-49cd-8a1b-6bc26d2e3867",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P5.3 DRAFTED as PROPOSED — co-located with P2.2 on the C-12 PR (joint disposition; P5.3 depends_on P2.2). Claim policy: conformance asserted only against P2.2's FSSS full-string (+ parse->serialize->parse identity), never the 18-field projection; historical projection claims preserved as evidence, retired as oracles. 5-authority labeled oracle taxonomy (whatwg-wpt/rfc3986-grammar/libcurl-parity/browser-parity/self-metamorphic); parity never certifies conformance; headline = 158/99 labeled count not 100% probe. Positive/negative coverage across 8 G4 families. Defers determinism->P5.2, cache/perf->P5.1, release->P0.4. 5 open questions.",
+        "createdAt": "2026-07-22T21:58:07.218Z"
+      }
+    ]
   },
   {
     "id": "gdskpscfrrwygqfuwzuunduzrzcjxaqq",
     "displayId": "RURL-gdskpscf",
     "title": "P2.1 — Decide fixer/recovery ordering for C-02 and C-03",
     "description": "Decide accepted browser-fixer versus shipped ordering and classify repeated-@ recovery as syntax, compatibility, or repair bound to an entry point. Produce atomic durable decisions for C-02 and C-03. (§5 C-02–C-03; §8 P2; RCON-04)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
     "dependencies": [
@@ -258,9 +312,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:07.845Z",
-    "updatedAt": "2026-07-22T14:14:07.845Z",
+    "updatedAt": "2026-07-23T17:05:14.672Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "bb8586e7-c0e4-4537-b49e-67095154a0f0",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P2.1 DRAFTED as PROPOSED — PR opened, NOT merged, awaiting owner batch-ratification. Disposes C-02 (shipped fixer-before-WHATWG-preprocessing ordering wins, traced to code; PRD bullet-list SUPERSEDED as drafting artifact) + C-03 (repeated-@ = REPAIR; strict rejects agreeing with RFC-general, repair performs, compatibility-only retention). Defines strict/compatibility/repair posture axis + fixed 6-stage pipeline; 'repair off = tested no-op' invariant. 5 open questions (chiefly whether v3 public default flips to strict). Defers verdicts→P2.3, output→P2.2.",
+        "createdAt": "2026-07-22T21:47:08.709Z"
+      }
+    ]
   },
   {
     "id": "hnyqemimjduuwbisudvnvdshvauvvogm",
@@ -283,7 +344,7 @@
     "displayId": "RURL-hvjufcvn",
     "title": "C-11 — Apply ADR 0012 supersession to scheme admission precisely",
     "description": "Jointly apply P2 admission and P4 specialization decisions; preserve ADR 0004 only where compatibility/default policy requires it. (§5 C-11; §7 G2; RCON-05, RCON-08)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -294,7 +355,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:16:03.244Z",
-    "updatedAt": "2026-07-22T14:16:03.244Z",
+    "updatedAt": "2026-07-23T21:41:48.794Z",
     "properties": {},
     "comments": []
   },
@@ -303,7 +364,7 @@
     "displayId": "RURL-hvrqjdae",
     "title": "C-02 — Choose browser-fixer ordering and supersede the other claim",
     "description": "Apply the P2 ordering decision to accepted prose and shipped evidence. Choose and trace one ordering; mark the other superseded or compatibility-only. (§5 C-02; §7 G2; RCON-04)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -313,7 +374,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:23.221Z",
-    "updatedAt": "2026-07-22T14:15:23.221Z",
+    "updatedAt": "2026-07-23T21:41:45.433Z",
     "properties": {},
     "comments": []
   },
@@ -322,7 +383,7 @@
     "displayId": "RURL-ifivvurk",
     "title": "C-01 — Reconcile accepted wrappers with internal draft metadata",
     "description": "Produce a typed disposition correcting durable metadata or marking stale status fields superseded; classify mixed claims assertion-by-assertion until corrected. Record authority, rationale, affected claims, and invalidated artifacts. (§5 C-01; §7 G2; RCON-01, RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -332,7 +393,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:18.916Z",
-    "updatedAt": "2026-07-22T14:15:18.916Z",
+    "updatedAt": "2026-07-23T21:41:45.059Z",
     "properties": {},
     "comments": []
   },
@@ -341,7 +402,7 @@
     "displayId": "RURL-iwahdugj",
     "title": "G0.3a — Common artifact envelope and validator for §6 artifacts 1–11",
     "description": "Define the shared normative envelope required for every §6 artifact: schema/version, tracked location, owner/single writer, lifecycle state, dependencies, completion rule, input/output hashes, approval evidence, and exact validation command.\n\nImplement validation for duplicate IDs, broken references, unknown states, missing owner/approval/completion fields, and manifest hash drift.\n\nDone: artifacts 1–11 can be mechanically rejected when the universal §6 contract is incomplete. (§6; RCON-01–RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "bufpkphudjuhjhcaknzerotvjovuqlmd",
     "dependencies": [
@@ -352,16 +413,23 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:17:01.042Z",
-    "updatedAt": "2026-07-22T14:17:01.042Z",
+    "updatedAt": "2026-07-22T19:29:30.783Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "130e92ef-3d16-4b0e-8b51-dc2e24fe623b",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "tools/validate-records.R in PR #204: enforces duplicate_ids, broken_references, unknown_states, missing_required_fields, manifest_hash_drift. 105 checks pass on P0.1-P0.3; negative-tested each class.",
+        "createdAt": "2026-07-22T19:24:07.506Z"
+      }
+    ]
   },
   {
     "id": "jalwcgzkimgwvurlngldqtogotqoumkz",
     "displayId": "RURL-jalwcgzk",
     "title": "G1.1 — Transfer S1–S9 evidence with bidirectional coverage validation",
     "description": "Transfer—not summarize from memory—the detailed S1–S9 findings, owner questions, fixture families, matrix skeletons, and implementation paths into durable records.\n\nEach transfer records report identity/hash, stable finding ID and locator, target DEC/CON/REQ/FIX/matrix record, disposition state, and §10 canonical path correction where applicable.\n\nGenerate forward and inverse checks against §9 so every frozen finding is represented exactly once in the inverse grouping while allowing documented multi-RCON links. (§9–§10; RCON-01, RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "msqhcprboidyvnnjbhuetsxxubpxqlrp",
     "dependencies": [
@@ -370,16 +438,29 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:17:09.412Z",
-    "updatedAt": "2026-07-22T14:17:09.412Z",
+    "updatedAt": "2026-07-22T20:06:37.782Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "ca341b1f-db3c-4fd0-a3bd-89e870fb8db9",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G1.1 registers authored + validated. Transferred all 103 severity-ranked S1–S9 findings verbatim into design/work/url-v3/registers/source-claims.md (one row per frozen finding, report identity+hash, in-report locator, reconciliation classification, target RCON(s), DISCOVERED state, §10 path-correction on S4/S6 rows) and the 10 consolidated RCON findings into findings.md (§4 Sources as the forward map). Extended tools/validate-records.R to parse both Markdown registers and enforce §9 bidirectional coverage: it re-parses reconciliation §9 (inverse) + §4 (forward), self-checks §4⇔§9, and asserts source-claims target_ref == §9 inverse and findings sources expand == §9 forward, with a 103-row bijection completeness check. 888 checks pass; negative-tested (target_ref corruption, dropped row, forward-map corruption all fail). Sealed cp-snapshot-1 manifest left untouched; registers pin at future cp-snapshot-2.",
+        "createdAt": "2026-07-22T19:58:27.493Z"
+      },
+      {
+        "id": "2b5df557-acb3-4622-8fa7-df0b390c21f7",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Merged to main via PR #206 (squash 24b4265). All three control-plane validators pass post-merge (validate-records 888, validate-manifest 72, validate-transitions 180). Branch deleted. Remaining in G1: G1.2 (RURL-dmsgpcak) public-surface inventory registry.",
+        "createdAt": "2026-07-22T20:06:37.781Z"
+      }
+    ]
   },
   {
     "id": "jcigtsdxlsnhvsvncyamqduvpzceykdt",
     "displayId": "RURL-jcigtsdx",
     "title": "C-08 — Dispose cache runtime/documentation contradiction",
     "description": "At G2, choose the authoritative behavior and record the required correction. Do not wait for G4: G3 closes the cache semantics and G4 only implements/verifies the documentation-consistency gate. (§5 C-08; §7 G2–G4; RCON-09)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -389,7 +470,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:50.065Z",
-    "updatedAt": "2026-07-22T14:15:50.065Z",
+    "updatedAt": "2026-07-23T21:41:47.711Z",
     "properties": {},
     "comments": []
   },
@@ -398,7 +479,7 @@
     "displayId": "RURL-jidfytjr",
     "title": "G0 — Durable control plane & restore (RCON-01)",
     "description": "§7 G0 + RCON-01 + §6 artifacts 1–2. This is a gate container; its process prerequisites are P0.1–P0.3 only. P0.4/C-10 does not block durability.\n\nExit:\n- protocol, manifest, registers, and required review inputs are tracked;\n- fresh-clone restore proves the declared source baseline and control-plane snapshot are recoverable without local memory;\n- one writer owns each mutable artifact and concurrent inputs are frozen;\n- tracker state is non-normative and points to validated tracked records.\n\nG0.4 is the fan-in restore drill and depends on G0.1–G0.3. (§4 RCON-01; §6; §7 G0)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
     "dependencies": [
@@ -409,16 +490,23 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T11:03:59.955Z",
-    "updatedAt": "2026-07-22T14:12:50.453Z",
+    "updatedAt": "2026-07-22T19:37:04.572Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "26c77143-9ef5-4f1f-907c-f99ae250185f",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G0 durability gate CLOSED. All leaves done: G0.1 (evidence graduated #201), G0.2 (manifest + sealed cp-snapshot-1 #202/#203), G0.3/a/b (record schemas + lifecycle machine + two validators #204), G0.4 (restore drill #205). Objective fan-in signal = tools/restore-drill.sh passing from a genuine fresh clone (durable evidence in restore-drill.md). Three validators (manifest/records/transitions) all green. Per P0.1 §5 this tracker status is a pointer; the durable G0 evidence is the tracked control plane under design/work/url-v3/ + the passing drill. G1 (RURL-msqhcprb) now unblocked; G0.3 schemas drive its leaf slicing.",
+        "createdAt": "2026-07-22T19:37:04.571Z"
+      }
+    ]
   },
   {
     "id": "jjzmxvkwjhvvrohawwsbzilvdgcblcga",
     "displayId": "RURL-jjzmxvkw",
     "title": "P3.1 — Decide v3 identity and canonical_join migration for C-06",
     "description": "Decide the independent comparison-key boundary and migration of shipped canonical_join from clean_url identity. Produce an accepted durable owner record with affected claims and migration obligations. (§5 C-06; §8 P3; RCON-07)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oylalsrzlyuiyxcgzrimhhxluwayupsy",
     "dependencies": [
@@ -428,9 +516,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:29.306Z",
-    "updatedAt": "2026-07-22T14:14:29.306Z",
+    "updatedAt": "2026-07-23T17:05:16.062Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "3737ee1c-84be-49ac-a610-cf45b89d6991",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P3.1 DRAFTED as PROPOSED — PR opened, NOT merged, awaiting owner batch-ratification. Disposes C-06 (RCON-07): independent identity/comparison-key contract via new exported get_url_key() derived from canonical identity state (post-standard, pre-clean/display), never clean_url; classed/versioned/injectively-framed; cleaner/display non-interference invariant (key byte-identical under any presentation change); versioned url_key_policy + scheme/port truth tables + collision/framing + NA-key rows + 6 identity-keyed joins. C-06 = MIGRATE (shipped canonical_join clean_url keying = LEGACY/COMPATIBILITY-ONLY, NOT v3-compliant, explicit versioned migration + dual-key audit). Grounded in S5, ADR 0011. 8 open questions. Cites P2.2 by ID only.",
+        "createdAt": "2026-07-22T22:26:26.828Z"
+      }
+    ]
   },
   {
     "id": "jpgzrwsphmdhceiznqjyzqddotqmaxbk",
@@ -455,7 +550,7 @@
     "displayId": "RURL-jptimbiy",
     "title": "P2.3 — Decide validation verdicts and legacy status migration for C-07",
     "description": "Decide validation verdict/fatality/annotation boundaries and migration of legacy parse_status. This supplies the P2 portion of C-07 and must agree with P1.1. Produce an accepted durable owner record. (§5 C-07; §8 P2; RCON-04)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
     "dependencies": [
@@ -465,9 +560,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:20.717Z",
-    "updatedAt": "2026-07-22T14:14:20.717Z",
+    "updatedAt": "2026-07-23T17:05:15.373Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "ed845a5c-0003-446d-90a3-6a728a24af76",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P2.3 DRAFTED as PROPOSED — co-located with P1.1 on PR #210 (joint C-07 disposition; P2.3 depends_on P1.1). NOT merged; awaiting owner batch-ratification. Proposes: 8 shipped parse_status values mapped to L1 syntax/L2 policy/L3 PSL-annotation with fatality (shipped error = L1-fail OR L2-reject); S7-F3 typed annotation states via ADR 0006 companions; 9-row error-over-warning π collapse table reproducing .derive_parse_status_vec() byte-identically (parse_status stays byte-identical) + additive get_url_verdicts(); no hard-deprecation in 3.0. 5 open questions. Consumes P1.1 model, adds semantics+migration only.",
+        "createdAt": "2026-07-22T21:39:54.303Z"
+      }
+    ]
   },
   {
     "id": "lqdxihdhtdvuvmfmrcsucgbtxuadqfwl",
@@ -492,7 +594,7 @@
     "displayId": "RURL-lxksxtdi",
     "title": "C-12 — Retire projection-based conformance claims and define rebuild boundary",
     "description": "Jointly apply P2 output and P5 oracle decisions. Preserve historical projections as evidence only and define the full-state/full-string basis for rebuilt claims. (§5 C-12; §7 G2; RCON-03, RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -503,7 +605,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:16:07.699Z",
-    "updatedAt": "2026-07-22T14:16:07.699Z",
+    "updatedAt": "2026-07-23T21:41:49.154Z",
     "properties": {},
     "comments": []
   },
@@ -512,7 +614,7 @@
     "displayId": "RURL-maeurghb",
     "title": "C-04 — Separate standard serialization from legacy clean output",
     "description": "Apply the P2 output decision to ADR 0012 and shipped clean serializers; decide unimplemented versus superseded intent and preserve fragment policy explicitly. (§5 C-04; §7 G2; RCON-03)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -522,7 +624,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:31.338Z",
-    "updatedAt": "2026-07-22T14:15:31.338Z",
+    "updatedAt": "2026-07-23T21:41:46.137Z",
     "properties": {},
     "comments": []
   },
@@ -531,7 +633,7 @@
     "displayId": "RURL-mbzqthmk",
     "title": "C-09 — Dispose evidence-only determinism workflow contradiction",
     "description": "At G2, approve determinism tolerance, failure policy, and exception authority. G4 later implements the failing comparison and exception validation. (§5 C-09; §7 G2–G4; RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -541,7 +643,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:54.636Z",
-    "updatedAt": "2026-07-22T14:15:54.636Z",
+    "updatedAt": "2026-07-23T21:41:48.084Z",
     "properties": {},
     "comments": []
   },
@@ -569,7 +671,7 @@
     "displayId": "RURL-mlcpvscq",
     "title": "P0.4 — CRAN hold scope and exact v2/v3 release boundary (C-10)",
     "description": "What: Dispose C-10 by naming the exact release line governed by the CRAN hold and reconciling it with the accepted v2.7 disposition.\n\nWhy: this is release authority, not a durability prerequisite.\n\nDone: a typed, durable owner decision records authority, rationale, affected claims/releases, and invalidated artifacts. G2 consumes the disposition; G4 verifies the resulting release rule. (§5 C-10; §8 P0; RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oidmvnsdeqkmskagbytsckzuodqwjcnk",
     "dependencies": [
@@ -578,9 +680,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:12:05.937Z",
-    "updatedAt": "2026-07-22T14:12:05.937Z",
+    "updatedAt": "2026-07-23T17:05:13.996Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "cb42dd87-0c65-4755-9eef-0867905f3700",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P0.4 DRAFTED as PROPOSED — PR #209 (branch docs/v3-p0-4-cran-release-boundary), NOT merged, awaiting owner ratification (P0.1 §4). Proposed disposition: reconcile C-10 by release line — CRAN 'no-release-until-curl-free' hold ACCEPTED but scope-narrowed to the v3 (curl-free) line (RCON-09 closure gate); accepted v2.7 disposition preserved (compatibility-only) on the v2.x maintenance line, not superseded. Grounded in S8 Blocker 1 + verified repo state (tags end v2.2.1; DESCRIPTION 2.7.0+curl; determinism-probe non-gating). 3 open questions for owner (O1 cutover version, O2 lift v2.7 now, O3 further v2.x). validate-records+transitions PASS; validate-manifest fails by-design until owner seal adds P0.4.",
+        "createdAt": "2026-07-22T21:17:46.652Z"
+      }
+    ]
   },
   {
     "id": "msqhcprboidyvnnjbhuetsxxubpxqlrp",
@@ -623,7 +732,7 @@
     "displayId": "RURL-nvdlazon",
     "title": "P1.1 — Decide v3 state/status model needed by C-07",
     "description": "Decide the canonical state/public projection and legacy parse_status projection needed to distinguish syntax, policy, and optional facts. This supplies the P1 portion of C-07; P2 owns verdict/fatality behavior. Done only when an accepted durable owner record exists. (§5 C-07; §8 P1; RCON-02, RCON-04)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "hnyqemimjduuwbisudvnvdshvauvvogm",
     "dependencies": [
@@ -633,9 +742,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:03.399Z",
-    "updatedAt": "2026-07-22T14:14:03.399Z",
+    "updatedAt": "2026-07-23T17:05:14.321Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "d22e9f4a-30e6-467c-921b-0d9d8b180cd9",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P1.1 DRAFTED as PROPOSED — PR (branch docs/v3-p1-1-state-status-model), NOT merged, awaiting owner batch-ratification. Proposes v3 canonical superset record + 3-valued presence + public/internal split (18-field frame = compat projection) + 3-layer verdict model (syntax/policy/annotation) with L3-cannot-alter-L1/L2 invariant resolving C-07; legacy parse_status = pure projection. Defers verdict semantics + migration to P2.3 (4-point interface). 4 open questions for owner. Gate: records+transitions PASS; manifest fails by-design.",
+        "createdAt": "2026-07-22T21:29:03.890Z"
+      }
+    ]
   },
   {
     "id": "oidmvnsdeqkmskagbytsckzuodqwjcnk",
@@ -658,7 +774,7 @@
     "displayId": "RURL-oknltrux",
     "title": "G2 — Authority & contradiction closure (§5)",
     "description": "§7 G2 + §5 contradiction register. Starts after G1, but passes only through child G2.A.\n\nC-01–C-12 are explicit disposition tasks with corrected owner routing. C-08/C-09/C-10 are policy-disposed here; G4 only implements/verifies their accepted outcomes. Cross-tier wiring is explicit for C-07, C-11, and C-12.\n\nExit: every known/new contradiction has a typed durable owner disposition; claim roles remain assertion-distinct; invalidation edges validate; no blocking OPEN/CONFLICT/INVALIDATED record remains; G2.A records input hashes and acceptance evidence. (§5; §6 lifecycle; §7 G2; C-01–C-12; RCON-01–RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
     "dependencies": [
@@ -667,9 +783,57 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T11:04:02.705Z",
-    "updatedAt": "2026-07-22T14:20:37.354Z",
+    "updatedAt": "2026-07-23T21:42:12.089Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "893e15b6-53d2-48fe-9130-a197101b5c98",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G2 scaffold landed — contradiction register (§6 artifact 2) merged via PR #208 (squash 67a1f65). 12 rows C-01..C-12 verbatim from §5, bound to owner P-tier(s) + RCON(s), all DISCOVERED/pending; validate-records.R +104 checks (records 1739). Register present:false in sealed manifest, pins at cp-snapshot-2. Typed dispositions + G2.A remain (owner) work via the bound P-tier decisions.",
+        "createdAt": "2026-07-22T21:08:17.744Z"
+      },
+      {
+        "id": "e971531d-c994-49ec-85fd-309b4f57a36d",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G2 disposition finalization DRAFTED — PR #220 (PROPOSED, owner-merge only; register ACCEPTED transition is owner single-writer per P0.3 §5). All 12 rows C-01..C-12 flipped from scaffold to owner disposition, transcribed from the accepted P-tier (owner_decision_ref = P-record @ acceptance SHA). validate-records.R evolved to assert the disposed shape; envelope stays PROPOSED (seals at cp-snapshot-2). Validators 2109/116/180 + ci-gate strict PASS. Two soft spots flagged for owner: C-01 (ACCEPTED vs SUPERSEDED, no P-tier) + C-12 (P5.3 typed value was a recommendation). Awaiting owner merge; then G2.A (RURL-uksahklp).",
+        "createdAt": "2026-07-23T20:31:40.800Z"
+      },
+      {
+        "id": "3829d4d9-99c1-47fa-af0e-d742e7bdcc14",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G2 CLOSED: all 12 contradictions disposed (PR #220, 6369d75) + G2.A gate acceptance (PR #221, a0ffb6f). Validators green on main. Passes through G2.A per exit criteria.",
+        "createdAt": "2026-07-23T21:41:50.228Z"
+      }
+    ]
+  },
+  {
+    "id": "orfazvmhlxrtrwobggvenshksucqdlfd",
+    "displayId": "RURL-orfazvmh",
+    "title": "Phase D: lifecycle-aware control-plane validators in CI",
+    "description": "",
+    "status": "done",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T20:04:50.448Z",
+    "updatedAt": "2026-07-23T20:19:06.994Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "eb3b25fb-3297-4ed2-88a0-bd355ebe3092",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "PR #219 open — lifecycle-aware control-plane gate. New workflow .github/workflows/control-plane.yml runs ci-gate.R (composes the 3 validators unchanged; one fact-keyed tolerance for newly-added PROPOSED decision records; every other failure fatal). Verified both tolerate + fatal paths on a throwaway branch. Awaiting CI.",
+        "createdAt": "2026-07-23T20:10:32.230Z"
+      },
+      {
+        "id": "7cd2ff07-755e-4513-b843-df14afc5d9b5",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "DONE — squash-merged as 025ef88 (PR #219). All CI green incl. the new control-plane gate (46s). Strict on main/seal/process PRs; tolerates only newly-added PROPOSED decision records (fact-keyed subset). Both tolerate + fatal paths verified pre-merge.",
+        "createdAt": "2026-07-23T20:19:06.636Z"
+      }
+    ]
   },
   {
     "id": "orrxacxhhulwhywiyvycfjqpbrslvbvn",
@@ -711,7 +875,7 @@
     "displayId": "RURL-pyhmjqjs",
     "title": "C-06 — Separate comparison identity from clean_url join behavior",
     "description": "Apply the P3 identity decision; record the independent v3 key contract direction and explicit canonical_join migration without reinterpreting shipped behavior as v3 intent. (§5 C-06; §7 G2; RCON-07)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -721,7 +885,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:39.639Z",
-    "updatedAt": "2026-07-22T14:15:39.639Z",
+    "updatedAt": "2026-07-23T21:41:46.854Z",
     "properties": {},
     "comments": []
   },
@@ -730,7 +894,7 @@
     "displayId": "RURL-qcduzpex",
     "title": "G0.2 — Machine-readable manifest (§6 artifact 1)",
     "description": "§6 artifact 1.\n\nCreate the machine-readable manifest in the P0.2 format, including distinct source_baseline_commit and control_plane_snapshot_commit/tag fields; source inventory; hashed tracker export/query/as-of boundary; artifact hashes; tool versions; external revisions; and tested restore instructions.\n\nGive the manifest a schema, owner/single writer, lifecycle, completion rule, and tracked location. Done requires schema validation and referential integrity to owner decisions, findings, contradictions, and supersession records. (§4 RCON-01; §6 artifact 1; §7 G0–G1)",
-    "status": "in-progress",
+    "status": "done",
     "priority": "high",
     "parent": "jidfytjrkkqhptclhgbqeolovfcfhppg",
     "dependencies": [
@@ -740,9 +904,22 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T11:04:00.908Z",
-    "updatedAt": "2026-07-22T18:11:01.000Z",
+    "updatedAt": "2026-07-22T19:12:19.632Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "b3938dea-ce8d-44d3-8c32-d2166195d69f",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Manifest drafted and validated. PR #202 (C1 candidate, manifest state PROPOSED — not self-merged; manifest is owner-single-writer per P0.3 §5). Added manifest.yaml (P0.2 §3 format), evidence/tracker-snapshot.json (P0.3 §2 exporter, 57 issues = frozen count), tools/export-tracker-snapshot.sh, tools/validate-manifest.R. Validator: 72 checks pass, negative-tested. Seal ceremony (tag v3/cp-snapshot-1 + snapshots.log binding + PROPOSED->ACCEPTED flip) deferred to a follow-up seal PR after C1 lands, per the P0.2 §3 two-phase seal.",
+        "createdAt": "2026-07-22T18:18:28.977Z"
+      },
+      {
+        "id": "8682e6e3-785b-4f32-b135-ac73ca3a88ae",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Done. Sealed end-to-end. C1 = d139675 (PR #202); annotated tag v3/cp-snapshot-1 -> C1; seal PR #203 (f12cb3d) bound registers/snapshots.log line 1 and flipped manifest PROPOSED->ACCEPTED (accepted_evidence=C1). Proved durability with a genuine fresh-clone restore drill: tag<->log binding = C1, 11 sources shasum -c OK, validate-manifest.R 72 checks PASS, baseline 89be90b distinct from snapshot. All gating CI green on both PRs.",
+        "createdAt": "2026-07-22T19:12:19.630Z"
+      }
+    ]
   },
   {
     "id": "rplmmeciswystldursivefurivxxcefg",
@@ -790,7 +967,7 @@
     "displayId": "RURL-rwyknzue",
     "title": "C-03 — Classify repeated-@ RFC recovery and bind it to an entry point",
     "description": "Apply the P2 recovery decision: classify behavior as syntax, compatibility, or repair; bind it to an entry point; invalidate contradictory claims. (§5 C-03; §7 G2; RCON-04)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -800,7 +977,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:27.366Z",
-    "updatedAt": "2026-07-22T14:15:27.366Z",
+    "updatedAt": "2026-07-23T21:41:45.793Z",
     "properties": {},
     "comments": []
   },
@@ -847,7 +1024,7 @@
     "displayId": "RURL-smobrguc",
     "title": "P2.2 — Decide serializer/clean-output boundaries for C-04, C-05 and C-12",
     "description": "Decide fragment-preserving standard serialization versus legacy clean output; path-encoding compatibility; and the output boundary needed to rebuild historical conformance claims. C-12 also requires P5 oracle policy. Produce atomic durable decisions. (§5 C-04, C-05, C-12; §8 P2; RCON-03, RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
     "dependencies": [
@@ -857,9 +1034,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:12.392Z",
-    "updatedAt": "2026-07-22T14:14:12.392Z",
+    "updatedAt": "2026-07-23T17:05:15.029Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "42a97131-8353-49eb-b6b9-347e489a6b38",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P2.2 DRAFTED as PROPOSED — co-located with P5.3 on the C-12 PR (joint disposition). Separates output into 4 surfaces (url_source / serialize_url-FSSS / clean_url / format_url). C-04: standard serializer UNIMPLEMENTED not superseded (shipped .serialize_*_vec are the clean surface); C-05: %2F/path_encoding = compatibility-only dial excluded from standards serializer. C-12 serialization-half: FSSS is the conformance substrate. Grounded in RCON-03, S3-F1/F2/F5/F6, ADR 0012 D2 + ADR 0011. 5 open questions. NOT merged; awaiting owner batch-ratification.",
+        "createdAt": "2026-07-22T21:58:06.865Z"
+      }
+    ]
   },
   {
     "id": "tnrybfzdyqixwxdayokgxhpmlmvjrkmg",
@@ -901,7 +1085,7 @@
     "displayId": "RURL-twxgvbas",
     "title": "C-10 — Dispose CRAN hold versus accepted v2.7 release boundary",
     "description": "Consume P0.4 and record the named release line governed by the hold, authority, rationale, affected claims/releases, and invalidations. G4 later verifies the resulting release rule. (§5 C-10; §7 G2–G4; §8 P0; RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -911,7 +1095,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:58.817Z",
-    "updatedAt": "2026-07-22T14:15:58.817Z",
+    "updatedAt": "2026-07-23T21:41:48.445Z",
     "properties": {},
     "comments": []
   },
@@ -920,7 +1104,7 @@
     "displayId": "RURL-uclnnuku",
     "title": "C-07 — Dispose parse_status conflation and legacy projection",
     "description": "Jointly apply P1 state/result and P2 verdict decisions. Separate syntax, policy, and optional facts while recording the legacy projection/migration. (§5 C-07; §7 G2; RCON-02, RCON-04)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -931,7 +1115,7 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:15:45.365Z",
-    "updatedAt": "2026-07-22T14:15:45.365Z",
+    "updatedAt": "2026-07-23T21:41:47.205Z",
     "properties": {},
     "comments": []
   },
@@ -940,7 +1124,7 @@
     "displayId": "RURL-uksahklp",
     "title": "G2.A — Authority and contradiction gate acceptance",
     "description": "Acceptance fan-in for §7 G2.\n\nPass only when C-01–C-12 plus every newly discovered contradiction have typed durable dispositions; accepted/shipped/historical/proposed/superseded claims remain assertion-distinct; dependency edges propagate source changes; and no blocking OPEN/CONFLICT/INVALIDATED record remains.\n\nRecord exact input hashes and validation results. Any later invalidation fails/reopens this acceptance and blocks G3 onward. (§5; §6 lifecycle; §7 G2; C-01–C-12; RCON-01, RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "oknltruxkwmyehdusldeoozricvweity",
     "dependencies": [
@@ -960,9 +1144,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:17:17.354Z",
-    "updatedAt": "2026-07-22T14:17:17.354Z",
+    "updatedAt": "2026-07-23T21:42:11.652Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "8b770cd0-b416-4ef0-ad28-f0b116aa7e29",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G2.A gate-acceptance record merged (a0ffb6f, PR #221). §7 G2 criteria met + input hashes + machine-enforced reopening (validate-records gates section; tamper of contradictions.md fails with 'gate acceptance reopened'). manifest untouched — G2.A registers+seals at cp-snapshot-2.",
+        "createdAt": "2026-07-23T21:41:49.510Z"
+      }
+    ]
   },
   {
     "id": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
@@ -987,7 +1178,7 @@
     "displayId": "RURL-vwtxvhgp",
     "title": "P4.1 — Decide scheme specialization posture needed by C-11",
     "description": "Decide specialization/compatibility treatment for the closed web scheme set versus arbitrary general schemes, including affected FTP-family and scheme-relative posture. This supplies the P4 portion of C-11. (§5 C-11; §8 P4; RCON-05, RCON-08)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "ycowquulrnnzvrkwurgupakvjvemzaqa",
     "dependencies": [
@@ -997,16 +1188,23 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:14:33.386Z",
-    "updatedAt": "2026-07-22T14:14:33.386Z",
+    "updatedAt": "2026-07-23T17:05:16.405Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "c261895d-f5f1-4c46-9fd2-8afe0c3c7f9a",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P4.1 DRAFTED as PROPOSED — co-located with P2.4 on the C-11 PR (joint disposition; P4.1 depends_on P2.4). C-11 specialization: preserve shipped ADR 0012 behavior per-family, url_standard-gated. D-A special/non-special (6 WHATWG-special); D-B ftp special port21 / ftps-sftp non-special no-default-port + scheme-relative separate axis; D-C generic credentials preserved + mailto first-recipient via D7 PSL carve-out (clean_url byte-unchanged, raw-vs-decoded flagged) + get_mailto_recipients only email helper; D-D opaque lexing, scheme violations = companion facts not errors, ws/wss general-only; D-E defers host vocab (RCON-08) to separate P4 host record. 5 shipped-vs-accepted gaps (S6 O3-O7) → cleanup/P4-email slices.",
+        "createdAt": "2026-07-22T22:18:30.615Z"
+      }
+    ]
   },
   {
     "id": "vytzhgzhchbfmbiihdmnxfwbejhyiear",
     "displayId": "RURL-vytzhgzh",
     "title": "G0.3b — Gate invalidation, stale propagation and re-open semantics",
     "description": "Define executable propagation from changed source/owner decisions to INVALIDATED dependent records, replacement DISCOVERED records, and failed/reopened downstream gate acceptance.\n\nTracker done state must not keep a gate accepted when its durable acceptance record is stale. Leaf preparation may overlap, but G0→G5 pass order remains strict.\n\nDone: transition fixtures cover source delta, owner supersession, invalidated review, replacement record, and downstream gate failure/reapproval. (§6 lifecycle; §7 G0–G5; RCON-01, RCON-10)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "bufpkphudjuhjhcaknzerotvjovuqlmd",
     "dependencies": [
@@ -1016,9 +1214,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:17:05.292Z",
-    "updatedAt": "2026-07-22T14:17:05.292Z",
+    "updatedAt": "2026-07-22T19:29:31.211Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "1ded4a50-018d-4212-bf77-3ee694fa6464",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "tools/validate-transitions.R + 5 fixtures in PR #204: legality + per-transition evidence + gate propagation (source delta, owner supersession, invalidated review, replacement record, downstream-gate failure). 180 checks pass; negative-tested illegal transitions + left-accepted gate.",
+        "createdAt": "2026-07-22T19:24:07.887Z"
+      }
+    ]
   },
   {
     "id": "wmoncyuxespzjtopxeohfutogqegvbii",
@@ -1048,6 +1253,35 @@
         "author": "142225707+bart-turczynski@users.noreply.github.com",
         "content": "Done. Merged as PR #201 (squash 78f1a56 into main). All 11 frozen inputs now tracked at design/work/url-v3/evidence/ with byte-for-byte SHA-256 matches to reconciliation §2; SHA256SUMS.txt + README.md added (non-source helpers). CI gating checks (lint, tests, R CMD check, pkgdown, README-sync, NEWS) all passed. Scope kept clean: §10 stale-path corrections deferred to G1 (RURL-jalwcgzk); manifest hash re-pinning deferred to G0.2 (RURL-qcduzpex).",
         "createdAt": "2026-07-22T18:07:36.994Z"
+      }
+    ]
+  },
+  {
+    "id": "xgtjmxepxzesvdlhjcgildzihsaytxjm",
+    "displayId": "RURL-xgtjmxep",
+    "title": "Cross-validate v3 P-tier decision records against the governing PRD/ADRs (drift audit) — blocks P-tier merge",
+    "description": "## Goal\n\nCross-validate every v3 P-tier owner-decision record (and the registers they\ntouch) against the **governing PRD/ADR docs** to catch and fix any place where a\nrecord drifted from — contradicts, silently narrows, or re-opens — a question the\ndesign docs already settled. Blocking: the P-tier PRs (#209–#216, 11 records)\nmust NOT be owner-merged (= irreversible acceptance) until this audit is clean or\nevery divergence is an owner-approved intentional supersession.\n\n## Why\n\nA near-miss surfaced at ratification: the agent reasoned from the decision\nrecords instead of the governing PRD and manufactured a false decision fork\n(`compatibility → infer`) that the PRD's shared-seam model (http-prepend =\nsingle `scheme_policy=infer` seam, ADR 0012 D4; `browser` = the repair posture\nthat reaches it) had already closed. Owner: \"very worried we created things that\ndrift from the PRD.\"\n\n## Oracle docs (authority order)\n\n1. `design/prd/browser-fixer-and-url-search-classifier.md` (posture model;\n   http-prepend seam; strict = reject scheme-less; credentials preserved by\n   design, line 172)\n2. `design/adr/0012-general-url-parser-scope.md` (D1–D7: parser scope, admission,\n   one-prepend seam D4, profiles D6, mailto D7)\n3. `design/adr/0010-scheme-policy-acceptance-axis.md`, `0011`, `0007`, `0004`,\n   `0003`, `0006`\n4. `design/prd/url-standard-selector*.md`, `host-validation-policy.md`,\n   `email-userinfo-diagnostics.md`\n5. `design/work/url-v3/protocol-review-reconciliation.md` (RCON-01..10,\n   C-01..12, gates, P0–P5 queue)\n\n## Scope — records to audit (11)\n\nP0.4 (#209) · P1.1 + P2.3 (#210) · P2.1 (#211) · P2.2 + P5.3 (#212) ·\nP2.4 + P4.1 (#213) · P3.1 (#214) · P5.1 (#215) · P5.2 (#216), plus the register\nrows each cites (contradictions.md C-01..12, public-surface-inventory,\nsource-claims, findings).\n\n## Method\n\nFor each record: extract its normative claims/dispositions; trace each to a\nspecific PRD/ADR/reconciliation line that supports it, OR flag it as one of:\n- **DRIFT-CONTRADICT** — asserts something the docs decide otherwise;\n- **DRIFT-NARROW/WIDEN** — silently changes the scope of a settled rule;\n- **DRIFT-REOPEN** — re-litigates a closed question;\n- **UNGROUNDED** — a normative claim with no doc backing (may be legitimate new\n  policy, but must be named as such, not smuggled in).\n\nPriority focus (highest drift risk): the posture/prepend model in P2.1/P2.4 vs\nthe browser-fixer PRD; the credential/serializer surfaces in P2.2/P4.1 vs PRD\nline 172 + ADR 0012; the admission lattice in P2.4 vs ADR 0012 D3/D4/0004.\n\n## Acceptance\n\nA drift ledger (one row per record: claim → oracle line → verdict). Zero\nunresolved DRIFT-* rows, or each remaining one carries an explicit owner\n\"intentional supersession\" note. Only then may the P-tier PRs be merged.\n",
+    "status": "done",
+    "priority": "high",
+    "parent": "dorofzmbnunqtdnnptdjbmzhvkfnqxlu",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T14:18:58.168Z",
+    "updatedAt": "2026-07-23T15:29:56.311Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "cbb07dd2-2f52-4f5a-9f2f-c7e222b78752",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "DRIFT AUDIT COMPLETE (3 parallel passes, all 11 records traced to PRD/ADR/reconciliation + code-verified). Result: records substantially faithful; ONE structural governance drift + 5 minor fixes. No UNGROUNDED normative claims beyond the ones listed; no code-anchored fact wrong.\n\nMUST-FIX before merge:\n1. [HEADLINE] Strict-default flip contradicts accepted ADRs. P2.1/P2.4 make v3 default strict (scheme-less rejects) but carry supersedes:[] while ADR 0010 fixes 'infer (default), byte-for-byte' and ADR 0012 D4 fixes infer/byte-identity as a 'hard CRAN constraint'. Decision is correct (owner wants strict; 3.0 major lifts the 2.x constraint) — but the ADRs weren't amended, so the doc set is internally inconsistent, and P2.2 leans on the old D4 byte-identity reading. FIX: amend ADR 0010 + ADR 0012 D4 to scope byte-identity to 2.x and record the 3.0 strict flip; reword PRD 'shared with the default posture'; have P2.1/P2.4 declare the supersession; reconcile P2.2 wording.\n\nOWNER DECISION:\n2. New export get_url_verdicts() (P2.3) not authorized by ADR 0006 (enumerates exactly 3 companion helpers). Amend ADR 0006 for a 4th, or fold verdicts into get_url_diagnostics() columns.\n\nWORDING/SCOPE FIXES (agent-doable):\n3. P2.3 'dependency-error -> ok' byte-identity claim overstated (verified: .derive_parse_status_vec maps empty tld/domain to warning-*, not ok). Scope the guarantee.\n4. P5.3 '158/99' headline DRIFT-WIDEN: figure is rfc3986-grammar ACCEPTANCE over the 257-row audited fixture (NEWS.md:271-274), not the FSSS-level conformance headline P5.3 elevates it to (tension with P5.3's own FSSS-only claim policy). Label it to its real scope.\n5. P5.2 mis-citation: 'reconciliation §10 acceptance gate 8' -> gate 8 lives in S8; recon §10 has no numbered gates. Cite S8 gate 8 / recon §7 G4.\n6. Code hygiene (not a record blocker): R/zzz.R:55-56 stale inline comment says caches 'unbounded' (contradicted by 100000L at :77-81); fold inline-comment scan into P5.1's doc-consistency gate.\n\nGROUNDED (no action): P0.4, P1.1, P3.1, P5.1 fully clean; the posture/prepend/admission/credential cluster (highest drift risk) came back clean — http-prepend correctly the single shared scheme_policy=infer seam, browser=repair posture, credential preservation = intended behavior with leakage guarded at output surfaces.",
+        "createdAt": "2026-07-23T14:27:38.492Z"
+      },
+      {
+        "id": "e758feec-c46d-43a7-bcc4-ffa1d70f5764",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "RESOLVED — all fixes applied + independently verified (2026-07-23).\n\nApplied across 7 branches: new PR #217 (atomic ADR 0010 + ADR 0012 D4 + browser-PRD v3.0 amendment trio) + edits on #210/#211/#212/#213/#215/#216. Verification pass: 8/8 PASS, no new contradiction, no cross-file conflict.\n\n- #1 strict-default supersession now RECORDED (not silent): ADR 0010 + ADR 0012 D4 + browser PRD carry v3.0 amendment blocks; P2.1/P2.4 declare the supersession. Doc set no longer says two contradictory things about the v3 default. D4 amendment enumerates ALL non-scheme_policy constraints as unchanged.\n- #2 get_url_verdicts() -> get_parse_verdicts() (disambiguated from the classifier verdict); defined at url_standard=NULL; get_url_diagnostics() shape preserved; ADR 0006 amended to authorize the 4th helper (never-widen preserved).\n- #3 dependency-error->ok re-scoped (v3 policy choice, not byte-identity claim); byte-identity guarantee scoped to inputs whose PSL lookup runs.\n- #4 P5.3 158/99 re-scoped to rfc3986-grammar acceptance over the 257-row fixture (NEWS.md:271-274), not the FSSS conformance headline.\n- #5 P5.2 §10-gate-8 mis-citation fixed. #6 P5.1 gate now scans inline R/** comments (R/zzz.R:55-56).\n\nEvery branch: validate-records + validate-transitions PASS; validate-manifest by-design red (unreferenced PROPOSED files) until the owner seal. Block cleared — P-tier merge batch is now 9 PRs (#209-#216 + #217). Marking done; the merge itself is the owner's pending act (tracked on epic RURL-dorofzmb).",
+        "createdAt": "2026-07-23T15:29:55.936Z"
       }
     ]
   },
@@ -1088,7 +1322,7 @@
     "displayId": "RURL-zyksymya",
     "title": "G0.4 — Fresh-clone restore drill (reconstruct baseline 89be90b without local memory)",
     "description": "§7 G0 restore acceptance; depends on G0.1–G0.3.\n\nFrom a fresh clone with no local _scratch memory:\n- obtain the tracked control-plane snapshot;\n- follow the manifest to reconstruct source baseline 89be90bc…;\n- recover protocol, S1–S9, predecessor, and register state;\n- verify hashes, schema versions, tracker snapshot, references, and single-writer declarations.\n\nThis is the objective G0 fan-in signal and must not run before all three inputs are complete. (§4 RCON-01; §6 artifact 1; §7 G0)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "jidfytjrkkqhptclhgbqeolovfcfhppg",
     "dependencies": [
@@ -1101,8 +1335,15 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T11:04:01.779Z",
-    "updatedAt": "2026-07-22T14:19:33.410Z",
+    "updatedAt": "2026-07-22T19:36:33.139Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "79f80823-c66a-477c-a308-e2dc92abbbcb",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Done. PR #205 squash-merged (117863c). Restore drill (tools/restore-drill.sh) passes end-to-end from a genuine fresh clone: snapshot binding tag<->log = C1 d139675, baseline 89be90b distinct, 11 sources shasum -c OK, tracker 57 issues, all three validators PASS. Captured run recorded in restore-drill.md. This is the objective G0 fan-in signal -> G0 durability gate fully closed (G0.1-G0.4 all done).",
+        "createdAt": "2026-07-22T19:36:33.138Z"
+      }
+    ]
   }
 ]

@@ -12,19 +12,23 @@
 # append-only register registers/snapshots.log by a separate seal PR.
 
 schema_version: "1.0.0"          # semver; the manifest schema version
-state: ACCEPTED                  # sealed against C1 by the two-phase seal (P0.2 §3)
-generated_at: "2026-07-22T18:14:26Z"
+# cp-snapshot-2 re-seal in progress (two-phase, P0.2 §3). This PR is the PROPOSED
+# phase-1 sweep; the owner's phase-2 seal (a separate PR, after the tag) flips
+# state -> ACCEPTED, fills accepted_at/accepted_evidence = C2, and appends the
+# n=2 line to registers/snapshots.log. v3/cp-snapshot-1 -> d139675 never moves.
+state: PROPOSED
+generated_at: "2026-07-23T21:51:02Z"
 
 owner: Bart Turczynski <bartek@turczynski.pl>
 single_writer: repository owner (sole); P0.3 §5
 proposed_by: Claude (agent)
-accepted_at: "2026-07-22T19:05:14Z"
-accepted_evidence: d139675281078d8bdc38fd40fcae034290fb75f9 (PR #202 squash-merge into main = C1; tag v3/cp-snapshot-1)
+accepted_at: pending                     # owner seal at v3/cp-snapshot-2 (phase 2)
+accepted_evidence: pending — owner phase-2 seal binds C2 (merge SHA) + tag v3/cp-snapshot-2 + snapshots.log n=2
 
 # Baseline vs snapshot are distinct and never conflated (P0.2 §3).
-source_baseline: 89be90b                 # immutable historical SHA the reviews analyzed
-control_plane_snapshot: v3/cp-snapshot-1 # annotated tag resolving to the C1 content commit
-repo_commit: v3/cp-snapshot-1            # same tag; the content commit this manifest describes
+source_baseline: 89be90b                 # immutable historical SHA the reviews analyzed (S1-S9 frozen)
+control_plane_snapshot: v3/cp-snapshot-2 # annotated tag resolving to the C2 content commit
+repo_commit: v3/cp-snapshot-2            # same tag; the content commit this manifest describes
 
 # --- Frozen review bundle: 11 verbatim sources graduated by G0.1 (RURL-wmoncyux).
 # SHA-256 values equal reconciliation §2 byte-for-byte.
@@ -78,10 +82,10 @@ sources:
 tracker_snapshot:
   identity: TRACKER
   path: design/work/url-v3/evidence/tracker-snapshot.json
-  sha256: 9d519eaebfa85b599deefe82ed6c84eac1e379f9297e401fbdec0002c42f41f8
-  as_of_commit: v3/cp-snapshot-1
+  sha256: 9da1908d13c06a17c59276b92c6614b5da3395cb2637c81f1026c791af1e539a
+  as_of_commit: v3/cp-snapshot-2
   root: RURL-dorofzmb
-  issue_count: 57                # re-verified by the G0.4 restore drill
+  issue_count: 59                # re-exported at cp-snapshot-2 (owner fork resolution: re-export tracker, S1-S9 frozen)
   exporter: design/work/url-v3/tools/export-tracker-snapshot.sh
   fp_version: "0.24.0"
   completeness: >
@@ -165,6 +169,33 @@ artifacts:
     sha256: 2eb9aa66e1ec38cba8fab639bea7d19c6b88279b4160140d46182a43155311a6
   - path: design/work/url-v3/tools/validate-manifest.R
     sha256: 55cd4dee00204c621c89e7cec67d85ad54c5adc0748111b7d866aaa2d35eb301
+  # --- G2.A gate-acceptance record (RURL-uksahklp), swept in at cp-snapshot-2.
+  - path: design/work/url-v3/gates/G2-acceptance.md
+    sha256: b4d3d8846fc8881d75009ee909403ccce0bcfcf044566b42e1b25a9b8b076911
+  # --- G0.3 record schemas + lifecycle + transition fixtures (were unpinned).
+  - path: design/work/url-v3/schema/envelope.yaml
+    sha256: 446a14771d67174ccb8e0adcccc4231f00563704f17dfc1b7931536d09a7113c
+  - path: design/work/url-v3/schema/record-schemas.yaml
+    sha256: 38338d7f6e6fca29694c312ac03f37aa6754a0879f43e9f283daec224645a518
+  - path: design/work/url-v3/schema/lifecycle.yaml
+    sha256: 26c62c03e1682dfd26863e4abd67001600ecf8e92970dafa7276e28e3a1b7eec
+  - path: design/work/url-v3/schema/fixtures/01-source-delta.yaml
+    sha256: 5087db45746a3c32cd02227ee264fcc382a6b17a5aa818d7662c24091669a992
+  - path: design/work/url-v3/schema/fixtures/02-owner-supersession.yaml
+    sha256: 6820177c2548cf80d2cfaba57a5005985f445cb9918573787ebce6f7c81f30a2
+  - path: design/work/url-v3/schema/fixtures/03-invalidated-review.yaml
+    sha256: 2d50dda0857e3117230e399fbf9899859dd978e4ba100e9579f61469e8b7559a
+  - path: design/work/url-v3/schema/fixtures/04-replacement-record.yaml
+    sha256: 9ecc2001f957954d82dfc1d144d8764f88e27a18e642ca927727e65a61d6b6a2
+  - path: design/work/url-v3/schema/fixtures/05-downstream-gate-failure.yaml
+    sha256: d203cad261686340964ae3d7ad397ba1cffc4050c23540e0f3783a67f1252af0
+  # --- Control-plane validators now load-bearing gates (added since cp-snapshot-1).
+  - path: design/work/url-v3/tools/validate-records.R
+    sha256: 7de043808a9f1e8e48b2d33d030751bf121037d0bb9bf6eae4cdbbe00b83df6b
+  - path: design/work/url-v3/tools/validate-transitions.R
+    sha256: b002b5f5db9c62d34136577c0ddfb7b661b29dc0336339f425f4c52385c7e805
+  - path: design/work/url-v3/tools/ci-gate.R
+    sha256: 02c4f458fbe4fda57f2e2b78e51be574396790513c766fa12b3b656f916a2a31
 
 # --- Registers (§6). Declared, not silently omitted. Absent registers name the
 # gate that creates them; present registers carry a hash the validator checks.
@@ -177,22 +208,29 @@ registers:
       Sealed. Line 1 binds tag v3/cp-snapshot-1 to C1
       (d139675281078d8bdc38fd40fcae034290fb75f9). Append-only; a later snapshot
       takes the next integer (P0.2 §3.3).
+  # --- Registers built by G1.1/G1.2/G2, swept present:true at cp-snapshot-2.
+  # Their envelopes carry lifecycle_state PROPOSED; the seal is this present:true
+  # hash-pin, not an envelope flip (§6 registers are row-append artifacts).
   - id: contradictions
-    present: false
+    present: true
     path: design/work/url-v3/registers/contradictions.md
-    planned_gate: "G2 (C-01..C-12 dispositions)"
+    sha256: 6260a4b36777c482dd78d462fa03bcc0663d0e4f8a0d6029e6c1d36f660f7fe6
+    note: "G2 — C-01..C-12 all owner-disposed (RURL-oknltrux)."
   - id: findings
-    present: false
+    present: true
     path: design/work/url-v3/registers/findings.md
-    planned_gate: "G1.1 evidence transfer (RURL-jalwcgzk)"
+    sha256: dc7d11b297f2e3a0d90db13e0310407fc54a5f2707f68146a08ae6b9713fa3ac
+    note: "G1.1 evidence transfer (RURL-jalwcgzk)."
   - id: source-claims
-    present: false
+    present: true
     path: design/work/url-v3/registers/source-claims.md
-    planned_gate: "G1.1 evidence transfer (RURL-jalwcgzk)"
+    sha256: 2c9d970e7056d7e5f749178ccd45df0e3a977a6f3c273eb4595481f5be6e8106
+    note: "G1.1 evidence transfer (RURL-jalwcgzk)."
   - id: public-surface-inventory
-    present: false
+    present: true
     path: design/work/url-v3/registers/public-surface-inventory.md
-    planned_gate: "G1.2 (§6 artifact 4; RURL-dmsgpcak)"
+    sha256: 4a625e35cf2407822dff7353f3f49c3c80aef64b595956538c74d1a9005ee034
+    note: "G1.2 — §6 artifact 4 (RURL-dmsgpcak)."
 
 # --- Pinned dependency provenance. Remote refs are the reproducibility
 # authority (Remotes pins at baseline 89be90b); installed_local records the
