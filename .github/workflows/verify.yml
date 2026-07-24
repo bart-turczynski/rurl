@@ -151,6 +151,26 @@ jobs:
           stopifnot(identical(Sys.getlocale("LC_CTYPE"), "C"))
           testthat::test_local(reporter = "summary", stop_on_failure = TRUE)
 
+  # C-08 documentation-consistency gate (G4.1). The full_parse cache has one
+  # authoritative default bound (.FULL_PARSE_MAX_DEFAULT in R/zzz.R); every
+  # documented bound (README, cache roxygen -> man/*.Rd, vignettes, inline R/
+  # comments) must agree with it. Deterministic and network-free: it reads the
+  # source-of-truth by sourcing R/zzz.R, so it needs no package build and no
+  # dependencies beyond base R. The --self-test run exercises the gate's own
+  # positive/negative coverage before it scans the tree.
+  cache-docs:
+    runs-on: ubuntu-latest
+    name: Cache docs match runtime default (C-08)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        run: Rscript tools/cache-doc-consistency.R --self-test
+      - name: Scan documentation for full_parse default-bound drift
+        run: Rscript tools/cache-doc-consistency.R
+
   coverage:
     needs: check
     runs-on: ubuntu-latest
