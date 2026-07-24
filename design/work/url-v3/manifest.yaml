@@ -202,7 +202,7 @@ artifacts:
     sha256: d203cad261686340964ae3d7ad397ba1cffc4050c23540e0f3783a67f1252af0
   # --- Control-plane validators now load-bearing gates (added since cp-snapshot-1).
   - path: design/work/url-v3/tools/validate-records.R
-    sha256: ac5a36f8eab348d05ebd144f957279f57d1f5618bf48a6f0b6dd4cd7410ed91f
+    sha256: c8d9d3f77fa82097f15c5ff4d29ff56251fe22906f902e212805b55fcf693c8a
   - path: design/work/url-v3/tools/validate-transitions.R
     sha256: b002b5f5db9c62d34136577c0ddfb7b661b29dc0336339f425f4c52385c7e805
   - path: design/work/url-v3/tools/ci-gate.R
