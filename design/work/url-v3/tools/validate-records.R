@@ -540,7 +540,281 @@ if (dir.exists(gates_dir)) {
 }
 gate_checks <- (pass + length(fail)) - gate_checks_before
 
+## --- G3 contract-family records (§6 artifacts 3–10 + 4 + the G3.X capstone) ----
+## The ten design/work/url-v3/contracts/*.md are a record family parallel to the
+## registers and gate-acceptance records. This section is the validator coverage
+## each contract's envelope promises ("<name> validator section stages with the
+## cp-snapshot-3 seal"). It asserts, WITHOUT inventing product semantics, only what
+## each contract's own envelope + completion_rule already promise:
+##   * common envelope: the 17 required fields non-empty; lifecycle_state PROPOSED
+##     (the seal is a manifest present:true hash-pin, NOT an envelope flip — mirrors
+##     the registers); tracked_location == the file's own path; unique id.
+##   * tamper-evident ## Inputs: each projected source exists and its recorded
+##     sha256 recomputes equal (same mechanism as gates/*.md) — a drifted projection
+##     FAILS the record, exactly like the G2-acceptance reopening rule.
+##   * cell discipline (the completion_rule's "each carry a non-placeholder
+##     owner_decision_ref with status SETTLED or an explicit status OPEN"): every
+##     matrix table carrying an `owner_decision_ref` + `status` column pair has each
+##     row status in {SETTLED, OPEN}, and each SETTLED row cites a non-placeholder
+##     ref; every `## Open cells` section that lists an -O cell states destinations.
+## The canonical-state contract (artifact 3) additionally gets the deep staged
+## section (_scratch/orchestrate/g3-seal-staging/canonical-state-validator-section.md):
+## Rows columns/enums, 18-field completeness, verdict-layer sets, open-cell coverage.
+## Objective per-contract counts (public-surface 29+18 vs NAMESPACE/.spu_result_fields;
+## the capstone's five criterion verdicts; the three caches) are asserted only where
+## the contract states an exact cardinality. (RURL-huneoffx; the cp-snapshot-3 seal.)
+contracts_dir <- file.path(root, "contracts")
+contract_n <- 0L
+contract_checks_before <- pass + length(fail)
+
+# Split a table row into cells, honoring GitHub's backslash-escaped `\|` pipes
+# (a `\|` inside a cell is literal, not a column separator) via a perl lookbehind.
+.tcells  <- function(s) {
+  s <- sub("^\\s*\\|", "", sub("\\|\\s*$", "", s))
+  parts <- strsplit(s, "(?<!\\\\)\\|", perl = TRUE)[[1]]
+  trimws(gsub("\\|", "|", parts, fixed = TRUE))
+}
+.is_trow <- function(s) grepl("^\\s*\\|", s)
+.is_tsep <- function(s) grepl("^\\s*\\|[-:|[:space:]]*$", s) & grepl("-", s)
+# Parse every GitHub-style pipe table in a line vector into list(header, rows).
+parse_pipe_tables <- function(ln) {
+  tabs <- list(); i <- 1L; N <- length(ln)
+  while (i <= N) {
+    if (.is_trow(ln[i]) && i < N && .is_tsep(ln[i + 1L])) {
+      header <- .tcells(ln[i]); j <- i + 2L; rows <- list()
+      while (j <= N && .is_trow(ln[j]) && !.is_tsep(ln[j])) {
+        cs <- .tcells(ln[j])
+        rows[[length(rows) + 1L]] <- stats::setNames(cs, header[seq_along(cs)])
+        j <- j + 1L
+      }
+      tabs[[length(tabs) + 1L]] <- list(header = header, rows = rows); i <- j
+    } else i <- i + 1L
+  }
+  tabs
+}
+# The 2-column ## Envelope table -> named character.
+read_envelope <- function(ln) {
+  h <- which(grepl("^##\\s+Envelope\\s*$", ln)); if (length(h) != 1) return(NULL)
+  nxt <- which(grepl("^##\\s", ln) & seq_along(ln) > h)
+  end <- if (length(nxt)) min(nxt) - 1L else length(ln)
+  tbl <- ln[(h + 1):end]; tbl <- tbl[.is_trow(tbl) & !.is_tsep(tbl)]
+  kv <- list()
+  for (r in tbl[-1]) { cs <- .tcells(r); if (length(cs) >= 2 && nzchar(cs[[1]])) kv[[cs[[1]]]] <- cs[[2]] }
+  kv
+}
+# Lines of a "## <name>" section (exclusive of the next "## ").
+section_lines <- function(ln, name) {
+  h <- which(grepl(sprintf("^##\\s+%s\\s*$", name), ln)); if (length(h) != 1) return(character(0))
+  nxt <- which(grepl("^##\\s", ln) & seq_along(ln) > h)
+  end <- if (length(nxt)) min(nxt) - 1L else length(ln)
+  ln[(h + 1):end]
+}
+.placeholder <- function(x) is.na(x) || !nzchar(trimws(x %||% "")) ||
+  grepl("^(—|-|tbd|pending|n/?a)$", trimws(x), ignore.case = TRUE)
+
+env_required <- c("id", "name", "artifact_number", "schema_version", "tracked_location",
+                  "owner", "single_writer", "lifecycle_state", "dependencies", "bound_decision",
+                  "bound_evidence", "closes_finding", "completion_rule", "content_hash",
+                  "approval_evidence", "validation_command", "validator_note")
+seen_cids <- character(0)
+if (dir.exists(contracts_dir)) {
+  for (cf in sort(list.files(contracts_dir, pattern = "\\.md$", full.names = TRUE))) {
+    bn <- basename(cf); ln <- readLines(cf, warn = FALSE)
+    contract_n <- contract_n + 1L
+
+    ## A. common envelope --------------------------------------------------------
+    env <- read_envelope(ln)
+    check(!is.null(env), sprintf("contracts %s: no parseable ## Envelope", bn))
+    if (!is.null(env)) {
+      for (ef in env_required)
+        check(!is.null(env[[ef]]) && nzchar(env[[ef]]),
+              sprintf("[missing_required_fields] contracts %s: envelope field '%s'", bn, ef))
+      check(identical(env[["lifecycle_state"]], "PROPOSED"),
+            sprintf("[unknown_states] contracts %s: lifecycle_state must be PROPOSED until cp-snapshot-3 (got '%s')",
+                    bn, env[["lifecycle_state"]] %||% "<NA>"))
+      check(identical(env[["tracked_location"]] %||% "", cf),
+            sprintf("contracts %s: tracked_location '%s' != own path '%s'",
+                    bn, env[["tracked_location"]] %||% "<NA>", cf))
+      check(!is.null(env[["single_writer"]]) && grepl("owner", env[["single_writer"]], ignore.case = TRUE),
+            sprintf("contracts %s: single_writer must name the repository owner", bn))
+      cid <- env[["id"]] %||% ""
+      check(nzchar(cid) && !(cid %in% seen_cids),
+            sprintf("[duplicate_ids] contracts %s: id '%s'", bn, cid))
+      seen_cids <- c(seen_cids, cid)
+    }
+    for (sec in c("Inputs", "Scope boundaries", "Open cells"))
+      check(any(grepl(sprintf("^##\\s+%s\\s*$", sec), ln)),
+            sprintf("contracts %s: missing '## %s' section", bn, sec))
+
+    ## B. tamper-evident ## Inputs ----------------------------------------------
+    itbl <- section_lines(ln, "Inputs"); itbl <- itbl[.is_trow(itbl) & !.is_tsep(itbl)]
+    irows <- if (length(itbl) >= 1) itbl[-1] else character(0)
+    seen_paths <- character(0)
+    for (r in irows) {
+      cs <- .tcells(r); p <- cs[[1]]; recorded <- if (length(cs) >= 2) cs[[2]] else ""
+      if (!grepl("^design/work/url-v3/", p)) next
+      check(!(p %in% seen_paths), sprintf("contracts %s: duplicate ## Inputs path %s", bn, p))
+      seen_paths <- c(seen_paths, p)
+      if (!file.exists(p)) {
+        check(FALSE, sprintf("contracts %s: ## Inputs path missing: %s", bn, p))
+      } else {
+        got <- sha256_of(p)
+        check(identical(got, recorded),
+              sprintf("contracts %s: ## Inputs hash drift for %s (recorded %s, got %s) — projection stale",
+                      bn, p, substr(recorded, 1, 12), substr(got, 1, 12)))
+      }
+    }
+    check(length(seen_paths) >= 1, sprintf("contracts %s: ## Inputs has no source rows", bn))
+
+    ## C. cell discipline over owner_decision_ref+status matrix tables -----------
+    disc_tables <- 0L
+    for (tb in parse_pipe_tables(ln)) {
+      if (!("status" %in% tb$header && "owner_decision_ref" %in% tb$header)) next
+      disc_tables <- disc_tables + 1L
+      for (r in tb$rows) {
+        raw <- gv(r, "status")
+        if (is.na(raw) || !nzchar(trimws(raw))) next        # spacer/continuation row
+        st <- sub("\\s.*$", "", trimws(raw))                 # leading token
+        check(st %in% c("SETTLED", "OPEN"),
+              sprintf("contracts %s: status '%s' not in {SETTLED, OPEN}", bn, raw))
+        if (identical(st, "SETTLED"))
+          check(!.placeholder(gv(r, "owner_decision_ref")),
+                sprintf("contracts %s: SETTLED row cites placeholder owner_decision_ref ('%s')",
+                        bn, gv(r, "owner_decision_ref") %||% "<NA>"))
+      }
+    }
+
+    ## D. Open cells name destinations ------------------------------------------
+    obody <- section_lines(ln, "Open cells")
+    if (any(grepl("[A-Z]+-O[0-9]+", obody)))
+      check(any(grepl("Settles at|destination|CLOSED|closed", obody)),
+            sprintf("contracts %s: ## Open cells lists -O cells but names no settlement destination", bn))
+
+    ## E. deep section — canonical-state (artifact 3) ---------------------------
+    if (identical(bn, "canonical-state-contract.md") && !is.null(env)) {
+      check(identical(env[["artifact_number"]], "3"),
+            sprintf("canonical-state: artifact_number must be 3 (got '%s')", env[["artifact_number"]] %||% "<NA>"))
+      check(identical(env[["bound_decision"]], "P1.1"),
+            "canonical-state: bound_decision must be P1.1")
+      check(identical(env[["bound_evidence"]], "S1"),
+            "canonical-state: bound_evidence must be S1")
+      check(grepl("RCON-02", env[["closes_finding"]] %||% ""),
+            "canonical-state: closes_finding must name RCON-02")
+      cr <- read_rows(cf)
+      check(!is.null(cr), "canonical-state: no parseable ## Rows table")
+      if (!is.null(cr)) {
+        want <- c("field", "type", "presence", "provenance", "invariants",
+                  "public_projection", "lifecycle", "owner_decision_ref", "status")
+        check(identical(cr$header, want),
+              sprintf("canonical-state: Rows columns must be exactly [%s] (got [%s])",
+                      paste(want, collapse = ", "), paste(cr$header, collapse = ", ")))
+        fields <- vapply(cr$rows, function(r) gv(r, "field"), "")
+        dupf <- unique(fields[duplicated(fields)])
+        check(length(dupf) == 0, sprintf("canonical-state: duplicate field(s) %s", paste(dupf, collapse = ", ")))
+        presence_ok    <- c("absent", "present-empty", "present-nonempty", "n/a")
+        provenance_ok  <- c("source", "parsed", "derived", "classifier", "PSL", "projection")
+        projection_ok  <- c("public", "internal", "companion")
+        for (r in cr$rows) {
+          fn <- gv(r, "field")
+          for (col in c("type", "presence", "provenance", "invariants", "public_projection", "lifecycle")) {
+            v <- gv(r, col)
+            check(!is.na(v) && nzchar(trimws(v %||% "")),
+                  sprintf("canonical-state %s: empty '%s' (no unowned cells)", fn, col))
+          }
+          # presence: strip a trailing "(...)" note, then each " / "-joined token
+          # must be in the closed set (n/a is a single token with a bare slash).
+          pbase <- sub("\\s*\\(.*\\)\\s*$", "", gv(r, "presence") %||% "")
+          pv <- trimws(strsplit(pbase, "\\s+/\\s+")[[1]])
+          check(length(pv) >= 1 && all(pv %in% presence_ok),
+                sprintf("canonical-state %s: presence '%s' outside {%s}", fn, gv(r, "presence"),
+                        paste(presence_ok, collapse = ", ")))
+          check(sub("\\s.*$", "", gv(r, "provenance") %||% "") %in% provenance_ok,
+                sprintf("canonical-state %s: provenance leading token '%s' outside set", fn, gv(r, "provenance")))
+          check(sub("\\s.*$", "", gv(r, "public_projection") %||% "") %in% projection_ok,
+                sprintf("canonical-state %s: public_projection leading token '%s' outside set", fn, gv(r, "public_projection")))
+          st <- gv(r, "status")
+          check(st %in% c("SETTLED", "OPEN"),
+                sprintf("canonical-state %s: status '%s' not in {SETTLED, OPEN}", fn, st))
+          if (identical(st, "SETTLED"))
+            check(grepl("^P1\\.1@[0-9a-f]{7,40}$", gv(r, "owner_decision_ref") %||% ""),
+                  sprintf("canonical-state %s: SETTLED owner_decision_ref must match P1.1@<sha> (got '%s')",
+                          fn, gv(r, "owner_decision_ref") %||% "<NA>"))
+        }
+        # completeness: the 18 public .spu_result_fields present as public rows
+        pub18 <- c("original_url", "scheme", "host", "port", "path", "query", "fragment",
+                   "user", "password", "domain", "tld", "domain_ascii", "domain_unicode",
+                   "tld_ascii", "tld_unicode", "is_ip_host", "clean_url", "parse_status")
+        for (f in pub18) {
+          idx <- which(fields == f)
+          check(length(idx) == 1 &&
+                  identical(sub("\\s.*$", "", gv(cr$rows[[idx[1]]], "public_projection") %||% ""), "public"),
+                sprintf("canonical-state: public field '%s' missing or not public_projection=public", f))
+        }
+        # structural-kind fields present
+        for (f in c("host_kind", "authority_kind", "query_kind", "fragment_kind"))
+          check(f %in% fields, sprintf("canonical-state: structural field '%s' missing", f))
+        # verdict-layer fields: companion projection + layer3 enum set
+        for (f in c("layer1_syntax_verdict", "layer2_policy_verdict", "layer3_annotation_state")) {
+          idx <- which(fields == f)
+          check(length(idx) == 1 &&
+                  grepl("^companion", gv(cr$rows[[idx[1]]], "public_projection") %||% ""),
+                sprintf("canonical-state: verdict field '%s' missing or not companion", f))
+        }
+        idx3 <- which(fields == "layer3_annotation_state")
+        if (length(idx3) == 1) {
+          ty <- gv(cr$rows[[idx3[1]]], "type") %||% ""
+          for (tok in c("not-requested", "not-applicable", "known", "unknown", "invalid-input", "dependency-error"))
+            check(grepl(tok, ty, fixed = TRUE),
+                  sprintf("canonical-state: layer3_annotation_state type must enumerate '%s'", tok))
+        }
+        # authority_kind stays OPEN (regression guard — P1.1 Q3 deferred it)
+        idxa <- which(fields == "authority_kind")
+        if (length(idxa) == 1)
+          check(identical(gv(cr$rows[[idxa[1]]], "status"), "OPEN"),
+                "canonical-state: authority_kind must remain status OPEN (P1.1 Q3 deferred)")
+        # every OPEN row's field is named in ## Open cells
+        for (r in cr$rows) if (identical(gv(r, "status"), "OPEN")) {
+          fn <- gv(r, "field")
+          check(any(grepl(fn, obody, fixed = TRUE)),
+                sprintf("canonical-state: OPEN field '%s' absent from ## Open cells", fn))
+        }
+      }
+    }
+
+    ## F. objective per-contract counts -----------------------------------------
+    if (identical(bn, "public-surface-closure.md")) {
+      tabs <- parse_pipe_tables(ln)
+      exp_tab <- Filter(function(t) identical(t$header, c("export", "owning contract(s)", "v3 disposition", "status")), tabs)
+      fld_tab <- Filter(function(t) identical(t$header, c("field", "owning contract(s)", "v3 disposition", "status")), tabs)
+      ns <- readLines("NAMESPACE", warn = FALSE)
+      n_exports <- length(grep("^export\\(", ns))
+      check(length(exp_tab) == 1 && length(exp_tab[[1]]$rows) == n_exports,
+            sprintf("public-surface-closure: exported-function table must have %d rows (NAMESPACE exports)", n_exports))
+      check(length(fld_tab) == 1 && length(fld_tab[[1]]$rows) == 18L,
+            "public-surface-closure: public-output-field table must have 18 rows")
+    }
+    if (identical(bn, "cross-artifact-consistency.md")) {
+      crit <- Filter(function(t) "verdict" %in% t$header && "#" %in% t$header, parse_pipe_tables(ln))
+      crit <- Filter(function(t) length(t$rows) == 5L, crit)
+      check(length(crit) >= 1,
+            "cross-artifact-consistency: criterion table with five (i)-(v) rows not found")
+      if (length(crit) >= 1)
+        for (r in crit[[1]]$rows)
+          check(identical(gv(r, "verdict"), "PASS"),
+                sprintf("cross-artifact-consistency: criterion %s verdict must be PASS (got '%s')",
+                        gv(r, "#"), gv(r, "verdict")))
+    }
+    if (identical(bn, "semantic-cache-contract.md")) {
+      inv <- Filter(function(t) "cache" %in% t$header && "eviction" %in% t$header, parse_pipe_tables(ln))
+      check(length(inv) >= 1 && length(inv[[1]]$rows) == 3L,
+            "semantic-cache: cache-inventory table must enumerate exactly 3 caches (P5.1)")
+    }
+  }
+}
+contract_checks <- (pass + length(fail)) - contract_checks_before
+
 cat("validate-records.R\n")
+cat(sprintf("contracts: %d files, %d added checks\n", contract_n, contract_checks))
 cat(sprintf("public-surface-inventory: %d rows, %d added checks\n", psi_n, psi_checks))
 cat(sprintf("contradictions: %d rows, %d added checks\n", con_n, con_checks))
 cat(sprintf("gate-acceptance inputs: %d checked, %d added checks\n", gate_n, gate_checks))
