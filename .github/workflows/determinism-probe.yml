@@ -2,33 +2,26 @@
 #
 # EVIDENCE COLLECTION, NOT A GATE. It delegates the matrix and per-cell body to
 # the reusable _determinism-cells.yml and uploads per-cell artifacts; divergence
-# between cells is the finding, so a divergence must NEVER fail the build. The
-# FAILING acceptance comparison is a separate workflow (determinism-gate.yml,
-# P5.2 / C-09); this probe keeps its non-gating posture unchanged.
+# between cells is the finding, so a divergence must NEVER fail the build. This
+# is the deep RESEARCH sweep (curl-probe + env dumps + the non-comparable
+# `default` cells as evidence).
 #
-# Cost: 17 jobs incl. Windows (2x) and macOS (10x) minute multipliers. On demand
-# (workflow_dispatch) and on harness PRs only -- never on push to main.
+# DISPATCH-ONLY by design. The automatic determinism signal on parse/harness
+# changes -- the FAILING comparison C-09 requires -- is the separate
+# determinism-gate.yml, which reuses the SAME cell matrix. Keeping this probe
+# off the pull_request trigger avoids paying for two 17-cell matrices on a
+# harness PR; run it manually when a deep evidence dump is wanted.
+#
+# Cost: 17 jobs incl. Windows (2x) and macOS (10x) minute multipliers.
 name: Determinism probe
 
 on:
-  # Primary entry point once merged. Before merge, the pull_request trigger is
-  # what makes the first run happen (workflow_dispatch buttons only exist for
-  # workflows already on the default branch).
   workflow_dispatch:
     inputs:
       run_parse_dump:
         description: 'Also run the full rurl stack probe (parse-dump.R)'
         type: boolean
         default: true
-  # Deliberately narrow: only the harness and its workflows. This sweep never
-  # fails on divergence, so as a PR check it yields ZERO automatic gate signal
-  # (a human downloads artifacts). The automatic determinism signal on parse
-  # changes is the separate determinism-gate.yml.
-  pull_request:
-    paths:
-      - 'tools/determinism/**'
-      - '.github/workflows/determinism-probe.yml'
-      - '.github/workflows/_determinism-cells.yml'
 
 permissions: read-all
 
