@@ -2,7 +2,7 @@
 
 <!-- Contract artifact (§6 artifact 4). RCON-05 (public-surface half) closure —
      the explicit G1→G3 handoff for the public-surface inventory. This record does
-     NOT re-author the G1 inventory (register public-surface-inventory.md, 46 rows);
+     NOT re-author the G1 inventory (register public-surface-inventory.md, 51 rows);
      it PROJECTS every inventory row's "unknown — RCON-0X pending owner tier PY"
      migration disposition onto the owning G3 contract that now governs it, marking
      each SETTLED (with the accepted decision the owning contract projects) or OPEN
@@ -34,16 +34,16 @@
 | bound_decision | none new — this record assigns owners; the governing decisions (P1.1/P1.2/P2.1–P2.4/P3.1/P3.2/P4.1/P5.1/P5.3) are projected by the owning contracts and cited per row |
 | bound_evidence | reg-public-surface-inventory (the G1 inventory) |
 | closes_finding | RCON-05 (public-surface registry half; the standard/profile/scheme-matrix half is G3.5) |
-| completion_rule | §7 G3 — the artifact exists and contains no unowned cells: every one of the 46 inventory rows (29 exported functions + 18 public output fields + 3 curl-dependency + 1 migration-surface) carries an owning G3 contract and a v3 disposition that is SETTLED (citing the owning contract's projected accepted decision) or OPEN (citing the owning contract's open-cell ID or a named downstream artifact); the 29+18 bijection matches NAMESPACE/`.spu_result_fields`; terms/status/state fields are asserted to agree with artifacts 3 and 5–10; validate-records.R (public-surface-closure section, added at cp-snapshot-3) passes |
+| completion_rule | §7 G3 — the artifact exists and contains no unowned cells: every one of the 51 inventory rows (29 exported functions + 18 public output fields + 3 curl-dependency + 1 migration-surface) carries an owning G3 contract and a v3 disposition that is SETTLED (citing the owning contract's projected accepted decision) or OPEN (citing the owning contract's open-cell ID or a named downstream artifact); the 29+18 bijection matches NAMESPACE/`.spu_result_fields`; terms/status/state fields are asserted to agree with artifacts 3 and 5–10; validate-records.R (public-surface-closure section, added at cp-snapshot-3) passes |
 | content_hash | per-input sha256 under `## Inputs` (the inventory register), recomputed by validate-records.R at cp-snapshot-3 |
-| approval_evidence | pending — seals at v3/cp-snapshot-3 (NOT an envelope flip); the inventory register's own DISCOVERED→closed transition rides the same seal |
+| approval_evidence | pending — seals at v3/cp-snapshot-3 (NOT an envelope flip); the G1 inventory register is NOT transitioned by the seal — it stays historical PROPOSED/DISCOVERED evidence, present:true-pinned since cp-snapshot-2 |
 | validation_command | Rscript design/work/url-v3/tools/validate-records.R |
 | validator_note | public-surface-closure validator section stages with the cp-snapshot-3 seal |
 
 ## Purpose
 
 The normative closure of the §6 artifact-4 public-surface inventory: it takes the
-G1 inventory (46 DISCOVERED rows) through the G3 handoff by assigning every
+G1 inventory (51 DISCOVERED rows) through the G3 handoff by assigning every
 export, field, and dependency surface to the owning G3 contract that now governs
 its v3 disposition, and marking each SETTLED or OPEN. It settles no new product
 decision — the per-surface v3 semantics live in the owning contracts; this record
@@ -75,7 +75,7 @@ project are already hash-enforced by `validate-manifest.R`.
 | public output fields | 18 | `.spu_result_fields` (`R/utils.R:215-241`) | SETTLED (unchanged; the sole public surface per P1.1@a7e0a59 B3) |
 | curl-dependency surfaces | 3 | DESCRIPTION/NAMESPACE + parse + escape/unescape | SETTLED (inventoried; removal downstream) |
 | migration-surface | 1 | the disposition row this closure discharges | SETTLED (discharged here) |
-| **total** | **46** | | |
+| **total** | **51** | | |
 
 The 20 Stage-A internal fields (`.spu_stage_a_fields`) remain internal, out of the
 public surface (their public/internal split is the artifact-3 canonical-state
@@ -187,8 +187,10 @@ define, and must not be read as redefining:
   the owning contract's (artifacts 3/5/6/7/8/9/10). This record assigns owners and
   cites their SETTLED/OPEN cells; it redefines none of them.
 - **The inventory register content** — `public-surface-inventory.md` (the G1
-  artifact, 46 rows) is referenced and hashed, not edited; its own DISCOVERED →
-  normatively-closed state transition rides the cp-snapshot-3 seal, not this PR.
+  artifact, 51 rows) is referenced and hashed, never edited; it stays historical
+  PROPOSED/DISCOVERED G1 evidence (present:true-pinned at cp-snapshot-2). THIS
+  closure contract — not a register edit — supplies the normative closure; the
+  register's rows are not transitioned by the seal.
 - **Verification contracts (§6 artifact 11)** — curl-removal, the vectorization/
   performance budgets, cache-transparency executable gates, oracle register, and
   introspection budgets (RCON-09/RCON-10) are **outside G3** (G4 / P5.1 / P5.3).

@@ -792,6 +792,25 @@ if (dir.exists(contracts_dir)) {
             sprintf("public-surface-closure: exported-function table must have %d rows (NAMESPACE exports)", n_exports))
       check(length(fld_tab) == 1 && length(fld_tab[[1]]$rows) == 18L,
             "public-surface-closure: public-output-field table must have 18 rows")
+      # bijection: components 29 + 18 + 3 + 1 sum to the register's 51 rows, and
+      # the total row states 51 (guards the 46-vs-51 arithmetic regression).
+      bij <- Filter(function(t) "surface class" %in% t$header && "count" %in% t$header, tabs)
+      if (length(bij) == 1) {
+        labels <- vapply(bij[[1]]$rows, function(r) tolower(gv(r, "surface class") %||% ""), "")
+        nums   <- vapply(bij[[1]]$rows, function(r) {
+          d <- gsub("[^0-9]", "", gv(r, "count") %||% ""); if (nzchar(d)) as.integer(d) else NA_integer_
+        }, integer(1))
+        tot_i  <- grep("total", labels)
+        comp_i <- setdiff(seq_along(labels), tot_i)
+        check(sum(nums[comp_i], na.rm = TRUE) == 51L,
+              sprintf("public-surface-closure: bijection components must sum to 51 (got %d)",
+                      sum(nums[comp_i], na.rm = TRUE)))
+        check(length(tot_i) == 1 && identical(nums[tot_i[1]], 51L),
+              sprintf("public-surface-closure: bijection total must be 51 (got %s)",
+                      if (length(tot_i) == 1) nums[tot_i[1]] else "<none>"))
+      } else {
+        check(FALSE, "public-surface-closure: bijection table (surface class | count) not found")
+      }
     }
     if (identical(bn, "cross-artifact-consistency.md")) {
       crit <- Filter(function(t) "verdict" %in% t$header && "#" %in% t$header, parse_pipe_tables(ln))
