@@ -25,7 +25,7 @@
 | owner | Bart Turczynski <bartek@turczynski.pl> |
 | single_writer | repository owner (sole); P0.3 §5 |
 | state | ACCEPTED |
-| accepted_commit | 150f48d (PR #235 squash-merge into main — G3.X cross-artifact-consistency capstone, the last G3 content leaf; all ten §6 contract artifacts present on main) |
+| accepted_commit | 2694145 (PR #238 squash-merge into main — public-surface count correction 46→51 + register-transition language; the first commit where the asserted G3 state is fully accurate. Content completeness was reached earlier at 150f48d / PR #235, the G3.X capstone — the last G3 content leaf) |
 | accepted_at | 2026-07-24 |
 | depends_on | the ten §6 contracts (canonical-state 3, standard-scheme 5, validation-intervention 6, output 7, cleaning-mutation 8, semantic-cache 10-cache, host-annotation 10-host, key-join 9, public-surface-closure 4, cross-artifact-consistency capstone) — hashed in ## Inputs; P1.1, P1.2, P2.1, P2.2, P2.3, P2.4, P3.1, P3.2, P4.1, P5.1, P5.3 (ACCEPTED, hash-enforced in manifest.decisions[]); reconciliation §6, §7 G3 |
 | manifest_registration | pending — pins present:true at v3/cp-snapshot-3 (NOT the sealed cp-snapshot-2 manifest); the ten contracts and this gate are swept into manifest.artifacts[] at the phase-1 sweep |
@@ -39,7 +39,7 @@ closure" exit list.
 
 | # | §7 G3 criterion | Result | Evidence |
 |---|---|---|---|
-| 1 | The artifact set in §6 exists and contains no unowned cells. | PASS | All ten contract artifacts are present on main (`design/work/url-v3/contracts/*.md`, hashed below). The public-surface closure (G3.4) maps every one of the 46 inventory rows (29 exports + 18 fields + 3 curl + 1 migration-surface) onto an owning G3 contract with a SETTLED/OPEN disposition — no public-surface cell is unowned. `validate-records.R` (contract-family section, PR #236) asserts, per contract, the common envelope, tamper-evident `## Inputs`, and the SETTLED/OPEN cell discipline over every `owner_decision_ref`+`status` matrix (1662 checks). |
+| 1 | The artifact set in §6 exists and contains no unowned cells. | PASS | All ten contract artifacts are present on main (`design/work/url-v3/contracts/*.md`, hashed below). The public-surface closure (G3.4) maps every one of the 51 inventory rows (29 exports + 18 fields + 3 curl + 1 migration-surface) onto an owning G3 contract with a SETTLED/OPEN disposition — no public-surface cell is unowned. `validate-records.R` (contract-family section, PR #236) asserts, per contract, the common envelope, tamper-evident `## Inputs`, and the SETTLED/OPEN cell discipline over every `owner_decision_ref`+`status` matrix (1664 checks). |
 | 2 | Open product cells have an owner decision or are explicitly deferred outside G3. | PASS | The G3.X capstone's open-cell census enumerates 44 live open cells (CACHE 5, SCHEME 4, VAL 4, CLEAN 1, MUT 12, OUT 5, HOST 8, PSC 5), each with a named destination: a sibling cell, the unmade P4 host record (RCON-08), the unmade P3 mutation-slice owner decision, §6 artifact 11 / G4, or a future P5 decision. Nine frozen-text cells that predate a later seal are recorded closed (G3.3 `authority_kind` → P1.2@bb3346e; G3.K KJ-O1..O8 → P3.2@bb3346e). No cell resolves to an unowned owner. |
 | 3 | Cross-artifact terms, defaults, state fields, and status codes agree. | PASS | The G3.X cross-artifact-consistency capstone asserts (i)–(v) each PASS with a re-checkable evidence pointer: (i) the canonical field vocabulary is defined once by artifact 3 and only referenced by G3.6/G3.7/G3.9; (ii) the comparison key is defined once in G3.K; (iii) cache is defined once in G3.9 and only delegated from G3.H/G3.4; (iv) every P-tier default is cited identically — 11 distinct `Pn.n@sha` pairs, zero forks; (v) no cell is unowned. `validate-records.R` asserts the capstone's five (i)–(v) verdicts are all `PASS`. |
 
@@ -78,14 +78,14 @@ and are not duplicated here.
 | design/work/url-v3/contracts/semantic-cache-contract.md | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
 | design/work/url-v3/contracts/host-annotation-contracts.md | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
 | design/work/url-v3/contracts/key-join-contracts.md | c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3 |
-| design/work/url-v3/contracts/public-surface-closure.md | 9460e9898e4862bd601ef91a113e5c4fd895aad58bec38a44a1b0aa29f9fdc86 |
-| design/work/url-v3/contracts/cross-artifact-consistency.md | 293a20fd89e587af358cd196a28cfe8979c943a90e927ef2583877baff6748ec |
+| design/work/url-v3/contracts/public-surface-closure.md | 709e8179746cfe67cb86fe915447ceea15278b5c46c0ac50fe0117b62571e1d0 |
+| design/work/url-v3/contracts/cross-artifact-consistency.md | b3ea16d4e215b273311edd9e7c4ba9609f3b1a1f30501677209207608752553d |
 
 ## Validation results at the acceptance commit
 
 | validator | result |
 |---|---|
-| `validate-records.R` | VALIDATION PASSED (contract-family section: 10 contracts, 1662 checks — envelopes, tamper-evident inputs, SETTLED/OPEN cell discipline, deep canonical-state, per-contract counts; plus registers + the gate-inputs section) |
+| `validate-records.R` | VALIDATION PASSED (contract-family section: 10 contracts, 1664 checks — envelopes, tamper-evident inputs, SETTLED/OPEN cell discipline, deep canonical-state, per-contract counts incl. the 51-row bijection; plus registers + the gate-inputs section) |
 | `validate-manifest.R` | VALIDATION PASSED (11 P-tier decisions ACCEPTED + hash-verified; artifact hashes match) |
 | `validate-transitions.R` | VALIDATION PASSED (180 checks) |
 | `ci-gate.R` (control-plane) | CONTROL-PLANE GATE: PASS (strict) |
