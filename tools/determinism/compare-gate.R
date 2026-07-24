@@ -329,6 +329,26 @@ run_gate <- function(dumps_dir, expected_csv, exceptions_md,
     }
   }
 
+  # A DEGRADED comparable cell is a failure UNLESS a registered exception covers
+  # the gap (P5.2 part 1: "unless that gap is itself a registered exception").
+  # A gap has no output to diff, so its authorizing fingerprint is the typed
+  # sentinel `DEGRADED:<label>` -- still scope- AND signature-pinned to that
+  # exact absent cell, so an exception cannot widen to an output divergence or
+  # another cell. Reuses the same active-exception matching as a divergence.
+  degraded_gaps <- list()
+  for (label in names(cells)) {
+    dc <- cells[[label]]
+    if (!(dc$comparable && identical(dc$status, "DEGRADED"))) next
+    sig <- paste0("DEGRADED:", label)
+    covered <- divergence_covered(label, sig, exceptions, today)
+    degraded_gaps[[label]] <- list(label = label, signature = sig,
+                                   covered_by = covered)
+    if (!is.na(covered)) {
+      cells[[label]]$status <- "DEGRADED_COVERED"
+      cells[[label]]$detail <- paste0("DEGRADED covered_by=", covered)
+    }
+  }
+
   # Verdict. Missing/degraded/invalid are distinct failure classes from
   # divergence (P5.2: an un-runnable comparable cell cannot prove determinism).
   fail_missing <- Filter(function(c) c$comparable &&
@@ -584,7 +604,23 @@ self_test <- function() {
     fail("manifest with a field-width mismatch was not rejected")
   }
 
-  cat("determinism compare-gate self-test: PASS (13 fixtures)\n")
+  # (14) a DEGRADED comparable cell COVERED by a matching sentinel exception
+  # (signature DEGRADED:<label>) -> PASS: a governed, cell-pinned gap allowance.
+  reg_deg <- write_reg("exc-degraded.md", "gha-C-tr", "DEGRADED:gha-C-tr",
+                       "2099-01-01", "ACCEPTED")
+  if (run_gate(d6, exp_csv, reg_deg)$verdict != "PASS") {
+    fail("DEGRADED cell with a matching sentinel exception not PASS")
+  }
+
+  # (15) the DEGRADED sentinel is signature-pinned: a wrong sentinel does not
+  # cover the gap, so the cell still fails.
+  reg_deg_wrong <- write_reg("exc-degraded-wrong.md", "gha-C-tr",
+                             "DEGRADED:gha-OTHER", "2099-01-01", "ACCEPTED")
+  if (run_gate(d6, exp_csv, reg_deg_wrong)$verdict != "FAIL_DEGRADED") {
+    fail("DEGRADED cell with a wrong sentinel exception not FAIL_DEGRADED")
+  }
+
+  cat("determinism compare-gate self-test: PASS (15 fixtures)\n")
   invisible(TRUE)
 }
 

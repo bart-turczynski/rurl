@@ -86,8 +86,11 @@ manifest: **`tools/determinism/expected-cells.csv`**.
 3. **What failure means.** The gate FAILS on any divergence among comparable
    valid cells not covered by an active exception; and — distinctly — on missing
    evidence, an unexpected cell, an invalid (unarmed/metadata-conflicting/
-   malformed) comparable cell, or a `DEGRADED` comparable cell. The verdict names
-   the class (`FAIL_DIVERGENCE` / `FAIL_MISSING_EVIDENCE` / `FAIL_INVALID_AXIS` /
+   malformed) comparable cell, or a `DEGRADED` comparable cell not covered by an
+   active exception (P5.2 part 1: a registered gap allowance, matched by the typed
+   sentinel signature `DEGRADED:<label>`, which pins the exact absent cell and
+   cannot widen to an output diff). The verdict names the class
+   (`FAIL_DIVERGENCE` / `FAIL_MISSING_EVIDENCE` / `FAIL_INVALID_AXIS` /
    `FAIL_DEGRADED`) so a red gate is a real finding but not necessarily parser
    nondeterminism.
 4. **Where the result manifest is retained.** `compare-gate.R` writes a per-cell
@@ -116,7 +119,7 @@ row grants nothing. Steady state is an empty register (zero-divergence baseline)
 ## Positive and negative coverage (§7 G4)
 
 `Rscript tools/determinism/compare-gate.R --self-test` builds synthetic dump
-directories and asserts eight fixtures:
+directories and asserts fifteen fixtures:
 
 | # | fixture | expected verdict | sign |
 |---|---|---|---|
@@ -125,9 +128,16 @@ directories and asserts eight fixtures:
 | 3 | that divergence covered by a matching unexpired ACCEPTED exception | PASS | positive |
 | 4 | same exception but expired | FAIL_DIVERGENCE | negative |
 | 5 | exception with a non-matching signature | FAIL_DIVERGENCE | negative |
-| 6 | a comparable cell reports DEGRADED | FAIL_DEGRADED | negative |
+| 6 | a comparable cell reports DEGRADED, no exception | FAIL_DEGRADED | negative |
 | 7 | an expected comparable dump is missing | FAIL_MISSING_EVIDENCE | negative |
 | 8 | a `tr` cell whose hazard is not armed | FAIL_INVALID_AXIS | negative |
+| 9 | metadata decode round-trips the probe's `esc()` form, fail-closed on bare/absent | (decoder unit) | both |
+| 10 | exception with a blank required governance field (justification) | FAIL_DIVERGENCE | negative |
+| 11 | inclusive expiry: active the day before, inactive ON the expiry date | PASS / FAIL_DIVERGENCE | both |
+| 12 | manifest with a non-boolean `comparable` value | rejected (error) | negative |
+| 13 | manifest with a field-width mismatch (unquoted comma / short row) | rejected (error) | negative |
+| 14 | DEGRADED cell covered by a matching `DEGRADED:<label>` sentinel exception | PASS | positive |
+| 15 | DEGRADED cell with a wrong sentinel signature | FAIL_DEGRADED | negative |
 
 ## Exact commands
 
@@ -171,9 +181,32 @@ It does NOT define, and must not be read as redefining:
 
 ## Open cells
 
-None. Every part of P5.2's mandated gate maps to executable evidence above. Two
-coverage notes, neither an open decision:
+**Cross-run repeat-run comparison (P5.2 "two pinned runs of the same comparable
+cell") — one open leaf.** The gate today compares comparable cells to each other
+*within one run* (cross-platform). P5.2 additionally names comparing two runs of
+the same cell. The determinism-faithful reading of that clause is **repeat-run
+reproducibility** — the same cell run twice from fresh processes must be
+byte-identical — not a same-cell-at-two-commits output baseline: a cross-commit
+change is a *behavior regression under a declared input (code)*, which is already
+locked by `tests/testthat/_snaps/characterization-snapshot.md` (a `json2`
+value-snapshot of `safe_parse_urls()` over corpus × combos, with a
+readable-diff accept-after-review ritual). Duplicating that as a committed md5
+baseline would be lower-resolution and, under the v3 parser rewrite, red on most
+slices. The remaining executable-evidence leaf is therefore an **in-gate
+repeat-run**: each comparable cell emits its dump twice and the gate compares the
+pair as a distinct verdict class (`FAIL_NONDETERMINISM`), with an optional
+follow-on that varies run 2 in a way that *must not* matter (corpus order
+shuffled under a fixed seed; the projection is keyed and sorted on
+`(id, url_standard)`), catching order/state-leak sensitivity the cross-cell
+comparison structurally cannot isolate. Tracked as a follow-on G4.2 leaf.
 
+- **Matrix-uniform temporal drift.** Output that depends on ambient state
+  identical across cells on a given day (wall clock; a refreshed `pslr` snapshot)
+  is missed by both cross-cell and repeat-run comparison. It is caught by the
+  characterization snapshot on the next PR; the sharp *in-gate* fix is asserting
+  the **engine / PSL-snapshot identity** in the cell metadata — pinning an
+  **input** P5.2 already names as a required axis (RCON-09) — rather than an
+  output baseline. Deferred with the cache/engine axis note below.
 - **Cache-state and PSL-engine axes (RCON-09).** P5.2 requires the comparable
   axis set to extend to cache state (cold/warm/disabled) and PSL engine snapshot
   as those graduate. The cache-state transparency is already gated per process by
