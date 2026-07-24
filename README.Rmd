@@ -263,8 +263,10 @@ rurl_cache_config(puny_encode = FALSE)     # disable a cache entirely
 ```
 
 `rurl_cache_config()` covers three caches: `full_parse`, `puny_encode`, and
-`puny_decode`. The `full_parse` cache is unbounded by default
-(`max_full_parse = Inf`); set a bound to cap its peak memory. The
+`puny_decode`. The `full_parse` cache is bounded at 100000 entries by default: a
+hard reset-watermark that caps peak memory (once the bound is hit the cache
+empties completely and rebuilds, rather than evicting per entry). Set
+`max_full_parse = Inf` to opt into the historical unbounded behavior. The
 `puny_encode` and `puny_decode` caches are unbounded by design and can be
 disabled for workloads with very many unique hosts.
 

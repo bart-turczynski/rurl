@@ -48,12 +48,24 @@ names(.CACHE_CONFIG_FIELDS) <- vapply(
   .CACHE_REGISTRY, function(e) e$name, character(1L)
 )
 
+# Single source of truth for the shipped full_parse bound. .onLoad initializes
+# .rurl_config$full_parse_max to this value; every piece of documentation that
+# names the default bound (README, the rurl_cache_config/rurl_cache_info roxygen
+# -> man/*.Rd, any vignette, and inline comments) must agree with it. The C-08
+# documentation-consistency gate (tools/cache-doc-consistency.R) reads this
+# literal by sourcing this file and fails the verify chain on any divergence.
+# It is a hard reset-watermark bound (peak-memory cap), NOT an LRU/FIFO
+# working set; max_full_parse = Inf opts into the historical unbounded behavior.
+.FULL_PARSE_MAX_DEFAULT <- 100000L
+
 # Memoization caches
 .rurl_cache <- new.env(parent = emptyenv())
 
 # Cache configuration (enable/disable switches and the full_parse bound).
-# Initialized in .onLoad; defaults preserve the historical behavior (all
-# caches on, unbounded).
+# Initialized in .onLoad; defaults enable all three caches. full_parse is
+# bounded at .FULL_PARSE_MAX_DEFAULT entries (a peak-memory safety default);
+# the Punycode encode/decode caches are unbounded by design (they stay small,
+# bounded by the number of unique hosts/labels seen, not URL x option combos).
 .rurl_config <- new.env(parent = emptyenv())
 
 # Unique sentinel returned by .cache_get() on a miss. Distinct from every
@@ -74,11 +86,11 @@ names(.CACHE_CONFIG_FIELDS) <- vapply(
   # Initialize cache configuration. Use assign() so we mutate the .rurl_config
   # environment in place rather than rebinding the (locked) namespace binding,
   # mirroring how the cache environments above are populated by reference. The
-  # full_parse cache is bounded by default (100000 unique url x core-option
-  # combos, i.e. protocol/scheme handling, www_handling, and tld_source) so
-  # parsing millions of unique URLs cannot grow it without limit; override with
-  # rurl_cache_config(max_full_parse = ...).
-  assign("full_parse_max", 100000L, envir = .rurl_config)
+  # full_parse cache is bounded by default (.FULL_PARSE_MAX_DEFAULT unique url x
+  # core-option combos, i.e. protocol/scheme handling, www_handling, and
+  # tld_source) so parsing millions of unique URLs cannot grow it without limit;
+  # override with rurl_cache_config(max_full_parse = ...).
+  assign("full_parse_max", .FULL_PARSE_MAX_DEFAULT, envir = .rurl_config)
 
   # Register the built-in query-denylist source. A future backend package
   # registers additional named sources here the same way (see query-denylist.R).
