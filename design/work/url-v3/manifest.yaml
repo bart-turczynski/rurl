@@ -120,6 +120,12 @@ decisions:
     path: design/work/url-v3/decisions/P1.1-v3-state-status-model.md
     sha256: 656510b6d0c16991726ff7b41523712359f60921e1cc472d354f53b498a3cd29
     state: ACCEPTED
+  # --- P1.2 + P3.2 ACCEPTED by owner squash-merge of PR #226 (bb3346e); both
+  # share that squash SHA as accepted_evidence (batched owner-decision PR).
+  - id: P1.2
+    path: design/work/url-v3/decisions/P1.2-authority-state-vocabulary.md
+    sha256: 1c8f68528f834f96fefb0b2912661ea6ee33328b1d14652be3701810bcfaad2d
+    state: ACCEPTED
   - id: P2.3
     path: design/work/url-v3/decisions/P2.3-validation-verdicts-migration.md
     sha256: 1a1d1c4542a50a7c8310efc9055057c17c4ddbdaab2fb9988d08070253fa7a2e
@@ -147,6 +153,10 @@ decisions:
   - id: P3.1
     path: design/work/url-v3/decisions/P3.1-identity-canonical-join.md
     sha256: b1760889be4cf0d756cab48928211186a8395e5197b851cf692fdc9db919ad4e
+    state: ACCEPTED
+  - id: P3.2
+    path: design/work/url-v3/decisions/P3.2-key-join-closure.md
+    sha256: ac4bde5d136872ef84ed538e5a8cff5296a07b70c1bab5515ce9271d1440eab0
     state: ACCEPTED
   - id: P5.1
     path: design/work/url-v3/decisions/P5.1-cache-contract.md
