@@ -165,6 +165,29 @@
     "comments": []
   },
   {
+    "id": "djgofxorofavuprcprkjpogxauvjrjre",
+    "displayId": "RURL-djgofxor",
+    "title": "G3.3 — Canonical state contract (§6 artifact 3)",
+    "description": "Project P1.1 (v3 state/status model) + frozen evidence S1 into a normative canonical-state matrix under design/work/url-v3/contracts/. Cells: fields, types, presence states (3-valued), provenance, invariants, public projections, lifecycle. SINGLE WRITER of the canonical field vocabulary — G3.6/G3.7/G3.9 consume these names (capstone G3.X enforces agreement). Common §6 envelope (schema, owner, lifecycle, tracked location, completion rule, hashes, validator section). Exit: no unowned cells; any cell P1.1 did not settle → PROPOSED+FLAG (owner-merge). Content lands present:false; validator section rides cp-snapshot-3 owner seal (pin-decision a). Bound: RCON-02.",
+    "status": "done",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T22:49:07.319Z",
+    "updatedAt": "2026-07-23T23:53:46.661Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "b70fdd62-763c-4cde-a5c9-21b9e8e5fa85",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G3.3 canonical state contract merged to main (PR #224). 44-field vocabulary projecting P1.1@a7e0a59 + S1. A1 model: content present:false, validator section + present-flip ride cp-snapshot-3 seal. 3 flags surfaced to owner (precedent format; presence-label code/doc drift; 2 open cells incl. authority-state decision to mint).",
+        "createdAt": "2026-07-23T23:53:46.660Z"
+      }
+    ]
+  },
+  {
     "id": "dmsgpcakklxrmbjmtktfnaqsgmheqgoa",
     "displayId": "RURL-dmsgpcak",
     "title": "G1.2 — Build §6 artifact 4 public-surface inventory registry",
@@ -247,6 +270,37 @@
     ]
   },
   {
+    "id": "faxkryryieleoctrgfdilzbkfddurhoi",
+    "displayId": "RURL-faxkryry",
+    "title": "P3.2 — Close key/join details left open by P3.1 (KJ-O1..O8)",
+    "description": "Compact closure of the eight KJ-O cells G3.K surfaced that accepted P3.1 did not settle: KJ-O1 default parsing standard for url_key_policy(); KJ-O2 trailing-root-dot domain equivalence; KJ-O3 url_right_join() stable order; KJ-O4 non-keyable x in url_anti_join(); KJ-O5 public URL-column selector signature; KJ-O6 suffix/duplicate-name repair; KJ-O7 comparison-key visibility default; KJ-O8 type restoration and zero-row prototypes. Owner-ratified values (KJ-O2 = DISTINCT per WHATWG url-equivalence, which only exempts certificate comparison from the trailing dot). Consumed by G3.K, G3.7, G3.4, G3.X. Drafted PROPOSED under P0.1 owner-merge lifecycle.",
+    "status": "done",
+    "priority": "high",
+    "parent": "oylalsrzlyuiyxcgzrimhhxluwayupsy",
+    "dependencies": [
+      "jjzmxvkwjhvvrohawwsbzilvdgcblcga"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-24T13:21:29.922Z",
+    "updatedAt": "2026-07-24T14:06:37.859Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "3dbe5508-2efe-418f-99e1-abc0ef3b10ba",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P3.2 authored PROPOSED and opened in PR #226 (https://github.com/bart-turczynski/rurl/pull/226). Closes KJ-O1..KJ-O8 with owner-ratified values; notably KJ-O2 = DISTINCT (WHATWG url-equivalence exempts only certificate comparison from the trailing dot). Control-plane gate PASS. Merge is the ratifying act; seal registers it in the manifest.",
+        "createdAt": "2026-07-24T13:26:27.410Z"
+      },
+      {
+        "id": "381d328b-a8b9-45f5-8ea5-9bb029a01bfa",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "DONE. Minted PROPOSED in #226 (bb3346e), sealed ACCEPTED in #227 (5613479). All eight KJ-O cells closed (KJ-O2 = DISTINCT). G3.K OPEN rows can flip to SETTLED@P3.2; G3.7/G3.4/G3.X consume fixed formals.",
+        "createdAt": "2026-07-24T14:06:37.858Z"
+      }
+    ]
+  },
+  {
     "id": "fmjadknrdawpecmjpataalmeqnobblog",
     "displayId": "RURL-fmjadknr",
     "title": "P0.2 — Durable workspace and manifest format",
@@ -324,6 +378,29 @@
     ]
   },
   {
+    "id": "hmgjpukiiroupzwkfzzpiumdqaehygex",
+    "displayId": "RURL-hmgjpuki",
+    "title": "G3.8 — Cleaning/mutation contracts (§6 artifact 8)",
+    "description": "Project P2.2 + P3.1 + evidence S4 into contracts/. Cells: semantics matrix, state transitions, dependency graph, transaction behavior, security, invariants. Consumes G3.3 canonical state. Exit: no unowned cells; open cells → PROPOSED+FLAG. present:false content; validator rides cp-snapshot-3. Bound: RCON-06.",
+    "status": "done",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T22:49:09.056Z",
+    "updatedAt": "2026-07-24T16:11:24.166Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "706ec77b-1747-4b44-8421-a5777bfe4d08",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G3.8 cleaning/mutation contracts merged in PR #231 (squash b2728d0). Added design/work/url-v3/contracts/cleaning-mutation-contracts.md projecting P2.2@8292c7f + P3.1@3b89b94 + evidence S4; binds RCON-06. Single writer of: clean surface (c) contract, 25-dial cleaning-semantics matrix (surface assignment + lossiness + key non-interference), shipped processing order, downstream-capability classification (clean_url = display-only, never identity/join/redirect-safe), cleaner/identity non-interference invariant (P3.1 D-A.3), cleaning repair-provenance, credential-safety. S4-F2 lossy-vs-valid fork SETTLED via P2.2 surface split. MUTATION surface unbuilt+undecided at P-tier (S4 M1-M18, no mutate_url): all 12 mutation cells recorded OPEN (MUT-O1..O12 → dedicated P3 mutation-slice); plus CLEAN-O1 (vocabulary rename → RCON-05). Envelope PROPOSED/present:false; rides cp-snapshot-3 seal. CI note: README-sync flaked on a Pandoc-download 504 (setup-pandoc@v2), reran green; control-plane/lint/pkgdown/R-CMD-check/tests/coverage all passed.",
+        "createdAt": "2026-07-24T16:11:24.165Z"
+      }
+    ]
+  },
+  {
     "id": "hnyqemimjduuwbisudvnvdshvauvvogm",
     "displayId": "RURL-hnyqemim",
     "title": "P1 — State and public object owner decisions (§8)",
@@ -338,6 +415,39 @@
     "updatedAt": "2026-07-22T14:13:11.390Z",
     "properties": {},
     "comments": []
+  },
+  {
+    "id": "huneoffxsggytypjqnetnbbojkcwwlhn",
+    "displayId": "RURL-huneoffx",
+    "title": "G3.X — Cross-artifact consistency capstone (§7 G3 crit. 3)",
+    "description": "CAPSTONE — runs after all nine artifact leaves. §7 G3 exit criterion 3: cross-artifact terms, defaults, state fields, and status codes AGREE across §6 artifacts 3–10. Verify: (i) G3.3 canonical field names are the ONLY vocabulary used by G3.6 verdicts / G3.7 outputs / G3.9 status codes; (ii) keys defined once in G3.K, only referenced in G3.7; (iii) cache defined once in G3.9, only delegated from G3.H; (iv) strict-posture defaults cite their P-tier record identically everywhere; (v) no cell unowned across the artifact set. Produces the cross-artifact consistency assertion feeding gates/G3-acceptance.md at the cp-snapshot-3 owner seal. Depends on: G3.3/G3.4/G3.5/G3.6/G3.7/G3.8/G3.K/G3.9/G3.H.",
+    "status": "done",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [
+      "djgofxorofavuprcprkjpogxauvjrjre",
+      "jsfhhjbqvwtohjubpahrrkodqpxtnpbe",
+      "imoolarmlvritkjirkndzckvfetmdumr",
+      "ngmfpsqteeuyddsmtsdncqennpusyiqo",
+      "hmgjpukiiroupzwkfzzpiumdqaehygex",
+      "skflnvizaqtdczqvttsbbmrpufjhpbuj",
+      "tjvuwkdtpmqpljkybfihrsvhnzrbhuqw",
+      "sepfjagsgbrpcapgvttthavkhknrelng",
+      "sapahqcbbnvldfbsmdjvgmdswloecsjo"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T22:49:34.898Z",
+    "updatedAt": "2026-07-24T17:32:39.259Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "4752fc7c-5d9e-41f6-b9f3-61eadb60622f",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G3.X merged to main via PR #235 (squash 150f48d). Cross-artifact consistency capstone authored: design/work/url-v3/contracts/cross-artifact-consistency.md. Asserts §7 G3 exit criterion 3 (i)-(v), each PASS with re-checkable evidence: (i) canonical vocab defined once by G3.3; (ii) comparison key once in G3.K; (iii) cache once in G3.9; (iv) 11 distinct Pn.n@sha pairs, zero forks; (v) 44 live open-cell IDs (CACHE 5/SCHEME 4/VAL 4/CLEAN 1/MUT 12/OUT 5/HOST 8/PSC 5), none unowned. Census caught + records that G3.K KJ-O1..O8 are CLOSED by P3.2@bb3346e and G3.3 authority_kind by P1.2@bb3346e (frozen leaf text predated the #226/#227 seal). Makes no product decision, opens no cell. Envelope PROPOSED / present:false — rides cp-snapshot-3. Control-plane PASS (no setup-r hang this run). This closes all 10 G3 content leaves; only the cp-snapshot-3 seal remains.",
+        "createdAt": "2026-07-24T17:32:39.258Z"
+      }
+    ]
   },
   {
     "id": "hvjufcvndscxkajixglbzmcrtbfefvij",
@@ -396,6 +506,29 @@
     "updatedAt": "2026-07-23T21:41:45.059Z",
     "properties": {},
     "comments": []
+  },
+  {
+    "id": "imoolarmlvritkjirkndzckvfetmdumr",
+    "displayId": "RURL-imoolarm",
+    "title": "G3.6 — Validation/intervention contract (§6 artifact 6)",
+    "description": "Project P2.1 (fixer/recovery ordering) + P2.3 (verdicts/migration) + P1.1 (layers) + evidence S2 into contracts/. Cells: independent verdicts, ordered transformations, repair provenance, output revalidation. Consumes G3.3 canonical field names. Exit: no unowned cells; open cells → PROPOSED+FLAG. present:false content; validator rides cp-snapshot-3. Bound: RCON-04.",
+    "status": "done",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T22:49:08.279Z",
+    "updatedAt": "2026-07-24T15:34:00.768Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "df4bb78c-b57f-4690-87da-4325aaef985f",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G3.6 validation/intervention contract merged in PR #230 (squash 5d25ce7). Added design/work/url-v3/contracts/validation-intervention-contract.md projecting P2.1@a4d1b45 + P2.3@a7e0a59 + P1.1@a7e0a59 + evidence S2; binds RCON-04. Single writer of the input-side matrices: repair-posture axis, ordered intervention ledger, L1/L2/L3 verdict layers + fatality, C-07 shipped-value map, S7-F3 annotation-state resolution, π(L1,L2,L3) collapse table, repair/recovery provenance (C-02/C-03), repaired-input revalidation, resolution verdict layering, get_parse_verdicts() surface. 4 OPEN cells: VAL-O1 (ledger category for recoveries beyond repeated-@, P2.1 Q5), VAL-O2 (posture public spelling → RCON-05), VAL-O3 (resolver verdict surface → RCON-03), VAL-O4 (parse_status hard-deprecation window). Envelope PROPOSED/present:false; rides cp-snapshot-3 seal. Control-plane + lint + README + pkgdown all green.",
+        "createdAt": "2026-07-24T15:34:00.767Z"
+      }
+    ]
   },
   {
     "id": "iwahdugjtyztigywkbdmdbcwvblgcegm",
@@ -572,6 +705,29 @@
     ]
   },
   {
+    "id": "jsfhhjbqvwtohjubpahrrkodqpxtnpbe",
+    "displayId": "RURL-jsfhhjbq",
+    "title": "G3.5 — Standard/profile/scheme matrices (§6 artifact 5)",
+    "description": "Project P2.4 (scheme admission) + P4.1 (scheme specialization) + evidence S6 into matrices under contracts/. Cells: expansion, precedence, parser routes, eligibility, credentials, email, resolution, diagnostics. Cite the strict-posture defaults owned by P2.1/P2.4 (scheme_policy=require) — do not re-decide. Exit: no unowned cells; open cells → PROPOSED+FLAG. present:false content; validator rides cp-snapshot-3. Bound: RCON-05.",
+    "status": "done",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T22:49:07.883Z",
+    "updatedAt": "2026-07-24T15:10:37.325Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "fdaa47c3-f5bb-4900-ae45-1d6aee09acd6",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "DONE. Standard/profile/scheme matrices merged in #229 (690732e): design/work/url-v3/contracts/standard-scheme-matrices.md. Projects P2.4 + P4.1 + P1.2 + S6. Authority-emission cell BINDS accepted P1.2 (authority_delimiter_present + authority_payload_kind, host_kind independent) — SETTLED not OPEN. Boundaries: host/IDNA/PSL=G3.H, credential output=P2.2, cache=G3.9, keys=G3.K. Open cells SCHEME-O1..O4. Envelope PROPOSED/present:false until cp-snapshot-3. Strict gate green on main.",
+        "createdAt": "2026-07-24T15:10:37.324Z"
+      }
+    ]
+  },
+  {
     "id": "lqdxihdhtdvuvmfmrcsucgbtxuadqfwl",
     "displayId": "RURL-lqdxihdh",
     "title": "G5 — Independent re-review & acceptance (§7 G5)",
@@ -708,6 +864,29 @@
     "updatedAt": "2026-07-22T14:20:33.466Z",
     "properties": {},
     "comments": []
+  },
+  {
+    "id": "ngmfpsqteeuyddsmtsdncqennpusyiqo",
+    "displayId": "RURL-ngmfpsqt",
+    "title": "G3.7 — Output contracts (§6 artifact 7)",
+    "description": "Project P2.2 (serializer/clean-output) + P5.3 (oracle/claim) + P3.1 (identity) + evidence S3 into contracts/. Five output surfaces: source reproduction, standard serialization, cleaning, safe display, comparison keys — plus capability classification. SCOPE SPLIT: comparison-keys cell REFERENCES the G3.K key surface (get_url_key); it does not redefine keys. Consumes G3.3 field names. Exit: no unowned cells; open cells → PROPOSED+FLAG. present:false content; validator rides cp-snapshot-3. Bound: RCON-03.",
+    "status": "done",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T22:49:08.669Z",
+    "updatedAt": "2026-07-24T16:24:28.357Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "880fba37-37d1-48a8-8cb9-5a657e50e052",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G3.7 output contracts merged in PR #232 (squash 4c14eaa). Added design/work/url-v3/contracts/output-contracts.md projecting P2.2@8292c7f + P5.3@8292c7f + P3.1@3b89b94 + evidence S3; binds RCON-03. Single writer of the five output surfaces (source reproduction, standard serialization/FSSS, clean output, safe display, comparison key), surface-assignment invariants, lossless serializer-input record (credential/delimiter + query-lexical completeness), claim/oracle policy (claims against FSSS never the projection; parity!=conformance; labeled-oracle taxonomy), capability classification, encoding/locale invariance, and the credential-handling/undivided-userinfo cell deferred from G3.3 (S1 Q5). SCOPE SPLIT: surface (e) references G3.K key surface without redefining; cleaning dials=G3.8, ledger/verdicts=G3.6, oracle register+budgets=artifact 11/G4/P5.1/P5.2. OPEN cells OUT-O1..O5 (P2.2/P5.3 carry unresolved owner Qs): undivided-userinfo S1-Q5, serialize_url name P2.2-Q1, RFC serializer posture P2.2-Q2/S3-C3, format_url scope + resolve_url output shape P2.2-Q3/RCON-03, source-reproduction byte-vs-Encoding P2.2-Q4/S3-C7. Envelope PROPOSED/present:false; rides cp-snapshot-3. All CI green first run (no flakes).",
+        "createdAt": "2026-07-24T16:24:28.356Z"
+      }
+    ]
   },
   {
     "id": "nhwdlvajxbushjrsmjrdjclvuuvilbxs",
@@ -986,7 +1165,7 @@
     "displayId": "RURL-sapahqcb",
     "title": "G3.9 — Close semantic cache contract before executable evidence",
     "description": "Define cache keys, bounds, eviction, clearing, external-data versioning, determinism, semantic transparency, and cached/uncached equivalence from the accepted C-08 disposition.\n\nG4 owns executable equivalence and documentation-consistency checks; it does not choose these semantics. (§4 RCON-09; §5 C-08; §7 G3–G4)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
     "dependencies": [
@@ -996,16 +1175,23 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:17:26.581Z",
-    "updatedAt": "2026-07-22T14:17:26.581Z",
+    "updatedAt": "2026-07-24T14:33:42.064Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "d1e24774-f918-4202-ad0e-6f7a81db1c67",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "DONE. Semantic cache contract merged in #228 (98a305e): design/work/url-v3/contracts/semantic-cache-contract.md. Projects P5.1 + S8 — three caches, keys, 100k bounded full_parse + reset-watermark, pslr engine-snapshot version, semantic-transparency invariant (byte-identical cached/uncached), C-08 doc-consistency disposition. Boundaries: determinism=P5.2, oracle=P5.3, executable checks+README edit=G4, host remainder=G3.H. OPEN cells CACHE-O1..O5. Envelope PROPOSED / present:false until cp-snapshot-3 seal. Strict control-plane gate green on main.",
+        "createdAt": "2026-07-24T14:33:42.063Z"
+      }
+    ]
   },
   {
     "id": "sepfjagsgbrpcapgvttthavkhknrelng",
     "displayId": "RURL-sepfjags",
     "title": "G3.4 — Close public-surface registry across all contract artifacts",
     "description": "Take the G1 artifact-4 inventory through normative closure: no unowned cells; every export/dial has defaults, interactions, vector/error behavior, documentation, migration, and test disposition; and all terms/status/state fields agree with artifacts 3 and 5–10.\n\nThis is the explicit G1→G3 handoff for §6 artifact 4, not duplicate authoring. (§6 artifact 4; §7 G3; RCON-05)",
-    "status": "todo",
+    "status": "done",
     "priority": "high",
     "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
     "dependencies": [
@@ -1015,9 +1201,51 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T14:17:22.351Z",
-    "updatedAt": "2026-07-22T14:17:22.351Z",
+    "updatedAt": "2026-07-24T17:21:29.644Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "8d51f97e-de64-4f91-9e66-3b8d0d26128c",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G3.4 merged to main via PR #234 (squash 4beecb7). Public-surface closure authored: design/work/url-v3/contracts/public-surface-closure.md — 46 inventory rows (29 exports + 18 fields + 3 curl + migration-surface) each mapped onto their owning G3 contract with SETTLED/OPEN disposition; migration-surface discharged; residual opens grouped PSC-O1..O5 (all forward to sibling open cells or artifact 11). Envelope PROPOSED / present:false — rides cp-snapshot-3 seal. CI green (control-plane cancel+rerun cleared the setup-r hang). Branch deleted local+remote.",
+        "createdAt": "2026-07-24T17:21:29.642Z"
+      }
+    ]
+  },
+  {
+    "id": "skflnvizaqtdczqvttsbbmrpufjhpbuj",
+    "displayId": "RURL-skflnviz",
+    "title": "G3.K — Key/join contracts (§6 artifact 9)",
+    "description": "Project P3.1 (identity + canonical_join migration) + evidence S5 into contracts/. SINGLE WRITER of the key surface. Cells: versioned key policy, port/scheme truth tables, collision rules, six joins, legacy migration (canonical_join deprecation per B7). G3.7 references this surface. Exit: no unowned cells; open cells → PROPOSED+FLAG. present:false content; validator rides cp-snapshot-3. Bound: RCON-07.",
+    "status": "done",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T22:49:09.453Z",
+    "updatedAt": "2026-07-24T00:12:45.916Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "6d4dd4d8-6def-4f44-8325-144769e4bc0e",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Resuming G3 after verified handover. Drafting §6 artifact 9 in the G3.3 precedent format (Envelope → hashed Inputs → Rows → Scope boundaries → Open cells). This leaf is dependency-safe before the unresolved authority-state owner decision and will become G3.7's single-writer key/join referent.",
+        "createdAt": "2026-07-23T23:58:55.329Z"
+      },
+      {
+        "id": "49362cc1-be3a-4ffc-af00-137667679898",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Draft complete: added artifact-9 key/join contract with 67 SETTLED matrix rows traced to P3.1@3b89b94 and 8 explicit OPEN cells (default parse standard, trailing-dot identity, right-join order, anti invalid default, selector signature, name repair, key visibility, type/zero-row restoration). Input hashes match P3.1/S5. Existing validators and strict ci-gate pass (2131/180/128).",
+        "createdAt": "2026-07-24T00:03:36.980Z"
+      },
+      {
+        "id": "45be5f51-50f4-48d4-97eb-a4fcff315356",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "Completed and merged: PR #225 → main at b139838bfc460078f563cc17332c8047697f2adb. Added design/work/url-v3/contracts/key-join-contracts.md (67 SETTLED rows, 8 explicit OPEN P3 closure cells). All GitHub gates passed: control-plane, R CMD check, LC_ALL=C tests, coverage, lint, README/NEWS, pkgdown, Socket, and FOSSA. Local and remote task branches removed; main clean and synchronized.",
+        "createdAt": "2026-07-24T00:12:45.914Z"
+      }
+    ]
   },
   {
     "id": "smobrgucirfljyqjnmvoooabrkgahxhb",
@@ -1042,6 +1270,29 @@
         "author": "142225707+bart-turczynski@users.noreply.github.com",
         "content": "P2.2 DRAFTED as PROPOSED — co-located with P5.3 on the C-12 PR (joint disposition). Separates output into 4 surfaces (url_source / serialize_url-FSSS / clean_url / format_url). C-04: standard serializer UNIMPLEMENTED not superseded (shipped .serialize_*_vec are the clean surface); C-05: %2F/path_encoding = compatibility-only dial excluded from standards serializer. C-12 serialization-half: FSSS is the conformance substrate. Grounded in RCON-03, S3-F1/F2/F5/F6, ADR 0012 D2 + ADR 0011. 5 open questions. NOT merged; awaiting owner batch-ratification.",
         "createdAt": "2026-07-22T21:58:06.865Z"
+      }
+    ]
+  },
+  {
+    "id": "tjvuwkdtpmqpljkybfihrsvhnzrbhuqw",
+    "displayId": "RURL-tjvuwkdt",
+    "title": "G3.H — Host/annotation contracts (§6 artifact 10, excl. cache)",
+    "description": "Project host-facing P-tier + evidence S7 into contracts/. Cells: host vocabulary/matrix, IDNA, PSL, DNS, IP, external provenance, cost, failure states. SCOPE SPLIT: the cache/cost cell DELEGATES to the G3.9 semantic-cache contract (RURL-sapahqcb) — G3.H does not own cache. Exit: no unowned cells; open cells → PROPOSED+FLAG. present:false content; validator rides cp-snapshot-3. Bound: RCON-08.",
+    "status": "done",
+    "priority": "high",
+    "parent": "utiaefwlgnoiveiytoiefxfdhlvicrjw",
+    "dependencies": [],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-23T22:49:09.898Z",
+    "updatedAt": "2026-07-24T16:38:26.592Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "b0da26a4-2b0a-4f78-9d30-2a67a0d869a2",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "G3.H host/annotation contracts merged in PR #233 (squash 65fdb10). Added design/work/url-v3/contracts/host-annotation-contracts.md; binds RCON-08. KEY: RCON-08's P4 host record was never written (P4.1 D-E declines it), so this artifact projects only the host-facing BOUNDARIES of P4.1@b017e87 + P1.2@bb3346e + P3.2@bb3346e + P2.3@a7e0a59 + ADRs 0001/0002/0004/0006/0009/0012 + host-validation-policy PRD + S7, and flags the deep host contract OPEN (HOST-O1..O8 → the unmade P4 host record: unified typed host matrix, de-overloaded terminology, IDNA pinning, PSL reproducibility fingerprint, typed DNS-policy+reg-name eligibility, full IP row-set, full-host-identity fields, optional-result API+display fallback). SETTLED boundaries: host presence/form (host_kind independent), scheme posture, transform eligibility, 3 distinct IDNA ops (ADR 0002), PSL delegation+identity spellings (ADR 0001), annotation-state application (root-dot DISTINCT per P3.2), no-network DNS-policy, WHATWG/RFC IP model, domain*=PSL-not-full-host clarification, oracle labeling. SCOPE SPLIT: cache/cost→G3.9, verdict semantics→G3.6, keys→G3.K, admission→G3.5. All CI green first run.",
+        "createdAt": "2026-07-24T16:38:26.591Z"
       }
     ]
   },
@@ -1169,9 +1420,16 @@
     "revisions": [],
     "author": "142225707+bart-turczynski@users.noreply.github.com",
     "createdAt": "2026-07-22T11:04:03.282Z",
-    "updatedAt": "2026-07-22T14:20:41.230Z",
+    "updatedAt": "2026-07-24T18:29:02.504Z",
     "properties": {},
-    "comments": []
+    "comments": [
+      {
+        "id": "1b259e37-b9dc-439d-855c-b0af5462bb3f",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "cp-snapshot-3 seal in progress (owner-ratified, two-phase). All 10 G3 content leaves merged. Corrected choreography: contracts stay PROPOSED (seal = manifest present:true hash-pin, NOT an envelope flip). Sequence: A) contract-family validator in validate-records.R (+1662 checks, negative-tested) MERGED #236 5ddc3c0; B) gates/G3-acceptance.md (3 §7 G3 criteria PASS, Inputs hashes the 10 contracts) PR #237 OPEN, CI verifying; C) phase-1 sweep (manifest adds 10 contracts + gate, snapshot refs -> cp-snapshot-3, stays PROPOSED) — owner squash-merges = C3 + creates annotated tag v3/cp-snapshot-3; D) phase-2 seal (snapshots.log line 3 + manifest PROPOSED->ACCEPTED + accepted_evidence=C3) — owner merges; E) mark this issue done. C/D pending owner ratification (tag + merge).",
+        "createdAt": "2026-07-24T18:29:02.503Z"
+      }
+    ]
   },
   {
     "id": "vwtxvhgpeyikchszvjknwgftscitbwgj",
@@ -1282,6 +1540,37 @@
         "author": "142225707+bart-turczynski@users.noreply.github.com",
         "content": "RESOLVED — all fixes applied + independently verified (2026-07-23).\n\nApplied across 7 branches: new PR #217 (atomic ADR 0010 + ADR 0012 D4 + browser-PRD v3.0 amendment trio) + edits on #210/#211/#212/#213/#215/#216. Verification pass: 8/8 PASS, no new contradiction, no cross-file conflict.\n\n- #1 strict-default supersession now RECORDED (not silent): ADR 0010 + ADR 0012 D4 + browser PRD carry v3.0 amendment blocks; P2.1/P2.4 declare the supersession. Doc set no longer says two contradictory things about the v3 default. D4 amendment enumerates ALL non-scheme_policy constraints as unchanged.\n- #2 get_url_verdicts() -> get_parse_verdicts() (disambiguated from the classifier verdict); defined at url_standard=NULL; get_url_diagnostics() shape preserved; ADR 0006 amended to authorize the 4th helper (never-widen preserved).\n- #3 dependency-error->ok re-scoped (v3 policy choice, not byte-identity claim); byte-identity guarantee scoped to inputs whose PSL lookup runs.\n- #4 P5.3 158/99 re-scoped to rfc3986-grammar acceptance over the 257-row fixture (NEWS.md:271-274), not the FSSS conformance headline.\n- #5 P5.2 §10-gate-8 mis-citation fixed. #6 P5.1 gate now scans inline R/** comments (R/zzz.R:55-56).\n\nEvery branch: validate-records + validate-transitions PASS; validate-manifest by-design red (unreferenced PROPOSED files) until the owner seal. Block cleared — P-tier merge batch is now 9 PRs (#209-#216 + #217). Marking done; the merge itself is the owner's pending act (tracked on epic RURL-dorofzmb).",
         "createdAt": "2026-07-23T15:29:55.936Z"
+      }
+    ]
+  },
+  {
+    "id": "xhcesxrqiipmrhtnrnmajmaggapizjmd",
+    "displayId": "RURL-xhcesxrq",
+    "title": "P1.2 — Decide v3 authority-state vocabulary (S1-F5)",
+    "description": "Settle the authority-presence vocabulary deferred by P1.1 Q3. S1-F5 records the live contradiction: .AUTHORITY_KIND declares {absent,empty,present} but the general classifier emits only absent/present (empty 'reserved'), the RFC file: overlay emits authority-empty, so foo:///bar and file:///bar disagree for the same //-plus-empty-payload shape. Owner-ratified direction: split into authority_delimiter_present:logical + authority_payload_kind:{empty,present} with independent host_kind; serializers consume the delimiter fact, not host inference. Consumed by G3.3 (open authority_kind cell), G3.5, and G3.H. Drafted PROPOSED under P0.1 owner-merge lifecycle.",
+    "status": "done",
+    "priority": "high",
+    "parent": "hnyqemimjduuwbisudvnvdshvauvvogm",
+    "dependencies": [
+      "nvdlazonamhnjknykczdwvykanoirgkc"
+    ],
+    "revisions": [],
+    "author": "142225707+bart-turczynski@users.noreply.github.com",
+    "createdAt": "2026-07-24T13:21:22.195Z",
+    "updatedAt": "2026-07-24T14:06:37.228Z",
+    "properties": {},
+    "comments": [
+      {
+        "id": "e5ff3205-044d-425f-9405-81fe95ab445e",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "P1.2 authored PROPOSED and opened in PR #226 (https://github.com/bart-turczynski/rurl/pull/226). Owner-ratified split-axis model: authority_delimiter_present + authority_payload_kind, independent host_kind, serializers consume the delimiter fact. Control-plane gate PASS (records 2183, transitions 180, manifest tolerance recognized). Merge is the ratifying act; seal registers it in the manifest.",
+        "createdAt": "2026-07-24T13:26:27.036Z"
+      },
+      {
+        "id": "8fc70cbe-ddbf-46c4-ba98-d27fb68d6053",
+        "author": "142225707+bart-turczynski@users.noreply.github.com",
+        "content": "DONE. Minted PROPOSED in #226 (bb3346e), sealed ACCEPTED in #227 (5613479). Registered in manifest.decisions[]; strict control-plane gate green on main. G3.3/G3.5/G3.H can now bind authority_delimiter_present + authority_payload_kind (host_kind independent).",
+        "createdAt": "2026-07-24T14:06:37.227Z"
       }
     ]
   },
