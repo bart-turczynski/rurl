@@ -77,7 +77,12 @@ manifest: **`tools/determinism/expected-cells.csv`**.
    evidence, never entered into the equality comparison. A comparable cell whose
    `locale-<LABEL>.csv` reports `charset_as_requested = false` (or, for a `tr`
    cell, `hazard_armed = false`) is **invalid evidence** and FAILS — an unarmed
-   axis cannot prove determinism even if its dump happens to match.
+   axis cannot prove determinism even if its dump happens to match. The metadata
+   flags are stored in the probe's JSON string-literal form (a boolean is
+   `"true"`/`"false"` with inner quotes; NA is the bare token `null`); the gate
+   decodes that exact representation **fail-closed** — a missing, duplicated,
+   bare, or undecodable flag reads as NA and can never validate a comparable cell
+   (a round-trip fixture against the probe's own `esc()` output guards this).
 3. **What failure means.** The gate FAILS on any divergence among comparable
    valid cells not covered by an active exception; and — distinctly — on missing
    evidence, an unexpected cell, an invalid (unarmed/metadata-conflicting/

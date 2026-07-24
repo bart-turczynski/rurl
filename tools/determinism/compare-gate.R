@@ -40,10 +40,33 @@ md5_of_string <- function(s) {
   unname(tools::md5sum(tf))
 }
 
-read_kv_csv <- function(path) {
-  # Tidy key,value register (locale-*.csv / env-*.csv). Returns a named char.
-  d <- utils::read.csv(path, colClasses = "character", check.names = FALSE)
-  stats::setNames(d$value, d$key)
+# Decode one metadata flag from the probe's on-disk representation. parse-dump.R
+# and the probe write every value as a JSON string LITERAL via esc(): a boolean
+# is the six-char string "true"/"false" (inner quotes included), and R NA is the
+# bare token null (no inner quotes). After the CSV layer round-trips through
+# read.csv, a true value reads back as `"true"` (with embedded quotes) and NA as
+# `null`. This decodes that exact form and is FAIL-CLOSED: anything else -- a
+# bare token, an unexpected value, a missing or duplicated key -- yields NA, so
+# an unrecognized cell can never be treated as a valid comparable cell.
+decode_meta_flag <- function(kv, key) {
+  hit <- kv$value[kv$key == key]
+  if (length(hit) != 1L) {
+    return(NA)                         # missing or duplicated key: fail-closed
+  }
+  v <- hit[[1]]
+  if (is.na(v) || identical(v, "null")) {
+    return(NA)                         # JSON null sentinel
+  }
+  if (grepl('^".*"$', v)) {
+    inner <- tolower(substr(v, 2L, nchar(v) - 1L))
+    if (inner == "true") return(TRUE)
+    if (inner == "false") return(FALSE)
+  }
+  NA
+}
+
+read_meta_kv <- function(path) {
+  utils::read.csv(path, colClasses = "character", check.names = FALSE)
 }
 
 # ---- canonical dump projection ---------------------------------------------
@@ -189,21 +212,23 @@ run_gate <- function(dumps_dir, expected_csv, exceptions_md,
       rec$status <- if (comparable) "DEGRADED" else "DEGRADED_EVIDENCE"
       rec$detail <- "DEGRADED marker present"
     } else if (file.exists(dump_path)) {
-      # Metadata validity (comparable cells only need arming checked).
+      # Metadata validity. Fail-closed: a comparable cell must literally decode
+      # cross_os_comparable=true and charset_as_requested=true (a tr cell must
+      # also decode hazard_armed=true). NA -- missing/duplicated/undecodable --
+      # is invalid evidence, never a pass. Non-comparable cells are not gated.
       if (file.exists(loc_path)) {
-        meta <- read_kv_csv(loc_path)
-        cross_ok <- identical(tolower(meta[["cross_os_comparable"]]), "true")
-        charset_ok <-
-          !identical(tolower(meta[["charset_as_requested"]]), "false")
-        armed <- !identical(tolower(meta[["hazard_armed"]]), "false")
+        kv <- read_meta_kv(loc_path)
+        cross_ok <- decode_meta_flag(kv, "cross_os_comparable")
+        charset_ok <- decode_meta_flag(kv, "charset_as_requested")
+        armed <- decode_meta_flag(kv, "hazard_armed")
         is_tr <- identical(expected$locale[i], "tr")
-        if (comparable && !cross_ok) {
+        if (comparable && !isTRUE(cross_ok)) {
           rec$status <- "META_CONFLICT"
-          rec$detail <- "locale says cross_os_comparable=false"
-        } else if (comparable && !charset_ok) {
+          rec$detail <- "cross_os_comparable did not decode to true"
+        } else if (comparable && !isTRUE(charset_ok)) {
           rec$status <- "UNARMED_AXIS"
-          rec$detail <- "charset_as_requested=false (not like-for-like)"
-        } else if (comparable && is_tr && !armed) {
+          rec$detail <- "charset_as_requested not true (not like-for-like)"
+        } else if (comparable && is_tr && !isTRUE(armed)) {
           rec$status <- "UNARMED_AXIS"
           rec$detail <- "tr cell not hazard_armed (duplicates default)"
         }
@@ -341,11 +366,14 @@ self_test <- function() {
                     host = rows, stringsAsFactors = FALSE)
     utils::write.csv(d, file.path(dir, paste0("dump-", label, ".csv")),
                      row.names = FALSE)
+    # Encode flags exactly as the probe does: esc() renders a boolean as the
+    # JSON string literal "true"/"false" (inner quotes included); write.csv then
+    # quotes the field. This is the real producer representation the decoder
+    # must invert -- fixtures that wrote bare booleans hid the encoding.
+    esc_flag <- function(b) if (isTRUE(b)) "\"true\"" else "\"false\""
     meta <- data.frame(
       key = c("cross_os_comparable", "charset_as_requested", "hazard_armed"),
-      value = c(if (comparable) "true" else "false",
-                if (charset_ok) "true" else "false",
-                if (armed) "true" else "false"),
+      value = c(esc_flag(comparable), esc_flag(charset_ok), esc_flag(armed)),
       stringsAsFactors = FALSE)
     utils::write.csv(meta, file.path(dir, paste0("locale-", label, ".csv")),
                      row.names = FALSE)
@@ -436,7 +464,33 @@ self_test <- function() {
     fail("unarmed tr axis not caught")
   }
 
-  cat("determinism compare-gate self-test: PASS (8 fixtures)\n")
+  # (9) metadata decoding round-trips the probe's exact esc() + write.csv
+  # representation, and is fail-closed on the bare/absent forms.
+  d9 <- mk()
+  m9 <- data.frame(
+    key = c("cross_os_comparable", "charset_as_requested", "hazard_armed",
+            "na_flag"),
+    value = c("\"true\"", "\"false\"", "\"true\"", "null"),
+    stringsAsFactors = FALSE)
+  utils::write.csv(m9, file.path(d9, "locale-x.csv"), row.names = FALSE)
+  kv9 <- read_meta_kv(file.path(d9, "locale-x.csv"))
+  if (!isTRUE(decode_meta_flag(kv9, "cross_os_comparable"))) {
+    fail("did not decode probe-encoded true")
+  }
+  if (!isFALSE(decode_meta_flag(kv9, "charset_as_requested"))) {
+    fail("did not decode probe-encoded false")
+  }
+  if (!is.na(decode_meta_flag(kv9, "na_flag"))) fail("null not decoded to NA")
+  if (!is.na(decode_meta_flag(kv9, "absent"))) fail("absent key not NA")
+  m9b <- data.frame(key = "cross_os_comparable", value = "true",
+                    stringsAsFactors = FALSE)
+  utils::write.csv(m9b, file.path(d9, "locale-y.csv"), row.names = FALSE)
+  kv9b <- read_meta_kv(file.path(d9, "locale-y.csv"))
+  if (!is.na(decode_meta_flag(kv9b, "cross_os_comparable"))) {
+    fail("bare (unquoted) boolean was not fail-closed")
+  }
+
+  cat("determinism compare-gate self-test: PASS (9 fixtures)\n")
   invisible(TRUE)
 }
 
