@@ -6,7 +6,7 @@ gha-windows-latest-Rrelease-utf8,windows-latest,release,utf8,true,build axis
 gha-windows-latest-Rdevel-utf8,windows-latest,devel,utf8,true,build axis
 gha-windows-latest-Roldrel-1-utf8,windows-latest,oldrel-1,utf8,true,build axis
 gha-macos-latest-Rrelease-utf8,macos-latest,release,utf8,true,build axis
-gha-macos-latest-Roldrel-1-utf8,macos-latest,oldrel-1,utf8,true,build axis (macos/devel is a declared matrix exclusion, no upstream build)
+gha-macos-latest-Roldrel-1-utf8,macos-latest,oldrel-1,utf8,true,build axis (macos/devel is a declared matrix exclusion -- no upstream build)
 gha-ubuntu-latest-Rrelease-c,ubuntu-latest,release,c,true,charset axis
 gha-windows-latest-Rrelease-c,windows-latest,release,c,true,charset axis
 gha-macos-latest-Rrelease-c,macos-latest,release,c,true,charset axis

@@ -156,8 +156,11 @@ parse_exceptions <- function(path) {
 exception_active <- function(ex, today = Sys.Date()) {
   # Fail-closed: only a fully populated, ACCEPTED, unexpired row with a
   # parseable date expiry is active. A malformed row is inactive (no slack).
-  need <- c("exception_id", "owner", "approver", "scope", "signature",
-            "expiry", "state")
+  # ALL schema fields must be present and non-blank -- justification and
+  # tracking_issue included -- matching the register's "a row missing any field
+  # does not grant tolerance" contract (registers/determinism-exceptions.md).
+  need <- c("exception_id", "owner", "approver", "justification", "scope",
+            "signature", "expiry", "tracking_issue", "state")
   if (!all(need %in% names(ex))) return(FALSE)
   if (any(vapply(ex[need], function(v) !nzchar(v) ||
                  grepl("^(TBD|pending|-)$", v), logical(1)))) {
@@ -165,7 +168,9 @@ exception_active <- function(ex, today = Sys.Date()) {
   }
   if (!identical(toupper(ex$state), "ACCEPTED")) return(FALSE)
   d <- suppressWarnings(as.Date(ex$expiry))
-  if (is.na(d) || d < today) return(FALSE)
+  # Expiry is inclusive: the register says the row stops matching ON/after the
+  # expiry date, so an exception expiring today is already inactive.
+  if (is.na(d) || d <= today) return(FALSE)
   TRUE
 }
 
@@ -184,13 +189,56 @@ divergence_covered <- function(label, fingerprint, exceptions,
   NA_character_
 }
 
+# ---- expected-cell manifest -------------------------------------------------
+
+# Read + VALIDATE the expected-cell manifest, fail-closed. read.csv with the
+# default fill=TRUE silently absorbs a malformed row (an unquoted comma in a
+# note spills into a phantom row; a short row pads with NA), and a typo'd
+# `comparable` value degrades to FALSE -- either of which could drop a real
+# comparable cell out of the comparison and let the gate pass on fewer cells.
+# So we assert structure before trusting it: every line has exactly the header's
+# field count (catches spilled/short rows), labels are unique, `comparable` is
+# strictly true/false (catches typos), and at least two comparable cells remain.
+read_expected <- function(path) {
+  expected <- utils::read.csv(path, colClasses = "character",
+                              check.names = FALSE)
+  req_cols <- c("label", "os", "r", "locale", "comparable")
+  if (!all(req_cols %in% names(expected))) {
+    stop("expected-cells manifest missing required column(s): ",
+         toString(setdiff(req_cols, names(expected))), call. = FALSE)
+  }
+  widths <- suppressWarnings(utils::count.fields(path, sep = ",", quote = "\""))
+  if (anyNA(widths) || any(widths != ncol(expected))) {
+    bad <- which(is.na(widths) | widths != ncol(expected))
+    stop(sprintf(
+      "expected-cells manifest malformed: line(s) %s have %s field(s), not %d ",
+      toString(bad), toString(widths[bad]), ncol(expected)),
+      "(unquoted comma or short row?)", call. = FALSE)
+  }
+  if (anyDuplicated(expected$label)) {
+    dup <- unique(expected$label[duplicated(expected$label)])
+    stop("expected-cells manifest has duplicate label(s): ", toString(dup),
+         call. = FALSE)
+  }
+  cmp <- tolower(expected$comparable)
+  if (!all(cmp %in% c("true", "false"))) {
+    bad <- unique(expected$comparable[!cmp %in% c("true", "false")])
+    stop("expected-cells 'comparable' must be true/false; bad value(s): ",
+         toString(bad), call. = FALSE)
+  }
+  expected$comparable <- cmp == "true"
+  if (sum(expected$comparable) < 2L) {
+    stop("expected-cells manifest declares <2 comparable cells; ",
+         "nothing to compare (fail-closed)", call. = FALSE)
+  }
+  expected
+}
+
 # ---- the gate ---------------------------------------------------------------
 
 run_gate <- function(dumps_dir, expected_csv, exceptions_md,
                      manifest_out = NULL, today = Sys.Date()) {
-  expected <- utils::read.csv(expected_csv, colClasses = "character",
-                              check.names = FALSE)
-  expected$comparable <- tolower(expected$comparable) == "true"
+  expected <- read_expected(expected_csv)
   exceptions <- parse_exceptions(exceptions_md)
 
   cells <- list()          # per-cell record
@@ -390,10 +438,11 @@ self_test <- function() {
   reg_hdr <- paste("| exception_id | owner | approver | justification |",
                    "scope | signature | expiry | tracking_issue | state |")
   reg_sep <- "|---|---|---|---|---|---|---|---|---|"
-  write_reg <- function(name, scope, signature, expiry, state) {
+  write_reg <- function(name, scope, signature, expiry, state,
+                        just = "j", track = "RURL-x") {
     path <- file.path(root, name)
-    row <- sprintf("| DET-EX-1 | o | a | j | %s | %s | %s | RURL-x | %s |",
-                   scope, signature, expiry, state)
+    row <- sprintf("| DET-EX-1 | o | a | %s | %s | %s | %s | %s | %s |",
+                   just, scope, signature, expiry, track, state)
     writeLines(c("## Exceptions", "", reg_hdr, reg_sep, row), path)
     path
   }
@@ -490,7 +539,52 @@ self_test <- function() {
     fail("bare (unquoted) boolean was not fail-closed")
   }
 
-  cat("determinism compare-gate self-test: PASS (9 fixtures)\n")
+  # (10) exception with a BLANK required governance field (justification) does
+  # not grant tolerance -- the register mandates every field be populated.
+  reg_blank <- write_reg("exc-blankjust.md", "gha-C-tr", sig, "2099-01-01",
+                         "ACCEPTED", just = "")
+  if (run_gate(d2, exp_csv, reg_blank)$verdict != "FAIL_DIVERGENCE") {
+    fail("exception with blank justification still matched")
+  }
+
+  # (11) inclusive expiry boundary: an exception is active the day BEFORE its
+  # expiry and inactive ON the expiry date (register: "on/after it stops
+  # matching").
+  reg_bound <- write_reg("exc-boundary.md", "gha-C-tr", sig, "2099-06-15",
+                         "ACCEPTED")
+  if (run_gate(d2, exp_csv, reg_bound,
+               today = as.Date("2099-06-14"))$verdict != "PASS") {
+    fail("exception inactive the day before expiry")
+  }
+  if (run_gate(d2, exp_csv, reg_bound,
+               today = as.Date("2099-06-15"))$verdict != "FAIL_DIVERGENCE") {
+    fail("exception still active ON its expiry date (off-by-one)")
+  }
+
+  # (12) malformed manifest -- a non-boolean `comparable` value is rejected
+  # (fail-closed) rather than silently degrading to non-comparable.
+  bad_bool <- file.path(root, "bad-bool.csv")
+  utils::write.csv(data.frame(
+    label = c("gha-A-utf8", "gha-B-utf8"), os = "x", r = "release",
+    locale = "utf8", comparable = c("true", "treu"), note = "",
+    stringsAsFactors = FALSE), bad_bool, row.names = FALSE)
+  if (!inherits(tryCatch(run_gate(d1, bad_bool, NULL),
+                         error = function(e) e), "error")) {
+    fail("manifest with a non-boolean comparable value was not rejected")
+  }
+
+  # (13) malformed manifest -- an unquoted comma spilling a note into a phantom
+  # row (a field-width mismatch) is rejected, not silently absorbed.
+  bad_width <- file.path(root, "bad-width.csv")
+  writeLines(c("label,os,r,locale,comparable,note",
+               "gha-A-utf8,x,release,utf8,true,note with, comma",
+               "gha-B-utf8,x,release,utf8,true,ok"), bad_width)
+  if (!inherits(tryCatch(run_gate(d1, bad_width, NULL),
+                         error = function(e) e), "error")) {
+    fail("manifest with a field-width mismatch was not rejected")
+  }
+
+  cat("determinism compare-gate self-test: PASS (13 fixtures)\n")
   invisible(TRUE)
 }
 
