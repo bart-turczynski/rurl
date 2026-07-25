@@ -191,6 +191,27 @@ jobs:
       - name: Verify the release rule over the normative corpus
         run: Rscript tools/release-rule-check.R
 
+  # parse_status documentation-consistency gate (G4, migration family). The
+  # status vocabulary has one authoritative definition -- the `.STATUS_*`
+  # constants in R/status-constants.R -- and this gate holds the documentation
+  # to it in both directions: every enumerating doc site lists every value (S1),
+  # no doc mentions a status literal with no constant behind it (S2), the
+  # ok/warning/error partition holds (S3), and the vocabulary size is pinned so
+  # a new token cannot appear silently (S4, the M-8 freeze). Deterministic and
+  # network-free: it sources the constants file, so it needs no package build.
+  status-docs:
+    runs-on: ubuntu-latest
+    name: parse_status docs match the status constants (M-8/M-14)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        run: Rscript tools/status-doc-consistency.R --self-test
+      - name: Scan documentation for status-vocabulary drift
+        run: Rscript tools/status-doc-consistency.R
+
   coverage:
     needs: check
     runs-on: ubuntu-latest
