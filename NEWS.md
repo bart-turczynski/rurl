@@ -1,3 +1,70 @@
+## rurl (development version)
+
+### Breaking changes
+
+- **`canonical_join()` now warns when a legacy presentation dial is forwarded
+  through `...`.** `canonical_join()` matches on the canonicalized presentation
+  string (`clean_url`), so a presentation or cleaning dial passed through `...`
+  silently moves the comparison key and changes join cardinality — the same
+  inputs match a different number of rows because of dials that were never meant
+  to be identity inputs. Twenty-one such dials now emit one warning per call, of
+  class `"rurl_legacy_join_dial_warning"`. The four input and interpretation
+  axes — `url_standard`, `scheme_acceptance`, `scheme_policy` and
+  `scheme_relative_handling` — are legitimate inputs to identity and stay
+  silent.
+
+  **Results are unchanged.** The warning is purely additive, and byte-identical
+  output was verified across ten dial configurations, so no caller is silently
+  re-matched. This is flagged breaking only because a new condition is
+  *signalled*: code running under `options(warn = 2)`, or asserting with
+  `expect_silent()`, will now see an error where it previously saw none. Because
+  the condition is classed it can be silenced without hiding other warnings:
+
+  ```r
+  suppressWarnings(
+    canonical_join(A, B, www_handling = "strip"),
+    classes = "rurl_legacy_join_dial_warning"
+  )
+  ```
+
+  The per-dial classification is taken from the settled `key-affecting?` column
+  of the v3 cleaning-mutation contract rather than re-derived. Retaining
+  `canonical_join()` with a deprecation window and warnings — rather than
+  re-keying it in place — is the ratified disposition (P3.1 Q7/B7).
+
+### Bug fixes
+
+- **A list element of the wrong length no longer aborts the whole
+  `safe_parse_urls()` call.** `safe_parse_urls(list("http://a.com/", c("b", "c")))`
+  failed the entire call with base R's untyped `"values must be length 1"`. A
+  list element of the wrong length is bad *data*, not a contract violation, so it
+  now recovers row-locally as an error row (`original_url = NA`,
+  `parse_status = "error"`) — matching what every other non-scalar shape (`NULL`,
+  length 0, a non-character vector) already did. Call-level errors stay reserved
+  for contract violations.
+
+- **Input names no longer leak into `safe_parse_urls()` row names.**
+  `safe_parse_urls(c(a = "http://example.com/", b = "http://ex.org/"))` promoted
+  the input's names to the result frame's row names, while the vectorized
+  accessors strip them. The public surface disagreed with itself, and leaked row
+  names are a silent correctness hazard rather than a cosmetic one — they survive
+  into joins and downstream frames as though they were a column. The frame now
+  always has ordinary sequential row names, matching the accessors, which return
+  unnamed vectors. Both halves are now pinned by test; the suite previously had
+  no named-vector coverage at all.
+
+### Internal
+
+- The documented `canonical_join()` example no longer passes presentation dials,
+  so the package's own headline usage no longer demonstrates the pattern that now
+  warns. Documentation and `README` only; no behavior change.
+
+- The four tests that pinned presentation dials moving the `canonical_join()`
+  comparison key now state that behavior as documented legacy that warns, rather
+  than endorsing the collapse as correct. Every value assertion is unchanged; the
+  rewrite to key invariance is deferred to the slice that introduces an explicit
+  identity key.
+
 ## rurl 2.7.0
 
 ### Breaking changes
