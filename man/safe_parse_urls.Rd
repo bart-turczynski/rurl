@@ -341,7 +341,10 @@ filter tracking params). Inspect the resolved bundle with
 \value{
 A data.frame with one row per URL and the same fields returned by
 \code{\link{safe_parse_url}}. Invalid inputs return NA fields with
-\code{parse_status = "error"}.
+\code{parse_status = "error"}. Names on \code{url} are not carried into the
+result: the frame always has ordinary sequential row names, matching the
+accessors (\code{\link{get_host}} and friends), which return unnamed
+vectors.
 }
 \description{
 Vectorized wrapper around \code{\link{safe_parse_url}} that returns a
