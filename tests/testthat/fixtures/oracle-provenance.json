@@ -86,7 +86,7 @@
     {
       "path": "tests/testthat/fixtures/external-url-vectors.csv",
       "fixture_kind": "multi-source table of external adversarial/conformance vectors; the row oracle is the SOURCE's expectation, recorded per row in standard + standard_expectation (test-external-url-vectors.R:1-9)",
-      "transformed_fixture_sha256": "b72e162f631cb8d4a9448ebb080ffc3001357c64e693808e03e12c4487325d5e",
+      "transformed_fixture_sha256": "64b01423bb2900dc9efaeac7da33d9670df0997901a65850854adabf5afb3f61",
       "row_count": 353,
       "row_count_note": "data rows, excluding the CSV header",
       "in_fixture_provenance": "per-row source, source_class and source_reference columns, plus the file header comment at tests/testthat/test-external-url-vectors.R:1-48",
