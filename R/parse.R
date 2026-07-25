@@ -806,7 +806,19 @@ safe_parse_urls <- function(url,
 }
 
 # Coerce one input element to the scalar `original_url` value: NA for missing
-# or non-scalar inputs, the string itself for character, else as.character().
+# or non-scalar inputs, the string itself for a length-1 character, else
+# as.character().
+#
+# The `length(u) == 1L` guard on the character branch is load-bearing
+# (RURL-ksozrswe): without it a list element that is a character vector of
+# length > 1 was returned verbatim, so the caller's
+# `vapply(..., character(1))` aborted the WHOLE call with base R's untyped
+# "values must be length 1" message. A list element of the wrong length is bad
+# DATA, not a contract violation, so it must recover row-locally as an error row
+# (P1.1 §3.4). NA_character_ is what this function already returns for every
+# other non-scalar shape -- NULL, length 0, and a non-character vector of length
+# > 1 -- so the guard makes the character case follow the rule the rest of the
+# function already states, rather than inventing a deparsed/collapsed string.
 .spu_coerce_original <- function(u) {
   is_missing_url <- is.null(u) ||
     length(u) == 0 ||
@@ -814,7 +826,7 @@ safe_parse_urls <- function(url,
   if (is_missing_url) {
     return(NA_character_)
   }
-  if (is.character(u)) {
+  if (is.character(u) && length(u) == 1L) {
     return(u)
   }
   if (is.atomic(u) && length(u) == 1) {
