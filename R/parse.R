@@ -578,7 +578,10 @@ safe_parse_url <- function(url,
 #' @inheritParams safe_parse_url
 #' @return A data.frame with one row per URL and the same fields returned by
 #'   \code{\link{safe_parse_url}}. Invalid inputs return NA fields with
-#'   \code{parse_status = "error"}.
+#'   \code{parse_status = "error"}. Names on \code{url} are not carried into the
+#'   result: the frame always has ordinary sequential row names, matching the
+#'   accessors (\code{\link{get_host}} and friends), which return unnamed
+#'   vectors.
 #' @export
 #' @examples
 #' safe_parse_urls(c("example.com", "https://www.example.com/path"))
@@ -712,6 +715,20 @@ safe_parse_urls <- function(url,
   # applies the same as.character() coercion to its key columns).
   if (is.factor(url)) {
     url <- as.character(url)
+  }
+
+  # Input names are not data (RURL-vhdsqaln). `data.frame()` promotes the names
+  # of its first named component to row.names, so a named `url` reached the
+  # result frame as its row names -- where they read as though they were a
+  # column and silently survive into joins and downstream frames. The accessors
+  # already strip names via unname() (R/accessors.R:99,107); stripping once
+  # here, ahead of BOTH the character fast path and the list path, makes the
+  # agree with them instead of the surface disagreeing with itself. Guarded so
+  # the overwhelmingly common unnamed input keeps its zero-copy fast path.
+  # Values, order, length and NA-ness are untouched; only the names attribute
+  # goes, so an unnamed input is byte-identical to before.
+  if (!is.null(names(url))) {
+    url <- unname(url)
   }
 
   if (length(url) == 0) {
