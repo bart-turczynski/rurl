@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Control-plane validators (lifecycle-aware)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so ci-gate.R can diff the PR against its base to find
           # newly-added PROPOSED decision records (the lifecycle tolerance).
