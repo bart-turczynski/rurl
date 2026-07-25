@@ -1,4 +1,4 @@
-## rurl (development version)
+## rurl 2.8.0
 
 ### Breaking changes
 
