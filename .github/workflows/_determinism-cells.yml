@@ -288,6 +288,28 @@ jobs:
           cat("effective locale: ", Sys.getlocale("LC_ALL"), "\n", sep = "")
           source("tools/determinism/parse-dump.R")
 
+      # P5.2's "two pinned runs of the same comparable cell". Identical config,
+      # identical corpus -- the ONLY difference is that this is a second, FRESH
+      # R process, which is what makes it a repeat-run (temporal/process)
+      # reproducibility check rather than another platform observation. Cheap:
+      # the slow setup-r-dependencies install above is not repeated, only the
+      # probe itself. RURL_DETERMINISM_RUN redirects the output to
+      # `rerun-dump-<LABEL>.csv`, which compare-gate.R pairs with the first run.
+      # Same guard as the first probe -- a cell whose stack failed to install is
+      # DEGRADED and has no first run to pair with.
+      - name: Repeat the probe in a fresh process (parse-dump.R, run 2)
+        if: inputs.run_parse_dump && steps.stack.outcome == 'success'
+        continue-on-error: true
+        shell: Rscript {0}
+        env:
+          LANG: ${{ env.RURL_LANG }}
+          LC_ALL: ${{ env.RURL_LANG }}
+          R_PROFILE_USER: ${{ env.RURL_RPROFILE }}
+          RURL_DETERMINISM_RUN: rerun
+        run: |
+          cat("effective locale: ", Sys.getlocale("LC_ALL"), "\n", sep = "")
+          source("tools/determinism/parse-dump.R")
+
       # Do the locale and charset axes actually EXIST in this cell? A `tr` cell
       # whose case-mapping hazard is not live, or a `c` cell that is actually
       # in UTF-8, is a false negative that looks like a pass -- so both

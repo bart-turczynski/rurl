@@ -23,11 +23,26 @@
 #       [--dumps DIR] [--expected CSV] [--exceptions MD] [--manifest-out CSV]
 #   Rscript tools/determinism/compare-gate.R --self-test
 #
+# P5.2 pins TWO invariance axes, and this gate checks both:
+#   * ACROSS cells   -- platform invariance (one detection hash for the group).
+#   * ACROSS RUNS    -- repeat-run reproducibility ("two pinned runs of the same
+#                       comparable cell"). Cross-cell comparison structurally
+#                       cannot see a cell that is unstable against ITSELF, since
+#                       each cell contributes exactly one observation; the
+#                       harness therefore re-runs parse-dump.R in a fresh
+#                       process per cell, and this gate requires the pair to
+#                       be identical.
+# Neither axis is a regression check: comparing against a committed baseline
+# would test output drift under a declared input (owned by
+# tests/testthat/_snaps/characterization-snapshot.md), not determinism.
+#
 # Verdict categories (a red gate is always a real finding, but not always parser
 # nondeterminism -- the manifest distinguishes them):
 #   PASS
+#   FAIL_NONDETERMINISM    a comparable cell did not reproduce its own output
 #   FAIL_DIVERGENCE        comparable cells produced different output
-#   FAIL_MISSING_EVIDENCE  an expected comparable cell has no dump/metadata
+#   FAIL_MISSING_EVIDENCE  an expected comparable cell has no dump/metadata,
+#                          or produced no usable repeat run
 #   FAIL_INVALID_AXIS      a comparable cell did not arm its charset/locale axis
 #   FAIL_DEGRADED          an expected comparable cell reported DEGRADED
 
@@ -100,13 +115,18 @@ dump_projection <- function(path) {
 # THIS (not the whole-dump hash) is the exception signature: it pins the precise
 # divergence and scope, so an exception cannot authorize an unrelated diff.
 diff_signature <- function(cell, reference) {
-  all_keys <- sort(union(names(cell$by_key), names(reference$by_key)))
+  ref_keys <- names(reference$by_key)
+  cell_keys <- names(cell$by_key)
+  all_keys <- sort(union(cell_keys, ref_keys))
   deltas <- character(0)
   for (k in all_keys) {
-    a <- reference$by_key[[k]]
-    b <- cell$by_key[[k]]
-    if (is.null(a)) a <- "<absent>"
-    if (is.null(b)) b <- "<absent>"
+    # `by_key` is a NAMED CHARACTER VECTOR, and `[[` on one ERRORS for an absent
+    # name -- it does not return NULL. So presence must be tested explicitly: a
+    # key in only one projection means a row appeared or vanished, which is a
+    # real, reportable delta, not a crash in the gate before it writes its
+    # manifest.
+    a <- if (k %in% ref_keys) reference$by_key[[k]] else "<absent>"
+    b <- if (k %in% cell_keys) cell$by_key[[k]] else "<absent>"
     if (!identical(a, b)) {
       deltas <- c(deltas, paste(k, a, b, sep = "\x1f"))
     }
@@ -236,8 +256,14 @@ read_expected <- function(path) {
 
 # ---- the gate ---------------------------------------------------------------
 
+# The repeat-run output tag. MUST stay in step with RURL_DETERMINISM_RUN in
+# .github/workflows/_determinism-cells.yml: the harness writes
+# `<RURL_DETERMINISM_RUN>-dump-<LABEL>.csv` and the gate reads it back here.
+rerun_prefix_default <- "rerun-"
+
 run_gate <- function(dumps_dir, expected_csv, exceptions_md,
-                     manifest_out = NULL, today = Sys.Date()) {
+                     manifest_out = NULL, today = Sys.Date(),
+                     rerun_prefix = rerun_prefix_default) {
   expected <- read_expected(expected_csv)
   exceptions <- parse_exceptions(exceptions_md)
 
@@ -254,7 +280,7 @@ run_gate <- function(dumps_dir, expected_csv, exceptions_md,
       file.path(dumps_dir, paste0("DEGRADED-", label, ".txt")))
 
     rec <- list(label = label, comparable = comparable, status = "OK",
-                hash = NA_character_, detail = "")
+                hash = NA_character_, detail = "", rerun = "")
 
     if (degraded) {
       rec$status <- if (comparable) "DEGRADED" else "DEGRADED_EVIDENCE"
@@ -299,6 +325,55 @@ run_gate <- function(dumps_dir, expected_csv, exceptions_md,
       rec$detail <- "no dump-<label>.csv"
     }
     cells[[label]] <- rec
+  }
+
+  # Repeat-run reproducibility (P5.2: "two pinned runs of the same comparable
+  # cell"). Each comparable cell that produced a valid first dump must also have
+  # produced a byte-identical second one, from a fresh process on the same
+  # runner. Fail-closed: an absent or unreadable repeat run is missing evidence,
+  # never a pass -- a cell that cannot be re-run cannot demonstrate it is
+  # reproducible. Only findings are recorded; a reproducible cell is silent.
+  reruns <- list()
+  for (label in names(cells)) {
+    rc <- cells[[label]]
+    if (!rc$comparable || !identical(rc$status, "OK") ||
+          is.null(rc$projection)) {
+      next
+    }
+    rerun_path <- file.path(dumps_dir,
+                            paste0(rerun_prefix, "dump-", label, ".csv"))
+    if (!file.exists(rerun_path)) {
+      cells[[label]]$rerun <- "MISSING"
+      reruns[[label]] <- list(label = label, kind = "MISSING",
+                              signature = NA_character_, n_deltas = 0L,
+                              covered_by = NA_character_)
+      next
+    }
+    proj2 <- tryCatch(dump_projection(rerun_path), error = function(e) e)
+    if (inherits(proj2, "error")) {
+      cells[[label]]$rerun <- "MALFORMED"
+      reruns[[label]] <- list(label = label, kind = "MALFORMED",
+                              signature = NA_character_, n_deltas = 0L,
+                              covered_by = NA_character_)
+      next
+    }
+    if (identical(md5_of_string(proj2$serialized), rc$hash)) {
+      cells[[label]]$rerun <- "REPRODUCIBLE"
+      next
+    }
+    # Typed like the DEGRADED sentinel. A repeat-run divergence is a different
+    # KIND of finding from a cross-cell one, so its authorizing fingerprint is
+    # namespaced `RERUN:` -- a cross-cell exception can never silently satisfy
+    # a nondeterminism finding that happens to hash to the same delta set, or
+    # the reverse. Still scope- AND signature-pinned, so it cannot widen.
+    sig <- diff_signature(proj2, rc$projection)
+    fingerprint <- paste0("RERUN:", sig$fingerprint)
+    covered <- divergence_covered(label, fingerprint, exceptions, today)
+    reruns[[label]] <- list(label = label, kind = "NONDETERMINISTIC",
+                            signature = fingerprint, n_deltas = sig$n,
+                            covered_by = covered)
+    cells[[label]]$rerun <-
+      if (is.na(covered)) "NONDETERMINISTIC" else "NONDETERMINISTIC_COVERED"
   }
 
   # Unexpected observed cells (a dump with no expected-cell row).
@@ -358,10 +433,23 @@ run_gate <- function(dumps_dir, expected_csv, exceptions_md,
   fail_invalid <- Filter(function(c) c$comparable &&
     c$status %in% c("UNARMED_AXIS", "META_CONFLICT", "MALFORMED"), cells)
   uncovered <- Filter(function(d) is.na(d$covered_by), divergences)
+  # An unusable repeat run is an evidence gap, not a divergence: we never got
+  # the second observation, so nothing was compared.
+  fail_rerun_evidence <- Filter(
+    function(r) r$kind %in% c("MISSING", "MALFORMED"), reruns)
+  fail_nondet <- Filter(
+    function(r) r$kind == "NONDETERMINISTIC" && is.na(r$covered_by), reruns)
 
-  verdict <- if (length(uncovered) > 0L) {
+  # FAIL_NONDETERMINISM outranks FAIL_DIVERGENCE: a cell that cannot reproduce
+  # its own output makes its cross-cell hash unreliable evidence, so report the
+  # more fundamental finding first. (The unstable cell is deliberately left in
+  # the cross-cell comparison so its divergence, if any, is still reported.)
+  verdict <- if (length(fail_nondet) > 0L) {
+    "FAIL_NONDETERMINISM"
+  } else if (length(uncovered) > 0L) {
     "FAIL_DIVERGENCE"
-  } else if (length(fail_missing) > 0L || length(unexpected) > 0L) {
+  } else if (length(fail_missing) > 0L || length(unexpected) > 0L ||
+               length(fail_rerun_evidence) > 0L) {
     "FAIL_MISSING_EVIDENCE"
   } else if (length(fail_invalid) > 0L) {
     "FAIL_INVALID_AXIS"
@@ -376,6 +464,7 @@ run_gate <- function(dumps_dir, expected_csv, exceptions_md,
     comparable = vapply(cells, function(c) c$comparable, logical(1)),
     status = vapply(cells, function(c) c$status, character(1)),
     hash = vapply(cells, function(c) c$hash, character(1)),
+    rerun = vapply(cells, function(c) c$rerun, character(1)),
     detail = vapply(cells, function(c) c$detail, character(1)),
     stringsAsFactors = FALSE, row.names = NULL
   )
@@ -385,26 +474,45 @@ run_gate <- function(dumps_dir, expected_csv, exceptions_md,
   }
 
   list(verdict = verdict, manifest = manifest, divergences = divergences,
-       unexpected = unexpected,
+       reruns = reruns, unexpected = unexpected,
        n_comparable = sum(expected$comparable),
-       n_valid = length(valid))
+       n_valid = length(valid),
+       n_reproducible = sum(vapply(cells,
+         function(c) identical(c$rerun, "REPRODUCIBLE"), logical(1))))
 }
 
 print_result <- function(res) {
   cat("== rurl 3.0 determinism acceptance gate (P5.2 / C-09) ==\n")
   cat(sprintf("comparable cells expected: %d ; valid & compared: %d\n",
               res$n_comparable, res$n_valid))
+  cat(sprintf("repeat runs reproduced byte-identically: %d\n",
+              res$n_reproducible))
   print(res$manifest)
   if (length(res$unexpected) > 0L) {
     cat("UNEXPECTED cells (no expected-cell row):\n  ",
         toString(res$unexpected), "\n", sep = "")
   }
   if (length(res$divergences) > 0L) {
-    cat("DIVERGENCES:\n")
+    cat("DIVERGENCES (across cells):\n")
     for (d in res$divergences) {
       cat(sprintf("  - %s: signature=%s deltas=%d covered_by=%s\n",
                   d$label, d$signature, d$n_deltas,
                   if (is.na(d$covered_by)) "NONE" else d$covered_by))
+    }
+  }
+  if (length(res$reruns) > 0L) {
+    cat("REPEAT-RUN FINDINGS (same cell, second process):\n")
+    for (r in res$reruns) {
+      if (identical(r$kind, "NONDETERMINISTIC")) {
+        cat(sprintf("  - %s: NONDETERMINISTIC signature=%s deltas=%d",
+                    r$label, r$signature, r$n_deltas),
+            sprintf(" covered_by=%s\n",
+                    if (is.na(r$covered_by)) "NONE" else r$covered_by),
+            sep = "")
+      } else {
+        cat(sprintf("  - %s: repeat run %s (no second observation)\n",
+                    r$label, r$kind))
+      }
     }
   }
   cat("VERDICT:", res$verdict, "\n")
@@ -425,15 +533,28 @@ self_test <- function() {
   ), exp_csv, row.names = FALSE)
 
   write_cell <- function(dir, label, rows, comparable = TRUE,
-                         charset_ok = TRUE, armed = TRUE, degraded = FALSE) {
+                         charset_ok = TRUE, armed = TRUE, degraded = FALSE,
+                         rerun_rows = rows, rerun = TRUE) {
     if (degraded) {
       writeLines("SKIPPED", file.path(dir, paste0("DEGRADED-", label, ".txt")))
       return(invisible())
     }
-    d <- data.frame(id = seq_along(rows), url_standard = "whatwg",
-                    host = rows, stringsAsFactors = FALSE)
-    utils::write.csv(d, file.path(dir, paste0("dump-", label, ".csv")),
+    mk_dump <- function(r) {
+      data.frame(id = seq_along(r), url_standard = "whatwg", host = r,
+                 stringsAsFactors = FALSE)
+    }
+    utils::write.csv(mk_dump(rows),
+                     file.path(dir, paste0("dump-", label, ".csv")),
                      row.names = FALSE)
+    # Every cell also gets a repeat run, identical by default: that is the
+    # reproducible steady state. Fixtures opt out (rerun = FALSE) or perturb it
+    # (rerun_rows) to exercise the repeat-run axis.
+    if (isTRUE(rerun)) {
+      utils::write.csv(
+        mk_dump(rerun_rows),
+        file.path(dir, paste0(rerun_prefix_default, "dump-", label, ".csv")),
+        row.names = FALSE)
+    }
     # Encode flags exactly as the probe does: esc() renders a boolean as the
     # JSON string literal "true"/"false" (inner quotes included); write.csv then
     # quotes the field. This is the real producer representation the decoder
@@ -620,7 +741,75 @@ self_test <- function() {
     fail("DEGRADED cell with a wrong sentinel exception not FAIL_DEGRADED")
   }
 
-  cat("determinism compare-gate self-test: PASS (15 fixtures)\n")
+  # (16) a comparable cell whose SECOND run differs from its first ->
+  # FAIL_NONDETERMINISM. Cross-cell comparison is blind to this: every cell
+  # still agrees with the group on its first run, which is exactly the hole the
+  # repeat-run axis exists to close.
+  d16 <- mk()
+  write_cell(d16, "gha-A-utf8", good); write_cell(d16, "gha-B-utf8", good)
+  write_cell(d16, "gha-C-tr", good, rerun_rows = c("a.com", "b.com", "C.COM"))
+  write_cell(d16, "gha-D-default", good, comparable = FALSE)
+  r16 <- run_gate(d16, exp_csv, NULL)
+  if (r16$verdict != "FAIL_NONDETERMINISM") {
+    fail(paste("repeat-run divergence not caught:", r16$verdict))
+  }
+  rsig <- r16$reruns[["gha-C-tr"]]$signature
+  if (!grepl("^RERUN:", rsig)) fail("repeat-run signature is not namespaced")
+
+  # (17) a repeat-run divergence covered by a matching, unexpired exception ->
+  # PASS: tolerance is granted the same governed way on both axes.
+  reg_rerun <- write_reg("exc-rerun.md", "gha-C-tr", rsig, "2099-01-01",
+                         "ACCEPTED")
+  if (run_gate(d16, exp_csv, reg_rerun)$verdict != "PASS") {
+    fail("repeat-run divergence with a matching exception not PASS")
+  }
+
+  # (18) the RERUN: namespace is load-bearing -- the same delta set registered
+  # WITHOUT the prefix (i.e. as a cross-cell divergence) must not grant
+  # tolerance for a nondeterminism finding.
+  reg_bare <- write_reg("exc-rerun-bare.md", "gha-C-tr",
+                        sub("^RERUN:", "", rsig), "2099-01-01", "ACCEPTED")
+  if (run_gate(d16, exp_csv, reg_bare)$verdict != "FAIL_NONDETERMINISM") {
+    fail("un-namespaced exception covered a repeat-run divergence")
+  }
+
+  # (19) a comparable cell with a valid first dump but NO repeat run is missing
+  # evidence, not a pass: a cell that cannot be re-run proves nothing.
+  d19 <- mk()
+  write_cell(d19, "gha-A-utf8", good); write_cell(d19, "gha-B-utf8", good)
+  write_cell(d19, "gha-C-tr", good, rerun = FALSE)
+  write_cell(d19, "gha-D-default", good, comparable = FALSE)
+  if (run_gate(d19, exp_csv, NULL)$verdict != "FAIL_MISSING_EVIDENCE") {
+    fail("comparable cell without a repeat run not caught")
+  }
+
+  # (20) divergence by ROW SET, not just row value: a cell with an extra keyed
+  # row must yield a signature naming the appearance, not error out. `[[` on a
+  # named vector throws for an absent name, so an unguarded lookup crashed the
+  # gate here -- before the manifest was written, destroying the diagnostic.
+  d20 <- mk()
+  write_cell(d20, "gha-A-utf8", good); write_cell(d20, "gha-B-utf8", good)
+  write_cell(d20, "gha-C-tr", c(good, "extra.com"))
+  write_cell(d20, "gha-D-default", good, comparable = FALSE)
+  r20 <- run_gate(d20, exp_csv, NULL)
+  if (r20$verdict != "FAIL_DIVERGENCE") {
+    fail(paste("row-set divergence not caught:", r20$verdict))
+  }
+  if (r20$divergences[["gha-C-tr"]]$n_deltas != 1L) {
+    fail("row-set divergence did not report exactly one appeared row")
+  }
+
+  # (21) the same asymmetry on the repeat-run axis: a second run that DROPS a
+  # row is nondeterminism, and must survive signature computation.
+  d21 <- mk()
+  write_cell(d21, "gha-A-utf8", good); write_cell(d21, "gha-B-utf8", good)
+  write_cell(d21, "gha-C-tr", good, rerun_rows = good[-3])
+  write_cell(d21, "gha-D-default", good, comparable = FALSE)
+  if (run_gate(d21, exp_csv, NULL)$verdict != "FAIL_NONDETERMINISM") {
+    fail("repeat run with a dropped row not caught")
+  }
+
+  cat("determinism compare-gate self-test: PASS (21 fixtures)\n")
   invisible(TRUE)
 }
 

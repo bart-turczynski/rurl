@@ -55,15 +55,18 @@ fingerprint does **not** grant tolerance.
 | `approver` | Who authorized it (the owner; P0.1 ratification). |
 | `justification` | Why the divergence is acceptable and irreducible. |
 | `scope` | Space/semicolon-separated comparable-cell labels the exception covers (matching `tools/determinism/expected-cells.csv`), or `*` for all comparable cells. |
-| `signature` | The exact divergence fingerprint the gate emits (md5 over the canonicalized keyed row/column/value deltas vs the reference cell). Pins the precise diff so the exception cannot silently widen. |
+| `signature` | The exact fingerprint the gate emits for the finding being excepted. Three **typed** forms: (a) *cross-cell divergence* — a bare md5 over the canonicalized keyed row/column/value deltas vs the reference cell; (b) *repeat-run divergence* — `RERUN:<md5>`, the same delta hash computed over run 1 vs run 2 of a single cell; (c) *degraded cell* — `DEGRADED:<label>`, because an absent cell has no output to diff. The namespaces are load-bearing: an exception written for one class can never satisfy another, even if the delta set hashes identically. Pins the precise finding so the exception cannot silently widen. |
 | `expiry` | An ISO date `YYYY-MM-DD`; on/after it the row stops matching and the gate fails again. A non-date value is treated as expired (fail-closed). |
 | `tracking_issue` | The `fp` issue owning remediation or permanent-acceptance. |
 | `state` | Lifecycle state; only `ACCEPTED` grants tolerance. |
 
-**Matching rule (P5.2 part 3).** A divergence is authorized **iff** an active
+**Matching rule (P5.2 part 3).** A finding is authorized **iff** an active
 (`state = ACCEPTED`, unexpired, fully populated) exception's `scope` names the
-diverging cell label (or `*`) **and** its `signature` equals the divergence
-fingerprint. Any divergence with no matching active exception FAILS the gate.
+affected cell label (or `*`) **and** its `signature` equals the fingerprint the
+gate computed for that finding, in the exact typed form above. Any finding with
+no matching active exception FAILS the gate. This applies uniformly to all three
+classes: a cross-cell divergence, a repeat-run (nondeterminism) divergence, and
+a degraded comparable cell.
 
 ## Exceptions
 

@@ -18,6 +18,12 @@
 #          tools/determinism/out/env-<LABEL>.csv
 # LABEL comes from $RURL_DETERMINISM_LABEL, else <sysname>-libcurl<version>.
 #
+# $RURL_DETERMINISM_RUN optionally TAGS the output of a repeat run, writing
+# <RUN>-dump-<LABEL>.csv / <RUN>-env-<LABEL>.csv instead. Unset (the default)
+# writes the untagged names, so the primary run is unchanged. The tag PREFIXES
+# rather than suffixes: the gate enumerates cells with a `^dump-` glob, so a
+# suffixed repeat dump would register as an extra, unexpected cell.
+#
 # ZERO package dependencies beyond base R + an installed rurl (curl comes with
 # rurl). stringi is PROBED, never required. No jsonlite, no devtools.
 #
@@ -441,8 +447,14 @@ write_ascii_csv <- function(df, path) {
   invisible(path)
 }
 
-dump_path <- file.path(out_dir, paste0("dump-", label, ".csv"))
-env_path <- file.path(out_dir, paste0("env-", label, ".csv"))
+# Repeat-run tag (G4.2 / P5.2 "two pinned runs of the same comparable cell").
+# Sanitized like the label, and PREFIXED -- see the header: the gate's cell glob
+# is anchored `^dump-`, so a suffixed repeat dump would look like its own cell.
+run_tag <- gsub("[^A-Za-z0-9._-]", "_", Sys.getenv("RURL_DETERMINISM_RUN", ""))
+tag <- if (nzchar(run_tag)) paste0(run_tag, "-") else ""
+
+dump_path <- file.path(out_dir, paste0(tag, "dump-", label, ".csv"))
+env_path <- file.path(out_dir, paste0(tag, "env-", label, ".csv"))
 write_ascii_csv(dump, dump_path)
 write_ascii_csv(env_df, env_path)
 

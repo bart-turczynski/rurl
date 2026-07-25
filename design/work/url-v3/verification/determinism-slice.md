@@ -69,7 +69,11 @@ manifest: **`tools/determinism/expected-cells.csv`**.
    `3db0d6e9…`). The gate separates the per-cell **detection hash** (does this
    cell match the group?) from an exception **signature** (an md5 over the
    canonicalized keyed row/column/value deltas vs the reference cell), so an
-   exception authorizes an exact diff and cannot silently widen.
+   exception authorizes an exact diff and cannot silently widen. Each comparable
+   cell is probed **twice** — a second `parse-dump.R` in a fresh process, writing
+   `rerun-dump-<LABEL>.csv` (`$RURL_DETERMINISM_RUN`) — and the pair must reduce
+   to the same hash, so the same bytes are compared on both invariance axes:
+   **across cells** (platform) and **across runs** (process/temporal).
 2. **Which cells are comparable.** The **14** `cross_os_comparable = true` cells
    (the 8-cell build axis with charset held at UTF-8, minus the declared
    macOS/devel exclusion, plus the 3 `c` and 3 `tr` charset/locale cells). The
@@ -89,12 +93,18 @@ manifest: **`tools/determinism/expected-cells.csv`**.
    malformed) comparable cell, or a `DEGRADED` comparable cell not covered by an
    active exception (P5.2 part 1: a registered gap allowance, matched by the typed
    sentinel signature `DEGRADED:<label>`, which pins the exact absent cell and
-   cannot widen to an output diff). The verdict names the class
-   (`FAIL_DIVERGENCE` / `FAIL_MISSING_EVIDENCE` / `FAIL_INVALID_AXIS` /
+   cannot widen to an output diff); and on a comparable cell that fails to
+   reproduce its own output across its two runs, or that produced no usable
+   second run at all (fail-closed — a cell that cannot be re-run demonstrates
+   nothing). The verdict names the class (`FAIL_NONDETERMINISM` /
+   `FAIL_DIVERGENCE` / `FAIL_MISSING_EVIDENCE` / `FAIL_INVALID_AXIS` /
    `FAIL_DEGRADED`) so a red gate is a real finding but not necessarily parser
-   nondeterminism.
+   nondeterminism. `FAIL_NONDETERMINISM` outranks `FAIL_DIVERGENCE`: a cell that
+   is unstable against itself makes its cross-cell hash unreliable evidence, so
+   the more fundamental finding is reported first.
 4. **Where the result manifest is retained.** `compare-gate.R` writes a per-cell
-   `gate-manifest.csv` (label, comparable, status, hash, detail) before exiting,
+   `gate-manifest.csv` (label, comparable, status, hash, rerun, detail) before
+   exiting,
    uploaded as a CI artifact alongside the dumps; the probe's 90-day artifacts
    remain the raw-evidence retention.
 5. **Which changes trigger it.** Per P5.2: `R/**`, `DESCRIPTION`, `NAMESPACE`,
@@ -110,16 +120,20 @@ manifest: **`tools/determinism/expected-cells.csv`**.
 
 Tolerance is **byte-exact zero unapproved divergence** (P5.2 part 2) — no fuzzy
 margin. The **only** channel for tolerance is the append-only
-`registers/determinism-exceptions.md` (P5.2 part 3): a divergence passes iff an
+`registers/determinism-exceptions.md` (P5.2 part 3): a finding passes iff an
 active (`state = ACCEPTED`, unexpired, fully populated) exception whose `scope`
-names the diverging cell has a `signature` equal to the divergence fingerprint.
-The gate is **fail-closed**: a malformed, incomplete, non-ACCEPTED, or expired
-row grants nothing. Steady state is an empty register (zero-divergence baseline).
+names the affected cell has a `signature` equal to the fingerprint the gate
+computed. The signature is **typed**, in three forms that cannot substitute for
+one another: a bare md5 (cross-cell divergence), `RERUN:<md5>` (repeat-run
+divergence), and `DEGRADED:<label>` (an absent cell, which has no output to
+diff). The gate is **fail-closed**: a malformed, incomplete, non-ACCEPTED, or
+expired row grants nothing. Steady state is an empty register (zero-divergence
+baseline).
 
 ## Positive and negative coverage (§7 G4)
 
 `Rscript tools/determinism/compare-gate.R --self-test` builds synthetic dump
-directories and asserts fifteen fixtures:
+directories and asserts twenty-one fixtures:
 
 | # | fixture | expected verdict | sign |
 |---|---|---|---|
@@ -138,6 +152,12 @@ directories and asserts fifteen fixtures:
 | 13 | manifest with a field-width mismatch (unquoted comma / short row) | rejected (error) | negative |
 | 14 | DEGRADED cell covered by a matching `DEGRADED:<label>` sentinel exception | PASS | positive |
 | 15 | DEGRADED cell with a wrong sentinel signature | FAIL_DEGRADED | negative |
+| 16 | a cell's second run differs from its first (cross-cell hashes still agree) | FAIL_NONDETERMINISM | negative |
+| 17 | that repeat-run divergence covered by a matching `RERUN:<md5>` exception | PASS | positive |
+| 18 | the same delta set registered WITHOUT the `RERUN:` namespace | FAIL_NONDETERMINISM | negative |
+| 19 | a comparable cell with a valid first dump but no second run | FAIL_MISSING_EVIDENCE | negative |
+| 20 | divergence by row SET (a keyed row appears), not row value | FAIL_DIVERGENCE | negative |
+| 21 | a second run that DROPS a keyed row | FAIL_NONDETERMINISM | negative |
 
 ## Exact commands
 
@@ -181,24 +201,26 @@ It does NOT define, and must not be read as redefining:
 
 ## Open cells
 
-**Cross-run repeat-run comparison (P5.2 "two pinned runs of the same comparable
-cell") — one open leaf.** The gate today compares comparable cells to each other
-*within one run* (cross-platform). P5.2 additionally names comparing two runs of
-the same cell. The determinism-faithful reading of that clause is **repeat-run
-reproducibility** — the same cell run twice from fresh processes must be
-byte-identical — not a same-cell-at-two-commits output baseline: a cross-commit
-change is a *behavior regression under a declared input (code)*, which is already
-locked by `tests/testthat/_snaps/characterization-snapshot.md` (a `json2`
-value-snapshot of `safe_parse_urls()` over corpus × combos, with a
+**Cross-run repeat-run comparison — CLOSED.** P5.2's "two pinned runs of the same
+comparable cell" is implemented: each comparable cell emits its dump twice from
+fresh processes and the gate compares the pair as a distinct verdict class
+(`FAIL_NONDETERMINISM`). The determinism-faithful reading of that clause is
+**repeat-run reproducibility**, not a same-cell-at-two-commits output baseline: a
+cross-commit change is a *behavior regression under a declared input (code)*,
+which is already locked by `tests/testthat/_snaps/characterization-snapshot.md`
+(a `json2` value-snapshot of `safe_parse_urls()` over corpus × combos, with a
 readable-diff accept-after-review ritual). Duplicating that as a committed md5
 baseline would be lower-resolution and, under the v3 parser rewrite, red on most
-slices. The remaining executable-evidence leaf is therefore an **in-gate
-repeat-run**: each comparable cell emits its dump twice and the gate compares the
-pair as a distinct verdict class (`FAIL_NONDETERMINISM`), with an optional
-follow-on that varies run 2 in a way that *must not* matter (corpus order
-shuffled under a fixed seed; the projection is keyed and sorted on
-`(id, url_standard)`), catching order/state-leak sensitivity the cross-cell
-comparison structurally cannot isolate. Tracked as a follow-on G4.2 leaf.
+slices.
+
+**Perturbed repeat run — still open (follow-on leaf).** Run 2 is currently
+*identical in configuration* to run 1, so it proves process/temporal invariance
+only. A stronger variant varies run 2 in a way that **must not** matter — corpus
+order shuffled under a fixed seed, since the projection is keyed and sorted on
+`(id, url_standard)` — catching order-dependence and cache/state-leak
+sensitivity that neither the cross-cell nor the identical repeat-run comparison
+can isolate. Deferred deliberately: it requires shuffling in `parse-dump.R` plus
+a canonical re-sort before diffing, or row order alone reads as a false red.
 
 - **Matrix-uniform temporal drift.** Output that depends on ambient state
   identical across cells on a given day (wall clock; a refreshed `pslr` snapshot)

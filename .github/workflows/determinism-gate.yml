@@ -8,6 +8,11 @@
 # axis, or DEGRADED comparable cell not covered by an active, signature-matching,
 # unexpired approved exception (registers/determinism-exceptions.md).
 #
+# TWO invariance axes, per P5.2: ACROSS cells (platform invariance) and ACROSS
+# RUNS (each cell probes twice in separate processes, and the pair must be
+# byte-identical). The second axis closes a hole the first cannot see, since a
+# cell that is unstable against itself still contributes one hash to the group.
+#
 # Tolerance: byte-exact ZERO unapproved divergence (P5.2 part 2). The first live
 # run is also the re-measurement -- a red result is a real finding (divergence)
 # or a wiring/evidence problem, distinguished by the gate manifest, never flake.
