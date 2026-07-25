@@ -168,8 +168,12 @@ test_that("canonical_join() enforces the conflict matrix through `...`", {
   B <- data.frame(URL = "http://ex.com/a", ValB = 2L, stringsAsFactors = FALSE)
 
   # path_encoding is orthogonal (ADR 0011): it layers through the `...` seam.
-  expect_silent(
-    canonical_join(A, B, url_standard = "rfc3986", path_encoding = "keep")
+  # It is also a presentation dial, so it no longer layers SILENTLY -- P3.1
+  # D-E.1 makes comparison-irrelevant dials warn. The warning is additive: the
+  # conflict matrix (and the result) are unchanged.
+  expect_warning(
+    canonical_join(A, B, url_standard = "rfc3986", path_encoding = "keep"),
+    class = "rurl_legacy_join_dial_warning"
   )
   expect_error(
     canonical_join(A, B, url_standard = "whatwg", path_normalization = "none"),
