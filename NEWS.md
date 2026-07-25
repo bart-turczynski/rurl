@@ -107,6 +107,32 @@
   rewrite to key invariance is deferred to the slice that introduces an explicit
   identity key.
 
+- **The RFC 3986 probe set is now two-sided, and the published conformance
+  figure has moved.** `inst/bench/rfc3986-probes.csv` grew from 19 rows to 37.
+  Every one of the original 19 was an *accept* case, so the set could not detect
+  over-permissiveness at all — it could only fail to notice it. The 18 new rows
+  are rejection cases tagged by ABNF section, drawn from the audited conformance
+  fixture rather than invented, and each verified against both referees (the
+  transcribed RFC 3986 ABNF and Ruby's `URI::RFC3986_Parser`) before being
+  recorded.
+
+  Two properties keep the resulting number honest. Reject probes use only
+  `http`/`https`/`ftp`/`file`, so a rejection is attributable to the **grammar**
+  rather than to the ADR 0004 closed scheme set — otherwise the set would credit
+  rurl for rejecting `sc://…` for entirely the wrong reason. And five probes
+  record inputs the RFC grammar **admits** while rurl declines by policy; these
+  carry a `rurl_deviation` naming the owning ADR and are reported on their own
+  line, **excluded** from the conformance score. Counting them as conformance
+  would let rurl raise its own "RFC conformance" by rejecting more of what the
+  RFC allows — a metric that rewards the opposite of what it claims to measure.
+
+  Updated picture on the 257 rows carrying an RFC oracle: rurl matches the
+  standard on **164** and departs on **93** — 81 where it rejects what RFC 3986
+  admits, 12 where it accepts what RFC 3986 does not. The 2.7.0 figure was
+  158/99; binding the generic-URI gate uniformly (above) moved exactly six rows
+  from over-permissive to conformant-reject. Analysis only — no behavior
+  changed in this entry. (RURL-wlqhmbdw.)
+
 ## rurl 2.7.0
 
 ### Breaking changes
