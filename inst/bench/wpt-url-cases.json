@@ -1,9 +1,18 @@
 {
  "_meta": {
-  "source": "web-platform-tests url/resources/urltestdata.json",
+  "upstream_project": "web-platform-tests/wpt",
+  "upstream_revision": "181476aa16e8b28a07698bef3a0275fa53dd22e5",
+  "upstream_path": "url/resources/urltestdata.json",
+  "retrieved": "2026-07-08",
   "license": "BSD-3-Clause (web-platform-tests contributors)",
-  "extracted": "2026-07-08",
-  "filter": "base in {null, about:blank}; success limited to http/https/ftp/file; failure = any base-null case; NUL inputs dropped",
+  "raw_source_sha256": "355c9f1e5f34aae66ba8adfabf3c853f5cd30ea22964ef7a53eb292e7975d81e",
+  "import_command": "curl -fsSL https://raw.githubusercontent.com/web-platform-tests/wpt/181476aa16e8b28a07698bef3a0275fa53dd22e5/url/resources/urltestdata.json -o urltestdata.json",
+  "generation_command": "python3 inst/bench/make-wpt-fixture.py urltestdata.json --revision 181476aa16e8b28a07698bef3a0275fa53dd22e5 --retrieved 2026-07-08",
+  "standard": "WHATWG URL Standard",
+  "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
+  "standard_section": "URL parsing; URL serializing; URL class API getters (protocol, hostname, port, pathname, search, hash)",
+  "claim_kind": "conformance",
+  "applicability_selector": "base in {null, about:blank}; success limited to http/https/ftp/file; failure = any base-null case; NUL inputs dropped",
   "counts": {
    "success": 176,
    "failure": 202
