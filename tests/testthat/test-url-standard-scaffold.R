@@ -163,10 +163,16 @@ test_that("get_path()/get_clean_url() enforce the conflict matrix", {
 
 # --- Conflict matrix across the canonical_join() `...` seam
 
-test_that("canonical_join() enforces the conflict matrix through `...`", {
+test_that("conflict matrix holds on canonical_join()'s LEGACY `...` seam", {
   A <- data.frame(URL = "http://ex.com/a", ValA = 1L, stringsAsFactors = FALSE)
   B <- data.frame(URL = "http://ex.com/a", ValB = 2L, stringsAsFactors = FALSE)
 
+  # P3.1 D-E / RURL-xowxdsag. The `...` dial seam itself is LEGACY, not the v3
+  # identity model: canonical_join() keys on `clean_url`, so dials that take no
+  # part in URL identity still reach the key. What is pinned here is only that
+  # the conflict matrix is enforced across that seam, and that the presentation
+  # dial warns -- neither endorses the seam as the identity contract.
+  #
   # path_encoding is orthogonal (ADR 0011): it layers through the `...` seam.
   # It is also a presentation dial, so it no longer layers SILENTLY -- P3.1
   # D-E.1 makes comparison-irrelevant dials warn. The warning is additive: the
