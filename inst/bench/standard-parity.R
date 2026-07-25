@@ -98,20 +98,50 @@ fail_scored <- data.frame(
   conformant = f_rejected, stringsAsFactors = FALSE)
 
 # ---- RFC 3986 probes ------------------------------------------------------
+# Two-sided since RURL-wlqhmbdw: the set carries accept AND reject probes.
+#
+# `rurl_deviation` splits the reject rows into two populations that must NEVER
+# be summed into one number:
+#   blank      -- the RFC grammar itself rejects. rurl rejecting is CONFORMANCE.
+#   non-blank  -- the RFC grammar ACCEPTS; rurl declines by policy (ADR 0004).
+#                 Pinning it is regression-locking a DEPARTURE, not conformance.
+# Folding the second group into a conformance score would let rurl raise its own
+# "RFC conformance" by rejecting more of what the RFC allows -- the metric would
+# reward the opposite of conformance. They are reported separately below.
 rp <- utils::read.csv(find_file("rfc3986-probes.csv"), stringsAsFactors = FALSE)
-rr <- suppressWarnings(spu(rp$input, url_standard = "rfc3986"))
+# Not `%||%`: that helper calls is.na() on its argument, which errors on a
+# vector. These are whole columns, so test for the column's absence directly.
+rp$rurl_deviation <- if (is.null(rp$rurl_deviation)) {
+  rep("", nrow(rp))
+} else {
+  blank(rp$rurl_deviation)
+}
+# Rows whose input cannot be written literally (control bytes) carry a JSON
+# spelling in `input_json`, which is authoritative when present; `input` is then
+# only a lossy rendering for diff legibility.
+rp_input <- rp$input
+if (!is.null(rp$input_json)) {
+  ij <- blank(rp$input_json)
+  has_json <- nzchar(ij)
+  rp_input[has_json] <- vapply(ij[has_json], jsonlite::fromJSON, character(1))
+}
+rr <- suppressWarnings(spu(rp_input, url_standard = "rfc3986"))
 r_acc <- !rej(rr$parse_status)
 want_acc <- rp$expect == "accept"
 r_accept_ok <- r_acc == want_acc
 r_host_ok <- !want_acc | (r_acc & blank(rr$host) == rp$expected_host)
 r_path_ok <- !want_acc | (r_acc & blank(rr$path) == rp$expected_path)
 r_pass <- r_accept_ok & r_host_ok & r_path_ok
+
+is_departure <- nzchar(rp$rurl_deviation)
+conf <- !is_departure                       # rows that score as conformance
 rfc_scored <- data.frame(
   id = rp$id, input = rp$input, rfc_section = rp$rfc_section,
-  expect = rp$expect, pass = r_pass,
+  expect = rp$expect, is_departure = is_departure, pass = r_pass,
   rurl_status = rr$parse_status,
   rurl_host = blank(rr$host), exp_host = rp$expected_host,
   rurl_path = blank(rr$path), exp_path = rp$expected_path,
+  rurl_deviation = rp$rurl_deviation,
   note = rp$note, stringsAsFactors = FALSE)
 
 # ---- write ----------------------------------------------------------------
@@ -148,8 +178,19 @@ cat("  failure correctly reject:", pct(f_rejected), "\n")
 cat("  overall WHATWG acceptance conformance:",
     pct(c(acc, f_rejected)), "\n\n")
 
-cat("== RFC 3986 (probe set) ==\n")
-cat("  probes passed           :", pct(r_pass), "\n")
+cat("== RFC 3986 (probe set, two-sided since RURL-wlqhmbdw) ==\n")
+cat("  accept-conformance      :", pct(r_pass[conf & want_acc]),
+    "  (RFC admits; rurl must accept + match components)\n")
+cat("  reject-conformance      :", pct(r_pass[conf & !want_acc]),
+    "  (RFC rejects; rurl must reject)\n")
+cat("  two-sided conformance   :", pct(r_pass[conf]), "\n")
+cat("  documented departures   :", pct(r_pass[is_departure]),
+    "  (RFC ADMITS these; rurl declines by policy -- NOT conformance)\n")
+if (any(is_departure)) {
+  cat("    departures are pinned so intentional strictness cannot drift",
+      "silently;\n    they are EXCLUDED from the conformance figures above",
+      "on purpose.\n")
+}
 if (!all(r_pass)) {
   cat("  FAILURES:\n")
   bad <- rfc_scored[!r_pass, ]
