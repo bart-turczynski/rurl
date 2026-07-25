@@ -222,7 +222,7 @@ test_that("under 'filter' the query enters the join key (?id splits)", {
     URL = "https://ex.com/p?id=1&utm_source=x", b = 99,
     stringsAsFactors = FALSE
   )
-  j <- canonical_join(A, B, query_handling = "filter")
+  j <- cj_legacy(canonical_join(A, B, query_handling = "filter"))
   # B's utm-only difference collapses onto id=1; id=2 does NOT match.
   expect_equal(nrow(j), 1L)
   expect_equal(j$JoinKey, "https://ex.com/p?id=1")

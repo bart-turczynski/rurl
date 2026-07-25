@@ -57,7 +57,36 @@
 #'   it bundles several knobs, expands only into knobs you did not supply, and
 #'   an explicit knob always overrides it (so the url_standard conflict check is
 #'   skipped on the profile path). Inspect a bundle with
-#'   \code{\link{url_profile}}.
+#'   \code{\link{url_profile}}. See "Legacy presentation dials" below for the
+#'   arguments that warn.
+#'
+#' @section Legacy presentation dials:
+#' \code{canonical_join()} keys the join on the cleaned presentation string
+#' (\code{clean_url}), so every cleaning or display argument forwarded through
+#' \code{...} currently changes \emph{which rows match}. Those arguments do not
+#' participate in URL identity; they are legacy behavior retained for a
+#' deprecation window. Supplying any of
+#' \code{protocol_handling}, \code{www_handling}, \code{source},
+#' \code{tld_source}, \code{case_handling}, \code{trailing_slash_handling},
+#' \code{index_page_handling}, \code{path_normalization},
+#' \code{subdomain_levels_to_keep}, \code{host_encoding}, \code{path_encoding},
+#' \code{port_handling}, \code{engine}, \code{profile}, or any query cleaning
+#' dial (\code{query_handling}, \code{params_keep}, \code{params_drop},
+#' \code{params_case_sensitive}, \code{sort_params},
+#' \code{empty_param_handling}, \code{decode_plus})
+#' emits one warning per call, of class
+#' \code{"rurl_legacy_join_dial_warning"}. Results are unchanged: the warning
+#' is purely additive, so no caller is silently re-matched.
+#'
+#' The input and interpretation arguments \code{url_standard},
+#' \code{scheme_acceptance}, \code{scheme_policy}, and
+#' \code{scheme_relative_handling} are legitimate inputs to identity and never
+#' warn.
+#'
+#' Because the condition is classed, it can be silenced selectively without
+#' hiding other warnings:
+#' \code{suppressWarnings(canonical_join(A, B, www_handling = "strip"),
+#' classes = "rurl_legacy_join_dial_warning")}.
 #'
 #' @return A data frame representing the join. The output includes:
 #'   \itemize{
@@ -121,6 +150,12 @@ canonical_join <- function(data_A, data_B,
   if (is.null(profile)) {
     .check_url_standard_conflicts_dots(dots)
   }
+  # P3.1 D-E.1: the unrestricted `...` that makes every cleaning/display dial
+  # an equality dial is closed by WARNING (results stay byte-identical). Warn
+  # here, once, and after the hard checks above: safe_parse_urls() is called
+  # twice below (once per side), so warning at either call site would double
+  # up, and a call that fails the conflict matrix should error, not also warn.
+  .cj_warn_legacy_dials(names(dots))
 
   if (!.cj_validate_inputs(data_A, data_B, col_A, col_B)) {
     return(data.frame())
@@ -160,6 +195,96 @@ canonical_join <- function(data_A, data_B,
   }
 
   .cj_assemble_result(joined, name_A, name_B)
+}
+
+# Presentation/cleaning arguments that are comparison-irrelevant: they shape
+# how a URL is DISPLAYED, never what it IS. canonical_join() keys on clean_url,
+# so forwarding one still moves the match set -- exactly the legacy defect
+# P3.1 D-E.1 makes non-silent.
+#
+# The authority is the per-dial `key-affecting?` column of the
+# design/work/url-v3/contracts/cleaning-mutation-contracts.md
+# section "cleaning-semantics" table, which classifies all 25 shipped dials
+# and is SETTLED for every row below. Row numbers are noted so the list can be
+# diffed against the table. Every row marked key-affecting `no` is here.
+#
+# Deliberately NOT listed -- the table's four boundary rows, which are input /
+# interpretation axes rather than clean transforms, and so are legitimate
+# inputs to identity:
+#   row  9  scheme_relative_handling -- "input interpretation ... not a clean
+#           transform ... governed as input, not by cleaning" (ADR 0010)
+#   row 21  scheme_policy            -- input acceptance axis
+#   row 22  scheme_acceptance        -- input acceptance axis
+#   row 23  url_standard             -- interpretation axis (a different
+#           standard is a different identity, not a clean edit)
+# These four are also exactly what key-join-contracts.md admits as
+# interpretation/key-policy inputs.
+#
+# Note `source` (row 3) is the PSL-section dial's canonical name and
+# `tld_source` (row 4) its deprecated alias. Only `tld_source` is a formal of
+# safe_parse_urls(); `source` is a formal on the accessors (R/accessors.R), so
+# it is not reachable through this seam today. It is listed anyway so the
+# classification is complete and stays correct if the seam widens.
+.CJ_LEGACY_PRESENTATION_DIALS <- c(
+  "protocol_handling",        # row 1
+  "www_handling",             # row 2
+  "source",                   # row 3
+  "tld_source",               # row 4
+  "case_handling",            # row 5
+  "trailing_slash_handling",  # row 6
+  "index_page_handling",      # row 7
+  "path_normalization",       # row 8
+  "subdomain_levels_to_keep", # row 10
+  "host_encoding",            # row 11
+  "path_encoding",            # row 12
+  "query_handling",           # rows 13-19
+  "params_keep",
+  "params_drop",
+  "params_case_sensitive",
+  "sort_params",
+  "empty_param_handling",
+  "decode_plus",
+  "port_handling",            # row 20
+  "engine",                   # row 24
+  "profile"                   # row 25
+)
+
+# Partition the supplied `...` names into the legacy presentation dials. Driven
+# purely off names because canonical_join() has no named parse formals -- there
+# is nothing for missing() to see.
+.cj_classify_dots <- function(dot_names) {
+  if (is.null(dot_names)) {
+    return(character(0))
+  }
+  intersect(dot_names, .CJ_LEGACY_PRESENTATION_DIALS)
+}
+
+# Emit one classed warning naming every legacy presentation dial supplied.
+# The class lets callers mute this specific condition without blanket
+# suppressWarnings(). Returns the offenders invisibly for testability.
+.cj_warn_legacy_dials <- function(dot_names) {
+  offenders <- .cj_classify_dots(dot_names)
+  if (length(offenders) == 0L) {
+    return(invisible(character(0)))
+  }
+  msg <- paste0(
+    "canonical_join() received presentation/cleaning argument(s) through ",
+    "`...`: ", paste0("`", offenders, "`", collapse = ", "), ". ",
+    "These arguments do not participate in URL identity. They are legacy ",
+    "behavior retained for a deprecation window, and they currently still ",
+    "change which rows match, because this join is keyed on the cleaned ",
+    "presentation string (clean_url) rather than on an identity key. Only ",
+    "`url_standard`, `scheme_acceptance`, `scheme_policy` and ",
+    "`scheme_relative_handling` are input/interpretation axes, and they do ",
+    "not warn. Suppress selectively with ",
+    "suppressWarnings(..., classes = \"rurl_legacy_join_dial_warning\")."
+  )
+  warning(warningCondition(
+    msg,
+    class = "rurl_legacy_join_dial_warning",
+    call = NULL
+  ))
+  invisible(offenders)
 }
 
 # Validate canonical_join() inputs, emitting the same warnings as before and

@@ -77,10 +77,10 @@ test_that("canonical_join() enforces case_handling conflict through `...`", {
     "governs `case_handling`"
   )
 
-  joined <- canonical_join(
+  joined <- cj_legacy(canonical_join(
     A, B,
     url_standard = "rfc3986", case_handling = "lower_host"
-  )
+  ))
   expect_equal(nrow(joined), 1L)
 })
 

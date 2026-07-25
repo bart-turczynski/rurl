@@ -207,9 +207,11 @@ test_that("canonical_join layers path_encoding through the `...` seam", {
   B <- data.frame(URL = "https://ex.com/%C3%A9cole", ValB = 2L,
     stringsAsFactors = FALSE)
   # encode collapses both spellings of the path to the browser form, so the two
-  # rows join on one canonical key.
-  joined <- canonical_join(A, B, url_standard = "whatwg",
-    path_encoding = "encode")
+  # rows join on one canonical key. That the match set moves at all is the
+  # legacy defect P3.1 D-E.1 makes non-silent; the warning is muted here
+  # because this test pins the (unchanged) VALUES, not the condition.
+  joined <- cj_legacy(canonical_join(A, B, url_standard = "whatwg",
+    path_encoding = "encode"))
   expect_identical(nrow(joined), 1L)
   expect_identical(joined$ValA, 1L)
   expect_identical(joined$ValB, 2L)

@@ -152,7 +152,7 @@ test_that("canonical_join() forwards a profile bundle through `...`", {
   )
   # seo canonicalization (https + strip www / index / trailing slash / tracking
   # params) makes the two rows share a key and join.
-  joined <- canonical_join(A, B, profile = "seo")
+  joined <- cj_legacy(canonical_join(A, B, profile = "seo"))
   expect_identical(nrow(joined), 1L)
   expect_identical(joined$JoinKey, "https://example.com/Page")
 })
@@ -163,12 +163,14 @@ test_that("canonical_join() skips the conflict matrix on the profile path", {
 
   # A profile authorizes its own combination, so an explicit governed knob that
   # would conflict under a DIRECT url_standard call is accepted here (iron
-  # rule), exactly as in safe_parse_url(). This must NOT error.
-  expect_silent(
+  # rule), exactly as in safe_parse_url(). This must NOT error. It does warn:
+  # `profile` is a presentation bundle, and P3.1 D-E.1 makes those non-silent.
+  expect_warning(
     canonical_join(
       A, B,
       profile = "seo", url_standard = "whatwg", path_normalization = "none"
-    )
+    ),
+    class = "rurl_legacy_join_dial_warning"
   )
   # Sanity: the same combination WITHOUT a profile still fails fast.
   expect_error(
