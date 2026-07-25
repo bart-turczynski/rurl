@@ -1,0 +1,98 @@
+# Determinism acceptance gate (rurl 3.0 protocol hardening, G4.2; P5.2 / C-09).
+#
+# The FAILING cross-platform comparison C-09 requires -- distinct from, and
+# additive to, the non-gating Determinism probe. It reuses the SAME cell matrix
+# (_determinism-cells.yml, single source of the locale/charset arming), then
+# aggregates every cell's artifact and runs tools/determinism/compare-gate.R,
+# which FAILS the build on any divergence, missing evidence, invalid (unarmed)
+# axis, or DEGRADED comparable cell not covered by an active, signature-matching,
+# unexpired approved exception (registers/determinism-exceptions.md).
+#
+# TWO invariance axes, per P5.2: ACROSS cells (platform invariance) and ACROSS
+# RUNS (each cell probes twice in separate processes, and the pair must be
+# byte-identical). The second axis closes a hole the first cannot see, since a
+# cell that is unstable against itself still contributes one hash to the group.
+#
+# Tolerance: byte-exact ZERO unapproved divergence (P5.2 part 2). The first live
+# run is also the re-measurement -- a red result is a real finding (divergence)
+# or a wiring/evidence problem, distinguished by the gate manifest, never flake.
+name: Determinism gate
+
+on:
+  # P5.2 trigger surface: the change surfaces that can perturb parse output --
+  # not only harness changes (the C-09 defect this closes).
+  pull_request:
+    paths:
+      - 'R/**'
+      - 'DESCRIPTION'
+      - 'NAMESPACE'
+      - 'tools/determinism/**'
+      - 'design/work/url-v3/registers/determinism-exceptions.md'
+      - '.github/workflows/determinism-gate.yml'
+      - '.github/workflows/_determinism-cells.yml'
+  # Pre-graduation and periodic re-measurement.
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * 1'   # Mondays 05:17 UTC
+
+permissions: read-all
+
+concurrency:
+  # No cancel-in-progress: a half-collected matrix is not a verdict.
+  group: determinism-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Produce the 17 cells via the shared matrix (parse-dump always on).
+  cells:
+    uses: ./.github/workflows/_determinism-cells.yml
+    with:
+      run_parse_dump: true
+
+  # Aggregate every cell artifact and run the failing comparison.
+  gate:
+    needs: cells
+    # always(): a hard-failed or degraded cell must reach the gate so it can be
+    # reported as missing/degraded evidence, not silently skip the verdict.
+    if: always()
+    runs-on: ubuntu-latest
+    name: Determinism comparison (zero unapproved divergence)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+        # compare-gate.R is base R only (utils, tools) -- no dependency install.
+
+      - name: Collect every cell's dumps + metadata
+        uses: actions/download-artifact@v4
+        with:
+          pattern: determinism-*
+          path: tools/determinism/out
+          merge-multiple: true
+
+      - name: List collected cells
+        shell: bash
+        run: ls -la tools/determinism/out || true
+
+      - name: Gate self-test (positive/negative fixtures)
+        run: Rscript tools/determinism/compare-gate.R --self-test
+
+      - name: Compare comparable cells (fails on unapproved divergence)
+        id: gate
+        run: |
+          Rscript tools/determinism/compare-gate.R \
+            --dumps tools/determinism/out \
+            --expected tools/determinism/expected-cells.csv \
+            --exceptions design/work/url-v3/registers/determinism-exceptions.md \
+            --manifest-out tools/determinism/out/gate-manifest.csv
+
+      - name: Upload gate manifest + compared dumps
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinism-gate-manifest
+          path: tools/determinism/out/
+          if-no-files-found: warn
+          retention-days: 90

@@ -1,0 +1,18 @@
+label,os,r,locale,comparable,note
+gha-ubuntu-latest-Rrelease-utf8,ubuntu-latest,release,utf8,true,build axis
+gha-ubuntu-latest-Rdevel-utf8,ubuntu-latest,devel,utf8,true,build axis
+gha-ubuntu-latest-Roldrel-1-utf8,ubuntu-latest,oldrel-1,utf8,true,build axis
+gha-windows-latest-Rrelease-utf8,windows-latest,release,utf8,true,build axis
+gha-windows-latest-Rdevel-utf8,windows-latest,devel,utf8,true,build axis
+gha-windows-latest-Roldrel-1-utf8,windows-latest,oldrel-1,utf8,true,build axis
+gha-macos-latest-Rrelease-utf8,macos-latest,release,utf8,true,build axis
+gha-macos-latest-Roldrel-1-utf8,macos-latest,oldrel-1,utf8,true,build axis (macos/devel is a declared matrix exclusion -- no upstream build)
+gha-ubuntu-latest-Rrelease-c,ubuntu-latest,release,c,true,charset axis
+gha-windows-latest-Rrelease-c,windows-latest,release,c,true,charset axis
+gha-macos-latest-Rrelease-c,macos-latest,release,c,true,charset axis
+gha-ubuntu-latest-Rrelease-tr,ubuntu-latest,release,tr,true,locale-hazard axis (must be hazard_armed)
+gha-windows-latest-Rrelease-tr,windows-latest,release,tr,true,locale-hazard axis (must be hazard_armed)
+gha-macos-latest-Rrelease-tr,macos-latest,release,tr,true,locale-hazard axis (must be hazard_armed)
+gha-ubuntu-latest-Rrelease-default,ubuntu-latest,release,default,false,runner-default evidence only (cross_os_comparable=false)
+gha-windows-latest-Rrelease-default,windows-latest,release,default,false,runner-default evidence only (cross_os_comparable=false)
+gha-macos-latest-Rrelease-default,macos-latest,release,default,false,runner-default evidence only (cross_os_comparable=false)
