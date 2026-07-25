@@ -122,6 +122,25 @@ test_that("web acceptance never parses mailto (zero rows)", {
   )
 })
 
+test_that("bare defaults parse mailto without erroring (RURL-usbeqbcb)", {
+  # The `scheme_acceptance` formal here is deliberately reversed relative to
+  # `.parse_options()` ("general" first, because mailto is a general-scheme
+  # context). Forwarding that unresolved length-2 default aborted in
+  # `match.arg()` ("'arg' must be of length 1"), so every call at bare defaults
+  # errored from 2.6.0 on. Defaults must round-trip to "general".
+  r <- get_mailto_recipients("mailto:jane@example.com")
+  expect_s3_class(r, "data.frame")
+  expect_identical(nrow(r), 1L)
+  expect_identical(r$url, "mailto:jane@example.com")
+  expect_identical(r$mailto_local_part_form, "dot-atom-text")
+  expect_identical(r$mailto_domain_form, "ascii-dot-atom-text")
+  expect_identical(
+    r,
+    get_mailto_recipients("mailto:jane@example.com",
+      scheme_policy = "infer", scheme_acceptance = "general")
+  )
+})
+
 test_that("the return shape is a stable data.frame for degenerate input", {
   z <- get_mailto_recipients(character(0), scheme_acceptance = "general")
   expect_s3_class(z, "data.frame")
