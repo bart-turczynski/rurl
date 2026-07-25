@@ -540,6 +540,33 @@
   list(ok = ok, diagnostic = diagnostic)
 }
 
+# UNIFORM profile gate (RURL-qrfrvmkg / RURL-pfewxbhb Option (a)).
+#
+# `.rfc3986_generic_uri_ok()` above is the grammar; this is the one place that
+# says WHEN it binds. Until this unit it bound only where rurl happened to own
+# the parser -- the RFC 8089 `file:` overlay (Gate 1) and the general-routed
+# opaque/RFC rows -- so `file://C|/x` was an error while `http://a|b/` parsed,
+# with '|' admitted by no RFC 3986 production either way. That made the profile
+# a property of the ROUTE rather than of the selected standard. Under
+# `url_standard = "rfc3986"` the gate now binds on EVERY row, whichever route
+# it takes (libcurl, path-rootless, `file:`, general): selecting a standard
+# selects its grammar, uniformly.
+#
+# Byte-identity elsewhere is by construction: any other selector (including the
+# NULL no-selector default) returns an all-TRUE mask, so `parse_ok` is
+# unchanged bit for bit.
+#
+# NA input yields NA from the grammar; it is folded to FALSE here because such
+# rows are already non-parseable, and a mask must be a plain logical.
+.rfc3986_uniform_gate_ok <- function(url, url_standard) {
+  if (!identical(url_standard, "rfc3986")) {
+    return(rep(TRUE, length(url)))
+  }
+  ok <- .rfc3986_generic_uri_ok(url)$ok
+  ok[is.na(ok)] <- FALSE
+  ok
+}
+
 # --- Posture host/opaque parsers (ADR 0012 Layer 4b, RURL-yutinyhb) ----------
 #
 # The HOST/OPAQUE decomposition functions the (still-unexposed) `general`

@@ -1681,6 +1681,22 @@ safe_parse_urls <- function(url,
   # General-acceptance rows that parsed successfully (incl. the RFC gate).
   general_ok <- general_route & gen$ok
   parse_ok <- curl_ok | rfc3986_path_rootless | file_ok | general_ok
+  # UNIFORM RFC 3986 generic-URI gate (RURL-qrfrvmkg, adopting RURL-pfewxbhb
+  # Option (a)). Applied at the ONE point every route has already converged on,
+  # so the profile is a property of the SELECTED STANDARD rather than of which
+  # parser happened to own the row: libcurl (http/https/ftp/ftps), the
+  # path-rootless slice, the RFC 8089 `file:` overlay and the general-routed
+  # opaque/RFC rows all meet the same grammar. Before this, only the last two
+  # did -- `file://C|/x` errored while `http://a|b/` parsed, though '|' is in no
+  # RFC 3986 production. Path-rootless is INCLUDED deliberately: `path-rootless`
+  # is itself an RFC 3986 production, so a row admitted under it has no claim to
+  # skip the grammar that defines it.
+  #
+  # The mask is all-TRUE under `whatwg` and under the NULL no-selector default,
+  # so every non-rfc3986 output is bit-identical. `.parse_cache_keys()` already
+  # carries `url_standard`, so no cross-standard cache entry can go stale.
+  parse_ok <- parse_ok &
+    .rfc3986_uniform_gate_ok(prep$rfc_gate_input, opts$url_standard)
   null_row <- !parse_ok
 
   # Pull raw components into columns (mirrors .extract_raw_components() and the

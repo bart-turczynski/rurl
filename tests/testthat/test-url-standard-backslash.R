@@ -72,15 +72,33 @@ test_that("ftps backslash stays inert under rfc3986", {
 
 # --- rfc3986 / no selector: byte-for-byte unchanged baseline ------------------
 
-test_that("rfc3986 leaves backslash fully inert (byte-for-byte baseline)", {
+test_that("rfc3986 never REWRITES a backslash (no \\ -> / mapping)", {
+  # The thing this file governs is the WHATWG `\` -> `/` REWRITE, and rfc3986
+  # must never perform it. The three inputs below are rejected under both the
+  # rfc3986 selector and the no-selector default, so the absence of the rewrite
+  # is still asserted byte-for-byte.
   single_backslash <- paste0("http:", "\\", "host", "\\", "path")
-  urls <- c(
-    single_backslash,
-    "http:\\\\host\\path", "http://host\\path", "http://host/a\\b\\c"
-  )
+  urls <- c(single_backslash, "http:\\\\host\\path", "http://host\\path")
   no_selector <- lapply(urls, safe_parse_url)
   rfc <- lapply(urls, safe_parse_url, url_standard = "rfc3986")
   expect_identical(rfc, no_selector)
+  expect_true(all(vapply(rfc, is.null, logical(1))))
+})
+
+test_that("rfc3986 rejects a raw backslash rather than carrying it", {
+  # RE-POINTED by RURL-qrfrvmkg. `http://host/a\b\c` used to survive under
+  # rfc3986 with the backslash carried through verbatim, identical to the
+  # no-selector baseline. It no longer does: "\" is in none of unreserved /
+  # pct-encoded / sub-delims / pchar, so no RFC 3986 production admits it, and
+  # the uniform generic-URI gate now binds on the libcurl route too. Declining
+  # to REWRITE the byte (this file's subject) and declining to ACCEPT the
+  # string (the grammar's subject) are different claims; only the first is a
+  # backslash-handling decision.
+  expect_null(safe_parse_url("http://host/a\\b\\c", url_standard = "rfc3986"))
+  # The no-selector default is un-governed and still carries it verbatim.
+  expect_identical(
+    get_clean_url("http://host/a\\b\\c"), "http://host/a\\b\\c"
+  )
 })
 
 test_that("no url_standard leaves backslash fully inert (today's baseline)", {
