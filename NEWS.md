@@ -53,6 +53,20 @@
   unnamed vectors. Both halves are now pinned by test; the suite previously had
   no named-vector coverage at all.
 
+- **`get_mailto_recipients()` no longer errors at its own documented
+  defaults.** Every call that did not pass `scheme_acceptance` explicitly —
+  including the plain `get_mailto_recipients("mailto:x@example.com")` — aborted
+  with base R's untyped `"'arg' must be of length 1"`. The helper's
+  `scheme_acceptance` formal deliberately lists `"general"` first, since mailto
+  is a general-scheme context, and that unresolved length-2 default was
+  forwarded to an internal whose own choices are ordered `"web"` first;
+  `match.arg()` tolerates a length > 1 value only when it is `identical()` to
+  the callee's choices, so the reversed order failed. The default is now
+  resolved against the helper's own formal before forwarding, leaving the
+  deliberate ordering intact. Broken since the helper shipped in 2.6.0; all
+  three documented examples pass the argument explicitly, so `R CMD check`
+  never exercised the default path.
+
 ### Internal
 
 - The documented `canonical_join()` example no longer passes presentation dials,

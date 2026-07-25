@@ -500,6 +500,12 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
     )
   }
   smtp_wire <- .validate_flag(smtp_wire, "smtp_wire")
+  # mailto is a general-scheme context, so this function's `scheme_acceptance`
+  # formal deliberately puts "general" first -- the reverse of
+  # `.parse_options()`'s own default. `match.arg()` only tolerates a length > 1
+  # value when it is `identical()` to the callee's choices, so the default must
+  # be resolved HERE, against this function's own formal, before forwarding.
+  scheme_acceptance <- match.arg(scheme_acceptance)
   opts <- .parse_options(url_standard = url_standard,
     scheme_policy = scheme_policy, scheme_acceptance = scheme_acceptance)
 
