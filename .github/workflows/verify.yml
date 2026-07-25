@@ -171,6 +171,26 @@ jobs:
       - name: Scan documentation for full_parse default-bound drift
         run: Rscript tools/cache-doc-consistency.R
 
+  # C-10 release-rule gate (G4.3). Verifies the ACCEPTED owner disposition P0.4:
+  # the "no CRAN until curl-free" hold is bound to the v3 (3.0.0) line and does
+  # not reach the v2.x curl-bearing maintenance line, and no normative record
+  # broadens the hold onto v2.x or permits a curl-bearing v3. Deterministic,
+  # network-free, base R only -- it reads tracked records, so it needs no
+  # package build. It does NOT assert "3.x cannot ship with curl"; that closure
+  # criterion is carried whole by its own G4 leaf (RURL-cunfohwy).
+  release-rule:
+    runs-on: ubuntu-latest
+    name: Release rule matches the accepted C-10 boundary
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        run: Rscript tools/release-rule-check.R --self-test
+      - name: Verify the release rule over the normative corpus
+        run: Rscript tools/release-rule-check.R
+
   coverage:
     needs: check
     runs-on: ubuntu-latest

@@ -51,3 +51,4 @@
 ^tools/determinism$
 ^tools/oracle-audit-rfc3986\.R$
 ^tools/cache-doc-consistency\.R$
+^tools/release-rule-check\.R$
