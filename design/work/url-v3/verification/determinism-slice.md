@@ -221,6 +221,7 @@ order shuffled under a fixed seed, since the projection is keyed and sorted on
 sensitivity that neither the cross-cell nor the identical repeat-run comparison
 can isolate. Deferred deliberately: it requires shuffling in `parse-dump.R` plus
 a canonical re-sort before diffing, or row order alone reads as a false red.
+Carried by `RURL-ptsijueb` — this open cell is tracked, not merely noted.
 
 - **Matrix-uniform temporal drift.** Output that depends on ambient state
   identical across cells on a given day (wall clock; a refreshed `pslr` snapshot)
