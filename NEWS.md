@@ -34,6 +34,34 @@
 
 ### Bug fixes
 
+- **`url_standard = "rfc3986"` now applies RFC 3986's generic-URI grammar to
+  every scheme, not just `file:`.** The grammar gate travelled with the RFC 8089
+  `file:` overlay, so which parser happened to own a row decided whether the
+  selected standard was enforced: `file://C|/x` was an error while
+  `http://a|b/` parsed and reported `host = "a|b"` — though `"|"` is in none of
+  `unreserved` / `pct-encoded` / `sub-delims` / `pchar`, so no RFC 3986
+  production admits it either way. That is the wrong thing for a *selector* to
+  mean. Asking for a standard now gets that standard's grammar on every route
+  (libcurl, path-rootless, `file:`, general), which is also what a reference
+  RFC 3986 parser such as Ruby's `URI::RFC3986_Parser` does with both strings.
+
+  In practice this rejects raw bytes the grammar has no production for —
+  `"|"`, `"\"`, `"""`, and a repeated raw `"@"` in an authority — where the
+  rfc3986 profile previously carried them through or silently recovered a host
+  from them. That last case matters most: `https://n.pr\@e.gg` used to resolve
+  to host `e.gg` under rfc3986, reproducing what *permissive* RFC-style parsers
+  do rather than what the standard says, on exactly the inputs security papers
+  use to demonstrate host equivocation. The independent ABNF transcription of
+  RFC 3986 Appendix A that referees the project's oracle rejects all of them.
+
+  Deliberate acceptances are untouched: this adds only generic-*syntax*
+  rejections. A directly-written non-ASCII host stays accepted and flagged
+  (`http://exämple.com/`, ADR 0002/0011), a reg-name built from characters the
+  RFC admits stays accepted even where WHATWG forbids it (`http://a%7Cb/`), and
+  scheme inference remains the `scheme_policy` axis, so scheme-less input is
+  unaffected. `url_standard = "whatwg"` and the no-selector default are
+  byte-identical.
+
 - **A list element of the wrong length no longer aborts the whole
   `safe_parse_urls()` call.** `safe_parse_urls(list("http://a.com/", c("b", "c")))`
   failed the entire call with base R's untyped `"values must be length 1"`. A

@@ -11,15 +11,23 @@ test_that("whatwg uses last at-sign as authority host delimiter", {
   expect_identical(res$parse_status, "ok")
 })
 
-test_that("rfc3986 selector recovers host at last ambiguous at-sign", {
+test_that("rfc3986 rejects a repeated raw at-sign instead of recovering", {
+  # RE-POINTED by RURL-qrfrvmkg. This used to assert that the rfc3986 selector
+  # recovers host=example.com / user=username%40%40%40 -- the RURL-zqhgezuq
+  # last-"@" repair, which encodes the excess "@" bytes so libcurl can parse
+  # the authority. That repair is CORRECT under whatwg (the WHATWG parser
+  # genuinely takes the last "@") and is asserted above; under rfc3986 it was
+  # laundering an input the grammar has no production for. Both `userinfo` and
+  # `reg-name` forbid a raw "@", so a valid authority carries AT MOST ONE, and
+  # the audited RFC oracle records `failure` for this exact string (fixture row
+  # ada-018: "the RFC oracle ALSO rejects here -- repeated '@' leaves a userinfo
+  # that is not well-formed"). The uniform gate judges the input as accepted,
+  # BEFORE the parser-compat repairs, so the repair can no longer rescue it.
   u <- "http://username@@@@example.com"
-  res <- safe_parse_url(u, url_standard = "rfc3986")
-
-  expect_identical(res$host, "example.com")
-  expect_identical(res$user, "username%40%40%40")
-  expect_true(is.na(res$password))
-  expect_identical(res$clean_url, "http://example.com/")
-  expect_identical(res$parse_status, "ok")
+  expect_null(safe_parse_url(u, url_standard = "rfc3986"))
+  expect_identical(get_parse_status(u, url_standard = "rfc3986"), "error")
+  # the grammar, asserted directly and without any backend, agrees.
+  expect_false(isTRUE(.rfc3986_generic_uri_ok(u)$ok))
 })
 
 test_that("no selector leaves repeated at-sign authority baseline unchanged", {

@@ -1169,6 +1169,23 @@
   }
   url_to_parse[add_http] <- paste0("http://", url[add_http])
 
+  # The string the uniform RFC 3986 gate judges (RURL-qrfrvmkg). Snapshotted
+  # HERE, between the two kinds of rewrite this function performs:
+  #   * BEFORE it, scheme inference (`add_http`) and scheme-relative expansion
+  #     have run. Those are rurl's INPUT-ACCEPTANCE affordances, governed by
+  #     `scheme_policy` / `scheme_relative_handling` (ADR 0010), not by
+  #     `url_standard` -- so the gate must judge the input as accepted, or
+  #     every scheme-less row would fail RFC 3986's mandatory `scheme ":"`
+  #     and the grammar gate would silently re-implement scheme_policy.
+  #   * AFTER it come the PARSER-COMPAT repairs (excess-"@" encoding, WHATWG
+  #     IPv4 canonicalization, the host-charset shim, pqf sanitization). Those
+  #     exist to get a string past libcurl; judging their OUTPUT would let a
+  #     repair launder an input the RFC has no production for -- exactly the
+  #     "gated where rurl owns the parser" asymmetry this gate removes. The
+  #     general/`file:` routes gate the source string, and this keeps the
+  #     libcurl route's subject identical to theirs.
+  rfc_gate_input <- url_to_parse
+
   # Authority userinfo repair (RURL-zqhgezuq): selector profiles recover the
   # host at the last "@" and encode earlier "@" bytes in userinfo before curl.
   at <- .encode_excess_authority_at_vec(url_to_parse, url_standard)
@@ -1190,6 +1207,8 @@
   list(
     url_to_parse = url_to_parse,
     whatwg_pqf_url = whatwg_pqf_url,
+    # Subject of the uniform RFC 3986 gate (RURL-qrfrvmkg); see above.
+    rfc_gate_input = rfc_gate_input,
     looks_like_protocol = looks_like_protocol,
     original_has_allowed_scheme = original_has_allowed_scheme,
     is_scheme_relative = is_scheme_relative,
