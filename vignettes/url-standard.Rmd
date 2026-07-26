@@ -179,9 +179,13 @@ live in [`analysis/`](https://github.com/bart-turczynski/rurl/tree/main/analysis
 with the harnesses in `inst/bench/`.
 
 **WHATWG.** Against the spec's own conformance suite (web-platform-tests
-`urltestdata.json`), the `"whatwg"` profile accepts all **176** success cases
-with full component parity — scheme, host, port, path, query and fragment — and
-correctly rejects all **202** failure cases: **378/378**. Against `adaR` (the
+`urltestdata.json`), at `scheme_acceptance = "general"` the `"whatwg"` profile
+accepts all **336** success cases with full component parity — scheme, host,
+port, path, query and fragment — and correctly rejects all **202** failure
+cases: **538/538**. At the default `scheme_acceptance = "web"` the same corpus
+scores 176 accepted, all at full parity, plus the same 202 rejections; the 160
+difference is the ADR 0004 allowlist declining non-web schemes before the
+grammar is consulted, not a conformance miss. Against `adaR` (the
 Ada C++ WHATWG reference) over a 336-input adversarial corpus, it differs on
 **two rows**, and neither is a parsing disagreement: one is punycode-vs-Unicode
 *presentation* (ADR 0002 — reachable through `host_encoding`), and one is the
@@ -190,8 +194,8 @@ scheme, port and path agreement are all 1.000.
 
 **RFC 3986.** Over the 257-row audited conformance fixture, the `"rfc3986"`
 profile matches the standard on **164** rows and departs on **93** — 81 where it
-rejects what the RFC admits (the ADR 0004 host-shape gate and the closed default
-scheme set) and 12 where it accepts what the RFC does not (ADR 0002 Unicode
+rejects what the RFC admits (all of them the ADR 0004 host/authority gate; the
+closed scheme set contributes none) and 12 where it accepts what the RFC does not (ADR 0002 Unicode
 hosts, ADR 0011 readable paths). Every one of the 93 cites the ADR or ticket
 that owns it; none is accidental. A hand-authored, two-sided probe set covering
 the grammar and normalization rules passes 32/32 in both directions, with five
@@ -200,10 +204,10 @@ conformance number.
 
 Two boundaries keep that honest rather than triumphal:
 
-- The WPT **success** fixture covers `http`/`https`/`ftp`/`file` only, so
-  176/176 says nothing yet about opaque, `ws:` or `wss:` serialization. Widening
-  it is tracked work, not a settled result. (The **failure** set already spans
-  every scheme.)
+- The WPT fixture keeps only **absolute** URLs (rows with a null base), because
+  rurl does not resolve relative references against a base URL. 336/336 says
+  nothing about base-relative resolution. It does now cover every scheme the
+  suite exercises, including opaque, `ws:` and `wss:`.
 - The `"whatwg"` profile is WHATWG on the axes it governs — **not** a full
   UTS-46 host mapping. Ligatures, circled digits and zero-width code points pass
   through unmapped (ADR 0002).

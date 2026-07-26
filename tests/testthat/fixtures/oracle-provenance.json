@@ -45,27 +45,27 @@
     {
       "path": "inst/bench/wpt-url-cases.json",
       "fixture_kind": "imported suite, machine-generated from a pinned upstream artifact",
-      "transformed_fixture_sha256": "611c6cb20560ccee984bd9139df7f7ac9f269b4f63ba410bca68c69171f66164",
+      "transformed_fixture_sha256": "e3813f68e5a7a31ea23251e0e82c47651915ff64dfaaa569cc68836a1af92ecc",
       "case_count": {
-        "total": 378,
-        "success": 176,
+        "total": 538,
+        "success": 336,
         "failure": 202
       },
-      "case_count_note": "Mirrors the fixture's own _meta.counts.",
+      "case_count_note": "Mirrors the fixture's own _meta.counts. The success arm was widened from 176 to 336 when the http/https/ftp/file scheme carve-out was dropped: the success selector now admits every base-null non-failure case regardless of scheme, so all 54 schemes present upstream are scored, not four. The failure arm is unchanged at 202 -- it never carried a scheme filter. The two base = about:blank rows the previous selector admitted are now excluded with the rest of the base-relative rows (see applicability_selector).",
       "in_fixture_provenance": "_meta block (landed by commit 266c6f3); it carries the ten non-self-referential section-2.3 fields for this file",
       "source_group_key": "not applicable -- single source; the fixture has no source column",
       "source_groups": [
         {
           "group": "wpt-urltestdata",
           "group_key_origin": "named after the single upstream artifact, matching the source column value used for the same artifact in external-url-vectors.csv",
-          "row_count": 378,
+          "row_count": 538,
           "section_2_3_applies": true,
           "import_status": "imported",
           "upstream_project": "web-platform-tests/wpt",
           "upstream_revision": "181476aa16e8b28a07698bef3a0275fa53dd22e5",
           "upstream_revision_pin_kind": "retrieved-at",
           "upstream_revision_reproduces_fixture": true,
-          "upstream_revision_pin_note": "Re-running generation_command against the raw source at this revision reproduces the committed fixture exactly: 176 success / 202 failure, both arrays byte-identical.",
+          "upstream_revision_pin_note": "Re-running generation_command against the raw source at this revision reproduces the committed fixture exactly: 336 success / 202 failure, both arrays byte-identical.",
           "upstream_path": "url/resources/urltestdata.json",
           "retrieval_date": "2026-07-08",
           "license": "BSD-3-Clause (web-platform-tests contributors)",
@@ -76,10 +76,10 @@
           "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
           "standard_section": "URL parsing; URL serializing; URL class API getters (protocol, hostname, port, pathname, search, hash)",
           "claim_kind": "conformance",
-          "applicability_selector": "base in {null, about:blank}; success limited to http/https/ftp/file; failure = any base-null case; NUL inputs dropped",
+          "applicability_selector": "base = null only -- base-relative rows (including base about:blank) are excluded because rurl is absolute-parse-only and does no relative resolution; success = any base-null non-failure case, all schemes, no scheme restriction; failure = any base-null failure case; NUL inputs dropped",
           "relocation_verified": "yes",
-          "relocation_verified_count": "378/378",
-          "relocation_note": "Verified by reproduction, which is stronger than row-level re-location: the generation command at the pinned revision regenerates both arrays byte-identically, so every case is accounted for."
+          "relocation_verified_count": "538/538",
+          "relocation_note": "Verified by reproduction, which is stronger than row-level re-location: the generation command at the pinned revision regenerates both arrays byte-identically, so every case is accounted for. The exclusion of base-relative rows is a disclosed scope statement about rurl (absolute parse only), not a selection over outcomes -- it is applied before the failure/success split, so it cannot favour either arm. Two rows were affected, both success-expected bare fragment references ('#x' and '#x:y'); the failure arm is unchanged. This matches the disposition external-url-vectors.csv already records for base-relative rows (runnable = no-relative-resolution)."
         }
       ]
     },
@@ -103,7 +103,7 @@
           "upstream_revision": "181476aa16e8b28a07698bef3a0275fa53dd22e5",
           "upstream_revision_pin_kind": "verified-at",
           "upstream_revision_reproduces_fixture": false,
-          "upstream_revision_pin_note": "Same revision inst/bench/wpt-url-cases.json was retrieved at, and all 267 rows re-locate there. This fixture records no retrieval date and no import command, so the revision the rows were actually imported from is unrecorded: the pin proves re-location, not import.",
+          "upstream_revision_pin_note": "Same revision inst/bench/wpt-url-cases.json was retrieved at, and all 267 rows re-locate there. This fixture records no retrieval date and no import command, so the revision the rows were actually imported from is unrecorded: the pin proves re-location, not import. This group's applicability_selector deliberately differs from the same-named group under inst/bench/wpt-url-cases.json: this one selects the upstream failure arm only, so widening that fixture's success selector to all schemes leaves these 267 rows untouched.",
           "upstream_path": "url/resources/urltestdata.json",
           "retrieval_date": "MISSING[RURL-vwurxmzm]",
           "license": "BSD-3-Clause (web-platform-tests contributors)",

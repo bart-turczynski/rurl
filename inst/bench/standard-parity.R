@@ -14,8 +14,9 @@
 #   inst/bench/wpt-url-cases.json  -- WHATWG: derived from web-platform-tests
 #     urltestdata.json (BSD-3-Clause) by make-wpt-fixture.py. success cases
 #     carry the spec's expected components; failure cases MUST be rejected.
-#     Success is limited to the schemes rurl supports (http/https/ftp/file)
-#     -- the "additional protocols notwithstanding" carve-out.
+#     Since RURL-ghdlrcjv the success set spans EVERY scheme WPT exercises
+#     (opaque, ws:, wss:, ...), not just http/https/ftp/file; only
+#     base-relative rows are out of scope (rurl parses absolute URLs).
 #   inst/bench/rfc3986-probes.csv  -- RFC: hand-authored against RFC 3986's
 #     grammar/normalization rules (no official suite exists), each row tagged
 #     with its section.
@@ -26,8 +27,17 @@
 # genuine (the standard cannot be reached by any knob). Failure cases use only
 # scheme_policy="require".
 #
+# scheme_acceptance is passed EXPLICITLY and scored at BOTH postures, never
+# left implicit at the exported default: "web" (the ADR 0004 closed allowlist,
+# http/https/ftp/ftps/file) and "general" (every scheme). A low "web" success
+# count is the closed scheme set working as designed, NOT a conformance
+# failure; the grammar figure is the "general" one.
+#
 # Outputs (CSV) go to $RURL_PARITY_OUT (default: _scratch/parity):
-#   whatwg-success-scored.csv / whatwg-failure-scored.csv
+#   whatwg-success-scored.csv          -- scheme_acceptance = "web"
+#   whatwg-success-scored-general.csv  -- scheme_acceptance = "general"
+#   whatwg-failure-scored.csv          -- scheme_acceptance = "web"
+#   whatwg-failure-scored-general.csv  -- scheme_acceptance = "general"
 #   rfc-probes-scored.csv
 # ----------------------------------------------------------------------------
 
@@ -61,41 +71,65 @@ succ <- do.call(rbind, lapply(wpt$success, function(e) data.frame(
 fail_inputs <- vapply(wpt$failure, function(e) e$input, character(1))
 
 # ---- WHATWG success: canonical-output config ------------------------------
-cfg <- spu(succ$input, url_standard = "whatwg", scheme_policy = "require",
-           host_encoding = "idna", path_encoding = "encode")
-cfg <- suppressWarnings(cfg)
-acc <- !rej(cfg$parse_status)
+# Scored at BOTH scheme-acceptance postures, each passed explicitly.
 exp_scheme <- sub(":$", "", succ$protocol)
 exp_query <- sub("^\\?", "", succ$search)
 exp_fragment <- sub("^#", "", succ$hash)
-s_ok <- acc & blank(cfg$scheme) == exp_scheme
-h_ok <- acc & blank(cfg$host) == succ$hostname
-p_ok <- acc & blank(cfg$port) == succ$port
-path_ok <- acc & blank(cfg$path) == succ$pathname
-query_ok <- acc & blank(cfg$query) == exp_query
-fragment_ok <- acc & blank(cfg$fragment) == exp_fragment
-full <- s_ok & h_ok & p_ok & path_ok & query_ok & fragment_ok
 
-succ_scored <- data.frame(
-  input = succ$input, accepted = acc,
-  scheme_ok = s_ok, host_ok = h_ok, port_ok = p_ok, path_ok = path_ok,
-  query_ok = query_ok, fragment_ok = fragment_ok,
-  full_parity = full,
-  rurl_scheme = blank(cfg$scheme), exp_scheme = exp_scheme,
-  rurl_host = blank(cfg$host), exp_host = succ$hostname,
-  rurl_port = blank(cfg$port), exp_port = succ$port,
-  rurl_path = blank(cfg$path), exp_path = succ$pathname,
-  rurl_query = blank(cfg$query), exp_query = exp_query,
-  rurl_fragment = blank(cfg$fragment), exp_fragment = exp_fragment,
-  rurl_status = cfg$parse_status, stringsAsFactors = FALSE)
+score_success <- function(posture) {
+  cfg <- suppressWarnings(spu(
+    succ$input, url_standard = "whatwg", scheme_acceptance = posture,
+    scheme_policy = "require", host_encoding = "idna",
+    path_encoding = "encode"))
+  acc <- !rej(cfg$parse_status)
+  ok <- list(
+    scheme = acc & blank(cfg$scheme) == exp_scheme,
+    host = acc & blank(cfg$host) == succ$hostname,
+    port = acc & blank(cfg$port) == succ$port,
+    path = acc & blank(cfg$path) == succ$pathname,
+    query = acc & blank(cfg$query) == exp_query,
+    fragment = acc & blank(cfg$fragment) == exp_fragment)
+  full <- Reduce(`&`, ok)
+  scored <- data.frame(
+    input = succ$input, posture = posture, accepted = acc,
+    scheme_ok = ok$scheme, host_ok = ok$host, port_ok = ok$port,
+    path_ok = ok$path, query_ok = ok$query, fragment_ok = ok$fragment,
+    full_parity = full,
+    rurl_scheme = blank(cfg$scheme), exp_scheme = exp_scheme,
+    rurl_host = blank(cfg$host), exp_host = succ$hostname,
+    rurl_port = blank(cfg$port), exp_port = succ$port,
+    rurl_path = blank(cfg$path), exp_path = succ$pathname,
+    rurl_query = blank(cfg$query), exp_query = exp_query,
+    rurl_fragment = blank(cfg$fragment), exp_fragment = exp_fragment,
+    rurl_status = cfg$parse_status, stringsAsFactors = FALSE)
+  list(posture = posture, acc = acc, ok = ok, full = full, scored = scored)
+}
+
+web <- score_success("web")
 
 # ---- WHATWG failure: must reject ------------------------------------------
-fdf <- suppressWarnings(spu(fail_inputs, url_standard = "whatwg",
-                            scheme_policy = "require"))
-f_rejected <- rej(fdf$parse_status)
-fail_scored <- data.frame(
-  input = fail_inputs, rurl_status = fdf$parse_status,
-  conformant = f_rejected, stringsAsFactors = FALSE)
+# Also scored at both postures. At "general" the ADR 0004 allowlist cannot be
+# the reason a non-web-scheme row rejects, so the general column is the
+# in-band evidence that the GRAMMAR rejects them.
+score_failure <- function(posture) {
+  fdf <- suppressWarnings(spu(fail_inputs, url_standard = "whatwg",
+                              scheme_acceptance = posture,
+                              scheme_policy = "require"))
+  rejected <- rej(fdf$parse_status)
+  list(posture = posture, rejected = rejected, scored = data.frame(
+    input = fail_inputs, posture = posture, rurl_status = fdf$parse_status,
+    conformant = rejected, stringsAsFactors = FALSE))
+}
+
+web_fail <- score_failure("web")
+f_rejected <- web_fail$rejected
+
+# ---- WHATWG at scheme_acceptance = "general" ------------------------------
+# Same dials otherwise. This is the posture that scores the GRAMMAR over the
+# whole spec corpus: no scheme is excluded by the ADR 0004 allowlist, so a
+# rejection or a component mismatch here is a real conformance gap.
+general <- score_success("general")
+general_fail <- score_failure("general")
 
 # ---- RFC 3986 probes ------------------------------------------------------
 # Two-sided since RURL-wlqhmbdw: the set carries accept AND reject probes.
@@ -148,9 +182,16 @@ rfc_scored <- data.frame(
 out_dir <- Sys.getenv("RURL_PARITY_OUT",
                       unset = file.path("_scratch", "parity"))
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-utils::write.csv(succ_scored, file.path(out_dir, "whatwg-success-scored.csv"),
+utils::write.csv(web$scored, file.path(out_dir, "whatwg-success-scored.csv"),
                  row.names = FALSE)
-utils::write.csv(fail_scored, file.path(out_dir, "whatwg-failure-scored.csv"),
+utils::write.csv(general$scored,
+                 file.path(out_dir, "whatwg-success-scored-general.csv"),
+                 row.names = FALSE)
+utils::write.csv(web_fail$scored,
+                 file.path(out_dir, "whatwg-failure-scored.csv"),
+                 row.names = FALSE)
+utils::write.csv(general_fail$scored,
+                 file.path(out_dir, "whatwg-failure-scored-general.csv"),
                  row.names = FALSE)
 utils::write.csv(rfc_scored, file.path(out_dir, "rfc-probes-scored.csv"),
                  row.names = FALSE)
@@ -168,15 +209,32 @@ cat(sprintf("  WHATWG oracle : WPT urltestdata (%d success + %d failure)\n",
 cat(sprintf("  RFC oracle    : %d hand-authored RFC-3986 probes\n", nrow(rp)))
 cat(sprintf("  output dir    : %s\n\n", normalizePath(out_dir)))
 
-cat("== WHATWG (canonical-output config) ==\n")
-cat("  success accepted        :", pct(acc), "\n")
-cat("  success FULL parity     :", pct(full), "\n")
-cat("    scheme", pct(s_ok), "| host", pct(h_ok),
-    "| port", pct(p_ok), "| path", pct(path_ok),
-    "| query", pct(query_ok), "| fragment", pct(fragment_ok), "\n")
+report_success <- function(r) {
+  cat("  success accepted        :", pct(r$acc), "\n")
+  cat("  success FULL parity     :", pct(r$full), "\n")
+  cat("    scheme", pct(r$ok$scheme), "| host", pct(r$ok$host),
+      "| port", pct(r$ok$port), "| path", pct(r$ok$path),
+      "| query", pct(r$ok$query), "| fragment", pct(r$ok$fragment), "\n")
+}
+
+cat("== WHATWG (canonical-output config)",
+    "| scheme_acceptance = \"general\" ==\n")
+cat("  the GRAMMAR figure: every WPT scheme in scope, nothing excluded\n")
+report_success(general)
+cat("  failure correctly reject:", pct(general_fail$rejected), "\n")
+cat("  overall WHATWG acceptance conformance (general):",
+    pct(c(general$acc, general_fail$rejected)), "\n\n")
+
+cat("== WHATWG (canonical-output config)",
+    "| scheme_acceptance = \"web\" ==\n")
+cat("  the ADR 0004 closed allowlist (http/https/ftp/ftps/file). A lower\n")
+cat("  accepted count is that allowlist working, NOT a conformance failure.\n")
+report_success(web)
 cat("  failure correctly reject:", pct(f_rejected), "\n")
-cat("  overall WHATWG acceptance conformance:",
-    pct(c(acc, f_rejected)), "\n\n")
+cat(sprintf(
+  "  of the accepted %d, full parity %d -- the other %d are ADR 0004\n",
+  sum(web$acc), sum(web$full), sum(!web$acc)))
+cat("  policy rejections, NOT conformance misses (see the general block).\n\n")
 
 cat("== RFC 3986 (probe set, two-sided since RURL-wlqhmbdw) ==\n")
 cat("  accept-conformance      :", pct(r_pass[conf & want_acc]),
@@ -202,12 +260,16 @@ if (!all(r_pass)) {
   }
 }
 
-cat("\n== WHATWG success: non-conformances by component ==\n")
-for (cc in c("scheme_ok", "host_ok", "port_ok", "path_ok",
-             "query_ok", "fragment_ok")) {
-  bad <- acc & !succ_scored[[cc]]
-  cat(sprintf("  %-9s %d\n", sub("_ok", "", cc, fixed = TRUE), sum(bad)))
+for (r in list(general, web)) {
+  cat(sprintf(
+    "\n== WHATWG success: non-conformances by component [%s] ==\n",
+    r$posture))
+  for (cc in c("scheme_ok", "host_ok", "port_ok", "path_ok",
+               "query_ok", "fragment_ok")) {
+    bad <- r$acc & !r$scored[[cc]]
+    cat(sprintf("  %-9s %d\n", sub("_ok", "", cc, fixed = TRUE), sum(bad)))
+  }
+  cat("  (rejects of WPT-valid input:", sum(!r$acc), ")\n")
 }
-cat("  (over-strict rejects of WPT-valid input:", sum(!acc), ")\n")
 
 invisible(NULL)
