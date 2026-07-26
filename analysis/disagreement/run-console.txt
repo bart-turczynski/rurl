@@ -3,12 +3,12 @@ cross-parser URL-parsing disagreement harness (RURL-wncwfasl)
   R              4.6.0
   platform       aarch64-apple-darwin23
   libcurl        8.14.1
-  rurl           2.7.0
+  rurl           2.8.0
   curl           7.1.0
   adaR           0.3.5
   urltools       1.7.3.1
   pslr           1.1.1
-  punycoder      1.2.1
+  punycoder      1.2.1.9000
 
   corpus         336 inputs across 28 axes
   participants   rurl(rfc3986), rurl(whatwg), curl, adaR, urltools
@@ -32,8 +32,8 @@ per-axis divergence summary (most-divergent first):
          idn-punycode-host        1           1 1.000                  host
                     c0-tab        1           1 1.000 scheme,host,port,path
            ipv4-over-arity        1           1 1.000 scheme,host,port,path
+ ext-ada-extra-urltestdata       20          18 0.900 scheme,host,port,path
            ext-youarealiar        9           8 0.889 scheme,host,port,path
- ext-ada-extra-urltestdata       20          17 0.850 scheme,host,port,path
         ext-equivocal-urls       10           6 0.600 scheme,host,port,path
          host-trailing-dot        1           0 0.000                      
           idn-unicode-host        1           0 0.000                      
@@ -45,7 +45,7 @@ per-axis divergence summary (most-divergent first):
             ipv4-canonical        1           0 0.000                      
    ext-ada-verifydnslength       14           0 0.000                      
 
-divergent inputs: 306 of 336 (91%)
+divergent inputs: 307 of 336 (91%)
 
 disagreement matrix (divergent rows only; cell = scheme|host|port|path,
   or <status> when the parser did not accept the input):
@@ -328,7 +328,7 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  http://[::ffff:127.0.0.1%2523]/                                          ext-ip-obfuscation        scheme,host,port,path
  example.com`x.example.com                                                ext-ada-extra-urltestdata scheme,host,port,path
  http://Yağız.com                                                         ext-ada-extra-urltestdata host                 
- fs:/hello.eth                                                            ext-ada-extra-urltestdata scheme,host,port,path
+ fs:/hello.eth                                                            ext-ada-extra-urltestdata scheme,host,path     
  http://///\\'                                                            ext-ada-extra-urltestdata scheme,host,port,path
  http://[0:0:0:0:0:0:0:0                                                  ext-ada-extra-urltestdata scheme,host,port,path
  http://0:0:0:0:0:0:0:0]                                                  ext-ada-extra-urltestdata scheme,host,port,path
@@ -342,21 +342,22 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  file://localhost/path/to/file.txt                                        ext-ada-extra-urltestdata host                 
  file://localhost:8098/path/to/file.txt                                   ext-ada-extra-urltestdata scheme,host,port,path
  data:space    ?test#test                                                 ext-ada-extra-urltestdata scheme,host,port,path
+ https://example.com/"quoted"                                             ext-ada-extra-urltestdata scheme,host,port,path
  a:b#                                                                     ext-ada-extra-urltestdata scheme,host,port,path
- http://google.com:80\\@yahoo.com                                         ext-youarealiar           host,path            
+ http://google.com:80\\@yahoo.com                                         ext-youarealiar           scheme,host,port,path
  https://user:pass@xdavidhu.me\test.corp.google.com                       ext-youarealiar           scheme,host,port,path
  http://127.0.0.\n1:6379?SET\ntest\nfailure12:80                          ext-youarealiar           scheme,host,port,path
  https:/\\/\\/\\github.com/foo/bar                                        ext-youarealiar           scheme,host,port,path
  https:///evil.com                                                        ext-youarealiar           host,path            
- http://example.com:80\\@localhost:8080/secret.txt                        ext-youarealiar           host,port,path       
+ http://example.com:80\\@localhost:8080/secret.txt                        ext-youarealiar           scheme,host,port,path
  foo://///////bar.com/                                                    ext-youarealiar           scheme,host,port,path
  www.php.net:80/index.php?test=1                                          ext-youarealiar           scheme,host,port,path
- https://n.pr\\@e.gg                                                      ext-equivocal-urls        host,path            
+ https://n.pr\\@e.gg                                                      ext-equivocal-urls        scheme,host,port,path
  https://n.pr][e.gg                                                       ext-equivocal-urls        scheme,host,port,path
  https://n.pr#@e.gg                                                       ext-equivocal-urls        host                 
  https://n.pr%2ee.gg                                                      ext-equivocal-urls        host                 
  https://n.pr\ne.gg                                                       ext-equivocal-urls        scheme,host,port,path
- https://malware.testing.google.test\\testing\\malware\\*@letsencrypt.org ext-equivocal-urls        host,path            
+ https://malware.testing.google.test\\testing\\malware\\*@letsencrypt.org ext-equivocal-urls        scheme,host,port,path
  rurl(rfc3986)                                                                   rurl(whatwg)                                                                               
  http|ex.com||/AB                                                                http|ex.com||/%41%42                                                                       
  http|ex.com||/a%2Fb                                                             http|ex.com||/a%2Fb                                                                        
@@ -435,6 +436,10 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  https|�||/ [warning-no-tld]                                                     <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
+ sc|||/                                                                          <error>                                                                                    
+ <error>                                                                         <error>                                                                                    
+ sc|||/                                                                          <error>                                                                                    
+ sc||12|/                                                                        <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
@@ -479,10 +484,6 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- http|a|b||/ [warning-no-tld]                                                    <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
@@ -588,25 +589,25 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  <error>                                                                         <error>                                                                                    
  https|­||/ [warning-no-tld]                                                     <error>                                                                                    
  https|­||/ [warning-no-tld]                                                     <error>                                                                                    
+ data||443|/                                                                     <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
+ javascript||443|/                                                               <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
+ mailto||443|/                                                                   <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
+ intent||443|/                                                                   <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
+ urn||443|/                                                                      <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
+ turn||443|/                                                                     <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
+ stun||443|/                                                                     <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
@@ -635,35 +636,36 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  http|yağız.com||/                                                               http|yağız.com||/                                                                          
- <error>                                                                         <error>                                                                                    
+ fs|||/hello.eth                                                                 fs|||/hello.eth                                                                            
  <error>                                                                         http|'||/ [warning-no-tld]                                                                 
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
+ mailto|||/a@b.com                                                               mailto|||/a@b.com                                                                          
+ scheme|||/example.com                                                           scheme|||/example.com                                                                      
+ scheme|||/example.com/path                                                      scheme|||/example.com/path                                                                 
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
  <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
+ <error>                                                                         scheme|example.com||/                                                                      
  file|||/path/to/file.txt                                                        file|||/path/to/file.txt                                                                   
  <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- http|yahoo.com||/                                                               http|google.com||/@yahoo.com                                                               
+ <error>                                                                         data|||/space   %20                                                                        
+ <error>                                                                         https|example.com||/"quoted"                                                               
+ a|||/b                                                                          a|||/b                                                                                     
+ <error>                                                                         http|google.com||/@yahoo.com                                                               
  <error>                                                                         https|xdavidhu.meest.corp.google.com||/                                                    
  <error>                                                                         http|127.0.0.1|6379|/                                                                      
  <error>                                                                         https|github.com||/foo/bar                                                                 
  https|evil.com||/                                                               https|evil.com||/                                                                          
- http|localhost|8080|/secret.txt [warning-no-tld]                                http|example.com||/@localhost:8080/secret.txt                                              
+ <error>                                                                         http|example.com||/@localhost:8080/secret.txt                                              
+ foo|||///////bar.com/                                                           foo|||///////bar.com/                                                                      
  <error>                                                                         <error>                                                                                    
- <error>                                                                         <error>                                                                                    
- https|e.gg||/                                                                   https|n.pr||/@e.gg                                                                         
+ <error>                                                                         https|n.pr||/@e.gg                                                                         
  <error>                                                                         <error>                                                                                    
  https|n.pr||/                                                                   https|n.pr||/                                                                              
  https|n.pr.e.gg||/                                                              https|n.pr.e.gg||/                                                                         
  <error>                                                                         https|n.pre.gg||/                                                                          
- https|letsencrypt.org||/                                                        https|malware.testing.google.test||/testing/malware/*@letsencrypt.org [warning-invalid-tld]
+ <error>                                                                         https|malware.testing.google.test||/testing/malware/*@letsencrypt.org [warning-invalid-tld]
  curl                                   adaR                                                                  urltools                                                 
  http|ex.com||/AB                       http|ex.com||/%41%42                                                  http|ex.com||/%41%42                                     
  http|ex.com||/a/b                      http|ex.com||/a%2Fb                                                   http|ex.com||/a%2Fb                                      
@@ -956,6 +958,7 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  file|||/path/to/file.txt               file|||/path/to/file.txt                                              file|localhost||/path/to/file.txt                        
  <error>                                <reject>                                                              file|localhost|8098|/path/to/file.txt                    
  <error>                                data|||/space   %20                                                   |data|space    |/                                        
+ https|example.com||/"quoted"           https|example.com||/%22quoted%22                                      https|example.com||/"quoted"                             
  <error>                                a|||/b                                                                |a|b|/                                                   
  http|yahoo.com||/                      http|google.com||/@yahoo.com                                          http|yahoo.com||/                                        
  <error>                                https|xdavidhu.meest.corp.google.com||/                               https|xdavidhu.me\test.corp.google.com||/                
@@ -971,12 +974,3 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  https|n.pr.e.gg||/                     https|n.pr.e.gg||/                                                    https|n.pr%2ee.gg||/                                     
  <error>                                https|n.pre.gg||/                                                     https|n.pr\ne.gg||/                                      
  https|letsencrypt.org||/               https|malware.testing.google.test||/testing/malware/*@letsencrypt.org https|letsencrypt.org||/                                 
-
-#### rurl(whatwg) vs adaR -- 10 divergent rows ####
-  by component: ACCEPT/REJECT=9  host=1 
-
-#### rurl(rfc3986) vs curl -- 52 divergent rows ####
-  by component: host=33  ACCEPT/REJECT=16  path=3 
-
-#### rurl(rfc3986) vs python-urllib -- 186 divergent rows ####
-  by component: ACCEPT/REJECT=160  host=14  path=11  host,path=1 

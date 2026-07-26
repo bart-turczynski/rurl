@@ -11,11 +11,12 @@
 test_that("WHATWG serializes the four non-special shapes", {
   # Helper: build the state and serialize with a fragment-free, port-free,
   # keep-trailing-slash configuration.
-  ser <- function(host, path, remainder) {
+  ser <- function(host, path, remainder, delimiter) {
     .serialize_whatwg_vec(
       scheme = "foo",
       host = host,
       host_kind = .host_kind(host),
+      authority_delimiter_present = delimiter,
       path = path,
       path_kind = .whatwg_path_kind(FALSE, remainder),
       query = NA_character_,
@@ -27,19 +28,22 @@ test_that("WHATWG serializes the four non-special shapes", {
   }
 
   # foo:bar   -> opaque path, host absent (remainder "bar" has no leading "/").
-  expect_identical(ser(NA_character_, "bar", "bar"), "foo:bar")
-  # foo:/bar  -> list path, host absent, no authority (no `//`).
-  expect_identical(ser(NA_character_, "/bar", "/bar"), "foo:/bar")
-  # foo:///bar -> list path, host EMPTY -> `//` + "" + "/bar".
-  expect_identical(ser("", "/bar", "///bar"), "foo:///bar")
-  # foo://[::1]/bar -> list path, host PRESENT.
-  expect_identical(ser("[::1]", "/bar", "//[::1]/bar"), "foo://[::1]/bar")
+  expect_identical(ser(NA_character_, "bar", "bar", FALSE), "foo:bar")
+  # foo:/bar  -> list path, host absent, no `//` delimiter.
+  expect_identical(ser(NA_character_, "/bar", "/bar", FALSE), "foo:/bar")
+  # foo:///bar -> list path, `//` delimiter present, host EMPTY.
+  expect_identical(ser("", "/bar", "///bar", TRUE), "foo:///bar")
+  # foo://[::1]/bar -> list path, delimiter present, host PRESENT.
+  expect_identical(
+    ser("[::1]", "/bar", "//[::1]/bar", TRUE), "foo://[::1]/bar"
+  )
 })
 
 test_that("WHATWG `/.` guard fires only for a null-host empty-lead list path", {
   ser <- function(path) {
     .serialize_whatwg_vec(
       scheme = "foo", host = NA_character_, host_kind = "absent",
+      authority_delimiter_present = FALSE,
       path = path, path_kind = "list", query = NA_character_,
       query_kind = "absent", port = NULL, port_handling = "exclude",
       trailing_slash_handling = "keep"
@@ -60,20 +64,46 @@ test_that("WHATWG `/.` guard fires only for a null-host empty-lead list path", {
 })
 
 test_that("WHATWG guard does NOT fire when the host is empty-but-present", {
-  # host_kind "empty" is NOT null: authority emits `//`, so no guard.
+  # The `/.` guard's own WHATWG condition is a NULL host, so an empty-but-
+  # present host under a present delimiter emits `//` and never the guard.
   expect_identical(
     .serialize_whatwg_vec(
-      "foo", "", "empty", "//bar", "list", NA_character_, "absent",
+      "foo", "", "empty", TRUE, "//bar", "list", NA_character_, "absent",
       NULL, "exclude", "keep"
     ),
     "foo:////bar"
   )
 })
 
+test_that("`//` emission follows the delimiter fact, not the host state", {
+  # P1.2 D-C. Hold every host-side argument CONSTANT and move only
+  # `authority_delimiter_present`: the `//` introducer must follow it. Before
+  # this slice both serializers re-derived `//` from `host_kind`, so the second
+  # row of each pair was not expressible at all -- a delimiter-present empty
+  # authority and a delimiter-absent input serialized identically.
+  whatwg <- function(delimiter) {
+    .serialize_whatwg_vec(
+      "foo", "", "empty", delimiter, "/bar", "list", NA_character_, "absent",
+      NULL, "exclude", "keep"
+    )
+  }
+  expect_identical(whatwg(TRUE), "foo:///bar")
+  expect_identical(whatwg(FALSE), "foo:/bar")
+
+  rfc <- function(delimiter) {
+    .serialize_rfc_generic_vec(
+      "foo", "", "empty", delimiter, "/bar", "abempty", NA_character_,
+      "absent", NULL, "exclude"
+    )
+  }
+  expect_identical(rfc(TRUE), "foo:///bar")
+  expect_identical(rfc(FALSE), "foo:/bar")
+})
+
 test_that("WHATWG query rule: empty-but-present -> `?`; never a fragment", {
   ser <- function(query, query_kind) {
     .serialize_whatwg_vec(
-      "foo", NA_character_, "absent", "/p", "list", query, query_kind,
+      "foo", NA_character_, "absent", FALSE, "/p", "list", query, query_kind,
       NULL, "exclude", "keep"
     )
   }
@@ -91,7 +121,7 @@ test_that("RFC generic serializes authority / rootless / absolute forms", {
   # Authority form: foo://h/p.
   expect_identical(
     .serialize_rfc_generic_vec(
-      "foo", "h", "present", "/p", "abempty", NA_character_, "absent",
+      "foo", "h", "present", TRUE, "/p", "abempty", NA_character_, "absent",
       NULL, "exclude"
     ),
     "foo://h/p"
@@ -99,7 +129,7 @@ test_that("RFC generic serializes authority / rootless / absolute forms", {
   # Rootless form: foo:p (no authority, no leading `/`).
   expect_identical(
     .serialize_rfc_generic_vec(
-      "foo", NA_character_, "absent", "p", "rootless", NA_character_,
+      "foo", NA_character_, "absent", FALSE, "p", "rootless", NA_character_,
       "absent", NULL, "exclude"
     ),
     "foo:p"
@@ -107,7 +137,7 @@ test_that("RFC generic serializes authority / rootless / absolute forms", {
   # Absolute form: foo:/p (no authority, leading `/`).
   expect_identical(
     .serialize_rfc_generic_vec(
-      "foo", NA_character_, "absent", "/p", "absolute", NA_character_,
+      "foo", NA_character_, "absent", FALSE, "/p", "absolute", NA_character_,
       "absent", NULL, "exclude"
     ),
     "foo:/p"
@@ -119,14 +149,14 @@ test_that("RFC generic preserves dot segments and applies no `/.` guard", {
   # verbatim: rfc-syntax does NOT remove dot segments or add the `/.` guard.
   expect_identical(
     .serialize_rfc_generic_vec(
-      "foo", "h", "present", "/a/./b/../c", "abempty", NA_character_,
+      "foo", "h", "present", TRUE, "/a/./b/../c", "abempty", NA_character_,
       "absent", NULL, "exclude"
     ),
     "foo://h/a/./b/../c"
   )
   expect_identical(
     .serialize_rfc_generic_vec(
-      "foo", NA_character_, "absent", "//bar", "absolute", NA_character_,
+      "foo", NA_character_, "absent", FALSE, "//bar", "absolute", NA_character_,
       "absent", NULL, "exclude"
     ),
     "foo://bar"
@@ -136,7 +166,7 @@ test_that("RFC generic preserves dot segments and applies no `/.` guard", {
 test_that("RFC generic query rule mirrors WHATWG presence handling", {
   ser <- function(query, query_kind) {
     .serialize_rfc_generic_vec(
-      "foo", "h", "present", "/p", "abempty", query, query_kind,
+      "foo", "h", "present", TRUE, "/p", "abempty", query, query_kind,
       NULL, "exclude"
     )
   }
@@ -151,7 +181,7 @@ test_that("WHATWG special-scheme host-present list path matches hierarchical", {
   # case: a normal http list path serializes identically.
   expect_identical(
     .serialize_whatwg_vec(
-      "http", "example.com", "present", "/a/b", "list", NA_character_,
+      "http", "example.com", "present", TRUE, "/a/b", "list", NA_character_,
       "absent", NULL, "exclude", "keep"
     ),
     "http://example.com/a/b"

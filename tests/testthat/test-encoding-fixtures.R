@@ -94,11 +94,55 @@ test_that("raw query fidelity honors the decode flag", {
   )
 })
 
-test_that("userinfo encoding is preserved verbatim", {
+test_that("userinfo percent-triplets are never decoded or double-encoded", {
   expect_identical(get_user("http://u%40ser:p%40ss@ex.com/x"), "u%40ser")
   expect_identical(get_password("http://u%40ser:p%40ss@ex.com/x"), "p%40ss")
   expect_identical(get_user("http://user:pass@ex.com/x"), "user")
   expect_identical(get_password("http://user:pass@ex.com/x"), "pass")
+  # Idempotency holds under `whatwg` too, where the userinfo percent-encode set
+  # IS applied: the encoder re-emits an existing triplet verbatim rather than
+  # re-encoding its "%" (so no `%2540` / `%2525`).
+  res <- safe_parse_urls(
+    c("http://u%40ser:p%40ss@ex.com/x",
+      "http://%25DOMAIN:foobar@foodomain.com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(res$user, c("u%40ser", "%25DOMAIN"))
+  expect_identical(res$password, c("p%40ss", "foobar"))
+})
+
+test_that("whatwg applies the userinfo percent-encode set to user/password", {
+  chars <- c("^", "\"", "<", ">", "|", "{", "}", ";")
+  urls <- paste0("http://a", chars, "b@host/")
+  res <- safe_parse_urls(urls, url_standard = "whatwg")
+  expect_identical(
+    res$user,
+    c("a%5Eb", "a%22b", "a%3Cb", "a%3Eb", "a%7Cb", "a%7Bb", "a%7Db", "a%3Bb")
+  )
+  # A ":" inside the password is a member of the set.
+  pw <- safe_parse_urls("http://u:p:q@ex.com/", url_standard = "whatwg")
+  expect_identical(pw$user, "u")
+  expect_identical(pw$password, "p%3Aq")
+  # The set also covers every non-ASCII byte (C0-control-set inheritance), so a
+  # non-ASCII userinfo gains UTF-8 escapes.
+  na <- safe_parse_urls("http://\u00e9x@host/", url_standard = "whatwg")
+  expect_identical(na$user, "%C3%A9x")
+  # Interaction with the userinfo charset acceptance shim: a SPACE arrives here
+  # already pre-encoded as %20 and must NOT be double-encoded to %2520.
+  sp <- safe_parse_urls("http://a b@host/", url_standard = "whatwg")
+  expect_identical(sp$user, "a%20b")
+})
+
+test_that("rfc3986 and no selector keep the raw userinfo spelling", {
+  rfc <- safe_parse_urls(
+    c("http://u:p:q@ex.com/", "http://a;b@ex.com/", "file://u;v@h/p"),
+    url_standard = "rfc3986"
+  )
+  expect_identical(rfc$user, c("u", "a;b", "u;v"))
+  expect_identical(rfc$password, c("p:q", NA_character_, NA_character_))
+  nul <- safe_parse_urls(c("http://u:p:q@ex.com/", "http://a^b@host/"))
+  expect_identical(nul$user, c("u", "a^b"))
+  expect_identical(nul$password, c("p:q", NA_character_))
 })
 
 test_that("canonical_join equivalence follows the encoding contract", {

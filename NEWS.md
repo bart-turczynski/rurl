@@ -1,3 +1,592 @@
+## rurl 2.8.0
+
+### Breaking changes
+
+- **`canonical_join()` now warns when a legacy presentation dial is forwarded
+  through `...`.** `canonical_join()` matches on the canonicalized presentation
+  string (`clean_url`), so a presentation or cleaning dial passed through `...`
+  silently moves the comparison key and changes join cardinality — the same
+  inputs match a different number of rows because of dials that were never meant
+  to be identity inputs. Twenty-one such dials now emit one warning per call, of
+  class `"rurl_legacy_join_dial_warning"`. The four input and interpretation
+  axes — `url_standard`, `scheme_acceptance`, `scheme_policy` and
+  `scheme_relative_handling` — are legitimate inputs to identity and stay
+  silent.
+
+  **Results are unchanged.** The warning is purely additive, and byte-identical
+  output was verified across ten dial configurations, so no caller is silently
+  re-matched. This is flagged breaking only because a new condition is
+  *signalled*: code running under `options(warn = 2)`, or asserting with
+  `expect_silent()`, will now see an error where it previously saw none. Because
+  the condition is classed it can be silenced without hiding other warnings:
+
+  ```r
+  suppressWarnings(
+    canonical_join(A, B, www_handling = "strip"),
+    classes = "rurl_legacy_join_dial_warning"
+  )
+  ```
+
+  The per-dial classification is taken from the settled `key-affecting?` column
+  of the v3 cleaning-mutation contract rather than re-derived. Retaining
+  `canonical_join()` with a deprecation window and warnings — rather than
+  re-keying it in place — is the ratified disposition (P3.1 Q7/B7).
+
+- **`safe_parse_url()` no longer reports an authority for a `mailto:` URL under
+  `scheme_acceptance = "general"`.** A non-special scheme with no `//` is a
+  WHATWG *opaque path*, which has no authority — but the `@` in a recipient
+  address was re-surfacing as parsed authority, so
+  `safe_parse_urls("mailto:a@b.com", url_standard = "whatwg", scheme_acceptance = "general")`
+  reported `host = "b.com"`, `user = "a"`, `domain = "b.com"`, `tld = "com"`.
+  Those five columns (plus `domain_ascii` / `domain_unicode` / `tld_ascii` /
+  `tld_unicode`) are now `NA`, matching WHATWG and adaR. `path` and `clean_url`
+  already carried the address verbatim and are unchanged, as is every
+  non-`mailto:` opaque row (`tel:`, `data:`, `sc:`), which already reported no
+  authority.
+
+  **The accessors are deliberately unchanged.** `get_host()`, `get_domain()`,
+  `get_tld()`, `get_subdomain()` and `get_user()` still decompose a `mailto:`
+  recipient under `general` — through the same PSL seam a web host uses — as
+  shipped in 2.6.0 (ADR 0012 D7). A recipient domain is *extraction metadata
+  about an address*, not the URL's authority, so it is surfaced by the
+  accessors and by `get_mailto_recipients()` while the parse table stays
+  WHATWG-conformant. `safe_parse_url(u)$host` and `get_host(u)` therefore
+  disagree for a `mailto:` under `general`, by design — the same independence
+  D7 already declared between `get_host()` and `clean_url()`. Only the default
+  `scheme_acceptance = "web"` posture is untouched in every respect, since it
+  does not parse `mailto:` at all.
+
+### Bug fixes
+
+- **`url_standard = "whatwg"` now applies the userinfo percent-encode set to the
+  `user` and `password` columns.** WHATWG's authority state fills its username
+  and password buffers by percent-encoding each code point with the userinfo
+  percent-encode set — the path set (SP `"` `#` `<` `>` `?` `^` `` ` `` `{` `}`)
+  plus `/` `:` `;` `=` `@` `[` `\` `]` `|` — so those are the parsed values the
+  standard stores. rurl applied no encode set at all, reporting the raw source
+  slice: `safe_parse_urls("http://a^b@host/", url_standard = "whatwg")$user` was
+  `a^b` where WHATWG stores `a%5Eb`, and a `:` inside a password was reported
+  literally instead of as `%3A`. **This is a user-visible output change under
+  `whatwg`** (spec exactness over output stability). Because the encode set
+  inherits the C0-control set, it also covers every C0 control, DEL and
+  **non-ASCII** byte, so a non-ASCII userinfo now gains UTF-8 escapes too:
+  `"http://éx@host/"` reports user `%C3%A9x`. Existing percent-triplets are
+  re-emitted verbatim, never decoded or double-encoded (`u%40ser` stays
+  `u%40ser`, `%25DOMAIN` stays `%25DOMAIN`), and a space already pre-encoded by
+  the userinfo charset shim stays `%20`. The transform is gated on `whatwg`
+  explicitly and applies only where the userinfo was actually split into a
+  username and a password: `url_standard = "rfc3986"` and the no-selector
+  default remain source-preserving and byte-for-byte unchanged, as do the
+  undivided RFC 8089 `file:` overlay and a `mailto:` recipient local-part,
+  which is not a URL userinfo.
+
+- **The general/opaque route no longer discards credentials.** For a
+  general-routed URL — any non-special scheme under
+  `scheme_acceptance = "general"` — the opaque parser computed the authority's
+  userinfo and then dropped it, so
+  `safe_parse_urls("sc://u:p@h/x", scheme_acceptance = "general",
+  url_standard = "rfc3986")` reported `user` and `password` as `NA` while the
+  same credentials on an `http:` URL were reported exactly. The userinfo is now
+  split at the **first** `:` per WHATWG's authority state, so `u:p:q` gives
+  user `u` and password `p:q`, and the userinfo percent-encode set applies here
+  on the same terms as the libcurl route (`p%3Aq` under `whatwg`, `p:q` under
+  `rfc3986` and the no-selector default).
+
+  Two producers deliberately stay undivided and unencoded: the RFC 8089
+  `file:` overlay, whose Appendix E.1 production is `[ userinfo "@" ]` with no
+  credentials split and which warns that a password there is "a serious
+  security exposure"; and a `mailto:` `user`, which is a recipient local-part
+  (ADR 0012 D7), not a URL userinfo at all.
+
+  `clean_url` is unaffected: it carries credentials on no route, including the
+  libcurl one. No scored conformance figure moved *at the time of this fix* —
+  because the parity oracle then compared only scheme, host, port, path, query
+  and fragment, so a credential fix and a credential regression were equally
+  invisible to it. That measurement gap is closed separately below; credentials
+  are now scored, and this fix passes on all 336 rows.
+
+- **`url_standard = "whatwg"` no longer rejects a URL whose userinfo carries a
+  space, a C0 control or DEL.** libcurl refuses an authority whose userinfo
+  contains any of 30 ASCII code points — SPACE (U+0020), the C0 controls
+  (U+0000–U+001F) and DEL (U+007F) — so rows the WHATWG parser accepts were
+  errored out entirely: `"http://a b@host/"` was a parse error (now accepted,
+  host `host`, user `a%20b`), as were the WPT punctuation-run rows
+  ``"wss:// !\"$%&'()*+,-.;<=>@[]^_`{|}~@host/"`` and its `joe:`-password variant
+  (both now host `host`, under `scheme_acceptance = "general"`). Those 30 code
+  points are now percent-encoded in the userinfo span before curl parses the
+  string. Every one of them is a member of the WHATWG userinfo percent-encode
+  set, so the encoded form is the spelling WHATWG stores and no restore step is
+  involved; `%` is not in the set, so an already-encoded userinfo
+  (`%25DOMAIN`, `u%40ser:p%40ss`) is never double-encoded. All other userinfo
+  bytes, including non-ASCII, already parsed and are untouched, as is the
+  pre-existing repeated-`@` recovery (`"http://username@@@@example.com"` still
+  reports user `username%40%40%40`). The rewrite is gated on `whatwg`
+  explicitly: `url_standard = "rfc3986"` — which has no userinfo production for
+  a space or a control byte — still rejects these inputs, and the no-selector
+  default is byte-for-byte unaffected. Acceptance does not launder the row's
+  facts: such rows report `invalid-credentials` and `invalid-URL-unit` from
+  `get_url_diagnostics()` as before.
+
+- **Leading and trailing C0-control-or-space is now stripped from the input
+  under `url_standard = "whatwg"`.** WHATWG's basic URL parser step 1 has two
+  halves — first remove any leading and trailing C0 control or space
+  (U+0000–U+0020) from the input, *then* remove every ASCII tab/LF/CR anywhere
+  in it. rurl implemented only the second half, so an input padded at either end
+  was mis-parsed: `"http://example.com/a  "` reported path `/a%20%20` (now
+  `/a`), `"  http://example.com/a"` was a parse error (now accepted, host
+  `example.com`), and under `scheme_acceptance = "general"`
+  `"non-special:opaque  "` reported path `opaque  ` (now `opaque`). Interior
+  spaces are untouched, and the trim runs in the spec's order, so a *leading*
+  tab is now removed by the first half rather than the second. The strip lives
+  in the single seam every route shares, so the libcurl route, the general route
+  and the Stage-B re-parse are fed identical input by construction.
+
+  The mutation is surfaced, not silent: a new `get_url_diagnostics()` token
+  **`leading-trailing-stripped`** fires exactly on the rows where a
+  leading/trailing run was removed. It is deliberately a separate token from
+  `control-char-stripped`, whose meaning is unchanged (an interior tab/LF/CR was
+  removed); a row that had both reports both. `url_standard = "rfc3986"` and the
+  default (no selector) are byte-for-byte unaffected — that profile has no strip
+  step and requires such bytes to be percent-encoded, so those inputs stay
+  errors. The frozen `analysis/parity` and `analysis/disagreement` studies are
+  byte-identical; WPT full-row parity on the excluded rows improves by one and
+  component mismatches go to zero. (RURL-yvxpanix.)
+
+- **Opaque paths are now percent-encoded, and `^` joins the path
+  percent-encode set.** Three related WHATWG encode-set gaps, all under
+  `scheme_acceptance = "general"` unless noted:
+
+  * **Opaque paths were carried verbatim.** WHATWG's opaque path state encodes
+    each code point with the C0-control percent-encode set as it is consumed,
+    so the stored path — what the `path` column reports — is already encoded.
+    rurl encoded only `clean_url`, so `wow:<U+FFFF>` reported path
+    `<U+FFFF>` where the serialized URL said `%EF%BF%BF`. The two now agree.
+    The C0 set is *not* the path set: printable ASCII that a hierarchical path
+    escapes (`^`, `{`, `}`, `<`, `>`) stays literal in an opaque path, and
+    existing `%xx` spellings are preserved. WHATWG also encodes the single
+    space immediately before the `?` or `#` that ends an opaque path — so that
+    a trailing space survives a re-parse — and `non-special:opaque  ?hi` now
+    yields path `opaque %20`, with interior spaces untouched.
+  * **`^` (U+005E) was missing from the path percent-encode set.** It applies
+    to *every* profile row under `url_standard = "whatwg"` with
+    `path_encoding = "encode"`, not just general-routed ones:
+    `http://ex.com/a^b` now presents `/a%5Eb`.
+  * **U+000B (VT) and U+000C (FF) broke decomposition entirely.** ICU counts
+    both as line terminators, so the `.`-based scheme/remainder split in the
+    general parser never matched them and the whole row failed — `sc://a<VT>b/`
+    was a parse error instead of host `a%0Bb`. WHATWG's step 1 strips only
+    tab/LF/CR; VT and FF are kept and percent-encoded. This also unblocks the
+    WPT C0-control host row, whose opaque host now encodes `%01`…`%1F%7F`
+    rather than being rejected.
+
+  `url_standard = "rfc3986"` is unaffected throughout — the `rfc-syntax`
+  posture disclaims this normalization. One cell of the frozen
+  `analysis/disagreement` study moves as a result, *converging* on the value
+  the WHATWG reference parser already reported; no count or ratio changes.
+  (RURL-qxpgcwie.)
+
+- **IPv6 hosts are now WHATWG-serialized for non-special schemes too.** The
+  WHATWG host parser stores an IPv6 literal as eight 16-bit pieces and
+  re-serializes it — longest zero run compressed to `::`, lowercase hex, no
+  dotted-quad tail — and that step is *scheme-independent*: the same host parser
+  runs for any scheme carrying an authority. rurl wired the serializer on the
+  special-scheme branch only, so under `scheme_acceptance = "general"` a
+  non-special host kept its input spelling:
+  `non-special://[1:2:0:0:5:0:0:0]/` reported `[1:2:0:0:5:0:0:0]` where
+  `http://[1:2:0:0:5:0:0:0]/` correctly reported `[1:2:0:0:5::]`. The two
+  branches now agree, and `[ABCD::1]` and `[::127.0.0.1]` render as `[abcd::1]`
+  and `[::7f00:1]` for non-special schemes as well.
+
+  The change is confined to the WHATWG opaque-host parse, so validation is
+  untouched — a malformed literal such as `[1:2:3:4]` is still a host parse
+  failure rather than a passthrough. `url_standard = "rfc3986"` is unaffected
+  and keeps the input spelling: the `rfc-syntax` posture disclaims host
+  normalization, which is the deliberate profile split. (RURL-cyxegfjs.)
+
+- **ASCII tab, LF and CR are now stripped for non-special schemes too.** The
+  WHATWG parser's very first step removes every ASCII tab (U+0009), LF
+  (U+000A) and CR (U+000D) from the input, everywhere, before any component is
+  parsed — and that step is *scheme-independent*. rurl applied it only on the
+  libcurl preparation path, so rows routed to the general parser under
+  `scheme_acceptance = "general"` were handed the raw string: `foo://ho<TAB>st/`
+  percent-encoded the tab into the host as `ho%09st`, and `foo://ho<LF>st/` was
+  rejected outright. All four spellings now agree with the clean input on host
+  `host`.
+
+  Only the strip is shared with the general route, deliberately not the rest of
+  the preparation: browser fixup and special-scheme backslash rewriting are
+  separate rules that must not begin firing on non-special schemes. Both parse
+  stages apply it identically, since they disagree about routing otherwise.
+  `url_standard = "rfc3986"` is unaffected and still rejects — RFC 3986 has no
+  strip step and requires such bytes to be percent-encoded, which is the
+  deliberate profile split. (RURL-lsgdeisl.)
+
+- **An opaque URL whose payload ends in `:<digits>` now parses.** Under
+  `scheme_acceptance = "general"`, `urn:ietf:rfc:2648` — the textbook URN form —
+  was rejected outright, as were `urn:a:1` and `sc:x:80`. A non-numeric tail
+  (`urn:ietf:rfc:abcd`) was fine, and so was a trailing query or fragment
+  (`urn:a:1?q`), which made the failure look arbitrary.
+
+  The cause is the carve-out that keeps the scheme-less `example.com:8080` form
+  out of the opaque parser. It is needed because a dot is a legal scheme
+  character, so `example.com:8080` also matches the scheme grammar — but its
+  authority part was matched colon-greedily, so `urn:ietf:rfc:2648` read as
+  "authority `urn:ietf:rfc`, port 2648". Such a row was withheld from the opaque
+  parser and fell through to the web path, which rejects `urn:`. The trailing
+  `?`/`#` cases escaped only because they broke the pattern's end anchor.
+
+  The authority part must be colon-free, which is what the scheme-less form
+  actually is. An opaque path has no authority, so a numeric tail in one is
+  never a port: `urn:ietf:rfc:2648` now parses with path `ietf:rfc:2648` and no
+  host or port. `example.com:8080` is unaffected and still reads as host plus
+  port. Pre-existing since general acceptance shipped — **not** introduced by
+  the host-missing-authority rule earlier in this cycle, verified against that
+  commit's parent. (RURL-jnvtttfm.)
+
+- **A `mailto:` URL carrying a real `//` authority no longer loses its host.**
+  Under `scheme_acceptance = "general"`,
+  `safe_parse_urls("mailto://example.com:8080/pathname")` reported
+  `host = NA` while still reporting `port = 8080` — an authority presenting a
+  port with no host to attach it to. WPT expects hostname `example.com`.
+
+  The WHATWG opaque-path rule has two halves — a non-special scheme **and** no
+  `//` — and only the first was being tested. ADR 0012 D7's recipient
+  decomposition is about the opaque form (`mailto:jane@example.com`, where the
+  payload is an `addr-spec`); running it over `mailto://host/pathname`
+  overwrote the authority the general parser had already parsed correctly with
+  the `NA` that decomposing `/pathname` yields, since a path is not an address.
+  Both the Stage A recipient write and the T1 parse-table mask now require the
+  `//` to be absent, so they agree on what "opaque" means.
+
+  Nothing about the opaque form changes: `mailto:jane@example.com` still
+  presents no authority in the parse table, and `get_host()` / `get_domain()`
+  still resolve the recipient through D7. This narrows the recipient rule to
+  the shape it was always specified for; it does not retire it. Introduced by
+  the D7 slice earlier in this same unreleased cycle, so no released version
+  carries it. (RURL-gmzipkyw.)
+
+- **`url_standard = "whatwg"` now rejects a host-missing authority under
+  `scheme_acceptance = "general"`.** `sc://@/`, `sc://te@s:t@/`, `sc://:/` and
+  `data://:` parsed as `ok` even though all four are host-missing authorities
+  that WHATWG requires be rejected — they are in the WPT must-fail set, and
+  adaR 0.3.5 rejects every one. The default `web` acceptance already rejected
+  them, so `general` was the *more* permissive route, which is backwards.
+
+  The earlier fix in this cycle keyed the host-missing rule off the *port having
+  content*, so an empty host followed by a bare `:` or `@` slipped through. The
+  trigger is really the **delimiter**: WHATWG's host state fails on the `:`
+  itself before any port is read, and its authority state fails when an `@` was
+  seen and the host after the last one is empty. A `//` authority holding
+  nothing else (`foo:///bar`) remains the one legal empty-host shape, and a
+  non-empty host with an empty port (`sc://host:/`), an IPv6 literal
+  (`sc://[::1]:/`) or userinfo (`sc://user@host/`) all stay legal.
+
+  `url_standard = "rfc3986"` is deliberately unaffected: its `reg-name` and
+  `port` productions are both `*`-quantified, so these are well-formed generic
+  syntax under the RFC.
+
+- **`url_standard = "rfc3986"` now applies RFC 3986's generic-URI grammar to
+  every scheme, not just `file:`.** The grammar gate travelled with the RFC 8089
+  `file:` overlay, so which parser happened to own a row decided whether the
+  selected standard was enforced: `file://C|/x` was an error while
+  `http://a|b/` parsed and reported `host = "a|b"` — though `"|"` is in none of
+  `unreserved` / `pct-encoded` / `sub-delims` / `pchar`, so no RFC 3986
+  production admits it either way. That is the wrong thing for a *selector* to
+  mean. Asking for a standard now gets that standard's grammar on every route
+  (libcurl, path-rootless, `file:`, general), which is also what a reference
+  RFC 3986 parser such as Ruby's `URI::RFC3986_Parser` does with both strings.
+
+  In practice this rejects raw bytes the grammar has no production for —
+  `"|"`, `"\"`, `"""`, and a repeated raw `"@"` in an authority — where the
+  rfc3986 profile previously carried them through or silently recovered a host
+  from them. That last case matters most: `https://n.pr\@e.gg` used to resolve
+  to host `e.gg` under rfc3986, reproducing what *permissive* RFC-style parsers
+  do rather than what the standard says, on exactly the inputs security papers
+  use to demonstrate host equivocation. The independent ABNF transcription of
+  RFC 3986 Appendix A that referees the project's oracle rejects all of them.
+
+  Deliberate acceptances are untouched: this adds only generic-*syntax*
+  rejections. A directly-written non-ASCII host stays accepted and flagged
+  (`http://exämple.com/`, ADR 0002/0011), a reg-name built from characters the
+  RFC admits stays accepted even where WHATWG forbids it (`http://a%7Cb/`), and
+  scheme inference remains the `scheme_policy` axis, so scheme-less input is
+  unaffected. `url_standard = "whatwg"` and the no-selector default are
+  byte-identical.
+
+- **A list element of the wrong length no longer aborts the whole
+  `safe_parse_urls()` call.** `safe_parse_urls(list("http://a.com/", c("b", "c")))`
+  failed the entire call with base R's untyped `"values must be length 1"`. A
+  list element of the wrong length is bad *data*, not a contract violation, so it
+  now recovers row-locally as an error row (`original_url = NA`,
+  `parse_status = "error"`) — matching what every other non-scalar shape (`NULL`,
+  length 0, a non-character vector) already did. Call-level errors stay reserved
+  for contract violations.
+
+- **Input names no longer leak into `safe_parse_urls()` row names.**
+  `safe_parse_urls(c(a = "http://example.com/", b = "http://ex.org/"))` promoted
+  the input's names to the result frame's row names, while the vectorized
+  accessors strip them. The public surface disagreed with itself, and leaked row
+  names are a silent correctness hazard rather than a cosmetic one — they survive
+  into joins and downstream frames as though they were a column. The frame now
+  always has ordinary sequential row names, matching the accessors, which return
+  unnamed vectors. Both halves are now pinned by test; the suite previously had
+  no named-vector coverage at all.
+
+- **`get_mailto_recipients()` no longer errors at its own documented
+  defaults.** Every call that did not pass `scheme_acceptance` explicitly —
+  including the plain `get_mailto_recipients("mailto:x@example.com")` — aborted
+  with base R's untyped `"'arg' must be of length 1"`. The helper's
+  `scheme_acceptance` formal deliberately lists `"general"` first, since mailto
+  is a general-scheme context, and that unresolved length-2 default was
+  forwarded to an internal whose own choices are ordered `"web"` first;
+  `match.arg()` tolerates a length > 1 value only when it is `identical()` to
+  the callee's choices, so the reversed order failed. The default is now
+  resolved against the helper's own formal before forwarding, leaving the
+  deliberate ordering intact. Broken since the helper shipped in 2.6.0; all
+  three documented examples pass the argument explicitly, so `R CMD check`
+  never exercised the default path.
+
+### New features
+
+- **`get_password()`, `get_query()`, `get_fragment()` and `get_port()` gain the
+  standards axis (`url_standard`, `scheme_policy`, `scheme_acceptance`).** Each
+  of the four could previously take only presentation dials, so none of them
+  could return a value its own `safe_parse_url()` column carries:
+  `get_password()` could not reach the WHATWG userinfo spelling the `password`
+  column has carried since 2.8.0's userinfo encode set (`p:q` vs `p%3Aq`);
+  `get_query()` and `get_fragment()` could not reach the query and fragment
+  percent-encode-set spellings; and `get_port()` could not report the WHATWG
+  default-port drop, where `http://example.com:80/` parses to `NA` rather than
+  `80`. All fourteen accessors now expose all three axes.
+
+  **Purely additive.** The new arguments default to the source-preserving
+  behavior (`url_standard = NULL`), and output with the arguments omitted — or
+  passed at their defaults — is byte-identical to before, which is pinned by a
+  test.
+
+  The accessor↔option coverage oracle
+  (`tests/testthat/test-accessor-registry.R`) now covers these three axes, not
+  just the eleven presentation dials. Their absence from it is precisely why
+  all four gaps went unnoticed: no registry cell forced the arguments to exist.
+
+### Documentation
+
+- **The diagnostics vocabulary now has one canonical, enforced enumeration.**
+  `?get_url_diagnostics` gains a *Diagnostic vocabulary (canonical)* section
+  listing all 32 tokens with their meanings and the postures they fire under.
+  Previously the only enumeration was the v1 selector PRD's section 7 table,
+  which — being a graduated, historical spec (ADR 0008) — had stopped tracking
+  the code: it was missing `control-char-stripped`, `host-charset-shimmed`,
+  `leading-trailing-stripped` and every Layer-5 token. A new CI gate,
+  `tools/diagnostics-doc-consistency.R`, now holds that section and the
+  `.URL_DIAGNOSTICS` registry to each other in both directions and rejects any
+  documented diagnostic literal that no longer resolves to a real token, so the
+  drift cannot recur silently. The test that claimed to check the PRD table was
+  renamed to what it actually does — pin the closed set.
+
+- **`safe_parse_url()`'s `query` and `fragment` columns are documented with the
+  two-branch encoding contract they actually have.** Both said the value is
+  returned "as written in the URL"; that stopped being true under
+  `url_standard = "whatwg"`, where the query and fragment percent-encode sets
+  are applied. `get_query()` and `get_fragment()` take no `url_standard` and so
+  do always return the raw source spelling — their documentation now says so
+  explicitly and points at the column for the WHATWG spelling, matching the
+  wording already used by `get_password()`.
+
+- **The conformance posture is now stated in one place, with its measurements
+  and its limits.** `vignette("url-standard")` gains a *Conformance posture*
+  section: against the WHATWG spec's own conformance suite the `"whatwg"`
+  profile is 378/378 (176 success rows at full component parity, 202 rejections)
+  and differs from the `adaR` reference on **two rows out of 336**, neither a
+  parsing disagreement; against RFC 3986 the `"rfc3986"` profile matches on
+  **164** of 257 oracled rows and departs on **93**, every departure attributed
+  to an ADR. The two boundaries that keep this honest are stated alongside the
+  numbers rather than buried: the WPT fixture covers **absolute** URLs only, so
+  the figures say nothing about base-relative resolution; and the profile is
+  WHATWG on its governed axes, **not** a full UTS-46 host mapping. (The success
+  figure was later widened to 336 rows — see the entry below.)
+
+- **"Full component parity" now scores credentials, so it means all eight
+  components rather than six.** `inst/bench/standard-parity.R` built its
+  per-row verdict from scheme, host, port, path, query and fragment;
+  `username` and `password` were never compared, in either posture. The
+  published headline — "336/336 accepted, 336/336 FULL component parity" — was
+  therefore silent on credentials, and the omission was not hypothetical: the
+  general/opaque route discarded userinfo entirely (fixed above), a
+  component-level non-conformance on the exact posture whose figure read 100%,
+  and **no scored number would have moved** either when it broke or when it was
+  fixed. A measurement whose name claims more than it checks.
+
+  The oracle was re-extracted at the **same** pinned upstream revision
+  (`181476aa`, from a raw file whose sha256 still matched the recorded
+  `raw_source_sha256` — a re-extraction, not a re-pin) so that
+  `make-wpt-fixture.py` carries upstream's `username`/`password`, which it had
+  been dropping: 24 rows carry a non-empty username and 13 a non-empty
+  password. No row was added or removed, so the case counts stay 336/202.
+
+  The headline is unchanged at **336/336**, but it is now a wider claim over a
+  stricter denominator, not the same claim restated — credentials are checked,
+  and they pass on every row at both postures. `analysis/parity/` was re-frozen:
+  the two success CSVs gained four columns, and the failure and RFC CSVs
+  reproduced byte-identically.
+
+- **The WPT success oracle now spans every scheme, and both scheme-acceptance
+  postures are scored.** The fixture generator used to keep only
+  `http`/`https`/`ftp`/`file` success rows, so the headline "176/176 full
+  component parity" was scored over a corpus that could not contain an opaque,
+  `ws:` or `wss:` URL — the carve-out the previous entry had to disclose as
+  *unmeasured*. Dropping it takes the success set from **176 to 336** rows (the
+  202 failure rows are unchanged), and `inst/bench/standard-parity.R` now passes
+  `scheme_acceptance` explicitly instead of inheriting the exported default,
+  scoring both postures side by side. At `scheme_acceptance = "general"` rurl
+  reaches **full component parity on all 336 rows** — across the six components
+  scored at the time (scheme, host, port, path, query, fragment; credentials
+  were added later in this release, see below) — with zero rejections of
+  WPT-valid input, and still
+  rejects **202/202** failure rows, for **538/538** overall. Widening the corpus
+  by 160 rows surfaced no new mismatch, so opaque, `ws:` and `wss:`
+  serialization is now measured-and-conformant rather than silently untested.
+  At the default `"web"` posture 160 of the 336 are declined by the ADR 0004
+  allowlist before the grammar is consulted; that is the allowlist working, and
+  `176/336` is not a conformance rate. Scoring the failure rows at `general`
+  also answers in band what previously needed the companion study: the 36
+  non-web-scheme failure rows are rejected by the **grammar**, not by the closed
+  scheme set. Only base-relative rows remain out of scope, because rurl parses
+  absolute URLs. Frozen in `analysis/parity/`.
+
+- **`scheme_acceptance` is documented as an axis in its own right.** The
+  vignette's *What the selector does not govern* section previously said the
+  selector "does not expand the allowed scheme set beyond
+  `http`/`https`/`ftp`/`ftps`" — which omitted `file` from the actual allowlist
+  and left readers with no way to discover that `scheme_acceptance = "general"`
+  parses `mailto:`, `data:` and `tel:`. The two axes are now described as
+  composing: `scheme_acceptance` decides what gets parsed, `url_standard`
+  decides how the result is read. A worked `mailto:` example shows the
+  opaque-path rule from the 2.8.0 breaking change — the parse table reports no
+  authority, while `get_host()` still extracts the recipient's host.
+
+- **`analysis/parity/README.md` now states its own posture and carries an
+  attributed ledger of what is left.** Every figure in it is scored at the
+  default `scheme_acceptance = "web"`, which was true but unstated; the success
+  fixture's scheme carve-out is now recorded as a *measurement limit* so the
+  silence on opaque schemes is not read as a pass. (Both of those were then
+  closed within this same release — the README now scores **both** postures over
+  a fixture with no scheme carve-out.) The residual deviations are
+  tabulated with their owning ADR and, where one exists, the argument that
+  reaches them — separating the one genuine gap (UTS-46 host mapping) from the
+  four deviations that are dials the caller chooses.
+
+- **A stale attribution of the RFC departures is corrected.** The 81 over-strict
+  rows were described as coming from "the ADR 0004 host-shape gate and the
+  closed scheme set". Re-derived from the audit rows, the closed scheme set
+  contributes **zero** of them: all 81 are the host/authority gate
+  (percent-encoded reg-names 48, other reg-name shapes 11, empty host 8,
+  userinfo 6, absent authority 5, port shape 3), and all 12 over-lenient rows
+  are the single `non-ascii-or-control` family. The corpus is 202/282
+  WPT-sourced and so almost entirely `http`/`https`/`file`, leaving the scheme
+  set no opportunity to fire. The 164/93 headline is unchanged. (RURL-vgovkcze.)
+
+### Internal
+
+- **Authority presence is now recorded as two independent facts instead of one
+  ambiguous enum.** The internal state model carried a single three-valued
+  `authority_kind`, which conflated *was a `//` delimiter present* with *did it
+  carry anything* and left its `empty` value unreachable: the general parser
+  called every `//` row authority-present, while the RFC 8089 `file:` overlay
+  called the identical shape authority-empty, so `foo:///bar` and `file:///bar`
+  disagreed. It is replaced by `authority_delimiter_present` (logical) and
+  `authority_payload_kind` (`empty`/`present`, `NA` when no delimiter was
+  present), with `host_kind` staying an independent axis — a payload can be
+  present while the host is empty (`foo://@/bar`, `foo://:80/bar`). The legacy
+  name survives only as a derived, read-only projection, whose `empty` value is
+  now reachable and defined. Both posture serializers emit `//` from the
+  recorded delimiter fact rather than re-deriving it from `host_kind`, which
+  could not tell a delimiter-present empty authority from a delimiter-absent
+  input.
+
+  **No public output changes.** These are internal state fields; the general
+  route's parsed columns and `clean_url` were verified byte-identical on both
+  postures across the opaque, empty-authority, `file:`, IPv6 and credential
+  shapes.
+
+- **The committed WHATWG conformance oracle
+  (`inst/bench/wpt-url-cases.json`) now covers every scheme, not four.** The
+  success arm of the fixture was carved out to `http`/`https`/`ftp`/`file`,
+  which silently dropped every non-special and opaque WPT success case — so
+  the oracle could not see a whole category of behaviour that
+  `scheme_acceptance = "general"` parses. The generator's scheme filter is
+  removed entirely rather than extended with a list: WHATWG has exactly two
+  scheme categories, so "success = any base-null non-failure case" is the
+  selector that needs no maintenance. Success grows 176 → 336 across 54
+  schemes; the failure arm is unchanged at 202, having never been filtered by
+  scheme. Base-relative rows (the two `base = "about:blank"` fragment
+  references) are now excluded as out of scope: rurl is an absolute-only
+  parser and does no relative resolution, the same disposition
+  `external-url-vectors.csv` already records for such rows. The applicability
+  selector, counts and fixture hash in
+  `tests/testthat/fixtures/oracle-provenance.json` are re-cut to match.
+
+- **The cross-parser disagreement study now measures rurl at
+  `scheme_acceptance = "general"`, and `analysis/disagreement/` is re-frozen.**
+  Previous runs used the default `"web"` allowlist against adaR and
+  `urllib.parse`, which are *general* parsers — scoring ~19 opaque/non-special
+  rows as rurl rejections and measuring rurl's scheme-acceptance policy rather
+  than the `url_standard` interpretation the study is about. Held as a
+  documented axis alongside `scheme_policy = "require"`.
+
+  `rurl(whatwg)` vs adaR falls from **10 divergent rows to 2** (full-tuple
+  agreement 0.970 → 0.994), and neither remaining row is a parsing
+  disagreement: one is punycode-vs-Unicode host rendering (a `host_encoding`
+  choice, ADR 0002) and one is the held `scheme_policy` row. There is no
+  accept/reject, host-shape, port or path disagreement left against the WHATWG
+  reference on this corpus. The `rurl(rfc3986)` vs `curl` pairing moves the
+  other way (52 → 73) because libcurl is a web-scheme parser: 15 of those rows
+  are purely scheme acceptance and are enumerated as such in the README, so the
+  count is not read as RFC-interpretation divergence.
+
+  Two stale claims in the frozen README were corrected against the regenerated
+  matrix: the `http://ex.com:80/` row still said "adaR alone drops `:80`"
+  (`rurl(whatwg)` has elided since `RURL-uvilvhnm`), and the `%7e` percent-hex
+  caveat still claimed a residual path gap against adaR (closed —
+  path agreement is now 1.000). Analysis artifacts only; no package behavior
+  changes.
+
+- The documented `canonical_join()` example no longer passes presentation dials,
+  so the package's own headline usage no longer demonstrates the pattern that now
+  warns. Documentation and `README` only; no behavior change.
+
+- The four tests that pinned presentation dials moving the `canonical_join()`
+  comparison key now state that behavior as documented legacy that warns, rather
+  than endorsing the collapse as correct. Every value assertion is unchanged; the
+  rewrite to key invariance is deferred to the slice that introduces an explicit
+  identity key.
+
+- **The RFC 3986 probe set is now two-sided, and the published conformance
+  figure has moved.** `inst/bench/rfc3986-probes.csv` grew from 19 rows to 37.
+  Every one of the original 19 was an *accept* case, so the set could not detect
+  over-permissiveness at all — it could only fail to notice it. The 18 new rows
+  are rejection cases tagged by ABNF section, drawn from the audited conformance
+  fixture rather than invented, and each verified against both referees (the
+  transcribed RFC 3986 ABNF and Ruby's `URI::RFC3986_Parser`) before being
+  recorded.
+
+  Two properties keep the resulting number honest. Reject probes use only
+  `http`/`https`/`ftp`/`file`, so a rejection is attributable to the **grammar**
+  rather than to the ADR 0004 closed scheme set — otherwise the set would credit
+  rurl for rejecting `sc://…` for entirely the wrong reason. And five probes
+  record inputs the RFC grammar **admits** while rurl declines by policy; these
+  carry a `rurl_deviation` naming the owning ADR and are reported on their own
+  line, **excluded** from the conformance score. Counting them as conformance
+  would let rurl raise its own "RFC conformance" by rejecting more of what the
+  RFC allows — a metric that rewards the opposite of what it claims to measure.
+
+  Updated picture on the 257 rows carrying an RFC oracle: rurl matches the
+  standard on **164** and departs on **93** — 81 where it rejects what RFC 3986
+  admits, 12 where it accepts what RFC 3986 does not. The 2.7.0 figure was
+  158/99; binding the generic-URI gate uniformly (above) moved exactly six rows
+  from over-permissive to conformant-reject. Analysis only — no behavior
+  changed in this entry. (RURL-wlqhmbdw.)
+
 ## rurl 2.7.0
 
 ### Breaking changes

@@ -15,12 +15,14 @@
 # CANNOT round-trip the four WHATWG non-special shapes -- `foo:bar` (opaque,
 # host absent), `foo:/bar` (list, host absent, no authority), `foo:///bar`
 # (list, host EMPTY, authority present), `foo://[::1]/bar` (list, IPv6 host).
-# `authority_kind` records whether a `//` authority was present (distinguishing
-# `foo:/bar` from `foo:///bar`); `host_kind` records empty-vs-absent-vs-present
-# WITHIN an authority. Neither derives the other across all four shapes, so both
-# are retained. Public `NA` mapping is unchanged: both empty and absent hosts,
-# and both empty and absent query/fragment, still surface as `NA` publicly --
-# this vocabulary is internal state only.
+# `authority_delimiter_present` records whether a `//` authority delimiter was
+# present (distinguishing `foo:/bar` from `foo:///bar`) and
+# `authority_payload_kind` whether that delimiter carried anything;
+# `host_kind` records empty-vs-absent-vs-present WITHIN an authority. Neither
+# derives the other across all four shapes, so both are retained. Public `NA`
+# mapping is unchanged: both empty and absent hosts, and both empty and absent
+# query/fragment, still surface as `NA` publicly -- this vocabulary is internal
+# state only.
 
 # --- enum vocabularies (first value = the natural default) ------------------
 
@@ -36,8 +38,18 @@
 # `absent` map to a public NA; only internal state distinguishes them.
 .HOST_KIND <- c("absent", "empty", "present")
 
-# Whether a `//` authority was present, and (if so) whether it carried a host
-# (ADR 0012 D2). Distinguishes `foo:/bar` (absent) from `foo:///bar` (empty).
+# Payload state of a PRESENT `//` authority delimiter (P1.2 D-A): `empty` when
+# the authority substring between `//` and the path start is zero-length,
+# `present` when it carries anything at all (userinfo-only, port-only, or an
+# ordinary host). Not applicable -- and projected NA -- when no delimiter was
+# present. It is a payload state UNDER a delimiter, never a third sibling of
+# absent/present.
+.AUTHORITY_PAYLOAD_KIND <- c("empty", "present")
+
+# LEGACY authority vocabulary (retired from the canonical schema by P1.2 D-D).
+# Retained only as the value set of the derived, read-only `.authority_kind()`
+# compatibility projection below -- never as canonical state, never as a
+# serializer input.
 .AUTHORITY_KIND <- c("absent", "empty", "present")
 
 # Delimiter-presence state for query and fragment (ADR 0012 D2): `query_kind` /
@@ -89,23 +101,43 @@
   out
 }
 
-# authority_kind (ADR 0012 D2, lines 257-258 + 270-271): records WHETHER a `//`
-# authority was present, distinguishing `foo:/bar` (absent) from `foo:///bar`
-# (present). No `//` -> absent; `//` present -> present. It deliberately does
-# NOT key off host emptiness: D2 labels `foo:///bar` as authority PRESENT with
-# host EMPTY, so an empty host under a present `//` is (authority_kind
-# "present", host_kind "empty"). Keying off the host would also misclassify a
-# `//user@/path` authority (empty host but a non-empty authority via userinfo).
+# authority_payload_kind (P1.2 D-A.2). `authority` is the substring between the
+# `//` delimiter and the path start (`/`, `?`, `#`, or end), or NA when no
+# delimiter was present. NA -> NA (not applicable: the payload of a delimiter
+# that does not exist is never forced to a substantive value); "" -> empty;
+# anything else -> present.
 #
-# The vocab's `empty` value is RESERVED for a genuinely empty authority
-# *component* (a present `//` with no userinfo, host, AND port); this pure
-# classifier cannot emit it because userinfo/port are not modeled here -- L4b
-# populates `empty` once they are. host_kind is the seam the L3b serializer
-# keys `//`-vs-no-`//` emission off (host null-vs-empty), so dropping the host
-# arg here keeps the signature minimal for L3b/L3c.
-.authority_kind <- function(has_double_slash) {
-  out <- rep("present", length(has_double_slash))
-  out[!has_double_slash] <- "absent"
+# Payload-`present` does NOT assert that a host exists: `foo://@/bar`
+# (userinfo-only) and `foo://:80/bar` (port-only) are both payload-present with
+# an empty host. Host presence is `host_kind`'s job and is decided
+# independently (P1.2 D-B).
+.authority_payload_kind <- function(authority) {
+  out <- rep("present", length(authority))
+  out[is.na(authority)] <- NA_character_
+  out[!is.na(authority) & authority == ""] <- "empty"
+  out
+}
+
+# LEGACY authority_kind -- a DERIVED, READ-ONLY compatibility projection over
+# the two canonical fields (P1.2 D-D). It is never canonical state and never a
+# serializer input; the serializers consume `authority_delimiter_present`
+# directly (P1.2 D-C), because inferring `//` from a derived component cannot
+# distinguish a delimiter-present empty authority from a delimiter-absent input.
+#
+# The projection makes the legacy `empty` value REACHABLE for the first time --
+# as a payload state under a present delimiter, which is precisely the
+# unreachable-value contradiction S1-F5 recorded:
+#   delimiter absent                   -> "absent"
+#   delimiter present, payload empty   -> "empty"
+#   delimiter present, payload present -> "present"
+.authority_kind <- function(delimiter_present, payload_kind) {
+  n <- max(length(delimiter_present), length(payload_kind))
+  delimiter_present <- rep_len(delimiter_present, n)
+  payload_kind <- rep_len(payload_kind, n)
+  out <- rep("absent", n)
+  present <- !is.na(delimiter_present) & delimiter_present
+  out[present & !is.na(payload_kind) & payload_kind == "empty"] <- "empty"
+  out[present & !is.na(payload_kind) & payload_kind == "present"] <- "present"
   out
 }
 
@@ -540,6 +572,33 @@
   list(ok = ok, diagnostic = diagnostic)
 }
 
+# UNIFORM profile gate (RURL-qrfrvmkg / RURL-pfewxbhb Option (a)).
+#
+# `.rfc3986_generic_uri_ok()` above is the grammar; this is the one place that
+# says WHEN it binds. Until this unit it bound only where rurl happened to own
+# the parser -- the RFC 8089 `file:` overlay (Gate 1) and the general-routed
+# opaque/RFC rows -- so `file://C|/x` was an error while `http://a|b/` parsed,
+# with '|' admitted by no RFC 3986 production either way. That made the profile
+# a property of the ROUTE rather than of the selected standard. Under
+# `url_standard = "rfc3986"` the gate now binds on EVERY row, whichever route
+# it takes (libcurl, path-rootless, `file:`, general): selecting a standard
+# selects its grammar, uniformly.
+#
+# Byte-identity elsewhere is by construction: any other selector (including the
+# NULL no-selector default) returns an all-TRUE mask, so `parse_ok` is
+# unchanged bit for bit.
+#
+# NA input yields NA from the grammar; it is folded to FALSE here because such
+# rows are already non-parseable, and a mask must be a plain logical.
+.rfc3986_uniform_gate_ok <- function(url, url_standard) {
+  if (!identical(url_standard, "rfc3986")) {
+    return(rep(TRUE, length(url)))
+  }
+  ok <- .rfc3986_generic_uri_ok(url)$ok
+  ok[is.na(ok)] <- FALSE
+  ok
+}
+
 # --- Posture host/opaque parsers (ADR 0012 Layer 4b, RURL-yutinyhb) ----------
 #
 # The HOST/OPAQUE decomposition functions the (still-unexposed) `general`
@@ -570,12 +629,12 @@
 #   - rfc_path_form : RFC abempty/absolute/rootless/empty (`.rfc_path_form`); NA
 #                     under WHATWG.
 #   - host_kind     : `.host_kind` (absent/empty/present).
-#   - authority_kind: absent (no `//`) / empty (a `//` whose authority component
-#                     is genuinely empty -- no userinfo, host, AND port) /
-#                     present (a `//` carrying content). This POPULATES the
-#                     `.authority_kind` vocab's reserved `empty` value, which
-#                     the pure L3a classifier could not emit (it did not model
-#                     userinfo/port). The L3a classifier is unchanged.
+#   - authority_delimiter_present : logical; was a `//` authority delimiter
+#                     present after the scheme `:` (P1.2 D-A.1). This is the
+#                     fact the L3b serializers consume to decide `//` emission.
+#   - authority_payload_kind : empty (the authority substring under a present
+#                     `//` is zero-length) / present (it carries anything at
+#                     all) / NA when no delimiter was present (P1.2 D-A.2).
 #   - host_form     : via the `.whatwg_host_form` / `.rfc_host_form` mappers.
 
 # Split an authority component into userinfo / host / port (ADR 0012 Layer 4b).
@@ -617,7 +676,10 @@
 # WHATWG #concept-opaque-host-parser). Preserve ASCII case, NO IDNA, NO IPv4
 # coercion, NO punycode/domain routing (ADR 0002). A bracketed host is an IPv6
 # literal -- the forbidden-host reject does NOT apply to it, but its inner form
-# must be a valid IPv6 address (WHATWG has no IPvFuture). A non-bracketed host
+# must be a valid IPv6 address (WHATWG has no IPvFuture) and, once parsed, is
+# re-serialized by the scheme-independent WHATWG IPv6 serializer (zero-run
+# compression, lowercase hex, no dotted-quad tail) exactly as the special-scheme
+# branch does in Phase 5b (RURL-cyxegfjs). A non-bracketed host
 # rejects the forbidden-HOST code points (`.WHATWG_FORBIDDEN_HOST_ONLY_CP`, NOT
 # the stricter forbidden-DOMAIN set), then is UTF-8 percent-encoded with the
 # C0-control set. `%` is NOT forbidden (a malformed `%` is an L5
@@ -631,7 +693,10 @@
     if (!isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPV6_RE))) {
       return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
     }
-    return(list(ok = TRUE, host = host, is_v6 = TRUE, is_v4 = FALSE))
+    return(list(
+      ok = TRUE, host = .serialize_whatwg_ipv6_host(host),
+      is_v6 = TRUE, is_v4 = FALSE
+    ))
   }
   forbidden <- stringi::stri_detect_regex(host, .WHATWG_FORBIDDEN_HOST_ONLY_CP)
   if (isTRUE(forbidden)) {
@@ -674,14 +739,21 @@
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
     fragment = na, path_kind = na, rfc_path_form = na, host_kind = "absent",
-    authority_kind = "absent", query_kind = "absent",
-    fragment_kind = "absent", host_form = na
+    authority_delimiter_present = FALSE, authority_payload_kind = na,
+    query_kind = "absent",
+    fragment_kind = "absent", host_form = na,
+    userinfo = na, userinfo_kind = na
   )
   if (is.na(url)) {
     return(blank)
   }
+  # `[\s\S]`, not `.`: ICU counts U+000B (VT) and U+000C (FF) as line
+  # terminators, so `.` does not match them and any input carrying one failed to
+  # decompose at all (`sc://a<VT>b/` was a parse error rather than a host with a
+  # percent-encoded control). Tab/LF/CR are stripped upstream, but VT/FF are not
+  # -- WHATWG keeps them and the C0 encoder handles them (RURL-qxpgcwie).
   m <- stringi::stri_match_first_regex(
-    url, "^([A-Za-z][A-Za-z0-9+.\\-]*):(.*)$"
+    url, "^([A-Za-z][A-Za-z0-9+.\\-]*):([\\s\\S]*)$"
   )
   if (is.na(m[1L, 1L])) {
     return(blank) # not a scheme-bearing input -> cannot decompose
@@ -711,6 +783,9 @@
   rfc_path_form <- na
   host <- na
   port <- na
+  # userinfo stays NA unless an authority actually supplies one. An opaque path
+  # and a scheme with no `//` have no authority to carry credentials at all.
+  userinfo <- na
   is_v6 <- FALSE
   is_v4 <- FALSE
   ok <- TRUE
@@ -723,8 +798,13 @@
   }
 
   if (is_whatwg && identical(path_kind, "opaque")) {
-    path <- rest
-    authority_kind <- "absent"
+    # WHATWG stores an opaque path ALREADY percent-encoded (opaque path state
+    # encodes each code point with the C0-control set as it is consumed), so
+    # this is parse-time identity, not `path_encoding` presentation: the
+    # `pathname` getter returns the encoded spelling. `delimiter_follows` is the
+    # `?`/`#` that ended the path, which decides the trailing-space rule.
+    path <- .whatwg_opaque_path_encode(rest, hpos > 0L || qpos > 0L)
+    authority <- na
   } else if (startsWith(rest, "//")) {
     after <- substring(rest, 3L)
     spos <- .rfc3986_first_index(after, "/")
@@ -735,31 +815,51 @@
       authority <- after
       path <- ""
     }
-    # Consistent with the L3a `.authority_kind()` classifier and ADR 0012 D2
-    # (lines 257-258, 270-271): any `//` is authority_kind "present" regardless
-    # of host emptiness. `foo:///bar` is (present, host_kind "empty"). The vocab
-    # `empty` value stays vestigial -- an empty host under a present `//` is
-    # host_kind's job, NOT authority_kind's, so the parser never emits it.
-    authority_kind <- .authority_kind(TRUE)
+    # P1.2 D-A: the delimiter fact is recorded from the source string
+    # (`authority` is non-NA exactly when `//` was seen) and the payload kind is
+    # classified from the authority substring, NOT from host emptiness.
+    # `foo:///bar` is delimiter-present + payload-empty, and so is the RFC
+    # `file:` overlay's `file:///bar` -- the two routes can no longer disagree
+    # about the same shape (S1-F5).
     parts <- .split_authority(authority)
     host <- parts$host
     port <- parts$port
+    # `.split_authority()` has always computed this -- the WHATWG host-missing
+    # rule below reads it -- but the opaque parser used to drop it on the floor,
+    # so every general-routed row reported NA credentials while the libcurl
+    # route reported them exactly (RURL-ovpguvva). Surfaced RAW here; the
+    # username/password split and the WHATWG userinfo encode set are applied
+    # downstream in R/parse.R, which is where the file:-overlay exception lives.
+    userinfo <- parts$userinfo
     if (is_whatwg) {
       # WHATWG authority validation (ADR 0012 D2; #host-parser / #port-state).
       # A non-null port (content after `:`) must be ASCII digits only and
       # <= 65535; an empty port (`:` then end/`/`/`?`/`#`) is null -> legal.
       # A non-digit (`-`, `+`, letters) or an out-of-range integer is failure.
-      # An empty host carrying a non-null port is the host-missing failure --
-      # an empty host with NO port stays legal for non-special schemes.
       has_port <- !is.na(port) && nzchar(port)
-      if (has_port) {
-        if (!isTRUE(stringi::stri_detect_regex(port, "^[0-9]+$")) ||
-          suppressWarnings(as.numeric(port)) > 65535) {
-          ok <- FALSE
-        }
-        if (!nzchar(host)) {
-          ok <- FALSE
-        }
+      if (has_port &&
+        (!isTRUE(stringi::stri_detect_regex(port, "^[0-9]+$")) ||
+          suppressWarnings(as.numeric(port)) > 65535)) {
+        ok <- FALSE
+      }
+      # host-missing (RURL-jxvibxqq). A bare empty host is legal for a
+      # non-special scheme (`foo:///bar`), but only when the authority holds
+      # NOTHING ELSE. Two spec rules make an empty host a failure, and both key
+      # off a DELIMITER being present rather than off the port having content:
+      #   * authority state -- "if atSignSeen is true and buffer is the empty
+      #     string, host-missing validation error, return failure". So `sc://@/`
+      #     and `sc://te@s:t@/` fail: `@` was seen and the host after the LAST
+      #     `@` is empty.
+      #   * host state -- "if c is U+003A (:) and insideBrackets is false: if
+      #     buffer is the empty string, host-missing validation error, return
+      #     failure". So `sc://:/` fails on the `:` alone, BEFORE the port is
+      #     read -- which is why this tests `!is.na(port)` (a `:` was present)
+      #     and not `has_port` (the `:` was followed by digits). That
+      #     distinction is the bug: an empty port after an empty host passed.
+      # RFC 3986 is untouched: its `reg-name` and `port` are both
+      # `*`-quantified, so these are well-formed under the generic syntax.
+      if (!nzchar(host) && (!is.na(parts$userinfo) || !is.na(port))) {
+        ok <- FALSE
       }
     }
     if (ok && nzchar(host)) {
@@ -777,7 +877,7 @@
       rfc_path_form <- .rfc_path_form(TRUE, path)
     }
   } else {
-    authority_kind <- "absent"
+    authority <- na
     path <- rest
     if (!is_whatwg) {
       rfc_path_form <- .rfc_path_form(FALSE, path)
@@ -794,8 +894,16 @@
     ok = ok, scheme = scheme, host = host, port = port, path = path,
     query = query, fragment = fragment, path_kind = path_kind,
     rfc_path_form = rfc_path_form, host_kind = .host_kind(host),
-    authority_kind = authority_kind, query_kind = .presence_kind(query),
-    fragment_kind = .presence_kind(fragment), host_form = host_form
+    authority_delimiter_present = !is.na(authority),
+    authority_payload_kind = .authority_payload_kind(authority),
+    query_kind = .presence_kind(query),
+    fragment_kind = .presence_kind(fragment), host_form = host_form,
+    userinfo = userinfo,
+    # WHATWG authority userinfo: splittable at the first ":" into
+    # username/password. Distinguished from the RFC 8089 overlay's UNDIVIDED
+    # `[ userinfo "@" ]` so the consumer never has to re-derive which parser a
+    # row came from (RURL-ovpguvva).
+    userinfo_kind = if (is.na(userinfo)) na else "authority"
   )
 }
 
@@ -806,18 +914,27 @@
   n <- length(url)
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "path_kind",
-    "rfc_path_form", "host_kind", "authority_kind", "query_kind",
-    "fragment_kind", "host_form"
+    "rfc_path_form", "host_kind", "authority_payload_kind", "query_kind",
+    "fragment_kind", "host_form", "userinfo", "userinfo_kind"
   )
+  # `authority_delimiter_present` is the one LOGICAL state column (P1.2 D-A.1),
+  # so it collects alongside `ok` rather than through the character loop.
+  lgl_fields <- c("ok", "authority_delimiter_present")
   if (n == 0L) {
-    out <- list(ok = logical(0))
+    out <- list()
+    for (f in lgl_fields) {
+      out[[f]] <- logical(0)
+    }
     for (f in chr_fields) {
       out[[f]] <- character(0)
     }
     return(out)
   }
   rows <- lapply(url, .parse_opaque_url_one, url_standard = url_standard)
-  out <- list(ok = vapply(rows, `[[`, logical(1L), "ok", USE.NAMES = FALSE))
+  out <- list()
+  for (f in lgl_fields) {
+    out[[f]] <- vapply(rows, `[[`, logical(1L), f, USE.NAMES = FALSE)
+  }
   for (f in chr_fields) {
     out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
   }
@@ -873,11 +990,17 @@
   na <- NA_character_
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
-    fragment = na, userinfo = na, rfc_path_form = na, host_kind = "absent",
-    authority_kind = "absent", query_kind = "absent",
+    fragment = na, userinfo = na, userinfo_kind = na, rfc_path_form = na,
+    host_kind = "absent",
+    authority_delimiter_present = FALSE, authority_payload_kind = na,
+    query_kind = "absent",
     fragment_kind = "absent", host_form = na
   )
-  m <- stringi::stri_match_first_regex(url, "^([Ff][Ii][Ll][Ee]):(.*)$")
+  # `[\s\S]`, not `.` -- the same ICU VT/FF line-terminator trap the opaque
+  # decomposer above documents.
+  m <- stringi::stri_match_first_regex(
+    url, "^([Ff][Ii][Ll][Ee]):([\\s\\S]*)$"
+  )
   if (is.na(m[1L, 1L])) {
     return(blank)
   }
@@ -912,7 +1035,6 @@
       authority <- after
       path <- ""
     }
-    authority_kind <- if (nzchar(authority)) "present" else "empty"
     parts <- .split_authority(authority)
     host <- parts$host
     port <- parts$port
@@ -935,7 +1057,7 @@
     }
     rfc_path_form <- .rfc_path_form(TRUE, path)
   } else {
-    authority_kind <- "absent"
+    authority <- na
     path <- rest
     rfc_path_form <- .rfc_path_form(FALSE, path)
   }
@@ -943,8 +1065,19 @@
   list(
     ok = TRUE, scheme = scheme, host = host, port = port, path = path,
     query = query, fragment = fragment, userinfo = userinfo,
+    # RFC 8089 App. E.1/F give `[ userinfo "@" ]` UNDIVIDED, and warn that a
+    # password there is "a serious security exposure". rurl does not
+    # manufacture a credentials split the RFC never draws (RURL-ovpguvva).
+    userinfo_kind = if (is.na(userinfo)) na else "rfc8089",
     rfc_path_form = rfc_path_form,
-    host_kind = .host_kind(host), authority_kind = authority_kind,
+    host_kind = .host_kind(host),
+    # Same classifiers as the opaque parser, on the same substring: this is
+    # WHERE the S1-F5 route disagreement is removed. The overlay used to emit
+    # its own two-value authority_kind ("present"/"empty" keyed off payload
+    # content), so `file:///bar` reported authority-empty while `foo:///bar`
+    # reported authority-present for the identical shape.
+    authority_delimiter_present = !is.na(authority),
+    authority_payload_kind = .authority_payload_kind(authority),
     query_kind = .presence_kind(query),
     fragment_kind = .presence_kind(fragment),
     host_form = .rfc_host_form(host, is_v6, is_v4, resolve = TRUE)
@@ -962,18 +1095,26 @@
   n <- length(url)
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "userinfo",
-    "rfc_path_form",
-    "host_kind", "authority_kind", "query_kind", "fragment_kind", "host_form"
+    "userinfo_kind", "rfc_path_form",
+    "host_kind", "authority_payload_kind", "query_kind", "fragment_kind",
+    "host_form"
   )
+  lgl_fields <- c("ok", "authority_delimiter_present")
   if (n == 0L) {
-    out <- list(ok = logical(0))
+    out <- list()
+    for (f in lgl_fields) {
+      out[[f]] <- logical(0)
+    }
     for (f in chr_fields) {
       out[[f]] <- character(0)
     }
     return(out)
   }
   rows <- lapply(url, .parse_rfc_file_url_one)
-  out <- list(ok = vapply(rows, `[[`, logical(1L), "ok", USE.NAMES = FALSE))
+  out <- list()
+  for (f in lgl_fields) {
+    out[[f]] <- vapply(rows, `[[`, logical(1L), f, USE.NAMES = FALSE)
+  }
   for (f in chr_fields) {
     out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
   }
@@ -1025,7 +1166,16 @@
   m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
   scheme_lc <- .ascii_tolower(m[, 2L])
   has_scheme <- !is.na(scheme_lc)
-  host_port <- stringi::stri_detect_regex(url, "^[^/]+:[0-9]+($|/)")
+  # The host:port carve-out exists for the SCHEME-LESS `example.com:8080` form,
+  # which the scheme regex above also matches (a dot is a legal scheme char, so
+  # `example.com` reads as a scheme). The authority-part must therefore be
+  # colon-free: `[^/]+` was greedy across colons, so `urn:ietf:rfc:2648` matched
+  # as "authority `urn:ietf:rfc`, port 2648", was withheld from the opaque
+  # parser, and fell through to the web path that rejects `urn:`. Any opaque
+  # payload ending in `:<digits>` was unparseable -- `urn:a:1`, `sc:x:80` -- and
+  # only a trailing `?`/`#` saved it, by breaking the `($|/)` anchor
+  # (RURL-jnvtttfm).
+  host_port <- stringi::stri_detect_regex(url, "^[^/:]+:[0-9]+($|/)")
   host_port[is.na(host_port)] <- FALSE
 
   # RFC-model `file:` leaves libcurl on EVERY acceptance posture (RURL-obsweger,
@@ -1065,18 +1215,20 @@
 #                    caller). host is UTF-8 %-encoded (WHATWG opaque host) or
 #                    source-preserving (RFC), never routed through punycode /
 #                    domain.R (ADR 0002).
-#   path_kind/rfc_path_form/host_kind/authority_kind/query_kind/fragment_kind/
-#   host_form : the internal state kinds the L3b serializers and the
-#                    parse-status promotion consume.
+#   path_kind/rfc_path_form/host_kind/authority_delimiter_present/
+#   authority_payload_kind/query_kind/fragment_kind/host_form : the internal
+#                    state kinds the L3b serializers and the parse-status
+#                    promotion consume.
 .general_parse_vec <- function(url, url_standard, scheme_acceptance) {
   n <- length(url)
   na <- rep(NA_character_, n)
   out <- list(
     general_parsed = rep(FALSE, n), ok = rep(FALSE, n),
     scheme = na, host = na, port = na, path = na, query = na, fragment = na,
-    userinfo = na,
+    userinfo = na, userinfo_kind = na,
     path_kind = na, rfc_path_form = na, host_kind = rep("absent", n),
-    authority_kind = rep("absent", n), query_kind = rep("absent", n),
+    authority_delimiter_present = rep(FALSE, n), authority_payload_kind = na,
+    query_kind = rep("absent", n),
     fragment_kind = rep("absent", n), host_form = na
   )
   gp <- .general_parsed_mask(url, url_standard, scheme_acceptance)
@@ -1108,8 +1260,9 @@
 
   opaque_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "path_kind",
-    "rfc_path_form", "host_kind", "authority_kind", "query_kind",
-    "fragment_kind", "host_form"
+    "rfc_path_form", "host_kind", "authority_delimiter_present",
+    "authority_payload_kind", "query_kind",
+    "fragment_kind", "host_form", "userinfo", "userinfo_kind"
   )
   if (any(reg)) {
     p <- .parse_opaque_urls_vec(url[reg], url_standard)
@@ -1120,10 +1273,14 @@
   }
   if (any(is_file)) {
     p <- .parse_rfc_file_urls_vec(url[is_file])
-    # `userinfo` is file-only: RFC 8089 App. E.1/F supplies a production for it,
-    # so the overlay surfaces it as a fact. The opaque parser has no such column
-    # and its rows keep the NA initialized above, so opaque output is unchanged.
-    for (f in c(setdiff(opaque_fields, "path_kind"), "userinfo")) {
+    # Both parsers now supply `userinfo`, but they mean different things by it,
+    # and the difference is honoured downstream in R/parse.R rather than here:
+    # the opaque parser's is a WHATWG authority userinfo (split at the first
+    # ":" into username/password), while RFC 8089's App. E.1/F production is
+    # `[ userinfo "@" ]` UNDIVIDED -- the appendix warns a password there is
+    # "a serious security exposure", so rurl does not manufacture a split the
+    # RFC never draws.
+    for (f in setdiff(opaque_fields, "path_kind")) {
       out[[f]][is_file] <- p[[f]]
     }
     out$ok[is_file] <- p$ok

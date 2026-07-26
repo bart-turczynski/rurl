@@ -12,30 +12,29 @@
 
 test_that("four WHATWG non-special shapes map to distinct state tuples", {
   # is_special = FALSE for the non-special scheme `foo`. Each row is the
-  # hand-decomposition of one shape: the remainder after `foo:`, whether a `//`
-  # authority is present, and the isolated host.
+  # hand-decomposition of one shape: the remainder after `foo:`, the authority
+  # substring (NA when no `//` delimiter was present), and the isolated host.
   shapes <- list(
     list(
-      url = "foo:bar", remainder = "bar", has_dbl_slash = FALSE, host = NA,
-      exp_path = "opaque", exp_auth = "absent", exp_host = "absent"
+      url = "foo:bar", remainder = "bar", authority = NA, host = NA,
+      exp_path = "opaque", exp_payload = NA_character_, exp_host = "absent"
     ),
     list(
-      url = "foo:/bar", remainder = "/bar", has_dbl_slash = FALSE, host = NA,
-      exp_path = "list", exp_auth = "absent", exp_host = "absent"
+      url = "foo:/bar", remainder = "/bar", authority = NA, host = NA,
+      exp_path = "list", exp_payload = NA_character_, exp_host = "absent"
     ),
     list(
-      # ADR 0012 D2 (lines 257-258, 270-271) is dispositive: `foo:///bar` is
-      # authority PRESENT with host EMPTY -- authority_kind records only WHETHER
-      # a `//` authority was present, and host emptiness is carried by host_kind
-      # (not by authority_kind). The vocab's `empty` is reserved for a genuinely
-      # empty authority *component* (L4b, once userinfo/port are modeled).
-      url = "foo:///bar", remainder = "///bar", has_dbl_slash = TRUE, host = "",
-      exp_path = "list", exp_auth = "present", exp_host = "empty"
+      # P1.2 D-A: `foo:///bar` is delimiter-PRESENT with an EMPTY payload and an
+      # EMPTY host. The payload kind classifies the authority substring, the
+      # host kind the host -- two independent axes (D-B), so the RFC `file:`
+      # overlay cannot classify the identical shape differently (S1-F5).
+      url = "foo:///bar", remainder = "///bar", authority = "", host = "",
+      exp_path = "list", exp_payload = "empty", exp_host = "empty"
     ),
     list(
       url = "foo://[::1]/bar", remainder = "//[::1]/bar",
-      has_dbl_slash = TRUE, host = "[::1]",
-      exp_path = "list", exp_auth = "present", exp_host = "present"
+      authority = "[::1]", host = "[::1]",
+      exp_path = "list", exp_payload = "present", exp_host = "present"
     )
   )
 
@@ -43,18 +42,20 @@ test_that("four WHATWG non-special shapes map to distinct state tuples", {
   for (i in seq_along(shapes)) {
     s <- shapes[[i]]
     path_kind <- .whatwg_path_kind(FALSE, s$remainder)
-    auth_kind <- .authority_kind(s$has_dbl_slash)
+    delimiter <- !is.na(s$authority)
+    payload_kind <- .authority_payload_kind(s$authority)
     host_kind <- .host_kind(s$host)
 
     expect_identical(path_kind, s$exp_path, info = s$url)
-    expect_identical(auth_kind, s$exp_auth, info = s$url)
+    expect_identical(payload_kind, s$exp_payload, info = s$url)
     expect_identical(host_kind, s$exp_host, info = s$url)
 
-    tuples[i] <- paste(auth_kind, host_kind, path_kind, sep = "|")
+    tuples[i] <- paste(delimiter, payload_kind, host_kind, path_kind, sep = "|")
   }
 
   # D2's core claim: a single opaque boolean is insufficient -- the four
-  # (authority_kind, host_kind, path_kind) tuples are all DISTINCT.
+  # (authority_delimiter_present, authority_payload_kind, host_kind, path_kind)
+  # tuples are all DISTINCT.
   expect_length(unique(tuples), 4L)
 })
 
@@ -72,12 +73,31 @@ test_that("host_kind maps absent / empty / present", {
   expect_identical(.host_kind("example.com"), "present")
 })
 
-test_that("authority_kind records only whether a // authority was present", {
-  # ADR 0012 D2: authority_kind records WHETHER `//` was present; host
-  # emptiness is host_kind's job, not authority_kind's. No `//` -> absent;
-  # `//` present -> present (regardless of what host it carries).
-  expect_identical(.authority_kind(FALSE), "absent")
-  expect_identical(.authority_kind(TRUE), "present")
+test_that("authority_payload_kind classifies the payload, not the host", {
+  # P1.2 D-A.2. NA authority (no delimiter) -> not applicable; "" -> empty;
+  # anything at all -> present, including userinfo-only and port-only payloads
+  # whose HOST is empty. Host presence is host_kind's job (D-B).
+  expect_identical(.authority_payload_kind(NA_character_), NA_character_)
+  expect_identical(.authority_payload_kind(""), "empty")
+  expect_identical(.authority_payload_kind("example.com"), "present")
+  expect_identical(.authority_payload_kind("@"), "present")
+  expect_identical(.authority_payload_kind(":80"), "present")
+})
+
+test_that("legacy authority_kind is derived from the two canonical fields", {
+  # P1.2 D-D: the retired three-value enum survives ONLY as a read-only
+  # projection. Its `empty` value is now REACHABLE -- as a payload state under
+  # a present delimiter -- which is the unreachable-value defect S1-F5 named.
+  expect_identical(.authority_kind(FALSE, NA_character_), "absent")
+  expect_identical(.authority_kind(TRUE, "empty"), "empty")
+  expect_identical(.authority_kind(TRUE, "present"), "present")
+
+  # All three legacy values are produced by some canonical pair, so no value in
+  # the legacy vocabulary is unreachable any more.
+  expect_setequal(
+    .authority_kind(c(FALSE, TRUE, TRUE), c(NA, "empty", "present")),
+    .AUTHORITY_KIND
+  )
 })
 
 test_that("whatwg_path_kind: non-special opaque trigger vs list", {
@@ -143,7 +163,11 @@ test_that("classifiers are vectorized and stay within vocabulary", {
   expect_length(qk, 3L)
   expect_true(all(qk %in% .PRESENCE_KIND))
 
-  ak <- .authority_kind(c(FALSE, TRUE, TRUE))
+  apk <- .authority_payload_kind(c(NA, "", "example.com"))
+  expect_length(apk, 3L)
+  expect_true(all(apk[!is.na(apk)] %in% .AUTHORITY_PAYLOAD_KIND))
+
+  ak <- .authority_kind(c(FALSE, TRUE, TRUE), c(NA, "empty", "present"))
   expect_length(ak, 3L)
   expect_true(all(ak %in% .AUTHORITY_KIND))
 
