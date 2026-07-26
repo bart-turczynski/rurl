@@ -166,6 +166,15 @@ decisions:
     path: design/work/url-v3/decisions/P5.2-determinism-tolerance.md
     sha256: 18787e57769adc0dd5adef707cb7737621bf1408e21798cc6ba2da6f9aa9bb02
     state: ACCEPTED
+  # --- P0.5 ACCEPTED by owner squash-merge of PR #246
+  # (76bc38d9850938ee9a526cf9857ab623a6b0cb50); this entry is that merge's
+  # phase-3 seal, per P0.5's own "Ratification and lifecycle stamping" section.
+  # The sha256 is computed AFTER the frontmatter stamps, since stamping the
+  # record changes the bytes this pin covers.
+  - id: P0.5
+    path: design/work/url-v3/decisions/P0.5-g4-exit-criterion-scope.md
+    sha256: 4a8adcffc7e4502d6e67375834a0e2377b9cb20a242e190e0bc07fac81db93ea
+    state: ACCEPTED
 
 # --- Other tracked control-plane artifacts (excludes manifest.yaml itself and
 # the frozen sources; decisions are inventoried above).
