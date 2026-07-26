@@ -592,11 +592,11 @@ get_path <- function(
 #' still percent-decodes for readability (`decode = TRUE`); pass
 #' `decode = FALSE` to obtain the raw query exactly as written in the URL.
 #'
-#' This accessor takes no `url_standard`, so `decode = FALSE` always yields the
-#' raw source spelling; the `query` column of [safe_parse_url()] under
-#' `url_standard = "whatwg"` instead carries the standard's percent-encoded
-#' spelling (the query percent-encode set is applied, so a literal space
-#' becomes `%20`).
+#' Under `url_standard = "whatwg"` the underlying query carries the standard's
+#' percent-encoded spelling (the query percent-encode set is applied, so a
+#' literal space becomes `%20`); under `url_standard = "rfc3986"` or no
+#' selector it is the raw source spelling. That distinction is only visible
+#' with `decode = FALSE`, since decoding collapses both spellings.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -641,22 +641,27 @@ get_query <- function(url,
                       params_case_sensitive = FALSE,
                       sort_params = FALSE,
                       empty_param_handling = c("keep", "drop"),
-                      decode_plus = FALSE) {
+                      decode_plus = FALSE,
+                      scheme_policy = c("infer", "require"),
+                      scheme_acceptance = c("web", "general"),
+                      url_standard = NULL) {
   format <- match.arg(format)
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
+  url_standard <- .validate_url_standard(url_standard)
 
   .check_character_url(url)
 
   if (!.query_engine_active(query_handling, sort_params, empty_param_handling,
     decode_plus)) {
-    return(.get_query_fast_path(url, protocol_handling, format, decode))
+    return(.get_query_fast_path(url, protocol_handling, format, decode,
+      scheme_policy, scheme_acceptance, url_standard))
   }
 
   .get_query_engine_path(
     url, protocol_handling, format, decode, query_handling, params_keep,
     params_drop, params_case_sensitive, sort_params, empty_param_handling,
-    decode_plus
+    decode_plus, scheme_policy, scheme_acceptance, url_standard
   )
 }
 
@@ -678,10 +683,15 @@ get_query <- function(url,
     !decode_plus)
 }
 
-.get_query_fast_path <- function(url, protocol_handling, format, decode) {
+.get_query_fast_path <- function(url, protocol_handling, format, decode,
+                                 scheme_policy, scheme_acceptance,
+                                 url_standard) {
   if (identical(format, "string")) {
     raw <- .extract_from_urls(url, "query",
-      protocol_handling = protocol_handling
+      protocol_handling = protocol_handling,
+      scheme_policy = scheme_policy,
+      scheme_acceptance = scheme_acceptance,
+      url_standard = url_standard
     )
     if (decode) {
       return(.decode_raw_query_strings(raw))
@@ -691,7 +701,10 @@ get_query <- function(url,
 
   raw <- .extract_from_urls(url, "query",
     protocol_handling = protocol_handling,
-    case_handling = "keep"
+    case_handling = "keep",
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
   )
   lapply(raw, ._parse_query_string, decode = decode)
 }
@@ -714,8 +727,15 @@ get_query <- function(url,
 .get_query_engine_path <- function(url, protocol_handling, format, decode,
                                    query_handling, params_keep, params_drop,
                                    params_case_sensitive, sort_params,
-                                   empty_param_handling, decode_plus) {
-  raw <- .extract_from_urls(url, "query", protocol_handling = protocol_handling)
+                                   empty_param_handling, decode_plus,
+                                   scheme_policy, scheme_acceptance,
+                                   url_standard) {
+  raw <- .extract_from_urls(url, "query",
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
+  )
   if (identical(format, "string")) {
     return(.get_query_engine_string(
       raw, decode, query_handling, params_keep, params_drop,
@@ -819,12 +839,11 @@ get_query <- function(url,
 #' Get URL fragments
 #'
 #' Extracts the fragment component of a URL. The value is never
-#' percent-decoded. This accessor takes no \code{url_standard}, so it always
-#' returns the raw source spelling, exactly as written in the URL; the
-#' \code{fragment} column of \code{\link{safe_parse_url}} under
-#' \code{url_standard = "whatwg"} instead carries the standard's
-#' percent-encoded spelling (the fragment percent-encode set is applied, so a
-#' double-quote inside the fragment becomes \code{\%22}).
+#' percent-decoded. Under \code{url_standard = "whatwg"} it carries the
+#' standard's percent-encoded spelling (the fragment percent-encode set is
+#' applied, so a double-quote inside the fragment becomes \code{\%22}); under
+#' \code{url_standard = "rfc3986"} or no selector it is the raw source
+#' spelling, exactly as written in the URL.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -832,13 +851,31 @@ get_query <- function(url,
 #' @export
 #' @examples
 #' get_fragment("http://example.com/path#section")
-get_fragment <- function(url, protocol_handling = "keep") {
-  .extract_from_urls(url, "fragment", protocol_handling = protocol_handling)
+#' get_fragment("http://example.com/p#a\"b", url_standard = "whatwg")
+get_fragment <- function(url, protocol_handling = "keep",
+                         scheme_policy = c("infer", "require"),
+                         scheme_acceptance = c("web", "general"),
+                         url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
+  .extract_from_urls(url, "fragment",
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
+  )
 }
 
 #' Get URL ports
 #'
 #' Extracts the port component of a URL.
+#'
+#' Under \code{url_standard = "whatwg"} a port equal to the scheme's default is
+#' \emph{not part of the parsed URL} (the standard discards it during parsing),
+#' so \code{"http://example.com:80/"} reports \code{NA} rather than \code{80}.
+#' Under \code{url_standard = "rfc3986"} or no selector the written port is
+#' reported as-is. This is distinct from \code{port_handling}, a presentation
+#' dial that governs whether a port is rendered into \code{clean_url}; the two
+#' are independent.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -846,12 +883,20 @@ get_fragment <- function(url, protocol_handling = "keep") {
 #' @export
 #' @examples
 #' get_port("http://example.com:8080/path")
-get_port <- function(url, protocol_handling = "keep") {
+#' get_port("http://example.com:80/path", url_standard = "whatwg")
+get_port <- function(url, protocol_handling = "keep",
+                     scheme_policy = c("infer", "require"),
+                     scheme_acceptance = c("web", "general"),
+                     url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, "port",
     null_value = NA_integer_,
     fun_value = integer(1),
     transform = as.integer,
-    protocol_handling = protocol_handling
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
   )
 }
 
@@ -898,21 +943,32 @@ get_user <- function(url, protocol_handling = "keep",
 #' Get URL passwords
 #'
 #' Extracts the password component of a URL. The value is never
-#' percent-decoded. This accessor takes no \code{url_standard}, so it always
-#' returns the raw source spelling, exactly as written in the URL; the
-#' \code{password} column of \code{\link{safe_parse_url}} under
-#' \code{url_standard = "whatwg"} instead carries the standard's
-#' percent-encoded spelling (a ":" inside the password becomes
-#' \code{\%3A}).
+#' percent-decoded. Under \code{url_standard = "whatwg"} it carries the
+#' standard's percent-encoded spelling (the userinfo percent-encode set is
+#' applied, so a ":" inside the password becomes \code{\%3A}); under
+#' \code{url_standard = "rfc3986"} or no selector it is the raw source
+#' spelling, exactly as written in the URL. This is the same contract as
+#' \code{\link{get_user}}.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @return A character vector of passwords.
+#' @seealso \code{\link{get_user}}, \code{\link{get_userinfo}}.
 #' @export
 #' @examples
 #' get_password("ftp://alice:secret@ftp.example.com/file.txt")
-get_password <- function(url, protocol_handling = "keep") {
-  .extract_from_urls(url, "password", protocol_handling = protocol_handling)
+#' get_password("http://u:p:q@example.com/", url_standard = "whatwg")
+get_password <- function(url, protocol_handling = "keep",
+                         scheme_policy = c("infer", "require"),
+                         scheme_acceptance = c("web", "general"),
+                         url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
+  .extract_from_urls(url, "password",
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
+  )
 }
 
 #' Get URL userinfo
