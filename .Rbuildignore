@@ -55,3 +55,4 @@
 ^tools/release-rule-check\.R$
 ^tools/status-doc-consistency\.R$
 ^tools/diagnostics-doc-consistency\.R$
+^tools/deferral-gate\.R$
