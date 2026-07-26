@@ -156,6 +156,43 @@ test_that("mailto parse columns and the D7 accessors diverge by design", {
   expect_identical(do.call(get_user, c(list(u), args)), "jane")
 })
 
+test_that("a mailto: with a real // authority keeps the host it parsed", {
+  # RURL-gmzipkyw. The opaque-path rule is "non-special scheme AND no `//`";
+  # both halves matter. `mailto://host/p` carries a genuine authority, so D7's
+  # recipient decomposition must NOT run over its path -- doing so overwrote the
+  # parsed host with NA (there is no addr-spec in `/pathname`) and left a row
+  # presenting a port with no host. WPT expects hostname `example.com` here.
+  args <- list(url_standard = "whatwg", scheme_policy = "require",
+               scheme_acceptance = "general")
+
+  d <- do.call(safe_parse_urls, c(
+    list(c("mailto://example.com:8080/pathname?search#hash",
+           "mailto://test/a/../b",
+           "MAILTO://ex.com/p",
+           "mailto:jane@example.com")), args))
+
+  # The three `//` forms keep their authority; scheme match is case-insensitive.
+  expect_identical(d$host, c("example.com", "test", "ex.com", NA_character_))
+  expect_identical(d$port, c(8080L, NA_integer_, NA_integer_, NA_integer_))
+  # A port is never presented without the host it belongs to.
+  expect_false(any(!is.na(d$port) & is.na(d$host)))
+  # The opaque form is untouched: still no authority, payload still verbatim.
+  expect_identical(d$path[4], "jane@example.com")
+
+  # The scalar surface agrees with the vector one, as it must.
+  s <- do.call(safe_parse_url,
+               c(list("mailto://example.com:8080/pathname"), args))
+  expect_identical(s$host, "example.com")
+  expect_identical(s$port, 8080L)
+
+  # D7 still reaches users for the opaque form -- this narrows the recipient
+  # rule, it does not retire it.
+  expect_identical(
+    do.call(get_host, c(list("mailto:jane@sub.example.co.uk"), args)),
+    "sub.example.co.uk"
+  )
+})
+
 # --- no DNS/PSL derivation and no punycode for opaque/non-special hosts ------
 
 test_that("opaque and non-special hosts get no domain/tld and no punycode", {
