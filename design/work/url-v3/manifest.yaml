@@ -211,7 +211,7 @@ artifacts:
     sha256: d203cad261686340964ae3d7ad397ba1cffc4050c23540e0f3783a67f1252af0
   # --- Control-plane validators now load-bearing gates (added since cp-snapshot-1).
   - path: design/work/url-v3/tools/validate-records.R
-    sha256: c8d9d3f77fa82097f15c5ff4d29ff56251fe22906f902e212805b55fcf693c8a
+    sha256: 5cdec3b63845e8d9fbe8a38739fc51f584fc4af5b9b168cef42855cb4ba48d60
   - path: design/work/url-v3/tools/validate-transitions.R
     sha256: b002b5f5db9c62d34136577c0ddfb7b661b29dc0336339f425f4c52385c7e805
   - path: design/work/url-v3/tools/ci-gate.R
@@ -238,11 +238,18 @@ artifacts:
   - path: design/work/url-v3/contracts/key-join-contracts.md
     sha256: c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3
   - path: design/work/url-v3/contracts/public-surface-closure.md
-    sha256: 709e8179746cfe67cb86fe915447ceea15278b5c46c0ac50fe0117b62571e1d0
+    sha256: 9b4fdb2d3bc67ceaf9c1aa579c160e4f173ff0df90ef98edf3f0f80a93005e46
   - path: design/work/url-v3/contracts/cross-artifact-consistency.md
-    sha256: b3ea16d4e215b273311edd9e7c4ba9609f3b1a1f30501677209207608752553d
+    sha256: b678651cc70138269957cae6f5d189741ac360fb49a6c3ed95f58e3bd9ac88ce
+  # G3-acceptance.md is retained at state SUPERSEDED (superseded_by
+  # gate-G3-acceptance-2). It stays pinned so the historical record is still
+  # tamper-evident; validate-records no longer recomputes its ## Inputs, because
+  # those describe the tree at ITS acceptance commit (2694145), not today's.
   - path: design/work/url-v3/gates/G3-acceptance.md
-    sha256: 96bfef619642c5a626e7e1d238ed0f91d62e9f66e917debe3e92e20251857293
+    sha256: 419ca6bbe1335eaf8a6e6132e8ad45b048d7ab7acbb1002f0c7d660e92eb4c93
+  # The live G3 acceptance since ff2140a (PR #281, public surface 51 -> 52).
+  - path: design/work/url-v3/gates/G3-acceptance-2.md
+    sha256: a94c48ab6c34e14b1ef78c037eba25ff13953e318de592931ddd8b9d98a57d1b
 
 # --- Registers (§6). Declared, not silently omitted. Absent registers name the
 # gate that creates them; present registers carry a hash the validator checks.
@@ -279,7 +286,7 @@ registers:
   - id: public-surface-inventory
     present: true
     path: design/work/url-v3/registers/public-surface-inventory.md
-    sha256: 4a625e35cf2407822dff7353f3f49c3c80aef64b595956538c74d1a9005ee034
+    sha256: c1cb3ffca5766e40c99714985f8fc952f5608dc7e1324d9466e21079f1ba2f2b
     note: "G1.2 — §6 artifact 4 (RURL-dmsgpcak)."
 
 # --- Pinned dependency provenance. Remote refs are the reproducibility

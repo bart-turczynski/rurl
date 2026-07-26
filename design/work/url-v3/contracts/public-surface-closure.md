@@ -65,7 +65,7 @@ project are already hash-enforced by `validate-manifest.R`.
 
 | path | sha256 |
 |---|---|
-| design/work/url-v3/registers/public-surface-inventory.md | 4a625e35cf2407822dff7353f3f49c3c80aef64b595956538c74d1a9005ee034 |
+| design/work/url-v3/registers/public-surface-inventory.md | c1cb3ffca5766e40c99714985f8fc952f5608dc7e1324d9466e21079f1ba2f2b |
 
 ## Bijection (unchanged from baseline 89be90b)
 
