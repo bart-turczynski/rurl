@@ -236,7 +236,16 @@
 #'     Requires an explicit `url_standard` (`"rfc3986"` or `"whatwg"`), which
 #'     decides the interpretation; `general` with `url_standard = NULL` is an
 #'     error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
-#'     derivation, and are never run through the IDNA/punycode helpers.}
+#'     derivation, and are never run through the IDNA/punycode helpers.
+#'     A non-special scheme with no `//` is an *opaque path*: it has no
+#'     authority, so `host`, `user`, `port` and the `domain`/`tld` columns are
+#'     all `NA` and the entire remainder is the `path` (`query`/`fragment` are
+#'     still split off). This includes `mailto:` — the recipient's `@` never
+#'     re-triggers authority parsing. To decompose a `mailto:` recipient, use
+#'     the accessors (`get_host()` / `get_domain()` / `get_user()`, ADR 0012 D7)
+#'     or `get_mailto_recipients()`; those deliberately return a recipient's
+#'     parts where this table presents `NA`, because a recipient domain is
+#'     extraction metadata, not the URL's authority.}
 #'   }
 #' @param url_standard Optional top-level standard profile: `NULL` (default),
 #'   `"rfc3986"`, or `"whatwg"`. With `NULL` the behavior is exactly what the
@@ -296,15 +305,28 @@
 #'     empty after processing.
 #'     \item `port`: The port number.
 #'     \item `path`: The path component (e.g., "/path/to/resource").
-#'     \item `query`: The raw query string as written in the URL, preserved
-#'     byte-for-byte (e.g., "name=value"); not percent-decoded. A present-but-
-#'     empty query (e.g. from a trailing "?") is reported as NA.
-#'     \item `fragment`: The fragment identifier as written in the URL
-#'     (e.g., "section"); not percent-decoded. Empty is reported as NA.
-#'     \item `user`: The user name for authentication, as written in the URL;
-#'     not percent-decoded. Empty is reported as NA.
-#'     \item `password`: The password for authentication, as written in the
-#'     URL; not percent-decoded. Empty is reported as NA.
+#'     \item `query`: The query string (e.g., "name=value"); never
+#'     percent-decoded. Under `url_standard = "whatwg"` it carries the
+#'     standard's percent-encoded spelling (the query percent-encode set is
+#'     applied, so a literal space reports as "%20"); under
+#'     `url_standard = "rfc3986"` or no selector it is the raw source spelling,
+#'     preserved byte-for-byte exactly as written in the URL (a bare key such
+#'     as "flag" stays "flag", not "flag="). A present-but-empty query (e.g.
+#'     from a trailing "?") is reported as NA.
+#'     \item `fragment`: The fragment identifier (e.g., "section"); never
+#'     percent-decoded, with the same two-branch contract as `query` (the
+#'     fragment percent-encode set is applied under `url_standard = "whatwg"`,
+#'     so a double-quote inside the fragment reports as "%22"). Empty is
+#'     reported as NA.
+#'     \item `user`: The user name for authentication; never percent-decoded.
+#'     Under `url_standard = "whatwg"` it carries the standard's percent-encoded
+#'     spelling (the userinfo percent-encode set is applied, so
+#'     "http://a^b@host/" reports "a%5Eb"); under `url_standard = "rfc3986"` or
+#'     no selector it is the raw source spelling, exactly as written in the URL.
+#'     Empty is reported as NA.
+#'     \item `password`: The password for authentication, with the same
+#'     encoding contract as `user` (so a ":" inside a WHATWG password is
+#'     reported as "%3A"). Empty is reported as NA.
 #'     \item `domain`: The registered domain name (e.g., "example.com"). NA if
 #'     host is an IP, empty, or derivation fails.
 #'     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP,
@@ -578,7 +600,10 @@ safe_parse_url <- function(url,
 #' @inheritParams safe_parse_url
 #' @return A data.frame with one row per URL and the same fields returned by
 #'   \code{\link{safe_parse_url}}. Invalid inputs return NA fields with
-#'   \code{parse_status = "error"}.
+#'   \code{parse_status = "error"}. Names on \code{url} are not carried into the
+#'   result: the frame always has ordinary sequential row names, matching the
+#'   accessors (\code{\link{get_host}} and friends), which return unnamed
+#'   vectors.
 #' @export
 #' @examples
 #' safe_parse_urls(c("example.com", "https://www.example.com/path"))
@@ -714,6 +739,20 @@ safe_parse_urls <- function(url,
     url <- as.character(url)
   }
 
+  # Input names are not data (RURL-vhdsqaln). `data.frame()` promotes the names
+  # of its first named component to row.names, so a named `url` reached the
+  # result frame as its row names -- where they read as though they were a
+  # column and silently survive into joins and downstream frames. The accessors
+  # already strip names via unname() (R/accessors.R:99,107); stripping once
+  # here, ahead of BOTH the character fast path and the list path, makes the
+  # agree with them instead of the surface disagreeing with itself. Guarded so
+  # the overwhelmingly common unnamed input keeps its zero-copy fast path.
+  # Values, order, length and NA-ness are untouched; only the names attribute
+  # goes, so an unnamed input is byte-identical to before.
+  if (!is.null(names(url))) {
+    url <- unname(url)
+  }
+
   if (length(url) == 0) {
     return(.spu_empty_result())
   }
@@ -748,10 +787,77 @@ safe_parse_urls <- function(url,
   # ._parse_urls_cached(). original_url is restored per row afterwards so it
   # reflects the input element even for duplicates / NA / non-character rows.
   field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
-  cols <- ._parse_urls_cached(parse_input, opts)[field_names]
+  cols <- .mask_opaque_authority(._parse_urls_cached(parse_input, opts), opts,
+                                 parse_input)
+  cols <- cols[field_names]
   cols$original_url <- original_url_vec
   cols$stringsAsFactors <- FALSE
   do.call(data.frame, cols)
+}
+
+# Authority columns the parse TABLE must not present for an opaque-path row.
+# `port`/`password` are never populated for one, so masking these eight is
+# exhaustive; `is_ip_host` stays FALSE exactly as it is for every other opaque
+# row (`tel:`, `data:`), so it is deliberately not in the list.
+.spu_opaque_authority_cols <- c(
+  "host", "user",
+  "domain", "tld",
+  "domain_ascii", "domain_unicode", "tld_ascii", "tld_unicode"
+)
+
+# T1 (RURL-glphqenm): a non-special scheme with no `//` is a WHATWG OPAQUE PATH
+# -- it has no authority, so the parse table presents no host/user and no PSL
+# decomposition of one. The opaque parser already yields NA authority for every
+# such row (`tel:`, `data:`, `sc:`); the sole exception is the ADR 0012 D7
+# `mailto:` recipient decomposition, which Stage A writes into the internal
+# host/user precisely so the get_*() accessors resolve a recipient domain
+# through the SAME PSL/presentation branches a web host takes.
+#
+# That value is extraction metadata about a recipient, not the URL's authority,
+# so this is where it stops: the public parse table masks it, while the accessor
+# seam (.extract_from_urls) keeps reading the unmasked columns. D7 already
+# declared `get_host`(mailto) and `clean_url`(mailto) independent and called the
+# write "extraction metadata ONLY" -- masking here is what finally makes that
+# true of the table too. `safe_parse_url()` and `get_host()` therefore diverge
+# for a mailto under general acceptance, by design (see D7's amendment note).
+.mask_opaque_authority <- function(cols, opts, url) {
+  if (!identical(opts$scheme_acceptance, "general")) {
+    return(cols)
+  }
+  scheme <- cols[["scheme"]]
+  is_mailto <- !is.na(scheme) & .ascii_tolower(scheme) == "mailto"
+  if (!any(is_mailto)) {
+    return(cols)
+  }
+  # BOTH halves of the opaque-path rule must hold. Matching the scheme alone
+  # masked `mailto://example.com:8080/p` too -- a non-special scheme that DOES
+  # carry a `//` authority, so not an opaque path at all. That row kept its
+  # parsed `port` while losing its `host`, presenting an authority with a port
+  # and no host (RURL-gmzipkyw; WPT `mailto://example.com:8080/pathname?...`
+  # expects hostname `example.com`).
+  is_mailto <- is_mailto & !.has_explicit_authority(url, opts$url_standard)
+  if (!any(is_mailto)) {
+    return(cols)
+  }
+  for (field in .spu_opaque_authority_cols) {
+    cols[[field]][is_mailto] <- NA_character_
+  }
+  cols
+}
+
+# Does the input carry an explicit `//` authority after its scheme colon? This
+# is the "and no `//`" half of the WHATWG opaque-path test, so it mirrors the
+# two input normalizations the parser performs before it chooses between an
+# authority and an opaque path: tab/LF/CR are removed everywhere (whatwg only,
+# a no-op otherwise) and leading C0-control-or-space is trimmed.
+.has_explicit_authority <- function(url, url_standard) {
+  if (length(url) == 0L) {
+    return(logical(0))
+  }
+  u <- ifelse(is.na(url), "", as.character(url))
+  u <- .strip_whatwg_control_chars_vec(u, url_standard)$url
+  u <- stringi::stri_replace_first_regex(u, "^[\\u0000-\\u0020]+", "")
+  grepl("^[A-Za-z][A-Za-z0-9+.-]*://", u)
 }
 
 # Empty (zero-row) result data.frame with the canonical column set/types.
@@ -806,7 +912,19 @@ safe_parse_urls <- function(url,
 }
 
 # Coerce one input element to the scalar `original_url` value: NA for missing
-# or non-scalar inputs, the string itself for character, else as.character().
+# or non-scalar inputs, the string itself for a length-1 character, else
+# as.character().
+#
+# The `length(u) == 1L` guard on the character branch is load-bearing
+# (RURL-ksozrswe): without it a list element that is a character vector of
+# length > 1 was returned verbatim, so the caller's
+# `vapply(..., character(1))` aborted the WHOLE call with base R's untyped
+# "values must be length 1" message. A list element of the wrong length is bad
+# DATA, not a contract violation, so it must recover row-locally as an error row
+# (P1.1 §3.4). NA_character_ is what this function already returns for every
+# other non-scalar shape -- NULL, length 0, and a non-character vector of length
+# > 1 -- so the guard makes the character case follow the rule the rest of the
+# function already states, rather than inventing a deparsed/collapsed string.
 .spu_coerce_original <- function(u) {
   is_missing_url <- is.null(u) ||
     length(u) == 0 ||
@@ -814,7 +932,7 @@ safe_parse_urls <- function(url,
   if (is_missing_url) {
     return(NA_character_)
   }
-  if (is.character(u)) {
+  if (is.character(u) && length(u) == 1L) {
     return(u)
   }
   if (is.atomic(u) && length(u) == 1) {
@@ -1457,6 +1575,9 @@ safe_parse_urls <- function(url,
     return(NULL)
   }
   field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  # Same opaque-path authority mask the vector table applies, so the scalar and
+  # vector parse surfaces stay identical (see .mask_opaque_authority).
+  cols <- .mask_opaque_authority(cols, opts, url)
   lapply(cols[field_names], function(column) column[[1L]])
 }
 
@@ -1615,7 +1736,20 @@ safe_parse_urls <- function(url,
   # from curl_parseable and their components installed directly (mirroring the
   # whatwg_file / rfc3986_path_rootless blocks). Rows the gate/parser rejects
   # (gen$ok = FALSE) simply never join parse_ok, so they present as errors.
-  gen <- .general_parse_vec(urls, opts$url_standard, opts$scheme_acceptance)
+  #
+  # The general route gets the SAME WHATWG step-1 treatment the libcurl route
+  # already had: remove every ASCII tab/LF/CR before anything is parsed. That
+  # step is scheme-independent in WHATWG, but it lived only inside
+  # `._prepare_urls_vec` (parse-phases.R), so the rows routed away from libcurl
+  # were still handed the raw string -- `foo://ho<TAB>st/` kept the tab and
+  # percent-encoded it into the host, and `foo://ho<LF>st/` was rejected
+  # outright (RURL-lsgdeisl). Only the strip is applied here, deliberately NOT
+  # the rest of `prep`: browser fixup and special-scheme backslash rewriting are
+  # separate rules that must not start firing on non-special schemes. A
+  # byte-for-byte no-op unless url_standard == "whatwg".
+  gen_input <- .strip_whatwg_control_chars_vec(urls, opts$url_standard)$url
+  gen <- .general_parse_vec(gen_input, opts$url_standard,
+                            opts$scheme_acceptance)
   general_route <- valid & gen$general_parsed
 
   # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
@@ -1652,6 +1786,22 @@ safe_parse_urls <- function(url,
   # General-acceptance rows that parsed successfully (incl. the RFC gate).
   general_ok <- general_route & gen$ok
   parse_ok <- curl_ok | rfc3986_path_rootless | file_ok | general_ok
+  # UNIFORM RFC 3986 generic-URI gate (RURL-qrfrvmkg, adopting RURL-pfewxbhb
+  # Option (a)). Applied at the ONE point every route has already converged on,
+  # so the profile is a property of the SELECTED STANDARD rather than of which
+  # parser happened to own the row: libcurl (http/https/ftp/ftps), the
+  # path-rootless slice, the RFC 8089 `file:` overlay and the general-routed
+  # opaque/RFC rows all meet the same grammar. Before this, only the last two
+  # did -- `file://C|/x` errored while `http://a|b/` parsed, though '|' is in no
+  # RFC 3986 production. Path-rootless is INCLUDED deliberately: `path-rootless`
+  # is itself an RFC 3986 production, so a row admitted under it has no claim to
+  # skip the grammar that defines it.
+  #
+  # The mask is all-TRUE under `whatwg` and under the NULL no-selector default,
+  # so every non-rfc3986 output is bit-identical. `.parse_cache_keys()` already
+  # carries `url_standard`, so no cross-standard cache entry can go stale.
+  parse_ok <- parse_ok &
+    .rfc3986_uniform_gate_ok(prep$rfc_gate_input, opts$url_standard)
   null_row <- !parse_ok
 
   # Pull raw components into columns (mirrors .extract_raw_components() and the
@@ -1700,6 +1850,13 @@ safe_parse_urls <- function(url,
   raw_password <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$password %||% NA_character_
   }, character(1), USE.NAMES = FALSE))
+  # Which rows carry a userinfo that was actually SPLIT into a username and a
+  # password. The libcurl route always splits, so it is TRUE wherever that
+  # route produced credentials; the general route sets it per row below. The
+  # WHATWG userinfo percent-encode set keys off this and nothing else, because
+  # encoding an UNDIVIDED userinfo would render its structural ":" as "%3A"
+  # (RURL-micalqvh half b, RURL-ovpguvva).
+  general_userinfo_split <- rep(FALSE, length(raw_user))
   raw_port <- vapply(parsed_list, function(p) {
     if (is.null(p)) {
       NA_integer_
@@ -1742,14 +1899,37 @@ safe_parse_urls <- function(url,
     raw_path[general_ok] <- gen$path[general_ok]
     raw_query[general_ok] <- .blank_to_na(gen$query[general_ok])
     raw_fragment[general_ok] <- .blank_to_na(gen$fragment[general_ok])
-    # userinfo is surfaced only by the RFC 8089 `file:` overlay, which has a
-    # production for it (App. E.1/F); every other general-routed row leaves
-    # `gen$userinfo` NA, so their output is unchanged (RURL-obsweger). Password
-    # stays NA: RFC 8089's production is `[ userinfo "@" ]` undivided, and
-    # App. E.1 warns that a password there is "a serious security exposure",
-    # so rurl does not manufacture a credentials split the RFC never draws.
-    raw_user[general_ok] <- .blank_to_na(gen$userinfo[general_ok])
-    raw_password[general_ok] <- NA_character_
+    # Credentials (RURL-ovpguvva). `gen$userinfo_kind` says which parser the
+    # row's userinfo came from, so the rule is read off the parse rather than
+    # re-derived from the scheme here:
+    #   * "authority" -- a WHATWG authority userinfo. SPLIT at the FIRST ":"
+    #     into username / password, exactly as the authority state does. Before
+    #     this the opaque parser dropped userinfo entirely, so `sc://u:p@h/x`
+    #     reported NA credentials while the libcurl route reported them exactly.
+    #   * "rfc8089"   -- the `file:` overlay's `[ userinfo "@" ]`, UNDIVIDED by
+    #     production. App. E.1 warns a password there is "a serious security
+    #     exposure", so rurl does not manufacture a split the RFC never draws.
+    # These are the RAW source slices in both cases; the WHATWG userinfo
+    # percent-encode set is applied later, and only to the split rows, so a
+    # structural ":" is never rendered as "%3A".
+    gen_ui <- .blank_to_na(gen$userinfo[general_ok])
+    gen_split <- !is.na(gen_ui) &
+      !is.na(gen$userinfo_kind[general_ok]) &
+      gen$userinfo_kind[general_ok] == "authority"
+    gen_pw <- rep(NA_character_, length(gen_ui))
+    if (any(gen_split)) {
+      colon <- regexpr(":", gen_ui[gen_split], fixed = TRUE)
+      has_colon <- colon > 0L
+      ui <- gen_ui[gen_split]
+      pw <- rep(NA_character_, length(ui))
+      pw[has_colon] <- substring(ui[has_colon], colon[has_colon] + 1L)
+      ui[has_colon] <- substring(ui[has_colon], 1L, colon[has_colon] - 1L)
+      gen_ui[gen_split] <- .blank_to_na(ui)
+      gen_pw[gen_split] <- .blank_to_na(pw)
+    }
+    raw_user[general_ok] <- gen_ui
+    raw_password[general_ok] <- gen_pw
+    general_userinfo_split[general_ok] <- gen_split
     raw_port[general_ok] <- suppressWarnings(as.integer(gen$port[general_ok]))
   }
 
@@ -1760,8 +1940,17 @@ safe_parse_urls <- function(url,
   # the general rows from its own gen_b re-parse (host NA for mailto), so
   # clean_url / round-trip is untouched. Domain-form RHS only; address-literal /
   # invalid -> NA host.
+  #
+  # The recipient rule applies ONLY to the opaque-path form. `mailto://host/p`
+  # is a non-special scheme carrying a real `//` authority, so the general
+  # parser has already put its host in `raw_host` above; running the recipient
+  # decomposition over its path clobbered that with NA (no addr-spec in `/p`),
+  # leaving a row with a parsed `port` and no `host`. WPT's
+  # `mailto://example.com:8080/pathname?search#hash` expects hostname
+  # `example.com` (RURL-gmzipkyw).
   is_mailto_gen <- general_ok & !is.na(raw_scheme) &
-    .ascii_tolower(raw_scheme) == "mailto"
+    .ascii_tolower(raw_scheme) == "mailto" &
+    !.has_explicit_authority(urls, opts$url_standard)
   if (any(is_mailto_gen)) {
     rp <- .mailto_first_recipient_parts(raw_path[is_mailto_gen])
     raw_host[is_mailto_gen] <- rp$host
@@ -1855,6 +2044,7 @@ safe_parse_urls <- function(url,
     raw_fragment = raw_fragment,
     raw_user = raw_user,
     raw_password = raw_password,
+    general_userinfo_split = general_userinfo_split,
     raw_port = raw_port,
     domain_ascii = dt_ascii$domain,
     domain_unicode = dt_unicode$domain,
@@ -1880,6 +2070,11 @@ safe_parse_urls <- function(url,
     # WHATWG control-char strip (RURL-tyetpjym): same seam, emits
     # `control-char-stripped` only where a tab/LF/CR was actually removed.
     control_char_stripped = prep$control_char_stripped,
+    # WHATWG leading/trailing strip (RURL-yvxpanix, step 1's first half): same
+    # seam and likewise NOT a cached Stage-A field, emits
+    # `leading-trailing-stripped` only where a leading/trailing
+    # C0-control-or-space run was actually removed.
+    leading_trailing_stripped = prep$leading_trailing_stripped,
     # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009): same seam, emits
     # `host-charset-shimmed` where a curl-rejected-but-WHATWG-valid host code
     # point was accepted via the shim + true-host restore above.
@@ -1939,8 +2134,13 @@ safe_parse_urls <- function(url,
     # routed to the posture parser AND that parsed ok (curl_ok is the complement
     # of Stage A's null rows). Cheap and deterministic; only the general posture
     # pays for it.
+    # Stage A feeds the general parser its WHATWG step-1 stripped input
+    # (RURL-lsgdeisl), so this re-parse MUST strip identically -- otherwise the
+    # two stages disagree about which rows are general-routed and the recovered
+    # state kinds land on the wrong rows.
     gen_b <- .general_parse_vec(
-      original_url, opts$url_standard, opts$scheme_acceptance
+      .strip_whatwg_control_chars_vec(original_url, opts$url_standard)$url,
+      opts$url_standard, opts$scheme_acceptance
     )
     gp <- gen_b$general_parsed & curl_ok
     # path_kind / host_kind for eligibility: the L3a classifier proxy for the
@@ -2055,6 +2255,51 @@ safe_parse_urls <- function(url,
     }
   }
 
+  # Userinfo identity (RURL-micalqvh, half b): WHATWG's authority state stores
+  # the username/password buffers percent-encoded with the userinfo
+  # percent-encode set, so under `url_standard = "whatwg"` the PARSED `user` /
+  # `password` columns carry that spelling. `a$raw_user` / `a$raw_password` are
+  # the source slices and keep the raw spelling untouched (the escape hatch).
+  # Under `rfc3986` or no selector the columns stay source-preserving.
+  #
+  # Applied ONLY where the userinfo was actually SPLIT into a username and a
+  # password, which is what `a$general_userinfo_split` records. Encoding an
+  # UNDIVIDED userinfo would render its structural ":" as "%3A" and misreport
+  # it. The rows that stay undivided, and why:
+  #   * the RFC 8089 `file:` overlay -- App. E.1's production is
+  #     `[ userinfo "@" ]`, undivided, and the appendix warns a password there
+  #     is "a serious security exposure".
+  #   * a mailto: `user` is a recipient LOCAL-PART (ADR 0012 D7), not a URL
+  #     userinfo at all -- mailto is an opaque path under WHATWG, so no userinfo
+  #     encode set applies to it. (It carries no authority, so the general
+  #     parser leaves its userinfo NA and the mask is FALSE.)
+  # The general/opaque route USED to be a third exclusion, because it dropped
+  # userinfo instead of splitting it. It now splits, so it is encoded here on
+  # the same terms as the libcurl route (RURL-ovpguvva).
+  user_output <- a$raw_user
+  password_output <- a$raw_password
+  if (.is_whatwg(opts$url_standard)) {
+    split_userinfo <- if (general_acceptance) {
+      !gp | a$general_userinfo_split
+    } else {
+      rep(TRUE, length(a$raw_user))
+    }
+    u_idx <- which(split_userinfo & !is.na(user_output))
+    if (length(u_idx) > 0L) {
+      user_output[u_idx] <- vapply(
+        user_output[u_idx], .whatwg_userinfo_percent_encode, character(1),
+        USE.NAMES = FALSE
+      )
+    }
+    p_idx <- which(split_userinfo & !is.na(password_output))
+    if (length(p_idx) > 0L) {
+      password_output[p_idx] <- vapply(
+        password_output[p_idx], .whatwg_userinfo_percent_encode, character(1),
+        USE.NAMES = FALSE
+      )
+    }
+  }
+
   # Phase 11: clean URL reconstruction (with the filtered query appended).
   clean_url <- .build_clean_url_vec(
     cased$scheme, cased$host, cased$path, opts$trailing_slash_handling,
@@ -2070,7 +2315,10 @@ safe_parse_urls <- function(url,
     if (.is_whatwg(opts$url_standard)) {
       clean_url[gp] <- .serialize_whatwg_vec(
         scheme = cased$scheme[gp], host = gen_b$host[gp],
-        host_kind = gen_b$host_kind[gp], path = gen_b$path[gp],
+        host_kind = gen_b$host_kind[gp],
+        authority_delimiter_present =
+          gen_b$authority_delimiter_present[gp],
+        path = gen_b$path[gp],
         path_kind = gen_b$path_kind[gp], query = gen_b$query[gp],
         query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
         port_handling = opts$port_handling,
@@ -2079,7 +2327,10 @@ safe_parse_urls <- function(url,
     } else {
       clean_url[gp] <- .serialize_rfc_generic_vec(
         scheme = cased$scheme[gp], host = gen_b$host[gp],
-        host_kind = gen_b$host_kind[gp], path = gen_b$path[gp],
+        host_kind = gen_b$host_kind[gp],
+        authority_delimiter_present =
+          gen_b$authority_delimiter_present[gp],
+        path = gen_b$path[gp],
         rfc_path_form = gen_b$rfc_path_form[gp], query = gen_b$query[gp],
         query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
         port_handling = opts$port_handling
@@ -2116,8 +2367,8 @@ safe_parse_urls <- function(url,
     path_output = cased$path,
     raw_query = query_output,
     fragment = fragment_output,
-    user = a$raw_user,
-    password = a$raw_password,
+    user = user_output,
+    password = password_output,
     domain = domain,
     tld = tld,
     # Encoding-independent identity spellings (RURL-owrdsivt): surfaced straight

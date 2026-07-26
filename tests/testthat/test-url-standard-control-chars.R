@@ -79,3 +79,107 @@ test_that("stripping is vectorized and per-row", {
   fires <- vapply(diags, function(d) "control-char-stripped" %in% d, logical(1))
   expect_identical(fires, c(TRUE, FALSE, TRUE))
 })
+
+# --- step 1's FIRST half: leading/trailing C0-or-SPACE (RURL-yvxpanix) --------
+#
+# WHATWG step 1 has two halves, in this order: (1a) remove any leading and
+# trailing C0-control-or-SPACE (U+0000..U+0020), then (1b) remove all tab/LF/CR
+# anywhere. Half 1a is a DIFFERENT fact from half 1b, so it carries its own
+# `leading-trailing-stripped` diagnostic. Like 1b it must not run under
+# url_standard = "rfc3986" / no selector, which have no strip step.
+
+# U+0001..U+0020, i.e. every C0 control plus SPACE. U+0000 is deliberately
+# absent: an R character string cannot carry an embedded NUL at all.
+C0_RUN <- intToUtf8(1:32)
+
+test_that("whatwg strips a trailing space run instead of encoding it", {
+  u <- "http://example.com/a  "
+  # Was "/a%20%20" (the two spaces percent-encoded into the path).
+  expect_identical(get_path(u, url_standard = "whatwg"), "/a")
+  expect_identical(get_clean_url(u, url_standard = "whatwg"),
+                   "http://example.com/a")
+})
+
+test_that("whatwg accepts an input with a leading space run", {
+  u <- "  http://example.com/a"
+  # Was a parse error (the leading space reached curl).
+  expect_identical(get_parse_status(u, url_standard = "whatwg"), "ok")
+  expect_identical(get_host(u, url_standard = "whatwg"), "example.com")
+  expect_identical(get_path(u, url_standard = "whatwg"), "/a")
+})
+
+test_that("whatwg strips both ends at once", {
+  expect_identical(get_clean_url("  http://example.com/a  ",
+                                 url_standard = "whatwg"),
+                   "http://example.com/a")
+})
+
+test_that("whatwg strips the whole U+0001..U+0020 range at both ends", {
+  u <- paste0(C0_RUN, "http://example.com/a", C0_RUN)
+  expect_identical(get_host(u, url_standard = "whatwg"), "example.com")
+  expect_identical(get_path(u, url_standard = "whatwg"), "/a")
+})
+
+test_that("whatwg strips a trailing run from a non-special opaque path", {
+  # Was path "opaque  " (both spaces carried verbatim). The opaque trailing-
+  # space rule (.whatwg_opaque_path_encode) only fires when a "?"/"#" follows,
+  # so the two rules never both apply to the same space.
+  d <- safe_parse_urls(c("non-special:opaque  ", "  non-special:opaque"),
+                       url_standard = "whatwg", scheme_policy = "require",
+                       scheme_acceptance = "general")
+  expect_identical(d$path, c("opaque", "opaque"))
+})
+
+test_that("interior spaces and controls are NOT stripped by half 1a", {
+  # Interior spaces stay (and are percent-encoded by the path serializer);
+  # interior tab/LF/CR are removed by half 1b, which keeps its own token.
+  expect_identical(get_path("http://example.com/a b c ",
+                            url_standard = "whatwg"),
+                   "/a%20b%20c")
+  u <- paste0("http://exa", TAB, "mple.com/")
+  expect_identical(get_host(u, url_standard = "whatwg"), "example.com")
+  expect_false("leading-trailing-stripped" %in%
+                 get_url_diagnostics(u, url_standard = "whatwg"))
+})
+
+test_that("the two step-1 halves emit two independent diagnostics", {
+  us <- c(
+    "http://example.com/a  ",                     # 1a only
+    paste0("http://exa", TAB, "mple.com/"),        # 1b only
+    paste0(" http://exa", LF, "mple.com/a "),      # both
+    "http://example.com/a"                         # neither
+  )
+  diags <- get_url_diagnostics(us, url_standard = "whatwg")
+  fired <- function(token) {
+    vapply(diags, function(d) token %in% d, logical(1))
+  }
+  expect_identical(fired("leading-trailing-stripped"),
+                   c(TRUE, FALSE, TRUE, FALSE))
+  expect_identical(fired("control-char-stripped"),
+                   c(FALSE, TRUE, TRUE, FALSE))
+})
+
+test_that("half 1a is a byte-for-byte no-op under rfc3986 / no selector", {
+  us <- c("  http://example.com/a", "http://example.com/a  ",
+          "http://example.com/b")
+  for (std in list("rfc3986", NULL)) {
+    stripped <- rurl:::.strip_whatwg_control_chars_vec(us, std)
+    # The rfc3986 row keeps its input spelling, byte for byte.
+    expect_identical(stripped$url, us)
+    expect_identical(stripped$leading_trailing_stripped, rep(FALSE, 3L))
+    expect_identical(stripped$control_char_stripped, rep(FALSE, 3L))
+  }
+  # And nothing is rescued at the public surface: rfc3986 requires such bytes
+  # to be percent-encoded, so both rows stay errors under either selector.
+  expect_identical(get_parse_status(us[1:2], url_standard = "rfc3986"),
+                   c("error", "error"))
+  expect_identical(get_parse_status(us[1:2]), c("error", "error"))
+})
+
+test_that("the leading/trailing diagnostic never fires under rfc3986", {
+  u <- "  http://example.com/a  "
+  expect_false("leading-trailing-stripped" %in%
+                 get_url_diagnostics(u, url_standard = "rfc3986"))
+  expect_false("leading-trailing-stripped" %in%
+                 get_url_diagnostics(u))
+})

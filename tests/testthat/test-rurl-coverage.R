@@ -8,6 +8,79 @@ test_that("safe_parse_urls handles empty and non-character inputs", {
   expect_equal(res_num$parse_status, "error")
 })
 
+# ---- list-element length matrix (RURL-ksozrswe) -----------------------------
+#
+# P1.1 §3.4 is settled: "row-local recovery for parse/validation failure;
+# call-level errors reserved for contract violations ..., not for bad data."
+# A list element whose length is not 1 is bad DATA, so it must produce an error
+# ROW, never abort the call. S1 (S1-F3) enumerates "list elements of length
+# 0/1/>1" as a required contract cell.
+#
+# original_url for a non-scalar element is NA_character_, which is what
+# .spu_coerce_original() already returns for every other non-scalar shape
+# (NULL, length 0, and non-character length > 1); only the character length > 1
+# case escaped that rule and blew up the surrounding vapply().
+
+test_that("non-scalar list elements yield error rows, not a call-level abort", {
+  # The reported defect: a length-2 character element aborted the whole call
+  # with base R's untyped "values must be length 1" vapply message.
+  res <- safe_parse_urls(list("http://a.com/", c("b", "c")))
+  expect_equal(nrow(res), 2L)
+  expect_equal(res$parse_status, c(rurl:::.STATUS_OK, rurl:::.STATUS_ERROR))
+  expect_equal(res$original_url, c("http://a.com/", NA_character_))
+  expect_equal(res$host, c("a.com", NA_character_))
+})
+
+test_that("the list-element length x type matrix is row-local throughout", {
+  # length 0 / 1 / >1 crossed with character and non-character elements. Each
+  # bad element is paired with a good one so a call-level abort is detectable
+  # as a lost first row rather than only as an error.
+  bad <- list(
+    `character length 0` = character(0),
+    `character length 2` = c("b", "c"),
+    `character length 3` = c("http://b.com/", "http://c.com/", "http://d.com/"),
+    `NULL` = NULL,
+    `numeric length 0` = numeric(0),
+    `numeric length 2` = c(2, 3),
+    `logical length 2` = c(TRUE, FALSE),
+    `nested list length 2` = list("b", "c")
+  )
+  for (nm in names(bad)) {
+    res <- safe_parse_urls(list("http://a.com/", bad[[nm]]))
+    expect_equal(nrow(res), 2L, info = nm)
+    expect_equal(
+      res$parse_status, c(rurl:::.STATUS_OK, rurl:::.STATUS_ERROR),
+      info = nm
+    )
+    expect_equal(res$original_url, c("http://a.com/", NA_character_), info = nm)
+  }
+
+  # length 1 is the parseable cell and must stay unchanged: a character scalar
+  # parses; a non-character scalar is stringified for original_url only and
+  # still yields an error row (the sibling behavior pinned above).
+  ok <- safe_parse_urls(list("http://a.com/", "http://b.com/"))
+  expect_equal(ok$parse_status, c(rurl:::.STATUS_OK, rurl:::.STATUS_OK))
+  expect_equal(ok$host, c("a.com", "b.com"))
+
+  scalar_num <- safe_parse_urls(list("http://a.com/", 1))
+  expect_equal(scalar_num$original_url, c("http://a.com/", "1"))
+  expect_equal(
+    scalar_num$parse_status, c(rurl:::.STATUS_OK, rurl:::.STATUS_ERROR)
+  )
+})
+
+test_that("a bad list element does not widen or narrow the result frame", {
+  # ADR 0006: the result column set is fixed. Row-local recovery changes which
+  # ROWS appear and their status, never the columns.
+  good <- safe_parse_urls(list("http://a.com/"))
+  mixed <- safe_parse_urls(list("http://a.com/", c("b", "c")))
+  expect_named(mixed, names(good))
+  expect_identical(
+    vapply(mixed, function(x) class(x)[1], character(1)),
+    vapply(good, function(x) class(x)[1], character(1))
+  )
+})
+
 test_that("safe_parse_urls accepts factor input by coercing to labels", {
   # Factor input is coerced to its character labels up front, so it parses
   # identically to the equivalent character vector rather than yielding an

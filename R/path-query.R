@@ -261,13 +261,46 @@
 }
 
 # WHATWG path serializer for `url_standard = "whatwg"` +
-# `path_encoding = "encode"`: uses the path percent-encode set
-# (`" # < > ? ` { }`).
+# `path_encoding = "encode"`: uses the path percent-encode set -- the query set
+# (SP `"` `#` `<` `>`) plus `?` `^` `` ` `` `{` `}`. `^` (U+005E) is a member:
+# the set is the query set and "U+003F (?), U+005E (^), U+0060 (`), U+007B ({),
+# and U+007D (})", which WPT pins (`foo://host/...^...` -> `%5E`). It is NOT a
+# member of the C0-control set an OPAQUE path uses, so `^` stays literal there
+# -- see `.whatwg_opaque_path_encode()`.
 .whatwg_path_percent_encode <- function(path) {
   .whatwg_component_percent_encode(
     path,
-    c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x60L, 0x7BL, 0x7DL)
+    c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL)
   )
+}
+
+# WHATWG opaque-path serializer (#opaque-path-state). An opaque path is
+# percent-encoded with the C0-control set only -- C0 controls, DEL and every
+# non-ASCII byte -- so the printable ASCII a list path escapes (`^` `{` `}` ...)
+# stays literal.
+#
+# `delimiter_follows` carries the one context the encode set cannot: WHATWG
+# encodes a SPACE that sits immediately before the `?` or `#` that ends an
+# opaque path, and leaves every other space literal. WPT pins all three cases:
+# `non-special:opaque  x?hi` keeps both interior spaces,
+# `non-special:opaque  ?hi` yields `opaque %20` (only the LAST space encoded),
+# and a space at the very end of the input
+# is removed by the parser's leading/trailing strip instead. The reason is
+# round-tripping: a trailing space would otherwise be stripped when the
+# serialized URL is re-parsed.
+.whatwg_opaque_path_encode <- function(path, delimiter_follows) {
+  if (is.na(path) || !nzchar(path)) {
+    return(path)
+  }
+  trailing_space <- isTRUE(delimiter_follows) && endsWith(path, " ")
+  if (trailing_space) {
+    path <- substring(path, 1L, nchar(path) - 1L)
+  }
+  out <- .whatwg_component_percent_encode(path, integer(0))
+  if (trailing_space) {
+    out <- paste0(out, "%20")
+  }
+  out
 }
 
 # WHATWG query serializer for special schemes: uses the special-query
@@ -281,6 +314,30 @@
     encode_set <- c(encode_set, 0x27L)
   }
   .whatwg_component_percent_encode(query, encode_set)
+}
+
+# WHATWG userinfo serializer (#userinfo-percent-encode-set): the path
+# percent-encode set (SP `"` `#` `<` `>` `?` `^` `` ` `` `{` `}`) plus `/` `:`
+# `;` `=` `@` `[` `\` `]` `|`. WHATWG's host parser fills the username and
+# password buffers by percent-encoding each code point with this set, so the
+# PARSED credential values it stores are already escaped -- unlike rurl's
+# `raw_user` / `raw_password`, which keep the source spelling.
+#
+# Reusing `.whatwg_component_percent_encode()` is what makes this idempotent:
+# its `%` branch re-emits an existing percent triplet verbatim, so `u%40ser`
+# stays `u%40ser` and `%25DOMAIN` stays `%25DOMAIN` rather than becoming
+# `%2525DOMAIN`. It also encodes every C0 control, DEL and non-ASCII byte, so a
+# non-ASCII userinfo gains escapes too (WHATWG-correct).
+.whatwg_userinfo_percent_encode <- function(x) {
+  .whatwg_component_percent_encode(
+    x,
+    c(
+      # path percent-encode set
+      0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL,
+      # userinfo additions
+      0x2FL, 0x3AL, 0x3BL, 0x3DL, 0x40L, 0x5BL, 0x5CL, 0x5DL, 0x7CL
+    )
+  )
 }
 
 # WHATWG fragment serializer: uses the fragment percent-encode set

@@ -283,7 +283,16 @@ opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
 Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
 decides the interpretation; \code{general} with \code{url_standard = NULL} is an
 error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
-derivation, and are never run through the IDNA/punycode helpers.}
+derivation, and are never run through the IDNA/punycode helpers.
+A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
+authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are
+all \code{NA} and the entire remainder is the \code{path} (\code{query}/\code{fragment} are
+still split off). This includes \verb{mailto:} — the recipient's \code{@} never
+re-triggers authority parsing. To decompose a \verb{mailto:} recipient, use
+the accessors (\code{get_host()} / \code{get_domain()} / \code{get_user()}, ADR 0012 D7)
+or \code{get_mailto_recipients()}; those deliberately return a recipient's
+parts where this table presents \code{NA}, because a recipient domain is
+extraction metadata, not the URL's authority.}
 }}
 
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
@@ -348,15 +357,28 @@ A named list with the following components:
 empty after processing.
 \item \code{port}: The port number.
 \item \code{path}: The path component (e.g., "/path/to/resource").
-\item \code{query}: The raw query string as written in the URL, preserved
-byte-for-byte (e.g., "name=value"); not percent-decoded. A present-but-
-empty query (e.g. from a trailing "?") is reported as NA.
-\item \code{fragment}: The fragment identifier as written in the URL
-(e.g., "section"); not percent-decoded. Empty is reported as NA.
-\item \code{user}: The user name for authentication, as written in the URL;
-not percent-decoded. Empty is reported as NA.
-\item \code{password}: The password for authentication, as written in the
-URL; not percent-decoded. Empty is reported as NA.
+\item \code{query}: The query string (e.g., "name=value"); never
+percent-decoded. Under \code{url_standard = "whatwg"} it carries the
+standard's percent-encoded spelling (the query percent-encode set is
+applied, so a literal space reports as "\%20"); under
+\code{url_standard = "rfc3986"} or no selector it is the raw source spelling,
+preserved byte-for-byte exactly as written in the URL (a bare key such
+as "flag" stays "flag", not "flag="). A present-but-empty query (e.g.
+from a trailing "?") is reported as NA.
+\item \code{fragment}: The fragment identifier (e.g., "section"); never
+percent-decoded, with the same two-branch contract as \code{query} (the
+fragment percent-encode set is applied under \code{url_standard = "whatwg"},
+so a double-quote inside the fragment reports as "\%22"). Empty is
+reported as NA.
+\item \code{user}: The user name for authentication; never percent-decoded.
+Under \code{url_standard = "whatwg"} it carries the standard's percent-encoded
+spelling (the userinfo percent-encode set is applied, so
+"http://a^b@host/" reports "a\%5Eb"); under \code{url_standard = "rfc3986"} or
+no selector it is the raw source spelling, exactly as written in the URL.
+Empty is reported as NA.
+\item \code{password}: The password for authentication, with the same
+encoding contract as \code{user} (so a ":" inside a WHATWG password is
+reported as "\%3A"). Empty is reported as NA.
 \item \code{domain}: The registered domain name (e.g., "example.com"). NA if
 host is an IP, empty, or derivation fails.
 \item \code{tld}: The top-level domain (e.g., "com"). NA if host is an IP,

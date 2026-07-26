@@ -67,6 +67,7 @@
 # ---------------------------------------------------------------------------
 
 .spu_options <- c(
+  # Presentation dials: how a component is rendered.
   "protocol_handling",
   "www_handling",
   "tld_source",
@@ -77,7 +78,23 @@
   "scheme_relative_handling",
   "subdomain_levels_to_keep",
   "host_encoding",
-  "path_encoding"
+  "path_encoding",
+  # Interpretation / acceptance axes: WHICH URL is parsed and under WHICH
+  # standard, not how the answer is printed (ADR 0010, ADR 0011). They belong
+  # in this oracle for exactly the reason the presentation dials do -- an
+  # accessor that omits one cannot reach a value the corresponding column
+  # carries, and nothing else in the suite notices.
+  #
+  # They were absent until RURL-bznwelxn, and their absence is why FOUR
+  # accessors silently drifted out of reach of their own columns:
+  # get_password() could not return the WHATWG userinfo spelling the
+  # `password` column had carried since PR #275; get_query() and
+  # get_fragment() could not return the query/fragment percent-encode-set
+  # spellings; and get_port() could not report the WHATWG default-port drop
+  # (`http://example.com:80/` parses to NA under "whatwg", 80 otherwise).
+  "scheme_policy",
+  "scheme_acceptance",
+  "url_standard"
 )
 
 # ---------------------------------------------------------------------------
@@ -605,7 +622,55 @@
   .reg_omitted(
     "get_tld", "path_encoding",
     "path_encoding does not affect the TLD component"
-  )
+  ),
+
+  # ---- interpretation / acceptance axes ----------------------------------
+  # Every accessor exposes all three. There is no by-design-omitted cell here
+  # and there should not be one: these axes decide which URL is parsed and
+  # under which standard, so they can reach any component. A future accessor
+  # that cannot take them is a gap, not a design choice.
+  .reg_exposed("get_parse_status", "scheme_policy"),
+  .reg_exposed("get_parse_status", "scheme_acceptance"),
+  .reg_exposed("get_parse_status", "url_standard"),
+  .reg_exposed("get_clean_url", "scheme_policy"),
+  .reg_exposed("get_clean_url", "scheme_acceptance"),
+  .reg_exposed("get_clean_url", "url_standard"),
+  .reg_exposed("get_domain", "scheme_policy"),
+  .reg_exposed("get_domain", "scheme_acceptance"),
+  .reg_exposed("get_domain", "url_standard"),
+  .reg_exposed("get_scheme", "scheme_policy"),
+  .reg_exposed("get_scheme", "scheme_acceptance"),
+  .reg_exposed("get_scheme", "url_standard"),
+  .reg_exposed("get_host", "scheme_policy"),
+  .reg_exposed("get_host", "scheme_acceptance"),
+  .reg_exposed("get_host", "url_standard"),
+  .reg_exposed("get_path", "scheme_policy"),
+  .reg_exposed("get_path", "scheme_acceptance"),
+  .reg_exposed("get_path", "url_standard"),
+  .reg_exposed("get_query", "scheme_policy"),
+  .reg_exposed("get_query", "scheme_acceptance"),
+  .reg_exposed("get_query", "url_standard"),
+  .reg_exposed("get_fragment", "scheme_policy"),
+  .reg_exposed("get_fragment", "scheme_acceptance"),
+  .reg_exposed("get_fragment", "url_standard"),
+  .reg_exposed("get_port", "scheme_policy"),
+  .reg_exposed("get_port", "scheme_acceptance"),
+  .reg_exposed("get_port", "url_standard"),
+  .reg_exposed("get_user", "scheme_policy"),
+  .reg_exposed("get_user", "scheme_acceptance"),
+  .reg_exposed("get_user", "url_standard"),
+  .reg_exposed("get_password", "scheme_policy"),
+  .reg_exposed("get_password", "scheme_acceptance"),
+  .reg_exposed("get_password", "url_standard"),
+  .reg_exposed("get_userinfo", "scheme_policy"),
+  .reg_exposed("get_userinfo", "scheme_acceptance"),
+  .reg_exposed("get_userinfo", "url_standard"),
+  .reg_exposed("get_subdomain", "scheme_policy"),
+  .reg_exposed("get_subdomain", "scheme_acceptance"),
+  .reg_exposed("get_subdomain", "url_standard"),
+  .reg_exposed("get_tld", "scheme_policy"),
+  .reg_exposed("get_tld", "scheme_acceptance"),
+  .reg_exposed("get_tld", "url_standard")
 )
 
 # ---------------------------------------------------------------------------

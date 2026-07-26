@@ -171,6 +171,38 @@ jobs:
       - name: Scan documentation for full_parse default-bound drift
         run: Rscript tools/cache-doc-consistency.R
 
+  # Oracle-provenance gate (G4, S8 finding 9 / P5.3 SS2.3). The provenance of
+  # every normative fixture is recorded in
+  # tests/testthat/fixtures/oracle-provenance.json; this job makes that record
+  # executable instead of decorative. It RECOMPUTES every quantity the record
+  # states about a tracked file -- each transformed-fixture sha256, each row and
+  # case count, the WPT fixture's own _meta counts -- because a recorded hash or
+  # tally is a claim, not evidence. It then holds the section-2.3 field set on
+  # every in-scope source group (a gap must read as MISSING[<fp-issue>], never
+  # as a blank), forbids that sentinel where a group is out of scope, pins the
+  # record against the in-band _meta so no second copy can drift, and requires
+  # the recorded group keys to be an exact bijection with the fixture's source
+  # column so neither an unprovenanced new upstream nor a stale group can hide.
+  # Deterministic, network-free, tracked files only -- no package build. The
+  # anchor was chosen deliberately (between cache-docs and release-rule) to
+  # avoid collisions with the concurrent branches inserting around status-docs
+  # and at the end of this file.
+  oracle-provenance:
+    runs-on: ubuntu-latest
+    name: Oracle provenance record matches the fixtures
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install gate dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite", "digest"))
+      - name: Gate self-test (positive/negative coverage)
+        run: Rscript tools/oracle-provenance-gate.R --self-test
+      - name: Verify the provenance record against the fixture bytes
+        run: Rscript tools/oracle-provenance-gate.R
+
   # C-10 release-rule gate (G4.3). Verifies the ACCEPTED owner disposition P0.4:
   # the "no CRAN until curl-free" hold is bound to the v3 (3.0.0) line and does
   # not reach the v2.x curl-bearing maintenance line, and no normative record
@@ -212,6 +244,31 @@ jobs:
       - name: Scan documentation for status-vocabulary drift
         run: Rscript tools/status-doc-consistency.R
 
+  # Diagnostics-vocabulary documentation-consistency gate (epic RURL-rnobeauh).
+  # The diagnostics vocabulary has one authoritative definition -- the
+  # `.URL_DIAGNOSTICS` registry in R/diagnostics.R -- and one authoritative
+  # enumeration of it, the "Diagnostic vocabulary (canonical)" section of
+  # get_url_diagnostics(). This gate holds them to each other in both
+  # directions (D1 completeness, D2 no extras), forbids a diagnostic-shaped
+  # literal anywhere in R/ or man/ that no longer resolves to a token (D3), and
+  # pins the vocabulary size so a token cannot appear silently (D4). It exists
+  # because that prose drifted twice unnoticed: the only "docs" the vocabulary
+  # pointed at was a graduated PRD, which ADR 0008 makes a historical record
+  # rather than a registry. Deterministic and network-free: it sources the
+  # registry file, so it needs no package build.
+  diagnostics-docs:
+    runs-on: ubuntu-latest
+    name: Diagnostics docs match the vocabulary registry
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        run: Rscript tools/diagnostics-doc-consistency.R --self-test
+      - name: Scan documentation for diagnostics-vocabulary drift
+        run: Rscript tools/diagnostics-doc-consistency.R
+
   # G4 deferral gate. Verifies the owner disposition P0.5: G4 criterion 3 is
   # "verified where shipped", and a cell whose surface is specified but not
   # shipped must be explicitly deferred to a named carrier while remaining
@@ -232,7 +289,6 @@ jobs:
         run: Rscript tools/deferral-gate.R --self-test
       - name: Verify the deferral register against the tree
         run: Rscript tools/deferral-gate.R
-
 
   coverage:
     needs: check

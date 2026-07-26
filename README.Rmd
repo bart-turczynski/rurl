@@ -235,18 +235,14 @@ query_param_summary(urls)
 preferred option for large datasets:
 
 ```r
-A <- data.frame(URL = c("http://Example.com/Page", "http://example.com/Other"),
+A <- data.frame(URL = c("https://Example.com/page", "https://example.com/other"),
                 ValA = 1:2, stringsAsFactors = FALSE)
-B <- data.frame(URL = c("https://www.example.com/Page/", "http://example.com/Miss"),
+B <- data.frame(URL = c("https://example.com/page?utm_source=nl", "https://example.com/missing"),
                 ValB = c("x", "y"), stringsAsFactors = FALSE)
 
-canonical_join(
-  A, B,
-  protocol_handling = "strip",
-  www_handling = "strip",
-  case_handling = "lower_host",
-  trailing_slash_handling = "strip"
-)
+# Default canonicalization lower-cases the host and drops the query, so the
+# first row of each side shares one canonical key.
+canonical_join(A, B)
 ```
 
 ## Caching

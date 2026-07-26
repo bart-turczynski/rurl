@@ -50,7 +50,9 @@
 ^SECURITY-INSIGHTS\.yml$
 ^tools/determinism$
 ^tools/oracle-audit-rfc3986\.R$
+^tools/oracle-provenance-gate\.R$
 ^tools/cache-doc-consistency\.R$
 ^tools/release-rule-check\.R$
 ^tools/status-doc-consistency\.R$
+^tools/diagnostics-doc-consistency\.R$
 ^tools/deferral-gate\.R$

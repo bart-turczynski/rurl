@@ -213,7 +213,7 @@ test_that("canonical_join is unchanged under the default 'drop'", {
   expect_equal(unique(j$JoinKey), "https://ex.com/p")
 })
 
-test_that("under 'filter' the query enters the join key (?id splits)", {
+test_that("query_handling is LEGACY: 'filter' re-keys the join (?id splits)", {
   A <- data.frame(
     URL = c("https://ex.com/p?id=1", "https://ex.com/p?id=2"),
     a = 1:2, stringsAsFactors = FALSE
@@ -222,7 +222,16 @@ test_that("under 'filter' the query enters the join key (?id splits)", {
     URL = "https://ex.com/p?id=1&utm_source=x", b = 99,
     stringsAsFactors = FALSE
   )
-  j <- canonical_join(A, B, query_handling = "filter")
+  # P3.1 D-E / RURL-fjuuptux. This pins LEGACY `clean_url` keying, NOT the v3
+  # identity model: `query_handling` is a cleaning dial that takes no part in
+  # URL identity, yet forwarding it through `...` changes WHICH ROWS MATCH.
+  # D-E retains that as compatibility-only for a deprecation window and
+  # requires the dial to warn -- so both halves are pinned here.
+  expect_warning(
+    canonical_join(A, B, query_handling = "filter"),
+    class = "rurl_legacy_join_dial_warning"
+  )
+  j <- cj_legacy(canonical_join(A, B, query_handling = "filter"))
   # B's utm-only difference collapses onto id=1; id=2 does NOT match.
   expect_equal(nrow(j), 1L)
   expect_equal(j$JoinKey, "https://ex.com/p?id=1")

@@ -67,7 +67,16 @@ opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
 Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
 decides the interpretation; \code{general} with \code{url_standard = NULL} is an
 error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
-derivation, and are never run through the IDNA/punycode helpers.}
+derivation, and are never run through the IDNA/punycode helpers.
+A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
+authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are
+all \code{NA} and the entire remainder is the \code{path} (\code{query}/\code{fragment} are
+still split off). This includes \verb{mailto:} — the recipient's \code{@} never
+re-triggers authority parsing. To decompose a \verb{mailto:} recipient, use
+the accessors (\code{get_host()} / \code{get_domain()} / \code{get_user()}, ADR 0012 D7)
+or \code{get_mailto_recipients()}; those deliberately return a recipient's
+parts where this table presents \code{NA}, because a recipient domain is
+extraction metadata, not the URL's authority.}
 }}
 
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
@@ -97,15 +106,22 @@ on any profile), IDNA rendering, or query handling.}
 A character vector of user names.
 }
 \description{
-Extracts the user component of a URL. The value is returned raw, exactly as
-written in the URL (not percent-decoded).
+Extracts the user component of a URL. The value is never percent-decoded.
+Under \code{url_standard = "whatwg"} it carries the standard's
+percent-encoded spelling (WHATWG stores the username buffer encoded with the
+userinfo percent-encode set, so \code{"http://a^b@host/"} yields
+\code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} or no selector it is
+the raw source spelling, exactly as written in the URL.
 }
 \details{
 Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
 first recipient (its \code{addr-spec} local-part) is returned, mirroring how
 \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
-domain (ADR 0012 D7). Under the default \code{"web"} acceptance a
-\code{mailto:} URL is not parsed and this returns \code{NA}.
+domain (ADR 0012 D7). As with \code{\link{get_host}}, this deliberately
+diverges from \code{\link{safe_parse_url}}, whose \code{user} column is
+\code{NA} for a \code{mailto:} URL (an opaque path carries no authority).
+Under the default \code{"web"} acceptance a \code{mailto:} URL is not parsed
+and this returns \code{NA}.
 }
 \examples{
 get_user("ftp://alice:secret@ftp.example.com/file.txt")

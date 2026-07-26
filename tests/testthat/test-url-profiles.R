@@ -141,7 +141,7 @@ test_that("seo profile cleans origin URLs", {
 
 # --- profile across the canonical_join() `...` seam (RURL-cujzicqf) ----------
 
-test_that("canonical_join() forwards a profile bundle through `...`", {
+test_that("canonical_join() profile via `...` is LEGACY: it warns, re-keys", {
   A <- data.frame(
     URL = "http://www.Example.com/Page/index.html?utm_source=x",
     ValA = 1L, stringsAsFactors = FALSE
@@ -150,25 +150,40 @@ test_that("canonical_join() forwards a profile bundle through `...`", {
     URL = "https://example.com/Page",
     ValB = 2L, stringsAsFactors = FALSE
   )
+  # P3.1 D-E / RURL-bgzzyfwd. This pins LEGACY `clean_url` keying, NOT the v3
+  # identity model: `profile` is a presentation/cleaning bundle that takes no
+  # part in URL identity, yet forwarding it through `...` changes WHICH ROWS
+  # MATCH. D-E keeps that as compatibility-only for a deprecation window and
+  # requires the dial to warn -- so both halves are pinned here.
+  expect_warning(
+    canonical_join(A, B, profile = "seo"),
+    class = "rurl_legacy_join_dial_warning"
+  )
   # seo canonicalization (https + strip www / index / trailing slash / tracking
-  # params) makes the two rows share a key and join.
-  joined <- canonical_join(A, B, profile = "seo")
+  # params) makes the two rows share a legacy key and join.
+  joined <- cj_legacy(canonical_join(A, B, profile = "seo"))
   expect_identical(nrow(joined), 1L)
   expect_identical(joined$JoinKey, "https://example.com/Page")
 })
 
-test_that("canonical_join() skips the conflict matrix on the profile path", {
+test_that("the LEGACY profile seam skips the conflict matrix (P3.1 D-E)", {
   A <- data.frame(URL = "http://ex.com/a", ValA = 1L, stringsAsFactors = FALSE)
   B <- data.frame(URL = "http://ex.com/a", ValB = 2L, stringsAsFactors = FALSE)
 
+  # P3.1 D-E / RURL-bgzzyfwd: the `...` profile seam is legacy `clean_url`
+  # keying, not the v3 identity model. Pinning how it dispatches is not an
+  # endorsement of a presentation bundle reaching the join key.
+  #
   # A profile authorizes its own combination, so an explicit governed knob that
   # would conflict under a DIRECT url_standard call is accepted here (iron
-  # rule), exactly as in safe_parse_url(). This must NOT error.
-  expect_silent(
+  # rule), exactly as in safe_parse_url(). This must NOT error. It does warn:
+  # `profile` is a presentation bundle, and P3.1 D-E.1 makes those non-silent.
+  expect_warning(
     canonical_join(
       A, B,
       profile = "seo", url_standard = "whatwg", path_normalization = "none"
-    )
+    ),
+    class = "rurl_legacy_join_dial_warning"
   )
   # Sanity: the same combination WITHOUT a profile still fails fast.
   expect_error(
