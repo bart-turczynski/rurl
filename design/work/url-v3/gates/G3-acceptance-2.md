@@ -24,8 +24,9 @@
 | tracked_location | design/work/url-v3/gates/G3-acceptance-2.md |
 | owner | Bart Turczynski <bartek@turczynski.pl> |
 | single_writer | repository owner (sole); P0.3 §5 |
-| state | ACCEPTED |
+| state | SUPERSEDED |
 | supersedes | gate-G3-acceptance |
+| superseded_by | gate-G3-acceptance-3 |
 | accepted_commit | ff2140a (PR #281 squash-merge into main — `get_parse_verdicts()` and the layered verdict surface; the first commit where the asserted 52-row public surface is accurate) |
 | accepted_at | 2026-07-26 |
 | depends_on | the ten §6 contracts (canonical-state 3, standard-scheme 5, validation-intervention 6, output 7, cleaning-mutation 8, semantic-cache 10-cache, host-annotation 10-host, key-join 9, public-surface-closure 4, cross-artifact-consistency capstone) — hashed in ## Inputs; P1.1, P1.2, P2.1, P2.2, P2.3, P2.4, P3.1, P3.2, P4.1, P5.1, P5.3 (ACCEPTED, hash-enforced in manifest.decisions[]); reconciliation §6, §7 G3 |

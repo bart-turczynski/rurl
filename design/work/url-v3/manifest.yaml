@@ -175,6 +175,15 @@ decisions:
     path: design/work/url-v3/decisions/P0.5-g4-exit-criterion-scope.md
     sha256: 4a8adcffc7e4502d6e67375834a0e2377b9cb20a242e190e0bc07fac81db93ea
     state: ACCEPTED
+  # --- P0.6 ACCEPTED by owner squash-merge of PR #285
+  # (c0c8dca355f5f6ee2e8653d458485a9fd8f5a8f7); this entry is that merge's phase-3
+  # seal. P0.6 moves artifact 4's per-cell roster OFF the G3 gate-input path: the
+  # invariant stays a gate ## Inputs pin, the roster is pinned in artifacts[] below.
+  # The sha256 is computed AFTER the frontmatter stamps.
+  - id: P0.6
+    path: design/work/url-v3/decisions/P0.6-g3-closure-input-scope.md
+    sha256: 725b84d526fc7b9e6fe6f8c58a2d26159d67a849c03718bd414f1eedf28d170b
+    state: ACCEPTED
 
 # --- Other tracked control-plane artifacts (excludes manifest.yaml itself and
 # the frozen sources; decisions are inventoried above).
@@ -256,7 +265,12 @@ artifacts:
     sha256: 419ca6bbe1335eaf8a6e6132e8ad45b048d7ab7acbb1002f0c7d660e92eb4c93
   # The live G3 acceptance since ff2140a (PR #281, public surface 51 -> 52).
   - path: design/work/url-v3/gates/G3-acceptance-2.md
-    sha256: a94c48ab6c34e14b1ef78c037eba25ff13953e318de592931ddd8b9d98a57d1b
+    sha256: c010215fd38e65e4ade98042bcee4556907db16123702193b8716453029de4f4
+  # The live G3 acceptance since c0c8dca (PR #285, the P0.6 invariant/roster split).
+  # G3-acceptance-2.md is retained at state SUPERSEDED (superseded_by
+  # gate-G3-acceptance-3) and stays pinned so the chain is tamper-evident.
+  - path: design/work/url-v3/gates/G3-acceptance-3.md
+    sha256: 18fea94ec1b30eb149b32cc0ec2ca99397aa9010cec9ab011ad22ac99a0bc222
 
 # --- Registers (§6). Declared, not silently omitted. Absent registers name the
 # gate that creates them; present registers carry a hash the validator checks.
