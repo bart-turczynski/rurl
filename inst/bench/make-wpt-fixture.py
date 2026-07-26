@@ -9,9 +9,11 @@ is reproducible without a network fetch; regenerate when the upstream suite is
 refreshed.
 
 Filter:
-  * base in {null, about:blank}  -- absolute parse, no relative resolution;
-  * success cases limited to the schemes rurl supports (http/https/ftp/file) --
-    the "additional protocols notwithstanding" carve-out;
+  * base = null only -- rurl is absolute-parse-only and does no relative
+    resolution, so base-relative rows (including base "about:blank") are out
+    of scope and excluded;
+  * success cases: any base-null non-failure case, all schemes (special and
+    non-special alike -- no scheme restriction);
   * failure cases: any base-null case (all schemes -- a reject is a reject);
   * inputs containing NUL are dropped (not round-trippable through R).
 
@@ -44,16 +46,17 @@ PROJECT = "web-platform-tests/wpt"
 UPSTREAM_PATH = "url/resources/urltestdata.json"
 LICENSE = "BSD-3-Clause (web-platform-tests contributors)"
 RAW_URL = "https://raw.githubusercontent.com/%s/%s/%s"
-SELECTOR = ("base in {null, about:blank}; success limited to "
-            "http/https/ftp/file; failure = any base-null case; "
-            "NUL inputs dropped")
+SELECTOR = ("base = null only -- base-relative rows (including base "
+            "about:blank) are excluded because rurl is absolute-parse-only "
+            "and does no relative resolution; success = any base-null "
+            "non-failure case, all schemes, no scheme restriction; "
+            "failure = any base-null failure case; NUL inputs dropped")
 STANDARD = "WHATWG URL Standard"
 STANDARD_VERSION = "Living Standard (unversioned); pinned by upstream_revision"
 STANDARD_SECTION = ("URL parsing; URL serializing; URL class API getters "
                     "(protocol, hostname, port, pathname, search, hash)")
 CLAIM_KIND = "conformance"
 OUT_PATH = "inst/bench/wpt-url-cases.json"
-SUPP = {"http:", "https:", "ftp:", "file:"}
 
 
 def parse_args(argv):
@@ -95,13 +98,13 @@ success, failure = [], []
 for e in src:
     if not isinstance(e, dict):
         continue
-    if e.get("base") not in (None, "about:blank"):
+    if e.get("base") is not None:
         continue
     if "\x00" in e.get("input", ""):
         continue
     if e.get("failure"):
         failure.append({"input": e["input"]})
-    elif e.get("protocol") in SUPP:
+    else:
         success.append({k: e.get(k, "") for k in (
             "input", "protocol", "hostname", "port", "pathname",
             "search", "hash")})

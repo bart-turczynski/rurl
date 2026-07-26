@@ -368,6 +368,23 @@
 
 ### Internal
 
+- **The committed WHATWG conformance oracle
+  (`inst/bench/wpt-url-cases.json`) now covers every scheme, not four.** The
+  success arm of the fixture was carved out to `http`/`https`/`ftp`/`file`,
+  which silently dropped every non-special and opaque WPT success case — so
+  the oracle could not see a whole category of behaviour that
+  `scheme_acceptance = "general"` parses. The generator's scheme filter is
+  removed entirely rather than extended with a list: WHATWG has exactly two
+  scheme categories, so "success = any base-null non-failure case" is the
+  selector that needs no maintenance. Success grows 176 → 336 across 54
+  schemes; the failure arm is unchanged at 202, having never been filtered by
+  scheme. Base-relative rows (the two `base = "about:blank"` fragment
+  references) are now excluded as out of scope: rurl is an absolute-only
+  parser and does no relative resolution, the same disposition
+  `external-url-vectors.csv` already records for such rows. The applicability
+  selector, counts and fixture hash in
+  `tests/testthat/fixtures/oracle-provenance.json` are re-cut to match.
+
 - **The cross-parser disagreement study now measures rurl at
   `scheme_acceptance = "general"`, and `analysis/disagreement/` is re-frozen.**
   Previous runs used the default `"web"` allowlist against adaR and
