@@ -1194,11 +1194,17 @@ get_tld <- function(url, source = c("all", "private", "icann"),
 #' @param url A character vector of URLs.
 #' @param url_standard Standard profile governing host interpretation:
 #'   \code{NULL} (default; no classification, returns \code{NA}),
-#'   \code{"rfc3986"}, or \code{"whatwg"}.
+#'   \code{"rfc3986"}, or \code{"whatwg"}. The gate is semantic, not stylistic:
+#'   whether a host is an IPv4 literal or a registered name is a question only
+#'   a standard answers, so with no selector there is no fact to report.
+#'   \code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
+#'   --- its layers describe the parse that actually ran, which is defined with
+#'   or without a selector.
 #' @inheritParams safe_parse_url
 #' @return A character vector the same length as \code{url}, each element one of
 #'   the \code{host_type} tokens above, or \code{NA} when no selector is given.
-#' @seealso \code{\link{get_url_diagnostics}}, \code{\link{safe_parse_url}}
+#' @seealso \code{\link{get_url_diagnostics}}, \code{\link{get_parse_verdicts}},
+#'   \code{\link{safe_parse_url}}
 #' @export
 #' @examples
 #' get_host_type("http://example.com/", url_standard = "rfc3986")
@@ -1454,7 +1460,11 @@ get_url_diagnostics <- function(url, url_standard = NULL,
 #' @param url A character vector of URLs.
 #' @param url_standard Standard profile gating the classification: \code{NULL}
 #'   (default; no classification, returns \code{NA}), \code{"rfc3986"}, or
-#'   \code{"whatwg"}.
+#'   \code{"whatwg"}. The gate is semantic, not stylistic: "special" is a
+#'   WHATWG notion, so without a selector there is no fact to report.
+#'   \code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
+#'   --- its layers describe the parse that actually ran, which is defined with
+#'   or without a selector.
 #' @inheritParams safe_parse_url
 #' @return A character vector the same length as \code{url}, each element one
 #'   of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"},

@@ -16,7 +16,12 @@ get_host_type(
 
 \item{url_standard}{Standard profile governing host interpretation:
 \code{NULL} (default; no classification, returns \code{NA}),
-\code{"rfc3986"}, or \code{"whatwg"}.}
+\code{"rfc3986"}, or \code{"whatwg"}. The gate is semantic, not stylistic:
+whether a host is an IPv4 literal or a registered name is a question only
+a standard answers, so with no selector there is no fact to report.
+\code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
+--- its layers describe the parse that actually ran, which is defined with
+or without a selector.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
@@ -83,5 +88,6 @@ get_host_type("http://example.com/", url_standard = "rfc3986")
 get_host_type("http://2130706433/", url_standard = "whatwg")
 }
 \seealso{
-\code{\link{get_url_diagnostics}}, \code{\link{safe_parse_url}}
+\code{\link{get_url_diagnostics}}, \code{\link{get_parse_verdicts}},
+\code{\link{safe_parse_url}}
 }
