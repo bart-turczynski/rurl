@@ -58,6 +58,28 @@
 
 ### Bug fixes
 
+- **A `mailto:` URL carrying a real `//` authority no longer loses its host.**
+  Under `scheme_acceptance = "general"`,
+  `safe_parse_urls("mailto://example.com:8080/pathname")` reported
+  `host = NA` while still reporting `port = 8080` — an authority presenting a
+  port with no host to attach it to. WPT expects hostname `example.com`.
+
+  The WHATWG opaque-path rule has two halves — a non-special scheme **and** no
+  `//` — and only the first was being tested. ADR 0012 D7's recipient
+  decomposition is about the opaque form (`mailto:jane@example.com`, where the
+  payload is an `addr-spec`); running it over `mailto://host/pathname`
+  overwrote the authority the general parser had already parsed correctly with
+  the `NA` that decomposing `/pathname` yields, since a path is not an address.
+  Both the Stage A recipient write and the T1 parse-table mask now require the
+  `//` to be absent, so they agree on what "opaque" means.
+
+  Nothing about the opaque form changes: `mailto:jane@example.com` still
+  presents no authority in the parse table, and `get_host()` / `get_domain()`
+  still resolve the recipient through D7. This narrows the recipient rule to
+  the shape it was always specified for; it does not retire it. Introduced by
+  the D7 slice earlier in this same unreleased cycle, so no released version
+  carries it. (RURL-gmzipkyw.)
+
 - **`url_standard = "whatwg"` now rejects a host-missing authority under
   `scheme_acceptance = "general"`.** `sc://@/`, `sc://te@s:t@/`, `sc://:/` and
   `data://:` parsed as `ok` even though all four are host-missing authorities

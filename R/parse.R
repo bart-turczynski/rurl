@@ -774,7 +774,8 @@ safe_parse_urls <- function(url,
   # ._parse_urls_cached(). original_url is restored per row afterwards so it
   # reflects the input element even for duplicates / NA / non-character rows.
   field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
-  cols <- .mask_opaque_authority(._parse_urls_cached(parse_input, opts), opts)
+  cols <- .mask_opaque_authority(._parse_urls_cached(parse_input, opts), opts,
+                                 parse_input)
   cols <- cols[field_names]
   cols$original_url <- original_url_vec
   cols$stringsAsFactors <- FALSE
@@ -806,7 +807,7 @@ safe_parse_urls <- function(url,
 # write "extraction metadata ONLY" -- masking here is what finally makes that
 # true of the table too. `safe_parse_url()` and `get_host()` therefore diverge
 # for a mailto under general acceptance, by design (see D7's amendment note).
-.mask_opaque_authority <- function(cols, opts) {
+.mask_opaque_authority <- function(cols, opts, url) {
   if (!identical(opts$scheme_acceptance, "general")) {
     return(cols)
   }
@@ -815,10 +816,35 @@ safe_parse_urls <- function(url,
   if (!any(is_mailto)) {
     return(cols)
   }
+  # BOTH halves of the opaque-path rule must hold. Matching the scheme alone
+  # masked `mailto://example.com:8080/p` too -- a non-special scheme that DOES
+  # carry a `//` authority, so not an opaque path at all. That row kept its
+  # parsed `port` while losing its `host`, presenting an authority with a port
+  # and no host (RURL-gmzipkyw; WPT `mailto://example.com:8080/pathname?...`
+  # expects hostname `example.com`).
+  is_mailto <- is_mailto & !.has_explicit_authority(url, opts$url_standard)
+  if (!any(is_mailto)) {
+    return(cols)
+  }
   for (field in .spu_opaque_authority_cols) {
     cols[[field]][is_mailto] <- NA_character_
   }
   cols
+}
+
+# Does the input carry an explicit `//` authority after its scheme colon? This
+# is the "and no `//`" half of the WHATWG opaque-path test, so it mirrors the
+# two input normalizations the parser performs before it chooses between an
+# authority and an opaque path: tab/LF/CR are removed everywhere (whatwg only,
+# a no-op otherwise) and leading C0-control-or-space is trimmed.
+.has_explicit_authority <- function(url, url_standard) {
+  if (length(url) == 0L) {
+    return(logical(0))
+  }
+  u <- ifelse(is.na(url), "", as.character(url))
+  u <- .strip_whatwg_control_chars_vec(u, url_standard)$url
+  u <- stringi::stri_replace_first_regex(u, "^[\\u0000-\\u0020]+", "")
+  grepl("^[A-Za-z][A-Za-z0-9+.-]*://", u)
 }
 
 # Empty (zero-row) result data.frame with the canonical column set/types.
@@ -1538,7 +1564,7 @@ safe_parse_urls <- function(url,
   field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
   # Same opaque-path authority mask the vector table applies, so the scalar and
   # vector parse surfaces stay identical (see .mask_opaque_authority).
-  cols <- .mask_opaque_authority(cols, opts)
+  cols <- .mask_opaque_authority(cols, opts, url)
   lapply(cols[field_names], function(column) column[[1L]])
 }
 
@@ -1858,8 +1884,17 @@ safe_parse_urls <- function(url,
   # the general rows from its own gen_b re-parse (host NA for mailto), so
   # clean_url / round-trip is untouched. Domain-form RHS only; address-literal /
   # invalid -> NA host.
+  #
+  # The recipient rule applies ONLY to the opaque-path form. `mailto://host/p`
+  # is a non-special scheme carrying a real `//` authority, so the general
+  # parser has already put its host in `raw_host` above; running the recipient
+  # decomposition over its path clobbered that with NA (no addr-spec in `/p`),
+  # leaving a row with a parsed `port` and no `host`. WPT's
+  # `mailto://example.com:8080/pathname?search#hash` expects hostname
+  # `example.com` (RURL-gmzipkyw).
   is_mailto_gen <- general_ok & !is.na(raw_scheme) &
-    .ascii_tolower(raw_scheme) == "mailto"
+    .ascii_tolower(raw_scheme) == "mailto" &
+    !.has_explicit_authority(urls, opts$url_standard)
   if (any(is_mailto_gen)) {
     rp <- .mailto_first_recipient_parts(raw_path[is_mailto_gen])
     raw_host[is_mailto_gen] <- rp$host
