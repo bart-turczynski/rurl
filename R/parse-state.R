@@ -644,7 +644,10 @@
 # WHATWG #concept-opaque-host-parser). Preserve ASCII case, NO IDNA, NO IPv4
 # coercion, NO punycode/domain routing (ADR 0002). A bracketed host is an IPv6
 # literal -- the forbidden-host reject does NOT apply to it, but its inner form
-# must be a valid IPv6 address (WHATWG has no IPvFuture). A non-bracketed host
+# must be a valid IPv6 address (WHATWG has no IPvFuture) and, once parsed, is
+# re-serialized by the scheme-independent WHATWG IPv6 serializer (zero-run
+# compression, lowercase hex, no dotted-quad tail) exactly as the special-scheme
+# branch does in Phase 5b (RURL-cyxegfjs). A non-bracketed host
 # rejects the forbidden-HOST code points (`.WHATWG_FORBIDDEN_HOST_ONLY_CP`, NOT
 # the stricter forbidden-DOMAIN set), then is UTF-8 percent-encoded with the
 # C0-control set. `%` is NOT forbidden (a malformed `%` is an L5
@@ -658,7 +661,10 @@
     if (!isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPV6_RE))) {
       return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
     }
-    return(list(ok = TRUE, host = host, is_v6 = TRUE, is_v4 = FALSE))
+    return(list(
+      ok = TRUE, host = .serialize_whatwg_ipv6_host(host),
+      is_v6 = TRUE, is_v4 = FALSE
+    ))
   }
   forbidden <- stringi::stri_detect_regex(host, .WHATWG_FORBIDDEN_HOST_ONLY_CP)
   if (isTRUE(forbidden)) {

@@ -58,6 +58,24 @@
 
 ### Bug fixes
 
+- **IPv6 hosts are now WHATWG-serialized for non-special schemes too.** The
+  WHATWG host parser stores an IPv6 literal as eight 16-bit pieces and
+  re-serializes it — longest zero run compressed to `::`, lowercase hex, no
+  dotted-quad tail — and that step is *scheme-independent*: the same host parser
+  runs for any scheme carrying an authority. rurl wired the serializer on the
+  special-scheme branch only, so under `scheme_acceptance = "general"` a
+  non-special host kept its input spelling:
+  `non-special://[1:2:0:0:5:0:0:0]/` reported `[1:2:0:0:5:0:0:0]` where
+  `http://[1:2:0:0:5:0:0:0]/` correctly reported `[1:2:0:0:5::]`. The two
+  branches now agree, and `[ABCD::1]` and `[::127.0.0.1]` render as `[abcd::1]`
+  and `[::7f00:1]` for non-special schemes as well.
+
+  The change is confined to the WHATWG opaque-host parse, so validation is
+  untouched — a malformed literal such as `[1:2:3:4]` is still a host parse
+  failure rather than a passthrough. `url_standard = "rfc3986"` is unaffected
+  and keeps the input spelling: the `rfc-syntax` posture disclaims host
+  normalization, which is the deliberate profile split. (RURL-cyxegfjs.)
+
 - **ASCII tab, LF and CR are now stripped for non-special schemes too.** The
   WHATWG parser's very first step removes every ASCII tab (U+0009), LF
   (U+000A) and CR (U+000D) from the input, everywhere, before any component is
