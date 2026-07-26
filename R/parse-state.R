@@ -15,12 +15,14 @@
 # CANNOT round-trip the four WHATWG non-special shapes -- `foo:bar` (opaque,
 # host absent), `foo:/bar` (list, host absent, no authority), `foo:///bar`
 # (list, host EMPTY, authority present), `foo://[::1]/bar` (list, IPv6 host).
-# `authority_kind` records whether a `//` authority was present (distinguishing
-# `foo:/bar` from `foo:///bar`); `host_kind` records empty-vs-absent-vs-present
-# WITHIN an authority. Neither derives the other across all four shapes, so both
-# are retained. Public `NA` mapping is unchanged: both empty and absent hosts,
-# and both empty and absent query/fragment, still surface as `NA` publicly --
-# this vocabulary is internal state only.
+# `authority_delimiter_present` records whether a `//` authority delimiter was
+# present (distinguishing `foo:/bar` from `foo:///bar`) and
+# `authority_payload_kind` whether that delimiter carried anything;
+# `host_kind` records empty-vs-absent-vs-present WITHIN an authority. Neither
+# derives the other across all four shapes, so both are retained. Public `NA`
+# mapping is unchanged: both empty and absent hosts, and both empty and absent
+# query/fragment, still surface as `NA` publicly -- this vocabulary is internal
+# state only.
 
 # --- enum vocabularies (first value = the natural default) ------------------
 
@@ -36,8 +38,18 @@
 # `absent` map to a public NA; only internal state distinguishes them.
 .HOST_KIND <- c("absent", "empty", "present")
 
-# Whether a `//` authority was present, and (if so) whether it carried a host
-# (ADR 0012 D2). Distinguishes `foo:/bar` (absent) from `foo:///bar` (empty).
+# Payload state of a PRESENT `//` authority delimiter (P1.2 D-A): `empty` when
+# the authority substring between `//` and the path start is zero-length,
+# `present` when it carries anything at all (userinfo-only, port-only, or an
+# ordinary host). Not applicable -- and projected NA -- when no delimiter was
+# present. It is a payload state UNDER a delimiter, never a third sibling of
+# absent/present.
+.AUTHORITY_PAYLOAD_KIND <- c("empty", "present")
+
+# LEGACY authority vocabulary (retired from the canonical schema by P1.2 D-D).
+# Retained only as the value set of the derived, read-only `.authority_kind()`
+# compatibility projection below -- never as canonical state, never as a
+# serializer input.
 .AUTHORITY_KIND <- c("absent", "empty", "present")
 
 # Delimiter-presence state for query and fragment (ADR 0012 D2): `query_kind` /
@@ -89,23 +101,43 @@
   out
 }
 
-# authority_kind (ADR 0012 D2, lines 257-258 + 270-271): records WHETHER a `//`
-# authority was present, distinguishing `foo:/bar` (absent) from `foo:///bar`
-# (present). No `//` -> absent; `//` present -> present. It deliberately does
-# NOT key off host emptiness: D2 labels `foo:///bar` as authority PRESENT with
-# host EMPTY, so an empty host under a present `//` is (authority_kind
-# "present", host_kind "empty"). Keying off the host would also misclassify a
-# `//user@/path` authority (empty host but a non-empty authority via userinfo).
+# authority_payload_kind (P1.2 D-A.2). `authority` is the substring between the
+# `//` delimiter and the path start (`/`, `?`, `#`, or end), or NA when no
+# delimiter was present. NA -> NA (not applicable: the payload of a delimiter
+# that does not exist is never forced to a substantive value); "" -> empty;
+# anything else -> present.
 #
-# The vocab's `empty` value is RESERVED for a genuinely empty authority
-# *component* (a present `//` with no userinfo, host, AND port); this pure
-# classifier cannot emit it because userinfo/port are not modeled here -- L4b
-# populates `empty` once they are. host_kind is the seam the L3b serializer
-# keys `//`-vs-no-`//` emission off (host null-vs-empty), so dropping the host
-# arg here keeps the signature minimal for L3b/L3c.
-.authority_kind <- function(has_double_slash) {
-  out <- rep("present", length(has_double_slash))
-  out[!has_double_slash] <- "absent"
+# Payload-`present` does NOT assert that a host exists: `foo://@/bar`
+# (userinfo-only) and `foo://:80/bar` (port-only) are both payload-present with
+# an empty host. Host presence is `host_kind`'s job and is decided
+# independently (P1.2 D-B).
+.authority_payload_kind <- function(authority) {
+  out <- rep("present", length(authority))
+  out[is.na(authority)] <- NA_character_
+  out[!is.na(authority) & authority == ""] <- "empty"
+  out
+}
+
+# LEGACY authority_kind -- a DERIVED, READ-ONLY compatibility projection over
+# the two canonical fields (P1.2 D-D). It is never canonical state and never a
+# serializer input; the serializers consume `authority_delimiter_present`
+# directly (P1.2 D-C), because inferring `//` from a derived component cannot
+# distinguish a delimiter-present empty authority from a delimiter-absent input.
+#
+# The projection makes the legacy `empty` value REACHABLE for the first time --
+# as a payload state under a present delimiter, which is precisely the
+# unreachable-value contradiction S1-F5 recorded:
+#   delimiter absent                   -> "absent"
+#   delimiter present, payload empty   -> "empty"
+#   delimiter present, payload present -> "present"
+.authority_kind <- function(delimiter_present, payload_kind) {
+  n <- max(length(delimiter_present), length(payload_kind))
+  delimiter_present <- rep_len(delimiter_present, n)
+  payload_kind <- rep_len(payload_kind, n)
+  out <- rep("absent", n)
+  present <- !is.na(delimiter_present) & delimiter_present
+  out[present & !is.na(payload_kind) & payload_kind == "empty"] <- "empty"
+  out[present & !is.na(payload_kind) & payload_kind == "present"] <- "present"
   out
 }
 
@@ -597,12 +629,12 @@
 #   - rfc_path_form : RFC abempty/absolute/rootless/empty (`.rfc_path_form`); NA
 #                     under WHATWG.
 #   - host_kind     : `.host_kind` (absent/empty/present).
-#   - authority_kind: absent (no `//`) / empty (a `//` whose authority component
-#                     is genuinely empty -- no userinfo, host, AND port) /
-#                     present (a `//` carrying content). This POPULATES the
-#                     `.authority_kind` vocab's reserved `empty` value, which
-#                     the pure L3a classifier could not emit (it did not model
-#                     userinfo/port). The L3a classifier is unchanged.
+#   - authority_delimiter_present : logical; was a `//` authority delimiter
+#                     present after the scheme `:` (P1.2 D-A.1). This is the
+#                     fact the L3b serializers consume to decide `//` emission.
+#   - authority_payload_kind : empty (the authority substring under a present
+#                     `//` is zero-length) / present (it carries anything at
+#                     all) / NA when no delimiter was present (P1.2 D-A.2).
 #   - host_form     : via the `.whatwg_host_form` / `.rfc_host_form` mappers.
 
 # Split an authority component into userinfo / host / port (ADR 0012 Layer 4b).
@@ -707,7 +739,8 @@
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
     fragment = na, path_kind = na, rfc_path_form = na, host_kind = "absent",
-    authority_kind = "absent", query_kind = "absent",
+    authority_delimiter_present = FALSE, authority_payload_kind = na,
+    query_kind = "absent",
     fragment_kind = "absent", host_form = na,
     userinfo = na, userinfo_kind = na
   )
@@ -771,7 +804,7 @@
     # `pathname` getter returns the encoded spelling. `delimiter_follows` is the
     # `?`/`#` that ended the path, which decides the trailing-space rule.
     path <- .whatwg_opaque_path_encode(rest, hpos > 0L || qpos > 0L)
-    authority_kind <- "absent"
+    authority <- na
   } else if (startsWith(rest, "//")) {
     after <- substring(rest, 3L)
     spos <- .rfc3986_first_index(after, "/")
@@ -782,12 +815,12 @@
       authority <- after
       path <- ""
     }
-    # Consistent with the L3a `.authority_kind()` classifier and ADR 0012 D2
-    # (lines 257-258, 270-271): any `//` is authority_kind "present" regardless
-    # of host emptiness. `foo:///bar` is (present, host_kind "empty"). The vocab
-    # `empty` value stays vestigial -- an empty host under a present `//` is
-    # host_kind's job, NOT authority_kind's, so the parser never emits it.
-    authority_kind <- .authority_kind(TRUE)
+    # P1.2 D-A: the delimiter fact is recorded from the source string
+    # (`authority` is non-NA exactly when `//` was seen) and the payload kind is
+    # classified from the authority substring, NOT from host emptiness.
+    # `foo:///bar` is delimiter-present + payload-empty, and so is the RFC
+    # `file:` overlay's `file:///bar` -- the two routes can no longer disagree
+    # about the same shape (S1-F5).
     parts <- .split_authority(authority)
     host <- parts$host
     port <- parts$port
@@ -844,7 +877,7 @@
       rfc_path_form <- .rfc_path_form(TRUE, path)
     }
   } else {
-    authority_kind <- "absent"
+    authority <- na
     path <- rest
     if (!is_whatwg) {
       rfc_path_form <- .rfc_path_form(FALSE, path)
@@ -861,7 +894,9 @@
     ok = ok, scheme = scheme, host = host, port = port, path = path,
     query = query, fragment = fragment, path_kind = path_kind,
     rfc_path_form = rfc_path_form, host_kind = .host_kind(host),
-    authority_kind = authority_kind, query_kind = .presence_kind(query),
+    authority_delimiter_present = !is.na(authority),
+    authority_payload_kind = .authority_payload_kind(authority),
+    query_kind = .presence_kind(query),
     fragment_kind = .presence_kind(fragment), host_form = host_form,
     userinfo = userinfo,
     # WHATWG authority userinfo: splittable at the first ":" into
@@ -879,18 +914,27 @@
   n <- length(url)
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "path_kind",
-    "rfc_path_form", "host_kind", "authority_kind", "query_kind",
+    "rfc_path_form", "host_kind", "authority_payload_kind", "query_kind",
     "fragment_kind", "host_form", "userinfo", "userinfo_kind"
   )
+  # `authority_delimiter_present` is the one LOGICAL state column (P1.2 D-A.1),
+  # so it collects alongside `ok` rather than through the character loop.
+  lgl_fields <- c("ok", "authority_delimiter_present")
   if (n == 0L) {
-    out <- list(ok = logical(0))
+    out <- list()
+    for (f in lgl_fields) {
+      out[[f]] <- logical(0)
+    }
     for (f in chr_fields) {
       out[[f]] <- character(0)
     }
     return(out)
   }
   rows <- lapply(url, .parse_opaque_url_one, url_standard = url_standard)
-  out <- list(ok = vapply(rows, `[[`, logical(1L), "ok", USE.NAMES = FALSE))
+  out <- list()
+  for (f in lgl_fields) {
+    out[[f]] <- vapply(rows, `[[`, logical(1L), f, USE.NAMES = FALSE)
+  }
   for (f in chr_fields) {
     out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
   }
@@ -948,7 +992,8 @@
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
     fragment = na, userinfo = na, userinfo_kind = na, rfc_path_form = na,
     host_kind = "absent",
-    authority_kind = "absent", query_kind = "absent",
+    authority_delimiter_present = FALSE, authority_payload_kind = na,
+    query_kind = "absent",
     fragment_kind = "absent", host_form = na
   )
   # `[\s\S]`, not `.` -- the same ICU VT/FF line-terminator trap the opaque
@@ -990,7 +1035,6 @@
       authority <- after
       path <- ""
     }
-    authority_kind <- if (nzchar(authority)) "present" else "empty"
     parts <- .split_authority(authority)
     host <- parts$host
     port <- parts$port
@@ -1013,7 +1057,7 @@
     }
     rfc_path_form <- .rfc_path_form(TRUE, path)
   } else {
-    authority_kind <- "absent"
+    authority <- na
     path <- rest
     rfc_path_form <- .rfc_path_form(FALSE, path)
   }
@@ -1026,7 +1070,14 @@
     # manufacture a credentials split the RFC never draws (RURL-ovpguvva).
     userinfo_kind = if (is.na(userinfo)) na else "rfc8089",
     rfc_path_form = rfc_path_form,
-    host_kind = .host_kind(host), authority_kind = authority_kind,
+    host_kind = .host_kind(host),
+    # Same classifiers as the opaque parser, on the same substring: this is
+    # WHERE the S1-F5 route disagreement is removed. The overlay used to emit
+    # its own two-value authority_kind ("present"/"empty" keyed off payload
+    # content), so `file:///bar` reported authority-empty while `foo:///bar`
+    # reported authority-present for the identical shape.
+    authority_delimiter_present = !is.na(authority),
+    authority_payload_kind = .authority_payload_kind(authority),
     query_kind = .presence_kind(query),
     fragment_kind = .presence_kind(fragment),
     host_form = .rfc_host_form(host, is_v6, is_v4, resolve = TRUE)
@@ -1045,17 +1096,25 @@
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "userinfo",
     "userinfo_kind", "rfc_path_form",
-    "host_kind", "authority_kind", "query_kind", "fragment_kind", "host_form"
+    "host_kind", "authority_payload_kind", "query_kind", "fragment_kind",
+    "host_form"
   )
+  lgl_fields <- c("ok", "authority_delimiter_present")
   if (n == 0L) {
-    out <- list(ok = logical(0))
+    out <- list()
+    for (f in lgl_fields) {
+      out[[f]] <- logical(0)
+    }
     for (f in chr_fields) {
       out[[f]] <- character(0)
     }
     return(out)
   }
   rows <- lapply(url, .parse_rfc_file_url_one)
-  out <- list(ok = vapply(rows, `[[`, logical(1L), "ok", USE.NAMES = FALSE))
+  out <- list()
+  for (f in lgl_fields) {
+    out[[f]] <- vapply(rows, `[[`, logical(1L), f, USE.NAMES = FALSE)
+  }
   for (f in chr_fields) {
     out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
   }
@@ -1156,9 +1215,10 @@
 #                    caller). host is UTF-8 %-encoded (WHATWG opaque host) or
 #                    source-preserving (RFC), never routed through punycode /
 #                    domain.R (ADR 0002).
-#   path_kind/rfc_path_form/host_kind/authority_kind/query_kind/fragment_kind/
-#   host_form : the internal state kinds the L3b serializers and the
-#                    parse-status promotion consume.
+#   path_kind/rfc_path_form/host_kind/authority_delimiter_present/
+#   authority_payload_kind/query_kind/fragment_kind/host_form : the internal
+#                    state kinds the L3b serializers and the parse-status
+#                    promotion consume.
 .general_parse_vec <- function(url, url_standard, scheme_acceptance) {
   n <- length(url)
   na <- rep(NA_character_, n)
@@ -1167,7 +1227,8 @@
     scheme = na, host = na, port = na, path = na, query = na, fragment = na,
     userinfo = na, userinfo_kind = na,
     path_kind = na, rfc_path_form = na, host_kind = rep("absent", n),
-    authority_kind = rep("absent", n), query_kind = rep("absent", n),
+    authority_delimiter_present = rep(FALSE, n), authority_payload_kind = na,
+    query_kind = rep("absent", n),
     fragment_kind = rep("absent", n), host_form = na
   )
   gp <- .general_parsed_mask(url, url_standard, scheme_acceptance)
@@ -1199,7 +1260,8 @@
 
   opaque_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "path_kind",
-    "rfc_path_form", "host_kind", "authority_kind", "query_kind",
+    "rfc_path_form", "host_kind", "authority_delimiter_present",
+    "authority_payload_kind", "query_kind",
     "fragment_kind", "host_form", "userinfo", "userinfo_kind"
   )
   if (any(reg)) {

@@ -2571,23 +2571,32 @@
 # R/parse-state.R: host_kind, path_kind, query_kind, rfc_path_form) and use the
 # repo's pre-allocate + logical-mask assignment idiom.
 
-# WHATWG serializer (ADR 0012 A.1 #concept-url-serializer + D2). Keys authority
-# emission off the null-vs-empty host distinction and applies the four-condition
-# `/.` guard for a null-host list path. Reuses the existing byte-level encoders
+# WHATWG serializer (ADR 0012 A.1 #concept-url-serializer + D2). Emits the `//`
+# authority introducer IFF `authority_delimiter_present` is TRUE (P1.2 D-C) --
+# the recorded syntactic fact, never re-derived from `host_kind`, which cannot
+# tell a delimiter-present empty authority from a delimiter-absent input. The
+# CONTENT of the authority (host, port) is still driven by the respective
+# component states, and the four-condition `/.` guard still keys off a null
+# HOST, which is what the WHATWG serializer's own condition names.
+#
+# Reuses the existing byte-level encoders
 # (R/path-query.R): opaque paths take the C0-control set only
 # (`.whatwg_component_percent_encode(path, integer(0))`), list paths take the
 # path percent-encode set (`.whatwg_path_percent_encode`), and both already
 # preserve existing `%xx` spellings. `port` may be NULL (no port) or a vector.
-.serialize_whatwg_vec <- function(scheme, host, host_kind, path, path_kind,
+.serialize_whatwg_vec <- function(scheme, host, host_kind,
+                                  authority_delimiter_present, path, path_kind,
                                   query, query_kind, port, port_handling,
                                   trailing_slash_handling) {
   n <- max(
-    length(scheme), length(host), length(host_kind), length(path),
+    length(scheme), length(host), length(host_kind),
+    length(authority_delimiter_present), length(path),
     length(path_kind), length(query), length(query_kind)
   )
   scheme <- rep_len(scheme, n)
   host <- rep_len(host, n)
   host_kind <- rep_len(host_kind, n)
+  authority_delimiter_present <- rep_len(authority_delimiter_present, n)
   path <- rep_len(path, n)
   path_kind <- rep_len(path_kind, n)
   query <- rep_len(query, n)
@@ -2654,17 +2663,18 @@
   out <- character(n)
   out[is_opaque] <- paste0(scheme_prefix[is_opaque], path_body[is_opaque])
 
-  # List path with an authority (host present OR empty-but-non-null): emit
-  # `//` + host (host may be "") + port. `foo:///bar` = "foo://" + "" + "/bar".
-  auth <- !is_opaque & host_kind != "absent"
+  # List path under a PRESENT `//` delimiter: emit `//` + host (host may be "")
+  # + port. `foo:///bar` = "foo://" + "" + "/bar" (P1.2 D-C).
+  delim <- !is.na(authority_delimiter_present) & authority_delimiter_present
+  auth <- !is_opaque & delim
   host_str <- ifelse(is.na(host), "", host)
   out[auth] <- paste0(
     scheme_prefix[auth], "//", host_str[auth], port_part[auth], path_body[auth]
   )
 
-  # List path with a null host (no authority): NO `//`; the `/.` guard, if it
-  # fired, sits between the scheme and the path. `foo:/bar` -> "foo:/bar".
-  noauth <- !is_opaque & host_kind == "absent"
+  # List path with no delimiter: NO `//`; the `/.` guard, if it fired, sits
+  # between the scheme and the path. `foo:/bar` -> "foo:/bar".
+  noauth <- !is_opaque & !delim
   out[noauth] <- paste0(
     scheme_prefix[noauth], guard[noauth], path_body[noauth]
   )
@@ -2675,23 +2685,31 @@
 # RFC 3986 generic serializer (ADR 0012 D1/D2, rfc-syntax posture). NO
 # normalization, NO opaque/list distinction, NO `/.` guard, NO dot-segment
 # removal, NO case folding: it is a faithful generic serialization that
-# preserves the source path bytes. `rfc_path_form` is informational under this
-# posture -- the path string is already in its final source-preserving shape,
-# so nothing structural keys off it here (force() marks it deliberately
-# consumed, mirroring .build_port_part_vec's force(url_standard)). The query is
+# preserves the source path bytes. `//` is emitted iff
+# `authority_delimiter_present` (P1.2 D-C), so `host_kind` -- like
+# `rfc_path_form` -- is now informational under this posture: the path string
+# is already in its final source-preserving shape and host presence no longer
+# decides the authority introducer, so nothing structural keys off either here
+# (force() marks them deliberately consumed, mirroring .build_port_part_vec's
+# force(url_standard)). Both stay in the signature because they are part of the
+# state the caller hands the serializer. The query is
 # preserved verbatim (no percent-encoder) under rfc-syntax's "preserve source"
 # disclaimer. `port` may be NULL or a vector.
-.serialize_rfc_generic_vec <- function(scheme, host, host_kind, path,
+.serialize_rfc_generic_vec <- function(scheme, host, host_kind,
+                                       authority_delimiter_present, path,
                                        rfc_path_form, query, query_kind,
                                        port, port_handling) {
   force(rfc_path_form)
+  force(host_kind)
   n <- max(
-    length(scheme), length(host), length(host_kind), length(path),
+    length(scheme), length(host), length(host_kind),
+    length(authority_delimiter_present), length(path),
     length(query), length(query_kind)
   )
   scheme <- rep_len(scheme, n)
   host <- rep_len(host, n)
   host_kind <- rep_len(host_kind, n)
+  authority_delimiter_present <- rep_len(authority_delimiter_present, n)
   path <- rep_len(path, n)
   query <- rep_len(query, n)
   query_kind <- rep_len(query_kind, n)
@@ -2704,7 +2722,7 @@
   path_body <- ifelse(is.na(path), "", path) # source-preserving; no encoding
 
   out <- character(n)
-  auth <- host_kind != "absent"
+  auth <- !is.na(authority_delimiter_present) & authority_delimiter_present
   host_str <- ifelse(is.na(host), "", host)
   out[auth] <- paste0(
     scheme_prefix[auth], "//", host_str[auth], port_part[auth], path_body[auth]
