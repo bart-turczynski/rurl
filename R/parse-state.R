@@ -776,17 +776,30 @@
       # A non-null port (content after `:`) must be ASCII digits only and
       # <= 65535; an empty port (`:` then end/`/`/`?`/`#`) is null -> legal.
       # A non-digit (`-`, `+`, letters) or an out-of-range integer is failure.
-      # An empty host carrying a non-null port is the host-missing failure --
-      # an empty host with NO port stays legal for non-special schemes.
       has_port <- !is.na(port) && nzchar(port)
-      if (has_port) {
-        if (!isTRUE(stringi::stri_detect_regex(port, "^[0-9]+$")) ||
-          suppressWarnings(as.numeric(port)) > 65535) {
-          ok <- FALSE
-        }
-        if (!nzchar(host)) {
-          ok <- FALSE
-        }
+      if (has_port &&
+        (!isTRUE(stringi::stri_detect_regex(port, "^[0-9]+$")) ||
+          suppressWarnings(as.numeric(port)) > 65535)) {
+        ok <- FALSE
+      }
+      # host-missing (RURL-jxvibxqq). A bare empty host is legal for a
+      # non-special scheme (`foo:///bar`), but only when the authority holds
+      # NOTHING ELSE. Two spec rules make an empty host a failure, and both key
+      # off a DELIMITER being present rather than off the port having content:
+      #   * authority state -- "if atSignSeen is true and buffer is the empty
+      #     string, host-missing validation error, return failure". So `sc://@/`
+      #     and `sc://te@s:t@/` fail: `@` was seen and the host after the LAST
+      #     `@` is empty.
+      #   * host state -- "if c is U+003A (:) and insideBrackets is false: if
+      #     buffer is the empty string, host-missing validation error, return
+      #     failure". So `sc://:/` fails on the `:` alone, BEFORE the port is
+      #     read -- which is why this tests `!is.na(port)` (a `:` was present)
+      #     and not `has_port` (the `:` was followed by digits). That
+      #     distinction is the bug: an empty port after an empty host passed.
+      # RFC 3986 is untouched: its `reg-name` and `port` are both
+      # `*`-quantified, so these are well-formed under the generic syntax.
+      if (!nzchar(host) && (!is.na(parts$userinfo) || !is.na(port))) {
+        ok <- FALSE
       }
     }
     if (ok && nzchar(host)) {

@@ -112,12 +112,15 @@ test_that("rfc3986 rejects unsupported excess-slash empty authority", {
   )
 })
 
-# --- WHATWG non-special empty-host + port validation (RURL-kknambrz, T2) -----
+# --- WHATWG non-special empty-host validation (RURL-kknambrz T2, then ---------
+# --- RURL-jxvibxqq) ----------------------------------------------------------
 # Under scheme_acceptance="general", url_standard="whatwg", the non-special
-# authority parser must reject an empty host that carries a (non-null) port
-# (WHATWG host-missing rule), while keeping an empty host with NO port legal for
-# non-special schemes. RFC-profile authority/port rules are a separate path
-# (sibling T4/T5) and must stay untouched.
+# authority parser must reject a host-missing authority. T2 implemented that as
+# "empty host carrying a non-null PORT"; RURL-jxvibxqq corrected the trigger to
+# the DELIMITER, since WHATWG fails on the `:` or `@` itself, before/without any
+# port content. The single legal empty-host shape is a `//` authority holding
+# nothing else at all (`foo:///bar`). RFC-profile authority/port rules are a
+# separate path (sibling T4/T5) and must stay untouched.
 
 test_that("whatwg general rejects empty host with a port", {
   bad <- c("data://:443", "sc://:12/")
@@ -128,15 +131,63 @@ test_that("whatwg general rejects empty host with a port", {
 })
 
 test_that("whatwg general keeps empty host with no port accepted", {
-  # foo:///bar (empty host, no port) stays legal; data://: is empty host + a
-  # null (empty) port, which is also legal for a non-special scheme.
-  ok <- c("foo:///bar", "data://:")
+  # foo:///bar -- empty host, and the authority holds NOTHING else (no `@`, no
+  # `:`) -- is the one legal empty-host shape for a non-special scheme.
+  res <- safe_parse_urls(
+    "foo:///bar", scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_identical(res$parse_status, "ok")
+  expect_true(is.na(res$host))
+  expect_true(is.na(res$port))
+})
+
+test_that("whatwg general rejects host-missing authority shapes", {
+  # RURL-jxvibxqq. WHATWG makes an empty host a failure as soon as the
+  # authority carries a delimiter, and the trigger is the DELIMITER, not the
+  # port having content:
+  #   * host state -- "if c is U+003A (:) ... if buffer is the empty string,
+  #     host-missing validation error, return failure" (fires on `:` alone,
+  #     before any port is read).
+  #   * authority state -- "if atSignSeen is true and buffer is the empty
+  #     string, host-missing validation error, return failure".
+  # `data://:` was previously pinned here as legal on the reading that an empty
+  # port is a null port and therefore harmless. That reading was wrong: the
+  # host-state rule fires on the `:` itself. adaR 0.3.5 rejects it, and
+  # `data://:443` / `sc://:/` / `sc://@/` / `sc://te@s:t@/` are all in the WPT
+  # must-fail set (inst/bench/wpt-url-cases.json).
+  bad <- c("sc://@/", "sc://te@s:t@/", "sc://:/", "data://:")
+  res <- safe_parse_urls(
+    bad, scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_identical(res$parse_status, rep("error", length(bad)))
+  # Rejected at `web` acceptance too -- general must not be the lenient one.
+  web <- safe_parse_urls(
+    bad, scheme_acceptance = "web", url_standard = "whatwg"
+  )
+  expect_identical(web$parse_status, rep("error", length(bad)))
+})
+
+test_that("whatwg general keeps legal authority shapes with delimiters", {
+  # The mirror of the rejection test: a delimiter is only fatal when the host it
+  # delimits is EMPTY. A non-empty host with an empty port, an IPv6 literal, or
+  # userinfo all stay legal, so the host-missing rule cannot over-reject.
+  ok <- c("sc://host:/", "sc://[::1]:/", "sc://user@host/", "sc://[::1]:80/")
   res <- safe_parse_urls(
     ok, scheme_acceptance = "general", url_standard = "whatwg"
   )
-  expect_identical(res$parse_status, c("ok", "ok"))
-  expect_true(all(is.na(res$host)))
-  expect_true(all(is.na(res$port)))
+  expect_identical(res$parse_status, rep("ok", length(ok)))
+})
+
+test_that("rfc3986 general still accepts host-missing authority shapes", {
+  # WHATWG-only, exactly like T2: RFC 3986's `reg-name` and `port` are both
+  # `*`-quantified, so an empty host (with or without an empty port) is
+  # well-formed generic syntax. `sc://te@s:t@/` is excluded -- it is rejected
+  # under RFC for an unrelated reason (`@` is not in the `userinfo` production).
+  res <- safe_parse_urls(
+    c("sc://@/", "sc://:/", "data://:"),
+    scheme_acceptance = "general", url_standard = "rfc3986"
+  )
+  expect_identical(res$parse_status, c("ok", "ok", "ok"))
 })
 
 test_that("rfc3986 general empty-host-with-port behavior is unchanged", {

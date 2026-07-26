@@ -58,6 +58,26 @@
 
 ### Bug fixes
 
+- **`url_standard = "whatwg"` now rejects a host-missing authority under
+  `scheme_acceptance = "general"`.** `sc://@/`, `sc://te@s:t@/`, `sc://:/` and
+  `data://:` parsed as `ok` even though all four are host-missing authorities
+  that WHATWG requires be rejected — they are in the WPT must-fail set, and
+  adaR 0.3.5 rejects every one. The default `web` acceptance already rejected
+  them, so `general` was the *more* permissive route, which is backwards.
+
+  The earlier fix in this cycle keyed the host-missing rule off the *port having
+  content*, so an empty host followed by a bare `:` or `@` slipped through. The
+  trigger is really the **delimiter**: WHATWG's host state fails on the `:`
+  itself before any port is read, and its authority state fails when an `@` was
+  seen and the host after the last one is empty. A `//` authority holding
+  nothing else (`foo:///bar`) remains the one legal empty-host shape, and a
+  non-empty host with an empty port (`sc://host:/`), an IPv6 literal
+  (`sc://[::1]:/`) or userinfo (`sc://user@host/`) all stay legal.
+
+  `url_standard = "rfc3986"` is deliberately unaffected: its `reg-name` and
+  `port` productions are both `*`-quantified, so these are well-formed generic
+  syntax under the RFC.
+
 - **`url_standard = "rfc3986"` now applies RFC 3986's generic-URI grammar to
   every scheme, not just `file:`.** The grammar gate travelled with the RFC 8089
   `file:` overlay, so which parser happened to own a row decided whether the
