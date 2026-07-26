@@ -139,6 +139,51 @@
   three documented examples pass the argument explicitly, so `R CMD check`
   never exercised the default path.
 
+### Documentation
+
+- **The conformance posture is now stated in one place, with its measurements
+  and its limits.** `vignette("url-standard")` gains a *Conformance posture*
+  section: against the WHATWG spec's own conformance suite the `"whatwg"`
+  profile is 378/378 (176 success rows at full component parity, 202 rejections)
+  and differs from the `adaR` reference on **two rows out of 336**, neither a
+  parsing disagreement; against RFC 3986 the `"rfc3986"` profile matches on
+  **164** of 257 oracled rows and departs on **93**, every departure attributed
+  to an ADR. The two boundaries that keep this honest are stated alongside the
+  numbers rather than buried: the WPT success fixture covers `http`/`https`/
+  `ftp`/`file` only, so opaque, `ws:` and `wss:` serialization is *unmeasured*
+  rather than passing; and the profile is WHATWG on its governed axes, **not** a
+  full UTS-46 host mapping.
+
+- **`scheme_acceptance` is documented as an axis in its own right.** The
+  vignette's *What the selector does not govern* section previously said the
+  selector "does not expand the allowed scheme set beyond
+  `http`/`https`/`ftp`/`ftps`" — which omitted `file` from the actual allowlist
+  and left readers with no way to discover that `scheme_acceptance = "general"`
+  parses `mailto:`, `data:` and `tel:`. The two axes are now described as
+  composing: `scheme_acceptance` decides what gets parsed, `url_standard`
+  decides how the result is read. A worked `mailto:` example shows the
+  opaque-path rule from the 2.8.0 breaking change — the parse table reports no
+  authority, while `get_host()` still extracts the recipient's host.
+
+- **`analysis/parity/README.md` now states its own posture and carries an
+  attributed ledger of what is left.** Every figure in it is scored at the
+  default `scheme_acceptance = "web"`, which was true but unstated; the success
+  fixture's scheme carve-out is now recorded as a *measurement limit* so the
+  silence on opaque schemes is not read as a pass. The residual deviations are
+  tabulated with their owning ADR and, where one exists, the argument that
+  reaches them — separating the one genuine gap (UTS-46 host mapping) from the
+  four deviations that are dials the caller chooses.
+
+- **A stale attribution of the RFC departures is corrected.** The 81 over-strict
+  rows were described as coming from "the ADR 0004 host-shape gate and the
+  closed scheme set". Re-derived from the audit rows, the closed scheme set
+  contributes **zero** of them: all 81 are the host/authority gate
+  (percent-encoded reg-names 48, other reg-name shapes 11, empty host 8,
+  userinfo 6, absent authority 5, port shape 3), and all 12 over-lenient rows
+  are the single `non-ascii-or-control` family. The corpus is 202/282
+  WPT-sourced and so almost entirely `http`/`https`/`file`, leaving the scheme
+  set no opportunity to fire. The 164/93 headline is unchanged. (RURL-vgovkcze.)
+
 ### Internal
 
 - **The cross-parser disagreement study now measures rurl at
