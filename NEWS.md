@@ -141,6 +141,31 @@
 
 ### Internal
 
+- **The cross-parser disagreement study now measures rurl at
+  `scheme_acceptance = "general"`, and `analysis/disagreement/` is re-frozen.**
+  Previous runs used the default `"web"` allowlist against adaR and
+  `urllib.parse`, which are *general* parsers — scoring ~19 opaque/non-special
+  rows as rurl rejections and measuring rurl's scheme-acceptance policy rather
+  than the `url_standard` interpretation the study is about. Held as a
+  documented axis alongside `scheme_policy = "require"`.
+
+  `rurl(whatwg)` vs adaR falls from **10 divergent rows to 2** (full-tuple
+  agreement 0.970 → 0.994), and neither remaining row is a parsing
+  disagreement: one is punycode-vs-Unicode host rendering (a `host_encoding`
+  choice, ADR 0002) and one is the held `scheme_policy` row. There is no
+  accept/reject, host-shape, port or path disagreement left against the WHATWG
+  reference on this corpus. The `rurl(rfc3986)` vs `curl` pairing moves the
+  other way (52 → 73) because libcurl is a web-scheme parser: 15 of those rows
+  are purely scheme acceptance and are enumerated as such in the README, so the
+  count is not read as RFC-interpretation divergence.
+
+  Two stale claims in the frozen README were corrected against the regenerated
+  matrix: the `http://ex.com:80/` row still said "adaR alone drops `:80`"
+  (`rurl(whatwg)` has elided since `RURL-uvilvhnm`), and the `%7e` percent-hex
+  caveat still claimed a residual path gap against adaR (closed —
+  path agreement is now 1.000). Analysis artifacts only; no package behavior
+  changes.
+
 - The documented `canonical_join()` example no longer passes presentation dials,
   so the package's own headline usage no longer demonstrates the pattern that now
   warns. Documentation and `README` only; no behavior change.
