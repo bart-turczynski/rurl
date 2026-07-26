@@ -316,6 +316,30 @@
   .whatwg_component_percent_encode(query, encode_set)
 }
 
+# WHATWG userinfo serializer (#userinfo-percent-encode-set): the path
+# percent-encode set (SP `"` `#` `<` `>` `?` `^` `` ` `` `{` `}`) plus `/` `:`
+# `;` `=` `@` `[` `\` `]` `|`. WHATWG's host parser fills the username and
+# password buffers by percent-encoding each code point with this set, so the
+# PARSED credential values it stores are already escaped -- unlike rurl's
+# `raw_user` / `raw_password`, which keep the source spelling.
+#
+# Reusing `.whatwg_component_percent_encode()` is what makes this idempotent:
+# its `%` branch re-emits an existing percent triplet verbatim, so `u%40ser`
+# stays `u%40ser` and `%25DOMAIN` stays `%25DOMAIN` rather than becoming
+# `%2525DOMAIN`. It also encodes every C0 control, DEL and non-ASCII byte, so a
+# non-ASCII userinfo gains escapes too (WHATWG-correct).
+.whatwg_userinfo_percent_encode <- function(x) {
+  .whatwg_component_percent_encode(
+    x,
+    c(
+      # path percent-encode set
+      0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL,
+      # userinfo additions
+      0x2FL, 0x3AL, 0x3BL, 0x3DL, 0x40L, 0x5BL, 0x5CL, 0x5DL, 0x7CL
+    )
+  )
+}
+
 # WHATWG fragment serializer: uses the fragment percent-encode set
 # (`" < > ` plus C0/non-ASCII).
 .whatwg_fragment_percent_encode <- function(fragment) {

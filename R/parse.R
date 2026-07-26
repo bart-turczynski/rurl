@@ -310,10 +310,15 @@
 #'     empty query (e.g. from a trailing "?") is reported as NA.
 #'     \item `fragment`: The fragment identifier as written in the URL
 #'     (e.g., "section"); not percent-decoded. Empty is reported as NA.
-#'     \item `user`: The user name for authentication, as written in the URL;
-#'     not percent-decoded. Empty is reported as NA.
-#'     \item `password`: The password for authentication, as written in the
-#'     URL; not percent-decoded. Empty is reported as NA.
+#'     \item `user`: The user name for authentication; never percent-decoded.
+#'     Under `url_standard = "whatwg"` it carries the standard's percent-encoded
+#'     spelling (the userinfo percent-encode set is applied, so
+#'     "http://a^b@host/" reports "a%5Eb"); under `url_standard = "rfc3986"` or
+#'     no selector it is the raw source spelling, exactly as written in the URL.
+#'     Empty is reported as NA.
+#'     \item `password`: The password for authentication, with the same
+#'     encoding contract as `user` (so a ":" inside a WHATWG password is
+#'     reported as "%3A"). Empty is reported as NA.
 #'     \item `domain`: The registered domain name (e.g., "example.com"). NA if
 #'     host is an IP, empty, or derivation fails.
 #'     \item `tld`: The top-level domain (e.g., "com"). NA if host is an IP,
@@ -2211,6 +2216,49 @@ safe_parse_urls <- function(url,
     }
   }
 
+  # Userinfo identity (RURL-micalqvh, half b): WHATWG's authority state stores
+  # the username/password buffers percent-encoded with the userinfo
+  # percent-encode set, so under `url_standard = "whatwg"` the PARSED `user` /
+  # `password` columns carry that spelling. `a$raw_user` / `a$raw_password` are
+  # the source slices and keep the raw spelling untouched (the escape hatch).
+  # Under `rfc3986` or no selector the columns stay source-preserving.
+  #
+  # Applied ONLY to the libcurl (special-scheme) route, i.e. the rows where the
+  # userinfo was actually SPLIT into a username and a password:
+  #   * the general/opaque route puts the WHOLE UNDIVIDED userinfo in `raw_user`
+  #     (`raw_password` is NA), so its `:` is a structural delimiter rather than
+  #     a username code point and encoding it to `%3A` would misreport it. The
+  #     missing split there is a separate, pre-existing modeling gap.
+  #   * the RFC 8089 `file:` overlay is undivided by design (App. E.1), same
+  #     reasoning.
+  #   * a mailto: `user` is a recipient LOCAL-PART (ADR 0012 D7), not a URL
+  #     userinfo at all -- mailto is an opaque path under WHATWG, so no userinfo
+  #     encode set applies to it.
+  # All three of those routes are the general-routed rows (`gp`).
+  user_output <- a$raw_user
+  password_output <- a$raw_password
+  if (.is_whatwg(opts$url_standard)) {
+    split_userinfo <- if (general_acceptance) {
+      !gp
+    } else {
+      rep(TRUE, length(a$raw_user))
+    }
+    u_idx <- which(split_userinfo & !is.na(user_output))
+    if (length(u_idx) > 0L) {
+      user_output[u_idx] <- vapply(
+        user_output[u_idx], .whatwg_userinfo_percent_encode, character(1),
+        USE.NAMES = FALSE
+      )
+    }
+    p_idx <- which(split_userinfo & !is.na(password_output))
+    if (length(p_idx) > 0L) {
+      password_output[p_idx] <- vapply(
+        password_output[p_idx], .whatwg_userinfo_percent_encode, character(1),
+        USE.NAMES = FALSE
+      )
+    }
+  }
+
   # Phase 11: clean URL reconstruction (with the filtered query appended).
   clean_url <- .build_clean_url_vec(
     cased$scheme, cased$host, cased$path, opts$trailing_slash_handling,
@@ -2272,8 +2320,8 @@ safe_parse_urls <- function(url,
     path_output = cased$path,
     raw_query = query_output,
     fragment = fragment_output,
-    user = a$raw_user,
-    password = a$raw_password,
+    user = user_output,
+    password = password_output,
     domain = domain,
     tld = tld,
     # Encoding-independent identity spellings (RURL-owrdsivt): surfaced straight

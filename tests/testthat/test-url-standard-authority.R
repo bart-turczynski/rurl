@@ -237,11 +237,19 @@ test_that("whatwg accepts the WPT userinfo punctuation runs", {
   )
 
   expect_identical(res$host, c("host", "host"))
-  # The space becomes %20 and the non-delimiting "@" becomes %40; every other
-  # byte in the run is already curl-acceptable and stays literal.
-  expect_identical(res$user[1], "%20!\"$%&'()*+,-.;<=>%40[]^_`{|}~")
+  # The parsed credentials carry the userinfo percent-encode set (RURL-micalqvh
+  # half b), so these are WPT's expected `username` / `password` byte-for-byte:
+  # the space is %20, the non-delimiting "@" is %40, and the set members
+  # `" ; < = > [ ] ^ ` { | }` are escaped, while `! $ % & ' ( ) * + , - . _ ~`
+  # stay literal.
+  expect_identical(
+    res$user[1], "%20!%22$%&'()*+,-.%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~"
+  )
   expect_identical(res$user[2], "joe")
-  expect_identical(res$password[2], "%20!\"$%&'()*+,-.:;<=>%40[]^_`{|}~")
+  expect_identical(
+    res$password[2],
+    "%20!%22$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~"
+  )
 })
 
 test_that("whatwg accepts a C0 control and DEL in user and in password", {

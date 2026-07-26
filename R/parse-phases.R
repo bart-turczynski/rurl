@@ -2875,9 +2875,12 @@
     port = port,
     path = path_output,
     query = raw_query,
-    # fragment/user/password are returned raw (as written in the URL): with
-    # `decode = FALSE` (see .parse_with_curl) curl no longer percent-decodes
-    # them, keeping them consistent with the raw path/query.
+    # fragment/user/password are never percent-DECODED: with `decode = FALSE`
+    # (see .parse_with_curl) curl no longer decodes them, keeping them
+    # consistent with the raw path/query. Under `url_standard = "whatwg"` the
+    # caller has already re-encoded these three with their WHATWG percent-encode
+    # sets (fragment / userinfo) before they reach this assembler; under
+    # `rfc3986` or no selector they are the raw source spelling.
     fragment = fragment,
     user = user,
     password = password,
