@@ -180,9 +180,9 @@ with the harnesses in `inst/bench/`.
 
 **WHATWG.** Against the spec's own conformance suite (web-platform-tests
 `urltestdata.json`), at `scheme_acceptance = "general"` the `"whatwg"` profile
-accepts all **336** success cases with full component parity — scheme, host,
-port, path, query and fragment — and correctly rejects all **202** failure
-cases: **538/538**. At the default `scheme_acceptance = "web"` the same corpus
+accepts all **336** success cases with full component parity — scheme,
+username, password, host, port, path, query and fragment — and correctly
+rejects all **202** failure cases: **538/538**. At the default `scheme_acceptance = "web"` the same corpus
 scores 176 accepted, all at full parity, plus the same 202 rejections; the 160
 difference is the ADR 0004 allowlist declining non-web schemes before the
 grammar is consulted, not a conformance miss. Against `adaR` (the

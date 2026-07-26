@@ -64,7 +64,9 @@ blank <- function(x) ifelse(is.na(x), "", as.character(x))
 wpt <- jsonlite::fromJSON(find_file("wpt-url-cases.json"),
                           simplifyVector = FALSE)
 succ <- do.call(rbind, lapply(wpt$success, function(e) data.frame(
-  input = e$input, protocol = e$protocol %||% "", hostname = e$hostname %||% "",
+  input = e$input, protocol = e$protocol %||% "",
+  username = e$username %||% "", password = e$password %||% "",
+  hostname = e$hostname %||% "",
   port = e$port %||% "", pathname = e$pathname %||% "",
   search = e$search %||% "", hash = e$hash %||% "",
   stringsAsFactors = FALSE)))
@@ -82,8 +84,15 @@ score_success <- function(posture) {
     scheme_policy = "require", host_encoding = "idna",
     path_encoding = "encode"))
   acc <- !rej(cfg$parse_status)
+  # Credentials are scored since RURL-nolcjgdb. WPT's username/password are the
+  # SERIALIZED (percent-encoded) forms, which is what rurl's user/password
+  # columns carry at this config -- so they are compared directly, no decode.
+  # Omitting them let "FULL component parity" read 100% while the general route
+  # silently discarded userinfo altogether (RURL-ovpguvva).
   ok <- list(
     scheme = acc & blank(cfg$scheme) == exp_scheme,
+    username = acc & blank(cfg$user) == succ$username,
+    password = acc & blank(cfg$password) == succ$password,
     host = acc & blank(cfg$host) == succ$hostname,
     port = acc & blank(cfg$port) == succ$port,
     path = acc & blank(cfg$path) == succ$pathname,
@@ -92,10 +101,13 @@ score_success <- function(posture) {
   full <- Reduce(`&`, ok)
   scored <- data.frame(
     input = succ$input, posture = posture, accepted = acc,
-    scheme_ok = ok$scheme, host_ok = ok$host, port_ok = ok$port,
+    scheme_ok = ok$scheme, username_ok = ok$username,
+    password_ok = ok$password, host_ok = ok$host, port_ok = ok$port,
     path_ok = ok$path, query_ok = ok$query, fragment_ok = ok$fragment,
     full_parity = full,
     rurl_scheme = blank(cfg$scheme), exp_scheme = exp_scheme,
+    rurl_username = blank(cfg$user), exp_username = succ$username,
+    rurl_password = blank(cfg$password), exp_password = succ$password,
     rurl_host = blank(cfg$host), exp_host = succ$hostname,
     rurl_port = blank(cfg$port), exp_port = succ$port,
     rurl_path = blank(cfg$path), exp_path = succ$pathname,
@@ -212,8 +224,9 @@ cat(sprintf("  output dir    : %s\n\n", normalizePath(out_dir)))
 report_success <- function(r) {
   cat("  success accepted        :", pct(r$acc), "\n")
   cat("  success FULL parity     :", pct(r$full), "\n")
-  cat("    scheme", pct(r$ok$scheme), "| host", pct(r$ok$host),
-      "| port", pct(r$ok$port), "| path", pct(r$ok$path),
+  cat("    scheme", pct(r$ok$scheme), "| username", pct(r$ok$username),
+      "| password", pct(r$ok$password), "| host", pct(r$ok$host), "\n")
+  cat("    port", pct(r$ok$port), "| path", pct(r$ok$path),
       "| query", pct(r$ok$query), "| fragment", pct(r$ok$fragment), "\n")
 }
 
@@ -264,8 +277,8 @@ for (r in list(general, web)) {
   cat(sprintf(
     "\n== WHATWG success: non-conformances by component [%s] ==\n",
     r$posture))
-  for (cc in c("scheme_ok", "host_ok", "port_ok", "path_ok",
-               "query_ok", "fragment_ok")) {
+  for (cc in c("scheme_ok", "username_ok", "password_ok", "host_ok",
+               "port_ok", "path_ok", "query_ok", "fragment_ok")) {
     bad <- r$acc & !r$scored[[cc]]
     cat(sprintf("  %-9s %d\n", sub("_ok", "", cc, fixed = TRUE), sum(bad)))
   }

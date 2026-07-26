@@ -231,6 +231,30 @@ jobs:
   # ok/warning/error partition holds (S3), and the vocabulary size is pinned so
   # a new token cannot appear silently (S4, the M-8 freeze). Deterministic and
   # network-free: it sources the constants file, so it needs no package build.
+  # G4 criterion 1: "Every normative claim maps to tests, fixtures, benchmarks,
+  # or a documented manual verification with exact commands." S9 H6 (RCON-10)
+  # asks for automated orphan/reverse-coverage checks, because a list of
+  # citations cannot show what it omits. This gate derives the claim population
+  # from the §6 contracts themselves -- add a contract row and it fails until
+  # the row's section has an owning verification slice -- and pins the
+  # generated index/census byte-for-byte. Deterministic, network-free, base R.
+  #
+  # Inserted BEFORE `status-docs` deliberately. PR #246 inserts its gate AFTER
+  # `status-docs` and PR #250 appends at the end of the file; three concurrent
+  # branches need three distinct anchors, and this is the third.
+  claim-traceability:
+    runs-on: ubuntu-latest
+    name: Every normative claim has an owning verification slice (G4 criterion 1)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (T0-T7, positive/negative coverage)
+        run: Rscript design/work/url-v3/tools/traceability-gate.R --self-test
+      - name: Orphan / reverse-coverage check over the contract family
+        run: Rscript design/work/url-v3/tools/traceability-gate.R
+
   status-docs:
     runs-on: ubuntu-latest
     name: parse_status docs match the status constants (M-8/M-14)
@@ -269,6 +293,27 @@ jobs:
       - name: Scan documentation for diagnostics-vocabulary drift
         run: Rscript tools/diagnostics-doc-consistency.R
 
+  # G4 deferral gate. Verifies the owner disposition P0.5: G4 criterion 3 is
+  # "verified where shipped", and a cell whose surface is specified but not
+  # shipped must be explicitly deferred to a named carrier while remaining
+  # UNSATISFIED. Fails when a deferral names no carrier, when a discharged
+  # deferral is claimed by no verification slice, or -- the load-bearing case --
+  # when a deferred surface SHIPS while its cells are still deferred. That last
+  # check is what stops "specified-but-unshipped" becoming a permanent parking
+  # space the surface quietly escapes. Deterministic, network-free, base R.
+  deferral-gate:
+    runs-on: ubuntu-latest
+    name: G4 deferrals name carriers and no deferred surface has shipped
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        run: Rscript tools/deferral-gate.R --self-test
+      - name: Verify the deferral register against the tree
+        run: Rscript tools/deferral-gate.R
+
   coverage:
     needs: check
     runs-on: ubuntu-latest
@@ -293,3 +338,29 @@ jobs:
         with:
           files: ./cobertura.xml
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Oracle-label gate (G4 criterion 2, P5.3 §2/§2.3). Criterion 2 reads
+  # "Oracles are labeled by authority and claim boundary"; P5.3 §2 fixes a
+  # CLOSED taxonomy of five authorities and registers/oracle-register.md binds
+  # each shipped oracle instance to one. This gate makes that binding
+  # executable: the taxonomy cannot gain a sixth label without a successor
+  # record (O1), an oracle no authority admits must be OPEN and carried (O2),
+  # and -- the rule that keeps the register alive -- a new fixture in the tree
+  # fails the build until it is classified (O3). Deterministic and network-free:
+  # it reads markdown and globs the tree, so it needs no package build.
+  #
+  # Appended at the end of this file deliberately: PR #246 inserts its own gate
+  # job after `status-docs`, and keeping the two insertion points apart is what
+  # stops these branches from conflicting on the same anchor a second time.
+  oracle-labels:
+    runs-on: ubuntu-latest
+    name: Oracles are labeled by authority and claim boundary (G4 criterion 2)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        run: Rscript design/work/url-v3/tools/oracle-label-gate.R --self-test
+      - name: Every oracle instance is classified
+        run: Rscript design/work/url-v3/tools/oracle-label-gate.R

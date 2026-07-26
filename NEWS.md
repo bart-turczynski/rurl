@@ -99,9 +99,11 @@
   (ADR 0012 D7), not a URL userinfo at all.
 
   `clean_url` is unaffected: it carries credentials on no route, including the
-  libcurl one. No scored conformance figure moves — the parity oracle compares
-  scheme, host, port, path, query and fragment, and all five scored artifacts
-  in `analysis/parity/` reproduce byte-identically.
+  libcurl one. No scored conformance figure moved *at the time of this fix* —
+  because the parity oracle then compared only scheme, host, port, path, query
+  and fragment, so a credential fix and a credential regression were equally
+  invisible to it. That measurement gap is closed separately below; credentials
+  are now scored, and this fix passes on all 336 rows.
 
 - **`url_standard = "whatwg"` no longer rejects a URL whose userinfo carries a
   space, a C0 control or DEL.** libcurl refuses an authority whose userinfo
@@ -439,6 +441,30 @@
   WHATWG on its governed axes, **not** a full UTS-46 host mapping. (The success
   figure was later widened to 336 rows — see the entry below.)
 
+- **"Full component parity" now scores credentials, so it means all eight
+  components rather than six.** `inst/bench/standard-parity.R` built its
+  per-row verdict from scheme, host, port, path, query and fragment;
+  `username` and `password` were never compared, in either posture. The
+  published headline — "336/336 accepted, 336/336 FULL component parity" — was
+  therefore silent on credentials, and the omission was not hypothetical: the
+  general/opaque route discarded userinfo entirely (fixed above), a
+  component-level non-conformance on the exact posture whose figure read 100%,
+  and **no scored number would have moved** either when it broke or when it was
+  fixed. A measurement whose name claims more than it checks.
+
+  The oracle was re-extracted at the **same** pinned upstream revision
+  (`181476aa`, from a raw file whose sha256 still matched the recorded
+  `raw_source_sha256` — a re-extraction, not a re-pin) so that
+  `make-wpt-fixture.py` carries upstream's `username`/`password`, which it had
+  been dropping: 24 rows carry a non-empty username and 13 a non-empty
+  password. No row was added or removed, so the case counts stay 336/202.
+
+  The headline is unchanged at **336/336**, but it is now a wider claim over a
+  stricter denominator, not the same claim restated — credentials are checked,
+  and they pass on every row at both postures. `analysis/parity/` was re-frozen:
+  the two success CSVs gained four columns, and the failure and RFC CSVs
+  reproduced byte-identically.
+
 - **The WPT success oracle now spans every scheme, and both scheme-acceptance
   postures are scored.** The fixture generator used to keep only
   `http`/`https`/`ftp`/`file` success rows, so the headline "176/176 full
@@ -448,8 +474,10 @@
   202 failure rows are unchanged), and `inst/bench/standard-parity.R` now passes
   `scheme_acceptance` explicitly instead of inheriting the exported default,
   scoring both postures side by side. At `scheme_acceptance = "general"` rurl
-  reaches **full component parity on all 336 rows** — scheme, host, port, path,
-  query and fragment — with zero rejections of WPT-valid input, and still
+  reaches **full component parity on all 336 rows** — across the six components
+  scored at the time (scheme, host, port, path, query, fragment; credentials
+  were added later in this release, see below) — with zero rejections of
+  WPT-valid input, and still
   rejects **202/202** failure rows, for **538/538** overall. Widening the corpus
   by 160 rows surfaced no new mismatch, so opaque, `ws:` and `wss:`
   serialization is now measured-and-conformant rather than silently untested.
