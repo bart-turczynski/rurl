@@ -15,7 +15,10 @@ get_query(
   params_case_sensitive = FALSE,
   sort_params = FALSE,
   empty_param_handling = c("keep", "drop"),
-  decode_plus = FALSE
+  decode_plus = FALSE,
+  scheme_policy = c("infer", "require"),
+  scheme_acceptance = c("web", "general"),
+  url_standard = NULL
 )
 }
 \arguments{
@@ -101,6 +104,70 @@ in "filter" mode.}
 \item{decode_plus}{Logical (default \code{FALSE}). When \code{TRUE}, \code{+} in query
 values is treated as a space (HTML-form decoding) before percent-decoding.
 \code{FALSE} keeps \code{+} literal (RFC 3986 generic behavior).}
+
+\item{scheme_policy}{Controls whether scheme-less, host-shaped input is
+\emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
+which only controls how the scheme is \emph{presented}, and from \code{url_standard},
+which controls interpretation). Defaults to "infer".
+\itemize{
+\item{"infer": (Default) Fabricate \verb{http://} for scheme-less host-shaped
+input (e.g. \code{example.com} parses as \verb{http://example.com}), a
+browser-omnibox-style affordance. This is the historical behavior.}
+\item{"require": Reject scheme-less input — a scheme-less host-shaped
+value becomes \code{parse_status = "error"} rather than gaining a fabricated
+scheme. Use this for a strict, pure-parser posture. Note this governs
+only bare host input; scheme-relative \verb{//host} input is governed
+separately by \code{scheme_relative_handling}.}
+}}
+
+\item{scheme_acceptance}{Which scheme \emph{tokens} may enter parsing (a
+scheme-acceptance axis, distinct from \code{scheme_policy}, which governs
+scheme-\emph{less} input, and from \code{url_standard}, which governs interpretation).
+Defaults to "web".
+\itemize{
+\item{"web": (Default) Only the curated web-scheme allowlist
+(\code{http}/\code{https}/\code{ftp}/\code{ftps}/\code{file}) is admitted; a scheme-bearing input
+outside it is \code{parse_status = "error"}. This is the historical,
+byte-for-byte compatible behavior.}
+\item{"general": Admit any syntactically valid scheme token and parse
+opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
+Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
+decides the interpretation; \code{general} with \code{url_standard = NULL} is an
+error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+derivation, and are never run through the IDNA/punycode helpers.
+A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
+authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are
+all \code{NA} and the entire remainder is the \code{path} (\code{query}/\code{fragment} are
+still split off). This includes \verb{mailto:} — the recipient's \code{@} never
+re-triggers authority parsing. To decompose a \verb{mailto:} recipient, use
+the accessors (\code{get_host()} / \code{get_domain()} / \code{get_user()}, ADR 0012 D7)
+or \code{get_mailto_recipients()}; those deliberately return a recipient's
+parts where this table presents \code{NA}, because a recipient domain is
+extraction metadata, not the URL's authority.}
+}}
+
+\item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
+\code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
+individual low-level options select (fully backward compatible). When set,
+it selects a coherent set of standard-conformant behaviors for the axes it
+governs — path percent/dot handling, the host IPv4/reg-name model, and
+\code{case_handling} — so callers do not have to hand-assemble the low-level
+knobs. Passing a governed low-level knob (\code{path_normalization} or
+\code{case_handling}) with a value the selected
+profile would not choose is an error; passing the value the profile would
+pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
+selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
+also lowercases the path, which neither standard sanctions). Added as the
+last argument so existing positional calls keep their meaning; always
+pass it by name. Under \code{"whatwg"} the selector additionally recognizes a
+literal backslash as a path separator for WHATWG-special schemes
+(\code{http}/\code{https}/\code{ftp}) and nulls default ports in parse output; use
+\code{port_handling = "strip_default"} for spec-style clean URL port rendering.
+See \code{\link{resolve_url}} for \code{url_standard}-governed
+reference resolution. The selector does \strong{not} govern whether
+\code{port_handling} may be set (it is a standalone editorial knob), nor does it
+govern \code{path_encoding} (an orthogonal path-presentation knob that layers
+on any profile), IDNA rendering, or query handling.}
 }
 \value{
 A character vector (format="string") or list (format="list").
@@ -114,11 +181,11 @@ key such as \code{?flag} stays \code{flag}, not \verb{flag=}). By default this a
 still percent-decodes for readability (\code{decode = TRUE}); pass
 \code{decode = FALSE} to obtain the raw query exactly as written in the URL.
 
-This accessor takes no \code{url_standard}, so \code{decode = FALSE} always yields the
-raw source spelling; the \code{query} column of \code{\link[=safe_parse_url]{safe_parse_url()}} under
-\code{url_standard = "whatwg"} instead carries the standard's percent-encoded
-spelling (the query percent-encode set is applied, so a literal space
-becomes \verb{\%20}).
+Under \code{url_standard = "whatwg"} the underlying query carries the standard's
+percent-encoded spelling (the query percent-encode set is applied, so a
+literal space becomes \verb{\%20}); under \code{url_standard = "rfc3986"} or no
+selector it is the raw source spelling. That distinction is only visible
+with \code{decode = FALSE}, since decoding collapses both spellings.
 
 The filtering arguments (\code{query_handling}, \code{params_keep}, \code{params_drop},
 \code{params_case_sensitive}, \code{sort_params}, \code{empty_param_handling},

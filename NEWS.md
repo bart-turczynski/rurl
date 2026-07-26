@@ -321,6 +321,29 @@
   three documented examples pass the argument explicitly, so `R CMD check`
   never exercised the default path.
 
+### New features
+
+- **`get_password()`, `get_query()`, `get_fragment()` and `get_port()` gain the
+  standards axis (`url_standard`, `scheme_policy`, `scheme_acceptance`).** Each
+  of the four could previously take only presentation dials, so none of them
+  could return a value its own `safe_parse_url()` column carries:
+  `get_password()` could not reach the WHATWG userinfo spelling the `password`
+  column has carried since 2.8.0's userinfo encode set (`p:q` vs `p%3Aq`);
+  `get_query()` and `get_fragment()` could not reach the query and fragment
+  percent-encode-set spellings; and `get_port()` could not report the WHATWG
+  default-port drop, where `http://example.com:80/` parses to `NA` rather than
+  `80`. All fourteen accessors now expose all three axes.
+
+  **Purely additive.** The new arguments default to the source-preserving
+  behavior (`url_standard = NULL`), and output with the arguments omitted — or
+  passed at their defaults — is byte-identical to before, which is pinned by a
+  test.
+
+  The accessor↔option coverage oracle
+  (`tests/testthat/test-accessor-registry.R`) now covers these three axes, not
+  just the eleven presentation dials. Their absence from it is precisely why
+  all four gaps went unnoticed: no registry cell forced the arguments to exist.
+
 ### Documentation
 
 - **The diagnostics vocabulary now has one canonical, enforced enumeration.**

@@ -1228,3 +1228,117 @@ test_that("get_*() accessors error if passed a parsed object, not a string", {
   expect_error(get_query(p), "character vector")
   expect_error(get_subdomain(p), "character vector")
 })
+
+# ---------------------------------------------------------------------------
+# The standards axis on get_password() / get_query() / get_fragment() /
+# get_port() (RURL-bznwelxn, epic RURL-rnobeauh)
+#
+# These four accessors took only presentation dials, so each was unable to
+# return a value its own safe_parse_url() column carries. The tests below pin
+# BOTH halves of every fix: the WHATWG spelling is now reachable, and the
+# source-preserving branches (rfc3986, and no selector at all) are byte-for-
+# byte what they were. That second half is the load-bearing one -- sitemapr
+# and pagerankr read these columns with no url_standard set.
+# ---------------------------------------------------------------------------
+
+test_that("get_password() reaches the WHATWG userinfo spelling", {
+  u <- "http://u:p:q@example.com/"
+  # A ":" inside the password is percent-encoded by the userinfo encode set.
+  expect_identical(get_password(u, url_standard = "whatwg"), "p%3Aq")
+  # ... and NOT under the source-preserving profiles.
+  expect_identical(get_password(u, url_standard = "rfc3986"), "p:q")
+  expect_identical(get_password(u), "p:q")
+  # The accessor now agrees with the column it mirrors.
+  expect_identical(
+    get_password(u, url_standard = "whatwg"),
+    safe_parse_url(u, url_standard = "whatwg")$password
+  )
+})
+
+test_that("get_query() reaches the WHATWG query spelling", {
+  u <- "http://example.com/p?a=b\"c"
+  # Only visible undecoded: decoding collapses both spellings.
+  expect_identical(
+    get_query(u, decode = FALSE, url_standard = "whatwg"), "a=b%22c"
+  )
+  expect_identical(get_query(u, decode = FALSE), "a=b\"c")
+  expect_identical(
+    get_query(u, decode = FALSE, url_standard = "whatwg"),
+    safe_parse_url(u, url_standard = "whatwg")$query
+  )
+  # The axis threads through the filtering engine too, not just the fast path.
+  expect_identical(
+    get_query("http://example.com/?utm_source=n&id=4\"2",
+      query_handling = "filter", decode = FALSE, url_standard = "whatwg"
+    ),
+    "id=4%222"
+  )
+  # ... and through the list shape.
+  expect_identical(
+    get_query(u, format = "list", decode = FALSE,
+      url_standard = "whatwg")[[1]]$a,
+    "b%22c"
+  )
+})
+
+test_that("get_fragment() reaches the WHATWG fragment spelling", {
+  u <- "http://example.com/p#a\"b"
+  expect_identical(get_fragment(u, url_standard = "whatwg"), "a%22b")
+  expect_identical(get_fragment(u), "a\"b")
+  expect_identical(
+    get_fragment(u, url_standard = "whatwg"),
+    safe_parse_url(u, url_standard = "whatwg")$fragment
+  )
+  # The fragment encode set is NOT the query set: "^" is a query-set byte but
+  # a fragment-set survivor, so this pins that the right encoder is wired.
+  expect_identical(get_fragment("http://example.com/p#a^b",
+    url_standard = "whatwg"), "a^b")
+})
+
+test_that("get_port() reports the WHATWG default-port drop", {
+  # WHATWG discards a default port during PARSING, so it is absent from the
+  # parsed URL entirely -- distinct from port_handling, which only governs
+  # whether a port is rendered into clean_url.
+  expect_identical(get_port("http://example.com:80/",
+    url_standard = "whatwg"), NA_integer_)
+  expect_identical(get_port("http://example.com:80/",
+    url_standard = "rfc3986"), 80L)
+  expect_identical(get_port("http://example.com:80/"), 80L)
+  # A non-default port is unaffected in every profile.
+  for (std in list(NULL, "rfc3986", "whatwg")) {
+    expect_identical(
+      get_port("http://example.com:8080/", url_standard = std), 8080L
+    )
+  }
+})
+
+test_that("the new axes leave the default output byte-identical", {
+  urls <- c(
+    "http://u:p@example.com:8080/a/b?x=1&y=2#frag",
+    "https://example.com/",
+    "ftp://alice:secret@ftp.example.com/file.txt",
+    "not a url"
+  )
+  # Passing the arguments at their documented defaults must be a no-op, which
+  # is what keeps the NULL-selector compatibility story airtight.
+  expect_identical(
+    get_password(urls),
+    get_password(urls, scheme_policy = "infer", scheme_acceptance = "web",
+      url_standard = NULL)
+  )
+  expect_identical(
+    get_port(urls),
+    get_port(urls, scheme_policy = "infer", scheme_acceptance = "web",
+      url_standard = NULL)
+  )
+  expect_identical(
+    get_fragment(urls),
+    get_fragment(urls, scheme_policy = "infer", scheme_acceptance = "web",
+      url_standard = NULL)
+  )
+  expect_identical(
+    get_query(urls, decode = FALSE),
+    get_query(urls, decode = FALSE, scheme_policy = "infer",
+      scheme_acceptance = "web", url_standard = NULL)
+  )
+})
