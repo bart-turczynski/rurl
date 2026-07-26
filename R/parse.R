@@ -236,7 +236,16 @@
 #'     Requires an explicit `url_standard` (`"rfc3986"` or `"whatwg"`), which
 #'     decides the interpretation; `general` with `url_standard = NULL` is an
 #'     error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
-#'     derivation, and are never run through the IDNA/punycode helpers.}
+#'     derivation, and are never run through the IDNA/punycode helpers.
+#'     A non-special scheme with no `//` is an *opaque path*: it has no
+#'     authority, so `host`, `user`, `port` and the `domain`/`tld` columns are
+#'     all `NA` and the entire remainder is the `path` (`query`/`fragment` are
+#'     still split off). This includes `mailto:` — the recipient's `@` never
+#'     re-triggers authority parsing. To decompose a `mailto:` recipient, use
+#'     the accessors (`get_host()` / `get_domain()` / `get_user()`, ADR 0012 D7)
+#'     or `get_mailto_recipients()`; those deliberately return a recipient's
+#'     parts where this table presents `NA`, because a recipient domain is
+#'     extraction metadata, not the URL's authority.}
 #'   }
 #' @param url_standard Optional top-level standard profile: `NULL` (default),
 #'   `"rfc3986"`, or `"whatwg"`. With `NULL` the behavior is exactly what the
@@ -765,10 +774,51 @@ safe_parse_urls <- function(url,
   # ._parse_urls_cached(). original_url is restored per row afterwards so it
   # reflects the input element even for duplicates / NA / non-character rows.
   field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
-  cols <- ._parse_urls_cached(parse_input, opts)[field_names]
+  cols <- .mask_opaque_authority(._parse_urls_cached(parse_input, opts), opts)
+  cols <- cols[field_names]
   cols$original_url <- original_url_vec
   cols$stringsAsFactors <- FALSE
   do.call(data.frame, cols)
+}
+
+# Authority columns the parse TABLE must not present for an opaque-path row.
+# `port`/`password` are never populated for one, so masking these eight is
+# exhaustive; `is_ip_host` stays FALSE exactly as it is for every other opaque
+# row (`tel:`, `data:`), so it is deliberately not in the list.
+.spu_opaque_authority_cols <- c(
+  "host", "user",
+  "domain", "tld",
+  "domain_ascii", "domain_unicode", "tld_ascii", "tld_unicode"
+)
+
+# T1 (RURL-glphqenm): a non-special scheme with no `//` is a WHATWG OPAQUE PATH
+# -- it has no authority, so the parse table presents no host/user and no PSL
+# decomposition of one. The opaque parser already yields NA authority for every
+# such row (`tel:`, `data:`, `sc:`); the sole exception is the ADR 0012 D7
+# `mailto:` recipient decomposition, which Stage A writes into the internal
+# host/user precisely so the get_*() accessors resolve a recipient domain
+# through the SAME PSL/presentation branches a web host takes.
+#
+# That value is extraction metadata about a recipient, not the URL's authority,
+# so this is where it stops: the public parse table masks it, while the accessor
+# seam (.extract_from_urls) keeps reading the unmasked columns. D7 already
+# declared `get_host`(mailto) and `clean_url`(mailto) independent and called the
+# write "extraction metadata ONLY" -- masking here is what finally makes that
+# true of the table too. `safe_parse_url()` and `get_host()` therefore diverge
+# for a mailto under general acceptance, by design (see D7's amendment note).
+.mask_opaque_authority <- function(cols, opts) {
+  if (!identical(opts$scheme_acceptance, "general")) {
+    return(cols)
+  }
+  scheme <- cols[["scheme"]]
+  is_mailto <- !is.na(scheme) & .ascii_tolower(scheme) == "mailto"
+  if (!any(is_mailto)) {
+    return(cols)
+  }
+  for (field in .spu_opaque_authority_cols) {
+    cols[[field]][is_mailto] <- NA_character_
+  }
+  cols
 }
 
 # Empty (zero-row) result data.frame with the canonical column set/types.
@@ -1486,6 +1536,9 @@ safe_parse_urls <- function(url,
     return(NULL)
   }
   field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  # Same opaque-path authority mask the vector table applies, so the scalar and
+  # vector parse surfaces stay identical (see .mask_opaque_authority).
+  cols <- .mask_opaque_authority(cols, opts)
   lapply(cols[field_names], function(column) column[[1L]])
 }
 

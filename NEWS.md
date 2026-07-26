@@ -32,6 +32,30 @@
   `canonical_join()` with a deprecation window and warnings — rather than
   re-keying it in place — is the ratified disposition (P3.1 Q7/B7).
 
+- **`safe_parse_url()` no longer reports an authority for a `mailto:` URL under
+  `scheme_acceptance = "general"`.** A non-special scheme with no `//` is a
+  WHATWG *opaque path*, which has no authority — but the `@` in a recipient
+  address was re-surfacing as parsed authority, so
+  `safe_parse_urls("mailto:a@b.com", url_standard = "whatwg", scheme_acceptance = "general")`
+  reported `host = "b.com"`, `user = "a"`, `domain = "b.com"`, `tld = "com"`.
+  Those five columns (plus `domain_ascii` / `domain_unicode` / `tld_ascii` /
+  `tld_unicode`) are now `NA`, matching WHATWG and adaR. `path` and `clean_url`
+  already carried the address verbatim and are unchanged, as is every
+  non-`mailto:` opaque row (`tel:`, `data:`, `sc:`), which already reported no
+  authority.
+
+  **The accessors are deliberately unchanged.** `get_host()`, `get_domain()`,
+  `get_tld()`, `get_subdomain()` and `get_user()` still decompose a `mailto:`
+  recipient under `general` — through the same PSL seam a web host uses — as
+  shipped in 2.6.0 (ADR 0012 D7). A recipient domain is *extraction metadata
+  about an address*, not the URL's authority, so it is surfaced by the
+  accessors and by `get_mailto_recipients()` while the parse table stays
+  WHATWG-conformant. `safe_parse_url(u)$host` and `get_host(u)` therefore
+  disagree for a `mailto:` under `general`, by design — the same independence
+  D7 already declared between `get_host()` and `clean_url()`. Only the default
+  `scheme_acceptance = "web"` posture is untouched in every respect, since it
+  does not parse `mailto:` at all.
+
 ### Bug fixes
 
 - **`url_standard = "rfc3986"` now applies RFC 3986's generic-URI grammar to
