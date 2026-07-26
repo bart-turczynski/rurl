@@ -24,7 +24,8 @@
 | tracked_location | design/work/url-v3/gates/G3-acceptance.md |
 | owner | Bart Turczynski <bartek@turczynski.pl> |
 | single_writer | repository owner (sole); P0.3 §5 |
-| state | ACCEPTED |
+| state | SUPERSEDED |
+| superseded_by | gate-G3-acceptance-2 |
 | accepted_commit | 2694145 (PR #238 squash-merge into main — public-surface count correction 46→51 + register-transition language; the first commit where the asserted G3 state is fully accurate. Content completeness was reached earlier at 150f48d / PR #235, the G3.X capstone — the last G3 content leaf) |
 | accepted_at | 2026-07-24 |
 | depends_on | the ten §6 contracts (canonical-state 3, standard-scheme 5, validation-intervention 6, output 7, cleaning-mutation 8, semantic-cache 10-cache, host-annotation 10-host, key-join 9, public-surface-closure 4, cross-artifact-consistency capstone) — hashed in ## Inputs; P1.1, P1.2, P2.1, P2.2, P2.3, P2.4, P3.1, P3.2, P4.1, P5.1, P5.3 (ACCEPTED, hash-enforced in manifest.decisions[]); reconciliation §6, §7 G3 |
@@ -89,6 +90,21 @@ and are not duplicated here.
 | `validate-manifest.R` | VALIDATION PASSED (11 P-tier decisions ACCEPTED + hash-verified; artifact hashes match) |
 | `validate-transitions.R` | VALIDATION PASSED (180 checks) |
 | `ci-gate.R` (control-plane) | CONTROL-PLANE GATE: PASS (strict) |
+
+## Superseded
+
+**This record is history.** It was superseded on 2026-07-26 by
+`gates/G3-acceptance-2.md` (`gate-G3-acceptance-2`), after `get_parse_verdicts()`
+shipped at `ff2140a` (PR #281) and grew the closed public surface 51 → 52,
+drifting this record's `## Inputs` hash for `public-surface-closure.md` and
+reopening the acceptance exactly as the rule below prescribes.
+
+Its `## Inputs` hashes below are **deliberately left as they were** and are no
+longer recomputed by `validate-records.R`. They describe the tree at *this*
+record's acceptance commit (`2694145`), which is the whole point: rewriting them
+to match today's tree would erase the evidence that an acceptance was ever
+reopened. Read them as a snapshot, not as a current claim. The live acceptance
+is acceptance 2.
 
 ## Reopening rule
 

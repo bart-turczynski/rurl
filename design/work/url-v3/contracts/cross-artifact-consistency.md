@@ -72,7 +72,7 @@ decisions the siblings project are already hash-enforced by `validate-manifest.R
 | design/work/url-v3/contracts/semantic-cache-contract.md | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
 | design/work/url-v3/contracts/host-annotation-contracts.md | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
 | design/work/url-v3/contracts/key-join-contracts.md | c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3 |
-| design/work/url-v3/contracts/public-surface-closure.md | 709e8179746cfe67cb86fe915447ceea15278b5c46c0ac50fe0117b62571e1d0 |
+| design/work/url-v3/contracts/public-surface-closure.md | 9b4fdb2d3bc67ceaf9c1aa579c160e4f173ff0df90ef98edf3f0f80a93005e46 |
 
 ## Criterion-3 assertions ((i)–(v))
 

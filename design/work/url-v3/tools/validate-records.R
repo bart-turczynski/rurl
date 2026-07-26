@@ -502,15 +502,67 @@ con_checks <- (pass + length(fail)) - con_checks_before
 ## '## Inputs' hash is recomputed here; a mismatch fails the record, which
 ## reopens the gate acceptance and (via ci-gate) the control plane. This is the
 ## machine half of the §7 G2 reopening rule. (RURL-uksahklp; §6 lifecycle.)
+##
+## SUPERSESSION (RURL-kpyapioi). A gate's reopening rule states that
+## "re-acceptance requires a new gate-acceptance record superseding this one".
+## Until this section understood supersession that rule was NOT executable: the
+## predecessor stayed in gates/, so it was still hash-checked against inputs it
+## no longer describes, and the only ways to green the build were to sweep its
+## hashes (which defeats the reopening rule) or to hide the file from the glob
+## (which makes an audit record invisible by a path trick). Both are worse than
+## the problem.
+##
+## So a record may instead declare `state: SUPERSEDED` with a non-empty
+## `superseded_by`. Such a record is retained and readable but is NOT
+## hash-checked -- it is history, describing inputs as they stood at ITS
+## acceptance commit, and drift against today's tree is expected rather than a
+## defect. Two rules keep that from becoming an escape hatch:
+##   * `superseded_by` must name a gate record that EXISTS in gates/, so a
+##     record cannot retire into a dangling reference; and
+##   * each `gate` value must have EXACTLY ONE ACCEPTED record, so supersession
+##     can never leave a gate with zero live acceptances (nor two rival ones).
+## The live record is hash-checked exactly as before. Nothing is weakened for
+## the acceptance that is actually in force.
 gates_dir <- file.path(root, "gates")
 gate_n <- 0L
 gate_checks_before <- pass + length(fail)
+gate_field <- function(gln, name) {
+  hit <- grep(sprintf("^\\|\\s*%s\\s*\\|", name), gln, value = TRUE)
+  if (length(hit) != 1) return(NA_character_)
+  cells <- trimws(strsplit(sub("^\\|", "", sub("\\|\\s*$", "", hit[[1]])),
+                           "\\|")[[1]])
+  if (length(cells) >= 2) cells[[2]] else NA_character_
+}
 if (dir.exists(gates_dir)) {
+  gate_live <- list()   # gate id -> count of ACCEPTED records
+  gate_ids <- character(0)
+  for (gf in list.files(gates_dir, pattern = "\\.md$", full.names = TRUE)) {
+    gln <- readLines(gf, warn = FALSE)
+    gate_ids <- c(gate_ids, gate_field(gln, "id"))
+  }
   for (gf in list.files(gates_dir, pattern = "\\.md$", full.names = TRUE)) {
     gln <- readLines(gf, warn = FALSE)
     st <- grep("^\\|\\s*state\\s*\\|", gln, value = TRUE)
+    superseded <- length(st) == 1 && grepl("\\|\\s*SUPERSEDED\\s*\\|", st[[1]])
+    gname <- gate_field(gln, "gate")
+    if (superseded) {
+      sby <- gate_field(gln, "superseded_by")
+      check(!is.na(sby) && nzchar(sby) && !identical(sby, "pending"),
+            sprintf("gates: %s is SUPERSEDED but names no superseded_by",
+                    basename(gf)))
+      check(!is.na(sby) && sby %in% gate_ids,
+            sprintf("gates: %s superseded_by '%s' names no record in gates/",
+                    basename(gf), sby))
+      # Retained as history; its inputs describe its own acceptance commit and
+      # are deliberately not recomputed against today's tree.
+      next
+    }
+    if (!is.na(gname)) {
+      gate_live[[gname]] <- (gate_live[[gname]] %||% 0L) + 1L
+    }
     check(length(st) == 1 && grepl("\\|\\s*ACCEPTED\\s*\\|", st[[1]]),
-          sprintf("gates: %s envelope state must be ACCEPTED", basename(gf)))
+          sprintf("gates: %s envelope state must be ACCEPTED or SUPERSEDED",
+                  basename(gf)))
     h <- which(grepl("^##\\s+Inputs\\s*$", gln))
     check(length(h) == 1,
           sprintf("gates: %s must have exactly one '## Inputs' section", basename(gf)))
@@ -536,6 +588,13 @@ if (dir.exists(gates_dir)) {
         }
       }
     }
+  }
+  # Supersession must never leave a gate unattended, nor with rival live
+  # acceptances. Exactly one ACCEPTED record per gate.
+  for (g in names(gate_live)) {
+    check(identical(gate_live[[g]], 1L),
+          sprintf("gates: gate %s must have exactly one ACCEPTED record (found %d)",
+                  g, gate_live[[g]]))
   }
 }
 gate_checks <- (pass + length(fail)) - gate_checks_before
