@@ -17,38 +17,46 @@ test_that("four WHATWG non-special shapes decompose to distinct state", {
   expect_true(all(r$ok))
   expect_identical(r$scheme, rep("foo", 4L))
 
-  # foo:bar -- opaque path, host ABSENT, no authority.
+  # foo:bar -- opaque path, host ABSENT, no `//` delimiter.
   expect_identical(r$path_kind[[1L]], "opaque")
   expect_identical(r$path[[1L]], "bar")
   expect_identical(r$host_kind[[1L]], "absent")
-  expect_identical(r$authority_kind[[1L]], "absent")
+  expect_false(r$authority_delimiter_present[[1L]])
+  expect_true(is.na(r$authority_payload_kind[[1L]]))
   expect_true(is.na(r$host[[1L]]))
 
-  # foo:/bar -- list path, host ABSENT, no authority.
+  # foo:/bar -- list path, host ABSENT, no `//` delimiter.
   expect_identical(r$path_kind[[2L]], "list")
   expect_identical(r$path[[2L]], "/bar")
   expect_identical(r$host_kind[[2L]], "absent")
-  expect_identical(r$authority_kind[[2L]], "absent")
+  expect_false(r$authority_delimiter_present[[2L]])
+  expect_true(is.na(r$authority_payload_kind[[2L]]))
 
-  # foo:///bar -- list path, authority PRESENT (any `//`), host EMPTY. Matches
-  # the L3a `.authority_kind()` classifier + ADR 0012 D2 (lines 257-258,
-  # 270-271): host emptiness is host_kind's job, not authority_kind's.
+  # foo:///bar -- list path, `//` delimiter PRESENT with an EMPTY payload, host
+  # EMPTY (P1.2 D-A/D-B: payload state and host state are independent axes).
   expect_identical(r$path_kind[[3L]], "list")
   expect_identical(r$path[[3L]], "/bar")
   expect_identical(r$host[[3L]], "")
   expect_identical(r$host_kind[[3L]], "empty")
-  expect_identical(r$authority_kind[[3L]], "present")
+  expect_true(r$authority_delimiter_present[[3L]])
+  expect_identical(r$authority_payload_kind[[3L]], "empty")
   expect_identical(r$host_form[[3L]], "empty")
 
   # foo://[::1]/bar -- list path, IPv6 host.
   expect_identical(r$path_kind[[4L]], "list")
   expect_identical(r$host[[4L]], "[::1]")
   expect_identical(r$host_kind[[4L]], "present")
-  expect_identical(r$authority_kind[[4L]], "present")
+  expect_true(r$authority_delimiter_present[[4L]])
+  expect_identical(r$authority_payload_kind[[4L]], "present")
   expect_identical(r$host_form[[4L]], "ipv6")
 
-  # The four (authority_kind, host_kind, path_kind) tuples are all DISTINCT.
-  tuples <- paste(r$authority_kind, r$host_kind, r$path_kind, sep = "|")
+  # The four (delimiter, payload_kind, host_kind, path_kind) tuples are all
+  # DISTINCT.
+  tuples <- paste(
+    r$authority_delimiter_present, r$authority_payload_kind, r$host_kind,
+    r$path_kind,
+    sep = "|"
+  )
   expect_length(unique(tuples), 4L)
 })
 
@@ -123,7 +131,8 @@ test_that("RFC file overlay parses absolute path and localhost -> empty host", {
   expect_identical(abs$scheme, "file")
   expect_identical(abs$path, "/abs/path")
   expect_identical(abs$rfc_path_form, "absolute")
-  expect_identical(abs$authority_kind, "absent")
+  expect_false(abs$authority_delimiter_present)
+  expect_true(is.na(abs$authority_payload_kind))
   expect_true(is.na(abs$host)) # no authority -> host absent
 
   loc <- .parse_rfc_file_urls_vec("file://localhost/x")

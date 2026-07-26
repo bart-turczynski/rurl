@@ -460,6 +460,27 @@
 
 ### Internal
 
+- **Authority presence is now recorded as two independent facts instead of one
+  ambiguous enum.** The internal state model carried a single three-valued
+  `authority_kind`, which conflated *was a `//` delimiter present* with *did it
+  carry anything* and left its `empty` value unreachable: the general parser
+  called every `//` row authority-present, while the RFC 8089 `file:` overlay
+  called the identical shape authority-empty, so `foo:///bar` and `file:///bar`
+  disagreed. It is replaced by `authority_delimiter_present` (logical) and
+  `authority_payload_kind` (`empty`/`present`, `NA` when no delimiter was
+  present), with `host_kind` staying an independent axis — a payload can be
+  present while the host is empty (`foo://@/bar`, `foo://:80/bar`). The legacy
+  name survives only as a derived, read-only projection, whose `empty` value is
+  now reachable and defined. Both posture serializers emit `//` from the
+  recorded delimiter fact rather than re-deriving it from `host_kind`, which
+  could not tell a delimiter-present empty authority from a delimiter-absent
+  input.
+
+  **No public output changes.** These are internal state fields; the general
+  route's parsed columns and `clean_url` were verified byte-identical on both
+  postures across the opaque, empty-authority, `file:`, IPv6 and credential
+  shapes.
+
 - **The committed WHATWG conformance oracle
   (`inst/bench/wpt-url-cases.json`) now covers every scheme, not four.** The
   success arm of the fixture was carved out to `http`/`https`/`ftp`/`file`,

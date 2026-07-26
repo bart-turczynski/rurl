@@ -2315,7 +2315,10 @@ safe_parse_urls <- function(url,
     if (.is_whatwg(opts$url_standard)) {
       clean_url[gp] <- .serialize_whatwg_vec(
         scheme = cased$scheme[gp], host = gen_b$host[gp],
-        host_kind = gen_b$host_kind[gp], path = gen_b$path[gp],
+        host_kind = gen_b$host_kind[gp],
+        authority_delimiter_present =
+          gen_b$authority_delimiter_present[gp],
+        path = gen_b$path[gp],
         path_kind = gen_b$path_kind[gp], query = gen_b$query[gp],
         query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
         port_handling = opts$port_handling,
@@ -2324,7 +2327,10 @@ safe_parse_urls <- function(url,
     } else {
       clean_url[gp] <- .serialize_rfc_generic_vec(
         scheme = cased$scheme[gp], host = gen_b$host[gp],
-        host_kind = gen_b$host_kind[gp], path = gen_b$path[gp],
+        host_kind = gen_b$host_kind[gp],
+        authority_delimiter_present =
+          gen_b$authority_delimiter_present[gp],
+        path = gen_b$path[gp],
         rfc_path_form = gen_b$rfc_path_form[gp], query = gen_b$query[gp],
         query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
         port_handling = opts$port_handling
