@@ -106,8 +106,12 @@ on any profile), IDNA rendering, or query handling.}
 A character vector of user names.
 }
 \description{
-Extracts the user component of a URL. The value is returned raw, exactly as
-written in the URL (not percent-decoded).
+Extracts the user component of a URL. The value is never percent-decoded.
+Under \code{url_standard = "whatwg"} it carries the standard's
+percent-encoded spelling (WHATWG stores the username buffer encoded with the
+userinfo percent-encode set, so \code{"http://a^b@host/"} yields
+\code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} or no selector it is
+the raw source spelling, exactly as written in the URL.
 }
 \details{
 Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's

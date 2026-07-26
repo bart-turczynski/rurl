@@ -362,10 +362,15 @@ byte-for-byte (e.g., "name=value"); not percent-decoded. A present-but-
 empty query (e.g. from a trailing "?") is reported as NA.
 \item \code{fragment}: The fragment identifier as written in the URL
 (e.g., "section"); not percent-decoded. Empty is reported as NA.
-\item \code{user}: The user name for authentication, as written in the URL;
-not percent-decoded. Empty is reported as NA.
-\item \code{password}: The password for authentication, as written in the
-URL; not percent-decoded. Empty is reported as NA.
+\item \code{user}: The user name for authentication; never percent-decoded.
+Under \code{url_standard = "whatwg"} it carries the standard's percent-encoded
+spelling (the userinfo percent-encode set is applied, so
+"http://a^b@host/" reports "a\%5Eb"); under \code{url_standard = "rfc3986"} or
+no selector it is the raw source spelling, exactly as written in the URL.
+Empty is reported as NA.
+\item \code{password}: The password for authentication, with the same
+encoding contract as \code{user} (so a ":" inside a WHATWG password is
+reported as "\%3A"). Empty is reported as NA.
 \item \code{domain}: The registered domain name (e.g., "example.com"). NA if
 host is an IP, empty, or derivation fails.
 \item \code{tld}: The top-level domain (e.g., "com"). NA if host is an IP,

@@ -58,6 +58,28 @@
 
 ### Bug fixes
 
+- **`url_standard = "whatwg"` now applies the userinfo percent-encode set to the
+  `user` and `password` columns.** WHATWG's authority state fills its username
+  and password buffers by percent-encoding each code point with the userinfo
+  percent-encode set — the path set (SP `"` `#` `<` `>` `?` `^` `` ` `` `{` `}`)
+  plus `/` `:` `;` `=` `@` `[` `\` `]` `|` — so those are the parsed values the
+  standard stores. rurl applied no encode set at all, reporting the raw source
+  slice: `safe_parse_urls("http://a^b@host/", url_standard = "whatwg")$user` was
+  `a^b` where WHATWG stores `a%5Eb`, and a `:` inside a password was reported
+  literally instead of as `%3A`. **This is a user-visible output change under
+  `whatwg`** (spec exactness over output stability). Because the encode set
+  inherits the C0-control set, it also covers every C0 control, DEL and
+  **non-ASCII** byte, so a non-ASCII userinfo now gains UTF-8 escapes too:
+  `"http://éx@host/"` reports user `%C3%A9x`. Existing percent-triplets are
+  re-emitted verbatim, never decoded or double-encoded (`u%40ser` stays
+  `u%40ser`, `%25DOMAIN` stays `%25DOMAIN`), and a space already pre-encoded by
+  the userinfo charset shim stays `%20`. The transform is gated on `whatwg`
+  explicitly and applies only where the userinfo was actually split into a
+  username and a password: `url_standard = "rfc3986"` and the no-selector
+  default remain source-preserving and byte-for-byte unchanged, as do the
+  undivided-userinfo routes (the general/opaque parser, the RFC 8089 `file:`
+  overlay) and a `mailto:` recipient local-part, which is not a URL userinfo.
+
 - **`url_standard = "whatwg"` no longer rejects a URL whose userinfo carries a
   space, a C0 control or DEL.** libcurl refuses an authority whose userinfo
   contains any of 30 ASCII code points — SPACE (U+0020), the C0 controls

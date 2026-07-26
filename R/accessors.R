@@ -846,8 +846,12 @@ get_port <- function(url, protocol_handling = "keep") {
 
 #' Get URL user names
 #'
-#' Extracts the user component of a URL. The value is returned raw, exactly as
-#' written in the URL (not percent-decoded).
+#' Extracts the user component of a URL. The value is never percent-decoded.
+#' Under \code{url_standard = "whatwg"} it carries the standard's
+#' percent-encoded spelling (WHATWG stores the username buffer encoded with the
+#' userinfo percent-encode set, so \code{"http://a^b@host/"} yields
+#' \code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} or no selector it is
+#' the raw source spelling, exactly as written in the URL.
 #'
 #' Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
 #' first recipient (its \code{addr-spec} local-part) is returned, mirroring how
@@ -882,8 +886,12 @@ get_user <- function(url, protocol_handling = "keep",
 
 #' Get URL passwords
 #'
-#' Extracts the password component of a URL. The value is returned raw, exactly
-#' as written in the URL (not percent-decoded).
+#' Extracts the password component of a URL. The value is never
+#' percent-decoded. This accessor takes no \code{url_standard}, so it always
+#' returns the raw source spelling, exactly as written in the URL; the
+#' \code{password} column of \code{\link{safe_parse_url}} under
+#' \code{url_standard = "whatwg"} instead carries the standard's
+#' percent-encoded spelling (a ":" inside the password becomes "\%3A").
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url

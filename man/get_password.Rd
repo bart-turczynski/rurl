@@ -36,8 +36,12 @@ NA).}
 A character vector of passwords.
 }
 \description{
-Extracts the password component of a URL. The value is returned raw, exactly
-as written in the URL (not percent-decoded).
+Extracts the password component of a URL. The value is never
+percent-decoded. This accessor takes no \code{url_standard}, so it always
+returns the raw source spelling, exactly as written in the URL; the
+\code{password} column of \code{\link{safe_parse_url}} under
+\code{url_standard = "whatwg"} instead carries the standard's
+percent-encoded spelling (a ":" inside the password becomes "\\%3A").
 }
 \examples{
 get_password("ftp://alice:secret@ftp.example.com/file.txt")
