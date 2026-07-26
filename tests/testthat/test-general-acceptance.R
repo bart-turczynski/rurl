@@ -193,6 +193,37 @@ test_that("a mailto: with a real // authority keeps the host it parsed", {
   )
 })
 
+test_that("tab/LF/CR are stripped for non-special schemes too", {
+  # RURL-lsgdeisl. WHATWG's step 1 removes every ASCII tab/LF/CR from the input
+  # before anything is parsed, for ALL schemes. That step lived only in the
+  # libcurl preparation path, so rows routed to the general parser were handed
+  # the raw string: a tab was percent-encoded into the host and an LF was
+  # rejected outright.
+  args <- list(url_standard = "whatwg", scheme_policy = "require",
+               scheme_acceptance = "general")
+  u <- c("foo://ho\tst/", "foo://ho\nst/", "foo://ho\rst/", "foo://host/")
+  d <- do.call(safe_parse_urls, c(list(u), args))
+
+  expect_false(any(d$parse_status == "error"))
+  # All four spellings converge on the same host as the clean input.
+  expect_identical(d$host, rep("host", length(u)))
+
+  # Stripping is scheme-independent, so an interior tab goes for a non-special
+  # reg-name host as well.
+  expect_identical(
+    do.call(safe_parse_urls, c(list("sc://a\tb.com/p"), args))$host,
+    "ab.com"
+  )
+
+  # RFC 3986 has NO strip step -- it requires such bytes to be percent-encoded
+  # -- so the rfc3986 profile must still reject. This is the deliberate profile
+  # split, not a gap.
+  rfc <- suppressWarnings(safe_parse_urls(
+    "foo://ho\tst/", url_standard = "rfc3986", scheme_policy = "require",
+    scheme_acceptance = "general"))
+  expect_identical(rfc$parse_status, "error")
+})
+
 test_that("an opaque payload ending in :<digits> still parses", {
   # RURL-jnvtttfm. The scheme-less `example.com:8080` carve-out matched with a
   # colon-greedy authority part, so `urn:ietf:rfc:2648` read as "authority

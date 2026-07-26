@@ -1723,7 +1723,20 @@ safe_parse_urls <- function(url,
   # from curl_parseable and their components installed directly (mirroring the
   # whatwg_file / rfc3986_path_rootless blocks). Rows the gate/parser rejects
   # (gen$ok = FALSE) simply never join parse_ok, so they present as errors.
-  gen <- .general_parse_vec(urls, opts$url_standard, opts$scheme_acceptance)
+  #
+  # The general route gets the SAME WHATWG step-1 treatment the libcurl route
+  # already had: remove every ASCII tab/LF/CR before anything is parsed. That
+  # step is scheme-independent in WHATWG, but it lived only inside
+  # `._prepare_urls_vec` (parse-phases.R), so the rows routed away from libcurl
+  # were still handed the raw string -- `foo://ho<TAB>st/` kept the tab and
+  # percent-encoded it into the host, and `foo://ho<LF>st/` was rejected
+  # outright (RURL-lsgdeisl). Only the strip is applied here, deliberately NOT
+  # the rest of `prep`: browser fixup and special-scheme backslash rewriting are
+  # separate rules that must not start firing on non-special schemes. A
+  # byte-for-byte no-op unless url_standard == "whatwg".
+  gen_input <- .strip_whatwg_control_chars_vec(urls, opts$url_standard)$url
+  gen <- .general_parse_vec(gen_input, opts$url_standard,
+                            opts$scheme_acceptance)
   general_route <- valid & gen$general_parsed
 
   # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
@@ -2072,8 +2085,13 @@ safe_parse_urls <- function(url,
     # routed to the posture parser AND that parsed ok (curl_ok is the complement
     # of Stage A's null rows). Cheap and deterministic; only the general posture
     # pays for it.
+    # Stage A feeds the general parser its WHATWG step-1 stripped input
+    # (RURL-lsgdeisl), so this re-parse MUST strip identically -- otherwise the
+    # two stages disagree about which rows are general-routed and the recovered
+    # state kinds land on the wrong rows.
     gen_b <- .general_parse_vec(
-      original_url, opts$url_standard, opts$scheme_acceptance
+      .strip_whatwg_control_chars_vec(original_url, opts$url_standard)$url,
+      opts$url_standard, opts$scheme_acceptance
     )
     gp <- gen_b$general_parsed & curl_ok
     # path_kind / host_kind for eligibility: the L3a classifier proxy for the
