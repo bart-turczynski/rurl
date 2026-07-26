@@ -58,6 +58,24 @@
 
 ### Bug fixes
 
+- **ASCII tab, LF and CR are now stripped for non-special schemes too.** The
+  WHATWG parser's very first step removes every ASCII tab (U+0009), LF
+  (U+000A) and CR (U+000D) from the input, everywhere, before any component is
+  parsed — and that step is *scheme-independent*. rurl applied it only on the
+  libcurl preparation path, so rows routed to the general parser under
+  `scheme_acceptance = "general"` were handed the raw string: `foo://ho<TAB>st/`
+  percent-encoded the tab into the host as `ho%09st`, and `foo://ho<LF>st/` was
+  rejected outright. All four spellings now agree with the clean input on host
+  `host`.
+
+  Only the strip is shared with the general route, deliberately not the rest of
+  the preparation: browser fixup and special-scheme backslash rewriting are
+  separate rules that must not begin firing on non-special schemes. Both parse
+  stages apply it identically, since they disagree about routing otherwise.
+  `url_standard = "rfc3986"` is unaffected and still rejects — RFC 3986 has no
+  strip step and requires such bytes to be percent-encoded, which is the
+  deliberate profile split. (RURL-lsgdeisl.)
+
 - **An opaque URL whose payload ends in `:<digits>` now parses.** Under
   `scheme_acceptance = "general"`, `urn:ietf:rfc:2648` — the textbook URN form —
   was rejected outright, as were `urn:a:1` and `sc:x:80`. A non-numeric tail
