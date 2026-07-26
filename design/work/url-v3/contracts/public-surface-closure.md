@@ -71,13 +71,13 @@ project are already hash-enforced by `validate-manifest.R`.
 
 | surface class | count | source of truth | status |
 |---|---|---|---|
-| exported functions | 29 | `NAMESPACE` `export(...)` (29 lines; all functions, zero data) | SETTLED (unchanged) |
+| exported functions | 30 | `NAMESPACE` `export(...)` (30 lines; all functions, zero data) | SETTLED (+1: `get_parse_verdicts`, the P2.3 §2 layered companion ADR 0006 was amended to authorize) |
 | public output fields | 18 | `.spu_result_fields` (`R/utils.R:215-241`) | SETTLED (unchanged; the sole public surface per P1.1@a7e0a59 B3) |
 | curl-dependency surfaces | 3 | DESCRIPTION/NAMESPACE + parse + escape/unescape | SETTLED (inventoried; removal downstream) |
 | migration-surface | 1 | the disposition row this closure discharges | SETTLED (discharged here) |
-| **total** | **51** | | |
+| **total** | **52** | | |
 
-The 20 Stage-A internal fields (`.spu_stage_a_fields`) remain internal, out of the
+The 21 Stage-A internal fields (`.spu_stage_a_fields`) remain internal, out of the
 public surface (their public/internal split is the artifact-3 canonical-state
 matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 
@@ -108,6 +108,7 @@ matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 | `get_host_type` | G3.H (+ G3.6 companion) | companion diagnostic SETTLED (ADR 0006); de-overload → HOST-O2 | OPEN (HOST-O2) |
 | `get_mailto_recipients` | G3.5 | recipient projection + `smtp_wire` SETTLED (P4.1@b017e87 D-C; ADR 0012 D7); email facts → G3.5 SCHEME-O3 | OPEN (SCHEME-O3) |
 | `get_parse_status` | G3.6 | π(L1,L2,L3) compat projection, byte-identical retain (P2.3@a7e0a59 §4-5); deprecation window → VAL-O4 | OPEN (VAL-O4) |
+| `get_parse_verdicts` | G3.6 | layered L1/L2/L3 companion, ADR 0006 amended to authorize it (P2.3@a7e0a59 §1-§2); defined at `url_standard = NULL`; L3 enum membership G3.6 | SETTLED |
 | `get_password` | G3.7 (+ G3.5) | `user`/`password` split SETTLED; selector parity → G3.5 SCHEME-O2, undivided-userinfo → G3.7 OUT-O1 | OPEN (SCHEME-O2/OUT-O1) |
 | `get_path` | G3.7 (+ G3.8) | path presentation dials SETTLED (ADR 0011; P2.2@8292c7f §3); path mutation → G3.8 MUT-O9 | OPEN (MUT-O9) |
 | `get_port` | G3.K | thin port accessor; port equivalence truth table (P3.2@bb3346e; P3.1@3b89b94 D-B) | SETTLED |

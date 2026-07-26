@@ -309,7 +309,7 @@ if (!is.null(sc_reg) && !is.null(fd_reg)) {
 
 ## --- G1.2 register: public-surface-inventory (§6 artifact 4) -----------------
 ## Parses the artifact-4 inventory register and enforces: PROPOSED envelope,
-## every row DISCOVERED with non-empty required columns, the 29-export NAMESPACE
+## every row DISCOVERED with non-empty required columns, the 30-export NAMESPACE
 ## bijection over exported-function/exported-data rows (mirrors G1.1's row-count
 ## bijection), and the 18 public-output-field rows. (RURL-dmsgpcak)
 psi_path <- file.path(reg_dir, "public-surface-inventory.md")
@@ -358,17 +358,17 @@ if (!is.null(psi_reg)) {
   check(length(dup_psi) == 0,
         sprintf("[duplicate_ids] public-surface-inventory: %s", paste(dup_psi, collapse = ", ")))
 
-  # --- 29-export NAMESPACE bijection over exported-function/exported-data rows -
+  # --- 30-export NAMESPACE bijection over exported-function/exported-data rows -
   ns <- readLines("NAMESPACE", warn = FALSE)
   ns_exports <- regmatches(ns, regexpr("(?<=^export\\()[^)]+", ns, perl = TRUE))
   ns_exports <- sort(ns_exports[nzchar(ns_exports)])
   is_export_row <- vapply(psi_rows,
                           function(r) gv(r, "kind") %in% c("exported-function", "exported-data"), TRUE)
   fn_ids <- sort(vapply(psi_rows[is_export_row], function(r) gv(r, "item_id"), ""))
-  check(length(ns_exports) == 29L,
-        sprintf("NAMESPACE expected 29 export() lines, got %d", length(ns_exports)))
-  check(length(fn_ids) == 29L,
-        sprintf("public-surface-inventory expected 29 export rows, got %d", length(fn_ids)))
+  check(length(ns_exports) == 30L,
+        sprintf("NAMESPACE expected 30 export() lines, got %d", length(ns_exports)))
+  check(length(fn_ids) == 30L,
+        sprintf("public-surface-inventory expected 30 export rows, got %d", length(fn_ids)))
   check(setequal(fn_ids, ns_exports),
         sprintf("public-surface-inventory export rows != NAMESPACE (rows=%d, NAMESPACE=%d)",
                 length(fn_ids), length(ns_exports)))
@@ -560,7 +560,7 @@ gate_checks <- (pass + length(fail)) - gate_checks_before
 ## The canonical-state contract (artifact 3) additionally gets the deep staged
 ## section (_scratch/orchestrate/g3-seal-staging/canonical-state-validator-section.md):
 ## Rows columns/enums, 18-field completeness, verdict-layer sets, open-cell coverage.
-## Objective per-contract counts (public-surface 29+18 vs NAMESPACE/.spu_result_fields;
+## Objective per-contract counts (public-surface 30+18 vs NAMESPACE/.spu_result_fields;
 ## the capstone's five criterion verdicts; the three caches) are asserted only where
 ## the contract states an exact cardinality. (RURL-huneoffx; the cp-snapshot-3 seal.)
 contracts_dir <- file.path(root, "contracts")
@@ -792,8 +792,8 @@ if (dir.exists(contracts_dir)) {
             sprintf("public-surface-closure: exported-function table must have %d rows (NAMESPACE exports)", n_exports))
       check(length(fld_tab) == 1 && length(fld_tab[[1]]$rows) == 18L,
             "public-surface-closure: public-output-field table must have 18 rows")
-      # bijection: components 29 + 18 + 3 + 1 sum to the register's 51 rows, and
-      # the total row states 51 (guards the 46-vs-51 arithmetic regression).
+      # bijection: components 30 + 18 + 3 + 1 sum to the register's 52 rows, and
+      # the total row states 52 (guards the 46-vs-51 arithmetic regression).
       bij <- Filter(function(t) "surface class" %in% t$header && "count" %in% t$header, tabs)
       if (length(bij) == 1) {
         labels <- vapply(bij[[1]]$rows, function(r) tolower(gv(r, "surface class") %||% ""), "")
@@ -802,11 +802,11 @@ if (dir.exists(contracts_dir)) {
         }, integer(1))
         tot_i  <- grep("total", labels)
         comp_i <- setdiff(seq_along(labels), tot_i)
-        check(sum(nums[comp_i], na.rm = TRUE) == 51L,
-              sprintf("public-surface-closure: bijection components must sum to 51 (got %d)",
+        check(sum(nums[comp_i], na.rm = TRUE) == 52L,
+              sprintf("public-surface-closure: bijection components must sum to 52 (got %d)",
                       sum(nums[comp_i], na.rm = TRUE)))
-        check(length(tot_i) == 1 && identical(nums[tot_i[1]], 51L),
-              sprintf("public-surface-closure: bijection total must be 51 (got %s)",
+        check(length(tot_i) == 1 && identical(nums[tot_i[1]], 52L),
+              sprintf("public-surface-closure: bijection total must be 52 (got %s)",
                       if (length(tot_i) == 1) nums[tot_i[1]] else "<none>"))
       } else {
         check(FALSE, "public-surface-closure: bijection table (surface class | count) not found")

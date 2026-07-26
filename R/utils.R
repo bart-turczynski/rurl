@@ -288,5 +288,14 @@
   # set off it, because encoding an UNDIVIDED userinfo would render its
   # structural ":" as "%3A". Cached with the rest of Stage A: it is a fact
   # about the parse, not a presentation choice.
-  list(name = "general_userinfo_split", default = FALSE, template = logical(1))
+  list(name = "general_userinfo_split", default = FALSE, template = logical(1)),
+  # Whether Stage A produced NO usable parse for this row (invalid input, a
+  # Phase-1 rejection, or a curl failure). Cached WITH the other fields rather
+  # than signalled by caching a NULL value, so a null row's classifier flags --
+  # `looks_like_protocol` / `original_has_allowed_scheme` /
+  # `looks_like_host_port`, which are what distinguish an admission REJECTION
+  # from a syntax FAILURE -- survive a cache hit instead of reverting to their
+  # defaults. Without this the layered verdicts (R/verdicts.R) would depend on
+  # cache warmth, which P1.1 §2 forbids.
+  list(name = "null_row", default = TRUE, template = logical(1))
 )

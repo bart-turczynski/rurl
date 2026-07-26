@@ -109,6 +109,14 @@
 
 #' Get the parse status of URLs
 #'
+#' The status is a single value collapsed from three independent facts --- URL
+#' syntax, admission policy, and the Public Suffix List annotation --- so it is
+#' a \emph{lossy} view of them. The guaranteed loss: a structural syntax
+#' failure and a policy rejection both report \code{"error"}. Call
+#' \code{\link{get_parse_verdicts}} when you need to tell those apart, or to
+#' read the PSL result as a typed annotation state rather than as a warning.
+#' Nothing here is deprecated --- the layered accessor is purely additive.
+#'
 #' @param url A character vector of URLs to be parsed.
 #' @inheritParams safe_parse_url
 #' @param source Which PSL source to use: "all", "private", or "icann".
@@ -121,6 +129,7 @@
 #'   \code{"warning-public-suffix"}, \code{"warning-userinfo"} (a scheme-less
 #'   input carrying userinfo, e.g. \code{"user@example.com"}), or
 #'   \code{"error"}. See \code{\link{safe_parse_url}} for the full semantics.
+#' @seealso \code{\link{get_parse_verdicts}} for the unprojected layers
 #' @export
 #' @examples
 #' get_parse_status(

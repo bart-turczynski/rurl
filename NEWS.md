@@ -346,6 +346,41 @@
 
 ### New features
 
+- **`get_parse_verdicts()` reports the three verdicts `parse_status` collapses
+  into one.** A single status value answers three independent questions at
+  once — did the input present well-formed URL syntax (layer 1), was the parsed
+  object admitted under the active policy (layer 2), and what did the Public
+  Suffix List annotation find (layer 3) — so it is a *lossy* view of them. The
+  guaranteed loss is that a structural failure and a policy rejection both
+  report `"error"`:
+
+  ```r
+  get_parse_status(c("mailto:jane@example.com", "http://"))
+  #> [1] "error" "error"
+
+  get_parse_verdicts(c("mailto:jane@example.com", "http://"))
+  #>   layer1_syntax_verdict layer2_policy_verdict layer3_annotation_state
+  #> 1                  pass       rejected-scheme          not-applicable
+  #> 2                  fail              admitted          not-applicable
+  ```
+
+  The first was declined at admission; the second did not parse. Layer 3 also
+  makes the Public Suffix List result a *typed annotation* rather than a
+  warning: a host with no public suffix is `"unknown"`, while an IP literal or
+  a `file:` host is `"not-applicable"` (no registrable-domain concept at all),
+  and neither is ever fatal.
+
+  Like the other companion helpers it never widens the `safe_parse_url()`
+  frame — that keeps its 18 columns. Unlike `get_host_type()` and
+  `get_scheme_class()` it is fully defined without a `url_standard` selector,
+  since layers 1 and 2 describe the parse that actually occurred.
+
+  **`parse_status` is unchanged and is not deprecated.** It is now *derived* as
+  the projection of the three layers rather than computed separately, so there
+  is one status-deciding path and the two surfaces cannot drift apart.
+  Byte-identity was verified over 74,700 (`parse_status`, `clean_url`) cells —
+  the committed corpora under 60 option configurations — plus the whole suite.
+
 - **`get_password()`, `get_query()`, `get_fragment()` and `get_port()` gain the
   standards axis (`url_standard`, `scheme_policy`, `scheme_acceptance`).** Each
   of the four could previously take only presentation dials, so none of them

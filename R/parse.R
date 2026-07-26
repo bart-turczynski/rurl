@@ -1630,10 +1630,12 @@ safe_parse_urls <- function(url,
   names(a_uniq) <- a_fields
   null_uniq <- rep(TRUE, m)
 
-  # Fill cache hits. A hit value is an unnamed Stage A field list (populated
-  # row) or NULL (cached null row -- keep the defaults). Non-null rows are
-  # gathered a field at a time with the builtin `[[`, so reconstruction avoids a
-  # closure per hit.
+  # Fill cache hits. A hit value is an unnamed Stage A field list; null-ness is
+  # carried by the `null_row` FIELD rather than by a NULL value, so a null row's
+  # classifier flags survive the round trip (see .spu_stage_a_fields). A legacy
+  # NULL value is still tolerated -- it simply keeps the defaults, which is what
+  # it always meant. Fields are gathered one at a time with the builtin `[[`, so
+  # reconstruction avoids a closure per hit.
   if (any(hit)) {
     hit_idx <- which(hit)
     is_null_hit <- vapply(cached[hit_idx], is.null, logical(1))
@@ -1646,6 +1648,7 @@ safe_parse_urls <- function(url,
           nn_vals, `[[`, .spu_stage_a_fields[[j]]$template, j
         )
       }
+      null_uniq[nn_idx] <- a_uniq$null_row[nn_idx]
     }
   }
 
@@ -1659,16 +1662,13 @@ safe_parse_urls <- function(url,
       a_uniq[[nm]][need_idx] <- a_cols[[nm]]
     }
 
-    # Store the freshly computed, cacheable Stage A rows: the unnamed field
-    # list, or NULL for a null row. NA / "" are never cached.
+    # Store the freshly computed, cacheable Stage A rows as the unnamed field
+    # list -- INCLUDING null rows, whose `null_row` field marks them and whose
+    # classifier flags the layered verdicts need. NA / "" are never cached.
     store_idx <- need_idx[cacheable[need_idx]]
     if (length(store_idx) > 0L) {
       store_vals <- lapply(store_idx, function(i) {
-        if (null_uniq[i]) {
-          NULL
-        } else {
-          unname(lapply(a_uniq, `[[`, i))
-        }
+        unname(lapply(a_uniq, `[[`, i))
       })
       .cache_set_many("full_parse", keys[store_idx], store_vals)
     }
@@ -1678,6 +1678,12 @@ safe_parse_urls <- function(url,
   # the presentation options. Runs on every call (never cached); curl_ok is the
   # complement of the null rows.
   cols_uniq <- ._parse_stage_b_vec(a_uniq, uniq, !null_uniq, opts)
+  # The layered verdicts ride out of Stage B on an attribute (never a column --
+  # ADR 0006). They are deliberately NOT reset for null rows below: a null row's
+  # verdicts are already the correct ones (L1 `fail`, or L2 `rejected-scheme`
+  # for a row the web admission gate demoted), and that pair is exactly what
+  # `get_parse_verdicts()` exists to tell apart.
+  verdicts_uniq <- attr(cols_uniq, "verdicts")
 
   # Null rows collapse to the all-default "error" row (original_url is left as
   # the unique input and restored per row by the caller). This matches the tail
@@ -1697,6 +1703,7 @@ safe_parse_urls <- function(url,
   cols <- lapply(cols_uniq, function(col) col[pos])
   names(cols) <- field_names
   attr(cols, "null_row") <- null_uniq[pos]
+  attr(cols, "verdicts") <- lapply(verdicts_uniq, function(col) col[pos])
   cols
 }
 
@@ -2078,7 +2085,11 @@ safe_parse_urls <- function(url,
     # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009): same seam, emits
     # `host-charset-shimmed` where a curl-rejected-but-WHATWG-valid host code
     # point was accepted via the shim + true-host restore above.
-    host_charset_shimmed = prep$host_charset_shimmed
+    host_charset_shimmed = prep$host_charset_shimmed,
+    # Also a cached Stage-A FIELD (not only the attribute below), so a cache
+    # hit can report null-ness without the cache having to encode it as a NULL
+    # value -- see the `null_row` entry in .spu_stage_a_fields.
+    null_row = null_row
   )
   attr(cols, "null_row") <- null_row
   cols
@@ -2338,9 +2349,13 @@ safe_parse_urls <- function(url,
     }
   }
 
-  # Phase 12: parse-status assignment (uses the post-subdomain-trim host,
-  # exactly as the previous single-stage engine did).
-  parse_status <- .derive_parse_status_vec(
+  # Phase 12: the three independent verdict layers (R/verdicts.R), then the
+  # legacy `parse_status` as their projection pi. Uses the post-subdomain-trim
+  # host, exactly as the previous single-stage engine did. The layers are
+  # carried out of Stage B on an attribute so `get_parse_verdicts()` reads the
+  # SAME derivation the status came from; the public parse frame is untouched
+  # (ADR 0006 -- companion helpers never widen it).
+  verdicts <- .derive_verdict_layers_vec(
     curl_ok = curl_ok,
     final_host = final_host,
     is_ip_host = is_ip_host,
@@ -2355,8 +2370,14 @@ safe_parse_urls <- function(url,
     scheme_relative_handling = opts$scheme_relative_handling,
     rfc3986_path_rootless = a$rfc3986_path_rootless,
     scheme_acceptance = opts$scheme_acceptance,
-    is_general = if (general_acceptance) gp else NULL
+    is_general = if (general_acceptance) gp else NULL,
+    # D5 scheme-less userinfo used to overwrite the FINISHED status below,
+    # which made `.derive_parse_status_vec()` not actually the locus that
+    # decided the status. It is an L2 policy note, so it is an input to the
+    # layers and reaches the status only through pi (RURL-pnprjiis).
+    scheme_less_userinfo = a$scheme_less_userinfo
   )
+  parse_status <- .project_parse_status_vec(verdicts)
 
   # Phase 13: assemble the 14 typed columns.
   result <- .assemble_parse_result_vec(
@@ -2387,15 +2408,18 @@ safe_parse_urls <- function(url,
 
   # D5: scheme-less userinfo (user@example.com). host/domain/tld/user still
   # resolve, but rurl refuses to fabricate a canonical clean_url from an
-  # ambiguous, email-shaped, scheme-less string: NA clean_url + the warning.
+  # ambiguous, email-shaped, scheme-less string: NA clean_url. The accompanying
+  # `warning-userinfo` status is no longer stamped here -- it is the L2
+  # `warn-userinfo` verdict, projected by pi in Phase 12 above.
   slu <- a$scheme_less_userinfo & curl_ok
   if (any(slu)) {
     result$clean_url[slu] <- NA_character_
-    result$parse_status[slu] <- .STATUS_WARN_USERINFO
   }
 
   # Output-side encoding contract: declare the returned character columns UTF-8.
-  .mark_result_utf8(result)
+  out <- .mark_result_utf8(result)
+  attr(out, "verdicts") <- verdicts
+  out
 }
 
 # Internal implementation of safe_parse_url (not memoized)

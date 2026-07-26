@@ -27,8 +27,8 @@ The `Collate:` field in `DESCRIPTION` is authoritative. The load order is:
 
 ```
 rurl-package.R → status-constants.R → utils.R → query-denylist.R → domain.R →
-path-query.R → parse-phases.R → parse.R → diagnostics.R → accessors.R →
-canonical_join.R → resolve.R → zzz.R
+path-query.R → parse-phases.R → parse.R → verdicts.R → diagnostics.R →
+accessors.R → canonical_join.R → resolve.R → zzz.R
 ```
 
 Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
@@ -50,6 +50,12 @@ Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
   `.strip_whatwg_control_chars_vec()`, `.map_whatwg_domain_separators_vec()`,
   and the host-charset shim `.shim_whatwg_host_charset_vec()` — ADR 0009), and
   the `clean_url` assembler (`.build_clean_url_vec()` / `.build_port_part_vec()`).
+- **R/verdicts.R** — the layered validation verdicts: the L1 syntax / L2 policy
+  / L3 annotation vocabularies, their derivation
+  (`.derive_verdict_layers_vec()`), the projection back to the legacy
+  `parse_status` (`.project_parse_status_vec()`, "π"), and the public companion
+  `get_parse_verdicts()`. Phase 12 **is** π ∘ layer-derivation, so there is one
+  status-deciding path and the companion cannot drift from the column.
 - **R/accessors.R** — public `get_*()` accessors, all built on the shared
   `.extract_from_urls()` helper over `safe_parse_url()`.
 - **R/domain.R** — Punycode helpers (`.normalize_and_punycode()`,
