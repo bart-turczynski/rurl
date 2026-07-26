@@ -2763,8 +2763,22 @@
 
 # Phase 12 (vector): classify the parse outcome (ok / ok-ftp / warning-* /
 # error / ok-scheme-relative). `curl_ok` is TRUE for rows curl parsed (the
-# scalar wrapper passes !is.null(parsed_curl)). Progressive mask assignment
-# mirrors the scalar precedence exactly.
+# scalar wrapper passes !is.null(parsed_curl)).
+#
+# The status is now DERIVED, not decided here: Phase 12 computes the three
+# independent verdict layers (R/verdicts.R) and projects them through pi. That
+# projection reproduces the historical cascade exactly -- including the two
+# places the old code let a later fact overwrite an earlier one (an FTP scheme
+# only reached `ok-ftp` when the PSL cascade had left the row `ok`; a
+# scheme-relative row likewise) -- because pi considers the L3 annotation rows
+# BEFORE the L2 accept sub-states. Keeping one status-deciding path is what
+# makes `get_parse_verdicts()` incapable of drifting from `parse_status`.
+#
+# ADR 0012 D5 (RURL-qbnelzku): a general-routed opaque / non-special-authority
+# row is `ok` and EXEMPT from the reg-name host_has_dot / tld / domain cascade
+# -- an opaque or arbitrary-scheme host has no PSL domain, so it must NOT
+# become warning-no-tld. Empty under "web" (no general row exists there), so
+# this is a pure no-op for the default posture.
 .derive_parse_status_vec <- function(curl_ok, final_host, is_ip_host, tld,
                                      domain, protocol_handling, final_scheme,
                                      looks_like_protocol,
@@ -2774,71 +2788,26 @@
                                      scheme_relative_handling,
                                      rfc3986_path_rootless = NULL,
                                      scheme_acceptance = "web",
-                                     is_general = NULL) {
-  n <- length(final_host)
-  if (is.null(rfc3986_path_rootless)) {
-    rfc3986_path_rootless <- rep(FALSE, n)
-  }
-  # ADR 0012 D5 (RURL-qbnelzku): a general-routed opaque / non-special-authority
-  # row is `ok`, promoted BEFORE and EXEMPT FROM the reg-name host_has_dot / tld
-  # / domain WARN cascade -- an opaque or arbitrary-scheme host has no PSL
-  # domain, so it must NOT become warning-no-tld. Empty under "web" (no general
-  # row exists there), so this is a pure no-op for the default posture.
-  if (is.null(is_general)) {
-    is_general <- rep(FALSE, n)
-  }
-  status <- rep(.STATUS_ERROR, n)
-
-  scheme_lower <- .ascii_tolower(final_scheme)
-  is_file <- curl_ok & !is.na(scheme_lower) & scheme_lower == "file"
-  is_rfc3986_path_rootless <- curl_ok & rfc3986_path_rootless
-  is_general_ok <- curl_ok & is_general
-  host_present <- curl_ok & !is.na(final_host) & final_host != ""
-
-  status[host_present & is_ip_host] <- .STATUS_OK
-  status[is_file] <- .STATUS_OK
-  status[is_rfc3986_path_rootless] <- .STATUS_OK
-  status[is_general_ok] <- .STATUS_OK
-
-  non_ip <- host_present & !is_ip_host & !is_file & !is_general_ok
-  host_has_dot <- stringi::stri_detect_fixed(final_host, ".")
-  host_has_dot[is.na(host_has_dot)] <- FALSE
-  tld_empty <- is.na(tld) | !nzchar(tld)
-  domain_empty <- is.na(domain) | !nzchar(domain)
-
-  status[non_ip & !host_has_dot] <- .STATUS_WARN_NO_TLD
-  status[non_ip & host_has_dot & tld_empty] <- .STATUS_WARN_INVALID_TLD
-  status[non_ip & host_has_dot & !tld_empty & domain_empty] <-
-    .STATUS_WARN_PUBLIC_SUFFIX
-  status[non_ip & host_has_dot & !tld_empty & !domain_empty] <- .STATUS_OK
-
-  if (protocol_handling != "strip") {
-    ftp_candidate <- host_present & status == .STATUS_OK & !is.na(final_scheme)
-    is_ftp <- ftp_candidate & scheme_lower %in% c("ftp", "ftps")
-    is_ftp[is.na(is_ftp)] <- FALSE
-    status[is_ftp] <- .STATUS_OK_FTP
-  }
-
-  # ADR 0012 D3 (Option B): armed on the scheme-ACCEPTANCE axis, in lock-step
-  # with Phase 1 (.prepare_urls_for_curl_vec). Under "web" an unsupported
-  # scheme-bearing token is demoted to error regardless of protocol_handling;
-  # under "general" the demotion is suppressed. host:port inputs match the
-  # scheme regex (`example.com:` looks like a scheme) but Phase 1 already
-  # recognizes and parses them as host:port, so the `!looks_like_host_port`
-  # term keeps them from being demoted here (RURL-aldwnots).
-  if (scheme_acceptance == "web") {
-    unsupported <- looks_like_protocol &
-      !original_has_allowed_scheme &
-      !looks_like_host_port
-    status[unsupported] <- .STATUS_ERROR
-  }
-  status[!curl_ok] <- .STATUS_ERROR
-
-  if (scheme_relative_handling == "keep") {
-    status[is_scheme_relative & status == .STATUS_OK] <- .STATUS_OK_SCHEME_REL
-  }
-
-  status
+                                     is_general = NULL,
+                                     scheme_less_userinfo = NULL) {
+  .project_parse_status_vec(.derive_verdict_layers_vec(
+    curl_ok = curl_ok,
+    final_host = final_host,
+    is_ip_host = is_ip_host,
+    tld = tld,
+    domain = domain,
+    protocol_handling = protocol_handling,
+    final_scheme = final_scheme,
+    looks_like_protocol = looks_like_protocol,
+    original_has_allowed_scheme = original_has_allowed_scheme,
+    looks_like_host_port = looks_like_host_port,
+    is_scheme_relative = is_scheme_relative,
+    scheme_relative_handling = scheme_relative_handling,
+    rfc3986_path_rootless = rfc3986_path_rootless,
+    scheme_acceptance = scheme_acceptance,
+    is_general = is_general,
+    scheme_less_userinfo = scheme_less_userinfo
+  ))
 }
 
 # Phase 12 (scalar wrapper): delegates to .derive_parse_status_vec().

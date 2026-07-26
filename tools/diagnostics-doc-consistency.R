@@ -68,6 +68,35 @@ registry_tokens <- function(e) {
   sort(as.character(get(".URL_DIAGNOSTICS", envir = e)))
 }
 
+# Values of the package's OTHER enumerated vocabularies. A hyphenated literal
+# can legitimately belong to one of them and still land in a diagnostic family:
+# the layered-verdict state `invalid-input` (P2.3 §2) shares the `invalid-`
+# family with `invalid-URL-unit`. Those are not phantom diagnostics, and a
+# curated denylist would rot -- so the exemption is READ FROM THE SAME SOURCE
+# the vocabularies are defined in, exactly as the token registry is. The
+# `non-special` precedent is handled instead by the family-size rule below,
+# which is why that vocabulary needs no entry here.
+SIBLING_VOCABULARY_FILES <- c("verdicts.R", "parse-state.R")
+
+sibling_vocabulary <- function(root) {
+  out <- character(0)
+  for (nm in SIBLING_VOCABULARY_FILES) {
+    f <- file.path(root, "R", nm)
+    if (!file.exists(f)) next
+    e <- new.env(parent = baseenv())
+    # Definitions only; nothing here is called, so package internals the
+    # function bodies reference are never reached (same trick as above).
+    try(sys.source(f, envir = e), silent = TRUE)
+    for (obj in ls(e, all.names = TRUE)) {
+      val <- get(obj, envir = e)
+      if (is.character(val) && length(val) > 0L) {
+        out <- c(out, val)
+      }
+    }
+  }
+  unique(out)
+}
+
 # ---- the canonical section --------------------------------------------------
 
 # Extract one `\section{<title>}{ ... }` body by brace matching. Rd nests braces
@@ -206,12 +235,14 @@ check_diagnostics_docs <- function(root = ".", expected_n = 32L) {
     else "the canonical section documents no token that is not in the registry"))
 
   # ---- D3 no phantoms -------------------------------------------------------
+  siblings <- sibling_vocabulary(root)
   phantom <- character(0)
   for (f in doc_files(root)) {
     lines <- readLines(f, warn = FALSE)
     for (i in seq_along(lines)) {
       for (tok in extract_tokens(lines[i])) {
-        if (family(tok) %in% families && !tok %in% tokens) {
+        if (family(tok) %in% families && !tok %in% tokens &&
+              !tok %in% siblings) {
           phantom <- c(phantom, sprintf("%s:%d '%s'",
                                         sub(paste0("^", root, "/?"), "", f),
                                         i, tok))
@@ -285,11 +316,15 @@ self_test <- function() {
     "}"
   )
 
-  mk <- function(registry = reg, rd = sect, extra_rd = NULL, extra_r = NULL) {
+  mk <- function(registry = reg, rd = sect, extra_rd = NULL, extra_r = NULL,
+                 verdicts = NULL) {
     root <- tempfile("diagdoc-")
     dir.create(file.path(root, "man"), recursive = TRUE)
     dir.create(file.path(root, "R"), recursive = TRUE)
     writeLines(registry, file.path(root, "R", "diagnostics.R"))
+    if (!is.null(verdicts)) {
+      writeLines(verdicts, file.path(root, "R", "verdicts.R"))
+    }
     writeLines(rd, file.path(root, "man", "get_url_diagnostics.Rd"))
     if (!is.null(extra_rd)) {
       writeLines(extra_rd, file.path(root, "man", "other.Rd"))
@@ -365,6 +400,32 @@ self_test <- function() {
   r <- mk(extra_rd = 'the class is \\code{non-special} for these schemes')
   expect("D3 does not scan a singleton family",
          identical(rule(r, "D3"), TRUE))
+
+  # 9d. D3 -- a value of a SIBLING vocabulary that lands in a diagnostic family
+  #     is not a phantom. The live case: the layered-verdict annotation state
+  #     `invalid-input` shares the `invalid-` family with `invalid-URL-unit`.
+  #     Needs a registry where `invalid-` is a real family (two tokens), or the
+  #     singleton rule above would exempt it for the wrong reason.
+  reg_inv <- append(reg, '  "invalid-credentials",', after = 6L)
+  sect_inv <- append(sect, "\\item \\code{invalid-credentials} --- creds.",
+                     after = 7L)
+  mk_inv <- function(...) mk(registry = reg_inv, rd = sect_inv, ...)
+  vocab <- '.LAYER3_ANNOTATION_STATE <- c("not-applicable", "invalid-input")'
+
+  # Negative half first: with no sibling vocabulary it IS drift.
+  r <- mk_inv(extra_rd = "the state is \\code{invalid-input} here")
+  expect("D3 fails on an invalid- literal with no sibling vocabulary",
+         identical(rule(r, "D3", n = 7L), FALSE))
+  r <- mk_inv(extra_rd = "the state is \\code{invalid-input} here",
+              verdicts = vocab)
+  expect("D3 exempts a sibling-vocabulary value",
+         identical(rule(r, "D3", n = 7L), TRUE))
+  # ...and the exemption is not a blanket one: a real phantom in the same
+  # family still fails even with the sibling vocabulary present.
+  r <- mk_inv(extra_rd = "reject on \\code{invalid-nonsense} here",
+              verdicts = vocab)
+  expect("D3 still fails a phantom when a sibling vocabulary exists",
+         identical(rule(r, "D3", n = 7L), FALSE))
 
   # 9c. Section extraction must survive an escaped BACKSLASH before a closing
   #     brace. `\code{\\}` (the `invalid-reverse-solidus` row in the live

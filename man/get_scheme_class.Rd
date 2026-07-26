@@ -16,7 +16,11 @@ get_scheme_class(
 
 \item{url_standard}{Standard profile gating the classification: \code{NULL}
 (default; no classification, returns \code{NA}), \code{"rfc3986"}, or
-\code{"whatwg"}.}
+\code{"whatwg"}. The gate is semantic, not stylistic: "special" is a
+WHATWG notion, so without a selector there is no fact to report.
+\code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
+--- its layers describe the parse that actually ran, which is defined with
+or without a selector.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
