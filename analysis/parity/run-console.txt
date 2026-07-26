@@ -1,16 +1,27 @@
 standard-conformance parity harness (RURL-wncwfasl companion)
 ==========================================================================
   R 4.6.0 | rurl 2.8.0 | pslr 1.1.1 | punycoder 1.2.1.9000
-  WHATWG oracle : WPT urltestdata (176 success + 202 failure)
+  WHATWG oracle : WPT urltestdata (336 success + 202 failure)
   RFC oracle    : 37 hand-authored RFC-3986 probes
   output dir    : /Users/bartturczynski/Projects/rurl/analysis/parity
 
-== WHATWG (canonical-output config) ==
-  success accepted        : 176/176 (100%) 
-  success FULL parity     : 176/176 (100%) 
-    scheme 176/176 (100%) | host 176/176 (100%) | port 176/176 (100%) | path 176/176 (100%) | query 176/176 (100%) | fragment 176/176 (100%) 
+== WHATWG (canonical-output config) | scheme_acceptance = "general" ==
+  the GRAMMAR figure: every WPT scheme in scope, nothing excluded
+  success accepted        : 336/336 (100%) 
+  success FULL parity     : 336/336 (100%) 
+    scheme 336/336 (100%) | host 336/336 (100%) | port 336/336 (100%) | path 336/336 (100%) | query 336/336 (100%) | fragment 336/336 (100%) 
   failure correctly reject: 202/202 (100%) 
-  overall WHATWG acceptance conformance: 378/378 (100%) 
+  overall WHATWG acceptance conformance (general): 538/538 (100%) 
+
+== WHATWG (canonical-output config) | scheme_acceptance = "web" ==
+  the ADR 0004 closed allowlist (http/https/ftp/ftps/file). A lower
+  accepted count is that allowlist working, NOT a conformance failure.
+  success accepted        : 176/336 (52%) 
+  success FULL parity     : 176/336 (52%) 
+    scheme 176/336 (52%) | host 176/336 (52%) | port 176/336 (52%) | path 176/336 (52%) | query 176/336 (52%) | fragment 176/336 (52%) 
+  failure correctly reject: 202/202 (100%) 
+  of the accepted 176, full parity 176 -- the other 160 are ADR 0004
+  policy rejections, NOT conformance misses (see the general block).
 
 == RFC 3986 (probe set, two-sided since RURL-wlqhmbdw) ==
   accept-conformance      : 19/19 (100%)   (RFC admits; rurl must accept + match components)
@@ -20,11 +31,20 @@ standard-conformance parity harness (RURL-wncwfasl companion)
     departures are pinned so intentional strictness cannot drift silently;
     they are EXCLUDED from the conformance figures above on purpose.
 
-== WHATWG success: non-conformances by component ==
+== WHATWG success: non-conformances by component [general] ==
   scheme    0
   host      0
   port      0
   path      0
   query     0
   fragment  0
-  (over-strict rejects of WPT-valid input: 0 )
+  (rejects of WPT-valid input: 0 )
+
+== WHATWG success: non-conformances by component [web] ==
+  scheme    0
+  host      0
+  port      0
+  path      0
+  query     0
+  fragment  0
+  (rejects of WPT-valid input: 160 )

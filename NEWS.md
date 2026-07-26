@@ -331,10 +331,32 @@
   parsing disagreement; against RFC 3986 the `"rfc3986"` profile matches on
   **164** of 257 oracled rows and departs on **93**, every departure attributed
   to an ADR. The two boundaries that keep this honest are stated alongside the
-  numbers rather than buried: the WPT success fixture covers `http`/`https`/
-  `ftp`/`file` only, so opaque, `ws:` and `wss:` serialization is *unmeasured*
-  rather than passing; and the profile is WHATWG on its governed axes, **not** a
-  full UTS-46 host mapping.
+  numbers rather than buried: the WPT fixture covers **absolute** URLs only, so
+  the figures say nothing about base-relative resolution; and the profile is
+  WHATWG on its governed axes, **not** a full UTS-46 host mapping. (The success
+  figure was later widened to 336 rows — see the entry below.)
+
+- **The WPT success oracle now spans every scheme, and both scheme-acceptance
+  postures are scored.** The fixture generator used to keep only
+  `http`/`https`/`ftp`/`file` success rows, so the headline "176/176 full
+  component parity" was scored over a corpus that could not contain an opaque,
+  `ws:` or `wss:` URL — the carve-out the previous entry had to disclose as
+  *unmeasured*. Dropping it takes the success set from **176 to 336** rows (the
+  202 failure rows are unchanged), and `inst/bench/standard-parity.R` now passes
+  `scheme_acceptance` explicitly instead of inheriting the exported default,
+  scoring both postures side by side. At `scheme_acceptance = "general"` rurl
+  reaches **full component parity on all 336 rows** — scheme, host, port, path,
+  query and fragment — with zero rejections of WPT-valid input, and still
+  rejects **202/202** failure rows, for **538/538** overall. Widening the corpus
+  by 160 rows surfaced no new mismatch, so opaque, `ws:` and `wss:`
+  serialization is now measured-and-conformant rather than silently untested.
+  At the default `"web"` posture 160 of the 336 are declined by the ADR 0004
+  allowlist before the grammar is consulted; that is the allowlist working, and
+  `176/336` is not a conformance rate. Scoring the failure rows at `general`
+  also answers in band what previously needed the companion study: the 36
+  non-web-scheme failure rows are rejected by the **grammar**, not by the closed
+  scheme set. Only base-relative rows remain out of scope, because rurl parses
+  absolute URLs. Frozen in `analysis/parity/`.
 
 - **`scheme_acceptance` is documented as an axis in its own right.** The
   vignette's *What the selector does not govern* section previously said the
@@ -351,7 +373,9 @@
   attributed ledger of what is left.** Every figure in it is scored at the
   default `scheme_acceptance = "web"`, which was true but unstated; the success
   fixture's scheme carve-out is now recorded as a *measurement limit* so the
-  silence on opaque schemes is not read as a pass. The residual deviations are
+  silence on opaque schemes is not read as a pass. (Both of those were then
+  closed within this same release — the README now scores **both** postures over
+  a fixture with no scheme carve-out.) The residual deviations are
   tabulated with their owning ADR and, where one exists, the argument that
   reaches them — separating the one genuine gap (UTS-46 host mapping) from the
   four deviations that are dials the caller chooses.
