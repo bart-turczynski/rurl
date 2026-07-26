@@ -340,3 +340,119 @@ test_that("newly accepted userinfo rows report the credential diagnostics", {
   expect_true("invalid-credentials" %in% diag)
   expect_true("invalid-URL-unit" %in% diag)
 })
+
+# ---------------------------------------------------------------------------
+# General/opaque-route credentials (RURL-ovpguvva, epic RURL-rnobeauh)
+#
+# The opaque parser computed the authority's userinfo -- the WHATWG
+# host-missing rule reads it -- and then dropped it from its return list, so
+# every general-routed row reported NA credentials while the libcurl route
+# reported them exactly. It now splits at the first ":" per the WHATWG
+# authority state, which also lets the userinfo percent-encode set apply here
+# on the same terms as the libcurl route.
+# ---------------------------------------------------------------------------
+
+test_that("the general route splits userinfo into user and password", {
+  for (std in c("rfc3986", "whatwg")) {
+    res <- safe_parse_urls(
+      c("sc://u:p@h/x", "sc://u@h/x", "sc://h/x"),
+      scheme_acceptance = "general", url_standard = std
+    )
+    expect_identical(res$user, c("u", "u", NA_character_), info = std)
+    expect_identical(
+      res$password, c("p", NA_character_, NA_character_), info = std
+    )
+    # The credentials do not disturb the rest of the parse.
+    expect_identical(res$host, rep("h", 3L), info = std)
+  }
+})
+
+test_that("the general route splits at the FIRST colon, not the last", {
+  # WHATWG's authority state puts everything after the first ":" into the
+  # password buffer, so a second ":" is password content, not a delimiter.
+  res <- safe_parse_urls("sc://u:p:q@h/x",
+    scheme_acceptance = "general", url_standard = "rfc3986"
+  )
+  expect_identical(res$user, "u")
+  expect_identical(res$password, "p:q")
+})
+
+test_that("general-route credentials carry the WHATWG userinfo encode set", {
+  res <- safe_parse_urls(c("sc://u:p:q@h/x", "sc://u^b:p@h/x"),
+    scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  # The structural ":" became the delimiter; the one INSIDE the password is
+  # content and is encoded. Encoding before splitting would have produced
+  # "p%3Aq" out of the delimiter itself and misreported the split.
+  expect_identical(res$user, c("u", "u%5Eb"))
+  expect_identical(res$password, c("p%3Aq", "p"))
+  # rfc3986 stays source-preserving on the same inputs.
+  raw <- safe_parse_urls("sc://u:p:q@h/x",
+    scheme_acceptance = "general", url_standard = "rfc3986"
+  )
+  expect_identical(raw$password, "p:q")
+})
+
+test_that("the RFC 8089 file: overlay keeps its userinfo UNDIVIDED", {
+  # App. E.1's production is `[ userinfo "@" ]` with no credentials split, and
+  # the appendix warns a password there is "a serious security exposure", so
+  # rurl must not manufacture a split the RFC never draws. This is the one
+  # general-routed producer that deliberately differs.
+  res <- safe_parse_urls("file://u:p@host/p",
+    scheme_acceptance = "general", url_standard = "rfc3986"
+  )
+  expect_identical(res$user, "u:p")
+  expect_identical(res$password, NA_character_)
+  # Undivided means the userinfo encode set must NOT be applied -- it would
+  # render the structural ":" as "%3A".
+  expect_false(grepl("%3A", res$user, fixed = TRUE))
+})
+
+test_that("a mailto: user stays a recipient local-part, not a userinfo", {
+  # mailto is an opaque path: no authority, so the general parser leaves its
+  # userinfo NA and the split mask is FALSE. safe_parse_url()'s user column is
+  # NA for mailto (the D7 recipient extraction is an accessor-level
+  # divergence), and no userinfo encode set may reach it.
+  res <- safe_parse_urls("mailto:jane@example.com",
+    scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_identical(res$user, NA_character_)
+  expect_identical(res$password, NA_character_)
+})
+
+test_that("the libcurl route's credentials are unchanged", {
+  # The special-scheme route always split, so nothing about it moves.
+  res <- safe_parse_urls("http://u:p:q@ex.com/", url_standard = "whatwg")
+  expect_identical(res$user, "u")
+  expect_identical(res$password, "p%3Aq")
+  expect_identical(
+    safe_parse_urls("http://u:p:q@ex.com/",
+      url_standard = "rfc3986")$password,
+    "p:q"
+  )
+})
+
+test_that("general-route credentials are reachable through the accessors", {
+  u <- "sc://u:p:q@h/x"
+  expect_identical(
+    get_password(u, scheme_acceptance = "general", url_standard = "whatwg"),
+    "p%3Aq"
+  )
+  expect_identical(
+    get_password(u, scheme_acceptance = "general", url_standard = "rfc3986"),
+    "p:q"
+  )
+  expect_identical(
+    get_userinfo(u, scheme_acceptance = "general", url_standard = "whatwg"),
+    "u:p%3Aq"
+  )
+})
+
+test_that("general-route credentials raise invalid-credentials under whatwg", {
+  # The diagnostic keys off raw_user/raw_password being present, so surfacing
+  # credentials that were previously dropped must also surface the fact.
+  diag <- get_url_diagnostics("sc://u:p@h/x",
+    url_standard = "whatwg", scheme_acceptance = "general"
+  )
+  expect_true("invalid-credentials" %in% diag)
+})

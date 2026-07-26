@@ -708,7 +708,8 @@
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
     fragment = na, path_kind = na, rfc_path_form = na, host_kind = "absent",
     authority_kind = "absent", query_kind = "absent",
-    fragment_kind = "absent", host_form = na
+    fragment_kind = "absent", host_form = na,
+    userinfo = na, userinfo_kind = na
   )
   if (is.na(url)) {
     return(blank)
@@ -749,6 +750,9 @@
   rfc_path_form <- na
   host <- na
   port <- na
+  # userinfo stays NA unless an authority actually supplies one. An opaque path
+  # and a scheme with no `//` have no authority to carry credentials at all.
+  userinfo <- na
   is_v6 <- FALSE
   is_v4 <- FALSE
   ok <- TRUE
@@ -787,6 +791,13 @@
     parts <- .split_authority(authority)
     host <- parts$host
     port <- parts$port
+    # `.split_authority()` has always computed this -- the WHATWG host-missing
+    # rule below reads it -- but the opaque parser used to drop it on the floor,
+    # so every general-routed row reported NA credentials while the libcurl
+    # route reported them exactly (RURL-ovpguvva). Surfaced RAW here; the
+    # username/password split and the WHATWG userinfo encode set are applied
+    # downstream in R/parse.R, which is where the file:-overlay exception lives.
+    userinfo <- parts$userinfo
     if (is_whatwg) {
       # WHATWG authority validation (ADR 0012 D2; #host-parser / #port-state).
       # A non-null port (content after `:`) must be ASCII digits only and
@@ -851,7 +862,13 @@
     query = query, fragment = fragment, path_kind = path_kind,
     rfc_path_form = rfc_path_form, host_kind = .host_kind(host),
     authority_kind = authority_kind, query_kind = .presence_kind(query),
-    fragment_kind = .presence_kind(fragment), host_form = host_form
+    fragment_kind = .presence_kind(fragment), host_form = host_form,
+    userinfo = userinfo,
+    # WHATWG authority userinfo: splittable at the first ":" into
+    # username/password. Distinguished from the RFC 8089 overlay's UNDIVIDED
+    # `[ userinfo "@" ]` so the consumer never has to re-derive which parser a
+    # row came from (RURL-ovpguvva).
+    userinfo_kind = if (is.na(userinfo)) na else "authority"
   )
 }
 
@@ -863,7 +880,7 @@
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "path_kind",
     "rfc_path_form", "host_kind", "authority_kind", "query_kind",
-    "fragment_kind", "host_form"
+    "fragment_kind", "host_form", "userinfo", "userinfo_kind"
   )
   if (n == 0L) {
     out <- list(ok = logical(0))
@@ -929,7 +946,8 @@
   na <- NA_character_
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
-    fragment = na, userinfo = na, rfc_path_form = na, host_kind = "absent",
+    fragment = na, userinfo = na, userinfo_kind = na, rfc_path_form = na,
+    host_kind = "absent",
     authority_kind = "absent", query_kind = "absent",
     fragment_kind = "absent", host_form = na
   )
@@ -1003,6 +1021,10 @@
   list(
     ok = TRUE, scheme = scheme, host = host, port = port, path = path,
     query = query, fragment = fragment, userinfo = userinfo,
+    # RFC 8089 App. E.1/F give `[ userinfo "@" ]` UNDIVIDED, and warn that a
+    # password there is "a serious security exposure". rurl does not
+    # manufacture a credentials split the RFC never draws (RURL-ovpguvva).
+    userinfo_kind = if (is.na(userinfo)) na else "rfc8089",
     rfc_path_form = rfc_path_form,
     host_kind = .host_kind(host), authority_kind = authority_kind,
     query_kind = .presence_kind(query),
@@ -1022,7 +1044,7 @@
   n <- length(url)
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "userinfo",
-    "rfc_path_form",
+    "userinfo_kind", "rfc_path_form",
     "host_kind", "authority_kind", "query_kind", "fragment_kind", "host_form"
   )
   if (n == 0L) {
@@ -1143,7 +1165,7 @@
   out <- list(
     general_parsed = rep(FALSE, n), ok = rep(FALSE, n),
     scheme = na, host = na, port = na, path = na, query = na, fragment = na,
-    userinfo = na,
+    userinfo = na, userinfo_kind = na,
     path_kind = na, rfc_path_form = na, host_kind = rep("absent", n),
     authority_kind = rep("absent", n), query_kind = rep("absent", n),
     fragment_kind = rep("absent", n), host_form = na
@@ -1178,7 +1200,7 @@
   opaque_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "path_kind",
     "rfc_path_form", "host_kind", "authority_kind", "query_kind",
-    "fragment_kind", "host_form"
+    "fragment_kind", "host_form", "userinfo", "userinfo_kind"
   )
   if (any(reg)) {
     p <- .parse_opaque_urls_vec(url[reg], url_standard)
@@ -1189,10 +1211,14 @@
   }
   if (any(is_file)) {
     p <- .parse_rfc_file_urls_vec(url[is_file])
-    # `userinfo` is file-only: RFC 8089 App. E.1/F supplies a production for it,
-    # so the overlay surfaces it as a fact. The opaque parser has no such column
-    # and its rows keep the NA initialized above, so opaque output is unchanged.
-    for (f in c(setdiff(opaque_fields, "path_kind"), "userinfo")) {
+    # Both parsers now supply `userinfo`, but they mean different things by it,
+    # and the difference is honoured downstream in R/parse.R rather than here:
+    # the opaque parser's is a WHATWG authority userinfo (split at the first
+    # ":" into username/password), while RFC 8089's App. E.1/F production is
+    # `[ userinfo "@" ]` UNDIVIDED -- the appendix warns a password there is
+    # "a serious security exposure", so rurl does not manufacture a split the
+    # RFC never draws.
+    for (f in setdiff(opaque_fields, "path_kind")) {
       out[[f]][is_file] <- p[[f]]
     }
     out$ok[is_file] <- p$ok
