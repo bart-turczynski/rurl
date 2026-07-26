@@ -260,7 +260,10 @@ table settle them:
    (path percent/dot, host IPv4/reg-name, case, port elision, backslash,
    tab/CR/LF, forbidden host code points) — **not** a full UTS-46 host mapping.
    Ligatures / circled digits / zero-width code points pass through (ADR 0002).
-   Tracked: **`RURL-tvbvdjde`**.
+   Tracked: **`RURL-mumydwfh`** — which reopened `RURL-tvbvdjde`; cite the live
+   one, the original is closed. This is the **only** residual on the WHATWG side
+   that is a genuine gap rather than a dial; the attributed ledger of the rest is
+   in [`../parity/README.md`](../parity/README.md#residual-deviations--the-attributed-ledger).
 2. **ada-008 / host allowed-set:** libcurl's host allowed-set is narrower than
    WHATWG's (e.g. curl rejects an apostrophe in a host) → **`RURL-dxwxeamq`**.
 3. **`%7e`→`%7E` percent-hex case — CLOSED (`RURL-dkaycxvp`).** Verified in the

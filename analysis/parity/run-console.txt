@@ -1,6 +1,6 @@
 standard-conformance parity harness (RURL-wncwfasl companion)
 ==========================================================================
-  R 4.6.0 | rurl 2.8.0 | pslr 1.1.0 | punycoder 1.2.1.9000
+  R 4.6.0 | rurl 2.8.0 | pslr 1.1.1 | punycoder 1.2.1.9000
   WHATWG oracle : WPT urltestdata (176 success + 202 failure)
   RFC oracle    : 37 hand-authored RFC-3986 probes
   output dir    : /Users/bartturczynski/Projects/rurl/analysis/parity

@@ -24,16 +24,44 @@ Rows whose input contains a control byte carry a JSON spelling in `input_json`,
 which is authoritative when present; the `input` cell is then a lossy rendering
 kept only so the row stays legible in a diff.
 
-Success cases are limited to the schemes rurl supports (`http/https/ftp/file`) —
-the *"additional protocols notwithstanding"* carve-out; non-special schemes
-(`mailto:`, `data:`, `ws:`, …) are out of scope by design.
-
 WHATWG success is scored in rurl's **canonical-output config**
 (`scheme_policy="require", host_encoding="idna", path_encoding="encode"`) — the
 settings that ask rurl for the WHATWG serialization. A residual mismatch there
 is genuine: **the spec output cannot be reached by any knob.**
 
-## Headline (rurl 2.8.0, 2026-07-26)
+### Held axis — `scheme_acceptance = "web"` (the default)
+
+Every figure below is scored at rurl's **default** scheme acceptance, the
+curated `http`/`https`/`ftp`/`ftps`/`file` allowlist (ADR 0004). That is a
+deliberate division of labour with the companion study, and it has to be read
+carefully in both directions:
+
+* The **success** fixture is itself limited to `http`/`https`/`ftp`/`file` —
+  `make-wpt-fixture.py` hardcodes that set. So the success figures are scored at
+  `web` over a corpus that never leaves `web`, and they say **nothing yet** about
+  opaque, `ws:` or `wss:` serialization. Widening the carve-out to non-special
+  schemes — and re-cutting the oracle-provenance records that key off the
+  fixture digest — is tracked as **`RURL-ghdlrcjv`**. Until it lands, read
+  176/176 as *"complete on the special schemes the spec suite covers"*, not as
+  *"complete."*
+* The **failure** fixture is not limited that way, so `202/202` is a real
+  whole-corpus rejection result. Measured at `4ed6c14`: 158 of the 202 rows
+  carry a `web` scheme, **36 carry a non-web one** (`sc` 12, then `data`,
+  `intent`, `javascript`, `mailto`, `stun`, `turn`, `urn` at 3 each,
+  `non-special` 2, `asdf` 1), and 8 carry no scheme at all. At this posture
+  those 36 are rejected by the **closed scheme set**, not by the WHATWG
+  grammar — so they are correctly rejected, but for a reason the grammar did
+  not have to supply. The complementary evidence that the grammar itself rejects
+  them comes from the disagreement study, which holds `scheme_acceptance =
+  "general"`; that posture is exactly what exposed the `sc://@/` over-acceptance
+  closed by `RURL-jxvibxqq`.
+
+`scheme_acceptance` is a **public argument**, not an internal flag: it is in the
+formals of the exported parse and accessor surface, so both postures are things
+users actually run. Between them, the two frozen studies cover both —
+`web` here, `general` in [`../disagreement/`](../disagreement/README.md).
+
+## Headline (rurl 2.8.0, 2026-07-26, `scheme_acceptance = "web"`)
 
 | Metric | Result |
 |---|---|
@@ -48,8 +76,16 @@ is genuine: **the spec output cannot be reached by any knob.**
 
 rurl **never accepts a URL WHATWG rejects** among these 202 failure cases, and
 the three over-strict rejections noted in the 2026-07-08 run (rurl 2.5.0:
-173/176) are gone. Against this oracle the WHATWG profile is now fully
-conformant.
+173/176) are gone. Against this oracle the WHATWG profile is fully conformant —
+with "this oracle" carrying the scope stated above.
+
+> **Re-verified at `4ed6c14`.** The general-mode parser fixes that landed after
+> this run was frozen (`RURL-glphqenm` opaque-path masking, `RURL-jxvibxqq`
+> host-missing authority) are `general`-posture edits, so they were not expected
+> to move a `web`-posture score. That was **checked, not assumed**: re-running
+> the harness at `4ed6c14` reproduces `whatwg-success-scored.csv`,
+> `whatwg-failure-scored.csv` and `rfc-probes-scored.csv` **byte-identically**.
+> The frozen figures are current.
 
 ### Reading the RFC rows
 
@@ -72,14 +108,23 @@ notice it. Two properties keep the number honest:
 > hand-authored probes cannot cover the grammar. The honest whole-corpus figure
 > comes from the audited conformance fixture (`RURL-nknytzxz`): of **257 rows
 > carrying an RFC 3986 oracle, rurl matches the standard on 164 and departs on
-> 93** — 81 where it rejects what the RFC admits (deliberate policy: the ADR
-> 0004 host-shape gate and the closed scheme set) and 12 where it accepts what
-> the RFC does not (ADR 0002 Unicode hosts, ADR 0011 readable paths). Each of
-> the 93 cites the ADR or ticket that owns it.
+> 93** — 81 where it rejects what the RFC admits and 12 where it accepts what
+> the RFC does not. Each of the 93 cites the ADR or ticket that owns it.
 >
 > That was **158 / 99** before `RURL-qrfrvmkg` bound the generic-URI gate
 > uniformly across schemes; closing the `RURL-pfewxbhb` coverage gap moved
 > exactly 6 rows from over-permissive to conformant-reject (18 → 12).
+>
+> **Both halves are single-cause, which earlier prose got wrong.** This
+> attribution used to read "the ADR 0004 host-shape gate *and the closed scheme
+> set*"; re-deriving it from `oracle-audit-rows.csv` at `4ed6c14` shows the
+> closed scheme set contributes **zero** rows. Every one of the 81 is the ADR
+> 0004 host/authority gate — percent-encoded reg-names **48**, other reg-name
+> shapes **11**, empty host **8**, userinfo **6**, absent authority **5**, port
+> shape **3** — and all **12** over-lenient rows are a single family,
+> `non-ascii-or-control` (ADR 0002 Unicode hosts, ADR 0011 readable paths). The
+> corpus is 202/282 WPT-sourced and therefore almost entirely `http`/`https`/
+> `file`, so the scheme set never had the opportunity to fire.
 
 ## Where rurl falls short of the standard
 
@@ -120,6 +165,31 @@ the record of what was closed, not as open items.
    accepted query and fragment components with their component-specific encode
    sets, and the harness scores WPT `search`/`hash` alongside the existing
    scheme/host/port/path columns.
+
+## Residual deviations — the attributed ledger
+
+What is left, with the owner of each. Nothing here is unattributed, and nothing
+here is accidental — that is the standard this ledger is held to, not the count.
+
+| # | Residual | Kind | Owner | Reachable by the user? |
+|---|---|---|---|---|
+| 1 | Host mapping is not full **UTS-46**: ligatures, circled digits and zero-width code points pass through unmapped | Deliberate | ADR 0002; tracked `RURL-mumydwfh` (which reopened the closed `RURL-tvbvdjde`) | No — open work, not a dial |
+| 2 | Punycode hosts keep the **A-label** rather than rendering back to Unicode | Deliberate (facts-not-policy) | ADR 0002 | Yes — `host_encoding` |
+| 3 | The default scheme set is **closed** to the `web` allowlist | Deliberate | ADR 0004 | Yes — `scheme_acceptance = "general"` |
+| 4 | No scheme is **inferred** for scheme-less input under `require` | Deliberate | ADR 0010 | Yes — `scheme_policy` |
+| 5 | RFC 3986: **81** rows rejected that the grammar admits — all of them the host/authority gate | Deliberate strictness | ADR 0004 | No — the gate is not a dial |
+| 6 | RFC 3986: **12** rows accepted that the grammar does not admit — all `non-ascii-or-control` | Deliberate leniency | ADR 0002 (Unicode hosts), ADR 0011 (readable paths) | Yes — `host_encoding`, `path_encoding` |
+
+Row 1 is the only entry that is a **gap** rather than a dial, and it is the one
+the companion study also names as its biggest carried caveat. Rows 2–4 are the
+design's actual claim: a deviation that is reachable from a documented argument
+is a policy the caller chooses, not a defect they are stuck with.
+
+**Measurement scope is not a deviation, but it is a limit.** The success
+fixture's `http`/`https`/`ftp`/`file` carve-out (see the held-axis note above)
+means opaque, `ws:` and `wss:` serialization is currently **unmeasured** against
+WPT rather than measured-and-conformant. It is listed here so no reader mistakes
+the silence for a pass. Tracked: `RURL-ghdlrcjv`.
 
 ## Files
 
