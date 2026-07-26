@@ -564,6 +564,22 @@ Rules:
   `gen_b` re-parse (host `NA` for `mailto`), so `clean_url` / round-trip is
   byte-for-byte unchanged. `get_host`(mailto) and `clean_url`(mailto) are
   independent.
+
+  **Amended by T1 (`RURL-glphqenm`), rurl 2.8.0.** As originally shipped this
+  metadata also reached the *public parse table*, whose `host` / `user` /
+  `domain` / `tld` columns showed the recipient's parts. That contradicted
+  WHATWG — a non-special scheme with no `//` is an opaque path and has no
+  authority — so the parse table now masks those columns for a `mailto:` row
+  (`.mask_opaque_authority()`, applied at both the vector and scalar assembly
+  sites). Stage A is unchanged, so the accessors below still resolve recipients
+  through the identical PSL/presentation branches. The decision this D7 records
+  is therefore **intact**: the accessors remain the surface, and no
+  `mailto`/email-specific extraction function was minted. Only the *reach* of
+  the metadata narrowed — making this bullet's own "extraction metadata only"
+  claim true of the parse table as well, not just of `clean_url`.
+  `safe_parse_url`(mailto)`$host` and `get_host`(mailto) now deliberately
+  diverge, the same shape of independence this bullet already declared between
+  `get_host` and `clean_url`.
 - **Deliberate carve-out of D2.** D2 masks a general/opaque host out of the PSL
   decomposition because it is not asserted to be a DNS name. A `mailto` recipient
   domain *is* a domain, so it is exempted from that mask and does flow through

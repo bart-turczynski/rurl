@@ -449,6 +449,17 @@ get_scheme <- function(url, protocol_handling = "keep",
 #'
 #' Extracts the host component of a URL.
 #'
+#' Under \code{scheme_acceptance = "general"} a \code{mailto:} URL's first
+#' recipient domain is returned, decomposed through the same PSL seam a web host
+#' uses, so \code{\link{get_domain}} / \code{\link{get_tld}} /
+#' \code{\link{get_subdomain}} work on it too (ADR 0012 D7). This deliberately
+#' diverges from \code{\link{safe_parse_url}}, whose \code{host} column is
+#' \code{NA} for a \code{mailto:} URL: a \code{mailto:} is a WHATWG opaque path
+#' and has no authority, so the recipient domain is surfaced here as extraction
+#' metadata rather than presented as a parsed authority. Under the default
+#' \code{"web"} acceptance a \code{mailto:} URL is not parsed and this returns
+#' \code{NA}.
+#'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @param source Which PSL source to use: "all", "private", or "icann".
@@ -581,6 +592,12 @@ get_path <- function(
 #' still percent-decodes for readability (`decode = TRUE`); pass
 #' `decode = FALSE` to obtain the raw query exactly as written in the URL.
 #'
+#' Under `url_standard = "whatwg"` the underlying query carries the standard's
+#' percent-encoded spelling (the query percent-encode set is applied, so a
+#' literal space becomes `%20`); under `url_standard = "rfc3986"` or no
+#' selector it is the raw source spelling. That distinction is only visible
+#' with `decode = FALSE`, since decoding collapses both spellings.
+#'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @param format Return format: "string" (default) or "list" for parsed
@@ -624,22 +641,27 @@ get_query <- function(url,
                       params_case_sensitive = FALSE,
                       sort_params = FALSE,
                       empty_param_handling = c("keep", "drop"),
-                      decode_plus = FALSE) {
+                      decode_plus = FALSE,
+                      scheme_policy = c("infer", "require"),
+                      scheme_acceptance = c("web", "general"),
+                      url_standard = NULL) {
   format <- match.arg(format)
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
+  url_standard <- .validate_url_standard(url_standard)
 
   .check_character_url(url)
 
   if (!.query_engine_active(query_handling, sort_params, empty_param_handling,
     decode_plus)) {
-    return(.get_query_fast_path(url, protocol_handling, format, decode))
+    return(.get_query_fast_path(url, protocol_handling, format, decode,
+      scheme_policy, scheme_acceptance, url_standard))
   }
 
   .get_query_engine_path(
     url, protocol_handling, format, decode, query_handling, params_keep,
     params_drop, params_case_sensitive, sort_params, empty_param_handling,
-    decode_plus
+    decode_plus, scheme_policy, scheme_acceptance, url_standard
   )
 }
 
@@ -661,10 +683,15 @@ get_query <- function(url,
     !decode_plus)
 }
 
-.get_query_fast_path <- function(url, protocol_handling, format, decode) {
+.get_query_fast_path <- function(url, protocol_handling, format, decode,
+                                 scheme_policy, scheme_acceptance,
+                                 url_standard) {
   if (identical(format, "string")) {
     raw <- .extract_from_urls(url, "query",
-      protocol_handling = protocol_handling
+      protocol_handling = protocol_handling,
+      scheme_policy = scheme_policy,
+      scheme_acceptance = scheme_acceptance,
+      url_standard = url_standard
     )
     if (decode) {
       return(.decode_raw_query_strings(raw))
@@ -674,7 +701,10 @@ get_query <- function(url,
 
   raw <- .extract_from_urls(url, "query",
     protocol_handling = protocol_handling,
-    case_handling = "keep"
+    case_handling = "keep",
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
   )
   lapply(raw, ._parse_query_string, decode = decode)
 }
@@ -697,8 +727,15 @@ get_query <- function(url,
 .get_query_engine_path <- function(url, protocol_handling, format, decode,
                                    query_handling, params_keep, params_drop,
                                    params_case_sensitive, sort_params,
-                                   empty_param_handling, decode_plus) {
-  raw <- .extract_from_urls(url, "query", protocol_handling = protocol_handling)
+                                   empty_param_handling, decode_plus,
+                                   scheme_policy, scheme_acceptance,
+                                   url_standard) {
+  raw <- .extract_from_urls(url, "query",
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
+  )
   if (identical(format, "string")) {
     return(.get_query_engine_string(
       raw, decode, query_handling, params_keep, params_drop,
@@ -801,8 +838,12 @@ get_query <- function(url,
 
 #' Get URL fragments
 #'
-#' Extracts the fragment component of a URL. The value is returned raw, exactly
-#' as written in the URL (not percent-decoded).
+#' Extracts the fragment component of a URL. The value is never
+#' percent-decoded. Under \code{url_standard = "whatwg"} it carries the
+#' standard's percent-encoded spelling (the fragment percent-encode set is
+#' applied, so a double-quote inside the fragment becomes \code{\%22}); under
+#' \code{url_standard = "rfc3986"} or no selector it is the raw source
+#' spelling, exactly as written in the URL.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -810,13 +851,31 @@ get_query <- function(url,
 #' @export
 #' @examples
 #' get_fragment("http://example.com/path#section")
-get_fragment <- function(url, protocol_handling = "keep") {
-  .extract_from_urls(url, "fragment", protocol_handling = protocol_handling)
+#' get_fragment("http://example.com/p#a\"b", url_standard = "whatwg")
+get_fragment <- function(url, protocol_handling = "keep",
+                         scheme_policy = c("infer", "require"),
+                         scheme_acceptance = c("web", "general"),
+                         url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
+  .extract_from_urls(url, "fragment",
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
+  )
 }
 
 #' Get URL ports
 #'
 #' Extracts the port component of a URL.
+#'
+#' Under \code{url_standard = "whatwg"} a port equal to the scheme's default is
+#' \emph{not part of the parsed URL} (the standard discards it during parsing),
+#' so \code{"http://example.com:80/"} reports \code{NA} rather than \code{80}.
+#' Under \code{url_standard = "rfc3986"} or no selector the written port is
+#' reported as-is. This is distinct from \code{port_handling}, a presentation
+#' dial that governs whether a port is rendered into \code{clean_url}; the two
+#' are independent.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -824,25 +883,40 @@ get_fragment <- function(url, protocol_handling = "keep") {
 #' @export
 #' @examples
 #' get_port("http://example.com:8080/path")
-get_port <- function(url, protocol_handling = "keep") {
+#' get_port("http://example.com:80/path", url_standard = "whatwg")
+get_port <- function(url, protocol_handling = "keep",
+                     scheme_policy = c("infer", "require"),
+                     scheme_acceptance = c("web", "general"),
+                     url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, "port",
     null_value = NA_integer_,
     fun_value = integer(1),
     transform = as.integer,
-    protocol_handling = protocol_handling
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
   )
 }
 
 #' Get URL user names
 #'
-#' Extracts the user component of a URL. The value is returned raw, exactly as
-#' written in the URL (not percent-decoded).
+#' Extracts the user component of a URL. The value is never percent-decoded.
+#' Under \code{url_standard = "whatwg"} it carries the standard's
+#' percent-encoded spelling (WHATWG stores the username buffer encoded with the
+#' userinfo percent-encode set, so \code{"http://a^b@host/"} yields
+#' \code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} or no selector it is
+#' the raw source spelling, exactly as written in the URL.
 #'
 #' Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
 #' first recipient (its \code{addr-spec} local-part) is returned, mirroring how
 #' \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
-#' domain (ADR 0012 D7). Under the default \code{"web"} acceptance a
-#' \code{mailto:} URL is not parsed and this returns \code{NA}.
+#' domain (ADR 0012 D7). As with \code{\link{get_host}}, this deliberately
+#' diverges from \code{\link{safe_parse_url}}, whose \code{user} column is
+#' \code{NA} for a \code{mailto:} URL (an opaque path carries no authority).
+#' Under the default \code{"web"} acceptance a \code{mailto:} URL is not parsed
+#' and this returns \code{NA}.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -868,17 +942,33 @@ get_user <- function(url, protocol_handling = "keep",
 
 #' Get URL passwords
 #'
-#' Extracts the password component of a URL. The value is returned raw, exactly
-#' as written in the URL (not percent-decoded).
+#' Extracts the password component of a URL. The value is never
+#' percent-decoded. Under \code{url_standard = "whatwg"} it carries the
+#' standard's percent-encoded spelling (the userinfo percent-encode set is
+#' applied, so a ":" inside the password becomes \code{\%3A}); under
+#' \code{url_standard = "rfc3986"} or no selector it is the raw source
+#' spelling, exactly as written in the URL. This is the same contract as
+#' \code{\link{get_user}}.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @return A character vector of passwords.
+#' @seealso \code{\link{get_user}}, \code{\link{get_userinfo}}.
 #' @export
 #' @examples
 #' get_password("ftp://alice:secret@ftp.example.com/file.txt")
-get_password <- function(url, protocol_handling = "keep") {
-  .extract_from_urls(url, "password", protocol_handling = protocol_handling)
+#' get_password("http://u:p:q@example.com/", url_standard = "whatwg")
+get_password <- function(url, protocol_handling = "keep",
+                         scheme_policy = c("infer", "require"),
+                         scheme_acceptance = c("web", "general"),
+                         url_standard = NULL) {
+  url_standard <- .validate_url_standard(url_standard)
+  .extract_from_urls(url, "password",
+    protocol_handling = protocol_handling,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance,
+    url_standard = url_standard
+  )
 }
 
 #' Get URL userinfo
@@ -1128,7 +1218,8 @@ get_host_type <- function(url, url_standard = NULL,
 #' not policy: they are emitted keyed to host/path \emph{shape} in both
 #' standard modes so a security-sensitive consumer can reject a footgun URL
 #' regardless of which selector it chose, while a link-graph consumer can ignore
-#' them. See \code{vignette} / the package NEWS for the full token vocabulary.
+#' them. The complete token vocabulary is enumerated below under
+#' \emph{Diagnostic vocabulary (canonical)}.
 #'
 #' A single URL can carry several diagnostics, so the return shape is not a
 #' plain scalar-per-URL vector (see \emph{Value}). \code{parse_status} stays
@@ -1173,6 +1264,123 @@ get_host_type <- function(url, url_standard = NULL,
 #'       \code{file-component-outside-rfc8089} (a query or fragment, which
 #'       RFC 8089's grammar does not mention and which are therefore inherited
 #'       generic RFC 3986 components).
+#'   }
+#'
+#' @section Diagnostic vocabulary (canonical): This section is the
+#'   \strong{single authoritative enumeration} of the diagnostics vocabulary.
+#'   It is held to the runtime registry (\code{.URL_DIAGNOSTICS}) in both
+#'   directions by \code{tools/diagnostics-doc-consistency.R}, a CI gate: a
+#'   token cannot be added, renamed, or removed without this list moving with
+#'   it. Earlier design documents (including the v1 selector PRD's section 7
+#'   table) are historical records of what the vocabulary was when they were
+#'   accepted --- they are not registries and do not track it.
+#'
+#'   Every token below is emitted only when \code{url_standard} is not
+#'   \code{NULL}. Tokens marked \emph{general} additionally require
+#'   \code{scheme_acceptance = "general"}; the rest fire under both acceptance
+#'   postures and, unless noted, under both \code{"rfc3986"} and
+#'   \code{"whatwg"}.
+#'
+#'   \strong{Host --- IPv4 shape.} Facts about a host written as, or coerced
+#'   to, an IPv4 address; security filters typically reject all of them.
+#'   \itemize{
+#'     \item \code{ipv4-number-form} --- numeric IPv4 shorthand instead of
+#'       dotted decimal.
+#'     \item \code{ipv4-non-dotted} --- a whole-host number parsed/coerced to
+#'       IPv4 in WHATWG mode.
+#'     \item \code{ipv4-short-form} --- fewer than four dotted parts.
+#'     \item \code{ipv4-non-decimal} --- hex or octal notation participated in
+#'       IPv4 parsing.
+#'     \item \code{ipv4-octal} --- octal interpretation changed the apparent
+#'       address value.
+#'     \item \code{ipv4-leading-zero} --- a dotted decimal-looking part had a
+#'       leading zero.
+#'     \item \code{ipv4-out-of-range} --- a dotted part exceeds 255 (fatal
+#'       under \code{"whatwg"}; flags a numeric-looking \code{reg-name} under
+#'       \code{"rfc3986"}, e.g. \code{256.1.1.1}).
+#'   }
+#'
+#'   \strong{Host --- DNS length, UTS-46 and charset.} Probed against the
+#'   resolved host; IP literals are excluded.
+#'   \itemize{
+#'     \item \code{domain-label-too-long} --- a label exceeds the DNS 63-byte
+#'       limit.
+#'     \item \code{domain-name-too-long} --- the whole name exceeds the DNS
+#'       253-byte limit.
+#'     \item \code{domain-empty-label} --- the host contains an empty label
+#'       (a \code{".."} run, or a leading dot).
+#'     \item \code{domain-hyphen-violation} --- a label breaks the UTS-46
+#'       hyphen rules (leading/trailing hyphen, or \code{"--"} in positions
+#'       3--4 of a non-\code{xn--} label).
+#'     \item \code{domain-std3-violation} --- a label carries a code point
+#'       outside the STD3 LDH set.
+#'     \item \code{host-charset-shimmed} --- the host carries one of the 15
+#'       code points WHATWG keeps but libcurl rejects, accepted by the shim
+#'       (ADR 0009: \code{! $ & ( ) * + , ; =}, plus the ASCII quotation mark,
+#'       apostrophe, grave accent, and the two curly braces).
+#'       \code{"whatwg"} only.
+#'   }
+#'
+#'   \strong{Path.}
+#'   \itemize{
+#'     \item \code{encoded-dot-segment} --- an encoded-dot segment
+#'       (\code{\%2e} / \code{\%2e\%2e}, any hex case) that the profile's dot
+#'       handling acted on.
+#'     \item \code{encoded-reserved-path-byte} --- the preserved path still
+#'       carries an encoded reserved byte (\code{\%2F}, \code{\%3F},
+#'       \code{\%23}) held as data rather than as a separator.
+#'   }
+#'
+#'   \strong{Port.} Facts about the raw port versus the resolved scheme's
+#'   WHATWG default, independent of the \code{port_handling} knob.
+#'   \itemize{
+#'     \item \code{explicit-default-port} --- the port was written out and
+#'       equals the scheme's default.
+#'     \item \code{non-default-port} --- a port is present and is not the
+#'       scheme's default (including any port on a scheme with no defined
+#'       default).
+#'   }
+#'
+#'   \strong{Input shape --- WHATWG cleanup.} All three are \code{"whatwg"}
+#'   only; \code{"rfc3986"} has no strip or rewrite step.
+#'   \itemize{
+#'     \item \code{invalid-reverse-solidus} --- a literal \code{\\} was
+#'       reinterpreted as \code{/} (special schemes only).
+#'     \item \code{control-char-stripped} --- an ASCII tab/LF/CR was removed
+#'       from the interior of the input (step 1, second half).
+#'     \item \code{leading-trailing-stripped} --- a leading and/or trailing run
+#'       of C0-control-or-SPACE was removed (step 1, first half).
+#'   }
+#'
+#'   \strong{Layer 5 --- selected per-standard and per-scheme facts}
+#'   (ADR 0012 D5). Described in full under \emph{Selected facts, not a
+#'   conformance oracle} above.
+#'   \itemize{
+#'     \item \code{invalid-URL-unit} --- WHATWG validation error: a malformed
+#'       \code{\%}-escape or a non-URL code point. \code{"whatwg"} only.
+#'     \item \code{invalid-credentials} --- WHATWG validation error:
+#'       credentials (userinfo) are present. \code{"whatwg"} only.
+#'     \item \code{unicode-outside-rfc3986-uri} --- \emph{general}; a
+#'       directly-written non-ASCII scalar value under \code{"rfc3986"}.
+#'     \item \code{transform-skipped-ineligible-scheme} --- \emph{general};
+#'       a non-HTTP(S) scheme, ineligible for the Stage-B transforms.
+#'     \item \code{ws-fragment-forbidden} --- \emph{general}; a fragment on a
+#'       \code{ws:}/\code{wss:} URL (RFC 6455).
+#'     \item \code{ws-userinfo-forbidden} --- \emph{general}; userinfo on a
+#'       \code{ws:}/\code{wss:} URL (RFC 6455).
+#'     \item \code{mailto-fragment-discouraged} --- \emph{general}; a fragment
+#'       on a \code{mailto:} URL (RFC 6068).
+#'     \item \code{tel-missing-phone-context} --- \emph{general}; a local
+#'       \code{tel:} number with no \code{phone-context} (RFC 3966).
+#'     \item \code{data-missing-comma} --- \emph{general}; a \code{data:} URL
+#'       with no \code{","} separator (RFC 2397).
+#'     \item \code{file-non-absolute-path} --- \emph{general}; a
+#'       non-absolute \code{file:} path under \code{"rfc3986"}.
+#'     \item \code{file-userinfo-extension} --- \emph{general}; userinfo on a
+#'       \code{file:} URL, permitted by RFC 8089 Appendix E.1's non-normative
+#'       extended grammar.
+#'     \item \code{file-component-outside-rfc8089} --- \emph{general}; a query
+#'       or fragment on a \code{file:} URL, inherited from generic RFC 3986.
 #'   }
 #'
 #' @param url A character vector of URLs.

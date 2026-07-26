@@ -79,8 +79,16 @@ test_that("whatwg path_encoding = 'encode' uses the WHATWG path encode set", {
     )
   }
   expect_identical(
-    rurl:::.whatwg_path_percent_encode("\"#<>?`{} é"),
-    "%22%23%3C%3E%3F%60%7B%7D%20%C3%A9"
+    rurl:::.whatwg_path_percent_encode("\"#<>?^`{} é"),
+    "%22%23%3C%3E%3F%5E%60%7B%7D%20%C3%A9"
+  )
+  # `^` (U+005E) is a member of the path set (RURL-qxpgcwie): WPT pins
+  # `foo://host/...^...` -> `%5E`. It was the one missing member, so every other
+  # character of that row already matched.
+  expect_identical(
+    get_path("http://ex.com/a^b", url_standard = "whatwg",
+             path_encoding = "encode"),
+    "/a%5Eb"
   )
 })
 
@@ -201,15 +209,26 @@ test_that("path_encoding composes with host_encoding under a profile", {
   expect_identical(res$path, "/%C3%A9cole")
 })
 
-test_that("canonical_join layers path_encoding through the `...` seam", {
+test_that("canonical_join() path_encoding is LEGACY: it warns, it re-keys", {
   A <- data.frame(URL = "https://ex.com/école", ValA = 1L,
     stringsAsFactors = FALSE)
   B <- data.frame(URL = "https://ex.com/%C3%A9cole", ValB = 2L,
     stringsAsFactors = FALSE)
+  # P3.1 D-E / RURL-nfpjtxpq. This pins LEGACY behavior, NOT a feature:
+  # canonical_join() keys on `clean_url`, so `path_encoding` -- a presentation
+  # dial that takes no part in URL identity -- changes WHICH ROWS MATCH. D-E
+  # types that as compatibility-only, explicitly not the v3 identity model,
+  # retained for a deprecation window and required to warn. Both halves of
+  # that legacy contract are pinned below: the warning, then the match set.
+  expect_warning(
+    canonical_join(A, B, url_standard = "whatwg", path_encoding = "encode"),
+    class = "rurl_legacy_join_dial_warning"
+  )
   # encode collapses both spellings of the path to the browser form, so the two
-  # rows join on one canonical key.
-  joined <- canonical_join(A, B, url_standard = "whatwg",
-    path_encoding = "encode")
+  # rows join on one legacy key. The warning is muted here because this half of
+  # the test pins the (unchanged) VALUES, not the condition.
+  joined <- cj_legacy(canonical_join(A, B, url_standard = "whatwg",
+    path_encoding = "encode"))
   expect_identical(nrow(joined), 1L)
   expect_identical(joined$ValA, 1L)
   expect_identical(joined$ValB, 2L)

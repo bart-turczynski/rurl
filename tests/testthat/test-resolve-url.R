@@ -139,8 +139,16 @@ test_that("WHATWG backslash-as-slash flows from url_standard", {
     resolve_url("g\\h", "http://a/b/c/", url_standard = "whatwg"),
     "http://a/b/c/g/h"
   )
+  # rfc3986 does NOT map "\" to "/" -- and, since RURL-qrfrvmkg, does not carry
+  # the raw byte either: the resolved absolute URL `http://a/b/c/g\h` matches no
+  # RFC 3986 production, so the downstream parse rejects it. The no-selector
+  # default is un-governed and still returns it verbatim, which is what shows
+  # the rewrite genuinely did not happen.
+  expect_true(is.na(
+    resolve_url("g\\h", "http://a/b/c/", url_standard = "rfc3986")
+  ))
   expect_identical(
-    resolve_url("g\\h", "http://a/b/c/", url_standard = "rfc3986"),
+    resolve_url("g\\h", "http://a/b/c/"),
     "http://a/b/c/g\\h"
   )
 })

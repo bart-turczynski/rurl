@@ -56,15 +56,34 @@ test_that("whatwg rejects a soft-hyphen-only label (UTS-46 -> empty)", {
 
 # --- rfc3986 / default keep RFC reg-name permissiveness -----------------------
 
-test_that("rfc3986 keeps forbidden-code-point hosts as reg-names", {
-  # RFC 3986 has no forbidden-host-code-point concept; these are accepted
-  # (flagged warning-no-tld), NOT rejected -- an intended profile divergence.
+test_that("rfc3986 keeps reg-name-legal hosts WHATWG forbids", {
+  # RFC 3986 has no forbidden-host-code-point CONCEPT, so a host built only
+  # from characters `reg-name` admits stays accepted under rfc3986 even where
+  # WHATWG's forbidden-domain-code-point rule rejects it. A pct-encoded octet
+  # is exactly that case: `reg-name = *( unreserved / pct-encoded /
+  # sub-delims )` (S3.2.2) admits it; WHATWG forbids a raw "%" in a domain.
+  pct <- "http://a%7Cb/"
   expect_false(is.na(
-    suppressWarnings(get_parse_status("http://a|b/", url_standard = "rfc3986"))
+    suppressWarnings(get_parse_status(pct, url_standard = "rfc3986"))
   ))
-  expect_false(
-    get_parse_status("http://a|b/", url_standard = "rfc3986") == "error"
-  )
+  expect_false(get_parse_status(pct, url_standard = "rfc3986") == "error")
+  expect_identical(get_parse_status(pct, url_standard = "whatwg"), "error")
+})
+
+test_that("rfc3986 rejects a host byte NO production admits", {
+  # RE-POINTED by RURL-qrfrvmkg. This row used to assert `http://a|b/` parses
+  # under rfc3986, filed under "no forbidden-code-point concept" -- but "|" is
+  # in none of unreserved / pct-encoded / sub-delims, so no `reg-name`
+  # production admits it and this was never a concept divergence: it was the
+  # RURL-pfewxbhb coverage asymmetry, the generic grammar gate binding only
+  # where rurl owned the parser (`file:`) and not on the libcurl route. The
+  # audited RFC oracle (RURL-nknytzxz) records `failure` for this input, and
+  # the independent ABNF referee in test-external-url-vectors.R rejects it too.
+  expect_identical(get_parse_status("http://a|b/", url_standard = "rfc3986"),
+                   "error")
+  # The no-selector default is NOT governed by any standard and is unchanged.
+  expect_identical(suppressWarnings(get_parse_status("http://a|b/")),
+                   "warning-no-tld")
 })
 
 # --- no over-rejection of valid hosts ----------------------------------------

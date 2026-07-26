@@ -7,11 +7,13 @@
 #
 # Every assertion here pins behavior that ALREADY holds -- these tests were
 # green the first time they ran. None of them encodes a wished-for behavior:
-# cells whose correct behavior is still undecided (the general-branch
-# credential loss, the authority_kind route disagreement, list-input recovery,
-# input-name handling) are deliberately absent, because writing a test for an
-# undecided cell would freeze an arbitrary answer as if it were the contract.
-# Those carry their own fp carriers.
+# cells whose correct behavior was still undecided when this file was written
+# (the general-branch credential loss, the authority route disagreement,
+# list-input recovery, input-name handling) are deliberately absent, because
+# writing a test for an undecided cell would freeze an arbitrary answer as if
+# it were the contract. Those carry their own fp carriers; two have since been
+# decided and pinned by those carriers (credentials in test-url-standard-
+# authority.R, authority state in test-p1-2-authority-state.R).
 
 # ---- mutation: invalid dial values are rejected -----------------------------
 

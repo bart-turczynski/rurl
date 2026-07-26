@@ -10,14 +10,14 @@ test_that("canonical_join matches on clean_url", {
     stringsAsFactors = FALSE
   )
 
-  res <- canonical_join(
+  res <- cj_legacy(canonical_join(
     A, B,
     protocol_handling = "strip",
     www_handling = "strip",
     case_handling = "lower_host",
     trailing_slash_handling = "strip",
     join = "inner"
-  )
+  ))
 
   expect_equal(nrow(res), 1)
   expect_equal(res$A[1], "http://Example.com/Page")
@@ -39,23 +39,23 @@ test_that("canonical_join handles collisions via first/all", {
     stringsAsFactors = FALSE
   )
 
-  res_first <- canonical_join(
+  res_first <- cj_legacy(canonical_join(
     A, B,
     protocol_handling = "strip",
     trailing_slash_handling = "strip",
     collision = "first",
     join = "inner"
-  )
+  ))
   expect_equal(nrow(res_first), 1)
   expect_equal(res_first$Id_A[1], 1)
 
-  res_all <- canonical_join(
+  res_all <- cj_legacy(canonical_join(
     A, B,
     protocol_handling = "strip",
     trailing_slash_handling = "strip",
     collision = "all",
     join = "inner"
-  )
+  ))
   expect_equal(nrow(res_all), 2)
   expect_equal(sort(res_all$Id_A), c(1, 2))
 })
@@ -72,13 +72,13 @@ test_that("canonical_join keeps parse errors when requested", {
     stringsAsFactors = FALSE
   )
 
-  res <- canonical_join(
+  res <- cj_legacy(canonical_join(
     A, B,
     protocol_handling = "strip",
     trailing_slash_handling = "strip",
     on_parse_error = "keep",
     join = "left"
-  )
+  ))
 
   expect_equal(nrow(res), 2)
   expect_true(anyNA(res$JoinKey))
@@ -97,25 +97,25 @@ test_that("canonical_join supports right/full joins and parse-error handling", {
     stringsAsFactors = FALSE
   )
 
-  res_right <- canonical_join(
+  res_right <- cj_legacy(canonical_join(
     A, B,
     protocol_handling = "strip",
     trailing_slash_handling = "strip",
     on_parse_error = "keep",
     join = "right"
-  )
+  ))
 
   expect_equal(nrow(res_right), 2)
   expect_true(any(res_right$JoinKey == "example.com/b"))
   expect_true(anyNA(res_right$A))
 
-  res_drop <- canonical_join(
+  res_drop <- cj_legacy(canonical_join(
     A, B,
     protocol_handling = "strip",
     trailing_slash_handling = "strip",
     on_parse_error = "drop",
     join = "full"
-  )
+  ))
 
   expect_equal(nrow(res_drop), 2)
   expect_false(any(is.na(res_drop$A) & is.na(res_drop$B)))
@@ -137,12 +137,12 @@ test_that("canonical_join collision = error stops on duplicates", {
   )
 
   expect_error(
-    canonical_join(
+    cj_legacy(canonical_join(
       A, B,
       protocol_handling = "strip",
       trailing_slash_handling = "strip",
       collision = "error"
-    ),
+    )),
     "duplicate canonical keys"
   )
 })
@@ -211,12 +211,12 @@ test_that("canonical_join returns empty structure on no matches", {
     stringsAsFactors = FALSE
   )
 
-  res <- canonical_join(
+  res <- cj_legacy(canonical_join(
     A, B,
     protocol_handling = "strip",
     trailing_slash_handling = "strip",
     join = "inner"
-  )
+  ))
 
   expect_s3_class(res, "data.frame")
   expect_equal(nrow(res), 0)
@@ -231,11 +231,11 @@ test_that("canonical_join uses explicit name_A / name_B for output columns", {
     URL = "http://example.com/a", ValB = "x", stringsAsFactors = FALSE
   )
 
-  res <- canonical_join(
+  res <- cj_legacy(canonical_join(
     A, B,
     name_A = "left_url", name_B = "right_url",
     protocol_handling = "strip"
-  )
+  ))
 
   expect_equal(nrow(res), 1)
   expect_true(all(c("left_url", "right_url", "JoinKey") %in% names(res)))
@@ -257,16 +257,18 @@ test_that("canonical_join yields stable names for piped / anonymous inputs", {
 
   # Without explicit names, deparse(substitute()) yields the call expression,
   # which data.frame() then mangles into a non-syntactic name — unstable.
-  res_default <- canonical_join(make_a(), make_b(), protocol_handling = "strip")
+  res_default <- cj_legacy(
+    canonical_join(make_a(), make_b(), protocol_handling = "strip")
+  )
   expect_true("make_a.." %in% names(res_default))
   expect_true("make_b.." %in% names(res_default))
 
   # Explicit names are stable regardless of the input expression.
-  res_named <- canonical_join(
+  res_named <- cj_legacy(canonical_join(
     make_a(), make_b(),
     name_A = "A", name_B = "B",
     protocol_handling = "strip"
-  )
+  ))
   expect_true(all(c("A", "B") %in% names(res_named)))
 })
 

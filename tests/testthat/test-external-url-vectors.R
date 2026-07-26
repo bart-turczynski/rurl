@@ -455,18 +455,31 @@ test_that("Equivocal URLs paper divergences pin to the documented set", {
   expect_true(all(is.na(norun$rurl_whatwg_status)))
   expect_true(all(is.na(norun$diverges)))
 
-  # Headline result: rurl reproduces BOTH sides of the hostname equivocation
-  # across profiles (whatwg vs rfc) for the backslash row and the GSB
-  # web-interface evasion row.
+  # Headline result, RE-POINTED by RURL-qrfrvmkg. rurl used to reproduce BOTH
+  # sides of the backslash equivocation across profiles: whatwg took Option B
+  # (the browser host) and rfc3986 took Option A (the lenient-RFC-parser host,
+  # `\` swallowed into userinfo). The paper's own RFC column is `ERR`, and the
+  # audited oracle (RURL-nknytzxz) records `failure` on both rows -- "\" is in
+  # none of unreserved / pct-encoded / sub-delims / pchar, so no production
+  # admits it. Option A was never what the STANDARD says; it was what the
+  # PERMISSIVE parsers (urllib, uri-js, php, curl) do, and rurl reproduced it
+  # only because the generic gate did not bind on the libcurl route. The
+  # equivocation is still demonstrated -- one profile resolves a host, the other
+  # refuses the string -- but the rfc3986 profile now answers as a STRICT RFC
+  # 3986 parser (Ruby's URI::RFC3986_Parser), not as a lenient one.
   u2 <- eq[eq$id == "eq-U2", ]
   expect_true(grepl("n.pr", u2$rurl_whatwg_clean, fixed = TRUE))   # Option B
-  expect_true(grepl("e.gg", u2$rurl_rfc_clean, fixed = TRUE))      # Option A
+  expect_identical(u2$rurl_rfc_status, "error")                    # paper: ERR
+  expect_true(is.na(u2$rurl_rfc_clean))
   bs <- eq[eq$id == "eq-bs", ]
-  # whatwg -> browser side (malware host); rfc -> classifier side (letsencrypt).
+  # whatwg -> browser side (malware host); rfc3986 -> refuses the string, so
+  # the GSB-evasion payoff still holds: the two profiles do not agree, and the
+  # classifier's lenient reading (letsencrypt.org) is NOT what a conformant RFC
+  # 3986 parser returns.
   expect_true(grepl("malware.testing.google.test", bs$rurl_whatwg_clean,
     fixed = TRUE))
-  expect_true(grepl("letsencrypt.org", bs$rurl_rfc_clean, fixed = TRUE))
-  expect_false(grepl("malware", bs$rurl_rfc_clean, fixed = TRUE))
+  expect_identical(bs$rurl_rfc_status, "error")
+  expect_true(is.na(bs$rurl_rfc_clean))
 })
 
 test_that("Ada verify_dns_length: rurl accepts, host-length probe matches", {
