@@ -45,13 +45,13 @@
     {
       "path": "inst/bench/wpt-url-cases.json",
       "fixture_kind": "imported suite, machine-generated from a pinned upstream artifact",
-      "transformed_fixture_sha256": "e3813f68e5a7a31ea23251e0e82c47651915ff64dfaaa569cc68836a1af92ecc",
+      "transformed_fixture_sha256": "5a05f6430ac574d1258db82beb2487732e4413d056a41b810408deaf584e5086",
       "case_count": {
         "total": 538,
         "success": 336,
         "failure": 202
       },
-      "case_count_note": "Mirrors the fixture's own _meta.counts. The success arm was widened from 176 to 336 when the http/https/ftp/file scheme carve-out was dropped: the success selector now admits every base-null non-failure case regardless of scheme, so all 54 schemes present upstream are scored, not four. The failure arm is unchanged at 202 -- it never carried a scheme filter. The two base = about:blank rows the previous selector admitted are now excluded with the rest of the base-relative rows (see applicability_selector).",
+      "case_count_note": "Mirrors the fixture's own _meta.counts. The success arm was widened from 176 to 336 when the http/https/ftp/file scheme carve-out was dropped: the success selector now admits every base-null non-failure case regardless of scheme, so all 54 schemes present upstream are scored, not four. The failure arm is unchanged at 202 -- it never carried a scheme filter. The two base = about:blank rows the previous selector admitted are now excluded with the rest of the base-relative rows (see applicability_selector). RURL-nolcjgdb widened the per-row FIELD set, not the case counts: the extractor now also carries upstream's username and password (24 rows carry a non-empty username, 13 a non-empty password), which it had been dropping, so standard-parity.R can score credentials as components. That was a re-extraction at the SAME upstream_revision from a raw file whose sha256 still matched raw_source_sha256 -- no re-pin, no row added or removed, hence the unchanged counts and the changed transformed_fixture_sha256.",
       "in_fixture_provenance": "_meta block (landed by commit 266c6f3); it carries the ten non-self-referential section-2.3 fields for this file",
       "source_group_key": "not applicable -- single source; the fixture has no source column",
       "source_groups": [
@@ -74,7 +74,7 @@
           "generation_command": "python3 inst/bench/make-wpt-fixture.py urltestdata.json --revision 181476aa16e8b28a07698bef3a0275fa53dd22e5 --retrieved 2026-07-08",
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
-          "standard_section": "URL parsing; URL serializing; URL class API getters (protocol, hostname, port, pathname, search, hash)",
+          "standard_section": "URL parsing; URL serializing; URL class API getters (protocol, username, password, hostname, port, pathname, search, hash)",
           "claim_kind": "conformance",
           "applicability_selector": "base = null only -- base-relative rows (including base about:blank) are excluded because rurl is absolute-parse-only and does no relative resolution; success = any base-null non-failure case, all schemes, no scheme restriction; failure = any base-null failure case; NUL inputs dropped",
           "relocation_verified": "yes",
