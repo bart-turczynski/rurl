@@ -224,6 +224,51 @@ test_that("tab/LF/CR are stripped for non-special schemes too", {
   expect_identical(rfc$parse_status, "error")
 })
 
+test_that("IPv6 hosts are WHATWG-serialized for non-special schemes too", {
+  # RURL-cyxegfjs. The WHATWG IPv6 serializer (longest zero run compressed,
+  # lowercase hex, no dotted-quad tail) is scheme-independent -- the host parser
+  # runs it for any scheme with an authority. rurl wired it on the Phase 5b
+  # special-scheme branch only, so non-special hosts kept their input spelling.
+  args <- list(url_standard = "whatwg", scheme_policy = "require",
+               scheme_acceptance = "general")
+  u <- c("non-special://[1:2:0:0:5:0:0:0]/", "non-special://[1:2:0:0:0:0:0:3]/",
+         "non-special://[0:0:0:0:0:0:0:0]/", "non-special://[::127.0.0.1]/",
+         "non-special://[ABCD::1]/", "non-special://[1:2:3:4:5:6:7:8]/")
+  d <- do.call(safe_parse_urls, c(list(u), args))
+
+  expect_false(any(d$parse_status == "error"))
+  expect_identical(
+    d$host,
+    c("[1:2:0:0:5::]", "[1:2::3]", "[::]", "[::7f00:1]", "[abcd::1]",
+      "[1:2:3:4:5:6:7:8]")
+  )
+  # The special-scheme spelling is the oracle: both branches must agree.
+  expect_identical(
+    do.call(safe_parse_urls, c(list("http://[1:2:0:0:5:0:0:0]/"), args))$host,
+    d$host[1L]
+  )
+  # A port after the literal is unaffected, and the serialized host is what the
+  # non-special serializer renders back out.
+  p <- do.call(safe_parse_urls,
+               c(list("non-special://[1:2:0:0:5:0:0:0]:8080/x"),
+                 c(args, list(port_handling = "keep"))))
+  expect_identical(p$port, 8080L)
+  expect_identical(p$clean_url, "non-special://[1:2:0:0:5::]:8080/x")
+
+  # A malformed literal is still a host parse failure, not a passthrough.
+  bad <- suppressWarnings(
+    do.call(safe_parse_urls, c(list("non-special://[1:2:3:4]/"), args))
+  )
+  expect_identical(bad$parse_status, "error")
+
+  # rfc3986 stays source-preserving: the `rfc-syntax` posture disclaims host
+  # normalization, so the input spelling survives. Deliberate profile split.
+  rfc <- safe_parse_urls(
+    "non-special://[1:2:0:0:5:0:0:0]/", url_standard = "rfc3986",
+    scheme_policy = "require", scheme_acceptance = "general")
+  expect_identical(rfc$host, "[1:2:0:0:5:0:0:0]")
+})
+
 test_that("an opaque payload ending in :<digits> still parses", {
   # RURL-jnvtttfm. The scheme-less `example.com:8080` carve-out matched with a
   # colon-greedy authority part, so `urn:ietf:rfc:2648` read as "authority
