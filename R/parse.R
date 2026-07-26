@@ -2026,6 +2026,11 @@ safe_parse_urls <- function(url,
     # WHATWG control-char strip (RURL-tyetpjym): same seam, emits
     # `control-char-stripped` only where a tab/LF/CR was actually removed.
     control_char_stripped = prep$control_char_stripped,
+    # WHATWG leading/trailing strip (RURL-yvxpanix, step 1's first half): same
+    # seam and likewise NOT a cached Stage-A field, emits
+    # `leading-trailing-stripped` only where a leading/trailing
+    # C0-control-or-space run was actually removed.
+    leading_trailing_stripped = prep$leading_trailing_stripped,
     # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009): same seam, emits
     # `host-charset-shimmed` where a curl-rejected-but-WHATWG-valid host code
     # point was accepted via the shim + true-host restore above.

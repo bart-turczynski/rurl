@@ -38,6 +38,7 @@
   "non-default-port",
   "invalid-reverse-solidus",
   "control-char-stripped",
+  "leading-trailing-stripped",
   "host-charset-shimmed",
   "domain-label-too-long",
   "domain-name-too-long",
@@ -236,18 +237,33 @@
     diag, live & backslash_rewritten, "invalid-reverse-solidus"
   )
 
-  # --- control-char strip diagnostic (RURL-tyetpjym) -------------------------
-  # `control-char-stripped` fires exactly where Phase 1's WHATWG control-char
-  # stripper (.strip_whatwg_control_chars_vec) actually removed an ASCII tab/LF/
-  # CR from the input -- surfacing the mutation as a FACT (ADR 0006) rather than
-  # silently stripping. Always FALSE under rfc3986 / no selector (that profile
-  # rejects such bytes instead of stripping).
+  # --- step-1 strip diagnostics (RURL-tyetpjym, RURL-yvxpanix) ---------------
+  # Phase 1's WHATWG step-1 stripper (.strip_whatwg_control_chars_vec) performs
+  # two distinct mutations, each surfaced as its OWN fact (ADR 0006) rather than
+  # silently stripping, and a row can carry both. Both are always FALSE under
+  # rfc3986 / no selector (that profile has no strip step -- it rejects control
+  # bytes and percent-encodes a trailing space instead).
+  #
+  # `control-char-stripped` fires exactly where step 1's SECOND half removed an
+  # ASCII tab/LF/CR from anywhere in the input. Note a LEADING or TRAILING
+  # tab/LF/CR is removed by the first half instead, so it reports as
+  # `leading-trailing-stripped`.
   control_char_stripped <- a$control_char_stripped
   if (is.null(control_char_stripped)) {
     control_char_stripped <- rep(FALSE, n)
   }
   diag <- .diag_add(
     diag, live & control_char_stripped, "control-char-stripped"
+  )
+
+  # `leading-trailing-stripped` fires exactly where step 1's FIRST half removed
+  # a leading and/or trailing run of C0-control-or-SPACE (U+0000..U+0020).
+  leading_trailing_stripped <- a$leading_trailing_stripped
+  if (is.null(leading_trailing_stripped)) {
+    leading_trailing_stripped <- rep(FALSE, n)
+  }
+  diag <- .diag_add(
+    diag, live & leading_trailing_stripped, "leading-trailing-stripped"
   )
 
   # --- host-charset shim diagnostic (RURL-dxwxeamq, ADR 0009) ----------------
@@ -324,7 +340,8 @@
     # selected fact, not a full WHATWG validation engine): a `%` not followed by
     # two hex digits, or a clearly non-URL ASCII code point (space " < > ` { }
     # | ^). Backslash and C0 controls are excluded -- they are surfaced by
-    # `invalid-reverse-solidus` / `control-char-stripped`.
+    # `invalid-reverse-solidus` / `control-char-stripped` /
+    # `leading-trailing-stripped`.
     malformed_pct <- stringi::stri_detect_regex(url, "%(?![0-9A-Fa-f]{2})")
     non_url_cp <- stringi::stri_detect_regex(url, "[ \"<>\\u0060{}|^]")
     bad_unit <- malformed_pct | non_url_cp

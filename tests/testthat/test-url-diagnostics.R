@@ -17,7 +17,8 @@ test_that("the diagnostics vocabulary matches the PRD §7 table verbatim", {
       "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero",
       "ipv4-out-of-range", "encoded-dot-segment", "encoded-reserved-path-byte",
       "explicit-default-port", "non-default-port", "invalid-reverse-solidus",
-      "control-char-stripped", "host-charset-shimmed",
+      "control-char-stripped", "leading-trailing-stripped",
+      "host-charset-shimmed",
       "domain-label-too-long", "domain-name-too-long", "domain-empty-label",
       "domain-hyphen-violation", "domain-std3-violation",
       # Layer 5 SELECTED diagnostics (ADR 0012 D5, RURL-izsouyxs).

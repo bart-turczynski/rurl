@@ -58,6 +58,31 @@
 
 ### Bug fixes
 
+- **Leading and trailing C0-control-or-space is now stripped from the input
+  under `url_standard = "whatwg"`.** WHATWG's basic URL parser step 1 has two
+  halves — first remove any leading and trailing C0 control or space
+  (U+0000–U+0020) from the input, *then* remove every ASCII tab/LF/CR anywhere
+  in it. rurl implemented only the second half, so an input padded at either end
+  was mis-parsed: `"http://example.com/a  "` reported path `/a%20%20` (now
+  `/a`), `"  http://example.com/a"` was a parse error (now accepted, host
+  `example.com`), and under `scheme_acceptance = "general"`
+  `"non-special:opaque  "` reported path `opaque  ` (now `opaque`). Interior
+  spaces are untouched, and the trim runs in the spec's order, so a *leading*
+  tab is now removed by the first half rather than the second. The strip lives
+  in the single seam every route shares, so the libcurl route, the general route
+  and the Stage-B re-parse are fed identical input by construction.
+
+  The mutation is surfaced, not silent: a new `get_url_diagnostics()` token
+  **`leading-trailing-stripped`** fires exactly on the rows where a
+  leading/trailing run was removed. It is deliberately a separate token from
+  `control-char-stripped`, whose meaning is unchanged (an interior tab/LF/CR was
+  removed); a row that had both reports both. `url_standard = "rfc3986"` and the
+  default (no selector) are byte-for-byte unaffected — that profile has no strip
+  step and requires such bytes to be percent-encoded, so those inputs stay
+  errors. The frozen `analysis/parity` and `analysis/disagreement` studies are
+  byte-identical; WPT full-row parity on the excluded rows improves by one and
+  component mismatches go to zero. (RURL-yvxpanix.)
+
 - **Opaque paths are now percent-encoded, and `^` joins the path
   percent-encode set.** Three related WHATWG encode-set gaps, all under
   `scheme_acceptance = "general"` unless noted:
