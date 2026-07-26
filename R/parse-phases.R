@@ -206,32 +206,78 @@
   list(url = url_out, backslash_rewritten = changed)
 }
 
-# WHATWG control-character stripping (RURL-tyetpjym). The WHATWG basic URL
-# parser's very first step removes EVERY ASCII tab (U+0009), LF (U+000A), and CR
-# (U+000D) from the input, everywhere in the string, before any component is
-# parsed. rurl otherwise rejects a control char in the authority (libcurl
-# errors) -- correct under RFC 3986, which has no strip step and requires such
-# bytes to be percent-encoded -- so this runs ONLY under url_standard ==
-# "whatwg" and is a byte-for-byte no-op otherwise. Stripping is not silent: the
-# returned `control_char_stripped` mask (rows where a byte was removed) drives
-# the `control-char-stripped` diagnostic (ADR 0006 -- surface the mutation as a
-# FACT). Only tab/LF/CR are removed; other C0 controls are left for libcurl.
-# Resolves the control-char-in-authority family: c0-tab probe, eq-U6 (LF),
-# yal-002 (TAB), yal-003 (CR/LF), which WHATWG strips-and-accepts.
+# WHATWG input stripping -- the basic URL parser's step 1, BOTH halves
+# (RURL-tyetpjym, RURL-yvxpanix). Step 1 says, in this order:
+#   1a. Remove any leading and trailing C0 control or SPACE (U+0000..U+0020)
+#       from the input.
+#   1b. Remove ALL ASCII tab (U+0009), LF (U+000A) and CR (U+000D) from the
+#       input, everywhere in the string.
+# Both run before any component is parsed, so every downstream scheme/host
+# regex and the backslash recognizer see the already-stripped string. rurl
+# otherwise rejects a control char in the authority (libcurl errors) and
+# percent-encodes a trailing space into the path -- correct under RFC 3986,
+# which has no strip step and requires such bytes to be percent-encoded -- so
+# this runs ONLY under url_standard == "whatwg" and is a byte-for-byte no-op
+# otherwise. Note the spec order matters for fact attribution: a LEADING tab is
+# removed by 1a, not 1b.
+#
+# Neither strip is silent. Two SEPARATE masks are returned, because they are two
+# different facts (ADR 0006 -- surface the mutation as a FACT; ADR 0009's
+# precedent of a new token for a new fact):
+#   - `leading_trailing_stripped` -> the `leading-trailing-stripped` diagnostic
+#     (rows where 1a removed a leading/trailing C0-or-space run).
+#   - `control_char_stripped` -> the `control-char-stripped` diagnostic (rows
+#     where 1b removed an interior tab/LF/CR). Only tab/LF/CR are removed by
+#     1b; other interior C0 controls are left for libcurl.
+# A row can carry both. Resolves the control-char-in-authority family: c0-tab
+# probe, eq-U6 (LF), yal-002 (TAB), yal-003 (CR/LF), which WHATWG
+# strips-and-accepts.
+#
+# This function is deliberately the single seam shared by prep, the Stage-A
+# general route, the Stage-B general re-parse and `.has_explicit_authority()`:
+# putting step 1 here (never at a call site) is what keeps every stage fed
+# byte-identical input by construction.
 .strip_whatwg_control_chars_vec <- function(url, url_standard) {
   n <- length(url)
-  no_op <- list(url = url, control_char_stripped = rep(FALSE, n))
+  no_op <- list(
+    url = url,
+    control_char_stripped = rep(FALSE, n),
+    leading_trailing_stripped = rep(FALSE, n)
+  )
   if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
-  had <- stringi::stri_detect_regex(url, "[\\t\\n\\r]")
-  had[is.na(had)] <- FALSE
-  if (!any(had)) {
-    return(no_op)
-  }
+
+  # Step 1a: leading/trailing C0-control-or-SPACE. `\z` (true end of input), not
+  # `$`: ICU's `$` also matches before a final line terminator, and LF/CR/VT/FF
+  # all live inside this class.
   url_out <- url
-  url_out[had] <- stringi::stri_replace_all_regex(url[had], "[\\t\\n\\r]", "")
-  list(url = url_out, control_char_stripped = had)
+  trimmed <- stringi::stri_replace_first_regex(
+    url_out, "^[\\u0000-\\u0020]+", ""
+  )
+  trimmed <- stringi::stri_replace_first_regex(
+    trimmed, "[\\u0000-\\u0020]+\\z", ""
+  )
+  lt <- !is.na(trimmed) & !is.na(url_out) & trimmed != url_out
+  lt[is.na(lt)] <- FALSE
+  if (any(lt)) {
+    url_out[lt] <- trimmed[lt]
+  }
+
+  # Step 1b: every remaining tab/LF/CR, anywhere.
+  had <- stringi::stri_detect_regex(url_out, "[\\t\\n\\r]")
+  had[is.na(had)] <- FALSE
+  if (any(had)) {
+    url_out[had] <- stringi::stri_replace_all_regex(
+      url_out[had], "[\\t\\n\\r]", ""
+    )
+  }
+
+  list(
+    url = url_out,
+    control_char_stripped = had,
+    leading_trailing_stripped = lt
+  )
 }
 
 # WHATWG / UTS-46 alternative full-stop mapping (RURL-odsmwsxu). UTS-46
@@ -937,8 +983,12 @@
 #
 # Steps (each feeds the next):
 #   1. Outer C0/space trim -- strip leading/trailing U+0000..U+0020 from the
-#      whole input (WHATWG "C0 control or space"). Greenfield: there is no other
-#      outer trim in the parse path.
+#      whole input (WHATWG "C0 control or space"). This trim has a whatwg-gated
+#      sibling: WHATWG step 1's first half, in
+#      .strip_whatwg_control_chars_vec() (RURL-yvxpanix), does the same trim for
+#      every posture when url_standard == "whatwg". This one stays load-bearing
+#      because it is the ONLY outer trim under url_standard = "rfc3986" / no
+#      selector, where step 1 does not run at all.
 #   2. `;`->`:` -- rewrite a leading `scheme;` to `scheme:` ONLY when the scheme
 #      token is in the recognized-scheme set. A `;` after any other token is
 #      left verbatim.
@@ -1009,8 +1059,9 @@
   # with the default posture (ADR 0012 D4 -- one prepend impl).
   url <- .apply_browser_fixup_vec(url, fixup_posture)
 
-  # WHATWG control-character stripping (RURL-tyetpjym) runs FIRST -- it is the
-  # WHATWG parser's step 1 (remove all ASCII tab/LF/CR), so every scheme/host
+  # WHATWG input stripping (RURL-tyetpjym, RURL-yvxpanix) runs FIRST -- it is
+  # the WHATWG parser's step 1 (trim leading/trailing C0-or-space, then remove
+  # all ASCII tab/LF/CR), so every scheme/host
   # regex and the backslash recognizer below see the already-stripped string.
   # A no-op (byte-for-byte `url` unchanged) unless url_standard == "whatwg".
   cc <- .strip_whatwg_control_chars_vec(url, url_standard)
@@ -1226,6 +1277,10 @@
     # WHATWG control-char strip (RURL-tyetpjym): TRUE where a tab/LF/CR was
     # removed, consumed by the diagnostics seam to emit `control-char-stripped`.
     control_char_stripped = cc$control_char_stripped,
+    # WHATWG leading/trailing strip (RURL-yvxpanix, step 1's first half): TRUE
+    # where a leading/trailing C0-control-or-space run was removed, consumed by
+    # the same seam to emit `leading-trailing-stripped`.
+    leading_trailing_stripped = cc$leading_trailing_stripped,
     # Host shim: TRUE where curl saw filler bytes in the host and Stage A must
     # restore `shimmed_true_host`.
     restore_host_shimmed = shim$restore_host_shimmed,
