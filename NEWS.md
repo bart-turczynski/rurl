@@ -77,8 +77,31 @@
   explicitly and applies only where the userinfo was actually split into a
   username and a password: `url_standard = "rfc3986"` and the no-selector
   default remain source-preserving and byte-for-byte unchanged, as do the
-  undivided-userinfo routes (the general/opaque parser, the RFC 8089 `file:`
-  overlay) and a `mailto:` recipient local-part, which is not a URL userinfo.
+  undivided RFC 8089 `file:` overlay and a `mailto:` recipient local-part,
+  which is not a URL userinfo.
+
+- **The general/opaque route no longer discards credentials.** For a
+  general-routed URL — any non-special scheme under
+  `scheme_acceptance = "general"` — the opaque parser computed the authority's
+  userinfo and then dropped it, so
+  `safe_parse_urls("sc://u:p@h/x", scheme_acceptance = "general",
+  url_standard = "rfc3986")` reported `user` and `password` as `NA` while the
+  same credentials on an `http:` URL were reported exactly. The userinfo is now
+  split at the **first** `:` per WHATWG's authority state, so `u:p:q` gives
+  user `u` and password `p:q`, and the userinfo percent-encode set applies here
+  on the same terms as the libcurl route (`p%3Aq` under `whatwg`, `p:q` under
+  `rfc3986` and the no-selector default).
+
+  Two producers deliberately stay undivided and unencoded: the RFC 8089
+  `file:` overlay, whose Appendix E.1 production is `[ userinfo "@" ]` with no
+  credentials split and which warns that a password there is "a serious
+  security exposure"; and a `mailto:` `user`, which is a recipient local-part
+  (ADR 0012 D7), not a URL userinfo at all.
+
+  `clean_url` is unaffected: it carries credentials on no route, including the
+  libcurl one. No scored conformance figure moves — the parity oracle compares
+  scheme, host, port, path, query and fragment, and all five scored artifacts
+  in `analysis/parity/` reproduce byte-identically.
 
 - **`url_standard = "whatwg"` no longer rejects a URL whose userinfo carries a
   space, a C0 control or DEL.** libcurl refuses an authority whose userinfo

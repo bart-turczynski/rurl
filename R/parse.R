@@ -1850,6 +1850,13 @@ safe_parse_urls <- function(url,
   raw_password <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$password %||% NA_character_
   }, character(1), USE.NAMES = FALSE))
+  # Which rows carry a userinfo that was actually SPLIT into a username and a
+  # password. The libcurl route always splits, so it is TRUE wherever that
+  # route produced credentials; the general route sets it per row below. The
+  # WHATWG userinfo percent-encode set keys off this and nothing else, because
+  # encoding an UNDIVIDED userinfo would render its structural ":" as "%3A"
+  # (RURL-micalqvh half b, RURL-ovpguvva).
+  general_userinfo_split <- rep(FALSE, length(raw_user))
   raw_port <- vapply(parsed_list, function(p) {
     if (is.null(p)) {
       NA_integer_
@@ -1892,14 +1899,37 @@ safe_parse_urls <- function(url,
     raw_path[general_ok] <- gen$path[general_ok]
     raw_query[general_ok] <- .blank_to_na(gen$query[general_ok])
     raw_fragment[general_ok] <- .blank_to_na(gen$fragment[general_ok])
-    # userinfo is surfaced only by the RFC 8089 `file:` overlay, which has a
-    # production for it (App. E.1/F); every other general-routed row leaves
-    # `gen$userinfo` NA, so their output is unchanged (RURL-obsweger). Password
-    # stays NA: RFC 8089's production is `[ userinfo "@" ]` undivided, and
-    # App. E.1 warns that a password there is "a serious security exposure",
-    # so rurl does not manufacture a credentials split the RFC never draws.
-    raw_user[general_ok] <- .blank_to_na(gen$userinfo[general_ok])
-    raw_password[general_ok] <- NA_character_
+    # Credentials (RURL-ovpguvva). `gen$userinfo_kind` says which parser the
+    # row's userinfo came from, so the rule is read off the parse rather than
+    # re-derived from the scheme here:
+    #   * "authority" -- a WHATWG authority userinfo. SPLIT at the FIRST ":"
+    #     into username / password, exactly as the authority state does. Before
+    #     this the opaque parser dropped userinfo entirely, so `sc://u:p@h/x`
+    #     reported NA credentials while the libcurl route reported them exactly.
+    #   * "rfc8089"   -- the `file:` overlay's `[ userinfo "@" ]`, UNDIVIDED by
+    #     production. App. E.1 warns a password there is "a serious security
+    #     exposure", so rurl does not manufacture a split the RFC never draws.
+    # These are the RAW source slices in both cases; the WHATWG userinfo
+    # percent-encode set is applied later, and only to the split rows, so a
+    # structural ":" is never rendered as "%3A".
+    gen_ui <- .blank_to_na(gen$userinfo[general_ok])
+    gen_split <- !is.na(gen_ui) &
+      !is.na(gen$userinfo_kind[general_ok]) &
+      gen$userinfo_kind[general_ok] == "authority"
+    gen_pw <- rep(NA_character_, length(gen_ui))
+    if (any(gen_split)) {
+      colon <- regexpr(":", gen_ui[gen_split], fixed = TRUE)
+      has_colon <- colon > 0L
+      ui <- gen_ui[gen_split]
+      pw <- rep(NA_character_, length(ui))
+      pw[has_colon] <- substring(ui[has_colon], colon[has_colon] + 1L)
+      ui[has_colon] <- substring(ui[has_colon], 1L, colon[has_colon] - 1L)
+      gen_ui[gen_split] <- .blank_to_na(ui)
+      gen_pw[gen_split] <- .blank_to_na(pw)
+    }
+    raw_user[general_ok] <- gen_ui
+    raw_password[general_ok] <- gen_pw
+    general_userinfo_split[general_ok] <- gen_split
     raw_port[general_ok] <- suppressWarnings(as.integer(gen$port[general_ok]))
   }
 
@@ -2014,6 +2044,7 @@ safe_parse_urls <- function(url,
     raw_fragment = raw_fragment,
     raw_user = raw_user,
     raw_password = raw_password,
+    general_userinfo_split = general_userinfo_split,
     raw_port = raw_port,
     domain_ascii = dt_ascii$domain,
     domain_unicode = dt_unicode$domain,
@@ -2231,23 +2262,25 @@ safe_parse_urls <- function(url,
   # the source slices and keep the raw spelling untouched (the escape hatch).
   # Under `rfc3986` or no selector the columns stay source-preserving.
   #
-  # Applied ONLY to the libcurl (special-scheme) route, i.e. the rows where the
-  # userinfo was actually SPLIT into a username and a password:
-  #   * the general/opaque route puts the WHOLE UNDIVIDED userinfo in `raw_user`
-  #     (`raw_password` is NA), so its `:` is a structural delimiter rather than
-  #     a username code point and encoding it to `%3A` would misreport it. The
-  #     missing split there is a separate, pre-existing modeling gap.
-  #   * the RFC 8089 `file:` overlay is undivided by design (App. E.1), same
-  #     reasoning.
+  # Applied ONLY where the userinfo was actually SPLIT into a username and a
+  # password, which is what `a$general_userinfo_split` records. Encoding an
+  # UNDIVIDED userinfo would render its structural ":" as "%3A" and misreport
+  # it. The rows that stay undivided, and why:
+  #   * the RFC 8089 `file:` overlay -- App. E.1's production is
+  #     `[ userinfo "@" ]`, undivided, and the appendix warns a password there
+  #     is "a serious security exposure".
   #   * a mailto: `user` is a recipient LOCAL-PART (ADR 0012 D7), not a URL
   #     userinfo at all -- mailto is an opaque path under WHATWG, so no userinfo
-  #     encode set applies to it.
-  # All three of those routes are the general-routed rows (`gp`).
+  #     encode set applies to it. (It carries no authority, so the general
+  #     parser leaves its userinfo NA and the mask is FALSE.)
+  # The general/opaque route USED to be a third exclusion, because it dropped
+  # userinfo instead of splitting it. It now splits, so it is encoded here on
+  # the same terms as the libcurl route (RURL-ovpguvva).
   user_output <- a$raw_user
   password_output <- a$raw_password
   if (.is_whatwg(opts$url_standard)) {
     split_userinfo <- if (general_acceptance) {
-      !gp
+      !gp | a$general_userinfo_split
     } else {
       rep(TRUE, length(a$raw_user))
     }

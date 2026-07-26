@@ -282,5 +282,11 @@
   # RFC 3986 scheme + path-rootless special-scheme rows (`http:example.com`):
   # parseable but hostless, so Stage B must not demote them to an error solely
   # because no authority exists.
-  list(name = "rfc3986_path_rootless", default = FALSE, template = logical(1))
+  list(name = "rfc3986_path_rootless", default = FALSE, template = logical(1)),
+  # Whether this row's userinfo was actually SPLIT into a username and a
+  # password (RURL-ovpguvva). Stage B keys the WHATWG userinfo percent-encode
+  # set off it, because encoding an UNDIVIDED userinfo would render its
+  # structural ":" as "%3A". Cached with the rest of Stage A: it is a fact
+  # about the parse, not a presentation choice.
+  list(name = "general_userinfo_split", default = FALSE, template = logical(1))
 )
