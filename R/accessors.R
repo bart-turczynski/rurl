@@ -592,6 +592,12 @@ get_path <- function(
 #' still percent-decodes for readability (`decode = TRUE`); pass
 #' `decode = FALSE` to obtain the raw query exactly as written in the URL.
 #'
+#' This accessor takes no `url_standard`, so `decode = FALSE` always yields the
+#' raw source spelling; the `query` column of [safe_parse_url()] under
+#' `url_standard = "whatwg"` instead carries the standard's percent-encoded
+#' spelling (the query percent-encode set is applied, so a literal space
+#' becomes `%20`).
+#'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @param format Return format: "string" (default) or "list" for parsed
@@ -812,8 +818,13 @@ get_query <- function(url,
 
 #' Get URL fragments
 #'
-#' Extracts the fragment component of a URL. The value is returned raw, exactly
-#' as written in the URL (not percent-decoded).
+#' Extracts the fragment component of a URL. The value is never
+#' percent-decoded. This accessor takes no \code{url_standard}, so it always
+#' returns the raw source spelling, exactly as written in the URL; the
+#' \code{fragment} column of \code{\link{safe_parse_url}} under
+#' \code{url_standard = "whatwg"} instead carries the standard's
+#' percent-encoded spelling (the fragment percent-encode set is applied, so a
+#' double-quote inside the fragment becomes \code{\%22}).
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -891,7 +902,8 @@ get_user <- function(url, protocol_handling = "keep",
 #' returns the raw source spelling, exactly as written in the URL; the
 #' \code{password} column of \code{\link{safe_parse_url}} under
 #' \code{url_standard = "whatwg"} instead carries the standard's
-#' percent-encoded spelling (a ":" inside the password becomes "\%3A").
+#' percent-encoded spelling (a ":" inside the password becomes
+#' \code{\%3A}).
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -1150,7 +1162,8 @@ get_host_type <- function(url, url_standard = NULL,
 #' not policy: they are emitted keyed to host/path \emph{shape} in both
 #' standard modes so a security-sensitive consumer can reject a footgun URL
 #' regardless of which selector it chose, while a link-graph consumer can ignore
-#' them. See \code{vignette} / the package NEWS for the full token vocabulary.
+#' them. The complete token vocabulary is enumerated below under
+#' \emph{Diagnostic vocabulary (canonical)}.
 #'
 #' A single URL can carry several diagnostics, so the return shape is not a
 #' plain scalar-per-URL vector (see \emph{Value}). \code{parse_status} stays
@@ -1195,6 +1208,123 @@ get_host_type <- function(url, url_standard = NULL,
 #'       \code{file-component-outside-rfc8089} (a query or fragment, which
 #'       RFC 8089's grammar does not mention and which are therefore inherited
 #'       generic RFC 3986 components).
+#'   }
+#'
+#' @section Diagnostic vocabulary (canonical): This section is the
+#'   \strong{single authoritative enumeration} of the diagnostics vocabulary.
+#'   It is held to the runtime registry (\code{.URL_DIAGNOSTICS}) in both
+#'   directions by \code{tools/diagnostics-doc-consistency.R}, a CI gate: a
+#'   token cannot be added, renamed, or removed without this list moving with
+#'   it. Earlier design documents (including the v1 selector PRD's section 7
+#'   table) are historical records of what the vocabulary was when they were
+#'   accepted --- they are not registries and do not track it.
+#'
+#'   Every token below is emitted only when \code{url_standard} is not
+#'   \code{NULL}. Tokens marked \emph{general} additionally require
+#'   \code{scheme_acceptance = "general"}; the rest fire under both acceptance
+#'   postures and, unless noted, under both \code{"rfc3986"} and
+#'   \code{"whatwg"}.
+#'
+#'   \strong{Host --- IPv4 shape.} Facts about a host written as, or coerced
+#'   to, an IPv4 address; security filters typically reject all of them.
+#'   \itemize{
+#'     \item \code{ipv4-number-form} --- numeric IPv4 shorthand instead of
+#'       dotted decimal.
+#'     \item \code{ipv4-non-dotted} --- a whole-host number parsed/coerced to
+#'       IPv4 in WHATWG mode.
+#'     \item \code{ipv4-short-form} --- fewer than four dotted parts.
+#'     \item \code{ipv4-non-decimal} --- hex or octal notation participated in
+#'       IPv4 parsing.
+#'     \item \code{ipv4-octal} --- octal interpretation changed the apparent
+#'       address value.
+#'     \item \code{ipv4-leading-zero} --- a dotted decimal-looking part had a
+#'       leading zero.
+#'     \item \code{ipv4-out-of-range} --- a dotted part exceeds 255 (fatal
+#'       under \code{"whatwg"}; flags a numeric-looking \code{reg-name} under
+#'       \code{"rfc3986"}, e.g. \code{256.1.1.1}).
+#'   }
+#'
+#'   \strong{Host --- DNS length, UTS-46 and charset.} Probed against the
+#'   resolved host; IP literals are excluded.
+#'   \itemize{
+#'     \item \code{domain-label-too-long} --- a label exceeds the DNS 63-byte
+#'       limit.
+#'     \item \code{domain-name-too-long} --- the whole name exceeds the DNS
+#'       253-byte limit.
+#'     \item \code{domain-empty-label} --- the host contains an empty label
+#'       (a \code{".."} run, or a leading dot).
+#'     \item \code{domain-hyphen-violation} --- a label breaks the UTS-46
+#'       hyphen rules (leading/trailing hyphen, or \code{"--"} in positions
+#'       3--4 of a non-\code{xn--} label).
+#'     \item \code{domain-std3-violation} --- a label carries a code point
+#'       outside the STD3 LDH set.
+#'     \item \code{host-charset-shimmed} --- the host carries one of the 15
+#'       code points WHATWG keeps but libcurl rejects, accepted by the shim
+#'       (ADR 0009: \code{! $ & ( ) * + , ; =}, plus the ASCII quotation mark,
+#'       apostrophe, grave accent, and the two curly braces).
+#'       \code{"whatwg"} only.
+#'   }
+#'
+#'   \strong{Path.}
+#'   \itemize{
+#'     \item \code{encoded-dot-segment} --- an encoded-dot segment
+#'       (\code{\%2e} / \code{\%2e\%2e}, any hex case) that the profile's dot
+#'       handling acted on.
+#'     \item \code{encoded-reserved-path-byte} --- the preserved path still
+#'       carries an encoded reserved byte (\code{\%2F}, \code{\%3F},
+#'       \code{\%23}) held as data rather than as a separator.
+#'   }
+#'
+#'   \strong{Port.} Facts about the raw port versus the resolved scheme's
+#'   WHATWG default, independent of the \code{port_handling} knob.
+#'   \itemize{
+#'     \item \code{explicit-default-port} --- the port was written out and
+#'       equals the scheme's default.
+#'     \item \code{non-default-port} --- a port is present and is not the
+#'       scheme's default (including any port on a scheme with no defined
+#'       default).
+#'   }
+#'
+#'   \strong{Input shape --- WHATWG cleanup.} All three are \code{"whatwg"}
+#'   only; \code{"rfc3986"} has no strip or rewrite step.
+#'   \itemize{
+#'     \item \code{invalid-reverse-solidus} --- a literal \code{\\} was
+#'       reinterpreted as \code{/} (special schemes only).
+#'     \item \code{control-char-stripped} --- an ASCII tab/LF/CR was removed
+#'       from the interior of the input (step 1, second half).
+#'     \item \code{leading-trailing-stripped} --- a leading and/or trailing run
+#'       of C0-control-or-SPACE was removed (step 1, first half).
+#'   }
+#'
+#'   \strong{Layer 5 --- selected per-standard and per-scheme facts}
+#'   (ADR 0012 D5). Described in full under \emph{Selected facts, not a
+#'   conformance oracle} above.
+#'   \itemize{
+#'     \item \code{invalid-URL-unit} --- WHATWG validation error: a malformed
+#'       \code{\%}-escape or a non-URL code point. \code{"whatwg"} only.
+#'     \item \code{invalid-credentials} --- WHATWG validation error:
+#'       credentials (userinfo) are present. \code{"whatwg"} only.
+#'     \item \code{unicode-outside-rfc3986-uri} --- \emph{general}; a
+#'       directly-written non-ASCII scalar value under \code{"rfc3986"}.
+#'     \item \code{transform-skipped-ineligible-scheme} --- \emph{general};
+#'       a non-HTTP(S) scheme, ineligible for the Stage-B transforms.
+#'     \item \code{ws-fragment-forbidden} --- \emph{general}; a fragment on a
+#'       \code{ws:}/\code{wss:} URL (RFC 6455).
+#'     \item \code{ws-userinfo-forbidden} --- \emph{general}; userinfo on a
+#'       \code{ws:}/\code{wss:} URL (RFC 6455).
+#'     \item \code{mailto-fragment-discouraged} --- \emph{general}; a fragment
+#'       on a \code{mailto:} URL (RFC 6068).
+#'     \item \code{tel-missing-phone-context} --- \emph{general}; a local
+#'       \code{tel:} number with no \code{phone-context} (RFC 3966).
+#'     \item \code{data-missing-comma} --- \emph{general}; a \code{data:} URL
+#'       with no \code{","} separator (RFC 2397).
+#'     \item \code{file-non-absolute-path} --- \emph{general}; a
+#'       non-absolute \code{file:} path under \code{"rfc3986"}.
+#'     \item \code{file-userinfo-extension} --- \emph{general}; userinfo on a
+#'       \code{file:} URL, permitted by RFC 8089 Appendix E.1's non-normative
+#'       extended grammar.
+#'     \item \code{file-component-outside-rfc8089} --- \emph{general}; a query
+#'       or fragment on a \code{file:} URL, inherited from generic RFC 3986.
 #'   }
 #'
 #' @param url A character vector of URLs.
