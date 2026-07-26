@@ -38,6 +38,14 @@ or freeze a new committed run with `RURL_BENCH_OUT=analysis/disagreement Rscript
 > study is about. Do not compare this run's counts cell-by-cell against the
 > 2026-07-20 run without reading the posture note below.
 
+> **Refreshed later the same day (`RURL-qxpgcwie`).** One cell moved:
+> `data:space    ?test#test` now yields path `/space   %20` for
+> `rurl(whatwg)` instead of `/space    `, because opaque paths are now
+> percent-encoded at parse time with the WHATWG C0-control set and its
+> trailing-space rule. It is a *convergence* — that is the value the WHATWG
+> reference already reported. No count, ratio or per-axis figure changes; the
+> version manifest above is unchanged.
+
 Oracle: divergence is measured against the committed **dual RFC/WHATWG oracle**
 (`tests/testthat/fixtures/url-standard-conformance.csv` +
 `external-url-vectors.csv`, columns `rfc3986_expected` / `whatwg_expected` /

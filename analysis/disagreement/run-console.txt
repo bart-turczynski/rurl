@@ -649,7 +649,7 @@ disagreement matrix (divergent rows only; cell = scheme|host|port|path,
  <error>                                                                         scheme|example.com||/                                                                      
  file|||/path/to/file.txt                                                        file|||/path/to/file.txt                                                                   
  <error>                                                                         <error>                                                                                    
- <error>                                                                         data|||/space                                                                              
+ <error>                                                                         data|||/space   %20                                                                        
  <error>                                                                         https|example.com||/"quoted"                                                               
  a|||/b                                                                          a|||/b                                                                                     
  <error>                                                                         http|google.com||/@yahoo.com                                                               

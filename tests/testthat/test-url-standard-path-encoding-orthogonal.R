@@ -79,8 +79,16 @@ test_that("whatwg path_encoding = 'encode' uses the WHATWG path encode set", {
     )
   }
   expect_identical(
-    rurl:::.whatwg_path_percent_encode("\"#<>?`{} é"),
-    "%22%23%3C%3E%3F%60%7B%7D%20%C3%A9"
+    rurl:::.whatwg_path_percent_encode("\"#<>?^`{} é"),
+    "%22%23%3C%3E%3F%5E%60%7B%7D%20%C3%A9"
+  )
+  # `^` (U+005E) is a member of the path set (RURL-qxpgcwie): WPT pins
+  # `foo://host/...^...` -> `%5E`. It was the one missing member, so every other
+  # character of that row already matched.
+  expect_identical(
+    get_path("http://ex.com/a^b", url_standard = "whatwg",
+             path_encoding = "encode"),
+    "/a%5Eb"
   )
 })
 

@@ -224,6 +224,88 @@ test_that("tab/LF/CR are stripped for non-special schemes too", {
   expect_identical(rfc$parse_status, "error")
 })
 
+test_that("an opaque path is percent-encoded with the C0-control set", {
+  # RURL-qxpgcwie. WHATWG's opaque path state encodes each code point with the
+  # C0-control percent-encode set as it is consumed, so the stored path -- what
+  # the `pathname` getter returns -- is already encoded. rurl carried the
+  # payload verbatim; only `clean_url` was encoded, so the `path` column and the
+  # serialized URL disagreed.
+  args <- list(url_standard = "whatwg", scheme_policy = "require",
+               scheme_acceptance = "general")
+  d <- do.call(safe_parse_urls, c(list(c(
+    "wow:￿", "non-special:￿y", "non-special:x/￿y"
+  )), args))
+  expect_identical(d$path, c("%EF%BF%BF", "%EF%BF%BFy", "x/%EF%BF%BFy"))
+
+  # The C0 set is NOT the path set: printable ASCII a LIST path escapes stays
+  # literal in an opaque path. WPT pins this whole row verbatim.
+  raw <- "non-special:cannot-be-a-base-url-!\"$%&'()*+,-.;<=>@[\\]^_`{|}~@/"
+  expect_identical(
+    do.call(safe_parse_urls, c(list(raw), args))$path,
+    "cannot-be-a-base-url-!\"$%&'()*+,-.;<=>@[\\]^_`{|}~@/"
+  )
+
+  # Existing percent spellings survive, malformed `%` included (a validation
+  # -error fact, never a re-encode).
+  expect_identical(
+    do.call(safe_parse_urls, c(list(c("sc:a%41b", "sc:a%zzb")), args))$path,
+    c("a%41b", "a%zzb")
+  )
+})
+
+test_that("a space before the ?/# ending an opaque path becomes %20", {
+  # RURL-qxpgcwie. WHATWG encodes the space immediately preceding the delimiter
+  # that ends an opaque path, and leaves every other space literal, so that a
+  # trailing space survives a re-parse (which strips trailing spaces). Only the
+  # LAST space of a run is affected.
+  args <- list(url_standard = "whatwg", scheme_policy = "require",
+               scheme_acceptance = "general")
+  d <- do.call(safe_parse_urls, c(list(c(
+    "non-special:opaque  ?hi", "non-special:opaque  #hi",
+    "non-special:opaque  x?hi", "non-special:opaque  x#hi"
+  )), args))
+  expect_identical(
+    d$path,
+    c("opaque %20", "opaque %20", "opaque  x", "opaque  x")
+  )
+
+  # Tab/LF/CR are removed first (WHATWG step 1), so the rule sees the stripped
+  # string: three spaces survive and only the third is encoded.
+  expect_identical(
+    do.call(safe_parse_urls,
+            c(list("non-special:opaque \t\t  \t#hi"), args))$path,
+    "opaque  %20"
+  )
+})
+
+test_that("VT and FF in a general-routed input no longer break decomposition", {
+  # RURL-qxpgcwie. ICU counts U+000B (VT) and U+000C (FF) as line terminators,
+  # so the `(.*)` in the scheme/remainder split did not match them and the whole
+  # row failed to decompose -- surfacing as a parse error rather than a host
+  # with a percent-encoded control. WHATWG strips only tab/LF/CR; VT and FF
+  # reach the C0 encoder.
+  args <- list(url_standard = "whatwg", scheme_policy = "require",
+               scheme_acceptance = "general")
+  d <- do.call(safe_parse_urls, c(list(c(
+    "sc://a\vb/", "sc://a\fb/", "sc:pa\vth"
+  )), args))
+  expect_false(any(d$parse_status == "error"))
+  expect_identical(d$host, c("a%0Bb", "a%0Cb", NA_character_))
+  expect_identical(d$path, c("/", "/", "pa%0Bth"))
+
+  # The full WPT C0 row: an opaque host percent-encodes the C0 controls and DEL
+  # rather than rejecting them, and keeps every non-forbidden printable.
+  ctl <- rawToChar(as.raw(c(1:6, 7, 8, 11, 12, 14:31, 127)))
+  got <- do.call(safe_parse_urls,
+                 c(list(paste0("sc://", ctl, "!\"$%&'()*+,-.;=_`{}~/")), args))
+  expect_identical(got$parse_status, "ok")
+  expect_identical(
+    got$host,
+    paste0("%01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17",
+           "%18%19%1A%1B%1C%1D%1E%1F%7F!\"$%&'()*+,-.;=_`{}~")
+  )
+})
+
 test_that("IPv6 hosts are WHATWG-serialized for non-special schemes too", {
   # RURL-cyxegfjs. The WHATWG IPv6 serializer (longest zero run compressed,
   # lowercase hex, no dotted-quad tail) is scheme-independent -- the host parser
