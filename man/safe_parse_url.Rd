@@ -357,11 +357,19 @@ A named list with the following components:
 empty after processing.
 \item \code{port}: The port number.
 \item \code{path}: The path component (e.g., "/path/to/resource").
-\item \code{query}: The raw query string as written in the URL, preserved
-byte-for-byte (e.g., "name=value"); not percent-decoded. A present-but-
-empty query (e.g. from a trailing "?") is reported as NA.
-\item \code{fragment}: The fragment identifier as written in the URL
-(e.g., "section"); not percent-decoded. Empty is reported as NA.
+\item \code{query}: The query string (e.g., "name=value"); never
+percent-decoded. Under \code{url_standard = "whatwg"} it carries the
+standard's percent-encoded spelling (the query percent-encode set is
+applied, so a literal space reports as "\%20"); under
+\code{url_standard = "rfc3986"} or no selector it is the raw source spelling,
+preserved byte-for-byte exactly as written in the URL (a bare key such
+as "flag" stays "flag", not "flag="). A present-but-empty query (e.g.
+from a trailing "?") is reported as NA.
+\item \code{fragment}: The fragment identifier (e.g., "section"); never
+percent-decoded, with the same two-branch contract as \code{query} (the
+fragment percent-encode set is applied under \code{url_standard = "whatwg"},
+so a double-quote inside the fragment reports as "\%22"). Empty is
+reported as NA.
 \item \code{user}: The user name for authentication; never percent-decoded.
 Under \code{url_standard = "whatwg"} it carries the standard's percent-encoded
 spelling (the userinfo percent-encode set is applied, so

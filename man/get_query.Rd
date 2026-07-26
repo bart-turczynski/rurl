@@ -114,6 +114,12 @@ key such as \code{?flag} stays \code{flag}, not \verb{flag=}). By default this a
 still percent-decodes for readability (\code{decode = TRUE}); pass
 \code{decode = FALSE} to obtain the raw query exactly as written in the URL.
 
+This accessor takes no \code{url_standard}, so \code{decode = FALSE} always yields the
+raw source spelling; the \code{query} column of \code{\link[=safe_parse_url]{safe_parse_url()}} under
+\code{url_standard = "whatwg"} instead carries the standard's percent-encoded
+spelling (the query percent-encode set is applied, so a literal space
+becomes \verb{\%20}).
+
 The filtering arguments (\code{query_handling}, \code{params_keep}, \code{params_drop},
 \code{params_case_sensitive}, \code{sort_params}, \code{empty_param_handling},
 \code{decode_plus}) share the engine used by \code{\link{get_clean_url}}, but

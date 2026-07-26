@@ -5,9 +5,24 @@
 # The host (RURL-luwvkwhd) and path (RURL-gjltzwmp / RURL-bbmuehsx) tickets add
 # the emissions and assert token presence against this same helper contract.
 
-# --- Vocabulary: single source of truth, matching PRD §7 exactly -------------
+# --- Vocabulary: the closed set, pinned --------------------------------------
+#
+# This test pins `.URL_DIAGNOSTICS` as a CLOSED SET. It is deliberately NOT a
+# docs-sync gate, and its former name ("matches the PRD §7 table verbatim")
+# claimed that it was: the referenced table in the v1 selector PRD is a
+# graduated, historical spec (ADR 0008) and had not tracked the vocabulary for
+# many releases -- it was missing `control-char-stripped`,
+# `host-charset-shimmed`, `leading-trailing-stripped` and every Layer-5 token.
+# Anyone adding a token trusted the name and went looking for a registry that
+# did not exist.
+#
+# The docs-sync half now lives where it can actually hold: the "Diagnostic
+# vocabulary (canonical)" section of get_url_diagnostics(), enforced against
+# this registry in both directions by tools/diagnostics-doc-consistency.R
+# (a CI gate, `verify` -> diagnostics-docs). Adding a token costs an edit HERE,
+# in R/diagnostics.R, and in that section (RURL-vwkjtoer).
 
-test_that("the diagnostics vocabulary matches the PRD §7 table verbatim", {
+test_that("the diagnostics vocabulary is the pinned closed set", {
   # Authoritative names; these supersede the research-doc drafts. Order is not
   # semantically meaningful, so compare as sets.
   expect_setequal(

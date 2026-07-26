@@ -323,6 +323,28 @@
 
 ### Documentation
 
+- **The diagnostics vocabulary now has one canonical, enforced enumeration.**
+  `?get_url_diagnostics` gains a *Diagnostic vocabulary (canonical)* section
+  listing all 32 tokens with their meanings and the postures they fire under.
+  Previously the only enumeration was the v1 selector PRD's section 7 table,
+  which — being a graduated, historical spec (ADR 0008) — had stopped tracking
+  the code: it was missing `control-char-stripped`, `host-charset-shimmed`,
+  `leading-trailing-stripped` and every Layer-5 token. A new CI gate,
+  `tools/diagnostics-doc-consistency.R`, now holds that section and the
+  `.URL_DIAGNOSTICS` registry to each other in both directions and rejects any
+  documented diagnostic literal that no longer resolves to a real token, so the
+  drift cannot recur silently. The test that claimed to check the PRD table was
+  renamed to what it actually does — pin the closed set.
+
+- **`safe_parse_url()`'s `query` and `fragment` columns are documented with the
+  two-branch encoding contract they actually have.** Both said the value is
+  returned "as written in the URL"; that stopped being true under
+  `url_standard = "whatwg"`, where the query and fragment percent-encode sets
+  are applied. `get_query()` and `get_fragment()` take no `url_standard` and so
+  do always return the raw source spelling — their documentation now says so
+  explicitly and points at the column for the WHATWG spelling, matching the
+  wording already used by `get_password()`.
+
 - **The conformance posture is now stated in one place, with its measurements
   and its limits.** `vignette("url-standard")` gains a *Conformance posture*
   section: against the WHATWG spec's own conformance suite the `"whatwg"`

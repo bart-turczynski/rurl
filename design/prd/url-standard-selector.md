@@ -318,6 +318,14 @@ proven out, but are explicitly out of scope for v1.
 
 ## 7. Diagnostics vocabulary
 
+> **Historical, not a registry.** This table records the vocabulary as accepted
+> for v1 and is not maintained. The live vocabulary is `.URL_DIAGNOSTICS`
+> (`R/diagnostics.R`), enumerated for users in the "Diagnostic vocabulary
+> (canonical)" section of `?get_url_diagnostics` and held to the registry in
+> both directions by `tools/diagnostics-doc-consistency.R`. Consult those, not
+> this table. (ADR 0008: a graduated PRD is a record of a decision, not a
+> living index. RURL-vwkjtoer.)
+
 Initial diagnostics:
 
 | Diagnostic | Meaning | Typical consumer action |

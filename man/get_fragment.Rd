@@ -36,8 +36,13 @@ NA).}
 A character vector of fragments.
 }
 \description{
-Extracts the fragment component of a URL. The value is returned raw, exactly
-as written in the URL (not percent-decoded).
+Extracts the fragment component of a URL. The value is never
+percent-decoded. This accessor takes no \code{url_standard}, so it always
+returns the raw source spelling, exactly as written in the URL; the
+\code{fragment} column of \code{\link{safe_parse_url}} under
+\code{url_standard = "whatwg"} instead carries the standard's
+percent-encoded spelling (the fragment percent-encode set is applied, so a
+double-quote inside the fragment becomes \code{\%22}).
 }
 \examples{
 get_fragment("http://example.com/path#section")
