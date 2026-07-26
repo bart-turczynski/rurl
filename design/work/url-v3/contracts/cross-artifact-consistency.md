@@ -62,6 +62,14 @@ The exact sources this capstone asserts over, hashed at authoring.
 `validate-records.R` recomputes the hashes at the cp-snapshot-3 seal. The accepted
 decisions the siblings project are already hash-enforced by `validate-manifest.R`.
 
+Artifact 4 is represented here by its **invariant** half only
+(`public-surface-closure.md`). Its roster half, `public-surface-disposition.md`, is
+deliberately not hashed in this table: this capstone is itself a G3 `## Inputs`
+entry, so pinning the roster here would put every added export back on the path to
+a gate re-acceptance — the cascade P0.6 removes. The roster's vocabulary agreement
+is asserted through the invariant's own agreement section, and its conformance is
+checked executably by `validate-records.R` (P0.6 I1–I5).
+
 | path | sha256 |
 |---|---|
 | design/work/url-v3/contracts/canonical-state-contract.md | efebe54e645dfcaf56aa2e7d78fcad37d1f266952431a247d5197624996f43ca |
@@ -72,7 +80,7 @@ decisions the siblings project are already hash-enforced by `validate-manifest.R
 | design/work/url-v3/contracts/semantic-cache-contract.md | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
 | design/work/url-v3/contracts/host-annotation-contracts.md | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
 | design/work/url-v3/contracts/key-join-contracts.md | c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3 |
-| design/work/url-v3/contracts/public-surface-closure.md | 9b4fdb2d3bc67ceaf9c1aa579c160e4f173ff0df90ef98edf3f0f80a93005e46 |
+| design/work/url-v3/contracts/public-surface-closure.md | 9a1cd6c68141c55386818a6ec43e8aeecef973417ce442923e5a156a012e782a |
 
 ## Criterion-3 assertions ((i)–(v))
 

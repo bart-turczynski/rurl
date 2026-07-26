@@ -307,11 +307,45 @@ if (!is.null(sc_reg) && !is.null(fd_reg)) {
   check(length(fd_ids) == 10L, sprintf("findings register expected 10 RCON rows, got %d", length(fd_ids)))
 }
 
+## --- the public surface, DERIVED from source ---------------------------------
+## Every artifact-4 check compares against these rather than against a number
+## written into a document (P0.6 I1; RURL-oygqsykd). Memoized: several sections
+## use them. A transcribed count is a maintenance tax and a stale-fact risk —
+## the "29 exports / 51 rows" prose that survived the 51->52 growth is the proof.
+.psd_cache <- new.env(parent = emptyenv())
+psd_ns_exports <- function() {
+  if (is.null(.psd_cache$exports)) {
+    ns <- readLines("NAMESPACE", warn = FALSE)
+    e <- regmatches(ns, regexpr("(?<=^export\\()[^)]+", ns, perl = TRUE))
+    .psd_cache$exports <- sort(e[nzchar(e)])
+  }
+  .psd_cache$exports
+}
+psd_result_fields <- function() {
+  if (is.null(.psd_cache$fields)) {
+    ut <- readLines(file.path("R", "utils.R"), warn = FALSE)
+    i0 <- grep("^\\.spu_result_fields\\s*<-\\s*list\\(", ut)
+    f <- character(0)
+    if (length(i0) == 1) {
+      ends <- grep("^\\)\\s*$", ut)
+      ends <- ends[ends > i0]
+      if (length(ends)) {
+        blk <- ut[i0:ends[[1]]]
+        m <- regmatches(blk, regexpr('(?<=name = ")[^"]+', blk, perl = TRUE))
+        f <- sort(m[nzchar(m)])
+      }
+    }
+    .psd_cache$fields <- f
+  }
+  .psd_cache$fields
+}
+
 ## --- G1.2 register: public-surface-inventory (§6 artifact 4) -----------------
 ## Parses the artifact-4 inventory register and enforces: PROPOSED envelope,
-## every row DISCOVERED with non-empty required columns, the 30-export NAMESPACE
-## bijection over exported-function/exported-data rows (mirrors G1.1's row-count
-## bijection), and the 18 public-output-field rows. (RURL-dmsgpcak)
+## every row DISCOVERED with non-empty required columns, the NAMESPACE bijection
+## over exported-function/exported-data rows (mirrors G1.1's row-count
+## bijection), and the public-output-field rows. Both bijections are by NAME
+## against derived sources — no count is pinned here (P0.6 I1). (RURL-dmsgpcak)
 psi_path <- file.path(reg_dir, "public-surface-inventory.md")
 psi_reg  <- if (file.exists(psi_path)) read_rows(psi_path) else NULL
 check(!is.null(psi_reg), "public-surface-inventory.md: no parseable Rows table")
@@ -358,17 +392,14 @@ if (!is.null(psi_reg)) {
   check(length(dup_psi) == 0,
         sprintf("[duplicate_ids] public-surface-inventory: %s", paste(dup_psi, collapse = ", ")))
 
-  # --- 30-export NAMESPACE bijection over exported-function/exported-data rows -
-  ns <- readLines("NAMESPACE", warn = FALSE)
-  ns_exports <- regmatches(ns, regexpr("(?<=^export\\()[^)]+", ns, perl = TRUE))
-  ns_exports <- sort(ns_exports[nzchar(ns_exports)])
+  # --- NAMESPACE bijection over exported-function/exported-data rows, BY NAME --
+  # No count is asserted: setequal + the two setdiff loops below are strictly
+  # stronger than a cardinality check, and unlike a literal they never need
+  # editing when the surface grows (P0.6 I1).
+  ns_exports <- psd_ns_exports()
   is_export_row <- vapply(psi_rows,
                           function(r) gv(r, "kind") %in% c("exported-function", "exported-data"), TRUE)
   fn_ids <- sort(vapply(psi_rows[is_export_row], function(r) gv(r, "item_id"), ""))
-  check(length(ns_exports) == 30L,
-        sprintf("NAMESPACE expected 30 export() lines, got %d", length(ns_exports)))
-  check(length(fn_ids) == 30L,
-        sprintf("public-surface-inventory expected 30 export rows, got %d", length(fn_ids)))
   check(setequal(fn_ids, ns_exports),
         sprintf("public-surface-inventory export rows != NAMESPACE (rows=%d, NAMESPACE=%d)",
                 length(fn_ids), length(ns_exports)))
@@ -377,17 +408,15 @@ if (!is.null(psi_reg)) {
   for (e in setdiff(fn_ids, ns_exports))
     check(FALSE, sprintf("public-surface-inventory: extra export row '%s' not in NAMESPACE", e))
 
-  # --- 18 public-output-field rows present, exact name set --------------------
-  pub_fields <- c("original_url", "scheme", "host", "port", "path", "query",
-                  "fragment", "user", "password", "domain", "tld", "domain_ascii",
-                  "domain_unicode", "tld_ascii", "tld_unicode", "is_ip_host",
-                  "clean_url", "parse_status")
+  # --- public-output-field rows, exact name set derived from .spu_result_fields -
+  pub_fields <- psd_result_fields()
+  check(length(pub_fields) >= 1,
+        "public-surface-inventory: could not derive the field set from .spu_result_fields")
   is_field_row <- vapply(psi_rows, function(r) identical(gv(r, "kind"), "public-output-field"), TRUE)
   field_ids <- sort(vapply(psi_rows[is_field_row], function(r) gv(r, "item_id"), ""))
-  check(length(field_ids) == 18L,
-        sprintf("public-surface-inventory expected 18 public-output-field rows, got %d", length(field_ids)))
   check(setequal(field_ids, pub_fields),
-        sprintf("public-surface-inventory public-output-field rows != 18 known fields (got %d)", length(field_ids)))
+        sprintf("public-surface-inventory public-output-field rows != .spu_result_fields (rows=%d, source=%d)",
+                length(field_ids), length(pub_fields)))
   for (f in setdiff(pub_fields, field_ids))
     check(FALSE, sprintf("public-surface-inventory: missing public-output-field row '%s'", f))
 
@@ -619,9 +648,22 @@ gate_checks <- (pass + length(fail)) - gate_checks_before
 ## The canonical-state contract (artifact 3) additionally gets the deep staged
 ## section (_scratch/orchestrate/g3-seal-staging/canonical-state-validator-section.md):
 ## Rows columns/enums, 18-field completeness, verdict-layer sets, open-cell coverage.
-## Objective per-contract counts (public-surface 30+18 vs NAMESPACE/.spu_result_fields;
-## the capstone's five criterion verdicts; the three caches) are asserted only where
-## the contract states an exact cardinality. (RURL-huneoffx; the cp-snapshot-3 seal.)
+## Objective per-contract counts (the capstone's five criterion verdicts; the three
+## caches) are asserted only where the contract states an exact cardinality.
+## (RURL-huneoffx; the cp-snapshot-3 seal.)
+##
+## ARTIFACT 4 IS TWO FILES (P0.6; RURL-oygqsykd). public-surface-closure.md is the
+## INVARIANT (I1-I5 + the owning-contract legend) and is a G3 `## Inputs` hash pin;
+## public-surface-disposition.md is the ROSTER (one row per surface cell) and is
+## deliberately NOT a gate input, because G3 criterion 1 is a property over the
+## surface, not a statement about its size. Pinning the roster in the gate made
+## every added export reopen contract-matrix closure for a change that SATISFIED
+## the property. So the roster's conformance is asserted here instead, and — this
+## is the part that matters — the population is DERIVED from NAMESPACE and
+## `.spu_result_fields` and compared BY NAME. No surface count is written in this
+## file or in either contract; a transcribed number is a stale fact waiting to
+## happen, and the 51->52 growth that left "29 exports" in three places of the
+## closure prose is the proof.
 contracts_dir <- file.path(root, "contracts")
 contract_n <- 0L
 contract_checks_before <- pass + length(fail)
@@ -670,6 +712,29 @@ section_lines <- function(ln, name) {
 }
 .placeholder <- function(x) is.na(x) || !nzchar(trimws(x %||% "")) ||
   grepl("^(—|-|tbd|pending|n/?a)$", trimws(x), ignore.case = TRUE)
+
+# --- artifact-4 helpers (P0.6: invariant half + roster half) -----------------
+# The three roster table shapes. Named once so section F can assert their ABSENCE
+# from the gate-pinned invariant and section G their presence in the roster.
+PSD_EXPORT_HDR <- c("export", "owning contract(s)", "v3 disposition", "status")
+PSD_FIELD_HDR  <- c("field", "owning contract(s)", "v3 disposition", "status")
+PSD_ITEM_HDR   <- c("item", "owning contract", "v3 disposition", "status")
+
+# G3 leaf -> owning contract filename, read out of the invariant's legend table.
+# Read rather than hardcoded: the legend is the invariant's to state, and a leaf
+# that names a nonexistent contract must fail loudly instead of being ignored.
+psd_legend <- function(ln) {
+  out <- list()
+  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
+               parse_pipe_tables(ln))
+  if (length(lg) != 1) return(out)
+  for (r in lg[[1]]$rows) {
+    leaf <- trimws(gv(r, "G3 leaf") %||% "")
+    cn <- gsub("`", "", trimws(gv(r, "contract") %||% ""), fixed = TRUE)
+    if (grepl("^G3\\.[0-9A-Z]+$", leaf) && nzchar(cn)) out[[leaf]] <- paste0(cn, ".md")
+  }
+  out
+}
 
 env_required <- c("id", "name", "artifact_number", "schema_version", "tracked_location",
                   "owner", "single_writer", "lifecycle_state", "dependencies", "bound_decision",
@@ -840,37 +905,167 @@ if (dir.exists(contracts_dir)) {
       }
     }
 
-    ## F. objective per-contract counts -----------------------------------------
+    ## F. artifact 4, invariant half — the ownership rule itself -----------------
+    ## The G3-pinned file must state I1-I5 and the legend, and must NOT contain a
+    ## roster table: the split is enforced structurally, not just described in a
+    ## comment, so a well-meaning future edit cannot quietly re-merge the halves
+    ## and restore the cascade.
     if (identical(bn, "public-surface-closure.md")) {
       tabs <- parse_pipe_tables(ln)
-      exp_tab <- Filter(function(t) identical(t$header, c("export", "owning contract(s)", "v3 disposition", "status")), tabs)
-      fld_tab <- Filter(function(t) identical(t$header, c("field", "owning contract(s)", "v3 disposition", "status")), tabs)
-      ns <- readLines("NAMESPACE", warn = FALSE)
-      n_exports <- length(grep("^export\\(", ns))
-      check(length(exp_tab) == 1 && length(exp_tab[[1]]$rows) == n_exports,
-            sprintf("public-surface-closure: exported-function table must have %d rows (NAMESPACE exports)", n_exports))
-      check(length(fld_tab) == 1 && length(fld_tab[[1]]$rows) == 18L,
-            "public-surface-closure: public-output-field table must have 18 rows")
-      # bijection: components 30 + 18 + 3 + 1 sum to the register's 52 rows, and
-      # the total row states 52 (guards the 46-vs-51 arithmetic regression).
-      bij <- Filter(function(t) "surface class" %in% t$header && "count" %in% t$header, tabs)
-      if (length(bij) == 1) {
-        labels <- vapply(bij[[1]]$rows, function(r) tolower(gv(r, "surface class") %||% ""), "")
-        nums   <- vapply(bij[[1]]$rows, function(r) {
-          d <- gsub("[^0-9]", "", gv(r, "count") %||% ""); if (nzchar(d)) as.integer(d) else NA_integer_
-        }, integer(1))
-        tot_i  <- grep("total", labels)
-        comp_i <- setdiff(seq_along(labels), tot_i)
-        check(sum(nums[comp_i], na.rm = TRUE) == 52L,
-              sprintf("public-surface-closure: bijection components must sum to 52 (got %d)",
-                      sum(nums[comp_i], na.rm = TRUE)))
-        check(length(tot_i) == 1 && identical(nums[tot_i[1]], 52L),
-              sprintf("public-surface-closure: bijection total must be 52 (got %s)",
-                      if (length(tot_i) == 1) nums[tot_i[1]] else "<none>"))
-      } else {
-        check(FALSE, "public-surface-closure: bijection table (surface class | count) not found")
-      }
+      for (h in list(PSD_EXPORT_HDR, PSD_FIELD_HDR, PSD_ITEM_HDR))
+        check(!any(vapply(tabs, function(t) identical(t$header, h), TRUE)),
+              sprintf("public-surface-closure: roster table [%s] belongs in public-surface-disposition.md (P0.6)",
+                      paste(h, collapse = " | ")))
+      for (i in sprintf("I%d", 1:5))
+        check(any(grepl(sprintf("\\*\\*%s ", i), ln, fixed = FALSE)),
+              sprintf("public-surface-closure: invariant clause %s is not stated", i))
+      check(!any(grepl("^##\\s+Bijection", ln)),
+            "public-surface-closure: a Bijection (count) table must not live in the gate-pinned invariant (P0.6 I1)")
+      lg <- psd_legend(ln)
+      check(length(lg) >= 8L,
+            sprintf("public-surface-closure: owning-contract legend must map at least 8 G3 leaves (got %d)",
+                    length(lg)))
+      for (leaf in names(lg))
+        check(file.exists(file.path(contracts_dir, lg[[leaf]])),
+              sprintf("public-surface-closure: legend leaf %s names no contract file (%s)", leaf, lg[[leaf]]))
     }
+
+    ## G. artifact 4, roster half — I1-I5 over the per-cell rows -----------------
+    ## Not a gate input (P0.6). Everything here is DERIVED: the export set from
+    ## NAMESPACE, the field set from .spu_result_fields, the legend from the
+    ## invariant half. No count is transcribed, so growing the surface cannot make
+    ## this section stale.
+    if (identical(bn, "public-surface-disposition.md")) {
+      tabs <- parse_pipe_tables(ln)
+      exp_tab <- Filter(function(t) identical(t$header, PSD_EXPORT_HDR), tabs)
+      fld_tab <- Filter(function(t) identical(t$header, PSD_FIELD_HDR), tabs)
+      itm_tab <- Filter(function(t) identical(t$header, PSD_ITEM_HDR), tabs)
+      check(length(exp_tab) == 1, "public-surface-disposition: exactly one exported-function roster table")
+      check(length(fld_tab) == 1, "public-surface-disposition: exactly one public-output-field roster table")
+      check(length(itm_tab) == 1, "public-surface-disposition: exactly one curl/migration roster table")
+
+      ## --- I1 + I2: population derived from source, compared BY NAME ----------
+      unq <- function(x) gsub("`", "", trimws(x %||% ""), fixed = TRUE)
+      if (length(exp_tab) == 1) {
+        rows_e <- vapply(exp_tab[[1]]$rows, function(r) unq(gv(r, "export")), "")
+        for (e in setdiff(psd_ns_exports(), rows_e))
+          check(FALSE, sprintf("public-surface-disposition: NAMESPACE exports '%s' with no roster row (I2)", e))
+        for (e in setdiff(rows_e, psd_ns_exports()))
+          check(FALSE, sprintf("public-surface-disposition: roster row '%s' is not a NAMESPACE export (I2)", e))
+        dup <- unique(rows_e[duplicated(rows_e)])
+        check(length(dup) == 0,
+              sprintf("public-surface-disposition: duplicate export row(s) %s (I2)", paste(dup, collapse = ", ")))
+      }
+      if (length(fld_tab) == 1) {
+        rows_f <- vapply(fld_tab[[1]]$rows, function(r) unq(gv(r, "field")), "")
+        src_f <- psd_result_fields()
+        check(length(src_f) >= 1,
+              "public-surface-disposition: could not derive the field set from .spu_result_fields (I1)")
+        for (f in setdiff(src_f, rows_f))
+          check(FALSE, sprintf("public-surface-disposition: .spu_result_fields has '%s' with no roster row (I2)", f))
+        for (f in setdiff(rows_f, src_f))
+          check(FALSE, sprintf("public-surface-disposition: roster row '%s' is not a .spu_result_fields entry (I2)", f))
+      }
+      if (length(itm_tab) == 1) {
+        items <- vapply(itm_tab[[1]]$rows, function(r) unq(gv(r, "item")), "")
+        check(sum(grepl("^curl-", items)) >= 1L,
+              "public-surface-disposition: no curl-dependency row (§10 curl surface)")
+        check(sum(items == "migration-surface") == 1L,
+              "public-surface-disposition: exactly one migration-surface row required")
+      }
+
+      ## --- the Bijection table is VERIFIED against source, never pinned -------
+      bij <- Filter(function(t) "surface class" %in% t$header && "count" %in% t$header, tabs)
+      check(length(bij) == 1, "public-surface-disposition: bijection table (surface class | count) not found")
+      if (length(bij) == 1 && length(exp_tab) == 1 && length(fld_tab) == 1 && length(itm_tab) == 1) {
+        labels <- vapply(bij[[1]]$rows, function(r) tolower(gv(r, "surface class") %||% ""), "")
+        nums <- vapply(bij[[1]]$rows, function(r) {
+          d <- gsub("[^0-9]", "", gv(r, "count") %||% "")
+          if (nzchar(d)) as.integer(d) else NA_integer_
+        }, integer(1))
+        tot_i <- grep("total", labels)
+        comp_i <- setdiff(seq_along(labels), tot_i)
+        derived <- length(psd_ns_exports()) + length(psd_result_fields()) +
+          length(itm_tab[[1]]$rows)
+        check(sum(nums[comp_i], na.rm = TRUE) == derived,
+              sprintf("public-surface-disposition: bijection components sum to %d but the derived surface is %d (NAMESPACE + .spu_result_fields + curl/migration rows)",
+                      sum(nums[comp_i], na.rm = TRUE), derived))
+        check(length(tot_i) == 1 && identical(nums[tot_i[1]], derived),
+              sprintf("public-surface-disposition: bijection total is %s but the derived surface is %d",
+                      if (length(tot_i) == 1) nums[tot_i[1]] else "<none>", derived))
+      }
+
+      ## --- I2/I3/I4: every row is owned, and every citation resolves ----------
+      inv_ln <- if (file.exists(file.path(contracts_dir, "public-surface-closure.md")))
+        readLines(file.path(contracts_dir, "public-surface-closure.md"), warn = FALSE) else character(0)
+      lg <- psd_legend(inv_ln)
+      check(length(lg) >= 8L,
+            "public-surface-disposition: could not read the owning-contract legend from the invariant half")
+      ctext <- list()
+      for (f in unique(unlist(lg))) {
+        p <- file.path(contracts_dir, f)
+        ctext[[f]] <- if (file.exists(p)) readLines(p, warn = FALSE) else character(0)
+      }
+      for (tb in c(exp_tab, fld_tab, itm_tab)) {
+        key <- tb$header[[1]]
+        own_col <- if ("owning contract(s)" %in% tb$header) "owning contract(s)" else "owning contract"
+        for (r in tb$rows) {
+          cell <- unq(gv(r, key))
+          owner_raw <- gv(r, own_col) %||% ""
+          st_raw <- gv(r, "status") %||% ""
+          st <- sub("\\s.*$", "", trimws(st_raw))
+          check(st %in% c("SETTLED", "OPEN"),
+                sprintf("public-surface-disposition %s: status '%s' not in {SETTLED, OPEN}", cell, st_raw))
+          leaves <- unique(regmatches(owner_raw, gregexpr("G3\\.[0-9A-Z]+", owner_raw))[[1]])
+          downstream <- grepl("artifact 11|artifact 4", owner_raw)
+          check(length(leaves) >= 1 || downstream,
+                sprintf("public-surface-disposition %s: names no owning contract (I2): '%s'", cell, owner_raw))
+          for (lf in leaves)
+            check(lf %in% names(lg),
+                  sprintf("public-surface-disposition %s: owning contract '%s' is not in the legend (I2)", cell, lf))
+          disp <- gv(r, "v3 disposition") %||% ""
+          if (identical(st, "SETTLED")) {
+            # I3: a SETTLED row must cite the accepted decision its owner projects
+            # (P-tier ref, an ADR, or — for the migration row — its discharge).
+            ok <- grepl("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", disp) ||
+              grepl("ADR [0-9]{4}", disp) || grepl("discharged", disp)
+            check(ok, sprintf("public-surface-disposition %s: SETTLED cites no decision, ADR, or discharge (I3): '%s'",
+                              cell, disp))
+          } else if (identical(st, "OPEN")) {
+            # I3/I4: each -O id cited must EXIST in one of the owning contracts.
+            # "HOST-O2/O4" is shorthand: a bare /O<n> inherits the last prefix.
+            toks <- regmatches(st_raw, gregexpr("[A-Z]+-O[0-9]+|/O[0-9]+", st_raw))[[1]]
+            ids <- character(0); last_pref <- NA_character_
+            for (tk in toks) {
+              if (grepl("^/O", tk)) {
+                if (!is.na(last_pref)) ids <- c(ids, paste0(last_pref, "-", sub("^/", "", tk)))
+              } else {
+                ids <- c(ids, tk); last_pref <- sub("-O[0-9]+$", "", tk)
+              }
+            }
+            named_downstream <- grepl("artifact 11|S1 s/v|RCON-08|P4 host", st_raw) || downstream
+            check(length(ids) >= 1 || named_downstream,
+                  sprintf("public-surface-disposition %s: OPEN cites neither an open-cell id nor a named downstream artifact (I3): '%s'",
+                          cell, st_raw))
+            for (id in unique(ids)) {
+              hay <- unlist(ctext[unique(unlist(lg[leaves]))], use.names = FALSE)
+              if (length(hay) == 0) hay <- unlist(ctext, use.names = FALSE)
+              check(any(grepl(id, hay, fixed = TRUE)),
+                    sprintf("public-surface-disposition %s: OPEN cites '%s', which appears in none of its owning contracts (%s) — dangling citation (I3)",
+                            cell, id, paste(leaves, collapse = ", ")))
+            }
+          }
+        }
+      }
+
+      ## --- I4: the roster opens nothing of its own ----------------------------
+      obody2 <- section_lines(ln, "Open cells")
+      check(!any(grepl("PSD-O[0-9]+", obody2)),
+            "public-surface-disposition: the roster must not define open cells of its own (I4)")
+      check(any(grepl("PSC-O", obody2)),
+            "public-surface-disposition: ## Open cells must forward to the invariant's PSC-O groups (I4)")
+    }
+
     if (identical(bn, "cross-artifact-consistency.md")) {
       crit <- Filter(function(t) "verdict" %in% t$header && "#" %in% t$header, parse_pipe_tables(ln))
       crit <- Filter(function(t) length(t$rows) == 5L, crit)

@@ -89,6 +89,10 @@ CONTRACT_ABBREV <- c(
   "key-join-contracts.md"               = "KJ",
   "output-contracts.md"                 = "OUT",
   "public-surface-closure.md"           = "PS",
+  # Artifact 4's roster half (P0.6). Its rows are normative claims exactly as
+  # before the split — they merely live in a second file now, so they stay in the
+  # claim population under their own prefix rather than silently leaving it.
+  "public-surface-disposition.md"       = "PSD",
   "semantic-cache-contract.md"          = "SC",
   "standard-scheme-matrices.md"         = "SS",
   "validation-intervention-contract.md" = "VI"
