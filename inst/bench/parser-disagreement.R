@@ -62,6 +62,19 @@
 #   and stops rurl's http:// inference -- a SEPARATE axis -- from inflating
 #   accept-vs-reject divergence. It also removes the lone WHATWG false-accept
 #   (backtick host, ada-005), which is opt-out-able precisely here.
+#
+#   Both rurl profiles are ALSO run with scheme_acceptance = "general" (ADR
+#   0012 D3), held for the same reason (T6, RURL-goeprkuf). adaR is a GENERAL
+#   WHATWG parser: it parses `mailto:`, `data:`, `tel:` and other non-special
+#   schemes. rurl's default "web" acceptance admits only the curated
+#   http/https/ftp/ftps/file allowlist (ADR 0004), so running the study at
+#   "web" scores ~19 opaque/non-special rows as rurl rejects and adaR accepts
+#   -- an apples-to-oranges accept/reject inflation that measures rurl's
+#   SCHEME-ACCEPTANCE policy, not the url_standard interpretation this study is
+#   about. "general" requires an explicit url_standard, which both profiles
+#   already pass. The "web" posture is not unmeasured: it is exactly what the
+#   conformance fixture and inst/bench/standard-parity.R score, so the two
+#   harnesses cover the two postures between them.
 # ----------------------------------------------------------------------------
 
 # ---- resolve rurl (installed or dev tree) ----------------------------------
@@ -143,8 +156,13 @@ adapt_rurl <- function(urls, standard) {
   # scheme_policy = "require": hold the scheme-inference axis fixed (see header
   # HELD AXES). Matches curl/adaR no-base acceptance posture and drops the
   # backtick-host false-accept, which is opt-out-able exactly here.
+  # scheme_acceptance = "general": hold the scheme-ACCEPTANCE axis fixed too --
+  # adaR is a general WHATWG parser, so scoring rurl's web allowlist against it
+  # would inflate accept/reject divergence with an axis this study does not
+  # measure (see header HELD AXES).
   df <- suppressWarnings(spu(urls, url_standard = standard,
-                             scheme_policy = "require"))
+                             scheme_policy = "require",
+                             scheme_acceptance = "general"))
   data.frame(
     scheme   = norm_scheme(df$scheme),
     host     = norm_host(df$host),
