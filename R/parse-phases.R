@@ -344,6 +344,27 @@
 # userinfo either, but recovering at the last delimiter is the only
 # host-preserving parse; selector profiles use it to avoid dropping the host.
 # `url_standard = NULL` remains a no-op for backward compatibility.
+#
+# WHATWG userinfo charset acceptance (RURL-micalqvh, half (a)). A SECOND,
+# independently gated rewrite shares this function's span machinery: libcurl
+# refuses an authority whose userinfo carries any of 30 ASCII code points --
+# SPACE (0x20), the C0 controls (0x00-0x1F) and DEL (0x7F) -- so
+# `http://a b@host/` errors even though WHATWG parses it and keeps the host.
+# Every other userinfo byte libcurl already accepts, including non-ASCII and
+# existing percent-triplets, so the set is exactly those 30 and no wider. Each
+# is a member of the WHATWG userinfo percent-encode set, i.e. the
+# percent-encoded form written here IS the spelling WHATWG stores; curl is asked
+# to parse with `decode = FALSE`, so no restore step is needed (contrast the ADR
+# 0009 host shim, which substitutes non-spec filler and must restore). "%" is
+# not in the set, so an already-encoded userinfo (`%25DOMAIN`, `u%40ser`) is
+# never double-encoded.
+#
+# GATED ON `.is_whatwg()` EXPLICITLY. The repeated-"@" repair above deliberately
+# runs under both selector profiles and is only *incidentally* invisible under
+# `rfc3986` (the uniform grammar gate judges the pre-repair snapshot taken at
+# the call site). That no-op is incidental, not structural, so the charset
+# acceptance set is confined to `whatwg` by construction: `rfc3986` has no
+# userinfo production for a space or a control byte and stays source-preserving.
 .encode_excess_authority_at_vec <- function(url, url_standard) {
   no_op <- list(url = url)
   if (is.null(url_standard)) {
@@ -355,18 +376,45 @@
   )
   authority <- m[, 4L]
   at_count <- stringi::stri_count_fixed(authority, "@")
-  eligible <- !is.na(authority) & at_count > 1L
-  eligible[is.na(eligible)] <- FALSE
+  has_at <- !is.na(authority) & at_count > 0L
+  has_at[is.na(has_at)] <- FALSE
+
+  # Repeated-"@" recovery (the historical eligibility: strictly more than one).
+  repair_at <- has_at & at_count > 1L
+
+  # Charset acceptance: any of the 30 libcurl-refused code points inside the
+  # userinfo span (everything before the LAST "@"). `[\s\S]` rather than `.`
+  # because ICU excludes U+000B/U+000C from `.`, and those are in the set.
+  charset <- rep(FALSE, length(url))
+  if (.is_whatwg(url_standard) && any(has_at)) {
+    userinfo_span <- stringi::stri_replace_last_regex(
+      authority[has_at], "@[^@]*\\z", ""
+    )
+    hit <- stringi::stri_detect_regex(
+      userinfo_span, "[\\u0000-\\u0020\\u007F]"
+    )
+    hit[is.na(hit)] <- FALSE
+    charset[has_at] <- hit
+  }
+
+  eligible <- repair_at | charset
   if (!any(eligible)) {
     return(no_op)
   }
 
-  repaired <- vapply(authority[eligible], function(a) {
+  repaired <- vapply(which(eligible), function(i) {
+    a <- authority[i]
     at_pos <- gregexpr("@", a, fixed = TRUE)[[1L]]
     last <- at_pos[length(at_pos)]
     userinfo <- substr(a, 1L, last - 1L)
     host_part <- substr(a, last, nchar(a))
-    paste0(gsub("@", "%40", userinfo, fixed = TRUE), host_part)
+    if (repair_at[i]) {
+      userinfo <- gsub("@", "%40", userinfo, fixed = TRUE)
+    }
+    if (charset[i]) {
+      userinfo <- .percent_encode_userinfo_charset(userinfo)
+    }
+    paste0(userinfo, host_part)
   }, character(1), USE.NAMES = FALSE)
 
   url_out <- url
@@ -375,6 +423,20 @@
   )
   no_op$url <- url_out
   no_op
+}
+
+# Percent-encode the 30 ASCII code points libcurl refuses in a userinfo: SPACE,
+# the C0 controls and DEL. U+0000 cannot occur in an R string (and
+# `rawToChar(as.raw(0L))` is ""), so the literal table covers 0x01-0x20 and
+# 0x7F; the regex above still names the full 0x00-0x20 range. "%" is absent from
+# the table, so the substitution is idempotent over already-encoded input.
+.percent_encode_userinfo_charset <- function(userinfo) {
+  codes <- c(seq.int(1L, 32L), 127L)
+  chars <- vapply(codes, function(i) rawToChar(as.raw(i)), character(1))
+  stringi::stri_replace_all_fixed(
+    userinfo, chars, sprintf("%%%02X", codes),
+    vectorize_all = FALSE
+  )
 }
 
 .parse_whatwg_ipv4_number <- function(part) {
