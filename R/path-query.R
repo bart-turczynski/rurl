@@ -261,13 +261,46 @@
 }
 
 # WHATWG path serializer for `url_standard = "whatwg"` +
-# `path_encoding = "encode"`: uses the path percent-encode set
-# (`" # < > ? ` { }`).
+# `path_encoding = "encode"`: uses the path percent-encode set -- the query set
+# (SP `"` `#` `<` `>`) plus `?` `^` `` ` `` `{` `}`. `^` (U+005E) is a member:
+# the set is the query set and "U+003F (?), U+005E (^), U+0060 (`), U+007B ({),
+# and U+007D (})", which WPT pins (`foo://host/...^...` -> `%5E`). It is NOT a
+# member of the C0-control set an OPAQUE path uses, so `^` stays literal there
+# -- see `.whatwg_opaque_path_encode()`.
 .whatwg_path_percent_encode <- function(path) {
   .whatwg_component_percent_encode(
     path,
-    c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x60L, 0x7BL, 0x7DL)
+    c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL)
   )
+}
+
+# WHATWG opaque-path serializer (#opaque-path-state). An opaque path is
+# percent-encoded with the C0-control set only -- C0 controls, DEL and every
+# non-ASCII byte -- so the printable ASCII a list path escapes (`^` `{` `}` ...)
+# stays literal.
+#
+# `delimiter_follows` carries the one context the encode set cannot: WHATWG
+# encodes a SPACE that sits immediately before the `?` or `#` that ends an
+# opaque path, and leaves every other space literal. WPT pins all three cases:
+# `non-special:opaque  x?hi` keeps both interior spaces,
+# `non-special:opaque  ?hi` yields `opaque %20` (only the LAST space encoded),
+# and a space at the very end of the input
+# is removed by the parser's leading/trailing strip instead. The reason is
+# round-tripping: a trailing space would otherwise be stripped when the
+# serialized URL is re-parsed.
+.whatwg_opaque_path_encode <- function(path, delimiter_follows) {
+  if (is.na(path) || !nzchar(path)) {
+    return(path)
+  }
+  trailing_space <- isTRUE(delimiter_follows) && endsWith(path, " ")
+  if (trailing_space) {
+    path <- substring(path, 1L, nchar(path) - 1L)
+  }
+  out <- .whatwg_component_percent_encode(path, integer(0))
+  if (trailing_space) {
+    out <- paste0(out, "%20")
+  }
+  out
 }
 
 # WHATWG query serializer for special schemes: uses the special-query

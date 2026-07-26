@@ -713,8 +713,13 @@
   if (is.na(url)) {
     return(blank)
   }
+  # `[\s\S]`, not `.`: ICU counts U+000B (VT) and U+000C (FF) as line
+  # terminators, so `.` does not match them and any input carrying one failed to
+  # decompose at all (`sc://a<VT>b/` was a parse error rather than a host with a
+  # percent-encoded control). Tab/LF/CR are stripped upstream, but VT/FF are not
+  # -- WHATWG keeps them and the C0 encoder handles them (RURL-qxpgcwie).
   m <- stringi::stri_match_first_regex(
-    url, "^([A-Za-z][A-Za-z0-9+.\\-]*):(.*)$"
+    url, "^([A-Za-z][A-Za-z0-9+.\\-]*):([\\s\\S]*)$"
   )
   if (is.na(m[1L, 1L])) {
     return(blank) # not a scheme-bearing input -> cannot decompose
@@ -756,7 +761,12 @@
   }
 
   if (is_whatwg && identical(path_kind, "opaque")) {
-    path <- rest
+    # WHATWG stores an opaque path ALREADY percent-encoded (opaque path state
+    # encodes each code point with the C0-control set as it is consumed), so
+    # this is parse-time identity, not `path_encoding` presentation: the
+    # `pathname` getter returns the encoded spelling. `delimiter_follows` is the
+    # `?`/`#` that ended the path, which decides the trailing-space rule.
+    path <- .whatwg_opaque_path_encode(rest, hpos > 0L || qpos > 0L)
     authority_kind <- "absent"
   } else if (startsWith(rest, "//")) {
     after <- substring(rest, 3L)
@@ -923,7 +933,11 @@
     authority_kind = "absent", query_kind = "absent",
     fragment_kind = "absent", host_form = na
   )
-  m <- stringi::stri_match_first_regex(url, "^([Ff][Ii][Ll][Ee]):(.*)$")
+  # `[\s\S]`, not `.` -- the same ICU VT/FF line-terminator trap the opaque
+  # decomposer above documents.
+  m <- stringi::stri_match_first_regex(
+    url, "^([Ff][Ii][Ll][Ee]):([\\s\\S]*)$"
+  )
   if (is.na(m[1L, 1L])) {
     return(blank)
   }

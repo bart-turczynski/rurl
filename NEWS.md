@@ -58,6 +58,39 @@
 
 ### Bug fixes
 
+- **Opaque paths are now percent-encoded, and `^` joins the path
+  percent-encode set.** Three related WHATWG encode-set gaps, all under
+  `scheme_acceptance = "general"` unless noted:
+
+  * **Opaque paths were carried verbatim.** WHATWG's opaque path state encodes
+    each code point with the C0-control percent-encode set as it is consumed,
+    so the stored path — what the `path` column reports — is already encoded.
+    rurl encoded only `clean_url`, so `wow:<U+FFFF>` reported path
+    `<U+FFFF>` where the serialized URL said `%EF%BF%BF`. The two now agree.
+    The C0 set is *not* the path set: printable ASCII that a hierarchical path
+    escapes (`^`, `{`, `}`, `<`, `>`) stays literal in an opaque path, and
+    existing `%xx` spellings are preserved. WHATWG also encodes the single
+    space immediately before the `?` or `#` that ends an opaque path — so that
+    a trailing space survives a re-parse — and `non-special:opaque  ?hi` now
+    yields path `opaque %20`, with interior spaces untouched.
+  * **`^` (U+005E) was missing from the path percent-encode set.** It applies
+    to *every* profile row under `url_standard = "whatwg"` with
+    `path_encoding = "encode"`, not just general-routed ones:
+    `http://ex.com/a^b` now presents `/a%5Eb`.
+  * **U+000B (VT) and U+000C (FF) broke decomposition entirely.** ICU counts
+    both as line terminators, so the `.`-based scheme/remainder split in the
+    general parser never matched them and the whole row failed — `sc://a<VT>b/`
+    was a parse error instead of host `a%0Bb`. WHATWG's step 1 strips only
+    tab/LF/CR; VT and FF are kept and percent-encoded. This also unblocks the
+    WPT C0-control host row, whose opaque host now encodes `%01`…`%1F%7F`
+    rather than being rejected.
+
+  `url_standard = "rfc3986"` is unaffected throughout — the `rfc-syntax`
+  posture disclaims this normalization. One cell of the frozen
+  `analysis/disagreement` study moves as a result, *converging* on the value
+  the WHATWG reference parser already reported; no count or ratio changes.
+  (RURL-qxpgcwie.)
+
 - **IPv6 hosts are now WHATWG-serialized for non-special schemes too.** The
   WHATWG host parser stores an IPv6 literal as eight 16-bit pieces and
   re-serializes it — longest zero run compressed to `::`, lowercase hex, no
