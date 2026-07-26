@@ -58,6 +58,28 @@
 
 ### Bug fixes
 
+- **`url_standard = "whatwg"` no longer rejects a URL whose userinfo carries a
+  space, a C0 control or DEL.** libcurl refuses an authority whose userinfo
+  contains any of 30 ASCII code points — SPACE (U+0020), the C0 controls
+  (U+0000–U+001F) and DEL (U+007F) — so rows the WHATWG parser accepts were
+  errored out entirely: `"http://a b@host/"` was a parse error (now accepted,
+  host `host`, user `a%20b`), as were the WPT punctuation-run rows
+  ``"wss:// !\"$%&'()*+,-.;<=>@[]^_`{|}~@host/"`` and its `joe:`-password variant
+  (both now host `host`, under `scheme_acceptance = "general"`). Those 30 code
+  points are now percent-encoded in the userinfo span before curl parses the
+  string. Every one of them is a member of the WHATWG userinfo percent-encode
+  set, so the encoded form is the spelling WHATWG stores and no restore step is
+  involved; `%` is not in the set, so an already-encoded userinfo
+  (`%25DOMAIN`, `u%40ser:p%40ss`) is never double-encoded. All other userinfo
+  bytes, including non-ASCII, already parsed and are untouched, as is the
+  pre-existing repeated-`@` recovery (`"http://username@@@@example.com"` still
+  reports user `username%40%40%40`). The rewrite is gated on `whatwg`
+  explicitly: `url_standard = "rfc3986"` — which has no userinfo production for
+  a space or a control byte — still rejects these inputs, and the no-selector
+  default is byte-for-byte unaffected. Acceptance does not launder the row's
+  facts: such rows report `invalid-credentials` and `invalid-URL-unit` from
+  `get_url_diagnostics()` as before.
+
 - **Leading and trailing C0-control-or-space is now stripped from the input
   under `url_standard = "whatwg"`.** WHATWG's basic URL parser step 1 has two
   halves — first remove any leading and trailing C0 control or space
