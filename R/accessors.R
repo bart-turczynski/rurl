@@ -449,6 +449,17 @@ get_scheme <- function(url, protocol_handling = "keep",
 #'
 #' Extracts the host component of a URL.
 #'
+#' Under \code{scheme_acceptance = "general"} a \code{mailto:} URL's first
+#' recipient domain is returned, decomposed through the same PSL seam a web host
+#' uses, so \code{\link{get_domain}} / \code{\link{get_tld}} /
+#' \code{\link{get_subdomain}} work on it too (ADR 0012 D7). This deliberately
+#' diverges from \code{\link{safe_parse_url}}, whose \code{host} column is
+#' \code{NA} for a \code{mailto:} URL: a \code{mailto:} is a WHATWG opaque path
+#' and has no authority, so the recipient domain is surfaced here as extraction
+#' metadata rather than presented as a parsed authority. Under the default
+#' \code{"web"} acceptance a \code{mailto:} URL is not parsed and this returns
+#' \code{NA}.
+#'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @param source Which PSL source to use: "all", "private", or "icann".
@@ -841,8 +852,11 @@ get_port <- function(url, protocol_handling = "keep") {
 #' Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
 #' first recipient (its \code{addr-spec} local-part) is returned, mirroring how
 #' \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
-#' domain (ADR 0012 D7). Under the default \code{"web"} acceptance a
-#' \code{mailto:} URL is not parsed and this returns \code{NA}.
+#' domain (ADR 0012 D7). As with \code{\link{get_host}}, this deliberately
+#' diverges from \code{\link{safe_parse_url}}, whose \code{user} column is
+#' \code{NA} for a \code{mailto:} URL (an opaque path carries no authority).
+#' Under the default \code{"web"} acceptance a \code{mailto:} URL is not parsed
+#' and this returns \code{NA}.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url

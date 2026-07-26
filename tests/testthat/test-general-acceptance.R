@@ -89,12 +89,71 @@ test_that("opaque scheme payload is carried verbatim under whatwg general", {
     "mailto:a@b.com", scheme_acceptance = "general", url_standard = "whatwg"
   )
   expect_identical(d$scheme, "mailto")
-  # ADR 0012 D7: the recipient domain is extracted as host (see the D7 tests in
-  # test-email-diagnostics.R), while the opaque payload is still carried
-  # verbatim in path and clean_url.
-  expect_identical(d$host, "b.com")
+  # T1 (RURL-glphqenm): a non-special no-`//` scheme is a WHATWG OPAQUE PATH, so
+  # the parse table presents NO authority -- the `@` never re-triggers authority
+  # parsing -- while the opaque payload is carried verbatim in path and
+  # clean_url. ADR 0012 D7's recipient decomposition still reaches users through
+  # the get_*() accessors (pinned in test-email-diagnostics.R and in the
+  # divergence test below); it is just no longer presented as a parse column.
+  expect_identical(d$host, NA_character_)
+  expect_identical(d$user, NA_character_)
   expect_identical(d$path, "a@b.com")
   expect_identical(d$clean_url, "mailto:a@b.com")
+})
+
+test_that("opaque tails carry @/:/?/# verbatim as path under whatwg general", {
+  inputs <- c(
+    "mailto:a@b.com",
+    "mailto:a@b.com?subject=x",
+    "data:text/plain,x",
+    "tel:+1-234",
+    "sc:a@b:1#frag"
+  )
+  d <- safe_parse_urls(
+    inputs, scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_false(any(d$parse_status == "error"))
+  # Non-special no-`//` schemes: no authority is parsed, and none is presented.
+  expect_identical(d$host, rep(NA_character_, length(inputs)))
+  expect_identical(d$user, rep(NA_character_, length(inputs)))
+  expect_identical(d$port, rep(NA_integer_, length(inputs)))
+  # No host means no PSL decomposition of one, in either spelling.
+  expect_identical(d$domain, rep(NA_character_, length(inputs)))
+  expect_identical(d$tld, rep(NA_character_, length(inputs)))
+  expect_identical(d$domain_ascii, rep(NA_character_, length(inputs)))
+  expect_identical(d$tld_unicode, rep(NA_character_, length(inputs)))
+  # Whole remainder is the opaque path; query/fragment still split per WHATWG.
+  expect_identical(
+    d$path,
+    c("a@b.com", "a@b.com", "text/plain,x", "+1-234", "a@b:1")
+  )
+  expect_identical(d$query, c(NA, "subject=x", NA, NA, NA))
+  expect_identical(d$fragment, c(NA, NA, NA, NA, "frag"))
+})
+
+test_that("mailto parse columns and the D7 accessors diverge by design", {
+  # The deliberate split T1 introduced, pinned from both sides so neither can
+  # drift silently: the parse TABLE is WHATWG-conformant (an opaque path has no
+  # authority), while the ACCESSORS keep ADR 0012 D7's recipient decomposition,
+  # resolved through the same PSL/presentation branches a web host takes.
+  u <- "mailto:jane@sub.example.co.uk"
+  args <- list(url_standard = "whatwg", scheme_acceptance = "general")
+
+  d <- do.call(safe_parse_urls, c(list(u), args))
+  expect_identical(d$host, NA_character_)
+  expect_identical(d$user, NA_character_)
+  expect_identical(d$domain, NA_character_)
+
+  # The scalar surface masks identically to the vector one.
+  s <- do.call(safe_parse_url, c(list(u), args))
+  expect_identical(s$host, NA_character_)
+  expect_identical(s$domain, NA_character_)
+
+  expect_identical(do.call(get_host, c(list(u), args)), "sub.example.co.uk")
+  expect_identical(do.call(get_domain, c(list(u), args)), "example.co.uk")
+  expect_identical(do.call(get_tld, c(list(u), args)), "co.uk")
+  expect_identical(do.call(get_subdomain, c(list(u), args)), "sub")
+  expect_identical(do.call(get_user, c(list(u), args)), "jane")
 })
 
 # --- no DNS/PSL derivation and no punycode for opaque/non-special hosts ------
