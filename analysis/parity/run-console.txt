@@ -9,7 +9,8 @@ standard-conformance parity harness (RURL-wncwfasl companion)
   the GRAMMAR figure: every WPT scheme in scope, nothing excluded
   success accepted        : 336/336 (100%) 
   success FULL parity     : 336/336 (100%) 
-    scheme 336/336 (100%) | host 336/336 (100%) | port 336/336 (100%) | path 336/336 (100%) | query 336/336 (100%) | fragment 336/336 (100%) 
+    scheme 336/336 (100%) | username 336/336 (100%) | password 336/336 (100%) | host 336/336 (100%) 
+    port 336/336 (100%) | path 336/336 (100%) | query 336/336 (100%) | fragment 336/336 (100%) 
   failure correctly reject: 202/202 (100%) 
   overall WHATWG acceptance conformance (general): 538/538 (100%) 
 
@@ -18,7 +19,8 @@ standard-conformance parity harness (RURL-wncwfasl companion)
   accepted count is that allowlist working, NOT a conformance failure.
   success accepted        : 176/336 (52%) 
   success FULL parity     : 176/336 (52%) 
-    scheme 176/336 (52%) | host 176/336 (52%) | port 176/336 (52%) | path 176/336 (52%) | query 176/336 (52%) | fragment 176/336 (52%) 
+    scheme 176/336 (52%) | username 176/336 (52%) | password 176/336 (52%) | host 176/336 (52%) 
+    port 176/336 (52%) | path 176/336 (52%) | query 176/336 (52%) | fragment 176/336 (52%) 
   failure correctly reject: 202/202 (100%) 
   of the accepted 176, full parity 176 -- the other 160 are ADR 0004
   policy rejections, NOT conformance misses (see the general block).
@@ -33,6 +35,8 @@ standard-conformance parity harness (RURL-wncwfasl companion)
 
 == WHATWG success: non-conformances by component [general] ==
   scheme    0
+  username  0
+  password  0
   host      0
   port      0
   path      0
@@ -42,6 +46,8 @@ standard-conformance parity harness (RURL-wncwfasl companion)
 
 == WHATWG success: non-conformances by component [web] ==
   scheme    0
+  username  0
+  password  0
   host      0
   port      0
   path      0

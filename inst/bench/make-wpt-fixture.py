@@ -54,7 +54,8 @@ SELECTOR = ("base = null only -- base-relative rows (including base "
 STANDARD = "WHATWG URL Standard"
 STANDARD_VERSION = "Living Standard (unversioned); pinned by upstream_revision"
 STANDARD_SECTION = ("URL parsing; URL serializing; URL class API getters "
-                    "(protocol, hostname, port, pathname, search, hash)")
+                    "(protocol, username, password, hostname, port, "
+                    "pathname, search, hash)")
 CLAIM_KIND = "conformance"
 OUT_PATH = "inst/bench/wpt-url-cases.json"
 
@@ -106,8 +107,8 @@ for e in src:
         failure.append({"input": e["input"]})
     else:
         success.append({k: e.get(k, "") for k in (
-            "input", "protocol", "hostname", "port", "pathname",
-            "search", "hash")})
+            "input", "protocol", "username", "password", "hostname", "port",
+            "pathname", "search", "hash")})
 
 out = {
     "_meta": {

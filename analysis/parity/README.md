@@ -91,11 +91,25 @@ path_encoding="encode"`).
 | documented departures pinned | 5/5 — *excluded from the figures above* |
 
 At `general` — every scheme in scope, nothing filtered — rurl reproduces the
-WHATWG serialization on **all 336** success rows across scheme, host, port,
-path, query and fragment, and **never accepts a URL WHATWG rejects** among the
-202 failure rows. The three over-strict rejections noted in the 2026-07-08 run
-(rurl 2.5.0: 173/176) are gone, and widening the corpus from 176 to 336 rows
-surfaced **no new component mismatch**.
+WHATWG serialization on **all 336** success rows across all **eight** scored
+components (scheme, username, password, host, port, path, query, fragment), and
+**never accepts a URL WHATWG rejects** among the 202 failure rows. The three
+over-strict rejections noted in the 2026-07-08 run (rurl 2.5.0: 173/176) are
+gone, and widening the corpus from 176 to 336 rows surfaced **no new component
+mismatch**.
+
+> **"Full component parity" now means all eight components (`RURL-nolcjgdb`).**
+> Until this freeze the verdict was built from **six** — `username` and
+> `password` were never compared, in either posture, so the headline was silent
+> on credentials. That mattered concretely: the general/opaque route used to
+> discard userinfo entirely (`RURL-ovpguvva`), a component-level
+> non-conformance on the exact posture whose figure read 100%, and **no scored
+> number would have moved** when it broke or when it was fixed. The oracle was
+> re-extracted at the *same* pinned upstream revision to carry upstream's
+> `username`/`password` (24 and 13 non-empty rows respectively), which
+> `make-wpt-fixture.py` had been dropping. The headline is unchanged at
+> **336/336** — but it is now a wider claim over a stricter denominator, not the
+> same claim re-stated: credentials are checked, and they pass.
 
 > **This freeze supersedes the `4ed6c14` re-verification.** That note recorded
 > that the three CSVs reproduced byte-identically at `4ed6c14`; it is now stale
@@ -103,6 +117,9 @@ surfaced **no new component mismatch**.
 > regenerated from the tree carrying the widened oracle and the two-posture
 > harness — both landed together in the `RURL-ghdlrcjv` change, so re-running
 > `standard-parity.R` at any commit from that change onward reproduces them.
+> The `RURL-nolcjgdb` credential-scoring change supersedes it again on the two
+> success CSVs, which gained four columns; the failure and RFC CSVs reproduced
+> byte-identically across that change.
 > The `general` figures are
 > **new measurements**, not carried-over ones — the 176→336 widening was
 > measured, not assumed to hold.
@@ -168,15 +185,16 @@ dotless hosts, an empty authority, and a scheme outside the closed set.
 At `scheme_acceptance = "general"`, over the full 336-row success corpus:
 component non-conformances among accepted cases **0**; rejections of WPT-valid
 input **0**. Query and fragment are scored in the full-component metric and have
-no accepted-case mismatches. At `web` the component mismatch count is likewise
+no accepted-case mismatches, as are `username` and `password` since
+`RURL-nolcjgdb`. At `web` the component mismatch count is likewise
 **0**; its 160 rejections are the ADR 0004 allowlist, listed as residual #3
 below rather than as a shortfall. The buckets described below are retained as
 the record of what was closed, not as open items.
 
 1. **Over-strict rejected path/control rows — closed.** Three WPT-valid success
    rows once rejected before component comparison; at `general` no success row
-   rejects, and accepted rows have no scheme, host, port, path, query or
-   fragment mismatch.
+   rejects, and accepted rows have no scheme, username, password, host, port,
+   path, query or fragment mismatch.
 2. **Default-port elision closed.** Under `url_standard = "whatwg"`, default
    ports now serialize as absent in the parse result (`http://foo:80/` returns
    `port = NA`, matching WHATWG's empty `.port`).
