@@ -193,6 +193,43 @@ test_that("a mailto: with a real // authority keeps the host it parsed", {
   )
 })
 
+test_that("an opaque payload ending in :<digits> still parses", {
+  # RURL-jnvtttfm. The scheme-less `example.com:8080` carve-out matched with a
+  # colon-greedy authority part, so `urn:ietf:rfc:2648` read as "authority
+  # urn:ietf:rfc, port 2648", never reached the opaque parser, and fell through
+  # to the web path that rejects `urn:`. Every opaque payload whose last
+  # colon-separated segment was numeric was unparseable.
+  args <- list(url_standard = "whatwg", scheme_policy = "require",
+               scheme_acceptance = "general")
+  u <- c("urn:ietf:rfc:2648", "urn:a:1", "sc:x:80", "sc:x:80/p",
+         "urn:a:abc", "tel:+1-234")
+  d <- do.call(safe_parse_urls, c(list(u), args))
+
+  expect_false(any(d$parse_status == "error"))
+  expect_identical(
+    d$path,
+    c("ietf:rfc:2648", "a:1", "x:80", "x:80/p", "a:abc", "+1-234")
+  )
+  # An opaque path has no authority, so a numeric tail is never read as a port.
+  expect_identical(d$host, rep(NA_character_, length(u)))
+  expect_identical(d$port, rep(NA_integer_, length(u)))
+
+  # A trailing `?`/`#` used to be the only thing that saved these rows, by
+  # breaking the carve-out's end-anchor. They must now agree with the bare form.
+  q <- do.call(safe_parse_urls, c(list(c("urn:a:1?q", "urn:a:1#f")), args))
+  expect_identical(q$path, c("a:1", "a:1"))
+})
+
+test_that("the scheme-less host:port form is still read as host:port", {
+  # The guard narrowed by RURL-jnvtttfm must keep doing its actual job: a dot is
+  # a legal scheme character, so `example.com:8080` also matches the scheme
+  # regex and would otherwise be routed to the opaque parser.
+  d <- suppressWarnings(safe_parse_urls(
+    c("example.com:8080", "example.com:8080/p", "localhost:3000")))
+  expect_identical(d$host, c("example.com", "example.com", "localhost"))
+  expect_identical(d$port, c(8080L, 8080L, 3000L))
+})
+
 # --- no DNS/PSL derivation and no punycode for opaque/non-special hosts ------
 
 test_that("opaque and non-special hosts get no domain/tld and no punycode", {

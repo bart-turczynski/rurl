@@ -1065,7 +1065,16 @@
   m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
   scheme_lc <- .ascii_tolower(m[, 2L])
   has_scheme <- !is.na(scheme_lc)
-  host_port <- stringi::stri_detect_regex(url, "^[^/]+:[0-9]+($|/)")
+  # The host:port carve-out exists for the SCHEME-LESS `example.com:8080` form,
+  # which the scheme regex above also matches (a dot is a legal scheme char, so
+  # `example.com` reads as a scheme). The authority-part must therefore be
+  # colon-free: `[^/]+` was greedy across colons, so `urn:ietf:rfc:2648` matched
+  # as "authority `urn:ietf:rfc`, port 2648", was withheld from the opaque
+  # parser, and fell through to the web path that rejects `urn:`. Any opaque
+  # payload ending in `:<digits>` was unparseable -- `urn:a:1`, `sc:x:80` -- and
+  # only a trailing `?`/`#` saved it, by breaking the `($|/)` anchor
+  # (RURL-jnvtttfm).
+  host_port <- stringi::stri_detect_regex(url, "^[^/:]+:[0-9]+($|/)")
   host_port[is.na(host_port)] <- FALSE
 
   # RFC-model `file:` leaves libcurl on EVERY acceptance posture (RURL-obsweger,

@@ -58,6 +58,28 @@
 
 ### Bug fixes
 
+- **An opaque URL whose payload ends in `:<digits>` now parses.** Under
+  `scheme_acceptance = "general"`, `urn:ietf:rfc:2648` — the textbook URN form —
+  was rejected outright, as were `urn:a:1` and `sc:x:80`. A non-numeric tail
+  (`urn:ietf:rfc:abcd`) was fine, and so was a trailing query or fragment
+  (`urn:a:1?q`), which made the failure look arbitrary.
+
+  The cause is the carve-out that keeps the scheme-less `example.com:8080` form
+  out of the opaque parser. It is needed because a dot is a legal scheme
+  character, so `example.com:8080` also matches the scheme grammar — but its
+  authority part was matched colon-greedily, so `urn:ietf:rfc:2648` read as
+  "authority `urn:ietf:rfc`, port 2648". Such a row was withheld from the opaque
+  parser and fell through to the web path, which rejects `urn:`. The trailing
+  `?`/`#` cases escaped only because they broke the pattern's end anchor.
+
+  The authority part must be colon-free, which is what the scheme-less form
+  actually is. An opaque path has no authority, so a numeric tail in one is
+  never a port: `urn:ietf:rfc:2648` now parses with path `ietf:rfc:2648` and no
+  host or port. `example.com:8080` is unaffected and still reads as host plus
+  port. Pre-existing since general acceptance shipped — **not** introduced by
+  the host-missing-authority rule earlier in this cycle, verified against that
+  commit's parent. (RURL-jnvtttfm.)
+
 - **A `mailto:` URL carrying a real `//` authority no longer loses its host.**
   Under `scheme_acceptance = "general"`,
   `safe_parse_urls("mailto://example.com:8080/pathname")` reported
