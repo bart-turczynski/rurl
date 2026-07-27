@@ -155,13 +155,11 @@ RFC_UNRESERVED_PCT <- local({
 })
 
 # --- the deviation sets ------------------------------------------------------
-
-# A general-scheme userinfo admits raw LF/VT/FF/CR (0x0A-0x0D) and emits them
-# verbatim; the special-scheme userinfo rejects all four.
-DEV_USERINFO_C0 <- sprintf(
-  "foo://u%s@host/p", vapply(0x0A:0x0D, function(i) rawToChar(as.raw(i)),
-                             character(1))
-)
+#
+# EMPTY. Every enumerated deviation this harness was born with has been fixed
+# (the last, RURL-dergzwku, was a general-scheme userinfo admitting a raw
+# LF/VT/FF/CR). A new one must be added here with its ticket, not tolerated by
+# widening a predicate.
 
 # Directly-written non-ASCII in a reg-name or path. NOT a deviation: ADR 0012
 # and host-annotation-contracts.md sec RFC host form settle this as a
@@ -193,10 +191,7 @@ test_that("every RFC serialization is admitted by the RFC 3986 ABNF", {
     r <- rfc_prop_serialize(form)
     ascii <- !rfc_prop_non_ascii(r$output)
     bad <- ascii & !rfc3986_abnf_accepts(r$output)
-    expect_property(
-      bad, r$input,
-      deviations = DEV_USERINFO_C0
-    )
+    expect_property(bad, r$input)
   }
 })
 
