@@ -56,3 +56,4 @@
 ^tools/status-doc-consistency\.R$
 ^tools/diagnostics-doc-consistency\.R$
 ^tools/deferral-gate\.R$
+^tools/curl-zero-gate\.R$
