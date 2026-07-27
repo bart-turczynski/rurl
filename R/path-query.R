@@ -189,10 +189,10 @@
   has_leading <- stringi::stri_startswith_fixed(path, "/")
   has_trailing <- stringi::stri_endswith_fixed(path, "/")
   segments <- strsplit(path, "/", fixed = TRUE)[[1]]
-  # curl_escape() is vectorized: one call escapes every segment (and returns
+  # .pct_escape() is vectorized: one call escapes every segment (and returns
   # character(0) for a character(0) input), so paste() recomposes identically
   # to the former per-segment vapply().
-  encoded_segments <- curl::curl_escape(segments)
+  encoded_segments <- .pct_escape(segments)
   recomposed <- paste(encoded_segments, collapse = "/")
   if (has_leading && !stringi::stri_startswith_fixed(recomposed, "/")) {
     recomposed <- paste0("/", recomposed)
@@ -398,11 +398,11 @@
   lapply(grouped, unname)
 }
 
-# Percent-decode a character vector in one vectorized curl_unescape() call,
+# Percent-decode a character vector in one vectorized .pct_unescape() call,
 # falling back to the raw input if the call errors (mirrors the former
 # per-element tryCatch guard).
 .query_unescape <- function(x) {
-  tryCatch(curl::curl_unescape(x), error = function(e) x)
+  tryCatch(.pct_unescape(x), error = function(e) x)
 }
 
 # --- Query-filter engine (query_handling) -----------------------------------
@@ -590,10 +590,10 @@
   }
 
   # Re-encode key and value separately. Opaque tokens emit their raw bytes; the
-  # curl_escape() of an opaque token is computed but discarded by ifelse().
-  enc_key <- ifelse(sp$key_opaque, sp$raw_key, curl::curl_escape(sp$dec_key))
+  # .pct_escape() of an opaque token is computed but discarded by ifelse().
+  enc_key <- ifelse(sp$key_opaque, sp$raw_key, .pct_escape(sp$dec_key))
   enc_val <- ifelse(
-    sp$val_opaque, sp$raw_value, curl::curl_escape(sp$dec_value)
+    sp$val_opaque, sp$raw_value, .pct_escape(sp$dec_value)
   )
   paste(paste0(enc_key, "=", enc_val), collapse = "&")
 }
