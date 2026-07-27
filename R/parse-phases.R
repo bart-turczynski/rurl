@@ -573,6 +573,44 @@
   tryCatch(utils::URLdecode(host), error = function(e) "\u0001")
 }
 
+# Render an RFC 3986 host the way the profile decodes it, EXCEPT that triplets
+# encoding a C0 control or DEL stay encoded (uppercased per section 6.2.2.1).
+# RFC 3986 section 6.2.2.2 permits decoding only unreserved octets; a decoded
+# control byte in the host makes the serialized URL un-re-parseable and hides
+# the control behind a clean-looking host (RURL-savatsuc). Every other triplet
+# keeps the established decode contract, so IDNA presentation still sees real
+# code points. A private-use sentinel parks the retained triplets across the
+# decode; it cannot collide, because a literal U+E000 reaches this host as its
+# own percent-triplet, never as the bare code point.
+# Uppercase the hex digits of every percent-triplet, leaving all other
+# characters alone (RFC 3986 section 6.2.2.1). Unlike
+# `.rfc_unreserved_normalize` this does NOT decode unreserved triplets -- it is
+# the case rule only, for callers that must not change which octets stay
+# encoded.
+.pct_hex_upper <- function(x) {
+  gsub("%([0-9a-f]{2})", "%\\U\\1", x, perl = TRUE)
+}
+
+.rfc_host_retain_controls <- function(host) {
+  sentinel <- intToUtf8(0xE000L)
+  m <- gregexpr("%[0-9A-Fa-f]{2}", host, perl = TRUE)
+  matches <- regmatches(host, m)[[1]]
+  codes <- strtoi(substring(matches, 2L), base = 16L)
+  is_ctrl <- codes <= 31L | codes == 127L
+  if (!any(is_ctrl)) {
+    return(.whatwg_percent_decode_host(host))
+  }
+  retained <- .ascii_toupper(matches[is_ctrl])
+  parked <- matches
+  parked[is_ctrl] <- sentinel
+  regmatches(host, m) <- list(parked)
+  decoded <- .whatwg_percent_decode_host(host)
+  for (triplet in retained) {
+    decoded <- sub(sentinel, triplet, decoded, fixed = TRUE)
+  }
+  decoded
+}
+
 # Host shim (RURL-dxwxeamq, ADR 0009; extended by RURL-rgjpcbuk and
 # RURL-dnddogce). libcurl's host handling is too eager for selector mode in two
 # ways:
@@ -676,10 +714,35 @@
     stringi::stri_detect_regex(pct_decoded_host, .WHATWG_HOST_CHARSET_SHIM_CP)
   pct_gap[is.na(pct_gap)] <- FALSE
 
+  # libcurl decodes every host percent-triplet, including ones RFC 3986
+  # section 6.2.2.2 forbids decoding. For a C0 control or DEL that produces a
+  # `final_host` carrying a raw control byte, which the serializer then renders
+  # verbatim -- output that no longer re-parses, and that makes an encoded
+  # control look like a clean host (RURL-savatsuc). Route those rows through
+  # the mask/restore seam so the control stays an uppercase triplet.
+  #
+  # Scoped to DEL, and to rows carrying no C0 triplet. DEL is the only control
+  # octet libcurl decodes and then ADMITS; every C0 octet is rejected once
+  # decoded, and masking would route it past that rejection, turning a
+  # serialization fix into an acceptance widening. So a host mixing the two
+  # keeps the rejection. Non-control triplets are deliberately left alone --
+  # the RFC host profile decodes them by established contract, and
+  # `host_encoding = "idna"` needs the real code points, not triplets.
+  pct_ctrl <- eligible & pct_ok &
+    grepl("%7[Ff]", host, perl = TRUE) &
+    !grepl("%[01][0-9A-Fa-f]", host, perl = TRUE)
+  pct_ctrl[is.na(pct_ctrl)] <- FALSE
+  if (!.is_whatwg(url_standard) && any(pct_ctrl)) {
+    model_host[pct_ctrl] <- vapply(
+      host[pct_ctrl], .rfc_host_retain_controls, character(1),
+      USE.NAMES = FALSE
+    )
+  }
+
   pct_mask <- if (.is_whatwg(url_standard)) {
     pct_ok & decoded_gap
   } else {
-    pct_gap
+    pct_gap | pct_ctrl
   }
   literal_mask <- if (.is_whatwg(url_standard)) {
     literal_gap_whatwg
@@ -2330,7 +2393,12 @@
   h_mask <- !is.na(host_output) & host_output != ""
   if (any(h_mask)) {
     if (case_handling == "lower" || case_handling == "lower_host") {
-      host_output[h_mask] <- .ascii_tolower(host_output[h_mask])
+      # Case folding applies to the reg-name, not to the hex digits of a
+      # surviving percent-triplet, which RFC 3986 section 6.2.2.1 renders
+      # uppercase (RURL-savatsuc).
+      host_output[h_mask] <- .pct_hex_upper(
+        .ascii_tolower(host_output[h_mask])
+      )
     } else if (case_handling == "upper") {
       host_output[h_mask] <- stringi::stri_trans_toupper(
         host_output[h_mask],
@@ -2993,7 +3061,12 @@
 
   if (normalized) {
     scheme <- .ascii_tolower(scheme)
-    host <- .ascii_tolower(host)
+    # Section 6.2.2.1 splits into two rules for the host: case-fold the
+    # reg-name, but render the hex digits of a surviving percent-triplet
+    # uppercase. Case folding alone lowercased the triplet too, so the host
+    # was the one component whose triplets escaped the hex normalization the
+    # path/query/fragment below already get (RURL-savatsuc).
+    host <- .pct_hex_upper(.ascii_tolower(host))
     path <- .rfc_pct_normalize(path)
     query <- .rfc_pct_normalize(query)
     fragment <- .rfc_pct_normalize(fragment)

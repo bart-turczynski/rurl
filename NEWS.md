@@ -58,6 +58,54 @@
 
 ### Bug fixes
 
+- **Under `url_standard = "rfc3986"`, a percent-encoded DEL in the host no
+  longer decodes into the parsed host, and host percent-triplets keep uppercase
+  hex.** Two defects on the same RFC 3986 §6.2.2 rule, both invisible to the
+  existing harnesses because the RFC profile is scored on an *acceptance* axis,
+  which cannot see a bad output string on an accepted input.
+
+  libcurl percent-decodes every host triplet, including octets §6.2.2.2 forbids
+  decoding (only ALPHA / DIGIT / `-` / `.` / `_` / `~` may be decoded). DEL was
+  the one such octet libcurl also *admitted*, so it reached the parsed host as a
+  raw control byte:
+
+  ```r
+  # before
+  serialize_url("http://ho%7Fst/", standard = "rfc3986")
+  #> "http://ho\177st/"    <- raw DEL
+  serialize_url("http://ho\177st/", standard = "rfc3986")
+  #> NA                    <- the serializer's own output does not re-parse
+
+  # after
+  serialize_url("http://ho%7Fst/", standard = "rfc3986")
+  #> "http://ho%7Fst/"     <- re-parses to itself
+  ```
+
+  Besides breaking round-trip and idempotence, decoding the control byte is what
+  made an encoded host render as a clean-looking hostname.
+
+  Separately, host case folding lowercased the hex digits of a *surviving*
+  triplet, which §6.2.2.1 renders uppercase — the host was the only component
+  whose triplets escaped the hex normalization the path, query, fragment and
+  userinfo already got. `file://%43%7C` now normalizes to `file://%43%7C`
+  rather than `file://%43%7c`.
+
+  **Acceptance is unchanged.** Which URLs the RFC profile accepts or rejects is
+  byte-identical, verified over the full 0–255 host-octet range: every other
+  control octet is rejected once decoded, and the fix deliberately leaves those
+  rows on that path rather than admitting them. Non-control triplets keep the
+  established decode contract, so `host_encoding = "idna"` still sees real code
+  points. Five conformance-fixture expectations were re-baselined; their
+  `rfc3986_expected` cells are a *reading* of the RFC (the imported oracle
+  records `failure` with no value for those rows) and had transcribed the
+  retained triplets in lowercase, corrected here from the RFC text.
+
+  One defect of the same class remains open and is **not** fixed here: a
+  percent-encoded `|` (`%7C`) still decodes to a literal `|`, which is not an
+  RFC 3986 reg-name character, so that output does not re-parse either. Its
+  decoded spelling is pinned by existing fixtures, so changing it is a separate
+  decision.
+
 - **`serialize_url()` now reads the backslash-rewritten source, fixing two
   hostname-confusion defects.** Both shipped with the serializer and were
   invisible to every existing test, because `clean_url` drops userinfo so no
