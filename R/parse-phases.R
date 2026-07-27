@@ -2642,19 +2642,20 @@
     #
     # SEGMENT DERIVATION: rurl holds a list path as its serialized STRING (each
     # WHATWG path segment rendered as "/" + segment, so a rooted list path
-    # always begins with "/"). To recover the WHATWG path-list segment view we
-    # split on "/" and DROP the leading "" element (the empty piece before the
-    # first "/"): strsplit("/bar") -> c("","bar") -> list c("bar") (size 1);
-    # strsplit("//bar") -> c("","","bar") -> list c("","bar") (size 2, first
-    # ""); strsplit("/") -> c("") -> list character(0) (size 0). strsplit drops
-    # a single TRAILING "" (a trailing-slash path), but the guard only inspects
-    # size>1 and the first segment, so that omission is immaterial here.
-    if (host_kind[i] == "absent") {
-      segs <- strsplit(p, "/", fixed = TRUE)[[1]]
-      segs <- segs[-1L]
-      if (length(segs) > 1L && !is.na(segs[1L]) && segs[1L] == "") {
-        guard[i] <- "/."
-      }
+    # always begins with "/"). On that rendering the two path conditions
+    # collapse into ONE string test: the first segment is empty exactly when
+    # the string begins with "//", and any such string carries at least two
+    # "/" -- hence at least two segments -- so `size > 1` is implied and need
+    # not be tested separately. "/bar" -> ["bar"]; "//bar" -> ["","bar"];
+    # "//" -> ["",""]; "/" -> [""].
+    #
+    # Do NOT re-derive this by splitting on "/": `strsplit` drops a single
+    # TRAILING "", so a path of exactly "//" (WHATWG list ["",""], size 2)
+    # measures as size 1 and the guard misses -- emitting `non-spec://`, which
+    # re-reads as an empty AUTHORITY rather than a path. That was a real defect
+    # against WPT rows `non-spec:/.//`, `non-spec:/..//` and `non-spec:/a/..//`.
+    if (host_kind[i] == "absent" && isTRUE(startsWith(p, "//"))) {
+      guard[i] <- "/."
     }
   }
 
@@ -2896,13 +2897,10 @@
     # Four-condition `/.` guard -- identical to the clean serializer's, but
     # with no trailing-slash strip ahead of it, since that is a presentation
     # dial this surface does not take. See .serialize_whatwg_vec for the
-    # segment-derivation reasoning.
-    if (host_kind[i] == "absent") {
-      segs <- strsplit(p, "/", fixed = TRUE)[[1]]
-      segs <- segs[-1L]
-      if (length(segs) > 1L && !is.na(segs[1L]) && segs[1L] == "") {
-        guard[i] <- "/."
-      }
+    # segment-derivation reasoning, including why this must NOT be re-derived
+    # by splitting on "/".
+    if (host_kind[i] == "absent" && isTRUE(startsWith(p, "//"))) {
+      guard[i] <- "/."
     }
   }
 
