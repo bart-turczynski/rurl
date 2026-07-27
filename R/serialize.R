@@ -188,8 +188,16 @@
   # accepts a "\"-bearing run as the authority introducer, so
   # `https:/\/\/\github.com/foo/bar` HAS an authority (host `github.com`) even
   # though it carries no literal "://". Testing the raw source dropped the host.
+  # The strip must run BEFORE the rewrite, in the parser's own order: the
+  # rewrite is anchored on the scheme, so a leading C0-or-space would make it a
+  # no-op and the host would still be dropped.
   authority_delimiter_present <- .has_explicit_authority(
-    .rewrite_whatwg_backslashes_vec(url, opts$url_standard)$url,
+    .rewrite_whatwg_backslashes_vec(
+      .strip_whatwg_control_chars_vec(
+        ifelse(is.na(url), "", as.character(url)), opts$url_standard
+      )$url,
+      opts$url_standard
+    )$url,
     opts$url_standard
   )
   if (any(gp)) {
