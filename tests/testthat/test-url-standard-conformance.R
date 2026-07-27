@@ -8,8 +8,26 @@
 # re-locate them.
 #
 # Percent-triplet hex case is canonicalized by the RFC profile where RFC 3986
-# normalization applies. The WHATWG profile preserves existing percent spelling
-# byte-for-byte, matching the URL Standard serializer.
+# normalization applies; the WHATWG profile preserves existing percent spelling
+# byte-for-byte.
+#
+# That sentence used to end "..., matching the URL Standard serializer" while
+# every assertion below compared `expected_clean_url`. `clean_url` is output
+# surface (c) -- "a policy-driven SEO/canonicalization product; NOT a
+# serializer" (output-contracts.md P2.2 sec 1c/5.1) -- so the claim named one
+# artifact and the evidence tested another. That is the C-04 conflation, stated
+# as a comment inside the conformance suite (RURL-yeikpnan).
+#
+# The claim is now testable and is tested: `expected_serialized` pins
+# `serialize_url()`, surface (b), which IS the URL Standard serializer. Note the
+# two columns answer different questions and are both kept: `expected_clean_url`
+# pins the cleaning product's behavior, which is a real contract of its own.
+#
+# PROVENANCE. `expected_serialized` is a CHARACTERIZATION pin, not an oracle:
+# it records what rurl emits today so drift is caught. The serialization ORACLE
+# -- expected values derived from an external WHATWG reference (Ada's `href`,
+# WPT) -- lives in fixtures/external-url-vectors.csv, which carries real
+# upstream expectations to compare against.
 #
 # Most RFC-side rows are derived from RFC 3986 grammar/normalization prose
 # (there is no RFC equivalent of WPT's machine-checkable corpus). The
@@ -40,6 +58,13 @@ test_that("url_standard conformance fixtures match pinned expectations", {
     expect_identical(
       get_clean_url(row$input, url_standard = row$url_standard),
       row$expected_clean_url, label = paste("clean_url", label)
+    )
+    # Surface (b): the standard serializer. See the provenance note at the head
+    # of this file -- this is a characterization pin, and it is the assertion
+    # the "matches the URL Standard serializer" claim actually needs.
+    expect_identical(
+      serialize_url(row$input, standard = row$url_standard),
+      row$expected_serialized, label = paste("serialized", label)
     )
     expect_identical(
       get_host(row$input, url_standard = row$url_standard),
@@ -355,9 +380,24 @@ test_that("conformance divergence_class is consistent with the paired oracle", {
   # For every input, the class must agree with the actual paired expectations:
   # spec-divergent iff the rfc3986 and whatwg rows disagree; aligned iff they
   # agree; *-only iff the counterpart standard is absent.
+  #
+  # Derived from the serialized column, not the cleaned one (RURL-yeikpnan).
+  # `divergence_class` is a STANDARD-vs-STANDARD claim, and two profiles
+  # agreeing on `clean_url` is agreement about rurl's CLEANING policy -- surface
+  # (c) drops credentials and fragments and applies its own dials, so it can
+  # both hide a real divergence and manufacture a false one.
+  #
+  # Specifically the NORMALIZED form (P2.5 OUT-O3, the comparison substrate).
+  # Classifying on `source` is wrong in both directions: `http://ex.com/%41%42`
+  # looks aligned because neither posture rewrites it, when RFC 3986 sec 6.2.2.2
+  # requires decoding the unreserved octet and WHATWG preserves it; and
+  # `http://ex.com/./g` looks divergent because RFC `source` keeps the dot
+  # segment, when both standards remove it under normalization.
   for (inp in unique(fx$input)) {
-    rr <- fx$expected_clean_url[fx$input == inp & fx$url_standard == "rfc3986"]
-    wr <- fx$expected_clean_url[fx$input == inp & fx$url_standard == "whatwg"]
+    rr <- fx$expected_serialized_normalized[fx$input == inp &
+      fx$url_standard == "rfc3986"]
+    wr <- fx$expected_serialized_normalized[fx$input == inp &
+      fx$url_standard == "whatwg"]
     cls <- unique(fx$divergence_class[fx$input == inp])
     expect_length(cls, 1L)
     if (length(rr) == 0L) {
