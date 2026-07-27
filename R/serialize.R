@@ -84,6 +84,14 @@
     u <- .strip_whatwg_control_chars_vec(u, url_standard)$url
     u <- stringi::stri_replace_first_regex(u, "^[\\u0000-\\u0020]+", "")
     u <- stringi::stri_replace_last_regex(u, "[\\u0000-\\u0020]+$", "")
+    # Reverse-solidus rewrite, exactly as the parser performs it before reading
+    # the authority. Lexing the RAW source instead would let a "\" that the
+    # standard maps to the authority/path boundary stay inside the authority
+    # slice, so the text before the last "@" -- which is PATH -- would be
+    # recovered as a phantom userinfo the parser never found
+    # (`http://google.com:80\@yahoo.com`: host `google.com`, path `/@yahoo.com`,
+    # no credentials).
+    u <- .rewrite_whatwg_backslashes_vec(u, url_standard)$url
   }
 
   fragment <- rep(NA_character_, n)
@@ -175,7 +183,15 @@
   path_kind <- .whatwg_path_kind(is_special, a$raw_path)
   host_kind <- .host_kind(a$final_host)
   rfc_path_form <- .rfc_path_form(!is.na(a$final_host), a$raw_path)
-  authority_delimiter_present <- .has_explicit_authority(url, opts$url_standard)
+  # The authority test runs on the backslash-rewritten source for the same
+  # reason the lexer does: WHATWG's special-authority-ignore-slashes state
+  # accepts a "\"-bearing run as the authority introducer, so
+  # `https:/\/\/\github.com/foo/bar` HAS an authority (host `github.com`) even
+  # though it carries no literal "://". Testing the raw source dropped the host.
+  authority_delimiter_present <- .has_explicit_authority(
+    .rewrite_whatwg_backslashes_vec(url, opts$url_standard)$url,
+    opts$url_standard
+  )
   if (any(gp)) {
     path_kind[gp] <- gen$path_kind[gp]
     path_kind[gp & is.na(path_kind)] <- "list"
