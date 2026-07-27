@@ -969,9 +969,16 @@
   c(path = path, query = query, fragment = fragment)
 }
 
+# The WHATWG `file:` host, which is NEVER null (RURL-uhwivndf). WHATWG's "file
+# state" sets url's host to the EMPTY STRING before any authority is read, and
+# nothing in the file host state can put it back to null: `localhost` is
+# explicitly mapped to the empty string, not dropped. So this returns "" -- an
+# empty, PRESENT host -- where it used to return NA, and NA is now reserved for
+# "this row did not parse". That distinction is what lets the serializer emit
+# the `//` the standard requires for every `file:` URL.
 .whatwg_file_normalize_host <- function(host) {
   if (is.na(host) || host == "") {
-    return(NA_character_)
+    return("")
   }
   if (stringi::stri_startswith_fixed(host, "[")) {
     return(host)
@@ -1003,7 +1010,7 @@
     decoded <- normalized
   }
   if (identical(.ascii_tolower(decoded), "localhost")) {
-    return(NA_character_)
+    return("")
   }
   decoded
 }
@@ -1039,7 +1046,10 @@
   file_path_raw <- parts[, "path"]
   file_path <- stringi::stri_replace_all_fixed(file_path_raw, "\\", "/")
 
-  host <- rep(NA_character_, length(file_path))
+  # Empty, not NA: WHATWG's file state gives every `file:` URL a non-null host,
+  # and the host-less forms (`file:`, `file:/p`, `file:C|/m/`) carry the empty
+  # string. See .whatwg_file_normalize_host().
+  host <- rep("", length(file_path))
   path <- file_path
   has_authority <- stringi::stri_detect_regex(file_path_raw, "^[/\\\\]{2}")
   has_authority[is.na(has_authority)] <- FALSE
@@ -1088,7 +1098,7 @@
   path <- .whatwg_file_drive_path(path)
   # A backslash-introduced empty file authority serializes with a double-slash
   # path. `file:` and `file://` proper keep their ordinary single slash.
-  empty_backslash_authority <- has_authority & is.na(host) &
+  empty_backslash_authority <- has_authority & !nzchar(host) &
     backslash_rewritten[ok] & path == "/"
   empty_backslash_authority[is.na(empty_backslash_authority)] <- FALSE
   path[empty_backslash_authority] <- "//"
@@ -2639,13 +2649,35 @@
 # R/parse-state.R: host_kind, path_kind, query_kind, rfc_path_form) and use the
 # repo's pre-allocate + logical-mask assignment idiom.
 
+# Does the WHATWG serializer emit the `//` authority introducer for this row?
+#
+# The standard names ONE condition -- "if url's host is non-null, append //"
+# (#concept-url-serializer step 2) -- so this is `host_kind != "absent"` and
+# nothing else. The `authority_delimiter_present` syntactic fact is NOT
+# consulted: it is a property of the SOURCE string, and WHATWG serializes the
+# parsed URL, not the source.
+#
+# THIS REPLACES P1.2 D-C, which keyed the introducer off
+# `authority_delimiter_present` because `host_kind` "cannot tell a
+# delimiter-present empty authority from a delimiter-absent input". That
+# premise was itself the defect (RURL-uhwivndf): the only rows where the two
+# collapsed were `file:` rows whose host the parser recorded as NULL where
+# WHATWG gives every special scheme a non-null -- here empty -- host. With the
+# `file:` host model repaired in `.parse_whatwg_file_urls_vec()`, host_kind
+# distinguishes them, and the two conditions agree on every WPT success row
+# EXCEPT the ten this fixes. `authority_delimiter_present` stays in the record
+# and stays load-bearing for the RFC serializers, where the source spelling IS
+# the fact being rendered.
+.whatwg_authority_emitted <- function(host_kind) {
+  !is.na(host_kind) & host_kind != "absent"
+}
+
 # WHATWG serializer (ADR 0012 A.1 #concept-url-serializer + D2). Emits the `//`
-# authority introducer IFF `authority_delimiter_present` is TRUE (P1.2 D-C) --
-# the recorded syntactic fact, never re-derived from `host_kind`, which cannot
-# tell a delimiter-present empty authority from a delimiter-absent input. The
-# CONTENT of the authority (host, port) is still driven by the respective
-# component states, and the four-condition `/.` guard still keys off a null
-# HOST, which is what the WHATWG serializer's own condition names.
+# authority introducer per `.whatwg_authority_emitted()` -- the standard's own
+# condition, a NON-NULL host. The CONTENT of the authority (host, port) is
+# driven by the respective component states, and the four-condition `/.` guard
+# keys off a null HOST, which is what the WHATWG serializer's own condition
+# names.
 #
 # Reuses the existing byte-level encoders
 # (R/path-query.R): opaque paths take the C0-control set only
@@ -2656,6 +2688,10 @@
                                   authority_delimiter_present, path, path_kind,
                                   query, query_kind, port, port_handling,
                                   trailing_slash_handling) {
+  # Part of the state the caller hands the serializer, but not consulted: the
+  # `//` introducer follows the host, not the source spelling. force() marks it
+  # deliberately consumed, as .serialize_rfc_generic_vec() does for host_kind.
+  force(authority_delimiter_present)
   n <- max(
     length(scheme), length(host), length(host_kind),
     length(authority_delimiter_present), length(path),
@@ -2732,9 +2768,9 @@
   out <- character(n)
   out[is_opaque] <- paste0(scheme_prefix[is_opaque], path_body[is_opaque])
 
-  # List path under a PRESENT `//` delimiter: emit `//` + host (host may be "")
-  # + port. `foo:///bar` = "foo://" + "" + "/bar" (P1.2 D-C).
-  delim <- !is.na(authority_delimiter_present) & authority_delimiter_present
+  # List path under a NON-NULL host: emit `//` + host (host may be "") + port.
+  # `foo:///bar` = "foo://" + "" + "/bar".
+  delim <- .whatwg_authority_emitted(host_kind)
   auth <- !is_opaque & delim
   host_str <- ifelse(is.na(host), "", host)
   out[auth] <- paste0(
@@ -2887,6 +2923,9 @@
                                        authority_delimiter_present, path,
                                        path_kind, query, query_kind,
                                        fragment, fragment_kind, port) {
+  # Not consulted; see .serialize_whatwg_vec(). The `//` introducer follows the
+  # parsed host, which is what #concept-url-serializer names.
+  force(authority_delimiter_present)
   n <- max(
     length(scheme), length(userinfo), length(host), length(host_kind),
     length(authority_delimiter_present), length(path), length(path_kind),
@@ -2975,7 +3014,7 @@
   out <- character(n)
   out[is_opaque] <- paste0(scheme_prefix[is_opaque], path_body[is_opaque])
 
-  delim <- !is.na(authority_delimiter_present) & authority_delimiter_present
+  delim <- .whatwg_authority_emitted(host_kind)
   auth <- !is_opaque & delim
   host_str <- ifelse(is.na(host), "", host)
   out[auth] <- paste0(

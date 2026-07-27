@@ -75,12 +75,12 @@ test_that("WHATWG guard does NOT fire when the host is empty-but-present", {
   )
 })
 
-test_that("`//` emission follows the delimiter fact, not the host state", {
-  # P1.2 D-C. Hold every host-side argument CONSTANT and move only
-  # `authority_delimiter_present`: the `//` introducer must follow it. Before
-  # this slice both serializers re-derived `//` from `host_kind`, so the second
-  # row of each pair was not expressible at all -- a delimiter-present empty
-  # authority and a delimiter-absent input serialized identically.
+test_that("WHATWG `//` emission follows the HOST, per the standard", {
+  # P1.3, superseding P1.2 D-C for the WHATWG serializer only.
+  # #concept-url-serializer names ONE condition -- "if url's host is non-null,
+  # append //" -- so the introducer must follow `host_kind` and must not move
+  # with `authority_delimiter_present`. Hold the host state constant, move only
+  # the delimiter: the output must not change.
   whatwg <- function(delimiter) {
     .serialize_whatwg_vec(
       "foo", "", "empty", delimiter, "/bar", "list", NA_character_, "absent",
@@ -88,8 +88,21 @@ test_that("`//` emission follows the delimiter fact, not the host state", {
     )
   }
   expect_identical(whatwg(TRUE), "foo:///bar")
-  expect_identical(whatwg(FALSE), "foo:/bar")
+  expect_identical(whatwg(FALSE), "foo:///bar")
 
+  # And it DOES move with the host: a null host emits no authority.
+  null_host <- .serialize_whatwg_vec(
+    "foo", NA_character_, "absent", TRUE, "/bar", "list", NA_character_,
+    "absent", NULL, "exclude", "keep"
+  )
+  expect_identical(null_host, "foo:/bar")
+})
+
+test_that("RFC `//` emission follows the delimiter fact, not the host state", {
+  # P1.2 D-C, unchanged for the RFC serializers: under the source-preserving
+  # posture the `//` in the INPUT is the fact being rendered, so the delimiter
+  # stays load-bearing there. Hold every host-side argument CONSTANT and move
+  # only `authority_delimiter_present`.
   rfc <- function(delimiter) {
     .serialize_rfc_generic_vec(
       "foo", "", "empty", delimiter, "/bar", "abempty", NA_character_,
