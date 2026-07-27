@@ -138,6 +138,10 @@ decisions:
     path: design/work/url-v3/decisions/P2.2-serializer-clean-output.md
     sha256: 01542610a8aaa7f0c1abdbfaae373f65d220446b4f8ae8e6f29cc721cd263c9a
     state: ACCEPTED
+  - id: P5.4
+    path: design/work/url-v3/decisions/P5.4-conformance-evidence-rebaseline.md
+    sha256: 75aaa65b8da03b435c080564eb9c4cfb3085f676661f05aed749ca808a834c04
+    state: PROPOSED
   - id: P2.5
     path: design/work/url-v3/decisions/P2.5-standard-serializer-surface.md
     sha256: e92da918cbaaba7ebdbe75250f8a97e9b6cb939cd5ec87a16e7eb1856405219a

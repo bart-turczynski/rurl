@@ -58,6 +58,37 @@
 
 ### Bug fixes
 
+- **`serialize_url()` now reads the backslash-rewritten source, fixing two
+  hostname-confusion defects.** Both shipped with the serializer and were
+  invisible to every existing test, because `clean_url` drops userinfo so no
+  harness could observe them. The parse record was correct throughout; only the
+  serializer's lexical recovery was wrong.
+
+  `.fsss_source_lex()` read the *raw* source where the parser reads the source
+  after WHATWG's reverse-solidus rewrite, so a `\` the standard maps to the
+  authority/path boundary stayed inside the authority slice. The text before the
+  last `@` — which is **path** — was recovered as a userinfo the parser never
+  found, and the host was duplicated into the credentials:
+
+  ```r
+  serialize_url("http://google.com:80\\@yahoo.com")
+  #> was: "http://google.com:80%5C@google.com/@yahoo.com"
+  #> now: "http://google.com/@yahoo.com"
+  ```
+
+  Separately, `.has_explicit_authority()` greps a literal `://`, which an input
+  using WHATWG's special-authority-ignore-slashes state need not contain, so the
+  serializer emitted no `//` and **dropped the host** the parser had resolved:
+  `serialize_url("https:/\\/\\/\\github.com/foo/bar")` returned
+  `"https:/foo/bar"` and now returns `"https://github.com/foo/bar"`.
+
+  Both are confined to the serializer; `.has_explicit_authority()` itself is
+  unchanged, so the `mailto:` and Stage-B callers keep their behavior. The
+  rewrite is a no-op under `rfc3986`, which admits no raw `\` and rejects these
+  inputs outright. Found by the conformance re-baseline (RURL-yeikpnan): every
+  affected row is in the CVE-2020-26291 hostname-confusion family, and each now
+  agrees with its published oracle.
+
 - **`url_standard = "whatwg"` now applies the userinfo percent-encode set to the
   `user` and `password` columns.** WHATWG's authority state fills its username
   and password buffers by percent-encoding each code point with the userinfo
@@ -453,6 +484,56 @@
   all four gaps went unnoticed: no registry cell forced the arguments to exist.
 
 ### Documentation
+
+- **All conformance and benchmark evidence is re-baselined onto
+  `serialize_url()`; two headline figures now exist where one did.** Every
+  harness in the repository scored `clean_url`, which is output surface (c) —
+  "a policy-driven SEO/canonicalization product; **not** a serializer, identity,
+  redirect target, or conformance oracle" — and which P5.3 CLAIM-1 does not
+  admit as a claim substrate. Surface (b) did not exist when those harnesses
+  were written, so there was nothing admissible to score against. It does now.
+
+  **The previously published "158 conforming / 99 documented deviations" is an
+  RFC-3986-grammar *acceptance* count and is not replaced by the new figure.**
+  The two answer different questions:
+
+  | | axis 1 (new) | axis 2 |
+  |---|---|---|
+  | question | does rurl emit the standard's **serialization**? | does rurl **accept/reject** what the grammar does? |
+  | authority | `whatwg-wpt` | `rfc3986-grammar` |
+  | figure | **91 conforming / 1 documented deviation** over 92 string-valued rows | 164/93 → **179/78** (like-for-like, 257-row scope) |
+
+  Axis 1 is new evidence: P5.3 §2.2 had already recorded that the FSSS
+  full-string headline did not yet exist. It is reported **by substrate** —
+  quoting a single percentage over the whole corpus would let 233 rows that
+  assert only "this must fail" inflate a *serialization* result.
+
+  Axis 2 moves because fifteen rows stop being deviations. Every one is a case
+  where surface (c) declined **by policy** — the ADR 0004 closed scheme set, the
+  ADR 0002 reversible Unicode host, the readable-path default — and surface (b)
+  matches the grammar. rurl's parser never disagreed with the RFC on any of them.
+  The same effect empties the Ada watch list entirely (11 documented divergences
+  → 0): Ada is a conformant WHATWG parser and its `href` is a full serialization,
+  so that comparison was like-for-like for the first time.
+
+  **The corpus shape was distorted too, and is repaired.** It carried **zero**
+  expected values with a fragment or credentials, and the conformance fixture
+  contained **zero** `@` characters — because those are precisely the rows a
+  `clean_url` comparison could never have passed, so the corpus had grown into
+  the shape its harness could score. 43 rows are added from the committed WPT
+  import, with expected values assembled from WPT's own recorded components by
+  the WHATWG URL serializer (URL Standard §4.5). rurl matches all 43. The
+  string-valued substrate nearly doubles, 49 → 92 rows.
+
+  Two oracle repairs are not surface swaps. Host oracles now compare an
+  **extracted host** rather than asking `grepl(host, clean_url)`; on a
+  hostname-confusion corpus containment is the wrong question, since both
+  hostnames appear in `http://letsencrypt.org%2F@malware.testing.google.test/`
+  and it passes whether the parse is correct or inverted. And the conformance
+  fixture's `divergence_class` is derived from the **normalized** serialization
+  rather than the source form, which had misclassified 7 of 75 rows in both
+  directions. Disposition and full numbers: P5.4. (RURL-yeikpnan.)
+
 
 - **The diagnostics vocabulary now has one canonical, enforced enumeration.**
   `?get_url_diagnostics` gains a *Diagnostic vocabulary (canonical)* section
