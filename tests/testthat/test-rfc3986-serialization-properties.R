@@ -156,12 +156,6 @@ RFC_UNRESERVED_PCT <- local({
 
 # --- the deviation sets ------------------------------------------------------
 
-# `%7C` decodes to a literal `|`, which is in no RFC 3986 production, so the
-# output is not a URI and does not re-parse. Its decoded spelling is pinned
-# across the fixtures with a reasoned `oracle_ref`, which makes it a decision
-# about which spelling is canonical rather than a patch.
-DEV_PIPE_HOST <- c("http://ho%7Cst/p", "http://ho%7cst/p")
-
 # A general-scheme userinfo admits raw LF/VT/FF/CR (0x0A-0x0D) and emits them
 # verbatim; the special-scheme userinfo rejects all four.
 DEV_USERINFO_C0 <- sprintf(
@@ -179,20 +173,13 @@ rfc_prop_non_ascii <- function(x) {
   grepl("[^\\x00-\\x7f]", x, perl = TRUE, useBytes = TRUE)
 }
 
-# The general-scheme host is the only position that skips sec 6.2.2.2, so every
-# unreserved triplet written there survives normalization.
-DEV_GENERAL_HOST_PCT <- c(
-  sprintf("foo://ho%sst/p", RFC_UNRESERVED_PCT), "foo://HO%2DST/p"
-)
-
 # Component positions whose percent-spelling the `source` posture DOES preserve,
-# measured byte-for-byte over all 512 triplet spellings. Three of the six
-# components are absent, each for its own reason and each pinned below: the host
-# is normalized on the parse record (RURL-xkhbhaje symptom B), and the query and
-# fragment fold hex case (RURL-gkmwqpos family 4).
+# measured byte-for-byte over all 512 triplet spellings. The host is here under
+# BOTH scheme classes since RURL-xkhbhaje; the query and fragment are the only
+# positions still absent, because they fold hex case (RURL-gkmwqpos family 3).
 SRC_PRESERVING_POSITIONS <- c(
-  "http://u%s@host/p", "http://host/pa%sth",
-  "foo://u%s@host/p", "foo://host/pa%sth", "foo:opa%sque"
+  "http://ho%sst/p", "http://u%s@host/p", "http://host/pa%sth",
+  "foo://ho%sst/p", "foo://u%s@host/p", "foo://host/pa%sth", "foo:opa%sque"
 )
 
 # --- P-G: every serialization is admitted by the RFC 3986 grammar ------------
@@ -208,7 +195,7 @@ test_that("every RFC serialization is admitted by the RFC 3986 ABNF", {
     bad <- ascii & !rfc3986_abnf_accepts(r$output)
     expect_property(
       bad, r$input,
-      deviations = c(DEV_PIPE_HOST, DEV_USERINFO_C0)
+      deviations = DEV_USERINFO_C0
     )
   }
 })
@@ -231,7 +218,7 @@ test_that("an RFC serialization re-parses to itself", {
     r <- rfc_prop_serialize(form)
     again <- serialize_url(r$output, standard = "rfc3986", form = form)
     bad <- is.na(again) | again != r$output
-    expect_property(bad, r$input, deviations = DEV_PIPE_HOST)
+    expect_property(bad, r$input)
   }
 })
 
@@ -245,7 +232,7 @@ test_that("normalization is confluent with the source posture", {
   keep <- !is.na(src) & !is.na(nrm)
   round <- serialize_url(src[keep], standard = "rfc3986", form = "normalized")
   bad <- is.na(round) | round != nrm[keep]
-  expect_property(bad, pop[keep], deviations = DEV_PIPE_HOST)
+  expect_property(bad, pop[keep])
 })
 
 test_that("`form` is a presentation axis and never changes acceptance", {
@@ -294,7 +281,7 @@ test_that("normalization decodes every triplet encoding an unreserved octet", {
     rfc_out_triplets(r$output),
     function(t) any(t %in% RFC_UNRESERVED_PCT), logical(1)
   )
-  expect_property(bad, r$input, deviations = DEV_GENERAL_HOST_PCT)
+  expect_property(bad, r$input)
 })
 
 # --- N3 / N4: sec 6.2.2.3 path segments, sec 6.2.3 default port --------------
@@ -356,18 +343,20 @@ test_that("the source posture preserves percent-spelling outside the host", {
   expect_property(keep & out != pop, pop)
 })
 
-test_that("the source posture is not byte-preserving in four known places", {
+test_that("the source posture is not byte-preserving in three known places", {
   # RURL-gkmwqpos. `?serialize_url` says `source` preserves source bytes; it
-  # does not, on 419 of 5668 accepted population rows in four families. These
+  # does not, on 324 of 5668 accepted population rows in three families. These
   # are pinned as CHARACTERIZED FACTS, not as approved behavior: the ticket
   # records that the open question is whether the docs or the code is wrong.
+  #
+  # The fourth family -- the host, which was normalized on the parse record --
+  # is gone: RURL-xkhbhaje moved sec 6.2.2.2 out of the parse and into the
+  # `normalized` serializer branch, so the host now preserves byte-for-byte at
+  # both scheme classes (see SRC_PRESERVING_POSITIONS, which it joined).
+
   src <- function(x) serialize_url(x, standard = "rfc3986", form = "source")
 
-  # 1. Host percent-spelling, normalized on the parse record (RURL-xkhbhaje).
-  expect_identical(src("http://ho%2Dst/p"), "http://ho-st/p")
-  expect_identical(src("http://ho%7fst/p"), "http://ho%7Fst/p")
-
-  # 2. Query and fragment fold hex case -- half of sec 6.2.2.1, in the posture
+  # 1. Query and fragment fold hex case -- half of sec 6.2.2.1, in the posture
   # defined as applying none of it. Total, not partial: every one of the 156
   # triplet spellings that HAS a lowercase hex letter folds, at both positions.
   expect_identical(src("http://host/p?q%0ax"), "http://host/p?q%0Ax")
@@ -381,19 +370,19 @@ test_that("the source posture is not byte-preserving in four known places", {
     expect_identical(out, sprintf(tmpl, sprintf("%%%02X", 0:255)))
   }
 
-  # 3. Scheme case -- the other half of sec 6.2.2.1, applied while the host
+  # 2. Scheme case -- the other half of sec 6.2.2.1, applied while the host
   # half is not, so the two forms agree on the scheme and differ on the host.
   expect_identical(src("HTTP://EXAMPLE.COM/"), "http://EXAMPLE.COM/")
 
-  # 4. Empty path rendered as "/" -- a sec 6.2.3 scheme-based normalization.
+  # 3. Empty path rendered as "/" -- a sec 6.2.3 scheme-based normalization.
   expect_identical(src("http://h"), "http://h/")
   expect_identical(src("http://h?"), "http://h/?")
 
-  # And the bound, so four families cannot quietly become five.
+  # And the bound, so three families cannot quietly become four.
   pop <- rfc_prop_population()
   out <- src(pop)
   keep <- !is.na(out)
-  expect_identical(sum(keep & out != pop), 419L)
+  expect_identical(sum(keep & out != pop), 324L)
 })
 
 # --- the population itself ---------------------------------------------------

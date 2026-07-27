@@ -3100,12 +3100,18 @@
 
   if (normalized) {
     scheme <- .ascii_tolower(scheme)
-    # Section 6.2.2.1 splits into two rules for the host: case-fold the
-    # reg-name, but render the hex digits of a surviving percent-triplet
-    # uppercase. Case folding alone lowercased the triplet too, so the host
-    # was the one component whose triplets escaped the hex normalization the
-    # path/query/fragment below already get (RURL-savatsuc).
-    host <- .pct_hex_upper(.ascii_tolower(host))
+    # The host takes all three rules, in the order the section states them:
+    # 6.2.2.2 decodes the triplets encoding an unreserved octet, 6.2.2.1
+    # case-folds the reg-name (including any octet that decoding just
+    # revealed), and the hex digits of every triplet that survived are rendered
+    # uppercase. The last step is separate because case folding lowercases the
+    # triplet too, so the host was the one component whose triplets escaped the
+    # hex normalization the path/query/fragment below already get
+    # (RURL-savatsuc); the first is here rather than in the parse because
+    # 6.2.2.2 is normalization, and applying it during the parse made the
+    # decoding depend on the SCHEME instead of the requested form
+    # (RURL-xkhbhaje).
+    host <- .pct_hex_upper(.ascii_tolower(.rfc_pct_normalize(host)))
     path <- .rfc_pct_normalize(path)
     query <- .rfc_pct_normalize(query)
     fragment <- .rfc_pct_normalize(fragment)
