@@ -88,7 +88,7 @@ boundary complete. No surface may silently stand in for another.
 | # | surface | v3 name | fragment | credentials | round-trips to source | spec-exact | owner_decision_ref | status |
 |---|---|---|---|---|---|---|---|---|
 | a | source reproduction | `url_source()` (← `original_url`) | verbatim | verbatim | yes (bytes, unmutated row) | n/a (echoes input) | P2.2@8292c7f (§1a) | SETTLED |
-| b | standard serialization (FSSS) | `serialize_url(x, standard=)` (unimplemented) | **preserved** | **reconstructed** | via parse→serialize→parse identity | **yes** (WHATWG / RFC 3986) | P2.2@8292c7f (§1b, §4) | SETTLED |
+| b | standard serialization (FSSS) | `serialize_url(x, standard=, form=)` (shipped; P2.5) | **preserved** | **reconstructed** | via parse→serialize→parse identity | **yes** (WHATWG / RFC 3986) | P2.2@8292c7f (§1b, §4) | SETTLED |
 | c | clean output | `clean_url` / `get_clean_url()` | **omitted** | **not reconstructed** | no (intentionally lossy) | no (SEO/policy product) | P2.2@8292c7f (§1c) | SETTLED |
 | d | safe display | `format_url()` (unimplemented) | policy | redacted/annotated | no | no (human-readable) | P2.2@8292c7f (§1d) | SETTLED (surface; matrix OPEN — OUT-O4) |
 | e | comparison key | `get_url_key()` (non-URL projection) | ignored (state kept for diagnostics) | ignored | n/a | n/a (identity, not a URL string) | P3.1@3b89b94 (D-A) — **owned by G3.K**, referenced | SETTLED (boundary) |

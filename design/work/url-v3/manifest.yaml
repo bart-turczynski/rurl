@@ -140,7 +140,7 @@ decisions:
     state: ACCEPTED
   - id: P2.5
     path: design/work/url-v3/decisions/P2.5-standard-serializer-surface.md
-    sha256: 4134611bc9702807395597e48834e435ab527514cc2df1b9f533e964826a8817
+    sha256: e92da918cbaaba7ebdbe75250f8a97e9b6cb939cd5ec87a16e7eb1856405219a
     state: PROPOSED
   - id: P5.3
     path: design/work/url-v3/decisions/P5.3-oracle-claim-policy.md
@@ -232,7 +232,7 @@ artifacts:
   - path: design/work/url-v3/contracts/validation-intervention-contract.md
     sha256: aa06d046d495c94f5f1cba5bef923c666653cdceaedabc2ebee66d86d2679c18
   - path: design/work/url-v3/contracts/output-contracts.md
-    sha256: 346eff84d5e8fbf30a36eb51268c5c126325eeb8005617a84cf70669c4f0473c
+    sha256: 62087dad29481e78e204f2dcb511aabea3ac823dc0651ae3c918e0c0a588975f
   - path: design/work/url-v3/contracts/cleaning-mutation-contracts.md
     sha256: d8996daf621ca9409d7249116c15efa1740379eda836eb4ce81aa9278ff8a255
   - path: design/work/url-v3/contracts/semantic-cache-contract.md
@@ -251,7 +251,7 @@ artifacts:
   - path: design/work/url-v3/contracts/public-surface-disposition.md
     sha256: f3a4da8e17e764823d3bf5877b90ae75fa9d1c6c26fcebfaa34b2c8f46616bfb
   - path: design/work/url-v3/contracts/cross-artifact-consistency.md
-    sha256: fd72965ef2698a0660929ea55ef0b442db229fe6fe87bee0709d447a0e10050c
+    sha256: f922b9c6ab510a48366fd62c904036167c8fc9a3f6ba4c5655f8de04e010b1db
   # G3-acceptance.md is retained at state SUPERSEDED (superseded_by
   # gate-G3-acceptance-2). It stays pinned so the historical record is still
   # tamper-evident; validate-records no longer recomputes its ## Inputs, because
