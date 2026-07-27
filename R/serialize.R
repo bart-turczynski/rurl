@@ -65,18 +65,35 @@
 # are three-valued precisely so a present-but-empty delimiter survives
 # (ADR 0012 D2), so they are read off the source string here. The undivided
 # `userinfo` slice is recovered the same way -- libcurl hands back a `user`/
-# `password` split, and RFC 3986 has no such split to reconstruct from.
+# `password` split, and RFC 3986 has no such split to reconstruct from -- and so
+# is the `host` slice, which libcurl percent-decodes and case-folds during the
+# parse (RURL-xkhbhaje).
 #
 # The WHATWG strips (tab/LF/CR removal, then the leading/trailing
 # C0-control-or-space run) are applied only under `whatwg`, matching
 # `._prepare_urls_vec`; under `rfc3986` the source is read verbatim, which is
 # what the source-preserving posture requires.
+# The host of a userinfo-free authority: an unterminated "[" keeps everything
+# (there is no IP-literal to delimit), a terminated one stops at "]", and any
+# other authority drops the last ":"-introduced run, which is the port.
+.fsss_host_slice <- function(s) {
+  if (startsWith(s, "[")) {
+    close <- regexpr("]", s, fixed = TRUE)
+    return(if (close > 0L) substring(s, 1L, close) else s)
+  }
+  pos <- gregexpr(":", s, fixed = TRUE)[[1L]]
+  if (pos[1L] == -1L) {
+    return(s)
+  }
+  substring(s, 1L, as.integer(pos[length(pos)]) - 1L)
+}
+
 .fsss_source_lex <- function(url, url_standard) {
   n <- length(url)
   if (n == 0L) {
     return(list(
       query_kind = character(0), fragment_kind = character(0),
-      userinfo = character(0)
+      userinfo = character(0), host = character(0)
     ))
   }
   u <- ifelse(is.na(url), "", as.character(url))
@@ -115,27 +132,48 @@
   authority <- stringi::stri_match_first_regex(
     hier, "^[A-Za-z][A-Za-z0-9+.\\-]*://([^/]*)"
   )[, 2L]
+  #
+  # The host slice is recovered here too, and for the same reason: libcurl
+  # percent-decodes and case-folds the host before rurl ever sees it, so Stage
+  # A's `final_host` cannot answer "which bytes did the source spell here?" --
+  # which is exactly what RFC 3986's source-preserving posture emits, and what
+  # section 6.2.2.2 normalization must be applied TO rather than after
+  # (RURL-xkhbhaje). Host = the authority after any userinfo, minus a trailing
+  # ":port"; a bracketed IPv6 literal keeps its "[...]" and its inner colons.
+  #
+  # Both slices are cut by POSITION rather than by an anchored regex. A regex
+  # "." does not match a line terminator and "$" matches before a trailing one,
+  # so an authority carrying a raw NEL/LS/PS -- all of which reach here, since
+  # the RFC posture strips nothing -- would keep its userinfo and emit it twice.
   userinfo <- rep(NA_character_, n)
+  host <- rep(NA_character_, n)
   has_auth <- !is.na(authority)
   if (any(has_auth)) {
+    auth <- authority[has_auth]
     at <- vapply(
-      authority[has_auth],
+      auth,
       function(s) {
         pos <- gregexpr("@", s, fixed = TRUE)[[1L]]
-        if (pos[1L] == -1L) -1L else as.integer(pos[length(pos)])
+        if (pos[1L] == -1L) 0L else as.integer(pos[length(pos)])
       },
       integer(1), USE.NAMES = FALSE
     )
-    slice <- rep(NA_character_, sum(has_auth))
+    slice <- rep(NA_character_, length(auth))
     found <- at > 0L
-    slice[found] <- substring(authority[has_auth][found], 1L, at[found] - 1L)
+    slice[found] <- substring(auth[found], 1L, at[found] - 1L)
     userinfo[has_auth] <- slice
+
+    host[has_auth] <- vapply(
+      substring(auth, at + 1L), .fsss_host_slice, character(1),
+      USE.NAMES = FALSE
+    )
   }
 
   list(
     query_kind = .presence_kind(query),
     fragment_kind = .presence_kind(fragment),
-    userinfo = userinfo
+    userinfo = userinfo,
+    host = host
   )
 }
 
@@ -234,6 +272,21 @@
     default_port <- .scheme_default_port_vec(a$final_scheme)
     port[!is.na(port) & !is.na(default_port) & port == default_port] <-
       NA_character_
+  } else {
+    # RFC 3986 has no host-decoding or host-case PARSE step: section 6.2.2.1
+    # and 6.2.2.2 are NORMALIZATION rules, which belong to `form =
+    # "normalized"` inside the serializer -- where the other four components'
+    # already are -- not to the parse. libcurl performs both anyway, so the
+    # record takes the source spelling instead of `final_host` (RURL-xkhbhaje).
+    # Substituted only where the source and the parse AGREE that a host is
+    # there: same NA-ness and same emptiness. They disagree when the parse read
+    # a host the authority slice does not hold (`http:///p`, whose host libcurl
+    # reads as `p` out of the path), and swapping one component of a disagreeing
+    # pair while the rest of the record stays Stage A's would emit a string
+    # neither of them describes.
+    src_host <- lex$host
+    take <- !is.na(host) & !is.na(src_host) & (nzchar(host) == nzchar(src_host))
+    host[take] <- src_host[take]
   }
 
   list(

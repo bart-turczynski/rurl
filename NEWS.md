@@ -58,6 +58,44 @@
 
 ### Bug fixes
 
+- **RFC 3986 §6.2.2.2 host normalization no longer depends on the scheme, and
+  no longer leaks into the source-preserving form.** Percent-decoding of the
+  host happened during the parse, inside a phase gated on rurl's supported
+  scheme set, rather than in the RFC serializer's `normalized` branch alongside
+  the other four components. Which decoding a host got therefore depended on
+  *its scheme* instead of the `form` the caller asked for, and it broke in both
+  directions at once:
+
+  ```r
+  # before                                                  # after
+  serialize_url("foo://ho%2Dst/p", standard = "rfc3986",
+                form = "normalized")   #> "foo://ho%2Dst/p" -> "foo://ho-st/p"
+  serialize_url("http://ho%41st/p", standard = "rfc3986",
+                form = "source")       #> "http://hoAst/p"  -> "http://ho%41st/p"
+  ```
+
+  A general-scheme host was the only position in a URL that skipped §6.2.2.2
+  (all 132 unreserved triplet spellings survived normalization there, and none
+  did anywhere else), while a special-scheme host was the only one that decoded
+  in `form = "source"`, which is documented as byte-preserving. Both are fixed:
+  §6.2.2.2 now runs in the serializer's `normalized` branch for every scheme,
+  and the RFC record takes the host's *source* spelling, recovered lexically
+  the way the undivided `userinfo` slice already was.
+
+  Two further consequences. A host triplet that does **not** encode an
+  unreserved octet now stays encoded, so `serialize_url("http://ho%7Cst/p",
+  standard = "rfc3986")` keeps `%7C` instead of emitting a literal `|` — output
+  that no RFC 3986 production admits and that did not re-parse. And `form =
+  "source"` is now byte-preserving at the host under both scheme classes, which
+  was one of the four places it was not.
+
+  Acceptance is unchanged: the fix is confined to the serializer-input record,
+  and an invariance sweep over every octet 0–255 in both hex cases at nine
+  component positions across six schemes (36,104 inputs) shows identical
+  accepted counts and identical per-row `parse_status` on all four parse
+  profiles, plus byte-identical WHATWG serialization and an unchanged 336/336
+  on the WHATWG web-platform-tests.
+
 - **A host-less `file:` URL now carries an empty host, not a null one, so
   `serialize_url()` emits the authority the URL Standard requires.** WHATWG's
   *file state* gives every `file:` URL a non-null host — the empty string when
