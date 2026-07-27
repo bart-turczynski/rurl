@@ -573,6 +573,47 @@
 
 ### Documentation
 
+- **RFC 3986 now has a serialization oracle; it had only an acceptance axis.**
+  The conformance evidence has four quadrants — {WHATWG, RFC 3986} ×
+  {acceptance, full-string serialization} — and three were covered. Nothing in
+  the repository answered *what string does RFC 3986 require this URL to
+  serialize to*. That gap was not theoretical: the host-decoding defect fixed
+  earlier in this release produced output that does not re-parse, and passed
+  every harness here, because an acceptance metric cannot see a bad output
+  string on an input it accepts.
+
+  The new harness is **property-based and transcribes no expected strings**.
+  WHATWG ships a suite with recorded `href` values; RFC 3986 is prose plus
+  ABNF, and hand-transcribing expected strings is the move that produced 75
+  fixture rows where the oracle and the implementation confirmed each other and
+  their shared disagreement with the RFC stayed invisible. So §6.2.2/§6.2.3 are
+  stated as properties over a **generated** 6506-input population (256 octets ×
+  2 hex cases × 12 component positions × both scheme classes, plus 47
+  structural shapes): every output must be admitted by the RFC's own ABNF, must
+  re-parse to itself, and under `form = "normalized"` must satisfy §6.2.2.1
+  case, §6.2.2.2 unreserved decoding, §6.2.2.3 dot-segment removal and §6.2.3
+  default-port elision. A property needs no oracle, so it cannot co-confirm
+  with the implementation.
+
+  The one external judge is the independent RFC 3986 ABNF transcription that
+  already exists in the suite — normative grammar, sharing no code with rurl.
+
+  **What it is not.** These are properties of the output *string*. An output
+  can satisfy every one and still describe the wrong URL, because nothing here
+  checks that a component was sliced from the input correctly. This quadrant is
+  a necessary condition on RFC serialization, not a sufficient one, and the
+  oracle register records it that way (OR-023).
+
+  Running it found three defects with no oracle and no adjudication, each now
+  enumerated by input in the harness so a fix must delete its entry rather than
+  re-fit a total: the general-scheme host is the only component that skips
+  §6.2.2.2 unreserved decoding; a general-scheme userinfo admits raw
+  CR/LF/VT/FF and emits them verbatim, which no RFC 3986 production allows; and
+  `form = "source"`, documented as preserving source bytes, does not — 419 of
+  5668 accepted rows change, in four families. All three are filed, not fixed
+  here: the host seam is the one where a change silently widens *acceptance*
+  rather than only serialization, so it needs its own octet-invariance sweep.
+
 - **All conformance and benchmark evidence is re-baselined onto
   `serialize_url()`; two headline figures now exist where one did.** Every
   harness in the repository scored `clean_url`, which is output surface (c) —
