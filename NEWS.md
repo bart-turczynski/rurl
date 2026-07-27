@@ -58,6 +58,46 @@
 
 ### Bug fixes
 
+- **A host-less `file:` URL now carries an empty host, not a null one, so
+  `serialize_url()` emits the authority the URL Standard requires.** WHATWG's
+  *file state* gives every `file:` URL a non-null host — the empty string when
+  no authority is written, and `localhost` maps to that same empty string — and
+  the serializer therefore always emits `//`. rurl recorded a null host
+  instead, so ten inputs serialized without it:
+
+  ```r
+  # before                             # after
+  serialize_url("file:C|/m/")          #> "file:/C:/m/"   -> "file:///C:/m/"
+  serialize_url("file:/example.com/")  #> "file:/example.com/"
+                                       #>                 -> "file:///example.com/"
+  serialize_url("file:?q=v")           #> "file:/?q=v"    -> "file:///?q=v"
+  serialize_url("file:/.//p")          #> "file:/.//p"    -> "file:////p"
+  ```
+
+  With this, **`serialize_url(standard = "whatwg")` reproduces the WHATWG URL
+  Standard's own recorded `href` on all 336 success rows of the full imported
+  web-platform-tests suite (was 326), and still rejects all 202 must-fail
+  rows.** No deviation family remains on that oracle. The ten inputs are
+  enumerated in `tests/testthat/test-wpt-full-suite.R` rather than counted, so
+  a regression has to name itself.
+
+  The defect was in the **parse record**, not the serializer: the fix teaches
+  the WHATWG `file:` parser to record the empty host, and the serializer's `//`
+  condition moves with it, from the source delimiter fact to the standard's own
+  rule — a non-null host (`#concept-url-serializer`). The RFC serializers keep
+  the delimiter fact, where the source spelling *is* what they render:
+  `file:/example.com/` has no authority under RFC 3986 and its `rfc3986`
+  serialization is unchanged.
+
+  **Nothing else moves.** Acceptance is byte-identical (859 accepted of 1460
+  probed inputs under `whatwg`, 1045 under `rfc3986`, before and after), both
+  RFC forms are unchanged on every row, and the public parse frame —
+  `parse_status`, `host`, `path`, `clean_url`, `domain`, `port` — is
+  byte-identical under all four profiles. In particular `get_host()` still
+  reports `NA` for an empty host: that collapse is a general accessor rule
+  (`foo:///bar` reports `NA` too), not part of this defect. (`RURL-uhwivndf`;
+  disposition P1.3, superseding P1.2 D-C for the WHATWG serializer.)
+
 - **Under `url_standard = "rfc3986"`, a percent-encoded DEL in the host no
   longer decodes into the parsed host, and host percent-triplets keep uppercase
   hex.** Two defects on the same RFC 3986 §6.2.2 rule, both invisible to the
@@ -549,7 +589,7 @@
   |---|---|---|
   | question | does rurl emit the standard's **serialization**? | does rurl **accept/reject** what the grammar does? |
   | authority | `whatwg-wpt` | `rfc3986-grammar` |
-  | figure | **326 exact / 10 documented deviations** over the 336 WPT success rows, plus **202/202** must-fail rows rejected | 164/93 → **179/78** (like-for-like, 257-row scope) |
+  | figure | **336 exact / 0 deviations** over the 336 WPT success rows, plus **202/202** must-fail rows rejected | 164/93 → **179/78** (like-for-like, 257-row scope) |
 
   Axis 1 is new evidence: P5.3 §2.2 had already recorded that the FSSS
   full-string headline did not yet exist. It is measured on the **WHATWG's own
@@ -567,12 +607,13 @@
   swept; under `whatwg` the two forms are identical on every row, and
   acceptance never depends on `form`.
 
-  All 10 deviations are one family in one scheme: rurl parses a host-less
-  `file:` URL to a null host where WHATWG gives every special scheme a non-null
-  host, so rurl emits `file:/x` for the standard's `file:///x`. Non-special
-  schemes are exact on all 141 rows, and special schemes with a host on all
-  159. The cause is in the parse record rather than the serializer and is filed
-  as `RURL-uhwivndf`.
+  The measurement first reported 326 exact with 10 deviations — one family in
+  one scheme, the host-less `file:` URL parsed to a null host. That family is
+  **fixed in this same release** (see *Bug fixes*, `RURL-uhwivndf`), which is
+  what moves the figure above to 336 / 336. Non-special schemes were exact on
+  all 141 rows and special schemes with a host on all 159 before the fix as
+  well; the family was traced to the parse record rather than the serializer,
+  and was fixed there.
 
   Axis 2 moves because fifteen rows stop being deviations. Every one is a case
   where surface (c) declined **by policy** — the ADR 0004 closed scheme set, the

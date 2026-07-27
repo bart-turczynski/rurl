@@ -104,27 +104,59 @@ test_that("WPT success rows serialize to the standard's own `href`", {
   host <- wpt_field(s, "hostname")
   special <- proto %in% c("http:", "https:", "ws:", "wss:", "ftp:", "file:")
 
-  # Reported by substrate, one population per claim.
-  expect_identical(sum(agree), 326L)
+  # Reported by substrate, one population per claim. NO deviation family
+  # remains: every success row serializes to the standard's own `href`.
+  expect_identical(sum(agree), 336L)
   expect_true(all(agree[!special]))                  # 141/141 non-special
   expect_true(all(agree[special & nzchar(host)]))    # 159/159 special + host
+  expect_true(all(agree))
+})
 
-  # THE ONE DOCUMENTED DEVIATION FAMILY, enumerated rather than counted, so a
-  # regression cannot hide inside a tolerance. rurl parses a host-less `file:`
-  # URL to a NULL host, where WHATWG gives every special scheme a non-null host
-  # -- the empty string here -- and therefore always serializes the `//`
-  # delimiter. rurl emits `file:/x`, the standard `file:///x`.
+test_that("a host-less `file:` URL carries an EMPTY, not a null, host", {
+  # The former deviation family (RURL-uhwivndf), kept as its own enumerated pin
+  # so a regression names itself instead of moving a count. WHATWG's file state
+  # gives every `file:` URL a non-null host -- the empty string when no
+  # authority is written -- and the serializer therefore always emits `//`.
   #
-  # Traced to the Stage-A parse record (`final_host` is NA for these inputs, so
-  # host_kind is "absent"), NOT to the serializer, which renders that record
-  # faithfully. Per the standing precedent it is filed against the parser and
-  # not compensated for downstream. RURL-uhwivndf.
-  expect_identical(inp[!agree], c(
+  # Fixed in the PARSE record (`.parse_whatwg_file_urls_vec()` now records the
+  # empty host), not compensated for in the serializer, per the standing
+  # precedent. The serializer's `//` condition moved with it, from the source
+  # delimiter fact to the standard's own rule (a non-null host): P1.3,
+  # superseding P1.2 D-C for the WHATWG serializer.
+  inp <- c(
     "file:C|/m/", "file:C||/m/", "file:/example.com/", "file:.", "file:/C|/",
     "file:", "file:?q=v", "file:#frag", "file:.//p", "file:/.//p"
+  )
+  expect_identical(serialize_url(inp, standard = "whatwg"), c(
+    "file:///C:/m/", "file:///C||/m/", "file:///example.com/", "file:///",
+    "file:///C:/", "file:///", "file:///?q=v", "file:///#frag",
+    "file:////p", "file:////p"
   ))
-  expect_true(all(proto[!agree] == "file:"))
-  expect_true(all(is.na(get_host(inp[!agree]))))
+  # The parse RECORD is what moved: `host_kind` is now "empty" (a present,
+  # zero-length host) where it read "absent". `localhost` maps to that same
+  # empty host, and a real file host is untouched.
+  expect_identical(
+    .fsss_record_vec(inp, "whatwg")$host_kind, rep("empty", length(inp))
+  )
+  expect_identical(
+    .fsss_record_vec(
+      c("file:///p", "file://localhost/p", "file://h/p", "foo:/bar"), "whatwg"
+    )$host_kind,
+    c("empty", "empty", "present", "absent")
+  )
+  # NOT moved, and deliberately: the public `host` column still maps an empty
+  # host to NA (`.assemble_parse_result_vec`). That collapse is a general
+  # accessor rule -- `foo:///bar` reports NA too -- not the `file:` defect, so
+  # widening it is a separate surface decision and is not taken here.
+  expect_true(all(is.na(get_host(inp, url_standard = "whatwg"))))
+  # RFC 3986 has no such rule: `file:/example.com/` genuinely carries no
+  # authority there, and both the host and the serialization stay put.
+  expect_identical(get_host("file:/example.com/", url_standard = "rfc3986"),
+                   NA_character_)
+  expect_identical(
+    serialize_url("file:/example.com/", standard = "rfc3986"),
+    "file:/example.com/"
+  )
 })
 
 test_that("a rooted path starting `//` keeps its `/.` guard", {
