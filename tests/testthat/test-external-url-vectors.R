@@ -302,6 +302,19 @@ test_that("rurl output on external vectors matches recorded characterization", {
   expect_identical(rfc$clean_url, fx$rurl_rfc_clean)
   expect_identical(wha$parse_status, fx$rurl_whatwg_status)
   expect_identical(wha$clean_url, fx$rurl_whatwg_clean)
+  # The recorded FSSS columns must equal a live run too -- they are the
+  # substrate every conformance assertion in this file now rests on.
+  expect_identical(
+    serialize_url(fx$input, standard = "whatwg"), fx$fsss_whatwg
+  )
+  expect_identical(
+    serialize_url(fx$input, standard = "rfc3986", form = "source"),
+    fx$fsss_rfc_source
+  )
+  expect_identical(
+    serialize_url(fx$input, standard = "rfc3986", form = "normalized"),
+    fx$fsss_rfc_normalized
+  )
 })
 
 test_that("WPT failure divergences are pinned to the documented boundary set", {
@@ -319,7 +332,10 @@ test_that("WPT failure divergences are pinned to the documented boundary set", {
   diverging_ids <- wpt$id[wpt$diverges == "yes"]
   expect_setequal(diverging_ids, character(0))
   # Every runnable WPT row is genuinely rejected under whatwg (NA clean).
-  expect_true(all(is.na(wpt$rurl_whatwg_clean)))
+  # Acceptance read off surface (b): surface (c) additionally declines by POLICY
+  # (the closed scheme set), so a clean_url NA would credit rurl for rejecting
+  # URLs the standard accepts (RURL-yeikpnan).
+  expect_true(all(is.na(wpt$fsss_whatwg)))
   expect_true(all(wpt$rurl_whatwg_status == "error"))
 })
 
@@ -343,9 +359,12 @@ test_that("IPv4-obfuscation vectors all match the WHATWG oracle", {
   # serialization; the failure rows must genuinely reject (NA clean).
   ok_rows <- ip[ip$diverges == "no" & ip$standard_expectation != "failure", ,
     drop = FALSE]
-  expect_identical(ok_rows$rurl_whatwg_clean, ok_rows$standard_expectation)
+  # Compared on surface (b): `standard_expectation` here is a full WHATWG
+  # serialization, so clean_url was the wrong side of the comparison even where
+  # the two happened to agree (RURL-yeikpnan).
+  expect_identical(ok_rows$fsss_whatwg, ok_rows$standard_expectation)
   fail_rows <- ip[ip$standard_expectation == "failure", , drop = FALSE]
-  expect_true(all(is.na(fail_rows$rurl_whatwg_clean)))
+  expect_true(all(is.na(fail_rows$fsss_whatwg)))
 })
 
 test_that("Ada extra-urltestdata divergences pin to the documented set", {
@@ -353,37 +372,25 @@ test_that("Ada extra-urltestdata divergences pin to the documented set", {
   ada <- fx[fx$source == "ada-extra-urltestdata" & fx$runnable == "yes", ,
     drop = FALSE]
 
-  # Ada's beyond-WPT vectors (Apache-2.0), oracle = WHATWG. rurl agrees on every
-  # must-fail row (rejecting all of them, sometimes for a stricter reason such
-  # as the closed scheme set) and on the `http://./` accept. It diverges on 11
-  # rows, each triaged in the divergence ledger: 7 closed-scheme/opaque
-  # rejections including `a:b#` (boundary-by-design, ADR 0004),
-  # the IDNA host `Yağız.com` (boundary-by-design, ADR 0002 -- Unicode host kept
-  # reversible, punycode is a separate phase), the scheme-less backtick host
-  # `example.com``x.example.com` (ada-005: rurl infers http:// per ADR 0004 and
-  # keeps the backtick via the host-charset shim, RURL-dxwxeamq; the scheme-less
-  # WHATWG oracle fails for want of a base), and two path percent-encoding rows
-  # (needs-investigation). The backslash row `http://///\\'` (ada-008) NO LONGER
-  # diverges -- the shim made rurl(whatwg) reproduce Ada's `http://'/`. WATCH
-  # list, not an approval list.
+  # Ada's beyond-WPT vectors (Apache-2.0), oracle = WHATWG. Ada IS a conformant
+  # WHATWG parser, so `standard_expectation` is its own `href` -- a full WHATWG
+  # serialization. Scored against surface (b), rurl matches it on EVERY runnable
+  # row, so there is nothing left to watch (RURL-yeikpnan).
+  #
+  # This list held 11 ids while the comparison ran on `clean_url`. All 11 were
+  # surface artifacts, not parse disagreements: 7 rows surface (c) rejects by
+  # the closed scheme set (ADR 0004) and the standard serializer accepts, the
+  # IDNA host `Yağız.com` (surface (c) keeps the Unicode spelling by ADR 0002;
+  # the standard's own host is punycode), and 3 path/percent rows surface (c)
+  # renders readably. rurl's PARSE never disagreed with Ada on any of them.
+  # Kept as a WATCH list: a new divergence must be added here deliberately.
   diverging_ids <- ada$id[ada$diverges == "yes"]
-  expect_setequal(
-    diverging_ids,
-    c("ada-003", "ada-005", "ada-006", "ada-007", "ada-012", "ada-013",
-      "ada-014", "ada-018", "ada-021", "ada-022", "ada-023")
-  )
-  # Every non-diverging Ada row: accept rows must equal Ada's href, failure rows
-  # must genuinely reject.
-  ok_rows <- ada[ada$diverges == "no" & ada$standard_expectation != "failure", ,
-    drop = FALSE]
-  expect_identical(ok_rows$rurl_whatwg_clean, ok_rows$standard_expectation)
-  # Non-diverging must-fail rows genuinely reject. Diverging must-fail rows are
-  # the documented exceptions (e.g. ada-005: rurl infers a scheme and keeps the
-  # backtick host, so it accepts where the scheme-less oracle fails) and are
-  # excluded here -- their divergence is already pinned by diverging_ids above.
-  fail_rows <- ada[ada$standard_expectation == "failure" &
-    ada$diverges == "no", , drop = FALSE]
-  expect_true(all(is.na(fail_rows$rurl_whatwg_clean)))
+  expect_setequal(diverging_ids, character(0))
+  # Accept rows must equal Ada's href exactly; failure rows must reject.
+  ok_rows <- ada[ada$standard_expectation != "failure", , drop = FALSE]
+  expect_identical(ok_rows$fsss_whatwg, ok_rows$standard_expectation)
+  fail_rows <- ada[ada$standard_expectation == "failure", , drop = FALSE]
+  expect_true(all(is.na(fail_rows$fsss_whatwg)))
 })
 
 test_that("yoU-aRe-a-Liar paper divergences pin to the documented set", {
@@ -397,45 +404,49 @@ test_that("yoU-aRe-a-Liar paper divergences pin to the documented set", {
   # sides of the SOP equivocation across profiles and agrees with the WHATWG
   # reference on the plain hostname-confusion rows; it diverges on 3, each
   # triaged in the divergence ledger:
-  #   yal-005 non-ASCII host -- kept reversibly Unicode (boundary, ADR 0002);
-  #   yal-008 `foo://` -- outside the closed scheme set (boundary, ADR 0004);
-  #   yal-009 `www.php.net:80/...` -- default usability inference reads host,
-  #     while scheme_policy = "require" rejects the scheme-less form.
+  #   yal-009 `www.php.net:80/...` -- WHATWG reads a dotted `www.php.net` as a
+  #     SCHEME (dots are legal scheme code points) with an opaque path; rurl
+  #     rejects. A genuine acceptance-level deviation, filed against the parser.
+  # yal-005 (non-ASCII host) and yal-008 (`foo://`) NO LONGER diverge: both were
+  # surface artifacts (RURL-yeikpnan). Surface (c) keeps the host reversibly
+  # Unicode by ADR 0002 and declines `foo:` by the ADR 0004 closed scheme set;
+  # the standard serializer emits the punycode host and accepts the non-special
+  # scheme, which is what the paper's WHATWG reference does.
   # yal-002/003 (control chars in the authority) NO LONGER diverge: the whatwg
   # profile now strips ASCII tab/CR/LF before parsing (RURL-tyetpjym), matching
   # WHATWG, and surfaces the mutation via the `control-char-stripped` diagnostic
   # (asserted below). rfc3986 still rejects them (RFC has no strip step).
   diverging_ids <- yal$id[yal$diverges == "yes"]
-  expect_setequal(
-    diverging_ids,
-    c("yal-005", "yal-008", "yal-009")
-  )
+  expect_setequal(diverging_ids, "yal-009")
 
   # The two control-character rows now PARSE under whatwg (tab/CR/LF stripped)
   # but still REJECT under rfc3986 (which requires percent-encoding). The whatwg
   # parse must fire the `control-char-stripped` diagnostic on both.
   ctrl <- yal[yal$id %in% c("yal-002", "yal-003"), , drop = FALSE]
   expect_true(all(ctrl$rurl_rfc_status == "error"))
-  expect_true(all(is.na(ctrl$rurl_rfc_clean)))
-  expect_false(anyNA(ctrl$rurl_whatwg_clean))
+  expect_true(all(is.na(ctrl$fsss_rfc_normalized)))
+  expect_false(anyNA(ctrl$fsss_whatwg))
   ctrl_diag <- get_url_diagnostics(ctrl$input, url_standard = "whatwg")
   expect_true(all(vapply(
     ctrl_diag, function(d) "control-char-stripped" %in% d, logical(1)
   )))
 
-  # Non-diverging hostname rows: rurl's WHATWG clean_url must contain the
-  # WHATWG-reference host. The oracle is spelled either `host=X` (rows where
-  # rurl's exact serialization is the point) or `accept:host=X (why)` (the
-  # control-char rows, where the point is accept-not-reject).
-  host_rows <- yal[yal$diverges == "no", , drop = FALSE]
-  for (i in seq_len(nrow(host_rows))) {
-    exp <- host_rows$standard_expectation[i]
-    expect_true(grepl("^(accept:)?host=", exp))
-    host <- sub("^(accept:)?host=", "", exp)
-    host <- sub(" \\(.*\\)$", "", host)
-    expect_false(is.na(host_rows$rurl_whatwg_clean[i]))
-    expect_true(grepl(host, host_rows$rurl_whatwg_clean[i], fixed = TRUE))
-  }
+  # Non-diverging hostname rows: the host rurl actually parsed must EQUAL the
+  # WHATWG-reference host.
+  #
+  # This used to ask `grepl(host, clean_url, fixed = TRUE)` -- substring
+  # containment -- which is the wrong question on a hostname-confusion corpus
+  # (RURL-yeikpnan). Every row here is an input where two parsers disagree about
+  # WHICH of two hostnames is the authority, and both names appear in the
+  # string: `http://letsencrypt.org%2F@malware.testing.google.test/` contains
+  # "malware.testing.google.test" whether it is parsed as the host or as part of
+  # the userinfo. Containment passes either way, so it could not detect the
+  # confusion the corpus exists to detect. `fsss_host` is the extracted host.
+  host_rows <- yal[yal$diverges == "no" & yal$oracle_kind == "host", ,
+    drop = FALSE]
+  expect_gt(nrow(host_rows), 0)
+  expect_false(anyNA(host_rows$fsss_host))
+  expect_identical(host_rows$fsss_host, host_rows$oracle_value)
 })
 
 test_that("Equivocal URLs paper divergences pin to the documented set", {
@@ -477,18 +488,19 @@ test_that("Equivocal URLs paper divergences pin to the documented set", {
   # refuses the string -- but the rfc3986 profile now answers as a STRICT RFC
   # 3986 parser (Ruby's URI::RFC3986_Parser), not as a lenient one.
   u2 <- eq[eq$id == "eq-U2", ]
-  expect_true(grepl("n.pr", u2$rurl_whatwg_clean, fixed = TRUE))   # Option B
+  expect_identical(u2$fsss_host, "n.pr")   # Option B
   expect_identical(u2$rurl_rfc_status, "error")                    # paper: ERR
-  expect_true(is.na(u2$rurl_rfc_clean))
+  expect_true(is.na(u2$fsss_rfc_normalized))
   bs <- eq[eq$id == "eq-bs", ]
   # whatwg -> browser side (malware host); rfc3986 -> refuses the string, so
   # the GSB-evasion payoff still holds: the two profiles do not agree, and the
   # classifier's lenient reading (letsencrypt.org) is NOT what a conformant RFC
   # 3986 parser returns.
-  expect_true(grepl("malware.testing.google.test", bs$rurl_whatwg_clean,
-    fixed = TRUE))
+  # Extracted host, not containment: both hostnames appear in this string, so
+  # containment cannot tell a correct parse from an inverted one.
+  expect_identical(bs$fsss_host, "malware.testing.google.test")
   expect_identical(bs$rurl_rfc_status, "error")
-  expect_true(is.na(bs$rurl_rfc_clean))
+  expect_true(is.na(bs$fsss_rfc_normalized))
 })
 
 test_that("Ada verify_dns_length: rurl accepts, host-length probe matches", {
@@ -501,7 +513,7 @@ test_that("Ada verify_dns_length: rurl accepts, host-length probe matches", {
   # accepts over-length / empty-label hosts). rurl is WHATWG-URL-conformant: it
   # accepts every one -> no divergence from the standard oracle.
   expect_true(all(dl$diverges == "no"))
-  expect_false(anyNA(dl$rurl_whatwg_clean))
+  expect_false(anyNA(dl$fsss_whatwg))
 
   # The payoff: rurl's host-length probe (RURL-vowqpmdg / T5) surfaces the RFC
   # 1035 violation as a diagnostic FACT (ADR 0006). It must fire EXACTLY on the
