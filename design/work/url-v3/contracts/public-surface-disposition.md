@@ -73,17 +73,17 @@ against it.
 
 | path | sha256 |
 |---|---|
-| design/work/url-v3/registers/public-surface-inventory.md | c1cb3ffca5766e40c99714985f8fc952f5608dc7e1324d9466e21079f1ba2f2b |
+| design/work/url-v3/registers/public-surface-inventory.md | 7387b366ac84f4c56ba3c91612436114c76d89b454af5be14deb6225fe5f1c4b |
 
 ## Bijection
 
 | surface class | count | source of truth | status |
 |---|---|---|---|
-| exported functions | 30 | `NAMESPACE` `export(...)` (30 lines; all functions, zero data) | SETTLED (`NAMESPACE` is the source of truth; the validator checks this roster against it by name) |
+| exported functions | 31 | `NAMESPACE` `export(...)` (31 lines; all functions, zero data) | SETTLED (`NAMESPACE` is the source of truth; the validator checks this roster against it by name) |
 | public output fields | 18 | `.spu_result_fields` (`R/utils.R:215-241`) | SETTLED (unchanged; the sole public surface per P1.1@a7e0a59 B3) |
 | curl-dependency surfaces | 3 | DESCRIPTION/NAMESPACE + parse + escape/unescape | SETTLED (inventoried; removal downstream) |
 | migration-surface | 1 | the disposition row artifact 4 discharges | SETTLED (discharged here) |
-| **total** | **52** | | |
+| **total** | **53** | | |
 
 The counts above are documentation of the current state, **verified** by
 `validate-records.R` against `NAMESPACE` and `.spu_result_fields` — they are not a
@@ -127,6 +127,7 @@ matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 | `rurl_clear_caches` | G3.9 | cache lifecycle/reset (P5.1@d254ff1) | SETTLED |
 | `safe_parse_url` | G3.3 (+ G3.5) | 18-field projection = sole public surface (P1.1@a7e0a59 B3); dial matrix (G3.5) | SETTLED |
 | `safe_parse_urls` | G3.3 (+ artifact 11) | row-local recovery SETTLED (P1.1@a7e0a59 §3); the S1-F3 scalar/vector cell matrix + vectorization budget → §6 artifact 11 / the S1 scalar/vector contract | OPEN (artifact 11 / S1 s/v) |
+| `serialize_url` | G3.7 | output surface (b), the full-string standard serializer (FSSS): the surface, its pair of spec-exact serializers, full-string/credential completeness and the C-04/C-05 surface split (P2.2@8292c7f §1b/§2/§3; ADR 0012 D2; ADR 0011); the public entry-point name, the RFC posture, the parse posture and the host spelling (P2.5, PROPOSED, §1-§4) | SETTLED |
 | `url_profile` | G3.5 | profile expansion (P2.4@b017e87, P4.1@b017e87 D-B); direct-vs-profile divergence → G3.5 SCHEME-O1 | OPEN (SCHEME-O1) |
 
 ## Public-output-field disposition roster
