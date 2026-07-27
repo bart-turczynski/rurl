@@ -138,6 +138,10 @@ decisions:
     path: design/work/url-v3/decisions/P2.2-serializer-clean-output.md
     sha256: 01542610a8aaa7f0c1abdbfaae373f65d220446b4f8ae8e6f29cc721cd263c9a
     state: ACCEPTED
+  - id: P2.5
+    path: design/work/url-v3/decisions/P2.5-standard-serializer-surface.md
+    sha256: 4134611bc9702807395597e48834e435ab527514cc2df1b9f533e964826a8817
+    state: PROPOSED
   - id: P5.3
     path: design/work/url-v3/decisions/P5.3-oracle-claim-policy.md
     sha256: 3ca407467ed17f8ad34fc8fb46dda79f7465bb0631bc81bd20f2d490036d1c82
@@ -228,7 +232,7 @@ artifacts:
   - path: design/work/url-v3/contracts/validation-intervention-contract.md
     sha256: aa06d046d495c94f5f1cba5bef923c666653cdceaedabc2ebee66d86d2679c18
   - path: design/work/url-v3/contracts/output-contracts.md
-    sha256: d0570174098f2caf454acfcae7a25517c16fd11c703e7c07242cb221d3dff455
+    sha256: 346eff84d5e8fbf30a36eb51268c5c126325eeb8005617a84cf70669c4f0473c
   - path: design/work/url-v3/contracts/cleaning-mutation-contracts.md
     sha256: d8996daf621ca9409d7249116c15efa1740379eda836eb4ce81aa9278ff8a255
   - path: design/work/url-v3/contracts/semantic-cache-contract.md
@@ -238,16 +242,16 @@ artifacts:
   - path: design/work/url-v3/contracts/key-join-contracts.md
     sha256: c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3
   - path: design/work/url-v3/contracts/public-surface-closure.md
-    sha256: 9a1cd6c68141c55386818a6ec43e8aeecef973417ce442923e5a156a012e782a
+    sha256: 9bc15ab8a73a8ed88480611a272b023d31a7e601efc99cd94d3bc0182381eef8
   # Artifact 4's ROSTER half (P0.6). Pinned HERE and deliberately NOT in the G3
   # acceptance's ## Inputs: a manifest pin keeps it tamper-evident while staying
   # updatable inside the PR that changes the surface, whereas a gate input pin can
   # only be updated by a superseding acceptance record. Conformance to the
   # invariant (I1-I5) is asserted executably by validate-records.R.
   - path: design/work/url-v3/contracts/public-surface-disposition.md
-    sha256: 9f38f465bffba1da3bb7ac457158ca8452bdd80f265a09c4cf706508192d8ad7
+    sha256: f3a4da8e17e764823d3bf5877b90ae75fa9d1c6c26fcebfaa34b2c8f46616bfb
   - path: design/work/url-v3/contracts/cross-artifact-consistency.md
-    sha256: 4931bde27370e5f95f6bfeeaaac67e6f6f3356862d5cd570a222db52b5073947
+    sha256: fd72965ef2698a0660929ea55ef0b442db229fe6fe87bee0709d447a0e10050c
   # G3-acceptance.md is retained at state SUPERSEDED (superseded_by
   # gate-G3-acceptance-2). It stays pinned so the historical record is still
   # tamper-evident; validate-records no longer recomputes its ## Inputs, because
@@ -293,7 +297,7 @@ registers:
   - id: public-surface-inventory
     present: true
     path: design/work/url-v3/registers/public-surface-inventory.md
-    sha256: c1cb3ffca5766e40c99714985f8fc952f5608dc7e1324d9466e21079f1ba2f2b
+    sha256: 7387b366ac84f4c56ba3c91612436114c76d89b454af5be14deb6225fe5f1c4b
     note: "G1.2 — §6 artifact 4 (RURL-dmsgpcak)."
 
 # --- Pinned dependency provenance. Remote refs are the reproducibility

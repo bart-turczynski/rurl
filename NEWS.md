@@ -348,6 +348,54 @@
 
 ### New features
 
+- **`serialize_url()` renders a URL the way its standard would.** rurl's only
+  full-string output was `get_clean_url()`, which is an SEO/canonicalization
+  product: it drops credentials and the fragment by design, and it is driven by
+  two dozen cleaning dials. That makes it the wrong thing to compare against a
+  standard. `serialize_url()` is the other surface — the full string, credentials
+  and fragment included, with no presentation dial at all:
+
+  ```r
+  serialize_url("http://user:pw@Example.COM:80/a/../b?q=1#frag")
+  #> [1] "http://user:pw@example.com/b?q=1#frag"
+  get_clean_url("http://user:pw@Example.COM:80/a/../b?q=1#frag")
+  #> [1] "http://example.com/a/../b"
+  ```
+
+  A present-but-empty delimiter carries information and survives, which no
+  cleaning surface can promise:
+
+  ```r
+  serialize_url(c("http://h/", "http://h/#", "http://h/?"))
+  #> [1] "http://h/"  "http://h/#" "http://h/?"
+  ```
+
+  `standard = "rfc3986"` selects RFC 3986 §5.3 recomposition, in either of two
+  postures: `form = "source"` (the default) normalizes nothing and emits the
+  undivided `userinfo` verbatim, while `form = "normalized"` applies §6.2.2
+  syntax-based normalization and §6.2.3 default-port elision.
+
+  ```r
+  serialize_url("HTTP://Example.COM:80/a/%7Euser/../x", standard = "rfc3986")
+  #> [1] "http://Example.COM:80/a/%7Euser/../x"
+  serialize_url("HTTP://Example.COM:80/a/%7Euser/../x", standard = "rfc3986",
+                form = "normalized")
+  #> [1] "http://example.com/a/x"
+  ```
+
+  Each standard is parsed under its own spec posture, so any scheme is accepted
+  and a scheme is *required*: neither standard defines a base-URL-free parse of
+  `example.com/x`, and rurl's `https://` prepend is browser-like fix-up that has
+  no business inside a standard serialization. Scheme-less input returns `NA`.
+
+  Two consequences are worth stating plainly. WHATWG credential serialization is
+  spec-exact and therefore lossy in one direction — `http://@h/` serializes as
+  `http://h/` and `http://u:@h/` as `http://u@h/`, both pinned by the Web
+  Platform Tests — and the losslessness lives in the parse record, which the RFC
+  `source` form renders verbatim. And `serialize_url()` emits WHATWG's ASCII
+  (punycode) host where `get_clean_url()` keeps the Unicode spelling; both are
+  correct for their surface.
+
 - **`get_parse_verdicts()` reports the three verdicts `parse_status` collapses
   into one.** A single status value answers three independent questions at
   once — did the input present well-formed URL syntax (layer 1), was the parsed

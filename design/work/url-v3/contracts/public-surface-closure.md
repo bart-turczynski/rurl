@@ -101,7 +101,7 @@ re-acceptance to update.
 
 | path | sha256 |
 |---|---|
-| design/work/url-v3/registers/public-surface-inventory.md | c1cb3ffca5766e40c99714985f8fc952f5608dc7e1324d9466e21079f1ba2f2b |
+| design/work/url-v3/registers/public-surface-inventory.md | 7387b366ac84f4c56ba3c91612436114c76d89b454af5be14deb6225fe5f1c4b |
 
 ## The closure invariant
 

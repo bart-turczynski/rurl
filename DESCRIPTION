@@ -32,6 +32,7 @@ Collate:
     'host-policy.R'
     'canonical_join.R'
     'resolve.R'
+    'serialize.R'
     'zzz.R'
 Imports:
     utils,
