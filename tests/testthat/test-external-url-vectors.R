@@ -526,3 +526,42 @@ test_that("Ada verify_dns_length: rurl accepts, host-length probe matches", {
   ada_rejects <- grepl("failure", dl$paper_claimed_behavior, fixed = TRUE)
   expect_identical(probe_fires, ada_rejects)
 })
+
+test_that("credential and fragment vectors match the WHATWG serializer", {
+  # RURL-yeikpnan: the slice that closes the corpus SHAPE gap. Before it, ZERO
+  # expected values in this corpus carried a fragment or credentials -- because
+  # those are exactly the rows a `clean_url` comparison could never have passed
+  # (surface (c) drops both by contract), so the corpus had grown into the shape
+  # its harness could score.
+  #
+  # Oracle: the WPT import's recorded components (inst/bench/wpt-url-cases.json,
+  # BSD-3-Clause), assembled by the WHATWG URL serializer (URL Standard §4.5).
+  # Built by _scratch/build-credential-fragment-vectors.R.
+  fx <- read_vectors()
+  cf <- fx[fx$source == "wpt-credentials-fragments", , drop = FALSE]
+  expect_gt(nrow(cf), 40)
+  expect_true(all(cf$runnable == "yes"))
+  expect_true(all(cf$oracle_kind == "exact"))
+
+  # Every row reproduces the standard's serialization exactly.
+  expect_identical(cf$fsss_whatwg, cf$standard_expectation)
+  expect_setequal(cf$id[cf$diverges == "yes"], character(0))
+
+  # The shapes that were missing are actually present, not merely counted.
+  shapes <- cf$notes
+  expect_gt(sum(grepl("credentials", shapes, fixed = TRUE)), 20)
+  expect_gt(sum(grepl("fragment", shapes, fixed = TRUE)), 10)
+
+  # P2.5 open question 1, settled by evidence rather than by argument. WHATWG
+  # "includes credentials" is FALSE when both halves are empty, so the userinfo
+  # is dropped delimiter and all; a non-empty half survives. These rows come
+  # from WPT's own component expectations, so they are the standard's answer,
+  # not rurl's.
+  empty_cred <- cf[grepl("empty-credentials", cf$notes, fixed = TRUE), ,
+    drop = FALSE]
+  expect_gt(nrow(empty_cred), 0)
+  expect_false(any(grepl("@", empty_cred$fsss_host, fixed = TRUE)))
+  expect_false(any(grepl(
+    "@", sub("^[a-z]+://", "", empty_cred$fsss_whatwg), fixed = TRUE
+  )))
+})
