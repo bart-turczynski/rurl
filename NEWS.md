@@ -58,6 +58,38 @@
 
 ### Bug fixes
 
+- **A URL component ending in a raw line terminator is no longer accepted as
+  valid RFC 3986 syntax.** The in-tree RFC 3986 grammar transcription anchored
+  its component productions with `^`/`$`. ICU's `$` also matches *before* a
+  trailing line terminator, so every production silently admitted a component
+  ending in LF, VT, FF or CR — none of which appears in `unreserved`,
+  `sub-delims` or `pchar`, and none of which any RFC 3986 production allows. A
+  general-scheme userinfo accepted the control and emitted it verbatim, while
+  the special-scheme userinfo rejected all four:
+
+  ```r
+  # before                                          # after
+  serialize_url("foo://u\n@host/p",
+                standard = "rfc3986")  #> "foo://u\n@host/p" -> NA
+  serialize_url("http://u\n@host/p",
+                standard = "rfc3986")  #> NA                 -> NA (unchanged)
+  ```
+
+  RFC 3986 has no removal step, so the grammar **rejects** these rather than
+  stripping them the way the WHATWG parser strips tab, LF and CR. The
+  transcription now anchors on `\A`/`\z` throughout. The same `$` trap made the
+  general parser's WHATWG port check read `foo://h:80\v/` as port 80 — a silent
+  strip where the port state requires failure — and that is fixed too.
+
+  Acceptance was swept over 36,104 inputs (every octet 0–255 in both hex cases
+  and raw, at nine component positions across six schemes). Exactly 12 rows
+  move, all of them a host consisting solely of a trailing line terminator, all
+  `ok` → `error` under `rfc-syntax`. The `browser` and `whatwg` profiles are
+  unchanged row-for-row, and WHATWG serialization is byte-identical, including
+  336/336 `href` matches on the Web Platform Tests. This was the last enumerated
+  deviation in the RFC 3986 serialization property suite, which now carries
+  none.
+
 - **RFC 3986 §6.2.2.2 host normalization no longer depends on the scheme, and
   no longer leaks into the source-preserving form.** Percent-decoding of the
   host happened during the parse, inside a phase gated on rurl's supported

@@ -374,13 +374,25 @@
 .RFC3986_NONASCII <- "\\x{0080}-\\x{10FFFF}"
 .RFC3986_PCT <- "%[0-9A-Fa-f]{2}"
 
+# Every anchor in this transcription is `\A`/`\z` (true start/end of input), NOT
+# `^`/`$`. ICU's `$` also matches BEFORE a trailing line terminator, so an
+# `^...$` grammar silently admits a component ending in LF, VT, FF, CR, NEL,
+# LS or PS -- none of which any RFC 3986 production allows, since none is in
+# `unreserved` / `sub-delims` / `pchar`. That leak made a general-scheme
+# userinfo accept `u\n` and emit the raw control verbatim (RURL-dergzwku); RFC
+# 3986 has no removal step, so the grammar REJECTS these rather than stripping
+# them the way the WHATWG parser does. The same `$`-before-terminator trap is
+# recorded at `R/parse-phases.R:251`.
+.RFC3986_ANCHOR_START <- "\\A"
+.RFC3986_ANCHOR_END <- "\\z"
+
 # Build an anchored "*(data / pct-encoded)" matcher whose data class is the
 # unreserved + sub-delims + non-ASCII set plus the component-specific `extra`
 # characters (e.g. ":" for userinfo, ":@/" for a path).
 .rfc3986_class_re <- function(extra) {
   paste0(
-    "^(?:[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, extra,
-    .RFC3986_NONASCII, "]|", .RFC3986_PCT, ")*$"
+    .RFC3986_ANCHOR_START, "(?:[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS,
+    extra, .RFC3986_NONASCII, "]|", .RFC3986_PCT, ")*", .RFC3986_ANCHOR_END
   )
 }
 
@@ -394,7 +406,7 @@
 # query / fragment = *( pchar / "/" / "?" )                        (S3.4/S3.5)
 .RFC3986_QF_RE <- .rfc3986_class_re(":@/?")
 # port = *DIGIT (empty port is legal); non-ASCII is NOT tolerated here (S3.2.3).
-.RFC3986_PORT_RE <- "^[0-9]*$"
+.RFC3986_PORT_RE <- "\\A[0-9]*\\z"
 
 # IPv4address, and the full dotted quad, for embedded-IPv4 IPv6 forms (S3.2.2).
 .RFC3986_IPV4 <- "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
@@ -403,7 +415,7 @@
 # IPv6address (RFC 4291) -- the canonical fully-expanded alternation. ASCII-only
 # (no non-ASCII tolerance inside brackets); zone identifiers unsupported.
 .RFC3986_IPV6_RE <- paste0(
-  "^(",
+  "\\A(",
   "([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|",
   "([0-9A-Fa-f]{1,4}:){1,7}:|",
   "([0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|",
@@ -415,12 +427,12 @@
   ":((:[0-9A-Fa-f]{1,4}){1,7}|:)|",
   "::([Ff]{4}(:0{1,4})?:)?", .RFC3986_IPV4_QUAD, "|",
   "([0-9A-Fa-f]{1,4}:){1,4}:", .RFC3986_IPV4_QUAD,
-  ")$"
+  ")\\z"
 )
 
 # IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )     (S3.2.2)
 .RFC3986_IPVFUTURE_RE <- paste0(
-  "^v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+$"
+  "\\Av[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+\\z"
 )
 
 # Bracketed IPvFuture IP-literal `"[" IPvFuture "]"` (RURL-yutinyhb). Used by
@@ -428,7 +440,8 @@
 # `reg-name` once L4b resolves a present non-IP RFC host (the bracket is part of
 # the stored host value then). Same inner grammar as `.RFC3986_IPVFUTURE_RE`.
 .RFC3986_BRACKET_IPVFUTURE_RE <- paste0(
-  "^\\[v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+\\]$"
+  "\\A\\[v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS,
+  ":]+\\]\\z"
 )
 
 # First 1-based index of the literal `ch` in `s`, or 0L when absent.
@@ -727,7 +740,7 @@
     return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
   }
   is_v4 <- isTRUE(stringi::stri_detect_regex(
-    host, paste0("^", .RFC3986_IPV4_QUAD, "$")
+    host, paste0("\\A", .RFC3986_IPV4_QUAD, "\\z")
   ))
   list(ok = TRUE, host = host, is_v6 = FALSE, is_v4 = is_v4)
 }
@@ -836,9 +849,15 @@
       # A non-null port (content after `:`) must be ASCII digits only and
       # <= 65535; an empty port (`:` then end/`/`/`?`/`#`) is null -> legal.
       # A non-digit (`-`, `+`, letters) or an out-of-range integer is failure.
+      # `\A`/`\z`, not `^`/`$`, for the reason recorded at the RFC 3986 grammar
+      # transcription above: ICU's `$` matches before a trailing line
+      # terminator, so `^[0-9]+$` admitted `80\v`, which `as.numeric()` then
+      # coerced to 80 -- a silent STRIP of a code point the WHATWG port state
+      # requires to be a failure (RURL-dergzwku). Tab/LF/CR never reach here;
+      # step 1 removes them.
       has_port <- !is.na(port) && nzchar(port)
       if (has_port &&
-        (!isTRUE(stringi::stri_detect_regex(port, "^[0-9]+$")) ||
+        (!isTRUE(stringi::stri_detect_regex(port, "\\A[0-9]+\\z")) ||
           suppressWarnings(as.numeric(port)) > 65535)) {
         ok <- FALSE
       }
