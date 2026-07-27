@@ -84,7 +84,12 @@ test_that("external-url-vectors fixture is well-formed", {
       # Part 3a dual-standard expected-outcome oracle (RURL-moselrwp),
       # + rurl_deviation (RURL-nknytzxz).
       "rfc3986_expected", "whatwg_expected", "oracle_ref", "divergence_class",
-      "rurl_deviation")
+      "rurl_deviation",
+      # RURL-yeikpnan: the oracle re-baselined onto surface (b). `fsss_*` are
+      # the three standard serializations; `oracle_kind`/`oracle_value` restate
+      # the source corpus's expectation in one machine-readable shape.
+      "fsss_whatwg", "fsss_rfc_source", "fsss_rfc_normalized",
+      "oracle_kind", "oracle_value", "fsss_host", "fsss_conforms")
   )
   expect_identical(anyDuplicated(fx$id), 0L)
   expect_true(all(fx$source_class %in% c("A", "B", "C")))
@@ -159,8 +164,11 @@ test_that("dual-standard oracle: classes and invariants hold", {
   expect_true(all(is.na(fx$rfc3986_expected[al])))
   expect_true(all(is.na(fx$whatwg_expected[al])))
   expect_true(all(is.na(fx$oracle_ref[al])))
-  expect_identical(fx$rurl_rfc_clean[al], fx$rurl_whatwg_clean[al])
-  expect_false(anyNA(fx$rurl_rfc_clean[al]))
+  # Self-consistency is asserted on surface (b), not on clean_url: `clean_url`
+  # is a policy-driven product (P2.2 sec 1c/5.1), so two profiles agreeing on it
+  # is agreement about rurl's CLEANING, which is not what this bucket claims.
+  expect_identical(fx$fsss_rfc_normalized[al], fx$fsss_whatwg[al])
+  expect_false(anyNA(fx$fsss_whatwg[al]))
 
   # not-runnable rows carry no oracle value (source view stays in
   # standard_expectation).
@@ -187,13 +195,16 @@ test_that("rurl conforms to the spec oracle except at documented boundaries", {
   skip_ids <- oracle_nonconformance_ids(fx)
   chk <- fx[!(fx$id %in% skip_ids), , drop = FALSE]
 
-  # helper: does rurl's (status, clean) match a spec oracle cell?
-  conforms <- function(oracle, status, clean) {
-    accepted <- status != "error"
-    # a concrete clean_url oracle: rurl must reproduce it exactly. The "accept"
-    # sentinel means the standard admits the string but this fixture claims no
-    # canonical serialization, so only the verdict is asserted.
-    out <- !is.na(clean) & clean == oracle
+  # helper: does rurl's serialization match a spec oracle cell? Scored on
+  # surface (b) -- `serialize_url()` -- because that is the only full-string
+  # output rurl has that is contractually allowed to carry a conformance claim
+  # (P5.3 CLAIM-1; RURL-yeikpnan). `clean_url` is surface (c) and is excluded.
+  conforms <- function(oracle, serialized) {
+    accepted <- !is.na(serialized)
+    # a concrete serialization oracle: rurl must reproduce it exactly. The
+    # "accept" sentinel means the standard admits the string but this fixture
+    # claims no canonical serialization, so only the verdict is asserted.
+    out <- accepted & serialized == oracle
     sentinel <- !is.na(oracle) & oracle == "accept"
     fails <- !is.na(oracle) & oracle == "failure"
     out[sentinel] <- accepted[sentinel]
@@ -201,10 +212,8 @@ test_that("rurl conforms to the spec oracle except at documented boundaries", {
     out
   }
 
-  rfc_ok <- conforms(chk$rfc3986_expected, chk$rurl_rfc_status,
-    chk$rurl_rfc_clean)
-  wha_ok <- conforms(chk$whatwg_expected, chk$rurl_whatwg_status,
-    chk$rurl_whatwg_clean)
+  rfc_ok <- conforms(chk$rfc3986_expected, chk$fsss_rfc_normalized)
+  wha_ok <- conforms(chk$whatwg_expected, chk$fsss_whatwg)
   # NA oracle (aligned rows) is covered by the invariant test above; only assert
   # where an oracle value exists.
   rfc_ok[is.na(chk$rfc3986_expected)] <- TRUE
