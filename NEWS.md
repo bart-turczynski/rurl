@@ -501,12 +501,30 @@
   |---|---|---|
   | question | does rurl emit the standard's **serialization**? | does rurl **accept/reject** what the grammar does? |
   | authority | `whatwg-wpt` | `rfc3986-grammar` |
-  | figure | **91 conforming / 1 documented deviation** over 92 string-valued rows | 164/93 → **179/78** (like-for-like, 257-row scope) |
+  | figure | **326 exact / 10 documented deviations** over the 336 WPT success rows, plus **202/202** must-fail rows rejected | 164/93 → **179/78** (like-for-like, 257-row scope) |
 
   Axis 1 is new evidence: P5.3 §2.2 had already recorded that the FSSS
-  full-string headline did not yet exist. It is reported **by substrate** —
-  quoting a single percentage over the whole corpus would let 233 rows that
-  assert only "this must fail" inflate a *serialization* result.
+  full-string headline did not yet exist. It is measured on the **WHATWG's own
+  test suite** — the imported web-platform-tests corpus in
+  `inst/bench/wpt-url-cases.json` — and scored against upstream's recorded
+  `href`, the standard's own serialization, rather than against a string
+  re-assembled from the component getters. That distinction is not cosmetic:
+  the component dump cannot tell a null host from an empty one, so a
+  re-assembly must guess the `//` delimiter, and doing so reported 40
+  differences where the authoritative oracle reports 13.
+
+  It is reported **by substrate** — serialization and acceptance are never
+  summed, because an aggregate would let must-fail rows inflate a
+  *serialization* result. All four `standard` × `form` configurations were
+  swept; under `whatwg` the two forms are identical on every row, and
+  acceptance never depends on `form`.
+
+  All 10 deviations are one family in one scheme: rurl parses a host-less
+  `file:` URL to a null host where WHATWG gives every special scheme a non-null
+  host, so rurl emits `file:/x` for the standard's `file:///x`. Non-special
+  schemes are exact on all 141 rows, and special schemes with a host on all
+  159. The cause is in the parse record rather than the serializer and is filed
+  as `RURL-uhwivndf`.
 
   Axis 2 moves because fifteen rows stop being deviations. Every one is a case
   where surface (c) declined **by policy** — the ADR 0004 closed scheme set, the

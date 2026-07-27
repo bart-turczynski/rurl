@@ -153,8 +153,12 @@ notice it. Two properties keep the number honest:
 > them by POLICY (the ADR 0004 closed scheme set, the ADR 0002 reversible
 > Unicode host) where the standard serializer matches the grammar. Over the
 > current 325-runnable corpus it is 235 / 90. This remains an ACCEPTANCE axis;
-> the full-string serialization headline is separate and is 91 conforming / 1
-> documented deviation over 92 string-valued rows (OR-021).
+> the full-string serialization headline is separate, and is measured on the
+> WHATWG's own suite rather than on a curated subset: **326 exact / 10
+> documented deviations over the 336 success rows** of the imported
+> web-platform-tests corpus, scored against upstream's recorded `href`, plus
+> **202 / 202** must-fail rows rejected (OR-022, P5.4 §2.1). All 10 deviations
+> are the single host-less-`file:` family of RURL-uhwivndf.
 >
 > That was **158 / 99** before `RURL-qrfrvmkg` bound the generic-URI gate
 > uniformly across schemes; closing the `RURL-pfewxbhb` coverage gap moved

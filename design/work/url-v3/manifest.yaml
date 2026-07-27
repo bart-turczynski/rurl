@@ -140,7 +140,7 @@ decisions:
     state: ACCEPTED
   - id: P5.4
     path: design/work/url-v3/decisions/P5.4-conformance-evidence-rebaseline.md
-    sha256: 75aaa65b8da03b435c080564eb9c4cfb3085f676661f05aed749ca808a834c04
+    sha256: 49b17e02f96f5ab0a0e2f83eb6b74882f8b57e23b9631045f67f77b71e147870
     state: PROPOSED
   - id: P2.5
     path: design/work/url-v3/decisions/P2.5-standard-serializer-surface.md

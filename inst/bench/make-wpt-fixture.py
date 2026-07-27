@@ -17,6 +17,15 @@ Filter:
   * failure cases: any base-null case (all schemes -- a reject is a reject);
   * inputs containing NUL are dropped (not round-trippable through R).
 
+Success rows carry upstream's own `href` alongside the component getters.
+`href` is the WHATWG *serialization* of the parsed URL -- the authoritative
+full-string oracle, recorded by the standard's own suite. It must be preferred
+over re-assembling a string from the components: the component dump cannot
+distinguish a NULL host from an EMPTY one (both surface as `hostname: ""`),
+nor an absent query/fragment from a present-but-empty one (both surface as
+`""`), so any re-assembly has to GUESS the `//`, `?` and `#` delimiters and
+will manufacture differences that belong to the guesser, not the parser.
+
 Provenance (P5.3 section 2.3): the emitted `_meta` block pins the upstream
 project / revision / path, the retrieval date, the license, the raw-source
 hash, the import + generation commands, the standard / version / section, the
@@ -108,7 +117,7 @@ for e in src:
     else:
         success.append({k: e.get(k, "") for k in (
             "input", "protocol", "username", "password", "hostname", "port",
-            "pathname", "search", "hash")})
+            "pathname", "search", "hash", "href")})
 
 out = {
     "_meta": {
