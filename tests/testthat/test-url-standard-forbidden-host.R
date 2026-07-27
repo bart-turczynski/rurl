@@ -106,3 +106,61 @@ test_that("hyphen and underscore in the host are not forbidden", {
       "error"
   )
 })
+
+# --- the userinfo/host slice must not be defeated by a line terminator --------
+#
+# The host-charset shim sliced the host out of an authority with `^.*@` plus a
+# `:[^:]*$` port strip. ICU's `.` does not match a line terminator, and its `$`
+# also matches BEFORE a trailing one, so an authority carrying a raw LF / VT /
+# FF / CR / NEL / LS / PS mis-sliced: `u<NEL>ser@h!.com` kept the WHOLE string
+# as the host, whose `@` is a forbidden host code point -- a FALSE REJECTION of
+# a URL every part of which is valid. The slice now cuts by position, sharing
+# `.fsss_host_slice()` with the serializer so both sides of the parse agree by
+# construction (RURL-qjvxtyze; the serialize-side twin was RURL-dergzwku).
+#
+# The reachable population is exactly the NON-ASCII terminators: WHATWG strips
+# tab/LF/CR on the way in, and RURL-dergzwku made the RFC grammar reject a
+# component ending in one, so only NEL / LS / PS still carry a raw terminator
+# this far. That is also why the RFC property harness could not see this --
+# it excludes literal octets above 0x7F (RURL-zexwmwxn).
+#
+# Written as code points, not literals, so this file stays ASCII.
+rurl_ui_terminators <- vapply(
+  c(NEL = 0x85, LS = 0x2028, PS = 0x2029), intToUtf8, character(1)
+)
+
+test_that("a line terminator in the userinfo does not leak into the host", {
+  for (nm in names(rurl_ui_terminators)) {
+    u <- paste0("http://u", rurl_ui_terminators[[nm]], "ser@h!.com/p")
+    expect_identical(get_host(u, url_standard = "whatwg"), "h!.com", info = nm)
+    expect_false(get_parse_status(u, url_standard = "whatwg") == "error",
+                 info = nm)
+  }
+})
+
+test_that("the mis-slice does not survive into the RFC host either", {
+  for (nm in names(rurl_ui_terminators)) {
+    u <- paste0("http://u", rurl_ui_terminators[[nm]], "ser@h%7F.com/p")
+    expect_identical(get_host(u, url_standard = "rfc3986"), "h%7F.com",
+                     info = nm)
+  }
+})
+
+test_that("a userinfo terminator still percent-encodes in the serialization", {
+  expect_identical(
+    serialize_url(
+      paste0("http://u", rurl_ui_terminators[["NEL"]], "ser@h!.com/p"),
+      standard = "whatwg"
+    ),
+    "http://u%C2%85ser@h!.com/p"
+  )
+})
+
+test_that("correcting the slice does not admit a forbidden host code point", {
+  for (bad in c("<", ">", "|", "[", "]", "^", " ")) {
+    u <- paste0("http://u", rurl_ui_terminators[["NEL"]], "ser@h", bad,
+                ".com/p")
+    expect_identical(get_parse_status(u, url_standard = "whatwg"), "error",
+                     info = bad)
+  }
+})

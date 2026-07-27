@@ -669,13 +669,33 @@
 
   # Host = authority after any userinfo (up to the last "@"), minus a trailing
   # ":port". Bracketed IPv6 keeps its "[...]" (never carries a gap byte anyway).
-  after_ui <- stringi::stri_replace_first_regex(authority, "^.*@", "")
-  bracketed <- stringi::stri_startswith_fixed(after_ui, "[")
-  bracketed[is.na(bracketed)] <- FALSE
-  host <- ifelse(
-    bracketed,
-    stringi::stri_replace_first_regex(after_ui, "^(\\[[^\\]]*\\]).*$", "$1"),
-    stringi::stri_replace_first_regex(after_ui, ":[^:]*$", "")
+  #
+  # Cut by POSITION, not by an anchored regex. ICU's `.` does not match a line
+  # terminator (LF/VT/FF/CR/NEL/LS/PS) and its `$` also matches BEFORE a
+  # trailing one, so `^.*@`, `^(\[[^\]]*\]).*$` and `:[^:]*$` all mis-slice an
+  # authority carrying a raw terminator -- `u<LF>ser@h.com` kept the whole
+  # `u<LF>ser@h.com` as the host. This is the acceptance-critical seam: the
+  # slice picks which rows get masked past libcurl's host rejection, so a wrong
+  # host here can widen acceptance, not merely garble a render. Sharing
+  # `.fsss_host_slice()` with the serializer (RURL-dergzwku) makes the two
+  # sides of the parse agree by construction (RURL-qjvxtyze).
+  at <- vapply(
+    authority,
+    function(s) {
+      if (is.na(s)) {
+        return(0L)
+      }
+      pos <- gregexpr("@", s, fixed = TRUE)[[1L]]
+      if (pos[1L] == -1L) 0L else as.integer(pos[length(pos)])
+    },
+    integer(1), USE.NAMES = FALSE
+  )
+  after_ui <- substring(authority, at + 1L)
+  after_ui[is.na(authority)] <- NA_character_
+  host <- vapply(
+    after_ui,
+    function(s) if (is.na(s)) NA_character_ else .fsss_host_slice(s),
+    character(1), USE.NAMES = FALSE
   )
 
   has_pct <- grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)
