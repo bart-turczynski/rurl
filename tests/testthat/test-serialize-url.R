@@ -249,3 +249,20 @@ test_that("a backslash authority introducer still carries an authority", {
     serialize_url("https:/\\/\\/\\github.com/foo/bar", standard = "rfc3986")
   ))
 })
+
+test_that("the backslash rewrite survives a leading control character", {
+  # Regression on the ORDER of the two source normalizations: the rewrite is
+  # anchored on the scheme, so running it before the C0-or-space strip made it
+  # a no-op and the host was still dropped. The parser resolves `github.com`
+  # for every one of these; the serializer must agree.
+  variants <- c(
+    "https:/\\/\\/\\github.com/foo/bar",
+    " https:/\\/\\/\\github.com/foo/bar",
+    "\thttps:/\\/\\/\\github.com/foo/bar",
+    "https:/\\/\\/\\github.com/foo/bar "
+  )
+  expect_identical(
+    serialize_url(variants, standard = "whatwg"),
+    rep("https://github.com/foo/bar", length(variants))
+  )
+})
