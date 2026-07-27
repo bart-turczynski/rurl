@@ -725,7 +725,7 @@ get_query <- function(url,
       if (is.na(q)) {
         NA_character_
       } else {
-        tryCatch(curl::curl_unescape(q), error = function(e) q)
+        tryCatch(.pct_unescape(q), error = function(e) q)
       }
     },
     character(1),

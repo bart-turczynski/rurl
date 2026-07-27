@@ -368,7 +368,7 @@
 #'   or uses a disallowed scheme.
 #' @seealso \code{\link{safe_parse_urls}}
 #' @importFrom utils tail
-#' @importFrom curl curl_parse_url curl_escape curl_unescape
+#' @importFrom curl curl_parse_url
 #' @keywords internal
 #' @export
 #' @examples

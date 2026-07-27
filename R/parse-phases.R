@@ -1643,13 +1643,13 @@
     mask <- !is.na(path_work)
     if (any(mask)) {
       decoded <- tryCatch(
-        curl::curl_unescape(path_work[mask]),
+        .pct_unescape(path_work[mask]),
         error = function(e) NULL
       )
       if (!is.character(decoded) || length(decoded) != sum(mask)) {
         decoded <- vapply(
           path_work[mask],
-          function(p) tryCatch(curl::curl_unescape(p), error = function(e) p),
+          function(p) tryCatch(.pct_unescape(p), error = function(e) p),
           character(1),
           USE.NAMES = FALSE
         )
