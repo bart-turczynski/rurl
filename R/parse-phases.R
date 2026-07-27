@@ -2761,6 +2761,317 @@
   suffix
 }
 
+# ---------------------------------------------------------------------------
+# FSSS -- the full-string standard serializers (output surface (b)).
+#
+# These are the STANDARD serializers. The `.serialize_*_vec()` pair above are
+# the CLEAN serializers (surface c): they implement rurl's `clean_url` product
+# contract, which excludes the fragment and credentials by design. The two are
+# separate surfaces, not versions of one thing (output-contracts.md, C-04).
+#
+# Three properties distinguish the FSSS, all contractual:
+#
+#   1. FULL-STRING. Credentials and the fragment are emitted, and a delimiter
+#      that was present with an empty value survives as a trailing `?` / `#`
+#      (ADR 0012 D2).
+#   2. IDENTITY, NOT PRESENTATION. They take NO presentation dial -- no
+#      `port_handling`, no `trailing_slash_handling`, no `path_encoding`. The
+#      path is rendered by the selected standard's own percent-encode set and
+#      `path_encoding` is never consulted (output-contracts.md, C-05; ADR 0011).
+#      Passing one would be a category error, so there is no argument to pass.
+#   3. LOSSLESS RECORD IN. They consume the lossless serializer-input record
+#      (the R/parse-state.R vocabulary), never the 18-field public projection
+#      and never a cleaned or formatted component (S3-F2).
+#
+# `port` is the identity port and is emitted whenever it is non-NA. The
+# public projection's default-port nulling is a projection policy applied
+# downstream; it is not this surface's business.
+
+# WHATWG userinfo percent-encode set (#userinfo-percent-encode-set): the path
+# set plus `/ : ; = @ [ \ ] ^ |`. `^` is already a path-set member.
+.whatwg_userinfo_percent_encode <- function(x) {
+  .whatwg_component_percent_encode(
+    x,
+    c(
+      0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL,
+      0x2FL, 0x3AL, 0x3BL, 0x3DL, 0x40L, 0x5BL, 0x5CL, 0x5DL, 0x7CL
+    )
+  )
+}
+
+# WHATWG full-string serializer (#concept-url-serializer, ADR 0012 A.1 + D2).
+#
+# CREDENTIALS ARE SPEC-EXACT, WHICH MEANS LOSSY, AND THAT IS CORRECT HERE.
+# WHATWG appends credentials iff the URL "includes credentials" -- username or
+# password non-empty -- so a bare `http://@h/` serializes as `http://h/` and
+# `http://u:@h/` as `http://u@h/`, both pinned by WPT. The undivided source
+# userinfo is NOT used: this serializer emits the standard's own serialization
+# of the parsed state, and WHATWG's state is the username/password split. The
+# LOSSLESSNESS the contract requires lives in the RECORD (which keeps the
+# undivided slice), not in this serializer's output; the RFC source-preserving
+# form below is where the undivided spelling is rendered verbatim.
+#
+# Round-tripping is unaffected: the identity oracle is idempotence of
+# parse -> serialize -- serialize(parse(serialize(parse(x)))) equals
+# serialize(parse(x)) -- not recovery of the input bytes, which is surface (a).
+.serialize_whatwg_full_vec <- function(scheme, userinfo, host, host_kind,
+                                       authority_delimiter_present, path,
+                                       path_kind, query, query_kind,
+                                       fragment, fragment_kind, port) {
+  n <- max(
+    length(scheme), length(userinfo), length(host), length(host_kind),
+    length(authority_delimiter_present), length(path), length(path_kind),
+    length(query), length(query_kind), length(fragment), length(fragment_kind)
+  )
+  scheme <- rep_len(scheme, n)
+  userinfo <- rep_len(userinfo, n)
+  host <- rep_len(host, n)
+  host_kind <- rep_len(host_kind, n)
+  authority_delimiter_present <- rep_len(authority_delimiter_present, n)
+  path <- rep_len(path, n)
+  path_kind <- rep_len(path_kind, n)
+  query <- rep_len(query, n)
+  query_kind <- rep_len(query_kind, n)
+  fragment <- rep_len(fragment, n)
+  fragment_kind <- rep_len(fragment_kind, n)
+  port <- if (is.null(port)) rep(NA_character_, n) else rep_len(port, n)
+
+  scheme_prefix <- paste0(scheme, ":")
+  is_opaque <- path_kind == "opaque"
+
+  # Identity port: emitted whenever present. No `port_handling`.
+  port_part <- rep("", n)
+  has_port <- !is.na(port)
+  port_part[has_port] <- paste0(":", port[has_port])
+
+  cred_part <- character(n)
+  path_body <- character(n)
+  guard <- rep("", n)
+  for (i in seq_len(n)) {
+    # Credentials: split the recorded userinfo at the FIRST ":" into the
+    # WHATWG username/password pair, then apply #concept-url-serializer.
+    ui <- userinfo[i]
+    if (is.na(ui)) {
+      cred_part[i] <- ""
+    } else {
+      colon <- regexpr(":", ui, fixed = TRUE)
+      if (colon > 0L) {
+        username <- substring(ui, 1L, colon - 1L)
+        password <- substring(ui, colon + 1L)
+      } else {
+        username <- ui
+        password <- ""
+      }
+      if (nzchar(username) || nzchar(password)) {
+        out_cred <- .whatwg_userinfo_percent_encode(username)
+        if (nzchar(password)) {
+          out_cred <- paste0(
+            out_cred, ":", .whatwg_userinfo_percent_encode(password)
+          )
+        }
+        cred_part[i] <- paste0(out_cred, "@")
+      } else {
+        # "includes credentials" is false -- both halves empty. WHATWG drops
+        # the whole userinfo, delimiter included.
+        cred_part[i] <- ""
+      }
+    }
+
+    p <- path[i]
+    if (is.na(p)) {
+      path_body[i] <- ""
+      next
+    }
+    if (is_opaque[i]) {
+      # An opaque path's trailing space is encoded only when a `?`/`#`
+      # actually follows it. Unlike the clean serializer, the FSSS emits the
+      # fragment too, so the fragment counts as a following delimiter here.
+      delimiter_follows <- query_kind[i] != "absent" ||
+        fragment_kind[i] != "absent"
+      path_body[i] <- .whatwg_opaque_path_encode(p, delimiter_follows)
+      next
+    }
+    path_body[i] <- .whatwg_path_percent_encode(p)
+
+    # Four-condition `/.` guard -- identical to the clean serializer's, but
+    # with no trailing-slash strip ahead of it, since that is a presentation
+    # dial this surface does not take. See .serialize_whatwg_vec for the
+    # segment-derivation reasoning.
+    if (host_kind[i] == "absent") {
+      segs <- strsplit(p, "/", fixed = TRUE)[[1]]
+      segs <- segs[-1L]
+      if (length(segs) > 1L && !is.na(segs[1L]) && segs[1L] == "") {
+        guard[i] <- "/."
+      }
+    }
+  }
+
+  out <- character(n)
+  out[is_opaque] <- paste0(scheme_prefix[is_opaque], path_body[is_opaque])
+
+  delim <- !is.na(authority_delimiter_present) & authority_delimiter_present
+  auth <- !is_opaque & delim
+  host_str <- ifelse(is.na(host), "", host)
+  out[auth] <- paste0(
+    scheme_prefix[auth], "//", cred_part[auth], host_str[auth],
+    port_part[auth], path_body[auth]
+  )
+
+  noauth <- !is_opaque & !delim
+  out[noauth] <- paste0(
+    scheme_prefix[noauth], guard[noauth], path_body[noauth]
+  )
+
+  paste0(
+    out,
+    .whatwg_query_suffix_vec(query, query_kind, scheme),
+    .whatwg_fragment_suffix_vec(fragment, fragment_kind)
+  )
+}
+
+# WHATWG fragment suffix (ADR 0012 D2), mirroring .whatwg_query_suffix_vec:
+# present -> "#" + fragment-set encode; empty -> bare "#"; absent -> nothing.
+# The empty case is the whole point -- `http://h/#` must not collapse to
+# `http://h/`.
+.whatwg_fragment_suffix_vec <- function(fragment, fragment_kind) {
+  n <- length(fragment_kind)
+  suffix <- rep("", n)
+  for (i in seq_len(n)) {
+    if (fragment_kind[i] == "empty") {
+      suffix[i] <- "#"
+    } else if (fragment_kind[i] == "present") {
+      encoded <- .whatwg_fragment_percent_encode(fragment[i])
+      if (is.na(encoded)) {
+        encoded <- ""
+      }
+      suffix[i] <- paste0("#", encoded)
+    }
+  }
+  suffix
+}
+
+# RFC 3986 full-string serializer (section 5.3 component recomposition), in
+# BOTH postures the contract leaves open (OUT-O3):
+#
+#   form = "source"     -- rfc-syntax. No normalization of any kind: source
+#                          bytes are preserved, the undivided userinfo slice is
+#                          emitted verbatim (RFC 3986 has no credential concept
+#                          to be spec-exact about, so nothing is dropped), and
+#                          the query/fragment are appended without an encoder.
+#                          This is the posture round-trip fidelity needs.
+#   form = "normalized" -- section 6.2.2 syntax-based normalization plus the
+#                          section 6.2.3 default-port removal: case
+#                          normalization of scheme and host, percent-encoding
+#                          normalization (triplets upper-cased, unreserved
+#                          octets decoded), and path segment normalization.
+#                          This is the posture a conformance claim needs.
+#
+# Both are exposed rather than one being chosen, because choosing forfeits
+# either the round-trip oracle or the claim substrate.
+.serialize_rfc_full_vec <- function(scheme, userinfo, host, host_kind,
+                                    authority_delimiter_present, path,
+                                    rfc_path_form, query, query_kind,
+                                    fragment, fragment_kind, port,
+                                    form = "source") {
+  force(rfc_path_form)
+  force(host_kind)
+  n <- max(
+    length(scheme), length(userinfo), length(host),
+    length(authority_delimiter_present), length(path), length(query),
+    length(query_kind), length(fragment), length(fragment_kind)
+  )
+  scheme <- rep_len(scheme, n)
+  userinfo <- rep_len(userinfo, n)
+  host <- rep_len(host, n)
+  authority_delimiter_present <- rep_len(authority_delimiter_present, n)
+  path <- rep_len(path, n)
+  query <- rep_len(query, n)
+  query_kind <- rep_len(query_kind, n)
+  fragment <- rep_len(fragment, n)
+  fragment_kind <- rep_len(fragment_kind, n)
+  port <- if (is.null(port)) rep(NA_character_, n) else rep_len(port, n)
+
+  normalized <- identical(form, "normalized")
+
+  if (normalized) {
+    scheme <- .ascii_tolower(scheme)
+    host <- .ascii_tolower(host)
+    path <- .rfc_pct_normalize(path)
+    query <- .rfc_pct_normalize(query)
+    fragment <- .rfc_pct_normalize(fragment)
+    userinfo <- .rfc_pct_normalize(userinfo)
+    # Path segment normalization (section 6.2.2.3) applies to a path that has
+    # an authority or is absolute; a rootless path has no dot-segment meaning
+    # to remove.
+    seg_norm <- !is.na(path) & startsWith(path, "/")
+    if (any(seg_norm)) {
+      path[seg_norm] <- vapply(
+        path[seg_norm], ._remove_dot_segments, character(1), USE.NAMES = FALSE
+      )
+    }
+  }
+
+  scheme_prefix <- paste0(scheme, ":")
+
+  port_part <- rep("", n)
+  has_port <- !is.na(port)
+  if (normalized) {
+    # Section 6.2.3: a port equal to the scheme's default is elided.
+    default_port <- .scheme_default_port_vec(scheme)
+    has_port <- has_port & !(!is.na(default_port) & port == default_port)
+  }
+  port_part[has_port] <- paste0(":", port[has_port])
+
+  # RFC has no username/password split: the undivided slice is the component,
+  # so every delimiter state (`u@`, `u:@`, `:p@`, `@`) survives verbatim.
+  cred_part <- rep("", n)
+  has_cred <- !is.na(userinfo)
+  cred_part[has_cred] <- paste0(userinfo[has_cred], "@")
+
+  path_body <- ifelse(is.na(path), "", path)
+
+  out <- character(n)
+  auth <- !is.na(authority_delimiter_present) & authority_delimiter_present
+  host_str <- ifelse(is.na(host), "", host)
+  out[auth] <- paste0(
+    scheme_prefix[auth], "//", cred_part[auth], host_str[auth],
+    port_part[auth], path_body[auth]
+  )
+  out[!auth] <- paste0(scheme_prefix[!auth], path_body[!auth])
+
+  query_suffix <- rep("", n)
+  is_present <- query_kind == "present"
+  query_suffix[is_present] <- paste0("?", ifelse(
+    is.na(query[is_present]), "", query[is_present]
+  ))
+  query_suffix[query_kind == "empty"] <- "?"
+
+  fragment_suffix <- rep("", n)
+  frag_present <- fragment_kind == "present"
+  fragment_suffix[frag_present] <- paste0("#", ifelse(
+    is.na(fragment[frag_present]), "", fragment[frag_present]
+  ))
+  fragment_suffix[fragment_kind == "empty"] <- "#"
+
+  paste0(out, query_suffix, fragment_suffix)
+}
+
+# RFC 3986 section 6.2.2.1 + 6.2.2.2 percent-encoding normalization, vectorized
+# over the scalar .rfc_unreserved_normalize() (R/path-query.R), which already
+# does both halves: it decodes triplets encoding an unreserved octet and
+# upper-cases the hex digits of every triplet it leaves encoded.
+.rfc_pct_normalize <- function(x) {
+  out <- x
+  keep <- !is.na(x)
+  if (!any(keep)) {
+    return(x)
+  }
+  out[keep] <- vapply(
+    x[keep], .rfc_unreserved_normalize, character(1), USE.NAMES = FALSE
+  )
+  out
+}
+
 # Phase 12 (vector): classify the parse outcome (ok / ok-ftp / warning-* /
 # error / ok-scheme-relative). `curl_ok` is TRUE for rows curl parsed (the
 # scalar wrapper passes !is.null(parsed_curl)).
