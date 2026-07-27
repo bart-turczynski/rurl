@@ -508,47 +508,49 @@ covers the section.
 | TR-OUT-s3-correctness-oracle | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:118` |
 | TR-OUT-s3-c-04-fragment-preservation | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:119` |
 | TR-OUT-s3-c-05-2f-path-encoding | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:120` |
-| TR-OUT-s3-build-dependency | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:121` |
-| TR-OUT-s3-public-entry-point-name | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:122` |
-| TR-OUT-s3-rfc-serializer-posture | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:123` |
-| TR-OUT-s4-authority-host-state | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:134` |
-| TR-OUT-s4-credential-delimiter-state | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:135` |
-| TR-OUT-s4-query-lexical-state | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:136` |
-| TR-OUT-s4-query-fragment-presence | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:137` |
-| TR-OUT-s4-path-posture | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:138` |
-| TR-OUT-s4-parse-repair-provenance | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:139` |
-| TR-OUT-s5-own-surface-never-a-serializer | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:145` |
-| TR-OUT-s5-byte-vs-encoding-label-guarantee | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:146` |
-| TR-OUT-s6-intentionally-lossy-seo-product | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:155` |
-| TR-OUT-s6-omits-fragment-credentials | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:156` |
-| TR-OUT-s6-byte-compat-scope | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:157` |
-| TR-OUT-s6-dials-owned-elsewhere | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:158` |
-| TR-OUT-s6-resolve-url-coupling | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:159` |
-| TR-OUT-s7-separate-surface | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:165` |
-| TR-OUT-s7-redacts-credentials | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:166` |
-| TR-OUT-s7-scope-escape-annotation-matrix | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:167` |
-| TR-OUT-s8-identity-never-presentation | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:177` |
-| TR-OUT-s8-non-interference | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:178` |
-| TR-OUT-s8-key-policy-truth-tables-joins-mi | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:179` |
-| TR-OUT-s9-claims-against-the-fsss-only | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:189` |
-| TR-OUT-s9-the-projection-may-not-be-an-ora | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:190` |
-| TR-OUT-s9-historical-projection-claims-ret | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:191` |
-| TR-OUT-s9-parity-conformance | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:192` |
-| TR-OUT-s9-labeled-oracle-taxonomy | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:193` |
-| TR-OUT-s9-metamorphic-assertions-required | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:194` |
-| TR-OUT-s9-oracle-register-budgets | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:195` |
-| TR-OUT-s10-url-source-a | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:204` |
-| TR-OUT-s10-serialize-url-b | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:205` |
-| TR-OUT-s10-clean-url-c | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:206` |
-| TR-OUT-s10-format-url-d | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:207` |
-| TR-OUT-s10-get-url-key-e | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:208` |
-| TR-OUT-s11-utf-8-marking | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:216` |
-| TR-OUT-s11-locale-invariance | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:217` |
-| TR-OUT-s11-raw-byte-vs-percent-spelling-dis | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:218` |
-| TR-OUT-s12-user-password-split-retained | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:230` |
-| TR-OUT-s12-internal-reassembly-completeness | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:231` |
-| TR-OUT-s12-output-governance | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:232` |
-| TR-OUT-s12-public-undivided-userinfo-compon | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:233` |
+| TR-OUT-s3-parse-posture | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:121` |
+| TR-OUT-s3-host-spelling | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:122` |
+| TR-OUT-s3-build-dependency | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:123` |
+| TR-OUT-s3-public-entry-point-name | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:124` |
+| TR-OUT-s3-rfc-serializer-posture | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:125` |
+| TR-OUT-s4-authority-host-state | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:136` |
+| TR-OUT-s4-credential-delimiter-state | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:137` |
+| TR-OUT-s4-query-lexical-state | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:138` |
+| TR-OUT-s4-query-fragment-presence | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:139` |
+| TR-OUT-s4-path-posture | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:140` |
+| TR-OUT-s4-parse-repair-provenance | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:141` |
+| TR-OUT-s5-own-surface-never-a-serializer | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:147` |
+| TR-OUT-s5-byte-vs-encoding-label-guarantee | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:148` |
+| TR-OUT-s6-intentionally-lossy-seo-product | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:157` |
+| TR-OUT-s6-omits-fragment-credentials | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:158` |
+| TR-OUT-s6-byte-compat-scope | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:159` |
+| TR-OUT-s6-dials-owned-elsewhere | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:160` |
+| TR-OUT-s6-resolve-url-coupling | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:161` |
+| TR-OUT-s7-separate-surface | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:167` |
+| TR-OUT-s7-redacts-credentials | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:168` |
+| TR-OUT-s7-scope-escape-annotation-matrix | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:169` |
+| TR-OUT-s8-identity-never-presentation | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:179` |
+| TR-OUT-s8-non-interference | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:180` |
+| TR-OUT-s8-key-policy-truth-tables-joins-mi | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:181` |
+| TR-OUT-s9-claims-against-the-fsss-only | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:191` |
+| TR-OUT-s9-the-projection-may-not-be-an-ora | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:192` |
+| TR-OUT-s9-historical-projection-claims-ret | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:193` |
+| TR-OUT-s9-parity-conformance | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:194` |
+| TR-OUT-s9-labeled-oracle-taxonomy | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:195` |
+| TR-OUT-s9-metamorphic-assertions-required | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:196` |
+| TR-OUT-s9-oracle-register-budgets | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:197` |
+| TR-OUT-s10-url-source-a | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:206` |
+| TR-OUT-s10-serialize-url-b | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:207` |
+| TR-OUT-s10-clean-url-c | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:208` |
+| TR-OUT-s10-format-url-d | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:209` |
+| TR-OUT-s10-get-url-key-e | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:210` |
+| TR-OUT-s11-utf-8-marking | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:218` |
+| TR-OUT-s11-locale-invariance | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:219` |
+| TR-OUT-s11-raw-byte-vs-percent-spelling-dis | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:220` |
+| TR-OUT-s12-user-password-split-retained | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:232` |
+| TR-OUT-s12-internal-reassembly-completeness | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:233` |
+| TR-OUT-s12-output-governance | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:234` |
+| TR-OUT-s12-public-undivided-userinfo-compon | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:235` |
 | TR-PS-s1-the-18-public-fields-three-value | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-closure.md:163` |
 | TR-PS-s1-parse-status-l1-l2-l3-compat-pro | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-closure.md:164` |
 | TR-PS-s1-clean-url-clean-surface-c-not-id | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-closure.md:165` |
@@ -590,29 +592,30 @@ covers the section.
 | TR-PSD-s2-rurl-clear-caches | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:127` |
 | TR-PSD-s2-safe-parse-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:128` |
 | TR-PSD-s2-safe-parse-urls | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:129` |
-| TR-PSD-s2-url-profile | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:130` |
-| TR-PSD-s3-original-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:136` |
-| TR-PSD-s3-scheme | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:137` |
-| TR-PSD-s3-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:138` |
-| TR-PSD-s3-port | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:139` |
-| TR-PSD-s3-path | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:140` |
-| TR-PSD-s3-query | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:141` |
-| TR-PSD-s3-fragment | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:142` |
-| TR-PSD-s3-user | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:143` |
-| TR-PSD-s3-password | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:144` |
-| TR-PSD-s3-domain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:145` |
-| TR-PSD-s3-tld | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:146` |
-| TR-PSD-s3-domain-ascii | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:147` |
-| TR-PSD-s3-domain-unicode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:148` |
-| TR-PSD-s3-tld-ascii | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:149` |
-| TR-PSD-s3-tld-unicode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:150` |
-| TR-PSD-s3-is-ip-host | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:151` |
-| TR-PSD-s3-clean-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:152` |
-| TR-PSD-s3-parse-status | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:153` |
-| TR-PSD-s4-curl-import-metadata | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:159` |
-| TR-PSD-s4-curl-parse-call | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:160` |
-| TR-PSD-s4-curl-escape-unescape | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:161` |
-| TR-PSD-s4-migration-surface | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:162` |
+| TR-PSD-s2-serialize-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:130` |
+| TR-PSD-s2-url-profile | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:131` |
+| TR-PSD-s3-original-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:137` |
+| TR-PSD-s3-scheme | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:138` |
+| TR-PSD-s3-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:139` |
+| TR-PSD-s3-port | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:140` |
+| TR-PSD-s3-path | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:141` |
+| TR-PSD-s3-query | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:142` |
+| TR-PSD-s3-fragment | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:143` |
+| TR-PSD-s3-user | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:144` |
+| TR-PSD-s3-password | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:145` |
+| TR-PSD-s3-domain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:146` |
+| TR-PSD-s3-tld | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:147` |
+| TR-PSD-s3-domain-ascii | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:148` |
+| TR-PSD-s3-domain-unicode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:149` |
+| TR-PSD-s3-tld-ascii | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:150` |
+| TR-PSD-s3-tld-unicode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:151` |
+| TR-PSD-s3-is-ip-host | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:152` |
+| TR-PSD-s3-clean-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:153` |
+| TR-PSD-s3-parse-status | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:154` |
+| TR-PSD-s4-curl-import-metadata | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:160` |
+| TR-PSD-s4-curl-parse-call | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:161` |
+| TR-PSD-s4-curl-escape-unescape | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:162` |
+| TR-PSD-s4-migration-surface | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:163` |
 | TR-SC-s1-full-parse | SETTLED | cache-slice | MAPPED | `design/work/url-v3/contracts/semantic-cache-contract.md:77` |
 | TR-SC-s1-puny-encode | SETTLED | cache-slice | MAPPED | `design/work/url-v3/contracts/semantic-cache-contract.md:78` |
 | TR-SC-s1-puny-decode | SETTLED | cache-slice | MAPPED | `design/work/url-v3/contracts/semantic-cache-contract.md:79` |
@@ -767,13 +770,13 @@ other, and this one summarizes the very thing the record exists to establish.
 |---|---|---|---|---|
 | cache-slice | MAPPED | 20 | 20 | 0 |
 | state-slice | PENDING | 44 | 43 | 1 |
-| full-string-slice | PENDING | 49 | 44 | 5 |
+| full-string-slice | PENDING | 51 | 48 | 3 |
 | mutation-slice | PENDING | 64 | 49 | 15 |
 | join-slice | PENDING | 68 | 60 | 8 |
 | migration-slice | PENDING | 22 | 18 | 4 |
 | host-slice | PENDING | 41 | 35 | 6 |
-| UNASSIGNED | UNASSIGNED | 172 | 139 | 33 |
-| **total** | — | 480 | 408 | 72 |
+| UNASSIGNED | UNASSIGNED | 173 | 140 | 33 |
+| **total** | — | 483 | 413 | 70 |
 
 ### By contract
 
@@ -783,9 +786,9 @@ other, and this one summarizes the very thing the record exists to establish.
 | CM | `design/work/url-v3/contracts/cleaning-mutation-contracts.md` | 59 | 45 | 14 | 8 |
 | HA | `design/work/url-v3/contracts/host-annotation-contracts.md` | 41 | 35 | 6 | 10 |
 | KJ | `design/work/url-v3/contracts/key-join-contracts.md` | 75 | 67 | 8 | 7 |
-| OUT | `design/work/url-v3/contracts/output-contracts.md` | 57 | 51 | 6 | 12 |
+| OUT | `design/work/url-v3/contracts/output-contracts.md` | 59 | 55 | 4 | 12 |
 | PS | `design/work/url-v3/contracts/public-surface-closure.md` | 8 | 8 | 0 | 1 |
-| PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 56 | 26 | 30 | 4 |
+| PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 57 | 27 | 30 | 4 |
 | SC | `design/work/url-v3/contracts/semantic-cache-contract.md` | 20 | 20 | 0 | 5 |
 | SS | `design/work/url-v3/contracts/standard-scheme-matrices.md` | 50 | 46 | 4 | 9 |
 | VI | `design/work/url-v3/contracts/validation-intervention-contract.md` | 70 | 67 | 3 | 10 |

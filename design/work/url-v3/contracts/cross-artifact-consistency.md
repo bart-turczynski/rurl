@@ -75,7 +75,7 @@ checked executably by `validate-records.R` (P0.6 I1–I5).
 | design/work/url-v3/contracts/canonical-state-contract.md | efebe54e645dfcaf56aa2e7d78fcad37d1f266952431a247d5197624996f43ca |
 | design/work/url-v3/contracts/standard-scheme-matrices.md | f36ddf6cb8283af7203e7267c2bb1635df49fc670129134cfe9825cda5589d18 |
 | design/work/url-v3/contracts/validation-intervention-contract.md | aa06d046d495c94f5f1cba5bef923c666653cdceaedabc2ebee66d86d2679c18 |
-| design/work/url-v3/contracts/output-contracts.md | 346eff84d5e8fbf30a36eb51268c5c126325eeb8005617a84cf70669c4f0473c |
+| design/work/url-v3/contracts/output-contracts.md | 62087dad29481e78e204f2dcb511aabea3ac823dc0651ae3c918e0c0a588975f |
 | design/work/url-v3/contracts/cleaning-mutation-contracts.md | d8996daf621ca9409d7249116c15efa1740379eda836eb4ce81aa9278ff8a255 |
 | design/work/url-v3/contracts/semantic-cache-contract.md | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
 | design/work/url-v3/contracts/host-annotation-contracts.md | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
