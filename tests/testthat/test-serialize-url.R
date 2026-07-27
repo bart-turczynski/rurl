@@ -195,3 +195,57 @@ test_that("the RFC source form reproduces an already-conformant input", {
   )
   expect_identical(serialize_url(corpus, standard = "rfc3986"), corpus)
 })
+
+test_that("the WHATWG reverse-solidus rewrite reaches the serializer surface", {
+  # Regression: the FSSS read the RAW source where the parser reads the
+  # backslash-rewritten one, so a "\" the standard maps to the authority/path
+  # boundary stayed inside the lexer's authority slice. The text before the
+  # last "@" -- which is PATH -- was recovered as a userinfo the parser never
+  # found, and the emitted host was duplicated into the credentials.
+  # Oracles are the WHATWG-reference outcomes carried by the `youarealiar` and
+  # `equivocal-urls` corpus rows (CVE-2020-26291 family).
+  expect_identical(
+    serialize_url("http://google.com:80\\@yahoo.com", standard = "whatwg"),
+    "http://google.com/@yahoo.com"
+  )
+  expect_identical(
+    serialize_url("https://n.pr\\@e.gg", standard = "whatwg"),
+    "https://n.pr/@e.gg"
+  )
+  expect_identical(
+    serialize_url(
+      "http://example.com:80\\@localhost:8080/secret.txt",
+      standard = "whatwg"
+    ),
+    "http://example.com/@localhost:8080/secret.txt"
+  )
+  # The parser found no credentials, so the serializer must emit none.
+  expect_true(is.na(
+    safe_parse_urls("http://google.com:80\\@yahoo.com",
+                    url_standard = "whatwg")$user
+  ))
+})
+
+test_that("a backslash authority introducer still carries an authority", {
+  # Regression: `.has_explicit_authority()` greps a literal "://", which this
+  # input does not contain, so the FSSS emitted no "//" and DROPPED the host
+  # even though the parser had resolved it. WHATWG's
+  # special-authority-ignore-slashes state accepts the "\"-bearing run.
+  expect_identical(
+    serialize_url("https:/\\/\\/\\github.com/foo/bar", standard = "whatwg"),
+    "https://github.com/foo/bar"
+  )
+  deceptive <- paste0(
+    "https://malware.testing.google.test",
+    "\\testing\\malware\\*@letsencrypt.org"
+  )
+  expect_identical(
+    serialize_url(deceptive, standard = "whatwg"),
+    "https://malware.testing.google.test/testing/malware/*@letsencrypt.org"
+  )
+  # RFC 3986 has no reverse-solidus mapping and admits no raw "\" in a path, so
+  # it rejects outright. The rewrite must stay confined to the WHATWG standard.
+  expect_true(is.na(
+    serialize_url("https:/\\/\\/\\github.com/foo/bar", standard = "rfc3986")
+  ))
+})
