@@ -64,9 +64,21 @@ test_that("escape is vectorized and NA/empty-safe", {
 
 test_that("every triplet decodes, in either hex case", {
   # 0x00 is excluded: a decoded NUL terminates the value (see below).
+  # Asserted as OCTETS, one per triplet. The comparison this replaced was
+  # locale-dependent: `.pct_unescape()` declares its result UTF-8 (libcurl's
+  # wrapper marks unconditionally) while `rawToChar()` leaves it undeclared,
+  # and `identical()` reconciles the two marks only when the session's native
+  # encoding happens to be UTF-8 -- under `LC_ALL=C` it does not
+  # (RURL-cpmxhbgg).
+  decoded <- rurl:::.pct_unescape(sprintf("%%%02X", 1:255))
   expect_identical(
-    rurl:::.pct_unescape(sprintf("%%%02X", 1:255)),
-    vapply(1:255, function(b) rawToChar(as.raw(b)), character(1))
+    vapply(decoded, charToRaw, raw(1), USE.NAMES = FALSE),
+    as.raw(1:255)
+  )
+  # The declaration itself, pinned: R drops the mark on the pure-ASCII half
+  # and keeps it on the high half, in every locale.
+  expect_identical(
+    Encoding(decoded), rep(c("unknown", "UTF-8"), c(127L, 128L))
   )
   expect_identical(rurl:::.pct_unescape("%c3%a9"), "é")
   expect_identical(rurl:::.pct_unescape("%C3%A9"), "é")

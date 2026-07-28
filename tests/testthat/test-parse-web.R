@@ -30,6 +30,21 @@ fp <- function(url) {
   )
 }
 
+# Compare a field to the OCTETS it must carry, never to a source literal.
+# The parser hands back raw bytes with no encoding declaration, while a
+# `"\uXXXX"` literal is UTF-8-marked; `identical()` compares the two only
+# after translating both through the session's native encoding, so it agrees
+# under a UTF-8 locale and disagrees under `LC_ALL=C` on the very same bytes.
+# Octets are the locale-invariant statement, and they are the statement the
+# parser actually makes (RURL-cpmxhbgg). Integers, not raws, so that a failure
+# renders in any locale instead of warning "unable to translate".
+expect_bytes <- function(actual, expected) {
+  expect_identical(
+    if (is.null(actual)) NULL else as.integer(charToRaw(actual)),
+    as.integer(expected)
+  )
+}
+
 test_that("a plain URL decomposes into libcurl's field names and spellings", {
   r <- p("http://u:pw@example.com:8080/a/b?q=1#frag")
   expect_identical(r$scheme, "http")
@@ -155,9 +170,15 @@ test_that("host code points outside libcurl's set are rejected", {
 })
 
 test_that("host and userinfo take raw high bytes only as well-formed UTF-8", {
-  expect_identical(p("http://a\u00e9b/")$host, "a\u00e9b")
-  expect_identical(p("http://\u4e2d\u6587.com/")$host, "\u4e2d\u6587.com")
-  expect_identical(p("http://u\u00e9x@example.com/")$user, "u\u00e9x")
+  # Expectations are OCTETS -- see `expect_bytes()` above. The comments name
+  # the characters those octets spell.
+  expect_bytes(p("http://a\u00e9b/")$host,             # "a\u00e9b"
+               as.raw(c(0x61, 0xC3, 0xA9, 0x62)))
+  expect_bytes(p("http://\u4e2d\u6587.com/")$host,     # "\u4e2d\u6587.com"
+               as.raw(c(0xE4, 0xB8, 0xAD, 0xE6, 0x96, 0x87,
+                        0x2E, 0x63, 0x6F, 0x6D)))
+  expect_bytes(p("http://u\u00e9x@example.com/")$user, # "u\u00e9x"
+               as.raw(c(0x75, 0xC3, 0xA9, 0x78)))
   # A lone continuation byte is not valid UTF-8 -> parse error, in EVERY
   # locale. This is the locale-invariance pin, held here by construction.
   lone <- function(byte) rawToChar(as.raw(byte))
@@ -166,8 +187,14 @@ test_that("host and userinfo take raw high bytes only as well-formed UTF-8", {
   expect_null(p(paste0("http://u", lone(0x80L), "x@example.com/")))
   # Percent-escapes decode to the same test: valid UTF-8 passes, a lone byte
   # does not.
-  expect_identical(p("http://a%C3%A9b/")$host, "a\u00e9b")
+  expect_bytes(p("http://a%C3%A9b/")$host,             # "a\u00e9b"
+               as.raw(c(0x61, 0xC3, 0xA9, 0x62)))
   expect_null(p("http://a%80b/"))
+  # The bytes come back UNDECLARED: the parser slices the input and never
+  # re-marks an encoding. Pinned because a mark is precisely what made the
+  # comparisons above locale-dependent when they were written as literals.
+  expect_identical(Encoding(p("http://a\u00e9b/")$host), "unknown")
+  expect_identical(Encoding(p("http://a%C3%A9b/")$host), "unknown")
 })
 
 test_that("IPv4 normalization is reproduced, including its refusals", {
