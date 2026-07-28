@@ -76,7 +76,7 @@ test_that("rfc3986 rejects a host byte NO production admits", {
   # in none of unreserved / pct-encoded / sub-delims, so no `reg-name`
   # production admits it and this was never a concept divergence: it was the
   # RURL-pfewxbhb coverage asymmetry, the generic grammar gate binding only
-  # where rurl owned the parser (`file:`) and not on the libcurl route. The
+  # where rurl owned the parser (`file:`) and not on the web route. The
   # audited RFC oracle (RURL-nknytzxz) records `failure` for this input, and
   # the independent ABNF referee in test-external-url-vectors.R rejects it too.
   expect_identical(get_parse_status("http://a|b/", url_standard = "rfc3986"),

@@ -14,7 +14,7 @@ test_that("whatwg uses last at-sign as authority host delimiter", {
 test_that("rfc3986 rejects a repeated raw at-sign instead of recovering", {
   # RE-POINTED by RURL-qrfrvmkg. This used to assert that the rfc3986 selector
   # recovers host=example.com / user=username%40%40%40 -- the RURL-zqhgezuq
-  # last-"@" repair, which encodes the excess "@" bytes so libcurl can parse
+  # last-"@" repair, which encodes the excess "@" bytes so the parser can read
   # the authority. That repair is CORRECT under whatwg (the WHATWG parser
   # genuinely takes the last "@") and is asserted above; under rfc3986 it was
   # laundering an input the grammar has no production for. Both `userinfo` and
@@ -204,10 +204,11 @@ test_that("rfc3986 general empty-host-with-port behavior is unchanged", {
 # ---------------------------------------------------------------------------
 # WHATWG userinfo charset acceptance (RURL-micalqvh, half (a)).
 #
-# libcurl refuses an authority whose userinfo carries any of 30 ASCII code
+# The web parser refuses an authority whose userinfo carries any of 30 ASCII
+# code
 # points -- SPACE (0x20), the C0 controls (0x00-0x1F) and DEL (0x7F) -- so rows
 # WHATWG parses were rejected outright. Every one of the 30 is in the WHATWG
-# userinfo percent-encode set, so the encoded spelling written before curl sees
+# userinfo percent-encode set, so the encoded spelling written before the parse
 # the string IS what WHATWG stores; no restore step exists or is needed.
 #
 # These tests cover ACCEPTANCE ONLY. The wider userinfo percent-encode set
@@ -346,10 +347,10 @@ test_that("newly accepted userinfo rows report the credential diagnostics", {
 #
 # The opaque parser computed the authority's userinfo -- the WHATWG
 # host-missing rule reads it -- and then dropped it from its return list, so
-# every general-routed row reported NA credentials while the libcurl route
+# every general-routed row reported NA credentials while the web route
 # reported them exactly. It now splits at the first ":" per the WHATWG
 # authority state, which also lets the userinfo percent-encode set apply here
-# on the same terms as the libcurl route.
+# on the same terms as the web route.
 # ---------------------------------------------------------------------------
 
 test_that("the general route splits userinfo into user and password", {
@@ -420,7 +421,7 @@ test_that("a mailto: user stays a recipient local-part, not a userinfo", {
   expect_identical(res$password, NA_character_)
 })
 
-test_that("the libcurl route's credentials are unchanged", {
+test_that("the web route's credentials are unchanged", {
   # The special-scheme route always split, so nothing about it moves.
   res <- safe_parse_urls("http://u:p:q@ex.com/", url_standard = "whatwg")
   expect_identical(res$user, "u")

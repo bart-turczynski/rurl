@@ -81,7 +81,7 @@ test_that("safe_parse_urls() agrees row-for-row with safe_parse_url()", {
   }
 })
 
-# T2 (RURL-yuozrhop) correctness property: with curl parsed raw
+# T2 (RURL-yuozrhop) correctness property: with components parsed raw
 # (decode = FALSE, params = FALSE), the raw components round-trip the input
 # byte-for-byte. For URLs with a scheme + host + path + query and no
 # default-port / userinfo / fragment weirdness,

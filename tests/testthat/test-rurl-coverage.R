@@ -201,9 +201,9 @@ test_that("safe_parse_url handles NA from stringi ip detection", {
 test_that("safe_parse_url handles an empty host from the parse engine", {
   # The empty-host branch is defensive and UNREACHABLE through real input --
   # `.parse_web_url_one()` rejects an empty authority outright -- so the only
-  # way to exercise it is to stub the engine. (Before RURL-robgajml this
-  # stubbed `curl::curl_parse_url` in curl's namespace; the seam it targets is
-  # now rurl's own, which is the whole point.)
+  # way to exercise it is to stub the engine. It used to stub the external
+  # parser in ITS namespace; the seam it targets is rurl's own now, which is
+  # the whole point of RURL-robgajml.
   ns <- asNamespace("rurl")
   orig <- get(".parse_web_url_one", envir = ns)
   was_locked <- bindingIsLocked(".parse_web_url_one", ns)
@@ -417,7 +417,7 @@ test_that("encode_path_segments handles empty and multi-segment paths", {
   # Empty-segment behavior: "" stays "", character(0) recomposes to "".
   expect_equal(rurl:::._encode_path_segments(""), "")
   expect_equal(rurl:::._encode_path_segments("/"), "/")
-  # Every segment is escaped by the single vectorized curl_escape() call.
+  # Every segment is escaped by the single vectorized .pct_escape() call.
   expect_equal(rurl:::._encode_path_segments("/a b/c d"), "/a%20b/c%20d")
 })
 

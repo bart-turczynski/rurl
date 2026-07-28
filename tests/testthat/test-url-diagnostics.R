@@ -215,7 +215,7 @@ test_that("the general-only L5 facts stay dormant under web acceptance", {
 
 test_that("WHATWG-generic L5 facts fire under web + whatwg (RURL-sgjzbqzk)", {
   # invalid-credentials / invalid-URL-unit gate on the interpreting standard,
-  # not acceptance -- so they fire on the pre-existing web/libcurl path under
+  # not acceptance -- so they fire on the pre-existing web route under
   # url_standard = "whatwg" (no scheme_acceptance = "general" needed).
   web2 <- get_url_diagnostics("http://user@ex.com/%zz", url_standard = "whatwg")
   expect_true("invalid-credentials" %in% web2)

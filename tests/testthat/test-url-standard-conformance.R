@@ -132,12 +132,12 @@ test_that("PRD §9.3 required regression assertions hold", {
   )
 })
 
-# --- RURL-cdjnhnvf: WHATWG "ends in a number" hosts that libcurl leaves as
+# --- RURL-cdjnhnvf: WHATWG "ends in a number" hosts the web parser leaves as
 # reg-names (mixed reg-name/number, hex/octal final labels, trailing-dot forms,
 # >4 parts) must reject under whatwg -- not slip through as warning-invalid-tld.
 # rfc3986/NULL keep the reg-name (RFC 3986 has no numeric-host rule).
 
-test_that("WHATWG rejects obfuscated numeric hosts libcurl leaves literal", {
+test_that("WHATWG rejects obfuscated numeric hosts left literal", {
   bucket_a <- c(
     "http://foo.09", "http://foo.0x4", "http://0x1.2.3.4.5",
     "http://0x1.2.3.4.5.", "http://0x100.2.3.4.", "http://1.2.3.08",
@@ -191,11 +191,12 @@ test_that("get_parse_status/domain/tld/subdomain honor the standard (AC #8)", {
 })
 
 # --- RURL-dxwxeamq / ADR 0009: WHATWG host-charset shim ----------------------
-# libcurl's host allowed-set is narrower than WHATWG's; it rejects 15 ASCII
-# code points WHATWG keeps in the host. Under whatwg the shim accepts them (curl
+# The web parser's host allowed-set is narrower than WHATWG's; it rejects 15
+# ASCII code points WHATWG keeps in the host. Under whatwg the shim accepts
+# them (the parser
 # parses a filler-substituted host for structure; rurl restores the true host).
 # RFC 3986 uses the same restore seam for its literal reg-name sub-delims;
-# NULL keeps curl's stricter charset.
+# NULL keeps the parser's stricter charset.
 
 test_that("host-charset shim accepts selector-valid literal host bytes", {
   gap <- c("!", "\"", "$", "&", "'", "(", ")", "*",
@@ -245,7 +246,7 @@ test_that("host-charset shim accepts selector-valid literal host bytes", {
       )
     }
 
-    # NULL: curl's stricter charset is inherited unchanged.
+    # NULL: the parser's stricter charset is inherited unchanged.
     expect_true(
       is.na(get_clean_url(u, url_standard = NULL)),
       label = paste("NULL selector drops", ch)
@@ -272,7 +273,7 @@ test_that("host-charset shim excludes % and does not widen the forbidden set", {
 
 test_that("host-charset shim is scoped to the host, not path/query/fragment", {
   # A gap byte outside the authority is ordinary content: not shimmed, and the
-  # host (clean, curl-accepted) parses normally with no shim diagnostic.
+  # host (clean, parser-accepted) parses normally with no shim diagnostic.
   for (u in c("http://example.com/a'b", "http://example.com/p?q=a'b",
               "http://example.com/p#a'b")) {
     expect_identical(get_host(u, url_standard = "whatwg"), "example.com",

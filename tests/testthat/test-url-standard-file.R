@@ -1,6 +1,6 @@
 # Tests for file:// support (RURL-rutsdflg, epic RURL-apxhgjhf). WHATWG treats
 # file as a special scheme; RFC 3986 admits it as an ordinary registered
-# hierarchical scheme. rurl supports the hostless forms libcurl can parse:
+# hierarchical scheme. rurl supports the plain hostless forms:
 # file:///... and file://localhost/... (localhost collapses to empty host).
 
 test_that("file URLs parse under both standard profiles", {
@@ -37,10 +37,11 @@ test_that("file URLs compose with accessors and scheme classification", {
   expect_identical(get_scheme_class(u, url_standard = "whatwg"), "special")
 })
 
-test_that("legacy and RFC file forms are parsed in-tree, not by libcurl", {
+test_that("legacy and RFC file forms are parsed by the in-tree overlay", {
   # These two inputs are the epic's known-divergent pair (RURL-gxqdmpcp): they
-  # returned "error" on Linux/macOS and "ok" on Windows from the SAME libcurl
-  # call, because libcurl's file: handling is a BUILD property. They are now
+  # returned "error" on Linux/macOS and "ok" on Windows from the SAME external
+  # call, because that engine's file: handling was a BUILD property. They are
+  # now
   # decided by the in-tree RFC 8089 overlay, so the answer is the same on every
   # platform. This test previously asserted the macOS half of that divergence.
   urls <- c("file://example.com/path", "file:///c:/Windows/System32")
@@ -58,7 +59,7 @@ test_that("legacy and RFC file forms are parsed in-tree, not by libcurl", {
     get_clean_url(urls),
     c("file://example.com/path", "file:///c:/Windows/System32")
   )
-  # The drive-letter path keeps its leading slash. Windows libcurl returned
+  # The drive-letter path keeps its leading slash. The Windows engine returned
   # path="c:/Windows/System32", which re-parses with host=c: -- one reason not
   # to adopt the Windows answer wholesale.
   expect_identical(get_path(urls)[2L], "/c:/Windows/System32")

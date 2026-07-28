@@ -482,8 +482,8 @@ test_that("Equivocal URLs paper divergences pin to the documented set", {
   # audited oracle (RURL-nknytzxz) records `failure` on both rows -- "\" is in
   # none of unreserved / pct-encoded / sub-delims / pchar, so no production
   # admits it. Option A was never what the STANDARD says; it was what the
-  # PERMISSIVE parsers (urllib, uri-js, php, curl) do, and rurl reproduced it
-  # only because the generic gate did not bind on the libcurl route. The
+  # PERMISSIVE parsers (urllib, uri-js, php and others) do, and rurl reproduced
+  # it only because the generic gate did not bind on the web route. The
   # equivocation is still demonstrated -- one profile resolves a host, the other
   # refuses the string -- but the rfc3986 profile now answers as a STRICT RFC
   # 3986 parser (Ruby's URI::RFC3986_Parser), not as a lenient one.
