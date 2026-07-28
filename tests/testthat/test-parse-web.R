@@ -11,13 +11,13 @@
 # corpora, all at zero differences) and then frozen here by hand. The sweep is
 # how they were found; this file is what holds them.
 
-p <- function(url, last = FALSE) {
-  rurl:::.parse_web_url_one(url, last_at_userinfo = last)
+p <- function(url, last = FALSE, pct = "narrow") {
+  rurl:::.parse_web_url_one(url, last_at_userinfo = last, host_pct = pct)
 }
 
 # Compact fingerprint of one parse, so a whole rule reads as one table.
-fp <- function(url, last = FALSE) {
-  r <- p(url, last)
+fp <- function(url, last = FALSE, pct = "narrow") {
+  r <- p(url, last, pct)
   if (is.null(r)) {
     return("REJECT")
   }
@@ -210,6 +210,66 @@ test_that("the host is percent-decoded, then validated", {
   # DEL is the ONE byte whose pre- and post-decode verdicts differ: rejected
   # written literally, kept when written as an escape.
   expect_identical(p("http://ho%7Fst/")$host, "ho\u007fst")
+})
+
+# `host_pct` (RURL-rgjpcbuk). The three settings differ on TWO things at once,
+# and the pair is the whole design: which decoded bytes are ADMITTED, and how
+# the admitted host is SPELLED. Validation always runs on the fully decoded
+# host -- a "/" is a "/" however it is written -- so a spelling rule can never
+# widen acceptance. That separation is what the pre-parse mask could not
+# express: masking a triplet to change the spelling also stopped every OTHER
+# triplet in the same host from being judged at all.
+test_that("host_pct = 'wide' admits the code points WHATWG keeps in a host", {
+  # Same code point, both spellings, same verdict -- the RURL-rgjpcbuk report.
+  expect_identical(p("http://ex.com%60x/", pct = "wide")$host, "ex.com`x")
+  expect_identical(p("http://ex.com%21x/", pct = "wide")$host, "ex.com!x")
+  expect_identical(p("http://ex.com%7Bx/", pct = "wide")$host, "ex.com{x")
+  # ...and "narrow" still refuses it, so the widening is the dial's alone.
+  expect_null(p("http://ex.com%60x/"))
+  # Only the 15. A forbidden domain code point rejects however it is written.
+  expect_null(p("http://a%2Fb/", pct = "wide")) # "/"
+  expect_null(p("http://a%25b/", pct = "wide")) # "%"
+  expect_null(p("http://a%01b/", pct = "wide")) # C0
+  # The LITERAL gap character is still rejected here: the raw-token check is
+  # untouched, so ADR 0009's shim still owns that spelling (deletion 1).
+  expect_null(p("http://ex.com`x/", pct = "wide"))
+})
+
+test_that("host_pct = 'keep' decodes only the unreserved triplets", {
+  # RFC 3986 section 6.2.2.2: unreserved decodes, everything else stands.
+  expect_identical(p("http://a%2Eb/", pct = "keep")$host, "a.b")
+  expect_identical(p("http://a%41b/", pct = "keep")$host, "aAb")
+  expect_identical(p("http://a%7Eb/", pct = "keep")$host, "a~b")
+  expect_identical(p("http://ex.com%60x/", pct = "keep")$host, "ex.com%60x")
+  expect_identical(p("http://ho%7Fst/", pct = "keep")$host, "ho%7Fst")
+  # Section 6.2.2.1: the retained triplet's hex is uppercased.
+  expect_identical(p("http://ex.com%7bx/", pct = "keep")$host, "ex.com%7Bx")
+  # A percent-encoded non-ASCII host keeps its source spelling rather than
+  # becoming raw UTF-8 -- the shape that makes this dial visible in practice.
+  expect_identical(p("http://a%C3%A9b.com/", pct = "keep")$host, "a%C3%A9b.com")
+  # Judged decoded all the same: these reject exactly as under "wide".
+  expect_null(p("http://a%2Fb/", pct = "keep"))
+  expect_null(p("http://a%01b/", pct = "keep"))
+  expect_null(p("http://a%00b/", pct = "keep"))
+  expect_null(p("http://a%C3b/", pct = "keep")) # invalid UTF-8 once decoded
+  # Malformed "%" is a parse error under every setting.
+  expect_null(p("http://a%zz/", pct = "keep"))
+  expect_null(p("http://a%2/", pct = "keep"))
+})
+
+test_that("host_pct changes the host alone, never the other components", {
+  u <- "http://u%60v:p%60w@ex.com%60x:8080/a%60b?q%60=1#f%60g"
+  # userinfo/path/query/fragment are byte-identical across the settings; only
+  # `host` moves. The mask this replaces reached them by construction.
+  rest <- function(pct) {
+    r <- p(u, pct = pct)
+    paste(r$scheme, r$port, r$path, r$query, r$fragment, r$user, r$password)
+  }
+  expect_identical(rest("wide"), rest("keep"))
+  expect_identical(rest("wide"), "http 8080 /a%60b q%60=1 f%60g u%60v p%60w")
+  expect_identical(p(u, pct = "wide")$host, "ex.com`x")
+  expect_identical(p(u, pct = "keep")$host, "ex.com%60x")
+  expect_null(p(u))
 })
 
 test_that("host code points outside libcurl's set are rejected", {

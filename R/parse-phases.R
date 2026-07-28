@@ -566,15 +566,6 @@
   tryCatch(utils::URLdecode(host), error = function(e) "\u0001")
 }
 
-# Render an RFC 3986 host the way the profile decodes it, EXCEPT that triplets
-# encoding a C0 control or DEL stay encoded (uppercased per section 6.2.2.1).
-# RFC 3986 section 6.2.2.2 permits decoding only unreserved octets; a decoded
-# control byte in the host makes the serialized URL un-re-parseable and hides
-# the control behind a clean-looking host (RURL-savatsuc). Every other triplet
-# keeps the established decode contract, so IDNA presentation still sees real
-# code points. A private-use sentinel parks the retained triplets across the
-# decode; it cannot collide, because a literal U+E000 reaches this host as its
-# own percent-triplet, never as the bare code point.
 # Uppercase the hex digits of every percent-triplet, leaving all other
 # characters alone (RFC 3986 section 6.2.2.1). Unlike
 # `.rfc_unreserved_normalize` this does NOT decode unreserved triplets -- it is
@@ -584,42 +575,19 @@
   .gsub_decodable("%([0-9a-f]{2})", "%\\U\\1", x, perl = TRUE)
 }
 
-.rfc_host_retain_controls <- function(host) {
-  sentinel <- intToUtf8(0xE000L)
-  m <- gregexpr("%[0-9A-Fa-f]{2}", host, perl = TRUE)
-  matches <- regmatches(host, m)[[1]]
-  codes <- strtoi(substring(matches, 2L), base = 16L)
-  is_ctrl <- codes <= 31L | codes == 127L
-  if (!any(is_ctrl)) {
-    return(.whatwg_percent_decode_host(host))
-  }
-  retained <- .ascii_toupper(matches[is_ctrl])
-  parked <- matches
-  parked[is_ctrl] <- sentinel
-  regmatches(host, m) <- list(parked)
-  decoded <- .whatwg_percent_decode_host(host)
-  for (triplet in retained) {
-    decoded <- sub(sentinel, triplet, decoded, fixed = TRUE)
-  }
-  decoded
-}
-
-# Host shim (RURL-dxwxeamq, ADR 0009; extended by RURL-rgjpcbuk and
-# RURL-dnddogce). The web parser's host handling is too eager for selector mode
-# in two
-# ways:
+# Host shim (RURL-dxwxeamq, ADR 0009; extended by RURL-dnddogce). WHATWG
+# accepts 15 LITERAL ASCII code points that the web parser rejects in a host.
+# The shim replaces those bytes 1:1 with filler so the parser can read the
+# structure, then restores the true host before the host model runs. RFC 3986
+# uses the same seam for the 11 literal reg-name sub-delims it permits in
+# section 3.2.2.
 #
-# * WHATWG accepts 15 literal ASCII code points that the web parser rejects in
-#   a host. The shim replaces those bytes 1:1 with filler so the parser can
-#   parse structure, then restores the true host before the host model runs.
-#   RFC 3986 uses the same seam for the 11 literal reg-name sub-delims it
-#   permits in section 3.2.2.
-# * The web parser percent-decodes host triplets before validation. That
-#   rejects the
-#   encoded spelling of the same selector-valid gap bytes, such as `%60`. The
-#   shim masks those host percent-triplets as three filler letters (`aaa`), then
-#   restores the profile-correct host spelling: WHATWG percent-decoded, RFC
-#   unreserved-decoded while preserving the encoded gap triplet.
+# It used to mask host PERCENT-TRIPLETS as well, because the parser decoded
+# them before validating and so rejected the encoded spelling of those same
+# code points (`%60`). That half is gone (RURL-rgjpcbuk / RURL-ezhzpkhg
+# deletion 2): decode order is a parser property, and `.parse_web_url_one()`
+# now owns it via `host_pct`. Only the literal mask is left, and it goes when
+# ADR 0009 is superseded and `.WEB_HOST_ALLOWED_BYTES` widens natively.
 #
 # The replacement is length- and delimiter-preserving, so the parser returns
 # byte-identical scheme/userinfo/port/path/query/fragment; only `$host` is a
@@ -710,16 +678,19 @@
   has_pct <- .grepl_decodable("%[0-9A-Fa-f]{2}", host, perl = TRUE)
   invalid_pct <- .grepl_decodable("%(?![0-9A-Fa-f]{2})", host, perl = TRUE)
 
+  # `model_host` is the host SPELLING this profile stores, and the restore below
+  # substitutes it wholesale. So it has to reproduce the parser's own
+  # `host_pct` rendering (R/parse-web.R) for the triplets as well as carrying
+  # the literal gap characters the parser never saw -- otherwise masking a
+  # literal "!" would also silently un-decode every `%7E` beside it.
   model_host <- host
   pct_ok <- eligible & has_pct & !invalid_pct
-  pct_decoded_host <- host
   if (any(pct_ok)) {
-    pct_decoded_host[pct_ok] <- vapply(
-      host[pct_ok], .whatwg_percent_decode_host, character(1),
-      USE.NAMES = FALSE
-    )
     if (.is_whatwg(url_standard)) {
-      model_host[pct_ok] <- pct_decoded_host[pct_ok]
+      model_host[pct_ok] <- vapply(
+        host[pct_ok], .whatwg_percent_decode_host, character(1),
+        USE.NAMES = FALSE
+      )
     } else {
       model_host[pct_ok] <- vapply(
         host[pct_ok], .rfc_unreserved_normalize, character(1),
@@ -734,58 +705,42 @@
   literal_gap_rfc3986 <- eligible &
     stringi::stri_detect_regex(host, .RFC3986_REG_NAME_SUB_DELIM_CP)
   literal_gap_rfc3986[is.na(literal_gap_rfc3986)] <- FALSE
+  # Reads `model_host`, so it covers the ENCODED spelling too -- `%60` and "`"
+  # both surface `host-charset-shimmed` (ADR 0006/0009), which is what the
+  # diagnostic documents ("the host carries one of the 15") and what the
+  # `host-pct-gap-backtick-whatwg` conformance fixture pins. That stays true
+  # now that the encoded spelling is the parser's business: the flag is a
+  # property of the resulting host, not of which layer admitted it.
   decoded_gap <- eligible &
     stringi::stri_detect_regex(model_host, .WHATWG_HOST_CHARSET_SHIM_CP)
   decoded_gap[is.na(decoded_gap)] <- FALSE
-  pct_gap <- eligible & pct_ok &
-    stringi::stri_detect_regex(pct_decoded_host, .WHATWG_HOST_CHARSET_SHIM_CP)
-  pct_gap[is.na(pct_gap)] <- FALSE
 
-  # The web parser decodes every host percent-triplet, including ones RFC 3986
-  # section 6.2.2.2 forbids decoding. For a C0 control or DEL that produces a
-  # `final_host` carrying a raw control byte, which the serializer then renders
-  # verbatim -- output that no longer re-parses, and that makes an encoded
-  # control look like a clean host (RURL-savatsuc). Route those rows through
-  # the mask/restore seam so the control stays an uppercase triplet.
-  #
-  # Scoped to DEL, and to rows carrying no C0 triplet. DEL is the only control
-  # octet the parser decodes and then ADMITS; every C0 octet is rejected once
-  # decoded, and masking would route it past that rejection, turning a
-  # serialization fix into an acceptance widening. So a host mixing the two
-  # keeps the rejection. Non-control triplets are deliberately left alone --
-  # the RFC host profile decodes them by established contract, and
-  # `host_encoding = "idna"` needs the real code points, not triplets.
-  pct_ctrl <- eligible & pct_ok &
-    .grepl_decodable("%7[Ff]", host, perl = TRUE) &
-    !.grepl_decodable("%[01][0-9A-Fa-f]", host, perl = TRUE)
-  if (!.is_whatwg(url_standard) && any(pct_ctrl)) {
-    model_host[pct_ctrl] <- vapply(
-      host[pct_ctrl], .rfc_host_retain_controls, character(1),
-      USE.NAMES = FALSE
-    )
-  }
-
-  pct_mask <- if (.is_whatwg(url_standard)) {
-    pct_ok & decoded_gap
-  } else {
-    pct_gap | pct_ctrl
-  }
   literal_mask <- if (.is_whatwg(url_standard)) {
     literal_gap_whatwg
   } else {
     literal_gap_rfc3986
   }
-  restore <- eligible & (pct_mask | literal_mask)
+  restore <- eligible & literal_mask
   restore[is.na(restore)] <- FALSE
+  # NOT `return(no_op)`: `host_charset_shimmed` is a property of the resulting
+  # host, and a host whose only gap code point arrived ENCODED (`%60`) now
+  # needs no mask at all -- the parser admits the triplet itself. Returning the
+  # bare no-op here silently stopped the diagnostic firing for exactly the rows
+  # RURL-rgjpcbuk added it for.
   if (!any(restore)) {
-    return(no_op)
+    return(utils::modifyList(
+      no_op,
+      list(host_charset_shimmed = .is_whatwg(url_standard) & decoded_gap)
+    ))
   }
 
-  # Filler swaps preserve length: `%HH` -> `aaa`, literal gaps -> `a`.
+  # Filler swaps preserve length: literal gaps -> `a`. Percent-triplets are NOT
+  # filled any more (RURL-rgjpcbuk); the parser reads them itself under
+  # `host_pct`. That mask was the widest thing in this function -- it blanked
+  # EVERY triplet in a host, not just the one that made the row eligible, so
+  # `http://a%60b%2Fc.com/` reached the parser as `aaaabaaac.com` and the "/"
+  # was never judged at all.
   filled_host <- host
-  filled_host[pct_mask] <- gsub(
-    "%[0-9A-Fa-f]{2}", "aaa", filled_host[pct_mask], perl = TRUE
-  )
   literal_fill_cp <- if (.is_whatwg(url_standard)) {
     .WHATWG_HOST_CHARSET_SHIM_CP
   } else {
@@ -2363,6 +2318,23 @@
   }
 
   subset <- final_host[elig]
+  # Under `rfc3986` the host IDENTITY preserves its source spelling: section
+  # 6.2.2.2 lets only unreserved triplets decode, so `a%C2%ADb` stays written
+  # that way (`host_pct = "keep"`, R/parse-web.R). IDNA and Unicode are
+  # PRESENTATIONS of that identity, and both need real code points -- UTS-46
+  # has nothing to say about the characters "%", "C", "2". So decode here,
+  # where the rendering is chosen, rather than in the parse, where it would
+  # change what the host IS (the ADR 0011 separation).
+  #
+  # Scoped to `rfc3986` precisely because that is the only profile that leaves
+  # a triplet standing; `whatwg` and the no-selector default have already
+  # decoded the host once, and decoding again would strip a LEVEL of encoding
+  # (`a%2560b` -> `a%60b` -> "a`b") rather than reveal one.
+  if (identical(url_standard, "rfc3986")) {
+    subset <- vapply(subset, .whatwg_percent_decode_host, character(1),
+      USE.NAMES = FALSE
+    )
+  }
   if (host_encoding == "idna") {
     if (.is_whatwg(url_standard)) {
       encoded <- punycoder::host_normalize(
