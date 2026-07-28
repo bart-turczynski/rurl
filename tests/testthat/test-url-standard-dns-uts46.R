@@ -89,7 +89,7 @@ test_that("domain-std3-violation fires for non-LDH ASCII outside WHATWG set", {
   # Superset behavior (T5 Open Question 2): use_std3 also catches classic
   # STD3/LDH violations WHATWG itself does not forbid at the host-code-point
   # level (underscore, tilde). "+"/"*"/"$" are also caught by use_std3 (per
-  # T5's characterization), but libcurl itself rejects them as "Bad hostname"
+  # T5's characterization), but the web parser itself rejects them as hosts
   # before the URL ever reaches the diagnostics seam, so they cannot be
   # exercised end-to-end through get_url_diagnostics() and are omitted here.
   for (ch in c("_", "~")) {

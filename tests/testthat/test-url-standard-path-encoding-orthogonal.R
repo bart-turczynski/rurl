@@ -132,7 +132,7 @@ test_that("whatwg profile serializes query and fragment encode sets", {
   )
 })
 
-test_that("whatwg accepts WPT-valid path query fragment bytes curl rejects", {
+test_that("whatwg accepts WPT-valid path query fragment bytes web rejects", {
   urls <- c(
     paste0("http://www.google.com/foo?bar=baz# ", intToUtf8(0x00BB)),
     paste0("http://foo.bar/baz?qux#foo", intToUtf8(0x08), "bar"),

@@ -90,7 +90,7 @@ test_that("rfc3986 rejects a raw backslash rather than carrying it", {
   # rfc3986 with the backslash carried through verbatim, identical to the
   # no-selector baseline. It no longer does: "\" is in none of unreserved /
   # pct-encoded / sub-delims / pchar, so no RFC 3986 production admits it, and
-  # the uniform generic-URI gate now binds on the libcurl route too. Declining
+  # the uniform generic-URI gate now binds on the web route too. Declining
   # to REWRITE the byte (this file's subject) and declining to ACCEPT the
   # string (the grammar's subject) are different claims; only the first is a
   # backslash-handling decision.

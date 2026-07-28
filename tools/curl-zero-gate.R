@@ -94,6 +94,79 @@ ALLOWLIST <- list(
     reason = paste("the libcurl-version determinism harness (RURL-gxqdmpcp)",
                    "measures libcurl itself and is reference material, not",
                    "package runtime")
+  ),
+  # --- the in-tree replacements (RURL-robgajml) ------------------------------
+  # These four are the files that REPLACED libcurl. Their whole content is a
+  # reproduction of measured libcurl behaviour, and every constant, refusal and
+  # spelling in them is justified by what libcurl did. Sweeping the references
+  # would not remove a dependency -- it would delete the provenance of the
+  # rules and leave a pile of unexplained magic numbers. Naming what they
+  # reproduce is what makes them auditable.
+  list(
+    path = "R/parse-web.R",
+    reason = paste("the in-tree web/special-scheme parser that replaced the",
+                   "libcurl seam; every rule in it is a measured libcurl",
+                   "behaviour and is cited as such")
+  ),
+  list(
+    path = "tests/testthat/test-parse-web.R",
+    reason = paste("the literal oracle for R/parse-web.R; it records which",
+                   "libcurl behaviour each literal was frozen from, and the",
+                   "literals ARE the oracle -- no live curl call")
+  ),
+  list(
+    path = "R/percent-coding.R",
+    reason = paste("the in-tree percent-coding helpers that replaced",
+                   "curl_escape/curl_unescape; the byte-exactness contract",
+                   "and its two documented deviations are stated against",
+                   "libcurl")
+  ),
+  list(
+    path = "tests/testthat/test-percent-coding.R",
+    reason = paste("the literal oracle for R/percent-coding.R; same reason",
+                   "as test-parse-web.R -- literals only, no live curl call")
+  ),
+  # --- provenance of imported data -------------------------------------------
+  # `curl -fsSL <url> -o <file>` is the SHELL COMMAND that fetched a pinned
+  # upstream fixture. It is a reproducibility record, not a package
+  # dependency: rewriting it would falsify how the data actually arrived.
+  list(
+    path = "tests/testthat/fixtures/oracle-provenance.json",
+    reason = paste("records the shell command that imported each pinned",
+                   "upstream oracle; a provenance record must not be",
+                   "rewritten")
+  ),
+  list(
+    path = "inst/bench/wpt-url-cases.json",
+    reason = "same: the recorded import command for the pinned WPT fixture"
+  ),
+  list(
+    path = "inst/bench/make-wpt-fixture.py",
+    reason = "emits that import command, so it must contain it verbatim"
+  ),
+  list(
+    path = "tools/oracle-provenance-gate.R",
+    reason = paste("validates those import_command strings, so its fixtures",
+                   "contain one")
+  ),
+  # --- curl as a MEASURED SUBJECT, not a dependency --------------------------
+  list(
+    path = "inst/bench/parser-disagreement.R",
+    reason = paste("the cross-implementation comparison harness; curl is one",
+                   "of the PARTICIPANTS being measured (alongside adaR and",
+                   "urltools), the same standing tools/determinism has")
+  ),
+  list(
+    path = "tests/testthat/fixtures/external-url-vectors.csv",
+    reason = paste("published research data recording what OTHER parsers do",
+                   "with each vector; curl is one of the columns and the",
+                   "record is factual, not a rurl behaviour")
+  ),
+  # --- the release rule that requires all of the above -----------------------
+  list(
+    path = "tools/release-rule-check.R",
+    reason = paste("polices the 'no CRAN until curl-free' release rule",
+                   "(RCON-10); like this gate, it must name what it checks")
   )
 )
 
@@ -425,9 +498,29 @@ check_clean_room <- function(root) {
   # start would find nothing and report a bare exit code -- and the check
   # directory does not outlive this process, so that log is unreadable
   # afterwards. Read it while it exists.
+  # Two WARNINGs are MANUFACTURED BY THIS GATE and must not count against it.
+  # The clean room builds and checks with `--no-build-vignettes` -- deliberately,
+  # because rebuilding vignettes would drag the whole rmarkdown/knitr toolchain
+  # into the poisoned library and test THAT rather than rurl. R CMD check then
+  # always reports "files in 'vignettes' ... WARNING" and "package vignettes ...
+  # WARNING" for a package that HAS vignettes, because `inst/doc` is absent by
+  # construction. Both reproduce with no shim at all, so treating them as
+  # clean-room failures made C7 unpassable for this package no matter what.
+  #
+  # The tolerance is deliberately NARROW -- these two check names only, and only
+  # at WARNING. Any other WARNING, any ERROR, and every "Status:" line still
+  # count. `--no-build-vignettes` does NOT skip "checking running R code from
+  # vignettes", so a vignette that loaded curl would still be caught there.
+  vignette_artifact <- paste0(
+    "^\\* checking (files in .vignettes.|package vignettes) \\.\\.\\. WARNING$"
+  )
   errors <- if (file.exists(log)) {
     lines <- readLines(log, warn = FALSE)
-    trimws(grep("(ERROR|WARNING)\\s*$|^Status:", lines, value = TRUE))
+    hits <- trimws(grep("(ERROR|WARNING)\\s*$|^Status:", lines, value = TRUE))
+    hits <- hits[!grepl(vignette_artifact, hits)]
+    # The trailing "Status: N WARNINGs" line summarizes what was just filtered,
+    # so drop it when nothing but the artifacts remains.
+    if (all(grepl("^Status:", hits))) character(0) else hits
   } else {
     character(0)
   }
@@ -599,18 +692,32 @@ self_test <- function() {
   root <- mk(clean_desc, rd = "\\name{f}\n\\note{uses curl}\n")
   expect("C5 fails on curl in an Rd file", identical(rule(root, "C5"), FALSE))
 
+  # Materialize EVERY allowlisted path in a fixture tree, each with (or
+  # without) a curl hit. Driven off ALLOWLIST itself rather than a hardcoded
+  # pair, so adding a row cannot silently break these two cases -- which is
+  # exactly what it used to do. A row whose path has no extension is treated as
+  # a directory, matching `check_allowlist()`'s dir/file handling.
+  materialize_allowlist <- function(root, content) {
+    for (a in ALLOWLIST) {
+      p <- file.path(root, a$path)
+      if (grepl("\\.[A-Za-z0-9]+$", basename(a$path))) {
+        dir.create(dirname(p), recursive = TRUE, showWarnings = FALSE)
+        writeLines(content, p)
+      } else {
+        dir.create(p, recursive = TRUE, showWarnings = FALSE)
+        writeLines(content, file.path(p, "d.R"))
+      }
+    }
+  }
+
   # 12. C0 -- a stale allowlist row (path exists, no hit left) is a violation.
   root <- mk(clean_desc)
-  dir.create(file.path(root, "tools", "determinism"), recursive = TRUE)
-  writeLines("x <- 1\n", file.path(root, "tools", "determinism", "d.R"))
-  writeLines("x <- 1\n", file.path(root, "tools", "curl-zero-gate.R"))
+  materialize_allowlist(root, "x <- 1\n")
   expect("C0 fails when an allowlisted path has no curl left",
          identical(rule(root, "C0"), FALSE))
 
   # 13. C0 -- a live allowlist row passes, and C6 honors it.
-  writeLines("# measures libcurl versions\n",
-             file.path(root, "tools", "determinism", "d.R"))
-  writeLines("# forbids curl\n", file.path(root, "tools", "curl-zero-gate.R"))
+  materialize_allowlist(root, "# measures libcurl versions\n")
   expect("C0 passes when every allowlisted path still has a hit",
          identical(rule(root, "C0"), TRUE))
   expect("C6 does not flag an allowlisted path",

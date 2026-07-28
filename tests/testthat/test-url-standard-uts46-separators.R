@@ -2,9 +2,10 @@
 # (RURL-odsmwsxu, epic RURL-moselrwp). UTS-46 domain-to-ASCII maps three
 # alternative full-stop code points to ASCII "." before a host is split into
 # labels: U+3002 (ideographic), U+FF0E (fullwidth), U+FF61 (halfwidth
-# ideographic). rurl hands the raw string to libcurl, which does not apply
+# ideographic). rurl hands the raw string to the web parser, which does not
+# apply
 # UTS-46, so under url_standard = "whatwg" rurl maps these to "." in the
-# AUTHORITY before curl. That lets a Unicode-dot host coerce through the IPv4
+# AUTHORITY pre-parse. That lets a Unicode-dot host coerce through the IPv4
 # parser (an SSRF-relevant loopback/metadata obfuscation) and normalizes IDN
 # separators. RFC 3986 has no UTS-46 mapping, so rfc3986 / no selector keep the
 # bytes literal.

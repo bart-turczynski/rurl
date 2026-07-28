@@ -183,8 +183,9 @@ such as the `clean_url`.
 `rurl` builds on prior art (notably
 [urltools](https://github.com/Ironholds/urltools)) and follows published
 standards throughout — RFC 3986, the WHATWG URL Standard, the Public Suffix
-List, and UTS #46 for internationalized hosts — while leaning on `curl`,
-`stringi`, and the sibling `punycoder` and `pslr` packages.
+List, and UTS #46 for internationalized hosts — while leaning on `stringi`
+and the sibling `punycoder` and `pslr` packages. URL parsing itself is
+in-tree.
 
 The full list of credits — prior art, dependencies, the standards this code
 implements, and the data sources it serves — is in

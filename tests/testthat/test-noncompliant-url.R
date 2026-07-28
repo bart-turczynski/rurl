@@ -13,8 +13,8 @@ test_that("D1: scheme-less non-host-like input is error, not fabricated", {
   }
 })
 
-test_that("D1: nonsense is consistent regardless of a space tripping curl", {
-  # The historical inconsistency: "hello world" errored (curl rejects the
+test_that("D1: nonsense is consistent regardless of a space in the input", {
+  # The historical inconsistency: "hello world" errored (the parser rejects the
   # space) but "asdfghjkl" fabricated a URL. Now both are error.
   expect_identical(
     unname(get_parse_status(c("hello world", "asdfghjkl"))),

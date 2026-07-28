@@ -120,7 +120,7 @@ test_that("encoded-reserved-path-byte fires on the whatwg profile", {
 
 test_that("without a selector the historical path_encoding behavior is intact",
   {
-    # libcurl uppercases percent-triplet hex by default, independent of
+    # The web parser uppercases percent-triplet hex by default, independent of
     # url_standard; the dot segment is left literal (no dot resolution without
     # an explicit path_normalization).
     expect_identical(get_path("http://ex.com/%2e%2e/a"), "/%2E%2E/a")

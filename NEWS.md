@@ -2,6 +2,34 @@
 
 ### Breaking changes
 
+- **`rurl` no longer depends on `curl`.** URL parsing is now entirely in-tree.
+  `curl` is removed from `Imports`, so installing `rurl` no longer pulls it in
+  and no longer requires the system `libcurl` it links against.
+
+  The last route still handed to `curl::curl_parse_url()` — http/https/ftp/ftps
+  (plus ws/wss under `url_standard = "whatwg"`) — is now parsed by
+  `R/parse-web.R`. Every other route already had an in-tree parser.
+
+  **Output is unchanged.** This was verified as a behaviour-preserving engine
+  swap before the dependency was dropped: 106,898 inputs were compared field by
+  field against `curl_parse_url()` — a structural grid, a per-octet sweep of
+  every URL position, an IPv6/IPv4/percent-escape fuzz corpus, the WPT
+  `urltestdata` corpus and every URL literal in the package's own tests —
+  including encoding marks, at **zero differences**. The full test suite, the
+  WPT suite, and the FSSS and `url_standard` conformance harnesses are all
+  unchanged.
+
+  This is flagged breaking only because a declared dependency disappears: code
+  that relied on `rurl` to load `curl` transitively must now declare `curl`
+  itself. Nothing in `rurl`'s own behaviour changed.
+
+  One improvement falls out of it. A host or userinfo carrying invalid UTF-8
+  used to be accepted or rejected depending on the session locale, because
+  `curl_parse_url()`'s R binding threw under a UTF-8 locale but returned raw
+  bytes under `LC_ALL=C`; `rurl` pinned the UTF-8 outcome with an explicit
+  check bolted onto the seam. The in-tree parser enforces that boundary by
+  construction, so locale invariance there is no longer compensation.
+
 - **`canonical_join()` now warns when a legacy presentation dial is forwarded
   through `...`.** `canonical_join()` matches on the canonicalized presentation
   string (`clean_url`), so a presentation or cleaning dial passed through `...`

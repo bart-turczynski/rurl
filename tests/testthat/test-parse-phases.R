@@ -50,7 +50,8 @@ test_that(".parse_web_url_one returns NULL on unparseable input", {
 })
 
 test_that(".extract_raw_components takes the raw query verbatim", {
-  # T2 (RURL-yuozrhop): with params = FALSE, curl surfaces the raw query
+  # T2 (RURL-yuozrhop): the web parser never decodes, so it surfaces the raw
+  # query
   # string directly, so .extract_raw_components takes it byte-for-byte (a bare
   # key keeps no trailing "=") rather than rebuilding it from decoded params.
   prepared <- "http://example.com/p?a=1&b=2&flag"
@@ -61,7 +62,8 @@ test_that(".extract_raw_components takes the raw query verbatim", {
 })
 
 test_that(".extract_raw_path_vec preserves dot segments and percent case", {
-  # Raw path comes from the prepared input, not curl's normalized $path, so RFC
+  # Raw path comes from the prepared input, not the parser's normalized $path,
+  # so RFC
   # 3986 dot segments (and encoded %2e forms) survive to path_normalization;
   # percent-triplet case is preserved for the later presentation phase.
   ext <- function(prepared) {
@@ -72,11 +74,12 @@ test_that(".extract_raw_path_vec preserves dot segments and percent case", {
   expect_equal(ext("http://ex.com/a/%2e%2e/b"), "/a/%2e%2e/b")
   expect_equal(ext("http://ex.com/a%2fb"), "/a%2fb")
   expect_equal(ext("http://ex.com/a//b"), "/a//b")
-  # Empty-authority special schemes are reinterpreted by curl as host-bearing
-  # URLs. Keep curl's coherent path so the promoted host is not duplicated.
+  # Empty-authority special schemes are reinterpreted by the parser as
+  # host-bearing URLs. Keep its coherent path so the promoted host is not
+  # duplicated.
   expect_equal(ext("http:///evil.com"), "/")
   expect_equal(ext("http:///a/../b"), "/b")
-  # No path component -> fall back to curl's canonical "/".
+  # No path component -> fall back to the parser's canonical "/".
   expect_equal(ext("http://ex.com"), "/")
   expect_equal(ext("http://ex.com?x=1"), "/")
   # Query/fragment slashes never leak into the path.

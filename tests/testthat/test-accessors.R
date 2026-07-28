@@ -1157,7 +1157,7 @@ test_that("safe_parse_url validates and applies subdomain_levels_to_keep", {
 })
 
 test_that("port is returned as integer and vectorizes without error", {
-  # Regression: curl returns port as character; the parser must coerce so that
+  # Regression: the parse returns port as character; it must be coerced so that
   # scalar, vector, and accessor paths all yield integer / NA_integer_.
   res <- safe_parse_url("http://example.com:8080/path")
   expect_identical(res$port, 8080L)

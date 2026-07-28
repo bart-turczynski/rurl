@@ -102,7 +102,7 @@ test_that("values are decoded before grouping; decode_plus honoured", {
 })
 
 test_that("opaque tokens group by their raw form", {
-  # Malformed %zz (curl upper-cases to %ZZ) is opaque and grouped raw.
+  # Malformed %zz (the parser upper-cases to %ZZ) is opaque and grouped raw.
   res <- query_param_summary(
     c("http://e.com/?a=%zz", "http://e.com/?a=%zz"),
     level = "value"

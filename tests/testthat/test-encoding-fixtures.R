@@ -3,9 +3,10 @@
 # A small, inspectable set of path/query/userinfo cases with EXPLICIT expected
 # outputs (unlike the whole-corpus characterization snapshot, which pins
 # whatever the code currently emits). It documents rurl's intended contract for
-# percent-encoding and path structure and pins it against libcurl drift.
+# percent-encoding and path structure and pins it against engine drift.
 #
-# rurl is an RFC 3986 / curl parser, NOT a WHATWG URL parser. Cases drawn from
+# rurl's default profile is an RFC 3986 parser, NOT a WHATWG URL parser. Cases
+# drawn from
 # the WHATWG URL test data where rurl *intentionally* diverges (encoded-dot
 # resolution, backslash-as-separator) are kept and annotated, so a future
 # accidental behavior change is caught rather than silently "conforming".
@@ -82,7 +83,7 @@ test_that("raw query fidelity honors the decode flag", {
   expect_identical(
     get_query("http://ex.com/p?x=a%2Fb&y=1", decode = TRUE), "x=a/b&y=1"
   )
-  # Lowercase hex in the query is uppercased too (libcurl, section 6.2.2.1).
+  # Lowercase hex in the query is uppercased too (section 6.2.2.1).
   expect_identical(
     get_query("http://ex.com/p?x=a%2fb", decode = FALSE), "x=a%2Fb"
   )
@@ -202,8 +203,8 @@ test_that("a percent-decoded file: host is read as UTF-8 in any locale", {
 })
 
 test_that("a host that percent-decodes to invalid UTF-8 is rejected", {
-  # libcurl decodes the host even under `decode = FALSE`, and
-  # `curl_parse_url()` then throws in a UTF-8 session but returns raw bytes
+  # The historical engine decoded the host unconditionally, and its R binding
+  # then threw in a UTF-8 session but returned raw bytes
   # under LC_ALL=C -- where those bytes went on to break `pslr`'s regex ops.
   for (std in list(NULL, "rfc3986", "whatwg")) {
     expect_identical(

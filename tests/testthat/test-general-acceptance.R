@@ -196,7 +196,8 @@ test_that("a mailto: with a real // authority keeps the host it parsed", {
 test_that("tab/LF/CR are stripped for non-special schemes too", {
   # RURL-lsgdeisl. WHATWG's step 1 removes every ASCII tab/LF/CR from the input
   # before anything is parsed, for ALL schemes. That step lived only in the
-  # libcurl preparation path, so rows routed to the general parser were handed
+  # web-route preparation path, so rows routed to the general parser were
+  # handed
   # the raw string: a tab was percent-encoded into the host and an LF was
   # rejected outright.
   args <- list(url_standard = "whatwg", scheme_policy = "require",
