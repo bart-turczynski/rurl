@@ -1214,12 +1214,12 @@
   if (!identical(scheme_acceptance, "general")) {
     return(rfc_file)
   }
-  curl_scheme <- if (.is_whatwg(url_standard)) {
+  web_route_scheme <- if (.is_whatwg(url_standard)) {
     .WHATWG_SPECIAL_SCHEMES
   } else {
     c("http", "https", "ftp", "ftps")
   }
-  gp <- has_scheme & !host_port & !(scheme_lc %in% curl_scheme)
+  gp <- has_scheme & !host_port & !(scheme_lc %in% web_route_scheme)
   gp[is.na(gp)] <- FALSE
   gp | rfc_file
 }

@@ -818,16 +818,16 @@
 # prepares a curl-safe spelling of ONLY the post-authority components; Stage A
 # uses it as a fallback after the original curl parse fails, so already-accepted
 # readable paths keep their historical raw spelling under path_encoding="keep".
-.sanitize_whatwg_pqf_for_curl_vec <- function(url, url_standard) {
+.sanitize_whatwg_pqf_vec <- function(url, url_standard) {
   if (!.is_whatwg(url_standard)) {
     return(url)
   }
-  vapply(url, .sanitize_whatwg_pqf_for_curl_one, character(1),
+  vapply(url, .sanitize_whatwg_pqf_one, character(1),
     USE.NAMES = FALSE
   )
 }
 
-.sanitize_whatwg_pqf_for_curl_one <- function(url) {
+.sanitize_whatwg_pqf_one <- function(url) {
   if (is.na(url) || !nzchar(url)) {
     return(url)
   }
@@ -1195,7 +1195,7 @@
 # keep/none; a scheme-less input that is not host-shaped (D1); or an IP attempt
 # that is not a canonical literal (D2/D3)) and a `scheme_less_userinfo` flag
 # (D5). An input's supported scheme is decided against .SUPPORTED_SCHEMES.
-.prepare_urls_for_curl_vec <- function(url,
+.prepare_urls_for_parse_vec <- function(url,
                                        protocol_handling,
                                        scheme_relative_handling,
                                        url_standard = NULL,
@@ -1406,7 +1406,7 @@
   # "@" no longer blocks curl from parsing an otherwise valid host.
   shim <- .shim_whatwg_host_charset_vec(url_to_parse, url_standard)
   url_to_parse <- shim$url
-  whatwg_pqf_url <- .sanitize_whatwg_pqf_for_curl_vec(
+  whatwg_pqf_url <- .sanitize_whatwg_pqf_vec(
     url_to_parse, url_standard
   )
 
@@ -1454,11 +1454,11 @@
 }
 
 # Phase 1 (scalar wrapper): returns the per-URL list, or NULL when the URL must
-# be rejected. Delegates to .prepare_urls_for_curl_vec().
-.prepare_url_for_curl <- function(url,
+# be rejected. Delegates to .prepare_urls_for_parse_vec().
+.prepare_url_for_parse <- function(url,
                                   protocol_handling,
                                   scheme_relative_handling) {
-  cols <- .prepare_urls_for_curl_vec(
+  cols <- .prepare_urls_for_parse_vec(
     url, protocol_handling, scheme_relative_handling
   )
   if (cols$rejected[1L]) {
@@ -1475,31 +1475,6 @@
   )
 }
 
-# Phase 2a: parse the prepared URL with curl, returning NULL on failure.
-# `decode = FALSE, params = FALSE` are load-bearing: with curl's defaults
-# (`decode = TRUE, params = TRUE`) curl percent-decodes the path/query/fragment/
-# userinfo before rurl sees them (so `path_encoding = "keep"` could not keep,
-# and `%2F` structurally merged path segments) and splits the query into
-# decoded params (losing the raw query byte-for-byte). Parsing raw lets rurl own
-# every encoding decision downstream. curl never percent-decodes the host.
-# curl is scalar-only, so the engine calls this once per URL in its single loop.
-#
-# The host validity check is a LOCALE-INVARIANCE gate, not a policy gate.
-# libcurl percent-decodes the host even under `decode = FALSE`, so
-# `http://example.com%80/` yields a host whose bytes (`example.com\x80`) are not
-# valid UTF-8 -- and `curl_parse_url()` itself then behaves differently by
-# session locale: its R-side `gsub(perl = TRUE)` percent-hex pass THROWS
-# ("input string 1 is invalid UTF-8") in a UTF-8 session but returns the raw
-# bytes under `LC_ALL=C`. rurl therefore accepted under `LC_ALL=C` a host it
-# rejects everywhere else, and those bytes -- declared UTF-8 at the host
-# chokepoint, as they must be -- later blew up inside `pslr`'s regex ops. Making
-# the reject explicit here pins curl's UTF-8-session outcome (a parse failure,
-# `NULL`) for every locale: a percent-decoded host that is not valid UTF-8 is
-# not a host any profile can carry. Only the HOST is affected -- libcurl leaves
-# path/query/fragment/userinfo percent-encoded, so `/%80` is untouched.
-.parse_with_curl <- function(url_to_parse) {
-  .parse_web_url_one(url_to_parse)
-}
 
 # Uppercase the two hex digits of every %XX percent-triplet, leaving the rest of
 # the string untouched (`%2f` -> `%2F`). This keeps the historical no-selector
@@ -1530,7 +1505,7 @@
 }
 
 # Recover the raw request path from the prepared URL string (the exact bytes
-# curl was handed), rather than `parsed_curl$path`. libcurl's `$path` applies
+# curl was handed), rather than `parsed_web$path`. libcurl's `$path` applies
 # two normalizations even under `decode = FALSE`: it uppercases percent-hex and
 # resolves RFC 3986 dot segments, INCLUDING percent-encoded ones
 # (`/a/%2e%2e/b` -> `/b`). Both are profile/presentation decisions, so raw
@@ -1550,9 +1525,9 @@
 # the authority is followed directly by `?`, `#`, or end-of-string there is no
 # path, so fall back to curl's `$path` (the canonical "/" trailing-slash
 # expects).
-.extract_raw_path_vec <- function(prepared, curl_path) {
-  out <- curl_path
-  ok <- !is.na(prepared) & !is.na(curl_path)
+.extract_raw_path_vec <- function(prepared, engine_path) {
+  out <- engine_path
+  ok <- !is.na(prepared) & !is.na(engine_path)
   if (!any(ok)) {
     return(out)
   }
@@ -1565,7 +1540,7 @@
   has_path <- !is.na(first) &
     stringi::stri_sub(body, first, first) == "/" &
     !empty_authority
-  raw <- curl_path[ok]
+  raw <- engine_path[ok]
   if (any(has_path)) {
     bp <- body[has_path]
     start <- first[has_path]
@@ -1581,20 +1556,20 @@
 }
 
 # Phase 2b: pull the raw components used downstream out of the curl result.
-# With `params = FALSE` (see .parse_with_curl) `parsed_curl$query` is already
+# With `params = FALSE` (see .parse_with_curl) `parsed_web$query` is already
 # the raw (percent-encoded) query string, so it is taken verbatim; downstream
 # parsers split on raw "&"/"=" then decode per-pair. scheme/host as-is. The path
 # is re-derived from the prepared input by .extract_raw_path_vec() (see there)
 # so dot segments survive to `path_normalization`.
-.extract_raw_components <- function(parsed_curl, prepared) {
+.extract_raw_components <- function(parsed_web, prepared) {
   list(
-    scheme = parsed_curl$scheme %||% NA_character_,
-    host = parsed_curl$host %||% NA_character_,
+    scheme = parsed_web$scheme %||% NA_character_,
+    host = parsed_web$host %||% NA_character_,
     path = .extract_raw_path_vec(
-      prepared, parsed_curl$path %||% NA_character_
+      prepared, parsed_web$path %||% NA_character_
     ),
     # .blank_to_na(): present-but-empty query "" -> NA (libcurl-version stable).
-    query = .blank_to_na(parsed_curl$query %||% NA_character_)
+    query = .blank_to_na(parsed_web$query %||% NA_character_)
   )
 }
 
@@ -2008,7 +1983,7 @@
 #
 # libcurl already coerces numeric IPv4 forms itself (2130706433 -> 127.0.0.1,
 # 192.168.010.1 -> 192.168.8.1) and keeps out-of-range / over-arity forms
-# literal (256.1.1.1, 1.2.3.4.5). So `curl_host` is the coerced spelling and
+# literal (256.1.1.1, 1.2.3.4.5). So `engine_host` is the coerced spelling and
 # `input_host` (the original pre-curl token) is the un-coerced one. For an
 # IPv4 attempt (`is_attempt`):
 #   - rfc3986: parse faithfully as a reg-name -- restore the original token and
@@ -2021,11 +1996,12 @@
 # Non-attempt hosts (ordinary names, IPv6, missing) pass through untouched.
 # Returns updated `host`, `is_ip`, and a `fatal` mask the caller folds into the
 # null-row set.
-.apply_host_standard_model_vec <- function(input_host, curl_host, is_ip_curl,
-                                           url_standard, is_attempt) {
-  n <- length(curl_host)
-  host <- curl_host
-  is_ip <- is_ip_curl
+.apply_host_standard_model_vec <- function(input_host, engine_host,
+                                           is_ip_engine, url_standard,
+                                           is_attempt) {
+  n <- length(engine_host)
+  host <- engine_host
+  is_ip <- is_ip_engine
   fatal <- rep(FALSE, n)
   if (is.null(url_standard)) {
     return(list(host = host, is_ip = is_ip, fatal = fatal))
@@ -2049,9 +2025,9 @@
     # bypassed the gate and were wrongly accepted with warning-invalid-tld.
     att <- .host_ends_in_number_vec(input_host)
     if (any(att)) {
-      curl_canonical <- .detect_ip_host_vec(curl_host)
-      is_ip[att] <- curl_canonical[att]
-      fatal[att] <- !curl_canonical[att]
+      coerced_canonical <- .detect_ip_host_vec(engine_host)
+      is_ip[att] <- coerced_canonical[att]
+      fatal[att] <- !coerced_canonical[att]
     }
 
     # WHATWG forbidden host/domain code points (RURL-jfuqpwvh). A special-scheme
@@ -3198,8 +3174,8 @@
 }
 
 # Phase 12 (vector): classify the parse outcome (ok / ok-ftp / warning-* /
-# error / ok-scheme-relative). `curl_ok` is TRUE for rows curl parsed (the
-# scalar wrapper passes !is.null(parsed_curl)).
+# error / ok-scheme-relative). `web_ok` is TRUE for rows curl parsed (the
+# scalar wrapper passes !is.null(parsed_web)).
 #
 # The status is now DERIVED, not decided here: Phase 12 computes the three
 # independent verdict layers (R/verdicts.R) and projects them through pi. That
@@ -3215,7 +3191,7 @@
 # -- an opaque or arbitrary-scheme host has no PSL domain, so it must NOT
 # become warning-no-tld. Empty under "web" (no general row exists there), so
 # this is a pure no-op for the default posture.
-.derive_parse_status_vec <- function(curl_ok, final_host, is_ip_host, tld,
+.derive_parse_status_vec <- function(web_ok, final_host, is_ip_host, tld,
                                      domain, protocol_handling, final_scheme,
                                      looks_like_protocol,
                                      original_has_allowed_scheme,
@@ -3227,7 +3203,7 @@
                                      is_general = NULL,
                                      scheme_less_userinfo = NULL) {
   .project_parse_status_vec(.derive_verdict_layers_vec(
-    curl_ok = curl_ok,
+    web_ok = web_ok,
     final_host = final_host,
     is_ip_host = is_ip_host,
     tld = tld,
@@ -3247,7 +3223,7 @@
 }
 
 # Phase 12 (scalar wrapper): delegates to .derive_parse_status_vec().
-.derive_parse_status <- function(parsed_curl, final_host, is_ip_host, tld,
+.derive_parse_status <- function(parsed_web, final_host, is_ip_host, tld,
                                  domain, protocol_handling, final_scheme,
                                  looks_like_protocol,
                                  original_has_allowed_scheme,
@@ -3256,7 +3232,7 @@
                                  scheme_relative_handling,
                                  rfc3986_path_rootless = NULL) {
   .derive_parse_status_vec(
-    curl_ok = !is.null(parsed_curl),
+    web_ok = !is.null(parsed_web),
     final_host = final_host,
     is_ip_host = is_ip_host,
     tld = tld,
@@ -3322,7 +3298,7 @@
 # Phase 13 (scalar wrapper): extracts port/fragment/user/password from the curl
 # object, then delegates to .assemble_parse_result_vec().
 .assemble_parse_result <- function(original_input_url, scheme_output,
-                                   host_output, parsed_curl, path_output,
+                                   host_output, parsed_web, path_output,
                                    raw_query, domain, tld,
                                    domain_ascii, domain_unicode,
                                    tld_ascii, tld_unicode, is_ip_host,
@@ -3332,13 +3308,13 @@
     original_url = original_input_url,
     scheme_output = scheme_output,
     host_output = host_output,
-    port = suppressWarnings(as.integer(parsed_curl$port %||% NA_integer_)),
+    port = suppressWarnings(as.integer(parsed_web$port %||% NA_integer_)),
     path_output = path_output,
     # .blank_to_na(): present-but-empty raw components "" -> NA (see utils.R).
     raw_query = .blank_to_na(raw_query %||% NA_character_),
-    fragment = .blank_to_na(parsed_curl$fragment %||% NA_character_),
-    user = .blank_to_na(parsed_curl$user %||% NA_character_),
-    password = .blank_to_na(parsed_curl$password %||% NA_character_),
+    fragment = .blank_to_na(parsed_web$fragment %||% NA_character_),
+    user = .blank_to_na(parsed_web$user %||% NA_character_),
+    password = .blank_to_na(parsed_web$password %||% NA_character_),
     domain = domain,
     tld = tld,
     domain_ascii = domain_ascii,

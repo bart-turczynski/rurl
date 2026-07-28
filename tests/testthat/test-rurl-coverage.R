@@ -198,19 +198,24 @@ test_that("safe_parse_url handles NA from stringi ip detection", {
   expect_type(parsed, "list")
 })
 
-test_that("safe_parse_url handles empty host from curl_parse_url", {
-  ns <- asNamespace("curl")
-  orig <- get("curl_parse_url", envir = ns)
-  was_locked <- bindingIsLocked("curl_parse_url", ns)
-  if (was_locked) unlockBinding("curl_parse_url", ns)
+test_that("safe_parse_url handles an empty host from the parse engine", {
+  # The empty-host branch is defensive and UNREACHABLE through real input --
+  # `.parse_web_url_one()` rejects an empty authority outright -- so the only
+  # way to exercise it is to stub the engine. (Before RURL-robgajml this
+  # stubbed `curl::curl_parse_url` in curl's namespace; the seam it targets is
+  # now rurl's own, which is the whole point.)
+  ns <- asNamespace("rurl")
+  orig <- get(".parse_web_url_one", envir = ns)
+  was_locked <- bindingIsLocked(".parse_web_url_one", ns)
+  if (was_locked) unlockBinding(".parse_web_url_one", ns)
   withr::defer(
     {
-      assign("curl_parse_url", orig, envir = ns)
-      if (was_locked) lockBinding("curl_parse_url", ns)
+      assign(".parse_web_url_one", orig, envir = ns)
+      if (was_locked) lockBinding(".parse_web_url_one", ns)
     }
   )
 
-  assign("curl_parse_url", function(url, ...) {
+  assign(".parse_web_url_one", function(url, ...) {
     if (identical(url, "http://empty-host")) {
       return(list(scheme = "http", host = "", path = ""))
     }

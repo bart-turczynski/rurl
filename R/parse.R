@@ -368,7 +368,6 @@
 #'   or uses a disallowed scheme.
 #' @seealso \code{\link{safe_parse_urls}}
 #' @importFrom utils tail
-#' @importFrom curl curl_parse_url
 #' @keywords internal
 #' @export
 #' @examples
@@ -961,7 +960,7 @@ safe_parse_urls <- function(url,
 # host-shaped input, orthogonal to protocol_handling (presentation) and
 # url_standard (interpretation). "infer" (default) fabricates "http://" for
 # scheme-less host-shaped input (today's behavior, byte-for-byte). "require"
-# rejects it (strict / pure-parser posture). See .prepare_urls_for_curl_vec().
+# rejects it (strict / pure-parser posture). See .prepare_urls_for_parse_vec().
 .opt_scheme_policy <- c("infer", "require")
 # scheme_acceptance (ADR 0012 D3): the scheme-*acceptance* axis, orthogonal to
 # protocol_handling (presentation) and url_standard (interpretation). "web"
@@ -1675,7 +1674,7 @@ safe_parse_urls <- function(url,
   }
 
   # Stage B: derive the 14 presented columns from the unique Stage A rows plus
-  # the presentation options. Runs on every call (never cached); curl_ok is the
+  # the presentation options. Runs on every call (never cached); web_ok is the
   # complement of the null rows.
   cols_uniq <- ._parse_stage_b_vec(a_uniq, uniq, !null_uniq, opts)
   # The layered verdicts ride out of Stage B on an attribute (never a column --
@@ -1728,7 +1727,7 @@ safe_parse_urls <- function(url,
   # Phase 1: scheme detection and curl-input preparation. url_standard is passed
   # so the host-shape gate parses numeric IPv4 attempts faithfully instead of
   # rejecting them under a selector (RURL-luwvkwhd).
-  prep <- .prepare_urls_for_curl_vec(
+  prep <- .prepare_urls_for_parse_vec(
     urls, opts$protocol_handling, opts$scheme_relative_handling,
     opts$url_standard, opts$scheme_policy, opts$scheme_acceptance,
     opts$fixup_posture
@@ -1740,7 +1739,7 @@ safe_parse_urls <- function(url,
   # posture routes OUT of libcurl. A pure no-op under "web" (empty mask, NA
   # columns), so `general_route` is empty and every libcurl-path vector below
   # stays bit-identical -- byte-identity by construction. These rows are cut
-  # from curl_parseable and their components installed directly (mirroring the
+  # from web_parseable and their components installed directly (mirroring the
   # whatwg_file / rfc3986_path_rootless blocks). Rows the gate/parser rejects
   # (gen$ok = FALSE) simply never join parse_ok, so they present as errors.
   #
@@ -1763,27 +1762,27 @@ safe_parse_urls <- function(url,
   parseable <- valid & !prep$rejected
   rfc3986_path_rootless <- parseable & prep$rfc3986_path_rootless
   whatwg_file <- parseable & prep$whatwg_file
-  curl_parseable <- parseable & !rfc3986_path_rootless & !whatwg_file &
+  web_parseable <- parseable & !rfc3986_path_rootless & !whatwg_file &
     !general_route
   parsed_list <- vector("list", n)
-  parse_idx <- which(curl_parseable)
+  parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
-      prep$url_to_parse[parse_idx], .parse_with_curl
+      prep$url_to_parse[parse_idx], .parse_web_url_one
     )
   }
-  curl_ok <- curl_parseable & !vapply(parsed_list, is.null, logical(1))
+  web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
   parsed_from_pqf_fallback <- rep(FALSE, n)
   fallback_idx <- which(
-    curl_parseable & !curl_ok & prep$whatwg_pqf_url != prep$url_to_parse
+    web_parseable & !web_ok & prep$whatwg_pqf_url != prep$url_to_parse
   )
   if (length(fallback_idx) > 0L) {
     parsed_list[fallback_idx] <- lapply(
-      prep$whatwg_pqf_url[fallback_idx], .parse_with_curl
+      prep$whatwg_pqf_url[fallback_idx], .parse_web_url_one
     )
     fallback_ok <- !vapply(parsed_list[fallback_idx], is.null, logical(1))
     parsed_from_pqf_fallback[fallback_idx[fallback_ok]] <- TRUE
-    curl_ok[fallback_idx[fallback_ok]] <- TRUE
+    web_ok[fallback_idx[fallback_ok]] <- TRUE
   }
   file_parse <- .parse_whatwg_file_urls_vec(
     prep$whatwg_file_input[whatwg_file], prep$backslash_rewritten[whatwg_file]
@@ -1792,7 +1791,7 @@ safe_parse_urls <- function(url,
   file_ok[whatwg_file] <- file_parse$ok
   # General-acceptance rows that parsed successfully (incl. the RFC gate).
   general_ok <- general_route & gen$ok
-  parse_ok <- curl_ok | rfc3986_path_rootless | file_ok | general_ok
+  parse_ok <- web_ok | rfc3986_path_rootless | file_ok | general_ok
   # UNIFORM RFC 3986 generic-URI gate (RURL-qrfrvmkg, adopting RURL-pfewxbhb
   # Option (a)). Applied at the ONE point every route has already converged on,
   # so the profile is a property of the SELECTED STANDARD rather than of which
@@ -1824,22 +1823,22 @@ safe_parse_urls <- function(url,
   # sanitized so curl could parse the structure, curl's `$host` is a
   # placeholder; overwrite it with the profile-correct host BEFORE IP detection
   # and the host model, so every downstream gate validates the real host.
-  restore <- curl_ok & prep$restore_host_shimmed
+  restore <- web_ok & prep$restore_host_shimmed
   if (any(restore)) {
     raw_host[restore] <- prep$shimmed_true_host[restore]
   }
   # Path is re-derived from the prepared input (not curl's normalized $path) so
   # dot segments survive to path_normalization; see .extract_raw_path_vec().
-  curl_path <- vapply(parsed_list, function(p) {
+  engine_path <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$path %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
-  raw_path <- curl_path
-  if (any(curl_ok)) {
+  raw_path <- engine_path
+  if (any(web_ok)) {
     prepared_for_components <- prep$url_to_parse
     prepared_for_components[parsed_from_pqf_fallback] <-
       prep$whatwg_pqf_url[parsed_from_pqf_fallback]
-    raw_path[curl_ok] <- .extract_raw_path_vec(
-      prepared_for_components[curl_ok], curl_path[curl_ok]
+    raw_path[web_ok] <- .extract_raw_path_vec(
+      prepared_for_components[web_ok], engine_path[web_ok]
     )
   }
   # query/fragment/userinfo are raw pass-throughs; .blank_to_na() maps a
@@ -2097,7 +2096,7 @@ safe_parse_urls <- function(url,
 
 # Stage B (vector): the presentation transform (RURL-dkwrebdt). A pure,
 # never-cached function of the cached Stage A columns (`a`), the per-row
-# original URL, `curl_ok` (the complement of Stage A's null rows), and the
+# original URL, `web_ok` (the complement of Stage A's null rows), and the
 # validated presentation options. Runs the option-dependent phases -- path
 # normalization (3), subdomain-level trimming (8), host encoding (9), case
 # policy (10), clean-URL assembly (11), parse-status (12), and result assembly
@@ -2106,7 +2105,7 @@ safe_parse_urls <- function(url,
 # are applied by the caller). Every option EXCLUDED from the cache key is
 # consumed here, so switching presentation profiles re-runs only this cheap
 # stage.
-._parse_stage_b_vec <- function(a, original_url, curl_ok, opts) {
+._parse_stage_b_vec <- function(a, original_url, web_ok, opts) {
   is_ip_host <- a$is_ip_host
 
   # Select the domain/TLD spelling exactly as .derive_domain_tld_vec() would for
@@ -2142,7 +2141,7 @@ safe_parse_urls <- function(url,
     # ADR 0012 Layer 4b-2 (RURL-qbnelzku): re-run the pure general parser on the
     # original URL to recover the state kinds Stage A did not thread through the
     # cache (the cache stores only .spu_stage_a_fields). `gp` = the rows Stage A
-    # routed to the posture parser AND that parsed ok (curl_ok is the complement
+    # routed to the posture parser AND that parsed ok (web_ok is the complement
     # of Stage A's null rows). Cheap and deterministic; only the general posture
     # pays for it.
     # Stage A feeds the general parser its WHATWG step-1 stripped input
@@ -2153,7 +2152,7 @@ safe_parse_urls <- function(url,
       .strip_whatwg_control_chars_vec(original_url, opts$url_standard)$url,
       opts$url_standard, opts$scheme_acceptance
     )
-    gp <- gen_b$general_parsed & curl_ok
+    gp <- gen_b$general_parsed & web_ok
     # path_kind / host_kind for eligibility: the L3a classifier proxy for the
     # libcurl (special) rows, the TRUE parser kinds for the general-routed rows.
     pk <- .whatwg_path_kind(is_special_row, a$raw_path)
@@ -2356,7 +2355,7 @@ safe_parse_urls <- function(url,
   # SAME derivation the status came from; the public parse frame is untouched
   # (ADR 0006 -- companion helpers never widen it).
   verdicts <- .derive_verdict_layers_vec(
-    curl_ok = curl_ok,
+    web_ok = web_ok,
     final_host = final_host,
     is_ip_host = is_ip_host,
     tld = tld,
@@ -2411,7 +2410,7 @@ safe_parse_urls <- function(url,
   # ambiguous, email-shaped, scheme-less string: NA clean_url. The accompanying
   # `warning-userinfo` status is no longer stamped here -- it is the L2
   # `warn-userinfo` verdict, projected by pi in Phase 12 above.
-  slu <- a$scheme_less_userinfo & curl_ok
+  slu <- a$scheme_less_userinfo & web_ok
   if (any(slu)) {
     result$clean_url[slu] <- NA_character_
   }
@@ -2444,7 +2443,7 @@ safe_parse_urls <- function(url,
   # .parse_options(); no re-validation here.
 
   # Phase 1: scheme detection and input preparation for curl
-  prep <- .prepare_url_for_curl(
+  prep <- .prepare_url_for_parse(
     url, protocol_handling, scheme_relative_handling
   )
   if (is.null(prep)) {
@@ -2452,11 +2451,11 @@ safe_parse_urls <- function(url,
   }
 
   # Phase 2: parse with curl, then pull out raw components
-  parsed_curl <- .parse_with_curl(prep$url_to_parse)
-  if (is.null(parsed_curl)) {
+  parsed_web <- .parse_web_url_one(prep$url_to_parse)
+  if (is.null(parsed_web)) {
     return(NULL)
   }
-  raw <- .extract_raw_components(parsed_curl, prep$url_to_parse)
+  raw <- .extract_raw_components(parsed_web, prep$url_to_parse)
   raw_host <- .mark_host_utf8(raw$host)
   raw_query <- raw$query
 
@@ -2522,7 +2521,7 @@ safe_parse_urls <- function(url,
 
   # Phase 12: parse-status assignment
   parse_status <- .derive_parse_status(
-    parsed_curl = parsed_curl,
+    parsed_web = parsed_web,
     final_host = final_host,
     is_ip_host = is_ip_host,
     tld = tld,
@@ -2549,7 +2548,7 @@ safe_parse_urls <- function(url,
     original_input_url = original_input_url,
     scheme_output = scheme_output,
     host_output = host_output,
-    parsed_curl = parsed_curl,
+    parsed_web = parsed_web,
     path_output = path_output,
     raw_query = raw_query,
     domain = domain,
