@@ -23,6 +23,7 @@ Collate:
     'query-denylist.R'
     'domain.R'
     'path-query.R'
+    'parse-web.R'
     'parse-phases.R'
     'parse.R'
     'verdicts.R'

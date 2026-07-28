@@ -1498,18 +1498,7 @@
 # not a host any profile can carry. Only the HOST is affected -- libcurl leaves
 # path/query/fragment/userinfo percent-encoded, so `/%80` is untouched.
 .parse_with_curl <- function(url_to_parse) {
-  parsed <- tryCatch(
-    curl::curl_parse_url(url_to_parse, decode = FALSE, params = FALSE),
-    error = function(e) NULL
-  )
-  if (is.null(parsed)) {
-    return(NULL)
-  }
-  host <- parsed$host
-  if (length(host) == 1L && !is.na(host) && !validUTF8(host)) {
-    return(NULL)
-  }
-  parsed
+  .parse_web_url_one(url_to_parse)
 }
 
 # Uppercase the two hex digits of every %XX percent-triplet, leaving the rest of
