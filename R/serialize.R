@@ -76,16 +76,22 @@
 # The host of a userinfo-free authority: an unterminated "[" keeps everything
 # (there is no IP-literal to delimit), a terminated one stops at "]", and any
 # other authority drops the last ":"-introduced run, which is the port.
+#
+# Located AND cut in BYTES (RURL-kmpnbvdl). Shared with the parse-side shim, so
+# both sides of the seam have to survive the same input: an authority captured
+# by stringi arrives DECLARED UTF-8 whatever its octets, and character-indexed
+# slicing throws `invalid multibyte string` on `<80>:80`. Byte indices are also
+# the only ones that agree with the locating scan under `LC_ALL=C`.
 .fsss_host_slice <- function(s) {
   if (startsWith(s, "[")) {
-    close <- regexpr("]", s, fixed = TRUE)
-    return(if (close > 0L) substring(s, 1L, close) else s)
+    close <- .first_byte_index(s, "]")
+    return(if (close > 0L) .byte_substring(s, 1L, close) else s)
   }
-  pos <- gregexpr(":", s, fixed = TRUE)[[1L]]
-  if (pos[1L] == -1L) {
+  pos <- .last_byte_index(s, ":")
+  if (pos == 0L) {
     return(s)
   }
-  substring(s, 1L, as.integer(pos[length(pos)]) - 1L)
+  .byte_substring(s, 1L, pos - 1L)
 }
 
 .fsss_source_lex <- function(url, url_standard) {
@@ -111,19 +117,24 @@
     u <- .rewrite_whatwg_backslashes_vec(u, url_standard)$url
   }
 
+  # Located AND cut in BYTES (RURL-kmpnbvdl), like the authority slice below.
+  # `regexpr()` without `useBytes` WARNS on a source holding invalid octets and
+  # takes a different path per locale to reach it -- silent under `LC_ALL=C`,
+  # noisy under UTF-8 -- which is not a property the conformance oracle should
+  # have, whichever answer it lands on.
   fragment <- rep(NA_character_, n)
   body <- u
-  hash <- regexpr("#", u, fixed = TRUE)
+  hash <- .first_byte_index_vec(u, "#")
   hit <- hash > 0L
-  fragment[hit] <- substring(u[hit], hash[hit] + 1L)
-  body[hit] <- substring(u[hit], 1L, hash[hit] - 1L)
+  fragment[hit] <- .byte_substring_vec(u[hit], hash[hit] + 1L)
+  body[hit] <- .byte_substring_vec(u[hit], 1L, hash[hit] - 1L)
 
   query <- rep(NA_character_, n)
-  qmark <- regexpr("?", body, fixed = TRUE)
+  qmark <- .first_byte_index_vec(body, "?")
   qhit <- qmark > 0L
-  query[qhit] <- substring(body[qhit], qmark[qhit] + 1L)
+  query[qhit] <- .byte_substring_vec(body[qhit], qmark[qhit] + 1L)
   hier <- body
-  hier[qhit] <- substring(body[qhit], 1L, qmark[qhit] - 1L)
+  hier[qhit] <- .byte_substring_vec(body[qhit], 1L, qmark[qhit] - 1L)
 
   # Authority payload: everything after `scheme://` up to the path start. The
   # userinfo is what precedes the LAST "@" in it -- last, not first, because
@@ -145,27 +156,34 @@
   # "." does not match a line terminator and "$" matches before a trailing one,
   # so an authority carrying a raw NEL/LS/PS -- all of which reach here, since
   # the RFC posture strips nothing -- would keep its userinfo and emit it twice.
+  # The position is a BYTE position (RURL-kmpnbvdl). `authority` comes from
+  # `stri_match_first_regex()`, which declares every capture UTF-8 whatever
+  # octets it holds, so a source carrying a stray `<80>` made `substring()`
+  # throw `invalid multibyte string` and took the whole `serialize_url()` call
+  # -- the FSSS conformance oracle -- down with it. Bytes also keep the locate
+  # and the cut in the same unit, which is what makes the slice agree with
+  # itself under `LC_ALL=C`.
   userinfo <- rep(NA_character_, n)
   host <- rep(NA_character_, n)
   has_auth <- !is.na(authority)
   if (any(has_auth)) {
     auth <- authority[has_auth]
     at <- vapply(
-      auth,
-      function(s) {
-        pos <- gregexpr("@", s, fixed = TRUE)[[1L]]
-        if (pos[1L] == -1L) 0L else as.integer(pos[length(pos)])
-      },
-      integer(1), USE.NAMES = FALSE
+      auth, .last_byte_index, integer(1), ch = "@", USE.NAMES = FALSE
     )
     slice <- rep(NA_character_, length(auth))
     found <- at > 0L
-    slice[found] <- substring(auth[found], 1L, at[found] - 1L)
+    slice[found] <- vapply(
+      which(found),
+      function(i) .byte_substring(auth[i], 1L, at[i] - 1L),
+      character(1), USE.NAMES = FALSE
+    )
     userinfo[has_auth] <- slice
 
     host[has_auth] <- vapply(
-      substring(auth, at + 1L), .fsss_host_slice, character(1),
-      USE.NAMES = FALSE
+      seq_along(auth),
+      function(i) .fsss_host_slice(.byte_substring(auth[i], at[i] + 1L)),
+      character(1), USE.NAMES = FALSE
     )
   }
 

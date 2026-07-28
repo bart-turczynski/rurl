@@ -3,6 +3,112 @@
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
 
+# --- byte-indexed string slicing (RURL-kmpnbvdl) -----------------------------
+#
+# Authority seams must cut by POSITION on BYTES. `substring()`/`substr()` index
+# NATIVE characters and THROW `invalid multibyte string` on a string that is
+# DECLARED UTF-8 but holds invalid octets -- and that is not a hypothetical
+# input here: `stringi::stri_match_first_regex()` marks every capture UTF-8
+# unconditionally, so slicing an authority captured out of `http://<80>/p`
+# aborted the whole vectorized call, losing every good row in the same batch.
+#
+# Byte indexing also removes the second half of the problem: `gregexpr()` and
+# `stri_locate_*()` report positions in different units from `substring()` once
+# a string is multi-byte and unmarked, so a position taken from one and applied
+# to the other mis-slices under `LC_ALL=C`. Locating and cutting in the SAME
+# unit -- bytes -- is invariant by construction.
+#
+# The encoding DECLARATION is carried across the cut rather than recomputed:
+# these helpers move bytes, they do not reinterpret them.
+
+# 1-based byte index of the last occurrence of a single-byte literal `ch` in
+# `s`, or 0L when absent. `useBytes = TRUE` also suppresses the "input string
+# is invalid UTF-8" warning that the same scan emits without it.
+.last_byte_index <- function(s, ch) {
+  pos <- gregexpr(ch, s, fixed = TRUE, useBytes = TRUE)[[1L]]
+  if (pos[1L] == -1L) 0L else as.integer(pos[length(pos)])
+}
+
+# 1-based byte index of the FIRST occurrence of `ch` in `s`, or 0L when absent.
+.first_byte_index <- function(s, ch) {
+  pos <- regexpr(ch, s, fixed = TRUE, useBytes = TRUE)[1L]
+  if (pos == -1L) 0L else as.integer(pos)
+}
+
+# `substring()` on BYTES: the bytes of `s` from byte `first` to byte `last`
+# inclusive, keeping the input's encoding declaration. Out-of-range indices
+# clamp to "" exactly as `substring()` does.
+.byte_substring <- function(s, first, last = NA_integer_) {
+  b <- charToRaw(s)
+  n <- length(b)
+  if (is.na(last)) {
+    last <- n
+  }
+  first <- max(as.integer(first), 1L)
+  last <- min(as.integer(last), n)
+  out <- if (first > last) "" else rawToChar(b[first:last])
+  Encoding(out) <- Encoding(s)
+  out
+}
+
+# Vector form of `.byte_substring()`. `first`/`last` recycle to `length(s)`;
+# NA input stays NA. Pure-ASCII elements keep the vectorized `substring()` C
+# path -- byte and character indices coincide there, so it is exact -- and only
+# the multi-byte or undecodable elements pay for the per-element cut.
+.byte_substring_vec <- function(s, first, last = NA_integer_) {
+  n <- length(s)
+  first <- rep_len(as.integer(first), n)
+  last <- rep_len(as.integer(last), n)
+  out <- rep(NA_character_, n)
+  present <- !is.na(s)
+  ascii <- present & !grepl("[^\001-\177]", s, perl = TRUE, useBytes = TRUE)
+  if (any(ascii)) {
+    stop_at <- last[ascii]
+    stop_at[is.na(stop_at)] <- .Machine$integer.max
+    out[ascii] <- substring(s[ascii], first[ascii], stop_at)
+  }
+  for (i in which(present & !ascii)) {
+    out[i] <- .byte_substring(s[i], first[i], last[i])
+  }
+  out
+}
+
+# 1-based BYTE index of the first occurrence of `ch` in each element of `s`, or
+# 0L where absent. Vector form of `.first_byte_index()`.
+.first_byte_index_vec <- function(s, ch) {
+  pos <- regexpr(ch, s, fixed = TRUE, useBytes = TRUE)
+  pos[is.na(pos) | pos < 0L] <- 0L
+  as.integer(pos)
+}
+
+# `grepl()` on an UNDECODABLE element: FALSE, quietly and in every locale.
+#
+# A host sliced out of a `stri_match_first_regex()` capture is DECLARED UTF-8
+# whatever its octets. `grepl(perl = TRUE)` on such a string warns
+# ("input string 1 is invalid UTF-8") and yields NA -- which every caller here
+# already folds to FALSE. Skipping those rows keeps that answer and drops the
+# warning, and it also removes a latent locale dependency: on an "unknown"-
+# marked element the same call yields NA under a UTF-8 locale but MATCHES ON
+# BYTES under `LC_ALL=C`, so the fold was only accidentally agreeing.
+#
+# Deliberately NOT `useBytes = TRUE`, which would be the obvious-looking fix
+# and is the wrong one: it would let an ASCII pattern match INSIDE an
+# undecodable host (`%41` in a host that also holds a stray `<80>`), routing
+# that row into percent-decoding and past a rejection it currently gets. At a
+# host seam that is an acceptance WIDENING, which is the one thing this seam
+# must never do silently.
+#
+# "latin1" is exempt because every octet sequence is valid latin1: those
+# elements decode, so they match normally.
+.grepl_decodable <- function(pattern, x, ...) {
+  out <- rep(FALSE, length(x))
+  ok <- !is.na(x) & (validUTF8(x) | Encoding(x) == "latin1")
+  if (any(ok)) {
+    out[ok] <- grepl(pattern, x[ok], ...)
+  }
+  out
+}
+
 # Single source of truth for the WHATWG standard-posture toggle (ADR 0012
 # Layer 0, RURL-dztjlfkc). Every posture-dependent branch tests membership in
 # the WHATWG profile through this predicate instead of an inline
