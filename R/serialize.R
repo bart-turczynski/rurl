@@ -64,10 +64,10 @@
 # `http://h/` both arrive with `raw_query = NA`. `query_kind`/`fragment_kind`
 # are three-valued precisely so a present-but-empty delimiter survives
 # (ADR 0012 D2), so they are read off the source string here. The undivided
-# `userinfo` slice is recovered the same way -- libcurl hands back a `user`/
-# `password` split, and RFC 3986 has no such split to reconstruct from -- and so
-# is the `host` slice, which libcurl percent-decodes and case-folds during the
-# parse (RURL-xkhbhaje).
+# `userinfo` slice is recovered the same way -- the web-route parser hands back
+# a `user`/`password` split, and RFC 3986 has no such split to reconstruct
+# from -- and so is the `host` slice, which that parser percent-decodes and
+# case-folds during the parse (RURL-xkhbhaje).
 #
 # The WHATWG strips (tab/LF/CR removal, then the leading/trailing
 # C0-control-or-space run) are applied only under `whatwg`, matching
@@ -133,8 +133,8 @@
     hier, "^[A-Za-z][A-Za-z0-9+.\\-]*://([^/]*)"
   )[, 2L]
   #
-  # The host slice is recovered here too, and for the same reason: libcurl
-  # percent-decodes and case-folds the host before rurl ever sees it, so Stage
+  # The host slice is recovered here too, and for the same reason: the parse
+  # percent-decodes and case-folds the host before this point, so Stage
   # A's `final_host` cannot answer "which bytes did the source spell here?" --
   # which is exactly what RFC 3986's source-preserving posture emits, and what
   # section 6.2.2.2 normalization must be applied TO rather than after
@@ -276,12 +276,14 @@
     # RFC 3986 has no host-decoding or host-case PARSE step: section 6.2.2.1
     # and 6.2.2.2 are NORMALIZATION rules, which belong to `form =
     # "normalized"` inside the serializer -- where the other four components'
-    # already are -- not to the parse. libcurl performs both anyway, so the
-    # record takes the source spelling instead of `final_host` (RURL-xkhbhaje).
+    # already are -- not to the parse. The web-route parser performs both
+    # anyway, so the record takes the source spelling instead of `final_host`
+    # (RURL-xkhbhaje).
     # Substituted only where the source and the parse AGREE that a host is
     # there: same NA-ness and same emptiness. They disagree when the parse read
-    # a host the authority slice does not hold (`http:///p`, whose host libcurl
-    # reads as `p` out of the path), and swapping one component of a disagreeing
+    # a host the authority slice does not hold (`http:///p`, whose host the
+    # parser reads as `p` out of the path), and swapping one component of a
+    # disagreeing
     # pair while the rest of the record stays Stage A's would emit a string
     # neither of them describes.
     src_host <- lex$host

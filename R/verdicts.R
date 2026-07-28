@@ -154,7 +154,8 @@
   # evaluated its syntax.
   layer1 <- rep("pass", n)
   layer1[!web_ok & !rejected] <- "fail"
-  # A row curl accepted but which resolved no host, in a shape where a host is
+  # A row the parser accepted but which resolved no host, in a shape where a
+  # host is
   # not optional, did not yield a well-formed URL either. Empirically this cell
   # is unreached across the committed corpora; it is handled so pi stays TOTAL.
   layer1[web_ok & !host_present & !host_optional & !rejected] <- "fail"
