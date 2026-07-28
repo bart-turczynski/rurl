@@ -196,6 +196,39 @@ for (sn in names(pct_shapes)) {
   }
 }
 
+# MULTI-TRIPLET SEQUENCES. The block above varies ONE triplet, which cannot
+# express a valid non-ASCII code point at all -- `%C3` alone is invalid UTF-8
+# and rejects for that reason, so a corpus of single triplets says nothing
+# about `%C3%A9`. That is the same conjunction blind spot as the raw-octet
+# block, one level up: here the SECOND triplet is what makes the first one
+# legal. Percent-encoded IDN hosts are the common real-world shape, and they
+# live only in this block.
+pct_seqs <- list(
+  "e-acute"   = "%C3%A9",
+  "cjk"       = "%E4%B8%AD",
+  "astral"    = "%F0%9F%98%80",
+  "lone-c3"   = "%C3",
+  "overlong"  = "%C0%AF",
+  "surrogate" = "%ED%A0%80",
+  "shy"       = "%C2%AD",
+  "replace"   = "%EF%BF%BD",
+  "mixed"     = "%C3%A9%60",
+  "pct-pct"   = "%25%36%30"
+)
+pct_seq_shapes <- list(
+  sq_host   = function(s) paste0("http://a", s, "b.com/p"),
+  sq_only   = function(s) paste0("http://", s, "/p"),
+  sq_3slash = function(s) paste0("http:///a", s, "b.com/p"),
+  sq_port   = function(s) paste0("http://a", s, "b.com:8080/p"),
+  sq_label  = function(s) paste0("http://", s, ".com/p")
+)
+for (qn in names(pct_seqs)) {
+  for (shn in names(pct_seq_shapes)) {
+    corpus <- c(corpus, pct_seq_shapes[[shn]](pct_seqs[[qn]]))
+    labels <- c(labels, sprintf("pctseq:%s:%s", qn, shn))
+  }
+}
+
 # Malformed and case-varied triplets: a "%" that is not followed by two hex
 # digits is a host PARSE ERROR (not a literal "%"), and the hex case must not
 # decide acceptance.
