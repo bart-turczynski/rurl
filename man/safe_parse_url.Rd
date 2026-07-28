@@ -115,7 +115,7 @@ index/default pages. Defaults to "keep".
 
 \item{path_normalization}{How to normalize path structure. Defaults to
 "none". rurl owns dot-segment resolution: the path is read from the input
-verbatim (not from libcurl's pre-normalized path), so \code{"none"} preserves
+verbatim (never from a pre-normalized path), so \code{"none"} preserves
 \code{.} / \code{..} segments (\code{/a/../b} stays \code{/a/../b}) and only
 the settings below change them. Resolution follows RFC 3986 section 5.2.4 and
 acts on \emph{literal} \code{.}/\code{..} segments only — a percent-encoded
@@ -160,7 +160,7 @@ in addition to any 'www.' prefix. E.g., if N=1,
 \item{host_encoding}{How to present the host in \code{clean_url}. Defaults to
 "keep".
 \itemize{
-\item{"keep": Leave host as parsed by curl (may preserve original case).}
+\item{"keep": Leave the host as parsed (may preserve original case).}
 \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
 cleaned URL.}
 \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}

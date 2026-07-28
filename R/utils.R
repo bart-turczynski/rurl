@@ -18,7 +18,7 @@
 # URLs. http/https/ftp/ftps carry "scheme://host[:port]/path"; file is the
 # one supported hostless hierarchical scheme. In the WHATWG profile, `file:`
 # has a small parser slice for drive-letter, host, and backslash state-machine
-# forms; default/RFC behavior remains limited to libcurl-parseable local forms.
+# forms; default/RFC behavior remains limited to the plain local forms.
 # ftps is FTP-over-TLS (the https-analogue for ftp), not the unrelated
 # SSH-based sftp.
 # This is the single source of truth: a scheme-bearing input whose scheme is not
@@ -72,21 +72,23 @@
 .WHATWG_FORBIDDEN_HOST_ONLY_CP <- "[\\u0020#/:<>?@\\[\\]\\\\^|]"
 
 # WHATWG host-charset shim code points (RURL-dxwxeamq, ADR 0009). The 15 ASCII
-# code points libcurl rejects in a host ("Bad hostname") that the WHATWG URL
-# Standard keeps verbatim in the host (ada-confirmed): ! " $ & ' ( ) * + , ; = `
-# { }. libcurl's host allowed-set is narrower than WHATWG's; without the shim
-# the whole row is dropped. These are all NON-forbidden (none appears in
+# code points the web-route host parser rejects that the WHATWG URL Standard
+# keeps verbatim in the host (ada-confirmed): ! " $ & ' ( ) * + , ; = ` { }.
+# That parser's host allowed-set is narrower than WHATWG's (see
+# `.WEB_HOST_ALLOWED_BYTES` in R/parse-web.R); without the shim the whole row
+# is dropped. These are all NON-forbidden (none appears in
 # .WHATWG_FORBIDDEN_HOST_CP) and NON-structural (none delimits userinfo/port/
 # path/query/fragment), so the host span is locatable before substitution.
 # U+0025 "%" is DELIBERATELY EXCLUDED -- it is a forbidden domain code point
-# (WHATWG drops it too), so libcurl rejecting it is correct. An ICU regex class.
+# (WHATWG drops it too), so rejecting it is correct. An ICU regex class.
 .WHATWG_HOST_CHARSET_SHIM_CP <- paste0(
   "[\\u0021\\u0022\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
   "\\u002b\\u002c\\u003b\\u003d\\u0060\\u007b\\u007d]"
 )
 
-# RFC 3986 reg-name sub-delims (RURL-dnddogce): the subset of libcurl-rejected
-# host bytes that RFC 3986 section 3.2.2 permits literally in a reg-name.
+# RFC 3986 reg-name sub-delims (RURL-dnddogce): the subset of host bytes the
+# web-route parser rejects that RFC 3986 section 3.2.2 permits literally in a
+# reg-name.
 .RFC3986_REG_NAME_SUB_DELIM_CP <- paste0(
   "[\\u0021\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
   "\\u002b\\u002c\\u003b\\u003d]"
@@ -196,12 +198,14 @@
 # "simplify" this to "root"/"und": the obvious fix silently does nothing.
 .ASCII_SAFE_ICU_LOCALE <- "en_US_POSIX"
 
-# Coerce present-but-empty ("") raw components to NA, vectorized. curl's
-# `curl_parse_url()` is inconsistent across libcurl versions for a present-but-
-# empty component (e.g. the query of "https://example.com/?"): older libcurl
-# returns NULL (-> NA via %||%), newer returns "". This normalizes "" -> NA so
-# rurl's raw query/fragment/userinfo output is deterministic across libcurl
-# versions, matching the long-shipped "empty component == absent" behavior.
+# Coerce present-but-empty ("") raw components to NA, vectorized. This dates
+# from the external parse engine, whose treatment of a present-but-empty
+# component (e.g. the query of "https://example.com/?") varied by VERSION:
+# older builds returned NULL (-> NA via %||%), newer ones "". Normalizing
+# "" -> NA made rurl's raw query/fragment/userinfo output deterministic
+# regardless. The engine is in-tree now and emits NULL for an empty component
+# by contract, so this no longer papers over anything -- it is simply where
+# the long-shipped "empty component == absent" behavior is enforced.
 .blank_to_na <- function(x) {
   x[!is.na(x) & x == ""] <- NA_character_
   x
@@ -244,7 +248,7 @@
 # cache stores (RURL-dkwrebdt). One entry per cached column, in the order the
 # unnamed per-row cache value packs them, with the vapply type template used to
 # gather cache hits (mirrors .spu_result_fields). Stage A holds the expensive,
-# presentation-independent work -- curl components, IP detection, the post-www
+# presentation-independent work -- raw components, IP detection, the post-www
 # host, and the PSL decomposition in BOTH spellings (so host_encoding stays a
 # Stage-B choice) -- keyed only by url x protocol x www x tld_source x
 # scheme_relative. Stage B (._parse_stage_b_vec) derives every remaining column
@@ -290,7 +294,7 @@
   # about the parse, not a presentation choice.
   list(name = "general_userinfo_split", default = FALSE, template = logical(1)),
   # Whether Stage A produced NO usable parse for this row (invalid input, a
-  # Phase-1 rejection, or a curl failure). Cached WITH the other fields rather
+  # Phase-1 rejection, or a parse failure). Cached WITH the other fields rather
   # than signalled by caching a NULL value, so a null row's classifier flags --
   # `looks_like_protocol` / `original_has_allowed_scheme` /
   # `looks_like_host_port`, which are what distinguish an admission REJECTION

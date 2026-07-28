@@ -148,7 +148,7 @@ get_parse_status <- function(url,
   source <- match.arg(source)
   url_standard <- .validate_url_standard(url_standard)
   # case_handling does not affect the parse_status output (it is derived from
-  # curl success, host, domain and TLD, none of which depend on the clean_url
+  # parse success, host, domain and TLD, none of which depend on the clean_url
   # case policy). "lower" is kept here purely as an explicit, stable profile;
   # it is intentionally NOT aligned to .extract_from_urls()'s "lower_host"
   # default, so this accessor keeps its own memoization key rather than risk a
@@ -1330,9 +1330,9 @@ get_host_type <- function(url, url_standard = NULL,
 #'     \item \code{domain-std3-violation} --- a label carries a code point
 #'       outside the STD3 LDH set.
 #'     \item \code{host-charset-shimmed} --- the host carries one of the 15
-#'       code points WHATWG keeps but libcurl rejects, accepted by the shim
-#'       (ADR 0009: \code{! $ & ( ) * + , ; =}, plus the ASCII quotation mark,
-#'       apostrophe, grave accent, and the two curly braces).
+#'       code points WHATWG keeps but the historical parser rejected,
+#'       accepted by the shim (ADR 0009: \code{! $ & ( ) * + , ; =}, plus the
+#'       ASCII quotation mark, apostrophe, grave accent, and the two braces).
 #'       \code{"whatwg"} only.
 #'   }
 #'

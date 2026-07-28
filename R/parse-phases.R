@@ -13,14 +13,14 @@
 # delegate to their `*_vec` counterpart on a length-1 input, so the per-phase
 # unit tests (test-parse-phases.R) still pin behavior through them and the
 # scalar orchestrator ._safe_parse_url_impl() (parse.R) keeps working.
-# .parse_with_curl()/.extract_raw_components() stay scalar because curl is
-# scalar-only; the engine reuses .parse_with_curl() in its single per-URL loop
+# .parse_web_url_one()/.extract_raw_components() stay scalar because the web
+# parser is scalar; the engine reuses it in its single per-URL loop
 # and extracts the raw columns itself.
 # ---------------------------------------------------------------------------
 
 # Phase 1 helper (vector): classify the host token of each raw input for the
 # host-shape gate. rurl only fabricates a scheme for URL-shaped input, so we
-# must isolate and inspect the host before curl sees it. Returns, per element:
+# must isolate and inspect the host before the web parse. Returns, per element:
 #   has_userinfo    - an '@' appears in the authority (user[:pass]@host)
 #   is_localhost    - the bare host is an allowlisted single-label host
 #   is_dotted_name  - >= 2 non-empty dot-separated labels (example.com, a.b.c)
@@ -79,8 +79,9 @@
     is_dotted_name = is_dotted_name,
     is_ipish = is_ipish,
     is_canonical_ip = is_canonical_ip,
-    # Original (pre-curl) host token and the IPv4-attempt flag, surfaced for the
-    # url_standard host model (RURL-luwvkwhd): libcurl coerces numeric IPv4
+    # Original (pre-parse) host token and the IPv4-attempt flag, surfaced for
+    # the url_standard host model (RURL-luwvkwhd): the web parser coerces
+    # numeric IPv4
     # forms itself, so the model reads the original token to keep an RFC 3986
     # reg-name uncoerced and to compute shape-keyed diagnostics.
     host_token = host_token,
@@ -95,13 +96,13 @@
 # forward slash everywhere the WHATWG state machine checks for one: the
 # scheme-relative "//" marker, the authority/path boundary, and path-segment
 # separators. For rurl's authority-based special schemes (http/https/ftp), the
-# same pre-curl step also implements the WHATWG special-authority-slashes state
-# for inputs with no slash run at all: `http:example.com` is handed to curl as
-# `http://example.com`. This must run BEFORE curl ever sees the URL (libcurl
+# same pre-parse step also implements the WHATWG special-authority-slashes
+# state for inputs with no slash run at all: `http:example.com` is handed to the
+# parser as `http://example.com`. This must run BEFORE the parse (the parser
 # never treats "\" as a separator and rejects missing `//` authority forms), so
 # it rewrites the raw string here in Phase 1, ahead of every other scheme/host
 # regex in this function -- once rewritten, the existing "://"/"//" detection,
-# host classification, and curl handoff need no further changes.
+# host classification, and the parser handoff need no further changes.
 #
 # The leading run right after "scheme:" is handled as its own case (mirroring
 # the WHATWG "special authority slashes"/"special authority ignore slashes"
@@ -186,7 +187,8 @@
     stringi::stri_detect_fixed(remainder, "\\")
   remainder_had_backslash[is.na(remainder_had_backslash)] <- FALSE
   # file:///path carries an empty file authority. Collapsing an all-forward-
-  # slash run from "///" to "//" would turn it into file://path, which libcurl
+  # slash run from "///" to "//" would turn it into file://path, which the
+  # parser
   # treats as a non-local file host and rejects. Keep file rows byte-for-byte
   # when no literal backslash is present; actual backslash repair still uses the
   # shared special-scheme path above.
@@ -214,7 +216,7 @@
 #       input, everywhere in the string.
 # Both run before any component is parsed, so every downstream scheme/host
 # regex and the backslash recognizer see the already-stripped string. rurl
-# otherwise rejects a control char in the authority (libcurl errors) and
+# otherwise rejects a control char in the authority (the parser errors) and
 # percent-encodes a trailing space into the path -- correct under RFC 3986,
 # which has no strip step and requires such bytes to be percent-encoded -- so
 # this runs ONLY under url_standard == "whatwg" and is a byte-for-byte no-op
@@ -228,7 +230,7 @@
 #     (rows where 1a removed a leading/trailing C0-or-space run).
 #   - `control_char_stripped` -> the `control-char-stripped` diagnostic (rows
 #     where 1b removed an interior tab/LF/CR). Only tab/LF/CR are removed by
-#     1b; other interior C0 controls are left for libcurl.
+#     1b; other interior C0 controls are left to the web parser.
 # A row can carry both. Resolves the control-char-in-authority family: c0-tab
 # probe, eq-U6 (LF), yal-002 (TAB), yal-003 (CR/LF), which WHATWG
 # strips-and-accepts.
@@ -285,13 +287,14 @@
 # schemes -- maps three alternative full-stop code points to ASCII "." before a
 # host is split into labels: U+3002 (ideographic full stop), U+FF0E (fullwidth
 # full stop), and U+FF61 (halfwidth ideographic full stop). rurl hands the raw
-# string to libcurl, which does NOT apply UTS-46, so a Unicode-dot host like
-# "127。0。0。1" reaches curl with its separators intact, is never split into
+# string to the web parser, which does NOT apply UTS-46, so a Unicode-dot host
+# like "127。0。0。1" reaches it with its separators intact, is never split into
 # numeric labels, and so never coerces to the canonical dotted-quad (an
 # SSRF-relevant loopback/metadata obfuscation -- browsers coerce). The upstream
 # host-shape gate is no help either: .classify_input_host_vec()'s ipv4-attempt
 # test splits on ASCII "." only, so a literal-Unicode-dot host is not even seen
-# as an IPv4 attempt. Mapping the three code points to "." here, BEFORE curl,
+# as an IPv4 attempt. Mapping the three code points to "." here, BEFORE the
+# parse,
 # lets the existing IPv4 coercion and label handling see "127.0.0.1" (and, for
 # names, "例え。jp" -> "例え.jp").
 #
@@ -337,7 +340,7 @@
   no_op
 }
 
-# Authority userinfo repair for selector profiles (RURL-zqhgezuq). libcurl
+# Authority userinfo repair for selector profiles (RURL-zqhgezuq). The parser
 # rejects authorities with more than one literal "@", while the WHATWG authority
 # state uses the LAST "@" as the userinfo/host delimiter and percent-encodes
 # earlier "@" bytes into userinfo. RFC 3986 does not admit a raw "@" inside
@@ -346,14 +349,15 @@
 # `url_standard = NULL` remains a no-op for backward compatibility.
 #
 # WHATWG userinfo charset acceptance (RURL-micalqvh, half (a)). A SECOND,
-# independently gated rewrite shares this function's span machinery: libcurl
+# independently gated rewrite shares this function's span machinery: the parser
 # refuses an authority whose userinfo carries any of 30 ASCII code points --
 # SPACE (0x20), the C0 controls (0x00-0x1F) and DEL (0x7F) -- so
 # `http://a b@host/` errors even though WHATWG parses it and keeps the host.
-# Every other userinfo byte libcurl already accepts, including non-ASCII and
+# Every other userinfo byte the parser already accepts, including non-ASCII and
 # existing percent-triplets, so the set is exactly those 30 and no wider. Each
 # is a member of the WHATWG userinfo percent-encode set, i.e. the
-# percent-encoded form written here IS the spelling WHATWG stores; curl is asked
+# percent-encoded form written here IS the spelling WHATWG stores; the parser
+# is asked
 # to parse with `decode = FALSE`, so no restore step is needed (contrast the ADR
 # 0009 host shim, which substitutes non-spec filler and must restore). "%" is
 # not in the set, so an already-encoded userinfo (`%25DOMAIN`, `u%40ser`) is
@@ -382,7 +386,7 @@
   # Repeated-"@" recovery (the historical eligibility: strictly more than one).
   repair_at <- has_at & at_count > 1L
 
-  # Charset acceptance: any of the 30 libcurl-refused code points inside the
+  # Charset acceptance: any of the 30 parser-refused code points inside the
   # userinfo span (everything before the LAST "@"). `[\s\S]` rather than `.`
   # because ICU excludes U+000B/U+000C from `.`, and those are in the set.
   charset <- rep(FALSE, length(url))
@@ -425,7 +429,7 @@
   no_op
 }
 
-# Percent-encode the 30 ASCII code points libcurl refuses in a userinfo: SPACE,
+# Percent-encode the 30 ASCII code points refused in a userinfo: SPACE,
 # the C0 controls and DEL. U+0000 cannot occur in an R string (and
 # `rawToChar(as.raw(0L))` is ""), so the literal table covers 0x01-0x20 and
 # 0x7F; the regex above still names the full 0x00-0x20 range. "%" is absent from
@@ -500,11 +504,12 @@
   paste(octets, collapse = ".")
 }
 
-# WHATWG IPv4 canonicalization before curl. libcurl handles many numeric forms,
+# WHATWG IPv4 canonicalization before the web parse. That parser handles many
+# numeric forms,
 # but rejects WPT-valid empty-hex-zero parts such as `0x.0x.0`; canonicalizing
-# valid WHATWG IPv4 hosts here lets curl parse the rest of the URL structure.
+# valid WHATWG IPv4 hosts here lets it read the rest of the URL structure.
 # Invalid "ends in a number" hosts are left untouched and rejected either by
-# curl or by the later WHATWG host model.
+# the web parser or by the later WHATWG host model.
 .rewrite_whatwg_ipv4_hosts_vec <- function(url, url_standard) {
   no_op <- list(url = url)
   if (!.is_whatwg(url_standard)) {
@@ -561,7 +566,7 @@
 }
 
 # Decode percent-triplets in a WHATWG host just far enough for the host model to
-# see the real code points after curl has parsed the URL's structure. A
+# see the real code points after the parse has resolved the URL's structure. A
 # malformed or NUL-containing sequence maps to a C0 sentinel so the WHATWG
 # forbidden-host gate rejects the row; no successful output depends on that
 # placeholder.
@@ -612,28 +617,30 @@
 }
 
 # Host shim (RURL-dxwxeamq, ADR 0009; extended by RURL-rgjpcbuk and
-# RURL-dnddogce). libcurl's host handling is too eager for selector mode in two
+# RURL-dnddogce). The web parser's host handling is too eager for selector mode
+# in two
 # ways:
 #
-# * WHATWG accepts 15 literal ASCII code points that libcurl rejects in a host
-#   ("Bad hostname"). The shim replaces those bytes 1:1 with filler so curl can
+# * WHATWG accepts 15 literal ASCII code points that the web parser rejects in
+#   a host. The shim replaces those bytes 1:1 with filler so the parser can
 #   parse structure, then restores the true host before the host model runs.
 #   RFC 3986 uses the same seam for the 11 literal reg-name sub-delims it
 #   permits in section 3.2.2.
-# * libcurl percent-decodes host triplets before validation. That rejects the
+# * The web parser percent-decodes host triplets before validation. That
+#   rejects the
 #   encoded spelling of the same selector-valid gap bytes, such as `%60`. The
 #   shim masks those host percent-triplets as three filler letters (`aaa`), then
 #   restores the profile-correct host spelling: WHATWG percent-decoded, RFC
 #   unreserved-decoded while preserving the encoded gap triplet.
 #
-# The replacement is length- and delimiter-preserving, so curl returns
+# The replacement is length- and delimiter-preserving, so the parser returns
 # byte-identical scheme/userinfo/port/path/query/fragment; only `$host` is a
 # placeholder. The caller restores `shimmed_true_host` before IP detection and
 # forbidden-code-point checks, so the shim widens no validation gate.
 #
 # Literal host-character widening is selector-scoped: WHATWG gets its full
 # ada-confirmed gap set for special schemes; RFC 3986 gets only its reg-name
-# sub-delims for authority-based supported schemes. NULL keeps historical curl
+# sub-delims for authority-based supported schemes. NULL keeps the historical
 # behavior.
 .shim_whatwg_host_charset_vec <- function(url, url_standard) {
   n <- length(url)
@@ -675,7 +682,7 @@
   # trailing one, so `^.*@`, `^(\[[^\]]*\]).*$` and `:[^:]*$` all mis-slice an
   # authority carrying a raw terminator -- `u<LF>ser@h.com` kept the whole
   # `u<LF>ser@h.com` as the host. This is the acceptance-critical seam: the
-  # slice picks which rows get masked past libcurl's host rejection, so a wrong
+  # slice picks which rows get masked past the host rejection, so a wrong
   # host here can widen acceptance, not merely garble a render. Sharing
   # `.fsss_host_slice()` with the serializer (RURL-dergzwku) makes the two
   # sides of the parse agree by construction (RURL-qjvxtyze).
@@ -734,7 +741,7 @@
     stringi::stri_detect_regex(pct_decoded_host, .WHATWG_HOST_CHARSET_SHIM_CP)
   pct_gap[is.na(pct_gap)] <- FALSE
 
-  # libcurl decodes every host percent-triplet, including ones RFC 3986
+  # The web parser decodes every host percent-triplet, including ones RFC 3986
   # section 6.2.2.2 forbids decoding. For a C0 control or DEL that produces a
   # `final_host` carrying a raw control byte, which the serializer then renders
   # verbatim -- output that no longer re-parses, and that makes an encoded
@@ -742,7 +749,7 @@
   # the mask/restore seam so the control stays an uppercase triplet.
   #
   # Scoped to DEL, and to rows carrying no C0 triplet. DEL is the only control
-  # octet libcurl decodes and then ADMITS; every C0 octet is rejected once
+  # octet the parser decodes and then ADMITS; every C0 octet is rejected once
   # decoded, and masking would route it past that rejection, turning a
   # serialization fix into an acceptance widening. So a host mixing the two
   # keeps the rejection. Non-control triplets are deliberately left alone --
@@ -811,12 +818,13 @@
   )
 }
 
-# WHATWG path/query/fragment curl fallback. libcurl rejects some WPT-valid
+# WHATWG path/query/fragment parse fallback. The web parser rejects some
+# WPT-valid
 # bytes outside the authority (for example raw DEL, non-ASCII fragment bytes,
 # and C0 controls other than tab/LF/CR), while WHATWG serializes those
 # component bytes with the path/query/fragment percent-encode sets. This helper
-# prepares a curl-safe spelling of ONLY the post-authority components; Stage A
-# uses it as a fallback after the original curl parse fails, so already-accepted
+# prepares a parser-safe spelling of ONLY the post-authority components; Stage A
+# uses it as a fallback after the original parse fails, so already-accepted
 # readable paths keep their historical raw spelling under path_encoding="keep".
 .sanitize_whatwg_pqf_vec <- function(url, url_standard) {
   if (!.is_whatwg(url_standard)) {
@@ -880,9 +888,10 @@
 # RFC 3986 scheme + path-rootless support for special schemes without `//`
 # (RURL-pwsacxvo). In RFC 3986 section 3, an authority is present only when the
 # scheme-specific part starts with a literal `//`; otherwise `http:example.com`
-# is `scheme = "http"`, no authority, `path = "example.com"`. libcurl rejects
+# is `scheme = "http"`, no authority, `path = "example.com"`. The web parser
+# rejects
 # these as malformed HTTP URLs, so selector mode records the components here and
-# Stage A installs them directly instead of going through curl.
+# Stage A installs them directly instead of going through the web parser.
 #
 # This slice is intentionally limited to host-shaped path-rootless
 # (`scheme:example.com[/...]`) for the http/https/ftp family that WHATWG treats
@@ -1189,7 +1198,8 @@
 }
 
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
-# gate, and building the string handed to curl. Returns the per-URL columns plus
+# gate, and building the string handed to the parser. Returns the per-URL
+# columns plus
 # a logical `rejected` column marking rows the scalar pipeline returned NULL for
 # (scheme-relative under "error" handling; a bare unsupported scheme under
 # keep/none; a scheme-less input that is not host-shaped (D1); or an IP attempt
@@ -1233,7 +1243,8 @@
   # WHATWG UTS-46 alternative full-stop mapping (RURL-odsmwsxu) runs next: for
   # eligible rows it maps U+3002/U+FF0E/U+FF61 to ASCII "." in the AUTHORITY
   # only, so a Unicode-dot host coerces through the existing IPv4/label handling
-  # (and IDN names normalize their separators) instead of reaching curl as an
+  # (and IDN names normalize their separators) instead of reaching the parser
+  # as an
   # un-splittable literal. A no-op unless url_standard == "whatwg".
   sep <- .map_whatwg_domain_separators_vec(url, url_standard)
   url <- sep$url
@@ -1313,7 +1324,7 @@
   #
   # url_standard host model (RURL-luwvkwhd): under a selector, a numeric IPv4
   # attempt is parsed faithfully instead of rejected -- RFC 3986 keeps it as a
-  # reg-name, WHATWG coerces it (and only the post-curl model, not this gate,
+  # reg-name, WHATWG coerces it (and only the post-parse model, not this gate,
   # decides WHATWG-fatal cases like 256.1.1.1 / 1.2.3.4.5). So the reject is
   # suppressed for the ipv4-ish attempts; non-canonical IPv6 (ipv6ish) stays
   # rejected in both modes. NULL selector keeps the historical hard reject.
@@ -1385,15 +1396,16 @@
   #     and the grammar gate would silently re-implement scheme_policy.
   #   * AFTER it come the PARSER-COMPAT repairs (excess-"@" encoding, WHATWG
   #     IPv4 canonicalization, the host-charset shim, pqf sanitization). Those
-  #     exist to get a string past libcurl; judging their OUTPUT would let a
+  #     exist to get a string past the web parser; judging their OUTPUT would
+  #     let a
   #     repair launder an input the RFC has no production for -- exactly the
   #     "gated where rurl owns the parser" asymmetry this gate removes. The
   #     general/`file:` routes gate the source string, and this keeps the
-  #     libcurl route's subject identical to theirs.
+  #     web route's subject identical to theirs.
   rfc_gate_input <- url_to_parse
 
   # Authority userinfo repair (RURL-zqhgezuq): selector profiles recover the
-  # host at the last "@" and encode earlier "@" bytes in userinfo before curl.
+  # host at the last "@" and encode earlier "@" bytes in userinfo pre-parse.
   at <- .encode_excess_authority_at_vec(url_to_parse, url_standard)
   url_to_parse <- at$url
 
@@ -1403,7 +1415,7 @@
   # Host shim (RURL-dxwxeamq / RURL-rgjpcbuk) runs LAST -- after scheme
   # fabrication, authority userinfo repair, and WHATWG IPv4 canonicalization,
   # so scheme-less host-like inputs (now "http://..") are in scope and repeated
-  # "@" no longer blocks curl from parsing an otherwise valid host.
+  # "@" no longer blocks the parser from reading an otherwise valid host.
   shim <- .shim_whatwg_host_charset_vec(url_to_parse, url_standard)
   url_to_parse <- shim$url
   whatwg_pqf_url <- .sanitize_whatwg_pqf_vec(
@@ -1436,10 +1448,11 @@
     # where a leading/trailing C0-control-or-space run was removed, consumed by
     # the same seam to emit `leading-trailing-stripped`.
     leading_trailing_stripped = cc$leading_trailing_stripped,
-    # Host shim: TRUE where curl saw filler bytes in the host and Stage A must
+    # Host shim: TRUE where the parser saw filler bytes in the host and Stage A
+    # must
     # restore `shimmed_true_host`.
     restore_host_shimmed = shim$restore_host_shimmed,
-    # WHATWG host-charset shim diagnostic: TRUE where a libcurl-rejected but
+    # WHATWG host-charset shim diagnostic: TRUE where a parser-rejected but
     # WHATWG-valid host code point was accepted via filler substitution.
     host_charset_shimmed = shim$host_charset_shimmed,
     shimmed_true_host = shim$shimmed_true_host,
@@ -1505,7 +1518,7 @@
 }
 
 # Recover the raw request path from the prepared URL string (the exact bytes
-# curl was handed), rather than `parsed_web$path`. libcurl's `$path` applies
+# the parser was handed), rather than `parsed_web$path`. Its `$path` applies
 # two normalizations even under `decode = FALSE`: it uppercases percent-hex and
 # resolves RFC 3986 dot segments, INCLUDING percent-encoded ones
 # (`/a/%2e%2e/b` -> `/b`). Both are profile/presentation decisions, so raw
@@ -1519,11 +1532,11 @@
 # scheme, then the path is the run from the first literal `/` (after the
 # authority, which cannot contain one) up to the first `?`/`#`. If the body
 # starts with `/`, the prepared URL had an empty authority (`scheme:///...`) and
-# curl may have promoted the following segment into `$host`; in that shape the
-# path from the prepared string is no longer the fetched path, so keep curl's
+# the parser may have promoted the following segment into `$host`; in that shape
+# the path from the prepared string is no longer the fetched path, so keep its
 # coherent `$path` instead of duplicating the promoted host into the path. When
 # the authority is followed directly by `?`, `#`, or end-of-string there is no
-# path, so fall back to curl's `$path` (the canonical "/" trailing-slash
+# path, so fall back to the parser's `$path` (the canonical "/" trailing-slash
 # expects).
 .extract_raw_path_vec <- function(prepared, engine_path) {
   out <- engine_path
@@ -1555,8 +1568,8 @@
   out
 }
 
-# Phase 2b: pull the raw components used downstream out of the curl result.
-# With `params = FALSE` (see .parse_with_curl) `parsed_web$query` is already
+# Phase 2b: pull the raw components used downstream out of the parse result.
+# The web parser never decodes, so `parsed_web$query` is already
 # the raw (percent-encoded) query string, so it is taken verbatim; downstream
 # parsers split on raw "&"/"=" then decode per-pair. scheme/host as-is. The path
 # is re-derived from the prepared input by .extract_raw_path_vec() (see there)
@@ -1568,7 +1581,7 @@
     path = .extract_raw_path_vec(
       prepared, parsed_web$path %||% NA_character_
     ),
-    # .blank_to_na(): present-but-empty query "" -> NA (libcurl-version stable).
+    # .blank_to_na(): present-but-empty query "" -> NA.
     query = .blank_to_na(parsed_web$query %||% NA_character_)
   )
 }
@@ -1836,7 +1849,7 @@
 # MUST parse to a valid IPv4 address or the whole host parse fails -- there is
 # no reg-name fallback. This is broader than the all-numeric-parts is_ipv4ish
 # flag: it also fires on mixed reg-name/number hosts (foo.09), hex/octal final
-# labels (foo.0x4), trailing-dot forms (1.2.3.08.), and >4-part hosts libcurl
+# labels (foo.0x4), trailing-dot forms (1.2.3.08.), and >4-part hosts the parser
 # leaves literal (0x1.2.3.4.5.). NA/"" hosts are FALSE.
 .host_ends_in_number_vec <- function(host) {
   n <- length(host)
@@ -1977,21 +1990,24 @@
 }
 
 # Phase 5b (vector): the url_standard host IPv4/reg-name model (RURL-luwvkwhd,
-# PRD §6.2). A no-op when url_standard is NULL (returns curl's host / IP flag
+# PRD §6.2). A no-op when url_standard is NULL (returns the parsed host / IP
+# flag
 # unchanged, never fatal), so the default pipeline is byte-for-byte unaffected
 # (AC #1).
 #
-# libcurl already coerces numeric IPv4 forms itself (2130706433 -> 127.0.0.1,
+# The web parser already coerces numeric IPv4 forms itself (2130706433 ->
+# 127.0.0.1,
 # 192.168.010.1 -> 192.168.8.1) and keeps out-of-range / over-arity forms
 # literal (256.1.1.1, 1.2.3.4.5). So `engine_host` is the coerced spelling and
-# `input_host` (the original pre-curl token) is the un-coerced one. For an
+# `input_host` (the original pre-parse token) is the un-coerced one. For an
 # IPv4 attempt (`is_attempt`):
 #   - rfc3986: parse faithfully as a reg-name -- restore the original token and
 #     treat it as an IP only if the ORIGINAL was already a canonical quad.
 #     Never fatal (every such token is a valid RFC 3986 reg-name).
-#   - whatwg: adopt curl's coercion; it is a valid WHATWG IPv4 exactly when
-#     curl's output is a canonical dotted-quad. When it is not (out-of-range or
-#     > 4 parts, which curl leaves literal), the WHATWG IPv4 parser rejects it,
+#   - whatwg: adopt the parser's coercion; it is a valid WHATWG IPv4 exactly
+#     when that output is a canonical dotted-quad. When it is not (out-of-range
+#     or > 4 parts, which the parser leaves literal), the WHATWG IPv4 parser
+#     rejects it,
 #     so the row is fatal.
 # Non-attempt hosts (ordinary names, IPv6, missing) pass through untouched.
 # Returns updated `host`, `is_ip`, and a `fatal` mask the caller folds into the
@@ -2019,9 +2035,10 @@
     }
   } else {
     # WHATWG: a host that "ends in a number" MUST parse as IPv4 or the whole
-    # host parse fails -- independent of whether libcurl chose to coerce it.
+    # host parse fails -- independent of whether the web parser coerced it.
     # This trigger (not is_ipv4ish) closes the gap where obfuscated/mixed forms
-    # libcurl leaves as reg-names (foo.09, foo.0x4, 1.2.3.08., 0x1.2.3.4.5.)
+    # the web parser leaves as reg-names (foo.09, foo.0x4, 1.2.3.08.,
+    # 0x1.2.3.4.5.)
     # bypassed the gate and were wrongly accepted with warning-invalid-tld.
     att <- .host_ends_in_number_vec(input_host)
     if (any(att)) {
@@ -3174,7 +3191,8 @@
 }
 
 # Phase 12 (vector): classify the parse outcome (ok / ok-ftp / warning-* /
-# error / ok-scheme-relative). `web_ok` is TRUE for rows curl parsed (the
+# error / ok-scheme-relative). `web_ok` is TRUE for rows the web parser read
+# (the
 # scalar wrapper passes !is.null(parsed_web)).
 #
 # The status is now DERIVED, not decided here: Phase 12 computes the three
@@ -3275,7 +3293,7 @@
     path = path_output,
     query = raw_query,
     # fragment/user/password are never percent-DECODED: with `decode = FALSE`
-    # (see .parse_with_curl) curl no longer decodes them, keeping them
+    # the web parser never decodes them, keeping them
     # consistent with the raw path/query. Under `url_standard = "whatwg"` the
     # caller has already re-encoded these three with their WHATWG percent-encode
     # sets (fragment / userinfo) before they reach this assembler; under
@@ -3295,7 +3313,7 @@
   )
 }
 
-# Phase 13 (scalar wrapper): extracts port/fragment/user/password from the curl
+# Phase 13 (scalar wrapper): extracts port/fragment/user/password from the parse
 # object, then delegates to .assemble_parse_result_vec().
 .assemble_parse_result <- function(original_input_url, scheme_output,
                                    host_output, parsed_web, path_output,

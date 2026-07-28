@@ -268,11 +268,11 @@
 
   # --- host-charset shim diagnostic (RURL-dxwxeamq, ADR 0009) ----------------
   # `host-charset-shimmed` fires exactly where Phase 1's shim
-  # (.shim_whatwg_host_charset_vec) accepted a host code point libcurl rejects
-  # but WHATWG keeps (! " $ & ' ( ) * + , ; = ` { }) -- surfacing the accepted
-  # WHATWG boundary as a FACT (ADR 0006). Always FALSE under rfc3986 / no
-  # selector; RFC 3986 sub-delim recovery is standards conformance, not this
-  # WHATWG diagnostic.
+  # (.shim_whatwg_host_charset_vec) accepted a host code point the web-route
+  # parser rejects but WHATWG keeps (! " $ & ' ( ) * + , ; = ` { }) --
+  # surfacing the accepted WHATWG boundary as a FACT (ADR 0006). Always FALSE
+  # under rfc3986 / no selector; RFC 3986 sub-delim recovery is standards
+  # conformance, not this WHATWG diagnostic.
   host_charset_shimmed <- a$host_charset_shimmed
   if (is.null(host_charset_shimmed)) {
     host_charset_shimmed <- rep(FALSE, n)
@@ -324,7 +324,8 @@
   # url_standard is WHATWG, INCLUDING the default `web` acceptance path. The
   # DEFAULT combo (web + url_standard = NULL) is untouched because is_whatwg is
   # FALSE there, so the D4 byte-identity / CRAN contract holds. userinfo is
-  # carried by libcurl on the special-scheme route (http/https/ftp/ws/wss); the
+  # carried by the web-route parser on the special-scheme route
+  # (http/https/ftp/ws/wss); the
   # general parser sets user/password NA for opaque/RFC rows, so this bounded
   # detection covers the WHATWG special-scheme routes. All OTHER Layer 5 facts
   # stay general-gated below: they are parse-structural or ride the general
@@ -389,7 +390,7 @@
 
     if (is_whatwg) {
       # ws/wss (RFC 6455 forbids both a fragment AND userinfo) -- TWO separate
-      # facts. ws/wss parse via the libcurl SPECIAL-scheme route under whatwg
+      # facts. ws/wss parse via the SPECIAL-scheme web route under whatwg
       # (they are in .WHATWG_SPECIAL_SCHEMES), NOT via .general_parse_vec, so
       # read fragment/userinfo from the Stage-A columns for that route.
       is_ws <- !is.na(scheme_lc) & scheme_lc %in% c("ws", "wss")
@@ -403,7 +404,7 @@
 
     # Per-scheme facts on the general-routed opaque/RFC rows (`gp`). mailto/tel/
     # data route to the general parser under BOTH postures; `file` routes there
-    # only under rfc3986 (whatwg `file` is a special scheme on the libcurl
+    # only under rfc3986 (whatwg `file` is a special scheme on the web
     # route), so the file facts are rfc-only.
     gs <- .ascii_tolower(gen_b$scheme)
     # `mailto`: fragment present (RFC 6068 section 2 SHOULD NOT).

@@ -173,9 +173,9 @@ hyphen rules (leading/trailing hyphen, or \code{"--"} in positions
 \item \code{domain-std3-violation} --- a label carries a code point
 outside the STD3 LDH set.
 \item \code{host-charset-shimmed} --- the host carries one of the 15
-code points WHATWG keeps but libcurl rejects, accepted by the shim
-(ADR 0009: \code{! $ & ( ) * + , ; =}, plus the ASCII quotation mark,
-apostrophe, grave accent, and the two curly braces).
+code points WHATWG keeps but the historical parser rejected,
+accepted by the shim (ADR 0009: \code{! $ & ( ) * + , ; =}, plus the
+ASCII quotation mark, apostrophe, grave accent, and the two braces).
 \code{"whatwg"} only.
 }
 

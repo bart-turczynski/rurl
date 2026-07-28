@@ -8,7 +8,8 @@
 # live parse pipeline yet, so byte-identity of every existing output is
 # trivially preserved. The classifiers are PURE: they take already-decomposed
 # pieces (scheme special-ness, the remainder after the scheme, an isolated host,
-# a `//` flag, a raw component value) and never parse, never touch curl, and
+# a `//` flag, a raw component value) and never parse, never touch the web
+# parser, and
 # never route through the punycode/domain helpers (ADR 0002).
 #
 # Why a richer state model at all: ADR 0012 D2 shows a single `opaque` boolean
@@ -248,7 +249,8 @@
 # takes already-classified per-row state (scheme string, WHATWG path_kind via
 # `.whatwg_path_kind`, host_kind via `.host_kind`, is_ip_host) plus the resolved
 # `scheme_acceptance`/`url_standard`, and returns three logical masks. It never
-# parses, never touches curl, and never routes through the punycode/domain
+# parses, never touches the web parser, and never routes through the
+# punycode/domain
 # helpers (ADR 0002).
 #
 # CRITICAL BYTE-IDENTITY DESIGN: the ENTIRE restriction is gated on
@@ -330,9 +332,9 @@
 # for the new RFC-general branch (ADR 0012 D1, lines 199-226). After scheme +
 # component-delimiter recognition it validates that the ASCII portion of the
 # input matches RFC 3986's generic `URI` grammar (RFC 3986 section 3). It is a
-# PURE, vectorized validator: it NEVER calls curl and never delegates to
-# libcurl's permissiveness (D1: "an INDEPENDENT gate, not a delegation to
-# libcurl"). It is deliberately ADDITIVE -- nothing here is wired into the live
+# PURE, vectorized validator: it NEVER runs the web parser and never delegates
+# to its permissiveness (D1: "an INDEPENDENT gate, not a delegation to the
+# parser"). It is deliberately ADDITIVE -- nothing here is wired into the live
 # parse pipeline (L4b does that), so byte-identity of every existing output is
 # trivially preserved.
 #
@@ -594,7 +596,7 @@
 # with '|' admitted by no RFC 3986 production either way. That made the profile
 # a property of the ROUTE rather than of the selected standard. Under
 # `url_standard = "rfc3986"` the gate now binds on EVERY row, whichever route
-# it takes (libcurl, path-rootless, `file:`, general): selecting a standard
+# it takes (web, path-rootless, `file:`, general): selecting a standard
 # selects its grammar, uniformly.
 #
 # Byte-identity elsewhere is by construction: any other selector (including the
@@ -839,7 +841,7 @@
     port <- parts$port
     # `.split_authority()` has always computed this -- the WHATWG host-missing
     # rule below reads it -- but the opaque parser used to drop it on the floor,
-    # so every general-routed row reported NA credentials while the libcurl
+    # so every general-routed row reported NA credentials while the web
     # route reported them exactly (RURL-ovpguvva). Surfaced RAW here; the
     # username/password split and the WHATWG userinfo encode set are applied
     # downstream in R/parse.R, which is where the file:-overlay exception lives.
@@ -927,7 +929,8 @@
 }
 
 # Vectorized posture opaque/host parser (ADR 0012 Layer 4b). See the column
-# contract above. Pure: never touches curl, never routes through punycode /
+# contract above. Pure: never runs the web parser, never routes through
+# punycode /
 # domain.R (ADR 0002).
 .parse_opaque_urls_vec <- function(url, url_standard) {
   n <- length(url)
@@ -961,7 +964,7 @@
 }
 
 # RFC 8089 `file:` overlay (ADR 0012 D1 / A.2, RURL-yutinyhb; two-gate model
-# RURL-obsweger). A THIN overlay used wherever `file:` is routed out of libcurl
+# RURL-obsweger). A THIN overlay used wherever `file:` is routed off the web
 # under the RFC model (`url_standard = "rfc3986"` and the NULL selector) -- the
 # WHATWG `file:` path (`.parse_whatwg_file_urls_vec`) is a SEPARATE state
 # machine and is left verbatim.
@@ -1149,7 +1152,7 @@
 #
 # The ACTIVATION seam that wires the L3a/L3b/L3c/L4a/L4b-1 building blocks into
 # the live pipeline. `.general_parsed_mask` decides WHICH rows the `general`
-# posture routes OUT of libcurl to the posture opaque/RFC/file parser;
+# posture routes OFF the web route to the posture opaque/RFC/file parser;
 # `.general_parse_vec` performs that parse and reports the components, the parse
 # `ok` verdict (including D1's RFC generic-grammar gate), and the internal state
 # kinds. BOTH Stage A and Stage B call `.general_parse_vec` on the same URL
@@ -1162,19 +1165,19 @@
 # `scheme_acceptance == "general"`. Under any other value (notably "web", the
 # default and, until this unit, the only publicly reachable value) the mask is
 # all-FALSE and the parse returns empty/NA columns, so the `general_route`
-# masks in Stage A/B are EMPTY, libcurl-path vectors are bit-identical, and no
+# masks in Stage A/B are EMPTY, web-route vectors are bit-identical, and no
 # new behavior runs. Byte-identity for web is BY CONSTRUCTION.
 #
 # ROUTING RULE (posture-keyed). A row is general-routed iff it is scheme-bearing
 # (`^scheme:`), is NOT a host:port form (`example.com:8080`, which Phase 1
-# parses as host:port), and its scheme is NOT one libcurl + the existing web
-# machinery
-# already handle for the posture:
+# parses as host:port), and its scheme is NOT one the web route and the
+# existing machinery already handle for the posture:
 #   - whatwg  : keep the six WHATWG special schemes (http/https/ftp/ws/wss/file)
-#               on libcurl; route every other (non-special) scheme to the opaque
-#               parser. ws/wss stay on libcurl and parse as special (L1 default
+#               on the web route; route every other (non-special) scheme to
+#               the opaque parser. ws/wss stay on the web route and parse as
+#               special (L1 default
 #               ports 80/443); ftps is non-special under WHATWG and routes here.
-#   - rfc3986 : keep http/https/ftp/ftps on libcurl (existing rfc3986 host model
+#   - rfc3986 : keep http/https/ftp/ftps on the web route (existing host model
 #               + path-rootless slice); route file to the RFC 8089 overlay and
 #               every other scheme to the RFC generic host parser.
 .general_parsed_mask <- function(url, url_standard, scheme_acceptance) {
@@ -1197,8 +1200,9 @@
   host_port <- stringi::stri_detect_regex(url, "^[^/:]+:[0-9]+($|/)")
   host_port[is.na(host_port)] <- FALSE
 
-  # RFC-model `file:` leaves libcurl on EVERY acceptance posture (RURL-obsweger,
-  # Tier 1 of the determinism epic). libcurl's `file:` handling is a BUILD
+  # RFC-model `file:` leaves the web route on EVERY acceptance posture
+  # (RURL-obsweger, Tier 1 of the determinism epic). The external engine's
+  # `file:` handling was a BUILD
   # property, not a version property: Windows builds enable drive-letter and
   # `file://host` handling that Unix builds reject, so identical input yields
   # `ok` on Windows and `error` on Linux/macOS. That is a DEREFERENCING concern

@@ -353,7 +353,7 @@
 # Linear in the number of pairs: the former version grew the result list with a
 # per-pair `result[[key]] <- c(result[[key]], value)` plus an `%in% names()`
 # membership scan, which is O(k^2) in the pair count. This splits once, decodes
-# each side with a single vectorized curl_unescape(), and groups by key with
+# each side with a single vectorized .pct_unescape(), and groups by key with
 # split(), preserving first-seen key order and per-key value order.
 #
 # Byte-for-byte compatible with the old parser: the "=" split keeps
