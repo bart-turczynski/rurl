@@ -11,11 +11,13 @@
 # corpora, all at zero differences) and then frozen here by hand. The sweep is
 # how they were found; this file is what holds them.
 
-p <- function(url) rurl:::.parse_web_url_one(url)
+p <- function(url, last = FALSE) {
+  rurl:::.parse_web_url_one(url, last_at_userinfo = last)
+}
 
 # Compact fingerprint of one parse, so a whole rule reads as one table.
-fp <- function(url) {
-  r <- p(url)
+fp <- function(url, last = FALSE) {
+  r <- p(url, last)
   if (is.null(r)) {
     return("REJECT")
   }
@@ -122,10 +124,66 @@ test_that("userinfo splits at the first colon and admits at most one '@'", {
   expect_identical(p("http://@example.com/")$user, "")
   expect_identical(p("http://u:@example.com/")$password, "")
   expect_identical(p("http://:p@example.com/")$user, "")
-  # A second "@" is a parse error whichever side it lands on.
+  # A second "@" is a parse error whichever side it lands on -- under the
+  # DEFAULT dial. `last_at_userinfo = TRUE` recovers it; see below.
   expect_null(p("http://a@b@example.com/"))
-  # ...which is exactly why Phase 1 pre-encodes the excess one.
+  # An already-encoded "@" is not a second delimiter and never was.
   expect_identical(p("http://a%40b@example.com/")$user, "a%40b")
+})
+
+test_that("last_at_userinfo splits at the last '@' and encodes the earlier", {
+  # WHATWG's authority state buffers to the FINAL "@" and prepends "%40" for
+  # each earlier one. Until RURL-ezhzpkhg deletion 3 a pre-parse rewrite
+  # (`.encode_excess_authority_at_vec`) did this to the input string because
+  # libcurl refused a second "@"; it is parser behaviour now, and these
+  # literals are the ones that rewrite used to produce.
+  expect_identical(
+    fp("http://username@@@@example.com/", last = TRUE),
+    "http|example.com|-|/|-|-|username%40%40%40|-"
+  )
+  # The dial is OFF by default, and off means reject, not "parse loosely".
+  expect_identical(fp("http://username@@@@example.com/"), "REJECT")
+
+  # The split is by the LAST "@", so "@" on either side of the ":" lands in
+  # whichever half it falls in -- the ":" split runs on the encoded userinfo,
+  # and "%40" can neither create nor destroy a ":".
+  expect_identical(
+    fp("http://u@v:p@example.com/", last = TRUE),
+    "http|example.com|-|/|-|-|u%40v|p"
+  )
+  expect_identical(
+    fp("http://u:p@v@example.com/", last = TRUE),
+    "http|example.com|-|/|-|-|u|p%40v"
+  )
+  expect_identical(
+    fp("http://u:@v@example.com/", last = TRUE),
+    "http|example.com|-|/|-|-|u|%40v"
+  )
+
+  # Degenerate authorities: an empty userinfo, and a host that is only "@"s.
+  expect_identical(p("http://@@example.com/", last = TRUE)$user, "%40")
+  expect_identical(fp("http://a@@/", last = TRUE), "REJECT") # empty host
+  expect_identical(
+    fp("http://a@@b.com:80/", last = TRUE),
+    "http|b.com|80|/|-|-|a%40|-"
+  )
+
+  # A single "@" is unaffected by the dial, in either position.
+  expect_identical(
+    fp("http://u:p@example.com/"), fp("http://u:p@example.com/", last = TRUE)
+  )
+
+  # "@" past the authority is not the authority's business and never moves.
+  expect_identical(
+    fp("http://a@@b.com/p@q?r@s#t@u", last = TRUE),
+    "http|b.com|-|/p@q|r@s|t@u|a%40|-"
+  )
+
+  # An already-encoded "@" is not double-encoded: "%40" carries no 0x40 byte.
+  expect_identical(
+    fp("http://a%40b@@example.com/", last = TRUE),
+    "http|example.com|-|/|-|-|a%40b%40|-"
+  )
 })
 
 test_that("userinfo is percent-uppercased but never percent-decoded", {
