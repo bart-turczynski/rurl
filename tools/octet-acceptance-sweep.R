@@ -107,6 +107,56 @@ for (sn in names(seqs)) {
   }
 }
 
+# CONJUNCTIONS -- the blind spot that let a PARTIAL RURL-kmpnbvdl fix score as
+# complete. Both blocks above vary ONE thing at a time, and every mask past the
+# authority split is a conjunction: reaching it needs the bad octet AND a
+# second character that makes the row eligible. So the sweep reported "0
+# throwing rows" truthfully over a corpus that could not reach the three sites
+# still throwing (the shim's reassembly, `.pct_hex_upper()`, the excess-"@"
+# repair). This block pairs them explicitly.
+#
+# `paren` looks redundant next to `bad-pair` and is not: `C3 28` is an invalid
+# sequence whose SECOND octet is "(", a sub-delim -- it is its own conjunction,
+# which is why a lone <80> never threw but `http://<C3>(/p` did. Keeping both
+# spellings distinguishes "the pair matters" from "the octet matters".
+triggers <- list(
+  none   = integer(0),
+  bang   = asc("!"),
+  paren  = asc("("),
+  comma  = asc(","),
+  semi   = asc(";"),
+  pct_lc = asc("%7f"),
+  pct_uc = asc("%7F"),
+  pct_c0 = asc("%01"),
+  pct_az = asc("%41"),
+  pct_no = asc("%zz"),
+  upper  = asc("AB"),
+  xn     = asc("xn--a"),
+  at     = asc("@")
+)
+bad_seqs <- list(
+  "lone-80"  = 0x80,
+  "bad-pair" = c(0xC3, 0x28),
+  "trunc-E2" = c(0xE2, 0x82),
+  "ff"       = 0xFF
+)
+conj <- list(
+  host     = function(s, t) c(asc("http://"), s, t, asc("/p")),
+  host_rev = function(s, t) c(asc("http://"), t, s, asc("/p")),
+  host_dot = function(s, t) c(asc("http://"), s, t, asc(".com/p")),
+  host_prt = function(s, t) c(asc("http://"), s, t, asc(":80/p")),
+  userinfo = function(s, t) c(asc("http://"), s, t, asc("@e.com/p")),
+  ui_at2   = function(s, t) c(asc("http://"), s, asc("@"), t, asc("@e.com/p"))
+)
+for (bn in names(bad_seqs)) {
+  for (tn in names(triggers)) {
+    for (cn in names(conj)) {
+      corpus <- c(corpus, bstr(conj[[cn]](bad_seqs[[bn]], triggers[[tn]])))
+      labels <- c(labels, sprintf("conj:%s:%s:%s", bn, tn, cn))
+    }
+  }
+}
+
 # Bytes AND the encoding mark: a transcoding regression changes neither value
 # nor length, only the mark, and would otherwise pass unnoticed.
 hex <- function(x) {
