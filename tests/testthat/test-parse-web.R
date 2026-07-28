@@ -11,13 +11,15 @@
 # corpora, all at zero differences) and then frozen here by hand. The sweep is
 # how they were found; this file is what holds them.
 
-p <- function(url, last = FALSE, pct = "narrow") {
-  rurl:::.parse_web_url_one(url, last_at_userinfo = last, host_pct = pct)
+p <- function(url, last = FALSE, pct = "narrow", pqf = "reject") {
+  rurl:::.parse_web_url_one(url,
+    last_at_userinfo = last, host_pct = pct, pqf_bytes = pqf
+  )
 }
 
 # Compact fingerprint of one parse, so a whole rule reads as one table.
-fp <- function(url, last = FALSE, pct = "narrow") {
-  r <- p(url, last, pct)
+fp <- function(url, last = FALSE, pct = "narrow", pqf = "reject") {
+  r <- p(url, last, pct, pqf)
   if (is.null(r)) {
     return("REJECT")
   }
@@ -270,6 +272,73 @@ test_that("host_pct changes the host alone, never the other components", {
   expect_identical(p(u, pct = "wide")$host, "ex.com`x")
   expect_identical(p(u, pct = "keep")$host, "ex.com%60x")
   expect_null(p(u))
+})
+
+# `pqf_bytes` (RURL-ezhzpkhg deletion 5). The dial decides ONE thing: whether a
+# C0 control, SP or DEL outside the authority is a parse error or is escaped in
+# place. It is deliberately NOT the rest of the WHATWG percent-encode sets --
+# those are rendering, they belong to the serializer, and conflating them is
+# what the deleted pqf fallback did.
+
+test_that("pqf_bytes = 'reject' refuses C0/SP/DEL outside the authority", {
+  for (u in c("http://h.com/a b", "http://h.com/a\u0001b",
+              "http://h.com/a\u007fb", "http://h.com/a\u000bb",
+              "http://h.com/p?q= 1", "http://h.com/p?q=\u0001",
+              "http://h.com/p#f g", "http://h.com/p#f\u007f")) {
+    expect_null(p(u), info = u)
+  }
+})
+
+test_that("pqf_bytes = 'encode' escapes those bytes instead of refusing", {
+  expect_identical(p("http://h.com/a b", pqf = "encode")$path, "/a%20b")
+  expect_identical(p("http://h.com/a\u0001b", pqf = "encode")$path, "/a%01b")
+  expect_identical(p("http://h.com/a\u007fb", pqf = "encode")$path, "/a%7Fb")
+  # VT and FF are ordinary C0 controls: WHATWG's leading/trailing strip and its
+  # tab/LF/CR removal do not touch them, so they escape like any other. The
+  # deleted fallback could never reach them -- it matched the post-authority
+  # remainder with an ICU `.`, which excludes the Unicode line terminators.
+  expect_identical(p("http://h.com/a\u000bb", pqf = "encode")$path, "/a%0Bb")
+  expect_identical(p("http://h.com/a\u000cb", pqf = "encode")$path, "/a%0Cb")
+  expect_identical(p("http://h.com/p?q= 1", pqf = "encode")$query, "q=%201")
+  expect_identical(p("http://h.com/p#f g", pqf = "encode")$fragment, "f%20g")
+})
+
+test_that("pqf_bytes = 'encode' escapes ONLY those bytes", {
+  # Every other member of the WHATWG path/query/fragment encode sets stays
+  # literal here. The serializer applies them; the parser does not.
+  expect_identical(
+    p("http://h.com/a<b>c`d{e}f\"g", pqf = "encode")$path,
+    "/a<b>c`d{e}f\"g"
+  )
+  expect_identical(p("http://h.com/p?a<b'c", pqf = "encode")$query, "a<b'c")
+  expect_identical(p("http://h.com/p#a<b`c", pqf = "encode")$fragment, "a<b`c")
+  # And an existing triplet is left exactly as written apart from the standing
+  # "%XX" uppercase pass, which is not this dial's doing.
+  expect_identical(p("http://h.com/a%2fb c", pqf = "encode")$path, "/a%2Fb%20c")
+})
+
+test_that("pqf_bytes does not reach the authority", {
+  # A space or control in the host/userinfo is still a parse error under
+  # `"encode"`: this dial is scoped to path/query/fragment.
+  expect_null(p("http://a b.com/p", pqf = "encode"))
+  expect_null(p("http://a\u0001b.com/p", pqf = "encode"))
+  expect_null(p("http://u v@h.com/p", pqf = "encode"))
+  expect_null(p("http://h.com:8 0/p", pqf = "encode"))
+})
+
+test_that("pqf_bytes leaves everything else about a parse alone", {
+  u <- "http://u:p@ex.com:8080/a b?q= 1#f g"
+  expect_identical(
+    fp(u, pqf = "encode"),
+    "http|ex.com|8080|/a%20b|q=%201|f%20g|u|p"
+  )
+  # Dot segments still resolve, and they resolve AFTER the escaping -- so a
+  # space cannot smuggle a segment past the removal.
+  expect_identical(p("http://h.com/a/../b c", pqf = "encode")$path, "/b%20c")
+  expect_identical(p("http://h.com/a b/../c", pqf = "encode")$path, "/c")
+  # An absent component stays absent; escaping never fabricates one.
+  expect_null(p("http://h.com/a b", pqf = "encode")$query)
+  expect_null(p("http://h.com/a b", pqf = "encode")$fragment)
 })
 
 test_that("host code points outside libcurl's set are rejected", {

@@ -50,6 +50,9 @@
 # is gone too (deletion 2): which host triplets get decoded is decode ORDER,
 # which only a parser can own -- see `host_pct`. What survives of that shim is
 # the LITERAL gap-character mask, until ADR 0009 is superseded (deletion 1).
+# The pqf fallback is GONE as well (deletion 5): whether an unwritable byte
+# outside the authority is refused or escaped is an accept/reject rule, so it is
+# parser behaviour -- see `pqf_bytes`.
 #
 # Every rule below was derived by MEASUREMENT against
 # libcurl (per-octet acceptance sweeps over host/userinfo/path/query/fragment,
@@ -88,11 +91,15 @@
 #             percent-encoded; the two characters after every "%" are
 #             ASCII-uppercased; then dot segments are removed, INCLUDING
 #             percent-encoded ones ("/a/%2E%2E/b" -> "/b").
+#             This is `pqf_bytes = "reject"`; under `"encode"` the C0/space/DEL
+#             rejection becomes a percent-encoding, documented at
+#             `.parse_web_url_one()` below.
 #   query/    absent or empty -> NULL; otherwise the same C0/space/DEL
-#   fragment  rejection and the same high-byte encoding + "%XX" uppercasing.
+#   fragment  treatment and the same high-byte encoding + "%XX" uppercasing.
 
 # Bytes libcurl refuses outright in path/query/fragment: C0 controls, SP, DEL.
-# (NUL cannot reach here -- R strings cannot hold it.)
+# (NUL cannot reach here -- R strings cannot hold it.) Under
+# `pqf_bytes = "encode"` these are the bytes that get escaped instead.
 .WEB_FORBIDDEN_BYTES <- c(seq.int(1L, 32L), 127L)
 
 # Decoded-host allowed ASCII set, as MEASURED: alphanumerics plus "-", ".",
@@ -205,12 +212,72 @@
   }), use.names = FALSE)
 }
 
-# path/query/fragment normalization: reject the forbidden bytes, percent-encode
-# every byte >= 0x80, then uppercase the "%XX" pairs. Returns NULL on rejection.
-.web_normalize_component <- function(s) {
+# Percent-escape the selected byte positions, LOWERCASE. The case is
+# deliberate and the uppercase pass that runs afterwards is why: that pass is a
+# sequential scan, so a "%" already present in the source can swallow the "%"
+# introducing a freshly encoded octet and leave that octet's hex lowercase.
+# `/foo%2<C3><82>z` really does come back `/foo%2%c3%82z`. Emitting uppercase
+# here would hide that interaction rather than reproduce it.
+.web_escape_bytes <- function(b, sel) {
+  out <- vector("list", length(b))
+  out[!sel] <- lapply(b[!sel], identity)
+  out[sel] <- lapply(b[sel], function(x) {
+    c(0x25L, .web_bytes(sprintf("%02x", x)))
+  })
+  unlist(out, use.names = FALSE)
+}
+
+# The forbidden-byte half of `.web_normalize_component()`, on its own, for the
+# ONE caller that needs the escaping without the rest of the normalization: the
+# re-derived raw path (`.extract_raw_path_vec()`), which slices the prepared
+# input directly so that dot segments survive to `path_normalization` and
+# therefore never passes through the parser's component pass at all.
+#
+# Only the bytes whose ACCEPTANCE `pqf_bytes = "encode"` just changed are
+# escaped here -- not the >= 0x80 ones the parser also escapes. The distinction
+# is the point: a C0/SP/DEL byte is admissible only BECAUSE WHATWG escapes it,
+# so storing it raw would store something the parser never accepted, whereas a
+# non-ASCII byte is accepted raw and its encoding is a rendering choice that
+# belongs to `path_encoding` and the serializer.
+#
+# Everything ELSE in the slice is left exactly as written -- including an
+# existing "%XX", whose hex case is NOT normalized here. That is what keeps the
+# raw path source-preserving, and it is also what the deleted fallback did: its
+# `.whatwg_component_percent_encode()` re-emitted an existing triplet verbatim.
+# Hence uppercase hex directly, rather than the lowercase-then-uppercase-pass
+# the component normalizer uses to reproduce libcurl's swallowed-"%" quirk.
+.web_escape_pqf_bytes <- function(s) {
+  if (is.na(s)) {
+    return(s)
+  }
   b <- .web_bytes(s)
-  if (any(b %in% .WEB_FORBIDDEN_BYTES)) {
-    return(NULL)
+  bad <- b %in% .WEB_FORBIDDEN_BYTES
+  if (!any(bad)) {
+    return(s)
+  }
+  out <- as.list(vapply(b, function(x) rawToChar(as.raw(x)), character(1)))
+  out[bad] <- lapply(b[bad], function(x) sprintf("%%%02X", x))
+  paste(unlist(out, use.names = FALSE), collapse = "")
+}
+
+# path/query/fragment normalization: deal with the forbidden bytes,
+# percent-encode every byte >= 0x80, then uppercase the "%XX" pairs. Returns
+# NULL on rejection.
+#
+# `pqf_bytes` decides what "deal with" means, and is the third dial (see
+# `.parse_web_url_one()`). Under `"reject"` a C0 control, SP or DEL outside the
+# authority is a parse error, which is what libcurl did. Under `"encode"` it is
+# percent-encoded instead -- WHATWG's path/query/fragment states have no
+# rejection to speak of; they run every code point through a percent-encode set,
+# so a byte that is merely "not writable literally" is escaped, not refused.
+.web_normalize_component <- function(s, pqf_bytes = "reject") {
+  b <- .web_bytes(s)
+  bad <- b %in% .WEB_FORBIDDEN_BYTES
+  if (any(bad)) {
+    if (identical(pqf_bytes, "reject")) {
+      return(NULL)
+    }
+    b <- .web_escape_bytes(b, bad)
   }
   high <- b >= 0x80L
   if (any(high)) {
@@ -280,6 +347,19 @@
   } else {
     "narrow"
   }
+}
+
+# The `pqf_bytes` setting each selected standard asks for, for the same reason
+# as the mapper above: one place, so the vectorized and scalar routes cannot
+# drift. WHATWG escapes what it cannot write literally; RFC 3986 and the
+# no-selector baseline reject, which is the historical behaviour.
+#
+# Note that the two routes DID drift while this was compensated for outside the
+# parser: the pqf fallback lived in the vectorized path only, so
+# `http://h.com/a b` parsed there and errored on the scalar one under the same
+# `url_standard = "whatwg"`. A dial on the parser cannot reproduce that.
+.web_pqf_policy <- function(url_standard) {
+  if (.is_whatwg(url_standard)) "encode" else "reject"
 }
 
 # RFC 3986 host rendering: decode the triplets section 6.2.2.2 permits decoding
@@ -672,8 +752,29 @@
 # happen, then substituted the profile-correct host back afterwards. That
 # masking also hid the rest of the host from every check the parser makes
 # (RURL-rgjpcbuk / RURL-ezhzpkhg deletion 2).
+#
+# `pqf_bytes` -- what a C0 control, SP or DEL in path/query/fragment means:
+#
+#   "reject"  a parse error, which is what libcurl did. The no-selector default
+#             and the `rfc3986` setting -- neither `pchar`, `query` nor
+#             `fragment` admits those octets raw, and RFC 3986 has no
+#             escape-it-for-me rule to fall back on.
+#   "encode"  percent-encoded in place. WHATWG's path/query/fragment states do
+#             not reject: they run each code point through a percent-encode set,
+#             so an unwritable byte is ESCAPED. Nothing here applies the rest of
+#             those sets ("<", "`", '"' ...) -- that is RENDERING, it belongs to
+#             the serializer, and the serializer already does it.
+#
+# This too was compensated for outside the parser, and in a way that shows why
+# it could not stay there: `.sanitize_whatwg_pqf_vec()` re-spelled the input
+# with the full WHATWG encode sets and re-parsed after the first attempt failed
+# (RURL-ezhzpkhg deletion 5). Because the retry was gated on FAILURE and rewrote
+# all three components at once, whether a "<" in the QUERY was stored as "<" or
+# "%3C" was decided by whether the PATH happened to hold a space. Acceptance and
+# spelling are separate axes; a second parse of a rewritten string conflates
+# them by construction.
 .parse_web_url_one <- function(url, last_at_userinfo = FALSE,
-                               host_pct = "narrow") {
+                               host_pct = "narrow", pqf_bytes = "reject") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -829,7 +930,7 @@
   }
 
   if (nzchar(path)) {
-    path <- .web_normalize_component(path)
+    path <- .web_normalize_component(path, pqf_bytes)
     if (is.null(path)) {
       return(NULL)
     }
@@ -848,7 +949,7 @@
     if (is.null(x) || !nzchar(x)) {
       return(list(ok = TRUE, value = NULL))
     }
-    v <- .web_normalize_component(x)
+    v <- .web_normalize_component(x, pqf_bytes)
     if (is.null(v)) {
       list(ok = FALSE, value = NULL)
     } else {
