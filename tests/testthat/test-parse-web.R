@@ -240,8 +240,17 @@ test_that("an IPv6 literal is normalized only when that comes out shorter", {
   # makes the rule look value-dependent when it is purely about length.
   expect_identical(p("http://[::1:2]/")$host, "[::1:2]")
   expect_identical(p("http://[::0001:0002]/")$host, "[::0.1.0.2]")
-  # A "%zone" suffix is dropped.
-  expect_identical(p("http://[::1%25eth0]/")$host, "[::1]")
+  # A "%" anywhere inside the brackets is a parse error (RURL-ezhzpkhg). This
+  # is a DELIBERATE departure from libcurl, which dropped a "%zone" suffix and
+  # kept the address; the seam previously copied that and so accepted
+  # `[::1%]`, which libcurl itself rejected. Neither host model rurl ships has
+  # a zone production -- WHATWG forbids "%" in an IPv6 address, and RFC 9844
+  # restored RFC 3986's zone-less `IP-literal` -- and the downstream host gate
+  # was already rejecting every one of these rows, so this narrows the seam
+  # onto the gates behind it rather than moving any public output.
+  expect_null(p("http://[::1%25eth0]/"))
+  expect_null(p("http://[::1%eth0]/"))
+  expect_null(p("http://[::1%]/"))
   # Invalid literals are parse errors.
   expect_null(p("http://[zz]/"))
   expect_null(p("http://[1:2:3]/"))

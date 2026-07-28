@@ -11,11 +11,27 @@
 # fully PREPARED URL string (Phase 1 has already fabricated the scheme, stripped
 # tab/LF/CR, rewritten backslashes, encoded excess authority "@", canonicalized
 # WHATWG IPv4 and applied the host-charset shim) and returns either `NULL` (the
-# row is a parse error) or a list with libcurl's field names and spellings:
-# `url`, `scheme`, `host`, `port`, `path`, `query`, `fragment`, `user`,
-# `password`. Absent components are `NULL`, exactly as libcurl reports them, so
-# every `%||% NA_character_` and `.blank_to_na()` downstream keeps working
-# unchanged.
+# row is a parse error) or a list of components: `url`, `scheme`, `host`,
+# `port`, `path`, `query`, `fragment`, `user`, `password`. Absent components are
+# `NULL`, exactly as libcurl reported them, so every `%||% NA_character_` and
+# `.blank_to_na()` downstream keeps working unchanged.
+#
+# EIGHT of those nine reproduce libcurl's spelling and were verified to. `url`
+# DOES NOT, and never did -- read this before reaching for it:
+#
+#   input                     libcurl $url             this $url
+#   HTTP://example.com/p      http://example.com/p     HTTP://example.com/p
+#   http://example.com        http://example.com/      http://example.com
+#   http://example.com/a%2fb  http://example.com/a%2Fb http://example.com/a%2fb
+#
+# libcurl RE-SERIALIZES (ASCII-lowercases the scheme, supplies "/" for an empty
+# path, uppercases every %XX); this returns the PREPARED INPUT VERBATIM. Over a
+# 53,407-input corpus 10,614 rows (~20%) differ on `url`, against 3 on the eight
+# consumed fields. Nothing in rurl reads `url` -- `.extract_raw_components()`
+# and the vectorized path take scheme/host/port/path/query/fragment/user/
+# password and nothing else -- so the divergence is inert. It stops being inert
+# the moment someone treats `url` as a re-serialization; the FSSS
+# (`serialize_url()`) is what renders a URL, not this field.
 #
 # WHY IT REPRODUCES LIBCURL RATHER THAN THE SPEC DIRECTLY. rurl's accept/reject
 # verdict at this seam is load-bearing for `parse_status`, and the profile
@@ -271,20 +287,29 @@
 # dotted-quad tail into two hextets and lowercases, per the WHATWG serializer.
 # libcurl instead normalizes through inet_ntop and then keeps the result only
 # if it came out SHORTER than the source text; otherwise the source stands
-# verbatim, case and dotted quad intact. A "%zone" suffix is dropped. Returns
-# NULL when the literal is invalid.
+# verbatim, case and dotted quad intact. Returns NULL when the literal is
+# invalid.
 .web_ipv6_serialize <- function(inner) {
   # ASCII guard before any ICU call: an IPv6 literal is ASCII by construction,
   # and `stringi` refuses a declared-UTF-8 string holding invalid octets.
   if (any(.web_bytes(inner) >= 0x80L)) {
     return(NULL)
   }
-  pct <- stringi::stri_locate_first_fixed(inner, "%")[1L, 1L]
-  if (!is.na(pct)) {
-    inner <- substring(inner, 1L, pct - 1L)
+  # A "%" anywhere inside the brackets REJECTS (RURL-ezhzpkhg). This seam used
+  # to strip a "%zone" suffix and carry on, which silently ACCEPTED literals
+  # every other part of rurl refuses: `ftp://[::1%]/x` parsed here with host
+  # `[::1]` though libcurl rejected it outright. Rejecting agrees with both
+  # host models rurl actually ships -- WHATWG forbids "%" in an IPv6 address,
+  # and `.RFC3986_IPV6_RE` has no zone production either (RFC 9844 restored
+  # RFC 3986's zone-less `IP-literal`) -- and it agrees with the downstream
+  # host gate, which was already rejecting every one of these rows. That gate
+  # is what made the widening invisible; a seam whose acceptance is wider than
+  # every gate behind it is one refactor away from becoming user-visible.
+  if (any(.web_bytes(inner) == 0x25L)) {
+    return(NULL)
   }
-  # The zone-stripped source text, kept for the length comparison and the
-  # verbatim return at the end -- `inner` itself is consumed by the quad split.
+  # The source text, kept for the length comparison and the verbatim return at
+  # the end -- `inner` itself is consumed by the quad split below.
   src_inner <- inner
   quad <- NA_character_
   oct <- "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
