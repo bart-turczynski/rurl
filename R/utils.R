@@ -37,14 +37,23 @@
 
 # `substring()` on BYTES: the bytes of `s` from byte `first` to byte `last`
 # inclusive, keeping the input's encoding declaration. Out-of-range indices
-# clamp to "" exactly as `substring()` does.
+# clamp to "" exactly as `substring()` does, and `first = NA` yields NA as it
+# does there too.
+#
+# ONE deliberate difference: `last = NA` means "to the end of `s`" rather than
+# `substring()`'s NA, because it is this function's default argument -- callers
+# say `.byte_substring(s, i)` to take a suffix.
 .byte_substring <- function(s, first, last = NA_integer_) {
+  first <- as.integer(first)
+  if (is.na(first)) {
+    return(NA_character_)
+  }
   b <- charToRaw(s)
   n <- length(b)
   if (is.na(last)) {
     last <- n
   }
-  first <- max(as.integer(first), 1L)
+  first <- max(first, 1L)
   last <- min(as.integer(last), n)
   out <- if (first > last) "" else rawToChar(b[first:last])
   Encoding(out) <- Encoding(s)
@@ -70,6 +79,18 @@
   for (i in which(present & !ascii)) {
     out[i] <- .byte_substring(s[i], first[i], last[i])
   }
+  out
+}
+
+# Octet count of each element, NA where the element is NA. `nchar(type =
+# "bytes")` counts without decoding, so unlike `stringi::stri_length()` -- which
+# THROWS `invalid UTF-8 byte sequence detected` -- it is total over declared-
+# UTF-8 elements holding invalid octets. Use it whenever a length feeds a
+# `.byte_substring*()` offset, so the measuring and the cutting share one unit.
+.byte_length <- function(s) {
+  out <- rep(NA_integer_, length(s))
+  ok <- !is.na(s)
+  out[ok] <- nchar(s[ok], type = "bytes")
   out
 }
 
@@ -105,6 +126,31 @@
   ok <- !is.na(x) & (validUTF8(x) | Encoding(x) == "latin1")
   if (any(ok)) {
     out[ok] <- grepl(pattern, x[ok], ...)
+  }
+  out
+}
+
+# `gsub()` on an UNDECODABLE element: returned BYTE-IDENTICAL, quietly and in
+# every locale. The substitution counterpart of `.grepl_decodable()`, and needed
+# for the same reason -- `gsub()` THROWS `input string 1 is invalid UTF-8` on a
+# declared-UTF-8 element holding invalid octets, with `fixed = TRUE` no less
+# than `perl = TRUE`, and one such element aborts the whole vectorized call.
+#
+# Leaving the bytes alone rather than substituting on them is the conservative
+# half of the choice, and it is deliberate. `useBytes = TRUE` would also stop
+# the throw, and for an ASCII-only pattern it is even byte-exact (UTF-8 is
+# self-synchronizing, so an ASCII octet never occurs inside a multi-byte
+# sequence) -- but it REWRITES an undecodable element, and every caller here
+# feeds its output back into masks that later decide acceptance. An undecodable
+# row is already bound for rejection; returning it unchanged keeps it there,
+# whereas rewriting it can only change what a downstream predicate sees. Same
+# rule as the host-charset greps: at these seams, do not touch what you cannot
+# read.
+.gsub_decodable <- function(pattern, replacement, x, ...) {
+  out <- x
+  ok <- !is.na(x) & (validUTF8(x) | Encoding(x) == "latin1")
+  if (any(ok)) {
+    out[ok] <- gsub(pattern, replacement, x[ok], ...)
   }
   out
 }

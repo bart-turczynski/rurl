@@ -264,8 +264,15 @@
 # Vectorized .host_is_ace(): TRUE per element when any label is an ACE A-label.
 # NA or empty hosts are FALSE. Used by the vectorized domain/TLD phase to pick
 # the emitted spelling under host_encoding = "keep".
+#
+# `.grepl_decodable()` rather than bare `grepl()` (RURL-kmpnbvdl): an
+# undecodable host reaches here, and `ignore.case = TRUE` without `perl` is the
+# WIDE-CHARACTER path, which warns `unable to translate '<80>!' to a wide
+# string` and resolves case against LC_CTYPE. FALSE is the same answer it
+# already produced -- "xn--" is ASCII and an undecodable host is not a valid
+# A-label either way -- but now it is reached without consulting the locale.
 .host_is_ace_vec <- function(host) {
-  res <- grepl("(^|\\.)xn--", host, ignore.case = TRUE)
+  res <- .grepl_decodable("(^|\\.)xn--", host, ignore.case = TRUE)
   res[is.na(host) | !nzchar(host)] <- FALSE
   res
 }

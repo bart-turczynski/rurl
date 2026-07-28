@@ -415,7 +415,7 @@
     userinfo <- .byte_substring(a, 1L, last - 1L)
     host_part <- .byte_substring(a, last)
     if (repair_at[i]) {
-      userinfo <- gsub("@", "%40", userinfo, fixed = TRUE)
+      userinfo <- .gsub_decodable("@", "%40", userinfo, fixed = TRUE)
     }
     if (charset[i]) {
       userinfo <- .percent_encode_userinfo_charset(userinfo)
@@ -595,7 +595,7 @@
 # the case rule only, for callers that must not change which octets stay
 # encoded.
 .pct_hex_upper <- function(x) {
-  gsub("%([0-9a-f]{2})", "%\\U\\1", x, perl = TRUE)
+  .gsub_decodable("%([0-9a-f]{2})", "%\\U\\1", x, perl = TRUE)
 }
 
 .rfc_host_retain_controls <- function(host) {
@@ -808,11 +808,22 @@
   filled_host[literal_mask] <- stringi::stri_replace_all_regex(
     filled_host[literal_mask], literal_fill_cp, "a"
   )
-  ui_prefix <- stringi::stri_sub(
-    authority, 1L, stringi::stri_length(authority) -
-      stringi::stri_length(after_ui)
-  )
-  port_suffix <- stringi::stri_sub(after_ui, stringi::stri_length(host) + 1L)
+  # Reassembled in BYTES, for the same reason the `@` split above is
+  # (RURL-kmpnbvdl) -- and the split alone was not enough. `authority`,
+  # `after_ui` and `host` are all declared UTF-8 whatever their octets, and
+  # `stri_length()` THROWS `invalid UTF-8 byte sequence detected` on an
+  # undecodable one, aborting the whole vectorized call exactly as `substring()`
+  # did. It survived the split fix because it is only reached on a `restore`
+  # row: an undecodable host also has to trip a charset mask, which needs a
+  # sub-delim or shim code point ALONGSIDE the bad octet (`http://<80>!/p`,
+  # `http://<c3><28>/p` -- the `(` is itself a sub-delim). A corpus varying one
+  # octet at a time never builds that pair.
+  #
+  # `ui_prefix` is exactly the split's left side, so reuse `at` rather than
+  # recomputing it as a length difference: `after_ui` was cut at byte `at + 1`,
+  # so the prefix is the first `at` bytes, and `at == 0L` yields "" as before.
+  ui_prefix <- .byte_substring_vec(authority, 1L, at)
+  port_suffix <- .byte_substring_vec(after_ui, .byte_length(host) + 1L)
   new_authority <- paste0(ui_prefix, filled_host, port_suffix)
 
   url_out <- url
