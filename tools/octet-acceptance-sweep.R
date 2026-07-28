@@ -157,6 +157,57 @@ for (bn in names(bad_seqs)) {
   }
 }
 
+# PERCENT-TRIPLET HOSTS (RURL-rgjpcbuk / RURL-ezhzpkhg deletion 2). The two
+# blocks above put RAW octets in the host; neither can reach the ENCODED
+# spelling, which is decided by a different rule -- the host's percent-DECODE
+# ORDER. `%60` and a literal "`" are the same host code point written two ways,
+# and until this block existed the sweep could score "0 differing rows" over a
+# corpus that never varied one of them.
+#
+# `%HH` for every HH, in the shapes whose gates historically differed:
+#
+#   pct_host    the plain authority -- the shape the pre-parse shim covered
+#   pct_3slash  THREE slashes, which that shim's `^scheme://` regex could not
+#               match, so the parser judged it alone (the deletion-3 shape)
+#   pct_ftps    `ftps`, a rurl scheme that is not WHATWG-special, which the
+#               shim's `whatwg` eligibility set therefore excluded
+#   pct_port    a triplet followed by a real ":port" delimiter
+#   pct_ui      a triplet in USERINFO, which is never percent-decoded and must
+#               not move when the host rule changes
+#
+# and two conjunctions, because admitting a triplet is exactly the kind of
+# conjunction-guarded behaviour a one-at-a-time corpus cannot falsify: a
+# masked host bypasses the rejection of everything ELSE in it, so the second
+# triplet / the literal gap char is what makes the row reachable.
+pct_shapes <- list(
+  pct_host   = function(t) c(asc("http://a"), t, asc("b.com/p")),
+  pct_3slash = function(t) c(asc("http:///a"), t, asc("b.com/p")),
+  pct_ftps   = function(t) c(asc("ftps://a"), t, asc("b.com/p")),
+  pct_port   = function(t) c(asc("http://a"), t, asc("b.com:8080/p")),
+  pct_ui     = function(t) c(asc("http://u"), t, asc("v@h.com/p")),
+  pct_gap_x  = function(t) c(asc("http://a%60b"), t, asc("c.com/p")),
+  pct_lit_x  = function(t) c(asc("http://a!b"), t, asc("c.com/p"))
+)
+for (sn in names(pct_shapes)) {
+  f <- pct_shapes[[sn]]
+  for (o in 0:255) {
+    corpus <- c(corpus, bstr(f(asc(sprintf("%%%02X", o)))))
+    labels <- c(labels, sprintf("%s:%03d", sn, o))
+  }
+}
+
+# Malformed and case-varied triplets: a "%" that is not followed by two hex
+# digits is a host PARSE ERROR (not a literal "%"), and the hex case must not
+# decide acceptance.
+pct_odd <- c(
+  "http://a%6b.com/p", "http://a%b.com/p", "http://a%zzb.com/p",
+  "http://a%2b.com/p", "http://a%2B.com/p", "http://a%60b.com/p",
+  "http://a%60b.com/p", "http://a%6-b.com/p", "http://a%%60b.com/p",
+  "http://a%25%36%30b.com/p", "http://a%.com/p", "http://%60/p"
+)
+corpus <- c(corpus, pct_odd)
+labels <- c(labels, sprintf("pct_odd:%02d", seq_along(pct_odd)))
+
 # Bytes AND the encoding mark: a transcoding regression changes neither value
 # nor length, only the mark, and would otherwise pass unnoticed.
 hex <- function(x) {
