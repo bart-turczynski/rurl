@@ -783,73 +783,6 @@
   )
 }
 
-# WHATWG path/query/fragment parse fallback. The web parser rejects some
-# WPT-valid
-# bytes outside the authority (for example raw DEL, non-ASCII fragment bytes,
-# and C0 controls other than tab/LF/CR), while WHATWG serializes those
-# component bytes with the path/query/fragment percent-encode sets. This helper
-# prepares a parser-safe spelling of ONLY the post-authority components; Stage A
-# uses it as a fallback after the original parse fails, so already-accepted
-# readable paths keep their historical raw spelling under path_encoding="keep".
-.sanitize_whatwg_pqf_vec <- function(url, url_standard) {
-  if (!.is_whatwg(url_standard)) {
-    return(url)
-  }
-  vapply(url, .sanitize_whatwg_pqf_one, character(1),
-    USE.NAMES = FALSE
-  )
-}
-
-.sanitize_whatwg_pqf_one <- function(url) {
-  if (is.na(url) || !nzchar(url)) {
-    return(url)
-  }
-  m <- stringi::stri_match_first_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*://[^/?#]*)(.*)$"
-  )
-  if (is.na(m[1L, 1L])) {
-    return(url)
-  }
-
-  prefix <- m[1L, 2L]
-  rest <- m[1L, 3L]
-  scheme <- sub(":.*$", "", prefix)
-
-  hash <- regexpr("#", rest, fixed = TRUE)[1L]
-  qmark <- regexpr("?", rest, fixed = TRUE)[1L]
-  has_query <- qmark > 0L && (hash < 0L || qmark < hash)
-  has_fragment <- hash > 0L
-
-  path_end <- nchar(rest)
-  if (has_query) {
-    path_end <- min(path_end, qmark - 1L)
-  }
-  if (has_fragment) {
-    path_end <- min(path_end, hash - 1L)
-  }
-  path <- if (path_end > 0L) substr(rest, 1L, path_end) else ""
-
-  query <- NA_character_
-  if (has_query) {
-    query_end <- if (has_fragment) hash - 1L else nchar(rest)
-    query <- substr(rest, qmark + 1L, query_end)
-  }
-
-  fragment <- NA_character_
-  if (has_fragment) {
-    fragment <- substr(rest, hash + 1L, nchar(rest))
-  }
-
-  out <- paste0(prefix, .whatwg_path_percent_encode(path))
-  if (has_query) {
-    out <- paste0(out, "?", .whatwg_query_percent_encode(query, scheme))
-  }
-  if (has_fragment) {
-    out <- paste0(out, "#", .whatwg_fragment_percent_encode(fragment))
-  }
-  out
-}
-
 # RFC 3986 scheme + path-rootless support for special schemes without `//`
 # (RURL-pwsacxvo). In RFC 3986 section 3, an authority is present only when the
 # scheme-specific part starts with a literal `//`; otherwise `http:example.com`
@@ -1359,8 +1292,8 @@
   #     `url_standard` -- so the gate must judge the input as accepted, or
   #     every scheme-less row would fail RFC 3986's mandatory `scheme ":"`
   #     and the grammar gate would silently re-implement scheme_policy.
-  #   * AFTER it come the PARSER-COMPAT repairs (excess-"@" encoding, WHATWG
-  #     IPv4 canonicalization, the host-charset shim, pqf sanitization). Those
+  #   * AFTER it come the PARSER-COMPAT repairs (WHATWG userinfo charset
+  #     acceptance, WHATWG IPv4 canonicalization, the host-charset shim). Those
   #     exist to get a string past the web parser; judging their OUTPUT would
   #     let a
   #     repair launder an input the RFC has no production for -- exactly the
@@ -1386,13 +1319,9 @@
   # repeated-"@" repair that used to precede it.
   shim <- .shim_whatwg_host_charset_vec(url_to_parse, url_standard)
   url_to_parse <- shim$url
-  whatwg_pqf_url <- .sanitize_whatwg_pqf_vec(
-    url_to_parse, url_standard
-  )
 
   list(
     url_to_parse = url_to_parse,
-    whatwg_pqf_url = whatwg_pqf_url,
     # Subject of the uniform RFC 3986 gate (RURL-qrfrvmkg); see above.
     rfc_gate_input = rfc_gate_input,
     looks_like_protocol = looks_like_protocol,
@@ -1506,7 +1435,8 @@
 # the authority is followed directly by `?`, `#`, or end-of-string there is no
 # path, so fall back to the parser's `$path` (the canonical "/" trailing-slash
 # expects).
-.extract_raw_path_vec <- function(prepared, engine_path) {
+.extract_raw_path_vec <- function(prepared, engine_path,
+                                  pqf_bytes = "reject") {
   out <- engine_path
   ok <- !is.na(prepared) & !is.na(engine_path)
   if (!any(ok)) {
@@ -1532,6 +1462,15 @@
     )
     raw[has_path] <- stringi::stri_sub(bp, start, end)
   }
+  # This slice bypasses the parser's component pass by design (dot segments must
+  # survive to `path_normalization`), so under `pqf_bytes = "encode"` it is also
+  # the one place a C0/SP/DEL byte could reach a public surface UNESCAPED --
+  # while `query` and `fragment`, which come straight off the parser, are
+  # escaped. That asymmetry is not a spelling preference; it would put a literal
+  # space in `clean_url()` and a raw control byte in `path`.
+  if (identical(pqf_bytes, "encode")) {
+    raw <- vapply(raw, .web_escape_pqf_bytes, character(1), USE.NAMES = FALSE)
+  }
   out[ok] <- raw
   out
 }
@@ -1542,12 +1481,13 @@
 # parsers split on raw "&"/"=" then decode per-pair. scheme/host as-is. The path
 # is re-derived from the prepared input by .extract_raw_path_vec() (see there)
 # so dot segments survive to `path_normalization`.
-.extract_raw_components <- function(parsed_web, prepared) {
+.extract_raw_components <- function(parsed_web, prepared,
+                                    pqf_bytes = "reject") {
   list(
     scheme = parsed_web$scheme %||% NA_character_,
     host = parsed_web$host %||% NA_character_,
     path = .extract_raw_path_vec(
-      prepared, parsed_web$path %||% NA_character_
+      prepared, parsed_web$path %||% NA_character_, pqf_bytes
     ),
     # .blank_to_na(): present-but-empty query "" -> NA.
     query = .blank_to_na(parsed_web$query %||% NA_character_)

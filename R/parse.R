@@ -1786,28 +1786,21 @@ safe_parse_urls <- function(url,
   # host triplet as filler and substituting the profile's spelling back
   # afterwards; the parser owns it now. See `host_pct` in R/parse-web.R.
   host_pct <- .web_host_pct_policy(opts$url_standard)
+  # Whether an unwritable byte outside the authority is refused or escaped
+  # (RURL-ezhzpkhg deletion 5). This used to be a SECOND parse: Phase 1 kept a
+  # copy of the input respelled with the WHATWG encode sets, and a row that
+  # failed the first attempt was re-parsed from that copy. See `pqf_bytes` in
+  # R/parse-web.R for why a retry-on-failure cannot express the rule.
+  pqf_bytes <- .web_pqf_policy(opts$url_standard)
   parsed_list <- vector("list", n)
   parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
       prep$url_to_parse[parse_idx], .parse_web_url_one,
-      last_at_userinfo = last_at, host_pct = host_pct
+      last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
-  parsed_from_pqf_fallback <- rep(FALSE, n)
-  fallback_idx <- which(
-    web_parseable & !web_ok & prep$whatwg_pqf_url != prep$url_to_parse
-  )
-  if (length(fallback_idx) > 0L) {
-    parsed_list[fallback_idx] <- lapply(
-      prep$whatwg_pqf_url[fallback_idx], .parse_web_url_one,
-      last_at_userinfo = last_at, host_pct = host_pct
-    )
-    fallback_ok <- !vapply(parsed_list[fallback_idx], is.null, logical(1))
-    parsed_from_pqf_fallback[fallback_idx[fallback_ok]] <- TRUE
-    web_ok[fallback_idx[fallback_ok]] <- TRUE
-  }
   file_parse <- .parse_whatwg_file_urls_vec(
     prep$whatwg_file_input[whatwg_file], prep$backslash_rewritten[whatwg_file]
   )
@@ -1859,11 +1852,8 @@ safe_parse_urls <- function(url,
   }, character(1), USE.NAMES = FALSE)
   raw_path <- engine_path
   if (any(web_ok)) {
-    prepared_for_components <- prep$url_to_parse
-    prepared_for_components[parsed_from_pqf_fallback] <-
-      prep$whatwg_pqf_url[parsed_from_pqf_fallback]
     raw_path[web_ok] <- .extract_raw_path_vec(
-      prepared_for_components[web_ok], engine_path[web_ok]
+      prep$url_to_parse[web_ok], engine_path[web_ok], pqf_bytes
     )
   }
   # query/fragment/userinfo are raw pass-throughs; .blank_to_na() maps a
@@ -2483,12 +2473,15 @@ safe_parse_urls <- function(url,
   parsed_web <- .parse_web_url_one(
     prep$url_to_parse,
     last_at_userinfo = .is_whatwg(url_standard),
-    host_pct = .web_host_pct_policy(url_standard)
+    host_pct = .web_host_pct_policy(url_standard),
+    pqf_bytes = .web_pqf_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)
   }
-  raw <- .extract_raw_components(parsed_web, prep$url_to_parse)
+  raw <- .extract_raw_components(
+    parsed_web, prep$url_to_parse, .web_pqf_policy(url_standard)
+  )
   raw_host <- .mark_host_utf8(raw$host)
   raw_query <- raw$query
 
