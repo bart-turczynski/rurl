@@ -1,0 +1,296 @@
+# Literal-oracle tests for the in-tree web/special-scheme parser
+# (R/parse-web.R, RURL-robgajml step 3).
+#
+# EVERY expectation here is a LITERAL, never a differential against
+# `curl::curl_parse_url()`. That is a hard requirement, not a preference:
+# `RURL-cunfohwy`'s curl-zero-reference gate forbids a curl reference anywhere
+# in `tests/`, and an oracle that outlives the dependency is the only kind
+# worth having. The literals were PRODUCED by differential sweeps against
+# libcurl (106,898 inputs across a structural grid, a per-octet sweep of every
+# position, an IPv6/IPv4/percent-escape fuzz corpus and the WPT + in-repo URL
+# corpora, all at zero differences) and then frozen here by hand. The sweep is
+# how they were found; this file is what holds them.
+
+p <- function(url) rurl:::.parse_web_url_one(url)
+
+# Compact fingerprint of one parse, so a whole rule reads as one table.
+fp <- function(url) {
+  r <- p(url)
+  if (is.null(r)) {
+    return("REJECT")
+  }
+  paste(
+    vapply(
+      c("scheme", "host", "port", "path", "query", "fragment",
+        "user", "password"),
+      function(k) if (is.null(r[[k]])) "-" else r[[k]],
+      character(1)
+    ),
+    collapse = "|"
+  )
+}
+
+test_that("a plain URL decomposes into libcurl's field names and spellings", {
+  r <- p("http://u:pw@example.com:8080/a/b?q=1#frag")
+  expect_identical(r$scheme, "http")
+  expect_identical(r$host, "example.com")
+  expect_identical(r$port, "8080")
+  expect_identical(r$path, "/a/b")
+  expect_identical(r$query, "q=1")
+  expect_identical(r$fragment, "frag")
+  expect_identical(r$user, "u")
+  expect_identical(r$password, "pw")
+  expect_identical(r$url, "http://u:pw@example.com:8080/a/b?q=1#frag")
+})
+
+test_that("absent components are NULL, not NA or empty string", {
+  r <- p("http://example.com/")
+  expect_null(r$port)
+  expect_null(r$query)
+  expect_null(r$fragment)
+  expect_null(r$user)
+  expect_null(r$password)
+  # A present-but-empty query/fragment is also NULL: the "?" alone carries no
+  # component. (`.blank_to_na()` downstream never sees an "" from here.)
+  expect_null(p("http://example.com/?")$query)
+  expect_null(p("http://example.com/#")$fragment)
+  expect_null(p("http://example.com/?#")$query)
+})
+
+test_that("the scheme is ASCII-lowercased and the grammar is enforced", {
+  expect_identical(p("HtTp://Ex.CoM/Path?Q#F")$scheme, "http")
+  # Host, path, query and fragment case is NOT touched -- only the scheme.
+  expect_identical(p("HtTp://Ex.CoM/Path?Q#F")$host, "Ex.CoM")
+  expect_identical(p("HtTp://Ex.CoM/Path?Q#F")$path, "/Path")
+  expect_identical(p("h+t-p.x://example.com/")$scheme, "h+t-p.x")
+  expect_null(p("1http://example.com/"))   # must start with ALPHA
+  expect_null(p("://example.com/"))        # no scheme at all
+  expect_null(p("h t://example.com/"))     # space is not a scheme character
+})
+
+test_that("1 to 3 slashes are accepted and 3 promotes a path segment to host", {
+  expect_identical(fp("http:/example.com/"), "http|example.com|-|/|-|-|-|-")
+  expect_identical(fp("http://example.com/"), "http|example.com|-|/|-|-|-|-")
+  # Three slashes = EMPTY authority; libcurl slides the first path segment into
+  # the host. This is the shape `.extract_raw_path_vec()` compensates for.
+  expect_identical(fp("http:///a/b"), "http|a|-|/b|-|-|-|-")
+  expect_identical(fp("http:///a?q#f"), "http|a|-|/|q|f|-|-")
+  # No slash, or four or more, is a parse error.
+  expect_null(p("http:example.com/"))
+  expect_null(p("http:////a"))
+  expect_null(p("http://///a"))
+  expect_null(p("http:///"))    # empty authority with nothing to promote
+  expect_null(p("http://"))     # empty authority
+})
+
+test_that("the port must be digits within range, and loses leading zeros", {
+  expect_identical(p("http://example.com:80/")$port, "80")
+  expect_identical(p("http://example.com:080/")$port, "80")
+  expect_identical(p("http://example.com:00080/")$port, "80")
+  expect_identical(p("http://example.com:0/")$port, "0")
+  expect_identical(p("http://example.com:65535/")$port, "65535")
+  # An EMPTY port is no port, not an error.
+  expect_null(p("http://example.com:/")$port)
+  expect_identical(p("http://example.com:/")$host, "example.com")
+  expect_null(p("http://example.com:65536/"))
+  expect_null(p("http://example.com:8a/"))
+  expect_null(p("http://example.com:+80/"))
+  expect_null(p("http://example.com: 80/"))
+})
+
+test_that("userinfo splits at the first colon and admits at most one '@'", {
+  expect_identical(fp("http://u@example.com/"), "http|example.com|-|/|-|-|u|-")
+  expect_identical(
+    fp("http://u:p:q@example.com/"), "http|example.com|-|/|-|-|u|p:q"
+  )
+  # Empty sides are reported as "" (the caller's `.blank_to_na()` maps them).
+  expect_identical(p("http://@example.com/")$user, "")
+  expect_identical(p("http://u:@example.com/")$password, "")
+  expect_identical(p("http://:p@example.com/")$user, "")
+  # A second "@" is a parse error whichever side it lands on.
+  expect_null(p("http://a@b@example.com/"))
+  # ...which is exactly why Phase 1 pre-encodes the excess one.
+  expect_identical(p("http://a%40b@example.com/")$user, "a%40b")
+})
+
+test_that("userinfo is percent-uppercased but never percent-decoded", {
+  expect_identical(p("http://a%2eb@example.com/")$user, "a%2Eb")
+  expect_identical(p("http://a%41b@example.com/")$user, "a%41b")
+  # Uppercasing is applied to each side of the ":" independently.
+  expect_identical(p("http://a%2eb:c%3fd@example.com/")$password, "c%3Fd")
+})
+
+test_that("the host is percent-decoded, then validated", {
+  expect_identical(p("http://a%2Eb/")$host, "a.b")
+  expect_identical(p("http://a%41b/")$host, "aAb")
+  # A "%" without two hex digits after it is a parse error in the host
+  # (unlike in the path, where it is simply left alone).
+  expect_null(p("http://a%zz/"))
+  expect_null(p("http://a%2/"))
+  # Escapes that decode to a forbidden byte reject just as the literal does.
+  expect_null(p("http://a%2Fb/"))   # "/"
+  expect_null(p("http://a%25b/"))   # "%"
+  expect_null(p("http://a%40b/"))   # "@"
+  expect_null(p("http://a%3Ab/"))   # ":"
+  expect_null(p("http://a%20b/"))   # SP
+  expect_null(p("http://a%00b/"))   # NUL
+  # DEL is the ONE byte whose pre- and post-decode verdicts differ: rejected
+  # written literally, kept when written as an escape.
+  expect_identical(p("http://ho%7Fst/")$host, "ho\u007fst")
+})
+
+test_that("host code points outside libcurl's set are rejected", {
+  # The full measured allowed set is [A-Za-z0-9._~|-]. Note "|" is IN it,
+  # although WHATWG forbids it in a host.
+  expect_identical(p("http://a|b/")$host, "a|b")
+  expect_identical(p("http://a_b~c-d.e/")$host, "a_b~c-d.e")
+  for (ch in c("!", "\"", "$", "%", "&", "'", "(", ")", "*", "+", ",",
+               ";", "<", "=", ">", "^", "`", "{", "}")) {
+    expect_null(p(paste0("http://a", ch, "b/")), info = ch)
+  }
+  # C0 controls, space and DEL, written literally.
+  expect_null(p("http://a\u0001b/"))
+  expect_null(p("http://a b/"))
+  expect_null(p("http://a\u007fb/"))
+})
+
+test_that("host and userinfo take raw high bytes only as well-formed UTF-8", {
+  expect_identical(p("http://a\u00e9b/")$host, "a\u00e9b")
+  expect_identical(p("http://\u4e2d\u6587.com/")$host, "\u4e2d\u6587.com")
+  expect_identical(p("http://u\u00e9x@example.com/")$user, "u\u00e9x")
+  # A lone continuation byte is not valid UTF-8 -> parse error, in EVERY
+  # locale. This is the locale-invariance pin, held here by construction.
+  lone <- function(byte) rawToChar(as.raw(byte))
+  expect_null(p(paste0("http://a", lone(0x80L), "b/")))
+  expect_null(p(paste0("http://a", lone(0xC3L), "b/")))
+  expect_null(p(paste0("http://u", lone(0x80L), "x@example.com/")))
+  # Percent-escapes decode to the same test: valid UTF-8 passes, a lone byte
+  # does not.
+  expect_identical(p("http://a%C3%A9b/")$host, "a\u00e9b")
+  expect_null(p("http://a%80b/"))
+})
+
+test_that("IPv4 normalization is reproduced, including its refusals", {
+  expect_identical(p("http://0x7f.1/")$host, "127.0.0.1")
+  expect_identical(p("http://127.1/")$host, "127.0.0.1")
+  expect_identical(p("http://0177.0.0.1/")$host, "127.0.0.1")
+  expect_identical(p("http://2130706433/")$host, "127.0.0.1")
+  expect_identical(p("http://1.2.3.04/")$host, "1.2.3.4")
+  expect_identical(p("http://0xffffffff/")$host, "255.255.255.255")
+  # Tokens that are NOT addresses stay registered names -- never an error.
+  expect_identical(p("http://1.2.3.4.5/")$host, "1.2.3.4.5")
+  expect_identical(p("http://999.1.1.1/")$host, "999.1.1.1")
+  expect_identical(p("http://4294967296/")$host, "4294967296")
+  expect_identical(p("http://0x/")$host, "0x")           # empty hex digits
+  expect_identical(p("http://1.2.3.4./")$host, "1.2.3.4.") # trailing dot
+  # Only a LOWERCASE "0x" prefix is hex to libcurl.
+  expect_identical(p("http://0Xff/")$host, "0Xff")
+  expect_identical(p("http://0xff/")$host, "0.0.0.255")
+  # A percent-escape anywhere in the host SUPPRESSES the numeric reading.
+  expect_identical(
+    p("http://%30%78%63%30%2e%30%32%35%30.01/")$host, "0xc0.0250.01"
+  )
+})
+
+test_that("an IPv6 literal is normalized only when that comes out shorter", {
+  # THE rule: libcurl adopts inet_ntop's spelling only if it is strictly
+  # shorter than the source; otherwise the source stands, case and all.
+  # Shorter -> rewritten (and inet_ntop lowercases).
+  expect_identical(p("http://[0:0:0:0:0:0:0:1]/")$host, "[::1]")
+  expect_identical(p("http://[0001:0002::]/")$host, "[1:2::]")
+  expect_identical(p("http://[0ABC::0DEF]/")$host, "[abc::def]")
+  expect_identical(p("http://[ABCD:0::EF]/")$host, "[abcd::ef]")
+  expect_identical(p("http://[1:2:3:4:5:6:0:0]/")$host, "[1:2:3:4:5:6::]")
+  expect_identical(p("http://[1:0:0:0:2:0:0:3]/")$host, "[1::2:0:0:3]")
+  expect_identical(p("http://[::0.0.0.0]/")$host, "[::]")
+  # Not shorter -> verbatim, INCLUDING uppercase and leading zeros.
+  expect_identical(p("http://[AB::CD]/")$host, "[AB::CD]")
+  expect_identical(p("http://[ABCD::EF]/")$host, "[ABCD::EF]")
+  expect_identical(p("http://[::ffff:0:0]/")$host, "[::ffff:0:0]")
+  expect_identical(p("http://[::1:000]/")$host, "[::1:000]")
+  expect_identical(p("http://[::0fff:0001]/")$host, "[::0fff:0001]")
+  # The same ADDRESS, two spellings, two answers -- this is the pair that
+  # makes the rule look value-dependent when it is purely about length.
+  expect_identical(p("http://[::1:2]/")$host, "[::1:2]")
+  expect_identical(p("http://[::0001:0002]/")$host, "[::0.1.0.2]")
+  # A "%zone" suffix is dropped.
+  expect_identical(p("http://[::1%25eth0]/")$host, "[::1]")
+  # Invalid literals are parse errors.
+  expect_null(p("http://[zz]/"))
+  expect_null(p("http://[1:2:3]/"))
+  expect_null(p("http://[1:2:3:4:5:6:7:8:9]/"))
+  expect_null(p("http://[::1::2]/"))
+  expect_null(p("http://[v1.x]/"))   # no IPvFuture
+})
+
+test_that("inet_ntop's dotted-quad rule is libcurl's narrowed one", {
+  # Dotted only when the leading zero run is 6, or is 5 and word[5] is ffff.
+  expect_identical(p("http://[::0808:0808]/")$host, "[::8.8.8.8]")
+  expect_identical(p("http://[::ffff:0808:0808]/")$host, "[::ffff:8.8.8.8]")
+  expect_identical(
+    p("http://[0:0:0:0:0:ffff:1.2.3.4]/")$host, "[::ffff:1.2.3.4]"
+  )
+  # A run of 7 does NOT go dotted -- the BSD/glibc clause libcurl omits. Were
+  # it present, `[::0:2]` would come back "[::0.0.0.2]".
+  expect_identical(p("http://[::0:2]/")$host, "[::2]")
+  expect_identical(p("http://[::0:1]/")$host, "[::1]")
+})
+
+test_that("the path defaults to '/' and resolves dot segments", {
+  expect_identical(p("http://example.com")$path, "/")
+  expect_identical(p("http://example.com?q")$path, "/")
+  expect_identical(p("http://example.com#f")$path, "/")
+  expect_identical(p("http://example.com/a/../b")$path, "/b")
+  expect_identical(p("http://example.com/a/./b")$path, "/a/b")
+  expect_identical(p("http://example.com/a/../../../b")$path, "/b")
+  expect_identical(p("http://example.com/..")$path, "/")
+  # Encoded dot segments resolve too -- unlike RFC 3986 section 5.2.4, which
+  # recognizes only literal "." and "..".
+  expect_identical(p("http://example.com/%2e%2e/b")$path, "/b")
+  expect_identical(p("http://example.com/a/%2E%2E/b")$path, "/b")
+  # ...but only when the WHOLE segment is a dot segment.
+  expect_identical(p("http://example.com/a%2e.")$path, "/a%2E.")
+  # Empty segments are preserved; no slash collapsing happens here.
+  expect_identical(p("http://example.com//a")$path, "//a")
+})
+
+test_that("path, query and fragment reject C0, SP and DEL and encode >= 0x80", {
+  expect_null(p("http://example.com/a b"))
+  expect_null(p("http://example.com/?a b"))
+  expect_null(p("http://example.com/#a b"))
+  expect_null(p("http://example.com/a\u0001b"))
+  expect_null(p("http://example.com/a\u007fb"))
+  expect_identical(p("http://example.com/\u00e9")$path, "/%C3%A9")
+  expect_identical(p("http://example.com/?a\u00e9b")$query, "a%C3%A9b")
+  expect_identical(p("http://example.com/#a\u00e9b")$fragment, "a%C3%A9b")
+})
+
+test_that("percent pairs are uppercased by a sequential three-byte scan", {
+  expect_identical(p("http://example.com/a%2fb")$path, "/a%2Fb")
+  expect_identical(p("http://example.com/?a%2fb")$query, "a%2Fb")
+  expect_identical(p("http://example.com/#a%2fb")$fragment, "a%2Fb")
+  # Not just valid hex: the PAIR is uppercased.
+  expect_identical(p("http://example.com/?a%zzb")$query, "a%ZZb")
+  # A "%" with fewer than two bytes after it is left alone.
+  expect_identical(p("http://example.com/?a%b")$query, "a%b")
+  expect_identical(p("http://example.com/a%b")$path, "/a%b")
+  # The scan consumes three bytes per "%", so in "%%2e" the first "%" claims
+  # the pair "%2" and the "e" is never a pair member.
+  expect_identical(p("http://example.com/?%%2e")$query, "%%2e")
+  # ...and a freshly encoded high byte can be swallowed the same way, which is
+  # why the encoder emits lowercase and the scan decides the final case.
+  high <- paste0("http://example.com/foo%2", rawToChar(as.raw(0xC3L)),
+                 rawToChar(as.raw(0x82L)), "z")
+  expect_identical(p(high)$path, "/foo%2%c3%82z")
+})
+
+test_that("the query/fragment split is on the FIRST '#' then the FIRST '?'", {
+  expect_identical(fp("http://e.com/a?b#c?d"), "http|e.com|-|/a|b|c?d|-|-")
+  expect_identical(fp("http://e.com/#a#b"), "http|e.com|-|/|-|a#b|-|-")
+  # A "?" after the "#" belongs to the fragment, not the query.
+  expect_null(p("http://e.com/#a?b")$query)
+})
+
+test_that("NA input is a parse error rather than an error condition", {
+  expect_null(p(NA_character_))
+})
