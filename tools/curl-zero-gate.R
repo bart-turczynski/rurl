@@ -431,6 +431,76 @@ install_poisoned_curl <- function(lib) {
   lib
 }
 
+# The two WARNING bodies the clean room MANUFACTURES, sentence by sentence.
+#
+# Tolerating the two check NAMES was the old rule, and it was too coarse
+# (RURL-pdrrmfmu): R CMD check reports several findings under one heading, so
+# anything else filed under "files in 'vignettes'" or "package vignettes"
+# became invisible. A stray `vignettes/leftover.log` really did produce
+# "The following files look like leftovers/mistakes:" under an already-
+# tolerated heading, and C7 still returned PASS.
+#
+# So the heading is tolerated only when EVERY line of its body is one of these
+# sentences. One unrecognized line and the whole block counts again. The
+# file-list lines are held to vignette source extensions specifically, so a
+# leftover named in the list is caught even when no new sentence accompanies
+# it. Quotes may be directional or plain depending on the check's locale.
+CLEAN_ROOM_ARTIFACT_BODY <- c(
+  "^Files in the .vignettes. directory but no files in .inst/doc.:$",
+  "^Directory .inst/doc. does not exist\\.$",
+  "^Package vignettes without corresponding single PDF/HTML:$",
+  paste0("^([‘'][^’']+\\.(Rmd|Rnw|Rtex|Rhtml|Rasciidoc|Rrst)",
+         "[’']\\s*)+$")
+)
+CLEAN_ROOM_ARTIFACT_HEAD <- paste0(
+  "^\\* checking (files in .vignettes.|package vignettes) \\.\\.\\. WARNING$"
+)
+
+# Every flagged line in a 00check.log that the clean room does NOT manufacture.
+# Pure, so the self-test can exercise the tolerance without running a real
+# R CMD check (which is why C7 was previously untestable at unit scale).
+clean_room_findings <- function(lines) {
+  starts <- grep("^\\* ", lines)
+  if (!length(starts)) {
+    return(trimws(grep("^Status:", lines, value = TRUE)))
+  }
+  ends <- c(starts[-1L] - 1L, length(lines))
+  flagged <- character(0)
+  for (i in seq_along(starts)) {
+    head_line <- trimws(lines[starts[i]])
+    if (!grepl("(ERROR|WARNING)\\s*$", head_line)) {
+      next
+    }
+    body <- character(0)
+    if (ends[i] > starts[i]) {
+      body <- trimws(lines[(starts[i] + 1L):ends[i]])
+      body <- body[nzchar(body)]
+    }
+    tolerated <- grepl(CLEAN_ROOM_ARTIFACT_HEAD, head_line) &&
+      all(vapply(body, function(b) {
+        any(vapply(CLEAN_ROOM_ARTIFACT_BODY, grepl, logical(1), x = b))
+      }, logical(1)))
+    if (!tolerated) {
+      # Carry the unrecognized body lines: "... WARNING" alone does not say
+      # what went wrong, and the check directory does not survive the run.
+      extra <- body[!vapply(body, function(b) {
+        any(vapply(CLEAN_ROOM_ARTIFACT_BODY, grepl, logical(1), x = b))
+      }, logical(1))]
+      flagged <- c(flagged, if (length(extra)) {
+        sprintf("%s [%s]", head_line, toString(utils::head(extra, 2L)))
+      } else {
+        head_line
+      })
+    }
+  }
+  # The trailing "Status: N WARNINGs" line summarizes what was just filtered,
+  # so it only counts when a real finding survived.
+  if (length(flagged)) {
+    flagged <- c(flagged, trimws(grep("^Status:", lines, value = TRUE)))
+  }
+  flagged
+}
+
 check_clean_room <- function(root) {
   lib <- tempfile("curl-zero-lib-")
   dir.create(lib, recursive = TRUE)
@@ -507,20 +577,13 @@ check_clean_room <- function(root) {
   # construction. Both reproduce with no shim at all, so treating them as
   # clean-room failures made C7 unpassable for this package no matter what.
   #
-  # The tolerance is deliberately NARROW -- these two check names only, and only
-  # at WARNING. Any other WARNING, any ERROR, and every "Status:" line still
-  # count. `--no-build-vignettes` does NOT skip "checking running R code from
-  # vignettes", so a vignette that loaded curl would still be caught there.
-  vignette_artifact <- paste0(
-    "^\\* checking (files in .vignettes.|package vignettes) \\.\\.\\. WARNING$"
-  )
+  # The tolerance is scoped by CONTENT, not by check name -- see
+  # `clean_room_findings()`. Any other WARNING, any ERROR, and any unrecognized
+  # line under a tolerated heading still count. `--no-build-vignettes` does NOT
+  # skip "checking running R code from vignettes", so a vignette that loaded
+  # curl would still be caught there.
   errors <- if (file.exists(log)) {
-    lines <- readLines(log, warn = FALSE)
-    hits <- trimws(grep("(ERROR|WARNING)\\s*$|^Status:", lines, value = TRUE))
-    hits <- hits[!grepl(vignette_artifact, hits)]
-    # The trailing "Status: N WARNINGs" line summarizes what was just filtered,
-    # so drop it when nothing but the artifacts remains.
-    if (all(grepl("^Status:", hits))) character(0) else hits
+    clean_room_findings(readLines(log, warn = FALSE))
   } else {
     character(0)
   }
@@ -730,6 +793,64 @@ self_test <- function() {
          identical(rule(root, "C1"), FALSE))
   expect("C2 fails closed with no NAMESPACE",
          identical(rule(root, "C2"), FALSE))
+
+  # 15. C7 log judging (RURL-pdrrmfmu). The full C7 runs a real R CMD check and
+  # so stays out of the self-test, but the TOLERANCE is pure and is exercised
+  # here -- which is what made the blind spot findable in the first place. The
+  # artifact block below is the verbatim log the clean room produces.
+  artifact_log <- c(
+    "* checking installed package size ... OK",
+    "* checking files in ‘vignettes’ ... WARNING",
+    "Files in the 'vignettes' directory but no files in 'inst/doc':",
+    "  ‘getting-started.Rmd’ ‘url-standard.Rmd’",
+    "* checking examples ... OK",
+    "* checking package vignettes ... WARNING",
+    "Directory 'inst/doc' does not exist.",
+    "Package vignettes without corresponding single PDF/HTML:",
+    "  ‘getting-started.Rmd’",
+    "  ‘url-standard.Rmd’",
+    "* checking running R code from vignettes ... OK",
+    "* DONE",
+    "Status: 2 WARNINGs"
+  )
+  expect("C7 tolerates the clean room's own two vignette artifacts",
+         identical(clean_room_findings(artifact_log), character(0)))
+
+  # The measured blind spot: an extra finding filed UNDER a tolerated heading.
+  leftover_log <- append(
+    artifact_log,
+    c("The following files look like leftovers/mistakes:",
+      "  ‘leftover.log’"),
+    after = 4L
+  )
+  expect("C7 catches a leftover reported under a tolerated heading",
+         any(grepl("leftovers", clean_room_findings(leftover_log),
+                   fixed = TRUE)))
+
+  # ...and the same file named only in the list, with no new sentence: the
+  # list lines are held to vignette source extensions for exactly this case.
+  listed_log <- artifact_log
+  listed_log[4L] <- "  ‘getting-started.Rmd’ ‘leftover.log’"
+  expect("C7 catches a non-vignette file named in the artifact list",
+         any(grepl("leftover", clean_room_findings(listed_log),
+                   fixed = TRUE)))
+
+  # Unrelated findings under other headings still count, at either severity.
+  expect("C7 catches an unrelated WARNING",
+         length(clean_room_findings(c(
+           "* checking for missing documentation entries ... WARNING",
+           "Undocumented code objects:", "  ‘g’",
+           "Status: 1 WARNING"
+         ))) > 0L)
+  expect("C7 catches an ERROR",
+         length(clean_room_findings(c(
+           "* checking whether the package can be loaded ... ERROR",
+           "Status: 1 ERROR"
+         ))) > 0L)
+  # A wholly clean log stays clean, and the summary line alone is not a finding.
+  expect("C7 passes a clean log",
+         identical(clean_room_findings(c("* checking tests ... OK", "* DONE",
+                                         "Status: OK")), character(0)))
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
   if (length(st$fail)) {
