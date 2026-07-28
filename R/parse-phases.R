@@ -408,10 +408,12 @@
 
   repaired <- vapply(which(eligible), function(i) {
     a <- authority[i]
-    at_pos <- gregexpr("@", a, fixed = TRUE)[[1L]]
-    last <- at_pos[length(at_pos)]
-    userinfo <- substr(a, 1L, last - 1L)
-    host_part <- substr(a, last, nchar(a))
+    # Byte-indexed for the same reason as the shim's slice (RURL-kmpnbvdl):
+    # `authority` is a stringi capture, so it is declared UTF-8 no matter what
+    # octets it holds, and `substr()` threw on `http://a@@<80>b/`.
+    last <- .last_byte_index(a, "@")
+    userinfo <- .byte_substring(a, 1L, last - 1L)
+    host_part <- .byte_substring(a, last)
     if (repair_at[i]) {
       userinfo <- gsub("@", "%40", userinfo, fixed = TRUE)
     }
@@ -686,29 +688,41 @@
   # host here can widen acceptance, not merely garble a render. Sharing
   # `.fsss_host_slice()` with the serializer (RURL-dergzwku) makes the two
   # sides of the parse agree by construction (RURL-qjvxtyze).
+  #
+  # Located AND cut in BYTES (RURL-kmpnbvdl). `authority` is a
+  # `stri_match_first_regex()` capture, and stringi marks every capture UTF-8
+  # unconditionally -- so an authority holding an invalid octet arrives here
+  # DECLARED UTF-8 but not valid UTF-8, and `substring()` on it threw
+  # `invalid multibyte string`, aborting the whole vectorized call and losing
+  # every good row in the same batch (`http://<80>/p` under `rfc3986`).
   at <- vapply(
     authority,
-    function(s) {
-      if (is.na(s)) {
-        return(0L)
-      }
-      pos <- gregexpr("@", s, fixed = TRUE)[[1L]]
-      if (pos[1L] == -1L) 0L else as.integer(pos[length(pos)])
-    },
+    function(s) if (is.na(s)) 0L else .last_byte_index(s, "@"),
     integer(1), USE.NAMES = FALSE
   )
-  after_ui <- substring(authority, at + 1L)
-  after_ui[is.na(authority)] <- NA_character_
+  after_ui <- vapply(
+    seq_along(authority),
+    function(i) {
+      if (is.na(authority[i])) {
+        NA_character_
+      } else {
+        .byte_substring(authority[i], at[i] + 1L)
+      }
+    },
+    character(1), USE.NAMES = FALSE
+  )
   host <- vapply(
     after_ui,
     function(s) if (is.na(s)) NA_character_ else .fsss_host_slice(s),
     character(1), USE.NAMES = FALSE
   )
 
-  has_pct <- grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)
-  has_pct[is.na(has_pct)] <- FALSE
-  invalid_pct <- grepl("%(?![0-9A-Fa-f]{2})", host, perl = TRUE)
-  invalid_pct[is.na(invalid_pct)] <- FALSE
+  # `.grepl_decodable()` rather than bare `grepl()`: the host may be declared
+  # UTF-8 and hold invalid octets, where `grepl(perl = TRUE)` warns and returns
+  # NA. Same FALSE answer as the `is.na()` fold it replaces, without the
+  # warning, and locale-invariant rather than accidentally so (RURL-kmpnbvdl).
+  has_pct <- .grepl_decodable("%[0-9A-Fa-f]{2}", host, perl = TRUE)
+  invalid_pct <- .grepl_decodable("%(?![0-9A-Fa-f]{2})", host, perl = TRUE)
 
   model_host <- host
   pct_ok <- eligible & has_pct & !invalid_pct
@@ -756,9 +770,8 @@
   # the RFC host profile decodes them by established contract, and
   # `host_encoding = "idna"` needs the real code points, not triplets.
   pct_ctrl <- eligible & pct_ok &
-    grepl("%7[Ff]", host, perl = TRUE) &
-    !grepl("%[01][0-9A-Fa-f]", host, perl = TRUE)
-  pct_ctrl[is.na(pct_ctrl)] <- FALSE
+    .grepl_decodable("%7[Ff]", host, perl = TRUE) &
+    !.grepl_decodable("%[01][0-9A-Fa-f]", host, perl = TRUE)
   if (!.is_whatwg(url_standard) && any(pct_ctrl)) {
     model_host[pct_ctrl] <- vapply(
       host[pct_ctrl], .rfc_host_retain_controls, character(1),

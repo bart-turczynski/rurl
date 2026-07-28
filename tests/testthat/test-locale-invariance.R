@@ -177,6 +177,138 @@ test_that("a non-ASCII quoted SMTPUTF8 local part classifies stably", {
 })
 
 
+# --- 4b. The rfc3986 authority: no throw, no mark-dependent verdict ----------
+#
+# RURL-kmpnbvdl, two symptoms of one cause. Under `url_standard = "rfc3986"`
+# an authority carrying a raw high byte used to (a) THROW `invalid multibyte
+# string` out of the whole vectorized call, and (b) where it did not throw,
+# decide accept-vs-reject differently depending on `LC_CTYPE`.
+#
+# Every input here is built from RAW OCTETS with `rawToChar()`, never from a
+# source literal, and is therefore mark-"unknown" -- which is the shape that
+# made the verdict locale-dependent, and the shape real user input has.
+
+# "http://<80>/p": a lone continuation byte, so NOT valid UTF-8.
+bad_authority <- rawToChar(as.raw(
+  c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x80, 0x2f, 0x70)
+))
+# "ftp://<C3><A9>:<C3><A9>@example.com/p": VALID UTF-8 (U+00E9) in userinfo.
+eacute_userinfo <- rawToChar(as.raw(
+  c(0x66, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0xC3, 0xA9, 0x3a, 0xC3, 0xA9, 0x40,
+    0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d,
+    0x2f, 0x70)
+))
+
+test_that("an undecodable rfc3986 authority rejects instead of throwing", {
+  expect_no_error(h <- get_host(bad_authority, url_standard = "rfc3986"))
+  expect_identical(h, NA_character_)
+  expect_no_error(
+    st <- get_parse_status(bad_authority, url_standard = "rfc3986")
+  )
+  expect_identical(st, "error")
+  expect_no_error(
+    s <- serialize_url(bad_authority, standard = "rfc3986")
+  )
+  expect_identical(s, NA_character_)
+})
+
+test_that("one undecodable row does not poison the rest of the batch", {
+  # The headline severity: `substring()` aborted the CALL, not the row, so
+  # every good URL in the same vector was lost. `safe_parse_urls()` is named
+  # for the promise that broke.
+  batch <- c("http://a.example.com/", bad_authority, "http://b.example.com/")
+  expect_identical(
+    get_host(batch, url_standard = "rfc3986"),
+    c("a.example.com", NA, "b.example.com")
+  )
+  expect_identical(
+    get_parse_status(batch, url_standard = "rfc3986"),
+    c("ok", "error", "ok")
+  )
+})
+
+test_that("the rfc3986 verdict does not depend on the encoding mark", {
+  # In-process half of locale invariance (see this file's header): under
+  # `LC_ALL=C` an "unknown"-marked string is read as native, under a UTF-8
+  # locale as UTF-8. Asserting that BOTH marks give the same answer is the
+  # same statement, testable in one session.
+  #
+  # The mechanism, for whoever reads this next: the grammar walk mixes
+  # `stri_locate_*()` (code-point indices) with `substring()` (native-character
+  # indices). On an unmarked multi-byte string those units diverge under
+  # `LC_ALL=C`, the authority is sliced at the wrong offset, and `ok-ftp`
+  # became `error`.
+  marked <- eacute_userinfo
+  Encoding(marked) <- "UTF-8"
+  for (fn in list(get_host, get_parse_status, get_user)) {
+    expect_identical(
+      fn(eacute_userinfo, url_standard = "rfc3986"),
+      fn(marked, url_standard = "rfc3986")
+    )
+  }
+  expect_identical(
+    serialize_url(eacute_userinfo, standard = "rfc3986"),
+    serialize_url(marked, standard = "rfc3986")
+  )
+  # ...and the answer both marks agree on is the accepting one: U+00E9 is a
+  # Unicode scalar value, which the RFC 3986 gate admits wherever a data
+  # character is admitted (ADR 0002 / D1 rule 5).
+  expect_identical(
+    get_parse_status(eacute_userinfo, url_standard = "rfc3986"), "ok-ftp"
+  )
+  expect_identical(
+    get_host(eacute_userinfo, url_standard = "rfc3986"), "example.com"
+  )
+})
+
+test_that("undecodable bytes reject on every rfc3986-gated surface", {
+  # The trigger class, all shapes: lone continuation byte, truncated 2- and
+  # 3-byte starts, an overlong encoding and a UTF-16 surrogate. None denotes a
+  # scalar value, so none can match an RFC 3986 production.
+  octets <- list(
+    "lone-80" = 0x80, "lone-C3" = 0xC3, "trunc-E4BD" = c(0xE4, 0xBD),
+    "overlong" = c(0xC0, 0xAF), "surrogate" = c(0xED, 0xA0, 0x80)
+  )
+  prefix <- c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f)  # "http://"
+  for (nm in names(octets)) {
+    u <- rawToChar(as.raw(c(prefix, octets[[nm]], 0x2f, 0x70)))
+    expect_no_error(st <- get_parse_status(u, url_standard = "rfc3986"))
+    expect_identical(st, "error", info = nm)
+    # ...and in the userinfo, which is the other half of the authority.
+    v <- rawToChar(as.raw(c(
+      prefix, 0x75, octets[[nm]], 0x40, 0x68, 0x2e, 0x63, 0x6f, 0x6d, 0x2f
+    )))
+    expect_no_error(st2 <- get_parse_status(v, url_standard = "rfc3986"))
+    expect_identical(st2, "error", info = nm)
+  }
+})
+
+test_that("the byte-slice helpers cut positions, not characters", {
+  # `.byte_substring()` / `.last_byte_index()` / `.first_byte_index()` are the
+  # shared seam helpers. They must survive a DECLARED-UTF-8 string holding
+  # invalid octets -- which is what every `stri_match_first_regex()` capture
+  # is, since stringi marks its captures unconditionally.
+  s <- rawToChar(as.raw(c(0x61, 0x80, 0x40, 0x68, 0x2e, 0x63)))  # "a<80>@h.c"
+  Encoding(s) <- "UTF-8"
+  expect_identical(rurl:::.last_byte_index(s, "@"), 3L)
+  expect_identical(rurl:::.first_byte_index(s, "@"), 3L)
+  expect_no_error(tail <- rurl:::.byte_substring(s, 4L))
+  expect_identical(charToRaw(tail), as.raw(c(0x68, 0x2e, 0x63)))
+  expect_no_error(head_part <- rurl:::.byte_substring(s, 1L, 2L))
+  expect_identical(charToRaw(head_part), as.raw(c(0x61, 0x80)))
+  # Absent needle, and out-of-range indices clamping to "" as substring() does.
+  expect_identical(rurl:::.last_byte_index(s, "?"), 0L)
+  expect_identical(rurl:::.byte_substring(s, 99L), "")
+  # A multi-byte scalar is cut by BYTE, so the helper never re-indexes by
+  # locale: "é" is 2 bytes whatever LC_CTYPE says.
+  e <- rawToChar(as.raw(c(0xC3, 0xA9, 0x40, 0x78)))
+  expect_identical(rurl:::.last_byte_index(e, "@"), 3L)
+  expect_identical(
+    charToRaw(rurl:::.byte_substring(e, 1L, 2L)), as.raw(c(0xC3, 0xA9))
+  )
+})
+
+
 # --- 5. Meta-guard: no transcoding-from-native in the package ----------------
 
 # Which namespace functions reference `fn`, and how many times. Reads the

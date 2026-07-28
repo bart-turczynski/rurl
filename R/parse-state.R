@@ -573,12 +573,76 @@
   .rfc3986_valid_hier_part(rest)
 }
 
+# Pin the byte->code-point reading this grammar walks, so the VERDICT does not
+# depend on the session locale (RURL-kmpnbvdl).
+#
+# The walk mixes two indexing schemes: `stri_locate_first_fixed()` /
+# `stri_detect_regex()` count CODE POINTS (stringi decodes first), while
+# `substring()` / `nchar()` count NATIVE characters. For a string marked
+# "unknown" -- which is what `rawToChar()` and most user input produce -- native
+# means the session encoding, so `<C3><A9>` is ONE character under a UTF-8
+# locale and TWO under `LC_ALL=C`. The two schemes then disagree and the
+# grammar slices the authority at the wrong offset: `ftp://é:é@example.com/p`
+# was admitted (`ok-ftp`) under a UTF-8 session and REJECTED (`error`) under
+# `LC_ALL=C`, on byte-identical input.
+#
+# `\x{0080}-\x{10FFFF}` in the data class admits directly-written non-ASCII
+# SCALAR VALUES, and a scalar value only exists once an encoding is fixed. UTF-8
+# is that encoding everywhere else in the package (`.mark_host_utf8()`,
+# `.web_high_bytes_ok()`), so declaring it here makes the gate agree with the
+# parser it gates instead of with whoever set LC_CTYPE.
+#
+# `Encoding<-`, never `enc2utf8()`: the bytes must not move, only their reading
+# be fixed -- `enc2utf8()` TRANSCODES from the session locale, which is the very
+# sensitivity being removed. Only "unknown" (native) elements are touched: an
+# explicit "UTF-8"/"latin1"/"bytes" declaration is already locale-invariant and
+# is the caller stating what the bytes mean, so it stands. Invalid octets stay
+# invalid -- a declared-UTF-8 string holding `<80>` makes `stri_detect_regex()`
+# return NA, `isTRUE()` folds that to FALSE, and the row is rejected in EVERY
+# locale, which is the correct answer: a lone continuation byte is not a scalar
+# value and no RFC 3986 production admits it.
+.rfc3986_declare_native_utf8 <- function(url) {
+  native <- !is.na(url) & Encoding(url) == "unknown"
+  if (any(native)) {
+    Encoding(url[native]) <- "UTF-8"
+  }
+  url
+}
+
 # Vectorized public-internal gate. `diagnostic` fires ONLY on an accepted row
 # that carries a non-ASCII scalar value; a rejected row is never flagged (D1:
 # the Unicode tolerance never rescues an otherwise-invalid ASCII portion).
 .rfc3986_generic_uri_ok <- function(url) {
   n <- length(url)
-  ok <- vapply(url, .rfc3986_generic_uri_ok_one, logical(1L), USE.NAMES = FALSE)
+  url <- .rfc3986_declare_native_utf8(url)
+  # Bytes that do not decode are rejected WITHOUT walking the grammar, and that
+  # is a shortcut for a proof, not a convenience: the walk covers the whole
+  # string (scheme / authority / path / query / fragment leave no byte
+  # unclassified), every production is ASCII apart from the
+  # `\x{0080}-\x{10FFFF}` scalar-value tolerance, and an octet sequence that is
+  # not valid UTF-8 denotes no scalar value. So an undecodable element must
+  # fail whichever component it lands in -- FALSE is the answer the walk would
+  # have reached had it been able to run.
+  #
+  # It cannot run: the walk slices with `substring()`/`nchar()`, which THROW
+  # `invalid multibyte string` on a declared-UTF-8 string holding invalid
+  # octets. That throw aborted the entire vectorized call -- `get_host()` over
+  # 1000 URLs lost all 1000 because one carried a stray `<80>` (RURL-kmpnbvdl).
+  # `safe_parse_urls()` is named for the promise this broke.
+  #
+  # Scoped to elements DECLARED UTF-8 (including the ones just declared above).
+  # A "latin1" element decodes by definition -- every octet is a latin1
+  # character -- so it walks normally and is never caught here.
+  undecodable <- !is.na(url) & Encoding(url) == "UTF-8" & !validUTF8(url)
+  walkable <- !undecodable
+  ok <- rep(NA, n)
+  ok[undecodable] <- FALSE
+  if (any(walkable)) {
+    ok[walkable] <- vapply(
+      url[walkable], .rfc3986_generic_uri_ok_one, logical(1L),
+      USE.NAMES = FALSE
+    )
+  }
   has_non_ascii <- stringi::stri_detect_regex(url, "\\P{ASCII}")
   has_non_ascii[is.na(has_non_ascii)] <- FALSE
   diagnostic <- rep(NA_character_, n)
