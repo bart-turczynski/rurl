@@ -41,7 +41,7 @@ test_that("step 4 fallback http is the existing infer seam, fed by the fixer", {
   # Under the browser knob combo, a scheme-less host-shaped input (and the
   # step-2/step-3 outputs) reach the shared scheme_policy = "infer" prepend, so
   # url_to_parse gains the single http:// prepend -- not a second fixer prepend.
-  prep <- rurl:::.prepare_urls_for_curl_vec(
+  prep <- rurl:::.prepare_urls_for_parse_vec(
     c("http;//example.com", "http:example.com", "example.com"),
     protocol_handling = "keep", scheme_relative_handling = "keep",
     url_standard = "whatwg", scheme_policy = "infer",
@@ -131,12 +131,12 @@ test_that("default posture is a byte-identical no-op", {
     "ftps;host/p", "foo:bar", "example.com", NA_character_
   )
   expect_identical(rurl:::.apply_browser_fixup_vec(tricky, "none"), tricky)
-  # And .prepare_urls_for_curl_vec with the default fixup_posture matches an
+  # And .prepare_urls_for_parse_vec with the default fixup_posture matches an
   # omitted argument (defaults to "none") byte-for-byte.
-  with_default <- rurl:::.prepare_urls_for_curl_vec(
+  with_default <- rurl:::.prepare_urls_for_parse_vec(
     tricky, "keep", "keep", "whatwg", "infer", "general", "none"
   )
-  omitted <- rurl:::.prepare_urls_for_curl_vec(
+  omitted <- rurl:::.prepare_urls_for_parse_vec(
     tricky, "keep", "keep", "whatwg", "infer", "general"
   )
   expect_identical(with_default$url_to_parse, omitted$url_to_parse)

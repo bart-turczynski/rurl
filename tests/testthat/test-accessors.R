@@ -844,7 +844,7 @@ test_that("safe_parse_url handles www_handling options correctly", {
   # safe_parse_url with an effectively empty host after protocol strip might be
   # tricky to set up directly
   # Let's test the helper directly if possible, or ensure this path is hit.
-  # For safe_parse_url, if the input is just "http://", parsed_curl$host might
+  # For safe_parse_url, if the input is just "http://", parsed_web$host might
   # be NA or empty.
   # If input is "", it returns NULL early. If input is "http://", host is NA.
   expect_null(safe_parse_url("http://", www_handling = "keep")$host)
