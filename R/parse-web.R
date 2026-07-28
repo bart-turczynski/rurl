@@ -43,11 +43,13 @@
 # compensation layer and moves the semantics deliberately, scored against the
 # FSSS/WPT harness.
 #
-# STEP 4 IS UNDER WAY, so the list above is already out of date in one place:
-# the excess-"@" repair is GONE (RURL-ezhzpkhg deletion 3). Splitting the
-# authority at the LAST "@" is what the WHATWG authority state does, so it is
-# parser behaviour and belongs here, not in a pre-parse rewrite of the input
-# string -- see `last_at_userinfo` below.
+# STEP 4 IS UNDER WAY, so the list above is already out of date in two places.
+# The excess-"@" repair is GONE (deletion 3): splitting the authority at the
+# LAST "@" is what the WHATWG authority state does, so it is parser behaviour
+# -- see `last_at_userinfo` below. The host-charset shim's PERCENT-TRIPLET half
+# is gone too (deletion 2): which host triplets get decoded is decode ORDER,
+# which only a parser can own -- see `host_pct`. What survives of that shim is
+# the LITERAL gap-character mask, until ADR 0009 is superseded (deletion 1).
 #
 # Every rule below was derived by MEASUREMENT against
 # libcurl (per-octet acceptance sweeps over host/userinfo/path/query/fragment,
@@ -77,6 +79,9 @@
 #             parse error), then every decoded byte must be in
 #             [A-Za-z0-9._~|-]; then libcurl's IPv4 normalization. A bracketed
 #             host is an IPv6 literal, validated and re-serialized.
+#             This is `host_pct = "narrow"`, the no-selector default; the other
+#             two settings change the decode order and the set together, and
+#             are documented at `.parse_web_url_one()` below.
 #   port      ":" then ASCII digits only, value <= 65535, leading zeros
 #             stripped; an EMPTY port (":" then end/"/"/"?"/"#") is no port.
 #   path      "/" when absent; C0/space/DEL are a parse error; bytes >= 0x80 are
@@ -97,6 +102,26 @@
 .WEB_HOST_ALLOWED_BYTES <- c(
   0x2DL, 0x2EL, seq.int(0x30L, 0x39L), seq.int(0x41L, 0x5AL), 0x5FL,
   seq.int(0x61L, 0x7AL), 0x7CL, 0x7EL
+)
+
+# The 15 ASCII code points WHATWG keeps in a host that the set above rejects:
+# ! " $ & ' ( ) * + , ; = ` { }. The byte spelling of
+# `.WHATWG_HOST_CHARSET_SHIM_CP` (R/utils.R), which states the provenance --
+# none is a forbidden host or domain code point (ADR 0009, ada-confirmed).
+# Admitted here only under `host_pct = "wide"`, and only on the DECODED side:
+# the raw-token check stays narrow, so this closes the ENCODED spelling
+# (`%60`) and leaves the literal one to the pre-parse shim until ADR 0009 is
+# superseded.
+.WEB_HOST_GAP_BYTES <- c(
+  0x21L, 0x22L, 0x24L, 0x26L, 0x27L, 0x28L, 0x29L, 0x2AL, 0x2BL, 0x2CL,
+  0x3BL, 0x3DL, 0x60L, 0x7BL, 0x7DL
+)
+
+# RFC 3986 section 2.3 `unreserved`: ALPHA / DIGIT / "-" / "." / "_" / "~".
+# Section 6.2.2.2 permits decoding these and ONLY these.
+.WEB_HOST_UNRESERVED_BYTES <- c(
+  0x2DL, 0x2EL, seq.int(0x30L, 0x39L), seq.int(0x41L, 0x5AL), 0x5FL,
+  seq.int(0x61L, 0x7AL), 0x7EL
 )
 
 # Userinfo allowed ASCII set: printable ASCII except "@" (0x40).
@@ -207,16 +232,18 @@
 # Strict percent-decode for the host. Unlike `.pct_unescape()` (which tolerates
 # a malformed "%"), libcurl treats a "%" not followed by two hex digits in the
 # host as a PARSE ERROR. Returns NULL in that case.
+.web_hexdig <- function(x) {
+  (x >= 0x30L & x <= 0x39L) | (x >= 0x41L & x <= 0x46L) |
+    (x >= 0x61L & x <= 0x66L)
+}
+
 .web_host_percent_decode <- function(host) {
   b <- .web_bytes(host)
   hits <- which(b == 0x25L)
   if (length(hits) == 0L) {
     return(host)
   }
-  hexd <- function(x) {
-    (x >= 0x30L & x <= 0x39L) | (x >= 0x41L & x <= 0x46L) |
-      (x >= 0x61L & x <= 0x66L)
-  }
+  hexd <- .web_hexdig
   n <- length(b)
   out <- integer(0)
   i <- 1L
@@ -237,6 +264,62 @@
   # truncate.
   if (any(out == 0L)) {
     return(NULL)
+  }
+  .web_chr(out)
+}
+
+# The `host_pct` setting each selected standard asks for. One place, because
+# both the vectorized and the scalar route have to agree on it, and because a
+# mapping that lives at the call sites is a mapping that drifts between them.
+# The no-selector default stays `"narrow"` -- the historical behaviour.
+.web_host_pct_policy <- function(url_standard) {
+  if (.is_whatwg(url_standard)) {
+    "wide"
+  } else if (identical(url_standard, "rfc3986")) {
+    "keep"
+  } else {
+    "narrow"
+  }
+}
+
+# RFC 3986 host rendering: decode the triplets section 6.2.2.2 permits decoding
+# (unreserved only) and leave every other one ENCODED, hex uppercased per
+# section 6.2.2.1. Malformed "%" is still a parse error, exactly as in
+# `.web_host_percent_decode()`, so the two agree on WHICH hosts parse and
+# differ only on how the ones that do are spelled.
+#
+# This is the byte-level twin of `.rfc_unreserved_normalize()` (R/path-query.R),
+# and it is a separate function rather than a call to it on purpose: that one
+# runs `gregexpr(perl = TRUE)` over a string that here may be DECLARED UTF-8
+# while holding invalid octets, which warns and returns NA on exactly the input
+# this seam must judge (RURL-kmpnbvdl).
+.web_host_pct_unreserved <- function(host) {
+  b <- .web_bytes(host)
+  if (!any(b == 0x25L)) {
+    return(host)
+  }
+  n <- length(b)
+  out <- integer(0)
+  i <- 1L
+  while (i <= n) {
+    if (b[i] == 0x25L) {
+      if (i + 2L > n || !.web_hexdig(b[i + 1L]) || !.web_hexdig(b[i + 2L])) {
+        return(NULL)
+      }
+      pair <- b[(i + 1L):(i + 2L)]
+      code <- strtoi(.web_chr(pair), base = 16L)
+      out <- if (code %in% .WEB_HOST_UNRESERVED_BYTES) {
+        c(out, code)
+      } else {
+        lower <- pair >= 0x61L & pair <= 0x7AL
+        pair[lower] <- pair[lower] - 32L
+        c(out, 0x25L, pair)
+      }
+      i <- i + 3L
+    } else {
+      out <- c(out, b[i])
+      i <- i + 1L
+    }
   }
   .web_chr(out)
 }
@@ -478,7 +561,12 @@
 
 # Host parse: bracketed IPv6 literal, or a percent-decoded registered name /
 # IPv4 address. Returns NULL on rejection.
-.web_parse_host <- function(host) {
+#
+# `host_pct` is the host's percent-decode POLICY -- see `.parse_web_url_one()`.
+# It changes two things together, and they have to move together: which
+# triplets are decoded, and therefore which byte set the result is judged
+# against.
+.web_parse_host <- function(host, host_pct = "narrow") {
   # Byte-based throughout: `nchar()`/`substring()`/`endsWith()` all throw
   # "invalid multibyte string" on a declared-UTF-8 host token holding invalid
   # octets -- and such a token must REJECT, not error.
@@ -503,12 +591,27 @@
   if (!.web_high_bytes_ok(host, c(.WEB_HOST_ALLOWED_BYTES, 0x25L))) {
     return(NULL)
   }
+  # VALIDATION always runs on the fully decoded host, whatever the spelling
+  # rule -- `%2F` is a "/" in a host however it is written, and a policy that
+  # renders it encoded must not thereby stop judging it. That separation is the
+  # whole point: the pre-parse mask this replaces blanked every triplet, so it
+  # widened ACCEPTANCE as a side effect of wanting a different SPELLING.
   decoded <- .web_host_percent_decode(host)
   if (is.null(decoded) || !nzchar(decoded)) {
     return(NULL)
   }
-  if (!.web_high_bytes_ok(decoded, c(.WEB_HOST_ALLOWED_BYTES, 0x7FL))) {
+  post_allowed <- c(.WEB_HOST_ALLOWED_BYTES, 0x7FL)
+  if (!identical(host_pct, "narrow")) {
+    post_allowed <- c(post_allowed, .WEB_HOST_GAP_BYTES)
+  }
+  if (!.web_high_bytes_ok(decoded, post_allowed)) {
     return(NULL)
+  }
+  # RENDERING then differs. "keep" re-reads the RAW token and decodes only the
+  # unreserved triplets; it cannot fail, because the decode above has already
+  # proved every triplet well-formed.
+  if (identical(host_pct, "keep")) {
+    decoded <- .web_host_pct_unreserved(host)
   }
   # IPv4 normalization reads the host AS WRITTEN, before percent-decoding: a
   # host spelled "%30%78%63%30%2e%30%32%35%30.01" decodes to the numeric form
@@ -531,15 +634,46 @@
 # and `$`
 # matching BEFORE a trailing one -- that this codebase has lost two sessions to.
 #
-# `last_at_userinfo` is the ONE policy dial on this parser, and it is here
-# rather than in front of it because splitting at the last "@" is *parsing*, not
-# repair: WHATWG's authority state buffers until the final "@" and prepends
-# "%40" for each earlier one. It stays a dial because the P2.1 C-03 disposition
-# binds repeated-"@" recovery to the `compatibility`/`repair` postures and
-# requires a `strict` parse to REJECT a repeated raw "@" -- RFC 3986 admits no
-# unescaped "@" in either `userinfo` or `reg-name`. FALSE is therefore the
-# strict/no-recovery default, and callers opt in per selected standard.
-.parse_web_url_one <- function(url, last_at_userinfo = FALSE) {
+# TWO policy dials, both here rather than in front of the parser because both
+# describe *parsing*, not repair. Each defaults to the historical no-selector
+# behaviour, and callers opt in per selected standard.
+#
+# `last_at_userinfo` -- split the authority at the LAST "@". WHATWG's authority
+# state buffers until the final "@" and prepends "%40" for each earlier one. It
+# stays a dial because the P2.1 C-03 disposition binds repeated-"@" recovery to
+# the `compatibility`/`repair` postures and requires a `strict` parse to REJECT
+# a repeated raw "@" -- RFC 3986 admits no unescaped "@" in either `userinfo`
+# or `reg-name`.
+#
+# `host_pct` -- the host's percent-decode ORDER and spelling, which is a
+# property of the SELECTED STANDARD and cannot be inferred from the input:
+#
+#   "narrow"  decode every triplet, then judge the result against libcurl's
+#             host set, and report it decoded. The no-selector default.
+#   "wide"    the same, but the judged set also holds the 15 code points
+#             WHATWG keeps in a host (`.WEB_HOST_GAP_BYTES`). WHATWG's host
+#             parser percent-decodes FIRST and only then checks forbidden
+#             domain code points, and "`" is not one of them -- so `%60` must
+#             parse exactly as the literal "`" does.
+#   "keep"    judged like "wide", but REPORTED with only the unreserved
+#             triplets decoded and the rest left encoded, hex uppercased
+#             (RFC 3986 sections 6.2.2.2 and 6.2.2.1). The RFC posture
+#             preserves a reg-name's source spelling instead of inventing a
+#             decoded one.
+#
+# Note what "keep" does NOT do: it does not stop VALIDATING the decoded host.
+# `reg-name` grammar would admit any well-formed triplet whatever it decodes
+# to, and that reading is a much larger acceptance question than this seam --
+# it is left open deliberately. Rendering and acceptance are separate axes
+# here, which is precisely what the mask could not express.
+#
+# Until this dial existed the difference was compensated for OUTSIDE the
+# parser: Phase 1 masked every host triplet as filler so the decode could not
+# happen, then substituted the profile-correct host back afterwards. That
+# masking also hid the rest of the host from every check the parser makes
+# (RURL-rgjpcbuk / RURL-ezhzpkhg deletion 2).
+.parse_web_url_one <- function(url, last_at_userinfo = FALSE,
+                               host_pct = "narrow") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -689,7 +823,7 @@
     }
   }
 
-  host <- .web_parse_host(host_token)
+  host <- .web_parse_host(host_token, host_pct)
   if (is.null(host)) {
     return(NULL)
   }

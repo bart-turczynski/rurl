@@ -1781,12 +1781,17 @@ safe_parse_urls <- function(url,
   # split into the parser under the wider gate would have handed `rfc3986` the
   # recovery RURL-qrfrvmkg took away.
   last_at <- .is_whatwg(opts$url_standard)
+  # The host's percent-decode order, per selected standard (RURL-rgjpcbuk).
+  # This used to be compensated for in front of the parser, by masking every
+  # host triplet as filler and substituting the profile's spelling back
+  # afterwards; the parser owns it now. See `host_pct` in R/parse-web.R.
+  host_pct <- .web_host_pct_policy(opts$url_standard)
   parsed_list <- vector("list", n)
   parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
       prep$url_to_parse[parse_idx], .parse_web_url_one,
-      last_at_userinfo = last_at
+      last_at_userinfo = last_at, host_pct = host_pct
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -1797,7 +1802,7 @@ safe_parse_urls <- function(url,
   if (length(fallback_idx) > 0L) {
     parsed_list[fallback_idx] <- lapply(
       prep$whatwg_pqf_url[fallback_idx], .parse_web_url_one,
-      last_at_userinfo = last_at
+      last_at_userinfo = last_at, host_pct = host_pct
     )
     fallback_ok <- !vapply(parsed_list[fallback_idx], is.null, logical(1))
     parsed_from_pqf_fallback[fallback_idx[fallback_ok]] <- TRUE
@@ -2477,7 +2482,8 @@ safe_parse_urls <- function(url,
   # Phase 2: run the web parse, then pull out raw components
   parsed_web <- .parse_web_url_one(
     prep$url_to_parse,
-    last_at_userinfo = .is_whatwg(url_standard)
+    last_at_userinfo = .is_whatwg(url_standard),
+    host_pct = .web_host_pct_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)
