@@ -340,16 +340,7 @@
   no_op
 }
 
-# Authority userinfo repair for selector profiles (RURL-zqhgezuq). The parser
-# rejects authorities with more than one literal "@", while the WHATWG authority
-# state uses the LAST "@" as the userinfo/host delimiter and percent-encodes
-# earlier "@" bytes into userinfo. RFC 3986 does not admit a raw "@" inside
-# userinfo either, but recovering at the last delimiter is the only
-# host-preserving parse; selector profiles use it to avoid dropping the host.
-# `url_standard = NULL` remains a no-op for backward compatibility.
-#
-# WHATWG userinfo charset acceptance (RURL-micalqvh, half (a)). A SECOND,
-# independently gated rewrite shares this function's span machinery: the parser
+# WHATWG userinfo charset acceptance (RURL-micalqvh, half (a)). The parser
 # refuses an authority whose userinfo carries any of 30 ASCII code points --
 # SPACE (0x20), the C0 controls (0x00-0x1F) and DEL (0x7F) -- so
 # `http://a b@host/` errors even though WHATWG parses it and keeps the host.
@@ -363,15 +354,20 @@
 # not in the set, so an already-encoded userinfo (`%25DOMAIN`, `u%40ser`) is
 # never double-encoded.
 #
-# GATED ON `.is_whatwg()` EXPLICITLY. The repeated-"@" repair above deliberately
-# runs under both selector profiles and is only *incidentally* invisible under
-# `rfc3986` (the uniform grammar gate judges the pre-repair snapshot taken at
-# the call site). That no-op is incidental, not structural, so the charset
-# acceptance set is confined to `whatwg` by construction: `rfc3986` has no
-# userinfo production for a space or a control byte and stays source-preserving.
-.encode_excess_authority_at_vec <- function(url, url_standard) {
+# THIS IS NOT COMPENSATION, which is why it survived RURL-ezhzpkhg deletion 3
+# while the repeated-"@" repair that used to share this function did not. That
+# repair (RURL-zqhgezuq) existed only because libcurl rejected a second "@";
+# splitting at the LAST "@" is what the WHATWG authority state does, so it moved
+# into the parser as `.parse_web_url_one(last_at_userinfo = TRUE)`. What is left
+# here changes the SPELLING of a userinfo the parser would otherwise refuse, and
+# the spelling it writes is the one WHATWG stores -- a normalization the parser
+# cannot infer, because `rfc3986` must keep the same bytes source-preserving.
+#
+# GATED ON `.is_whatwg()` EXPLICITLY, for exactly that reason: `rfc3986` has no
+# userinfo production for a space or a control byte.
+.encode_userinfo_charset_vec <- function(url, url_standard) {
   no_op <- list(url = url)
-  if (is.null(url_standard)) {
+  if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
 
@@ -379,18 +375,14 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)(.*)$"
   )
   authority <- m[, 4L]
-  at_count <- stringi::stri_count_fixed(authority, "@")
-  has_at <- !is.na(authority) & at_count > 0L
+  has_at <- !is.na(authority) & stringi::stri_count_fixed(authority, "@") > 0L
   has_at[is.na(has_at)] <- FALSE
 
-  # Repeated-"@" recovery (the historical eligibility: strictly more than one).
-  repair_at <- has_at & at_count > 1L
-
-  # Charset acceptance: any of the 30 parser-refused code points inside the
-  # userinfo span (everything before the LAST "@"). `[\s\S]` rather than `.`
-  # because ICU excludes U+000B/U+000C from `.`, and those are in the set.
-  charset <- rep(FALSE, length(url))
-  if (.is_whatwg(url_standard) && any(has_at)) {
+  # Any of the 30 parser-refused code points inside the userinfo span
+  # (everything before the LAST "@"). `[\s\S]` rather than `.` because ICU
+  # excludes U+000B/U+000C from `.`, and those are in the set.
+  eligible <- rep(FALSE, length(url))
+  if (any(has_at)) {
     userinfo_span <- stringi::stri_replace_last_regex(
       authority[has_at], "@[^@]*\\z", ""
     )
@@ -398,10 +390,9 @@
       userinfo_span, "[\\u0000-\\u0020\\u007F]"
     )
     hit[is.na(hit)] <- FALSE
-    charset[has_at] <- hit
+    eligible[has_at] <- hit
   }
 
-  eligible <- repair_at | charset
   if (!any(eligible)) {
     return(no_op)
   }
@@ -412,15 +403,10 @@
     # `authority` is a stringi capture, so it is declared UTF-8 no matter what
     # octets it holds, and `substr()` threw on `http://a@@<80>b/`.
     last <- .last_byte_index(a, "@")
-    userinfo <- .byte_substring(a, 1L, last - 1L)
-    host_part <- .byte_substring(a, last)
-    if (repair_at[i]) {
-      userinfo <- .gsub_decodable("@", "%40", userinfo, fixed = TRUE)
-    }
-    if (charset[i]) {
-      userinfo <- .percent_encode_userinfo_charset(userinfo)
-    }
-    paste0(userinfo, host_part)
+    paste0(
+      .percent_encode_userinfo_charset(.byte_substring(a, 1L, last - 1L)),
+      .byte_substring(a, last)
+    )
   }, character(1), USE.NAMES = FALSE)
 
   url_out <- url
@@ -1428,18 +1414,21 @@
   #     web route's subject identical to theirs.
   rfc_gate_input <- url_to_parse
 
-  # Authority userinfo repair (RURL-zqhgezuq): selector profiles recover the
-  # host at the last "@" and encode earlier "@" bytes in userinfo pre-parse.
-  at <- .encode_excess_authority_at_vec(url_to_parse, url_standard)
+  # WHATWG userinfo charset acceptance (RURL-micalqvh): rewrite the SPACE / C0 /
+  # DEL bytes the parser refuses into the percent-encoded spelling WHATWG
+  # stores. The repeated-"@" recovery that used to run here is now parser
+  # behaviour (RURL-ezhzpkhg deletion 3).
+  at <- .encode_userinfo_charset_vec(url_to_parse, url_standard)
   url_to_parse <- at$url
 
   ipv4 <- .rewrite_whatwg_ipv4_hosts_vec(url_to_parse, url_standard)
   url_to_parse <- ipv4$url
 
   # Host shim (RURL-dxwxeamq / RURL-rgjpcbuk) runs LAST -- after scheme
-  # fabrication, authority userinfo repair, and WHATWG IPv4 canonicalization,
-  # so scheme-less host-like inputs (now "http://..") are in scope and repeated
-  # "@" no longer blocks the parser from reading an otherwise valid host.
+  # fabrication, userinfo charset acceptance and WHATWG IPv4 canonicalization,
+  # so scheme-less host-like inputs (now "http://..") are in scope. It slices
+  # the host at the LAST "@" itself (RURL-qjvxtyze), so it never needed the
+  # repeated-"@" repair that used to precede it.
   shim <- .shim_whatwg_host_charset_vec(url_to_parse, url_standard)
   url_to_parse <- shim$url
   whatwg_pqf_url <- .sanitize_whatwg_pqf_vec(

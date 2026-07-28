@@ -1766,11 +1766,27 @@ safe_parse_urls <- function(url,
   whatwg_file <- parseable & prep$whatwg_file
   web_parseable <- parseable & !rfc3986_path_rootless & !whatwg_file &
     !general_route
+  # Splitting the authority at the LAST "@" is the WHATWG authority state, so it
+  # is on for exactly that standard. NOT for `rfc3986`, which rejects a repeated
+  # raw "@" (P2.1 C-03; test-url-standard-authority.R), and not for the
+  # no-selector baseline.
+  #
+  # The deleted pre-parse repair was gated `!is.null(url_standard)` instead, and
+  # reproducing that here WIDENS `rfc3986` by 165 rows of the at-sweep corpus.
+  # The reason is worth recording: the repair's regex needed a literal "//", so
+  # it never fired on a THREE-slash URL, and `http:///u@@h.com/p` was rejected
+  # by the parser. The uniform RFC gate does not catch that shape -- it judges
+  # the raw input, where "@" is a perfectly legal pchar in the path
+  # `/u@@h.com/p` -- so the parser was the only thing rejecting it. Moving the
+  # split into the parser under the wider gate would have handed `rfc3986` the
+  # recovery RURL-qrfrvmkg took away.
+  last_at <- .is_whatwg(opts$url_standard)
   parsed_list <- vector("list", n)
   parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
-      prep$url_to_parse[parse_idx], .parse_web_url_one
+      prep$url_to_parse[parse_idx], .parse_web_url_one,
+      last_at_userinfo = last_at
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -1780,7 +1796,8 @@ safe_parse_urls <- function(url,
   )
   if (length(fallback_idx) > 0L) {
     parsed_list[fallback_idx] <- lapply(
-      prep$whatwg_pqf_url[fallback_idx], .parse_web_url_one
+      prep$whatwg_pqf_url[fallback_idx], .parse_web_url_one,
+      last_at_userinfo = last_at
     )
     fallback_ok <- !vapply(parsed_list[fallback_idx], is.null, logical(1))
     parsed_from_pqf_fallback[fallback_idx[fallback_ok]] <- TRUE
@@ -2458,7 +2475,10 @@ safe_parse_urls <- function(url,
   }
 
   # Phase 2: run the web parse, then pull out raw components
-  parsed_web <- .parse_web_url_one(prep$url_to_parse)
+  parsed_web <- .parse_web_url_one(
+    prep$url_to_parse,
+    last_at_userinfo = .is_whatwg(url_standard)
+  )
   if (is.null(parsed_web)) {
     return(NULL)
   }

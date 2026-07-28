@@ -9,9 +9,9 @@
 #
 # CONTRACT. `.parse_web_url_one()` is a drop-in for that call: it takes ONE
 # fully PREPARED URL string (Phase 1 has already fabricated the scheme, stripped
-# tab/LF/CR, rewritten backslashes, encoded excess authority "@", canonicalized
-# WHATWG IPv4 and applied the host-charset shim) and returns either `NULL` (the
-# row is a parse error) or a list of components: `url`, `scheme`, `host`,
+# tab/LF/CR, rewritten backslashes, canonicalized WHATWG IPv4 and applied the
+# host-charset shim) and returns either `NULL` (the row is a parse error) or a
+# list of components: `url`, `scheme`, `host`,
 # `port`, `path`, `query`, `fragment`, `user`, `password`. Absent components are
 # `NULL`, exactly as libcurl reported them, so every `%||% NA_character_` and
 # `.blank_to_na()` downstream keeps working unchanged.
@@ -41,7 +41,15 @@
 # conformance movement unattributable. So step 3 is a BEHAVIOUR-PRESERVING
 # engine swap, verified by differential sweep; step 4 then deletes the
 # compensation layer and moves the semantics deliberately, scored against the
-# FSSS/WPT harness. Every rule below was derived by MEASUREMENT against
+# FSSS/WPT harness.
+#
+# STEP 4 IS UNDER WAY, so the list above is already out of date in one place:
+# the excess-"@" repair is GONE (RURL-ezhzpkhg deletion 3). Splitting the
+# authority at the LAST "@" is what the WHATWG authority state does, so it is
+# parser behaviour and belongs here, not in a pre-parse rewrite of the input
+# string -- see `last_at_userinfo` below.
+#
+# Every rule below was derived by MEASUREMENT against
 # libcurl (per-octet acceptance sweeps over host/userinfo/path/query/fragment,
 # plus targeted probes for IPv4/IPv6/authority/port/dot-segment behaviour), not
 # from reading the RFC -- because the thing being reproduced is libcurl, and
@@ -59,10 +67,12 @@
 #             path "/b") -- the shape `.extract_raw_path_vec()` documents.
 #   authority up to the first "/" of what remains (after "#" and "?" are cut).
 #             An empty authority is a parse error.
-#   userinfo  at most ONE "@" (libcurl rejects "@" inside userinfo, so a second
-#             one fails whichever side it lands on); split into user/password
-#             at the FIRST ":"; bytes restricted to 0x21-0x7E minus "@"; NEVER
-#             percent-decoded.
+#   userinfo  split from the host at the LAST "@"; every earlier "@" is
+#             percent-encoded into the userinfo as "%40". Under
+#             `last_at_userinfo = FALSE` (the default, and what libcurl did)
+#             only ONE "@" is admitted and a second is a parse error. Either
+#             way: split into user/password at the FIRST ":"; bytes restricted
+#             to 0x21-0x7E minus "@"; NEVER percent-decoded.
 #   host      percent-DECODED first (a "%" not followed by two hex digits is a
 #             parse error), then every decoded byte must be in
 #             [A-Za-z0-9._~|-]; then libcurl's IPv4 normalization. A bracketed
@@ -153,6 +163,21 @@
     }
   }
   b
+}
+
+# Percent-encode every "@" in a userinfo byte run. Deliberately NOT expressed as
+# a string substitution: `ub` is a raw byte slice that may hold invalid UTF-8,
+# which is exactly the input `gsub`/`stringi` mishandle here (the pre-parse
+# repair this replaces had to be rewritten onto byte-indexed helpers for
+# RURL-kmpnbvdl for the same reason). Uppercase "%40" needs no later fix-up from
+# `.web_uppercase_pct()`, which only touches hex letters.
+.web_encode_at <- function(b) {
+  if (!any(b == 0x40L)) {
+    return(b)
+  }
+  unlist(lapply(b, function(x) {
+    if (x == 0x40L) c(0x25L, 0x34L, 0x30L) else x
+  }), use.names = FALSE)
 }
 
 # path/query/fragment normalization: reject the forbidden bytes, percent-encode
@@ -505,7 +530,16 @@
 # sidesteps the ICU line-terminator trap -- `.` not matching VT/FF/NEL/LS/PS,
 # and `$`
 # matching BEFORE a trailing one -- that this codebase has lost two sessions to.
-.parse_web_url_one <- function(url) {
+#
+# `last_at_userinfo` is the ONE policy dial on this parser, and it is here
+# rather than in front of it because splitting at the last "@" is *parsing*, not
+# repair: WHATWG's authority state buffers until the final "@" and prepends
+# "%40" for each earlier one. It stays a dial because the P2.1 C-03 disposition
+# binds repeated-"@" recovery to the `compatibility`/`repair` postures and
+# requires a `strict` parse to REJECT a repeated raw "@" -- RFC 3986 admits no
+# unescaped "@" in either `userinfo` or `reg-name`. FALSE is therefore the
+# strict/no-recovery default, and callers opt in per selected standard.
+.parse_web_url_one <- function(url, last_at_userinfo = FALSE) {
   if (is.na(url)) {
     return(NULL)
   }
@@ -581,16 +615,25 @@
   user <- NULL
   password <- NULL
   ats <- which(ab == 0x40L)
-  if (length(ats) > 1L) {
-    return(NULL) # libcurl forbids "@" inside userinfo
+  if (length(ats) > 1L && !last_at_userinfo) {
+    return(NULL) # no recovery: a repeated raw "@" is not a valid authority
   }
   hb <- ab
-  if (length(ats) == 1L) {
-    ub <- if (ats[1L] > 1L) ab[seq_len(ats[1L] - 1L)] else integer(0)
-    hb <- if (ats[1L] < length(ab)) {
-      ab[(ats[1L] + 1L):length(ab)]
+  if (length(ats) >= 1L) {
+    # The LAST "@" is the delimiter; everything before it is userinfo, and the
+    # earlier "@" bytes become "%40" there -- the spelling WHATWG stores, and
+    # the same bytes the deleted pre-parse repair used to write.
+    at <- ats[length(ats)]
+    ub <- if (at > 1L) ab[seq_len(at - 1L)] else integer(0)
+    hb <- if (at < length(ab)) {
+      ab[(at + 1L):length(ab)]
     } else {
       integer(0)
+    }
+    # Before the allowed-byte check, because "@" is not in the allowed set and
+    # before the ":" split, because "%40" can neither create nor destroy a ":".
+    if (length(ats) > 1L) {
+      ub <- .web_encode_at(ub)
     }
     if (length(ub) > 0L &&
           !.web_high_bytes_ok(.web_chr(ub), .WEB_USERINFO_ALLOWED_BYTES)) {

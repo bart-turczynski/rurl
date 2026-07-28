@@ -240,7 +240,12 @@ test_that("one undecodable row does not poison the rest of the batch", {
 #   `.shim_whatwg_host_charset_vec()` reassembly  -- stri_length() on the
 #     authority, reached only on a `restore` row (bad octet + charset mask).
 #   `.pct_hex_upper()`                            -- gsub(perl = TRUE).
-#   `.encode_excess_authority_at_vec()` repair    -- gsub(fixed = TRUE).
+#   the repeated-"@" repair                       -- gsub(fixed = TRUE). That
+#     repair was `.encode_excess_authority_at_vec()` when this was written;
+#     RURL-ezhzpkhg deletion 3 moved the last-"@" split into the parser
+#     (`.web_encode_at()`), which works on the byte vector and so cannot
+#     reach a locale-sensitive `gsub` at all. The row below still pins the
+#     conjunction, and must: the site moved, the input class did not.
 #
 # Note `<C3><28>` needs no added sub-delim: "(" IS one, so the invalid pair is
 # its own conjunction. That is why it threw where a lone `<80>` did not.
