@@ -227,6 +227,193 @@ test_that("one undecodable row does not poison the rest of the batch", {
   )
 })
 
+# --- 4c. The same defect where the mask is a CONJUNCTION ---------------------
+#
+# The first pass at RURL-kmpnbvdl closed the authority `@` split and stopped
+# there, because the corpus that found the defect varied ONE octet at a time.
+# Every mask past that split is a conjunction: reaching it needs the bad octet
+# AND a second character that makes the row eligible -- a sub-delim, a
+# percent-triplet, a repeated "@". A one-octet-at-a-time corpus cannot build a
+# pair, so it scored the partial fix as complete. These are the shapes that
+# still threw afterwards, one per surviving site:
+#
+#   `.shim_whatwg_host_charset_vec()` reassembly  -- stri_length() on the
+#     authority, reached only on a `restore` row (bad octet + charset mask).
+#   `.pct_hex_upper()`                            -- gsub(perl = TRUE).
+#   `.encode_excess_authority_at_vec()` repair    -- gsub(fixed = TRUE).
+#
+# Note `<C3><28>` needs no added sub-delim: "(" IS one, so the invalid pair is
+# its own conjunction. That is why it threw where a lone `<80>` did not.
+
+# "http://<80>!/p" -- undecodable octet AND a sub-delim in the same host.
+bad_host_subdelim <- rawToChar(as.raw(
+  c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x80, 0x21, 0x2f, 0x70)
+))
+# "http://<C3>(/p" -- a truncated 2-byte sequence whose trailing octet is "(".
+bad_host_pair <- rawToChar(as.raw(
+  c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0xC3, 0x28, 0x2f, 0x70)
+))
+# "http://<80>%7f/p" -- undecodable octet AND a lowercase percent-triplet, the
+# pair that reaches `.pct_hex_upper()`.
+bad_host_triplet <- rawToChar(as.raw(
+  c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x80, 0x25, 0x37, 0x66,
+    0x2f, 0x70)
+))
+# "http://<80>@!@e.com/p" -- undecodable octet AND a repeated "@", the pair
+# that reaches the excess-"@" repair.
+bad_userinfo_at2 <- rawToChar(as.raw(
+  c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x80, 0x40, 0x21, 0x40,
+    0x65, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70)
+))
+
+test_that("an undecodable HOST rejects even when a mask also fires", {
+  in_host <- c(bad_host_subdelim, bad_host_pair, bad_host_triplet)
+  for (std in c("whatwg", "rfc3986")) {
+    for (u in in_host) {
+      expect_no_error(st <- get_parse_status(u, url_standard = std))
+      expect_identical(st, "error")
+      expect_no_error(h <- get_host(u, url_standard = std))
+      expect_identical(h, NA_character_)
+      expect_no_error(s <- serialize_url(u, standard = std))
+      expect_identical(s, NA_character_)
+    }
+  }
+})
+
+test_that("an undecodable USERINFO follows each profile's own rule", {
+  # Not a rejection under WHATWG, and that is correct rather than tolerated:
+  # WHATWG parses a scalar-value string, so the undecodable octet becomes
+  # U+FFFD and percent-encodes as %EF%BF%BD in the userinfo, leaving a valid
+  # host. rfc3986 has no such substitution rule and rejects. Both answers are
+  # byte-identical to what this input produced before RURL-kmpnbvdl -- the
+  # totality fix repaired THROWS, it did not move an accepted row.
+  expect_no_error(
+    st <- get_parse_status(bad_userinfo_at2, url_standard = "whatwg")
+  )
+  expect_identical(st, "ok")
+  expect_identical(
+    get_host(bad_userinfo_at2, url_standard = "whatwg"), "e.com"
+  )
+  expect_identical(
+    serialize_url(bad_userinfo_at2, standard = "whatwg"),
+    "http://%EF%BF%BD%40!@e.com/p"
+  )
+
+  expect_no_error(
+    st <- get_parse_status(bad_userinfo_at2, url_standard = "rfc3986")
+  )
+  expect_identical(st, "error")
+  expect_identical(
+    get_host(bad_userinfo_at2, url_standard = "rfc3986"), NA_character_
+  )
+})
+
+test_that("a masked undecodable row does not poison the batch either", {
+  for (u in c(bad_host_subdelim, bad_host_pair, bad_host_triplet,
+              bad_userinfo_at2)) {
+    batch <- c("http://a.example.com/", u, "http://b.example.com/")
+    expect_identical(
+      get_parse_status(batch, url_standard = "rfc3986"),
+      c("ok", "error", "ok")
+    )
+    expect_identical(
+      get_host(batch, url_standard = "rfc3986"),
+      c("a.example.com", NA, "b.example.com")
+    )
+  }
+})
+
+test_that("the decodable-guarded helpers leave undecodable input alone", {
+  # `.gsub_decodable()` returns an undecodable element BYTE-IDENTICAL rather
+  # than substituting on it, so a rejected row is never rewritten on its way
+  # out. Decodable elements substitute normally.
+  undecodable <- rawToChar(as.raw(c(0x61, 0x80, 0x25, 0x37, 0x66)))
+  x <- c("%7f", undecodable, NA)
+  out <- .gsub_decodable("%([0-9a-f]{2})", "%\\U\\1", x, perl = TRUE)
+  expect_identical(out[[1L]], "%7F")
+  expect_identical(
+    as.integer(charToRaw(out[[2L]])),
+    as.integer(charToRaw(undecodable))
+  )
+  expect_true(is.na(out[[3L]]))
+})
+
+test_that("the undecodable short-circuit is exactly as severe as the walk", {
+  # `.rfc3986_generic_uri_ok()` rejects an undecodable element WITHOUT walking
+  # the grammar, justified by: the walk classifies every byte, every production
+  # is ASCII apart from the `-\U0010FFFF` scalar-value tolerance, and an
+  # invalid octet sequence denotes no scalar value. The way that argument could
+  # fail is if the walk's decoder were MORE PERMISSIVE than `validUTF8()` --
+  # repairing an overlong or surrogate form into a character the grammar likes,
+  # so the walk would have accepted where the short-circuit rejects.
+  #
+  # It is not: ICU maps every one of these to U+FFFD, never back to the ASCII
+  # they overlong-encode. `C0 AF` is the classic overlong "/" and must not
+  # become a path separator.
+  invalid <- list(
+    c(0xC0, 0xAF), c(0xC1, 0xA1), c(0xE0, 0x81, 0xA1), c(0xC0, 0x80),
+    c(0xED, 0xA0, 0x80), c(0xED, 0xB0, 0x80), c(0xF8, 0x88, 0x80, 0x80, 0x80),
+    c(0xF5, 0x90, 0x80, 0x80), c(0xE2, 0x82), 0x80
+  )
+  for (seq in invalid) {
+    u <- rawToChar(as.raw(c(
+      0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x61, seq, 0x62, 0x2f, 0x70
+    )))
+    expect_false(validUTF8(u))
+    expect_false(.rfc3986_generic_uri_ok(u)$ok)
+    # the decisive half: ICU does not repair it into bare ASCII
+    decoded <- suppressWarnings(
+      stringi::stri_encode(rawToChar(as.raw(seq)), "UTF-8", "UTF-8")
+    )
+    expect_true(grepl("[^\001-\177]", decoded, useBytes = TRUE))
+  }
+
+  # The symmetric risk: a VALID sequence must never be short-circuited. These
+  # are the tolerance's own endpoints and its awkward interior members.
+  valid <- list(
+    c(0xC2, 0x80), c(0xC3, 0xA9), c(0xE2, 0x82, 0xAC),
+    c(0xF4, 0x8F, 0xBF, 0xBF), c(0xEF, 0xBF, 0xBF), c(0xEF, 0xBF, 0xBD)
+  )
+  for (seq in valid) {
+    u <- rawToChar(as.raw(c(
+      0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x61, seq, 0x62, 0x2f, 0x70
+    )))
+    expect_true(validUTF8(u))
+    expect_true(.rfc3986_generic_uri_ok(u)$ok)
+  }
+})
+
+test_that(".byte_length() counts octets and is total", {
+  # It exists so a length feeding a `.byte_substring*()` offset is measured in
+  # the SAME unit as the cut, and because `stringi::stri_length()` throws on
+  # exactly the input this seam must survive.
+  declared <- rawToChar(as.raw(c(0x61, 0x80)))
+  Encoding(declared) <- "UTF-8"
+  expect_identical(
+    .byte_length(c("abc", declared, NA, "")),
+    c(3L, 2L, NA_integer_, 0L)
+  )
+})
+
+test_that(".byte_substring() matches substring() including NA indices", {
+  # The helper documents itself as clamping "exactly as substring() does". On
+  # pure ASCII the two MUST agree, byte and character indices being the same
+  # there -- so this is a real oracle, not a restatement of the implementation.
+  # `last = NA` is the ONE deliberate difference (it is the default, meaning
+  # "to the end"), so it is excluded rather than asserted away.
+  idx <- c(NA, -3L, -1L, 0L, 1L, 2L, 5L, 6L, 7L, 100L)
+  for (s in c("abcdef", "a", "")) {
+    for (first in idx) {
+      for (last in idx[!is.na(idx)]) {
+        expect_identical(
+          .byte_substring(s, first, last), substring(s, first, last),
+          info = paste("s=", s, "first=", first, "last=", last)
+        )
+      }
+    }
+  }
+})
+
 test_that("the rfc3986 verdict does not depend on the encoding mark", {
   # In-process half of locale invariance (see this file's header): under
   # `LC_ALL=C` an "unknown"-marked string is read as native, under a UTF-8
