@@ -131,7 +131,26 @@
 # Order matters. `//host` is scheme-relative, an unresolved-reference kind that
 # ratification Q4 pins as DISTINCT from "missing" and therefore never collapsed
 # by `http_https_missing`.
-.url_key_scheme_presence <- function(url, url_standard) {
+#
+# `looks_like_host_port` is REQUIRED, not an optimization. The lexical regex
+# below cannot tell a scheme from a host:port: `h.com` satisfies RFC 3986's
+# `scheme` production, so `h.com:80/` matches `^[A-Za-z][A-Za-z0-9+.-]*:` and
+# reads as an explicit scheme. The truth table settles what it actually is --
+# row 9's left state is labelled literally "missing scheme `:80`"
+# (`contracts/key-join-contracts.md:113`) -- so the Stage-A flag that exists for
+# exactly this shape (RURL-aldwnots) overrides the regex.
+#
+# Getting this wrong was NOT harmless. Misreading presence as `explicit` also
+# makes `.url_key_port()` eligible to normalize the row's `:80` away under the
+# INFERRED http scheme, which ratification Q4 forbids. Under `exact` the two
+# errors cancel -- the wrong presence keeps `h.com:80/` distinct from `h.com/`,
+# masking the wrong port -- and a relaxed mode that collapses presence removes
+# the compensation, making `h.com:80/` == `h.com/`. Verified by measurement, and
+# pinned by tests over both modes.
+# `looks_like_host_port` has NO default on purpose: the compensation described
+# above is re-introducible by any caller that omits it, so omitting it is made
+# impossible rather than merely discouraged.
+.url_key_scheme_presence <- function(url, url_standard, looks_like_host_port) {
   u <- ifelse(is.na(url), "", as.character(url))
   if (.is_whatwg(url_standard)) {
     u <- .strip_whatwg_control_chars_vec(u, url_standard)$url
@@ -141,6 +160,8 @@
   out[stringi::stri_startswith_fixed(u, "//")] <- "scheme-relative"
   explicit <- stringi::stri_detect_regex(u, "^[A-Za-z][A-Za-z0-9+.\\-]*:")
   out[!is.na(explicit) & explicit] <- "explicit"
+  hp <- !is.na(looks_like_host_port) & looks_like_host_port
+  out[hp & out == "explicit"] <- "inferred"
   out
 }
 
@@ -203,7 +224,13 @@
 .url_key_state_vec <- function(url, policy, engine = NULL) {
   opts <- .url_key_parse_options(policy, engine)
   rec <- .fsss_record_vec(url, policy$standard, engine, opts = opts)
-  presence <- .url_key_scheme_presence(url, opts$url_standard)
+  # Stage A under the SAME options object `.fsss_record_vec()` just used, so
+  # this is a cache hit rather than a second parse, and the flag cannot come
+  # from a posture the record did not see.
+  presence <- .url_key_scheme_presence(
+    url, opts$url_standard,
+    looks_like_host_port = ._parse_stage_a_vec(url, opts)$looks_like_host_port
+  )
   port <- .url_key_port(rec$scheme, rec$syntactic_port, presence)
 
   list(
