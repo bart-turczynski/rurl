@@ -223,28 +223,14 @@
 # IPv6 literal legitimately carries `[` `]` `:` and is checked separately.
 .WHATWG_FORBIDDEN_HOST_ONLY_CP <- "[\\u0020#/:<>?@\\[\\]\\\\^|]"
 
-# WHATWG host-charset shim code points (RURL-dxwxeamq, ADR 0009). The 15 ASCII
-# code points the web-route host parser rejects that the WHATWG URL Standard
-# keeps verbatim in the host (ada-confirmed): ! " $ & ' ( ) * + , ; = ` { }.
-# That parser's host allowed-set is narrower than WHATWG's (see
-# `.WEB_HOST_ALLOWED_BYTES` in R/parse-web.R); without the shim the whole row
-# is dropped. These are all NON-forbidden (none appears in
-# .WHATWG_FORBIDDEN_HOST_CP) and NON-structural (none delimits userinfo/port/
-# path/query/fragment), so the host span is locatable before substitution.
-# U+0025 "%" is DELIBERATELY EXCLUDED -- it is a forbidden domain code point
-# (WHATWG drops it too), so rejecting it is correct. An ICU regex class.
-.WHATWG_HOST_CHARSET_SHIM_CP <- paste0(
-  "[\\u0021\\u0022\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
-  "\\u002b\\u002c\\u003b\\u003d\\u0060\\u007b\\u007d]"
-)
-
-# RFC 3986 reg-name sub-delims (RURL-dnddogce): the subset of host bytes the
-# web-route parser rejects that RFC 3986 section 3.2.2 permits literally in a
-# reg-name.
-.RFC3986_REG_NAME_SUB_DELIM_CP <- paste0(
-  "[\\u0021\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
-  "\\u002b\\u002c\\u003b\\u003d]"
-)
+# The two host-charset code point classes that lived here -- the 15 WHATWG gap
+# code points (RURL-dxwxeamq, ADR 0009) and the 11 RFC 3986 reg-name sub-delims
+# (RURL-dnddogce) -- are gone with the pre-parse shim that consumed them
+# (RURL-ezhzpkhg deletion 1, ADR 0013). They now exist as BYTE sets in the
+# parser that judges them, `.WEB_HOST_GAP_BYTES` and
+# `.WEB_HOST_SUBDELIM_BYTES` in R/parse-web.R. The change of unit is the point:
+# an ICU class only matches a string stringi will accept, and a host token may
+# be declared UTF-8 while holding invalid octets (RURL-kmpnbvdl).
 
 # Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts;
 # ws/wss added by RURL-qluqkdwl / ADR 0012 Layer 1). WHATWG defines defaults

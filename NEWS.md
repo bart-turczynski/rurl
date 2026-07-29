@@ -86,6 +86,34 @@
 
 ### Bug fixes
 
+- **Whether a host may hold a literal `!`, `` ` ``, `;` … no longer depends on
+  the slash count, on a control character elsewhere in the URL, or on the
+  scheme.** Under `url_standard = "whatwg"` rurl accepts the 15 ASCII code
+  points WHATWG keeps in a host (`! " $ & ' ( ) * + , ; = `` ` `` { }`), and
+  under `"rfc3986"` the 11 RFC 3986 `sub-delims`. That acceptance was
+  implemented as a pre-parse rewrite (ADR 0009), and a rewrite needs an
+  eligibility test — which was a regex over the whole URL. So three unrelated
+  properties of the *rest* of the string were silently deciding it:
+
+  ```r
+  # all rejected before; all parse now
+  safe_parse_url("http:///a!b.com/p", url_standard = "rfc3986")  # 1 or 3 slashes
+  safe_parse_url("http://a!b.com/p\vq", url_standard = "whatwg") # VT/FF/NEL/LS/PS
+  safe_parse_url("ftps://a!b.com/p", url_standard = "whatwg")    # non-special scheme
+  ```
+
+  The pattern hard-required a literal `//`; it matched the post-authority
+  remainder with an ICU `.`, which excludes the Unicode line terminators; and
+  it was scoped to a scheme set, so `ftps` was refused under `whatwg` while
+  `rfc3986` allowed it. Removing the `\v` from the second URL made it parse.
+
+  Acceptance now lives in the parser, on a dial of its own, and applies to the
+  host regardless of what surrounds it (ADR 0013, superseding ADR 0009). The
+  **default profile is unaffected** — it never admitted these code points and
+  still does not. Measured on an extended octet-acceptance sweep: +90 accepted
+  rows under `whatwg`, +44 under `rfc3986`, +0 by default, zero rows narrowed,
+  and the moved byte sets are exactly the 15 and exactly the 11.
+
 - **A URL component ending in a raw line terminator is no longer accepted as
   valid RFC 3986 syntax.** The in-tree RFC 3986 grammar transcription anchored
   its component productions with `^`/`$`. ICU's `$` also matches *before* a

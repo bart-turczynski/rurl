@@ -241,6 +241,65 @@ pct_odd <- c(
 corpus <- c(corpus, pct_odd)
 labels <- c(labels, sprintf("pct_odd:%02d", seq_along(pct_odd)))
 
+# LITERAL HOST BYTE x STRUCTURE (RURL-ezhzpkhg deletion 1, ADR 0013). Every
+# block above varies the host OCTET inside a FIXED frame -- `http://` + two
+# slashes + a plain remainder -- so none of them can see a rule whose gate is
+# the structure AROUND the host. That was exactly the shim's shape: its
+# eligibility was a regex over the whole URL, and which literal host bytes were
+# admitted depended on things the host does not contain.
+#
+# The three frames that mattered, each of which used to REJECT a host the
+# profile plainly admits, and none of which the corpus could reach:
+#
+#   slashes     the pattern hard-required a literal "//", so a 1- or 3-slash
+#               authority never qualified (the encoded half already has
+#               `pct_3slash`; the literal half had nothing)
+#   terminator  the post-authority remainder was matched with an ICU ".", which
+#               excludes the Unicode line terminators -- so a raw VT, FF, NEL,
+#               LS or PS ANYWHERE after the authority made the row ineligible
+#               and took the host down with it. This is the third instrument
+#               this trap has evaded; ICU "." is not "[^\n]".
+#   scheme      eligibility was scoped to a scheme SET, so `ftps` -- not a
+#               WHATWG special scheme -- was excluded under `whatwg` while
+#               `rfc3986` allowed it
+#
+# `lit_ui` and `lit_port` are the controls: userinfo and port are governed by
+# other sets entirely and must not move when the host rule changes.
+lit_bytes <- c(
+  # the 15 WHATWG keeps in a host
+  0x21L, 0x22L, 0x24L, 0x26L, 0x27L, 0x28L, 0x29L, 0x2AL, 0x2BL, 0x2CL,
+  0x3BL, 0x3DL, 0x60L, 0x7BL, 0x7DL,
+  # negative controls: forbidden host code points, and one ordinary byte
+  0x3CL, 0x3EL, 0x5EL, 0x2FL, 0x25L, 0x7CL, 0x61L
+)
+lit_frames <- list(
+  lit_1slash = function(o) c(asc("http:/a"), o, asc("b.com/p")),
+  lit_2slash = function(o) c(asc("http://a"), o, asc("b.com/p")),
+  lit_3slash = function(o) c(asc("http:///a"), o, asc("b.com/p")),
+  lit_ftps   = function(o) c(asc("ftps://a"), o, asc("b.com/p")),
+  lit_ftp    = function(o) c(asc("ftp://a"), o, asc("b.com/p")),
+  lit_vt     = function(o) c(asc("http://a"), o, asc("b.com/p"), 0x0BL, asc("q")),
+  lit_ff     = function(o) c(asc("http://a"), o, asc("b.com/p"), 0x0CL, asc("q")),
+  lit_nel    = function(o) {
+    c(asc("http://a"), o, asc("b.com/p"), 0xC2L, 0x85L, asc("q"))
+  },
+  lit_ls     = function(o) {
+    c(asc("http://a"), o, asc("b.com/p"), 0xE2L, 0x80L, 0xA8L, asc("q"))
+  },
+  lit_ps     = function(o) {
+    c(asc("http://a"), o, asc("b.com/p"), 0xE2L, 0x80L, 0xA9L, asc("q"))
+  },
+  lit_ui     = function(o) c(asc("http://u"), o, asc("v@h.com/p")),
+  lit_port   = function(o) c(asc("http://a"), o, asc("b.com:8080/p"))
+)
+for (fn in names(lit_frames)) {
+  f <- lit_frames[[fn]]
+  for (o in lit_bytes) {
+    corpus <- c(corpus, bstr(f(o)))
+    labels <- c(labels, sprintf("%s:%03d", fn, o))
+  }
+}
+
 # Bytes AND the encoding mark: a transcoding regression changes neither value
 # nor length, only the mark, and would otherwise pass unnoticed.
 hex <- function(x) {

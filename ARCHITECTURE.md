@@ -45,11 +45,15 @@ Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
   (`._parse_stage_a_vec` / `._parse_stage_b_vec`) plus the cache-key derivation
   (`.parse_cache_keys()`). `parse-phases.R` holds the decomposed per-phase
   helpers `.prepare_urls_for_curl_vec()` … `.assemble_parse_result()`, including
-  the host model (`.apply_host_standard_model_vec()`), the WHATWG pre-curl
+  the host model (`.apply_host_standard_model_vec()`), the WHATWG pre-parse
   transforms (`.rewrite_whatwg_backslashes_vec()`,
-  `.strip_whatwg_control_chars_vec()`, `.map_whatwg_domain_separators_vec()`,
-  and the host-charset shim `.shim_whatwg_host_charset_vec()` — ADR 0009), and
-  the `clean_url` assembler (`.build_clean_url_vec()` / `.build_port_part_vec()`).
+  `.strip_whatwg_control_chars_vec()`, `.map_whatwg_domain_separators_vec()`),
+  and the `clean_url` assembler (`.build_clean_url_vec()` /
+  `.build_port_part_vec()`). The host-charset shim that used to sit in that
+  family is **gone** (ADR 0013 superseding ADR 0009): which literal bytes a host
+  may hold is an accept/reject rule, so it is now the in-tree parser's
+  `host_charset` dial. Phase 1 rewrites the input; it no longer decides
+  acceptance for the host.
 - **R/verdicts.R** — the layered validation verdicts: the L1 syntax / L2 policy
   / L3 annotation vocabularies, their derivation
   (`.derive_verdict_layers_vec()`), the projection back to the legacy

@@ -237,8 +237,13 @@ test_that("one undecodable row does not poison the rest of the batch", {
 # pair, so it scored the partial fix as complete. These are the shapes that
 # still threw afterwards, one per surviving site:
 #
-#   `.shim_whatwg_host_charset_vec()` reassembly  -- stri_length() on the
+#   the host-charset shim's reassembly            -- stri_length() on the
 #     authority, reached only on a `restore` row (bad octet + charset mask).
+#     That shim was `.shim_whatwg_host_charset_vec()`; RURL-ezhzpkhg deletion 1
+#     moved literal host acceptance into the parser (`host_charset`, ADR 0013),
+#     which judges the raw byte vector and so has no reassembly to mis-slice.
+#     The row below still pins the conjunction, for the same reason as the
+#     repeated-"@" one: the site moved, the input class did not.
 #   `.pct_hex_upper()`                            -- gsub(perl = TRUE).
 #   the repeated-"@" repair                       -- gsub(fixed = TRUE). That
 #     repair was `.encode_excess_authority_at_vec()` when this was written;
