@@ -213,10 +213,21 @@
 #     default, so the record carries no default port. This is a PARSE fact,
 #     which is why the serializer emits whatever port it is handed. RFC keeps
 #     it; the normalized form elides it per sec 6.2.3.
-.fsss_record_vec <- function(url, standard, engine = NULL) {
+#
+# `opts` exists ONLY so a second identity surface can reuse this builder under a
+# DIFFERENT parse posture without duplicating it. Surface (b) never passes it
+# and is byte-for-byte unaffected; surface (e), the comparison key, passes its
+# bundle because the FSSS posture (`scheme_policy = "require"`) makes every
+# scheme-less input a parse failure, which would leave the key's missing-scheme
+# truth-table rows unreachable (`contracts/key-join-contracts.md:112-115`).
+# Porting the lexical recovery and the general-parse kind merge into a private
+# copy is the alternative, and it is the one that silently narrows.
+.fsss_record_vec <- function(url, standard, engine = NULL, opts = NULL) {
   n <- length(url)
   is_whatwg <- identical(standard, "whatwg")
-  opts <- .fsss_parse_options(standard, engine)
+  if (is.null(opts)) {
+    opts <- .fsss_parse_options(standard, engine)
+  }
 
   a <- ._parse_stage_a_vec(url, opts)
   ok <- !attr(a, "null_row")
@@ -323,7 +334,15 @@
     query_kind = lex$query_kind,
     fragment = a$raw_fragment,
     fragment_kind = lex$fragment_kind,
-    port = port
+    port = port,
+    # The port AS SPELLED, before the WHATWG default-port elision above. Surface
+    # (b) must not use it -- nulling a special scheme's default port is a WHATWG
+    # PARSE fact and the serializer emits what it is handed. Surface (e) must:
+    # key-policy v1 normalizes ONLY http:80 and https:443, so `ftp://h:21/` and
+    # `ws://h:80/` stay DISTINCT from their portless spellings
+    # (`contracts/key-join-contracts.md:116-117`, P3.1 ratification Q8) even
+    # though WHATWG's parser elides all five defaults.
+    syntactic_port = a$raw_port
   )
 }
 
