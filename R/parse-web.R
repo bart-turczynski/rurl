@@ -382,6 +382,17 @@
   if (.is_whatwg(url_standard)) "encode" else "reject"
 }
 
+# The `host_ipv4` setting each selected standard asks for -- which token shapes
+# count as an IPv4 ADDRESS rather than a registered name. Compensated for in
+# front of the parser until RURL-ezhzpkhg deletion 4, where it had to be
+# `whatwg`-only for a reason that no longer holds: the rewrite existed because
+# the OLD engine could not read `0x.0x.0`, not because `rfc3986` wants a
+# different address grammar than the no-selector baseline. Both still get
+# `narrow`, so nothing moves for them.
+.web_host_ipv4_policy <- function(url_standard) {
+  if (.is_whatwg(url_standard)) "whatwg" else "narrow"
+}
+
 # RFC 3986 host rendering: decode the triplets section 6.2.2.2 permits decoding
 # (unreserved only) and leave every other one ENCODED, hex uppercased per
 # section 6.2.2.1. Malformed "%" is still a parse error, exactly as in
@@ -424,21 +435,39 @@
   .web_chr(out)
 }
 
-# libcurl's IPv4 normalization. Deliberately NOT `.parse_whatwg_ipv4_host()`:
-# the two disagree on the forms that decide whether a token is an ADDRESS at
-# all. libcurl treats an empty numeric part as "not a number" (`0x` stays the
-# name "0x", where WHATWG reads it as 0) and does not strip a trailing dot
-# (`1.2.3.4.` stays a name). A token that is not an address is returned
-# UNCHANGED -- it is simply a registered name -- never rejected.
-.web_ipv4_number <- function(part) {
+# IPv4 normalization, in the two flavours rurl ships. This used to be TWO
+# functions that deliberately disagreed -- this one and
+# `.parse_whatwg_ipv4_host()` in front of the parser (RURL-ezhzpkhg deletion 4)
+# -- and reconciling them is most of that deletion, because what they disagreed
+# about is not how an address is SPELLED but whether a token is an address AT
+# ALL. Three forms, and WHATWG reads every one of them as an address where the
+# narrow flavour reads a registered name:
+#
+#   empty hex digits   `0x` is the number 0 to WHATWG (its IPv4-number parser
+#                      strips the "0x" and returns 0 for what is left), and the
+#                      name "0x" to the narrow flavour
+#   trailing dot       WHATWG removes one empty final part before splitting, so
+#                      `1.2.3.4.` is the address; narrow keeps it a name
+#   uppercase `0X`     WHATWG's prefix test is case-insensitive and narrow's is
+#                      not, so `0Xff` is a name and `0xff` the address
+#                      0.0.0.255
+#
+# One function with a flag rather than two functions, so the disagreement is
+# stated in one place instead of having to be rediscovered by diffing them. The
+# narrow success set is a strict SUBSET of the WHATWG one and the two agree on
+# every value in it, which is why the whatwg profile needs no fallback to the
+# narrow one.
+#
+# A token that is not an address is returned UNCHANGED -- it is simply a
+# registered name -- never rejected. Under `whatwg` a host that "ends in a
+# number" and is NOT an address is fatal, but that is the standard's host model
+# (`.apply_host_standard_model_vec()`), not the parser's business.
+.web_ipv4_number <- function(part, ipv4) {
   if (!nzchar(part)) {
     return(NA_real_)
   }
-  # LOWERCASE "0x" only. libcurl does not accept "0X", so `0Xff` is a registered
-  # name while `0xff` is the address 0.0.0.255. (`.parse_whatwg_ipv4_number()`
-  # accepts both, per WHATWG -- another reason these two normalizers stay
-  # separate.)
-  if (grepl("^0x", part, useBytes = TRUE)) {
+  hex <- if (identical(ipv4, "whatwg")) "^0[xX]" else "^0x"
+  if (grepl(hex, part, useBytes = TRUE)) {
     digits <- substring(part, 3L)
     base <- 16
   } else if (grepl("^0[0-9]+$", part, useBytes = TRUE)) {
@@ -449,7 +478,9 @@
     base <- 10
   }
   if (!nzchar(digits)) {
-    return(NA_real_)
+    # Empty only ever means "the prefix was the whole part" -- a wholly empty
+    # `part` returned above -- so this is WHATWG's `0x` -> 0 rule.
+    return(if (identical(ipv4, "whatwg")) 0 else NA_real_)
   }
   chars <- strsplit(digits, "", fixed = TRUE)[[1L]]
   vals <- match(.ascii_toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
@@ -459,15 +490,30 @@
   Reduce(function(acc, d) acc * base + d, vals, 0)
 }
 
-.web_ipv4_normalize <- function(host) {
-  parts <- strsplit(host, ".", fixed = TRUE)[[1L]]
+.web_ipv4_normalize <- function(host, ipv4 = "narrow") {
+  # WHATWG removes ONE empty final part before splitting; the narrow flavour
+  # removes none. Cut on the BYTE vector, never with `substring()` on a
+  # `nchar(type = "bytes")` length -- the host may hold high bytes here, and
+  # mixing byte lengths with character indices is the defect class RURL-kmpnbvdl
+  # was. `work` is what gets read; `host` is what a non-address returns, so a
+  # second trailing dot (`1.2.3.4..`, not an address either way) is given back
+  # exactly as written.
+  work <- host
+  if (identical(ipv4, "whatwg")) {
+    hb <- .web_bytes(host)
+    if (length(hb) > 0L && hb[length(hb)] == 0x2EL) {
+      work <- .web_chr(hb[-length(hb)])
+    }
+  }
+  parts <- strsplit(work, ".", fixed = TRUE)[[1L]]
   # `strsplit` drops a trailing empty field, so a trailing dot is detected from
-  # the string, not from `parts` -- `1.2.3.4.` must stay a name.
+  # the string, not from `parts` -- under `narrow`, `1.2.3.4.` must stay a name.
   if (length(parts) == 0L || length(parts) > 4L ||
-      endsWith(host, ".")) {
+      endsWith(work, ".")) {
     return(host)
   }
-  numbers <- vapply(parts, .web_ipv4_number, numeric(1), USE.NAMES = FALSE)
+  numbers <- vapply(parts, .web_ipv4_number, numeric(1), ipv4 = ipv4,
+                    USE.NAMES = FALSE)
   if (anyNA(numbers)) {
     return(host)
   }
@@ -668,7 +714,7 @@
 # They were one dial until ADR 0013, which could not express `rfc3986` (RFC
 # rendering, 11 literal bytes) and `whatwg` (decoded rendering, 15) at once.
 .web_parse_host <- function(host, host_pct = "decode",
-                            host_charset = "narrow") {
+                            host_charset = "narrow", host_ipv4 = "narrow") {
   # Byte-based throughout: `nchar()`/`substring()`/`endsWith()` all throw
   # "invalid multibyte string" on a declared-UTF-8 host token holding invalid
   # octets -- and such a token must REJECT, not error.
@@ -740,11 +786,14 @@
   # IPv4 normalization reads the host AS WRITTEN, before percent-decoding: a
   # host spelled "%30%78%63%30%2e%30%32%35%30.01" decodes to the numeric form
   # "0xc0.0250.01" and yet libcurl leaves it a registered name. Percent-escapes
-  # therefore SUPPRESS the numeric reading entirely.
+  # therefore SUPPRESS the numeric reading entirely -- under BOTH flavours, and
+  # under `whatwg` for the same reason as before deletion 4: the pre-parse
+  # rewrite's own gate (`.host_ends_in_number_vec()`, still the WHATWG host
+  # model's trigger) never matched a token holding a "%" either.
   if (any(hb == 0x25L)) {
     return(decoded)
   }
-  .web_ipv4_normalize(decoded)
+  .web_ipv4_normalize(decoded, host_ipv4)
 }
 
 # The seam. One prepared URL in; libcurl's field list out, or NULL.
@@ -832,9 +881,29 @@
 # "%3C" was decided by whether the PATH happened to hold a space. Acceptance and
 # spelling are separate axes; a second parse of a rewritten string conflates
 # them by construction.
+#
+# `host_ipv4` -- which host tokens are read as an IPv4 ADDRESS:
+#
+#   "narrow"  the historical set. No empty hex digits, no trailing dot, a
+#             lowercase "0x" prefix only. The no-selector default and the
+#             `rfc3986` setting.
+#   "whatwg"  WHATWG's IPv4 parser, which reads all three of them
+#             (`.web_ipv4_normalize()` lists them). A strict SUPERSET of
+#             "narrow", agreeing on every value they both accept.
+#
+# The last of the five compensations to move in (RURL-ezhzpkhg deletion 4), and
+# the one whose regex gate did more than narrow a set. `(.*)$` let ICU's "$"
+# match BEFORE a trailing line terminator, so a URL ending in a raw VT, FF, LS,
+# PS or NEL was reassembled WITHOUT it -- a fired rewrite silently deleted a
+# byte from the URL. The same pattern also hard-required a literal "//" and,
+# through the same ICU ".", skipped any URL carrying one of those terminators
+# anywhere after the authority. Reading the host token the parser already cut is
+# not a tidy-up; it is the only way the answer stops depending on the rest of
+# the string.
 .parse_web_url_one <- function(url, last_at_userinfo = FALSE,
                                host_pct = "decode", pqf_bytes = "reject",
-                               host_charset = "narrow") {
+                               host_charset = "narrow",
+                               host_ipv4 = "narrow") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -984,7 +1053,7 @@
     }
   }
 
-  host <- .web_parse_host(host_token, host_pct, host_charset)
+  host <- .web_parse_host(host_token, host_pct, host_charset, host_ipv4)
   if (is.null(host)) {
     return(NULL)
   }

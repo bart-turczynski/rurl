@@ -431,127 +431,19 @@
   )
 }
 
-.parse_whatwg_ipv4_number <- function(part) {
-  if (grepl("^0[xX]", part)) {
-    digits <- sub("^0[xX]", "", part)
-    base <- 16
-  } else if (grepl("^0[0-9]+$", part)) {
-    digits <- substring(part, 2L)
-    base <- 8
-  } else {
-    digits <- part
-    base <- 10
-  }
-  if (!nzchar(digits)) {
-    return(0)
-  }
-
-  chars <- strsplit(digits, "", fixed = TRUE)[[1L]]
-  vals <- match(.ascii_toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
-  if (anyNA(vals) || any(vals >= base)) {
-    return(NA_real_)
-  }
-  Reduce(function(acc, d) acc * base + d, vals, 0)
-}
-
-.parse_whatwg_ipv4_host <- function(host) {
-  if (is.na(host) || !nzchar(host)) {
-    return(NA_character_)
-  }
-
-  host <- stringi::stri_replace_first_regex(host, "\\.$", "")
-  parts <- strsplit(host, ".", fixed = TRUE)[[1L]]
-  if (length(parts) > 4L || any(parts == "")) {
-    return(NA_character_)
-  }
-
-  numbers <- vapply(
-    parts, .parse_whatwg_ipv4_number, numeric(1), USE.NAMES = FALSE
-  )
-  if (anyNA(numbers)) {
-    return(NA_character_)
-  }
-
-  k <- length(numbers)
-  if (k > 1L && any(numbers[-k] > 255)) {
-    return(NA_character_)
-  }
-  if (numbers[k] > 256^(5L - k) - 1) {
-    return(NA_character_)
-  }
-
-  ipv4 <- numbers[k]
-  if (k > 1L) {
-    for (i in seq_len(k - 1L)) {
-      ipv4 <- ipv4 + numbers[i] * 256^(4L - i)
-    }
-  }
-  octets <- vapply(3L:0L, function(pow) {
-    floor(ipv4 / 256^pow) %% 256
-  }, numeric(1), USE.NAMES = FALSE)
-  paste(octets, collapse = ".")
-}
-
-# WHATWG IPv4 canonicalization before the web parse. That parser handles many
-# numeric forms,
-# but rejects WPT-valid empty-hex-zero parts such as `0x.0x.0`; canonicalizing
-# valid WHATWG IPv4 hosts here lets it read the rest of the URL structure.
-# Invalid "ends in a number" hosts are left untouched and rejected either by
-# the web parser or by the later WHATWG host model.
-.rewrite_whatwg_ipv4_hosts_vec <- function(url, url_standard) {
-  no_op <- list(url = url)
-  if (!.is_whatwg(url_standard)) {
-    return(no_op)
-  }
-
-  m <- stringi::stri_match_first_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)(.*)$"
-  )
-  authority <- m[, 4L]
-  eligible <- !is.na(authority)
-  eligible[is.na(eligible)] <- FALSE
-  if (!any(eligible)) {
-    return(no_op)
-  }
-
-  after_ui <- stringi::stri_replace_first_regex(authority, "^.*@", "")
-  bracketed <- stringi::stri_startswith_fixed(after_ui, "[")
-  bracketed[is.na(bracketed)] <- FALSE
-  host <- ifelse(
-    bracketed,
-    stringi::stri_replace_first_regex(after_ui, "^(\\[[^\\]]*\\]).*$", "$1"),
-    stringi::stri_replace_first_regex(after_ui, ":[^:]*$", "")
-  )
-
-  attempt <- eligible & !bracketed & .host_ends_in_number_vec(host)
-  attempt[is.na(attempt)] <- FALSE
-  if (!any(attempt)) {
-    return(no_op)
-  }
-
-  parsed <- rep(NA_character_, length(url))
-  parsed[attempt] <- vapply(
-    host[attempt], .parse_whatwg_ipv4_host, character(1), USE.NAMES = FALSE
-  )
-  rewrite <- attempt & !is.na(parsed)
-  if (!any(rewrite)) {
-    return(no_op)
-  }
-
-  ui_prefix <- stringi::stri_sub(
-    authority, 1L, stringi::stri_length(authority) -
-      stringi::stri_length(after_ui)
-  )
-  port_suffix <- stringi::stri_sub(after_ui, stringi::stri_length(host) + 1L)
-  new_authority <- paste0(ui_prefix, parsed, port_suffix)
-
-  url_out <- url
-  url_out[rewrite] <- paste0(
-    m[rewrite, 2L], m[rewrite, 3L], new_authority[rewrite], m[rewrite, 5L]
-  )
-  no_op$url <- url_out
-  no_op
-}
+# The WHATWG IPv4 canonicalization that used to run here is gone
+# (RURL-ezhzpkhg deletion 4, the last of the five). It rewrote a WHATWG-valid
+# IPv4 host inside the URL STRING before the parse, because the old engine
+# refused WPT-valid forms such as `0x.0x.0`; the in-tree parser owns the address
+# grammar directly, as `host_ipv4` (R/parse-web.R). Its companion
+# `.parse_whatwg_ipv4_host()` / `.parse_whatwg_ipv4_number()` went with it,
+# reconciled into `.web_ipv4_normalize(host, ipv4)` -- one function with a flag,
+# so the three forms the two flavours disagree about are stated once instead of
+# having to be rediscovered by diffing two near-identical normalizers.
+#
+# `.host_ends_in_number_vec()` STAYS: it is also the WHATWG host model's trigger
+# in `.apply_host_standard_model_vec()`, which is where "a host that ends in a
+# number must parse as an address" belongs.
 
 # Decode percent-triplets in a WHATWG host just far enough for the host model to
 # see the real code points after the parse has resolved the URL's structure. A
@@ -1084,9 +976,9 @@
   #     `url_standard` -- so the gate must judge the input as accepted, or
   #     every scheme-less row would fail RFC 3986's mandatory `scheme ":"`
   #     and the grammar gate would silently re-implement scheme_policy.
-  #   * AFTER it come the PARSER-COMPAT repairs (WHATWG userinfo charset
-  #     acceptance, WHATWG IPv4 canonicalization, the host-charset shim). Those
-  #     exist to get a string past the web parser; judging their OUTPUT would
+  #   * AFTER it comes the one PARSER-COMPAT rewrite still standing (WHATWG
+  #     userinfo charset acceptance). It exists to get a string past the web
+  #     parser; judging its OUTPUT would
   #     let a
   #     repair launder an input the RFC has no production for -- exactly the
   #     "gated where rurl owns the parser" asymmetry this gate removes. The
@@ -1101,14 +993,15 @@
   at <- .encode_userinfo_charset_vec(url_to_parse, url_standard)
   url_to_parse <- at$url
 
-  ipv4 <- .rewrite_whatwg_ipv4_hosts_vec(url_to_parse, url_standard)
-  url_to_parse <- ipv4$url
-
-  # The host-charset shim used to run LAST here, rewriting the host so the
-  # parser could read a structure it would otherwise reject. Both halves are
-  # gone (RURL-ezhzpkhg deletions 1 and 2, ADR 0013 superseding ADR 0009):
-  # which literal bytes a host may hold and which of its triplets get decoded
-  # are both parser properties, carried by `host_charset` and `host_pct`.
+  # `.encode_userinfo_charset_vec()` is now the ONLY rewrite left after the gate
+  # snapshot, and it is a survivor rather than a leftover: it writes the
+  # spelling WHATWG STORES for a userinfo byte, which the parser cannot infer
+  # because `rfc3986` must stay source-preserving. The other four are gone --
+  # the host-charset shim and the host percent-decode order (deletions 1 and 2,
+  # ADR 0013 superseding ADR 0009), the excess-"@" authority split (3), the pqf
+  # fallback (5) and the WHATWG IPv4 canonicalization (4). Each was a parser
+  # property being decided in front of the parser, and each was gated by a
+  # regex over the whole URL that narrowed the set it claimed to cover.
 
   list(
     url_to_parse = url_to_parse,

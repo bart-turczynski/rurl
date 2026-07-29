@@ -12,17 +12,17 @@
 # how they were found; this file is what holds them.
 
 p <- function(url, last = FALSE, pct = "decode", pqf = "reject",
-              charset = "narrow") {
+              charset = "narrow", ipv4 = "narrow") {
   rurl:::.parse_web_url_one(url,
     last_at_userinfo = last, host_pct = pct, pqf_bytes = pqf,
-    host_charset = charset
+    host_charset = charset, host_ipv4 = ipv4
   )
 }
 
 # Compact fingerprint of one parse, so a whole rule reads as one table.
 fp <- function(url, last = FALSE, pct = "decode", pqf = "reject",
-               charset = "narrow") {
-  r <- p(url, last, pct, pqf, charset)
+               charset = "narrow", ipv4 = "narrow") {
+  r <- p(url, last, pct, pqf, charset, ipv4)
   if (is.null(r)) {
     return("REJECT")
   }
@@ -463,6 +463,111 @@ test_that("IPv4 normalization is reproduced, including its refusals", {
   expect_identical(
     p("http://%30%78%63%30%2e%30%32%35%30.01/")$host, "0xc0.0250.01"
   )
+})
+
+test_that("host_ipv4 = 'whatwg' reads the three forms 'narrow' calls names", {
+  # The whole content of the `host_ipv4` dial: THREE token shapes that decide
+  # whether a token is an ADDRESS at all. Everything else the two flavours agree
+  # on, which is why `whatwg` needs no fallback to `narrow` (RURL-ezhzpkhg
+  # deletion 4).
+  #
+  # empty hex digits -- WHATWG's IPv4-number parser strips "0x" and reads what
+  # is left, and what is left being empty means 0.
+  expect_identical(p("http://0x/", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http://0x.0x.0/", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http://0x/")$host, "0x")
+  expect_identical(p("http://0x.0x.0/")$host, "0x.0x.0")
+  # one trailing dot -- removed before splitting.
+  expect_identical(p("http://1.2.3.4./", ipv4 = "whatwg")$host, "1.2.3.4")
+  expect_identical(p("http://1.2.3.4./")$host, "1.2.3.4.")
+  # uppercase "0X" -- WHATWG's prefix test is case-insensitive.
+  expect_identical(p("http://0Xff/", ipv4 = "whatwg")$host, "0.0.0.255")
+  expect_identical(p("http://0Xff/")$host, "0Xff")
+  # ONE trailing dot, not two: `1.2.3.4..` is not an address under either
+  # flavour, and a non-address is returned EXACTLY as written -- the strip must
+  # not leak into the reg-name answer.
+  expect_identical(p("http://1.2.3.4../", ipv4 = "whatwg")$host, "1.2.3.4..")
+  expect_identical(p("http://.../", ipv4 = "whatwg")$host, "...")
+  # The forms both flavours already agreed on stay put, with the same VALUE --
+  # the narrow success set is a strict subset, not an overlapping one.
+  for (f in c("narrow", "whatwg")) {
+    expect_identical(p("http://0x7f.1/", ipv4 = f)$host, "127.0.0.1")
+    expect_identical(p("http://0177.0.0.1/", ipv4 = f)$host, "127.0.0.1")
+    expect_identical(p("http://2130706433/", ipv4 = f)$host, "127.0.0.1")
+    expect_identical(p("http://0xff/", ipv4 = f)$host, "0.0.0.255")
+    expect_identical(p("http://0xffffffff/", ipv4 = f)$host, "255.255.255.255")
+    # Non-addresses stay registered names under BOTH -- never an error. The
+    # "ends in a number must be an address" rule is the WHATWG host model's,
+    # applied after the parse, not the parser's.
+    expect_identical(p("http://1.2.3.4.5/", ipv4 = f)$host, "1.2.3.4.5")
+    expect_identical(p("http://256.1.1.1/", ipv4 = f)$host, "256.1.1.1")
+    expect_identical(p("http://4294967296/", ipv4 = f)$host, "4294967296")
+    expect_identical(p("http://1..2/", ipv4 = f)$host, "1..2")
+    expect_identical(p("http://1.2.3.08/", ipv4 = f)$host, "1.2.3.08")
+    expect_identical(p("http://example.com/", ipv4 = f)$host, "example.com")
+    # A percent-escape suppresses the numeric reading under both, which is what
+    # kept the retired pre-parse rewrite and the parser agreeing on these.
+    expect_identical(
+      p("http://%30%78%63%30%2e%30%32%35%30.01/", ipv4 = f)$host,
+      "0xc0.0250.01"
+    )
+  }
+})
+
+test_that("the IPv4 answer does not depend on the rest of the URL", {
+  # This is the deletion's whole point. The retired pre-parse rewrite gated on a
+  # regex over the WHOLE URL, so three properties of everything AROUND the host
+  # decided whether the host was an address -- and one of them deleted a byte.
+  #
+  # The terminators are written as BYTE vectors, never as "\uXXXX" literals:
+  # the parser hands back undeclared bytes, and comparing those to a UTF-8
+  # marked literal agrees under a UTF-8 locale and fails under LC_ALL=C on the
+  # very same octets (see `expect_bytes()` at the top of this file).
+  b <- function(s) as.integer(charToRaw(s))
+  terms <- list(
+    # C0 controls -- `pqf = "encode"` writes the spelling WHATWG stores.
+    list(t = 0x0BL, path = b("/p%0B"), tail = b("/p%0Bq")),
+    list(t = 0x0CL, path = b("/p%0C"), tail = b("/p%0Cq")),
+    # NEL, LS and PS are not C0 controls at all -- they are non-ASCII, and the
+    # "encode" set takes every byte a path cannot carry literally, so all three
+    # come back as UTF-8 triplet spellings rather than raw.
+    list(t = c(0xC2L, 0x85L), path = b("/p%C2%85"), tail = b("/p%C2%85q")),
+    list(t = c(0xE2L, 0x80L, 0xA8L), path = b("/p%E2%80%A8"),
+         tail = b("/p%E2%80%A8q")),
+    list(t = c(0xE2L, 0x80L, 0xA9L), path = b("/p%E2%80%A9"),
+         tail = b("/p%E2%80%A9q"))
+  )
+  pre <- b("http://0x.0x.0/p")
+  for (tm in terms) {
+    # (a) a raw line terminator ANYWHERE after the authority made the row
+    #     ineligible, because the pattern matched the remainder with an ICU ".",
+    #     which excludes VT/FF/NEL/LS/PS -- so `0x.0x.0` stayed a registered
+    #     name purely because of a byte in the PATH.
+    r <- p(rawToChar(as.raw(c(pre, tm$t, b("q")))), pqf = "encode",
+           ipv4 = "whatwg")
+    expect_identical(r$host, "0.0.0.0")
+    expect_bytes(r$path, tm$tail)
+    # (b) a TRAILING one was worse than ineligibility: `(.*)$` let ICU's "$"
+    #     match BEFORE it, so a rewrite that fired reassembled the URL WITHOUT
+    #     it. The parser cuts by byte position and cannot lose one.
+    r <- p(rawToChar(as.raw(c(pre, tm$t))), pqf = "encode", ipv4 = "whatwg")
+    expect_identical(r$host, "0.0.0.0")
+    expect_bytes(r$path, tm$path)
+  }
+  # (c) the pattern hard-required a literal "//", so a 1- or 3-slash authority
+  #     never qualified. The parser reads whatever authority it was handed.
+  expect_identical(p("http:/0x.0x.0/p", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http://0x.0x.0/p", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http:///0x.0x.0/p", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http://0x.0x.0:8080/p", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http://u:pw@0x.0x.0/p", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http://0x.0x.0", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http://0x.0x.0?a=1", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("http://0x.0x.0#f", ipv4 = "whatwg")$host, "0.0.0.0")
+  # (d) eligibility was scoped to a scheme SET. The address grammar is a
+  #     property of the token, not of the scheme in front of it.
+  expect_identical(p("ftps://0x.0x.0/p", ipv4 = "whatwg")$host, "0.0.0.0")
+  expect_identical(p("ftp://0x.0x.0/p", ipv4 = "whatwg")$host, "0.0.0.0")
 })
 
 test_that("an IPv6 literal is normalized only when that comes out shorter", {

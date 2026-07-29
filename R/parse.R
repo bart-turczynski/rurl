@@ -1798,13 +1798,18 @@ safe_parse_urls <- function(url,
   # failed the first attempt was re-parsed from that copy. See `pqf_bytes` in
   # R/parse-web.R for why a retry-on-failure cannot express the rule.
   pqf_bytes <- .web_pqf_policy(opts$url_standard)
+  # Which host tokens read as an IPv4 address (RURL-ezhzpkhg deletion 4). The
+  # last of the compensations: a Phase-1 rewrite canonicalized WHATWG-valid IPv4
+  # hosts in the URL STRING so the old engine could read the rest of it. See
+  # `host_ipv4` in R/parse-web.R for what its regex gate cost.
+  host_ipv4 <- .web_host_ipv4_policy(opts$url_standard)
   parsed_list <- vector("list", n)
   parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
       prep$url_to_parse[parse_idx], .parse_web_url_one,
       last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes,
-      host_charset = host_charset
+      host_charset = host_charset, host_ipv4 = host_ipv4
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -2498,7 +2503,8 @@ safe_parse_urls <- function(url,
     last_at_userinfo = .is_whatwg(url_standard),
     host_pct = .web_host_pct_policy(url_standard),
     pqf_bytes = .web_pqf_policy(url_standard),
-    host_charset = .web_host_charset_policy(url_standard)
+    host_charset = .web_host_charset_policy(url_standard),
+    host_ipv4 = .web_host_ipv4_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)
