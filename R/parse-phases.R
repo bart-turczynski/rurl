@@ -1770,23 +1770,75 @@
   .apply_www_policy_vec(raw_host, www_handling, is_ip_host, engine)
 }
 
+# Phase 7 (vector, RURL-jhsbzmsj): the PSL ANNOTATION candidate for a host.
+#
+# `rfc3986` keeps a reg-name's percent-encoding in the host IDENTITY (host_pct =
+# "keep"), because the RFC profile has to be source-preserving. The PSL cannot
+# read a label containing "%", so a percent-encoded IDN host would carry no
+# domain/TLD at all. RFC 3986 §3.2.2 explicitly admits percent-encoded UTF-8
+# non-ASCII names in reg-name and requires IDNA transformation before a DNS
+# lookup, while §6.2.2.2 authorizes only unreserved decoding for URI
+# normalization -- so the decoded view is a legitimate basis for a DNS-facing
+# ANNOTATION even though it must never become the identity.
+#
+# Hence: decode EXACTLY ONCE as UTF-8, solely to build the candidate. This must
+# not affect acceptance, `final_host`, serialization, or identity -- it is
+# reachable only from this function, which returns domain/TLD and nothing else.
+#
+# "Exactly once" is well defined here because no ACCEPTED host can carry a
+# literal "%": an input spelling one (`%25`) is rejected under every profile, so
+# a "%" in `final_host` is always an undecoded triplet. Verified across the
+# whole octet sweep, not assumed.
+#
+# A failed decode (a malformed triplet, a decoded NUL) or a decode that is not
+# valid UTF-8 yields NA -- the `unknown` annotation. `validUTF8()` is the
+# validator on purpose: it is byte-based and locale-independent (the
+# RURL-kmpnbvdl defect class), and strict enough to reject overlong forms and
+# encoded surrogates, which are not legitimate spellings of a code point.
+#
+# Everything after the decode is the EXISTING pslr path, deliberately: the
+# annotation for an `rfc3986` host then agrees with the one `whatwg` computes
+# for the same decoded host, including its rejections (U+FFFD stays unknown, a
+# soft hyphen is mapped away by IDNA).
+.psl_annotation_host_vec <- function(hosts) {
+  candidate <- hosts
+  pct <- stringi::stri_detect_fixed(hosts, "%")
+  pct[is.na(pct)] <- FALSE
+  if (!any(pct)) {
+    return(candidate)
+  }
+  candidate[pct] <- vapply(hosts[pct], function(one) {
+    decoded <- .web_host_percent_decode(one)
+    if (is.null(decoded) || !validUTF8(decoded)) {
+      return(NA_character_)
+    }
+    Encoding(decoded) <- "UTF-8"
+    decoded
+  }, character(1), USE.NAMES = FALSE)
+  candidate
+}
+
 # Phase 7 (vector): derive the registered domain and TLD from each host using
 # the Public Suffix List. This is the hot path: pslr is queried ONCE per output
 # spelling over the UNIQUE non-IP hosts (host-level de-dup; many URLs share a
 # host) rather than once per URL. `host_encoding` selects the emitted spelling,
 # mirroring get_host(): "unicode" decodes IDNs, "idna" emits ASCII A-labels, and
 # "keep" follows each input host's own spelling (ASCII if it is an A-label).
+#
+# The PSL is queried on the ANNOTATION candidate (above), never on the identity
+# host -- the two differ only for a percent-encoded `rfc3986` reg-name.
 .derive_domain_tld_vec <- function(final_host, is_ip_host, tld_source,
                                    host_encoding = "keep", engine = NULL) {
   n <- length(final_host)
   domain <- rep(NA_character_, n)
   tld <- rep(NA_character_, n)
-  elig <- !is_ip_host & !is.na(final_host) & final_host != ""
+  annot_host <- .psl_annotation_host_vec(final_host)
+  elig <- !is_ip_host & !is.na(annot_host) & annot_host != ""
   if (!any(elig)) {
     return(list(domain = domain, tld = tld))
   }
 
-  hosts <- final_host[elig]
+  hosts <- annot_host[elig]
   uniq_hosts <- unique(hosts)
 
   spelling <- if (host_encoding == "idna") {

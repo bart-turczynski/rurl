@@ -133,6 +133,18 @@ ADR 0001). `rurl` calls `pslr` with a fixed contract:
   `get_domain()`/`get_tld()`/`get_subdomain()` mirror `get_host()`.
 - `unknown = "na"` so an unknown TLD yields `NA` rather than pslr's implicit
   `*`.
+- pslr is queried on the **annotation candidate**, never on the identity host
+  (`.psl_annotation_host_vec()`, R/parse-phases.R). The two differ only for a
+  percent-encoded `rfc3986` reg-name, which keeps its source spelling in the
+  host identity and so cannot be read by the PSL at all. The candidate is that
+  host decoded **exactly once** as UTF-8 — legitimate because RFC 3986 §3.2.2
+  admits percent-encoded UTF-8 in `reg-name` and requires IDNA transformation
+  before a DNS lookup, while §6.2.2.2 authorizes only unreserved decoding for
+  URI normalization. The decode reaches domain/TLD and nothing else: acceptance,
+  `final_host` and serialization are untouched, and an invalid-UTF-8 or
+  non-domain result is the `unknown` annotation. Because everything after the
+  decode is the ordinary pslr path, an `rfc3986` host's annotation agrees with
+  the one `whatwg` computes for the same decoded host (RURL-jhsbzmsj).
 - `invalid = "na"` so malformed hosts yield `NA` instead of erroring.
 - Never use pslr session-global list switching (`psl_use()`) for per-request
   behavior (pslr PRD §12). Per-request list selection instead flows through the

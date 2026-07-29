@@ -86,6 +86,32 @@
 
 ### Bug fixes
 
+- **A percent-encoded internationalized host is classified again under
+  `url_standard = "rfc3986"`.** `domain` and `tld` are now derived from a
+  decoded *view* of the host, so a `reg-name` that spells its non-ASCII bytes as
+  percent-triplets is no longer left unclassified:
+
+  ```r
+  r <- safe_parse_url("http://a%C3%A9b.com/", url_standard = "rfc3986")
+  r$domain  # "aéb.com"  (was NA)
+  r$tld     # "com"      (was NA)
+  r$host    # "a%C3%A9b.com" -- unchanged, still source-preserving
+  ```
+
+  The host identity, the serialization, and which URLs are accepted are all
+  untouched: the decode happens once, as UTF-8, purely to build the annotation
+  candidate. An invalid-UTF-8 or non-domain result stays unknown (`NA`). Because
+  the candidate then takes the ordinary PSL path, an `rfc3986` host's
+  `domain`/`tld` now agree with what `"whatwg"` reports for the same host.
+
+  `parse_status` for these URLs changes from `warning-invalid-tld` to `ok`,
+  which is the status projection following the annotation it reports.
+
+  RFC 3986 §3.2.2 admits percent-encoded UTF-8 in `reg-name` and requires IDNA
+  transformation before a DNS lookup, while §6.2.2.2 authorizes only unreserved
+  decoding for URI normalization — so the decoded view is a sound basis for a
+  DNS-facing annotation without ever becoming the URL's identity.
+
 - **Whether a host may hold a literal `!`, `` ` ``, `;` … no longer depends on
   the slash count, on a control character elsewhere in the URL, or on the
   scheme.** Under `url_standard = "whatwg"` rurl accepts the 15 ASCII code

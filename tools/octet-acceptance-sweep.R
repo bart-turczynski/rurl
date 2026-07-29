@@ -23,6 +23,16 @@
 #   acceptance drift    count rows whose status is neither `error` nor NA, per
 #                       profile; a RISE is a widening and needs justifying
 #
+# Columns are profile, label, parse_status, host, serialization, domain, tld.
+# `domain`/`tld` are the L3 ANNOTATION columns and were added for RURL-jhsbzmsj
+# (derive PSL annotations from the decoded reg-name view). They earn their place
+# for the reason the fixed-frame trap keeps teaching: an instrument that records
+# only `parse_status` can see an annotation change ONLY where it happens to flip
+# the status projection, so a corpus without them scores a truthful 0 while the
+# annotation moves underneath. `host` and `serialization` are the identity
+# guards for that same change -- they must not move when only the annotation
+# does.
+#
 # TWO TRAPS this harness exists to avoid, both of which produced a WRONG answer
 # on a first attempt during RURL-kmpnbvdl:
 #
@@ -389,10 +399,12 @@ lines <- character(0)
 for (pn in names(profiles)) {
   us <- profiles[[pn]]
   lines <- c(lines, sprintf(
-    "%s\t%s\t%s\t%s\t%s", pn, labels,
+    "%s\t%s\t%s\t%s\t%s\t%s\t%s", pn, labels,
     each(get_parse_status, corpus, url_standard = us),
     each(get_host, corpus, url_standard = us),
-    each(serialize_url, corpus, standard = us)
+    each(serialize_url, corpus, standard = us),
+    each(get_domain, corpus, url_standard = us),
+    each(get_tld, corpus, url_standard = us)
   ))
 }
 writeLines(lines, out_path)
