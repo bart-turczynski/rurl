@@ -575,214 +575,6 @@
   .gsub_decodable("%([0-9a-f]{2})", "%\\U\\1", x, perl = TRUE)
 }
 
-# Host shim (RURL-dxwxeamq, ADR 0009; extended by RURL-dnddogce). WHATWG
-# accepts 15 LITERAL ASCII code points that the web parser rejects in a host.
-# The shim replaces those bytes 1:1 with filler so the parser can read the
-# structure, then restores the true host before the host model runs. RFC 3986
-# uses the same seam for the 11 literal reg-name sub-delims it permits in
-# section 3.2.2.
-#
-# It used to mask host PERCENT-TRIPLETS as well, because the parser decoded
-# them before validating and so rejected the encoded spelling of those same
-# code points (`%60`). That half is gone (RURL-rgjpcbuk / RURL-ezhzpkhg
-# deletion 2): decode order is a parser property, and `.parse_web_url_one()`
-# now owns it via `host_pct`. Only the literal mask is left, and it goes when
-# ADR 0009 is superseded and `.WEB_HOST_ALLOWED_BYTES` widens natively.
-#
-# The replacement is length- and delimiter-preserving, so the parser returns
-# byte-identical scheme/userinfo/port/path/query/fragment; only `$host` is a
-# placeholder. The caller restores `shimmed_true_host` before IP detection and
-# forbidden-code-point checks, so the shim widens no validation gate.
-#
-# Literal host-character widening is selector-scoped: WHATWG gets its full
-# ada-confirmed gap set for special schemes; RFC 3986 gets only its reg-name
-# sub-delims for authority-based supported schemes. NULL keeps the historical
-# behavior.
-.shim_whatwg_host_charset_vec <- function(url, url_standard) {
-  n <- length(url)
-  no_op <- list(
-    url = url,
-    restore_host_shimmed = rep(FALSE, n),
-    host_charset_shimmed = rep(FALSE, n),
-    shimmed_true_host = rep(NA_character_, n)
-  )
-  if (!.is_whatwg(url_standard) &&
-      !identical(url_standard, "rfc3986")) {
-    return(no_op)
-  }
-
-  # Split "scheme://" authority "rest". Literal gap chars and percent-triplets
-  # are non-structural, so the authority boundary (first /?#) is safe to locate
-  # before any substitution.
-  m <- stringi::stri_match_first_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*):(//)([^/?#]*)(.*)$"
-  )
-  scheme_lower <- .ascii_tolower(m[, 2L])
-  authority <- m[, 4L]
-  authority_schemes <- if (.is_whatwg(url_standard)) {
-    .WHATWG_SPECIAL_SCHEMES
-  } else {
-    setdiff(.SUPPORTED_SCHEMES, "file")
-  }
-  eligible <- !is.na(authority) & scheme_lower %in% authority_schemes
-  eligible[is.na(eligible)] <- FALSE
-  if (!any(eligible)) {
-    return(no_op)
-  }
-
-  # Host = authority after any userinfo (up to the last "@"), minus a trailing
-  # ":port". Bracketed IPv6 keeps its "[...]" (never carries a gap byte anyway).
-  #
-  # Cut by POSITION, not by an anchored regex. ICU's `.` does not match a line
-  # terminator (LF/VT/FF/CR/NEL/LS/PS) and its `$` also matches BEFORE a
-  # trailing one, so `^.*@`, `^(\[[^\]]*\]).*$` and `:[^:]*$` all mis-slice an
-  # authority carrying a raw terminator -- `u<LF>ser@h.com` kept the whole
-  # `u<LF>ser@h.com` as the host. This is the acceptance-critical seam: the
-  # slice picks which rows get masked past the host rejection, so a wrong
-  # host here can widen acceptance, not merely garble a render. Sharing
-  # `.fsss_host_slice()` with the serializer (RURL-dergzwku) makes the two
-  # sides of the parse agree by construction (RURL-qjvxtyze).
-  #
-  # Located AND cut in BYTES (RURL-kmpnbvdl). `authority` is a
-  # `stri_match_first_regex()` capture, and stringi marks every capture UTF-8
-  # unconditionally -- so an authority holding an invalid octet arrives here
-  # DECLARED UTF-8 but not valid UTF-8, and `substring()` on it threw
-  # `invalid multibyte string`, aborting the whole vectorized call and losing
-  # every good row in the same batch (`http://<80>/p` under `rfc3986`).
-  at <- vapply(
-    authority,
-    function(s) if (is.na(s)) 0L else .last_byte_index(s, "@"),
-    integer(1), USE.NAMES = FALSE
-  )
-  after_ui <- vapply(
-    seq_along(authority),
-    function(i) {
-      if (is.na(authority[i])) {
-        NA_character_
-      } else {
-        .byte_substring(authority[i], at[i] + 1L)
-      }
-    },
-    character(1), USE.NAMES = FALSE
-  )
-  host <- vapply(
-    after_ui,
-    function(s) if (is.na(s)) NA_character_ else .fsss_host_slice(s),
-    character(1), USE.NAMES = FALSE
-  )
-
-  # `.grepl_decodable()` rather than bare `grepl()`: the host may be declared
-  # UTF-8 and hold invalid octets, where `grepl(perl = TRUE)` warns and returns
-  # NA. Same FALSE answer as the `is.na()` fold it replaces, without the
-  # warning, and locale-invariant rather than accidentally so (RURL-kmpnbvdl).
-  has_pct <- .grepl_decodable("%[0-9A-Fa-f]{2}", host, perl = TRUE)
-  invalid_pct <- .grepl_decodable("%(?![0-9A-Fa-f]{2})", host, perl = TRUE)
-
-  # `model_host` is the host SPELLING this profile stores, and the restore below
-  # substitutes it wholesale. So it has to reproduce the parser's own
-  # `host_pct` rendering (R/parse-web.R) for the triplets as well as carrying
-  # the literal gap characters the parser never saw -- otherwise masking a
-  # literal "!" would also silently un-decode every `%7E` beside it.
-  model_host <- host
-  pct_ok <- eligible & has_pct & !invalid_pct
-  if (any(pct_ok)) {
-    if (.is_whatwg(url_standard)) {
-      model_host[pct_ok] <- vapply(
-        host[pct_ok], .whatwg_percent_decode_host, character(1),
-        USE.NAMES = FALSE
-      )
-    } else {
-      model_host[pct_ok] <- vapply(
-        host[pct_ok], .rfc_unreserved_normalize, character(1),
-        USE.NAMES = FALSE
-      )
-    }
-  }
-
-  literal_gap_whatwg <- eligible &
-    stringi::stri_detect_regex(host, .WHATWG_HOST_CHARSET_SHIM_CP)
-  literal_gap_whatwg[is.na(literal_gap_whatwg)] <- FALSE
-  literal_gap_rfc3986 <- eligible &
-    stringi::stri_detect_regex(host, .RFC3986_REG_NAME_SUB_DELIM_CP)
-  literal_gap_rfc3986[is.na(literal_gap_rfc3986)] <- FALSE
-  # Reads `model_host`, so it covers the ENCODED spelling too -- `%60` and "`"
-  # both surface `host-charset-shimmed` (ADR 0006/0009), which is what the
-  # diagnostic documents ("the host carries one of the 15") and what the
-  # `host-pct-gap-backtick-whatwg` conformance fixture pins. That stays true
-  # now that the encoded spelling is the parser's business: the flag is a
-  # property of the resulting host, not of which layer admitted it.
-  decoded_gap <- eligible &
-    stringi::stri_detect_regex(model_host, .WHATWG_HOST_CHARSET_SHIM_CP)
-  decoded_gap[is.na(decoded_gap)] <- FALSE
-
-  literal_mask <- if (.is_whatwg(url_standard)) {
-    literal_gap_whatwg
-  } else {
-    literal_gap_rfc3986
-  }
-  restore <- eligible & literal_mask
-  restore[is.na(restore)] <- FALSE
-  # NOT `return(no_op)`: `host_charset_shimmed` is a property of the resulting
-  # host, and a host whose only gap code point arrived ENCODED (`%60`) now
-  # needs no mask at all -- the parser admits the triplet itself. Returning the
-  # bare no-op here silently stopped the diagnostic firing for exactly the rows
-  # RURL-rgjpcbuk added it for.
-  if (!any(restore)) {
-    return(utils::modifyList(
-      no_op,
-      list(host_charset_shimmed = .is_whatwg(url_standard) & decoded_gap)
-    ))
-  }
-
-  # Filler swaps preserve length: literal gaps -> `a`. Percent-triplets are NOT
-  # filled any more (RURL-rgjpcbuk); the parser reads them itself under
-  # `host_pct`. That mask was the widest thing in this function -- it blanked
-  # EVERY triplet in a host, not just the one that made the row eligible, so
-  # `http://a%60b%2Fc.com/` reached the parser as `aaaabaaac.com` and the "/"
-  # was never judged at all.
-  filled_host <- host
-  literal_fill_cp <- if (.is_whatwg(url_standard)) {
-    .WHATWG_HOST_CHARSET_SHIM_CP
-  } else {
-    .RFC3986_REG_NAME_SUB_DELIM_CP
-  }
-  filled_host[literal_mask] <- stringi::stri_replace_all_regex(
-    filled_host[literal_mask], literal_fill_cp, "a"
-  )
-  # Reassembled in BYTES, for the same reason the `@` split above is
-  # (RURL-kmpnbvdl) -- and the split alone was not enough. `authority`,
-  # `after_ui` and `host` are all declared UTF-8 whatever their octets, and
-  # `stri_length()` THROWS `invalid UTF-8 byte sequence detected` on an
-  # undecodable one, aborting the whole vectorized call exactly as `substring()`
-  # did. It survived the split fix because it is only reached on a `restore`
-  # row: an undecodable host also has to trip a charset mask, which needs a
-  # sub-delim or shim code point ALONGSIDE the bad octet (`http://<80>!/p`,
-  # `http://<c3><28>/p` -- the `(` is itself a sub-delim). A corpus varying one
-  # octet at a time never builds that pair.
-  #
-  # `ui_prefix` is exactly the split's left side, so reuse `at` rather than
-  # recomputing it as a length difference: `after_ui` was cut at byte `at + 1`,
-  # so the prefix is the first `at` bytes, and `at == 0L` yields "" as before.
-  ui_prefix <- .byte_substring_vec(authority, 1L, at)
-  port_suffix <- .byte_substring_vec(after_ui, .byte_length(host) + 1L)
-  new_authority <- paste0(ui_prefix, filled_host, port_suffix)
-
-  url_out <- url
-  url_out[restore] <- paste0(
-    m[restore, 2L], ":", m[restore, 3L], new_authority[restore],
-    m[restore, 5L]
-  )
-  true_host <- rep(NA_character_, n)
-  true_host[restore] <- model_host[restore]
-
-  list(
-    url = url_out,
-    restore_host_shimmed = restore,
-    host_charset_shimmed = .is_whatwg(url_standard) & decoded_gap,
-    shimmed_true_host = true_host
-  )
-}
-
 # RFC 3986 scheme + path-rootless support for special schemes without `//`
 # (RURL-pwsacxvo). In RFC 3986 section 3, an authority is present only when the
 # scheme-specific part starts with a literal `//`; otherwise `http:example.com`
@@ -1312,13 +1104,11 @@
   ipv4 <- .rewrite_whatwg_ipv4_hosts_vec(url_to_parse, url_standard)
   url_to_parse <- ipv4$url
 
-  # Host shim (RURL-dxwxeamq / RURL-rgjpcbuk) runs LAST -- after scheme
-  # fabrication, userinfo charset acceptance and WHATWG IPv4 canonicalization,
-  # so scheme-less host-like inputs (now "http://..") are in scope. It slices
-  # the host at the LAST "@" itself (RURL-qjvxtyze), so it never needed the
-  # repeated-"@" repair that used to precede it.
-  shim <- .shim_whatwg_host_charset_vec(url_to_parse, url_standard)
-  url_to_parse <- shim$url
+  # The host-charset shim used to run LAST here, rewriting the host so the
+  # parser could read a structure it would otherwise reject. Both halves are
+  # gone (RURL-ezhzpkhg deletions 1 and 2, ADR 0013 superseding ADR 0009):
+  # which literal bytes a host may hold and which of its triplets get decoded
+  # are both parser properties, carried by `host_charset` and `host_pct`.
 
   list(
     url_to_parse = url_to_parse,
@@ -1345,14 +1135,6 @@
     # where a leading/trailing C0-control-or-space run was removed, consumed by
     # the same seam to emit `leading-trailing-stripped`.
     leading_trailing_stripped = cc$leading_trailing_stripped,
-    # Host shim: TRUE where the parser saw filler bytes in the host and Stage A
-    # must
-    # restore `shimmed_true_host`.
-    restore_host_shimmed = shim$restore_host_shimmed,
-    # WHATWG host-charset shim diagnostic: TRUE where a parser-rejected but
-    # WHATWG-valid host code point was accepted via filler substitution.
-    host_charset_shimmed = shim$host_charset_shimmed,
-    shimmed_true_host = shim$shimmed_true_host,
     rfc3986_path_rootless = rfc_rootless$is_path_rootless,
     rfc3986_path_rootless_scheme = rfc_rootless$scheme,
     rfc3986_path_rootless_path = rfc_rootless$path,

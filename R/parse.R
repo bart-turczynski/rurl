@@ -1786,6 +1786,12 @@ safe_parse_urls <- function(url,
   # host triplet as filler and substituting the profile's spelling back
   # afterwards; the parser owns it now. See `host_pct` in R/parse-web.R.
   host_pct <- .web_host_pct_policy(opts$url_standard)
+  # Which LITERAL host bytes the selected standard admits (RURL-ezhzpkhg
+  # deletion 1, ADR 0013 superseding ADR 0009). Compensated for in front of the
+  # parser until now as well, by substituting filler for the gap bytes and
+  # restoring the true host once the structure had been read. See
+  # `host_charset` in R/parse-web.R.
+  host_charset <- .web_host_charset_policy(opts$url_standard)
   # Whether an unwritable byte outside the authority is refused or escaped
   # (RURL-ezhzpkhg deletion 5). This used to be a SECOND parse: Phase 1 kept a
   # copy of the input respelled with the WHATWG encode sets, and a row that
@@ -1797,7 +1803,8 @@ safe_parse_urls <- function(url,
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
       prep$url_to_parse[parse_idx], .parse_web_url_one,
-      last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes
+      last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes,
+      host_charset = host_charset
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -1836,13 +1843,28 @@ safe_parse_urls <- function(url,
   raw_host <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$host %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
-  # Host shim restore (RURL-dxwxeamq / RURL-rgjpcbuk). For rows Phase 1
-  # sanitized so the parser could read the structure, its `$host` is a
-  # placeholder; overwrite it with the profile-correct host BEFORE IP detection
-  # and the host model, so every downstream gate validates the real host.
-  restore <- web_ok & prep$restore_host_shimmed
-  if (any(restore)) {
-    raw_host[restore] <- prep$shimmed_true_host[restore]
+  # The host shim's restore step used to run here (RURL-dxwxeamq /
+  # RURL-rgjpcbuk): for rows Phase 1 had masked, the parser's `$host` was
+  # filler and the profile-correct host was substituted back before IP
+  # detection and the host model. Both halves of that shim are gone
+  # (RURL-ezhzpkhg deletions 1 and 2, ADR 0013), so `$host` is already the
+  # profile-correct host and there is nothing to restore.
+  #
+  # `host-charset-shimmed` (ADR 0006/0009) survives the shim it was named
+  # after, because it always described the RESULTING HOST rather than the layer
+  # that admitted it: TRUE where a WHATWG parse produced a host carrying one of
+  # the 15 code points libcurl's set rejects. Derived from the parsed host, so
+  # it covers both spellings -- `%60` decodes to "`" under `host_pct =
+  # "decode"` and reads identically to a literal one.
+  host_charset_shimmed <- rep(FALSE, n)
+  if (.is_whatwg(opts$url_standard) && any(web_ok)) {
+    host_charset_shimmed[web_ok] <- vapply(
+      raw_host[web_ok],
+      function(h) {
+        !is.na(h) && any(.web_bytes(h) %in% .WEB_HOST_GAP_BYTES)
+      },
+      logical(1), USE.NAMES = FALSE
+    )
   }
   # Path is re-derived from the prepared input (not the parser's normalized
   # $path) so
@@ -2100,10 +2122,11 @@ safe_parse_urls <- function(url,
     # `leading-trailing-stripped` only where a leading/trailing
     # C0-control-or-space run was actually removed.
     leading_trailing_stripped = prep$leading_trailing_stripped,
-    # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009): same seam, emits
-    # `host-charset-shimmed` where a parser-rejected-but-WHATWG-valid host code
-    # point was accepted via the shim + true-host restore above.
-    host_charset_shimmed = prep$host_charset_shimmed,
+    # WHATWG host-charset acceptance (RURL-dxwxeamq, ADR 0009 -> ADR 0013):
+    # emits `host-charset-shimmed` where a WHATWG parse kept a host code point
+    # libcurl's set rejects. Derived above from the PARSED host, not from a
+    # Phase-1 rewrite flag.
+    host_charset_shimmed = host_charset_shimmed,
     # Also a cached Stage-A FIELD (not only the attribute below), so a cache
     # hit can report null-ness without the cache having to encode it as a NULL
     # value -- see the `null_row` entry in .spu_stage_a_fields.
@@ -2474,7 +2497,8 @@ safe_parse_urls <- function(url,
     prep$url_to_parse,
     last_at_userinfo = .is_whatwg(url_standard),
     host_pct = .web_host_pct_policy(url_standard),
-    pqf_bytes = .web_pqf_policy(url_standard)
+    pqf_bytes = .web_pqf_policy(url_standard),
+    host_charset = .web_host_charset_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)

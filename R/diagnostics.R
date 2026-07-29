@@ -266,13 +266,19 @@
     diag, live & leading_trailing_stripped, "leading-trailing-stripped"
   )
 
-  # --- host-charset shim diagnostic (RURL-dxwxeamq, ADR 0009) ----------------
-  # `host-charset-shimmed` fires exactly where Phase 1's shim
-  # (.shim_whatwg_host_charset_vec) accepted a host code point the web-route
-  # parser rejects but WHATWG keeps (! " $ & ' ( ) * + , ; = ` { }) --
-  # surfacing the accepted WHATWG boundary as a FACT (ADR 0006). Always FALSE
-  # under rfc3986 / no selector; RFC 3986 sub-delim recovery is standards
-  # conformance, not this WHATWG diagnostic.
+  # --- host-charset diagnostic (RURL-dxwxeamq, ADR 0009 -> ADR 0013) ---------
+  # `host-charset-shimmed` fires exactly where a WHATWG parse produced a host
+  # carrying a code point the web-route parser's own set rejects but WHATWG
+  # keeps (! " $ & ' ( ) * + , ; = ` { }) -- surfacing the accepted WHATWG
+  # boundary as a FACT (ADR 0006). Always FALSE under rfc3986 / no selector;
+  # RFC 3986 sub-delim acceptance is standards conformance, not this WHATWG
+  # diagnostic.
+  #
+  # The Phase-1 shim it is named after is GONE (ADR 0013) and the token is a
+  # fossil, kept because renaming a shipped diagnostic is a public-surface
+  # change. Nothing else moved: the flag always described the RESULTING HOST
+  # rather than the layer that admitted it, so it is now read straight off the
+  # parsed host in ._parse_stage_a_vec() and still covers both spellings.
   host_charset_shimmed <- a$host_charset_shimmed
   if (is.null(host_charset_shimmed)) {
     host_charset_shimmed <- rep(FALSE, n)

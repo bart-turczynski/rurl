@@ -11,15 +11,18 @@
 # corpora, all at zero differences) and then frozen here by hand. The sweep is
 # how they were found; this file is what holds them.
 
-p <- function(url, last = FALSE, pct = "narrow", pqf = "reject") {
+p <- function(url, last = FALSE, pct = "decode", pqf = "reject",
+              charset = "narrow") {
   rurl:::.parse_web_url_one(url,
-    last_at_userinfo = last, host_pct = pct, pqf_bytes = pqf
+    last_at_userinfo = last, host_pct = pct, pqf_bytes = pqf,
+    host_charset = charset
   )
 }
 
 # Compact fingerprint of one parse, so a whole rule reads as one table.
-fp <- function(url, last = FALSE, pct = "narrow", pqf = "reject") {
-  r <- p(url, last, pct, pqf)
+fp <- function(url, last = FALSE, pct = "decode", pqf = "reject",
+               charset = "narrow") {
+  r <- p(url, last, pct, pqf, charset)
   if (is.null(r)) {
     return("REJECT")
   }
@@ -214,64 +217,120 @@ test_that("the host is percent-decoded, then validated", {
   expect_identical(p("http://ho%7Fst/")$host, "ho\u007fst")
 })
 
-# `host_pct` (RURL-rgjpcbuk). The three settings differ on TWO things at once,
-# and the pair is the whole design: which decoded bytes are ADMITTED, and how
-# the admitted host is SPELLED. Validation always runs on the fully decoded
-# host -- a "/" is a "/" however it is written -- so a spelling rule can never
-# widen acceptance. That separation is what the pre-parse mask could not
-# express: masking a triplet to change the spelling also stopped every OTHER
-# triplet in the same host from being judged at all.
-test_that("host_pct = 'wide' admits the code points WHATWG keeps in a host", {
-  # Same code point, both spellings, same verdict -- the RURL-rgjpcbuk report.
-  expect_identical(p("http://ex.com%60x/", pct = "wide")$host, "ex.com`x")
-  expect_identical(p("http://ex.com%21x/", pct = "wide")$host, "ex.com!x")
-  expect_identical(p("http://ex.com%7Bx/", pct = "wide")$host, "ex.com{x")
-  # ...and "narrow" still refuses it, so the widening is the dial's alone.
+# `host_charset` (RURL-ezhzpkhg deletion 1, ADR 0013) and `host_pct`
+# (RURL-rgjpcbuk) are TWO dials over the host, and keeping them apart is the
+# whole design: `host_charset` decides which bytes are ADMITTED, `host_pct` how
+# an admitted host is SPELLED BACK. They were one dial until the pre-parse shim
+# came out, and one dial could not express the profiles -- `rfc3986` pairs RFC
+# rendering with the 11-byte literal set while `whatwg` pairs decoded rendering
+# with the 15-byte one, so a value named after percent-decoding was silently
+# deciding whether a literal "!" was a legal host byte.
+#
+# Validation always runs on the fully decoded host -- a "/" is a "/" however it
+# is written -- so a spelling rule can never widen acceptance. That is what the
+# pre-parse mask could not express: masking a triplet to change the spelling
+# also stopped every OTHER triplet in the same host from being judged at all.
+test_that("host_charset = 'whatwg' admits the 15, both spellings", {
+  # Same code point, encoded and literal, same verdict. The encoded half is
+  # RURL-rgjpcbuk's report; the literal half is what the shim used to carry.
+  expect_identical(p("http://ex.com%60x/", charset = "whatwg")$host, "ex.com`x")
+  expect_identical(p("http://ex.com`x/", charset = "whatwg")$host, "ex.com`x")
+  expect_identical(p("http://ex.com%21x/", charset = "whatwg")$host, "ex.com!x")
+  expect_identical(p("http://ex.com!x/", charset = "whatwg")$host, "ex.com!x")
+  expect_identical(p("http://ex.com%7Bx/", charset = "whatwg")$host, "ex.com{x")
+  expect_identical(p("http://ex.com{x/", charset = "whatwg")$host, "ex.com{x")
+  # ...and "narrow" refuses both, so the widening is the dial's alone.
   expect_null(p("http://ex.com%60x/"))
+  expect_null(p("http://ex.com`x/"))
   # Only the 15. A forbidden domain code point rejects however it is written.
-  expect_null(p("http://a%2Fb/", pct = "wide")) # "/"
-  expect_null(p("http://a%25b/", pct = "wide")) # "%"
-  expect_null(p("http://a%01b/", pct = "wide")) # C0
-  # The LITERAL gap character is still rejected here: the raw-token check is
-  # untouched, so ADR 0009's shim still owns that spelling (deletion 1).
-  expect_null(p("http://ex.com`x/", pct = "wide"))
+  expect_null(p("http://a%2Fb/", charset = "whatwg")) # "/"
+  expect_null(p("http://a%25b/", charset = "whatwg")) # "%"
+  expect_null(p("http://a%01b/", charset = "whatwg")) # C0
+  expect_null(p("http://a<b/", charset = "whatwg"))   # literal, not in the 15
+})
+
+test_that("host_charset = 'rfc3986' admits sub-delims literally only", {
+  # `reg-name = *( unreserved / pct-encoded / sub-delims )`. The 11 sub-delims
+  # are admissible literally...
+  expect_identical(p("http://ex.com!x/", charset = "rfc3986")$host, "ex.com!x")
+  expect_identical(p("http://a;b=c/", charset = "rfc3986")$host, "a;b=c")
+  # ...and " ` { } are NOT, because they are neither unreserved nor sub-delims.
+  # This is the asymmetry that forced acceptance onto its own dial: the same
+  # four code points ARE admissible under `whatwg`.
+  expect_null(p("http://ex.com`x/", charset = "rfc3986"))
+  expect_null(p("http://ex.com{x/", charset = "rfc3986"))
+  expect_identical(p("http://ex.com`x/", charset = "whatwg")$host, "ex.com`x")
+  # Encoded, "`" is a well-formed `pct-encoded` and so reg-name admits it.
+  expect_identical(
+    p("http://ex.com%60x/", pct = "keep", charset = "rfc3986")$host,
+    "ex.com%60x"
+  )
 })
 
 test_that("host_pct = 'keep' decodes only the unreserved triplets", {
+  k <- function(u) p(u, pct = "keep", charset = "rfc3986")
   # RFC 3986 section 6.2.2.2: unreserved decodes, everything else stands.
-  expect_identical(p("http://a%2Eb/", pct = "keep")$host, "a.b")
-  expect_identical(p("http://a%41b/", pct = "keep")$host, "aAb")
-  expect_identical(p("http://a%7Eb/", pct = "keep")$host, "a~b")
-  expect_identical(p("http://ex.com%60x/", pct = "keep")$host, "ex.com%60x")
-  expect_identical(p("http://ho%7Fst/", pct = "keep")$host, "ho%7Fst")
+  expect_identical(k("http://a%2Eb/")$host, "a.b")
+  expect_identical(k("http://a%41b/")$host, "aAb")
+  expect_identical(k("http://a%7Eb/")$host, "a~b")
+  expect_identical(k("http://ex.com%60x/")$host, "ex.com%60x")
+  expect_identical(k("http://ho%7Fst/")$host, "ho%7Fst")
   # Section 6.2.2.1: the retained triplet's hex is uppercased.
-  expect_identical(p("http://ex.com%7bx/", pct = "keep")$host, "ex.com%7Bx")
+  expect_identical(k("http://ex.com%7bx/")$host, "ex.com%7Bx")
   # A percent-encoded non-ASCII host keeps its source spelling rather than
   # becoming raw UTF-8 -- the shape that makes this dial visible in practice.
-  expect_identical(p("http://a%C3%A9b.com/", pct = "keep")$host, "a%C3%A9b.com")
-  # Judged decoded all the same: these reject exactly as under "wide".
-  expect_null(p("http://a%2Fb/", pct = "keep"))
-  expect_null(p("http://a%01b/", pct = "keep"))
-  expect_null(p("http://a%00b/", pct = "keep"))
-  expect_null(p("http://a%C3b/", pct = "keep")) # invalid UTF-8 once decoded
+  expect_identical(k("http://a%C3%A9b.com/")$host, "a%C3%A9b.com")
+  # Judged decoded all the same: these reject exactly as under "whatwg".
+  expect_null(k("http://a%2Fb/"))
+  expect_null(k("http://a%01b/"))
+  expect_null(k("http://a%00b/"))
+  expect_null(k("http://a%C3b/")) # invalid UTF-8 once decoded
   # Malformed "%" is a parse error under every setting.
-  expect_null(p("http://a%zz/", pct = "keep"))
-  expect_null(p("http://a%2/", pct = "keep"))
+  expect_null(k("http://a%zz/"))
+  expect_null(k("http://a%2/"))
 })
 
-test_that("host_pct changes the host alone, never the other components", {
+test_that("the host dials change the host alone, never the other components", {
   u <- "http://u%60v:p%60w@ex.com%60x:8080/a%60b?q%60=1#f%60g"
   # userinfo/path/query/fragment are byte-identical across the settings; only
   # `host` moves. The mask this replaces reached them by construction.
-  rest <- function(pct) {
-    r <- p(u, pct = pct)
+  rest <- function(pct, charset) {
+    r <- p(u, pct = pct, charset = charset)
     paste(r$scheme, r$port, r$path, r$query, r$fragment, r$user, r$password)
   }
-  expect_identical(rest("wide"), rest("keep"))
-  expect_identical(rest("wide"), "http 8080 /a%60b q%60=1 f%60g u%60v p%60w")
-  expect_identical(p(u, pct = "wide")$host, "ex.com`x")
-  expect_identical(p(u, pct = "keep")$host, "ex.com%60x")
+  expect_identical(rest("decode", "whatwg"), rest("keep", "rfc3986"))
+  expect_identical(
+    rest("decode", "whatwg"),
+    "http 8080 /a%60b q%60=1 f%60g u%60v p%60w"
+  )
+  expect_identical(p(u, charset = "whatwg")$host, "ex.com`x")
+  expect_identical(p(u, pct = "keep", charset = "rfc3986")$host, "ex.com%60x")
   expect_null(p(u))
+})
+
+# The gate the shim used was a REGEX, and a regex-shaped eligibility gate
+# silently narrows the set it claims to cover -- the finding in every deletion
+# of this mission. These are the shapes its gate could not reach, each of which
+# used to REJECT a host the profile plainly admits.
+test_that("literal host acceptance has no structural gate", {
+  # The shim's pattern hard-required a literal "//" after the scheme, so a 1- or
+  # 3-slash authority never qualified. The parser accepts 1..3.
+  expect_identical(p("http:/a!b.com/p", charset = "whatwg")$host, "a!b.com")
+  expect_identical(p("http:///a!b.com/p", charset = "whatwg")$host, "a!b.com")
+  expect_identical(p("http:///a!b.com/p", charset = "rfc3986")$host, "a!b.com")
+  # It matched the post-authority remainder with an ICU ".", which excludes the
+  # Unicode line terminators -- so a raw VT or FF anywhere after the authority
+  # made the whole row ineligible and the host was rejected along with it.
+  vt <- p("http://a!b.com/p\u000bq", charset = "whatwg", pqf = "encode")
+  expect_identical(vt$host, "a!b.com")
+  expect_identical(vt$path, "/p%0Bq")
+  ff <- p("http://a!b.com/p\u000cq", charset = "whatwg", pqf = "encode")
+  expect_identical(ff$host, "a!b.com")
+  expect_identical(ff$path, "/p%0Cq")
+  # And it was scheme-scoped, so `ftps` -- not a WHATWG special scheme -- was
+  # excluded under `whatwg` while `rfc3986` allowed it. WHATWG keeps the 15 in
+  # an opaque host too, so the scoping was an artifact of the rewrite.
+  expect_identical(p("ftps://a!b.com/p", charset = "whatwg")$host, "a!b.com")
 })
 
 # `pqf_bytes` (RURL-ezhzpkhg deletion 5). The dial decides ONE thing: whether a

@@ -46,10 +46,11 @@
 # STEP 4 IS UNDER WAY, so the list above is already out of date in two places.
 # The excess-"@" repair is GONE (deletion 3): splitting the authority at the
 # LAST "@" is what the WHATWG authority state does, so it is parser behaviour
-# -- see `last_at_userinfo` below. The host-charset shim's PERCENT-TRIPLET half
-# is gone too (deletion 2): which host triplets get decoded is decode ORDER,
-# which only a parser can own -- see `host_pct`. What survives of that shim is
-# the LITERAL gap-character mask, until ADR 0009 is superseded (deletion 1).
+# -- see `last_at_userinfo` below. The host-charset shim is gone ENTIRELY, in
+# two steps: its percent-triplet half first (deletion 2), because which host
+# triplets get decoded is decode ORDER -- see `host_pct` -- and then its literal
+# gap-character mask (deletion 1, ADR 0013 superseding ADR 0009), because which
+# literal bytes a host may hold is an accept/reject rule -- see `host_charset`.
 # The pqf fallback is GONE as well (deletion 5): whether an unwritable byte
 # outside the authority is refused or escaped is an accept/reject rule, so it is
 # parser behaviour -- see `pqf_bytes`.
@@ -82,9 +83,10 @@
 #             parse error), then every decoded byte must be in
 #             [A-Za-z0-9._~|-]; then libcurl's IPv4 normalization. A bracketed
 #             host is an IPv6 literal, validated and re-serialized.
-#             This is `host_pct = "narrow"`, the no-selector default; the other
-#             two settings change the decode order and the set together, and
-#             are documented at `.parse_web_url_one()` below.
+#             This is `host_pct = "decode"` with `host_charset = "narrow"`, the
+#             no-selector default. `host_pct` changes how a parsed host is
+#             SPELLED BACK and `host_charset` which literal bytes it may hold;
+#             both are documented at `.parse_web_url_one()` below.
 #   port      ":" then ASCII digits only, value <= 65535, leading zeros
 #             stripped; an EMPTY port (":" then end/"/"/"?"/"#") is no port.
 #   path      "/" when absent; C0/space/DEL are a parse error; bytes >= 0x80 are
@@ -112,16 +114,24 @@
 )
 
 # The 15 ASCII code points WHATWG keeps in a host that the set above rejects:
-# ! " $ & ' ( ) * + , ; = ` { }. The byte spelling of
-# `.WHATWG_HOST_CHARSET_SHIM_CP` (R/utils.R), which states the provenance --
-# none is a forbidden host or domain code point (ADR 0009, ada-confirmed).
-# Admitted here only under `host_pct = "wide"`, and only on the DECODED side:
-# the raw-token check stays narrow, so this closes the ENCODED spelling
-# (`%60`) and leaves the literal one to the pre-parse shim until ADR 0009 is
-# superseded.
+# ! " $ & ' ( ) * + , ; = ` { }. None is a forbidden host code point and none is
+# a forbidden domain code point, so WHATWG's host parser keeps every one of them
+# whether the scheme is special or not (ADR 0009, ada-confirmed; ADR 0013).
+# "%" is DELIBERATELY absent -- it IS a forbidden domain code point.
 .WEB_HOST_GAP_BYTES <- c(
   0x21L, 0x22L, 0x24L, 0x26L, 0x27L, 0x28L, 0x29L, 0x2AL, 0x2BL, 0x2CL,
   0x3BL, 0x3DL, 0x60L, 0x7BL, 0x7DL
+)
+
+# RFC 3986 section 3.2.2:
+# `reg-name = *( unreserved / pct-encoded / sub-delims )`.
+# These are the 11 `sub-delims` (section 2.2) the set above rejects:
+# ! $ & ' ( ) * + , ; = -- the gap set minus " ` { }, which RFC 3986 admits in a
+# reg-name only in their pct-encoded spelling. That asymmetry is the whole
+# reason acceptance is keyed to the STANDARD rather than to the percent dial:
+# under `rfc3986` a literal "`" rejects while `%60` parses.
+.WEB_HOST_SUBDELIM_BYTES <- c(
+  0x21L, 0x24L, 0x26L, 0x27L, 0x28L, 0x29L, 0x2AL, 0x2BL, 0x2CL, 0x3BL, 0x3DL
 )
 
 # RFC 3986 section 2.3 `unreserved`: ALPHA / DIGIT / "-" / "." / "_" / "~".
@@ -338,12 +348,22 @@
 # The `host_pct` setting each selected standard asks for. One place, because
 # both the vectorized and the scalar route have to agree on it, and because a
 # mapping that lives at the call sites is a mapping that drifts between them.
-# The no-selector default stays `"narrow"` -- the historical behaviour.
+# The no-selector default stays `"decode"` -- the historical rendering.
 .web_host_pct_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "keep" else "decode"
+}
+
+# The `host_charset` setting each selected standard asks for -- the ACCEPTANCE
+# axis, kept apart from the rendering axis above for the reason ADR 0013
+# records: `rfc3986` wants RFC 3986 rendering with an 11-byte literal set,
+# `whatwg` wants decoded rendering with a 15-byte one, and the no-selector
+# baseline wants decoded rendering with neither. Three standards, two
+# independent answers each; one dial could only express the diagonal.
+.web_host_charset_policy <- function(url_standard) {
   if (.is_whatwg(url_standard)) {
-    "wide"
+    "whatwg"
   } else if (identical(url_standard, "rfc3986")) {
-    "keep"
+    "rfc3986"
   } else {
     "narrow"
   }
@@ -642,11 +662,13 @@
 # Host parse: bracketed IPv6 literal, or a percent-decoded registered name /
 # IPv4 address. Returns NULL on rejection.
 #
-# `host_pct` is the host's percent-decode POLICY -- see `.parse_web_url_one()`.
-# It changes two things together, and they have to move together: which
-# triplets are decoded, and therefore which byte set the result is judged
-# against.
-.web_parse_host <- function(host, host_pct = "narrow") {
+# `host_pct` is the host's percent-decode RENDERING and `host_charset` its
+# literal ACCEPTANCE set -- two dials, both documented at
+# `.parse_web_url_one()`.
+# They were one dial until ADR 0013, which could not express `rfc3986` (RFC
+# rendering, 11 literal bytes) and `whatwg` (decoded rendering, 15) at once.
+.web_parse_host <- function(host, host_pct = "decode",
+                            host_charset = "narrow") {
   # Byte-based throughout: `nchar()`/`substring()`/`endsWith()` all throw
   # "invalid multibyte string" on a declared-UTF-8 host token holding invalid
   # octets -- and such a token must REJECT, not error.
@@ -665,10 +687,27 @@
   }
   # The RAW token is validated too, not just the decoded result, and the two
   # sets are NOT the same. A literal DEL is rejected, but "%7F" decodes to one
-  # and is KEPT -- the only byte where the pre- and post-decode verdicts differ.
-  # Every other forbidden byte fails whichever way it is written ("%2F" -> "/",
-  # "%25" -> "%", "%40" -> "@" all reject).
-  if (!.web_high_bytes_ok(host, c(.WEB_HOST_ALLOWED_BYTES, 0x25L))) {
+  # and is KEPT. Under `rfc3986` the gap runs the other way: " ` { }" are
+  # admissible only ENCODED, because `reg-name` lists them under `pct-encoded`
+  # and not under `sub-delims`. Every byte in neither set fails whichever way it
+  # is written ("%2F" -> "/", "%25" -> "%", "%40" -> "@" all reject).
+  #
+  # Widening this check is what retired ADR 0009's pre-parse shim, which used to
+  # substitute filler for these bytes so the parse could proceed and then put
+  # the true host back. Doing it here rather than in front of the parser is not
+  # a tidy-up: the shim's eligibility was a REGEX, and a regex-shaped gate
+  # silently narrows the set it claims to cover. That one required a literal
+  # "//" (so a 1- or 3-slash authority never qualified) and matched the
+  # post-authority remainder with an ICU ".", which excludes the Unicode line
+  # terminators -- so `http://a!b.com/p<VT>q` rejected while `http://a!b.com/pq`
+  # parsed. The parser has no such gate; it reads bytes.
+  raw_allowed <- c(.WEB_HOST_ALLOWED_BYTES, 0x25L)
+  if (identical(host_charset, "whatwg")) {
+    raw_allowed <- c(raw_allowed, .WEB_HOST_GAP_BYTES)
+  } else if (identical(host_charset, "rfc3986")) {
+    raw_allowed <- c(raw_allowed, .WEB_HOST_SUBDELIM_BYTES)
+  }
+  if (!.web_high_bytes_ok(host, raw_allowed)) {
     return(NULL)
   }
   # VALIDATION always runs on the fully decoded host, whatever the spelling
@@ -680,8 +719,13 @@
   if (is.null(decoded) || !nzchar(decoded)) {
     return(NULL)
   }
+  # The DECODED set is wider than the literal one under `rfc3986` and identical
+  # to it under `whatwg`: `%60` is a well-formed `pct-encoded`, so `reg-name`
+  # admits it however it decodes, whereas a bare "`" is not `sub-delims`.
+  # (Generalizing that to EVERY octet -- `%2F` included -- is a much larger
+  # acceptance question, deliberately left open; see `host_pct` below.)
   post_allowed <- c(.WEB_HOST_ALLOWED_BYTES, 0x7FL)
-  if (!identical(host_pct, "narrow")) {
+  if (!identical(host_charset, "narrow")) {
     post_allowed <- c(post_allowed, .WEB_HOST_GAP_BYTES)
   }
   if (!.web_high_bytes_ok(decoded, post_allowed)) {
@@ -714,7 +758,7 @@
 # and `$`
 # matching BEFORE a trailing one -- that this codebase has lost two sessions to.
 #
-# TWO policy dials, both here rather than in front of the parser because both
+# FOUR policy dials, all here rather than in front of the parser because all
 # describe *parsing*, not repair. Each defaults to the historical no-selector
 # behaviour, and callers opt in per selected standard.
 #
@@ -725,33 +769,48 @@
 # a repeated raw "@" -- RFC 3986 admits no unescaped "@" in either `userinfo`
 # or `reg-name`.
 #
-# `host_pct` -- the host's percent-decode ORDER and spelling, which is a
-# property of the SELECTED STANDARD and cannot be inferred from the input:
+# `host_pct` -- how a host that PARSED is spelled back. Rendering only:
 #
-#   "narrow"  decode every triplet, then judge the result against libcurl's
-#             host set, and report it decoded. The no-selector default.
-#   "wide"    the same, but the judged set also holds the 15 code points
-#             WHATWG keeps in a host (`.WEB_HOST_GAP_BYTES`). WHATWG's host
-#             parser percent-decodes FIRST and only then checks forbidden
-#             domain code points, and "`" is not one of them -- so `%60` must
-#             parse exactly as the literal "`" does.
-#   "keep"    judged like "wide", but REPORTED with only the unreserved
-#             triplets decoded and the rest left encoded, hex uppercased
-#             (RFC 3986 sections 6.2.2.2 and 6.2.2.1). The RFC posture
-#             preserves a reg-name's source spelling instead of inventing a
-#             decoded one.
+#   "decode"  report the host with every triplet decoded. The no-selector
+#             default, and what WHATWG stores.
+#   "keep"    report it with only the unreserved triplets decoded and the rest
+#             left encoded, hex uppercased (RFC 3986 sections 6.2.2.2 and
+#             6.2.2.1). The RFC posture preserves a reg-name's source spelling
+#             instead of inventing a decoded one.
 #
 # Note what "keep" does NOT do: it does not stop VALIDATING the decoded host.
 # `reg-name` grammar would admit any well-formed triplet whatever it decodes
 # to, and that reading is a much larger acceptance question than this seam --
-# it is left open deliberately. Rendering and acceptance are separate axes
-# here, which is precisely what the mask could not express.
+# it is left open deliberately.
 #
-# Until this dial existed the difference was compensated for OUTSIDE the
-# parser: Phase 1 masked every host triplet as filler so the decode could not
-# happen, then substituted the profile-correct host back afterwards. That
-# masking also hid the rest of the host from every check the parser makes
-# (RURL-rgjpcbuk / RURL-ezhzpkhg deletion 2).
+# `host_charset` -- which literal ASCII bytes a host may CONTAIN. Acceptance
+# only, and a property of the selected standard that no input can reveal:
+#
+#   "narrow"  libcurl's measured host set (`.WEB_HOST_ALLOWED_BYTES`). The
+#             no-selector default.
+#   "whatwg"  plus the 15 code points WHATWG keeps in a host
+#             (`.WEB_HOST_GAP_BYTES`), literally AND percent-encoded: WHATWG's
+#             host parser percent-decodes first and only then checks forbidden
+#             domain code points, and "`" is not one of them, so `%60` must
+#             parse exactly as the literal "`" does.
+#   "rfc3986" plus the 11 `sub-delims` (`.WEB_HOST_SUBDELIM_BYTES`) literally,
+#             and the full 15 once decoded -- see `.web_parse_host()` for why
+#             the two differ here and nowhere else.
+#
+# The two are SEPARATE dials because the three standards do not agree on the
+# diagonal: `rfc3986` pairs "keep" rendering with the 11-byte literal set,
+# `whatwg` pairs "decode" with the 15-byte one, and the no-selector baseline
+# pairs "decode" with neither. A single dial had to pick one axis and smuggle
+# the other, which is how a value named after percent-decoding ended up
+# deciding whether a literal "!" was a legal host byte.
+#
+# Both were compensated for OUTSIDE the parser until ADR 0013, and each
+# compensation failed in its own way. The percent half masked every host
+# triplet as filler so the decode could not happen, which also hid the rest of
+# the host from every check the parser makes (RURL-rgjpcbuk / deletion 2). The
+# literal half substituted filler for the gap bytes and restored the true host
+# afterwards, gated by a regex whose blind spots decided acceptance
+# (`.web_parse_host()` lists them).
 #
 # `pqf_bytes` -- what a C0 control, SP or DEL in path/query/fragment means:
 #
@@ -774,7 +833,8 @@
 # spelling are separate axes; a second parse of a rewritten string conflates
 # them by construction.
 .parse_web_url_one <- function(url, last_at_userinfo = FALSE,
-                               host_pct = "narrow", pqf_bytes = "reject") {
+                               host_pct = "decode", pqf_bytes = "reject",
+                               host_charset = "narrow") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -924,7 +984,7 @@
     }
   }
 
-  host <- .web_parse_host(host_token, host_pct)
+  host <- .web_parse_host(host_token, host_pct, host_charset)
   if (is.null(host)) {
     return(NULL)
   }
