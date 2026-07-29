@@ -317,3 +317,40 @@ test_that("vectorized and element-wise computation agree", {
                 USE.NAMES = FALSE)
   expect_identical(as.character(key(u)), one)
 })
+
+# --- host:port is a MISSING-scheme state, not an explicit one (:113) ---------
+
+# The truth table names row 9's left state literally "missing scheme `:80`", so
+# a `host:port` input must not be framed as carrying an explicit scheme. The
+# lexical scheme regex cannot see this on its own: `h.com` satisfies RFC 3986's
+# `scheme` production, so `h.com:80/` matches it.
+#
+# Asserting the FRAMED FIELDS, not just an inequality: the shipped
+# `expect_false(same("h.com:80/", "http://h.com/"))` above passed even while the
+# presence and port fields were both wrong, because the two errors cancelled.
+state <- function(u, pol = rurl:::.url_key_policy_spec()) {
+  rurl:::.url_key_state_vec(u, pol)$fields
+}
+
+test_that("a host:port input frames as a missing (inferred) scheme", {
+  f <- state(c("h.com:80/", "h.com:443/", "sub.h.com:8080/x"))
+  expect_identical(f$scheme_presence, rep("inferred", 3L))
+})
+
+test_that("an explicit scheme still frames as explicit", {
+  f <- state(c("http://h.com/", "mailto:a@b.com", "custom://h.com/"))
+  expect_identical(f$scheme_presence, rep("explicit", 3L))
+})
+
+test_that("a missing-scheme port is never normalized away (Q4, rows 9-10)", {
+  # `:80` survives on an inferred scheme, because normalization requires the
+  # row's OWN explicit recognized scheme. This is the assertion that fails when
+  # presence is misread as explicit.
+  f <- state(c("h.com:80/", "h.com:443/", "http://h.com:80/"))
+  expect_identical(f$port, c("80", "443", NA_character_))
+})
+
+test_that("scheme-relative stays its own presence state, never missing", {
+  f <- state(c("//h.com/", "h.com/"))
+  expect_identical(f$scheme_presence, c("scheme-relative", "inferred"))
+})

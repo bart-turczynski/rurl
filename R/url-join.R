@@ -162,7 +162,10 @@
   opts <- .url_key_parse_options(policy, engine)
   v <- attr(._parse_urls_cached(unname(as.character(url)), opts), "verdicts")
   rec <- .fsss_record_vec(url, policy$standard, engine, opts = opts)
-  presence <- .url_key_scheme_presence(url, opts$url_standard)
+  presence <- .url_key_scheme_presence(
+    url, opts$url_standard,
+    looks_like_host_port = ._parse_stage_a_vec(url, opts)$looks_like_host_port
+  )
 
   # Keyable-but-not-a-resolved-web-reference, then the warning refinement, then
   # the fatal states -- fatal last so they always win.
