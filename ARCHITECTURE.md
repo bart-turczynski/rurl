@@ -49,11 +49,18 @@ Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
   transforms (`.rewrite_whatwg_backslashes_vec()`,
   `.strip_whatwg_control_chars_vec()`, `.map_whatwg_domain_separators_vec()`),
   and the `clean_url` assembler (`.build_clean_url_vec()` /
-  `.build_port_part_vec()`). The host-charset shim that used to sit in that
-  family is **gone** (ADR 0013 superseding ADR 0009): which literal bytes a host
-  may hold is an accept/reject rule, so it is now the in-tree parser's
-  `host_charset` dial. Phase 1 rewrites the input; it no longer decides
-  acceptance for the host.
+  `.build_port_part_vec()`). The libcurl **compensation layer** that used to sit
+  in that family is **gone** (RURL-ezhzpkhg; ADR 0013 supersedes ADR 0009). Each
+  of its five members decided a *parsing* question in front of the parser, and
+  each is now a dial on `.parse_web_url_one()` (R/parse-web.R), mapped from
+  `url_standard` by a `.web_*_policy()` function so the vectorized and scalar
+  routes cannot drift: `host_charset` (which literal bytes a host may hold),
+  `host_pct` (how a host that parsed is spelled back), `last_at_userinfo` (where
+  the authority splits), `pqf_bytes` (an unwritable byte outside the authority)
+  and `host_ipv4` (which tokens are IPv4 addresses). Phase 1 rewrites the input;
+  it no longer decides acceptance. `.encode_userinfo_charset_vec()` is the one
+  survivor — it writes the spelling WHATWG *stores*, which the parser cannot
+  infer because `rfc3986` must stay source-preserving.
 - **R/verdicts.R** — the layered validation verdicts: the L1 syntax / L2 policy
   / L3 annotation vocabularies, their derivation
   (`.derive_verdict_layers_vec()`), the projection back to the legacy

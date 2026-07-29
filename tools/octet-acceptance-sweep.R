@@ -300,6 +300,63 @@ for (fn in names(lit_frames)) {
   }
 }
 
+# IPv4 ADDRESS GRAMMAR x STRUCTURE (RURL-ezhzpkhg deletion 4). Every block above
+# -- the `lit_*` one included -- holds the host token NON-NUMERIC, so none of
+# them can reach a rule that only fires on a host that "ends in a number". The
+# fixed-frame finding generalizes: ask what a corpus holds CONSTANT.
+#
+# Two dimensions, because the pre-parse rewrite is gated on both.
+#
+#   token   whether a token is an ADDRESS at all is where the two normalizers
+#           disagree. WHATWG reads an empty hex digit string as 0 (`0x` -> 0),
+#           strips one trailing dot and accepts an uppercase `0X`; libcurl's
+#           does none of the three, so `0x.0x.0`, `1.2.3.4.` and `0Xff` are
+#           registered NAMES to it. `example.com` is the negative control.
+#   frame   the rewrite's eligibility was, once again, a regex over the whole
+#           URL. It hard-required a literal "//" and matched the remainder with
+#           an ICU "." -- and, worse than the shim's version, its `(.*)$` let
+#           ICU's `$` match BEFORE a trailing line terminator, so a fired
+#           rewrite reassembled the URL without it. `ip4_*_end` are the frames
+#           that catch that deletion; `ip4_vt` / `ip4_nel` / `ip4_ps` catch the
+#           ineligibility.
+ip4_tokens <- c(
+  "1.2.3.4", "1.2.3.4.", "0x.0x.0", "0x", "0X.0X.0", "0Xff", "0xff",
+  "0x1.0x2.0x3.0x4", "0300.0250.0.1", "010", "999", "2130706433",
+  "1.2.3.4.5", "256.1.1.1", "1..2", "a.0x", "0x.0x.0.", "1.2.3.08",
+  "example.com"
+)
+ip4_frames <- list(
+  ip4_2slash = function(t) c(asc("http://"), t, asc("/p")),
+  ip4_1slash = function(t) c(asc("http:/"), t, asc("/p")),
+  ip4_3slash = function(t) c(asc("http:///"), t, asc("/p")),
+  ip4_bare   = function(t) c(asc("http://"), t),
+  ip4_port   = function(t) c(asc("http://"), t, asc(":8080/p")),
+  ip4_ui     = function(t) c(asc("http://u:p@"), t, asc("/p")),
+  ip4_ftps   = function(t) c(asc("ftps://"), t, asc("/p")),
+  ip4_ftp    = function(t) c(asc("ftp://"), t, asc("/p")),
+  ip4_query  = function(t) c(asc("http://"), t, asc("?a=1")),
+  ip4_frag   = function(t) c(asc("http://"), t, asc("#f")),
+  ip4_vt     = function(t) c(asc("http://"), t, asc("/p"), 0x0BL, asc("q")),
+  ip4_nel    = function(t) {
+    c(asc("http://"), t, asc("/p"), 0xC2L, 0x85L, asc("q"))
+  },
+  ip4_ps     = function(t) {
+    c(asc("http://"), t, asc("/p"), 0xE2L, 0x80L, 0xA9L, asc("q"))
+  },
+  ip4_vt_end = function(t) c(asc("http://"), t, asc("/p"), 0x0BL),
+  ip4_ff_end = function(t) c(asc("http://"), t, asc("/p"), 0x0CL),
+  ip4_ls_end = function(t) {
+    c(asc("http://"), t, asc("/p"), 0xE2L, 0x80L, 0xA8L)
+  }
+)
+for (fn in names(ip4_frames)) {
+  f <- ip4_frames[[fn]]
+  for (tk in ip4_tokens) {
+    corpus <- c(corpus, bstr(f(asc(tk))))
+    labels <- c(labels, sprintf("%s:%s", fn, tk))
+  }
+}
+
 # Bytes AND the encoding mark: a transcoding regression changes neither value
 # nor length, only the mark, and would otherwise pass unnoticed.
 hex <- function(x) {
