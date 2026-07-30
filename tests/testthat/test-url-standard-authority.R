@@ -70,23 +70,44 @@ test_that("no selector keeps special schemes without slashes as errors", {
 })
 
 test_that("rfc3986 empty authority does not duplicate host into path", {
+  # This test's NAME was always the right invariant; its assertions used to
+  # encode the violation (RURL-xfbzkico). It pinned `host = "evil.com"` with
+  # `path = "/"` -- i.e. the WHATWG promotion -- under the grammar selector, and
+  # so the duplication check below could only ever count 1 and pass vacuously.
+  #
+  # RFC 3986 sec 3: `hier-part = "//" authority path-abempty`, and `authority`
+  # may be EMPTY, so the third slash begins `path-abempty`. The authority is
+  # empty and the path is `/evil.com`. There is no promotion. Appendix B agrees,
+  # and so do Go net/url, Python urlsplit, Ruby URI and Perl URI.
   urls <- c("https:///evil.com", "http:///evil.com")
-  res <- safe_parse_urls(urls, url_standard = "rfc3986")
 
-  expect_identical(res$host, c("evil.com", "evil.com"))
-  expect_identical(res$path, c("/", "/"))
+  # Surface (b) and the identity record are the conformance substrates. NOT
+  # `clean_url`, which is a policy-driven SEO product (P2.2 sec 1c/5.1) and is
+  # barred as a claim substrate by P5.3 CLAIM-1.
   expect_identical(
-    res$clean_url, c("https://evil.com/", "http://evil.com/")
+    serialize_url(urls, standard = "rfc3986", form = "source"), urls
   )
-  expect_identical(res$parse_status, c("ok", "ok"))
+  rec <- rurl:::.fsss_record_vec(urls, "rfc3986", NULL)
+  expect_true(all(rec$ok))
+  expect_true(all(rec$authority_delimiter_present))
+  expect_identical(rec$host_kind, c("empty", "empty"))
+  expect_identical(rec$path, c("/evil.com", "/evil.com"))
 
+  # The duplication invariant, asserted so it can actually fail: the token must
+  # appear in EXACTLY ONE component, and under the RFC that is the path.
   for (i in seq_along(urls)) {
-    occurrences <- sum(
-      c(res$host[[i]], res$path[[i]]) == "evil.com" |
-        c(res$host[[i]], res$path[[i]]) == "/evil.com",
-      na.rm = TRUE
-    )
-    expect_identical(occurrences, 1L)
+    expect_true(is.na(rec$host[[i]]) || !nzchar(rec$host[[i]]))
+    expect_identical(rec$path[[i]], "/evil.com")
+  }
+
+  # The accessors report the same GRAMMAR on every acceptance posture -- one
+  # selector must not mean two parses. `scheme_acceptance` still decides whether
+  # the row is ADMITTED, which is a different question and stays its own axis.
+  for (posture in c("web", "general")) {
+    res <- safe_parse_urls(urls, url_standard = "rfc3986",
+                           scheme_acceptance = posture)
+    expect_true(all(is.na(res$host)))
+    expect_identical(res$path, c("/evil.com", "/evil.com"))
   }
 })
 
@@ -103,13 +124,28 @@ test_that("whatwg empty-authority special schemes stay host/path coherent", {
   expect_identical(res$parse_status, c("ok", "ok", "ok"))
 })
 
-test_that("rfc3986 rejects unsupported excess-slash empty authority", {
-  res <- safe_parse_url("https:////evil.com", url_standard = "rfc3986")
+test_that("rfc3986 parses an excess-slash empty authority per the grammar", {
+  # Was "rfc3986 rejects unsupported excess-slash empty authority" -- a false
+  # rejection pinned as if it were a rule (RURL-xfbzkico). `path-abempty =
+  # *( "/" segment )` and `segment = *pchar` may be EMPTY, so `//evil.com` is a
+  # well-formed `path-abempty` and a 4-slash run is a valid URI: empty
+  # authority, path `//evil.com`. "Unsupported" described the libcurl
+  # reproduction's reach, not RFC 3986.
+  u <- "https:////evil.com"
+  expect_true(rfc3986_abnf_accepts(u))
+  expect_identical(serialize_url(u, standard = "rfc3986", form = "source"), u)
 
-  expect_null(res)
-  expect_identical(
-    get_parse_status("https:////evil.com", url_standard = "rfc3986"), "error"
-  )
+  rec <- rurl:::.fsss_record_vec(u, "rfc3986", NULL)
+  expect_true(rec$ok)
+  expect_true(rec$authority_delimiter_present)
+  expect_identical(rec$host_kind, "empty")
+  expect_identical(rec$path, "//evil.com")
+
+  # WHATWG still collapses the run to `host = evil.com`; that divergence is the
+  # point of the two profiles, and the security rationale in
+  # fixtures/external-url-vectors.csv (Section VI.B) rests on the WHATWG side,
+  # where the browser/fetcher model belongs.
+  expect_identical(get_host(u, url_standard = "whatwg"), "evil.com")
 })
 
 # --- WHATWG non-special empty-host validation (RURL-kknambrz T2, then ---------

@@ -1279,17 +1279,89 @@
     !is.na(scheme_lc) & scheme_lc == "file"
   rfc_file[is.na(rfc_file)] <- FALSE
 
-  if (!identical(scheme_acceptance, "general")) {
-    return(rfc_file)
-  }
   web_route_scheme <- if (.is_whatwg(url_standard)) {
     .WHATWG_SPECIAL_SCHEMES
   } else {
     c("http", "https", "ftp", "ftps")
   }
+  # Keyed on `url_standard`, NOT on the acceptance posture -- like `rfc_file`
+  # above, and for the same reason. Which GRAMMAR a string is read under is
+  # `url_standard`'s question; which SCHEMES are admitted is
+  # `scheme_acceptance`'s. Gating this on the posture made one selector mean two
+  # different grammars: `url_standard = "rfc3986"` reported host `evil.com` for
+  # `https:///evil.com` under the default posture and the correct empty
+  # authority
+  # under `general`. ADR 0007 requires one axis per question, so it is answered
+  # here once, for every posture.
+  odd_slash <- .rfc_odd_slash_run(url, url_standard, scheme_lc, has_scheme,
+                                  host_port, web_route_scheme)
+
+  if (!identical(scheme_acceptance, "general")) {
+    return(rfc_file | odd_slash)
+  }
   gp <- has_scheme & !host_port & !(scheme_lc %in% web_route_scheme)
   gp[is.na(gp)] <- FALSE
-  gp | rfc_file
+  gp | rfc_file | odd_slash
+}
+
+# RURL-xfbzkico. Under `rfc3986`, a web-route scheme whose post-scheme slash run
+# is not EXACTLY 2 has no web-route shape at all, and the web route -- a libcurl
+# reproduction -- models none of these correctly:
+#
+#   run  RFC 3986 sec 3 hier-part          web route reports
+#   1    path-absolute, NO authority       host = first segment AND path = /seg
+#   3    "//" empty-authority path-abempty host = first path segment (promotion)
+#   >=4  "//" empty-authority path-abempty rejected outright
+#
+# The 1-slash case is the sharpest: the record claims
+# `authority_delimiter_present = FALSE` while reporting a host, and leaves the
+# same text in the path -- an internally incoherent record, and a decomposition
+# no standard and no other engine produces.
+#
+# The fix is a ROUTING change rather than a second authority parser, because the
+# general (RFC generic) parser already produces the exactly correct answer for
+# every one of these shapes -- measured on the non-special twins, which differ
+# only in scheme:
+#
+#   foo:/a           -> authority absent, path /a,          form `absolute`
+#   foo:///a/b       -> authority EMPTY,  path /a/b,         form `abempty`
+#   foo:////evil.com -> authority EMPTY,  path //evil.com,   form `abempty`
+#
+# So this routes to code that is already right and already covered, instead of
+# teaching a libcurl reproduction a grammar it never modelled. It also fixes
+# `rfc_path_form` for free (RURL-clgbpwla): the general route already reports
+# `absolute` where the web route said `abempty`.
+#
+# DELIBERATELY EXCLUDES a 0-slash run. `http:@www.example.com` is also
+# grammar-valid (path-rootless) and also wrongly rejected, but that shape is
+# owned by the existing `prep$rfc3986_path_rootless` slice, and widening it is a
+# separate acceptance question with its own ticket. Scope here is the slash-run
+# family only.
+#
+# `whatwg` and the no-selector default are untouched -- the mask is gated on
+# `url_standard == "rfc3986"` and returns all-FALSE for anything else, so both
+# stay byte-identical by construction.
+#
+# It fires on EVERY acceptance posture, deliberately. Restricting it to
+# `scheme_acceptance == "general"` (the first attempt) preserved `web`-posture
+# bytes but split one selector across two grammars: `serialize_url(standard =
+# "rfc3986")` gave the RFC answer while `safe_parse_urls(url_standard =
+# "rfc3986")` still promoted the path segment into the host, and which you got
+# depended on an unrelated axis. That is the "behaviour changes with the
+# settings" failure mode, and it is worse than a characterization diff.
+.rfc_odd_slash_run <- function(url, url_standard, scheme_lc, has_scheme,
+                               host_port, web_route_scheme) {
+  if (!identical(url_standard, "rfc3986")) {
+    return(rep(FALSE, length(url)))
+  }
+  run <- stringi::stri_match_first_regex(
+    url, "^[A-Za-z][A-Za-z0-9+.\\-]*:(/*)"
+  )[, 2L]
+  n_slash <- stringi::stri_length(run)
+  out <- has_scheme & !host_port & scheme_lc %in% web_route_scheme &
+    !is.na(n_slash) & (n_slash == 1L | n_slash >= 3L)
+  out[is.na(out)] <- FALSE
+  out
 }
 
 # Vectorized general-acceptance parse. Returns a columnar list, length-n:
