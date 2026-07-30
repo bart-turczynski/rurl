@@ -1803,13 +1803,18 @@ safe_parse_urls <- function(url,
   # hosts in the URL STRING so the old engine could read the rest of it. See
   # `host_ipv4` in R/parse-web.R for what its regex gate cost.
   host_ipv4 <- .web_host_ipv4_policy(opts$url_standard)
+  # What an ABSENT path after the authority parses to (RURL-epoinamh). See
+  # `empty_path` in R/parse-web.R for why the sec 6.2.3 "/" is a normalization
+  # and not a parse step.
+  empty_path <- .web_empty_path_policy(opts$url_standard)
   parsed_list <- vector("list", n)
   parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
       prep$url_to_parse[parse_idx], .parse_web_url_one,
       last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes,
-      host_charset = host_charset, host_ipv4 = host_ipv4
+      host_charset = host_charset, host_ipv4 = host_ipv4,
+      empty_path = empty_path
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -2504,7 +2509,8 @@ safe_parse_urls <- function(url,
     host_pct = .web_host_pct_policy(url_standard),
     pqf_bytes = .web_pqf_policy(url_standard),
     host_charset = .web_host_charset_policy(url_standard),
-    host_ipv4 = .web_host_ipv4_policy(url_standard)
+    host_ipv4 = .web_host_ipv4_policy(url_standard),
+    empty_path = .web_empty_path_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)

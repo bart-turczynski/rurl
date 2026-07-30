@@ -174,7 +174,10 @@ rfc_prop_non_ascii <- function(x) {
 # Component positions whose percent-spelling the `source` posture DOES preserve,
 # measured byte-for-byte over all 512 triplet spellings. The host is here under
 # BOTH scheme classes since RURL-xkhbhaje; the query and fragment are the only
-# positions still absent, because they fold hex case (RURL-gkmwqpos family 3).
+# positions still absent, because they fold hex case (RURL-gkmwqpos, the
+# hex-fold
+# family -- numbered 1, not 3, in the test below; the old "family 3" pointer was
+# a mis-citation).
 SRC_PRESERVING_POSITIONS <- c(
   "http://ho%sst/p", "http://u%s@host/p", "http://host/pa%sth",
   "foo://ho%sst/p", "foo://u%s@host/p", "foo://host/pa%sth", "foo:opa%sque"
@@ -338,16 +341,27 @@ test_that("the source posture preserves percent-spelling outside the host", {
   expect_property(keep & out != pop, pop)
 })
 
-test_that("the source posture is not byte-preserving in three known places", {
+test_that("the source posture is not byte-preserving in two known places", {
   # RURL-gkmwqpos. `?serialize_url` says `source` preserves source bytes; it
-  # does not, on 324 of 5668 accepted population rows in three families. These
+  # does not, on 316 of 5664 accepted population rows in two families. These
   # are pinned as CHARACTERIZED FACTS, not as approved behavior: the ticket
   # records that the open question is whether the docs or the code is wrong.
   #
-  # The fourth family -- the host, which was normalized on the parse record --
-  # is gone: RURL-xkhbhaje moved sec 6.2.2.2 out of the parse and into the
-  # `normalized` serializer branch, so the host now preserves byte-for-byte at
-  # both scheme classes (see SRC_PRESERVING_POSITIONS, which it joined).
+  # Two of the four original families are gone, and neither cost any acceptance
+  # (5664 rows accepted before and after each):
+  #
+  #   * the host, which was normalized on the parse record -- RURL-xkhbhaje
+  #     moved sec 6.2.2.2 out of the parse and into the `normalized` serializer
+  #     branch, so the host now preserves byte-for-byte at both scheme classes
+  #     (see SRC_PRESERVING_POSITIONS, which it joined).
+  #   * the empty path rendered as "/" -- RURL-epoinamh did the same for
+  #     sec 6.2.3. The parse now leaves `path-abempty`'s empty match empty and
+  #     only `form = "normalized"` roots it, which retired exactly 8 rows from
+  #     the deviating set (`http://h`, `http://h?`, `http://h#`, `http://h?#`
+  #     and the four authority shapes whose "?"/"#" ends the authority) and
+  #     added none. Was 324; the 5668 recorded alongside it was already stale at
+  #     that point -- the population accepts 5664 and did so before this fix
+  #     too.
 
   src <- function(x) serialize_url(x, standard = "rfc3986", form = "source")
 
@@ -369,15 +383,22 @@ test_that("the source posture is not byte-preserving in three known places", {
   # half is not, so the two forms agree on the scheme and differ on the host.
   expect_identical(src("HTTP://EXAMPLE.COM/"), "http://EXAMPLE.COM/")
 
-  # 3. Empty path rendered as "/" -- a sec 6.2.3 scheme-based normalization.
-  expect_identical(src("http://h"), "http://h/")
-  expect_identical(src("http://h?"), "http://h/?")
+  # And the retired family, asserted from the other side so it cannot come back:
+  # an authority-only URI keeps its empty path in the `source` posture, and only
+  # `normalized` applies sec 6.2.3.
+  expect_identical(src(c("http://h", "http://h?")), c("http://h", "http://h?"))
+  expect_identical(
+    serialize_url(c("http://h", "http://h?"), standard = "rfc3986",
+                  form = "normalized"),
+    c("http://h/", "http://h/?")
+  )
 
-  # And the bound, so three families cannot quietly become four.
+  # And the bound, so two families cannot quietly become three.
   pop <- rfc_prop_population()
   out <- src(pop)
   keep <- !is.na(out)
-  expect_identical(sum(keep & out != pop), 324L)
+  expect_identical(sum(keep), 5664L)
+  expect_identical(sum(keep & out != pop), 316L)
 })
 
 # --- the population itself ---------------------------------------------------

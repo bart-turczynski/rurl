@@ -130,3 +130,80 @@ test_that("without a selector the historical path_encoding behavior is intact",
     )
   }
 )
+
+# --- path-abempty matches the EMPTY string (RURL-epoinamh) -------------------
+# RFC 3986 sec 3: `hier-part = "//" authority path-abempty` and
+# `path-abempty = *( "/" segment )` -- zero or more, so an authority-only URI
+# has
+# an EMPTY path, not "/". Appendix B agrees (group 5 `([^?#]*)` matches empty).
+# sec 6.2.3 does equate `http://x` with `http://x/`, but it sits under
+# "Normalization and Comparison", so that "/" belongs to `form = "normalized"`
+# and to WHATWG's special-scheme path state -- never to the parse.
+
+test_that("rfc3986 reports an authority-only path as empty, not '/'", {
+  urls <- c("https://example.com", "http://a.com?q", "http://a.com#f",
+            "http://a.com:8080")
+  rec <- rurl:::.fsss_record_vec(urls, "rfc3986", NULL)
+
+  expect_true(all(rec$ok))
+  expect_identical(rec$path, rep("", length(urls)))
+  expect_identical(rec$rfc_path_form, rep("abempty", length(urls)))
+  # The accessors must report the SAME grammar on every acceptance posture --
+  # one selector, one parse (ADR 0007; the eb8ba1a lesson).
+  for (posture in c("web", "general")) {
+    res <- safe_parse_urls(urls, url_standard = "rfc3986",
+                           scheme_acceptance = posture)
+    expect_identical(res$path, rep("", length(urls)), info = posture)
+  }
+})
+
+test_that("rfc3986 source form keeps the authority-only URI distinguishable", {
+  # The whole consequence of the defect: these two are DIFFERENT URIs and both
+  # used to serialize to the trailing-slash spelling.
+  expect_identical(
+    serialize_url(c("https://example.com", "https://example.com/"),
+                  standard = "rfc3986", form = "source"),
+    c("https://example.com", "https://example.com/")
+  )
+  expect_identical(
+    serialize_url(c("http://a.com?q", "http://a.com#f", "http://a.com:8080"),
+                  standard = "rfc3986", form = "source"),
+    c("http://a.com?q", "http://a.com#f", "http://a.com:8080")
+  )
+})
+
+test_that("rfc3986 normalized form restores the sec 6.2.3 '/' path", {
+  # sec 6.2.3: "a URI that uses the generic syntax for authority with an empty
+  # path should be normalized to a path of '/'". Keyed on the AUTHORITY
+  # delimiter, not on the scheme, because that is what the sentence says -- so
+  # it
+  # fires on a non-special scheme too.
+  expect_identical(
+    serialize_url(c("https://example.com", "https://example.com/",
+                    "http://a.com?q", "foo://h"),
+                  standard = "rfc3986", form = "normalized"),
+    c("https://example.com/", "https://example.com/",
+      "http://a.com/?q", "foo://h/")
+  )
+  # No authority means no sec 6.2.3 sentence to apply: an empty path stays
+  # empty.
+  expect_identical(
+    serialize_url("mailto:", standard = "rfc3986", form = "normalized"),
+    "mailto:"
+  )
+})
+
+test_that("whatwg and the no-selector default keep the '/' path", {
+  urls <- c("https://example.com", "http://a.com?q", "http://a.com:8080")
+  expect_identical(
+    serialize_url(urls, standard = "whatwg"),
+    c("https://example.com/", "http://a.com/?q", "http://a.com:8080/")
+  )
+  expect_identical(
+    rurl:::.fsss_record_vec(urls, "whatwg", NULL)$path, rep("/", length(urls))
+  )
+  expect_identical(get_path(urls), rep("/", length(urls)))
+  expect_identical(
+    get_path(urls, url_standard = "whatwg"), rep("/", length(urls))
+  )
+})

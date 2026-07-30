@@ -86,6 +86,50 @@
 
 ### Bug fixes
 
+- **Under `url_standard = "rfc3986"`, an authority-only URL now has an EMPTY
+  path, not `"/"`.** RFC 3986 §3 gives `hier-part = "//" authority path-abempty`
+  with `path-abempty = *( "/" segment )` — zero or more, so the empty string is a
+  well-formed path, and Appendix B's group 5 `([^?#]*)` reads it that way. §6.2.3
+  *does* equate `http://example.com` with `http://example.com/`, but that
+  sentence sits under §6 "Normalization and Comparison", so the `"/"` is a
+  normalization, not a parse result.
+
+  Injecting it during the parse made two distinct URIs indistinguishable and
+  broke source preservation for the shape:
+
+  ```r
+  # before
+  serialize_url(c("https://example.com", "https://example.com/"),
+                standard = "rfc3986", form = "source")
+  #> "https://example.com/" "https://example.com/"   <- one URI lost
+
+  # after
+  serialize_url(c("https://example.com", "https://example.com/"),
+                standard = "rfc3986", form = "source")
+  #> "https://example.com"  "https://example.com/"
+  serialize_url("https://example.com", standard = "rfc3986",
+                form = "normalized")
+  #> "https://example.com/"                          <- §6.2.3, where it belongs
+  ```
+
+  `form = "normalized"` now applies §6.2.3's empty-path sentence explicitly
+  ("a URI that uses the generic syntax for authority with an empty path should be
+  normalized to a path of `/`"), keyed on the authority delimiter rather than on
+  the scheme — so it also fires on a non-special scheme (`foo://h` normalizes to
+  `foo://h/`), where the previous behaviour depended on which parser owned the
+  row rather than on any rule. Whether a scheme-specific reader should overrule
+  that for `urn:`, `mailto:` and `data:` is a separate axis and stays open
+  (`RURL-eqrpggvz`).
+
+  **`whatwg` and the no-selector default are unchanged** — WHATWG's path-start
+  state genuinely pushes an empty segment for a special scheme, so `"/"` is the
+  parse result there. Acceptance does not move on either profile: the WPT suite
+  stays at 336/336, and all three acceptance sweeps report identical accepted
+  counts and identical verdict/host/domain/TLD columns, with the injected `"/"`
+  as the only difference on 67 + 6 + 5 `rfc3986` rows. RFC 3986 decomposition
+  conformance rises from 379/519 to 444/519 grammar-valid rows, closing the
+  largest divergence class outright (path: 65 rows to 0). (`RURL-epoinamh`.)
+
 - **A percent-encoded internationalized host is classified again under
   `url_standard = "rfc3986"`.** `domain` and `tld` are now derived from a
   decoded *view* of the host, so a `reg-name` that spells its non-ASCII bytes as

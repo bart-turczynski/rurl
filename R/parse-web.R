@@ -393,6 +393,33 @@
   if (.is_whatwg(url_standard)) "whatwg" else "narrow"
 }
 
+# The `empty_path` setting each selected standard asks for -- what an ABSENT
+# path
+# after the authority means. Same one-place reason as the mappers above.
+#
+#   "slash"  the authority-only URL carries the path "/". WHATWG's
+#            path-start state pushes an empty segment for a special scheme, so
+#            `https://example.com` really does parse to path "/" there, and the
+#            no-selector baseline reproduces libcurl, which did the same.
+#   "keep"   the path stays EMPTY. RFC 3986 sec 3: `hier-part = "//" authority
+#            path-abempty` and `path-abempty = *( "/" segment )` -- zero or
+#            more,
+#            so the empty string is a well-formed path and it is what Appendix B
+#            reads (group 5 `([^?#]*)` matches empty).
+#
+# sec 6.2.3 DOES equate `http://x` with `http://x/`, which is why this looks
+# like
+# a distinction without a difference. It is not: that sentence sits under sec 6
+# "Normalization and Comparison", not under the parser, so the "/" is a
+# normalization. Injecting it during the parse made `https://example.com` and
+# `https://example.com/` indistinguishable in the identity record and collapsed
+# both to the trailing-slash spelling even under `form = "source"`
+# (RURL-epoinamh). `.serialize_rfc_full_vec()` applies sec 6.2.3 under
+# `form = "normalized"`, where it belongs.
+.web_empty_path_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "keep" else "slash"
+}
+
 # RFC 3986 host rendering: decode the triplets section 6.2.2.2 permits decoding
 # (unreserved only) and leave every other one ENCODED, hex uppercased per
 # section 6.2.2.1. Malformed "%" is still a parse error, exactly as in
@@ -903,7 +930,8 @@
 .parse_web_url_one <- function(url, last_at_userinfo = FALSE,
                                host_pct = "decode", pqf_bytes = "reject",
                                host_charset = "narrow",
-                               host_ipv4 = "narrow") {
+                               host_ipv4 = "narrow",
+                               empty_path = "slash") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -1058,7 +1086,8 @@
     return(NULL)
   }
 
-  if (nzchar(path)) {
+  had_path <- nzchar(path)
+  if (had_path) {
     path <- .web_normalize_component(path, pqf_bytes)
     if (is.null(path)) {
       return(NULL)
@@ -1069,8 +1098,13 @@
       path <- ._remove_dot_segments_whatwg(path)
     }
   }
-  # Covers both an absent path and one that dot-segment resolution emptied.
-  if (!nzchar(path)) {
+  # Two different empty paths, and only one of them is `empty_path`'s question.
+  # An ABSENT path is the `path-abempty` empty match the policy above governs. A
+  # path that dot-segment resolution EMPTIED is not: something was written,
+  # every
+  # profile roots the result, and RFC 3986's own sec 5.2.4 does the same (its
+  # "/.." rule outputs "/"). So the policy is consulted only for `!had_path`.
+  if (!nzchar(path) && (had_path || identical(empty_path, "slash"))) {
     path <- "/"
   }
 
