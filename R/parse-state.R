@@ -1069,10 +1069,38 @@
 #                    Section 3.5 describes). Reported via
 #                    `file-component-outside-rfc8089`.
 #
-# Like WHATWG, `file://localhost/...` maps to an empty host (RFC 8089 App. B
-# treats `localhost` and the empty authority as the local machine). No
-# drive-letter or backslash rewriting (those are WHATWG-specific).
-.parse_rfc_file_url_one <- function(url) {
+# No drive-letter or backslash rewriting (those are WHATWG-specific).
+#
+# What a `localhost` authority DECOMPOSES to, keyed on `url_standard` -- the
+# same one-place shape as the `.web_*_policy()` mappers in R/parse-web.R, so
+# the selector cannot mean two different grammars on two routes (ADR 0007).
+#
+#   "empty"     `localhost` collapses to an empty host. WHATWG's file host state
+#               says "if host is localhost, set host to the empty string", and
+#               the no-selector baseline reproduces it (byte-frozen, ADR 0012
+#               D4).
+#   "reg-name"  `localhost` is reported as itself, on the ordinary reg-name
+#               seam. RFC 3986 S3.2.2 gives `reg-name` no special names, and
+#               RFC 8089 S2's `file-auth = "localhost" / host` lists empty,
+#               `localhost` and `host` as three legal authority FORMS -- it
+#               never rewrites one into another. App. B makes
+#               `file://localhost/p` EQUIVALENT to `file:///p`; equivalence is
+#               not identical decomposition, and ADR 0007 puts `file` expansion
+#               out of the selector's scope.
+#
+# ADR 0012 D5 scopes the collapse to WHATWG explicitly, by contrast with the
+# `rfc-syntax` clause in the same bullet ("`file` under `rfc-syntax`:
+# non-absolute path; userinfo, port, query, or fragment present ... Under
+# WHATWG, `file://localhost/...` maps `localhost` to the empty host"). Layer
+# 4b's "preserve WHATWG's `file://localhost/` -> empty-host mapping" is
+# attributive -- it names the mapping's owner, and is not a mandate to run it
+# under `rfc-syntax`. Emptying it there scored as the last `host`-field
+# divergence in `tools/rfc3986-conformance-sweep.R` (RURL-zyytztdd).
+.rfc_file_localhost_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "reg-name" else "empty"
+}
+
+.parse_rfc_file_url_one <- function(url, localhost_policy = "empty") {
   na <- NA_character_
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
@@ -1131,8 +1159,10 @@
     if (!is.na(port)) {
       return(blank)
     }
-    # localhost (case-insensitive) collapses to an empty host, matching WHATWG.
-    if (!is.na(host) &&
+    # localhost (case-insensitive) collapses to an empty host where the selected
+    # standard asks for it; under `rfc3986` it falls through to the reg-name arm
+    # below and is reported as itself (see `.rfc_file_localhost_policy()`).
+    if (identical(localhost_policy, "empty") && !is.na(host) &&
         identical(.ascii_tolower(host), "localhost")) {
       host <- ""
     } else if (nzchar(host)) {
@@ -1177,7 +1207,8 @@
 # acceptance, `rfc3986`, or the NULL selector), instead of depending on a caller
 # to have applied the generic gate first. Under `rfc3986` the caller's gate runs
 # too; that is idempotent, not a conflict.
-.parse_rfc_file_urls_vec <- function(url) {
+.parse_rfc_file_urls_vec <- function(url, url_standard = NULL) {
+  localhost_policy <- .rfc_file_localhost_policy(url_standard)
   n <- length(url)
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "userinfo",
@@ -1196,7 +1227,9 @@
     }
     return(out)
   }
-  rows <- lapply(url, .parse_rfc_file_url_one)
+  rows <- lapply(
+    url, .parse_rfc_file_url_one, localhost_policy = localhost_policy
+  )
   out <- list()
   for (f in lgl_fields) {
     out[[f]] <- vapply(rows, `[[`, logical(1L), f, USE.NAMES = FALSE)
@@ -1431,7 +1464,7 @@
     out$ok[reg] <- p$ok
   }
   if (any(is_file)) {
-    p <- .parse_rfc_file_urls_vec(url[is_file])
+    p <- .parse_rfc_file_urls_vec(url[is_file], url_standard)
     # Both parsers now supply `userinfo`, but they mean different things by it,
     # and the difference is honoured downstream in R/parse.R rather than here:
     # the opaque parser's is a WHATWG authority userinfo (split at the first

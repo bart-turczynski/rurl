@@ -1,7 +1,10 @@
 # Tests for file:// support (RURL-rutsdflg, epic RURL-apxhgjhf). WHATWG treats
 # file as a special scheme; RFC 3986 admits it as an ordinary registered
-# hierarchical scheme. rurl supports the plain hostless forms:
-# file:///... and file://localhost/... (localhost collapses to empty host).
+# hierarchical scheme. rurl supports the plain hostless forms `file:///...` and
+# `file://localhost/...`. The localhost authority DECOMPOSES differently per
+# selector -- collapsed to an empty host under `whatwg` and the byte-frozen NULL
+# baseline, reported as an ordinary `reg-name` under `rfc3986` (RURL-zyytztdd,
+# and see `.rfc_file_localhost_policy()`).
 
 test_that("file URLs parse under both standard profiles", {
   urls <- c(
@@ -9,22 +12,89 @@ test_that("file URLs parse under both standard profiles", {
     "file:///path/to/file.txt"
   )
 
+  # Everything EXCEPT the localhost host decomposition is selector-invariant.
   for (std in c("whatwg", "rfc3986")) {
     parsed <- safe_parse_urls(urls, url_standard = std)
 
     expect_identical(parsed$scheme, c("file", "file"), info = std)
-    expect_true(all(is.na(parsed$host)), info = std)
     expect_identical(
       parsed$path, c("/path/to/file.txt", "/path/to/file.txt"), info = std
-    )
-    expect_identical(
-      parsed$clean_url,
-      c("file:///path/to/file.txt", "file:///path/to/file.txt"),
-      info = std
     )
     expect_identical(parsed$parse_status, c("ok", "ok"), info = std)
     expect_identical(parsed$port, c(NA_integer_, NA_integer_), info = std)
   }
+
+  # This test previously asserted an empty host and a hostless `clean_url` for
+  # BOTH selectors, i.e. it pinned RURL-zyytztdd's defect on the `rfc3986` half.
+  # These are the presentation host and surface (c), not the identity record --
+  # characterization of the accessor surface, not the conformance claim, which
+  # the `.fsss_record_vec()` test below owns.
+  w <- safe_parse_urls(urls, url_standard = "whatwg")
+  expect_true(all(is.na(w$host)))
+  expect_identical(
+    w$clean_url, c("file:///path/to/file.txt", "file:///path/to/file.txt")
+  )
+
+  r <- safe_parse_urls(urls, url_standard = "rfc3986")
+  expect_identical(r$host, c("localhost", NA_character_))
+  expect_identical(
+    r$clean_url,
+    c("file://localhost/path/to/file.txt", "file:///path/to/file.txt")
+  )
+})
+
+# RURL-zyytztdd. `localhost` is an ordinary `reg-name` under RFC 3986 S3.2.2, so
+# the grammar-fidelity selector must REPORT it. Emptying it is WHATWG's
+# file-host rule ("if host is localhost, set host to the empty string"), which
+# ADR 0012 D5 scopes to WHATWG by explicit contrast with its `rfc-syntax`
+# clause.
+# RFC 8089 S2 lists the normative authority as empty, `localhost`, or `host` --
+# three legal FORMS, none of them rewritten into another. Its App. B equivalence
+# of `file://localhost/p` with `file:///p` is an equivalence, not an identical
+# decomposition, and ADR 0007 puts `file` expansion out of the selector's scope.
+test_that("rfc3986 reports localhost as an ordinary reg-name host", {
+  u <- c("file://localhost/path/to/file.txt", "file:///path/to/file.txt")
+  r <- rurl:::.fsss_record_vec(u, "rfc3986", NULL)
+
+  expect_identical(r$ok, c(TRUE, TRUE))
+  expect_identical(r$host, c("localhost", ""))
+  expect_identical(r$host_kind, c("present", "empty"))
+  expect_identical(r$authority_delimiter_present, c(TRUE, TRUE))
+  expect_identical(r$path, c("/path/to/file.txt", "/path/to/file.txt"))
+
+  # The host is now on the same seam as any other reg-name, so it preserves
+  # source case exactly as `foo://Example.COM/p` does under this selector
+  # (S6.2.2.1 lowercasing is a NORMALIZATION, not a parse result).
+  expect_identical(
+    rurl:::.fsss_record_vec("file://LocalHost/p", "rfc3986", NULL)$host,
+    "LocalHost"
+  )
+
+  # Surface (b): the serializer round-trips the authority it was given.
+  expect_identical(
+    serialize_url(u, standard = "rfc3986", form = "source"),
+    c("file://localhost/path/to/file.txt", "file:///path/to/file.txt")
+  )
+})
+
+test_that("whatwg and NULL keep the localhost empty-host mapping", {
+  u <- c("file://localhost/path/to/file.txt", "file:///path/to/file.txt")
+
+  w <- rurl:::.fsss_record_vec(u, "whatwg", NULL)
+  expect_identical(w$host, c("", ""))
+  expect_identical(w$host_kind, c("empty", "empty"))
+  expect_identical(
+    serialize_url(u, standard = "whatwg", form = "source"),
+    c("file:///path/to/file.txt", "file:///path/to/file.txt")
+  )
+
+  # The no-selector baseline is byte-frozen (ADR 0012 D4), so it keeps the
+  # collapse even though `rfc3986` no longer applies it.
+  expect_identical(
+    serialize_url(u, form = "source"),
+    c("file:///path/to/file.txt", "file:///path/to/file.txt")
+  )
+  expect_true(is.na(get_host("file://localhost/p")))
 })
 
 test_that("file URLs compose with accessors and scheme classification", {
