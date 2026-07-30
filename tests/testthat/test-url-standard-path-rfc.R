@@ -134,8 +134,8 @@ test_that("without a selector the historical path_encoding behavior is intact",
 # --- path-abempty matches the EMPTY string (RURL-epoinamh) -------------------
 # RFC 3986 sec 3: `hier-part = "//" authority path-abempty` and
 # `path-abempty = *( "/" segment )` -- zero or more, so an authority-only URI
-# has
-# an EMPTY path, not "/". Appendix B agrees (group 5 `([^?#]*)` matches empty).
+# has an EMPTY path, not "/". Appendix B agrees: group 5 `([^?#]*)` matches
+# empty.
 # sec 6.2.3 does equate `http://x` with `http://x/`, but it sits under
 # "Normalization and Comparison", so that "/" belongs to `form = "normalized"`
 # and to WHATWG's special-scheme path state -- never to the parse.
@@ -176,8 +176,7 @@ test_that("rfc3986 normalized form restores the sec 6.2.3 '/' path", {
   # sec 6.2.3: "a URI that uses the generic syntax for authority with an empty
   # path should be normalized to a path of '/'". Keyed on the AUTHORITY
   # delimiter, not on the scheme, because that is what the sentence says -- so
-  # it
-  # fires on a non-special scheme too.
+  # it fires on a non-special scheme too.
   expect_identical(
     serialize_url(c("https://example.com", "https://example.com/",
                     "http://a.com?q", "foo://h"),
@@ -185,8 +184,7 @@ test_that("rfc3986 normalized form restores the sec 6.2.3 '/' path", {
     c("https://example.com/", "https://example.com/",
       "http://a.com/?q", "foo://h/")
   )
-  # No authority means no sec 6.2.3 sentence to apply: an empty path stays
-  # empty.
+  # No authority means no sec 6.2.3 sentence to apply: the path stays empty.
   expect_identical(
     serialize_url("mailto:", standard = "rfc3986", form = "normalized"),
     "mailto:"

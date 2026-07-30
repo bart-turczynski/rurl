@@ -2779,16 +2779,21 @@
         path[seg_norm], ._remove_dot_segments, character(1), USE.NAMES = FALSE
       )
     }
-    # Section 6.2.3, verbatim: "a URI that uses the generic syntax for authority
-    # with an empty path should be normalized to a path of '/'". This is the
-    # ONLY
-    # home for that "/" -- the parse leaves `path-abempty`'s empty match empty
-    # (RURL-epoinamh), so without this step the normalized form would lose a
-    # normalization the RFC states. Keyed on the AUTHORITY delimiter rather than
-    # on the scheme, because that is what the sentence is keyed on: it fires on
-    # a
-    # non-special scheme too, and not at all on a URI with no authority, which
-    # has no `path-abempty` and so no sentence to apply.
+    # Section 6.2.3, verbatim: "a URI that uses the generic syntax for
+    # authority with an empty path should be normalized to a path of '/'".
+    # This is the ONLY home for that "/" -- the parse leaves `path-abempty`'s
+    # empty match empty (RURL-epoinamh), so without this step the normalized
+    # form would lose a normalization the RFC states.
+    #
+    # Keyed on the AUTHORITY delimiter rather than on the scheme, because that
+    # is what the sentence is keyed on: it fires on a non-special scheme too,
+    # and not at all on a URI with no authority, which has no `path-abempty`
+    # and so no sentence to apply. `urn://:443` therefore normalizes to
+    # `urn://:443/`, and that is deliberate -- ADR 0012 rules that
+    # scheme-specific restrictions are overlays, not generic parse gates, so a
+    # string being an invalid URN (RFC 8141) does not change its RFC 3986
+    # generic-normalization spelling. Reporting that violation is the
+    # RURL-eqrpggvz reader's job, not this dial's.
     empty_abempty <- !is.na(authority_delimiter_present) &
       authority_delimiter_present & (is.na(path) | !nzchar(path))
     path[empty_abempty] <- "/"

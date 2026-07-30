@@ -117,9 +117,13 @@
   normalized to a path of `/`"), keyed on the authority delimiter rather than on
   the scheme — so it also fires on a non-special scheme (`foo://h` normalizes to
   `foo://h/`), where the previous behaviour depended on which parser owned the
-  row rather than on any rule. Whether a scheme-specific reader should overrule
-  that for `urn:`, `mailto:` and `data:` is a separate axis and stays open
-  (`RURL-eqrpggvz`).
+  row rather than on any rule. So `urn://:443` normalizes to `urn://:443/`, and
+  likewise for `mailto:` and `data:`. Scheme-specific conformance is orthogonal:
+  those strings remain invalid URNs, `mailto` URIs and data URLs under RFC 8141,
+  RFC 6068 and RFC 2397, and a future reader will report that as a fact
+  (`RURL-eqrpggvz`) — but scheme invalidity does not alter a URI's RFC 3986
+  generic-normalization spelling. ADR 0012 already settles this: scheme-specific
+  restrictions are overlays, not generic parse gates.
 
   **`whatwg` and the no-selector default are unchanged** — WHATWG's path-start
   state genuinely pushes an empty segment for a special scheme, so `"/"` is the
