@@ -125,7 +125,7 @@ test_that("RFC host preserves case and is not routed through punycode", {
 
 # --- RFC 8089 file overlay ---------------------------------------------------
 
-test_that("RFC file overlay parses absolute path and localhost -> empty host", {
+test_that("RFC file overlay parses absolute path and per-selector localhost", {
   abs <- .parse_rfc_file_urls_vec("file:/abs/path")
   expect_true(abs$ok)
   expect_identical(abs$scheme, "file")
@@ -135,11 +135,27 @@ test_that("RFC file overlay parses absolute path and localhost -> empty host", {
   expect_true(is.na(abs$authority_payload_kind))
   expect_true(is.na(abs$host)) # no authority -> host absent
 
+  # No selector: localhost collapses to an empty host (byte-frozen baseline).
   loc <- .parse_rfc_file_urls_vec("file://localhost/x")
   expect_true(loc$ok)
-  expect_identical(loc$host, "") # localhost collapses to empty host
+  expect_identical(loc$host, "")
   expect_identical(loc$host_kind, "empty")
   expect_identical(loc$path, "/x")
+
+  # Under `rfc3986` the SAME overlay reports it as an ordinary `reg-name`: RFC
+  # 3986 S3.2.2 privileges no name, and RFC 8089 S2 lists `localhost` as one of
+  # three legal authority forms rather than rewriting it (RURL-zyytztdd).
+  rloc <- .parse_rfc_file_urls_vec("file://localhost/x", "rfc3986")
+  expect_true(rloc$ok)
+  expect_identical(rloc$host, "localhost")
+  expect_identical(rloc$host_kind, "present")
+  expect_identical(rloc$host_form, "reg-name")
+  expect_identical(rloc$path, "/x")
+
+  # `whatwg` never reaches this overlay, but the policy mapper is total.
+  expect_identical(.rfc_file_localhost_policy("whatwg"), "empty")
+  expect_identical(.rfc_file_localhost_policy(NULL), "empty")
+  expect_identical(.rfc_file_localhost_policy("rfc3986"), "reg-name")
 
   named <- .parse_rfc_file_urls_vec("file://example.com/x")
   expect_true(named$ok)
