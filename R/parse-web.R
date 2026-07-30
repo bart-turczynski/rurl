@@ -394,8 +394,7 @@
 }
 
 # The `empty_path` setting each selected standard asks for -- what an ABSENT
-# path
-# after the authority means. Same one-place reason as the mappers above.
+# path after the authority means. Same one-place reason as the mappers above.
 #
 #   "slash"  the authority-only URL carries the path "/". WHATWG's
 #            path-start state pushes an empty segment for a special scheme, so
@@ -403,14 +402,12 @@
 #            no-selector baseline reproduces libcurl, which did the same.
 #   "keep"   the path stays EMPTY. RFC 3986 sec 3: `hier-part = "//" authority
 #            path-abempty` and `path-abempty = *( "/" segment )` -- zero or
-#            more,
-#            so the empty string is a well-formed path and it is what Appendix B
-#            reads (group 5 `([^?#]*)` matches empty).
+#            more, so the empty string is a well-formed path, and it is what
+#            Appendix B reads (group 5 `([^?#]*)` matches empty).
 #
 # sec 6.2.3 DOES equate `http://x` with `http://x/`, which is why this looks
-# like
-# a distinction without a difference. It is not: that sentence sits under sec 6
-# "Normalization and Comparison", not under the parser, so the "/" is a
+# like a distinction without a difference. It is not: that sentence sits under
+# sec 6 "Normalization and Comparison", not under the parser, so the "/" is a
 # normalization. Injecting it during the parse made `https://example.com` and
 # `https://example.com/` indistinguishable in the identity record and collapsed
 # both to the trailing-slash spelling even under `form = "source"`
@@ -1100,10 +1097,10 @@
   }
   # Two different empty paths, and only one of them is `empty_path`'s question.
   # An ABSENT path is the `path-abempty` empty match the policy above governs. A
-  # path that dot-segment resolution EMPTIED is not: something was written,
-  # every
-  # profile roots the result, and RFC 3986's own sec 5.2.4 does the same (its
-  # "/.." rule outputs "/"). So the policy is consulted only for `!had_path`.
+  # path that dot-segment resolution EMPTIED is not: something was written
+  # there, every profile roots the result, and RFC 3986's own sec 5.2.4 does the
+  # same (its "/.." rule outputs "/"). So the policy is consulted only for
+  # `!had_path`.
   if (!nzchar(path) && (had_path || identical(empty_path, "slash"))) {
     path <- "/"
   }

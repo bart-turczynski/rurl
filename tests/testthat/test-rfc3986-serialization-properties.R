@@ -175,9 +175,8 @@ rfc_prop_non_ascii <- function(x) {
 # measured byte-for-byte over all 512 triplet spellings. The host is here under
 # BOTH scheme classes since RURL-xkhbhaje; the query and fragment are the only
 # positions still absent, because they fold hex case (RURL-gkmwqpos, the
-# hex-fold
-# family -- numbered 1, not 3, in the test below; the old "family 3" pointer was
-# a mis-citation).
+# hex-fold family -- numbered 1, not 3, in the test below; the old "family 3"
+# pointer was a mis-citation).
 SRC_PRESERVING_POSITIONS <- c(
   "http://ho%sst/p", "http://u%s@host/p", "http://host/pa%sth",
   "foo://ho%sst/p", "foo://u%s@host/p", "foo://host/pa%sth", "foo:opa%sque"
@@ -360,8 +359,8 @@ test_that("the source posture is not byte-preserving in two known places", {
   #     the deviating set (`http://h`, `http://h?`, `http://h#`, `http://h?#`
   #     and the four authority shapes whose "?"/"#" ends the authority) and
   #     added none. Was 324; the 5668 recorded alongside it was already stale at
-  #     that point -- the population accepts 5664 and did so before this fix
-  #     too.
+  #     that point -- the population accepts 5664, and did so before this fix
+  #     as well.
 
   src <- function(x) serialize_url(x, standard = "rfc3986", form = "source")
 
