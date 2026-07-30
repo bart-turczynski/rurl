@@ -46,6 +46,14 @@
 .URL_KEY_STANDARDS <- c("whatwg", "rfc3986")
 .URL_KEY_SCHEME_EQUALITY <- c("exact", "http_https", "http_https_missing")
 
+# The scheme family the relaxed modes collapse, and the token they collapse it
+# to. The token is deliberately UNSPELLABLE as a scheme: `/` is outside RFC
+# 3986's `scheme` production (`[A-Za-z][A-Za-z0-9+.-]*`), so no input can
+# present a real scheme that forges membership in the collapsed class. A token
+# like `http+https` would be forgeable, since `+` IS in the production.
+.URL_KEY_COLLAPSED_SCHEMES <- c("http", "https")
+.URL_KEY_COLLAPSED_SCHEME_TOKEN <- "http/https"
+
 # The comparison-key policy. ONE immutable, symmetric, versioned object shared
 # by both sides of any comparison or join -- side-specific rules are prohibited
 # because equality must stay symmetric and transitive
@@ -63,19 +71,31 @@
   standard <- match.arg(standard, .URL_KEY_STANDARDS)
   scheme_equality <- match.arg(scheme_equality, .URL_KEY_SCHEME_EQUALITY)
 
-  # The two relaxed modes are SPECIFIED but not implementable as written: rows
-  # 1, 2 and 7 of the scheme/port truth table force `HTTP:80 ~ HTTPS:443` under
-  # transitive closure, while row 6 of the same table declares that pair
-  # `distinct` in both relaxed columns. Equality is contractually an equivalence
-  # relation (`:66`), so no implementation can satisfy both. Refusing is the
-  # only honest option -- picking a side would silently install one reading of a
-  # SETTLED contract as fact. Tracked as RURL-ixlultql.
-  if (!identical(scheme_equality, "exact")) {
+  # `http_https` was blocked with `http_https_missing` until the owner ruled on
+  # RURL-ixlultql. The clash was real: rows 1, 2 and 7 of the scheme/port truth
+  # table force `HTTP:80 ~ HTTPS:443` under transitive closure, while row 6
+  # declared that pair `distinct` in both relaxed columns, and equality is
+  # contractually an equivalence relation (`:66`). The ruling amends row 6's
+  # relaxed cells to `equal`, which is exactly the closure, so the mode became
+  # implementable without picking a side. The contract TEXT still reads
+  # `distinct` on purpose -- that edit rides the cp-snapshot-3 seal
+  # (RURL-isbsbrry); this code ships against a PROPOSED record, as
+  # `serialize_url()` did against P2.5.
+  #
+  # `http_https_missing` stays refused for a DIFFERENT reason, so the citation
+  # moves with it. Row 8 declares `missing scheme/no port` == `HTTP/no port`,
+  # which collapsing scheme + presence cannot deliver: the pair also differs on
+  # `authority_delimiter_present`, which P1.2 D-A frames as independent
+  # identity. Satisfying row 8 needs a third collapse reaching into a SETTLED
+  # contract, and row 11's scheme-relative branch is defective on top of that
+  # (RURL-kmkyicpt). Tracked as RURL-ixxvjjwj.
+  if (identical(scheme_equality, "http_https_missing")) {
     stop(
-      "scheme_equality = \"", scheme_equality, "\" is not implemented: the ",
-      "scheme/port truth table is non-transitive in the relaxed columns ",
-      "(HTTP:80 vs HTTPS:443), so no equivalence relation satisfies it. ",
-      "See RURL-ixlultql. Use scheme_equality = \"exact\" (the default).",
+      "scheme_equality = \"http_https_missing\" is not implemented: ",
+      "truth-table row 8 also requires collapsing ",
+      "`authority_delimiter_present`, which P1.2 D-A frames as independent ",
+      "identity, and row 11's scheme-relative branch is unsettled. ",
+      "See RURL-ixxvjjwj. Use \"exact\" or \"http_https\".",
       call. = FALSE
     )
   }
@@ -184,6 +204,32 @@
   out
 }
 
+# The relaxed scheme collapse (key-policy `:81`, truth-table rows 6-7 as
+# amended). Applied to the framed scheme field ONLY, and only for the two named
+# web schemes -- "every other valid scheme remains exact", so the ws/wss pair,
+# which shares http/https's default ports, is untouched.
+#
+# MUST run after `.url_key_port()`, and must never be fed to it. The contract
+# opens the truth table with the sequencing rule (`:99`): default-port
+# normalization happens BEFORE collapsing and uses "each row's own explicit
+# recognized scheme". Feed the collapsed token to the port rule and neither
+# `scheme == "http"` nor `scheme == "https"` matches, so rows 1-2 stop
+# normalizing; collapse the scheme first and instead `https://h.com:80/` would
+# lose its `:80`, breaking row 4. Only this order satisfies both.
+#
+# Transitivity is structural rather than argued: the collapse is a FUNCTION of
+# the field, so key equality stays equality of a projection -- an equivalence
+# relation by construction, whatever the table says.
+.url_key_scheme_collapse <- function(scheme, scheme_equality) {
+  if (identical(scheme_equality, "exact")) {
+    return(scheme)
+  }
+  out <- scheme
+  hit <- !is.na(out) & out %in% .URL_KEY_COLLAPSED_SCHEMES
+  out[hit] <- .URL_KEY_COLLAPSED_SCHEME_TOKEN
+  out
+}
+
 # Injective length-prefixed framing (P3.1 D-A.2). Each field emits
 # `<nbytes>:<utf8 bytes>`, and `NA` emits the digit-free sentinel `-:`. A
 # decoder reads the length, then exactly that many bytes, so no component value
@@ -231,7 +277,12 @@
     url, opts$url_standard,
     looks_like_host_port = ._parse_stage_a_vec(url, opts)$looks_like_host_port
   )
+  # Order is load-bearing, see `.url_key_scheme_collapse()`: the port rule reads
+  # the row's OWN scheme off the record, and only then is the framed scheme
+  # field collapsed. `rec$scheme` is never overwritten, so no later reader can
+  # pick up the token by accident.
   port <- .url_key_port(rec$scheme, rec$syntactic_port, presence)
+  scheme <- .url_key_scheme_collapse(rec$scheme, policy$scheme_equality)
 
   list(
     ok = rec$ok,
@@ -243,7 +294,7 @@
       standard = rep(policy$standard, length(url)),
       scheme_equality = rep(policy$scheme_equality, length(url)),
       scheme_presence = presence,
-      scheme = rec$scheme,
+      scheme = scheme,
       authority_delimiter_present = ifelse(
         rec$authority_delimiter_present, "T", "F"
       ),
