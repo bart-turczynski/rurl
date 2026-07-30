@@ -295,13 +295,20 @@ test_that("keys minted under different policies never compare equal", {
   expect_false(identical(a, b))
 })
 
-test_that("the non-transitive relaxed scheme modes are refused, not guessed", {
-  # RURL-ixlultql: rows 1/2/7 of the truth table force HTTP:80 ~ HTTPS:443
-  # under transitive closure, while row 6 declares that pair distinct. No
-  # equivalence relation satisfies both, so the engine refuses rather than
-  # installing one reading of a SETTLED contract as fact.
-  expect_error(policy(scheme_equality = "http_https"), "RURL-ixlultql")
-  expect_error(policy(scheme_equality = "http_https_missing"), "RURL-ixlultql")
+test_that("http_https_missing is refused, not guessed", {
+  # RURL-ixxvjjwj, NOT ixlultql: the transitivity clash that once blocked BOTH
+  # relaxed modes was resolved by the owner ruling on row 6. What still blocks
+  # this mode is rows 8 and 11 -- row 8's declared `equal` is unreachable by
+  # collapsing scheme + presence alone (it needs a third collapse reaching into
+  # P1.2 D-A's authority_delimiter_present, a SETTLED contract), and row 11
+  # exercises a demonstrably defective branch (RURL-kmkyicpt).
+  expect_error(policy(scheme_equality = "http_https_missing"), "RURL-ixxvjjwj")
+})
+
+test_that("http_https is accepted and recorded in the policy", {
+  p <- policy(scheme_equality = "http_https")
+  expect_identical(p$scheme_equality, "http_https")
+  expect_s3_class(p, "rurl_url_key_policy")
 })
 
 # --- determinism -------------------------------------------------------------
@@ -353,4 +360,127 @@ test_that("a missing-scheme port is never normalized away (Q4, rows 9-10)", {
 test_that("scheme-relative stays its own presence state, never missing", {
   f <- state(c("//h.com/", "h.com/"))
   expect_identical(f$scheme_presence, c("scheme-relative", "inferred"))
+})
+
+# --- scheme/port truth table, `http_https` column (:103-118) -----------------
+
+# The mode became implementable when the owner ruled row 6's relaxed cells
+# `equal` (RURL-ixlultql). The contract's own sequencing sentence (`:99`) is the
+# load-bearing part: default-port normalization happens BEFORE the collapse and
+# uses each row's own explicit scheme. Collapse first and `https://h.com:80/`
+# would lose its `:80`, breaking row 4.
+#
+# The contract row text is NOT yet amended -- that edit rides the cp-snapshot-3
+# seal (RURL-isbsbrry). This code ships against a PROPOSED record, as
+# serialize_url() did against P2.5.
+
+hh <- function(standard = "whatwg") {
+  policy(standard = standard, scheme_equality = "http_https")
+}
+
+test_that("both standards agree on the whole http_https column", {
+  for (std in rurl:::.URL_KEY_STANDARDS) {
+    p <- hh(std)
+    # rows 1-2: default ports normalize against absent
+    expect_true(same("http://h.com/", "http://h.com:80/", p))
+    expect_true(same("https://h.com/", "https://h.com:443/", p))
+    # row 3: a non-default port stays significant
+    expect_false(same("http://h.com/", "http://h.com:8080/", p))
+    # row 4: another scheme's default stays significant -- the
+    # normalize-before-collapse assertion. Collapsing first makes this TRUE.
+    expect_false(same("https://h.com/", "https://h.com:80/", p))
+    # row 5: likewise in the other direction (Q3)
+    expect_false(same("http://h.com:443/", "https://h.com/", p))
+    # row 6, as amended by the owner ruling: equal, which is exactly what
+    # transitive closure over rows 1, 2 and 7 forces
+    expect_true(same("http://h.com:80/", "https://h.com:443/", p))
+    # row 7: the collapse itself
+    expect_true(same("http://h.com/", "https://h.com/", p))
+    # rows 8-10: presence is NOT collapsed in this mode
+    expect_false(same("h.com/", "http://h.com/", p))
+    expect_false(same("h.com:80/", "http://h.com/", p))
+    expect_false(same("h.com:443/", "https://h.com/", p))
+    # rows 12-14: the relaxed mode widens NO other scheme family
+    expect_false(same("ftp://h.com:21/", "ftp://h.com/", p))
+    expect_false(same("ws://h.com:80/", "ws://h.com/", p))
+    expect_false(same("wss://h.com:443/", "wss://h.com/", p))
+    expect_false(same("custom://h.com:123/", "custom://h.com/", p))
+  }
+})
+
+test_that("the collapse never reaches a non-web scheme pair", {
+  for (std in rurl:::.URL_KEY_STANDARDS) {
+    p <- hh(std)
+    # ws/wss are a same-family pair with the SAME default ports as http/https,
+    # so they are the pair most likely to be swept in by a sloppy collapse.
+    expect_false(same("ws://h.com/", "wss://h.com/", p))
+    expect_false(same("ftp://h.com/", "ftps://h.com/", p))
+    expect_false(same("http://h.com/", "ftp://h.com/", p))
+  }
+})
+
+test_that("the whole transitive class collapses to exactly one key", {
+  for (std in rurl:::.URL_KEY_STANDARDS) {
+    k <- as.character(key(
+      c("http://h.com/", "http://h.com:80/",
+        "https://h.com/", "https://h.com:443/"),
+      hh(std)
+    ))
+    expect_false(anyNA(k))
+    expect_length(unique(k), 1L)
+  }
+})
+
+# Asserting the framed FIELDS, not only the equalities: an equality pair can
+# pass while both fields are wrong and the errors cancel, which is precisely how
+# the host:port defect above survived 77 tests.
+
+test_that("the collapse rewrites the scheme field and nothing else", {
+  u <- c("http://h.com/p?q=1", "https://h.com/p?q=1", "ftp://h.com/p?q=1")
+  f <- state(u, hh())
+  expect_identical(f$scheme, c("http/https", "http/https", "ftp"))
+  # every other framed field is untouched by the mode
+  g <- state(u)
+  for (nm in setdiff(names(f), c("scheme", "scheme_equality"))) {
+    expect_identical(f[[nm]], g[[nm]], info = nm)
+  }
+})
+
+test_that("ports are normalized under the row's own scheme, then collapsed", {
+  f <- state(
+    c("http://h.com:80/", "https://h.com:443/",
+      "https://h.com:80/", "http://h.com:443/", "ftp://h.com:21/"),
+    hh()
+  )
+  # the two eligible defaults are gone; the two cross-scheme defaults survive
+  expect_identical(f$port, c(NA_character_, NA_character_, "80", "443", "21"))
+  # and the collapse still happened on the same rows
+  expect_identical(
+    f$scheme,
+    c("http/https", "http/https", "http/https", "http/https", "ftp")
+  )
+})
+
+test_that("the collapsed token cannot be spelled by any real scheme", {
+  # `/` is outside RFC 3986's scheme production, so the token is unspellable:
+  # an input that tries is not carrying that scheme at all, and here is not even
+  # keyable. Measured under both standards.
+  for (std in rurl:::.URL_KEY_STANDARDS) {
+    k <- key("http/https://h.com/", hh(std))
+    expect_true(is.na(as.character(k)[[1L]]))
+  }
+  # And the token can never appear in an `exact` key, so no exact-mode key can
+  # collide with a collapsed one even before the policy fields are compared.
+  exact_keys <- as.character(key(
+    c("http://h.com/", "https://h.com/", "custom://h.com/"), policy()
+  ))
+  expect_false(anyNA(exact_keys))
+  expect_false(any(grepl("http/https", exact_keys, fixed = TRUE)))
+})
+
+test_that("exact stays exact -- the mode cannot leak across policies", {
+  expect_false(same("http://h.com/", "https://h.com/", policy()))
+  a <- as.character(key("http://h.com/", policy()))
+  b <- as.character(key("http://h.com/", hh()))
+  expect_false(identical(a, b))
 })
