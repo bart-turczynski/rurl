@@ -19,6 +19,11 @@
 # stops running here too. It also means this script cannot claim to mirror CI
 # while quietly running something else.
 #
+# GATE SELF-TESTS ARE A SEPARATE RISK CLASS. Their positive/negative fixtures
+# prove the verifier, not the product, so routine runs select them only when the
+# corresponding script changed relative to main. `--release` deliberately runs
+# every self-test. The real tree scans still run in every complete local gate.
+#
 # WHAT IT DOES NOT COVER, stated so nobody reads a green run as more than it is:
 #   * cross-platform and multi-R-version checks (full-check.yml, rhub.yaml) --
 #     this runs one platform, one R;
@@ -42,10 +47,12 @@
 # run, because knowing all of what is broken beats knowing the first thing.
 #
 # Usage:
-#   Rscript tools/verify.R            # gates + lint + build/check + locale
-#   Rscript tools/verify.R --fast     # gates + lint only (seconds)
+#   Rscript tools/verify.R            # gates + relevant self-tests + full gate
+#   Rscript tools/verify.R --fast     # gates + relevant self-tests + lint
 #   Rscript tools/verify.R --release  # everything, plus the curl clean room
 #   Rscript tools/verify.R --list     # print the stage plan and exit
+# `--fast` is iteration feedback only. It is never sufficient verification for
+# a behavioral slice; the unsuffixed command remains the end-of-slice gate.
 #
 # Base R only. Exits 1 if any BLOCKING stage fails; advisory stages report and
 # never fail the run.
@@ -87,7 +94,26 @@ workflow_gates <- function(path) {
   lines <- readLines(path, warn = FALSE)
   hits <- grep("^\\s*run: Rscript\\s+\\S", lines, value = TRUE)
   cmds <- sub("^\\s*run: Rscript\\s+", "", hits)
-  unique(trimws(cmds))
+  unique(trimws(cmds[!grepl(" --self-test", cmds, fixed = TRUE)]))
+}
+
+workflow_self_tests <- function(path) {
+  lines <- readLines(path, warn = FALSE)
+  hits <- grep("^\\s*run: Rscript\\s+\\S+ --self-test\\s*$", lines,
+               value = TRUE)
+  unique(trimws(sub("^\\s*run: Rscript\\s+", "", hits)))
+}
+
+changed_files <- function() {
+  committed <- suppressWarnings(system2(
+    "git", c("diff", "--name-only", "main...HEAD"),
+    stdout = TRUE, stderr = FALSE
+  ))
+  uncommitted <- suppressWarnings(system2(
+    "git", c("diff", "--name-only", "HEAD"),
+    stdout = TRUE, stderr = FALSE
+  ))
+  unique(c(committed, uncommitted))
 }
 
 # One command, output captured. Only a failure prints its log: a passing gate
@@ -115,6 +141,21 @@ stage_gates <- function(root) {
   cmds <- workflow_gates(file.path(root, WORKFLOW))
   cat(sprintf("[gates] %d step(s) derived from %s\n", length(cmds), WORKFLOW))
   lapply(cmds, function(cmd) {
+    parts <- strsplit(cmd, "\\s+")[[1]]
+    run_step(cmd, "Rscript", parts)
+  })
+}
+
+stage_self_tests <- function(root) {
+  cmds <- workflow_self_tests(file.path(root, WORKFLOW))
+  changed <- changed_files()
+  scripts <- sub(" --self-test$", "", cmds)
+  selected <- if (opt_release) rep(TRUE, length(cmds)) else scripts %in% changed
+  cat(sprintf(
+    "[gate-self-tests] %d/%d corresponding implementation(s) changed\n",
+    sum(selected), length(cmds)
+  ))
+  lapply(cmds[selected], function(cmd) {
     parts <- strsplit(cmd, "\\s+")[[1]]
     run_step(cmd, "Rscript", parts)
   })
@@ -222,7 +263,7 @@ stage_advisory <- function(root) {
 # ---- main -------------------------------------------------------------------
 
 root <- repo_root()
-plan <- c("gates", "lint")
+plan <- c("gates", "selftests", "lint")
 if (!opt_fast) {
   plan <- c(plan, "check", "locale")
 }
@@ -235,6 +276,9 @@ if (opt_list) {
   cat("stage plan:", paste(plan, collapse = " -> "), "\n")
   cat("derived gate steps:\n")
   cat(paste0("  ", workflow_gates(file.path(root, WORKFLOW))), sep = "\n")
+  cat("\nconditional gate self-tests:\n")
+  cat(paste0("  ", workflow_self_tests(file.path(root, WORKFLOW))), sep = "\n")
+  cat("\n")
   quit(status = 0)
 }
 
@@ -246,6 +290,7 @@ for (st in plan) {
   results <- c(results, switch(
     st,
     gates = stage_gates(root),
+    selftests = stage_self_tests(root),
     lint = stage_lint(),
     check = stage_check(root),
     locale = stage_locale(),

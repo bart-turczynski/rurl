@@ -41,8 +41,9 @@
   gate steps (derived from `.github/workflows/verify.yml`, never transcribed),
   `lintr::lint_package()`, `R CMD build` + `R CMD check --as-cran` on the built
   tarball, and the test suite under `LC_ALL=C`. `--fast` runs the gates and lint
-  only; `--list` prints the plan; `--release` adds the curl clean room. Its
-  header states what it does **not** cover.
+  only and is iteration feedback, never sufficient verification for a
+  behavioral slice; `--list` prints the plan; `--release` adds the curl clean
+  room. Its header states what it does **not** cover.
 - Intermediate local commits may temporarily be red while a slice is being
   assembled. The delivered slice tip and its squash-merged result must pass the
   complete local gate.
