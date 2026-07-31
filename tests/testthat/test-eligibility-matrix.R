@@ -14,26 +14,25 @@
 test_that("web (and any non-general) acceptance leaves every mask TRUE", {
   # Every scheme, path kind, and host kind must be all-TRUE under "web" -- the
   # previously supported web schemes (incl. ftp/file) are grandfathered.
-  schemes <- c("http", "https", "ftp", "ftps", "file", "mailto", "foo", NA)
-  path_kinds <- c("list", "opaque")
-  host_kinds <- c("present", "empty", "absent")
-  for (acc in c("web", "rfc3986-ish-nonsense", "anything-but-general")) {
-    for (sch in schemes) {
-      for (pk in path_kinds) {
-        for (hk in host_kinds) {
-          for (ip in c(TRUE, FALSE, NA)) {
-            elig <- rurl:::.stage_b_eligibility(
-              acc, sch, "whatwg",
-              path_kind = pk, host_kind = hk, is_ip_host = ip
-            )
-            expect_true(elig$path_eligible)
-            expect_true(elig$host_transform_eligible)
-            expect_true(elig$semantic_transform_eligible)
-          }
-        }
-      }
-    }
-  }
+  cases <- expand.grid(
+    acceptance = c("web", "rfc3986-ish-nonsense", "anything-but-general"),
+    scheme = c("http", "https", "ftp", "ftps", "file", "mailto", "foo", NA),
+    path_kind = c("list", "opaque"),
+    host_kind = c("present", "empty", "absent"),
+    is_ip_host = c(TRUE, FALSE, NA),
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+  elig <- rurl:::.stage_b_eligibility(
+    cases$acceptance, cases$scheme, "whatwg",
+    path_kind = cases$path_kind,
+    host_kind = cases$host_kind,
+    is_ip_host = cases$is_ip_host
+  )
+  expect_length(elig$path_eligible, nrow(cases))
+  expect_true(all(elig$path_eligible))
+  expect_true(all(elig$host_transform_eligible))
+  expect_true(all(elig$semantic_transform_eligible))
 })
 
 test_that("web masks are all-TRUE and vectorized to input length", {

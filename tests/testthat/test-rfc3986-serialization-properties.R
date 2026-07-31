@@ -62,7 +62,7 @@
 # hex cases -- so the octet range itself is not the gap; only its literal
 # spelling is.
 
-rfc_prop_population <- function() {
+rfc_prop_population <- local({
   triplets <- c(sprintf("%%%02X", 0:255), sprintf("%%%02x", 0:255))
   literals <- vapply(1:127, function(i) rawToChar(as.raw(i)), character(1))
   tokens <- unique(c(triplets, literals))
@@ -98,19 +98,31 @@ rfc_prop_population <- function() {
     "http://[2001:db8::1]/x", "http://h/p?a=1&b=2#f/g?h"
   )
 
-  unique(c(
+  population <- unique(c(
     unlist(lapply(positions, sprintf, tokens), use.names = FALSE), shapes
   ))
-}
+
+  # Return the same immutable value to every property. R's copy-on-modify
+  # semantics keep callers from mutating the cached population in place.
+  function() population
+})
 
 # Serialize the population under one RFC posture and drop the rows the profile
 # rejects. Acceptance is OR-002's axis and is deliberately not scored here.
-rfc_prop_serialize <- function(form) {
+rfc_prop_serialize <- local({
   pop <- rfc_prop_population()
-  out <- serialize_url(pop, standard = "rfc3986", form = form)
-  keep <- !is.na(out)
-  list(input = pop[keep], output = out[keep])
-}
+  cache <- lapply(c("source", "normalized"), function(form) {
+    out <- serialize_url(pop, standard = "rfc3986", form = form)
+    keep <- !is.na(out)
+    list(input = pop[keep], output = out[keep])
+  })
+  names(cache) <- c("source", "normalized")
+
+  function(form) {
+    stopifnot(length(form) == 1L, form %in% names(cache))
+    cache[[form]]
+  }
+})
 
 # Assert a property holds of every row except an enumerated deviation set.
 #
@@ -223,21 +235,21 @@ test_that("normalization is confluent with the source posture", {
   # normalize(source(x)) == normalize(x). Normalization is defined on the URL,
   # so routing through the source rendering must not change where it lands --
   # otherwise `source` is losing state that `normalized` depends on.
-  pop <- rfc_prop_population()
-  src <- serialize_url(pop, standard = "rfc3986", form = "source")
-  nrm <- serialize_url(pop, standard = "rfc3986", form = "normalized")
-  keep <- !is.na(src) & !is.na(nrm)
-  round <- serialize_url(src[keep], standard = "rfc3986", form = "normalized")
-  bad <- is.na(round) | round != nrm[keep]
-  expect_property(bad, pop[keep])
+  src <- rfc_prop_serialize("source")
+  nrm <- rfc_prop_serialize("normalized")
+  expect_identical(src$input, nrm$input)
+  round <- serialize_url(src$output, standard = "rfc3986", form = "normalized")
+  bad <- is.na(round) | round != nrm$output
+  expect_property(bad, src$input)
 })
 
 test_that("`form` is a presentation axis and never changes acceptance", {
   # P2.5 OUT-O3, re-asserted on this population rather than on WPT's.
-  pop <- rfc_prop_population()
+  src <- rfc_prop_serialize("source")
+  nrm <- rfc_prop_serialize("normalized")
   expect_identical(
-    is.na(serialize_url(pop, standard = "rfc3986", form = "source")),
-    is.na(serialize_url(pop, standard = "rfc3986", form = "normalized"))
+    src$input,
+    nrm$input
   )
 })
 
@@ -412,11 +424,9 @@ test_that("the source posture is not byte-preserving in two known places", {
   # `changed` count is untouched, which is the load-bearing half of this
   # assertion: the row joined the byte-PRESERVING family, so the two known
   # non-preserving families did not become three.
-  pop <- rfc_prop_population()
-  out <- src(pop)
-  keep <- !is.na(out)
-  expect_identical(sum(keep), 5967L)
-  expect_identical(sum(keep & out != pop), 316L)
+  pop <- rfc_prop_serialize("source")
+  expect_length(pop$input, 5967L)
+  expect_identical(sum(pop$output != pop$input), 316L)
   expect_identical(src("urn:ietf:rfc:2648"), "urn:ietf:rfc:2648")
 })
 
