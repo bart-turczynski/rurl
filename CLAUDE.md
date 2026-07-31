@@ -27,6 +27,17 @@ R CMD check .
 # current time and emit a future-timestamp NOTE; rerun with normal network
 # access, or set `_R_CHECK_SYSTEM_CLOCK_=false` for that local check.
 
+# The local verify gate: CI's fast gate, reproduced locally (RURL-mvsxmyww).
+# Runs the ~20 gate steps DERIVED from .github/workflows/verify.yml, lint,
+# R CMD build + check --as-cran on the built tarball, and the suite under
+# LC_ALL=C. Wired as a pre-push hook by `pre-commit install --hook-type
+# pre-push` -- which must be run once per clone; committing the config does
+# not install it.
+Rscript tools/verify.R          # full; --fast = gates + lint, --list = plan
+# `devtools::test()` is NOT a substitute: it ignores Collate: and runs against
+# the source tree rather than an installed copy, so it cannot see a package
+# that does not build.
+
 # Lint (must stay clean — see .lintr below)
 lintr::lint_package()
 

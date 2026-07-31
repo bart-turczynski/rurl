@@ -167,6 +167,12 @@ ALLOWLIST <- list(
     path = "tools/release-rule-check.R",
     reason = paste("polices the 'no CRAN until curl-free' release rule",
                    "(RCON-10); like this gate, it must name what it checks")
+  ),
+  list(
+    path = "tools/verify.R",
+    reason = paste("the local verify gate; it RUNS this gate and documents",
+                   "why the C7 clean room is release-only, so it must name",
+                   "the thing it invokes")
   )
 )
 
