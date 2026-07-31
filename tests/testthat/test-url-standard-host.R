@@ -297,3 +297,118 @@ test_that("without a selector numeric hosts stay rejected (unchanged)", {
   # Canonical IPv4 is accepted with no selector, as always.
   expect_identical(get_host(url_of("127.0.0.1")), "127.0.0.1")
 })
+
+# --- RURL-crrgaiel: `pct-encoded` in a reg-name is unrestricted -------------
+
+# RFC 3986 S3.2.2: `reg-name = *( unreserved / pct-encoded / sub-delims )` with
+# `pct-encoded = "%" HEXDIG HEXDIG`. The production restricts WHICH LITERAL
+# bytes a reg-name may hold; it places no restriction whatever on what a
+# well-formed triplet DECODES to. S2.2 is the point of the escape: a reserved
+# octet is percent-encoded precisely so it can be carried as DATA rather than as
+# a delimiter. So `ho%2Fst` is a valid reg-name whose second-to-last character
+# is a slash-as-data, and S6.2.2.2 forbids decoding it (only `unreserved` may be
+# decoded), which `host_pct = "keep"` already renders correctly.
+#
+# rurl used to judge the DECODED octet against the literal set, so `%2F`, `%25`,
+# `%40` and the C0 range rejected "whichever way they were written". That is
+# libcurl/WHATWG's rule, not RFC 3986's, and it scored 48 of the sweep's
+# grammar-valid rejections.
+test_that("rfc3986 admits any well-formed host triplet, kept encoded", {
+  hosts <- c(
+    sprintf("%%%02X", 0:31),                      # the C0 controls
+    "%20", "%23", "%25", "%2F", "%3A", "%3C", "%3E", "%3F", "%40",
+    "%5B", "%5C", "%5D"
+  )
+  urls <- paste0("http://ho", hosts, "st/")
+
+  # The PARSE succeeds -- that is the conformance fact, read off the identity
+  # record rather than off `parse_status`, which is a projection that also folds
+  # in the L3 PSL annotation (R/verdicts.R).
+  r <- rurl:::.fsss_record_vec(urls, "rfc3986", NULL)
+  expect_identical(r$ok, rep(TRUE, length(urls)))
+  # Kept ENCODED -- never decoded, since S6.2.2.2 permits decoding `unreserved`
+  # only.
+  expect_identical(r$host, paste0("ho", hosts, "st"))
+  # Surface (b) round-trips the source spelling.
+  expect_identical(
+    serialize_url(urls, standard = "rfc3986", form = "source"),
+    paste0("http://ho", hosts, "st/")
+  )
+
+  # `parse_status` is whatever a structurally IDENTICAL host with a literal
+  # character in place of the triplet reports -- i.e. the percent-encoding is
+  # not itself the reason for the verdict. `ho...st` is a single label, so every
+  # one of these is the ordinary no-TLD annotation.
+  expect_identical(
+    get_parse_status(urls, url_standard = "rfc3986"),
+    rep(get_parse_status("http://hoXst/", url_standard = "rfc3986"),
+      length(urls))
+  )
+
+  # The two S6.2.2 normalizations are applied by the SERIALIZER under
+  # `form = "normalized"`, never during the parse -- the same parse/normalize
+  # line RURL-epoinamh drew for the empty path. So the identity record keeps the
+  # source spelling and only `normalized` uppercases the hex (S6.2.2.1) and
+  # decodes an `unreserved` triplet (S6.2.2.2), while a non-unreserved octet
+  # stays encoded in BOTH forms.
+  mixed <- c("http://ho%2fst/", "http://ho%6fst/", "http://ho%00st/")
+  expect_identical(
+    rurl:::.fsss_record_vec(mixed, "rfc3986", NULL)$host,
+    c("ho%2fst", "ho%6fst", "ho%00st")
+  )
+  expect_identical(
+    serialize_url(mixed, standard = "rfc3986", form = "source"), mixed
+  )
+  expect_identical(
+    serialize_url(mixed, standard = "rfc3986", form = "normalized"),
+    c("http://ho%2Fst/", "http://hoost/", "http://ho%00st/")
+  )
+  # S6.2.2.1 has a SECOND sentence -- the host is case-insensitive and
+  # normalizes to lowercase -- so an `unreserved` triplet decoding to uppercase
+  # normalizes twice: "%41" -> "A" -> "a". Both still leave `source` untouched.
+  expect_identical(
+    serialize_url("http://ho%41st/", standard = "rfc3986", form = "source"),
+    "http://ho%41st/"
+  )
+  expect_identical(
+    serialize_url("http://ho%41st/", standard = "rfc3986",
+      form = "normalized"),
+    "http://hoast/"
+  )
+
+  # High bytes are `pct-encoded` too, on the schemes the sweep exercised.
+  hi <- c("ftp://example.com%80/", "ftp://example.com%A0/",
+          "https://example.com%80/", "https://example.com%A0/")
+  expect_identical(rurl:::.fsss_record_vec(hi, "rfc3986", NULL)$ok,
+    rep(TRUE, 4L))
+  expect_identical(
+    rurl:::.fsss_record_vec(hi, "rfc3986", NULL)$host,
+    c("example.com%80", "example.com%A0", "example.com%80", "example.com%A0")
+  )
+  expect_identical(
+    get_parse_status(hi, url_standard = "rfc3986"),
+    rep(get_parse_status("https://example.comX/", url_standard = "rfc3986"), 4L)
+  )
+
+  # A malformed "%" is still a PARSE ERROR -- widening which octets a triplet
+  # may denote did not stop requiring `"%" HEXDIG HEXDIG`.
+  bad <- c("http://ho%st/", "http://ho%0st/", "http://ho%zzst/", "http://ho%/")
+  expect_identical(get_parse_status(bad, url_standard = "rfc3986"),
+    rep("error", length(bad)))
+})
+
+test_that("whatwg and NULL keep rejecting host triplets they always did", {
+  # WHATWG's forbidden host code points are judged on the DECODED host, so these
+  # must keep failing there; the no-selector baseline is byte-frozen.
+  urls <- paste0("http://ho", c("%00", "%1F", "%2F", "%25", "%40"), "st/")
+  expect_identical(get_parse_status(urls, url_standard = "whatwg"),
+    rep("error", length(urls)))
+  expect_identical(get_parse_status(urls), rep("error", length(urls)))
+
+  # A percent-encoded reg-name is not DNS-eligible, so the PSL annotation
+  # declines it rather than guessing (`.psl_annotation_host_vec()`).
+  expect_true(all(is.na(
+    get_domain(paste0("http://ho", c("%00", "%2F"), "st/"),
+      url_standard = "rfc3986")
+  )))
+})

@@ -342,12 +342,23 @@ test_that("the source posture preserves percent-spelling outside the host", {
 
 test_that("the source posture is not byte-preserving in two known places", {
   # RURL-gkmwqpos. `?serialize_url` says `source` preserves source bytes; it
-  # does not, on 316 of 5664 accepted population rows in two families. These
+  # does not, on 316 of 5966 accepted population rows in two families. These
   # are pinned as CHARACTERIZED FACTS, not as approved behavior: the ticket
   # records that the open question is whether the docs or the code is wrong.
   #
+  # The accepted count rose 5664 -> 5966 in RURL-crrgaiel, which admitted any
+  # well-formed `pct-encoded` in an `rfc3986` reg-name (RFC 3986 sec 3.2.2). The
+  # 302 are derived, not observed: all 302 are the single shape
+  # `http://ho%XXst/p` (the `foo://` twins already parsed, on the general
+  # route), and they are 173 newly-admitted octets spread over the population's
+  # two hex spellings -- 129 of those octets have a letter-bearing hex pair and
+  # so appear twice, 44 are digits-only and appear once: 129*2 + 44 = 302. The
+  # complement, 27 + 56 = 83, is exactly the octet count that already parsed in
+  # `tools/octet-acceptance-sweep.R`. All 302 BYTE-PRESERVE, which is why the
+  # deviating count below is unchanged at 316.
+  #
   # Two of the four original families are gone, and neither cost any acceptance
-  # (5664 rows accepted before and after each):
+  # (5664 rows accepted before and after each, as measured at that time):
   #
   #   * the host, which was normalized on the parse record -- RURL-xkhbhaje
   #     moved sec 6.2.2.2 out of the parse and into the `normalized` serializer
@@ -396,7 +407,7 @@ test_that("the source posture is not byte-preserving in two known places", {
   pop <- rfc_prop_population()
   out <- src(pop)
   keep <- !is.na(out)
-  expect_identical(sum(keep), 5664L)
+  expect_identical(sum(keep), 5966L)
   expect_identical(sum(keep & out != pop), 316L)
 })
 
