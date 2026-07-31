@@ -86,6 +86,30 @@
 
 ### Bug fixes
 
+- **`clean_url` no longer fabricates an authority for a hostless `file:` parse
+  error.** A hostless row is reassembled as `scheme://` + path, so a path that
+  did not begin with `/` landed in the authority position:
+
+  ```r
+  # before                                   # after
+  get_clean_url("file:C:/W")        # "file://C:/W"        -> NA
+  get_clean_url("file:etc/passwd")  # "file://etc/passwd"  -> NA
+  get_clean_url("file:.")           # "file://."           -> NA
+  ```
+
+  Every one of these inputs is already `parse_status = "error"`, and these were
+  the only rows in an error sweep that still emitted a `clean_url` — so the
+  emitted string was both unreachable as a canonical key and actively
+  misleading: `file://C:/W` re-reads as authority `C:`, and a `file:` URL with
+  an authority is an SMB fetch on Windows.
+
+  The `file:` carve-out that lets a *legitimately* hostless row build is
+  unchanged, because those paths are absolute: `file:///etc/passwd`,
+  `file:////server/share`, `file://server/share/x` and `file:///` all keep their
+  previous output, as do the WHATWG drive-letter forms (`file:C|/W` →
+  `file:///C:/W`). Found auditing `rurl` against curl's documented security
+  guidance.
+
 - **Under `url_standard = "rfc3986"`, an authority-only URL now has an EMPTY
   path, not `"/"`.** RFC 3986 §3 gives `hier-part = "//" authority path-abempty`
   with `path-abempty = *( "/" segment )` — zero or more, so the empty string is a
