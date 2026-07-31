@@ -604,8 +604,12 @@ derive_ip_obfuscation <- function(roster = ip_obfuscation_roster()) {
   )
 }
 
-if (identical(environment(), globalenv()) &&
-      !is.null(sys.frames()) && sys.nframe() == 0L) {
+# Runs only when this file is executed as a script: `sys.nframe()` is 0 at the
+# top level of an Rscript invocation and non-zero inside the verifier's
+# `source()` call. The earlier form also tested `!is.null(sys.frames())`, which
+# is FALSE at top level -- so the block never fired and the header's "running it
+# directly prints ..." was untrue of all three modules.
+if (sys.nframe() == 0L) {
   d <- derive_ip_obfuscation()
   cat("derived rows:", nrow(d), "\n")
   print(table(d$kind))
