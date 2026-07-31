@@ -878,7 +878,18 @@
     !original_has_allowed_scheme &
     !has_scheme_slashes
   if (any(maybe_host_port)) {
-    lhp <- stringi::stri_detect_regex(url, "^[^/]+:[0-9]+($|/)")
+    # The authority-part must be COLON-FREE. This is the same regex as
+    # `.general_parsed_mask()`'s (R/parse-state.R), and the two must stay in
+    # step: the carve-out exists for the scheme-LESS `example.com:8080` form,
+    # which the scheme regex also matches (a dot is a legal scheme char). With
+    # `[^/]+` the class ran greedily across colons, so `urn:ietf:rfc:2648` read
+    # as "authority `urn:ietf:rfc`, port 2648", was flagged host:port, and was
+    # diverted from the opaque parser to the web route that rejects `urn:`. Any
+    # opaque payload ending in `:<digits>` was unparseable -- `urn:a:1`,
+    # `sc:x:80`, `urn:isbn:0451450523` -- and only a trailing `?`/`#` rescued
+    # it, by breaking the `($|/)` anchor. RURL-jnvtttfm repaired the sibling
+    # site only; this is the second one (RURL-uafjkaas).
+    lhp <- stringi::stri_detect_regex(url, "^[^/:]+:[0-9]+($|/)")
     lhp[is.na(lhp)] <- FALSE
     looks_like_host_port[maybe_host_port] <- lhp[maybe_host_port]
   }
