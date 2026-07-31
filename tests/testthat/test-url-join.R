@@ -737,7 +737,8 @@ test_that("no join-family export has shipped yet", {
   if (!file.exists(ns_path)) {
     ns_path <- system.file("NAMESPACE", package = "rurl")
   }
-  expect_true(nzchar(ns_path) && file.exists(ns_path))
+  expect_true(nzchar(ns_path))
+  expect_true(file.exists(ns_path))
   ns <- readLines(ns_path, warn = FALSE)
   deferred <- c("get_url_key", "url_key_policy", "url_inner_join",
                 "url_left_join", "url_right_join", "url_full_join",
