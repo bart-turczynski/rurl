@@ -21,8 +21,22 @@
 
 ## Validation
 
-- Run `devtools::test()` locally for every change.
-- For packaging changes, run `R CMD check --as-cran` before release work.
+- **Install the local verify gate once, per clone:**
+
+      pre-commit install --hook-type pre-push
+
+  It is not installed automatically — `.pre-commit-config.yaml` being committed
+  does nothing until someone runs that command in their own working copy.
+- Run `Rscript tools/verify.R` to reproduce CI's fast gate by hand: the ~20
+  gate steps (derived from `.github/workflows/verify.yml`, never transcribed),
+  `lintr::lint_package()`, `R CMD build` + `R CMD check --as-cran` on the built
+  tarball, and the test suite under `LC_ALL=C`. `--fast` runs the gates and lint
+  only; `--list` prints the plan; `--release` adds the curl clean room. Its
+  header states what it does **not** cover.
+- Run `devtools::test()` locally for every change — but note it is not a
+  substitute for `tools/verify.R`. A green suite says nothing about whether the
+  package builds: `devtools::test()` ignores `Collate:` and runs against the
+  source tree, not an installed copy.
 - New prose in `DESCRIPTION`, `.Rd`, README, or vignettes should pass
   `spelling::spell_check_package()`; add genuine terms to `inst/WORDLIST`.
 
