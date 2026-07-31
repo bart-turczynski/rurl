@@ -164,12 +164,10 @@ test_that("file: Gate 1 rejects forms that are not valid RFC 3986", {
 
 test_that("file: Gate 2 applies RFC 8089 S2's narrowing of the authority", {
   # No port: S2's `file-auth = "localhost" / host` has none, and no appendix
-  # supplies a production for one -> parse failure.
+  # supplies a production for one -> parse failure. This is the NULL default,
+  # byte-frozen by ADR 0012 D4. The `rfc3986` selector no longer agrees --
+  # see the test below (RURL-uhkofhjf).
   expect_identical(get_parse_status("file://example.com:80/path"), "error")
-  expect_identical(
-    get_parse_status("file://example.com:80/path", url_standard = "rfc3986"),
-    "error"
-  )
   # userinfo IS admitted, by App. E.1/F's production, and is surfaced as a
   # fact rather than silently discarded.
   u <- "file://user@example.com/path"
@@ -182,6 +180,55 @@ test_that("file: Gate 2 applies RFC 8089 S2's narrowing of the authority", {
   expect_identical(get_parse_status("file:///doc.pdf#page=2"), "ok")
   expect_identical(get_fragment("file:///doc.pdf#page=2"), "page=2")
   expect_identical(get_query("file:///data.csv?v=2"), "v=2")
+})
+
+test_that("under rfc3986 a file: port is a FACT, not a Gate 2 failure", {
+  # RURL-uhkofhjf. ADR 0012 D5 lists four "scheme-specific facts (parseable !=
+  # valid-for-the-scheme)" items for `file` under rfc-syntax: non-absolute path,
+  # userinfo, port, query/fragment. Three were already facts; port alone gated
+  # the parse. `rfc3986` is the scheme-AGNOSTIC generic syntax, and ADR 0012
+  # rules that "scheme-specific restrictions are overlays, not generic parse
+  # gates" -- so an RFC 8089 narrowing may not reject here.
+  args <- list(url_standard = "rfc3986")
+  u <- c("file://example:1/", "file://localhost:8098/path/to/file.txt",
+         "file://example.com:80/path")
+  expect_identical(
+    do.call(get_parse_status, c(list(u), args)), rep("ok", 3L)
+  )
+  expect_identical(do.call(get_host, c(list(u), args)),
+                   c("example", "localhost", "example.com"))
+  expect_identical(do.call(get_port, c(list(u), args)), c(1L, 8098L, 80L))
+
+  # The FACT is surfaced, grouped with query/fragment: RFC 8089 mentions a port
+  # exactly as often as it mentions a query, which is never.
+  d <- get_url_diagnostics(u, url_standard = "rfc3986",
+                           scheme_acceptance = "general")
+  for (i in seq_along(u)) {
+    expect_true("file-component-outside-rfc8089" %in% d[[i]], info = u[[i]])
+  }
+
+  # Only the SCHEME-specific narrowing is lifted. RFC 3986 sec 3.2.3 is
+  # `port = *DIGIT`, so a non-digit port is still a generic grammar failure,
+  # and an EMPTY port is still no port rather than an error.
+  expect_identical(
+    do.call(get_parse_status,
+            c(list(c("file://example:abc/", "file://example:1x/")), args)),
+    c("error", "error")
+  )
+  expect_identical(
+    do.call(get_parse_status, c(list("file://example:/"), args)), "ok"
+  )
+  expect_identical(do.call(get_port, c(list("file://example:/"), args)),
+                   NA_integer_)
+
+  # The other two profiles do not move. The NULL default is byte-frozen
+  # (ADR 0012 D4) and WHATWG runs its own `file:` state machine.
+  expect_identical(
+    suppressWarnings(get_parse_status(u)), rep("error", 3L)
+  )
+  expect_identical(
+    get_parse_status(u, url_standard = "whatwg"), rep("error", 3L)
+  )
 })
 
 test_that("WHATWG file parser accepts drive-letter and bare path forms", {

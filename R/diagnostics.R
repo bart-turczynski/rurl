@@ -436,9 +436,15 @@
     )
     # `file` under rfc-syntax (RURL-obsweger two-gate model): a non-absolute
     # path; userinfo present via App. E.1/F's non-normative production; or a
-    # query/fragment, which RFC 8089 never mentions and which are therefore
-    # inherited generic RFC 3986 components. `port` is NOT reported here -- it
-    # is a parse failure under Gate 2, so no `ok` row can carry one.
+    # port/query/fragment, which RFC 8089 never mentions and which are therefore
+    # inherited generic RFC 3986 components.
+    #
+    # `port` joined this set with RURL-uhkofhjf. It used to be a parse failure
+    # under Gate 2, so no `ok` row could carry one -- which made it the lone
+    # exception among ADR 0012 D5's four items, three of which were already
+    # facts. It is grouped with query/fragment rather than given a diagnostic of
+    # its own because D5 lists the four together and RFC 8089 mentions a port
+    # exactly as often as it mentions a query: never.
     if (is_rfc) {
       is_file <- gp & gs == "file"
       diag <- .diag_add(
@@ -449,7 +455,8 @@
       diag <- .diag_add(
         diag, is_file & !is.na(gen_b$userinfo), "file-userinfo-extension"
       )
-      outside_8089 <- !is.na(gen_b$query) | !is.na(gen_b$fragment)
+      outside_8089 <- !is.na(gen_b$query) | !is.na(gen_b$fragment) |
+        !is.na(gen_b$port)
       diag <- .diag_add(
         diag, is_file & outside_8089, "file-component-outside-rfc8089"
       )

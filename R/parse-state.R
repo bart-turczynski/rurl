@@ -1100,7 +1100,35 @@
   if (identical(url_standard, "rfc3986")) "reg-name" else "empty"
 }
 
-.parse_rfc_file_url_one <- function(url, localhost_policy = "empty") {
+# What a port in a `file:` authority MEANS -- the fourth of ADR 0012 D5's four
+# "scheme-specific facts (parseable != valid-for-the-scheme)" items for `file`
+# under rfc-syntax. Keyed on the selector, exactly like
+# `.rfc_file_localhost_policy()` above and for the same reason.
+#
+#   "reject"  a port is a parse FAILURE. RFC 8089 sec 2's
+#             `file-auth = "localhost" / host` has no port production and no
+#             appendix supplies one. This is the NULL default, byte-frozen by
+#             ADR 0012 D4.
+#   "fact"    the port parses and is surfaced as a diagnostic. `rfc3986` is the
+#             scheme-AGNOSTIC generic syntax, where `port = *DIGIT` and the
+#             authority is well-formed, so an RFC 8089 narrowing may not gate
+#             the parse: ADR 0012 (owner-ruled) "Scheme-specific restrictions
+#             are overlays, not generic parse gates", and ADR 0012:63 has
+#             scheme-specific RFC violations surface as companion facts
+#             (ADR 0006).
+#
+# D5 lists userinfo, port, query and fragment TOGETHER. Three of the four were
+# already facts -- `file://u@example.com/p` parses and reports
+# `file-userinfo-extension`, `file:///p?q=1` reports
+# `file-component-outside-rfc8089` -- and port was the lone exception, gating
+# the parse instead (RURL-uhkofhjf). Same defect class as RURL-zyytztdd, where
+# WHATWG's localhost emptying had leaked into the grammar selector.
+.rfc_file_port_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "fact" else "reject"
+}
+
+.parse_rfc_file_url_one <- function(url, localhost_policy = "empty",
+                                    port_policy = "reject") {
   na <- NA_character_
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
@@ -1154,10 +1182,24 @@
     port <- parts$port
     userinfo <- parts$userinfo
     # Gate 2: RFC 8089 Section 2 admits no port, and no appendix supplies a
-    # production for one. A port is therefore a parse FAILURE, not a fact.
+    # production for one. Under `port_policy = "reject"` -- the NULL default,
+    # byte-frozen by ADR 0012 D4 -- a port is therefore a parse FAILURE.
     # (Contrast userinfo, which App. E.1/F does supply a production for.)
+    #
+    # Under `"fact"` the RFC 8089 narrowing stops gating the parse and the port
+    # is surfaced as a diagnostic instead; see `.rfc_file_port_policy()`. The
+    # GENERIC production still applies, though -- RFC 3986 sec 3.2.3 is
+    # `port = *DIGIT`, so a non-digit port is a grammar failure on this route
+    # just as it is on every other, and only the SCHEME-specific narrowing is
+    # lifted. `\A`/`\z`, not `^`/`$`: ICU's `$` matches before a trailing line
+    # terminator, so `^[0-9]*$` would admit `1\v` (RURL-dergzwku).
     if (!is.na(port)) {
-      return(blank)
+      if (identical(port_policy, "reject")) {
+        return(blank)
+      }
+      if (!isTRUE(stringi::stri_detect_regex(port, "\\A[0-9]*\\z"))) {
+        return(blank)
+      }
     }
     # localhost (case-insensitive) collapses to an empty host where the selected
     # standard asks for it; under `rfc3986` it falls through to the reg-name arm
@@ -1209,6 +1251,7 @@
 # too; that is idempotent, not a conflict.
 .parse_rfc_file_urls_vec <- function(url, url_standard = NULL) {
   localhost_policy <- .rfc_file_localhost_policy(url_standard)
+  port_policy <- .rfc_file_port_policy(url_standard)
   n <- length(url)
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "userinfo",
@@ -1228,7 +1271,8 @@
     return(out)
   }
   rows <- lapply(
-    url, .parse_rfc_file_url_one, localhost_policy = localhost_policy
+    url, .parse_rfc_file_url_one, localhost_policy = localhost_policy,
+    port_policy = port_policy
   )
   out <- list()
   for (f in lgl_fields) {
