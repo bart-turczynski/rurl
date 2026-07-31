@@ -264,6 +264,62 @@ one direction: if those sentinels are ever filled in, the claim becomes
 re-runnable and the gate demands enforcement with the exact fetch command
 instead of continuing to describe it as un-runnable.
 
+### `equivocal-urls`: the octet-notation exception
+
+The second tier-3 group needs one check the other four do not, and it is the
+group where tracking matters most and re-derivation helps least. Reynolds et al.
+released **no artifact** — the 98,425-case fuzzing corpus was never published and
+the paper carries no repository link across its 60 references — so unlike
+`youarealiar` there is not even a third-party repo to byte-check against. Until
+this port the 12 rows existed in exactly two places: the committed fixture, and
+one gitignored builder on one machine.
+
+Two Table-3 rows cannot be represented as R character strings at all:
+
+- `eq-U1` — `n.pr[0x00]@e.gg`, an embedded NUL
+- `eq-U7` — `n.pr[0xDD9ADCBD]e.gg`, octets that are not valid UTF-8
+
+Both are `runnable = no` with `input = NA`, and their `input_json` holds **the
+paper's `[0xNN]` notation** rather than a JSON-encoded copy of the bytes. That is
+a deliberate exception to the fixture's own convention that `input_json` is the
+byte-exact source of truth — and nothing was checking that the exception stayed
+an exception. A later pass that "normalized" those cells into ordinary escaped
+strings would convert a faithful record of *un-representable* octets into a false
+claim about representable ones, and would make two rows look runnable that cannot
+be run.
+
+Check E asserts it in **both** directions: exactly those two rows are
+notation-only and keep `input = NA` with `[0x..]` intact, and **no runnable row
+carries octet notation** — the latter being what happens if someone records a new
+un-representable input by copying the notation without also marking the row
+non-runnable.
+
+Also deliberately absent: the paper's VirusTotal example
+`http://letsencrypt.org%2Fdocs%2F[redacted]/LS.exe`. `[redacted]` is the authors'
+own redaction of the live host, so there is no faithful string to transcribe, and
+fabricating a plausible host would be the one unrecoverable error here.
+
+### `fsss_host` must be checked conditionally, or it re-opens a closed trap
+
+Both tier-3 gates assert `fsss_host == oracle_value` **only where
+`rurl_deviation` is NA**. That condition is the correct rule, not a loosening:
+
+- `eq-U8` records `oracle_value = n.xn--prie-swc.gg` (the paper's Option A, where
+  the dotted-İ folds into the host) while `rurl` reads the `@` as a userinfo
+  delimiter and lands on `e.gg`. That disagreement **is** the row's point, and a
+  `rurl_deviation` citation owns it.
+- `yal-005` is the latent-trap case: it is a host row that *does* carry a
+  deviation (ADR 0002 — the host stays reversibly Unicode and Punycode is a
+  separate presentation phase) and happens to satisfy the equality anyway. An
+  unconditional check passes there **by luck**, and would fail wrongly the moment
+  that documented presentation phase changed.
+
+Either way, an unconditional check would force the next author to choose between
+writing a false oracle and deleting a documented deviation — which is exactly the
+co-confirmation trap `RURL-nknytzxz` was filed for. The falsification run covers
+both directions: an undocumented `fsss_host` difference must fail, a documented
+one must pass, and **deleting the deviation must fail**.
+
 ## Status
 
 | Group | Ported | Verifier |
@@ -271,6 +327,7 @@ instead of continuing to describe it as un-runnable.
 | `wpt-credentials-fragments` | yes | `verify-credentials-fragments.R` |
 | `ip-obfuscation` | yes | `verify-ip-obfuscation.R` |
 | `youarealiar` | yes | `verify-youarealiar.R` (integrity, not re-derivation) |
+| `equivocal-urls` | yes | `verify-equivocal-urls.R` (integrity, not re-derivation) |
 | `wpt-urltestdata` | no | — |
 | `ada-extra-urltestdata` | no | — |
 | `ada-verifydnslength` | no | — |
