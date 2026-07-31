@@ -404,11 +404,20 @@ test_that("the source posture is not byte-preserving in two known places", {
   )
 
   # And the bound, so two families cannot quietly become three.
+  #
+  # 5966 -> 5967 with RURL-uafjkaas. Exactly one population row moved, and it is
+  # named rather than absorbed: `urn:ietf:rfc:2648` used to serialize to NA
+  # because the colon-greedy host:port carve-out diverted it off the opaque
+  # parser and onto the web route, which rejects `urn:`. It now round-trips. The
+  # `changed` count is untouched, which is the load-bearing half of this
+  # assertion: the row joined the byte-PRESERVING family, so the two known
+  # non-preserving families did not become three.
   pop <- rfc_prop_population()
   out <- src(pop)
   keep <- !is.na(out)
-  expect_identical(sum(keep), 5966L)
+  expect_identical(sum(keep), 5967L)
   expect_identical(sum(keep & out != pop), 316L)
+  expect_identical(src("urn:ietf:rfc:2648"), "urn:ietf:rfc:2648")
 })
 
 # --- the population itself ---------------------------------------------------

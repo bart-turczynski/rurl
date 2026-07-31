@@ -1391,13 +1391,69 @@
   # here once, for every posture.
   odd_slash <- .rfc_odd_slash_run(url, url_standard, scheme_lc, has_scheme,
                                   host_port, web_route_scheme)
+  empty_auth <- .rfc_empty_authority_host(url, url_standard, scheme_lc,
+                                          has_scheme, host_port,
+                                          web_route_scheme)
 
   if (!identical(scheme_acceptance, "general")) {
-    return(rfc_file | odd_slash)
+    return(rfc_file | odd_slash | empty_auth)
   }
   gp <- has_scheme & !host_port & !(scheme_lc %in% web_route_scheme)
   gp[is.na(gp)] <- FALSE
-  gp | rfc_file | odd_slash
+  gp | rfc_file | odd_slash | empty_auth
+}
+
+# RURL-ajikcwkh. The companion to `.rfc_odd_slash_run()` below for the one shape
+# it cannot cover: a slash run of EXACTLY 2 whose authority holds no host.
+#
+#   http://                        authority present + EMPTY, path empty
+#   http://?                       ditto, query empty
+#   http://#                       ditto, fragment empty
+#   http://user@/www.example.com   authority `user@`  -> host empty
+#   http://a:b@/www.example.com    authority `a:b@`   -> host empty
+#
+# RFC 3986 sec 3.2: `authority = [ userinfo "@" ] host [ ":" port ]` and
+# `host = IP-literal / IPv4address / reg-name`, where `reg-name = *( ... )` --
+# `*`-quantified, so the EMPTY host is a well-formed authority. Appendix B reads
+# every row above as authority-present with an empty host, and rurl already
+# reports exactly that for the non-special twins (`foo://`,
+# `foo://user@/www.example.com`) because those route to the general parser.
+#
+# These did not, so they hit the web route, which rejects an empty authority
+# outright -- `.parse_web_url_one()` returns NULL. That is correct for the model
+# the web route implements (a special-scheme authority always has a host) and
+# wrong for RFC 3986's generic syntax, so it is the same ROUTING defect as the
+# slash-run family and takes the same fix: send the row to the parser that is
+# already right.
+#
+# The slash run is checked as EXACTLY 2 and the host-empty test is lexical,
+# because a 2-slash run WITH a host is the ordinary web shape and must keep
+# going to the web route untouched. `\A`/`\z`, not `^`/`$`, for the ICU
+# trailing-line-terminator reason recorded throughout this file.
+#
+# This deliberately does NOT answer RURL-mugcdtrv, which asks whether the `web`
+# POSTURE should admit such a row. That question is about ADR 0004's host-shape
+# gate applied to rows that already parse; this is about rows that never reached
+# a parser at all. After this change these 7 behave exactly like their
+# already-shipped odd-slash siblings -- record `ok`, `general` posture `ok`,
+# `web` posture still rejected -- so the posture question is left open, with
+# these rows added to the set it governs rather than decided.
+.rfc_empty_authority_host <- function(url, url_standard, scheme_lc, has_scheme,
+                                      host_port, web_route_scheme) {
+  if (!identical(url_standard, "rfc3986")) {
+    return(rep(FALSE, length(url)))
+  }
+  # Authority = what sits between the `//` and the first `/`, `?` or `#`. It has
+  # no host when it is empty, or holds only a userinfo (`...@`) and/or an empty
+  # `:port`.
+  hostless <- stringi::stri_detect_regex(
+    url,
+    "\\A[A-Za-z][A-Za-z0-9+.\\-]*://([^/?#@]*@)?(:[0-9]*)?([/?#][\\s\\S]*)?\\z"
+  )
+  hostless[is.na(hostless)] <- FALSE
+  out <- has_scheme & !host_port & scheme_lc %in% web_route_scheme & hostless
+  out[is.na(out)] <- FALSE
+  out
 }
 
 # RURL-xfbzkico. Under `rfc3986`, a web-route scheme whose post-scheme slash run
@@ -1524,7 +1580,30 @@
   # (whatwg `file` is a special scheme and never reaches here -- it stays on the
   # existing WHATWG file state machine.)
   is_file <- gp & !is_whatwg & !is.na(scheme_lc) & scheme_lc == "file"
-  reg <- gp & !is_file
+  # A row whose BYTES are not valid UTF-8 is withheld from the opaque parser.
+  # `.parse_opaque_urls_vec()` reaches `substring()`, which THROWS "invalid
+  # multibyte string" on such input, so the row escaped as an error CONDITION
+  # rather than the `error` verdict it is owed -- measured as 8 THROW rows in
+  # the octet sweep's conjunction block (`http://<80>@/p` and friends). They
+  # reached the general route for the first time only when RURL-ajikcwkh's
+  # hostless 2-slash routing started sending them here; previously they went to
+  # the web route, which rejects them without ever decoding them.
+  #
+  # The test is `validUTF8()` and NOT `gate_ok`, though the generic gate does
+  # reject every one of these too. Short-circuiting on the gate was the first
+  # attempt and is WRONG: `out$ok & gate_ok` (below) masks the VERDICT, but the
+  # email/mailto diagnostics read this parser's component fields WITHOUT
+  # consulting `ok`, so skipping the parse blanked them -- 6 failures in
+  # test-email-diagnostics.R, and only under `LC_ALL=C`, because whether the
+  # gate rejects those rows is itself locale-dependent. `validUTF8()` is a byte
+  # test: it answers the same way in every locale, and it is exactly the
+  # condition that makes the parser throw rather than a proxy for it.
+  #
+  # Withholding costs nothing that was available: RFC 3986's grammar is ASCII,
+  # so a string that is not even valid UTF-8 has no decomposition to report.
+  decodable <- validUTF8(url)
+  decodable[is.na(decodable)] <- FALSE
+  reg <- gp & !is_file & decodable
 
   opaque_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "path_kind",
