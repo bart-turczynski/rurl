@@ -2,11 +2,19 @@
 
 ## Workflow
 
-- Open an issue or discussion before large behavioral changes.
+- Use an FP issue for an independently schedulable outcome, a distinct owner or
+  blocker, or a separately deliverable change. Keep intra-slice steps and
+  incidental findings in the owning issue unless they meet that threshold.
 - Add or update tests for every user-visible change.
 - Keep exported function signatures and object shapes stable unless the change
   is explicitly planned as breaking.
 - Prefer small, reviewable patches over broad rewrites without coverage.
+- Load repository documents selectively: start with the guidance and references
+  relevant to the files being changed. Ordinary work does not require reading
+  the complete `design/work/url-v3/` workspace.
+- Tracker housekeeping, including reorganizing issues or updating their status,
+  does not amend the product protocol. Change protocol records only when the
+  product contract or its evidence actually changes.
 
 ## Constraints
 
@@ -27,16 +35,23 @@
 
   It is not installed automatically — `.pre-commit-config.yaml` being committed
   does nothing until someone runs that command in their own working copy.
-- Run `Rscript tools/verify.R` to reproduce CI's fast gate by hand: the ~20
+- During iteration, run the targeted tests and checks relevant to the change.
+  Run `Rscript tools/verify.R` once at the coherent slice tip, before delivery,
+  to reproduce CI's fast gate by hand: the ~20
   gate steps (derived from `.github/workflows/verify.yml`, never transcribed),
   `lintr::lint_package()`, `R CMD build` + `R CMD check --as-cran` on the built
   tarball, and the test suite under `LC_ALL=C`. `--fast` runs the gates and lint
   only; `--list` prints the plan; `--release` adds the curl clean room. Its
   header states what it does **not** cover.
-- Run `devtools::test()` locally for every change — but note it is not a
-  substitute for `tools/verify.R`. A green suite says nothing about whether the
-  package builds: `devtools::test()` ignores `Collate:` and runs against the
-  source tree, not an installed copy.
+- Intermediate local commits may temporarily be red while a slice is being
+  assembled. The delivered slice tip and its squash-merged result must pass the
+  complete local gate.
+- `devtools::test()` can provide targeted feedback during iteration, but it is
+  not a substitute for `tools/verify.R`. A green suite says nothing about
+  whether the package builds: `devtools::test()` ignores `Collate:` and runs
+  against the source tree, not an installed copy.
+- Add a new universal gate only when it has a relevant trigger surface, a named
+  owner, and a stated retirement or review condition.
 - New prose in `DESCRIPTION`, `.Rd`, README, or vignettes should pass
   `spelling::spell_check_package()`; add genuine terms to `inst/WORDLIST`.
 
