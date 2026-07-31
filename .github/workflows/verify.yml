@@ -233,6 +233,14 @@ jobs:
         run: Rscript tools/oracle/verify-credentials-fragments.R --self-test
       - name: Re-derive the committed oracle values
         run: Rscript tools/oracle/verify-credentials-fragments.R
+      # ip-obfuscation is the group with NO upstream artifact, so
+      # re-derivability is not a convenience here -- it is the only provenance
+      # the group has. Its record says so in prose ("derivable from arithmetic
+      # alone"); this makes the sentence executable.
+      - name: Gate self-test (ip-obfuscation)
+        run: Rscript tools/oracle/verify-ip-obfuscation.R --self-test
+      - name: Re-derive the committed oracle values (ip-obfuscation)
+        run: Rscript tools/oracle/verify-ip-obfuscation.R
 
   # Enforced-vs-documentary hash-pin model (RURL-kufiwlxc). The control plane
   # pins hashes in four kinds of place, and only some are recomputed: a
