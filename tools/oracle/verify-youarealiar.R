@@ -191,14 +191,21 @@ check_restatement <- function(committed, roster) {
         cm$id[i], encodeString(got), encodeString(p$value)))
     }
     # Where the expectation names a host, the FSSS host column must be that
-    # host. This is the join between the transcribed claim and the surface the
-    # conformance suite scores on.
-    if (identical(p$kind, "host")) {
-      if (!identical(cm$fsss_host[i], p$value)) {
-        fail <- c(fail, sprintf(
-          "%s: fsss_host is %s but the transcribed expectation names host %s",
-          cm$id[i], encodeString(cm$fsss_host[i]), encodeString(p$value)))
-      }
+    # host -- UNLESS a `rurl_deviation` owns the difference. That condition is
+    # the correct rule rather than a loosening, and it is a latent trap without
+    # it: yal-005 is a host row that DOES carry a deviation (ADR 0002 -- rurl
+    # keeps the host reversibly Unicode and Punycode is a separate presentation
+    # phase) and happens to satisfy the equality anyway. An unconditional check
+    # therefore passes today by luck, and would fail wrongly the moment the
+    # documented presentation phase changed -- forcing either a false oracle or
+    # a deleted deviation, which is the co-confirmation trap RURL-nknytzxz was
+    # filed for.
+    if (identical(p$kind, "host") && is.na(cm$rurl_deviation[i]) &&
+          !identical(cm$fsss_host[i], p$value)) {
+      fail <- c(fail, sprintf(
+        paste0("%s: fsss_host is %s but the transcribed expectation names ",
+               "host %s, and no rurl_deviation owns the difference"),
+        cm$id[i], encodeString(cm$fsss_host[i]), encodeString(p$value)))
     }
   }
   fail
@@ -411,6 +418,19 @@ self_test <- function() {
   bent3$oracle_value[bent3$id == "yal-001"] <- "yahoo.com"
   expect("restatement check notices a flipped host",
          length(check_restatement(bent3, r)) > 0L, TRUE)
+  bentd <- cm
+  bentd$fsss_host[bentd$id == "yal-001"] <- "yahoo.com"
+  expect("restatement check notices an undocumented fsss_host difference",
+         length(check_restatement(bentd, r)) > 0L, TRUE)
+  # yal-005 carries a deviation, so a differing fsss_host there is ALLOWED.
+  bente <- cm
+  bente$fsss_host[bente$id == "yal-005"] <- "something.else"
+  expect("a documented deviation may differ on fsss_host",
+         length(check_restatement(bente, r)), 0L)
+  bentf <- bente
+  bentf$rurl_deviation[bentf$id == "yal-005"] <- NA_character_
+  expect("but deleting the deviation makes it fail",
+         length(check_restatement(bentf, r)) > 0L, TRUE)
   bent4 <- cm
   bent4$notes[bent4$id == "yal-001"] <- "no citation here"
   expect("citation check notices a lost citation",

@@ -250,6 +250,14 @@ jobs:
         run: Rscript tools/oracle/verify-youarealiar.R --self-test
       - name: Committed transcription is intact (youarealiar)
         run: Rscript tools/oracle/verify-youarealiar.R
+      # equivocal-urls is the most irrecoverable group in the fixture: the paper
+      # released NO artifact, so there is not even a third-party repo to
+      # byte-check against. Integrity, byte exactness, and the [0xNN]
+      # octet-notation exception for the two un-representable rows.
+      - name: Gate self-test (equivocal-urls transcription)
+        run: Rscript tools/oracle/verify-equivocal-urls.R --self-test
+      - name: Committed transcription is intact (equivocal-urls)
+        run: Rscript tools/oracle/verify-equivocal-urls.R
 
   # Enforced-vs-documentary hash-pin model (RURL-kufiwlxc). The control plane
   # pins hashes in four kinds of place, and only some are recomputed: a
