@@ -103,6 +103,27 @@
 # agrees with exactly the rurl bug it was built to expose (`http:/evil.com`
 # reported as "authority written, and empty"). A green from that oracle would
 # have been worthless.
+# `rawToChar()` returns the right BYTES with no declared encoding, and losing
+# the declaration is not cosmetic: a slice of a UTF-8 string comes back marked
+# "unknown", which means "native". In a UTF-8 session native IS UTF-8, so the
+# loss is invisible; under `LC_ALL=C` the identical bytes then denote different
+# characters, and a decompose/recompose round-trip stops being `identical()` to
+# the string it started from. That is what the locale cell of verify.yml caught:
+# two non-ASCII corpus rows failed there and nowhere else.
+#
+# So the byte discipline above is kept exactly -- the bytes are never touched --
+# and only the input's own declaration is put back on each slice. This is what
+# makes the header's claim that the split is locale-independent true, rather
+# than true-in-a-UTF-8-session. It is the encoding-mark half of the same
+# index-unit family recorded in RURL-kmpnbvdl.
+.ab_keep_encoding <- function(x, from) {
+  enc <- Encoding(from)
+  if (!identical(enc, "unknown")) {
+    Encoding(x) <- enc
+  }
+  x
+}
+
 split_rfc3986_appendix_b_one <- function(s) {
   na_row <- function() {
     data.frame(
@@ -134,7 +155,7 @@ split_rfc3986_appendix_b_one <- function(s) {
     if (lens[i] == 0L) {
       return("")
     }
-    rawToChar(bytes[starts[i] - 1L + seq_len(lens[i])])
+    .ab_keep_encoding(rawToChar(bytes[starts[i] - 1L + seq_len(lens[i])]), s)
   }
   g <- .RFC3986_AB_GROUPS
   out <- data.frame(
@@ -193,11 +214,12 @@ split_rfc3986_authority_one <- function(authority) {
   if (length(at) > 0L) {
     cut <- at[1L]
     b <- charToRaw(rest)
-    out$userinfo <- if (cut == 1L) "" else rawToChar(b[seq_len(cut - 1L)])
+    out$userinfo <- if (cut == 1L) "" else
+      .ab_keep_encoding(rawToChar(b[seq_len(cut - 1L)]), authority)
     rest <- if (cut == length(b)) {
       ""
     } else {
-      rawToChar(b[seq.int(cut + 1L, length(b))])
+      .ab_keep_encoding(rawToChar(b[seq.int(cut + 1L, length(b))]), authority)
     }
   }
   b <- charToRaw(rest)
@@ -214,11 +236,12 @@ split_rfc3986_authority_one <- function(authority) {
     if (length(hit) > 0L) colon <- hit[1L]
   }
   if (colon > 0L) {
-    out$host <- if (colon == 1L) "" else rawToChar(b[seq_len(colon - 1L)])
+    out$host <- if (colon == 1L) "" else
+      .ab_keep_encoding(rawToChar(b[seq_len(colon - 1L)]), authority)
     out$port <- if (colon == length(b)) {
       ""
     } else {
-      rawToChar(b[seq.int(colon + 1L, length(b))])
+      .ab_keep_encoding(rawToChar(b[seq.int(colon + 1L, length(b))]), authority)
     }
   } else {
     out$host <- rest
