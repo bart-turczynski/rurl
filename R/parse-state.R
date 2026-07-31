@@ -1340,6 +1340,25 @@
   # (RURL-jnvtttfm).
   host_port <- stringi::stri_detect_regex(url, "^[^/:]+:[0-9]+($|/)")
   host_port[is.na(host_port)] <- FALSE
+  # ...and the carve-out does not apply under `rfc3986` AT ALL (RURL-kkuirsnz).
+  # It encodes rurl's browser-omnibox affordance -- "a bare `example.com:8080`
+  # means host `example.com`, port 8080" -- which is a FIX-UP, not a production
+  # in the generic syntax. Under the scheme-AGNOSTIC grammar selector the answer
+  # is settled by the grammar and there is nothing to infer: `scheme = ALPHA
+  # *( ALPHA / DIGIT / "+" / "-" / "." )` admits dots, so `example.com` IS a
+  # scheme, and RFC 3986 sec 3.3 makes `8080/x` a `path-rootless`. The
+  # Appendix B referee agrees, for `example.com:8080/x` and
+  # `www.php.net:80/index.php?test=1` both.
+  #
+  # This does NOT touch the Stage-A `looks_like_host_port` flag, which is a
+  # different question with a different consumer: the key/join surface reads it
+  # to classify `h.com:80/` as "missing scheme `:80`"
+  # (`contracts/key-join-contracts.md`, P3.1 ratification Q8), and it overrides
+  # the same lexical ambiguity there deliberately. Only the rfc3986 ROUTING
+  # stops consulting it.
+  if (identical(url_standard, "rfc3986")) {
+    host_port <- rep(FALSE, n)
+  }
 
   # RFC-model `file:` leaves the web route on EVERY acceptance posture
   # (RURL-obsweger, Tier 1 of the determinism epic). The external engine's
@@ -1410,11 +1429,23 @@
 # `rfc_path_form` for free (RURL-clgbpwla): the general route already reports
 # `absolute` where the web route said `abempty`.
 #
-# DELIBERATELY EXCLUDES a 0-slash run. `http:@www.example.com` is also
-# grammar-valid (path-rootless) and also wrongly rejected, but that shape is
-# owned by the existing `prep$rfc3986_path_rootless` slice, and widening it is a
-# separate acceptance question with its own ticket. Scope here is the slash-run
-# family only.
+# A 0-slash run is INCLUDED as of RURL-kkuirsnz. `eb8ba1a` deliberately left it
+# out -- the shape was nominally owned by the `prep$rfc3986_path_rootless` slice
+# (`.rfc3986_path_rootless_vec()`, R/parse-phases.R) and widening it was a
+# separate acceptance question. It is answered the same way as the rest of the
+# family, and for the same reason: with no `//` there is no authority, RFC 3986
+# sec 3.3's `hier-part` is `path-rootless`, and `@` and `:` are both `pchar`, so
+# the whole remainder is a PATH.
+#
+# That slice stays, but it only ever claimed a NARROW subset -- a
+# `.SPECIAL_AUTHORITY_SCHEMES` scheme whose first path segment is a DOTTED name
+# -- so `http:example.com` worked while `http:@www.example.com`, `http:a:b@h`
+# and `http::b@h` were rejected. The general parser is already right about all
+# of them, and it is installed AFTER the slice in `.parse_urls_vec()`, so
+# widening the routing lets ONE parser answer the whole family instead of a
+# regex deciding which rootless paths are allowed to exist. Verified: on every
+# shape the slice claims, the general parser returns the identical
+# scheme/path/query/fragment.
 #
 # `whatwg` and the no-selector default are untouched -- the mask is gated on
 # `url_standard == "rfc3986"` and returns all-FALSE for anything else, so both
@@ -1437,7 +1468,7 @@
   )[, 2L]
   n_slash <- stringi::stri_length(run)
   out <- has_scheme & !host_port & scheme_lc %in% web_route_scheme &
-    !is.na(n_slash) & (n_slash == 1L | n_slash >= 3L)
+    !is.na(n_slash) & n_slash != 2L
   out[is.na(out)] <- FALSE
   out
 }
