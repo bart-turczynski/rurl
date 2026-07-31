@@ -66,15 +66,76 @@ verification is viable. The two Ada JSONs are **gone** from this machine; their
 hashes are recorded, so a re-fetch can still be verified, but nothing local
 proves it today.
 
+## What a port discharges is not the same claim in every group
+
+The ticket frames the gap as "`generation_command` names something no clean
+checkout can run", which is exactly right for six of the seven groups.
+`ip-obfuscation` is the exception, and it matters because it inverts the
+priority.
+
+That group records **no `generation_command` at all**. It carries
+`section_2_3_applies = false`: nothing was imported, so there is no upstream
+project, revision, path, license, raw hash or import command to pin. What stands
+in for all of that is one prose sentence —
+
+> each row is a decimal/octal/hex re-encoding of an IPv4 literal, **derivable
+> from arithmetic alone**
+
+— plus a `relocation_note` saying the same thing. So this is the group where
+re-derivability is not a convenience that supplements a provenance chain; it
+*is* the provenance chain, and it was the only claim in the record with nothing
+behind it. A group with no upstream artifact is the worst place to leave a
+re-derivability claim untested, not the safest.
+
+Two shape consequences follow, and they generalize to the two tier-3
+transcription groups:
+
+- **The inputs are the irreducible data and travel with the script.** They
+  cannot be re-fetched from anywhere — deliberately, since neither technique
+  reference ships a LICENSE, so no bytes were vendored. The roster in
+  `derive-ip-obfuscation.R` is therefore the only copy besides the fixture, and
+  the verifier checks set equality in **both** directions: a row added to the
+  fixture without being added to the roster is as much a provenance break as a
+  deletion.
+- **Declared intent is a third, independent statement.** Re-derivation alone
+  cannot catch a mistyped encoding: fat-finger `0177` to `0176` and it derives
+  cleanly to 126.0.0.1, the fixture can be updated to match, and the row simply
+  stops demonstrating the obfuscation it claims to. So the roster also declares,
+  per row, the 32-bit address the encoding is *meant* to denote, written in a
+  notation the input does not use. `ipobf-005` proves that check is not vacuous:
+  `0x7f.256` looks like a 127.0.0.1 encoding and is not one, so it declares
+  2130706688 (127.0.1.0).
+
+### Fail closed means aborting, not returning "failure"
+
+Four of the 24 rows expect `failure`. That makes "failure" a dangerous default
+return value: a derivation that answered `failure` for a construction it does
+not model would agree with those four rows for entirely the wrong reason. So
+every unmodeled construction in `derive-ip-obfuscation.R` **aborts** — non-ASCII
+outside the three UTS-46 full-stop variants, a percent sign in a domain (host
+parser step 4's percent-decode is not transcribed), a numeric part too long to
+hold exactly in a double, and any input that is not of the form
+`http://<host>/`. Only the spec's own reject paths return failure.
+
+### One column, one oracle
+
+The verifier grades the six columns that restate the group's WHATWG expectation
+(`standard_expectation`, `whatwg_expected`, `oracle_kind`, `oracle_value`,
+`fsss_whatwg`, `fsss_host`) plus `notes` and `source_reference`. It deliberately
+does **not** grade `rfc3986_expected`: that is a different oracle and it already
+has one — the `oracle-vs-grammar` test in `test-external-url-vectors.R` checks it
+against a transcription of RFC 3986's own ABNF (`tools/oracle-audit-rfc3986.R`).
+Two gates deriving one column is how they drift apart.
+
 ## Status
 
 | Group | Ported | Verifier |
 | --- | --- | --- |
 | `wpt-credentials-fragments` | yes | `verify-credentials-fragments.R` |
+| `ip-obfuscation` | yes | `verify-ip-obfuscation.R` |
 | `wpt-urltestdata` | no | — |
 | `ada-extra-urltestdata` | no | — |
 | `ada-verifydnslength` | no | — |
-| `ip-obfuscation` | no | — |
 | `youarealiar` | no | — |
 | `equivocal-urls` | no | — |
 
@@ -93,7 +154,23 @@ porting a builder cannot recover a date that was never written down.
 ```bash
 Rscript tools/oracle/verify-credentials-fragments.R             # verify
 Rscript tools/oracle/verify-credentials-fragments.R --self-test # gate self-test
+Rscript tools/oracle/verify-ip-obfuscation.R                    # verify
+Rscript tools/oracle/verify-ip-obfuscation.R --self-test        # gate self-test
 ```
+
+A gate only ever observed to pass is not evidence, so each was falsified before
+being trusted — both halves, in both directions. For `ip-obfuscation`: four
+mutations of the committed fixture (a corrupted expectation, a deleted row, a
+flipped `oracle_kind`, a re-paired `notes` cell) each exit 1 with an attributed
+diff, and five mutations of the *derivation* (a naive split that drops the
+trailing empty field, `>` for `>=` in IPv4 parser step 7, compressing a lone
+zero piece, dropping the uppercase `0X` prefix, and letting unmodeled non-ASCII
+pass through instead of aborting) are each caught by `--self-test`.
+
+Worth recording from that exercise: the naive-split break is **not** caught by
+`127.0.0.1.`, which parses correctly by accident under the wrong split. Only
+`127.0.0.1..` distinguishes them. A single trailing-dot case would have scored a
+truthful pass over a broken transcription.
 
 Both run in CI via the `oracle-rederivation` job in
 `.github/workflows/verify.yml`, and therefore in `Rscript tools/verify.R`, which

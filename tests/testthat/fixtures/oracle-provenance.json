@@ -233,7 +233,9 @@
           "applicability_selector": "24 hand-generated IPv4 obfuscation encodings; all runnable; 20 carry a concrete expected clean URL and 4 carry standard_expectation = failure.",
           "relocation_verified": "not-applicable",
           "relocation_verified_count": "n/a",
-          "relocation_note": "There is no upstream artifact to re-locate against; the rows are re-derivable by arithmetic instead."
+          "relocation_note": "There is no upstream artifact to re-locate against; the rows are re-derivable by arithmetic instead. That re-derivability is the group's entire provenance argument, so it is executable rather than asserted: see rederivation_command.",
+          "rederivation_command": "Rscript tools/oracle/verify-ip-obfuscation.R",
+          "rederivation_command_note": "A VERIFIER, not a builder (RURL-ozdejfzl). It re-derives all 24 expected values from the inputs by a transcription of the WHATWG host parser -- IPv4 parser (URL Standard sec 3.2), IPv6 parser (sec 3.3), host serializers (sec 3.5.1/3.5.2) -- and compares them to what the fixture records, exiting non-zero on any disagreement. It never rewrites the fixture: regenerating a committed oracle in place is how an implementation change becomes its own expectation. It loads no package, so it cannot consult rurl. The 24 encodings themselves are the irreducible data and travel with tools/oracle/derive-ip-obfuscation.R, which also declares per row the 32-bit address each encoding is INTENDED to denote; the spec arithmetic must agree with that declared intent, which is what would catch a mistyped encoding that still parses cleanly. Runs in CI via the oracle-rederivation job in .github/workflows/verify.yml. --self-test covers the transcription itself (65 positive/negative cases)."
         },
         {
           "group": "youarealiar",
