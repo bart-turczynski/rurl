@@ -87,6 +87,60 @@ re-derivability is not a convenience that supplements a provenance chain; it
 behind it. A group with no upstream artifact is the worst place to leave a
 re-derivability claim untested, not the safest.
 
+**But read `section_2_3_applies = false` narrowly.** It is a true statement about
+the *rows* — no bytes were vendored — and it is *not* a statement that the group
+has no upstream normative source. WHATWG's URL Standard is one, and since this
+port the group's expectations are **computed by a transcription of it** rather
+than hand-written, which makes the spec a load-bearing dependency the record
+must date. "Derivable from arithmetic alone" is weaker than a reproducible
+standards reference, because the URL Standard is a *Living* Standard: amend the
+IPv4 parser upstream and the transcription silently becomes a reading of a
+superseded revision.
+
+Every other WHATWG group here dates its standard reference by proxy —
+`"Living Standard (unversioned); pinned by upstream_revision"`, borrowing the
+date from its WPT or Ada artifact. `ip-obfuscation` and `equivocal-urls` have no
+artifact to borrow from. That gap is filed as **`RURL-qhwktfcw`** and is *not*
+closed by this port; pinning a `whatwg/url` commit needs network access that was
+unavailable, and no revision was invented. What the port does instead is anchor
+the transcription to something that *is* pinned — see below.
+
+The general question `RURL-qhwktfcw` raises is worth answering for the whole
+record, not just this group: **does transcribing a normative standard create its
+own pinning duty, independent of whether bytes were vendored?** The policy in
+`conventions.section_2_3_scope` is framed entirely around vendored artifacts and
+does not currently speak to it — and its claim that out-of-scope groups have
+"nothing absent to pin" stops being true the moment a transcription becomes
+load-bearing.
+
+### Anchoring a transcription without a spec pin
+
+`verify-ip-obfuscation.R`'s check D grades the transcription against a corpus
+that carries both a revision and a hash: `inst/bench/wpt-url-cases.json` at WPT
+`181476aa16e8`, `raw_source_sha256 355c9f1e5f34`. Two halves, each with a floor
+so the check cannot silently erode to zero rows:
+
+- **Idempotence** — every recorded `hostname` is an already-serialized,
+  spec-conformant host, so re-parsing must return it unchanged. **152/152**, none
+  outside the modeled subset.
+- **Input → host** — for inputs whose authority is extractable without
+  transcribing the URL parser, the derived host must equal the recorded one.
+  **90/90**, 62 skipped.
+
+That converts "trust this reading of the spec" into agreement with 152 host
+serializations at a named, hash-verified revision. Two URL-parser steps are
+applied during extraction, because omitting them would misattribute a parser
+rule to the host parser: ASCII tab/newline are removed from the input, and for a
+special scheme `\` terminates the authority exactly as `/` does. Both were found
+by measurement — they were the only four disagreements in the first run.
+
+**The anchor is not redundant with the 24 rows.** Measured: mutating
+"ends in a number" to treat un-prefixed hex digits as a number leaves checks
+A–C *and* the whole hand-written case list green, and is caught **only** by the
+anchor — it wrongly rejects the pinned hostnames `b`, `c` and `ab`. A 24-row
+corpus about IPv4 obfuscation cannot notice a parser that breaks ordinary
+domains.
+
 Two shape consequences follow, and they generalize to the two tier-3
 transcription groups:
 
