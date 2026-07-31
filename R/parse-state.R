@@ -1338,8 +1338,9 @@
 }
 
 # RURL-xfbzkico. Under `rfc3986`, a web-route scheme whose post-scheme slash run
-# is not EXACTLY 2 has no web-route shape at all, and the web route -- a libcurl
-# reproduction -- models none of these correctly:
+# is not EXACTLY 2 has no web-route shape at all, and the web route -- which
+# models the special-scheme authority, not RFC 3986's generic syntax -- gets
+# none of these right:
 #
 #   run  RFC 3986 sec 3 hier-part          web route reports
 #   1    path-absolute, NO authority       host = first segment AND path = /seg
@@ -1361,7 +1362,7 @@
 #   foo:////evil.com -> authority EMPTY,  path //evil.com,   form `abempty`
 #
 # So this routes to code that is already right and already covered, instead of
-# teaching a libcurl reproduction a grammar it never modelled. It also fixes
+# teaching the web route a grammar it never modelled. It also fixes
 # `rfc_path_form` for free (RURL-clgbpwla): the general route already reports
 # `absolute` where the web route said `abempty`.
 #

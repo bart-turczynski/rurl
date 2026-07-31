@@ -129,8 +129,8 @@ test_that("rfc3986 parses an excess-slash empty authority per the grammar", {
   # rejection pinned as if it were a rule (RURL-xfbzkico). `path-abempty =
   # *( "/" segment )` and `segment = *pchar` may be EMPTY, so `//evil.com` is a
   # well-formed `path-abempty` and a 4-slash run is a valid URI: empty
-  # authority, path `//evil.com`. "Unsupported" described the libcurl
-  # reproduction's reach, not RFC 3986.
+  # authority, path `//evil.com`. "Unsupported" described the reach of the web
+  # route the input used to be sent down, not RFC 3986.
   u <- "https:////evil.com"
   expect_true(rfc3986_abnf_accepts(u))
   expect_identical(serialize_url(u, standard = "rfc3986", form = "source"), u)

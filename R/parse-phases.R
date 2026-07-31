@@ -356,9 +356,11 @@
 #
 # THIS IS NOT COMPENSATION, which is why it survived RURL-ezhzpkhg deletion 3
 # while the repeated-"@" repair that used to share this function did not. That
-# repair (RURL-zqhgezuq) existed only because libcurl rejected a second "@";
-# splitting at the LAST "@" is what the WHATWG authority state does, so it moved
-# into the parser as `.parse_web_url_one(last_at_userinfo = TRUE)`. What is left
+# repair (RURL-zqhgezuq) compensated for a parse seam that rejected a second
+# "@" -- the C-03 disposition in design/work/url-v3/contracts/
+# validation-intervention-contract.md owns that history. Splitting at the LAST
+# "@" is what the WHATWG authority state does, so the behaviour moved into the
+# parser as `.parse_web_url_one(last_at_userinfo = TRUE)`. What is left
 # here changes the SPELLING of a userinfo the parser would otherwise refuse, and
 # the spelling it writes is the one WHATWG stores -- a normalization the parser
 # cannot infer, because `rfc3986` must keep the same bytes source-preserving.
