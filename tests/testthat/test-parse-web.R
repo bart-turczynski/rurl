@@ -120,6 +120,57 @@ test_that("the port must be digits within range, and loses leading zeros", {
   expect_null(p("http://example.com: 80/"))
 })
 
+test_that("port_range = 'unbounded' drops the bound, not the digits", {
+  # RURL-tzmmjeck. RFC 3986 sec 3.2.3 is `port = *DIGIT` with no upper bound.
+  # The 16-bit ceiling is TCP/UDP's, and ADR 0012 rules that a lower-layer
+  # restriction is an overlay, never a generic-syntax parse gate. The default
+  # axis value stays "u16", so the test above -- and the whatwg and
+  # no-selector profiles -- are untouched.
+  pu <- function(url) {
+    rurl:::.parse_web_url_one(url, host_pct = "keep", pqf_bytes = "reject",
+                              host_charset = "rfc3986", host_ipv4 = "narrow",
+                              empty_path = "keep", port_range = "unbounded")
+  }
+  expect_identical(pu("http://example.com:65536/")$port, "65536")
+  expect_identical(pu("http://example.com:99999/")$port, "99999")
+  expect_identical(pu("http://example.com:2147483647/")$port, "2147483647")
+
+  # Leading zeros are stripped over the BYTES, so a digit run far longer than
+  # any numeric type holds is still exact. `as.numeric()` would have rounded
+  # this to 1e20 and re-rendered it as "100000000000000000000".
+  expect_identical(pu("http://example.com:000000000000000000080/")$port, "80")
+  expect_identical(pu("http://example.com:0000/")$port, "0")
+
+  # A run with no lossless `integer` representation is still refused, because
+  # the identity record types its port `integer(1)`: accepting it made the parse
+  # `ok` while the port silently VANISHED from the round-trip. This is a
+  # representation limit, not the transport bound under another name.
+  expect_null(pu("http://example.com:2147483648/"))
+  expect_null(pu("http://example.com:99999999999999999999/"))
+  # Non-digits are still non-digits whatever the range.
+  expect_null(pu("http://example.com:8a/"))
+  expect_null(pu("http://example.com:+80/"))
+})
+
+test_that("the port axis follows the selector, losslessly", {
+  # The end-to-end half: rfc3986 accepts what the grammar admits, whatwg keeps
+  # its port state's u16 failure, and no accepted row loses its port when
+  # serialized back. That last check is the one the conformance sweep CANNOT
+  # make -- it compares no port column.
+  expect_identical(.web_port_range_policy("rfc3986"), "unbounded")
+  expect_identical(.web_port_range_policy("whatwg"), "u16")
+  expect_identical(.web_port_range_policy(NULL), "u16")
+
+  u <- "https://example.com:99999/p"
+  expect_identical(safe_parse_urls(u, url_standard = "rfc3986")$parse_status,
+                   "ok")
+  expect_identical(safe_parse_urls(u, url_standard = "whatwg")$parse_status,
+                   "error")
+  expect_identical(suppressWarnings(safe_parse_urls(u)$parse_status), "error")
+  # Lossless both ways: the port survives the source round-trip.
+  expect_identical(serialize_url(u, standard = "rfc3986", form = "source"), u)
+})
+
 test_that("userinfo splits at the first colon and admits at most one '@'", {
   expect_identical(fp("http://u@example.com/"), "http|example.com|-|/|-|-|u|-")
   expect_identical(

@@ -89,6 +89,10 @@
 #             both are documented at `.parse_web_url_one()` below.
 #   port      ":" then ASCII digits only, value <= 65535, leading zeros
 #             stripped; an EMPTY port (":" then end/"/"/"?"/"#") is no port.
+#             The 65535 ceiling is `port_range = "u16"`, the default and what
+#             libcurl did; the rfc3986 selector asks for `"unbounded"`, since
+#             RFC 3986 sec 3.2.3 is `port = *DIGIT`. Documented at
+#             `.web_port_range_policy()` below.
 #   path      "/" when absent; C0/space/DEL are a parse error; bytes >= 0x80 are
 #             percent-encoded; the two characters after every "%" are
 #             ASCII-uppercased; then dot segments are removed, INCLUDING
@@ -444,6 +448,35 @@
 # `form = "normalized"`, where it belongs.
 .web_empty_path_policy <- function(url_standard) {
   if (identical(url_standard, "rfc3986")) "keep" else "slash"
+}
+
+# The `port_range` setting each selected standard asks for -- whether the port's
+# digit run has an upper BOUND. Same one-place reason as the mappers above.
+#
+#   "u16"        the value must be <= 65535, or the parse fails. This is
+#                WHATWG's port state ("if port is greater than 2^16 - 1,
+#                port-out-of-range validation error, return failure") and what
+#                the no-selector baseline froze.
+#   "unbounded"  any digit run is admissible. RFC 3986 sec 3.2.3 is
+#                `port = *DIGIT` with NO upper bound -- the 16-bit ceiling comes
+#                from TCP/UDP, the TRANSPORT layer, not from the URI generic
+#                syntax, and the Appendix B referee accepts `:99999`.
+#
+# ADR 0012 (owner-ruled): "Scheme-specific restrictions are overlays, not
+# generic parse gates." A transport-layer range sits even further from the
+# generic syntax than a scheme rule does, so enforcing it under the
+# scheme-AGNOSTIC rfc3986 selector was the same defect class as RURL-zyytztdd
+# (WHATWG's localhost emptying) and RURL-uhkofhjf (RFC 8089's no-port rule):
+# a lower-layer restriction implemented as a generic-syntax parse gate
+# (RURL-tzmmjeck).
+#
+# The operational objection -- a port that cannot fit a u16 can never be
+# dialled -- is real but belongs to a different axis. It is answered as a FACT,
+# not a gate (ADR 0006): the parse is `ok`, and the numeric `port` accessor is
+# NA for a digit run that has no `integer` representation while the source
+# digits stay recoverable from the record.
+.web_port_range_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "unbounded" else "u16"
 }
 
 # RFC 3986 host rendering: decode the triplets section 6.2.2.2 permits decoding
@@ -981,7 +1014,8 @@
                                host_charset = "narrow",
                                host_ipv4 = "narrow",
                                empty_path = "slash",
-                               host_pct_octets = "restricted") {
+                               host_pct_octets = "restricted",
+                               port_range = "u16") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -1121,13 +1155,49 @@
   }
   if (!is.null(port)) {
     pbytes <- .web_bytes(port)
+    port_ceiling <- if (identical(port_range, "u16")) {
+      65535
+    } else {
+      .Machine$integer.max
+    }
     if (length(pbytes) == 0L) {
       port <- NULL
-    } else if (!all(is_digit(pbytes)) ||
-                 suppressWarnings(as.numeric(port)) > 65535) {
+    } else if (!all(is_digit(pbytes))) {
+      return(NULL)
+    } else if (suppressWarnings(as.numeric(port)) > port_ceiling) {
+      # The "unbounded" ceiling is `.Machine$integer.max`, NOT another transport
+      # bound: the identity record types its port `integer(1)` (see the field
+      # registry in R/utils.R), so a longer digit run has no lossless
+      # representation in it. Accepting one anyway made the parse `ok` while the
+      # port vanished from the round-trip -- measured:
+      # `https://example.com:99999999999999999999/p` serialized back as
+      # `https://example.com/p`, SILENTLY dropping a component the source wrote.
+      # A lossy identity is a worse defect than the strictness this ticket
+      # removes, and the conformance sweep cannot see it because it compares no
+      # port column.
+      #
+      # So this is a REPRESENTATION limit, honestly labelled as one, and it is
+      # not the u16 gate wearing a bigger number: every port a transport can
+      # actually carry, and five more orders of magnitude besides, now parse.
+      # Admitting the remainder needs a character-typed syntactic port threaded
+      # through the record, which is a change to `raw_port`'s type contract and
+      # not this ticket's business.
       return(NULL)
     } else {
-      port <- format(as.numeric(port), scientific = FALSE) # strips zeros
+      # Strip leading zeros over the BYTES, not via `as.numeric()`. The numeric
+      # round-trip was safe only because the u16 gate above capped the digit
+      # run at five: under `port_range = "unbounded"` RFC 3986 admits runs of
+      # any length, and `format(as.numeric("99999999999999999999"))` returns
+      # "100000000000000000000" -- a silent CORRUPTION of the source digits by
+      # double-precision rounding. This is byte-identical to the old expression
+      # for every value the u16 range admits ("080" -> "80", "0" -> "0",
+      # "00" -> "0") and exact for the ones it does not.
+      nz <- which(pbytes != 0x30L)
+      port <- if (length(nz) == 0L) {
+        "0"
+      } else {
+        .web_chr(pbytes[seq(nz[1L], length(pbytes))])
+      }
     }
   }
 

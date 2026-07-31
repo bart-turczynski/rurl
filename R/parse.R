@@ -1812,6 +1812,7 @@ safe_parse_urls <- function(url,
   # RFC 3986 sec 3.2.2 places no condition on what `pct-encoded` denotes, so
   # `rfc3986` judges the raw token and leaves the octet encoded.
   host_pct_octets <- .web_host_pct_octets_policy(opts$url_standard)
+  port_range <- .web_port_range_policy(opts$url_standard)
   parsed_list <- vector("list", n)
   parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
@@ -1819,7 +1820,8 @@ safe_parse_urls <- function(url,
       prep$url_to_parse[parse_idx], .parse_web_url_one,
       last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes,
       host_charset = host_charset, host_ipv4 = host_ipv4,
-      empty_path = empty_path, host_pct_octets = host_pct_octets
+      empty_path = empty_path, host_pct_octets = host_pct_octets,
+      port_range = port_range
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -2517,7 +2519,8 @@ safe_parse_urls <- function(url,
     host_charset = .web_host_charset_policy(url_standard),
     host_ipv4 = .web_host_ipv4_policy(url_standard),
     empty_path = .web_empty_path_policy(url_standard),
-    host_pct_octets = .web_host_pct_octets_policy(url_standard)
+    host_pct_octets = .web_host_pct_octets_policy(url_standard),
+    port_range = .web_port_range_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)
