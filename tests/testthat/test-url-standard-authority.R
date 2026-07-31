@@ -136,6 +136,101 @@ test_that("rfc3986 reads a scheme-shaped host:port as scheme + rootless path", {
   expect_identical(suppressWarnings(get_port(urls)), c(8080L, 80L))
 })
 
+test_that("rfc3986 reads a 2-slash authority with no host per the grammar", {
+  # RURL-ajikcwkh, closing the rfc3986 profile's last 7 grammar rejections.
+  # `eb8ba1a` and RURL-kkuirsnz routed every slash run EXCEPT 2 to the general
+  # parser; a run of exactly 2 whose authority holds no host was left on the web
+  # route, which rejects an empty authority outright. RFC 3986 sec 3.2:
+  # `authority = [ userinfo "@" ] host [ ":" port ]` with
+  # `reg-name = *( ... )` -- `*`-quantified, so the EMPTY host is a well-formed
+  # authority. rurl already reported exactly this for the non-special twins
+  # (`foo://`, `foo://user@/x`), which is what made it a routing defect.
+  urls <- c("http://", "http://user:pass@/", "http://user@/www.example.com",
+            "http://@/www.example.com", "http://a:b@/www.example.com",
+            "http://?", "http://#")
+  want_path <- c("", "/", "/www.example.com", "/www.example.com",
+                 "/www.example.com", "", "")
+
+  expect_true(all(rfc3986_abnf_accepts(urls)))
+  expect_identical(
+    serialize_url(urls, standard = "rfc3986", form = "source"), urls
+  )
+  rec <- rurl:::.fsss_record_vec(urls, "rfc3986", NULL)
+  expect_true(all(rec$ok))
+  # The authority WAS written, and its host is empty -- not absent.
+  expect_true(all(rec$authority_delimiter_present))
+  expect_identical(rec$host_kind, rep("empty", length(urls)))
+  expect_identical(rec$path, want_path)
+  expect_identical(rec$userinfo,
+                   c(NA, "user:pass", "user", "", "a:b", NA, NA))
+
+  # A 2-slash run WITH a host is the ordinary web shape and must be untouched.
+  hosted <- c("http://example.com/", "http://a:b@example.com:80/p?q#f",
+              "http://:80@example.com/", "http://[::1]/p")
+  hrec <- rurl:::.fsss_record_vec(hosted, "rfc3986", NULL)
+  expect_true(all(hrec$ok))
+  expect_identical(hrec$host,
+                   c("example.com", "example.com", "example.com", "[::1]"))
+
+  # whatwg and the no-selector baseline do not move: both still reject, because
+  # a special-scheme authority always has a host in the model they implement.
+  expect_identical(get_parse_status(urls, url_standard = "whatwg"),
+                   rep("error", length(urls)))
+  expect_identical(suppressWarnings(get_parse_status(urls)),
+                   rep("error", length(urls)))
+
+  # RURL-mugcdtrv is deliberately NOT answered here. The `web` posture still
+  # declines these, exactly as it declines the already-shipped odd-slash
+  # siblings, so the open posture question gains rows rather than an answer.
+  expect_identical(
+    get_parse_status(urls, url_standard = "rfc3986",
+                     scheme_acceptance = "web"),
+    rep("error", length(urls))
+  )
+  expect_identical(
+    get_parse_status(urls, url_standard = "rfc3986",
+                     scheme_acceptance = "general"),
+    rep("ok", length(urls))
+  )
+  expect_identical(
+    get_parse_status(c("http:/a", "http:///a/b"), url_standard = "rfc3986",
+                     scheme_acceptance = "web"),
+    c("error", "error")
+  )
+})
+
+test_that("a gate-rejected general row is an error, never a thrown condition", {
+  # The latent defect RURL-ajikcwkh's routing exposed. `.general_parse_vec()`
+  # computed its RFC grammar gate before the parser but applied it only
+  # afterwards (`out$ok & gate_ok`), so the parser still RAN on rows the gate
+  # had rejected -- and `.parse_opaque_urls_vec()` raises "invalid multibyte
+  # string"
+  # on an authority holding invalid UTF-8. Those rows never reached the general
+  # route until hostless 2-slash routing started sending them there, whereupon 8
+  # rows of the octet sweep's conjunction block escaped as an ERROR CONDITION
+  # instead of the `error` verdict already decided for them.
+  #
+  # Bytes, not a literal: the input is deliberately not valid UTF-8, so a
+  # `"\u..."` escape cannot express it and its meaning must not depend on the
+  # session locale.
+  bad <- rawToChar(as.raw(c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f,
+                            0x80, 0x40, 0x2f, 0x70)))   # http://<80>@/p
+  for (sel in list("rfc3986", "whatwg", NULL)) {
+    label <- if (is.null(sel)) "NULL" else sel
+    for (posture in c("web", "general")) {
+      if (posture == "general" && is.null(sel)) next
+      st <- expect_no_error(
+        suppressWarnings(get_parse_status(bad, url_standard = sel,
+                                          scheme_acceptance = posture))
+      )
+      expect_identical(st, "error", info = paste(label, posture))
+    }
+  }
+  # The generic gate is what refuses it: a raw 0x80 is no `reg-name` or
+  # `userinfo` character in RFC 3986's ASCII grammar.
+  expect_false(rurl:::.rfc3986_generic_uri_ok(bad)$ok)
+})
+
 test_that("no selector keeps special schemes without slashes as errors", {
   urls <- c("http:example.com", "https:example.com/path")
 
