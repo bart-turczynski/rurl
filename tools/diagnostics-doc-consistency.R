@@ -76,7 +76,19 @@ registry_tokens <- function(e) {
 # the vocabularies are defined in, exactly as the token registry is. The
 # `non-special` precedent is handled instead by the family-size rule below,
 # which is why that vocabulary needs no entry here.
-SIBLING_VOCABULARY_FILES <- c("verdicts.R", "parse-state.R")
+#
+# `url-key.R` / `url-join.R` are the key/join surface's keyability and
+# eligibility vocabularies (`.URL_KEY_REASONS`, `.URL_JOIN_ELIGIBILITY`), whose
+# `invalid-parse` is the same kind of neighbour. Registering them here rather
+# than renaming the state is deliberate: the ACCEPTED P3.1 D-C enumerates that
+# state in prose as "invalid parse", so the current literal is the FAITHFUL
+# spelling of a settled contract term, and renaming it to clear a scan would
+# make the code less true to the record in order to make a gate quieter. The
+# alternative -- growing `.URL_DIAGNOSTICS` to admit it -- would invert the
+# dependency, putting an unexported internal vocabulary inside the frozen
+# registry ADR 0006 governs. RURL-jcwsayul.
+SIBLING_VOCABULARY_FILES <- c("verdicts.R", "parse-state.R", "url-key.R",
+                              "url-join.R")
 
 sibling_vocabulary <- function(root) {
   out <- character(0)
