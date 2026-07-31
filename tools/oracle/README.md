@@ -190,12 +190,87 @@ has one — the `oracle-vs-grammar` test in `test-external-url-vectors.R` checks
 against a transcription of RFC 3986's own ABNF (`tools/oracle-audit-rfc3986.R`).
 Two gates deriving one column is how they drift apart.
 
+## Tier 3: an integrity gate is not a re-derivation gate
+
+The tier-1 and tier-2 groups have `derive-*.R` modules because their expected
+values are computable. Tier 3's are computable from **nothing** — they are
+transcribed from a paper's reference-implementation column, so the transcription
+*is* the primary source. The module is therefore named `transcribe-*.R`, and the
+gate reports `TRANSCRIPTION INTEGRITY`, never `ORACLE RE-DERIVATION`.
+
+That naming is load-bearing. **No gate here can tell you the transcription is
+correct** — there is no algorithm to re-run. It can only establish that the
+committed rows *are* the transcription that was recorded. A gate labelled
+"re-derivation" would invite a reader to assume an independent check happened,
+which is the more dangerous error, so `verify-youarealiar.R` prints the
+limitation in its own output rather than leaving it to this file.
+
+What is genuinely checkable:
+
+- **Primary-source integrity** — `input`, `standard_expectation`,
+  `paper_claimed_behavior`, `source_reference`, against a roster whose source of
+  truth is the original **builder**, not the fixture. Sourcing it from the
+  fixture would make the check a tautology.
+- **Byte exactness** — three of the nine rows exist *because* the paper's PDF
+  escaping is ambiguous and a human resolved it: `yal-002` is a literal TAB and
+  not a backslash (the paper displays `\t`), `yal-003` carries three CR LF
+  pairs, and `yal-001/004/007` carry **single** backslashes. Declared as ordered
+  code points plus a backslash count. This is the group's most perishable fact:
+  `yal-003`'s CR bytes provably do not survive a CSV round trip, so `input_json`
+  is the only faithful carrier and nothing was checking it stayed faithful.
+- **Restatement fidelity** — `oracle_kind`/`oracle_value`/`fsss_host` are a
+  later machine-readable restatement of the transcribed prose, and a restatement
+  can drift from what it restates.
+- **Citation integrity** — asserted against the *declared* section, not merely
+  pattern-matched, so a row citing the **wrong** section fails too.
+
+### The finding: a class-C row has two kinds of cell, and freezing both is wrong
+
+Discovered by measurement, not foresight. Freezing `notes` against the builder
+produced five disagreements — and in **every one the fixture was the more
+current text**, because `rurl`'s behavior had legitimately moved: `rfc3986` now
+rejects backslashes so `yal-001/007` no longer reproduce the paper's RFC column
+(`RURL-qrfrvmkg`), `yal-006` was reclassified out of `aligned`
+(`RURL-xfbzkico`/`RURL-kmkyicpt`), `yal-008`'s closed scheme set gained `file`,
+and `yal-009` moved from "needs-investigation" to boundary-by-design once
+`scheme_policy` existed.
+
+So a class-C row mixes **immutable primary-source data** with **living
+commentary about `rurl`**, and the two must be treated differently.
+`input`/`standard_expectation`/`paper_claimed_behavior`/`source_reference`
+matched the builder exactly across all nine rows — those are the paper's.
+`notes` is ours, and it is *supposed* to change when behavior changes. Freezing
+it would convert a correct update into a gate failure and pressure the next
+author into reverting a true statement. What is stable inside `notes` is the
+paper citation, so that is what is asserted. **This applies directly to
+`equivocal-urls`**, the remaining tier-3 group.
+
+The falsification run covers the boundary explicitly: rewriting a `notes` cell
+while keeping its citation must **pass**, and does.
+
+### A claim that is not re-runnable, and not because we are offline
+
+`youarealiar`'s `source_reference` asserts "bytes verified vs
+wspr-ncsu/urlparsing-framework", and the record pins revision `1577b534…` for
+that cross-check. It cannot be re-run — but the reason is a **recording** gap,
+not connectivity: `upstream_path`, `raw_source_sha256` and `import_command` are
+all `MISSING[RURL-vwurxmzm]`, so nobody wrote down *which file* in that
+repository the bytes were checked against. An offline skip would misreport that
+as a network problem.
+
+The gate therefore **reports** this every run rather than failing — a
+permanently-red gate stops being read — but it is not silent, and it fails in
+one direction: if those sentinels are ever filled in, the claim becomes
+re-runnable and the gate demands enforcement with the exact fetch command
+instead of continuing to describe it as un-runnable.
+
 ## Status
 
 | Group | Ported | Verifier |
 | --- | --- | --- |
 | `wpt-credentials-fragments` | yes | `verify-credentials-fragments.R` |
 | `ip-obfuscation` | yes | `verify-ip-obfuscation.R` |
+| `youarealiar` | yes | `verify-youarealiar.R` (integrity, not re-derivation) |
 | `wpt-urltestdata` | no | — |
 | `ada-extra-urltestdata` | no | — |
 | `ada-verifydnslength` | no | — |

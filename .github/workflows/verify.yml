@@ -241,6 +241,15 @@ jobs:
         run: Rscript tools/oracle/verify-ip-obfuscation.R --self-test
       - name: Re-derive the committed oracle values (ip-obfuscation)
         run: Rscript tools/oracle/verify-ip-obfuscation.R
+      # youarealiar is TIER 3: its expected values are transcribed from a paper,
+      # so there is no algorithm to re-run and this gate checks transcription
+      # INTEGRITY -- primary-source cells, byte exactness of the three rows whose
+      # PDF escaping was ambiguous, restatement fidelity, and citations. It
+      # cannot establish correctness, and it says so in its own output.
+      - name: Gate self-test (youarealiar transcription)
+        run: Rscript tools/oracle/verify-youarealiar.R --self-test
+      - name: Committed transcription is intact (youarealiar)
+        run: Rscript tools/oracle/verify-youarealiar.R
 
   # Enforced-vs-documentary hash-pin model (RURL-kufiwlxc). The control plane
   # pins hashes in four kinds of place, and only some are recomputed: a

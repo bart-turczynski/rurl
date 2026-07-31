@@ -137,6 +137,21 @@ ALLOWLIST <- list(
                    "rewritten")
   ),
   list(
+    path = "tools/oracle/transcribe-youarealiar.R",
+    reason = paste("curl is one of the seven PARSERS the SecWeb 2022 paper",
+                   "cross-tested, so it is named inside transcribed",
+                   "paper_claimed_behavior strings ('curl Error',",
+                   "'curl host=\\\\'); rewriting them would falsify the",
+                   "transcription, and the paper is the primary source")
+  ),
+  list(
+    path = "tools/oracle/verify-youarealiar.R",
+    reason = paste("emits the `curl -fsSL` fetch command a reader would need",
+                   "if the group's byte-verification sentinels are ever",
+                   "filled in -- same reproducibility-record rationale as",
+                   "oracle-provenance.json, whose import_command it mirrors")
+  ),
+  list(
     path = "inst/bench/wpt-url-cases.json",
     reason = "same: the recorded import command for the pinned WPT fixture"
   ),
