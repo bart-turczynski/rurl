@@ -17,7 +17,13 @@ name: control-plane
 on:
   push:
     branches: [main]
+    paths:
+      - 'design/work/url-v3/**'
+      - '.github/workflows/control-plane.yml'
   pull_request:
+    paths:
+      - 'design/work/url-v3/**'
+      - '.github/workflows/control-plane.yml'
   workflow_dispatch:
 
 permissions:

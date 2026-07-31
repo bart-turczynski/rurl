@@ -30,6 +30,9 @@ on:
       - 'design/work/url-v3/registers/determinism-exceptions.md'
       - '.github/workflows/determinism-gate.yml'
       - '.github/workflows/_determinism-cells.yml'
+  # Release tags retain the complete cross-platform determinism evidence.
+  push:
+    tags: ['v*']
   # Pre-graduation and periodic re-measurement.
   workflow_dispatch:
   schedule:
