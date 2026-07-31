@@ -34,9 +34,23 @@
 #      nor JorianWoltjer/ipobf ships a LICENSE), which is exactly why they
 #      cannot be re-fetched from anywhere.
 #   2. Every EXPECTED value is computed, never quoted -- by a transcription of
-#      the WHATWG host parser (URL Standard section 3.5), its IPv4 parser
-#      (section 3.2), its IPv6 parser (section 3.3), and the two host
-#      serializers (sections 3.5.1 / 3.5.2).
+#      the WHATWG host parser (#concept-host-parser), its IPv4 parser
+#      (#concept-ipv4-parser), its IPv6 parser (#concept-ipv6-parser), and the
+#      two host serializers (#concept-ipv4-serializer and
+#      #concept-ipv6-serializer). The first four live in URL Standard section
+#      3.5 "Host parsing"; the two serializers in section 3.6 "Host
+#      serializing".
+#
+# HOW THIS FILE CITES THE SPEC. Anchor first, section number second. Section
+# NUMBERS are presentation metadata and they demonstrably drift: every citation
+# in this file used to carry a number that does not resolve, and two of them
+# pointed at subsections of "Host parsing" that have never existed in ANY
+# revision of the standard -- it has no subsections. The anchor id (the
+# fragment on https://url.spec.whatwg.org/) is what a future reader can
+# actually resolve, so the anchor is the durable key and the number is the
+# secondary hint. The spec revision these sections were verified against is
+# pinned in tests/testthat/fixtures/oracle-provenance.json, under this group's
+# `normative_dependencies`.
 #
 # The roster additionally declares, per IPv4 row, `denotes`: the 32-bit integer
 # the encoding is INTENDED to carry, written in a notation the input does not
@@ -65,7 +79,8 @@ IPOBF_SOURCE_PREFIX <- paste0(
   "facts, not vendored) -- "
 )
 
-# ---- WHATWG URL Standard section 3.2: IPv4 number parser --------------------
+# ---- IPv4 number parser ----------------------------------------------------
+# WHATWG URL Standard section 3.5 "Host parsing", algorithm #ipv4-number-parser
 #
 # Returns list(ok = TRUE, value = <double>) or list(ok = FALSE).
 #
@@ -132,7 +147,8 @@ ipobf_drop_trailing_empty <- function(parts) {
   parts
 }
 
-# ---- WHATWG URL Standard section 3.2: IPv4 parser ---------------------------
+# ---- IPv4 parser -----------------------------------------------------------
+# WHATWG URL Standard section 3.5 "Host parsing", algorithm #concept-ipv4-parser
 ipobf_ipv4_parser <- function(input) {
   parts <- ipobf_drop_trailing_empty(ipobf_strict_split(input))
   if (length(parts) > 4L) {
@@ -166,7 +182,9 @@ ipobf_ipv4_parser <- function(input) {
   list(ok = TRUE, value = ipv4)
 }
 
-# ---- WHATWG URL Standard section 3.2: "ends in a number" -------------------
+# ---- "ends in a number" checker ---------------------------------------------
+# WHATWG URL Standard section 3.5 "Host parsing", algorithm
+# #ends-in-a-number-checker
 ipobf_ends_in_number <- function(domain) {
   parts <- ipobf_drop_trailing_empty(ipobf_strict_split(domain))
   last <- parts[length(parts)]
@@ -176,7 +194,9 @@ ipobf_ends_in_number <- function(domain) {
   ipobf_ipv4_number_parser(last)$ok
 }
 
-# ---- WHATWG URL Standard section 3.5.1: IPv4 serializer --------------------
+# ---- IPv4 serializer --------------------------------------------------------
+# WHATWG URL Standard section 3.6 "Host serializing", algorithm
+# #concept-ipv4-serializer
 ipobf_ipv4_serialize <- function(value) {
   octets <- character(4)
   n <- value
@@ -187,7 +207,8 @@ ipobf_ipv4_serialize <- function(value) {
   paste(octets, collapse = ".")
 }
 
-# ---- WHATWG URL Standard section 3.3: IPv6 parser --------------------------
+# ---- IPv6 parser -----------------------------------------------------------
+# WHATWG URL Standard section 3.5 "Host parsing", algorithm #concept-ipv6-parser
 #
 # A direct transcription, pointer and all, over CODE POINTS rather than native
 # characters. Returns list(ok = TRUE, address = <8 doubles>) or
@@ -319,7 +340,9 @@ ipobf_ipv6_parser <- function(input) {
   list(ok = TRUE, address = address)
 }
 
-# ---- WHATWG URL Standard section 3.5.2: IPv6 serializer -------------------
+# ---- IPv6 serializer --------------------------------------------------------
+# WHATWG URL Standard section 3.6 "Host serializing", algorithm
+# #concept-ipv6-serializer
 #
 # Compression applies to the FIRST longest run of zero pieces, and only when
 # that run is longer than one piece -- which is why [::ffff:7f00:1] compresses
@@ -407,7 +430,8 @@ ipobf_has_forbidden_domain_cp <- function(host) {
   any(cp <= 31L) || any(cp == 127L) || any(cp %in% forbidden)
 }
 
-# ---- WHATWG URL Standard section 3.5: host parser -------------------------
+# ---- host parser ------------------------------------------------------------
+# WHATWG URL Standard section 3.5 "Host parsing", algorithm #concept-host-parser
 #
 # Returns list(ok = TRUE, host = <serialized host>) or list(ok = FALSE).
 # `is_opaque` is not a parameter: every row here has a special scheme, which is
@@ -564,7 +588,9 @@ ipobf_split_host <- function(url) {
 #   kind    -- "exact" if the WHATWG host parser accepts, "failure" if it
 #              rejects. Mirrors the fixture's `oracle_kind`.
 #   host    -- the serialized host, or NA on failure
-#   href    -- the section 4.5 URL serialization, or NA on failure
+#   href    -- the URL serialization (URL Standard section 4.5 "URL
+#              serializing", algorithm #concept-url-serializer), or NA on
+#              failure
 #   ipv4    -- the 32-bit value when the host was IPv4-coerced, else NA
 #   denotes -- the roster's declared intent, for the caller to cross-check
 #   note    -- the roster's description
@@ -585,8 +611,9 @@ derive_ip_obfuscation <- function(roster = ip_obfuscation_roster()) {
     if (parsed$ok) {
       kind[i] <- "exact"
       host[i] <- parsed$host
-      # WHATWG URL serializer (section 4.5) for this shape: no credentials, no
-      # port, path "/", no query and no fragment.
+      # WHATWG URL Standard section 4.5 "URL serializing", algorithm
+      # #concept-url-serializer, for this shape: no credentials, no port,
+      # path "/", no query and no fragment.
       href[i] <- paste0("http://", parsed$host, "/")
       if (!is.null(parsed$ipv4)) {
         ipv4[i] <- parsed$ipv4
