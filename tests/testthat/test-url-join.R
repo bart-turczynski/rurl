@@ -729,7 +729,16 @@ test_that("no join-family export has shipped yet", {
   # VD-001's surface_probe names all eight; D3 fires on ANY of them appearing in
   # NAMESPACE, at which point all 51 cells must be verified in the same change.
   # This test is the local tripwire for that sequencing constraint.
-  ns <- readLines(testthat::test_path("..", "..", "NAMESPACE"), warn = FALSE)
+  # The source tree keeps NAMESPACE two levels above tests/testthat, but under
+  # `R CMD check` the tests run beside an INSTALLED copy, where it ships at the
+  # package root instead. Resolve both rather than assume the source layout --
+  # assuming it made this tripwire an error on every checked build.
+  ns_path <- testthat::test_path("..", "..", "NAMESPACE")
+  if (!file.exists(ns_path)) {
+    ns_path <- system.file("NAMESPACE", package = "rurl")
+  }
+  expect_true(nzchar(ns_path) && file.exists(ns_path))
+  ns <- readLines(ns_path, warn = FALSE)
   deferred <- c("get_url_key", "url_key_policy", "url_inner_join",
                 "url_left_join", "url_right_join", "url_full_join",
                 "url_semi_join", "url_anti_join")
