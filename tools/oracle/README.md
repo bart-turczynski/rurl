@@ -127,8 +127,17 @@ so the check cannot silently erode to zero rows:
   transcribing the URL parser, the derived host must equal the recorded one.
   **90/90**, 62 skipped.
 
-That converts "trust this reading of the spec" into agreement with 152 host
-serializations at a named, hash-verified revision. Two URL-parser steps are
+Be precise about what that buys, because the tempting overstatement is what
+would make `RURL-qhwktfcw` look closed when it is not. The anchor establishes
+strong agreement with **a hash-verified WPT corpus revision**. It does *not*
+establish that corpus as a proxy for the WHATWG spec revision the transcription
+purports to implement — WPT is an independent compatibility suite with its own
+release cadence, not a snapshot of the standard's text. So this is behavioral
+evidence from a second, datable witness; it is not a spec pin, and it does not
+date the sections transcribed. That gap is exactly why `RURL-qhwktfcw` stays
+open.
+
+Two URL-parser steps are
 applied during extraction, because omitting them would misattribute a parser
 rule to the host parser: ASCII tab/newline are removed from the input, and for a
 special scheme `\` terminates the authority exactly as `/` does. Both were found

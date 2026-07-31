@@ -192,8 +192,14 @@ check_intent <- function(derived) {
 # defining property. But the repository DOES contain a WHATWG host-parsing
 # corpus that is pinned: `inst/bench/wpt-url-cases.json`, at a recorded
 # `upstream_revision` with a recorded `raw_source_sha256`. Grading the
-# transcription against it converts "trust this reading of the spec" into
-# agreement with a named, hash-verified revision.
+# transcription against it replaces "trust this reading of the spec" with
+# measured agreement from a second, datable witness.
+#
+# What that is NOT: WPT is an independent compatibility suite with its own
+# release cadence, not a snapshot of the standard's text, so a pinned WPT
+# revision is not a proxy for the WHATWG spec revision this transcription
+# purports to implement. The anchor is behavioral evidence, not a spec pin, and
+# it does not date the transcribed sections.
 #
 # This does NOT close RURL-qhwktfcw. The URL Standard is a Living Standard and
 # nothing here pins a whatwg/url revision, so the anchor dates the transcription
