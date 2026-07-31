@@ -353,6 +353,35 @@
   if (identical(url_standard, "rfc3986")) "keep" else "decode"
 }
 
+# Whether a well-formed triplet's DECODED octet must itself be an admissible
+# literal host byte -- a third question about percent-encoding, distinct from
+# `host_pct` (how a parsed host is spelled back) and `host_charset` (which
+# LITERAL bytes it may hold). One axis, one question (ADR 0007).
+#
+#   "restricted"  the decoded octet is judged against the literal set, so
+#                 "%2F", "%25", "%40" and the C0 range fail whichever way they
+#                 are written. This is libcurl's rule and WHATWG's
+#                 forbidden-host code points, and what the no-selector baseline
+#                 froze.
+#   "any"         any well-formed triplet is admissible whatever it denotes.
+#                 RFC 3986 S3.2.2's `reg-name = *( unreserved / pct-encoded /
+#                 sub-delims )` constrains which LITERAL bytes a reg-name holds
+#                 and places NO condition on what `pct-encoded = "%" HEXDIG
+#                 HEXDIG` denotes -- S2.2 is the whole point of the escape,
+#                 which is to carry a reserved octet as DATA rather than as a
+#                 delimiter. S6.2.2.2 then forbids decoding anything but
+#                 `unreserved`, so the octet stays ENCODED and cannot be
+#                 mistaken for a delimiter downstream.
+#
+# This was the "much larger acceptance question, deliberately left open" that
+# `.web_parse_host()` recorded; RURL-crrgaiel closed it, because it scored 48 of
+# the RFC conformance sweep's grammar-valid rejections. It WIDENS acceptance,
+# and only under `rfc3986`: the decoded-octet gate is the one thing the RFC
+# grammar does not ask for.
+.web_host_pct_octets_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "any" else "restricted"
+}
+
 # The `host_charset` setting each selected standard asks for -- the ACCEPTANCE
 # axis, kept apart from the rendering axis above for the reason ADR 0013
 # records: `rfc3986` wants RFC 3986 rendering with an 11-byte literal set,
@@ -738,7 +767,8 @@
 # They were one dial until ADR 0013, which could not express `rfc3986` (RFC
 # rendering, 11 literal bytes) and `whatwg` (decoded rendering, 15) at once.
 .web_parse_host <- function(host, host_pct = "decode",
-                            host_charset = "narrow", host_ipv4 = "narrow") {
+                            host_charset = "narrow", host_ipv4 = "narrow",
+                            host_pct_octets = "restricted") {
   # Byte-based throughout: `nchar()`/`substring()`/`endsWith()` all throw
   # "invalid multibyte string" on a declared-UTF-8 host token holding invalid
   # octets -- and such a token must REJECT, not error.
@@ -759,8 +789,10 @@
   # sets are NOT the same. A literal DEL is rejected, but "%7F" decodes to one
   # and is KEPT. Under `rfc3986` the gap runs the other way: " ` { }" are
   # admissible only ENCODED, because `reg-name` lists them under `pct-encoded`
-  # and not under `sub-delims`. Every byte in neither set fails whichever way it
-  # is written ("%2F" -> "/", "%25" -> "%", "%40" -> "@" all reject).
+  # and not under `sub-delims`. Under `host_pct_octets = "restricted"` a byte in
+  # neither set fails whichever way it is written ("%2F" -> "/", "%25" -> "%",
+  # "%40" -> "@" all reject); under `"any"` the triplet spelling is admissible
+  # and only the LITERAL byte is judged here (RURL-crrgaiel).
   #
   # Widening this check is what retired ADR 0009's pre-parse shim, which used to
   # substitute filler for these bytes so the parse could proceed and then put
@@ -779,6 +811,26 @@
   }
   if (!.web_high_bytes_ok(host, raw_allowed)) {
     return(NULL)
+  }
+  # `host_pct_octets = "any"`: RFC 3986 judges the RAW token. A well-formed
+  # triplet is an admissible `reg-name` character whatever it denotes, so the
+  # decoded-octet gate below simply does not apply, and the decoded string is
+  # never materialized -- it may hold a NUL, which no R string can carry.
+  #
+  # `.web_host_pct_unreserved()` is both halves of what is still owed here: it
+  # returns NULL on a malformed "%" (the parse error that must survive) and
+  # otherwise renders the S6.2.2.2 spelling, decoding only `unreserved`. Since
+  # `unreserved` bytes are all in the literal set, that decode can never
+  # introduce a byte the raw gate above just rejected, so nothing is skipped.
+  # Returning here also matches the `any(hb == 0x25L)` early return below: a
+  # host holding a "%" never takes the IPv4 reading, under any profile.
+  #
+  # Deliberately NOT reached by widening `.web_host_percent_decode()`: that
+  # function's NULL is also `.psl_annotation_host_vec()`'s "not DNS-eligible"
+  # signal, so a percent-encoded reg-name still declines a domain/TLD rather
+  # than guessing one.
+  if (identical(host_pct_octets, "any") && any(hb == 0x25L)) {
+    return(.web_host_pct_unreserved(host))
   }
   # VALIDATION always runs on the fully decoded host, whatever the spelling
   # rule -- `%2F` is a "/" in a host however it is written, and a policy that
@@ -851,10 +903,10 @@
 #             6.2.2.1). The RFC posture preserves a reg-name's source spelling
 #             instead of inventing a decoded one.
 #
-# Note what "keep" does NOT do: it does not stop VALIDATING the decoded host.
-# `reg-name` grammar would admit any well-formed triplet whatever it decodes
-# to, and that reading is a much larger acceptance question than this seam --
-# it is left open deliberately.
+# Note what "keep" does NOT do: on its own it does not stop VALIDATING the
+# decoded host. Whether `reg-name` admits any well-formed triplet whatever it
+# decodes to is a separate acceptance question, and it is `host_pct_octets`
+# that answers it (RURL-crrgaiel) -- not this dial.
 #
 # `host_charset` -- which literal ASCII bytes a host may CONTAIN. Acceptance
 # only, and a property of the selected standard that no input can reveal:
@@ -928,7 +980,8 @@
                                host_pct = "decode", pqf_bytes = "reject",
                                host_charset = "narrow",
                                host_ipv4 = "narrow",
-                               empty_path = "slash") {
+                               empty_path = "slash",
+                               host_pct_octets = "restricted") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -1078,7 +1131,9 @@
     }
   }
 
-  host <- .web_parse_host(host_token, host_pct, host_charset, host_ipv4)
+  host <- .web_parse_host(
+    host_token, host_pct, host_charset, host_ipv4, host_pct_octets
+  )
   if (is.null(host)) {
     return(NULL)
   }
