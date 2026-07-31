@@ -62,6 +62,80 @@ test_that("rfc3986 keeps missing-slash special schemes as path-rootless", {
   expect_identical(res$parse_status, c("ok", "ok"))
 })
 
+test_that("rfc3986 reads EVERY 0-slash remainder as path-rootless", {
+  # RURL-kkuirsnz. `eb8ba1a` routed the 1-slash and 3+-slash runs to the general
+  # parser but deliberately left the 0-slash run behind, where it was served by
+  # `.rfc3986_path_rootless_vec()` -- a slice that only claimed a
+  # SPECIAL_AUTHORITY scheme whose first path segment is a DOTTED NAME. So the
+  # test above passed for `http:example.com` while these were all rejected,
+  # though RFC 3986 sec 3.3 makes the whole remainder a `path-rootless` and both
+  # `@` and `:` are `pchar`.
+  urls <- c("http:@www.example.com", "http:a:b@www.example.com",
+            "http::b@www.example.com", "http:a:@www.example.com",
+            "ftps:example.com/", "http:@/www.example.com",
+            "https:@/www.example.com", "http:a:b@/www.example.com",
+            "http::@/www.example.com", "http:@:www.example.com")
+  want <- c("@www.example.com", "a:b@www.example.com", ":b@www.example.com",
+            "a:@www.example.com", "example.com/", "@/www.example.com",
+            "@/www.example.com", "a:b@/www.example.com", ":@/www.example.com",
+            "@:www.example.com")
+
+  # The referee first: every one of these is grammar-valid, so a rejection was
+  # never rurl's prerogative.
+  expect_true(all(rfc3986_abnf_accepts(urls)))
+  expect_identical(
+    serialize_url(urls, standard = "rfc3986", form = "source"), urls
+  )
+  rec <- rurl:::.fsss_record_vec(urls, "rfc3986", NULL)
+  expect_true(all(rec$ok))
+  # No `//`, so no authority delimiter and no host -- anywhere.
+  expect_false(any(rec$authority_delimiter_present))
+  expect_identical(rec$host_kind, rep("absent", length(urls)))
+  expect_identical(rec$path, want)
+  expect_identical(rec$rfc_path_form, rep("rootless", length(urls)))
+
+  # One selector, one grammar, on every acceptance posture.
+  for (posture in c("web", "general")) {
+    res <- safe_parse_urls(urls, url_standard = "rfc3986",
+                           scheme_acceptance = posture)
+    expect_true(all(is.na(res$host)), info = posture)
+    expect_identical(res$path, want, info = posture)
+  }
+})
+
+test_that("rfc3986 reads a scheme-shaped host:port as scheme + rootless path", {
+  # The other half of RURL-kkuirsnz, and the sharper one. rurl carries a
+  # host:port carve-out so a bare `example.com:8080` is read as host + port --
+  # a browser-omnibox FIX-UP, not a production in the generic syntax. Under the
+  # scheme-agnostic grammar selector there is nothing to infer: `scheme = ALPHA
+  # *( ALPHA / DIGIT / "+" / "-" / "." )` admits dots, so `example.com` IS a
+  # scheme and `8080/x` is its `path-rootless`.
+  urls <- c("example.com:8080/x", "www.php.net:80/index.php?test=1")
+  expect_true(all(rfc3986_abnf_accepts(urls)))
+
+  rec <- rurl:::.fsss_record_vec(urls, "rfc3986", NULL)
+  expect_true(all(rec$ok))
+  expect_identical(rec$scheme, c("example.com", "www.php.net"))
+  expect_identical(rec$host_kind, c("absent", "absent"))
+  expect_identical(rec$path, c("8080/x", "80/index.php"))
+  expect_identical(rec$query, c(NA_character_, "test=1"))
+
+  # The carve-out still does its job everywhere else. WHATWG and the no-selector
+  # baseline keep reading these as host:port, which is what makes this a
+  # per-selector routing change rather than the removal of a feature.
+  expect_identical(get_host(urls, url_standard = "whatwg"),
+                   c("example.com", "www.php.net"))
+  # `:80` comes back NA under whatwg because it IS http's default port and the
+  # WHATWG port state nulls it -- the port was read, then elided. The
+  # no-selector baseline does not elide, so it still reports 80. Both read the
+  # authority; they differ only on default-port presentation.
+  expect_identical(get_port(urls, url_standard = "whatwg"),
+                   c(8080L, NA_integer_))
+  expect_identical(suppressWarnings(get_host(urls)),
+                   c("example.com", "www.php.net"))
+  expect_identical(suppressWarnings(get_port(urls)), c(8080L, 80L))
+})
+
 test_that("no selector keeps special schemes without slashes as errors", {
   urls <- c("http:example.com", "https:example.com/path")
 
