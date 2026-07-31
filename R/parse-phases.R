@@ -2263,6 +2263,24 @@
     path_part[path_part == "/"] <- ""
   }
   host_part <- ifelse(has_host, host_output, "")
+
+  # A hostless row renders as `scheme://` + path, so a non-empty path that does
+  # not begin with "/" lands in the AUTHORITY position and fabricates a host:
+  # "file:C:/W" measured as clean_url "file://C:/W" (authority "C:" -- an SMB
+  # fetch on Windows), "file:etc/passwd" as "file://etc/passwd", "file:." as
+  # "file://.". Only `file:` reaches here hostless (`buildable` above), and
+  # such row is `parse_status = "error"`, so there is no canonical spelling to
+  # emit: rurl does not fabricate one (RURL-hnddjptl). Same defect class the
+  # WHATWG serializer already guards with `/.` for an absent host and a
+  # "//"-leading path (see .serialize_whatwg_vec below) -- but that guard
+  # rewrites a path it can still spell; an error row has no spelling at all.
+  fabricates_authority <- !has_host & nzchar(path_part) &
+    !startsWith(path_part, "/")
+  buildable <- buildable & !fabricates_authority
+  if (!any(buildable)) {
+    return(clean_url)
+  }
+
   clean_url[buildable] <- paste0(
     scheme_part[buildable], host_part[buildable], port_part[buildable],
     path_part[buildable]

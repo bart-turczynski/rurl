@@ -310,3 +310,56 @@ test_that("WHATWG file parser rejects forbidden decoded file hosts", {
   )
   expect_true(is.na(get_clean_url("file://%43%3A", url_standard = "whatwg")))
 })
+
+test_that("hostless file: non-absolute path never fabricates an authority", {
+  # RURL-hnddjptl. `clean_url` renders a hostless row as `scheme://` + path,
+  # so a path not beginning with "/" lands in the authority position:
+  # "file:C:/W" emitted "file://C:/W" (authority "C:" -- an SMB fetch on
+  # Windows), "file:etc/passwd" -> "file://etc/passwd", "file:." -> "file://.".
+  # All three are parse errors, so there is no canonical spelling to emit.
+  offenders <- c("file:C:/W", "file:etc/passwd", "file:.")
+  for (std in list(NULL, "rfc3986")) {
+    parsed <- safe_parse_urls(offenders, url_standard = std)
+    expect_identical(parsed$parse_status, rep("error", length(offenders)))
+    # No emitted key may carry an authority. Under rfc3986 "file:." reduces to
+    # an EMPTY path, so the guard does not fire and it still emits the
+    # authority-less
+    # "file://" -- tracked separately as the "error implies clean_url is NA"
+    # invariant (RURL-pjqchuqs), which is a different question from this one.
+    emitted <- parsed$clean_url[!is.na(parsed$clean_url)]
+    expect_true(all(emitted == "file://"))
+  }
+  # The path column still reports what was read: the guard suppresses only the
+  # reassembled key, it does not discard the parse facts.
+  expect_identical(
+    safe_parse_urls(offenders)$path, c("C:/W", "etc/passwd", ".")
+  )
+})
+
+test_that("the authority guard leaves legitimate hostless file: rows intact", {
+  # Companion to RURL-hnddjptl: an absolute path is safe to concatenate, so the
+  # guard must not fire on it. Pins the shapes `is_file` exists for.
+  expect_identical(
+    get_clean_url("file:///etc/passwd", url_standard = "rfc3986"),
+    "file:///etc/passwd"
+  )
+  expect_identical(
+    get_clean_url("file:////server/share", url_standard = "rfc3986"),
+    "file:////server/share"
+  )
+  expect_identical(
+    get_clean_url("file://server/share/x", url_standard = "rfc3986"),
+    "file://server/share/x"
+  )
+  expect_identical(
+    get_clean_url("file:///", url_standard = "rfc3986"), "file:///"
+  )
+  # WHATWG makes these paths absolute during parsing, so they stay buildable.
+  expect_identical(
+    get_clean_url("file:C|/W", url_standard = "whatwg"), "file:///C:/W"
+  )
+  expect_identical(
+    get_clean_url("file:etc/passwd", url_standard = "whatwg"),
+    "file:///etc/passwd"
+  )
+})
