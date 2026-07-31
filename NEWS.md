@@ -1,4 +1,4 @@
-## rurl 2.8.0
+## rurl 3.0.0
 
 ### Breaking changes
 
@@ -779,7 +779,7 @@
   of the four could previously take only presentation dials, so none of them
   could return a value its own `safe_parse_url()` column carries:
   `get_password()` could not reach the WHATWG userinfo spelling the `password`
-  column has carried since 2.8.0's userinfo encode set (`p:q` vs `p%3Aq`);
+  column has carried since 3.0.0's userinfo encode set (`p:q` vs `p%3Aq`);
   `get_query()` and `get_fragment()` could not reach the query and fragment
   percent-encode-set spellings; and `get_port()` could not report the WHATWG
   default-port drop, where `http://example.com:80/` parses to `NA` rather than
@@ -998,7 +998,7 @@
   parses `mailto:`, `data:` and `tel:`. The two axes are now described as
   composing: `scheme_acceptance` decides what gets parsed, `url_standard`
   decides how the result is read. A worked `mailto:` example shows the
-  opaque-path rule from the 2.8.0 breaking change — the parse table reports no
+  opaque-path rule from the 3.0.0 breaking change — the parse table reports no
   authority, while `get_host()` still extracts the recipient's host.
 
 - **`analysis/parity/README.md` now states its own posture and carries an

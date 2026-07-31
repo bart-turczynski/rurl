@@ -565,7 +565,7 @@ Rules:
   byte-for-byte unchanged. `get_host`(mailto) and `clean_url`(mailto) are
   independent.
 
-  **Amended by T1 (`RURL-glphqenm`), rurl 2.8.0.** As originally shipped this
+  **Amended by T1 (`RURL-glphqenm`), rurl 3.0.0.** As originally shipped this
   metadata also reached the *public parse table*, whose `host` / `user` /
   `domain` / `tld` columns showed the recipient's parts. That contradicted
   WHATWG — a non-special scheme with no `//` is an opaque path and has no
