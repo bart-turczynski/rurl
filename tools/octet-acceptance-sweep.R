@@ -319,9 +319,9 @@ for (fn in names(lit_frames)) {
 #
 #   token   whether a token is an ADDRESS at all is where the two normalizers
 #           disagree. WHATWG reads an empty hex digit string as 0 (`0x` -> 0),
-#           strips one trailing dot and accepts an uppercase `0X`; libcurl's
-#           does none of the three, so `0x.0x.0`, `1.2.3.4.` and `0Xff` are
-#           registered NAMES to it. `example.com` is the negative control.
+#           strips one trailing dot and accepts an uppercase `0X`; the web
+#           route's does none of the three, so `0x.0x.0`, `1.2.3.4.` and `0Xff`
+#           are registered NAMES to it. `example.com` is the negative control.
 #   frame   the rewrite's eligibility was, once again, a regex over the whole
 #           URL. It hard-required a literal "//" and matched the remainder with
 #           an ICU "." -- and, worse than the shim's version, its `(.*)$` let

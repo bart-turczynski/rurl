@@ -1868,7 +1868,8 @@ safe_parse_urls <- function(url,
   # `host-charset-shimmed` (ADR 0006/0009) survives the shim it was named
   # after, because it always described the RESULTING HOST rather than the layer
   # that admitted it: TRUE where a WHATWG parse produced a host carrying one of
-  # the 15 code points libcurl's set rejects. Derived from the parsed host, so
+  # the 15 `.WEB_HOST_GAP_BYTES` code points (R/parse-web.R, which records what
+  # each was frozen from). Derived from the parsed host, so
   # it covers both spellings -- `%60` decodes to "`" under `host_pct =
   # "decode"` and reads identically to a literal one.
   host_charset_shimmed <- rep(FALSE, n)
@@ -2139,7 +2140,7 @@ safe_parse_urls <- function(url,
     leading_trailing_stripped = prep$leading_trailing_stripped,
     # WHATWG host-charset acceptance (RURL-dxwxeamq, ADR 0009 -> ADR 0013):
     # emits `host-charset-shimmed` where a WHATWG parse kept a host code point
-    # libcurl's set rejects. Derived above from the PARSED host, not from a
+    # in `.WEB_HOST_GAP_BYTES`. Derived above from the PARSED host, not from a
     # Phase-1 rewrite flag.
     host_charset_shimmed = host_charset_shimmed,
     # Also a cached Stage-A FIELD (not only the attribute below), so a cache

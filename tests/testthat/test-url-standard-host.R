@@ -310,9 +310,10 @@ test_that("without a selector numeric hosts stay rejected (unchanged)", {
 # decoded), which `host_pct = "keep"` already renders correctly.
 #
 # rurl used to judge the DECODED octet against the literal set, so `%2F`, `%25`,
-# `%40` and the C0 range rejected "whichever way they were written". That is
-# libcurl/WHATWG's rule, not RFC 3986's, and it scored 48 of the sweep's
-# grammar-valid rejections.
+# `%40` and the C0 range rejected "whichever way they were written". That is the
+# WHATWG host parser's rule -- decode first, then check forbidden host code
+# points -- not RFC 3986's, and it scored 48 of the sweep's grammar-valid
+# rejections.
 test_that("rfc3986 admits any well-formed host triplet, kept encoded", {
   hosts <- c(
     sprintf("%%%02X", 0:31),                      # the C0 controls
