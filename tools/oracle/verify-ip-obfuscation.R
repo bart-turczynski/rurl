@@ -183,6 +183,160 @@ check_intent <- function(derived) {
   fail
 }
 
+# Check D -- SPEC-TRANSCRIPTION ANCHOR. Checks A-C all grade the transcription's
+# CONSISTENCY with the fixture and with declared intent. None of them can tell
+# you the transcription is a faithful reading of the standard: a
+# uniformly-wrong host parser would satisfy all three.
+#
+# The group has no upstream artifact of its own to check against -- that is its
+# defining property. But the repository DOES contain a WHATWG host-parsing
+# corpus that is pinned: `inst/bench/wpt-url-cases.json`, at a recorded
+# `upstream_revision` with a recorded `raw_source_sha256`. Grading the
+# transcription against it converts "trust this reading of the spec" into
+# agreement with a named, hash-verified revision.
+#
+# This does NOT close RURL-qhwktfcw. The URL Standard is a Living Standard and
+# nothing here pins a whatwg/url revision, so the anchor dates the transcription
+# against a WPT revision rather than a spec revision. It also cannot cover every
+# rule the transcription implements: the octal/hex/dword coercion forms are this
+# group's whole subject precisely because WPT does not cover them all.
+#
+# Two halves, because they fail differently:
+#   D1 idempotence -- every recorded `hostname` is an already-serialized,
+#      spec-conformant host, so re-parsing it must return it unchanged. Catches a
+#      transcription that mangles or wrongly rejects valid hosts.
+#   D2 input -> host -- for inputs whose authority can be extracted without
+#      transcribing the URL parser, the transcription must reproduce the recorded
+#      `hostname`. Catches a coercion that lands on the wrong address.
+WPT_CASES <- "inst/bench/wpt-url-cases.json"
+ANCHOR_SPECIAL <- c("http:", "https:", "ws:", "wss:", "ftp:")
+# `file:` is excluded: it has its own host rules, and a non-special scheme takes
+# the opaque-host path, which this transcription does not model.
+
+# Extract the authority from a WPT input, or NA when doing so would require
+# transcribing the URL parser. Two URL-parser steps ARE applied, because
+# skipping them would misattribute a parser rule to the host parser:
+#   * ASCII tab and newline are removed from the input entirely (URL parsing,
+#     "remove all ASCII tab or newline"), so `http://ho<TAB>st/` is `host`.
+#   * For a special scheme "\" terminates the authority exactly as "/" does.
+anchor_authority <- function(input) {
+  stripped <- gsub("[\t\n\r]", "", input)
+  m <- regmatches(
+    stripped,
+    regexec("^[A-Za-z][A-Za-z0-9+.-]*://([^/?#\\\\]*)", stripped)
+  )[[1]]
+  if (length(m) != 2L) {
+    return(NA_character_)
+  }
+  auth <- m[2]
+  # Userinfo, a port and bracket forms all need real parsing to split off, so
+  # those cases are skipped rather than guessed at.
+  if (grepl("@", auth, fixed = TRUE) || grepl(":", auth, fixed = TRUE) ||
+        grepl("[", auth, fixed = TRUE)) {
+    return(NA_character_)
+  }
+  auth
+}
+
+check_wpt_anchor <- function(cases_path = WPT_CASES) {
+  if (!file.exists(cases_path)) {
+    return(sprintf(paste0("FATAL: %s is missing. It is committed; a missing ",
+                          "copy is a broken checkout, and the transcription ",
+                          "anchor cannot be evaluated without it."),
+                   cases_path))
+  }
+  j <- jsonlite::fromJSON(cases_path, simplifyVector = FALSE)
+  meta <- j[["_meta"]]
+  # The anchor's entire value is that the corpus is PINNED. An unpinned corpus
+  # would make this check look like evidence while proving nothing datable.
+  if (is.null(meta$upstream_revision) || is.null(meta$raw_source_sha256)) {
+    return(sprintf(paste0("FATAL: %s carries no upstream_revision or ",
+                          "raw_source_sha256; an unpinned corpus cannot ",
+                          "anchor a spec transcription."), cases_path))
+  }
+
+  fail <- character(0)
+  idem_ok <- 0L
+  idem_unmodeled <- 0L
+  inp_ok <- 0L
+  inp_skip <- 0L
+  idem_bad <- character(0)
+  inp_bad <- character(0)
+
+  for (x in j$success) {
+    proto <- if (is.null(x$protocol)) "" else x$protocol
+    hostname <- if (is.null(x$hostname)) "" else x$hostname
+    if (!(proto %in% ANCHOR_SPECIAL) || !nzchar(hostname)) {
+      next
+    }
+    r <- try(ipobf_host_parse(hostname), silent = TRUE)
+    if (inherits(r, "try-error")) {
+      idem_unmodeled <- idem_unmodeled + 1L
+    } else if (r$ok && identical(r$host, hostname)) {
+      idem_ok <- idem_ok + 1L
+    } else {
+      idem_bad <- c(idem_bad, sprintf(
+        "    %s -> %s (must be unchanged)", encodeString(hostname),
+        if (r$ok) encodeString(r$host) else "FAILURE"))
+    }
+
+    auth <- anchor_authority(if (is.null(x$input)) "" else x$input)
+    if (is.na(auth)) {
+      inp_skip <- inp_skip + 1L
+      next
+    }
+    r2 <- try(ipobf_host_parse(auth), silent = TRUE)
+    if (inherits(r2, "try-error")) {
+      inp_skip <- inp_skip + 1L
+    } else if (r2$ok && identical(r2$host, hostname)) {
+      inp_ok <- inp_ok + 1L
+    } else {
+      inp_bad <- c(inp_bad, sprintf(
+        "    input=%s authority=%s\n      derived =%s\n      recorded=%s",
+        encodeString(x$input), encodeString(auth),
+        if (r2$ok) encodeString(r2$host) else "FAILURE",
+        encodeString(hostname)))
+    }
+  }
+
+  if (length(idem_bad)) {
+    fail <- c(fail, sprintf(
+      "%d pinned WPT hostname(s) do not survive re-parsing unchanged:",
+      length(idem_bad)), idem_bad)
+  }
+  if (length(inp_bad)) {
+    fail <- c(fail, sprintf(
+      "%d pinned WPT case(s) derive a different host than recorded:",
+      length(inp_bad)), inp_bad)
+  }
+  # Floors, because a check that silently exercises zero rows passes. If a WPT
+  # re-import legitimately shrinks these, that is a deliberate act and this
+  # gate should be re-examined rather than quietly widened.
+  if (idem_ok + length(idem_bad) < 100L) {
+    fail <- c(fail, sprintf(paste0("the idempotence anchor exercised only %d ",
+                                   "case(s); it has stopped being evidence"),
+                            idem_ok + length(idem_bad)))
+  }
+  if (inp_ok + length(inp_bad) < 50L) {
+    fail <- c(fail, sprintf(paste0("the input->host anchor exercised only %d ",
+                                   "case(s); it has stopped being evidence"),
+                            inp_ok + length(inp_bad)))
+  }
+  # Every case the transcription cannot model must be an ABORT that lands here,
+  # not a wrong answer. Reported so the modeled fraction stays visible.
+  attr(fail, "summary") <- sprintf(
+    paste0("anchor         : WPT %s (sha256 %s)\n",
+           "                 idempotence %d/%d recorded hostnames re-parse ",
+           "unchanged (%d unmodeled)\n",
+           "                 coercion    %d/%d extractable inputs derive the ",
+           "recorded host (%d skipped)"),
+    substr(meta$upstream_revision, 1L, 12L),
+    substr(meta$raw_source_sha256, 1L, 12L),
+    idem_ok, idem_ok + length(idem_bad), idem_unmodeled,
+    inp_ok, inp_ok + length(inp_bad), inp_skip)
+  fail
+}
+
 # ---- self-test --------------------------------------------------------------
 #
 # Positive and negative coverage of the transcribed algorithms, over synthetic
@@ -340,6 +494,48 @@ self_test <- function() {
          length(check_intent(bent2)) > 0L, TRUE)
   expect("intent check clean on itself", length(check_intent(d)), 0L)
 
+  # -- the anchor's authority extraction ------------------------------------
+  expect("tab is stripped from the input",
+         anchor_authority("http://ho\tst/"), "host")
+  expect("backslash ends a special authority",
+         anchor_authority("http://example.com\\foo"), "example.com")
+  expect("userinfo is skipped, not guessed",
+         anchor_authority("http://u@h/"), NA_character_)
+  expect("port is skipped", anchor_authority("http://h:80/"), NA_character_)
+  expect("bracket form is skipped",
+         anchor_authority("http://[::1]/"), NA_character_)
+  expect("non-URL is skipped", anchor_authority("not a url"),
+         NA_character_)
+
+  # -- the anchor must fail closed on an unusable corpus --------------------
+  # Its whole value is that the corpus is pinned, so an unpinned or absent one
+  # must be an error rather than a silent pass over zero rows.
+  expect("missing corpus is fatal",
+         grepl("FATAL", check_wpt_anchor(tempfile()), fixed = TRUE), TRUE)
+  unpinned <- tempfile(fileext = ".json")
+  on.exit(unlink(unpinned), add = TRUE)
+  writeLines(jsonlite::toJSON(list(
+    `_meta` = list(upstream_project = "x"),
+    success = list(list(input = "http://h/", protocol = "http:",
+                        hostname = "h"))
+  ), auto_unbox = TRUE), unpinned)
+  expect("unpinned corpus is fatal",
+         grepl("FATAL", check_wpt_anchor(unpinned), fixed = TRUE), TRUE)
+  # A corpus that is pinned but too small must trip the floors, not pass.
+  thin <- tempfile(fileext = ".json")
+  on.exit(unlink(thin), add = TRUE)
+  writeLines(jsonlite::toJSON(list(
+    `_meta` = list(upstream_revision = strrep("a", 40L),
+                   raw_source_sha256 = strrep("b", 64L)),
+    success = list(list(input = "http://h/", protocol = "http:",
+                        hostname = "h"))
+  ), auto_unbox = TRUE), thin)
+  expect("thin corpus trips the floors",
+         any(grepl("stopped being evidence", check_wpt_anchor(thin),
+                   fixed = TRUE)), TRUE)
+  # And it must actually be clean against the committed corpus.
+  expect("anchor clean on the pinned corpus", length(check_wpt_anchor()), 0L)
+
   cat(sprintf("self-test: %d passed, %d failed\n", pass, length(fail)))
   if (length(fail)) {
     cat(paste0("  - ", fail, collapse = "\n"), "\n", sep = "")
@@ -367,10 +563,12 @@ main <- function() {
   cat(sprintf("roster rows    : %d (%d accept, %d must-fail)\n", nrow(derived),
               sum(derived$kind == "exact"), sum(derived$kind == "failure")))
 
+  anchor <- check_wpt_anchor()
   fails <- c(
     check_roster(committed, derived),
     check_rederivation(committed, derived),
-    check_intent(derived)
+    check_intent(derived),
+    as.character(anchor)
   )
 
   if (length(fails)) {
@@ -388,6 +586,7 @@ main <- function() {
   cat(sprintf("intent         : %d/%d encodings denote the address they ",
               sum(!is.na(derived$denotes)), sum(!is.na(derived$denotes))))
   cat("declare\n")
+  cat(attr(anchor, "summary"), "\n", sep = "")
   cat("ORACLE RE-DERIVATION: PASS\n")
   invisible(TRUE)
 }
