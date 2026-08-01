@@ -53,6 +53,15 @@
 #                      with that column's distinct values. A new upstream in
 #                      the CSV with no provenance is an ORPHAN; a recorded
 #                      group no longer in the CSV is a PHANTOM. Both FAIL.
+#   PV9 source pins -- wherever a group carries normative_dependencies, it is
+#                      a non-empty ARRAY of objects, each carrying the ten keys
+#                      conventions.normative_dependency_scope names, a
+#                      pin_status and a revision_scheme drawn from that
+#                      convention's two enums, a tracking_issue whenever the
+#                      status is `missing`, an immutable_revision validated
+#                      ACCORDING TO ITS SCHEME plus ISO dates whenever it is
+#                      `verified`, at least one algorithm anchor, and never
+#                      the MISSING[...] sentinel.
 #
 # FIELD RESOLUTION (PV5). A section-2.3 field is looked up on the group first,
 # then on the fixture. That is not leniency -- it is how the record states its
@@ -71,6 +80,28 @@
 # explaining it for that fixture's IN-scope groups (external-url-vectors.csv's
 # retrieval_date_status does exactly this), and the conventions block defines
 # it. Scanning those would flag the explanation as the defect.
+#
+# SHAPE, NOT PRESENCE (PV9). normative_dependencies carries the record's SECOND
+# pinning duty -- source pinning -- which conventions.normative_dependency_scope
+# states as orthogonal to section 2.3: a group may owe both duties, either one,
+# or neither. PV9 therefore judges only groups that CARRY the key, and judges
+# only its shape. Deciding which groups OWE a pin is a different question with a
+# different evidence base, and it is not this rule's business.
+#
+# WHY A REVISION HAS A SCHEME (PV9). The first cut of this rule required every
+# `verified` pin to be a 40-hex git sha, which is true of the WHATWG entry and
+# false in general: UTS-46 has no repository, and its pin -- the still-open half
+# of RURL-qhwktfcw -- can only ever be a named edition like "Unicode 15.1.0". A
+# gate that rejected that would have obstructed the closure of the very ticket
+# that produced it. revision_scheme names the kind of revision, and the check
+# follows the scheme instead of assuming one. What the gate CANNOT do is decide
+# immutability; see NON_IMMUTABLE_REVISIONS for the honest limit.
+#
+# WHY PV9 DOES NOT REUSE THE SENTINEL (and why PV6 needs no re-scoping). The
+# convention makes pin_status an enum precisely so an unpinned normative source
+# can be recorded inside a section_2_3_applies = false group without PV6 reading
+# it as a section-2.3 gap. PV9 enforces that separation from the other side: a
+# MISSING[...] anywhere in an entry FAILS, in every group, in scope or out.
 #
 # Dependencies: jsonlite (Suggests, as tools/oracle-audit-rfc3986.R uses) and
 # digest for sha256. Nothing else beyond base R.
@@ -117,6 +148,50 @@ MIRROR_FIELDS <- c(
   applicability_selector = "applicability_selector"
 )
 META_STRUCTURAL <- "counts"
+
+# PV9's contract, read off conventions.normative_dependency_scope rather than
+# invented here: "Each entry names its source, source_url, immutable_revision,
+# revision_scheme, revision_date, retrieved_at, pin_kind, pin_status and
+# algorithm_anchors, plus a note stating what is load-bearing about it".
+# tracking_issue is NOT in this list because the convention makes it
+# conditional on pin_status = "missing".
+NORMATIVE_DEP_FIELDS <- c("source", "source_url", "immutable_revision",
+                          "revision_scheme", "revision_date", "retrieved_at",
+                          "pin_kind", "pin_status", "algorithm_anchors", "note")
+
+# The same convention's first enum, verbatim and closed. "verified" = the
+# derivation was checked against that revision on retrieved_at; "missing" = the
+# source is read but no revision is pinned; "not-applicable" = the source is
+# cited but nothing is derived from it.
+NORMATIVE_DEP_STATUS <- c("verified", "missing", "not-applicable")
+
+# Its second enum: what KIND of thing immutable_revision names. A normative
+# source's immutable revision is NOT always a git commit -- UTS-46 has no
+# repository to cite -- and a rule that demanded one would have made the still
+# -open half of RURL-qhwktfcw unpinnable, obstructing the closure of the ticket
+# that created the rule. The scheme is what lets the check be shape-directed
+# instead of assuming git.
+NORMATIVE_DEP_SCHEME <- c("git-commit", "document-version", "unpinned")
+
+# "unpinned" claims nothing, so it is legal only where the status claims
+# nothing either.
+UNPINNABLE_STATUS <- c("missing", "not-applicable")
+
+# HONEST LIMIT. Immutability is not machine-checkable: no predicate can tell
+# "Unicode 15.1.0" (a frozen edition) from "Unicode 16" (one that may not exist
+# yet). What IS checkable is the specific class of non-immutable strings that
+# actually turns up in practice, which is the mistake worth catching. Matched
+# case-insensitively on the trimmed value; this rejects the placeholders that
+# get written, NOT every string a careless author could invent.
+NON_IMMUTABLE_REVISIONS <- c("", "latest", "head", "living standard",
+                             "unversioned", "not pinned", "not recorded",
+                             "n/a", "current")
+
+# Character classes written out rather than ranged. `[a-f]` is a collation
+# range and this repo has been bitten by locale-dependent matching before; the
+# enumerated set means the same thing under every LC_COLLATE.
+COMMIT_SHA_RE <- "^[0123456789abcdef]{40}$"
+ISO_DATE_RE <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
 
 # ---- readers ----------------------------------------------------------------
 
@@ -207,6 +282,38 @@ field_verdict <- function(v) {
 has_sentinel <- function(x) {
   flat <- as.character(unlist(x, use.names = FALSE))
   any(grepl("MISSING[", flat, fixed = TRUE))
+}
+
+# A JSON scalar string, or NA when the value is absent or is something else.
+# PV9 needs this rather than as_chr(): "the key is present but holds an object
+# or an array" must FAIL, not be silently coerced to its first element.
+one_string <- function(x) {
+  if (!is.character(x) || length(x) != 1L || is.na(x)) return(NA_character_)
+  x
+}
+
+is_commit_sha <- function(s) !is.na(s) && grepl(COMMIT_SHA_RE, s)
+
+# A named edition, to the extent that is decidable -- see the honest limit on
+# NON_IMMUTABLE_REVISIONS. This does NOT prove the edition is immutable; it
+# proves the author did not write a moving target's usual name.
+is_named_edition <- function(s) {
+  if (is.na(s)) return(FALSE)
+  !tolower(trimws(s)) %in% NON_IMMUTABLE_REVISIONS
+}
+
+# Shape AND validity: 2026-13-45 has the shape and is not a date.
+is_iso_date <- function(s) {
+  if (is.na(s) || !grepl(ISO_DATE_RE, s)) return(FALSE)
+  !is.na(as.Date(s, format = "%Y-%m-%d"))
+}
+
+# A JSON array of non-blank strings. A JSON object fails on its names, a bare
+# scalar string is accepted -- it is a character vector of length one.
+is_anchor_vector <- function(x) {
+  if (!is.null(names(x))) return(FALSE)
+  flat <- as.character(unlist(x, use.names = FALSE))
+  length(flat) > 0L && !anyNA(flat) && all(nzchar(trimws(flat)))
 }
 
 # ---- rules ------------------------------------------------------------------
@@ -498,6 +605,132 @@ rule_pv8 <- function(root, rec) {
                              "column in %d source-keyed fixture(s)"), n))
 }
 
+# One entry of a group's normative_dependencies array. Returns the defects it
+# has, labelled; character(0) when it is well-formed. Every value check is
+# guarded on the key being PRESENT, so an omitted key is reported once by the
+# required-key check rather than twice.
+normative_dep_defects <- function(e, lab) {
+  bad <- character(0)
+  if (!is.list(e) || is.null(names(e))) {
+    return(sprintf("%s is not an object", lab))
+  }
+  gaps <- missing_keys(e, NORMATIVE_DEP_FIELDS)
+  if (length(gaps)) {
+    bad <- c(bad, sprintf("%s lacks %s", lab, toString(gaps)))
+  }
+  status <- NA_character_
+  if ("pin_status" %in% names(e)) {
+    status <- one_string(e$pin_status)
+    if (is.na(status) || !status %in% NORMATIVE_DEP_STATUS) {
+      shown <- if (is.na(status)) "not a scalar string" else {
+        paste0("\"", status, "\"")
+      }
+      bad <- c(bad, sprintf("%s: pin_status is %s, not one of %s", lab, shown,
+                            toString(NORMATIVE_DEP_STATUS)))
+      status <- NA_character_
+    }
+  }
+  scheme <- NA_character_
+  if ("revision_scheme" %in% names(e)) {
+    scheme <- one_string(e$revision_scheme)
+    if (is.na(scheme) || !scheme %in% NORMATIVE_DEP_SCHEME) {
+      shown <- if (is.na(scheme)) "not a scalar string" else {
+        paste0("\"", scheme, "\"")
+      }
+      bad <- c(bad, sprintf("%s: revision_scheme is %s, not one of %s", lab,
+                            shown, toString(NORMATIVE_DEP_SCHEME)))
+      scheme <- NA_character_
+    }
+  }
+  if (identical(status, "missing")) {
+    if (!identical(field_verdict(e$tracking_issue), "value")) {
+      bad <- c(bad, sprintf(paste("%s: pin_status = missing without a",
+                                  "tracking_issue -- an unpinned source is a",
+                                  "filed gap, not an exemption"), lab))
+    }
+    if (!is.na(scheme) && !identical(scheme, "unpinned")) {
+      bad <- c(bad, sprintf(paste("%s: pin_status = missing but",
+                                  "revision_scheme is \"%s\" -- a filed gap",
+                                  "cannot also claim a pinning scheme"),
+                            lab, scheme))
+    }
+  }
+  if (identical(scheme, "unpinned") && !is.na(status) &&
+        !status %in% UNPINNABLE_STATUS) {
+    bad <- c(bad, sprintf(paste("%s: revision_scheme = unpinned is legal only",
+                                "where pin_status is %s, not \"%s\""),
+                          lab, toString(UNPINNABLE_STATUS), status))
+  }
+  if (identical(status, "verified")) {
+    # Validated ACCORDING TO THE SCHEME. Assuming git here is what made the
+    # first cut of this rule reject a legitimate document-version pin.
+    if ("immutable_revision" %in% names(e) && !is.na(scheme)) {
+      rev <- one_string(e$immutable_revision)
+      if (identical(scheme, "git-commit") && !is_commit_sha(rev)) {
+        bad <- c(bad, sprintf(paste("%s: revision_scheme = git-commit but",
+                                    "immutable_revision is not a",
+                                    "40-character lowercase hex commit sha"),
+                              lab))
+      }
+      if (identical(scheme, "document-version") && !is_named_edition(rev)) {
+        bad <- c(bad, sprintf(paste("%s: revision_scheme = document-version",
+                                    "but immutable_revision is \"%s\", a",
+                                    "moving target rather than a named",
+                                    "edition"),
+                              lab, if (is.na(rev)) "" else rev))
+      }
+    }
+    for (key in c("revision_date", "retrieved_at")) {
+      if (key %in% names(e) && !is_iso_date(one_string(e[[key]]))) {
+        bad <- c(bad, sprintf(paste("%s: pin_status = verified but %s is not",
+                                    "an ISO yyyy-mm-dd date"), lab, key))
+      }
+    }
+  }
+  if ("algorithm_anchors" %in% names(e) &&
+        !is_anchor_vector(e$algorithm_anchors)) {
+    bad <- c(bad, sprintf(paste("%s: algorithm_anchors is not a non-empty",
+                                "character vector -- the anchors are the",
+                                "durable key, not the section numbers"), lab))
+  }
+  if (has_sentinel(e)) {
+    bad <- c(bad, sprintf(paste("%s: uses a MISSING[...] sentinel -- an",
+                                "unpinned normative source is recorded",
+                                "through the pin_status enum instead"), lab))
+  }
+  bad
+}
+
+rule_pv9 <- function(rec) {
+  bad <- character(0)
+  ngroups <- 0L
+  nentries <- 0L
+  for (fx in fixtures_of(rec)) {
+    for (g in groups_of(fx)) {
+      deps <- g[["normative_dependencies"]]
+      if (is.null(deps)) next
+      ngroups <- ngroups + 1L
+      lab <- group_label(fx, g)
+      if (!is.list(deps) || !is.null(names(deps)) || !length(deps)) {
+        bad <- c(bad, sprintf(paste("%s: normative_dependencies is not a",
+                                    "non-empty array -- one derivation may",
+                                    "read several sources"), lab))
+        next
+      }
+      for (i in seq_along(deps)) {
+        nentries <- nentries + 1L
+        bad <- c(bad, normative_dep_defects(
+          deps[[i]], sprintf("%s: normative_dependencies[%d]", lab, i)))
+      }
+    }
+  }
+  finding("PV9", length(bad) == 0L,
+          if (length(bad)) paste(bad, collapse = "; ")
+          else sprintf(paste("%d normative-dependency entr%s in %d group(s)",
+                             "are well-formed"),
+                       nentries, if (nentries == 1L) "y" else "ies", ngroups))
+}
+
 check_oracle_provenance <- function(root = ".",
                                     record = RECORD_PATH,
                                     expected_fields = EXPECTED_FIELD_COUNT) {
@@ -512,7 +745,7 @@ check_oracle_provenance <- function(root = ".",
   }
   shape <- rule_pv1(rec, expected_fields)
   if (!shape[[1L]]$ok) {
-    rest <- lapply(c("PV2", "PV3", "PV4", "PV5", "PV6", "PV7", "PV8"),
+    rest <- lapply(c("PV2", "PV3", "PV4", "PV5", "PV6", "PV7", "PV8", "PV9"),
                    function(id) {
                      list(id = id, ok = FALSE,
                           detail = "not evaluated -- record shape is broken")
@@ -521,7 +754,8 @@ check_oracle_provenance <- function(root = ".",
   }
   c(shape,
     rule_pv2(root, rec), rule_pv3(root, rec), rule_pv4(root, rec),
-    rule_pv5(rec), rule_pv6(rec), rule_pv7(root, rec), rule_pv8(root, rec))
+    rule_pv5(rec), rule_pv6(rec), rule_pv7(root, rec), rule_pv8(root, rec),
+    rule_pv9(rec))
 }
 
 # ---- reporting --------------------------------------------------------------
@@ -568,6 +802,48 @@ self_test <- function() {
     applicability_selector = "base null"
   )
 
+  # Two normative_dependencies entries modelled on the real ip-obfuscation
+  # array: one pinned source and one read-but-unpinned source. The second is
+  # not decoration -- pin_status = missing is the branch where tracking_issue
+  # becomes mandatory and where the sha/date requirements must NOT apply.
+  dep_base <- list(
+    list(source = "WHATWG URL Standard",
+         source_url = "https://url.spec.whatwg.org/",
+         immutable_revision = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
+         revision_scheme = "git-commit",
+         revision_date = "2026-07-06",
+         retrieved_at = "2026-08-01",
+         pin_kind = "retrieved-at",
+         pin_status = "verified",
+         algorithm_anchors = list("concept-host-parser", "concept-ipv4-parser"),
+         note = "the expected values are computed by transcribing these"),
+    list(source = "UTS #46",
+         source_url = "https://www.unicode.org/reports/tr46/",
+         immutable_revision = "not pinned",
+         revision_scheme = "unpinned",
+         revision_date = "not recorded",
+         retrieved_at = "not recorded",
+         pin_kind = "none",
+         pin_status = "missing",
+         tracking_issue = "RURL-abc123",
+         algorithm_anchors = list("IDNA_Mapping_Table"),
+         note = "a second source this derivation reads, and it is not pinned")
+  )
+
+  # The shape the git-commit assumption would have made unwritable: a source
+  # with no repository, verified against a named edition. Used below to prove
+  # the widening is real rather than nominal.
+  dep_document <- list(source = "UTS #46",
+                       source_url = "https://www.unicode.org/reports/tr46/",
+                       immutable_revision = "Unicode 15.1.0",
+                       revision_scheme = "document-version",
+                       revision_date = "2023-09-12",
+                       retrieved_at = "2026-08-01",
+                       pin_kind = "verified-at",
+                       pin_status = "verified",
+                       algorithm_anchors = list("IDNA_Mapping_Table"),
+                       note = "the mapping table, pinned to a named edition")
+
   mk <- function(mutate = NULL, meta_extra = NULL, csv_sources = NULL) {
     root <- tempfile("oracleprov-")
     dir.create(file.path(root, "tests", "testthat", "fixtures"),
@@ -597,13 +873,20 @@ self_test <- function() {
                        section_2_3_applies = TRUE),
                   meta_base[setdiff(names(meta_base), "retrieved")],
                   list(retrieval_date = sentinel))
+    # beta owes SOURCE pinning only -- nothing vendored, expectations derived
+    # from two standards -- which is the ip-obfuscation shape. wpt-like owes
+    # BOTH duties, which is the wpt-credentials-fragments shape and the case
+    # that proves PV9 is not a restatement of PV6: PV6 never looks at an
+    # in-scope group.
     out_scope <- list(group = "beta", row_count = sum(src == "beta"),
                       section_2_3_applies = FALSE,
-                      out_of_scope_reason = "generated here; nothing imported")
+                      out_of_scope_reason = "generated here; nothing imported",
+                      normative_dependencies = dep_base)
     json_group <- c(list(group = "wpt-like", row_count = 3L,
                          section_2_3_applies = TRUE),
                     meta_base[setdiff(names(meta_base), "retrieved")],
-                    list(retrieval_date = meta_base$retrieved))
+                    list(retrieval_date = meta_base$retrieved,
+                         normative_dependencies = dep_base[1L]))
 
     rec <- list(
       record_kind = "oracle-provenance",
@@ -650,11 +933,34 @@ self_test <- function() {
     all(vapply(check_oracle_provenance(root, expected_fields = nfields),
                function(f) isTRUE(f$ok), logical(1)))
   }
+  detail <- function(root, id) {
+    for (f in check_oracle_provenance(root, expected_fields = nfields)) {
+      if (identical(f$id, id)) return(f$detail)
+    }
+    NA_character_
+  }
   set_group <- function(fixture, group, key, value) {
     function(rec) {
       rec$fixtures[[fixture]]$source_groups[[group]][[key]] <- value
       rec
     }
+  }
+  # Mutate one key of one normative_dependencies entry. A NULL value deletes
+  # the key, which is how the required-key check is falsified.
+  set_dep <- function(fixture, group, entry, key, value) {
+    function(rec) {
+      deps <- rec$fixtures[[fixture]]$source_groups[[group]]
+      deps <- deps$normative_dependencies
+      deps[[entry]][[key]] <- value
+      rec$fixtures[[fixture]]$source_groups[[group]]$normative_dependencies <-
+        deps
+      rec
+    }
+  }
+  # A rule is only falsified if the gate as a whole goes red for it, so every
+  # PV9 negative below asserts the exit verdict too, not just the rule.
+  pv9_fails <- function(root) {
+    identical(rule(root, "PV9"), FALSE) && identical(verdict(root), FALSE)
   }
 
   # 1. Clean positive -- every rule passes on a consistent tree.
@@ -823,6 +1129,184 @@ self_test <- function() {
   expect("PV8 fails on a phantom group", identical(rule(r, "PV8"), FALSE))
   expect("PV8 is the only rule that catches a zero-row phantom",
          identical(rule(r, "PV4"), TRUE))
+
+  # ---- PV9 -------------------------------------------------------------
+  #
+  # THE FLOOR, FIRST. Every case below is worthless if the positive tree
+  # exercises no entries, because a rule that inspects nothing passes for the
+  # wrong reason. Assert the population before asserting anything about it.
+  expect("PV9's positive case exercises a real population",
+         startsWith(detail(mk(), "PV9"),
+                    "3 normative-dependency entries in 2 group(s)"))
+
+  # 26. ... and here is what that floor guards against. Strip both arrays and
+  #     PV9 still says PASS: it judges shape, never presence (a later unit
+  #     owns presence). Only the count in the detail distinguishes a vacuous
+  #     pass from a real one.
+  r <- mk(function(rec) {
+    rec$fixtures[[1L]]$source_groups[[1L]]$normative_dependencies <- NULL
+    rec$fixtures[[2L]]$source_groups[[2L]]$normative_dependencies <- NULL
+    rec
+  })
+  expect("PV9 passes vacuously when nothing carries the key",
+         identical(rule(r, "PV9"), TRUE))
+  expect("and the vacuous pass is visible in the count",
+         startsWith(detail(r, "PV9"), "0 normative-dependency entries"))
+
+  # 27. Check 1 -- an ARRAY. A single object is the tempting mis-shape,
+  #     because one derivation usually does read one source.
+  r <- mk(set_group(2L, 2L, "normative_dependencies", dep_base[[1L]]))
+  expect("PV9 fails when normative_dependencies is a bare object",
+         pv9_fails(r))
+  r <- mk(set_group(2L, 2L, "normative_dependencies", list()))
+  expect("PV9 fails on an empty normative_dependencies array", pv9_fails(r))
+  #     BOUNDARY: an array of one is legal -- the rule is non-empty, not plural.
+  r <- mk(set_group(2L, 2L, "normative_dependencies", dep_base[1L]))
+  expect("PV9 passes on a single-entry array", identical(verdict(r), TRUE))
+
+  # 28. Check 2 -- the nine required keys.
+  r <- mk(set_dep(2L, 2L, 1L, "note", NULL))
+  expect("PV9 fails on an entry with no note", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 1L, "source_url", NULL))
+  expect("PV9 fails on an entry with no source_url", pv9_fails(r))
+  #     BOUNDARY: the list is a floor, not a whitelist. The real record carries
+  #     an anchor_scope_note on one entry; an extra key must not fail.
+  r <- mk(set_dep(2L, 2L, 1L, "anchor_scope_note",
+                  "every anchor listed is transcribed"))
+  expect("PV9 passes on an entry carrying an extra key",
+         identical(verdict(r), TRUE))
+
+  # 29. Check 3 -- pin_status is a CLOSED enum.
+  r <- mk(set_dep(2L, 2L, 1L, "pin_status", "pinned"))
+  expect("PV9 fails on a pin_status outside the enum", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 1L, "pin_status", "Verified"))
+  expect("PV9 fails on a mis-cased pin_status", pv9_fails(r))
+  #     BOUNDARY: not-applicable is the third member and is exercised nowhere
+  #     in the real record yet, so nothing else here would have proved it legal.
+  r <- mk(set_dep(2L, 2L, 1L, "pin_status", "not-applicable"))
+  expect("PV9 passes on pin_status = not-applicable",
+         identical(verdict(r), TRUE))
+
+  # 30. Check 4 -- missing is a FILED gap, so it owes a tracking_issue.
+  r <- mk(set_dep(2L, 2L, 2L, "tracking_issue", NULL))
+  expect("PV9 fails on pin_status = missing with no tracking_issue",
+         pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 2L, "tracking_issue", ""))
+  expect("PV9 fails on a blank tracking_issue", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 2L, "tracking_issue", "TBD"))
+  expect("PV9 fails on a placeholder tracking_issue", pv9_fails(r))
+  #     BOUNDARY: the duty is scoped to `missing`. Entry 1 is verified and
+  #     carries no tracking_issue at all, and must stay legal.
+  r <- mk(function(rec) {
+    rec <- set_dep(2L, 2L, 2L, "pin_status", "not-applicable")(rec)
+    set_dep(2L, 2L, 2L, "tracking_issue", NULL)(rec)
+  })
+  expect("PV9 requires a tracking_issue only for pin_status = missing",
+         identical(verdict(r), TRUE))
+
+  # 31. Check 5 -- verified means a revision anyone can resolve, on a date.
+  r <- mk(set_dep(2L, 2L, 1L, "immutable_revision", "0f1e2d3"))
+  expect("PV9 fails when a verified pin abbreviates its sha", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 1L, "immutable_revision",
+                  toupper("0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c")))
+  expect("PV9 fails on an uppercase sha", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 1L, "revision_date", "2026-07"))
+  expect("PV9 fails on a truncated revision_date", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 1L, "retrieved_at", "2026-13-45"))
+  expect("PV9 fails on a date-shaped string that is not a date", pv9_fails(r))
+  #     BOUNDARY: an UNPINNED source legitimately records prose in exactly
+  #     those three fields. Entry 2 does, and the clean positive proves it, but
+  #     assert it directly -- a sha rule applied to every status would make
+  #     pin_status = missing unwritable.
+  r <- mk(function(rec) {
+    rec <- set_dep(2L, 2L, 1L, "pin_status", "missing")(rec)
+    rec <- set_dep(2L, 2L, 1L, "tracking_issue", "RURL-abc123")(rec)
+    rec <- set_dep(2L, 2L, 1L, "revision_scheme", "unpinned")(rec)
+    rec <- set_dep(2L, 2L, 1L, "immutable_revision", "not pinned")(rec)
+    rec <- set_dep(2L, 2L, 1L, "revision_date", "not recorded")(rec)
+    set_dep(2L, 2L, 1L, "retrieved_at", "not recorded")(rec)
+  })
+  expect("PV9 demands a sha and ISO dates only of a verified pin",
+         identical(verdict(r), TRUE))
+
+  # 32. Check 6 -- anchors are the durable key, so there must be one.
+  r <- mk(set_dep(2L, 2L, 1L, "algorithm_anchors", list()))
+  expect("PV9 fails on an empty algorithm_anchors", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 1L, "algorithm_anchors", list("")))
+  expect("PV9 fails on a blank algorithm anchor", pv9_fails(r))
+  #     BOUNDARY: one anchor is enough; the rule is non-empty, not exhaustive.
+  r <- mk(set_dep(2L, 2L, 1L, "algorithm_anchors", list("concept-host-parser")))
+  expect("PV9 passes on a single algorithm anchor", identical(verdict(r), TRUE))
+
+  # 33. Check 7 -- the sentinel is reserved for an absent section-2.3 SCALAR;
+  #     an unpinned source uses the enum. Asserted on the IN-SCOPE group,
+  #     because PV6 skips those entirely: this is PV9's own catch, not PV6's.
+  r <- mk(set_dep(1L, 1L, 1L, "note", paste("the revision is", sentinel)))
+  expect("PV9 fails on a sentinel inside an in-scope group's entry",
+         pv9_fails(r))
+  expect("PV6 never sees it -- an in-scope group is not its subject",
+         identical(rule(r, "PV6"), TRUE))
+  #     BOUNDARY: prose that merely NAMES the key is not the sentinel itself.
+  r <- mk(set_dep(2L, 2L, 2L, "note",
+                  paste("unpinned; recorded through pin_status rather than",
+                        "the MISSING marker PV6 scans for")))
+  expect("PV9 passes on a note that discusses pinning without a sentinel",
+         identical(verdict(r), TRUE))
+
+  # 34. Check 8 -- revision_scheme is the SECOND closed enum, and it is
+  #     required of every entry, because every pin_status constrains it.
+  r <- mk(set_dep(2L, 2L, 1L, "revision_scheme", "svn-rev"))
+  expect("PV9 fails on a revision_scheme outside the enum", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 1L, "revision_scheme", NULL))
+  expect("PV9 fails on an entry with no revision_scheme", pv9_fails(r))
+
+  # 35. Check 8 -- the cross-field rules. "unpinned" claims nothing, so it
+  #     cannot sit under a status that claims something; and a filed gap that
+  #     names a scheme is describing a pin it does not have.
+  r <- mk(set_dep(2L, 2L, 1L, "revision_scheme", "unpinned"))
+  expect("PV9 fails on pin_status = verified with revision_scheme = unpinned",
+         pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 2L, "revision_scheme", "git-commit"))
+  expect("PV9 fails on pin_status = missing without revision_scheme = unpinned",
+         pv9_fails(r))
+  #     BOUNDARY: not-applicable is the other status that may be unpinned.
+  r <- mk(set_dep(2L, 2L, 2L, "pin_status", "not-applicable"))
+  expect("PV9 passes on not-applicable with revision_scheme = unpinned",
+         identical(verdict(r), TRUE))
+
+  # 36. Check 8 -- document-version rejects the moving targets that actually
+  #     get written. It cannot prove immutability and does not claim to.
+  for (moving in c("latest", "HEAD", "Living Standard", "unversioned",
+                   "current", "")) {
+    r <- mk(function(rec) {
+      rec <- set_dep(2L, 2L, 1L, "revision_scheme", "document-version")(rec)
+      set_dep(2L, 2L, 1L, "immutable_revision", moving)(rec)
+    })
+    expect(sprintf("PV9 fails a document-version pinned to \"%s\"", moving),
+           pv9_fails(r))
+  }
+
+  # 37. THE WIDENING, PROVED. A source with no repository, verified against a
+  #     named edition, must go GREEN -- this is the shape the first cut of
+  #     check 5 wrongly rejected, and it is how RURL-qhwktfcw's open UTS-46
+  #     half will eventually be closed.
+  r <- mk(set_group(2L, 2L, "normative_dependencies",
+                    list(dep_base[[1L]], dep_document)))
+  expect("PV9 passes a document-version pin to a named edition",
+         identical(verdict(r), TRUE))
+
+  #     ... and the widening is REAL, not laxity. The pre-change rule was
+  #     is_commit_sha() applied to EVERY verified pin; that predicate still
+  #     exists and still says no to this revision, so the same string under
+  #     the git-commit scheme stays red. The check followed the scheme; it was
+  #     not relaxed for everyone.
+  r <- mk(set_group(2L, 2L, "normative_dependencies", list(
+    dep_base[[1L]],
+    utils::modifyList(dep_document, list(revision_scheme = "git-commit")))))
+  expect("the same revision under git-commit is still rejected", pv9_fails(r))
+  expect("which is what makes 'Unicode 15.1.0' a widening, not a loophole",
+         identical(is_commit_sha("Unicode 15.1.0"), FALSE) &&
+           identical(is_named_edition("Unicode 15.1.0"), TRUE))
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
   if (length(st$fail)) {
