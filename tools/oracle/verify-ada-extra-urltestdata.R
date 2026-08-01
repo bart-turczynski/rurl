@@ -32,8 +32,17 @@
 # reproduce -- and that revision was not guessed: every one of the 17 commits
 # that ever touched this path was swept, and exactly one, aa8e4043 (2025-07-16),
 # reproduces 24/24. Every earlier revision reproduces fewer and every later one
-# 23/24, which bounds the unrecorded import to [2025-07-16, 2026-07-17) without
-# inventing a retrieval date.
+# 23/24.
+#
+# WHAT THAT BOUNDS IS UPSTREAM'S CONTENT STATE, NOT THE IMPORT (corrected in
+# RURL-drkcvzex; this comment used to say "bounds the unrecorded import"). The
+# bytes the block agrees with are the bytes that existed across
+# [2025-07-16, 2026-07-17), and that is all. It does not resolve an import
+# revision, for two independent reasons: no commit touched the path inside the
+# window, so every revision in it carries the SAME bytes and no sweep could
+# single one out; and content agreement is not import provenance -- a block
+# produced later from an older checkout would agree exactly as well. The record
+# carries this as content_state_bound, and retrieval_date stays a sentinel.
 #
 # Usage:
 #   Rscript tools/oracle/verify-ada-extra-urltestdata.R

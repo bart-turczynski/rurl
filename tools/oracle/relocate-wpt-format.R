@@ -60,7 +60,7 @@ wpt_runnable_reason <- function(entry) {
   has_nul <- grepl(NUL_SHIM_CHAR, entry$input, fixed = TRUE)
   base <- entry$base
   load_bearing_base <- !is.null(base) && is.character(base) &&
-    (!identical(base, "about:blank") || !wpt_is_absolute(entry$input))
+    (!identical(base, "about:blank") || !wpt_occupies_scheme_position(entry$input))
   # Both at once is unmodeled: the fixture has no such row, so which label wins
   # was never decided, and guessing would put a row under a reason nobody chose.
   if (has_nul && load_bearing_base) {
@@ -77,20 +77,37 @@ wpt_runnable_reason <- function(entry) {
 # "Does this input occupy the scheme position?" -- the only sense the classifier
 # needs, because that is what decides whether a base is consulted at all.
 #
-# IT IS DELIBERATELY NOT RFC 3986's SCHEME PRODUCTION, and the difference was
-# found by measurement rather than chosen. The first cut of this rule WAS that
-# production (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":"). It reproduces all
-# 267 wpt-urltestdata rows -- and disagrees with the committed corpus on exactly
-# one ada row: `schéme://example.com` (ada-017), whose scheme is invalid because
-# of the non-ASCII é. WHATWG would indeed fall back to the base there, but the
-# fixture RUNS that row, because rurl can be pointed at it and rejects it: what
-# makes a row unrunnable is needing a base to have a meaning at all, and an
-# input with something in the scheme position does not.
+# THE NAME IS PART OF THE CLAIM, so it says `occupies_scheme_position` and not
+# `is_absolute` (renamed in RURL-drkcvzex). This is FITTED APPLICABILITY
+# METADATA, not an absoluteness oracle: it answers "can rurl be pointed at this
+# row without a base?", which is a question about this fixture's `runnable`
+# column, and it deliberately DISAGREES with the WHATWG notion of an absolute
+# URL. Reading it as a spec predicate is the specific error the old name
+# invited, and it would be wrong in both directions -- see below.
+#
+# IT IS ALSO NOT RFC 3986's SCHEME PRODUCTION, and that difference was found by
+# measurement rather than chosen. The first cut of this rule WAS that production
+# (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":"). It reproduces all 267
+# wpt-urltestdata rows -- and disagrees with the committed corpus on exactly one
+# ada row: `schéme://example.com` (ada-017), whose scheme is invalid because of
+# the non-ASCII é. WHATWG would indeed fall back to the base there, and this
+# function says TRUE anyway, because the fixture RUNS that row: rurl can be
+# pointed at it and rejects it. What makes a row unrunnable is needing a base to
+# have a meaning at all, not having a VALID scheme.
 #
 # So the rule is positional: a non-empty run of characters that are none of
 # "/", "?", "#" or ":", followed by ":". Non-empty because ":foo" has an EMPTY
 # scheme and is a relative reference, not a scheme-ful one.
-wpt_is_absolute <- function(input) {
+#
+# WHAT ITS AGREEMENT WITH THE CORPUS DOES AND DOES NOT ESTABLISH. Reproducing all
+# 291 committed classifications is the FIT, not evidence the rule is right -- the
+# 291 rows are the data it was fitted to, so it could hardly do otherwise, and
+# the ada-017 finding above is the proof that a perfect fit on one corpus is
+# compatible with a wrong rule. What the fit buys is entirely prospective: once
+# the rule is executable, a row silently re-classified LATER stops agreeing with
+# it. Anything stronger would have to come from the builder that originally
+# computed the column, and that rule was never preserved.
+wpt_occupies_scheme_position <- function(input) {
   grepl("^[^/?#:]+:", input)
 }
 

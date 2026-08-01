@@ -530,12 +530,25 @@ and that revision was not guessed. Sweeping all 17 commits that ever touched the
 path finds **exactly one** revision reproducing 24/24, `aa8e4043` (2025-07-16);
 every earlier revision reproduces fewer and every later one 23/24.
 
-That has a consequence beyond this gate. `RURL-vwurxmzm` concluded that with no
-recorded retrieval date "there is no way to resolve the revision it was imported
-from". For this group that is **false**: the expected values themselves date the
-import to `[2025-07-16, 2026-07-17)`. The sentinel stays — a bound is not a date
-— but it is now a bound, recorded as `retrieval_date_bound` and re-derived on
-every run rather than asserted.
+**What that sweep bounds is the upstream CONTENT STATE, and nothing else**
+(corrected in `RURL-drkcvzex`; it was written as bounding the *import*). The
+measurement is that the committed expectations agree with the bytes that existed
+at `aa8e4043` and stopped existing at `fbea5b01` — so the content state the block
+agrees with is `[2025-07-16, 2026-07-17)`, recorded as `content_state_bound` and
+re-derived on every run rather than asserted.
+
+It does **not** resolve the revision the rows were imported from, and it does not
+date the fetch:
+
+- no commit touched the path inside that window, so *every* revision in it has
+  the same bytes — the sweep cannot single one out even in principle;
+- content agreement is not import provenance. A block produced later from an
+  older checkout, an older copy of the file, or by hand would agree just as well.
+
+So `retrieval_date` keeps its sentinel because it is genuinely unrecorded, not
+merely because "a bound is not a date". `RURL-vwurxmzm`'s conclusion that the
+import revision cannot be resolved stands; what this adds is a bound on the
+content, which is a weaker and different claim.
 
 The anchor is deliberately *not* proposed as the group's `upstream_revision`.
 Re-pinning to the revision a fixture happens to agree with would make the pin
@@ -552,6 +565,22 @@ the fixture *runs* that row, because what makes a row unrunnable is needing a
 base to have a meaning at all, not having a *valid* scheme. The rule is
 positional, and the point generalizes: a reconstruction that fits one corpus
 perfectly is not thereby right.
+
+That is also why the helper is called `wpt_occupies_scheme_position` and not
+`wpt_is_absolute` (renamed in `RURL-drkcvzex`). It is **fitted applicability
+metadata** — it answers "can `rurl` be pointed at this row without a base?",
+a question about this fixture's `runnable` column — and it deliberately
+disagrees with the WHATWG notion of an absolute URL, saying `TRUE` for
+`schéme://…` exactly where WHATWG falls back to the base. The old name
+invited it to be read as a spec predicate, which it is not.
+
+And its agreement with the corpus is the **fit, not validation**. Reproducing all
+291 committed classifications could hardly come out otherwise: those 291 rows are
+the data the rule was fitted to, and `ada-017` is the standing proof that a
+perfect fit on one corpus is compatible with a wrong rule. What the fit buys is
+entirely prospective — a row silently re-classified *later* stops agreeing with
+an executable rule. Anything stronger would have to come from the builder that
+originally computed the column, and that rule was never preserved.
 
 **A digest-only cache key leaves the revision unverified.** The resolver was
 first content-addressed on the digest alone, which is sound for the bytes and
@@ -797,9 +826,10 @@ machine's history. It does not prove these bytes entered this repository that wa
 or when.
 
 `retrieval_date` cannot be recovered either and keeps its own sentinel for the
-same reason: a reproducing command dates nothing. For
-`ada-extra-urltestdata` the *content state* is bounded — see the commit sweep
-above — but a content-state window is not a retrieval date.
+same reason: a reproducing command dates nothing. For `ada-extra-urltestdata` the
+upstream **content state** the block agrees with is bounded — see the commit
+sweep above — but that bounds the bytes, not the fetch, and not the revision the
+rows were imported from.
 
 ## Running them
 
