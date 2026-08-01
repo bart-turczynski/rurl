@@ -595,6 +595,52 @@ rule_pv4 <- function(root, rec) {
           else sprintf("%d recomputed count(s) match the record", checks))
 }
 
+# A REPRODUCING FETCH IS NOT AN IMPORT COMMAND (RURL-drkcvzex), and PV5 owns the
+# distinction because PV5 is the rule whose whole subject is "a gap must be
+# visible, not inferable".
+#
+# Three groups had `import_command` filled with a command that re-fetches the
+# pinned bytes and verifies their digest. That command is real and worth having,
+# but it is NOT the command that was originally run -- nobody recorded that, and
+# a reproducing fetch cannot recover it. Recording it under `import_command`
+# therefore closed a section-2.3 field that is still open: the record read as
+# fully provenanced on the import axis while the historical provenance gap was
+# exactly as unresolved as before, and every consumer counting sentinels saw one
+# fewer.
+#
+# So the two live in different keys. `import_command` keeps the sentinel, which
+# is what keeps the gap machine-detectable; `pin_fetch_command` carries the
+# reproducing command, and this check refuses the combination that would undo
+# the separation -- a `pin_fetch_command` sitting beside an `import_command`
+# that claims to be a real value.
+pin_fetch_defects <- function(g, fx) {
+  cmd <- g[["pin_fetch_command"]]
+  if (is.null(cmd)) return(character(0))
+  lab <- group_label(fx, g)
+  bad <- character(0)
+  if (!identical(field_verdict(cmd), "value")) {
+    bad <- c(bad, sprintf(paste("%s: pin_fetch_command is %s -- record a real",
+                                "command or omit the key"),
+                          lab, field_verdict(cmd)))
+  }
+  if (!identical(field_verdict(g[["pin_fetch_command_note"]]), "value")) {
+    bad <- c(bad, sprintf(paste("%s: pin_fetch_command without a",
+                                "pin_fetch_command_note -- what the command",
+                                "proves, and what it does not, has to be said"),
+                          lab))
+  }
+  imported <- resolve_field(g, fx, "import_command")
+  if (identical(field_verdict(imported), "value")) {
+    bad <- c(bad, sprintf(
+      paste("%s: carries a pin_fetch_command AND an import_command with a",
+            "real value -- a command that merely reproduces the pinned bytes",
+            "must not stand in for the unattested historical import; if the",
+            "import command genuinely is recorded, drop pin_fetch_command"),
+      lab))
+  }
+  bad
+}
+
 rule_pv5 <- function(rec) {
   fields <- required_fields(rec)
   bad <- character(0)
@@ -610,6 +656,7 @@ rule_pv5 <- function(rec) {
                                 verdict))
         }
       }
+      bad <- c(bad, pin_fetch_defects(g, fx))
     }
   }
   finding("PV5", length(bad) == 0L,
@@ -1446,6 +1493,50 @@ self_test <- function() {
   r <- mk(set_group(2L, 1L, "import_command", "MISSING[RURL-abc123]"))
   expect("PV5 passes on a well-formed sentinel",
          identical(rule(r, "PV5"), TRUE))
+
+  # 15b. PV5 -- A REPRODUCING FETCH IS NOT AN IMPORT COMMAND (RURL-drkcvzex).
+  #      The combination that undoes the separation is a pin_fetch_command
+  #      beside an import_command holding a real value: the reproducing then
+  #      stands in for the unattested historical one and the record reads as
+  #      fully provenanced on an axis that is still open.
+  fetch_cmd <- "curl -fsSL https://example.invalid/cases.json -o c.json"
+  r <- mk(set_group(2L, 1L, "pin_fetch_command", fetch_cmd))
+  expect("PV5 fails on a pin_fetch_command beside a real import_command",
+         identical(rule(r, "PV5"), FALSE))
+  #      ... and it passes once import_command carries the sentinel, which is
+  #      what keeps the gap machine-detectable. Both halves, because a rule that
+  #      only ever went red would just forbid the new key.
+  r <- mk(function(rec) {
+    g <- rec$fixtures[[2L]]$source_groups[[1L]]
+    g$import_command <- sentinel
+    g$pin_fetch_command <- fetch_cmd
+    g$pin_fetch_command_note <- "reproduces the digest; dates nothing"
+    rec$fixtures[[2L]]$source_groups[[1L]] <- g
+    rec
+  })
+  expect("PV5 accepts the split, with the gap still visible",
+         identical(verdict(r), TRUE))
+  #      The note is not optional: what the command proves, and what it does
+  #      not, is the whole reason the key is separate.
+  r <- mk(function(rec) {
+    g <- rec$fixtures[[2L]]$source_groups[[1L]]
+    g$import_command <- sentinel
+    g$pin_fetch_command <- fetch_cmd
+    rec$fixtures[[2L]]$source_groups[[1L]] <- g
+    rec
+  })
+  expect("PV5 fails on a pin_fetch_command with no note",
+         identical(rule(r, "PV5"), FALSE))
+  r <- mk(function(rec) {
+    g <- rec$fixtures[[2L]]$source_groups[[1L]]
+    g$import_command <- sentinel
+    g$pin_fetch_command <- ""
+    g$pin_fetch_command_note <- "reproduces the digest"
+    rec$fixtures[[2L]]$source_groups[[1L]] <- g
+    rec
+  })
+  expect("PV5 fails on a blank pin_fetch_command",
+         identical(rule(r, "PV5"), FALSE))
 
   # 16. The fixture-level fallback is load-bearing, not decoration: no group
   #     carries transformed_fixture_sha256, so the clean positive above passes

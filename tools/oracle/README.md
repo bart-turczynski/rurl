@@ -743,16 +743,32 @@ that the record agrees with itself.
 executable path, and no `MISSING[RURL-vwurxmzm]` sentinel remains on that field
 anywhere in the record.
 
-`import_command` was a different gap, and the tier-2 slices closed it for the
-three groups that had it: now that the bytes can be re-fetched and hash-verified,
-each records the exact command that **reproduces the pinned digest**, labelled as
-what it is — reproducing, not attested as the command originally run.
+`import_command` is a different gap, and it is **still open** — deliberately.
+The tier-2 slices established that the pinned bytes can be re-fetched and
+hash-verified, and for one commit range that reproducing command was written into
+`import_command` with a note saying it was not attested as the command originally
+run. Honest prose in a machine-readable field that then read as *filled*: the
+record counted one fewer sentinel while the historical provenance was exactly as
+unrecorded as before.
 
-`retrieval_date` genuinely cannot be recovered and keeps its sentinel: nobody
-wrote down when the Ada files were fetched, and a reproducing command dates
-nothing. But it is no longer unbounded for `ada-extra-urltestdata` — see the
-commit sweep above, which brackets the import to `[2025-07-16, 2026-07-17)` from
-the expected values themselves.
+So the two claims are two keys (`RURL-drkcvzex`):
+
+| Key | Claim | Value |
+| --- | --- | --- |
+| `import_command` | the command originally run | `MISSING[RURL-vwurxmzm]` — unattested, unrecoverable |
+| `pin_fetch_command` | a command that re-fetches the revision and reproduces `raw_source_sha256` | the `curl` invocation, verified 2026-08-01 |
+
+`PV5` refuses a `pin_fetch_command` beside an `import_command` holding a real
+value, and requires a `pin_fetch_command_note` saying what the command proves and
+what it does not. It proves the recorded digest is reachable at the recorded
+revision and path, so the pin is checkable by anyone rather than resting on one
+machine's history. It does not prove these bytes entered this repository that way,
+or when.
+
+`retrieval_date` cannot be recovered either and keeps its own sentinel for the
+same reason: a reproducing command dates nothing. For
+`ada-extra-urltestdata` the *content state* is bounded — see the commit sweep
+above — but a content-state window is not a retrieval date.
 
 ## Running them
 
