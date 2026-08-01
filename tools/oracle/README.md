@@ -816,7 +816,7 @@ So the two claims are two keys (`RURL-drkcvzex`):
 | Key | Claim | Value |
 | --- | --- | --- |
 | `import_command` | the command originally run | `MISSING[RURL-vwurxmzm]` — unattested, unrecoverable |
-| `pin_fetch_command` | a command that re-fetches the revision and reproduces `raw_source_sha256` | the `curl` invocation, verified 2026-08-01 |
+| `pin_fetch_command` | a command that re-fetches the revision and reproduces `raw_source_sha256` | the fetch invocation, verified 2026-08-01 |
 
 `PV5` refuses a `pin_fetch_command` beside an `import_command` holding a real
 value, and requires a `pin_fetch_command_note` saying what the command proves and
