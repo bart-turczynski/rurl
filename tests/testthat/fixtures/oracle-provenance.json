@@ -336,7 +336,7 @@
     {
       "path": "tests/testthat/fixtures/url-standard-conformance.csv",
       "fixture_kind": "hand-derived golden table -- NOT an imported suite. test-external-url-vectors.R:1-4 contrasts it explicitly with the imported fixture; its expected values are derived here and its source_reference column cites the authority each row is derived from.",
-      "transformed_fixture_sha256": "0c9f73fe66e3bbe945e3d2e022c91b9f39d857a659bfc1fb116f4d59fe113f11",
+      "transformed_fixture_sha256": "3c5ff62e610ea7232c8a7fcfd7f849ea3f6004e8b4b4df9a6d05d1542b0914fa",
       "row_count": 75,
       "row_count_note": "data rows, excluding the CSV header",
       "expected_value_columns": "Three, and they are three different questions about the same input, not one answer in three formats. expected_clean_url is surface (c), the cleaning product, which P2.2 section 1c/5.1 states is NOT a conformance oracle. expected_serialized and expected_serialized_normalized are surface (b), the full-string serialization, added by commit db6aa6e when the C-04 conflation was fixed: the fixture's header had claimed to pin the URL Standard serializer while every assertion compared the cleaning product. Both serialization columns are hand-derived from the same cited authority as the rest of the row -- this fixture has no generator, only readers -- and both are NA on the 11 rows whose expected outcome is rejection. The groups below describe the whole row, so their claim_kind and citation cover all three columns.",
@@ -394,7 +394,7 @@
           "row_count": 20,
           "section_2_3_applies": false,
           "import_status": "hand-derived from the cited standard's algorithm steps",
-          "citation_form": "source_reference values whose leading authority token is WHATWG. 14 cite a section, of the form \"WHATWG URL Standard SS<section>\" (e.g. \"WHATWG URL Standard SS4.1 percent-encode set\"); the other 6 cite an algorithm by name plus the in-repo decision that adopted it, of the form \"WHATWG host parsing ...\" / \"WHATWG host parser ...\" (the ADR 0009 host-charset-shim rows and the RURL-rgjpcbuk percent-decode-order row). Both forms are hand-derived from the Living Standard; neither pins a commit.",
+          "citation_form": "source_reference values whose leading authority token is WHATWG. 14 cite a section, of the form \"WHATWG URL Standard SS<section>\" (e.g. \"WHATWG URL Standard SS1.3 path percent-encode set #path-percent-encode-set\" -- the three percent-encode-set rows also name the spec's stable dfn anchor, which is the durable key where the section number is only a hint, per RURL-qhwktfcw); the other 6 cite an algorithm by name plus the in-repo decision that adopted it, of the form \"WHATWG host parsing ...\" / \"WHATWG host parser ...\" (the ADR 0009 host-charset-shim rows and the RURL-rgjpcbuk percent-decode-order row). Both forms are hand-derived from the Living Standard; neither pins a commit.",
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned); the fixture cites algorithm steps by section, not by upstream commit",
           "standard_section": "per row, in the source_reference column",
