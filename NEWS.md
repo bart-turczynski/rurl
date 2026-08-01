@@ -1138,6 +1138,28 @@
   halves — PV9 the shape of an answer, PV10 its presence on all 12 groups. Test
   fixtures and CI only; no package behavior changes. (RURL-qhwktfcw.)
 
+- **A `not-applicable` source pin now has to say *why*, because its one enum
+  member was carrying two different questions.** `pin_status` mixed a status
+  axis (`verified`, `missing`) with a reason (`not-applicable`), and that reason
+  was glossed "the source is cited but nothing is derived from it" — which was
+  false for two of the eight entries carrying it. RFC 3986's 25 rows and PRD
+  §6.1's rows *are* hand-derived from their source's text; what is inapplicable
+  there is the **duty**, not the derivation, and both entry notes had to open by
+  contradicting the enum that classified them. A consumer reading `pin_status`
+  alone could not tell a group that transcribed 25 rows from one that
+  transcribed none — the same undifferentiated pass `normative_dependencies` was
+  added to close, one level down. The reasons were measured off the record
+  rather than enumerated in advance, and there are three: `no-derivation` (six
+  entries), `frozen-source` (a published, numbered document cannot be amended in
+  place), and `internal-source` (the source is in this repository and git-dated).
+  Recorded as a separate `not_applicable_reason` rather than as a fourth
+  `pin_status` member, since the status axis is closed while the reason axis is
+  open — it went from one recognised reason to three inside a single 13-entry
+  record. PV9 requires the key on exactly the `not-applicable` entries and
+  forbids it elsewhere, so a real pin cannot come to read as an exemption
+  through a stale copy-paste; its self-test grew 81 → 92 assertions. Test
+  fixtures and CI only; no package behavior changes. (RURL-ynirvjxb.)
+
 ## rurl 2.7.0
 
 ### Breaking changes

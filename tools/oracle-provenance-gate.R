@@ -58,10 +58,12 @@
 #                      conventions.normative_dependency_scope names, a
 #                      pin_status and a revision_scheme drawn from that
 #                      convention's two enums, a tracking_issue whenever the
-#                      status is `missing`, an immutable_revision validated
-#                      ACCORDING TO ITS SCHEME plus ISO dates whenever it is
-#                      `verified`, at least one algorithm anchor, and never
-#                      the MISSING[...] sentinel.
+#                      status is `missing`, a not_applicable_reason drawn from
+#                      the third enum whenever -- and ONLY whenever -- the
+#                      status is `not-applicable`, an immutable_revision
+#                      validated ACCORDING TO ITS SCHEME plus ISO dates
+#                      whenever it is `verified`, at least one algorithm
+#                      anchor, and never the MISSING[...] sentinel.
 #  PV10 source answer-- EVERY source group in EVERY fixture CARRIES a non-empty
 #                      normative_dependencies. There is no exemption: a group
 #                      that derives nothing from a normative source records one
@@ -111,8 +113,8 @@
 # pinning DUTY applies ("to any source group whose oracle is transcribed,
 # computed, or hand-derived from a standard"), and it supplies the enum member
 # that makes a universal ANSWER writable -- pin_status "not-applicable" (the
-# source is cited but nothing is derived from it), whose whole purpose is to let
-# a group that owes no pin still answer. It does not itself spell out "every
+# duty does not apply to this source), whose whole purpose is to let a group
+# that owes no pin still answer. It does not itself spell out "every
 # group must carry the key"; PV10 is the rule that says so. The record already
 # practises it -- inst/bench/wpt-url-cases.json's group carries exactly such a
 # negative declaration and explains it as recording "that the source-pinning
@@ -193,11 +195,37 @@ NORMATIVE_DEP_FIELDS <- c("source", "source_url", "immutable_revision",
                           "revision_scheme", "revision_date", "retrieved_at",
                           "pin_kind", "pin_status", "algorithm_anchors", "note")
 
-# The same convention's first enum, verbatim and closed. "verified" = the
-# derivation was checked against that revision on retrieved_at; "missing" = the
-# source is read but no revision is pinned; "not-applicable" = the source is
-# cited but nothing is derived from it.
+# The same convention's first enum, verbatim and closed. A STATUS AXIS ONLY:
+# "verified" = the derivation was checked against that revision on retrieved_at;
+# "missing" = the source is read but no revision is pinned; "not-applicable" =
+# the duty does not apply to this source. WHY the duty does not apply is a
+# different question and lives in NORMATIVE_DEP_NA_REASON below.
 NORMATIVE_DEP_STATUS <- c("verified", "missing", "not-applicable")
+
+# The convention's THIRD enum (RURL-ynirvjxb), and the reason axis the status
+# member used to swallow. "not-applicable" was glossed as "the source is cited
+# but nothing is derived from it", which was FALSE for two of the eight entries
+# carrying it: RFC 3986's 25 rows and PRD 6.1's rows ARE hand-derived from their
+# source's text. What is inapplicable there is the DUTY, not the derivation.
+#
+#   no-derivation   the source is cited but no expected value is derived from
+#                   its TEXT -- values read out of vendored hash-pinned bytes,
+#                   or the authority is another document such as a paper.
+#   frozen-source   derived, but the source is a published, numbered document
+#                   that cannot be amended in place, so the amendment hazard
+#                   the duty exists to detect cannot arise.
+#   internal-source derived, but the source is IN this repository and versioned
+#                   by its git history, so there is no external revision to name
+#                   and a change to it is a diff reviewable beside the fixture.
+#
+# A SEPARATE KEY, NOT A FOURTH pin_status MEMBER, which is what the finding
+# asked for. pin_status answers "what is the state of the pin?" and this answers
+# "why is there no pinning duty?"; one field cannot carry both axes. The status
+# axis is closed while this one is OPEN -- it went from one recognised reason to
+# three inside a single 13-entry record -- so a member per reason would keep
+# being added, whereas a closed second enum grows where it was built to.
+NORMATIVE_DEP_NA_REASON <- c("no-derivation", "frozen-source",
+                             "internal-source")
 
 # Its second enum: what KIND of thing immutable_revision names. A normative
 # source's immutable revision is NOT always a git commit -- UTS-46 has no
@@ -689,6 +717,32 @@ normative_dep_defects <- function(e, lab) {
                             lab, scheme))
     }
   }
+  # The symmetric conditional to tracking_issue-on-missing, and for the same
+  # kind of reason: a status that excuses the duty must say WHICH excuse it is.
+  # Six of the record's eight not-applicable entries derive nothing; two derive
+  # 25 rows and a fixture's worth respectively. Without this key a consumer
+  # reading pin_status cannot tell those apart -- the same undifferentiated
+  # pass that normative_dependencies itself was added to close.
+  if (identical(status, "not-applicable")) {
+    reason <- one_string(e$not_applicable_reason)
+    if (is.na(reason) || !reason %in% NORMATIVE_DEP_NA_REASON) {
+      shown <- if (is.na(reason)) "absent or not a scalar string" else {
+        paste0("\"", reason, "\"")
+      }
+      bad <- c(bad, sprintf(paste("%s: pin_status = not-applicable but",
+                                  "not_applicable_reason is %s -- say which of",
+                                  "%s applies; the status member alone cannot"),
+                            lab, shown, toString(NORMATIVE_DEP_NA_REASON)))
+    }
+  } else if (!is.na(status) && "not_applicable_reason" %in% names(e)) {
+    # Forbidden rather than merely unrequired. An entry that claims a pin state
+    # cannot also excuse the duty, and the copy-paste that leaves the key behind
+    # is exactly how a real pin would come to read as an exemption.
+    bad <- c(bad, sprintf(paste("%s: pin_status = \"%s\" but a",
+                                "not_applicable_reason is recorded -- the",
+                                "reason axis applies only where the duty does",
+                                "not"), lab, status))
+  }
   if (identical(scheme, "unpinned") && !is.na(status) &&
         !status %in% UNPINNABLE_STATUS) {
     bad <- c(bad, sprintf(paste("%s: revision_scheme = unpinned is legal only",
@@ -940,6 +994,7 @@ self_test <- function() {
     retrieved_at = "not applicable",
     pin_kind = "none",
     pin_status = "not-applicable",
+    not_applicable_reason = "no-derivation",
     algorithm_anchors = list("concept-url-parser"),
     note = paste("read out of vendored bytes, not derived from spec text;",
                  "recorded explicitly rather than by omission"))
@@ -1287,9 +1342,12 @@ self_test <- function() {
   expect("PV9 fails on a pin_status outside the enum", pv9_fails(r))
   r <- mk(set_dep(2L, 2L, 1L, "pin_status", "Verified"))
   expect("PV9 fails on a mis-cased pin_status", pv9_fails(r))
-  #     BOUNDARY: not-applicable is the third member and is exercised nowhere
-  #     in the real record yet, so nothing else here would have proved it legal.
-  r <- mk(set_dep(2L, 2L, 1L, "pin_status", "not-applicable"))
+  #     BOUNDARY: not-applicable is the third member. It now carries a
+  #     mandatory reason, so the legal shape is status AND reason together.
+  r <- mk(function(rec) {
+    rec <- set_dep(2L, 2L, 1L, "pin_status", "not-applicable")(rec)
+    set_dep(2L, 2L, 1L, "not_applicable_reason", "no-derivation")(rec)
+  })
   expect("PV9 passes on pin_status = not-applicable",
          identical(verdict(r), TRUE))
 
@@ -1305,6 +1363,7 @@ self_test <- function() {
   #     carries no tracking_issue at all, and must stay legal.
   r <- mk(function(rec) {
     rec <- set_dep(2L, 2L, 2L, "pin_status", "not-applicable")(rec)
+    rec <- set_dep(2L, 2L, 2L, "not_applicable_reason", "no-derivation")(rec)
     set_dep(2L, 2L, 2L, "tracking_issue", NULL)(rec)
   })
   expect("PV9 requires a tracking_issue only for pin_status = missing",
@@ -1376,7 +1435,10 @@ self_test <- function() {
   expect("PV9 fails on pin_status = missing without revision_scheme = unpinned",
          pv9_fails(r))
   #     BOUNDARY: not-applicable is the other status that may be unpinned.
-  r <- mk(set_dep(2L, 2L, 2L, "pin_status", "not-applicable"))
+  r <- mk(function(rec) {
+    rec <- set_dep(2L, 2L, 2L, "pin_status", "not-applicable")(rec)
+    set_dep(2L, 2L, 2L, "not_applicable_reason", "no-derivation")(rec)
+  })
   expect("PV9 passes on not-applicable with revision_scheme = unpinned",
          identical(verdict(r), TRUE))
 
@@ -1479,6 +1541,52 @@ self_test <- function() {
   expect("PV10 refuses to pass over fixtures that hold no groups",
          identical(rule_pv10(list(fixtures = list(list(path = "x.csv"))))[[
            1L]]$ok, FALSE))
+
+  # 44. Check 9 (RURL-ynirvjxb) -- not_applicable_reason, the THIRD enum and
+  #     the reason axis. The status member was carrying two questions; these
+  #     cases pin the split down. dep_not_applicable is the subject throughout:
+  #     alpha's only entry, which is fixtures[2].source_groups[1][1].
+  #
+  #     FALSIFIED, five ways.
+  r <- mk(set_dep(2L, 1L, 1L, "not_applicable_reason", NULL))
+  expect("PV9 fails on not-applicable with no reason", pv9_fails(r))
+  r <- mk(set_dep(2L, 1L, 1L, "not_applicable_reason", "no derivation"))
+  expect("PV9 fails on a reason outside the enum", pv9_fails(r))
+  r <- mk(set_dep(2L, 1L, 1L, "not_applicable_reason", "No-Derivation"))
+  expect("PV9 fails on a mis-cased reason", pv9_fails(r))
+  r <- mk(set_dep(2L, 1L, 1L, "not_applicable_reason", ""))
+  expect("PV9 fails on a blank reason", pv9_fails(r))
+  #     ... and a reason that is an ARRAY, not a scalar. one_string() is why
+  #     this fails rather than being coerced to its first element.
+  r <- mk(set_dep(2L, 1L, 1L, "not_applicable_reason",
+                  list("no-derivation", "frozen-source")))
+  expect("PV9 fails on a reason holding an array", pv9_fails(r))
+
+  # 45. Check 9 -- FORBIDDEN where the duty is not excused, which is the half
+  #     a "required on not-applicable" rule alone would miss. A verified pin
+  #     that also carries an excuse is a copy-paste, and it is exactly how a
+  #     real pin would come to read as an exemption.
+  r <- mk(set_dep(2L, 2L, 1L, "not_applicable_reason", "no-derivation"))
+  expect("PV9 fails on a verified entry carrying a reason", pv9_fails(r))
+  r <- mk(set_dep(2L, 2L, 2L, "not_applicable_reason", "frozen-source"))
+  expect("PV9 fails on a missing entry carrying a reason", pv9_fails(r))
+
+  # 46. Check 9 -- BOUNDARY, once per member, because a rule that accepted only
+  #     the member the record happens to use most would still pass every case
+  #     above. All three are load-bearing in the real record: no-derivation on
+  #     six entries, frozen-source on RFC 3986, internal-source on PRD 6.1.
+  for (reason in c("no-derivation", "frozen-source", "internal-source")) {
+    r <- mk(set_dep(2L, 1L, 1L, "not_applicable_reason", reason))
+    expect(sprintf("PV9 passes on not_applicable_reason = \"%s\"", reason),
+           identical(verdict(r), TRUE))
+  }
+  #     BOUNDARY: the two statuses that owe NO reason must stay writable with
+  #     the key absent. The clean positive covers it, but assert it directly --
+  #     a rule that required the key of every entry would make a pin unwritable.
+  expect("PV9 leaves verified and missing entries free of the key",
+         identical(verdict(mk()), TRUE) &&
+           !"not_applicable_reason" %in% names(dep_base[[1L]]) &&
+           !"not_applicable_reason" %in% names(dep_base[[2L]]))
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
   if (length(st$fail)) {
