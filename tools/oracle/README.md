@@ -157,6 +157,20 @@ like `pslr::psl_refresh()` and is deliberately not a gate. The pin claims those
 29 mappings and nothing more; UTS-46 *Processing* is not implemented, and any
 other non-ASCII code point aborts the derivation instead of being guessed.
 
+**And it fixes bytes, not just a name.** A revision number alone does not pin
+content. Unicode's versioned directories are *intended* to be immutable, but
+intent is not a check: without a digest, an in-place reissue upstream would
+leave the sweep re-deriving happily against changed content and reporting PASS —
+the same silent-supersession hazard this whole duty exists to detect, moved one
+level up. So `pinned_table_sha256` records the digest of the exact file the
+mappings were checked against, the checker verifies it *before* parsing a single
+mapping, and it carries digests for the other sixteen tables too, which makes
+the historical-stability evidence tamper-evident as well as the pin.
+
+Read that digest as **a verification record, not vendored provenance.** No
+upstream bytes live in this repository; the group stays `section_2_3_applies =
+false`, and PV3 recomputes digests for the record's own in-repo fixtures only.
+
 Three details of that shape are load-bearing. `pin_status` is an **enum**
 (`verified` / `missing` / `not-applicable`), never the `MISSING[…]` sentinel,
 because gate rule PV6 fails any `section_2_3_applies = false` group whose

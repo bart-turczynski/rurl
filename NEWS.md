@@ -1175,7 +1175,14 @@
   first and is re-derivable rather than prose: the new
   `tools/oracle/check-uts46-mapping-pin.R` sweeps every `IdnaMappingTable.txt`
   published under `Public/idna` (5.2.0 → 16.0.0) for all 29 transcribed
-  mappings and reports **493 checks, 0 mismatches**, replacing this entry's
+  mappings and reports **493 checks, 0 mismatches**. The pin fixes *bytes*, not
+  just a name: `pinned_table_sha256` records the digest of the exact file
+  checked, verified before a single mapping is parsed, because Unicode's
+  versioned directories are only *intended* to be immutable and without a digest
+  an in-place reissue upstream would go undetected. That digest is a
+  verification record, not vendored provenance — no upstream bytes are in the
+  repository and the group stays `section_2_3_applies = false`. This replaces
+  this entry's
   former unverifiable claim that the mappings "have been stable across every
   Unicode version that defines them". The pin is deliberately narrow — UTS-46
   *Processing* is not implemented and is not claimed; any other non-ASCII code
