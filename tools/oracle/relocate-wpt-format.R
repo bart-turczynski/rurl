@@ -74,12 +74,24 @@ wpt_runnable_reason <- function(entry) {
   "runnable"
 }
 
-# "Is this input an absolute URL?" in the only sense the classifier needs: does
-# it begin with a scheme, so that a base is never consulted. This is RFC 3986's
-# scheme production (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":"), applied to
-# the raw input. It deliberately does not attempt to parse the rest.
+# "Does this input occupy the scheme position?" -- the only sense the classifier
+# needs, because that is what decides whether a base is consulted at all.
+#
+# IT IS DELIBERATELY NOT RFC 3986's SCHEME PRODUCTION, and the difference was
+# found by measurement rather than chosen. The first cut of this rule WAS that
+# production (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":"). It reproduces all
+# 267 wpt-urltestdata rows -- and disagrees with the committed corpus on exactly
+# one ada row: `schéme://example.com` (ada-017), whose scheme is invalid because
+# of the non-ASCII é. WHATWG would indeed fall back to the base there, but the
+# fixture RUNS that row, because rurl can be pointed at it and rejects it: what
+# makes a row unrunnable is needing a base to have a meaning at all, and an
+# input with something in the scheme position does not.
+#
+# So the rule is positional: a non-empty run of characters that are none of
+# "/", "?", "#" or ":", followed by ":". Non-empty because ":foo" has an EMPTY
+# scheme and is a relative reference, not a scheme-ful one.
 wpt_is_absolute <- function(input) {
-  grepl("^[A-Za-z][A-Za-z0-9+.-]*:", input)
+  grepl("^[^/?#:]+:", input)
 }
 
 # Every upstream entry, flattened to the three things a re-location check reads.
@@ -90,6 +102,80 @@ wpt_upstream_frame <- function(cases) {
     reason = vapply(cases, wpt_runnable_reason, character(1)),
     stringsAsFactors = FALSE
   )
+}
+
+# THE MACHINE-READABLE RESTATEMENT, and why it needs its own check.
+#
+# `standard_expectation` is prose-ish: it holds either the literal "failure" or
+# a serialization. `oracle_kind` / `oracle_value` are a later, machine-readable
+# restatement of the same fact, and a restatement can drift from what it
+# restates -- which is exactly the check the tier-3 gates carry for their own
+# restatement columns. Found here by falsification: corrupting a restatement
+# column left the first cut of both tier-2 gates green.
+#
+# The mapping is exact across all 291 tier-2 rows, measured not assumed:
+#
+#   kind  = "not-runnable" when the row does not run;
+#           "failure"      when it runs and upstream rejects;
+#           "exact"        otherwise
+#   value = the expectation for "exact", and NA for the other two -- a rejected
+#           or unrun case has no serialization to carry
+wpt_restatement <- function(runs, expectation) {
+  kind <- ifelse(!runs, "not-runnable",
+                 ifelse(expectation == "failure", "failure", "exact"))
+  list(kind = kind,
+       value = ifelse(kind == "exact", expectation, NA_character_))
+}
+
+# `fsss_whatwg` restates it once more, for the rows that have a serialization.
+# Graded only where both are present: the FSSS columns are populated by a
+# different pass and their absence is not this gate's business.
+#
+# ONE COLUMN, ONE ORACLE -- what is deliberately NOT graded here, and why.
+# `whatwg_expected` also restates the WHATWG expectation, and a falsification
+# run confirmed corrupting it leaves this gate green. It stays out for two
+# reasons that both have to hold. Its NA pattern is exactly `divergence_class`
+# in (`aligned`, `not-runnable`) -- a column derived from how rurl ANSWERS, so
+# an oracle module that read it would be consulting the implementation it
+# grades. And it is already asserted, structurally and against
+# `rfc3986_expected`, by tests/testthat/test-external-url-vectors.R. Two gates
+# deriving one column is how they drift apart.
+wpt_check_restatement <- function(committed, runs) {
+  want <- wpt_restatement(runs, committed$standard_expectation)
+  fail <- character(0)
+  bad <- which(committed$oracle_kind != want$kind)
+  if (length(bad)) {
+    fail <- c(fail, sprintf("%d row(s) restate a different oracle_kind:",
+                            length(bad)))
+    for (i in utils::head(bad, 10L)) {
+      fail <- c(fail, sprintf("    %s  recorded=%s  derived=%s", committed$id[i],
+                              committed$oracle_kind[i], want$kind[i]))
+    }
+  }
+  bad <- which(!identical_na(committed$oracle_value, want$value))
+  if (length(bad)) {
+    fail <- c(fail, sprintf("%d row(s) restate a different oracle_value:",
+                            length(bad)))
+    for (i in utils::head(bad, 10L)) {
+      fail <- c(fail, sprintf("    %s  recorded=%s  derived=%s", committed$id[i],
+                              encodeString(as.character(committed$oracle_value[i])),
+                              encodeString(as.character(want$value[i]))))
+    }
+  }
+  both <- !is.na(committed$fsss_whatwg) & !is.na(committed$oracle_value)
+  bad <- which(both & committed$fsss_whatwg != committed$oracle_value)
+  if (length(bad)) {
+    fail <- c(fail, sprintf(
+      "%d row(s) carry an fsss_whatwg that is not their oracle_value: %s",
+      length(bad), paste(committed$id[utils::head(bad, 5L)], collapse = ", ")))
+  }
+  fail
+}
+
+# NA-aware elementwise equality: NA == NA is TRUE here, because "both absent" is
+# agreement for a column whose absence is meaningful.
+identical_na <- function(a, b) {
+  (is.na(a) & is.na(b)) | (!is.na(a) & !is.na(b) & a == b)
 }
 
 # The fixture's `input` column is NA wherever the value cannot survive a CSV
