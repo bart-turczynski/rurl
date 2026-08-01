@@ -608,6 +608,73 @@ base, so neither rule is exercised. They are covered by
 `about:blank`-based, and by `--self-test`. Recorded because a falsification run
 that only reports its successes is how a blind spot survives.
 
+### An implementation-conformance check is not an oracle check
+
+`tools/oracle/check-fsss-conformance.R`, and the file boundary is the point
+(`RURL-drkcvzex`). Everything else under `tools/oracle/` answers *where an
+expected value came from* — pinned upstream bytes, or pinned normative text,
+never anything `rurl` produced. The `fsss_whatwg` == `oracle_value` comparison
+answers a different question: does the implementation's **captured** output agree
+with that expected value. It was living inside `wpt_check_restatement()`, so a
+tier-2 gate printed `ORACLE RE-LOCATION: PASS` over a set of checks one of which
+was grading `rurl`.
+
+That was not circular — `oracle_value` is independent of `rurl`, so the
+comparison has a real subject — but a conformance assertion filed under an
+oracle's label is how the next reader comes to believe the oracle was checked
+against the implementation. Both tier-2 gates now print two verdicts, and a
+failure is attributed to the arm that owns it:
+
+```
+ORACLE RE-LOCATION: PASS
+fsss conformance: 13 row(s) graded, 2 of them carrying a documented rurl_deviation
+IMPLEMENTATION FSSS CONFORMANCE: PASS
+```
+
+The comparison stays **unconditional** on `rurl_deviation`, for the reason
+recorded in that file: `ada-003` (ADR 0011, `path_encoding`) and `ada-006`
+(ADR 0002, Punycode) deviate on `clean_url`, the *presentation* surface, while
+`fsss_whatwg` is the conformance serialization and both rows carry
+`fsss_conforms = yes`. Conditioning would switch the check off on exactly the
+rows where a presentation surface deviates and the conformance surface still has
+to agree. Those two ids are **named** in `FSSS_REQUIRED_DEVIATION_IDS`, not
+merely counted: a count alone would let them drop out and be replaced by two
+non-deviating rows, silently restoring the conditioning the check refuses.
+
+`wpt-urltestdata` passes a floor of **zero** and says "0 row(s) graded" out loud.
+Every row there is an upstream failure expectation, so no row carries a
+serialization — the check grades nothing by construction. A caller that simply
+omitted it would be silent about that.
+
+### `whatwg_expected` was ungraded for one good reason and one wrong one
+
+It was left out of the tier-2 gates on two stated grounds. The good one stands:
+its **NA pattern** is exactly `divergence_class` in (`aligned`, `not-runnable`),
+a column derived from how `rurl` answers, so an oracle module that derived the
+pattern would be consulting the implementation it grades. The check added by
+`RURL-drkcvzex` does not touch the pattern — absence is not graded at all.
+
+The wrong one extended that to the **value**. A non-NA `whatwg_expected` is the
+WHATWG expectation for the row, and on every tier-2 row the pinned upstream bytes
+state it, independently of `rurl`. Falsified: corrupting it on `ada-003` — a row
+carrying a `rurl_deviation` — left every gate green, because
+`test-external-url-vectors.R` relates the column to `divergence_class` and
+`rfc3986_expected` rather than to any upstream fact, and a deviating row can
+satisfy those with a wrong value.
+
+So it now has an owner, deriving from pinned bytes only:
+
+| Group | Rows graded | Of those, deviating | Derived from |
+| --- | --- | --- | --- |
+| `wpt-urltestdata` | 202 | 21 | upstream's own `failure: true` at the pin |
+| `ada-extra-urltestdata` | 14 | 3 | the pin, or the **second anchor** on a drift-ledgered row |
+| `ada-verifydnslength` | 0 | 0 | nothing to grade — all 17 are `aligned`, so the column is NA |
+
+Both floors are "at least", so the corpus may grow but may not drain: dropping
+`ada-003`'s value fails on the row count *and* on the deviating-row count. And a
+graded row whose expectation cannot be derived at all is a **failure**, never a
+skip — "we could not check it" must not report as "it agrees".
+
 ## A dependency object has to be attached to the group it describes
 
 `PV11` in `tools/oracle-provenance-gate.R`. It exists because of a measured

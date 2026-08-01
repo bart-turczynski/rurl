@@ -127,41 +127,14 @@ wpt_restatement <- function(runs, expectation) {
        value = ifelse(kind == "exact", expectation, NA_character_))
 }
 
-# `fsss_whatwg` restates it once more, for the rows that have a serialization.
-# Graded only where both are present: the FSSS columns are populated by a
-# different pass and their absence is not this gate's business.
-#
-# WHY THIS IS *NOT* CONDITIONED ON `rurl_deviation`, unlike the tier-3 gates.
-# The obvious review question, because verify-youarealiar.R and
-# verify-equivocal-urls.R assert their FSSS equality only where `rurl_deviation`
-# is NA, to avoid the RURL-nknytzxz co-confirmation trap. Two of these rows
-# (ada-003, ada-006) DO carry a deviation and DO satisfy the equality, which is
-# the shape of that trap -- so it was measured rather than argued.
-#
-# The asymmetry is real and the two cases are not the same comparison. Tier 3's
-# `oracle_value` is a HOST ("google.com"), which is why those gates compare it
-# to `fsss_host`; tier 2's is a full SERIALIZATION, compared to `fsss_whatwg`.
-# Measured across the whole fixture: all 16 rows where fsss_whatwg differs from
-# oracle_value are tier-3 rows, and they differ because the two columns hold
-# different KINDS of value there, not because an implementation deviates.
-#
-# And the deviations on ada-003 (ADR 0011, path_encoding) and ada-006 (ADR 0002,
-# Punycode) are deviations of `clean_url` -- the presentation surface -- while
-# `fsss_whatwg` is the conformance serialization, and both rows carry
-# fsss_conforms = "yes". So the equality holding there is the EXPECTED state,
-# not luck. Conditioning on `rurl_deviation` would have been the error: it would
-# switch the check off on exactly the rows where a presentation surface deviates
-# and the conformance surface still has to agree.
-#
-# ONE COLUMN, ONE ORACLE -- what is deliberately NOT graded here, and why.
-# `whatwg_expected` also restates the WHATWG expectation, and a falsification
-# run confirmed corrupting it leaves this gate green. It stays out for two
-# reasons that both have to hold. Its NA pattern is exactly `divergence_class`
-# in (`aligned`, `not-runnable`) -- a column derived from how rurl ANSWERS, so
-# an oracle module that read it would be consulting the implementation it
-# grades. And it is already asserted, structurally and against
-# `rfc3986_expected`, by tests/testthat/test-external-url-vectors.R. Two gates
-# deriving one column is how they drift apart.
+# `fsss_whatwg` IS ALSO GRADED, BUT NOT HERE AND NOT AS PROVENANCE. It is a
+# captured rurl output column, so comparing it to `oracle_value` is an
+# implementation-conformance assertion rather than a statement about where the
+# expected value came from. It lives in tools/oracle/check-fsss-conformance.R
+# (RURL-drkcvzex) and is reported by each caller under its own heading; that file
+# carries the reasoning for why the comparison is deliberately unconditional on
+# `rurl_deviation`. It was inside this function, which made a conformance check
+# read as part of "ORACLE RE-LOCATION: PASS".
 wpt_check_restatement <- function(committed, runs) {
   want <- wpt_restatement(runs, committed$standard_expectation)
   fail <- character(0)
@@ -184,13 +157,74 @@ wpt_check_restatement <- function(committed, runs) {
                               encodeString(as.character(want$value[i]))))
     }
   }
-  both <- !is.na(committed$fsss_whatwg) & !is.na(committed$oracle_value)
-  bad <- which(both & committed$fsss_whatwg != committed$oracle_value)
-  if (length(bad)) {
+  fail
+}
+
+# `whatwg_expected` -- THE THIRD RESTATEMENT, AND IT NOW HAS AN OWNER.
+#
+# It was deliberately ungraded here, on two stated reasons, and one of them was
+# wrong (RURL-drkcvzex). The good half: its NA PATTERN is exactly
+# `divergence_class` in (`aligned`, `not-runnable`), a column derived from how
+# rurl ANSWERS, so an oracle module that derived the pattern would be consulting
+# the implementation it grades. That still holds, and this check does not touch
+# the pattern -- absence is not graded at all.
+#
+# The bad half was extending that to the VALUE. A non-NA `whatwg_expected` is the
+# WHATWG expectation for the row, and on every tier-2 row the pinned upstream
+# bytes state it -- so it is derivable from the same independent source as
+# `standard_expectation`, with no reference to rurl. Leaving it out meant a
+# corrupted value could pass: the structural assertions in
+# tests/testthat/test-external-url-vectors.R relate it to `divergence_class` and
+# `rfc3986_expected` rather than to any upstream fact, and a row carrying a
+# `rurl_deviation` can satisfy them with a wrong value. Falsification confirmed
+# it: corrupting `whatwg_expected` on ada-003, a deviation-carrying row, left
+# every gate green.
+#
+# `derived` is the expectation read out of the pinned upstream bytes, aligned
+# row-for-row with `committed`, and NA where the caller cannot align a row. A
+# graded row with no derived value is a FAILURE, not a skip -- "we could not
+# check it" must never report as "it agrees".
+wpt_check_whatwg_expected <- function(committed, derived, min_rows,
+                                      min_deviation_rows = 0L) {
+  fail <- character(0)
+  graded <- which(!is.na(committed$whatwg_expected))
+  undeliverable <- graded[is.na(derived[graded])]
+  if (length(undeliverable)) {
     fail <- c(fail, sprintf(
-      "%d row(s) carry an fsss_whatwg that is not their oracle_value: %s",
-      length(bad), paste(committed$id[utils::head(bad, 5L)], collapse = ", ")))
+      paste0("%d row(s) record a whatwg_expected that could not be derived from ",
+             "the pinned upstream bytes at all: %s"),
+      length(undeliverable),
+      paste(committed$id[utils::head(undeliverable, 5L)], collapse = ", ")))
   }
+  cmp <- setdiff(graded, undeliverable)
+  bad <- cmp[committed$whatwg_expected[cmp] != derived[cmp]]
+  if (length(bad)) {
+    fail <- c(fail, sprintf("%d row(s) record a whatwg_expected that upstream",
+                            length(bad)))
+    fail <- c(fail, "    does not state:")
+    for (i in utils::head(bad, 10L)) {
+      fail <- c(fail, sprintf("    %s  recorded=%s  upstream=%s",
+                              committed$id[i],
+                              encodeString(committed$whatwg_expected[i]),
+                              encodeString(derived[i])))
+    }
+  }
+  if (length(graded) < min_rows) {
+    fail <- c(fail, sprintf(
+      paste0("only %d row(s) carry a whatwg_expected, and the floor is %d -- a ",
+             "column check whose population shrinks passes for the wrong reason"),
+      length(graded), min_rows))
+  }
+  ndev <- sum(!is.na(committed$rurl_deviation[graded]))
+  if (ndev < min_deviation_rows) {
+    fail <- c(fail, sprintf(
+      paste0("only %d graded row(s) carry a rurl_deviation, and the floor is %d ",
+             "-- those are the rows the fixture's own structural assertions ",
+             "cannot referee, so they are the reason this check exists"),
+      ndev, min_deviation_rows))
+  }
+  attr(fail, "graded") <- length(graded)
+  attr(fail, "deviating") <- ndev
   fail
 }
 
