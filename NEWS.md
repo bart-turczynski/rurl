@@ -1123,6 +1123,21 @@
   from over-permissive to conformant-reject. Analysis only — no behavior
   changed in this entry. (RURL-wlqhmbdw.)
 
+- **The oracle provenance record now states a second pinning duty, and every
+  source group must answer it.** `tests/testthat/fixtures/oracle-provenance.json`
+  pinned only *vendored bytes* (its section 2.3), so a group that vendored
+  nothing but derived its expected values from a standard's **text** was
+  reported fully provenanced — which is how `ip-obfuscation`'s unpinned in-repo
+  transcription, and six section citations that resolve to no revision of the
+  WHATWG URL Standard, survived review. Source pinning is now recorded per group
+  in `normative_dependencies`, and `conventions.normative_dependency_scope`
+  states it as universal *as a question*: the key is required on every source
+  group, and a group with no normative dependency answers with
+  `pin_status = "not-applicable"` and a reason rather than by omission, because
+  silence was the failure mode. `tools/oracle-provenance-gate.R` enforces both
+  halves — PV9 the shape of an answer, PV10 its presence on all 12 groups. Test
+  fixtures and CI only; no package behavior changes. (RURL-qhwktfcw.)
+
 ## rurl 2.7.0
 
 ### Breaking changes
