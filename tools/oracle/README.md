@@ -442,6 +442,37 @@ machine since the port began.
   Collapsing them would make an outage read as a defect — and a partial pass
   over a short block is the failure this whole directory exists to prevent.
 
+### They are not blocking gates, but they are no longer manual either
+
+`.github/workflows/oracle-upstream.yml` (`RURL-drkcvzex`). Keeping the fetching
+verifiers out of the merge gate was right; leaving them with **no automated path
+at all** was not. `workflow_dispatch` on `verify.yml` does not help — it widens
+the `if:` conditions on the tier-2 `--self-test` steps, and the full verifiers
+are not steps there in the first place — so the fixture-to-upstream comparison
+ran only when a person remembered to type the command.
+
+The new workflow runs all three, weekly and on demand, and it distinguishes the
+two outcomes the verifiers already distinguish:
+
+| Exit | Meaning | Job |
+| --- | --- | --- |
+| 1 | the fixture disagrees with upstream | **fails** |
+| 2 | the source could not be resolved | reported as `SOURCE UNAVAILABLE`, never as a pass |
+
+An upstream outage is not a defect in this repository, so exit 2 does not fail
+the job — but it is never silently absorbed either: each one emits a warning
+annotation, and a run where all three are unresolvable states in its summary that
+it **produced no evidence**. `workflow_dispatch` takes a `fail_on_unavailable`
+input for when the question actually being asked is whether the sources can still
+be reached.
+
+It is a separate workflow rather than a job in `verify.yml` so that it is outside
+the merge gate **by construction** rather than by an `if:` somebody can widen —
+and so `tools/verify.R`, which derives its blocking gate list from `verify.yml`
+alone, cannot pick up a network-reading check for the local pre-push hook. All
+four paths were exercised before the file was trusted: unavailable-and-tolerated,
+unavailable-and-requested-to-fail, clean, and one group drifted.
+
 ### These are not blocking CI gates
 
 They read the network, so they follow `check-uts46-mapping-pin.R`'s posture: run
