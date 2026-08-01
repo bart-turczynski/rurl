@@ -1,0 +1,41 @@
+# PROBE ONLY — not the proposed gate.
+#
+# This file exists to answer one empirical question before any design work is
+# committed to: will a GitLab free-tier shared runner accept a job for this
+# private project at all? Zero pipelines have ever run here, and free-tier
+# shared runners are gated behind account identity verification, so
+# `shared_runners_enabled: true` in the project settings is a setting, not a
+# capability. It is cheaper to find out than to reason about.
+#
+# Two jobs, deliberately separated so a failure says which layer broke:
+#   runner-probe  — can ANY job be scheduled (busybox, no toolchain)
+#   gate-probe    — does the base-R, network-free gate family run in CI
+#
+# Delete this branch once the answer is recorded.
+
+stages:
+  - probe
+
+runner-probe:
+  stage: probe
+  image: busybox:latest
+  script:
+    - echo "a shared runner picked up this job"
+    - echo "runner=$CI_RUNNER_DESCRIPTION project=$CI_PROJECT_ID sha=$CI_COMMIT_SHA"
+
+# The gate family that needs no package installation: every one of these reads
+# tracked files or sources a single R/ file, so it needs base R and nothing
+# else. This is the subset worth running server-side on a minutes budget --
+# R CMD check, coverage and the cross-platform matrix are a separate question.
+gate-probe:
+  stage: probe
+  image: r-base:latest
+  script:
+    - Rscript design/work/url-v3/tools/validate-transitions.R
+    - Rscript tools/cache-doc-consistency.R
+    - Rscript tools/status-doc-consistency.R
+    - Rscript tools/diagnostics-doc-consistency.R
+    - Rscript tools/release-rule-check.R
+    - Rscript tools/deferral-gate.R
+    - Rscript design/work/url-v3/tools/oracle-label-gate.R
+    - Rscript design/work/url-v3/tools/traceability-gate.R
