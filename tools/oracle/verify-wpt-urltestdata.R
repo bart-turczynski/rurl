@@ -254,9 +254,19 @@ self_test <- function() {
          wpt_runnable_reason(cases[[4]]), "base-relative")
   expect("about:blank with an absolute input is runnable",
          wpt_runnable_reason(cases[[5]]), "runnable")
-  expect("scheme detection accepts a scheme", wpt_is_absolute("sc://a"), TRUE)
-  expect("scheme detection rejects a path", wpt_is_absolute("./foo"), FALSE)
-  expect("scheme detection rejects a fragment", wpt_is_absolute("#x"), FALSE)
+  expect("scheme position: a scheme occupies it",
+         wpt_occupies_scheme_position("sc://a"), TRUE)
+  expect("scheme position: a path does not",
+         wpt_occupies_scheme_position("./foo"), FALSE)
+  expect("scheme position: a fragment does not",
+         wpt_occupies_scheme_position("#x"), FALSE)
+  # FITTED APPLICABILITY METADATA, NOT AN ABSOLUTENESS ORACLE, asserted rather
+  # than left to the name: an INVALID scheme still occupies the position, so this
+  # says TRUE where WHATWG would fall back to the base. That is ada-017, the row
+  # that falsified the RFC 3986 scheme production, and the disagreement is the
+  # rule rather than an edge of it.
+  expect("an invalid scheme still occupies the scheme position",
+         wpt_occupies_scheme_position("sch\u00e9me://example.com"), TRUE)
 
   # THE NUL SHIM. Its failure mode is silent agreement, so the negative case is
   # the one that matters: without the shim these two DIFFERENT inputs decode to

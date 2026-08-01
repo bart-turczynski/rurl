@@ -1229,9 +1229,10 @@
   does not. Both deltas are now exact ledgers — a ledger row that stops
   disagreeing fails too, so the gap cannot be closed by adopting upstream's
   current value. Sweeping all 17 commits that ever touched that path found
-  exactly one revision reproducing 24/24, which bounds the unrecorded import to
-  `[2025-07-16, 2026-07-17)` and narrows `RURL-vwurxmzm`'s conclusion that the
-  import revision could not be resolved at all.
+  exactly one revision reproducing 24/24, which bounds the upstream **content
+  state** the block agrees with to `[2025-07-16, 2026-07-17)`. That bounds the
+  *bytes*, not the fetch and not the import revision — see the correction under
+  `RURL-drkcvzex` below.
 
   One latent defect fell out of the reuse: `derive-ip-obfuscation.R`'s IPv4
   number parser applied its double-precision guard *before* the digit-validity
