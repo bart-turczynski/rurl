@@ -144,6 +144,24 @@
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
           "standard_section": "URL serializing (section 4.5), over the URL class API getters the import records (protocol, username, password, hostname, port, pathname, search, hash)",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "9dc3827fc722ac4af3f11061aa3e9adb44a17c8b",
+              "revision_scheme": "git-commit",
+              "revision_date": "2026-07-06",
+              "retrieved_at": "2026-08-01",
+              "pin_kind": "retrieved-at",
+              "pin_status": "verified",
+              "algorithm_anchors": [
+                "concept-url-serializer"
+              ],
+              "note": "THE FLAGSHIP BOTH-DUTIES CASE. This group has genuine artifact provenance -- a pinned, hash-verified WPT import at upstream_revision 181476aa16e8b28a07698bef3a0275fa53dd22e5 -- AND it derives rather than quotes its expected values: none of the 43 expected `href` strings occurs in the imported bytes. Each one is RECOMPUTED by tools/oracle/derive-credentials-fragments.R, which transcribes the URL serializer (section 4.5, #concept-url-serializer) over the components the import records, including the serializer's \"if url includes credentials\" branch -- the step that makes an empty userinfo serialize with the \"@\" dropped, delimiter and all, which is this group's most load-bearing shape. WHY THE PIN IS OWED DESPITE THE ARTIFACT PIN: standard_version above reads \"Living Standard (unversioned); pinned by upstream_revision\", which dates the standard only BY PROXY through the WPT artifact's revision -- and a WPT revision is a compatibility-suite RELEASE DATE, not the spec revision the transcription implements. WPT is an independent project with its own cadence; it is a second witness, not a snapshot of the standard's text. So the artifact pin secures the INPUTS and the recorded components, while this entry secures the spec text the serializer transcription was written and verified against. An amendment to #concept-url-serializer upstream would turn all 43 expectations into a reading of a superseded revision without changing a byte in this repository, and without moving upstream_revision either. section_2_3_applies stays true and no section-2.3 field was added, gained or moved by recording this.",
+              "anchor_scope_note": "ONE anchor, deliberately. This derivation serializes only: the host arrives already serialized in the import's `hostname` getter and is copied verbatim, so no host anchor is read -- #concept-host-parser and #concept-host-serializer would be over-claims here, which is what separates this entry from ip-obfuscation's eight. Two departures from a naive reading of 4.5 are lexical rather than spec-derived and are recorded so they are not mistaken for transcribed steps: the '?' and '#' delimiters are recovered from the input string because the URL class API collapses absent and present-but-empty to \"\", and the derivation refuses any case outside a special scheme with a non-empty host rather than guessing the \"//\"."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array: this derivation reads exactly one normative source. It is an array all the same because the shape is the record's, not the group's -- see conventions.normative_dependency_scope and ip-obfuscation, whose transcription reads two sources pinned to different degrees. No UTS-46 entry belongs here: the hosts are copied from the import, never re-mapped.",
           "claim_kind": "conformance",
           "claim_kind_basis": "test-external-url-vectors.R:530-567 asserts rurl's serialization EQUALS the standard's on every row (expect_identical(cf$fsss_whatwg, cf$standard_expectation)) and that the divergence set is empty. That is a conformance assertion, not the characterization/regression pin its sibling groups carry: the expected value is the standard's own serialization of upstream's recorded components, so a mismatch is a rurl defect rather than a reviewed baseline change. It is scored on the FSSS (surface (b)), never on clean_url -- surface (c) drops credentials and fragments by contract, which is the exact reason this shape was missing from the corpus until a3d37e2.",
           "applicability_selector": "Success-arm cases of inst/bench/wpt-url-cases.json carrying at least one of: credentials (non-empty username or password); EMPTY credentials (an '@' in the input the parser resolved to an empty userinfo, excluding an '@' in path, query or fragment); a fragment (non-empty hash, or an input ending in '#'); or a present-but-empty query (an input ending in '?', or search == '?'). Restricted to a special scheme (http/https/ws/wss/ftp/file) with a non-empty hostname, so the '//' is never guessed. Cases whose input was already covered by this fixture or by url-standard-conformance.csv were dropped. 43 rows result; all carry runnable = yes and oracle_kind = exact.",
@@ -378,6 +396,28 @@
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned); citation checked at citation_upstream_revision",
           "standard_section": "host parsing -- IPv4 whole-number, dotted-decimal, octal and hexadecimal forms",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "9dc3827fc722ac4af3f11061aa3e9adb44a17c8b",
+              "revision_scheme": "git-commit",
+              "revision_date": "2026-07-06",
+              "retrieved_at": "2026-08-01",
+              "pin_kind": "retrieved-at",
+              "pin_status": "verified",
+              "algorithm_anchors": [
+                "concept-host-parser",
+                "ends-in-a-number-checker",
+                "concept-ipv4-parser",
+                "ipv4-number-parser",
+                "concept-ipv4-serializer"
+              ],
+              "note": "THE INPUT PIN DOES NOT COVER THE EXPECTATIONS, and this entry exists to stop it being read as though it did. What citation_upstream_revision pins is exactly what import_status says it pins: \"the INPUT string of each row is cited from WPT\" -- and relocation_verified (22/23, the 23rd elided for readability) is a claim about those input STRINGS re-locating in urltestdata.json at that revision. It is not a claim about any expected value. The rest of import_status is the other half of the sentence: \"the expected values are derived here\", and claim_kind_basis says why that matters -- \"the WPT verdict is not inherited\", so upstream's own expectation is deliberately NOT the oracle. The expected_host, expected_host_type and expected_clean_url on these rows are hand-derived from the standard's algorithm steps, which makes the standard's TEXT load-bearing and unpinned until now. Two independent hazards, two pins: WPT could restate or drop an input (caught by citation_upstream_revision), and WHATWG could amend the IPv4 rules (caught by this entry, and by nothing else -- a WPT revision is a compatibility-suite release date, not a snapshot of the spec text). standard_version above reads \"citation checked at citation_upstream_revision\", which dates the CITATION and not the standard; this entry supplies the missing half. section_2_3_applies stays false and no section-2.3 field was added, gained or moved by recording it.",
+              "anchor_scope_note": "COVERS 19 OF 23 ROWS -- the url_standard = whatwg rows, per applicability_selector. #concept-host-parser and #ends-in-a-number-checker carry the four foo.09 / foo.0x4 / 0x1.2.3.4.5 / 1.2.3.08 shapes, where the whole question is whether the host is even submitted to the IPv4 parser; #concept-ipv4-parser and #ipv4-number-parser carry the radix, arity, overflow and range rejections (0xffffffff1, 4294967296, 1.2.3.4.5, 192.168.0.257, the invalid octal digits) and the empty-hex 0x.0x.0 forms; #concept-ipv4-serializer carries the dotted-decimal expected_host. THE OTHER FOUR ROWS ARE NOT COVERED BY THIS PIN and are named rather than absorbed: host-ends-in-number-mixed-decimal-wpt-rfc, -hex-wpt-rfc, -over-arity-wpt-rfc and -bad-octal-wpt-rfc carry url_standard = rfc3986, and their expectation -- the same WPT input kept as a reg-name -- derives from RFC 3986 section 3.2.2, not from any WHATWG algorithm. No second array entry is recorded for it because RFC 3986 is a frozen published document with no living text to drift: the amendment hazard this duty exists to detect cannot arise there, so a pin would record a version that is already implied by the document's name. That is a judgement about RFC 3986's nature, not about those four rows being unimportant. #concept-url-serializer is deliberately absent: expected_clean_url is rurl's surface (c), not the standard's serialization, and citing the URL serializer for it would over-claim."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array covering the 19 whatwg-profile rows. The 4 rfc3986-profile rows read a second, non-living document (RFC 3986 section 3.2.2 reg-name); anchor_scope_note names them and states why a frozen RFC is not given an entry here. This key is additional to the section-2.3 contract, not part of it, and the group's citation_* fields -- which pin the cited INPUTS, not the derived expectations -- are neither superseded nor discharged by it.",
           "claim_kind": "conformance",
           "claim_kind_basis": "hand-derived expected value over a WPT-cited input; the WPT verdict is not inherited.",
           "applicability_selector": "23 rows; url_standard = whatwg on 19 and rfc3986 on 4.",
@@ -401,6 +441,32 @@
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned); the fixture cites algorithm steps by section, not by upstream commit",
           "standard_section": "per row, in the source_reference column",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "9dc3827fc722ac4af3f11061aa3e9adb44a17c8b",
+              "revision_scheme": "git-commit",
+              "revision_date": "2026-07-06",
+              "retrieved_at": "2026-08-01",
+              "pin_kind": "retrieved-at",
+              "pin_status": "verified",
+              "algorithm_anchors": [
+                "concept-host-parser",
+                "ends-in-a-number-checker",
+                "concept-ipv4-parser",
+                "ipv4-number-parser",
+                "concept-ipv4-serializer",
+                "concept-url-parser",
+                "concept-url-serializer",
+                "percent-encode-set",
+                "path-percent-encode-set"
+              ],
+              "note": "THE PUREST CASE OF THE DUTY, which is why the pin is taken directly instead of borrowed. import_status states it plainly: every expected value in these 20 rows is \"hand-derived from the cited standard's algorithm steps\", and standard_version records that the fixture \"cites algorithm steps by section, not by upstream commit\". Nothing was vendored (section_2_3_applies = false) and there is no artifact revision to date the standard by proxy -- so before this entry the group's oracle was a reading of the Living Standard with nothing at all dating it, and an amendment to any cited step would have turned these expectations into a reading of a superseded revision silently. This pin is the whatwg/url revision the 20 derivations were written and verified against on retrieved_at. The anchors above are the durable key; the section numbers in the source_reference column are the secondary hint (\"SS1.3\" is a percent-encode-set citation whose number has moved before), and the three rows that already name a dfn anchor in the column are the pattern the rest are read through. HETEROGENEITY, MEASURED NOT ASSUMED: all 20 source_reference values were read; every one derives from WHATWG URL Standard text and none cites WPT, a paper, an RFC or a PRD, so a single group-level SOURCE pin is honest. The rows are NOT homogeneous in WHICH ALGORITHM they read, however, so the pin's coverage is stated row-by-row in anchor_scope_note rather than left as a blanket claim.",
+              "anchor_scope_note": "WHICH ROWS THE PIN COVERS, by algorithm, all 20 accounted for. (1) NINE IPv4 rows -- host-canonical-ipv4, host-whole-decimal, host-whole-decimal-zero, host-whole-hex, host-whole-octal, host-dotted-octal-single-part, host-dotted-octal-multi-part, host-short-form, host-out-of-range -- read #concept-host-parser, then #ends-in-a-number-checker (which is what decides these hosts are IPv4 at all rather than reg-names), #concept-ipv4-parser and #ipv4-number-parser for the decimal/octal/hex radix rules, the short-form redistribution and the last-part range check, and #concept-ipv4-serializer for the dotted-decimal expected_host. (2) THREE percent-encode-set rows -- path-reserved-slash (which cites #percent-encode-set), path-reserved-question and path-reserved-hash (which cite #path-percent-encode-set) -- read those two sets through the URL parser's path state (#concept-url-parser): the claim is that an already-encoded %2F/%3F/%23 is not decoded. (3) TWO path-serialization rows -- path-unreserved-tilde, path-unreserved-mixed-hex-case -- read #concept-url-parser and #concept-url-serializer for the fact that WHATWG neither decodes %7E nor case-normalizes %4a%6A. (4) SIX host-parser rows read #concept-host-parser only: the five ADR 0009 -> ADR 0013 host-charset-shim rows (exclam, apostrophe, plus, equals, semicolon) turn on its forbidden-host-code-point set, and host-pct-gap-backtick (RURL-rgjpcbuk) on the step ORDER -- percent-decode before the forbidden-code-point check. NOT A NORMATIVE SOURCE, recorded so the token is not mistaken for one: five of those six carry \"(ada-confirmed)\" in the column and all six name an in-repo decision (ADR 0009 -> ADR 0013, RURL-rgjpcbuk). ada is an independent implementation used as a corroborating witness and the ADRs are this repository's own decisions; neither is a source the expected values are DERIVED from, so neither gets an entry in this array -- the derivation is from the standard's text, and ada's agreement is evidence about it, not a second normative reading. The ada witness is itself unpinned to any ada revision."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array because all 20 rows derive from a single document, verified by reading every source_reference value rather than inferred from the group name. The array shape is still the record's convention (one derivation may read several sources; see ip-obfuscation), and the WITHIN-source heterogeneity that a one-member array could hide -- four distinct algorithm families across the 20 rows -- is carried explicitly in the entry's anchor_scope_note instead of being papered over by a blanket pin.",
           "claim_kind": "conformance",
           "claim_kind_basis": "hand-derived expected value checked against the cited algorithm step; not an imported oracle row.",
           "applicability_selector": "20 rows; url_standard = whatwg on all 20.",
