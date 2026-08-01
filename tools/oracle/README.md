@@ -136,11 +136,32 @@ degrees. `ip-obfuscation` reads two:
 | WHATWG URL Standard | `verified` | **Closed.** Pinned at `whatwg/url` `9dc3827f` (2026-07-06), the revision its transcribed algorithms were verified against. |
 | UTS #46 IDNA mapping table | `missing` | **Open**, carrying `tracking_issue: RURL-qhwktfcw`. Three rows turn on the mapping table's treatment of U+3002/U+FF0E/U+FF61; no Unicode version is pinned for them. |
 
-Two details of that shape are load-bearing. `pin_status` is an **enum**
+Three details of that shape are load-bearing. `pin_status` is an **enum**
 (`verified` / `missing` / `not-applicable`), never the `MISSING[…]` sentinel,
 because gate rule PV6 fails any `section_2_3_applies = false` group whose
 subtree contains that sentinel — writing one here would report a section-2.3 gap
-this group does not have. And citations are **anchor-first**: the stable `<dfn>`
+this group does not have.
+
+It is also a **status axis only**. Why the duty does not apply is a separate
+question, carried by a `not_applicable_reason` that PV9 requires on exactly the
+`not-applicable` entries and forbids elsewhere. That split (RURL-ynirvjxb)
+corrected a real error: the member used to be glossed "the source is cited but
+nothing is derived from it", which was false for two of the eight entries
+carrying it — RFC 3986's 25 rows and PRD §6.1's rows *are* hand-derived from
+their source's text, and what is inapplicable there is the **duty**, not the
+derivation. The three measured reasons:
+
+| Reason | Derives from the source's text? | Why no duty |
+| --- | --- | --- |
+| `no-derivation` | No | Values are read out of vendored, hash-pinned bytes, or the authority is another document (a transcribed paper). |
+| `frozen-source` | **Yes** | A published, numbered document cannot be amended in place, so the drift the duty detects cannot arise. |
+| `internal-source` | **Yes** | The source is in this repository, git-dated, and changes in the same pull request as the fixture it would invalidate. |
+
+A separate key rather than a fourth `pin_status` member, because the status axis
+is closed while the reason axis is open — it went from one recognised reason to
+three inside a single 13-entry record.
+
+And citations are **anchor-first**: the stable `<dfn>`
 fragment id is the durable key and the section number is only a hint. That is
 measured, not preferred — host parsing was section 3.2 in 2016, 3.4 in 2019 and
 2022, and 3.5 today, while `#concept-host-parser` resolves in all of them.
