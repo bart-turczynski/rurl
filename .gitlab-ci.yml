@@ -55,6 +55,9 @@ gate-probe-control-plane:
   image: r-base:latest
   script:
     - apt-get update -qq && apt-get install -y --no-install-recommends r-cran-yaml r-cran-digest
-    - Rscript design/work/url-v3/tools/validate-transitions.R
-    - Rscript design/work/url-v3/tools/validate-records.R || echo "EXPECTED: G3-acceptance-2 hash drift"
-    - Rscript design/work/url-v3/tools/validate-manifest.R design/work/url-v3/manifest.yaml || echo "EXPECTED: P0.6 awaiting its seal"
+    # Quoted as whole scalars: an unquoted "EXPECTED: ..." makes YAML read the
+    # ": " as a mapping key and the pipeline dies with a config error before any
+    # job is created (run 2). Run `glab ci lint .gitlab-ci.yml` before pushing.
+    - 'Rscript design/work/url-v3/tools/validate-transitions.R'
+    - 'Rscript design/work/url-v3/tools/validate-records.R || echo "EXPECTED - G3-acceptance-2 hash drift"'
+    - 'Rscript design/work/url-v3/tools/validate-manifest.R design/work/url-v3/manifest.yaml || echo "EXPECTED - P0.6 awaiting its seal"'
