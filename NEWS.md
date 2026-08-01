@@ -1192,6 +1192,54 @@
   `pin_status: missing`. Test fixtures and tooling only; no package behavior
   changes. (RURL-qhwktfcw.)
 
+- **Every oracle group is now re-derivable from a clean checkout, and the last
+  three exposed two record errors.** All seven per-source builders behind
+  `tests/testthat/fixtures/external-url-vectors.csv` lived in gitignored
+  `_scratch/`, so `generation_command` named paths no reviewer could run. The
+  final three — `wpt-urltestdata` (267 rows), `ada-extra-urltestdata` (24) and
+  `ada-verifydnslength` (17) — are the *tier-2* groups, whose upstream bytes are
+  pinned but deliberately not vendored. All three recorded `raw_source_sha256`
+  values were re-fetched and **reproduce byte-exact**, including both Ada files,
+  which had been gone from the machine that imported them; a shared resolver
+  (`tools/oracle/fetch-source.R`) reads each pin out of the record rather than
+  copying it, verifies the digest before parsing, and treats an unresolvable
+  source as exit 2 — never a pass. Because they read the network they are not
+  blocking CI gates, following `check-uts46-mapping-pin.R`; CI runs their
+  offline `--self-test`.
+
+  Two things the record asserted turned out to be false. **`ada-verifydnslength`
+  was not an imported oracle at all**: it declared `pin_status:
+  not-applicable` / `no-derivation` and "every expected value here is READ OUT
+  of vendored, hash-pinned bytes", but upstream marks 10 of its 17 entries
+  `failure: true` while the fixture records `accept` for all 17. Those ten
+  verdicts are hand-derived from the URL Standard — host parsing runs the domain
+  parser with `beStrict = false`, and ToASCII binds *VerifyDnsLength* to
+  `beStrict`, so the standard performs no DNS length check and Ada's is
+  optional. The group now carries a **verified** pin at `whatwg/url`
+  `9dc3827f…`, and its gate derives *both* readings, requiring the RFC 1035
+  §2.3.4 one to equal upstream's own verdict on every row, so the ten-row
+  disagreement is explained rather than tolerated. The lesson generalises: PV10
+  makes the source-pinning question mandatory and PV9 makes the answer
+  well-formed, but this group answered in the required shape and answered
+  *wrongly*, while stating the derivation it denied two sentences later.
+
+  And **`ada-extra-urltestdata`'s pinned revision does not reproduce it**:
+  upstream commit `fbea5b01` re-expected one case and added three entries after
+  the import, so at the pin all 24 *inputs* re-locate and one *expected value*
+  does not. Both deltas are now exact ledgers — a ledger row that stops
+  disagreeing fails too, so the gap cannot be closed by adopting upstream's
+  current value. Sweeping all 17 commits that ever touched that path found
+  exactly one revision reproducing 24/24, which bounds the unrecorded import to
+  `[2025-07-16, 2026-07-17)` and narrows `RURL-vwurxmzm`'s conclusion that the
+  import revision could not be resolved at all.
+
+  One latent defect fell out of the reuse: `derive-ip-obfuscation.R`'s IPv4
+  number parser applied its double-precision guard *before* the digit-validity
+  check, so an over-long **non-numeric** label aborted instead of failing
+  cleanly. Fail-closed, so never a wrong answer, but a refusal to answer a
+  question the spec answers. Test fixtures and tooling only; no package behavior
+  changes. (RURL-ozdejfzl.)
+
 ## rurl 2.7.0
 
 ### Breaking changes

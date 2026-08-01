@@ -477,8 +477,21 @@ self_test <- function() {
          errs(ipobf_split_host("https://127.0.0.1/")), TRUE)
   expect("path beyond / aborts",
          errs(ipobf_split_host("http://127.0.0.1/a")), TRUE)
-  expect("inexact radix value aborts",
-         errs(ipobf_ipv4_number_parser(strrep("f", 20L))), TRUE)
+  # VALIDITY BEFORE PRECISION. The guard exists for a part that IS a number and
+  # is too wide for a double, so both halves are asserted: an over-long NUMERIC
+  # part still aborts, and an over-long part that is not a number in its radix
+  # returns failure cleanly rather than refusing to answer. The second case is
+  # the one the original ordering got wrong -- it used a 20-character run of
+  # "f", which is not a radix-10 digit at all, so it was scoring the abort for
+  # the wrong reason.
+  expect("inexact radix-10 value aborts",
+         errs(ipobf_ipv4_number_parser(strrep("9", 20L))), TRUE)
+  expect("inexact radix-16 value aborts",
+         errs(ipobf_ipv4_number_parser(paste0("0x", strrep("f", 20L)))), TRUE)
+  expect("an over-long NON-numeric part fails rather than aborting",
+         ipobf_ipv4_number_parser(strrep("f", 20L))$ok, FALSE)
+  expect("a long non-numeric last label is not a number",
+         ipobf_ends_in_number(paste0("br.", strrep("loren", 12L))), FALSE)
   expect("empty roster aborts",
          errs(derive_ip_obfuscation(ip_obfuscation_roster()[0L, ])), TRUE)
 

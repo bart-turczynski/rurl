@@ -531,6 +531,62 @@ checked. Measured: with a digest-only key, re-pointing the second anchor at the
 revision that *broke* the block left the gate green. The key is now
 `(digest, revision)`, and that mutation misses the cache, fetches, and fails.
 
+### The group that turned out not to be tier 2 at all
+
+`ada-verifydnslength` is filed as an imported suite, and its record said so:
+`pin_status: not-applicable`, `not_applicable_reason: no-derivation`, and a note
+asserting that "every expected value here is READ OUT of vendored, hash-pinned
+bytes". **That was false for 10 of its 17 rows.** Upstream marks ten entries
+`failure: true`; the fixture records `accept` for *all seventeen*. Those ten
+verdicts are not copied from anywhere — they are hand-derived from the URL
+Standard's text, which is exactly what `normative_dependency_scope` says creates
+a source-pinning duty.
+
+The derivation is two steps long, at the pinned revision:
+
+> host parser step 6 — run the **domain parser** with `domain` and **false**
+> domain parser ToASCII — *VerifyDnsLength* is set to `beStrict`
+
+So with `beStrict = false` there is no DNS length verification at all, and Ada's
+`verify_dns_length` is an *optional* RFC 1035 §2.3.4 check the standard does not
+perform. That is the whole reason all 17 accept.
+
+Two things about how this was missed are worth carrying:
+
+- **The record stated the derivation and then denied it.** The old note's own
+  prose read "the rows are recorded against the WHATWG default
+  (VerifyDnsLength = false), which is why all 17 carry
+  standard_expectation = accept" — a derivation, described in the sentence that
+  classified the group as deriving nothing. The contradiction was legible on the
+  page.
+- **A wrong answer passes both gate rules.** PV10 makes the source-pinning
+  question mandatory; PV9 makes the answer well-formed. This group answered, in
+  the required shape, incorrectly. Silence was never the only failure mode — and
+  what caught it was not a gate but pointing an executable derivation at the
+  group and seeing what its expectations actually depend on.
+
+**Both readings are derived, which is what makes the disagreement an
+explanation.** The gate computes the WHATWG reading (producing the committed
+`accept`) *and* the RFC 1035 §2.3.4 reading, and requires the second to equal
+upstream's own `failure: true` verdict on every row. A hand-written "these ten
+differ" ledger would record *that* they differ; deriving both shows the
+difference is that axis and nothing else, so if upstream ever rejects one of
+these hosts for another reason the disagreement stops being explained and the
+gate fails. There is a floor too: if *no* row disagrees, the gate fails rather
+than passing vacuously, because that is the state in which the group would no
+longer owe the pin it now carries.
+
+**No second transcription.** `derive-ip-obfuscation.R` already transcribes
+`#concept-host-parser` at the same revision and is falsified nine ways, so this
+group sources it. That reuse immediately found a latent defect in it: the IPv4
+number parser applied its double-precision guard **before** the digit-validity
+check, so a 63-character *non-numeric* label aborted instead of failing cleanly.
+The spec's order is validity first. It was fail-closed, so never a wrong answer
+— but it was a refusal to answer a question the spec answers, and it would have
+blocked exactly this reuse. Worth generalizing: pointing a second corpus at a
+transcription is a cheaper way to find its unmodeled edges than adding cases to
+the first.
+
 ### What this corpus cannot see, measured rather than assumed
 
 Two mutations of the shared `runnable` classifier — dropping the `about:blank`
@@ -552,25 +608,43 @@ that only reports its successes is how a blind spot survives.
 | `equivocal-urls` | yes | `verify-equivocal-urls.R` (integrity, not re-derivation) |
 | `wpt-urltestdata` | yes | `verify-wpt-urltestdata.R` (re-location, not re-derivation) |
 | `ada-extra-urltestdata` | yes | `verify-ada-extra-urltestdata.R` (re-location + two exact ledgers) |
-| `ada-verifydnslength` | no | — |
+| `ada-verifydnslength` | yes | `verify-ada-verifydnslength.R` (re-location **and** re-derivation) |
 
-`oracle-provenance.json` still carries `MISSING[RURL-vwurxmzm]` for the
-un-ported groups' `generation_command`. Those sentinels are correct until the
-group is ported; do not replace one with a `tools/oracle/` path before its
-verifier exists and passes.
+**All seven groups are ported.** Every `generation_command` now names a tracked,
+executable path, and no `MISSING[RURL-vwurxmzm]` sentinel remains on that field
+anywhere in the record.
 
-Note that `MISSING[RURL-vwurxmzm]` also covers `import_command` and
-`retrieval_date` on several groups. Those are a **different** gap and are not
-this directory's to close: nobody recorded when the Ada files were fetched, and
-porting a builder cannot recover a date that was never written down.
+`import_command` was a different gap, and the tier-2 slices closed it for the
+three groups that had it: now that the bytes can be re-fetched and hash-verified,
+each records the exact command that **reproduces the pinned digest**, labelled as
+what it is — reproducing, not attested as the command originally run.
+
+`retrieval_date` genuinely cannot be recovered and keeps its sentinel: nobody
+wrote down when the Ada files were fetched, and a reproducing command dates
+nothing. But it is no longer unbounded for `ada-extra-urltestdata` — see the
+commit sweep above, which brackets the import to `[2025-07-16, 2026-07-17)` from
+the expected values themselves.
 
 ## Running them
 
 ```bash
+# Tier 1 and 3 -- offline, and wired into CI as blocking gates.
 Rscript tools/oracle/verify-credentials-fragments.R             # verify
 Rscript tools/oracle/verify-credentials-fragments.R --self-test # gate self-test
 Rscript tools/oracle/verify-ip-obfuscation.R                    # verify
 Rscript tools/oracle/verify-ip-obfuscation.R --self-test        # gate self-test
+Rscript tools/oracle/verify-youarealiar.R
+Rscript tools/oracle/verify-equivocal-urls.R
+
+# Tier 2 -- these FETCH. CI runs only their --self-test; run the full form by
+# hand. Exit 2 means the source could not be resolved, and is never a pass.
+Rscript tools/oracle/verify-wpt-urltestdata.R
+Rscript tools/oracle/verify-ada-extra-urltestdata.R
+Rscript tools/oracle/verify-ada-verifydnslength.R
+
+# Fetched sources are cached, so a second run is offline:
+#   RURL_ORACLE_SOURCE_DIR   where to cache (default _scratch/oracle-sources/)
+#   RURL_ORACLE_OFFLINE=1    never fetch; fail if the cache has no entry
 ```
 
 A gate only ever observed to pass is not evidence, so each was falsified before

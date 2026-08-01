@@ -37,6 +37,7 @@ jobs:
       equivocal_urls_selftest: ${{ steps.filter.outputs.equivocal_urls_selftest }}
       wpt_urltestdata_selftest: ${{ steps.filter.outputs.wpt_urltestdata_selftest }}
       ada_extra_selftest: ${{ steps.filter.outputs.ada_extra_selftest }}
+      ada_dnslength_selftest: ${{ steps.filter.outputs.ada_dnslength_selftest }}
       pin_inventory_selftest: ${{ steps.filter.outputs.pin_inventory_selftest }}
       release_rule_selftest: ${{ steps.filter.outputs.release_rule_selftest }}
       traceability_selftest: ${{ steps.filter.outputs.traceability_selftest }}
@@ -104,6 +105,11 @@ jobs:
             ada_extra_selftest:
               - 'tools/oracle/verify-ada-extra-urltestdata.R'
               - 'tools/oracle/relocate-wpt-format.R'
+              - 'tools/oracle/fetch-source.R'
+            ada_dnslength_selftest:
+              - 'tools/oracle/verify-ada-verifydnslength.R'
+              - 'tools/oracle/derive-verifydnslength.R'
+              - 'tools/oracle/derive-ip-obfuscation.R'
               - 'tools/oracle/fetch-source.R'
             pin_inventory_selftest:
               - 'design/work/url-v3/tools/pin-inventory.R'
@@ -399,6 +405,17 @@ jobs:
       - name: Gate self-test (ada-extra-urltestdata re-location)
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.ada_extra_selftest == 'true'
         run: Rscript tools/oracle/verify-ada-extra-urltestdata.R --self-test
+      # ada-verifydnslength is the one tier-2 group whose VERDICTS are not
+      # upstream's: upstream rejects 10 of its 17 hosts under Ada's optional
+      # verify_dns_length, while the fixture records `accept` for all 17 against
+      # the WHATWG default. So its expectations are derived, not copied, and the
+      # gate re-derives BOTH readings -- the one that produces the committed
+      # value and the one that produces upstream's -- so the disagreement is
+      # explained rather than tolerated. --self-test grades both readings
+      # offline, including the trailing-empty-field split trap.
+      - name: Gate self-test (ada-verifydnslength derivation)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.ada_dnslength_selftest == 'true'
+        run: Rscript tools/oracle/verify-ada-verifydnslength.R --self-test
 
   # Enforced-vs-documentary hash-pin model (RURL-kufiwlxc). The control plane
   # pins hashes in four kinds of place, and only some are recomputed: a

@@ -106,16 +106,29 @@ ipobf_ipv4_number_parser <- function(part) {
   if (!nzchar(part)) {
     return(list(ok = TRUE, value = 0))
   }
-  if (nchar(part) * log2(radix) > 53) {
-    stop("NOT MODELED: numeric part '", part, "' in radix ", radix,
-         " cannot be held exactly in a double; refusing to answer rather ",
-         "than compare an inexact value.", call. = FALSE)
-  }
+  # VALIDITY BEFORE PRECISION, which is the spec's own order and was not the
+  # first cut's. The IPv4 number parser returns failure for a part containing a
+  # non-radix-R digit BEFORE any value is computed, so a part that is not a
+  # number at all has a defined answer no matter how long it is. Ordering the
+  # precision guard first made length dominate, and a long NON-NUMERIC label
+  # aborted instead of failing cleanly: found by pointing the ada-verifydnslength
+  # rows at this transcription, where the 63-character label
+  # "lorenloren...lore" reaches the "ends in a number" checker and is not a
+  # number. Fail-closed, so it was never a wrong answer -- but it was a refusal
+  # to answer a question the spec answers, and it would have blocked a second
+  # group from reusing this file.
   digits <- strsplit(part, "", fixed = TRUE)[[1]]
   lowered <- chartr("ABCDEF", "abcdef", digits)
   idx <- match(lowered, c(as.character(0:9), letters[1:6]))
   if (anyNA(idx) || any(idx - 1L >= radix)) {
     return(list(ok = FALSE))
+  }
+  # Only a genuinely numeric part can overflow a double, and only then is
+  # refusing to answer the honest move.
+  if (nchar(part) * log2(radix) > 53) {
+    stop("NOT MODELED: numeric part '", part, "' in radix ", radix,
+         " cannot be held exactly in a double; refusing to answer rather ",
+         "than compare an inexact value.", call. = FALSE)
   }
   value <- 0
   for (d in idx) {
