@@ -564,6 +564,16 @@ Two things about how this was missed are worth carrying:
   the required shape, incorrectly. Silence was never the only failure mode — and
   what caught it was not a gate but pointing an executable derivation at the
   group and seeing what its expectations actually depend on.
+- **And then the repair itself misfiled the corrected object** (`RURL-drkcvzex`).
+  The verified `9dc3827f…` pin — whose whole subject is these 17 rows and the
+  `beStrict = false` reading — was inserted under **`ada-extra-urltestdata`**,
+  while this group kept the false `no-derivation` entry. The record then
+  contradicted its own `standard_version`, this README, the NEWS entry and the
+  verifier, and PV1–PV10 stayed green for the whole commit range: a *well-formed
+  answer to another group's question* satisfies a shape rule and a presence rule
+  alike. So the record now says which group each dependency object describes,
+  and `PV11` checks it. See "A dependency object has to be attached to the group
+  it describes" below.
 
 **Both readings are derived, which is what makes the disagreement an
 explanation.** The gate computes the WHATWG reading (producing the committed
@@ -597,6 +607,58 @@ base, so neither rule is exercised. They are covered by
 `verify-ada-extra-urltestdata.R`, whose 24 rows are almost entirely
 `about:blank`-based, and by `--self-test`. Recorded because a falsification run
 that only reports its successes is how a blind spot survives.
+
+## A dependency object has to be attached to the group it describes
+
+`PV11` in `tools/oracle-provenance-gate.R`. It exists because of a measured
+defect, not a hypothesis: the `ada-verifydnslength` repair above landed its
+corrected, verified pin under `ada-extra-urltestdata` and left the false
+negative entry where it was, and **every earlier rule stayed green**. PV9 asks
+whether an answer is well-formed and PV10 asks whether an answer exists — a
+well-formed answer to somebody else's question satisfies both.
+
+Three things a rule can check, and PV11 checks all three independently, so each
+failure says something different:
+
+| Check | What it reads | What it catches |
+| --- | --- | --- |
+| ownership | `applies_to_fixture` + `applies_to_group` on every entry | an object moved under the wrong group |
+| revision agreement | a 40-hex sha named in the group's `standard_version` | a group claiming a direct pin its own array does not carry |
+| declaration kind | `NEGATIVE declaration` / `POSITIVE declaration` in `normative_dependencies_note` | a note that contradicts its entries' `pin_status` |
+
+**The declaration is a fixture-plus-group pair, not a bare name.** Two groups in
+this record are both called `wpt-urltestdata` — one in
+`inst/bench/wpt-url-cases.json`, one in `external-url-vectors.csv` — so a bare
+name could not distinguish a swap between them from a correct record.
+
+**Revision agreement fires on the real defect from the other side.**
+`ada-verifydnslength`'s `standard_version` read "pinned **DIRECTLY** at
+`whatwg/url` `9dc3827f…` by `normative_dependencies[0]`" above an entry whose
+`revision_scheme` was `unpinned`. The converse is deliberately *not* enforced: a
+verified git-commit pin under a `standard_version` that dates the standard by
+proxy through an artifact revision is correct — that is
+`wpt-credentials-fragments`, and its entry explains why.
+
+**Declaration kind makes existing prose falsifiable.** The record already wrote
+"the array is a NEGATIVE declaration" by convention; requiring the phrase and
+checking it against the entries' `pin_status` turns it into a claim. The
+misfiled object sat under exactly that sentence, above a verified pin, for a
+whole commit range.
+
+**Falsified against the real record, not only synthetically.** The gate's
+`--self-test` reads the committed record, swaps the two Ada groups'
+`normative_dependencies` arrays — the actual defect — and asserts PV11 goes red
+while PV9 and PV10 stay green. Nine synthetic cases cover the rest: a missing
+declaration, a blank one, a wrong group, a wrong *fixture*, a named sha nothing
+pins, a named sha pinned only by **another** group, a note declaring neither
+kind, a note declaring both, and a note contradicting its array in each
+direction.
+
+**The honest limit, stated rather than implied.** PV11 catches a *move* — the
+object travels and its declaration does not. An author who edits the
+declaration too is rewriting the claim, not misfiling it, and no structural rule
+can referee that. Nor does PV11 decide whether a group *owes* a pin; it checks
+that the record agrees with itself.
 
 ## Status
 

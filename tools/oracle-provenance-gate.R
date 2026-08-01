@@ -69,6 +69,14 @@
 #                      that derives nothing from a normative source records one
 #                      entry with pin_status = "not-applicable" saying so.
 #                      Absence is a FAIL, never a pass.
+#  PV11 coherence  -- an answer that is present and well-formed still has to be
+#                      an answer to THIS group's question. Every entry declares
+#                      the fixture and group it describes and must be nested
+#                      under them; a commit sha named in a group's
+#                      standard_version must be pinned by a verified entry in
+#                      that same group; and the group's
+#                      normative_dependencies_note must declare itself NEGATIVE
+#                      or POSITIVE in agreement with its entries' statuses.
 #
 # FIELD RESOLUTION (PV5). A section-2.3 field is looked up on the group first,
 # then on the fixture. That is not leniency -- it is how the record states its
@@ -123,6 +131,49 @@
 # Judging WHETHER a not-applicable answer is the honest one stays out of scope:
 # PV10 demands an answer, PV9 demands it be well-formed, and a human still owns
 # whether it is true.
+#
+# COHERENCE (PV11), and the third failure mode neither of the two above can see.
+# PV9 asks "is this answer well-formed?" and PV10 asks "is there an answer?" --
+# so a well-formed answer to ANOTHER GROUP'S question passes both. That is not
+# hypothetical: the RURL-ozdejfzl repair that gave ada-verifydnslength its real
+# whatwg/url pin inserted the corrected object under ada-extra-urltestdata and
+# left the false "no-derivation" object where it was. The result contradicted
+# the group's own standard_version (which named the commit and said it was
+# pinned "by normative_dependencies[0]"), its README, its NEWS entry and its
+# verifier, and PV1-PV10 were green for the whole commit range. So the record
+# now carries three facts a rule can check, and PV11 checks them:
+#
+#   * OWNERSHIP. Every entry declares applies_to_fixture and applies_to_group,
+#     and must be nested under exactly those. A fixture-plus-group PAIR, not a
+#     bare group name, because two groups here are both called wpt-urltestdata
+#     (inst/bench/wpt-url-cases.json and external-url-vectors.csv) and a bare
+#     name could not tell a swap between them from a correct record. This
+#     catches a MOVE -- the object travels, the declaration does not. An author
+#     who edits the declaration too is rewriting the claim rather than
+#     misfiling it, and no structural rule can referee that; the honest scope
+#     is stated, not implied.
+#
+#   * REVISION AGREEMENT. Where a group's standard_version names a 40-hex commit
+#     sha, some verified entry in the SAME group must carry it as its
+#     immutable_revision. This is the check that fires on the real defect from
+#     the other side: ada-verifydnslength's standard_version named
+#     9dc3827f... while its only entry was revision_scheme "unpinned". The
+#     converse is deliberately NOT enforced -- wpt-credentials-fragments carries
+#     a verified git-commit pin under a standard_version that dates the standard
+#     by proxy through an artifact revision, which is correct and says so.
+#
+#   * DECLARATION KIND. An array is NEGATIVE when every entry is
+#     "not-applicable" and POSITIVE otherwise, and the group's
+#     normative_dependencies_note must carry exactly one of the literal phrases
+#     "NEGATIVE declaration" / "POSITIVE declaration", agreeing with the
+#     statuses. The record already wrote these phrases by convention; requiring
+#     them makes the prose falsifiable. The misplaced object sat under a note
+#     reading "nothing derived from it. The array is a NEGATIVE declaration"
+#     above a verified pin, so the contradiction was on the page and unread.
+#
+# What PV11 still does not do: decide whether a group OWES a pin, or whether a
+# declared owner is the RIGHT owner. It checks that the record agrees with
+# itself. A human owns the rest, as with PV9 and PV10.
 #
 # WHY A REVISION HAS A SCHEME (PV9). The first cut of this rule required every
 # `verified` pin to be a 40-hex git sha, which is true of the WHATWG entry and
@@ -872,6 +923,145 @@ rule_pv10 <- function(rec) {
                        ngroups, nanswered))
 }
 
+# PV11 -- COHERENCE. See "COHERENCE (PV11)" above for the measured defect this
+# exists for. Three independent checks; each can fail on its own and each says
+# something different, so none is folded into another.
+#
+# NEGATIVE means every entry excuses the duty. POSITIVE means at least one entry
+# pins a revision or files a gap -- the two cases the note must not describe as
+# "nothing derived from it".
+declaration_kind <- function(deps) {
+  statuses <- vapply(deps, function(e) {
+    s <- one_string(e$pin_status)
+    if (is.na(s)) "" else s
+  }, character(1))
+  if (all(statuses == "not-applicable")) "NEGATIVE" else "POSITIVE"
+}
+
+# Every 40-hex run in a free-text field. Used on standard_version, where the
+# record names a commit in prose ("pinned DIRECTLY at whatwg/url 9dc3827f...").
+commit_shas_in <- function(s) {
+  if (is.na(s)) return(character(0))
+  m <- gregexpr("[0123456789abcdef]{40}", s)[[1L]]
+  if (identical(as.integer(m), -1L)) return(character(0))
+  substring(s, m, m + attr(m, "match.length") - 1L)
+}
+
+rule_pv11 <- function(rec) {
+  bad <- character(0)
+  ngroups <- 0L
+  nentries <- 0L
+  for (fx in fixtures_of(rec)) {
+    fxpath <- as_chr(fx$path)
+    for (g in groups_of(fx)) {
+      deps <- g[["normative_dependencies"]]
+      if (is.null(deps) || !length(deps) || !is.null(names(deps))) next
+      ngroups <- ngroups + 1L
+      lab <- group_label(fx, g)
+      gname <- as_chr(g$group)
+
+      # 1. OWNERSHIP -- the entry declares where it belongs.
+      for (i in seq_along(deps)) {
+        nentries <- nentries + 1L
+        e <- deps[[i]]
+        elab <- sprintf("%s: normative_dependencies[%d]", lab, i)
+        if (!is.list(e) || is.null(names(e))) next
+        for (key in c("applies_to_fixture", "applies_to_group")) {
+          if (!identical(field_verdict(e[[key]]), "value")) {
+            bad <- c(bad, sprintf(
+              paste("%s lacks a usable %s -- an entry must declare which group",
+                    "it describes, so a misfiled object cannot read as this",
+                    "group's answer"), elab, key))
+          }
+        }
+        owner_fx <- one_string(e$applies_to_fixture)
+        owner_g <- one_string(e$applies_to_group)
+        if (!is.na(owner_fx) && !identical(owner_fx, fxpath)) {
+          bad <- c(bad, sprintf(
+            paste("%s declares applies_to_fixture \"%s\" but is nested under",
+                  "\"%s\" -- the object describes another fixture"),
+            elab, owner_fx, fxpath))
+        }
+        if (!is.na(owner_g) && !identical(owner_g, gname)) {
+          bad <- c(bad, sprintf(
+            paste("%s declares applies_to_group \"%s\" but is nested under",
+                  "group \"%s\" -- a well-formed answer to another group's",
+                  "question is not this group's provenance"),
+            elab, owner_g, gname))
+        }
+      }
+
+      # 2. REVISION AGREEMENT -- a sha the group names in prose must be pinned
+      #    by one of its own verified entries.
+      named <- commit_shas_in(one_string(g$standard_version))
+      if (length(named)) {
+        pinned <- unlist(lapply(deps, function(e) {
+          if (!identical(one_string(e$pin_status), "verified")) {
+            return(character(0))
+          }
+          rev <- one_string(e$immutable_revision)
+          if (is.na(rev)) character(0) else rev
+        }))
+        orphan <- setdiff(named, pinned)
+        if (length(orphan)) {
+          bad <- c(bad, sprintf(
+            paste("%s: standard_version names commit %s but no verified entry",
+                  "in this group pins it -- the group claims a direct pin its",
+                  "own normative_dependencies does not carry"),
+            lab, toString(substr(orphan, 1L, 12L))))
+        }
+      }
+
+      # 3. DECLARATION KIND -- the note says which, and it is right.
+      note <- one_string(g$normative_dependencies_note)
+      want <- declaration_kind(deps)
+      if (is.na(note)) {
+        bad <- c(bad, sprintf(paste("%s: no normative_dependencies_note -- the",
+                                    "group must declare its array %s",
+                                    "declaration"), lab, want))
+      } else {
+        found <- c("NEGATIVE", "POSITIVE")[
+          c(grepl("NEGATIVE declaration", note, fixed = TRUE),
+            grepl("POSITIVE declaration", note, fixed = TRUE))]
+        if (!length(found)) {
+          bad <- c(bad, sprintf(
+            paste("%s: normative_dependencies_note declares neither a",
+                  "\"NEGATIVE declaration\" nor a \"POSITIVE declaration\"",
+                  "-- it is a %s one"), lab, want))
+        } else if (length(found) > 1L) {
+          bad <- c(bad, sprintf(
+            paste("%s: normative_dependencies_note declares BOTH kinds --",
+                  "exactly one applies, and it is %s"), lab, want))
+        } else if (!identical(found, want)) {
+          bad <- c(bad, sprintf(
+            paste("%s: normative_dependencies_note declares a %s declaration,",
+                  "but the array is %s (%s) -- note and entries contradict",
+                  "each other"),
+            lab, found, want,
+            toString(vapply(deps, function(e) {
+              s <- one_string(e$pin_status)
+              if (is.na(s)) "?" else s
+            }, character(1)))))
+        }
+      }
+    }
+  }
+  # The same floor PV9 and PV10 carry, for the same reason: a coherence rule
+  # that walked no array would report PASS having compared nothing.
+  if (!nentries) {
+    bad <- c(bad, paste("PV11 inspected NO normative-dependency entry -- a",
+                        "coherence rule that walks an empty iteration passes",
+                        "for the wrong reason"))
+  }
+  finding("PV11", length(bad) == 0L,
+          if (length(bad)) paste(bad, collapse = "; ")
+          else sprintf(paste("%d normative-dependency entr%s in %d group(s)",
+                             "are attached to the group they describe, and",
+                             "each group's declaration kind and named revision",
+                             "agree with its entries"),
+                       nentries, if (nentries == 1L) "y" else "ies", ngroups))
+}
+
 check_oracle_provenance <- function(root = ".",
                                     record = RECORD_PATH,
                                     expected_fields = EXPECTED_FIELD_COUNT) {
@@ -887,7 +1077,7 @@ check_oracle_provenance <- function(root = ".",
   shape <- rule_pv1(rec, expected_fields)
   if (!shape[[1L]]$ok) {
     rest <- lapply(c("PV2", "PV3", "PV4", "PV5", "PV6", "PV7", "PV8", "PV9",
-                     "PV10"),
+                     "PV10", "PV11"),
                    function(id) {
                      list(id = id, ok = FALSE,
                           detail = "not evaluated -- record shape is broken")
@@ -897,7 +1087,7 @@ check_oracle_provenance <- function(root = ".",
   c(shape,
     rule_pv2(root, rec), rule_pv3(root, rec), rule_pv4(root, rec),
     rule_pv5(rec), rule_pv6(rec), rule_pv7(root, rec), rule_pv8(root, rec),
-    rule_pv9(rec), rule_pv10(rec))
+    rule_pv9(rec), rule_pv10(rec), rule_pv11(rec))
 }
 
 # ---- reporting --------------------------------------------------------------
@@ -1005,6 +1195,16 @@ self_test <- function() {
     note = paste("read out of vendored bytes, not derived from spec text;",
                  "recorded explicitly rather than by omission"))
 
+  # PV11 requires every entry to declare the fixture and group it describes, so
+  # a case that replaces a whole array stamps the replacement for `beta` -- the
+  # out-of-scope CSV group most of the PV9 cases use as their subject.
+  CSV_REL <- "tests/testthat/fixtures/vectors.csv"
+  own_beta <- function(...) {
+    lapply(list(...), function(e) {
+      c(e, list(applies_to_fixture = CSV_REL, applies_to_group = "beta"))
+    })
+  }
+
   mk <- function(mutate = NULL, meta_extra = NULL, csv_sources = NULL) {
     root <- tempfile("oracleprov-")
     dir.create(file.path(root, "tests", "testthat", "fixtures"),
@@ -1030,6 +1230,16 @@ self_test <- function() {
     utils::write.csv(data.frame(id = seq_along(src), source = src),
                      file.path(root, csv_rel), row.names = FALSE)
 
+    # PV11 requires every entry to declare the fixture and group it describes,
+    # so the synthetic tree stamps them the way the real record does. Applied
+    # BEFORE `mutate`, so a case that wants a wrong declaration can set one.
+    own <- function(deps, fixture, group) {
+      lapply(deps, function(e) {
+        c(e[names(e) != "note"],
+          list(applies_to_fixture = fixture, applies_to_group = group,
+               note = e$note))
+      })
+    }
     in_scope <- c(list(group = "alpha", row_count = sum(src == "alpha"),
                        section_2_3_applies = TRUE),
                   meta_base[setdiff(names(meta_base), "retrieved")],
@@ -1037,7 +1247,11 @@ self_test <- function() {
                   # answers "not-applicable", which is the boundary the rule
                   # must leave writable.
                   list(retrieval_date = sentinel,
-                       normative_dependencies = list(dep_not_applicable)))
+                       normative_dependencies = own(list(dep_not_applicable),
+                                                    csv_rel, "alpha"),
+                       normative_dependencies_note = paste(
+                         "A NEGATIVE declaration: the source is cited and",
+                         "nothing is derived from its text.")))
     # beta owes SOURCE pinning only -- nothing vendored, expectations derived
     # from two standards -- which is the ip-obfuscation shape. wpt-like owes
     # BOTH duties, which is the wpt-credentials-fragments shape and the case
@@ -1046,12 +1260,19 @@ self_test <- function() {
     out_scope <- list(group = "beta", row_count = sum(src == "beta"),
                       section_2_3_applies = FALSE,
                       out_of_scope_reason = "generated here; nothing imported",
-                      normative_dependencies = dep_base)
+                      normative_dependencies = own(dep_base, csv_rel, "beta"),
+                      normative_dependencies_note = paste(
+                        "A POSITIVE declaration: two sources are derived from,",
+                        "one pinned and one a filed gap."))
     json_group <- c(list(group = "wpt-like", row_count = 3L,
                          section_2_3_applies = TRUE),
                     meta_base[setdiff(names(meta_base), "retrieved")],
                     list(retrieval_date = meta_base$retrieved,
-                         normative_dependencies = dep_base[1L]))
+                         normative_dependencies = own(dep_base[1L], json_rel,
+                                                      "wpt-like"),
+                         normative_dependencies_note = paste(
+                           "A POSITIVE declaration: the expected values are",
+                           "derived from this source's text.")))
 
     rec <- list(
       record_kind = "oracle-provenance",
@@ -1328,7 +1549,8 @@ self_test <- function() {
   r <- mk(set_group(2L, 2L, "normative_dependencies", list()))
   expect("PV9 fails on an empty normative_dependencies array", pv9_fails(r))
   #     BOUNDARY: an array of one is legal -- the rule is non-empty, not plural.
-  r <- mk(set_group(2L, 2L, "normative_dependencies", dep_base[1L]))
+  r <- mk(set_group(2L, 2L, "normative_dependencies",
+                    own_beta(dep_base[[1L]])))
   expect("PV9 passes on a single-entry array", identical(verdict(r), TRUE))
 
   # 28. Check 2 -- the nine required keys.
@@ -1465,7 +1687,7 @@ self_test <- function() {
   #     check 5 wrongly rejected, and it is how RURL-qhwktfcw's open UTS-46
   #     half will eventually be closed.
   r <- mk(set_group(2L, 2L, "normative_dependencies",
-                    list(dep_base[[1L]], dep_document)))
+                    own_beta(dep_base[[1L]], dep_document)))
   expect("PV9 passes a document-version pin to a named edition",
          identical(verdict(r), TRUE))
 
@@ -1531,8 +1753,16 @@ self_test <- function() {
   #     directly, on a group whose ONLY entry is a negative declaration. If
   #     this went red the rule would be demanding invented pins rather than
   #     answers, which is the failure mode that would get PV10 deleted.
-  r <- mk(set_group(2L, 2L, "normative_dependencies",
-                    list(dep_not_applicable)))
+  r <- mk(function(rec) {
+    rec$fixtures[[2L]]$source_groups[[2L]]$normative_dependencies <- list(
+      c(dep_not_applicable,
+        list(applies_to_fixture = CSV_REL, applies_to_group = "beta")))
+    # PV11 owns the note/array agreement, so an array that becomes negative
+    # takes its note with it. That is the point of the rule, not a workaround.
+    rec$fixtures[[2L]]$source_groups[[2L]]$normative_dependencies_note <-
+      "A NEGATIVE declaration: nothing is derived from the source's text."
+    rec
+  })
   expect("PV10 passes a group whose only entry is not-applicable",
          identical(verdict(r), TRUE))
   expect("and the not-applicable answer counts as an answer",
@@ -1593,6 +1823,159 @@ self_test <- function() {
          identical(verdict(mk()), TRUE) &&
            !"not_applicable_reason" %in% names(dep_base[[1L]]) &&
            !"not_applicable_reason" %in% names(dep_base[[2L]]))
+
+  # ---- PV11 ------------------------------------------------------------
+  #
+  # Same discipline again: the population first. A coherence rule compares two
+  # things, so a rule that found nothing to compare is the easiest false pass of
+  # the three.
+  pv11_fails <- function(root) {
+    identical(rule(root, "PV11"), FALSE) && identical(verdict(root), FALSE)
+  }
+
+  # 47. THE FLOOR.
+  expect("PV11's positive case compares a real population",
+         startsWith(detail(mk(), "PV11"),
+                    "4 normative-dependency entries in 3 group(s)"))
+  expect("PV11 refuses to pass over an empty iteration",
+         identical(rule_pv11(list(fixtures = list()))[[1L]]$ok, FALSE))
+
+  # 48. OWNERSHIP -- the declaration is required, and a missing one is not
+  #     silently treated as "belongs wherever it sits".
+  r <- mk(set_dep(2L, 1L, 1L, "applies_to_group", NULL))
+  expect("PV11 fails on an entry with no applies_to_group", pv11_fails(r))
+  r <- mk(set_dep(2L, 1L, 1L, "applies_to_fixture", NULL))
+  expect("PV11 fails on an entry with no applies_to_fixture", pv11_fails(r))
+  r <- mk(set_dep(2L, 1L, 1L, "applies_to_group", ""))
+  expect("PV11 fails on a blank declaration", pv11_fails(r))
+
+  # 49. THE DEFECT ITSELF, in the synthetic tree: an object that describes
+  #     another group, moved under this one. It stays well-formed and it is
+  #     still an answer, so PV9 and PV10 both pass it -- which is the whole
+  #     reason PV11 exists and is asserted here rather than assumed.
+  r <- mk(set_group(2L, 1L, "normative_dependencies", list(
+    utils::modifyList(dep_base[[1L]],
+                      list(applies_to_fixture = CSV_REL,
+                           applies_to_group = "beta")))))
+  expect("PV11 fails on a dependency object filed under the wrong group",
+         pv11_fails(r))
+  expect("PV9 and PV10 pass the misfiled object -- shape and presence are fine",
+         identical(rule(r, "PV9"), TRUE) && identical(rule(r, "PV10"), TRUE))
+
+  # 50. ... and the same object under the wrong FIXTURE, which a bare group name
+  #     could not catch: this record has two groups called wpt-urltestdata, in
+  #     different fixtures, so the declaration is a pair.
+  r <- mk(set_dep(1L, 1L, 1L, "applies_to_fixture",
+                  "tests/testthat/fixtures/vectors.csv"))
+  expect("PV11 fails on an entry declaring another fixture", pv11_fails(r))
+
+  # 51. REVISION AGREEMENT. A group whose standard_version names a commit in
+  #     prose must pin it in its own array -- the check that fires on the real
+  #     defect from the other side, where standard_version said "pinned DIRECTLY
+  #     at whatwg/url 9dc3827f..." above an entry with revision_scheme
+  #     "unpinned".
+  sha <- dep_base[[1L]]$immutable_revision
+  r <- mk(function(rec) {
+    rec$fixtures[[2L]]$source_groups[[1L]]$standard_version <-
+      sprintf("Living Standard, pinned DIRECTLY at whatwg/url %s", sha)
+    rec
+  })
+  expect("PV11 fails when standard_version names a sha the group does not pin",
+         pv11_fails(r))
+  #     ... and passes once an entry in that same group actually pins it. Both
+  #     halves, because a rule that only ever went red would be
+  #     indistinguishable from one that rejects every sha in prose.
+  r <- mk(function(rec) {
+    g <- rec$fixtures[[2L]]$source_groups[[1L]]
+    g$standard_version <- sprintf("Living Standard, pinned DIRECTLY at %s", sha)
+    g$normative_dependencies <- list(utils::modifyList(
+      dep_base[[1L]],
+      list(applies_to_fixture = "tests/testthat/fixtures/vectors.csv",
+           applies_to_group = "alpha")))
+    g$normative_dependencies_note <- "A POSITIVE declaration: derived, pinned."
+    rec$fixtures[[2L]]$source_groups[[1L]] <- g
+    rec
+  })
+  expect("PV11 passes when the group pins the sha it names",
+         identical(verdict(r), TRUE))
+  #     A sha named in prose that IS pinned, but only by a DIFFERENT group, is
+  #     still a failure -- "somewhere in the record" is exactly the reasoning
+  #     that let the misplaced pin look adequate.
+  r <- mk(function(rec) {
+    rec$fixtures[[2L]]$source_groups[[1L]]$standard_version <-
+      sprintf("pinned DIRECTLY at %s", sha)
+    rec
+  })
+  expect("PV11 does not accept a sha pinned by another group", pv11_fails(r))
+
+  # 52. DECLARATION KIND, in both directions and on both members.
+  r <- mk(set_group(2L, 1L, "normative_dependencies_note",
+                    "A one-member array. Nothing to see here."))
+  expect("PV11 fails on a note that declares neither kind", pv11_fails(r))
+  r <- mk(set_group(2L, 1L, "normative_dependencies_note",
+                    paste("A NEGATIVE declaration and also a POSITIVE",
+                          "declaration.")))
+  expect("PV11 fails on a note that declares both", pv11_fails(r))
+  #     THE REAL SHAPE: a NEGATIVE note over an array that pins something. This
+  #     is the sentence that sat above the misplaced object for a whole commit
+  #     range without anything reading it.
+  r <- mk(function(rec) {
+    g <- rec$fixtures[[2L]]$source_groups[[1L]]
+    g$normative_dependencies <- list(utils::modifyList(
+      dep_base[[1L]],
+      list(applies_to_fixture = "tests/testthat/fixtures/vectors.csv",
+           applies_to_group = "alpha")))
+    g$normative_dependencies_note <- paste(
+      "A one-member array: one cited source, nothing derived from it.",
+      "The array is a NEGATIVE declaration.")
+    rec$fixtures[[2L]]$source_groups[[1L]] <- g
+    rec
+  })
+  expect("PV11 fails on a NEGATIVE note over a verified pin", pv11_fails(r))
+  r <- mk(set_group(2L, 1L, "normative_dependencies_note",
+                    "A POSITIVE declaration: derived and pinned."))
+  expect("PV11 fails on a POSITIVE note over a not-applicable array",
+         pv11_fails(r))
+  #     A "missing" entry is POSITIVE too: a filed gap is not an excused duty.
+  expect("a filed gap counts as a POSITIVE declaration",
+         identical(declaration_kind(dep_base), "POSITIVE") &&
+           identical(declaration_kind(list(dep_base[[2L]])), "POSITIVE") &&
+           identical(declaration_kind(list(dep_not_applicable)), "NEGATIVE"))
+
+  # 53. THE ACCEPTANCE DEMONSTRATION, ON THE REAL RECORD (RURL-drkcvzex). The
+  #     synthetic cases above prove the rule; this proves it against the actual
+  #     defect. Move the ada-verifydnslength dependency object under
+  #     ada-extra-urltestdata -- which is precisely what happened -- and PV11
+  #     must go red. rule_pv11() is called directly so the case needs no tree
+  #     and stays offline: the record's own bytes are the fixture here.
+  if (file.exists(RECORD_PATH)) {
+    real <- read_json_file(RECORD_PATH)
+    expect("PV11 passes the record as committed",
+           identical(rule_pv11(real)[[1L]]$ok, TRUE))
+    swap_ada <- function(rec) {
+      for (i in seq_along(rec$fixtures)) {
+        gs <- rec$fixtures[[i]]$source_groups
+        if (is.null(gs)) next
+        names_i <- vapply(gs, function(g) as_chr(g$group), character(1))
+        a <- match("ada-extra-urltestdata", names_i)
+        b <- match("ada-verifydnslength", names_i)
+        if (is.na(a) || is.na(b)) next
+        keep <- gs[[a]]$normative_dependencies
+        gs[[a]]$normative_dependencies <- gs[[b]]$normative_dependencies
+        gs[[b]]$normative_dependencies <- keep
+        rec$fixtures[[i]]$source_groups <- gs
+      }
+      rec
+    }
+    swapped <- swap_ada(real)
+    expect("PV11 fails when the DNS-length object is moved under Ada extra",
+           identical(rule_pv11(swapped)[[1L]]$ok, FALSE))
+    #   ... and the swap is invisible to every earlier rule, which is why the
+    #   defect survived review with the gate green.
+    expect("PV9 and PV10 stay green on the swapped record",
+           identical(rule_pv9(swapped)[[1L]]$ok, TRUE) &&
+             identical(rule_pv10(swapped)[[1L]]$ok, TRUE))
+  }
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
   if (length(st$fail)) {
