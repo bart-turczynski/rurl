@@ -62,6 +62,11 @@
 #                      ACCORDING TO ITS SCHEME plus ISO dates whenever it is
 #                      `verified`, at least one algorithm anchor, and never
 #                      the MISSING[...] sentinel.
+#  PV10 source answer-- EVERY source group in EVERY fixture CARRIES a non-empty
+#                      normative_dependencies. There is no exemption: a group
+#                      that derives nothing from a normative source records one
+#                      entry with pin_status = "not-applicable" saying so.
+#                      Absence is a FAIL, never a pass.
 #
 # FIELD RESOLUTION (PV5). A section-2.3 field is looked up on the group first,
 # then on the fixture. That is not leniency -- it is how the record states its
@@ -87,6 +92,35 @@
 # or neither. PV9 therefore judges only groups that CARRY the key, and judges
 # only its shape. Deciding which groups OWE a pin is a different question with a
 # different evidence base, and it is not this rule's business.
+#
+# PRESENCE, UNIVERSALLY (PV10). What PV9 leaves open is the hole the ticket that
+# produced both rules came through, and it is worth naming exactly: the defect
+# was not a wrong value, it was SILENCE. ip-obfuscation derived its 24 expected
+# values by transcribing a Living Standard, and because NO FIELD IN THE RECORD
+# NAMED THAT DEPENDENCY, nobody was ever asked to date it -- so six section
+# citations that resolve to no revision of the standard survived review inside a
+# group the gate reported as fully provenanced. PV9 only fires on groups that
+# already volunteer the key, so it cannot see that: a source group added
+# tomorrow could omit normative_dependencies entirely and every rule above would
+# stay green. PV10 closes it from the other side by making the QUESTION
+# mandatory rather than the pin. An absent key is indistinguishable from an
+# unasked question, so absence is an error and never a pass.
+#
+# WHAT PV10 DOES AND DOES NOT INFER FROM THE CONVENTION. Read
+# conventions.normative_dependency_scope precisely: it states when the source-
+# pinning DUTY applies ("to any source group whose oracle is transcribed,
+# computed, or hand-derived from a standard"), and it supplies the enum member
+# that makes a universal ANSWER writable -- pin_status "not-applicable" (the
+# source is cited but nothing is derived from it), whose whole purpose is to let
+# a group that owes no pin still answer. It does not itself spell out "every
+# group must carry the key"; PV10 is the rule that says so. The record already
+# practises it -- inst/bench/wpt-url-cases.json's group carries exactly such a
+# negative declaration and explains it as recording "that the source-pinning
+# question was considered and does not apply, rather than leaving the key
+# absent" -- and PV10 makes that practice non-optional for the next group.
+# Judging WHETHER a not-applicable answer is the honest one stays out of scope:
+# PV10 demands an answer, PV9 demands it be well-formed, and a human still owns
+# whether it is true.
 #
 # WHY A REVISION HAS A SCHEME (PV9). The first cut of this rule required every
 # `verified` pin to be a 40-hex git sha, which is true of the WHATWG entry and
@@ -731,6 +765,53 @@ rule_pv9 <- function(rec) {
                        nentries, if (nentries == 1L) "y" else "ies", ngroups))
 }
 
+# PV10 -- PRESENCE. The rule that stops the silence recurring: see "PRESENCE,
+# UNIVERSALLY" above. PV9 judges the shape of an answer that was volunteered;
+# this judges that an answer exists at all, in every group, with no exemption.
+# Deliberately additive -- it reuses nothing of PV9's logic and changes none of
+# it, so the two can fail independently and say different things.
+rule_pv10 <- function(rec) {
+  bad <- character(0)
+  ngroups <- 0L
+  nanswered <- 0L
+  for (fx in fixtures_of(rec)) {
+    for (g in groups_of(fx)) {
+      ngroups <- ngroups + 1L
+      deps <- g[["normative_dependencies"]]
+      # NULL covers both an absent key and an explicit JSON null; length 0
+      # covers a present-but-empty array. All three are the same silence.
+      if (is.null(deps) || !length(deps)) {
+        bad <- c(bad, sprintf(paste(
+          "%s: no normative_dependencies -- every source group must ANSWER the",
+          "source-pinning question, and an absent key is indistinguishable",
+          "from an unasked question. FIX: add an entry naming the normative",
+          "source this group's expected values are derived from; if nothing",
+          "here is derived from a normative source, record ONE entry with",
+          "pin_status = \"not-applicable\" -- \"the source is cited but",
+          "nothing is derived from it\" -- and a note saying why. See",
+          "conventions.normative_dependency_scope, and",
+          "inst/bench/wpt-url-cases.json's group for a worked negative",
+          "declaration."), group_label(fx, g)))
+      } else {
+        nanswered <- nanswered + 1L
+      }
+    }
+  }
+  # THE FLOOR, IN THE RULE ITSELF. A presence rule that walked no group would
+  # report PASS having proved nothing, which is the exact failure mode it
+  # exists to close. Refuse to pass vacuously.
+  if (!ngroups) {
+    bad <- c(bad, paste("PV10 inspected NO source group -- a presence rule",
+                        "that walks an empty iteration passes for the wrong",
+                        "reason; the record has no groups to answer for"))
+  }
+  finding("PV10", length(bad) == 0L,
+          if (length(bad)) paste(bad, collapse = "; ")
+          else sprintf(paste("all %d source group(s) answer the source-pinning",
+                             "question (%d non-empty normative_dependencies)"),
+                       ngroups, nanswered))
+}
+
 check_oracle_provenance <- function(root = ".",
                                     record = RECORD_PATH,
                                     expected_fields = EXPECTED_FIELD_COUNT) {
@@ -745,7 +826,8 @@ check_oracle_provenance <- function(root = ".",
   }
   shape <- rule_pv1(rec, expected_fields)
   if (!shape[[1L]]$ok) {
-    rest <- lapply(c("PV2", "PV3", "PV4", "PV5", "PV6", "PV7", "PV8", "PV9"),
+    rest <- lapply(c("PV2", "PV3", "PV4", "PV5", "PV6", "PV7", "PV8", "PV9",
+                     "PV10"),
                    function(id) {
                      list(id = id, ok = FALSE,
                           detail = "not evaluated -- record shape is broken")
@@ -755,7 +837,7 @@ check_oracle_provenance <- function(root = ".",
   c(shape,
     rule_pv2(root, rec), rule_pv3(root, rec), rule_pv4(root, rec),
     rule_pv5(rec), rule_pv6(rec), rule_pv7(root, rec), rule_pv8(root, rec),
-    rule_pv9(rec))
+    rule_pv9(rec), rule_pv10(rec))
 }
 
 # ---- reporting --------------------------------------------------------------
@@ -844,6 +926,24 @@ self_test <- function() {
                        algorithm_anchors = list("IDNA_Mapping_Table"),
                        note = "the mapping table, pinned to a named edition")
 
+  # The NEGATIVE declaration, modelled on inst/bench/wpt-url-cases.json's
+  # group: a group that derives nothing from a standard's text still ANSWERS,
+  # through the not-applicable enum member. PV10 has no exemption, so this is
+  # the shape that keeps a no-derivation group writable -- if it failed, the
+  # rule would be forcing authors to invent pins.
+  dep_not_applicable <- list(
+    source = "WHATWG URL Standard",
+    source_url = "https://url.spec.whatwg.org/",
+    immutable_revision = "not applicable",
+    revision_scheme = "unpinned",
+    revision_date = "not applicable",
+    retrieved_at = "not applicable",
+    pin_kind = "none",
+    pin_status = "not-applicable",
+    algorithm_anchors = list("concept-url-parser"),
+    note = paste("read out of vendored bytes, not derived from spec text;",
+                 "recorded explicitly rather than by omission"))
+
   mk <- function(mutate = NULL, meta_extra = NULL, csv_sources = NULL) {
     root <- tempfile("oracleprov-")
     dir.create(file.path(root, "tests", "testthat", "fixtures"),
@@ -872,7 +972,11 @@ self_test <- function() {
     in_scope <- c(list(group = "alpha", row_count = sum(src == "alpha"),
                        section_2_3_applies = TRUE),
                   meta_base[setdiff(names(meta_base), "retrieved")],
-                  list(retrieval_date = sentinel))
+                  # PV10 admits no exemption, so alpha answers too -- and it
+                  # answers "not-applicable", which is the boundary the rule
+                  # must leave writable.
+                  list(retrieval_date = sentinel,
+                       normative_dependencies = list(dep_not_applicable)))
     # beta owes SOURCE pinning only -- nothing vendored, expectations derived
     # from two standards -- which is the ip-obfuscation shape. wpt-like owes
     # BOTH duties, which is the wpt-credentials-fragments shape and the case
@@ -1137,14 +1241,16 @@ self_test <- function() {
   # wrong reason. Assert the population before asserting anything about it.
   expect("PV9's positive case exercises a real population",
          startsWith(detail(mk(), "PV9"),
-                    "3 normative-dependency entries in 2 group(s)"))
+                    "4 normative-dependency entries in 3 group(s)"))
 
-  # 26. ... and here is what that floor guards against. Strip both arrays and
-  #     PV9 still says PASS: it judges shape, never presence (a later unit
-  #     owns presence). Only the count in the detail distinguishes a vacuous
-  #     pass from a real one.
+  # 26. ... and here is what that floor guards against. Strip every array and
+  #     PV9 still says PASS: it judges shape, never presence (PV10 owns
+  #     presence, which is why this asserts the RULE and not the verdict).
+  #     Only the count in the detail distinguishes a vacuous pass from a real
+  #     one.
   r <- mk(function(rec) {
     rec$fixtures[[1L]]$source_groups[[1L]]$normative_dependencies <- NULL
+    rec$fixtures[[2L]]$source_groups[[1L]]$normative_dependencies <- NULL
     rec$fixtures[[2L]]$source_groups[[2L]]$normative_dependencies <- NULL
     rec
   })
@@ -1307,6 +1413,72 @@ self_test <- function() {
   expect("which is what makes 'Unicode 15.1.0' a widening, not a loophole",
          identical(is_commit_sha("Unicode 15.1.0"), FALSE) &&
            identical(is_named_edition("Unicode 15.1.0"), TRUE))
+
+  # ---- PV10 ------------------------------------------------------------
+  #
+  # Same discipline as PV9: a presence rule is the easiest of all to pass for
+  # nothing, so the population comes first.
+  pv10_fails <- function(root) {
+    identical(rule(root, "PV10"), FALSE) && identical(verdict(root), FALSE)
+  }
+
+  # 38. THE FLOOR. Assert PV10 actually walked every group of the positive
+  #     tree -- 3 of them -- before believing anything it says about them.
+  expect("PV10's positive case walks every group",
+         startsWith(detail(mk(), "PV10"),
+                    "all 3 source group(s) answer the source-pinning question"))
+
+  # 39. FALSIFIED, three ways -- once per class of group, because "no
+  #     exemption" is the whole content of the rule. An in-scope CSV group, an
+  #     out-of-scope CSV group and the JSON oracle's group each go red on
+  #     their own when the key is simply absent.
+  r <- mk(set_group(2L, 1L, "normative_dependencies", NULL))
+  expect("PV10 fails when an IN-SCOPE group omits the key", pv10_fails(r))
+  expect("PV9 never sees the omission -- it judges shape, not presence",
+         identical(rule(r, "PV9"), TRUE))
+  r <- mk(set_group(2L, 2L, "normative_dependencies", NULL))
+  expect("PV10 fails when an OUT-OF-SCOPE group omits the key", pv10_fails(r))
+  expect("PV6 passes it too -- being out of section 2.3 is not an exemption",
+         identical(rule(r, "PV6"), TRUE))
+  r <- mk(set_group(1L, 1L, "normative_dependencies", NULL))
+  expect("PV10 fails when the JSON oracle's group omits the key",
+         pv10_fails(r))
+
+  # 40. FALSIFIED, fourth way -- present but EMPTY. An empty array answers
+  #     nothing; it is silence with a key in front of it.
+  r <- mk(set_group(2L, 1L, "normative_dependencies", list()))
+  expect("PV10 fails on an empty normative_dependencies array", pv10_fails(r))
+
+  # 41. FALSIFIED, fifth way -- present but NULL. The record's shape allows it
+  #     (jsonlite serialises NA to JSON null and parses it back to a present
+  #     key holding NULL), and PV9 SKIPS it exactly as it skips an absent key,
+  #     so PV10 is the only rule standing between this and a green gate.
+  r <- mk(set_group(2L, 1L, "normative_dependencies", NA))
+  expect("PV10 fails on a null normative_dependencies", pv10_fails(r))
+  expect("PV10 is the only rule that catches a null answer",
+         identical(rule(r, "PV9"), TRUE) && identical(rule(r, "PV5"), TRUE))
+
+  # 42. BOUNDARY. The unmodified positive already passes (case 1), and it
+  #     passes with alpha answering "not-applicable" -- but assert the shape
+  #     directly, on a group whose ONLY entry is a negative declaration. If
+  #     this went red the rule would be demanding invented pins rather than
+  #     answers, which is the failure mode that would get PV10 deleted.
+  r <- mk(set_group(2L, 2L, "normative_dependencies",
+                    list(dep_not_applicable)))
+  expect("PV10 passes a group whose only entry is not-applicable",
+         identical(verdict(r), TRUE))
+  expect("and the not-applicable answer counts as an answer",
+         startsWith(detail(r, "PV10"), "all 3 source group(s) answer"))
+
+  # 43. THE FLOOR, FALSIFIED IN THE RULE ITSELF. A presence rule that inspects
+  #     ZERO groups must not report PASS. Called directly, because a record
+  #     with no groups trips PV1 first and would otherwise "fail" for a reason
+  #     that says nothing about PV10.
+  expect("PV10 refuses to pass over an empty iteration",
+         identical(rule_pv10(list(fixtures = list()))[[1L]]$ok, FALSE))
+  expect("PV10 refuses to pass over fixtures that hold no groups",
+         identical(rule_pv10(list(fixtures = list(list(path = "x.csv"))))[[
+           1L]]$ok, FALSE))
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
   if (length(st$fail)) {
