@@ -152,6 +152,15 @@ ALLOWLIST <- list(
                    "oracle-provenance.json, whose import_command it mirrors")
   ),
   list(
+    path = "tools/oracle/fetch-source.R",
+    reason = paste("builds the `curl -fsSL` command a reader runs by hand when",
+                   "a tier-2 upstream source cannot be resolved -- the abort",
+                   "message IS the reproducibility record, and printing a",
+                   "command nobody can paste would defeat it. It fetches",
+                   "through utils::download.file(), so no curl code path is",
+                   "taken; the string is instructions for a human")
+  ),
+  list(
     path = "inst/bench/wpt-url-cases.json",
     reason = "same: the recorded import command for the pinned WPT fixture"
   ),
