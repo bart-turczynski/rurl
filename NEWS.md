@@ -1240,6 +1240,38 @@
   question the spec answers. Test fixtures and tooling only; no package behavior
   changes. (RURL-ozdejfzl.)
 
+- **A dependency object is now attached to the group it describes, and the gate
+  says so.** The `ada-verifydnslength` repair above put its corrected, verified
+  `whatwg/url` `9dc3827f…` pin under **`ada-extra-urltestdata`** and left the
+  false `no-derivation` entry in place. The record then contradicted its own
+  `standard_version`, its README, its NEWS entry and its verifier — and PV1–PV10
+  were **green for the whole commit range**, because PV9 judges whether an
+  answer is well-formed and PV10 whether one exists, and a well-formed answer to
+  *another group's* question satisfies both.
+
+  Both groups now carry the claims that describe them: `ada-verifydnslength` the
+  verified pin with the `#concept-host-parser` and `#concept-domain-to-ascii`
+  anchors it actually reads, `ada-extra-urltestdata` a negative declaration for
+  the 24 expectations it copies out of hash-pinned Ada bytes. Every entry in the
+  record now declares `applies_to_fixture` and `applies_to_group` — a *pair*,
+  because two groups here are both called `wpt-urltestdata` — and new gate rule
+  **PV11** checks three things independently: that each object is nested under
+  the group it declares; that a 40-hex commit named in a group's
+  `standard_version` is pinned by a verified entry in **that same group** (which
+  is the check that fires on the original defect from the other side); and that
+  `normative_dependencies_note` declares itself a `NEGATIVE declaration` or a
+  `POSITIVE declaration` in agreement with its entries' `pin_status`. That last
+  one turns prose the record already wrote into a claim: the misfiled object sat
+  under "nothing derived from it. The array is a NEGATIVE declaration", above a
+  verified pin.
+
+  Falsified against the committed record, not only synthetically — the gate's
+  `--self-test` swaps the two Ada arrays, the actual defect, and asserts PV11
+  goes red while PV9 and PV10 stay green. The limit is recorded too: PV11
+  catches a *move*, where the object travels and its declaration does not. An
+  author who edits the declaration as well is rewriting the claim rather than
+  misfiling it, and no structural rule can referee that. (RURL-drkcvzex.)
+
 ## rurl 2.7.0
 
 ### Breaking changes
