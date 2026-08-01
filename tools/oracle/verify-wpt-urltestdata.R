@@ -312,6 +312,7 @@ main <- function() {
     check_verdict(cmp, upstream),
     check_runnable(cmp, upstream),
     check_input_column(committed),
+    wpt_check_restatement(committed, committed$runnable == "yes"),
     check_constants(committed)
   )
 
@@ -325,6 +326,8 @@ main <- function() {
               nrow(committed), nrow(committed)))
   cat("verdict        : every expectation is upstream's own `failure: true`\n")
   cat(sprintf("runnable       : %d/%d classifications re-derive\n",
+              nrow(committed), nrow(committed)))
+  cat(sprintf("restatement    : %d/%d oracle_kind/oracle_value cells re-derive\n",
               nrow(committed), nrow(committed)))
   cat("ORACLE RE-LOCATION: PASS\n")
   invisible(TRUE)

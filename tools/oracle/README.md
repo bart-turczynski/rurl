@@ -60,11 +60,13 @@ group carries all **267** upstream `failure: true` entries. The 65-row differenc
 is the non-runnable rows the import drops, so 65 rows genuinely require the
 upstream file.
 
-The upstream WPT bytes were recovered locally during this work and hash-match the
-recorded `355c9f1e…` exactly, which is what establishes that tier-2 fetch
-verification is viable. The two Ada JSONs are **gone** from this machine; their
-hashes are recorded, so a re-fetch can still be verified, but nothing local
-proves it today.
+All three recorded digests have since been re-fetched from upstream and
+**reproduce byte-exact** — the WPT file at `355c9f1e…` and, on 2026-08-01, both
+Ada files, which had been *gone* from this machine since before the port began
+(the scratch builder resolved them through a deleted session scratchpad). That
+is what establishes tier-2 fetch verification as viable rather than aspirational:
+until it was run, nothing local proved the recorded Ada digests were reachable at
+all.
 
 ## What a port discharges is not the same claim in every group
 
@@ -469,6 +471,66 @@ for the comparison only; nothing is written back, and both preconditions (no
 U+E000 already present, no escaped `\\u0000` upstream) are asserted rather than
 assumed.
 
+### When the pinned revision does not reproduce the block
+
+`ada-extra-urltestdata` is the group where tier 2's central assumption breaks,
+and it breaks quietly. Upstream commit `fbea5b01` (2026-07-17, ada #1186)
+**re-expected** the `..#` case from href `a:b/#` to `failure` and added three new
+entries. The record's pin is a `verified-at` pin taken two days later, so at the
+pin all 24 inputs re-locate — and one expected value does not. The old note said
+"the revision at which all 24 rows were re-located", which is true of *inputs*
+and reads as true of *expectations*.
+
+Both deltas are carried as **exact ledgers**, never tolerances:
+
+| Ledger | Rows | What it fails on |
+| --- | --- | --- |
+| drift | 1 (`ada-024`) | a new disagreement, a ledger row that stops disagreeing, or one that disagrees *differently* |
+| upstream-only | 4 | an upstream entry nobody triaged, or a ledger row that is no longer outside the block |
+
+"A ledger row that stops disagreeing is a failure" is the load-bearing half. It
+means you cannot close the gap by adopting upstream's current value: falsified,
+and rewriting `ada-024` to `failure` fails the gate.
+
+**The second anchor is what makes a ledger honest.** A ledger alone says "we
+know about that one" with no evidence the recorded value was ever right. So the
+gate also grades the block against the revision at which it *does* reproduce —
+and that revision was not guessed. Sweeping all 17 commits that ever touched the
+path finds **exactly one** revision reproducing 24/24, `aa8e4043` (2025-07-16);
+every earlier revision reproduces fewer and every later one 23/24.
+
+That has a consequence beyond this gate. `RURL-vwurxmzm` concluded that with no
+recorded retrieval date "there is no way to resolve the revision it was imported
+from". For this group that is **false**: the expected values themselves date the
+import to `[2025-07-16, 2026-07-17)`. The sentinel stays — a bound is not a date
+— but it is now a bound, recorded as `retrieval_date_bound` and re-derived on
+every run rather than asserted.
+
+The anchor is deliberately *not* proposed as the group's `upstream_revision`.
+Re-pinning to the revision a fixture happens to agree with would make the pin
+follow the fixture, which is the direction this record exists to prevent.
+
+### Two things falsification found that design did not
+
+**The classifier's scheme rule was wrong, and only the second corpus could show
+it.** The first cut used RFC 3986's scheme production (`ALPHA *( ALPHA / DIGIT /
+"+" / "-" / "." ) ":"`). It reproduces all 267 `wpt-urltestdata` rows and
+disagrees with exactly one ada row: `schéme://example.com`, whose scheme is
+invalid because of the `é`. WHATWG would indeed fall back to the base there — but
+the fixture *runs* that row, because what makes a row unrunnable is needing a
+base to have a meaning at all, not having a *valid* scheme. The rule is
+positional, and the point generalizes: a reconstruction that fits one corpus
+perfectly is not thereby right.
+
+**A digest-only cache key leaves the revision unverified.** The resolver was
+first content-addressed on the digest alone, which is sound for the bytes and
+silently unsound for the pin: re-point `upstream_revision` at a revision serving
+different content, leave the digest, and a warm cache hits and never fetches — so
+the gate grades the right bytes while the revision it reports is a claim nothing
+checked. Measured: with a digest-only key, re-pointing the second anchor at the
+revision that *broke* the block left the gate green. The key is now
+`(digest, revision)`, and that mutation misses the cache, fetches, and fails.
+
 ### What this corpus cannot see, measured rather than assumed
 
 Two mutations of the shared `runnable` classifier — dropping the `about:blank`
@@ -489,7 +551,7 @@ that only reports its successes is how a blind spot survives.
 | `youarealiar` | yes | `verify-youarealiar.R` (integrity, not re-derivation) |
 | `equivocal-urls` | yes | `verify-equivocal-urls.R` (integrity, not re-derivation) |
 | `wpt-urltestdata` | yes | `verify-wpt-urltestdata.R` (re-location, not re-derivation) |
-| `ada-extra-urltestdata` | no | — |
+| `ada-extra-urltestdata` | yes | `verify-ada-extra-urltestdata.R` (re-location + two exact ledgers) |
 | `ada-verifydnslength` | no | — |
 
 `oracle-provenance.json` still carries `MISSING[RURL-vwurxmzm]` for the

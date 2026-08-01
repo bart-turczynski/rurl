@@ -35,6 +35,8 @@ jobs:
       ip_obfuscation_selftest: ${{ steps.filter.outputs.ip_obfuscation_selftest }}
       youarealiar_selftest: ${{ steps.filter.outputs.youarealiar_selftest }}
       equivocal_urls_selftest: ${{ steps.filter.outputs.equivocal_urls_selftest }}
+      wpt_urltestdata_selftest: ${{ steps.filter.outputs.wpt_urltestdata_selftest }}
+      ada_extra_selftest: ${{ steps.filter.outputs.ada_extra_selftest }}
       pin_inventory_selftest: ${{ steps.filter.outputs.pin_inventory_selftest }}
       release_rule_selftest: ${{ steps.filter.outputs.release_rule_selftest }}
       traceability_selftest: ${{ steps.filter.outputs.traceability_selftest }}
@@ -97,6 +99,10 @@ jobs:
               - 'tools/oracle/verify-equivocal-urls.R'
             wpt_urltestdata_selftest:
               - 'tools/oracle/verify-wpt-urltestdata.R'
+              - 'tools/oracle/relocate-wpt-format.R'
+              - 'tools/oracle/fetch-source.R'
+            ada_extra_selftest:
+              - 'tools/oracle/verify-ada-extra-urltestdata.R'
               - 'tools/oracle/relocate-wpt-format.R'
               - 'tools/oracle/fetch-source.R'
             pin_inventory_selftest:
@@ -385,6 +391,14 @@ jobs:
       - name: Gate self-test (wpt-urltestdata re-location)
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.wpt_urltestdata_selftest == 'true'
         run: Rscript tools/oracle/verify-wpt-urltestdata.R --self-test
+      # ada-extra-urltestdata is the tier-2 group whose pinned revision does NOT
+      # reproduce one expected value: upstream re-expected a case after the
+      # import. Its two exact ledgers, and the second anchor that dates them,
+      # are graded by the full run; --self-test grades the ledger LOGIC in all
+      # four of its states, which is offline.
+      - name: Gate self-test (ada-extra-urltestdata re-location)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.ada_extra_selftest == 'true'
+        run: Rscript tools/oracle/verify-ada-extra-urltestdata.R --self-test
 
   # Enforced-vs-documentary hash-pin model (RURL-kufiwlxc). The control plane
   # pins hashes in four kinds of place, and only some are recomputed: a

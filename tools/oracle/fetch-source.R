@@ -101,12 +101,23 @@ oracle_source_cache_dir <- function() {
                                                          "oracle-sources"))
 }
 
-# Content-addressed, so a cache entry can never be served for a different pin:
-# the digest is in the name AND re-checked after reading. A cache keyed by file
-# name would happily hand back last month's bytes after a re-pin.
+# Keyed by BOTH coordinates the pin names -- revision and digest -- and the
+# digest is re-checked after reading. A cache keyed by file name would hand back
+# last month's bytes after a re-pin.
+#
+# WHY THE REVISION IS IN THE KEY, found by falsification rather than design. The
+# first cut was content-addressed on the digest alone, which is sound for the
+# BYTES and silently unsound for the pin: re-point a record's
+# upstream_revision at a revision serving different content, leave the digest
+# alone, and a warm cache hits on the digest and never fetches -- so the gate
+# grades the right bytes while the revision it reports becomes a claim nothing
+# checked. Measured: with a digest-only key, re-pointing this group's second
+# anchor at the revision that BROKE it left the gate green. With the revision in
+# the key that mutation misses the cache, fetches, and fails on the digest.
 cache_path <- function(pin) {
   file.path(oracle_source_cache_dir(),
-            sprintf("%s-%s", substr(pin$sha256, 1L, 12L), basename(pin$path)))
+            sprintf("%s-%s-%s", substr(pin$sha256, 1L, 12L),
+                    substr(pin$revision, 1L, 12L), basename(pin$path)))
 }
 
 source_unavailable <- function(pin, why) {
