@@ -1,0 +1,143 @@
+# Tier-2 oracle fixtures, compared against their PINNED UPSTREAM BYTES
+# (RURL-drkcvzex).
+#
+# WHY THIS IS A SEPARATE WORKFLOW. Three source groups -- wpt-urltestdata,
+# ada-extra-urltestdata and ada-verifydnslength -- read their expected values out
+# of upstream bytes this repository deliberately does not vendor. So their full
+# verifiers FETCH, and verify.yml runs only their offline `--self-test`: an
+# upstream outage is not a defect in this repository, and a network read in the
+# fast gate would make GitHub's and Ada's availability a condition of merging.
+#
+# The consequence nobody had closed is that the fixture-to-upstream comparison
+# ran only when a person remembered to type the command. `workflow_dispatch` in
+# verify.yml does not help -- it widens the `if:` conditions on the SELF-TEST
+# steps, and the full verifiers are not steps there at all. This workflow is the
+# missing automated path: scheduled weekly, dispatchable on demand, and outside
+# the merge gate by construction rather than by an `if:` somebody can widen.
+#
+# It is also invisible to tools/verify.R, which derives its blocking gate list
+# from .github/workflows/verify.yml alone. That is deliberate: a network-reading
+# check must not appear in the local pre-push gate.
+#
+# TWO OUTCOMES THAT MUST NOT BE CONFLATED, which is the whole reason each
+# verifier already distinguishes them:
+#
+#   exit 1  THE FIXTURE DISAGREES WITH UPSTREAM. A real finding -- upstream moved
+#           and no ledger covers it, or a committed cell drifted. Fails the job.
+#   exit 2  THE SOURCE COULD NOT BE RESOLVED. raw.githubusercontent.com was
+#           unreachable, or the digest check refused the bytes. Says nothing about
+#           the fixture, so it does not fail the job -- but it is reported as
+#           UNAVAILABLE and is NEVER reported as a pass. A run where all three
+#           are unavailable produces no evidence, and the summary says so.
+#
+# `fail_on_unavailable` makes the second class blocking for one run, for when the
+# question being asked is "can these sources still be reached at all".
+name: oracle-upstream
+
+on:
+  schedule:
+    # Weekly, Wednesday 05:41 UTC. Offset from osv-audit (Mon 04:23) and
+    # security-audit (04:17) so a shared-runner hiccup cannot take out two
+    # unrelated audits at once.
+    - cron: '41 5 * * 3'
+  workflow_dispatch:
+    inputs:
+      fail_on_unavailable:
+        description: 'Treat an unresolvable upstream source as a failure'
+        type: boolean
+        default: false
+
+permissions: read-all
+
+concurrency:
+  group: oracle-upstream-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tier2:
+    runs-on: ubuntu-latest
+    name: Tier-2 fixtures still match their pinned upstream bytes
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      # jsonlite and digest only. NO package install and no devtools::load_all():
+      # an oracle that can reach the implementation it grades is a
+      # characterization test wearing an oracle's label. The independence is
+      # structural, not a comment.
+      - name: Install verifier dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite", "digest"))
+
+      # The offline half first. If the gate logic itself is broken there is no
+      # point spending three fetches to find out.
+      - name: Gate self-tests (offline)
+        run: |
+          Rscript tools/oracle/verify-wpt-urltestdata.R --self-test
+          Rscript tools/oracle/verify-ada-extra-urltestdata.R --self-test
+          Rscript tools/oracle/verify-ada-verifydnslength.R --self-test
+
+      - name: Full verifiers against the pinned upstream revisions
+        id: verify
+        env:
+          FAIL_ON_UNAVAILABLE: ${{ inputs.fail_on_unavailable }}
+        run: |
+          set -u
+          disagreed=0
+          unavailable=0
+          {
+            echo '## Tier-2 oracle verifiers'
+            echo
+            echo '| Group | Result |'
+            echo '| --- | --- |'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for script in \
+            tools/oracle/verify-wpt-urltestdata.R \
+            tools/oracle/verify-ada-extra-urltestdata.R \
+            tools/oracle/verify-ada-verifydnslength.R
+          do
+            group=$(basename "$script" .R)
+            echo "::group::$group"
+            # `|| status=$?` rather than `set -e`: the exit code IS the result
+            # here, and two of the three possible codes are not job failures.
+            status=0
+            Rscript "$script" || status=$?
+            echo "::endgroup::"
+            case "$status" in
+              0)
+                echo "| \`$group\` | agrees with upstream |" >> "$GITHUB_STEP_SUMMARY"
+                ;;
+              2)
+                unavailable=$((unavailable + 1))
+                echo "| \`$group\` | **SOURCE UNAVAILABLE** — no evidence either way |" >> "$GITHUB_STEP_SUMMARY"
+                echo "::warning title=Upstream source unavailable::$group could not resolve its pinned source (exit 2). This says nothing about the fixture."
+                ;;
+              *)
+                disagreed=$((disagreed + 1))
+                echo "| \`$group\` | **DISAGREES** (exit $status) |" >> "$GITHUB_STEP_SUMMARY"
+                echo "::error title=Tier-2 fixture disagrees with upstream::$group exited $status. The committed block no longer matches its pinned upstream bytes, or a ledger row is stale."
+                ;;
+            esac
+          done
+          {
+            echo
+            echo "$disagreed group(s) disagree with upstream; $unavailable could not be resolved."
+            if [ "$unavailable" -eq 3 ]; then
+              echo
+              echo '**All three sources were unresolvable, so this run produced no evidence about the fixtures.**'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$disagreed" -gt 0 ]; then
+            echo "FAIL: $disagreed tier-2 group(s) disagree with their pinned upstream bytes."
+            exit 1
+          fi
+          if [ "$unavailable" -gt 0 ] && [ "$FAIL_ON_UNAVAILABLE" = "true" ]; then
+            echo "FAIL: $unavailable source(s) unresolvable, and fail_on_unavailable was requested."
+            exit 1
+          fi
+          if [ "$unavailable" -gt 0 ]; then
+            echo "PASS with $unavailable unresolvable source(s) -- reported, not counted as agreement."
+          else
+            echo "PASS: all three tier-2 groups agree with their pinned upstream bytes."
+          fi
