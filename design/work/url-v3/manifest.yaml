@@ -175,6 +175,21 @@ decisions:
     path: design/work/url-v3/decisions/P0.5-g4-exit-criterion-scope.md
     sha256: 4a8adcffc7e4502d6e67375834a0e2377b9cb20a242e190e0bc07fac81db93ea
     state: ACCEPTED
+  # --- P0.11 ACCEPTED by owner merge of MR !1 (merge commit
+  # e41ae377680b7feea593c41f3589827895b49b76; squash commit
+  # 776e562ee949b90ba4f79f3cd4a67f5ad117aefa, identical tree), performed by
+  # gitlab:27694267 — the first acceptance on the reconstituted mechanism, and
+  # the first recorded under a forge that runs no server-side gate. Per P0.11
+  # §2.3 the verification this merge stands on is recorded in the record's
+  # "Verification at acceptance" section, not implied by the merge. Per P0.11 §3
+  # this acceptance is an extraordinary reconstituting act, not an ordinary
+  # application of P0.1; the break in the chain is deliberate and documented.
+  # The sha256 is computed AFTER the frontmatter stamps, since stamping the
+  # record changes the bytes this pin covers.
+  - id: P0.11
+    path: design/work/url-v3/decisions/P0.11-forge-binding-ratifying-identity.md
+    sha256: 18ae365f2c6993b2ccc657631e5ad039075da73eb86b4cbe315d1653de1457d9
+    state: ACCEPTED
 
 # --- Other tracked control-plane artifacts (excludes manifest.yaml itself and
 # the frozen sources; decisions are inventoried above).
