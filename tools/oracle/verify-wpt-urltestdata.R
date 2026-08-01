@@ -34,6 +34,22 @@ GROUP <- "wpt-urltestdata"
 here <- function(...) file.path("tools", "oracle", ...)
 source(here("fetch-source.R"), local = FALSE)
 source(here("relocate-wpt-format.R"), local = FALSE)
+source(here("check-fsss-conformance.R"), local = FALSE)
+
+# FLOORS for the two column checks, so neither can erode to a population that
+# passes for nothing. Measured on the committed block: 202 of the 267 rows carry
+# a `whatwg_expected` (the other 65 are divergence_class `aligned` or
+# `not-runnable`), and 21 of those 202 carry a documented `rurl_deviation`.
+WHATWG_EXPECTED_FLOOR <- 202L
+WHATWG_EXPECTED_DEVIATION_FLOOR <- 21L
+
+# ZERO, AND STATED RATHER THAN DISCOVERED. This group is the upstream FAILURE
+# arm, so every row's oracle_value is NA and there is no serialization for
+# `fsss_whatwg` to be compared against -- the implementation-conformance check
+# grades nothing here, by construction and not by accident. The floor is passed
+# explicitly so the verifier's output says "0 rows graded" out loud; a caller
+# that simply omitted the check would be silent about it.
+FSSS_FLOOR <- 0L
 
 # How the group's applicability_selector reads, executably: the upstream failure
 # arm and nothing else.
@@ -271,6 +287,34 @@ self_test <- function() {
            input = paste0("a", NUL_SHIM_CHAR, "b"),
            base = "http://other.com/")), silent = TRUE), "try-error"), TRUE)
 
+  # The two column checks this group carries (RURL-drkcvzex). The shared logic is
+  # graded in verify-ada-extra-urltestdata.R's self-test, where the population
+  # exists; what is asserted here is THIS group's posture, which is different in
+  # a way worth pinning.
+  row <- function(we, dev = NA_character_) {
+    data.frame(id = "wpt-fail-012", whatwg_expected = we, rurl_deviation = dev,
+               fsss_whatwg = NA_character_, oracle_value = NA_character_,
+               stringsAsFactors = FALSE)
+  }
+  expect("a whatwg_expected that is not upstream's verdict fails",
+         length(wpt_check_whatwg_expected(row("accept", dev = "ADR 0004"),
+                                          "failure", 1L, 1L)) > 0L, TRUE)
+  expect("upstream's own verdict passes",
+         length(wpt_check_whatwg_expected(row("failure", dev = "ADR 0004"),
+                                          "failure", 1L, 1L)), 0L)
+  # THE ZERO FLOOR IS DELIBERATE AND IS ASSERTED, not left to be inferred: this
+  # group is the upstream failure arm, so no row has a serialization for
+  # `fsss_whatwg` to be compared against. A floor above zero here would demand a
+  # population the corpus cannot have; a check that quietly graded nothing
+  # without saying so is the other error.
+  expect("this group's fsss floor is zero", FSSS_FLOOR, 0L)
+  expect("an empty fsss population passes at a zero floor",
+         length(fsss_check_conformance(row(NA_character_), FSSS_FLOOR)), 0L)
+  expect("and the report says out loud that it graded nothing",
+         fsss_report_line(fsss_check_conformance(row(NA_character_), 0L)),
+         paste("fsss conformance: 0 row(s) graded, 0 of them carrying a",
+               "documented rurl_deviation"))
+
   cat(sprintf("self-test: %d passed, %d failed\n", pass, length(fail)))
   if (length(fail)) {
     cat(paste0("  - ", fail, collapse = "\n"), "\n", sep = "")
@@ -307,7 +351,13 @@ main <- function() {
   cmp <- committed
   cmp$input <- committed$input_decoded
 
-  fails <- c(
+  # Every row of this group is an upstream failure entry, so the derived
+  # expectation is upstream's own verdict, aligned by input. NA where a row does
+  # not align -- wpt_check_whatwg_expected() treats that as a failure rather than
+  # a skip.
+  derived <- upstream$expected[match(cmp$input, upstream$input)]
+
+  oracle_fails <- c(
     check_relocation(cmp, upstream),
     check_verdict(cmp, upstream),
     check_runnable(cmp, upstream),
@@ -315,11 +365,29 @@ main <- function() {
     wpt_check_restatement(committed, committed$runnable == "yes"),
     check_constants(committed)
   )
+  whatwg_expected <- wpt_check_whatwg_expected(
+    committed, derived, WHATWG_EXPECTED_FLOOR, WHATWG_EXPECTED_DEVIATION_FLOOR)
+  oracle_fails <- c(oracle_fails, as.character(whatwg_expected))
 
-  if (length(fails)) {
-    cat("\n== failures ==\n")
-    cat(paste0("  - ", fails, collapse = "\n"), "\n", sep = "")
-    cat("\nORACLE RE-LOCATION: FAIL\n")
+  # A SEPARATE ARM, reported separately: this compares a CAPTURED rurl column to
+  # the oracle, so it is implementation conformance and not provenance. See
+  # tools/oracle/check-fsss-conformance.R.
+  impl <- fsss_check_conformance(committed, FSSS_FLOOR)
+  impl_fails <- as.character(impl)
+
+  if (length(oracle_fails) || length(impl_fails)) {
+    if (length(oracle_fails)) {
+      cat("\n== oracle failures (provenance / re-location) ==\n")
+      cat(paste0("  - ", oracle_fails, collapse = "\n"), "\n", sep = "")
+    }
+    if (length(impl_fails)) {
+      cat("\n== implementation failures (FSSS conformance) ==\n")
+      cat(paste0("  - ", impl_fails, collapse = "\n"), "\n", sep = "")
+    }
+    cat(sprintf("\nORACLE RE-LOCATION: %s\n",
+                if (length(oracle_fails)) "FAIL" else "PASS"))
+    cat(sprintf("IMPLEMENTATION FSSS CONFORMANCE: %s\n",
+                if (length(impl_fails)) "FAIL" else "PASS"))
     quit(status = 1L)
   }
   cat(sprintf("re-location    : %d/%d rows re-locate in upstream order\n",
@@ -329,7 +397,14 @@ main <- function() {
               nrow(committed), nrow(committed)))
   cat(sprintf("restatement    : %d/%d oracle_kind/oracle_value cells re-derive\n",
               nrow(committed), nrow(committed)))
+  cat(sprintf("whatwg_expected: %d row(s) match upstream's own verdict, %d of\n",
+              attr(whatwg_expected, "graded"),
+              attr(whatwg_expected, "deviating")))
+  cat("                 them on rows carrying a documented rurl_deviation\n")
   cat("ORACLE RE-LOCATION: PASS\n")
+  cat(sprintf("%s (no serialization in the failure arm)\n",
+              fsss_report_line(impl)))
+  cat("IMPLEMENTATION FSSS CONFORMANCE: PASS\n")
   invisible(TRUE)
 }
 

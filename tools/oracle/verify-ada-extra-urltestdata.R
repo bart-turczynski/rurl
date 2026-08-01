@@ -47,6 +47,18 @@ GROUP <- "ada-extra-urltestdata"
 here <- function(...) file.path("tools", "oracle", ...)
 source(here("fetch-source.R"), local = FALSE)
 source(here("relocate-wpt-format.R"), local = FALSE)
+source(here("check-fsss-conformance.R"), local = FALSE)
+
+# FLOORS, measured on the committed block, so neither column check can erode to
+# a population that passes for nothing. 14 of the 24 rows carry a
+# `whatwg_expected` and 3 of those carry a documented `rurl_deviation`; 13 rows
+# carry both an `fsss_whatwg` and an `oracle_value`, 2 of them deviating. This is
+# the group that gives the unconditional FSSS comparison its whole subject --
+# ada-003 and ada-006 are the deviating rows, named in
+# FSSS_REQUIRED_DEVIATION_IDS rather than merely counted.
+WHATWG_EXPECTED_FLOOR <- 14L
+WHATWG_EXPECTED_DEVIATION_FLOOR <- 3L
+FSSS_FLOOR <- 13L
 
 # This group runs every row it can, so its `runnable` column spells the
 # base-relative reason as a bare "no". A NUL-bearing row would need a label this
@@ -209,6 +221,27 @@ check_expectations_at_pin <- function(committed, upstream, ledger = DRIFT_LEDGER
   fail
 }
 
+# THE EXPECTATION EACH ROW SHOULD CARRY, derived from pinned upstream bytes and
+# nothing else -- the input to the `whatwg_expected` check, which needs a value
+# per row rather than a comparison against the fixture's own
+# `standard_expectation` column.
+#
+# LEDGERED ROWS TAKE THE LEDGER'S value, and that is not a loophole. For a
+# drifted row the CURRENT pin no longer states the expectation the block was
+# imported with; what states it is the second anchor, and check D verifies the
+# ledger's `committed` value against the bytes at that revision independently of
+# this function. So both branches derive from hash-pinned upstream bytes; they
+# differ only in WHICH pin. A row that aligns nowhere upstream gets NA, and the
+# check treats NA as a failure rather than a skip.
+derived_expectations <- function(committed, upstream, ledger = DRIFT_LEDGER) {
+  out <- upstream$expected[match(committed$input, upstream$input)]
+  for (entry in ledger) {
+    hit <- which(committed$id == entry$id)
+    if (length(hit)) out[hit] <- entry$committed
+  }
+  out
+}
+
 # Check D -- THE SECOND ANCHOR. At the revision the sweep identified, all 24
 # committed expectations must reproduce EXACTLY, with no ledger. This is what
 # turns "we know about that one drifted row" into evidence that the recorded
@@ -361,6 +394,68 @@ self_test <- function() {
   expect("an unlabelled reason fails rather than defaulting",
          length(check_runnable(fx("ada-001", "a:1", "a:1"), nul_up)) > 0L, TRUE)
 
+  # ---- the two column checks (RURL-drkcvzex) --------------------------------
+  #
+  # `whatwg_expected`, which used to be ungraded. The subject throughout is a
+  # row carrying a rurl_deviation, because that is the case the fixture's own
+  # structural assertions cannot referee and therefore the case the check exists
+  # for.
+  col <- function(we, dev = NA_character_, fsss = NA_character_,
+                  ov = NA_character_) {
+    data.frame(id = "ada-003", whatwg_expected = we, rurl_deviation = dev,
+               fsss_whatwg = fsss, oracle_value = ov, stringsAsFactors = FALSE)
+  }
+  expect("a whatwg_expected matching the derived value passes",
+         length(wpt_check_whatwg_expected(col("a:1", dev = "ADR 0011"), "a:1",
+                                          1L, 1L)), 0L)
+  expect("a corrupted whatwg_expected fails ON A DEVIATING ROW",
+         length(wpt_check_whatwg_expected(col("a:2", dev = "ADR 0011"), "a:1",
+                                          1L, 1L)) > 0L, TRUE)
+  expect("... and on a row with no deviation, so the rule is not conditioned",
+         length(wpt_check_whatwg_expected(col("a:2"), "a:1", 1L)) > 0L, TRUE)
+  # NA is not graded -- the absence PATTERN is derived from divergence_class,
+  # which is a function of how rurl answers, so this check must not read it.
+  expect("an NA whatwg_expected is not graded",
+         length(wpt_check_whatwg_expected(col(NA_character_), "a:1", 0L)), 0L)
+  # ... but the population may not silently drain away either.
+  expect("an NA that drops the population below the floor fails",
+         length(wpt_check_whatwg_expected(col(NA_character_), "a:1", 1L)) > 0L,
+         TRUE)
+  expect("losing the deviating rows fails even when the count holds",
+         length(wpt_check_whatwg_expected(col("a:1"), "a:1", 1L, 1L)) > 0L, TRUE)
+  # "Could not derive it" must never report as "it agrees".
+  expect("a graded row with no derived value fails rather than skipping",
+         length(wpt_check_whatwg_expected(col("a:1"), NA_character_, 1L)) > 0L,
+         TRUE)
+
+  # The FSSS conformance arm, which is implementation conformance and not
+  # provenance -- see tools/oracle/check-fsss-conformance.R.
+  expect("an fsss_whatwg equal to oracle_value passes",
+         length(fsss_check_conformance(col(NA, dev = "ADR 0002", fsss = "a:1",
+                                           ov = "a:1"),
+                                       1L, "ada-003")), 0L)
+  expect("a differing fsss_whatwg fails ON A DEVIATING ROW",
+         length(fsss_check_conformance(col(NA, dev = "ADR 0002", fsss = "a:2",
+                                           ov = "a:1"),
+                                       1L, "ada-003")) > 0L, TRUE)
+  #   THE FLOOR AND THE NAMED ROWS. A count alone would let ada-003/ada-006 drop
+  #   out and be replaced by two non-deviating rows, which is the state that
+  #   quietly restores the rurl_deviation conditioning this check refuses.
+  expect("an empty population fails the floor",
+         length(fsss_check_conformance(col(NA), 1L)) > 0L, TRUE)
+  expect("a required deviating row that is not graded fails",
+         length(fsss_check_conformance(col(NA, fsss = "a:1", ov = "a:1"),
+                                       1L, "ada-006")) > 0L, TRUE)
+  expect("the two rows the unconditional comparison exists for are named",
+         FSSS_REQUIRED_DEVIATION_IDS, c("ada-003", "ada-006"))
+
+  # The ledger-aware derivation. A drifted row derives to the value the SECOND
+  # anchor verifies, not to what the current pin says -- both are pinned bytes.
+  expect("a drifted row derives to the ledger's committed value",
+         derived_expectations(committed, upstream, drift1)[2L], "a:b/#")
+  expect("an undrifted row derives to the pinned upstream value",
+         derived_expectations(committed, upstream, drift1)[1L], "a:1")
+
   cat(sprintf("self-test: %d passed, %d failed\n", pass, length(fail)))
   if (length(fail)) {
     cat(paste0("  - ", fail, collapse = "\n"), "\n", sep = "")
@@ -389,7 +484,7 @@ main <- function() {
   cat(sprintf("upstream cases : %d at the pinned revision %s\n",
               nrow(upstream), substr(pin$revision, 1L, 12L)))
 
-  fails <- c(
+  oracle_fails <- c(
     check_relocation(committed, upstream),
     check_upstream_only(committed, upstream),
     check_expectations_at_pin(committed, upstream),
@@ -397,11 +492,31 @@ main <- function() {
     wpt_check_restatement(committed, committed$runnable == "yes"),
     check_reproducing_revision(committed)
   )
+  whatwg_expected <- wpt_check_whatwg_expected(
+    committed, derived_expectations(committed, upstream),
+    WHATWG_EXPECTED_FLOOR, WHATWG_EXPECTED_DEVIATION_FLOOR)
+  oracle_fails <- c(oracle_fails, as.character(whatwg_expected))
 
-  if (length(fails)) {
-    cat("\n== failures ==\n")
-    cat(paste0("  - ", fails, collapse = "\n"), "\n", sep = "")
-    cat("\nORACLE RE-LOCATION: FAIL\n")
+  # A SEPARATE ARM, reported separately: this compares a CAPTURED rurl column to
+  # the oracle, so it is implementation conformance and not provenance. See
+  # tools/oracle/check-fsss-conformance.R.
+  impl <- fsss_check_conformance(committed, FSSS_FLOOR,
+                                 FSSS_REQUIRED_DEVIATION_IDS)
+  impl_fails <- as.character(impl)
+
+  if (length(oracle_fails) || length(impl_fails)) {
+    if (length(oracle_fails)) {
+      cat("\n== oracle failures (provenance / re-location) ==\n")
+      cat(paste0("  - ", oracle_fails, collapse = "\n"), "\n", sep = "")
+    }
+    if (length(impl_fails)) {
+      cat("\n== implementation failures (FSSS conformance) ==\n")
+      cat(paste0("  - ", impl_fails, collapse = "\n"), "\n", sep = "")
+    }
+    cat(sprintf("\nORACLE RE-LOCATION: %s\n",
+                if (length(oracle_fails)) "FAIL" else "PASS"))
+    cat(sprintf("IMPLEMENTATION FSSS CONFORMANCE: %s\n",
+                if (length(impl_fails)) "FAIL" else "PASS"))
     quit(status = 1L)
   }
   cat(sprintf("re-location    : %d/%d rows re-locate in upstream order\n",
@@ -417,7 +532,14 @@ main <- function() {
   cat(sprintf("second anchor  : %d/%d expectations reproduce at %s (%s)\n",
               nrow(committed), nrow(committed),
               substr(REPRODUCING$revision, 1L, 12L), REPRODUCING$date))
+  cat(sprintf("whatwg_expected: %d row(s) match the expectation derived from the\n",
+              attr(whatwg_expected, "graded")))
+  cat(sprintf("                 pinned bytes, %d of them on rows carrying a\n",
+              attr(whatwg_expected, "deviating")))
+  cat("                 documented rurl_deviation\n")
   cat("ORACLE RE-LOCATION: PASS\n")
+  cat(sprintf("%s\n", fsss_report_line(impl)))
+  cat("IMPLEMENTATION FSSS CONFORMANCE: PASS\n")
   invisible(TRUE)
 }
 

@@ -101,10 +101,12 @@ jobs:
             wpt_urltestdata_selftest:
               - 'tools/oracle/verify-wpt-urltestdata.R'
               - 'tools/oracle/relocate-wpt-format.R'
+              - 'tools/oracle/check-fsss-conformance.R'
               - 'tools/oracle/fetch-source.R'
             ada_extra_selftest:
               - 'tools/oracle/verify-ada-extra-urltestdata.R'
               - 'tools/oracle/relocate-wpt-format.R'
+              - 'tools/oracle/check-fsss-conformance.R'
               - 'tools/oracle/fetch-source.R'
             ada_dnslength_selftest:
               - 'tools/oracle/verify-ada-verifydnslength.R'
