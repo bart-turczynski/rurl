@@ -100,20 +100,52 @@ superseded revision.
 Every other WHATWG group here dates its standard reference by proxy —
 `"Living Standard (unversioned); pinned by upstream_revision"`, borrowing the
 date from its WPT or Ada artifact. `ip-obfuscation` and `equivocal-urls` have no
-artifact to borrow from. That gap is filed as **`RURL-qhwktfcw`** and is *not*
-closed by this port; pinning a `whatwg/url` commit needs network access that was
-unavailable, and no revision was invented. What the port does instead is anchor
-the transcription to something that *is* pinned — see below.
+artifact to borrow from. That gap was filed as **`RURL-qhwktfcw`**, which the
+port could not close: pinning a `whatwg/url` commit needed network access that
+was unavailable, and no revision was invented. What the port did instead was
+anchor the transcription to something that *is* pinned — see below.
 
-The general question `RURL-qhwktfcw` raises is worth answering for the whole
-record, not just this group: **does transcribing a normative standard create its
-own pinning duty, independent of whether bytes were vendored?** The policy in
-`conventions.section_2_3_scope` is framed entirely around vendored artifacts and
-does not currently speak to it — and its claim that out-of-scope groups have
-"nothing absent to pin" stops being true the moment a transcription becomes
-load-bearing.
+**The pin has since been taken directly, and the policy behind it split in two.**
+The general question `RURL-qhwktfcw` raised was worth answering for the whole
+record rather than this group alone: *does transcribing a normative standard
+create its own pinning duty, independent of whether bytes were vendored?* It
+does, and the record now says so. `conventions.section_2_3_scope` keeps its
+original subject — **artifact pinning**, "did we vendor bytes?" — with
+`section_2_3_applies` unchanged in meaning. Alongside it,
+`conventions.normative_dependency_scope` states the second, orthogonal duty:
+**source pinning**, which binds any group whose expected values are transcribed,
+computed or hand-derived from a standard's text, vendored bytes or not. A group
+can owe both, either, or neither. `wpt-credentials-fragments` owes both, and is
+why one boolean could never have carried them: it has real artifact provenance
+*and* transcribes the URL serializer.
 
-### Anchoring a transcription without a spec pin
+The old policy justified its no-sentinel rule by asserting that out-of-scope
+groups have "nothing absent to pin". That was simply false, and it has been
+withdrawn rather than softened. `ip-obfuscation` was `section_2_3_applies =
+false` and correctly so — yet something *was* absent to pin, namely the revision
+of the standard its transcription reads, and because no field in the record
+named that dependency, six section citations that resolve to no revision of the
+spec survived review.
+
+The duty is carried by a group-level `normative_dependencies` **array** — an
+array because one derivation may read several sources pinned to different
+degrees. `ip-obfuscation` reads two:
+
+| Source | `pin_status` | State |
+| --- | --- | --- |
+| WHATWG URL Standard | `verified` | **Closed.** Pinned at `whatwg/url` `9dc3827f` (2026-07-06), the revision its transcribed algorithms were verified against. |
+| UTS #46 IDNA mapping table | `missing` | **Open**, carrying `tracking_issue: RURL-qhwktfcw`. Three rows turn on the mapping table's treatment of U+3002/U+FF0E/U+FF61; no Unicode version is pinned for them. |
+
+Two details of that shape are load-bearing. `pin_status` is an **enum**
+(`verified` / `missing` / `not-applicable`), never the `MISSING[…]` sentinel,
+because gate rule PV6 fails any `section_2_3_applies = false` group whose
+subtree contains that sentinel — writing one here would report a section-2.3 gap
+this group does not have. And citations are **anchor-first**: the stable `<dfn>`
+fragment id is the durable key and the section number is only a hint. That is
+measured, not preferred — host parsing was section 3.2 in 2016, 3.4 in 2019 and
+2022, and 3.5 today, while `#concept-host-parser` resolves in all of them.
+
+### Anchoring the transcription against a second witness
 
 `verify-ip-obfuscation.R`'s check D grades the transcription against a corpus
 that carries both a revision and a hash: `inst/bench/wpt-url-cases.json` at WPT
@@ -128,14 +160,16 @@ so the check cannot silently erode to zero rows:
   **90/90**, 62 skipped.
 
 Be precise about what that buys, because the tempting overstatement is what
-would make `RURL-qhwktfcw` look closed when it is not. The anchor establishes
-strong agreement with **a hash-verified WPT corpus revision**. It does *not*
-establish that corpus as a proxy for the WHATWG spec revision the transcription
-purports to implement — WPT is an independent compatibility suite with its own
-release cadence, not a snapshot of the standard's text. So this is behavioral
-evidence from a second, datable witness; it is not a spec pin, and it does not
-date the sections transcribed. That gap is exactly why `RURL-qhwktfcw` stays
-open.
+would have made `RURL-qhwktfcw` look closed before it was. The anchor
+establishes strong agreement with **a hash-verified WPT corpus revision**. It
+does *not* establish that corpus as a proxy for the WHATWG spec revision the
+transcription purports to implement — WPT is an independent compatibility suite
+with its own release cadence, not a snapshot of the standard's text. So this is
+behavioral evidence from a second, datable witness; **it is not a spec pin**,
+and it does not date the sections transcribed. That distinction survives the
+pin: `normative_dependencies[0]` is what dates the WHATWG algorithms, the anchor
+is independent evidence that the transcription of them behaves, and neither
+substitutes for the other.
 
 Two URL-parser steps are
 applied during extraction, because omitting them would misattribute a parser
