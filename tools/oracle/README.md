@@ -134,7 +134,28 @@ degrees. `ip-obfuscation` reads two:
 | Source | `pin_status` | State |
 | --- | --- | --- |
 | WHATWG URL Standard | `verified` | **Closed.** Pinned at `whatwg/url` `9dc3827f` (2026-07-06), the revision its transcribed algorithms were verified against. |
-| UTS #46 IDNA mapping table | `missing` | **Open**, carrying `tracking_issue: RURL-qhwktfcw`. Three rows turn on the mapping table's treatment of U+3002/U+FF0E/U+FF61; no Unicode version is pinned for them. |
+| UTS #46 IDNA mapping table | `verified` | **Closed.** Pinned at UTS #46 revision 35 (2025-09-04) with the mapping table at Unicode 16.0.0. Three rows turn on the treatment of U+3002/U+FF0E/U+FF61. |
+
+Two things about that second pin are worth carrying forward.
+
+**It names two coordinates on purpose.** UTS #46 is a *document* with its own
+revision numbering; the IDNA mapping table is *data* versioned by Unicode
+version, and the two run on independent cadences — when this was pinned the
+document had already moved to revision 35, dated in the Unicode 17 era, while
+`Public/idna/17.0.0/` still returned 404 and the newest published table was
+16.0.0. Naming only "the current UTS-46 revision" or only "the current Unicode
+version" would each have been a plausible-sounding pin to a *different thing*.
+
+**It was verified before it was written.** `pin_status: verified` means the
+derivation was checked against that revision — so writing it first and checking
+later would be the same fabrication this whole record exists to prevent. The
+check is re-derivable, not prose: `check-uts46-mapping-pin.R` sweeps every
+`IdnaMappingTable.txt` published under `Public/idna` (5.2.0 → 16.0.0) for the 29
+mappings the derivation transcribes — 3 full-stop variants plus 26 letters — and
+reports **493 checks, 0 mismatches**. It reads unicode.org, so it is run by hand
+like `pslr::psl_refresh()` and is deliberately not a gate. The pin claims those
+29 mappings and nothing more; UTS-46 *Processing* is not implemented, and any
+other non-ASCII code point aborts the derivation instead of being guessed.
 
 Three details of that shape are load-bearing. `pin_status` is an **enum**
 (`verified` / `missing` / `not-applicable`), never the `MISSING[…]` sentinel,

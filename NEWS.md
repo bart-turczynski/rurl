@@ -1160,6 +1160,31 @@
   through a stale copy-paste; its self-test grew 81 → 92 assertions. Test
   fixtures and CI only; no package behavior changes. (RURL-ynirvjxb.)
 
+- **The last unpinned normative source, UTS #46, is now pinned — and was
+  verified before it was pinned.** The `ip-obfuscation` oracle transcribes one
+  slice of the IDNA mapping table (U+3002, U+FF0E and U+FF61 each mapping to
+  U+002E, plus ASCII uppercase), and three of its 24 rows are load-bearing on
+  it; no Unicode or UTS-46 version dated that. It is pinned at **UTS #46
+  revision 35 (2025-09-04), IDNA mapping table Unicode 16.0.0** — two
+  coordinates, because the document's revision numbering and the mapping
+  table's Unicode versioning run on independent cadences: at pinning time the
+  document had already moved to a revision dated in the Unicode 17 era while
+  `Public/idna/17.0.0/` still returned 404, so naming either axis alone would
+  have been a plausible pin to a different thing. Since `pin_status: verified`
+  asserts the derivation was *checked* against that revision, the check came
+  first and is re-derivable rather than prose: the new
+  `tools/oracle/check-uts46-mapping-pin.R` sweeps every `IdnaMappingTable.txt`
+  published under `Public/idna` (5.2.0 → 16.0.0) for all 29 transcribed
+  mappings and reports **493 checks, 0 mismatches**, replacing this entry's
+  former unverifiable claim that the mappings "have been stable across every
+  Unicode version that defines them". The pin is deliberately narrow — UTS-46
+  *Processing* is not implemented and is not claimed; any other non-ASCII code
+  point aborts the derivation rather than being guessed. The checker reads
+  unicode.org, so it is run by hand like `pslr::psl_refresh()` and is not
+  wired into CI. No entry in the provenance record now carries
+  `pin_status: missing`. Test fixtures and tooling only; no package behavior
+  changes. (RURL-qhwktfcw.)
+
 ## rurl 2.7.0
 
 ### Breaking changes
