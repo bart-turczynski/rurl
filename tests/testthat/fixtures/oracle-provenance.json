@@ -76,6 +76,25 @@
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
           "standard_section": "URL parsing; URL serializing; URL class API getters (protocol, username, password, hostname, port, pathname, search, hash)",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "not applicable -- no spec revision is read by this group; what the oracle depends on is dated by upstream_revision 181476aa16e8b28a07698bef3a0275fa53dd22e5",
+              "revision_scheme": "unpinned",
+              "revision_date": "not applicable -- no spec revision is read",
+              "retrieved_at": "not applicable -- nothing was retrieved from the standard; this declaration was recorded 2026-08-01",
+              "pin_kind": "none",
+              "pin_status": "not-applicable",
+              "algorithm_anchors": [
+                "concept-url-parser",
+                "concept-url-serializer"
+              ],
+              "note": "IMPORTED SUITE -- the duty does not apply, and this entry exists to say so explicitly rather than by omission. This group is the committed WPT import itself: its cases, their expected failures and the URL class API getter values are upstream's recorded bytes. Every expected value here is READ OUT of vendored, hash-pinned bytes (upstream_revision 181476aa16e8b28a07698bef3a0275fa53dd22e5, raw_source_sha256), not transcribed, computed or hand-derived from the standard's TEXT, which is the question conventions.normative_dependency_scope asks. The amendment hazard the duty exists to detect -- upstream spec prose moving and silently turning a committed derivation into a reading of a superseded revision -- cannot arise where nothing was derived: the artifact pin already dates exactly what the oracle depends on, and a spec pin here would date something this group never reads. If a future unit ever recomputes any expected value in this group from spec text, this entry stops being true and must become a real pin.",
+              "anchor_scope_note": "NOT A DERIVATION CLAIM, and recorded so the anchors are not read as one. Nothing in this group is transcribed from the standard's text: the anchors name the algorithms the group's expected values are ABOUT, which is a subject-matter citation and not a reading. They are listed because gate rule PV9 requires algorithm_anchors to be a non-empty vector on every entry, including a not-applicable one that by construction reads no algorithm; see the entry note. Each anchor is one already verified against whatwg/url 9dc3827fc722ac4af3f11061aa3e9adb44a17c8b elsewhere in this record, so no anchor is invented here."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array: the only normative source this group cites is the WHATWG URL Standard, and it cites it without deriving from it. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it. Contrast wpt-credentials-fragments in external-url-vectors.csv, which SELECTS rows from this same import and then recomputes their expected href by transcribing the URL serializer: that derivation owes the duty and carries a verified pin. The difference is the derivation, not the bytes -- both groups sit on this one artifact.",
           "claim_kind": "conformance",
           "applicability_selector": "base = null only -- base-relative rows (including base about:blank) are excluded because rurl is absolute-parse-only and does no relative resolution; success = any base-null non-failure case, all schemes, no scheme restriction; failure = any base-null failure case; NUL inputs dropped",
           "relocation_verified": "yes",
@@ -114,6 +133,25 @@
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
           "standard_section": "URL parsing -- failure cases: inputs the WHATWG URL parser must reject",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "not applicable -- no spec revision is read by this group; what the oracle depends on is dated by upstream_revision 181476aa16e8b28a07698bef3a0275fa53dd22e5",
+              "revision_scheme": "unpinned",
+              "revision_date": "not applicable -- no spec revision is read",
+              "retrieved_at": "not applicable -- nothing was retrieved from the standard; this declaration was recorded 2026-08-01",
+              "pin_kind": "none",
+              "pin_status": "not-applicable",
+              "algorithm_anchors": [
+                "concept-url-parser",
+                "concept-host-parser"
+              ],
+              "note": "IMPORTED SUITE -- the duty does not apply, and this entry exists to say so explicitly rather than by omission. All 267 rows carry standard_expectation = failure, and that verdict is upstream's: it is the imported suite's own expectation, copied. Every expected value here is READ OUT of vendored, hash-pinned bytes (upstream_revision 181476aa16e8b28a07698bef3a0275fa53dd22e5, raw_source_sha256), not transcribed, computed or hand-derived from the standard's TEXT, which is the question conventions.normative_dependency_scope asks. The amendment hazard the duty exists to detect -- upstream spec prose moving and silently turning a committed derivation into a reading of a superseded revision -- cannot arise where nothing was derived: the artifact pin already dates exactly what the oracle depends on, and a spec pin here would date something this group never reads. claim_kind is characterization/regression rather than conformance here, which points the same way: the test pins rurl's recorded output against the source's expectation, and neither side of that comparison is computed from spec prose. If a future unit ever recomputes any expected value in this group from spec text, this entry stops being true and must become a real pin.",
+              "anchor_scope_note": "NOT A DERIVATION CLAIM, and recorded so the anchors are not read as one. Nothing in this group is transcribed from the standard's text: the anchors name the algorithms the group's expected values are ABOUT, which is a subject-matter citation and not a reading. They are listed because gate rule PV9 requires algorithm_anchors to be a non-empty vector on every entry, including a not-applicable one that by construction reads no algorithm; see the entry note. Each anchor is one already verified against whatwg/url 9dc3827fc722ac4af3f11061aa3e9adb44a17c8b elsewhere in this record, so no anchor is invented here."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array: one cited normative source, nothing derived from it. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it.",
           "claim_kind": "characterization/regression",
           "claim_kind_basis": "test-external-url-vectors.R:17-21 -- the test pins rurl's recorded output and the divergence set so both a regression and a fix force a reviewed update. The per-row oracle is the source's WHATWG expectation (standard = whatwg, standard_expectation = failure on all 267 rows).",
           "applicability_selector": "urltestdata.json entries with failure: true. 202 rows runnable; 62 carry runnable = no-relative-resolution and 3 carry runnable = no-nul-byte-r-cannot-represent, which are provenance-only rows with no rurl output.",
@@ -187,8 +225,27 @@
           "import_command": "MISSING[RURL-vwurxmzm]",
           "generation_command": "MISSING[RURL-vwurxmzm]",
           "standard": "WHATWG URL Standard",
-          "standard_version": "Living Standard (unversioned)",
+          "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
           "standard_section": "URL parsing / URL serializing -- Ada's supplementary cases in WPT urltestdata format, not an upstream WPT file",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "not applicable -- no spec revision is read by this group; what the oracle depends on is dated by upstream_revision 308110b26b32d12db492d460a41e57932366269d",
+              "revision_scheme": "unpinned",
+              "revision_date": "not applicable -- no spec revision is read",
+              "retrieved_at": "not applicable -- nothing was retrieved from the standard; this declaration was recorded 2026-08-01",
+              "pin_kind": "none",
+              "pin_status": "not-applicable",
+              "algorithm_anchors": [
+                "concept-url-parser",
+                "concept-url-serializer"
+              ],
+              "note": "IMPORTED SUITE -- the duty does not apply, and this entry exists to say so explicitly rather than by omission. The 24 rows are Ada's supplementary cases in WPT urltestdata format -- a third-party implementation's test file, not an upstream WPT file and not spec prose. Every expected value here is READ OUT of vendored, hash-pinned bytes (upstream_revision 308110b26b32d12db492d460a41e57932366269d, raw_source_sha256), not transcribed, computed or hand-derived from the standard's TEXT, which is the question conventions.normative_dependency_scope asks. The amendment hazard the duty exists to detect -- upstream spec prose moving and silently turning a committed derivation into a reading of a superseded revision -- cannot arise where nothing was derived: the artifact pin already dates exactly what the oracle depends on, and a spec pin here would date something this group never reads. If a future unit ever recomputes any expected value in this group from spec text, this entry stops being true and must become a real pin.",
+              "anchor_scope_note": "NOT A DERIVATION CLAIM, and recorded so the anchors are not read as one. Nothing in this group is transcribed from the standard's text: the anchors name the algorithms the group's expected values are ABOUT, which is a subject-matter citation and not a reading. They are listed because gate rule PV9 requires algorithm_anchors to be a non-empty vector on every entry, including a not-applicable one that by construction reads no algorithm; see the entry note. Each anchor is one already verified against whatwg/url 9dc3827fc722ac4af3f11061aa3e9adb44a17c8b elsewhere in this record, so no anchor is invented here."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array: one cited normative source, nothing derived from it. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it. No entry is recorded for Ada itself: Ada is an implementation whose test file supplied these bytes, not a normative source, and its revision is already pinned by upstream_revision.",
           "claim_kind": "characterization/regression",
           "claim_kind_basis": "test-external-url-vectors.R:17-21; the per-row oracle is the source's expectation (standard = whatwg on all 24 rows).",
           "applicability_selector": "all 24 entries of ada_extra_urltestdata.json; 20 runnable, 4 carry runnable = no.",
@@ -214,8 +271,26 @@
           "import_command": "MISSING[RURL-vwurxmzm]",
           "generation_command": "MISSING[RURL-vwurxmzm]",
           "standard": "WHATWG URL Standard",
-          "standard_version": "Living Standard (unversioned)",
+          "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
           "standard_section": "host parsing. Per the fixture's own source_reference the upstream suite exercises Ada's OPTIONAL verify_dns_length (RFC 1035 S2.3.4), which is NOT the WHATWG URL Standard default (VerifyDnsLength = false); the rows are recorded here against the WHATWG default, so all 17 carry standard_expectation = accept.",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "not applicable -- no spec revision is read by this group; what the oracle depends on is dated by upstream_revision 308110b26b32d12db492d460a41e57932366269d",
+              "revision_scheme": "unpinned",
+              "revision_date": "not applicable -- no spec revision is read",
+              "retrieved_at": "not applicable -- nothing was retrieved from the standard; this declaration was recorded 2026-08-01",
+              "pin_kind": "none",
+              "pin_status": "not-applicable",
+              "algorithm_anchors": [
+                "concept-host-parser"
+              ],
+              "note": "IMPORTED SUITE -- the duty does not apply, and this entry exists to say so explicitly rather than by omission. The 17 rows are Ada's verify_dns_length suite, imported as bytes. Every expected value here is READ OUT of vendored, hash-pinned bytes (upstream_revision 308110b26b32d12db492d460a41e57932366269d, raw_source_sha256), not transcribed, computed or hand-derived from the standard's TEXT, which is the question conventions.normative_dependency_scope asks. The amendment hazard the duty exists to detect -- upstream spec prose moving and silently turning a committed derivation into a reading of a superseded revision -- cannot arise where nothing was derived: the artifact pin already dates exactly what the oracle depends on, and a spec pin here would date something this group never reads. RFC 1035 S2.3.4 is named in standard_section because it is what the UPSTREAM suite exercises through Ada's optional verify_dns_length; it gets no entry of its own because nothing here is derived from its text either -- the rows are recorded against the WHATWG default (VerifyDnsLength = false), which is why all 17 carry standard_expectation = accept. If a future unit ever recomputes any expected value in this group from spec text, this entry stops being true and must become a real pin.",
+              "anchor_scope_note": "NOT A DERIVATION CLAIM, and recorded so the anchors are not read as one. Nothing in this group is transcribed from the standard's text: the anchors name the algorithms the group's expected values are ABOUT, which is a subject-matter citation and not a reading. They are listed because gate rule PV9 requires algorithm_anchors to be a non-empty vector on every entry, including a not-applicable one that by construction reads no algorithm; see the entry note. Each anchor is one already verified against whatwg/url 9dc3827fc722ac4af3f11061aa3e9adb44a17c8b elsewhere in this record, so no anchor is invented here."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array. Two documents are NAMED by this group -- the WHATWG URL Standard and RFC 1035 S2.3.4 -- and neither is derived from, so the array records the one that governs the expectation actually stored and the entry's note accounts for the other. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it.",
           "claim_kind": "characterization/regression",
           "claim_kind_basis": "test-external-url-vectors.R:17-21; the per-row oracle is the source's expectation (standard = whatwg on all 17 rows).",
           "applicability_selector": "all 17 entries of verifydnslength_tests.json; all runnable; all 17 land in divergence_class = aligned.",
@@ -322,6 +397,25 @@
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned); NOT pinned by any revision. The same gap RURL-qhwktfcw raises for ip-obfuscation applies here in a weaker form: the group's oracle is a PAPER's reference column rather than a transcription of the spec text, so no spec revision is load-bearing for the expected values -- but standard_section below still names spec behavior with nothing dating it.",
           "standard_section": "URL parsing -- authority delimiting and host confusion (backslash before @, TAB/CR/LF stripping, IDNA/Punycode, non-special opaque hosts)",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "not applicable -- no spec revision is read by this group; the paper's reference column, not the standard's text, is the authority for every expected value",
+              "revision_scheme": "unpinned",
+              "revision_date": "not applicable -- no spec revision is read",
+              "retrieved_at": "not applicable -- nothing was retrieved from the standard; this declaration was recorded 2026-08-01",
+              "pin_kind": "none",
+              "pin_status": "not-applicable",
+              "algorithm_anchors": [
+                "concept-url-parser",
+                "concept-host-parser"
+              ],
+              "note": "PAPER-TRANSCRIBED -- the authority for every expected value is the PAPER, not the standard. The 9 standard_expectation values reproduce the reference column of Ajmani et al., \"yoU aRe a Liar\" (SecWeb 2022); no step of the URL Standard is transcribed, computed or hand-applied here, so no spec revision is load-bearing and none is invented. THE CLAIM IN standard_version WAS VERIFIED AGAINST THIS GROUP'S OWN FIELDS RATHER THAN ACCEPTED: source_class = C; claim_kind_basis records that the class-C paper_claimed_behavior column is kept SEPARATE from standard_expectation so the paper's claim is never asserted as the standard's requirement; and the two columns line up row by row in exactly the way that reading predicts -- paper_claimed_behavior \"whatwg-url/chrome/urllib3/url-parse host=google.com; urllib/uri-js/php/curl host=yahoo.com (CVE-2020-26291)\" against standard_expectation \"host=google.com\", the paper's own whatwg-url/chrome reference verdict and nothing more. What dates this oracle is therefore the paper plus the third-party framework bytes cross-checked at upstream_revision 1577b5348df6b33820b939493911785311b18360, neither of which is a spec revision. The residue standard_version already admits is real and unchanged by this entry: standard_section names spec behavior with nothing dating it, and that costs nothing precisely because no expected value rests on it.",
+              "anchor_scope_note": "NOT A DERIVATION CLAIM, and recorded so the anchors are not read as one. Nothing in this group is transcribed from the standard's text: the anchors name the algorithms the group's expected values are ABOUT, which is a subject-matter citation and not a reading. They are listed because gate rule PV9 requires algorithm_anchors to be a non-empty vector on every entry, including a not-applicable one that by construction reads no algorithm; see the entry note. Each anchor is one already verified against whatwg/url 9dc3827fc722ac4af3f11061aa3e9adb44a17c8b elsewhere in this record, so no anchor is invented here."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array: the standard is cited as context, the paper is the authority, and nothing is derived from either the standard's text or a spec revision. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it. The paper itself is not given an entry: it is recorded in paper_reference and it is not a normative source in the sense this key tracks -- a published paper cannot be amended in place, which is the hazard the duty exists to detect.",
           "claim_kind": "characterization/regression",
           "claim_kind_basis": "test-external-url-vectors.R:6-8 keeps the class-C paper_claimed_behavior column SEPARATE from the standard's expectation, so the paper's claim is never asserted as the standard's requirement.",
           "applicability_selector": "the 9 hostname-confusion cases transcribed from the paper; all runnable; standard = whatwg on all 9.",
@@ -341,6 +435,25 @@
           "standard": "WHATWG URL Standard",
           "standard_version": "Living Standard (unversioned)",
           "standard_section": "URL parsing -- NUL-byte and host-boundary handling",
+          "normative_dependencies": [
+            {
+              "source": "WHATWG URL Standard",
+              "source_url": "https://url.spec.whatwg.org/",
+              "immutable_revision": "not applicable -- no spec revision is read by this group; the paper's reference column, not the standard's text, is the authority for every expected value",
+              "revision_scheme": "unpinned",
+              "revision_date": "not applicable -- no spec revision is read",
+              "retrieved_at": "not applicable -- nothing was retrieved from the standard; this declaration was recorded 2026-08-01",
+              "pin_kind": "none",
+              "pin_status": "not-applicable",
+              "algorithm_anchors": [
+                "concept-url-parser",
+                "concept-host-parser"
+              ],
+              "note": "PAPER-TRANSCRIBED -- the authority for every expected value is the PAPER, not the standard. The 12 rows are hand-transcribed from the PDF text layer of Reynolds et al., \"Equivocal URLs\" (ESORICS 2022), Pitfall 1 (Null Bytes), Table 3, and their standard_expectation is the paper's own WHATWG-reference verdict: paper_claimed_behavior \"A=e.gg|B=n.pr; WHATWG-ref=A, RFC-ref=ERR\" against standard_expectation \"e.gg\". No algorithm of the URL Standard is transcribed or applied, so no spec revision is load-bearing and no spec pin is fabricated. This matches, and is the field-level check of, what standard_version_note already states in prose. The group is also section_2_3_applies = false with no artifact of any kind (the paper released none), so neither pinning duty has anything to bite on: the exposure that remains is the paper's own, not a revision's.",
+              "anchor_scope_note": "NOT A DERIVATION CLAIM, and recorded so the anchors are not read as one. Nothing in this group is transcribed from the standard's text: the anchors name the algorithms the group's expected values are ABOUT, which is a subject-matter citation and not a reading. They are listed because gate rule PV9 requires algorithm_anchors to be a non-empty vector on every entry, including a not-applicable one that by construction reads no algorithm; see the entry note. Each anchor is one already verified against whatwg/url 9dc3827fc722ac4af3f11061aa3e9adb44a17c8b elsewhere in this record, so no anchor is invented here."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array: the standard is cited as context, the paper is the authority, nothing is derived from spec text. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it. The paper is not given an entry of its own -- it is recorded in paper_reference, and a published paper has no living text to drift.",
           "claim_kind": "characterization/regression",
           "claim_kind_basis": "test-external-url-vectors.R:6-8 keeps the class-C paper_claimed_behavior column SEPARATE from the standard's expectation.",
           "applicability_selector": "12 rows transcribed from Table 3; 10 runnable, 2 carry runnable = no; standard = whatwg on all 12.",
@@ -375,6 +488,30 @@
           "standard": "RFC 3986",
           "standard_version": "RFC 3986 (STD 66), January 2005",
           "standard_section": "per row, in the source_reference column",
+          "normative_dependencies": [
+            {
+              "source": "RFC 3986 -- Uniform Resource Identifier (URI): Generic Syntax",
+              "source_url": "https://www.rfc-editor.org/rfc/rfc3986",
+              "immutable_revision": "RFC 3986 (STD 66), January 2005",
+              "revision_scheme": "document-version",
+              "revision_date": "2005-01 -- an RFC is dated by month; there is no ISO day to record, and inventing one would be precision this document does not have",
+              "retrieved_at": "not applicable -- a frozen document, nothing was re-retrieved; this declaration was recorded 2026-08-01",
+              "pin_kind": "document-edition",
+              "pin_status": "not-applicable",
+              "algorithm_anchors": [
+                "section-2.2",
+                "section-2.3",
+                "section-3.2.2",
+                "section-5.2.4",
+                "section-5.4",
+                "section-6.2.2.1",
+                "section-6.2.2.2"
+              ],
+              "note": "A FROZEN, NUMBERED STANDARD -- stated explicitly because it is the REASON the duty is different here, not an oversight. These 25 rows ARE hand-derived from this document's text (import_status: \"hand-derived from the cited standard's text\"), so the enum gloss on not-applicable -- \"the source is cited but nothing is derived from it\" -- does NOT describe this entry, and the entry says so rather than letting the enum imply it. What does not apply is the DUTY: a published RFC cannot be amended in place. The hazard conventions.normative_dependency_scope exists to detect is a Living Standard's text moving upstream and silently turning a committed derivation into a reading of a superseded revision without a byte changing here; RFC 3986 has no such text. A successor could obsolete it, but that would be a different document with a different number, not an amendment to this one, and the fixture cites this one. THE SAME JUDGEMENT IS ALREADY IN THIS RECORD FROM THE OTHER SIDE: the WPT group's anchor_scope_note declines an RFC 3986 entry for its four rfc3986-profile rows on exactly this reasoning; this entry is the positive statement of it where RFC 3986 is the group's own authority. WHY THE FIELDS LOOK PINNED BUT THE STATUS DOES NOT: an immutable_revision genuinely exists here, so it is recorded with revision_scheme = document-version instead of being thrown away -- but pin_status stays not-applicable rather than verified because no re-derivation of the 25 expected values against the text was carried out when this entry was written, and \"verified\" means exactly that check happened on retrieved_at. Recording verified would claim work nobody did; recording missing would file a gap that does not exist, since the revision is fixed by the document's own name.",
+              "anchor_scope_note": "SECTION anchors, not <dfn> fragment ids, because RFC 3986 has no dfn system to cite: the durable key available is the rfc-editor rendering's section fragments, e.g. https://www.rfc-editor.org/rfc/rfc3986#section-3.2.2. The seven listed are the DISTINCT sections actually cited by this group's 25 source_reference values -- 2.2, 2.3, 3.2.2, 5.2.4, 5.4, 6.2.2.1 and 6.2.2.2 -- read off the fixture column rather than guessed from the group name. Section 5.3 is deliberately absent: it appears only inside one row's parenthetical explaining why an absolute-path reference skips merge, which is prose about a S5.4 citation and not a citation of its own. For a frozen document the numbers ARE stable, so the usual warning that section numbers are only a hint does not apply here -- that warning is about Living Standards renumbering under a fixed anchor."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array: every one of the 25 rows derives from a single document, verified by reading the group's source_reference values rather than inferred from the group name. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it. Unlike the other negative declarations in this record this group DOES derive from its source's text; what makes the duty inapplicable is the source's nature, not the absence of a derivation. The entry note keeps those two reasons apart so a reader does not generalise the wrong one.",
           "claim_kind": "conformance",
           "claim_kind_basis": "hand-derived expected value checked against the cited section; not an imported oracle row.",
           "applicability_selector": "25 rows; url_standard = rfc3986 on 22 and whatwg on 3 (the RFC-cited rows that pin the WHATWG side of the same behavior).",
@@ -483,6 +620,25 @@
           "standard": "in-repo PRD section 6.1 (v1 WHATWG path profile)",
           "standard_version": "not applicable -- an in-repo specification, versioned by this repository's own history; the column names the section, not a document filename",
           "standard_section": "6.1 -- path profile, including the normative encoded-dot recognizer",
+          "normative_dependencies": [
+            {
+              "source": "in-repo PRD section 6.1 \"Path percent handling\" (v1 WHATWG path profile) -- design/prd/url-standard-selector.md",
+              "source_url": "design/prd/url-standard-selector.md -- an in-repo path, not a URL: this source has no external location to cite, which is the whole point of the entry",
+              "immutable_revision": "not applicable -- an in-repo specification, versioned by this repository's own git history; there is no external revision to name",
+              "revision_scheme": "unpinned",
+              "revision_date": "not applicable -- dated by this repository's history, per commit",
+              "retrieved_at": "not applicable -- nothing was retrieved; the source is in the tree. This declaration was recorded 2026-08-01",
+              "pin_kind": "none",
+              "pin_status": "not-applicable",
+              "algorithm_anchors": [
+                "6.1 Path percent handling",
+                "encoded-dot recognizer"
+              ],
+              "note": "AN IN-REPO SPECIFICATION -- there is no external normative source, so there is nothing external to pin and nothing is invented. These rows are hand-derived from this repository's own PRD, and the amendment hazard the duty exists to detect cannot arise: an upstream revision moving WITHOUT a byte changing here is impossible when the source IS bytes here. Any edit to section 6.1 is a diff in this repository, dated by git, reviewable in the same pull request as the fixture it would invalidate -- which is a strictly stronger guarantee than a recorded upstream commit sha, not a weaker one. That is why standard_version says \"not applicable\" rather than leaving a gap, and this entry is the explicit form of the same statement. Note what is NOT claimed: the PRD section is titled \"v1 WHATWG path profile\" and its content tracks the WHATWG URL Standard, but the expected values are derived from the PRD's text, not from the standard's, so no WHATWG entry is recorded here -- the authority is internal, as claim_kind_basis already states.",
+              "anchor_scope_note": "NOT <dfn> fragment ids, and they cannot be: a markdown PRD has no dfn system. The two values are VERBATIM LOCATORS that occur literally in design/prd/url-standard-selector.md -- the heading \"### 6.1 Path percent handling\" and the bolded normative construct \"encoded-dot recognizer\" that the section defines -- so a reader can find exactly what these rows rest on. They are recorded rather than omitted because PV9 requires algorithm_anchors to be a non-empty vector on every entry; they are locators, not a claim that an in-repo PRD defines spec algorithms, and no placeholder or invented id was used to satisfy the rule. THE RULE AND THIS ENTRY PULL IN DIFFERENT DIRECTIONS and that is worth a reader's attention: PV9's non-empty requirement was written for entries that ARE derivations, where the anchors are the durable key; a not-applicable entry reads no algorithm by construction, so the field can only ever be filled with a citation of subject matter. This entry is the most acute case in the record because even the notion of an anchor is foreign to the source."
+            }
+          ],
+          "normative_dependencies_note": "A one-member array naming this repository's own specification, which is the only source these rows derive from. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it. It is the one group in the record whose declaration is negative because the source is INTERNAL: no external document is read at all, so the question of an external pin has no subject.",
           "claim_kind": "conformance",
           "claim_kind_basis": "hand-derived expected value checked against this repository's own specification; the authority is internal, not external, and it certifies rurl's specified behavior rather than a third-party standard.",
           "applicability_selector": "7 rows; url_standard = whatwg on all 7.",
