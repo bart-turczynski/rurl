@@ -1271,7 +1271,60 @@
   goes red while PV9 and PV10 stay green. The limit is recorded too: PV11
   catches a *move*, where the object travels and its declaration does not. An
   author who edits the declaration as well is rewriting the claim rather than
-  misfiling it, and no structural rule can referee that. (RURL-drkcvzex.)
+  misfiling it, and no structural rule can referee that.
+
+  **Three more scope corrections in the same slice.**
+
+  *An implementation-conformance check is not an oracle check.* The
+  `fsss_whatwg` == `oracle_value` comparison was running inside the tier-2
+  restatement check, so the gates printed `ORACLE RE-LOCATION: PASS` over a set
+  of checks one of which grades a **captured `rurl` output column**. Not circular
+  — `oracle_value` is independent — but a conformance assertion under an oracle's
+  label invites the next reader to believe the oracle was checked against the
+  implementation. It now lives in `tools/oracle/check-fsss-conformance.R` behind
+  its own `IMPLEMENTATION FSSS CONFORMANCE` verdict. It stays **unconditional**
+  on `rurl_deviation`, and `ada-003`/`ada-006` are *named* rather than counted, so
+  the two rows the reasoning turns on cannot drop out and be replaced.
+
+  *`whatwg_expected` was ungraded for one good reason and one wrong one.* Its NA
+  **pattern** derives from `divergence_class`, a function of how `rurl` answers —
+  that still holds, and absence is still not graded. But the **value** is stated
+  by the pinned upstream bytes. Measured: corrupting it on `ada-003`, a
+  deviation-carrying row, left every gate green, because the fixture's own
+  assertions relate the column to `divergence_class` and `rfc3986_expected`
+  rather than to any upstream fact. It is now derived from pinned bytes only —
+  the current pin, or the second anchor on a drift-ledgered row — with floors on
+  both the row count and the deviating-row count.
+
+  *`import_command` is a sentinel again.* `RURL-ozdejfzl` had written a command
+  that merely re-fetches the pinned bytes into that field, with a note saying it
+  was not attested as the command originally run: honest prose in a
+  machine-readable field that then read as *filled*, so three sentinels
+  disappeared while the historical provenance stayed exactly as unrecorded. The
+  reproducing command moves to `pin_fetch_command`, and `PV5` refuses the
+  combination that would mask the gap again.
+
+  Two documentation claims were also stronger than their evidence. The 17-commit
+  Ada sweep bounds the upstream **content state** the block agrees with, not the
+  import: no commit touched the path inside the window, so every revision in it
+  carries the same bytes, and content agreement is not import provenance anyway.
+  `retrieval_date_bound` is renamed `content_state_bound`, and `RURL-vwurxmzm`'s
+  conclusion that the import revision cannot be resolved **stands** rather than
+  being narrowed. And `wpt_is_absolute` is renamed
+  `wpt_occupies_scheme_position`: it is fitted applicability metadata that
+  deliberately disagrees with WHATWG absoluteness (it says `TRUE` for
+  `schéme://example.com`, where WHATWG falls back to the base), and its agreement
+  with all 291 committed classifications is the **fit**, not validation — those
+  rows are the data it was fitted to.
+
+  Finally, the three full tier-2 verifiers now have an automated path at all:
+  `.github/workflows/oracle-upstream.yml` runs them weekly and on demand, failing
+  on a fixture disagreement (exit 1) while reporting an unresolvable upstream
+  source (exit 2) as `SOURCE UNAVAILABLE` — never as a pass, and never as a
+  blocking PR failure. It is a separate workflow so that it stays outside the
+  merge gate by construction, and so `tools/verify.R` cannot pick up a
+  network-reading check for the pre-push hook. Test fixtures, tooling and CI
+  only; no package behavior changes. (RURL-drkcvzex.)
 
 ## rurl 2.7.0
 
