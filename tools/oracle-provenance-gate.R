@@ -126,12 +126,18 @@
 #
 # WHY A REVISION HAS A SCHEME (PV9). The first cut of this rule required every
 # `verified` pin to be a 40-hex git sha, which is true of the WHATWG entry and
-# false in general: UTS-46 has no repository, and its pin -- the still-open half
-# of RURL-qhwktfcw -- can only ever be a named edition like "Unicode 15.1.0". A
-# gate that rejected that would have obstructed the closure of the very ticket
-# that produced it. revision_scheme names the kind of revision, and the check
-# follows the scheme instead of assuming one. What the gate CANNOT do is decide
-# immutability; see NON_IMMUTABLE_REVISIONS for the honest limit.
+# false in general: UTS-46 has no repository, so its pin can only ever be a
+# named edition. A gate that rejected that would have obstructed the closure of
+# the very ticket that produced it. That is no longer hypothetical -- UTS-46 was
+# pinned as "UTS #46 revision 35 (2025-09-04), IDNA mapping table Unicode
+# 16.0.0", which the sha rule would have refused outright, and which names TWO
+# coordinates because the document's revisions and the mapping table's Unicode
+# versions run on independent cadences. revision_scheme names the kind of
+# revision, and the check follows the scheme instead of assuming one. What the
+# gate CANNOT do is decide immutability; see NON_IMMUTABLE_REVISIONS for the
+# honest limit -- and it cannot decide TRUTH either: nothing here proves the 29
+# transcribed mappings hold at the pinned edition. That is a network check, run
+# by hand, at tools/oracle/check-uts46-mapping-pin.R.
 #
 # WHY PV9 DOES NOT REUSE THE SENTINEL (and why PV6 needs no re-scoping). The
 # convention makes pin_status an enum precisely so an unpinned normative source
