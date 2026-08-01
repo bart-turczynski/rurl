@@ -410,6 +410,76 @@ co-confirmation trap `RURL-nknytzxz` was filed for. The falsification run covers
 both directions: an undocumented `fsss_host` difference must fail, a documented
 one must pass, and **deleting the deviation must fail**.
 
+## Tier 2: a re-location gate is not a re-derivation gate either
+
+Tier 1 re-derives an expected value from the standard. Tier 3 can only show a
+transcription is intact. Tier 2 sits between them, and the honest word is
+**re-location**: the expected values were *read out of* upstream bytes, so what
+is checkable is that each committed row still corresponds to an upstream entry
+at the pinned revision and still records that entry's own verdict. Nothing is
+re-derived, and the gates print `ORACLE RE-LOCATION` for the same reason the
+tier-3 gates print `TRANSCRIPTION INTEGRITY`.
+
+What makes tier 2 possible at all is that the record pins **both** a revision
+and a `raw_source_sha256`, so the bytes can be re-fetched and *verified* rather
+than trusted. All three digests were re-checked from upstream on 2026-08-01 and
+reproduce byte-exact — including the two Ada files that had been gone from this
+machine since the port began.
+
+`fetch-source.R` is the shared resolver. Three properties are load-bearing:
+
+- **It reads the pins out of `oracle-provenance.json` at run time** rather than
+  copying them into code. A second copy of a pin is what drifts, and this way a
+  pin naming bytes that do not exist fails loudly at the fetch instead of years
+  later.
+- **The digest is verified on every path**, cache included, before a byte is
+  parsed. A half-written cache entry is exactly as dangerous as a corrupted
+  download, and the cache is the path that gets reused.
+- **Unresolvable is exit 2, never a pass.** Status 1 means the committed oracle
+  disagrees with upstream; status 2 means the source could not be resolved.
+  Collapsing them would make an outage read as a defect — and a partial pass
+  over a short block is the failure this whole directory exists to prevent.
+
+### These are not blocking CI gates
+
+They read the network, so they follow `check-uts46-mapping-pin.R`'s posture: run
+by hand, and by CI only as `--self-test`, which is fully offline. That is a
+deliberate trade — an upstream outage is not a defect in this repository, and a
+gate that goes red for one stops being read. If a future pass wants them
+blocking, the cache directory (`RURL_ORACLE_SOURCE_DIR`, default
+`_scratch/oracle-sources/`) is the seam that would make it possible without
+vendoring.
+
+### The NUL shim, whose failure mode is a silent pass
+
+Three of the 267 `wpt-urltestdata` inputs contain U+0000. An R character vector
+cannot hold a NUL, and `jsonlite` does not error on one — it **truncates**:
+
+```r
+jsonlite::fromJSON('"sc://a\\u0000b/"')   # => "sc://a"
+```
+
+So the obvious re-location check compares `"sc://a"` against `"sc://a"`, agrees,
+and reports a pass it did not earn: after truncation any two inputs sharing a
+prefix before their NUL are equal, and everything the three rows exist to record
+is never compared. The `\u0000` **escape** is therefore rewritten in the JSON
+*source text* to `\ue000` — U+E000, a Private Use Area code point R holds happily —
+identically on both sides, before either is parsed. It is a transport encoding
+for the comparison only; nothing is written back, and both preconditions (no
+U+E000 already present, no escaped `\\u0000` upstream) are asserted rather than
+assumed.
+
+### What this corpus cannot see, measured rather than assumed
+
+Two mutations of the shared `runnable` classifier — dropping the `about:blank`
+rule, and narrowing scheme detection to `://` forms — leave
+`verify-wpt-urltestdata.R` **green**. That is not a gap in the gate; it is a
+property of the corpus: no `wpt-urltestdata` entry carries an `about:blank`
+base, so neither rule is exercised. They are covered by
+`verify-ada-extra-urltestdata.R`, whose 24 rows are almost entirely
+`about:blank`-based, and by `--self-test`. Recorded because a falsification run
+that only reports its successes is how a blind spot survives.
+
 ## Status
 
 | Group | Ported | Verifier |
@@ -418,11 +488,9 @@ one must pass, and **deleting the deviation must fail**.
 | `ip-obfuscation` | yes | `verify-ip-obfuscation.R` |
 | `youarealiar` | yes | `verify-youarealiar.R` (integrity, not re-derivation) |
 | `equivocal-urls` | yes | `verify-equivocal-urls.R` (integrity, not re-derivation) |
-| `wpt-urltestdata` | no | — |
+| `wpt-urltestdata` | yes | `verify-wpt-urltestdata.R` (re-location, not re-derivation) |
 | `ada-extra-urltestdata` | no | — |
 | `ada-verifydnslength` | no | — |
-| `youarealiar` | no | — |
-| `equivocal-urls` | no | — |
 
 `oracle-provenance.json` still carries `MISSING[RURL-vwurxmzm]` for the
 un-ported groups' `generation_command`. Those sentinels are correct until the
