@@ -131,6 +131,28 @@ wpt_restatement <- function(runs, expectation) {
 # Graded only where both are present: the FSSS columns are populated by a
 # different pass and their absence is not this gate's business.
 #
+# WHY THIS IS *NOT* CONDITIONED ON `rurl_deviation`, unlike the tier-3 gates.
+# The obvious review question, because verify-youarealiar.R and
+# verify-equivocal-urls.R assert their FSSS equality only where `rurl_deviation`
+# is NA, to avoid the RURL-nknytzxz co-confirmation trap. Two of these rows
+# (ada-003, ada-006) DO carry a deviation and DO satisfy the equality, which is
+# the shape of that trap -- so it was measured rather than argued.
+#
+# The asymmetry is real and the two cases are not the same comparison. Tier 3's
+# `oracle_value` is a HOST ("google.com"), which is why those gates compare it
+# to `fsss_host`; tier 2's is a full SERIALIZATION, compared to `fsss_whatwg`.
+# Measured across the whole fixture: all 16 rows where fsss_whatwg differs from
+# oracle_value are tier-3 rows, and they differ because the two columns hold
+# different KINDS of value there, not because an implementation deviates.
+#
+# And the deviations on ada-003 (ADR 0011, path_encoding) and ada-006 (ADR 0002,
+# Punycode) are deviations of `clean_url` -- the presentation surface -- while
+# `fsss_whatwg` is the conformance serialization, and both rows carry
+# fsss_conforms = "yes". So the equality holding there is the EXPECTED state,
+# not luck. Conditioning on `rurl_deviation` would have been the error: it would
+# switch the check off on exactly the rows where a presentation surface deviates
+# and the conformance surface still has to agree.
+#
 # ONE COLUMN, ONE ORACLE -- what is deliberately NOT graded here, and why.
 # `whatwg_expected` also restates the WHATWG expectation, and a falsification
 # run confirmed corrupting it leaves this gate green. It stays out for two
