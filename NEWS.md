@@ -2287,7 +2287,7 @@ registered domains.
 - Improved test coverage to 100%.
 - Cleaned up exports and internal helpers.
 - Updated ignores.
-- Tested on macOS, Windows, and Linux via rhub and win-builder.  
+- Tested on macOS, Windows, and Linux via rhub and win-builder.
 - CRAN checks pass with 0 errors/warnings and only standard notes.
 
 ### Documentation

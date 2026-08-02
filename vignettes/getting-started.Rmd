@@ -18,7 +18,7 @@ library(rurl)
 # Introduction
 
 The `rurl` package provides tools to parse, normalize, and extract information
-from URLs using a consistent and safe API.  
+from URLs using a consistent and safe API.
 It is fully vectorized and delegates domain handling to the `pslr` package,
 which implements the [Public Suffix List](https://publicsuffix.org) for
 accurate domain and TLD extraction.
