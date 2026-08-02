@@ -73,17 +73,17 @@ against it.
 
 | path | sha256 |
 |---|---|
-| design/work/url-v3/registers/public-surface-inventory.md | 7387b366ac84f4c56ba3c91612436114c76d89b454af5be14deb6225fe5f1c4b |
+| design/work/url-v3/registers/public-surface-inventory.md | 4712cc073e097efe5d6ff0718acc8da1a44682a67a492c6cdd19918f75391e41 |
 
 ## Bijection
 
 | surface class | count | source of truth | status |
 |---|---|---|---|
-| exported functions | 31 | `NAMESPACE` `export(...)` (31 lines; all functions, zero data) | SETTLED (`NAMESPACE` is the source of truth; the validator checks this roster against it by name) |
+| exported functions | 39 | `NAMESPACE` `export(...)` (39 lines; all functions, zero data) | SETTLED (`NAMESPACE` is the source of truth; the validator checks this roster against it by name) |
 | public output fields | 18 | `.spu_result_fields` (`R/utils.R:215-241`) | SETTLED (unchanged; the sole public surface per P1.1@a7e0a59 B3) |
 | curl-dependency surfaces | 3 | DESCRIPTION/NAMESPACE + parse + escape/unescape | SETTLED (inventoried; removal downstream) |
 | migration-surface | 1 | the disposition row artifact 4 discharges | SETTLED (discharged here) |
-| **total** | **53** | | |
+| **total** | **61** | | |
 
 The counts above are documentation of the current state, **verified** by
 `validate-records.R` against `NAMESPACE` and `.spu_result_fields` — they are not a
@@ -117,6 +117,7 @@ matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 | `get_subdomain` | G3.H | PSL delegation SETTLED (ADR 0001); reproducibility → HOST-O4 | OPEN (HOST-O4) |
 | `get_tld` | G3.H | PSL suffix delegation + identity spellings SETTLED (ADR 0001); reproducibility → HOST-O4 | OPEN (HOST-O4) |
 | `get_url_diagnostics` | G3.6 (+ G3.H) | aggregator keeps token-list shape (P2.3@a7e0a59 §2; ADR 0006) | SETTLED |
+| `get_url_key` | G3.K | output surface (e), the versioned comparison key: identity from the canonical state before cleaning, injective framing, typed keyability, and the D-A.3 non-interference invariant that no presentation dial can move a key byte (P3.1@3b89b94 D-A/D-C; P3.2@bb3346e D-A/D-B) | SETTLED |
 | `get_user` | G3.7 | credential split SETTLED; undivided-userinfo → OUT-O1 | OPEN (OUT-O1) |
 | `get_userinfo` | G3.7 | internal reassembly completeness SETTLED (S3-F5); public undivided-userinfo → OUT-O1 | OPEN (OUT-O1) |
 | `is_valid_host` | G3.H | named policies + no-network SETTLED (host-validation-policy PRD); typed DNS contract → HOST-O5 | OPEN (HOST-O5) |
@@ -128,7 +129,14 @@ matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 | `safe_parse_url` | G3.3 (+ G3.5) | 18-field projection = sole public surface (P1.1@a7e0a59 B3); dial matrix (G3.5) | SETTLED |
 | `safe_parse_urls` | G3.3 (+ artifact 11) | row-local recovery SETTLED (P1.1@a7e0a59 §3); the S1-F3 scalar/vector cell matrix + vectorization budget → §6 artifact 11 / the S1 scalar/vector contract | OPEN (artifact 11 / S1 s/v) |
 | `serialize_url` | G3.7 | output surface (b), the full-string standard serializer (FSSS): the surface, its pair of spec-exact serializers, full-string/credential completeness and the C-04/C-05 surface split (P2.2@8292c7f §1b/§2/§3; ADR 0012 D2; ADR 0011); the public entry-point name, the RFC posture, the parse posture and the host spelling (P2.5, PROPOSED, §1-§4) | SETTLED |
+| `url_anti_join` | G3.K | identity-keyed anti join; KJ-O4 closed RETAIN — non-keyable x is kept, because a row that cannot match anything is the anti-join predicate itself (P3.2@bb3346e D-D) | SETTLED |
+| `url_full_join` | G3.K | identity-keyed full join: the left result in x order, then the y rows it never consumed, in y order (P3.1@3b89b94 D-D; P3.2@bb3346e D-H) | SETTLED |
+| `url_inner_join` | G3.K | identity-keyed inner join: eligible matching pairs, x order with y match order within each x (P3.1@3b89b94 D-D; P3.2@bb3346e D-E..D-H) | SETTLED |
+| `url_key_policy` | G3.K | one immutable, symmetric, versioned key policy; KJ-O1's default standard closed to `whatwg` and KJ-O2's root dot closed DISTINCT (P3.2@bb3346e D-A/D-B); truth-table row 6 amended and `http_https_missing` held refused on rows 8/11 grounds (P3.3@d9b0976 §1, RURL-ixxvjjwj) | SETTLED |
+| `url_left_join` | G3.K | identity-keyed left join: every x row, matches expanded, unmatched x carrying a typed missing y payload (P3.1@3b89b94 D-D; P3.2@bb3346e D-H) | SETTLED |
 | `url_profile` | G3.5 | profile expansion (P2.4@b017e87, P4.1@b017e87 D-B); direct-vs-profile divergence → G3.5 SCHEME-O1 | OPEN (SCHEME-O1) |
+| `url_right_join` | G3.K | identity-keyed right join; KJ-O3's order fork closed as the y-primary mirror of left, implemented as a side swap rather than a second hand-written order (P3.2@bb3346e D-C) | SETTLED |
+| `url_semi_join` | G3.K | identity-keyed semi join: each matching x row once, x columns only, never duplicated for duplicate y (P3.1@3b89b94 D-D) | SETTLED |
 
 ## Public-output-field disposition roster
 

@@ -139,6 +139,30 @@ test_that("scheme and host case are normalized case-insensitively", {
   expect_true(same("HTTP://EXAMPLE.COM/p", "http://example.com/p"))
 })
 
+test_that("the authority delimiter is framed independently of the host", {
+  # The authority row (:84): frame authority state independently from
+  # `host_kind`, and never collapse absent and empty by accident. The key
+  # frames P1.2 D-A's `authority_delimiter_present`, so "no authority at all"
+  # and "an empty authority" are different resources rather than two spellings
+  # of one.
+  expect_false(same("foo:/bar", "foo:///bar"))
+  expect_false(same("foo:bar", "foo://bar"))
+  expect_false(same("foo://", "foo:"))
+  expect_false(same("foo:///a", "foo://x/a"))
+})
+
+test_that("delimiter framing inherits the standard's own fix-ups", {
+  # The key does not second-guess the parser it consumes. WHATWG's special
+  # schemes repair `http:/h.com/` to a two-slash authority during parsing, so
+  # the two spellings ARE one resource there; RFC 3986 performs no such
+  # fix-up, so under `rfc3986` they stay distinct. Framing the delimiter fact
+  # from a re-lexed source instead of from the parse would make one of these
+  # two rows wrong whichever way it was written.
+  expect_true(same("http://h.com/", "http:/h.com/"))
+  expect_false(same("http://h.com/", "http:/h.com/",
+                    policy = policy(standard = "rfc3986")))
+})
+
 test_that("a Unicode host and its A-label share one key", {
   expect_true(same("http://münchen.de/", "http://xn--mnchen-3ya.de/"))
 })
