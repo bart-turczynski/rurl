@@ -86,6 +86,15 @@
 
 ### Bug fixes
 
+- **Path presentation no longer changes which cleanup rules fire.** Combining
+  `path_encoding = "decode"` or `"encode"` with index-page or trailing-slash
+  stripping previously decoded `%2F` too early, turning data into a separator
+  before cleanup. For example, stripping the index from
+  `https://ex.com/a%2Findex.html` incorrectly produced `https://ex.com/a`.
+  Cleanup now inspects the pre-presentation path and path encoding runs last, so
+  the same call renders `https://ex.com/a/index.html` without treating the
+  encoded slash as structural.
+
 - **A bytes-marked input no longer aborts the whole vectorized call.** One
   element carrying `Encoding(x) <- "bytes"` used to throw `bytes encoding is
   not supported by this function` out of the entire batch, so a thousand-URL
