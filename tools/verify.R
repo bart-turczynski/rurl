@@ -114,15 +114,48 @@ workflow_self_tests <- function(path) {
   unique(trimws(sub("^\\s*run: Rscript\\s+", "", hits)))
 }
 
+# git, with a failure reported as "no output" rather than an R error. A bad
+# revision must not abort the run before a single self-test has been chosen.
+git_lines <- function(args) {
+  out <- tryCatch(
+    suppressWarnings(system2("git", args, stdout = TRUE, stderr = FALSE)),
+    error = function(e) NULL
+  )
+  if (is.null(out) || !is.null(attr(out, "status"))) character(0) else out
+}
+
+# The self-test selection diffs against main, so main has to EXIST. GitLab CI
+# checks out a shallow, single-ref clone: no local `main`, no `origin/main`, and
+# `git diff main...HEAD` is a fatal bad revision. That took down the whole gates
+# job after all 14 gates had passed.
+#
+# Returning NULL means "cannot tell", which is NOT the same as "nothing
+# changed" -- and the difference matters, because the two answers select
+# opposite sets. Reading a missing ref as an empty diff would silently skip
+# every self-test in the one place that is not opt-in per clone.
+base_ref <- function() {
+  for (ref in c("main", "origin/main")) {
+    ok <- tryCatch(
+      suppressWarnings(system2(
+        "git", c("rev-parse", "--verify", "--quiet", ref),
+        stdout = FALSE, stderr = FALSE
+      )),
+      error = function(e) 1L
+    )
+    if (identical(as.integer(ok), 0L)) {
+      return(ref)
+    }
+  }
+  NULL
+}
+
 changed_files <- function() {
-  committed <- suppressWarnings(system2(
-    "git", c("diff", "--name-only", "main...HEAD"),
-    stdout = TRUE, stderr = FALSE
-  ))
-  uncommitted <- suppressWarnings(system2(
-    "git", c("diff", "--name-only", "HEAD"),
-    stdout = TRUE, stderr = FALSE
-  ))
+  base <- base_ref()
+  if (is.null(base)) {
+    return(NULL)
+  }
+  committed <- git_lines(c("diff", "--name-only", paste0(base, "...HEAD")))
+  uncommitted <- git_lines(c("diff", "--name-only", "HEAD"))
   unique(c(committed, uncommitted))
 }
 
@@ -160,10 +193,19 @@ stage_self_tests <- function(root) {
   cmds <- workflow_self_tests(file.path(root, WORKFLOW))
   changed <- changed_files()
   scripts <- sub(" --self-test$", "", cmds)
-  selected <- if (opt_release) rep(TRUE, length(cmds)) else scripts %in% changed
+  unknown <- is.null(changed)
+  selected <- if (opt_release || unknown) {
+    rep(TRUE, length(cmds))
+  } else {
+    scripts %in% changed
+  }
   cat(sprintf(
-    "[gate-self-tests] %d/%d corresponding implementation(s) changed\n",
-    sum(selected), length(cmds)
+    "[gate-self-tests] %d/%d %s\n", sum(selected), length(cmds),
+    if (unknown) {
+      "-- no base ref to diff against, so running every one"
+    } else {
+      "corresponding implementation(s) changed"
+    }
   ))
   lapply(cmds[selected], function(cmd) {
     parts <- strsplit(cmd, "\\s+")[[1]]
