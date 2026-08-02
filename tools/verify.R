@@ -149,13 +149,47 @@ base_ref <- function() {
   NULL
 }
 
+rev_of <- function(ref) {
+  out <- git_lines(c("rev-parse", ref))
+  if (length(out) == 1L && nzchar(out)) out else NA_character_
+}
+
+# A classed empty vector, not NULL: R refuses to set an attribute on NULL
+# ("attempt to set an attribute on NULL"), and the `reason` is what lets the
+# printed line name which of the two unanswerable cases it hit instead of
+# asserting the wrong one.
+cannot_tell <- function(reason) {
+  structure(character(0), class = "cannot_tell", reason = reason)
+}
+
 changed_files <- function() {
   base <- base_ref()
   if (is.null(base)) {
-    return(NULL)
+    return(cannot_tell("no base ref to diff against"))
+  }
+  uncommitted <- git_lines(c("diff", "--name-only", "HEAD"))
+  # ON THE BASE BRANCH ITSELF the committed diff is vacuously empty -- nothing
+  # has changed relative to main when you ARE main -- so selection quietly
+  # picked ZERO self-tests in the job that is supposed to be the thorough one.
+  # Measured on GitLab: two jobs of ONE pipeline, same commit, disagreed 16/16
+  # against 0/16, purely because the check stage's apt install transitively
+  # pulls in git while the gates stage's does not. Verification depth must not
+  # hinge on a package manager's transitive closure.
+  #
+  # Uncommitted edits are still a real signal here, though, and dropping them
+  # would cost the local optimization on a freshly branched tree -- where HEAD
+  # is still the base commit but files are already modified. So fall back to
+  # them, and only give up when the tree is clean too, which is exactly the CI
+  # case.
+  head_rev <- rev_of("HEAD")
+  base_rev <- rev_of(base)
+  if (!is.na(head_rev) && identical(head_rev, base_rev)) {
+    if (length(uncommitted)) {
+      return(uncommitted)
+    }
+    return(cannot_tell(sprintf("HEAD is %s and the tree is clean", base)))
   }
   committed <- git_lines(c("diff", "--name-only", paste0(base, "...HEAD")))
-  uncommitted <- git_lines(c("diff", "--name-only", "HEAD"))
   unique(c(committed, uncommitted))
 }
 
@@ -193,7 +227,7 @@ stage_self_tests <- function(root) {
   cmds <- workflow_self_tests(file.path(root, WORKFLOW))
   changed <- changed_files()
   scripts <- sub(" --self-test$", "", cmds)
-  unknown <- is.null(changed)
+  unknown <- inherits(changed, "cannot_tell")
   selected <- if (opt_release || unknown) {
     rep(TRUE, length(cmds))
   } else {
@@ -202,7 +236,7 @@ stage_self_tests <- function(root) {
   cat(sprintf(
     "[gate-self-tests] %d/%d %s\n", sum(selected), length(cmds),
     if (unknown) {
-      "-- no base ref to diff against, so running every one"
+      sprintf("-- %s, so running every one", attr(changed, "reason"))
     } else {
       "corresponding implementation(s) changed"
     }
