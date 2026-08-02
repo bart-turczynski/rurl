@@ -45,6 +45,47 @@ default:
   - apt-get update -qq
   - apt-get install -y --no-install-recommends r-cran-yaml r-cran-digest r-cran-jsonlite
 
+# The check stage needs the package's real dependency tree. Everything except
+# the two siblings ships as a Debian binary, so this stays apt-fast instead of
+# compiling stringi from source. Verified present in r-base:latest, not assumed.
+#
+# THE ASSERTION AT THE END IS LOAD-BEARING, so do not drop it as belt-and-braces.
+# `install.packages()` reports a failed install as a WARNING and exits 0. The
+# first run of this stage therefore installed NOTHING, exited clean, and let
+# verify.R run against an empty library -- which reported three failures
+# (lintr, R CMD build, testthat) that had nothing to do with the code. The
+# job must die where the dependency is missing, not later wearing the costume
+# of a product defect.
+#
+# knitr and rmarkdown were absent from the original list entirely, which is its
+# own lesson: DESCRIPTION declares `VignetteBuilder: knitr`, and `R CMD build`
+# re-renders both vignettes, so the build cannot even start without them.
+.check_deps: &check_deps
+  - apt-get update -qq
+  - 'apt-get install -y --no-install-recommends
+     r-cran-yaml r-cran-digest r-cran-jsonlite r-cran-curl r-cran-stringi
+     r-cran-testthat r-cran-pkgload r-cran-lintr r-cran-rcmdcheck
+     r-cran-knitr r-cran-rmarkdown r-cran-pkgdown r-cran-withr pandoc qpdf'
+  # Not packaged by Debian, all on CRAN. oysteR and rosv are audit-only tools
+  # that nothing here calls -- but `R CMD check` treats a missing Suggests as an
+  # ERROR ("the suggested packages are required for a complete check"), and they
+  # cost 27s together. Installing them keeps the check at full strength, which
+  # is worth more than the seconds saved by _R_CHECK_FORCE_SUGGESTS_=false.
+  - 'Rscript -e ''install.packages(c("punycoder", "pslr", "oysteR", "rosv"))'''
+  # DERIVED FROM DESCRIPTION, not transcribed -- same reason the gate list is.
+  # A hand-copied dependency list is one more thing to forget: add a Suggests
+  # and `R CMD check` starts ERRORing in CI with a hand-copy that is silently
+  # incomplete from that moment. Reading Imports + Suggests means a new
+  # dependency fails here, loudly, NAMING itself -- which tells whoever added it
+  # exactly what to put in the apt line above (the only half that must stay
+  # hand-written, because Debian's package names are not derivable from CRAN's).
+  #
+  # The version-bound stripper is spelled "[(].*" rather than an escaped paren
+  # on purpose: a backslash here crosses YAML *and* the shell before R sees it,
+  # and loses a level on the way. A character class needs no escaping in any of
+  # the three.
+  - 'Rscript -e ''d <- read.dcf("DESCRIPTION", c("Imports", "Suggests")); p <- trimws(sub("[(].*", "", unlist(strsplit(d[!is.na(d)], ",")))); p <- unique(c(p[nzchar(p)], "pkgload", "lintr", "rcmdcheck")); m <- p[!vapply(p, requireNamespace, logical(1), quietly = TRUE)]; if (length(m)) stop("missing dependencies: ", paste(m, collapse = ", ")); cat("all", length(p), "dependencies present\n")'''
+
 gates:
   stage: gates
   script:
@@ -61,7 +102,5 @@ check:
     - if: '$CI_COMMIT_TAG'
     - if: '$CI_PIPELINE_SOURCE == "web"'
   script:
-    - *gate_deps
-    - apt-get install -y --no-install-recommends pandoc qpdf texinfo
-    - 'Rscript -e ''install.packages(c("curl","stringi","punycoder","pslr","testthat","pkgload","lintr","rcmdcheck"))'''
+    - *check_deps
     - 'Rscript tools/verify.R'
