@@ -786,6 +786,13 @@ safe_parse_urls <- function(url,
   # ._parse_urls_cached(). original_url is restored per row afterwards so it
   # reflects the input element even for duplicates / NA / non-character rows.
   field_names <- vapply(.spu_result_fields, function(f) f$name, character(1))
+  # Neutralized HERE and not only inside ._parse_urls_cached(), because
+  # .mask_opaque_authority() reads `parse_input` itself rather than receiving it
+  # from that funnel: it walks the whole vector the moment any row is `mailto:`,
+  # so a bytes-marked row elsewhere in the same batch threw there even with the
+  # funnel guarded. Measured, not assumed -- see .neutralize_bytes_input() for
+  # the reproducer and why the accessors do not show it.
+  parse_input <- .neutralize_bytes_input(parse_input)
   cols <- .mask_opaque_authority(._parse_urls_cached(parse_input, opts), opts,
                                  parse_input)
   cols <- cols[field_names]
@@ -1608,6 +1615,11 @@ safe_parse_urls <- function(url,
 ._parse_urls_cached <- function(parse_input, opts) {
   a_fields <- vapply(.spu_stage_a_fields, function(f) f$name, character(1))
   n_a_fields <- length(.spu_stage_a_fields)
+  # BEFORE unique(): neutralizing here rather than on `uniq` is what keeps the
+  # `match(parse_input, uniq)` expansion below in step. Neutralizing the unique
+  # vector would leave the input vector holding bytes the unique vector no
+  # longer contains, and every row would gather from the wrong position.
+  parse_input <- .neutralize_bytes_input(parse_input)
   uniq <- unique(parse_input)
   m <- length(uniq)
 
@@ -1705,6 +1717,51 @@ safe_parse_urls <- function(url,
   attr(cols, "null_row") <- null_uniq[pos]
   attr(cols, "verdicts") <- lapply(verdicts_uniq, function(col) col[pos])
   cols
+}
+
+# Neutralize bytes-marked input to NA before it can reach any string operation.
+#
+# `Encoding(x) <- "bytes"` is R's declaration that a value is NOT text, and
+# stringi honors it by refusing such a string WHOLESALE: `stri_escape_unicode()`
+# inside `.cache_key_ascii()` throws "bytes encoding is not supported by this
+# function" before the parse has even begun. That throw took the entire
+# vectorized call with it -- `get_host()` over 1000 URLs lost all 1000 because
+# one row carried a bytes mark (RURL-jttoigtc). Same broken promise as
+# RURL-kmpnbvdl, at a different seam and with a different trigger: kmpnbvdl's
+# guards scope on `validUTF8()` and on `Encoding()` being "UTF-8"/"latin1", and
+# a "bytes" mark is neither, so they never see this row.
+#
+# NA, not a repair. There is no locale-free reading of a value whose author has
+# declared it is not text, so `error` is the correct VERDICT here -- it is only
+# the THROW that is wrong. Mapping to NA puts the row on the existing null-row
+# path, where it reports `parse_status` "error" exactly like NA and "" input,
+# and it costs no new column or field (ADR 0006).
+#
+# Deliberately NOT applied to `original_url`: safe_parse_urls() restores that
+# column from the untouched input vector, so the caller still gets their own
+# bytes back in the echo and can see WHICH row was refused.
+#
+# Idempotent and O(n) in C, so calling it at more than one seam is cheap. It has
+# to be called at more than one, and that is MEASURED rather than assumed:
+# `.mask_opaque_authority()` is a SIBLING consumer of the same input vector, not
+# a caller of this funnel, and it walks the whole vector through
+# `.has_explicit_authority()`'s `stri_replace_first_regex()` as soon as any one
+# row is `mailto:`. With only the funnel guarded,
+#
+#   safe_parse_urls(c("mailto:a@b.com", <bytes row>),
+#                   scheme_acceptance = "general", url_standard = "whatwg")
+#
+# still threw. Note the shape of that reproducer: it is a CONJUNCTION (a mailto
+# row AND a bytes row AND `scheme_acceptance = "general"`), and it fires on
+# `safe_parse_urls()` but NOT on `get_host()`, which reaches the mask by a path
+# the mailto branch does not arm. A one-input-at-a-time probe on the accessors
+# scores the funnel-only fix as complete.
+.neutralize_bytes_input <- function(url) {
+  bytes <- Encoding(url) == "bytes"
+  if (any(bytes)) {
+    url[bytes] <- NA_character_
+  }
+  url
 }
 
 # Stage A (vector): the option-INDEPENDENT parse core (RURL-dkwrebdt). Runs the

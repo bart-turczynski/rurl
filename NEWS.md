@@ -86,6 +86,36 @@
 
 ### Bug fixes
 
+- **A bytes-marked input no longer aborts the whole vectorized call.** One
+  element carrying `Encoding(x) <- "bytes"` used to throw `bytes encoding is
+  not supported by this function` out of the entire batch, so a thousand-URL
+  `get_host()` lost all thousand because of one row:
+
+  ```r
+  u <- rawToChar(as.raw(c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f,
+                          0x80, 0x2f, 0x70)))
+  Encoding(u) <- "bytes"
+
+  # before                                    # after
+  get_host(c("http://a.example.com/", u))
+  #> Error: bytes encoding is not               #> "a.example.com" NA
+  #>   supported by this function
+  ```
+
+  Such a row is now refused individually and reports `parse_status = "error"`,
+  the same as `NA` and `""` input. The verdict is unchanged in spirit —
+  `Encoding(x) <- "bytes"` is a declaration that the value is not text, so
+  rejecting it is correct — it is only the batch-wide throw that was the bug.
+  `original_url` still hands back the caller's exact bytes, so the refused
+  element remains identifiable.
+
+  This is the same broken promise as the `rfc3986` authority throw fixed
+  earlier in this release, at a different seam: `stringi` refuses a
+  bytes-marked string wholesale regardless of which octets it holds, so the
+  error arrived from cache-key construction before the parser ran, and the
+  earlier guards (which scope on `validUTF8()` and on `Encoding()` being
+  `"UTF-8"`/`"latin1"`) could not see it.
+
 - **`clean_url` no longer fabricates an authority for a hostless `file:` parse
   error.** A hostless row is reassembled as `scheme://` + path, so a path that
   did not begin with `/` landed in the authority position:
