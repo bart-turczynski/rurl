@@ -220,6 +220,8 @@ test_that("canonical_join() path_encoding is LEGACY: it warns, it re-keys", {
   # types that as compatibility-only, explicitly not the v3 identity model,
   # retained for a deprecation window and required to warn. Both halves of
   # that legacy contract are pinned below: the warning, then the match set.
+  # The identity half of the row lives in the next block; neither is complete
+  # without the other, because the contract is a CONTRAST between them.
   expect_warning(
     canonical_join(A, B, url_standard = "whatwg", path_encoding = "encode"),
     class = "rurl_legacy_join_dial_warning"
@@ -232,6 +234,57 @@ test_that("canonical_join() path_encoding is LEGACY: it warns, it re-keys", {
   expect_identical(nrow(joined), 1L)
   expect_identical(joined$ValA, 1L)
   expect_identical(joined$ValB, 2L)
+})
+
+test_that("the identity family answers the same question invariantly", {
+  # key-join-contracts.md :183, the identity half of the LEGACY block above,
+  # asserted on the same two frames. That block pins that `path_encoding`
+  # MOVES canonical_join()'s match set; this one pins that the identity
+  # family's answer to the same question cannot be moved at all.
+  #
+  # Deliberately not a duplicate of two neighbouring pins: test-url-key-join-
+  # api.R :: "no public cleaning or profile dial can reach the exported key"
+  # covers get_url_key(), and test-url-join.R :: "the family has no
+  # presentation dials to forward" covers the unexported ENGINE. The six
+  # exported join wrappers are a third surface, and the match-set contrast
+  # against the legacy frames exists nowhere.
+  A <- data.frame(URL = "https://ex.com/école", ValA = 1L,
+    stringsAsFactors = FALSE)
+  B <- data.frame(URL = "https://ex.com/%C3%A9cole", ValB = 2L,
+    stringsAsFactors = FALSE)
+
+  # Identity gives a DIFFERENT answer, not a coincidentally equal one:
+  # `path_encoding = "encode"` collapses both spellings onto one legacy key and
+  # joins them (1 row, above), while identity holds `/école` and `/%C3%A9cole`
+  # apart, so nothing matches. Worth stating because a test that happened to
+  # agree with the legacy result here could pass while the invariance it claims
+  # to check was broken.
+  k <- get_url_key(c(A$URL, B$URL))
+  expect_false(identical(k[[1]], k[[2]]))
+  expect_identical(nrow(url_inner_join(A, B, by = "URL")), 0L)
+
+  # And that 0 cannot be argued up to 1: no member of canonical_join()'s own
+  # presentation-dial list is a formal of any of the six. Derived from
+  # .CJ_LEGACY_PRESENTATION_DIALS rather than transcribed, so a dial added
+  # there is covered here for free. `engine` is the single admitted member,
+  # for the reason recorded in test-url-join.R :: "the family has no
+  # presentation dials to forward".
+  joins <- list(inner = url_inner_join, left = url_left_join,
+    right = url_right_join, full = url_full_join,
+    semi = url_semi_join, anti = url_anti_join)
+  for (nm in names(joins)) {
+    expect_identical(
+      intersect(names(formals(joins[[nm]])), .CJ_LEGACY_PRESENTATION_DIALS),
+      "engine",
+      info = nm
+    )
+  }
+
+  # Passing one anyway is refused rather than absorbed: none of the six take
+  # `...`, so a legacy call ported over verbatim fails loudly instead of
+  # quietly keeping its old match set. R translates "unused argument" under
+  # some locales, so the condition is asserted and its text is not.
+  expect_error(url_inner_join(A, B, by = "URL", path_encoding = "encode"))
 })
 
 test_that("path_encoding = 'keep' does not depend on a sibling component", {
