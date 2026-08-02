@@ -1,12 +1,19 @@
-# lifecycle.yaml — the ten-state record lifecycle and its legal transitions,
-# encoded machine-readably. Source of truth = reconciliation §6 ("Recommended
-# record lifecycle") table. Produced by G0.3 (RURL-bufpkphu); consumed by the
-# G0.3b transition validator (tools/validate-transitions.R).
+# lifecycle.yaml — the record STATE VOCABULARY.
 #
-# Every transition records actor, timestamp, evidence, and affected dependency
-# IDs (enforced by the transition validator). A source or owner-decision change
-# marks dependent records INVALIDATED and opens replacement records at
-# DISCOVERED; it never silently rewinds or edits history.
+# SCOPE, after ADR 0014. This file used to encode a ten-state lifecycle, its
+# legal transitions, and a propagation model that cascaded INVALIDATED through
+# dependents and reopened downstream gates. All of that is retired along with
+# the ratification layer, and validate-transitions.R (which proved the model
+# against schema/fixtures/) is deleted.
+#
+# What survives is the part still in use: the state NAMES. Registers label rows
+# DISCOVERED / ACCEPTED / SUPERSEDED and validate-records.R checks those tokens
+# against this list, so the vocabulary is load-bearing even though the machinery
+# around it is gone.
+#
+# The transitions table below is retained as documentation of what the states
+# mean in sequence. Nothing enforces it. The full model is recoverable from tag
+# v3-control-plane-final.
 
 schema_version: "1.0.0"
 
@@ -73,17 +80,8 @@ transitions:
   SUPERSEDED: []
   INVALIDATED: []
 
-# Every transition log entry must carry these fields (validated by G0.3b).
-transition_evidence_fields: [from, to, actor, timestamp, evidence, affected]
-
-# Propagation rules (G0.3b). A change to a source or an owner decision must
-# cascade to dependents; these names are asserted by the transition fixtures.
-propagation:
-  # When a record R that others depend_on changes (source delta or supersession):
-  on_upstream_change:
-    - dependents_move_to: INVALIDATED          # every ACCEPTED/TRANSFERRED/VERIFIED dependent
-    - open_replacement_at: DISCOVERED          # a new record, linked to the invalidated one
-    - downstream_gate: FAILED_OR_REOPENED      # any gate whose acceptance rested on the dependent
-  # Tracker `done` must never keep a gate accepted when its durable acceptance
-  # record is stale (INVALIDATED/SUPERSEDED). Tracker state is non-authoritative.
-  tracker_authority: none
+# The `propagation:` block lived here: a change upstream moved dependents to
+# INVALIDATED, opened replacements at DISCOVERED, and marked any gate resting on
+# them FAILED_OR_REOPENED. That rule is retired (ADR 0014) -- it is the reopening
+# cascade whose only remedy was a re-seal. Contract drift is still caught, by
+# traceability-gate.R T3 regenerating the claim index and byte-comparing it.

@@ -1,8 +1,9 @@
 # Raw-path extraction (RURL-chdrlyci): path_normalization = "none" is lossless.
 #
-# rurl reads the request path from the input verbatim rather than from libcurl's
+# rurl reads the request path from the input verbatim rather than from the
+# parser's
 # pre-normalized $path, so dot segments (and percent-encoded dot forms) survive
-# to path_normalization. The only libcurl normalization replayed is percent-hex
+# to path_normalization. The only parser normalization replayed is percent-hex
 # case (RFC 3986 section 6.2.2.1), which keeps %2F/%2f join-equivalent.
 
 test_that("path_normalization = 'none' preserves dot segments (default)", {
@@ -38,7 +39,7 @@ test_that("percent-encoded %2e is a path byte, never a dot segment", {
   )
   # ... and NOT collapsed even when dot-segment resolution is requested
   # (RFC 3986 section 5.2.4 operates on literal segments only). This kills the
-  # silent encoded-dot traversal that libcurl's $path used to perform.
+  # silent encoded-dot traversal that the parser's $path performs.
   expect_equal(
     get_clean_url(
       "http://ex.com/a/%2e%2e/b", path_normalization = "dot_segments"

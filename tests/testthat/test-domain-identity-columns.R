@@ -100,3 +100,71 @@ test_that("empty-input frame carries the identity columns with correct types", {
     expect_type(empty[[col]], "character")
   }
 })
+
+# PSL annotations from the decoded reg-name view (RURL-jhsbzmsj).
+#
+# `rfc3986` keeps a reg-name's percent-encoding in the host IDENTITY, and the
+# PSL cannot read a label containing "%". The annotation is therefore derived
+# from a decode-once-as-UTF-8 VIEW of the host, which must leave identity,
+# serialization and acceptance untouched.
+
+test_that("a percent-encoded rfc3986 reg-name still classifies", {
+  r <- safe_parse_url("http://a%C3%A9b.com/", url_standard = "rfc3986")
+  # The annotation is derived from the decoded view ...
+  expect_identical(r$domain, "aéb.com")
+  expect_identical(r$tld, "com")
+  # ... while the identity keeps the source spelling, un-decoded.
+  expect_identical(r$host, "a%C3%A9b.com")
+  expect_identical(
+    serialize_url("http://a%C3%A9b.com/", standard = "rfc3986"),
+    "http://a%C3%A9b.com/"
+  )
+})
+
+test_that("the decoded view agrees with what whatwg computes for that host", {
+  # The annotation is the EXISTING pslr path applied to the decoded candidate,
+  # so the two profiles agree on the annotation even though they disagree on
+  # the host spelling. IDNA maps the soft hyphen away under both.
+  for (u in c("http://a%C3%A9b.com/", "http://a%E4%B8%ADb.com/",
+              "http://a%C2%ADb.com/")) {
+    rfc <- safe_parse_url(u, url_standard = "rfc3986")
+    web <- safe_parse_url(u, url_standard = "whatwg")
+    expect_identical(rfc$domain, web$domain, info = u)
+    expect_identical(rfc$tld, web$tld, info = u)
+    # Identity still differs -- only the annotation is shared.
+    expect_false(identical(rfc$host, web$host), info = u)
+  }
+})
+
+test_that("a decoded view that is not a domain stays unknown", {
+  # U+FFFD is valid UTF-8 but not a usable label, so the annotation is unknown
+  # while the host itself is still accepted and source-preserving.
+  r <- safe_parse_url("http://a%EF%BF%BDb.com/", url_standard = "rfc3986")
+  expect_identical(r$host, "a%EF%BF%BDb.com")
+  expect_identical(r$domain, NA_character_)
+  expect_identical(r$tld, NA_character_)
+})
+
+test_that("the annotation candidate decodes exactly once", {
+  # Direct unit test of the seam: the parser rejects these host shapes before
+  # phase 7 sees them, so the guards are only reachable here.
+  #
+  # "%2560" decodes ONCE to "%60"; decoding twice would yield a backtick and
+  # invent a label the input never spelled.
+  expect_identical(.psl_annotation_host_vec("a%2560b.com"), "a%60b.com")
+  # Valid UTF-8 decodes; the mark is set so pslr sees code points, not bytes.
+  expect_identical(.psl_annotation_host_vec("a%C3%A9b.com"), "aéb.com")
+  expect_identical(Encoding(.psl_annotation_host_vec("a%C3%A9b.com")), "UTF-8")
+  # Invalid UTF-8 -- lone lead byte, overlong, encoded surrogate -- is unknown,
+  # never a mojibake label.
+  expect_identical(.psl_annotation_host_vec("a%C3b.com"), NA_character_)
+  expect_identical(.psl_annotation_host_vec("a%C0%AFb.com"), NA_character_)
+  expect_identical(.psl_annotation_host_vec("a%ED%A0%80b.com"), NA_character_)
+  # A malformed triplet is unknown rather than a partial decode.
+  expect_identical(.psl_annotation_host_vec("a%zzb.com"), NA_character_)
+  # A host with no "%" is returned untouched, including NA.
+  expect_identical(
+    .psl_annotation_host_vec(c("example.com", NA_character_)),
+    c("example.com", NA_character_)
+  )
+})

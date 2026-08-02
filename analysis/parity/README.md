@@ -148,6 +148,20 @@ notice it. Two properties keep the number honest:
 > 93** — 81 where it rejects what the RFC admits and 12 where it accepts what
 > the RFC does not. Each of the 93 cites the ADR or ticket that owns it.
 >
+> **Re-baselined onto `serialize_url()` (P5.4), that same 257-row scope reads
+> 179 / 78** — fifteen rows stop being departures because surface (c) declined
+> them by POLICY (the ADR 0004 closed scheme set, the ADR 0002 reversible
+> Unicode host) where the standard serializer matches the grammar. Over the
+> current 325-runnable corpus it is 235 / 90. This remains an ACCEPTANCE axis;
+> the full-string serialization headline is separate, and is measured on the
+> WHATWG's own suite rather than on a curated subset: **336 exact / 0
+> deviations over the 336 success rows** of the imported web-platform-tests
+> corpus, scored against upstream's recorded `href`, plus **202 / 202**
+> must-fail rows rejected (OR-022, P5.4 §2.1). That figure read **326 / 10**
+> when P5.4 measured it; all 10 were the single host-less-`file:` family of
+> RURL-uhwivndf, which is now fixed in the parse record (P1.3), leaving no
+> deviation family on this oracle.
+>
 > That was **158 / 99** before `RURL-qrfrvmkg` bound the generic-URI gate
 > uniformly across schemes; closing the `RURL-pfewxbhb` coverage gap moved
 > exactly 6 rows from over-permissive to conformant-reject (18 → 12).

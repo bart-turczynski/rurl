@@ -75,12 +75,12 @@ checked executably by `validate-records.R` (P0.6 I1–I5).
 | design/work/url-v3/contracts/canonical-state-contract.md | efebe54e645dfcaf56aa2e7d78fcad37d1f266952431a247d5197624996f43ca |
 | design/work/url-v3/contracts/standard-scheme-matrices.md | f36ddf6cb8283af7203e7267c2bb1635df49fc670129134cfe9825cda5589d18 |
 | design/work/url-v3/contracts/validation-intervention-contract.md | aa06d046d495c94f5f1cba5bef923c666653cdceaedabc2ebee66d86d2679c18 |
-| design/work/url-v3/contracts/output-contracts.md | d0570174098f2caf454acfcae7a25517c16fd11c703e7c07242cb221d3dff455 |
+| design/work/url-v3/contracts/output-contracts.md | 62087dad29481e78e204f2dcb511aabea3ac823dc0651ae3c918e0c0a588975f |
 | design/work/url-v3/contracts/cleaning-mutation-contracts.md | d8996daf621ca9409d7249116c15efa1740379eda836eb4ce81aa9278ff8a255 |
 | design/work/url-v3/contracts/semantic-cache-contract.md | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
 | design/work/url-v3/contracts/host-annotation-contracts.md | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
 | design/work/url-v3/contracts/key-join-contracts.md | c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3 |
-| design/work/url-v3/contracts/public-surface-closure.md | 9a1cd6c68141c55386818a6ec43e8aeecef973417ce442923e5a156a012e782a |
+| design/work/url-v3/contracts/public-surface-closure.md | 9bc15ab8a73a8ed88480611a272b023d31a7e601efc99cd94d3bc0182381eef8 |
 
 ## Criterion-3 assertions ((i)–(v))
 
@@ -147,8 +147,6 @@ these.
 | MUT-O11 | cleaning-mutation (G3.8) | the P3 mutation-slice (mutation standards/profile/repair interaction) |
 | MUT-O12 | cleaning-mutation (G3.8) | the P3 mutation-slice (mutation downstream safety) |
 | OUT-O1 | output (G3.7) | a credential-accessor / public-surface owner decision (S1 Q5; coordinated with SCHEME-O2). Also the destination of G3.3's undivided-`userinfo` open cell |
-| OUT-O2 | output (G3.7) | the RCON-05 public-surface decision (surface-b entry-point name) |
-| OUT-O3 | output (G3.7) | the surface-b build slice / an owner decision on RFC serializer posture |
 | OUT-O4 | output (G3.7) | a dedicated safe-display P-tier record + the RCON-03 `resolve_url` output-shape record (paired with VAL-O3) |
 | OUT-O5 | output (G3.7) | an owner decision on the source-reproduction guarantee (with the surface-a naming slice) |
 | HOST-O1 | host-annotation (G3.H) | the dedicated P4 host record (RCON-08; unmade) — unified typed host-state matrix |

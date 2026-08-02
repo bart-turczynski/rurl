@@ -1,7 +1,7 @@
 # ADR 0012 Layer 4a (RURL-sxssynfu): the INDEPENDENT RFC 3986 generic-URI
 # grammar gate (`.rfc3986_generic_uri_ok`) and its hand-authored ABNF fixture
 # corpus -- the NORMATIVE ORACLE for the new RFC-general branch (D1). The gate
-# is independent of libcurl: a permissive component splitter (curl/WHATWG)
+# is independent of the parse engine: a permissive component splitter
 # "accepts" strings D1 deliberately rejects (e.g. a repeated raw @), so parity
 # with a backend is NOT proof of grammar conformance. These tests assert the
 # gate's verdict directly against the CSV, never against a backend.
@@ -73,8 +73,9 @@ test_that("directly-written non-ASCII is tolerated and flagged, not rejected", {
   expect_true(is.na(bad$diagnostic))
 })
 
-test_that("the gate is a pure function, independent of curl/WHATWG leniency", {
-  # curl / WHATWG accept-and-escape scheme://username@@@@example.com (emitting
+test_that("the gate is a pure function, independent of parser leniency", {
+  # The web route / WHATWG accept-and-escape scheme://username@@@@example.com
+  # (emitting
   # invalid-credentials); the RFC generic gate REJECTS it (repeated raw @ in the
   # authority). This asserts the verdict WITHOUT any backend call.
   res <- .rfc3986_generic_uri_ok("scheme://username@@@@example.com")
@@ -97,7 +98,8 @@ test_that("the gate is a pure function, independent of curl/WHATWG leniency", {
 
 test_that("rfc3986 rejects a forbidden ASCII byte on EVERY route", {
   # Same offending character ('|'), four different routes through Stage A:
-  # libcurl (http authority), the RFC 8089 `file:` overlay, the path-rootless
+  # the web route (http authority), the RFC 8089 `file:` overlay, the
+  # path-rootless
   # slice (`http:` with no "//"), and a userinfo-bearing authority. All four
   # must reject identically -- the route must not decide the verdict.
   inputs <- c(

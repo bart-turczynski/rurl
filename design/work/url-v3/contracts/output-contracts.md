@@ -88,7 +88,7 @@ boundary complete. No surface may silently stand in for another.
 | # | surface | v3 name | fragment | credentials | round-trips to source | spec-exact | owner_decision_ref | status |
 |---|---|---|---|---|---|---|---|---|
 | a | source reproduction | `url_source()` (← `original_url`) | verbatim | verbatim | yes (bytes, unmutated row) | n/a (echoes input) | P2.2@8292c7f (§1a) | SETTLED |
-| b | standard serialization (FSSS) | `serialize_url(x, standard=)` (unimplemented) | **preserved** | **reconstructed** | via parse→serialize→parse identity | **yes** (WHATWG / RFC 3986) | P2.2@8292c7f (§1b, §4) | SETTLED |
+| b | standard serialization (FSSS) | `serialize_url(x, standard=, form=)` (shipped; P2.5) | **preserved** | **reconstructed** | via parse→serialize→parse identity | **yes** (WHATWG / RFC 3986) | P2.2@8292c7f (§1b, §4) | SETTLED |
 | c | clean output | `clean_url` / `get_clean_url()` | **omitted** | **not reconstructed** | no (intentionally lossy) | no (SEO/policy product) | P2.2@8292c7f (§1c) | SETTLED |
 | d | safe display | `format_url()` (unimplemented) | policy | redacted/annotated | no | no (human-readable) | P2.2@8292c7f (§1d) | SETTLED (surface; matrix OPEN — OUT-O4) |
 | e | comparison key | `get_url_key()` (non-URL projection) | ignored (state kept for diagnostics) | ignored | n/a | n/a (identity, not a URL string) | P3.1@3b89b94 (D-A) — **owned by G3.K**, referenced | SETTLED (boundary) |
@@ -118,9 +118,11 @@ The full-string standard-serialization surface that conformance is rebuilt from
 | correctness oracle | parse→serialize→parse structural equivalence plus full-string fixtures — the substrate P5.3's claims stand on | P2.2@8292c7f (§4); P5.3@8292c7f (§1) | SETTLED |
 | C-04 — fragment preservation | **SEPARATE / UNIMPLEMENTED, not superseded**: the shipped `.serialize_*_vec()` are the *clean* serializers (surface c) implementing the `clean_url` contract; the ADR 0012 D2 standard serializer preserves fragments/credentials and is scheduled (Layer 3b), not built | P2.2@8292c7f (§2); ADR 0012 D2 | SETTLED |
 | C-05 — `%2F` / `path_encoding` | **compat retained in clean surface, excluded from (b)**: `path_encoding` is a clean/display presentation dial only; surface (b) renders the path from the identity record per the selected standard's own percent-encode set and **never consults `path_encoding`** | P2.2@8292c7f (§3); ADR 0011 | SETTLED |
+| parse posture | (b) serializes the SELECTED standard's own parse: profile `whatwg` / `rfc-syntax`, both `scheme_acceptance = "general"` + `scheme_policy = "require"`. Any scheme is accepted; a scheme is REQUIRED — rurl's `https://` prepend is browser-like fix-up and belongs to surface (c), so scheme-less input is `NA`, never an assertion of conformance for a string the standard rejects | P2.5 (PROPOSED) (§3) | SETTLED |
+| host spelling | (b) emits WHATWG's parsed host, the ASCII (punycode) domain; surface (c) keeps the Unicode spelling (`host_encoding = "keep"`, a readability choice). Default-port elision is likewise a PARSE fact under WHATWG, not a serializer policy | P2.5 (PROPOSED) (§4) | SETTLED |
 | build dependency | surface (b) requires the lossless serializer-input record (S3-F2 → RCON-02 canonical-state, artifact 3) first, so it cannot be implemented before the state contract lands — this record fixes the contract + name, not the implementation | P2.2@8292c7f (Consequences) | SETTLED |
-| public entry-point name | whether (b) is `serialize_url(x, standard=)`, a `standard=` arg on an existing accessor, or split `serialize_whatwg()`/`serialize_rfc()` — **not** resolved (P2.2 Q1) | — (see Open cells OUT-O2) | OPEN |
-| RFC serializer posture | whether (b)'s RFC variant serializes the source-preserving `rfc-syntax` form, the normalized form, or both (P2.2 Q2; S3-C3) | — (see Open cells OUT-O3) | OPEN |
+| public entry-point name | `serialize_url(x, standard = c("whatwg", "rfc3986"), form = c("source", "normalized"))` — one export, the standard as a VALUE (ADR 0007 selector idiom); rejected: a `standard=` arg on an existing accessor (accessors return components, (b) returns the whole string) and a split `serialize_whatwg()`/`serialize_rfc()` pair | P2.5 (PROPOSED) (§1) | SETTLED |
+| RFC serializer posture | **both**, as `form=`: `"source"` (§5.3 recomposition, no normalization, undivided `userinfo` verbatim — the round-trip oracle) and `"normalized"` (§6.2.2 syntax-based normalization + §6.2.3 default-port elision — the comparison substrate). Choosing one forfeits the other; `form` is a standard-selector, not a presentation dial (C-05 intact) | P2.5 (PROPOSED) (§2) | SETTLED |
 
 ## Lossless serializer-input record (S3-F2 / S3-F5)
 
@@ -278,17 +280,6 @@ invented. None reopens a SETTLED default.
   collapsed) are exposed. **Settles at:** a credential-accessor / public-surface
   owner decision (coordinated with G3.5 SCHEME-O2 `get_password` selector parity),
   driven by S1 Q5.
-- **OUT-O2 — standard-serializer (surface b) public entry-point name (P2.2 Q1).**
-  `serialize_url(x, standard=)` vs a `standard=` arg on an existing accessor vs
-  split `serialize_whatwg()`/`serialize_rfc()` is unresolved. **Impact:** the FSSS
-  public API spelling is unspecified (the surface + contract are SETTLED).
-  **Settles at:** the RCON-05 public-surface decision (with the surface-b build
-  slice).
-- **OUT-O3 — RFC serializer posture (P2.2 Q2; S3-C3).** Whether surface (b)'s RFC
-  variant serializes the source-preserving `rfc-syntax` form, the normalized form,
-  or exposes both is unresolved. **Impact:** RFC round-trip fidelity vs
-  normalization for the standard serializer is undefined. **Settles at:** the
-  surface-b build slice / an owner decision on the RFC serializer posture.
 - **OUT-O4 — safe-display (surface d) scope + escape/annotation matrix, and the
   `resolve_url` output shape (P2.2 Q3; S3-F3/S3-C6; RCON-03 resolve half).**
   Whether `format_url()` is in scope for 3.0, its component-by-component

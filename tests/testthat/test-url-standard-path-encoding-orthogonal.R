@@ -132,7 +132,7 @@ test_that("whatwg profile serializes query and fragment encode sets", {
   )
 })
 
-test_that("whatwg accepts WPT-valid path query fragment bytes curl rejects", {
+test_that("whatwg accepts WPT-valid path query fragment bytes web rejects", {
   urls <- c(
     paste0("http://www.google.com/foo?bar=baz# ", intToUtf8(0x00BB)),
     paste0("http://foo.bar/baz?qux#foo", intToUtf8(0x08), "bar"),
@@ -232,4 +232,80 @@ test_that("canonical_join() path_encoding is LEGACY: it warns, it re-keys", {
   expect_identical(nrow(joined), 1L)
   expect_identical(joined$ValA, 1L)
   expect_identical(joined$ValB, 2L)
+})
+
+test_that("path_encoding = 'keep' does not depend on a sibling component", {
+  # RURL-ezhzpkhg deletion 5. Until the pqf fallback was removed, "keep" was
+  # not keeping: a failed first parse triggered a re-parse of the input
+  # respelled with the FULL WHATWG encode sets, so the stored path picked up
+  # escapes it had no reason to carry. Because the retry was gated on FAILURE
+  # and rewrote all three components at once, whether the "<" in this PATH was
+  # kept or escaped was decided by what the QUERY happened to hold.
+  #
+  # Same path, two queries. "keep" must give the same answer to both.
+  expect_identical(
+    get_path("http://h.com/a<b?k= v", url_standard = "whatwg",
+      path_encoding = "keep"),
+    get_path("http://h.com/a<b?k=<v", url_standard = "whatwg",
+      path_encoding = "keep")
+  )
+  expect_identical(
+    get_path("http://h.com/a<b?k= v", url_standard = "whatwg",
+      path_encoding = "keep"),
+    "/a<b"
+  )
+  # The other two settings were already conjunction-free and must not move.
+  expect_identical(
+    get_path("http://h.com/a<b?k= v", url_standard = "whatwg",
+      path_encoding = "encode"),
+    "/a%3Cb"
+  )
+  expect_identical(
+    get_path("http://h.com/a<b?k= v", url_standard = "whatwg",
+      path_encoding = "decode"),
+    "/a<b"
+  )
+  # The SPACE is a different case and must still be escaped under "keep": a
+  # C0/SP/DEL byte parses at all only because WHATWG escapes it, so keeping it
+  # raw would keep something the parser never accepted -- and would put a
+  # literal space in `clean_url()`.
+  expect_identical(
+    get_path("http://h.com/a b?k=<v", url_standard = "whatwg",
+      path_encoding = "keep"),
+    "/a%20b"
+  )
+  # The serializer is unmoved throughout: rendering the full encode set is its
+  # job, and it did it before and after.
+  expect_identical(
+    serialize_url("http://h.com/a<b?k= v", standard = "whatwg"),
+    "http://h.com/a%3Cb?k=%20v"
+  )
+})
+
+test_that("VT and FF are escaped like any other C0 control under whatwg", {
+  # These two were rejected under `whatwg` for a reason that had nothing to do
+  # with URLs: the deleted fallback matched the post-authority remainder with
+  # an ICU ".", which excludes the Unicode line terminators, so the rewrite it
+  # was gated on never fired. WHATWG strips only tab/LF/CR; VT and FF are
+  # ordinary C0 controls and percent-encode.
+  for (ch in c("\u000b", "\u000c")) {
+    u <- paste0("http://h.com/a", ch, "b")
+    hexpair <- if (identical(ch, "\u000b")) "%0B" else "%0C"
+    expect_identical(
+      get_parse_status(u, url_standard = "whatwg"), "ok",
+      info = hexpair
+    )
+    expect_identical(
+      get_path(u, url_standard = "whatwg", path_encoding = "keep"),
+      paste0("/a", hexpair, "b"),
+      info = hexpair
+    )
+    # `rfc3986` and the no-selector baseline still reject: the dial is scoped
+    # to the WHATWG profile, which is the only one with an escape-it rule.
+    expect_identical(
+      get_parse_status(u, url_standard = "rfc3986"), "error",
+      info = hexpair
+    )
+    expect_identical(get_parse_status(u), "error", info = hexpair)
+  }
 })

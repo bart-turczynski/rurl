@@ -1,6 +1,34 @@
-## rurl 2.8.0
+## rurl 3.0.0
 
 ### Breaking changes
+
+- **`rurl` no longer depends on `curl`.** URL parsing is now entirely in-tree.
+  `curl` is removed from `Imports`, so installing `rurl` no longer pulls it in
+  and no longer requires the system `libcurl` it links against.
+
+  The last route still handed to `curl::curl_parse_url()` — http/https/ftp/ftps
+  (plus ws/wss under `url_standard = "whatwg"`) — is now parsed by
+  `R/parse-web.R`. Every other route already had an in-tree parser.
+
+  **Output is unchanged.** This was verified as a behaviour-preserving engine
+  swap before the dependency was dropped: 106,898 inputs were compared field by
+  field against `curl_parse_url()` — a structural grid, a per-octet sweep of
+  every URL position, an IPv6/IPv4/percent-escape fuzz corpus, the WPT
+  `urltestdata` corpus and every URL literal in the package's own tests —
+  including encoding marks, at **zero differences**. The full test suite, the
+  WPT suite, and the FSSS and `url_standard` conformance harnesses are all
+  unchanged.
+
+  This is flagged breaking only because a declared dependency disappears: code
+  that relied on `rurl` to load `curl` transitively must now declare `curl`
+  itself. Nothing in `rurl`'s own behaviour changed.
+
+  One improvement falls out of it. A host or userinfo carrying invalid UTF-8
+  used to be accepted or rejected depending on the session locale, because
+  `curl_parse_url()`'s R binding threw under a UTF-8 locale but returned raw
+  bytes under `LC_ALL=C`; `rurl` pinned the UTF-8 outcome with an explicit
+  check bolted onto the seam. The in-tree parser enforces that boundary by
+  construction, so locale invariance there is no longer compensation.
 
 - **`canonical_join()` now warns when a legacy presentation dial is forwarded
   through `...`.** `canonical_join()` matches on the canonicalized presentation
@@ -57,6 +85,321 @@
   does not parse `mailto:` at all.
 
 ### Bug fixes
+
+- **`clean_url` no longer fabricates an authority for a hostless `file:` parse
+  error.** A hostless row is reassembled as `scheme://` + path, so a path that
+  did not begin with `/` landed in the authority position:
+
+  ```r
+  # before                                   # after
+  get_clean_url("file:C:/W")        # "file://C:/W"        -> NA
+  get_clean_url("file:etc/passwd")  # "file://etc/passwd"  -> NA
+  get_clean_url("file:.")           # "file://."           -> NA
+  ```
+
+  Every one of these inputs is already `parse_status = "error"`, and these were
+  the only rows in an error sweep that still emitted a `clean_url` — so the
+  emitted string was both unreachable as a canonical key and actively
+  misleading: `file://C:/W` re-reads as authority `C:`, and a `file:` URL with
+  an authority is an SMB fetch on Windows.
+
+  The `file:` carve-out that lets a *legitimately* hostless row build is
+  unchanged, because those paths are absolute: `file:///etc/passwd`,
+  `file:////server/share`, `file://server/share/x` and `file:///` all keep their
+  previous output, as do the WHATWG drive-letter forms (`file:C|/W` →
+  `file:///C:/W`). Found auditing `rurl` against curl's documented security
+  guidance.
+
+- **Under `url_standard = "rfc3986"`, an authority-only URL now has an EMPTY
+  path, not `"/"`.** RFC 3986 §3 gives `hier-part = "//" authority path-abempty`
+  with `path-abempty = *( "/" segment )` — zero or more, so the empty string is a
+  well-formed path, and Appendix B's group 5 `([^?#]*)` reads it that way. §6.2.3
+  *does* equate `http://example.com` with `http://example.com/`, but that
+  sentence sits under §6 "Normalization and Comparison", so the `"/"` is a
+  normalization, not a parse result.
+
+  Injecting it during the parse made two distinct URIs indistinguishable and
+  broke source preservation for the shape:
+
+  ```r
+  # before
+  serialize_url(c("https://example.com", "https://example.com/"),
+                standard = "rfc3986", form = "source")
+  #> "https://example.com/" "https://example.com/"   <- one URI lost
+
+  # after
+  serialize_url(c("https://example.com", "https://example.com/"),
+                standard = "rfc3986", form = "source")
+  #> "https://example.com"  "https://example.com/"
+  serialize_url("https://example.com", standard = "rfc3986",
+                form = "normalized")
+  #> "https://example.com/"                          <- §6.2.3, where it belongs
+  ```
+
+  `form = "normalized"` now applies §6.2.3's empty-path sentence explicitly
+  ("a URI that uses the generic syntax for authority with an empty path should be
+  normalized to a path of `/`"), keyed on the authority delimiter rather than on
+  the scheme — so it also fires on a non-special scheme (`foo://h` normalizes to
+  `foo://h/`), where the previous behaviour depended on which parser owned the
+  row rather than on any rule. So `urn://:443` normalizes to `urn://:443/`, and
+  likewise for `mailto:` and `data:`. Scheme-specific conformance is orthogonal:
+  those strings remain invalid URNs, `mailto` URIs and data URLs under RFC 8141,
+  RFC 6068 and RFC 2397, and a future reader will report that as a fact
+  (`RURL-eqrpggvz`) — but scheme invalidity does not alter a URI's RFC 3986
+  generic-normalization spelling. ADR 0012 already settles this: scheme-specific
+  restrictions are overlays, not generic parse gates.
+
+  **`whatwg` and the no-selector default are unchanged** — WHATWG's path-start
+  state genuinely pushes an empty segment for a special scheme, so `"/"` is the
+  parse result there. Acceptance does not move on either profile: the WPT suite
+  stays at 336/336, and all three acceptance sweeps report identical accepted
+  counts and identical verdict/host/domain/TLD columns, with the injected `"/"`
+  as the only difference on 67 + 6 + 5 `rfc3986` rows. RFC 3986 decomposition
+  conformance rises from 379/519 to 444/519 grammar-valid rows, closing the
+  largest divergence class outright (path: 65 rows to 0). (`RURL-epoinamh`.)
+
+- **A percent-encoded internationalized host is classified again under
+  `url_standard = "rfc3986"`.** `domain` and `tld` are now derived from a
+  decoded *view* of the host, so a `reg-name` that spells its non-ASCII bytes as
+  percent-triplets is no longer left unclassified:
+
+  ```r
+  r <- safe_parse_url("http://a%C3%A9b.com/", url_standard = "rfc3986")
+  r$domain  # "aéb.com"  (was NA)
+  r$tld     # "com"      (was NA)
+  r$host    # "a%C3%A9b.com" -- unchanged, still source-preserving
+  ```
+
+  The host identity, the serialization, and which URLs are accepted are all
+  untouched: the decode happens once, as UTF-8, purely to build the annotation
+  candidate. An invalid-UTF-8 or non-domain result stays unknown (`NA`). Because
+  the candidate then takes the ordinary PSL path, an `rfc3986` host's
+  `domain`/`tld` now agree with what `"whatwg"` reports for the same host.
+
+  `parse_status` for these URLs changes from `warning-invalid-tld` to `ok`,
+  which is the status projection following the annotation it reports.
+
+  RFC 3986 §3.2.2 admits percent-encoded UTF-8 in `reg-name` and requires IDNA
+  transformation before a DNS lookup, while §6.2.2.2 authorizes only unreserved
+  decoding for URI normalization — so the decoded view is a sound basis for a
+  DNS-facing annotation without ever becoming the URL's identity.
+
+- **Whether a host may hold a literal `!`, `` ` ``, `;` … no longer depends on
+  the slash count, on a control character elsewhere in the URL, or on the
+  scheme.** Under `url_standard = "whatwg"` rurl accepts the 15 ASCII code
+  points WHATWG keeps in a host (`! " $ & ' ( ) * + , ; = `` ` `` { }`), and
+  under `"rfc3986"` the 11 RFC 3986 `sub-delims`. That acceptance was
+  implemented as a pre-parse rewrite (ADR 0009), and a rewrite needs an
+  eligibility test — which was a regex over the whole URL. So three unrelated
+  properties of the *rest* of the string were silently deciding it:
+
+  ```r
+  # all rejected before; all parse now
+  safe_parse_url("http:///a!b.com/p", url_standard = "rfc3986")  # 1 or 3 slashes
+  safe_parse_url("http://a!b.com/p\vq", url_standard = "whatwg") # VT/FF/NEL/LS/PS
+  safe_parse_url("ftps://a!b.com/p", url_standard = "whatwg")    # non-special scheme
+  ```
+
+  The pattern hard-required a literal `//`; it matched the post-authority
+  remainder with an ICU `.`, which excludes the Unicode line terminators; and
+  it was scoped to a scheme set, so `ftps` was refused under `whatwg` while
+  `rfc3986` allowed it. Removing the `\v` from the second URL made it parse.
+
+  Acceptance now lives in the parser, on a dial of its own, and applies to the
+  host regardless of what surrounds it (ADR 0013, superseding ADR 0009). The
+  **default profile is unaffected** — it never admitted these code points and
+  still does not. Measured on an extended octet-acceptance sweep: +90 accepted
+  rows under `whatwg`, +44 under `rfc3986`, +0 by default, zero rows narrowed,
+  and the moved byte sets are exactly the 15 and exactly the 11.
+
+- **A URL component ending in a raw line terminator is no longer accepted as
+  valid RFC 3986 syntax.** The in-tree RFC 3986 grammar transcription anchored
+  its component productions with `^`/`$`. ICU's `$` also matches *before* a
+  trailing line terminator, so every production silently admitted a component
+  ending in LF, VT, FF or CR — none of which appears in `unreserved`,
+  `sub-delims` or `pchar`, and none of which any RFC 3986 production allows. A
+  general-scheme userinfo accepted the control and emitted it verbatim, while
+  the special-scheme userinfo rejected all four:
+
+  ```r
+  # before                                          # after
+  serialize_url("foo://u\n@host/p",
+                standard = "rfc3986")  #> "foo://u\n@host/p" -> NA
+  serialize_url("http://u\n@host/p",
+                standard = "rfc3986")  #> NA                 -> NA (unchanged)
+  ```
+
+  RFC 3986 has no removal step, so the grammar **rejects** these rather than
+  stripping them the way the WHATWG parser strips tab, LF and CR. The
+  transcription now anchors on `\A`/`\z` throughout. The same `$` trap made the
+  general parser's WHATWG port check read `foo://h:80\v/` as port 80 — a silent
+  strip where the port state requires failure — and that is fixed too.
+
+  Acceptance was swept over 36,104 inputs (every octet 0–255 in both hex cases
+  and raw, at nine component positions across six schemes). Exactly 12 rows
+  move, all of them a host consisting solely of a trailing line terminator, all
+  `ok` → `error` under `rfc-syntax`. The `browser` and `whatwg` profiles are
+  unchanged row-for-row, and WHATWG serialization is byte-identical, including
+  336/336 `href` matches on the Web Platform Tests. This was the last enumerated
+  deviation in the RFC 3986 serialization property suite, which now carries
+  none.
+
+- **RFC 3986 §6.2.2.2 host normalization no longer depends on the scheme, and
+  no longer leaks into the source-preserving form.** Percent-decoding of the
+  host happened during the parse, inside a phase gated on rurl's supported
+  scheme set, rather than in the RFC serializer's `normalized` branch alongside
+  the other four components. Which decoding a host got therefore depended on
+  *its scheme* instead of the `form` the caller asked for, and it broke in both
+  directions at once:
+
+  ```r
+  # before                                                  # after
+  serialize_url("foo://ho%2Dst/p", standard = "rfc3986",
+                form = "normalized")   #> "foo://ho%2Dst/p" -> "foo://ho-st/p"
+  serialize_url("http://ho%41st/p", standard = "rfc3986",
+                form = "source")       #> "http://hoAst/p"  -> "http://ho%41st/p"
+  ```
+
+  A general-scheme host was the only position in a URL that skipped §6.2.2.2
+  (all 132 unreserved triplet spellings survived normalization there, and none
+  did anywhere else), while a special-scheme host was the only one that decoded
+  in `form = "source"`, which is documented as byte-preserving. Both are fixed:
+  §6.2.2.2 now runs in the serializer's `normalized` branch for every scheme,
+  and the RFC record takes the host's *source* spelling, recovered lexically
+  the way the undivided `userinfo` slice already was.
+
+  Two further consequences. A host triplet that does **not** encode an
+  unreserved octet now stays encoded, so `serialize_url("http://ho%7Cst/p",
+  standard = "rfc3986")` keeps `%7C` instead of emitting a literal `|` — output
+  that no RFC 3986 production admits and that did not re-parse. And `form =
+  "source"` is now byte-preserving at the host under both scheme classes, which
+  was one of the four places it was not.
+
+  Acceptance is unchanged: the fix is confined to the serializer-input record,
+  and an invariance sweep over every octet 0–255 in both hex cases at nine
+  component positions across six schemes (36,104 inputs) shows identical
+  accepted counts and identical per-row `parse_status` on all four parse
+  profiles, plus byte-identical WHATWG serialization and an unchanged 336/336
+  on the WHATWG web-platform-tests.
+
+- **A host-less `file:` URL now carries an empty host, not a null one, so
+  `serialize_url()` emits the authority the URL Standard requires.** WHATWG's
+  *file state* gives every `file:` URL a non-null host — the empty string when
+  no authority is written, and `localhost` maps to that same empty string — and
+  the serializer therefore always emits `//`. rurl recorded a null host
+  instead, so ten inputs serialized without it:
+
+  ```r
+  # before                             # after
+  serialize_url("file:C|/m/")          #> "file:/C:/m/"   -> "file:///C:/m/"
+  serialize_url("file:/example.com/")  #> "file:/example.com/"
+                                       #>                 -> "file:///example.com/"
+  serialize_url("file:?q=v")           #> "file:/?q=v"    -> "file:///?q=v"
+  serialize_url("file:/.//p")          #> "file:/.//p"    -> "file:////p"
+  ```
+
+  With this, **`serialize_url(standard = "whatwg")` reproduces the WHATWG URL
+  Standard's own recorded `href` on all 336 success rows of the full imported
+  web-platform-tests suite (was 326), and still rejects all 202 must-fail
+  rows.** No deviation family remains on that oracle. The ten inputs are
+  enumerated in `tests/testthat/test-wpt-full-suite.R` rather than counted, so
+  a regression has to name itself.
+
+  The defect was in the **parse record**, not the serializer: the fix teaches
+  the WHATWG `file:` parser to record the empty host, and the serializer's `//`
+  condition moves with it, from the source delimiter fact to the standard's own
+  rule — a non-null host (`#concept-url-serializer`). The RFC serializers keep
+  the delimiter fact, where the source spelling *is* what they render:
+  `file:/example.com/` has no authority under RFC 3986 and its `rfc3986`
+  serialization is unchanged.
+
+  **Nothing else moves.** Acceptance is byte-identical (859 accepted of 1460
+  probed inputs under `whatwg`, 1045 under `rfc3986`, before and after), both
+  RFC forms are unchanged on every row, and the public parse frame —
+  `parse_status`, `host`, `path`, `clean_url`, `domain`, `port` — is
+  byte-identical under all four profiles. In particular `get_host()` still
+  reports `NA` for an empty host: that collapse is a general accessor rule
+  (`foo:///bar` reports `NA` too), not part of this defect. (`RURL-uhwivndf`;
+  disposition P1.3, superseding P1.2 D-C for the WHATWG serializer.)
+
+- **Under `url_standard = "rfc3986"`, a percent-encoded DEL in the host no
+  longer decodes into the parsed host, and host percent-triplets keep uppercase
+  hex.** Two defects on the same RFC 3986 §6.2.2 rule, both invisible to the
+  existing harnesses because the RFC profile is scored on an *acceptance* axis,
+  which cannot see a bad output string on an accepted input.
+
+  libcurl percent-decodes every host triplet, including octets §6.2.2.2 forbids
+  decoding (only ALPHA / DIGIT / `-` / `.` / `_` / `~` may be decoded). DEL was
+  the one such octet libcurl also *admitted*, so it reached the parsed host as a
+  raw control byte:
+
+  ```r
+  # before
+  serialize_url("http://ho%7Fst/", standard = "rfc3986")
+  #> "http://ho\177st/"    <- raw DEL
+  serialize_url("http://ho\177st/", standard = "rfc3986")
+  #> NA                    <- the serializer's own output does not re-parse
+
+  # after
+  serialize_url("http://ho%7Fst/", standard = "rfc3986")
+  #> "http://ho%7Fst/"     <- re-parses to itself
+  ```
+
+  Besides breaking round-trip and idempotence, decoding the control byte is what
+  made an encoded host render as a clean-looking hostname.
+
+  Separately, host case folding lowercased the hex digits of a *surviving*
+  triplet, which §6.2.2.1 renders uppercase — the host was the only component
+  whose triplets escaped the hex normalization the path, query, fragment and
+  userinfo already got. `file://%43%7C` now normalizes to `file://%43%7C`
+  rather than `file://%43%7c`.
+
+  **Acceptance is unchanged.** Which URLs the RFC profile accepts or rejects is
+  byte-identical, verified over the full 0–255 host-octet range: every other
+  control octet is rejected once decoded, and the fix deliberately leaves those
+  rows on that path rather than admitting them. Non-control triplets keep the
+  established decode contract, so `host_encoding = "idna"` still sees real code
+  points. Five conformance-fixture expectations were re-baselined; their
+  `rfc3986_expected` cells are a *reading* of the RFC (the imported oracle
+  records `failure` with no value for those rows) and had transcribed the
+  retained triplets in lowercase, corrected here from the RFC text.
+
+  One defect of the same class remains open and is **not** fixed here: a
+  percent-encoded `|` (`%7C`) still decodes to a literal `|`, which is not an
+  RFC 3986 reg-name character, so that output does not re-parse either. Its
+  decoded spelling is pinned by existing fixtures, so changing it is a separate
+  decision.
+
+- **`serialize_url()` now reads the backslash-rewritten source, fixing two
+  hostname-confusion defects.** Both shipped with the serializer and were
+  invisible to every existing test, because `clean_url` drops userinfo so no
+  harness could observe them. The parse record was correct throughout; only the
+  serializer's lexical recovery was wrong.
+
+  `.fsss_source_lex()` read the *raw* source where the parser reads the source
+  after WHATWG's reverse-solidus rewrite, so a `\` the standard maps to the
+  authority/path boundary stayed inside the authority slice. The text before the
+  last `@` — which is **path** — was recovered as a userinfo the parser never
+  found, and the host was duplicated into the credentials:
+
+  ```r
+  serialize_url("http://google.com:80\\@yahoo.com")
+  #> was: "http://google.com:80%5C@google.com/@yahoo.com"
+  #> now: "http://google.com/@yahoo.com"
+  ```
+
+  Separately, `.has_explicit_authority()` greps a literal `://`, which an input
+  using WHATWG's special-authority-ignore-slashes state need not contain, so the
+  serializer emitted no `//` and **dropped the host** the parser had resolved:
+  `serialize_url("https:/\\/\\/\\github.com/foo/bar")` returned
+  `"https:/foo/bar"` and now returns `"https://github.com/foo/bar"`.
+
+  Both are confined to the serializer; `.has_explicit_authority()` itself is
+  unchanged, so the `mailto:` and Stage-B callers keep their behavior. The
+  rewrite is a no-op under `rfc3986`, which admits no raw `\` and rejects these
+  inputs outright. Found by the conformance re-baseline (RURL-yeikpnan): every
+  affected row is in the CVE-2020-26291 hostname-confusion family, and each now
+  agrees with its published oracle.
 
 - **`url_standard = "whatwg"` now applies the userinfo percent-encode set to the
   `user` and `password` columns.** WHATWG's authority state fills its username
@@ -348,6 +691,54 @@
 
 ### New features
 
+- **`serialize_url()` renders a URL the way its standard would.** rurl's only
+  full-string output was `get_clean_url()`, which is an SEO/canonicalization
+  product: it drops credentials and the fragment by design, and it is driven by
+  two dozen cleaning dials. That makes it the wrong thing to compare against a
+  standard. `serialize_url()` is the other surface — the full string, credentials
+  and fragment included, with no presentation dial at all:
+
+  ```r
+  serialize_url("http://user:pw@Example.COM:80/a/../b?q=1#frag")
+  #> [1] "http://user:pw@example.com/b?q=1#frag"
+  get_clean_url("http://user:pw@Example.COM:80/a/../b?q=1#frag")
+  #> [1] "http://example.com/a/../b"
+  ```
+
+  A present-but-empty delimiter carries information and survives, which no
+  cleaning surface can promise:
+
+  ```r
+  serialize_url(c("http://h/", "http://h/#", "http://h/?"))
+  #> [1] "http://h/"  "http://h/#" "http://h/?"
+  ```
+
+  `standard = "rfc3986"` selects RFC 3986 §5.3 recomposition, in either of two
+  postures: `form = "source"` (the default) normalizes nothing and emits the
+  undivided `userinfo` verbatim, while `form = "normalized"` applies §6.2.2
+  syntax-based normalization and §6.2.3 default-port elision.
+
+  ```r
+  serialize_url("HTTP://Example.COM:80/a/%7Euser/../x", standard = "rfc3986")
+  #> [1] "http://Example.COM:80/a/%7Euser/../x"
+  serialize_url("HTTP://Example.COM:80/a/%7Euser/../x", standard = "rfc3986",
+                form = "normalized")
+  #> [1] "http://example.com/a/x"
+  ```
+
+  Each standard is parsed under its own spec posture, so any scheme is accepted
+  and a scheme is *required*: neither standard defines a base-URL-free parse of
+  `example.com/x`, and rurl's `https://` prepend is browser-like fix-up that has
+  no business inside a standard serialization. Scheme-less input returns `NA`.
+
+  Two consequences are worth stating plainly. WHATWG credential serialization is
+  spec-exact and therefore lossy in one direction — `http://@h/` serializes as
+  `http://h/` and `http://u:@h/` as `http://u@h/`, both pinned by the Web
+  Platform Tests — and the losslessness lives in the parse record, which the RFC
+  `source` form renders verbatim. And `serialize_url()` emits WHATWG's ASCII
+  (punycode) host where `get_clean_url()` keeps the Unicode spelling; both are
+  correct for their surface.
+
 - **`get_parse_verdicts()` reports the three verdicts `parse_status` collapses
   into one.** A single status value answers three independent questions at
   once — did the input present well-formed URL syntax (layer 1), was the parsed
@@ -388,7 +779,7 @@
   of the four could previously take only presentation dials, so none of them
   could return a value its own `safe_parse_url()` column carries:
   `get_password()` could not reach the WHATWG userinfo spelling the `password`
-  column has carried since 2.8.0's userinfo encode set (`p:q` vs `p%3Aq`);
+  column has carried since 3.0.0's userinfo encode set (`p:q` vs `p%3Aq`);
   `get_query()` and `get_fragment()` could not reach the query and fragment
   percent-encode-set spellings; and `get_port()` could not report the WHATWG
   default-port drop, where `http://example.com:80/` parses to `NA` rather than
@@ -405,6 +796,116 @@
   all four gaps went unnoticed: no registry cell forced the arguments to exist.
 
 ### Documentation
+
+- **RFC 3986 now has a serialization oracle; it had only an acceptance axis.**
+  The conformance evidence has four quadrants — {WHATWG, RFC 3986} ×
+  {acceptance, full-string serialization} — and three were covered. Nothing in
+  the repository answered *what string does RFC 3986 require this URL to
+  serialize to*. That gap was not theoretical: the host-decoding defect fixed
+  earlier in this release produced output that does not re-parse, and passed
+  every harness here, because an acceptance metric cannot see a bad output
+  string on an input it accepts.
+
+  The new harness is **property-based and transcribes no expected strings**.
+  WHATWG ships a suite with recorded `href` values; RFC 3986 is prose plus
+  ABNF, and hand-transcribing expected strings is the move that produced 75
+  fixture rows where the oracle and the implementation confirmed each other and
+  their shared disagreement with the RFC stayed invisible. So §6.2.2/§6.2.3 are
+  stated as properties over a **generated** 6506-input population (256 octets ×
+  2 hex cases × 12 component positions × both scheme classes, plus 47
+  structural shapes): every output must be admitted by the RFC's own ABNF, must
+  re-parse to itself, and under `form = "normalized"` must satisfy §6.2.2.1
+  case, §6.2.2.2 unreserved decoding, §6.2.2.3 dot-segment removal and §6.2.3
+  default-port elision. A property needs no oracle, so it cannot co-confirm
+  with the implementation.
+
+  The one external judge is the independent RFC 3986 ABNF transcription that
+  already exists in the suite — normative grammar, sharing no code with rurl.
+
+  **What it is not.** These are properties of the output *string*. An output
+  can satisfy every one and still describe the wrong URL, because nothing here
+  checks that a component was sliced from the input correctly. This quadrant is
+  a necessary condition on RFC serialization, not a sufficient one, and the
+  oracle register records it that way (OR-023).
+
+  Running it found three defects with no oracle and no adjudication, each now
+  enumerated by input in the harness so a fix must delete its entry rather than
+  re-fit a total: the general-scheme host is the only component that skips
+  §6.2.2.2 unreserved decoding; a general-scheme userinfo admits raw
+  CR/LF/VT/FF and emits them verbatim, which no RFC 3986 production allows; and
+  `form = "source"`, documented as preserving source bytes, does not — 419 of
+  5668 accepted rows change, in four families. All three are filed, not fixed
+  here: the host seam is the one where a change silently widens *acceptance*
+  rather than only serialization, so it needs its own octet-invariance sweep.
+
+- **All conformance and benchmark evidence is re-baselined onto
+  `serialize_url()`; two headline figures now exist where one did.** Every
+  harness in the repository scored `clean_url`, which is output surface (c) —
+  "a policy-driven SEO/canonicalization product; **not** a serializer, identity,
+  redirect target, or conformance oracle" — and which P5.3 CLAIM-1 does not
+  admit as a claim substrate. Surface (b) did not exist when those harnesses
+  were written, so there was nothing admissible to score against. It does now.
+
+  **The previously published "158 conforming / 99 documented deviations" is an
+  RFC-3986-grammar *acceptance* count and is not replaced by the new figure.**
+  The two answer different questions:
+
+  | | axis 1 (new) | axis 2 |
+  |---|---|---|
+  | question | does rurl emit the standard's **serialization**? | does rurl **accept/reject** what the grammar does? |
+  | authority | `whatwg-wpt` | `rfc3986-grammar` |
+  | figure | **336 exact / 0 deviations** over the 336 WPT success rows, plus **202/202** must-fail rows rejected | 164/93 → **179/78** (like-for-like, 257-row scope) |
+
+  Axis 1 is new evidence: P5.3 §2.2 had already recorded that the FSSS
+  full-string headline did not yet exist. It is measured on the **WHATWG's own
+  test suite** — the imported web-platform-tests corpus in
+  `inst/bench/wpt-url-cases.json` — and scored against upstream's recorded
+  `href`, the standard's own serialization, rather than against a string
+  re-assembled from the component getters. That distinction is not cosmetic:
+  the component dump cannot tell a null host from an empty one, so a
+  re-assembly must guess the `//` delimiter, and doing so reported 40
+  differences where the authoritative oracle reports 13.
+
+  It is reported **by substrate** — serialization and acceptance are never
+  summed, because an aggregate would let must-fail rows inflate a
+  *serialization* result. All four `standard` × `form` configurations were
+  swept; under `whatwg` the two forms are identical on every row, and
+  acceptance never depends on `form`.
+
+  The measurement first reported 326 exact with 10 deviations — one family in
+  one scheme, the host-less `file:` URL parsed to a null host. That family is
+  **fixed in this same release** (see *Bug fixes*, `RURL-uhwivndf`), which is
+  what moves the figure above to 336 / 336. Non-special schemes were exact on
+  all 141 rows and special schemes with a host on all 159 before the fix as
+  well; the family was traced to the parse record rather than the serializer,
+  and was fixed there.
+
+  Axis 2 moves because fifteen rows stop being deviations. Every one is a case
+  where surface (c) declined **by policy** — the ADR 0004 closed scheme set, the
+  ADR 0002 reversible Unicode host, the readable-path default — and surface (b)
+  matches the grammar. rurl's parser never disagreed with the RFC on any of them.
+  The same effect empties the Ada watch list entirely (11 documented divergences
+  → 0): Ada is a conformant WHATWG parser and its `href` is a full serialization,
+  so that comparison was like-for-like for the first time.
+
+  **The corpus shape was distorted too, and is repaired.** It carried **zero**
+  expected values with a fragment or credentials, and the conformance fixture
+  contained **zero** `@` characters — because those are precisely the rows a
+  `clean_url` comparison could never have passed, so the corpus had grown into
+  the shape its harness could score. 43 rows are added from the committed WPT
+  import, with expected values assembled from WPT's own recorded components by
+  the WHATWG URL serializer (URL Standard §4.5). rurl matches all 43. The
+  string-valued substrate nearly doubles, 49 → 92 rows.
+
+  Two oracle repairs are not surface swaps. Host oracles now compare an
+  **extracted host** rather than asking `grepl(host, clean_url)`; on a
+  hostname-confusion corpus containment is the wrong question, since both
+  hostnames appear in `http://letsencrypt.org%2F@malware.testing.google.test/`
+  and it passes whether the parse is correct or inverted. And the conformance
+  fixture's `divergence_class` is derived from the **normalized** serialization
+  rather than the source form, which had misclassified 7 of 75 rows in both
+  directions. Disposition and full numbers: P5.4. (RURL-yeikpnan.)
+
 
 - **The diagnostics vocabulary now has one canonical, enforced enumeration.**
   `?get_url_diagnostics` gains a *Diagnostic vocabulary (canonical)* section
@@ -497,7 +998,7 @@
   parses `mailto:`, `data:` and `tel:`. The two axes are now described as
   composing: `scheme_acceptance` decides what gets parsed, `url_standard`
   decides how the result is read. A worked `mailto:` example shows the
-  opaque-path rule from the 2.8.0 breaking change — the parse table reports no
+  opaque-path rule from the 3.0.0 breaking change — the parse table reports no
   authority, while `get_host()` still extracts the recipient's host.
 
 - **`analysis/parity/README.md` now states its own posture and carries an
@@ -621,6 +1122,209 @@
   158/99; binding the generic-URI gate uniformly (above) moved exactly six rows
   from over-permissive to conformant-reject. Analysis only — no behavior
   changed in this entry. (RURL-wlqhmbdw.)
+
+- **The oracle provenance record now states a second pinning duty, and every
+  source group must answer it.** `tests/testthat/fixtures/oracle-provenance.json`
+  pinned only *vendored bytes* (its section 2.3), so a group that vendored
+  nothing but derived its expected values from a standard's **text** was
+  reported fully provenanced — which is how `ip-obfuscation`'s unpinned in-repo
+  transcription, and six section citations that resolve to no revision of the
+  WHATWG URL Standard, survived review. Source pinning is now recorded per group
+  in `normative_dependencies`, and `conventions.normative_dependency_scope`
+  states it as universal *as a question*: the key is required on every source
+  group, and a group with no normative dependency answers with
+  `pin_status = "not-applicable"` and a reason rather than by omission, because
+  silence was the failure mode. `tools/oracle-provenance-gate.R` enforces both
+  halves — PV9 the shape of an answer, PV10 its presence on all 12 groups. Test
+  fixtures and CI only; no package behavior changes. (RURL-qhwktfcw.)
+
+- **A `not-applicable` source pin now has to say *why*, because its one enum
+  member was carrying two different questions.** `pin_status` mixed a status
+  axis (`verified`, `missing`) with a reason (`not-applicable`), and that reason
+  was glossed "the source is cited but nothing is derived from it" — which was
+  false for two of the eight entries carrying it. RFC 3986's 25 rows and PRD
+  §6.1's rows *are* hand-derived from their source's text; what is inapplicable
+  there is the **duty**, not the derivation, and both entry notes had to open by
+  contradicting the enum that classified them. A consumer reading `pin_status`
+  alone could not tell a group that transcribed 25 rows from one that
+  transcribed none — the same undifferentiated pass `normative_dependencies` was
+  added to close, one level down. The reasons were measured off the record
+  rather than enumerated in advance, and there are three: `no-derivation` (six
+  entries), `frozen-source` (a published, numbered document cannot be amended in
+  place), and `internal-source` (the source is in this repository and git-dated).
+  Recorded as a separate `not_applicable_reason` rather than as a fourth
+  `pin_status` member, since the status axis is closed while the reason axis is
+  open — it went from one recognised reason to three inside a single 13-entry
+  record. PV9 requires the key on exactly the `not-applicable` entries and
+  forbids it elsewhere, so a real pin cannot come to read as an exemption
+  through a stale copy-paste; its self-test grew 81 → 92 assertions. Test
+  fixtures and CI only; no package behavior changes. (RURL-ynirvjxb.)
+
+- **The last unpinned normative source, UTS #46, is now pinned — and was
+  verified before it was pinned.** The `ip-obfuscation` oracle transcribes one
+  slice of the IDNA mapping table (U+3002, U+FF0E and U+FF61 each mapping to
+  U+002E, plus ASCII uppercase), and three of its 24 rows are load-bearing on
+  it; no Unicode or UTS-46 version dated that. It is pinned at **UTS #46
+  revision 35 (2025-09-04), IDNA mapping table Unicode 16.0.0** — two
+  coordinates, because the document's revision numbering and the mapping
+  table's Unicode versioning run on independent cadences: at pinning time the
+  document had already moved to a revision dated in the Unicode 17 era while
+  `Public/idna/17.0.0/` still returned 404, so naming either axis alone would
+  have been a plausible pin to a different thing. Since `pin_status: verified`
+  asserts the derivation was *checked* against that revision, the check came
+  first and is re-derivable rather than prose: the new
+  `tools/oracle/check-uts46-mapping-pin.R` sweeps every `IdnaMappingTable.txt`
+  published under `Public/idna` (5.2.0 → 16.0.0) for all 29 transcribed
+  mappings and reports **493 checks, 0 mismatches**. The pin fixes *bytes*, not
+  just a name: `pinned_table_sha256` records the digest of the exact file
+  checked, verified before a single mapping is parsed, because Unicode's
+  versioned directories are only *intended* to be immutable and without a digest
+  an in-place reissue upstream would go undetected. That digest is a
+  verification record, not vendored provenance — no upstream bytes are in the
+  repository and the group stays `section_2_3_applies = false`. This replaces
+  this entry's
+  former unverifiable claim that the mappings "have been stable across every
+  Unicode version that defines them". The pin is deliberately narrow — UTS-46
+  *Processing* is not implemented and is not claimed; any other non-ASCII code
+  point aborts the derivation rather than being guessed. The checker reads
+  unicode.org, so it is run by hand like `pslr::psl_refresh()` and is not
+  wired into CI. No entry in the provenance record now carries
+  `pin_status: missing`. Test fixtures and tooling only; no package behavior
+  changes. (RURL-qhwktfcw.)
+
+- **Every oracle group is now re-derivable from a clean checkout, and the last
+  three exposed two record errors.** All seven per-source builders behind
+  `tests/testthat/fixtures/external-url-vectors.csv` lived in gitignored
+  `_scratch/`, so `generation_command` named paths no reviewer could run. The
+  final three — `wpt-urltestdata` (267 rows), `ada-extra-urltestdata` (24) and
+  `ada-verifydnslength` (17) — are the *tier-2* groups, whose upstream bytes are
+  pinned but deliberately not vendored. All three recorded `raw_source_sha256`
+  values were re-fetched and **reproduce byte-exact**, including both Ada files,
+  which had been gone from the machine that imported them; a shared resolver
+  (`tools/oracle/fetch-source.R`) reads each pin out of the record rather than
+  copying it, verifies the digest before parsing, and treats an unresolvable
+  source as exit 2 — never a pass. Because they read the network they are not
+  blocking CI gates, following `check-uts46-mapping-pin.R`; CI runs their
+  offline `--self-test`.
+
+  Two things the record asserted turned out to be false. **`ada-verifydnslength`
+  was not an imported oracle at all**: it declared `pin_status:
+  not-applicable` / `no-derivation` and "every expected value here is READ OUT
+  of vendored, hash-pinned bytes", but upstream marks 10 of its 17 entries
+  `failure: true` while the fixture records `accept` for all 17. Those ten
+  verdicts are hand-derived from the URL Standard — host parsing runs the domain
+  parser with `beStrict = false`, and ToASCII binds *VerifyDnsLength* to
+  `beStrict`, so the standard performs no DNS length check and Ada's is
+  optional. The group now carries a **verified** pin at `whatwg/url`
+  `9dc3827f…`, and its gate derives *both* readings, requiring the RFC 1035
+  §2.3.4 one to equal upstream's own verdict on every row, so the ten-row
+  disagreement is explained rather than tolerated. The lesson generalises: PV10
+  makes the source-pinning question mandatory and PV9 makes the answer
+  well-formed, but this group answered in the required shape and answered
+  *wrongly*, while stating the derivation it denied two sentences later.
+
+  And **`ada-extra-urltestdata`'s pinned revision does not reproduce it**:
+  upstream commit `fbea5b01` re-expected one case and added three entries after
+  the import, so at the pin all 24 *inputs* re-locate and one *expected value*
+  does not. Both deltas are now exact ledgers — a ledger row that stops
+  disagreeing fails too, so the gap cannot be closed by adopting upstream's
+  current value. Sweeping all 17 commits that ever touched that path found
+  exactly one revision reproducing 24/24, which bounds the upstream **content
+  state** the block agrees with to `[2025-07-16, 2026-07-17)`. That bounds the
+  *bytes*, not the fetch and not the import revision — see the correction under
+  `RURL-drkcvzex` below.
+
+  One latent defect fell out of the reuse: `derive-ip-obfuscation.R`'s IPv4
+  number parser applied its double-precision guard *before* the digit-validity
+  check, so an over-long **non-numeric** label aborted instead of failing
+  cleanly. Fail-closed, so never a wrong answer, but a refusal to answer a
+  question the spec answers. Test fixtures and tooling only; no package behavior
+  changes. (RURL-ozdejfzl.)
+
+- **A dependency object is now attached to the group it describes, and the gate
+  says so.** The `ada-verifydnslength` repair above put its corrected, verified
+  `whatwg/url` `9dc3827f…` pin under **`ada-extra-urltestdata`** and left the
+  false `no-derivation` entry in place. The record then contradicted its own
+  `standard_version`, its README, its NEWS entry and its verifier — and PV1–PV10
+  were **green for the whole commit range**, because PV9 judges whether an
+  answer is well-formed and PV10 whether one exists, and a well-formed answer to
+  *another group's* question satisfies both.
+
+  Both groups now carry the claims that describe them: `ada-verifydnslength` the
+  verified pin with the `#concept-host-parser` and `#concept-domain-to-ascii`
+  anchors it actually reads, `ada-extra-urltestdata` a negative declaration for
+  the 24 expectations it copies out of hash-pinned Ada bytes. Every entry in the
+  record now declares `applies_to_fixture` and `applies_to_group` — a *pair*,
+  because two groups here are both called `wpt-urltestdata` — and new gate rule
+  **PV11** checks three things independently: that each object is nested under
+  the group it declares; that a 40-hex commit named in a group's
+  `standard_version` is pinned by a verified entry in **that same group** (which
+  is the check that fires on the original defect from the other side); and that
+  `normative_dependencies_note` declares itself a `NEGATIVE declaration` or a
+  `POSITIVE declaration` in agreement with its entries' `pin_status`. That last
+  one turns prose the record already wrote into a claim: the misfiled object sat
+  under "nothing derived from it. The array is a NEGATIVE declaration", above a
+  verified pin.
+
+  Falsified against the committed record, not only synthetically — the gate's
+  `--self-test` swaps the two Ada arrays, the actual defect, and asserts PV11
+  goes red while PV9 and PV10 stay green. The limit is recorded too: PV11
+  catches a *move*, where the object travels and its declaration does not. An
+  author who edits the declaration as well is rewriting the claim rather than
+  misfiling it, and no structural rule can referee that.
+
+  **Three more scope corrections in the same slice.**
+
+  *An implementation-conformance check is not an oracle check.* The
+  `fsss_whatwg` == `oracle_value` comparison was running inside the tier-2
+  restatement check, so the gates printed `ORACLE RE-LOCATION: PASS` over a set
+  of checks one of which grades a **captured `rurl` output column**. Not circular
+  — `oracle_value` is independent — but a conformance assertion under an oracle's
+  label invites the next reader to believe the oracle was checked against the
+  implementation. It now lives in `tools/oracle/check-fsss-conformance.R` behind
+  its own `IMPLEMENTATION FSSS CONFORMANCE` verdict. It stays **unconditional**
+  on `rurl_deviation`, and `ada-003`/`ada-006` are *named* rather than counted, so
+  the two rows the reasoning turns on cannot drop out and be replaced.
+
+  *`whatwg_expected` was ungraded for one good reason and one wrong one.* Its NA
+  **pattern** derives from `divergence_class`, a function of how `rurl` answers —
+  that still holds, and absence is still not graded. But the **value** is stated
+  by the pinned upstream bytes. Measured: corrupting it on `ada-003`, a
+  deviation-carrying row, left every gate green, because the fixture's own
+  assertions relate the column to `divergence_class` and `rfc3986_expected`
+  rather than to any upstream fact. It is now derived from pinned bytes only —
+  the current pin, or the second anchor on a drift-ledgered row — with floors on
+  both the row count and the deviating-row count.
+
+  *`import_command` is a sentinel again.* `RURL-ozdejfzl` had written a command
+  that merely re-fetches the pinned bytes into that field, with a note saying it
+  was not attested as the command originally run: honest prose in a
+  machine-readable field that then read as *filled*, so three sentinels
+  disappeared while the historical provenance stayed exactly as unrecorded. The
+  reproducing command moves to `pin_fetch_command`, and `PV5` refuses the
+  combination that would mask the gap again.
+
+  Two documentation claims were also stronger than their evidence. The 17-commit
+  Ada sweep bounds the upstream **content state** the block agrees with, not the
+  import: no commit touched the path inside the window, so every revision in it
+  carries the same bytes, and content agreement is not import provenance anyway.
+  `retrieval_date_bound` is renamed `content_state_bound`, and `RURL-vwurxmzm`'s
+  conclusion that the import revision cannot be resolved **stands** rather than
+  being narrowed. And `wpt_is_absolute` is renamed
+  `wpt_occupies_scheme_position`: it is fitted applicability metadata that
+  deliberately disagrees with WHATWG absoluteness (it says `TRUE` for
+  `schéme://example.com`, where WHATWG falls back to the base), and its agreement
+  with all 291 committed classifications is the **fit**, not validation — those
+  rows are the data it was fitted to.
+
+  Finally, the three full tier-2 verifiers now have an automated path at all:
+  `.github/workflows/oracle-upstream.yml` runs them weekly and on demand, failing
+  on a fixture disagreement (exit 1) while reporting an unresolvable upstream
+  source (exit 2) as `SOURCE UNAVAILABLE` — never as a pass, and never as a
+  blocking PR failure. It is a separate workflow so that it stays outside the
+  merge gate by construction, and so `tools/verify.R` cannot pick up a
+  network-reading check for the pre-push hook. Test fixtures, tooling and CI
+  only; no package behavior changes. (RURL-drkcvzex.)
 
 ## rurl 2.7.0
 
@@ -1583,7 +2287,7 @@ registered domains.
 - Improved test coverage to 100%.
 - Cleaned up exports and internal helpers.
 - Updated ignores.
-- Tested on macOS, Windows, and Linux via rhub and win-builder.  
+- Tested on macOS, Windows, and Linux via rhub and win-builder.
 - CRAN checks pass with 0 errors/warnings and only standard notes.
 
 ### Documentation

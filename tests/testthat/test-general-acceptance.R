@@ -196,7 +196,8 @@ test_that("a mailto: with a real // authority keeps the host it parsed", {
 test_that("tab/LF/CR are stripped for non-special schemes too", {
   # RURL-lsgdeisl. WHATWG's step 1 removes every ASCII tab/LF/CR from the input
   # before anything is parsed, for ALL schemes. That step lived only in the
-  # libcurl preparation path, so rows routed to the general parser were handed
+  # web-route preparation path, so rows routed to the general parser were
+  # handed
   # the raw string: a tab was percent-encoded into the host and an LF was
   # rejected outright.
   args <- list(url_standard = "whatwg", scheme_policy = "require",
@@ -376,6 +377,30 @@ test_that("an opaque payload ending in :<digits> still parses", {
   # breaking the carve-out's end-anchor. They must now agree with the bare form.
   q <- do.call(safe_parse_urls, c(list(c("urn:a:1?q", "urn:a:1#f")), args))
   expect_identical(q$path, c("a:1", "a:1"))
+})
+
+test_that("the :<digits> opaque payload parses under EVERY selector", {
+  # RURL-uafjkaas. The fix above landed at one of the TWO sites carrying the
+  # colon-greedy regex, and the test above could not see it: it varied the
+  # PAYLOAD (six urn/sc/tel rows) while holding the FRAME fixed at
+  # `url_standard = "whatwg"`. The surviving site is reached only under the
+  # rfc3986 selector, so every one of those rows still errored there while this
+  # file stayed green. Vary the selector, not just the input.
+  args <- list(scheme_policy = "require", scheme_acceptance = "general")
+  u <- c("urn:ietf:rfc:2648", "urn:a:1", "sc:x:80", "sc:x:80/p",
+         "urn:a:abc", "tel:+1-234")
+  want <- c("ietf:rfc:2648", "a:1", "x:80", "x:80/p", "a:abc", "+1-234")
+  # Both selectors, and only these two: `scheme_acceptance = "general"` requires
+  # an explicit `url_standard`, so a NULL-selector frame is unreachable here by
+  # construction rather than by omission.
+  for (sel in c("rfc3986", "whatwg")) {
+    d <- do.call(safe_parse_urls, c(list(u), args, list(url_standard = sel)))
+    expect_false(any(d$parse_status == "error"), info = sel)
+    expect_identical(d$path, want, info = sel)
+    # An opaque payload has no authority, so a numeric tail is never a port.
+    expect_identical(d$host, rep(NA_character_, length(u)), info = sel)
+    expect_identical(d$port, rep(NA_integer_, length(u)), info = sel)
+  }
 })
 
 test_that("the scheme-less host:port form is still read as host:port", {

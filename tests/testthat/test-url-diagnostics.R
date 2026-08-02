@@ -215,7 +215,7 @@ test_that("the general-only L5 facts stay dormant under web acceptance", {
 
 test_that("WHATWG-generic L5 facts fire under web + whatwg (RURL-sgjzbqzk)", {
   # invalid-credentials / invalid-URL-unit gate on the interpreting standard,
-  # not acceptance -- so they fire on the pre-existing web/libcurl path under
+  # not acceptance -- so they fire on the pre-existing web route under
   # url_standard = "whatwg" (no scheme_acceptance = "general" needed).
   web2 <- get_url_diagnostics("http://user@ex.com/%zz", url_standard = "whatwg")
   expect_true("invalid-credentials" %in% web2)
@@ -360,14 +360,23 @@ test_that("file rfc-syntax shape facts fire (RFC 8089)", {
   expect_false(
     "file-userinfo-extension" %in% gd("file://h/p", "rfc3986")
   )
-  # A port is a parse FAILURE under Gate 2 (S2 admits none; no appendix
-  # supplies a production), so no ok row can carry one and no diagnostic
-  # describes it.
+  # A port used to be a parse FAILURE under Gate 2. RURL-uhkofhjf made it the
+  # FACT that ADR 0012 D5 already listed it as, alongside the userinfo above:
+  # RFC 8089's silence about a port is a scheme-specific narrowing, and under
+  # the scheme-agnostic rfc3986 selector an overlay may not gate the parse. So
+  # the row is `ok` and the fact is reported, grouped with query/fragment.
   expect_identical(
     safe_parse_urls(
       "file://h:8080/p",
       url_standard = "rfc3986", scheme_acceptance = "general"
     )$parse_status,
-    "error"
+    "ok"
+  )
+  expect_true(
+    "file-component-outside-rfc8089" %in% gd("file://h:8080/p", "rfc3986")
+  )
+  # The NULL default is byte-frozen (ADR 0012 D4) and still rejects.
+  expect_identical(
+    suppressWarnings(get_parse_status("file://h:8080/p")), "error"
   )
 })

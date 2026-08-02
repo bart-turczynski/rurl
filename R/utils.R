@@ -3,6 +3,158 @@
 # Null coalescing operator
 `%||%` <- function(x, y) if (!is.null(x)) x else y
 
+# --- byte-indexed string slicing (RURL-kmpnbvdl) -----------------------------
+#
+# Authority seams must cut by POSITION on BYTES. `substring()`/`substr()` index
+# NATIVE characters and THROW `invalid multibyte string` on a string that is
+# DECLARED UTF-8 but holds invalid octets -- and that is not a hypothetical
+# input here: `stringi::stri_match_first_regex()` marks every capture UTF-8
+# unconditionally, so slicing an authority captured out of `http://<80>/p`
+# aborted the whole vectorized call, losing every good row in the same batch.
+#
+# Byte indexing also removes the second half of the problem: `gregexpr()` and
+# `stri_locate_*()` report positions in different units from `substring()` once
+# a string is multi-byte and unmarked, so a position taken from one and applied
+# to the other mis-slices under `LC_ALL=C`. Locating and cutting in the SAME
+# unit -- bytes -- is invariant by construction.
+#
+# The encoding DECLARATION is carried across the cut rather than recomputed:
+# these helpers move bytes, they do not reinterpret them.
+
+# 1-based byte index of the last occurrence of a single-byte literal `ch` in
+# `s`, or 0L when absent. `useBytes = TRUE` also suppresses the "input string
+# is invalid UTF-8" warning that the same scan emits without it.
+.last_byte_index <- function(s, ch) {
+  pos <- gregexpr(ch, s, fixed = TRUE, useBytes = TRUE)[[1L]]
+  if (pos[1L] == -1L) 0L else as.integer(pos[length(pos)])
+}
+
+# 1-based byte index of the FIRST occurrence of `ch` in `s`, or 0L when absent.
+.first_byte_index <- function(s, ch) {
+  pos <- regexpr(ch, s, fixed = TRUE, useBytes = TRUE)[1L]
+  if (pos == -1L) 0L else as.integer(pos)
+}
+
+# `substring()` on BYTES: the bytes of `s` from byte `first` to byte `last`
+# inclusive, keeping the input's encoding declaration. Out-of-range indices
+# clamp to "" exactly as `substring()` does, and `first = NA` yields NA as it
+# does there too.
+#
+# ONE deliberate difference: `last = NA` means "to the end of `s`" rather than
+# `substring()`'s NA, because it is this function's default argument -- callers
+# say `.byte_substring(s, i)` to take a suffix.
+.byte_substring <- function(s, first, last = NA_integer_) {
+  first <- as.integer(first)
+  if (is.na(first)) {
+    return(NA_character_)
+  }
+  b <- charToRaw(s)
+  n <- length(b)
+  if (is.na(last)) {
+    last <- n
+  }
+  first <- max(first, 1L)
+  last <- min(as.integer(last), n)
+  out <- if (first > last) "" else rawToChar(b[first:last])
+  Encoding(out) <- Encoding(s)
+  out
+}
+
+# Vector form of `.byte_substring()`. `first`/`last` recycle to `length(s)`;
+# NA input stays NA. Pure-ASCII elements keep the vectorized `substring()` C
+# path -- byte and character indices coincide there, so it is exact -- and only
+# the multi-byte or undecodable elements pay for the per-element cut.
+.byte_substring_vec <- function(s, first, last = NA_integer_) {
+  n <- length(s)
+  first <- rep_len(as.integer(first), n)
+  last <- rep_len(as.integer(last), n)
+  out <- rep(NA_character_, n)
+  present <- !is.na(s)
+  ascii <- present & !grepl("[^\001-\177]", s, perl = TRUE, useBytes = TRUE)
+  if (any(ascii)) {
+    stop_at <- last[ascii]
+    stop_at[is.na(stop_at)] <- .Machine$integer.max
+    out[ascii] <- substring(s[ascii], first[ascii], stop_at)
+  }
+  for (i in which(present & !ascii)) {
+    out[i] <- .byte_substring(s[i], first[i], last[i])
+  }
+  out
+}
+
+# Octet count of each element, NA where the element is NA. `nchar(type =
+# "bytes")` counts without decoding, so unlike `stringi::stri_length()` -- which
+# THROWS `invalid UTF-8 byte sequence detected` -- it is total over declared-
+# UTF-8 elements holding invalid octets. Use it whenever a length feeds a
+# `.byte_substring*()` offset, so the measuring and the cutting share one unit.
+.byte_length <- function(s) {
+  out <- rep(NA_integer_, length(s))
+  ok <- !is.na(s)
+  out[ok] <- nchar(s[ok], type = "bytes")
+  out
+}
+
+# 1-based BYTE index of the first occurrence of `ch` in each element of `s`, or
+# 0L where absent. Vector form of `.first_byte_index()`.
+.first_byte_index_vec <- function(s, ch) {
+  pos <- regexpr(ch, s, fixed = TRUE, useBytes = TRUE)
+  pos[is.na(pos) | pos < 0L] <- 0L
+  as.integer(pos)
+}
+
+# `grepl()` on an UNDECODABLE element: FALSE, quietly and in every locale.
+#
+# A host sliced out of a `stri_match_first_regex()` capture is DECLARED UTF-8
+# whatever its octets. `grepl(perl = TRUE)` on such a string warns
+# ("input string 1 is invalid UTF-8") and yields NA -- which every caller here
+# already folds to FALSE. Skipping those rows keeps that answer and drops the
+# warning, and it also removes a latent locale dependency: on an "unknown"-
+# marked element the same call yields NA under a UTF-8 locale but MATCHES ON
+# BYTES under `LC_ALL=C`, so the fold was only accidentally agreeing.
+#
+# Deliberately NOT `useBytes = TRUE`, which would be the obvious-looking fix
+# and is the wrong one: it would let an ASCII pattern match INSIDE an
+# undecodable host (`%41` in a host that also holds a stray `<80>`), routing
+# that row into percent-decoding and past a rejection it currently gets. At a
+# host seam that is an acceptance WIDENING, which is the one thing this seam
+# must never do silently.
+#
+# "latin1" is exempt because every octet sequence is valid latin1: those
+# elements decode, so they match normally.
+.grepl_decodable <- function(pattern, x, ...) {
+  out <- rep(FALSE, length(x))
+  ok <- !is.na(x) & (validUTF8(x) | Encoding(x) == "latin1")
+  if (any(ok)) {
+    out[ok] <- grepl(pattern, x[ok], ...)
+  }
+  out
+}
+
+# `gsub()` on an UNDECODABLE element: returned BYTE-IDENTICAL, quietly and in
+# every locale. The substitution counterpart of `.grepl_decodable()`, and needed
+# for the same reason -- `gsub()` THROWS `input string 1 is invalid UTF-8` on a
+# declared-UTF-8 element holding invalid octets, with `fixed = TRUE` no less
+# than `perl = TRUE`, and one such element aborts the whole vectorized call.
+#
+# Leaving the bytes alone rather than substituting on them is the conservative
+# half of the choice, and it is deliberate. `useBytes = TRUE` would also stop
+# the throw, and for an ASCII-only pattern it is even byte-exact (UTF-8 is
+# self-synchronizing, so an ASCII octet never occurs inside a multi-byte
+# sequence) -- but it REWRITES an undecodable element, and every caller here
+# feeds its output back into masks that later decide acceptance. An undecodable
+# row is already bound for rejection; returning it unchanged keeps it there,
+# whereas rewriting it can only change what a downstream predicate sees. Same
+# rule as the host-charset greps: at these seams, do not touch what you cannot
+# read.
+.gsub_decodable <- function(pattern, replacement, x, ...) {
+  out <- x
+  ok <- !is.na(x) & (validUTF8(x) | Encoding(x) == "latin1")
+  if (any(ok)) {
+    out[ok] <- gsub(pattern, replacement, x[ok], ...)
+  }
+  out
+}
+
 # Single source of truth for the WHATWG standard-posture toggle (ADR 0012
 # Layer 0, RURL-dztjlfkc). Every posture-dependent branch tests membership in
 # the WHATWG profile through this predicate instead of an inline
@@ -18,7 +170,7 @@
 # URLs. http/https/ftp/ftps carry "scheme://host[:port]/path"; file is the
 # one supported hostless hierarchical scheme. In the WHATWG profile, `file:`
 # has a small parser slice for drive-letter, host, and backslash state-machine
-# forms; default/RFC behavior remains limited to libcurl-parseable local forms.
+# forms; default/RFC behavior remains limited to the plain local forms.
 # ftps is FTP-over-TLS (the https-analogue for ftp), not the unrelated
 # SSH-based sftp.
 # This is the single source of truth: a scheme-bearing input whose scheme is not
@@ -71,26 +223,14 @@
 # IPv6 literal legitimately carries `[` `]` `:` and is checked separately.
 .WHATWG_FORBIDDEN_HOST_ONLY_CP <- "[\\u0020#/:<>?@\\[\\]\\\\^|]"
 
-# WHATWG host-charset shim code points (RURL-dxwxeamq, ADR 0009). The 15 ASCII
-# code points libcurl rejects in a host ("Bad hostname") that the WHATWG URL
-# Standard keeps verbatim in the host (ada-confirmed): ! " $ & ' ( ) * + , ; = `
-# { }. libcurl's host allowed-set is narrower than WHATWG's; without the shim
-# the whole row is dropped. These are all NON-forbidden (none appears in
-# .WHATWG_FORBIDDEN_HOST_CP) and NON-structural (none delimits userinfo/port/
-# path/query/fragment), so the host span is locatable before substitution.
-# U+0025 "%" is DELIBERATELY EXCLUDED -- it is a forbidden domain code point
-# (WHATWG drops it too), so libcurl rejecting it is correct. An ICU regex class.
-.WHATWG_HOST_CHARSET_SHIM_CP <- paste0(
-  "[\\u0021\\u0022\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
-  "\\u002b\\u002c\\u003b\\u003d\\u0060\\u007b\\u007d]"
-)
-
-# RFC 3986 reg-name sub-delims (RURL-dnddogce): the subset of libcurl-rejected
-# host bytes that RFC 3986 section 3.2.2 permits literally in a reg-name.
-.RFC3986_REG_NAME_SUB_DELIM_CP <- paste0(
-  "[\\u0021\\u0024\\u0026\\u0027\\u0028\\u0029\\u002a",
-  "\\u002b\\u002c\\u003b\\u003d]"
-)
+# The two host-charset code point classes that lived here -- the 15 WHATWG gap
+# code points (RURL-dxwxeamq, ADR 0009) and the 11 RFC 3986 reg-name sub-delims
+# (RURL-dnddogce) -- are gone with the pre-parse shim that consumed them
+# (RURL-ezhzpkhg deletion 1, ADR 0013). They now exist as BYTE sets in the
+# parser that judges them, `.WEB_HOST_GAP_BYTES` and
+# `.WEB_HOST_SUBDELIM_BYTES` in R/parse-web.R. The change of unit is the point:
+# an ICU class only matches a string stringi will accept, and a host token may
+# be declared UTF-8 while holding invalid octets (RURL-kmpnbvdl).
 
 # Default ports for rurl's WHATWG-special schemes (PRD v2 D1, RURL-qdlvldts;
 # ws/wss added by RURL-qluqkdwl / ADR 0012 Layer 1). WHATWG defines defaults
@@ -196,12 +336,14 @@
 # "simplify" this to "root"/"und": the obvious fix silently does nothing.
 .ASCII_SAFE_ICU_LOCALE <- "en_US_POSIX"
 
-# Coerce present-but-empty ("") raw components to NA, vectorized. curl's
-# `curl_parse_url()` is inconsistent across libcurl versions for a present-but-
-# empty component (e.g. the query of "https://example.com/?"): older libcurl
-# returns NULL (-> NA via %||%), newer returns "". This normalizes "" -> NA so
-# rurl's raw query/fragment/userinfo output is deterministic across libcurl
-# versions, matching the long-shipped "empty component == absent" behavior.
+# Coerce present-but-empty ("") raw components to NA, vectorized. This dates
+# from the external parse engine, whose treatment of a present-but-empty
+# component (e.g. the query of "https://example.com/?") varied by VERSION:
+# older builds returned NULL (-> NA via %||%), newer ones "". Normalizing
+# "" -> NA made rurl's raw query/fragment/userinfo output deterministic
+# regardless. The engine is in-tree now and emits NULL for an empty component
+# by contract, so this no longer papers over anything -- it is simply where
+# the long-shipped "empty component == absent" behavior is enforced.
 .blank_to_na <- function(x) {
   x[!is.na(x) & x == ""] <- NA_character_
   x
@@ -244,7 +386,7 @@
 # cache stores (RURL-dkwrebdt). One entry per cached column, in the order the
 # unnamed per-row cache value packs them, with the vapply type template used to
 # gather cache hits (mirrors .spu_result_fields). Stage A holds the expensive,
-# presentation-independent work -- curl components, IP detection, the post-www
+# presentation-independent work -- raw components, IP detection, the post-www
 # host, and the PSL decomposition in BOTH spellings (so host_encoding stays a
 # Stage-B choice) -- keyed only by url x protocol x www x tld_source x
 # scheme_relative. Stage B (._parse_stage_b_vec) derives every remaining column
@@ -290,7 +432,7 @@
   # about the parse, not a presentation choice.
   list(name = "general_userinfo_split", default = FALSE, template = logical(1)),
   # Whether Stage A produced NO usable parse for this row (invalid input, a
-  # Phase-1 rejection, or a curl failure). Cached WITH the other fields rather
+  # Phase-1 rejection, or a parse failure). Cached WITH the other fields rather
   # than signalled by caching a NULL value, so a null row's classifier flags --
   # `looks_like_protocol` / `original_has_allowed_scheme` /
   # `looks_like_host_port`, which are what distinguish an admission REJECTION

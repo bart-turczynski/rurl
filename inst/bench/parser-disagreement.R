@@ -21,7 +21,8 @@
 #
 # ----------------------------------------------------------------------------
 # FRAMING (keep honest -- reviewers will check; see RURL-wncwfasl):
-#   * rurl is a NORMALIZATION/POLICY layer over libcurl + pslr + punycoder, not
+#   * rurl is a NORMALIZATION/POLICY layer over its in-tree parser + pslr +
+#     punycoder, not
 #     a new parser. The url_standard selector governs a SUBSET of axes (path
 #     percent/dot, host IPv4/reg-name, case, port elision, backslash) -- NOT
 #     IDNA rendering or query handling.

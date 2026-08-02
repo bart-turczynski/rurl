@@ -8,7 +8,8 @@
 # live parse pipeline yet, so byte-identity of every existing output is
 # trivially preserved. The classifiers are PURE: they take already-decomposed
 # pieces (scheme special-ness, the remainder after the scheme, an isolated host,
-# a `//` flag, a raw component value) and never parse, never touch curl, and
+# a `//` flag, a raw component value) and never parse, never touch the web
+# parser, and
 # never route through the punycode/domain helpers (ADR 0002).
 #
 # Why a richer state model at all: ADR 0012 D2 shows a single `opaque` boolean
@@ -248,7 +249,8 @@
 # takes already-classified per-row state (scheme string, WHATWG path_kind via
 # `.whatwg_path_kind`, host_kind via `.host_kind`, is_ip_host) plus the resolved
 # `scheme_acceptance`/`url_standard`, and returns three logical masks. It never
-# parses, never touches curl, and never routes through the punycode/domain
+# parses, never touches the web parser, and never routes through the
+# punycode/domain
 # helpers (ADR 0002).
 #
 # CRITICAL BYTE-IDENTITY DESIGN: the ENTIRE restriction is gated on
@@ -330,9 +332,9 @@
 # for the new RFC-general branch (ADR 0012 D1, lines 199-226). After scheme +
 # component-delimiter recognition it validates that the ASCII portion of the
 # input matches RFC 3986's generic `URI` grammar (RFC 3986 section 3). It is a
-# PURE, vectorized validator: it NEVER calls curl and never delegates to
-# libcurl's permissiveness (D1: "an INDEPENDENT gate, not a delegation to
-# libcurl"). It is deliberately ADDITIVE -- nothing here is wired into the live
+# PURE, vectorized validator: it NEVER runs the web parser and never delegates
+# to its permissiveness (D1: "an INDEPENDENT gate, not a delegation to the
+# parser"). It is deliberately ADDITIVE -- nothing here is wired into the live
 # parse pipeline (L4b does that), so byte-identity of every existing output is
 # trivially preserved.
 #
@@ -374,13 +376,25 @@
 .RFC3986_NONASCII <- "\\x{0080}-\\x{10FFFF}"
 .RFC3986_PCT <- "%[0-9A-Fa-f]{2}"
 
+# Every anchor in this transcription is `\A`/`\z` (true start/end of input), NOT
+# `^`/`$`. ICU's `$` also matches BEFORE a trailing line terminator, so an
+# `^...$` grammar silently admits a component ending in LF, VT, FF, CR, NEL,
+# LS or PS -- none of which any RFC 3986 production allows, since none is in
+# `unreserved` / `sub-delims` / `pchar`. That leak made a general-scheme
+# userinfo accept `u\n` and emit the raw control verbatim (RURL-dergzwku); RFC
+# 3986 has no removal step, so the grammar REJECTS these rather than stripping
+# them the way the WHATWG parser does. The same `$`-before-terminator trap is
+# recorded at `R/parse-phases.R:251`.
+.RFC3986_ANCHOR_START <- "\\A"
+.RFC3986_ANCHOR_END <- "\\z"
+
 # Build an anchored "*(data / pct-encoded)" matcher whose data class is the
 # unreserved + sub-delims + non-ASCII set plus the component-specific `extra`
 # characters (e.g. ":" for userinfo, ":@/" for a path).
 .rfc3986_class_re <- function(extra) {
   paste0(
-    "^(?:[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, extra,
-    .RFC3986_NONASCII, "]|", .RFC3986_PCT, ")*$"
+    .RFC3986_ANCHOR_START, "(?:[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS,
+    extra, .RFC3986_NONASCII, "]|", .RFC3986_PCT, ")*", .RFC3986_ANCHOR_END
   )
 }
 
@@ -394,7 +408,7 @@
 # query / fragment = *( pchar / "/" / "?" )                        (S3.4/S3.5)
 .RFC3986_QF_RE <- .rfc3986_class_re(":@/?")
 # port = *DIGIT (empty port is legal); non-ASCII is NOT tolerated here (S3.2.3).
-.RFC3986_PORT_RE <- "^[0-9]*$"
+.RFC3986_PORT_RE <- "\\A[0-9]*\\z"
 
 # IPv4address, and the full dotted quad, for embedded-IPv4 IPv6 forms (S3.2.2).
 .RFC3986_IPV4 <- "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
@@ -403,7 +417,7 @@
 # IPv6address (RFC 4291) -- the canonical fully-expanded alternation. ASCII-only
 # (no non-ASCII tolerance inside brackets); zone identifiers unsupported.
 .RFC3986_IPV6_RE <- paste0(
-  "^(",
+  "\\A(",
   "([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|",
   "([0-9A-Fa-f]{1,4}:){1,7}:|",
   "([0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|",
@@ -415,12 +429,12 @@
   ":((:[0-9A-Fa-f]{1,4}){1,7}|:)|",
   "::([Ff]{4}(:0{1,4})?:)?", .RFC3986_IPV4_QUAD, "|",
   "([0-9A-Fa-f]{1,4}:){1,4}:", .RFC3986_IPV4_QUAD,
-  ")$"
+  ")\\z"
 )
 
 # IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )     (S3.2.2)
 .RFC3986_IPVFUTURE_RE <- paste0(
-  "^v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+$"
+  "\\Av[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+\\z"
 )
 
 # Bracketed IPvFuture IP-literal `"[" IPvFuture "]"` (RURL-yutinyhb). Used by
@@ -428,7 +442,8 @@
 # `reg-name` once L4b resolves a present non-IP RFC host (the bracket is part of
 # the stored host value then). Same inner grammar as `.RFC3986_IPVFUTURE_RE`.
 .RFC3986_BRACKET_IPVFUTURE_RE <- paste0(
-  "^\\[v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, ":]+\\]$"
+  "\\A\\[v[0-9A-Fa-f]+\\.[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS,
+  ":]+\\]\\z"
 )
 
 # First 1-based index of the literal `ch` in `s`, or 0L when absent.
@@ -558,12 +573,76 @@
   .rfc3986_valid_hier_part(rest)
 }
 
+# Pin the byte->code-point reading this grammar walks, so the VERDICT does not
+# depend on the session locale (RURL-kmpnbvdl).
+#
+# The walk mixes two indexing schemes: `stri_locate_first_fixed()` /
+# `stri_detect_regex()` count CODE POINTS (stringi decodes first), while
+# `substring()` / `nchar()` count NATIVE characters. For a string marked
+# "unknown" -- which is what `rawToChar()` and most user input produce -- native
+# means the session encoding, so `<C3><A9>` is ONE character under a UTF-8
+# locale and TWO under `LC_ALL=C`. The two schemes then disagree and the
+# grammar slices the authority at the wrong offset: `ftp://é:é@example.com/p`
+# was admitted (`ok-ftp`) under a UTF-8 session and REJECTED (`error`) under
+# `LC_ALL=C`, on byte-identical input.
+#
+# `\x{0080}-\x{10FFFF}` in the data class admits directly-written non-ASCII
+# SCALAR VALUES, and a scalar value only exists once an encoding is fixed. UTF-8
+# is that encoding everywhere else in the package (`.mark_host_utf8()`,
+# `.web_high_bytes_ok()`), so declaring it here makes the gate agree with the
+# parser it gates instead of with whoever set LC_CTYPE.
+#
+# `Encoding<-`, never `enc2utf8()`: the bytes must not move, only their reading
+# be fixed -- `enc2utf8()` TRANSCODES from the session locale, which is the very
+# sensitivity being removed. Only "unknown" (native) elements are touched: an
+# explicit "UTF-8"/"latin1"/"bytes" declaration is already locale-invariant and
+# is the caller stating what the bytes mean, so it stands. Invalid octets stay
+# invalid -- a declared-UTF-8 string holding `<80>` makes `stri_detect_regex()`
+# return NA, `isTRUE()` folds that to FALSE, and the row is rejected in EVERY
+# locale, which is the correct answer: a lone continuation byte is not a scalar
+# value and no RFC 3986 production admits it.
+.rfc3986_declare_native_utf8 <- function(url) {
+  native <- !is.na(url) & Encoding(url) == "unknown"
+  if (any(native)) {
+    Encoding(url[native]) <- "UTF-8"
+  }
+  url
+}
+
 # Vectorized public-internal gate. `diagnostic` fires ONLY on an accepted row
 # that carries a non-ASCII scalar value; a rejected row is never flagged (D1:
 # the Unicode tolerance never rescues an otherwise-invalid ASCII portion).
 .rfc3986_generic_uri_ok <- function(url) {
   n <- length(url)
-  ok <- vapply(url, .rfc3986_generic_uri_ok_one, logical(1L), USE.NAMES = FALSE)
+  url <- .rfc3986_declare_native_utf8(url)
+  # Bytes that do not decode are rejected WITHOUT walking the grammar, and that
+  # is a shortcut for a proof, not a convenience: the walk covers the whole
+  # string (scheme / authority / path / query / fragment leave no byte
+  # unclassified), every production is ASCII apart from the
+  # `\x{0080}-\x{10FFFF}` scalar-value tolerance, and an octet sequence that is
+  # not valid UTF-8 denotes no scalar value. So an undecodable element must
+  # fail whichever component it lands in -- FALSE is the answer the walk would
+  # have reached had it been able to run.
+  #
+  # It cannot run: the walk slices with `substring()`/`nchar()`, which THROW
+  # `invalid multibyte string` on a declared-UTF-8 string holding invalid
+  # octets. That throw aborted the entire vectorized call -- `get_host()` over
+  # 1000 URLs lost all 1000 because one carried a stray `<80>` (RURL-kmpnbvdl).
+  # `safe_parse_urls()` is named for the promise this broke.
+  #
+  # Scoped to elements DECLARED UTF-8 (including the ones just declared above).
+  # A "latin1" element decodes by definition -- every octet is a latin1
+  # character -- so it walks normally and is never caught here.
+  undecodable <- !is.na(url) & Encoding(url) == "UTF-8" & !validUTF8(url)
+  walkable <- !undecodable
+  ok <- rep(NA, n)
+  ok[undecodable] <- FALSE
+  if (any(walkable)) {
+    ok[walkable] <- vapply(
+      url[walkable], .rfc3986_generic_uri_ok_one, logical(1L),
+      USE.NAMES = FALSE
+    )
+  }
   has_non_ascii <- stringi::stri_detect_regex(url, "\\P{ASCII}")
   has_non_ascii[is.na(has_non_ascii)] <- FALSE
   diagnostic <- rep(NA_character_, n)
@@ -581,7 +660,7 @@
 # with '|' admitted by no RFC 3986 production either way. That made the profile
 # a property of the ROUTE rather than of the selected standard. Under
 # `url_standard = "rfc3986"` the gate now binds on EVERY row, whichever route
-# it takes (libcurl, path-rootless, `file:`, general): selecting a standard
+# it takes (web, path-rootless, `file:`, general): selecting a standard
 # selects its grammar, uniformly.
 #
 # Byte-identity elsewhere is by construction: any other selector (including the
@@ -727,7 +806,7 @@
     return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
   }
   is_v4 <- isTRUE(stringi::stri_detect_regex(
-    host, paste0("^", .RFC3986_IPV4_QUAD, "$")
+    host, paste0("\\A", .RFC3986_IPV4_QUAD, "\\z")
   ))
   list(ok = TRUE, host = host, is_v6 = FALSE, is_v4 = is_v4)
 }
@@ -826,7 +905,7 @@
     port <- parts$port
     # `.split_authority()` has always computed this -- the WHATWG host-missing
     # rule below reads it -- but the opaque parser used to drop it on the floor,
-    # so every general-routed row reported NA credentials while the libcurl
+    # so every general-routed row reported NA credentials while the web
     # route reported them exactly (RURL-ovpguvva). Surfaced RAW here; the
     # username/password split and the WHATWG userinfo encode set are applied
     # downstream in R/parse.R, which is where the file:-overlay exception lives.
@@ -836,9 +915,15 @@
       # A non-null port (content after `:`) must be ASCII digits only and
       # <= 65535; an empty port (`:` then end/`/`/`?`/`#`) is null -> legal.
       # A non-digit (`-`, `+`, letters) or an out-of-range integer is failure.
+      # `\A`/`\z`, not `^`/`$`, for the reason recorded at the RFC 3986 grammar
+      # transcription above: ICU's `$` matches before a trailing line
+      # terminator, so `^[0-9]+$` admitted `80\v`, which `as.numeric()` then
+      # coerced to 80 -- a silent STRIP of a code point the WHATWG port state
+      # requires to be a failure (RURL-dergzwku). Tab/LF/CR never reach here;
+      # step 1 removes them.
       has_port <- !is.na(port) && nzchar(port)
       if (has_port &&
-        (!isTRUE(stringi::stri_detect_regex(port, "^[0-9]+$")) ||
+        (!isTRUE(stringi::stri_detect_regex(port, "\\A[0-9]+\\z")) ||
           suppressWarnings(as.numeric(port)) > 65535)) {
         ok <- FALSE
       }
@@ -908,7 +993,8 @@
 }
 
 # Vectorized posture opaque/host parser (ADR 0012 Layer 4b). See the column
-# contract above. Pure: never touches curl, never routes through punycode /
+# contract above. Pure: never runs the web parser, never routes through
+# punycode /
 # domain.R (ADR 0002).
 .parse_opaque_urls_vec <- function(url, url_standard) {
   n <- length(url)
@@ -942,7 +1028,7 @@
 }
 
 # RFC 8089 `file:` overlay (ADR 0012 D1 / A.2, RURL-yutinyhb; two-gate model
-# RURL-obsweger). A THIN overlay used wherever `file:` is routed out of libcurl
+# RURL-obsweger). A THIN overlay used wherever `file:` is routed off the web
 # under the RFC model (`url_standard = "rfc3986"` and the NULL selector) -- the
 # WHATWG `file:` path (`.parse_whatwg_file_urls_vec`) is a SEPARATE state
 # machine and is left verbatim.
@@ -983,10 +1069,66 @@
 #                    Section 3.5 describes). Reported via
 #                    `file-component-outside-rfc8089`.
 #
-# Like WHATWG, `file://localhost/...` maps to an empty host (RFC 8089 App. B
-# treats `localhost` and the empty authority as the local machine). No
-# drive-letter or backslash rewriting (those are WHATWG-specific).
-.parse_rfc_file_url_one <- function(url) {
+# No drive-letter or backslash rewriting (those are WHATWG-specific).
+#
+# What a `localhost` authority DECOMPOSES to, keyed on `url_standard` -- the
+# same one-place shape as the `.web_*_policy()` mappers in R/parse-web.R, so
+# the selector cannot mean two different grammars on two routes (ADR 0007).
+#
+#   "empty"     `localhost` collapses to an empty host. WHATWG's file host state
+#               says "if host is localhost, set host to the empty string", and
+#               the no-selector baseline reproduces it (byte-frozen, ADR 0012
+#               D4).
+#   "reg-name"  `localhost` is reported as itself, on the ordinary reg-name
+#               seam. RFC 3986 S3.2.2 gives `reg-name` no special names, and
+#               RFC 8089 S2's `file-auth = "localhost" / host` lists empty,
+#               `localhost` and `host` as three legal authority FORMS -- it
+#               never rewrites one into another. App. B makes
+#               `file://localhost/p` EQUIVALENT to `file:///p`; equivalence is
+#               not identical decomposition, and ADR 0007 puts `file` expansion
+#               out of the selector's scope.
+#
+# ADR 0012 D5 scopes the collapse to WHATWG explicitly, by contrast with the
+# `rfc-syntax` clause in the same bullet ("`file` under `rfc-syntax`:
+# non-absolute path; userinfo, port, query, or fragment present ... Under
+# WHATWG, `file://localhost/...` maps `localhost` to the empty host"). Layer
+# 4b's "preserve WHATWG's `file://localhost/` -> empty-host mapping" is
+# attributive -- it names the mapping's owner, and is not a mandate to run it
+# under `rfc-syntax`. Emptying it there scored as the last `host`-field
+# divergence in `tools/rfc3986-conformance-sweep.R` (RURL-zyytztdd).
+.rfc_file_localhost_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "reg-name" else "empty"
+}
+
+# What a port in a `file:` authority MEANS -- the fourth of ADR 0012 D5's four
+# "scheme-specific facts (parseable != valid-for-the-scheme)" items for `file`
+# under rfc-syntax. Keyed on the selector, exactly like
+# `.rfc_file_localhost_policy()` above and for the same reason.
+#
+#   "reject"  a port is a parse FAILURE. RFC 8089 sec 2's
+#             `file-auth = "localhost" / host` has no port production and no
+#             appendix supplies one. This is the NULL default, byte-frozen by
+#             ADR 0012 D4.
+#   "fact"    the port parses and is surfaced as a diagnostic. `rfc3986` is the
+#             scheme-AGNOSTIC generic syntax, where `port = *DIGIT` and the
+#             authority is well-formed, so an RFC 8089 narrowing may not gate
+#             the parse: ADR 0012 (owner-ruled) "Scheme-specific restrictions
+#             are overlays, not generic parse gates", and ADR 0012:63 has
+#             scheme-specific RFC violations surface as companion facts
+#             (ADR 0006).
+#
+# D5 lists userinfo, port, query and fragment TOGETHER. Three of the four were
+# already facts -- `file://u@example.com/p` parses and reports
+# `file-userinfo-extension`, `file:///p?q=1` reports
+# `file-component-outside-rfc8089` -- and port was the lone exception, gating
+# the parse instead (RURL-uhkofhjf). Same defect class as RURL-zyytztdd, where
+# WHATWG's localhost emptying had leaked into the grammar selector.
+.rfc_file_port_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "fact" else "reject"
+}
+
+.parse_rfc_file_url_one <- function(url, localhost_policy = "empty",
+                                    port_policy = "reject") {
   na <- NA_character_
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
@@ -1040,13 +1182,29 @@
     port <- parts$port
     userinfo <- parts$userinfo
     # Gate 2: RFC 8089 Section 2 admits no port, and no appendix supplies a
-    # production for one. A port is therefore a parse FAILURE, not a fact.
+    # production for one. Under `port_policy = "reject"` -- the NULL default,
+    # byte-frozen by ADR 0012 D4 -- a port is therefore a parse FAILURE.
     # (Contrast userinfo, which App. E.1/F does supply a production for.)
+    #
+    # Under `"fact"` the RFC 8089 narrowing stops gating the parse and the port
+    # is surfaced as a diagnostic instead; see `.rfc_file_port_policy()`. The
+    # GENERIC production still applies, though -- RFC 3986 sec 3.2.3 is
+    # `port = *DIGIT`, so a non-digit port is a grammar failure on this route
+    # just as it is on every other, and only the SCHEME-specific narrowing is
+    # lifted. `\A`/`\z`, not `^`/`$`: ICU's `$` matches before a trailing line
+    # terminator, so `^[0-9]*$` would admit `1\v` (RURL-dergzwku).
     if (!is.na(port)) {
-      return(blank)
+      if (identical(port_policy, "reject")) {
+        return(blank)
+      }
+      if (!isTRUE(stringi::stri_detect_regex(port, "\\A[0-9]*\\z"))) {
+        return(blank)
+      }
     }
-    # localhost (case-insensitive) collapses to an empty host, matching WHATWG.
-    if (!is.na(host) &&
+    # localhost (case-insensitive) collapses to an empty host where the selected
+    # standard asks for it; under `rfc3986` it falls through to the reg-name arm
+    # below and is reported as itself (see `.rfc_file_localhost_policy()`).
+    if (identical(localhost_policy, "empty") && !is.na(host) &&
         identical(.ascii_tolower(host), "localhost")) {
       host <- ""
     } else if (nzchar(host)) {
@@ -1091,7 +1249,9 @@
 # acceptance, `rfc3986`, or the NULL selector), instead of depending on a caller
 # to have applied the generic gate first. Under `rfc3986` the caller's gate runs
 # too; that is idempotent, not a conflict.
-.parse_rfc_file_urls_vec <- function(url) {
+.parse_rfc_file_urls_vec <- function(url, url_standard = NULL) {
+  localhost_policy <- .rfc_file_localhost_policy(url_standard)
+  port_policy <- .rfc_file_port_policy(url_standard)
   n <- length(url)
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "userinfo",
@@ -1110,7 +1270,10 @@
     }
     return(out)
   }
-  rows <- lapply(url, .parse_rfc_file_url_one)
+  rows <- lapply(
+    url, .parse_rfc_file_url_one, localhost_policy = localhost_policy,
+    port_policy = port_policy
+  )
   out <- list()
   for (f in lgl_fields) {
     out[[f]] <- vapply(rows, `[[`, logical(1L), f, USE.NAMES = FALSE)
@@ -1130,7 +1293,7 @@
 #
 # The ACTIVATION seam that wires the L3a/L3b/L3c/L4a/L4b-1 building blocks into
 # the live pipeline. `.general_parsed_mask` decides WHICH rows the `general`
-# posture routes OUT of libcurl to the posture opaque/RFC/file parser;
+# posture routes OFF the web route to the posture opaque/RFC/file parser;
 # `.general_parse_vec` performs that parse and reports the components, the parse
 # `ok` verdict (including D1's RFC generic-grammar gate), and the internal state
 # kinds. BOTH Stage A and Stage B call `.general_parse_vec` on the same URL
@@ -1143,19 +1306,19 @@
 # `scheme_acceptance == "general"`. Under any other value (notably "web", the
 # default and, until this unit, the only publicly reachable value) the mask is
 # all-FALSE and the parse returns empty/NA columns, so the `general_route`
-# masks in Stage A/B are EMPTY, libcurl-path vectors are bit-identical, and no
+# masks in Stage A/B are EMPTY, web-route vectors are bit-identical, and no
 # new behavior runs. Byte-identity for web is BY CONSTRUCTION.
 #
 # ROUTING RULE (posture-keyed). A row is general-routed iff it is scheme-bearing
 # (`^scheme:`), is NOT a host:port form (`example.com:8080`, which Phase 1
-# parses as host:port), and its scheme is NOT one libcurl + the existing web
-# machinery
-# already handle for the posture:
+# parses as host:port), and its scheme is NOT one the web route and the
+# existing machinery already handle for the posture:
 #   - whatwg  : keep the six WHATWG special schemes (http/https/ftp/ws/wss/file)
-#               on libcurl; route every other (non-special) scheme to the opaque
-#               parser. ws/wss stay on libcurl and parse as special (L1 default
+#               on the web route; route every other (non-special) scheme to
+#               the opaque parser. ws/wss stay on the web route and parse as
+#               special (L1 default
 #               ports 80/443); ftps is non-special under WHATWG and routes here.
-#   - rfc3986 : keep http/https/ftp/ftps on libcurl (existing rfc3986 host model
+#   - rfc3986 : keep http/https/ftp/ftps on the web route (existing host model
 #               + path-rootless slice); route file to the RFC 8089 overlay and
 #               every other scheme to the RFC generic host parser.
 .general_parsed_mask <- function(url, url_standard, scheme_acceptance) {
@@ -1177,9 +1340,29 @@
   # (RURL-jnvtttfm).
   host_port <- stringi::stri_detect_regex(url, "^[^/:]+:[0-9]+($|/)")
   host_port[is.na(host_port)] <- FALSE
+  # ...and the carve-out does not apply under `rfc3986` AT ALL (RURL-kkuirsnz).
+  # It encodes rurl's browser-omnibox affordance -- "a bare `example.com:8080`
+  # means host `example.com`, port 8080" -- which is a FIX-UP, not a production
+  # in the generic syntax. Under the scheme-AGNOSTIC grammar selector the answer
+  # is settled by the grammar and there is nothing to infer: `scheme = ALPHA
+  # *( ALPHA / DIGIT / "+" / "-" / "." )` admits dots, so `example.com` IS a
+  # scheme, and RFC 3986 sec 3.3 makes `8080/x` a `path-rootless`. The
+  # Appendix B referee agrees, for `example.com:8080/x` and
+  # `www.php.net:80/index.php?test=1` both.
+  #
+  # This does NOT touch the Stage-A `looks_like_host_port` flag, which is a
+  # different question with a different consumer: the key/join surface reads it
+  # to classify `h.com:80/` as "missing scheme `:80`"
+  # (`contracts/key-join-contracts.md`, P3.1 ratification Q8), and it overrides
+  # the same lexical ambiguity there deliberately. Only the rfc3986 ROUTING
+  # stops consulting it.
+  if (identical(url_standard, "rfc3986")) {
+    host_port <- rep(FALSE, n)
+  }
 
-  # RFC-model `file:` leaves libcurl on EVERY acceptance posture (RURL-obsweger,
-  # Tier 1 of the determinism epic). libcurl's `file:` handling is a BUILD
+  # RFC-model `file:` leaves the web route on EVERY acceptance posture
+  # (RURL-obsweger, Tier 1 of the determinism epic). The external engine's
+  # `file:` handling was a BUILD
   # property, not a version property: Windows builds enable drive-letter and
   # `file://host` handling that Unix builds reject, so identical input yields
   # `ok` on Windows and `error` on Linux/macOS. That is a DEREFERENCING concern
@@ -1192,17 +1375,158 @@
     !is.na(scheme_lc) & scheme_lc == "file"
   rfc_file[is.na(rfc_file)] <- FALSE
 
-  if (!identical(scheme_acceptance, "general")) {
-    return(rfc_file)
-  }
-  curl_scheme <- if (.is_whatwg(url_standard)) {
+  web_route_scheme <- if (.is_whatwg(url_standard)) {
     .WHATWG_SPECIAL_SCHEMES
   } else {
     c("http", "https", "ftp", "ftps")
   }
-  gp <- has_scheme & !host_port & !(scheme_lc %in% curl_scheme)
+  # Keyed on `url_standard`, NOT on the acceptance posture -- like `rfc_file`
+  # above, and for the same reason. Which GRAMMAR a string is read under is
+  # `url_standard`'s question; which SCHEMES are admitted is
+  # `scheme_acceptance`'s. Gating this on the posture made one selector mean two
+  # different grammars: `url_standard = "rfc3986"` reported host `evil.com` for
+  # `https:///evil.com` under the default posture and the correct empty
+  # authority
+  # under `general`. ADR 0007 requires one axis per question, so it is answered
+  # here once, for every posture.
+  odd_slash <- .rfc_odd_slash_run(url, url_standard, scheme_lc, has_scheme,
+                                  host_port, web_route_scheme)
+  empty_auth <- .rfc_empty_authority_host(url, url_standard, scheme_lc,
+                                          has_scheme, host_port,
+                                          web_route_scheme)
+
+  if (!identical(scheme_acceptance, "general")) {
+    return(rfc_file | odd_slash | empty_auth)
+  }
+  gp <- has_scheme & !host_port & !(scheme_lc %in% web_route_scheme)
   gp[is.na(gp)] <- FALSE
-  gp | rfc_file
+  gp | rfc_file | odd_slash | empty_auth
+}
+
+# RURL-ajikcwkh. The companion to `.rfc_odd_slash_run()` below for the one shape
+# it cannot cover: a slash run of EXACTLY 2 whose authority holds no host.
+#
+#   http://                        authority present + EMPTY, path empty
+#   http://?                       ditto, query empty
+#   http://#                       ditto, fragment empty
+#   http://user@/www.example.com   authority `user@`  -> host empty
+#   http://a:b@/www.example.com    authority `a:b@`   -> host empty
+#
+# RFC 3986 sec 3.2: `authority = [ userinfo "@" ] host [ ":" port ]` and
+# `host = IP-literal / IPv4address / reg-name`, where `reg-name = *( ... )` --
+# `*`-quantified, so the EMPTY host is a well-formed authority. Appendix B reads
+# every row above as authority-present with an empty host, and rurl already
+# reports exactly that for the non-special twins (`foo://`,
+# `foo://user@/www.example.com`) because those route to the general parser.
+#
+# These did not, so they hit the web route, which rejects an empty authority
+# outright -- `.parse_web_url_one()` returns NULL. That is correct for the model
+# the web route implements (a special-scheme authority always has a host) and
+# wrong for RFC 3986's generic syntax, so it is the same ROUTING defect as the
+# slash-run family and takes the same fix: send the row to the parser that is
+# already right.
+#
+# The slash run is checked as EXACTLY 2 and the host-empty test is lexical,
+# because a 2-slash run WITH a host is the ordinary web shape and must keep
+# going to the web route untouched. `\A`/`\z`, not `^`/`$`, for the ICU
+# trailing-line-terminator reason recorded throughout this file.
+#
+# This deliberately does NOT answer RURL-mugcdtrv, which asks whether the `web`
+# POSTURE should admit such a row. That question is about ADR 0004's host-shape
+# gate applied to rows that already parse; this is about rows that never reached
+# a parser at all. After this change these 7 behave exactly like their
+# already-shipped odd-slash siblings -- record `ok`, `general` posture `ok`,
+# `web` posture still rejected -- so the posture question is left open, with
+# these rows added to the set it governs rather than decided.
+.rfc_empty_authority_host <- function(url, url_standard, scheme_lc, has_scheme,
+                                      host_port, web_route_scheme) {
+  if (!identical(url_standard, "rfc3986")) {
+    return(rep(FALSE, length(url)))
+  }
+  # Authority = what sits between the `//` and the first `/`, `?` or `#`. It has
+  # no host when it is empty, or holds only a userinfo (`...@`) and/or an empty
+  # `:port`.
+  hostless <- stringi::stri_detect_regex(
+    url,
+    "\\A[A-Za-z][A-Za-z0-9+.\\-]*://([^/?#@]*@)?(:[0-9]*)?([/?#][\\s\\S]*)?\\z"
+  )
+  hostless[is.na(hostless)] <- FALSE
+  out <- has_scheme & !host_port & scheme_lc %in% web_route_scheme & hostless
+  out[is.na(out)] <- FALSE
+  out
+}
+
+# RURL-xfbzkico. Under `rfc3986`, a web-route scheme whose post-scheme slash run
+# is not EXACTLY 2 has no web-route shape at all, and the web route -- which
+# models the special-scheme authority, not RFC 3986's generic syntax -- gets
+# none of these right:
+#
+#   run  RFC 3986 sec 3 hier-part          web route reports
+#   1    path-absolute, NO authority       host = first segment AND path = /seg
+#   3    "//" empty-authority path-abempty host = first path segment (promotion)
+#   >=4  "//" empty-authority path-abempty rejected outright
+#
+# The 1-slash case is the sharpest: the record claims
+# `authority_delimiter_present = FALSE` while reporting a host, and leaves the
+# same text in the path -- an internally incoherent record, and a decomposition
+# no standard and no other engine produces.
+#
+# The fix is a ROUTING change rather than a second authority parser, because the
+# general (RFC generic) parser already produces the exactly correct answer for
+# every one of these shapes -- measured on the non-special twins, which differ
+# only in scheme:
+#
+#   foo:/a           -> authority absent, path /a,          form `absolute`
+#   foo:///a/b       -> authority EMPTY,  path /a/b,         form `abempty`
+#   foo:////evil.com -> authority EMPTY,  path //evil.com,   form `abempty`
+#
+# So this routes to code that is already right and already covered, instead of
+# teaching the web route a grammar it never modelled. It also fixes
+# `rfc_path_form` for free (RURL-clgbpwla): the general route already reports
+# `absolute` where the web route said `abempty`.
+#
+# A 0-slash run is INCLUDED as of RURL-kkuirsnz. `eb8ba1a` deliberately left it
+# out -- the shape was nominally owned by the `prep$rfc3986_path_rootless` slice
+# (`.rfc3986_path_rootless_vec()`, R/parse-phases.R) and widening it was a
+# separate acceptance question. It is answered the same way as the rest of the
+# family, and for the same reason: with no `//` there is no authority, RFC 3986
+# sec 3.3's `hier-part` is `path-rootless`, and `@` and `:` are both `pchar`, so
+# the whole remainder is a PATH.
+#
+# That slice stays, but it only ever claimed a NARROW subset -- a
+# `.SPECIAL_AUTHORITY_SCHEMES` scheme whose first path segment is a DOTTED name
+# -- so `http:example.com` worked while `http:@www.example.com`, `http:a:b@h`
+# and `http::b@h` were rejected. The general parser is already right about all
+# of them, and it is installed AFTER the slice in `.parse_urls_vec()`, so
+# widening the routing lets ONE parser answer the whole family instead of a
+# regex deciding which rootless paths are allowed to exist. Verified: on every
+# shape the slice claims, the general parser returns the identical
+# scheme/path/query/fragment.
+#
+# `whatwg` and the no-selector default are untouched -- the mask is gated on
+# `url_standard == "rfc3986"` and returns all-FALSE for anything else, so both
+# stay byte-identical by construction.
+#
+# It fires on EVERY acceptance posture, deliberately. Restricting it to
+# `scheme_acceptance == "general"` (the first attempt) preserved `web`-posture
+# bytes but split one selector across two grammars: `serialize_url(standard =
+# "rfc3986")` gave the RFC answer while `safe_parse_urls(url_standard =
+# "rfc3986")` still promoted the path segment into the host, and which you got
+# depended on an unrelated axis. That is the "behaviour changes with the
+# settings" failure mode, and it is worse than a characterization diff.
+.rfc_odd_slash_run <- function(url, url_standard, scheme_lc, has_scheme,
+                               host_port, web_route_scheme) {
+  if (!identical(url_standard, "rfc3986")) {
+    return(rep(FALSE, length(url)))
+  }
+  run <- stringi::stri_match_first_regex(
+    url, "^[A-Za-z][A-Za-z0-9+.\\-]*:(/*)"
+  )[, 2L]
+  n_slash <- stringi::stri_length(run)
+  out <- has_scheme & !host_port & scheme_lc %in% web_route_scheme &
+    !is.na(n_slash) & n_slash != 2L
+  out[is.na(out)] <- FALSE
+  out
 }
 
 # Vectorized general-acceptance parse. Returns a columnar list, length-n:
@@ -1256,7 +1580,30 @@
   # (whatwg `file` is a special scheme and never reaches here -- it stays on the
   # existing WHATWG file state machine.)
   is_file <- gp & !is_whatwg & !is.na(scheme_lc) & scheme_lc == "file"
-  reg <- gp & !is_file
+  # A row whose BYTES are not valid UTF-8 is withheld from the opaque parser.
+  # `.parse_opaque_urls_vec()` reaches `substring()`, which THROWS "invalid
+  # multibyte string" on such input, so the row escaped as an error CONDITION
+  # rather than the `error` verdict it is owed -- measured as 8 THROW rows in
+  # the octet sweep's conjunction block (`http://<80>@/p` and friends). They
+  # reached the general route for the first time only when RURL-ajikcwkh's
+  # hostless 2-slash routing started sending them here; previously they went to
+  # the web route, which rejects them without ever decoding them.
+  #
+  # The test is `validUTF8()` and NOT `gate_ok`, though the generic gate does
+  # reject every one of these too. Short-circuiting on the gate was the first
+  # attempt and is WRONG: `out$ok & gate_ok` (below) masks the VERDICT, but the
+  # email/mailto diagnostics read this parser's component fields WITHOUT
+  # consulting `ok`, so skipping the parse blanked them -- 6 failures in
+  # test-email-diagnostics.R, and only under `LC_ALL=C`, because whether the
+  # gate rejects those rows is itself locale-dependent. `validUTF8()` is a byte
+  # test: it answers the same way in every locale, and it is exactly the
+  # condition that makes the parser throw rather than a proxy for it.
+  #
+  # Withholding costs nothing that was available: RFC 3986's grammar is ASCII,
+  # so a string that is not even valid UTF-8 has no decomposition to report.
+  decodable <- validUTF8(url)
+  decodable[is.na(decodable)] <- FALSE
+  reg <- gp & !is_file & decodable
 
   opaque_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "path_kind",
@@ -1272,7 +1619,7 @@
     out$ok[reg] <- p$ok
   }
   if (any(is_file)) {
-    p <- .parse_rfc_file_urls_vec(url[is_file])
+    p <- .parse_rfc_file_urls_vec(url[is_file], url_standard)
     # Both parsers now supply `userinfo`, but they mean different things by it,
     # and the difference is honoured downstream in R/parse.R rather than here:
     # the opaque parser's is a WHATWG authority userinfo (split at the first

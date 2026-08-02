@@ -2,77 +2,84 @@
 # These exercise each normalization phase in isolation so behavior changes can
 # be localized to a single phase rather than the former ~486-line monolith.
 
-test_that(".prepare_url_for_curl prefixes scheme-less hosts with http://", {
-  prep <- rurl:::.prepare_url_for_curl("example.com", "keep", "keep")
+test_that(".prepare_url_for_parse prefixes scheme-less hosts with http://", {
+  prep <- rurl:::.prepare_url_for_parse("example.com", "keep", "keep")
   expect_equal(prep$url_to_parse, "http://example.com")
   expect_false(prep$looks_like_protocol)
   expect_false(prep$original_has_allowed_scheme)
   expect_false(prep$is_scheme_relative)
 })
 
-test_that(".prepare_url_for_curl keeps supported explicit schemes as-is", {
-  prep <- rurl:::.prepare_url_for_curl("https://example.com/p", "keep", "keep")
+test_that(".prepare_url_for_parse keeps supported explicit schemes as-is", {
+  prep <- rurl:::.prepare_url_for_parse("https://example.com/p", "keep", "keep")
   expect_equal(prep$url_to_parse, "https://example.com/p")
   expect_true(prep$looks_like_protocol)
   expect_true(prep$original_has_allowed_scheme)
 })
 
-test_that(".prepare_url_for_curl treats host:port as a host, not a scheme", {
-  prep <- rurl:::.prepare_url_for_curl("example.com:8080/p", "keep", "keep")
+test_that(".prepare_url_for_parse treats host:port as a host, not a scheme", {
+  prep <- rurl:::.prepare_url_for_parse("example.com:8080/p", "keep", "keep")
   expect_true(prep$looks_like_host_port)
   expect_equal(prep$url_to_parse, "http://example.com:8080/p")
 })
 
-test_that(".prepare_url_for_curl rejects unsupported schemes under keep/none", {
-  expect_null(rurl:::.prepare_url_for_curl("mailto:a@b.com", "keep", "keep"))
-  expect_null(rurl:::.prepare_url_for_curl("mailto:a@b.com", "none", "keep"))
+test_that(".prepare_url_for_parse rejects bad schemes under keep/none", {
+  expect_null(rurl:::.prepare_url_for_parse("mailto:a@b.com", "keep", "keep"))
+  expect_null(rurl:::.prepare_url_for_parse("mailto:a@b.com", "none", "keep"))
 })
 
-test_that(".prepare_url_for_curl honors scheme-relative handling", {
+test_that(".prepare_url_for_parse honors scheme-relative handling", {
   expect_null(
-    rurl:::.prepare_url_for_curl("//cdn.example.com", "keep", "error")
+    rurl:::.prepare_url_for_parse("//cdn.example.com", "keep", "error")
   )
-  prep_http <- rurl:::.prepare_url_for_curl("//cdn.example.com", "keep", "http")
+  prep_http <- rurl:::.prepare_url_for_parse(
+    "//cdn.example.com", "keep", "http"
+  )
   expect_true(prep_http$is_scheme_relative)
   expect_equal(prep_http$url_to_parse, "http://cdn.example.com")
-  prep_keep <- rurl:::.prepare_url_for_curl("//cdn.example.com", "keep", "keep")
+  prep_keep <- rurl:::.prepare_url_for_parse(
+    "//cdn.example.com", "keep", "keep"
+  )
   expect_equal(prep_keep$url_to_parse, "http://cdn.example.com")
 })
 
-test_that(".parse_with_curl returns NULL on unparseable input", {
-  parsed <- rurl:::.parse_with_curl("ht!tp://")
+test_that(".parse_web_url_one returns NULL on unparseable input", {
+  parsed <- rurl:::.parse_web_url_one("ht!tp://")
   expect_true(is.null(parsed) || is.list(parsed))
-  expect_type(rurl:::.parse_with_curl("http://example.com"), "list")
+  expect_type(rurl:::.parse_web_url_one("http://example.com"), "list")
 })
 
 test_that(".extract_raw_components takes the raw query verbatim", {
-  # T2 (RURL-yuozrhop): with params = FALSE, curl surfaces the raw query
+  # T2 (RURL-yuozrhop): the web parser never decodes, so it surfaces the raw
+  # query
   # string directly, so .extract_raw_components takes it byte-for-byte (a bare
   # key keeps no trailing "=") rather than rebuilding it from decoded params.
   prepared <- "http://example.com/p?a=1&b=2&flag"
-  parsed <- rurl:::.parse_with_curl(prepared)
+  parsed <- rurl:::.parse_web_url_one(prepared)
   raw <- rurl:::.extract_raw_components(parsed, prepared)
   expect_equal(raw$host, "example.com")
   expect_equal(raw$query, "a=1&b=2&flag")
 })
 
 test_that(".extract_raw_path_vec preserves dot segments and percent case", {
-  # Raw path comes from the prepared input, not curl's normalized $path, so RFC
+  # Raw path comes from the prepared input, not the parser's normalized $path,
+  # so RFC
   # 3986 dot segments (and encoded %2e forms) survive to path_normalization;
   # percent-triplet case is preserved for the later presentation phase.
   ext <- function(prepared) {
-    curl_path <- rurl:::.parse_with_curl(prepared)$path
-    rurl:::.extract_raw_path_vec(prepared, curl_path)
+    engine_path <- rurl:::.parse_web_url_one(prepared)$path
+    rurl:::.extract_raw_path_vec(prepared, engine_path)
   }
   expect_equal(ext("http://ex.com/a/../b"), "/a/../b")
   expect_equal(ext("http://ex.com/a/%2e%2e/b"), "/a/%2e%2e/b")
   expect_equal(ext("http://ex.com/a%2fb"), "/a%2fb")
   expect_equal(ext("http://ex.com/a//b"), "/a//b")
-  # Empty-authority special schemes are reinterpreted by curl as host-bearing
-  # URLs. Keep curl's coherent path so the promoted host is not duplicated.
+  # Empty-authority special schemes are reinterpreted by the parser as
+  # host-bearing URLs. Keep its coherent path so the promoted host is not
+  # duplicated.
   expect_equal(ext("http:///evil.com"), "/")
   expect_equal(ext("http:///a/../b"), "/b")
-  # No path component -> fall back to curl's canonical "/".
+  # No path component -> fall back to the parser's canonical "/".
   expect_equal(ext("http://ex.com"), "/")
   expect_equal(ext("http://ex.com?x=1"), "/")
   # Query/fragment slashes never leak into the path.
@@ -260,7 +267,7 @@ test_that(".build_clean_url reconstructs scheme/host/path", {
 })
 
 test_that(".derive_parse_status classifies outcomes", {
-  parsed <- curl::curl_parse_url("http://example.com")
+  parsed <- rurl:::.parse_web_url_one("http://example.com")
   expect_equal(
     rurl:::.derive_parse_status(
       parsed, "example.com", FALSE, "com",
@@ -303,7 +310,7 @@ test_that(".derive_parse_status keeps host:port off scheme demotion", {
   # (looks_like_protocol = TRUE, original_has_allowed_scheme = FALSE) but is a
   # valid host:port form (looks_like_host_port = TRUE), so it must stay "ok"
   # rather than being demoted to "error".
-  parsed <- curl::curl_parse_url("http://example.com:8080/x")
+  parsed <- rurl:::.parse_web_url_one("http://example.com:8080/x")
   expect_equal(
     rurl:::.derive_parse_status(
       parsed, "example.com", FALSE, "com",
@@ -333,7 +340,7 @@ test_that("get_parse_status agrees with clean_url for scheme-less host:port", {
 })
 
 test_that(".assemble_parse_result coerces port to integer", {
-  parsed <- curl::curl_parse_url("http://example.com:8080/p")
+  parsed <- rurl:::.parse_web_url_one("http://example.com:8080/p")
   res <- rurl:::.assemble_parse_result(
     "http://example.com:8080/p", "http", "example.com", parsed, "/p",
     NA_character_, "example.com", "com", "example.com", "example.com",

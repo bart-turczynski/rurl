@@ -45,11 +45,22 @@ Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
   (`._parse_stage_a_vec` / `._parse_stage_b_vec`) plus the cache-key derivation
   (`.parse_cache_keys()`). `parse-phases.R` holds the decomposed per-phase
   helpers `.prepare_urls_for_curl_vec()` … `.assemble_parse_result()`, including
-  the host model (`.apply_host_standard_model_vec()`), the WHATWG pre-curl
+  the host model (`.apply_host_standard_model_vec()`), the WHATWG pre-parse
   transforms (`.rewrite_whatwg_backslashes_vec()`,
-  `.strip_whatwg_control_chars_vec()`, `.map_whatwg_domain_separators_vec()`,
-  and the host-charset shim `.shim_whatwg_host_charset_vec()` — ADR 0009), and
-  the `clean_url` assembler (`.build_clean_url_vec()` / `.build_port_part_vec()`).
+  `.strip_whatwg_control_chars_vec()`, `.map_whatwg_domain_separators_vec()`),
+  and the `clean_url` assembler (`.build_clean_url_vec()` /
+  `.build_port_part_vec()`). The libcurl **compensation layer** that used to sit
+  in that family is **gone** (RURL-ezhzpkhg; ADR 0013 supersedes ADR 0009). Each
+  of its five members decided a *parsing* question in front of the parser, and
+  each is now a dial on `.parse_web_url_one()` (R/parse-web.R), mapped from
+  `url_standard` by a `.web_*_policy()` function so the vectorized and scalar
+  routes cannot drift: `host_charset` (which literal bytes a host may hold),
+  `host_pct` (how a host that parsed is spelled back), `last_at_userinfo` (where
+  the authority splits), `pqf_bytes` (an unwritable byte outside the authority)
+  and `host_ipv4` (which tokens are IPv4 addresses). Phase 1 rewrites the input;
+  it no longer decides acceptance. `.encode_userinfo_charset_vec()` is the one
+  survivor — it writes the spelling WHATWG *stores*, which the parser cannot
+  infer because `rfc3986` must stay source-preserving.
 - **R/verdicts.R** — the layered validation verdicts: the L1 syntax / L2 policy
   / L3 annotation vocabularies, their derivation
   (`.derive_verdict_layers_vec()`), the projection back to the legacy
@@ -122,6 +133,18 @@ ADR 0001). `rurl` calls `pslr` with a fixed contract:
   `get_domain()`/`get_tld()`/`get_subdomain()` mirror `get_host()`.
 - `unknown = "na"` so an unknown TLD yields `NA` rather than pslr's implicit
   `*`.
+- pslr is queried on the **annotation candidate**, never on the identity host
+  (`.psl_annotation_host_vec()`, R/parse-phases.R). The two differ only for a
+  percent-encoded `rfc3986` reg-name, which keeps its source spelling in the
+  host identity and so cannot be read by the PSL at all. The candidate is that
+  host decoded **exactly once** as UTF-8 — legitimate because RFC 3986 §3.2.2
+  admits percent-encoded UTF-8 in `reg-name` and requires IDNA transformation
+  before a DNS lookup, while §6.2.2.2 authorizes only unreserved decoding for
+  URI normalization. The decode reaches domain/TLD and nothing else: acceptance,
+  `final_host` and serialization are untouched, and an invalid-UTF-8 or
+  non-domain result is the `unknown` annotation. Because everything after the
+  decode is the ordinary pslr path, an `rfc3986` host's annotation agrees with
+  the one `whatwg` computes for the same decoded host (RURL-jhsbzmsj).
 - `invalid = "na"` so malformed hosts yield `NA` instead of erroring.
 - Never use pslr session-global list switching (`psl_use()`) for per-request
   behavior (pslr PRD §12). Per-request list selection instead flows through the

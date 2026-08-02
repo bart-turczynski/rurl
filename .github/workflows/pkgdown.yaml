@@ -1,8 +1,26 @@
 on:
   push:
     branches: [main]
+    paths:
+      - 'R/**'
+      - 'man/**'
+      - 'vignettes/**'
+      - 'README.Rmd'
+      - 'DESCRIPTION'
+      - 'NAMESPACE'
+      - '_pkgdown.yml'
+      - '.github/workflows/pkgdown.yaml'
   pull_request:
     branches: [main]
+    paths:
+      - 'R/**'
+      - 'man/**'
+      - 'vignettes/**'
+      - 'README.Rmd'
+      - 'DESCRIPTION'
+      - 'NAMESPACE'
+      - '_pkgdown.yml'
+      - '.github/workflows/pkgdown.yaml'
   release:
     types: [published]
   workflow_dispatch:

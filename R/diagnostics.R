@@ -266,13 +266,19 @@
     diag, live & leading_trailing_stripped, "leading-trailing-stripped"
   )
 
-  # --- host-charset shim diagnostic (RURL-dxwxeamq, ADR 0009) ----------------
-  # `host-charset-shimmed` fires exactly where Phase 1's shim
-  # (.shim_whatwg_host_charset_vec) accepted a host code point libcurl rejects
-  # but WHATWG keeps (! " $ & ' ( ) * + , ; = ` { }) -- surfacing the accepted
-  # WHATWG boundary as a FACT (ADR 0006). Always FALSE under rfc3986 / no
-  # selector; RFC 3986 sub-delim recovery is standards conformance, not this
-  # WHATWG diagnostic.
+  # --- host-charset diagnostic (RURL-dxwxeamq, ADR 0009 -> ADR 0013) ---------
+  # `host-charset-shimmed` fires exactly where a WHATWG parse produced a host
+  # carrying a code point the web-route parser's own set rejects but WHATWG
+  # keeps (! " $ & ' ( ) * + , ; = ` { }) -- surfacing the accepted WHATWG
+  # boundary as a FACT (ADR 0006). Always FALSE under rfc3986 / no selector;
+  # RFC 3986 sub-delim acceptance is standards conformance, not this WHATWG
+  # diagnostic.
+  #
+  # The Phase-1 shim it is named after is GONE (ADR 0013) and the token is a
+  # fossil, kept because renaming a shipped diagnostic is a public-surface
+  # change. Nothing else moved: the flag always described the RESULTING HOST
+  # rather than the layer that admitted it, so it is now read straight off the
+  # parsed host in ._parse_stage_a_vec() and still covers both spellings.
   host_charset_shimmed <- a$host_charset_shimmed
   if (is.null(host_charset_shimmed)) {
     host_charset_shimmed <- rep(FALSE, n)
@@ -324,7 +330,8 @@
   # url_standard is WHATWG, INCLUDING the default `web` acceptance path. The
   # DEFAULT combo (web + url_standard = NULL) is untouched because is_whatwg is
   # FALSE there, so the D4 byte-identity / CRAN contract holds. userinfo is
-  # carried by libcurl on the special-scheme route (http/https/ftp/ws/wss); the
+  # carried by the web-route parser on the special-scheme route
+  # (http/https/ftp/ws/wss); the
   # general parser sets user/password NA for opaque/RFC rows, so this bounded
   # detection covers the WHATWG special-scheme routes. All OTHER Layer 5 facts
   # stay general-gated below: they are parse-structural or ride the general
@@ -389,7 +396,7 @@
 
     if (is_whatwg) {
       # ws/wss (RFC 6455 forbids both a fragment AND userinfo) -- TWO separate
-      # facts. ws/wss parse via the libcurl SPECIAL-scheme route under whatwg
+      # facts. ws/wss parse via the SPECIAL-scheme web route under whatwg
       # (they are in .WHATWG_SPECIAL_SCHEMES), NOT via .general_parse_vec, so
       # read fragment/userinfo from the Stage-A columns for that route.
       is_ws <- !is.na(scheme_lc) & scheme_lc %in% c("ws", "wss")
@@ -403,7 +410,7 @@
 
     # Per-scheme facts on the general-routed opaque/RFC rows (`gp`). mailto/tel/
     # data route to the general parser under BOTH postures; `file` routes there
-    # only under rfc3986 (whatwg `file` is a special scheme on the libcurl
+    # only under rfc3986 (whatwg `file` is a special scheme on the web
     # route), so the file facts are rfc-only.
     gs <- .ascii_tolower(gen_b$scheme)
     # `mailto`: fragment present (RFC 6068 section 2 SHOULD NOT).
@@ -429,9 +436,15 @@
     )
     # `file` under rfc-syntax (RURL-obsweger two-gate model): a non-absolute
     # path; userinfo present via App. E.1/F's non-normative production; or a
-    # query/fragment, which RFC 8089 never mentions and which are therefore
-    # inherited generic RFC 3986 components. `port` is NOT reported here -- it
-    # is a parse failure under Gate 2, so no `ok` row can carry one.
+    # port/query/fragment, which RFC 8089 never mentions and which are therefore
+    # inherited generic RFC 3986 components.
+    #
+    # `port` joined this set with RURL-uhkofhjf. It used to be a parse failure
+    # under Gate 2, so no `ok` row could carry one -- which made it the lone
+    # exception among ADR 0012 D5's four items, three of which were already
+    # facts. It is grouped with query/fragment rather than given a diagnostic of
+    # its own because D5 lists the four together and RFC 8089 mentions a port
+    # exactly as often as it mentions a query: never.
     if (is_rfc) {
       is_file <- gp & gs == "file"
       diag <- .diag_add(
@@ -442,7 +455,8 @@
       diag <- .diag_add(
         diag, is_file & !is.na(gen_b$userinfo), "file-userinfo-extension"
       )
-      outside_8089 <- !is.na(gen_b$query) | !is.na(gen_b$fragment)
+      outside_8089 <- !is.na(gen_b$query) | !is.na(gen_b$fragment) |
+        !is.na(gen_b$port)
       diag <- .diag_add(
         diag, is_file & outside_8089, "file-component-outside-rfc8089"
       )

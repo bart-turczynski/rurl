@@ -29,6 +29,7 @@
 ^CONTRIBUTING\.md$
 ^CODE_OF_CONDUCT\.md$
 ^\.pre-commit-config\.yaml$
+^\.gitlab-ci\.yml$
 ^_scratch$
 ^analysis$
 ^inst/bench/wpt-url-cases\.json$
@@ -56,3 +57,4 @@
 ^tools/status-doc-consistency\.R$
 ^tools/diagnostics-doc-consistency\.R$
 ^tools/deferral-gate\.R$
+^tools/curl-zero-gate\.R$

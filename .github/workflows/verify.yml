@@ -1,12 +1,14 @@
-# Fast verification gate: lint + a single Ubuntu R CMD check + coverage, on
-# every push to main and every PR. Full cross-platform coverage lives in
-# full-check.yml. Named "R-CMD-check" so tooling that discovers CI by the
-# conventional workflow name (e.g. pkgcheck's `cmd|coverage` heuristic) sees it.
+# Fast verification gate: lint + a single Ubuntu R CMD check on every push to
+# main and every PR. Coverage and the specialized evidence jobs run only when
+# their declared surfaces change. Release tags run the complete job set; full
+# cross-platform checks live in full-check.yml. Named "R-CMD-check" so tooling
+# that discovers CI by the conventional workflow name sees it.
 name: R-CMD-check
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -17,6 +19,114 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # One cheap diff classifies the PR before specialized jobs reserve runners.
+  # Manual and release-tag runs bypass these filters below: both are evidence
+  # collection points, not routine feedback.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      documentation: ${{ steps.filter.outputs.documentation }}
+      locale: ${{ steps.filter.outputs.locale }}
+      coverage: ${{ steps.filter.outputs.coverage }}
+      oracle: ${{ steps.filter.outputs.oracle }}
+      cache_docs_selftest: ${{ steps.filter.outputs.cache_docs_selftest }}
+      oracle_provenance_selftest: ${{ steps.filter.outputs.oracle_provenance_selftest }}
+      credentials_selftest: ${{ steps.filter.outputs.credentials_selftest }}
+      ip_obfuscation_selftest: ${{ steps.filter.outputs.ip_obfuscation_selftest }}
+      youarealiar_selftest: ${{ steps.filter.outputs.youarealiar_selftest }}
+      equivocal_urls_selftest: ${{ steps.filter.outputs.equivocal_urls_selftest }}
+      wpt_urltestdata_selftest: ${{ steps.filter.outputs.wpt_urltestdata_selftest }}
+      ada_extra_selftest: ${{ steps.filter.outputs.ada_extra_selftest }}
+      ada_dnslength_selftest: ${{ steps.filter.outputs.ada_dnslength_selftest }}
+      release_rule_selftest: ${{ steps.filter.outputs.release_rule_selftest }}
+      traceability_selftest: ${{ steps.filter.outputs.traceability_selftest }}
+      status_docs_selftest: ${{ steps.filter.outputs.status_docs_selftest }}
+      diagnostics_docs_selftest: ${{ steps.filter.outputs.diagnostics_docs_selftest }}
+      deferral_selftest: ${{ steps.filter.outputs.deferral_selftest }}
+      curl_zero_selftest: ${{ steps.filter.outputs.curl_zero_selftest }}
+      oracle_labels_selftest: ${{ steps.filter.outputs.oracle_labels_selftest }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            documentation:
+              - 'README.Rmd'
+              - 'README.md'
+              - 'R/**'
+              - 'man/**'
+              - 'vignettes/**'
+              - 'DESCRIPTION'
+              - 'NAMESPACE'
+              - 'tools/*doc-consistency.R'
+              - 'design/work/url-v3/contracts/**'
+              - 'design/work/url-v3/tools/traceability-gate.R'
+              - '.github/workflows/verify.yml'
+            locale:
+              - 'R/**'
+              - 'tests/**'
+              - 'DESCRIPTION'
+              - 'NAMESPACE'
+              - '.github/workflows/verify.yml'
+            coverage:
+              - 'R/**'
+              - 'tests/**'
+              - 'DESCRIPTION'
+              - 'NAMESPACE'
+              - '.github/workflows/verify.yml'
+            oracle:
+              - 'tests/testthat/fixtures/**'
+              - 'tests/testthat/helper-rfc3986-*.R'
+              - 'tests/testthat/test-external-url-vectors.R'
+              - 'tests/testthat/test-rfc3986-*.R'
+              - 'tools/oracle/**'
+              - 'tools/oracle-provenance-gate.R'
+              - 'design/work/url-v3/registers/oracle-register.md'
+              - 'design/work/url-v3/tools/oracle-label-gate.R'
+              - '.github/workflows/verify.yml'
+            cache_docs_selftest:
+              - 'tools/cache-doc-consistency.R'
+            oracle_provenance_selftest:
+              - 'tools/oracle-provenance-gate.R'
+            credentials_selftest:
+              - 'tools/oracle/verify-credentials-fragments.R'
+            ip_obfuscation_selftest:
+              - 'tools/oracle/verify-ip-obfuscation.R'
+            youarealiar_selftest:
+              - 'tools/oracle/verify-youarealiar.R'
+            equivocal_urls_selftest:
+              - 'tools/oracle/verify-equivocal-urls.R'
+            wpt_urltestdata_selftest:
+              - 'tools/oracle/verify-wpt-urltestdata.R'
+              - 'tools/oracle/relocate-wpt-format.R'
+              - 'tools/oracle/check-fsss-conformance.R'
+              - 'tools/oracle/fetch-source.R'
+            ada_extra_selftest:
+              - 'tools/oracle/verify-ada-extra-urltestdata.R'
+              - 'tools/oracle/relocate-wpt-format.R'
+              - 'tools/oracle/check-fsss-conformance.R'
+              - 'tools/oracle/fetch-source.R'
+            ada_dnslength_selftest:
+              - 'tools/oracle/verify-ada-verifydnslength.R'
+              - 'tools/oracle/derive-verifydnslength.R'
+              - 'tools/oracle/derive-ip-obfuscation.R'
+              - 'tools/oracle/fetch-source.R'
+            release_rule_selftest:
+              - 'tools/release-rule-check.R'
+            traceability_selftest:
+              - 'design/work/url-v3/tools/traceability-gate.R'
+            status_docs_selftest:
+              - 'tools/status-doc-consistency.R'
+            diagnostics_docs_selftest:
+              - 'tools/diagnostics-doc-consistency.R'
+            deferral_selftest:
+              - 'tools/deferral-gate.R'
+            curl_zero_selftest:
+              - 'tools/curl-zero-gate.R'
+            oracle_labels_selftest:
+              - 'design/work/url-v3/tools/oracle-label-gate.R'
+
   lint:
     runs-on: ubuntu-latest
     env:
@@ -35,6 +145,8 @@ jobs:
         shell: Rscript {0}
 
   readme:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.documentation == 'true'
     runs-on: ubuntu-latest
     name: README in sync with README.Rmd
     env:
@@ -96,7 +208,8 @@ jobs:
   # earns its keep. It is deliberately NOT the determinism probe, which
   # collects evidence across OS x R x charset and never fails a build.
   locale:
-    needs: lint
+    needs: [lint, changes]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.locale == 'true'
     runs-on: ubuntu-latest
     name: Tests (LC_ALL=C)
     env:
@@ -159,6 +272,8 @@ jobs:
   # dependencies beyond base R. The --self-test run exercises the gate's own
   # positive/negative coverage before it scans the tree.
   cache-docs:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.documentation == 'true'
     runs-on: ubuntu-latest
     name: Cache docs match runtime default (C-08)
     steps:
@@ -167,6 +282,7 @@ jobs:
         with:
           use-public-rspm: true
       - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.cache_docs_selftest == 'true'
         run: Rscript tools/cache-doc-consistency.R --self-test
       - name: Scan documentation for full_parse default-bound drift
         run: Rscript tools/cache-doc-consistency.R
@@ -188,6 +304,8 @@ jobs:
   # avoid collisions with the concurrent branches inserting around status-docs
   # and at the end of this file.
   oracle-provenance:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.oracle == 'true'
     runs-on: ubuntu-latest
     name: Oracle provenance record matches the fixtures
     steps:
@@ -199,9 +317,131 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c("jsonlite", "digest"))
       - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.oracle_provenance_selftest == 'true'
         run: Rscript tools/oracle-provenance-gate.R --self-test
       - name: Verify the provenance record against the fixture bytes
         run: Rscript tools/oracle-provenance-gate.R
+
+  # Oracle re-derivation (RURL-ozdejfzl). The provenance gate above checks that a
+  # generation_command is RECORDED; it cannot check that the command runs, so a
+  # recorded builder living in gitignored _scratch/ passed it while naming
+  # something no clean checkout could execute. This job closes the other half for
+  # the wpt-credentials-fragments group: it re-derives all 43 expected values
+  # from the committed WPT import by an independent transcription of URL Standard
+  # SS4.5 and compares them to the recorded ones, so the record's "43/43
+  # re-derive" claim is re-tested on every run rather than resting on one
+  # hand-verification. It also re-applies the de-duplication that selected the
+  # block, which is what notices if a later corpus addition changed what this
+  # group ought to contain.
+  #
+  # Deliberately installs NO package and never calls devtools::load_all(): an
+  # oracle that can reach the implementation it grades is a characterization
+  # test wearing an oracle's label. The independence is structural, not a comment.
+  oracle-rederivation:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.oracle == 'true'
+    runs-on: ubuntu-latest
+    name: Committed oracle values re-derive from their upstream components
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install gate dependencies
+        shell: Rscript {0}
+        run: install.packages("jsonlite")
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.credentials_selftest == 'true'
+        run: Rscript tools/oracle/verify-credentials-fragments.R --self-test
+      - name: Re-derive the committed oracle values
+        run: Rscript tools/oracle/verify-credentials-fragments.R
+      # ip-obfuscation is the group with NO upstream artifact, so
+      # re-derivability is not a convenience here -- it is the only provenance
+      # the group has. Its record says so in prose ("derivable from arithmetic
+      # alone"); this makes the sentence executable.
+      - name: Gate self-test (ip-obfuscation)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.ip_obfuscation_selftest == 'true'
+        run: Rscript tools/oracle/verify-ip-obfuscation.R --self-test
+      - name: Re-derive the committed oracle values (ip-obfuscation)
+        run: Rscript tools/oracle/verify-ip-obfuscation.R
+      # youarealiar is TIER 3: its expected values are transcribed from a paper,
+      # so there is no algorithm to re-run and this gate checks transcription
+      # INTEGRITY -- primary-source cells, byte exactness of the three rows whose
+      # PDF escaping was ambiguous, restatement fidelity, and citations. It
+      # cannot establish correctness, and it says so in its own output.
+      - name: Gate self-test (youarealiar transcription)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.youarealiar_selftest == 'true'
+        run: Rscript tools/oracle/verify-youarealiar.R --self-test
+      - name: Committed transcription is intact (youarealiar)
+        run: Rscript tools/oracle/verify-youarealiar.R
+      # equivocal-urls is the most irrecoverable group in the fixture: the paper
+      # released NO artifact, so there is not even a third-party repo to
+      # byte-check against. Integrity, byte exactness, and the [0xNN]
+      # octet-notation exception for the two un-representable rows.
+      - name: Gate self-test (equivocal-urls transcription)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.equivocal_urls_selftest == 'true'
+        run: Rscript tools/oracle/verify-equivocal-urls.R --self-test
+      - name: Committed transcription is intact (equivocal-urls)
+        run: Rscript tools/oracle/verify-equivocal-urls.R
+      # wpt-urltestdata is TIER 2: its 267 expected values were read out of
+      # upstream bytes this repository does NOT vendor, so the full verifier has
+      # to fetch the pinned revision and cannot run offline. Only --self-test is
+      # wired here, which is the tools/oracle/check-uts46-mapping-pin.R posture:
+      # a network-reading check is not a blocking gate, because an upstream
+      # outage is not a defect in this repository. The self-test is offline and
+      # grades the parts that are logic -- the failure-arm selector, the
+      # `runnable` classifier, and the NUL shim whose failure mode is a silent
+      # false PASS rather than an error.
+      - name: Gate self-test (wpt-urltestdata re-location)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.wpt_urltestdata_selftest == 'true'
+        run: Rscript tools/oracle/verify-wpt-urltestdata.R --self-test
+      # ada-extra-urltestdata is the tier-2 group whose pinned revision does NOT
+      # reproduce one expected value: upstream re-expected a case after the
+      # import. Its two exact ledgers, and the second anchor that dates them,
+      # are graded by the full run; --self-test grades the ledger LOGIC in all
+      # four of its states, which is offline.
+      - name: Gate self-test (ada-extra-urltestdata re-location)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.ada_extra_selftest == 'true'
+        run: Rscript tools/oracle/verify-ada-extra-urltestdata.R --self-test
+      # ada-verifydnslength is the one tier-2 group whose VERDICTS are not
+      # upstream's: upstream rejects 10 of its 17 hosts under Ada's optional
+      # verify_dns_length, while the fixture records `accept` for all 17 against
+      # the WHATWG default. So its expectations are derived, not copied, and the
+      # gate re-derives BOTH readings -- the one that produces the committed
+      # value and the one that produces upstream's -- so the disagreement is
+      # explained rather than tolerated. --self-test grades both readings
+      # offline, including the trailing-empty-field split trap.
+      - name: Gate self-test (ada-verifydnslength derivation)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.ada_dnslength_selftest == 'true'
+        run: Rscript tools/oracle/verify-ada-verifydnslength.R --self-test
+
+  # Structural validator for the §6 records (ADR 0014). This replaces both the
+  # pin-inventory job and the retired control-plane workflow.
+  #
+  # Until ADR 0014 this validator ran ONLY via ci-gate.R, which tools/verify.R
+  # treated as ADVISORY -- it printed a verdict and never failed a push -- and
+  # via a control-plane.yml that could not run at all once origin moved off
+  # GitHub. So the checks that catch real defects (a duplicated record id, a
+  # dangling reference, an export no inventory row covers, a register that has
+  # drifted out of bijection with its sources) were the ones nothing enforced,
+  # while the hash cascade that only a re-seal could clear was blocking.
+  #
+  # That is now inverted. The ratification half is deleted and what remains is
+  # wired here as an ordinary blocking gate, which also means tools/verify.R
+  # picks it up automatically -- it derives its gate list from this file.
+  control-plane:
+    runs-on: ubuntu-latest
+    name: Records are structurally sound (§6)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install gate dependencies
+        shell: Rscript {0}
+        run: install.packages("yaml")
+      - name: Validate the record family
+        run: Rscript design/work/url-v3/tools/validate-records.R
 
   # C-10 release-rule gate (G4.3). Verifies the ACCEPTED owner disposition P0.4:
   # the "no CRAN until curl-free" hold is bound to the v3 (3.0.0) line and does
@@ -211,6 +451,7 @@ jobs:
   # package build. It does NOT assert "3.x cannot ship with curl"; that closure
   # criterion is carried whole by its own G4 leaf (RURL-cunfohwy).
   release-rule:
+    needs: changes
     runs-on: ubuntu-latest
     name: Release rule matches the accepted C-10 boundary
     steps:
@@ -219,6 +460,7 @@ jobs:
         with:
           use-public-rspm: true
       - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.release_rule_selftest == 'true'
         run: Rscript tools/release-rule-check.R --self-test
       - name: Verify the release rule over the normative corpus
         run: Rscript tools/release-rule-check.R
@@ -243,6 +485,8 @@ jobs:
   # `status-docs` and PR #250 appends at the end of the file; three concurrent
   # branches need three distinct anchors, and this is the third.
   claim-traceability:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.documentation == 'true'
     runs-on: ubuntu-latest
     name: Every normative claim has an owning verification slice (G4 criterion 1)
     steps:
@@ -251,11 +495,14 @@ jobs:
         with:
           use-public-rspm: true
       - name: Gate self-test (T0-T7, positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.traceability_selftest == 'true'
         run: Rscript design/work/url-v3/tools/traceability-gate.R --self-test
       - name: Orphan / reverse-coverage check over the contract family
         run: Rscript design/work/url-v3/tools/traceability-gate.R
 
   status-docs:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.documentation == 'true'
     runs-on: ubuntu-latest
     name: parse_status docs match the status constants (M-8/M-14)
     steps:
@@ -264,6 +511,7 @@ jobs:
         with:
           use-public-rspm: true
       - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.status_docs_selftest == 'true'
         run: Rscript tools/status-doc-consistency.R --self-test
       - name: Scan documentation for status-vocabulary drift
         run: Rscript tools/status-doc-consistency.R
@@ -281,6 +529,8 @@ jobs:
   # rather than a registry. Deterministic and network-free: it sources the
   # registry file, so it needs no package build.
   diagnostics-docs:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.documentation == 'true'
     runs-on: ubuntu-latest
     name: Diagnostics docs match the vocabulary registry
     steps:
@@ -289,6 +539,7 @@ jobs:
         with:
           use-public-rspm: true
       - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.diagnostics_docs_selftest == 'true'
         run: Rscript tools/diagnostics-doc-consistency.R --self-test
       - name: Scan documentation for diagnostics-vocabulary drift
         run: Rscript tools/diagnostics-doc-consistency.R
@@ -302,6 +553,7 @@ jobs:
   # check is what stops "specified-but-unshipped" becoming a permanent parking
   # space the surface quietly escapes. Deterministic, network-free, base R.
   deferral-gate:
+    needs: changes
     runs-on: ubuntu-latest
     name: G4 deferrals name carriers and no deferred surface has shipped
     steps:
@@ -310,12 +562,48 @@ jobs:
         with:
           use-public-rspm: true
       - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.deferral_selftest == 'true'
         run: Rscript tools/deferral-gate.R --self-test
       - name: Verify the deferral register against the tree
         run: Rscript tools/deferral-gate.R
 
+  # curl zero-reference gate (RURL-cunfohwy) -- the v3 line's CRAN release
+  # criterion from P0.4 / RCON-09 section 4.
+  #
+  # THIS GATE IS RED TODAY, ON PURPOSE: curl::curl_parse_url() is still live at
+  # the single remaining parse seam. Its self-test is BLOCKING (the gate itself
+  # must be correct, and it passes), while the tree scan is deliberately
+  # non-blocking -- wiring a known-red criterion as blocking would turn the
+  # headline gate red for every unrelated change, which trains people to ignore
+  # it. The scan's job right now is to publish the exact remaining worklist on
+  # every run.
+  #
+  # WHEN THE REMOVAL LANDS: drop `continue-on-error`, and add the full run
+  # (no --static-only) to the release act. --static-only never satisfies
+  # RCON-09; only the full run's clean room does.
+  curl-zero-gate:
+    needs: changes
+    runs-on: ubuntu-latest
+    name: curl zero-reference (RCON-09)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.curl_zero_selftest == 'true'
+        run: Rscript tools/curl-zero-gate.R --self-test
+      # Blocking as of RURL-robgajml: the removal has landed, so a new curl
+      # reference is a regression, not a known-red backlog item. The static
+      # scan runs here; the clean room (C7) needs a full R CMD check with the
+      # package's dependencies installed, so it runs in the `check` matrix
+      # rather than being duplicated on this bare runner.
+      - name: Scan the tree for surviving curl references
+        run: Rscript tools/curl-zero-gate.R --static-only
+
   coverage:
-    needs: check
+    needs: [check, changes]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     name: Test coverage
     env:
@@ -353,6 +641,8 @@ jobs:
   # job after `status-docs`, and keeping the two insertion points apart is what
   # stops these branches from conflicting on the same anchor a second time.
   oracle-labels:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.oracle == 'true'
     runs-on: ubuntu-latest
     name: Oracles are labeled by authority and claim boundary (G4 criterion 2)
     steps:
@@ -361,6 +651,7 @@ jobs:
         with:
           use-public-rspm: true
       - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.oracle_labels_selftest == 'true'
         run: Rscript design/work/url-v3/tools/oracle-label-gate.R --self-test
       - name: Every oracle instance is classified
         run: Rscript design/work/url-v3/tools/oracle-label-gate.R

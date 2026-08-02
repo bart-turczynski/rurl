@@ -22,7 +22,7 @@ get_tld(
 \item{host_encoding}{How to present the host in \code{clean_url}. Defaults to
 "keep".
 \itemize{
-\item{"keep": Leave host as parsed by curl (may preserve original case).}
+\item{"keep": Leave the host as parsed (may preserve original case).}
 \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
 cleaned URL.}
 \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}

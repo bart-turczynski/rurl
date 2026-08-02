@@ -118,7 +118,7 @@ timed_rate("scalar accessor loop (get_domain)", length(unique_urls), {
 # Multi-profile accessor workload (RURL-dkwrebdt): the rurl-mcp pattern -- call
 # several accessors, each with a DIFFERENT presentation profile, on the same
 # URLs. Before the parse/present split each profile produced a different
-# full_parse key, so every accessor re-ran the whole parse core (curl + PSL).
+# full_parse key, so every accessor re-ran the whole parse core (parse + PSL).
 # After the split, all five share ONE Stage A cache entry per URL (they differ
 # only in Stage-B presentation: case / host_encoding / trailing slash), so the
 # core is computed once and the floor is a single safe_parse_urls() cold pass.

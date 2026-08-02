@@ -2,7 +2,8 @@
 # (RURL-tyetpjym, epic RURL-moselrwp). The WHATWG basic URL parser's first step
 # removes every ASCII tab (U+0009), LF (U+000A), and CR (U+000D) from the input
 # before parsing. rurl otherwise rejects a control char in the authority
-# (libcurl errors) -- correct under RFC 3986, which requires such bytes to be
+# (the parser errors) -- correct under RFC 3986, which requires such bytes to
+# be
 # percent-encoded and has no strip step. So the strip runs ONLY under
 # url_standard = "whatwg"; rfc3986 and no selector keep rejecting. Stripping is
 # surfaced, not silent: it fires the `control-char-stripped` diagnostic
@@ -102,7 +103,7 @@ test_that("whatwg strips a trailing space run instead of encoding it", {
 
 test_that("whatwg accepts an input with a leading space run", {
   u <- "  http://example.com/a"
-  # Was a parse error (the leading space reached curl).
+  # Was a parse error (the leading space reached the parser).
   expect_identical(get_parse_status(u, url_standard = "whatwg"), "ok")
   expect_identical(get_host(u, url_standard = "whatwg"), "example.com")
   expect_identical(get_path(u, url_standard = "whatwg"), "/a")

@@ -117,9 +117,9 @@ non-HTTP(S) and so ineligible for the SEO/semantic Stage-B transforms.
 \code{file-non-absolute-path},
 \code{file-userinfo-extension} (userinfo, permitted by RFC 8089
 Appendix E.1's non-normative extended grammar), and
-\code{file-component-outside-rfc8089} (a query or fragment, which
-RFC 8089's grammar does not mention and which are therefore inherited
-generic RFC 3986 components).
+\code{file-component-outside-rfc8089} (a port, query or fragment,
+which RFC 8089's grammar does not mention and which are therefore
+inherited generic RFC 3986 components).
 }
 }
 
@@ -173,9 +173,9 @@ hyphen rules (leading/trailing hyphen, or \code{"--"} in positions
 \item \code{domain-std3-violation} --- a label carries a code point
 outside the STD3 LDH set.
 \item \code{host-charset-shimmed} --- the host carries one of the 15
-code points WHATWG keeps but libcurl rejects, accepted by the shim
-(ADR 0009: \code{! $ & ( ) * + , ; =}, plus the ASCII quotation mark,
-apostrophe, grave accent, and the two curly braces).
+code points WHATWG keeps but the historical parser rejected,
+accepted by the shim (ADR 0009: \code{! $ & ( ) * + , ; =}, plus the
+ASCII quotation mark, apostrophe, grave accent, and the two braces).
 \code{"whatwg"} only.
 }
 
@@ -237,8 +237,9 @@ non-absolute \code{file:} path under \code{"rfc3986"}.
 \item \code{file-userinfo-extension} --- \emph{general}; userinfo on a
 \code{file:} URL, permitted by RFC 8089 Appendix E.1's non-normative
 extended grammar.
-\item \code{file-component-outside-rfc8089} --- \emph{general}; a query
-or fragment on a \code{file:} URL, inherited from generic RFC 3986.
+\item \code{file-component-outside-rfc8089} --- \emph{general}; a port,
+query or fragment on a \code{file:} URL, inherited from generic
+RFC 3986.
 }
 }
 

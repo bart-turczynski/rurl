@@ -1,7 +1,17 @@
 # ADR 0009: Accept curl-rejected-but-WHATWG-valid host code points under `whatwg` (host-charset shim)
 
-- **Status:** Accepted
-- **Date:** 2026-07-07 (rurl 2.3.0)
+- **Status:** Superseded by ADR-0013
+- **Date:** 2026-07-07 (rurl 2.3.0); superseded 2026-07-29
+- **Superseded because:** rurl no longer delegates host parsing to libcurl
+  (RURL-robgajml), so the allowed-set this ADR worked around is now rurl's own
+  constant. The shim's finding stands — all 15 code points still parse under
+  `whatwg`, both spellings, and `host-charset-shimmed` still fires — but the
+  mechanism is gone: acceptance moved into `.parse_web_url_one()` on a
+  `host_charset` dial. ADR 0013 also records why the pre-parse mechanism was
+  not merely obsolete but wrong (its regex eligibility gate made host
+  acceptance depend on slash count, on line terminators elsewhere in the URL,
+  and on the scheme). Read ADR 0013 for current behaviour; keep this one for
+  the charset analysis and the ada-005/ada-008 corpus history.
 - **Tracking:** RURL-dxwxeamq. Boundary-case reference: RURL-ffrkfdcq (ada-008,
   closed as documented boundary). Relates to ADR 0002 (reversible host), ADR
   0004 (host-shape gate), ADR 0007 (`url_standard` governed axes).

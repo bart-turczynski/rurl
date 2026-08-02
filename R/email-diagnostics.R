@@ -380,8 +380,8 @@
     if (!split$ok) {
       next
     }
-    user[i] <- curl::curl_unescape(split$local)
-    dd <- curl::curl_unescape(split$domain)
+    user[i] <- .pct_unescape(split$local)
+    dd <- .pct_unescape(split$domain)
     if (.email_classify_mailto_domain(dd) %in%
       c("ascii-dot-atom-text", "idna2008-domain")) {
       host[i] <- dd
@@ -575,8 +575,8 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   if (!split$ok) {
     return(out)
   }
-  ld <- curl::curl_unescape(split$local)
-  dd <- curl::curl_unescape(split$domain)
+  ld <- .pct_unescape(split$local)
+  dd <- .pct_unescape(split$domain)
   out$mailto_local_part_form <- .email_classify_local(ld)
   out$mailto_domain_form <- .email_classify_mailto_domain(dd)
   out$smtp_mailbox_rhs_syntax_form <- .email_classify_smtp_rhs(dd)

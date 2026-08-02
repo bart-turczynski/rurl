@@ -429,16 +429,31 @@ order:
 - Full-string, state, vector, mutation, join, cache, determinism, and migration
   properties have positive and negative coverage.
 
-### G5 — Independent re-review and acceptance
+**G4 exits when its gates pass in CI.** All three criteria are executable and
+wired into `verify.yml`: `traceability-gate.R` (criterion 1 — it derives the
+claim population from the contracts themselves and fails on an unowned claim),
+`oracle-label-gate.R` (criterion 2), and `tools/deferral-gate.R` (criterion 3,
+including the rule that a deferred surface may not ship). There is no G4
+acceptance record and none is required: a green gate is the evidence, and a
+record asserting the same thing would be a second, weaker copy of it.
 
-- One context-free reviewer checks comprehensibility and completeness.
-- One evidence-aware reviewer checks every material citation and executable
-  claim against the frozen baseline.
-- Every review finding has a disposition and closure state.
-- All amended protocol acceptance questions have objective yes/no evidence.
+### G5 — RETIRED (ADR 0014)
 
-Only after G5 may the successor product-specification draft begin. Code changes
-that would prematurely choose an open v3 product decision remain out of scope.
+G5 required "one context-free reviewer" and "one evidence-aware reviewer", plus
+a disposition for every finding. **Those reviewers do not exist.** This is a
+single-developer project, and P0.1 §Decision(4) never delegated either role, so
+G5 could only ever have been satisfied by the author reviewing their own work
+and recording that as independent re-review — which is not what the criterion
+says, and is worth less than the gates already running.
+
+A gate that cannot honestly be satisfied is not a gate; it is a permanent
+blocker. It blocked "the successor product-specification draft", i.e. all of
+rurl 3.0's remaining work.
+
+**Independent review still happens — by parties who are actually independent:**
+CRAN's submission checks, rOpenSci review, and R Journal refereeing. Those
+produce findings from people who did not write the code, which is the thing G5
+was reaching for.
 
 ## 8. Owner decision queue, ordered by dependency
 

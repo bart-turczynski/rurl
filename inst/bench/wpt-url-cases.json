@@ -28,7 +28,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://test@test/"
   },
   {
    "input": "https://:@test",
@@ -39,7 +40,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://test/"
   },
   {
    "input": "non-special://test:@test/x",
@@ -50,7 +52,8 @@
    "port": "",
    "pathname": "/x",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special://test@test/x"
   },
   {
    "input": "non-special://:@test/x",
@@ -61,7 +64,8 @@
    "port": "",
    "pathname": "/x",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special://test/x"
   },
   {
    "input": "lolscheme:x x#x x",
@@ -72,7 +76,8 @@
    "port": "",
    "pathname": "x x",
    "search": "",
-   "hash": "#x%20x"
+   "hash": "#x%20x",
+   "href": "lolscheme:x x#x%20x"
   },
   {
    "input": "http://é@é",
@@ -83,7 +88,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://%C3%A9@xn--9ca/"
   },
   {
    "input": "http://é@example.com",
@@ -94,7 +100,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://%C3%A9@example.com/"
   },
   {
    "input": "http://a:b@c\\",
@@ -105,7 +112,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a:b@c/"
   },
   {
    "input": "ws://a@b\\c",
@@ -116,7 +124,8 @@
    "port": "",
    "pathname": "/c",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ws://a@b/c"
   },
   {
    "input": "file:///w|m",
@@ -127,7 +136,8 @@
    "port": "",
    "pathname": "/w|m",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///w|m"
   },
   {
    "input": "file:///w||m",
@@ -138,7 +148,8 @@
    "port": "",
    "pathname": "/w||m",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///w||m"
   },
   {
    "input": "file:///w|/m",
@@ -149,7 +160,8 @@
    "port": "",
    "pathname": "/w:/m",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///w:/m"
   },
   {
    "input": "file:C|/m/",
@@ -160,7 +172,8 @@
    "port": "",
    "pathname": "/C:/m/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///C:/m/"
   },
   {
    "input": "file:C||/m/",
@@ -171,7 +184,8 @@
    "port": "",
    "pathname": "/C||/m/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///C||/m/"
   },
   {
    "input": "http://example.com/././foo",
@@ -182,7 +196,8 @@
    "port": "",
    "pathname": "/foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo"
   },
   {
    "input": "http://example.com/./.foo",
@@ -193,7 +208,8 @@
    "port": "",
    "pathname": "/.foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/.foo"
   },
   {
    "input": "http://example.com/foo/.",
@@ -204,7 +220,8 @@
    "port": "",
    "pathname": "/foo/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/"
   },
   {
    "input": "http://example.com/foo/./",
@@ -215,7 +232,8 @@
    "port": "",
    "pathname": "/foo/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/"
   },
   {
    "input": "http://example.com/foo/bar/..",
@@ -226,7 +244,8 @@
    "port": "",
    "pathname": "/foo/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/"
   },
   {
    "input": "http://example.com/foo/bar/../",
@@ -237,7 +256,8 @@
    "port": "",
    "pathname": "/foo/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/"
   },
   {
    "input": "http://example.com/foo/..bar",
@@ -248,7 +268,8 @@
    "port": "",
    "pathname": "/foo/..bar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/..bar"
   },
   {
    "input": "http://example.com/foo/bar/../ton",
@@ -259,7 +280,8 @@
    "port": "",
    "pathname": "/foo/ton",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/ton"
   },
   {
    "input": "http://example.com/foo/bar/../ton/../../a",
@@ -270,7 +292,8 @@
    "port": "",
    "pathname": "/a",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/a"
   },
   {
    "input": "http://example.com/foo/../../..",
@@ -281,7 +304,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/"
   },
   {
    "input": "http://example.com/foo/../../../ton",
@@ -292,7 +316,8 @@
    "port": "",
    "pathname": "/ton",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/ton"
   },
   {
    "input": "http://example.com/foo/%2e",
@@ -303,7 +328,8 @@
    "port": "",
    "pathname": "/foo/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/"
   },
   {
    "input": "http://example.com/foo/%2e%2",
@@ -314,7 +340,8 @@
    "port": "",
    "pathname": "/foo/%2e%2",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/%2e%2"
   },
   {
    "input": "http://example.com/foo/%2e./%2e%2e/.%2e/%2e.bar",
@@ -325,7 +352,8 @@
    "port": "",
    "pathname": "/%2e.bar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/%2e.bar"
   },
   {
    "input": "http://example.com////../..",
@@ -336,7 +364,8 @@
    "port": "",
    "pathname": "//",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com//"
   },
   {
    "input": "http://example.com/foo/bar//../..",
@@ -347,7 +376,8 @@
    "port": "",
    "pathname": "/foo/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/"
   },
   {
    "input": "http://example.com/foo/bar//..",
@@ -358,7 +388,8 @@
    "port": "",
    "pathname": "/foo/bar/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo/bar/"
   },
   {
    "input": "http://example.com/foo",
@@ -369,7 +400,8 @@
    "port": "",
    "pathname": "/foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo"
   },
   {
    "input": "http://example.com/%20foo",
@@ -380,7 +412,8 @@
    "port": "",
    "pathname": "/%20foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/%20foo"
   },
   {
    "input": "http://example.com/foo%",
@@ -391,7 +424,8 @@
    "port": "",
    "pathname": "/foo%",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo%"
   },
   {
    "input": "http://example.com/foo%2",
@@ -402,7 +436,8 @@
    "port": "",
    "pathname": "/foo%2",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo%2"
   },
   {
    "input": "http://example.com/foo%2zbar",
@@ -413,7 +448,8 @@
    "port": "",
    "pathname": "/foo%2zbar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo%2zbar"
   },
   {
    "input": "http://example.com/foo%2Â©zbar",
@@ -424,7 +460,8 @@
    "port": "",
    "pathname": "/foo%2%C3%82%C2%A9zbar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo%2%C3%82%C2%A9zbar"
   },
   {
    "input": "http://example.com/foo%41%7a",
@@ -435,7 +472,8 @@
    "port": "",
    "pathname": "/foo%41%7a",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo%41%7a"
   },
   {
    "input": "http://example.com/foo\t%91",
@@ -446,7 +484,8 @@
    "port": "",
    "pathname": "/foo%C2%91%91",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo%C2%91%91"
   },
   {
    "input": "http://example.com/foo%00%51",
@@ -457,7 +496,8 @@
    "port": "",
    "pathname": "/foo%00%51",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foo%00%51"
   },
   {
    "input": "http://example.com/(%28:%3A%29)",
@@ -468,7 +508,8 @@
    "port": "",
    "pathname": "/(%28:%3A%29)",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/(%28:%3A%29)"
   },
   {
    "input": "http://example.com/%3A%3a%3C%3c",
@@ -479,7 +520,8 @@
    "port": "",
    "pathname": "/%3A%3a%3C%3c",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/%3A%3a%3C%3c"
   },
   {
    "input": "http://example.com/foo\tbar",
@@ -490,7 +532,8 @@
    "port": "",
    "pathname": "/foobar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/foobar"
   },
   {
    "input": "http://example.com\\\\foo\\\\bar",
@@ -501,7 +544,8 @@
    "port": "",
    "pathname": "//foo//bar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com//foo//bar"
   },
   {
    "input": "http://example.com/%7Ffp3%3Eju%3Dduvgw%3Dd",
@@ -512,7 +556,8 @@
    "port": "",
    "pathname": "/%7Ffp3%3Eju%3Dduvgw%3Dd",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/%7Ffp3%3Eju%3Dduvgw%3Dd"
   },
   {
    "input": "http://example.com/@asdf%40",
@@ -523,7 +568,8 @@
    "port": "",
    "pathname": "/@asdf%40",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/@asdf%40"
   },
   {
    "input": "http://example.com/你好你好",
@@ -534,7 +580,8 @@
    "port": "",
    "pathname": "/%E4%BD%A0%E5%A5%BD%E4%BD%A0%E5%A5%BD",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/%E4%BD%A0%E5%A5%BD%E4%BD%A0%E5%A5%BD"
   },
   {
    "input": "http://example.com/‥/foo",
@@ -545,7 +592,8 @@
    "port": "",
    "pathname": "/%E2%80%A5/foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/%E2%80%A5/foo"
   },
   {
    "input": "http://example.com/﻿/foo",
@@ -556,7 +604,8 @@
    "port": "",
    "pathname": "/%EF%BB%BF/foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/%EF%BB%BF/foo"
   },
   {
    "input": "http://example.com/‮/foo/‭/bar",
@@ -567,7 +616,8 @@
    "port": "",
    "pathname": "/%E2%80%AE/foo/%E2%80%AD/bar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/%E2%80%AE/foo/%E2%80%AD/bar"
   },
   {
    "input": "http://www.google.com/foo?bar=baz#",
@@ -578,7 +628,8 @@
    "port": "",
    "pathname": "/foo",
    "search": "?bar=baz",
-   "hash": ""
+   "hash": "",
+   "href": "http://www.google.com/foo?bar=baz#"
   },
   {
    "input": "http://www.google.com/foo?bar=baz# »",
@@ -589,7 +640,8 @@
    "port": "",
    "pathname": "/foo",
    "search": "?bar=baz",
-   "hash": "#%20%C2%BB"
+   "hash": "#%20%C2%BB",
+   "href": "http://www.google.com/foo?bar=baz#%20%C2%BB"
   },
   {
    "input": "data:test# »",
@@ -600,7 +652,8 @@
    "port": "",
    "pathname": "test",
    "search": "",
-   "hash": "#%20%C2%BB"
+   "hash": "#%20%C2%BB",
+   "href": "data:test#%20%C2%BB"
   },
   {
    "input": "http://www.google.com",
@@ -611,7 +664,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www.google.com/"
   },
   {
    "input": "http://192.0x00A80001",
@@ -622,7 +676,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://192.168.0.1/"
   },
   {
    "input": "http://www/foo%2Ehtml",
@@ -633,7 +688,8 @@
    "port": "",
    "pathname": "/foo%2Ehtml",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www/foo%2Ehtml"
   },
   {
    "input": "http://www/foo/%2E/html",
@@ -644,7 +700,8 @@
    "port": "",
    "pathname": "/foo/html",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www/foo/html"
   },
   {
    "input": "http://%25DOMAIN:foobar@foodomain.com/",
@@ -655,7 +712,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://%25DOMAIN:foobar@foodomain.com/"
   },
   {
    "input": "http:\\\\www.google.com\\foo",
@@ -666,7 +724,8 @@
    "port": "",
    "pathname": "/foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www.google.com/foo"
   },
   {
    "input": "http://foo:80/",
@@ -677,7 +736,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://foo/"
   },
   {
    "input": "http://foo:81/",
@@ -688,7 +748,8 @@
    "port": "81",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://foo:81/"
   },
   {
    "input": "httpa://foo:80/",
@@ -699,7 +760,8 @@
    "port": "80",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "httpa://foo:80/"
   },
   {
    "input": "https://foo:443/",
@@ -710,7 +772,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://foo/"
   },
   {
    "input": "https://foo:80/",
@@ -721,7 +784,8 @@
    "port": "80",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://foo:80/"
   },
   {
    "input": "ftp://foo:21/",
@@ -732,7 +796,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ftp://foo/"
   },
   {
    "input": "ftp://foo:80/",
@@ -743,7 +808,8 @@
    "port": "80",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ftp://foo:80/"
   },
   {
    "input": "gopher://foo:70/",
@@ -754,7 +820,8 @@
    "port": "70",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "gopher://foo:70/"
   },
   {
    "input": "gopher://foo:443/",
@@ -765,7 +832,8 @@
    "port": "443",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "gopher://foo:443/"
   },
   {
    "input": "ws://foo:80/",
@@ -776,7 +844,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ws://foo/"
   },
   {
    "input": "ws://foo:81/",
@@ -787,7 +856,8 @@
    "port": "81",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ws://foo:81/"
   },
   {
    "input": "ws://foo:443/",
@@ -798,7 +868,8 @@
    "port": "443",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ws://foo:443/"
   },
   {
    "input": "ws://foo:815/",
@@ -809,7 +880,8 @@
    "port": "815",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ws://foo:815/"
   },
   {
    "input": "wss://foo:80/",
@@ -820,7 +892,8 @@
    "port": "80",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://foo:80/"
   },
   {
    "input": "wss://foo:81/",
@@ -831,7 +904,8 @@
    "port": "81",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://foo:81/"
   },
   {
    "input": "wss://foo:443/",
@@ -842,7 +916,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://foo/"
   },
   {
    "input": "wss://foo:815/",
@@ -853,7 +928,8 @@
    "port": "815",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://foo:815/"
   },
   {
    "input": "http:/example.com/",
@@ -864,7 +940,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/"
   },
   {
    "input": "ftp:/example.com/",
@@ -875,7 +952,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ftp://example.com/"
   },
   {
    "input": "https:/example.com/",
@@ -886,7 +964,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://example.com/"
   },
   {
    "input": "madeupscheme:/example.com/",
@@ -897,7 +976,8 @@
    "port": "",
    "pathname": "/example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "madeupscheme:/example.com/"
   },
   {
    "input": "file:/example.com/",
@@ -908,7 +988,8 @@
    "port": "",
    "pathname": "/example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///example.com/"
   },
   {
    "input": "ftps:/example.com/",
@@ -919,7 +1000,8 @@
    "port": "",
    "pathname": "/example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ftps:/example.com/"
   },
   {
    "input": "gopher:/example.com/",
@@ -930,7 +1012,8 @@
    "port": "",
    "pathname": "/example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "gopher:/example.com/"
   },
   {
    "input": "ws:/example.com/",
@@ -941,7 +1024,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ws://example.com/"
   },
   {
    "input": "wss:/example.com/",
@@ -952,7 +1036,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://example.com/"
   },
   {
    "input": "data:/example.com/",
@@ -963,7 +1048,8 @@
    "port": "",
    "pathname": "/example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "data:/example.com/"
   },
   {
    "input": "javascript:/example.com/",
@@ -974,7 +1060,8 @@
    "port": "",
    "pathname": "/example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "javascript:/example.com/"
   },
   {
    "input": "mailto:/example.com/",
@@ -985,7 +1072,8 @@
    "port": "",
    "pathname": "/example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "mailto:/example.com/"
   },
   {
    "input": "http:example.com/",
@@ -996,7 +1084,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.com/"
   },
   {
    "input": "ftp:example.com/",
@@ -1007,7 +1096,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ftp://example.com/"
   },
   {
    "input": "https:example.com/",
@@ -1018,7 +1108,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://example.com/"
   },
   {
    "input": "madeupscheme:example.com/",
@@ -1029,7 +1120,8 @@
    "port": "",
    "pathname": "example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "madeupscheme:example.com/"
   },
   {
    "input": "ftps:example.com/",
@@ -1040,7 +1132,8 @@
    "port": "",
    "pathname": "example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ftps:example.com/"
   },
   {
    "input": "gopher:example.com/",
@@ -1051,7 +1144,8 @@
    "port": "",
    "pathname": "example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "gopher:example.com/"
   },
   {
    "input": "ws:example.com/",
@@ -1062,7 +1156,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ws://example.com/"
   },
   {
    "input": "wss:example.com/",
@@ -1073,7 +1168,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://example.com/"
   },
   {
    "input": "data:example.com/",
@@ -1084,7 +1180,8 @@
    "port": "",
    "pathname": "example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "data:example.com/"
   },
   {
    "input": "javascript:example.com/",
@@ -1095,7 +1192,8 @@
    "port": "",
    "pathname": "example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "javascript:example.com/"
   },
   {
    "input": "mailto:example.com/",
@@ -1106,7 +1204,8 @@
    "port": "",
    "pathname": "example.com/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "mailto:example.com/"
   },
   {
    "input": "https://example.com/aaa/bbb/%2e%2e?query",
@@ -1117,7 +1216,8 @@
    "port": "",
    "pathname": "/aaa/",
    "search": "?query",
-   "hash": ""
+   "hash": "",
+   "href": "https://example.com/aaa/?query"
   },
   {
    "input": "http:@www.example.com",
@@ -1128,7 +1228,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www.example.com/"
   },
   {
    "input": "http:/@www.example.com",
@@ -1139,7 +1240,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www.example.com/"
   },
   {
    "input": "http://@www.example.com",
@@ -1150,7 +1252,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www.example.com/"
   },
   {
    "input": "http:a:b@www.example.com",
@@ -1161,7 +1264,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a:b@www.example.com/"
   },
   {
    "input": "http:/a:b@www.example.com",
@@ -1172,7 +1276,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a:b@www.example.com/"
   },
   {
    "input": "http://a:b@www.example.com",
@@ -1183,7 +1288,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a:b@www.example.com/"
   },
   {
    "input": "http://@pple.com",
@@ -1194,7 +1300,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://pple.com/"
   },
   {
    "input": "http::b@www.example.com",
@@ -1205,7 +1312,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://:b@www.example.com/"
   },
   {
    "input": "http:/:b@www.example.com",
@@ -1216,7 +1324,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://:b@www.example.com/"
   },
   {
    "input": "http://:b@www.example.com",
@@ -1227,7 +1336,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://:b@www.example.com/"
   },
   {
    "input": "http:a:@www.example.com",
@@ -1238,7 +1348,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a@www.example.com/"
   },
   {
    "input": "http:/a:@www.example.com",
@@ -1249,7 +1360,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a@www.example.com/"
   },
   {
    "input": "http://a:@www.example.com",
@@ -1260,7 +1372,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a@www.example.com/"
   },
   {
    "input": "http://www.@pple.com",
@@ -1271,7 +1384,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www.@pple.com/"
   },
   {
    "input": "http://:@www.example.com",
@@ -1282,7 +1396,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://www.example.com/"
   },
   {
    "input": "file:.",
@@ -1293,7 +1408,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///"
   },
   {
    "input": "non-special:opaque  ",
@@ -1304,7 +1420,8 @@
    "port": "",
    "pathname": "opaque",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:opaque"
   },
   {
    "input": "non-special:opaque  ?hi",
@@ -1315,7 +1432,8 @@
    "port": "",
    "pathname": "opaque %20",
    "search": "?hi",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:opaque %20?hi"
   },
   {
    "input": "non-special:opaque  #hi",
@@ -1326,7 +1444,8 @@
    "port": "",
    "pathname": "opaque %20",
    "search": "",
-   "hash": "#hi"
+   "hash": "#hi",
+   "href": "non-special:opaque %20#hi"
   },
   {
    "input": "non-special:opaque  x?hi",
@@ -1337,7 +1456,8 @@
    "port": "",
    "pathname": "opaque  x",
    "search": "?hi",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:opaque  x?hi"
   },
   {
    "input": "non-special:opaque  x#hi",
@@ -1348,7 +1468,8 @@
    "port": "",
    "pathname": "opaque  x",
    "search": "",
-   "hash": "#hi"
+   "hash": "#hi",
+   "href": "non-special:opaque  x#hi"
   },
   {
    "input": "non-special:opaque \t\t  \t#hi",
@@ -1359,7 +1480,8 @@
    "port": "",
    "pathname": "opaque  %20",
    "search": "",
-   "hash": "#hi"
+   "hash": "#hi",
+   "href": "non-special:opaque  %20#hi"
   },
   {
    "input": "non-special:opaque \t\t  #hi",
@@ -1370,7 +1492,8 @@
    "port": "",
    "pathname": "opaque  %20",
    "search": "",
-   "hash": "#hi"
+   "hash": "#hi",
+   "href": "non-special:opaque  %20#hi"
   },
   {
    "input": "non-special:opaque\t\t  \r #hi",
@@ -1381,7 +1504,8 @@
    "port": "",
    "pathname": "opaque  %20",
    "search": "",
-   "hash": "#hi"
+   "hash": "#hi",
+   "href": "non-special:opaque  %20#hi"
   },
   {
    "input": "https://x/�?�#�",
@@ -1392,7 +1516,8 @@
    "port": "",
    "pathname": "/%EF%BF%BD",
    "search": "?%EF%BF%BD",
-   "hash": "#%EF%BF%BD"
+   "hash": "#%EF%BF%BD",
+   "href": "https://x/%EF%BF%BD?%EF%BF%BD#%EF%BF%BD"
   },
   {
    "input": "http://a.b.c.xn--pokxncvks",
@@ -1403,7 +1528,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a.b.c.xn--pokxncvks/"
   },
   {
    "input": "http://10.0.0.xn--pokxncvks",
@@ -1414,7 +1540,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://10.0.0.xn--pokxncvks/"
   },
   {
    "input": "http://a.b.c.XN--pokxncvks",
@@ -1425,7 +1552,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a.b.c.xn--pokxncvks/"
   },
   {
    "input": "http://a.b.c.Xn--pokxncvks",
@@ -1436,7 +1564,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a.b.c.xn--pokxncvks/"
   },
   {
    "input": "http://10.0.0.XN--pokxncvks",
@@ -1447,7 +1576,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://10.0.0.xn--pokxncvks/"
   },
   {
    "input": "http://10.0.0.xN--pokxncvks",
@@ -1458,7 +1588,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://10.0.0.xn--pokxncvks/"
   },
   {
    "input": "https://faß.ExAmPlE/",
@@ -1469,7 +1600,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://xn--fa-hia.example/"
   },
   {
    "input": "sc://faß.ExAmPlE/",
@@ -1480,7 +1612,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc://fa%C3%9F.ExAmPlE/"
   },
   {
    "input": "http://./",
@@ -1491,7 +1624,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://./"
   },
   {
    "input": "http://../",
@@ -1502,7 +1636,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://../"
   },
   {
    "input": "h://.",
@@ -1513,7 +1648,8 @@
    "port": "",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "h://."
   },
   {
    "input": "http://😀x@host/",
@@ -1524,7 +1660,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://%F0%9F%98%80x@host/"
   },
   {
    "input": "http://a:😀x@host/",
@@ -1535,7 +1672,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://a:%F0%9F%98%80x@host/"
   },
   {
    "input": "http://😀@host/",
@@ -1546,7 +1684,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://%F0%9F%98%80@host/"
   },
   {
    "input": "https://localhost?q=🔥",
@@ -1557,7 +1696,8 @@
    "port": "",
    "pathname": "/",
    "search": "?q=%F0%9F%94%A5",
-   "hash": ""
+   "hash": "",
+   "href": "https://localhost/?q=%F0%9F%94%A5"
   },
   {
    "input": "https://localhost#🔥",
@@ -1568,7 +1708,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": "#%F0%9F%94%A5"
+   "hash": "#%F0%9F%94%A5",
+   "href": "https://localhost/#%F0%9F%94%A5"
   },
   {
    "input": "http://host/?'",
@@ -1579,7 +1720,8 @@
    "port": "",
    "pathname": "/",
    "search": "?%27",
-   "hash": ""
+   "hash": "",
+   "href": "http://host/?%27"
   },
   {
    "input": "notspecial://host/?'",
@@ -1590,7 +1732,8 @@
    "port": "",
    "pathname": "/",
    "search": "?'",
-   "hash": ""
+   "hash": "",
+   "href": "notspecial://host/?'"
   },
   {
    "input": "about:/../",
@@ -1601,7 +1744,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "about:/"
   },
   {
    "input": "data:/../",
@@ -1612,7 +1756,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "data:/"
   },
   {
    "input": "javascript:/../",
@@ -1623,7 +1768,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "javascript:/"
   },
   {
    "input": "mailto:/../",
@@ -1634,7 +1780,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "mailto:/"
   },
   {
    "input": "sc://ñ.test/",
@@ -1645,7 +1792,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc://%C3%B1.test/"
   },
   {
    "input": "sc://%/",
@@ -1656,7 +1804,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc://%/"
   },
   {
    "input": "sc:\\../",
@@ -1667,7 +1816,8 @@
    "port": "",
    "pathname": "\\../",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc:\\../"
   },
   {
    "input": "sc::a@example.net",
@@ -1678,7 +1828,8 @@
    "port": "",
    "pathname": ":a@example.net",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc::a@example.net"
   },
   {
    "input": "wow:%NBD",
@@ -1689,7 +1840,8 @@
    "port": "",
    "pathname": "%NBD",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wow:%NBD"
   },
   {
    "input": "wow:%1G",
@@ -1700,7 +1852,8 @@
    "port": "",
    "pathname": "%1G",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wow:%1G"
   },
   {
    "input": "wow:￿",
@@ -1711,7 +1864,8 @@
    "port": "",
    "pathname": "%EF%BF%BF",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wow:%EF%BF%BF"
   },
   {
    "input": "foo://ho\tst/",
@@ -1722,7 +1876,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "foo://host/"
   },
   {
    "input": "foo://ho\nst/",
@@ -1733,7 +1888,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "foo://host/"
   },
   {
    "input": "foo://ho\rst/",
@@ -1744,7 +1900,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "foo://host/"
   },
   {
    "input": "http://ho\tst/",
@@ -1755,7 +1912,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://host/"
   },
   {
    "input": "http://ho\nst/",
@@ -1766,7 +1924,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://host/"
   },
   {
    "input": "http://ho\rst/",
@@ -1777,7 +1936,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://host/"
   },
   {
    "input": "http://!\"$&'()*+,-.;=_`{}~/",
@@ -1788,7 +1948,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://!\"$&'()*+,-.;=_`{}~/"
   },
   {
    "input": "sc://\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\u000b\f\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f!\"$%&'()*+,-.;=_`{}~/",
@@ -1799,7 +1960,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc://%01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F!\"$%&'()*+,-.;=_`{}~/"
   },
   {
    "input": "ftp://%e2%98%83",
@@ -1810,7 +1972,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ftp://xn--n3h/"
   },
   {
    "input": "https://%e2%98%83",
@@ -1821,7 +1984,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://xn--n3h/"
   },
   {
    "input": "http://127.0.0.1:10100/relative_import.html",
@@ -1832,7 +1996,8 @@
    "port": "10100",
    "pathname": "/relative_import.html",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://127.0.0.1:10100/relative_import.html"
   },
   {
    "input": "http://facebook.com/?foo=%7B%22abc%22",
@@ -1843,7 +2008,8 @@
    "port": "",
    "pathname": "/",
    "search": "?foo=%7B%22abc%22",
-   "hash": ""
+   "hash": "",
+   "href": "http://facebook.com/?foo=%7B%22abc%22"
   },
   {
    "input": "https://localhost:3000/jqueryui@1.2.3",
@@ -1854,7 +2020,8 @@
    "port": "3000",
    "pathname": "/jqueryui@1.2.3",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://localhost:3000/jqueryui@1.2.3"
   },
   {
    "input": "h\tt\nt\rp://h\to\ns\rt:9\t0\n0\r0/p\ta\nt\rh?q\tu\ne\rry#f\tr\na\rg",
@@ -1865,7 +2032,8 @@
    "port": "9000",
    "pathname": "/path",
    "search": "?query",
-   "hash": "#frag"
+   "hash": "#frag",
+   "href": "http://host:9000/path?query#frag"
   },
   {
    "input": "http://foo.bar/baz?qux#foo\bbar",
@@ -1876,7 +2044,8 @@
    "port": "",
    "pathname": "/baz",
    "search": "?qux",
-   "hash": "#foo%08bar"
+   "hash": "#foo%08bar",
+   "href": "http://foo.bar/baz?qux#foo%08bar"
   },
   {
    "input": "http://foo.bar/baz?qux#foo\"bar",
@@ -1887,7 +2056,8 @@
    "port": "",
    "pathname": "/baz",
    "search": "?qux",
-   "hash": "#foo%22bar"
+   "hash": "#foo%22bar",
+   "href": "http://foo.bar/baz?qux#foo%22bar"
   },
   {
    "input": "http://foo.bar/baz?qux#foo<bar",
@@ -1898,7 +2068,8 @@
    "port": "",
    "pathname": "/baz",
    "search": "?qux",
-   "hash": "#foo%3Cbar"
+   "hash": "#foo%3Cbar",
+   "href": "http://foo.bar/baz?qux#foo%3Cbar"
   },
   {
    "input": "http://foo.bar/baz?qux#foo>bar",
@@ -1909,7 +2080,8 @@
    "port": "",
    "pathname": "/baz",
    "search": "?qux",
-   "hash": "#foo%3Ebar"
+   "hash": "#foo%3Ebar",
+   "href": "http://foo.bar/baz?qux#foo%3Ebar"
   },
   {
    "input": "http://foo.bar/baz?qux#foo`bar",
@@ -1920,7 +2092,8 @@
    "port": "",
    "pathname": "/baz",
    "search": "?qux",
-   "hash": "#foo%60bar"
+   "hash": "#foo%60bar",
+   "href": "http://foo.bar/baz?qux#foo%60bar"
   },
   {
    "input": "https://0x.0x.0",
@@ -1931,7 +2104,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://0.0.0.0/"
   },
   {
    "input": "https://0x.0x.0x.0x",
@@ -1942,7 +2116,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://0.0.0.0/"
   },
   {
    "input": "https://00.00.00.00",
@@ -1953,7 +2128,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://0.0.0.0/"
   },
   {
    "input": "https://0000000000000000000000000000000000000000177.0.0.1",
@@ -1964,7 +2140,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://127.0.0.1/"
   },
   {
    "input": "file:///C%3A/",
@@ -1975,7 +2152,8 @@
    "port": "",
    "pathname": "/C%3A/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///C%3A/"
   },
   {
    "input": "file:///C%7C/",
@@ -1986,7 +2164,8 @@
    "port": "",
    "pathname": "/C%7C/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///C%7C/"
   },
   {
    "input": "asdf://%43%7C/",
@@ -1997,7 +2176,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "asdf://%43%7C/"
   },
   {
    "input": "file:\\\\//",
@@ -2008,7 +2188,8 @@
    "port": "",
    "pathname": "//",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:////"
   },
   {
    "input": "file:\\\\\\\\",
@@ -2019,7 +2200,8 @@
    "port": "",
    "pathname": "//",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:////"
   },
   {
    "input": "file:\\\\\\\\?fox",
@@ -2030,7 +2212,8 @@
    "port": "",
    "pathname": "//",
    "search": "?fox",
-   "hash": ""
+   "hash": "",
+   "href": "file:////?fox"
   },
   {
    "input": "file:\\\\\\\\#guppy",
@@ -2041,7 +2224,8 @@
    "port": "",
    "pathname": "//",
    "search": "",
-   "hash": "#guppy"
+   "hash": "#guppy",
+   "href": "file:////#guppy"
   },
   {
    "input": "file://spider///",
@@ -2052,7 +2236,8 @@
    "port": "",
    "pathname": "///",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://spider///"
   },
   {
    "input": "file:\\\\localhost//",
@@ -2063,7 +2248,8 @@
    "port": "",
    "pathname": "//",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:////"
   },
   {
    "input": "file:///localhost//cat",
@@ -2074,7 +2260,8 @@
    "port": "",
    "pathname": "/localhost//cat",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///localhost//cat"
   },
   {
    "input": "file://\\/localhost//cat",
@@ -2085,7 +2272,8 @@
    "port": "",
    "pathname": "//localhost//cat",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:////localhost//cat"
   },
   {
    "input": "file://localhost//a//../..//",
@@ -2096,7 +2284,8 @@
    "port": "",
    "pathname": "///",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://///"
   },
   {
    "input": "file://example.net/C:/",
@@ -2107,7 +2296,8 @@
    "port": "",
    "pathname": "/C:/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://example.net/C:/"
   },
   {
    "input": "file://1.2.3.4/C:/",
@@ -2118,7 +2308,8 @@
    "port": "",
    "pathname": "/C:/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://1.2.3.4/C:/"
   },
   {
    "input": "file://[1::8]/C:/",
@@ -2129,7 +2320,8 @@
    "port": "",
    "pathname": "/C:/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://[1::8]/C:/"
   },
   {
    "input": "file:/C|/",
@@ -2140,7 +2332,8 @@
    "port": "",
    "pathname": "/C:/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///C:/"
   },
   {
    "input": "file://C|/",
@@ -2151,7 +2344,8 @@
    "port": "",
    "pathname": "/C:/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///C:/"
   },
   {
    "input": "file:",
@@ -2162,7 +2356,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///"
   },
   {
    "input": "file:?q=v",
@@ -2173,7 +2368,8 @@
    "port": "",
    "pathname": "/",
    "search": "?q=v",
-   "hash": ""
+   "hash": "",
+   "href": "file:///?q=v"
   },
   {
    "input": "file:#frag",
@@ -2184,7 +2380,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": "#frag"
+   "hash": "#frag",
+   "href": "file:///#frag"
   },
   {
    "input": "file:///Y:",
@@ -2195,7 +2392,8 @@
    "port": "",
    "pathname": "/Y:",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///Y:"
   },
   {
    "input": "file:///Y:/",
@@ -2206,7 +2404,8 @@
    "port": "",
    "pathname": "/Y:/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///Y:/"
   },
   {
    "input": "file:///./Y",
@@ -2217,7 +2416,8 @@
    "port": "",
    "pathname": "/Y",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///Y"
   },
   {
    "input": "file:///./Y:",
@@ -2228,7 +2428,8 @@
    "port": "",
    "pathname": "/Y:",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///Y:"
   },
   {
    "input": "file:///y:",
@@ -2239,7 +2440,8 @@
    "port": "",
    "pathname": "/y:",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///y:"
   },
   {
    "input": "file:///y:/",
@@ -2250,7 +2452,8 @@
    "port": "",
    "pathname": "/y:/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///y:/"
   },
   {
    "input": "file:///./y",
@@ -2261,7 +2464,8 @@
    "port": "",
    "pathname": "/y",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///y"
   },
   {
    "input": "file:///./y:",
@@ -2272,7 +2476,8 @@
    "port": "",
    "pathname": "/y:",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///y:"
   },
   {
    "input": "file://localhost//a//../..//foo",
@@ -2283,7 +2488,8 @@
    "port": "",
    "pathname": "///foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://///foo"
   },
   {
    "input": "file://localhost////foo",
@@ -2294,7 +2500,8 @@
    "port": "",
    "pathname": "////foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://////foo"
   },
   {
    "input": "file:////foo",
@@ -2305,7 +2512,8 @@
    "port": "",
    "pathname": "//foo",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:////foo"
   },
   {
    "input": "file:.//p",
@@ -2316,7 +2524,8 @@
    "port": "",
    "pathname": "//p",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:////p"
   },
   {
    "input": "file:/.//p",
@@ -2327,7 +2536,8 @@
    "port": "",
    "pathname": "//p",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:////p"
   },
   {
    "input": "sc://ñ",
@@ -2338,7 +2548,8 @@
    "port": "",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc://%C3%B1"
   },
   {
    "input": "sc://ñ?x",
@@ -2349,7 +2560,8 @@
    "port": "",
    "pathname": "",
    "search": "?x",
-   "hash": ""
+   "hash": "",
+   "href": "sc://%C3%B1?x"
   },
   {
    "input": "sc://ñ#x",
@@ -2360,7 +2572,8 @@
    "port": "",
    "pathname": "",
    "search": "",
-   "hash": "#x"
+   "hash": "#x",
+   "href": "sc://%C3%B1#x"
   },
   {
    "input": "sc://?",
@@ -2371,7 +2584,8 @@
    "port": "",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc://?"
   },
   {
    "input": "sc://#",
@@ -2382,7 +2596,8 @@
    "port": "",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "sc://#"
   },
   {
    "input": "tftp://foobar.com/someconfig;mode=netascii",
@@ -2393,7 +2608,8 @@
    "port": "",
    "pathname": "/someconfig;mode=netascii",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "tftp://foobar.com/someconfig;mode=netascii"
   },
   {
    "input": "telnet://user:pass@foobar.com:23/",
@@ -2404,7 +2620,8 @@
    "port": "23",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "telnet://user:pass@foobar.com:23/"
   },
   {
    "input": "ut2004://10.10.10.10:7777/Index.ut2",
@@ -2415,7 +2632,8 @@
    "port": "7777",
    "pathname": "/Index.ut2",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ut2004://10.10.10.10:7777/Index.ut2"
   },
   {
    "input": "redis://foo:bar@somehost:6379/0?baz=bam&qux=baz",
@@ -2426,7 +2644,8 @@
    "port": "6379",
    "pathname": "/0",
    "search": "?baz=bam&qux=baz",
-   "hash": ""
+   "hash": "",
+   "href": "redis://foo:bar@somehost:6379/0?baz=bam&qux=baz"
   },
   {
    "input": "rsync://foo@host:911/sup",
@@ -2437,7 +2656,8 @@
    "port": "911",
    "pathname": "/sup",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "rsync://foo@host:911/sup"
   },
   {
    "input": "git://github.com/foo/bar.git",
@@ -2448,7 +2668,8 @@
    "port": "",
    "pathname": "/foo/bar.git",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "git://github.com/foo/bar.git"
   },
   {
    "input": "irc://myserver.com:6999/channel?passwd",
@@ -2459,7 +2680,8 @@
    "port": "6999",
    "pathname": "/channel",
    "search": "?passwd",
-   "hash": ""
+   "hash": "",
+   "href": "irc://myserver.com:6999/channel?passwd"
   },
   {
    "input": "dns://fw.example.org:9999/foo.bar.org?type=TXT",
@@ -2470,7 +2692,8 @@
    "port": "9999",
    "pathname": "/foo.bar.org",
    "search": "?type=TXT",
-   "hash": ""
+   "hash": "",
+   "href": "dns://fw.example.org:9999/foo.bar.org?type=TXT"
   },
   {
    "input": "ldap://localhost:389/ou=People,o=JNDITutorial",
@@ -2481,7 +2704,8 @@
    "port": "389",
    "pathname": "/ou=People,o=JNDITutorial",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "ldap://localhost:389/ou=People,o=JNDITutorial"
   },
   {
    "input": "git+https://github.com/foo/bar",
@@ -2492,7 +2716,8 @@
    "port": "",
    "pathname": "/foo/bar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "git+https://github.com/foo/bar"
   },
   {
    "input": "urn:ietf:rfc:2648",
@@ -2503,7 +2728,8 @@
    "port": "",
    "pathname": "ietf:rfc:2648",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "urn:ietf:rfc:2648"
   },
   {
    "input": "tag:joe@example.org,2001:foo/bar",
@@ -2514,7 +2740,8 @@
    "port": "",
    "pathname": "joe@example.org,2001:foo/bar",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "tag:joe@example.org,2001:foo/bar"
   },
   {
    "input": "non-spec:/.//",
@@ -2525,7 +2752,8 @@
    "port": "",
    "pathname": "//",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-spec:/.//"
   },
   {
    "input": "non-spec:/..//",
@@ -2536,7 +2764,8 @@
    "port": "",
    "pathname": "//",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-spec:/.//"
   },
   {
    "input": "non-spec:/a/..//",
@@ -2547,7 +2776,8 @@
    "port": "",
    "pathname": "//",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-spec:/.//"
   },
   {
    "input": "non-spec:/.//path",
@@ -2558,7 +2788,8 @@
    "port": "",
    "pathname": "//path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-spec:/.//path"
   },
   {
    "input": "non-spec:/..//path",
@@ -2569,7 +2800,8 @@
    "port": "",
    "pathname": "//path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-spec:/.//path"
   },
   {
    "input": "non-spec:/a/..//path",
@@ -2580,7 +2812,8 @@
    "port": "",
    "pathname": "//path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-spec:/.//path"
   },
   {
    "input": "non-special://%E2%80%A0/",
@@ -2591,7 +2824,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special://%E2%80%A0/"
   },
   {
    "input": "non-special://H%4fSt/path",
@@ -2602,7 +2836,8 @@
    "port": "",
    "pathname": "/path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special://H%4fSt/path"
   },
   {
    "input": "non-special://[1:2:0:0:5:0:0:0]/",
@@ -2613,7 +2848,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special://[1:2:0:0:5::]/"
   },
   {
    "input": "non-special://[1:2:0:0:0:0:0:3]/",
@@ -2624,7 +2860,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special://[1:2::3]/"
   },
   {
    "input": "non-special://[1:2::3]:80/",
@@ -2635,7 +2872,8 @@
    "port": "80",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special://[1:2::3]:80/"
   },
   {
    "input": "blob:https://example.com:443/",
@@ -2646,7 +2884,8 @@
    "port": "",
    "pathname": "https://example.com:443/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:https://example.com:443/"
   },
   {
    "input": "blob:http://example.org:88/",
@@ -2657,7 +2896,8 @@
    "port": "",
    "pathname": "http://example.org:88/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:http://example.org:88/"
   },
   {
    "input": "blob:d3958f5c-0777-0845-9dcf-2cb28783acaf",
@@ -2668,7 +2908,8 @@
    "port": "",
    "pathname": "d3958f5c-0777-0845-9dcf-2cb28783acaf",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:d3958f5c-0777-0845-9dcf-2cb28783acaf"
   },
   {
    "input": "blob:",
@@ -2679,7 +2920,8 @@
    "port": "",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:"
   },
   {
    "input": "blob:blob:",
@@ -2690,7 +2932,8 @@
    "port": "",
    "pathname": "blob:",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:blob:"
   },
   {
    "input": "blob:blob:https://example.org/",
@@ -2701,7 +2944,8 @@
    "port": "",
    "pathname": "blob:https://example.org/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:blob:https://example.org/"
   },
   {
    "input": "blob:about:blank",
@@ -2712,7 +2956,8 @@
    "port": "",
    "pathname": "about:blank",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:about:blank"
   },
   {
    "input": "blob:file://host/path",
@@ -2723,7 +2968,8 @@
    "port": "",
    "pathname": "file://host/path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:file://host/path"
   },
   {
    "input": "blob:ftp://host/path",
@@ -2734,7 +2980,8 @@
    "port": "",
    "pathname": "ftp://host/path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:ftp://host/path"
   },
   {
    "input": "blob:ws://example.org/",
@@ -2745,7 +2992,8 @@
    "port": "",
    "pathname": "ws://example.org/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:ws://example.org/"
   },
   {
    "input": "blob:wss://example.org/",
@@ -2756,7 +3004,8 @@
    "port": "",
    "pathname": "wss://example.org/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:wss://example.org/"
   },
   {
    "input": "blob:http%3a//example.org/",
@@ -2767,7 +3016,8 @@
    "port": "",
    "pathname": "http%3a//example.org/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "blob:http%3a//example.org/"
   },
   {
    "input": "http://0x7f.0.0.0x7g",
@@ -2778,7 +3028,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://0x7f.0.0.0x7g/"
   },
   {
    "input": "http://0X7F.0.0.0X7G",
@@ -2789,7 +3040,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://0x7f.0.0.0x7g/"
   },
   {
    "input": "http://[0:1:0:1:0:1:0:1]",
@@ -2800,7 +3052,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://[0:1:0:1:0:1:0:1]/"
   },
   {
    "input": "http://[1:0:1:0:1:0:1:0]",
@@ -2811,7 +3064,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://[1:0:1:0:1:0:1:0]/"
   },
   {
    "input": "http://example.org/test?\"",
@@ -2822,7 +3076,8 @@
    "port": "",
    "pathname": "/test",
    "search": "?%22",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.org/test?%22"
   },
   {
    "input": "http://example.org/test?#",
@@ -2833,7 +3088,8 @@
    "port": "",
    "pathname": "/test",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.org/test?#"
   },
   {
    "input": "http://example.org/test?<",
@@ -2844,7 +3100,8 @@
    "port": "",
    "pathname": "/test",
    "search": "?%3C",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.org/test?%3C"
   },
   {
    "input": "http://example.org/test?>",
@@ -2855,7 +3112,8 @@
    "port": "",
    "pathname": "/test",
    "search": "?%3E",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.org/test?%3E"
   },
   {
    "input": "http://example.org/test?⌣",
@@ -2866,7 +3124,8 @@
    "port": "",
    "pathname": "/test",
    "search": "?%E2%8C%A3",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.org/test?%E2%8C%A3"
   },
   {
    "input": "http://example.org/test?%23%23",
@@ -2877,7 +3136,8 @@
    "port": "",
    "pathname": "/test",
    "search": "?%23%23",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.org/test?%23%23"
   },
   {
    "input": "http://example.org/test?%GH",
@@ -2888,7 +3148,8 @@
    "port": "",
    "pathname": "/test",
    "search": "?%GH",
-   "hash": ""
+   "hash": "",
+   "href": "http://example.org/test?%GH"
   },
   {
    "input": "http://example.org/test?a#%EF",
@@ -2899,7 +3160,8 @@
    "port": "",
    "pathname": "/test",
    "search": "?a",
-   "hash": "#%EF"
+   "hash": "#%EF",
+   "href": "http://example.org/test?a#%EF"
   },
   {
    "input": "http://example.org/test?a#%GH",
@@ -2910,7 +3172,8 @@
    "port": "",
    "pathname": "/test",
    "search": "?a",
-   "hash": "#%GH"
+   "hash": "#%GH",
+   "href": "http://example.org/test?a#%GH"
   },
   {
    "input": "file://a­b/p",
@@ -2921,7 +3184,8 @@
    "port": "",
    "pathname": "/p",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://ab/p"
   },
   {
    "input": "file://a%C2%ADb/p",
@@ -2932,7 +3196,8 @@
    "port": "",
    "pathname": "/p",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://ab/p"
   },
   {
    "input": "file://loC𝐀𝐋𝐇𝐨𝐬𝐭/usr/bin",
@@ -2943,7 +3208,8 @@
    "port": "",
    "pathname": "/usr/bin",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file:///usr/bin"
   },
   {
    "input": "file://xn--/p",
@@ -2954,7 +3220,8 @@
    "port": "",
    "pathname": "/p",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "file://xn--/p"
   },
   {
    "input": "non-special:cannot-be-a-base-url-!\"$%&'()*+,-.;<=>@[\\]^_`{|}~@/",
@@ -2965,7 +3232,8 @@
    "port": "",
    "pathname": "cannot-be-a-base-url-!\"$%&'()*+,-.;<=>@[\\]^_`{|}~@/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:cannot-be-a-base-url-!\"$%&'()*+,-.;<=>@[\\]^_`{|}~@/"
   },
   {
    "input": "https://www.example.com/path{path.html?query'=query#fragment<fragment",
@@ -2976,7 +3244,8 @@
    "port": "",
    "pathname": "/path%7B%7Fpath.html",
    "search": "?query%27%7F=query",
-   "hash": "#fragment%3C%7Ffragment"
+   "hash": "#fragment%3C%7Ffragment",
+   "href": "https://www.example.com/path%7B%7Fpath.html?query%27%7F=query#fragment%3C%7Ffragment"
   },
   {
    "input": "foo:// !\"$%&'()*+,-.;<=>@[\\]^_`{|}~@host/",
@@ -2987,7 +3256,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "foo://%20!%22$%&'()*+,-.%3B%3C%3D%3E%40%5B%5C%5D%5E_%60%7B%7C%7D~@host/"
   },
   {
    "input": "wss:// !\"$%&'()*+,-.;<=>@[]^_`{|}~@host/",
@@ -2998,7 +3268,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://%20!%22$%&'()*+,-.%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~@host/"
   },
   {
    "input": "foo://joe: !\"$%&'()*+,-.:;<=>@[\\]^_`{|}~@host/",
@@ -3009,7 +3280,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "foo://joe:%20!%22$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5C%5D%5E_%60%7B%7C%7D~@host/"
   },
   {
    "input": "wss://joe: !\"$%&'()*+,-.:;<=>@[]^_`{|}~@host/",
@@ -3020,7 +3292,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://joe:%20!%22$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~@host/"
   },
   {
    "input": "foo://!\"$%&'()*+,-.;=_`{}~/",
@@ -3031,7 +3304,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "foo://!\"$%&'()*+,-.;=_`{}~/"
   },
   {
    "input": "wss://!\"$&'()*+,-.;=_`{}~/",
@@ -3042,7 +3316,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://!\"$&'()*+,-.;=_`{}~/"
   },
   {
    "input": "foo://host/ !\"$%&'()*+,-./:;<=>@[\\]^_`{|}~",
@@ -3053,7 +3328,8 @@
    "port": "",
    "pathname": "/%20!%22$%&'()*+,-./:;%3C=%3E@[\\]%5E_%60%7B|%7D~",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "foo://host/%20!%22$%&'()*+,-./:;%3C=%3E@[\\]%5E_%60%7B|%7D~"
   },
   {
    "input": "wss://host/ !\"$%&'()*+,-./:;<=>@[\\]^_`{|}~",
@@ -3064,7 +3340,8 @@
    "port": "",
    "pathname": "/%20!%22$%&'()*+,-./:;%3C=%3E@[/]%5E_%60%7B|%7D~",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "wss://host/%20!%22$%&'()*+,-./:;%3C=%3E@[/]%5E_%60%7B|%7D~"
   },
   {
    "input": "foo://host/dir/? !\"$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
@@ -3075,7 +3352,8 @@
    "port": "",
    "pathname": "/dir/",
    "search": "?%20!%22$%&'()*+,-./:;%3C=%3E?@[\\]^_`{|}~",
-   "hash": ""
+   "hash": "",
+   "href": "foo://host/dir/?%20!%22$%&'()*+,-./:;%3C=%3E?@[\\]^_`{|}~"
   },
   {
    "input": "wss://host/dir/? !\"$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
@@ -3086,7 +3364,8 @@
    "port": "",
    "pathname": "/dir/",
    "search": "?%20!%22$%&%27()*+,-./:;%3C=%3E?@[\\]^_`{|}~",
-   "hash": ""
+   "hash": "",
+   "href": "wss://host/dir/?%20!%22$%&%27()*+,-./:;%3C=%3E?@[\\]^_`{|}~"
   },
   {
    "input": "foo://host/dir/# !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
@@ -3097,7 +3376,8 @@
    "port": "",
    "pathname": "/dir/",
    "search": "",
-   "hash": "#%20!%22#$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~"
+   "hash": "#%20!%22#$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~",
+   "href": "foo://host/dir/#%20!%22#$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~"
   },
   {
    "input": "wss://host/dir/# !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
@@ -3108,7 +3388,8 @@
    "port": "",
    "pathname": "/dir/",
    "search": "",
-   "hash": "#%20!%22#$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~"
+   "hash": "#%20!%22#$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~",
+   "href": "wss://host/dir/#%20!%22#$%&'()*+,-./:;%3C=%3E?@[\\]^_%60{|}~"
   },
   {
    "input": "http://foo.09..",
@@ -3119,7 +3400,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "http://foo.09../"
   },
   {
    "input": "https://x/￿y",
@@ -3130,7 +3412,8 @@
    "port": "",
    "pathname": "/%EF%BF%BFy",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://x/%EF%BF%BFy"
   },
   {
    "input": "https://x/?￿y",
@@ -3141,7 +3424,8 @@
    "port": "",
    "pathname": "/",
    "search": "?%EF%BF%BFy",
-   "hash": ""
+   "hash": "",
+   "href": "https://x/?%EF%BF%BFy"
   },
   {
    "input": "https://x/?#￿y",
@@ -3152,7 +3436,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": "#%EF%BF%BFy"
+   "hash": "#%EF%BF%BFy",
+   "href": "https://x/?#%EF%BF%BFy"
   },
   {
    "input": "non-special:￿y",
@@ -3163,7 +3448,8 @@
    "port": "",
    "pathname": "%EF%BF%BFy",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:%EF%BF%BFy"
   },
   {
    "input": "non-special:x/￿y",
@@ -3174,7 +3460,8 @@
    "port": "",
    "pathname": "x/%EF%BF%BFy",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:x/%EF%BF%BFy"
   },
   {
    "input": "non-special:x/?￿y",
@@ -3185,7 +3472,8 @@
    "port": "",
    "pathname": "x/",
    "search": "?%EF%BF%BFy",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:x/?%EF%BF%BFy"
   },
   {
    "input": "non-special:x/?#￿y",
@@ -3196,7 +3484,8 @@
    "port": "",
    "pathname": "x/",
    "search": "",
-   "hash": "#%EF%BF%BFy"
+   "hash": "#%EF%BF%BFy",
+   "href": "non-special:x/?#%EF%BF%BFy"
   },
   {
    "input": "https://example.com/\"quoted\"",
@@ -3207,7 +3496,8 @@
    "port": "",
    "pathname": "/%22quoted%22",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://example.com/%22quoted%22"
   },
   {
    "input": "https://a%C2%ADb/",
@@ -3218,7 +3508,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://ab/"
   },
   {
    "input": "https://xn--/",
@@ -3229,7 +3520,8 @@
    "port": "",
    "pathname": "/",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "https://xn--/"
   },
   {
    "input": "data://example.com:8080/pathname?search#hash",
@@ -3240,7 +3532,8 @@
    "port": "8080",
    "pathname": "/pathname",
    "search": "?search",
-   "hash": "#hash"
+   "hash": "#hash",
+   "href": "data://example.com:8080/pathname?search#hash"
   },
   {
    "input": "data:///test",
@@ -3251,7 +3544,8 @@
    "port": "",
    "pathname": "/test",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "data:///test"
   },
   {
    "input": "data://test/a/../b",
@@ -3262,7 +3556,8 @@
    "port": "",
    "pathname": "/b",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "data://test/b"
   },
   {
    "input": "javascript://example.com:8080/pathname?search#hash",
@@ -3273,7 +3568,8 @@
    "port": "8080",
    "pathname": "/pathname",
    "search": "?search",
-   "hash": "#hash"
+   "hash": "#hash",
+   "href": "javascript://example.com:8080/pathname?search#hash"
   },
   {
    "input": "javascript:///test",
@@ -3284,7 +3580,8 @@
    "port": "",
    "pathname": "/test",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "javascript:///test"
   },
   {
    "input": "javascript://test/a/../b",
@@ -3295,7 +3592,8 @@
    "port": "",
    "pathname": "/b",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "javascript://test/b"
   },
   {
    "input": "mailto://example.com:8080/pathname?search#hash",
@@ -3306,7 +3604,8 @@
    "port": "8080",
    "pathname": "/pathname",
    "search": "?search",
-   "hash": "#hash"
+   "hash": "#hash",
+   "href": "mailto://example.com:8080/pathname?search#hash"
   },
   {
    "input": "mailto:///test",
@@ -3317,7 +3616,8 @@
    "port": "",
    "pathname": "/test",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "mailto:///test"
   },
   {
    "input": "mailto://test/a/../b",
@@ -3328,7 +3628,8 @@
    "port": "",
    "pathname": "/b",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "mailto://test/b"
   },
   {
    "input": "intent://example.com:8080/pathname?search#hash",
@@ -3339,7 +3640,8 @@
    "port": "8080",
    "pathname": "/pathname",
    "search": "?search",
-   "hash": "#hash"
+   "hash": "#hash",
+   "href": "intent://example.com:8080/pathname?search#hash"
   },
   {
    "input": "intent:///test",
@@ -3350,7 +3652,8 @@
    "port": "",
    "pathname": "/test",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "intent:///test"
   },
   {
    "input": "intent://test/a/../b",
@@ -3361,7 +3664,8 @@
    "port": "",
    "pathname": "/b",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "intent://test/b"
   },
   {
    "input": "urn://example.com:8080/pathname?search#hash",
@@ -3372,7 +3676,8 @@
    "port": "8080",
    "pathname": "/pathname",
    "search": "?search",
-   "hash": "#hash"
+   "hash": "#hash",
+   "href": "urn://example.com:8080/pathname?search#hash"
   },
   {
    "input": "urn:///test",
@@ -3383,7 +3688,8 @@
    "port": "",
    "pathname": "/test",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "urn:///test"
   },
   {
    "input": "urn://test/a/../b",
@@ -3394,7 +3700,8 @@
    "port": "",
    "pathname": "/b",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "urn://test/b"
   },
   {
    "input": "turn://example.com:8080/pathname?search#hash",
@@ -3405,7 +3712,8 @@
    "port": "8080",
    "pathname": "/pathname",
    "search": "?search",
-   "hash": "#hash"
+   "hash": "#hash",
+   "href": "turn://example.com:8080/pathname?search#hash"
   },
   {
    "input": "turn:///test",
@@ -3416,7 +3724,8 @@
    "port": "",
    "pathname": "/test",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "turn:///test"
   },
   {
    "input": "turn://test/a/../b",
@@ -3427,7 +3736,8 @@
    "port": "",
    "pathname": "/b",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "turn://test/b"
   },
   {
    "input": "stun://example.com:8080/pathname?search#hash",
@@ -3438,7 +3748,8 @@
    "port": "8080",
    "pathname": "/pathname",
    "search": "?search",
-   "hash": "#hash"
+   "hash": "#hash",
+   "href": "stun://example.com:8080/pathname?search#hash"
   },
   {
    "input": "stun:///test",
@@ -3449,7 +3760,8 @@
    "port": "",
    "pathname": "/test",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "stun:///test"
   },
   {
    "input": "stun://test/a/../b",
@@ -3460,7 +3772,8 @@
    "port": "",
    "pathname": "/b",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "stun://test/b"
   },
   {
    "input": "w://x:0",
@@ -3471,7 +3784,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "w://x:0"
   },
   {
    "input": "west://x:0",
@@ -3482,7 +3796,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "west://x:0"
   },
   {
    "input": "android://x:0/a",
@@ -3493,7 +3808,8 @@
    "port": "0",
    "pathname": "/a",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "android://x:0/a"
   },
   {
    "input": "drivefs://x:0/a",
@@ -3504,7 +3820,8 @@
    "port": "0",
    "pathname": "/a",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "drivefs://x:0/a"
   },
   {
    "input": "chromeos-steam://x:0/a",
@@ -3515,7 +3832,8 @@
    "port": "0",
    "pathname": "/a",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "chromeos-steam://x:0/a"
   },
   {
    "input": "steam://x:0/a",
@@ -3526,7 +3844,8 @@
    "port": "0",
    "pathname": "/a",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "steam://x:0/a"
   },
   {
    "input": "materialized-view://x:0/a",
@@ -3537,7 +3856,8 @@
    "port": "0",
    "pathname": "/a",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "materialized-view://x:0/a"
   },
   {
    "input": "android-app://x:0",
@@ -3548,7 +3868,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "android-app://x:0"
   },
   {
    "input": "chrome-distiller://x:0",
@@ -3559,7 +3880,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "chrome-distiller://x:0"
   },
   {
    "input": "chrome-extension://x:0",
@@ -3570,7 +3892,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "chrome-extension://x:0"
   },
   {
    "input": "chrome-native://x:0",
@@ -3581,7 +3904,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "chrome-native://x:0"
   },
   {
    "input": "chrome-resource://x:0",
@@ -3592,7 +3916,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "chrome-resource://x:0"
   },
   {
    "input": "chrome-search://x:0",
@@ -3603,7 +3928,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "chrome-search://x:0"
   },
   {
    "input": "fuchsia-dir://x:0",
@@ -3614,7 +3940,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "fuchsia-dir://x:0"
   },
   {
    "input": "isolated-app://x:0",
@@ -3625,7 +3952,8 @@
    "port": "0",
    "pathname": "",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "isolated-app://x:0"
   },
   {
    "input": "non-special:\\\\opaque",
@@ -3636,7 +3964,8 @@
    "port": "",
    "pathname": "\\\\opaque",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:\\\\opaque"
   },
   {
    "input": "non-special:\\\\opaque/path",
@@ -3647,7 +3976,8 @@
    "port": "",
    "pathname": "\\\\opaque/path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:\\\\opaque/path"
   },
   {
    "input": "non-special:\\\\opaque\\path",
@@ -3658,7 +3988,8 @@
    "port": "",
    "pathname": "\\\\opaque\\path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:\\\\opaque\\path"
   },
   {
    "input": "non-special:\\/opaque",
@@ -3669,7 +4000,8 @@
    "port": "",
    "pathname": "\\/opaque",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:\\/opaque"
   },
   {
    "input": "non-special:/\\path",
@@ -3680,7 +4012,8 @@
    "port": "",
    "pathname": "/\\path",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special:/\\path"
   },
   {
    "input": "non-special://host/a\\b",
@@ -3691,7 +4024,8 @@
    "port": "",
    "pathname": "/a\\b",
    "search": "",
-   "hash": ""
+   "hash": "",
+   "href": "non-special://host/a\\b"
   },
   {
    "input": "data:text/plain,test#<foo> <bar>",
@@ -3702,7 +4036,8 @@
    "port": "",
    "pathname": "text/plain,test",
    "search": "",
-   "hash": "#%3Cfoo%3E%20%3Cbar%3E"
+   "hash": "#%3Cfoo%3E%20%3Cbar%3E",
+   "href": "data:text/plain,test#%3Cfoo%3E%20%3Cbar%3E"
   },
   {
    "input": "about:blank#<foo> <bar>",
@@ -3713,7 +4048,8 @@
    "port": "",
    "pathname": "blank",
    "search": "",
-   "hash": "#%3Cfoo%3E%20%3Cbar%3E"
+   "hash": "#%3Cfoo%3E%20%3Cbar%3E",
+   "href": "about:blank#%3Cfoo%3E%20%3Cbar%3E"
   }
  ],
  "failure": [

@@ -3,9 +3,10 @@
 # A small, inspectable set of path/query/userinfo cases with EXPLICIT expected
 # outputs (unlike the whole-corpus characterization snapshot, which pins
 # whatever the code currently emits). It documents rurl's intended contract for
-# percent-encoding and path structure and pins it against libcurl drift.
+# percent-encoding and path structure and pins it against engine drift.
 #
-# rurl is an RFC 3986 / curl parser, NOT a WHATWG URL parser. Cases drawn from
+# rurl's default profile is an RFC 3986 parser, NOT a WHATWG URL parser. Cases
+# drawn from
 # the WHATWG URL test data where rurl *intentionally* diverges (encoded-dot
 # resolution, backslash-as-separator) are kept and annotated, so a future
 # accidental behavior change is caught rather than silently "conforming".
@@ -82,7 +83,7 @@ test_that("raw query fidelity honors the decode flag", {
   expect_identical(
     get_query("http://ex.com/p?x=a%2Fb&y=1", decode = TRUE), "x=a/b&y=1"
   )
-  # Lowercase hex in the query is uppercased too (libcurl, section 6.2.2.1).
+  # Lowercase hex in the query is uppercased too (section 6.2.2.1).
   expect_identical(
     get_query("http://ex.com/p?x=a%2fb", decode = FALSE), "x=a%2Fb"
   )
@@ -202,10 +203,15 @@ test_that("a percent-decoded file: host is read as UTF-8 in any locale", {
 })
 
 test_that("a host that percent-decodes to invalid UTF-8 is rejected", {
-  # libcurl decodes the host even under `decode = FALSE`, and
-  # `curl_parse_url()` then throws in a UTF-8 session but returns raw bytes
+  # The historical engine decoded the host unconditionally, and its R binding
+  # then threw in a UTF-8 session but returned raw bytes
   # under LC_ALL=C -- where those bytes went on to break `pslr`'s regex ops.
-  for (std in list(NULL, "rfc3986", "whatwg")) {
+  #
+  # The profiles that DECODE the host still reject it, which is what keeps those
+  # bytes away from `pslr`. `rfc3986` no longer does (RURL-crrgaiel: `%80` is a
+  # well-formed `pct-encoded` and S3.2.2 admits it), and it reaches the same
+  # locale-determinism guarantee by a different route -- see the next test.
+  for (std in list(NULL, "whatwg")) {
     expect_identical(
       get_parse_status("http://example.com%80/", url_standard = std), "error"
     )
@@ -215,4 +221,34 @@ test_that("a host that percent-decodes to invalid UTF-8 is rejected", {
   }
   # Only the host is affected: an invalid-UTF-8 octet in the path is kept.
   expect_identical(get_path("http://ex.com/%80"), "/%80")
+})
+
+test_that("rfc3986 keeps an invalid-UTF-8 host triplet encoded, unannotated", {
+  # The guarantee the test above protects is that `pslr` never sees raw
+  # invalid-UTF-8 bytes and that the answer does not depend on the locale.
+  # Accepting the row does not weaken it, because two things hold at once:
+  #
+  #  1. the IDENTITY host is never decoded -- it stays the ASCII text "%80", so
+  #     there are no non-UTF-8 bytes in the host to begin with; and
+  #  2. `.psl_annotation_host_vec()` decodes only for the ANNOTATION and returns
+  #     NA when that decode is not valid UTF-8, so domain/TLD DECLINE rather
+  #     than querying `pslr` with bad bytes.
+  #
+  # Verified byte-identical under LC_ALL=C and en_US.UTF-8.
+  u <- c("http://example.com%80/", "ftp://example.com%80/",
+         "http://ho%C0%AFst.com/")
+  expect_identical(get_host(u, url_standard = "rfc3986"),
+    c("example.com%80", "example.com%80", "ho%C0%AFst.com"))
+  # ASCII throughout -- no declared-UTF-8 string holding invalid octets.
+  expect_true(all(vapply(
+    get_host(u, url_standard = "rfc3986"), validUTF8, logical(1)
+  )))
+  expect_true(all(is.na(get_domain(u, url_standard = "rfc3986"))))
+  expect_true(all(is.na(get_tld(u, url_standard = "rfc3986"))))
+
+  # A triplet that DOES decode to valid UTF-8 still annotates, through the same
+  # seam, so the decline above is about validity and not about percent-encoding.
+  expect_identical(
+    get_domain("http://a%C2%ADb.com/", url_standard = "rfc3986"), "ab.com"
+  )
 })

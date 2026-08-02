@@ -75,7 +75,7 @@
 #
 # Returns a columnar list: `layer1_syntax_verdict`, `layer2_policy_verdict`,
 # `layer3_annotation_state`, and the private `layer3_detail`.
-.derive_verdict_layers_vec <- function(curl_ok, final_host, is_ip_host, tld,
+.derive_verdict_layers_vec <- function(web_ok, final_host, is_ip_host, tld,
                                        domain, protocol_handling, final_scheme,
                                        looks_like_protocol,
                                        original_has_allowed_scheme,
@@ -96,13 +96,13 @@
   if (is.null(scheme_less_userinfo)) {
     scheme_less_userinfo <- rep(FALSE, n)
   }
-  curl_ok <- rep_len(curl_ok, n)
+  web_ok <- rep_len(web_ok, n)
 
   scheme_lower <- .ascii_tolower(final_scheme)
-  is_file <- curl_ok & !is.na(scheme_lower) & scheme_lower == "file"
-  is_rootless <- curl_ok & rfc3986_path_rootless
-  is_general_ok <- curl_ok & is_general
-  host_present <- curl_ok & !is.na(final_host) & final_host != ""
+  is_file <- web_ok & !is.na(scheme_lower) & scheme_lower == "file"
+  is_rootless <- web_ok & rfc3986_path_rootless
+  is_general_ok <- web_ok & is_general
+  host_present <- web_ok & !is.na(final_host) & final_host != ""
   # The three shapes that legitimately carry no host: a `file:` URL, an RFC
   # rootless path, and a general-routed opaque / non-special-authority row.
   host_optional <- is_file | is_rootless | is_general_ok
@@ -131,7 +131,7 @@
   }
 
   # D5 scheme-less userinfo (`user@example.com`): accepted with a note.
-  slu <- scheme_less_userinfo & !is.na(scheme_less_userinfo) & curl_ok
+  slu <- scheme_less_userinfo & !is.na(scheme_less_userinfo) & web_ok
   layer2[slu] <- "warn-userinfo"
 
   # ADR 0012 D3: under `web` an unsupported scheme-bearing token is demoted.
@@ -153,11 +153,12 @@
   # L2 and is not additionally reported as a syntax failure, since rurl never
   # evaluated its syntax.
   layer1 <- rep("pass", n)
-  layer1[!curl_ok & !rejected] <- "fail"
-  # A row curl accepted but which resolved no host, in a shape where a host is
+  layer1[!web_ok & !rejected] <- "fail"
+  # A row the parser accepted but which resolved no host, in a shape where a
+  # host is
   # not optional, did not yield a well-formed URL either. Empirically this cell
   # is unreached across the committed corpora; it is handled so pi stays TOTAL.
-  layer1[curl_ok & !host_present & !host_optional & !rejected] <- "fail"
+  layer1[web_ok & !host_present & !host_optional & !rejected] <- "fail"
 
   # --- L3 annotation --------------------------------------------------------
   # The registrability cascade, verbatim from the shipped one. Everything with

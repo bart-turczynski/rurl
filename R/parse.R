@@ -82,7 +82,7 @@
 #'   }
 #' @param path_normalization How to normalize path structure. Defaults to
 #' "none". rurl owns dot-segment resolution: the path is read from the input
-#' verbatim (not from libcurl's pre-normalized path), so \code{"none"} preserves
+#' verbatim (never from a pre-normalized path), so \code{"none"} preserves
 #' \code{.} / \code{..} segments (\code{/a/../b} stays \code{/a/../b}) and only
 #' the settings below change them. Resolution follows RFC 3986 section 5.2.4 and
 #' acts on \emph{literal} \code{.}/\code{..} segments only — a percent-encoded
@@ -107,7 +107,7 @@
 #' @param host_encoding How to present the host in `clean_url`. Defaults to
 #' "keep".
 #'   \itemize{
-#'     \item{"keep": Leave host as parsed by curl (may preserve original case).}
+#'     \item{"keep": Leave the host as parsed (may preserve original case).}
 #'     \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
 #'     cleaned URL.}
 #'     \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
@@ -368,7 +368,6 @@
 #'   or uses a disallowed scheme.
 #' @seealso \code{\link{safe_parse_urls}}
 #' @importFrom utils tail
-#' @importFrom curl curl_parse_url curl_escape curl_unescape
 #' @keywords internal
 #' @export
 #' @examples
@@ -868,7 +867,7 @@ safe_parse_urls <- function(url,
   do.call(data.frame, cols)
 }
 
-# Declare (not convert) the parsed host as UTF-8. `curl::curl_parse_url()` hands
+# Declare (not convert) the parsed host as UTF-8. The web-route parser hands
 # back the host as raw bytes marked "unknown" (native), so under a non-UTF-8
 # LC_CTYPE (e.g. LC_ALL=C, which win-builder uses) downstream consumers --
 # `pslr` and `punycoder::host_normalize()` -- re-decode those bytes in the
@@ -961,7 +960,7 @@ safe_parse_urls <- function(url,
 # host-shaped input, orthogonal to protocol_handling (presentation) and
 # url_standard (interpretation). "infer" (default) fabricates "http://" for
 # scheme-less host-shaped input (today's behavior, byte-for-byte). "require"
-# rejects it (strict / pure-parser posture). See .prepare_urls_for_curl_vec().
+# rejects it (strict / pure-parser posture). See .prepare_urls_for_parse_vec().
 .opt_scheme_policy <- c("infer", "require")
 # scheme_acceptance (ADR 0012 D3): the scheme-*acceptance* axis, orthogonal to
 # protocol_handling (presentation) and url_standard (interpretation). "web"
@@ -1472,7 +1471,7 @@ safe_parse_urls <- function(url,
 # Build Stage A memoization cache keys for a vector of URLs from validated
 # options. Stage A is the option-INDEPENDENT parse core (RURL-dkwrebdt), so the
 # key covers ONLY the options that actually change that core: the two scheme
-# policies that decide what curl parses (protocol_handling,
+# policies that decide what the web parser is handed (protocol_handling,
 # scheme_relative_handling), the www policy that shapes the post-www host fed to
 # the PSL decomposition (www_handling), and the PSL section (tld_source). Every
 # other option (case, trailing slash, index page, path normalization, path/host
@@ -1524,7 +1523,7 @@ safe_parse_urls <- function(url,
   # (AC #9). Option (a) from the PRD: one extra cache entry per URL per standard
   # actually used. NULL maps to "" so the no-selector key is stable.
   # scheme_policy is Stage-A-affecting (RURL-vzgeurae): under "require" it folds
-  # scheme-less host-shaped rows into the reject set, changing what curl parses
+  # scheme-less host-shaped rows into the reject set, changing what is parsed
   # (and whether a row survives at all). So it MUST enter the key, or a second
   # call under a different policy would reuse a stale cached row.
   # scheme_acceptance is Stage-A-affecting (ADR 0012 D3): under "web" a
@@ -1534,8 +1533,9 @@ safe_parse_urls <- function(url,
   # different acceptance would reuse a stale cached row.
   # fixup_posture is Stage-A-affecting (RURL-jynceqrj, ADR 0012 Layer 6a):
   # under "browser" the bounded string fixer rewrites the input (outer trim,
-  # `;`->`:`, `://` insertion) BEFORE curl sees it, so a fixed parse produces a
-  # different curl input than the unfixed one. It MUST enter the key, or a
+  # `;`->`:`, `://` insertion) BEFORE the parser sees it, so a fixed parse
+  # produces a different parser input than the unfixed one. It MUST enter the
+  # key, or a
   # fixed parse would collide with an unfixed cached row (PRD Part 1).
   # engine is Stage-A-affecting (RURL-mhibnqbd): it resolves the memoized PSL
   # decomposition against a specific list, so it MUST enter the key or a second
@@ -1559,7 +1559,7 @@ safe_parse_urls <- function(url,
 # Internal scalar helper that handles caching and calls the shared cached
 # vector path (n = 1). Receives the validated `opts` list (from
 # .parse_options()) and reuses it directly. Returns NULL for a NULL-equivalent
-# row (invalid / rejected / curl failure) or the row as a named list
+# row (invalid / rejected / parse failure) or the row as a named list
 # (byte-identical to the historical .assemble_parse_result() output).
 ._safe_parse_url_scalar <- function(url, opts) {
   # Early return for invalid input (never cached, matching the historical
@@ -1588,14 +1588,14 @@ safe_parse_urls <- function(url,
 # attribute -- the rows the scalar pipeline would have returned NULL for.
 #
 # Parse/present split (RURL-dkwrebdt): the full_parse cache stores STAGE A --
-# the option-independent parse core (curl components, IP detection, post-www
+# the option-independent parse core (raw components, IP detection, post-www
 # host, and the PSL decomposition in both spellings) -- keyed by
 # url x protocol x www x tld_source x scheme_relative only. STAGE B
 # (._parse_stage_b_vec) then derives the 14 presented columns from the cached
 # Stage A plus the presentation options and is NEVER cached. So two accessor
 # profiles that differ only in presentation (case, path handling, host_encoding
 # spelling, subdomain levels, ...) share one cache entry and re-run only the
-# cheap Stage B: the expensive curl + PSL work is done once per URL regardless
+# cheap Stage B: the expensive parse + PSL work is done once per URL regardless
 # of how many option profiles ask for it.
 #
 # Cache mechanics mirror the previous full-result cache: keyed/stored at the
@@ -1675,7 +1675,7 @@ safe_parse_urls <- function(url,
   }
 
   # Stage B: derive the 14 presented columns from the unique Stage A rows plus
-  # the presentation options. Runs on every call (never cached); curl_ok is the
+  # the presentation options. Runs on every call (never cached); web_ok is the
   # complement of the null rows.
   cols_uniq <- ._parse_stage_b_vec(a_uniq, uniq, !null_uniq, opts)
   # The layered verdicts ride out of Stage B on an attribute (never a column --
@@ -1708,13 +1708,13 @@ safe_parse_urls <- function(url,
 }
 
 # Stage A (vector): the option-INDEPENDENT parse core (RURL-dkwrebdt). Runs the
-# expensive, presentation-independent phases -- scheme detection + curl input
-# prep (1), the curl parse and raw-component extraction (2), final-scheme policy
+# expensive, presentation-independent phases -- scheme detection + parser input
+# prep (1), the parse and raw-component extraction (2), final-scheme policy
 # (4), IP detection (5), the www-prefix policy that shapes the host (6), and the
 # registered-domain / TLD derivation (7) computed in BOTH the ascii and unicode
 # spellings so host_encoding stays a Stage-B choice. Returns the Stage A columns
 # named by .spu_stage_a_fields plus a `null_row` attribute (invalid input,
-# phase-1 rejection, or curl failure). Its output for a given URL depends only
+# phase-1 rejection, or parse failure). Its output for a given URL depends only
 # on opts$protocol_handling / www_handling / tld_source /
 # scheme_relative_handling (the full_parse cache key), so it is memoized once
 # and reused across every presentation profile.
@@ -1725,10 +1725,11 @@ safe_parse_urls <- function(url,
   # scalar (callers map non-character input to NA before the engine).
   valid <- !is.na(urls) & nzchar(urls)
 
-  # Phase 1: scheme detection and curl-input preparation. url_standard is passed
+  # Phase 1: scheme detection and parser-input preparation. url_standard is
+  # passed
   # so the host-shape gate parses numeric IPv4 attempts faithfully instead of
   # rejecting them under a selector (RURL-luwvkwhd).
-  prep <- .prepare_urls_for_curl_vec(
+  prep <- .prepare_urls_for_parse_vec(
     urls, opts$protocol_handling, opts$scheme_relative_handling,
     opts$url_standard, opts$scheme_policy, opts$scheme_acceptance,
     opts$fixup_posture
@@ -1737,17 +1738,17 @@ safe_parse_urls <- function(url,
   # ADR 0012 Layer 4b-2 (RURL-qbnelzku): general-acceptance routing. Under
   # scheme_acceptance == "general", `.general_parse_vec` decomposes the
   # opaque / non-special-authority / RFC-generic / RFC-8089-file rows the
-  # posture routes OUT of libcurl. A pure no-op under "web" (empty mask, NA
-  # columns), so `general_route` is empty and every libcurl-path vector below
+  # posture routes OFF the web route. A pure no-op under "web" (empty mask, NA
+  # columns), so `general_route` is empty and every web-route vector below
   # stays bit-identical -- byte-identity by construction. These rows are cut
-  # from curl_parseable and their components installed directly (mirroring the
+  # from web_parseable and their components installed directly (mirroring the
   # whatwg_file / rfc3986_path_rootless blocks). Rows the gate/parser rejects
   # (gen$ok = FALSE) simply never join parse_ok, so they present as errors.
   #
-  # The general route gets the SAME WHATWG step-1 treatment the libcurl route
+  # The general route gets the SAME WHATWG step-1 treatment the web route
   # already had: remove every ASCII tab/LF/CR before anything is parsed. That
   # step is scheme-independent in WHATWG, but it lived only inside
-  # `._prepare_urls_vec` (parse-phases.R), so the rows routed away from libcurl
+  # `._prepare_urls_vec` (parse-phases.R), so the rows routed off the web route
   # were still handed the raw string -- `foo://ho<TAB>st/` kept the tab and
   # percent-encoded it into the host, and `foo://ho<LF>st/` was rejected
   # outright (RURL-lsgdeisl). Only the strip is applied here, deliberately NOT
@@ -1759,32 +1760,71 @@ safe_parse_urls <- function(url,
                             opts$scheme_acceptance)
   general_route <- valid & gen$general_parsed
 
-  # Phase 2: parse with curl (the only per-URL loop) over the surviving rows.
+  # Phase 2: the web parse (the only per-URL loop) over the surviving rows.
   parseable <- valid & !prep$rejected
   rfc3986_path_rootless <- parseable & prep$rfc3986_path_rootless
   whatwg_file <- parseable & prep$whatwg_file
-  curl_parseable <- parseable & !rfc3986_path_rootless & !whatwg_file &
+  web_parseable <- parseable & !rfc3986_path_rootless & !whatwg_file &
     !general_route
+  # Splitting the authority at the LAST "@" is the WHATWG authority state, so it
+  # is on for exactly that standard. NOT for `rfc3986`, which rejects a repeated
+  # raw "@" (P2.1 C-03; test-url-standard-authority.R), and not for the
+  # no-selector baseline.
+  #
+  # The deleted pre-parse repair was gated `!is.null(url_standard)` instead, and
+  # reproducing that here WIDENS `rfc3986` by 165 rows of the at-sweep corpus.
+  # The reason is worth recording: the repair's regex needed a literal "//", so
+  # it never fired on a THREE-slash URL, and `http:///u@@h.com/p` was rejected
+  # by the parser. The uniform RFC gate does not catch that shape -- it judges
+  # the raw input, where "@" is a perfectly legal pchar in the path
+  # `/u@@h.com/p` -- so the parser was the only thing rejecting it. Moving the
+  # split into the parser under the wider gate would have handed `rfc3986` the
+  # recovery RURL-qrfrvmkg took away.
+  last_at <- .is_whatwg(opts$url_standard)
+  # The host's percent-decode order, per selected standard (RURL-rgjpcbuk).
+  # This used to be compensated for in front of the parser, by masking every
+  # host triplet as filler and substituting the profile's spelling back
+  # afterwards; the parser owns it now. See `host_pct` in R/parse-web.R.
+  host_pct <- .web_host_pct_policy(opts$url_standard)
+  # Which LITERAL host bytes the selected standard admits (RURL-ezhzpkhg
+  # deletion 1, ADR 0013 superseding ADR 0009). Compensated for in front of the
+  # parser until now as well, by substituting filler for the gap bytes and
+  # restoring the true host once the structure had been read. See
+  # `host_charset` in R/parse-web.R.
+  host_charset <- .web_host_charset_policy(opts$url_standard)
+  # Whether an unwritable byte outside the authority is refused or escaped
+  # (RURL-ezhzpkhg deletion 5). This used to be a SECOND parse: Phase 1 kept a
+  # copy of the input respelled with the WHATWG encode sets, and a row that
+  # failed the first attempt was re-parsed from that copy. See `pqf_bytes` in
+  # R/parse-web.R for why a retry-on-failure cannot express the rule.
+  pqf_bytes <- .web_pqf_policy(opts$url_standard)
+  # Which host tokens read as an IPv4 address (RURL-ezhzpkhg deletion 4). The
+  # last of the compensations: a Phase-1 rewrite canonicalized WHATWG-valid IPv4
+  # hosts in the URL STRING so the old engine could read the rest of it. See
+  # `host_ipv4` in R/parse-web.R for what its regex gate cost.
+  host_ipv4 <- .web_host_ipv4_policy(opts$url_standard)
+  # What an ABSENT path after the authority parses to (RURL-epoinamh). See
+  # `empty_path` in R/parse-web.R for why the sec 6.2.3 "/" is a normalization
+  # and not a parse step.
+  empty_path <- .web_empty_path_policy(opts$url_standard)
+  # Whether a well-formed triplet's DECODED octet must also be an admissible
+  # literal host byte (RURL-crrgaiel). See `host_pct_octets` in R/parse-web.R:
+  # RFC 3986 sec 3.2.2 places no condition on what `pct-encoded` denotes, so
+  # `rfc3986` judges the raw token and leaves the octet encoded.
+  host_pct_octets <- .web_host_pct_octets_policy(opts$url_standard)
+  port_range <- .web_port_range_policy(opts$url_standard)
   parsed_list <- vector("list", n)
-  parse_idx <- which(curl_parseable)
+  parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
     parsed_list[parse_idx] <- lapply(
-      prep$url_to_parse[parse_idx], .parse_with_curl
+      prep$url_to_parse[parse_idx], .parse_web_url_one,
+      last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes,
+      host_charset = host_charset, host_ipv4 = host_ipv4,
+      empty_path = empty_path, host_pct_octets = host_pct_octets,
+      port_range = port_range
     )
   }
-  curl_ok <- curl_parseable & !vapply(parsed_list, is.null, logical(1))
-  parsed_from_pqf_fallback <- rep(FALSE, n)
-  fallback_idx <- which(
-    curl_parseable & !curl_ok & prep$whatwg_pqf_url != prep$url_to_parse
-  )
-  if (length(fallback_idx) > 0L) {
-    parsed_list[fallback_idx] <- lapply(
-      prep$whatwg_pqf_url[fallback_idx], .parse_with_curl
-    )
-    fallback_ok <- !vapply(parsed_list[fallback_idx], is.null, logical(1))
-    parsed_from_pqf_fallback[fallback_idx[fallback_ok]] <- TRUE
-    curl_ok[fallback_idx[fallback_ok]] <- TRUE
-  }
+  web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
   file_parse <- .parse_whatwg_file_urls_vec(
     prep$whatwg_file_input[whatwg_file], prep$backslash_rewritten[whatwg_file]
   )
@@ -1792,11 +1832,11 @@ safe_parse_urls <- function(url,
   file_ok[whatwg_file] <- file_parse$ok
   # General-acceptance rows that parsed successfully (incl. the RFC gate).
   general_ok <- general_route & gen$ok
-  parse_ok <- curl_ok | rfc3986_path_rootless | file_ok | general_ok
+  parse_ok <- web_ok | rfc3986_path_rootless | file_ok | general_ok
   # UNIFORM RFC 3986 generic-URI gate (RURL-qrfrvmkg, adopting RURL-pfewxbhb
   # Option (a)). Applied at the ONE point every route has already converged on,
   # so the profile is a property of the SELECTED STANDARD rather than of which
-  # parser happened to own the row: libcurl (http/https/ftp/ftps), the
+  # parser happened to own the row: the web route (http/https/ftp/ftps), the
   # path-rootless slice, the RFC 8089 `file:` overlay and the general-routed
   # opaque/RFC rows all meet the same grammar. Before this, only the last two
   # did -- `file://C|/x` errored while `http://a|b/` parsed, though '|' is in no
@@ -1820,31 +1860,46 @@ safe_parse_urls <- function(url,
   raw_host <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$host %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
-  # Host shim restore (RURL-dxwxeamq / RURL-rgjpcbuk). For rows Phase 1
-  # sanitized so curl could parse the structure, curl's `$host` is a
-  # placeholder; overwrite it with the profile-correct host BEFORE IP detection
-  # and the host model, so every downstream gate validates the real host.
-  restore <- curl_ok & prep$restore_host_shimmed
-  if (any(restore)) {
-    raw_host[restore] <- prep$shimmed_true_host[restore]
+  # The host shim's restore step used to run here (RURL-dxwxeamq /
+  # RURL-rgjpcbuk): for rows Phase 1 had masked, the parser's `$host` was
+  # filler and the profile-correct host was substituted back before IP
+  # detection and the host model. Both halves of that shim are gone
+  # (RURL-ezhzpkhg deletions 1 and 2, ADR 0013), so `$host` is already the
+  # profile-correct host and there is nothing to restore.
+  #
+  # `host-charset-shimmed` (ADR 0006/0009) survives the shim it was named
+  # after, because it always described the RESULTING HOST rather than the layer
+  # that admitted it: TRUE where a WHATWG parse produced a host carrying one of
+  # the 15 `.WEB_HOST_GAP_BYTES` code points (R/parse-web.R, which records what
+  # each was frozen from). Derived from the parsed host, so
+  # it covers both spellings -- `%60` decodes to "`" under `host_pct =
+  # "decode"` and reads identically to a literal one.
+  host_charset_shimmed <- rep(FALSE, n)
+  if (.is_whatwg(opts$url_standard) && any(web_ok)) {
+    host_charset_shimmed[web_ok] <- vapply(
+      raw_host[web_ok],
+      function(h) {
+        !is.na(h) && any(.web_bytes(h) %in% .WEB_HOST_GAP_BYTES)
+      },
+      logical(1), USE.NAMES = FALSE
+    )
   }
-  # Path is re-derived from the prepared input (not curl's normalized $path) so
+  # Path is re-derived from the prepared input (not the parser's normalized
+  # $path) so
   # dot segments survive to path_normalization; see .extract_raw_path_vec().
-  curl_path <- vapply(parsed_list, function(p) {
+  engine_path <- vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$path %||% NA_character_
   }, character(1), USE.NAMES = FALSE)
-  raw_path <- curl_path
-  if (any(curl_ok)) {
-    prepared_for_components <- prep$url_to_parse
-    prepared_for_components[parsed_from_pqf_fallback] <-
-      prep$whatwg_pqf_url[parsed_from_pqf_fallback]
-    raw_path[curl_ok] <- .extract_raw_path_vec(
-      prepared_for_components[curl_ok], curl_path[curl_ok]
+  raw_path <- engine_path
+  if (any(web_ok)) {
+    raw_path[web_ok] <- .extract_raw_path_vec(
+      prep$url_to_parse[web_ok], engine_path[web_ok], pqf_bytes
     )
   }
   # query/fragment/userinfo are raw pass-throughs; .blank_to_na() maps a
-  # present-but-empty "" component to NA so output is stable across libcurl
-  # versions (see .blank_to_na in utils.R).
+  # present-but-empty "" component to NA, which is where the long-shipped
+  # "empty component == absent" behavior is enforced (see .blank_to_na in
+  # utils.R).
   raw_query <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$query %||% NA_character_
   }, character(1), USE.NAMES = FALSE))
@@ -1858,7 +1913,7 @@ safe_parse_urls <- function(url,
     if (is.null(p)) NA_character_ else p$password %||% NA_character_
   }, character(1), USE.NAMES = FALSE))
   # Which rows carry a userinfo that was actually SPLIT into a username and a
-  # password. The libcurl route always splits, so it is TRUE wherever that
+  # password. The web route always splits, so it is TRUE wherever that
   # route produced credentials; the general route sets it per row below. The
   # WHATWG userinfo percent-encode set keys off this and nothing else, because
   # encoding an UNDIVIDED userinfo would render its structural ":" as "%3A"
@@ -1912,7 +1967,7 @@ safe_parse_urls <- function(url,
     #   * "authority" -- a WHATWG authority userinfo. SPLIT at the FIRST ":"
     #     into username / password, exactly as the authority state does. Before
     #     this the opaque parser dropped userinfo entirely, so `sc://u:p@h/x`
-    #     reported NA credentials while the libcurl route reported them exactly.
+    #     reported NA credentials while the web route reported them exactly.
     #   * "rfc8089"   -- the `file:` overlay's `[ userinfo "@" ]`, UNDIVIDED by
     #     production. App. E.1 warns a password there is "a serious security
     #     exposure", so rurl does not manufacture a split the RFC never draws.
@@ -1964,7 +2019,8 @@ safe_parse_urls <- function(url,
     raw_user[is_mailto_gen] <- rp$user
   }
 
-  # Every host source (curl, shim restore, `file:`, the general/opaque parser,
+  # Every host source (web route, shim restore, `file:`, the general/opaque
+  # parser,
   # mailto) has merged into `raw_host` by here, so this is the single vector-
   # path chokepoint at which the host's encoding can be declared once for all
   # downstream consumers (`pslr`, `punycoder::host_normalize()`).
@@ -1975,13 +2031,15 @@ safe_parse_urls <- function(url,
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
   )
 
-  # Phase 5: IP host detection (on curl's host, which may be a coerced IPv4).
+  # Phase 5: IP host detection (on the parsed host, which may be a coerced
+  # IPv4).
   is_ip_host <- .detect_ip_host_vec(raw_host)
   is_ip_pre_model <- is_ip_host
 
   # Phase 5b: url_standard host IPv4/reg-name model (RURL-luwvkwhd). No-op when
   # url_standard is NULL. Under a selector it restores the RFC reg-name spelling
-  # (or keeps curl's WHATWG coercion) and marks WHATWG-fatal numeric hosts,
+  # (or keeps the parser's WHATWG coercion) and marks WHATWG-fatal numeric
+  # hosts,
   # which are folded into the null-row set so they present as parse errors.
   model <- .apply_host_standard_model_vec(
     prep$input_host, raw_host, is_ip_host, opts$url_standard,
@@ -1989,8 +2047,8 @@ safe_parse_urls <- function(url,
   )
   model_host <- model$host
   is_ip_host <- model$is_ip
-  # The libcurl host model must never touch a general-routed host (parsed by
-  # the posture opaque/RFC parser, not libcurl): restore its host + IP verdict
+  # The web host model must never touch a general-routed host (parsed by
+  # the posture opaque/RFC parser instead): restore its host + IP verdict
   # and exempt it from the model's WHATWG-fatal reject.
   general_acceptance <- identical(opts$scheme_acceptance, "general")
   if (general_acceptance && any(general_route)) {
@@ -2064,7 +2122,7 @@ safe_parse_urls <- function(url,
     looks_like_host_port = prep$looks_like_host_port,
     scheme_less_userinfo = prep$scheme_less_userinfo,
     rfc3986_path_rootless = rfc3986_path_rootless,
-    # Original (pre-curl) host token: NOT a cached Stage-A field (absent from
+    # Original (pre-parse) host token: NOT a cached Stage-A field (absent from
     # .spu_stage_a_fields) and never surfaced in the 14-column result, so it
     # widens no public output. The url_standard metadata seam
     # (.derive_url_metadata_vec) reads it off the direct ._parse_stage_a_vec()
@@ -2082,10 +2140,11 @@ safe_parse_urls <- function(url,
     # `leading-trailing-stripped` only where a leading/trailing
     # C0-control-or-space run was actually removed.
     leading_trailing_stripped = prep$leading_trailing_stripped,
-    # WHATWG host-charset shim (RURL-dxwxeamq, ADR 0009): same seam, emits
-    # `host-charset-shimmed` where a curl-rejected-but-WHATWG-valid host code
-    # point was accepted via the shim + true-host restore above.
-    host_charset_shimmed = prep$host_charset_shimmed,
+    # WHATWG host-charset acceptance (RURL-dxwxeamq, ADR 0009 -> ADR 0013):
+    # emits `host-charset-shimmed` where a WHATWG parse kept a host code point
+    # in `.WEB_HOST_GAP_BYTES`. Derived above from the PARSED host, not from a
+    # Phase-1 rewrite flag.
+    host_charset_shimmed = host_charset_shimmed,
     # Also a cached Stage-A FIELD (not only the attribute below), so a cache
     # hit can report null-ness without the cache having to encode it as a NULL
     # value -- see the `null_row` entry in .spu_stage_a_fields.
@@ -2097,7 +2156,7 @@ safe_parse_urls <- function(url,
 
 # Stage B (vector): the presentation transform (RURL-dkwrebdt). A pure,
 # never-cached function of the cached Stage A columns (`a`), the per-row
-# original URL, `curl_ok` (the complement of Stage A's null rows), and the
+# original URL, `web_ok` (the complement of Stage A's null rows), and the
 # validated presentation options. Runs the option-dependent phases -- path
 # normalization (3), subdomain-level trimming (8), host encoding (9), case
 # policy (10), clean-URL assembly (11), parse-status (12), and result assembly
@@ -2106,7 +2165,7 @@ safe_parse_urls <- function(url,
 # are applied by the caller). Every option EXCLUDED from the cache key is
 # consumed here, so switching presentation profiles re-runs only this cheap
 # stage.
-._parse_stage_b_vec <- function(a, original_url, curl_ok, opts) {
+._parse_stage_b_vec <- function(a, original_url, web_ok, opts) {
   is_ip_host <- a$is_ip_host
 
   # Select the domain/TLD spelling exactly as .derive_domain_tld_vec() would for
@@ -2142,7 +2201,7 @@ safe_parse_urls <- function(url,
     # ADR 0012 Layer 4b-2 (RURL-qbnelzku): re-run the pure general parser on the
     # original URL to recover the state kinds Stage A did not thread through the
     # cache (the cache stores only .spu_stage_a_fields). `gp` = the rows Stage A
-    # routed to the posture parser AND that parsed ok (curl_ok is the complement
+    # routed to the posture parser AND that parsed ok (web_ok is the complement
     # of Stage A's null rows). Cheap and deterministic; only the general posture
     # pays for it.
     # Stage A feeds the general parser its WHATWG step-1 stripped input
@@ -2153,9 +2212,9 @@ safe_parse_urls <- function(url,
       .strip_whatwg_control_chars_vec(original_url, opts$url_standard)$url,
       opts$url_standard, opts$scheme_acceptance
     )
-    gp <- gen_b$general_parsed & curl_ok
+    gp <- gen_b$general_parsed & web_ok
     # path_kind / host_kind for eligibility: the L3a classifier proxy for the
-    # libcurl (special) rows, the TRUE parser kinds for the general-routed rows.
+    # web (special) rows, the TRUE parser kinds for the general-routed rows.
     pk <- .whatwg_path_kind(is_special_row, a$raw_path)
     hk <- .host_kind(a$final_host)
     if (any(gp)) {
@@ -2286,7 +2345,7 @@ safe_parse_urls <- function(url,
   #     parser leaves its userinfo NA and the mask is FALSE.)
   # The general/opaque route USED to be a third exclusion, because it dropped
   # userinfo instead of splitting it. It now splits, so it is encoded here on
-  # the same terms as the libcurl route (RURL-ovpguvva).
+  # the same terms as the web route (RURL-ovpguvva).
   user_output <- a$raw_user
   password_output <- a$raw_password
   if (.is_whatwg(opts$url_standard)) {
@@ -2356,7 +2415,7 @@ safe_parse_urls <- function(url,
   # SAME derivation the status came from; the public parse frame is untouched
   # (ADR 0006 -- companion helpers never widen it).
   verdicts <- .derive_verdict_layers_vec(
-    curl_ok = curl_ok,
+    web_ok = web_ok,
     final_host = final_host,
     is_ip_host = is_ip_host,
     tld = tld,
@@ -2411,7 +2470,7 @@ safe_parse_urls <- function(url,
   # ambiguous, email-shaped, scheme-less string: NA clean_url. The accompanying
   # `warning-userinfo` status is no longer stamped here -- it is the L2
   # `warn-userinfo` verdict, projected by pi in Phase 12 above.
-  slu <- a$scheme_less_userinfo & curl_ok
+  slu <- a$scheme_less_userinfo & web_ok
   if (any(slu)) {
     result$clean_url[slu] <- NA_character_
   }
@@ -2443,20 +2502,32 @@ safe_parse_urls <- function(url,
   # host_encoding/path_encoding are already validated upstream by
   # .parse_options(); no re-validation here.
 
-  # Phase 1: scheme detection and input preparation for curl
-  prep <- .prepare_url_for_curl(
+  # Phase 1: scheme detection and input preparation for the web parse
+  prep <- .prepare_url_for_parse(
     url, protocol_handling, scheme_relative_handling
   )
   if (is.null(prep)) {
     return(NULL)
   }
 
-  # Phase 2: parse with curl, then pull out raw components
-  parsed_curl <- .parse_with_curl(prep$url_to_parse)
-  if (is.null(parsed_curl)) {
+  # Phase 2: run the web parse, then pull out raw components
+  parsed_web <- .parse_web_url_one(
+    prep$url_to_parse,
+    last_at_userinfo = .is_whatwg(url_standard),
+    host_pct = .web_host_pct_policy(url_standard),
+    pqf_bytes = .web_pqf_policy(url_standard),
+    host_charset = .web_host_charset_policy(url_standard),
+    host_ipv4 = .web_host_ipv4_policy(url_standard),
+    empty_path = .web_empty_path_policy(url_standard),
+    host_pct_octets = .web_host_pct_octets_policy(url_standard),
+    port_range = .web_port_range_policy(url_standard)
+  )
+  if (is.null(parsed_web)) {
     return(NULL)
   }
-  raw <- .extract_raw_components(parsed_curl, prep$url_to_parse)
+  raw <- .extract_raw_components(
+    parsed_web, prep$url_to_parse, .web_pqf_policy(url_standard)
+  )
   raw_host <- .mark_host_utf8(raw$host)
   raw_query <- raw$query
 
@@ -2522,7 +2593,7 @@ safe_parse_urls <- function(url,
 
   # Phase 12: parse-status assignment
   parse_status <- .derive_parse_status(
-    parsed_curl = parsed_curl,
+    parsed_web = parsed_web,
     final_host = final_host,
     is_ip_host = is_ip_host,
     tld = tld,
@@ -2549,7 +2620,7 @@ safe_parse_urls <- function(url,
     original_input_url = original_input_url,
     scheme_output = scheme_output,
     host_output = host_output,
-    parsed_curl = parsed_curl,
+    parsed_web = parsed_web,
     path_output = path_output,
     raw_query = raw_query,
     domain = domain,
