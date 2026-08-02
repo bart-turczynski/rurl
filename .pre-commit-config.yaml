@@ -10,17 +10,22 @@ repos:
     hooks:
       - id: check-added-large-files
         args: ['--maxkb=5120']
-      # tests/testthat/fixtures/ holds byte-sensitive conformance corpora
-      # (encoding, parse, and URL-standard CSVs), so the whitespace/EOF fixers
-      # must not rewrite them.
+      # These paths are byte-pinned: tools/oracle-provenance-gate.R PV3
+      # recomputes each one's sha256 and compares it to the digest recorded in
+      # tests/testthat/fixtures/oracle-provenance.json. A fixer that appends a
+      # newline or strips a trailing space changes the bytes and turns PV3 red,
+      # so they are off limits. inst/bench/wpt-url-cases.json in particular is
+      # stored exactly as fetched upstream, which means NO final newline.
+      #
+      # Keep this list in sync with the in-repo fixtures PV3 hashes.
       - id: end-of-file-fixer
-        exclude: '^tests/testthat/fixtures/'
+        exclude: &byte-pinned '^(tests/testthat/fixtures/|inst/bench/wpt-url-cases\.json$)'
       - id: trailing-whitespace
-        exclude: '^tests/testthat/fixtures/'
+        exclude: *byte-pinned
       - id: check-merge-conflict
       - id: check-yaml
       - id: mixed-line-ending
-        exclude: '^tests/testthat/fixtures/'
+        exclude: *byte-pinned
       - id: check-case-conflict
   - repo: local
     hooks:
