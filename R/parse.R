@@ -354,8 +354,8 @@
 #'     the port is excluded, as before); fragment and userinfo are always
 #'     excluded (use the dedicated components above to retrieve them). With
 #'     `path_encoding = "decode"` the path is shown decoded, so `clean_url`
-#'     is human-readable rather than guaranteed URL-safe. NA if host is
-#'     empty/NA.
+#'     is human-readable rather than guaranteed URL-safe. NA on a parse error,
+#'     or when the host is empty/NA except for a valid hostless `file:` URL.
 #'     \item `parse_status`: Character string indicating parsing outcome
 #'       ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
 #'       "warning-invalid-tld", "warning-public-suffix", "warning-userinfo").
@@ -2494,6 +2494,13 @@ safe_parse_urls <- function(url,
     scheme_less_userinfo = a$scheme_less_userinfo
   )
   parse_status <- .project_parse_status_vec(verdicts)
+
+  # A failed parse has no canonical spelling to emit. Most error rows already
+  # arrive here with clean_url = NA because their components are unbuildable,
+  # but an RFC-normalized hostless `file:.` has an empty path and otherwise
+  # assembles as `file://`. Apply the invariant after the verdict projection so
+  # every serializer route is covered at one seam (RURL-pjqchuqs).
+  clean_url[parse_status == "error"] <- NA_character_
 
   # Phase 13: assemble the 14 typed columns.
   result <- .assemble_parse_result_vec(

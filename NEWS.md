@@ -86,6 +86,12 @@
 
 ### Bug fixes
 
+- **An error row no longer exposes a `clean_url`.** Under
+  `url_standard = "rfc3986"`, `file:.` was correctly classified as an error but
+  path normalization reduced `.` to an empty path, allowing the clean builder
+  to emit `file://`. Error rows now consistently return `NA` for `clean_url`;
+  valid hostless file URLs such as `file:///etc/passwd` are unchanged.
+
 - **Path presentation no longer changes which cleanup rules fire.** Combining
   `path_encoding = "decode"` or `"encode"` with index-page or trailing-slash
   stripping previously decoded `%2F` too early, turning data into a separator

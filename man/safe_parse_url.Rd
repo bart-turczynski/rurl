@@ -406,8 +406,8 @@ case-unfolded. The port is included only when
 the port is excluded, as before); fragment and userinfo are always
 excluded (use the dedicated components above to retrieve them). With
 \code{path_encoding = "decode"} the path is shown decoded, so \code{clean_url}
-is human-readable rather than guaranteed URL-safe. NA if host is
-empty/NA.
+is human-readable rather than guaranteed URL-safe. NA on a parse error,
+or when the host is empty/NA except for a valid hostless \verb{file:} URL.
 \item \code{parse_status}: Character string indicating parsing outcome
 ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
 "warning-invalid-tld", "warning-public-suffix", "warning-userinfo").
