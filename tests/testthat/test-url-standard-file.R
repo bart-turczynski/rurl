@@ -358,7 +358,7 @@ test_that("WHATWG file parser rejects forbidden decoded file hosts", {
   expect_true(is.na(get_clean_url("file://%43%3A", url_standard = "whatwg")))
 })
 
-test_that("hostless file: non-absolute path never fabricates an authority", {
+test_that("hostless invalid file: rows never emit a clean URL", {
   # RURL-hnddjptl. `clean_url` renders a hostless row as `scheme://` + path,
   # so a path not beginning with "/" lands in the authority position:
   # "file:C:/W" emitted "file://C:/W" (authority "C:" -- an SMB fetch on
@@ -368,13 +368,9 @@ test_that("hostless file: non-absolute path never fabricates an authority", {
   for (std in list(NULL, "rfc3986")) {
     parsed <- safe_parse_urls(offenders, url_standard = std)
     expect_identical(parsed$parse_status, rep("error", length(offenders)))
-    # No emitted key may carry an authority. Under rfc3986 "file:." reduces to
-    # an EMPTY path, so the guard does not fire and it still emits the
-    # authority-less
-    # "file://" -- tracked separately as the "error implies clean_url is NA"
-    # invariant (RURL-pjqchuqs), which is a different question from this one.
-    emitted <- parsed$clean_url[!is.na(parsed$clean_url)]
-    expect_true(all(emitted == "file://"))
+    # An error row has no canonical spelling to emit. This also covers the
+    # RFC-normalized empty-path edge: "file:." must not become "file://".
+    expect_true(all(is.na(parsed$clean_url)))
   }
   # The path column still reports what was read: the guard suppresses only the
   # reassembled key, it does not discard the parse facts.
