@@ -506,6 +506,90 @@ test_that("the byte-slice helpers cut positions, not characters", {
 })
 
 
+# --- 4d. A "bytes" MARK, where 4b/4c were about undecodable OCTETS -----------
+#
+# RURL-jttoigtc. Third instance of the same broken promise, and the one the
+# kmpnbvdl guards structurally cannot catch: those scope on `validUTF8()` and on
+# `Encoding()` being "UTF-8"/"latin1", and a "bytes" mark is neither. stringi
+# refuses a bytes-marked string WHOLESALE -- it is not a question of which
+# octets it holds -- so the throw arrives from `stri_escape_unicode()` in the
+# CACHE KEY, before the parser has looked at the input at all.
+#
+# `error` is the right verdict and is not in dispute: `Encoding(x) <- "bytes"`
+# is the caller declaring the value is not text, and rurl already treats that
+# declaration as authoritative (`.rfc3986_declare_native_utf8()` leaves it
+# alone on purpose). Only the THROW is the defect.
+
+# Same octets as `bad_authority` above -- "http://<80>/p" -- so the MARK is the
+# only variable between them.
+bytes_marked <- local({
+  s <- rawToChar(as.raw(
+    c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x80, 0x2f, 0x70)
+  ))
+  Encoding(s) <- "bytes"
+  s
+})
+
+test_that("a bytes-marked row is refused without costing the batch", {
+  batch <- c("http://a.example.com/", bytes_marked, "http://b.example.com/")
+  for (std in c("whatwg", "rfc3986")) {
+    expect_no_error(h <- get_host(batch, url_standard = std))
+    expect_identical(h, c("a.example.com", NA, "b.example.com"), info = std)
+    expect_no_error(st <- get_parse_status(batch, url_standard = std))
+    expect_identical(st, c("ok", "error", "ok"), info = std)
+  }
+})
+
+test_that("every encoding mark survives a batch, not just the tolerated ones", {
+  # The cross-product the ticket asks for: all four marks on the SAME octets,
+  # each one placed between two healthy rows. Before the fix three of these
+  # passed and "bytes" threw -- which is exactly why the mark has to be the
+  # varied axis. A corpus that varies only the octets cannot reach this row.
+  for (enc in c("unknown", "UTF-8", "latin1", "bytes")) {
+    u <- rawToChar(as.raw(
+      c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x80, 0x2f, 0x70)
+    ))
+    Encoding(u) <- enc
+    expect_no_error(
+      st <- get_parse_status(c("http://a.example.com/", u, "http://b.com/"))
+    )
+    expect_identical(st, c("ok", "error", "ok"), info = enc)
+  }
+})
+
+test_that("the opaque-authority mask is guarded too, and it is a conjunction", {
+  # The funnel guard in ._parse_urls_cached() does NOT cover this:
+  # .mask_opaque_authority() reads the input vector itself, and arms only when
+  # some row is `mailto:` under scheme_acceptance = "general". Deleting the
+  # second .neutralize_bytes_input() call in safe_parse_urls() makes precisely
+  # this expectation throw again while everything above stays green.
+  #
+  # It also fires on safe_parse_urls() but NOT on get_host(), so both are
+  # asserted -- the accessor is the shape that would have scored a
+  # funnel-only fix as complete.
+  batch <- c("mailto:a@b.com", bytes_marked, "mailto://ex.com:8080/p")
+  expect_no_error(
+    df <- safe_parse_urls(batch, scheme_acceptance = "general",
+      url_standard = "whatwg")
+  )
+  expect_identical(df$parse_status, c("ok", "error", "ok"))
+  expect_no_error(
+    h <- get_host(batch, scheme_acceptance = "general",
+      url_standard = "whatwg")
+  )
+  expect_identical(h, c("b.com", NA, "ex.com"))
+})
+
+test_that("the bytes echo comes back untouched in original_url", {
+  # Neutralization is an INPUT-side refusal, not a rewrite of what the caller
+  # sent: the row reports `error`, and original_url still hands back the exact
+  # bytes so the caller can see which element was refused.
+  df <- safe_parse_urls(c("http://a.example.com/", bytes_marked))
+  expect_identical(Encoding(df$original_url[2]), "bytes")
+  expect_identical(charToRaw(df$original_url[2]), charToRaw(bytes_marked))
+})
+
+
 # --- 5. Meta-guard: no transcoding-from-native in the package ----------------
 
 # Which namespace functions reference `fn`, and how many times. Reads the
