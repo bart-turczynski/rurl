@@ -1202,7 +1202,27 @@ get_tld <- function(url, source = c("all", "private", "icann"),
 #'   or without a selector.
 #' @inheritParams safe_parse_url
 #' @return A character vector the same length as \code{url}, each element one of
-#'   the \code{host_type} tokens above, or \code{NA} when no selector is given.
+#'   the \code{host_type} tokens above, or \code{NA}.
+#'
+#'   \strong{\code{NA} is ambiguous, and knowingly so.} It means either that no
+#'   selector was passed --- in which case nothing was classified at all --- or
+#'   that a selector \emph{was} passed and this row could not be classified
+#'   under it. The two are indistinguishable in the returned value:
+#'
+#'   \preformatted{identical(
+#'   get_host_type(c("/relative/path", ""), url_standard = "rfc3986"),
+#'   get_host_type(c("http://example.com/", "http://x.test/"))
+#' )
+#' #> TRUE}
+#'
+#'   A caller that must tell them apart has to retain its own knowledge of
+#'   whether it supplied \code{url_standard}; the return value does not carry
+#'   it. In particular, an all-\code{NA} result is \emph{not} evidence that the
+#'   URLs are unclassifiable --- it is the same answer a selector-less call
+#'   gives for perfectly well-formed input.
+#'
+#'   \code{\link{get_scheme_class}} imposes no such burden: see the guarantee in
+#'   its own \code{Value} section.
 #' @seealso \code{\link{get_url_diagnostics}}, \code{\link{get_parse_verdicts}},
 #'   \code{\link{safe_parse_url}}
 #' @export
@@ -1407,6 +1427,14 @@ get_host_type <- function(url, url_standard = NULL,
 #'   diagnostic tokens for that URL. For a length-n \code{url} (including
 #'   \code{n == 0}), a list of length n whose i-th element is the character
 #'   vector of that URL's tokens (\code{character(0)} when it has none).
+#'
+#'   \strong{An empty result is ambiguous, and knowingly so.} Per row,
+#'   \code{character(0)} means either that no selector was passed --- in which
+#'   case no diagnostics were evaluated for any row --- or that a selector
+#'   \emph{was} passed and that URL raised none. An empty result is therefore
+#'   never evidence that a URL is clean unless the caller knows it supplied
+#'   \code{url_standard}. Under \code{NULL} every row is \code{character(0)},
+#'   whatever the input.
 #' @seealso \code{\link{get_host_type}}, \code{\link{safe_parse_url}}
 #' @export
 #' @examples
@@ -1470,6 +1498,14 @@ get_url_diagnostics <- function(url, url_standard = NULL,
 #' @return A character vector the same length as \code{url}, each element one
 #'   of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"},
 #'   or \code{NA} when no selector is given.
+#'
+#'   \strong{Here \code{NA} is unambiguous}, unlike
+#'   \code{\link{get_host_type}}'s. Given a selector, every element receives one
+#'   of the three tokens above --- input that is unparseable, scheme-less, empty
+#'   or \code{NA} classifies as \code{"missing-or-error"} rather than falling
+#'   through to \code{NA}. So \code{NA} occurs if and only if
+#'   \code{url_standard} was \code{NULL}, and \code{is.na()} on this result is a
+#'   reliable test for the selector-less call.
 #' @details
 #' Under the default \code{scheme_acceptance = "web"} an opaque scheme such as
 #' \code{mailto:} is outside rurl's web allowlist and classifies as

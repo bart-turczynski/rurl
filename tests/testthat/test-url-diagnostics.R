@@ -380,3 +380,56 @@ test_that("file rfc-syntax shape facts fire (RFC 8089)", {
     suppressWarnings(get_parse_status("file://h:8080/p")), "error"
   )
 })
+
+# The NULL-selector return contract, pinned because the roxygen @return
+# sections now make claims about it that nothing else would catch drifting
+# (RURL-hikovisr).
+#
+# These are green on arrival by construction: they pin SHIPPED behavior that
+# the docs were changed to describe accurately, rather than guarding a fix.
+# The point is the reverse direction -- if the behavior ever moves, the
+# documented guarantees become false silently, and only a pin makes that
+# detectable.
+test_that("get_host_type(): NA under NULL collides with unclassifiable", {
+  # The overload the docs now warn about, verbatim from the @return section.
+  expect_identical(
+    get_host_type(c("/relative/path", ""), url_standard = "rfc3986"),
+    get_host_type(c("http://example.com/", "http://x.test/"))
+  )
+  # ... and the NULL arm really is content-free: well-formed input, all NA.
+  expect_true(all(is.na(
+    get_host_type(
+      c("http://example.com/", "http://2130706433/", "http://[::1]/")
+    )
+  )))
+})
+
+test_that("get_scheme_class(): NA iff no selector was passed", {
+  # The guarantee the docs give, and the reason get_scheme_class escapes the
+  # overload get_host_type has: with a selector nothing falls through to NA.
+  awkward <- c(
+    "http://example.com/", "/relative", "://bad", "", NA_character_,
+    "http://x|y/", "mailto:a@b.c", "not a url", "http://[::1]/", "ftp://h/"
+  )
+  for (std in c("rfc3986", "whatwg")) {
+    got <- get_scheme_class(awkward, url_standard = std)
+    expect_false(anyNA(got), info = std)
+    expect_true(
+      all(got %in% c("special", "non-special", "missing-or-error")),
+      info = std
+    )
+  }
+  # Without a selector, every one of the same rows is NA.
+  expect_true(all(is.na(get_scheme_class(awkward))))
+})
+
+test_that("get_url_diagnostics(): empty under NULL is not a clean verdict", {
+  dirty <- "http://2130706433/"
+  # Under a selector this URL raises tokens ...
+  expect_gt(length(get_url_diagnostics(dirty, url_standard = "whatwg")), 0L)
+  # ... and under NULL it is indistinguishable from a URL that raises none.
+  expect_identical(
+    get_url_diagnostics(dirty),
+    get_url_diagnostics("http://example.com/", url_standard = "whatwg")
+  )
+})

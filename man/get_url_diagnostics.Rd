@@ -63,6 +63,14 @@ For a length-1 \code{url}, a character vector of zero or more
 diagnostic tokens for that URL. For a length-n \code{url} (including
 \code{n == 0}), a list of length n whose i-th element is the character
 vector of that URL's tokens (\code{character(0)} when it has none).
+
+\strong{An empty result is ambiguous, and knowingly so.} Per row,
+\code{character(0)} means either that no selector was passed --- in which
+case no diagnostics were evaluated for any row --- or that a selector
+\emph{was} passed and that URL raised none. An empty result is therefore
+never evidence that a URL is clean unless the caller knows it supplied
+\code{url_standard}. Under \code{NULL} every row is \code{character(0)},
+whatever the input.
 }
 \description{
 Companion helper for the \code{url_standard} selector: reports the

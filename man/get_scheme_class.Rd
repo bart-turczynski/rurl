@@ -67,6 +67,14 @@ extraction metadata, not the URL's authority.}
 A character vector the same length as \code{url}, each element one
 of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"},
 or \code{NA} when no selector is given.
+
+\strong{Here \code{NA} is unambiguous}, unlike
+\code{\link{get_host_type}}'s. Given a selector, every element receives one
+of the three tokens above --- input that is unparseable, scheme-less, empty
+or \code{NA} classifies as \code{"missing-or-error"} rather than falling
+through to \code{NA}. So \code{NA} occurs if and only if
+\code{url_standard} was \code{NULL}, and \code{is.na()} on this result is a
+reliable test for the selector-less call.
 }
 \description{
 Companion helper for the \code{url_standard} selector: reports whether each

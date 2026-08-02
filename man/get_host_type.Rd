@@ -66,7 +66,27 @@ extraction metadata, not the URL's authority.}
 }
 \value{
 A character vector the same length as \code{url}, each element one of
-the \code{host_type} tokens above, or \code{NA} when no selector is given.
+the \code{host_type} tokens above, or \code{NA}.
+
+\strong{\code{NA} is ambiguous, and knowingly so.} It means either that no
+selector was passed --- in which case nothing was classified at all --- or
+that a selector \emph{was} passed and this row could not be classified
+under it. The two are indistinguishable in the returned value:
+
+\preformatted{identical(
+  get_host_type(c("/relative/path", ""), url_standard = "rfc3986"),
+  get_host_type(c("http://example.com/", "http://x.test/"))
+)
+#> TRUE}
+
+A caller that must tell them apart has to retain its own knowledge of
+whether it supplied \code{url_standard}; the return value does not carry
+it. In particular, an all-\code{NA} result is \emph{not} evidence that the
+URLs are unclassifiable --- it is the same answer a selector-less call
+gives for perfectly well-formed input.
+
+\code{\link{get_scheme_class}} imposes no such burden: see the guarantee in
+its own \code{Value} section.
 }
 \description{
 Companion helper for the \code{url_standard} selector: reports the host

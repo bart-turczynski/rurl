@@ -64,7 +64,8 @@ k <- get_url_key(c("http://example.com/?a=1&b=2",
 k[1] == k[2]
 
 # Deduplicate by identity rather than by string.
-u <- c("HTTP://Example.com/a", "http://example.com/a", "http://example.com/b")
+u <- c("HTTP://Example.com/a", "http://example.com/a",
+       "http://example.com/b")
 u[!duplicated(get_url_key(u))]
 
 # Non-keyable input carries a typed reason.
