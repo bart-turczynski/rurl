@@ -64,11 +64,12 @@
 #                      validated ACCORDING TO ITS SCHEME plus ISO dates
 #                      whenever it is `verified`, at least one algorithm
 #                      anchor, and never the MISSING[...] sentinel.
-#  PV10 source answer-- EVERY source group in EVERY fixture CARRIES a non-empty
-#                      normative_dependencies. There is no exemption: a group
-#                      that derives nothing from a normative source records one
-#                      entry with pin_status = "not-applicable" saying so.
-#                      Absence is a FAIL, never a pass.
+#  PV10            -- RETIRED (ADR 0014). It required EVERY source group to
+#                      carry a non-empty normative_dependencies, with no
+#                      exemption, which made every new fixture a paperwork
+#                      exercise. Pinning is now opt-in: PV9 and PV11 judge only
+#                      what is written, so absence is clean and a written pin is
+#                      still held to its full shape.
 #  PV11 coherence  -- an answer that is present and well-formed still has to be
 #                      an answer to THIS group's question. Every entry declares
 #                      the fixture and group it describes and must be nested
@@ -923,52 +924,27 @@ rule_pv9 <- function(rec) {
                        nentries, if (nentries == 1L) "y" else "ies", ngroups))
 }
 
-# PV10 -- PRESENCE. The rule that stops the silence recurring: see "PRESENCE,
-# UNIVERSALLY" above. PV9 judges the shape of an answer that was volunteered;
-# this judges that an answer exists at all, in every group, with no exemption.
-# Deliberately additive -- it reuses nothing of PV9's logic and changes none of
-# it, so the two can fail independently and say different things.
-rule_pv10 <- function(rec) {
-  bad <- character(0)
-  ngroups <- 0L
-  nanswered <- 0L
-  for (fx in fixtures_of(rec)) {
-    for (g in groups_of(fx)) {
-      ngroups <- ngroups + 1L
-      deps <- g[["normative_dependencies"]]
-      # NULL covers both an absent key and an explicit JSON null; length 0
-      # covers a present-but-empty array. All three are the same silence.
-      if (is.null(deps) || !length(deps)) {
-        bad <- c(bad, sprintf(paste(
-          "%s: no normative_dependencies -- every source group must ANSWER the",
-          "source-pinning question, and an absent key is indistinguishable",
-          "from an unasked question. FIX: add an entry naming the normative",
-          "source this group's expected values are derived from; if nothing",
-          "here is derived from a normative source, record ONE entry with",
-          "pin_status = \"not-applicable\" -- \"the source is cited but",
-          "nothing is derived from it\" -- and a note saying why. See",
-          "conventions.normative_dependency_scope, and",
-          "inst/bench/wpt-url-cases.json's group for a worked negative",
-          "declaration."), group_label(fx, g)))
-      } else {
-        nanswered <- nanswered + 1L
-      }
-    }
-  }
-  # THE FLOOR, IN THE RULE ITSELF. A presence rule that walked no group would
-  # report PASS having proved nothing, which is the exact failure mode it
-  # exists to close. Refuse to pass vacuously.
-  if (!ngroups) {
-    bad <- c(bad, paste("PV10 inspected NO source group -- a presence rule",
-                        "that walks an empty iteration passes for the wrong",
-                        "reason; the record has no groups to answer for"))
-  }
-  finding("PV10", length(bad) == 0L,
-          if (length(bad)) paste(bad, collapse = "; ")
-          else sprintf(paste("all %d source group(s) answer the source-pinning",
-                             "question (%d non-empty normative_dependencies)"),
-                       ngroups, nanswered))
-}
+# PV10 -- RETIRED (ADR 0014).
+#
+# PV10 was the PRESENCE rule: every source group in every fixture had to carry a
+# non-empty normative_dependencies, with no exemption -- a group deriving nothing
+# from a normative source still had to file an entry with
+# pin_status = "not-applicable" saying so. Absence was a FAIL.
+#
+# That is the rule that made adding a fixture a paperwork exercise: the build
+# stayed red until ten keys of spec-citation metadata were written, for a
+# library that consumes standards rather than publishing them.
+#
+# It is retired ALONE, and that is the whole point. PV9 skips any group without
+# the key (`if (is.null(deps)) next`) and PV11 likewise judges only entries that
+# exist. So pinning is now OPT-IN: write no normative_dependencies and nothing
+# fires; write one and PV9 still holds it to the full shape, PV11 still holds it
+# to coherence with its group. The evidence stays trustworthy where it is
+# claimed, and is no longer compulsory where it is not.
+#
+# PV1/PV3/PV4/PV7/PV8 -- the rules that recompute sha256s, row counts and _meta
+# mirrors from real bytes -- are untouched. Fixture integrity was never the
+# expensive part.
 
 # PV11 -- COHERENCE. See "COHERENCE (PV11)" above for the measured defect this
 # exists for. Three independent checks; each can fail on its own and each says
@@ -1124,7 +1100,7 @@ check_oracle_provenance <- function(root = ".",
   shape <- rule_pv1(rec, expected_fields)
   if (!shape[[1L]]$ok) {
     rest <- lapply(c("PV2", "PV3", "PV4", "PV5", "PV6", "PV7", "PV8", "PV9",
-                     "PV10", "PV11"),
+                     "PV11"),
                    function(id) {
                      list(id = id, ok = FALSE,
                           detail = "not evaluated -- record shape is broken")
@@ -1134,7 +1110,7 @@ check_oracle_provenance <- function(root = ".",
   c(shape,
     rule_pv2(root, rec), rule_pv3(root, rec), rule_pv4(root, rec),
     rule_pv5(rec), rule_pv6(rec), rule_pv7(root, rec), rule_pv8(root, rec),
-    rule_pv9(rec), rule_pv10(rec), rule_pv11(rec))
+    rule_pv9(rec), rule_pv11(rec))
 }
 
 # ---- reporting --------------------------------------------------------------
@@ -1795,79 +1771,35 @@ self_test <- function() {
          identical(is_commit_sha("Unicode 15.1.0"), FALSE) &&
            identical(is_named_edition("Unicode 15.1.0"), TRUE))
 
-  # ---- PV10 ------------------------------------------------------------
+  # ---- PV10: RETIRED (ADR 0014) ----------------------------------------
   #
-  # Same discipline as PV9: a presence rule is the easiest of all to pass for
-  # nothing, so the population comes first.
-  pv10_fails <- function(root) {
-    identical(rule(root, "PV10"), FALSE) && identical(verdict(root), FALSE)
-  }
-
-  # 38. THE FLOOR. Assert PV10 actually walked every group of the positive
-  #     tree -- 3 of them -- before believing anything it says about them.
-  expect("PV10's positive case walks every group",
-         startsWith(detail(mk(), "PV10"),
-                    "all 3 source group(s) answer the source-pinning question"))
-
-  # 39. FALSIFIED, three ways -- once per class of group, because "no
-  #     exemption" is the whole content of the rule. An in-scope CSV group, an
-  #     out-of-scope CSV group and the JSON oracle's group each go red on
-  #     their own when the key is simply absent.
+  # The six cases here proved that a group omitting normative_dependencies went
+  # red -- the "no exemption" rule. Pinning is opt-in now, so the property they
+  # asserted is deliberately no longer true and the cases go with the rule.
+  #
+  # What replaces them is the opposite assertion, kept because it is the thing
+  # that could silently regress: that omitting the key is now CLEAN, and that
+  # the rules judging what IS written still fire. If a future edit makes PV9 or
+  # PV11 start failing on absence, this goes red.
   r <- mk(set_group(2L, 1L, "normative_dependencies", NULL))
-  expect("PV10 fails when an IN-SCOPE group omits the key", pv10_fails(r))
-  expect("PV9 never sees the omission -- it judges shape, not presence",
-         identical(rule(r, "PV9"), TRUE))
-  r <- mk(set_group(2L, 2L, "normative_dependencies", NULL))
-  expect("PV10 fails when an OUT-OF-SCOPE group omits the key", pv10_fails(r))
-  expect("PV6 passes it too -- being out of section 2.3 is not an exemption",
-         identical(rule(r, "PV6"), TRUE))
-  r <- mk(set_group(1L, 1L, "normative_dependencies", NULL))
-  expect("PV10 fails when the JSON oracle's group omits the key",
-         pv10_fails(r))
-
-  # 40. FALSIFIED, fourth way -- present but EMPTY. An empty array answers
-  #     nothing; it is silence with a key in front of it.
-  r <- mk(set_group(2L, 1L, "normative_dependencies", list()))
-  expect("PV10 fails on an empty normative_dependencies array", pv10_fails(r))
-
-  # 41. FALSIFIED, fifth way -- present but NULL. The record's shape allows it
-  #     (jsonlite serialises NA to JSON null and parses it back to a present
-  #     key holding NULL), and PV9 SKIPS it exactly as it skips an absent key,
-  #     so PV10 is the only rule standing between this and a green gate.
-  r <- mk(set_group(2L, 1L, "normative_dependencies", NA))
-  expect("PV10 fails on a null normative_dependencies", pv10_fails(r))
-  expect("PV10 is the only rule that catches a null answer",
-         identical(rule(r, "PV9"), TRUE) && identical(rule(r, "PV5"), TRUE))
-
-  # 42. BOUNDARY. The unmodified positive already passes (case 1), and it
-  #     passes with alpha answering "not-applicable" -- but assert the shape
-  #     directly, on a group whose ONLY entry is a negative declaration. If
-  #     this went red the rule would be demanding invented pins rather than
-  #     answers, which is the failure mode that would get PV10 deleted.
-  r <- mk(function(rec) {
-    rec$fixtures[[2L]]$source_groups[[2L]]$normative_dependencies <- list(
-      c(dep_not_applicable,
-        list(applies_to_fixture = CSV_REL, applies_to_group = "beta")))
-    # PV11 owns the note/array agreement, so an array that becomes negative
-    # takes its note with it. That is the point of the rule, not a workaround.
-    rec$fixtures[[2L]]$source_groups[[2L]]$normative_dependencies_note <-
-      "A NEGATIVE declaration: nothing is derived from the source's text."
-    rec
-  })
-  expect("PV10 passes a group whose only entry is not-applicable",
+  expect("omitting normative_dependencies is clean -- pinning is opt-in",
          identical(verdict(r), TRUE))
-  expect("and the not-applicable answer counts as an answer",
-         startsWith(detail(r, "PV10"), "all 3 source group(s) answer"))
+  expect("PV9 skips the omission rather than failing it",
+         identical(rule(r, "PV9"), TRUE))
+  expect("PV11 skips it too",
+         identical(rule(r, "PV11"), TRUE))
 
-  # 43. THE FLOOR, FALSIFIED IN THE RULE ITSELF. A presence rule that inspects
-  #     ZERO groups must not report PASS. Called directly, because a record
-  #     with no groups trips PV1 first and would otherwise "fail" for a reason
-  #     that says nothing about PV10.
-  expect("PV10 refuses to pass over an empty iteration",
-         identical(rule_pv10(list(fixtures = list()))[[1L]]$ok, FALSE))
-  expect("PV10 refuses to pass over fixtures that hold no groups",
-         identical(rule_pv10(list(fixtures = list(list(path = "x.csv"))))[[
-           1L]]$ok, FALSE))
+  # A present-but-NULL key is the same silence, and must also be clean now.
+  r <- mk(set_group(2L, 1L, "normative_dependencies", NA))
+  expect("a null normative_dependencies is clean", identical(verdict(r), TRUE))
+
+  # THE OTHER HALF, which is the point of retiring PV10 alone: a pin that IS
+  # written is still held to its full shape. Falsify it to prove the gate did
+  # not go slack.
+  r <- mk(set_group(2L, 1L, "normative_dependencies",
+                    list(list(source = "only a source, missing every other key"))))
+  expect("a malformed pin that IS written still fails PV9",
+         identical(rule(r, "PV9"), FALSE) && identical(verdict(r), FALSE))
 
   # 44. Check 9 (RURL-ynirvjxb) -- not_applicable_reason, the THIRD enum and
   #     the reason axis. The status member was carrying two questions; these
@@ -1950,8 +1882,8 @@ self_test <- function() {
                            applies_to_group = "beta")))))
   expect("PV11 fails on a dependency object filed under the wrong group",
          pv11_fails(r))
-  expect("PV9 and PV10 pass the misfiled object -- shape and presence are fine",
-         identical(rule(r, "PV9"), TRUE) && identical(rule(r, "PV10"), TRUE))
+  expect("PV9 passes the misfiled object -- its shape is fine",
+         identical(rule(r, "PV9"), TRUE))
 
   # 50. ... and the same object under the wrong FIXTURE, which a bare group name
   #     could not catch: this record has two groups called wpt-urltestdata, in
@@ -2063,9 +1995,8 @@ self_test <- function() {
            identical(rule_pv11(swapped)[[1L]]$ok, FALSE))
     #   ... and the swap is invisible to every earlier rule, which is why the
     #   defect survived review with the gate green.
-    expect("PV9 and PV10 stay green on the swapped record",
-           identical(rule_pv9(swapped)[[1L]]$ok, TRUE) &&
-             identical(rule_pv10(swapped)[[1L]]$ok, TRUE))
+    expect("PV9 stays green on the swapped record",
+           identical(rule_pv9(swapped)[[1L]]$ok, TRUE))
   }
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
