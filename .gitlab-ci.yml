@@ -1,0 +1,67 @@
+# GitLab CI — the server-side gate.
+#
+# WHY THIS EXISTS. Every gate this repository owns ran in one place, GitHub
+# Actions, and when `origin` moved to GitLab none of them ran anywhere. The local
+# pre-push hook was the only enforcement left, and a hook is opt-in per clone
+# (`pre-commit install`) — so "the history is green" meant nothing about whether
+# anything had checked it.
+#
+# THE JOB LIST IS NOT WRITTEN HERE, DELIBERATELY. Both jobs below shell out to
+# `tools/verify.R`, which derives the gate list from `.github/workflows/verify.yml`
+# at run time. Transcribing the gates into this file would create exactly the
+# drift that script exists to prevent: add a gate to CI and a hand-maintained
+# copy is silently incomplete from that moment. The GitHub workflow therefore
+# stays the single source of truth for WHAT the gates are, regardless of which
+# forge runs them.
+#
+# TWO STAGES, because compute minutes are finite on the free tier:
+#   gates — every push. The gate family needs almost no installed packages
+#           (measured: ~74s for the whole family plus the control plane).
+#   check — default branch and tags only. The full `R CMD check --as-cran`,
+#           lint and the locale cell, which need the toolchain and every
+#           dependency, so this is the job that costs real minutes.
+#
+# NOT COVERED HERE, so nobody reads a green pipeline as more than it is: the
+# cross-platform matrix, rhub, pkgdown, coverage, the determinism matrix and the
+# README re-render. Those still live in `.github/workflows/` and do not run.
+#
+# Before pushing a change to this file, run `glab ci lint .gitlab-ci.yml`. An
+# unquoted `key: value` inside a script entry makes YAML read the `: ` as a
+# mapping and GitLab rejects the whole config, creating ZERO jobs — which
+# surfaces in the REST API as a bare "failed" pipeline with `yaml_errors: null`
+# and no failure reason. Only GraphQL `failureReason` names it.
+
+stages:
+  - gates
+  - check
+
+default:
+  image: r-base:latest
+  interruptible: true
+
+# Debian's r-cran-* packages install in about a second; install.packages() would
+# compile and cost minutes. Only what the gates actually need.
+.gate_deps: &gate_deps
+  - apt-get update -qq
+  - apt-get install -y --no-install-recommends r-cran-yaml r-cran-digest r-cran-jsonlite
+
+gates:
+  stage: gates
+  script:
+    - *gate_deps
+    - 'Rscript tools/verify.R --gates'
+
+# The expensive half. Restricted to the default branch and tags: running a full
+# --as-cran check on every push to every branch would exhaust the monthly
+# compute allowance without telling us anything the gate stage missed.
+check:
+  stage: check
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - *gate_deps
+    - apt-get install -y --no-install-recommends pandoc qpdf texinfo
+    - 'Rscript -e ''install.packages(c("curl","stringi","punycoder","pslr","testthat","pkgload","lintr","rcmdcheck"))'''
+    - 'Rscript tools/verify.R'

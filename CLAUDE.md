@@ -75,10 +75,18 @@ PRD graduation policy), 0009 (`whatwg` host-charset shim — accept the 15 ASCII
 host code points libcurl rejects but WHATWG keeps), 0010 (`scheme_policy` —
 the input-acceptance axis; `require` rejects scheme-less input), 0011
 (`path_encoding` is an orthogonal presentation axis, not governed by
-`url_standard` — un-governs it and splits path identity from presentation).
+`url_standard` — un-governs it and splits path identity from presentation),
+0014 (**retire the v3 ratification layer** — acceptance is now simply "merged to
+`main`"; there are no seals, no manifest hash-pinning and no gate-acceptance
+hash cascade, and G5 is retired).
 Design PRDs are drafted in
 gitignored `_scratch/` and
 graduate to `design/prd/` once accepted and depended upon (ADR 0008).
+
+**Do not reintroduce a record lifecycle.** Decision records under
+`design/work/url-v3/decisions/` are kept as design rationale; their frontmatter
+`state:` fields are historical and nothing reads them. A record is accepted when
+it is on `main`. See ADR 0014 for why, and for what replaced the reopening rule.
 
 ## Critical Constraints
 

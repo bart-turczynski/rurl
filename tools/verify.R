@@ -48,11 +48,20 @@
 #
 # Usage:
 #   Rscript tools/verify.R            # gates + relevant self-tests + full gate
-#   Rscript tools/verify.R --fast     # gates + relevant self-tests + lint
+#   Rscript tools/verify.R --gates    # gates + relevant self-tests ONLY
+#   Rscript tools/verify.R --fast     # the above plus lint
 #   Rscript tools/verify.R --release  # everything, plus the curl clean room
 #   Rscript tools/verify.R --list     # print the stage plan and exit
 # `--fast` is iteration feedback only. It is never sufficient verification for
 # a behavioral slice; the unsuffixed command remains the end-of-slice gate.
+#
+# `--gates` exists for CI on a compute-minutes budget: the gate family needs
+# almost no installed packages and runs in about a minute, where the check stage
+# needs the full toolchain and every dependency. It lets a pipeline run the
+# cheap half on every push and the whole thing on the default branch WITHOUT
+# hand-listing the gates in a CI config -- which is the drift this script exists
+# to prevent (see "THE GATE LIST IS DERIVED, NOT TRANSCRIBED" above). Like
+# `--fast`, it is not sufficient verification for a behavioral slice.
 #
 # Base R only. Exits 1 if any BLOCKING stage fails.
 
@@ -70,6 +79,7 @@ WORKFLOW <- ".github/workflows/verify.yml"
 # blocking gate, so it arrives here through the derived list like any other.
 
 args <- commandArgs(trailingOnly = TRUE)
+opt_gates <- "--gates" %in% args
 opt_fast <- "--fast" %in% args
 opt_release <- "--release" %in% args
 opt_list <- "--list" %in% args
@@ -252,8 +262,11 @@ stage_release <- function() {
 # ---- main -------------------------------------------------------------------
 
 root <- repo_root()
-plan <- c("gates", "selftests", "lint")
-if (!opt_fast) {
+plan <- c("gates", "selftests")
+if (!opt_gates) {
+  plan <- c(plan, "lint")
+}
+if (!opt_gates && !opt_fast) {
   plan <- c(plan, "check", "locale")
 }
 if (opt_release) {

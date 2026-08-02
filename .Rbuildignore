@@ -29,6 +29,7 @@
 ^CONTRIBUTING\.md$
 ^CODE_OF_CONDUCT\.md$
 ^\.pre-commit-config\.yaml$
+^\.gitlab-ci\.yml$
 ^_scratch$
 ^analysis$
 ^inst/bench/wpt-url-cases\.json$
