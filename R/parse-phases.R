@@ -1202,34 +1202,13 @@
   #      default). Profile-internal; never a public argument.
   #   2. path PRESENTATION (`path_encoding`) -- the public keep/encode/decode
   #      readable-vs-browser rendering, which LAYERS on any identity mode.
-  # Non-WHATWG presentation `decode`/`encode` full-decodes FIRST (as it always
-  # has), then the identity mode. WHATWG `encode` is deliberately different:
-  # the standard's path serializer preserves existing percent spellings, so it
-  # must not full-decode before encoding.
+  # Presentation is terminal: identity normalization and the cleaning policies
+  # below must inspect the pre-presentation path, where an encoded separator is
+  # data rather than structure. WHATWG `encode` is deliberately different from
+  # the legacy encoder: the standard's path serializer preserves existing
+  # percent spellings, so it never full-decodes before encoding.
   whatwg_encode <- path_encoding == "encode" &&
     identical(path_identity, ".whatwg_preserve")
-
-  # Presentation: decode path (before normalization/index handling) when the
-  # public knob requests decode OR encode (encode decodes first, re-encodes
-  # last).
-  if (path_encoding %in% c("decode", "encode") && !whatwg_encode) {
-    mask <- !is.na(path_work)
-    if (any(mask)) {
-      decoded <- tryCatch(
-        .pct_unescape(path_work[mask]),
-        error = function(e) NULL
-      )
-      if (!is.character(decoded) || length(decoded) != sum(mask)) {
-        decoded <- vapply(
-          path_work[mask],
-          function(p) tryCatch(.pct_unescape(p), error = function(e) p),
-          character(1),
-          USE.NAMES = FALSE
-        )
-      }
-      path_work[mask] <- decoded
-    }
-  }
 
   # Identity: apply the profile's path-identity normalization (independent of
   # the presentation step above).
@@ -1325,7 +1304,29 @@
     path_work[mask] <- paste0(path_work[mask], "/")
   }
 
-  # Path percent-encoding (after normalization/index logic).
+  # Terminal path presentation. Decode only after identity normalization and
+  # cleaning have decided which structural rules fire. Legacy `encode` still
+  # means decode then segment-encode; the difference is that both presentation
+  # operations now happen after index/trailing-slash handling.
+  if (path_encoding %in% c("decode", "encode") && !whatwg_encode) {
+    mask <- !is.na(path_work)
+    if (any(mask)) {
+      decoded <- tryCatch(
+        .pct_unescape(path_work[mask]),
+        error = function(e) NULL
+      )
+      if (!is.character(decoded) || length(decoded) != sum(mask)) {
+        decoded <- vapply(
+          path_work[mask],
+          function(p) tryCatch(.pct_unescape(p), error = function(e) p),
+          character(1),
+          USE.NAMES = FALSE
+        )
+      }
+      path_work[mask] <- decoded
+    }
+  }
+
   if (whatwg_encode) {
     mask <- !is.na(path_work)
     if (any(mask)) {

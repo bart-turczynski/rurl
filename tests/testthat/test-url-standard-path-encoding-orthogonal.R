@@ -186,6 +186,55 @@ test_that("path_encoding = 'decode' renders the readable form on a profile", {
   }
 })
 
+test_that("path presentation runs after index and trailing-slash cleaning", {
+  index_input <- "https://ex.com/a%2Findex.html"
+  slash_input <- "https://ex.com/a%2F"
+
+  # Each cleaning dial alone correctly treats %2F as data, not a separator.
+  expect_identical(
+    get_clean_url(index_input, index_page_handling = "strip"),
+    index_input
+  )
+  expect_identical(
+    get_clean_url(slash_input, trailing_slash_handling = "strip"),
+    slash_input
+  )
+
+  for (encoding in c("decode", "encode")) {
+    # Presentation alone may render the encoded slash as "/". Combining it
+    # with cleaning must not retroactively expose a separator to that earlier
+    # cleaning step and change which index/slash rule fires.
+    expect_identical(
+      get_clean_url(index_input, path_encoding = encoding),
+      "https://ex.com/a/index.html",
+      info = encoding
+    )
+    expect_identical(
+      get_clean_url(
+        index_input,
+        index_page_handling = "strip",
+        path_encoding = encoding
+      ),
+      "https://ex.com/a/index.html",
+      info = encoding
+    )
+    expect_identical(
+      get_clean_url(slash_input, path_encoding = encoding),
+      "https://ex.com/a/",
+      info = encoding
+    )
+    expect_identical(
+      get_clean_url(
+        slash_input,
+        trailing_slash_handling = "strip",
+        path_encoding = encoding
+      ),
+      "https://ex.com/a/",
+      info = encoding
+    )
+  }
+})
+
 test_that("encode/decode are presentation not identity: reserved octets fold", {
   # Documented consequence (ADR 0011): the presentation forms may re-encode or
   # decode reserved octets, so a profile's %2F identity does NOT survive them.
