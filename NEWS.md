@@ -691,6 +691,84 @@
 
 ### New features
 
+- **URL identity is now a first-class surface: `get_url_key()`,
+  `url_key_policy()` and six identity-keyed joins.** Deciding whether two URLs
+  are the same resource used to mean comparing cleaned strings, and a cleaned
+  string is a display product, not an identity. `get_url_key()` projects a URL
+  onto a versioned, injectively framed comparison key derived from its canonical
+  state — after the standard has interpreted it, before any cleaning:
+
+  ```r
+  k <- get_url_key(c("http://example.com:80/a", "http://example.com/a"))
+  k[1] == k[2]
+  #> [1] TRUE
+  ```
+
+  No cleaning option can reach it. `www_handling`, `case_handling`,
+  `path_encoding`, `port_handling`, query cleaning and every `url_profile()`
+  bundle are structurally incapable of moving a key byte — `get_url_key()` has
+  no such argument to pass. The fragment and userinfo are excluded from
+  web-resource identity; query order and duplicates are significant; and ports
+  normalize only where the standard makes them redundant, so `ftp://h:21/` and
+  `ftp://h/` stay distinct.
+
+  A URL that cannot be parsed has no identity, so its key is `NA` and never
+  matches anything — with the reason kept rather than collapsed into the `NA`:
+
+  ```r
+  attr(get_url_key(c("http://example.com/", NA, "", ":::")), "keyability")
+  #> [1] "ok" "missing-input" "empty-input" "invalid-parse"
+  ```
+
+  `url_inner_join()`, `url_left_join()`, `url_right_join()`, `url_full_join()`,
+  `url_semi_join()` and `url_anti_join()` join two data frames on that key.
+  Against `canonical_join()`, which matches on the cleaned display string, two
+  differences show up immediately. Duplicate keys are a multiplicity fact, not
+  something to silently resolve:
+
+  ```r
+  x <- data.frame(URL = "http://example.com/a", clicks = 10)
+  y <- data.frame(URL = rep("http://example.com/a", 2), tag = c("t1", "t2"))
+
+  nrow(canonical_join(x, y))    # the second match is discarded
+  #> [1] 1
+  nrow(url_inner_join(x, y, by = "URL"))
+  #> [1] 2
+  ```
+
+  And cleaning overmatches, because dropping a query parameter is a display
+  decision that a join should not inherit:
+
+  ```r
+  p <- data.frame(URL = c("http://example.com/a?utm_source=x",
+                          "http://example.com/a"), clicks = c(1, 2))
+  q <- data.frame(URL = "http://example.com/a", title = "A")
+
+  canonical_join(p, q)$title_B      # the tracked URL matched the clean one
+  #> [1] "A"
+  url_left_join(p, q, by = "URL")$title
+  #> [1] NA  "A"
+  ```
+
+  Row order is contractual per join, not an artifact of `merge()`. Rows that
+  cannot be keyed and rows that parsed with a warning are governed by two
+  independent axes, `invalid = "keep"/"drop"/"error"` and
+  `warnings = "allow"/"reject"/"error"`, replacing `canonical_join()`'s single
+  `on_parse_error` dial; `relationship` is validated before the result is
+  materialized; and `multiple = "first"/"last"` is available but separately
+  named, because it is lossy. Failures raise typed conditions under
+  `rurl_url_join_error` that report row positions and truncated keys, never URL
+  content, so a credential in the input cannot leak into an error message.
+
+  `url_key_policy()` carries the two identity dials: `standard`
+  (`"whatwg"` by default, or `"rfc3986"`) and `scheme_equality`, where the
+  opt-in `"http_https"` treats `http` and `https` as one class and leaves every
+  other scheme exact. Both a key version and a schema version ride inside the
+  framed bytes, so no release can silently reinterpret a persisted key.
+
+  `canonical_join()` is unchanged and still matches on `clean_url`. It is
+  legacy, and its migration onto the identity key is a separate, later step.
+
 - **`serialize_url()` renders a URL the way its standard would.** rurl's only
   full-string output was `get_clean_url()`, which is an SEO/canonicalization
   product: it drops credentials and the fragment by design, and it is driven by

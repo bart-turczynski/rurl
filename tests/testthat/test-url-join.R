@@ -723,12 +723,16 @@ test_that("all typed conditions subclass one family class", {
   expect_true("rurl_url_join_error" %in% err)
 })
 
-# --- the engine stays unexported (VD-001 / deferral-gate D3) ----------------
+# --- the family graduated as ONE slice (VD-001 / deferral-gate D3) -----------
 
-test_that("no join-family export has shipped yet", {
-  # VD-001's surface_probe names all eight; D3 fires on ANY of them appearing in
-  # NAMESPACE, at which point all 51 cells must be verified in the same change.
-  # This test is the local tripwire for that sequencing constraint.
+test_that("all eight VD-001 exports shipped together, VD-001 discharged", {
+  # This was the tripwire asserting the opposite: while the engine was
+  # unexported, D3 required that NONE of the eight appear in NAMESPACE, because
+  # ANY one of them makes all 51 cells due in the same change. The export slice
+  # landed, so the tripwire flips to the other half of the same rule -- the
+  # eight are an indivisible set, and the register row that excused them must
+  # now read DISCHARGED rather than ACCEPTED.
+  #
   # The source tree keeps NAMESPACE two levels above tests/testthat, but under
   # `R CMD check` the tests run beside an INSTALLED copy, where it ships at the
   # package root instead. Resolve both rather than assume the source layout --
@@ -740,10 +744,20 @@ test_that("no join-family export has shipped yet", {
   expect_true(nzchar(ns_path))
   expect_true(file.exists(ns_path))
   ns <- readLines(ns_path, warn = FALSE)
-  deferred <- c("get_url_key", "url_key_policy", "url_inner_join",
-                "url_left_join", "url_right_join", "url_full_join",
-                "url_semi_join", "url_anti_join")
-  for (nm in deferred) {
-    expect_false(any(grepl(sprintf("^export\\(%s\\)$", nm), ns)))
+  slice <- c("get_url_key", "url_key_policy", "url_inner_join",
+             "url_left_join", "url_right_join", "url_full_join",
+             "url_semi_join", "url_anti_join")
+  for (nm in slice) {
+    expect_true(any(grepl(sprintf("^export\\(%s\\)$", nm), ns)))
   }
+
+  # `design/` is not installed, so the register is only reachable from the
+  # source tree. Skip rather than pretend: the deferral gate checks this same
+  # fact directly, and it runs on every push.
+  reg <- testthat::test_path("..", "..", "design", "work", "url-v3",
+                             "registers", "verification-deferrals.md")
+  skip_if_not(file.exists(reg), "register not present in an installed check")
+  row <- grep("^\\| VD-001 \\|", readLines(reg, warn = FALSE), value = TRUE)
+  expect_length(row, 1L)
+  expect_match(row, "\\|\\s*DISCHARGED\\s*\\|\\s*$")
 })

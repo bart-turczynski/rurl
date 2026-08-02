@@ -1,16 +1,16 @@
-# Output surface (e) -- the v3 comparison key. THE ENGINE ONLY: nothing here is
-# exported yet, deliberately.
+# Output surface (e) -- the v3 comparison key: the engine, plus the two exported
+# wrappers at the foot of the file.
 #
 # `registers/verification-deferrals.md` VD-001 probes this surface with
 # `export:get_url_key;...;export:url_anti_join`, and deferral-gate D3 fires the
 # moment ANY of those eight names appears in NAMESPACE -- at which point all 51
 # of VD-001's cells must be covered in the same change (P0.5 failure condition
-# 3). The six joins do not exist yet, so exporting the key half alone would trip
-# D3 while leaving 14 cells unverifiable. The engine therefore lands
-# unexported first, exactly as output surface (b) did: VD-002 records that
-# `.serialize_whatwg_full_vec` / `.serialize_rfc_full_vec` shipped in `df00da8`
-# while the public `serialize_url()` waited for P2.5, and D3 stayed green
-# throughout because the probe named only the export.
+# 3). That is why the engine landed unexported first and why the eight exports
+# then landed together, with `verification/key-join-discharge.md` claiming
+# `DISCHARGED[VD-001]` in the same change. Output surface (b) did the same:
+# VD-002 records `.serialize_whatwg_full_vec` / `.serialize_rfc_full_vec`
+# shipping in `df00da8` while the public `serialize_url()` waited for P2.5, and
+# D3 stayed green throughout because the probe named only the export.
 #
 # Surface discipline (design/work/url-v3/contracts/key-join-contracts.md):
 #
@@ -65,7 +65,7 @@
 # heuristic. `NULL` is deliberately NOT accepted -- an unnamed standard cannot
 # freeze key bytes, which is the whole point of KJ-O1.
 #
-# The public `url_key_policy()` wrapper ships with the join family.
+# `url_key_policy()` at the foot of this file is the exported wrapper.
 .url_key_policy_spec <- function(standard = "whatwg",
                                  scheme_equality = "exact") {
   standard <- match.arg(standard, .URL_KEY_STANDARDS)
@@ -375,6 +375,19 @@
 
 # --- classed-key methods -----------------------------------------------------
 
+# The policy prints as what it IS -- the four fields that decide equality --
+# rather than as the bare list `str()` would show. Both versions are displayed
+# because they are the fields that make a persisted key re-readable.
+#' @export
+print.rurl_url_key_policy <- function(x, ...) {
+  cat(sprintf(
+    paste0("<rurl_url_key_policy> standard=%s  scheme_equality=%s  ",
+           "key_version=%d  schema_version=%d\n"),
+    x$standard, x$scheme_equality, x$key_version, x$schema_version
+  ))
+  invisible(x)
+}
+
 # The printable form is DIAGNOSTICS ONLY (P3.1 D-A.2). It never round-trips and
 # is never a URL: the framed bytes are shown truncated, with the policy identity
 # that produced them, so a key can be recognized in output without inviting
@@ -424,4 +437,186 @@ as.character.rurl_url_key <- function(x, ...) {
   attributes(v) <- NULL
   names(v) <- names(unclass(x))
   v
+}
+
+# --- the exported surface ----------------------------------------------------
+#
+# Two thin wrappers. They add no behavior on purpose: the engine above is what
+# `tests/testthat/test-url-key.R` pins, and a wrapper that re-implemented any of
+# it would give the public surface a second, unpinned notion of identity.
+#
+# NO `engine` ARGUMENT, deliberately, and it is not an oversight. The key frames
+# no PSL-derived component, so a `pslr` engine cannot move a key byte -- that is
+# asserted, not assumed (`test-url-key.R`). A public `engine =` here would
+# therefore be a dial that provably does nothing. The six joins DO take one,
+# because `warnings = "reject"` reads the L3 PSL annotation and a divergent
+# suffix list can move eligibility: identity is engine-independent, eligibility
+# is not, and the two signatures say so.
+
+#' Comparison-key policy
+#'
+#' Builds the immutable, versioned policy object that governs URL *identity*
+#' for [get_url_key()] and the [url_join] family. One policy is applied
+#' symmetrically to both sides of every comparison, because equality has to
+#' stay symmetric and transitive.
+#'
+#' @section Identity is not presentation:
+#'
+#' A comparison key is derived from the URL's canonical identity state -- after
+#' the selected standard has interpreted it, and *before* any cleaning or
+#' display transform. No cleaning option can reach it. `www_handling`,
+#' `case_handling`, `trailing_slash_handling`, `index_page_handling`,
+#' `path_encoding`, `host_encoding`, `port_handling`, query cleaning and every
+#' [url_profile()] bundle are structurally incapable of changing a key byte.
+#' That is the point: two URLs that a cleaning profile happens to render alike
+#' are not thereby the same resource.
+#'
+#' @section What the key does and does not distinguish:
+#'
+#' Framed as identity: the scheme (and, separately, whether one was written at
+#' all), the authority delimiter, the host and its kind, the port, the path and
+#' its kind, and the query -- order and duplicates significant.
+#'
+#' Excluded by contract: the fragment and any userinfo. Neither identifies a
+#' web resource, so `http://u:pw@h/p#frag` and `http://h/p` mint the same key.
+#' Their structural state is still available from [safe_parse_url()] and the
+#' diagnostics helpers.
+#'
+#' Ports normalize only where the standard makes them redundant: an explicit
+#' `:80` under `http` and `:443` under `https` compare equal to no port at all.
+#' Every other default stays literal, so `ftp://h:21/` and `ftp://h/` are
+#' distinct, and an inferred scheme normalizes nothing (`h.com:80/` is not
+#' `http://h.com/`).
+#'
+#' @section Versioning:
+#'
+#' The policy carries a key version and a schema version, and both travel
+#' *inside* the framed key bytes. A key minted under different semantics can
+#' therefore never compare equal to one minted here, so no release can silently
+#' reinterpret a persisted key.
+#'
+#' @param standard The standard whose identity semantics apply: `"whatwg"`
+#'   (default) or `"rfc3986"`. Unlike the parse surface, `NULL` is not accepted
+#'   -- an unnamed standard cannot freeze key bytes.
+#' @param scheme_equality How strictly schemes compare. `"exact"` (default)
+#'   compares the normalized scheme identity. `"http_https"` additionally
+#'   collapses `http` and `https` into one class, so `http://h/` and
+#'   `https://h/` compare equal; every other scheme stays exact, including the
+#'   `ws`/`wss` pair. `"http_https_missing"` is accepted by the vocabulary but
+#'   not implemented, and errors -- see Details.
+#'
+#' @details
+#' `scheme_equality = "http_https_missing"` would additionally collapse "no
+#' scheme written" into the `http`/`https` class. It errors rather than
+#' guessing, because the pair it would have to equate also differs on whether
+#' an authority delimiter (`//`) was present, which rurl frames as independent
+#' identity. Collapsing that too is a contract change, not an implementation
+#' detail, so the mode refuses instead of silently picking a side.
+#'
+#' @return An object of class `rurl_url_key_policy`.
+#'
+#' @seealso [get_url_key()] for the key itself, and [url_join] for the joins
+#'   that consume it.
+#'
+#' @examples
+#' url_key_policy()
+#'
+#' # Identity under one policy ...
+#' get_url_key(c("http://example.com/", "https://example.com/"))
+#'
+#' # ... and under a relaxed scheme mode.
+#' p <- url_key_policy(scheme_equality = "http_https")
+#' k <- get_url_key(c("http://example.com/", "https://example.com/"), p)
+#' k[1] == k[2]
+#'
+#' @export
+url_key_policy <- function(standard = c("whatwg", "rfc3986"),
+                           scheme_equality = c("exact", "http_https",
+                                               "http_https_missing")) {
+  # `NULL` is rejected rather than absorbed. `match.arg(NULL, choices)` quietly
+  # returns `choices[[1]]`, which would make `standard = NULL` a silent
+  # "whatwg" -- and on the parse surface `url_standard = NULL` means the
+  # OPPOSITE, "infer per input". A key cannot be minted under an unnamed
+  # standard, so the mistake is refused at the edge instead of guessed.
+  if (is.null(standard) || is.null(scheme_equality)) {
+    stop(
+      "`standard` and `scheme_equality` must be named; NULL is not accepted. ",
+      "A key minted under an unnamed standard could not be frozen or ",
+      "re-read. Pass standard = \"whatwg\" or \"rfc3986\".",
+      call. = FALSE
+    )
+  }
+  .url_key_policy_spec(
+    standard = match.arg(standard),
+    scheme_equality = match.arg(scheme_equality)
+  )
+}
+
+#' URL comparison key
+#'
+#' Projects each URL onto a versioned, non-URL comparison key: the value rurl
+#' uses to decide whether two URLs identify the same web resource. Use it to
+#' deduplicate, group, or match URLs without relying on a cleaned display
+#' string.
+#'
+#' @section The key is not a URL:
+#'
+#' The returned object is a classed character vector whose contents are
+#' injectively framed component bytes, not a URL. Never parse it, never render
+#' it to users, and never reconstruct a URL from it. `print()` deliberately
+#' shows a truncated diagnostic form for that reason. What it *is* good for is
+#' comparison: `==`, [match()], [duplicated()], `%in%` and the [url_join]
+#' family all work on it directly.
+#'
+#' Framing is length-prefixed, so component boundaries cannot be forged. A host
+#' or path containing separators, control bytes or colons can never make two
+#' different URLs collide.
+#'
+#' @section Non-keyable input:
+#'
+#' A URL the selected standard cannot parse has no identity, so its key is
+#' `NA` and never matches anything -- not even another `NA`. The reason is kept
+#' alongside rather than collapsed into the `NA`, and is readable with
+#' `attr(key, "keyability")`: one of `"ok"`, `"missing-input"`, `"empty-input"`
+#' or `"invalid-parse"`. Missing input is never conflated with an invalid
+#' parse.
+#'
+#' @param url A character vector of URLs. Factors are coerced.
+#' @param policy A `rurl_url_key_policy` object from [url_key_policy()],
+#'   which is also the default. The policy is scalar and is never recycled.
+#'
+#' @return A classed character vector (`rurl_url_key`) the same length as
+#'   `url`, preserving its names. `NA` for a non-keyable element. The policy
+#'   version, schema version, standard, scheme-equality mode and the per-element
+#'   `keyability` reasons ride along as attributes.
+#'
+#' @seealso [url_key_policy()] for the dials, [url_join] for joining on the
+#'   key, and [serialize_url()] for a standard's full-string serialization
+#'   (which *is* a URL, unlike this).
+#'
+#' @examples
+#' # Presentation differences that are not identity differences.
+#' get_url_key(c("http://example.com:80/a", "http://example.com/a"))
+#'
+#' # The fragment and userinfo are excluded from web-resource identity.
+#' k <- get_url_key(c("http://u:pw@example.com/a#top", "http://example.com/a"))
+#' k[1] == k[2]
+#'
+#' # Query order and duplicates are significant.
+#' k <- get_url_key(c("http://example.com/?a=1&b=2",
+#'                    "http://example.com/?b=2&a=1"))
+#' k[1] == k[2]
+#'
+#' # Deduplicate by identity rather than by string.
+#' u <- c("HTTP://Example.com/a", "http://example.com/a",
+#'        "http://example.com/b")
+#' u[!duplicated(get_url_key(u))]
+#'
+#' # Non-keyable input carries a typed reason.
+#' k <- get_url_key(c("http://example.com/", NA, "", ":::"))
+#' attr(k, "keyability")
+#'
+#' @export
+get_url_key <- function(url, policy = url_key_policy()) {
+  .url_key_compute_vec(url, policy)
 }

@@ -1,16 +1,17 @@
-# The v3 identity-keyed join family -- THE ENGINE ONLY: nothing here is
-# exported yet, deliberately, and for the same reason R/url-key.R is not.
+# The v3 identity-keyed join family -- the engine, plus the six exported
+# wrappers at the foot of the file.
 #
 # `registers/verification-deferrals.md` VD-001 probes this surface with
 # `export:get_url_key;...;export:url_anti_join`, and deferral-gate D3 fires the
 # moment ANY of those eight names appears in NAMESPACE -- at which point all 51
 # of VD-001's cells must be covered in the same change (P0.5 failure condition
 # 3). The probes are `export:` probes, matched as `^export\(<name>\)$` against
-# NAMESPACE (`tools/deferral-gate.R:100-121`), so an internal engine is
-# invisible to them. The eight public wrappers therefore land in ONE later
-# change together with the discharge record, exactly as output surface (b) did:
-# VD-002 records the serializers shipping in `df00da8` while public
-# `serialize_url()` waited for P2.5, with D3 green throughout.
+# NAMESPACE (`tools/deferral-gate.R:100-121`), so the engine was invisible to
+# them while it landed first. All eight wrappers then landed in ONE change
+# together with `verification/key-join-discharge.md`, which claims
+# `DISCHARGED[VD-001]`. Output surface (b) did the same: VD-002 records the
+# serializers shipping in `df00da8` while public `serialize_url()` waited for
+# P2.5, with D3 green throughout.
 #
 # Contract discipline (design/work/url-v3/contracts/key-join-contracts.md,
 # "Six-join matrix" and "Cross-cutting join rows"; P3.1 D-C/D-D; P3.2 D-C..D-H):
@@ -80,11 +81,12 @@
 # Stable typed condition classes (`:164`). Every class below has a reachable
 # trigger; a class with no trigger would be a promise the code does not keep.
 #
-# NOT IMPLEMENTED -- the "unmatched" condition the same contract row lists has
-# no axis to fire it: P3.2 closes KJ-O1..KJ-O8 without defining an `unmatched`
-# formal, and inventing one (or firing a default warning) would be new behavior
-# authored here rather than settled upstream. Carried as a tracker item rather
-# than silently dropped or silently invented.
+# The "unmatched" condition the same contract row lists is DROPPED, by owner
+# ruling (P3.3 section 2, RURL-kcgsuzll), not merely unimplemented. The six
+# joins already express unmatched-ness structurally, as `NA` on the non-primary
+# side -- which is what a join is. A condition or an axis would re-report the
+# result's own shape as a diagnostic, and a caller who wants the count already
+# has it (`is.na()` over the key column, or `relationship`).
 .url_join_abort <- function(msg, class) {
   stop(errorCondition(
     msg, class = c(class, "rurl_url_join_error"), call = NULL
@@ -677,4 +679,229 @@
     x = c(e$a, rep(NA_integer_, length(rest))),
     y = c(e$b, rest)
   )
+}
+
+# --- the exported surface ----------------------------------------------------
+#
+# Six thin wrappers over one engine. They differ only in `type`, which is the
+# whole point: sharing the key computation, the axes, the preflight, the name
+# plan and the assembly is what makes "one symmetric policy applied to both
+# sides" true by construction rather than by six-fold review.
+#
+# `engine` IS public here, unlike on `get_url_key()`. The asymmetry is
+# deliberate and measured: the key frames no PSL-derived component, so an engine
+# cannot move a key byte, but `warnings = "reject"` reads the L3 PSL annotation,
+# so a divergent suffix list CAN move which rows are eligible to match. Identity
+# is engine-independent; eligibility is not, and the two signatures say so.
+
+#' Identity-keyed URL joins
+#'
+#' Six joins that match rows on URL *identity* rather than on string equality.
+#' Each side names one URL column; both sides are keyed with one immutable
+#' [url_key_policy()], and rows pair up when their comparison keys are equal.
+#'
+#' @section Why not a plain join:
+#'
+#' Joining data frames on raw URL strings misses `http://example.com:80/a`
+#' against `http://example.com/a`. Joining them on a *cleaned* string
+#' overmatches instead, because cleaning is a display policy: it can strip a
+#' trailing slash, a query parameter or a `www.` that genuinely distinguished
+#' two resources. These joins use [get_url_key()], so what matches is what rurl
+#' considers the same resource -- and no cleaning or display option can change
+#' that.
+#'
+#' @section Row order:
+#'
+#' Order is part of the contract, not an artifact of the implementation:
+#'
+#' \describe{
+#'   \item{`url_inner_join`}{matching pairs in `x` order, `y` matches in `y`
+#'     order within each `x` row.}
+#'   \item{`url_left_join`}{every `x` row in `x` order; unmatched `x` rows carry
+#'     a missing `y` payload typed from `y`'s own columns.}
+#'   \item{`url_right_join`}{the exact mirror: every `y` row in `y` order, `x`
+#'     matches in `x` order.}
+#'   \item{`url_full_join`}{the left-join result, then the `y` rows it never
+#'     consumed, in `y` order.}
+#'   \item{`url_semi_join`}{each `x` row with at least one match, once, `x`
+#'     columns only.}
+#'   \item{`url_anti_join`}{each `x` row with no match, once, `x` columns only.}
+#' }
+#'
+#' Duplicate keys expand as a Cartesian product. Rows are never silently
+#' discarded to "resolve" a duplicate -- multiplicity is a fact you declare with
+#' `relationship` or narrow with `multiple`.
+#'
+#' @section Rows that cannot be keyed:
+#'
+#' A URL the standard cannot parse, or a missing or empty one, has no identity
+#' and never matches -- not even another unparseable URL. `invalid` decides what
+#' happens to those rows: `"keep"` (default) leaves them in, unmatched, so a
+#' left join still returns them; `"drop"` removes them before matching;
+#' `"error"` refuses the join and reports the offending row positions.
+#'
+#' `warnings` is a separate axis for rows that *did* parse but carry a note --
+#' userinfo on a scheme-less input, or a host whose public-suffix annotation did
+#' not resolve. `"allow"` (default) matches them normally, `"reject"` makes them
+#' ineligible to match without removing them, and `"error"` refuses the join.
+#'
+#' `url_anti_join()` keeps non-keyable `x` rows, because a row that cannot match
+#' anything is exactly what an anti join asks for.
+#'
+#' @section Conditions:
+#'
+#' Failures raise typed conditions -- `rurl_url_join_input_error`,
+#' `rurl_url_join_policy_error`, `rurl_url_join_suffix_error`,
+#' `rurl_url_join_key_name_error`, `rurl_url_join_relationship_error`,
+#' `rurl_url_join_invalid_error` and `rurl_url_join_warning_error`, all
+#' inheriting from `rurl_url_join_error` -- so they can be caught precisely.
+#' Messages report row *positions* and truncated keys, never URL content, so a
+#' credential in the input cannot leak into an error message.
+#'
+#' @param x,y Data frames to join.
+#' @param by The URL columns to key on: either one column name present on both
+#'   sides (`"URL"`), or the named form `c(x_col = "y_col")` when they differ.
+#' @param policy A `rurl_url_key_policy` from [url_key_policy()], applied
+#'   symmetrically to both sides. Side-specific rules are prohibited: equality
+#'   has to stay symmetric and transitive.
+#' @param suffix Length-2 character vector disambiguating column names present
+#'   on both sides. Default `c(".x", ".y")`. If the result would still contain a
+#'   duplicate name, the join errors rather than repairing it silently.
+#' @param key_name Optional column name under which to expose the comparison
+#'   key. `NULL` (default) hides it. The exposed value is the classed key from
+#'   [get_url_key()], never a URL-looking string, and a name that collides with
+#'   an output column is an error.
+#' @param relationship Cardinality you assert about matching keys, checked
+#'   *before* the result is materialized: `"none"` (default, no check),
+#'   `"one-to-one"`, `"one-to-many"`, `"many-to-one"`, or `"many-to-many"`
+#'   (no constraint, declared explicitly).
+#' @param multiple How many `y` rows a matching `x` row may take: `"all"`
+#'   (default, lossless) or the separately named lossy narrowings `"first"` /
+#'   `"last"`, which take the first or last match in `y` row order.
+#' @param invalid What to do with rows that cannot be keyed: `"keep"`
+#'   (default), `"drop"` or `"error"`.
+#' @param warnings What to do with rows that parsed with a warning: `"allow"`
+#'   (default), `"reject"` (ineligible to match, but retained) or `"error"`.
+#' @param engine Optional `psl_engine` object from `pslr::psl_engine()` for
+#'   per-request Public Suffix List resolution. `NULL` (default) uses the
+#'   session-global engine. It cannot affect the comparison key -- identity
+#'   frames no public-suffix component -- but it can affect which rows count as
+#'   warning rows under `warnings = "reject"`.
+#'
+#' @return A data frame built by row-slicing `x`, so `x`'s column types and
+#'   subclass survive. `url_inner_join()`, `url_left_join()`,
+#'   `url_right_join()` and `url_full_join()` return `x`'s columns followed by
+#'   `y`'s, disambiguated by `suffix`; `url_semi_join()` and `url_anti_join()`
+#'   return `x`'s columns only. A zero-row result is built by the same path, so
+#'   it carries the complete typed schema.
+#'
+#' @seealso [get_url_key()] and [url_key_policy()] for the identity model, and
+#'   [canonical_join()] for the legacy join that matches on cleaned strings.
+#'
+#' @examples
+#' pages <- data.frame(
+#'   URL = c("http://example.com:80/a", "https://example.com/b",
+#'           "http://example.com/c?", "not a url"),
+#'   clicks = c(10, 20, 30, 40),
+#'   stringsAsFactors = FALSE
+#' )
+#' meta <- data.frame(
+#'   URL = c("http://example.com/a", "http://example.com/b",
+#'           "http://example.com/c"),
+#'   title = c("A", "B", "C"),
+#'   stringsAsFactors = FALSE
+#' )
+#'
+#' # Only row 1 matches: `:80` is redundant under http, but http is not https,
+#' # and a present-but-empty query is not the same resource as no query.
+#' url_inner_join(pages, meta, by = "URL")
+#'
+#' # Every left row survives, unmatched ones with a typed missing payload.
+#' url_left_join(pages, meta, by = "URL")
+#'
+#' # Rows that could not be parsed at all.
+#' url_anti_join(pages, meta, by = "URL")
+#'
+#' # Expose the key you matched on.
+#' url_inner_join(pages, meta, by = "URL", key_name = "key")
+#'
+#' # Relaxing scheme equality brings row 2 in.
+#' url_inner_join(pages, meta, by = "URL",
+#'                policy = url_key_policy(scheme_equality = "http_https"))
+#'
+#' @name url_join
+NULL
+
+#' @rdname url_join
+#' @export
+url_inner_join <- function(x, y, by, policy = url_key_policy(),
+                           suffix = c(".x", ".y"), key_name = NULL,
+                           relationship = "none", multiple = "all",
+                           invalid = "keep", warnings = "allow",
+                           engine = NULL) {
+  .url_join_impl(x, y, by, "inner", policy = policy, suffix = suffix,
+                 key_name = key_name, relationship = relationship,
+                 multiple = multiple, invalid = invalid, warnings = warnings,
+                 engine = engine)
+}
+
+#' @rdname url_join
+#' @export
+url_left_join <- function(x, y, by, policy = url_key_policy(),
+                          suffix = c(".x", ".y"), key_name = NULL,
+                          relationship = "none", multiple = "all",
+                          invalid = "keep", warnings = "allow",
+                          engine = NULL) {
+  .url_join_impl(x, y, by, "left", policy = policy, suffix = suffix,
+                 key_name = key_name, relationship = relationship,
+                 multiple = multiple, invalid = invalid, warnings = warnings,
+                 engine = engine)
+}
+
+#' @rdname url_join
+#' @export
+url_right_join <- function(x, y, by, policy = url_key_policy(),
+                           suffix = c(".x", ".y"), key_name = NULL,
+                           relationship = "none", multiple = "all",
+                           invalid = "keep", warnings = "allow",
+                           engine = NULL) {
+  .url_join_impl(x, y, by, "right", policy = policy, suffix = suffix,
+                 key_name = key_name, relationship = relationship,
+                 multiple = multiple, invalid = invalid, warnings = warnings,
+                 engine = engine)
+}
+
+#' @rdname url_join
+#' @export
+url_full_join <- function(x, y, by, policy = url_key_policy(),
+                          suffix = c(".x", ".y"), key_name = NULL,
+                          relationship = "none", multiple = "all",
+                          invalid = "keep", warnings = "allow",
+                          engine = NULL) {
+  .url_join_impl(x, y, by, "full", policy = policy, suffix = suffix,
+                 key_name = key_name, relationship = relationship,
+                 multiple = multiple, invalid = invalid, warnings = warnings,
+                 engine = engine)
+}
+
+#' @rdname url_join
+#' @export
+url_semi_join <- function(x, y, by, policy = url_key_policy(),
+                          key_name = NULL, relationship = "none",
+                          invalid = "keep", warnings = "allow",
+                          engine = NULL) {
+  .url_join_impl(x, y, by, "semi", policy = policy, key_name = key_name,
+                 relationship = relationship, invalid = invalid,
+                 warnings = warnings, engine = engine)
+}
+
+#' @rdname url_join
+#' @export
+url_anti_join <- function(x, y, by, policy = url_key_policy(),
+                          key_name = NULL, relationship = "none",
+                          invalid = "keep", warnings = "allow",
+                          engine = NULL) {
+  .url_join_impl(x, y, by, "anti", policy = policy, key_name = key_name,
+                 relationship = relationship, invalid = invalid,
+                 warnings = warnings, engine = engine)
 }
