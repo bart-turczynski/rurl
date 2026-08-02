@@ -54,20 +54,20 @@
 # `--fast` is iteration feedback only. It is never sufficient verification for
 # a behavioral slice; the unsuffixed command remains the end-of-slice gate.
 #
-# Base R only. Exits 1 if any BLOCKING stage fails; advisory stages report and
-# never fail the run.
+# Base R only. Exits 1 if any BLOCKING stage fails.
 
 WORKFLOW <- ".github/workflows/verify.yml"
 
-# The control-plane gate is ADVISORY here, and that is a deliberate reading of
-# its semantics rather than leniency. It goes red when a contract body is edited
-# under an ACCEPTED acceptance gate -- the reopening rule working as designed --
-# and clearing it needs an owner seal-merge, not a code change. Wiring a
-# legitimately-red gate as blocking would make every unrelated commit fail,
-# which trains people to pass `--no-verify`; the curl-zero gate's own header
-# makes the same argument for the same reason. It is still RUN, and its verdict
-# still printed, because an advisory gate nobody looks at is not a gate.
-ADVISORY <- "design/work/url-v3/tools/ci-gate.R"
+# There is no longer an advisory stage. The control-plane gate used to be one:
+# it went red whenever a contract body was edited under an ACCEPTED acceptance
+# gate, and clearing it needed an owner seal-merge rather than a code change, so
+# wiring it as blocking would have failed every unrelated commit and trained
+# people to pass `--no-verify`.
+#
+# ADR 0014 removed the cause instead of tolerating the symptom: the hash cascade
+# and the seal are gone, and what survives of validate-records.R is structural
+# and clearable by fixing the tree. It is wired into verify.yml as an ordinary
+# blocking gate, so it arrives here through the derived list like any other.
 
 args <- commandArgs(trailingOnly = TRUE)
 opt_fast <- "--fast" %in% args
@@ -249,17 +249,6 @@ stage_release <- function() {
                 "tools/curl-zero-gate.R"))
 }
 
-stage_advisory <- function(root) {
-  cat("[advisory] control-plane gate -- reported, never blocking\n")
-  base <- suppressWarnings(system2("git", c("rev-parse", "main"),
-                                   stdout = TRUE, stderr = FALSE))
-  env <- if (length(base) == 1L) paste0("CI_GATE_BASE_SHA=", base) else
-    character(0)
-  res <- run_step("ci-gate.R (advisory)", "Rscript", ADVISORY, env = env)
-  res$advisory <- TRUE
-  list(res)
-}
-
 # ---- main -------------------------------------------------------------------
 
 root <- repo_root()
@@ -270,7 +259,6 @@ if (!opt_fast) {
 if (opt_release) {
   plan <- c(plan, "release")
 }
-plan <- c(plan, "advisory")
 
 if (opt_list) {
   cat("stage plan:", paste(plan, collapse = " -> "), "\n")
@@ -294,23 +282,16 @@ for (st in plan) {
     lint = stage_lint(),
     check = stage_check(root),
     locale = stage_locale(),
-    release = stage_release(),
-    advisory = stage_advisory(root)
+    release = stage_release()
   ))
   cat("\n")
 }
 
-blocking <- Filter(function(r) !isTRUE(r$advisory), results)
+blocking <- results
 failed <- Filter(function(r) !r$ok, blocking)
-advisory_failed <- Filter(function(r) isTRUE(r$advisory) && !r$ok, results)
 
 cat(sprintf("%d blocking step(s), %d failed\n", length(blocking),
             length(failed)))
-if (length(advisory_failed)) {
-  cat("advisory RED (not blocking):",
-      paste(vapply(advisory_failed, function(r) r$label, character(1)),
-            collapse = ", "), "\n")
-}
 if (length(failed)) {
   cat("VERDICT: FAIL --",
       paste(vapply(failed, function(r) r$label, character(1)),

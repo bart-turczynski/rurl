@@ -1,32 +1,41 @@
 #!/usr/bin/env Rscript
-# validate-records.R — G0.3a common-envelope + record-schema validator for the
-# §6 authority records. Consumes schema/{lifecycle,envelope,record-schemas}.yaml
-# and manifest.yaml; validates every present record and reports the five §6
-# rejection classes (envelope.yaml:rejection_classes):
-#   duplicate_ids, broken_references, unknown_states, missing_required_fields,
-#   manifest_hash_drift.
+# validate-records.R — structural validator for the §6 records.
 #
-# Import rule (P0.1 §Consequences): P0.1-P0.3 must validate here WITHOUT any
-# substance edit. Run from the repository root:
+# SCOPE, after ADR 0014. This script used to enforce two different things at
+# once: (1) that the records are STRUCTURALLY sound -- ids unique, references
+# resolvable, registers in bijection with the sources they claim to cover, the
+# public surface matching NAMESPACE -- and (2) that each record had been
+# RATIFIED, via manifest hash-pinning, `## Inputs` hash cascades and an
+# ACCEPTED/PROPOSED lifecycle.
+#
+# Only (1) survives. The ratification layer is retired: this project has one
+# developer, so propose -> ratify -> seal separated a proposer from an approver
+# who were the same person, and the hash cascade reopened accepted gates for
+# edits that git already reports. What remains is the half that catches real
+# defects -- a duplicated id, a dangling reference, an export that no inventory
+# row covers -- none of which git tells you.
+#
+# Contract/claim drift is still caught, by a better instrument: traceability-
+# gate.R regenerates the claim index and byte-compares it, so editing a contract
+# still fails a machine check.
+#
+# Run from the repository root:
 #   Rscript design/work/url-v3/tools/validate-records.R
 
 suppressWarnings(suppressMessages({
-  ok <- requireNamespace("yaml", quietly = TRUE) &&
-    requireNamespace("digest", quietly = TRUE)
+  ok <- requireNamespace("yaml", quietly = TRUE)
 }))
-if (!ok) stop("validate-records.R needs the 'yaml' and 'digest' packages")
+if (!ok) stop("validate-records.R needs the 'yaml' package")
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
 root <- "design/work/url-v3"
 sdir <- file.path(root, "schema")
 lifecycle <- yaml::read_yaml(file.path(sdir, "lifecycle.yaml"))
 rschemas  <- yaml::read_yaml(file.path(sdir, "record-schemas.yaml"))
-manifest  <- yaml::read_yaml(file.path(root, "manifest.yaml"))
 
 fail <- character(0); pass <- 0L
 check <- function(cond, msg) if (isTRUE(cond)) pass <<- pass + 1L else fail <<- c(fail, msg)
 valid_states <- names(lifecycle$states)
-sha256_of <- function(p) digest::digest(file = p, algo = "sha256")
 
 read_frontmatter <- function(path) {
   ln <- readLines(path, warn = FALSE)
@@ -43,11 +52,11 @@ for (f in dec_files) {
   fm <- read_frontmatter(f)
   check(!is.null(fm), sprintf("owner-decision: no frontmatter: %s", f))
   if (is.null(fm)) next
-  # missing_required_fields
-  for (k in dec$required_fields) {
-    check(!is.null(fm[[k]]),
-          sprintf("[missing_required_fields] %s: missing '%s'", basename(f), k))
-  }
+  # The required-field sweep is gone with the seal (ADR 0014): it existed to
+  # demand `accepted_at`/`accepted_evidence`/`approver`/`authority`, which no
+  # longer mean anything now that "merged to main" IS acceptance. Frontmatter is
+  # deliberately NOT rewritten across the 28 records -- the fields are harmless
+  # history; nothing reads them.
   id <- as.character(fm$id %||% "")
   check(grepl(dec$id_pattern, id),
         sprintf("%s: id '%s' fails pattern %s", basename(f), id, dec$id_pattern))
@@ -78,28 +87,11 @@ for (id in known) {
   }
 }
 
-## --- single-writer = owner for ACCEPTED; append-only substance -------------
-for (id in known) {
-  r <- records[[id]]
-  if (identical(r$state, "ACCEPTED")) {
-    check(!is.null(r$fm$owner) && !is.null(r$fm$approver),
-          sprintf("%s: ACCEPTED record missing owner/approver", id))
-    check(grepl("owner", tolower(r$fm$authority %||% "")),
-          sprintf("%s: ACCEPTED record authority is not owner-held", id))
-  }
-}
-
-## --- manifest_hash_drift (incl. append-only proof for ACCEPTED decisions) --
-drift <- c(manifest$sources, manifest$artifacts, manifest$decisions,
-           list(manifest$tracker_snapshot))
-for (reg in manifest$registers) if (isTRUE(reg$present)) drift <- c(drift, list(reg))
-for (e in drift) {
-  p <- e$path %||% NULL
-  if (is.null(p) || is.null(e$sha256)) next
-  if (!file.exists(p)) { check(FALSE, sprintf("manifest references missing file: %s", p)); next }
-  check(identical(sha256_of(p), e$sha256),
-        sprintf("[manifest_hash_drift] %s (append-only violation if ACCEPTED)", p))
-}
+## The owner/approver assertion for ACCEPTED records and the manifest
+## hash-drift sweep both lived here. Both are retired (ADR 0014): the first
+## asserted that a record the sole developer wrote was approved by the sole
+## developer, and the second re-pinned every artifact's sha256 in manifest.yaml
+## so that editing any of them reopened the acceptance. manifest.yaml is gone.
 
 ## --- register presence: snapshots.log columnar shape -----------------------
 snap <- file.path(root, "registers", "snapshots.log")
@@ -525,108 +517,21 @@ if (!is.null(con_reg)) {
 }
 con_checks <- (pass + length(fail)) - con_checks_before
 
-## --- Gate-acceptance records: input-hash integrity (G2.A onward) --------------
-## Each design/work/url-v3/gates/*.md records the exact input hashes captured at
-## the gate's acceptance commit. The envelope state must be ACCEPTED, and every
-## '## Inputs' hash is recomputed here; a mismatch fails the record, which
-## reopens the gate acceptance and (via ci-gate) the control plane. This is the
-## machine half of the §7 G2 reopening rule. (RURL-uksahklp; §6 lifecycle.)
+## --- Gate-acceptance input hashes: RETIRED (ADR 0014) ------------------------
+## This section recomputed every sha256 pinned in a gates/*.md '## Inputs' table
+## and failed with "gate acceptance reopened" on any drift. It was the costliest
+## instrument in the control plane: editing a contract body reopened an ACCEPTED
+## gate, which then stayed red until an owner seal-merge -- for a change git had
+## already reported in full, to an approver who was the same person as the
+## proposer.
 ##
-## SUPERSESSION (RURL-kpyapioi). A gate's reopening rule states that
-## "re-acceptance requires a new gate-acceptance record superseding this one".
-## Until this section understood supersession that rule was NOT executable: the
-## predecessor stayed in gates/, so it was still hash-checked against inputs it
-## no longer describes, and the only ways to green the build were to sweep its
-## hashes (which defeats the reopening rule) or to hide the file from the glob
-## (which makes an audit record invisible by a path trick). Both are worse than
-## the problem.
+## It is not replaced by nothing. traceability-gate.R T3 regenerates the claim
+## index from the contracts and byte-compares it, so editing a contract still
+## fails a machine check -- one clearable by regenerating rather than by a
+## ratification ceremony.
 ##
-## So a record may instead declare `state: SUPERSEDED` with a non-empty
-## `superseded_by`. Such a record is retained and readable but is NOT
-## hash-checked -- it is history, describing inputs as they stood at ITS
-## acceptance commit, and drift against today's tree is expected rather than a
-## defect. Two rules keep that from becoming an escape hatch:
-##   * `superseded_by` must name a gate record that EXISTS in gates/, so a
-##     record cannot retire into a dangling reference; and
-##   * each `gate` value must have EXACTLY ONE ACCEPTED record, so supersession
-##     can never leave a gate with zero live acceptances (nor two rival ones).
-## The live record is hash-checked exactly as before. Nothing is weakened for
-## the acceptance that is actually in force.
-gates_dir <- file.path(root, "gates")
-gate_n <- 0L
-gate_checks_before <- pass + length(fail)
-gate_field <- function(gln, name) {
-  hit <- grep(sprintf("^\\|\\s*%s\\s*\\|", name), gln, value = TRUE)
-  if (length(hit) != 1) return(NA_character_)
-  cells <- trimws(strsplit(sub("^\\|", "", sub("\\|\\s*$", "", hit[[1]])),
-                           "\\|")[[1]])
-  if (length(cells) >= 2) cells[[2]] else NA_character_
-}
-if (dir.exists(gates_dir)) {
-  gate_live <- list()   # gate id -> count of ACCEPTED records
-  gate_ids <- character(0)
-  for (gf in list.files(gates_dir, pattern = "\\.md$", full.names = TRUE)) {
-    gln <- readLines(gf, warn = FALSE)
-    gate_ids <- c(gate_ids, gate_field(gln, "id"))
-  }
-  for (gf in list.files(gates_dir, pattern = "\\.md$", full.names = TRUE)) {
-    gln <- readLines(gf, warn = FALSE)
-    st <- grep("^\\|\\s*state\\s*\\|", gln, value = TRUE)
-    superseded <- length(st) == 1 && grepl("\\|\\s*SUPERSEDED\\s*\\|", st[[1]])
-    gname <- gate_field(gln, "gate")
-    if (superseded) {
-      sby <- gate_field(gln, "superseded_by")
-      check(!is.na(sby) && nzchar(sby) && !identical(sby, "pending"),
-            sprintf("gates: %s is SUPERSEDED but names no superseded_by",
-                    basename(gf)))
-      check(!is.na(sby) && sby %in% gate_ids,
-            sprintf("gates: %s superseded_by '%s' names no record in gates/",
-                    basename(gf), sby))
-      # Retained as history; its inputs describe its own acceptance commit and
-      # are deliberately not recomputed against today's tree.
-      next
-    }
-    if (!is.na(gname)) {
-      gate_live[[gname]] <- (gate_live[[gname]] %||% 0L) + 1L
-    }
-    check(length(st) == 1 && grepl("\\|\\s*ACCEPTED\\s*\\|", st[[1]]),
-          sprintf("gates: %s envelope state must be ACCEPTED or SUPERSEDED",
-                  basename(gf)))
-    h <- which(grepl("^##\\s+Inputs\\s*$", gln))
-    check(length(h) == 1,
-          sprintf("gates: %s must have exactly one '## Inputs' section", basename(gf)))
-    if (length(h) == 1) {
-      nxt <- which(grepl("^##\\s", gln) & seq_along(gln) > h)
-      end <- if (length(nxt)) min(nxt) - 1L else length(gln)
-      tbl <- gln[(h + 1):end]
-      tbl <- tbl[grepl("^\\|", tbl) & !grepl("^\\|[-:[:space:]|]*$", tbl)]
-      rows <- if (length(tbl) >= 1) tbl[-1] else character(0)  # drop | path | sha256 | header
-      check(length(rows) >= 1, sprintf("gates: %s '## Inputs' has no rows", basename(gf)))
-      for (r in rows) {
-        cells <- trimws(strsplit(sub("^\\|", "", sub("\\|\\s*$", "", r)), "\\|")[[1]])
-        gate_n <- gate_n + 1L
-        p <- cells[[1]]
-        recorded <- if (length(cells) >= 2) cells[[2]] else ""
-        if (!file.exists(p)) {
-          check(FALSE, sprintf("gates: %s input missing: %s", basename(gf), p))
-        } else {
-          got <- sha256_of(p)
-          check(identical(got, recorded),
-                sprintf("gates: %s input hash drift for %s (recorded %s, got %s) — gate acceptance reopened",
-                        basename(gf), p, substr(recorded, 1, 12), substr(got, 1, 12)))
-        }
-      }
-    }
-  }
-  # Supersession must never leave a gate unattended, nor with rival live
-  # acceptances. Exactly one ACCEPTED record per gate.
-  for (g in names(gate_live)) {
-    check(identical(gate_live[[g]], 1L),
-          sprintf("gates: gate %s must have exactly one ACCEPTED record (found %d)",
-                  g, gate_live[[g]]))
-  }
-}
-gate_checks <- (pass + length(fail)) - gate_checks_before
+## The gates/ records are deleted with it; both are recoverable from the tag
+## v3-control-plane-final.
 
 ## --- G3 contract-family records (§6 artifacts 3–10 + 4 + the G3.X capstone) ----
 ## The ten design/work/url-v3/contracts/*.md are a record family parallel to the
@@ -770,23 +675,21 @@ if (dir.exists(contracts_dir)) {
       check(any(grepl(sprintf("^##\\s+%s\\s*$", sec), ln)),
             sprintf("contracts %s: missing '## %s' section", bn, sec))
 
-    ## B. tamper-evident ## Inputs ----------------------------------------------
+    ## B. ## Inputs paths resolve ------------------------------------------------
+    ## The sha256 comparison here is retired (ADR 0014) for the same reason as
+    ## the gate cascade: it turned any edit to a projected source into a
+    ## "projection stale" failure clearable only by re-sealing. What is KEPT is
+    ## the half that finds real defects and that git does not report -- a path
+    ## listed twice, or an Inputs row pointing at a file that no longer exists.
     itbl <- section_lines(ln, "Inputs"); itbl <- itbl[.is_trow(itbl) & !.is_tsep(itbl)]
     irows <- if (length(itbl) >= 1) itbl[-1] else character(0)
     seen_paths <- character(0)
     for (r in irows) {
-      cs <- .tcells(r); p <- cs[[1]]; recorded <- if (length(cs) >= 2) cs[[2]] else ""
+      cs <- .tcells(r); p <- cs[[1]]
       if (!grepl("^design/work/url-v3/", p)) next
       check(!(p %in% seen_paths), sprintf("contracts %s: duplicate ## Inputs path %s", bn, p))
       seen_paths <- c(seen_paths, p)
-      if (!file.exists(p)) {
-        check(FALSE, sprintf("contracts %s: ## Inputs path missing: %s", bn, p))
-      } else {
-        got <- sha256_of(p)
-        check(identical(got, recorded),
-              sprintf("contracts %s: ## Inputs hash drift for %s (recorded %s, got %s) — projection stale",
-                      bn, p, substr(recorded, 1, 12), substr(got, 1, 12)))
-      }
+      check(file.exists(p), sprintf("contracts %s: ## Inputs path missing: %s", bn, p))
     }
     check(length(seen_paths) >= 1, sprintf("contracts %s: ## Inputs has no source rows", bn))
 
@@ -1090,7 +993,6 @@ cat("validate-records.R\n")
 cat(sprintf("contracts: %d files, %d added checks\n", contract_n, contract_checks))
 cat(sprintf("public-surface-inventory: %d rows, %d added checks\n", psi_n, psi_checks))
 cat(sprintf("contradictions: %d rows, %d added checks\n", con_n, con_checks))
-cat(sprintf("gate-acceptance inputs: %d checked, %d added checks\n", gate_n, gate_checks))
 cat(sprintf("registers: source-claims=%d rows, findings=%d rows\n",
             if (!is.null(sc_reg)) length(sc_reg$rows) else 0L,
             if (!is.null(fd_reg)) length(fd_reg$rows) else 0L))

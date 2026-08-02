@@ -38,7 +38,6 @@ jobs:
       wpt_urltestdata_selftest: ${{ steps.filter.outputs.wpt_urltestdata_selftest }}
       ada_extra_selftest: ${{ steps.filter.outputs.ada_extra_selftest }}
       ada_dnslength_selftest: ${{ steps.filter.outputs.ada_dnslength_selftest }}
-      pin_inventory_selftest: ${{ steps.filter.outputs.pin_inventory_selftest }}
       release_rule_selftest: ${{ steps.filter.outputs.release_rule_selftest }}
       traceability_selftest: ${{ steps.filter.outputs.traceability_selftest }}
       status_docs_selftest: ${{ steps.filter.outputs.status_docs_selftest }}
@@ -113,9 +112,6 @@ jobs:
               - 'tools/oracle/derive-verifydnslength.R'
               - 'tools/oracle/derive-ip-obfuscation.R'
               - 'tools/oracle/fetch-source.R'
-            pin_inventory_selftest:
-              - 'design/work/url-v3/tools/pin-inventory.R'
-              - 'design/work/url-v3/tools/validate-*.R'
             release_rule_selftest:
               - 'tools/release-rule-check.R'
             traceability_selftest:
@@ -419,19 +415,23 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.ada_dnslength_selftest == 'true'
         run: Rscript tools/oracle/verify-ada-verifydnslength.R --self-test
 
-  # Enforced-vs-documentary hash-pin model (RURL-kufiwlxc). The control plane
-  # pins hashes in four kinds of place, and only some are recomputed: a
-  # SUPERSEDED gate record and everything under verification/ are deliberately
-  # NOT enforced. Nothing said so mechanically, so blast radius was inferred by
-  # grep -- which overstates it and invites re-pinning a table meant to stay
-  # frozen. The self-test proves the model against the validators themselves:
-  # every pin the tool calls ENFORCED must produce its own attributed failure
-  # when it drifts, and every DOCUMENTARY one must stay silent. It fails if the
-  # model is wrong in either direction, so the model cannot rot unnoticed.
-  pin-inventory:
-    needs: changes
+  # Structural validator for the §6 records (ADR 0014). This replaces both the
+  # pin-inventory job and the retired control-plane workflow.
+  #
+  # Until ADR 0014 this validator ran ONLY via ci-gate.R, which tools/verify.R
+  # treated as ADVISORY -- it printed a verdict and never failed a push -- and
+  # via a control-plane.yml that could not run at all once origin moved off
+  # GitHub. So the checks that catch real defects (a duplicated record id, a
+  # dangling reference, an export no inventory row covers, a register that has
+  # drifted out of bijection with its sources) were the ones nothing enforced,
+  # while the hash cascade that only a re-seal could clear was blocking.
+  #
+  # That is now inverted. The ratification half is deleted and what remains is
+  # wired here as an ordinary blocking gate, which also means tools/verify.R
+  # picks it up automatically -- it derives its gate list from this file.
+  control-plane:
     runs-on: ubuntu-latest
-    name: Enforced hash pins match what the validators actually recompute
+    name: Records are structurally sound (§6)
     steps:
       - uses: actions/checkout@v7
       - uses: r-lib/actions/setup-r@v2
@@ -439,12 +439,9 @@ jobs:
           use-public-rspm: true
       - name: Install gate dependencies
         shell: Rscript {0}
-        run: install.packages("digest")
-      - name: Model self-test (enforced must fire, documentary must not)
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.pin_inventory_selftest == 'true'
-        run: Rscript design/work/url-v3/tools/pin-inventory.R --self-test
-      - name: Report current pin drift
-        run: Rscript design/work/url-v3/tools/pin-inventory.R --drift
+        run: install.packages("yaml")
+      - name: Validate the record family
+        run: Rscript design/work/url-v3/tools/validate-records.R
 
   # C-10 release-rule gate (G4.3). Verifies the ACCEPTED owner disposition P0.4:
   # the "no CRAN until curl-free" hold is bound to the v3 (3.0.0) line and does
