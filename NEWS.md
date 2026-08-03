@@ -2,6 +2,39 @@
 
 ### Breaking changes
 
+- **`profile = "seo"` (and its `"canonical"` alias) now delivers rurl's
+  definition of a clean URL: a WHATWG-parsed URL plus visual tweaks.** The
+  bundle gained two knobs, `url_standard = "whatwg"` and
+  `host_encoding = "unicode"`, so cleaned output resolves `.`/`..` folder
+  segments and renders the host in Unicode regardless of how the input spelled
+  it.
+
+  ```r
+  # before
+  get_clean_url("http://example.com/a/./b/../c", profile = "seo")
+  #> "https://example.com/a/./b/../c"
+  get_clean_url("https://xn--mnchen-3ya.de/a", profile = "seo")
+  #> "https://xn--mnchen-3ya.de/a"
+
+  # after
+  get_clean_url("http://example.com/a/./b/../c", profile = "seo")
+  #> "https://example.com/a/c"
+  get_clean_url("https://xn--mnchen-3ya.de/a", profile = "seo")
+  #> "https://münchen.de/a"
+  ```
+
+  The Unicode host is the more consequential half: `host_encoding = "keep"`
+  echoed whichever spelling the input used, so the same site could yield
+  `xn--mnchen-3ya.de` from one row and `münchen.de` from the next. Cleaning the
+  Punycode and Unicode spellings of one host is now byte-identical.
+
+  This changes output only for callers who pass `profile = "seo"` or
+  `profile = "canonical"`. **Callers who pass no profile are unaffected**: the
+  `url_standard = NULL` default is frozen byte-for-byte (ADR 0007) and was
+  verified unchanged across the full fixture corpus. An explicit argument still
+  overrides the bundle, so `profile = "seo", host_encoding = "keep"` restores
+  the previous host rendering.
+
 - **`rurl` no longer depends on `curl`.** URL parsing is now entirely in-tree.
   `curl` is removed from `Imports`, so installing `rurl` no longer pulls it in
   and no longer requires the system `libcurl` it links against.

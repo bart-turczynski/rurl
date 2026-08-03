@@ -39,11 +39,13 @@ test_that("url_profile() resolves each bundle to its exact knob set", {
   expect_identical(
     url_profile("seo"),
     list(
+      url_standard = "whatwg",
       scheme_acceptance = "web",
       protocol_handling = "https",
       www_handling = "strip",
       trailing_slash_handling = "strip",
       index_page_handling = "strip",
+      host_encoding = "unicode",
       query_handling = "filter",
       customized = FALSE
     )
@@ -137,6 +139,101 @@ test_that("seo profile cleans origin URLs", {
   )
   # seo strips the trailing slash (trailing_slash_handling = "strip")
   expect_identical(out, "https://example.com")
+})
+
+# --- the clean-URL definition (RURL-hcntbqku) --------------------------------
+#
+# A clean URL is a WHATWG-parsed URL plus visual tweaks, never a separate,
+# weaker construction. These pin the definition items the `seo` bundle now
+# carries; each was verified to FAIL against the pre-change bundle.
+
+test_that("seo: folders resolve -- no dot segment survives cleaning", {
+  expect_identical(
+    get_clean_url("http://example.com/a/./b/../c", profile = "seo"),
+    "https://example.com/a/c"
+  )
+  # the compounding case: index-page strip on a path that still needs resolving
+  expect_identical(
+    get_clean_url("http://example.com/a/./b/../index.html", profile = "seo"),
+    "https://example.com/a"
+  )
+  # corpus sweep: no cleaned SEO output carries "/./" or "/../"
+  corpus <- read.csv(
+    testthat::test_path("fixtures", "parse-corpus.csv"),
+    stringsAsFactors = FALSE
+  )$url
+  cleaned <- get_clean_url(corpus, profile = "seo")
+  cleaned <- cleaned[!is.na(cleaned)]
+  expect_false(any(grepl("/\\./|/\\.\\./", cleaned)))
+  expect_false(any(grepl("/\\.$|/\\.\\.$", cleaned)))
+})
+
+test_that("seo: the domain is Unicode regardless of the input spelling", {
+  # host_encoding = "keep" echoed whichever spelling the input used, so the
+  # same site yielded xn-- from one row and Unicode from the next.
+  expect_identical(
+    get_clean_url("https://xn--mnchen-3ya.de/a", profile = "seo"),
+    "https://münchen.de/a"
+  )
+  for (host in c("łódź.pl", "домен.рф", "münchen.de", "例え.テスト")) {
+    unicode_url <- paste0("http://", host, "/a")
+    puny_host <- get_host(
+      unicode_url,
+      url_standard = "whatwg", host_encoding = "idna"
+    )
+    expect_identical(
+      get_clean_url(unicode_url, profile = "seo"),
+      get_clean_url(paste0("http://", puny_host, "/a"), profile = "seo")
+    )
+  }
+})
+
+test_that("seo: the fragment and the port do not survive", {
+  expect_identical(
+    get_clean_url("https://example.com:8080/a#top", profile = "seo"),
+    "https://example.com/a"
+  )
+})
+
+test_that("seo: an explicit dial still overrides the profile (iron rule)", {
+  # the two knobs the definition added must stay overridable
+  expect_identical(
+    get_clean_url(
+      "https://xn--mnchen-3ya.de/a",
+      profile = "seo", host_encoding = "keep"
+    ),
+    "https://xn--mnchen-3ya.de/a"
+  )
+  # the bundle now selects a url_standard, whose .parse_options() expansion
+  # governs path_normalization -- an explicit value must still win over it
+  expect_identical(
+    get_clean_url(
+      "http://example.com/a/./b/../c",
+      profile = "seo", path_normalization = "none"
+    ),
+    "https://example.com/a/./b/../c"
+  )
+  res <- url_profile("seo", host_encoding = "keep")
+  expect_true(res$customized)
+  expect_identical(res$host_encoding, "keep")
+})
+
+test_that("seo enrichment does not disturb the ADR 0007 NULL-selector freeze", {
+  # The definition is delivered entirely inside the `seo` bundle, so a caller
+  # who passes no profile must be byte-identical to before. Sentinels chosen
+  # from the rows the seo column actually moved.
+  expect_identical(
+    safe_parse_urls("https://xn--mnchen-3ya.de/")$clean_url,
+    "https://xn--mnchen-3ya.de/"
+  )
+  expect_identical(
+    safe_parse_urls("https://example.com/a/./b/../c")$clean_url,
+    "https://example.com/a/./b/../c"
+  )
+  expect_identical(
+    safe_parse_urls("https://example.com./")$clean_url,
+    "https://example.com./"
+  )
 })
 
 # --- profile across the canonical_join() `...` seam (RURL-cujzicqf) ----------

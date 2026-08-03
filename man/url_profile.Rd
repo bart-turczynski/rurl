@@ -43,6 +43,16 @@ http-prepending fix-up posture; not Chrome-faithful), \code{"whatwg"}
 normalization: case and dot-segments are preserved), and \code{"seo"}
 (rurl's origin-cleaning intent; \code{"canonical"} is an alias resolving
 identically to \code{"seo"}).
+
+\code{"seo"} delivers rurl's definition of a \emph{clean URL}: a
+WHATWG-parsed URL plus visual tweaks, never a separate, weaker construction.
+It selects \code{url_standard = "whatwg"} as the identity underneath — which
+is also what resolves \code{.} and \code{..} folder segments — and
+\code{host_encoding = "unicode"}, so the host is canonical in one direction
+regardless of whether the input spelled it in Unicode or Punycode. The
+remaining knobs are the visual tweaks: https, strip www, trailing slash and
+index page, and filter tracking parameters. As always, an explicit argument
+overrides the bundle.
 }
 \examples{
 url_profile("browser")
