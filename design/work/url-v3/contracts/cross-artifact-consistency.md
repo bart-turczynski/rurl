@@ -129,7 +129,6 @@ these.
 | SCHEME-O2 | standard-scheme (G3.5) | the credential-accessor implementation-cleanup slice (paired with OUT-O1) |
 | SCHEME-O3 | standard-scheme (G3.5) | the P4-email slice + email PRD (`indeterminate` lexer, URL-level email facts) |
 | SCHEME-O4 | standard-scheme (G3.5) | a dedicated resolution-layer decision (RFC relative-reference resolution; not owned by P2.4/P4.1) |
-| VAL-O1 | validation-intervention (G3.6) | an owner-decision extension of P2.1 (RCON-04 intervention-ledger categorization) |
 | VAL-O2 | validation-intervention (G3.6) | the RCON-05 public-surface decision (repair-posture spelling; cf. CLEAN-O1) |
 | VAL-O3 | validation-intervention (G3.6) | the RCON-03 `resolve_url` output-shape record (paired with OUT-O4) |
 | VAL-O4 | validation-intervention (G3.6) | a future owner deprecation-schedule decision, post-3.0 (`parse_status` removal window) |
@@ -183,10 +182,21 @@ One further G3.3 frozen cell is a live forward, not a closure:
 |---|---|---|
 | G3.3 (canonical-state) | Undivided `userinfo` source component vs the `user`/`password` split (S1 Q5) | the `user`/`password` fields are SETTLED; only the augmenting undivided component is open → G3.7 **OUT-O1** (the output contract's credential-handling clause), driven by S1 Q5. (Counted at OUT-O1, not double-counted.) |
 
+### Open cells closed at source
+
+Distinct from the frozen-text group above: these reached their named destination
+and were then closed **in their own contract**, so no post-authoring
+reconciliation is carried here. They are listed only so a reader comparing this
+census against an earlier revision can see why the count moved.
+
+| cell | owning contract (G3 leaf) | disposition |
+|---|---|---|
+| VAL-O1 | validation-intervention (G3.6) | **CLOSED by P2.6@5f4309b** (`P2.6-ledger-recovery-categorization.md`), the owner-decision extension of P2.1 this cell named as its destination. The four recoveries beyond repeated-`@` are standard-selected parse behavior governed by `url_standard`, not posture-bound interventions, so the `ledger completeness` row settles as "no rows" and the ordered ledger stays at six stages (D-A–D-E). Closed in `validation-intervention-contract.md` itself (`ledger completeness` row + the VAL-O1 bullet), not here. |
+
 ### Census tally
 
-**44 live open-cell IDs** across the nine contracts (CACHE 5, SCHEME 4, VAL 4,
-CLEAN 1, MUT 12, OUT 5, HOST 8, PSC 5) — each with a named destination; **none is
+**41 live open-cell IDs** across the nine contracts (CACHE 5, SCHEME 4, VAL 3,
+CLEAN 1, MUT 12, OUT 3, HOST 8, PSC 5) — each with a named destination; **none is
 unowned.** PSC-O1..O5 are pure forwarders to sibling cells (not independent product
 cells); HOST-O1..O8 and MUT-O1..O12 forward to the two unmade owner decisions (the
 P4 host record / RCON-08 and the P3 mutation-slice); CACHE-O1/O2/O3/O5 and VAL-O4
@@ -195,6 +205,25 @@ artifact 11 / G4. Separately, **9** frozen-text cells that predate a later seal 
 already **closed** (G3.3 `authority_kind` → P1.2@bb3346e; G3.K KJ-O1..O8 →
 P3.2@bb3346e), and G3.3's undivided-`userinfo` forwards to OUT-O1. No cell in the
 set is unowned.
+
+**Why this tally moved from 44 to 41 (`RURL-ztuodtcl`).** Three cells left the
+live set, and only one of them is this revision's own work:
+
+- **VAL-O1** — closed at source by P2.6@5f4309b; recorded in "Open cells closed
+  at source" above.
+- **OUT-O2 and OUT-O3** — closed by **P2.5** (`P2.5-standard-serializer-surface.md`
+  §1/§2: the entry point is `serialize_url(x, standard=, form=)`, and both RFC
+  postures are exposed as `form =`). That slice correctly removed both from
+  `output-contracts.md`'s `## Open cells` and from the destination table above,
+  **but did not update this prose**, which kept asserting "OUT 5" and a total of
+  44. The count was therefore already wrong by two before VAL-O1 closed. Found
+  while reconciling VAL-O1 and corrected here rather than carried.
+
+The live count is reproducible from the destination table above by counting rows,
+which is the check that caught the drift. Note that VAL-O1's bullet is *retained*
+in `validation-intervention-contract.md`'s `## Open cells`, marked CLOSED, so its
+deferral text survives as provenance — a per-contract grep for declared `-O` IDs
+therefore still finds it, and this table, not that grep, is the live census.
 
 ## Scope boundaries
 

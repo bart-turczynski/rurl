@@ -220,11 +220,13 @@ canonical_join <- function(data_A, data_B,
 # These four are also exactly what key-join-contracts.md admits as
 # interpretation/key-policy inputs.
 #
-# Note `source` (row 3) is the PSL-section dial's canonical name and
-# `tld_source` (row 4) its deprecated alias. Only `tld_source` is a formal of
-# safe_parse_urls(); `source` is a formal on the accessors (R/accessors.R), so
-# it is not reachable through this seam today. It is listed anyway so the
-# classification is complete and stays correct if the seam widens.
+# Note `source` (row 3) and `tld_source` (row 4) are the SAME PSL-section dial
+# under two live spellings, one per surface -- neither is deprecated, and
+# neither is an alias retained for compatibility. Only `tld_source` is a formal
+# of safe_parse_urls(); `source` is a formal on the accessors (R/accessors.R),
+# which forward it inward as `tld_source`, so it is not reachable through this
+# seam today. It is listed anyway so the classification is complete and stays
+# correct if the seam widens.
 .CJ_LEGACY_PRESENTATION_DIALS <- c(
   "protocol_handling",        # row 1
   "www_handling",             # row 2

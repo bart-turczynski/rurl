@@ -110,7 +110,7 @@ OPEN (CLEAN-O1).
 | 1 | `protocol_handling` | clean/presentation (emits scheme presentation after inference; the inference itself is Stage-A input, P2.1 stage 3) | no | no (P3.1 D-A.3) | P2.2@8292c7f (§5.3); P3.1@3b89b94 (D-A.3) | SETTLED |
 | 2 | `www_handling` | clean/presentation (PSL-derived subdomain edit) | no | no (`www`/subdomain excluded from default key) | P2.2@8292c7f (§5.3); P3.1@3b89b94 (D-A.3, D-B host row) | SETTLED |
 | 3 | `source` (PSL section) | clean/presentation input (suffix rules → domain/suffix/subdomain boundaries) | no | no | P2.2@8292c7f (§5.3); P3.1@3b89b94 (D-A.3) | SETTLED |
-| 4 | `tld_source` (deprecated alias of `source`) | clean/presentation (compat alias) | no | no | P2.2@8292c7f (§5.3) | SETTLED |
+| 4 | `tld_source` (row 3's dial, spelled for the parse surface) | clean/presentation input (same suffix-rule role as row 3; `source` is the accessor formal, `tld_source` the `safe_parse_url(s)` formal, and the accessors forward `source` as `tld_source`) — **both live; neither is deprecated** | no | no | P2.2@8292c7f (§5.3) | SETTLED |
 | 5 | `case_handling` | clean/presentation (host-only default; query exempt) | can be (whole-string lower/upper) | no (key compares normalized identity, not display case) | P2.2@8292c7f (§5.3); P3.1@3b89b94 (D-A.3, scheme-case row D-B) | SETTLED |
 | 6 | `trailing_slash_handling` | clean/presentation | no | no | P2.2@8292c7f (§5.3); P3.1@3b89b94 (D-A.3) | SETTLED |
 | 7 | `index_page_handling` | clean/presentation | can be (drops a terminal index) | no | P2.2@8292c7f (§5.3); P3.1@3b89b94 (D-A.3) | SETTLED |
@@ -129,6 +129,23 @@ OPEN (CLEAN-O1).
 | internal | `fixup_posture`, `path_identity` | profile-resolved input/identity controls (Stage-A repair posture; path identity before presentation) — **not** clean transforms | n/a | governed as input/identity, not by cleaning | P2.1@a4d1b45 (posture); P4.1@b017e87 (via G3.5) | SETTLED (boundary — input/identity controls) |
 | eligibility | semantic-transform eligibility per scheme family | **automatic SEO semantic transforms are HTTP(S)-only**; other admitted schemes serialize but do not receive SEO transforms; host/subdomain dials no-op on non-domain hosts (IP/opaque/empty) — shipped behavior preserved by P2.2 D4 byte-compat | — | — | P4.1@b017e87 (D-A/D-B, via G3.5); P2.2@8292c7f (D4) | SETTLED (eligibility owned by G3.5) |
 | vocabulary | `keep`/`none`/`strip` verb semantics diverge per dial (S4 F5) | the v3 rename to precise verbs (`preserve_if_present`/`ensure`/`omit`/`canonicalize`/`retain_explicit`) is **not** decided by P2.2/P3.1 | — | — | — (see Open cells CLEAN-O1) | OPEN |
+
+**Errata on row 4 (`RURL-vwobubfs`).** This row previously read "`tld_source`
+(deprecated alias of `source`)". That was false and is corrected above: nothing
+in the package is deprecated (no `.Deprecated()` call, no lifecycle badge, no
+removal schedule), and the two spellings are not aliases *of one another* —
+they are the one PSL-section dial exposed on two surfaces, `source` on the
+accessors and `tld_source` on `safe_parse_url(s)`.
+
+The gloss did **not** come from the cited authority: P2.2 nowhere mentions
+`tld_source` or deprecation. It was transcribed from evidence
+`S4-cleaning-mutation.md:48` ("deprecated alias, default `NULL`"), a
+review-slice characterization that was already inaccurate — the shipped default
+is `"all"`, not `NULL`. S4 is frozen evidence (sha256-pinned in
+`evidence/SHA256SUMS.txt`) and is therefore **left unedited on purpose**; this
+note, not a correction to S4, is what prevents the claim being restored from it.
+The same transcription was corrected in `R/canonical_join.R` and
+`tests/testthat/test-canonical-join-legacy-dials.R`, which had inherited it.
 
 ## Cleaning processing-order rows
 
