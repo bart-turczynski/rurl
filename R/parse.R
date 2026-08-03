@@ -293,8 +293,11 @@
 #'   *rejects* scheme-less input (unlike a bare `url_standard = "whatwg"`);
 #'   `"rfc-syntax"` is RFC 3986 generic syntax as parsing, not normalization
 #'   (case and dot-segments are preserved); `"seo"`/`"canonical"` is rurl's
-#'   origin-cleaning intent (https, strip www / trailing slash / index page,
-#'   filter tracking params). Inspect the resolved bundle with
+#'   origin-cleaning intent — a **WHATWG-parsed URL plus visual tweaks**:
+#'   `url_standard = "whatwg"` underneath (which also resolves `.`/`..` folder
+#'   segments), https, a Unicode host regardless of the input spelling, and
+#'   strip www / trailing slash / index page, filter tracking params. Inspect
+#'   the resolved bundle with
 #'   \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
 #'   (forwarded through its \code{...}).
 #' @return A named list with the following components:
@@ -579,6 +582,8 @@ safe_parse_url <- function(url,
       } else {
         match.arg(index_page_handling)
       },
+      host_encoding =
+        if (missing(host_encoding)) NULL else match.arg(host_encoding),
       query_handling =
         if (missing(query_handling)) NULL else match.arg(query_handling)
     )))
@@ -724,6 +729,8 @@ safe_parse_urls <- function(url,
       } else {
         match.arg(index_page_handling)
       },
+      host_encoding =
+        if (missing(host_encoding)) NULL else match.arg(host_encoding),
       query_handling =
         if (missing(query_handling)) NULL else match.arg(query_handling)
     )))
@@ -1101,12 +1108,26 @@ safe_parse_urls <- function(url,
   # (the default) -- the built-in semantic transforms are HTTP(S)-only, which
   # the existing pipeline already enforces. Maps exactly onto get_clean_url()'s
   # existing knobs; no new cleaning machinery.
+  #
+  # `url_standard` and `host_encoding` implement the clean-URL definition
+  # (RURL-hcntbqku): a clean URL is a WHATWG-parsed URL plus visual tweaks, not
+  # a separate weaker construction. `url_standard = "whatwg"` puts a real
+  # standard parse underneath -- which is also what RESOLVES dot segments, via
+  # the .URL_STANDARD_PROFILES expansion in .parse_options() (path_identity +
+  # path_normalization = "dot_segments"). `host_encoding = "unicode"` makes the
+  # host canonical in ONE direction: the default "keep" echoes whichever
+  # spelling the input used, so the same site yielded `xn--` from one row and
+  # Unicode from the next. Both live in the BUNDLE, not in the global defaults:
+  # `url_standard = NULL` output is frozen byte-for-byte by ADR 0007 and is not
+  # disturbed here.
   seo = list(
+    url_standard = "whatwg",
     scheme_acceptance = "web",
     protocol_handling = "https",
     www_handling = "strip",
     trailing_slash_handling = "strip",
     index_page_handling = "strip",
+    host_encoding = "unicode",
     query_handling = "filter"
   )
 )
@@ -1133,6 +1154,7 @@ safe_parse_urls <- function(url,
   www_handling = .opt_www_handling,
   trailing_slash_handling = .opt_trailing_slash_handling,
   index_page_handling = .opt_index_page_handling,
+  host_encoding = .opt_host_encoding,
   query_handling = .opt_query_handling
 )
 
@@ -1177,6 +1199,12 @@ safe_parse_urls <- function(url,
   list(
     profile = name,
     opts = bundle,
+    # The knobs the caller EXPLICITLY supplied, whether or not the bundle also
+    # carries them, already match.arg()-resolved by the calling wrapper.
+    # `overrides` above can only see bundle knobs; .merge_profile_args() needs
+    # the wider set to keep the iron rule true for a knob the url_standard
+    # expansion in .parse_options() would otherwise clobber.
+    supplied = supplied,
     customized = length(overrides) > 0L
   )
 }
@@ -1198,6 +1226,17 @@ safe_parse_urls <- function(url,
   auth <- res$opts[intersect(
     names(res$opts), c("path_normalization", "path_identity")
   )]
+  # Iron rule under a bundle that carries `url_standard` (RURL-hcntbqku): when
+  # the bundle selects a standard, .parse_options() expands
+  # .URL_STANDARD_PROFILES over `path_normalization`, which would silently
+  # overwrite a value the CALLER supplied explicitly. `res$supplied` names the
+  # caller's explicit knobs, so route that one through `profile_authorized`,
+  # which is applied AFTER the expansion. Without this, an explicit
+  # `path_normalization` is ignored on any profile that sets `url_standard`.
+  if (!is.null(res$opts$url_standard) &&
+        !is.null(res$supplied$path_normalization)) {
+    auth$path_normalization <- res$supplied$path_normalization
+  }
   if (length(auth) > 0L) {
     args$profile_authorized <- auth
   }

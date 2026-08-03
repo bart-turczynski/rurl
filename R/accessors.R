@@ -364,6 +364,11 @@ get_clean_url <- function(url,
         } else {
           match.arg(index_page_handling, .opt_index_page_handling)
         },
+        host_encoding = if (missing(host_encoding)) {
+          NULL
+        } else {
+          match.arg(host_encoding, .opt_host_encoding)
+        },
         query_handling = if (query_handling_supplied) query_handling else NULL
       )
     ))

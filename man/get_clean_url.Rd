@@ -343,8 +343,11 @@ Chrome-faithful); \code{"whatwg"} is the absolute-URL no-base posture that
 \emph{rejects} scheme-less input (unlike a bare \code{url_standard = "whatwg"});
 \code{"rfc-syntax"} is RFC 3986 generic syntax as parsing, not normalization
 (case and dot-segments are preserved); \code{"seo"}/\code{"canonical"} is rurl's
-origin-cleaning intent (https, strip www / trailing slash / index page,
-filter tracking params). Inspect the resolved bundle with
+origin-cleaning intent — a \strong{WHATWG-parsed URL plus visual tweaks}:
+\code{url_standard = "whatwg"} underneath (which also resolves \code{.}/\code{..} folder
+segments), https, a Unicode host regardless of the input spelling, and
+strip www / trailing slash / index page, filter tracking params. Inspect
+the resolved bundle with
 \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
 (forwarded through its \code{...}).}
 }
