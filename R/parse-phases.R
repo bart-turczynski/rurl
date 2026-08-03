@@ -2950,7 +2950,8 @@
                                  looks_like_host_port,
                                  is_scheme_relative,
                                  scheme_relative_handling,
-                                 rfc3986_path_rootless = NULL) {
+                                 rfc3986_path_rootless = NULL,
+                                 scheme_less_userinfo = NULL) {
   .derive_parse_status_vec(
     web_ok = !is.null(parsed_web),
     final_host = final_host,
@@ -2964,7 +2965,8 @@
     looks_like_host_port = looks_like_host_port,
     is_scheme_relative = is_scheme_relative,
     scheme_relative_handling = scheme_relative_handling,
-    rfc3986_path_rootless = rfc3986_path_rootless
+    rfc3986_path_rootless = rfc3986_path_rootless,
+    scheme_less_userinfo = scheme_less_userinfo
   )
 }
 
