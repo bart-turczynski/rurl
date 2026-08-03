@@ -294,3 +294,69 @@ test_that("three L3 states have no producer in the shipped engine", {
   )))
   expect_setequal(produced, c("known", "unknown", "not-applicable"))
 })
+
+test_that("pi is the projection locus on both engines, not just the vector", {
+  # RURL-pnprjiis. The record guarantee (P2.3 §4, transcribed at
+  # validation-intervention-contract.md) states the mechanism as "pi reproduces
+  # .derive_parse_status_vec() exactly". PR #281 made that true of the vector
+  # engine by turning `scheme_less_userinfo` into an INPUT to the layers. The
+  # scalar orchestrator ._safe_parse_url_impl() kept stamping
+  # `warning-userinfo` over the finished status afterwards, so on that path the
+  # named locus still did not decide the status.
+  #
+  # That mattered even though the scalar path has no public caller, because
+  # test-domain-identity-columns.R uses it as a "stays in sync" parity oracle. A
+  # path that reaches the right answer by a DIFFERENT mechanism cannot witness a
+  # regression in the mechanism -- measured: with pi row 3 broken, the vector
+  # engine changed and the scalar engine did not.
+  #
+  # Row 3 is also the one pi row whose assignment site had no direct unit test.
+
+  # 1. THE PIN THAT BITES. Assert against the SCALAR wrapper
+  #    .derive_parse_status(), not the `_vec` form: the vector form already
+  #    accepted `scheme_less_userinfo` before this fix, so a `_vec` assertion
+  #    would have been green on arrival. The scalar wrapper did not forward the
+  #    flag at all, so on the pre-fix tree this call is an "unused argument"
+  #    error. Giving the projection the flag as an input must be sufficient to
+  #    produce the status -- nothing downstream may be what supplies it.
+  status_of <- function(slu) {
+    rurl:::.derive_parse_status(
+      parsed_web = list(host = "example.com"), final_host = "example.com",
+      is_ip_host = FALSE, tld = "com", domain = "example.com",
+      protocol_handling = "keep", final_scheme = "http",
+      looks_like_protocol = FALSE, original_has_allowed_scheme = FALSE,
+      looks_like_host_port = FALSE, is_scheme_relative = FALSE,
+      scheme_relative_handling = "keep", scheme_less_userinfo = slu
+    )
+  }
+  expect_identical(status_of(TRUE), "warning-userinfo")
+
+  # 2. Same inputs, flag off: the projection must NOT invent the status. Pins
+  #    that assertion 1 is driven by the flag rather than by the host shape.
+  expect_identical(status_of(FALSE), "ok")
+
+  # 3. End to end, the two engines agree on every warn-userinfo shape -- both
+  #    on the status and on the D5 clean_url suppression that accompanies it.
+  scalar_row <- function(x) {
+    r <- rurl:::._safe_parse_url_impl(
+      url = x, protocol_handling = "keep", www_handling = "none",
+      tld_source = "all", case_handling = "lower_host",
+      trailing_slash_handling = "none", index_page_handling = "keep",
+      path_normalization = "none", scheme_relative_handling = "keep",
+      subdomain_levels_to_keep = NULL
+    )
+    c(r$parse_status, r$clean_url)
+  }
+  urls <- c(
+    "user@example.com", "bob@sub.example.co.uk", "user@127.0.0.1",
+    "user@example.invalidtld", "user@localhost", "user@example.co.uk"
+  )
+  scalar <- vapply(urls, scalar_row, character(2))
+  vector <- safe_parse_urls(urls, case_handling = "lower_host")
+
+  expect_identical(unname(scalar[1, ]), vector$parse_status)
+  expect_identical(unname(scalar[2, ]), vector$clean_url)
+  # ...and the shared answer is in fact the row under test.
+  expect_true(all(vector$parse_status == "warning-userinfo"))
+  expect_true(all(is.na(vector$clean_url)))
+})

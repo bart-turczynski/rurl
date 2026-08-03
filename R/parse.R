@@ -2668,14 +2668,20 @@ safe_parse_urls <- function(url,
     original_has_allowed_scheme = prep$original_has_allowed_scheme,
     looks_like_host_port = prep$looks_like_host_port,
     is_scheme_relative = prep$is_scheme_relative,
-    scheme_relative_handling = scheme_relative_handling
+    scheme_relative_handling = scheme_relative_handling,
+    # D5 scheme-less userinfo is an L2 policy NOTE, so it is an input to the
+    # layers and reaches the status only through pi -- never stamped over the
+    # finished status here. Mirrors the vector engine (RURL-pnprjiis).
+    scheme_less_userinfo = prep$scheme_less_userinfo
   )
 
   # D5: scheme-less userinfo (user@example.com) -- suppress the fabricated
-  # clean_url and flag warning-userinfo (host/domain/tld/user still resolve).
-  if (isTRUE(prep$scheme_less_userinfo)) {
+  # clean_url (host/domain/tld/user still resolve). The accompanying
+  # `warning-userinfo` status is NOT set here; it is the L2 `warn-userinfo`
+  # verdict, projected by pi in Phase 12 above. Gated on a successful web parse
+  # exactly as the vector engine gates it.
+  if (isTRUE(prep$scheme_less_userinfo) && !is.null(parsed_web)) {
     clean_url <- NA_character_
-    parse_status <- .STATUS_WARN_USERINFO
   }
 
   # Phase 13: assemble the typed result list, then declare the returned
