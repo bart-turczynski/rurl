@@ -612,6 +612,15 @@ get_path <- function(
 #' selector it is the raw source spelling. That distinction is only visible
 #' with `decode = FALSE`, since decoding collapses both spellings.
 #'
+#' @section Security note:
+#' Because `decode = TRUE` is the **default**, this accessor can return
+#' characters the URL itself never contained literally — including control
+#' characters such as CR and LF, which `%0D`/`%0A` decode to. Treat the result
+#' as untrusted input: do not interpolate it into a header, a log line, a
+#' shell command, or a SQL statement without escaping it for that sink, and do
+#' not assume it is single-line. Pass `decode = FALSE` when you want the query
+#' exactly as written, with no decoding step at all.
+#'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @param format Return format: "string" (default) or "list" for parsed
@@ -938,7 +947,7 @@ get_port <- function(url, protocol_handling = "keep",
 #' @seealso \code{\link{get_mailto_recipients}} for the full per-recipient list.
 #' @export
 #' @examples
-#' get_user("ftp://alice:secret@ftp.example.com/file.txt")
+#' get_user("ftp://user:password@ftp.example.com/file.txt")
 #' get_user("mailto:jane@example.com",
 #'   scheme_acceptance = "general", url_standard = "rfc3986")
 get_user <- function(url, protocol_handling = "keep",
@@ -970,7 +979,7 @@ get_user <- function(url, protocol_handling = "keep",
 #' @seealso \code{\link{get_user}}, \code{\link{get_userinfo}}.
 #' @export
 #' @examples
-#' get_password("ftp://alice:secret@ftp.example.com/file.txt")
+#' get_password("ftp://user:password@ftp.example.com/file.txt")
 #' get_password("http://u:p:q@example.com/", url_standard = "whatwg")
 get_password <- function(url, protocol_handling = "keep",
                          scheme_policy = c("infer", "require"),
@@ -994,8 +1003,8 @@ get_password <- function(url, protocol_handling = "keep",
 #' @return A character vector of userinfo values.
 #' @export
 #' @examples
-#' get_userinfo("ftp://alice:secret@ftp.example.com/file.txt")
-#' get_userinfo("ftp://alice@ftp.example.com/file.txt")
+#' get_userinfo("ftp://user:password@ftp.example.com/file.txt")
+#' get_userinfo("ftp://user@ftp.example.com/file.txt")
 get_userinfo <- function(url, protocol_handling = "keep",
                          scheme_policy = c("infer", "require"),
                          scheme_acceptance = c("web", "general"),

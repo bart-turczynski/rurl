@@ -247,6 +247,12 @@
 #'     parts where this table presents `NA`, because a recipient domain is
 #'     extraction metadata, not the URL's authority.}
 #'   }
+#'   Note that `file:` is admitted under *both* values, including the default.
+#'   A `file:` URL denotes local-filesystem access, and one with a non-empty
+#'   host (`file://server/share/x`) is a UNC path on Windows, so dereferencing
+#'   it reaches a remote SMB share. rurl parses `file:` URLs; it never opens
+#'   them. Restricting schemes before anything dereferences them is the
+#'   caller's job — see `SECURITY.md`.
 #' @param url_standard Optional top-level standard profile: `NULL` (default),
 #'   `"rfc3986"`, or `"whatwg"`. With `NULL` the behavior is exactly what the
 #'   individual low-level options select (fully backward compatible). When set,
