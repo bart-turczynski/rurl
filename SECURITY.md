@@ -68,6 +68,14 @@ diagnostic is evidence rather than a decision. In particular:
   `scheme_acceptance = "general"` accepts any syntactically valid scheme,
   including `file:`, `smb:`, `scp:` and `javascript:`. Restricting schemes is the
   caller's job.
+- **A `file:` URL is local-filesystem access, and it is not always local.** If
+  you hand a parsed `file:` URL to anything that dereferences it, `file:///etc/passwd`
+  reads a local file. A `file:` URL with a *non-empty* host — `file://server/share/x`
+  — is a UNC path on Windows, so dereferencing it reaches a **remote SMB share**
+  and can leak credentials to a host the URL author chose. rurl parses these;
+  it does not open them, and it does not warn you. If your inputs are
+  user-controlled, reject `file:` before dereferencing rather than after, and
+  check `get_host()` — an empty host is the local-only form.
 - Percent-*decoding* surfaces return the decoded bytes, which is what decoding
   means. `get_query()` (which decodes by default) and `path_encoding = "decode"`
   can therefore return control characters, including CR and LF. Do not

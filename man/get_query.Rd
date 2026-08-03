@@ -144,7 +144,13 @@ the accessors (\code{get_host()} / \code{get_domain()} / \code{get_user()}, ADR 
 or \code{get_mailto_recipients()}; those deliberately return a recipient's
 parts where this table presents \code{NA}, because a recipient domain is
 extraction metadata, not the URL's authority.}
-}}
+}
+Note that \verb{file:} is admitted under \emph{both} values, including the default.
+A \verb{file:} URL denotes local-filesystem access, and one with a non-empty
+host (\verb{file://server/share/x}) is a UNC path on Windows, so dereferencing
+it reaches a remote SMB share. rurl parses \verb{file:} URLs; it never opens
+them. Restricting schemes before anything dereferences them is the
+caller's job — see \code{SECURITY.md}.}
 
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
 \code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
@@ -196,6 +202,17 @@ requested (the default profile), the output is byte-for-byte identical to
 earlier releases; once you opt in, the surviving params are selected first
 and only then rendered per \code{format}/\code{decode}.
 }
+\section{Security note}{
+
+Because \code{decode = TRUE} is the \strong{default}, this accessor can return
+characters the URL itself never contained literally — including control
+characters such as CR and LF, which \verb{\%0D}/\verb{\%0A} decode to. Treat the result
+as untrusted input: do not interpolate it into a header, a log line, a
+shell command, or a SQL statement without escaping it for that sink, and do
+not assume it is single-line. Pass \code{decode = FALSE} when you want the query
+exactly as written, with no decoding step at all.
+}
+
 \examples{
 get_query("http://example.com/path?a=1&b=2")
 get_query("http://example.com/path?a=1&b=2", format = "list")

@@ -121,7 +121,13 @@ the accessors (\code{get_host()} / \code{get_domain()} / \code{get_user()}, ADR 
 or \code{get_mailto_recipients()}; those deliberately return a recipient's
 parts where this table presents \code{NA}, because a recipient domain is
 extraction metadata, not the URL's authority.}
-}}
+}
+Note that \verb{file:} is admitted under \emph{both} values, including the default.
+A \verb{file:} URL denotes local-filesystem access, and one with a non-empty
+host (\verb{file://server/share/x}) is a UNC path on Windows, so dereferencing
+it reaches a remote SMB share. rurl parses \verb{file:} URLs; it never opens
+them. Restricting schemes before anything dereferences them is the
+caller's job — see \code{SECURITY.md}.}
 
 \item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
 \code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the

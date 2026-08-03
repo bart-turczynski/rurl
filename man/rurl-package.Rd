@@ -8,6 +8,29 @@
 \description{
 A lightweight toolkit for extracting structured information from URLs. Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs. Domain and public-suffix extraction is delegated to the 'pslr' package, which implements the Public Suffix List from \url{https://publicsuffix.org}. Punycode and IDNA encoding is handled by the 'punycoder' package.
 }
+\examples{
+# Parse a vector of URLs into one row each.
+urls <- c(
+  "https://www.Example.co.uk/Blog/index.html?utm_source=nl&id=7#top",
+  "http://sub.example.com:8080/a/./b/../c"
+)
+safe_parse_urls(urls)[, c("scheme", "host", "domain", "tld", "path")]
+
+# Reach a single component without materializing the frame.
+get_domain(urls)
+get_subdomain(urls)
+
+# Clean for SEO: a WHATWG parse plus visual tweaks. Dot segments resolve,
+# the host renders in Unicode, www/index/tracking params come off.
+get_clean_url(urls, profile = "seo")
+
+# Profiles are inspectable sugar over the low-level knobs, and an explicit
+# argument always overrides the bundle.
+url_profile("seo")
+get_clean_url("https://xn--mnchen-3ya.de/a", profile = "seo")
+get_clean_url("https://xn--mnchen-3ya.de/a", profile = "seo",
+  host_encoding = "keep")
+}
 \seealso{
 Parsing: \code{\link[=safe_parse_url]{safe_parse_url()}}, \code{\link[=safe_parse_urls]{safe_parse_urls()}}.
 Accessors: \code{\link[=get_host]{get_host()}}, \code{\link[=get_domain]{get_domain()}}, \code{\link[=get_tld]{get_tld()}}, \code{\link[=get_subdomain]{get_subdomain()}},
