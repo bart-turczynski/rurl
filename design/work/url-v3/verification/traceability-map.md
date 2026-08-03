@@ -343,39 +343,39 @@ covers the section.
 | TR-CM-s2-internal | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:129` |
 | TR-CM-s2-eligibility | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:130` |
 | TR-CM-s2-vocabulary | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:131` |
-| TR-CM-s3-1 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:142` |
-| TR-CM-s3-2 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:143` |
-| TR-CM-s3-3 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:144` |
-| TR-CM-s3-4 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:145` |
-| TR-CM-s3-5 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:146` |
-| TR-CM-s3-6 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:147` |
-| TR-CM-s3-7 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:148` |
-| TR-CM-s3-8 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:149` |
-| TR-CM-s3-9 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:150` |
-| TR-CM-s4-clean-url-get-clean-url-surface- | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:159` |
-| TR-CM-s4-comparison-key-get-url-key | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:160` |
-| TR-CM-s4-standard-serialization-serialize | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:161` |
-| TR-CM-s5-non-interference | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:170` |
-| TR-CM-s5-the-defect-it-fixes | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:171` |
-| TR-CM-s5-test-revision-obligation | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:172` |
-| TR-CM-s6-cleaning-repair | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:181` |
-| TR-CM-s6-strict-default-admission-flow-th | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:182` |
-| TR-CM-s6-s4-f3-provenance-boundary | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:183` |
-| TR-CM-s7-clean-surface-never-reconstructs | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:189` |
-| TR-CM-s7-safe-display-redacts | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:190` |
-| TR-CM-s7-mutation-credential-safety | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:191` |
-| TR-CM-s8-semantics-verb-vocabulary | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:206` |
-| TR-CM-s8-component-dependency-graph | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:207` |
-| TR-CM-s8-state-transitions | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:208` |
-| TR-CM-s8-transaction-behavior | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:209` |
-| TR-CM-s8-eligibility | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:210` |
-| TR-CM-s8-security | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:211` |
-| TR-CM-s8-invariants | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:212` |
-| TR-CM-s8-query-model | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:213` |
-| TR-CM-s8-path-model | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:214` |
-| TR-CM-s8-psl-binding | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:215` |
-| TR-CM-s8-standards-profile-repair-interac | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:216` |
-| TR-CM-s8-downstream-safety | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:217` |
+| TR-CM-s3-1 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:159` |
+| TR-CM-s3-2 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:160` |
+| TR-CM-s3-3 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:161` |
+| TR-CM-s3-4 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:162` |
+| TR-CM-s3-5 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:163` |
+| TR-CM-s3-6 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:164` |
+| TR-CM-s3-7 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:165` |
+| TR-CM-s3-8 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:166` |
+| TR-CM-s3-9 | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:167` |
+| TR-CM-s4-clean-url-get-clean-url-surface- | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:176` |
+| TR-CM-s4-comparison-key-get-url-key | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:177` |
+| TR-CM-s4-standard-serialization-serialize | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:178` |
+| TR-CM-s5-non-interference | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:187` |
+| TR-CM-s5-the-defect-it-fixes | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:188` |
+| TR-CM-s5-test-revision-obligation | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:189` |
+| TR-CM-s6-cleaning-repair | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:198` |
+| TR-CM-s6-strict-default-admission-flow-th | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:199` |
+| TR-CM-s6-s4-f3-provenance-boundary | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:200` |
+| TR-CM-s7-clean-surface-never-reconstructs | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:206` |
+| TR-CM-s7-safe-display-redacts | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:207` |
+| TR-CM-s7-mutation-credential-safety | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:208` |
+| TR-CM-s8-semantics-verb-vocabulary | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:223` |
+| TR-CM-s8-component-dependency-graph | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:224` |
+| TR-CM-s8-state-transitions | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:225` |
+| TR-CM-s8-transaction-behavior | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:226` |
+| TR-CM-s8-eligibility | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:227` |
+| TR-CM-s8-security | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:228` |
+| TR-CM-s8-invariants | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:229` |
+| TR-CM-s8-query-model | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:230` |
+| TR-CM-s8-path-model | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:231` |
+| TR-CM-s8-psl-binding | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:232` |
+| TR-CM-s8-standards-profile-repair-interac | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:233` |
+| TR-CM-s8-downstream-safety | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/cleaning-mutation-contracts.md:234` |
 | TR-HA-s1-host-presence | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/host-annotation-contracts.md:96` |
 | TR-HA-s1-whatwg-host-form | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/host-annotation-contracts.md:97` |
 | TR-HA-s1-rfc-host-form | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/host-annotation-contracts.md:98` |
@@ -705,7 +705,7 @@ covers the section.
 | TR-VI-s2-4 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:110` |
 | TR-VI-s2-5 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:111` |
 | TR-VI-s2-6 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:112` |
-| TR-VI-s2-ledger-completeness | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:113` |
+| TR-VI-s2-ledger-completeness | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:113` |
 | TR-VI-s3-l1-syntax-parse | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:128` |
 | TR-VI-s3-l2-policy-admission | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:129` |
 | TR-VI-s3-l3-optional-annotation | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:130` |
@@ -783,8 +783,8 @@ other, and this one summarizes the very thing the record exists to establish.
 | join-slice | PENDING | 68 | 60 | 8 |
 | migration-slice | PENDING | 22 | 18 | 4 |
 | host-slice | PENDING | 41 | 35 | 6 |
-| UNASSIGNED | UNASSIGNED | 181 | 148 | 33 |
-| **total** | — | 491 | 421 | 70 |
+| UNASSIGNED | UNASSIGNED | 181 | 149 | 32 |
+| **total** | — | 491 | 422 | 69 |
 
 ### By contract
 
@@ -799,7 +799,7 @@ other, and this one summarizes the very thing the record exists to establish.
 | PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 65 | 35 | 30 | 4 |
 | SC | `design/work/url-v3/contracts/semantic-cache-contract.md` | 20 | 20 | 0 | 5 |
 | SS | `design/work/url-v3/contracts/standard-scheme-matrices.md` | 50 | 46 | 4 | 9 |
-| VI | `design/work/url-v3/contracts/validation-intervention-contract.md` | 70 | 67 | 3 | 10 |
+| VI | `design/work/url-v3/contracts/validation-intervention-contract.md` | 70 | 68 | 2 | 10 |
 <!-- END GENERATED: coverage-census -->
 
 ## Excluded sources

@@ -110,7 +110,7 @@ the original bytes are evaluated, and no hidden recovery runs before curl (P2.1
 | 4 | recovery (selector-scoped; chiefly repeated-`@` authority recovery) | `compatibility` / `repair` — **never `strict`** | explicit repair (repeated-`@`) | the **last** `@` is taken as the userinfo/host delimiter and the earlier `@` bytes are percent-encoded; under `strict` this stage is a no-op and a non-conformant authority rejects; **this binding is the C-03 disposition** | P2.1@a4d1b45 (§2.4, §3 C-03) | SETTLED |
 | 5 | strict parse + component extraction | all | n/a (parse) | the selected standard's parse produces the canonical component slices | P2.1@a4d1b45 (§2.5) | SETTLED |
 | 6 | validation verdicts | all | n/a (verdict) | the independent L1/L2/L3 verdicts (below) are produced here; both original-input and repaired-input verdicts are exposed when repair ran (RCON-04) | P2.1@a4d1b45 (§2.6); P2.3@a7e0a59 (§1) | SETTLED |
-| ledger completeness | per-row category for recoveries **beyond** repeated-`@` (WHATWG IPv4 rewrite, host-charset shim, curl PQF sanitization, dependency shims) | — | **not assigned** | P2.1 categorized only the fixer steps, scheme inference, and repeated-`@`; the `strict`-excluded-vs-parser-behavior assignment for the other ledger recoveries was explicitly deferred | — (see Open cells VAL-O1) | OPEN |
+| ledger completeness | per-row category for recoveries **beyond** repeated-`@` (WHATWG IPv4 rewrite, host-charset shim, curl PQF sanitization, dependency shims) | all postures | `n/a (parse)` — they are **stage 5**, not a ledger stage | **no ledger rows.** P2.1 deferred (Q5) the `strict`-excluded-vs-parser-behavior assignment for these four; P2.6 answers that they are standard-selected parse behavior governed by `url_standard`, not by the repair posture (D-A), reachable under every posture including `strict` (D-B), and therefore **not interventions at all** — the ledger records what a *posture* did on the way to the parse (stages 1–4), so where a parsed component's spelling differs from the input's that is the selected standard's own rendering, owned by G3.H and P2.2/G3.7 (D-C). The cell settles as "no rows", not as an assignment: the ordered ledger stays at **six** stages (D-D). "Dependency shims" is retired rather than answered — `curl` is gone (D-E) | P2.6@5f4309b (D-A–D-E); P2.1@a4d1b45 (§2, Q5) | SETTLED |
 
 ## Verdict-layer rows
 
@@ -308,16 +308,24 @@ Each cell an accepted record left open or deferred is recorded rather than
 invented. None reopens a SETTLED default.
 
 - **VAL-O1 — intervention-ledger category for recoveries beyond repeated-`@`.**
-  P2.1 categorized the fixer steps (explicit repair / standards-required
-  preprocessing), scheme inference (stage 3), and the repeated-`@` recovery
-  (REPAIR); it explicitly deferred (Q5) the per-row `strict`-excluded-vs-parser-
-  behavior category for the other ledger recoveries — WHATWG IPv4 rewriting, the
-  host-charset shim (ADR 0009), curl PQF sanitization, and dependency shims.
-  **Impact:** those recoveries' posture-binding and RCON-04 category are
-  unspecified, so whether each is `strict`-reachable is undefined for the ledger.
-  **Settles at:** an owner-decision extension of P2.1 completing the RCON-04
-  intervention-ledger categorization (P2.1 Q5 named "G3 intervention ledger", but
-  the assignment is a product decision this projection cannot make).
+  **CLOSED by P2.6@5f4309b** (`decisions/P2.6-ledger-recovery-categorization.md`,
+  the owner-decision extension of P2.1 this cell named as its destination). The
+  deferral, retained for provenance: P2.1 categorized the fixer steps (explicit
+  repair / standards-required preprocessing), scheme inference (stage 3), and the
+  repeated-`@` recovery (REPAIR); it explicitly deferred (Q5) the per-row
+  `strict`-excluded-vs-parser-behavior category for the other ledger recoveries —
+  WHATWG IPv4 rewriting, the host-charset shim (ADR 0009), curl PQF sanitization,
+  and dependency shims. **Impact, as stated:** those recoveries' posture-binding
+  and RCON-04 category were unspecified, so whether each is `strict`-reachable was
+  undefined for the ledger. **Disposition:** the question presupposed one axis
+  where there are two. All four are standard-selected parse behavior governed by
+  `url_standard`, reachable under every posture, so none is `strict`-excluded and
+  none is an intervention; the `ledger completeness` row settles as "no rows" and
+  the ordered ledger stays at six stages (P2.6 D-A–D-E). "Dependency shims" is
+  retired rather than answered — `curl` is gone. Note that the four-recovery
+  enumeration above is transcribed from frozen evidence S2 (`:75`, `:246`) and is
+  deliberately **not** rewritten to name today's parser dials; that current
+  mapping lives in P2.6 §2, so this projection stays a faithful projection.
 - **VAL-O2 — repair-posture public surface naming.** P2.1 fixes the *axis and
   pipeline order*, not the public *spelling* — whether the posture is a new
   argument, an extension of `scheme_policy` / `fixup_posture`, or a `profile`

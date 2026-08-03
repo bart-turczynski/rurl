@@ -163,8 +163,8 @@ test_that("the PSL engine dial warns (cleaning-semantics row 24)", {
 test_that("`source` is classified even though the seam cannot reach it", {
   A <- make_a()
   B <- make_b()
-  # Row 3 `source` is the PSL-section dial's canonical name; row 4
-  # `tld_source` is its deprecated alias. Only `tld_source` is a formal of
+  # Rows 3 and 4 are the same PSL-section dial under two live spellings, one
+  # per surface -- neither is deprecated. Only `tld_source` is a formal of
   # safe_parse_urls() -- `source` lives on the accessors -- so forwarding
   # `source` still fails downstream. It is classified anyway, so the list
   # stays correct if the seam ever widens.

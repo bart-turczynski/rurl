@@ -10,8 +10,9 @@
      ACCEPTED; and a DISCHARGED row must be claimed by a verification slice
      (deferral-gate rule D2). This record is that claim.
 
-     Read the "Not discharged: migration cell M-11" section before treating
-     this as full coverage of the row's cell list. -->
+     The former "Not discharged: migration cell M-11" carve-out is resolved
+     (RURL-fcewylwv); see "Resolved: the M-11 citation" below. The row's cell
+     list is now fully covered. -->
 
 ## Envelope
 
@@ -27,8 +28,8 @@
 | lifecycle_state | PROPOSED |
 | verifies | VD-004 (registers/verification-deferrals.md); P2.3 (authoritative decision); contracts/canonical-state-contract.md — verdict-layer cells only |
 | dependencies | P0.5 (the deferral register and its gate); P2.3 (bound decision); P1.1 (state/status model) |
-| closes_finding | VD-004 (partially — see the M-11 carve-out below) |
-| completion_rule | every *locatable* cell named by VD-004 maps to shipped executable evidence, cited as `path :: test name`; any cell that cannot be located is named as NOT covered and carried to an issue rather than silently claimed; `tools/deferral-gate.R` reports D2 and D3 PASS |
+| closes_finding | VD-004 (fully, since RURL-fcewylwv removed the unlocatable `M-11` citation from the row) |
+| completion_rule | every cell named by VD-004 maps to shipped executable evidence, cited as `path :: test name`; any cell that cannot be located is named as NOT covered and carried to an issue rather than silently claimed; `tools/deferral-gate.R` reports D2 and D3 PASS |
 | approval_evidence | pending — rides the owner's merge of the PR carrying it |
 | validation_command | Rscript tools/deferral-gate.R && devtools::test() |
 
@@ -60,24 +61,35 @@ PR and runs in the standard `devtools::test()` chain.
 | vocabulary containment | `:: "every produced verdict is inside its settled vocabulary"`; `:: "three L3 states have no producer in the shipped engine"` | no verdict escapes its settled enum; the three unproduced L3 states are asserted rather than left silent |
 | companion-surface constraints | `:: "the companion never widens the parse frame"`; `:: "get_parse_verdicts is shaped and validated like its siblings"`; `:: "the verdicts do not depend on cache warmth"` | ADR 0006 (no frame widening), sibling shape/validation parity, and cache-warmth invariance (P1.1 §2) |
 
-## Not discharged: migration cell `M-11`
+## Resolved: the `M-11` citation
 
-VD-004's cell list ends with "migration cell M-11". **That cell is not claimed
-as covered here, because it could not be located.** `M-11` is not defined
-anywhere in this repository: not in `contracts/`, `registers/`, `decisions/`,
-`evidence/` or `verification/`, and not anywhere in the tree outside `.git`.
-Its only occurrence is the VD-004 row that cites it.
+This section previously carved out "migration cell M-11" as a cell this record
+could not claim, because it could not be located. `RURL-fcewylwv` settled it:
+**`M-11` was never defined, and the citation has been removed from VD-004.**
 
-The `M-n` namespace is otherwise real — `M-8` and `M-14` are the
-frozen-vocabulary rules implemented by `tools/status-doc-consistency.R` — so
-this is a specific dangling citation, not a missing family.
+The evidence is a history check, not another search. `M-11` was born dangling:
+the commit that introduced the VD-004 row (`76bc38d`, PR #246) defines no `M-n`
+cell anywhere in its diff, and no later commit added one. There is nothing to
+find, so the citation was dropped rather than repointed.
+
+**The earlier framing here was itself an over-claim and is withdrawn.** This
+section used to assert that "the `M-n` namespace is otherwise real — `M-8` and
+`M-14` are the frozen-vocabulary rules implemented by
+`tools/status-doc-consistency.R`". That is not what makes a cell real. No `M-n`
+cell has a *definition* in any artifact: `M-3`, `M-5`, `M-8` and `M-14` occur
+only as informal labels in tool and test comments
+(`tools/status-doc-consistency.R`, `tools/diagnostics-doc-consistency.R`,
+`tests/testthat/test-g4-coverage-negatives.R`, `.github/workflows/verify.yml`),
+and `evidence/S8`'s v2-to-v3 migration matrix is eight unnumbered rows with no
+`M-n` labels at all. A tool that *closes* a rule it names does not *define* it.
+So `M-11` was not a dangling citation into a real family — the family itself
+was only ever a working-audit vocabulary that never entered the repository.
 
 This is recorded rather than papered over. Deferral-gate rule D2 only checks
 that a DISCHARGED row is claimed by *some* slice; it does not verify coverage
-cell by cell, so nothing mechanical would have caught a silent over-claim here.
-The register's schema carries one `state` per row and cannot express a partial
-discharge, so the carve-out lives in this prose instead. Carried as
-**`RURL-fcewylwv`**.
+cell by cell, so nothing mechanical would have caught the original silent
+over-claim, and nothing would have caught this record's own weaker one either.
+Both were found by reading, which is the standing lesson.
 
 ## Boundary: what this record does NOT claim
 
