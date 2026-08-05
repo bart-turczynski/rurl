@@ -119,6 +119,43 @@
 
 ### Bug fixes
 
+- **`index_page_handling = "strip"` no longer emits a path ending in `.` or
+  `..`.** Dropping a terminal `index.*`/`default.*` page exposes dot segments
+  that the page name was hiding, and nothing re-normalized afterwards, so the
+  cleaner handed back paths no consumer should be given — including one that
+  escapes above the document root:
+
+  ```r
+  # before                                     # after
+  get_clean_url("http://example.com/a/./b/../index.html",
+                index_page_handling = "strip")
+  #> "http://example.com/a/./b/.."             #> "http://example.com/a/"
+  get_clean_url("http://example.com/../index.html",
+                index_page_handling = "strip")
+  #> "http://example.com/.."                   #> "http://example.com/"
+  ```
+
+  The processing order was not at fault: `path_normalization` (step 2)
+  correctly precedes `index_page_handling` (step 3). The bug was that step 3
+  had an unstated precondition — a resolved path — that step 2 does not
+  guarantee, because `path_normalization` defaults to `"none"`. Stripping now
+  resolves the remaining path when, and only when, it left a dot segment in
+  final position; dot segments that were already visible beforehand are still
+  untouched, so `path_normalization = "none"` keeps meaning none.
+
+  Output moves only for `index_page_handling = "strip"` with dot-segment
+  normalization off. `"keep"` is byte-identical, and `url_standard = "whatwg"`
+  and `"rfc3986"` cannot reach the new branch at all — both profiles set
+  `path_normalization = "dot_segments"`, which leaves the strip nothing to
+  expose. **ADR 0007 disposition: (ii).** `index_page_handling` is not in
+  `.URL_STANDARD_PROFILES` (whose governed axes are exactly `path_identity`,
+  `path_normalization` and `case_handling`), so it is an ungoverned
+  presentation axis in ADR 0011's sense; the ADR 0007 freeze binds
+  selector-driven drift, and a defect fix on an ungoverned axis may move
+  `url_standard = NULL` rows without an amendment. Measured over a conjunction
+  corpus of 840 URLs × 36 dial cells: 2160 violating rows before, 0 after, and
+  every changed row carries the defect's own signature.
+
 - **`host_encoding = "unicode"` no longer drops a trailing root-dot label.**
   Rendering the host in Unicode is supposed to change how a label is *spelled*,
   never how many labels the host has — but the decoder split the host with base
