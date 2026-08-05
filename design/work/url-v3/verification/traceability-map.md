@@ -33,12 +33,12 @@
 | schema_version | 1.0.0 |
 | tracked_location | design/work/url-v3/verification/traceability-map.md |
 | owner | Bart Turczynski <bartek@turczynski.pl> |
-| single_writer | repository owner (sole); P0.3 §5 — this record is the SINGLE WRITER of the claim POPULATION rule and of section→slice ownership; it is never a writer of contract semantics or of per-claim evidence |
+| single_writer | repository owner (sole); P0.3 §5 — this record is the SINGLE WRITER of the claim POPULATION rule, of section→slice ownership, and of the claim-level ownership overrides that dissent from it; it is never a writer of contract semantics or of per-claim evidence |
 | lifecycle_state | PROPOSED |
 | verifies | §7 G4 criterion 1 over the §6 contract family (artifacts 3–12) |
 | dependencies | the nine claim-bearing §6 contracts (hashed under `## Inputs`); reconciliation §6 artifact 11, §7 G4; S9 H6 / RCON-10; P5.3 (oracle policy, the authority axis) |
 | closes_finding | RCON-10 (traceability half; the release-rule half stays with P0.4/C-10 and the determinism half with P5.2/C-09) |
-| completion_rule | §7 G4 criterion 1 — the claim population is derived, not transcribed; every claim-bearing contract section has exactly one owner; every owner is a registered verification slice or `UNASSIGNED` with a named carrier; every verification record on disk is this map, a registered slice, or a registered discharge record; the generated index and census regenerate byte-identically; the gate is in the verify chain and self-tested |
+| completion_rule | §7 G4 criterion 1 — the claim population is derived, not transcribed; every claim-bearing contract section has exactly one owner, and every claim its section's owner unless the override table dissents; every owner is a registered verification slice or `UNASSIGNED` with a named carrier; every verification record on disk is this map, a registered slice, or a registered discharge record; the generated index and census regenerate byte-identically; the gate is in the verify chain and self-tested |
 | content_hash | per-input sha256 under `## Inputs`, recomputed by the verification-family validator at the sealing G4 snapshot |
 | approval_evidence | pending — seals at a future G4 control-plane snapshot (NOT an envelope flip) |
 | validation_command | Rscript design/work/url-v3/tools/traceability-gate.R |
@@ -68,8 +68,9 @@ run. Add a row to a contract and it appears here; the gate fails until it is
 owned.
 
 What is hand-authored is small and reviewable: which slice owns which contract
-**section** (67 rows), the slice registry, the discharge-record registry, and
-the disposition of any contract that contributes no claims.
+**section** (67 rows), the individual **claims** that dissent from their section
+(`## Claim ownership overrides`, 1 row), the slice registry, the discharge-record
+registry, and the disposition of any contract that contributes no claims.
 
 ## Inputs
 
@@ -126,7 +127,9 @@ Three consequences worth stating plainly:
   the whole point. The failure mode for a traceability artifact is not a wrong
   row, it is a missing one.
 
-The current population is **479 claims across 9 contracts and 67 sections**.
+The current population is **491 claims across 10 contracts and 67 sections**,
+as the generated census below reports it. That block is the authority for the
+number; this sentence is a summary and has drifted from it before.
 
 ## Verification slices
 
@@ -313,6 +316,47 @@ by-slice tally while every rule stayed green (RURL-fymdhizq).
   `OUT` §Clean output (surface c) goes to `mutation-slice` alongside the
   `CM` cleaning sections, so one slice owns surface c rather than two owning
   half each. The same logic sends `OUT` §Comparison key to `join-slice`.
+
+## Claim ownership overrides
+
+Ownership above is assigned per **section**, and some sections cannot be
+expressed at that granularity: their columns state properties of different
+families in one table. `SS s5` is the measured case — its columns are `family |
+special-ness (whatwg) | default port | host / PSL eligibility |
+semantic-transform eligibility`, which the map's own precedents send to four
+different owners (default port → `join-slice` per `KJ s3`; host / PSL
+eligibility → `host-slice` per `HA s2` and `HA s4`; semantic-transform
+eligibility → `mutation-slice` per `CM s2`), so no single `owning_slice` for the
+section is right for all nine of its claims. P0.8 D-D
+(`design/work/url-v3/decisions/P0.8-scheme-claim-ownership.md`) rules that such
+a section becomes claim-granular, and names this table as the derivation change
+that requires; `RURL-sbhpzwzk` built it.
+
+This table is the **dissent list: one row per claim whose owner differs from its
+section's**. `## Section ownership` stays the default and carries everything
+else, so the hand-authored surface grows by exactly the claims that disagree
+with it. `## Claim index` and `## Coverage census` resolve every claim as
+*override if listed, section owner otherwise* — the override is applied in the
+derivation, not transcribed into the generated block, so a row here moves the
+claim's `owning_slice`, its `coverage`, and its census tally together or not at
+all. Rule T9 rejects a row naming a claim that does not exist, a duplicate
+`claim_id`, and one that merely restates its section's owner; T2 holds these
+owners to the same vocabulary and carrier discipline as the section rows.
+
+| claim_id | owning_slice | carrier | reason |
+|---|---|---|---|
+| TR-SS-s5-default-port-data | join-slice | — | The row's only non-`—` column is the default-port table (`.SCHEME_DEFAULT_PORTS`, and the rule that no `ftps`/`sftp` default is standards-backed), which is the property `KJ s3` §Scheme and port truth table already owns. P0.8 §4 names that precedent explicitly. |
+
+**What this table cannot do, stated plainly.** A claim is a table *row*, so an
+override moves a whole row. Eight of `SS s5`'s nine rows state all four
+properties at once — `http, https` is special, has default ports 80/443, is
+DNS/PSL-eligible, and takes the full HTTP(S) semantic transforms — so no single
+owner is right for them at row granularity either. Claim granularity is a
+strict improvement on section granularity and it is **not sufficient** for this
+section: only the `default-port data` row, whose other three columns are `—`,
+resolves. The residue is reported as `## Open cells` 5 rather than closed by
+picking a dominant column, because picking one would freeze an answer to a
+question nobody has been asked — the same posture `UNASSIGNED` takes above.
 
 ## Claim index
 
@@ -729,7 +773,7 @@ covers the section.
 | TR-SS-s5-ws-wss | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:142` |
 | TR-SS-s5-mailto | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:143` |
 | TR-SS-s5-tel-data-arbitrary-foo | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:144` |
-| TR-SS-s5-default-port-data | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:145` |
+| TR-SS-s5-default-port-data | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:145` |
 | TR-SS-s6-five-distinct-credential-routes | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:151` |
 | TR-SS-s6-generic-authority-credential-pre | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:152` |
 | TR-SS-s6-credential-output-policy-boundar | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:153` |
@@ -832,10 +876,10 @@ other, and this one summarizes the very thing the record exists to establish.
 | state-slice | PENDING | 44 | 43 | 1 |
 | full-string-slice | PENDING | 51 | 48 | 3 |
 | mutation-slice | PENDING | 64 | 49 | 15 |
-| join-slice | PENDING | 68 | 60 | 8 |
+| join-slice | PENDING | 69 | 61 | 8 |
 | migration-slice | PENDING | 22 | 18 | 4 |
 | host-slice | PENDING | 41 | 35 | 6 |
-| UNASSIGNED | UNASSIGNED | 181 | 149 | 32 |
+| UNASSIGNED | UNASSIGNED | 180 | 148 | 32 |
 | **total** | — | 491 | 422 | 69 |
 
 ### By contract
@@ -893,8 +937,9 @@ Rscript tools/deferral-gate.R
 
 ## Scope boundaries
 
-This record owns the **claim population rule** and **section→slice ownership**,
-and nothing else. It does NOT define, and must not be read as redefining:
+This record owns the **claim population rule**, **section→slice ownership**,
+and the **claim-level overrides** that dissent from it, and nothing else. It
+does NOT define, and must not be read as redefining:
 
 - **Any contract semantic.** Every claim it indexes belongs to the contract
   that wrote it. This record cannot settle an `OPEN` cell, and the fact that a
@@ -919,19 +964,20 @@ and nothing else. It does NOT define, and must not be read as redefining:
   no registered slice's family covers a section — **not** a deferral, and no
   claim to owner authority.
 - **The eight property families themselves.** Fixed by §7 G4 criterion 3. That
-  three of the ten registered slices own no contract section, and that 171
+  three of the ten registered slices own no contract section, and that 180
   claims fall outside all of them, are findings reported below — not license to
-  invent a ninth family.
+  invent a ninth family. Claim-granular ownership does not widen this: an
+  override may only name a slice already in the registry.
 
 ## Open cells
 
-Four, all reported rather than resolved.
+Five, all reported rather than resolved.
 
-1. **171 of 479 claims (36%) have no owning verification slice.** Three
+1. **180 of 491 claims (37%) have no owning verification slice.** Three
    carriers, each a question only the owner can answer:
    `RURL-jdnlpydz` (validation/intervention, 62 claims), `RURL-lkyverse`
-   (standard/scheme matrices, 50), `RURL-sunrlgio` (public-surface
-   dispositions, 59). This is the material finding of criterion 1: **the
+   (standard/scheme matrices, 49), `RURL-sunrlgio` (public-surface
+   dispositions, 69). This is the material finding of criterion 1: **the
    accepted verification-slice set does not span the contract family.** It is
    not a defect in any slice — each shipped slice is complete over what it
    claims — it is a gap between the eight §7 G4 property families and the ten
@@ -944,10 +990,12 @@ Four, all reported rather than resolved.
    carrier's 62. The count does not net them out: a discharge record grants no
    coverage here, and moving those claims is an ownership ruling with its own
    carrier. Separately, these hand-written figures lag the generated census
-   above (which reads 181 of 491), because they are a prose summary of a block
-   that regenerates and they were last written when it read 171 of 479. Both
-   the netting and the restatement belong to that ruling, not to the gate
-   reconciliation that added the discharge table.
+   above. The numerals were last restated here when the override table landed
+   (P0.8's own §Consequences assigns that restatement to this edit); they are a
+   prose summary of a block that regenerates, so read the census, not this
+   paragraph, when the two disagree. The **netting** is the part that is still
+   owed and it belongs to `RURL-jdnlpydz`'s ruling, not to any edit that only
+   changes how ownership is spelled.
 
 2. **`vector-slice` owns no contract section.** The vector property family is
    named in §7 G4 criterion 3, but no contract section states vector/scalar
@@ -976,3 +1024,22 @@ Four, all reported rather than resolved.
    visible reviewed diff rather than silent drift, which is the property that
    matters; it does not make ids immutable. Once slices cite `TR-*` ids, a
    rename becomes a breaking edit — and the gate will surface it as one.
+   `## Claim ownership overrides` is now one such citer, and rule T9 is where a
+   rename surfaces: an override naming a dead id fails rather than quietly
+   ceasing to move its claim.
+
+5. **Eight of `SS s5`'s nine claims are still not expressible, because a claim
+   is a row and those rows state four properties each.** P0.8 D-D's granularity
+   change lands above and resolves exactly one of them — `default-port data`,
+   whose other three columns are `—`. The other eight (`http, https`, `ftp`,
+   `ftps`, `sftp`, `file`, `ws, wss`, `mailto`, `tel, data, arbitrary foo:`)
+   each assert special-ness *and* a default port *and* host/PSL eligibility
+   *and* semantic-transform eligibility, which the map's precedents send to
+   three different slices plus the parser-route property. Claim granularity is
+   a strict improvement on section granularity and it is not sufficient here.
+   Two shapes close it and the choice is the owner's: **split the contract
+   table** into one claim-bearing section per property, which changes the
+   population and renumbers those ids (see 4 above), or **rule a dominant
+   property** per row and record why the other three ride along. Assigning them
+   by picking a column silently is the option this record declines. Carrier:
+   `RURL-lkyverse`'s successor question, filed as `RURL-fmkuunwj`.
