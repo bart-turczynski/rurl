@@ -21,8 +21,25 @@
 # `## Coverage census` blocks are regenerated from the contracts and compared
 # byte-for-byte (T3), so the map cannot disagree with its own sources. The
 # hand-authored surface is deliberately small: which slice owns which contract
-# SECTION (67 rows), the slice registry, the discharge-record registry, and the
+# SECTION (67 rows), the CLAIMS that dissent from their section (the override
+# table), the slice registry, the discharge-record registry, and the
 # excluded-source dispositions.
+#
+# OWNERSHIP GRANULARITY (P0.8 D-D, RURL-sbhpzwzk). Ownership is assigned per
+# section, and some sections cannot be expressed that way: `SS s5` states
+# special-ness, default port, host/PSL eligibility and semantic-transform
+# eligibility in four columns of one table, and the map's own precedents send
+# those to four different slices, so no single owner for the section is right
+# for all nine of its claims. The index already carries a per-claim
+# `owning_slice`, but it was a PROJECTION of the section row and therefore not
+# assignable. `## Claim ownership overrides` is the dissent list -- one row per
+# claim whose owner differs from its section's -- and the derivation resolves
+# every claim as OVERRIDE IF LISTED, SECTION OWNER OTHERWISE. The override is
+# applied here rather than transcribed into the generated block, which is the
+# whole point: T3 compares the block against this derivation, so a table the
+# derivation ignored would still pass byte-for-byte. That is why T9 exists and
+# why the self-test asserts the moved value in the generated index and census,
+# not merely that the table parses.
 #
 # WHAT THIS GATE DOES NOT CLAIM. `coverage = MAPPED` means the verification
 # slice that owns the claim's section is on disk -- it does NOT mean that
@@ -46,7 +63,9 @@
 #                      UNASSIGNED. Invented slice names FAIL, and so does any
 #                      other qualifier spelling -- the accepted set is exactly
 #                      what the coverage census can group, so a row cannot be
-#                      admitted here and then vanish from the tally.
+#                      admitted here and then vanish from the tally. Applies to
+#                      the SECTION rows and the claim OVERRIDE rows alike: two
+#                      vocabularies over one census is the drift T2 is for.
 #   T3  fidelity    -- the committed generated blocks equal a fresh
 #                      derivation, byte for byte (index AND census; the
 #                      census is a tally, and an unrecomputed tally is just
@@ -61,8 +80,10 @@
 #                      `## Excluded sources` with a reason, and every listed
 #                      file really does contribute zero. A contract cannot
 #                      leave the population silently.
-#   T7  citation    -- a contract with at least one section owned by a
-#                      SHIPPED slice must be cited by path in that slice.
+#   T7  citation    -- a contract with at least one CLAIM owned by a SHIPPED
+#                      slice must be cited by path in that slice. Read off the
+#                      resolved per-claim owners, so an override cannot grant a
+#                      shipped slice coverage of a contract it never names.
 #   T8  discharges  -- `## Discharge records` accounts for every verification
 #                      record that is not a registered slice, in BOTH
 #                      directions, and each listed record really claims its
@@ -71,6 +92,12 @@
 #                      therefore partitions into: this map, the registered
 #                      slices, and the registered discharge records. Nothing
 #                      else may sit there unaccounted.
+#   T9  overrides    -- every `## Claim ownership overrides` row names a claim
+#                      the population actually contains, exactly once, with a
+#                      reason, and DISSENTS from its section's owner. A
+#                      redundant override is a no-op today and silent drift
+#                      tomorrow: change the section row and the claim stops
+#                      moving with its family for a reason nobody recorded.
 #
 # WHY T8 EXISTS, AND WHY IT IS HALF OF A PAIR (P0.7 D-E, RURL-ogktvhgp).
 # `tools/deferral-gate.R` rule D2 requires a DISCHARGED deferral to be claimed
@@ -154,6 +181,12 @@ owner_group <- function(owner) sub("\\[[^][]*\\]$", "", owner)
 
 OWNERSHIP_FIELDS <- c("contract", "sec", "section", "owning_slice", "carrier")
 
+# The dissent list. A row here overrides the section-derived owner for ONE
+# claim; `reason` is required because the row exists precisely where the
+# section rule is wrong, and the next reader needs to know which property
+# precedent moved it.
+OVERRIDE_FIELDS <- c("claim_id", "owning_slice", "carrier", "reason")
+
 SLICE_FIELDS <- c("slice_id", "tracked_path", "state")
 
 # A discharge record is NOT a slice and must never be added to SLICE_REGISTRY:
@@ -174,8 +207,9 @@ INDEX_FIELDS <- c(
 
 REQUIRED_SECTIONS <- c(
   "Envelope", "Purpose", "Inputs", "Population rule", "Verification slices",
-  "Discharge records", "Section ownership", "Claim index", "Coverage census",
-  "Excluded sources", "Scope boundaries", "Open cells"
+  "Discharge records", "Section ownership", "Claim ownership overrides",
+  "Claim index", "Coverage census", "Excluded sources", "Scope boundaries",
+  "Open cells"
 )
 
 GENERATED_BLOCKS <- c("claim-index", "coverage-census")
@@ -338,6 +372,9 @@ read_map <- function(path) {
     ownership = as_frame(
       table_rows(lines, "Section ownership"), OWNERSHIP_FIELDS
     ),
+    overrides = as_frame(
+      table_rows(lines, "Claim ownership overrides"), OVERRIDE_FIELDS
+    ),
     slices = as_frame(table_rows(lines, "Verification slices"), SLICE_FIELDS),
     discharges = as_frame(
       table_rows(lines, "Discharge records"), DISCHARGE_FIELDS
@@ -376,14 +413,35 @@ paths_in_record <- function(lines) {
 
 # ---- generation -------------------------------------------------------------
 
-# Coverage is DERIVED, never asserted: a claim is MAPPED only when the slice
-# owning its section is actually on disk. That is what stops the map from
-# claiming coverage that does not exist yet.
-resolve_coverage <- function(claims, ownership, root) {
+# The section rule: a claim's default owner is the owner of the section it
+# lives in. `ORPHAN` when no ownership row matches it, which T1 reports.
+section_owner <- function(claims, ownership) {
   key <- paste(claims$contract, claims$section, sep = "")
   okey <- paste(ownership$contract, ownership$section, sep = "")
   owner <- ownership$owning_slice[match(key, okey)]
   owner[is.na(owner)] <- "ORPHAN"
+  owner
+}
+
+# The dissent rule, applied ON TOP of the section rule: override if listed,
+# section owner otherwise. A row naming a claim outside the population is
+# ignored here and FAILED by T9 -- resolution must not depend on the map being
+# well formed, or a malformed row would move a claim it does not name.
+apply_overrides <- function(owner, claims, overrides) {
+  if (!nrow(overrides)) return(owner)
+  at <- match(trimws(overrides$claim_id), claims$claim_id)
+  hit <- !is.na(at)
+  owner[at[hit]] <- trimws(overrides$owning_slice[hit])
+  owner
+}
+
+# Coverage is DERIVED, never asserted: a claim is MAPPED only when the slice
+# owning it is actually on disk. That is what stops the map from claiming
+# coverage that does not exist yet.
+resolve_coverage <- function(claims, map, root) {
+  owner <- apply_overrides(
+    section_owner(claims, map$ownership), claims, map$overrides
+  )
   shipped <- vapply(SLICE_REGISTRY, function(s) {
     file.exists(file.path(root, VERIFICATION_DIR, paste0(s, ".md")))
   }, logical(1))
@@ -395,8 +453,8 @@ resolve_coverage <- function(claims, ownership, root) {
   list(owner = owner, coverage = cov)
 }
 
-generate_index <- function(claims, ownership, root, paths) {
-  r <- resolve_coverage(claims, ownership, root)
+generate_index <- function(claims, map, root, paths) {
+  r <- resolve_coverage(claims, map, root)
   src <- paste0(paths[claims$contract], ":", claims$line)
   md_table(INDEX_FIELDS, vapply(seq_len(nrow(claims)), function(i) {
     md_row(claims$claim_id[i], claims$status[i], r$owner[i], r$coverage[i],
@@ -404,8 +462,8 @@ generate_index <- function(claims, ownership, root, paths) {
   }, character(1)))
 }
 
-generate_census <- function(claims, ownership, root, paths) {
-  r <- resolve_coverage(claims, ownership, root)
+generate_census <- function(claims, map, root, paths) {
+  r <- resolve_coverage(claims, map, root)
   tally <- function(sel) {
     c(sum(sel), sum(sel & claims$status == "SETTLED"),
       sum(sel & claims$status == "OPEN"))
@@ -458,8 +516,8 @@ generate_blocks <- function(root, map) {
   claims <- derive_claims(root)
   paths <- contract_paths(root)
   list(
-    "claim-index" = generate_index(claims, map$ownership, root, paths),
-    "coverage-census" = generate_census(claims, map$ownership, root, paths)
+    "claim-index" = generate_index(claims, map, root, paths),
+    "coverage-census" = generate_census(claims, map, root, paths)
   )
 }
 
@@ -504,7 +562,8 @@ evaluate <- function(map, root) {
     }, logical(1))
   ]
   width_bad <- sum(!own$.width_ok) + sum(!map$slices$.width_ok) +
-    sum(!map$discharges$.width_ok) + sum(!map$exclusions$.width_ok)
+    sum(!map$discharges$.width_ok) + sum(!map$exclusions$.width_ok) +
+    sum(!map$overrides$.width_ok)
   res[[length(res) + 1L]] <- check(
     "T0",
     !length(missing_sec) && !length(bad_block) && width_bad == 0L,
@@ -543,16 +602,22 @@ evaluate <- function(map, root) {
     }
   )
 
-  # T2 -- owner vocabulary and carrier discipline.
-  owner <- own$owning_slice
+  # T2 -- owner vocabulary and carrier discipline, over the SECTION rows and
+  # the claim OVERRIDE rows alike. Both tables feed one census, so a spelling
+  # admitted in one and rejected by the other is exactly the disagreement this
+  # rule exists to prevent (RURL-fymdhizq, one predicate and no second copy).
+  ovr <- map$overrides
+  owner <- c(own$owning_slice, ovr$owning_slice)
+  label <- paste(c(rep("section", nrow(own)), rep("override", nrow(ovr))),
+                 "row", c(seq_len(nrow(own)), seq_len(nrow(ovr))))
   is_unassigned <- is_unassigned_owner(owner)
   bad_owner <- owner[!is_unassigned & !(owner %in% SLICE_REGISTRY)]
-  carrier <- own$carrier
+  carrier <- c(own$carrier, ovr$carrier)
   carrier_clean <- gsub("^—$", "", trimws(carrier))
-  bad_carrier <- which(
+  bad_carrier <- label[which(
     (is_unassigned & !grepl(CARRIER_RE, carrier_clean)) |
       (!is_unassigned & nzchar(carrier_clean))
-  )
+  )]
   res[[length(res) + 1L]] <- check(
     "T2",
     !length(bad_owner) && !length(bad_carrier),
@@ -573,11 +638,12 @@ evaluate <- function(map, root) {
         }
       ), collapse = "; ")
     } else if (length(bad_carrier)) {
-      paste("carrier required iff UNASSIGNED; violated at row(s):",
+      paste("carrier required iff UNASSIGNED; violated at:",
             paste(bad_carrier, collapse = ", "))
     } else {
-      sprintf("%d owners in registry, %d UNASSIGNED with a carrier",
-              sum(!is_unassigned), sum(is_unassigned))
+      sprintf(paste("%d owners in registry, %d UNASSIGNED with a carrier,",
+                    "over %d section row(s) and %d claim override(s)"),
+              sum(!is_unassigned), sum(is_unassigned), nrow(own), nrow(ovr))
     }
   )
 
@@ -668,9 +734,16 @@ evaluate <- function(map, root) {
     }
   )
 
-  # T7 -- a shipped owning slice must cite the contract it owns.
-  shipped_owned <- own[own$owning_slice %in% SLICE_REGISTRY, , drop = FALSE]
-  pairs <- unique(shipped_owned[, c("contract", "owning_slice")])
+  # T7 -- a shipped owning slice must cite the contract it owns. Read off the
+  # RESOLVED per-claim owners, not the section table: an override can hand a
+  # claim to a slice whose section-level rows never mention that contract, and
+  # a citation rule blind to overrides would let it grant coverage silently.
+  resolved <- apply_overrides(
+    section_owner(claims, own), claims, map$overrides
+  )
+  owned <- data.frame(contract = claims$contract, owning_slice = resolved,
+                      stringsAsFactors = FALSE)
+  pairs <- unique(owned[resolved %in% SLICE_REGISTRY, , drop = FALSE])
   uncited <- character(0)
   for (i in seq_len(nrow(pairs))) {
     sp <- file.path(root, VERIFICATION_DIR,
@@ -695,6 +768,9 @@ evaluate <- function(map, root) {
 
   # T8 -- discharge records, both directions.
   res[[length(res) + 1L]] <- check_discharges(map, root, paths)
+
+  # T9 -- claim ownership overrides.
+  res[[length(res) + 1L]] <- check_overrides(map, claims)
 
   res
 }
@@ -814,6 +890,65 @@ unregistered_records <- function(root, known_discharges) {
   setdiff(on_disk, known)
 }
 
+# T9. The override table is the ONE place ownership is hand-assigned below
+# section granularity, so it gets the same treatment `## Section ownership`
+# gets from T1: a row must name something that exists, exactly once. Three
+# failures, each with its own edit:
+#
+#   PHANTOM     -- `claim_id` is in no contract. A renamed row key or a
+#                  reordered claim-bearing section renumbers ids (the map says
+#                  so in `## Open cells` 4), and this is where that shows up:
+#                  an override pointing at a dead id silently stops moving its
+#                  claim, and the census reports the section owner as if the
+#                  dissent had never been recorded.
+#   DUPLICATE   -- two rows for one claim. Last write would win, which is not a
+#                  rule anybody chose.
+#   REDUNDANT   -- the override restates the section owner. It moves nothing
+#                  today, and tomorrow -- when the section row changes -- it
+#                  pins the claim to the old owner for a reason nobody wrote
+#                  down. A dissent list that contains agreements is not one.
+#
+# `reason` is required for the same reason `carrier` is on an UNASSIGNED row:
+# the table exists where the general rule is wrong, and the next reader needs
+# the precedent that moved it.
+check_overrides <- function(map, claims) {
+  ovr <- map$overrides
+  if (!nrow(ovr)) {
+    return(check("T9", TRUE, "no claim ownership overrides registered"))
+  }
+  ids <- trimws(ovr$claim_id)
+  bad <- character(0)
+  if (any(blank(ovr$reason))) {
+    bad <- c(bad, paste("override(s) with no reason:",
+                        paste(ids[blank(ovr$reason)], collapse = ", ")))
+  }
+  phantom <- ids[!ids %in% claims$claim_id]
+  if (length(phantom)) {
+    bad <- c(bad, paste("claim_id in no contract:",
+                        paste(phantom, collapse = ", ")))
+  }
+  dupes <- unique(ids[duplicated(ids)])
+  if (length(dupes)) {
+    bad <- c(bad, paste("duplicate claim_id:", paste(dupes, collapse = ", ")))
+  }
+  at <- match(ids, claims$claim_id)
+  sect <- section_owner(claims, map$ownership)
+  same <- !is.na(at) & sect[at] == trimws(ovr$owning_slice)
+  if (any(same)) {
+    bad <- c(bad, paste("override restates its section's owner:",
+                        paste(ids[same], collapse = ", ")))
+  }
+  check(
+    "T9", !length(bad),
+    if (length(bad)) {
+      paste(bad, collapse = "; ")
+    } else {
+      sprintf("%d claim override(s), each dissenting from its section",
+              nrow(ovr))
+    }
+  )
+}
+
 # ---- reporting --------------------------------------------------------------
 
 report <- function(res) {
@@ -861,7 +996,7 @@ mk <- function(contracts = NULL, ownership = NULL, slices = NULL,
                exclusions = NULL, extra_files = character(0),
                shipped = "cache-slice", regenerate_blocks = TRUE,
                sections = REQUIRED_SECTIONS, discharges = NULL,
-               discharge_records = list()) {
+               discharge_records = list(), overrides = NULL) {
   root <- file.path(tempdir(), paste0("trg-", as.integer(runif(1, 1, 1e9))))
   dir.create(file.path(root, CONTRACT_DIR), recursive = TRUE,
              showWarnings = FALSE)
@@ -890,6 +1025,7 @@ mk <- function(contracts = NULL, ownership = NULL, slices = NULL,
   if (is.null(slices)) slices <- default_slices()
   if (is.null(exclusions)) exclusions <- default_exclusions()
   if (is.null(discharges)) discharges <- character(0)
+  if (is.null(overrides)) overrides <- character(0)
   body <- character(0)
   for (s in sections) {
     body <- c(body, paste0("## ", s), "")
@@ -899,6 +1035,8 @@ mk <- function(contracts = NULL, ownership = NULL, slices = NULL,
       body <- c(body, md_table(SLICE_FIELDS, slices), "")
     } else if (identical(s, "Discharge records")) {
       body <- c(body, md_table(DISCHARGE_FIELDS, discharges), "")
+    } else if (identical(s, "Claim ownership overrides")) {
+      body <- c(body, md_table(OVERRIDE_FIELDS, overrides), "")
     } else if (identical(s, "Excluded sources")) {
       body <- c(body, md_table(EXCLUSION_FIELDS, exclusions), "")
     } else if (identical(s, "Claim index")) {
@@ -1215,6 +1353,93 @@ self_test <- function() {
   expect("T0 flags a missing Discharge records section",
          !verdict(mk(sections = setdiff(REQUIRED_SECTIONS,
                                         "Discharge records")), "T0"))
+
+  # --- T9 and the override derivation ---------------------------------------
+  # The gotcha this leaf was filed with (RURL-sbhpzwzk / P0.8 D-D): the claim
+  # index is compared byte-for-byte against a fresh derivation, so a gate that
+  # PARSED the override table and then ignored it would pass T0-T8 and T3 with
+  # the claim still reading its section's owner. Every assertion below that
+  # matters therefore reads the GENERATED block, not the rule verdict.
+  index_row <- function(root, claim) {
+    rows <- block_content(readLines(file.path(root, MAP_REL)), "claim-index")
+    hit <- rows[startsWith(rows, paste0("| ", claim, " |"))]
+    if (!length(hit)) return(NULL)
+    split_row(hit[1])
+  }
+  census_claims <- function(root, owner) {
+    rows <- block_content(readLines(file.path(root, MAP_REL)),
+                          "coverage-census")
+    rows <- rows[seq.int(grep("^### By owning slice", rows) + 1L,
+                         grep("^### By contract", rows) - 1L)]
+    hit <- rows[startsWith(rows, paste0("| ", owner, " |"))]
+    if (!length(hit)) return(0L)
+    as.integer(split_row(hit[1])[3])
+  }
+  ovr_row <- function(claim = "TR-CS-s1-host", owner = "cache-slice",
+                      carrier = "—", reason = "KJ s3 precedent") {
+    md_row(claim, owner, carrier, reason)
+  }
+  # `state.md` §Rows is owned by the OWED state-slice, so its one claim reads
+  # PENDING at baseline. Moving it to the SHIPPED cache-slice changes owner,
+  # coverage and tally at once -- three observables, one derivation.
+  cite_both <- function(root) {
+    writeLines(
+      c("# slice", paste0("Verifies `", CONTRACT_DIR, "/semantic-cache.md`",
+                          " and `", CONTRACT_DIR, "/state.md`.")),
+      file.path(root, VERIFICATION_DIR, "cache-slice.md")
+    )
+    root
+  }
+  base <- mk()
+  expect("baseline: the claim reads its SECTION owner",
+         identical(index_row(base, "TR-CS-s1-host")[3:4],
+                   c("state-slice", "PENDING")))
+  expect("baseline: cache-slice tallies 3, state-slice 1",
+         census_claims(base, "cache-slice") == 3L &&
+           census_claims(base, "state-slice") == 1L)
+
+  moved <- cite_both(mk(overrides = ovr_row()))
+  expect("an override MOVES the owner in the generated claim index",
+         identical(index_row(moved, "TR-CS-s1-host")[3], "cache-slice"))
+  expect("an override re-derives coverage from the new owner (MAPPED)",
+         identical(index_row(moved, "TR-CS-s1-host")[4], "MAPPED"))
+  expect("an override moves the claim's census tally with it",
+         census_claims(moved, "cache-slice") == 4L &&
+           census_claims(moved, "state-slice") == 0L)
+  expect("a well-formed override passes every rule", all_pass(moved))
+
+  expect("T9 flags an override naming a claim in no contract",
+         !verdict(mk(overrides = ovr_row(claim = "TR-CS-s1-ghost")), "T9"))
+  expect("T9 flags a duplicate claim_id",
+         !verdict(cite_both(mk(overrides = c(ovr_row(), ovr_row()))), "T9"))
+  expect("T9 flags an override that restates its section's owner",
+         !verdict(mk(overrides = ovr_row(owner = "state-slice")), "T9"))
+  expect("T9 flags an override with no reason",
+         !verdict(cite_both(mk(overrides = ovr_row(reason = ""))), "T9"))
+  expect("T0 flags a short override row",
+         !verdict(mk(overrides = md_row("TR-CS-s1-host", "cache-slice"),
+                     regenerate_blocks = FALSE), "T0"))
+  expect("T0 flags a missing Claim ownership overrides section",
+         !verdict(mk(sections = setdiff(REQUIRED_SECTIONS,
+                                        "Claim ownership overrides")), "T0"))
+
+  # T2 is one vocabulary over both tables, not two that can drift apart.
+  expect("T2 rejects an invented slice name in an override row",
+         !verdict(mk(overrides = ovr_row(owner = "vibes-slice"),
+                     regenerate_blocks = FALSE), "T2"))
+  expect("T2 rejects a carrier on an assigned override row",
+         !verdict(cite_both(mk(overrides = ovr_row(carrier = "RURL-abcd1234"))),
+                  "T2"))
+  expect("T2 rejects an UNASSIGNED override with no carrier",
+         !verdict(mk(overrides = ovr_row(owner = "UNASSIGNED")), "T2"))
+  expect("T2 accepts an UNASSIGNED[subtype] override with a carrier",
+         verdict(mk(overrides = ovr_row(owner = "UNASSIGNED[capstone]",
+                                        carrier = "RURL-abcd1234")), "T2"))
+
+  # T7 reads the RESOLVED owners: an override is exactly how a shipped slice
+  # can come to own a claim in a contract its section rows never mention.
+  expect("T7 flags an override handing a claim to a slice that never cites it",
+         !verdict(mk(overrides = ovr_row()), "T7"))
 
   cat(sprintf("\nself-test: %d passed, %d failed\n", passed, failed))
   quit(status = if (failed == 0L) 0L else 1L)
