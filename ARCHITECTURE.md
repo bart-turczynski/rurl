@@ -2,7 +2,7 @@
 
 This is the durable, tracked description of how `rurl` is put together: the
 load order, the file/responsibility map, the parse data flow, the delegation
-seams, and the caches. It is the reference `CLAUDE.md` and new contributors
+seams, and the caches. It is the reference `AGENTS.md` and new contributors
 point at, so it survives on a fresh clone and in CI (unlike the working-tree
 `_scratch/` notes).
 
@@ -210,8 +210,10 @@ only under `port_handling != "exclude"`.
 
 ## Dependencies
 
-- `curl` — syntactic URL parse via `curl_parse_url()`.
 - `stringi` — Unicode string manipulation (with deliberate base-R exceptions;
   see ADR 0005).
 - `punycoder` (>= 1.2.0) — Punycode encoding/decoding.
-- `pslr` (>= 1.0.2) — Public Suffix List matching.
+- `pslr` (>= 1.1.0) — Public Suffix List matching.
+
+The syntactic URL parse is in-tree (`R/parse-web.R`); `curl` is no longer a
+dependency.
