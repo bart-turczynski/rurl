@@ -178,6 +178,21 @@
   if (!stringi::stri_startswith_fixed(base, "/")) {
     base <- paste0("/", base)
   }
+  # Dropping the terminal page can EXPOSE a dot segment the page name was
+  # hiding -- `/a/../index.html` would otherwise emit `/a/..`, and
+  # `/../index.html` a path that escapes above the document root. Resolve the
+  # base when, and only when, the strip left a dot segment in final position:
+  # dot segments that were already visible beforehand are the caller's
+  # `path_normalization` choice to make, and "none" has to keep meaning none.
+  # Under a selector this branch is unreachable -- both standard profiles set
+  # `path_normalization = "dot_segments"`, which runs first (processing-order
+  # step 2) and leaves no dot segment for the strip to expose. RURL-ogruzocw.
+  if (stringi::stri_detect_regex(base, "(^|/)\\.{1,2}$")) {
+    base <- ._remove_dot_segments(base)
+    if (!nzchar(base)) {
+      return("/")
+    }
+  }
   base
 }
 
