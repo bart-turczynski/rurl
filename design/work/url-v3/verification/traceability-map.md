@@ -38,7 +38,7 @@
 | verifies | §7 G4 criterion 1 over the §6 contract family (artifacts 3–12) |
 | dependencies | the nine claim-bearing §6 contracts (hashed under `## Inputs`); reconciliation §6 artifact 11, §7 G4; S9 H6 / RCON-10; P5.3 (oracle policy, the authority axis) |
 | closes_finding | RCON-10 (traceability half; the release-rule half stays with P0.4/C-10 and the determinism half with P5.2/C-09) |
-| completion_rule | §7 G4 criterion 1 — the claim population is derived, not transcribed; every claim-bearing contract section has exactly one owner; every owner is a registered verification slice or `UNASSIGNED` with a named carrier; the generated index and census regenerate byte-identically; the gate is in the verify chain and self-tested |
+| completion_rule | §7 G4 criterion 1 — the claim population is derived, not transcribed; every claim-bearing contract section has exactly one owner; every owner is a registered verification slice or `UNASSIGNED` with a named carrier; every verification record on disk is this map, a registered slice, or a registered discharge record; the generated index and census regenerate byte-identically; the gate is in the verify chain and self-tested |
 | content_hash | per-input sha256 under `## Inputs`, recomputed by the verification-family validator at the sealing G4 snapshot |
 | approval_evidence | pending — seals at a future G4 control-plane snapshot (NOT an envelope flip) |
 | validation_command | Rscript design/work/url-v3/tools/traceability-gate.R |
@@ -68,8 +68,8 @@ run. Add a row to a contract and it appears here; the gate fails until it is
 owned.
 
 What is hand-authored is small and reviewable: which slice owns which contract
-**section** (67 rows), the slice registry, and the disposition of any contract
-that contributes no claims.
+**section** (67 rows), the slice registry, the discharge-record registry, and
+the disposition of any contract that contributes no claims.
 
 ## Inputs
 
@@ -158,6 +158,52 @@ re-owning its sections here fails.
 P0.4/C-10) rather than contract table rows, and they cite no contract by path —
 consistent with owning nothing here. `vector-slice` is different and is a
 finding: see `## Open cells`.
+
+## Discharge records
+
+A **discharge record** maps the cells of exactly one deferral onto shipped
+executable evidence, and does nothing else. It is **not a slice**: it owns no
+contract section, spans no property family, and grants no coverage in the
+census below. Each of the four on disk says so in its own envelope comment —
+*"NARROW BY CONSTRUCTION … it is NOT the state-family verification slice"*.
+
+They are registered here because another gate credits them.
+`tools/deferral-gate.R` rule D2 requires a `DISCHARGED` row of
+`design/work/url-v3/registers/verification-deferrals.md` to be claimed by a
+verification slice, and it used to accept **any** file under
+`design/work/url-v3/verification/` as one — so a discharge could be claimed by
+a file that claims nothing, and in practice was claimed by records this map had
+never heard of. Two gates, two incompatible definitions of "slice", both green
+(P0.7 D-E, `RURL-ogktvhgp`). D2 now reads its claimant registry out of this
+section together with `## Verification slices`, and rule T8 holds that registry
+to disk in **both** directions: a record listed here must exist and must
+actually carry the `DISCHARGED[VD-nnn]` claim D2 will credit, and a
+verification record on disk that appears in neither table fails the gate. The
+directory therefore partitions into exactly three kinds of file — this map, a
+registered slice, a registered discharge record — and admitting a fourth kind
+is an explicit edit here, not a filename.
+
+| record_id | deferral_id | tracked_path | contract | scope |
+|---|---|---|---|---|
+| key-join-discharge | VD-001 | design/work/url-v3/verification/key-join-discharge.md | KJ | the 51 key/join cells VD-001 enumerates, with the residual `http_https_missing` refusal named rather than claimed; not the join-family slice |
+| output-fsss-discharge | VD-002 | design/work/url-v3/verification/output-fsss-discharge.md | OUT | the FSSS (surface b) cells VD-002 enumerates; surfaces (a), (c) and (d) untouched; not the full-string-family slice |
+| state-authority-discharge | VD-005 | design/work/url-v3/verification/state-authority-discharge.md | CS | the authority-state cells only (`authority_delimiter_present`, `authority_payload_kind`, and the emit-`//`-iff-delimiter rule); not the state-family slice |
+| state-verdicts-discharge | VD-004 | design/work/url-v3/verification/state-verdicts-discharge.md | CS | the verdict-layer cells only (the three layer fields and the π projection); not the state-family slice |
+
+**What this table does not do, stated plainly.** It does not move a claim.
+`coverage` in `## Coverage census` is section-granular and derives from slice
+ownership, while a discharge record enumerates cells in the *deferral's*
+vocabulary (`SURF-b`, `layer1_syntax_verdict`) rather than in `TR-*` ids —
+translating one into the other would be per-claim evidence, which this record
+does not restate, and in places an ownership ruling, which it has no authority
+to make. So a section whose cells a discharge record evidences can still read
+`UNASSIGNED` here, and that is not a contradiction: it says no registered
+slice's family covers the section, which remains true. Where that gap is
+material the question has a carrier — `RURL-jdnlpydz` for the verdict-layer
+sections, which P0.7 D-B routes to `state-slice` — and the census moves when
+that ruling lands, not when a record is listed above. What this table changes
+is that the evidence is no longer invisible to the record whose job is to
+report what is missing.
 
 ## Section ownership
 
@@ -822,7 +868,7 @@ claims.
 ## Exact CI commands
 
 ```sh
-# Self-test: T0-T7 against synthetic fixtures (network-free, base R).
+# Self-test: T0-T8 against synthetic fixtures (network-free, base R).
 Rscript design/work/url-v3/tools/traceability-gate.R --self-test
 
 # Live gate over the real contract family and this record.
@@ -834,6 +880,16 @@ Rscript design/work/url-v3/tools/traceability-gate.R --regenerate
 
 The gate runs as the `claim-traceability` job in
 `.github/workflows/verify.yml`, self-test first, then the live run.
+
+A second gate consumes this record. `tools/deferral-gate.R` reads
+`## Verification slices` and `## Discharge records` as its claimant registry
+(rule D2), so an edit to either table changes what that gate admits and both
+must be run after one:
+
+```sh
+Rscript tools/deferral-gate.R --self-test
+Rscript tools/deferral-gate.R
+```
 
 ## Scope boundaries
 
@@ -852,12 +908,16 @@ and nothing else. It does NOT define, and must not be read as redefining:
   the coverage axis; that register is the authority axis. A slice may cite
   `OR-nnn` for authority and `TR-*` for coverage; neither implies the other,
   and a well-labeled oracle can still fail to cover a claim.
-- **Whether a deferral is legitimate.** Scope deferrals belong to P0.5 and the
-  verification-deferrals register (proposed, not yet on `main`). This record
-  cites neither by path, deliberately: a forward reference to unmerged work is
-  exactly what the gate's T4 rule exists to catch. `UNASSIGNED` here is a
-  factual statement that no registered slice's family covers a section — it is
-  **not** a deferral and does not pretend to owner authority.
+- **Whether a deferral is legitimate.** Scope deferrals belong to P0.5 and
+  `design/work/url-v3/registers/verification-deferrals.md`, which is now on
+  `main` and therefore citable — when this bullet was written it was not, and
+  citing unmerged work is exactly what T4 exists to catch. What
+  `## Discharge records` adds is a *fact*: which record on disk claims which
+  `VD-nnn`, so that the gate crediting those claims and the record reporting
+  coverage read the same registry. It judges no deferral, grants no cell, and
+  overturns nothing P0.5 decides. `UNASSIGNED` remains a factual statement that
+  no registered slice's family covers a section — **not** a deferral, and no
+  claim to owner authority.
 - **The eight property families themselves.** Fixed by §7 G4 criterion 3. That
   three of the ten registered slices own no contract section, and that 171
   claims fall outside all of them, are findings reported below — not license to
@@ -876,6 +936,18 @@ Four, all reported rather than resolved.
    not a defect in any slice — each shipped slice is complete over what it
    claims — it is a gap between the eight §7 G4 property families and the ten
    §6 contracts, and it was not visible until the population was enumerated.
+
+   **Read the count against `## Discharge records`, and read the numerals
+   themselves with care.** Part of what this item reports as unowned has
+   shipped evidence in a discharge record — the verdict-layer sections under
+   `RURL-jdnlpydz` are the material case, which P0.7 D-B measures at 37 of that
+   carrier's 62. The count does not net them out: a discharge record grants no
+   coverage here, and moving those claims is an ownership ruling with its own
+   carrier. Separately, these hand-written figures lag the generated census
+   above (which reads 181 of 491), because they are a prose summary of a block
+   that regenerates and they were last written when it read 171 of 479. Both
+   the netting and the restatement belong to that ruling, not to the gate
+   reconciliation that added the discharge table.
 
 2. **`vector-slice` owns no contract section.** The vector property family is
    named in §7 G4 criterion 3, but no contract section states vector/scalar

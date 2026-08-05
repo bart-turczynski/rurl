@@ -29,6 +29,7 @@ jobs:
       locale: ${{ steps.filter.outputs.locale }}
       coverage: ${{ steps.filter.outputs.coverage }}
       oracle: ${{ steps.filter.outputs.oracle }}
+      traceability: ${{ steps.filter.outputs.traceability }}
       cache_docs_selftest: ${{ steps.filter.outputs.cache_docs_selftest }}
       oracle_provenance_selftest: ${{ steps.filter.outputs.oracle_provenance_selftest }}
       credentials_selftest: ${{ steps.filter.outputs.credentials_selftest }}
@@ -84,6 +85,18 @@ jobs:
               - 'tools/oracle-provenance-gate.R'
               - 'design/work/url-v3/registers/oracle-register.md'
               - 'design/work/url-v3/tools/oracle-label-gate.R'
+              - '.github/workflows/verify.yml'
+            # The claim-traceability gate used to ride the broad `documentation`
+            # filter, which does not mention the verification directory at all
+            # -- so ADDING A VERIFICATION RECORD did not run the gate that is
+            # supposed to account for it. That is the same blindness class the
+            # gate's T8 rule closes inside the record (P0.7 D-E), and leaving it
+            # in the trigger would have kept the reverse-direction check
+            # unreachable in CI for the one edit that trips it.
+            traceability:
+              - 'design/work/url-v3/contracts/**'
+              - 'design/work/url-v3/verification/**'
+              - 'design/work/url-v3/tools/traceability-gate.R'
               - '.github/workflows/verify.yml'
             cache_docs_selftest:
               - 'tools/cache-doc-consistency.R'
@@ -486,7 +499,7 @@ jobs:
   # branches need three distinct anchors, and this is the third.
   claim-traceability:
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.documentation == 'true'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.traceability == 'true'
     runs-on: ubuntu-latest
     name: Every normative claim has an owning verification slice (G4 criterion 1)
     steps:
@@ -494,7 +507,7 @@ jobs:
       - uses: r-lib/actions/setup-r@v2
         with:
           use-public-rspm: true
-      - name: Gate self-test (T0-T7, positive/negative coverage)
+      - name: Gate self-test (T0-T8, positive/negative coverage)
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.traceability_selftest == 'true'
         run: Rscript design/work/url-v3/tools/traceability-gate.R --self-test
       - name: Orphan / reverse-coverage check over the contract family
@@ -548,7 +561,10 @@ jobs:
   # "verified where shipped", and a cell whose surface is specified but not
   # shipped must be explicitly deferred to a named carrier while remaining
   # UNSATISFIED. Fails when a deferral names no carrier, when a discharged
-  # deferral is claimed by no verification slice, or -- the load-bearing case --
+  # deferral is claimed by no REGISTERED claimant -- a verification slice or the
+  # discharge record registered for that deferral in the traceability map's
+  # `## Discharge records` table, which is the single definition both this gate
+  # and `traceability-gate.R` now read (P0.7 D-E) -- or -- the load-bearing case --
   # when a deferred surface SHIPS while its cells are still deferred. That last
   # check is what stops "specified-but-unshipped" becoming a permanent parking
   # space the surface quietly escapes. Deterministic, network-free, base R.
