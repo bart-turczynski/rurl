@@ -170,6 +170,12 @@ properties, or where no registered slice's family covers them, the row is
 table tidy would freeze an arbitrary answer to a question the owner has not
 been asked.**
 
+An unassigned row may name a subtype, but only as `UNASSIGNED[subtype]`: that
+is the one qualified spelling `## Coverage census` folds back into the parent
+row, so it is the only one T2 accepts. Any other qualifier used to pass the
+vocabulary rule and then match no census group, taking its claims out of the
+by-slice tally while every rule stayed green (RURL-fymdhizq).
+
 | contract | sec | section | owning_slice | carrier |
 |---|---|---|---|---|
 | CS | s1 | Rows | state-slice | — |
