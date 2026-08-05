@@ -40,9 +40,12 @@
 #                      section is an ORPHAN until it is assigned; a stale
 #                      ownership row is a PHANTOM. This is S9 H6's
 #                      orphan/reverse-coverage check, both directions.
-#   T2  vocabulary  -- every owner is a registered slice id or the literal
-#                      UNASSIGNED; carrier named iff UNASSIGNED. Invented
-#                      slice names FAIL.
+#   T2  vocabulary  -- every owner is a registered slice id, the literal
+#                      UNASSIGNED, or `UNASSIGNED[subtype]`; carrier named iff
+#                      UNASSIGNED. Invented slice names FAIL, and so does any
+#                      other qualifier spelling -- the accepted set is exactly
+#                      what the coverage census can group, so a row cannot be
+#                      admitted here and then vanish from the tally.
 #   T3  fidelity    -- the committed generated blocks equal a fresh
 #                      derivation, byte for byte (index AND census; the
 #                      census is a tally, and an unrecomputed tally is just
@@ -110,6 +113,23 @@ SLICE_REGISTRY <- c(
 )
 
 UNASSIGNED <- "UNASSIGNED"
+
+# The ONLY two owner spellings the census grouper can fold back into a row:
+# the bare literal and the bracket-qualified form `UNASSIGNED[subtype]`. Any
+# other qualifier -- a parenthesized one, most plausibly -- used to satisfy T2's
+# vocabulary rule and resolve in the claim index while matching no census group,
+# so its claims silently left the by-slice tally and the census stopped summing
+# to its own total (RURL-fymdhizq). T3 structurally cannot catch that: the
+# census is generated, so it agrees byte-for-byte with the generator and both
+# are wrong together. T2, resolve_coverage() and generate_census() therefore
+# share ONE predicate, and T2 fails closed on anything it cannot group.
+UNASSIGNED_RE <- "^UNASSIGNED(\\[[^][]+\\])?$"
+
+is_unassigned_owner <- function(owner) grepl(UNASSIGNED_RE, owner)
+
+# The census row an owner is tallied under: the bracket qualifier is a subtype
+# of its parent, so it folds back. Every other owner is its own group.
+owner_group <- function(owner) sub("\\[[^][]*\\]$", "", owner)
 
 OWNERSHIP_FIELDS <- c("contract", "sec", "section", "owning_slice", "carrier")
 
@@ -335,7 +355,7 @@ resolve_coverage <- function(claims, ownership, root) {
   }, logical(1))
   cov <- ifelse(
     owner == "ORPHAN", "ORPHAN",
-    ifelse(startsWith(owner, UNASSIGNED), UNASSIGNED,
+    ifelse(is_unassigned_owner(owner), UNASSIGNED,
            ifelse(owner %in% SLICE_REGISTRY[shipped], "MAPPED", "PENDING"))
   )
   list(owner = owner, coverage = cov)
@@ -356,16 +376,26 @@ generate_census <- function(claims, ownership, root, paths) {
     c(sum(sel), sum(sel & claims$status == "SETTLED"),
       sum(sel & claims$status == "OPEN"))
   }
+  group <- owner_group(r$owner)
   owners <- c(SLICE_REGISTRY, UNASSIGNED, "ORPHAN")
-  owners <- owners[vapply(owners, function(o) {
-    any(r$owner == o | startsWith(r$owner, paste0(o, "[")))
-  }, logical(1))]
+  owners <- owners[vapply(owners, function(o) any(group == o), logical(1))]
   by_owner <- vapply(owners, function(o) {
-    sel <- r$owner == o | startsWith(r$owner, paste0(o, "["))
+    sel <- group == o
     t <- tally(sel)
     md_row(o, unique(r$coverage[sel])[1], t[1], t[2], t[3])
   }, character(1), USE.NAMES = FALSE)
   tot <- tally(rep(TRUE, nrow(claims)))
+
+  # A tally that does not sum to its own total is the RURL-fymdhizq failure:
+  # some owner spelling matched no group and its claims left the census
+  # silently. T3 cannot see it -- it compares the generated block against this
+  # same generator -- so the generator refuses to emit an unsound census.
+  ungrouped <- setdiff(unique(group), owners)
+  if (length(ungrouped)) {
+    stop("census would drop ", sum(!group %in% owners), " of ", tot[1],
+         " claims: owner group(s) in no census row: ",
+         paste(ungrouped, collapse = ", "), call. = FALSE)
+  }
   by_owner <- c(by_owner, md_row("**total**", "—", tot[1], tot[2], tot[3]))
 
   abbrevs <- names(paths)
@@ -481,7 +511,7 @@ evaluate <- function(map, root) {
 
   # T2 -- owner vocabulary and carrier discipline.
   owner <- own$owning_slice
-  is_unassigned <- startsWith(owner, UNASSIGNED)
+  is_unassigned <- is_unassigned_owner(owner)
   bad_owner <- owner[!is_unassigned & !(owner %in% SLICE_REGISTRY)]
   carrier <- own$carrier
   carrier_clean <- gsub("^—$", "", trimws(carrier))
@@ -493,8 +523,21 @@ evaluate <- function(map, root) {
     "T2",
     !length(bad_owner) && !length(bad_carrier),
     if (length(bad_owner)) {
-      paste("owner not in the slice registry:",
-            paste(unique(bad_owner), collapse = ", "))
+      # An UNASSIGNED-prefixed spelling that failed the predicate is a
+      # qualifier the census cannot group, not an invented slice name. Say so:
+      # the two need different edits.
+      near <- unique(bad_owner[startsWith(bad_owner, UNASSIGNED)])
+      rest <- unique(bad_owner[!startsWith(bad_owner, UNASSIGNED)])
+      paste(c(
+        if (length(near)) {
+          paste("UNASSIGNED qualifier the census cannot group (use",
+                "UNASSIGNED[subtype]):", paste(near, collapse = ", "))
+        },
+        if (length(rest)) {
+          paste("owner not in the slice registry:",
+                paste(rest, collapse = ", "))
+        }
+      ), collapse = "; ")
     } else if (length(bad_carrier)) {
       paste("carrier required iff UNASSIGNED; violated at row(s):",
             paste(bad_carrier, collapse = ", "))
@@ -504,15 +547,23 @@ evaluate <- function(map, root) {
     }
   )
 
-  # T3 -- generated blocks equal a fresh derivation.
-  fresh <- generate_blocks(root, map)
-  stale <- GENERATED_BLOCKS[vapply(GENERATED_BLOCKS, function(b) {
-    !identical(block_content(map$lines, b), fresh[[b]])
-  }, logical(1))]
+  # T3 -- generated blocks equal a fresh derivation. A derivation that REFUSES
+  # to produce a sound census is a T3 failure with its reason, not a traceback:
+  # the gate has to report a verdict for every rule even when one cannot run.
+  fresh <- tryCatch(generate_blocks(root, map), error = identity)
+  stale <- if (inherits(fresh, "error")) {
+    GENERATED_BLOCKS
+  } else {
+    GENERATED_BLOCKS[vapply(GENERATED_BLOCKS, function(b) {
+      !identical(block_content(map$lines, b), fresh[[b]])
+    }, logical(1))]
+  }
   res[[length(res) + 1L]] <- check(
     "T3",
-    !length(stale),
-    if (length(stale)) {
+    !length(stale) && !inherits(fresh, "error"),
+    if (inherits(fresh, "error")) {
+      paste("cannot derive the generated blocks:", conditionMessage(fresh))
+    } else if (length(stale)) {
       paste0("stale generated block(s): ", paste(stale, collapse = ", "),
              " -- rerun with --regenerate")
     } else {
@@ -796,10 +847,14 @@ self_test <- function() {
                                    default_ownership()[1])), "T1"))
 
   # --- T2 -------------------------------------------------------------------
+  # regenerate_blocks = FALSE: an owner outside the census vocabulary is one
+  # the generator now refuses to tally at all, so the fixture cannot build its
+  # blocks. Same opt-out the malformed-row fixtures above use.
   expect("T2 rejects an invented slice name",
          !verdict(mk(ownership = c(
            default_ownership()[1:2],
-           md_row("CS", "s1", "Rows", "vibes-slice", "—"))), "T2"))
+           md_row("CS", "s1", "Rows", "vibes-slice", "—")),
+           regenerate_blocks = FALSE), "T2"))
   expect("T2 rejects UNASSIGNED with no carrier",
          !verdict(mk(ownership = c(
            default_ownership()[1:2],
@@ -816,6 +871,48 @@ self_test <- function() {
          verdict(mk(ownership = c(
            default_ownership()[1:2],
            md_row("CS", "s1", "Rows", "UNASSIGNED", "RURL-abcd1234"))), "T2"))
+
+  # RURL-fymdhizq. The vocabulary rule and the census grouper must accept the
+  # SAME set. A spelling T2 admits but generate_census() cannot group takes its
+  # claims out of the by-slice tally with all eight rules green.
+  qualified <- function(owner) {
+    mk(ownership = c(default_ownership()[1:2],
+                     md_row("CS", "s1", "Rows", owner, "RURL-abcd1234")),
+       regenerate_blocks = FALSE)
+  }
+  expect("T2 accepts the bracket-qualified UNASSIGNED the census can group",
+         verdict(qualified("UNASSIGNED[criterion-1]"), "T2"))
+  expect("T2 rejects a parenthesized UNASSIGNED qualifier",
+         !verdict(qualified("UNASSIGNED (criterion-1 self-verified)"), "T2"))
+  expect("T2 rejects a bare-suffix UNASSIGNED qualifier",
+         !verdict(qualified("UNASSIGNEDish"), "T2"))
+  expect("T2 rejects an empty bracket qualifier",
+         !verdict(qualified("UNASSIGNED[]"), "T2"))
+
+  # The by-slice rows must sum to the census total. Asserted on the generator
+  # itself, because T3 compares the block against this same generator and so
+  # agrees with it byte-for-byte when both are wrong.
+  census_sums <- function(root) {
+    ln <- readLines(file.path(root, MAP_REL))
+    at <- block_bounds(ln, "coverage-census")
+    rows <- ln[seq.int(at[1], at[2])]
+    # The block carries TWO tables and both have `claims` in column 4, so a
+    # whole-block sum silently double-counts. Score the by-slice table only.
+    from <- grep("^### By owning slice", rows)
+    to <- grep("^### By contract", rows)
+    rows <- rows[seq.int(from + 1L, to - 1L)]
+    rows <- rows[grepl("^\\| ", rows) & !grepl("^\\|---", rows)]
+    cells <- lapply(strsplit(rows, "\\|"), trimws)
+    n <- vapply(cells, function(x) suppressWarnings(as.integer(x[4])),
+                integer(1))
+    is_total <- vapply(cells, function(x) identical(x[2], "**total**"),
+                       logical(1))
+    !is.na(n[is_total]) && sum(n[!is_total & !is.na(n)]) == n[is_total]
+  }
+  expect("the by-slice census sums to its own total", census_sums(mk()))
+  expect("the census generator refuses to drop an ungroupable owner",
+         inherits(try(regenerate(qualified("UNASSIGNED (x)")), silent = TRUE),
+                  "try-error"))
 
   # --- T3 -------------------------------------------------------------------
   stale <- mk()
