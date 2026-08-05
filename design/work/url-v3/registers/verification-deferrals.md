@@ -62,7 +62,7 @@ conditions does **not** authorize G4's exit.
 | `surface_probe` | The executable predicate proving the surface is unshipped, as a semicolon-separated list of `export:<name>` (present iff exported in `NAMESPACE`) or `symbol:<name>` (present iff the identifier occurs in `R/`). **If ANY listed symbol is present, the surface has shipped** and failure condition 3 fires. This is what makes "specified but not shipped" a fact about the repository rather than a claim. |
 | `carrier` | The `fp` issue owning construction of the surface. A **pointer** for navigation; per P0.1 §5 its tracker state is NOT authoritative and the gate never reads it. Authority is this row's `state`. |
 | `justification` | Why no test can close the cells today. |
-| `state` | `ACCEPTED` — an active deferral, G4 may exit with these cells unsatisfied. `DISCHARGED` — the carrier's work landed; the cells must now be covered by a verification slice, and the gate fails if they are not. Any other value is malformed and fails. |
+| `state` | `ACCEPTED` — an active deferral, G4 may exit with these cells unsatisfied. `DISCHARGED` — the carrier's work landed; the cells must now be covered, and claimed by a **registered** claimant — a verification slice, or the discharge record registered for this very row in `verification/traceability-map.md` § `Discharge records` (P0.7 D-E). A file that merely sits in the verification directory is not a claimant. Any other value is malformed and fails. |
 
 **No date expiry.** Unlike the determinism-exceptions register, deferrals carry
 no `expiry` date, because the condition that ends a deferral is not the passage

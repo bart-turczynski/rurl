@@ -24,9 +24,11 @@
 #   D0  schema     -- every row fully populated; `state` in
 #                     {ACCEPTED, DISCHARGED}.
 #   D1  carrier    -- every row names a carrier. (P0.5 condition 1.)
-#   D2  discharge  -- a DISCHARGED row is claimed by some verification slice
-#                     via `DISCHARGED[VD-nnn]`. Closing a carrier is not
-#                     evidence about the cell. (P0.5 condition 2.)
+#   D2  discharge  -- a DISCHARGED row is claimed via `DISCHARGED[VD-nnn]` by a
+#                     REGISTERED claimant: a verification slice, or the
+#                     discharge record registered for that very deferral.
+#                     Closing a carrier is not evidence about the cell.
+#                     (P0.5 condition 2.)
 #   D3  graduation -- no ACCEPTED row's `surface_probe` symbol is present in
 #                     the tree. If the surface shipped, the cells must be
 #                     verified, not still deferred. (P0.5 condition 3.)
@@ -34,6 +36,30 @@
 #                     resolves to an ACCEPTED row. Stops a slice excusing a
 #                     cell against a row that is missing, malformed or
 #                     discharged.
+#
+# WHAT COUNTS AS A CLAIMANT, AND WHY THIS GATE READS ANOTHER RECORD (P0.7 D-E,
+# RURL-ogktvhgp). D2 used to glob every `design/work/url-v3/verification/*.md`
+# and treat each one as a verification slice, so a discharge was satisfiable by
+# ANY file in that directory whatever its name or content -- a discharge could
+# be "claimed" by a file that claims nothing. Meanwhile
+# `design/work/url-v3/tools/traceability-gate.R` rule T5 checked a fixed
+# ten-name registry that three of the four claimant records on disk were not in.
+# Both gates passed while contradicting each other about the same file, and the
+# traceability map's census consequently reported as unowned a body of claims
+# for which shipped evidence existed and was already claimed cell by cell.
+#
+# The two definitions are reconciled toward the NARROWER one, and the registry
+# lives in ONE place: the traceability map's `## Verification slices` and
+# `## Discharge records` tables. This gate reads them; that gate's T5/T8 hold
+# them to disk in both directions. A copied registry here would be a second
+# list to forget, and the drift would be silent in exactly the way this pair of
+# rules exists to prevent -- so if the map is missing, or has no discharge
+# registry, D2 fails CLOSED rather than falling back to the old glob.
+#
+# Note the asymmetry with D4, which is deliberate. D2 asks "who may GRANT a
+# discharge" and must be narrow. D4 asks "does any file in the tree cite a
+# deferral that does not resolve", and stays wide on purpose: a dangling
+# citation is worth catching wherever it is written.
 #
 # Zero dependencies beyond base R. Deterministic and network-free.
 #
@@ -43,7 +69,11 @@
 
 REGISTER_REL <- file.path("design", "work", "url-v3", "registers",
                           "verification-deferrals.md")
-SLICE_GLOB_REL <- file.path("design", "work", "url-v3", "verification")
+# Where verification records live. It is NOT the definition of a claimant --
+# treating "in this directory" as "is a verification slice" is precisely the
+# defect P0.7 D-E fixed -- it is only where citations are read from.
+VERIFICATION_DIR <- file.path("design", "work", "url-v3", "verification")
+MAP_REL <- file.path(VERIFICATION_DIR, "traceability-map.md")
 VALID_STATES <- c("ACCEPTED", "DISCHARGED")
 ROW_FIELDS <- c("deferral_id", "family", "artifact", "cells", "surface_probe",
                 "carrier", "justification", "state")
@@ -125,31 +155,99 @@ split_probes <- function(s) {
   p[nzchar(p)]
 }
 
+# ---- the claimant registry --------------------------------------------------
+
+# Data rows of the pipe table under a `## <heading>` in the traceability map,
+# stopping at the next `##`. Same shape as read_deferrals() above and equally
+# unforgiving: it wants a pipe table there and reports its absence rather than
+# inventing an empty one.
+map_table <- function(lines, heading) {
+  start <- grep(sprintf("^##[[:space:]]+%s[[:space:]]*$", heading), lines)
+  if (length(start) != 1L) return(NULL)
+  rest <- lines[seq.int(start[1] + 1L, length(lines))]
+  nxt <- grep("^##[[:space:]]", rest)
+  if (length(nxt)) rest <- rest[seq_len(nxt[1] - 1L)]
+  rest <- trimws(rest)
+  rest <- rest[grepl("^\\|", rest) & !grepl("^\\|[-:| ]*$", rest)]
+  if (length(rest) < 2L) return(list())
+  lapply(rest[-1], function(r) {
+    cells <- sub("\\|$", "", sub("^\\|", "", r))
+    trimws(strsplit(cells, "|", fixed = TRUE)[[1]])
+  })
+}
+
+# Who may claim a discharge, read off the traceability map. Returns a list with
+# `slices` (basenames of registered slice files) and `discharges` (a named
+# character vector: record basename -> the ONE deferral it is registered for),
+# or an `error` string when the map cannot supply the registry -- in which case
+# D2 fails rather than guessing.
+claimant_registry <- function(root) {
+  path <- file.path(root, MAP_REL)
+  if (!file.exists(path)) {
+    return(list(error = sprintf("claimant registry unavailable: %s not found",
+                                MAP_REL)))
+  }
+  lines <- readLines(path, warn = FALSE)
+  sl <- map_table(lines, "Verification slices")
+  dr <- map_table(lines, "Discharge records")
+  if (is.null(sl)) {
+    return(list(error = paste(MAP_REL,
+                              "has no '## Verification slices' table")))
+  }
+  if (is.null(dr)) {
+    return(list(error = paste(MAP_REL, "has no '## Discharge records' table")))
+  }
+  slices <- vapply(sl, function(r) if (length(r)) r[1] else NA_character_,
+                   character(1))
+  ids <- vapply(dr, function(r) if (length(r) >= 2L) r[2] else NA_character_,
+                character(1))
+  names(ids) <- vapply(dr, function(r) if (length(r)) r[1] else NA_character_,
+                       character(1))
+  list(slices = paste0(slices[!is.na(slices)], ".md"),
+       discharges = ids[!is.na(ids) & !is.na(names(ids))])
+}
+
 # ---- slice citations --------------------------------------------------------
 
-# Collect every DEFERRED[VD-nnn] / DISCHARGED[VD-nnn] marker in the verification
-# slices. These are the slices' positive claims about what they excuse and what
-# they now cover.
+# Collect every DEFERRED[VD-nnn] / DISCHARGED[VD-nnn] marker written under the
+# verification directory, keeping the FILE each one came from: D2 credits a
+# discharge only to a registered claimant, so "which file said it" is part of
+# the fact, not an implementation detail.
 slice_citations <- function(root) {
-  dir <- file.path(root, SLICE_GLOB_REL)
-  out <- list(deferred = character(0), discharged = character(0))
+  dir <- file.path(root, VERIFICATION_DIR)
+  out <- list(deferred = character(0), discharged = character(0),
+              claims = list())
   if (!dir.exists(dir)) return(out)
   files <- list.files(dir, pattern = "\\.md$", full.names = TRUE)
   for (f in files) {
     txt <- paste(readLines(f, warn = FALSE), collapse = "\n")
     grab <- function(kw) {
-      m <- gregexpr(sprintf("%s\\[(VD-[0-9]+)\\]", kw), txt)[[1]]
-      if (identical(as.integer(m)[1], -1L)) return(character(0))
       hits <- regmatches(txt, gregexpr(sprintf("%s\\[(VD-[0-9]+)\\]", kw),
                                        txt))[[1]]
+      if (!length(hits)) return(character(0))
       unique(sub(sprintf("^%s\\[", kw), "", sub("\\]$", "", hits)))
     }
     out$deferred <- c(out$deferred, grab("DEFERRED"))
-    out$discharged <- c(out$discharged, grab("DISCHARGED"))
+    discharged <- grab("DISCHARGED")
+    out$discharged <- c(out$discharged, discharged)
+    if (length(discharged)) out$claims[[basename(f)]] <- discharged
   }
   out$deferred <- unique(out$deferred)
   out$discharged <- unique(out$discharged)
   out
+}
+
+# The files whose `DISCHARGED[id]` claim D2 may credit: a registered slice, or
+# the discharge record registered for THAT deferral. A discharge record listed
+# against VD-002 cannot vouch for VD-004 -- it is narrow by construction, and
+# the registry says which one it is narrow to.
+eligible_claimants <- function(id, claims, reg) {
+  claimants <- names(claims)[vapply(claims, function(v) id %in% v, logical(1))]
+  keep <- vapply(claimants, function(f) {
+    f %in% reg$slices ||
+      identical(unname(reg$discharges[sub("\\.md$", "", f)]), id)
+  }, logical(1))
+  list(all = claimants, eligible = claimants[keep])
 }
 
 # ---- the checks -------------------------------------------------------------
@@ -226,19 +324,42 @@ check_deferrals <- function(root = ".") {
 
   # ---- D2 discharge (P0.5 failure condition 2) ------------------------------
   cit <- slice_citations(root)
+  reg <- claimant_registry(root)
   unclaimed <- character(0)
+  unregistered <- character(0)
+  discharged_rows <- 0L
   for (r in rows) {
     if (!identical(r[["state"]], "DISCHARGED")) next
-    if (!r[["deferral_id"]] %in% cit$discharged) {
-      unclaimed <- c(unclaimed, as.character(r[["deferral_id"]]))
+    discharged_rows <- discharged_rows + 1L
+    if (!is.null(reg$error)) next
+    id <- as.character(r[["deferral_id"]])
+    hit <- eligible_claimants(id, cit$claims, reg)
+    if (length(hit$eligible)) next
+    if (length(hit$all)) {
+      # The narrowing's whole point: a claim exists, but from a file no
+      # registry admits. Name the file -- the fix is to register it (or to
+      # write the evidence in something that is registered), not to hunt for a
+      # missing citation that is right there.
+      unregistered <- c(unregistered, sprintf("%s (claimed only by %s)", id,
+                                              toString(hit$all)))
+    } else {
+      unclaimed <- c(unclaimed, id)
     }
   }
   findings <- c(findings, finding(
-    "D2", length(unclaimed) == 0L,
-    if (length(unclaimed))
-      sprintf("DISCHARGED row(s) unclaimed by any slice: %s",
-              toString(unclaimed))
-    else "every discharged deferral is claimed by a verification slice"))
+    "D2",
+    is.null(reg$error) && !length(unclaimed) && !length(unregistered),
+    if (!is.null(reg$error)) {
+      reg$error
+    } else if (length(unclaimed)) {
+      sprintf("DISCHARGED row(s) claimed by nothing: %s", toString(unclaimed))
+    } else if (length(unregistered)) {
+      sprintf("DISCHARGED row(s) claimed by an unregistered file: %s",
+              toString(unregistered))
+    } else {
+      sprintf(paste("all %d discharged deferral(s) claimed by a registered",
+                    "slice or their own discharge record"), discharged_rows)
+    }))
 
   # ---- D3 graduation (P0.5 failure condition 3) -----------------------------
   shipped <- character(0)
@@ -309,12 +430,18 @@ self_test <- function() {
     }
   }
 
-  # Build a throwaway tree: NAMESPACE + R/ + register + verification slices.
+  # Build a throwaway tree: NAMESPACE + R/ + register + verification records +
+  # the traceability map that says which of those records may claim a
+  # discharge. `slice_file` is the file the citation is WRITTEN in and
+  # `registry_*` is what the map admits; a fixture makes them disagree to
+  # exercise the narrowing.
   mk <- function(rows_md, namespace = "export(get_host)\n", rfile = "x <- 1\n",
-                 slices = character(0)) {
+                 slices = character(0), slice_file = "cache-slice.md",
+                 registry_slices = "cache-slice",
+                 registry_discharges = character(0), map = TRUE) {
     root <- tempfile("deferral-fixture-")
     dir.create(file.path(root, "R"), recursive = TRUE)
-    dir.create(file.path(root, SLICE_GLOB_REL), recursive = TRUE)
+    dir.create(file.path(root, VERIFICATION_DIR), recursive = TRUE)
     dir.create(dirname(file.path(root, REGISTER_REL)), recursive = TRUE)
     writeLines(namespace, file.path(root, "NAMESPACE"))
     writeLines(rfile, file.path(root, "R", "a.R"))
@@ -324,7 +451,28 @@ self_test <- function() {
                  hdr, "|---|---|---|---|---|---|---|---|", rows_md),
                file.path(root, REGISTER_REL))
     if (length(slices)) {
-      writeLines(slices, file.path(root, SLICE_GLOB_REL, "s-slice.md"))
+      writeLines(slices, file.path(root, VERIFICATION_DIR, slice_file))
+    }
+    if (!identical(map, FALSE)) {
+      row <- function(...) paste0("| ", paste(c(...), collapse = " | "), " |")
+      tracked <- function(id) file.path(VERIFICATION_DIR, paste0(id, ".md"))
+      writeLines(c(
+        "# fixture map", "",
+        "## Verification slices", "",
+        "| slice_id | tracked_path | state |", "|---|---|---|",
+        vapply(registry_slices, function(s) row(s, tracked(s), "SHIPPED"),
+               character(1), USE.NAMES = FALSE),
+        "",
+        if (identical(map, "no-discharge-table")) character(0) else c(
+          "## Discharge records", "",
+          "| record_id | deferral_id | tracked_path | contract | scope |",
+          "|---|---|---|---|---|",
+          vapply(seq_along(registry_discharges), function(i) {
+            id <- names(registry_discharges)[i]
+            row(id, registry_discharges[[i]], tracked(id), "CS", "one row")
+          }, character(1), USE.NAMES = FALSE)
+        )
+      ), file.path(root, MAP_REL))
     }
     root
   }
@@ -380,15 +528,64 @@ self_test <- function() {
   r <- mk(d, namespace = "export(get_url_key)\n")
   expect("D2 fails on an unclaimed discharge", identical(rule(r, "D2"), FALSE))
 
-  # 9. D2 -- discharged and claimed.
+  # 9. D2 -- discharged and claimed by a REGISTERED slice.
   r <- mk(d, namespace = "export(get_url_key)\n",
           slices = c("# s", "DISCHARGED[VD-001] covered by tests."))
-  expect("D2 passes when a slice claims the discharge",
+  expect("D2 passes when a registered slice claims the discharge",
          identical(rule(r, "D2"), TRUE))
+
+  # 9a. The narrowing itself (P0.7 D-E). The same citation, in a file the old
+  # glob accepted because it merely sat in the directory. Green before, red now.
+  r <- mk(d, namespace = "export(get_url_key)\n",
+          slices = c("# s", "DISCHARGED[VD-001] covered by tests."),
+          slice_file = "loose-notes.md")
+  expect("D2 fails when the only claimant is an unregistered file",
+         identical(rule(r, "D2"), FALSE))
+
+  # 9b. A registered discharge record may claim the deferral it is registered
+  # for ...
+  r <- mk(d, namespace = "export(get_url_key)\n",
+          slices = c("# s", "DISCHARGED[VD-001] covered by tests."),
+          slice_file = "join-discharge.md",
+          registry_discharges = c("join-discharge" = "VD-001"))
+  expect("D2 passes when the registered discharge record claims its deferral",
+         identical(rule(r, "D2"), TRUE))
+
+  # 9c. ... and only that one. A discharge record is narrow by construction, so
+  # being registered for VD-002 does not let it vouch for VD-001.
+  r <- mk(d, namespace = "export(get_url_key)\n",
+          slices = c("# s", "DISCHARGED[VD-001] covered by tests."),
+          slice_file = "join-discharge.md",
+          registry_discharges = c("join-discharge" = "VD-002"))
+  expect(paste("D2 fails when a discharge record claims a deferral it is not",
+               "registered for"),
+         identical(rule(r, "D2"), FALSE))
+
+  # 9d/9e. No registry, no verdict: D2 fails closed rather than falling back to
+  # the glob it replaced. This is what makes the two halves land together --
+  # the tightened rule is red until the map carries the discharge registry.
+  r <- mk(d, namespace = "export(get_url_key)\n",
+          slices = c("# s", "DISCHARGED[VD-001] covered by tests."),
+          map = FALSE)
+  expect("D2 fails closed when the traceability map is missing",
+         identical(rule(r, "D2"), FALSE))
+  r <- mk(d, namespace = "export(get_url_key)\n",
+          slices = c("# s", "DISCHARGED[VD-001] covered by tests."),
+          map = "no-discharge-table")
+  expect("D2 fails closed when the map has no discharge registry",
+         identical(rule(r, "D2"), FALSE))
 
   # 10. D4 -- slice cites a deferral that does not exist.
   r <- mk(good, slices = c("# s", "cell X is DEFERRED[VD-999]."))
   expect("D4 fails on a dangling deferral citation",
+         identical(rule(r, "D4"), FALSE))
+
+  # 10a. D4 stays WIDE where D2 narrowed. A dangling citation is worth catching
+  # wherever it is written, including in a file no registry admits -- narrowing
+  # both rules together would have opened a hole while closing one.
+  r <- mk(good, slices = c("# s", "cell X is DEFERRED[VD-999]."),
+          slice_file = "loose-notes.md")
+  expect("D4 still sees a dangling citation in an unregistered file",
          identical(rule(r, "D4"), FALSE))
 
   # 11. D4 -- slice cites a DISCHARGED row as still deferred.

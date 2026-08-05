@@ -21,7 +21,8 @@
 # `## Coverage census` blocks are regenerated from the contracts and compared
 # byte-for-byte (T3), so the map cannot disagree with its own sources. The
 # hand-authored surface is deliberately small: which slice owns which contract
-# SECTION (67 rows), the slice registry, and the excluded-source dispositions.
+# SECTION (67 rows), the slice registry, the discharge-record registry, and the
+# excluded-source dispositions.
 #
 # WHAT THIS GATE DOES NOT CLAIM. `coverage = MAPPED` means the verification
 # slice that owns the claim's section is on disk -- it does NOT mean that
@@ -62,6 +63,26 @@
 #                      leave the population silently.
 #   T7  citation    -- a contract with at least one section owned by a
 #                      SHIPPED slice must be cited by path in that slice.
+#   T8  discharges  -- `## Discharge records` accounts for every verification
+#                      record that is not a registered slice, in BOTH
+#                      directions, and each listed record really claims its
+#                      deferral (`DISCHARGED[VD-nnn]`) and names the contract
+#                      whose cells it maps. The verification directory
+#                      therefore partitions into: this map, the registered
+#                      slices, and the registered discharge records. Nothing
+#                      else may sit there unaccounted.
+#
+# WHY T8 EXISTS, AND WHY IT IS HALF OF A PAIR (P0.7 D-E, RURL-ogktvhgp).
+# `tools/deferral-gate.R` rule D2 requires a DISCHARGED deferral to be claimed
+# by a "verification slice", and it used to accept ANY `verification/*.md` as
+# one -- so a discharge could be claimed by a file that claims nothing, and
+# three of the four discharges on disk were in fact claimed by records this map
+# had never heard of. Both gates passed while contradicting each other about
+# the same file. D2 now reads the claimant registry out of THIS record (the
+# `## Verification slices` and `## Discharge records` tables), so there is one
+# definition of an admissible claimant and two consumers of it. T5 and T8 are
+# what keep that definition honest against disk; without them the narrowing
+# would just move the blind spot into this file.
 #
 # WHY THIS LIVES UNDER design/work/url-v3/tools/. Control-plane gate over a
 # control-plane record, beside ci-gate.R and oracle-label-gate.R; `^design$`
@@ -135,6 +156,16 @@ OWNERSHIP_FIELDS <- c("contract", "sec", "section", "owning_slice", "carrier")
 
 SLICE_FIELDS <- c("slice_id", "tracked_path", "state")
 
+# A discharge record is NOT a slice and must never be added to SLICE_REGISTRY:
+# it maps one deferral's cells onto shipped evidence and says so in its own
+# envelope, where a slice owns a property family's whole surface. Registering
+# it here is what makes it an admissible D2 claimant without granting it
+# section ownership, which stays with the registry above.
+DISCHARGE_FIELDS <- c("record_id", "deferral_id", "tracked_path", "contract",
+                      "scope")
+
+DEFERRAL_ID_RE <- "^VD-[0-9]+$"
+
 EXCLUSION_FIELDS <- c("path", "claims", "reason")
 
 INDEX_FIELDS <- c(
@@ -143,8 +174,8 @@ INDEX_FIELDS <- c(
 
 REQUIRED_SECTIONS <- c(
   "Envelope", "Purpose", "Inputs", "Population rule", "Verification slices",
-  "Section ownership", "Claim index", "Coverage census", "Excluded sources",
-  "Scope boundaries", "Open cells"
+  "Discharge records", "Section ownership", "Claim index", "Coverage census",
+  "Excluded sources", "Scope boundaries", "Open cells"
 )
 
 GENERATED_BLOCKS <- c("claim-index", "coverage-census")
@@ -308,6 +339,9 @@ read_map <- function(path) {
       table_rows(lines, "Section ownership"), OWNERSHIP_FIELDS
     ),
     slices = as_frame(table_rows(lines, "Verification slices"), SLICE_FIELDS),
+    discharges = as_frame(
+      table_rows(lines, "Discharge records"), DISCHARGE_FIELDS
+    ),
     exclusions = as_frame(
       table_rows(lines, "Excluded sources"), EXCLUSION_FIELDS
     )
@@ -470,7 +504,7 @@ evaluate <- function(map, root) {
     }, logical(1))
   ]
   width_bad <- sum(!own$.width_ok) + sum(!map$slices$.width_ok) +
-    sum(!map$exclusions$.width_ok)
+    sum(!map$discharges$.width_ok) + sum(!map$exclusions$.width_ok)
   res[[length(res) + 1L]] <- check(
     "T0",
     !length(missing_sec) && !length(bad_block) && width_bad == 0L,
@@ -659,7 +693,125 @@ evaluate <- function(map, root) {
     }
   )
 
+  # T8 -- discharge records, both directions.
+  res[[length(res) + 1L]] <- check_discharges(map, root, paths)
+
   res
+}
+
+# T8. The verification directory partitions into three kinds of record, and
+# this rule is what makes that partition a fact rather than a convention:
+# this map, a registered slice, or a registered discharge record. A file that
+# is none of them FAILS -- which is the reverse direction, and the one that
+# was missing: three discharge records sat on disk with the map unaware of
+# them, and `deferral-gate.R` D2 was leaning on exactly those files.
+#
+# The forward direction checks that a listed record is what it says it is: the
+# file exists, its id matches its path, its `deferral_id` is well formed, it
+# actually carries the `DISCHARGED[VD-nnn]` claim D2 will credit it with, and
+# it names the contract whose cells it maps.
+#
+# The contract check matches the contract's BASENAME, not its repo path. The
+# family spells the same citation two ways -- `contracts/output-contracts.md`
+# and the full `design/work/url-v3/...` form, both in use across the four
+# records on disk -- and requiring one spelling would be a naming rule wearing
+# a coverage rule's clothes. T7 can demand the full path of a slice because a
+# slice's own contract citation is load-bearing for section ownership; here
+# the question is only whether the record names its subject.
+check_discharges <- function(map, root, paths) {
+  d <- map$discharges
+  if (!nrow(d)) {
+    unaccounted <- unregistered_records(root, character(0))
+    return(check(
+      "T8", !length(unaccounted),
+      if (length(unaccounted)) {
+        paste("verification record(s) in no registry:",
+              paste(unaccounted, collapse = ", "))
+      } else {
+        "no discharge records registered, and none on disk"
+      }
+    ))
+  }
+
+  bad <- character(0)
+  for (i in seq_len(nrow(d))) {
+    id <- d$record_id[i]
+    if (any(blank(unlist(d[i, DISCHARGE_FIELDS], use.names = FALSE)))) {
+      bad <- c(bad, paste0(id, ": empty field"))
+      next
+    }
+    want_path <- file.path(VERIFICATION_DIR, paste0(id, ".md"))
+    if (!identical(trimws(d$tracked_path[i]), want_path)) {
+      bad <- c(bad, paste0(id, ": tracked_path is not ", want_path))
+      next
+    }
+    if (id %in% SLICE_REGISTRY) {
+      bad <- c(bad, paste0(id,
+                           ": a registered slice is not a discharge record"))
+      next
+    }
+    if (!grepl(DEFERRAL_ID_RE, d$deferral_id[i])) {
+      bad <- c(bad, paste0(id, ": deferral_id '", d$deferral_id[i],
+                           "' fails ", DEFERRAL_ID_RE))
+      next
+    }
+    if (!file.exists(file.path(root, want_path))) {
+      bad <- c(bad, paste0(id, ": listed but not on disk"))
+      next
+    }
+    abbrev <- trimws(d$contract[i])
+    if (!abbrev %in% names(paths)) {
+      bad <- c(bad, paste0(id, ": contract '", abbrev,
+                           "' is not a §6 contract"))
+      next
+    }
+    body <- readLines(file.path(root, want_path), warn = FALSE,
+                      encoding = "UTF-8")
+    txt <- paste(body, collapse = "\n")
+    if (!grepl(paste0("DISCHARGED[", d$deferral_id[i], "]"), txt,
+               fixed = TRUE)) {
+      bad <- c(bad, paste0(id, ": record does not claim DISCHARGED[",
+                           d$deferral_id[i], "]"))
+      next
+    }
+    if (!grepl(basename(paths[[abbrev]]), txt, fixed = TRUE)) {
+      bad <- c(bad, paste0(id, ": record never names ",
+                           basename(paths[[abbrev]])))
+    }
+  }
+  dupes <- unique(d$record_id[duplicated(d$record_id)])
+  if (length(dupes)) {
+    bad <- c(bad, paste("duplicate record_id:", paste(dupes, collapse = ", ")))
+  }
+  unaccounted <- unregistered_records(root, d$record_id)
+
+  check(
+    "T8",
+    !length(bad) && !length(unaccounted),
+    if (length(bad)) {
+      paste("discharge record(s) failing the registry:",
+            paste(bad, collapse = "; "))
+    } else if (length(unaccounted)) {
+      paste("verification record(s) in no registry:",
+            paste(unaccounted, collapse = ", "))
+    } else {
+      sprintf("%d discharge record(s), each claiming its deferral; %s",
+              nrow(d), "the verification directory partitions")
+    }
+  )
+}
+
+# Files under verification/ that are neither this map, nor a registered slice,
+# nor a registered discharge record. `known_discharges` is passed in rather
+# than re-read so the empty-table case and the populated one ask disk the same
+# question.
+unregistered_records <- function(root, known_discharges) {
+  dir <- file.path(root, VERIFICATION_DIR)
+  if (!dir.exists(dir)) return(character(0))
+  on_disk <- list.files(dir, pattern = "[.]md$")
+  known <- c(basename(MAP_REL), paste0(SLICE_REGISTRY, ".md"),
+             paste0(known_discharges, ".md"))
+  setdiff(on_disk, known)
 }
 
 # ---- reporting --------------------------------------------------------------
@@ -708,7 +860,8 @@ main <- function(args) {
 mk <- function(contracts = NULL, ownership = NULL, slices = NULL,
                exclusions = NULL, extra_files = character(0),
                shipped = "cache-slice", regenerate_blocks = TRUE,
-               sections = REQUIRED_SECTIONS) {
+               sections = REQUIRED_SECTIONS, discharges = NULL,
+               discharge_records = list()) {
   root <- file.path(tempdir(), paste0("trg-", as.integer(runif(1, 1, 1e9))))
   dir.create(file.path(root, CONTRACT_DIR), recursive = TRUE,
              showWarnings = FALSE)
@@ -729,9 +882,14 @@ mk <- function(contracts = NULL, ownership = NULL, slices = NULL,
                showWarnings = FALSE)
     writeLines("x", file.path(root, f))
   }
+  for (nm in names(discharge_records)) {
+    writeLines(discharge_records[[nm]],
+               file.path(root, VERIFICATION_DIR, paste0(nm, ".md")))
+  }
   if (is.null(ownership)) ownership <- default_ownership()
   if (is.null(slices)) slices <- default_slices()
   if (is.null(exclusions)) exclusions <- default_exclusions()
+  if (is.null(discharges)) discharges <- character(0)
   body <- character(0)
   for (s in sections) {
     body <- c(body, paste0("## ", s), "")
@@ -739,6 +897,8 @@ mk <- function(contracts = NULL, ownership = NULL, slices = NULL,
       body <- c(body, md_table(OWNERSHIP_FIELDS, ownership), "")
     } else if (identical(s, "Verification slices")) {
       body <- c(body, md_table(SLICE_FIELDS, slices), "")
+    } else if (identical(s, "Discharge records")) {
+      body <- c(body, md_table(DISCHARGE_FIELDS, discharges), "")
     } else if (identical(s, "Excluded sources")) {
       body <- c(body, md_table(EXCLUSION_FIELDS, exclusions), "")
     } else if (identical(s, "Claim index")) {
@@ -983,6 +1143,78 @@ self_test <- function() {
   writeLines(c("# slice", "Says nothing about any contract."), sp)
   expect("T7 flags a shipped slice that never cites its contract",
          !verdict(silent, "T7"))
+
+  # --- T8 -------------------------------------------------------------------
+  # A well-formed discharge record: it claims one deferral and names the
+  # contract whose cells it maps, in the relative spelling two of the four real
+  # records use.
+  drec <- function(id = "VD-001", contract = "semantic-cache.md") {
+    c("# discharge", "", paste0("## DISCHARGED[", id, "]"), "",
+      paste0("Cells of `contracts/", contract, "` now ship."))
+  }
+  drow <- function(record = "cache-discharge", id = "VD-001",
+                   path = NULL, contract = "SC", scope = "one row") {
+    md_row(record, id,
+           if (is.null(path)) {
+             file.path(VERIFICATION_DIR, paste0(record, ".md"))
+           } else {
+             path
+           },
+           contract, scope)
+  }
+  registered <- function(...) {
+    mk(discharges = drow(...),
+       discharge_records = list("cache-discharge" = drec()))
+  }
+  expect("baseline with no discharge records passes T8", verdict(mk(), "T8"))
+  expect("T8 accepts a registered discharge record",
+         verdict(registered(), "T8"))
+
+  # The reverse direction, and the reason this rule exists: a record on disk
+  # that no registry names. Three of these sat unaccounted while both gates
+  # passed (P0.7 D-E).
+  expect("T8 flags a verification record in no registry",
+         !verdict(mk(discharge_records = list("ghost-discharge" = drec())),
+                  "T8"))
+  expect("T8 flags a listed record with no file on disk",
+         !verdict(mk(discharges = drow()), "T8"))
+  expect("T8 flags a record that claims no deferral",
+         !verdict(mk(discharges = drow(),
+                     discharge_records = list(
+                       "cache-discharge" = c("# d", "cache things"))), "T8"))
+  expect(paste("T8 flags a record claiming a DIFFERENT deferral than it is",
+               "listed for"),
+         !verdict(mk(discharges = drow(id = "VD-002"),
+                     discharge_records = list(
+                       "cache-discharge" = drec("VD-001"))), "T8"))
+  expect("T8 flags a malformed deferral_id",
+         !verdict(mk(discharges = drow(id = "VD1"),
+                     discharge_records = list(
+                       "cache-discharge" = drec("VD1"))), "T8"))
+  expect("T8 flags an unknown contract abbreviation",
+         !verdict(registered(contract = "ZZ"), "T8"))
+  expect("T8 flags a record that never names its contract",
+         !verdict(mk(discharges = drow(contract = "CS"),
+                     discharge_records = list(
+                       "cache-discharge" = drec())), "T8"))
+  expect("T8 flags a tracked_path that disagrees with the record id",
+         !verdict(mk(discharges = drow(path = "design/elsewhere.md"),
+                     discharge_records = list(
+                       "cache-discharge" = drec())), "T8"))
+  expect("T8 flags a discharge record wearing a registered slice's name",
+         !verdict(mk(discharges = drow(record = "cache-slice"),
+                     shipped = "cache-slice"), "T8"))
+  expect("T8 flags a duplicate record_id",
+         !verdict(mk(discharges = c(drow(), drow()),
+                     discharge_records = list("cache-discharge" = drec())),
+                  "T8"))
+  expect("T0 flags a short discharge row",
+         !verdict(mk(discharges = md_row("cache-discharge", "VD-001"),
+                     discharge_records = list("cache-discharge" = drec())),
+                  "T0"))
+  expect("T0 flags a missing Discharge records section",
+         !verdict(mk(sections = setdiff(REQUIRED_SECTIONS,
+                                        "Discharge records")), "T0"))
 
   cat(sprintf("\nself-test: %d passed, %d failed\n", passed, failed))
   quit(status = if (failed == 0L) 0L else 1L)
