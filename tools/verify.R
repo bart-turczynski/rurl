@@ -286,7 +286,8 @@ stage_check <- function(root) {
   }
   # _R_CHECK_SYSTEM_CLOCK_: a network-restricted machine cannot reach the time
   # server, and the resulting "unable to verify current time" NOTE is about the
-  # sandbox, not the package (CLAUDE.md records the same workaround).
+  # sandbox, not the package. Set it for a local `R CMD check` too if you hit
+  # that NOTE off-network; it is not needed on a machine with normal access.
   chk <- run_step("R CMD check --as-cran", file.path(R.home("bin"), "R"),
                   c("CMD", "check", "--no-manual", "--as-cran", tarball),
                   env = "_R_CHECK_SYSTEM_CLOCK_=false")

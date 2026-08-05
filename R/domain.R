@@ -466,7 +466,7 @@
   # ("a.com." -> c("a", "com")), which is exactly the FQDN-tolerant behavior
   # host_normalize() itself exhibits -- do not swap for stringi's
   # stri_split_fixed(), which keeps the trailing "" and would misfire on a
-  # valid trailing-root-dot FQDN (rurl house convention; see CLAUDE.md).
+  # valid trailing-root-dot FQDN (rurl house convention; see ADR 0005).
   labels_list <- strsplit(h, ".", fixed = TRUE)
   out$empty_label[probe_idx] <- vapply(
     labels_list,

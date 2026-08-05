@@ -19,13 +19,14 @@
 ## Constraints
 
 - Do not alter the Punycode helpers (`.normalize_and_punycode()`,
-  `.punycode_to_unicode()`) or their hardcoded TLD workarounds. See `CLAUDE.md`
-  for the full list of protected areas and the intentional base-R string
-  exceptions.
+  `.punycode_to_unicode()`) or their hardcoded TLD workarounds; see
+  [ADR 0002](design/adr/0002-keep-punycode-helpers.md). `AGENTS.md` lists the
+  protected areas, and [ADR 0005](design/adr/0005-intentional-base-r-string-exceptions.md)
+  covers the intentional base-R string exceptions.
 - Public Suffix List data, its parsing, and its refresh (`pslr::psl_refresh()`)
   live in the `pslr` package. `rurl` ships no PSL list of its own and queries
-  `pslr` through the `R/domain.R` seam. See `CLAUDE.md` for the delegation
-  contract.
+  `pslr` through the `R/domain.R` seam. The delegation contract is in
+  [ARCHITECTURE.md](ARCHITECTURE.md) and [ADR 0001](design/adr/0001-delegate-psl-to-pslr.md).
 
 ## Validation
 

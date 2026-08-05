@@ -1929,7 +1929,7 @@
   derived_subdomain <- decomp$subdomain
   has_subdomain <- !is.na(derived_subdomain) & nzchar(derived_subdomain)
 
-  # base strsplit keeps the documented trailing-empty behavior (see CLAUDE.md).
+  # base strsplit keeps the documented trailing-empty behavior (see ADR 0005).
   sub_split <- strsplit(derived_subdomain, ".", fixed = TRUE)
   raw_split <- strsplit(host_part, ".", fixed = TRUE)
   num_sub_labels <- lengths(sub_split)
