@@ -413,3 +413,48 @@ test_that("whatwg and NULL keep rejecting host triplets they always did", {
       url_standard = "rfc3986")
   )))
 })
+
+# --- host_encoding = "unicode" preserves the label structure ----------------
+# RURL-eikgtrqf. `unicode` is a RENDERING knob over a host identity, so it may
+# change a label's SPELLING (A-label -> U-label) but never how many labels the
+# host has. The decode seam used to rejoin `strsplit(host, ".", fixed = TRUE)`,
+# which drops trailing empty labels (ADR 0005 documents that base-R gap), so a
+# root-dot FQDN silently lost its root label and converged on the non-FQDN host
+# that P3.2 (KJ-O1..O8) holds DISTINCT. The WHATWG host parser does not strip a
+# root dot either, so `unicode` was also the only rendering diverging from the
+# standard it sits under.
+
+test_that("host_encoding = 'unicode' keeps a trailing root-dot label", {
+  for (std in list(NULL, "whatwg", "rfc3986")) {
+    expect_identical(
+      unname(get_host("https://example.com./",
+        url_standard = std, host_encoding = "unicode")),
+      "example.com.",
+      info = paste("url_standard =", if (is.null(std)) "NULL" else std)
+    )
+  }
+
+  # The A-label still decodes; only the label COUNT is preserved.
+  expect_identical(
+    unname(get_host("https://xn--mnchen-3ya.de./", host_encoding = "unicode")),
+    "münchen.de."
+  )
+
+  # And the distinction survives to the presentation surface.
+  expect_false(identical(
+    unname(get_host("https://example.com./", host_encoding = "unicode")),
+    unname(get_host("https://example.com/", host_encoding = "unicode"))
+  ))
+})
+
+test_that("the unicode decode seam is label-count preserving", {
+  # Both implementations, since the scalar seam is a separate code path
+  # (test doubles) that the parity oracle compares against the vector one.
+  hosts <- c("example.com.", "a..b", "a..", ".", "..", "xn--p1ai.")
+  expected <- c("example.com.", "a..b", "a..", ".", "..", "рф.")
+  expect_identical(rurl:::.punycode_to_unicode_vec(hosts), expected)
+  expect_identical(
+    vapply(hosts, rurl:::.punycode_to_unicode, character(1), USE.NAMES = FALSE),
+    expected
+  )
+})

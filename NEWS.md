@@ -119,6 +119,29 @@
 
 ### Bug fixes
 
+- **`host_encoding = "unicode"` no longer drops a trailing root-dot label.**
+  Rendering the host in Unicode is supposed to change how a label is *spelled*,
+  never how many labels the host has — but the decoder split the host with base
+  `strsplit(host, ".", fixed = TRUE)`, which discards the empty label after a
+  final dot, and then rejoined what was left as the output host:
+
+  ```r
+  # before                                     # after
+  get_host("https://example.com./", host_encoding = "unicode")
+  #> "example.com"                             #> "example.com."
+  ```
+
+  So a root-dot FQDN silently converged on the non-FQDN host that rurl's own
+  identity model holds distinct (`get_url_key()` keeps them apart), with no
+  diagnostic marking the collapse — and `unicode` was the only host rendering
+  that diverged from the WHATWG host parser, which does not strip a root dot
+  either. This reached every `profile = "seo"` caller, since that bundle now
+  sets `host_encoding = "unicode"`.
+
+  Only root-dot hosts under `host_encoding = "unicode"` change: `"keep"` and
+  `"idna"` are byte-identical, and across the fixture corpus under all three
+  `url_standard` values no other row moved.
+
 - **An error row no longer exposes a `clean_url`.** Under
   `url_standard = "rfc3986"`, `file:.` was correctly classified as an error but
   path normalization reduced `.` to an empty path, allowing the clean builder

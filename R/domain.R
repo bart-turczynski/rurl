@@ -105,6 +105,25 @@
   unname(result)
 }
 
+# Split hosts into their labels for the Punycode DECODE seam, preserving empty
+# labels — including the trailing one a root-dot FQDN ends with (RURL-eikgtrqf).
+#
+# This is the one dot split that deliberately does NOT use base
+# `strsplit(..., fixed = TRUE)`. ADR 0005 keeps that call for the STRUCTURAL
+# host/subdomain splits and records exactly why it is not `stringi`-equivalent:
+# it drops the trailing empty, so `"example.com."` splits to `c("example",
+# "com")`. A decision caller does not care — but this seam rejoins its labels
+# and returns the result as the rendered host, so the dropped label is dropped
+# from the OUTPUT. That silently collapsed `example.com.` onto `example.com`,
+# two hosts P3.2 (KJ-O1..O8) holds distinct, under `host_encoding = "unicode"`
+# alone. Preserving the label count is the whole point here, so the documented
+# equivalence gap is the reason to take the `stringi` side of it, not to avoid
+# it. Do not "align" this back to `strsplit` for consistency with the splits
+# ADR 0005 names.
+.split_host_labels <- function(hosts) {
+  stringi::stri_split_fixed(hosts, ".")
+}
+
 # Internal helper to decode Punycode domain parts to Unicode. With the default
 # decode_fn (production) it delegates to the vectorized
 # .punycode_to_unicode_vec() so there is a single implementation; a non-default
@@ -124,7 +143,7 @@
     return("")
   }
 
-  parts_puny <- strsplit(domain_puny, ".", fixed = TRUE)[[1]]
+  parts_puny <- .split_host_labels(domain_puny)[[1]]
 
   # No strict-retry here: the first attempt is already the lenient strict =
   # FALSE decode, and a strict = TRUE retry (punycoder's getOption default) is
@@ -185,7 +204,7 @@
   miss_idx <- which(!hit)
   if (length(miss_idx) > 0L) {
     miss_hosts <- uniq_hosts[miss_idx]
-    parts_list <- strsplit(miss_hosts, ".", fixed = TRUE)
+    parts_list <- .split_host_labels(miss_hosts)
     lens <- lengths(parts_list)
     flat <- unlist(parts_list, use.names = FALSE)
 

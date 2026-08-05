@@ -18,8 +18,15 @@ repos:
       # stored exactly as fetched upstream, which means NO final newline.
       #
       # Keep this list in sync with the in-repo fixtures PV3 hashes.
+      #
+      # tests/testthat/_snaps/ is off limits for a different reason: testthat
+      # OWNS those bytes and rewrites them on every run, passing runs included.
+      # Its writer ends the file with a blank line, which end-of-file-fixer then
+      # strips -- so the committed form was one the suite could never reproduce,
+      # every local test run left the tree dirty, and the pre-push verify hook
+      # failed with "files were modified by this hook" even on a green gate.
       - id: end-of-file-fixer
-        exclude: &byte-pinned '^(tests/testthat/fixtures/|inst/bench/wpt-url-cases\.json$)'
+        exclude: &byte-pinned '^(tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$)'
       - id: trailing-whitespace
         exclude: *byte-pinned
       - id: check-merge-conflict
