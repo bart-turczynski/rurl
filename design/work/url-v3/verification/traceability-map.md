@@ -36,7 +36,7 @@
 | single_writer | repository owner (sole); P0.3 §5 — this record is the SINGLE WRITER of the claim POPULATION rule, of section→slice ownership, and of the claim-level ownership overrides that dissent from it; it is never a writer of contract semantics or of per-claim evidence |
 | lifecycle_state | PROPOSED |
 | verifies | §7 G4 criterion 1 over the §6 contract family (artifacts 3–12) |
-| dependencies | the nine claim-bearing §6 contracts (hashed under `## Inputs`); reconciliation §6 artifact 11, §7 G4; S9 H6 / RCON-10; P5.3 (oracle policy, the authority axis) |
+| dependencies | the ten claim-bearing §6 contracts (hashed under `## Inputs`); reconciliation §6 artifact 11, §7 G4; S9 H6 / RCON-10; P5.3 (oracle policy, the authority axis) |
 | closes_finding | RCON-10 (traceability half; the release-rule half stays with P0.4/C-10 and the determinism half with P5.2/C-09) |
 | completion_rule | §7 G4 criterion 1 — the claim population is derived, not transcribed; every claim-bearing contract section has exactly one owner, and every claim its section's owner unless the override table dissents; every owner is a registered verification slice or `UNASSIGNED` with a named carrier; every verification record on disk is this map, a registered slice, or a registered discharge record; the generated index and census regenerate byte-identically; the gate is in the verify chain and self-tested |
 | content_hash | per-input sha256 under `## Inputs`, recomputed by the verification-family validator at the sealing G4 snapshot |
@@ -69,8 +69,9 @@ owned.
 
 What is hand-authored is small and reviewable: which slice owns which contract
 **section** (70 rows), the individual **claims** that dissent from their section
-(`## Claim ownership overrides`, 1 row), the slice registry, the discharge-record
-registry, and the disposition of any contract that contributes no claims.
+(`## Claim ownership overrides`, currently 0 rows), the slice registry, the
+discharge-record registry, and the disposition of any contract that contributes
+no claims.
 
 ## Inputs
 
@@ -409,12 +410,24 @@ The table stays. It is the declared mechanism for the next section whose
 columns cross families, T9 still guards it, and rule T2 still holds its owners
 to the section rows' vocabulary. An empty dissent list asserts that no claim
 currently disagrees with its section — a fact about this tree, not a dormant
-feature. The machinery is not left resting on a live row to prove it works: the gate's
+feature.
+
+The machinery is not left resting on a live row to prove it works: the gate's
 self-tests build synthetic contracts, register an override over them, and assert
 the moved value in the **generated** claim index, its re-derived coverage, and
 the census tally — the three observables a derivation that parsed the table and
 then ignored it would leave unchanged. Those tests are what would go red if the
 apply step were removed, and they do not depend on this table having rows.
+
+**What no rule here can do, and an empty table makes easy to forget.** Nothing
+detects that a section *needs* an override. A future contract section whose
+columns cross families will take one owner for all of its claims and pass T1,
+T3 and T9 exactly as a correct section does — these rules check that ownership
+is *declared and derived consistently*, never that it is *right*. That is how
+the scheme-family table sat mis-owned until a reader noticed, and splitting it
+changed nothing about the detection gap. The obligation stays with whoever adds
+a claim-bearing section: if its columns state properties of different families,
+split it or dissent, because no rule will ask.
 
 ## Claim index
 
