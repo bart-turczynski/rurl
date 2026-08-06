@@ -36,10 +36,10 @@
 | single_writer | repository owner (sole); P0.3 §5 — this record is the SINGLE WRITER of the claim POPULATION rule, of section→slice ownership, and of the claim-level ownership overrides that dissent from it; it is never a writer of contract semantics or of per-claim evidence |
 | lifecycle_state | PROPOSED |
 | verifies | §7 G4 criterion 1 over the §6 contract family (artifacts 3–12) |
-| dependencies | the ten claim-bearing §6 contracts (hashed under `## Inputs`); reconciliation §6 artifact 11, §7 G4; S9 H6 / RCON-10; P5.3 (oracle policy, the authority axis) |
+| dependencies | the ten claim-bearing §6 contracts (derived under `## Inputs`, with the eleventh, zero-claim source); reconciliation §6 artifact 11, §7 G4; S9 H6 / RCON-10; P5.3 (oracle policy, the authority axis) |
 | closes_finding | RCON-10 (traceability half; the release-rule half stays with P0.4/C-10 and the determinism half with P5.2/C-09) |
-| completion_rule | §7 G4 criterion 1 — the claim population is derived, not transcribed; every claim-bearing contract section has exactly one owner, and every claim its section's owner unless the override table dissents; every owner is a registered verification slice or `UNASSIGNED` with a named carrier; every verification record on disk is this map, a registered slice, or a registered discharge record; the generated index and census regenerate byte-identically; the gate is in the verify chain and self-tested |
-| content_hash | per-input sha256 under `## Inputs`, recomputed by the verification-family validator at the sealing G4 snapshot |
+| completion_rule | §7 G4 criterion 1 — the claim population is derived, not transcribed; every claim-bearing contract section has exactly one owner, and every claim its section's owner unless the override table dissents; every owner is a registered verification slice or `UNASSIGNED` with a named carrier; every verification record on disk is this map, a registered slice, or a registered discharge record; the generated source list, index and census regenerate byte-identically; the gate is in the verify chain and self-tested |
+| content_hash | none — the `## Inputs` sha256 column was retired with the rest of the `## Inputs` hash comparison (ADR 0014); the source list is derived and T3-compared instead (RURL-lynlhzec) |
 | approval_evidence | pending — seals at a future G4 control-plane snapshot (NOT an envelope flip) |
 | validation_command | Rscript design/work/url-v3/tools/traceability-gate.R |
 | validator_note | a verification-family validator section stages with the sealing G4 snapshot; until then no validator globs design/work/url-v3/verification/ |
@@ -62,10 +62,11 @@ The design follows from one decision: **the population is derived from the
 contracts, never transcribed.** A hand-copied index of 515 rows is a second
 copy of the contract family that begins drifting the moment either side is
 edited, and the drift is silent — which is the precise failure mode criterion 1
-exists to prevent. So the claim index and the coverage census below are
-generated and compared byte-for-byte against a fresh derivation on every CI
-run. Add a row to a contract and it appears here; the gate fails until it is
-owned.
+exists to prevent. So the source list, the claim index and the coverage census
+below are generated and compared byte-for-byte against a fresh derivation on
+every CI run. Add a row to a contract and it appears here; the gate fails until
+it is owned. Add a *contract* and it appears in `## Inputs`; the gate fails
+until the map accounts for it.
 
 What is hand-authored is small and reviewable: which slice owns which contract
 **section** (70 rows), the individual **claims** that dissent from their section
@@ -75,46 +76,55 @@ no claims.
 
 ## Inputs
 
-The normative sources whose rows constitute the claim population, hashed at
-authoring. A future verification-family validator recomputes them at the
-sealing G4 snapshot; the manifest already hash-pins the contract family as of
-v3/cp-snapshot-3.
+The normative sources whose rows constitute the claim population — **derived**,
+like everything else generated here, and regenerated with the claim index and
+the census under T3.
 
-Because nothing recomputes this table *yet*, it silently went stale: the
-`public-surface-closure` and `cross-artifact-consistency` entries still carried
-their acceptance-1 hashes after PR #281/#284 moved both files. All eleven rows are
-re-derived here (P0.6), and `public-surface-disposition.md` is added as the
-eleventh source. The gap that let them drift unnoticed is real and unfixed — the
-recomputation is still owed by the G4 verification-family validator, and until it
-lands this table is authored, not enforced.
-
-**It has drifted again, and the amount is measured rather than feared**
-(`RURL-fmkuunwj`, recomputing every row of this table and of
-`cross-artifact-consistency.md`'s against disk). Five of the eleven rows here
-are stale — `cleaning-mutation-contracts`, `output-contracts`,
+**This table used to carry a sha256 per row, and no longer does**
+(`RURL-lynlhzec`). Those pins were written to be "recomputed by the
+verification-family validator at the sealing G4 snapshot". No validator ever
+recomputed them; ADR 0014 then retired the `## Inputs` hash comparison as a
+mechanism (`design/work/url-v3/tools/validate-records.R:678-684` records the
+reasoning at the site); and by the time anyone measured, five of the eleven had
+gone stale — `cleaning-mutation-contracts`, `output-contracts`,
 `public-surface-closure`, `public-surface-disposition`,
-`validation-intervention-contract` — as are two of that capstone's nine
-(`validation-intervention-contract`, `cleaning-mutation-contracts`). The two
-rows `RURL-fmkuunwj` itself moved (`standard-scheme-matrices` here and there,
-and this record's pin of the capstone) are current. The other seven are **left
-stale on purpose**: re-pinning a row asserts that the record still holds over
-the file's new bytes, and for the capstone that is a claim about its
-criterion-3 assertions which nobody has re-checked. A silent re-pin would
-convert an honest stale hash into a false fresh one. Carrier: `RURL-lynlhzec`.
+`validation-intervention-contract`. A hash that
+nothing recomputes is not tamper-evidence, and leaving it in place made an
+unverified assertion read as a verified one.
 
-| path | sha256 |
+Deleting the column loses nothing this record needs. A pin answers *did this
+source change?* — which T3 already answers, and answers better, by regenerating
+the population from those sources and byte-comparing the result. What a pin
+could never answer is *is this the right set of sources?*: a contract added to
+the family and omitted from this table drifted no hash, because a row that is
+absent has none. That is the failure the generated block forecloses, and
+`generate_sources()` additionally refuses to emit a table that omits a contract
+which contributed claims.
+
+**The capstone keeps its pins, and two of them stay stale.**
+`contracts/cross-artifact-consistency.md`'s `## Inputs` is "the exact sources
+this capstone asserts over", so a hash there records which bytes its
+criterion-3 assertions (i)–(v) were checked against. The remedy when one drifts
+is to re-check those assertions, not to re-hash — a silent re-pin would convert
+an honest stale hash into a false fresh one. Two of its nine
+(`validation-intervention-contract`, `cleaning-mutation-contracts`) are stale
+and remain so under `RURL-lynlhzec`.
+
+<!-- BEGIN GENERATED: contract-sources -->
+| contract | path |
 |---|---|
-| `design/work/url-v3/contracts/canonical-state-contract.md` | efebe54e645dfcaf56aa2e7d78fcad37d1f266952431a247d5197624996f43ca |
-| `design/work/url-v3/contracts/cleaning-mutation-contracts.md` | d8996daf621ca9409d7249116c15efa1740379eda836eb4ce81aa9278ff8a255 |
-| `design/work/url-v3/contracts/cross-artifact-consistency.md` | 3b2a8ac2d44bc9b67d81dd07e061ec3f8b88065c1366e42e1dbaac746801db1d |
-| `design/work/url-v3/contracts/host-annotation-contracts.md` | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
-| `design/work/url-v3/contracts/key-join-contracts.md` | c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3 |
-| `design/work/url-v3/contracts/output-contracts.md` | d0570174098f2caf454acfcae7a25517c16fd11c703e7c07242cb221d3dff455 |
-| `design/work/url-v3/contracts/public-surface-closure.md` | 9a1cd6c68141c55386818a6ec43e8aeecef973417ce442923e5a156a012e782a |
-| `design/work/url-v3/contracts/public-surface-disposition.md` | 9f38f465bffba1da3bb7ac457158ca8452bdd80f265a09c4cf706508192d8ad7 |
-| `design/work/url-v3/contracts/semantic-cache-contract.md` | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
-| `design/work/url-v3/contracts/standard-scheme-matrices.md` | a41b45d1531efa05f11e8685e4891766e2eea15d8c3b63cec0640439dc8ec5de |
-| `design/work/url-v3/contracts/validation-intervention-contract.md` | aa06d046d495c94f5f1cba5bef923c666653cdceaedabc2ebee66d86d2679c18 |
+| CS | `design/work/url-v3/contracts/canonical-state-contract.md` |
+| CM | `design/work/url-v3/contracts/cleaning-mutation-contracts.md` |
+| CA | `design/work/url-v3/contracts/cross-artifact-consistency.md` |
+| HA | `design/work/url-v3/contracts/host-annotation-contracts.md` |
+| KJ | `design/work/url-v3/contracts/key-join-contracts.md` |
+| OUT | `design/work/url-v3/contracts/output-contracts.md` |
+| PS | `design/work/url-v3/contracts/public-surface-closure.md` |
+| PSD | `design/work/url-v3/contracts/public-surface-disposition.md` |
+| SC | `design/work/url-v3/contracts/semantic-cache-contract.md` |
+| SS | `design/work/url-v3/contracts/standard-scheme-matrices.md` |
+| VI | `design/work/url-v3/contracts/validation-intervention-contract.md` |
+<!-- END GENERATED: contract-sources -->
 
 ## Population rule
 

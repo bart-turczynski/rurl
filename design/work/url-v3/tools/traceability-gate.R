@@ -17,13 +17,34 @@
 #
 # WHY THE INDEX IS GENERATED, NOT WRITTEN. A hand-copied index of 515 rows is
 # a second copy of the contracts that starts drifting the moment either side
-# is edited, and the drift is silent. The `## Claim index` and
+# is edited, and the drift is silent. The `## Inputs`, `## Claim index` and
 # `## Coverage census` blocks are regenerated from the contracts and compared
 # byte-for-byte (T3), so the map cannot disagree with its own sources. The
 # hand-authored surface is deliberately small: which slice owns which contract
 # SECTION (70 rows), the CLAIMS that dissent from their section (the override
 # table), the slice registry, the discharge-record registry, and the
 # excluded-source dispositions.
+#
+# WHY `## Inputs` CARRIES NO sha256 (RURL-lynlhzec). It used to: eleven rows
+# pinning each contract, "recomputed by the verification-family validator at
+# the sealing G4 snapshot". No validator ever recomputed them, ADR 0014 then
+# retired the `## Inputs` hash comparison outright -- see the note at
+# `design/work/url-v3/tools/validate-records.R:678-684` -- and five had gone stale
+# by the time anyone measured. The column was inert, and an inert hash is worse
+# than none: it makes an unverified assertion read as a verified one.
+#
+# The list itself is worth keeping, so it is DERIVED like everything else here.
+# That also fixes what the hashes never covered. A pin answers "did this source
+# change?", which T3 already answers better by regenerating the population. It
+# cannot answer "is this the right set of sources?" -- a contract added to the
+# family and omitted from the table drifted nothing, because there was no hash
+# for a row that was not there. The generated block cannot omit one.
+#
+# This is scoped to THIS record. `contracts/cross-artifact-consistency.md`
+# keeps its pins: its `## Inputs` is "the exact sources this capstone asserts
+# over", so a hash there records which bytes its criterion-3 assertions were
+# checked against, and the remedy when it drifts is to re-check them, not to
+# re-hash. Two of those nine are stale and stay stale under `RURL-lynlhzec`.
 #
 # OWNERSHIP GRANULARITY (P0.8 D-D, RURL-sbhpzwzk). Ownership is assigned per
 # section, and a section whose columns state properties of different families
@@ -216,6 +237,8 @@ INDEX_FIELDS <- c(
   "claim_id", "status", "owning_slice", "coverage", "source"
 )
 
+SOURCE_FIELDS <- c("contract", "path")
+
 REQUIRED_SECTIONS <- c(
   "Envelope", "Purpose", "Inputs", "Population rule", "Verification slices",
   "Discharge records", "Section ownership", "Claim ownership overrides",
@@ -223,7 +246,7 @@ REQUIRED_SECTIONS <- c(
   "Open cells"
 )
 
-GENERATED_BLOCKS <- c("claim-index", "coverage-census")
+GENERATED_BLOCKS <- c("contract-sources", "claim-index", "coverage-census")
 
 CARRIER_RE <- "^RURL-[a-z0-9]{8}$"
 
@@ -464,6 +487,37 @@ resolve_coverage <- function(claims, map, root) {
   list(owner = owner, coverage = cov)
 }
 
+# The sources the claim population is derived from -- the `## Inputs` table.
+#
+# The two stop()s are GENERATOR INVARIANTS, not comparisons, and the difference
+# matters. T3 regenerates this block and byte-compares it, which is structurally
+# blind to a defect the generator and its output share: both move together and
+# agree (RURL-fymdhizq was that failure inside this very file). So the generator
+# refuses to emit a table it can see is wrong, the same way generate_census()
+# refuses to emit a census that does not sum to its own total.
+#
+# The cross-check is against the OTHER traversal of the contract family:
+# `contract_paths()` globs the directory, `derive_claims()` opens every file and
+# reports which ones carried claims. A contract that fed the population while
+# missing from this table would leave the record asserting over less than it
+# derives from -- the one defect the retired sha256 column could not catch,
+# because a row that is not there has no hash to drift.
+generate_sources <- function(claims, paths) {
+  dupe <- unique(names(paths)[duplicated(names(paths))])
+  if (length(dupe)) {
+    stop("`## Inputs` would list a contract twice: ",
+         paste(dupe, collapse = ", "), call. = FALSE)
+  }
+  missing <- setdiff(unique(claims$contract), names(paths))
+  if (length(missing)) {
+    stop("contract(s) contributed claims but are absent from `## Inputs`: ",
+         paste(missing, collapse = ", "), call. = FALSE)
+  }
+  md_table(SOURCE_FIELDS, vapply(names(paths), function(a) {
+    md_row(a, paste0("`", paths[[a]], "`"))
+  }, character(1), USE.NAMES = FALSE))
+}
+
 generate_index <- function(claims, map, root, paths) {
   r <- resolve_coverage(claims, map, root)
   src <- paste0(paths[claims$contract], ":", claims$line)
@@ -527,6 +581,7 @@ generate_blocks <- function(root, map) {
   claims <- derive_claims(root)
   paths <- contract_paths(root)
   list(
+    "contract-sources" = generate_sources(claims, paths),
     "claim-index" = generate_index(claims, map, root, paths),
     "coverage-census" = generate_census(claims, map, root, paths)
   )
@@ -1050,6 +1105,9 @@ mk <- function(contracts = NULL, ownership = NULL, slices = NULL,
       body <- c(body, md_table(OVERRIDE_FIELDS, overrides), "")
     } else if (identical(s, "Excluded sources")) {
       body <- c(body, md_table(EXCLUSION_FIELDS, exclusions), "")
+    } else if (identical(s, "Inputs")) {
+      body <- c(body, "<!-- BEGIN GENERATED: contract-sources -->",
+                "<!-- END GENERATED: contract-sources -->", "")
     } else if (identical(s, "Claim index")) {
       body <- c(body, "<!-- BEGIN GENERATED: claim-index -->",
                 "<!-- END GENERATED: claim-index -->", "")
@@ -1241,6 +1299,61 @@ self_test <- function() {
   writeLines(c(readLines(cf), "| port | P1.1 | SETTLED |"), cf)
   expect("T3 flags a new contract row not yet regenerated",
          !verdict(grown, "T3"))
+
+  # --- ## Inputs / contract-sources (RURL-lynlhzec) --------------------------
+  # The retired sha256 column answered "did a listed source change?". These
+  # assert the two things it could not: that the SET of sources is right, and
+  # that a source contributing claims cannot go unlisted.
+  sources_of <- function(root) block_content(readLines(file.path(root, MAP_REL)),
+                                             "contract-sources")
+
+  # Delete the row INSIDE the block only. `| CS | \`...\`` also spells a row of
+  # the census's `### By contract` table, so a whole-file substitution would
+  # turn T3 red through the census and prove nothing about this block.
+  dropped <- mk()
+  ln <- readLines(file.path(dropped, MAP_REL))
+  at <- block_bounds(ln, "contract-sources")
+  keep <- !(seq_along(ln) %in% seq.int(at[1], at[2]) & grepl("^\\| CS \\| `", ln))
+  writeLines(ln[keep], file.path(dropped, MAP_REL))
+  expect("T3 flags a source deleted from the `## Inputs` block",
+         !verdict(dropped, "T3"))
+
+  # The case the hashes were structurally blind to: a contract JOINS the family
+  # and the table is not updated. There was no row for it, so no hash drifted.
+  old3 <- CONTRACT_ABBREV
+  CONTRACT_ABBREV <<- c(old3, "capstone.md" = "CA")
+  cs3 <- default_contracts()
+  cs3[["capstone.md"]] <- c("# cap", "", "## Assertions", "",
+                            "| # | verdict |", "|---|---|", "| (i) | PASS |")
+  added <- mk()
+  writeLines(cs3[["capstone.md"]],
+             file.path(added, CONTRACT_DIR, "capstone.md"))
+  expect("T3 flags a contract added to the family but absent from `## Inputs`",
+         !verdict(added, "T3"))
+  # And a zero-claim source is still LISTED -- this is what the block says that
+  # the census's `### By contract` table, which only tallies contracts carrying
+  # claims, structurally cannot.
+  listed <- mk(contracts = cs3, exclusions = md_row(
+    paste0("`", CONTRACT_DIR, "/capstone.md`"), "0", "capstone"))
+  expect("the source block lists a contract that contributes no claims",
+         any(grepl("^\\| CA \\| `", sources_of(listed))))
+  CONTRACT_ABBREV <<- old3
+
+  # Generator invariants. Asserted on generate_sources() directly, because T3
+  # compares the block against this same generator: a generator that omits a
+  # source emits a block that omits it too, and the two agree byte-for-byte.
+  fake_claims <- data.frame(contract = c("CS", "SC"), stringsAsFactors = FALSE)
+  expect("the source generator refuses to omit a contract that has claims",
+         inherits(try(generate_sources(
+           fake_claims, c(CS = "a/CS.md")), silent = TRUE), "try-error"))
+  expect("the source generator refuses to list a contract twice",
+         inherits(try(generate_sources(
+           fake_claims[1, , drop = FALSE],
+           c(CS = "a/CS.md", CS = "a/other.md")), silent = TRUE), "try-error"))
+  expect("the source generator accepts a superset of the claim-bearing set",
+         !inherits(try(generate_sources(
+           fake_claims, c(CS = "a/CS.md", SC = "a/SC.md", CA = "a/CA.md")),
+           silent = TRUE), "try-error"))
 
   # --- T4 -------------------------------------------------------------------
   ghost <- mk()
