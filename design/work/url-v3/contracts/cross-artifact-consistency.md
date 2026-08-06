@@ -58,9 +58,44 @@ a real finding for the owner — it does not.
 
 ## Inputs
 
-The exact sources this capstone asserts over, hashed at authoring.
-`validate-records.R` recomputes the hashes at the cp-snapshot-3 seal. The accepted
-decisions the siblings project are already hash-enforced by `validate-manifest.R`.
+The exact sources this capstone asserts over. A hash here records **which bytes
+assertions (i)–(v) below were checked against** — it is not bookkeeping, so it
+may only be refreshed by someone who has re-run those checks.
+
+Nothing recomputes these. ADR 0014 retired the `## Inputs` sha256 comparison
+along with the seal phase (`design/work/url-v3/tools/validate-records.R:678-684`
+keeps the reasoning at the site; `validate-manifest.R`, named here until this
+revision, was deleted by the same ADR). That is a deliberate gap, not an
+oversight: the remedy when one of these drifts is to re-check the assertions,
+which no machine can confirm happened. `RURL-lynlhzec` carries it.
+
+**Two rows were re-verified and re-pinned on 2026-08-06 (`RURL-lynlhzec`).**
+`validation-intervention-contract.md` and `cleaning-mutation-contracts.md` had
+carried their authoring hashes (`5d25ce7`, `b2728d0`) through three later
+commits. What the re-check found, per assertion:
+
+- **(i)–(iii)** — unaffected. Both files' envelopes, and with them both
+  `single_writer` declarations, are byte-identical to the pinned versions; the
+  drift is confined to matrix rows and open-cell prose, and neither file
+  re-declares artifact-3 field vocabulary, comparison-key policy, or cache
+  semantics.
+- **(iv)** — verdict holds, evidence was stale. `2f7c182`/`f9db0c1` settled VI's
+  `ledger completeness` row and introduced a twelfth citation, `P2.6@5f4309b`.
+  Re-running the census gives 12 distinct `Pn.n@sha` pairs and **zero** forks, so
+  the assertion stands; its evidence cell, which listed eleven, is corrected.
+- **(v)** — verdict holds, evidence was stale. VAL-O1 closed at source, which
+  `### Census tally` already records (44 → 41, two of the three from P2.5, not
+  from this drift). Assertion (v)'s own evidence cell still said 44 and now says
+  41 — it disagreed with the tally three sections below it.
+
+Both files' assertions therefore still hold over their current bytes, and only
+then are the hashes advanced.
+
+The envelope above and this record's header comment still describe the seal
+phase and `validate-manifest.R`. They are left as written: ADR 0014 kept every
+record's frontmatter deliberately, on the ground that rewriting it to strip a
+retired lifecycle would be churn. The prose in this section, not the envelope,
+is what a reader should believe about how these hashes are maintained.
 
 Artifact 4 is represented here by its **invariant** half only
 (`public-surface-closure.md`). Its roster half, `public-surface-disposition.md`, is
@@ -74,9 +109,9 @@ checked executably by `validate-records.R` (P0.6 I1–I5).
 |---|---|
 | design/work/url-v3/contracts/canonical-state-contract.md | efebe54e645dfcaf56aa2e7d78fcad37d1f266952431a247d5197624996f43ca |
 | design/work/url-v3/contracts/standard-scheme-matrices.md | a41b45d1531efa05f11e8685e4891766e2eea15d8c3b63cec0640439dc8ec5de |
-| design/work/url-v3/contracts/validation-intervention-contract.md | aa06d046d495c94f5f1cba5bef923c666653cdceaedabc2ebee66d86d2679c18 |
+| design/work/url-v3/contracts/validation-intervention-contract.md | 8430df426ab06ed311df45d00d2ba6311d5e5b24e949c2c7c763aeba84e62dd7 |
 | design/work/url-v3/contracts/output-contracts.md | 62087dad29481e78e204f2dcb511aabea3ac823dc0651ae3c918e0c0a588975f |
-| design/work/url-v3/contracts/cleaning-mutation-contracts.md | d8996daf621ca9409d7249116c15efa1740379eda836eb4ce81aa9278ff8a255 |
+| design/work/url-v3/contracts/cleaning-mutation-contracts.md | 1169224b914482960767bd6f294f870d0bcb1ef59858aadb1f5d060e7fd9faed |
 | design/work/url-v3/contracts/semantic-cache-contract.md | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
 | design/work/url-v3/contracts/host-annotation-contracts.md | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
 | design/work/url-v3/contracts/key-join-contracts.md | c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3 |
@@ -94,18 +129,28 @@ it). "Citation census" pointers are a grep over the nine files.
 | (i) | The canonical field vocabulary is defined **once** by artifact 3 (G3.3) and is the ONLY vocabulary used by G3.6 verdicts, G3.7 outputs, and G3.9 status/cache introspection — no forked field names. | `canonical-state-contract.md` `single_writer` = "SINGLE WRITER of the canonical field vocabulary"; G3.6/G3.7/G3.9 name artifact-3 fields (e.g. `parse_status`, the 18 public fields, three-valued presence) and re-declare none. G3.4's cross-artifact section already asserts the public-surface slice of this ("the 18 public fields + three-valued presence → artifact 3"). | PASS |
 | (ii) | The comparison key is defined **once** in artifact 9 (G3.K) and only *referenced* by G3.7 (output surface e), G3.8, G3.H, and G3.4 — never redefined. | `key-join-contracts.md` `single_writer` = "SINGLE WRITER of comparison-key policy, URL-join semantics, and canonical_join migration"; `output-contracts.md` lists "comparison key" only as one of the five output **surfaces** (an assignment), not a policy re-definition; G3.4 records `canonical_join` migrating OFF `clean_url` ONTO the identity key (G3.K), and `get_url_key`/"identity key" appears in the siblings as a reference to G3.K. | PASS |
 | (iii) | Cache is defined **once** in artifact 10-cache (G3.9) and only *delegated* from G3.H (and G3.4) — never redefined. | `semantic-cache-contract.md` `single_writer` = "SINGLE WRITER of v3 cache semantics"; `host-annotation-contracts.md` `single_writer` explicitly EXCEPTS "the annotation cost/cache contract (G3.9)"; G3.4's owning-contract legend + `rurl_cache_*` rows defer cache semantics to G3.9; HOST-O4 coordinates PSL cache **mechanics** with G3.9 rather than restating them. | PASS |
-| (iv) | The strict-posture default (P2.1 B1) and every other P-tier default are cited **identically** everywhere — each `Pn.n` resolves to exactly one `@shortsha` across all nine contracts, with no fork. | Citation census over the nine files: each accepted record appears with exactly one short SHA — `P1.1@a7e0a59`, `P1.2@bb3346e`, `P2.1@a4d1b45`, `P2.2@8292c7f`, `P2.3@a7e0a59`, `P2.4@b017e87`, `P3.1@3b89b94`, `P3.2@bb3346e`, `P4.1@b017e87`, `P5.1@d254ff1`, `P5.3@8292c7f`. `grep -rhoE 'P[0-9]\.[0-9]@[0-9a-f]{7}' *.md \| sort \| uniq -c` yields exactly 11 distinct `Pn.n@sha` pairs — one per decision, zero collisions on a `Pn.n` with two SHAs. | PASS |
-| (v) | **No cell is unowned** across the artifact set: every open cell in every contract carries a named settlement destination. | The open-cell census below enumerates all 44 live open-cell IDs; each row names an owning contract and a destination that is a sibling cell, the unmade P4 host record (RCON-08), the unmade P3 mutation-slice owner decision, a future P5 decision, or §6 artifact 11 / G4. It also records the frozen-text cells a later-accepted decision has since closed (G3.3 `authority_kind` → P1.2@bb3346e; G3.K KJ-O1..O8 → P3.2@bb3346e), and the one forwarded to a sibling (G3.3 undivided-`userinfo` → OUT-O1). None resolves to "nobody." | PASS |
+| (iv) | The strict-posture default (P2.1 B1) and every other P-tier default are cited **identically** everywhere — each `Pn.n` resolves to exactly one `@shortsha` across all nine contracts, with no fork. | Citation census over the nine files: each accepted record appears with exactly one short SHA — `P1.1@a7e0a59`, `P1.2@bb3346e`, `P2.1@a4d1b45`, `P2.2@8292c7f`, `P2.3@a7e0a59`, `P2.4@b017e87`, `P3.1@3b89b94`, `P3.2@bb3346e`, `P4.1@b017e87`, `P5.1@d254ff1`, `P5.3@8292c7f`, `P2.6@5f4309b`. `grep -hoE 'P[0-9]\.[0-9]@[0-9a-f]{7}' <the nine> \| sort -u` yields exactly 12 distinct `Pn.n@sha` pairs — one per decision, zero collisions on a `Pn.n` with two SHAs. | PASS |
+| (v) | **No cell is unowned** across the artifact set: every open cell in every contract carries a named settlement destination. | The open-cell census below enumerates all **41** live open-cell IDs (see `### Census tally` for why the figure moved from 44); each row names an owning contract and a destination that is a sibling cell, the unmade P4 host record (RCON-08), the unmade P3 mutation-slice owner decision, a future P5 decision, or §6 artifact 11 / G4. It also records the frozen-text cells a later-accepted decision has since closed (G3.3 `authority_kind` → P1.2@bb3346e; G3.K KJ-O1..O8 → P3.2@bb3346e), and the one forwarded to a sibling (G3.3 undivided-`userinfo` → OUT-O1). None resolves to "nobody." | PASS |
 
 ### Note on criterion (iv)
 
-The `@shortsha` in an `accepted_evidence` citation is the commit that ratified the
-decision on `main`; validate-manifest.R hash-enforces the decision **records**
-themselves, so a forked short SHA on a P-tier citation would be a cross-artifact
-drift this capstone exists to catch. The census found none: the eleven pairs above
-are the complete set, each `Pn.n` mapping to one SHA. (`P5.3@8292c7f` and
+The `@shortsha` in an `accepted_evidence` citation is the commit that carried the
+decision onto `main`, so a forked short SHA on a P-tier citation would be a
+cross-artifact drift this capstone exists to catch: two siblings would be citing
+different versions of the same decision. The census found none: the twelve pairs
+above are the complete set, each `Pn.n` mapping to one SHA. (`P5.3@8292c7f` and
 `P2.2@8292c7f` share a commit because #212 accepted both; that is one commit
 ratifying two decisions, not one decision with two SHAs — no fork.)
+
+This note previously added that "validate-manifest.R hash-enforces the decision
+**records** themselves". That validator was deleted by ADR 0014 along with the
+rest of the seal phase, so the claim no longer holds and is removed rather than
+restated. It was a corroborating remark, not the assertion's ground: (iv) is
+re-checkable from the inputs by the census above, which is what the evidence
+column requires. What is genuinely lost is the guarantee that a cited SHA still
+resolves to the *record content* that was ratified there — under ADR 0014 a
+citation is a git reference and nothing more, and re-checking it means reading
+the commit.
 
 ## Open-cell census (criterion (v) evidence)
 
