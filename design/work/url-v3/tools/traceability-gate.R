@@ -15,31 +15,42 @@
 # claims. Nothing is hand-listed, so a claim cannot be dropped by omission:
 # add a contract row and it appears here on the next run.
 #
-# WHY THE INDEX IS GENERATED, NOT WRITTEN. A hand-copied index of 479 rows is
+# WHY THE INDEX IS GENERATED, NOT WRITTEN. A hand-copied index of 515 rows is
 # a second copy of the contracts that starts drifting the moment either side
 # is edited, and the drift is silent. The `## Claim index` and
 # `## Coverage census` blocks are regenerated from the contracts and compared
 # byte-for-byte (T3), so the map cannot disagree with its own sources. The
 # hand-authored surface is deliberately small: which slice owns which contract
-# SECTION (67 rows), the CLAIMS that dissent from their section (the override
+# SECTION (70 rows), the CLAIMS that dissent from their section (the override
 # table), the slice registry, the discharge-record registry, and the
 # excluded-source dispositions.
 #
 # OWNERSHIP GRANULARITY (P0.8 D-D, RURL-sbhpzwzk). Ownership is assigned per
-# section, and some sections cannot be expressed that way: `SS s5` states
-# special-ness, default port, host/PSL eligibility and semantic-transform
-# eligibility in four columns of one table, and the map's own precedents send
-# those to four different slices, so no single owner for the section is right
-# for all nine of its claims. The index already carries a per-claim
-# `owning_slice`, but it was a PROJECTION of the section row and therefore not
-# assignable. `## Claim ownership overrides` is the dissent list -- one row per
-# claim whose owner differs from its section's -- and the derivation resolves
-# every claim as OVERRIDE IF LISTED, SECTION OWNER OTHERWISE. The override is
-# applied here rather than transcribed into the generated block, which is the
-# whole point: T3 compares the block against this derivation, so a table the
-# derivation ignored would still pass byte-for-byte. That is why T9 exists and
-# why the self-test asserts the moved value in the generated index and census,
-# not merely that the table parses.
+# section, and a section whose columns state properties of different families
+# cannot be expressed that way. `SS`'s scheme-family table was the measured
+# case: special-ness, default port, host/PSL eligibility and semantic-transform
+# eligibility in four columns of one table, which the map's precedents send to
+# four different owners, so no single owner for the section was right for all
+# nine of its claims. The index already carries a per-claim `owning_slice`, but
+# it was a PROJECTION of the section row and therefore not assignable.
+# `## Claim ownership overrides` is the dissent list -- one row per claim whose
+# owner differs from its section's -- and the derivation resolves every claim as
+# OVERRIDE IF LISTED, SECTION OWNER OTHERWISE. The override is applied here
+# rather than transcribed into the generated block, which is the whole point:
+# T3 compares the block against this derivation, so a table the derivation
+# ignored would still pass byte-for-byte. That is why T9 exists and why the
+# self-test asserts the moved value in the generated index and census, not
+# merely that the table parses.
+#
+# THE OVERRIDE TABLE IS CURRENTLY EMPTY, AND THAT IS NOT A REASON TO DELETE IT
+# (RURL-fmkuunwj). Overrides moved the assignable KEY but not the assignable
+# ROW: a claim is a table row, so of the scheme-family table's nine rows only
+# `default-port data` -- whose other three columns were `--` -- had one property
+# to assign. The section was therefore SPLIT into one section per property,
+# which resolved that row along with the other eight and left no dissent to
+# record. The mechanism stays because the next cross-family section will need
+# it, T9 still guards it, and the self-tests exercise it over synthetic
+# contracts, so nothing here depends on a live row being on disk.
 #
 # WHAT THIS GATE DOES NOT CLAIM. `coverage = MAPPED` means the verification
 # slice that owns the claim's section is on disk -- it does NOT mean that
@@ -1397,6 +1408,18 @@ self_test <- function() {
   expect("baseline: cache-slice tallies 3, state-slice 1",
          census_claims(base, "cache-slice") == 3L &&
            census_claims(base, "state-slice") == 1L)
+
+  # The EMPTY dissent list is the real record's configuration since
+  # RURL-fmkuunwj split the section that needed an override, so it is asserted
+  # rather than left implicit in "baseline passes every rule". An empty table
+  # must be a PASS with the section rule still governing -- not a fail-closed,
+  # and not a silent skip that would also "pass" if the derivation had stopped
+  # consulting the section table at all.
+  expect("T9 passes on an empty override table", verdict(base, "T9"))
+  expect("an empty override table leaves the section rule governing",
+         identical(index_row(base, "TR-CS-s1-host")[3:4],
+                   c("state-slice", "PENDING")) &&
+           nrow(read_map(file.path(base, MAP_REL))$overrides) == 0L)
 
   moved <- cite_both(mk(overrides = ovr_row()))
   expect("an override MOVES the owner in the generated claim index",

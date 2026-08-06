@@ -59,7 +59,7 @@ checks" (`design/work/url-v3/evidence/S9-process-red-team.md`, H6). This record
 and `design/work/url-v3/tools/traceability-gate.R` are that check.
 
 The design follows from one decision: **the population is derived from the
-contracts, never transcribed.** A hand-copied index of 479 rows is a second
+contracts, never transcribed.** A hand-copied index of 515 rows is a second
 copy of the contract family that begins drifting the moment either side is
 edited, and the drift is silent — which is the precise failure mode criterion 1
 exists to prevent. So the claim index and the coverage census below are
@@ -68,7 +68,7 @@ run. Add a row to a contract and it appears here; the gate fails until it is
 owned.
 
 What is hand-authored is small and reviewable: which slice owns which contract
-**section** (67 rows), the individual **claims** that dissent from their section
+**section** (70 rows), the individual **claims** that dissent from their section
 (`## Claim ownership overrides`, 1 row), the slice registry, the discharge-record
 registry, and the disposition of any contract that contributes no claims.
 
@@ -87,18 +87,32 @@ eleventh source. The gap that let them drift unnoticed is real and unfixed — t
 recomputation is still owed by the G4 verification-family validator, and until it
 lands this table is authored, not enforced.
 
+**It has drifted again, and the amount is measured rather than feared**
+(`RURL-fmkuunwj`, recomputing every row of this table and of
+`cross-artifact-consistency.md`'s against disk). Five of the eleven rows here
+are stale — `cleaning-mutation-contracts`, `output-contracts`,
+`public-surface-closure`, `public-surface-disposition`,
+`validation-intervention-contract` — as are two of that capstone's nine
+(`validation-intervention-contract`, `cleaning-mutation-contracts`). The two
+rows `RURL-fmkuunwj` itself moved (`standard-scheme-matrices` here and there,
+and this record's pin of the capstone) are current. The other seven are **left
+stale on purpose**: re-pinning a row asserts that the record still holds over
+the file's new bytes, and for the capstone that is a claim about its
+criterion-3 assertions which nobody has re-checked. A silent re-pin would
+convert an honest stale hash into a false fresh one. Carrier: `RURL-lynlhzec`.
+
 | path | sha256 |
 |---|---|
 | `design/work/url-v3/contracts/canonical-state-contract.md` | efebe54e645dfcaf56aa2e7d78fcad37d1f266952431a247d5197624996f43ca |
 | `design/work/url-v3/contracts/cleaning-mutation-contracts.md` | d8996daf621ca9409d7249116c15efa1740379eda836eb4ce81aa9278ff8a255 |
-| `design/work/url-v3/contracts/cross-artifact-consistency.md` | 4931bde27370e5f95f6bfeeaaac67e6f6f3356862d5cd570a222db52b5073947 |
+| `design/work/url-v3/contracts/cross-artifact-consistency.md` | 3b2a8ac2d44bc9b67d81dd07e061ec3f8b88065c1366e42e1dbaac746801db1d |
 | `design/work/url-v3/contracts/host-annotation-contracts.md` | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
 | `design/work/url-v3/contracts/key-join-contracts.md` | c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3 |
 | `design/work/url-v3/contracts/output-contracts.md` | d0570174098f2caf454acfcae7a25517c16fd11c703e7c07242cb221d3dff455 |
 | `design/work/url-v3/contracts/public-surface-closure.md` | 9a1cd6c68141c55386818a6ec43e8aeecef973417ce442923e5a156a012e782a |
 | `design/work/url-v3/contracts/public-surface-disposition.md` | 9f38f465bffba1da3bb7ac457158ca8452bdd80f265a09c4cf706508192d8ad7 |
 | `design/work/url-v3/contracts/semantic-cache-contract.md` | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
-| `design/work/url-v3/contracts/standard-scheme-matrices.md` | f36ddf6cb8283af7203e7267c2bb1635df49fc670129134cfe9825cda5589d18 |
+| `design/work/url-v3/contracts/standard-scheme-matrices.md` | a41b45d1531efa05f11e8685e4891766e2eea15d8c3b63cec0640439dc8ec5de |
 | `design/work/url-v3/contracts/validation-intervention-contract.md` | aa06d046d495c94f5f1cba5bef923c666653cdceaedabc2ebee66d86d2679c18 |
 
 ## Population rule
@@ -127,9 +141,17 @@ Three consequences worth stating plainly:
   the whole point. The failure mode for a traceability artifact is not a wrong
   row, it is a missing one.
 
-The current population is **491 claims across 10 contracts and 67 sections**,
+The current population is **515 claims across 10 contracts and 70 sections**,
 as the generated census below reports it. That block is the authority for the
 number; this sentence is a summary and has drifted from it before.
+
+The count moved by 24 at `RURL-fmkuunwj` without a single new contract cell
+being written. `SS`'s scheme-family table stated four properties in four columns
+of one table, so its nine rows were nine claims that asserted thirty-three
+things; splitting it into one section per property makes the population count
+assertions where it used to count rows. That is the rule working as written
+rather than a change to it — and it is why a claim total is not a measure of how
+much a contract says.
 
 ## Verification slices
 
@@ -279,11 +301,14 @@ by-slice tally while every rule stayed green (RURL-fymdhizq).
 | SS | s2 | Precedence rows | UNASSIGNED | RURL-lkyverse |
 | SS | s3 | Admission gate (input class × axis setting) | UNASSIGNED | RURL-lkyverse |
 | SS | s4 | Interpretation / parser-route rows | UNASSIGNED | RURL-lkyverse |
-| SS | s5 | Scheme-family specialization and eligibility rows | UNASSIGNED | RURL-lkyverse |
-| SS | s6 | Credential rows | UNASSIGNED | RURL-lkyverse |
-| SS | s7 | Email rows | UNASSIGNED | RURL-lkyverse |
-| SS | s8 | Resolution rows | UNASSIGNED | RURL-lkyverse |
-| SS | s9 | Diagnostics rows | UNASSIGNED | RURL-lkyverse |
+| SS | s5 | Scheme-family special-ness rows (whatwg) | UNASSIGNED | RURL-lkyverse |
+| SS | s6 | Scheme-family default-port rows | join-slice | — |
+| SS | s7 | Scheme-family host / PSL eligibility rows | host-slice | — |
+| SS | s8 | Scheme-family semantic-transform eligibility rows | mutation-slice | — |
+| SS | s9 | Credential rows | UNASSIGNED | RURL-lkyverse |
+| SS | s10 | Email rows | UNASSIGNED | RURL-lkyverse |
+| SS | s11 | Resolution rows | UNASSIGNED | RURL-lkyverse |
+| SS | s12 | Diagnostics rows | UNASSIGNED | RURL-lkyverse |
 | VI | s1 | Repair-posture axis rows | UNASSIGNED | RURL-jdnlpydz |
 | VI | s2 | Ordered pipeline / intervention-ledger rows | UNASSIGNED | RURL-jdnlpydz |
 | VI | s3 | Verdict-layer rows | UNASSIGNED | RURL-jdnlpydz |
@@ -316,21 +341,36 @@ by-slice tally while every rule stayed green (RURL-fymdhizq).
   `OUT` §Clean output (surface c) goes to `mutation-slice` alongside the
   `CM` cleaning sections, so one slice owns surface c rather than two owning
   half each. The same logic sends `OUT` §Comparison key to `join-slice`.
+- **The four `SS` scheme-family sections are that same principle applied to a
+  table that was split so it could obey it** (`RURL-fmkuunwj`). Until the split
+  those four properties shared one table, and a claim is a *row*, so the section
+  had to carry one owner for four families' worth of claims. Each new section
+  goes to the family the map already sends that property to: default port →
+  `join-slice` on the `KJ s3` §Scheme and port truth table precedent; host / PSL
+  eligibility → `host-slice` on `HA s2` (scheme-forced host posture) and `HA s4`
+  (PSL annotation); semantic-transform eligibility → `mutation-slice` on `CM s2`.
+  P0.8 §4 names all three. **Special-ness is the one that stays `UNASSIGNED`**:
+  P0.8 §4 routes it to "the route property", which is `SS s4`
+  §Interpretation / parser-route rows — itself unowned under `RURL-lkyverse`.
+  Assigning it would invent the answer the other three did not have to invent,
+  so it keeps the carrier and waits for the same ruling `SS s4` waits for.
 
 ## Claim ownership overrides
 
 Ownership above is assigned per **section**, and some sections cannot be
 expressed at that granularity: their columns state properties of different
-families in one table. `SS s5` is the measured case — its columns are `family |
-special-ness (whatwg) | default port | host / PSL eligibility |
-semantic-transform eligibility`, which the map's own precedents send to four
-different owners (default port → `join-slice` per `KJ s3`; host / PSL
-eligibility → `host-slice` per `HA s2` and `HA s4`; semantic-transform
+families in one table. `SS`'s scheme-family table was the measured case — its
+columns were `family | special-ness (whatwg) | default port | host / PSL
+eligibility | semantic-transform eligibility`, which the map's own precedents
+send to four different owners (default port → `join-slice` per `KJ s3`; host /
+PSL eligibility → `host-slice` per `HA s2` and `HA s4`; semantic-transform
 eligibility → `mutation-slice` per `CM s2`), so no single `owning_slice` for the
-section is right for all nine of its claims. P0.8 D-D
+section was right for all nine of its claims. P0.8 D-D
 (`design/work/url-v3/decisions/P0.8-scheme-claim-ownership.md`) rules that such
 a section becomes claim-granular, and names this table as the derivation change
-that requires; `RURL-sbhpzwzk` built it.
+that requires; `RURL-sbhpzwzk` built it. That table has since been split into
+one section per property (`RURL-fmkuunwj`), which is why the dissent list below
+is empty — see the note under it for why the mechanism stays.
 
 This table is the **dissent list: one row per claim whose owner differs from its
 section's**. `## Section ownership` stays the default and carries everything
@@ -345,18 +385,36 @@ owners to the same vocabulary and carrier discipline as the section rows.
 
 | claim_id | owning_slice | carrier | reason |
 |---|---|---|---|
-| TR-SS-s5-default-port-data | join-slice | — | The row's only non-`—` column is the default-port table (`.SCHEME_DEFAULT_PORTS`, and the rule that no `ftps`/`sftp` default is standards-backed), which is the property `KJ s3` §Scheme and port truth table already owns. P0.8 §4 names that precedent explicitly. |
 
-**What this table cannot do, stated plainly.** A claim is a table *row*, so an
-override moves a whole row. Eight of `SS s5`'s nine rows state all four
-properties at once — `http, https` is special, has default ports 80/443, is
-DNS/PSL-eligible, and takes the full HTTP(S) semantic transforms — so no single
-owner is right for them at row granularity either. Claim granularity is a
-strict improvement on section granularity and it is **not sufficient** for this
-section: only the `default-port data` row, whose other three columns are `—`,
-resolves. The residue is reported as `## Open cells` 5 rather than closed by
-picking a dominant column, because picking one would freeze an answer to a
-question nobody has been asked — the same posture `UNASSIGNED` takes above.
+**The list is empty, and that is a result rather than a gap.** It carried
+exactly one row — `TR-SS-s5-default-port-data` → `join-slice` — and
+`RURL-fmkuunwj` removed the condition that row existed to work around. The
+reasoning is worth keeping because it is what the mechanism is for and what its
+limit is.
+
+A claim is a table *row*, so an override moves a whole row. `SS`'s
+scheme-family table stated special-ness, default port, host / PSL eligibility
+and semantic-transform eligibility in four columns of one table, and the map's
+precedents send those to three different families plus the unowned route
+property. Claim granularity made the *key* assignable but not the *row*: of
+those nine rows only `default-port data`, whose other three columns were `—`,
+had a single property to assign. Claim granularity was a strict improvement on
+section granularity and it was **not sufficient**, so the residue was reported
+as an open cell rather than closed by picking a dominant column. Splitting the
+contract table into one section per property — the shape P0.8 D-D left to the
+owner — is what actually resolved it, and it resolved the `default-port data`
+row along with the other eight, which is why no dissent is left to record.
+
+The table stays. It is the declared mechanism for the next section whose
+columns cross families, T9 still guards it, and rule T2 still holds its owners
+to the section rows' vocabulary. An empty dissent list asserts that no claim
+currently disagrees with its section — a fact about this tree, not a dormant
+feature. The machinery is not left resting on a live row to prove it works: the gate's
+self-tests build synthetic contracts, register an override over them, and assert
+the moved value in the **generated** claim index, its re-derived coverage, and
+the census tally — the three observables a derivation that parsed the table and
+then ignored it would leave unchanged. Those tests are what would go red if the
+apply step were removed, and they do not depend on this table having rows.
 
 ## Claim index
 
@@ -765,31 +823,55 @@ covers the section.
 | TR-SS-s4-rfc-3986-route | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:129` |
 | TR-SS-s4-opaque-path-trigger | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:130` |
 | TR-SS-s4-authority-emission-binds-p1-2 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:131` |
-| TR-SS-s5-http-https | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:137` |
-| TR-SS-s5-ftp | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:138` |
-| TR-SS-s5-ftps | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:139` |
-| TR-SS-s5-sftp | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:140` |
-| TR-SS-s5-file | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:141` |
-| TR-SS-s5-ws-wss | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:142` |
-| TR-SS-s5-mailto | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:143` |
-| TR-SS-s5-tel-data-arbitrary-foo | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:144` |
-| TR-SS-s5-default-port-data | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:145` |
-| TR-SS-s6-five-distinct-credential-routes | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:151` |
-| TR-SS-s6-generic-authority-credential-pre | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:152` |
-| TR-SS-s6-credential-output-policy-boundar | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:153` |
-| TR-SS-s6-get-password-selector-parity | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:154` |
-| TR-SS-s7-recipient-projection | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:160` |
-| TR-SS-s7-extraction-is-metadata-only | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:161` |
-| TR-SS-s7-first-local-part-decode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:162` |
-| TR-SS-s7-email-helper-surface | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:163` |
-| TR-SS-s7-indeterminate-lexer-url-level-em | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:164` |
-| TR-SS-s8-scheme-less-input | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:170` |
-| TR-SS-s8-scheme-relative-host | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:171` |
-| TR-SS-s8-rfc-relative-reference-resolutio | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:172` |
-| TR-SS-s9-get-scheme-class | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:178` |
-| TR-SS-s9-selected-scheme-facts | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:179` |
-| TR-SS-s9-absence-is-not-conformance | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:180` |
-| TR-SS-s9-email-diagnostics | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:181` |
+| TR-SS-s5-http-https | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:163` |
+| TR-SS-s5-ftp | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:164` |
+| TR-SS-s5-ftps | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:165` |
+| TR-SS-s5-sftp | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:166` |
+| TR-SS-s5-file | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:167` |
+| TR-SS-s5-ws-wss | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:168` |
+| TR-SS-s5-mailto | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:169` |
+| TR-SS-s5-tel-data-arbitrary-foo | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:170` |
+| TR-SS-s6-http-https | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:176` |
+| TR-SS-s6-ftp | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:177` |
+| TR-SS-s6-ftps | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:178` |
+| TR-SS-s6-sftp | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:179` |
+| TR-SS-s6-file | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:180` |
+| TR-SS-s6-ws-wss | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:181` |
+| TR-SS-s6-mailto | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:182` |
+| TR-SS-s6-tel-data-arbitrary-foo | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:183` |
+| TR-SS-s6-default-port-data | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:184` |
+| TR-SS-s7-http-https | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:190` |
+| TR-SS-s7-ftp | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:191` |
+| TR-SS-s7-ftps | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:192` |
+| TR-SS-s7-sftp | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:193` |
+| TR-SS-s7-file | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:194` |
+| TR-SS-s7-ws-wss | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:195` |
+| TR-SS-s7-mailto | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:196` |
+| TR-SS-s7-tel-data-arbitrary-foo | SETTLED | host-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:197` |
+| TR-SS-s8-http-https | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:203` |
+| TR-SS-s8-ftp | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:204` |
+| TR-SS-s8-ftps | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:205` |
+| TR-SS-s8-sftp | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:206` |
+| TR-SS-s8-file | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:207` |
+| TR-SS-s8-ws-wss | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:208` |
+| TR-SS-s8-mailto | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:209` |
+| TR-SS-s8-tel-data-arbitrary-foo | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/standard-scheme-matrices.md:210` |
+| TR-SS-s9-five-distinct-credential-routes | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:216` |
+| TR-SS-s9-generic-authority-credential-pre | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:217` |
+| TR-SS-s9-credential-output-policy-boundar | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:218` |
+| TR-SS-s9-get-password-selector-parity | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:219` |
+| TR-SS-s10-recipient-projection | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:225` |
+| TR-SS-s10-extraction-is-metadata-only | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:226` |
+| TR-SS-s10-first-local-part-decode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:227` |
+| TR-SS-s10-email-helper-surface | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:228` |
+| TR-SS-s10-indeterminate-lexer-url-level-em | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:229` |
+| TR-SS-s11-scheme-less-input | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:235` |
+| TR-SS-s11-scheme-relative-host | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:236` |
+| TR-SS-s11-rfc-relative-reference-resolutio | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:237` |
+| TR-SS-s12-get-scheme-class | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:243` |
+| TR-SS-s12-selected-scheme-facts | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:244` |
+| TR-SS-s12-absence-is-not-conformance | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:245` |
+| TR-SS-s12-email-diagnostics | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:246` |
 | TR-VI-s1-strict | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:88` |
 | TR-VI-s1-compatibility | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:89` |
 | TR-VI-s1-repair | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:90` |
@@ -875,12 +957,12 @@ other, and this one summarizes the very thing the record exists to establish.
 | cache-slice | MAPPED | 20 | 20 | 0 |
 | state-slice | PENDING | 44 | 43 | 1 |
 | full-string-slice | PENDING | 51 | 48 | 3 |
-| mutation-slice | PENDING | 64 | 49 | 15 |
-| join-slice | PENDING | 69 | 61 | 8 |
+| mutation-slice | PENDING | 72 | 57 | 15 |
+| join-slice | PENDING | 77 | 69 | 8 |
 | migration-slice | PENDING | 22 | 18 | 4 |
-| host-slice | PENDING | 41 | 35 | 6 |
+| host-slice | PENDING | 49 | 43 | 6 |
 | UNASSIGNED | UNASSIGNED | 180 | 148 | 32 |
-| **total** | — | 491 | 422 | 69 |
+| **total** | — | 515 | 446 | 69 |
 
 ### By contract
 
@@ -894,7 +976,7 @@ other, and this one summarizes the very thing the record exists to establish.
 | PS | `design/work/url-v3/contracts/public-surface-closure.md` | 8 | 8 | 0 | 1 |
 | PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 65 | 35 | 30 | 4 |
 | SC | `design/work/url-v3/contracts/semantic-cache-contract.md` | 20 | 20 | 0 | 5 |
-| SS | `design/work/url-v3/contracts/standard-scheme-matrices.md` | 50 | 46 | 4 | 9 |
+| SS | `design/work/url-v3/contracts/standard-scheme-matrices.md` | 74 | 70 | 4 | 12 |
 | VI | `design/work/url-v3/contracts/validation-intervention-contract.md` | 70 | 68 | 2 | 10 |
 <!-- END GENERATED: coverage-census -->
 
@@ -971,9 +1053,9 @@ does NOT define, and must not be read as redefining:
 
 ## Open cells
 
-Five, all reported rather than resolved.
+Four, all reported rather than resolved.
 
-1. **180 of 491 claims (37%) have no owning verification slice.** Three
+1. **180 of 515 claims (35%) have no owning verification slice.** Three
    carriers, each a question only the owner can answer:
    `RURL-jdnlpydz` (validation/intervention, 62 claims), `RURL-lkyverse`
    (standard/scheme matrices, 49), `RURL-sunrlgio` (public-surface
@@ -990,12 +1072,24 @@ Five, all reported rather than resolved.
    carrier's 62. The count does not net them out: a discharge record grants no
    coverage here, and moving those claims is an ownership ruling with its own
    carrier. Separately, these hand-written figures lag the generated census
-   above. The numerals were last restated here when the override table landed
-   (P0.8's own §Consequences assigns that restatement to this edit); they are a
+   above. The numerals were last restated here at `RURL-fmkuunwj`; they are a
    prose summary of a block that regenerates, so read the census, not this
    paragraph, when the two disagree. The **netting** is the part that is still
    owed and it belongs to `RURL-jdnlpydz`'s ruling, not to any edit that only
    changes how ownership is spelled.
+
+   **Read the drop from 37% to 35% for what it is.** `RURL-fmkuunwj` split the
+   `SS` scheme-family table into one section per property and assigned three of
+   the four to the families the map already sends them to, which moved 24 claims
+   into `join-slice`, `host-slice` and `mutation-slice`. The unowned count did
+   **not** move: it is 180 before and 180 after. Every one of those 24 is newly
+   *counted*, not newly *covered* — they came into the population in the same
+   edit that owned them, because the rows they were split out of were already
+   unowned as wholes. The percentage fell only because the denominator grew.
+   None of the three carriers' figures changed either (62 / 49 / 69), and the
+   one `SS` property with no precedent to follow — special-ness — stayed
+   `UNASSIGNED` under `RURL-lkyverse` rather than being assigned to make the
+   number smaller.
 
 2. **`vector-slice` owns no contract section.** The vector property family is
    named in §7 G4 criterion 3, but no contract section states vector/scalar
@@ -1024,22 +1118,25 @@ Five, all reported rather than resolved.
    visible reviewed diff rather than silent drift, which is the property that
    matters; it does not make ids immutable. Once slices cite `TR-*` ids, a
    rename becomes a breaking edit — and the gate will surface it as one.
-   `## Claim ownership overrides` is now one such citer, and rule T9 is where a
-   rename surfaces: an override naming a dead id fails rather than quietly
-   ceasing to move its claim.
 
-5. **Eight of `SS s5`'s nine claims are still not expressible, because a claim
-   is a row and those rows state four properties each.** P0.8 D-D's granularity
-   change lands above and resolves exactly one of them — `default-port data`,
-   whose other three columns are `—`. The other eight (`http, https`, `ftp`,
-   `ftps`, `sftp`, `file`, `ws, wss`, `mailto`, `tel, data, arbitrary foo:`)
-   each assert special-ness *and* a default port *and* host/PSL eligibility
-   *and* semantic-transform eligibility, which the map's precedents send to
-   three different slices plus the parser-route property. Claim granularity is
-   a strict improvement on section granularity and it is not sufficient here.
-   Two shapes close it and the choice is the owner's: **split the contract
-   table** into one claim-bearing section per property, which changes the
-   population and renumbers those ids (see 4 above), or **rule a dominant
-   property** per row and record why the other three ride along. Assigning them
-   by picking a column silently is the option this record declines. Carrier:
-   `RURL-lkyverse`'s successor question, filed as `RURL-fmkuunwj`.
+   **This has now been measured, not just predicted.** `RURL-fmkuunwj` split one
+   `SS` section into four, which renumbered every claim in the four sections
+   below it (`SS s6`–`s9` became `s9`–`s12`, 16 claims) and retired the id
+   `TR-SS-s5-default-port-data` that `## Claim ownership overrides` cited. T9
+   failed on that dead id — it did not quietly stop moving its claim — and T1
+   reported the four new sections as ORPHANs in the same run. A renumbering
+   edit is therefore loud in both directions today, before any slice has adopted
+   the ids. What is still true is that nothing outside this record cites a
+   `TR-*` id yet, so the blast radius has not actually been tested at scale.
+
+**Closed since the last revision.** A fifth cell reported that eight of `SS s5`'s
+nine claims were not expressible, because a claim is a row and those rows stated
+four properties each. `RURL-fmkuunwj` took the first of the two shapes it
+offered — split the contract table into one claim-bearing section per property —
+and the cell is removed rather than restated. The residue it named is gone:
+three of the four properties now sit in sections owned by the family the map
+already sends them to, and the fourth, special-ness, is `UNASSIGNED` under
+`RURL-lkyverse` for the ordinary reason every other unowned section is, not
+because it cannot be expressed. What that split cost — 24 more claims in the
+population and 16 renumbered ids — is recorded in `## Population rule` and in 4
+above.
