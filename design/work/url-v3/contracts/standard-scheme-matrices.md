@@ -132,17 +132,82 @@ are the parser-route/specialization rows.
 
 ## Scheme-family specialization and eligibility rows
 
-| family | special-ness (whatwg) | default port | host / PSL eligibility | semantic-transform eligibility | owner_decision_ref | status |
-|---|---|---|---|---|---|---|
-| `http`, `https` | special | 80 / 443 | DNS/PSL + host presentation eligible | **full HTTP(S) semantic/canonical transforms** | P4.1@b017e87 (D-A) | SETTLED |
-| `ftp` | special | 21 | DNS/PSL-eligible host (detail → G3.H) | none (SEO transforms are HTTP(S)-only) | P4.1@b017e87 (D-A, D-B) | SETTLED |
-| `ftps` | **non-special** (in-tree general parser; legacy curl RFC route) | **none** (no standards-backed default port; grandfathered for CRAN, not standards) | host-eligible; detail → G3.H | none | P4.1@b017e87 (D-B) | SETTLED |
-| `sftp` | non-special (general-only) | none; **no browser-fixer inference** | host-eligible; detail → G3.H | none | P4.1@b017e87 (D-B) | SETTLED |
-| `file` | special | none | localhost/empty-host mapping; drive/path per standard (detail → G3.H) | none | P4.1@b017e87 (D-A, D-E); ADR 0012 D5 | SETTLED |
-| `ws`, `wss` | special (general-only) | 80 / 443 | host model under `general`; inert under `web` | none | P4.1@b017e87 (D-A, D-D) | SETTLED |
-| `mailto` | non-special | none | recipient-domain PSL carve-out (D-C) | none | P4.1@b017e87 (D-C); ADR 0012 D7 | SETTLED |
-| `tel`, `data`, arbitrary `foo:` | non-special (opaque/list/authority) | none | none | none | P4.1@b017e87 (D-D) | SETTLED |
-| default-port data | `.SCHEME_DEFAULT_PORTS` = `http 80, https 443, ftp 21, ws 80, wss 443`; deliberately no `ftps`/`sftp`; any asserted ftps/sftp port is convention, flagged, never standards-backed | — | — | — | P4.1@b017e87 (D-A.4, D-B) | SETTLED |
+Four sections, one per property, not one table with four normative columns.
+
+**Why the split, and what it does not change.** Until `RURL-fmkuunwj` these four
+properties shared a single table keyed on `family`. Every cell below is
+transcribed unchanged from that table, and each row keeps the exact
+`owner_decision_ref` its composite row carried — no cell's meaning, status, or
+attribution moves, and nothing here narrows a citation to a sub-property, which
+would be a new attribution this record has no authority to make. What changes is
+that a *row* now asserts one property instead of four.
+
+That matters outside this file. `verification/traceability-map.md` makes a table
+row the unit of a normative claim, so a row asserting special-ness *and* a
+default port *and* host/PSL eligibility *and* semantic-transform eligibility
+could not be assigned an owner: the map's own precedents send those to
+`join-slice` (`KJ s3`), `host-slice` (`HA s2`/`HA s4`) and `mutation-slice`
+(`CM s2`) respectively (P0.8 §4). Claim-level ownership overrides (P0.8 D-D)
+made the *key* assignable but not the *row*, resolving exactly one of the nine —
+`default-port data`, whose other three columns were `—`. Splitting the table is
+the shape P0.8 D-D left to the owner and is what makes the remaining eight
+expressible. `## Scheme-family default-port rows` is where the `default-port
+data` row now lives: its payload sat in the `special-ness` column positionally
+while stating the default-port table, which is why that row read as ambiguous
+and why only its semantics — not its position — could resolve it.
+
+## Scheme-family special-ness rows (whatwg)
+
+| family | special-ness (whatwg) | owner_decision_ref | status |
+|---|---|---|---|
+| `http`, `https` | special | P4.1@b017e87 (D-A) | SETTLED |
+| `ftp` | special | P4.1@b017e87 (D-A, D-B) | SETTLED |
+| `ftps` | **non-special** (in-tree general parser; legacy curl RFC route) | P4.1@b017e87 (D-B) | SETTLED |
+| `sftp` | non-special (general-only) | P4.1@b017e87 (D-B) | SETTLED |
+| `file` | special | P4.1@b017e87 (D-A, D-E); ADR 0012 D5 | SETTLED |
+| `ws`, `wss` | special (general-only) | P4.1@b017e87 (D-A, D-D) | SETTLED |
+| `mailto` | non-special | P4.1@b017e87 (D-C); ADR 0012 D7 | SETTLED |
+| `tel`, `data`, arbitrary `foo:` | non-special (opaque/list/authority) | P4.1@b017e87 (D-D) | SETTLED |
+
+## Scheme-family default-port rows
+
+| family | default port | owner_decision_ref | status |
+|---|---|---|---|
+| `http`, `https` | 80 / 443 | P4.1@b017e87 (D-A) | SETTLED |
+| `ftp` | 21 | P4.1@b017e87 (D-A, D-B) | SETTLED |
+| `ftps` | **none** (no standards-backed default port; grandfathered for CRAN, not standards) | P4.1@b017e87 (D-B) | SETTLED |
+| `sftp` | none; **no browser-fixer inference** | P4.1@b017e87 (D-B) | SETTLED |
+| `file` | none | P4.1@b017e87 (D-A, D-E); ADR 0012 D5 | SETTLED |
+| `ws`, `wss` | 80 / 443 | P4.1@b017e87 (D-A, D-D) | SETTLED |
+| `mailto` | none | P4.1@b017e87 (D-C); ADR 0012 D7 | SETTLED |
+| `tel`, `data`, arbitrary `foo:` | none | P4.1@b017e87 (D-D) | SETTLED |
+| default-port data | `.SCHEME_DEFAULT_PORTS` = `http 80, https 443, ftp 21, ws 80, wss 443`; deliberately no `ftps`/`sftp`; any asserted ftps/sftp port is convention, flagged, never standards-backed | P4.1@b017e87 (D-A.4, D-B) | SETTLED |
+
+## Scheme-family host / PSL eligibility rows
+
+| family | host / PSL eligibility | owner_decision_ref | status |
+|---|---|---|---|
+| `http`, `https` | DNS/PSL + host presentation eligible | P4.1@b017e87 (D-A) | SETTLED |
+| `ftp` | DNS/PSL-eligible host (detail → G3.H) | P4.1@b017e87 (D-A, D-B) | SETTLED |
+| `ftps` | host-eligible; detail → G3.H | P4.1@b017e87 (D-B) | SETTLED |
+| `sftp` | host-eligible; detail → G3.H | P4.1@b017e87 (D-B) | SETTLED |
+| `file` | localhost/empty-host mapping; drive/path per standard (detail → G3.H) | P4.1@b017e87 (D-A, D-E); ADR 0012 D5 | SETTLED |
+| `ws`, `wss` | host model under `general`; inert under `web` | P4.1@b017e87 (D-A, D-D) | SETTLED |
+| `mailto` | recipient-domain PSL carve-out (D-C) | P4.1@b017e87 (D-C); ADR 0012 D7 | SETTLED |
+| `tel`, `data`, arbitrary `foo:` | none | P4.1@b017e87 (D-D) | SETTLED |
+
+## Scheme-family semantic-transform eligibility rows
+
+| family | semantic-transform eligibility | owner_decision_ref | status |
+|---|---|---|---|
+| `http`, `https` | **full HTTP(S) semantic/canonical transforms** | P4.1@b017e87 (D-A) | SETTLED |
+| `ftp` | none (SEO transforms are HTTP(S)-only) | P4.1@b017e87 (D-A, D-B) | SETTLED |
+| `ftps` | none | P4.1@b017e87 (D-B) | SETTLED |
+| `sftp` | none | P4.1@b017e87 (D-B) | SETTLED |
+| `file` | none | P4.1@b017e87 (D-A, D-E); ADR 0012 D5 | SETTLED |
+| `ws`, `wss` | none | P4.1@b017e87 (D-A, D-D) | SETTLED |
+| `mailto` | none | P4.1@b017e87 (D-C); ADR 0012 D7 | SETTLED |
+| `tel`, `data`, arbitrary `foo:` | none | P4.1@b017e87 (D-D) | SETTLED |
 
 ## Credential rows
 
