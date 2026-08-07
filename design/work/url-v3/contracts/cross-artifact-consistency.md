@@ -132,6 +132,37 @@ closed:
   deferred closures — carried by `RURL-ojrtnnhy`, and recorded in G3.K by this
   slice rather than discharged — will not move this figure either.
 
+**One row was re-verified and re-pinned on 2026-08-07 (`RURL-ojrtnnhy`).**
+`key-join-contracts.md` applied `P3.2@bb3346e`'s eight `KJ-O1..O8` rulings
+(D-A..D-H) to the matrix rows that still read `OPEN`, and marked the matching
+`## Open cells` bullets CLOSED. P3.2 had deferred that edit on a *condition* —
+"updated when G3.K next moves, not here" — which the row above fired without
+discharging; this is the discharge:
+
+- **(i), (iii)** — unaffected. Neither artifact-3 field vocabulary nor cache
+  semantics is touched, and no envelope field changed.
+- **(ii)** — holds, and this edit is the direction (ii) requires. The eight
+  closures are applied *inside* artifact 9, the single writer of comparison-key
+  and join policy. The siblings that already cite these rulings
+  (`public-surface-disposition.md`, `host-annotation-contracts.md`,
+  `verification/key-join-discharge.md`) were referencing a definition its own
+  contract did not yet state; the definition site now agrees with its references,
+  rather than a reference having become the de-facto definition. No sibling
+  redefines anything.
+- **(iv)** — holds, and the count does not move. `P3.2@bb3346e` gains eight new
+  citation sites and `P3.3@d9b0976` one more (the `## Purpose` prose), all inside
+  `key-join-contracts.md`; both pairs were already in the census. Re-running it
+  gives 13 distinct `Pn.n@sha` pairs with **zero** forks.
+- **(v)** — holds at **41**, measured rather than assumed. The row above
+  *predicted* this; the check is a re-count of the destination table's rows, which
+  yields 41 before and after. What moved is bookkeeping between the two
+  **excluded** groups: `KJ-O1..O8` left "frozen-text already closed" and entered
+  "closed at source," because the contract now records the closure itself instead
+  of a later decision recording it on the contract's behalf. Ten cells are
+  excluded either way, so no live cell was opened or closed. `### Census tally`
+  now states that sum as the invariant so a future reader does not read the 9→1
+  move in one group as a lost closure.
+
 The envelope above and this record's header comment still describe the seal
 phase and `validate-manifest.R`. They are left as written: ADR 0014 kept every
 record's frontmatter deliberately, on the ground that rewriting it to strip a
@@ -155,7 +186,7 @@ checked executably by `validate-records.R` (P0.6 I1–I5).
 | design/work/url-v3/contracts/cleaning-mutation-contracts.md | 1169224b914482960767bd6f294f870d0bcb1ef59858aadb1f5d060e7fd9faed |
 | design/work/url-v3/contracts/semantic-cache-contract.md | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
 | design/work/url-v3/contracts/host-annotation-contracts.md | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
-| design/work/url-v3/contracts/key-join-contracts.md | a033e389ab42af8242c092115a28690436842cd65be5cf8923eaea24b3fd68d4 |
+| design/work/url-v3/contracts/key-join-contracts.md | 456f4641a5908f17cb3c664d0b8a8a7106c6787bb36c531fbe159e0a4591e009 |
 | design/work/url-v3/contracts/public-surface-closure.md | 914b3ae27e05bf7bc7c6515c60b90598fff95a648188c2c28d26241750dd341f |
 
 ## Criterion-3 assertions ((i)–(v))
@@ -171,7 +202,7 @@ it). "Citation census" pointers are a grep over the nine files.
 | (ii) | The comparison key is defined **once** in artifact 9 (G3.K) and only *referenced* by G3.7 (output surface e), G3.8, G3.H, and G3.4 — never redefined. | `key-join-contracts.md` `single_writer` = "SINGLE WRITER of comparison-key policy, URL-join semantics, and canonical_join migration"; `output-contracts.md` lists "comparison key" only as one of the five output **surfaces** (an assignment), not a policy re-definition; G3.4 records `canonical_join` migrating OFF `clean_url` ONTO the identity key (G3.K), and `get_url_key`/"identity key" appears in the siblings as a reference to G3.K. | PASS |
 | (iii) | Cache is defined **once** in artifact 10-cache (G3.9) and only *delegated* from G3.H (and G3.4) — never redefined. | `semantic-cache-contract.md` `single_writer` = "SINGLE WRITER of v3 cache semantics"; `host-annotation-contracts.md` `single_writer` explicitly EXCEPTS "the annotation cost/cache contract (G3.9)"; G3.4's owning-contract legend + `rurl_cache_*` rows defer cache semantics to G3.9; HOST-O4 coordinates PSL cache **mechanics** with G3.9 rather than restating them. | PASS |
 | (iv) | The strict-posture default (P2.1 B1) and every other P-tier default are cited **identically** everywhere — each `Pn.n` resolves to exactly one `@shortsha` across all nine contracts, with no fork. | Citation census over the nine files: each accepted record appears with exactly one short SHA — `P1.1@a7e0a59`, `P1.2@bb3346e`, `P2.1@a4d1b45`, `P2.2@8292c7f`, `P2.3@a7e0a59`, `P2.4@b017e87`, `P3.1@3b89b94`, `P3.2@bb3346e`, `P4.1@b017e87`, `P5.1@d254ff1`, `P5.3@8292c7f`, `P2.6@5f4309b`, `P3.3@d9b0976`. `grep -hoE 'P[0-9]\.[0-9]@[0-9a-f]{7}' <the nine> \| sort -u` yields exactly 13 distinct `Pn.n@sha` pairs — one per decision, zero collisions on a `Pn.n` with two SHAs. | PASS |
-| (v) | **No cell is unowned** across the artifact set: every open cell in every contract carries a named settlement destination. | The open-cell census below enumerates all **41** live open-cell IDs (see `### Census tally` for why the figure moved from 44); each row names an owning contract and a destination that is a sibling cell, the unmade P4 host record (RCON-08), the unmade P3 mutation-slice owner decision, a future P5 decision, or §6 artifact 11 / G4. It also records the frozen-text cells a later-accepted decision has since closed (G3.3 `authority_kind` → P1.2@bb3346e; G3.K KJ-O1..O8 → P3.2@bb3346e), and the one forwarded to a sibling (G3.3 undivided-`userinfo` → OUT-O1). None resolves to "nobody." | PASS |
+| (v) | **No cell is unowned** across the artifact set: every open cell in every contract carries a named settlement destination. | The open-cell census below enumerates all **41** live open-cell IDs (see `### Census tally` for why the figure moved from 44); each row names an owning contract and a destination that is a sibling cell, the unmade P4 host record (RCON-08), the unmade P3 mutation-slice owner decision, a future P5 decision, or §6 artifact 11 / G4. It also records the cells a later-accepted decision has since closed — one still frozen in its leaf's text (G3.3 `authority_kind` → P1.2@bb3346e) and nine closed at source in their own contract (G3.K KJ-O1..O8 → P3.2@bb3346e; VAL-O1 → P2.6@5f4309b) — and the one forwarded to a sibling (G3.3 undivided-`userinfo` → OUT-O1). None resolves to "nobody." | PASS |
 
 ### Note on criterion (iv)
 
@@ -250,17 +281,20 @@ these.
 
 ### Frozen-text open cells a later-accepted decision has since closed
 
-Two sibling leaves were authored (and their leaf merged) **before** the P1.2 /
-P3.2 owner decisions were sealed (both at `bb3346e`, PR #226/#227), so their frozen
-`## Open cells` sections still list cells that a subsequently-accepted decision has
-closed. The capstone records the post-authoring disposition — surfacing exactly the
-cross-artifact closure a consistency check exists to catch. These are **not**
-counted among the live open cells above.
+A sibling leaf authored (and merged) **before** a later owner decision was sealed
+can carry a frozen `## Open cells` section that still lists cells the decision has
+since closed. The capstone records the post-authoring disposition — surfacing
+exactly the cross-artifact closure a consistency check exists to catch. These are
+**not** counted among the live open cells above.
 
 | leaf | frozen open cell(s) | disposition |
 |---|---|---|
 | G3.3 (canonical-state) | `authority_kind` — the `empty` value's operational meaning (S1-F5) | **CLOSED by P1.2@bb3346e**: authority state splits into `authority_delimiter_present: logical` + `authority_payload_kind: {empty, present}` — exactly the resolution G3.3 Q3 deferred to "a dedicated P1 authority-state decision." G3.3's frozen text predates the seal. |
-| G3.K (key-join) | KJ-O1..O8 (all eight) | **CLOSED by P3.2@bb3346e** (`P3.2-key-join-closure.md`, ACCEPTED, in `manifest.decisions[]`): `whatwg` default (KJ-O1), root-dot **DISTINCT** (KJ-O2), y-primary right-join mirror (KJ-O3), anti-join keeps non-keyable x (KJ-O4), `by`-only named-vector selector (KJ-O5), deterministic no-silent-repair suffix (KJ-O6), key hidden by default `key_name=NULL` (KJ-O7), type restoration + typed zero-row prototypes (KJ-O8). G3.K's frozen text (leaf #225) predates the P3.2 seal (#227). |
+
+G3.K's `KJ-O1..O8` were the second member of this group until `RURL-ojrtnnhy`
+applied P3.2's eight rulings to the contract itself. They are now closed **at
+source** and have moved to the table below; the disposition is unchanged, only its
+carrier is. Neither reading counted them live, so the tally did not move.
 
 One further G3.3 frozen cell is a live forward, not a closure:
 
@@ -277,6 +311,7 @@ census against an earlier revision can see why the count moved.
 
 | cell | owning contract (G3 leaf) | disposition |
 |---|---|---|
+| KJ-O1..O8 (all eight) | key-join (G3.K) | **CLOSED by P3.2@bb3346e** (`P3.2-key-join-closure.md`, ACCEPTED): `whatwg` default (KJ-O1), root-dot **DISTINCT** (KJ-O2), y-primary right-join mirror (KJ-O3), anti-join keeps non-keyable x (KJ-O4), `by`-only named-vector selector (KJ-O5), deterministic no-silent-repair suffix (KJ-O6), key hidden by default `key_name=NULL` (KJ-O7), type restoration + typed zero-row prototypes (KJ-O8). P3.2 deferred the contract edit ("updated when G3.K next moves, not here"), so for two revisions this row sat in the frozen-text table above; `RURL-ojrtnnhy` applied all eight to `key-join-contracts.md`'s matrix rows and marked the `## Open cells` bullets CLOSED, which is what moves the row here. Closed in G3.K itself, not reconciled here. |
 | VAL-O1 | validation-intervention (G3.6) | **CLOSED by P2.6@5f4309b** (`P2.6-ledger-recovery-categorization.md`), the owner-decision extension of P2.1 this cell named as its destination. The four recoveries beyond repeated-`@` are standard-selected parse behavior governed by `url_standard`, not posture-bound interventions, so the `ledger completeness` row settles as "no rows" and the ordered ledger stays at six stages (D-A–D-E). Closed in `validation-intervention-contract.md` itself (`ledger completeness` row + the VAL-O1 bullet), not here. |
 
 ### Census tally
@@ -287,10 +322,18 @@ unowned.** PSC-O1..O5 are pure forwarders to sibling cells (not independent prod
 cells); HOST-O1..O8 and MUT-O1..O12 forward to the two unmade owner decisions (the
 P4 host record / RCON-08 and the P3 mutation-slice); CACHE-O1/O2/O3/O5 and VAL-O4
 forward to future P5 / post-3.0 decisions; CACHE-O4 and PSC-O5 forward to §6
-artifact 11 / G4. Separately, **9** frozen-text cells that predate a later seal are
-already **closed** (G3.3 `authority_kind` → P1.2@bb3346e; G3.K KJ-O1..O8 →
-P3.2@bb3346e), and G3.3's undivided-`userinfo` forwards to OUT-O1. No cell in the
-set is unowned.
+artifact 11 / G4. Separately, **10** cells are already **closed** by a
+later-accepted decision — **1** still frozen in its leaf's text (G3.3
+`authority_kind` → P1.2@bb3346e) and **9** closed at source in their own contract
+(G3.K KJ-O1..O8 → P3.2@bb3346e; VAL-O1 → P2.6@5f4309b) — and G3.3's
+undivided-`userinfo` forwards to OUT-O1. No cell in the set is unowned.
+
+**The 10 did not change size when `RURL-ojrtnnhy` landed**, only which of the two
+tables holds them: applying P3.2's eight rulings to `key-join-contracts.md` moved
+KJ-O1..O8 from frozen-text to closed-at-source. Both groups are excluded from the
+live count by the same rule, so the live figure stays **41**. Read against an
+earlier revision, "9 frozen-text" and "1 closed at source" became "1" and "9"; the
+sum is the invariant, not either part.
 
 **Why this tally moved from 44 to 41 (`RURL-ztuodtcl`).** Three cells left the
 live set, and only one of them is this revision's own work:
