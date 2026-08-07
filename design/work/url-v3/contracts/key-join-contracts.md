@@ -43,9 +43,13 @@ non-URL key; fixes the component and scheme/port equivalence rules P3.1 settled;
 defines the six identity-keyed join operations; and records the non-silent
 migration of legacy `canonical_join()` away from implicit `clean_url` equality.
 
-This record **projects** P3.1 + S5; it does not implement these surfaces and
-makes no product decision. A `SETTLED` row cites `P3.1@3b89b94`. A cell P3.1
-left incomplete is `OPEN` with its exact impact and settlement destination.
+This record **projects** P3.1 + S5, and the later P3-tier decisions that closed
+the cells P3.1 left incomplete; it does not implement these surfaces and makes no
+product decision. Most `SETTLED` rows cite `P3.1@3b89b94`; the eight detail cells
+originally flagged `KJ-O1…KJ-O8` cite `P3.2@bb3346e` (D-A…D-H), and truth-table
+row 6's two relaxed cells cite `P3.3@d9b0976` §1. In each case the row transcribes
+that record's ruling rather than inventing one. A cell no accepted record has
+closed is `OPEN` with its exact impact and settlement destination.
 
 ## Inputs
 
@@ -67,7 +71,7 @@ already hash-enforced as an ACCEPTED decision by `validate-manifest.R`.
 | key representation | classed object carrying key-policy version and schema version in metadata; internal tuple uses injective length-prefixed/binary framing; printable form is diagnostics-only | never ambiguous delimiter concatenation; distinct component tuples cannot collide even when payloads contain separators/control bytes | P3.1@3b89b94 (D-A.2) | SETTLED |
 | identity input | canonical identity state after standard interpretation and before cleaning/display | never `clean_url`; consumes canonical structural kinds and identity spellings from artifact 3 without renaming them | P3.1@3b89b94 (D-A, D-B) | SETTLED |
 | non-interference | cleaning, profile, and display-only options cannot change key bytes for a fixed interpretation + key policy | includes `path_encoding`, `host_encoding`, protocol/case/www/subdomain/PSL presentation, query cleaning, `port_handling`, and profile bundles | P3.1@3b89b94 (D-A.3) | SETTLED |
-| interpretation selector | standard interpretation is an explicit key-policy field and may change canonical identity | P3.1 requires a stable default but does not name it | — (see Open cells KJ-O1) | OPEN |
+| interpretation selector | standard interpretation is an explicit key-policy field and may change canonical identity; the default is `"whatwg"` | `NULL` and `"rfc3986"` stay selectable policy values — only the *default* is fixed, and a later change to it bumps the key version per P3.1 D-B | P3.1@3b89b94 (D-B); P3.2@bb3346e (D-A; closes KJ-O1) | SETTLED |
 | diagnostic surface | keyability reason is exposed by a companion path; credentials are not emitted in diagnostic keys/errors | `NA` alone is not allowed to conflate missing input with invalid parse | P3.1@3b89b94 (D-C, D-D) | SETTLED |
 
 ## Key-policy rows
@@ -83,7 +87,7 @@ selected standard's normalized identity, not source-byte equality.
 | port | normalize absent vs explicit default for HTTP `80` and HTTPS `443` under each row's own explicit scheme | non-default, another scheme's default, empty/invalid, and missing-scheme ports remain significant; ftp/ws/wss/custom stay literal in key-policy v1 | P3.1@3b89b94 (D-B; ratification Q3/Q4/Q8) | SETTLED |
 | authority | frame `authority_kind` independently from `host_kind`; never collapse absent and empty accidentally | the exact vocabulary is consumed from artifact 3 and therefore inherits its authority-state OPEN cell | P3.1@3b89b94 (D-B); contract-canonical-state Open cells | SETTLED |
 | host kind | include domain/opaque/IPv4/IPv6/empty/absent kind; normalize according to kind | DNS/IDNA only for eligible domain hosts; canonical IP identity for IP kinds; opaque hosts use scheme/standard-appropriate identity | P3.1@3b89b94 (D-B) | SETTLED |
-| domain spelling | internal normalized domain identity, never Unicode/Punycode display | trailing-root-dot equivalence is not fixed by P3.1 | — (see Open cells KJ-O2) | OPEN |
+| domain spelling | internal normalized domain identity, never Unicode/Punycode display; a trailing DNS root dot is key-significant, so `example.com.` and `example.com` are **distinct** | any root-dot collapse is a future explicit, versioned DNS-oriented comparison policy carrying a key-version bump, never a silent default; coordinated with G3.H, which records the root dot as retained normalized-domain identity | P3.1@3b89b94 (D-B); P3.2@bb3346e (D-B; closes KJ-O2) | SETTLED |
 | host editing | `www`, subdomain/PSL trimming, and presentation encoding are excluded | a future lossy `host_scope` comparison mode requires a separately versioned policy and provenance | P3.1@3b89b94 (D-B) | SETTLED |
 | path | selected standard's post-interpretation structural identity before presentation; path kind and segments framed | reserved encoded bytes remain data unless the selected standard parsed them structurally; `%2F` never becomes `/` merely for comparison | P3.1@3b89b94 (D-B) | SETTLED |
 | path display/editing | excluded | case/presentation encoding, index removal, trailing-slash and SEO cleanup may exist only as separately named lossy comparison policies | P3.1@3b89b94 (D-A.3, D-B) | SETTLED |
@@ -132,16 +136,6 @@ The `exact` column is unchanged: under `scheme_equality = "exact"` the pair stay
 and for row 11 also `RURL-kmkyicpt`) — P3.3 `## Two cells this record does not
 settle` is explicit that §1 does not reach them.
 
-> **Carried debt — the `KJ-O1…KJ-O8` cells below are stale.** `P3.2@bb3346e`
-> closed all eight (D-A…D-H), but deferred the edit: "each `KJ-O*` OPEN cell is
-> closed … and the matrix row flips to SETTLED. **Updated when G3.K next moves,
-> not here.**" This amendment *is* G3.K moving, so that condition has now fired.
-> It is recorded rather than discharged here, because eight cell closures plus an
-> `## Open cells` rewrite is a larger change than this one-row amendment and
-> moves the capstone's criterion-(v) census. Carrier: **`RURL-ojrtnnhy`**. Until
-> it lands, the eight rows below and `## Open cells` state questions their
-> governing decision has already answered.
-
 ## Eligibility and collision rows
 
 | concern | contract | owner_decision_ref | status |
@@ -164,27 +158,27 @@ dplyr version.
 |---|---|---|---|---|---|---|
 | `url_inner_join(x, y, ...)` | eligible matching x/y pairs; Cartesian duplicate expansion unless relationship/multiple policy rejects or narrows | x order; y match order within each x | x columns then non-key y columns under suffix rules; comparison-key visibility follows KJ-O7 | non-keyable rows do not match and are omitted | P3.1@3b89b94 (D-D) | SETTLED |
 | `url_left_join(x, y, ...)` | every x row; eligible matches expand; unmatched x receives missing y payload | x order; y match order within each x | family prototype | non-keyable x retained unmatched; non-keyable y cannot match | P3.1@3b89b94 (D-D) | SETTLED |
-| `url_right_join(x, y, ...)` | every y row; eligible matches expand; unmatched y receives missing x payload | P3.1 does not choose y-primary mirror versus another pinned algorithm | family prototype | non-keyable y retained unmatched; non-keyable x cannot match | — (see Open cells KJ-O3) | OPEN |
+| `url_right_join(x, y, ...)` | every y row; eligible matches expand; unmatched y receives missing x payload | y order; x match order within each y — the exact y-primary mirror of `url_left_join()`, so the two directional joins are one symmetry rather than two order rules | family prototype | non-keyable y retained unmatched; non-keyable x cannot match | P3.1@3b89b94 (D-D); P3.2@bb3346e (D-C; closes KJ-O3) | SETTLED |
 | `url_full_join(x, y, ...)` | all matched pairs plus unmatched rows from both sides | left-join result in x order, then unmatched y in y order | family prototype | non-keyable rows retained separately and never match | P3.1@3b89b94 (D-D) | SETTLED |
 | `url_semi_join(x, y, ...)` | each x row whose eligible key has at least one eligible y match; never duplicate x for duplicate y | x order | x columns only | non-keyable x excluded; non-keyable y supplies no match | P3.1@3b89b94 (D-D) | SETTLED |
-| `url_anti_join(x, y, ...)` | each x row with no eligible y match; one output per x | x order | x columns only | P3.1 does not confirm whether non-keyable x is retained by default | — (see Open cells KJ-O4) | OPEN |
+| `url_anti_join(x, y, ...)` | each x row with no eligible y match; one output per x | x order | x columns only | non-keyable x is **retained**: by construction it has no eligible y match, which is the anti-join predicate itself; dropping it would conflate "not keyable" with "matched and excluded" | P3.1@3b89b94 (D-C, D-D); P3.2@bb3346e (D-D; closes KJ-O4) | SETTLED |
 
 ## Cross-cutting join rows
 
 | axis | contract | owner_decision_ref | status |
 |---|---|---|---|
-| URL columns | first release accepts one named URL column per side; exact public `by`/`col_x`/`col_y` signature is not fixed | — (see Open cells KJ-O5) | OPEN |
+| URL columns | first release accepts one named URL column per side, selected by a single `by` argument: a bare string names one column present on both sides; a length-one **named vector** maps left to right, `by = c(x_col = "y_col")`. No separate `col_x`/`col_y` — a longer named vector generalizes to multi-column keying without a signature break | P3.1@3b89b94 (D-D); P3.2@bb3346e (D-E; closes KJ-O5) | SETTLED |
 | key policy | one immutable policy applied symmetrically | P3.1@3b89b94 (D-D) | SETTLED |
 | parse policy | selected interpretation may affect identity; cleaning profiles and display dials are rejected as match inputs | P3.1@3b89b94 (D-A.3, D-D) | SETTLED |
 | relationship | `none`, `one-to-one`, `one-to-many`, `many-to-one`, `many-to-many`; validate eligible keys before materialization | P3.1@3b89b94 (D-D) | SETTLED |
 | multiple matches | default `all`; any lossy first/last mode is separately named with stable order and never reuses `collision` | P3.1@3b89b94 (D-D) | SETTLED |
 | duplicate counts | eligible, nonmissing keys only; missing/invalid counts reported separately | P3.1@3b89b94 (D-D) | SETTLED |
 | invalid/warnings | separate `invalid = keep/drop/error` and `warnings = allow/reject/error` axes; do not reuse `on_parse_error` | P3.1@3b89b94 (D-D) | SETTLED |
-| key visibility | P3.1 allows either hidden-by-default or explicit exposure under a collision-proof name; the exposed value is always the classed non-URL key | — (see Open cells KJ-O7) | OPEN |
+| key visibility | **hidden by default** (`key_name = NULL`); a non-`NULL` unique scalar string opts into one exposed column carrying the classed non-URL key. A `key_name` colliding with any output column is an early error, never a silent rename | P3.1@3b89b94 (D-D); P3.2@bb3346e (D-G; closes KJ-O7) | SETTLED |
 | original URLs | preserve both originals when names differ; semi/anti keep x only; never overwrite with cleaned display | P3.1@3b89b94 (D-D) | SETTLED |
-| suffix/name repair | behavior must be deterministic and reject ambiguity, but P3.1 does not choose distinct-suffix rejection versus a single repair algorithm | — (see Open cells KJ-O6) | OPEN |
+| suffix/name repair | one deterministic rurl algorithm, `suffix = c(".x", ".y")` by default: each side's input names must be unique; `suffix` must be two non-`NA` scalar strings; overlapping non-key names take `suffix[[1]]` on the x occurrence and `suffix[[2]]` on the y occurrence; any outcome that is still not a unique output schema is an **early error**. Columns are never silently repaired, renamed beyond the defined suffixing, or dropped | P3.1@3b89b94 (D-D); P3.2@bb3346e (D-F; closes KJ-O6) | SETTLED |
 | row order except right join | exact per settled cells of the six-join matrix, including duplicate and unmatched placement | P3.1@3b89b94 (D-D) | SETTLED |
-| type/attributes | the family is an independent rurl contract, but P3.1 does not name an exact restoration strategy for data-frame subclasses/attributes or zero-row prototypes | — (see Open cells KJ-O8) | OPEN |
+| type/attributes | restoration is **by construction, not by blind copy**: the result is built by row-slicing `x`'s prototype, so whatever `x`'s class preserves under subsetting is what the result preserves, and y's columns are appended under the suffix rules with their own types. Every zero-row/no-match result carries the complete typed would-be schema — all x columns, all contributed y columns under their suffixed names, and the `key_name` column when exposed — each a length-zero vector of its correct type | P3.1@3b89b94 (D-D); P3.2@bb3346e (D-H; closes KJ-O8) | SETTLED |
 | conditions | stable typed conditions for invalid input, relationship, unmatched, suffix/name collision, and policy conflict; representative key/count data must not reveal credentials | P3.1@3b89b94 (D-D) | SETTLED |
 | resource bound | preflight relationship/cardinality before result expansion | P3.1@3b89b94 (D-D) | SETTLED |
 | diagnostics | companion result/path carries per-row parse/keyability facts; diagnostics never encoded in a URL-looking display key | P3.1@3b89b94 (D-C, D-D) | SETTLED |
@@ -236,42 +230,90 @@ Other artifacts consume it without redefining equality:
 
 ## Open cells
 
-P3.1 did not settle these exact choices. They are recorded rather than filled
-by invention. Each blocks only the named implementation detail; the settled
-identity-before-presentation contract remains usable by downstream drafting.
+**No live open cell remains.** All eight cells this contract flagged when it was
+authored — `KJ-O1…KJ-O8`, the exact choices P3.1 did not settle — reached their
+named destination and are **closed at source**: each is applied to its matrix row
+above, citing `P3.2@bb3346e` and the decision letter that closed it.
+
+The bullets are retained rather than deleted, marked CLOSED, so the deferral text
+survives as provenance and a reader can see what each cell asked. Their
+**Settles at:** line named "a dedicated P3 key/join closure decision"; that
+decision is `P3.2-key-join-closure.md`, ACCEPTED at `bb3346e`, and it is the
+single referent all eight resolved to.
 
 - **KJ-O1 — default parsing standard for `url_key_policy()`.** P3.1 D-B
   requires an explicit standard field with a stable owner-selected default but
   names no default. **Impact:** default key bytes cannot be frozen.
   **Settles at:** a dedicated P3 key/join closure decision before implementation.
+  → **CLOSED by P3.2@bb3346e (D-A):** the default is `"whatwg"`, not
+  `parse_url()`'s `NULL`; `NULL` and `"rfc3986"` stay selectable. Applied at the
+  `interpretation selector` row.
 - **KJ-O2 — trailing-root-dot domain equivalence.** P3.1 consumes normalized
   domain identity but does not say whether a terminal DNS root dot compares
   equal to its undotted spelling. **Impact:** one host-policy cell and fixtures
   remain open. **Settles at:** the same P3 closure decision, coordinated with
   G3.H's host identity vocabulary.
+  → **CLOSED by P3.2@bb3346e (D-B):** **DISTINCT** by default — WHATWG defines
+  equality over serialized URLs and exempts only certificate comparison from the
+  trailing dot, so collapsing it would be a DNS relaxation, not the spec-exact
+  baseline. Applied at the `domain spelling` row; G3.H carries the coordinated
+  host-vocabulary half.
 - **KJ-O3 — exact `url_right_join()` stable order.** P3.1 adopts an independent
   rurl contract but does not choose the S5 fork between a y-primary mirror and
   another pinned order. **Impact:** exact right-join output order and fixtures
   cannot be frozen. **Settles at:** the P3 closure decision.
+  → **CLOSED by P3.2@bb3346e (D-C):** the y-primary mirror of
+  `url_left_join()`. Applied at the `url_right_join` row.
 - **KJ-O4 — non-keyable x rows in `url_anti_join()`.** S5 recommends retaining
   them as unmatched but marks owner confirmation required; P3.1 does not
   confirm it. **Impact:** anti-join invalid/missing default remains open.
   **Settles at:** the P3 closure decision.
+  → **CLOSED by P3.2@bb3346e (D-D):** RETAINED — a row that cannot match
+  anything is the anti-join predicate itself. Applied at the `url_anti_join` row.
 - **KJ-O5 — public URL-column selector signature.** P3.1 fixes one URL column
   per side for the first release but not whether the API exposes `by`, separate
   `col_x`/`col_y`, or both. **Impact:** semantics are stable, public formals are
   not. **Settles at:** the P3 closure decision, then G3.4 records the exports.
+  → **CLOSED by P3.2@bb3346e (D-E):** `by` alone, using the named-vector idiom.
+  Applied at the `URL columns` row; G3.4 records the resulting formals.
 - **KJ-O6 — suffix and duplicate-name repair.** P3.1 requires deterministic
   behavior and early rejection of ambiguity but does not choose strict distinct
   suffixes versus one repair algorithm. **Impact:** exact result prototypes for
   overlapping/duplicate column names remain open. **Settles at:** the P3
   closure decision.
+  → **CLOSED by P3.2@bb3346e (D-F):** one deterministic algorithm,
+  `suffix = c(".x", ".y")`, ambiguity an early error and never a silent repair.
+  Applied at the `suffix/name repair` row.
 - **KJ-O7 — comparison-key visibility default.** P3.1 requires any visible key
   to use a collision-proof explicit name and the classed non-URL value, but
   leaves the default at "hidden or explicit." **Impact:** the default output
   schema has one unresolved column. **Settles at:** the P3 closure decision.
+  → **CLOSED by P3.2@bb3346e (D-G):** hidden by default, opt-in exposure via a
+  non-`NULL` `key_name`. Applied at the `key visibility` row.
 - **KJ-O8 — type restoration and zero-row prototypes.** P3.1 chooses an
   independent rurl join contract but does not fix whether data-frame subclasses
   and non-column attributes are restored, nor the exact typed prototype for
   every zero-row/no-match result. **Impact:** type/attribute promises and empty
   fixtures remain open. **Settles at:** the P3 closure decision.
+  → **CLOSED by P3.2@bb3346e (D-H):** restoration by row-slicing `x`'s
+  prototype, and a complete typed would-be schema on every zero-row result.
+  Applied at the `type/attributes` row.
+
+### Not open cells, but not discharged either
+
+Two **SETTLED** truth-table cells carry findings that this contract deliberately
+does not resolve, and they are named here so a reader does not read "no live open
+cell" as "nothing outstanding." Neither is a `KJ-O*` cell, neither is counted in
+the cross-artifact open-cell census, and neither is opened by this section:
+
+- **Row 8** (`missing scheme/no port` vs `HTTP/no port`, `equal` under
+  `http_https_missing`) is not reachable by collapsing scheme presence alone —
+  the pair also differs on `authority_delimiter_present`, which P1.2 D-A frames
+  as independent identity. Tracked at `RURL-ixxvjjwj`.
+- **Row 11** (`scheme-relative/no port` vs `missing host-shaped/no port`) is
+  posture-dependent: under `rfc3986` the cell is evaluable and holds on key
+  inequality; under `whatwg` it holds by the never-match rule instead. Tracked at
+  `RURL-ixxvjjwj`, and additionally at `RURL-kmkyicpt`.
+
+`P3.3 ## Two cells this record does not settle` is the authority for both; §1 of
+that record does not reach them, and this contract does not extend it.

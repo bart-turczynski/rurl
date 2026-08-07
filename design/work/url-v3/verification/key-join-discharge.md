@@ -68,21 +68,24 @@ transcribed:
 | | | | **51** |
 
 The cross-cutting block is the only one that is not a whole table, so its
-selection is stated rather than assumed. Of its 15 rows, 4 are OPEN cells
-(`URL columns` KJ-O5, `key visibility` KJ-O7, `suffix/name repair` KJ-O6,
-`type/attributes` KJ-O8) and 3 are counted in other blocks (`key policy` and
-`parse policy` are the key surface's `url_key_policy` and `non-interference`
-rows; `row order except right join` is the six-join matrix's own order column).
-15 − 4 − 3 = **8**: `relationship`, `multiple matches`, `duplicate counts`,
-`invalid/warnings`, `original URLs`, `conditions`, `resource bound`,
-`diagnostics` — which is exactly the register's phrase
+selection is stated rather than assumed. Of its 15 rows, 4 were the OPEN cells
+`KJ-O5` (`URL columns`), `KJ-O6` (`suffix/name repair`), `KJ-O7`
+(`key visibility`) and `KJ-O8` (`type/attributes`) **when VD-001 was written**,
+which is what put them outside its cell set; and 3 are counted in other blocks
+(`key policy` and `parse policy` are the key surface's `url_key_policy` and
+`non-interference` rows; `row order except right join` is the six-join matrix's
+own order column). 15 − 4 − 3 = **8**: `relationship`, `multiple matches`,
+`duplicate counts`, `invalid/warnings`, `original URLs`, `conditions`,
+`resource bound`, `diagnostics` — which is exactly the register's phrase
 "relationship/multiplicity/resource/typed-condition/diagnostics rows".
 
-The four OPEN cross-cutting cells are **not** part of VD-001's 51 and are not
-claimed by this record's count. They were closed by P3.2 D-E..D-H after VD-001
-was written, and are implemented and tested; their evidence is listed in a
-separate section below so a reader is not left wondering whether they shipped
-untested.
+Those four cells are **not** part of VD-001's 51 and are not claimed by this
+record's count. P3.2 D-E..D-H closed them after VD-001 was written, and
+`RURL-ojrtnnhy` then applied that closure to the contract — so their `status`
+column now reads `SETTLED`, and the "4" above is a fact about the contract as
+VD-001 found it, not about its current bytes. They are implemented and tested;
+their evidence is listed in a separate section below so a reader is not left
+wondering whether they shipped untested.
 
 ## Cell → evidence map
 
@@ -214,13 +217,13 @@ suffix/name collision and policy conflict — all ship with reachable triggers a
 are covered above. The same contract-text edit (`RURL-isbsbrry`) carries this
 row.
 
-## Beyond VD-001 — the four OPEN cross-cutting cells
+## Beyond VD-001 — the four cross-cutting cells it left out
 
 Not part of the 51 and not counted here, but shipped in the same slice, so their
-evidence is recorded rather than left implicit. All four were closed by P3.2
-after VD-001 was written.
+evidence is recorded rather than left implicit. All four were OPEN when VD-001
+was written and closed by P3.2 afterwards.
 
-| open cell | closed by | evidence |
+| cell | closed by | evidence |
 |---|---|---|
 | KJ-O5 — public URL-column selector | P3.2 D-E (`by`, the named-vector idiom) | `test-url-join.R :: "by accepts a bare string and a length-one named vector"`; `:: "the join column must be character or factor"`; `:: "a factor join column is accepted and keys as its labels"` |
 | KJ-O6 — suffix and duplicate-name repair | P3.2 D-F (one deterministic algorithm, ambiguity an early error) | `test-url-join.R :: "overlapping non-key names are suffixed deterministically"`; `:: "suffix ambiguity is an early error, never a silent repair"`; `:: "duplicate input column names are rejected before any join work"`; `:: "suffix must be two non-NA strings"` |
