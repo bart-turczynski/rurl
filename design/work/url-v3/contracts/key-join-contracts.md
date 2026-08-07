@@ -107,7 +107,7 @@ does not widen that scheme family.
 | HTTP absent port | HTTP `:8080` | distinct | distinct | distinct | P3.1@3b89b94 (D-B) | SETTLED |
 | HTTPS absent port | HTTPS `:80` | distinct | distinct | distinct | P3.1@3b89b94 (D-B) | SETTLED |
 | HTTP `:443` | HTTPS absent | distinct | distinct | distinct | P3.1@3b89b94 (D-B; ratification Q3) | SETTLED |
-| HTTP `:80` | HTTPS `:443` | distinct | distinct | distinct | P3.1@3b89b94 (D-B; ratification Q3) | SETTLED |
+| HTTP `:80` | HTTPS `:443` | distinct | equal | equal | P3.1@3b89b94 (D-B; ratification Q3); relaxed cells amended by P3.3@d9b0976 §1 | SETTLED |
 | HTTP absent | HTTPS absent | distinct | equal | equal | P3.1@3b89b94 (D-B) | SETTLED |
 | missing scheme/no port | HTTP/no port | distinct | distinct | equal | P3.1@3b89b94 (D-B) | SETTLED |
 | missing scheme `:80` | HTTP/no port | distinct | distinct | distinct | P3.1@3b89b94 (D-B; ratification Q4) | SETTLED |
@@ -116,6 +116,31 @@ does not widen that scheme family.
 | FTP `:21` | FTP/no port | distinct | — | — | P3.1@3b89b94 (D-B; ratification Q8) | SETTLED |
 | WS `:80` / WSS `:443` | same scheme absent port | distinct | — | — | P3.1@3b89b94 (D-B; ratification Q8) | SETTLED |
 | custom `:123` | same custom scheme/no port | distinct | — | — | P3.1@3b89b94 (D-B; ratification Q8) | SETTLED |
+
+### Note on row 6 (amended by P3.3)
+
+Row 6's two relaxed cells read `distinct` until `P3.3@d9b0976` §1. They were
+**unsatisfiable**, not merely awkward: `:81` makes key equality an equivalence
+relation, and rows 1, 2 and 7 already force the pair equal by composition —
+`HTTP :80` ~ `HTTP absent` ~ `HTTPS absent` ~ `HTTPS :443`. Row 6 denied the
+composition of three equalities it did not itself deny. Amending it was the only
+option that did not empty the relaxed mode of its purpose, since row 7 *is* the
+collapse and rows 1–2 are the port rule stated one paragraph above.
+
+The `exact` column is unchanged: under `scheme_equality = "exact"` the pair stays
+`distinct`. Rows 8 and 11 remain unsettled on separate grounds (`RURL-ixxvjjwj`,
+and for row 11 also `RURL-kmkyicpt`) — P3.3 `## Two cells this record does not
+settle` is explicit that §1 does not reach them.
+
+> **Carried debt — the `KJ-O1…KJ-O8` cells below are stale.** `P3.2@bb3346e`
+> closed all eight (D-A…D-H), but deferred the edit: "each `KJ-O*` OPEN cell is
+> closed … and the matrix row flips to SETTLED. **Updated when G3.K next moves,
+> not here.**" This amendment *is* G3.K moving, so that condition has now fired.
+> It is recorded rather than discharged here, because eight cell closures plus an
+> `## Open cells` rewrite is a larger change than this one-row amendment and
+> moves the capstone's criterion-(v) census. Carrier: **`RURL-ojrtnnhy`**. Until
+> it lands, the eight rows below and `## Open cells` state questions their
+> governing decision has already answered.
 
 ## Eligibility and collision rows
 

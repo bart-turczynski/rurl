@@ -114,14 +114,17 @@ found, per clause:
   rather than read off a table: every export resolves to exactly one roster row
   and every roster row to an export, with no missing row, no extra row and no
   duplicate. All eight new cells name `G3.K`, which is in the legend.
-- **I3 — holds for seven of the eight; the eighth is a real finding.** Each new
-  row is `SETTLED` and cites a P3-tier decision. But `url_key_policy` cites
-  `P3.3@d9b0976`, and **G3.K does not project P3.3**: `key-join-contracts.md`
-  does not mention it, and the legend row below lists only P3.1 and P3.2. The
-  cause is recorded in P3.3's own `scope` — the contract edit was deferred to the
-  cp-snapshot-3 seal, which ADR 0014 retired, leaving it uncarried. Neither the
-  legend nor I3 is amended here: both are the ownership model, and changing them
-  reopens G3 (see `## The closure invariant`). Filed as `RURL-nravluqd`.
+- **I3 — held for seven of the eight; the eighth was a real finding, since
+  repaired.** Each new row is `SETTLED` and cites a P3-tier decision. But
+  `url_key_policy` cites `P3.3@d9b0976`, and at that revision **G3.K did not
+  project P3.3**: `key-join-contracts.md` did not mention it, and the legend row
+  below listed only P3.1 and P3.2. The cause was recorded in P3.3's own `scope` —
+  the contract edit was deferred to the cp-snapshot-3 seal, which ADR 0014
+  retired, leaving it uncarried. Closed by `RURL-nravluqd`: the truth table's row
+  6 now carries P3.3's amendment, and the legend row below now lists
+  `P3.3@d9b0976`. **That legend edit reopens G3** by this record's own reopening
+  rule (see `## The closure invariant`) — which under ADR 0014 is discharged by
+  the merge that carries it, acceptance being merge to `main` and nothing else.
 - **I4 — holds, untouched.** Every one of the eight is `SETTLED`, so the drift
   invented no open question and did not change the OPEN set. Every open-cell ID
   cited by the roster still resolves in the contract that names it, and the
@@ -208,7 +211,7 @@ ownership model and reopens G3 exactly as the reopening rule prescribes (P0.6).
 | G3.8 | cleaning-mutation-contracts | 8 | P2.2@8292c7f, P3.1@3b89b94 |
 | G3.9 | semantic-cache-contract | 10 (cache) | P5.1@d254ff1 |
 | G3.H | host-annotation-contracts | 10 (host) | P4.1@b017e87 + host-facing boundaries (RCON-08 deep record UNMADE) |
-| G3.K | key-join-contracts | 9 | P3.1@3b89b94, P3.2@bb3346e |
+| G3.K | key-join-contracts | 9 | P3.1@3b89b94, P3.2@bb3346e, P3.3@d9b0976 |
 | — | verification contracts (NOT a G3 leaf) | 11 | RCON-09/RCON-10; G4 / P5.1 / P5.3 (downstream) |
 
 ## Cross-artifact term / status / state-field agreement
