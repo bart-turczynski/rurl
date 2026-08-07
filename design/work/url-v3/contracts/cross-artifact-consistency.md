@@ -109,6 +109,29 @@ confined to that file's `## Inputs` section:
 - **(v)** — unaffected. The edit invents no open cell and changes no PSC-O group;
   the finding it records is filed against a sibling, not opened here.
 
+**Two rows were re-verified and re-pinned on 2026-08-07 (`RURL-nravluqd`).**
+`key-join-contracts.md` took P3.3's row-6 amendment, and
+`public-surface-closure.md`'s legend gained `P3.3@d9b0976` so that G3.K projects
+the decision its roster row cites — the finding the row above recorded, now
+closed:
+
+- **(i), (iii)** — unaffected. Neither edit touches artifact-3 field vocabulary
+  or cache semantics, and no envelope field changed.
+- **(ii)** — holds, and this is the edit that tests it. The comparison key must
+  be defined **once** in artifact 9 and only referenced elsewhere. Amending row 6
+  happens *inside* that single writer, which is the definition being exercised,
+  not a fork; and artifact 4 gained a legend **reference** to P3.3, which is
+  precisely the referencing (ii) requires of it. No sibling redefines the rule.
+- **(iv)** — holds, and the count does not move. `P3.3@d9b0976` now also appears
+  in `key-join-contracts.md` and in the legend, but it entered the census in the
+  row above, so the census still yields 13 distinct `Pn.n@sha` pairs — with
+  **zero** forks, P3.3 resolving to one SHA at every site.
+- **(v)** — unaffected. Row 6 was `SETTLED` before and after; no open cell was
+  opened or closed, so the 41 live IDs stand. `KJ-O1..O8` remain excluded as
+  frozen-text-already-closed (`:240`), which is why applying P3.2's eight
+  deferred closures — carried by `RURL-ojrtnnhy`, and recorded in G3.K by this
+  slice rather than discharged — will not move this figure either.
+
 The envelope above and this record's header comment still describe the seal
 phase and `validate-manifest.R`. They are left as written: ADR 0014 kept every
 record's frontmatter deliberately, on the ground that rewriting it to strip a
@@ -132,8 +155,8 @@ checked executably by `validate-records.R` (P0.6 I1–I5).
 | design/work/url-v3/contracts/cleaning-mutation-contracts.md | 1169224b914482960767bd6f294f870d0bcb1ef59858aadb1f5d060e7fd9faed |
 | design/work/url-v3/contracts/semantic-cache-contract.md | a70acc712e3db5f1426d45106e925d445af048df03086a230e04a4545fc67001 |
 | design/work/url-v3/contracts/host-annotation-contracts.md | ec67597447dd0c57dd8c0c7bc9e2216d6bc3c0ee75e956ec729e9a499b551ee0 |
-| design/work/url-v3/contracts/key-join-contracts.md | c8ab02251a2dda7760265ab32a889338134d81f938e0fba2a85de48d1063a7d3 |
-| design/work/url-v3/contracts/public-surface-closure.md | 31a72c2ef5613c83fd0ec7d5018aa79f2289786f740384146dc959e88e9399a5 |
+| design/work/url-v3/contracts/key-join-contracts.md | a033e389ab42af8242c092115a28690436842cd65be5cf8923eaea24b3fd68d4 |
+| design/work/url-v3/contracts/public-surface-closure.md | 914b3ae27e05bf7bc7c6515c60b90598fff95a648188c2c28d26241750dd341f |
 
 ## Criterion-3 assertions ((i)–(v))
 

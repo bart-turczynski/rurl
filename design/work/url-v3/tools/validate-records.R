@@ -641,6 +641,27 @@ psd_legend <- function(ln) {
   out
 }
 
+# G3 leaf -> the accepted decisions the legend says that leaf governs. Same table
+# as psd_legend(), fourth column. Used to check that a SETTLED roster row cites a
+# decision its OWNER actually projects, not merely something Pn.n@sha-shaped:
+# RURL-nravluqd was a roster row citing P3.3 while G3.K did not project it, which
+# the shape-only check below could not see.
+psd_legend_decisions <- function(ln) {
+  out <- list()
+  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
+               parse_pipe_tables(ln))
+  if (length(lg) != 1) return(out)
+  dcol <- "governing accepted decisions"
+  if (!dcol %in% lg[[1]]$header) return(out)
+  for (r in lg[[1]]$rows) {
+    leaf <- trimws(gv(r, "G3 leaf") %||% "")
+    if (!grepl("^G3\\.[0-9A-Z]+$", leaf)) next
+    out[[leaf]] <- unlist(regmatches(gv(r, dcol) %||% "",
+                                     gregexpr("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", gv(r, dcol) %||% "")))
+  }
+  out
+}
+
 env_required <- c("id", "name", "artifact_number", "schema_version", "tracked_location",
                   "owner", "single_writer", "lifecycle_state", "dependencies", "bound_decision",
                   "bound_evidence", "closes_finding", "completion_rule", "content_hash",
@@ -904,6 +925,9 @@ if (dir.exists(contracts_dir)) {
       lg <- psd_legend(inv_ln)
       check(length(lg) >= 8L,
             "public-surface-disposition: could not read the owning-contract legend from the invariant half")
+      psd_leg_dec <- psd_legend_decisions(inv_ln)
+      check(length(psd_leg_dec) >= 8L,
+            "public-surface-disposition: could not read the legend's governing-decision column")
       ctext <- list()
       for (f in unique(unlist(lg))) {
         p <- file.path(contracts_dir, f)
@@ -934,6 +958,21 @@ if (dir.exists(contracts_dir)) {
               grepl("ADR [0-9]{4}", disp) || grepl("discharged", disp)
             check(ok, sprintf("public-surface-disposition %s: SETTLED cites no decision, ADR, or discharge (I3): '%s'",
                               cell, disp))
+            # I3, second half: the citation must be one the OWNER projects. The
+            # check above is shape-only, so a row could cite a decision its owning
+            # contract has never heard of and still pass — which is exactly how
+            # RURL-nravluqd survived (`url_key_policy` cited P3.3 while G3.K's
+            # legend row listed only P3.1 and P3.2, and the contract never
+            # mentioned it). Silent when a leaf lists no decisions, so the
+            # artifact-11/artifact-4 rows are unaffected.
+            cited <- regmatches(disp, gregexpr("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", disp))[[1]]
+            allowed <- unique(unlist(psd_leg_dec[leaves]))
+            if (length(cited) && length(allowed)) {
+              for (pd in setdiff(cited, allowed))
+                check(FALSE, sprintf(
+                  "public-surface-disposition %s: SETTLED cites %s, which the legend does not list for %s (I3)",
+                  cell, pd, paste(leaves, collapse = "/")))
+            }
           } else if (identical(st, "OPEN")) {
             # I3/I4: each -O id cited must EXIST in one of the owning contracts.
             # "HOST-O2/O4" is shorthand: a bare /O<n> inherits the last prefix.
