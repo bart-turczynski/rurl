@@ -86,10 +86,69 @@ against the first on every run.
 
 ## Inputs
 
-The exact source this contract closes, hashed at authoring. `validate-records.R`
-recomputes the hash at the cp-snapshot-3 seal. The owning G3 contracts are
-referenced by name (siblings riding the same seal); the accepted decisions they
-project are already hash-enforced by `validate-manifest.R`.
+The exact source this contract closes. The hash records **which bytes I1–I5 and
+the PSC-O groups were last checked against** — it is not bookkeeping, so it may
+only be refreshed by someone who has re-run those checks. The owning G3
+contracts are referenced by name; the accepted decisions they project are
+hash-enforced elsewhere.
+
+Nothing recomputes this hash. ADR 0014 retired the `## Inputs` sha256 comparison
+along with the seal phase (`design/work/url-v3/tools/validate-records.R:678-684`
+keeps the reasoning at the site; `validate-manifest.R`, named here until this
+revision, was deleted by the same ADR). The gap is deliberate: the remedy when
+this input drifts is to re-run the invariant, which no machine can confirm
+happened.
+
+**Re-verified and re-pinned on 2026-08-07 (`RURL-arwfxzul`).** The register had
+carried its authoring hash (`0616de7`) through the eight-export identity surface
+of `RURL-mihbyjsr` (`9fce025`). That drift is eight new `exported-function` rows
+plus one envelope edit deleting a transcribed export count. What the re-check
+found, per clause:
+
+- **I1 — holds, and the drift moved toward it.** The envelope edit deleted the
+  literal count from the register's `completion_rule` in favour of a derived
+  bijection, which is what I1 demands. The only numerals left in artifact 4 are
+  this file's header comment recounting the stale prose that was *removed* — a
+  description of the failure mode, not a normative count.
+- **I2 — holds at the grown size.** The bijection was re-derived from `NAMESPACE`
+  rather than read off a table: every export resolves to exactly one roster row
+  and every roster row to an export, with no missing row, no extra row and no
+  duplicate. All eight new cells name `G3.K`, which is in the legend.
+- **I3 — holds for seven of the eight; the eighth is a real finding.** Each new
+  row is `SETTLED` and cites a P3-tier decision. But `url_key_policy` cites
+  `P3.3@d9b0976`, and **G3.K does not project P3.3**: `key-join-contracts.md`
+  does not mention it, and the legend row below lists only P3.1 and P3.2. The
+  cause is recorded in P3.3's own `scope` — the contract edit was deferred to the
+  cp-snapshot-3 seal, which ADR 0014 retired, leaving it uncarried. Neither the
+  legend nor I3 is amended here: both are the ownership model, and changing them
+  reopens G3 (see `## The closure invariant`). Filed as `RURL-nravluqd`.
+- **I4 — holds, untouched.** Every one of the eight is `SETTLED`, so the drift
+  invented no open question and did not change the OPEN set. Every open-cell ID
+  cited by the roster still resolves in the contract that names it, and the
+  PSC-O1…O5 groups below still account for every OPEN row — the three `curl-*`
+  rows via PSC-O5's collective phrase, the rest by name.
+- **I5 — holds, untouched.** The drift added no public-output-field row, so the
+  Stage-A internal/public split is not implicated.
+
+The `## Scope boundaries` claim that this register is "referenced and hashed,
+never edited … not transitioned by the seal" also survives, in the sense it was
+written: the drift added rows as the surface grew, but transitioned no row's
+state — every row is still `DISCOVERED` and the register's `lifecycle_state` is
+still `PROPOSED`. Only then is the hash advanced.
+
+Two places where this file's prose is **narrower than what
+`validate-records.R` already enforces** were also found, both on the single
+`migration-surface` cell: I2 requires an owner "drawn from the legend" and I3 a
+cited accepted decision, while the validator deliberately admits `artifact 4` as
+an owner (`:924`) and `discharged` as a citation (`:934`). Recorded, not fixed,
+for the same reason as above — the text at issue is I2 and I3 themselves.
+Filed as `RURL-psyozxqw`.
+
+The envelope above and this record's header comment still describe the seal
+phase and `validate-manifest.R`. They are left as written: ADR 0014 kept every
+record's frontmatter deliberately, rather than churn it to strip a retired
+lifecycle. The prose in this section, not the envelope, is what a reader should
+believe about how this hash is maintained.
 
 `public-surface-disposition.md` is deliberately **absent** from this table. Hashing
 the roster here would put it back inside the pin chain this file's own gate
@@ -101,7 +160,7 @@ re-acceptance to update.
 
 | path | sha256 |
 |---|---|
-| design/work/url-v3/registers/public-surface-inventory.md | 7387b366ac84f4c56ba3c91612436114c76d89b454af5be14deb6225fe5f1c4b |
+| design/work/url-v3/registers/public-surface-inventory.md | 4712cc073e097efe5d6ff0718acc8da1a44682a67a492c6cdd19918f75391e41 |
 
 ## The closure invariant
 
