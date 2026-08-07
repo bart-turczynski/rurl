@@ -46,6 +46,8 @@ jobs:
       deferral_selftest: ${{ steps.filter.outputs.deferral_selftest }}
       curl_zero_selftest: ${{ steps.filter.outputs.curl_zero_selftest }}
       oracle_labels_selftest: ${{ steps.filter.outputs.oracle_labels_selftest }}
+      citations: ${{ steps.filter.outputs.citations }}
+      citations_selftest: ${{ steps.filter.outputs.citations_selftest }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
@@ -139,6 +141,21 @@ jobs:
               - 'tools/curl-zero-gate.R'
             oracle_labels_selftest:
               - 'design/work/url-v3/tools/oracle-label-gate.R'
+            # The citation gate resolves key-join-discharge.md's and
+            # public-surface-inventory.md's citations against
+            # key-join-contracts.md. All THREE have to trigger it: the drift it
+            # exists to catch is created by editing the CONTRACT, which is the
+            # one file whose author has no reason to think about the citations
+            # pointing at it. Listing only the citing artifacts would leave the
+            # gate unreachable for exactly the edit that breaks it.
+            citations:
+              - 'design/work/url-v3/contracts/key-join-contracts.md'
+              - 'design/work/url-v3/verification/key-join-discharge.md'
+              - 'design/work/url-v3/registers/public-surface-inventory.md'
+              - 'design/work/url-v3/tools/citation-gate.R'
+              - '.github/workflows/verify.yml'
+            citations_selftest:
+              - 'design/work/url-v3/tools/citation-gate.R'
 
   lint:
     runs-on: ubuntu-latest
@@ -671,3 +688,26 @@ jobs:
         run: Rscript design/work/url-v3/tools/oracle-label-gate.R --self-test
       - name: Every oracle instance is classified
         run: Rscript design/work/url-v3/tools/oracle-label-gate.R
+
+  # G3.K citation resolution (RURL-ztakrggx). key-join-discharge.md claims its
+  # 51-cell arithmetic is "derived and checkable" against the contract's own
+  # tables; until this gate, nothing checked it, and every citation had gone
+  # stale. Cheap: base R over markdown, no package build.
+  #
+  # Appended at the end for the same reason oracle-labels was -- separate
+  # insertion points keep concurrent gate branches off one anchor.
+  citations:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.citations == 'true'
+    runs-on: ubuntu-latest
+    name: G3.K citations resolve to the rows they name
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.citations_selftest == 'true'
+        run: Rscript design/work/url-v3/tools/citation-gate.R --self-test
+      - name: Every G3.K citation resolves
+        run: Rscript design/work/url-v3/tools/citation-gate.R
