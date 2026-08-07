@@ -662,6 +662,63 @@ psd_legend_decisions <- function(ln) {
   out
 }
 
+# G3 leaf -> the §6 artifact number the legend assigns it. Same table again, third
+# column, digits only ("10 (cache)" and "10 (host)" both yield "10"). Used by the
+# agreement check to verify that a row naming "artifact N (G3.X)" pairs an
+# artifact with the leaf the legend actually puts there.
+psd_legend_artifacts <- function(ln) {
+  out <- list()
+  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
+               parse_pipe_tables(ln))
+  if (length(lg) != 1) return(out)
+  acol <- "§6 artifact"
+  if (!acol %in% lg[[1]]$header) return(out)
+  for (r in lg[[1]]$rows) {
+    leaf <- trimws(gv(r, "G3 leaf") %||% "")
+    if (!grepl("^G3\\.[0-9A-Z]+$", leaf)) next
+    out[[leaf]] <- gsub("[^0-9]", "", gv(r, acol) %||% "")
+  }
+  out
+}
+
+# Roster cell -> its raw "owning contract(s)" text, read out of the roster half.
+# The agreement section (invariant half) asserts things ABOUT roster rows, so it
+# cannot be checked without them. Memoized like the other derived sets.
+psd_roster_owners <- function(dir) {
+  if (is.null(.psd_cache$roster)) {
+    out <- list()
+    p <- file.path(dir, "public-surface-disposition.md")
+    if (file.exists(p)) {
+      tabs <- parse_pipe_tables(readLines(p, warn = FALSE))
+      for (tb in tabs) {
+        key <- tb$header[[1]]
+        if (!key %in% c("export", "field", "item")) next
+        own <- if ("owning contract(s)" %in% tb$header) "owning contract(s)" else
+          if ("owning contract" %in% tb$header) "owning contract" else next
+        for (r in tb$rows) {
+          cell <- gsub("`", "", trimws(gv(r, key) %||% ""), fixed = TRUE)
+          if (nzchar(cell)) out[[cell]] <- gv(r, own) %||% ""
+        }
+      }
+    }
+    .psd_cache$roster <- out
+  }
+  .psd_cache$roster
+}
+
+# English number words the agreement column may use in place of a digit. Kept
+# small on purpose: a count phrase the checker cannot resolve must not silently
+# become an unchecked claim, so anything outside this set fails the lookup and
+# the row falls back to needing a resolvable term for its anchor.
+PSC_NUMWORDS <- c(one = 1L, two = 2L, three = 3L, four = 4L, five = 5L,
+                  six = 6L, seven = 7L, eight = 8L, nine = 9L, ten = 10L)
+psc_as_count <- function(x) {
+  x <- tolower(trimws(x))
+  if (grepl("^[0-9]+$", x)) return(as.integer(x))
+  if (x %in% names(PSC_NUMWORDS)) return(PSC_NUMWORDS[[x]])
+  NA_integer_
+}
+
 env_required <- c("id", "name", "artifact_number", "schema_version", "tracked_location",
                   "owner", "single_writer", "lifecycle_state", "dependencies", "bound_decision",
                   "bound_evidence", "closes_finding", "completion_rule", "content_hash",
@@ -852,6 +909,119 @@ if (dir.exists(contracts_dir)) {
       for (leaf in names(lg))
         check(file.exists(file.path(contracts_dir, lg[[leaf]])),
               sprintf("public-surface-closure: legend leaf %s names no contract file (%s)", leaf, lg[[leaf]]))
+
+      ## F2. the cross-artifact agreement rows (PS s1) --------------------------
+      ## The section claims the roster's VOCABULARY agrees with the owning
+      ## contracts; until RURL-jzgelfto nothing read it, so the eight TR-PS-s1-*
+      ## claims were assertion-only. The trap the ticket names is real: every row
+      ## is SETTLED today, so a status-shaped check certifies nothing. These four
+      ## predicates are therefore all about RESOLUTION against derived facts —
+      ## the legend, the roster half, NAMESPACE, .spu_result_fields — and each
+      ## was proved to go red by mutation before being trusted green.
+      agr <- Filter(function(t) identical(t$header,
+                                          c("shared concept", "canonical owner", "agreement", "status")),
+                    tabs)
+      check(length(agr) == 1,
+            "public-surface-closure: cross-artifact agreement table (shared concept | canonical owner | agreement | status) not found")
+      if (length(agr) == 1) {
+        lga <- psd_legend_artifacts(ln)
+        cells <- psd_roster_owners(contracts_dir)
+        check(length(cells) >= 1,
+              "public-surface-closure: could not read the roster half's cells to check the agreement rows")
+        for (r in agr[[1]]$rows) {
+          concept <- gv(r, "shared concept") %||% ""
+          owner <- gv(r, "canonical owner") %||% ""
+          agree <- gv(r, "agreement") %||% ""
+          st <- trimws(gv(r, "status") %||% "")
+          lab <- if (nzchar(concept)) concept else owner
+          check(st %in% c("SETTLED", "OPEN"),
+                sprintf("public-surface-closure agreement [%s]: status '%s' not in {SETTLED, OPEN}", lab, st))
+
+          ## (a) the canonical owner resolves — leaf in the legend, and the
+          ## artifact number is the one the legend puts on that leaf. A row
+          ## naming a coherent-looking but wrong pair is the failure this catches.
+          leaves <- unique(regmatches(owner, gregexpr("G3\\.[0-9A-Z]+", owner))[[1]])
+          check(length(leaves) >= 1,
+                sprintf("public-surface-closure agreement [%s]: canonical owner names no G3 leaf: '%s'", lab, owner))
+          for (lf in leaves)
+            check(lf %in% names(lg),
+                  sprintf("public-surface-closure agreement [%s]: owner leaf '%s' is not in the legend", lab, lf))
+          anum <- regmatches(owner, regexpr("(?<=artifact )[0-9]+", owner, perl = TRUE))
+          adrs <- unique(regmatches(owner, gregexpr("ADR [0-9]{4}", owner))[[1]])
+          check(length(anum) == 1 || length(adrs) >= 1,
+                sprintf("public-surface-closure agreement [%s]: canonical owner names neither a §6 artifact nor an ADR: '%s'",
+                        lab, owner))
+          if (length(anum) == 1 && length(leaves) >= 1) {
+            expected <- unique(unlist(lga[leaves]))
+            check(length(expected) >= 1 && anum %in% expected,
+                  sprintf("public-surface-closure agreement [%s]: owner says artifact %s but the legend puts %s on artifact %s",
+                          lab, anum, paste(leaves, collapse = "/"),
+                          if (length(expected)) paste(expected, collapse = "/") else "<none>"))
+          }
+          for (a in adrs)
+            check(length(list.files("design/adr", pattern = sprintf("^%s-", sub("ADR ", "", a)))) >= 1,
+                  sprintf("public-surface-closure agreement [%s]: cites %s, which is not a file in design/adr", lab, a))
+
+          ## (b) every term the row names is a real roster cell. A trailing `*`
+          ## is a glob over cell names and must match at least one — the glob
+          ## `rurl_cache_*` silently matched two of the three cache surfaces
+          ## because the third is spelled `rurl_clear_caches` (RURL-jzgelfto).
+          raw <- unlist(regmatches(c(concept, agree), gregexpr("`[^`]+`", c(concept, agree))))
+          terms <- unique(gsub("`", "", raw, fixed = TRUE))
+          terms <- terms[grepl("^[A-Za-z_][A-Za-z0-9_]*\\*?$", terms)]
+          matched <- character(0)
+          for (tm in terms) {
+            hits <- if (grepl("\\*$", tm))
+              grep(sprintf("^%s", sub("\\*$", "", tm)), names(cells), value = TRUE)
+            else intersect(tm, names(cells))
+            check(length(hits) >= 1,
+                  sprintf("public-surface-closure agreement [%s]: term '%s' names no roster cell", lab, tm))
+            matched <- union(matched, hits)
+          }
+
+          ## (c) at least one cell the row names is owned by the leaf the row
+          ## names. Rows legitimately mention a neighbouring contract's cell for
+          ## contrast (`clean_url` in the key row), so this is "at least one",
+          ## not "all" — but it still fails a row assigned to the wrong owner,
+          ## which (a) and (b) both pass.
+          if (length(matched)) {
+            linked <- vapply(matched, function(cl)
+              any(vapply(leaves, function(lf) grepl(lf, cells[[cl]], fixed = TRUE), TRUE)), TRUE)
+            check(any(linked),
+                  sprintf("public-surface-closure agreement [%s]: none of the roster cells it names (%s) is owned by %s",
+                          lab, paste(matched, collapse = ", "), paste(leaves, collapse = "/")))
+          }
+
+          ## (d) a transcribed count must equal the derived one. I1 bans counts
+          ## from artifact 4 for exactly this reason; the two shapes this section
+          ## actually uses are checked rather than trusted. A count phrase whose
+          ## number is unreadable resolves to NA and fails here rather than
+          ## passing silently.
+          counted <- 0L
+          pf <- regmatches(concept, regexpr("(?i)(?<=\\bthe )\\S+(?= public fields)", concept, perl = TRUE))
+          if (length(pf) == 1) {
+            counted <- counted + 1L
+            check(identical(psc_as_count(pf), length(psd_result_fields())),
+                  sprintf("public-surface-closure agreement [%s]: says '%s public fields' but .spu_result_fields has %d (I1)",
+                          lab, pf, length(psd_result_fields())))
+          }
+          nr <- regmatches(agree, regexpr("(?i)(?<=\\bthe )\\S+(?=\\s[^|]*\\brows\\b)", agree, perl = TRUE))
+          if (length(nr) == 1 && !is.na(psc_as_count(nr))) {
+            counted <- counted + 1L
+            check(identical(psc_as_count(nr), length(matched)),
+                  sprintf("public-surface-closure agreement [%s]: says '%s ... rows' but its terms name %d roster cell(s)",
+                          lab, nr, length(matched)))
+          }
+
+          ## (e) no row is inert. A row that neither names a resolvable cell nor
+          ## carries a verified count has nothing this validator can falsify, so
+          ## it would sit here SETTLED and unchecked — the nullity P0.9 §6 warns
+          ## about, and the reason this whole block exists.
+          check(length(matched) >= 1 || counted >= 1,
+                sprintf("public-surface-closure agreement [%s]: row is inert — it names no roster cell and carries no checkable count",
+                        lab))
+        }
+      }
     }
 
     ## G. artifact 4, roster half — I1-I5 over the per-cell rows -----------------
