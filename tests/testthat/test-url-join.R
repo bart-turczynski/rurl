@@ -170,7 +170,7 @@ test_that("overlapping non-key names are suffixed deterministically", {
   expect_named(res2, c("URL_A", "vx", "URL_B", "vy"))
 })
 
-test_that("both original URL columns are preserved, never overwritten (:159)", {
+test_that("both original URL columns are preserved, never overwritten", {
   res <- .url_join_impl(jx(), jy(), by = "URL", type = "inner")
   # The two sides' source strings differ and are BOTH kept: they merely compare
   # equal under the identity key, so neither is the other's canonical form.

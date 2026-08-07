@@ -60,12 +60,28 @@ transcribed:
 
 | block | contract table | rows | cells |
 |---|---|---:|---:|
-| key surface | `## Key surface rows` (`:65-71`) | 7 | 7 |
-| key-policy | `## Key-policy rows` (`:80-95`) | 16 | 16 |
-| scheme/port truth table | `## Scheme and port truth table` (`:105-118`) | 14 | 14 |
-| six join operations | `## Six-join matrix` (`:140-145`) | 6 | 6 |
-| cross-cutting | `## Cross-cutting join rows` (`:151-165`) | 15 | 8 |
+| key surface | `## Key surface rows` | 7 | 7 |
+| key-policy | `## Key-policy rows` | 16 | 16 |
+| scheme/port truth table | `## Scheme and port truth table` | 14 | 14 |
+| six join operations | `## Six-join matrix` | 6 | 6 |
+| cross-cutting | `## Cross-cutting join rows` | 15 | 8 |
 | | | | **51** |
+
+**How this record cites the contract, and why not by line.** Every citation
+below names a **section heading** and, inside a block, a **row key** — never a
+line number. This is not a style preference. The record previously located each
+block by a line range and each row by a bare line number, and both went stale
+the moment the contract grew a paragraph: `RURL-nravluqd` inserted 25 lines and
+every citation below the insertion point silently denoted a different row. The
+notation was also ambiguous — a bare colon-plus-number meant a contract line in
+block 2's cell column and a port literal in block 3's, 24 lines apart. A
+citation form that collides with the domain's own vocabulary cannot be checked
+without heuristics and cannot be read reliably either. Names carry everything a
+line number carried and cannot rot, and the claim this record actually makes is
+arithmetic over **row counts**, which a line range never checked.
+`design/work/url-v3/tools/citation-gate.R` resolves every heading and row key
+here against the live contract on each run and re-derives the row counts above,
+so "derived and checkable" is now executable rather than asserted.
 
 The cross-cutting block is the only one that is not a whole table, so its
 selection is stated rather than assumed. Of its 15 rows, 4 were the OPEN cells
@@ -98,7 +114,7 @@ chain and under `Rscript tools/verify.R`:
   (**60** passing). The engines are pinned by the first two; this third file
   pins the only thing a thin wrapper can get wrong, the **signature**.
 
-### Block 1 — key surface (7 cells, contract `:65-71`)
+### Block 1 — key surface (7 cells, contract `## Key surface rows`)
 
 | cell | evidence | coverage |
 |---|---|---|
@@ -110,28 +126,28 @@ chain and under `Rscript tools/verify.R`:
 | interpretation selector (KJ-O1) | `test-url-key.R :: "the policy default standard is whatwg (P3.2 D-A)"`; `:: "selecting a different standard changes the key"`; `:: "an unnamed standard is rejected -- key bytes must be freezable"` | KJ-O1's default, closed by P3.2 D-A; `NULL` is refused at the public edge too (`test-url-key-join-api.R :: "url_key_policy validates its vocabulary at the public edge"`) |
 | diagnostic surface | `test-url-key.R :: "non-keyable rows are NA plus a typed reason"`; `:: "a credential never appears in the key or its display"`; `test-url-join.R :: "the eligibility vocabulary is projected, one label per row"` | typed reasons on a companion path, never a bare `NA`; no credential in a key or a diagnostic |
 
-### Block 2 — key-policy rows (16 cells, contract `:80-95`)
+### Block 2 — key-policy rows (16 cells, contract `## Key-policy rows`)
 
 | cell | evidence | coverage |
 |---|---|---|
-| scheme source (`:80`) | `test-url-key.R :: "a host:port input frames as a missing (inferred) scheme"`; `:: "an explicit scheme still frames as explicit"`; `:: "scheme-relative stays its own presence state, never missing"` | presence framed independently of the effective scheme, so inference never exists only to erase missing |
-| scheme equality (`:81`) | `test-url-key.R :: "http_https is accepted and recorded in the policy"`; `:: "both standards agree on the whole http_https column"`; `:: "the collapse never reaches a non-web scheme pair"`; `:: "the collapsed token cannot be spelled by any real scheme"`; `:: "exact stays exact -- the mode cannot leak across policies"` | `exact` and `http_https` in full. `http_https_missing` is a **residual** — see below |
-| scheme case (`:82`) | `test-url-key.R :: "scheme and host case are normalized case-insensitively"` | normalized case-insensitive identity |
-| port (`:83`) | `test-url-key.R :: "HTTP and HTTPS default ports normalize against absent"`; `:: "a non-default port stays significant"`; `:: "another scheme's default port stays significant"`; `:: "ftp, ws, wss and custom default ports stay literal in v1"` | HTTP/S-only normalization under each row's own explicit scheme (ratification Q3/Q4/Q8) |
-| authority (`:84`) | `test-url-key.R :: "the authority delimiter is framed independently of the host"`; `:: "delimiter framing inherits the standard's own fix-ups"` | P1.2 D-A's `authority_delimiter_present` framed independently of `host_kind`; absent and empty never collapsed; the delimiter fact comes from the parse, so WHATWG's special-scheme slash fix-up is inherited rather than re-litigated |
-| host kind (`:85`) | `test-url-key.R :: "a Unicode host and its A-label share one key"` | one identity per host, whatever its display spelling |
-| domain spelling (KJ-O2, `:86`) | `test-url-key.R :: "the trailing root dot is key-significant (P3.2 D-B)"` | KJ-O2's root-dot question, closed DISTINCT by P3.2 D-B |
-| host editing (`:87`) | `test-url-key.R :: "host editing is excluded from the key"` | `www`, subdomain/PSL trimming and presentation encoding excluded |
-| path (`:88`) | `test-url-key.R :: "reserved encoded path bytes remain data"` | `%2F` never becomes `/` merely for comparison |
-| path display/editing (`:89`) | `test-url-key.R :: "path display and editing are excluded from the key"` | index removal, trailing slash and case cleanup excluded |
-| query presence (`:90`) | `test-url-key.R :: "query presence is three-valued"` | absent, present-empty and present-nonempty stay distinct |
-| query structure (`:91`) | `test-url-key.R :: "query order and duplicates are significant"` | URL-query semantics, not form semantics |
-| fragment (`:92`) | `test-url-key.R :: "the fragment is ignored for web-resource identity"`; `test-url-join.R :: "fragment and userinfo are invisible to matching (Q5)"` | ratification Q5, at the key and through a join |
-| userinfo (`:93`) | `test-url-key.R :: "userinfo is ignored for web-resource identity"`; `:: "a credential never appears in the key or its display"` | Q5, plus the security consequence |
-| missing/invalid (`:94`) | `test-url-key.R :: "non-keyable rows never match each other (never-match default)"`; `:: "missing input is never conflated with an invalid parse"` | never-match default; the one conflation D-C forbids is prevented by construction |
-| persisted-key stability (`:95`) | `test-url-key.R :: "the key is a classed non-URL object carrying both versions"`; `:: "keys minted under different policies never compare equal"` | both versions ride inside the framed bytes, so no release can silently reinterpret a persisted key |
+| scheme source | `test-url-key.R :: "a host:port input frames as a missing (inferred) scheme"`; `:: "an explicit scheme still frames as explicit"`; `:: "scheme-relative stays its own presence state, never missing"` | presence framed independently of the effective scheme, so inference never exists only to erase missing |
+| scheme equality | `test-url-key.R :: "http_https is accepted and recorded in the policy"`; `:: "both standards agree on the whole http_https column"`; `:: "the collapse never reaches a non-web scheme pair"`; `:: "the collapsed token cannot be spelled by any real scheme"`; `:: "exact stays exact -- the mode cannot leak across policies"` | `exact` and `http_https` in full. `http_https_missing` is a **residual** — see below |
+| scheme case | `test-url-key.R :: "scheme and host case are normalized case-insensitively"` | normalized case-insensitive identity |
+| port | `test-url-key.R :: "HTTP and HTTPS default ports normalize against absent"`; `:: "a non-default port stays significant"`; `:: "another scheme's default port stays significant"`; `:: "ftp, ws, wss and custom default ports stay literal in v1"` | HTTP/S-only normalization under each row's own explicit scheme (ratification Q3/Q4/Q8) |
+| authority | `test-url-key.R :: "the authority delimiter is framed independently of the host"`; `:: "delimiter framing inherits the standard's own fix-ups"` | P1.2 D-A's `authority_delimiter_present` framed independently of `host_kind`; absent and empty never collapsed; the delimiter fact comes from the parse, so WHATWG's special-scheme slash fix-up is inherited rather than re-litigated |
+| host kind | `test-url-key.R :: "a Unicode host and its A-label share one key"` | one identity per host, whatever its display spelling |
+| domain spelling (KJ-O2) | `test-url-key.R :: "the trailing root dot is key-significant (P3.2 D-B)"` | KJ-O2's root-dot question, closed DISTINCT by P3.2 D-B |
+| host editing | `test-url-key.R :: "host editing is excluded from the key"` | `www`, subdomain/PSL trimming and presentation encoding excluded |
+| path | `test-url-key.R :: "reserved encoded path bytes remain data"` | `%2F` never becomes `/` merely for comparison |
+| path display/editing | `test-url-key.R :: "path display and editing are excluded from the key"` | index removal, trailing slash and case cleanup excluded |
+| query presence | `test-url-key.R :: "query presence is three-valued"` | absent, present-empty and present-nonempty stay distinct |
+| query structure | `test-url-key.R :: "query order and duplicates are significant"` | URL-query semantics, not form semantics |
+| fragment | `test-url-key.R :: "the fragment is ignored for web-resource identity"`; `test-url-join.R :: "fragment and userinfo are invisible to matching (Q5)"` | ratification Q5, at the key and through a join |
+| userinfo | `test-url-key.R :: "userinfo is ignored for web-resource identity"`; `:: "a credential never appears in the key or its display"` | Q5, plus the security consequence |
+| missing/invalid | `test-url-key.R :: "non-keyable rows never match each other (never-match default)"`; `:: "missing input is never conflated with an invalid parse"` | never-match default; the one conflation D-C forbids is prevented by construction |
+| persisted-key stability | `test-url-key.R :: "the key is a classed non-URL object carrying both versions"`; `:: "keys minted under different policies never compare equal"` | both versions ride inside the framed bytes, so no release can silently reinterpret a persisted key |
 
-### Block 3 — scheme/port truth table (14 cells, contract `:105-118`)
+### Block 3 — scheme/port truth table (14 cells, contract `## Scheme and port truth table`)
 
 Each row is one cell. The `exact` and `http_https` columns are both covered;
 `http_https_missing` is the residual named below.
@@ -153,7 +169,7 @@ Each row is one cell. The `exact` and `http_https` columns are both covered;
 | 13 | WS `:80` / WSS `:443` vs same scheme absent | same test; plus `:: "the collapse never reaches a non-web scheme pair"`, which is the ws/wss trap: they share http/https's default ports and must NOT collapse |
 | 14 | custom `:123` / same custom scheme no port | `test-url-key.R :: "ftp, ws, wss and custom default ports stay literal in v1"` |
 
-### Block 4 — the six join operations (6 cells, contract `:140-145`)
+### Block 4 — the six join operations (6 cells, contract `## Six-join matrix`)
 
 | operation | evidence | coverage |
 |---|---|---|
@@ -164,18 +180,18 @@ Each row is one cell. The `exact` and `http_https` columns are both covered;
 | `url_semi_join` | `test-url-join.R :: "semi join emits each matching x row once, in x order"`; `:: "semi and anti emit x columns only and never suffix"` | one output per matching x, x columns only |
 | `url_anti_join` (KJ-O4) | `test-url-join.R :: "anti join keeps unmatched x once, INCLUDING non-keyable (D-D)"` | KJ-O4's question, closed RETAIN by P3.2 D-D: a row that cannot match anything is exactly the anti-join predicate |
 
-### Block 5 — cross-cutting rows (8 cells, contract `:151-165`)
+### Block 5 — cross-cutting rows (8 cells, contract `## Cross-cutting join rows`)
 
 | cell | evidence | coverage |
 |---|---|---|
-| relationship (`:154`) | `test-url-join.R :: "relationship defaults to none and does not constrain"`; `:: "one-to-one rejects duplicate keys on either side"`; `:: "one-to-many constrains x, many-to-one constrains y"`; `:: "many-to-many allows expansion when declared explicitly"`; `:: "relationship is checked only on keys present on BOTH sides"` | all five values, over eligible keys only |
-| multiple matches (`:155`) | `test-url-join.R :: "multiple defaults to all and expands duplicates losslessly"`; `:: "multiple = first/last narrow to a defined stable order"`; `:: "multiple narrowing does not reuse the legacy collision dial"` | lossless default; the lossy narrowings separately named, with a stable order, and NOT the shipped `collision` dial |
-| duplicate counts (`:156`) | `test-url-join.R :: "the relationship error reports counts and leaks no credentials"` | counts over eligible non-missing keys, reported separately |
-| invalid/warnings (`:157`) | `test-url-join.R :: "invalid = keep retains non-keyable rows per the join's own rule"`; `:: "invalid = drop removes non-keyable rows before matching"`; `:: "invalid = error stops with a typed condition naming the reasons"`; `:: "warnings = allow lets warning rows match (the default)"`; `:: "warnings = reject makes a warning row ineligible but keeps it"`; `:: "warnings = error stops with its own typed condition"`; `:: "the invalid and warnings axes are independent, not on_parse_error"` | both axes in full, and their independence, which is the point of splitting `on_parse_error` |
-| original URLs (`:159`) | `test-url-join.R :: "both original URL columns are preserved, never overwritten (:159)"`; `:: "semi and anti emit x columns only and never suffix"` | both originals preserved; never overwritten with cleaned display |
-| conditions (`:163`) | `test-url-join.R :: "all typed conditions subclass one family class"`; `:: "the relationship error reports counts and leaks no credentials"`; `:: "by rejects malformed selectors as an early input error"`; `:: "a colliding key_name is an early error, never a silent rename"` | the stable typed-condition family, and the no-credential-in-a-condition rule. The `unmatched` condition is **dropped**, not implemented — see residual 2 |
-| resource bound (`:164`) | `test-url-join.R :: "the relationship preflight runs before materialization"` | the preflight is a preflight: it runs on counts, before expansion |
-| diagnostics (`:165`) | `test-url-join.R :: "the eligibility vocabulary is projected, one label per row"`; `:: "unsupported-scheme is enumerated but unreachable here"`; `:: "key_name exposes the CLASSED key, never a URL-looking string"` | per-row keyability facts on a companion path; never encoded in a URL-looking display key. The vocabulary's zero-instance term is ASSERTED as a gap rather than silently narrowed |
+| relationship | `test-url-join.R :: "relationship defaults to none and does not constrain"`; `:: "one-to-one rejects duplicate keys on either side"`; `:: "one-to-many constrains x, many-to-one constrains y"`; `:: "many-to-many allows expansion when declared explicitly"`; `:: "relationship is checked only on keys present on BOTH sides"` | all five values, over eligible keys only |
+| multiple matches | `test-url-join.R :: "multiple defaults to all and expands duplicates losslessly"`; `:: "multiple = first/last narrow to a defined stable order"`; `:: "multiple narrowing does not reuse the legacy collision dial"` | lossless default; the lossy narrowings separately named, with a stable order, and NOT the shipped `collision` dial |
+| duplicate counts | `test-url-join.R :: "the relationship error reports counts and leaks no credentials"` | counts over eligible non-missing keys, reported separately |
+| invalid/warnings | `test-url-join.R :: "invalid = keep retains non-keyable rows per the join's own rule"`; `:: "invalid = drop removes non-keyable rows before matching"`; `:: "invalid = error stops with a typed condition naming the reasons"`; `:: "warnings = allow lets warning rows match (the default)"`; `:: "warnings = reject makes a warning row ineligible but keeps it"`; `:: "warnings = error stops with its own typed condition"`; `:: "the invalid and warnings axes are independent, not on_parse_error"` | both axes in full, and their independence, which is the point of splitting `on_parse_error` |
+| original URLs | `test-url-join.R :: "both original URL columns are preserved, never overwritten"`; `:: "semi and anti emit x columns only and never suffix"` | both originals preserved; never overwritten with cleaned display |
+| conditions | `test-url-join.R :: "all typed conditions subclass one family class"`; `:: "the relationship error reports counts and leaks no credentials"`; `:: "by rejects malformed selectors as an early input error"`; `:: "a colliding key_name is an early error, never a silent rename"` | the stable typed-condition family, and the no-credential-in-a-condition rule. The `unmatched` condition is **dropped**, not implemented — see residual 2 |
+| resource bound | `test-url-join.R :: "the relationship preflight runs before materialization"` | the preflight is a preflight: it runs on counts, before expansion |
+| diagnostics | `test-url-join.R :: "the eligibility vocabulary is projected, one label per row"`; `:: "unsupported-scheme is enumerated but unreachable here"`; `:: "key_name exposes the CLASSED key, never a URL-looking string"` | per-row keyability facts on a companion path; never encoded in a URL-looking display key. The vocabulary's zero-instance term is ASSERTED as a gap rather than silently narrowed |
 
 ## Residuals — named, and NOT counted as coverage
 
@@ -183,8 +199,9 @@ Two cells of the 51 are covered by an assertion about a **refusal** rather than
 by an assertion about an answer. That is a real difference and it is recorded
 as one, because the register's own rule is that deferral is not satisfaction.
 
-**Residual 1 — `scheme_equality = "http_https_missing"` (block 2 `:81`;
-block 3 rows 8 and 11).** The mode is in the settled vocabulary and is
+**Residual 1 — `scheme_equality = "http_https_missing"` (block 2's
+`scheme equality` row; block 3 rows 8 and 11).** The mode is in the settled
+vocabulary and is
 **refused**: `url_key_policy(scheme_equality = "http_https_missing")` errors,
 citing `RURL-ixxvjjwj`. The grounds are contractual, not incidental. Row 8
 declares `missing scheme/no port` equal to `HTTP/no port`, but that pair also
@@ -205,7 +222,8 @@ all three columns): 6 of the 42 mode cells, spanning 3 rows. VD-001 counts rows,
 so the outstanding contract-text edit is 3 rows, not 6 cells. That edit is
 `RURL-isbsbrry`.
 
-**Residual 2 — the `unmatched` typed condition (block 5 `:163`).** The contract
+**Residual 2 — the `unmatched` typed condition (block 5's `conditions` row).**
+The contract
 row lists `unmatched` among the required typed conditions. It is **dropped by
 owner ruling** (P3.3@d9b0976 §2, `RURL-kcgsuzll`), not left unimplemented: the
 six joins already express unmatched-ness structurally, as `NA` on the
@@ -232,9 +250,9 @@ was written and closed by P3.2 afterwards.
 
 ## Boundary: what this record does NOT claim
 
-- It does **not** verify the rest of `contracts/key-join-contracts.md`. The
-  eleven `canonical_join()` migration rows (`:175-184`) are outside VD-001's
-  cell set and are untouched here: `canonical_join()` still keys on `clean_url`,
+- It does **not** verify the rest of `contracts/key-join-contracts.md`. Its
+  `## canonical_join() migration rows` table holds ten rows, every one outside
+  VD-001's cell set and untouched here: `canonical_join()` still keys on `clean_url`,
   and the delegation, the `...` equality closure and the dual-key audit surface
   are the remaining work on `RURL-mihbyjsr`. Exporting the family does not
   migrate the legacy join, and this record does not pretend it did.
