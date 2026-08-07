@@ -254,7 +254,7 @@ public-surface slice of it).
 | `clean_url` = clean surface (c), not identity | artifact 7 (G3.7) | the `clean_url` / `get_clean_url` rows are surface (c); `canonical_join` `clean_url` keying is LEGACY | SETTLED |
 | comparison key = `get_url_key`, not `clean_url` | artifact 9 (G3.K) | `canonical_join` migrates off `clean_url` to the identity key | SETTLED |
 | host `domain*` = PSL registrable, not full-host | artifact 10 host (G3.H) | the `domain`/`domain_ascii`/… rows are PSL identity keys, not full-host identity | SETTLED |
-| cache config/info/clear semantics | artifact 10 cache (G3.9) | the three `rurl_cache_*` rows defer cache semantics to G3.9 | SETTLED |
+| cache config/info/clear semantics | artifact 10 cache (G3.9) | the three `rurl_cache_config` / `rurl_cache_info` / `rurl_clear_caches` rows defer cache semantics to G3.9 | SETTLED |
 | scheme admission/interpretation + profile lattice | artifact 5 (G3.5) | `get_scheme`/`get_scheme_class`/`url_profile` rows defer to G3.5 | SETTLED |
 | companion-helpers never widen the parse frame | ADR 0006 (via G3.6) | `get_host_type`/`get_scheme_class`/`get_url_diagnostics`/`get_parse_verdicts` stay companion | SETTLED |
 
