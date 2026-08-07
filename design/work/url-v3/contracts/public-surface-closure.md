@@ -93,9 +93,10 @@ contracts are referenced by name; the accepted decisions they project are
 hash-enforced elsewhere.
 
 Nothing recomputes this hash. ADR 0014 retired the `## Inputs` sha256 comparison
-along with the seal phase (`design/work/url-v3/tools/validate-records.R:678-684`
-keeps the reasoning at the site; `validate-manifest.R`, named here until this
-revision, was deleted by the same ADR). The gap is deliberate: the remedy when
+along with the seal phase (`validate-records.R`'s
+`## --- Gate-acceptance input hashes: RETIRED (ADR 0014)` section keeps the
+reasoning at the site; `validate-manifest.R`, named here until this revision, was
+deleted by the same ADR). The gap is deliberate: the remedy when
 this input drifts is to re-run the invariant, which no machine can confirm
 happened.
 
@@ -139,13 +140,28 @@ written: the drift added rows as the surface grew, but transitioned no row's
 state — every row is still `DISCOVERED` and the register's `lifecycle_state` is
 still `PROPOSED`. Only then is the hash advanced.
 
-Two places where this file's prose is **narrower than what
+Two places where this file's prose was **narrower than what
 `validate-records.R` already enforces** were also found, both on the single
-`migration-surface` cell: I2 requires an owner "drawn from the legend" and I3 a
+`migration-surface` cell: I2 required an owner "drawn from the legend" and I3 a
 cited accepted decision, while the validator deliberately admits `artifact 4` as
-an owner (`:924`) and `discharged` as a citation (`:934`). Recorded, not fixed,
-for the same reason as above — the text at issue is I2 and I3 themselves.
-Filed as `RURL-psyozxqw`.
+an owner (its `downstream` predicate in the `public-surface-disposition` section)
+and `discharged` as a citation (the shape test in the same section's `SETTLED`
+branch). Recorded but **not fixed at the time**, for the same reason as above —
+the text at issue is I2 and I3 themselves, and this record's reopening rule makes
+an edit to I1–I5 a change to the ownership model. Filed as `RURL-psyozxqw`.
+
+**Since resolved.** The owner ruled that stating a carve-out the validator
+already enforces is a **writing correction, not a change to the ownership
+model** — the model is what the executable I1–I5 checks enforce, and P0.6 §3
+rests the whole no-weakening argument on exactly that. The opposite reading is
+self-defeating: it would make a false statement of I2/I3 permanently
+uncorrectable, because the rule protecting the text would block every repair.
+I2 and I3 above now name both carve-outs. The ruling is **scoped** — it holds
+only for an edit that is provably conservative, and this one was proved so:
+`validate-records.R` produced byte-identical output before and after (4090
+checks, `VALIDATION PASSED`), and a mutation check confirmed that an owner
+outside the documented set is still rejected, so the prose describes the
+enforced set rather than widening it.
 
 The envelope above and this record's header comment still describe the seal
 phase and `validate-manifest.R`. They are left as written: ADR 0014 kept every
@@ -177,14 +193,25 @@ count of them is normative anywhere in artifact 4; a number written into a
 document is a stale fact waiting to happen.
 
 **I2 — Every cell is owned.** Each cell has exactly one roster row, and that row
-names an owning contract drawn from the legend below. A cell with no row, a row
-with no cell, and a row naming a contract outside the legend are each a violation.
+names an owning contract drawn from the legend below, **or one of two downstream
+artifacts: §6 artifact 11 (the verification contracts, the legend's non-leaf row)
+or §6 artifact 4 (this roster and its own invariant).** A cell with no row, a row
+with no cell, and a row naming a contract outside that set are each a violation.
+
+The artifact-4 owner exists for exactly one cell, `migration-surface`, and is not
+a loophole: that cell is *about the roster*, so it cannot name an owner in a
+legend of **other** contracts without asserting something false. It is also the
+reading the roster's own `completion_rule` already takes — owners "drawn from the
+ten §6 contracts", of which artifact 4 is one. Naming it here removes a
+disagreement between two governance records; it does not widen the set.
 
 **I3 — Every disposition is SETTLED or OPEN, with a citation that resolves.** A
-`SETTLED` row cites the accepted decision its owning contract projects. An `OPEN`
-row cites an open-cell ID **that exists in the contract it names**, or a named
-downstream artifact (§6 artifact 11 / the unmade P4 host record). A citation that
-resolves to nothing is a violation, not a formatting nit.
+`SETTLED` row cites the accepted decision its owning contract projects — **or,
+where the owner is artifact 4 and the settlement is a discharge rather than a
+projection, the literal `discharged` together with the discharge it states.** An
+`OPEN` row cites an open-cell ID **that exists in the contract it names**, or a
+named downstream artifact (§6 artifact 11 / the unmade P4 host record). A citation
+that resolves to nothing is a violation, not a formatting nit.
 
 **I4 — No open question is invented in artifact 4.** Every OPEN disposition
 forwards to a question already flagged by an owning contract or a named downstream
