@@ -17,9 +17,23 @@
 # TWO STAGES, because compute minutes are finite on the free tier:
 #   gates — every push. The gate family needs almost no installed packages
 #           (measured: ~74s for the whole family plus the control plane).
-#   check — default branch and tags only. The full `R CMD check --as-cran`,
-#           lint and the locale cell, which need the toolchain and every
-#           dependency, so this is the job that costs real minutes.
+#   check — RELEASE TIME ONLY: a tag, or a pipeline started by hand. The full
+#           `R CMD check --as-cran`, lint and the locale cell, which need the
+#           toolchain and every dependency, so this is the job that costs real
+#           minutes. Measured locally at 227-290s against ~40s for the gates.
+#
+# WHY `check` NO LONGER RUNS ON THE DEFAULT BRANCH. It used to, and that is what
+# exhausted the allowance: four merge requests in one day meant four branch
+# pipelines AND four main pipelines, each main pipeline paying for the expensive
+# job. The expensive job is now the LAST thing before shipping to CRAN -- run it
+# by hand once `/cran` has been worked through and the package is otherwise
+# ready, as a finishing touch rather than a routine cost. Between merges,
+# `tools/local-ci.sh --all origin/main` runs the same job locally for free.
+#
+# This is deliberately NOT wired into the `/cran` skill. That skill is a
+# pre-submission audit that should stay local and cheap; a check chain that
+# silently starts a billed remote job is exactly the surprise this whole change
+# exists to remove.
 #
 # NOT COVERED HERE, so nobody reads a green pipeline as more than it is: the
 # cross-platform matrix, rhub, pkgdown, coverage, the determinism matrix and the
@@ -55,9 +69,14 @@
 # this image, against a clean clone of a commit, on demand. Read its header for
 # what that does and does not preserve -- in particular it is pull-based, so the
 # "server-side, not opt-in per clone" property of a real runner is GONE, not
-# replaced. Run it against `origin/main` after every merge.
+# replaced. Run `tools/local-ci.sh --all origin/main` after every merge; `--all`
+# is required because the `check` job's rules no longer select the default
+# branch, and locally the minutes it costs are free.
 #
-# TO RE-ENABLE: delete this `workflow:` block. Nothing else was changed.
+# TO RE-ENABLE, on or after 2026-09-01 when free-tier minutes reset: delete this
+# `workflow:` block. That is the ONLY remaining step -- the cadence that
+# exhausted the budget has already been fixed below, so re-enabling restores the
+# cheap half only. Nothing else was changed.
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "web"'
@@ -124,13 +143,21 @@ gates:
     - *gate_deps
     - 'Rscript tools/verify.R --gates'
 
-# The expensive half. Restricted to the default branch and tags: running a full
-# --as-cran check on every push to every branch would exhaust the monthly
-# compute allowance without telling us anything the gate stage missed.
+# The expensive half. A TAG or a HAND-STARTED pipeline, nothing else.
+#
+# Both rules are deliberate and neither is redundant. The tag rule covers the
+# release itself, so a version that ships has been checked at full strength on
+# the exact commit that carries the version number. The `web` rule is the
+# finishing touch before that: `/cran` has been worked through, the package is
+# believed ready, and someone presses the button once.
+#
+# The default-branch rule that used to sit here is GONE ON PURPOSE. Do not add
+# it back without a reason that outweighs paying for the slowest job on every
+# merge -- that is what exhausted the allowance, and the same evidence is
+# available for free from `tools/local-ci.sh --all origin/main`.
 check:
   stage: check
   rules:
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
     - if: '$CI_COMMIT_TAG'
     - if: '$CI_PIPELINE_SOURCE == "web"'
   script:

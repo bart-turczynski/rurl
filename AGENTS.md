@@ -26,13 +26,21 @@ where environment-shaped defects live that a fully-populated local library hides
 ```sh
 tools/local-ci.sh --list          # which jobs apply to this ref, and why
 tools/local-ci.sh                 # run them (needs Docker)
-git fetch origin main && tools/local-ci.sh origin/main   # after a merge
+git fetch origin main && tools/local-ci.sh --all origin/main   # after a merge
 ```
 
 Run it against `origin/main` after merging: a squash-merge produces a commit
 that has never existed on any machine, and the pipeline that used to check it is
-the one that is off. It is pull-based, so it does not restore the property that
-mattered most about a real runner — that verification was not opt-in.
+the one that is off. **`--all` is required** — the `check` job's rules select a
+tag or a hand-started pipeline only, so without it you get the cheap half and no
+`R CMD check --as-cran`. The runner is pull-based, so it does not restore the
+property that mattered most about a real runner — that verification was not
+opt-in.
+
+The expensive `check` job runs on the forge only at release time: on a tag, or
+on a pipeline started by hand as the finishing touch after `/cran` has been
+worked through. It is deliberately not part of `/cran`, which stays local and
+cheap.
 
 `lintr::lint_package()` must stay clean. `.lintr` mirrors the linter set
 `goodpractice::gp()` runs, and its header documents every intentional
