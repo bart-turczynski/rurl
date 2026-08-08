@@ -15,9 +15,9 @@ authors:
   - family-names: Turczynski
     given-names: Bart
     orcid: "https://orcid.org/0000-0002-8788-7980"
-repository-code: "https://github.com/bart-turczynski/rurl"
+repository-code: "https://gitlab.com/bart-turczynski/rurl"
 repository: "https://CRAN.R-project.org/package=rurl"
-url: "https://bart-turczynski.github.io/rurl/"
+url: "https://gitlab.com/bart-turczynski/rurl"
 license: MIT
 identifiers:
   - type: doi

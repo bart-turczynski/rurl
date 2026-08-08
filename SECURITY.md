@@ -12,17 +12,20 @@ released version; please upgrade to the most recent release before reporting.
 
 ## Reporting a vulnerability
 
-**Please do not report security vulnerabilities through public GitHub issues.**
+**Please do not report security vulnerabilities through public issues.**
 
-Preferred channel — **GitHub private vulnerability reporting**:
+Preferred channel — **email the maintainer at bartek@turczynski.pl.**
 
-1. Go to the repository's **Security** tab.
-2. Click **Report a vulnerability**.
+Alternatively, open a **confidential issue** on the GitLab project:
 
-This opens a private security advisory visible only to the maintainers.
+1. Go to [Issues](https://gitlab.com/bart-turczynski/rurl/-/issues) and click
+   **New issue**.
+2. Tick **This issue is confidential** before submitting.
 
-If you cannot use that channel, email the maintainer at
-**bartek@turczynski.pl** instead.
+A confidential issue is visible only to project members.
+
+Email is listed first deliberately: it works whether or not you have a GitLab
+account, and it is the channel the maintainer monitors.
 
 ## What to expect
 

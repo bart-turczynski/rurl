@@ -3,27 +3,16 @@ rurl
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/rurl)](https://CRAN.R-project.org/package=rurl)
 [![CRAN
 downloads](https://cranlogs.r-pkg.org/badges/rurl)](https://CRAN.R-project.org/package=rurl)
-[![Codecov
-coverage](https://codecov.io/gh/bart-turczynski/rurl/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bart-turczynski/rurl)
 [![Lifecycle:
 stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20972584.svg)](https://doi.org/10.5281/zenodo.20972584)
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
-[![FOSSA
-Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=security)
-[![FOSSA
-Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=license)
 [![OpenSSF Best
 Practices](https://www.bestpractices.dev/projects/13394/badge)](https://www.bestpractices.dev/projects/13394)
-[![Security
-audit](https://github.com/bart-turczynski/rurl/actions/workflows/security-audit.yml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/security-audit.yml)
-[![OSV
-audit](https://github.com/bart-turczynski/rurl/actions/workflows/osv-audit.yml/badge.svg)](https://github.com/bart-turczynski/rurl/actions/workflows/osv-audit.yml)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
@@ -48,9 +37,9 @@ Current package capabilities include:
 # From CRAN
 install.packages("rurl")
 
-# Development version from GitHub
+# Development version from GitLab
 # install.packages("remotes")
-remotes::install_github("bart-turczynski/rurl")
+remotes::install_gitlab("bart-turczynski/rurl")
 ```
 
 ## Function Overview
@@ -285,7 +274,7 @@ unique hosts.
 ## Public Suffix List
 
 Domain and TLD extraction is delegated to the
-[`pslr`](https://github.com/bart-turczynski/pslr) package, which owns
+[`pslr`](https://CRAN.R-project.org/package=pslr) package, which owns
 the Public Suffix List and its refresh cycle. `rurl` ships no embedded
 copy of the list. To update the PSL, call `pslr::psl_refresh()` (see the
 `pslr` documentation for details).
@@ -300,11 +289,11 @@ of thanks.
 
 `rurl` is part of a small ecosystem of R packages by the same author:
 
-- **[pslr](https://bart-turczynski.github.io/pslr/)** — the Public
+- **[pslr](https://CRAN.R-project.org/package=pslr)** — the Public
   Suffix List engine that powers domain and TLD extraction in `rurl`.
   Use it directly when you need raw eTLD / registrable-domain queries
   without full URL parsing.
-- **[punycoder](https://bart-turczynski.github.io/punycoder/)** — the
+- **[punycoder](https://CRAN.R-project.org/package=punycoder)** — the
   Punycode and IDNA codec that `rurl` uses for internationalized host
   handling. Useful on its own for host normalization and Unicode ↔ ACE
   round-trips.
