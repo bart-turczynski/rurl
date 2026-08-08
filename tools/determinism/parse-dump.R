@@ -18,11 +18,21 @@
 #          tools/determinism/out/env-<LABEL>.csv
 # LABEL comes from $RURL_DETERMINISM_LABEL, else <sysname>-libcurl<version>.
 #
-# $RURL_DETERMINISM_RUN optionally TAGS the output of a repeat run, writing
-# <RUN>-dump-<LABEL>.csv / <RUN>-env-<LABEL>.csv instead. Unset (the default)
-# writes the untagged names, so the primary run is unchanged. The tag PREFIXES
-# rather than suffixes: the gate enumerates cells with a `^dump-` glob, so a
-# suffixed repeat dump would register as an extra, unexpected cell.
+# $RURL_DETERMINISM_RUN optionally marks this as a repeat run. It does two
+# things:
+#   * it TAGS the output, writing <RUN>-dump-<LABEL>.csv /
+#     <RUN>-env-<LABEL>.csv instead. Unset (the default) writes the untagged
+#     names, so the primary run is unchanged. The tag PREFIXES rather than
+#     suffixes: the gate enumerates cells with a `^dump-` glob, so a suffixed
+#     repeat dump would register as an extra, unexpected cell.
+#   * it PERTURBS the corpus order under a fixed, recorded seed
+#     (CORPUS_SHUFFLE_SEED, written to env-<LABEL>.csv as `corpus_order` +
+#     `corpus_shuffle_seed`). An identical second run proves only
+#     process/temporal invariance; shuffling varies something that MUST NOT
+#     matter, so the repeat also probes order-dependence and session-cache
+#     state leakage. Row order in the dump therefore DIFFERS between run 1 and
+#     run 2 by design -- compare-gate.R's projection is sorted on
+#     (id, url_standard), so it compares content, not file order.
 #
 # ZERO package dependencies beyond base R + an installed rurl (curl comes with
 # rurl). stringi is PROBED, never required. No jsonlite, no devtools.
@@ -233,6 +243,69 @@ find_file <- function(rel) {
 corpus_path <- find_file(file.path("tools", "determinism", "corpus.csv"))
 corpus <- utils::read.csv(corpus_path, colClasses = "character",
                           fileEncoding = "UTF-8", stringsAsFactors = FALSE)
+
+# ---- repeat-run perturbation: seeded corpus shuffle (RURL-ptsijueb) --------
+#
+# $RURL_DETERMINISM_RUN is read HERE, above the parse, and not merely at the
+# write step: a repeat run does more than redirect its output path, it PERTURBS
+# THE CORPUS ORDER. An identically-configured second run can only prove
+# process/temporal invariance; varying something that MUST NOT matter is what
+# turns the repeat into a probe of order-dependence and cross-row cache /
+# state leakage (rurl's cache environments live for the whole session, so a
+# leak between rows is a real failure mode). compare-gate.R diffs a projection
+# keyed and sorted on (id, url_standard), so a correct parser is
+# order-insensitive by construction: the shuffled run must reproduce run 1
+# byte-for-byte after projection, and any difference is a finding.
+run_tag <- gsub("[^A-Za-z0-9._-]", "_", Sys.getenv("RURL_DETERMINISM_RUN", ""))
+tag <- if (nzchar(run_tag)) paste0(run_tag, "-") else ""
+
+# FIXED and RECORDED, never ambient (no env override on purpose): the seed is
+# written to env-<LABEL>.csv below, and a permutation whose seed cannot be
+# recovered from the artifact is not reproducible evidence. Nothing depends on
+# this constant's VALUE -- order-insensitivity must hold for every permutation
+# -- so it is a replay handle, not a tuning knob.
+CORPUS_SHUFFLE_SEED <- 20260725L
+
+# WHY NOT set.seed() + sample(): R's RNG is not a stable cross-version
+# contract. R 3.6.0 changed the DEFAULT sample.kind ("Rounding" ->
+# "Rejection") and silently changed every sample() result; pinning
+# kind=/sample.kind= would both depend on arguments that did not exist before
+# R 3.6.0 and bet on R never re-tuning a generator again. This matrix spans
+# oldrel / release / devel deliberately, so "same seed => same permutation"
+# has to hold across R versions BY CONSTRUCTION, not by convention. The
+# permutation is therefore computed in full, here, from an explicit 32-bit
+# linear congruential generator (Numerical Recipes constants) driving a
+# Fisher-Yates shuffle: exact in double arithmetic (1664525 * (2^32 - 1) +
+# 1013904223 < 2^53), a function of (seed, n) alone, and it never touches
+# .Random.seed -- so it also cannot perturb the RNG state the parse itself
+# runs under, which would confound the very thing being measured. Modulo bias
+# is irrelevant: this needs a reproducible permutation, not a uniform one.
+seeded_permutation <- function(n, seed) {
+  if (n < 2L) {
+    return(seq_len(n))
+  }
+  state <- seed %% 4294967296
+  idx <- seq_len(n)
+  for (i in n:2L) {
+    state <- (1664525 * state + 1013904223) %% 4294967296
+    j <- 1L + as.integer(state %% i)
+    keep <- idx[i]
+    idx[i] <- idx[j]
+    idx[j] <- keep
+  }
+  idx
+}
+
+corpus_order <- "as-read"
+if (nzchar(run_tag)) {
+  corpus_order <- "shuffled"
+  corpus <- corpus[seeded_permutation(nrow(corpus), CORPUS_SHUFFLE_SEED), ,
+                   drop = FALSE]
+  rownames(corpus) <- NULL
+  cat(sprintf("repeat run '%s': corpus shuffled, seed=%d, rows=%d\n",
+              run_tag, CORPUS_SHUFFLE_SEED, nrow(corpus)))
+}
+
 inputs <- json_unescape(corpus$input_json)
 
 # ---- round-trip self-test (must run BEFORE any parsing) --------------------
@@ -400,7 +473,16 @@ env_keys <- c(
   "r_version", "r_platform", "sysname", "release", "machine",
   "locale", "encoding", "icu_version", "unicode_version",
   "rurl_version", "curl_version_pkg", "pslr_version", "punycoder_version",
-  "stringi_version", "run_utc"
+  "stringi_version", "run_utc",
+  # Repeat-run perturbation (RURL-ptsijueb). `corpus_order` is "as-read" for
+  # the primary run and "shuffled" for a tagged repeat run;
+  # `corpus_shuffle_seed` is the seed that generated the permutation, or the
+  # `null` sentinel when no shuffle was applied. Recorded so a nondeterminism
+  # finding is replayable from the artifact alone, without re-deriving which
+  # order produced it. ADDITIVE: the key set is a tidy key/value list and
+  # nothing validates it as a closed set (compare-gate.R's read_meta_kv reads
+  # locale-<LABEL>.csv, not this file), so appending cannot orphan a consumer.
+  "corpus_order", "corpus_shuffle_seed"
 )
 
 label_raw <- Sys.getenv("RURL_DETERMINISM_LABEL", "")
@@ -425,7 +507,13 @@ env_vals <- c(
   flat(sti$ICU.version), flat(sti$Unicode.version),
   pkg_ver("rurl"), pkg_ver("curl"), pkg_ver("pslr"), pkg_ver("punycoder"),
   pkg_ver("stringi"),
-  format(Sys.time(), "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+  format(Sys.time(), "%Y-%m-%dT%H:%M:%S", tz = "UTC"),
+  corpus_order,
+  if (identical(corpus_order, "shuffled")) {
+    as.character(CORPUS_SHUFFLE_SEED)
+  } else {
+    NA_character_
+  }
 )
 env_df <- data.frame(key = env_keys, value = json_escape(env_vals),
                      stringsAsFactors = FALSE)
@@ -448,11 +536,10 @@ write_ascii_csv <- function(df, path) {
 }
 
 # Repeat-run tag (G4.2 / P5.2 "two pinned runs of the same comparable cell").
-# Sanitized like the label, and PREFIXED -- see the header: the gate's cell glob
-# is anchored `^dump-`, so a suffixed repeat dump would look like its own cell.
-run_tag <- gsub("[^A-Za-z0-9._-]", "_", Sys.getenv("RURL_DETERMINISM_RUN", ""))
-tag <- if (nzchar(run_tag)) paste0(run_tag, "-") else ""
-
+# `run_tag` / `tag` are computed WITH the corpus shuffle far above, because the
+# tag decides the input order as well as the output path. Sanitized like the
+# label, and PREFIXED -- see the header: the gate's cell glob is anchored
+# `^dump-`, so a suffixed repeat dump would look like its own cell.
 dump_path <- file.path(out_dir, paste0(tag, "dump-", label, ".csv"))
 env_path <- file.path(out_dir, paste0(tag, "env-", label, ".csv"))
 write_ascii_csv(dump, dump_path)

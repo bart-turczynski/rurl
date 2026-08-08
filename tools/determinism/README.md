@@ -207,11 +207,17 @@ Tidy `key,value`, one row per key, values JSON-escaped like everything else:
 `libcurl_protocols`, `libcurl_libidn`, `libcurl_libssh`, `r_version`,
 `r_platform`, `sysname`, `release`, `machine`, `locale`, `encoding`,
 `icu_version`, `unicode_version`, `rurl_version`, `curl_version_pkg`,
-`pslr_version`, `punycoder_version`, `stringi_version`, `run_utc`.
+`pslr_version`, `punycoder_version`, `stringi_version`, `run_utc`,
+`corpus_order`, `corpus_shuffle_seed`.
 
-Absent values (e.g. no `libidn`, stringi not installed) are the `null`
-sentinel. Under `devtools::load_all()`, `rurl_version` reports the working
-tree's `DESCRIPTION` version.
+`corpus_order` is `as-read` on the primary run and `shuffled` on a tagged
+repeat run (`$RURL_DETERMINISM_RUN`), which feeds the corpus in a permuted
+order; `corpus_shuffle_seed` records the seed that produced that permutation,
+so the run can be replayed from the artifact alone.
+
+Absent values (e.g. no `libidn`, stringi not installed, no shuffle applied) are
+the `null` sentinel. Under `devtools::load_all()`, `rurl_version` reports the
+working tree's `DESCRIPTION` version.
 
 ## Adding a platform
 

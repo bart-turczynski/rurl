@@ -288,16 +288,30 @@ jobs:
           cat("effective locale: ", Sys.getlocale("LC_ALL"), "\n", sep = "")
           source("tools/determinism/parse-dump.R")
 
-      # P5.2's "two pinned runs of the same comparable cell". Identical config,
-      # identical corpus -- the ONLY difference is that this is a second, FRESH
-      # R process, which is what makes it a repeat-run (temporal/process)
-      # reproducibility check rather than another platform observation. Cheap:
-      # the slow setup-r-dependencies install above is not repeated, only the
-      # probe itself. RURL_DETERMINISM_RUN redirects the output to
-      # `rerun-dump-<LABEL>.csv`, which compare-gate.R pairs with the first run.
-      # Same guard as the first probe -- a cell whose stack failed to install is
-      # DEGRADED and has no first run to pair with.
-      - name: Repeat the probe in a fresh process (parse-dump.R, run 2)
+      # P5.2's "two pinned runs of the same comparable cell". Same environment,
+      # a second FRESH R process -- and, since RURL-ptsijueb, a PERTURBED one:
+      # run 2 feeds the corpus in a shuffled order. That is deliberate. A run 2
+      # identical in configuration to run 1 can only demonstrate process /
+      # temporal invariance; it is structurally blind to order-dependence and
+      # to state leaking between rows through the session-lifetime cache
+      # environments rurl creates in .onLoad. Shuffling varies something that
+      # MUST NOT matter, so the repeat now tests that too.
+      #
+      # RURL_DETERMINISM_RUN is the single lever for both halves: it redirects
+      # the output to `rerun-dump-<LABEL>.csv` (which compare-gate.R pairs with
+      # the first run) AND switches parse-dump.R onto the shuffled corpus. The
+      # SEED IS NOT SET HERE ON PURPOSE. It is a fixed constant in
+      # parse-dump.R (CORPUS_SHUFFLE_SEED) and is recorded per run in
+      # `rerun-env-<LABEL>.csv` as `corpus_order` + `corpus_shuffle_seed`, so a
+      # finding is replayable from the artifact alone. Exposing it as a
+      # workflow env var would make the permutation ambient and create a second
+      # place for it to drift out of step, for no gain: correctness must hold
+      # for EVERY permutation, so the seed is a replay handle, not a knob.
+      #
+      # Cheap: the slow setup-r-dependencies install above is not repeated,
+      # only the probe itself. Same guard as the first probe -- a cell whose
+      # stack failed to install is DEGRADED and has no first run to pair with.
+      - name: Repeat the probe, shuffled corpus, fresh process (run 2)
         if: inputs.run_parse_dump && steps.stack.outcome == 'success'
         continue-on-error: true
         shell: Rscript {0}
