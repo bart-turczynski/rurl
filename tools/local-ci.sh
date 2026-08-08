@@ -39,7 +39,14 @@
 #   tools/local-ci.sh --keep [ref]    # keep the work tree even on success
 #
 # AFTER A MERGE, run it against what actually landed:
-#   git fetch origin main && tools/local-ci.sh origin/main
+#   git fetch origin main && tools/local-ci.sh --all origin/main
+#
+# `--all` IS LOAD-BEARING THERE, not belt-and-braces. The `check` job's rules
+# select a tag or a hand-started pipeline and nothing else, so honoring them on
+# `main` would run the cheap half and silently skip the `R CMD check --as-cran`
+# that is the whole reason to look at a merge commit. Those rules exist to
+# ration billed minutes on the forge; locally the minutes are free, so the
+# rationing is exactly what you want to override.
 
 set -euo pipefail
 
