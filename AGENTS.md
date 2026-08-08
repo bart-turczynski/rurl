@@ -17,6 +17,23 @@ the source tree, so a green suite can hide a package that does not build. The
 gate runs as a pre-push hook once you run `pre-commit install --hook-type
 pre-push` in your clone — committing the config does not install it.
 
+**GitLab CI is paused** — the free-tier compute allowance is exhausted, so
+`.gitlab-ci.yml` creates a pipeline only for a hand-triggered web run
+(RURL-psqmlgjf). Nothing verifies a push server-side. `tools/local-ci.sh` runs
+the same CI jobs in the same image against a clean clone of a commit, which is
+where environment-shaped defects live that a fully-populated local library hides:
+
+```sh
+tools/local-ci.sh --list          # which jobs apply to this ref, and why
+tools/local-ci.sh                 # run them (needs Docker)
+git fetch origin main && tools/local-ci.sh origin/main   # after a merge
+```
+
+Run it against `origin/main` after merging: a squash-merge produces a commit
+that has never existed on any machine, and the pipeline that used to check it is
+the one that is off. It is pull-based, so it does not restore the property that
+mattered most about a real runner — that verification was not opt-in.
+
 `lintr::lint_package()` must stay clean. `.lintr` mirrors the linter set
 `goodpractice::gp()` runs, and its header documents every intentional
 deviation — read that header before "fixing" a lint or adding a linter.
