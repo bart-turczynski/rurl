@@ -42,6 +42,39 @@ on a pipeline started by hand as the finishing touch after `/cran` has been
 worked through. It is deliberately not part of `/cran`, which stays local and
 cheap.
 
+### Which checks run where (RURL-sgkplmot)
+
+The forge moved to GitLab, so the answer is explicit rather than inherited:
+
+| Check | Where it runs | When |
+|---|---|---|
+| Gate list (lint, build, tests, `R CMD check`, record structure) | **Local**, `tools/verify.R` | Every push — it is a pre-push hook |
+| The same jobs in the CI image, clean clone | **Local**, `tools/local-ci.sh` | On demand; after every merge to `main` |
+| `gates` (~40s) | GitLab | **Paused.** Resumes on quota reset — RURL-utsbwfvc |
+| `check` (`R CMD check --as-cran`) | GitLab | Release time only: a tag, or a hand-started pipeline |
+| Everything in `.github/workflows/` | **Nowhere** | The account is suspended; none of it can fire |
+
+**Nothing verifies a push server-side today.** `tools/verify.R` as a pre-push
+hook is the only non-optional gate, and it is only installed if you ran
+`pre-commit install --hook-type pre-push` in your clone.
+
+`.github/workflows/` is **kept on purpose**, even though not one of those
+workflows can run. The files are in-repo configuration that local tooling and
+the test suite read as data, independently of GitHub:
+
+- `tools/verify.R` derives its entire gate list from `verify.yml` at run time,
+  precisely so the list is never transcribed twice. Deleting it breaks the gate.
+- `tools/determinism/compare-gate.R` reads `determinism-probe.yml` and
+  `_determinism-cells.yml`; `tools/oracle/check-uts46-mapping-pin.R` reads
+  `verify.yml`.
+- `tests/testthat/test-osv.R`, `test-security.R` and `test-locale-invariance.R`
+  assert against their contents.
+
+26 tracked files reference `.github/workflows/` paths. Untangling that — moving
+the gate manifest somewhere forge-neutral so the workflow files can go — is a
+refactor in its own right (RURL-vunvxusf), not part of a URL migration. Until
+then, read those files as manifests, not as promises that anything runs.
+
 `lintr::lint_package()` must stay clean. `.lintr` mirrors the linter set
 `goodpractice::gp()` runs, and its header documents every intentional
 deviation — read that header before "fixing" a lint or adding a linter.

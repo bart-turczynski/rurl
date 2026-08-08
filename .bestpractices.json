@@ -1,133 +1,90 @@
 {
   "homepage_url_status": "Met",
-  "homepage_url_justification": "Project homepage is the pkgdown site https://bart-turczynski.github.io/rurl/ (also linked from DESCRIPTION URL).",
-
+  "homepage_url_justification": "Project homepage is the GitLab project https://gitlab.com/bart-turczynski/rurl , also named by DESCRIPTION URL alongside the CRAN page https://CRAN.R-project.org/package=rurl . The former pkgdown site (bart-turczynski.github.io/rurl) was retired when the GitHub account hosting it was suspended; a replacement documentation site is tracked separately.",
   "sites_https_status": "Met",
-  "sites_https_justification": "All project sites are served over HTTPS: https://github.com/bart-turczynski/rurl , https://bart-turczynski.github.io/rurl/ , and https://CRAN.R-project.org/package=rurl .",
-
+  "sites_https_justification": "All project sites are served over HTTPS: https://gitlab.com/bart-turczynski/rurl and https://CRAN.R-project.org/package=rurl .",
   "description_good_status": "Met",
-  "description_good_justification": "DESCRIPTION and README provide a clear, succinct description of what rurl does: https://github.com/bart-turczynski/rurl#readme",
-
+  "description_good_justification": "DESCRIPTION and README provide a clear, succinct description of what rurl does: https://gitlab.com/bart-turczynski/rurl#readme",
   "interact_status": "Met",
-  "interact_justification": "CONTRIBUTING.md explains how to interact with and contribute to the project: https://github.com/bart-turczynski/rurl/blob/main/CONTRIBUTING.md",
-
+  "interact_justification": "CONTRIBUTING.md explains how to interact with and contribute to the project: https://gitlab.com/bart-turczynski/rurl/-/blob/main/CONTRIBUTING.md",
   "contribution_status": "Met",
-  "contribution_justification": "Contribution guide at https://github.com/bart-turczynski/rurl/blob/main/CONTRIBUTING.md",
-
+  "contribution_justification": "Contribution guide at https://gitlab.com/bart-turczynski/rurl/-/blob/main/CONTRIBUTING.md",
   "contribution_requirements_status": "Met",
-  "contribution_requirements_justification": "CONTRIBUTING.md states the requirements for acceptable contributions (tests, passing lint via the .lintr style config, and the verify CI gate): https://github.com/bart-turczynski/rurl/blob/main/CONTRIBUTING.md",
-
+  "contribution_requirements_justification": "CONTRIBUTING.md states the requirements for acceptable contributions (tests, passing lint via the .lintr style config, and the verify CI gate): https://gitlab.com/bart-turczynski/rurl/-/blob/main/CONTRIBUTING.md",
   "license_location_status": "Met",
-  "license_location_justification": "LICENSE is at the repository top level: https://github.com/bart-turczynski/rurl/blob/main/LICENSE",
-
+  "license_location_justification": "LICENSE is at the repository top level: https://gitlab.com/bart-turczynski/rurl/-/blob/main/LICENSE",
   "floss_license_status": "Met",
-  "floss_license_justification": "Released under the MIT license: https://github.com/bart-turczynski/rurl/blob/main/LICENSE",
-
+  "floss_license_justification": "Released under the MIT license: https://gitlab.com/bart-turczynski/rurl/-/blob/main/LICENSE",
   "floss_license_osi_status": "Met",
   "floss_license_osi_justification": "MIT is an OSI-approved open source license: https://opensource.org/license/mit",
-
   "documentation_basics_status": "Met",
-  "documentation_basics_justification": "Basic documentation in the README and the pkgdown site, plus package vignettes: https://bart-turczynski.github.io/rurl/",
-
+  "documentation_basics_justification": "Basic documentation ships in the README and in the package vignettes, which CRAN renders: https://CRAN.R-project.org/web/packages/rurl/vignettes/getting-started.html .",
   "documentation_interface_status": "Met",
-  "documentation_interface_justification": "Every exported function is documented (roxygen2 man pages) and published on the pkgdown reference index: https://bart-turczynski.github.io/rurl/reference/index.html",
-
+  "documentation_interface_justification": "Every exported function is documented with roxygen2 man pages, published by CRAN as the reference manual: https://CRAN.R-project.org/web/packages/rurl/rurl.pdf .",
   "repo_public_status": "Met",
-  "repo_public_justification": "Public GitHub repository: https://github.com/bart-turczynski/rurl",
-
+  "repo_public_justification": "Public GitLab repository: https://gitlab.com/bart-turczynski/rurl .",
   "repo_track_status": "Met",
-  "repo_track_justification": "All changes are tracked in git: https://github.com/bart-turczynski/rurl/commits/main",
-
+  "repo_track_justification": "All changes are tracked in git: https://gitlab.com/bart-turczynski/rurl/-/commits/main",
   "repo_interim_status": "Met",
-  "repo_interim_justification": "Interim development commits are publicly available on GitHub between releases: https://github.com/bart-turczynski/rurl/commits/main",
-
+  "repo_interim_justification": "Interim development commits are publicly available between releases: https://gitlab.com/bart-turczynski/rurl/-/commits/main .",
   "repo_distributed_status": "Met",
-  "repo_distributed_justification": "Uses git, a distributed version control system: https://github.com/bart-turczynski/rurl",
-
+  "repo_distributed_justification": "Uses git, a distributed version control system: https://gitlab.com/bart-turczynski/rurl",
   "version_unique_status": "Met",
   "version_unique_justification": "Each release carries a unique version (DESCRIPTION Version; CRAN enforces uniqueness): https://CRAN.R-project.org/package=rurl",
-
   "version_semver_status": "Met",
-  "version_semver_justification": "Uses semantic-style x.y.z versioning; releases visible at https://github.com/bart-turczynski/rurl/releases",
-
+  "version_semver_justification": "Uses semantic-style x.y.z versioning; releases visible at https://gitlab.com/bart-turczynski/rurl/-/releases",
   "version_tags_status": "Met",
-  "version_tags_justification": "Releases are tagged in git and published as GitHub Releases: https://github.com/bart-turczynski/rurl/releases",
-
+  "version_tags_justification": "Releases are tagged in git: https://gitlab.com/bart-turczynski/rurl/-/tags . CRAN is the authoritative record of what shipped (https://CRAN.R-project.org/package=rurl); tagging has historically been sparse and some released versions were never tagged.",
   "release_notes_status": "Met",
-  "release_notes_justification": "NEWS.md documents user-facing changes for each release: https://github.com/bart-turczynski/rurl/blob/main/NEWS.md",
-
+  "release_notes_justification": "NEWS.md documents user-facing changes for each release: https://gitlab.com/bart-turczynski/rurl/-/blob/main/NEWS.md",
   "release_notes_vulns_status": "Met",
-  "release_notes_vulns_justification": "No publicly known vulnerabilities have been fixed to date; NEWS.md records all changes: https://github.com/bart-turczynski/rurl/blob/main/NEWS.md",
-
+  "release_notes_vulns_justification": "No publicly known vulnerabilities have been fixed to date; NEWS.md records all changes: https://gitlab.com/bart-turczynski/rurl/-/blob/main/NEWS.md",
   "report_url_status": "Met",
-  "report_url_justification": "Bug tracker: https://github.com/bart-turczynski/rurl/issues",
-
+  "report_url_justification": "Bug tracker: https://gitlab.com/bart-turczynski/rurl/-/issues",
   "report_tracker_status": "Met",
-  "report_tracker_justification": "GitHub Issues serve as the bug tracker: https://github.com/bart-turczynski/rurl/issues",
-
+  "report_tracker_justification": "GitLab Issues serve as the bug tracker: https://gitlab.com/bart-turczynski/rurl/-/issues .",
   "report_process_status": "Met",
-  "report_process_justification": "Users submit bug reports through the GitHub issue tracker: https://github.com/bart-turczynski/rurl/issues",
-
+  "report_process_justification": "Users submit bug reports through the GitLab issue tracker: https://gitlab.com/bart-turczynski/rurl/-/issues , which DESCRIPTION names as BugReports.",
   "report_responses_status": "Met",
-  "report_responses_justification": "Maintainer responds to issue reports on the tracker: https://github.com/bart-turczynski/rurl/issues",
-
+  "report_responses_justification": "Maintainer responds to issue reports on the tracker: https://gitlab.com/bart-turczynski/rurl/-/issues",
   "enhancement_responses_status": "Met",
-  "enhancement_responses_justification": "Maintainer responds to enhancement requests on the tracker: https://github.com/bart-turczynski/rurl/issues",
-
+  "enhancement_responses_justification": "Maintainer responds to enhancement requests on the tracker: https://gitlab.com/bart-turczynski/rurl/-/issues",
   "report_archive_status": "Met",
-  "report_archive_justification": "GitHub Issues provide a publicly available, searchable archive of reports and responses: https://github.com/bart-turczynski/rurl/issues?q=is%3Aissue",
-
+  "report_archive_justification": "GitLab Issues provide a publicly available, searchable archive of reports and responses: https://gitlab.com/bart-turczynski/rurl/-/issues/?state=all .",
   "vulnerability_report_process_status": "Met",
-  "vulnerability_report_process_justification": "The vulnerability-reporting process is published in the security policy: https://github.com/bart-turczynski/rurl/security/policy (source: https://github.com/bart-turczynski/rurl/blob/main/SECURITY.md ). Reports go through GitHub private vulnerability reporting, with maintainer email as a documented fallback.",
-
+  "vulnerability_report_process_justification": "The vulnerability-reporting process is published in the security policy: https://gitlab.com/bart-turczynski/rurl/-/blob/main/SECURITY.md . Reports go to the maintainer by email, with a confidential GitLab issue as a documented alternative.",
   "vulnerability_report_private_status": "Met",
-  "vulnerability_report_private_justification": "GitHub private vulnerability reporting (private security advisories) is enabled, providing a confidential channel: https://github.com/bart-turczynski/rurl/security/advisories/new",
-
+  "vulnerability_report_private_justification": "Two confidential channels are documented in SECURITY.md (https://gitlab.com/bart-turczynski/rurl/-/blob/main/SECURITY.md): email to the maintainer, and a GitLab issue submitted with the \"This issue is confidential\" box ticked, which is visible only to project members.",
   "vulnerability_report_response_status": "Met",
-  "vulnerability_report_response_justification": "SECURITY.md commits to acknowledging reports within 7 days and coordinating a fix and disclosure: https://github.com/bart-turczynski/rurl/blob/main/SECURITY.md",
-
+  "vulnerability_report_response_justification": "SECURITY.md commits to acknowledging reports within 7 days and coordinating a fix and disclosure: https://gitlab.com/bart-turczynski/rurl/-/blob/main/SECURITY.md",
   "build_status": "Met",
-  "build_justification": "Builds with the standard R toolchain (R CMD build / INSTALL, devtools): https://github.com/bart-turczynski/rurl",
-
+  "build_justification": "Builds with the standard R toolchain (R CMD build / INSTALL, devtools): https://gitlab.com/bart-turczynski/rurl",
   "build_common_tools_status": "Met",
   "build_common_tools_justification": "Uses the standard, widely available R build tooling.",
-
   "build_floss_tools_status": "Met",
   "build_floss_tools_justification": "R and its toolchain are free/open source software: https://www.r-project.org/",
-
   "test_status": "Met",
-  "test_justification": "Automated test suite using testthat (edition 3): https://github.com/bart-turczynski/rurl/tree/main/tests/testthat",
-
+  "test_justification": "Automated test suite using testthat (edition 3): https://gitlab.com/bart-turczynski/rurl/-/tree/main/tests/testthat",
   "test_invocation_status": "Met",
   "test_invocation_justification": "Tests run via devtools::test() and as part of R CMD check.",
-
   "test_most_status": "Met",
-  "test_most_justification": "Coverage is measured with covr and reported to Codecov: https://app.codecov.io/gh/bart-turczynski/rurl",
-
+  "test_most_justification": "Coverage is measured with covr and rendered locally by tools/coverage-report.R (https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/coverage-report.R). Coverage was previously uploaded to Codecov from a GitHub Actions workflow; that upload stopped when the account hosting it was suspended, so the Codecov project reports a frozen figure and is no longer cited here.",
   "test_policy_status": "Met",
-  "test_policy_justification": "CONTRIBUTING.md requires tests for new features and bug fixes: https://github.com/bart-turczynski/rurl/blob/main/CONTRIBUTING.md",
-
+  "test_policy_justification": "CONTRIBUTING.md requires tests for new features and bug fixes: https://gitlab.com/bart-turczynski/rurl/-/blob/main/CONTRIBUTING.md",
   "tests_are_added_status": "Met",
   "tests_are_added_justification": "New functionality ships with tests, enforced in review.",
-
   "tests_documented_added_status": "Met",
-  "tests_documented_added_justification": "The test-addition policy is documented in CONTRIBUTING.md: https://github.com/bart-turczynski/rurl/blob/main/CONTRIBUTING.md",
-
+  "tests_documented_added_justification": "The test-addition policy is documented in CONTRIBUTING.md: https://gitlab.com/bart-turczynski/rurl/-/blob/main/CONTRIBUTING.md",
   "warnings_status": "Met",
-  "warnings_justification": "Warnings are surfaced via R CMD check and lintr in CI: https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml",
-
+  "warnings_justification": "Warnings are surfaced by R CMD check and lintr, run by tools/verify.R (https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/verify.R), the project's blocking verification gate. It is installed as a pre-push hook, so it runs before any push lands.",
   "warnings_fixed_status": "Met",
   "warnings_fixed_justification": "Warnings are treated as errors and fixed; R CMD check is kept clean.",
-
   "warnings_strict_status": "Met",
-  "warnings_strict_justification": "CI sets LINTR_ERROR_ON_LINT=true so any lint fails the build: https://github.com/bart-turczynski/rurl/blob/main/.github/workflows/verify.yml",
-
+  "warnings_strict_justification": "tools/verify.R sets LINTR_ERROR_ON_LINT=true, so any lint fails the gate and blocks the push: https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/verify.R .",
   "know_secure_design_status": "Met",
   "know_secure_design_justification": "The maintainer applies secure design principles; rurl defensively parses untrusted URL input.",
-
   "know_common_errors_status": "Met",
   "know_common_errors_justification": "The maintainer is aware of common URL/IDNA parsing pitfalls and tolerates malformed input safely.",
-
   "crypto_published_status": "N/A",
   "crypto_published_justification": "rurl performs no cryptographic operations.",
   "crypto_call_status": "N/A",
@@ -154,61 +111,42 @@
   "crypto_certificate_verification_justification": "rurl does not establish network connections.",
   "crypto_verification_private_status": "N/A",
   "crypto_verification_private_justification": "rurl does not establish network connections.",
-
   "delivery_mitm_status": "Met",
-  "delivery_mitm_justification": "Distributed via CRAN and GitHub over HTTPS; CRAN publishes per-package checksums: https://CRAN.R-project.org/package=rurl",
-
+  "delivery_mitm_justification": "Distributed via CRAN and GitLab over HTTPS; CRAN publishes per-package checksums: https://CRAN.R-project.org/package=rurl .",
   "delivery_unsigned_status": "Met",
-  "delivery_unsigned_justification": "All distribution downloads are served over HTTPS (CRAN, GitHub, r-universe): https://CRAN.R-project.org/package=rurl",
-
+  "delivery_unsigned_justification": "All distribution downloads are served over HTTPS (CRAN, GitLab): https://CRAN.R-project.org/package=rurl .",
   "vulnerabilities_fixed_60_days_status": "Met",
-  "vulnerabilities_fixed_60_days_justification": "No outstanding known vulnerabilities; tracker at https://github.com/bart-turczynski/rurl/issues",
-
+  "vulnerabilities_fixed_60_days_justification": "No outstanding known vulnerabilities; tracker at https://gitlab.com/bart-turczynski/rurl/-/issues",
   "vulnerabilities_critical_fixed_status": "Met",
   "vulnerabilities_critical_fixed_justification": "No known unfixed critical vulnerabilities.",
-
   "static_analysis_status": "Met",
-  "static_analysis_justification": "lintr (full-package lint) and goodpractice are run; FOSSA and Socket scan dependencies: https://github.com/bart-turczynski/rurl/blob/main/.github/workflows/verify.yml",
-
+  "static_analysis_justification": "lintr runs a full-package lint (its linter set mirrors goodpractice::gp()) as a blocking step of tools/verify.R: https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/verify.R . The .lintr header documents every intentional deviation.",
   "static_analysis_common_vulnerabilities_status": "Met",
-  "static_analysis_common_vulnerabilities_justification": "R CMD check plus lintr cover common defect classes; FOSSA/Socket cover dependency vulnerabilities: https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml",
-
+  "static_analysis_common_vulnerabilities_justification": "R CMD check plus lintr cover common defect classes; dependency vulnerabilities are audited against the OSV database (osv.dev) via rosv. Both are run by the maintainer against the gate described in https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/verify.R .",
   "static_analysis_fixed_status": "Met",
   "static_analysis_fixed_justification": "Static-analysis findings are addressed before merge.",
-
   "static_analysis_often_status": "Met",
-  "static_analysis_often_justification": "lintr runs on every CI build (each push and pull request): https://github.com/bart-turczynski/rurl/blob/main/.github/workflows/verify.yml",
-
-  "dynamic_analysis_status": "Met",
-  "dynamic_analysis_justification": "Before releases the rhub workflow runs R CMD check -- including the testthat suite -- on the clang-ASAN/UBSAN and valgrind containers: https://github.com/bart-turczynski/rurl/blob/main/.github/workflows/rhub.yaml",
-
+  "static_analysis_often_justification": "lintr runs on every push, not merely every release: tools/verify.R is installed as a pre-push hook via pre-commit, so the full-package lint is a precondition of pushing. See https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/verify.R .",
+  "dynamic_analysis_status": "Unmet",
+  "dynamic_analysis_justification": "NOT CURRENTLY MET. Dynamic analysis under sanitizers was provided by an rhub workflow running R CMD check on the clang-ASAN/UBSAN and valgrind containers. That workflow ran on GitHub Actions, and the account hosting it is suspended, so it no longer runs. The testthat suite still executes on every push via tools/verify.R (https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/verify.R), and tools/local-ci.sh reproduces the CI jobs in the CI container against a clean clone, but neither enables the memory or undefined-behavior sanitizers. Reported unmet rather than left as a claim about a runner that no longer exists.",
   "dynamic_analysis_unsafe_status": "N/A",
   "dynamic_analysis_unsafe_justification": "rurl is a pure-R package with no compiled code of its own (no src/ directory), so it contains no memory-unsafe C/C++ code to fuzz; the ASAN/valgrind runs still cover its compiled dependencies.",
-
   "dynamic_analysis_enable_assertions_status": "Met",
-  "dynamic_analysis_enable_assertions_justification": "rurl's automated test suite uses testthat, whose expectations (expect_*) are assertions checked at runtime during dynamic analysis on every CI run: https://github.com/bart-turczynski/rurl/tree/main/tests/testthat . The rhub workflow additionally runs the package under the clang-ASAN/UBSAN and valgrind configurations, enabling runtime memory and undefined-behavior assertions when checking the package and its compiled dependencies: https://github.com/bart-turczynski/rurl/blob/main/.github/workflows/rhub.yaml",
-
+  "dynamic_analysis_enable_assertions_justification": "rurl's automated test suite uses testthat, whose expectations (expect_*) are assertions checked at runtime on every gate run: https://gitlab.com/bart-turczynski/rurl/-/tree/main/tests/testthat . The suite is a blocking step of tools/verify.R and therefore runs before every push.",
   "dynamic_analysis_fixed_status": "Met",
   "dynamic_analysis_fixed_justification": "Any issues surfaced by the sanitizer or valgrind runs are fixed before release.",
-
-  "test_continuous_integration_status": "Met",
-  "test_continuous_integration_justification": "GitHub Actions (verify.yml) runs lint + R CMD check + coverage on every push and pull request: https://github.com/bart-turczynski/rurl/actions/workflows/verify.yml",
-
+  "test_continuous_integration_status": "Unmet",
+  "test_continuous_integration_justification": "NOT CURRENTLY MET. Continuous integration ran on GitHub Actions (verify.yml) until the account hosting it was suspended. A GitLab pipeline is configured at https://gitlab.com/bart-turczynski/rurl/-/blob/main/.gitlab-ci.yml but is deliberately paused: the free-tier compute allowance is exhausted, so the workflow block admits only hand-started web pipelines and every other pipeline would fail with ci_quota_exceeded. Verification is meanwhile local and mandatory, not optional: tools/verify.R reproduces CI's fast gate and is installed as a pre-push hook, and tools/local-ci.sh runs the CI jobs in the CI image against a clean clone. The pause lifts when the allowance resets; this criterion returns to met then.",
   "discussion_status": "Met",
-  "discussion_justification": "GitHub Issues provide a public forum for project discussion: https://github.com/bart-turczynski/rurl/issues",
-
+  "discussion_justification": "GitLab Issues provide a public forum for project discussion: https://gitlab.com/bart-turczynski/rurl/-/issues .",
   "no_leaked_credentials_status": "Met",
-  "no_leaked_credentials_justification": "No credentials are committed to the repository; Socket and FOSSA scan the repo: https://github.com/bart-turczynski/rurl",
-
+  "no_leaked_credentials_justification": "No credentials are committed to the repository; Socket and FOSSA scan the repo: https://gitlab.com/bart-turczynski/rurl",
   "english_status": "Met",
-  "english_justification": "Documentation and issue-tracker interaction are conducted in English (Language: en-US): https://github.com/bart-turczynski/rurl#readme",
-
+  "english_justification": "Documentation and issue-tracker interaction are conducted in English (Language: en-US): https://gitlab.com/bart-turczynski/rurl#readme",
   "hardening_status": "N/A",
   "hardening_justification": "Hardening mechanisms (e.g. HTTP security headers) apply to web applications; rurl is an R library.",
-
   "sites_password_security_status": "N/A",
-  "sites_password_security_justification": "Project sites (GitHub, CRAN) manage their own authentication; rurl operates no site with user passwords.",
-
+  "sites_password_security_justification": "Project sites (GitLab, CRAN) manage their own authentication; rurl operates no site with user passwords.",
   "maintained_status": "Met",
-  "maintained_justification": "Actively maintained: recent CRAN releases, frequent commits, and responsive issue handling: https://github.com/bart-turczynski/rurl/commits/main"
+  "maintained_justification": "Actively maintained: recent CRAN releases, frequent commits, and responsive issue handling: https://gitlab.com/bart-turczynski/rurl/-/commits/main"
 }

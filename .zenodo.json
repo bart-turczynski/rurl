@@ -38,12 +38,6 @@
       "scheme": "url"
     },
     {
-      "identifier": "https://bart-turczynski.github.io/rurl/",
-      "relation": "isDocumentedBy",
-      "resource_type": "publication-softwaredocumentation",
-      "scheme": "url"
-    },
-    {
       "identifier": "https://CRAN.R-project.org/package=pslr",
       "relation": "requires",
       "resource_type": "software",

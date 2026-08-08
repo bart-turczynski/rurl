@@ -1240,6 +1240,16 @@
 
 ### Internal
 
+- **The `Remotes:` block is gone; both siblings now install from CRAN.** `pslr`
+  and `punycoder` were pinned to GitHub tags because the versions the `Imports`
+  floors require (`pslr (>= 1.1.0)`, `punycoder (>= 1.2.0)`) had not reached
+  CRAN. They have: CRAN now serves `pslr` 1.1.1 and `punycoder` 1.2.1, both
+  above the floors. A source install of `rurl` therefore no longer depends on
+  GitHub being reachable, and downstream packages that pin `rurl` no longer
+  inherit two transitive GitHub pins. No version floor changed, so the resolved
+  dependency set is unchanged for anyone whose installed siblings already
+  satisfied the floors.
+
 - **Authority presence is now recorded as two independent facts instead of one
   ambiguous enum.** The internal state model carried a single three-valued
   `authority_kind`, which conflated *was a `//` delimiter present* with *did it
@@ -2455,7 +2465,7 @@ to `pslr` fixes the following; outputs change accordingly:
 
 - Published first stable GitHub release tag: `v1`.
 - Release notes added in `RELEASE_NOTES_v1.md`.
-- GitHub release page: <https://github.com/bart-turczynski/rurl/releases/tag/v1>
+- Release tag: <https://gitlab.com/bart-turczynski/rurl/-/tags/v1>
 - Package version for this release is `1.0.0` (see `DESCRIPTION`).
 
 ---

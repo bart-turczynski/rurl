@@ -69,14 +69,17 @@ published version, and `main` out of sync.
    is either `(development version)` or the `DESCRIPTION` Version.
 2. **Set the release version** in `DESCRIPTION`.
 3. Update `cran-comments.md` for this submission.
-4. Run `R CMD build . && R CMD check --as-cran rurl_*.tar.gz` clean; confirm the
-   platform CI (`R-CMD-check`, R-hub) is green.
+4. Run `R CMD build . && R CMD check --as-cran rurl_*.tar.gz` clean. There is no
+   platform CI to confirm — the `R-CMD-check` and R-hub workflows ran on GitHub
+   Actions and cannot fire. Run `tools/local-ci.sh --all origin/main` instead,
+   which reproduces the CI jobs in the CI image against a clean clone.
 5. Submit to CRAN. Once accepted, **tag the released commit**
    (`git tag -a vX.Y.Z`) and push the tag.
 6. **Fast-forward `main` to the released/tagged commit** so the default branch
    always reflects what shipped (`git merge --ff-only vX.Y.Z && git push`).
    Verify: `git merge-base vX.Y.Z main` equals the tag.
-7. Create the GitHub Release from the tag.
+7. Create the GitLab release from the tag
+   (`glab release create vX.Y.Z`).
 8. Open a post-release PR that (a) bumps `DESCRIPTION` to the next development
    version, (b) adds a fresh `## rurl (development version)` NEWS heading, and
    (c) adds the CRAN canonical URL to the `DESCRIPTION` `URL:` field

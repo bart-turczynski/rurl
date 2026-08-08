@@ -43,9 +43,9 @@ Imports:
     stringi,
     punycoder (>= 1.2.0),
     pslr (>= 1.1.0)
-URL: https://bart-turczynski.github.io/rurl/, https://github.com/bart-turczynski/rurl,
-    https://CRAN.R-project.org/package=rurl, https://bart-turczynski.r-universe.dev
-BugReports: https://github.com/bart-turczynski/rurl/issues
+URL: https://gitlab.com/bart-turczynski/rurl,
+    https://CRAN.R-project.org/package=rurl
+BugReports: https://gitlab.com/bart-turczynski/rurl/-/issues
 X-schema.org-keywords: url-parsing, url-parser, url-normalization,
     url-cleaning, url-cleaner, url-checker, domain-extraction,
     domain-name-detection, domain-name-checker, public-suffix, tld, tlds,
@@ -60,9 +60,6 @@ Suggests:
     oysteR,
     rosv,
     jsonlite
-Remotes:
-    bart-turczynski/pslr@v1.1.0,
-    bart-turczynski/punycoder@v1.2.0
 Config/testthat/edition: 3
 Depends:
     R (>= 4.0.0)

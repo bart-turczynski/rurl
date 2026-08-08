@@ -1,4 +1,8 @@
-url: https://bart-turczynski.github.io/rurl/
+# No `url:` until a docs site is actually published somewhere reachable.
+# The previous value (bart-turczynski.github.io/rurl) 404s and has no
+# publisher: it was built by .github/workflows/pkgdown.yaml, and the account
+# that ran it is suspended. RURL-vkltgopc chooses the host and restores this
+# key; DESCRIPTION's URL: field must name the same site when it does.
 
 template:
   bootstrap: 5
@@ -18,14 +22,15 @@ home:
 navbar:
   structure:
     left: [intro, reference, articles, news, acknowledgments]
-    right: [search, github]
+    right: [search, gitlab]
   components:
     acknowledgments:
       text: Acknowledgments
-      href: https://github.com/bart-turczynski/rurl/blob/main/ACKNOWLEDGMENTS.md
-    github:
-      icon: fab fa-github
-      href: https://github.com/bart-turczynski/rurl
+      href: https://gitlab.com/bart-turczynski/rurl/-/blob/main/ACKNOWLEDGMENTS.md
+    gitlab:
+      icon: fab fa-gitlab
+      href: https://gitlab.com/bart-turczynski/rurl
+      aria-label: GitLab
 
 footer:
   structure:
@@ -34,8 +39,8 @@ footer:
   components:
     related: >
       Related:
-      <a href="https://bart-turczynski.github.io/pslr/">pslr</a> ·
-      <a href="https://github.com/bart-turczynski/punycoder">punycoder</a>
+      <a href="https://CRAN.R-project.org/package=pslr">pslr</a> ·
+      <a href="https://CRAN.R-project.org/package=punycoder">punycoder</a>
 
 reference:
   - title: "Parsing"

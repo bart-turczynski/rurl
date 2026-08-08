@@ -12,11 +12,24 @@
 #   branch protection/rulesets and FOSSA posts no status check, so it already
 #   gates nothing — the red is internal to the FOSSA dashboard only.)
 #   The path excludes below still apply when the FOSSA CLI is run; the hosted
-#   GitHub-App integration may ignore this file entirely.
+#   forge-App integration may ignore this file entirely.
+#
+# PROJECT IDENTITY CHANGED 2026-08-08 (RURL-sgkplmot)
+#   The id was `git+github.com/bart-turczynski/rurl`. That GitHub account is
+#   suspended, so the hosted integration can no longer scan anything and the
+#   FOSSA project behind that id is frozen at its last scan. The id below
+#   follows `origin` to GitLab.
+#
+#   This id is a project KEY, not a link: the next `fossa analyze` will create
+#   a NEW FOSSA project rather than move the old one, and the old project's
+#   scan history does not follow. The two README badges keyed to the old id
+#   were removed in the same change — they still rendered, but rendered a
+#   result that can never update again. Re-add badges for the new id only
+#   after a scan has actually run against it.
 version: 3
 
 project:
-  id: git+github.com/bart-turczynski/rurl
+  id: git+gitlab.com/bart-turczynski/rurl
   name: rurl
 
 paths:

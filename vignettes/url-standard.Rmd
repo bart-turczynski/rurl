@@ -175,7 +175,7 @@ safe_parse_urls("mailto:jane@example.com", url_standard = "whatwg",
 ## Conformance posture
 
 `rurl`'s conformance claims are measured, frozen and regenerable — the studies
-live in [`analysis/`](https://github.com/bart-turczynski/rurl/tree/main/analysis),
+live in [`analysis/`](https://gitlab.com/bart-turczynski/rurl/-/tree/main/analysis),
 with the harnesses in `inst/bench/`.
 
 **WHATWG.** Against the spec's own conformance suite (web-platform-tests
