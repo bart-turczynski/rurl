@@ -31,7 +31,13 @@
 #                       each cell contributes exactly one observation; the
 #                       harness therefore re-runs parse-dump.R in a fresh
 #                       process per cell, and this gate requires the pair to
-#                       be identical.
+#                       be identical. Run 2 is PERTURBED, not a copy: it feeds
+#                       the corpus in a shuffled order under a fixed seed
+#                       recorded in its env-<LABEL>.csv (RURL-ptsijueb). Order
+#                       must not matter, so the pair must still project
+#                       identically -- which makes the axis catch
+#                       order-dependence and session-cache state leakage, not
+#                       just process/temporal variation.
 # Neither axis is a regression check: comparing against a committed baseline
 # would test output drift under a declared input (owned by
 # tests/testthat/_snaps/characterization-snapshot.md), not determinism.
@@ -91,6 +97,21 @@ read_meta_kv <- function(path) {
 # makes the whole projection byte-identical across cells (the frozen sweep
 # proved one MD5 across the matrix), so string equality detects divergence and
 # the per-row records feed exact diff signatures.
+#
+# ORDER-INSENSITIVE BY CONSTRUCTION (RURL-ptsijueb). The sort below already
+# canonicalizes row order, and diff_signature() works off the sorted `by_key`
+# map, so FILE row order is not observable in `serialized`, `hash` or any
+# signature. That is what lets parse-dump.R's repeat run shuffle the corpus:
+# no extra "canonical re-sort before diffing" was needed here, and adding a
+# second sort would have been dead code. Self-test fixture (22) pins the
+# property; (23) pins that it does not also swallow a real value difference.
+#
+# The one way a permutation COULD leak into the projection is a duplicated
+# (id, url_standard) key: order() is stable, so tied rows would keep their file
+# order, and `by_key` would silently drop all but one of them. Before the
+# shuffle that was invisible (both runs shared one order); now it would read as
+# nondeterminism. So it is rejected fail-closed as a MALFORMED dump -- an
+# honest evidence defect beats a fabricated parser finding.
 dump_projection <- function(path) {
   d <- utils::read.csv(path, colClasses = "character", check.names = FALSE)
   key_cols <- c("id", "url_standard")
@@ -101,6 +122,12 @@ dump_projection <- function(path) {
   ord <- order(d[["id"]], d[["url_standard"]])
   d <- d[ord, , drop = FALSE]
   keys <- paste(d[["id"]], d[["url_standard"]], sep = "\x1f")
+  if (anyDuplicated(keys) > 0L) {
+    dup <- unique(keys[duplicated(keys)])
+    shown <- sub("\x1f", "/", utils::head(dup, 3L), fixed = TRUE)
+    stop("dump has duplicate (id, url_standard) key(s), so its row order is ",
+         "not canonical: ", toString(shown), " -- ", path)
+  }
   rows <- do.call(paste, c(d[val_cols], sep = "\x1f"))
   list(
     key_cols = key_cols, val_cols = val_cols,
@@ -534,7 +561,7 @@ self_test <- function() {
 
   write_cell <- function(dir, label, rows, comparable = TRUE,
                          charset_ok = TRUE, armed = TRUE, degraded = FALSE,
-                         rerun_rows = rows, rerun = TRUE) {
+                         rerun_rows = rows, rerun = TRUE, rerun_perm = NULL) {
     if (degraded) {
       writeLines("SKIPPED", file.path(dir, paste0("DEGRADED-", label, ".txt")))
       return(invisible())
@@ -548,10 +575,17 @@ self_test <- function() {
                      row.names = FALSE)
     # Every cell also gets a repeat run, identical by default: that is the
     # reproducible steady state. Fixtures opt out (rerun = FALSE) or perturb it
-    # (rerun_rows) to exercise the repeat-run axis.
+    # to exercise the repeat-run axis -- `rerun_rows` changes VALUES, while
+    # `rerun_perm` reorders whole ROWS (ids travel with their values, which is
+    # what parse-dump.R's seeded corpus shuffle produces and what must NOT
+    # register as a finding).
     if (isTRUE(rerun)) {
+      rr <- mk_dump(rerun_rows)
+      if (!is.null(rerun_perm)) {
+        rr <- rr[rerun_perm, , drop = FALSE]
+      }
       utils::write.csv(
-        mk_dump(rerun_rows),
+        rr,
         file.path(dir, paste0(rerun_prefix_default, "dump-", label, ".csv")),
         row.names = FALSE)
     }
@@ -809,7 +843,63 @@ self_test <- function() {
     fail("repeat run with a dropped row not caught")
   }
 
-  cat("determinism compare-gate self-test: PASS (21 fixtures)\n")
+  # (22) PERTURBED repeat run, order-INSENSITIVE case (RURL-ptsijueb). Run 2
+  # now feeds the corpus in a seeded shuffled order, so its dump's ROW ORDER
+  # legitimately differs from run 1's. A pure row permutation must PASS: order
+  # is not part of the contract, and a false red here would make the whole
+  # perturbation unusable. This is NOT a vacuous pass -- the cell must be
+  # compared and found REPRODUCIBLE, so the reproduced count is asserted too
+  # (a gate that "passes" by never pairing the runs proves nothing).
+  d22 <- mk()
+  write_cell(d22, "gha-A-utf8", good); write_cell(d22, "gha-B-utf8", good)
+  write_cell(d22, "gha-C-tr", good, rerun_perm = c(3L, 1L, 2L))
+  write_cell(d22, "gha-D-default", good, comparable = FALSE)
+  r22 <- run_gate(d22, exp_csv, NULL)
+  if (r22$verdict != "PASS") {
+    fail(paste("row-permuted repeat run read as a finding:", r22$verdict))
+  }
+  if (r22$n_reproducible != 3L) {
+    fail(sprintf("permuted repeat run not actually compared (%d of 3 pairs)",
+                 r22$n_reproducible))
+  }
+  if (length(r22$reruns) != 0L) fail("permutation produced a rerun finding")
+
+  # (23) the other half of the pair: a repeat run that is BOTH permuted AND
+  # differs in one VALUE is still FAIL_NONDETERMINISM. Without this, (22) alone
+  # would be satisfied by a gate that had simply stopped looking at the repeat
+  # run. The delta count is asserted exactly: the permutation must contribute
+  # ZERO deltas, so the single changed cell is the only finding.
+  d23 <- mk()
+  write_cell(d23, "gha-A-utf8", good); write_cell(d23, "gha-B-utf8", good)
+  write_cell(d23, "gha-C-tr", good, rerun_rows = c("a.com", "b.com", "C.COM"),
+             rerun_perm = c(2L, 3L, 1L))
+  write_cell(d23, "gha-D-default", good, comparable = FALSE)
+  r23 <- run_gate(d23, exp_csv, NULL)
+  if (r23$verdict != "FAIL_NONDETERMINISM") {
+    fail(paste("value divergence hidden by a permutation:", r23$verdict))
+  }
+  if (r23$reruns[["gha-C-tr"]]$n_deltas != 1L) {
+    fail(sprintf("permutation leaked into the delta set (%d deltas, want 1)",
+                 r23$reruns[["gha-C-tr"]]$n_deltas))
+  }
+
+  # (24) the projection's order-insensitivity rests on the key being unique. A
+  # dump with a duplicated (id, url_standard) key has no canonical row order,
+  # so under a shuffled run 2 it would manufacture a nondeterminism finding out
+  # of nothing. Rejected fail-closed as MALFORMED evidence instead.
+  d24 <- mk()
+  write_cell(d24, "gha-A-utf8", good); write_cell(d24, "gha-B-utf8", good)
+  write_cell(d24, "gha-C-tr", good)
+  write_cell(d24, "gha-D-default", good, comparable = FALSE)
+  utils::write.csv(
+    data.frame(id = c(1L, 1L, 2L), url_standard = "whatwg", host = good,
+               stringsAsFactors = FALSE),
+    file.path(d24, "dump-gha-C-tr.csv"), row.names = FALSE)
+  if (run_gate(d24, exp_csv, NULL)$verdict != "FAIL_INVALID_AXIS") {
+    fail("duplicate-key dump was not rejected as malformed evidence")
+  }
+
+  cat("determinism compare-gate self-test: PASS (24 fixtures)\n")
   invisible(TRUE)
 }
 

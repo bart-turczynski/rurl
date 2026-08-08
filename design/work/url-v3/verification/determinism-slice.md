@@ -73,7 +73,9 @@ manifest: **`tools/determinism/expected-cells.csv`**.
    cell is probed **twice** — a second `parse-dump.R` in a fresh process, writing
    `rerun-dump-<LABEL>.csv` (`$RURL_DETERMINISM_RUN`) — and the pair must reduce
    to the same hash, so the same bytes are compared on both invariance axes:
-   **across cells** (platform) and **across runs** (process/temporal).
+   **across cells** (platform) and **across runs** (process/temporal *and*
+   corpus order — run 2 is perturbed, feeding the corpus in a seeded shuffled
+   order; see "Perturbed repeat run" below).
 2. **Which cells are comparable.** The **14** `cross_os_comparable = true` cells
    (the 8-cell build axis with charset held at UTF-8, minus the declared
    macOS/devel exclusion, plus the 3 `c` and 3 `tr` charset/locale cells). The
@@ -133,7 +135,7 @@ baseline).
 ## Positive and negative coverage (§7 G4)
 
 `Rscript tools/determinism/compare-gate.R --self-test` builds synthetic dump
-directories and asserts twenty-one fixtures:
+directories and asserts twenty-four fixtures:
 
 | # | fixture | expected verdict | sign |
 |---|---|---|---|
@@ -158,6 +160,9 @@ directories and asserts twenty-one fixtures:
 | 19 | a comparable cell with a valid first dump but no second run | FAIL_MISSING_EVIDENCE | negative |
 | 20 | divergence by row SET (a keyed row appears), not row value | FAIL_DIVERGENCE | negative |
 | 21 | a second run that DROPS a keyed row | FAIL_NONDETERMINISM | negative |
+| 22 | a second run that is a pure ROW PERMUTATION of the first (what the seeded shuffle produces) | PASS, and all 3 pairs compared | positive |
+| 23 | a second run that is permuted AND differs in one value | FAIL_NONDETERMINISM, exactly 1 delta | negative |
+| 24 | a dump with a duplicated `(id, url_standard)` key, so row order is not canonical | FAIL_INVALID_AXIS (MALFORMED) | negative |
 
 ## Exact commands
 
@@ -213,15 +218,53 @@ readable-diff accept-after-review ritual). Duplicating that as a committed md5
 baseline would be lower-resolution and, under the v3 parser rewrite, red on most
 slices.
 
-**Perturbed repeat run — still open (follow-on leaf).** Run 2 is currently
-*identical in configuration* to run 1, so it proves process/temporal invariance
-only. A stronger variant varies run 2 in a way that **must not** matter — corpus
-order shuffled under a fixed seed, since the projection is keyed and sorted on
-`(id, url_standard)` — catching order-dependence and cache/state-leak
-sensitivity that neither the cross-cell nor the identical repeat-run comparison
-can isolate. Deferred deliberately: it requires shuffling in `parse-dump.R` plus
-a canonical re-sort before diffing, or row order alone reads as a false red.
-Carried by `RURL-ptsijueb` — this open cell is tracked, not merely noted.
+**Perturbed repeat run — CLOSED (`RURL-ptsijueb`).** Run 2 is no longer a copy
+of run 1. `parse-dump.R` now reads `$RURL_DETERMINISM_RUN` *before* the parse,
+not just at the write step, and a tagged run feeds the corpus in a **shuffled
+order**. That varies something which **must not** matter, so the repeat-run axis
+now also probes order-dependence and state leaking between rows through the
+session-lifetime cache environments `.onLoad` creates — neither of which the
+cross-cell comparison nor an identical repeat run can isolate. Three parts:
+
+- **The permutation does not use R's RNG.** `set.seed()` + `sample()` was
+  rejected: R 3.6.0 changed the *default* `sample.kind` (`"Rounding"` →
+  `"Rejection"`) and silently changed every `sample()` result, and pinning
+  `kind=`/`sample.kind=` both depends on arguments that did not exist before
+  3.6.0 and bets on R never re-tuning a generator again. This matrix spans
+  oldrel/release/devel on purpose, so *same seed ⇒ same permutation* has to hold
+  across R versions **by construction**. `parse-dump.R` therefore computes the
+  permutation itself, from an explicit 32-bit LCG (Numerical Recipes constants,
+  exact in double arithmetic) driving Fisher–Yates. It is a function of
+  `(seed, n)` alone and never touches `.Random.seed`, so it cannot perturb the
+  RNG state the parse runs under — which would confound the measurement.
+- **The seed is fixed and recorded, never ambient.** `CORPUS_SHUFFLE_SEED` is a
+  constant in `parse-dump.R`; each run writes `corpus_order`
+  (`as-read` / `shuffled`) and `corpus_shuffle_seed` (the `null` sentinel on the
+  primary run) into its `env-<LABEL>.csv`, so a nondeterminism finding is
+  replayable from the artifact alone. Deliberately **not** a workflow env var:
+  correctness must hold for *every* permutation, so the seed is a replay handle,
+  not a knob, and a second place to set it would only invite drift.
+- **The "canonical re-sort before diffing" turned out to be a no-op — verified,
+  not assumed.** `dump_projection()` already sorted on `(id, url_standard)` and
+  `diff_signature()` already worked off the sorted `by_key` map, so file row
+  order was never observable in `serialized`, `hash` or any signature. Adding a
+  second sort would have been dead code, and none was added. What the shuffle
+  *did* newly expose is the projection's unstated precondition: a **duplicated**
+  `(id, url_standard)` key has no canonical order (`order()` is stable, so tied
+  rows keep file order, and `by_key` silently drops all but one), which under a
+  shuffled run 2 would manufacture nondeterminism out of nothing. That is now
+  rejected fail-closed as a MALFORMED dump — an honest evidence defect in
+  preference to a fabricated parser finding.
+
+Self-test fixtures 22–24 pin the pair the change turns on: a pure row
+permutation must PASS *and* be shown to have actually been compared (all pairs
+reproduced, zero rerun findings), while a permuted run that also differs in one
+value must still be `FAIL_NONDETERMINISM` with **exactly one** delta — the
+permutation contributing none. Both were confirmed against mutants: deleting
+the repeat-run value check flips fixture 23 to PASS, and deleting the
+projection's sort flips fixture 22 to `FAIL_NONDETERMINISM`. End-to-end, the two
+real runs on `Darwin-libcurl8.14.1` produce dumps whose **file** row order
+differs and whose projections are byte-identical (`IDENTICAL`, 0 deltas).
 
 - **Matrix-uniform temporal drift.** Output that depends on ambient state
   identical across cells on a given day (wall clock; a refreshed `pslr` snapshot)
