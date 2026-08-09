@@ -90,7 +90,8 @@ Eight branch tips exist on the mirror and not on `origin`. Evidence is
 equivalent upstream, a `+` line means it does not. **`-` proves redundancy; `+`
 proves nothing** — a commit that landed via squash or rebase gets a different
 patch-id and shows `+` even though its content is on `main`. So the two verdicts
-are not symmetric, and the `+` rows below are unresolved rather than live.
+are not symmetric: a `+` row cannot be settled by `git cherry` at all, and is
+settled below by comparing the tip's actual content against `main`.
 
 Measured 2026-08-09 against `origin/main` = `62c9fda`.
 
@@ -101,17 +102,25 @@ Measured 2026-08-09 against `origin/main` = `62c9fda`.
 | `fix/oracle-spec-pin` | `fa5355f` | 2026-08-01 | 107 `-`, 0 `+` | **Abandoned.** A second name for the same commit as the row above. |
 | `fix/verification-feedback-time` | `a8d109d` | 2026-08-01 | 83 `-`, 0 `+` | **Abandoned.** Same — fully upstream. |
 | `chore/seal-p0.6-g3-acceptance-3` | `584d800` | 2026-07-26 | 0 `-`, 1 `+` | **Abandoned, already declared.** `origin` carries the tag `abandoned/seal-p0.6-g3-acceptance-3` at this exact commit, so the ruling exists on the forge and the object is not mirror-only. It is a phase-3 *seal*, and [ADR 0014](adr/0014-retire-the-v3-control-plane.md) retired seals entirely. |
-| `chore/drop-remotes` | `de68e2d` | 2026-07-27 | 0 `-`, 1 `+` | **Unresolved — owner call.** The outcome is on `main` (no `Remotes:` block in `DESCRIPTION`), so the `+` is patch-id drift rather than lost work; the branch's `NEWS.md`/`CLAUDE.md` wording was not compared line by line. |
-| `docs/p0.11-forge-binding` | `85d4b38` | 2026-08-01 | 0 `-`, 2 `+` | **Unresolved — owner call.** `design/work/url-v3/decisions/P0.11-forge-binding-ratifying-identity.md` at this tip is **byte-identical** to the copy on `origin/main`, so the content landed. |
-| `fix/error-clean-url-invariant` | `70e1eab` | 2026-08-02 | 0 `-`, 2 `+` | **Unresolved — owner call.** The `clean_url[parse_status == "error"] <- NA_character_` seam and its comment are present verbatim in `R/parse.R` on `origin/main` (line 2548), so the fix landed. |
+| `chore/drop-remotes` | `de68e2d` | 2026-07-27 | 0 `-`, 1 `+` | **Abandoned** (owner ruling, 2026-08-09). All three files it touched are accounted for on `main`: `DESCRIPTION` has no `Remotes:` block; the `NEWS.md` bullet it added is present verbatim (`NEWS.md:1243`); and the one `CLAUDE.md` line it edited no longer exists anywhere, that file having since become a thin `@AGENTS.md` import — so that edit is moot rather than lost. |
+| `docs/p0.11-forge-binding` | `85d4b38` | 2026-08-01 | 0 `-`, 2 `+` | **Abandoned** (owner ruling, 2026-08-09). `design/work/url-v3/decisions/P0.11-forge-binding-ratifying-identity.md` at this tip is **byte-identical** to the copy on `origin/main`, so the content landed. |
+| `fix/error-clean-url-invariant` | `70e1eab` | 2026-08-02 | 0 `-`, 2 `+` | **Abandoned** (owner ruling, 2026-08-09). The `clean_url[parse_status == "error"] <- NA_character_` seam and its comment are present verbatim in `R/parse.R` on `origin/main` (line 2548), so the fix landed. |
 
 Two further mirror branches, `chore/sibling-durability` (`66978d4`) and
 `docs/de4-migration-table` (`ed8d439`), are **not** mirror-only — both are live
 open branches on `origin`.
 
-Nothing above was deleted, and nothing is to be. Resolving the four `+` rows is
-a ruling, not a cleanup: it decides whether anything there is worth resurrecting
-onto `origin`, and the mirror keeps them either way.
+Nothing above was deleted, and nothing is to be. Every tip is now dispositioned,
+but "abandoned" here means *nothing on it needs resurrecting onto `origin`* — it
+is not an instruction to prune. The mirror keeps all of them, which is the point
+of a mirror: the cost of holding a redundant tip is a few kilobytes, and the cost
+of dropping the one that was not redundant is unrecoverable.
+
+The three rows settled by content rather than by `git cherry` are the standing
+example of why the asymmetry above matters. Each showed `+` — the signal that
+normally means "carries unmerged work" — purely because the branch reached `main`
+through a squash, which rewrites the patch-id. Read a `+` as *unproven*, never as
+*unmerged*, and check the content before acting on it.
 
 ### Other refs
 
