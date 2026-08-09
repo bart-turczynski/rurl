@@ -262,7 +262,7 @@ NORMATIVE_DEP_STATUS <- c("verified", "missing", "not-applicable")
 
 # The convention's THIRD enum (RURL-ynirvjxb), and the reason axis the status
 # member used to swallow. "not-applicable" was glossed as "the source is cited
-# but nothing is derived from it", which was FALSE for two of the eight entries
+# but nothing is derived from it", which was FALSE for two of the seven entries
 # carrying it: RFC 3986's 25 rows and PRD 6.1's rows ARE hand-derived from their
 # source's text. What is inapplicable there is the DUTY, not the derivation.
 #
@@ -824,7 +824,7 @@ normative_dep_defects <- function(e, lab) {
   }
   # The symmetric conditional to tracking_issue-on-missing, and for the same
   # kind of reason: a status that excuses the duty must say WHICH excuse it is.
-  # Six of the record's eight not-applicable entries derive nothing; two derive
+  # Five of the record's seven not-applicable entries derive nothing; two derive
   # 25 rows and a fixture's worth respectively. Without this key a consumer
   # reading pin_status cannot tell those apart -- the same undifferentiated
   # pass that normative_dependencies itself was added to close.
@@ -1833,7 +1833,7 @@ self_test <- function() {
   # 46. Check 9 -- BOUNDARY, once per member, because a rule that accepted only
   #     the member the record happens to use most would still pass every case
   #     above. All three are load-bearing in the real record: no-derivation on
-  #     six entries, frozen-source on RFC 3986, internal-source on PRD 6.1.
+  #     five entries, frozen-source on RFC 3986, internal-source on PRD 6.1.
   for (reason in c("no-derivation", "frozen-source", "internal-source")) {
     r <- mk(set_dep(2L, 1L, 1L, "not_applicable_reason", reason))
     expect(sprintf("PV9 passes on not_applicable_reason = \"%s\"", reason),
