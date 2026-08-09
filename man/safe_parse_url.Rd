@@ -181,7 +181,11 @@ profile is set.
 preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
 decoding into a path-separating \code{/}). With no \code{url_standard}, rurl keeps
 its historical RFC-style percent-hex case canonicalization, so \verb{\%2f}
-becomes \verb{\%2F}. Under \code{url_standard = "whatwg"}, existing percent-triplet
+becomes \verb{\%2F}. Under \code{url_standard = "rfc3986"}, the profile's RFC 3986
+§6.2.2.2 normalization applies: a triplet encoding an unreserved byte is
+decoded, every other triplet stays encoded with uppercased hex, so
+\verb{\%7E} becomes \code{~} while \verb{\%2F} stays \verb{\%2F}. Under
+\code{url_standard = "whatwg"}, existing percent-triplet
 spelling is preserved byte-for-byte. Use "encode" to additionally
 normalize which bytes are encoded.}
 \item{"encode": The browser/percent-encoded rendering. Decodes the path
