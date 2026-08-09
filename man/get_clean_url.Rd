@@ -181,7 +181,11 @@ profile is set.
 preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
 decoding into a path-separating \code{/}). With no \code{url_standard}, rurl keeps
 its historical RFC-style percent-hex case canonicalization, so \verb{\%2f}
-becomes \verb{\%2F}. Under \code{url_standard = "whatwg"}, existing percent-triplet
+becomes \verb{\%2F}. Under \code{url_standard = "rfc3986"}, the profile's RFC 3986
+§6.2.2.2 normalization applies: a triplet encoding an unreserved byte is
+decoded, every other triplet stays encoded with uppercased hex, so
+\verb{\%7E} becomes \code{~} while \verb{\%2F} stays \verb{\%2F}. Under
+\code{url_standard = "whatwg"}, existing percent-triplet
 spelling is preserved byte-for-byte. Use "encode" to additionally
 normalize which bytes are encoded.}
 \item{"encode": The browser/percent-encoded rendering. Decodes the path
@@ -382,6 +386,61 @@ the engine is the same one \code{\link{safe_parse_url}} and
 The port is included only when \code{port_handling != "exclude"}; see
 \code{\link{safe_parse_url}} for the full \code{port_handling} semantics.
 }
+\section{Cleaning is lossy by design}{
+
+
+A cleaned URL is an SEO and deduplication product, not an identity function
+and not a standard's serialization. It is deliberately \emph{lossy}: the
+fragment and userinfo are always dropped, the query is dropped by default,
+and the cleaning policies (\code{www_handling},
+\code{trailing_slash_handling}, \code{index_page_handling}, subdomain
+trimming, \code{port_handling}) exist precisely to collapse URLs that differ.
+Distinct URLs therefore map to the same cleaned string, so this is never an
+identity function and never round-trips back to its input.
+
+It is also \strong{not} the surface rurl's standards-conformance claims are
+measured on. When identity or conformance is the goal, use a different
+surface:
+
+\itemize{
+\item \code{\link{serialize_url}} --- the selected standard's own
+full-string serialization, credentials and fragment included. This is the
+substrate the conformance claims are measured on.
+\item \code{\link{get_url_key}} (with \code{\link{url_key_policy}}) and the
+\code{\link{url_join}} family --- resource identity for deduplicating,
+grouping, matching and joining. No cleaning option can reach a key byte.
+}
+}
+
+\section{Path percent-encoding under a standard}{
+
+
+\code{path_encoding} is a presentation knob and does not select a standard's
+path identity; \code{url_standard} does. On the path axis the selector means:
+
+\itemize{
+\item \code{url_standard = "rfc3986"} applies RFC 3986 section 6.2.2.2
+percent-encoding normalization: a triplet encoding an \emph{unreserved}
+byte (\code{A-Z}, \code{a-z}, \code{0-9}, \code{-}, \code{.}, \code{_},
+\code{~}) is decoded to that byte, and every other triplet --- reserved
+bytes such as \code{\%2F}, \code{\%3F}, \code{\%23}, and non-ASCII bytes
+such as \code{\%C3} --- is left encoded with its hex digits uppercased.
+It is applied \emph{before} dot-segment removal, so an encoded dot segment
+(\code{\%2E} / \code{\%2E\%2E}) resolves like a literal one.
+\item \code{url_standard = "whatwg"} preserves existing percent-triplets
+byte-for-byte, hex case included, and resolves encoded dot segments
+without any decode.
+\item \code{url_standard = NULL} decodes nothing and canonicalizes triplet
+hex case to uppercase.
+}
+
+That normalization is part of the path a URL denotes, and only
+\code{path_encoding = "keep"} (the default) preserves it verbatim ---
+\code{"encode"} and \code{"decode"} layer a presentation form on top and may
+fold a reserved octet such as \code{\%2F} into a path-separating \code{/}.
+See \code{vignette("url-standard")}.
+}
+
 \examples{
 get_clean_url("Example.COM/Path") # Default lower_host: host folds, path kept
 get_clean_url(
@@ -421,4 +480,27 @@ get_clean_url(
   query_handling = "filter"
 )
 # -> "http://example.com/p?id=42"
+# Lossy by design: different URLs clean to the same string, and the cleaned
+# string is not what a standard would serialize.
+u <- c("http://u:pw@example.com/a#frag", "http://example.com/a?q=1")
+get_clean_url(u)
+# -> both "http://example.com/a"
+serialize_url(u[1])
+# The identity surface keeps them apart: the query is identity, the
+# fragment and userinfo are not.
+k <- get_url_key(u)
+k[1] == k[2]
+# -> FALSE
+# RFC 3986 section 6.2.2.2 on the path: unreserved triplets decode,
+# reserved ones stay encoded.
+get_clean_url("http://example.com/a\%7Eb\%2Fc", url_standard = "rfc3986")
+# -> "http://example.com/a~b\%2Fc"
+get_clean_url("http://example.com/a\%7Eb\%2Fc", url_standard = "whatwg")
+# -> "http://example.com/a\%7Eb\%2Fc"
+}
+\seealso{
+\code{\link{serialize_url}} for a standard's full-string
+serialization (the conformance-bearing surface), \code{\link{get_url_key}}
+and \code{\link{url_join}} for resource identity and joining, and
+\code{\link{safe_parse_url}} for the parsed components.
 }
