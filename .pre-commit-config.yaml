@@ -1,5 +1,6 @@
 # Pre-commit gate, mirroring CI. Install with `pre-commit install` (pre-commit
-# hooks) and `pre-commit install --hook-type pre-push` (the verify hook below).
+# hooks), `pre-commit install --hook-type pre-push` (the verify hook below) and
+# `pre-commit install --hook-type post-merge` (the archival-mirror refresh).
 #
 # air (the R formatter) is intentionally NOT wired up here: this package has not
 # adopted air (no air.toml), so enabling it would reformat the whole source tree
@@ -69,4 +70,34 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+        verbose: true
+
+      # Keeps the local archival mirror from going stale in silence
+      # (RURL-eqgqbeti). The `backup` remote was wired once by RURL-ivsyshdj
+      # and pushed once; six weeks later it was six commits behind and nothing
+      # anywhere said so, on a repository whose only other gate is the hook
+      # above (GitLab CI paused, GitHub account suspended).
+      #
+      # post-merge, because history arrives here exactly one way: merges happen
+      # on the forge and reach this machine through `git pull`/`git merge`.
+      # post-commit would fire on local commits that are not yet worth
+      # archiving. Read tools/mirror-refresh.sh's header for the full rationale
+      # and -- more importantly -- for what this does NOT guarantee: it is
+      # installed per clone like every other hook here, it does not fire for
+      # `git pull --rebase`, and git ignores a post-merge hook's exit status,
+      # so a failure is loud but not blocking. The non-optional half is
+      # tools/mirror-freshness.sh, which exits non-zero on drift.
+      #
+      # The script pushes with a PLAIN `git push`, no `--no-verify`: the
+      # pre-push wrapper above already skips the gate for a local-path
+      # destination, and routing through it keeps that predicate exercised.
+      # Nothing is ever force-pushed or pruned -- the mirror holds refs found
+      # nowhere else (design/backup-mirror.md).
+      - id: mirror-refresh
+        name: refresh the local archival mirror
+        entry: tools/mirror-refresh.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [post-merge]
         verbose: true
