@@ -67,6 +67,43 @@ The forge moved to GitLab, so the answer is explicit rather than inherited:
 hook is the only non-optional gate, and it is only installed if you ran
 `pre-commit install --hook-type pre-push` in your clone.
 
+### The archival mirror, and checking it is not stale (RURL-eqgqbeti)
+
+With no server-side gate and a suspended GitHub account, the bare mirror at
+`~/Projects/_backups/rurl.git` (the `backup` remote) is the only copy of the
+history that is not your working clone. It was wired once and pushed once, and
+by 2026-08-08 it was six commits behind with nothing anywhere saying so — which
+is the failure being fixed: not staleness, *silent* staleness in something still
+trusted.
+
+```sh
+tools/mirror-freshness.sh    # exit 0 = mirror carries origin/main, exit 1 = drifted
+tools/mirror-refresh.sh      # refresh every local-path mirror, then assert it took
+```
+
+`tools/mirror-freshness.sh` **exits non-zero** on drift; that is the whole point,
+and it is why it is not merely a print. The refresh runs automatically as a
+pre-commit **`post-merge`** hook, installed alongside the gate:
+
+```sh
+pre-commit install --hook-type pre-push --hook-type post-merge
+```
+
+Be honest about what that buys: it is per-clone like every hook here, it fires
+on `git merge`/`git pull` but not on `git pull --rebase` or `git fetch` + reset,
+and git ignores a `post-merge` hook's exit status, so a failure is loud but not
+blocking. The non-optional half is the check — run it by hand whenever you are
+about to rely on the backup. Both scripts find mirrors by the same
+URL-is-a-local-directory predicate `tools/verify-on-push.sh` uses, and the
+refresh pushes through that wrapper rather than around it with `--no-verify`.
+
+**Nothing is ever pruned or force-pushed to the mirror**, and its
+`refs/remotes/origin/*` namespace is a **frozen pre-migration GitHub snapshot**,
+not current forge state — `refs/remotes/origin/main` sits 186 commits back at
+what GitHub last held. See [design/backup-mirror.md](design/backup-mirror.md)
+for that namespace, the "never `git fetch` inside the mirror" hazard, and the
+triage of the eight mirror-only branch tips.
+
 `.github/workflows/` is **kept on purpose**, even though not one of those
 workflows can run. The files are in-repo configuration that local tooling and
 the test suite read as data, independently of GitHub:

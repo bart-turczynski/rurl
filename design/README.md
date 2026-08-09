@@ -18,6 +18,10 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
 - [`goodpractice-triage.md`](goodpractice-triage.md) — standing triage for
   `goodpractice::gp()` findings that are intentionally retained or queued as
   scoped cleanup debt.
+- [`backup-mirror.md`](backup-mirror.md) — standing record for the local
+  archival mirror: how it stays fresh, why its `refs/remotes/origin/*` is a
+  frozen pre-migration GitHub snapshot, and the triage of the branch tips that
+  exist only there.
 
 See also [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the structural overview
 (load order, file map, data flow, seams, caches).
