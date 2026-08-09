@@ -120,27 +120,44 @@ the gate rejects a blank.
 
 | oracle_id | upstream_project | revision | path | retrieved | license | raw_source_hash | import_command | transformed_hash | standard_section | claim_kind | applicability_selector |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| OR-001 | web-platform-tests/wpt (267 rows); ada-url/ada test data (41 rows) | `MISSING[RURL-hjgtwowf]` | `url/resources/urltestdata.json` | `MISSING[RURL-hjgtwowf]` | BSD-3-Clause (web-platform-tests contributors) | `MISSING[RURL-hjgtwowf]` | `MISSING[RURL-hjgtwowf]` | `MISSING[RURL-hjgtwowf]` | WHATWG URL Standard (version unpinned) | acceptance/rejection + `clean_url` string | failure cases + adversarial vectors; `runnable = "yes"` rows only |
-| OR-005 | web-platform-tests/wpt | `MISSING[RURL-hjgtwowf]` | `url/resources/urltestdata.json` | `MISSING[RURL-hjgtwowf]` | BSD-3-Clause (web-platform-tests contributors) | `MISSING[RURL-hjgtwowf]` | hand-transcribed; `source_reference` records the exact upstream `input` string per row | `MISSING[RURL-hjgtwowf]` | WHATWG URL Standard (version unpinned) | component + `clean_url` expectations | rows whose `source_reference` names a WPT input |
-| OR-007 | web-platform-tests/wpt | `MISSING[RURL-hjgtwowf]` | `url/resources/urltestdata.json` | 2026-07-08 | BSD-3-Clause (web-platform-tests contributors) | `MISSING[RURL-hjgtwowf]` | `inst/bench/make-wpt-fixture.py` (named in `analysis/parity/README.md`, absent from the fixture's own `_meta`) | `MISSING[RURL-hjgtwowf]` | WHATWG URL Standard (version unpinned) | acceptance + full-component parity | `base in {null, about:blank}`; success limited to `http/https/ftp/file`; failure = any base-null case; NUL inputs dropped |
+| OR-001 | web-platform-tests/wpt (267 rows); ada-url/ada test data (41 rows) | wpt `181476aa16e8b28a07698bef3a0275fa53dd22e5`; ada `308110b26b32d12db492d460a41e57932366269d` — both **verified-at**, not retrieved-at; copied from the per-group fields of `tests/testthat/fixtures/oracle-provenance.json` | `url/resources/urltestdata.json` | `MISSING[RURL-vwurxmzm]` — unrecorded for all three imported groups and unrecoverable; the sentinel the sidecar itself carries, re-carried to the issue that owns it | BSD-3-Clause (web-platform-tests contributors) | wpt `355c9f1e5f34aae66ba8adfabf3c853f5cd30ea22964ef7a53eb292e7975d81e`; ada extra-urltestdata `027f702da55f49ba1d7e249fd8157816f00009333c3e6839c3c83406249ea8c6`; ada verifydnslength `1259165fd8baf69644914741ab318d08c3370184d5b720f7d4548d6cf8f44d6d` | `MISSING[RURL-vwurxmzm]` — unattested and unrecoverable for all three groups; each records a `pin_fetch_command` that re-fetches the pinned bytes, which is a different claim and does not discharge this field | `0e2c05d827a2c339d7175b261722b2221a29f24b0f32e1d691218aa4d18081ab` | WHATWG URL Standard (version unpinned) | acceptance/rejection + `clean_url` string | failure cases + adversarial vectors; `runnable = "yes"` rows only |
+| OR-005 | web-platform-tests/wpt | `181476aa16e8b28a07698bef3a0275fa53dd22e5` — the sidecar's `citation_upstream_revision` (**verified-at**). It pins the cited upstream *input strings*, not the expected values, which are hand-derived here; 22 of 23 re-locate, the 23rd citation eliding a run of leading zeros | `url/resources/urltestdata.json` | not applicable — this fixture vendors no upstream bytes, so `tests/testthat/fixtures/oracle-provenance.json` records it `section_2_3_applies = false` and states "No missing sentinel is used in this fixture"; only the cited inputs have an upstream, and no date was recorded for the citation | BSD-3-Clause (web-platform-tests contributors) | `355c9f1e5f34aae66ba8adfabf3c853f5cd30ea22964ef7a53eb292e7975d81e` — the sidecar's `citation_raw_source_sha256`: the digest of the cited upstream file at that revision, not of a vendored import | hand-transcribed; `source_reference` records the exact upstream `input` string per row | `3c5ff62e610ea7232c8a7fcfd7f849ea3f6004e8b4b4df9a6d05d1542b0914fa` | WHATWG URL Standard (version unpinned) | component + `clean_url` expectations | rows whose `source_reference` names a WPT input |
+| OR-007 | web-platform-tests/wpt | `181476aa16e8b28a07698bef3a0275fa53dd22e5` — **retrieved-at**: re-running the generation command against the raw source at this revision reproduces the committed fixture exactly, 336 success / 202 failure, both arrays byte-identical | `url/resources/urltestdata.json` | 2026-07-08 | BSD-3-Clause (web-platform-tests contributors) | `355c9f1e5f34aae66ba8adfabf3c853f5cd30ea22964ef7a53eb292e7975d81e` | `inst/bench/make-wpt-fixture.py` (named in `analysis/parity/README.md`, absent from the fixture's own `_meta`) | `5141babf1bad1ab2960421aff80a89e3a9288974b0f702f33e6d3b9c7fb28ae8` | WHATWG URL Standard (version unpinned) | acceptance + full-component parity | `base in {null, about:blank}`; success limited to `http/https/ftp/file`; failure = any base-null case; NUL inputs dropped |
 | OR-021 | Per source group, recorded field-by-field in `tests/testthat/fixtures/oracle-provenance.json`; this row must not become a second copy of it. `web-platform-tests/wpt` (43 credential/fragment rows, derived from the in-repo import rather than fetched); `ada-url/ada` (13); NO upstream artifact for the 20 IPv4-obfuscation rows (hand-generated arithmetic) or the 16 class-C paper host rows | wpt `181476aa16e8b28a07698bef3a0275fa53dd22e5`; ada `308110b26b32d12db492d460a41e57932366269d` — both **verified-at**, not retrieved-at; not applicable for the 36 artifact-less rows | `url/resources/urltestdata.json`; `ada-url/ada tests/wpt/ada_extra_urltestdata.json` (repo-qualified: the bare path would collide with this repository's own `tests/` tree); none for the artifact-less rows | 2026-07-08 for the 43 WPT-derived rows, inherited from the in-repo import they derive from; `MISSING[RURL-vwurxmzm]` for the ada rows; not applicable for the artifact-less rows | BSD-3-Clause (web-platform-tests contributors); Apache-2.0 (Copyright 2023 Yagiz Nizipli and Daniel Lemire); the paper and arithmetic rows vendor no artifact | wpt `355c9f1e5f34aae66ba8adfabf3c853f5cd30ea22964ef7a53eb292e7975d81e`; ada `027f702da55f49ba1d7e249fd8157816f00009333c3e6839c3c83406249ea8c6`; not applicable for the artifact-less rows | wpt: the hop-1 `curl -fsSL .../181476aa16e8.../url/resources/urltestdata.json`; ada: `MISSING[RURL-vwurxmzm]`; the row builders that assembled the expected values are untracked — `MISSING[RURL-ozdejfzl]` | `0e2c05d827a2c339d7175b261722b2221a29f24b0f32e1d691218aa4d18081ab` | WHATWG URL Standard §4.5 URL serializing, scored on `fsss_whatwg` (surface (b)) | conformance over a curated HAZARD set — never a conformance rate (P5.3 §2.2) | the 92 string-valued rows, derived not transcribed: `oracle_kind = "exact"` (76 — 43 wpt-credentials-fragments, 20 ip-obfuscation, 13 ada-extra) or `"host"` (16 — 9 equivocal-urls, 7 youarealiar) |
 | OR-022 | web-platform-tests/wpt | `181476aa16e8b28a07698bef3a0275fa53dd22e5` | `url/resources/urltestdata.json` | 2026-07-08 | BSD-3-Clause (web-platform-tests contributors) | `355c9f1e5f34aae66ba8adfabf3c853f5cd30ea22964ef7a53eb292e7975d81e` | `curl -fsSL https://raw.githubusercontent.com/web-platform-tests/wpt/181476aa16e8b28a07698bef3a0275fa53dd22e5/url/resources/urltestdata.json -o urltestdata.json` then `python3 inst/bench/make-wpt-fixture.py urltestdata.json --revision 181476aa16e8b28a07698bef3a0275fa53dd22e5 --retrieved 2026-07-08` | `5141babf1bad1ab2960421aff80a89e3a9288974b0f702f33e6d3b9c7fb28ae8` | WHATWG URL Standard §4.5 URL serializing (upstream's own `href`), over §4.4 parsing | conformance — the full-string FSSS headline | base = null only; success = every non-failure case at that revision, all 54 upstream schemes; failure = every base-null failure case; NUL inputs dropped |
 
-**What the `MISSING` cells mean.** `revision` is the load-bearing one. P5.3 §2
-makes "pinned to an immutable upstream revision + hash" *definitional* for the
-`whatwg-wpt` authority, so all three instances currently wear a label whose
-defining condition they do not meet. The claim "rurl conforms to WPT" has no
-fixed referent until a commit SHA exists to conform *to*, and an upstream change
-cannot be detected. This is the same class of defect as RURL-nknytzxz, which
-concerned the oracle's **content**; this one concerns its **identity**.
-`OR-007`'s `_meta` block is the best of the three (5 of 10 fields, plus a
-genuinely precise applicability selector) and is the natural shape to extend.
+**What the `MISSING` cells mean.** `revision` was the load-bearing one, and it
+is now filled on all three rows. P5.3 §2 makes "pinned to an immutable upstream
+revision + hash" *definitional* for the `whatwg-wpt` authority, so until
+RURL-hjgtwowf these instances wore a label whose defining condition they did not
+meet: "rurl conforms to WPT" had no fixed referent, and an upstream change could
+not be detected. Every value above was **copied** from
+`tests/testthat/fixtures/oracle-provenance.json`, which records provenance per
+source group; none was derived independently of it, and a disagreement between
+the two is a defect in this table rather than a second opinion.
+
+What a pin *means* still differs by row, and the rows say so rather than reading
+alike. OR-007's is **retrieved-at** and reproduces — regenerating from the raw
+source at that revision yields the committed fixture byte-identically. OR-001's
+and OR-005's are **verified-at**: OR-001's rows re-locate at the pinned
+revisions, OR-005's cited input *strings* do, and neither dates an import.
+
+Two `MISSING` cells remain, both on OR-001, and both are re-carried to
+**RURL-vwurxmzm**, which owns them: nobody recorded the retrieval date or the
+import command for its three imported source groups, and nothing can recover
+them. The sidecar's per-group `pin_fetch_command` re-fetches the pinned bytes
+and reproduces the recorded digest, but it deliberately does not stand in either
+field — a reproducing command dates nothing and attests nothing about how the
+bytes arrived. OR-005's two former blanks are not gaps of that kind and take no
+sentinel: its fixture vendors no upstream bytes at all, so the sidecar records it
+`section_2_3_applies = false`, which puts it outside P5.3 §2.3's import
+requirement rather than in violation of it.
 
 ## Coverage of the taxonomy
 
 | P5.3 §2 authority | instances | note |
 |---|---|---|
-| `whatwg-wpt` | 5 (OR-001, OR-005, OR-007, OR-021, OR-022) | OR-021 and OR-022 DO carry the revision pin the label's definition requires; OR-001, OR-005 and OR-007 still lack it (RURL-hjgtwowf), even though the sidecar record now answers several of their `MISSING` cells |
+| `whatwg-wpt` | 5 (OR-001, OR-005, OR-007, OR-021, OR-022) | all five now carry the revision pin the label's definition requires; OR-001, OR-005 and OR-007 took theirs from the sidecar record (RURL-hjgtwowf), and only OR-001's retrieval date and import command remain unrecorded (RURL-vwurxmzm) |
 | `rfc3986-grammar` | 6 (OR-002, OR-003, OR-004, OR-006, OR-008, OR-023) | OR-003 is the independent transcription that keeps the other five honest — and the judge OR-023 runs every serialization through |
 | `libcurl-parity` | 1 (OR-009) | OR-014 is *not* one, despite calling libcurl |
 | `browser-parity` | **0** | the authority certifies nothing today (RURL-mydybnpl) |
@@ -180,9 +197,13 @@ vocabulary — the precise move P5.3 §2 exists to prevent.
    instances and state in `gates/G4-acceptance.md` that no browser-agreement
    claim is made. Build the ledger only if such a claim is ever asserted.
 
-A fourth item is a defect, not a question, and is tracked rather than open here:
-the three `whatwg-wpt` instances do not pin an upstream revision or any hash
-(RURL-hjgtwowf, §Provenance).
+A fourth item was a defect, not a question — the three `whatwg-wpt` instances
+OR-001, OR-005 and OR-007 pinned no upstream revision and no hash. It is
+discharged in §Provenance (RURL-hjgtwowf): all three now carry the revision, the
+raw-source digest and the transformed-fixture digest, copied from
+`tests/testthat/fixtures/oracle-provenance.json`. What survives is narrower and
+tracked elsewhere: OR-001's retrieval date and import command were never
+recorded and cannot be recovered (RURL-vwurxmzm).
 
 ## Scope boundaries
 
