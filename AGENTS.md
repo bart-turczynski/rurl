@@ -17,6 +17,15 @@ the source tree, so a green suite can hide a package that does not build. The
 gate runs as a pre-push hook once you run `pre-commit install --hook-type
 pre-push` in your clone — committing the config does not install it.
 
+The hook's `entry` is `tools/verify-on-push.sh`, not `tools/verify.R`. That
+wrapper looks at the destination remote and **skips the gate when the
+destination is a directory on this filesystem** — the local archival mirror
+`backup`, whose history already passed the gate on its way to `origin`, and
+where a run would only burn minutes and rewrite `_snaps/` and fixture bytes in
+your tree (RURL-qkowfsdt). A push to `origin` — or to any remote the wrapper
+cannot positively identify as a local mirror — runs the full gate unchanged.
+The skip is scoped to mirrors; it is not a way to push unverified work.
+
 **GitLab CI is paused** — the free-tier compute allowance is exhausted, so
 `.gitlab-ci.yml` creates a pipeline only for a hand-triggered web run
 (RURL-psqmlgjf). Nothing verifies a push server-side. `tools/local-ci.sh` runs

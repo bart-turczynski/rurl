@@ -46,9 +46,25 @@ repos:
       # and the test suite stayed green (RURL-mvsxmyww). Keeping the definition
       # in a committed script rather than a YAML string also means it can be run
       # by hand, listed with --list, and reviewed as code.
+      #
+      # `entry` points at tools/verify-on-push.sh, NOT at tools/verify.R
+      # directly, and that indirection is the whole point (RURL-qkowfsdt). The
+      # wrapper reads the DESTINATION REMOTE that pre-commit re-exports as
+      # $PRE_COMMIT_REMOTE_URL and skips the gate when the destination is a
+      # directory on this filesystem -- i.e. the local archival mirror
+      # `backup`, where the gate verifies nothing (that history already passed
+      # on its way to origin), costs minutes, and rewrites _snaps/ and fixture
+      # bytes in the working tree. Everything else, `origin` included, runs the
+      # full gate unchanged; anything the wrapper cannot positively identify as
+      # a local mirror also runs it. Read the wrapper's header before changing
+      # the predicate -- this is a scoped skip, not a hole.
+      #
+      # `always_run: true` STAYS. The predicate that was missing is the remote,
+      # not the file set: for origin this hook must fire regardless of what
+      # changed.
       - id: verify
         name: verify (mirrors CI's fast gate)
-        entry: Rscript tools/verify.R
+        entry: tools/verify-on-push.sh
         language: system
         pass_filenames: false
         always_run: true
