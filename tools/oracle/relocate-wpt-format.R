@@ -41,8 +41,11 @@ wpt_expected_value <- function(entry) {
 # The rule has two parts, and both were measured:
 #
 #   base-relative -- upstream supplies a `base` that is load-bearing, so the row
-#     tests relative resolution and rurl (absolute parse-only) is the wrong
-#     referee. A base of "about:blank" is NOT load-bearing when the input is
+#     tests relative resolution, which THIS harness does not exercise: it scores
+#     absolute parsing. (rurl itself does resolve references -- `resolve_url()`
+#     -- and those rows are scored by tests/testthat/test-wpt-base-relative.R.
+#     The label marks a scope boundary of this fixture, not a package limit.)
+#     A base of "about:blank" is NOT load-bearing when the input is
 #     itself absolute, which is why the ada group runs 20 of its 24 rows despite
 #     nearly all of them carrying that base -- and it IS load-bearing when the
 #     input is a relative reference, which is why "#x" does not run.
