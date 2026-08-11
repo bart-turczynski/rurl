@@ -153,6 +153,155 @@ test_that("WHATWG backslash-as-slash flows from url_standard", {
   )
 })
 
+# --- P2.7 D-B: a same-special-scheme reference is RELATIVE under whatwg -------
+#
+# WHATWG's "special relative or authority state" consumes a scheme equal to the
+# base's when that scheme is special and keeps parsing against the base. RFC
+# 3986 section 5.2.2 has no such rule -- any scheme makes the reference
+# absolute -- so this is the first genuinely standard-divergent behavior in the
+# MERGE, and it retires the standard-agnostic claim PRD v2 D6 made. The 274-row
+# conformance measurement lives in test-wpt-base-relative.R; these are the
+# axis-by-axis assertions.
+
+test_that("whatwg reads the base's own special scheme as relative", {
+  wbase <- "http://example.org/foo/bar"
+  # The worked example from P2.7 D-B section 3.
+  expect_identical(
+    resolve_url("http:foo.com", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "http://example.org/foo/foo.com"
+  )
+  # An absolute-path remainder roots against the BASE's authority, not its own.
+  expect_identical(
+    resolve_url("http:/example.com/", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "http://example.org/example.com/"
+  )
+  # A bare "scheme:" is the empty reference: base path AND base query survive.
+  expect_identical(
+    resolve_url("http:", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "http://example.org/foo/bar"
+  )
+  # The scheme match is ASCII case-insensitive on both sides.
+  expect_identical(
+    resolve_url("HTTP:g", "http://example.org/foo/bar",
+                url_standard = "whatwg", output = "serialized"),
+    "http://example.org/foo/g"
+  )
+})
+
+test_that("the consumed scheme is not re-read out of the remainder", {
+  # `.split_after_scheme()` drops the scheme production deliberately: re-running
+  # the full splitter would re-read "C:" / ":" as a scheme of the remainder.
+  expect_identical(
+    resolve_url("file:C:/", "file://host/", url_standard = "whatwg",
+                output = "serialized"),
+    "file://host/C:/"
+  )
+  expect_identical(
+    resolve_url("http::@c:29", "http://example.org/foo/bar",
+                url_standard = "whatwg", output = "serialized"),
+    "http://example.org/foo/:@c:29"
+  )
+})
+
+test_that("only the base's OWN special scheme is consumed", {
+  wbase <- "http://example.org/foo/bar"
+  # A DIFFERENT scheme stays absolute even when it is also special ...
+  expect_identical(
+    resolve_url("https:foo.com", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "https://foo.com/"
+  )
+  # ... and so does a matching scheme that is not special. `ftps` is rurl's own
+  # addition and is NOT a WHATWG special scheme, so the rule must not fire.
+  expect_identical(
+    resolve_url("ftps:foo.com", "ftps://example.org/foo/bar",
+                url_standard = "whatwg", output = "serialized"),
+    "ftps:foo.com"
+  )
+})
+
+test_that("file:// keeps its own two-slash authority entry", {
+  # The five non-file special schemes reach "special authority ignore slashes"
+  # and skip a run of any length; `file` has its own state machine that
+  # consumes exactly two, so a third slash is an EMPTY host plus a path.
+  expect_identical(
+    resolve_url("file:///foo/bar.txt", "file:///tmp/mock/path",
+                url_standard = "whatwg", output = "serialized"),
+    "file:///foo/bar.txt"
+  )
+  expect_identical(
+    resolve_url("http:///example.com/p", "http://example.org/foo/bar",
+                url_standard = "whatwg", output = "serialized"),
+    "http://example.com/p"
+  )
+})
+
+test_that("rfc3986 keeps the same-scheme reference ABSOLUTE", {
+  wbase <- "http://example.org/foo/bar"
+  # The other half of the axis: under rfc3986 the reference is absolute and the
+  # base is irrelevant, which is RFC 3986 section 5.2.2's first branch.
+  expect_identical(
+    resolve_url("http:foo.com", wbase, url_standard = "rfc3986",
+                output = "serialized"),
+    "http:foo.com"
+  )
+  # On the clean surface that same absolute `http:` reference carries no
+  # authority, which rurl's parser rejects exactly as it does a direct parse --
+  # pre-existing behavior, unchanged by this rule.
+  expect_identical(
+    resolve_url("http:foo.com", wbase, url_standard = "rfc3986"),
+    get_clean_url("http:foo.com", url_standard = "rfc3986")
+  )
+  # ... and the raw merge itself, one layer below the serializer.
+  expect_identical(
+    rurl:::.resolve_one_raw("http:foo.com", wbase, "rfc3986"),
+    "http:foo.com"
+  )
+  expect_identical(
+    rurl:::.resolve_one_raw("http:foo.com", wbase, "whatwg"),
+    "http://example.org/foo/foo.com"
+  )
+})
+
+test_that("url_standard = NULL is byte-frozen against the new rule", {
+  # ADR 0007 / P2.7 D-C: every reference-parsing rule is reachable ONLY through
+  # url_standard = "whatwg". At NULL the same inputs keep RFC 3986's answer.
+  wbase <- "http://example.org/foo/bar"
+  # The raw merge -- the locus of the change -- is untouched at NULL, and the
+  # internal's DEFAULT argument is that frozen path rather than the new one.
+  expect_identical(
+    rurl:::.resolve_one_raw("http:foo.com", wbase), "http:foo.com"
+  )
+  expect_identical(
+    rurl:::.resolve_one_raw("http:foo.com", wbase),
+    rurl:::.resolve_one_raw("http:foo.com", wbase, NULL)
+  )
+  expect_identical(
+    rurl:::.resolve_one_raw("file:test", "file:///tmp/mock/path"), "file:test"
+  )
+  # ... and so is the clean surface it feeds. These references resolve to an
+  # authority-less absolute URL that rurl's parser rejects, exactly as a direct
+  # parse of it does; the NA is pre-existing behavior, not a new one.
+  expect_identical(
+    resolve_url("http:foo.com", wbase), get_clean_url("http:foo.com")
+  )
+  expect_true(is.na(resolve_url("http:foo.com", wbase)))
+  expect_true(is.na(resolve_url("file:test", "file:///tmp/mock/path")))
+  # The whatwg selector is the ONLY way to reach the new rule: same input, same
+  # surface, and only there does it resolve against the base.
+  expect_identical(
+    resolve_url("http:foo.com", wbase, url_standard = "whatwg"),
+    "http://example.org/foo/foo.com"
+  )
+  expect_identical(
+    resolve_url("file:test", "file:///tmp/mock/path", url_standard = "whatwg"),
+    "file:///tmp/mock/test"
+  )
+})
+
 test_that("resolved output equals a direct parse of the resolved URL", {
   # The composition contract: resolving then reading clean_url is identical to
   # parsing the RFC-recomposed URL directly, for every governed axis.

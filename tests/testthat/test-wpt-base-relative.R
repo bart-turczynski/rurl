@@ -11,7 +11,7 @@
 # relative-resolution corpus. This file is that signal.
 #
 # SCOPE. It is an INSTRUMENT, not a fix. At this commit rurl differs from
-# upstream on 56 of the 274 rows, and those 56 are enumerated below. The test
+# upstream on 43 of the 274 rows, and those 43 are enumerated below. The test
 # is green because the measured differing set equals the enumerated one --
 # never because a count was tolerated.
 #
@@ -36,6 +36,14 @@
 # barred from carrying a conformance claim (P2.7 D-A,
 # design/work/url-v3/decisions/P2.7-display-and-resolver-output.md; P5.3
 # CLAIM-1). Scoring the public surface here would measure the canonicalizer.
+#
+# The resolution call passes `url_standard = "whatwg"` because that is the
+# standard this file scores against. Reference resolution stopped being
+# standard-agnostic with P2.7 D-B (R/resolve.R): the WHATWG reference-parsing
+# rules are reachable ONLY through that selector, and the NULL selector stays
+# byte-frozen under ADR 0007 / P2.7 D-C. Scoring with the NULL selector would
+# hold rurl to WHATWG's oracle while denying it WHATWG's rules -- and would go
+# silently stale as each rule lands.
 
 wpt_base_relative_suite <- function() {
   skip_if_not_installed("jsonlite")
@@ -57,39 +65,31 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 
 # ---- the known-differ set ---------------------------------------------------
 #
-# 56 of 274 rows, grouped by the EARLIEST point at which rurl's resolution
+# 43 of 274 rows, grouped by the EARLIEST point at which rurl's resolution
 # leaves the WHATWG algorithm, so a later unit can delete one group at a time.
 # Every group is a real, currently-failing family: nothing here is speculative.
 #
 # Two notes on how this differs from the prior measurement recorded on
 # RURL-fupsemxr, which counted 62 across a partly different family list:
-#   * the count is 56 at this commit, not 62 -- the `file:` empty-host family
-#     (RURL-uhwivndf) was discharged in the meantime, and the base-null suite
-#     now scores 336/336;
+#   * the count was 56 when this file landed, not 62 -- the `file:` empty-host
+#     family (RURL-uhwivndf) was discharged in the meantime, and the base-null
+#     suite now scores 336/336. It is 43 now: the SAME_SCHEME family (14 rows)
+#     was discharged by P2.7 D-B, and 13 of its 14 rows left with it;
 #   * "rows rurl rejects outright (NA)" is NOT a family here. A reject is a
-#     symptom, not a cause: the 16 NA rows are distributed across five of the
-#     groups below by the defect that produced them, which is the axis a fix
-#     is organised around.
-
-# The reference carries the base's OWN special scheme. WHATWG consumes it and
-# continues relatively ("special relative or authority state"); rurl's RFC 3986
-# splitter sees a scheme and takes the absolute branch, ignoring the base.
-WPT_REL_SAME_SCHEME <- c(
-  "http://example.org/foo/bar >> http:foo.com",
-  "http://example.org/foo/bar >> http::@c:29",
-  "http://example.org/foo/bar >> http:[61:27]/:foo",
-  "http://example.org/foo/bar >> http:/example.com/",
-  "http://example.com/ >> http:/",
-  "http://example.org/foo/bar >> http:example.com/",
-  "file:///tmp/mock/path >> file:c:\\foo\\bar.html",
-  "file:///tmp/mock/path >> file:test",
-  "http://example.org/foo/bar >> http:",
-  "file:///test?test#test >> file:",
-  "file:///test?test#test >> file:?x",
-  "file:///test?test#test >> file:#x",
-  "file://host/ >> file:C:/",
-  "file://host/ >> file:/C:/"
-)
+#     symptom, not a cause: the NA rows are distributed across the groups below
+#     by the defect that produced them, which is the axis a fix is organised
+#     around.
+#
+# DISCHARGED: `WPT_REL_SAME_SCHEME` -- the reference carrying the base's OWN
+# special scheme. WHATWG consumes it and continues relatively ("special relative
+# or authority state"); rurl's RFC 3986 splitter saw a scheme and took the
+# absolute branch, ignoring the base. `.split_after_scheme()` (R/resolve.R) now
+# implements the state under `url_standard = "whatwg"`, and 13 of the family's
+# 14 rows became exact. The fourteenth,
+# `file:///tmp/mock/path >> file:c:\foo\bar.html`, is a CONJUNCTION: once the
+# scheme is consumed relatively, what is left wrong about it is the Windows
+# drive letter, so it moved into WPT_REL_DRIVE_LETTER below rather than staying
+# behind under a family name that no longer explains it.
 
 # Backslash-as-slash inside the REFERENCE. Under a special scheme WHATWG reads
 # `\` exactly as `/`, including where a run of them introduces an authority;
@@ -133,7 +133,13 @@ WPT_REL_DRIVE_LETTER <- c(
   "file://host/dir/file >> C|\\",
   "file://x/C:/ >> ..",
   "file://host/ >> //C:/",
-  "file://host/ >> file://C:/"
+  "file://host/ >> file://C:/",
+  # Ex-WPT_REL_SAME_SCHEME. The scheme is now consumed relatively, so the
+  # resolved path merges against the base (`file:///tmp/mock/c:/foo/bar.html`)
+  # instead of being rejected; the residual gap is WHATWG's file-state rule that
+  # a remainder BEGINNING with a drive letter EMPTIES the path rather than
+  # shortening it, which is this family's machinery and this family's unit.
+  "file:///tmp/mock/path >> file:c:\\foo\\bar.html"
 )
 
 # "Special authority ignore slashes": after a special scheme WHATWG skips an
@@ -182,7 +188,7 @@ WPT_REL_SCHEME_PRODUCTION <- c(
 )
 
 WPT_REL_KNOWN_DIFFER <- c(
-  WPT_REL_SAME_SCHEME, WPT_REL_BACKSLASH, WPT_REL_C0_OR_SPACE,
+  WPT_REL_BACKSLASH, WPT_REL_C0_OR_SPACE,
   WPT_REL_DRIVE_LETTER, WPT_REL_SLASH_RUN, WPT_REL_PATH_AS_AUTHORITY,
   WPT_REL_ABSOLUTE_REF, WPT_REL_SCHEME_PRODUCTION
 )
@@ -199,8 +205,8 @@ expect_property <- function(violates, input, deviations = character(0)) {
 test_that("the known-differ families are disjoint and sum to the whole", {
   # The constant is itself data, and a duplicated id across two families would
   # make the set-equality below pass while the families lie about ownership.
-  expect_length(WPT_REL_KNOWN_DIFFER, 56L)
-  expect_length(unique(WPT_REL_KNOWN_DIFFER), 56L)
+  expect_length(WPT_REL_KNOWN_DIFFER, 43L)
+  expect_length(unique(WPT_REL_KNOWN_DIFFER), 43L)
 })
 
 test_that("WPT base-relative rows resolve to the standard's own `href`", {
@@ -226,7 +232,7 @@ test_that("WPT base-relative rows resolve to the standard's own `href`", {
   # cannot carry this claim.
   resolved <- vapply(
     seq_along(id),
-    function(i) rurl:::.resolve_one_raw(input[[i]], base[[i]]),
+    function(i) rurl:::.resolve_one_raw(input[[i]], base[[i]], "whatwg"),
     character(1)
   )
   got <- serialize_url(resolved, standard = "whatwg")

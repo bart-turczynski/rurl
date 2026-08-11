@@ -115,10 +115,16 @@ get_clean_url("http://example.com/a\\b", url_standard = "rfc3986")
 
 ## Resolving references
 
-`resolve_url()` implements RFC 3986 §5 reference resolution — turning a relative
-link and a base URL into an absolute URL — and then canonicalizes the result
-with the same machinery, so `url_standard` and the other options flow straight
-through.
+`resolve_url()` turns a relative link and a base URL into an absolute URL, then
+canonicalizes the result with the same machinery, so `url_standard` and the
+other options flow straight through.
+
+Resolution itself is one of the axes the selector governs. Under `"rfc3986"` —
+and under the default `NULL` — it is RFC 3986 §5 exactly. Under `"whatwg"` the
+WHATWG URL Standard's reference-parsing rules apply first; the visible one today
+is that a reference carrying the base's *own* special scheme is relative rather
+than absolute: `"http:g"` against `http://a/b/c/` resolves to `http://a/b/c/g`
+instead of being read as the absolute `http:g`.
 
 ```{r resolve}
 resolve_url("../g", "http://a/b/c/d;p?q")
