@@ -165,6 +165,13 @@ ALLOWLIST <- list(
     reason = "same: the recorded import command for the pinned WPT fixture"
   ),
   list(
+    path = "tests/testthat/fixtures/wpt-url-base-relative.json",
+    reason = paste("same again, for the base-relative half of that import.",
+                   "It ships in the tarball (unlike its inst/bench sibling)",
+                   "and is still inert: the string is an `_meta` provenance",
+                   "field the harness never executes")
+  ),
+  list(
     path = "inst/bench/make-wpt-fixture.py",
     reason = "emits that import command, so it must contain it verbatim"
   ),
