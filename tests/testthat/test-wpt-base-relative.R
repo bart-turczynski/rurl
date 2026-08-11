@@ -11,7 +11,7 @@
 # relative-resolution corpus. This file is that signal.
 #
 # SCOPE. It is an INSTRUMENT, not a fix. At this commit rurl differs from
-# upstream on 43 of the 274 rows, and those 43 are enumerated below. The test
+# upstream on 29 of the 274 rows, and those 29 are enumerated below. The test
 # is green because the measured differing set equals the enumerated one --
 # never because a count was tolerated.
 #
@@ -65,7 +65,7 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 
 # ---- the known-differ set ---------------------------------------------------
 #
-# 43 of 274 rows, grouped by the EARLIEST point at which rurl's resolution
+# 29 of 274 rows, grouped by the EARLIEST point at which rurl's resolution
 # leaves the WHATWG algorithm, so a later unit can delete one group at a time.
 # Every group is a real, currently-failing family: nothing here is speculative.
 #
@@ -73,8 +73,9 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 # RURL-fupsemxr, which counted 62 across a partly different family list:
 #   * the count was 56 when this file landed, not 62 -- the `file:` empty-host
 #     family (RURL-uhwivndf) was discharged in the meantime, and the base-null
-#     suite now scores 336/336. It is 43 now: the SAME_SCHEME family (14 rows)
-#     was discharged by P2.7 D-B, and 13 of its 14 rows left with it;
+#     suite now scores 336/336. It fell to 43 when the SAME_SCHEME family (14
+#     rows) was discharged by P2.7 D-B, and to 29 when the reference
+#     preprocessing families below were;
 #   * "rows rurl rejects outright (NA)" is NOT a family here. A reject is a
 #     symptom, not a cause: the NA rows are distributed across the groups below
 #     by the defect that produced them, which is the axis a fix is organised
@@ -90,28 +91,29 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 # scheme is consumed relatively, what is left wrong about it is the Windows
 # drive letter, so it moved into WPT_REL_DRIVE_LETTER below rather than staying
 # behind under a family name that no longer explains it.
-
-# Backslash-as-slash inside the REFERENCE. Under a special scheme WHATWG reads
-# `\` exactly as `/`, including where a run of them introduces an authority;
-# rurl's reference splitter and merge treat it as an ordinary path byte.
-WPT_REL_BACKSLASH <- c(
-  "http://example.org/foo/bar >> \\x",
-  "http://example.org/foo/bar >> \\\\x\\hello",
-  "file:///tmp/mock/path >> \\\\server\\file",
-  "file:///tmp/mock/path >> /\\server/file",
-  "file://lion/ >> \\//pig",
-  "file://lion/ >> \\/localhost//pig",
-  "http://example.org/ >> /\\/\\//example.org/../path",
-  "file:/// >> /\\//\\/a/../"
-)
-
-# Leading/trailing C0-or-space is not stripped from the reference (and the
-# stripped-to-empty case must then fall back to the base minus its fragment).
-WPT_REL_C0_OR_SPACE <- c(
-  "http://example.org/foo/bar >> \t   :foo.com   \n",
-  "http://example.org/foo/bar >>  foo.com  ",
-  "http://example.org/foo/bar >>   \t"
-)
+#
+# DISCHARGED: `WPT_REL_BACKSLASH` (8 rows) and `WPT_REL_SLASH_RUN` (4 rows) --
+# backslash-as-slash inside the reference, and the arbitrary-length leading run
+# of `/` and `\` that introduces an authority. These were two family names for
+# ONE state chain: WHATWG's "relative slash state" reads `\` exactly as `/` and
+# hands a second slash-or-backslash to "special authority ignore slashes", which
+# skips the whole run before reading a host. A scheme-LESS reference under a
+# special base now enters that chain through the same `.split_after_scheme()`
+# a consumed special scheme does (R/resolve.R), so neither family could be
+# discharged without the other -- `///example.org/../path` and
+# `/\/\//example.org/../path` differ only in which slash byte was typed.
+#
+# DISCHARGED: `WPT_REL_C0_OR_SPACE` (3 rows) -- the WHATWG parser's step 1
+# strip (leading/trailing C0-control-or-SPACE, then every tab/LF/CR) now runs on
+# the REFERENCE, through the same `.strip_whatwg_control_chars_vec()` seam the
+# absolute-parse path uses. One row MOVED rather than passing:
+# `file:///tmp/mock/path >>   File:c|////foo\bar.html` used to be exact by
+# accident, because its leading spaces made `  File` an unrecognizable scheme
+# and sent the whole reference down the absolute branch, where absolute parsing
+# got it right. Stripped, its scheme IS the base's, so it now resolves
+# relatively and lands on the drive-letter defect -- the same conjunction as the
+# ex-SAME_SCHEME row above, and it sits in WPT_REL_DRIVE_LETTER for the same
+# reason.
 
 # Windows drive letters. WHATWG normalises `C|` to `C:`, refuses to shorten a
 # path past a drive letter, and in the file-host state turns a drive-letter
@@ -139,17 +141,12 @@ WPT_REL_DRIVE_LETTER <- c(
   # instead of being rejected; the residual gap is WHATWG's file-state rule that
   # a remainder BEGINNING with a drive letter EMPTIES the path rather than
   # shortening it, which is this family's machinery and this family's unit.
-  "file:///tmp/mock/path >> file:c:\\foo\\bar.html"
-)
-
-# "Special authority ignore slashes": after a special scheme WHATWG skips an
-# arbitrary RUN of `/` and `\` before reading the host, so `///example.org/x`
-# has host example.org. RFC 3986 stops at two and reads an EMPTY authority.
-WPT_REL_SLASH_RUN <- c(
-  "http://example.org/ >> ///example.org/../path",
-  "http://example.org/ >> ///example.org/../../",
-  "http://example.org/ >> ///example.org/../path/../../",
-  "http://example.org/ >> ///example.org/../path/../../path"
+  "file:///tmp/mock/path >> file:c:\\foo\\bar.html",
+  # Ex-WPT_REL_C0_OR_SPACE, and the one row this file's count moved BACKWARDS
+  # on. See the DISCHARGED note above: it was exact only because unstripped
+  # leading spaces hid its scheme, and the residual gap is the same drive-letter
+  # rule as the row above it.
+  "file:///tmp/mock/path >>   File:c|////foo\\bar.html"
 )
 
 # A resolved path whose first segment is empty must serialize with the `/.`
@@ -188,8 +185,7 @@ WPT_REL_SCHEME_PRODUCTION <- c(
 )
 
 WPT_REL_KNOWN_DIFFER <- c(
-  WPT_REL_BACKSLASH, WPT_REL_C0_OR_SPACE,
-  WPT_REL_DRIVE_LETTER, WPT_REL_SLASH_RUN, WPT_REL_PATH_AS_AUTHORITY,
+  WPT_REL_DRIVE_LETTER, WPT_REL_PATH_AS_AUTHORITY,
   WPT_REL_ABSOLUTE_REF, WPT_REL_SCHEME_PRODUCTION
 )
 
@@ -205,8 +201,8 @@ expect_property <- function(violates, input, deviations = character(0)) {
 test_that("the known-differ families are disjoint and sum to the whole", {
   # The constant is itself data, and a duplicated id across two families would
   # make the set-equality below pass while the families lie about ownership.
-  expect_length(WPT_REL_KNOWN_DIFFER, 43L)
-  expect_length(unique(WPT_REL_KNOWN_DIFFER), 43L)
+  expect_length(WPT_REL_KNOWN_DIFFER, 29L)
+  expect_length(unique(WPT_REL_KNOWN_DIFFER), 29L)
 })
 
 test_that("WPT base-relative rows resolve to the standard's own `href`", {
