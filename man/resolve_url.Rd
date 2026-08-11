@@ -100,6 +100,26 @@ state} consumes a scheme equal to the base's when that scheme is special
 while RFC 3986 treats any scheme as making the reference absolute and
 gives \code{"http://foo.com/"}. A \emph{different} scheme stays absolute
 under both, even when it is also special.
+\item \strong{Under a special base, a leading \code{\\} in the reference is
+a \code{/}, and a run of either introduces an authority.} WHATWG's
+\dQuote{relative slash state} reads \code{\\} exactly as \code{/}, so
+\code{resolve_url("\\x", "http://example.org/foo/bar", url_standard =
+    "whatwg", output = "serialized")} is \code{"http://example.org/x"}; a
+second slash-or-backslash enters the authority, and
+\dQuote{special authority ignore slashes} then skips the whole run for
+the five non-\code{file} special schemes, so \code{"///example.org/x"}
+and \code{"/\\/\\//example.org/x"} both resolve with the host
+\code{example.org}. \code{file} has its own state machine and consumes
+exactly two. RFC 3986 has neither rule: \code{\\} is an ordinary path
+byte and \code{//} is the entire authority production.
+\item \strong{The reference is stripped before it is read.} The WHATWG
+basic URL parser's step 1 removes a leading and trailing run of C0
+control or SPACE (U+0000--U+0020) and then every ASCII tab, LF and CR,
+so \code{" foo.com "} resolves as \code{"foo.com"} does. A reference that
+strips to the empty string is the empty reference, which resolves to the
+base minus its fragment. RFC 3986 has no strip step -- such bytes are
+required to be percent-encoded -- so under \code{"rfc3986"} and
+\code{NULL} they stay in the reference.
 }
 
 The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):

@@ -302,6 +302,150 @@ test_that("url_standard = NULL is byte-frozen against the new rule", {
   )
 })
 
+# --- P2.7 D-B: reference PREPROCESSING under whatwg (RURL-fupsemxr T2.4) ------
+#
+# Two more rules WHATWG applies while parsing the REFERENCE that RFC 3986
+# section 5 has no equivalent for, both reachable through the "whatwg" selector
+# only. The 274-row conformance measurement lives in test-wpt-base-relative.R;
+# these are the axis-by-axis assertions.
+
+test_that("under a special base a leading backslash is a slash", {
+  wbase <- "http://example.org/foo/bar"
+  # WHATWG "relative slash state": one leading `\` roots the path exactly as
+  # `/` does -- it does NOT merge against the base path as a normal byte would.
+  expect_identical(
+    resolve_url("\\x", wbase, url_standard = "whatwg", output = "serialized"),
+    "http://example.org/x"
+  )
+  # And it is the state, not a blanket byte rewrite: a `\` that is not in the
+  # leading run stays a path byte here and is recognized downstream instead.
+  expect_identical(
+    resolve_url("\\?q", wbase, url_standard = "whatwg", output = "serialized"),
+    "http://example.org/?q"
+  )
+  expect_identical(
+    resolve_url("\\#f", wbase, url_standard = "whatwg", output = "serialized"),
+    "http://example.org/#f"
+  )
+})
+
+test_that("a leading run of slash-or-backslash introduces an authority", {
+  wbase <- "http://example.org/foo/bar"
+  # A SECOND slash-or-backslash enters the authority, and for the five
+  # non-`file` special schemes "special authority ignore slashes" then skips the
+  # whole run: these two references differ only in which byte was typed.
+  expect_identical(
+    resolve_url("\\\\x\\hello", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "http://x/hello"
+  )
+  expect_identical(
+    resolve_url("/\\/\\//example.org/../path", "http://example.org/",
+                url_standard = "whatwg", output = "serialized"),
+    "http://example.org/path"
+  )
+  expect_identical(
+    resolve_url("///example.org/../path", "http://example.org/",
+                url_standard = "whatwg", output = "serialized"),
+    "http://example.org/path"
+  )
+  # `file` consumes exactly TWO (its own file-slash chain), so a third slash is
+  # an EMPTY host plus a path -- the same asymmetry `file:` references have.
+  expect_identical(
+    resolve_url("/\\server/file", "file:///tmp/mock/path",
+                url_standard = "whatwg", output = "serialized"),
+    "file://server/file"
+  )
+  expect_identical(
+    resolve_url("///foo/bar", "file:///tmp/mock/path",
+                url_standard = "whatwg", output = "serialized"),
+    "file:///foo/bar"
+  )
+})
+
+test_that("a NON-special base gets neither rule", {
+  # Every rule here is a state WHATWG reaches only from a special scheme, so a
+  # non-special base keeps RFC 3986's reading even under the whatwg selector.
+  expect_identical(
+    rurl:::.resolve_one_raw("\\x", "non-spec://h/p", "whatwg"),
+    "non-spec://h/\\x"
+  )
+  expect_identical(
+    rurl:::.resolve_one_raw("///a/b", "non-spec://h/p", "whatwg"),
+    "non-spec:///a/b"
+  )
+})
+
+test_that("whatwg strips C0-or-space from the reference before reading it", {
+  wbase <- "http://example.org/foo/bar"
+  # Step 1a: a leading/trailing C0-control-or-SPACE run is removed, so this
+  # resolves exactly as the unpadded reference does.
+  expect_identical(
+    resolve_url("  foo.com  ", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "http://example.org/foo/foo.com"
+  )
+  # Step 1b: every ASCII tab/LF/CR, anywhere in the reference.
+  expect_identical(
+    resolve_url("\tg\nh\r", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "http://example.org/foo/gh"
+  )
+  # A reference that strips to EMPTY is the empty reference -- base minus its
+  # fragment (RFC 3986 section 5.2.2), not a merge of the whitespace.
+  expect_identical(
+    resolve_url("   \t", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "http://example.org/foo/bar"
+  )
+  expect_identical(
+    resolve_url("   \t", "http://example.org/foo/bar?q#old",
+                url_standard = "whatwg", output = "serialized"),
+    "http://example.org/foo/bar?q"
+  )
+  # The strip happens BEFORE the scheme is read, so a padded `:` is not one.
+  expect_identical(
+    resolve_url("\t   :foo.com   \n", wbase, url_standard = "whatwg",
+                output = "serialized"),
+    "http://example.org/foo/:foo.com"
+  )
+})
+
+test_that("rfc3986 and NULL are byte-frozen against BOTH new rules", {
+  # ADR 0007 / P2.7 D-C. Asserted on the raw merge, which is the locus of the
+  # change: `\` stays an ordinary path byte, `//` is the whole authority
+  # production, and no byte is stripped from the reference.
+  wbase <- "http://example.org/foo/bar"
+  frozen <- list(
+    c("\\x", "http://example.org/foo/\\x"),
+    c("\\\\x\\hello", "http://example.org/foo/\\\\x\\hello"),
+    c("///example.org/../path", "http:///path"),
+    c("  foo.com  ", "http://example.org/foo/  foo.com  "),
+    c("   \t", "http://example.org/foo/   \t")
+  )
+  for (case in frozen) {
+    expect_identical(
+      rurl:::.resolve_one_raw(case[[1L]], wbase, "rfc3986"), case[[2L]]
+    )
+    # NULL is the DEFAULT argument as well as an explicit value; both are the
+    # frozen path, and neither may drift from "rfc3986" here.
+    expect_identical(rurl:::.resolve_one_raw(case[[1L]], wbase), case[[2L]])
+    expect_identical(
+      rurl:::.resolve_one_raw(case[[1L]], wbase, NULL), case[[2L]]
+    )
+  }
+  # ... and the clean surface the NULL merge feeds: identical to a direct parse
+  # of the un-stripped, un-rewritten recomposition, which is what shows neither
+  # rule fired. (The padded reference resolves to a URL rurl's parser rejects at
+  # NULL -- pre-existing behavior, and exactly what the direct parse gives.)
+  expect_identical(
+    resolve_url("  foo.com  ", wbase),
+    get_clean_url("http://example.org/foo/  foo.com  ")
+  )
+  expect_true(is.na(resolve_url("  foo.com  ", wbase)))
+  expect_identical(resolve_url("\\x", wbase), "http://example.org/foo/\\x")
+})
+
 test_that("resolved output equals a direct parse of the resolved URL", {
   # The composition contract: resolving then reading clean_url is identical to
   # parsing the RFC-recomposed URL directly, for every governed axis.

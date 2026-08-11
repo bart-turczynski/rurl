@@ -81,10 +81,17 @@
   )
 }
 
-# Split the portion of a reference that FOLLOWS an already-consumed SPECIAL
-# scheme (see `.whatwg_reference_is_relative()`, the only caller's gate), as a
-# relative reference. Returns the same five-field list `.split_uri_ref()` does,
-# with `scheme` always NA.
+# Split the portion of a reference that follows an already-consumed SPECIAL
+# scheme, as a relative reference. Returns the same five-field list
+# `.split_uri_ref()` does, with `scheme` always NA.
+#
+# It has TWO callers in `.resolve_one_raw()`, both gated on
+# `.whatwg_special_base_scheme()`, because WHATWG reaches the same state chain
+# two ways: with the base's own special scheme consumed ("special relative or
+# authority state", `.whatwg_reference_is_relative()`) and with no scheme at all
+# ("relative state" -> "relative slash state"). The scheme production below is
+# absent either way, and the leading `sub()` is a no-op for the scheme-less
+# entry, so one function serves both.
 #
 # Two deliberate departures from `.split_uri_ref()`:
 #
@@ -137,6 +144,32 @@
   )
 }
 
+# The base's own scheme, ASCII-lowercased, when BOTH of these hold: this
+# resolution is running the WHATWG rules (`url_standard = "whatwg"`), and that
+# scheme is one of WHATWG's six special schemes (`.WHATWG_SPECIAL_SCHEMES`,
+# R/utils.R -- not a second hand-rolled list). NA_character_ otherwise.
+#
+# It is the single gate for every WHATWG-only reference-parsing rule below,
+# because every one of them is a state WHATWG reaches only from a special
+# scheme: "special relative or authority state", "relative slash state" ->
+# "special authority ignore slashes state", and `file`'s own file-slash chain.
+# A non-special base (`non-spec:/p`) reaches none of them and so is untouched,
+# and so is the frozen NULL selector and `"rfc3986"` (ADR 0007 / P2.7 D-C).
+.whatwg_special_base_scheme <- function(base, url_standard) {
+  if (!.is_whatwg(url_standard) || is.na(base)) {
+    return(NA_character_)
+  }
+  base_scheme <- .split_uri_ref(base)$scheme
+  if (is.na(base_scheme)) {
+    return(NA_character_)
+  }
+  base_scheme <- .ascii_tolower(base_scheme)
+  if (!(base_scheme %in% .WHATWG_SPECIAL_SCHEMES)) {
+    return(NA_character_)
+  }
+  base_scheme
+}
+
 # WHATWG "special relative or authority state" (P2.7 D-B): when the reference
 # carries the base's OWN special scheme, the scheme is CONSUMED and what follows
 # is parsed relatively against the base -- `http:foo.com` against
@@ -144,21 +177,15 @@
 # `http://foo.com/`. RFC 3986 section 5.2.2 has no such rule: any scheme makes
 # the reference absolute. So this fires under `url_standard = "whatwg"` only.
 #
-# The predicate is deliberately narrow on both halves. The scheme must be one of
-# WHATWG's six special schemes (`.WHATWG_SPECIAL_SCHEMES`, R/utils.R -- not a
-# second hand-rolled list), and it must equal the base's scheme under ASCII case
-# folding: a DIFFERENT special scheme (`https:` against an `http:` base) stays
-# absolute, exactly as WHATWG's "special authority slashes state" requires.
-.whatwg_reference_is_relative <- function(ref_scheme, base, url_standard) {
-  if (!identical(url_standard, "whatwg") || is.na(base) || is.na(ref_scheme)) {
-    return(FALSE)
-  }
-  scheme_lc <- .ascii_tolower(ref_scheme)
-  if (!(scheme_lc %in% .WHATWG_SPECIAL_SCHEMES)) {
-    return(FALSE)
-  }
-  base_scheme <- .split_uri_ref(base)$scheme
-  !is.na(base_scheme) && identical(.ascii_tolower(base_scheme), scheme_lc)
+# The predicate is deliberately narrow on both halves. `base_scheme` is
+# `.whatwg_special_base_scheme()`'s output -- already NA unless the selector is
+# "whatwg" and the base's scheme is special -- and the reference's scheme must
+# equal it under ASCII case folding: a DIFFERENT special scheme (`https:`
+# against an `http:` base) stays absolute, exactly as WHATWG's "special
+# authority slashes state" requires.
+.whatwg_reference_is_relative <- function(ref_scheme, base_scheme) {
+  !is.na(ref_scheme) && !is.na(base_scheme) &&
+    identical(.ascii_tolower(ref_scheme), base_scheme)
 }
 
 # RFC 3986 section 5.2.3: merge a relative-reference path with the base path.
@@ -253,10 +280,36 @@
   if (is.na(ref)) {
     return(NA_character_)
   }
+  # WHATWG basic URL parser step 1, applied to the REFERENCE before anything
+  # reads it: strip a leading/trailing C0-control-or-SPACE run, then remove
+  # every ASCII tab/LF/CR. The absolute-parse path already runs step 1 through
+  # `.strip_whatwg_control_chars_vec()` (R/parse-phases.R) and that function is
+  # deliberately the single seam for it, so this reuses it rather than
+  # re-spelling the character classes. It self-gates on the selector and is a
+  # byte-for-byte no-op under "rfc3986" and under NULL. Stripping to the EMPTY
+  # string is meaningful, not a degenerate case: an empty reference is RFC 3986
+  # section 5.2.2's "base minus its fragment" branch, which
+  # `.transform_reference()` below already implements.
+  ref <- .strip_whatwg_control_chars_vec(ref, url_standard)$url
   r <- .split_uri_ref(ref)
-  if (.whatwg_reference_is_relative(r$scheme, base, url_standard)) {
+  base_scheme <- .whatwg_special_base_scheme(base, url_standard)
+  if (.whatwg_reference_is_relative(r$scheme, base_scheme)) {
     # The base's own special scheme: consume it and continue relatively.
     r <- .split_after_scheme(ref, .ascii_tolower(r$scheme))
+  } else if (is.na(r$scheme) && !is.na(base_scheme)) {
+    # A scheme-LESS reference under a special base reaches WHATWG's "relative
+    # state", whose leading-`/`-or-`\` chain is the SAME chain a consumed
+    # special scheme reaches: `\` counts exactly as `/`, a second one enters the
+    # authority ("special authority ignore slashes" skips the whole run for the
+    # five non-`file` special schemes; `file` consumes exactly two), and a
+    # single leading `\` roots the path as `/` does ("relative slash state").
+    # That chain is `.split_after_scheme()`, so it is CALLED here rather than
+    # reimplemented -- the two entries differ only in whether a scheme was
+    # consumed first, which its `sub()` handles as a no-op for a reference the
+    # RFC splitter already found scheme-less. RFC 3986 has no such chain (`\` is
+    # an ordinary path byte and `//` is the whole authority production), so this
+    # is reachable under `url_standard = "whatwg"` only.
+    r <- .split_after_scheme(ref, base_scheme)
   }
   if (!is.na(r$scheme)) {
     # Absolute reference: base is irrelevant (section 5.2.2 first branch).
@@ -309,6 +362,26 @@
 #'     while RFC 3986 treats any scheme as making the reference absolute and
 #'     gives \code{"http://foo.com/"}. A \emph{different} scheme stays absolute
 #'     under both, even when it is also special.
+#'   \item \strong{Under a special base, a leading \code{\\} in the reference is
+#'     a \code{/}, and a run of either introduces an authority.} WHATWG's
+#'     \dQuote{relative slash state} reads \code{\\} exactly as \code{/}, so
+#'     \code{resolve_url("\\x", "http://example.org/foo/bar", url_standard =
+#'     "whatwg", output = "serialized")} is \code{"http://example.org/x"}; a
+#'     second slash-or-backslash enters the authority, and
+#'     \dQuote{special authority ignore slashes} then skips the whole run for
+#'     the five non-\code{file} special schemes, so \code{"///example.org/x"}
+#'     and \code{"/\\/\\//example.org/x"} both resolve with the host
+#'     \code{example.org}. \code{file} has its own state machine and consumes
+#'     exactly two. RFC 3986 has neither rule: \code{\\} is an ordinary path
+#'     byte and \code{//} is the entire authority production.
+#'   \item \strong{The reference is stripped before it is read.} The WHATWG
+#'     basic URL parser's step 1 removes a leading and trailing run of C0
+#'     control or SPACE (U+0000--U+0020) and then every ASCII tab, LF and CR,
+#'     so \code{" foo.com "} resolves as \code{"foo.com"} does. A reference that
+#'     strips to the empty string is the empty reference, which resolves to the
+#'     base minus its fragment. RFC 3986 has no strip step -- such bytes are
+#'     required to be percent-encoded -- so under \code{"rfc3986"} and
+#'     \code{NULL} they stay in the reference.
 #' }
 #'
 #' The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
