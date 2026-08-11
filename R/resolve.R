@@ -9,17 +9,61 @@
 # (design/work/url-v3/decisions/P2.7-display-and-resolver-output.md) retires
 # that claim against measurement -- WHATWG applies several rules while parsing
 # the REFERENCE that RFC 3986 section 5 has no equivalent for. Those rules fire
-# under `url_standard = "whatwg"` only; under "rfc3986" and under the NULL
-# selector the merge is RFC 3986 section 5.2-5.3 exactly as before, byte for
-# byte (ADR 0007 / P2.7 D-C).
+# under `url_standard = "whatwg"` only; under "rfc3986" the merge is RFC 3986
+# section 5.2-5.3 (P2.7 D-C).
+#
+# The SCHEME PRODUCTION is the one exception, and it splits on a different axis:
+# `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` is RFC 3986 section 3.1's own
+# grammar, identical to WHATWG's, so it is a conformance fix under BOTH named
+# profiles rather than a WHATWG rule -- see `.split_uri_ref()`.
+#
+# The NULL selector is frozen byte-for-byte throughout (ADR 0007): no rule in
+# this file, including the scheme production, is reachable from it.
+
+# The scheme production, `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`. It is
+# RFC 3986 section 3.1's own grammar and, byte for byte, WHATWG's "scheme start
+# state" plus "scheme state" -- the two standards do not disagree here, which is
+# why this constant carries no standard in its name. It is also already the
+# production the ABSOLUTE-parse path uses everywhere (R/parse-state.R,
+# R/url-key.R, R/serialize.R spell the same class inline); the resolver's
+# splitter was the one place in the package reading a looser one.
+.URI_SCHEME_PRODUCTION <- "[A-Za-z][A-Za-z0-9+.\\-]*"
+
+# The Appendix B scheme group as actually written in RFC 3986's own
+# **non-validating** reference regex: "any run of bytes that are not `: / ? #`".
+# Appendix B says of itself that it is deliberately permissive, and that
+# permissiveness is a defect for reference resolution specifically: a relative
+# PATH whose first segment merely contains a colon (`10.0.0.7:8080/foo.html`,
+# `[61:24:74]:98`) is read as a scheme, so section 5.2.2's first branch fires
+# and the base is discarded. RFC 3986 section 4.2 names the hazard itself.
+#
+# It is retained ONLY for `url_standard = NULL`, which ADR 0007 freezes
+# byte-for-byte; see `.split_uri_ref()`.
+.URI_SCHEME_PRODUCTION_APPENDIX_B <- "[^:/?#]+"
 
 # Split a URI reference into its five components using the RFC 3986 Appendix B
 # regular expression. Each of scheme / authority / query / fragment is either a
 # string (the component was PRESENT, possibly empty) or NA (ABSENT -- e.g. no
 # "//" means authority is NA, distinct from "" for "http:///"). `path` is always
 # a string (RFC 3986 always matches a, possibly empty, path). Returns NA fields
-# for an NA input. Purely syntactic and standard-agnostic.
-.split_uri_ref <- function(ref) {
+# for an NA input.
+#
+# The SCHEME production is the one part that is not standard-agnostic, and not
+# because the standards disagree -- they agree (`.URI_SCHEME_PRODUCTION`). What
+# differs is what each SELECTOR is allowed to change:
+#
+#   * `"rfc3986"` and `"whatwg"` both get the real production. Under "rfc3986"
+#     that is the RFC's own section 3.1 grammar replacing Appendix B's
+#     self-described non-validating shorthand, so it is a conformance fix on the
+#     profile's own terms, not an import from the other standard.
+#   * `NULL` keeps Appendix B's loose group. It is observably looser -- under
+#     the real production `resolve_url("10.0.0.7:8080/x", "http://a/b/c")`
+#     stops being an absolute reference and starts merging against the base --
+#     and the NULL selector is frozen byte-for-byte by ADR 0007. The freeze
+#     governs whether the bytes may move, not whether they are right; the fix
+#     ships on the two selectors that CLAIM a standard, and NULL is the surface
+#     that claims none.
+.split_uri_ref <- function(ref, url_standard = NULL) {
   na_ref <- list(
     scheme = NA_character_, authority = NA_character_, path = NA_character_,
     query = NA_character_, fragment = NA_character_
@@ -27,12 +71,19 @@
   if (is.na(ref)) {
     return(na_ref)
   }
-  # ^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?
+  scheme_re <- if (is.null(url_standard)) {
+    .URI_SCHEME_PRODUCTION_APPENDIX_B
+  } else {
+    .URI_SCHEME_PRODUCTION
+  }
+  # ^((<scheme>):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?
   # Groups: 2 scheme, 4 authority, 5 path, 7 query, 9 fragment.
   m <- regmatches(
     ref,
     regexec(
-      "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?$",
+      paste0(
+        "^((", scheme_re, "):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?$"
+      ),
       ref,
       perl = TRUE
     )
@@ -114,7 +165,17 @@
 # authority ignore slashes", which skips a run of ANY length, so `http:///x` has
 # the host `x`.
 .split_after_scheme <- function(ref, scheme_lc) {
-  rest <- sub("^[^:/?#]+:", "", ref, perl = TRUE)
+  # The leading strip uses the REAL scheme production
+  # (`.URI_SCHEME_PRODUCTION`), not Appendix B's loose group, and
+  # unconditionally: both call sites are gated
+  # on `.whatwg_special_base_scheme()`, so NULL and "rfc3986" never reach here
+  # and neither can move. Appendix B's group would break the scheme-LESS entry
+  # outright -- once `.split_uri_ref()` stopped calling `10.0.0.7:8080/foo.html`
+  # scheme-bearing, that reference started arriving here, and a loose strip
+  # would eat `10.0.0.7:` off a path it must leave alone. With the real
+  # production the strip is a genuine no-op for anything the splitter already
+  # found scheme-less, which is what the comment above claims.
+  rest <- sub(paste0("^", .URI_SCHEME_PRODUCTION, ":"), "", ref, perl = TRUE)
   run <- if (identical(scheme_lc, "file")) "{2}" else "{2,}"
   auth <- regmatches(
     rest,
@@ -159,7 +220,7 @@
   if (!.is_whatwg(url_standard) || is.na(base)) {
     return(NA_character_)
   }
-  base_scheme <- .split_uri_ref(base)$scheme
+  base_scheme <- .split_uri_ref(base, url_standard)$scheme
   if (is.na(base_scheme)) {
     return(NA_character_)
   }
@@ -291,7 +352,7 @@
   # section 5.2.2's "base minus its fragment" branch, which
   # `.transform_reference()` below already implements.
   ref <- .strip_whatwg_control_chars_vec(ref, url_standard)$url
-  r <- .split_uri_ref(ref)
+  r <- .split_uri_ref(ref, url_standard)
   base_scheme <- .whatwg_special_base_scheme(base, url_standard)
   if (.whatwg_reference_is_relative(r$scheme, base_scheme)) {
     # The base's own special scheme: consume it and continue relatively.
@@ -313,14 +374,18 @@
   }
   if (!is.na(r$scheme)) {
     # Absolute reference: base is irrelevant (section 5.2.2 first branch).
-    empty_base <- .split_uri_ref(NA_character_)
+    empty_base <- .split_uri_ref(NA_character_, url_standard)
     return(.recompose_uri(.transform_reference(r, empty_base)))
   }
   # Relative reference: the base must be an absolute URL (have a scheme).
   if (is.na(base)) {
     return(NA_character_)
   }
-  b <- .split_uri_ref(base)
+  # The BASE is split with the same production as the reference: a "base" whose
+  # scheme is only a scheme under Appendix B's loose group (`10.0.0.7:8080/x`)
+  # is not an absolute URL, and the `is.na(b$scheme)` guard below is exactly the
+  # place that must say so.
+  b <- .split_uri_ref(base, url_standard)
   if (is.na(b$scheme)) {
     return(NA_character_)
   }
@@ -345,7 +410,8 @@
 #' The merge itself (empty reference, fragment-only, query-only, scheme-relative
 #' \code{//host} reference, absolute-path reference, and relative-path merge) is
 #' RFC 3986 section 5.2--5.3 under \code{url_standard = "rfc3986"} and under the
-#' default \code{NULL} selector. Under \code{url_standard = "whatwg"} the WHATWG
+#' default \code{NULL} selector, with one exception under \code{"rfc3986"} noted
+#' last below. Under \code{url_standard = "whatwg"} the WHATWG
 #' URL Standard's reference-parsing rules are applied first, because they are
 #' rules the two standards genuinely disagree on rather than composition of the
 #' axes \code{url_standard} already governs (decision P2.7 D-B,
@@ -387,6 +453,19 @@
 #' The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
 #' every rule above is reachable only through
 #' \code{url_standard = "whatwg"}.
+#'
+#' One further rule applies under \strong{both} named profiles, because the two
+#' standards agree on it. A scheme is
+#' \code{ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )} -- RFC 3986 section 3.1's
+#' own grammar, and WHATWG's -- so a relative path whose first segment merely
+#' \emph{contains} a colon is a path, not an absolute reference:
+#' \code{resolve_url("[61:24:74]:98", "http://example.org/foo/bar",
+#' url_standard = "whatwg", output = "serialized")} is
+#' \code{"http://example.org/foo/[61:24:74]:98"}, and \code{"rfc3986"} merges
+#' the same way. The \code{NULL} selector instead keeps RFC 3986 Appendix B's
+#' explicitly \emph{non-validating} \code{[^:/?#]+}, which reads
+#' \code{"10.0.0.7"} as a scheme and discards the base; that is frozen behavior
+#' (ADR 0007), not a recommendation.
 #'
 #' @section Which output surface you want:
 #'

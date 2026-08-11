@@ -11,7 +11,7 @@
 # relative-resolution corpus. This file is that signal.
 #
 # SCOPE. It is an INSTRUMENT, not a fix. At this commit rurl differs from
-# upstream on 29 of the 274 rows, and those 29 are enumerated below. The test
+# upstream on 27 of the 274 rows, and those 27 are enumerated below. The test
 # is green because the measured differing set equals the enumerated one --
 # never because a count was tolerated.
 #
@@ -65,7 +65,7 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 
 # ---- the known-differ set ---------------------------------------------------
 #
-# 29 of 274 rows, grouped by the EARLIEST point at which rurl's resolution
+# 27 of 274 rows, grouped by the EARLIEST point at which rurl's resolution
 # leaves the WHATWG algorithm, so a later unit can delete one group at a time.
 # Every group is a real, currently-failing family: nothing here is speculative.
 #
@@ -74,8 +74,8 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 #   * the count was 56 when this file landed, not 62 -- the `file:` empty-host
 #     family (RURL-uhwivndf) was discharged in the meantime, and the base-null
 #     suite now scores 336/336. It fell to 43 when the SAME_SCHEME family (14
-#     rows) was discharged by P2.7 D-B, and to 29 when the reference
-#     preprocessing families below were;
+#     rows) was discharged by P2.7 D-B, to 29 when the reference preprocessing
+#     families below were, and to 27 with the scheme production;
 #   * "rows rurl rejects outright (NA)" is NOT a family here. A reject is a
 #     symptom, not a cause: the NA rows are distributed across the groups below
 #     by the defect that produced them, which is the axis a fix is organised
@@ -114,6 +114,22 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 # relatively and lands on the drive-letter defect -- the same conjunction as the
 # ex-SAME_SCHEME row above, and it sits in WPT_REL_DRIVE_LETTER for the same
 # reason.
+#
+# DISCHARGED: `WPT_REL_SCHEME_PRODUCTION` (2 rows) -- the scheme production was
+# Appendix B's self-described NON-validating `[^:/?#]+`, which admits "10.0.0.7"
+# and "[61", so a relative PATH whose first segment merely contains a colon was
+# read as an absolute reference and the base was discarded. `.split_uri_ref()`
+# (R/resolve.R) now reads `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` whenever
+# a standard is selected. That production is RFC 3986 section 3.1's OWN grammar
+# and byte-identical to WHATWG's scheme states, so unlike every other rule in
+# this file it ships under `"rfc3986"` too -- and unlike them it is not gated on
+# `.whatwg_special_base_scheme()`, because a reference's scheme production does
+# not depend on the base at all. Only `url_standard = NULL` keeps the loose
+# group, and only because ADR 0007 freezes it byte-for-byte (measured: zero
+# NULL-path rows move).
+#
+# No row MOVED between families this time: both rows became exact, and the
+# three families below are the previous residue unchanged (18 + 5 + 4).
 
 # Windows drive letters. WHATWG normalises `C|` to `C:`, refuses to shorten a
 # path past a drive letter, and in the file-host state turns a drive-letter
@@ -175,18 +191,9 @@ WPT_REL_ABSOLUTE_REF <- c(
          "\uff10\uff11")
 )
 
-# The scheme production is too permissive: RFC 3986's `[^:/?#]+` before a colon
-# admits "10.0.0.7" and "[61", so a relative PATH that happens to contain a
-# colon is misread as an absolute reference. WHATWG requires ALPHA *( ALPHA /
-# DIGIT / "+" / "-" / "." ).
-WPT_REL_SCHEME_PRODUCTION <- c(
-  "http://example.org/foo/bar >> [61:24:74]:98",
-  "file:///some/dir/bar.html >> 10.0.0.7:8080/foo.html"
-)
-
 WPT_REL_KNOWN_DIFFER <- c(
   WPT_REL_DRIVE_LETTER, WPT_REL_PATH_AS_AUTHORITY,
-  WPT_REL_ABSOLUTE_REF, WPT_REL_SCHEME_PRODUCTION
+  WPT_REL_ABSOLUTE_REF
 )
 
 # Assert a property holds of every row except an enumerated deviation set.
@@ -201,8 +208,8 @@ expect_property <- function(violates, input, deviations = character(0)) {
 test_that("the known-differ families are disjoint and sum to the whole", {
   # The constant is itself data, and a duplicated id across two families would
   # make the set-equality below pass while the families lie about ownership.
-  expect_length(WPT_REL_KNOWN_DIFFER, 29L)
-  expect_length(unique(WPT_REL_KNOWN_DIFFER), 29L)
+  expect_length(WPT_REL_KNOWN_DIFFER, 27L)
+  expect_length(unique(WPT_REL_KNOWN_DIFFER), 27L)
 })
 
 test_that("WPT base-relative rows resolve to the standard's own `href`", {
