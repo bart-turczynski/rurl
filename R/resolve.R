@@ -1,10 +1,17 @@
 # Reference resolution: resolve a relative or absolute URL reference against a
 # base URL (RFC 3986 section 5), then canonicalize the result through the same
-# url_standard-governed machinery as safe_parse_url(s). This file adds NO new
-# per-standard divergent behavior of its own (PRD v2 D6): the base-merge
-# (section 5.2.2) is identical under both standards, and everything downstream
-# (path percent/dot handling, host IPv4/reg-name model, port elision, WHATWG
-# backslash recognition, diagnostics) is delegated to safe_parse_urls().
+# url_standard-governed machinery as safe_parse_url(s). Everything downstream of
+# the merge (path percent/dot handling, host IPv4/reg-name model, port elision,
+# WHATWG backslash recognition, diagnostics) is delegated to safe_parse_urls().
+#
+# The merge itself is NOT standard-agnostic. PRD v2 D6 claimed it was and this
+# file used to repeat the claim; decision P2.7 D-B
+# (design/work/url-v3/decisions/P2.7-display-and-resolver-output.md) retires
+# that claim against measurement -- WHATWG applies several rules while parsing
+# the REFERENCE that RFC 3986 section 5 has no equivalent for. Those rules fire
+# under `url_standard = "whatwg"` only; under "rfc3986" and under the NULL
+# selector the merge is RFC 3986 section 5.2-5.3 exactly as before, byte for
+# byte (ADR 0007 / P2.7 D-C).
 
 # Split a URI reference into its five components using the RFC 3986 Appendix B
 # regular expression. Each of scheme / authority / query / fragment is either a
@@ -53,6 +60,107 @@
   )
 }
 
+# Split a path[?query][#fragment] tail -- the Appendix B grammar with BOTH the
+# scheme and the authority productions removed. Used only by
+# `.split_after_scheme()` below, which has already decided both.
+.split_ref_tail <- function(rest) {
+  # ^([^?#]*)(\?([^#]*))?(#(.*))?
+  # Groups: 1 path, 2 "?query", 3 query, 4 "#fragment", 5 fragment.
+  m <- regmatches(
+    rest,
+    regexec("^([^?#]*)(\\?([^#]*))?(#(.*))?$", rest, perl = TRUE)
+  )[[1]]
+  if (length(m) < 6L) {
+    # Unreachable in practice (every group is optional); stay defensive.
+    return(list(path = rest, query = NA_character_, fragment = NA_character_))
+  }
+  list(
+    path = m[[2L]],
+    query = if (startsWith(m[[3L]], "?")) m[[4L]] else NA_character_,
+    fragment = if (startsWith(m[[5L]], "#")) m[[6L]] else NA_character_
+  )
+}
+
+# Split the portion of a reference that FOLLOWS an already-consumed SPECIAL
+# scheme (see `.whatwg_reference_is_relative()`, the only caller's gate), as a
+# relative reference. Returns the same five-field list `.split_uri_ref()` does,
+# with `scheme` always NA.
+#
+# Two deliberate departures from `.split_uri_ref()`:
+#
+#   * There is NO scheme production. That omission is the point: re-running the
+#     full splitter on the remainder would re-read a first path segment that
+#     happens to contain a colon as a scheme of its own, so `file:C:/` would
+#     lose its `C:` and `http::@c:29` would grow a host.
+#   * The authority is introduced by TWO leading `/`-or-`\` code points, either
+#     of which may be a backslash, and it ends at the next `/ \ ? #`. That is
+#     WHATWG's own authority entry for the state reached after a special scheme
+#     is consumed, so it belongs to the rule implemented here rather than to the
+#     separate backslash-in-reference family: `http:\\foo.com\` against an
+#     `http:` base is `http://foo.com/`. Both departures are scoped to this
+#     function, so a reference with NO scheme is untouched by either.
+#
+# `file` differs from the other five special schemes on exactly one point, which
+# is why the scheme is a parameter: it has its own state machine (file state ->
+# file slash state -> file host state) which consumes exactly TWO slashes, so
+# `file:///x` has an EMPTY host and the path `/x`. The other five reach "special
+# authority ignore slashes", which skips a run of ANY length, so `http:///x` has
+# the host `x`.
+.split_after_scheme <- function(ref, scheme_lc) {
+  rest <- sub("^[^:/?#]+:", "", ref, perl = TRUE)
+  run <- if (identical(scheme_lc, "file")) "{2}" else "{2,}"
+  auth <- regmatches(
+    rest,
+    regexec(
+      paste0("^[/\\\\]", run, "([^/?#\\\\]*)(.*)$"), rest,
+      perl = TRUE
+    )
+  )[[1]]
+  if (length(auth) == 3L) {
+    tail <- .split_ref_tail(auth[[3L]])
+    return(list(
+      scheme = NA_character_, authority = auth[[2L]], path = tail$path,
+      query = tail$query, fragment = tail$fragment
+    ))
+  }
+  tail <- .split_ref_tail(rest)
+  list(
+    scheme = NA_character_, authority = NA_character_,
+    # One leading `\` roots the path exactly as `/` does (WHATWG "relative slash
+    # state" -- reached from the same chain, and the reason this rewrite is not
+    # the separate backslash-in-reference family's). Only the FIRST byte is
+    # rewritten: the rest of the path is left for the serializer's own
+    # special-scheme backslash recognition, and `\` inside a query or fragment
+    # is not a separator at all, so neither may be touched here.
+    path = sub("^\\\\", "/", tail$path, perl = TRUE),
+    query = tail$query, fragment = tail$fragment
+  )
+}
+
+# WHATWG "special relative or authority state" (P2.7 D-B): when the reference
+# carries the base's OWN special scheme, the scheme is CONSUMED and what follows
+# is parsed relatively against the base -- `http:foo.com` against
+# `http://example.org/foo/bar` is `http://example.org/foo/foo.com`, not
+# `http://foo.com/`. RFC 3986 section 5.2.2 has no such rule: any scheme makes
+# the reference absolute. So this fires under `url_standard = "whatwg"` only.
+#
+# The predicate is deliberately narrow on both halves. The scheme must be one of
+# WHATWG's six special schemes (`.WHATWG_SPECIAL_SCHEMES`, R/utils.R -- not a
+# second hand-rolled list), and it must equal the base's scheme under ASCII case
+# folding: a DIFFERENT special scheme (`https:` against an `http:` base) stays
+# absolute, exactly as WHATWG's "special authority slashes state" requires.
+.whatwg_reference_is_relative <- function(ref_scheme, base, url_standard) {
+  if (!identical(url_standard, "whatwg") || is.na(base) || is.na(ref_scheme)) {
+    return(FALSE)
+  }
+  scheme_lc <- .ascii_tolower(ref_scheme)
+  if (!(scheme_lc %in% .WHATWG_SPECIAL_SCHEMES)) {
+    return(FALSE)
+  }
+  base_scheme <- .split_uri_ref(base)$scheme
+  !is.na(base_scheme) && identical(.ascii_tolower(base_scheme), scheme_lc)
+}
+
 # RFC 3986 section 5.2.3: merge a relative-reference path with the base path.
 # When the base has an authority and an empty path, the merged path is the
 # reference path prefixed with "/"; otherwise it is the base path up to and
@@ -71,9 +179,11 @@
 
 # RFC 3986 section 5.2.2: transform a parsed reference `r` against a parsed base
 # `b` into the target components. Returns a component list (scheme / authority /
-# path / query / fragment). Standard-agnostic -- the same algorithm under both
-# rfc3986 and whatwg (PRD v2 D6). `._remove_dot_segments()` (R/path-query.R) is
-# reused for the mandated dot-segment removal.
+# path / query / fragment). This step is standard-agnostic; what is NOT is which
+# reference reaches it as scheme-bearing (see
+# `.whatwg_reference_is_relative()`).
+# `._remove_dot_segments()` (R/path-query.R) is reused for the mandated
+# dot-segment removal.
 .transform_reference <- function(r, b) {
   if (!is.na(r$scheme)) {
     return(list(
@@ -136,11 +246,18 @@
 # Resolve ONE (reference, base) pair to a raw absolute URI string, or NA when
 # resolution cannot yield an absolute URL (base not absolute and reference not
 # absolute either). ._remove_dot_segments happens inside .transform_reference().
-.resolve_one_raw <- function(ref, base) {
+# `url_standard` selects the reference-parsing rules that precede the merge
+# (P2.7 D-B); its default NULL is the frozen selector and reproduces the
+# pre-D-B behavior exactly, as does "rfc3986".
+.resolve_one_raw <- function(ref, base, url_standard = NULL) {
   if (is.na(ref)) {
     return(NA_character_)
   }
   r <- .split_uri_ref(ref)
+  if (.whatwg_reference_is_relative(r$scheme, base, url_standard)) {
+    # The base's own special scheme: consume it and continue relatively.
+    r <- .split_after_scheme(ref, .ascii_tolower(r$scheme))
+  }
   if (!is.na(r$scheme)) {
     # Absolute reference: base is irrelevant (section 5.2.2 first branch).
     empty_base <- .split_uri_ref(NA_character_)
@@ -164,15 +281,39 @@
 #' resolved absolute URL on the output surface \code{output} selects. Under the
 #' default \code{output = "clean"} the result is canonicalized with the same
 #' machinery as \code{\link{safe_parse_url}}; under \code{output = "serialized"}
-#' it is handed to \code{\link{serialize_url}} instead. The base-merge step
-#' (empty reference, fragment-only, query-only, scheme-relative \code{//host}
-#' reference, absolute-path reference, and relative-path merge) is identical
-#' under both standards; \code{url_standard} and any \code{...} options flow
-#' straight through to the parse so the host IPv4/reg-name model, path
-#' percent/dot-segment handling, default-port elision, WHATWG
-#' backslash-as-slash recognition, and diagnostics are exactly those of a direct
-#' \code{safe_parse_url()} call on the resolved URL. \code{resolve_url()}
-#' introduces no per-standard behavior of its own.
+#' it is handed to \code{\link{serialize_url}} instead. \code{url_standard} and
+#' any \code{...} options flow straight through to the parse, so the host
+#' IPv4/reg-name model, path percent/dot-segment handling, default-port elision,
+#' WHATWG backslash-as-slash recognition, and diagnostics are exactly those of a
+#' direct \code{safe_parse_url()} call on the resolved URL.
+#'
+#' @section Reference resolution is standard-aware:
+#'
+#' The merge itself (empty reference, fragment-only, query-only, scheme-relative
+#' \code{//host} reference, absolute-path reference, and relative-path merge) is
+#' RFC 3986 section 5.2--5.3 under \code{url_standard = "rfc3986"} and under the
+#' default \code{NULL} selector. Under \code{url_standard = "whatwg"} the WHATWG
+#' URL Standard's reference-parsing rules are applied first, because they are
+#' rules the two standards genuinely disagree on rather than composition of the
+#' axes \code{url_standard} already governs (decision P2.7 D-B,
+#' \code{design/work/url-v3/decisions/P2.7-display-and-resolver-output.md}):
+#'
+#' \itemize{
+#'   \item \strong{A reference carrying the base's own special scheme is
+#'     relative, not absolute.} WHATWG's \dQuote{special relative or authority
+#'     state} consumes a scheme equal to the base's when that scheme is special
+#'     (\code{http}, \code{https}, \code{ws}, \code{wss}, \code{ftp},
+#'     \code{file}) and keeps parsing against the base, so
+#'     \code{resolve_url("http:foo.com", "http://example.org/foo/bar",
+#'     url_standard = "whatwg")} is \code{"http://example.org/foo/foo.com"},
+#'     while RFC 3986 treats any scheme as making the reference absolute and
+#'     gives \code{"http://foo.com/"}. A \emph{different} scheme stays absolute
+#'     under both, even when it is also special.
+#' }
+#'
+#' The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
+#' every rule above is reachable only through
+#' \code{url_standard = "whatwg"}.
 #'
 #' @section Which output surface you want:
 #'
@@ -226,9 +367,10 @@
 #'   \code{NA} base yields \code{NA}.
 #' @param url_standard Optional standard profile forwarded to the parse:
 #'   \code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
-#'   \code{\link{safe_parse_url}} for the axes it governs. The reference-
-#'   resolution merge itself does not vary between the two profiles. Required
-#'   (non-\code{NULL}) when \code{output = "serialized"}.
+#'   \code{\link{safe_parse_url}} for the axes it governs, and
+#'   \emph{Reference resolution is standard-aware} for the reference-parsing
+#'   rules \code{"whatwg"} adds ahead of the merge. Required (non-\code{NULL})
+#'   when \code{output = "serialized"}.
 #' @param output Which output surface to return: \code{"clean"} (default,
 #'   today's canonical \code{clean_url} bytes) or \code{"serialized"} (the
 #'   selected standard's full-string serialization of the resolved absolute
@@ -338,7 +480,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
 
   resolved_raw <- vapply(
     seq_len(n),
-    function(i) .resolve_one_raw(ref[[i]], base[[i]]),
+    function(i) .resolve_one_raw(ref[[i]], base[[i]], url_standard),
     character(1)
   )
 

@@ -26,9 +26,10 @@ absolute reference ignores \code{base_url}.}
 
 \item{url_standard}{Optional standard profile forwarded to the parse:
 \code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
-\code{\link{safe_parse_url}} for the axes it governs. The reference-
-resolution merge itself does not vary between the two profiles. Required
-(non-\code{NULL}) when \code{output = "serialized"}.}
+\code{\link{safe_parse_url}} for the axes it governs, and
+\emph{Reference resolution is standard-aware} for the reference-parsing
+rules \code{"whatwg"} adds ahead of the merge. Required (non-\code{NULL})
+when \code{output = "serialized"}.}
 
 \item{output}{Which output surface to return: \code{"clean"} (default,
 today's canonical \code{clean_url} bytes) or \code{"serialized"} (the
@@ -70,16 +71,42 @@ the RFC 3986 section 5 reference-resolution algorithm, then renders the
 resolved absolute URL on the output surface \code{output} selects. Under the
 default \code{output = "clean"} the result is canonicalized with the same
 machinery as \code{\link{safe_parse_url}}; under \code{output = "serialized"}
-it is handed to \code{\link{serialize_url}} instead. The base-merge step
-(empty reference, fragment-only, query-only, scheme-relative \code{//host}
-reference, absolute-path reference, and relative-path merge) is identical
-under both standards; \code{url_standard} and any \code{...} options flow
-straight through to the parse so the host IPv4/reg-name model, path
-percent/dot-segment handling, default-port elision, WHATWG
-backslash-as-slash recognition, and diagnostics are exactly those of a direct
-\code{safe_parse_url()} call on the resolved URL. \code{resolve_url()}
-introduces no per-standard behavior of its own.
+it is handed to \code{\link{serialize_url}} instead. \code{url_standard} and
+any \code{...} options flow straight through to the parse, so the host
+IPv4/reg-name model, path percent/dot-segment handling, default-port elision,
+WHATWG backslash-as-slash recognition, and diagnostics are exactly those of a
+direct \code{safe_parse_url()} call on the resolved URL.
 }
+\section{Reference resolution is standard-aware}{
+
+
+The merge itself (empty reference, fragment-only, query-only, scheme-relative
+\code{//host} reference, absolute-path reference, and relative-path merge) is
+RFC 3986 section 5.2--5.3 under \code{url_standard = "rfc3986"} and under the
+default \code{NULL} selector. Under \code{url_standard = "whatwg"} the WHATWG
+URL Standard's reference-parsing rules are applied first, because they are
+rules the two standards genuinely disagree on rather than composition of the
+axes \code{url_standard} already governs (decision P2.7 D-B,
+\code{design/work/url-v3/decisions/P2.7-display-and-resolver-output.md}):
+
+\itemize{
+\item \strong{A reference carrying the base's own special scheme is
+relative, not absolute.} WHATWG's \dQuote{special relative or authority
+state} consumes a scheme equal to the base's when that scheme is special
+(\code{http}, \code{https}, \code{ws}, \code{wss}, \code{ftp},
+\code{file}) and keeps parsing against the base, so
+\code{resolve_url("http:foo.com", "http://example.org/foo/bar",
+    url_standard = "whatwg")} is \code{"http://example.org/foo/foo.com"},
+while RFC 3986 treats any scheme as making the reference absolute and
+gives \code{"http://foo.com/"}. A \emph{different} scheme stays absolute
+under both, even when it is also special.
+}
+
+The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
+every rule above is reachable only through
+\code{url_standard = "whatwg"}.
+}
+
 \section{Which output surface you want}{
 
 
