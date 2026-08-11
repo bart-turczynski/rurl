@@ -706,6 +706,48 @@
           "relocation_note": "The citation target is in-repo prose, not an external revisioned artifact."
         }
       ]
+    },
+    {
+      "path": "tests/testthat/fixtures/wpt-url-base-relative.json",
+      "fixture_kind": "imported suite, machine-generated from a pinned upstream artifact",
+      "transformed_fixture_sha256": "1fb0b33fa2c2ebea1ffb77248ff79dbef46f17efed1b1f29314ecbb760786bc9",
+      "case_count": {
+        "total": 274,
+        "success": 274
+      },
+      "case_count_note": "Mirrors the fixture's own _meta.counts, which carries a single arm. `total` and `success` are equal BY CONSTRUCTION and that is the fact worth reading, not a redundancy: this import has no failure arm at all. The base-carrying must-fail rows exist upstream and are deliberately NOT imported, because nothing in this repo scores base-relative rejection and a fixture arm no harness reads is a vacuous instrument rather than extra coverage. If a later unit builds that harness, the arm is added here and both this count and the applicability_selector move with it. The success arm is the exact complement of inst/bench/wpt-url-cases.json's base-null selector on the SAME raw bytes at the SAME upstream_revision, so the two imports partition upstream's rows and neither can silently drop one.",
+      "in_fixture_provenance": "_meta block, emitted by the same generator as inst/bench/wpt-url-cases.json (`--mode base-relative`); it carries the ten non-self-referential section-2.3 fields for this file",
+      "source_group_key": "not applicable -- single source; the fixture has no source column",
+      "source_groups": [
+        {
+          "group": "wpt-urltestdata-base-relative",
+          "group_key_origin": "the upstream artifact, suffixed with the selector half it carries, so it cannot collide with the `wpt-urltestdata` groups that record the base-null import (inst/bench/wpt-url-cases.json) and the derived credential/fragment rows (external-url-vectors.csv). PV11 keys ownership on the fixture-plus-group pair precisely because a bare group name is ambiguous across fixtures; a distinct name is the cheaper half of that.",
+          "row_count": 274,
+          "section_2_3_applies": true,
+          "import_status": "imported",
+          "upstream_project": "web-platform-tests/wpt",
+          "upstream_revision": "181476aa16e8b28a07698bef3a0275fa53dd22e5",
+          "upstream_revision_pin_kind": "retrieved-at",
+          "upstream_revision_reproduces_fixture": true,
+          "upstream_revision_pin_note": "Re-running generation_command against the raw source at this revision reproduces the committed fixture exactly: 274 success rows, the array byte-identical. The raw bytes were re-fetched and their sha256 re-verified against raw_source_sha256 BEFORE the extraction was run, so this is the same artifact OR-007/OR-022 pin and not a second, coincidentally-named one.",
+          "upstream_path": "url/resources/urltestdata.json",
+          "retrieval_date": "2026-07-08",
+          "license": "BSD-3-Clause (web-platform-tests contributors)",
+          "raw_source_sha256": "355c9f1e5f34aae66ba8adfabf3c853f5cd30ea22964ef7a53eb292e7975d81e",
+          "import_command": "curl -fsSL https://raw.githubusercontent.com/web-platform-tests/wpt/181476aa16e8b28a07698bef3a0275fa53dd22e5/url/resources/urltestdata.json -o urltestdata.json",
+          "generation_command": "python3 inst/bench/make-wpt-fixture.py urltestdata.json --revision 181476aa16e8b28a07698bef3a0275fa53dd22e5 --retrieved 2026-07-08 --mode base-relative",
+          "standard": "WHATWG URL Standard",
+          "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
+          "standard_section": "URL parsing with a base URL (reference resolution); URL serializing; URL class API getters (protocol, username, password, hostname, port, pathname, search, hash)",
+          "claim_kind": "conformance",
+          "applicability_selector": "base != null only -- the exact complement of the base-null import in inst/bench/wpt-url-cases.json, so every upstream row belongs to exactly one of the two and none is dropped by both; success = any base-carrying non-failure case, all schemes, no scheme restriction; the base-carrying FAILURE rows are deliberately not imported because no harness scores them; rows whose input or base contains NUL are dropped",
+          "normative_dependencies_note": "This group records NO normative_dependencies, and that is the correct answer rather than an omission (ADR 0014 retired PV10, the rule that made the key compulsory). Every expected value here -- the reference, the base, the component getters and the `href` oracle -- is READ OUT of vendored, hash-pinned upstream bytes, exactly as the base-null import's group is. Nothing is transcribed, computed or hand-derived from the standard's TEXT, so there is no spec revision this fixture depends on and no amendment hazard a spec pin could detect; upstream_revision already dates everything the oracle reads. If a later unit ever recomputes an expected value here from spec prose, this group acquires the duty and must carry a real pin.",
+          "relocation_verified": "yes",
+          "relocation_verified_count": "274/274",
+          "relocation_note": "Verified by reproduction, which is stronger than row-level re-location: the generation command at the pinned revision regenerates the array byte-identically, so every case is accounted for. The selector is applied on `base` BEFORE the failure/success split, so excluding the base-carrying failure rows is a disclosed scope statement about what this repo currently scores and cannot favour a serialization outcome -- it removes rows on the acceptance axis only. Complementarity with the base-null import was checked the same way: the two selectors are `base is None` and its negation over the same parsed raw file, so no upstream row is claimed twice and none is claimed by neither.",
+          "claim_state_note": "AT THIS COMMIT THIS FIXTURE CERTIFIES A KNOWN-DIFFER SET, NOT CONFORMANCE. 218 of the 274 rows serialize exactly to upstream's `href` under serialize_url(.resolve_one_raw(input, base), standard = \"whatwg\"); 56 do not, and tests/testthat/test-wpt-base-relative.R enumerates all 56 by defect family and asserts SET EQUALITY against the measured set, so neither an unlisted new difference nor a listed row that starts passing can go unnoticed. The register (OR-024) states the same boundary. This is a regression instrument for the units of RURL-fupsemxr that will discharge the families; the 56/274 split must never be quoted as a conformance rate (P5.3 section 2.2)."
+        }
+      ]
     }
   ]
 }

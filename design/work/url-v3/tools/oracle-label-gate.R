@@ -77,8 +77,18 @@ OPTIONAL_INSTANCE_FIELDS <- "carrier"
 # there are derived evidence, not oracles, and requiring them would push the
 # register toward listing artifacts instead of claims. `diverge-*` is the
 # ledger prefix, and it is the ledgers that adjudicate.
+#
+# `tests/testthat/fixtures/wpt-*.json` is NARROW ON PURPOSE. Oracle fixtures in
+# that directory used to be CSV-only, so the probe globbed `*.csv` there and a
+# JSON oracle landing beside them would have been invisible to O3 -- the
+# unregistered-fixture property silently not covering the newest fixture. A
+# bare `*.json` would over-correct: `oracle-provenance.json` lives there and is
+# the provenance RECORD, not an oracle, so it would fail closed for the wrong
+# reason and could only be silenced by registering a non-oracle. The `wpt-`
+# prefix names the imported-suite family and nothing else.
 ORACLE_PROBE_GLOBS <- c(
   file.path("tests", "testthat", "fixtures", "*.csv"),
+  file.path("tests", "testthat", "fixtures", "wpt-*.json"),
   file.path("inst", "bench", "*.csv"),
   file.path("inst", "bench", "*.json"),
   file.path("tools", "determinism", "*.csv"),
