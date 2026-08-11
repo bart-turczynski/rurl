@@ -1,11 +1,26 @@
 # Tests for resolve_url() (RURL-wrfcildb, epic RURL-ehlircjt / parent
-# RURL-uyjheruh; PRD v2 §5.6 D6). resolve_url() composes: standard-agnostic
-# RFC 3986 §5.2.2 base-merge, then the same safe_parse_urls() machinery for
-# host/path/port/query normalization and diagnostics. It adds NO per-standard
-# behavior of its own. The return is the CANONICAL clean_url of the resolved
-# reference (fragment/userinfo dropped, query per query_handling, port per
-# port_handling), which is why several RFC §5.4 expectations below differ from
-# a verbatim resolver on the query/fragment components only.
+# RURL-uyjheruh; PRD v2 §5.6 D6). resolve_url() composes: an RFC 3986 §5.2.2
+# base-merge, then the same safe_parse_urls() machinery for host/path/port/query
+# normalization and diagnostics.
+#
+# TWO CLAIMS IN THE ORIGINAL HEADER ARE RETIRED, and both are load-bearing for
+# reading the assertions below:
+#
+#   * "standard-agnostic ... adds NO per-standard behavior of its own" --
+#     FALSIFIED by measurement (P2.7 D-B, RURL-fupsemxr). Under
+#     `url_standard = "whatwg"` the WHATWG reference-PARSING rules run before
+#     the merge; under "rfc3986" it is RFC 3986 section 5.2-5.3; under NULL it
+#     is byte-frozen (ADR 0007). The scheme production is RFC 3986 section 3.1's
+#     and ships under both named profiles. See the P2.7 D-B block below.
+#   * "The return is the CANONICAL clean_url" -- true only of the DEFAULT
+#     `output = "clean"`. `output = "serialized"` (P2.7 D-A) returns
+#     serialize_url()'s full standard string, fragment and credentials intact,
+#     and requires an explicit `url_standard`.
+#
+# The default-output caveat still stands as written: clean_url drops
+# fragment/userinfo and applies query_handling/port_handling, which is why
+# several RFC section 5.4 expectations below differ from a verbatim resolver on
+# the query/fragment components only.
 
 base <- "http://a/b/c/d;p?q"
 

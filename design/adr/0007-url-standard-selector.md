@@ -32,7 +32,7 @@ Governed axes ship in two waves:
   special schemes, DNS-length/UTS-46 diagnostics, `get_scheme_class()`, and
   `resolve_url()` (RFC 3986 §5 reference resolution composed over
   `safe_parse_urls()` — a shared standard-agnostic base-merge plus delegation,
-  not a new divergence axis).
+  not a new divergence axis — **amended, see below: the merge is not agnostic**).
 - **Pre-benchmark hardening (RURL-moselrwp, rurl 2.3.0):** two host-acceptance
   axes added under `whatwg` (both Stage-A-affecting; both a no-op under `NULL`):
   ASCII tab/LF/CR **stripping** before parse (RURL-tyetpjym) and
@@ -55,3 +55,45 @@ Governed axes ship in two waves:
 - Explicitly out of scope: `ws`/`wss`/`file` scheme expansion, query handling
   (owned by the query epic), an Ada parser backend, `max_url_length`, and
   `explain_parse_url()`.
+
+## Amendment: reference resolution IS a divergence axis (P2.7 D-B)
+
+*Added RURL-fupsemxr T2.5, 2026-08-12. It amends the v2 bullet's parenthetical
+only, and is appended rather than edited in place so no line citation into this
+file moves.*
+
+The v2 bullet calls `resolve_url()`'s base-merge "a shared standard-agnostic
+base-merge … not a new divergence axis". That is falsified by measurement, not
+by argument. Scored over the WHATWG's own base-carrying corpus — 274 WPT
+base-relative success rows, `tests/testthat/test-wpt-base-relative.R` — the
+standard-blind merge was exact on 218 and differed on 56. Decision **P2.7 D-B**
+(`design/work/url-v3/decisions/P2.7-display-and-resolver-output.md`) retires the
+claim, and PRD v2 D6, which was its authority, carries the same note.
+
+Reference resolution is now selector-governed:
+
+- **`"whatwg"`** — WHATWG's reference-*parsing* rules run before the RFC 3986 §5
+  merge: a reference carrying the base's own special scheme is relative, `\`
+  reads as `/`, an arbitrary leading run of `/` and `\` introduces an authority,
+  and leading/trailing C0-or-space is stripped from the reference. All of these
+  are additionally gated on the base's scheme being special.
+- **`"rfc3986"`** — RFC 3986 §5.2–§5.3, unchanged.
+- **Both named profiles** — the scheme production is
+  `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`, RFC 3986 §3.1's own grammar,
+  replacing Appendix B's self-described non-validating `[^:/?#]+`. It is not a
+  WHATWG import: the two standards agree here, so it is a conformance fix on
+  each profile's own terms, and it is not gated on the base's scheme because a
+  reference's scheme spelling has no base dependence.
+
+**The `NULL` freeze in §Consequences is untouched, and was verified per rule
+rather than assumed.** No resolver rule — including the scheme production, whose
+tightening would otherwise be a strict improvement — is reachable from
+`url_standard = NULL`; Appendix B's loose group is retained there precisely
+because this ADR freezes the bytes, and the freeze governs whether output may
+*move*, not whether it is right. The carve-out was measured adversarially: NULL
+probes are byte-identical to the pre-change tree, and the same probe goes red
+when the carve-out is removed.
+
+Re-derived at T2.5, the corpus reads **247 exact / 27 differing**. That is a
+known-differ set over base-carrying rows, never a conformance rate, and it is a
+disjoint population from the base-null WPT headline — the two are never summed.

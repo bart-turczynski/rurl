@@ -16,7 +16,12 @@
 #     carry the spec's expected components; failure cases MUST be rejected.
 #     Since RURL-ghdlrcjv the success set spans EVERY scheme WPT exercises
 #     (opaque, ws:, wss:, ...), not just http/https/ftp/file; only
-#     base-relative rows are out of scope (rurl parses absolute URLs).
+#     base-relative rows are out of scope OF THIS STUDY. That is this file's
+#     scope, not a package limit: rurl resolves references (`resolve_url()`),
+#     and the complementary 274-row base-carrying corpus is scored by
+#     tests/testthat/test-wpt-base-relative.R (247 exact / 27 enumerated
+#     differences, OR-024). The two populations are disjoint and are NEVER
+#     summed into one rate.
 #   inst/bench/rfc3986-probes.csv  -- RFC: hand-authored against RFC 3986's
 #     grammar/normalization rules (no official suite exists), each row tagged
 #     with its section.

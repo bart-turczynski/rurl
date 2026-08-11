@@ -87,8 +87,8 @@ Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
   widened parse columns/fields (see ADR 0006).
 - **R/canonical_join.R** — dataset joining by canonicalized URL keys
   (`canonical_join()`).
-- **R/resolve.R** — `resolve_url()`, RFC 3986 §5 reference resolution composed
-  over `safe_parse_urls()` (see ADR 0007).
+- **R/resolve.R** — `resolve_url()`, reference resolution composed over
+  `safe_parse_urls()` (ADR 0007); the merge is standard-*aware* (see Invariants).
 - **R/status-constants.R** — the `.STATUS_*` parse-status constants and the
   `.is_*_status()` predicates (incl. `.is_joinable_status()`).
 - **R/utils.R** — the `%||%` operator, the scheme tables
@@ -205,8 +205,25 @@ only under `port_handling != "exclude"`.
   metadata is exposed through `get_host_type()` / `get_scheme_class()` /
   `get_url_diagnostics()`, never as new parse columns/fields.
 - **`clean_url` is the contract**: `canonical_join()` keys on it and
-  `resolve_url()` returns it, so any change to `clean_url` assembly is a change
-  to the join/identity semantics.
+  `resolve_url()` returns it **by default** (`output = "clean"`), so any change
+  to `clean_url` assembly is a change to the join/identity semantics.
+  `resolve_url(..., output = "serialized")` is the opt-in escape hatch added by
+  P2.7 D-A: it returns `serialize_url()`'s full standard string (surface (b) —
+  fragment and credentials preserved) and requires an explicit `url_standard`.
+  Surface (b) is the conformance substrate; surface (c) is a lossy SEO product
+  and never carries a standards claim (P2.2 §1, P5.3 CLAIM-1).
+- **Reference resolution is standard-aware** (P2.7 D-B, retiring PRD v2 D6):
+  under `url_standard = "whatwg"` the WHATWG reference-*parsing* rules run
+  before the RFC 3986 §5 merge — a reference carrying the base's own special
+  scheme is relative, `\` reads as `/`, leading slash runs are skipped, and
+  leading/trailing C0-or-space is stripped. Under `"rfc3986"` the merge is RFC
+  3986 §5.2–§5.3. Under `NULL` it is byte-frozen (ADR 0007). Only the scheme
+  production (RFC 3986 §3.1) is shared by both named profiles, because the two
+  standards agree on it. Measured over the WHATWG's own base-carrying corpus
+  (`tests/testthat/test-wpt-base-relative.R`): 247 of 274 rows exact, 27
+  enumerated differences. That is a **separate** population from the base-null
+  WPT headline (336/336, `tests/testthat/test-wpt-full-suite.R`); the two are
+  never summed and the 247/274 split is not quoted as a conformance rate.
 
 ## Dependencies
 

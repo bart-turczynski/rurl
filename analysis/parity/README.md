@@ -61,14 +61,33 @@ them on its own.
 formals of the exported parse and accessor surface, so both postures are things
 users actually run, and both are now measured here.
 
-### Held axis — absolute URLs only
+### Held axis — this study is absolute URLs only
 
-The one axis still held is **base resolution**. `make-wpt-fixture.py` keeps only
-rows with a null base, because rurl parses absolute URLs and does not implement
-WHATWG's relative-reference resolution against a base URL. Two rows (`#x` and
-`#x:y` against `about:blank`) are excluded on exactly that ground. Read the
-figures below as *complete on absolute-URL parsing*, and as saying **nothing**
-about base-relative resolution — which rurl does not claim to do.
+The one axis this study holds is **base resolution**. `make-wpt-fixture.py`
+keeps only rows with a null base, so every figure below is scored with no base
+in play. Two rows (`#x` and `#x:y` against `about:blank`) are excluded on
+exactly that ground. Read the figures below as *complete on absolute-URL
+parsing*, and as saying **nothing** about base-relative resolution.
+
+**Corrected (RURL-fupsemxr T2.5, 2026-08-12).** This section used to give the
+reason as "rurl parses absolute URLs and does not implement WHATWG's
+relative-reference resolution against a base URL … which rurl does not claim to
+do". That was already wrong when written — `resolve_url()` has shipped since
+rurl 2.2.0 — and the base-relative axis is now measured. Its harness is
+`tests/testthat/test-wpt-base-relative.R`, the exact complement of this import
+at the same pinned upstream revision (OR-024): **247 of 274 base-carrying
+success rows serialize to upstream's own `href`**, with 27 enumerated
+differences in three families (Windows drive letters under `file:` 18, a
+recomposition seam 5, absolute references whose deviation is in absolute
+parsing 4). The scope held here is this *study's*, not the package's.
+
+**The two populations are disjoint and are never summed.** The base-null
+headline below and the 247/274 base-relative figure are different corpora
+scored by different harnesses; a combined "rows passed / rows total" would be
+two measurements reported as one. The base-relative split is a known-differ
+set, not a conformance rate (P5.3 §2.2), and it is scored on the full standard
+serialization (`serialize_url()`), never on `resolve_url()`'s default clean
+output.
 
 ## Headline (rurl 2.8.0, 2026-07-26)
 
@@ -244,10 +263,14 @@ is a policy the caller chooses, not a defect they are stuck with.
 **Measurement scope is still a limit, but a different one.** The opaque / `ws:`
 / `wss:` gap that used to be listed here is closed: `RURL-ghdlrcjv` widened the
 success fixture to every scheme, and those rows are now **measured and
-conformant** at `general` rather than silently unmeasured. What remains unmeasured
-is **base-relative resolution** (see the held-axis note above) — rurl parses
-absolute URLs, so the two `about:blank`-based rows are out of scope by design,
-not pending.
+conformant** at `general` rather than silently unmeasured. What **this study**
+does not measure is **base-relative resolution** (see the held-axis note above);
+the two `about:blank`-based rows are out of its scope by construction. That is
+no longer a repository-level gap: RURL-fupsemxr T2.1 imported the complementary
+274-row corpus and `tests/testthat/test-wpt-base-relative.R` scores it (247
+exact / 27 enumerated differences, OR-024). Keep the two figures apart — they
+are disjoint populations and summing them would invent a rate neither harness
+measured.
 
 ## Files
 

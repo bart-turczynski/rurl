@@ -210,10 +210,16 @@ conformance number.
 
 Two boundaries keep that honest rather than triumphal:
 
-- The WPT fixture keeps only **absolute** URLs (rows with a null base), because
-  rurl does not resolve relative references against a base URL. 336/336 says
-  nothing about base-relative resolution. It does now cover every scheme the
-  suite exercises, including opaque, `ws:` and `wss:`.
+- The WPT fixture behind that 336/336 keeps only **absolute** URLs (rows with a
+  null base), so the figure says **nothing** about base-relative resolution. It
+  does now cover every scheme the suite exercises, including opaque, `ws:` and
+  `wss:`. Base-relative resolution is measured **separately**, over the
+  complementary 274 base-carrying rows of the same upstream file: **247 exact,
+  27 enumerated differences** (18 Windows drive letters under `file:`, 5 a
+  recomposition seam, 4 absolute references whose deviation is in absolute
+  parsing). **The two are disjoint populations and are never added together** —
+  there is no combined rate, and the 247/274 split is a known-differ set for
+  regression tracking, not a conformance rate.
 - The `"whatwg"` profile is WHATWG on the axes it governs — **not** a full
   UTS-46 host mapping. Ligatures, circled digits and zero-width code points pass
   through unmapped (ADR 0002).
