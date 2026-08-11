@@ -83,7 +83,8 @@ direct \code{safe_parse_url()} call on the resolved URL.
 The merge itself (empty reference, fragment-only, query-only, scheme-relative
 \code{//host} reference, absolute-path reference, and relative-path merge) is
 RFC 3986 section 5.2--5.3 under \code{url_standard = "rfc3986"} and under the
-default \code{NULL} selector. Under \code{url_standard = "whatwg"} the WHATWG
+default \code{NULL} selector, with one exception under \code{"rfc3986"} noted
+last below. Under \code{url_standard = "whatwg"} the WHATWG
 URL Standard's reference-parsing rules are applied first, because they are
 rules the two standards genuinely disagree on rather than composition of the
 axes \code{url_standard} already governs (decision P2.7 D-B,
@@ -125,6 +126,19 @@ required to be percent-encoded -- so under \code{"rfc3986"} and
 The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
 every rule above is reachable only through
 \code{url_standard = "whatwg"}.
+
+One further rule applies under \strong{both} named profiles, because the two
+standards agree on it. A scheme is
+\code{ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )} -- RFC 3986 section 3.1's
+own grammar, and WHATWG's -- so a relative path whose first segment merely
+\emph{contains} a colon is a path, not an absolute reference:
+\code{resolve_url("[61:24:74]:98", "http://example.org/foo/bar",
+url_standard = "whatwg", output = "serialized")} is
+\code{"http://example.org/foo/[61:24:74]:98"}, and \code{"rfc3986"} merges
+the same way. The \code{NULL} selector instead keeps RFC 3986 Appendix B's
+explicitly \emph{non-validating} \code{[^:/?#]+}, which reads
+\code{"10.0.0.7"} as a scheme and discards the base; that is frozen behavior
+(ADR 0007), not a recommendation.
 }
 
 \section{Which output surface you want}{

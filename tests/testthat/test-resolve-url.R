@@ -446,6 +446,146 @@ test_that("rfc3986 and NULL are byte-frozen against BOTH new rules", {
   expect_identical(resolve_url("\\x", wbase), "http://example.org/foo/\\x")
 })
 
+# --- the scheme production (RURL-fupsemxr T2.4b) -----------------------------
+#
+# Unlike every other rule in this section, this one is NOT WHATWG-only. The
+# production `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` is RFC 3986 section
+# 3.1's own scheme grammar, and byte-identical to WHATWG's scheme-start/scheme
+# states -- the two standards do not disagree. What the resolver had been
+# reading is Appendix B's *non-validating* `[^:/?#]+`, which the RFC itself
+# describes as deliberately permissive. So the fix ships on BOTH selectors that
+# name a standard, and the split is not "whatwg vs the rest" but "a standard is
+# selected vs none is": `url_standard = NULL` keeps the loose group solely
+# because ADR 0007 freezes it.
+
+test_that("a colon in a relative path's first segment is not a scheme", {
+  wbase <- "http://example.org/foo/bar"
+  fbase <- "file:///some/dir/bar.html"
+  # Neither "10.0.0.7" nor "[61" can be a scheme, so both references are
+  # relative and must merge against the base. Under Appendix B's group each was
+  # read as absolute and the base was discarded entirely. Both are upstream WPT
+  # rows (test-wpt-base-relative.R, ex-WPT_REL_SCHEME_PRODUCTION) and these are
+  # upstream's own `href`s.
+  for (std in c("rfc3986", "whatwg")) {
+    expect_identical(
+      rurl:::.resolve_one_raw("[61:24:74]:98", wbase, std),
+      "http://example.org/foo/[61:24:74]:98"
+    )
+    expect_identical(
+      rurl:::.resolve_one_raw("10.0.0.7:8080/foo.html", fbase, std),
+      "file:///some/dir/10.0.0.7:8080/foo.html"
+    )
+  }
+  # A first segment that is a syntactically VALID scheme still makes the
+  # reference absolute -- the production was tightened, not removed.
+  for (std in list(NULL, "rfc3986", "whatwg")) {
+    expect_identical(
+      rurl:::.resolve_one_raw("a+b-c.d:x", wbase, std), "a+b-c.d:x"
+    )
+    expect_identical(rurl:::.resolve_one_raw("A1:x", wbase, std), "A1:x")
+  }
+})
+
+test_that("the tightened production is exactly the RFC 3986 §3.1 grammar", {
+  # Each spelling below fails the production for one reason, so each is a
+  # relative path: a leading DIGIT, a leading `+`/`-`/`.`, an out-of-class byte
+  # (`_`, SPACE, `!`, `%`, non-ASCII). A single case would not distinguish
+  # "ALPHA-first" from "ASCII-only" from "no punctuation".
+  wbase <- "http://example.org/foo/bar"
+  not_schemes <- c(
+    "1foo:bar", "9:00/am", "-x:y", "+x:y", ".x:y", "_foo:bar", "fo o:bar",
+    "foo!:bar", "f%6fo:bar", "\u00e9:bar"
+  )
+  for (ref in not_schemes) {
+    for (std in c("rfc3986", "whatwg")) {
+      expect_identical(
+        rurl:::.resolve_one_raw(ref, wbase, std),
+        paste0("http://example.org/foo/", ref)
+      )
+    }
+  }
+})
+
+test_that("a re-routed reference keeps its colon-bearing first segment", {
+  # Regression guard for the re-route this fix causes, not for the fix itself.
+  # Tightening the production moves these references OUT of the absolute branch
+  # and INTO `.split_after_scheme()` (scheme-less reference, special base) --
+  # whose leading strip used to be Appendix B's group too. Left loose, that
+  # strip would eat `10.0.0.7:` off a path it is supposed to leave alone and
+  # yield "file:///some/dir/8080/foo.html". The path must survive whole.
+  expect_identical(
+    rurl:::.resolve_one_raw(
+      "10.0.0.7:8080/foo.html", "file:///some/dir/bar.html", "whatwg"
+    ),
+    "file:///some/dir/10.0.0.7:8080/foo.html"
+  )
+  expect_identical(
+    resolve_url("10.0.0.7:8080/foo.html", "file:///some/dir/bar.html",
+                url_standard = "whatwg", output = "serialized"),
+    "file:///some/dir/10.0.0.7:8080/foo.html"
+  )
+})
+
+test_that("the BASE is read with the same production as the reference", {
+  # "10.0.0.7:8080/dir/x" is not an absolute URL: its "scheme" exists only under
+  # Appendix B's group. A base that is not absolute cannot resolve a relative
+  # reference, so the answer is NA -- the same production, applied at the same
+  # seam, for both operands.
+  loose_base <- "10.0.0.7:8080/dir/x"
+  expect_true(is.na(rurl:::.resolve_one_raw("g", loose_base, "rfc3986")))
+  expect_true(is.na(rurl:::.resolve_one_raw("g", loose_base, "whatwg")))
+  # ... and NULL keeps the old answer, which is the freeze, not an endorsement.
+  expect_identical(
+    rurl:::.resolve_one_raw("g", loose_base), "10.0.0.7:8080/dir/g"
+  )
+})
+
+test_that("url_standard = NULL is byte-frozen against the production", {
+  # ADR 0007. This is the one rule in this file that IS a conformance fix under
+  # "rfc3986" as well as "whatwg", so the freeze had to be asserted rather than
+  # inherited from a whatwg-only gate: NULL is the surface that claims no
+  # standard, and it keeps Appendix B's answer byte for byte.
+  wbase <- "http://example.org/foo/bar"
+  fbase <- "file:///some/dir/bar.html"
+  frozen <- list(
+    c("[61:24:74]:98", "[61:24:74]:98"),
+    c("1foo:bar", "1foo:bar"),
+    c("_foo:bar", "_foo:bar"),
+    c("9:00/am", "9:00/am"),
+    c("-x:y", "-x:y"),
+    c("fo o:bar", "fo o:bar")
+  )
+  for (case in frozen) {
+    # The DEFAULT argument is the frozen path as well as the explicit NULL.
+    expect_identical(rurl:::.resolve_one_raw(case[[1L]], wbase), case[[2L]])
+    expect_identical(
+      rurl:::.resolve_one_raw(case[[1L]], wbase, NULL), case[[2L]]
+    )
+  }
+  expect_identical(
+    rurl:::.resolve_one_raw("10.0.0.7:8080/foo.html", fbase),
+    "10.0.0.7:8080/foo.html"
+  )
+  # ... and the clean surface the NULL merge feeds. `10.0.0.7:8080/foo.html` is
+  # still read as absolute there -- identical to a direct parse of it, which is
+  # what shows the base was never consulted.
+  expect_identical(
+    resolve_url("10.0.0.7:8080/foo.html", fbase),
+    get_clean_url("10.0.0.7:8080/foo.html")
+  )
+  expect_identical(
+    resolve_url("10.0.0.7:8080/foo.html", fbase), "http://10.0.0.7/foo.html"
+  )
+  # Only a selected standard reaches the real production, and both do.
+  for (std in c("rfc3986", "whatwg")) {
+    expect_identical(
+      resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = std,
+                  output = "serialized"),
+      "file:///some/dir/10.0.0.7:8080/foo.html"
+    )
+  }
+})
+
 test_that("resolved output equals a direct parse of the resolved URL", {
   # The composition contract: resolving then reading clean_url is identical to
   # parsing the RFC-recomposed URL directly, for every governed axis.
