@@ -4,7 +4,14 @@
 \alias{resolve_url}
 \title{Resolve a URL reference against a base URL}
 \usage{
-resolve_url(relative_or_absolute, base_url, url_standard = NULL, ...)
+resolve_url(
+  relative_or_absolute,
+  base_url,
+  url_standard = NULL,
+  output = c("clean", "serialized"),
+  form = c("source", "normalized"),
+  ...
+)
 }
 \arguments{
 \item{relative_or_absolute}{A character vector of URL references to resolve.
@@ -20,51 +27,119 @@ absolute reference ignores \code{base_url}.}
 \item{url_standard}{Optional standard profile forwarded to the parse:
 \code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
 \code{\link{safe_parse_url}} for the axes it governs. The reference-
-resolution merge itself does not vary between the two profiles.}
+resolution merge itself does not vary between the two profiles. Required
+(non-\code{NULL}) when \code{output = "serialized"}.}
+
+\item{output}{Which output surface to return: \code{"clean"} (default,
+today's canonical \code{clean_url} bytes) or \code{"serialized"} (the
+selected standard's full-string serialization of the resolved absolute
+URL, via \code{\link{serialize_url}}). See \emph{Which output surface you
+want}.}
+
+\item{form}{For \code{output = "serialized"} with
+\code{url_standard = "rfc3986"} only, the RFC posture forwarded to
+\code{\link{serialize_url}}: \code{"source"} (default, source-preserving)
+or \code{"normalized"}. Ignored for \code{"whatwg"}, whose serializer has a
+single spec-defined form, and ignored under \code{output = "clean"}, whose
+rendering is driven by the cleaning dials instead -- the same
+argument-is-inert-where-it-does-not-apply contract
+\code{\link{serialize_url}} itself holds for \code{form}.}
 
 \item{...}{Additional arguments forwarded to \code{\link{safe_parse_urls}}
 (e.g. \code{port_handling}, \code{query_handling}, \code{host_encoding}).
 Passing a governed low-level knob that conflicts with \code{url_standard}
-errors, exactly as it does for \code{\link{safe_parse_url}}.}
+errors, exactly as it does for \code{\link{safe_parse_url}}. These are
+presentation dials consumed by the \code{"clean"} path only; supplying any
+of them together with \code{output = "serialized"} is an error, because
+\code{\link{serialize_url}} takes no presentation arguments and the dial
+could not be honored.}
 }
 \value{
-A character vector the same length as the recycled inputs: the
-canonical \code{clean_url} of each resolved reference, or \code{NA} where
-resolution cannot produce an absolute URL or the resolved URL is
-unparseable.
+A character vector the same length as the recycled inputs, unnamed
+(names are not data). Under \code{output = "clean"} each element is the
+canonical \code{clean_url} of the resolved reference; under
+\code{output = "serialized"} it is the standard's full-string
+serialization of the resolved absolute URL. \code{NA} where resolution
+cannot produce an absolute URL, or where the resolved URL is not accepted
+by the parser (\code{"clean"}) or by the selected standard's parser
+(\code{"serialized"}).
 }
 \description{
 Resolves a relative or absolute URL reference against a base URL following
-the RFC 3986 section 5 reference-resolution algorithm, then canonicalizes the
-result with the same machinery as \code{\link{safe_parse_url}}. The
-base-merge step (empty reference, fragment-only, query-only, scheme-relative
-\code{//host} reference, absolute-path reference, and relative-path merge) is
-identical under both standards; \code{url_standard} and any \code{...}
-options flow straight through to the parse so the host IPv4/reg-name model,
-path percent/dot-segment handling, default-port elision, WHATWG
+the RFC 3986 section 5 reference-resolution algorithm, then renders the
+resolved absolute URL on the output surface \code{output} selects. Under the
+default \code{output = "clean"} the result is canonicalized with the same
+machinery as \code{\link{safe_parse_url}}; under \code{output = "serialized"}
+it is handed to \code{\link{serialize_url}} instead. The base-merge step
+(empty reference, fragment-only, query-only, scheme-relative \code{//host}
+reference, absolute-path reference, and relative-path merge) is identical
+under both standards; \code{url_standard} and any \code{...} options flow
+straight through to the parse so the host IPv4/reg-name model, path
+percent/dot-segment handling, default-port elision, WHATWG
 backslash-as-slash recognition, and diagnostics are exactly those of a direct
 \code{safe_parse_url()} call on the resolved URL. \code{resolve_url()}
 introduces no per-standard behavior of its own.
 }
-\details{
-The return value is the \emph{canonical} \code{clean_url} of the resolved
-reference, not a verbatim RFC 3986 recomposition: as everywhere else in rurl,
-the fragment and userinfo are excluded from \code{clean_url}, the query is
-included only when \code{query_handling != "drop"} (the default drops it),
-and the port only when \code{port_handling != "exclude"}. This differs from a
-generic resolver such as \code{xml2::url_absolute()} or Python's
-\code{urljoin}, which preserve every component verbatim; \code{resolve_url()}
-resolves \emph{and} canonicalizes. To inspect individual resolved components
-(including the fragment), resolve first and pass the result to
-\code{\link{safe_parse_url}}.
+\section{Which output surface you want}{
+
+
+\code{output} selects between two different products, not two settings of
+one (decision P2.7 D-A,
+\code{design/work/url-v3/decisions/P2.7-display-and-resolver-output.md}):
+
+\itemize{
+\item \code{output = "clean"} (the default) returns the \emph{canonical}
+\code{clean_url} of the resolved reference, not a verbatim RFC 3986
+recomposition: as everywhere else in rurl, the fragment and userinfo are
+excluded from \code{clean_url}, the query is included only when
+\code{query_handling != "drop"} (the default drops it), and the port only
+when \code{port_handling != "exclude"}. This surface is
+\strong{intentionally lossy} -- it is a cleaning/SEO product driven by
+presentation policy, and it therefore \strong{cannot carry a conformance
+claim}. This differs from a generic resolver such as
+\code{xml2::url_absolute()} or Python's \code{urljoin}, which preserve
+every component verbatim; \code{resolve_url()} resolves \emph{and}
+canonicalizes.
+\item \code{output = "serialized"} returns
+\code{\link{serialize_url}(<resolved absolute URL>, standard =
+    url_standard, form = form)}: the standard's own full-string
+serialization, with the fragment preserved and credentials
+reconstructed. This is the standards surface -- the one a conformance
+claim may be measured on -- and it is where RFC 3986 section 5.4's own
+expectations are reproduced exactly (\code{resolve_url("?y",
+    "http://a/b/c/d;p?q", url_standard = "rfc3986", output = "serialized")}
+is \code{"http://a/b/c/d;p?y"}).
 }
+
+\code{output = "serialized"} \strong{requires} an explicit
+\code{url_standard}: \code{NULL} selects no standard, so there is nothing to
+serialize \emph{to}, and the combination is an error rather than a silent
+choice of one. Because \code{\link{serialize_url}} accepts no presentation
+options at all, \code{output = "serialized"} also rejects any \code{...}
+argument: honoring, say, \code{port_handling = "exclude"} is impossible on
+that surface, and accepting-then-discarding it would misreport what was
+returned.
+
+To inspect individual resolved components (including the fragment), resolve
+first and pass the result to \code{\link{safe_parse_url}}.
+}
+
 \examples{
 resolve_url("../g", "http://a/b/c/d;p?q") # -> "http://a/b/g"
 resolve_url("g", "http://a/b/c/d;p?q") # -> "http://a/b/c/g"
 resolve_url("//example.org/p", "http://a/b/c") # -> "http://example.org/p"
 resolve_url("https://x.com/y", "http://a/b/c") # absolute ref, base ignored
 resolve_url(c("g", "../h"), "http://a/b/c/") # vectorized
+
+# The standards surface keeps the query and the fragment RFC 3986 section
+# 5.4 requires; the (lossy) clean surface drops both by design.
+resolve_url("?y", "http://a/b/c/d;p?q",
+            url_standard = "rfc3986", output = "serialized")
+resolve_url("#s", "http://a/b/c/d;p?q",
+            url_standard = "whatwg", output = "serialized")
+resolve_url("#s", "http://a/b/c/d;p?q")
 }
 \seealso{
-\code{\link{safe_parse_url}}, \code{\link{get_clean_url}}
+\code{\link{safe_parse_url}}, \code{\link{get_clean_url}},
+\code{\link{serialize_url}}
 }
