@@ -117,6 +117,72 @@
   `scheme_acceptance = "web"` posture is untouched in every respect, since it
   does not parse `mailto:` at all.
 
+- **`resolve_url()` reference resolution is now standard-*aware*.** It used to
+  run RFC 3986 §5 regardless of `url_standard`, on the reasoning that
+  decomposing WHATWG against §5.3 showed no genuinely new divergent behavior.
+  Measurement falsified that: over the 274 base-carrying rows of the WHATWG
+  suite's own `urltestdata.json`, 218 matched exactly and 56 differed. Under
+  `url_standard = "whatwg"` the WHATWG reference-*parsing* rules now run before
+  the merge:
+
+  ```r
+  # a reference carrying the base's own special scheme is relative, not absolute
+  resolve_url("http:g", "http://a/b/c/d", url_standard = "whatwg")
+  #> "http://a/b/c/g"
+
+  # `\` reads as `/`, and a leading run of slashes introduces an authority
+  resolve_url("..\\g", "http://a/b/c/d", url_standard = "whatwg")
+  #> "http://a/b/g"
+
+  # leading and trailing C0-or-space is stripped before the reference is read
+  resolve_url("  \n g ", "http://a/b/c/d", url_standard = "whatwg")
+  #> "http://a/b/c/g"
+  ```
+
+  Together with the scheme-production fix below, that corpus now scores **247
+  exact with 27 enumerated differences**, each one attributed. Under
+  `"rfc3986"` the merge stays RFC 3986 §5.2–§5.3. **Under the default
+  `url_standard = NULL` nothing moves**: that path is byte-frozen (ADR 0007) and
+  was verified unchanged across the corpus.
+
+- **A colon in a relative path's first segment is no longer mistaken for a
+  scheme** (under the two named profiles). The reference splitter matched the
+  scheme with RFC 3986 *Appendix B*'s `[^:/?#]+`, a group the appendix itself
+  describes as non-validating and which §4.2 names as exactly this hazard: a
+  relative path that merely *contains* a colon was read as an absolute
+  reference, and the base was discarded outright.
+
+  ```r
+  # before: the base vanished
+  resolve_url("10.0.0.7:8080/foo.html", "file:///some/dir/bar.html",
+              url_standard = "rfc3986")
+  #> "http://10.0.0.7/foo.html"
+
+  # after: `10.0.0.7` is not a scheme, so the reference is relative
+  #> "file:///some/dir/10.0.0.7:8080/foo.html"
+  ```
+
+  The production is now §3.1's real one, `ALPHA *( ALPHA / DIGIT / "+" / "-" /
+  "." )`. It was tightened, not removed: a first segment that really is a valid
+  scheme still makes the reference absolute.
+
+  **The same tightening cuts the other way for a *base*.** A base whose scheme
+  existed only under Appendix B is not an absolute URL, so there is nothing to
+  resolve against, and both named profiles now return `NA`:
+
+  ```r
+  resolve_url("g", "10.0.0.7:8080/dir/x", url_standard = "rfc3986")
+  #> NA          # was "http://10.0.0.7/dir/g"
+  resolve_url("g", "10.0.0.7:8080/dir/x")
+  #> "http://10.0.0.7/dir/g"   # url_standard = NULL is unchanged
+  ```
+
+  `url_standard = NULL` keeps Appendix B's loose group. Tightening it there
+  would move frozen bytes rather than merely improve them, and the freeze
+  governs whether output may *move*, not whether it is right — so the fix ships
+  on the two selectors that claim a standard, and the one that claims none is
+  left alone.
+
 ### Bug fixes
 
 - **`index_page_handling = "strip"` no longer emits a path ending in `.` or
@@ -954,6 +1020,76 @@
   `source` form renders verbatim. And `serialize_url()` emits WHATWG's ASCII
   (punycode) host where `get_clean_url()` keeps the Unicode spelling; both are
   correct for their surface.
+
+- **`format_url()` renders a URL for a human to read, safely.** Showing a URL to
+  a person is its own problem: a raw URL can carry credentials, and it can carry
+  code points that make the displayed string lie about where it points. Neither
+  `get_clean_url()` nor `serialize_url()` is the right tool — the first is a
+  cleaning product that drops information for SEO reasons, the second is exact
+  and therefore reproduces the hazard faithfully.
+
+  ```r
+  format_url("https://user:pw@example.com/a")
+  #> [1] "https://<redacted>@example.com/a"
+
+  format_url("https://example.com/p?x=a%26b%3Dc#%E2%80%AEevil")
+  #> [1] "https://example.com/p?x=a%26b%3Dc#<U+202E>evil"
+  ```
+
+  Four rules do the work. Credentials are replaced by a fixed-width
+  `<redacted>`, so the token leaks nothing — not even the secret's length.
+  Invisible, bidirectional-override and control code points become
+  `<U+XXXX>` tokens. Percent-encoded *delimiters* are deliberately left
+  encoded, because decoding them would fabricate structure the URL does not
+  have. And an octet that no valid UTF-8 sequence can contain is emitted as
+  `%XX` rather than decoded, replaced or dropped:
+
+  ```r
+  format_url(c("https://example.com/a%2Fb", "https://example.com/%FF%00"))
+  #> [1] "https://example.com/a%2Fb"       "https://example.com/%FF<U+0000>"
+  ```
+
+  An internationalized host is shown in **both** spellings whenever they
+  differ, since either one alone can mislead:
+
+  ```r
+  format_url("https://xn--mnchen-3ya.de/p")
+  #> [1] "https://münchen.de/p  [host: xn--mnchen-3ya.de]"
+  ```
+
+  The result is **display only**. It is not reparsable, has no round-trip
+  guarantee, and must never be fed back into `serialize_url()`, into a
+  comparison key, or into anything that treats it as an address — which is why
+  it takes no presentation dial: a `path_encoding = "decode"` would hand back
+  the exact hazard the delimiter rule exists to prevent. Input the WHATWG
+  parser does not accept returns `NA`.
+
+  The escape decision performs no runtime Unicode general-category lookup: the
+  code-point set is enumerated, so the same input renders identically no matter
+  which Unicode version the installed libraries carry.
+
+- **`resolve_url(output = "serialized")` returns the resolved URL as a standard
+  full string.** `resolve_url()` has always returned `clean_url`, which drops
+  credentials and the fragment — so RFC 3986 §5.4's own worked examples were not
+  reproducible on its output, and there was no way to ask for a surface they
+  were. `output = "serialized"` routes the resolved absolute string through
+  `serialize_url()` instead:
+
+  ```r
+  resolve_url("../g", "http://u:pw@a/b/c/d?q#f", url_standard = "whatwg")
+  #> [1] "http://a/b/g"
+  resolve_url("../g", "http://u:pw@a/b/c/d?q#f", url_standard = "whatwg",
+              output = "serialized")
+  #> [1] "http://u:pw@a/b/g"
+  ```
+
+  The default is unchanged (`output = "clean"`), and this is purely an
+  availability fix: cleaning and standard serialization stay distinct surfaces
+  rather than merging. `output = "serialized"` requires an explicit
+  `url_standard` — `NULL` selects no standard to serialize *to* — and rejects
+  the parser dots, since `serialize_url()` takes no presentation options and
+  silently discarding one would be worse than an error. `form =` passes through
+  for `"rfc3986"` and is inert for `"whatwg"`.
 
 - **`get_parse_verdicts()` reports the three verdicts `parse_status` collapses
   into one.** A single status value answers three independent questions at

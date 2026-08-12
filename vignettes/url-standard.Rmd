@@ -120,17 +120,79 @@ canonicalizes the result with the same machinery, so `url_standard` and the
 other options flow straight through.
 
 Resolution itself is one of the axes the selector governs. Under `"rfc3986"` —
-and under the default `NULL` — it is RFC 3986 §5 exactly. Under `"whatwg"` the
-WHATWG URL Standard's reference-parsing rules apply first; the visible one today
-is that a reference carrying the base's *own* special scheme is relative rather
-than absolute: `"http:g"` against `http://a/b/c/` resolves to `http://a/b/c/g`
-instead of being read as the absolute `http:g`.
+and under the default `NULL` — the merge is RFC 3986 §5 exactly.
 
 ```{r resolve}
 resolve_url("../g", "http://a/b/c/d;p?q")
 resolve_url("//other.example/p", "http://a/b/c")
 resolve_url(c("g", "../h"), "http://a/b/c/")
 ```
+
+### What `"whatwg"` changes
+
+Under `"whatwg"` the WHATWG URL Standard's reference-*parsing* rules run before
+the merge. Four of them are visible:
+
+```{r resolve-whatwg}
+# 1. A reference carrying the base's OWN special scheme is relative, not
+#    absolute -- so this is not read as the absolute `http:g`.
+resolve_url("http:g", "http://a/b/c/d", url_standard = "whatwg")
+
+# 2. Under a special base, `\` reads as `/`.
+resolve_url("..\\g", "http://a/b/c/d", url_standard = "whatwg")
+
+# 3. A leading run of slashes-or-backslashes introduces an authority.
+resolve_url("///g", "http://a/b/c/d", url_standard = "whatwg")
+
+# 4. Leading and trailing C0-or-space is stripped before the reference is read.
+resolve_url("  \n g ", "http://a/b/c/d", url_standard = "whatwg")
+```
+
+### Which colon starts a scheme
+
+One rule is not WHATWG's — it is the RFC's own grammar, so it applies under
+**both** named selectors. Deciding whether a reference is absolute means
+deciding whether the text before its first colon is a scheme, and RFC 3986
+§3.1's production is `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`. The looser
+group in the RFC's Appendix B parser, which the appendix itself describes as
+non-validating, admits things that are not schemes — and §4.2 names the
+consequence: a relative path that merely *contains* a colon gets read as
+absolute and the base is thrown away.
+
+```{r resolve-scheme}
+# `10.0.0.7` cannot be a scheme, so this is a relative path.
+resolve_url("10.0.0.7:8080/foo.html", "file:///some/dir/bar.html",
+            url_standard = "rfc3986")
+
+# The same tightening cuts the other way for a BASE: a base whose scheme
+# existed only under the loose group is not an absolute URL, so there is
+# nothing to resolve against.
+resolve_url("g", "10.0.0.7:8080/dir/x", url_standard = "rfc3986")
+```
+
+`url_standard = NULL` keeps the loose group. Tightening it there would move
+frozen bytes rather than merely improve them, and the freeze governs whether
+output may *move*, not whether it is right — so the fix ships on the two
+selectors that claim a standard, and the one that claims none is left alone.
+
+```{r resolve-null-frozen}
+resolve_url("g", "10.0.0.7:8080/dir/x")
+```
+
+### Asking for the standard string instead
+
+`resolve_url()` returns `clean_url` by default, which drops credentials and the
+fragment — a cleaning product, not a standard serialization. When you need the
+surface RFC 3986 §5.4's own worked examples are reproducible on, ask for it:
+
+```{r resolve-serialized}
+resolve_url("../g", "http://u:pw@a/b/c/d?q#f", url_standard = "whatwg")
+resolve_url("../g", "http://u:pw@a/b/c/d?q#f", url_standard = "whatwg",
+            output = "serialized")
+```
+
+`output = "serialized"` requires an explicit `url_standard`, since `NULL`
+selects no standard to serialize *to*.
 
 ## Migration notes
 
