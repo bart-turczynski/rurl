@@ -48,6 +48,8 @@ jobs:
       oracle_labels_selftest: ${{ steps.filter.outputs.oracle_labels_selftest }}
       citations: ${{ steps.filter.outputs.citations }}
       citations_selftest: ${{ steps.filter.outputs.citations_selftest }}
+      pkgdown_index: ${{ steps.filter.outputs.pkgdown_index }}
+      pkgdown_index_selftest: ${{ steps.filter.outputs.pkgdown_index_selftest }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
@@ -156,6 +158,18 @@ jobs:
               - '.github/workflows/verify.yml'
             citations_selftest:
               - 'design/work/url-v3/tools/citation-gate.R'
+            # NAMESPACE is the trigger that matters: the gap this gate catches
+            # is created by EXPORTING something, in a slice whose author has no
+            # reason to open `_pkgdown.yml`. man/ is listed too because renaming
+            # an Rd topic can orphan an index entry without touching NAMESPACE.
+            pkgdown_index:
+              - 'NAMESPACE'
+              - 'man/**'
+              - '_pkgdown.yml'
+              - 'tools/pkgdown-reference-gate.R'
+              - '.github/workflows/verify.yml'
+            pkgdown_index_selftest:
+              - 'tools/pkgdown-reference-gate.R'
 
   lint:
     runs-on: ubuntu-latest
@@ -711,3 +725,29 @@ jobs:
         run: Rscript design/work/url-v3/tools/citation-gate.R --self-test
       - name: Every G3.K citation resolves
         run: Rscript design/work/url-v3/tools/citation-gate.R
+
+  # pkgdown reference-index gate (RURL-mqexzpwt). `_pkgdown.yml`'s reference
+  # index is hand-maintained, and nothing checked it covered the exports. It was
+  # missing TEN of 40 -- serialize_url, get_url_key, url_key_policy, the six
+  # joins, format_url -- each shipped by a slice that never opened the file. The
+  # gap is silent until someone builds the site (RURL-vkltgopc), so the failure
+  # arrives release-shaped rather than diff-shaped. Base R over three tracked
+  # files; no package build, no yaml dependency.
+  #
+  # Appended at the end, like oracle-labels and citations: separate insertion
+  # points keep concurrent gate branches off one anchor.
+  pkgdown-index:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.pkgdown_index == 'true'
+    runs-on: ubuntu-latest
+    name: Every export reaches the pkgdown reference index
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.pkgdown_index_selftest == 'true'
+        run: Rscript tools/pkgdown-reference-gate.R --self-test
+      - name: Reference index covers every export
+        run: Rscript tools/pkgdown-reference-gate.R
