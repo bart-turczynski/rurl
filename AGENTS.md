@@ -67,6 +67,34 @@ The forge moved to GitLab, so the answer is explicit rather than inherited:
 hook is the only non-optional gate, and it is only installed if you ran
 `pre-commit install --hook-type pre-push` in your clone.
 
+### Dependency resolvability — a release check, across all seven repos
+
+```sh
+Rscript tools/dependency-resolvability-gate.R          # this repo
+Rscript tools/dependency-resolvability-gate.R --all    # every sibling package
+Rscript tools/dependency-resolvability-gate.R --self-test
+```
+
+Every other gate here asks whether this tree is internally consistent. This one
+asks whether the *rest of the world* can serve what `DESCRIPTION` promises: that
+each version floor is satisfiable by a release that exists, that each
+`dep::symbol` is exported by the **released** NAMESPACE rather than by the
+development checkout sitting in your library, and that each `Remotes:` entry is
+pinned and reachable. It reads CRAN tarballs and sibling git tags; it never
+reads the local library, which is the whole point — `R CMD check` and
+`devtools::test()` are both green on defects this catches, because locally the
+dependency *is* the development tree.
+
+Measured 2026-08-12 it fails in four of the seven on four different defects; see
+the script header for the list and RURL-ovgasmea for rurl's.
+
+**It is deliberately NOT in `tools/verify.R`'s gate list.** It needs the network
+by construction, and wiring a network dependency into the only non-optional
+pre-push gate would make every push fail on a train. Run it before a release,
+and after changing any floor, `Remotes:` entry, or `dep::symbol` call site.
+`--offline` scores from the artifact cache and aborts on a miss rather than
+guessing.
+
 ### The archival mirror, and checking it is not stale (RURL-eqgqbeti)
 
 With no server-side gate and a suspended GitHub account, the bare mirror at
