@@ -419,7 +419,7 @@ sibling_tag_versions <- function(sibling_root) {
 find_sibling <- local({
   cached <- new.env(parent = emptyenv())
   function(pkg, parent_dir) {
-    key <- paste0(parent_dir, "", pkg)
+    key <- paste0(parent_dir, "|", pkg)
     if (!is.null(cached[[key]])) {
       v <- cached[[key]]
       return(if (identical(v, "")) NULL else v)
@@ -588,7 +588,7 @@ resolution_points <- function(pkg, floor, universe, offline) {
 exports_at <- local({
   cached <- new.env(parent = emptyenv())
   function(pkg, point, sibling, offline) {
-    key <- paste(pkg, point$version, point$origin, sep = "")
+    key <- paste(pkg, point$version, point$origin, sep = "|")
     if (!is.null(cached[[key]])) {
       v <- cached[[key]]
       return(if (identical(v, "NONE")) NULL else v)
