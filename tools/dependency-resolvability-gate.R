@@ -38,7 +38,8 @@
 #       resolution artifact, read from the RELEASED NAMESPACE;
 #   P3  every `dep::symbol` in `tests/` satisfies P2 or sits behind a skip guard;
 #   P4  no `Remotes:` on a release tree; on a development tree every entry is
-#       pinned to a ref, and that ref resolves;
+#       pinned to a ref, and that ref resolves -- see WHY A SHA PIN NEEDS ITS
+#       OWN RESOLUTION PATH below;
 #   P5  unresolvable inputs ABORT rather than score zero findings.
 #
 # WHY P1 IS SATISFIABILITY AND NOT EXISTENCE. The tempting rule -- "the floor
@@ -57,6 +58,22 @@
 # `unicode_versions` is absent from both -- but a package that used a symbol
 # added in 1.2.1 would pass a current-release check and fail its own floor. Both
 # are checked, and the message names which artifact was consulted.
+#
+# WHY A SHA PIN NEEDS ITS OWN RESOLUTION PATH. `git ls-remote` lists REFS. A
+# commit sha is not a ref, so asking for one comes back empty and the naive
+# check -- `ls-remote --exit-code <url> <sha>` -- calls a perfectly good pin "not
+# served". Measured 2026-08-12 against GitLab: exit 2 for `ec2643c`, which was
+# punycoder main's own tip at the time. The damage is not the wrong message, it
+# is the remedy the wrong message implies: the only pins that satisfy the naive
+# check are branch and tag names, and a branch pin is exactly the drift P4
+# exists to catch. So a sha-shaped ref gets two further attempts -- a prefix scan
+# over the advertised object ids, which resolves a pin sitting at some ref's tip,
+# then a shallow `git fetch` of the object itself, which GitLab serves for any
+# reachable commit. Both were measured, including the negative: a fabricated sha
+# fails the fetch. One case stays genuinely unresolvable and is reported as
+# itself rather than as "not served" -- an ABBREVIATED sha that is not at a ref
+# tip, because the wire protocol wants a full object id and a shallow fetch of
+# `ec2643c` fails where the 40-character form succeeds.
 #
 # WHY IT PARSES AND DOES NOT GREP. Written first as a grep, this gate reported
 # `punycoder::unicode_versions` as a RUNTIME call in `R/format.R`. It is a
@@ -752,6 +769,71 @@ check_symbols <- function(desc, dir, prop, universes, parent_dir, offline,
        universes = universes)
 }
 
+# Is this ref a raw object id rather than a branch or tag name? Deliberately
+# hex-only and unanchored to any `v` prefix: `v1.2.1` is a tag even though its
+# tail is hex, and a 7-to-40 hex run is what git itself will accept as an
+# abbreviated object id.
+is_sha_ref <- function(ref) {
+  !is.na(ref) && grepl("^[0-9a-fA-F]{7,40}$", ref)
+}
+
+# Decide whether `ref` names something the remote will actually serve, and say
+# WHICH question was answered -- callers put `why` straight into the finding, so
+# an unverifiable short sha never reads as a missing repository. See WHY A SHA
+# PIN NEEDS ITS OWN RESOLUTION PATH in the header.
+resolve_remote_ref <- function(host_url, ref) {
+  git_ok <- function(args) {
+    identical(as.integer(suppressWarnings(
+      system2("git", args, stdout = FALSE, stderr = FALSE)
+    )), 0L)
+  }
+
+  # A name (branch or tag), and also the bare-repository case: is it served?
+  args <- c("ls-remote", "--exit-code", shQuote(host_url))
+  if (!is.na(ref)) args <- c(args, shQuote(ref))
+  if (git_ok(args)) return(list(resolved = TRUE, why = NA_character_))
+
+  if (!is_sha_ref(ref)) {
+    return(list(resolved = FALSE, why = "is not served"))
+  }
+
+  # The repository may be fine and only the ref lookup wrong, so re-ask whether
+  # the repository is served at all before blaming the sha.
+  if (!git_ok(c("ls-remote", "--exit-code", shQuote(host_url)))) {
+    return(list(resolved = FALSE, why = "is not served"))
+  }
+
+  # A pin sitting at some ref's tip: the sha appears among the advertised
+  # object ids, which `ls-remote <url> <sha>` will never match on its own.
+  tips <- suppressWarnings(system2(
+    "git", c("ls-remote", shQuote(host_url)), stdout = TRUE, stderr = FALSE
+  ))
+  ids <- sub("[[:space:]].*$", "", tips[nzchar(tips)])
+  if (any(startsWith(tolower(ids), tolower(ref)))) {
+    return(list(resolved = TRUE, why = NA_character_))
+  }
+
+  # Not at a tip. The object itself can still be fetched -- but the wire
+  # protocol wants a full object id, so an abbreviated sha stops here.
+  if (nchar(ref) < 40L) {
+    return(list(resolved = FALSE, why = paste(
+      "cannot be verified: an abbreviated sha that is not at a ref tip is not",
+      "requestable over the wire -- pin the full 40-character sha"
+    )))
+  }
+  probe <- tempfile("depgate-fetch-")
+  dir.create(probe, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(probe, recursive = TRUE), add = TRUE)
+  if (!git_ok(c("init", "-q", shQuote(probe)))) {
+    return(list(resolved = FALSE, why = "could not be probed: `git init` failed"))
+  }
+  if (git_ok(c("-C", shQuote(probe), "fetch", "-q", "--depth=1",
+               shQuote(host_url), shQuote(ref)))) {
+    return(list(resolved = TRUE, why = NA_character_))
+  }
+  list(resolved = FALSE, why = "names a commit the remote does not serve")
+}
+
 check_remotes <- function(desc, parent_dir, offline, reachable) {
   out <- list()
   dev <- is_development_version(desc$version)
@@ -791,14 +873,13 @@ check_remotes <- function(desc, parent_dir, offline, reachable) {
       next
     }
     if (!reachable || offline) next
-    args <- c("ls-remote", "--exit-code", shQuote(host_url))
-    if (!is.na(rm$ref)) args <- c(args, shQuote(rm$ref))
-    code <- suppressWarnings(system2("git", args, stdout = FALSE, stderr = FALSE))
-    if (!identical(as.integer(code), 0L)) {
+    res <- resolve_remote_ref(host_url, rm$ref)
+    if (!isTRUE(res$resolved)) {
       out[[length(out) + 1L]] <- finding("P4", sprintf(
-        "`Remotes: %s` does not resolve: %s%s is not served (host default was %s)",
+        "`Remotes: %s` does not resolve: %s%s %s (host default was %s)",
         rm$raw, host_url,
         if (is.na(rm$ref)) "" else sprintf(" at %s", rm$ref),
+        res$why,
         if (grepl("::", rm$raw)) "explicit" else "GitHub, by omission"
       ))
       next
@@ -899,6 +980,74 @@ self_test <- function() {
   r <- parse_remote("bart-turczynski/rurl@v2.2.1")
   if (!identical(r$host, "github")) fail("a bare owner/repo must default to GitHub")
   if (!identical(r$ref, "v2.2.1")) fail("did not read the pinned ref")
+
+  # POSITIVE + NEGATIVE: sha-shaped refs, told apart from tag names whose tail
+  # happens to be hex.
+  if (!is_sha_ref("ec2643c")) fail("did not read an abbreviated sha as a sha")
+  if (!is_sha_ref(strrep("a", 40L))) fail("did not read a full sha as a sha")
+  if (is_sha_ref("v1.2.1")) fail("read the tag v1.2.1 as a sha")
+  if (is_sha_ref("main")) fail("read the branch main as a sha")
+  if (is_sha_ref("abc")) fail("read a 3-character string as a sha")
+  if (is_sha_ref(NA_character_)) fail("read NA as a sha")
+
+  # THE MEASURED FALSE POSITIVE THIS PATH EXISTS FOR. `ls-remote` lists refs, so
+  # it answers "no" for a sha that the remote serves perfectly well, and the
+  # naive check turned that into "not served". Exercised against a real local
+  # repository, so the whole path -- prefix scan and shallow fetch alike -- runs
+  # with no network, on the same rule as everything else in this self-test.
+  repo <- file.path(base, "remote-fixture")
+  dir.create(repo, recursive = TRUE, showWarnings = FALSE)
+  git_q <- function(...) suppressWarnings(system2(
+    "git", c("-C", shQuote(repo), ...), stdout = FALSE, stderr = FALSE
+  ))
+  system2("git", c("init", "-q", "-b", "main", shQuote(repo)),
+          stdout = FALSE, stderr = FALSE)
+  git_q("config", "user.email", "selftest@example.invalid")
+  git_q("config", "user.name", "selftest")
+  git_q("config", "uploadpack.allowAnySHA1InWant", "true")
+  git_q("config", "uploadpack.allowReachableSHA1InWant", "true")
+  writeLines("one", file.path(repo, "f"))
+  git_q("add", "f"); git_q("commit", "-q", "-m", "one")
+  older <- system2("git", c("-C", shQuote(repo), "rev-parse", "HEAD"),
+                   stdout = TRUE, stderr = FALSE)
+  writeLines("two", file.path(repo, "f"))
+  git_q("add", "f"); git_q("commit", "-q", "-m", "two")
+  tip <- system2("git", c("-C", shQuote(repo), "rev-parse", "HEAD"),
+                 stdout = TRUE, stderr = FALSE)
+
+  if (!isTRUE(resolve_remote_ref(repo, "main")$resolved)) {
+    fail("a branch name that exists did not resolve")
+  }
+  if (!isTRUE(resolve_remote_ref(repo, NA_character_)$resolved)) {
+    fail("an unpinned remote pointing at a served repository did not resolve")
+  }
+  if (!isTRUE(resolve_remote_ref(repo, substr(tip, 1L, 7L))$resolved)) {
+    fail("an abbreviated sha sitting at a ref tip did not resolve")
+  }
+  if (!isTRUE(resolve_remote_ref(repo, tip)$resolved)) {
+    fail("a full sha sitting at a ref tip did not resolve")
+  }
+  if (!isTRUE(resolve_remote_ref(repo, older)$resolved)) {
+    fail("a full sha behind the tip did not resolve -- the fetch path is dead")
+  }
+  # NEGATIVE: an abbreviated sha off the tip is genuinely unrequestable, and must
+  # say so rather than accuse the remote of not serving the repository.
+  short_older <- resolve_remote_ref(repo, substr(older, 1L, 7L))
+  if (isTRUE(short_older$resolved)) fail("resolved an unrequestable short sha")
+  if (!grepl("40-character", short_older$why)) {
+    fail("an unverifiable short sha was not reported as itself")
+  }
+  # NEGATIVE: a well-formed sha of a commit that does not exist.
+  fabricated <- resolve_remote_ref(repo, strrep("0", 40L))
+  if (isTRUE(fabricated$resolved)) fail("resolved a fabricated sha")
+  # NEGATIVE: a ref name that is not there.
+  if (isTRUE(resolve_remote_ref(repo, "no-such-branch")$resolved)) {
+    fail("resolved a branch that does not exist")
+  }
+  # NEGATIVE: the repository itself missing, which must still read as unserved.
+  if (isTRUE(resolve_remote_ref(file.path(base, "absent"), "main")$resolved)) {
+    fail("resolved a ref in a repository that is not there")
+  }
 
   # THE MEASURED FALSE POSITIVE. Written as a grep, this gate reported a comment
   # as a call site. The fixture keeps the exact shape that fooled it.
@@ -1005,7 +1154,7 @@ self_test <- function() {
 
   unlink(base, recursive = TRUE)
   cat("dependency-resolvability-gate self-test: PASS",
-      "(12 positive + 10 negative cases)\n")
+      "(19 positive + 18 negative cases)\n")
   invisible(TRUE)
 }
 
