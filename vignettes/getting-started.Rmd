@@ -165,11 +165,53 @@ The parameter influences the host component
 that might be used in other parts of the `safe_parse_url` output,
 such as the `clean_url`.
 
+# Getting the whole URL back
+
+`get_clean_url()` is not the only way to turn a parse back into a string, and
+it is often not the one you want. It is a cleaning product: it drops the
+fragment and credentials by design and is driven by two dozen presentation
+dials. Three surfaces exist, and they are deliberately not interchangeable.
+
+```{r output-surfaces}
+u <- "https://user:pw@Example.COM:443/a/../b?q=1#frag"
+
+# (c) cleaning -- an SEO/canonicalization product, intentionally lossy
+get_clean_url(u)
+
+# (b) standard serialization -- the full string, exactly as WHATWG would
+#     write it. No presentation dial reaches it.
+serialize_url(u)
+
+# (d) safe display -- for showing a person
+format_url(u)
+```
+
+The `:443` that survives only in the display output is deliberate:
+`serialize_url()` elides a default port because WHATWG's *parse* elides it,
+which is a normalization, and a surface whose job is showing what is really
+there does not normalize. It shows the port as written.
+
+Use `serialize_url()` whenever the question is "what does the standard say this
+URL is", and `format_url()` whenever the string is going in front of a human.
+`format_url()` redacts credentials, makes invisible and bidirectional-override
+code points visible as `<U+XXXX>` tokens, and leaves percent-encoded delimiters
+encoded so that reading the string cannot suggest structure the URL does not
+have:
+
+```{r output-display}
+format_url("https://example.com/a%2Fb?x=a%26b%3Dc#%E2%80%AEevil")
+```
+
+Its output is display only — never feed it back into a parser, a comparison, or
+anything that treats it as an address.
+
 # Summary
 
 - Vectorized functions for parsing and cleaning URLs
 - Uses the Public Suffix List for domain logic
 - Unicode/punycode support
+- Three distinct full-string output surfaces: `get_clean_url()`,
+  `serialize_url()` and `format_url()`
 
 # See also
 

@@ -104,9 +104,25 @@ reference:
     contents:
       - resolve_url
 
-  - title: "Joining"
-    desc: "Join datasets on canonicalized URL keys."
+  - title: "Full-string output surfaces"
+    desc: >
+      The whole URL as a string, on the surface you actually want: the
+      standard's own serialization, or a rendering safe to show a person.
+      Neither is get_clean_url(), which is a cleaning product.
     contents:
+      - serialize_url
+      - format_url
+
+  - title: "Identity and joining"
+    desc: >
+      Compare and join URLs on identity rather than on a cleaned display
+      string: a versioned comparison key, its policy object, and the six
+      identity-keyed joins. canonical_join() is the legacy clean_url-keyed
+      join, retained unchanged.
+    contents:
+      - get_url_key
+      - url_key_policy
+      - url_join
       - canonical_join
 
   - title: "Cache management"

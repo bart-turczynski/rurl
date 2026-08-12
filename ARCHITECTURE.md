@@ -16,8 +16,9 @@ excluded from the package build (`.Rbuildignore`), so it never affects
 
 `rurl` parses, normalizes, cleans, and joins URLs with vectorized,
 pipe-friendly functions. Domain/TLD extraction is delegated to the `pslr`
-package (Public Suffix List); Punycode/IDNA to `punycoder`; the underlying
-syntactic parse to `curl`. `rurl` owns the normalization policy, the canonical
+package (Public Suffix List); Punycode/IDNA to `punycoder`. The underlying
+syntactic parse is **in-tree** (`R/parse-web.R`) — it used to be `curl`'s, and
+that dependency is gone. `rurl` owns the normalization policy, the canonical
 `clean_url` key, the reversible host rendering, and the standards-profile
 (`url_standard`) behavior on top of those libraries.
 
@@ -26,14 +27,19 @@ syntactic parse to `curl`. `rurl` owns the normalization policy, the canonical
 The `Collate:` field in `DESCRIPTION` is authoritative. The load order is:
 
 ```
-rurl-package.R → status-constants.R → utils.R → query-denylist.R → domain.R →
-path-query.R → parse-phases.R → parse.R → verdicts.R → diagnostics.R →
-accessors.R → canonical_join.R → resolve.R → zzz.R
+rurl-package.R → status-constants.R → utils.R → percent-coding.R →
+parse-state.R → query-denylist.R → domain.R → path-query.R → parse-web.R →
+parse-phases.R → parse.R → verdicts.R → profiles.R → diagnostics.R →
+accessors.R → email-diagnostics.R → host-policy.R → canonical_join.R →
+resolve.R → serialize.R → format.R → url-key.R → url-join.R → zzz.R
 ```
 
 Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
-`safe_parse_urls()` and `path-query.R`'s `._remove_dot_segments()`). Keep
-`Collate:` in sync when adding a file.
+`safe_parse_urls()` and `path-query.R`'s `._remove_dot_segments()`, and
+`format.R` reads the serializer-input record `serialize.R` builds). Keep
+`Collate:` in sync when adding a file — it is hand-maintained, and
+`devtools::load_all()` ignores it, so an omitted file passes the test suite and
+fails `R CMD build`.
 
 ## File / responsibility map
 
@@ -89,6 +95,23 @@ Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
   (`canonical_join()`).
 - **R/resolve.R** — `resolve_url()`, reference resolution composed over
   `safe_parse_urls()` (ADR 0007); the merge is standard-*aware* (see Invariants).
+  `output = "serialized"` routes the resolved absolute string to
+  `serialize_url()` rather than to the cleaner.
+- **R/serialize.R** — output surface **(b)**, the full-string standard
+  serializer: `serialize_url()` and `.fsss_record_vec()`, the *lossless*
+  serializer-input record the two spec-exact serializers
+  (`.serialize_whatwg_full_vec()` / `.serialize_rfc_full_vec()`, in
+  `parse-phases.R`) consume. The record is deliberately not the 18-field public
+  projection, which `.blank_to_na()` has already collapsed.
+- **R/format.R** — output surface **(d)**, safe human display: `format_url()`
+  and its escape engine. The escaped code-point set is enumerated as static
+  range matrices (`.FORMAT_IMMUTABLE_BLOCKS` / `.FORMAT_HAZARD_BLOCKS` /
+  `.FORMAT_ESCAPE_BLOCKS`) with **no runtime Unicode general-category lookup**,
+  so the rule is Unicode-version-invariant by construction; a test meta-guard
+  deparses the namespace objects to enforce it. `.format_render()` decodes UTF-8
+  itself instead of handing the string to `stringi`, because an invalid octet
+  must be *emitted* as `%XX` rather than throw or be replaced. It reads
+  `serialize.R`'s record, so it is loaded after it.
 - **R/status-constants.R** — the `.STATUS_*` parse-status constants and the
   `.is_*_status()` predicates (incl. `.is_joinable_status()`).
 - **R/utils.R** — the `%||%` operator, the scheme tables
@@ -163,7 +186,8 @@ and `resolve_url()` is built on it. The pipeline is split into two stages
 (ADR 0003):
 
 - **Stage A (`._parse_stage_a_vec`)** — the option-*independent*, cacheable
-  parse: prepare the URL for `curl`, run `curl::curl_parse_url()`, extract raw
+  parse: prepare the URL (`.prepare_urls_for_curl_vec()`, named for the parser
+  it no longer calls), run the in-tree `.parse_web_url_one()`, extract raw
   components, detect IP hosts, apply the `url_standard` host model, derive
   domain/TLD via `pslr`. Its output is keyed by `.parse_cache_keys()` (the URL
   plus the small set of options that change *what is parsed*, notably
@@ -212,6 +236,16 @@ only under `port_handling != "exclude"`.
   fragment and credentials preserved) and requires an explicit `url_standard`.
   Surface (b) is the conformance substrate; surface (c) is a lossy SEO product
   and never carries a standards claim (P2.2 §1, P5.3 CLAIM-1).
+- **No output surface substitutes for another** (P2.2 §5.1). The full-string
+  surfaces are distinct products of the same parse and are not interchangeable:
+  **(a)** source reproduction (`original_url`), **(b)** standard serialization
+  (`serialize_url()`), **(c)** clean output (`get_clean_url()`), **(d)** safe
+  display (`format_url()`), **(e)** the comparison key (`get_url_key()`, a
+  non-URL projection). Credentials are reproduced only by (a)/(b), dropped by
+  (c) and **redacted** by (d); a (d) string is display-only and must never
+  re-enter serialization, a mutation baseline or a key. The rule that keeps this
+  checkable is that (b) and (d) both consume the *lossless* serializer-input
+  record, never a cleaned or formatted component (P2.2 §5.2).
 - **Reference resolution is standard-aware** (P2.7 D-B, retiring PRD v2 D6):
   under `url_standard = "whatwg"` the WHATWG reference-*parsing* rules run
   before the RFC 3986 §5 merge — a reference carrying the base's own special
