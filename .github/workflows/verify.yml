@@ -177,7 +177,10 @@ jobs:
             # edit DESCRIPTION or `R CMD build` fails. That makes it the exact
             # and narrow signal for the gap -- a slice that adds a file and
             # never opens ARCHITECTURE.md. Listing 'R/**' would fire the job on
-            # nearly every change for no additional reachability.
+            # nearly every change for no additional reachability. The same one
+            # path reaches the dependency check (RURL-rnwfclja) for the same
+            # reason: an import or a version floor can only move by editing
+            # DESCRIPTION.
             architecture_map:
               - 'DESCRIPTION'
               - 'ARCHITECTURE.md'
@@ -767,13 +770,15 @@ jobs:
       - name: Reference index covers every export
         run: Rscript tools/pkgdown-reference-gate.R
 
-  # ARCHITECTURE.md load-order + file-map gate (RURL-vppxuyfs). Two sections of
-  # that file are exact enumerations of `Collate:` written as prose, and both
-  # drifted silently: measured 2026-08-12, the load-order block listed 14 of 24
-  # files and the file map documented 15 of 24. Among the missing was
-  # parse-web.R, which holds the in-tree syntactic parser ARCHITECTURE.md exists
-  # to explain -- so a reader sent there to learn it would not have found it
-  # named. Base R over two tracked files; no package build, no yaml dependency.
+  # ARCHITECTURE.md load-order + file-map + dependency gate (RURL-vppxuyfs,
+  # extended by RURL-rnwfclja). Three sections of that file are exact
+  # enumerations of a DESCRIPTION field written as prose, and all three drifted
+  # silently: measured 2026-08-12, the load-order block listed 14 of 24 files,
+  # the file map documented 15 of 24, and `## Dependencies` named 3 of the 4
+  # `Imports:`. Among the missing was parse-web.R, which holds the in-tree
+  # syntactic parser ARCHITECTURE.md exists to explain -- so a reader sent there
+  # to learn it would not have found it named. Base R over two tracked files; no
+  # package build, no yaml dependency.
   #
   # Appended at the end, like oracle-labels, citations and pkgdown-index:
   # separate insertion points keep concurrent gate branches off one anchor.
@@ -781,7 +786,7 @@ jobs:
     needs: changes
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.architecture_map == 'true'
     runs-on: ubuntu-latest
-    name: ARCHITECTURE.md documents every Collate file
+    name: ARCHITECTURE.md matches DESCRIPTION (Collate and Imports)
     steps:
       - uses: actions/checkout@v7
       - uses: r-lib/actions/setup-r@v2
@@ -790,5 +795,5 @@ jobs:
       - name: Gate self-test (positive/negative coverage)
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.architecture_map_selftest == 'true'
         run: Rscript tools/architecture-map-gate.R --self-test
-      - name: Load order and file map match Collate
+      - name: Load order, file map and dependency list match DESCRIPTION
         run: Rscript tools/architecture-map-gate.R

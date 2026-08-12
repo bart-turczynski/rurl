@@ -356,6 +356,8 @@ only under `port_handling != "exclude"`.
 
 ## Dependencies
 
+- `utils` — base-R helpers: `URLdecode()` on the host-decode path,
+  `head()`/`tail()` for label slicing, `capture.output()` for engine identity.
 - `stringi` — Unicode string manipulation (with deliberate base-R exceptions;
   see ADR 0005).
 - `punycoder` (>= 1.2.0) — Punycode encoding/decoding.
@@ -366,25 +368,41 @@ dependency.
 
 ## Gates on this file
 
-`tools/architecture-map-gate.R` checks the two sections above that are exact
-enumerations of `Collate:` — the load-order block and the file/responsibility
-map. It asserts three things, with `Collate:` as the authority:
+`tools/architecture-map-gate.R` checks the three sections above that are exact
+enumerations of a DESCRIPTION field — the load-order block, the
+file/responsibility map, and the dependency list. It asserts four things, with
+DESCRIPTION as the authority throughout:
 
 1. the load-order block lists exactly `Collate:`, **in the same order** — the
    block's whole subject is the order, so a set comparison would let it lie
    about the thing it is for;
 2. every `Collate:` file has a `**R/<file>**` entry in the file map;
 3. no map entry names a file that is not in `Collate:` — the direction a rename
-   or a deletion breaks.
+   or a deletion breaks;
+4. `## Dependencies` names exactly the packages in `Imports:`, each carrying the
+   same version floor. Compared as a **set**, unlike the load order: that
+   section groups by importance and has no order to be wrong about.
 
 Nothing else in this file is gated, and deliberately so: the rest is prose that
-a checker could only pretend to judge. These two sections are different in kind,
-and both had drifted. Measured 2026-08-12, the load-order block listed 14 of 24
-files and the map documented 15 of 24 — including no entry for `R/parse-web.R`,
-which holds the parser this file exists to explain. Every gap arrived the same
-way: a slice added an R file, edited `Collate:` because `R CMD build` forces it,
-and had no reason to open this document. That is also why the gate's CI trigger
-is `DESCRIPTION` rather than `R/**`.
+a checker could only pretend to judge. These three sections are different in
+kind, and all three had drifted. Measured 2026-08-12, the load-order block
+listed 14 of 24 files, the map documented 15 of 24 — including no entry for
+`R/parse-web.R`, which holds the parser this file exists to explain — and the
+dependency list named three of the four imports, missing `utils`. Every gap
+arrived the same way: a slice edited DESCRIPTION because `R CMD build` or `R CMD
+check` forced it, and had no reason to open this document. That is also why the
+gate's CI trigger is `DESCRIPTION` rather than `R/**`.
+
+Property 4 gates the version floors rather than banning them (RURL-rnwfclja).
+Forbidding version numbers in this prose would remove the drift surface instead
+of policing it, and would be marginally cheaper to check — but it also removes
+the answer to what the section is asked most, "which packages, at what minimum",
+and the gate makes the transcription safe anyway. The coupling is the intended
+one: a floor bump now touches DESCRIPTION and this file in one commit.
+
+`## Key internal functions` is **not** gated and should stay that way. It is a
+curated selection, not an enumeration; a bijection against `R/` would buy stub
+entries for several hundred internal functions and nothing else.
 
 The cost of the rule is one paragraph per new R file. That is the trade being
 made knowingly: a stub entry is worse than honest silence in a package with
@@ -395,5 +413,5 @@ Run it directly, or let `tools/verify.R` run it:
 
 ```sh
 Rscript tools/architecture-map-gate.R             # scan, exit 1 on a gap
-Rscript tools/architecture-map-gate.R --self-test # 2 positive + 8 negative cases
+Rscript tools/architecture-map-gate.R --self-test # 3 positive + 17 negative cases
 ```
