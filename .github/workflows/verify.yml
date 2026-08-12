@@ -50,6 +50,8 @@ jobs:
       citations_selftest: ${{ steps.filter.outputs.citations_selftest }}
       pkgdown_index: ${{ steps.filter.outputs.pkgdown_index }}
       pkgdown_index_selftest: ${{ steps.filter.outputs.pkgdown_index_selftest }}
+      architecture_map: ${{ steps.filter.outputs.architecture_map }}
+      architecture_map_selftest: ${{ steps.filter.outputs.architecture_map_selftest }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
@@ -170,6 +172,19 @@ jobs:
               - '.github/workflows/verify.yml'
             pkgdown_index_selftest:
               - 'tools/pkgdown-reference-gate.R'
+            # DESCRIPTION is the trigger that matters, not 'R/**': `Collate:` is
+            # hand-maintained, so adding, renaming or deleting an R file must
+            # edit DESCRIPTION or `R CMD build` fails. That makes it the exact
+            # and narrow signal for the gap -- a slice that adds a file and
+            # never opens ARCHITECTURE.md. Listing 'R/**' would fire the job on
+            # nearly every change for no additional reachability.
+            architecture_map:
+              - 'DESCRIPTION'
+              - 'ARCHITECTURE.md'
+              - 'tools/architecture-map-gate.R'
+              - '.github/workflows/verify.yml'
+            architecture_map_selftest:
+              - 'tools/architecture-map-gate.R'
 
   lint:
     runs-on: ubuntu-latest
@@ -751,3 +766,29 @@ jobs:
         run: Rscript tools/pkgdown-reference-gate.R --self-test
       - name: Reference index covers every export
         run: Rscript tools/pkgdown-reference-gate.R
+
+  # ARCHITECTURE.md load-order + file-map gate (RURL-vppxuyfs). Two sections of
+  # that file are exact enumerations of `Collate:` written as prose, and both
+  # drifted silently: measured 2026-08-12, the load-order block listed 14 of 24
+  # files and the file map documented 15 of 24. Among the missing was
+  # parse-web.R, which holds the in-tree syntactic parser ARCHITECTURE.md exists
+  # to explain -- so a reader sent there to learn it would not have found it
+  # named. Base R over two tracked files; no package build, no yaml dependency.
+  #
+  # Appended at the end, like oracle-labels, citations and pkgdown-index:
+  # separate insertion points keep concurrent gate branches off one anchor.
+  architecture-map:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.architecture_map == 'true'
+    runs-on: ubuntu-latest
+    name: ARCHITECTURE.md documents every Collate file
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.architecture_map_selftest == 'true'
+        run: Rscript tools/architecture-map-gate.R --self-test
+      - name: Load order and file map match Collate
+        run: Rscript tools/architecture-map-gate.R

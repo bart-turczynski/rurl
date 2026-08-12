@@ -39,10 +39,19 @@ Later files depend on earlier ones (e.g. `resolve.R` composes `parse.R`'s
 `format.R` reads the serializer-input record `serialize.R` builds). Keep
 `Collate:` in sync when adding a file — it is hand-maintained, and
 `devtools::load_all()` ignores it, so an omitted file passes the test suite and
-fails `R CMD build`.
+fails `R CMD build`. This block is checked against `Collate:`, order included,
+by `tools/architecture-map-gate.R` — see [Gates on this
+file](#gates-on-this-file).
 
 ## File / responsibility map
 
+Every file in `Collate:` has an entry here, and `tools/architecture-map-gate.R`
+checks that — see [Gates on this file](#gates-on-this-file) below.
+
+- **R/rurl-package.R** — the roxygen `"_PACKAGE"` block only: the package-level
+  help topic, its `@seealso` map of the public surface, and the runnable
+  overview examples. No code, and first in `Collate:` so the block is in place
+  before anything documents against it.
 - **R/parse.R** / **R/parse-phases.R** — the parsing engine. `parse.R` holds
   `safe_parse_url()` (scalar) and `safe_parse_urls()` (vector), option
   validation, the `url_standard` profile/conflict machinery
@@ -67,12 +76,45 @@ fails `R CMD build`.
   it no longer decides acceptance. `.encode_userinfo_charset_vec()` is the one
   survivor — it writes the spelling WHATWG *stores*, which the parser cannot
   infer because `rfc3986` must stay source-preserving.
+- **R/parse-web.R** — the in-tree syntactic parser for the web/special-scheme
+  route (http/https/ftp/ftps, plus ws/wss under `whatwg`). `.parse_web_url_one()`
+  is the drop-in replacement for the `curl::curl_parse_url()` call Phase 2 used
+  to make: it takes ONE already-prepared URL and returns either `NULL` (parse
+  error) or the nine components libcurl returned, so every downstream `%||%
+  NA_character_` keeps working. Eight of the nine reproduce libcurl's spelling
+  and were verified to; `$url` deliberately does not (it is the prepared input
+  verbatim, not a re-serialization) and nothing in rurl reads it — the file
+  header carries the measured table. This is also where the five ex-compensation
+  dials live as arguments (`host_charset`, `host_pct`, `last_at_userinfo`,
+  `pqf_bytes`, `host_ipv4`), each fed by its `.web_*_policy()` mapper, plus the
+  host parser (`.web_parse_host()`) and the IPv4/IPv6 canonicalizers.
+- **R/parse-state.R** — the non-web parse routes and the state model they share
+  (ADR 0012 Layers 3a/3c/4a/4b). Five sections: the internal enum vocabularies
+  (`.PATH_KIND`, `.HOST_KIND`, `.AUTHORITY_KIND`, `.WHATWG_HOST_FORM`,
+  `.RFC_HOST_FORM`, …) and their pure classifiers; the Stage-B eligibility
+  matrix (`.stage_b_eligibility()`); the RFC 3986 generic-URI grammar gate
+  (`.RFC3986_*` regex constants, `.rfc3986_generic_uri_ok()`,
+  `.rfc3986_uniform_gate_ok()`); the posture host/opaque parsers
+  (`.parse_opaque_urls_vec()`, `.parse_rfc_file_urls_vec()`); and the
+  general-acceptance router (`.general_parse_vec()`). Why the vocabulary is
+  richer than one `opaque` flag: ADR 0012 D2 shows a single boolean cannot
+  round-trip `foo:bar` / `foo:/bar` / `foo:///bar` / `foo://[::1]/bar`, so
+  `authority_delimiter_present`, `authority_payload_kind` and `host_kind` are
+  all retained. The vocabulary is internal state only — empty and absent hosts
+  still both surface as `NA` publicly.
 - **R/verdicts.R** — the layered validation verdicts: the L1 syntax / L2 policy
   / L3 annotation vocabularies, their derivation
   (`.derive_verdict_layers_vec()`), the projection back to the legacy
   `parse_status` (`.project_parse_status_vec()`, "π"), and the public companion
   `get_parse_verdicts()`. Phase 12 **is** π ∘ layer-derivation, so there is one
   status-deciding path and the companion cannot drift from the column.
+- **R/profiles.R** — the exported profile inspector `url_profile()` and nothing
+  else (ADR 0012 Layer 6 / D6). The resolution machinery (`.URL_PROFILES`,
+  `.validate_profile()`, `.resolve_profile()`) stays in `parse.R` next to the
+  knobs it bundles; the inspector calls that same `.resolve_profile()`, so
+  "what does this profile do" and "what does the parse path do" cannot diverge.
+  Explicit arguments always override a profile (the iron rule), and the result
+  is flagged `customized = TRUE` when they do.
 - **R/accessors.R** — public `get_*()` accessors, all built on the shared
   `.extract_from_urls()` helper over `safe_parse_url()`.
 - **R/domain.R** — Punycode helpers (`.normalize_and_punycode()`,
@@ -84,6 +126,16 @@ fails `R CMD build`.
   `._strip_index_page()`, `._encode_path_segments()`, and the per-standard
   `.rfc_unreserved_normalize()` / `.whatwg_preserve_normalize()`) and
   query-string parsing (`._parse_query_string()`).
+- **R/percent-coding.R** — the in-tree percent-coding primitives `.pct_escape()`
+  / `.pct_unescape()`, byte-exact replacements for `curl::curl_escape()` /
+  `curl::curl_unescape()` on every reachable input (two deviations, both
+  strictly local improvements, are documented on each function). The escape set
+  is a static 256-entry byte→chunk table, so it is not locale-dependent the way
+  a naive `isalnum()` would be. These are **not** the WHATWG component
+  serializers — `.whatwg_component_percent_encode()` (R/path-query.R) preserves
+  existing spellings and encodes a per-component set; these two are the plain
+  RFC 3986 unreserved-set escape and the permissive decode rurl's presentation
+  paths have always used. Do not merge them.
 - **R/diagnostics.R** — `url_standard` diagnostics + `host_type`
   infrastructure: the vocab constants (`.URL_DIAGNOSTICS`, `.HOST_TYPES`), the
   per-URL diagnostics accumulator (`.diag_new()` / `.diag_add()`), the single
@@ -91,8 +143,51 @@ fails `R CMD build`.
   (`._url_metadata_vec()`). Metadata is surfaced ONLY through
   `get_host_type()` / `get_url_diagnostics()` / `get_scheme_class()` — never as
   widened parse columns/fields (see ADR 0006).
+- **R/email-diagnostics.R** — the email/userinfo diagnostic vocabulary behind
+  `get_mailto_recipients()` (ADR 0012 D7). Structural **facts** only, never a
+  gate (D5) and never a new `safe_parse_url()` column (ADR 0006): each fact
+  names the grammar it was judged against, and the same recipient is projected
+  independently as RFC 6068 `mailto_*` vocabulary and as an RFC 5321 `smtp_*`
+  wire candidate. The provenance rule is load-bearing — the positional `to`
+  arrives still percent-encoded, so recipients are **tokenized before
+  decoding** (a `%2C` is never a separator, an encoded quote or bracket still
+  protects a raw comma) and each field is then decoded exactly once.
+- **R/host-policy.R** — practical host-validation **policy** on top of
+  standards-correct parsing: `is_valid_host()`, `check_hosts()`, and the
+  `.HOST_POLICY_RULES` vocabulary (`url` / `dns` / `web` / `registrable` /
+  `seo`). It never changes how a URL parses, never touches `parse_status`, and
+  never widens the parse fields — it is a companion helper composed from
+  `get_host_type()` / `get_url_diagnostics()` / `get_host()` (ADR 0006). It is
+  also not a conformance oracle (ADR 0012 D5): `web = TRUE` means "no practical
+  footgun rurl checks for", and the absence of a `reasons` token is not a
+  conformance claim. The one fact the parser cannot express is the underscore
+  split (`domain-std3-violation` bundles `_` with `+`), so the web/dns
+  char-class checks run their own regex over the ASCII host form; everything
+  else is read from facts the parser already surfaces.
 - **R/canonical_join.R** — dataset joining by canonicalized URL keys
-  (`canonical_join()`).
+  (`canonical_join()`). Legacy: its key **is** the cleaned display string. The
+  `url-key.R` / `url-join.R` family below exists because that conflation is a
+  defect, and deliberately does not inherit it.
+- **R/url-key.R** — output surface **(e)**, the comparison key: `get_url_key()`,
+  `url_key_policy()`, their print/format/`as.character` methods, and the engine
+  under them. The key is derived from the canonical **identity** state — after
+  standard interpretation, before any cleaning or display transform — and never
+  from `clean_url`, which is why it shares `.fsss_record_vec()` with
+  `serialize.R` rather than building its own record. No presentation dial can
+  reach it: `path_encoding`, `host_encoding`, `www_handling`, case, query
+  cleaning, `port_handling`, index/trailing-slash and every profile bundle are
+  pinned to their identity values, so they are structurally incapable of moving
+  a key byte. Framing is injective by construction, not delimiter
+  concatenation. The key is not a URL and must never be rendered as one.
+- **R/url-join.R** — the identity-keyed join family: `url_inner_join()`,
+  `url_left_join()`, `url_right_join()`, `url_full_join()`, `url_semi_join()`,
+  `url_anti_join()`, and the shared engine. It consumes
+  `.url_key_compute_vec()` and compares framed bytes — it never touches
+  `clean_url` and never re-derives identity. One immutable, symmetric policy is
+  applied to both sides (side-specific rules are prohibited, because equality
+  must stay symmetric and transitive), and row order is pinned per join rather
+  than inherited: the family builds index vectors instead of calling `merge()`,
+  whose ordering `canonical_join()` relies on and whose docs call unspecified.
 - **R/resolve.R** — `resolve_url()`, reference resolution composed over
   `safe_parse_urls()` (ADR 0007); the merge is standard-*aware* (see Invariants).
   `output = "serialized"` routes the resolved absolute string to
@@ -268,3 +363,37 @@ only under `port_handling != "exclude"`.
 
 The syntactic URL parse is in-tree (`R/parse-web.R`); `curl` is no longer a
 dependency.
+
+## Gates on this file
+
+`tools/architecture-map-gate.R` checks the two sections above that are exact
+enumerations of `Collate:` — the load-order block and the file/responsibility
+map. It asserts three things, with `Collate:` as the authority:
+
+1. the load-order block lists exactly `Collate:`, **in the same order** — the
+   block's whole subject is the order, so a set comparison would let it lie
+   about the thing it is for;
+2. every `Collate:` file has a `**R/<file>**` entry in the file map;
+3. no map entry names a file that is not in `Collate:` — the direction a rename
+   or a deletion breaks.
+
+Nothing else in this file is gated, and deliberately so: the rest is prose that
+a checker could only pretend to judge. These two sections are different in kind,
+and both had drifted. Measured 2026-08-12, the load-order block listed 14 of 24
+files and the map documented 15 of 24 — including no entry for `R/parse-web.R`,
+which holds the parser this file exists to explain. Every gap arrived the same
+way: a slice added an R file, edited `Collate:` because `R CMD build` forces it,
+and had no reason to open this document. That is also why the gate's CI trigger
+is `DESCRIPTION` rather than `R/**`.
+
+The cost of the rule is one paragraph per new R file. That is the trade being
+made knowingly: a stub entry is worse than honest silence in a package with
+hundreds of files, and better than silence in one with twenty-four, where every
+file is a subsystem with a header comment already explaining itself.
+
+Run it directly, or let `tools/verify.R` run it:
+
+```sh
+Rscript tools/architecture-map-gate.R             # scan, exit 1 on a gap
+Rscript tools/architecture-map-gate.R --self-test # 2 positive + 8 negative cases
+```
