@@ -79,11 +79,11 @@ against it.
 
 | surface class | count | source of truth | status |
 |---|---|---|---|
-| exported functions | 39 | `NAMESPACE` `export(...)` (39 lines; all functions, zero data) | SETTLED (`NAMESPACE` is the source of truth; the validator checks this roster against it by name) |
+| exported functions | 40 | `NAMESPACE` `export(...)` (40 lines; all functions, zero data) | SETTLED (`NAMESPACE` is the source of truth; the validator checks this roster against it by name) |
 | public output fields | 18 | `.spu_result_fields` (`R/utils.R:215-241`) | SETTLED (unchanged; the sole public surface per P1.1@a7e0a59 B3) |
 | curl-dependency surfaces | 3 | DESCRIPTION/NAMESPACE + parse + escape/unescape | SETTLED (inventoried; removal downstream) |
 | migration-surface | 1 | the disposition row artifact 4 discharges | SETTLED (discharged here) |
-| **total** | **61** | | |
+| **total** | **62** | | |
 
 The counts above are documentation of the current state, **verified** by
 `validate-records.R` against `NAMESPACE` and `.spu_result_fields` — they are not a
@@ -100,6 +100,7 @@ matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 |---|---|---|---|
 | `canonical_join` | G3.K | migration to identity key, `clean_url` keying typed LEGACY with a deprecation window (P3.1@3b89b94 D-E, Q7/B7) | SETTLED |
 | `check_hosts` | G3.H | named host policies + no-network SETTLED; typed DNS-policy contract → G3.H HOST-O5 | OPEN (HOST-O5) |
+| `format_url` | G3.7 | output surface (d), the safe human-facing display formatter: the surface, its E1–E5 escape/redaction matrix, the `<redacted>` and `<U+XXXX>` tokens and the dual host spelling are decided by P2.7 D-D, whose §7 acceptance criteria are S3-F3's five worked examples; the WHATWG-fixed parse posture and the no-presentation-dial signature are chosen there too. The surface is now BUILT (VD-003 discharged, `verification/output-display-discharge.md`), but OUT-O4 is still open in `output-contracts.md` because moving the cells P2.7 §7 projects is `RURL-irfmmoer`, a separate slice | OPEN (OUT-O4) |
 | `get_clean_url` | G3.8 (+ G3.7 surface c) | clean surface + 25 dials governed (P2.2@8292c7f §1c; G3.8); vocabulary rename → G3.8 CLEAN-O1 | OPEN (CLEAN-O1) |
 | `get_domain` | G3.H | PSL delegation + identity spellings SETTLED (ADR 0001); `domain` overload → HOST-O2, PSL reproducibility → HOST-O4 | OPEN (HOST-O2/O4) |
 | `get_fragment` | G3.3 | fragment field + three-valued presence (P1.1@a7e0a59 §1.2) | SETTLED |
