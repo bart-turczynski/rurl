@@ -200,7 +200,7 @@ finding: see `## Open cells`.
 A **discharge record** maps the cells of exactly one deferral onto shipped
 executable evidence, and does nothing else. It is **not a slice**: it owns no
 contract section, spans no property family, and grants no coverage in the
-census below. Each of the four on disk says so in its own envelope comment —
+census below. Each of the five on disk says so in its own envelope comment —
 *"NARROW BY CONSTRUCTION … it is NOT the state-family verification slice"*.
 
 They are registered here because another gate credits them.
@@ -222,6 +222,7 @@ is an explicit edit here, not a filename.
 | record_id | deferral_id | tracked_path | contract | scope |
 |---|---|---|---|---|
 | key-join-discharge | VD-001 | design/work/url-v3/verification/key-join-discharge.md | KJ | the 51 key/join cells VD-001 enumerates, with the residual `http_https_missing` refusal named rather than claimed; not the join-family slice |
+| output-display-discharge | VD-003 | design/work/url-v3/verification/output-display-discharge.md | OUT | the safe-display (surface d) cells VD-003 enumerates; surfaces (a), (b) and (c) untouched; OUT-O4's contract-cell move is `RURL-irfmmoer` and is not claimed; not the full-string-family slice |
 | output-fsss-discharge | VD-002 | design/work/url-v3/verification/output-fsss-discharge.md | OUT | the FSSS (surface b) cells VD-002 enumerates; surfaces (a), (c) and (d) untouched; not the full-string-family slice |
 | state-authority-discharge | VD-005 | design/work/url-v3/verification/state-authority-discharge.md | CS | the authority-state cells only (`authority_delimiter_present`, `authority_payload_kind`, and the emit-`//`-iff-delimiter rule); not the state-family slice |
 | state-verdicts-discharge | VD-004 | design/work/url-v3/verification/state-verdicts-discharge.md | CS | the verdict-layer cells only (the three layer fields and the π projection); not the state-family slice |
@@ -742,65 +743,66 @@ covers the section.
 | TR-PSD-s1-migration-surface | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:85` |
 | TR-PSD-s2-canonical-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:101` |
 | TR-PSD-s2-check-hosts | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:102` |
-| TR-PSD-s2-get-clean-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:103` |
-| TR-PSD-s2-get-domain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:104` |
-| TR-PSD-s2-get-fragment | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:105` |
-| TR-PSD-s2-get-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:106` |
-| TR-PSD-s2-get-host-type | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:107` |
-| TR-PSD-s2-get-mailto-recipients | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:108` |
-| TR-PSD-s2-get-parse-status | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:109` |
-| TR-PSD-s2-get-parse-verdicts | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:110` |
-| TR-PSD-s2-get-password | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:111` |
-| TR-PSD-s2-get-path | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:112` |
-| TR-PSD-s2-get-port | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:113` |
-| TR-PSD-s2-get-query | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:114` |
-| TR-PSD-s2-get-scheme | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:115` |
-| TR-PSD-s2-get-scheme-class | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:116` |
-| TR-PSD-s2-get-subdomain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:117` |
-| TR-PSD-s2-get-tld | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:118` |
-| TR-PSD-s2-get-url-diagnostics | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:119` |
-| TR-PSD-s2-get-url-key | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:120` |
-| TR-PSD-s2-get-user | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:121` |
-| TR-PSD-s2-get-userinfo | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:122` |
-| TR-PSD-s2-is-valid-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:123` |
-| TR-PSD-s2-query-param-summary | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:124` |
-| TR-PSD-s2-resolve-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:125` |
-| TR-PSD-s2-rurl-cache-config | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:126` |
-| TR-PSD-s2-rurl-cache-info | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:127` |
-| TR-PSD-s2-rurl-clear-caches | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:128` |
-| TR-PSD-s2-safe-parse-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:129` |
-| TR-PSD-s2-safe-parse-urls | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:130` |
-| TR-PSD-s2-serialize-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:131` |
-| TR-PSD-s2-url-anti-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:132` |
-| TR-PSD-s2-url-full-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:133` |
-| TR-PSD-s2-url-inner-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:134` |
-| TR-PSD-s2-url-key-policy | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:135` |
-| TR-PSD-s2-url-left-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:136` |
-| TR-PSD-s2-url-profile | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:137` |
-| TR-PSD-s2-url-right-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:138` |
-| TR-PSD-s2-url-semi-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:139` |
-| TR-PSD-s3-original-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:145` |
-| TR-PSD-s3-scheme | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:146` |
-| TR-PSD-s3-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:147` |
-| TR-PSD-s3-port | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:148` |
-| TR-PSD-s3-path | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:149` |
-| TR-PSD-s3-query | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:150` |
-| TR-PSD-s3-fragment | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:151` |
-| TR-PSD-s3-user | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:152` |
-| TR-PSD-s3-password | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:153` |
-| TR-PSD-s3-domain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:154` |
-| TR-PSD-s3-tld | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:155` |
-| TR-PSD-s3-domain-ascii | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:156` |
-| TR-PSD-s3-domain-unicode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:157` |
-| TR-PSD-s3-tld-ascii | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:158` |
-| TR-PSD-s3-tld-unicode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:159` |
-| TR-PSD-s3-is-ip-host | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:160` |
-| TR-PSD-s3-clean-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:161` |
-| TR-PSD-s3-parse-status | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:162` |
-| TR-PSD-s4-curl-import-metadata | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:168` |
-| TR-PSD-s4-curl-parse-call | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:169` |
-| TR-PSD-s4-curl-escape-unescape | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:170` |
-| TR-PSD-s4-migration-surface | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:171` |
+| TR-PSD-s2-format-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:103` |
+| TR-PSD-s2-get-clean-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:104` |
+| TR-PSD-s2-get-domain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:105` |
+| TR-PSD-s2-get-fragment | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:106` |
+| TR-PSD-s2-get-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:107` |
+| TR-PSD-s2-get-host-type | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:108` |
+| TR-PSD-s2-get-mailto-recipients | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:109` |
+| TR-PSD-s2-get-parse-status | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:110` |
+| TR-PSD-s2-get-parse-verdicts | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:111` |
+| TR-PSD-s2-get-password | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:112` |
+| TR-PSD-s2-get-path | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:113` |
+| TR-PSD-s2-get-port | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:114` |
+| TR-PSD-s2-get-query | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:115` |
+| TR-PSD-s2-get-scheme | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:116` |
+| TR-PSD-s2-get-scheme-class | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:117` |
+| TR-PSD-s2-get-subdomain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:118` |
+| TR-PSD-s2-get-tld | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:119` |
+| TR-PSD-s2-get-url-diagnostics | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:120` |
+| TR-PSD-s2-get-url-key | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:121` |
+| TR-PSD-s2-get-user | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:122` |
+| TR-PSD-s2-get-userinfo | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:123` |
+| TR-PSD-s2-is-valid-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:124` |
+| TR-PSD-s2-query-param-summary | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:125` |
+| TR-PSD-s2-resolve-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:126` |
+| TR-PSD-s2-rurl-cache-config | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:127` |
+| TR-PSD-s2-rurl-cache-info | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:128` |
+| TR-PSD-s2-rurl-clear-caches | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:129` |
+| TR-PSD-s2-safe-parse-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:130` |
+| TR-PSD-s2-safe-parse-urls | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:131` |
+| TR-PSD-s2-serialize-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:132` |
+| TR-PSD-s2-url-anti-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:133` |
+| TR-PSD-s2-url-full-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:134` |
+| TR-PSD-s2-url-inner-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:135` |
+| TR-PSD-s2-url-key-policy | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:136` |
+| TR-PSD-s2-url-left-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:137` |
+| TR-PSD-s2-url-profile | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:138` |
+| TR-PSD-s2-url-right-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:139` |
+| TR-PSD-s2-url-semi-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:140` |
+| TR-PSD-s3-original-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:146` |
+| TR-PSD-s3-scheme | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:147` |
+| TR-PSD-s3-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:148` |
+| TR-PSD-s3-port | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:149` |
+| TR-PSD-s3-path | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:150` |
+| TR-PSD-s3-query | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:151` |
+| TR-PSD-s3-fragment | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:152` |
+| TR-PSD-s3-user | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:153` |
+| TR-PSD-s3-password | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:154` |
+| TR-PSD-s3-domain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:155` |
+| TR-PSD-s3-tld | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:156` |
+| TR-PSD-s3-domain-ascii | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:157` |
+| TR-PSD-s3-domain-unicode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:158` |
+| TR-PSD-s3-tld-ascii | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:159` |
+| TR-PSD-s3-tld-unicode | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:160` |
+| TR-PSD-s3-is-ip-host | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:161` |
+| TR-PSD-s3-clean-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:162` |
+| TR-PSD-s3-parse-status | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:163` |
+| TR-PSD-s4-curl-import-metadata | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:169` |
+| TR-PSD-s4-curl-parse-call | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:170` |
+| TR-PSD-s4-curl-escape-unescape | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:171` |
+| TR-PSD-s4-migration-surface | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/public-surface-disposition.md:172` |
 | TR-SC-s1-full-parse | SETTLED | cache-slice | MAPPED | `design/work/url-v3/contracts/semantic-cache-contract.md:77` |
 | TR-SC-s1-puny-encode | SETTLED | cache-slice | MAPPED | `design/work/url-v3/contracts/semantic-cache-contract.md:78` |
 | TR-SC-s1-puny-decode | SETTLED | cache-slice | MAPPED | `design/work/url-v3/contracts/semantic-cache-contract.md:79` |
@@ -984,8 +986,8 @@ other, and this one summarizes the very thing the record exists to establish.
 | join-slice | PENDING | 77 | 77 | 0 |
 | migration-slice | PENDING | 22 | 18 | 4 |
 | host-slice | PENDING | 49 | 43 | 6 |
-| UNASSIGNED | UNASSIGNED | 180 | 148 | 32 |
-| **total** | — | 515 | 454 | 61 |
+| UNASSIGNED | UNASSIGNED | 181 | 148 | 33 |
+| **total** | — | 516 | 454 | 62 |
 
 ### By contract
 
@@ -997,7 +999,7 @@ other, and this one summarizes the very thing the record exists to establish.
 | KJ | `design/work/url-v3/contracts/key-join-contracts.md` | 75 | 75 | 0 | 7 |
 | OUT | `design/work/url-v3/contracts/output-contracts.md` | 59 | 55 | 4 | 12 |
 | PS | `design/work/url-v3/contracts/public-surface-closure.md` | 8 | 8 | 0 | 1 |
-| PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 65 | 35 | 30 | 4 |
+| PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 66 | 35 | 31 | 4 |
 | SC | `design/work/url-v3/contracts/semantic-cache-contract.md` | 20 | 20 | 0 | 5 |
 | SS | `design/work/url-v3/contracts/standard-scheme-matrices.md` | 74 | 70 | 4 | 12 |
 | VI | `design/work/url-v3/contracts/validation-intervention-contract.md` | 70 | 68 | 2 | 10 |

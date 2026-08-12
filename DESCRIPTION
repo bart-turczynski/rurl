@@ -35,6 +35,7 @@ Collate:
     'canonical_join.R'
     'resolve.R'
     'serialize.R'
+    'format.R'
     'url-key.R'
     'url-join.R'
     'zzz.R'
