@@ -183,14 +183,52 @@ test_that("the escape decision performs no runtime category lookup", {
   expect_false(any(grepl("unicode_version", code, fixed = TRUE)))
 })
 
-test_that("the pinned IDN fixture host is stable across Unicode versions", {
+test_that("the pinned IDN fixture host maps as the S3-F3 example expects", {
   # The one seam that could still move the host leg under a data bump is
-  # punycoder's own UTS-46 mapping. rurl passes no `unicode_version`, so this
-  # asserts the fixture host used in the S3-F3 example above is not one of the
-  # code points whose mapping differs between the offered versions -- i.e. the
-  # pin above cannot go red for a reason outside rurl.
+  # punycoder's own UTS-46 mapping. rurl passes no `unicode_version`, so what
+  # the example above actually depends on is this: the fixture host maps to
+  # this label under whatever single mapping table the INSTALLED punycoder
+  # compiled in. That is the assertion that has to survive everywhere rurl
+  # ships, and it is the one that goes red if a punycoder data bump moves this
+  # code point.
+  #
+  # It is deliberately not expressed as a version invariance (see the guarded
+  # test below): released punycoder offers no choice of table, so there is
+  # nothing for it to be invariant across.
+  expect_equal(
+    punycoder::host_normalize(
+      "münchen.de", check_hyphens = FALSE, use_std3 = FALSE,
+      verify_dns_length = FALSE
+    ),
+    "xn--mnchen-3ya.de"
+  )
+})
+
+test_that("the pinned IDN fixture host is stable across Unicode versions", {
+  # DELETE THIS GUARD when DESCRIPTION's floor reaches punycoder (>= 1.3.0).
+  # It is not a convenience: `unicode_versions()` and `host_normalize()`'s
+  # `unicode_version =` argument are BOTH dev-only. Measured against the
+  # released tarball, punycoder 1.2.1 exports ten functions and
+  # `unicode_versions` is not among them, and its `host_normalize()` formals
+  # are `x, check_hyphens, use_std3, verify_dns_length` -- no version argument
+  # at all. src/punycoder_normalize.cpp compiles one table ("the pinned
+  # Unicode 16.0.0 table"), so on CRAN punycoder there is exactly one mapping
+  # and this question is not merely unanswerable, it is empty (RURL-ovgasmea).
+  #
+  # So this asserts the strictly stronger property that only a multi-table
+  # punycoder can offer: the fixture host is not one of the code points whose
+  # mapping DIFFERS between the offered versions. The weaker property that does
+  # hold everywhere is asserted unguarded, immediately above -- the invariant is
+  # not going untested on the population that ships, it is being asserted at the
+  # strength that population supports.
+  # The floor names 1.2.1.9000, not 1.3.0, and the difference is coverage
+  # rather than pedantry: the capability landed after 1.2.1, so 1.2.1.9000 is
+  # the lowest version that truthfully has it. Naming 1.3.0 would satisfy the
+  # gate identically while skipping on every development checkout too -- the
+  # only machines where the assertion can currently run at all.
+  skip_if_not_installed("punycoder", "1.2.1.9000")
   versions <- punycoder::unicode_versions()
-  expect_gte(length(versions), 1L)
+  expect_gte(length(versions), 2L)
   labels <- vapply(
     versions,
     function(v) {
