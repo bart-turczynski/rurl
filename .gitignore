@@ -47,7 +47,10 @@ doc/*
 !doc/getting-started.Rmd
 
 CRAN-SUBMISSION
-cran-comments.md
+# cran-comments.md is deliberately TRACKED. It is excluded from the built
+# tarball by .Rbuildignore, so tracking it cannot reach CRAN; what it buys is a
+# diff, a history, and a copy on the backup mirror. Untracked, it drifted eleven
+# releases without anyone seeing it happen (RURL-ladruqhn).
 report.html
 LOCAL_WORKFLOW_NOTES.md
 
