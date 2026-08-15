@@ -69,6 +69,12 @@ around a platform-wide behavior would make it less accurate, not more.
 
 ## Changes in this version
 
+<!-- submission-span: from=1.2.0 to=3.0.0 -->
+<!-- Checked by tools/cran-comments-gate.R. `to` must equal DESCRIPTION's
+     Version, and both versions must appear in the prose below, so this pin and
+     the sentences a reviewer reads cannot drift apart. `--online` additionally
+     checks `from` against what CRAN publishes. -->
+
 This release consolidates all development since the version currently on CRAN.
 It is a large span: CRAN holds **1.2.0**, and this is **3.0.0**, covering
 eleven intermediate releases that were made on the development branch and never

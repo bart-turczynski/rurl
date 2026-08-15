@@ -95,6 +95,28 @@ and after changing any floor, `Remotes:` entry, or `dep::symbol` call site.
 `--offline` scores from the artifact cache and aborts on a miss rather than
 guessing.
 
+### `cran-comments.md`, and the half of its gate that needs the network
+
+```sh
+Rscript tools/cran-comments-gate.R            # in the gate list, network-free
+Rscript tools/cran-comments-gate.R --online   # release time only
+```
+
+`cran-comments.md` was untracked until 2026-08-16 (`e029b11` removed it and
+`.gitignore` kept it out), so nothing could see it and it drifted **eleven
+releases** — announcing a "1.4.0 -> 2.2.0" release when CRAN held 1.2.0 and
+`DESCRIPTION` said 3.0.0, instructing removal of a `Remotes:` field that was
+already gone, and quoting a stale `pslr` floor. It is now tracked *and* gated
+(RURL-ladruqhn).
+
+The offline half rides `tools/verify.R` like every other gate. The **`--online`
+half does not**, for the same reason the resolvability gate does not: `from=` is
+a claim about what CRAN publishes, and only the network can settle it. Run
+`--online` before a release. The span itself lives in one machine-readable pin
+in the file, `<!-- submission-span: from=X to=Y -->`, and the gate additionally
+requires both versions to appear in the visible prose — so the pin and the
+sentences a reviewer actually reads cannot drift apart.
+
 ### The archival mirror, and checking it is not stale (RURL-eqgqbeti)
 
 With no server-side gate and a suspended GitHub account, the bare mirror at
