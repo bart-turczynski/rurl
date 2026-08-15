@@ -52,6 +52,8 @@ jobs:
       pkgdown_index_selftest: ${{ steps.filter.outputs.pkgdown_index_selftest }}
       architecture_map: ${{ steps.filter.outputs.architecture_map }}
       architecture_map_selftest: ${{ steps.filter.outputs.architecture_map_selftest }}
+      cran_comments: ${{ steps.filter.outputs.cran_comments }}
+      cran_comments_selftest: ${{ steps.filter.outputs.cran_comments_selftest }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
@@ -188,6 +190,20 @@ jobs:
               - '.github/workflows/verify.yml'
             architecture_map_selftest:
               - 'tools/architecture-map-gate.R'
+            # DESCRIPTION is the trigger that matters here too, and for the same
+            # reason as architecture_map: the drift this gate catches is created
+            # by bumping `Version:` or moving a floor, in a slice whose author
+            # has no reason to open a note addressed to CRAN reviewers. Listing
+            # only cran-comments.md would leave the gate unreachable for exactly
+            # the edit that breaks it -- which is how it reached eleven releases
+            # of drift with nobody noticing.
+            cran_comments:
+              - 'DESCRIPTION'
+              - 'cran-comments.md'
+              - 'tools/cran-comments-gate.R'
+              - '.github/workflows/verify.yml'
+            cran_comments_selftest:
+              - 'tools/cran-comments-gate.R'
 
   lint:
     runs-on: ubuntu-latest
@@ -797,3 +813,34 @@ jobs:
         run: Rscript tools/architecture-map-gate.R --self-test
       - name: Load order, file map and dependency list match DESCRIPTION
         run: Rscript tools/architecture-map-gate.R
+
+  # cran-comments.md consistency gate (RURL-ladruqhn). The note CRAN reviewers
+  # read was not even tracked until 2026-08-16 -- e029b11 removed it and
+  # .gitignore kept it out -- so no diff, no review and no gate ever saw it.
+  # Measured 2026-08-15 it had drifted ELEVEN releases: it announced a
+  # "1.4.0 -> 2.2.0" release when CRAN held 1.2.0 and DESCRIPTION said 3.0.0,
+  # it told the submitter to delete a `Remotes:` field RURL-rdocgshe had already
+  # removed, and it quoted a pslr floor two versions stale. Tracking gave it a
+  # diff; a diff is only read by someone who happens to look. This is the check.
+  # The `from`-versus-CRAN half needs the network and is deliberately NOT here
+  # (`--online`, release-time), for the reason dependency-resolvability-gate.R
+  # states. Base R over two tracked files; no package build, no yaml dependency.
+  #
+  # Appended at the end, like oracle-labels, citations, pkgdown-index and
+  # architecture-map: separate insertion points keep concurrent gate branches
+  # off one anchor.
+  cran-comments:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.cran_comments == 'true'
+    runs-on: ubuntu-latest
+    name: cran-comments.md names this release and matches DESCRIPTION
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.cran_comments_selftest == 'true'
+        run: Rscript tools/cran-comments-gate.R --self-test
+      - name: The note names this release and its claims match DESCRIPTION
+        run: Rscript tools/cran-comments-gate.R
