@@ -8,6 +8,7 @@ public-suffix extraction delegated to `pslr`.
 
 ```sh
 Rscript tools/verify.R      # full gate; --fast = gates + lint, --list = plan
+Rscript tools/verify.R --verbose   # …and print every step's log, passing included
 ```
 
 `tools/verify.R` reproduces CI's fast gate locally and is the bar a delivered
@@ -16,6 +17,19 @@ slice has to clear. `--fast` is iteration feedback, never sufficient on its own.
 the source tree, so a green suite can hide a package that does not build. The
 gate runs as a pre-push hook once you run `pre-commit install --hook-type
 pre-push` in your clone — committing the config does not install it.
+
+**A step's output is printed only when it fails** — a passing gate that dumps
+40 lines is how a real failure scrolls past. The cost is that anything real
+which does not change an exit status is invisible: a testthat `WARN` reports
+`PASS` and its output is discarded (`RURL-aajradge` survived a green 40-step run
+that way). Two escape hatches, both proven by `Rscript tools/verify.R
+--self-test`:
+
+- `--verbose` prints every step's log **in full**, pass or fail. Reach for it
+  whenever the question is "did anything warn", not "did anything fail".
+- a step may declare `watch = <regex>`; on a PASS whose log matches, the matched
+  block prints under a `!` marker. The `LC_ALL=C` test step carries one for
+  testthat's warnings section, so that step is honest by default.
 
 The hook's `entry` is `tools/verify-on-push.sh`, not `tools/verify.R`. That
 wrapper looks at the destination remote and **skips the gate when the

@@ -46,12 +46,35 @@
 # after a five-minute check. Stages are independent: a failure does not stop the
 # run, because knowing all of what is broken beats knowing the first thing.
 #
+# WARNING-ONLY SIGNALS (RURL-pbihchti). A step's output is printed only when it
+# FAILS, so anything real that does not change an exit status is structurally
+# invisible here -- across a full run that is every passing step. The rationale
+# for the quiet default is sound and is NOT reverted: a gate that dumps 40 lines
+# per passing step is a gate whose real failures scroll past. What was missing
+# is an escape hatch, plus a default-on instrument for the one place we know
+# carries such signal.
+#
+# `--verbose` prints every step's log in full regardless of status. In FULL, not
+# as the 25-line failure tail: RURL-aajradge's testthat WARN was ever visible
+# only because it happened to fall inside those 25 lines while an unrelated
+# defect made the same step FAIL. That is luck twice over, and a tail that can
+# truncate the block you came for is not an escape hatch.
+#
+# `watch =` is the default-on half. A step may declare a regex; on a PASS whose
+# log matches it, the matched block prints under a `!` marker. Quiet when there
+# is nothing to say, loud exactly when there is -- so the known-hazardous step
+# is honest by default rather than opt-in, and opt-in is precisely how
+# `aajradge` stayed hidden. The check stage has done this ad hoc for WARNING and
+# NOTE lines since it was written; `watch` is that idea, named and reusable.
+#
 # Usage:
 #   Rscript tools/verify.R            # gates + relevant self-tests + full gate
 #   Rscript tools/verify.R --gates    # gates + relevant self-tests ONLY
 #   Rscript tools/verify.R --fast     # the above plus lint
 #   Rscript tools/verify.R --release  # everything, plus the curl clean room
+#   Rscript tools/verify.R --verbose  # print every step's log, passing included
 #   Rscript tools/verify.R --list     # print the stage plan and exit
+#   Rscript tools/verify.R --self-test  # prove the two instruments above
 # `--fast` is iteration feedback only. It is never sufficient verification for
 # a behavioral slice; the unsuffixed command remains the end-of-slice gate.
 #
@@ -83,6 +106,8 @@ opt_gates <- "--gates" %in% args
 opt_fast <- "--fast" %in% args
 opt_release <- "--release" %in% args
 opt_list <- "--list" %in% args
+opt_verbose <- "--verbose" %in% args
+opt_self_test <- "--self-test" %in% args
 
 # ---- helpers ----------------------------------------------------------------
 
@@ -193,9 +218,33 @@ changed_files <- function() {
   unique(c(committed, uncommitted))
 }
 
-# One command, output captured. Only a failure prints its log: a passing gate
-# that dumps 40 lines is how a real failure gets scrolled past.
-run_step <- function(label, command, args = character(0), env = character(0)) {
+read_log <- function(path) {
+  tryCatch(readLines(path, warn = FALSE), error = function(e) character())
+}
+
+# The block a `watch` hit selects: from the first matching line to the end of
+# the log. Matching lines alone would be useless for the case that motivated
+# this -- testthat's `== Warnings ==` header carries no information, the
+# numbered entries UNDER it do. Capped, because "to the end" is only short by
+# convention.
+watch_block <- function(txt, watch, cap = 40L) {
+  hit <- grep(watch, txt)
+  if (!length(hit)) {
+    return(character(0))
+  }
+  utils::head(txt[seq(hit[1L], length(txt))], cap)
+}
+
+# One command, output captured. What prints afterwards, in precedence order:
+#
+#   --verbose  -> the whole log, pass or fail. See the header for why full and
+#                 not the tail.
+#   FAIL       -> the last 25 lines. Unchanged; this is the default that works.
+#   PASS+watch -> the watched block under a `!` marker, if the log matched.
+#   otherwise  -> nothing. A passing gate that dumps 40 lines is how a real
+#                 failure gets scrolled past.
+run_step <- function(label, command, args = character(0), env = character(0),
+                     watch = NULL, verbose = opt_verbose) {
   log <- tempfile(fileext = ".log")
   t0 <- Sys.time()
   status <- suppressWarnings(system2(command, args, stdout = log,
@@ -204,10 +253,18 @@ run_step <- function(label, command, args = character(0), env = character(0)) {
   ok <- identical(as.integer(status), 0L)
   cat(sprintf("  %-4s %-58s %5.1fs\n", if (ok) "PASS" else "FAIL",
               substr(label, 1L, 58L), secs))
-  if (!ok) {
-    txt <- tryCatch(readLines(log, warn = FALSE), error = function(e) character())
-    tail_n <- utils::tail(txt, 25L)
-    cat(paste0("       | ", tail_n, collapse = "\n"), "\n", sep = "")
+  if (verbose) {
+    cat(paste0("       | ", read_log(log), collapse = "\n"), "\n", sep = "")
+  } else if (!ok) {
+    cat(paste0("       | ", utils::tail(read_log(log), 25L), collapse = "\n"),
+        "\n", sep = "")
+  } else if (!is.null(watch)) {
+    block <- watch_block(read_log(log), watch)
+    if (length(block)) {
+      cat("       ! this step PASSED but its output matched a watched",
+          "pattern\n       ! (--verbose for the whole log):\n")
+      cat(paste0("       ! ", block, collapse = "\n"), "\n", sep = "")
+    }
   }
   list(label = label, ok = ok, secs = secs, log = log)
 }
@@ -314,10 +371,24 @@ stage_check <- function(root) {
   list(res, chk)
 }
 
+# testthat's summary reporter heads its warning section with a rule of box
+# characters -- BUT it degrades that rule to plain `=` when the locale cannot
+# represent U+2550, which is exactly the locale this step forces. Both spellings
+# have to match or the watch is vacuous in the only step that carries it.
+# Written as an escape, not as the literal character: this file is source that
+# gets parsed in whatever locale the runner happens to be in.
+TESTTHAT_WARNINGS <- "^(=|\u2550){2} Warnings"
+
 # verify.yml's `Tests (LC_ALL=C)` cell. It is here rather than in the check
 # stage because R CMD check runs in the ambient locale: a defect that only
 # appears under a non-UTF-8 charset is invisible to every other stage, and this
 # codebase has shipped that exact class of defect before (RURL-kmpnbvdl).
+#
+# It is also the step with a KNOWN warning-only signal: RURL-aajradge is a
+# testthat WARN that reproduces under Linux/C and changes no exit status, so
+# this step reports PASS and drops it. Hence the `watch` -- the summary reporter
+# emits a warnings section only when there are warnings, so this prints nothing
+# on a clean run and the whole section when there is one.
 stage_locale <- function() {
   cat("[locale] test suite under LC_ALL=C\n")
   code <- paste(
@@ -327,13 +398,123 @@ stage_locale <- function() {
   )
   list(run_step("testthat under LC_ALL=C", "Rscript",
                 c("-e", shQuote(code)),
-                env = c("LC_ALL=C", "LANG=C")))
+                env = c("LC_ALL=C", "LANG=C"),
+                watch = TESTTHAT_WARNINGS))
 }
 
 stage_release <- function() {
   cat("[release] curl zero-reference clean room (C7)\n")
   list(run_step("curl-zero-gate.R (full, incl. C7)", "Rscript",
                 "tools/curl-zero-gate.R"))
+}
+
+# ---- self-test --------------------------------------------------------------
+
+# A verbosity feature that finds nothing is indistinguishable from a verbosity
+# feature that is broken, so the cases below are run BOTH ways: every positive
+# control is paired with the negative control that fails on today's code. Case 1
+# is that negative control -- it asserts the defect RURL-pbihchti describes is
+# real, and it is the one case that must keep passing after the fix, because the
+# quiet default is deliberate.
+#
+# The output is captured rather than eyeballed. `run_step()` writes with `cat`,
+# so `capture.output()` sees exactly what a runner would.
+self_test <- function() {
+  # A case is a name and a thunk, evaluated below. Building the list first keeps
+  # the tally out of a mutable counter, which this repo's linter set rejects.
+  case <- function(name, cond) list(name = name, cond = cond)
+
+  # A canary chosen to be the real thing: this is the substring RURL-aajradge's
+  # warning is identified by.
+  canary <- "strings not representable in native encoding"
+  emit <- function(status) {
+    c("-e", shQuote(sprintf("cat(%s); quit(status = %d)",
+                            shQuote(canary), status)))
+  }
+  step <- function(status, ...) {
+    paste(capture.output(
+      run_step("self-test", "Rscript", emit(status), ...)
+    ), collapse = "\n")
+  }
+  saw <- function(out) grepl(canary, out, fixed = TRUE)
+
+  # The block, not just the matching line: the header carries no information.
+  block <- watch_block(
+    c("noise", "== Warnings ====", "1. a test ('t.R:6:3') - the message",
+      "== DONE ===="),
+    TESTTHAT_WARNINGS
+  )
+
+  cases <- list(
+    case(
+      "NEGATIVE: a PASSING step with no watch stays quiet (the default)",
+      !saw(step(0L, verbose = FALSE))
+    ),
+    case(
+      "POSITIVE: --verbose surfaces a PASSING step's output",
+      saw(step(0L, verbose = TRUE))
+    ),
+    case(
+      "POSITIVE: a matching watch surfaces it without --verbose",
+      saw(step(0L, verbose = FALSE, watch = canary))
+    ),
+    case(
+      "NEGATIVE: a NON-matching watch stays quiet",
+      !saw(step(0L, verbose = FALSE, watch = "^no such line$"))
+    ),
+    case(
+      "UNCHANGED: a FAILING step still prints its tail with no flag",
+      saw(step(1L, verbose = FALSE))
+    ),
+    case(
+      "UNCHANGED: a watch does not suppress a FAILING step's tail",
+      saw(step(1L, verbose = FALSE, watch = "^no such line$"))
+    ),
+    case(
+      "the watch marker says PASSED, so a `!` block is not read as failure",
+      grepl("PASSED but its output matched",
+            step(0L, verbose = FALSE, watch = canary), fixed = TRUE)
+    ),
+    # The locale step's pattern, against both spellings testthat can emit. A
+    # watch that only matched the UTF-8 rule would be VACUOUS in the one step
+    # that carries it, since that step forces the locale which degrades it.
+    case(
+      "TESTTHAT_WARNINGS matches the C-locale (ASCII) header",
+      grepl(TESTTHAT_WARNINGS, "== Warnings =========")
+    ),
+    case(
+      "TESTTHAT_WARNINGS matches the UTF-8 header",
+      grepl(TESTTHAT_WARNINGS, "\u2550\u2550 Warnings \u2550\u2550\u2550")
+    ),
+    case(
+      "TESTTHAT_WARNINGS does not match the section that always prints",
+      !grepl(TESTTHAT_WARNINGS, "== DONE =========")
+    ),
+    case(
+      "a watch hit prints the entries UNDER the header, not it alone",
+      any(grepl("the message", block, fixed = TRUE))
+    ),
+    case(
+      "a watch hit drops what preceded the header",
+      !any(grepl("noise", block, fixed = TRUE))
+    )
+  )
+
+  ok <- vapply(cases, function(k) isTRUE(k$cond), logical(1))
+  for (i in seq_along(cases)) {
+    cat(sprintf("  %-4s %s\n", if (ok[i]) "ok" else "FAIL", cases[[i]]$name))
+  }
+  cat(sprintf("\n%d case(s), %d failed\n", length(cases), sum(!ok)))
+  if (!all(ok)) {
+    quit(status = 1)
+  }
+  cat("SELF-TEST PASS\n")
+  quit(status = 0)
+}
+
+if (opt_self_test) {
+  cat("tools/verify.R --self-test: step output visibility (RURL-pbihchti)\n")
+  self_test()
 }
 
 # ---- main -------------------------------------------------------------------
