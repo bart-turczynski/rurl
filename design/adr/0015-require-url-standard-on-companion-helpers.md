@@ -2,9 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-23
-- **Tracking:** RURL-kbpyivuk (this decision), RURL-bmxptxxz (the boundary of
-  ADR 0007's `NULL` freeze, which this states). Rejects RURL-hikovisr's
+- **Tracking:** RURL-kbpyivuk (this decision). Rejects RURL-hikovisr's
   sentinel. Narrows **ADR 0007** §Consequences; relates to **ADR 0006**.
+  Does **not** close RURL-bmxptxxz — see §Consequences.
 
 ## Context
 
@@ -103,9 +103,15 @@ ambiguous state unreachable rather than nameable.
   helpers were introduced by the same release as the selector (rurl 2.2.0), so
   no output that predates the selector is affected by removing their `NULL`
   arm. The freeze continues to govern every parse function, and the
-  Appendix-B/`NULL` carve-outs that depend on it are untouched. This is the
-  boundary RURL-bmxptxxz asked for: the freeze covers the surface that existed
-  before the selector, not the companions the selector added.
+  Appendix-B/`NULL` carve-outs that depend on it are untouched.
+
+  This states **one** boundary on that freeze — it covers the surface that
+  existed before the selector, not the companions the selector added. It is
+  **not** the boundary RURL-bmxptxxz asks for, which is a different question
+  about a different axis: whether fixing a defect on an *ungoverned
+  presentation* axis (`host_encoding`, `path_encoding` — see ADR 0011) counts
+  as a freeze violation when it necessarily moves `NULL` rows. Nothing here
+  answers that, and RURL-bmxptxxz stays open.
 - Measured cost at the time of the change: **25** selector-less call sites,
   **all in `tests/testthat/`** and none in `R/`, plus zero downstream callers —
   `raddr`'s nine `rurl` mentions are prose and comments, not calls. The
