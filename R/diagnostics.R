@@ -11,10 +11,10 @@
 # Design decision (PRD §6.3, resolves Open Question 1): metadata is surfaced
 # through COMPANION HELPERS -- get_host_type() and get_url_diagnostics() -- and
 # is deliberately NOT added as columns on safe_parse_urls() or fields on the
-# safe_parse_url() list. That keeps the url_standard = NULL compatibility story
-# airtight: with no selector nothing is widened and nothing is even parsed here,
-# so every existing function's output shape is byte-for-byte unchanged
-# (acceptance criterion 1). The whole path is a no-op when url_standard is NULL.
+# safe_parse_url() list, so those functions' output shapes stay fixed whatever
+# the selector says (ADR 0006). The helpers themselves now REQUIRE the selector
+# (ADR 0015), so this path never runs with url_standard = NULL; the parse
+# functions that still accept NULL simply never reach it.
 
 # --- Vocabulary (single source of truth) -------------------------------------
 

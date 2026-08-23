@@ -215,14 +215,20 @@ test_that("IPv4/IPv6 hosts never spuriously fire DNS/UTS-46 diagnostics", {
   )
 })
 
-# --- no selector: no diagnostics, byte-for-byte baseline unchanged -----------
+# --- no selector: an error, not an empty answer (ADR 0015) -------------------
 
-test_that("no url_standard yields no DNS/UTS-46 diagnostics", {
-  expect_identical(get_url_diagnostics("http://a..com/"), character(0))
-  expect_identical(get_url_diagnostics("http://-example.com/"), character(0))
-  expect_identical(
+test_that("no url_standard is an error, not a silent empty result", {
+  # This block used to assert that the same three hosts yielded character(0)
+  # with no selector -- indistinguishable from a host that raises nothing.
+  expect_error(
+    get_url_diagnostics("http://a..com/"), "`url_standard` is required"
+  )
+  expect_error(
+    get_url_diagnostics("http://-example.com/"), "`url_standard` is required"
+  )
+  expect_error(
     get_url_diagnostics(paste0("http://", strrep("a", 300), ".com/")),
-    character(0)
+    "`url_standard` is required"
   )
 })
 

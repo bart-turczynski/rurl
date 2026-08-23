@@ -6,7 +6,7 @@
 \usage{
 get_scheme_class(
   url,
-  url_standard = NULL,
+  url_standard,
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general")
 )
@@ -14,10 +14,11 @@ get_scheme_class(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{url_standard}{Standard profile gating the classification: \code{NULL}
-(default; no classification, returns \code{NA}), \code{"rfc3986"}, or
-\code{"whatwg"}. The gate is semantic, not stylistic: "special" is a
-WHATWG notion, so without a selector there is no fact to report.
+\item{url_standard}{Standard profile under which each URL is parsed before
+its scheme is classified: either \code{"rfc3986"} or \code{"whatwg"}.
+\strong{Required, with no default} (ADR 0015). The three tokens below do
+not differ between the profiles, but the parse that resolves the scheme
+does, so the profile has to be named.
 \code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
 --- its layers describe the parse that actually ran, which is defined with
 or without a selector.}
@@ -71,16 +72,13 @@ caller's job — see \code{SECURITY.md}.}
 }
 \value{
 A character vector the same length as \code{url}, each element one
-of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"},
-or \code{NA} when no selector is given.
+of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"}.
 
-\strong{Here \code{NA} is unambiguous}, unlike
-\code{\link{get_host_type}}'s. Given a selector, every element receives one
-of the three tokens above --- input that is unparseable, scheme-less, empty
-or \code{NA} classifies as \code{"missing-or-error"} rather than falling
-through to \code{NA}. So \code{NA} occurs if and only if
-\code{url_standard} was \code{NULL}, and \code{is.na()} on this result is a
-reliable test for the selector-less call.
+\strong{Never \code{NA}.} Every element receives one of the three tokens
+above --- input that is unparseable, scheme-less, empty or \code{NA}
+classifies as \code{"missing-or-error"} rather than falling through to
+\code{NA}. The one arm that used to return \code{NA} was the selector-less
+call, which is now an error (ADR 0015).
 }
 \description{
 Companion helper for the \code{url_standard} selector: reports whether each
@@ -94,9 +92,10 @@ scheme-relative URL under the default \code{scheme_relative_handling =
 Unlike \code{\link{get_host_type}}, the classification itself does not vary
 between \code{"rfc3986"} and \code{"whatwg"} -- \dQuote{special scheme} is a
 WHATWG concept describing a fixed property of the scheme string, not
-something RFC 3986 redefines. \code{url_standard} instead gates whether the
-metadata is exposed at all, mirroring \code{get_host_type()}'s contract:
-pass \code{NULL} (the default) and every element is \code{NA}.
+something RFC 3986 redefines. \code{url_standard} is nonetheless required,
+mirroring \code{get_host_type()}'s contract: the resolved scheme this
+classification reads is itself produced by a profile-dependent parse, so the
+profile has to be named (ADR 0015).
 
 Within rurl's allowlist (\code{http}/\code{https}/\code{ftp}/\code{ftps}/
 \code{file}), \code{http}, \code{https}, \code{ftp}, and \code{file} are

@@ -97,15 +97,16 @@ test_that(".diag_add rejects tokens outside the vocabulary", {
   )
 })
 
-# --- get_host_type() empty surface (T2) -------------------------------------
+# --- get_host_type() requires a selector (ADR 0015) --------------------------
 
-test_that("get_host_type is NA-equivalent with no selector", {
+test_that("get_host_type requires url_standard", {
   u <- c("http://example.com/", "http://2130706433/", "not-a-url")
-  res <- get_host_type(u)
-  expect_type(res, "character")
-  expect_length(res, length(u))
-  expect_true(all(is.na(res)))
-  expect_identical(get_host_type(u, url_standard = NULL), res)
+  # Omitted and explicitly NULL are the same error: the mode is gone, not
+  # merely undefaulted.
+  expect_error(get_host_type(u), "`url_standard` is required")
+  expect_error(
+    get_host_type(u, url_standard = NULL), "`url_standard` is required"
+  )
 })
 
 test_that("get_host_type classifies per selector (host model, RURL-luwvkwhd)", {
@@ -122,7 +123,9 @@ test_that("get_host_type classifies per selector (host model, RURL-luwvkwhd)", {
 })
 
 test_that("get_host_type validates input and length-0", {
-  expect_identical(get_host_type(character(0)), character(0))
+  expect_identical(
+    get_host_type(character(0), url_standard = "whatwg"), character(0)
+  )
   expect_error(get_host_type(123), "must be a character vector")
   # url_standard is the last (2nd positional) argument.
   expect_error(get_host_type("http://ex.com/", "bogus"), "url_standard must be")
@@ -134,8 +137,6 @@ test_that("get_url_diagnostics returns a bare vector for a length-1 url", {
   res <- get_url_diagnostics("http://example.com/", url_standard = "rfc3986")
   expect_type(res, "character")
   expect_identical(res, character(0))
-  # No selector: also empty.
-  expect_identical(get_url_diagnostics("http://2130706433/"), character(0))
 })
 
 test_that("get_url_diagnostics returns a length-n list for a vector url", {
@@ -148,13 +149,10 @@ test_that("get_url_diagnostics returns a length-n list for a vector url", {
   expect_identical(res[[1L]], character(0))
   expect_setequal(res[[2L]], c("ipv4-number-form", "ipv4-non-dotted"))
   expect_identical(res[[3L]], character(0))
-  # NULL selector: every element is empty (no metadata surface without one).
-  null_res <- get_url_diagnostics(u, url_standard = NULL)
-  expect_true(all(vapply(null_res, identical, logical(1), character(0))))
 })
 
 test_that("get_url_diagnostics handles length-0 and validates input", {
-  expect_identical(get_url_diagnostics(character(0)), list())
+  expect_error(get_url_diagnostics(character(0)), "`url_standard` is required")
   expect_identical(
     get_url_diagnostics(character(0), url_standard = "rfc3986"), list()
   )
@@ -226,10 +224,16 @@ test_that("WHATWG-generic L5 facts fire under web + whatwg (RURL-sgjzbqzk)", {
 })
 
 test_that("the true default (url_standard = NULL) stays silent for all L5", {
-  # The D4 byte-identity / CRAN lock: the DEFAULT combination (web acceptance +
-  # url_standard = NULL) fires NONE of the L5 facts, generic ones included.
+  # The D4 byte-identity / CRAN lock: the DEFAULT parse combination (web
+  # acceptance + url_standard = NULL) fires NONE of the L5 facts, generic ones
+  # included. Reached through the internals because the public helper now
+  # REQUIRES a selector (ADR 0015) -- the claim is about the parse path that
+  # safe_parse_url() and friends still run at url_standard = NULL, which
+  # outlives the helper arm that used to expose it.
   l5 <- c(l5_general_only, l5_whatwg_generic)
-  def <- get_url_diagnostics("http://user@ex.com/%zz")
+  opts <- rurl:::.parse_options(url_standard = NULL)
+  meta <- rurl:::._url_metadata_vec("http://user@ex.com/%zz", opts)
+  def <- meta$diagnostics[[1L]]
   expect_length(intersect(def, l5), 0L)
 })
 
@@ -381,32 +385,45 @@ test_that("file rfc-syntax shape facts fire (RFC 8089)", {
   )
 })
 
-# The NULL-selector return contract, pinned because the roxygen @return
-# sections now make claims about it that nothing else would catch drifting
-# (RURL-hikovisr).
+# The return contract of the three selector-gated helpers, pinned because the
+# roxygen @return sections make claims about it that nothing else would catch
+# drifting (RURL-hikovisr, then RURL-kbpyivuk / ADR 0015).
 #
-# These are green on arrival by construction: they pin SHIPPED behavior that
-# the docs were changed to describe accurately, rather than guarding a fix.
-# The point is the reverse direction -- if the behavior ever moves, the
-# documented guarantees become false silently, and only a pin makes that
-# detectable.
-test_that("get_host_type(): NA under NULL collides with unclassifiable", {
-  # The overload the docs now warn about, verbatim from the @return section.
-  expect_identical(
-    get_host_type(c("/relative/path", ""), url_standard = "rfc3986"),
-    get_host_type(c("http://example.com/", "http://x.test/"))
-  )
-  # ... and the NULL arm really is content-free: well-formed input, all NA.
-  expect_true(all(is.na(
-    get_host_type(
-      c("http://example.com/", "http://2130706433/", "http://[::1]/")
-    )
-  )))
+# Before ADR 0015 these pinned an AMBIGUITY: NA and character(0) each meant
+# both "no selector" and a real finding, and the docs warned about the overload
+# at length. Making url_standard required removed the first meaning from every
+# one of them, so what is pinned now is the absence of that overload -- which
+# is the whole point of the change and would be silently lost if a default ever
+# crept back.
+test_that("all three helpers reject a missing selector identically", {
+  u <- c("http://example.com/", "http://2130706433/", "not a url")
+  for (fn in list(get_host_type, get_url_diagnostics, get_scheme_class)) {
+    expect_error(fn(u), "`url_standard` is required")
+    expect_error(fn(u, url_standard = NULL), "`url_standard` is required")
+  }
+  # The message names both profiles, so the fix is in the error itself.
+  expect_error(get_host_type(u), "whatwg")
+  expect_error(get_host_type(u), "rfc3986")
 })
 
-test_that("get_scheme_class(): NA iff no selector was passed", {
-  # The guarantee the docs give, and the reason get_scheme_class escapes the
-  # overload get_host_type has: with a selector nothing falls through to NA.
+test_that("get_host_type(): NA now means unclassifiable, and nothing else", {
+  # The overload the docs used to warn about: the left side is unclassifiable
+  # input under a selector, the right side USED to be the same all-NA answer
+  # for well-formed input with no selector. The right side no longer exists.
+  expect_true(all(is.na(
+    get_host_type(c("/relative/path", ""), url_standard = "rfc3986")
+  )))
+  expect_false(anyNA(
+    get_host_type(
+      c("http://example.com/", "http://2130706433/", "http://[::1]/"),
+      url_standard = "whatwg"
+    )
+  ))
+})
+
+test_that("get_scheme_class(): never NA, under either profile", {
+  # With a selector nothing falls through to NA, and there is no longer a
+  # selector-less arm that could produce one -- so NA is unreachable.
   awkward <- c(
     "http://example.com/", "/relative", "://bad", "", NA_character_,
     "http://x|y/", "mailto:a@b.c", "not a url", "http://[::1]/", "ftp://h/"
@@ -419,17 +436,17 @@ test_that("get_scheme_class(): NA iff no selector was passed", {
       info = std
     )
   }
-  # Without a selector, every one of the same rows is NA.
-  expect_true(all(is.na(get_scheme_class(awkward))))
 })
 
-test_that("get_url_diagnostics(): empty under NULL is not a clean verdict", {
+test_that("get_url_diagnostics(): empty IS a clean verdict now", {
   dirty <- "http://2130706433/"
-  # Under a selector this URL raises tokens ...
+  clean <- "http://example.com/"
+  # Under a selector this URL raises tokens and the clean one does not ...
   expect_gt(length(get_url_diagnostics(dirty, url_standard = "whatwg")), 0L)
-  # ... and under NULL it is indistinguishable from a URL that raises none.
   expect_identical(
-    get_url_diagnostics(dirty),
-    get_url_diagnostics("http://example.com/", url_standard = "whatwg")
+    get_url_diagnostics(clean, url_standard = "whatwg"), character(0)
   )
+  # ... and there is no selector-less call that could make the dirty URL look
+  # like the clean one.
+  expect_error(get_url_diagnostics(dirty), "`url_standard` is required")
 })

@@ -181,6 +181,4 @@ test_that("the leading/trailing diagnostic never fires under rfc3986", {
   u <- "  http://example.com/a  "
   expect_false("leading-trailing-stripped" %in%
                  get_url_diagnostics(u, url_standard = "rfc3986"))
-  expect_false("leading-trailing-stripped" %in%
-                 get_url_diagnostics(u))
 })

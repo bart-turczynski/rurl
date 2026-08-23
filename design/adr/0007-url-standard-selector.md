@@ -97,3 +97,22 @@ when the carve-out is removed.
 Re-derived at T2.5, the corpus reads **247 exact / 27 differing**. That is a
 known-differ set over base-carrying rows, never a conformance rate, and it is a
 disjoint population from the base-null WPT headline — the two are never summed.
+
+## Amendment: the `NULL` freeze does not extend to the companion helpers (ADR 0015)
+
+*Added RURL-kbpyivuk, 2026-08-23. Appended rather than edited in place so no
+line citation into this file moves.*
+
+§Consequences promises `url_standard = NULL` stays byte-for-byte compatible.
+**That promise is about output which predates the selector, and it stands
+unchanged for every parse function.** It does not extend to the three companion
+helpers this ADR's epic introduced — `get_host_type()`,
+`get_url_diagnostics()`, `get_scheme_class()` — which shipped in the same
+release (rurl 2.2.0) and therefore have no pre-selector output to preserve.
+
+Measured on `848bd11`: under `url_standard = NULL` all three answer nothing for
+every input, always. [ADR 0015](0015-require-url-standard-on-companion-helpers.md)
+makes the selector **required** on those three, so omitting it is an error
+rather than a mode that returns `NA`. The parse functions keep the `NULL`
+profile, the freeze keeps governing it, and the Appendix-B carve-out recorded
+in the amendment above is unaffected.

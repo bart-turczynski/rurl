@@ -183,6 +183,61 @@
   on the two selectors that claim a standard, and the one that claims none is
   left alone.
 
+- **`url_standard` is now required on `get_host_type()`,
+  `get_url_diagnostics()` and `get_scheme_class()`.** All three defaulted to
+  `url_standard = NULL`, and under that default none of them could return
+  information for *any* input — measured, not estimated:
+
+  ```r
+  # before
+  get_host_type(c("http://example.com/", "http://2130706433/"))
+  #> NA NA
+  get_scheme_class(c("http://example.com/", "ftps://example.com/"))
+  #> NA NA
+  get_url_diagnostics("http://2130706433/")
+  #> character(0)
+
+  # after
+  get_host_type(c("http://example.com/", "http://2130706433/"))
+  #> Error: `url_standard` is required: pass "whatwg" or "rfc3986". Host type
+  #>   is a function of the standard profile, so there is no profile-neutral
+  #>   answer to report.
+  ```
+
+  There was no input for which the selector-less arm answered anything: it was
+  not a mode that answered a different question, it was a mode that could not
+  answer. Worse, on two of the three it collided with a real result.
+  `get_host_type()` returned `NA` both for a selector-less call and for a row
+  genuinely unclassifiable under the selector, so an all-`NA` result was never
+  evidence about the input; `get_url_diagnostics()` returned `character(0)`
+  both for a selector-less call and for a URL that raised no diagnostics, so an
+  empty result was never evidence that a URL was clean.
+
+  Both collisions are gone. `NA` from `get_host_type()` now means
+  *unclassifiable under the standard you named*, `character(0)` from
+  `get_url_diagnostics()` means *clean under the standard you named*, and
+  `get_scheme_class()` — which never returned `NA` once a selector was passed —
+  cannot return `NA` at all. Passing `url_standard = NULL` explicitly is the
+  same error as omitting it: the mode is gone, not merely undefaulted.
+
+  `get_scheme_class()` is included even though its `NA` was already
+  unambiguous. Sparing it would have made the argument requirement depend on
+  incidental return encoding rather than on meaning, and a caller who forgot
+  the argument still got no error and a column that answered nothing.
+
+  The selector was **not** simply defaulted to `"whatwg"` instead.
+  `is_valid_host()` and `check_hosts()` do default that way, but they are
+  policy APIs with a web-oriented posture; these three report profile-derived
+  facts, and there is no profile-neutral host type, diagnostic set or
+  special-scheme classification for a default to stand for. A silently-chosen
+  profile would let a plausible answer flow onward as authoritative while
+  concealing that no standard was named.
+
+  Every other function that takes `url_standard` is unaffected: parse
+  functions keep the `NULL` profile, and `get_parse_verdicts()` remains
+  deliberately ungated because its layers describe the parse that actually ran
+  (ADR 0015).
+
 ### Bug fixes
 
 - **`index_page_handling = "strip"` no longer emits a path ending in `.` or

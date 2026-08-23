@@ -299,13 +299,10 @@ test_that("port diagnostics cover https/ftp defaults and ftps (no default)", {
   )
 })
 
-test_that("no port diagnostics fire when no port/no selector is present", {
+test_that("no port diagnostics fire when no port is present", {
   expect_identical(
     get_url_diagnostics("http://example.com/path", url_standard = "whatwg"),
     character(0)
-  )
-  expect_identical(
-    get_url_diagnostics("http://example.com:80/path"), character(0)
   )
 })
 
