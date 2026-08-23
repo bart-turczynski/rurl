@@ -1263,6 +1263,25 @@ safe_parse_urls <- function(url,
   case_handling = .opt_case_handling
 )
 
+# Require `url_standard` on the three companion helpers that report
+# profile-derived facts (`get_host_type()`, `get_url_diagnostics()`,
+# `get_scheme_class()`). ADR 0015 supersedes ADR 0007's byte-for-byte clause
+# for these three: a host type, a diagnostic vocabulary and a special-scheme
+# classification are all functions of the selected profile, so there is no
+# profile-neutral answer for them to return and the selector-less mode could
+# only ever report `NA`. `what` names the fact in the error message.
+.require_url_standard <- function(url_standard, what) {
+  if (is.null(url_standard)) {
+    stop(
+      "`url_standard` is required: pass \"whatwg\" or \"rfc3986\". ",
+      what, " is a function of the standard profile, so there is no ",
+      "profile-neutral answer to report.",
+      call. = FALSE
+    )
+  }
+  .validate_url_standard(url_standard)
+}
+
 # Validate `url_standard`: NULL (default) or one of the allowed profile names.
 # Returns the value unchanged (NULL passes through) or errors.
 .validate_url_standard <- function(url_standard) {

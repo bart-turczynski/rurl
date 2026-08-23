@@ -174,10 +174,6 @@ test_that("invalid-reverse-solidus does not fire when backslash is inert", {
     get_url_diagnostics("http://host\\path", url_standard = "rfc3986"),
     character(0)
   )
-  # No selector at all.
-  expect_identical(
-    get_url_diagnostics("http://host\\path"), character(0)
-  )
 })
 
 test_that("invalid-reverse-solidus does not fire on mere backslash presence", {

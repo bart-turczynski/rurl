@@ -1274,48 +1274,35 @@ get_tld <- function(url, source = c("all", "private", "icann"),
 #'
 #' The metadata is intentionally exposed through this helper rather than as a
 #' column on \code{\link{safe_parse_urls}} or a field on
-#' \code{\link{safe_parse_url}}, so that passing no selector leaves every
-#' existing function's output shape unchanged.
+#' \code{\link{safe_parse_url}}, keeping those functions' output shapes fixed
+#' (ADR 0006).
 #'
 #' @param url A character vector of URLs.
-#' @param url_standard Standard profile governing host interpretation:
-#'   \code{NULL} (default; no classification, returns \code{NA}),
-#'   \code{"rfc3986"}, or \code{"whatwg"}. The gate is semantic, not stylistic:
-#'   whether a host is an IPv4 literal or a registered name is a question only
-#'   a standard answers, so with no selector there is no fact to report.
-#'   \code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
-#'   --- its layers describe the parse that actually ran, which is defined with
-#'   or without a selector.
+#' @param url_standard Standard profile governing host interpretation: either
+#'   \code{"rfc3986"} or \code{"whatwg"}. \strong{Required, with no default}
+#'   (ADR 0015). The requirement is semantic, not stylistic: whether a host is
+#'   an IPv4 literal or a registered name is a question only a standard
+#'   answers, so there is no profile-neutral classification a default could
+#'   stand for. \code{\link{get_parse_verdicts}} is deliberately \emph{not}
+#'   gated this way --- its layers describe the parse that actually ran, which
+#'   is defined with or without a selector.
 #' @inheritParams safe_parse_url
 #' @return A character vector the same length as \code{url}, each element one of
-#'   the \code{host_type} tokens above, or \code{NA}.
+#'   the \code{host_type} tokens above, or \code{NA} for a row that cannot be
+#'   classified under the selected standard.
 #'
-#'   \strong{\code{NA} is ambiguous, and knowingly so.} It means either that no
-#'   selector was passed --- in which case nothing was classified at all --- or
-#'   that a selector \emph{was} passed and this row could not be classified
-#'   under it. The two are indistinguishable in the returned value:
-#'
-#'   \preformatted{identical(
-#'   get_host_type(c("/relative/path", ""), url_standard = "rfc3986"),
-#'   get_host_type(c("http://example.com/", "http://x.test/"))
-#' )
-#' #> TRUE}
-#'
-#'   A caller that must tell them apart has to retain its own knowledge of
-#'   whether it supplied \code{url_standard}; the return value does not carry
-#'   it. In particular, an all-\code{NA} result is \emph{not} evidence that the
-#'   URLs are unclassifiable --- it is the same answer a selector-less call
-#'   gives for perfectly well-formed input.
-#'
-#'   \code{\link{get_scheme_class}} imposes no such burden: see the guarantee in
-#'   its own \code{Value} section.
+#'   \strong{\code{NA} means exactly one thing:} this row is unclassifiable
+#'   under the standard you named. It can no longer also mean \dQuote{no
+#'   selector was passed}, because omitting \code{url_standard} is an error
+#'   rather than a mode (ADR 0015). An all-\code{NA} result is therefore
+#'   evidence about the input, not about the call.
 #' @seealso \code{\link{get_url_diagnostics}}, \code{\link{get_parse_verdicts}},
 #'   \code{\link{safe_parse_url}}
 #' @export
 #' @examples
 #' get_host_type("http://example.com/", url_standard = "rfc3986")
 #' get_host_type("http://2130706433/", url_standard = "whatwg")
-get_host_type <- function(url, url_standard = NULL,
+get_host_type <- function(url, url_standard,
                           scheme_policy = c("infer", "require"),
                           scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
@@ -1325,6 +1312,8 @@ get_host_type <- function(url, url_standard = NULL,
       call. = FALSE
     )
   }
+  if (missing(url_standard)) url_standard <- NULL
+  url_standard <- .require_url_standard(url_standard, "Host type")
   opts <- .parse_options(url_standard = url_standard,
     scheme_policy = scheme_policy, scheme_acceptance = scheme_acceptance)
   ._url_metadata_vec(url, opts)$host_type
@@ -1506,21 +1495,22 @@ get_host_type <- function(url, url_standard = NULL,
 #'   }
 #'
 #' @param url A character vector of URLs.
-#' @param url_standard Standard profile governing interpretation: \code{NULL}
-#'   (default; no diagnostics), \code{"rfc3986"}, or \code{"whatwg"}.
+#' @param url_standard Standard profile governing interpretation: either
+#'   \code{"rfc3986"} or \code{"whatwg"}. \strong{Required, with no default}
+#'   (ADR 0015): the vocabulary is profile-dependent --- several tokens fire
+#'   under one standard only --- so there is no profile-neutral set of findings
+#'   a default could stand for.
 #' @inheritParams safe_parse_url
 #' @return For a length-1 \code{url}, a character vector of zero or more
 #'   diagnostic tokens for that URL. For a length-n \code{url} (including
 #'   \code{n == 0}), a list of length n whose i-th element is the character
 #'   vector of that URL's tokens (\code{character(0)} when it has none).
 #'
-#'   \strong{An empty result is ambiguous, and knowingly so.} Per row,
-#'   \code{character(0)} means either that no selector was passed --- in which
-#'   case no diagnostics were evaluated for any row --- or that a selector
-#'   \emph{was} passed and that URL raised none. An empty result is therefore
-#'   never evidence that a URL is clean unless the caller knows it supplied
-#'   \code{url_standard}. Under \code{NULL} every row is \code{character(0)},
-#'   whatever the input.
+#'   \strong{An empty result means exactly one thing:} that URL raised no
+#'   diagnostics under the standard you named. It can no longer also mean that
+#'   no selector was passed, because omitting \code{url_standard} is an error
+#'   rather than a mode (ADR 0015). \code{character(0)} is therefore evidence
+#'   that the URL is clean under that profile.
 #' @seealso \code{\link{get_host_type}}, \code{\link{safe_parse_url}}
 #' @export
 #' @examples
@@ -1529,7 +1519,7 @@ get_host_type <- function(url, url_standard = NULL,
 #'   c("http://example.com/", "http://2130706433/"),
 #'   url_standard = "whatwg"
 #' )
-get_url_diagnostics <- function(url, url_standard = NULL,
+get_url_diagnostics <- function(url, url_standard,
                                 scheme_policy = c("infer", "require"),
                                 scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
@@ -1539,6 +1529,8 @@ get_url_diagnostics <- function(url, url_standard = NULL,
       call. = FALSE
     )
   }
+  if (missing(url_standard)) url_standard <- NULL
+  url_standard <- .require_url_standard(url_standard, "A diagnostic vocabulary")
   opts <- .parse_options(url_standard = url_standard,
     scheme_policy = scheme_policy, scheme_acceptance = scheme_acceptance)
   diagnostics <- ._url_metadata_vec(url, opts)$diagnostics
@@ -1561,9 +1553,10 @@ get_url_diagnostics <- function(url, url_standard = NULL,
 #' Unlike \code{\link{get_host_type}}, the classification itself does not vary
 #' between \code{"rfc3986"} and \code{"whatwg"} -- \dQuote{special scheme} is a
 #' WHATWG concept describing a fixed property of the scheme string, not
-#' something RFC 3986 redefines. \code{url_standard} instead gates whether the
-#' metadata is exposed at all, mirroring \code{get_host_type()}'s contract:
-#' pass \code{NULL} (the default) and every element is \code{NA}.
+#' something RFC 3986 redefines. \code{url_standard} is nonetheless required,
+#' mirroring \code{get_host_type()}'s contract: the resolved scheme this
+#' classification reads is itself produced by a profile-dependent parse, so the
+#' profile has to be named (ADR 0015).
 #'
 #' Within rurl's allowlist (\code{http}/\code{https}/\code{ftp}/\code{ftps}/
 #' \code{file}), \code{http}, \code{https}, \code{ftp}, and \code{file} are
@@ -1573,25 +1566,23 @@ get_url_diagnostics <- function(url, url_standard = NULL,
 #' \code{\link{safe_parse_url}} accepts.
 #'
 #' @param url A character vector of URLs.
-#' @param url_standard Standard profile gating the classification: \code{NULL}
-#'   (default; no classification, returns \code{NA}), \code{"rfc3986"}, or
-#'   \code{"whatwg"}. The gate is semantic, not stylistic: "special" is a
-#'   WHATWG notion, so without a selector there is no fact to report.
+#' @param url_standard Standard profile under which each URL is parsed before
+#'   its scheme is classified: either \code{"rfc3986"} or \code{"whatwg"}.
+#'   \strong{Required, with no default} (ADR 0015). The three tokens below do
+#'   not differ between the profiles, but the parse that resolves the scheme
+#'   does, so the profile has to be named.
 #'   \code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
 #'   --- its layers describe the parse that actually ran, which is defined with
 #'   or without a selector.
 #' @inheritParams safe_parse_url
 #' @return A character vector the same length as \code{url}, each element one
-#'   of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"},
-#'   or \code{NA} when no selector is given.
+#'   of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"}.
 #'
-#'   \strong{Here \code{NA} is unambiguous}, unlike
-#'   \code{\link{get_host_type}}'s. Given a selector, every element receives one
-#'   of the three tokens above --- input that is unparseable, scheme-less, empty
-#'   or \code{NA} classifies as \code{"missing-or-error"} rather than falling
-#'   through to \code{NA}. So \code{NA} occurs if and only if
-#'   \code{url_standard} was \code{NULL}, and \code{is.na()} on this result is a
-#'   reliable test for the selector-less call.
+#'   \strong{Never \code{NA}.} Every element receives one of the three tokens
+#'   above --- input that is unparseable, scheme-less, empty or \code{NA}
+#'   classifies as \code{"missing-or-error"} rather than falling through to
+#'   \code{NA}. The one arm that used to return \code{NA} was the selector-less
+#'   call, which is now an error (ADR 0015).
 #' @details
 #' Under the default \code{scheme_acceptance = "web"} an opaque scheme such as
 #' \code{mailto:} is outside rurl's web allowlist and classifies as
@@ -1608,7 +1599,7 @@ get_url_diagnostics <- function(url, url_standard = NULL,
 #'   "mailto:jane@example.com",
 #'   url_standard = "rfc3986", scheme_acceptance = "general"
 #' )
-get_scheme_class <- function(url, url_standard = NULL,
+get_scheme_class <- function(url, url_standard,
                              scheme_policy = c("infer", "require"),
                              scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
@@ -1618,10 +1609,10 @@ get_scheme_class <- function(url, url_standard = NULL,
       call. = FALSE
     )
   }
-  url_standard <- .validate_url_standard(url_standard)
-  if (is.null(url_standard)) {
-    return(rep(NA_character_, length(url)))
-  }
+  if (missing(url_standard)) url_standard <- NULL
+  url_standard <- .require_url_standard(
+    url_standard, "Special-scheme classification"
+  )
   scheme <- get_scheme(url,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,

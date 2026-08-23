@@ -129,18 +129,18 @@ parse). Recovering that distinction is what this helper is for.
 Like the other companion helpers this never widens the
 \code{\link{safe_parse_url}} frame --- the parse table keeps its 18 columns
 and the verdicts live here. Unlike \code{\link{get_host_type}} and
-\code{\link{get_scheme_class}}, it is fully defined at
-\code{url_standard = NULL}: layers 1 and 2 describe the parse that actually
-occurred, which happens with or without a standard selector.
+\code{\link{get_scheme_class}}, which require a selector, it is fully
+defined at \code{url_standard = NULL}: layers 1 and 2 describe the parse
+that actually occurred, which happens with or without a standard selector.
 }
 \section{Why this helper is not gated on \code{url_standard}}{
 
-\code{\link{get_host_type}} and \code{\link{get_scheme_class}} return
-\code{NA} unless a selector is passed. That gate is not a house style ---
-it is a consequence of what those helpers report. Their content is
-\emph{standard-relative}: whether a host is an IPv4 address, or a scheme
-is special, is a question only a standard can answer, so without a
-selector there is no fact to return.
+\code{\link{get_host_type}} and \code{\link{get_scheme_class}}
+\emph{require} a selector and error without one (ADR 0015). That
+requirement is not a house style --- it is a consequence of what those
+helpers report. Their content is \emph{standard-relative}: whether a host
+is an IPv4 address, or a scheme is special, is a question only a standard
+can answer, so without a selector there is no fact to return.
 
 Verdict layers are not standard-relative in that way. A syntax failure
 (layer 1) and an admission rejection (layer 2) are facts about the parse
@@ -150,11 +150,11 @@ do under a selector, so there is nothing to withhold.
 
 Gating anyway would also break the helper's central guarantee. Because
 \code{parse_status} is the projection of these three layers, projecting
-the reported layers must reproduce the reported status. Returning
-\code{NA} at \code{url_standard = NULL} while \code{parse_status} still
-reports a real value would make the companion contradict the column it
-exists to explain --- on the most common call, and precisely when a caller
-is asking why a default-options parse failed.
+the reported layers must reproduce the reported status. Refusing to answer
+at \code{url_standard = NULL} while \code{parse_status} still reports a
+real value would make the companion contradict the column it exists to
+explain --- on the most common call, and precisely when a caller is asking
+why a default-options parse failed.
 }
 
 \section{Layers}{

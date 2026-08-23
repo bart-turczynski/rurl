@@ -6,7 +6,7 @@
 \usage{
 get_host_type(
   url,
-  url_standard = NULL,
+  url_standard,
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general")
 )
@@ -14,14 +14,14 @@ get_host_type(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{url_standard}{Standard profile governing host interpretation:
-\code{NULL} (default; no classification, returns \code{NA}),
-\code{"rfc3986"}, or \code{"whatwg"}. The gate is semantic, not stylistic:
-whether a host is an IPv4 literal or a registered name is a question only
-a standard answers, so with no selector there is no fact to report.
-\code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
---- its layers describe the parse that actually ran, which is defined with
-or without a selector.}
+\item{url_standard}{Standard profile governing host interpretation: either
+\code{"rfc3986"} or \code{"whatwg"}. \strong{Required, with no default}
+(ADR 0015). The requirement is semantic, not stylistic: whether a host is
+an IPv4 literal or a registered name is a question only a standard
+answers, so there is no profile-neutral classification a default could
+stand for. \code{\link{get_parse_verdicts}} is deliberately \emph{not}
+gated this way --- its layers describe the parse that actually ran, which
+is defined with or without a selector.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
@@ -72,27 +72,14 @@ caller's job — see \code{SECURITY.md}.}
 }
 \value{
 A character vector the same length as \code{url}, each element one of
-the \code{host_type} tokens above, or \code{NA}.
+the \code{host_type} tokens above, or \code{NA} for a row that cannot be
+classified under the selected standard.
 
-\strong{\code{NA} is ambiguous, and knowingly so.} It means either that no
-selector was passed --- in which case nothing was classified at all --- or
-that a selector \emph{was} passed and this row could not be classified
-under it. The two are indistinguishable in the returned value:
-
-\preformatted{identical(
-  get_host_type(c("/relative/path", ""), url_standard = "rfc3986"),
-  get_host_type(c("http://example.com/", "http://x.test/"))
-)
-#> TRUE}
-
-A caller that must tell them apart has to retain its own knowledge of
-whether it supplied \code{url_standard}; the return value does not carry
-it. In particular, an all-\code{NA} result is \emph{not} evidence that the
-URLs are unclassifiable --- it is the same answer a selector-less call
-gives for perfectly well-formed input.
-
-\code{\link{get_scheme_class}} imposes no such burden: see the guarantee in
-its own \code{Value} section.
+\strong{\code{NA} means exactly one thing:} this row is unclassifiable
+under the standard you named. It can no longer also mean \dQuote{no
+selector was passed}, because omitting \code{url_standard} is an error
+rather than a mode (ADR 0015). An all-\code{NA} result is therefore
+evidence about the input, not about the call.
 }
 \description{
 Companion helper for the \code{url_standard} selector: reports the host
@@ -106,8 +93,8 @@ Callers reading the result must therefore know which selector produced it.
 \details{
 The metadata is intentionally exposed through this helper rather than as a
 column on \code{\link{safe_parse_urls}} or a field on
-\code{\link{safe_parse_url}}, so that passing no selector leaves every
-existing function's output shape unchanged.
+\code{\link{safe_parse_url}}, keeping those functions' output shapes fixed
+(ADR 0006).
 }
 \examples{
 get_host_type("http://example.com/", url_standard = "rfc3986")

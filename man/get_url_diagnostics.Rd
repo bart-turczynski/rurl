@@ -6,7 +6,7 @@
 \usage{
 get_url_diagnostics(
   url,
-  url_standard = NULL,
+  url_standard,
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general")
 )
@@ -14,8 +14,11 @@ get_url_diagnostics(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{url_standard}{Standard profile governing interpretation: \code{NULL}
-(default; no diagnostics), \code{"rfc3986"}, or \code{"whatwg"}.}
+\item{url_standard}{Standard profile governing interpretation: either
+\code{"rfc3986"} or \code{"whatwg"}. \strong{Required, with no default}
+(ADR 0015): the vocabulary is profile-dependent --- several tokens fire
+under one standard only --- so there is no profile-neutral set of findings
+a default could stand for.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
@@ -70,13 +73,11 @@ diagnostic tokens for that URL. For a length-n \code{url} (including
 \code{n == 0}), a list of length n whose i-th element is the character
 vector of that URL's tokens (\code{character(0)} when it has none).
 
-\strong{An empty result is ambiguous, and knowingly so.} Per row,
-\code{character(0)} means either that no selector was passed --- in which
-case no diagnostics were evaluated for any row --- or that a selector
-\emph{was} passed and that URL raised none. An empty result is therefore
-never evidence that a URL is clean unless the caller knows it supplied
-\code{url_standard}. Under \code{NULL} every row is \code{character(0)},
-whatever the input.
+\strong{An empty result means exactly one thing:} that URL raised no
+diagnostics under the standard you named. It can no longer also mean that
+no selector was passed, because omitting \code{url_standard} is an error
+rather than a mode (ADR 0015). \code{character(0)} is therefore evidence
+that the URL is clean under that profile.
 }
 \description{
 Companion helper for the \code{url_standard} selector: reports the

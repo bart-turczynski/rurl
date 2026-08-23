@@ -75,9 +75,12 @@ get_url_diagnostics("http://2130706433/", url_standard = "rfc3986")
 
 ## Diagnostics are facts, not policy
 
-`url_standard` also unlocks three companion helpers. They return `NA` unless you
-pass a selector, and — importantly — they never widen the parse result shape:
-metadata is surfaced only through these helpers, never as new columns or fields.
+`url_standard` also unlocks three companion helpers. They **require** a
+selector and error without one — a host type, a diagnostic set and a
+special-scheme classification are all functions of the profile, so there is no
+profile-neutral answer they could return (ADR 0015). Importantly, they never
+widen the parse result shape: metadata is surfaced only through these helpers,
+never as new columns or fields.
 
 ```{r helpers}
 get_host_type("http://example.com/", url_standard = "whatwg")

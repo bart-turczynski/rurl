@@ -58,12 +58,21 @@ test_that("character accessors return unnamed vectors for NAMED input", {
   for (fn in list(
     get_scheme, get_host, get_path, get_query, get_fragment,
     get_user, get_password, get_userinfo, get_domain, get_tld,
-    get_clean_url, get_parse_status, get_host_type, get_scheme_class,
-    get_subdomain
+    get_clean_url, get_parse_status, get_subdomain
   )) {
     out <- fn(named_urls)
     expect_null(names(out))
     expect_identical(out, fn(plain_urls))
+  }
+})
+
+test_that("selector-gated accessors return unnamed vectors for NAMED input", {
+  # Same property, separate loop: these two require url_standard (ADR 0015),
+  # so they cannot be called with the single positional argument above.
+  for (fn in list(get_host_type, get_scheme_class)) {
+    out <- fn(named_urls, url_standard = "whatwg")
+    expect_null(names(out))
+    expect_identical(out, fn(plain_urls, url_standard = "whatwg"))
   }
 })
 
@@ -94,7 +103,9 @@ test_that("companion frame helpers give sequential row names for named input", {
 })
 
 test_that("get_url_diagnostics() carries no names for named input", {
-  diag <- get_url_diagnostics(named_urls)
+  diag <- get_url_diagnostics(named_urls, url_standard = "whatwg")
   expect_null(unique(unlist(lapply(diag, names))))
-  expect_identical(diag, get_url_diagnostics(plain_urls))
+  expect_identical(
+    diag, get_url_diagnostics(plain_urls, url_standard = "whatwg")
+  )
 })
