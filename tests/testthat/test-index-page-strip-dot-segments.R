@@ -8,10 +8,23 @@
 # step 3 had an unstated precondition -- a resolved path -- that step 2 does
 # not guarantee, because `path_normalization` defaults to "none".
 #
-# `index_page_handling` is NOT in `.URL_STANDARD_PROFILES` (whose governed axes
-# are exactly path_identity / path_normalization / case_handling), so it is an
-# ungoverned presentation axis in ADR 0011's sense and this fix legitimately
-# moves `url_standard = NULL` rows without an ADR 0007 amendment.
+# This fix MOVES `url_standard = NULL` rows, which ADR 0007 freezes, and ADR
+# 0016 is what licenses it: the freeze binds selector-CAUSED drift, and this
+# is a defect in the default path itself -- `http://example.com/..` escapes the
+# document root under no standard, profile or documented contract. Per ADR 0016
+# the fix carries a witness (the tests below run under the default selector, and
+# the first pins that omitting the argument and passing NULL explicitly agree)
+# and a signature (index_page_handling = "strip" on paths whose strip leaves a
+# dot segment in FINAL position -- the "path_normalization = 'none'" test below
+# bounds it from the other side).
+#
+# The named arms were ALREADY correct, by a different route: their
+# path_normalization = "dot_segments" resolves at step 2, so the new branch is
+# unreachable there ("selector arms are unreachable", below). One defect did not
+# manifest identically across the three arms -- which is exactly why membership
+# in `.URL_STANDARD_PROFILES` does NOT license this fix. That table is
+# conflict-matrix ownership, not behavioral independence; ADR 0016 falsifies the
+# reading this comment used to assert.
 
 test_that("stripping an index page never exposes a trailing dot segment", {
   inputs <- c(
@@ -21,15 +34,25 @@ test_that("stripping an index page never exposes a trailing dot segment", {
     "http://example.com/a/b/../../index.html",
     "http://example.com/../index.html"
   )
+  expected <- c(
+    "http://example.com/a/",
+    "http://example.com/",
+    "http://example.com/",
+    "http://example.com/",
+    "http://example.com/"
+  )
   expect_identical(
     safe_parse_urls(inputs, index_page_handling = "strip")$clean_url,
-    c(
-      "http://example.com/a/",
-      "http://example.com/",
-      "http://example.com/",
-      "http://example.com/",
-      "http://example.com/"
-    )
+    expected
+  )
+  # ADR 0016's witness requirement: the omitted argument and an explicit NULL
+  # are the same arm, so the defect this file fixes is demonstrably in the
+  # frozen default path rather than in a selector arm.
+  expect_identical(
+    safe_parse_urls(inputs,
+      url_standard = NULL, index_page_handling = "strip"
+    )$clean_url,
+    expected
   )
 })
 

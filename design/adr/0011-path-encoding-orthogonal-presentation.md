@@ -94,3 +94,28 @@ explicitly wants `encode` to work under `whatwg`. Presentation belongs with
 - The scaffold conflict tests that asserted profile + `path_encoding` errors
   flip to assert the layered output; the AC#1 "NULL is byte-for-byte inert"
   corpus gate is untouched.
+
+## Amendment: orthogonality is not a licence to move `NULL` (ADR 0016)
+
+*Added RURL-bmxptxxz, 2026-08-23. Appended rather than edited in place so no
+line citation into this file moves.*
+
+This ADR establishes that `path_encoding` is a presentation axis that LAYERS on
+any profile rather than being governed by one, and the same reasoning has been
+read across to `host_encoding`. That reading is correct about the **conflict
+matrix** — neither knob is in `.URL_STANDARD_PROFILES`, so neither conflicts
+with a selector.
+
+It has also been misread as a claim about *behavioral independence*: that a
+defect on such an axis manifests identically under `NULL`, `"rfc3986"` and
+`"whatwg"`, and that fixing it therefore moves `NULL` rows innocently.
+**It does not say that, and the claim is false.**
+`.apply_host_encoding_vec()` takes `url_standard` and branches on it, and
+`path_encoding = "encode"` selects a different encoder under the
+selector-derived `.whatwg_preserve` identity (citations in ADR 0016, measured on
+`ab97416`).
+
+[ADR 0016](0016-null-freeze-binds-selector-caused-drift.md) governs when a fix
+may move ADR 0007's frozen `NULL` output: a witness that the defect is in the
+`NULL` path, plus a declared signature. Orthogonality on this ADR's axis is
+never that justification.

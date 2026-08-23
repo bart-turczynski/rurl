@@ -116,3 +116,33 @@ makes the selector **required** on those three, so omitting it is an error
 rather than a mode that returns `NA`. The parse functions keep the `NULL`
 profile, the freeze keeps governing it, and the Appendix-B carve-out recorded
 in the amendment above is unaffected.
+
+## Amendment: the freeze binds selector-*caused* drift (ADR 0016)
+
+*Added RURL-bmxptxxz, 2026-08-23. Appended rather than edited in place so no
+line citation into this file moves.*
+
+§Consequences promises `url_standard = NULL` stays byte-for-byte compatible and
+states no boundary. [ADR 0016](0016-null-freeze-binds-selector-caused-drift.md)
+supplies one: **the promise binds drift caused by introducing, extending or
+conforming the selector. It does not require a pre-existing defect in the
+default parse path to survive.**
+
+A fix may move `NULL` output when it carries a witness that the defect is in the
+`NULL` path and a declared signature it stays inside. It may not move `NULL` on
+the strength of the axis it touches — in particular, membership in
+`.URL_STANDARD_PROFILES` is conflict-matrix ownership, not behavioral
+independence, and ADR 0016 falsifies the reading that an "ungoverned" axis
+manifests identically under all three selector values.
+
+The Appendix-B carve-out in the amendment above is the model for the other half:
+its retention under `NULL` is a *selector-caused* change held back, which this
+boundary leaves exactly where it was.
+
+This is a different boundary from the one
+[ADR 0015](0015-require-url-standard-on-companion-helpers.md) states, and
+neither implies the other. ADR 0015 says *which surface* the freeze
+covers; ADR 0016 says *which kind of change* it forbids on that surface.
+
+See also **[ADR 0011](0011-path-encoding-orthogonal-presentation.md)**, which
+this ADR had never cited in the other direction.
