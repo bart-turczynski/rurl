@@ -104,7 +104,9 @@
 # only its shape. Deciding which groups OWE a pin is a different question with a
 # different evidence base, and it is not this rule's business.
 #
-# PRESENCE, UNIVERSALLY (PV10). What PV9 leaves open is the hole the ticket that
+# PRESENCE, UNIVERSALLY (PV10) -- HISTORICAL. PV10 IS RETIRED (ADR 0014); this
+# block records WHY the rule existed and what its evidence was, not what the
+# gate enforces today. What PV9 leaves open is the hole the ticket that
 # produced both rules came through, and it is worth naming exactly: the defect
 # was not a wrong value, it was SILENCE. ip-obfuscation derived its 24 expected
 # values by transcribing a Living Standard, and because NO FIELD IN THE RECORD
@@ -115,23 +117,25 @@
 # tomorrow could omit normative_dependencies entirely and every rule above would
 # stay green. PV10 closes it from the other side by making the QUESTION
 # mandatory rather than the pin. An absent key is indistinguishable from an
-# unasked question, so absence is an error and never a pass.
+# unasked question, so under PV10 absence was an error and never a pass. Under
+# ADR 0014 absence is clean, and the hazard above is carried by SCOPE instead:
+# a group deriving from a source's TEXT still owes the pin and still writes it.
 #
-# WHAT PV10 DOES AND DOES NOT INFER FROM THE CONVENTION. Read
+# WHAT PV10 DID AND DID NOT INFER FROM THE CONVENTION (historical). Read
 # conventions.normative_dependency_scope precisely: it states when the source-
 # pinning DUTY applies ("to any source group whose oracle is transcribed,
 # computed, or hand-derived from a standard"), and it supplies the enum member
 # that makes a universal ANSWER writable -- pin_status "not-applicable" (the
 # duty does not apply to this source), whose whole purpose is to let a group
 # that owes no pin still answer. It does not itself spell out "every
-# group must carry the key"; PV10 is the rule that says so. The record already
+# group must carry the key"; PV10 was the rule that said so. The record still
 # practises it -- inst/bench/wpt-url-cases.json's group carries exactly such a
 # negative declaration and explains it as recording "that the source-pinning
 # question was considered and does not apply, rather than leaving the key
-# absent" -- and PV10 makes that practice non-optional for the next group.
+# absent" -- and PV10 made that practice non-optional for the next group.
 # Judging WHETHER a not-applicable answer is the honest one stays out of scope:
-# PV10 demands an answer, PV9 demands it be well-formed, and a human still owns
-# whether it is true.
+# PV10 demanded an answer, PV9 demands it be well-formed, and a human still
+# owns whether it is true.
 #
 # COHERENCE (PV11), and the third failure mode neither of the two above can see.
 # PV9 asks "is this answer well-formed?" and PV10 asks "is there an answer?" --
