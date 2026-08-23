@@ -86,6 +86,29 @@ test_that("a positional 2nd arg still binds to the historical parameter", {
 
 # --- Conflict matrix (final matrix, direct args)
 
+test_that("the governed-knob set is exactly what ADR 0016 documents", {
+  # ADR 0016 rules that membership in `.URL_STANDARD_PROFILES` means
+  # conflict-matrix OWNERSHIP and nothing else -- it is not behavioral
+  # independence and it never licenses moving ADR 0007's frozen NULL output.
+  # That prose names the three keys, so pin them: adding a fourth governed knob
+  # must fail here rather than let the ADR rot silently. This guards the
+  # DOCUMENTATION; the guard against NULL drift is ADR 0016's witness-plus-
+  # signature requirement, which no test can stand in for.
+  governed <- unlist(lapply(.URL_STANDARD_PROFILES, names), use.names = FALSE)
+  expect_identical(
+    sort(unique(governed)),
+    c("case_handling", "path_identity", "path_normalization")
+  )
+  expect_identical(sort(names(.URL_STANDARD_PROFILES)), c("rfc3986", "whatwg"))
+  # The corollary the same ADR relies on: the presentation axes are absent.
+  for (knob in c("host_encoding", "path_encoding", "port_handling",
+                 "index_page_handling")) {
+    for (std in c("rfc3986", "whatwg")) {
+      expect_null(.URL_STANDARD_PROFILES[[std]][[knob]])
+    }
+  }
+})
+
 test_that("explicit governed knobs conflicting with the profile error", {
   u <- "http://ex.com/%41%42"
 
