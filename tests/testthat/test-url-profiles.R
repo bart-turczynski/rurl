@@ -46,7 +46,7 @@ test_that("url_profile() resolves each bundle to its exact knob set", {
       trailing_slash_handling = "strip",
       index_page_handling = "strip",
       host_encoding = "unicode",
-      query_handling = "filter",
+      query_handling = "drop",
       customized = FALSE
     )
   )
@@ -141,11 +141,11 @@ test_that("seo profile cleans origin URLs", {
   expect_identical(out, "https://example.com")
 })
 
-# --- the clean-URL definition (RURL-hcntbqku) --------------------------------
+# --- the clean-URL definition (RURL-hcntbqku, ADR 0017) ----------------------
 #
-# A clean URL is a WHATWG-parsed URL plus visual tweaks, never a separate,
-# weaker construction. These pin the definition items the `seo` bundle now
-# carries; each was verified to FAIL against the pre-change bundle.
+# A clean URL is a LOSSY POLICY PROJECTION of a WHATWG-parsed URL, never a
+# separate, weaker construction. These pin the definition items the `seo`
+# bundle carries; each was verified to FAIL against the pre-change bundle.
 
 test_that("seo: folders resolve -- no dot segment survives cleaning", {
   expect_identical(
@@ -192,6 +192,52 @@ test_that("seo: the fragment and the port do not survive", {
   expect_identical(
     get_clean_url("https://example.com:8080/a#top", profile = "seo"),
     "https://example.com/a"
+  )
+})
+
+test_that("seo: the whole query goes, not just names on the denylist", {
+  # ADR 0017 D3. `filter` was name-matched, so it kept every parameter it did
+  # not recognize -- including `utm=x`, which LOOKS like a tracker and is not
+  # on the list. `drop` is the projection the definition asks for.
+  expect_identical(
+    get_clean_url("https://example.com/p?utm_source=nl&id=7&ref=x",
+                  profile = "seo"),
+    "https://example.com/p"
+  )
+  expect_identical(
+    get_clean_url("https://example.com/p?utm=x&id=1", profile = "seo"),
+    "https://example.com/p"
+  )
+  # a URL with no tracker at all used to come back completely untouched
+  expect_identical(
+    get_clean_url("https://example.com/p?a=1&b=2", profile = "seo"),
+    "https://example.com/p"
+  )
+})
+
+test_that("seo is never LESS clean on parameters than passing no profile", {
+  # The anomaly that decided item 7: asking for the SEO preset used to buy
+  # strictly less parameter cleaning than asking for nothing. This is the
+  # regression pin, stated as the relation rather than as two literals.
+  urls <- c(
+    "https://example.com/p?utm_source=nl&id=7&ref=x",
+    "https://example.com/p?a=1&b=2",
+    "https://example.com/p?utm=x&id=1",
+    "https://example.com/p"
+  )
+  expect_identical(
+    get_clean_url(urls, profile = "seo"),
+    get_clean_url(urls, protocol_handling = "https")
+  )
+})
+
+test_that("seo: tracker-only removal survives as an explicit opt-in", {
+  # `filter` is not the preset any more, but it is not gone: a caller who wants
+  # semantic parameters preserved says so, and the iron rule makes it win.
+  expect_identical(
+    get_clean_url("https://example.com/p?utm_source=nl&id=7",
+                  profile = "seo", query_handling = "filter"),
+    "https://example.com/p?id=7"
   )
 })
 
@@ -261,6 +307,28 @@ test_that("canonical_join() profile via `...` is LEGACY: it warns, re-keys", {
   joined <- cj_legacy(canonical_join(A, B, profile = "seo"))
   expect_identical(nrow(joined), 1L)
   expect_identical(joined$JoinKey, "https://example.com/Page")
+})
+
+test_that("the LEGACY join seam converges on its own default under ADR 0017", {
+  # `clean_url` doubles as the legacy join key, so seo's query_handling decides
+  # WHICH ROWS MATCH here. ADR 0017 moves that toward canonical_join()'s own
+  # no-profile default rather than away from it: `?id=7` and `?id=8` already
+  # keyed together with no profile, and `filter` was the only thing keeping
+  # them apart. Pinned so the consequence is recorded, not discovered.
+  A <- data.frame(URL = "https://example.com/p?id=7", ValA = 7L,
+                  stringsAsFactors = FALSE)
+  B <- data.frame(URL = "https://example.com/p?id=8", ValB = 8L,
+                  stringsAsFactors = FALSE)
+  bare <- canonical_join(A, B)
+  seo <- suppressWarnings(canonical_join(A, B, profile = "seo"))
+  expect_identical(nrow(seo), nrow(bare))
+  expect_identical(cj_legacy(seo)$JoinKey, cj_legacy(bare)$JoinKey)
+  expect_identical(cj_legacy(seo)$JoinKey, "https://example.com/p")
+  # still legacy, still non-silent
+  expect_warning(
+    canonical_join(A, B, profile = "seo"),
+    class = "rurl_legacy_join_dial_warning"
+  )
 })
 
 test_that("the LEGACY profile seam skips the conflict matrix (P3.1 D-E)", {

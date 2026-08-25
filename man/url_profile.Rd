@@ -45,14 +45,17 @@ normalization: case and dot-segments are preserved), and \code{"seo"}
 identically to \code{"seo"}).
 
 \code{"seo"} delivers rurl's definition of a \emph{clean URL}: a
-WHATWG-parsed URL plus visual tweaks, never a separate, weaker construction.
-It selects \code{url_standard = "whatwg"} as the identity underneath — which
-is also what resolves \code{.} and \code{..} folder segments — and
-\code{host_encoding = "unicode"}, so the host is canonical in one direction
-regardless of whether the input spelled it in Unicode or Punycode. The
-remaining knobs are the visual tweaks: https, strip www, trailing slash and
-index page, and filter tracking parameters. As always, an explicit argument
-overrides the bundle.
+\strong{lossy policy projection} of a WHATWG-parsed URL (ADR 0017), never a
+separate, weaker construction. It selects \code{url_standard = "whatwg"} as
+the identity underneath — which is also what resolves \code{.} and \code{..}
+folder segments — and \code{host_encoding = "unicode"}, so the host is
+canonical in one direction regardless of whether the input spelled it in
+Unicode or Punycode. The remaining knobs are the projection: https, strip
+www, trailing slash and index page, and \strong{drop the whole query}. The
+result makes no claim of resource equivalence and is not an HTML canonical
+URL — forcing https, dropping the port and dropping the query can each
+change the resource addressed. As always, an explicit argument overrides the
+bundle, so \code{query_handling = "filter"} still buys tracker-only removal.
 }
 \examples{
 url_profile("browser")

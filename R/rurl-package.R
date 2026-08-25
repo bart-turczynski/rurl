@@ -23,8 +23,8 @@
 #' get_domain(urls)
 #' get_subdomain(urls)
 #'
-#' # Clean for SEO: a WHATWG parse plus visual tweaks. Dot segments resolve,
-#' # the host renders in Unicode, www/index/tracking params come off.
+#' # Clean for SEO: a lossy projection of a WHATWG parse. Dot segments resolve,
+#' # the host renders in Unicode, www/index come off, the query is dropped.
 #' get_clean_url(urls, profile = "seo")
 #'
 #' # Profiles are inspectable sugar over the low-level knobs, and an explicit
