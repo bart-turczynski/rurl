@@ -3,7 +3,8 @@
 ### Breaking changes
 
 - **`profile = "seo"` (and its `"canonical"` alias) now delivers rurl's
-  definition of a clean URL: a WHATWG-parsed URL plus visual tweaks.** The
+  definition of a clean URL: a lossy policy projection of a WHATWG-parsed URL
+  (ADR 0017).** The
   bundle gained two knobs, `url_standard = "whatwg"` and
   `host_encoding = "unicode"`, so cleaned output resolves `.`/`..` folder
   segments and renders the host in Unicode regardless of how the input spelled
@@ -34,6 +35,34 @@
   verified unchanged across the full fixture corpus. An explicit argument still
   overrides the bundle, so `profile = "seo", host_encoding = "keep"` restores
   the previous host rendering.
+
+- **`profile = "seo"` now drops the whole query, where it used to keep every
+  parameter it did not recognize as a tracker** (`query_handling` moves from
+  `"filter"` to `"drop"`, ADR 0017). This closes an anomaly in which asking for
+  the SEO preset bought *less* parameter cleaning than asking for nothing at
+  all: `get_clean_url()`'s own default is, and always was, `"drop"`.
+
+  ```r
+  # before
+  get_clean_url("https://example.com/p?utm_source=nl&id=7&ref=x", profile = "seo")
+  #> "https://example.com/p?id=7&ref=x"
+  get_clean_url("https://example.com/p?a=1&b=2", profile = "seo")
+  #> "https://example.com/p?a=1&b=2"      # no tracker present: untouched
+  get_clean_url("https://example.com/p?a=1&b=2")
+  #> "https://example.com/p"              # ...but the bare default cleaned it
+
+  # after -- all three are "https://example.com/p"
+  ```
+
+  `"filter"` was also less categorical than it read: it matches parameter
+  *names* against a built-in denylist, so `utm_source=nl` was dropped while
+  `utm=x` — not on the list — survived. Over the 482-row union of the fixture
+  corpora the change moves 25 rows, and every one of them loses a parameter
+  that is not on that denylist.
+
+  Tracker-only filtering is unchanged and still one argument away:
+  `get_clean_url(x, profile = "seo", query_handling = "filter")`. As above,
+  callers who pass no profile are unaffected.
 
 - **`rurl` no longer depends on `curl`.** URL parsing is now entirely in-tree.
   `curl` is removed from `Imports`, so installing `rurl` no longer pulls it in

@@ -303,10 +303,11 @@
 #'   *rejects* scheme-less input (unlike a bare `url_standard = "whatwg"`);
 #'   `"rfc-syntax"` is RFC 3986 generic syntax as parsing, not normalization
 #'   (case and dot-segments are preserved); `"seo"`/`"canonical"` is rurl's
-#'   origin-cleaning intent — a **WHATWG-parsed URL plus visual tweaks**:
+#'   origin-cleaning intent — a **lossy policy projection of a WHATWG-parsed
+#'   URL** (ADR 0017), which claims no resource equivalence:
 #'   `url_standard = "whatwg"` underneath (which also resolves `.`/`..` folder
 #'   segments), https, a Unicode host regardless of the input spelling, and
-#'   strip www / trailing slash / index page, filter tracking params. Inspect
+#'   strip www / trailing slash / index page, drop the whole query. Inspect
 #'   the resolved bundle with
 #'   \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
 #'   (forwarded through its \code{...}).
@@ -1138,7 +1139,11 @@ safe_parse_urls <- function(url,
     trailing_slash_handling = "strip",
     index_page_handling = "strip",
     host_encoding = "unicode",
-    query_handling = "filter"
+    # ADR 0017 D3: the WHOLE query goes. `filter` reads as a category and
+    # behaves as a name list (`utm=x` survives, `utm_source=x` does not), and
+    # leaving it here made `profile = "seo"` LESS clean on parameters than
+    # passing no profile at all -- the surface's own default is "drop".
+    query_handling = "drop"
   )
 )
 

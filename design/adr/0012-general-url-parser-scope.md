@@ -527,6 +527,12 @@ returns the expanded knob list). Candidate set (≤4, names to confirm):
   for eligible HTTP(S) inputs, strip www, force https, apply trailing-slash and
   index policies, and strip tracking parameters. `file` and FTP-family inputs may
   remain admissible for compatibility but receive no SEO transforms.
+  > **Superseded in part by [ADR 0017](0017-clean-url-is-a-lossy-policy-projection.md)
+  > (2026-08-25):** "strip tracking parameters" is withdrawn for this bundle —
+  > `profile = "seo"` drops the **whole** query (`query_handling = "drop"`).
+  > Tracker-only filtering survives as an explicitly selectable `filter`. The
+  > rest of this bullet — scheme_acceptance, HTTP(S)-only transforms, strip www,
+  > force https, trailing-slash and index policies — stands unchanged.
   > **Pin before graduation (Open Q1):** one bundle with an alias (both
   > reviewers agree), keeping the "≤4 profiles" claim true — not a distinct fifth
   > bundle. Still open: which name is primary. Claude leans `canonical` primary
