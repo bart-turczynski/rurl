@@ -67,7 +67,7 @@ test_that("repeated raw @ errors under rfc gate, escaped under whatwg", {
 
 # --- the four WHATWG non-special shapes (D2) --------------------------------
 
-test_that("the four WHATWG non-special shapes parse and round-trip", {
+test_that("the four WHATWG non-special shapes parse and keep their shape", {
   d <- safe_parse_urls(
     c("foo:bar", "foo:/bar", "foo:///bar", "foo://[::1]/bar"),
     scheme_acceptance = "general", url_standard = "whatwg"
@@ -77,10 +77,40 @@ test_that("the four WHATWG non-special shapes parse and round-trip", {
   # opaque path (host absent), null-host list path, empty-host list path, IPv6.
   expect_identical(d$path, c("bar", "/bar", "/bar", "/bar"))
   expect_identical(d$host, c(NA, NA, NA, "[::1]"))
-  # clean_url round-trips through the WHATWG serializer (null-vs-empty host).
+  # `clean_url` PRESERVES the four shapes' structural distinction -- opaque,
+  # null-host, empty-host, authority -- which is the D2 representability
+  # property. It is NOT a round-trip capability, and the byte-identity here is
+  # not evidence that surface (c) serializes: these four inputs simply carry
+  # nothing the cleaning projection removes. The very next test feeds the same
+  # branch credentials, a port and a fragment and watches all three disappear.
+  # Round-trip and conformance claims ride `serialize_url()`, surface (b)
+  # (RURL-szvncnou; output-contracts.md P5.3; ADR 0017 D1).
   expect_identical(
     d$clean_url,
     c("foo:bar", "foo:/bar", "foo:///bar", "foo://[::1]/bar")
+  )
+})
+
+test_that("general-routed clean_url still drops credentials, port, fragment", {
+  # The counter-cases to the test above, on the SAME branch and standard. The
+  # general-routed rows borrow `.serialize_whatwg_vec()`, which has no `user`,
+  # `password` or `fragment` parameter at all -- it is structurally incapable of
+  # emitting them -- and `port_handling` defaults to dropping the port. So
+  # borrowing a standard-shaped renderer does not make surface (c) a serializer
+  # on this branch: it remains a lossy policy projection, exactly as the
+  # capability row in output-contracts.md and ADR 0017 D1 classify it.
+  ins <- c("foo://u:p@h:8080/a#frag", "foo://h:8080/a", "foo://u:p@h/a")
+  d <- safe_parse_urls(
+    ins, scheme_acceptance = "general", url_standard = "whatwg"
+  )
+  expect_true(all(d$parse_status == "ok"))
+  expect_identical(d$clean_url, rep("foo://h/a", 3L))
+  # Surface (b) keeps every component surface (c) just dropped. If these two
+  # ever agree on these inputs, one of the surfaces has drifted -- the same
+  # guard test-serialize-url.R states for the web branch, stated here for the
+  # general one.
+  expect_identical(
+    serialize_url(ins, standard = "whatwg", form = "source"), ins
   )
 })
 

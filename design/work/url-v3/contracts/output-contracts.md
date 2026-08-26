@@ -201,6 +201,35 @@ artifact records the claim/oracle *policy* that governs output claims.
 Every produced string/key declares its safe uses; a display-friendly value may
 never be mistaken for identity/routing/redirect-safe.
 
+**What the first two columns mean.** Both are *state-preservation* properties,
+not properties of the emitted text read on its own:
+
+- **`reparsable`** — re-parsing the emitted string reconstructs the
+  contractually relevant parsed state. It does **not** mean merely that a parser
+  accepts the string.
+- **`standards-valid`** — the string is a faithful serialization of the parsed
+  state under a named standard, and is therefore admissible as conformance
+  evidence. It does **not** mean merely that the text is a syntactically valid
+  URL.
+
+This is editorial: it records at the table the meaning the P5.3 block
+immediately above already fixes (claims stand on **exactly two substrates**, the
+FSSS full-string output and parse→serialize→parse — never any other), and which
+ADR 0017 D1 restates for surface (c). No row's values change, and each row is
+true under these readings.
+
+Stating it here is what `RURL-szvncnou` cost: read on the looser "the text
+parses" sense, surface (c)'s `no / no` looks falsified by
+`scheme_acceptance = "general"`, where the general-routed rows borrow
+`.serialize_whatwg_vec()` and four WHATWG non-special shapes come back
+byte-identical. They come back identical because they carry nothing the cleaning
+projection removes; the same branch drops credentials, port and fragment, and
+the borrowed renderer has no `user`/`password`/`fragment` parameter at all.
+`foo://h/a` is a perfectly valid URL — it is not the serialization of the parsed
+state of `foo://u:p@h:8080/a#frag`. Both counter-cases are pinned in
+`test-general-acceptance.R`. The same conflation was corrected once before in
+the conformance suite (`RURL-yeikpnan`, the C-04 conflation).
+
 | produced value | reparsable | standards-valid | identity/comparison-safe | routing/redirect/join-safe | display-only | owner_decision_ref | status |
 |---|---|---|---|---|---|---|---|
 | `url_source()` (a) | yes (echoes input) | n/a (may echo non-conformant input) | no | no | yes | P2.2@8292c7f (§1a) | SETTLED |
