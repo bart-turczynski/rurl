@@ -171,6 +171,16 @@ not reorder it.
 Every produced string/key declares its safe uses. The clean surface is
 **display-only**; it is never an identity, comparison, routing, or redirect key.
 
+**`reparsable` and `standards-valid` are state-preservation properties**, not
+properties of the emitted text read alone: `reparsable` means re-parsing
+reconstructs the contractually relevant parsed state, and `standards-valid`
+means the string is a faithful serialization of that state under a named
+standard and is admissible as conformance evidence. Neither means "a parser
+accepts this string". The definitions and the `RURL-szvncnou` case that made
+them worth stating live with the twin table in
+[`output-contracts.md`](output-contracts.md); this is the same classification,
+so it carries the same readings.
+
 | produced value | reparsable | standards-valid | comparison/identity-safe | join/redirect-safe | display-only | owner_decision_ref | status |
 |---|---|---|---|---|---|---|---|
 | `clean_url` / `get_clean_url()` (surface c) | no (intentionally lossy) | no (SEO/policy product) | **no** (never an identity — P2.2 §5.1) | **no** (never a join key — P3.1 D-A; legacy `canonical_join` `clean_url` keying is LEGACY-to-migrate) | **yes** | P2.2@8292c7f (§1c, §5.1); P3.1@3b89b94 (D-A, D-E) | SETTLED |
