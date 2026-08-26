@@ -8,6 +8,19 @@ nothing here affects `R CMD check` or the pkgdown site. See
   manifest hash-pinning, and no acceptance cascade —
   [ADR 0014](adr/0014-retire-the-v3-control-plane.md) retired all of it. Do not
   reintroduce a record lifecycle.
+- **Two kinds of `## Inputs` pin, needing opposite fixes.** Ask what the record
+  *asserts* over its inputs. If the assertion is re-derived by an executable
+  gate anyway, the pin is **inert** — delete it and derive the table, which also
+  closes what a hash structurally cannot answer (*is this the right SET of
+  sources?*, since an absent row has no hash). If the assertion is prose a human
+  checked, it is **semantic** — re-verify it by hand, then advance the hash.
+  Do **not** build a gate that recomputes every `## Inputs` sha256: under
+  ADR 0014 there is no seal, so such a gate clears by editing a file, and the
+  only mechanical edit available is the false-fresh re-pin the gate exists to
+  forbid. It would also un-retire the mechanism that
+  `work/url-v3/tools/validate-records.R` records as deleted — see its
+  `Gate-acceptance input hashes: RETIRED` block and its `## Inputs paths
+  resolve` comment. This has been filed as a ticket and must stay refused.
 - Frontmatter `state:` fields under `work/url-v3/decisions/` are historical.
   Nothing reads them; do not sweep or "fix" them.
 - Ordinary work does not require reading the whole `work/url-v3/` workspace.

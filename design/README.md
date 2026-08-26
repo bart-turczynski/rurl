@@ -22,6 +22,22 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
   archival mirror: how it stays fresh, why its `refs/remotes/origin/*` is a
   frozen pre-migration GitHub snapshot, and the triage of the branch tips that
   exist only there.
+- [`measurement-traps.md`](measurement-traps.md) — cross-cutting method note on
+  how a green test, gate or harness returns a plausible wrong number. Read
+  before building or extending any instrument.
+- [`oracle-pinning.md`](oracle-pinning.md) — the standing method behind the
+  oracle record's pins: verification precedes the pin string, anchors beat
+  section numbers, network checks stay out of the gate list.
+- [`oracle-fixtures.md`](oracle-fixtures.md) — how to read and edit
+  `tests/testthat/fixtures/external-url-vectors.csv`: which columns are
+  posture-scoped claims, and which are characterization.
+- [`release-chain.md`](release-chain.md) — the seven-package CRAN submission
+  order and the sibling-pinning rule that protects it.
+
+**Design docs cannot live in `docs/`.** That directory is pkgdown's **output**
+(`build_site_github_pages`, `clean = TRUE`), so anything written there is
+deleted on the next site build. Source design documents therefore live
+top-level and under `design/`, both `.Rbuildignore`d.
 
 See also [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the structural overview
 (load order, file map, data flow, seams, caches).
