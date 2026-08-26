@@ -18,6 +18,14 @@ the source tree, so a green suite can hide a package that does not build. The
 gate runs as a pre-push hook once you run `pre-commit install --hook-type
 pre-push` in your clone — committing the config does not install it.
 
+**The blocking-step count is diff-dependent, and a lower one is not evidence
+that a gate was bypassed.** `tools/verify.R` reports around 36 blocking steps on
+a clean `main` and around 19 on a typical feature branch, because the
+`[gate-self-tests]` stage runs a self-test only for the gate *implementations*
+the diff touched. A doc-only branch legitimately shows the lower number; a
+branch editing one gate shows one more. Read `0 failed` and the `VERDICT` line,
+never the step count.
+
 **A step's output is printed only when it fails** — a passing gate that dumps
 40 lines is how a real failure scrolls past. The cost is that anything real
 which does not change an exit status is invisible: a testthat `WARN` reports
@@ -39,6 +47,17 @@ where a run would only burn minutes and rewrite `_snaps/` and fixture bytes in
 your tree (RURL-qkowfsdt). A push to `origin` — or to any remote the wrapper
 cannot positively identify as a local mirror — runs the full gate unchanged.
 The skip is scoped to mirrors; it is not a way to push unverified work.
+
+**How that wrapper learns the destination is not how git documents it.** Git
+hands a `pre-push` hook `$1` = remote name and `$2` = remote URL, but
+`pre-commit` consumes both itself and re-exports them as
+`PRE_COMMIT_REMOTE_NAME` / `PRE_COMMIT_REMOTE_URL`, invoking the `entry` with
+**argc=0**. A wrapper written to the documented `$1`/`$2` contract alone would
+never fire — it would always run the gate and never skip, silently.
+`tools/verify-on-push.sh` reads positional first, environment second, and
+**fails open** — running the gate — when neither is present. Verify with a probe
+hook which mechanism actually delivers the values before writing another
+pre-push predicate.
 
 **GitLab CI is paused** — the free-tier compute allowance is exhausted, so
 `.gitlab-ci.yml` creates a pipeline only for a hand-triggered web run
@@ -81,6 +100,13 @@ The forge moved to GitLab, so the answer is explicit rather than inherited:
 hook is the only non-optional gate, and it is only installed if you ran
 `pre-commit install --hook-type pre-push` in your clone.
 
+An rOpenSci **pre-submission inquiry** (software-review #781, opened
+2026-06-26) is still **open** — a scope-and-fit question, not an active review;
+siblings `punycoder` #779 and `pslr` #780 are in the same state. Run locally,
+`pkgcheck()` reports **"no CI"**, which is a false negative from a missing
+`GITHUB_PAT`: its badge probe cannot reach the Actions API, while `has_ci` is
+`TRUE`. Do not chase it.
+
 ### Dependency resolvability — a release check, across all seven repos
 
 ```sh
@@ -108,6 +134,21 @@ pre-push gate would make every push fail on a train. Run it before a release,
 and after changing any floor, `Remotes:` entry, or `dep::symbol` call site.
 `--offline` scores from the artifact cache and aborts on a miss rather than
 guessing.
+
+**When a test reaches into `pslr`, `punycoder` or `raddr`, check two things, not
+one.** First that the export exists in the **released** version the
+`DESCRIPTION` floor admits — `getNamespaceExports()` on your machine proves
+nothing, because locally the dependency *is* the development tree. Then that the
+**capability** exists there: read the released function's formals and its C++
+source. A skip guard that looks like it leaves a coverage gap may leave none at
+all, because the property is undefined on what actually ships — released
+`punycoder` compiles one Unicode table, so "invariant across offered Unicode
+versions" is not untested there, it is *empty*. Name the **dev** version in the
+guard, not the next release: the next release skips on every dev checkout, which
+is the only machine where the assertion can run.
+
+The submission order these floors sit inside is
+[design/release-chain.md](design/release-chain.md).
 
 ### `cran-comments.md`, and the half of its gate that needs the network
 
@@ -189,6 +230,36 @@ then, read those files as manifests, not as promises that anything runs.
 `goodpractice::gp()` runs, and its header documents every intentional
 deviation — read that header before "fixing" a lint or adding a linter.
 
+## Design posture
+
+Standing owner mandate. ADRs 0007 and 0016 assume it; none of them states it.
+
+**On standards-conformance work, the conformant behavior ships as the DEFAULT,
+never as an opt-in compatibility flag.** A behavior a standard calls invalid is
+a bug even when it has shipped, and preserving it trades away the one thing this
+package is for. Record the break in `NEWS.md` citing the standard and the
+clause, and check the reverse-dependency gates before moving a floor. "Keep the
+old output for compatibility" is not a serious option to put on the table.
+
+The CRAN backward-compatibility constraint governs **gratuitous API churn** and
+nothing else. In particular it does not reach `url_standard = NULL`, whose
+freeze is a compatibility *promise* rather than a conformance *claim* — the NULL
+arm names no standard, so there is nothing for it to be wrong against
+([ADR 0007](design/adr/0007-url-standard-selector.md), with the causation
+boundary in [ADR 0016](design/adr/0016-null-freeze-binds-selector-caused-drift.md)).
+
+## Reading the tracker
+
+`done` on this repository's fp tracker often means **closed as a record**, not
+"question answered". The 2026-07-31 backlog migration closed issues with
+verbatim boilerplate as the live questions moved to an outcome carrier: only
+three of RURL-unroqtac's nine closed children are actually answered.
+
+So read **closure comments**, never status fields, and treat an epic whose
+children are all `done` as a claim to verify rather than a signal to close.
+Skipping this produced a wrong claim in two consecutive handovers. The cheapest
+disproof is usually a date on the closure comment.
+
 ## Protected code
 
 Four areas are frozen by ADR. Read the ADR before editing:
@@ -205,4 +276,15 @@ Four areas are frozen by ADR. Read the ADR before editing:
 - [CONTRIBUTING.md](CONTRIBUTING.md) — issue and PR workflow, validation policy,
   CRAN release checklist.
 - [design/](design/) — ADRs for *why* a decision holds, accepted PRDs for *what*
-  was specified.
+  was specified. Its [README](design/README.md) lists the whole tree; four
+  standing method notes are worth naming here:
+  - [design/measurement-traps.md](design/measurement-traps.md) — how a green
+    test, gate or harness returns a plausible wrong number. Read before building
+    or extending any instrument.
+  - [design/oracle-pinning.md](design/oracle-pinning.md) — what a `verified` pin
+    asserts, and what has to happen before the string is written.
+  - [design/oracle-fixtures.md](design/oracle-fixtures.md) — which columns of
+    `external-url-vectors.csv` are posture-scoped claims and must not be
+    "corrected".
+  - [design/release-chain.md](design/release-chain.md) — the seven-package CRAN
+    submission order and the sibling-pinning rule.

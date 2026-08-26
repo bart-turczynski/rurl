@@ -15,6 +15,14 @@
 - Tracker housekeeping, including reorganizing issues or updating their status,
   does not amend the product protocol. Change protocol records only when the
   product contract or its evidence actually changes.
+- **Read the governing PRD or ADR before escalating a URL design question, and
+  escalate only what they genuinely leave open.** The posture model, the
+  scheme-inference seam, the scheme-overlay rule and the credential policy are
+  all already settled in writing; re-deriving them from first principles
+  manufactures decision forks the records have already closed.
+- Escalate **behavior, public API and conformance posture** — nothing else.
+  Cosmetic release hygiene, version strings and dev suffixes are decided locally
+  and the rationale recorded on the ticket.
 
 ## Constraints
 
@@ -27,6 +35,11 @@
   live in the `pslr` package. `rurl` ships no PSL list of its own and queries
   `pslr` through the `R/domain.R` seam. The delegation contract is in
   [ARCHITECTURE.md](ARCHITECTURE.md) and [ADR 0001](design/adr/0001-delegate-psl-to-pslr.md).
+- `ACKNOWLEDGMENTS.md` is a **synced canonical file**, byte-identical across
+  `rurl`, `pslr`, `punycoder`, `pagerankr` and `sitemapr`, and `.Rbuildignore`d
+  in all five. Its only CRAN-visible surface is each package's intro vignette
+  `## Acknowledgments` section plus a pkgdown navbar link. Any edit must be
+  applied to all five repositories; verify with `md5 -q`.
 
 ## Validation
 
@@ -52,6 +65,15 @@
   not a substitute for `tools/verify.R`. A green suite says nothing about
   whether the package builds: `devtools::test()` ignores `Collate:` and runs
   against the source tree, not an installed copy.
+- **Any path whose bytes a tool owns must be excluded from the whitespace
+  fixers**, and belongs in the shared `&byte-pinned` exclude in
+  `.pre-commit-config.yaml`. Two kinds qualify: files testthat rewrites on
+  passing runs (`tests/testthat/_snaps/*.md`), and the hash-pinned oracle
+  fixtures under `inst/bench/` and `tests/testthat/fixtures/`. Left in, a fixer
+  mutates the tree during the push and the push then fails a gate the push
+  itself just broke — on a run whose verdict line printed `PASS`. Running
+  `tools/verify.R` by hand never reproduces this, because only the hook path
+  mutates the tree.
 - Add a new universal gate only when it has a relevant trigger surface, a named
   owner, and a stated retirement or review condition.
 - New prose in `DESCRIPTION`, `.Rd`, README, or vignettes should pass
@@ -61,12 +83,24 @@
 
 Follow these steps in order for every CRAN release. The first three and the
 fast-forward are the easiest to miss — skipping them leaves `NEWS.md`, the
-published version, and `main` out of sync.
+published version, and `main` out of sync. `rurl` is one link in a seven-package
+chain; [design/release-chain.md](design/release-chain.md) records the order and
+what must already be on CRAN before this checklist starts.
 
 1. **Update the NEWS heading.** Ensure the top `NEWS.md` heading matches the
    release version (e.g. `## rurl 1.2.0`) and fold any unreleased items into
-   that section. The `news-version` CI check enforces that the top NEWS heading
-   is either `(development version)` or the `DESCRIPTION` Version.
+   that section.
+
+   **Nothing checks this any more, and the freeze is why.** `rurl` ships as
+   3.0.0 with no further version bumps, so
+   `.github/workflows/news-version.yaml` — which asserts the top NEWS heading is
+   either `(development version)` or the `DESCRIPTION` Version — now compares
+   two constants and can never fail. It is also absent from `verify.yml`, so
+   `tools/verify.R` does not derive it. With the version bump gone as a
+   checkpoint, `## rurl 3.0.0` accumulates months of work with nothing asserting
+   that a user-visible change added an entry. The gate a freeze needs is NEWS
+   **completeness**, not NEWS/version **consistency**; until one exists, this
+   step is entirely manual.
 2. **Set the release version** in `DESCRIPTION`.
 3. Update `cran-comments.md` for this submission.
 4. Run `R CMD build . && R CMD check --as-cran rurl_*.tar.gz` clean. There is no
