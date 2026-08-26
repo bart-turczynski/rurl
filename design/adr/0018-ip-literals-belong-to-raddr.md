@@ -1,7 +1,7 @@
 # ADR 0018: IP literals belong to `raddr`, address policy to `ssrfr`
 
 - **Status:** Accepted
-- **Date:** 2026-07-28
+- **Date:** 2026-08-26 (the ruling was taken earlier and is recorded here)
 - **Tracking:** RURL-cbrfphfr (the scope ruling and the migration gate).
   RURL-dxwsksor (the missing `ipv6-*` diagnostics) and RURL-rhelasnq's
   loopback/private/link-local finding both resolve to this decision.

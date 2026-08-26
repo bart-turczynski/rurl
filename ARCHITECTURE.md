@@ -360,8 +360,15 @@ only under `port_handling != "exclude"`.
   oracle (336 success rows spanning 54 distinct schemes, plus 202 must-fail rows
   correctly rejected); the `rfc3986` profile at **519/519** on
   `tools/rfc3986-conformance-sweep.R`; and the acceptance split over the 257
-  fixture rows carrying an RFC 3986 oracle — **164 conforming, 93 departing**,
-  each departure naming the ADR or ticket that owns it. Not quotable: the `web`
+  fixture rows carrying an RFC 3986 oracle — **164 conforming, 93 departing**
+  *on the `clean_url` baseline*, each departure naming the ADR or ticket that
+  owns it. That split is surface-dependent and the surface is part of the
+  number: the same 257 rows re-baselined onto `serialize_url()` (P5.4) read
+  **179 / 78**, and the current 325-runnable corpus reads **235 / 90**. All
+  three are the acceptance axis and none of them is the serialization
+  headline. An acceptance split quoted without naming its surface is this
+  invariant's own trap in miniature — name the surface, or do not quote the
+  number. Not quotable: the `web`
   posture's **176/336**, because the other 160 are ADR 0004 allowlist rejections
   and not conformance misses; any RFC percentage out of
   `inst/bench/standard-parity.R`, whose oracle is 37 hand-authored probes and
