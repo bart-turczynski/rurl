@@ -354,6 +354,89 @@ only under `port_handling != "exclude"`.
   WPT headline (336/336, `tests/testthat/test-wpt-full-suite.R`); the two are
   never summed and the 247/274 split is not quoted as a conformance rate.
 
+  **Which conformance numbers may be quoted.** Every figure here is
+  dial-dependent, so measure at the canonical bundle and never at the defaults.
+  Quotable: `scheme_acceptance = "general"` at **538/538** on the widened WPT
+  oracle (336 success rows spanning 54 distinct schemes, plus 202 must-fail rows
+  correctly rejected); the `rfc3986` profile at **519/519** on
+  `tools/rfc3986-conformance-sweep.R`; and the acceptance split over the 257
+  fixture rows carrying an RFC 3986 oracle — **164 conforming, 93 departing**
+  *on the `clean_url` baseline*, each departure naming the ADR or ticket that
+  owns it. That split is surface-dependent and the surface is part of the
+  number: the same 257 rows re-baselined onto `serialize_url()` (P5.4) read
+  **179 / 78**, and the current 325-runnable corpus reads **235 / 90**. All
+  three are the acceptance axis and none of them is the serialization
+  headline. An acceptance split quoted without naming its surface is this
+  invariant's own trap in miniature — name the surface, or do not quote the
+  number. Not quotable: the `web`
+  posture's **176/336**, because the other 160 are ADR 0004 allowlist rejections
+  and not conformance misses; any RFC percentage out of
+  `inst/bench/standard-parity.R`, whose oracle is 37 hand-authored probes and
+  cannot cover a grammar; and the base-relative 247/274 above. `analysis/` is
+  read by no test, so nothing catches a stale figure there — re-derive from the
+  harness before citing one.
+
+- **Cut by byte position at the host and authority seams.** Locale-dependent
+  parse verdicts come from mixing two index units in one walk: `stri_*` indexes
+  **code points** (stringi decodes first) while base `substring()` / `nchar()`
+  index **native characters**, so on `"unknown"`-marked multibyte input a
+  position taken from one mis-slices the other. Worse, stringi marks every
+  capture UTF-8 unconditionally, so `substring()` on a captured authority throws
+  `invalid multibyte string` and aborts the whole vectorized call rather than
+  the row. Locate and cut in the same unit — bytes — using the
+  `.byte_substring()` / `.first_byte_index()` / `.last_byte_index()` /
+  `.grepl_decodable()` family in `R/utils.R`; declare native-marked input UTF-8
+  with `Encoding<-` (never `enc2utf8()`) and validate with `validUTF8()`.
+  `useBytes = TRUE` on a host-charset grep looks like the obvious fix and is
+  not: it **widens acceptance**, because an ASCII pattern then matches inside an
+  undecodable host and routes that row past a rejection it currently gets.
+
+- **No re-parse of a rewritten input.** Acceptance and spelling are separate
+  axes, and retry-on-failure conflates them by construction — the failure is its
+  trigger and the rewrite is its payload, so one component's bytes end up
+  deciding another component's spelling. The deleted `pqf` fallback is the worked
+  example: whether a `<` in the *path* was stored raw or as `%3C` depended on
+  whether the *query* happened to hold a space, under the very
+  `path_encoding = "keep"` the function claimed to protect. Put accept/reject in
+  the parser as a dial and leave rendering to the serializer, escaping only the
+  bytes whose **acceptance** the dial changes.
+
+- **The Appendix B scheme production holds the NULL freeze.** `.split_uri_ref()`
+  (`R/resolve.R`) keeps RFC 3986 Appendix B's loose `[^:/?#]+` scheme group on
+  the `url_standard = NULL` path **deliberately**. It looks like an obvious bug
+  to tighten — Appendix B is self-described as non-validating — but the NULL path
+  is byte-frozen (ADR 0007) and the §3.1 grammar moves 13 references per base.
+  The §3.1 production therefore ships on `"whatwg"` and `"rfc3986"` only, the two
+  selectors that claim a standard; NULL claims none, so there is nothing for it
+  to be wrong against. `.split_after_scheme()` uses §3.1 *unconditionally*, and
+  that is correct precisely because both its call sites are already
+  selector-gated. **Which production belongs at a site is answered by which
+  selectors can reach it, never by which is more correct.**
+
+- **`rfc3986` means the generic syntax, scheme-agnostic.** Scheme-specific RFC
+  constraints — RFC 9110 §4.2.1's empty-host MUST-reject, RFC 8089's file
+  narrowing — belong to the `scheme_acceptance` / web-profile axis, not to
+  `url_standard`, per ADR 0007's own one-axis-one-question rule. 29 of 519
+  grammar-valid corpus rows turn on this reading, so it is not a wording
+  preference. Settled from the same text: RFC 3986 §6.2.3's empty-path-equals-`/`
+  equivalence sits under *Normalization and Comparison*, not parsing — the parsed
+  path of `https://example.com` is **empty**, and `/` is correct only under
+  `form = "normalized"`.
+
+- **The `rfc3986` reject theme is routing, not grammar.** Every one of the 23
+  residual rejections closed at 519/519 was a lower-layer or scheme-specific rule
+  gating the scheme-agnostic selector, and four of the five fixes routed the row
+  to the parser already right about it — the general/opaque parser — rather than
+  teaching the web route a grammar it never modelled.
+
+- **Two curl-guidance findings that are not bugs.** Both have been filed as bugs
+  on sight. A raw space surviving in `mailto:a b@c.example` is conformant:
+  opaque paths use the WHATWG **C0-control** percent-encode set only
+  (`.whatwg_opaque_path_encode()`, `R/path-query.R`), and C0 controls *are*
+  encoded. And the absence of
+  loopback / private / link-local classification is settled layering, not an
+  oversight — see [ADR 0018](design/adr/0018-ip-literals-belong-to-raddr.md).
+
 ## Dependencies
 
 - `utils` — base-R helpers: `URLdecode()` on the host-decode path,
