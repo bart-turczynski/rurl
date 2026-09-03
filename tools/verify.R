@@ -112,7 +112,9 @@ opt_self_test <- "--self-test" %in% args
 # ---- helpers ----------------------------------------------------------------
 
 repo_root <- function() {
-  if (!file.exists("DESCRIPTION") || !dir.exists(".git")) {
+  # `.git` is a directory in a clone and a FILE in a `git worktree`; both are
+  # repositories, and subagents run the gate from worktrees.
+  if (!file.exists("DESCRIPTION") || !file.exists(".git")) {
     stop("run this from the repository root", call. = FALSE)
   }
   normalizePath(".")
