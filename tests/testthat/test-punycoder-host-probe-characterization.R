@@ -310,3 +310,37 @@ test_that("isolated check_hyphens covers leading/trailing/position-3-4 rules", {
   expect_false(is.na(call_a("ex-ample.com")))
   expect_false(is.na(call_a("exa-2mple.com")))
 })
+
+# --- The Unicode pin rurl inherits from punycoder (RURL-csdmuguh) ------------
+#
+# rurl passes no `unicode_version =` to punycoder anywhere: it deliberately
+# INHERITS punycoder's default table, so every IDN expectation in this package
+# is implicitly derived under whatever table the installed punycoder compiled.
+# This pins what was inherited, so that a pin move in punycoder fails HERE
+# first -- loudly, and naming the table -- rather than surfacing as scattered
+# fixture diffs in test-format-url.R and the WPT suite with nothing saying why.
+#
+# `normalization_profile_info()` is exported by every released punycoder the
+# floor admits (read from the CRAN tarball NAMESPACEs of 1.1.0 and 1.2.1), so
+# no dev-version skip guard is needed. Only the VALUE differs between released
+# and development punycoder, and both populations are pinned below, measured
+# 2026-09-04: CRAN 1.2.1, built into a throwaway library, reports Unicode
+# 16.0.0 under token `uts46-nontransitional-std3-v1` (its src/ carries exactly
+# one table, unicode_tables_16_0_0.cpp); the 1.2.1.9000 checkout reports
+# 17.0.0 under `uts46-nontransitional-std3-v2`. The boundary names the DEV
+# version because that is the lowest version that truthfully carries the new
+# table. When punycoder next moves its pin, update the literal for the
+# population it moved on, and record the move in NEWS.md.
+
+test_that("the Unicode pin rurl inherits from punycoder is the recorded one", {
+  info <- punycoder::normalization_profile_info()
+  expect_s3_class(info, "data.frame")
+  expect_identical(nrow(info), 1L)
+  expected <- if (utils::packageVersion("punycoder") >= "1.2.1.9000") {
+    list(unicode_version = "17.0.0", profile = "uts46-nontransitional-std3-v2")
+  } else {
+    list(unicode_version = "16.0.0", profile = "uts46-nontransitional-std3-v1")
+  }
+  expect_identical(info$unicode_version, expected$unicode_version)
+  expect_identical(info$profile, expected$profile)
+})

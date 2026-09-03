@@ -178,9 +178,9 @@ the single exception of the `curl` dependency removal, which changes no output.
 ## Dependencies
 
 `rurl` depends on R (>= 4.0.0). It imports `utils`, `stringi`,
-`punycoder (>= 1.2.0)` and `pslr (>= 1.1.0)`.
+`punycoder (>= 1.2.1)` and `pslr (>= 1.1.1)`.
 
-Both floors are satisfied by versions already on CRAN — `punycoder` 1.2.1 and
+Both floors name the versions already on CRAN — `punycoder` 1.2.1 and
 `pslr` 1.1.1 — so this submission resolves against current CRAN with no
 coordinated ordering required. There is no `Remotes:` field.
 
