@@ -28,8 +28,10 @@
 #       # roster's bijection counts; print what changed; exit 0. Free-text
 #       # cells are written as `TODO`; nothing existing is rewritten.
 #   Rscript design/work/url-v3/tools/validate-records.R --self-test
-#       # prove --regenerate on a temp copy of the real inputs: red before,
-#       # green after, diff exactly the one row.
+#       # (1) run the artifact-4 predicates (sections F, F2, G) on in-memory
+#       # fixtures, one positive and one negative case per rule (RUL-009);
+#       # (2) prove --regenerate on a temp copy of the real inputs: red
+#       # before, green after, diff exactly the one row.
 
 suppressWarnings(suppressMessages({
   ok <- requireNamespace("yaml", quietly = TRUE)
@@ -40,13 +42,772 @@ if (!ok) stop("validate-records.R needs the 'yaml' package")
 .vr_args <- commandArgs(trailingOnly = TRUE)
 .vr_regenerate <- "--regenerate" %in% .vr_args
 
-## --- --self-test: --regenerate proven on a copy of the real inputs ----------
-## Runs this script as a subprocess against a temp copy, because the checks
-## below are top-level code keyed to the working directory. Each scenario is
-## the same shape: remove one row (or add one export), assert the gate is RED,
-## regenerate, assert it is GREEN, and assert the file differs from its
-## pre-regeneration bytes by exactly the one row.
+## --- table parsers and the artifact-4 predicates (pure) -----------------------
+## Everything in this block is a function of its arguments: no `<<-`, no read of
+## the working tree. It sits AHEAD of the --self-test dispatch because the
+## self-test calls the same functions on in-memory fixtures that the live run
+## calls on the tree (RUL-009, RURL-ajplxzik). The checks that do read the tree
+## stay top-level code further down, in the order they always ran.
+gv <- function(r, k) if (!is.null(names(r)) && k %in% names(r)) r[[k]] else NA_character_
+
+# Split a table row into cells, honoring GitHub's backslash-escaped `\|` pipes
+# (a `\|` inside a cell is literal, not a column separator) via a perl lookbehind.
+.tcells  <- function(s) {
+  s <- sub("^\\s*\\|", "", sub("\\|\\s*$", "", s))
+  parts <- strsplit(s, "(?<!\\\\)\\|", perl = TRUE)[[1]]
+  trimws(gsub("\\|", "|", parts, fixed = TRUE))
+}
+.is_trow <- function(s) grepl("^\\s*\\|", s)
+.is_tsep <- function(s) grepl("^\\s*\\|[-:|[:space:]]*$", s) & grepl("-", s)
+# Parse every GitHub-style pipe table in a line vector into list(header, rows).
+parse_pipe_tables <- function(ln) {
+  tabs <- list(); i <- 1L; N <- length(ln)
+  while (i <= N) {
+    if (.is_trow(ln[i]) && i < N && .is_tsep(ln[i + 1L])) {
+      header <- .tcells(ln[i]); j <- i + 2L; rows <- list()
+      while (j <= N && .is_trow(ln[j]) && !.is_tsep(ln[j])) {
+        cs <- .tcells(ln[j])
+        rows[[length(rows) + 1L]] <- stats::setNames(cs, header[seq_along(cs)])
+        j <- j + 1L
+      }
+      tabs[[length(tabs) + 1L]] <- list(header = header, rows = rows); i <- j
+    } else i <- i + 1L
+  }
+  tabs
+}
+# Lines of a "## <name>" section (exclusive of the next "## ").
+section_lines <- function(ln, name) {
+  h <- which(grepl(sprintf("^##\\s+%s\\s*$", name), ln)); if (length(h) != 1) return(character(0))
+  nxt <- which(grepl("^##\\s", ln) & seq_along(ln) > h)
+  end <- if (length(nxt)) min(nxt) - 1L else length(ln)
+  ln[(h + 1):end]
+}
+
+# --- artifact-4 helpers (P0.6: invariant half + roster half) -----------------
+# The three roster table shapes. Named once so section F can assert their ABSENCE
+# from the gate-pinned invariant and section G their presence in the roster.
+PSD_EXPORT_HDR <- c("export", "owning contract(s)", "v3 disposition", "status")
+PSD_FIELD_HDR  <- c("field", "owning contract(s)", "v3 disposition", "status")
+PSD_ITEM_HDR   <- c("item", "owning contract", "v3 disposition", "status")
+
+# G3 leaf -> owning contract filename, read out of the invariant's legend table.
+# Read rather than hardcoded: the legend is the invariant's to state, and a leaf
+# that names a nonexistent contract must fail loudly instead of being ignored.
+psd_legend <- function(ln) {
+  out <- list()
+  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
+               parse_pipe_tables(ln))
+  if (length(lg) != 1) return(out)
+  for (r in lg[[1]]$rows) {
+    leaf <- trimws(gv(r, "G3 leaf") %||% "")
+    cn <- gsub("`", "", trimws(gv(r, "contract") %||% ""), fixed = TRUE)
+    if (grepl("^G3\\.[0-9A-Z]+$", leaf) && nzchar(cn)) out[[leaf]] <- paste0(cn, ".md")
+  }
+  out
+}
+
+# G3 leaf -> the accepted decisions the legend says that leaf governs. Same table
+# as psd_legend(), fourth column. Used to check that a SETTLED roster row cites a
+# decision its OWNER actually projects, not merely something Pn.n@sha-shaped:
+# RURL-nravluqd was a roster row citing P3.3 while G3.K did not project it, which
+# the shape-only check below could not see.
+psd_legend_decisions <- function(ln) {
+  out <- list()
+  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
+               parse_pipe_tables(ln))
+  if (length(lg) != 1) return(out)
+  dcol <- "governing accepted decisions"
+  if (!dcol %in% lg[[1]]$header) return(out)
+  for (r in lg[[1]]$rows) {
+    leaf <- trimws(gv(r, "G3 leaf") %||% "")
+    if (!grepl("^G3\\.[0-9A-Z]+$", leaf)) next
+    out[[leaf]] <- unlist(regmatches(gv(r, dcol) %||% "",
+                                     gregexpr("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", gv(r, dcol) %||% "")))
+  }
+  out
+}
+
+# G3 leaf -> the §6 artifact number the legend assigns it. Same table again, third
+# column, digits only ("10 (cache)" and "10 (host)" both yield "10"). Used by the
+# agreement check to verify that a row naming "artifact N (G3.X)" pairs an
+# artifact with the leaf the legend actually puts there.
+psd_legend_artifacts <- function(ln) {
+  out <- list()
+  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
+               parse_pipe_tables(ln))
+  if (length(lg) != 1) return(out)
+  acol <- "§6 artifact"
+  if (!acol %in% lg[[1]]$header) return(out)
+  for (r in lg[[1]]$rows) {
+    leaf <- trimws(gv(r, "G3 leaf") %||% "")
+    if (!grepl("^G3\\.[0-9A-Z]+$", leaf)) next
+    out[[leaf]] <- gsub("[^0-9]", "", gv(r, acol) %||% "")
+  }
+  out
+}
+
+# Roster cell -> its raw "owning contract(s)" text, parsed out of the roster
+# half's lines. The agreement section (invariant half) asserts things ABOUT
+# roster rows, so it cannot be checked without them. psd_roster_owners(), below
+# the live run's derived sets, memoizes this over the tree.
+psd_roster_cells <- function(ln) {
+  out <- list()
+  for (tb in parse_pipe_tables(ln)) {
+    key <- tb$header[[1]]
+    if (!key %in% c("export", "field", "item")) next
+    own <- if ("owning contract(s)" %in% tb$header) "owning contract(s)" else
+      if ("owning contract" %in% tb$header) "owning contract" else next
+    for (r in tb$rows) {
+      cell <- gsub("`", "", trimws(gv(r, key) %||% ""), fixed = TRUE)
+      if (nzchar(cell)) out[[cell]] <- gv(r, own) %||% ""
+    }
+  }
+  out
+}
+
+# English number words the agreement column may use in place of a digit. Kept
+# small on purpose: a count phrase the checker cannot resolve must not silently
+# become an unchecked claim, so anything outside this set fails the lookup and
+# the row falls back to needing a resolvable term for its anchor.
+PSC_NUMWORDS <- c(one = 1L, two = 2L, three = 3L, four = 4L, five = 5L,
+                  six = 6L, seven = 7L, eight = 8L, nine = 9L, ten = 10L)
+psc_as_count <- function(x) {
+  x <- tolower(trimws(x))
+  if (grepl("^[0-9]+$", x)) return(as.integer(x))
+  if (x %in% names(PSC_NUMWORDS)) return(PSC_NUMWORDS[[x]])
+  NA_integer_
+}
+
+# A per-predicate accumulator with check()'s contract, minus the `<<-`: the
+# predicate RETURNS what it found -- its failure messages, with the number of
+# checks it evaluated as attr "checks" -- and the live run feeds that into the
+# global accumulator through absorb(), one pass per check that raised nothing.
+# That is what lets --self-test run sections F, F2 and G on in-memory fixtures
+# and prove each rule goes red on a mutation (RUL-009).
+psd_acc <- function() {
+  a <- new.env(parent = emptyenv())
+  a$n <- 0L
+  a$msgs <- character(0)
+  a$check <- function(cond, msg) {
+    a$n <- a$n + 1L
+    if (!isTRUE(cond)) a$msgs <- c(a$msgs, msg)
+    invisible(NULL)
+  }
+  a$result <- function() structure(a$msgs, checks = a$n)
+  a
+}
+
+## F. artifact 4, invariant half — the ownership rule itself ---------------------
+## The G3-pinned file must state I1-I5 and the legend, and must NOT contain a
+## roster table: the split is enforced structurally, not just described in a
+## comment, so a well-meaning future edit cannot quietly re-merge the halves
+## and restore the cascade.
+##   ln              lines of public-surface-closure.md
+##   cells           roster cell -> owner text (psd_roster_cells() of the roster)
+##   fields          the derived public-output-field set (.spu_result_fields)
+##   contract_exists function(<contract filename>) -> logical
+##   adr_exists      function(<four-digit ADR number>) -> logical
+psd_closure_failures <- function(ln, cells, fields, contract_exists, adr_exists) {
+  a <- psd_acc(); check <- a$check
+  tabs <- parse_pipe_tables(ln)
+  for (h in list(PSD_EXPORT_HDR, PSD_FIELD_HDR, PSD_ITEM_HDR))
+    check(!any(vapply(tabs, function(t) identical(t$header, h), TRUE)),
+          sprintf("public-surface-closure: roster table [%s] belongs in public-surface-disposition.md (P0.6)",
+                  paste(h, collapse = " | ")))
+  for (i in sprintf("I%d", 1:5))
+    check(any(grepl(sprintf("\\*\\*%s ", i), ln, fixed = FALSE)),
+          sprintf("public-surface-closure: invariant clause %s is not stated", i))
+  check(!any(grepl("^##\\s+Bijection", ln)),
+        "public-surface-closure: a Bijection (count) table must not live in the gate-pinned invariant (P0.6 I1)")
+  lg <- psd_legend(ln)
+  check(length(lg) >= 8L,
+        sprintf("public-surface-closure: owning-contract legend must map at least 8 G3 leaves (got %d)",
+                length(lg)))
+  for (leaf in names(lg))
+    check(contract_exists(lg[[leaf]]),
+          sprintf("public-surface-closure: legend leaf %s names no contract file (%s)", leaf, lg[[leaf]]))
+
+  ## F2. the cross-artifact agreement rows (PS s1) --------------------------
+  ## The section claims the roster's VOCABULARY agrees with the owning
+  ## contracts; until RURL-jzgelfto nothing read it, so the eight TR-PS-s1-*
+  ## claims were assertion-only. The trap the ticket names is real: every row
+  ## is SETTLED today, so a status-shaped check certifies nothing. These four
+  ## predicates are therefore all about RESOLUTION against derived facts —
+  ## the legend, the roster half, NAMESPACE, .spu_result_fields — and each
+  ## was proved to go red by mutation before being trusted green.
+  agr <- Filter(function(t) identical(t$header,
+                                      c("shared concept", "canonical owner", "agreement", "status")),
+                tabs)
+  check(length(agr) == 1,
+        "public-surface-closure: cross-artifact agreement table (shared concept | canonical owner | agreement | status) not found")
+  if (length(agr) == 1) {
+    lga <- psd_legend_artifacts(ln)
+    check(length(cells) >= 1,
+          "public-surface-closure: could not read the roster half's cells to check the agreement rows")
+    for (r in agr[[1]]$rows) {
+      concept <- gv(r, "shared concept") %||% ""
+      owner <- gv(r, "canonical owner") %||% ""
+      agree <- gv(r, "agreement") %||% ""
+      st <- trimws(gv(r, "status") %||% "")
+      lab <- if (nzchar(concept)) concept else owner
+      check(st %in% c("SETTLED", "OPEN"),
+            sprintf("public-surface-closure agreement [%s]: status '%s' not in {SETTLED, OPEN}", lab, st))
+
+      ## (a) the canonical owner resolves — leaf in the legend, and the
+      ## artifact number is the one the legend puts on that leaf. A row
+      ## naming a coherent-looking but wrong pair is the failure this catches.
+      leaves <- unique(regmatches(owner, gregexpr("G3\\.[0-9A-Z]+", owner))[[1]])
+      check(length(leaves) >= 1,
+            sprintf("public-surface-closure agreement [%s]: canonical owner names no G3 leaf: '%s'", lab, owner))
+      for (lf in leaves)
+        check(lf %in% names(lg),
+              sprintf("public-surface-closure agreement [%s]: owner leaf '%s' is not in the legend", lab, lf))
+      anum <- regmatches(owner, regexpr("(?<=artifact )[0-9]+", owner, perl = TRUE))
+      adrs <- unique(regmatches(owner, gregexpr("ADR [0-9]{4}", owner))[[1]])
+      check(length(anum) == 1 || length(adrs) >= 1,
+            sprintf("public-surface-closure agreement [%s]: canonical owner names neither a §6 artifact nor an ADR: '%s'",
+                    lab, owner))
+      if (length(anum) == 1 && length(leaves) >= 1) {
+        expected <- unique(unlist(lga[leaves]))
+        check(length(expected) >= 1 && anum %in% expected,
+              sprintf("public-surface-closure agreement [%s]: owner says artifact %s but the legend puts %s on artifact %s",
+                      lab, anum, paste(leaves, collapse = "/"),
+                      if (length(expected)) paste(expected, collapse = "/") else "<none>"))
+      }
+      for (ad in adrs)
+        check(adr_exists(sub("ADR ", "", ad)),
+              sprintf("public-surface-closure agreement [%s]: cites %s, which is not a file in design/adr", lab, ad))
+
+      ## (b) every term the row names is a real roster cell. A trailing `*`
+      ## is a glob over cell names and must match at least one — the glob
+      ## `rurl_cache_*` silently matched two of the three cache surfaces
+      ## because the third is spelled `rurl_clear_caches` (RURL-jzgelfto).
+      raw <- unlist(regmatches(c(concept, agree), gregexpr("`[^`]+`", c(concept, agree))))
+      terms <- unique(gsub("`", "", raw, fixed = TRUE))
+      terms <- terms[grepl("^[A-Za-z_][A-Za-z0-9_]*\\*?$", terms)]
+      matched <- character(0)
+      for (tm in terms) {
+        hits <- if (grepl("\\*$", tm))
+          grep(sprintf("^%s", sub("\\*$", "", tm)), names(cells), value = TRUE)
+        else intersect(tm, names(cells))
+        check(length(hits) >= 1,
+              sprintf("public-surface-closure agreement [%s]: term '%s' names no roster cell", lab, tm))
+        matched <- union(matched, hits)
+      }
+
+      ## (c) at least one cell the row names is owned by the leaf the row
+      ## names. Rows legitimately mention a neighbouring contract's cell for
+      ## contrast (`clean_url` in the key row), so this is "at least one",
+      ## not "all" — but it still fails a row assigned to the wrong owner,
+      ## which (a) and (b) both pass.
+      if (length(matched)) {
+        linked <- vapply(matched, function(cl)
+          any(vapply(leaves, function(lf) grepl(lf, cells[[cl]], fixed = TRUE), TRUE)), TRUE)
+        check(any(linked),
+              sprintf("public-surface-closure agreement [%s]: none of the roster cells it names (%s) is owned by %s",
+                      lab, paste(matched, collapse = ", "), paste(leaves, collapse = "/")))
+      }
+
+      ## (d) a transcribed count must equal the derived one. I1 bans counts
+      ## from artifact 4 for exactly this reason; the two shapes this section
+      ## actually uses are checked rather than trusted. A count phrase whose
+      ## number is unreadable resolves to NA and fails here rather than
+      ## passing silently.
+      counted <- 0L
+      pf <- regmatches(concept, regexpr("(?i)(?<=\\bthe )\\S+(?= public fields)", concept, perl = TRUE))
+      if (length(pf) == 1) {
+        counted <- counted + 1L
+        check(identical(psc_as_count(pf), length(fields)),
+              sprintf("public-surface-closure agreement [%s]: says '%s public fields' but .spu_result_fields has %d (I1)",
+                      lab, pf, length(fields)))
+      }
+      nr <- regmatches(agree, regexpr("(?i)(?<=\\bthe )\\S+(?=\\s[^|]*\\brows\\b)", agree, perl = TRUE))
+      if (length(nr) == 1 && !is.na(psc_as_count(nr))) {
+        counted <- counted + 1L
+        check(identical(psc_as_count(nr), length(matched)),
+              sprintf("public-surface-closure agreement [%s]: says '%s ... rows' but its terms name %d roster cell(s)",
+                      lab, nr, length(matched)))
+      }
+
+      ## (e) no row is inert. A row that neither names a resolvable cell nor
+      ## carries a verified count has nothing this validator can falsify, so
+      ## it would sit here SETTLED and unchecked — the nullity P0.9 §6 warns
+      ## about, and the reason this whole block exists.
+      check(length(matched) >= 1 || counted >= 1,
+            sprintf("public-surface-closure agreement [%s]: row is inert — it names no roster cell and carries no checkable count",
+                    lab))
+    }
+  }
+  a$result()
+}
+
+## G. artifact 4, roster half — I1-I5 over the per-cell rows -------------------
+## Not a gate input (P0.6). Everything here is DERIVED: the export set from
+## NAMESPACE, the field set from .spu_result_fields, the legend from the
+## invariant half. No count is transcribed, so growing the surface cannot make
+## this section stale.
+##   ln             lines of public-surface-disposition.md
+##   inv_ln         lines of public-surface-closure.md (the legend's home)
+##   exports        the derived export set (NAMESPACE)
+##   fields         the derived public-output-field set (.spu_result_fields)
+##   contract_lines function(<contract filename>) -> its lines, or character(0)
+psd_roster_failures <- function(ln, inv_ln, exports, fields, contract_lines) {
+  a <- psd_acc(); check <- a$check
+  tabs <- parse_pipe_tables(ln)
+  exp_tab <- Filter(function(t) identical(t$header, PSD_EXPORT_HDR), tabs)
+  fld_tab <- Filter(function(t) identical(t$header, PSD_FIELD_HDR), tabs)
+  itm_tab <- Filter(function(t) identical(t$header, PSD_ITEM_HDR), tabs)
+  check(length(exp_tab) == 1, "public-surface-disposition: exactly one exported-function roster table")
+  check(length(fld_tab) == 1, "public-surface-disposition: exactly one public-output-field roster table")
+  check(length(itm_tab) == 1, "public-surface-disposition: exactly one curl/migration roster table")
+
+  ## --- I1 + I2: population derived from source, compared BY NAME ----------
+  unq <- function(x) gsub("`", "", trimws(x %||% ""), fixed = TRUE)
+  if (length(exp_tab) == 1) {
+    rows_e <- vapply(exp_tab[[1]]$rows, function(r) unq(gv(r, "export")), "")
+    for (e in setdiff(exports, rows_e))
+      check(FALSE, sprintf("public-surface-disposition: NAMESPACE exports '%s' with no roster row (I2)", e))
+    for (e in setdiff(rows_e, exports))
+      check(FALSE, sprintf("public-surface-disposition: roster row '%s' is not a NAMESPACE export (I2)", e))
+    dup <- unique(rows_e[duplicated(rows_e)])
+    check(length(dup) == 0,
+          sprintf("public-surface-disposition: duplicate export row(s) %s (I2)", paste(dup, collapse = ", ")))
+  }
+  if (length(fld_tab) == 1) {
+    rows_f <- vapply(fld_tab[[1]]$rows, function(r) unq(gv(r, "field")), "")
+    src_f <- fields
+    check(length(src_f) >= 1,
+          "public-surface-disposition: could not derive the field set from .spu_result_fields (I1)")
+    for (f in setdiff(src_f, rows_f))
+      check(FALSE, sprintf("public-surface-disposition: .spu_result_fields has '%s' with no roster row (I2)", f))
+    for (f in setdiff(rows_f, src_f))
+      check(FALSE, sprintf("public-surface-disposition: roster row '%s' is not a .spu_result_fields entry (I2)", f))
+  }
+  if (length(itm_tab) == 1) {
+    items <- vapply(itm_tab[[1]]$rows, function(r) unq(gv(r, "item")), "")
+    check(sum(grepl("^curl-", items)) >= 1L,
+          "public-surface-disposition: no curl-dependency row (§10 curl surface)")
+    check(sum(items == "migration-surface") == 1L,
+          "public-surface-disposition: exactly one migration-surface row required")
+  }
+
+  ## --- the Bijection table is VERIFIED against source, never pinned -------
+  bij <- Filter(function(t) "surface class" %in% t$header && "count" %in% t$header, tabs)
+  check(length(bij) == 1, "public-surface-disposition: bijection table (surface class | count) not found")
+  if (length(bij) == 1 && length(exp_tab) == 1 && length(fld_tab) == 1 && length(itm_tab) == 1) {
+    labels <- vapply(bij[[1]]$rows, function(r) tolower(gv(r, "surface class") %||% ""), "")
+    nums <- vapply(bij[[1]]$rows, function(r) {
+      d <- gsub("[^0-9]", "", gv(r, "count") %||% "")
+      if (nzchar(d)) as.integer(d) else NA_integer_
+    }, integer(1))
+    tot_i <- grep("total", labels)
+    comp_i <- setdiff(seq_along(labels), tot_i)
+    derived <- length(exports) + length(fields) + length(itm_tab[[1]]$rows)
+    check(sum(nums[comp_i], na.rm = TRUE) == derived,
+          sprintf("public-surface-disposition: bijection components sum to %d but the derived surface is %d (NAMESPACE + .spu_result_fields + curl/migration rows)",
+                  sum(nums[comp_i], na.rm = TRUE), derived))
+    check(length(tot_i) == 1 && identical(nums[tot_i[1]], derived),
+          sprintf("public-surface-disposition: bijection total is %s but the derived surface is %d",
+                  if (length(tot_i) == 1) nums[tot_i[1]] else "<none>", derived))
+  }
+
+  ## --- I2/I3/I4: every row is owned, and every citation resolves ----------
+  lg <- psd_legend(inv_ln)
+  check(length(lg) >= 8L,
+        "public-surface-disposition: could not read the owning-contract legend from the invariant half")
+  psd_leg_dec <- psd_legend_decisions(inv_ln)
+  check(length(psd_leg_dec) >= 8L,
+        "public-surface-disposition: could not read the legend's governing-decision column")
+  ctext <- list()
+  for (f in unique(unlist(lg))) ctext[[f]] <- contract_lines(f)
+  for (tb in c(exp_tab, fld_tab, itm_tab)) {
+    key <- tb$header[[1]]
+    own_col <- if ("owning contract(s)" %in% tb$header) "owning contract(s)" else "owning contract"
+    for (r in tb$rows) {
+      cell <- unq(gv(r, key))
+      owner_raw <- gv(r, own_col) %||% ""
+      st_raw <- gv(r, "status") %||% ""
+      st <- sub("\\s.*$", "", trimws(st_raw))
+      check(st %in% c("SETTLED", "OPEN"),
+            sprintf("public-surface-disposition %s: status '%s' not in {SETTLED, OPEN}", cell, st_raw))
+      leaves <- unique(regmatches(owner_raw, gregexpr("G3\\.[0-9A-Z]+", owner_raw))[[1]])
+      downstream <- grepl("artifact 11|artifact 4", owner_raw)
+      check(length(leaves) >= 1 || downstream,
+            sprintf("public-surface-disposition %s: names no owning contract (I2): '%s'", cell, owner_raw))
+      for (lf in leaves)
+        check(lf %in% names(lg),
+              sprintf("public-surface-disposition %s: owning contract '%s' is not in the legend (I2)", cell, lf))
+      disp <- gv(r, "v3 disposition") %||% ""
+      if (identical(st, "SETTLED")) {
+        # I3: a SETTLED row must cite the accepted decision its owner projects
+        # (P-tier ref, an ADR, or — for the migration row — its discharge).
+        ok <- grepl("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", disp) ||
+          grepl("ADR [0-9]{4}", disp) || grepl("discharged", disp)
+        check(ok, sprintf("public-surface-disposition %s: SETTLED cites no decision, ADR, or discharge (I3): '%s'",
+                          cell, disp))
+        # I3, second half: the citation must be one the OWNER projects. The
+        # check above is shape-only, so a row could cite a decision its owning
+        # contract has never heard of and still pass — which is exactly how
+        # RURL-nravluqd survived (`url_key_policy` cited P3.3 while G3.K's
+        # legend row listed only P3.1 and P3.2, and the contract never
+        # mentioned it). Silent when a leaf lists no decisions, so the
+        # artifact-11/artifact-4 rows are unaffected.
+        cited <- regmatches(disp, gregexpr("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", disp))[[1]]
+        allowed <- unique(unlist(psd_leg_dec[leaves]))
+        if (length(cited) && length(allowed)) {
+          for (pd in setdiff(cited, allowed))
+            check(FALSE, sprintf(
+              "public-surface-disposition %s: SETTLED cites %s, which the legend does not list for %s (I3)",
+              cell, pd, paste(leaves, collapse = "/")))
+        }
+      } else if (identical(st, "OPEN")) {
+        # I3/I4: each -O id cited must EXIST in one of the owning contracts.
+        # "HOST-O2/O4" is shorthand: a bare /O<n> inherits the last prefix.
+        toks <- regmatches(st_raw, gregexpr("[A-Z]+-O[0-9]+|/O[0-9]+", st_raw))[[1]]
+        ids <- character(0); last_pref <- NA_character_
+        for (tk in toks) {
+          if (grepl("^/O", tk)) {
+            if (!is.na(last_pref)) ids <- c(ids, paste0(last_pref, "-", sub("^/", "", tk)))
+          } else {
+            ids <- c(ids, tk); last_pref <- sub("-O[0-9]+$", "", tk)
+          }
+        }
+        named_downstream <- grepl("artifact 11|S1 s/v|RCON-08|P4 host", st_raw) || downstream
+        check(length(ids) >= 1 || named_downstream,
+              sprintf("public-surface-disposition %s: OPEN cites neither an open-cell id nor a named downstream artifact (I3): '%s'",
+                      cell, st_raw))
+        for (id in unique(ids)) {
+          hay <- unlist(ctext[unique(unlist(lg[leaves]))], use.names = FALSE)
+          if (length(hay) == 0) hay <- unlist(ctext, use.names = FALSE)
+          check(any(grepl(id, hay, fixed = TRUE)),
+                sprintf("public-surface-disposition %s: OPEN cites '%s', which appears in none of its owning contracts (%s) — dangling citation (I3)",
+                        cell, id, paste(leaves, collapse = ", ")))
+        }
+      }
+    }
+  }
+
+  ## --- I4: the roster opens nothing of its own ----------------------------
+  obody2 <- section_lines(ln, "Open cells")
+  check(!any(grepl("PSD-O[0-9]+", obody2)),
+        "public-surface-disposition: the roster must not define open cells of its own (I4)")
+  check(any(grepl("PSC-O", obody2)),
+        "public-surface-disposition: ## Open cells must forward to the invariant's PSC-O groups (I4)")
+  a$result()
+}
+
+## --- --self-test ---------------------------------------------------------------
+## Two halves. (1) The F/F2/G predicates above, run on small in-memory fixtures:
+## one positive case per rule (the unmutated fixture raises nothing under it)
+## and one negative case per rule (a mutation that must raise it). A predicate
+## that stays green on its mutated input is the vacuity this exists to catch
+## (RUL-009). (2) --regenerate proven on a temp copy of the real inputs: run
+## as a subprocess, because the checks below are top-level code keyed to the
+## working directory; each scenario removes one row (or adds one export),
+## asserts the gate is RED, regenerates, asserts it is GREEN, and asserts the
+## file differs from its pre-regeneration bytes by exactly the one row.
 if ("--self-test" %in% .vr_args) {
+  ## (1) the predicates over synthetic fixtures ----------------------------
+  ## The world: six exports, three public fields, an eight-leaf legend, and
+  ## the two artifact-4 halves written against them. Every code path of F,
+  ## F2 and G is exercised by the baseline -- the number-word count, the
+  ## `*` glob, the ADR-only owner, the `/O<n>` shorthand, the named
+  ## downstream OPEN row, the SETTLED-by-discharge item row.
+  FX_EXPORTS <- c("alpha_fn", "beta_fn", "gamma_fn",
+                  "rurl_cache_config", "rurl_cache_info", "rurl_clear_caches")
+  FX_FIELDS <- c("host", "path", "query")
+  FX_ADRS <- "0006"
+  FX_CONTRACTS <- list(
+    "c3.md" = "# c3", "c5.md" = "# c5", "c6.md" = "# c6",
+    "c7.md" = c("# c7", "- OUT-O1 undivided userinfo"),
+    "c8.md" = "# c8", "c9.md" = "# c9",
+    "ch.md" = c("# ch", "- HOST-O2 de-overload", "- HOST-O4 reproducibility"),
+    "ck.md" = "# ck"
+  )
+  FX_CLOSURE <- c(
+    "# Public-surface closure (fixture)",
+    "",
+    "## The closure invariant",
+    "",
+    "**I1 — Population is derived, never transcribed.** text",
+    "**I2 — Every cell is owned.** text",
+    "**I3 — Every disposition is SETTLED or OPEN.** text",
+    "**I4 — No open question is invented in artifact 4.** text",
+    "**I5 — The Stage-A internals stay out.** text",
+    "",
+    "## Owning-contract legend",
+    "",
+    "| G3 leaf | contract | §6 artifact | governing accepted decisions |",
+    "|---|---|---|---|",
+    "| G3.3 | c3 | 3 | P1.1@aaaaaaa |",
+    "| G3.5 | c5 | 5 | P2.4@aaaaaaa |",
+    "| G3.6 | c6 | 6 | P2.1@aaaaaaa |",
+    "| G3.7 | c7 | 7 | P2.2@aaaaaaa |",
+    "| G3.8 | c8 | 8 | P2.2@aaaaaaa |",
+    "| G3.9 | c9 | 10 (cache) | P5.1@aaaaaaa |",
+    "| G3.H | ch | 10 (host) | P4.1@aaaaaaa |",
+    "| G3.K | ck | 9 | P3.1@aaaaaaa |",
+    "| — | verification contracts (NOT a G3 leaf) | 11 | downstream |",
+    "",
+    "## Cross-artifact agreement",
+    "",
+    "| shared concept | canonical owner | agreement | status |",
+    "|---|---|---|---|",
+    "| the three public fields | artifact 3 (G3.3) | every field row names an artifact-3 field | SETTLED |",
+    "| `alpha_fn` companion | artifact 6 (G3.6) | the `alpha_fn` row is companion | SETTLED |",
+    paste("| cache semantics | artifact 10 cache (G3.9) |",
+          "the three `rurl_cache_*` / `rurl_clear_caches` rows defer to G3.9 | SETTLED |"),
+    "| `beta_fn` stays companion | ADR 0006 (via G3.6) | `beta_fn` never widens the parse frame | SETTLED |",
+    "",
+    "## Open cells",
+    "",
+    "- **PSC-O1 — host dispositions.** `gamma_fn` forwards to G3.H HOST-O2/O4.",
+    ""
+  )
+  FX_ROSTER <- c(
+    "# Public-surface disposition (fixture)",
+    "",
+    "## Bijection",
+    "",
+    "| surface class | count | source of truth | status |",
+    "|---|---|---|---|",
+    "| exported functions | 6 | NAMESPACE | SETTLED |",
+    "| public output fields | 3 | .spu_result_fields | SETTLED |",
+    "| curl-dependency surfaces | 1 | DESCRIPTION | SETTLED |",
+    "| migration-surface | 1 | this roster | SETTLED |",
+    "| **total** | **11** | | |",
+    "",
+    "## Exported-function disposition roster",
+    "",
+    "| export | owning contract(s) | v3 disposition | status |",
+    "|---|---|---|---|",
+    "| `alpha_fn` | G3.6 | companion diagnostic (P2.1@aaaaaaa; ADR 0006) | SETTLED |",
+    "| `beta_fn` | G3.6 (+ G3.7) | stays companion (ADR 0006) | SETTLED |",
+    "| `gamma_fn` | G3.H | host surface; de-overload → HOST-O2, reproducibility → HOST-O4 | OPEN (HOST-O2/O4) |",
+    "| `rurl_cache_config` | G3.9 | cache config (P5.1@aaaaaaa) | SETTLED |",
+    "| `rurl_cache_info` | G3.9 | cache info (P5.1@aaaaaaa) | SETTLED |",
+    "| `rurl_clear_caches` | G3.9 (+ artifact 11) | clearing budget → §6 artifact 11 | OPEN (artifact 11) |",
+    "",
+    "## Public-output-field disposition roster",
+    "",
+    "| field | owning contract(s) | v3 disposition | status |",
+    "|---|---|---|---|",
+    "| `host` | G3.3 (+ G3.H) | presentation host (P1.1@aaaaaaa) | SETTLED |",
+    "| `path` | G3.3 | path projection (P1.1@aaaaaaa) | SETTLED |",
+    "| `query` | G3.3 (+ G3.7) | three-valued presence; undivided form → OUT-O1 | OPEN (OUT-O1) |",
+    "",
+    "## curl-dependency + migration-surface disposition",
+    "",
+    "| item | owning contract | v3 disposition | status |",
+    "|---|---|---|---|",
+    "| `curl-import` | §6 artifact 11 | removal downstream (RCON-09) | OPEN (artifact 11 / G4) |",
+    "| `migration-surface` | artifact 4 (this roster) | **discharged**: every cell maps to an owner | SETTLED |",
+    "",
+    "## Open cells",
+    "",
+    "No open cell is invented here; every OPEN row forwards to the invariant",
+    "half's **PSC-O1** group (`public-surface-closure.md`, `## Open cells`).",
+    ""
+  )
+  closure_run <- function(cl = FX_CLOSURE, ro = FX_ROSTER, cells = psd_roster_cells(ro),
+                          fields = FX_FIELDS, contracts = FX_CONTRACTS, adrs = FX_ADRS) {
+    psd_closure_failures(cl, cells = cells, fields = fields,
+                         contract_exists = function(f) f %in% names(contracts),
+                         adr_exists = function(n) n %in% adrs)
+  }
+  roster_run <- function(ro = FX_ROSTER, cl = FX_CLOSURE, exports = FX_EXPORTS,
+                         fields = FX_FIELDS, contracts = FX_CONTRACTS) {
+    psd_roster_failures(ro, inv_ln = cl, exports = exports, fields = fields,
+                        contract_lines = function(f)
+                          if (f %in% names(contracts)) contracts[[f]] else character(0))
+  }
+  # Fixture mutators. Fixed-string matching throughout: the fixtures are full
+  # of `|`, `*` and `(`, and a mutation that silently matched nothing would be
+  # a positive case wearing a negative case's label, so a miss is an error.
+  sub_line <- function(x, pattern, replacement) {
+    k <- grep(pattern, x, fixed = TRUE)
+    if (length(k) < 1L) stop("self-test fixture: no line contains ", pattern, call. = FALSE)
+    x[[k[[1L]]]] <- sub(pattern, replacement, x[[k[[1L]]]], fixed = TRUE)
+    x
+  }
+  drop_line <- function(x, pattern) {
+    k <- grep(pattern, x, fixed = TRUE)
+    if (length(k) < 1L) stop("self-test fixture: no line contains ", pattern, call. = FALSE)
+    x[-k[[1L]]]
+  }
+  add_after <- function(x, pattern, lines) {
+    k <- grep(pattern, x, fixed = TRUE)
+    if (length(k) < 1L) stop("self-test fixture: no line contains ", pattern, call. = FALSE)
+    append(x, lines, after = k[[1L]])
+  }
+
+  st <- new.env(parent = emptyenv())
+  st$pos <- 0L; st$neg <- 0L; st$failed <- character(0)
+  st_check <- function(label, ok, kind) {
+    if (isTRUE(ok)) {
+      if (identical(kind, "positive")) st$pos <- st$pos + 1L else st$neg <- st$neg + 1L
+    } else {
+      st$failed <- c(st$failed, label)
+      cat("  FAIL: ", label, "\n", sep = "")
+    }
+    invisible(NULL)
+  }
+  # One rule = one positive case (the baseline raises nothing matching
+  # `pattern`) + one negative case (the mutated run raises it).
+  base_closure <- closure_run()
+  base_roster <- roster_run()
+  rule <- function(label, pattern, mutated, base) {
+    st_check(paste0(label, " -- baseline green"), !any(grepl(pattern, base, fixed = TRUE)), "positive")
+    st_check(paste0(label, " -- mutation red"), any(grepl(pattern, mutated, fixed = TRUE)), "negative")
+  }
+  green <- function(label, got, pattern = NULL) {
+    ok <- if (is.null(pattern)) length(got) == 0L else !any(grepl(pattern, got, fixed = TRUE))
+    st_check(label, ok, "positive")
+  }
+
+  green("F/F2: closure baseline raises nothing", base_closure)
+  green("G: roster baseline raises nothing", base_roster)
+
+  ## -- F: the invariant half --------------------------------------------
+  rule("F roster-table absent", "roster table [export | owning contract(s)", base = base_closure,
+       closure_run(cl = add_after(FX_CLOSURE, "## Open cells",
+                                  c("| export | owning contract(s) | v3 disposition | status |",
+                                    "|---|---|---|---|", "| `x` | G3.3 | y | SETTLED |"))))
+  rule("F I1-I5 stated", "invariant clause I3 is not stated", base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "**I3 —", "**J3 —")))
+  rule("F no Bijection heading", "Bijection (count) table must not live", base = base_closure,
+       closure_run(cl = add_after(FX_CLOSURE, "## Open cells", "## Bijection")))
+  rule("F legend size", "legend must map at least 8 G3 leaves (got 7)", base = base_closure,
+       closure_run(cl = drop_line(FX_CLOSURE, "| G3.K | ck |")))
+  rule("F legend leaf's contract exists", "legend leaf G3.K names no contract file (missing.md)",
+       base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| G3.K | ck |", "| G3.K | missing |")))
+  green("F: the legend's non-leaf row (—) is not counted as a leaf",
+        closure_run(cl = add_after(FX_CLOSURE, "| — | verification",
+                                   "| — | more prose (NOT a G3 leaf) | 12 | none |")))
+
+  ## -- F2: the agreement rows ---------------------------------------------
+  rule("F2 agreement table present",
+       "agreement table (shared concept | canonical owner | agreement | status) not found",
+       base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| shared concept | canonical owner |", "| shared concept | owner |")))
+  rule("F2 roster cells readable", "could not read the roster half's cells", base = base_closure,
+       closure_run(cells = list()))
+  rule("F2 status vocabulary", "agreement [the three public fields]: status 'DONE' not in {SETTLED, OPEN}",
+       base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "artifact-3 field | SETTLED |", "artifact-3 field | DONE |")))
+  rule("F2(a) owner names a G3 leaf", "agreement [`alpha_fn` companion]: canonical owner names no G3 leaf",
+       base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| artifact 6 (G3.6) |", "| artifact 6 |")))
+  rule("F2(a) owner leaf is in the legend", "owner leaf 'G3.Z' is not in the legend", base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| artifact 6 (G3.6) |", "| artifact 6 (G3.Z) |")))
+  rule("F2(a) owner names an artifact or an ADR", "canonical owner names neither a §6 artifact nor an ADR",
+       base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| artifact 6 (G3.6) |", "| (G3.6) |")))
+  rule("F2(a) artifact number matches the legend", "owner says artifact 7 but the legend puts G3.6 on artifact 6",
+       base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| artifact 6 (G3.6) |", "| artifact 7 (G3.6) |")))
+  rule("F2(a) cited ADR is a file", "cites ADR 0099, which is not a file in design/adr", base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| ADR 0006 (via G3.6) |", "| ADR 0099 (via G3.6) |")))
+  rule("F2(b) term names a roster cell", "term 'omega_fn' names no roster cell", base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| `alpha_fn` companion |", "| `omega_fn` companion |")))
+  rule("F2(b) glob term matches at least one cell", "term 'rurl_nope_*' names no roster cell",
+       base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "`rurl_cache_*`", "`rurl_nope_*`")))
+  rule("F2(c) a named cell is owned by the named leaf",
+       "none of the roster cells it names (alpha_fn) is owned by G3.3", base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "| artifact 6 (G3.6) |", "| artifact 3 (G3.3) |")))
+  rule("F2(d) 'the N public fields' equals the derived count",
+       "says 'two public fields' but .spu_result_fields has 3 (I1)", base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "the three public fields", "the two public fields")))
+  rule("F2(d) an unreadable numeral fails rather than passes",
+       "says 'several public fields' but .spu_result_fields has 3 (I1)", base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "the three public fields", "the several public fields")))
+  green("F2(d) a digit numeral resolves like a number word",
+        closure_run(cl = sub_line(FX_CLOSURE, "the three public fields", "the 3 public fields")))
+  rule("F2(d) 'the N ... rows' equals the cells its terms name",
+       "says 'two ... rows' but its terms name 3 roster cell(s)", base = base_closure,
+       closure_run(cl = sub_line(FX_CLOSURE, "the three `rurl_cache_*`", "the two `rurl_cache_*`")))
+  rule("F2(e) no inert row", "agreement [prose only]: row is inert", base = base_closure,
+       closure_run(cl = add_after(FX_CLOSURE, "| `beta_fn` stays companion |",
+                                  "| prose only | artifact 3 (G3.3) | nothing this validator can falsify | SETTLED |")))
+
+  ## -- G: the roster half ---------------------------------------------------
+  rule("G exactly one export table", "exactly one exported-function roster table", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| export | owning contract(s) |", "| exports | owning contract(s) |")))
+  rule("G exactly one field table", "exactly one public-output-field roster table", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| field | owning contract(s) |", "| fields | owning contract(s) |")))
+  rule("G exactly one item table", "exactly one curl/migration roster table", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| item | owning contract |", "| items | owning contract |")))
+  rule("G I2 every export has a roster row", "NAMESPACE exports 'beta_fn' with no roster row (I2)",
+       base = base_roster, roster_run(ro = drop_line(FX_ROSTER, "| `beta_fn` |")))
+  rule("G I2 every export row is a NAMESPACE export", "roster row 'zeta_fn' is not a NAMESPACE export (I2)",
+       base = base_roster,
+       roster_run(ro = add_after(FX_ROSTER, "| `rurl_clear_caches` |",
+                                 "| `zeta_fn` | G3.6 | x (ADR 0006) | SETTLED |")))
+  rule("G I2 no duplicate export row", "duplicate export row(s) alpha_fn (I2)", base = base_roster,
+       roster_run(ro = add_after(FX_ROSTER, "| `alpha_fn` |", "| `alpha_fn` | G3.6 | again (ADR 0006) | SETTLED |")))
+  rule("G I1 the field set is derivable", "could not derive the field set from .spu_result_fields (I1)",
+       base = base_roster, roster_run(fields = character(0)))
+  rule("G I2 every field has a roster row", ".spu_result_fields has 'path' with no roster row (I2)",
+       base = base_roster, roster_run(ro = drop_line(FX_ROSTER, "| `path` |")))
+  rule("G I2 every field row is a .spu_result_fields entry",
+       "roster row 'extra' is not a .spu_result_fields entry (I2)", base = base_roster,
+       roster_run(ro = add_after(FX_ROSTER, "| `query` |", "| `extra` | G3.3 | x (P1.1@aaaaaaa) | SETTLED |")))
+  rule("G a curl-dependency row exists", "no curl-dependency row (§10 curl surface)", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| `curl-import` |", "| `kurl-import` |")))
+  rule("G exactly one migration-surface row", "exactly one migration-surface row required", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| `migration-surface` |", "| `migration-surfaces` |")))
+  rule("G bijection table present", "bijection table (surface class | count) not found", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| surface class | count |", "| surface klass | count |")))
+  rule("G bijection components sum to the derived surface",
+       "bijection components sum to 12 but the derived surface is 11", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| exported functions | 6 |", "| exported functions | 7 |")))
+  rule("G bijection total equals the derived surface", "bijection total is 12 but the derived surface is 11",
+       base = base_roster, roster_run(ro = sub_line(FX_ROSTER, "| **total** | **11** |", "| **total** | **12** |")))
+  rule("G legend readable from the invariant half",
+       "could not read the owning-contract legend from the invariant half", base = base_roster,
+       roster_run(cl = character(0)))
+  rule("G legend's decision column readable", "could not read the legend's governing-decision column",
+       base = base_roster,
+       roster_run(cl = sub_line(FX_CLOSURE, "governing accepted decisions", "decisions")))
+  rule("G row status vocabulary", "public-surface-disposition alpha_fn: status 'DONE' not in {SETTLED, OPEN}",
+       base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "ADR 0006) | SETTLED |", "ADR 0006) | DONE |")))
+  rule("G I2 row names an owning contract", "alpha_fn: names no owning contract (I2)", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| `alpha_fn` | G3.6 |", "| `alpha_fn` | nobody |")))
+  rule("G I2 owning contract is in the legend", "alpha_fn: owning contract 'G3.Z' is not in the legend (I2)",
+       base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| `alpha_fn` | G3.6 |", "| `alpha_fn` | G3.Z |")))
+  rule("G I3 SETTLED cites a decision, ADR or discharge",
+       "alpha_fn: SETTLED cites no decision, ADR, or discharge (I3)", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "companion diagnostic (P2.1@aaaaaaa; ADR 0006)", "companion diagnostic")))
+  rule("G I3 SETTLED cites a decision its owner projects",
+       "alpha_fn: SETTLED cites P3.3@aaaaaaa, which the legend does not list for G3.6 (I3)", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "(P2.1@aaaaaaa; ADR 0006)", "(P3.3@aaaaaaa)")))
+  green("G I3 is silent when the owner's legend row lists no decisions",
+        roster_run(cl = sub_line(FX_CLOSURE, "| G3.6 | c6 | 6 | P2.1@aaaaaaa |", "| G3.6 | c6 | 6 | — |")),
+        pattern = "which the legend does not list")
+  rule("G I3 OPEN cites an open-cell id or a named downstream artifact",
+       "gamma_fn: OPEN cites neither an open-cell id nor a named downstream artifact (I3)", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| OPEN (HOST-O2/O4) |", "| OPEN (later) |")))
+  rule("G I3 an OPEN citation resolves in an owning contract",
+       "gamma_fn: OPEN cites 'HOST-O9', which appears in none of its owning contracts (G3.H)", base = base_roster,
+       roster_run(ro = sub_line(FX_ROSTER, "| OPEN (HOST-O2/O4) |", "| OPEN (HOST-O9) |")))
+  green("G I3 the /O<n> shorthand inherits the prefix and resolves", base_roster, pattern = "HOST-O4")
+  rule("G I3 the /O<n> shorthand is checked, not skipped",
+       "gamma_fn: OPEN cites 'HOST-O4', which appears in none of its owning contracts (G3.H)", base = base_roster,
+       roster_run(contracts = modifyList(FX_CONTRACTS, list("ch.md" = c("# ch", "- HOST-O2 only")))))
+  rule("G I4 the roster opens no cell of its own", "must not define open cells of its own (I4)",
+       base = base_roster, roster_run(ro = add_after(FX_ROSTER, "half's **PSC-O1** group", "- PSD-O1 invented here")))
+  rule("G I4 the roster forwards to PSC-O groups", "## Open cells must forward to the invariant's PSC-O groups (I4)",
+       base = base_roster, roster_run(ro = sub_line(FX_ROSTER, "**PSC-O1** group", "**PSX-O1** group")))
+
+  cat(sprintf("validate-records.R --self-test: predicates F/F2/G: %d cases (%d positive, %d negative), %d failed\n",
+              st$pos + st$neg + length(st$failed), st$pos, st$neg, length(st$failed)))
+  if (length(st$failed)) quit(status = 1L)
+
+  ## (2) --regenerate proven on a copy of the real inputs ------------------
   fail <- function(msg) stop("self-test FAILED: ", msg, call. = FALSE)
   script <- normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[[1]]))
   run <- function(dir, flag = "") {
@@ -149,7 +910,9 @@ if ("--self-test" %in% .vr_args) {
         !identical(readLines(dis(d), warn = FALSE), b_dis))
     fail("--regenerate touched a tree that had nothing to regenerate")
 
-  cat("validate-records.R --self-test: PASS (3 regenerate scenarios + 1 no-op)\n")
+  cat(sprintf(paste0("validate-records.R --self-test: PASS (%d predicate cases: %d positive,",
+                     " %d negative; 3 regenerate scenarios + 1 no-op)\n"),
+              st$pos + st$neg, st$pos, st$neg))
   quit(status = 0L)
 }
 
@@ -160,6 +923,13 @@ rschemas  <- yaml::read_yaml(file.path(sdir, "record-schemas.yaml"))
 
 fail <- character(0); pass <- 0L
 check <- function(cond, msg) if (isTRUE(cond)) pass <<- pass + 1L else fail <<- c(fail, msg)
+# The artifact-4 predicates (psd_closure_failures, psd_roster_failures) RETURN
+# their findings; this feeds them into the same accumulator, one pass per
+# evaluated check that raised nothing, so the count and output are unchanged.
+absorb <- function(res) {
+  pass <<- pass + attr(res, "checks") - length(res)
+  fail <<- c(fail, as.character(res))
+}
 valid_states <- names(lifecycle$states)
 
 read_frontmatter <- function(path) {
@@ -247,7 +1017,6 @@ fd_fields <- rschemas$record_types$register$variants$finding$row_fields
 env_fields <- yaml::read_yaml(file.path(sdir, "envelope.yaml"))$required_envelope_fields
 
 # Read the pipe-table under the "## Rows" heading of a register file.
-gv <- function(r, k) if (!is.null(names(r)) && k %in% names(r)) r[[k]] else NA_character_
 read_rows <- function(path) {
   ln <- readLines(path, warn = FALSE)
   h  <- which(grepl("^##\\s+Rows\\s*$", ln))
@@ -698,31 +1467,6 @@ contracts_dir <- file.path(root, "contracts")
 contract_n <- 0L
 contract_checks_before <- pass + length(fail)
 
-# Split a table row into cells, honoring GitHub's backslash-escaped `\|` pipes
-# (a `\|` inside a cell is literal, not a column separator) via a perl lookbehind.
-.tcells  <- function(s) {
-  s <- sub("^\\s*\\|", "", sub("\\|\\s*$", "", s))
-  parts <- strsplit(s, "(?<!\\\\)\\|", perl = TRUE)[[1]]
-  trimws(gsub("\\|", "|", parts, fixed = TRUE))
-}
-.is_trow <- function(s) grepl("^\\s*\\|", s)
-.is_tsep <- function(s) grepl("^\\s*\\|[-:|[:space:]]*$", s) & grepl("-", s)
-# Parse every GitHub-style pipe table in a line vector into list(header, rows).
-parse_pipe_tables <- function(ln) {
-  tabs <- list(); i <- 1L; N <- length(ln)
-  while (i <= N) {
-    if (.is_trow(ln[i]) && i < N && .is_tsep(ln[i + 1L])) {
-      header <- .tcells(ln[i]); j <- i + 2L; rows <- list()
-      while (j <= N && .is_trow(ln[j]) && !.is_tsep(ln[j])) {
-        cs <- .tcells(ln[j])
-        rows[[length(rows) + 1L]] <- stats::setNames(cs, header[seq_along(cs)])
-        j <- j + 1L
-      }
-      tabs[[length(tabs) + 1L]] <- list(header = header, rows = rows); i <- j
-    } else i <- i + 1L
-  }
-  tabs
-}
 # The 2-column ## Envelope table -> named character.
 read_envelope <- function(ln) {
   h <- which(grepl("^##\\s+Envelope\\s*$", ln)); if (length(h) != 1) return(NULL)
@@ -733,22 +1477,8 @@ read_envelope <- function(ln) {
   for (r in tbl[-1]) { cs <- .tcells(r); if (length(cs) >= 2 && nzchar(cs[[1]])) kv[[cs[[1]]]] <- cs[[2]] }
   kv
 }
-# Lines of a "## <name>" section (exclusive of the next "## ").
-section_lines <- function(ln, name) {
-  h <- which(grepl(sprintf("^##\\s+%s\\s*$", name), ln)); if (length(h) != 1) return(character(0))
-  nxt <- which(grepl("^##\\s", ln) & seq_along(ln) > h)
-  end <- if (length(nxt)) min(nxt) - 1L else length(ln)
-  ln[(h + 1):end]
-}
 .placeholder <- function(x) is.na(x) || !nzchar(trimws(x %||% "")) ||
   grepl("^(—|-|tbd|pending|n/?a)$", trimws(x), ignore.case = TRUE)
-
-# --- artifact-4 helpers (P0.6: invariant half + roster half) -----------------
-# The three roster table shapes. Named once so section F can assert their ABSENCE
-# from the gate-pinned invariant and section G their presence in the roster.
-PSD_EXPORT_HDR <- c("export", "owning contract(s)", "v3 disposition", "status")
-PSD_FIELD_HDR  <- c("field", "owning contract(s)", "v3 disposition", "status")
-PSD_ITEM_HDR   <- c("item", "owning contract", "v3 disposition", "status")
 
 ## --- --regenerate: emit the rows the artifact-4 checks derive ---------------
 ## The population is the same one the checks compare against -- psd_ns_exports()
@@ -902,98 +1632,16 @@ regenerate_public_surface <- function() {
   invisible(changed)
 }
 
-# G3 leaf -> owning contract filename, read out of the invariant's legend table.
-# Read rather than hardcoded: the legend is the invariant's to state, and a leaf
-# that names a nonexistent contract must fail loudly instead of being ignored.
-psd_legend <- function(ln) {
-  out <- list()
-  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
-               parse_pipe_tables(ln))
-  if (length(lg) != 1) return(out)
-  for (r in lg[[1]]$rows) {
-    leaf <- trimws(gv(r, "G3 leaf") %||% "")
-    cn <- gsub("`", "", trimws(gv(r, "contract") %||% ""), fixed = TRUE)
-    if (grepl("^G3\\.[0-9A-Z]+$", leaf) && nzchar(cn)) out[[leaf]] <- paste0(cn, ".md")
-  }
-  out
-}
-
-# G3 leaf -> the accepted decisions the legend says that leaf governs. Same table
-# as psd_legend(), fourth column. Used to check that a SETTLED roster row cites a
-# decision its OWNER actually projects, not merely something Pn.n@sha-shaped:
-# RURL-nravluqd was a roster row citing P3.3 while G3.K did not project it, which
-# the shape-only check below could not see.
-psd_legend_decisions <- function(ln) {
-  out <- list()
-  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
-               parse_pipe_tables(ln))
-  if (length(lg) != 1) return(out)
-  dcol <- "governing accepted decisions"
-  if (!dcol %in% lg[[1]]$header) return(out)
-  for (r in lg[[1]]$rows) {
-    leaf <- trimws(gv(r, "G3 leaf") %||% "")
-    if (!grepl("^G3\\.[0-9A-Z]+$", leaf)) next
-    out[[leaf]] <- unlist(regmatches(gv(r, dcol) %||% "",
-                                     gregexpr("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", gv(r, dcol) %||% "")))
-  }
-  out
-}
-
-# G3 leaf -> the §6 artifact number the legend assigns it. Same table again, third
-# column, digits only ("10 (cache)" and "10 (host)" both yield "10"). Used by the
-# agreement check to verify that a row naming "artifact N (G3.X)" pairs an
-# artifact with the leaf the legend actually puts there.
-psd_legend_artifacts <- function(ln) {
-  out <- list()
-  lg <- Filter(function(t) "G3 leaf" %in% t$header && "contract" %in% t$header,
-               parse_pipe_tables(ln))
-  if (length(lg) != 1) return(out)
-  acol <- "§6 artifact"
-  if (!acol %in% lg[[1]]$header) return(out)
-  for (r in lg[[1]]$rows) {
-    leaf <- trimws(gv(r, "G3 leaf") %||% "")
-    if (!grepl("^G3\\.[0-9A-Z]+$", leaf)) next
-    out[[leaf]] <- gsub("[^0-9]", "", gv(r, acol) %||% "")
-  }
-  out
-}
-
-# Roster cell -> its raw "owning contract(s)" text, read out of the roster half.
-# The agreement section (invariant half) asserts things ABOUT roster rows, so it
-# cannot be checked without them. Memoized like the other derived sets.
+# Roster cell -> its raw "owning contract(s)" text, read out of the roster half
+# and memoized like the other derived sets. The parsing is psd_roster_cells()
+# (with the predicates, above), which --self-test calls on a fixture instead.
 psd_roster_owners <- function(dir) {
   if (is.null(.psd_cache$roster)) {
-    out <- list()
     p <- file.path(dir, "public-surface-disposition.md")
-    if (file.exists(p)) {
-      tabs <- parse_pipe_tables(readLines(p, warn = FALSE))
-      for (tb in tabs) {
-        key <- tb$header[[1]]
-        if (!key %in% c("export", "field", "item")) next
-        own <- if ("owning contract(s)" %in% tb$header) "owning contract(s)" else
-          if ("owning contract" %in% tb$header) "owning contract" else next
-        for (r in tb$rows) {
-          cell <- gsub("`", "", trimws(gv(r, key) %||% ""), fixed = TRUE)
-          if (nzchar(cell)) out[[cell]] <- gv(r, own) %||% ""
-        }
-      }
-    }
-    .psd_cache$roster <- out
+    .psd_cache$roster <- psd_roster_cells(
+      if (file.exists(p)) readLines(p, warn = FALSE) else character(0))
   }
   .psd_cache$roster
-}
-
-# English number words the agreement column may use in place of a digit. Kept
-# small on purpose: a count phrase the checker cannot resolve must not silently
-# become an unchecked claim, so anything outside this set fails the lookup and
-# the row falls back to needing a resolvable term for its anchor.
-PSC_NUMWORDS <- c(one = 1L, two = 2L, three = 3L, four = 4L, five = 5L,
-                  six = 6L, seven = 7L, eight = 8L, nine = 9L, ten = 10L)
-psc_as_count <- function(x) {
-  x <- tolower(trimws(x))
-  if (grepl("^[0-9]+$", x)) return(as.integer(x))
-  if (x %in% names(PSC_NUMWORDS)) return(PSC_NUMWORDS[[x]])
-  NA_integer_
 }
 
 env_required <- c("id", "name", "artifact_number", "schema_version", "tracked_location",
@@ -1163,296 +1811,30 @@ if (dir.exists(contracts_dir)) {
       }
     }
 
-    ## F. artifact 4, invariant half — the ownership rule itself -----------------
-    ## The G3-pinned file must state I1-I5 and the legend, and must NOT contain a
-    ## roster table: the split is enforced structurally, not just described in a
-    ## comment, so a well-meaning future edit cannot quietly re-merge the halves
-    ## and restore the cascade.
+    ## F + F2. artifact 4, invariant half -- psd_closure_failures(), defined
+    ## with the parsers at the top of the file so --self-test can reach it.
+    ## The tree-bound inputs are resolved here; the rules live there.
     if (identical(bn, "public-surface-closure.md")) {
-      tabs <- parse_pipe_tables(ln)
-      for (h in list(PSD_EXPORT_HDR, PSD_FIELD_HDR, PSD_ITEM_HDR))
-        check(!any(vapply(tabs, function(t) identical(t$header, h), TRUE)),
-              sprintf("public-surface-closure: roster table [%s] belongs in public-surface-disposition.md (P0.6)",
-                      paste(h, collapse = " | ")))
-      for (i in sprintf("I%d", 1:5))
-        check(any(grepl(sprintf("\\*\\*%s ", i), ln, fixed = FALSE)),
-              sprintf("public-surface-closure: invariant clause %s is not stated", i))
-      check(!any(grepl("^##\\s+Bijection", ln)),
-            "public-surface-closure: a Bijection (count) table must not live in the gate-pinned invariant (P0.6 I1)")
-      lg <- psd_legend(ln)
-      check(length(lg) >= 8L,
-            sprintf("public-surface-closure: owning-contract legend must map at least 8 G3 leaves (got %d)",
-                    length(lg)))
-      for (leaf in names(lg))
-        check(file.exists(file.path(contracts_dir, lg[[leaf]])),
-              sprintf("public-surface-closure: legend leaf %s names no contract file (%s)", leaf, lg[[leaf]]))
-
-      ## F2. the cross-artifact agreement rows (PS s1) --------------------------
-      ## The section claims the roster's VOCABULARY agrees with the owning
-      ## contracts; until RURL-jzgelfto nothing read it, so the eight TR-PS-s1-*
-      ## claims were assertion-only. The trap the ticket names is real: every row
-      ## is SETTLED today, so a status-shaped check certifies nothing. These four
-      ## predicates are therefore all about RESOLUTION against derived facts —
-      ## the legend, the roster half, NAMESPACE, .spu_result_fields — and each
-      ## was proved to go red by mutation before being trusted green.
-      agr <- Filter(function(t) identical(t$header,
-                                          c("shared concept", "canonical owner", "agreement", "status")),
-                    tabs)
-      check(length(agr) == 1,
-            "public-surface-closure: cross-artifact agreement table (shared concept | canonical owner | agreement | status) not found")
-      if (length(agr) == 1) {
-        lga <- psd_legend_artifacts(ln)
-        cells <- psd_roster_owners(contracts_dir)
-        check(length(cells) >= 1,
-              "public-surface-closure: could not read the roster half's cells to check the agreement rows")
-        for (r in agr[[1]]$rows) {
-          concept <- gv(r, "shared concept") %||% ""
-          owner <- gv(r, "canonical owner") %||% ""
-          agree <- gv(r, "agreement") %||% ""
-          st <- trimws(gv(r, "status") %||% "")
-          lab <- if (nzchar(concept)) concept else owner
-          check(st %in% c("SETTLED", "OPEN"),
-                sprintf("public-surface-closure agreement [%s]: status '%s' not in {SETTLED, OPEN}", lab, st))
-
-          ## (a) the canonical owner resolves — leaf in the legend, and the
-          ## artifact number is the one the legend puts on that leaf. A row
-          ## naming a coherent-looking but wrong pair is the failure this catches.
-          leaves <- unique(regmatches(owner, gregexpr("G3\\.[0-9A-Z]+", owner))[[1]])
-          check(length(leaves) >= 1,
-                sprintf("public-surface-closure agreement [%s]: canonical owner names no G3 leaf: '%s'", lab, owner))
-          for (lf in leaves)
-            check(lf %in% names(lg),
-                  sprintf("public-surface-closure agreement [%s]: owner leaf '%s' is not in the legend", lab, lf))
-          anum <- regmatches(owner, regexpr("(?<=artifact )[0-9]+", owner, perl = TRUE))
-          adrs <- unique(regmatches(owner, gregexpr("ADR [0-9]{4}", owner))[[1]])
-          check(length(anum) == 1 || length(adrs) >= 1,
-                sprintf("public-surface-closure agreement [%s]: canonical owner names neither a §6 artifact nor an ADR: '%s'",
-                        lab, owner))
-          if (length(anum) == 1 && length(leaves) >= 1) {
-            expected <- unique(unlist(lga[leaves]))
-            check(length(expected) >= 1 && anum %in% expected,
-                  sprintf("public-surface-closure agreement [%s]: owner says artifact %s but the legend puts %s on artifact %s",
-                          lab, anum, paste(leaves, collapse = "/"),
-                          if (length(expected)) paste(expected, collapse = "/") else "<none>"))
-          }
-          for (a in adrs)
-            check(length(list.files("design/adr", pattern = sprintf("^%s-", sub("ADR ", "", a)))) >= 1,
-                  sprintf("public-surface-closure agreement [%s]: cites %s, which is not a file in design/adr", lab, a))
-
-          ## (b) every term the row names is a real roster cell. A trailing `*`
-          ## is a glob over cell names and must match at least one — the glob
-          ## `rurl_cache_*` silently matched two of the three cache surfaces
-          ## because the third is spelled `rurl_clear_caches` (RURL-jzgelfto).
-          raw <- unlist(regmatches(c(concept, agree), gregexpr("`[^`]+`", c(concept, agree))))
-          terms <- unique(gsub("`", "", raw, fixed = TRUE))
-          terms <- terms[grepl("^[A-Za-z_][A-Za-z0-9_]*\\*?$", terms)]
-          matched <- character(0)
-          for (tm in terms) {
-            hits <- if (grepl("\\*$", tm))
-              grep(sprintf("^%s", sub("\\*$", "", tm)), names(cells), value = TRUE)
-            else intersect(tm, names(cells))
-            check(length(hits) >= 1,
-                  sprintf("public-surface-closure agreement [%s]: term '%s' names no roster cell", lab, tm))
-            matched <- union(matched, hits)
-          }
-
-          ## (c) at least one cell the row names is owned by the leaf the row
-          ## names. Rows legitimately mention a neighbouring contract's cell for
-          ## contrast (`clean_url` in the key row), so this is "at least one",
-          ## not "all" — but it still fails a row assigned to the wrong owner,
-          ## which (a) and (b) both pass.
-          if (length(matched)) {
-            linked <- vapply(matched, function(cl)
-              any(vapply(leaves, function(lf) grepl(lf, cells[[cl]], fixed = TRUE), TRUE)), TRUE)
-            check(any(linked),
-                  sprintf("public-surface-closure agreement [%s]: none of the roster cells it names (%s) is owned by %s",
-                          lab, paste(matched, collapse = ", "), paste(leaves, collapse = "/")))
-          }
-
-          ## (d) a transcribed count must equal the derived one. I1 bans counts
-          ## from artifact 4 for exactly this reason; the two shapes this section
-          ## actually uses are checked rather than trusted. A count phrase whose
-          ## number is unreadable resolves to NA and fails here rather than
-          ## passing silently.
-          counted <- 0L
-          pf <- regmatches(concept, regexpr("(?i)(?<=\\bthe )\\S+(?= public fields)", concept, perl = TRUE))
-          if (length(pf) == 1) {
-            counted <- counted + 1L
-            check(identical(psc_as_count(pf), length(psd_result_fields())),
-                  sprintf("public-surface-closure agreement [%s]: says '%s public fields' but .spu_result_fields has %d (I1)",
-                          lab, pf, length(psd_result_fields())))
-          }
-          nr <- regmatches(agree, regexpr("(?i)(?<=\\bthe )\\S+(?=\\s[^|]*\\brows\\b)", agree, perl = TRUE))
-          if (length(nr) == 1 && !is.na(psc_as_count(nr))) {
-            counted <- counted + 1L
-            check(identical(psc_as_count(nr), length(matched)),
-                  sprintf("public-surface-closure agreement [%s]: says '%s ... rows' but its terms name %d roster cell(s)",
-                          lab, nr, length(matched)))
-          }
-
-          ## (e) no row is inert. A row that neither names a resolvable cell nor
-          ## carries a verified count has nothing this validator can falsify, so
-          ## it would sit here SETTLED and unchecked — the nullity P0.9 §6 warns
-          ## about, and the reason this whole block exists.
-          check(length(matched) >= 1 || counted >= 1,
-                sprintf("public-surface-closure agreement [%s]: row is inert — it names no roster cell and carries no checkable count",
-                        lab))
-        }
-      }
+      absorb(psd_closure_failures(
+        ln, cells = psd_roster_owners(contracts_dir), fields = psd_result_fields(),
+        contract_exists = function(f) file.exists(file.path(contracts_dir, f)),
+        adr_exists = function(n)
+          length(list.files("design/adr", pattern = sprintf("^%s-", n))) >= 1
+      ))
     }
 
-    ## G. artifact 4, roster half — I1-I5 over the per-cell rows -----------------
-    ## Not a gate input (P0.6). Everything here is DERIVED: the export set from
-    ## NAMESPACE, the field set from .spu_result_fields, the legend from the
-    ## invariant half. No count is transcribed, so growing the surface cannot make
-    ## this section stale.
+    ## G. artifact 4, roster half -- psd_roster_failures(), likewise at the top.
     if (identical(bn, "public-surface-disposition.md")) {
-      tabs <- parse_pipe_tables(ln)
-      exp_tab <- Filter(function(t) identical(t$header, PSD_EXPORT_HDR), tabs)
-      fld_tab <- Filter(function(t) identical(t$header, PSD_FIELD_HDR), tabs)
-      itm_tab <- Filter(function(t) identical(t$header, PSD_ITEM_HDR), tabs)
-      check(length(exp_tab) == 1, "public-surface-disposition: exactly one exported-function roster table")
-      check(length(fld_tab) == 1, "public-surface-disposition: exactly one public-output-field roster table")
-      check(length(itm_tab) == 1, "public-surface-disposition: exactly one curl/migration roster table")
-
-      ## --- I1 + I2: population derived from source, compared BY NAME ----------
-      unq <- function(x) gsub("`", "", trimws(x %||% ""), fixed = TRUE)
-      if (length(exp_tab) == 1) {
-        rows_e <- vapply(exp_tab[[1]]$rows, function(r) unq(gv(r, "export")), "")
-        for (e in setdiff(psd_ns_exports(), rows_e))
-          check(FALSE, sprintf("public-surface-disposition: NAMESPACE exports '%s' with no roster row (I2)", e))
-        for (e in setdiff(rows_e, psd_ns_exports()))
-          check(FALSE, sprintf("public-surface-disposition: roster row '%s' is not a NAMESPACE export (I2)", e))
-        dup <- unique(rows_e[duplicated(rows_e)])
-        check(length(dup) == 0,
-              sprintf("public-surface-disposition: duplicate export row(s) %s (I2)", paste(dup, collapse = ", ")))
-      }
-      if (length(fld_tab) == 1) {
-        rows_f <- vapply(fld_tab[[1]]$rows, function(r) unq(gv(r, "field")), "")
-        src_f <- psd_result_fields()
-        check(length(src_f) >= 1,
-              "public-surface-disposition: could not derive the field set from .spu_result_fields (I1)")
-        for (f in setdiff(src_f, rows_f))
-          check(FALSE, sprintf("public-surface-disposition: .spu_result_fields has '%s' with no roster row (I2)", f))
-        for (f in setdiff(rows_f, src_f))
-          check(FALSE, sprintf("public-surface-disposition: roster row '%s' is not a .spu_result_fields entry (I2)", f))
-      }
-      if (length(itm_tab) == 1) {
-        items <- vapply(itm_tab[[1]]$rows, function(r) unq(gv(r, "item")), "")
-        check(sum(grepl("^curl-", items)) >= 1L,
-              "public-surface-disposition: no curl-dependency row (§10 curl surface)")
-        check(sum(items == "migration-surface") == 1L,
-              "public-surface-disposition: exactly one migration-surface row required")
-      }
-
-      ## --- the Bijection table is VERIFIED against source, never pinned -------
-      bij <- Filter(function(t) "surface class" %in% t$header && "count" %in% t$header, tabs)
-      check(length(bij) == 1, "public-surface-disposition: bijection table (surface class | count) not found")
-      if (length(bij) == 1 && length(exp_tab) == 1 && length(fld_tab) == 1 && length(itm_tab) == 1) {
-        labels <- vapply(bij[[1]]$rows, function(r) tolower(gv(r, "surface class") %||% ""), "")
-        nums <- vapply(bij[[1]]$rows, function(r) {
-          d <- gsub("[^0-9]", "", gv(r, "count") %||% "")
-          if (nzchar(d)) as.integer(d) else NA_integer_
-        }, integer(1))
-        tot_i <- grep("total", labels)
-        comp_i <- setdiff(seq_along(labels), tot_i)
-        derived <- length(psd_ns_exports()) + length(psd_result_fields()) +
-          length(itm_tab[[1]]$rows)
-        check(sum(nums[comp_i], na.rm = TRUE) == derived,
-              sprintf("public-surface-disposition: bijection components sum to %d but the derived surface is %d (NAMESPACE + .spu_result_fields + curl/migration rows)",
-                      sum(nums[comp_i], na.rm = TRUE), derived))
-        check(length(tot_i) == 1 && identical(nums[tot_i[1]], derived),
-              sprintf("public-surface-disposition: bijection total is %s but the derived surface is %d",
-                      if (length(tot_i) == 1) nums[tot_i[1]] else "<none>", derived))
-      }
-
-      ## --- I2/I3/I4: every row is owned, and every citation resolves ----------
-      inv_ln <- if (file.exists(file.path(contracts_dir, "public-surface-closure.md")))
-        readLines(file.path(contracts_dir, "public-surface-closure.md"), warn = FALSE) else character(0)
-      lg <- psd_legend(inv_ln)
-      check(length(lg) >= 8L,
-            "public-surface-disposition: could not read the owning-contract legend from the invariant half")
-      psd_leg_dec <- psd_legend_decisions(inv_ln)
-      check(length(psd_leg_dec) >= 8L,
-            "public-surface-disposition: could not read the legend's governing-decision column")
-      ctext <- list()
-      for (f in unique(unlist(lg))) {
-        p <- file.path(contracts_dir, f)
-        ctext[[f]] <- if (file.exists(p)) readLines(p, warn = FALSE) else character(0)
-      }
-      for (tb in c(exp_tab, fld_tab, itm_tab)) {
-        key <- tb$header[[1]]
-        own_col <- if ("owning contract(s)" %in% tb$header) "owning contract(s)" else "owning contract"
-        for (r in tb$rows) {
-          cell <- unq(gv(r, key))
-          owner_raw <- gv(r, own_col) %||% ""
-          st_raw <- gv(r, "status") %||% ""
-          st <- sub("\\s.*$", "", trimws(st_raw))
-          check(st %in% c("SETTLED", "OPEN"),
-                sprintf("public-surface-disposition %s: status '%s' not in {SETTLED, OPEN}", cell, st_raw))
-          leaves <- unique(regmatches(owner_raw, gregexpr("G3\\.[0-9A-Z]+", owner_raw))[[1]])
-          downstream <- grepl("artifact 11|artifact 4", owner_raw)
-          check(length(leaves) >= 1 || downstream,
-                sprintf("public-surface-disposition %s: names no owning contract (I2): '%s'", cell, owner_raw))
-          for (lf in leaves)
-            check(lf %in% names(lg),
-                  sprintf("public-surface-disposition %s: owning contract '%s' is not in the legend (I2)", cell, lf))
-          disp <- gv(r, "v3 disposition") %||% ""
-          if (identical(st, "SETTLED")) {
-            # I3: a SETTLED row must cite the accepted decision its owner projects
-            # (P-tier ref, an ADR, or — for the migration row — its discharge).
-            ok <- grepl("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", disp) ||
-              grepl("ADR [0-9]{4}", disp) || grepl("discharged", disp)
-            check(ok, sprintf("public-surface-disposition %s: SETTLED cites no decision, ADR, or discharge (I3): '%s'",
-                              cell, disp))
-            # I3, second half: the citation must be one the OWNER projects. The
-            # check above is shape-only, so a row could cite a decision its owning
-            # contract has never heard of and still pass — which is exactly how
-            # RURL-nravluqd survived (`url_key_policy` cited P3.3 while G3.K's
-            # legend row listed only P3.1 and P3.2, and the contract never
-            # mentioned it). Silent when a leaf lists no decisions, so the
-            # artifact-11/artifact-4 rows are unaffected.
-            cited <- regmatches(disp, gregexpr("P[0-9]+\\.[0-9]+@[0-9a-f]{7}", disp))[[1]]
-            allowed <- unique(unlist(psd_leg_dec[leaves]))
-            if (length(cited) && length(allowed)) {
-              for (pd in setdiff(cited, allowed))
-                check(FALSE, sprintf(
-                  "public-surface-disposition %s: SETTLED cites %s, which the legend does not list for %s (I3)",
-                  cell, pd, paste(leaves, collapse = "/")))
-            }
-          } else if (identical(st, "OPEN")) {
-            # I3/I4: each -O id cited must EXIST in one of the owning contracts.
-            # "HOST-O2/O4" is shorthand: a bare /O<n> inherits the last prefix.
-            toks <- regmatches(st_raw, gregexpr("[A-Z]+-O[0-9]+|/O[0-9]+", st_raw))[[1]]
-            ids <- character(0); last_pref <- NA_character_
-            for (tk in toks) {
-              if (grepl("^/O", tk)) {
-                if (!is.na(last_pref)) ids <- c(ids, paste0(last_pref, "-", sub("^/", "", tk)))
-              } else {
-                ids <- c(ids, tk); last_pref <- sub("-O[0-9]+$", "", tk)
-              }
-            }
-            named_downstream <- grepl("artifact 11|S1 s/v|RCON-08|P4 host", st_raw) || downstream
-            check(length(ids) >= 1 || named_downstream,
-                  sprintf("public-surface-disposition %s: OPEN cites neither an open-cell id nor a named downstream artifact (I3): '%s'",
-                          cell, st_raw))
-            for (id in unique(ids)) {
-              hay <- unlist(ctext[unique(unlist(lg[leaves]))], use.names = FALSE)
-              if (length(hay) == 0) hay <- unlist(ctext, use.names = FALSE)
-              check(any(grepl(id, hay, fixed = TRUE)),
-                    sprintf("public-surface-disposition %s: OPEN cites '%s', which appears in none of its owning contracts (%s) — dangling citation (I3)",
-                            cell, id, paste(leaves, collapse = ", ")))
-            }
-          }
+      inv_path <- file.path(contracts_dir, "public-surface-closure.md")
+      absorb(psd_roster_failures(
+        ln,
+        inv_ln = if (file.exists(inv_path)) readLines(inv_path, warn = FALSE) else character(0),
+        exports = psd_ns_exports(), fields = psd_result_fields(),
+        contract_lines = function(f) {
+          p <- file.path(contracts_dir, f)
+          if (file.exists(p)) readLines(p, warn = FALSE) else character(0)
         }
-      }
-
-      ## --- I4: the roster opens nothing of its own ----------------------------
-      obody2 <- section_lines(ln, "Open cells")
-      check(!any(grepl("PSD-O[0-9]+", obody2)),
-            "public-surface-disposition: the roster must not define open cells of its own (I4)")
-      check(any(grepl("PSC-O", obody2)),
-            "public-surface-disposition: ## Open cells must forward to the invariant's PSC-O groups (I4)")
+      ))
     }
 
     if (identical(bn, "cross-artifact-consistency.md")) {
