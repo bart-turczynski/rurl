@@ -202,6 +202,86 @@ model. The new family defaults to the independent identity key.
 | path-encoding regression | revise the shipped forwarding test to assert key invariance | P3.1@3b89b94 (ratification Q7/B7) | SETTLED |
 | removal/default flip | later versioned step outside this contract; not part of v3.0 | P3.1@3b89b94 (D-E) | SETTLED |
 
+## Per-argument migration dispositions (D-E.4)
+
+P3.1 D-E.4 requires that **every** dial `canonical_join()` currently forwards
+through `...` carry a row stating which of three things it is: a legitimate
+parse-policy input to the key, an explicit comparison policy, or a presentation
+dial that no longer touches equality (warned/rejected). This section is that
+table. The rows above state the *surfaces*; these state the *arguments*.
+
+Two settled facts fix the classification, so no row here is invented:
+
+1. **Presentation versus input**, per dial, is already SETTLED by the
+   cleaning-semantics matrix of artifact 8
+   (`contracts/cleaning-mutation-contracts.md`, rows 1-25) in its
+   **`key-affecting?`** column. Every row marked `no` is a presentation dial;
+   its four boundary rows (9, 21, 22, 23) are input/interpretation axes. The `#`
+   column below is that row number, so the two tables can be diffed.
+2. **Which of them warn** is D-E.1 — close `...` as an implicit equality
+   surface — as ratified at Q7/B7: presentation dials **warn**, and results are
+   preserved byte-identical inside the deprecation window.
+
+Every SETTLED row below therefore cites `P3.1@3b89b94`, per this record's
+projection rule. Artifact 8's matrix is *consumed* for the presentation/input
+split, not cited as a decision, so this section adds no dependency outside the
+envelope. Exactly one dial falls outside that projection and is recorded OPEN
+rather than filled by invention: `scheme_relative_handling` (row 9), which
+artifact 8 classifies as an input axis but which P3.1 does not enumerate among
+either the forwarded parse dials or D-E.4's own argument list. See KJ-O9.
+
+The middle category, **explicit comparison policy**, has **no members today**.
+No shipped `canonical_join()` argument is a comparison policy, because the named
+key-policy surface (`url_key_policy()`, consumed by `get_url_key()`) is not yet
+implemented. Query-ignore/filter equality is the concrete case: it is a
+comparison policy in v3 (D-B, Q2/B6) and is deliberately *not* reachable by
+forwarding the `query_handling` display dial. That is a migration destination,
+not a current disposition.
+
+| # | forwarded argument | D-E.4 disposition | v3 destination | owner_decision_ref | status |
+|---|---|---|---|---|---|
+| 23 | `url_standard` | parse-policy input to the key | explicit standard field of `url_key_policy()`; the key is standard-scoped | P3.1@3b89b94 (D-B, D-E; ratification Q7/B7) | SETTLED |
+| 22 | `scheme_acceptance` | parse-policy input to the key | explicit interpretation field of `url_key_policy()` | P3.1@3b89b94 (D-E) | SETTLED |
+| 21 | `scheme_policy` | parse-policy input to the key | explicit interpretation field of `url_key_policy()` | P3.1@3b89b94 (D-E) | SETTLED |
+| 9 | `scheme_relative_handling` | input-interpretation axis, not a clean transform — so **not** a presentation dial, but P3.1 does not enumerate it among the forwarded parse dials either | explicit interpretation field, alongside the three parse dials above | — (see Open cells KJ-O9) | OPEN |
+| 1 | `protocol_handling` | presentation — warned | display-only; no key participation | P3.1@3b89b94 (D-A.3, D-E.1; ratification Q7/B7) | SETTLED |
+| 2 | `www_handling` | presentation — warned | display-only; `www`/subdomain excluded from the default key | P3.1@3b89b94 (D-A.3, D-B host row, D-E.1) | SETTLED |
+| 3 | `source` (PSL section) | presentation — warned | display-only; suffix rules shape domain/subdomain boundaries, not identity | P3.1@3b89b94 (D-A.3, D-E.1) | SETTLED |
+| 4 | `tld_source` (deprecated alias of `source`) | presentation — warned | retires with the alias | P3.1@3b89b94 (D-A.3, D-E.1) | SETTLED |
+| 5 | `case_handling` | presentation — warned | display-only; the key compares normalized identity, not display case | P3.1@3b89b94 (D-A.3, D-B scheme-case row, D-E.1) | SETTLED |
+| 6 | `trailing_slash_handling` | presentation — warned | display-only | P3.1@3b89b94 (D-A.3, D-E.1) | SETTLED |
+| 7 | `index_page_handling` | presentation — warned | display-only | P3.1@3b89b94 (D-A.3, D-E.1) | SETTLED |
+| 8 | `path_normalization` | presentation — warned | display-only; the key compares the post-standard identity path | P3.1@3b89b94 (D-A.3, D-B path rows, D-E.1) | SETTLED |
+| 10 | `subdomain_levels_to_keep` | presentation — warned | display-only | P3.1@3b89b94 (D-A.3, D-E.1) | SETTLED |
+| 11 | `host_encoding` | presentation — warned | display-only; the key never compares unicode/punycode spelling | P3.1@3b89b94 (D-A.3, D-B host row, D-E.1) | SETTLED |
+| 12 | `path_encoding` | presentation — warned | display-only; the key preserves reserved bytes (`%2F` never becomes `/`) | P3.1@3b89b94 (D-A.3, D-B path rows, D-E.1) | SETTLED |
+| 13-19 | `query_handling`, `params_keep`, `params_drop`, `params_case_sensitive`, `sort_params`, `empty_param_handling`, `decode_plus` | presentation — warned | display-only; the default key is the **exact structural query**. Ignore/filter equality becomes an explicit comparison policy, never a display dial | P3.1@3b89b94 (D-A.3, D-B query rows, Q2/B6, D-E.1) | SETTLED |
+| 20 | `port_handling` | presentation — warned | display-only; port equivalence is the D-B truth table | P3.1@3b89b94 (D-A.3, D-B port table, D-E.1) | SETTLED |
+| 24 | `engine` (PSL engine) | presentation — warned | annotation provenance (L3); must not alter identity | P3.1@3b89b94 (D-A.3, D-E.1) | SETTLED |
+| 25 | `profile` | presentation — warned (the whole bundle) | bundle expansion of display dials; non-interference holds for the bundle | P3.1@3b89b94 (D-A.3, D-E.1) | SETTLED |
+| policy | *(explicit comparison policy)* | **no current argument** — the category is a destination, not a disposition | named fields of `url_key_policy()`, consumed by `get_url_key()`; unreachable by forwarding a display dial | P3.1@3b89b94 (D-B, D-D, D-E.4) | SETTLED |
+
+Two notes on reachability, recorded so the table describes the shipped seam
+rather than an idealized one:
+
+- `source` (row 3) is the canonical name of the PSL-section dial but is a formal
+  of the **accessors**, not of `safe_parse_urls()`; only `tld_source` is a
+  `safe_parse_urls()` formal. Forwarding `source` therefore warns and *then*
+  fails on the unused argument. It is classified here so the table is complete
+  and stays correct if the seam widens.
+- `fixup_posture` and `path_identity` are profile-resolved internals, not public
+  forwarded arguments, so they carry no D-E.4 row; artifact 8 governs them as
+  input/identity controls.
+
+**Implementation cross-check.** The shipped seam agrees with this table
+argument-for-argument: the 21 presentation arguments emit one condition of class
+`rurl_legacy_join_dial_warning` per call, and the four input/interpretation axes
+stay silent — the three settled parse dials plus `scheme_relative_handling`,
+which the implementation leaves silent on artifact 8's authority pending KJ-O9.
+Values are unchanged — the warning is purely additive, so no caller is silently
+re-matched, which is D-E.3's "no caller is silently re-matched" requirement
+holding trivially for a window in which nothing re-keys.
+
 ## Scope boundaries
 
 This contract is the **single writer** of comparison-key policy, key
@@ -230,9 +310,10 @@ Other artifacts consume it without redefining equality:
 
 ## Open cells
 
-**No live open cell remains.** All eight cells this contract flagged when it was
-authored — `KJ-O1…KJ-O8`, the exact choices P3.1 did not settle — reached their
-named destination and are **closed at source**: each is applied to its matrix row
+**One live open cell remains: `KJ-O9`** (added 2026-09-04 with the D-E.4
+per-argument table, carrier `RURL-bvfivwmc`). All eight cells this contract
+flagged when it was authored — `KJ-O1…KJ-O8`, the exact choices P3.1 did not
+settle — reached their named destination and are **closed at source**: each is applied to its matrix row
 above, citing `P3.2@bb3346e` and the decision letter that closed it.
 
 The bullets are retained rather than deleted, marked CLOSED, so the deferral text
@@ -299,11 +380,23 @@ single referent all eight resolved to.
   prototype, and a complete typed would-be schema on every zero-row result.
   Applied at the `type/attributes` row.
 
+- **KJ-O9 — `scheme_relative_handling`'s D-E.4 disposition.** D-E.4's argument
+  list and D-E's "forwarded parse dials" row both name only `url_standard`,
+  `scheme_acceptance` and `scheme_policy`; neither enumerates
+  `scheme_relative_handling`, although it is a forwarded `safe_parse_urls()`
+  formal and artifact 8 row 9 classifies it as an input-interpretation axis
+  (ADR 0010) rather than a clean transform. **Impact:** one D-E.4 row cannot be
+  filled from P3.1, and the shipped seam consequently leaves the dial silent on
+  artifact 8's authority rather than this contract's. **Settles at:** `RURL-bvfivwmc`
+  (the canonical_join() v3 identity migration), by either extending D-E's
+  parse-dial list to four axes or ruling it a presentation dial. P3.2 closed
+  KJ-O1..O8 before this cell existed and does not reach it.
+
 ### Not open cells, but not discharged either
 
 Two **SETTLED** truth-table cells carry findings that this contract deliberately
-does not resolve, and they are named here so a reader does not read "no live open
-cell" as "nothing outstanding." Neither is a `KJ-O*` cell, neither is counted in
+does not resolve, and they are named here so a reader does not read the
+open-cell census as "nothing else outstanding." Neither is a `KJ-O*` cell, neither is counted in
 the cross-artifact open-cell census, and neither is opened by this section:
 
 - **Row 8** (`missing scheme/no port` vs `HTTP/no port`, `equal` under
