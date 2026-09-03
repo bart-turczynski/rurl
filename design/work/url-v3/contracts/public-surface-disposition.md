@@ -59,10 +59,14 @@ invariant half, `public-surface-closure.md`.
 
 ## Inputs
 
-The G1 inventory this roster closes, hashed at authoring and recomputed by
-`validate-records.R` on every run. The owning G3 contracts are referenced by
-name; the accepted decisions they project are hash-enforced in
-`manifest.decisions[]`.
+The G1 inventory this roster closes. It was hashed at authoring and the hash
+was meant to be recomputed by `validate-records.R` on every run; that `sha256`
+column was retired 2026-09-04 as an **inert** pin under ADR 0014 and
+`design/AGENTS.md` (RUL-013, RURL-rooxvstd) — the validator's `## Inputs` hash
+comparison is retired, the pin had gone stale (`4712cc07…`), and nothing read
+it. The validator still checks that each listed path resolves. The owning G3
+contracts are referenced by name; the accepted decisions they project were
+hash-enforced in `manifest.decisions[]` (also retired by ADR 0014).
 
 Deliberately **not** pinned here: `public-surface-closure.md`. The invariant is
 this roster's governing rule, and hashing it here would rebuild the very
@@ -71,9 +75,9 @@ gate acceptance also records. The relationship is enforced by the validator
 instead, which reads the legend out of the invariant and checks every row
 against it.
 
-| path | sha256 |
-|---|---|
-| design/work/url-v3/registers/public-surface-inventory.md | 4712cc073e097efe5d6ff0718acc8da1a44682a67a492c6cdd19918f75391e41 |
+| path |
+|---|
+| design/work/url-v3/registers/public-surface-inventory.md |
 
 ## Bijection
 

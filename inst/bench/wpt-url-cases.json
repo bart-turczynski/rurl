@@ -12,7 +12,7 @@
   "standard_version": "Living Standard (unversioned); pinned by upstream_revision",
   "standard_section": "URL parsing; URL serializing; URL class API getters (protocol, username, password, hostname, port, pathname, search, hash)",
   "claim_kind": "conformance",
-  "applicability_selector": "base = null only -- base-relative rows (including base about:blank) are excluded because rurl is absolute-parse-only and does no relative resolution; success = any base-null non-failure case, all schemes, no scheme restriction; failure = any base-null failure case; NUL inputs dropped",
+  "applicability_selector": "base = null only -- this fixture is the base-null half of the upstream suite; base-relative rows (including base about:blank) are imported separately as tests/testthat/fixtures/wpt-url-base-relative.json (OR-024, the exact complement on `base`), so every upstream row belongs to exactly one of the two; success = any base-null non-failure case, all schemes, no scheme restriction; failure = any base-null failure case; NUL inputs dropped",
   "counts": {
    "success": 336,
    "failure": 202

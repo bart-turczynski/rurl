@@ -23,8 +23,12 @@
 #   O4  no phantoms -- every repo path the register cites exists on disk.
 #   O5  provenance  -- every `imported = yes` row has a provenance row; every
 #                      provenance cell is a value or the literal
-#                      MISSING[<carrier>]; no provenance row for a
-#                      non-imported oracle.
+#                      MISSING[<carrier>]; no provenance row whose oracle_id
+#                      names no instance. A non-imported instance MAY carry a
+#                      voluntary provenance row (RUL-011: OR-005 cites
+#                      upstream input strings without vendoring bytes, so it
+#                      is not an import under P5.3 §2.3 yet its verified-at
+#                      citation is worth recording).
 #   O6  tally       -- the "Coverage of the taxonomy" table's counts and id
 #                      lists agree with the instances table exactly.
 #
@@ -337,13 +341,16 @@ evaluate <- function(reg, root) {
       paste(absent, collapse = ", ")
     ))
   }
-  extra <- setdiff(have, imported)
-  if (length(extra)) {
+  # A provenance row must belong to some instance. It need not belong to an
+  # imported one: RUL-011 admits voluntary provenance on a non-imported row.
+  orphan <- setdiff(have, inst$oracle_id[!blank(inst$oracle_id)])
+  if (length(orphan)) {
     problems <- c(problems, sprintf(
-      "provenance row(s) for a non-imported oracle: %s",
-      paste(extra, collapse = ", ")
+      "provenance row(s) whose oracle_id names no instance: %s",
+      paste(orphan, collapse = ", ")
     ))
   }
+  voluntary <- setdiff(have, c(imported, orphan))
   if (nrow(prov)) {
     bad_width <- which(!prov$.width_ok)
     if (length(bad_width)) {
@@ -375,8 +382,9 @@ evaluate <- function(reg, root) {
   }
   res$O5 <- check("O5", !length(problems), if (length(problems))
     paste(problems, collapse = "; ")
-    else sprintf("%d imported oracle(s), each with a complete provenance row",
-                 length(imported)))
+    else sprintf(paste("%d imported oracle(s), each with a complete provenance",
+                       "row; %d voluntary row(s) on non-imported oracle(s)"),
+                 length(imported), length(voluntary)))
 
   # ---- O6 tally -------------------------------------------------------------
   problems <- character(0)
@@ -649,11 +657,19 @@ self_test <- function() {
   expect("O5 fails when an imported oracle has no provenance row",
          identical(rule(r, "O5"), FALSE))
 
-  # 17. O5 -- provenance row for a non-imported oracle.
+  # 17. O5 -- a voluntary provenance row on a non-imported oracle is admitted
+  #     (RUL-011). OR-002 is `imported = no` in good_rows().
   r <- mk(good_rows(),
           c(good_prov(), sub("OR-001", "OR-002", good_prov(), fixed = TRUE)),
           files = good_files())
-  expect("O5 fails on a provenance row for a non-imported oracle",
+  expect("O5 admits a voluntary provenance row on a non-imported oracle",
+         identical(rule(r, "O5"), TRUE))
+
+  # 17b. O5 -- a provenance row whose oracle_id names no instance at all.
+  r <- mk(good_rows(),
+          c(good_prov(), sub("OR-001", "OR-009", good_prov(), fixed = TRUE)),
+          files = good_files())
+  expect("O5 fails on a provenance row whose oracle_id names no instance",
          identical(rule(r, "O5"), FALSE))
 
   # 18. O5 -- a blank provenance cell.
