@@ -590,6 +590,101 @@ test_that("the bytes echo comes back untouched in original_url", {
 })
 
 
+# --- 4e. The one warning the LC_ALL=C cell tolerated (RURL-aajradge) ---------
+#
+# `strings not representable in native encoding will be translated to UTF-8`,
+# reported against whichever test first touches pslr in a full run
+# (test-accessor-helper.R:6). The emitter is UPSTREAM and it is not a
+# function: it is R's lazy-load of pslr's `R/sysdata.rdb`. Released pslr
+# 1.1.1 serialized the bundled index's IDN suffixes with a native mark from a
+# UTF-8 build session, so a C-locale reader translates them on first fetch and
+# warns once per session. Forcing `pslr:::pslr_bundled` with no pslr code
+# running reproduces it; no rurl frame is involved at all. pslr 1.1.1.9000
+# stores those strings UTF-8-marked and is silent (PSLR-jzdhhugc).
+#
+# Two measurement facts that shape the assertion:
+#
+#   - It is not a Linux-only defect. Released pslr 1.1.1 warns on macOS under
+#     `LC_ALL=C` too; a local run is silent only because the local library
+#     holds the dev pslr. The axis is the pslr version, not the OS.
+#   - The promise is forced ONCE per session, so no in-process call can reach
+#     the emitter after the first test file has touched pslr -- a fresh
+#     `pslr::psl_engine()` is silent on released pslr too. The probe therefore
+#     runs in a fresh session, and forces the C charset itself, which also
+#     makes it live on a UTF-8 developer machine rather than only in the
+#     `LC_ALL=C` cell.
+#
+# Guarded on the DEV version, not the next release: that way it asserts on
+# every dev checkout and every later release, and skips -- rather than fails --
+# on the released pslr the DESCRIPTION floor still admits, which is the pslr
+# the CI cell's "warnings tolerated" note is about.
+
+test_that("pslr's bundled index loads silently in a C locale", {
+  skip_if_not(
+    utils::packageVersion("pslr") >= "1.1.1.9000",
+    "released pslr warns on its sysdata load (PSLR-jzdhhugc)"
+  )
+  # system2(env =) is Unix-only, and LC_ALL does not set R's charset there.
+  skip_on_os("windows")
+  rscript <- file.path(R.home("bin"), "Rscript")
+  skip_if_not(file.exists(rscript), "no Rscript binary")
+
+  # Bare pslr, on purpose: the emitter is its sysdata, and loading THIS tree
+  # into a subprocess would mean pkgload under check or an installed rurl of
+  # unknown vintage under load_all(). R_LIBS pins the subprocess to the same
+  # pslr the version guard above just inspected.
+  code <- paste(
+    "writeLines(paste0('utf8=', l10n_info()[['UTF-8']]))",
+    "writeLines(paste0('domain=', pslr::registrable_domain('example.com')))",
+    sep = "; "
+  )
+  libs <- paste(.libPaths(), collapse = .Platform$path.sep)
+  out <- system2(
+    rscript, c("--vanilla", "-e", shQuote(code)),
+    stdout = TRUE, stderr = TRUE,
+    env = c("LC_ALL=C", "LANG=C", paste0("R_LIBS=", shQuote(libs)))
+  )
+  # A probe that ran in a UTF-8 charset cannot see the seam, and its silence
+  # would be the "unobservable" that prints like "absent". Skip loudly instead.
+  skip_if_not(
+    "utf8=FALSE" %in% out, "the C locale did not reach the probe session"
+  )
+  expect_true("domain=example.com" %in% out)
+  expect_false(
+    any(grepl("not representable in native encoding", out, fixed = TRUE))
+  )
+})
+
+test_that("the selector plays no part on the accessor path", {
+  # The in-process half: the accessor path that reports the warning in a full
+  # run is byte-identical across the three url_standard arms, marks included
+  # (identical() distinguishes encoding marks on strings), through a
+  # caller-supplied engine as well as the default one.
+  urls <- c(
+    "http://example.com/p", "https://sub.example.org",
+    "http://www.blog.example.co.uk/x", idn_url
+  )
+  arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986", none = NULL)
+  pull <- function(std, engine) {
+    list(
+      host = get_host(urls, url_standard = std, engine = engine),
+      domain = get_domain(urls, url_standard = std, engine = engine),
+      subdomain = get_subdomain(urls, url_standard = std, engine = engine)
+    )
+  }
+  fresh <- lapply(arms, pull, engine = pslr::psl_engine())
+  default <- lapply(arms, pull, engine = NULL)
+  expect_identical(fresh$whatwg, fresh$rfc3986)
+  expect_identical(fresh$whatwg, fresh$none)
+  expect_identical(fresh, default)
+  expect_identical(
+    fresh$none$domain,
+    c("example.com", "example.org", "example.co.uk",
+      "\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444")
+  )
+})
+
+
 # --- 5. Meta-guard: no transcoding-from-native in the package ----------------
 
 # Which namespace functions reference `fn`, and how many times. Reads the
