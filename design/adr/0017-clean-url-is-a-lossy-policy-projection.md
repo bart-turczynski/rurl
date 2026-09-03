@@ -120,6 +120,9 @@ this ADR, not a bundle edit.
 | 9 | the port is dropped | `port_handling = "exclude"` (surface default) |
 | 10 | the host case folds | `case_handling = "lower_host"` (surface default) |
 | 11 | no fragment is ever carried | structural — `clean_url` has no fragment |
+| 12 | no userinfo (credentials) is carried | structural today — `clean_url` has no userinfo; RUL-001 adds `credential_handling = c("strip", "reject")`, default `"strip"`, so a caller may ask for `NA` instead of a silently collapsed URL |
+
+**Amendment 2026-09-03 (RUL-001, `design/work/url-v3/registers/rulings.md`).** Row 12 records a mutation that had shipped since the surface existed but was missing from this table: userinfo is always dropped, and the roxygen for `get_clean_url()` has said so throughout. It is added under D2's own rule that a transform not on the table is an amendment to this ADR.
 
 Rows 4, 5 and 6 are the three the eight items omitted; recording them here is
 what closes Q1. **Item 8 of the owner's list — "users can define what a clean URL
