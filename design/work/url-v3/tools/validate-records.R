@@ -21,12 +21,137 @@
 #
 # Run from the repository root:
 #   Rscript design/work/url-v3/tools/validate-records.R
+#   Rscript design/work/url-v3/tools/validate-records.R --regenerate
+#       # add a stub row for every NAMESPACE export and every
+#       # `.spu_result_fields` field the two artifact-4 files lack -- the
+#       # inventory register and the disposition roster -- and re-derive the
+#       # roster's bijection counts; print what changed; exit 0. Free-text
+#       # cells are written as `TODO`; nothing existing is rewritten.
+#   Rscript design/work/url-v3/tools/validate-records.R --self-test
+#       # prove --regenerate on a temp copy of the real inputs: red before,
+#       # green after, diff exactly the one row.
 
 suppressWarnings(suppressMessages({
   ok <- requireNamespace("yaml", quietly = TRUE)
 }))
 if (!ok) stop("validate-records.R needs the 'yaml' package")
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+.vr_args <- commandArgs(trailingOnly = TRUE)
+.vr_regenerate <- "--regenerate" %in% .vr_args
+
+## --- --self-test: --regenerate proven on a copy of the real inputs ----------
+## Runs this script as a subprocess against a temp copy, because the checks
+## below are top-level code keyed to the working directory. Each scenario is
+## the same shape: remove one row (or add one export), assert the gate is RED,
+## regenerate, assert it is GREEN, and assert the file differs from its
+## pre-regeneration bytes by exactly the one row.
+if ("--self-test" %in% .vr_args) {
+  fail <- function(msg) stop("self-test FAILED: ", msg, call. = FALSE)
+  script <- normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[[1]]))
+  run <- function(dir, flag = "") {
+    out <- suppressWarnings(system2(
+      "sh", c("-c", shQuote(sprintf("cd %s && exec Rscript %s %s",
+                                    shQuote(dir), shQuote(script), flag))),
+      stdout = TRUE, stderr = TRUE
+    ))
+    list(status = attr(out, "status") %||% 0L, out = out)
+  }
+  # Every line of `before` survives in order, and these are the extra lines.
+  lines_added <- function(before, after) {
+    i <- 1L; extra <- character(0)
+    for (ln in after) {
+      if (i <= length(before) && identical(ln, before[[i]])) i <- i + 1L
+      else extra <- c(extra, ln)
+    }
+    if (i <= length(before)) NULL else extra
+  }
+  fixture <- function(tag) {
+    d <- file.path(tempfile("validate-records-selftest-"), tag)
+    dir.create(file.path(d, "R"), recursive = TRUE, showWarnings = FALSE)
+    dir.create(file.path(d, "design", "work"), recursive = TRUE, showWarnings = FALSE)
+    file.copy("NAMESPACE", d)
+    file.copy(file.path("R", "utils.R"), file.path(d, "R"))
+    file.copy(file.path("design", "adr"), file.path(d, "design"), recursive = TRUE)
+    file.copy(file.path("design", "work", "url-v3"), file.path(d, "design", "work"),
+              recursive = TRUE)
+    d
+  }
+  inv <- function(d) file.path(d, "design/work/url-v3/registers/public-surface-inventory.md")
+  dis <- function(d) file.path(d, "design/work/url-v3/contracts/public-surface-disposition.md")
+  drop_row <- function(path, pattern) {
+    ln <- readLines(path, warn = FALSE)
+    hit <- grep(pattern, ln)
+    if (length(hit) != 1L) fail(sprintf("fixture row `%s` not unique in %s", pattern, basename(path)))
+    writeLines(ln[-hit], path, useBytes = TRUE)
+  }
+  cycle <- function(d, tag) {
+    b_inv <- readLines(inv(d), warn = FALSE); b_dis <- readLines(dis(d), warn = FALSE)
+    if (run(d)$status == 0L) fail(sprintf("[%s] the gate is not red before --regenerate", tag))
+    r <- run(d, "--regenerate")
+    if (r$status != 0L) fail(sprintf("[%s] --regenerate exited %d:\n%s", tag, r$status, paste(r$out, collapse = "\n")))
+    g <- run(d)
+    if (g$status != 0L) fail(sprintf("[%s] the gate is still red after --regenerate:\n%s", tag,
+                                     paste(grep("^  - ", g$out, value = TRUE), collapse = "\n")))
+    list(inv = lines_added(b_inv, readLines(inv(d), warn = FALSE)),
+         dis = lines_added(b_dis, readLines(dis(d), warn = FALSE)),
+         out = r$out)
+  }
+  one_row <- function(x, prefix, what) {
+    if (is.null(x)) fail(sprintf("%s: an existing line was rewritten or reordered", what))
+    if (length(x) != 1L || !startsWith(x, prefix))
+      fail(sprintf("%s: diff is not exactly the one stub row (%s): %s", what, prefix,
+                   paste(x, collapse = " / ")))
+  }
+
+  # A: an export row missing from both files (the row the register lost).
+  d <- fixture("export")
+  drop_row(inv(d), "^\\| url_semi_join \\|")
+  drop_row(dis(d), "^\\| `url_semi_join` \\|")
+  r <- cycle(d, "export")
+  one_row(r$inv, "| url_semi_join | exported-function | TODO |", "inventory export")
+  one_row(r$dis, "| `url_semi_join` | TODO", "disposition export")
+  a <- readLines(inv(d), warn = FALSE)
+  if (grep("^\\| url_semi_join \\|", a) != grep("^\\| url_right_join \\|", a) + 1L)
+    fail("inventory export stub was not inserted in alphabetical position")
+  if (!any(grepl("public-surface-inventory.md: + export row `url_semi_join`", r$out, fixed = TRUE)))
+    fail("--regenerate did not print the inventory row it added")
+
+  # B: a public-output-field row missing from both files.
+  d <- fixture("field")
+  drop_row(inv(d), "^\\| tld_unicode \\|")
+  drop_row(dis(d), "^\\| `tld_unicode` \\|")
+  r <- cycle(d, "field")
+  one_row(r$inv, "| tld_unicode | public-output-field | TODO |", "inventory field")
+  one_row(r$dis, "| `tld_unicode` | TODO", "disposition field")
+
+  # C: the way the gap arrives in practice -- a NEW export, so both files lack
+  # the row AND the roster's bijection counts are stale by one.
+  d <- fixture("new-export")
+  cat("export(zz_probe_export)\n", file = file.path(d, "NAMESPACE"), append = TRUE)
+  b_dis <- readLines(dis(d), warn = FALSE)
+  r <- cycle(d, "new-export")
+  one_row(r$inv, "| zz_probe_export | exported-function | TODO |", "inventory new export")
+  a <- readLines(dis(d), warn = FALSE)
+  changed <- setdiff(a, b_dis)
+  if (length(changed) != 3L ||
+        sum(startsWith(changed, "| `zz_probe_export` | TODO")) != 1L ||
+        !any(grepl("^\\| exported functions \\| 41 \\|", changed)) ||
+        !any(grepl("^\\| \\*\\*total\\*\\* \\| \\*\\*63\\*\\* \\|", changed)))
+    fail(sprintf("new-export: roster diff is not {row, exports count, total}: %s",
+                 paste(changed, collapse = " / ")))
+
+  # D: a no-op on the real tree leaves both files byte-identical.
+  d <- fixture("noop")
+  b_inv <- readLines(inv(d), warn = FALSE); b_dis <- readLines(dis(d), warn = FALSE)
+  r <- run(d, "--regenerate")
+  if (r$status != 0L || !identical(readLines(inv(d), warn = FALSE), b_inv) ||
+        !identical(readLines(dis(d), warn = FALSE), b_dis))
+    fail("--regenerate touched a tree that had nothing to regenerate")
+
+  cat("validate-records.R --self-test: PASS (3 regenerate scenarios + 1 no-op)\n")
+  quit(status = 0L)
+}
 
 root <- "design/work/url-v3"
 sdir <- file.path(root, "schema")
@@ -625,6 +750,158 @@ PSD_EXPORT_HDR <- c("export", "owning contract(s)", "v3 disposition", "status")
 PSD_FIELD_HDR  <- c("field", "owning contract(s)", "v3 disposition", "status")
 PSD_ITEM_HDR   <- c("item", "owning contract", "v3 disposition", "status")
 
+## --- --regenerate: emit the rows the artifact-4 checks derive ---------------
+## The population is the same one the checks compare against -- psd_ns_exports()
+## and psd_result_fields() -- and the row shape is read off the table each row
+## joins, so a regenerated row is one the checks accept by construction:
+##   inventory   item_id | kind | 9 x TODO ... | state=DISCOVERED | TODO | TODO
+##   roster      `name` | TODO (artifact 4: unassigned) | TODO | OPEN (TODO: ...)
+## The roster owner/status stubs name "artifact 4" (this roster) because I2/I3
+## accept an unowned cell only as a named downstream artifact; the TODO in the
+## same cell says the assignment is still to be made. Export rows are inserted
+## in alphabetical position (the order both tables keep); field rows are
+## appended after the last field row (the tables follow `.spu_result_fields`
+## order, which the derived set does not carry). The roster's Bijection counts
+## are re-derived when they no longer sum to the surface, digits only.
+.tline <- function(cells) paste0("| ", paste(cells, collapse = " | "), " |")
+# Line indices of the first pipe table whose header is `header`: list(header=,
+# rows=<indices of data lines>), or NULL. The same tokenizer the checks use.
+.table_at <- function(ln, header) {
+  for (i in seq_len(length(ln) - 1L)) {
+    if (.is_trow(ln[i]) && .is_tsep(ln[i + 1L]) && identical(.tcells(ln[i]), header)) {
+      j <- i + 2L
+      while (j <= length(ln) && .is_trow(ln[j]) && !.is_tsep(ln[j])) j <- j + 1L
+      return(list(header = i, rows = if (j > i + 2L) seq.int(i + 2L, j - 1L) else integer(0)))
+    }
+  }
+  NULL
+}
+# C-locale "k sorts after name" -- the order both tables keep, made independent
+# of the session locale (the LC_ALL=C cell of verify.yml runs this too).
+.c_after <- function(k, name) {
+  k != name & vapply(k, function(x) identical(sort(c(x, name), method = "radix")[[1L]], name), TRUE)
+}
+# Insert `line` into a table whose data lines are `rows` (line indices) keyed
+# by `keys`: before the first `group` row whose key sorts after `name` when
+# `ordered`, else after the last `group` row, else after the last row.
+.insert_row <- function(ln, rows, keys, group, name, line, ordered = TRUE) {
+  at <- NA_integer_
+  if (ordered) {
+    later <- rows[group & .c_after(keys, name)]
+    if (length(later)) at <- later[[1L]] - 1L
+  }
+  if (is.na(at)) {
+    same <- rows[group]
+    at <- if (length(same)) same[length(same)] else rows[length(rows)]
+  }
+  append(ln, line, after = at)
+}
+
+regenerate_public_surface <- function() {
+  changed <- character(0)
+  exports <- psd_ns_exports()
+  fields <- psd_result_fields()
+  export_kinds <- c("exported-function", "exported-data")
+
+  ## inventory register ------------------------------------------------------
+  ln <- readLines(psi_path, warn = FALSE)
+  reg <- read_rows(psi_path)
+  if (is.null(reg)) stop("public-surface-inventory.md: no parseable Rows table")
+  h <- which(grepl("^##\\s+Rows\\s*$", ln))
+  col <- function(name) match(name, reg$header)
+  stub_row <- function(id, kind) {
+    cells <- rep("TODO", length(reg$header))
+    cells[col("item_id")] <- id
+    cells[col("kind")] <- kind
+    cells[col("state")] <- "DISCOVERED"
+    .tline(cells)
+  }
+  # Re-read the table after every insertion: line indices move.
+  inv_state <- function(ln) {
+    tab <- .table_at(ln[h:length(ln)], reg$header)
+    if (is.null(tab)) stop("public-surface-inventory.md: cannot locate the Rows table")
+    rows <- tab$rows + h - 1L
+    cells <- lapply(ln[rows], .tcells)
+    list(rows = rows,
+         keys = vapply(cells, function(cs) cs[[col("item_id")]], ""),
+         kinds = vapply(cells, function(cs) cs[[col("kind")]], ""))
+  }
+  s <- inv_state(ln)
+  for (e in setdiff(exports, s$keys[s$kinds %in% export_kinds])) {
+    ln <- .insert_row(ln, s$rows, s$keys, s$kinds %in% export_kinds, e,
+                      stub_row(e, "exported-function"))
+    changed <- c(changed, sprintf("public-surface-inventory.md: + export row `%s`", e))
+    s <- inv_state(ln)
+  }
+  for (f in setdiff(fields, s$keys[s$kinds == "public-output-field"])) {
+    ln <- .insert_row(ln, s$rows, s$keys, s$kinds == "public-output-field", f,
+                      stub_row(f, "public-output-field"), ordered = FALSE)
+    changed <- c(changed, sprintf("public-surface-inventory.md: + public-output-field row `%s`", f))
+    s <- inv_state(ln)
+  }
+  if (length(changed)) writeLines(ln, psi_path, useBytes = TRUE)
+
+  ## disposition roster ------------------------------------------------------
+  dp <- file.path(contracts_dir, "public-surface-disposition.md")
+  ln <- readLines(dp, warn = FALSE)
+  before_n <- length(changed)
+  unq <- function(x) gsub("`", "", trimws(x), fixed = TRUE)
+  roster_stub <- function(name) .tline(c(
+    sprintf("`%s`", name), "TODO (artifact 4: unassigned)", "TODO",
+    "OPEN (TODO: assign an owning G3 contract; artifact 4)"
+  ))
+  for (spec in list(list(PSD_EXPORT_HDR, exports, TRUE), list(PSD_FIELD_HDR, fields, FALSE))) {
+    header <- spec[[1]]; want <- spec[[2]]; ordered <- spec[[3]]
+    repeat {
+      tab <- .table_at(ln, header)
+      if (is.null(tab)) stop(sprintf("public-surface-disposition.md: no `%s` roster table", header[[1]]))
+      keys <- vapply(ln[tab$rows], function(r) unq(.tcells(r)[[1]]), "")
+      missing <- setdiff(want, keys)
+      if (!length(missing)) break
+      ln <- .insert_row(ln, tab$rows, keys, rep(TRUE, length(keys)), missing[[1]],
+                        roster_stub(missing[[1]]), ordered = ordered)
+      changed <- c(changed, sprintf("public-surface-disposition.md: + %s row `%s`",
+                                    header[[1]], missing[[1]]))
+    }
+  }
+
+  # Bijection counts: digits only, re-derived the way the check derives them
+  # (NAMESPACE + .spu_result_fields + curl/migration rows).
+  items <- .table_at(ln, PSD_ITEM_HDR)
+  bij <- NULL
+  for (i in seq_len(length(ln) - 1L)) {
+    if (.is_trow(ln[i]) && .is_tsep(ln[i + 1L])) {
+      hd <- .tcells(ln[i])
+      if ("surface class" %in% hd && "count" %in% hd) { bij <- .table_at(ln, hd); break }
+    }
+  }
+  if (!is.null(bij) && !is.null(items)) {
+    derived <- length(exports) + length(fields) + length(items$rows)
+    targets <- list(c("^exported functions$", length(exports)),
+                    c("^public output fields$", length(fields)),
+                    c("total", derived))
+    for (t in targets) {
+      n <- as.integer(t[[2]])
+      for (r in bij$rows) {
+        cs <- .tcells(ln[r])
+        if (!grepl(t[[1]], tolower(cs[[1]]))) next
+        have <- as.integer(gsub("[^0-9]", "", cs[[2]]))
+        if (identical(have, n)) next
+        # the digits of the second cell only; bold markers and every other
+        # byte of the row are kept
+        ln[r] <- sub("^(\\|[^|]*\\|[^|0-9]*)[0-9]+", sprintf("\\1%d", n), ln[r])
+        changed <- c(changed, sprintf(
+          "public-surface-disposition.md: bijection count `%s` %d -> %d", cs[[1]], have, n))
+      }
+    }
+  }
+  if (length(changed) > before_n) writeLines(ln, dp, useBytes = TRUE)
+
+  if (!length(changed)) cat("  nothing to regenerate: the artifact-4 files cover the surface\n")
+  for (c in changed) cat("  + ", c, "\n", sep = "")
+  invisible(changed)
+}
+
 # G3 leaf -> owning contract filename, read out of the invariant's legend table.
 # Read rather than hardcoded: the legend is the invariant's to state, and a leaf
 # that names a nonexistent contract must fail loudly instead of being ignored.
@@ -1197,6 +1474,16 @@ if (dir.exists(contracts_dir)) {
   }
 }
 contract_checks <- (pass + length(fail)) - contract_checks_before
+
+## --- --regenerate: write the rows, say so, exit 0 ---------------------------
+## Placed after every check so it runs against the same derived sets the checks
+## just scored; without the flag nothing below this line is different.
+if (.vr_regenerate) {
+  cat("validate-records.R --regenerate\n")
+  regenerate_public_surface()
+  cat("regenerated the artifact-4 register and roster\n")
+  quit(status = 0L)
+}
 
 cat("validate-records.R\n")
 cat(sprintf("contracts: %d files, %d added checks\n", contract_n, contract_checks))
