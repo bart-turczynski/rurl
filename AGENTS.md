@@ -4,6 +4,13 @@
 standards-conformant parsing (WHATWG / RFC 3986 profiles), with domain and
 public-suffix extraction delegated to `pslr`.
 
+**Before touching parse behavior or a conformance test, read
+[design/posture-card.md](design/posture-card.md)** — one page: the exact
+argument recipe for each posture, where posture gets lost, and the definition
+of done for a conformance change. Decisions no gate can derive live in
+[design/work/url-v3/registers/rulings.md](design/work/url-v3/registers/rulings.md);
+its standing rule says which ones an agent may take by citing a clause.
+
 ## Verifying a change
 
 ```sh

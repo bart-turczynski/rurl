@@ -1,3 +1,8 @@
+> **ARCHIVAL (2026-09-03).** Everything in this directory is kept for history. Nothing reads its
+> body, it is not updated, and it is not the current authority for any
+> behavior — the ADRs under `design/adr/`, the shipped tests, and
+> `registers/rulings.md` are. See `design/README.md`.
+
 # rurl 3.0 protocol — frozen evidence archive
 
 This directory is the **raw-evidence archive** graduated out of gitignored

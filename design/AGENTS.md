@@ -4,6 +4,18 @@ Design documentation. The whole tree is excluded from the package build, so
 nothing here affects `R CMD check` or the pkgdown site. See
 [README.md](README.md) for the layout and the PRD graduation policy.
 
+- **Before you touch `R/parse*.R` or a conformance test, the reading list is
+  seven documents, not this tree:** [`posture-card.md`](posture-card.md);
+  ADR 0007 (the selector); ADR 0012 (scope); whichever of ADR 0010 / 0011 /
+  0013 governs the axis you are changing; [`oracle-fixtures.md`](oracle-fixtures.md);
+  [`oracle-pinning.md`](oracle-pinning.md) with [`measurement-traps.md`](measurement-traps.md);
+  and, only if the change flips a contract claim, the one owning contract under
+  `work/url-v3/contracts/`. `decisions/`, `evidence/` and `worklog/` are
+  archival — do not update them and do not cite them as current authority.
+- A decision no gate can derive is a row in
+  [`work/url-v3/registers/rulings.md`](work/url-v3/registers/rulings.md). Its
+  standing rule says when an agent may add one by citing a clause and when the
+  owner must.
 - A decision is accepted when it is **merged to `main`**. There are no seals, no
   manifest hash-pinning, and no acceptance cascade —
   [ADR 0014](adr/0014-retire-the-v3-control-plane.md) retired all of it. Do not

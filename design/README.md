@@ -12,9 +12,20 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
   from [`adr/0000-adr-template.md`](adr/0000-adr-template.md).
 - [`prd/`](prd/) — accepted Product Requirement Documents that an epic or
   shipped feature depends on, graduated out of `_scratch/` so they survive.
-- [`work/`](work/) — durable control-plane artifacts for active, multi-step
-  design work when a fresh clone must be able to recover the process state.
-  These documents must state their status explicitly and are not accepted PRDs.
+- [`posture-card.md`](posture-card.md) — **read first** before any parse or
+  conformance change: the argument recipe per posture, the traps, and the
+  definition of done.
+- [`work/`](work/) — records for the v3 program. Since
+  [ADR 0014](adr/0014-retire-the-v3-control-plane.md) a record is accepted
+  when it is merged to `main`; new records copy
+  [`work/url-v3/0000-record-template.md`](work/url-v3/0000-record-template.md).
+  Only `contracts/`, `verification/`, `registers/`, `schema/` and
+  `protocol-review-reconciliation.md` are read by gates. **`decisions/`,
+  `evidence/` and `worklog/` are archival** (banner in each file): read them
+  for history, never update them, and never cite them as the current
+  authority for a behavior — the ADR or the shipped test is.
+  [`work/url-v3/registers/rulings.md`](work/url-v3/registers/rulings.md) is
+  the one home for rulings, with the rule for which an agent may take.
 - [`goodpractice-triage.md`](goodpractice-triage.md) — standing triage for
   `goodpractice::gp()` findings that are intentionally retained or queued as
   scoped cleanup debt.
