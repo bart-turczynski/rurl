@@ -63,7 +63,10 @@
 #                      status is `not-applicable`, an immutable_revision
 #                      validated ACCORDING TO ITS SCHEME plus ISO dates
 #                      whenever it is `verified`, at least one algorithm
-#                      anchor, and never the MISSING[...] sentinel.
+#                      anchor -- EXCEPT for a `not-applicable` entry whose
+#                      reason is `no-derivation`, where algorithm_anchors may
+#                      be omitted or empty and is validated only when written
+#                      (RUL-006) -- and never the MISSING[...] sentinel.
 #  PV10            -- RETIRED (ADR 0014). It required EVERY source group to
 #                      carry a non-empty normative_dependencies, with no
 #                      exemption, which made every new fixture a paperwork
@@ -252,7 +255,13 @@ META_STRUCTURAL <- "counts"
 # revision_scheme, revision_date, retrieved_at, pin_kind, pin_status and
 # algorithm_anchors, plus a note stating what is load-bearing about it".
 # tracking_issue is NOT in this list because the convention makes it
-# conditional on pin_status = "missing".
+# conditional on pin_status = "missing". algorithm_anchors IS in the list but
+# is required only of an entry that DERIVES from its source's text: RUL-006
+# (design/work/url-v3/registers/rulings.md) found that across every
+# no-derivation entry the field carried two anchor sets and no per-entry
+# information, so requiring it there invited filler. normative_dep_defects()
+# drops it from the required set for pin_status = "not-applicable" with
+# not_applicable_reason = "no-derivation", and for those entries alone.
 NORMATIVE_DEP_FIELDS <- c("source", "source_url", "immutable_revision",
                           "revision_scheme", "revision_date", "retrieved_at",
                           "pin_kind", "pin_status", "algorithm_anchors", "note")
@@ -438,6 +447,21 @@ is_anchor_vector <- function(x) {
   if (!is.null(names(x))) return(FALSE)
   flat <- as.character(unlist(x, use.names = FALSE))
   length(flat) > 0L && !anyNA(flat) && all(nzchar(trimws(flat)))
+}
+
+# A JSON `[]` or `null` under the key: nothing written, as opposed to
+# something malformed. A JSON object `{}` reads as a named list and is NOT
+# empty in this sense -- it is the wrong shape, and stays a defect.
+is_empty_anchor_value <- function(x) {
+  is.null(x) || (is.list(x) && is.null(names(x)) && !length(x))
+}
+
+# The one entry shape RUL-006 exempts from the anchors duty: not-applicable
+# BECAUSE nothing is derived from the source's text. frozen-source and
+# internal-source entries do derive, so they keep the duty.
+is_no_derivation <- function(e) {
+  identical(one_string(e$pin_status), "not-applicable") &&
+    identical(one_string(e$not_applicable_reason), "no-derivation")
 }
 
 # ---- rules ------------------------------------------------------------------
@@ -785,7 +809,14 @@ normative_dep_defects <- function(e, lab) {
   if (!is.list(e) || is.null(names(e))) {
     return(sprintf("%s is not an object", lab))
   }
-  gaps <- missing_keys(e, NORMATIVE_DEP_FIELDS)
+  # RUL-006: a no-derivation entry has no derivation for anchors to key, so
+  # the key is optional there. Read off the raw values rather than the parsed
+  # `status`/`reason` below, because the required-key check runs first and an
+  # entry whose status is malformed is reported on that axis, not this one.
+  no_derivation <- is_no_derivation(e)
+  required <- NORMATIVE_DEP_FIELDS
+  if (no_derivation) required <- setdiff(required, "algorithm_anchors")
+  gaps <- missing_keys(e, required)
   if (length(gaps)) {
     bad <- c(bad, sprintf("%s lacks %s", lab, toString(gaps)))
   }
@@ -886,9 +917,21 @@ normative_dep_defects <- function(e, lab) {
   }
   if ("algorithm_anchors" %in% names(e) &&
         !is_anchor_vector(e$algorithm_anchors)) {
-    bad <- c(bad, sprintf(paste("%s: algorithm_anchors is not a non-empty",
-                                "character vector -- the anchors are the",
-                                "durable key, not the section numbers"), lab))
+    if (no_derivation && is_empty_anchor_value(e$algorithm_anchors)) {
+      # Empty is the honest value for an entry that derives nothing; only a
+      # non-empty value is held to the shape.
+    } else if (no_derivation) {
+      bad <- c(bad, sprintf(paste("%s: algorithm_anchors is written but is not",
+                                  "a character vector of non-blank anchors --",
+                                  "a no-derivation entry may omit the key or",
+                                  "leave it empty (RUL-006), but what it",
+                                  "writes must still be anchors"), lab))
+    } else {
+      bad <- c(bad, sprintf(paste("%s: algorithm_anchors is not a non-empty",
+                                  "character vector -- the anchors are the",
+                                  "durable key, not the section numbers"),
+                            lab))
+    }
   }
   if (has_sentinel(e)) {
     bad <- c(bad, sprintf(paste("%s: uses a MISSING[...] sentinel -- an",
@@ -1850,6 +1893,57 @@ self_test <- function() {
          identical(verdict(mk()), TRUE) &&
            !"not_applicable_reason" %in% names(dep_base[[1L]]) &&
            !"not_applicable_reason" %in% names(dep_base[[2L]]))
+
+  # 46b. Check 6 REVISITED (RUL-006, RURL-fpgksero) -- anchors are the durable
+  #      key of a DERIVATION, and a no-derivation entry has none. Measured over
+  #      the five such entries in the real record, the field carried two anchor
+  #      sets and no per-entry information: requiring it there invited filler.
+  #      So for pin_status = not-applicable with not_applicable_reason =
+  #      no-derivation the key may be omitted or empty; what IS written is
+  #      still held to the anchor-vector shape. Every other status and reason
+  #      keeps the non-empty rule, because those entries DO derive from the
+  #      source's text. Subject: dep_not_applicable, fixtures[2].groups[1][1].
+  #
+  #      (1) omitted, and (2) written as an empty array -- both clean. The
+  #      second asserts the key really is present in the written record, so
+  #      the case cannot silently collapse into the first.
+  r <- mk(set_dep(2L, 1L, 1L, "algorithm_anchors", NULL))
+  expect("PV9 passes a no-derivation entry with algorithm_anchors omitted",
+         identical(verdict(r), TRUE))
+  r <- mk(set_dep(2L, 1L, 1L, "algorithm_anchors", list()))
+  written <- read_json_file(file.path(r, RECORD_PATH))
+  written <- written$fixtures[[2L]]$source_groups[[1L]]
+  written <- written$normative_dependencies[[1L]]
+  expect("... and the empty-array case writes the key, not an omission",
+         "algorithm_anchors" %in% names(written) &&
+           identical(written$algorithm_anchors, list()))
+  expect("PV9 passes a no-derivation entry with algorithm_anchors = []",
+         identical(verdict(r), TRUE))
+  #      (3) a verified pin without anchors is still a defect: the anchors are
+  #      what let its derivation be re-read after the section numbers move.
+  r <- mk(set_dep(2L, 2L, 1L, "algorithm_anchors", NULL))
+  expect("PV9 still fails a verified entry with algorithm_anchors omitted",
+         pv9_fails(r))
+  #      (4) so is a not-applicable entry whose REASON is not no-derivation:
+  #      frozen-source and internal-source both derive from the source's text.
+  for (reason in c("frozen-source", "internal-source")) {
+    r <- mk(function(rec) {
+      rec <- set_dep(2L, 1L, 1L, "not_applicable_reason", reason)(rec)
+      set_dep(2L, 1L, 1L, "algorithm_anchors", NULL)(rec)
+    })
+    expect(sprintf(paste("PV9 still fails a %s entry with algorithm_anchors",
+                         "omitted"), reason),
+           pv9_fails(r))
+  }
+  #      (5) the relaxation is on PRESENCE, not on SHAPE: a no-derivation entry
+  #      that writes anchors writes real ones. A blank, and an object where an
+  #      array belongs, both stay red.
+  r <- mk(set_dep(2L, 1L, 1L, "algorithm_anchors", list("")))
+  expect("PV9 fails a no-derivation entry with a blank anchor", pv9_fails(r))
+  r <- mk(set_dep(2L, 1L, 1L, "algorithm_anchors",
+                  list(id = "concept-url-parser")))
+  expect("PV9 fails a no-derivation entry whose anchors are an object",
+         pv9_fails(r))
 
   # ---- PV11 ------------------------------------------------------------
   #
