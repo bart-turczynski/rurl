@@ -54,9 +54,25 @@
 #   C5  man        -- no curl in generated help (man/*.Rd), which is where an
 #                     `@importFrom` leaks into the shipped docs.
 #   C6  static     -- raw-text scan of the declared scope, comments included,
-#                     minus the allowlist.
+#                     minus the allowlist, minus the ONE categorical exemption
+#                     below (a provenance command field of a registered
+#                     oracle fixture).
 #   C7  clean room -- build + R CMD check against a temporary library whose
 #                     `curl` is poisoned. Runs only in full mode.
+#
+# THE CATEGORICAL EXEMPTION (RURL-vuxlhehz). P5.3 section 2.3 requires every
+# imported oracle fixture to record its `import_command`, and for a fetched
+# upstream artifact that command is a curl invocation. Allowlisting each such
+# fixture by PATH keyed the exemption on the file rather than on the reason,
+# so every new oracle fixture needed a one-off row here. The exemption is now
+# stated as the reason: a curl hit is inert when it sits inside the value of a
+# provenance COMMAND field (`import_command`, `generation_command`,
+# `pin_fetch_command`) of a file REGISTERED as a fixture in
+# tests/testthat/fixtures/oracle-provenance.json. Nothing else is reached by
+# it: an unregistered file gets no exemption however its `_meta` reads, and a
+# curl mention anywhere else in a registered file still fails C6. The registry
+# is read with base R (bracket depth, no JSON library), and a missing registry
+# means no exemption -- the rule fails closed.
 #
 # Zero dependencies beyond base R. Deterministic. C0-C6 are network-free; C7
 # runs R CMD check, which is not.
@@ -130,7 +146,16 @@ ALLOWLIST <- list(
   # `curl -fsSL <url> -o <file>` is the SHELL COMMAND that fetched a pinned
   # upstream fixture. It is a reproducibility record, not a package
   # dependency: rewriting it would falsify how the data actually arrived.
+  #
+  # The fixtures that carry that command in their own `_meta` block are NOT
+  # listed here any more: they are covered by the categorical exemption
+  # (PROVENANCE_REGISTRY + PROVENANCE_COMMAND_KEYS below), which reaches every
+  # registered fixture without a row per file. The rows that remain in this
+  # section are the ones the category cannot reach, each saying why.
   list(
+    # Cannot collapse: this is the REGISTRY, not a registered fixture, and
+    # besides its command fields it names curl in a narrative
+    # `normative_dependencies[].note` (the SecWeb 2022 cross-tested parsers).
     path = "tests/testthat/fixtures/oracle-provenance.json",
     reason = paste("records the shell command that imported each pinned",
                    "upstream oracle; a provenance record must not be",
@@ -161,21 +186,14 @@ ALLOWLIST <- list(
                    "taken; the string is instructions for a human")
   ),
   list(
-    path = "inst/bench/wpt-url-cases.json",
-    reason = "same: the recorded import command for the pinned WPT fixture"
-  ),
-  list(
-    path = "tests/testthat/fixtures/wpt-url-base-relative.json",
-    reason = paste("same again, for the base-relative half of that import.",
-                   "It ships in the tarball (unlike its inst/bench sibling)",
-                   "and is still inert: the string is an `_meta` provenance",
-                   "field the harness never executes")
-  ),
-  list(
+    # Cannot collapse: it EMITS the command from Python source, and it is a
+    # generator, not a registered fixture.
     path = "inst/bench/make-wpt-fixture.py",
     reason = "emits that import command, so it must contain it verbatim"
   ),
   list(
+    # Cannot collapse: its self-test fixtures are R string literals, not a
+    # registered fixture file.
     path = "tools/oracle-provenance-gate.R",
     reason = paste("validates those import_command strings, so its fixtures",
                    "contain one")
@@ -188,6 +206,9 @@ ALLOWLIST <- list(
                    "urltools), the same standing tools/determinism has")
   ),
   list(
+    # Cannot collapse: it IS registered in the provenance registry, but its
+    # curl is a data column (a measured parser), not a provenance field, so
+    # the categorical exemption does not reach it -- and must not.
     path = "tests/testthat/fixtures/external-url-vectors.csv",
     reason = paste("published research data recording what OTHER parsers do",
                    "with each vector; curl is one of the columns and the",
@@ -206,6 +227,16 @@ ALLOWLIST <- list(
                    "the thing it invokes")
   )
 )
+
+# The categorical exemption's two coordinates. A file is REGISTERED when its
+# repo-relative path is the `path` of an element of the registry's top-level
+# `fixtures` array; a hit is INERT when the whole line is one of these keys
+# paired with a single JSON string value. Both coordinates are required; a
+# curl anywhere else in a registered file, or in a provenance-shaped line of
+# an unregistered file, is a violation like any other.
+PROVENANCE_REGISTRY <- "tests/testthat/fixtures/oracle-provenance.json"
+PROVENANCE_COMMAND_KEYS <- c("import_command", "generation_command",
+                             "pin_fetch_command")
 
 # The token, matched case-insensitively so `curl`, `libcurl`, `curl_parse_url`
 # and `RCurl` all hit. Over-matching is intentional -- a false positive costs
@@ -292,6 +323,102 @@ file_has_curl <- function(path) {
   lines <- tryCatch(readLines(path, warn = FALSE),
                     error = function(e) character(0))
   any(has_curl(lines))
+}
+
+# ---- the categorical exemption ----------------------------------------------
+
+# Bracket depth of each line of a JSON text, computed with string bodies
+# blanked first so a `{` or `[` inside a value does not count. Returns, per
+# line, the depth BEFORE the line and the count of opens/closes on it.
+blank_json_strings <- function(x) {
+  gsub('"(\\\\.|[^"\\\\])*"', '""', x)
+}
+
+count_of <- function(x, re) {
+  nchar(x) - nchar(gsub(re, "", x))
+}
+
+json_depths <- function(lines) {
+  bare <- blank_json_strings(lines)
+  opens <- count_of(bare, "\\[|\\{")
+  closes <- count_of(bare, "\\]|\\}")
+  after <- cumsum(opens - closes)
+  list(before = c(0L, utils::head(after, -1L)), opens = opens,
+       closes = closes)
+}
+
+# The repo-relative paths registered as fixtures: the `path` key of every
+# element of the registry's top-level `fixtures` array, and no other `path`
+# key (the registry nests `path` keys inside source groups too, and its
+# `governing_decision` carries one). Base R by design -- this gate must not
+# grow a dependency to read a record -- so the registry is walked by bracket
+# depth, one key per line, which is the shape the pretty-printed record has.
+# A missing or unreadable registry registers nothing.
+registered_fixture_paths <- function(root) {
+  reg <- file.path(root, PROVENANCE_REGISTRY)
+  if (!file.exists(reg)) {
+    return(character(0))
+  }
+  lines <- tryCatch(readLines(reg, warn = FALSE),
+                    error = function(e) character(0))
+  if (!length(lines)) {
+    return(character(0))
+  }
+  d <- json_depths(lines)
+  out <- character(0)
+  in_fixtures <- FALSE
+  fx_depth <- NA_integer_
+  for (i in seq_along(lines)) {
+    line <- lines[i]
+    if (!in_fixtures) {
+      if (d$before[i] == 1L && grepl('^\\s*"fixtures"\\s*:\\s*\\[', line)) {
+        in_fixtures <- TRUE
+        fx_depth <- 2L
+      }
+      next
+    }
+    if (d$before[i] < fx_depth) {
+      # The array closed on an earlier line; nothing after it registers.
+      break
+    }
+    m <- regexec('"path"\\s*:\\s*"((\\\\.|[^"\\\\])*)"', line)[[1L]]
+    if (m[1L] < 0L) {
+      next
+    }
+    # Depth AT the key, not at the start of the line, so a one-line element
+    # (`{ "path": ... }`) is read the same way as a pretty-printed one.
+    prefix <- blank_json_strings(substr(line, 1L, m[1L] - 1L))
+    depth_at <- d$before[i] + count_of(prefix, "\\[|\\{") -
+      count_of(prefix, "\\]|\\}")
+    if (depth_at == fx_depth + 1L) {
+      len <- attr(m, "match.length")[2L]
+      out <- c(out, substr(line, m[2L], m[2L] + len - 1L))
+    }
+  }
+  out
+}
+
+# TRUE for a line that is, in its entirety, one provenance command key paired
+# with one JSON string value (escapes allowed, trailing comma allowed). The
+# regex consumes the whole line, so a curl on such a line can only be inside
+# the value -- there is nowhere else on the line for it to be.
+is_provenance_command_line <- function(lines) {
+  grepl(sprintf('^\\s*"(%s)"\\s*:\\s*"(\\\\.|[^"\\\\])*"\\s*,?\\s*$',
+                paste(PROVENANCE_COMMAND_KEYS, collapse = "|")),
+        lines)
+}
+
+# The curl hits of one file that the categorical exemption does NOT clear:
+# every hit if the file is unregistered, otherwise every hit outside a
+# provenance command line. Returns 1-based line numbers.
+live_curl_hits <- function(path, registered) {
+  lines <- tryCatch(readLines(path, warn = FALSE),
+                    error = function(e) character(0))
+  hit <- has_curl(lines)
+  if (registered) {
+    hit <- hit & !is_provenance_command_line(lines)
+  }
+  which(hit)
 }
 
 # ---- the checks -------------------------------------------------------------
@@ -406,13 +533,24 @@ check_man <- function(root) {
 
 check_static <- function(root) {
   files <- scan_files(root)
+  registered <- registered_fixture_paths(root)
   bad <- character(0)
+  cleared <- character(0)
   for (rel in files) {
     if (is_allowed(rel)) {
       next
     }
-    if (file_has_curl(file.path(root, rel))) {
-      bad <- c(bad, rel)
+    is_reg <- rel %in% registered
+    hits <- live_curl_hits(file.path(root, rel), is_reg)
+    if (length(hits)) {
+      bad <- c(bad, if (is_reg) {
+        sprintf(paste("%s (registered fixture; curl outside a provenance",
+                      "field at line %d)"), rel, hits[1L])
+      } else {
+        rel
+      })
+    } else if (is_reg && file_has_curl(file.path(root, rel))) {
+      cleared <- c(cleared, rel)
     }
   }
   finding("C6", length(bad) == 0L,
@@ -420,8 +558,10 @@ check_static <- function(root) {
             sprintf("%d unallowlisted file(s) mention curl: %s",
                     length(bad), toString(utils::head(bad, 8L)))
           } else {
-            sprintf("%d file(s) scanned, %d allowlisted path(s)",
-                    length(files), length(ALLOWLIST))
+            sprintf(paste("%d file(s) scanned, %d allowlisted path(s),",
+                          "%d registered fixture(s) cleared by the",
+                          "provenance-field exemption"),
+                    length(files), length(ALLOWLIST), length(cleared))
           })
 }
 
@@ -830,6 +970,138 @@ self_test <- function() {
          identical(rule(root, "C1"), FALSE))
   expect("C2 fails closed with no NAMESPACE",
          identical(rule(root, "C2"), FALSE))
+
+  # 16. The categorical exemption (RURL-vuxlhehz). A registry that registers
+  # two fixture paths, shaped like the real record: a `governing_decision`
+  # with its own `path` key BEFORE the array, and a nested `path` deep inside
+  # a source group, neither of which may register anything. Every case below
+  # runs through the same `rule()`, i.e. through `--static-only`, which is the
+  # mode verify.yml runs; C6 is one function in both modes.
+  fetch <- paste("curl -fsSL https://example.invalid/upstream.json",
+                 "-o upstream.json")
+  registry <- c(
+    "{",
+    '  "record_kind": "oracle-provenance",',
+    '  "governing_decision": {',
+    '    "path": "design/not-a-fixture.md"',
+    "  },",
+    '  "fixtures": [',
+    "    {",
+    '      "path": "inst/bench/reg-cases.json",',
+    '      "source_groups": [',
+    "        {",
+    '          "group": "wpt",',
+    sprintf('          "import_command": "%s",', fetch),
+    '          "technique_references": [{ "path": "ip.py" }]',
+    "        }",
+    "      ]",
+    "    },",
+    '    { "path": "tests/testthat/fixtures/reg-relative.json" }',
+    "  ]",
+    "}"
+  )
+  fixture_with <- function(meta_lines) {
+    c("{", '  "_meta": {', '    "upstream_project": "wpt/wpt",',
+      meta_lines, '    "counts": { "success": 1 }', "  },",
+      '  "success": [{ "input": "http://a/", "href": "http://a/" }]', "}")
+  }
+  provenance_tree <- function(registry_lines = registry) {
+    root <- mk(clean_desc)
+    dir.create(file.path(root, "tests", "testthat", "fixtures"),
+               recursive = TRUE, showWarnings = FALSE)
+    dir.create(file.path(root, "inst", "bench"), recursive = TRUE,
+               showWarnings = FALSE)
+    if (!is.null(registry_lines)) {
+      writeLines(registry_lines, file.path(root, PROVENANCE_REGISTRY))
+    }
+    root
+  }
+  put <- function(root, rel, lines) {
+    writeLines(lines, file.path(root, rel))
+  }
+  reg_paths <- registered_fixture_paths(provenance_tree())
+  expect("the registry reader returns exactly the fixtures[].path values",
+         identical(reg_paths, c("inst/bench/reg-cases.json",
+                                "tests/testthat/fixtures/reg-relative.json")))
+
+  # 16a. A registered fixture whose only curl is its import_command passes,
+  # with no allowlist row naming the file -- the acceptance criterion.
+  root <- provenance_tree()
+  put(root, "inst/bench/reg-cases.json",
+      fixture_with(sprintf('    "import_command": "%s",', fetch)))
+  put(root, "tests/testthat/fixtures/reg-relative.json",
+      fixture_with(sprintf('    "import_command": "%s",', fetch)))
+  expect("C6 passes a registered fixture with curl in import_command",
+         identical(rule(root, "C6"), TRUE))
+  expect("no allowlist row names the registered fixtures",
+         !any(c("inst/bench/reg-cases.json",
+                "tests/testthat/fixtures/reg-relative.json") %in%
+                allow_paths()))
+
+  # 16b. The other command keys are provenance fields too.
+  root <- provenance_tree()
+  put(root, "inst/bench/reg-cases.json",
+      fixture_with(c(sprintf('    "pin_fetch_command": "%s",', fetch),
+                     '    "generation_command": "curl-free-generator.py",')))
+  expect("C6 passes curl in pin_fetch_command / generation_command",
+         identical(rule(root, "C6"), TRUE))
+
+  # 16c. The SAME bytes at an unregistered path fail: the exemption is keyed
+  # on registration, not on the shape of the file.
+  root <- provenance_tree()
+  put(root, "tests/testthat/fixtures/reg-relative-copy.json",
+      fixture_with(sprintf('    "import_command": "%s",', fetch)))
+  expect("C6 fails the same import_command in an unregistered copy",
+         identical(rule(root, "C6"), FALSE))
+
+  # 16d. ...and with no registry at all, nothing is registered.
+  root <- provenance_tree(registry_lines = NULL)
+  put(root, "inst/bench/reg-cases.json",
+      fixture_with(sprintf('    "import_command": "%s",', fetch)))
+  expect("C6 fails closed when the registry is absent",
+         identical(rule(root, "C6"), FALSE))
+
+  # 16e. A registered fixture with curl OUTSIDE a provenance field fails, in
+  # each of the positions a stray reference could take: a narrative `_meta`
+  # key, a data row, and a hit that shares the file with a legitimate one.
+  root <- provenance_tree()
+  put(root, "inst/bench/reg-cases.json",
+      fixture_with('    "note": "compared against curl 8.x",'))
+  expect("C6 fails a registered fixture with curl in a non-command _meta key",
+         identical(rule(root, "C6"), FALSE))
+  root <- provenance_tree()
+  put(root, "inst/bench/reg-cases.json",
+      c("{", '  "_meta": { "import_command": "python3 make.py" },',
+        '  "success": [{ "input": "curl://a/", "href": "curl://a/" }]', "}"))
+  expect("C6 fails a registered fixture with curl in a data row",
+         identical(rule(root, "C6"), FALSE))
+  root <- provenance_tree()
+  put(root, "inst/bench/reg-cases.json",
+      fixture_with(c(sprintf('    "import_command": "%s",', fetch),
+                     '    "license": "same terms as libcurl",')))
+  fs <- run_gate(root, mode = "static-only")
+  c6 <- Filter(function(f) identical(f$id, "C6"), fs)[[1L]]
+  expect("C6 fails a registered fixture with one live hit beside an inert one",
+         identical(c6$ok, FALSE) &&
+           grepl("outside a provenance field at line", c6$detail, fixed = TRUE))
+
+  # 16f. The line predicate itself: a command key whose value is not a single
+  # JSON string, or that shares its line with anything else, is not inert.
+  expect("a provenance command line is recognised, with escapes and a comma",
+         identical(is_provenance_command_line(c(
+           sprintf('  "import_command": "%s",', fetch),
+           '"generation_command": "say \\"curl\\" -o x"',
+           '  "import_command": ["curl", "-o", "x"],',
+           '  "import_command": "curl -o x", "note": "curl"',
+           '  "import_command_note": "run curl by hand"'
+         )), c(TRUE, TRUE, FALSE, FALSE, FALSE)))
+
+  # 16g. Registration is the fixtures[].path key only: the decision's `path`
+  # and a source group's nested `path` register nothing.
+  expect("a governing_decision path does not register",
+         !"design/not-a-fixture.md" %in% reg_paths)
+  expect("a nested source-group path does not register",
+         !"ip.py" %in% reg_paths)
 
   # 15. C7 log judging (RURL-pdrrmfmu). The full C7 runs a real R CMD check and
   # so stays out of the self-test, but the TOLERANCE is pure and is exercised
