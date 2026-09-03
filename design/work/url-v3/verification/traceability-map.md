@@ -222,7 +222,7 @@ is an explicit edit here, not a filename.
 | record_id | deferral_id | tracked_path | contract | scope |
 |---|---|---|---|---|
 | key-join-discharge | VD-001 | design/work/url-v3/verification/key-join-discharge.md | KJ | the 51 key/join cells VD-001 enumerates, with the residual `http_https_missing` refusal named rather than claimed; not the join-family slice |
-| output-display-discharge | VD-003 | design/work/url-v3/verification/output-display-discharge.md | OUT | the safe-display (surface d) cells VD-003 enumerates; surfaces (a), (b) and (c) untouched; OUT-O4's contract-cell move is `RURL-irfmmoer` and is not claimed; not the full-string-family slice |
+| output-display-discharge | VD-003 | design/work/url-v3/verification/output-display-discharge.md | OUT | the safe-display (surface d) cells VD-003 enumerates; surfaces (a), (b) and (c) untouched; OUT-O4's contract-cell move landed under `RURL-irfmmoer` and is not claimed here; not the full-string-family slice |
 | output-fsss-discharge | VD-002 | design/work/url-v3/verification/output-fsss-discharge.md | OUT | the FSSS (surface b) cells VD-002 enumerates; surfaces (a), (c) and (d) untouched; not the full-string-family slice |
 | state-authority-discharge | VD-005 | design/work/url-v3/verification/state-authority-discharge.md | CS | the authority-state cells only (`authority_delimiter_present`, `authority_payload_kind`, and the emit-`//`-iff-delimiter rule); not the state-family slice |
 | state-verdicts-discharge | VD-004 | design/work/url-v3/verification/state-verdicts-discharge.md | CS | the verdict-layer cells only (the three layer fields and the π projection); not the state-family slice |
@@ -236,9 +236,10 @@ does not restate, and in places an ownership ruling, which it has no authority
 to make. So a section whose cells a discharge record evidences can still read
 `UNASSIGNED` here, and that is not a contradiction: it says no registered
 slice's family covers the section, which remains true. Where that gap is
-material the question has a carrier — `RURL-jdnlpydz` for the verdict-layer
-sections, which P0.7 D-B routes to `state-slice` — and the census moves when
-that ruling lands, not when a record is listed above. What this table changes
+material it has a carrier — `RURL-jdnlpydz` carried the verdict-layer sections
+until P0.7 D-B's routing to `state-slice` was applied in `## Section ownership`
+below — and the census moves when such a ruling lands, not when a record is
+listed above. What this table changes
 is that the evidence is no longer invisible to the record whose job is to
 report what is missing.
 
@@ -323,10 +324,10 @@ by-slice tally while every rule stayed green (RURL-fymdhizq).
 | SS | s12 | Diagnostics rows | UNASSIGNED | RURL-lkyverse |
 | VI | s1 | Repair-posture axis rows | UNASSIGNED | RURL-jdnlpydz |
 | VI | s2 | Ordered pipeline / intervention-ledger rows | UNASSIGNED | RURL-jdnlpydz |
-| VI | s3 | Verdict-layer rows | UNASSIGNED | RURL-jdnlpydz |
-| VI | s4 | Shipped-value → layer map (the C-07 map) | UNASSIGNED | RURL-jdnlpydz |
-| VI | s5 | Annotation-state resolution rows (S7-F3) | UNASSIGNED | RURL-jdnlpydz |
-| VI | s6 | π collapse table (legacy `parse_status` projection) | UNASSIGNED | RURL-jdnlpydz |
+| VI | s3 | Verdict-layer rows | state-slice | — |
+| VI | s4 | Shipped-value → layer map (the C-07 map) | state-slice | — |
+| VI | s5 | Annotation-state resolution rows (S7-F3) | state-slice | — |
+| VI | s6 | π collapse table (legacy `parse_status` projection) | state-slice | — |
 | VI | s7 | Repair / recovery provenance rows | UNASSIGNED | RURL-jdnlpydz |
 | VI | s8 | Repaired-input revalidation rows | UNASSIGNED | RURL-jdnlpydz |
 | VI | s9 | Resolution verdict rows (`resolve_url`) | UNASSIGNED | RURL-jdnlpydz |
@@ -334,15 +335,32 @@ by-slice tally while every rule stayed green (RURL-fymdhizq).
 
 ### Why these assignments, and where they are contestable
 
-- **`state-slice` is scoped to `canonical-state-contract.md` §Rows (44 cells)**
-  on the evidence of the prior state audit, which reported 35 of 44 cells
-  already covered both ways. The wider reading — that the state slice also
-  covers the four `validation-intervention-contract.md` verdict sections (VI
-  s3–s6), which elaborate `layer1_syntax_verdict`, `layer2_policy_verdict`,
-  `layer3_annotation_state`, and `parse_status`, all of them fields §Rows
-  already owns — is defensible and would move 37 claims. `RURL-jdnlpydz`
-  carries the question; the narrower reading is recorded here because it is the
-  one with evidence behind it, not because it is obviously right.
+- **`state-slice` owns `canonical-state-contract.md` §Rows (44 cells) plus the
+  four `validation-intervention-contract.md` verdict sections (VI s3–s6, 37
+  claims) — 81 claims.** The narrower scoping, CS §Rows alone on the evidence
+  of the prior state audit (35 of 44 cells covered both ways), was recorded
+  first because it was the reading with evidence behind it. P0.7 D-A/D-B
+  (`RURL-jdnlpydz`) then adopted the wider one: s3–s6 elaborate the value sets
+  and semantics of `layer1_syntax_verdict`, `layer2_policy_verdict`,
+  `layer3_annotation_state` and `parse_status`, four fields §Rows already owns,
+  and splitting a field's *name* from its *value set* across two slices would
+  put one runtime property under two owners. The evidence P0.7 §2 measured is
+  `tests/testthat/test-parse-verdicts.R`, whose named blocks
+  `design/work/url-v3/verification/state-verdicts-discharge.md` already maps
+  cell by cell (`:: "the two error kinds are distinguishable, and parse_status
+  is not"`, `:: "L3 does not move L1 or L2 (the independence invariant)"`,
+  `:: "pi projects every layer combination to a shipped status value"`,
+  `:: "pi reproduces parse_status across the option matrix"`, `:: "every
+  produced verdict is inside its settled vocabulary"`, `:: "three L3 states have
+  no producer in the shipped engine"`, among them) — with P0.7's own limit
+  carried: four s5/s6 cells (`not-requested`, `invalid-input`,
+  `dependency-error`, and the `dependency-error → nominal` π row) have no
+  producer in the shipped engine and are asserted *absent*, not covered, and one
+  s6 row is coverable on its `not-applicable` leg only. The per-cell tally is the
+  slice's to make when it is authored; the slice remains `OWED`, and this fixes
+  its scope, not its existence. VI s1, s2 and s7–s9 (25 claims) are P0.7 D-C's
+  unbuilt half and stay `UNASSIGNED` under `RURL-jdnlpydz` until that separate
+  ruling.
 - **`OUT` §Encoding / locale-invariance rows goes to `full-string-slice`, not
   `determinism-slice`.** Locale invariance of *serialized output* is a property
   of the serializer, and the shipped determinism slice scopes itself to the
@@ -703,10 +721,10 @@ covers the section.
 | TR-OUT-s6-omits-fragment-credentials | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:158` |
 | TR-OUT-s6-byte-compat-scope | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:159` |
 | TR-OUT-s6-dials-owned-elsewhere | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:160` |
-| TR-OUT-s6-resolve-url-coupling | OPEN | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:161` |
+| TR-OUT-s6-resolve-url-coupling | SETTLED | mutation-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:161` |
 | TR-OUT-s7-separate-surface | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:167` |
 | TR-OUT-s7-redacts-credentials | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:168` |
-| TR-OUT-s7-scope-escape-annotation-matrix | OPEN | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:169` |
+| TR-OUT-s7-scope-escape-annotation-matrix | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:169` |
 | TR-OUT-s8-identity-never-presentation | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:179` |
 | TR-OUT-s8-non-interference | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:180` |
 | TR-OUT-s8-key-policy-truth-tables-joins-mi | SETTLED | join-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:181` |
@@ -743,7 +761,7 @@ covers the section.
 | TR-PSD-s1-migration-surface | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:85` |
 | TR-PSD-s2-canonical-join | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:101` |
 | TR-PSD-s2-check-hosts | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:102` |
-| TR-PSD-s2-format-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:103` |
+| TR-PSD-s2-format-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:103` |
 | TR-PSD-s2-get-clean-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:104` |
 | TR-PSD-s2-get-domain | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:105` |
 | TR-PSD-s2-get-fragment | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:106` |
@@ -766,7 +784,7 @@ covers the section.
 | TR-PSD-s2-get-userinfo | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:123` |
 | TR-PSD-s2-is-valid-host | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:124` |
 | TR-PSD-s2-query-param-summary | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:125` |
-| TR-PSD-s2-resolve-url | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:126` |
+| TR-PSD-s2-resolve-url | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:126` |
 | TR-PSD-s2-rurl-cache-config | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:127` |
 | TR-PSD-s2-rurl-cache-info | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:128` |
 | TR-PSD-s2-rurl-clear-caches | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/public-surface-disposition.md:129` |
@@ -909,43 +927,43 @@ covers the section.
 | TR-VI-s2-5 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:111` |
 | TR-VI-s2-6 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:112` |
 | TR-VI-s2-ledger-completeness | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:113` |
-| TR-VI-s3-l1-syntax-parse | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:128` |
-| TR-VI-s3-l2-policy-admission | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:129` |
-| TR-VI-s3-l3-optional-annotation | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:130` |
-| TR-VI-s3-admitted | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:136` |
-| TR-VI-s3-admitted-scheme-relative | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:137` |
-| TR-VI-s3-admitted-ftp | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:138` |
-| TR-VI-s3-rejected-scheme | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:139` |
-| TR-VI-s3-warn-userinfo | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:140` |
-| TR-VI-s4-error-from-curl-ok | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:151` |
-| TR-VI-s4-error-web-unsupported-scheme-dem | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:152` |
-| TR-VI-s4-warning-userinfo | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:153` |
-| TR-VI-s4-ok-scheme-relative | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:154` |
-| TR-VI-s4-ok-ftp | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:155` |
-| TR-VI-s4-ok | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:156` |
-| TR-VI-s4-warning-no-tld | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:157` |
-| TR-VI-s4-warning-invalid-tld | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:158` |
-| TR-VI-s4-warning-public-suffix | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:159` |
-| TR-VI-s5-not-requested | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:172` |
-| TR-VI-s5-not-applicable | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:173` |
-| TR-VI-s5-known | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:174` |
-| TR-VI-s5-unknown | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:175` |
-| TR-VI-s5-invalid-input | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:176` |
-| TR-VI-s5-dependency-error | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:177` |
-| TR-VI-s6-1 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:189` |
-| TR-VI-s6-2 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:190` |
-| TR-VI-s6-3 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:191` |
-| TR-VI-s6-4 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:192` |
-| TR-VI-s6-5 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:193` |
-| TR-VI-s6-6 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:194` |
-| TR-VI-s6-7 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:195` |
-| TR-VI-s6-8 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:196` |
-| TR-VI-s6-9 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:197` |
-| TR-VI-s6-error-over-warning | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:203` |
-| TR-VI-s6-psl-warning-partition | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:204` |
-| TR-VI-s6-userinfo-over-psl | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:205` |
-| TR-VI-s6-not-applicable-not-requested-nom | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:206` |
-| TR-VI-s6-dependency-error-nominal-v3-forw | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:207` |
+| TR-VI-s3-l1-syntax-parse | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:128` |
+| TR-VI-s3-l2-policy-admission | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:129` |
+| TR-VI-s3-l3-optional-annotation | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:130` |
+| TR-VI-s3-admitted | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:136` |
+| TR-VI-s3-admitted-scheme-relative | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:137` |
+| TR-VI-s3-admitted-ftp | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:138` |
+| TR-VI-s3-rejected-scheme | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:139` |
+| TR-VI-s3-warn-userinfo | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:140` |
+| TR-VI-s4-error-from-curl-ok | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:151` |
+| TR-VI-s4-error-web-unsupported-scheme-dem | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:152` |
+| TR-VI-s4-warning-userinfo | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:153` |
+| TR-VI-s4-ok-scheme-relative | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:154` |
+| TR-VI-s4-ok-ftp | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:155` |
+| TR-VI-s4-ok | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:156` |
+| TR-VI-s4-warning-no-tld | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:157` |
+| TR-VI-s4-warning-invalid-tld | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:158` |
+| TR-VI-s4-warning-public-suffix | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:159` |
+| TR-VI-s5-not-requested | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:172` |
+| TR-VI-s5-not-applicable | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:173` |
+| TR-VI-s5-known | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:174` |
+| TR-VI-s5-unknown | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:175` |
+| TR-VI-s5-invalid-input | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:176` |
+| TR-VI-s5-dependency-error | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:177` |
+| TR-VI-s6-1 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:189` |
+| TR-VI-s6-2 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:190` |
+| TR-VI-s6-3 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:191` |
+| TR-VI-s6-4 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:192` |
+| TR-VI-s6-5 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:193` |
+| TR-VI-s6-6 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:194` |
+| TR-VI-s6-7 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:195` |
+| TR-VI-s6-8 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:196` |
+| TR-VI-s6-9 | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:197` |
+| TR-VI-s6-error-over-warning | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:203` |
+| TR-VI-s6-psl-warning-partition | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:204` |
+| TR-VI-s6-userinfo-over-psl | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:205` |
+| TR-VI-s6-not-applicable-not-requested-nom | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:206` |
+| TR-VI-s6-dependency-error-nominal-v3-forw | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:207` |
 | TR-VI-s7-c-02-browser-fixer-phase-orderin | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:218` |
 | TR-VI-s7-c-03-repeated-rfc-recovery | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:219` |
 | TR-VI-s7-repair-off-tested-no-op | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:220` |
@@ -958,7 +976,7 @@ covers the section.
 | TR-VI-s9-reference-verdict | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:245` |
 | TR-VI-s9-merged-output-verdict | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:246` |
 | TR-VI-s9-current-na-on-failure | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:247` |
-| TR-VI-s9-resolver-verdict-surface | OPEN | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:248` |
+| TR-VI-s9-resolver-verdict-surface | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:248` |
 | TR-VI-s10-get-parse-verdicts | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:258` |
 | TR-VI-s10-get-url-diagnostics-unchanged | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:259` |
 | TR-VI-s10-get-host-type-get-scheme-class-u | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:260` |
@@ -980,14 +998,14 @@ other, and this one summarizes the very thing the record exists to establish.
 | owning_slice | coverage | claims | SETTLED | OPEN |
 |---|---|---|---|---|
 | cache-slice | MAPPED | 20 | 20 | 0 |
-| state-slice | PENDING | 44 | 43 | 1 |
-| full-string-slice | PENDING | 51 | 48 | 3 |
-| mutation-slice | PENDING | 72 | 57 | 15 |
+| state-slice | PENDING | 81 | 80 | 1 |
+| full-string-slice | PENDING | 51 | 49 | 2 |
+| mutation-slice | PENDING | 72 | 58 | 14 |
 | join-slice | PENDING | 77 | 77 | 0 |
 | migration-slice | PENDING | 22 | 18 | 4 |
 | host-slice | PENDING | 49 | 43 | 6 |
-| UNASSIGNED | UNASSIGNED | 181 | 148 | 33 |
-| **total** | — | 516 | 454 | 62 |
+| UNASSIGNED | UNASSIGNED | 144 | 114 | 30 |
+| **total** | — | 516 | 459 | 57 |
 
 ### By contract
 
@@ -997,12 +1015,12 @@ other, and this one summarizes the very thing the record exists to establish.
 | CM | `design/work/url-v3/contracts/cleaning-mutation-contracts.md` | 59 | 45 | 14 | 8 |
 | HA | `design/work/url-v3/contracts/host-annotation-contracts.md` | 41 | 35 | 6 | 10 |
 | KJ | `design/work/url-v3/contracts/key-join-contracts.md` | 75 | 75 | 0 | 7 |
-| OUT | `design/work/url-v3/contracts/output-contracts.md` | 59 | 55 | 4 | 12 |
+| OUT | `design/work/url-v3/contracts/output-contracts.md` | 59 | 57 | 2 | 12 |
 | PS | `design/work/url-v3/contracts/public-surface-closure.md` | 8 | 8 | 0 | 1 |
-| PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 66 | 35 | 31 | 4 |
+| PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 66 | 37 | 29 | 4 |
 | SC | `design/work/url-v3/contracts/semantic-cache-contract.md` | 20 | 20 | 0 | 5 |
 | SS | `design/work/url-v3/contracts/standard-scheme-matrices.md` | 74 | 70 | 4 | 12 |
-| VI | `design/work/url-v3/contracts/validation-intervention-contract.md` | 70 | 68 | 2 | 10 |
+| VI | `design/work/url-v3/contracts/validation-intervention-contract.md` | 70 | 69 | 1 | 10 |
 <!-- END GENERATED: coverage-census -->
 
 ## Excluded sources
@@ -1080,28 +1098,33 @@ does NOT define, and must not be read as redefining:
 
 Four, all reported rather than resolved.
 
-1. **180 of 515 claims (35%) have no owning verification slice.** Three
+1. **144 of 516 claims (28%) have no owning verification slice.** Three
    carriers, each a question only the owner can answer:
-   `RURL-jdnlpydz` (validation/intervention, 62 claims), `RURL-lkyverse`
+   `RURL-jdnlpydz` (validation/intervention, 25 claims), `RURL-lkyverse`
    (standard/scheme matrices, 49), `RURL-sunrlgio` (public-surface
-   dispositions, 69). This is the material finding of criterion 1: **the
+   dispositions, 70). This is the material finding of criterion 1: **the
    accepted verification-slice set does not span the contract family.** It is
    not a defect in any slice — each shipped slice is complete over what it
    claims — it is a gap between the eight §7 G4 property families and the ten
    §6 contracts, and it was not visible until the population was enumerated.
 
-   **Read the count against `## Discharge records`, and read the numerals
-   themselves with care.** Part of what this item reports as unowned has
-   shipped evidence in a discharge record — the verdict-layer sections under
-   `RURL-jdnlpydz` are the material case, which P0.7 D-B measures at 37 of that
-   carrier's 62. The count does not net them out: a discharge record grants no
-   coverage here, and moving those claims is an ownership ruling with its own
-   carrier. Separately, these hand-written figures lag the generated census
-   above. The numerals were last restated here at `RURL-fmkuunwj`; they are a
-   prose summary of a block that regenerates, so read the census, not this
-   paragraph, when the two disagree. The **netting** is the part that is still
-   owed and it belongs to `RURL-jdnlpydz`'s ruling, not to any edit that only
-   changes how ownership is spelled.
+   **Read the drop from 181 to 144 for what it is.** P0.7 D-A/D-B, applied
+   under `RURL-jdnlpydz`, moved the four `VI` verdict-layer sections (s3–s6,
+   37 claims) to `state-slice`: their subject surface — `get_parse_verdicts()`
+   and the four fields CS §Rows already owns — is shipped, and the evidence a
+   discharge record had already mapped (`state-verdicts-discharge`) now sits
+   under a registered owner instead of beside one. That is the **netting** the
+   previous revision of this item said was owed, and it is an ownership ruling,
+   not a census edit: nothing here was newly covered — `state-slice` is still
+   `OWED` — it was newly *owned*. The 25 that remain under `RURL-jdnlpydz` are
+   P0.7 D-C's unbuilt half (s1, s2, s7–s9: the repair-posture axis, the
+   intervention ledger, provenance, revalidation, and the resolver verdict
+   surface that P2.7 D-E settled as not shipped); they are deferral candidates,
+   not slice candidates, and that ruling is separate. `RURL-sunrlgio`'s figure
+   reads 70 rather than the 69 the previous revision carried because one
+   `PSD` claim entered the population after those numerals were last restated;
+   these hand-written figures are a prose summary of the generated census
+   above, so read the census, not this paragraph, when the two disagree.
 
    **Read the drop from 37% to 35% for what it is.** `RURL-fmkuunwj` split the
    `SS` scheme-family table into one section per property and assigned three of

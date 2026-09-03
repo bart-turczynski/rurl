@@ -304,10 +304,10 @@ artifact. The residual open dispositions, grouped by destination:
   slice (G3.7 OUT-O1, G3.5 SCHEME-O2).
 - **PSC-O3 — cleaning/output/query dispositions → G3.8 / G3.7 open cells.**
   `get_clean_url` (CLEAN-O1), `get_path`/`get_query` and the `query` field
-  (MUT-O8/O9), `resolve_url` (VAL-O3/OUT-O4), `original_url` (OUT-O5). **Impact:**
-  the cleaning-vocabulary rename, query/path mutation model, resolver output shape,
-  and source-reproduction guarantee are unspecified. **Settles at:** the named
-  sibling open cells.
+  (MUT-O8/O9), `original_url` (OUT-O5); `resolve_url` left this group when
+  P2.7 closed VAL-O3/OUT-O4 (`RURL-irfmmoer`). **Impact:** the
+  cleaning-vocabulary rename, query/path mutation model, and source-reproduction
+  guarantee are unspecified. **Settles at:** the named sibling open cells.
 - **PSC-O4 — status/scheme/email dispositions → G3.6 / G3.5 open cells.**
   `get_parse_status` + `parse_status` field (VAL-O4), `get_mailto_recipients`
   (SCHEME-O3), `url_profile` (SCHEME-O1). **Impact:** the `parse_status`

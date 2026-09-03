@@ -75,7 +75,7 @@ Both run in the standard `devtools::test()` chain.
 - It does **not** verify the rest of `contracts/output-contracts.md`. Only the
   cells VD-002 enumerated are discharged. Surface (a) source reproduction,
   surface (c) clean output and surface (d) safe display keep whatever status they
-  already had, and `OUT-O1`, `OUT-O4` and `OUT-O5` remain open.
+  already had, and `OUT-O1` and `OUT-O5` remain open (`OUT-O4` closed later, under `RURL-irfmmoer`).
 - It does **not** discharge `VD-003`, the sibling row covering surface (d) and
   `format_url`. That surface is still unshipped, so VD-003 stays `ACCEPTED` and
   D3 correctly stays silent about it.

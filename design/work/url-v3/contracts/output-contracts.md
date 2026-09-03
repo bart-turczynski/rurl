@@ -35,8 +35,8 @@
 | owner | Bart Turczynski <bartek@turczynski.pl> |
 | single_writer | repository owner (sole); P0.3 §5 — this contract is the SINGLE WRITER of the v3 output-surface matrices: the five output surfaces (source reproduction, standard serialization, clean output, safe display, comparison key), the surface-assignment invariants, the lossless serializer-input record, the claim/oracle policy over the FSSS, the capability classification, the encoding/locale-invariance rows, and the credential-handling / undivided-userinfo cell (S1 Q5) |
 | lifecycle_state | PROPOSED |
-| dependencies | P2.2 (bound decision — four surfaces + FSSS + invariants); P5.3 (bound decision — claim/oracle policy over the FSSS); P3.1 (bound decision — comparison-key surface, REFERENCED not redefined); S3 (bound evidence); contract-canonical-state (field vocabulary only, not projected); P2.1/P2.3 (repair posture / verdict layering — referenced); reconciliation §6 artifact 7, §4 RCON-03, §7 G3 |
-| bound_decision | P2.2 + P5.3 + P3.1 |
+| dependencies | P2.2 (bound decision — four surfaces + FSSS + invariants); P5.3 (bound decision — claim/oracle policy over the FSSS); P3.1 (bound decision — comparison-key surface, REFERENCED not redefined); S3 (bound evidence); contract-canonical-state (field vocabulary only, not projected); P2.1/P2.3 (repair posture / verdict layering — referenced); P2.7 (bound decision — `format_url()` matrix, `resolve_url()` output surface; closed OUT-O4); reconciliation §6 artifact 7, §4 RCON-03, §7 G3 |
+| bound_decision | P2.2 + P5.3 + P3.1 + P2.7 |
 | bound_evidence | S3 |
 | closes_finding | RCON-03 |
 | completion_rule | §7 G3 — the artifact exists and contains no unowned cells: the five output surfaces, surface-assignment invariants, the standard-serialization (FSSS) contract, the lossless serializer-input record, source reproduction, clean output, safe display, the comparison-key reference, the claim/oracle policy, the capability classification, encoding/locale invariance, and the credential-handling / undivided-userinfo cell each carry a non-placeholder owner_decision_ref with status SETTLED or an explicit status OPEN with a one-line impact and owner-decision destination; cross-artifact field names agree with artifact 3; the key surface references G3.K without redefinition; validate-records.R (output section, added at cp-snapshot-3) passes |
@@ -90,7 +90,7 @@ boundary complete. No surface may silently stand in for another.
 | a | source reproduction | `url_source()` (← `original_url`) | verbatim | verbatim | yes (bytes, unmutated row) | n/a (echoes input) | P2.2@8292c7f (§1a) | SETTLED |
 | b | standard serialization (FSSS) | `serialize_url(x, standard=, form=)` (shipped; P2.5) | **preserved** | **reconstructed** | via parse→serialize→parse identity | **yes** (WHATWG / RFC 3986) | P2.2@8292c7f (§1b, §4) | SETTLED |
 | c | clean output | `clean_url` / `get_clean_url()` | **omitted** | **not reconstructed** | no (intentionally lossy) | no (SEO/policy product) | P2.2@8292c7f (§1c) | SETTLED |
-| d | safe display | `format_url()` (unimplemented) | policy | redacted/annotated | no | no (human-readable) | P2.2@8292c7f (§1d) | SETTLED (surface; matrix OPEN — OUT-O4) |
+| d | safe display | `format_url()` (shipped; P2.7 D-D) | policy | redacted/annotated | no | no (human-readable) | P2.2@8292c7f (§1d); P2.7@77e5d66 (D-D) | SETTLED |
 | e | comparison key | `get_url_key()` (non-URL projection) | ignored (state kept for diagnostics) | ignored | n/a | n/a (identity, not a URL string) | P3.1@3b89b94 (D-A) — **owned by G3.K**, referenced | SETTLED (boundary) |
 
 ## Surface-assignment invariants (P2.2 §5)
@@ -158,7 +158,7 @@ its output-surface classification. Consistent with G3.8.
 | omits fragment + credentials | drops the fragment and never reconstructs credentials (per-surface contract) | P2.2@8292c7f (§1c, §5.4) | SETTLED |
 | byte-compat scope | byte-for-byte compatible for every input that remains admitted under the active posture (D4); the strict-default flip is an admission change, not a clean-serialization change | P2.2@8292c7f (§1c, D4) | SETTLED |
 | dials owned elsewhere | the 25 cleaning dials, their order, lossiness, and non-interference are **G3.8** — referenced, not redefined | P2.2@8292c7f (§5.3) — dials owned by **G3.8** | SETTLED (boundary) |
-| `resolve_url()` coupling | `resolve_url()` currently returns the clean `clean_url` (dropping userinfo/fragment); decoupling its public return from cleaning is the RCON-03 resolve-output-shape question, tied to the G3.6 resolution verdict-layering (VAL-O3) | — (see Open cells OUT-O4 note; resolve output shape → RCON-03) | OPEN (see OUT-O4) |
+| `resolve_url()` coupling | `resolve_url()` returns the clean `clean_url` string (surface c) by default, byte-for-byte as before; `output = "serialized"` instead routes the resolved absolute string to `serialize_url()` (surface b: fragment preserved, credentials reconstructed) and requires an explicit `url_standard`, because `NULL` selects no standard to serialize to. The default never emits (b) — P2.2 §5(1) forbids one surface standing in for the other — so the RCON-03 resolve-output-shape question closes as an added opt-in argument, not a changed default; the resolver *verdict* surface is G3.6's (VAL-O3) | P2.7@77e5d66 (D-A); `tests/testthat/test-resolve-url.R` :: "the default output surface is unchanged by the new argument", :: "serialized keeps the fragment and credentials clean_url drops", :: 'output = "serialized" requires an explicit url_standard' | SETTLED |
 
 ## Safe display (surface d)
 
@@ -166,7 +166,7 @@ its output-surface classification. Consistent with G3.8.
 |---|---|---|---|
 | separate surface | a human-readable rendering with hazard handling (controls, bidi overrides, invisibles, spoof-safe host display); its output is **never** fed into serialization, mutation baselines, or keys | P2.2@8292c7f (§1d, §5.1); S3-F3 | SETTLED |
 | redacts credentials | `format_url()` redacts credentials (the §5.5 secret-in-output guard) | P2.2@8292c7f (§5.5) | SETTLED |
-| scope + escape/annotation matrix | whether `format_url()` is in scope for 3.0 and its component-by-component escape/annotation/host-display matrix (S3-F3; S3-C6) are **not** resolved (P2.2 Q3) | — (see Open cells OUT-O4) | OPEN |
+| scope + escape/annotation matrix | `format_url()` is in scope for 3.0 and ships (`792a137`); its component-by-component escape/annotation/host-display matrix is P2.7 D-D's five escape rules E1–E5, the fixed-width `<redacted>` userinfo token, the `<U+XXXX>` escape token (so every `<…>` in the output was written by the formatter) and the dual host spelling, accepted against S3-F3's five worked examples (S3-F3; S3-C6; answers P2.2 Q3) | P2.7@77e5d66 (D-D); `tests/testthat/test-format-url.R` :: "S3-F3 example 1: /a%2Fb does not display as /a/b" through :: "S3-F3 example 5: both host spellings are shown when they differ", :: "E1 escapes a literal angle bracket and keeps an encoded one", :: "E2a escapes C0, DEL, C1 and private-use code points", :: "E3 leaves an undecodable triplet run as uppercase %XX", :: "E4 keeps encoded grammar delimiters encoded in every component", :: "E5 decodes an ordinary percent-encoded character", :: "userinfo is redacted whenever any was present, including a bare @"; cell map in `verification/output-display-discharge.md` | SETTLED |
 
 ## Comparison key (surface e) — reference to G3.K
 
@@ -311,12 +311,20 @@ invented. None reopens a SETTLED default.
   driven by S1 Q5.
 - **OUT-O4 — safe-display (surface d) scope + escape/annotation matrix, and the
   `resolve_url` output shape (P2.2 Q3; S3-F3/S3-C6; RCON-03 resolve half).**
-  Whether `format_url()` is in scope for 3.0, its component-by-component
-  escape/annotation/host-display matrix, and whether `resolve_url()` decouples its
-  public return from `clean_url` are unresolved. **Impact:** safe display has a
-  fixed surface boundary but no output matrix; `resolve_url` still returns the
-  lossy clean string. **Settles at:** a dedicated safe-display P-tier record (S3-F3)
-  and the RCON-03 `resolve_url` output-shape record (paired with G3.6 VAL-O3).
+  **CLOSED by P2.7@77e5d66** (`decisions/P2.7-display-and-resolver-output.md`),
+  the dedicated safe-display record this cell named as its destination, which
+  also carries the RCON-03 resolve half. The deferral, retained for provenance:
+  whether `format_url()` is in scope for 3.0, its component-by-component
+  escape/annotation/host-display matrix, and whether `resolve_url()` decouples
+  its public return from `clean_url` were unresolved. **Disposition:**
+  `format_url()` is in scope and shipped with D-D's E1–E5 matrix (§Safe display,
+  row `scope + escape/annotation matrix`); `resolve_url()` keeps its clean
+  default byte-for-byte and gains `output = "serialized"` (D-A; §Clean output,
+  row `resolve_url()` coupling); the resolver *verdict* surface is G3.6's and
+  settles there as not shipped (VAL-O3, P2.7 D-E). The cells moved under
+  `RURL-irfmmoer`; the behavior is evidenced by
+  `verification/output-display-discharge.md` and
+  `tests/testthat/test-resolve-url.R`.
 - **OUT-O5 — source-reproduction (surface a) guarantee (P2.2 Q4; S3-C7/S3-F1).**
   Whether v3 promises source-byte reproduction, the R `Encoding()` label, both, or
   a bounded subset is unresolved. **Impact:** the exact round-trip guarantee of
