@@ -244,7 +244,14 @@ test_that("WHATWG file parser accepts drive-letter and bare path forms", {
       "file:.",
       "file:/example.com/",
       "file:.//p",
-      "file:/.//p"
+      "file:/.//p",
+      # WHATWG "file host state" (RURL-ufsltsit): a drive letter in the
+      # authority position -- `C:` as much as `C|` -- is not a host, and a
+      # slash-less one is the whole path (no `/` appended).
+      "file://C:/",
+      "file://C:",
+      "file://d|",
+      "file://d:\\x"
     ),
     path = c(
       "/C:/m/",
@@ -257,7 +264,11 @@ test_that("WHATWG file parser accepts drive-letter and bare path forms", {
       "/",
       "/example.com/",
       "//p",
-      "//p"
+      "//p",
+      "/C:/",
+      "/C:",
+      "/d:",
+      "/d:/x"
     ),
     stringsAsFactors = FALSE
   )

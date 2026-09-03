@@ -680,14 +680,26 @@
     authority <- stringi::stri_replace_all_fixed(authority, "\\", "/")
     auth_path <- stringi::stri_replace_all_fixed(auth_path, "\\", "/")
 
-    drive_authority <- stringi::stri_detect_regex(authority, "^[A-Za-z]\\|$")
+    # WHATWG "file host state": a buffer that is a Windows drive letter -- an
+    # ASCII alpha followed by `:` OR `|` -- is not a host at all; the state
+    # falls through to "path state" with the buffer intact, and the host stays
+    # the empty string the file state set. `file://C:/` is `file:///C:/`
+    # exactly as `file://C|/` is (RURL-ufsltsit: the `:` spelling was missed,
+    # so `file://C:/` was rejected outright).
+    drive_authority <- stringi::stri_detect_regex(authority, "^[A-Za-z][:|]$")
     drive_authority[is.na(drive_authority)] <- FALSE
     if (any(drive_authority)) {
+      # The buffer IS the first path segment, so a slash-less `file://d:` has
+      # the path `/d:` -- the "/" a real host would get from the path start
+      # state is not appended, because the path state consumed the buffer.
+      drive_tail <- ifelse(
+        is.na(slash[drive_authority]), "", auth_path[drive_authority]
+      )
       auth_path[drive_authority] <- paste0(
         "/",
         stringi::stri_sub(authority[drive_authority], 1L, 1L),
         ":",
-        auth_path[drive_authority]
+        drive_tail
       )
       authority[drive_authority] <- ""
     }
@@ -1637,11 +1649,47 @@
     # the web parser leaves as reg-names (foo.09, foo.0x4, 1.2.3.08.,
     # 0x1.2.3.4.5.)
     # bypassed the gate and were wrongly accepted with warning-invalid-tld.
-    att <- .host_ends_in_number_vec(input_host)
+    #
+    # The trigger is read in the HOST PARSER's own order (RURL-lxdwuacn):
+    # percent-decode, then domain-to-ASCII, and only THEN "ends in a number"
+    # (#concept-host-parser steps 3-6). `engine_host` is already
+    # percent-decoded under this profile (`host_pct`, R/parse-web.R), and the
+    # UTS-46 mapping is applied here for the test only -- the recorded host
+    # keeps its Unicode spelling, since `host_encoding` selects the rendering
+    # later. Reading the trigger off the SOURCE token missed both spellings
+    # WPT pins: `%30%78%63%30%2e%30%32%35%30.01` decodes to `0xc0.0250.01` and
+    # the fullwidth `０Ｘｃ０．０２５０．０１` maps to it, and each is
+    # `192.168.0.1`. The web parser itself never takes the IPv4 reading of a
+    # token holding a "%", and that stays so: it reproduces the engine it was
+    # calibrated against (ADR 0018); this is the standard's host MODEL, layered
+    # over it, and the address grammar it applies is the one already in tree
+    # (`.web_ipv4_normalize()`).
+    reg_like <- !is.na(host) & host != "" &
+      !stringi::stri_startswith_fixed(host, "[")
+    reg_like[is.na(reg_like)] <- FALSE
+    candidate <- host
+    nonascii_all <- reg_like &
+      stringi::stri_detect_regex(host, "[^\\u0001-\\u007f]")
+    nonascii_all[is.na(nonascii_all)] <- FALSE
+    mapped <- rep(NA_character_, n)
+    if (any(nonascii_all)) {
+      mapped[nonascii_all] <- punycoder::host_normalize(
+        host[nonascii_all], check_hyphens = FALSE, use_std3 = FALSE,
+        verify_dns_length = FALSE
+      )
+      use_mapped <- nonascii_all & !is.na(mapped)
+      candidate[use_mapped] <- mapped[use_mapped]
+    }
+    att <- reg_like & .host_ends_in_number_vec(candidate)
     if (any(att)) {
-      coerced_canonical <- .detect_ip_host_vec(engine_host)
-      is_ip[att] <- coerced_canonical[att]
-      fatal[att] <- !coerced_canonical[att]
+      ipv4 <- vapply(
+        candidate[att], .web_ipv4_normalize, character(1), ipv4 = "whatwg",
+        USE.NAMES = FALSE
+      )
+      canonical <- .detect_ip_host_vec(ipv4)
+      host[att] <- ipv4
+      is_ip[att] <- canonical
+      fatal[att] <- !canonical
     }
 
     # WHATWG forbidden host/domain code points (RURL-jfuqpwvh). A special-scheme
@@ -1664,18 +1712,12 @@
       bad_cp[is.na(bad_cp)] <- FALSE
       fatal <- fatal | bad_cp
 
+      # `mapped` is the one domain-to-ASCII pass above, computed over every
+      # non-ASCII reg-name; a row still non-ASCII here was not an address.
       nonascii <- reg & !bad_cp &
         stringi::stri_detect_regex(host, "[^\\u0001-\\u007f]")
       nonascii[is.na(nonascii)] <- FALSE
-      if (any(nonascii)) {
-        norm <- punycoder::host_normalize(
-          host[nonascii], check_hyphens = FALSE, use_std3 = FALSE,
-          verify_dns_length = FALSE
-        )
-        bad_uts46 <- rep(FALSE, n)
-        bad_uts46[nonascii] <- is.na(norm)
-        fatal <- fatal | bad_uts46
-      }
+      fatal <- fatal | (nonascii & is.na(mapped))
     }
 
     # WHATWG IPv6 serializer (RURL-thjmzaam): bracketed IPv6 literals serialize

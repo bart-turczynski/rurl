@@ -249,13 +249,116 @@
     identical(.ascii_tolower(ref_scheme), base_scheme)
 }
 
+# ---- WHATWG `file:` state machine, resolution half (RURL-ufsltsit) -----------
+#
+# WHATWG parses a reference against a `file:` base through its own chain --
+# "file state" -> "file slash state" -> "file host state" -> "path state" --
+# and three of its rules have no RFC 3986 section 5 counterpart. All three are
+# about Windows drive letters, and each is spelled once below:
+#
+#   * "file state": a scheme-less, slash-less reference that BEGINS with a
+#     drive letter (`C|/foo`, `C|`, `C|?`, `C|#`) EMPTIES the base path instead
+#     of shortening it, so the drive letter becomes the whole path
+#     (`.whatwg_file_ref_starts_with_drive()`).
+#   * "file slash state": a reference that is a lone `/`-rooted path (`/`,
+#     `/x`) INHERITS the base's drive letter when the base path starts with a
+#     normalized one and the reference does not (`.whatwg_file_base_drive()`).
+#   * "shorten a URL's path": `..` never removes a path whose only segment is a
+#     normalized drive letter, and "path state" rewrites `C|` to `C:` when it
+#     is the first segment (`.whatwg_file_remove_dot_segments()`).
+#
+# The fourth rule, "file host state" -- an authority that IS a drive letter
+# becomes an empty host plus a path segment -- lives in the ABSOLUTE parser
+# (`.parse_whatwg_file_urls_vec()`, R/parse-phases.R), because the resolver's
+# output is re-parsed there and the same rule applies to `file://C:/` typed
+# directly. Every rule here is reached only from `.whatwg_special_base_scheme()`
+# reporting `file`, so `"rfc3986"` and the frozen NULL selector never see them.
+
+# WHATWG "Windows drive letter": two code points, an ASCII alpha then `:` or
+# `|`. "Normalized" narrows the second to `:`. Both spellings are recognised
+# where the standard's parsed base would already carry the normalized one
+# (the base here is SPLIT, not parsed, so `file:///C|/a` arrives unnormalized).
+.WHATWG_DRIVE_LETTER_RE <- "^[A-Za-z][:|]"
+
+# "Starts with a Windows drive letter": a drive letter that is the whole string
+# or is followed by `/`, `\`, `?` or `#`. The path operand here has already
+# been cut at `?`/`#`, so "followed by a delimiter" reduces to end-of-string.
+.whatwg_file_ref_starts_with_drive <- function(path) {
+  grepl(paste0(.WHATWG_DRIVE_LETTER_RE, "([/\\\\]|$)"), path, perl = TRUE)
+}
+
+# The base path's first segment, when it is a drive letter: `"C"` for `/C:/a`
+# and `/C|`, NA otherwise. The SPLIT base's path is rooted, so the segment is
+# read after the leading `/`.
+.whatwg_file_base_drive <- function(base_path) {
+  m <- regmatches(
+    base_path,
+    regexec(paste0("^/([A-Za-z])[:|](/|$)"), base_path, perl = TRUE)
+  )[[1]]
+  if (length(m) < 2L) NA_character_ else m[[2L]]
+}
+
+# WHATWG "path state" over an already-merged path, replacing RFC 3986 section
+# 5.2.4 for a `file:` result: `..` shortens the path EXCEPT past a lone
+# normalized drive letter ("shorten a URL's path"), `.` and a final `..` leave
+# an empty segment behind exactly as section 5.2.4 does, and a first segment
+# spelled `C|` is rewritten to `C:` (the "(platform-independent) Windows drive
+# letter quirk"). The segment cut keeps a TRAILING empty segment -- `strsplit`
+# drops one, and `/C:/` is ["C:", ""] -- which is the same trap the serializer's
+# `/.` guard records (R/parse-phases.R).
+.whatwg_file_remove_dot_segments <- function(path) {
+  if (is.na(path) || !nzchar(path)) {
+    return(path)
+  }
+  rooted <- startsWith(path, "/")
+  body <- if (rooted) substring(path, 2L) else path
+  segs <- stringi::stri_split_fixed(body, "/")[[1L]]
+  out <- character(0)
+  n <- length(segs)
+  for (i in seq_len(n)) {
+    s <- segs[[i]]
+    last <- i == n
+    if (identical(s, "..")) {
+      keep_drive <- length(out) == 1L &&
+        grepl("^[A-Za-z]:$", out[[1L]], perl = TRUE)
+      if (!keep_drive && length(out) > 0L) {
+        out <- out[-length(out)]
+      }
+      if (last) {
+        out <- c(out, "")
+      }
+    } else if (identical(s, ".")) {
+      if (last) {
+        out <- c(out, "")
+      }
+    } else {
+      if (length(out) == 0L) {
+        s <- sub("^([A-Za-z])\\|$", "\\1:", s, perl = TRUE)
+      }
+      out <- c(out, s)
+    }
+  }
+  paste0(if (rooted) "/" else "", paste(out, collapse = "/"))
+}
+
 # RFC 3986 section 5.2.3: merge a relative-reference path with the base path.
 # When the base has an authority and an empty path, the merged path is the
 # reference path prefixed with "/"; otherwise it is the base path up to and
 # including its last "/", followed by the reference path.
-.merge_ref_path <- function(base_authority, base_path, ref_path) {
+#
+# `whatwg_file` adds the one point where WHATWG's "file state" merge differs:
+# it CLONES the base path and shortens it, and "shorten" refuses to remove a
+# lone normalized drive letter, so `foo` against `file:///C:` is `/C:/foo`
+# where section 5.2.3 gives `/foo`.
+.merge_ref_path <- function(base_authority, base_path, ref_path,
+                            whatwg_file = FALSE) {
   if (!is.na(base_authority) && !nzchar(base_path)) {
     return(paste0("/", ref_path))
+  }
+  if (whatwg_file &&
+        grepl(paste0("^/[A-Za-z][:|]$"), base_path, perl = TRUE)) {
+    return(sprintf("%s/%s", sub("\\|$", ":", base_path, perl = TRUE),
+                   ref_path))
   }
   slash <- regexpr("/[^/]*$", base_path, perl = TRUE)
   if (slash == -1L) {
@@ -269,10 +372,16 @@
 # `b` into the target components. Returns a component list (scheme / authority /
 # path / query / fragment). This step is standard-agnostic; what is NOT is which
 # reference reaches it as scheme-bearing (see
-# `.whatwg_reference_is_relative()`).
+# `.whatwg_reference_is_relative()`), and -- under `whatwg_file` only -- the
+# three drive-letter rules of WHATWG's `file:` chain documented above.
 # `._remove_dot_segments()` (R/path-query.R) is reused for the mandated
-# dot-segment removal.
-.transform_reference <- function(r, b) {
+# dot-segment removal; `whatwg_file` swaps in the drive-letter-aware one.
+.transform_reference <- function(r, b, whatwg_file = FALSE) {
+  remove_dots <- if (whatwg_file) {
+    .whatwg_file_remove_dot_segments
+  } else {
+    ._remove_dot_segments
+  }
   if (!is.na(r$scheme)) {
     return(list(
       scheme = r$scheme,
@@ -284,16 +393,33 @@
   }
   if (!is.na(r$authority)) {
     authority <- r$authority
-    path <- ._remove_dot_segments(r$path)
+    path <- remove_dots(r$path)
     query <- r$query
   } else {
     authority <- b$authority
     if (nzchar(r$path)) {
-      if (startsWith(r$path, "/")) {
-        path <- ._remove_dot_segments(r$path)
+      if (whatwg_file && .whatwg_file_ref_starts_with_drive(r$path)) {
+        # "file state": the remainder begins with a drive letter, so the base
+        # path is EMPTIED rather than shortened and the reference is parsed
+        # from the root -- `C|/foo/bar` against `file:///tmp/mock/path` is
+        # `file:///C:/foo/bar`.
+        path <- remove_dots(paste0("/", r$path))
+      } else if (startsWith(r$path, "/")) {
+        p <- r$path
+        if (whatwg_file) {
+          # "file slash state": a rooted reference that does not itself start
+          # with a drive letter inherits the base's -- `/` against
+          # `file:///C:/a/b` is `file:///C:/`, not `file:///`.
+          drive <- .whatwg_file_base_drive(b$path)
+          if (!is.na(drive) &&
+                !.whatwg_file_ref_starts_with_drive(substring(p, 2L))) {
+            p <- paste0("/", drive, ":", p)
+          }
+        }
+        path <- remove_dots(p)
       } else {
-        path <- ._remove_dot_segments(
-          .merge_ref_path(b$authority, b$path, r$path)
+        path <- remove_dots(
+          .merge_ref_path(b$authority, b$path, r$path, whatwg_file)
         )
       }
       query <- r$query
@@ -313,13 +439,36 @@
 
 # RFC 3986 section 5.3: recompose target components into a URI string. A
 # component contributes its delimiter only when it is present (non-NA).
-.recompose_uri <- function(t) {
+#
+# THE `/.` GUARD (RURL-bedensww). Section 5.2.4's remove_dot_segments can hand
+# back a path whose FIRST segment is empty -- `/..//path` against `non-spec:/p`
+# merges to `//path` -- and section 3.3 forbids exactly that string: "If a URI
+# does not contain an authority component, then the path cannot begin with two
+# slash characters". Written out verbatim, `non-spec://path` re-reads as an
+# AUTHORITY `path` with an empty path, which is not the components that were
+# resolved. The resolved string is handed to a parser (safe_parse_urls() or
+# serialize_url()), so the recomposition must spell the path in a way the
+# grammar reads back as the same components. `/.` is that spelling: a
+# dot-segment section 5.2.4 removes again on the next parse, and the guard the
+# WHATWG URL serializer emits for the same four conditions (host null, path a
+# list, size > 1, first segment empty) -- which `serialize_url()` already
+# implements (`.serialize_whatwg_full_vec`, R/parse-phases.R) and was LOSING
+# here because it was handed the unguarded string.
+#
+# Gated on a SELECTED standard, like the scheme production: it is RFC 3986's
+# own section 3.3 constraint under "rfc3986" and the serializer's guard under
+# "whatwg", and `url_standard = NULL` is byte-frozen (ADR 0007), so the frozen
+# selector keeps emitting the unguarded string it always did.
+.recompose_uri <- function(t, url_standard = NULL) {
   out <- ""
   if (!is.na(t$scheme)) {
     out <- paste0(out, t$scheme, ":")
   }
   if (!is.na(t$authority)) {
     out <- paste0(out, "//", t$authority)
+  } else if (!is.null(url_standard) && !is.na(t$path) &&
+               startsWith(t$path, "//")) {
+    out <- sprintf("%s/.", out)
   }
   out <- paste0(out, if (!is.na(t$path)) t$path else "")
   if (!is.na(t$query)) {
@@ -375,7 +524,7 @@
   if (!is.na(r$scheme)) {
     # Absolute reference: base is irrelevant (section 5.2.2 first branch).
     empty_base <- .split_uri_ref(NA_character_, url_standard)
-    return(.recompose_uri(.transform_reference(r, empty_base)))
+    return(.recompose_uri(.transform_reference(r, empty_base), url_standard))
   }
   # Relative reference: the base must be an absolute URL (have a scheme).
   if (is.na(base)) {
@@ -389,7 +538,11 @@
   if (is.na(b$scheme)) {
     return(NA_character_)
   }
-  .recompose_uri(.transform_reference(r, b))
+  # `base_scheme` is already NA unless the selector is "whatwg" and the base's
+  # scheme is special, so this is the WHATWG `file:` chain's gate and nothing
+  # else's.
+  whatwg_file <- identical(base_scheme, "file")
+  .recompose_uri(.transform_reference(r, b, whatwg_file), url_standard)
 }
 
 #' Resolve a URL reference against a base URL
@@ -448,14 +601,34 @@
 #'     base minus its fragment. RFC 3986 has no strip step -- such bytes are
 #'     required to be percent-encoded -- so under \code{"rfc3986"} and
 #'     \code{NULL} they stay in the reference.
+#'   \item \strong{Against a \code{file:} base, Windows drive letters follow
+#'     the WHATWG \code{file:} state machine.} A reference that \emph{begins}
+#'     with a drive letter empties the base path instead of shortening it, so
+#'     \code{resolve_url("C|/foo", "file:///tmp/mock/path", url_standard =
+#'     "whatwg", output = "serialized")} is \code{"file:///C:/foo"}; a rooted
+#'     reference inherits the base's drive letter (\code{"/"} against
+#'     \code{"file:///C:/a/b"} is \code{"file:///C:/"}); \code{..} never
+#'     removes a lone drive letter (\code{".."} against \code{"file:///C:/"}
+#'     is \code{"file:///C:/"}); and \code{C|} in the first segment is
+#'     normalized to \code{C:}. A drive letter in the authority position
+#'     (\code{"//d:"}) is an empty host plus a path segment,
+#'     \code{"file:///d:"}. RFC 3986 has no drive-letter concept, so under
+#'     \code{"rfc3986"} and \code{NULL} the plain section 5.2 merge applies.
 #' }
 #'
 #' The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
 #' every rule above is reachable only through
 #' \code{url_standard = "whatwg"}.
 #'
-#' One further rule applies under \strong{both} named profiles, because the two
-#' standards agree on it. A scheme is
+#' Two further rules apply under \strong{both} named profiles, because the two
+#' standards agree on them. First, a resolved path whose first segment is
+#' empty is recomposed with the \code{/.} guard: RFC 3986 section 3.3 forbids
+#' a path beginning with \code{//} after no authority, and the WHATWG URL
+#' serializer emits the same guard, so \code{resolve_url("/..//path",
+#' "non-spec:/p", url_standard = "whatwg", output = "serialized")} is
+#' \code{"non-spec:/.//path"} rather than a string that re-reads as the
+#' authority \code{path}. The \code{NULL} selector recomposes the unguarded
+#' string, as it always did. Second, a scheme is
 #' \code{ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )} -- RFC 3986 section 3.1's
 #' own grammar, and WHATWG's -- so a relative path whose first segment merely
 #' \emph{contains} a colon is a path, not an absolute reference:
