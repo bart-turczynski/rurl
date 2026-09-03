@@ -45,42 +45,23 @@
 # surfaces in the REST API as a bare "failed" pipeline with `yaml_errors: null`
 # and no failure reason. Only GraphQL `failureReason` names it.
 
-# PAUSED 2026-08-08, NOT DELETED -- see RURL-psqmlgjf.
+# PAUSED 2026-08-08 (RURL-psqmlgjf), RE-ENABLED 2026-09-03 (RURL-utsbwfvc).
+# The free-tier compute allowance ran out on 2026-08-07 after four merge
+# requests each fired a branch pipeline AND a main pipeline; a `workflow:` block
+# admitting only `$CI_PIPELINE_SOURCE == "web"` stopped pipeline creation until
+# the monthly reset. The cadence that spent the budget is fixed below: `gates`
+# (~40s) runs per push, `check` (`R CMD check --as-cran`) runs only on a tag or
+# a hand-started pipeline. If the allowance runs out again, restore the block --
+# a red badge that means "no minutes" is worse than no badge:
 #
-# The free-tier compute allowance ran out on 2026-08-07 between 17:11 and 20:47,
-# after four merge requests each fired a branch pipeline AND a main pipeline.
-# Every pipeline before the wall was green; every red badge after it is
-# `ci_quota_exceeded` -- a job that never started. A permanently red badge that
-# means "no minutes" and not "the code is broken" is worse than no badge, because
-# the next person has to re-derive that distinction before they can trust
-# anything, and eventually stops looking.
+#   workflow:
+#     rules:
+#       - if: '$CI_PIPELINE_SOURCE == "web"'
+#       - when: never
 #
-# THE BLOCK BELOW STOPS PIPELINE CREATION, which is the only lever that actually
-# spends nothing. Disabling shared runners in the project settings would still
-# create pipelines and leave their jobs stuck pending, which is the same
-# misleading badge by another route.
-#
-# `web` IS DELIBERATELY LEFT OPEN. A pipeline triggered by hand from the UI is
-# someone deciding to spend minutes, which is the behavior we want back -- not
-# the automatic per-push spend that exhausted the budget. It is also the escape
-# hatch that keeps this config exercisable without a code change.
-#
-# THE GATES DID NOT STOP RUNNING. `tools/local-ci.sh` runs the jobs below in
-# this image, against a clean clone of a commit, on demand. Read its header for
-# what that does and does not preserve -- in particular it is pull-based, so the
-# "server-side, not opt-in per clone" property of a real runner is GONE, not
-# replaced. Run `tools/local-ci.sh --all origin/main` after every merge; `--all`
-# is required because the `check` job's rules no longer select the default
-# branch, and locally the minutes it costs are free.
-#
-# TO RE-ENABLE, on or after 2026-09-01 when free-tier minutes reset: delete this
-# `workflow:` block. That is the ONLY remaining step -- the cadence that
-# exhausted the budget has already been fixed below, so re-enabling restores the
-# cheap half only. Nothing else was changed.
-workflow:
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - when: never
+# `tools/local-ci.sh` still runs these jobs in this image against a clean clone
+# on demand (`--all origin/main` after a merge); it is the pull-based fallback,
+# not a replacement for the per-push server-side run.
 
 stages:
   - gates
