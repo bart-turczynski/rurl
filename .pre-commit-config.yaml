@@ -26,14 +26,32 @@ repos:
       # strips -- so the committed form was one the suite could never reproduce,
       # every local test run left the tree dirty, and the pre-push verify hook
       # failed with "files were modified by this hook" even on a green gate.
+      #
+      # inst/LICENSE.psl is UPSTREAM-OWNED text (RUL-008): the Mozilla Public
+      # License 2.0 as the Public Suffix List ships it, carried verbatim under
+      # LICENSE.note. Its trailing spaces and missing final newline are the
+      # upstream bytes; a "fix" would make this copy differ from the text it
+      # claims to reproduce.
+      #
+      # analysis/**/*.csv and analysis/**/run-console.txt are RECORDED
+      # MEASUREMENT OUTPUT (RUL-008): what a scoring run printed and wrote,
+      # committed as evidence of that run. The bytes the fixers object to ARE
+      # the measurement: the bare CR that mixed-line-ending sees in the scored
+      # CSVs sits inside a quoted URL-input field (it is the input under test,
+      # not a line ending), and the console logs' trailing spaces are what the
+      # run printed. Editing them after the fact makes the record disagree
+      # with a re-run.
+      #
+      # Design prose and registers are deliberately NOT here: they are authored,
+      # so the fixers own their whitespace like any other source file.
       - id: end-of-file-fixer
-        exclude: &byte-pinned '^(tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$)'
+        exclude: &fixer-excludes '^(tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$|inst/LICENSE\.psl$|analysis/.*\.csv$|analysis/.*/run-console\.txt$)'
       - id: trailing-whitespace
-        exclude: *byte-pinned
+        exclude: *fixer-excludes
       - id: check-merge-conflict
       - id: check-yaml
       - id: mixed-line-ending
-        exclude: *byte-pinned
+        exclude: *fixer-excludes
       - id: check-case-conflict
   - repo: local
     hooks:

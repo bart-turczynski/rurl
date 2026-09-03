@@ -36,4 +36,3 @@ Last reviewed: 2026-07-09, for RURL-xuurxymj under RURL-lyhcyvsa.
   Review with `spelling::spell_check_package()` before release and add true
   project vocabulary to `inst/WORDLIST`; do not churn historical NEWS text just
   to silence the checker.
-

@@ -60,4 +60,3 @@ evidence are recorded (reconciliation §6).
 | RCON-08 | Host, IDNA, PSL, DNS, and IP concepts need separate typed contracts |
 | RCON-09 | Vectorization, performance, caches, and dependency removal are not measurable gates |
 | RCON-10 | Conformance, determinism, migration, and release claims are not executable |
-
