@@ -1460,6 +1460,16 @@
 
 ### Internal
 
+- **The WHATWG conformance suite now runs under `R CMD check`.** Its fixture,
+  `inst/bench/wpt-url-cases.json` (the 336 success + 202 failure rows imported
+  from web-platform-tests `url/resources/urltestdata.json`), was excluded from
+  the built tarball by `.Rbuildignore`, so `tests/testthat/test-wpt-full-suite.R`
+  skipped every fixture-backed block against the installed package and the
+  headline conformance claim was checked only in the source tree. The fixture
+  now ships, the suite executes under `R CMD check --as-cran`, and the
+  fixture's BSD-3-Clause notice is recorded in `LICENSE.note`. No behaviour
+  changed; the pinned bytes are the same bytes.
+
 - **The `Remotes:` block is gone; both siblings now install from CRAN.** `pslr`
   and `punycoder` were pinned to GitHub tags because the versions the `Imports`
   floors require (`pslr (>= 1.1.0)`, `punycoder (>= 1.2.0)`) had not reached

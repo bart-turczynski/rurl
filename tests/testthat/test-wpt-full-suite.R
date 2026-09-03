@@ -31,6 +31,11 @@
 wpt_suite <- function() {
   skip_if_not_installed("jsonlite")
   path <- system.file("bench", "wpt-url-cases.json", package = "rurl")
+  # The fixture SHIPS in the tarball (RURL-mifbbrez: it was .Rbuildignore'd,
+  # so under `R CMD check` every block below skipped and the package's most
+  # load-bearing conformance claim was vacuous exactly where the built
+  # artifact is checked). This skip now guards only a broken install -- an
+  # empty path here means inst/bench/ did not install, never "not built in".
   skip_if(!nzchar(path) || !file.exists(path), "WPT import not installed")
   jsonlite::fromJSON(path, simplifyVector = FALSE)
 }
