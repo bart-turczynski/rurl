@@ -1550,6 +1550,23 @@
   dependency set is unchanged for anyone whose installed siblings already
   satisfied the floors.
 
+- **The dependency floors now name the versions CRAN serves: `punycoder
+  (>= 1.2.1)` and `pslr (>= 1.1.1)`, up from `>= 1.2.0` / `>= 1.1.0`.**
+  Neither old floor was ever a CRAN release — `punycoder` 1.2.0 and `pslr`
+  1.1.0 exist only as git tags, and `tools/dependency-resolvability-gate.R`
+  reported each as "names a version that was never released" — so the floors
+  were satisfiable but not pinnable. The new floors are the lowest CRAN
+  releases that carry every capability rurl calls, read from the released
+  tarballs rather than the local library: `punycoder` 1.2.1 is the first CRAN
+  release whose `host_normalize()` takes `check_hyphens` / `use_std3` /
+  `verify_dns_length` (the CRAN-archived 1.1.0 has `strict =` only), and
+  `pslr` 1.1.1 is the first CRAN release with the `engine =` and `invalid =`
+  arguments. No code changed; a CRAN install already resolved to these
+  versions. In the same change, the punycoder characterization suite pins the
+  Unicode table version and profile token rurl inherits from
+  `punycoder::normalization_profile_info()`, so a future pin move in
+  `punycoder` fails there by name before it shows up as fixture diffs.
+
 - **Authority presence is now recorded as two independent facts instead of one
   ambiguous enum.** The internal state model carried a single three-valued
   `authority_kind`, which conflated *was a `//` delimiter present* with *did it

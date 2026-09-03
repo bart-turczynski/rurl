@@ -443,8 +443,8 @@ only under `port_handling != "exclude"`.
   `head()`/`tail()` for label slicing, `capture.output()` for engine identity.
 - `stringi` — Unicode string manipulation (with deliberate base-R exceptions;
   see ADR 0005).
-- `punycoder` (>= 1.2.0) — Punycode encoding/decoding.
-- `pslr` (>= 1.1.0) — Public Suffix List matching.
+- `punycoder` (>= 1.2.1) — Punycode encoding/decoding.
+- `pslr` (>= 1.1.1) — Public Suffix List matching.
 
 The syntactic URL parse is in-tree (`R/parse-web.R`); `curl` is no longer a
 dependency.
