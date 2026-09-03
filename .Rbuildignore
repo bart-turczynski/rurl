@@ -34,7 +34,6 @@
 ^\.gitlab-ci\.yml$
 ^_scratch$
 ^analysis$
-^inst/bench/wpt-url-cases\.json$
 ^inst/bench/rfc3986-probes\.csv$
 ^inst/bench/make-wpt-fixture\.py$
 ^worklog$
