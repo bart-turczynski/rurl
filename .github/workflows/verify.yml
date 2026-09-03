@@ -41,6 +41,7 @@ jobs:
       ada_dnslength_selftest: ${{ steps.filter.outputs.ada_dnslength_selftest }}
       release_rule_selftest: ${{ steps.filter.outputs.release_rule_selftest }}
       traceability_selftest: ${{ steps.filter.outputs.traceability_selftest }}
+      validate_records_selftest: ${{ steps.filter.outputs.validate_records_selftest }}
       status_docs_selftest: ${{ steps.filter.outputs.status_docs_selftest }}
       diagnostics_docs_selftest: ${{ steps.filter.outputs.diagnostics_docs_selftest }}
       deferral_selftest: ${{ steps.filter.outputs.deferral_selftest }}
@@ -138,6 +139,8 @@ jobs:
               - 'tools/release-rule-check.R'
             traceability_selftest:
               - 'design/work/url-v3/tools/traceability-gate.R'
+            validate_records_selftest:
+              - 'design/work/url-v3/tools/validate-records.R'
             status_docs_selftest:
               - 'tools/status-doc-consistency.R'
             diagnostics_docs_selftest:
@@ -515,7 +518,14 @@ jobs:
   # That is now inverted. The ratification half is deleted and what remains is
   # wired here as an ordinary blocking gate, which also means tools/verify.R
   # picks it up automatically -- it derives its gate list from this file.
+  #
+  # The self-test (RUL-009, RURL-ajplxzik) runs the validator's derived-
+  # population sections F, F2 and G as predicates over in-memory fixtures, one
+  # positive and one negative case per rule, and proves --regenerate on a temp
+  # copy. It is the step tools/verify.R's [gate-self-tests] stage selects when
+  # the validator itself changes; the gate run above it is unconditional.
   control-plane:
+    needs: changes
     runs-on: ubuntu-latest
     name: Records are structurally sound (§6)
     steps:
@@ -528,6 +538,9 @@ jobs:
         run: install.packages("yaml")
       - name: Validate the record family
         run: Rscript design/work/url-v3/tools/validate-records.R
+      - name: Gate self-test (F/F2/G predicates, positive/negative coverage; --regenerate)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.validate_records_selftest == 'true'
+        run: Rscript design/work/url-v3/tools/validate-records.R --self-test
 
   # C-10 release-rule gate (G4.3). Verifies the ACCEPTED owner disposition P0.4:
   # the "no CRAN until curl-free" hold is bound to the v3 (3.0.0) line and does
