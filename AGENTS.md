@@ -66,9 +66,11 @@ never fire — it would always run the gate and never skip, silently.
 hook which mechanism actually delivers the values before writing another
 pre-push predicate.
 
-**GitLab CI is paused** — the free-tier compute allowance is exhausted, so
-`.gitlab-ci.yml` creates a pipeline only for a hand-triggered web run
-(RURL-psqmlgjf). Nothing verifies a push server-side. `tools/local-ci.sh` runs
+**GitLab CI runs the cheap `gates` job per push again** (re-enabled
+2026-09-03, RURL-utsbwfvc, after the 2026-08 quota pause RURL-psqmlgjf). The
+expensive `check` job still runs only on a tag or a hand-started pipeline. If
+the allowance runs out again, restore the `workflow:` block quoted in
+`.gitlab-ci.yml`'s header rather than leaving red badges up. `tools/local-ci.sh` runs
 the same CI jobs in the same image against a clean clone of a commit, which is
 where environment-shaped defects live that a fully-populated local library hides:
 
@@ -99,13 +101,13 @@ The forge moved to GitLab, so the answer is explicit rather than inherited:
 |---|---|---|
 | Gate list (lint, build, tests, `R CMD check`, record structure) | **Local**, `tools/verify.R` | Every push — it is a pre-push hook |
 | The same jobs in the CI image, clean clone | **Local**, `tools/local-ci.sh` | On demand; after every merge to `main` |
-| `gates` (~40s) | GitLab | **Paused.** Resumes on quota reset — RURL-utsbwfvc |
+| `gates` (~40s) | GitLab | Every push (re-enabled 2026-09-03, RURL-utsbwfvc) |
 | `check` (`R CMD check --as-cran`) | GitLab | Release time only: a tag, or a hand-started pipeline |
 | Everything in `.github/workflows/` | **Nowhere** | The account is suspended; none of it can fire |
 
-**Nothing verifies a push server-side today.** `tools/verify.R` as a pre-push
-hook is the only non-optional gate, and it is only installed if you ran
-`pre-commit install --hook-type pre-push` in your clone.
+**The server-side check is the ~40s `gates` job only.** The full gate list
+runs as `tools/verify.R` in the pre-push hook, which is only installed if you
+ran `pre-commit install --hook-type pre-push` in your clone.
 
 An rOpenSci **pre-submission inquiry** (software-review #781, opened
 2026-06-26) is still **open** — a scope-and-fit question, not an active review;
