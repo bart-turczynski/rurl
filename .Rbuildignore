@@ -6,6 +6,7 @@
 ^README\.html$
 ^data-raw$
 ^_pkgdown\.yml$
+^docs$
 ^\.github$
 ^\.git$
 ^doc$

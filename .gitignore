@@ -57,6 +57,13 @@ LOCAL_WORKFLOW_NOTES.md
 # HTML widget assets (generated; excluded from package build via .Rbuildignore)
 /lib/
 
+# pkgdown site (generated). _pkgdown.yml sets no `destination:`, so a local
+# build_site() writes here. Nothing needs the built site in git: it is
+# published from a build, never from a committed directory. Hand-written
+# docs live in design/ -- never put a file you want to keep under docs/,
+# because a clean build_site() deletes it (design/README.md says the same).
+/docs/
+
 # Fiberplane local issue tracking
 .fp/
 .positai
