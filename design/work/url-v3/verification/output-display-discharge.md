@@ -46,16 +46,19 @@ deferral's `surface_probe` (`export:format_url`) resolves present in `NAMESPACE`
 that a row dies when its surface arrives, not when a date passes. The cells are
 no longer excused, they are **covered**.
 
-**The second half of VD-003's sentence is a different fact, and it has not
-expired.** The row also says the "escape/redaction matrix detail is separately
-OPEN as OUT-O4". P2.7 D-D *decides* that matrix, and P2.7 §7 projects the
-resulting cell moves onto `contracts/output-contracts.md` (`:93`, `:169`,
-`:283-290`). Those moves are `RURL-irfmmoer`, a separate slice; until it lands,
-`OUT-O4` remains open in the contract and the roster row in
-`contracts/public-surface-disposition.md` says so. A discharged deferral and an
-open cell are not in conflict: the deferral excused *evidence*, and the evidence
-now exists; the open cell records that the contract text has not yet been
-rewritten to match the decision that governs it.
+**The second half of VD-003's sentence was a different fact, and it expired
+separately.** The row also says the "escape/redaction matrix detail is
+separately OPEN as OUT-O4". P2.7 D-D *decides* that matrix, and P2.7 §7
+projects the resulting cell moves onto `contracts/output-contracts.md` (the
+surface-(d) row of §Five output surfaces, the `scope + escape/annotation
+matrix` row of §Safe display, the `resolve_url()` coupling row of §Clean
+output, and the OUT-O4 bullet of `## Open cells`). Those moves landed under
+`RURL-irfmmoer`, a separate slice from this one: `OUT-O4` is CLOSED in the
+contract and the `format_url` roster row in
+`contracts/public-surface-disposition.md` reads SETTLED. The two slices were
+kept apart on purpose — this record excused and then evidenced *behavior*; the
+other rewrote the contract text to match the decision that governs it — and
+neither claims the other's work.
 
 ## Cell → evidence map
 
@@ -80,10 +83,10 @@ criteria are locatable without reading the whole file.
   cells VD-003 enumerated are discharged. Surface (a) source reproduction and
   surface (c) clean output keep whatever status they already had, and `OUT-O1`
   and `OUT-O5` remain open.
-- It does **not** close `OUT-O4`. The matrix is *decided* (P2.7 D-D) and now
-  *implemented and tested*, but the contract cells P2.7 §7 projects have not
-  moved; that is `RURL-irfmmoer`. This record evidences the behavior, it does not
-  rewrite the contract.
+- It did **not** close `OUT-O4`. The matrix is *decided* (P2.7 D-D) and
+  *implemented and tested* here; the contract cells P2.7 §7 projects were moved
+  by `RURL-irfmmoer`, and that is what closed the cell. This record evidences the
+  behavior, it does not rewrite the contract.
 - It does **not** claim the display rule is verified against a Unicode *version*
   sweep. It is verified to be **version-independent by construction**: the E2
   blocks are static range matrices, and `:: "the escape decision performs no

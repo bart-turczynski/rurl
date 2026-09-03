@@ -201,15 +201,15 @@ it). "Citation census" pointers are a grep over the nine files.
 | (i) | The canonical field vocabulary is defined **once** by artifact 3 (G3.3) and is the ONLY vocabulary used by G3.6 verdicts, G3.7 outputs, and G3.9 status/cache introspection — no forked field names. | `canonical-state-contract.md` `single_writer` = "SINGLE WRITER of the canonical field vocabulary"; G3.6/G3.7/G3.9 name artifact-3 fields (e.g. `parse_status`, the 18 public fields, three-valued presence) and re-declare none. G3.4's cross-artifact section already asserts the public-surface slice of this ("the 18 public fields + three-valued presence → artifact 3"). | PASS |
 | (ii) | The comparison key is defined **once** in artifact 9 (G3.K) and only *referenced* by G3.7 (output surface e), G3.8, G3.H, and G3.4 — never redefined. | `key-join-contracts.md` `single_writer` = "SINGLE WRITER of comparison-key policy, URL-join semantics, and canonical_join migration"; `output-contracts.md` lists "comparison key" only as one of the five output **surfaces** (an assignment), not a policy re-definition; G3.4 records `canonical_join` migrating OFF `clean_url` ONTO the identity key (G3.K), and `get_url_key`/"identity key" appears in the siblings as a reference to G3.K. | PASS |
 | (iii) | Cache is defined **once** in artifact 10-cache (G3.9) and only *delegated* from G3.H (and G3.4) — never redefined. | `semantic-cache-contract.md` `single_writer` = "SINGLE WRITER of v3 cache semantics"; `host-annotation-contracts.md` `single_writer` explicitly EXCEPTS "the annotation cost/cache contract (G3.9)"; G3.4's owning-contract legend + `rurl_cache_*` rows defer cache semantics to G3.9; HOST-O4 coordinates PSL cache **mechanics** with G3.9 rather than restating them. | PASS |
-| (iv) | The strict-posture default (P2.1 B1) and every other P-tier default are cited **identically** everywhere — each `Pn.n` resolves to exactly one `@shortsha` across all nine contracts, with no fork. | Citation census over the nine files: each accepted record appears with exactly one short SHA — `P1.1@a7e0a59`, `P1.2@bb3346e`, `P2.1@a4d1b45`, `P2.2@8292c7f`, `P2.3@a7e0a59`, `P2.4@b017e87`, `P3.1@3b89b94`, `P3.2@bb3346e`, `P4.1@b017e87`, `P5.1@d254ff1`, `P5.3@8292c7f`, `P2.6@5f4309b`, `P3.3@d9b0976`. `grep -hoE 'P[0-9]\.[0-9]@[0-9a-f]{7}' <the nine> \| sort -u` yields exactly 13 distinct `Pn.n@sha` pairs — one per decision, zero collisions on a `Pn.n` with two SHAs. | PASS |
-| (v) | **No cell is unowned** across the artifact set: every open cell in every contract carries a named settlement destination. | The open-cell census below enumerates all **41** live open-cell IDs (see `### Census tally` for why the figure moved from 44); each row names an owning contract and a destination that is a sibling cell, the unmade P4 host record (RCON-08), the unmade P3 mutation-slice owner decision, a future P5 decision, or §6 artifact 11 / G4. It also records the cells a later-accepted decision has since closed — one still frozen in its leaf's text (G3.3 `authority_kind` → P1.2@bb3346e) and nine closed at source in their own contract (G3.K KJ-O1..O8 → P3.2@bb3346e; VAL-O1 → P2.6@5f4309b) — and the one forwarded to a sibling (G3.3 undivided-`userinfo` → OUT-O1). None resolves to "nobody." | PASS |
+| (iv) | The strict-posture default (P2.1 B1) and every other P-tier default are cited **identically** everywhere — each `Pn.n` resolves to exactly one `@shortsha` across all nine contracts, with no fork. | Citation census over the nine files: each accepted record appears with exactly one short SHA — `P1.1@a7e0a59`, `P1.2@bb3346e`, `P2.1@a4d1b45`, `P2.2@8292c7f`, `P2.3@a7e0a59`, `P2.4@b017e87`, `P3.1@3b89b94`, `P3.2@bb3346e`, `P4.1@b017e87`, `P5.1@d254ff1`, `P5.3@8292c7f`, `P2.6@5f4309b`, `P3.3@d9b0976`, `P2.7@77e5d66`. `grep -hoE 'P[0-9]\.[0-9]@[0-9a-f]{7}' <the nine> \| sort -u` yields exactly 14 distinct `Pn.n@sha` pairs — one per decision, zero collisions on a `Pn.n` with two SHAs. | PASS |
+| (v) | **No cell is unowned** across the artifact set: every open cell in every contract carries a named settlement destination. | The open-cell census below enumerates all **39** live open-cell IDs (see `### Census tally` for why the figure moved from 44 to 41, then to 39); each row names an owning contract and a destination that is a sibling cell, the unmade P4 host record (RCON-08), the unmade P3 mutation-slice owner decision, a future P5 decision, or §6 artifact 11 / G4. It also records the cells a later-accepted decision has since closed — one still frozen in its leaf's text (G3.3 `authority_kind` → P1.2@bb3346e) and eleven closed at source in their own contract (G3.K KJ-O1..O8 → P3.2@bb3346e; VAL-O1 → P2.6@5f4309b; OUT-O4 and VAL-O3 → P2.7@77e5d66) — and the one forwarded to a sibling (G3.3 undivided-`userinfo` → OUT-O1). None resolves to "nobody." | PASS |
 
 ### Note on criterion (iv)
 
 The `@shortsha` in an `accepted_evidence` citation is the commit that carried the
 decision onto `main`, so a forked short SHA on a P-tier citation would be a
 cross-artifact drift this capstone exists to catch: two siblings would be citing
-different versions of the same decision. The census found none: the thirteen pairs
+different versions of the same decision. The census found none: the fourteen pairs
 above are the complete set, each `Pn.n` mapping to one SHA. (`P5.3@8292c7f` and
 `P2.2@8292c7f` share a commit because #212 accepted both; that is one commit
 ratifying two decisions, not one decision with two SHAs — no fork.)
@@ -247,7 +247,6 @@ these.
 | SCHEME-O3 | standard-scheme (G3.5) | the P4-email slice + email PRD (`indeterminate` lexer, URL-level email facts) |
 | SCHEME-O4 | standard-scheme (G3.5) | a dedicated resolution-layer decision (RFC relative-reference resolution; not owned by P2.4/P4.1) |
 | VAL-O2 | validation-intervention (G3.6) | the RCON-05 public-surface decision (repair-posture spelling; cf. CLEAN-O1) |
-| VAL-O3 | validation-intervention (G3.6) | the RCON-03 `resolve_url` output-shape record (paired with OUT-O4) |
 | VAL-O4 | validation-intervention (G3.6) | a future owner deprecation-schedule decision, post-3.0 (`parse_status` removal window) |
 | CLEAN-O1 | cleaning-mutation (G3.8) | the RCON-05 public-surface decision / a cleaning-vocabulary migration slice |
 | MUT-O1 | cleaning-mutation (G3.8) | the unmade P3 mutation-slice owner decision (mutation semantics / verb vocabulary) |
@@ -263,7 +262,6 @@ these.
 | MUT-O11 | cleaning-mutation (G3.8) | the P3 mutation-slice (mutation standards/profile/repair interaction) |
 | MUT-O12 | cleaning-mutation (G3.8) | the P3 mutation-slice (mutation downstream safety) |
 | OUT-O1 | output (G3.7) | a credential-accessor / public-surface owner decision (S1 Q5; coordinated with SCHEME-O2). Also the destination of G3.3's undivided-`userinfo` open cell |
-| OUT-O4 | output (G3.7) | a dedicated safe-display P-tier record + the RCON-03 `resolve_url` output-shape record (paired with VAL-O3) |
 | OUT-O5 | output (G3.7) | an owner decision on the source-reproduction guarantee (with the surface-a naming slice) |
 | HOST-O1 | host-annotation (G3.H) | the dedicated P4 host record (RCON-08; unmade) — unified typed host-state matrix |
 | HOST-O2 | host-annotation (G3.H) | the P4 host record — de-overloaded host terminology + public type axes |
@@ -313,20 +311,23 @@ census against an earlier revision can see why the count moved.
 |---|---|---|
 | KJ-O1..O8 (all eight) | key-join (G3.K) | **CLOSED by P3.2@bb3346e** (`P3.2-key-join-closure.md`, ACCEPTED): `whatwg` default (KJ-O1), root-dot **DISTINCT** (KJ-O2), y-primary right-join mirror (KJ-O3), anti-join keeps non-keyable x (KJ-O4), `by`-only named-vector selector (KJ-O5), deterministic no-silent-repair suffix (KJ-O6), key hidden by default `key_name=NULL` (KJ-O7), type restoration + typed zero-row prototypes (KJ-O8). P3.2 deferred the contract edit ("updated when G3.K next moves, not here"), so for two revisions this row sat in the frozen-text table above; `RURL-ojrtnnhy` applied all eight to `key-join-contracts.md`'s matrix rows and marked the `## Open cells` bullets CLOSED, which is what moves the row here. Closed in G3.K itself, not reconciled here. |
 | VAL-O1 | validation-intervention (G3.6) | **CLOSED by P2.6@5f4309b** (`P2.6-ledger-recovery-categorization.md`), the owner-decision extension of P2.1 this cell named as its destination. The four recoveries beyond repeated-`@` are standard-selected parse behavior governed by `url_standard`, not posture-bound interventions, so the `ledger completeness` row settles as "no rows" and the ordered ledger stays at six stages (D-A–D-E). Closed in `validation-intervention-contract.md` itself (`ledger completeness` row + the VAL-O1 bullet), not here. |
+| OUT-O4 | output (G3.7) | **CLOSED by P2.7@77e5d66** (`P2.7-display-and-resolver-output.md`), the dedicated safe-display record this cell named as its destination, which also carries the RCON-03 resolve half: `format_url()` is in scope with the D-D escape/annotation matrix (shipped, `792a137`), and `resolve_url()` keeps its clean default and gains the opt-in `output = "serialized"` surface (D-A). P2.7 §7 deferred the contract edit to a later unit; `RURL-irfmmoer` moved the four cells and marked the bullet CLOSED. Closed in `output-contracts.md` itself, not here. |
+| VAL-O3 | validation-intervention (G3.6) | **SETTLED as not shipped by P2.7@77e5d66** (`P2.7-display-and-resolver-output.md`, D-E), the RCON-03 record this cell named as its destination: two of the three resolution verdicts are reachable through `get_parse_verdicts()`, the reference verdict has no defined model, so no two-thirds companion ships in 3.0. Recorded in `validation-intervention-contract.md` itself (the `resolver verdict **surface**` row + the VAL-O3 bullet), not here. |
 
 ### Census tally
 
-**41 live open-cell IDs** across the nine contracts (CACHE 5, SCHEME 4, VAL 3,
-CLEAN 1, MUT 12, OUT 3, HOST 8, PSC 5) — each with a named destination; **none is
+**39 live open-cell IDs** across the nine contracts (CACHE 5, SCHEME 4, VAL 2,
+CLEAN 1, MUT 12, OUT 2, HOST 8, PSC 5) — each with a named destination; **none is
 unowned.** PSC-O1..O5 are pure forwarders to sibling cells (not independent product
 cells); HOST-O1..O8 and MUT-O1..O12 forward to the two unmade owner decisions (the
 P4 host record / RCON-08 and the P3 mutation-slice); CACHE-O1/O2/O3/O5 and VAL-O4
 forward to future P5 / post-3.0 decisions; CACHE-O4 and PSC-O5 forward to §6
-artifact 11 / G4. Separately, **10** cells are already **closed** by a
+artifact 11 / G4. Separately, **12** cells are already **closed** by a
 later-accepted decision — **1** still frozen in its leaf's text (G3.3
-`authority_kind` → P1.2@bb3346e) and **9** closed at source in their own contract
-(G3.K KJ-O1..O8 → P3.2@bb3346e; VAL-O1 → P2.6@5f4309b) — and G3.3's
-undivided-`userinfo` forwards to OUT-O1. No cell in the set is unowned.
+`authority_kind` → P1.2@bb3346e) and **11** closed at source in their own contract
+(G3.K KJ-O1..O8 → P3.2@bb3346e; VAL-O1 → P2.6@5f4309b; OUT-O4 and VAL-O3 →
+P2.7@77e5d66) — and G3.3's undivided-`userinfo` forwards to OUT-O1. No cell in
+the set is unowned.
 
 **The 10 did not change size when `RURL-ojrtnnhy` landed**, only which of the two
 tables holds them: applying P3.2's eight rulings to `key-join-contracts.md` moved
@@ -348,11 +349,24 @@ live set, and only one of them is this revision's own work:
   44. The count was therefore already wrong by two before VAL-O1 closed. Found
   while reconciling VAL-O1 and corrected here rather than carried.
 
+**Why this tally moved from 41 to 39 (`RURL-irfmmoer`).** Two cells left the
+live set together, closed by the one record both had named as their destination:
+
+- **OUT-O4** — closed at source by P2.7@77e5d66 (D-A / D-D); the four
+  contract cells P2.7 §7 projected onto `output-contracts.md` moved under
+  `RURL-irfmmoer`, after `format_url()` (`792a137`) and
+  `resolve_url(output = "serialized")` had shipped.
+- **VAL-O3** — settled as *not shipped* by P2.7@77e5d66 (D-E), and recorded
+  that way in `validation-intervention-contract.md` rather than deleted, which
+  is the point of D-E: the reason survives, not the silence.
+
 The live count is reproducible from the destination table above by counting rows,
 which is the check that caught the drift. Note that VAL-O1's bullet is *retained*
 in `validation-intervention-contract.md`'s `## Open cells`, marked CLOSED, so its
-deferral text survives as provenance — a per-contract grep for declared `-O` IDs
-therefore still finds it, and this table, not that grep, is the live census.
+deferral text survives as provenance — and OUT-O4's and VAL-O3's bullets are
+retained the same way in their own contracts — so a per-contract grep for
+declared `-O` IDs still finds them, and this table, not that grep, is the live
+census.
 
 ## Scope boundaries
 

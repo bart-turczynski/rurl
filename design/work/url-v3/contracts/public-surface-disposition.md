@@ -100,7 +100,7 @@ matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 |---|---|---|---|
 | `canonical_join` | G3.K | migration to identity key, `clean_url` keying typed LEGACY with a deprecation window (P3.1@3b89b94 D-E, Q7/B7) | SETTLED |
 | `check_hosts` | G3.H | named host policies + no-network SETTLED; typed DNS-policy contract → G3.H HOST-O5 | OPEN (HOST-O5) |
-| `format_url` | G3.7 | output surface (d), the safe human-facing display formatter: the surface, its E1–E5 escape/redaction matrix, the `<redacted>` and `<U+XXXX>` tokens and the dual host spelling are decided by P2.7 D-D, whose §7 acceptance criteria are S3-F3's five worked examples; the WHATWG-fixed parse posture and the no-presentation-dial signature are chosen there too. The surface is now BUILT (VD-003 discharged, `verification/output-display-discharge.md`), but OUT-O4 is still open in `output-contracts.md` because moving the cells P2.7 §7 projects is `RURL-irfmmoer`, a separate slice | OPEN (OUT-O4) |
+| `format_url` | G3.7 | output surface (d), the safe human-facing display formatter: the surface, its E1–E5 escape/redaction matrix, the `<redacted>` and `<U+XXXX>` tokens and the dual host spelling are decided by P2.7 D-D, whose §7 acceptance criteria are S3-F3's five worked examples; the WHATWG-fixed parse posture and the no-presentation-dial signature are chosen there too. The surface is BUILT (VD-003 discharged, `verification/output-display-discharge.md`) and the contract cells P2.7 §7 projected have moved under `RURL-irfmmoer`, which closed OUT-O4 in `output-contracts.md` | SETTLED |
 | `get_clean_url` | G3.8 (+ G3.7 surface c) | clean surface + 25 dials governed (P2.2@8292c7f §1c; G3.8); vocabulary rename → G3.8 CLEAN-O1 | OPEN (CLEAN-O1) |
 | `get_domain` | G3.H | PSL delegation + identity spellings SETTLED (ADR 0001); `domain` overload → HOST-O2, PSL reproducibility → HOST-O4 | OPEN (HOST-O2/O4) |
 | `get_fragment` | G3.3 | fragment field + three-valued presence (P1.1@a7e0a59 §1.2) | SETTLED |
@@ -123,7 +123,7 @@ matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 | `get_userinfo` | G3.7 | internal reassembly completeness SETTLED (S3-F5); public undivided-userinfo → OUT-O1 | OPEN (OUT-O1) |
 | `is_valid_host` | G3.H | named policies + no-network SETTLED (host-validation-policy PRD); typed DNS contract → HOST-O5 | OPEN (HOST-O5) |
 | `query_param_summary` | G3.8 (+ artifact 11) | query filtering model SETTLED (G3.8); introspection budget (RCON-09) → §6 artifact 11 / G4 | OPEN (artifact 11) |
-| `resolve_url` | G3.6 (+ G3.7) | verdict layering SETTLED (P2.3@a7e0a59 §3); output shape → G3.6 VAL-O3 / G3.7 OUT-O4 | OPEN (VAL-O3/OUT-O4) |
+| `resolve_url` | G3.6 (+ G3.7) | verdict layering SETTLED (P2.3@a7e0a59 §3); output shape SETTLED — the clean default is unchanged and `output = "serialized"` opts in to surface (b) (P2.7 D-A, closing G3.7 OUT-O4; `output-contracts.md` §Clean output); resolver verdict surface SETTLED as not shipped (P2.7 D-E, closing G3.6 VAL-O3; `validation-intervention-contract.md` §Resolution verdict rows) | SETTLED |
 | `rurl_cache_config` | G3.9 | cache contract, 100k watermark, doc-drift C-08 (P5.1@d254ff1) | SETTLED |
 | `rurl_cache_info` | G3.9 | cache transparency introspection (P5.1@d254ff1) | SETTLED |
 | `rurl_clear_caches` | G3.9 | cache lifecycle/reset (P5.1@d254ff1) | SETTLED |
@@ -197,8 +197,8 @@ No open cell is invented or owned here. The residual OPEN dispositions in the
 roster above are grouped, with their settlement destinations, by the invariant
 half as **PSC-O1 … PSC-O5** (`public-surface-closure.md`, `## Open cells`).
 **Settles at:** the destinations that record names — the sibling G3 open cells
-(G3.H HOST-O2/O4/O5/O7, G3.7 OUT-O1/O4/O5, G3.5 SCHEME-O1/O2/O3, G3.8
-CLEAN-O1/MUT-O8/MUT-O9, G3.6 VAL-O3/VAL-O4), the unmade P4 host record
+(G3.H HOST-O2/O4/O5/O7, G3.7 OUT-O1/O5, G3.5 SCHEME-O1/O2/O3, G3.8
+CLEAN-O1/MUT-O8/MUT-O9, G3.6 VAL-O4), the unmade P4 host record
 (RCON-08), and §6 artifact 11 / G4 for the verification surfaces.
 
 Grouping them there rather than here is deliberate: which questions remain open

@@ -34,8 +34,8 @@
 | owner | Bart Turczynski <bartek@turczynski.pl> |
 | single_writer | repository owner (sole); P0.3 §5 — this contract is the SINGLE WRITER of the v3 validation/intervention (input-side) matrices: repair-posture axis, ordered intervention ledger, verdict layers + fatality, annotation-state resolution, the π collapse table, repair/recovery provenance, repaired-input revalidation, and resolution verdict layering |
 | lifecycle_state | PROPOSED |
-| dependencies | P2.1 (bound decision — postures/ordering/C-02/C-03); P2.3 (bound decision — verdict semantics/migration); P1.1 (bound decision — layer model + independence invariant); S2 (bound evidence); contract-canonical-state (field vocabulary only, not projected); reconciliation §6 artifact 6, §4 RCON-04, §7 G3 |
-| bound_decision | P2.1 + P2.3 + P1.1 |
+| dependencies | P2.1 (bound decision — postures/ordering/C-02/C-03); P2.3 (bound decision — verdict semantics/migration); P1.1 (bound decision — layer model + independence invariant); P2.7 (bound decision — resolver-verdict surface disposition; closed VAL-O3); S2 (bound evidence); contract-canonical-state (field vocabulary only, not projected); reconciliation §6 artifact 6, §4 RCON-04, §7 G3 |
+| bound_decision | P2.1 + P2.3 + P1.1 + P2.7 |
 | bound_evidence | S2 |
 | closes_finding | RCON-04 |
 | completion_rule | §7 G3 — the artifact exists and contains no unowned cells: repair-posture axis + pipeline order, ordered intervention ledger, verdict-layer enums + fatality, shipped-value→layer map, annotation-state resolution, the π collapse table, repair/recovery provenance, repaired-input revalidation, resolution verdict layering, and the companion-helper/migration surface each carry a non-placeholder owner_decision_ref with status SETTLED or an explicit status OPEN with a one-line impact and owner-decision destination; cross-artifact field names agree with artifact 3; validate-records.R (validation-intervention section, added at cp-snapshot-3) passes |
@@ -245,7 +245,7 @@ settled; whether/how the merged verdicts are **surfaced** is deferred.
 | reference verdict | L1/L2 of the relative/absolute reference | P2.3@a7e0a59 (§3) | SETTLED |
 | merged-output verdict | L1/L2 of the resolved absolute URL (RFC 3986 recomposition then re-parse); resolution *success* is an **L1 fact** about the merged output, admission of the merged output is **L2**; the merged host's L3 annotation follows §annotation | P2.3@a7e0a59 (§3) | SETTLED |
 | current `NA`-on-failure | `resolve_url()`'s existing `NA` return on unresolvable input / parse failure is an **L1-fatal projection**, preserved for back-compat; the verdict layering is independent of that output-shape question | P2.3@a7e0a59 (§3) | SETTLED |
-| resolver verdict **surface** | whether `resolve_url()` exposes the base/reference/merged-output L1/L2 verdicts via a companion helper is **not** settled | — (see Open cells VAL-O3) | OPEN |
+| resolver verdict **surface** | `resolve_url()` exposes **no** resolver-verdict companion in 3.0, by decision rather than by silence: the base-URL verdict is already reachable (`get_parse_verdicts()` on the base), the merged-output verdict is reachable by calling `get_parse_verdicts()` on the `output = "serialized"` result (P2.7 D-A), and the reference verdict has no defined model — a relative reference has no standalone parse frame, and no accepted record defines a verdict model over RFC 3986 §4.2 references — so a two-thirds `get_resolve_verdicts()` is deliberately not shipped. Reopening needs a record defining the relative-reference verdict model first | P2.7@77e5d66 (D-E); `NAMESPACE` exports `get_parse_verdicts` and no resolver companion; `tests/testthat/test-resolve-url.R` :: "serialized keeps the fragment and credentials clean_url drops" (the merged-output string the base/merged verdicts are read from) | SETTLED (not shipped) |
 
 ## Companion-helper surface + migration rows
 
@@ -296,8 +296,10 @@ This contract owns the **validation/intervention (input-side)** matrices. It doe
   call-level failure) — the S1 scalar/vector contract, not this artifact; P1.1 §3
   fixes only that a failed element is a typed invalid canonical record carrying
   `original_url` + the layered verdicts.
-- **`resolve_url` public return contract** (output shape) — RCON-03, deferred; this
-  contract owns only the *verdict layering* of resolution.
+- **`resolve_url` public return contract** (output shape) — RCON-03, settled by
+  P2.7 D-A and recorded in `output-contracts.md` §Clean output (row
+  `resolve_url()` coupling); this contract owns only the *verdict layering* of
+  resolution.
 - **Fixer/preprocessing double outer-trim consolidation** (P2.1 Q3) — an
   idempotent no-op on tested inputs with no known divergent output; parked as a
   post-acceptance **implementation-cleanup** slice, not a cell of this contract.
@@ -332,12 +334,22 @@ invented. None reopens a SETTLED default.
   expansion (Q4). **Impact:** the public surface a caller uses to select
   `strict` / `compatibility` / `repair` is unspecified. **Settles at:** the
   RCON-05 public-surface decision (coordinated with P2.4; cf. G3.5 posture rows).
-- **VAL-O3 — resolver verdict surface.** Whether `resolve_url()` exposes the
-  base / reference / merged-output L1/L2 verdicts via a companion helper is
-  deferred (P2.3 Q4); the verdict *layering* is SETTLED, the *surface* is not.
-  **Impact:** callers cannot read the resolved object's independent verdicts;
-  `resolve_url` continues to signal only success/failure through `NA`.
-  **Settles at:** the RCON-03 `resolve_url` output-shape record.
+- **VAL-O3 — resolver verdict surface.** **SETTLED as not shipped by
+  P2.7@77e5d66 (D-E)** (`decisions/P2.7-display-and-resolver-output.md`),
+  the RCON-03 `resolve_url` output-shape record this cell named as its
+  destination. The deferral, retained for provenance: whether `resolve_url()`
+  exposes the base / reference / merged-output L1/L2 verdicts via a companion
+  helper was deferred (P2.3 Q4); the verdict *layering* was SETTLED, the
+  *surface* was not. **Disposition:** no companion ships in 3.0. Two of the
+  three verdicts are reachable through `get_parse_verdicts()` (on the base; on
+  the `output = "serialized"` result), and the third — the reference verdict —
+  has no defined model because a relative reference has no standalone parse
+  frame, so a two-thirds companion would put an exported name on a middle layer
+  that is absent or quietly wrong. `resolve_url` keeps its `NA`-on-failure
+  signal. Recorded as SETTLED-not-shipped rather than deleted so the next reader
+  finds the reason, not the silence (the `resolver verdict **surface**` row
+  above); reopening requires a record defining the relative-reference verdict
+  model first.
 - **VAL-O4 — `parse_status` hard-deprecation window.** 3.0 retains `parse_status`
   as a documented lossy projection with **no** removal date; a hard-deprecation
   window is not scheduled (P2.3 Q2 CONFIRMED). **Impact:** the eventual removal
