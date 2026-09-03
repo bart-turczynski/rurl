@@ -330,6 +330,15 @@
   moved, and `R/parse-web.R`'s calibrated host parse is untouched (ADR 0018).
   `"rfc3986"` and `NULL` are unchanged on every input above.
 
+- **`serialize_url(standard = NULL)` is now an error instead of a silent
+  `"whatwg"`.** `match.arg(NULL, choices)` returns the first choice, so the
+  serializer quietly rendered the WHATWG form for a selector value that, on
+  the parse surface, means the opposite: `url_standard = NULL` is the frozen
+  legacy profile that names no standard (ADR 0007), so there is nothing to
+  serialize *as*. The refusal mirrors `url_key_policy(standard = NULL)`, the
+  other surface that spells the axis as `standard`; the named arms and the
+  `"whatwg"` default are byte-identical to before (RURL-ouorolhb).
+
 - **`index_page_handling = "strip"` no longer emits a path ending in `.` or
   `..`.** Dropping a terminal `index.*`/`default.*` page exposes dot segments
   that the page name was hiding, and nothing re-normalized afterwards, so the

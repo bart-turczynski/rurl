@@ -164,6 +164,63 @@ test_that("invalid standard or form is rejected", {
   )
 })
 
+test_that("standard = NULL is refused, not absorbed as whatwg", {
+  # RURL-ouorolhb. `match.arg(NULL, choices)` silently returns the first
+  # choice, so before this guard `serialize_url("http://a/", standard = NULL)`
+  # returned "http://a/" -- a WHATWG answer for a selector value that, on the
+  # parse surface, names the frozen legacy profile and no standard (ADR 0007).
+  # The message shape mirrors url_key_policy(standard = NULL) (R/url-key.R).
+  expect_error(
+    serialize_url("http://a/", standard = NULL),
+    "`standard` must be named; NULL is not accepted",
+    fixed = TRUE
+  )
+  expect_error(
+    serialize_url("http://a/", standard = NULL),
+    "Pass standard = \"whatwg\" or \"rfc3986\"",
+    fixed = TRUE
+  )
+  expect_error(url_key_policy(standard = NULL), "NULL is not accepted",
+               fixed = TRUE)
+})
+
+test_that("both named standards still serialize byte-identically", {
+  # Pinned literals, so the guard above cannot have shifted the named arms
+  # and this cannot pass by accident. Each row exercises something the two
+  # serializers render differently or identically on purpose.
+  corpus <- c(
+    "HTTP://User:Pw@Example.COM:80/a/./b/../c?q=1#f",
+    "https://h:443/",
+    "http://h/#",
+    "foo://h:80/x?#",
+    "http://\u041f\u0420\u0418\u0412\u0415\u0422.\u0440\u0444/A"
+  )
+  expected <- list(
+    whatwg = c(
+      "http://User:Pw@example.com/a/c?q=1#f",
+      "https://h/",
+      "http://h/#",
+      "foo://h:80/x?#",
+      "http://xn--b1agh1afp.xn--p1ai/A"
+    ),
+    rfc3986 = c(
+      "http://User:Pw@Example.COM:80/a/./b/../c?q=1#f",
+      "https://h:443/",
+      "http://h/#",
+      "foo://h:80/x?#",
+      "http://\u041f\u0420\u0418\u0412\u0415\u0422.\u0440\u0444/A"
+    )
+  )
+  for (standard in c("whatwg", "rfc3986")) {
+    expect_identical(
+      serialize_url(corpus, standard = standard), expected[[standard]],
+      info = standard
+    )
+  }
+  # The default is, and stays, "whatwg".
+  expect_identical(serialize_url(corpus), expected$whatwg)
+})
+
 # --- the oracle: parse -> serialize -> parse idempotence, publicly -----------
 
 test_that("serialize_url() is idempotent on both standards", {

@@ -15,7 +15,10 @@ serialize_url(
 \item{url}{A character vector of URLs.}
 
 \item{standard}{The standard to serialize to: \code{"whatwg"} (default) or
-\code{"rfc3986"}.}
+\code{"rfc3986"}. Unlike the parse surface, \code{NULL} is not accepted: the parse
+surface's \code{url_standard = NULL} is a frozen legacy profile that names no
+standard (ADR 0007), so there is nothing to serialize \emph{as}. Passing
+\code{NULL} is an error rather than a silent \code{"whatwg"}.}
 
 \item{form}{For \code{standard = "rfc3986"} only, the RFC posture: \code{"source"}
 (default, source-preserving) or \code{"normalized"}. Ignored for \code{"whatwg"},
