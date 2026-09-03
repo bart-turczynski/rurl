@@ -169,4 +169,3 @@ canonical tracked paths are:
 | S9 M3 | S9 | medium | Review findings have no disposition/closure lifecycle | reconciled-protocol-requirement | RCON-01 | DISCOVERED | M3 | — |
 | S9 M4 | S9 | medium | Batch boundaries ignore cross-cutting dependencies | reconciled-protocol-requirement | RCON-01 | DISCOVERED | M4 | — |
 | S9 M5 | S9 | medium | No restore drill or single-writer responsibility is defined | reconciled-protocol-requirement | RCON-01 | DISCOVERED | M5 | — |
-

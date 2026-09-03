@@ -1,8 +1,8 @@
 # S9 — Process red-team of the rurl 3.0 specification reconstruction protocol
 
-Date: 2026-07-22  
-Repository state inspected: `89be90bc1497507155ee9210dc6533020f127fc2` on `feature/url-v3-architecture-spec`  
-Protocol inspected: `_scratch/url-v3-spec-reconstruction-protocol.md` (`Status: proposed review protocol`)  
+Date: 2026-07-22
+Repository state inspected: `89be90bc1497507155ee9210dc6533020f127fc2` on `feature/url-v3-architecture-spec`
+Protocol inspected: `_scratch/url-v3-spec-reconstruction-protocol.md` (`Status: proposed review protocol`)
 Review posture: independent cold start; repository and read-only Fiberplane evidence only
 
 ## Executive verdict
@@ -153,120 +153,120 @@ Correction: define exact commands/workflows and required outcomes for process ac
 
 #### C1 — The process control plane is ephemeral
 
-**Evidence:** Protocol §5.1:72 requires state under ignored scratch; `.gitignore:23` ignores `_scratch/`; protocol, predecessor, run states, audit artifacts, and reports are untracked. `ARCHITECTURE.md:3-7`, `design/README.md:3-6`, and ADR 0008:9-15 explicitly say `_scratch` is absent from fresh clones/CI.  
-**Consequence:** loss of the worktree or orchestration context destroys the process, evidence index, pending approvals, and historical draft. The central purpose in protocol §1 cannot be met.  
+**Evidence:** Protocol §5.1:72 requires state under ignored scratch; `.gitignore:23` ignores `_scratch/`; protocol, predecessor, run states, audit artifacts, and reports are untracked. `ARCHITECTURE.md:3-7`, `design/README.md:3-6`, and ADR 0008:9-15 explicitly say `_scratch` is absent from fresh clones/CI.
+**Consequence:** loss of the worktree or orchestration context destroys the process, evidence index, pending approvals, and historical draft. The central purpose in protocol §1 cannot be met.
 **Correction:** graduate the protocol and all normative/control-plane artifacts to a tracked work area before drafting. Add a content-addressed evidence manifest and a CI fresh-clone restoration/validation check.
 
 #### C2 — Highest-precedence owner decisions are not durably identifiable
 
-**Evidence:** Protocol §3:40 and :49 elevate the latest confirmed owner decision; no record schema defines owner, confirmation, time, scope, exact decision, evidence link, baseline, or supersession. §5.1:77 permits approved decisions to remain temporarily only in ignored state.  
-**Consequence:** an agent can unknowingly apply a stale recollection, lose an approval before transfer, or invisibly override an accepted document.  
+**Evidence:** Protocol §3:40 and :49 elevate the latest confirmed owner decision; no record schema defines owner, confirmation, time, scope, exact decision, evidence link, baseline, or supersession. §5.1:77 permits approved decisions to remain temporarily only in ignored state.
+**Consequence:** an agent can unknowingly apply a stale recollection, lose an approval before transfer, or invisibly override an accepted document.
 **Correction:** require immutable `OWNER-*` records and prohibit authority elevation until the record is `ACCEPTED` in the durable ledger. Pending approvals must never be the sole copy of a decision.
 
 #### C3 — The named investigations and evidence baseline cannot be independently recovered
 
-**Evidence:** Protocol §4:58-64 describes three reports but supplies no paths, versions, authors, dates, hashes, or source baselines. Active run state says reports are retained in orchestration context. Counts are unversioned and already drift relative to the live tracker.  
-**Consequence:** a successor cannot distinguish completed evidence from an assertion that an investigation occurred, reproduce its corpus, or detect source drift.  
+**Evidence:** Protocol §4:58-64 describes three reports but supplies no paths, versions, authors, dates, hashes, or source baselines. Active run state says reports are retained in orchestration context. Counts are unversioned and already drift relative to the live tracker.
+**Consequence:** a successor cannot distinguish completed evidence from an assertion that an investigation occurred, reproduce its corpus, or detect source drift.
 **Correction:** persist each report or reproducible query in the evidence manifest with repository SHA, tracker export/as-of time, tool versions, content hash, provenance, and verification status.
 
 ### High
 
 #### H1 — Artifact schemas and transitions are underspecified
 
-**Evidence:** Protocol §§5.1-5.4 enumerate prose fields but omit versions, owners, timestamps, revisions, transition rules, dependencies, approval evidence, invalidation, and referential-integrity checks.  
-**Consequence:** separate agents can construct incompatible ledgers and mark the same broad topic “decided” while atomic assertions remain contradictory or stale.  
+**Evidence:** Protocol §§5.1-5.4 enumerate prose fields but omit versions, owners, timestamps, revisions, transition rules, dependencies, approval evidence, invalidation, and referential-integrity checks.
+**Consequence:** separate agents can construct incompatible ledgers and mark the same broad topic “decided” while atomic assertions remain contradictory or stale.
 **Correction:** adopt versioned machine-checkable schemas, atomic IDs, explicit state machines, and a validator as specified above.
 
 #### H2 — There is no frozen source/tracker baseline or completeness closure
 
-**Evidence:** §6 says the ledger covers “at least” listed topics; §4 uses unpinned document/issue counts. No public-export, dial, source, test, fixture, issue, or decision inventory is required. `NAMESPACE` exposes 29 symbols; `safe_parse_url()` alone has 24 controls after `url`; tracked architecture already omits four loaded modules.  
-**Consequence:** omitted surfaces cannot be detected, and evidence may change during review without invalidating prior approvals.  
+**Evidence:** §6 says the ledger covers “at least” listed topics; §4 uses unpinned document/issue counts. No public-export, dial, source, test, fixture, issue, or decision inventory is required. `NAMESPACE` exposes 29 symbols; `safe_parse_url()` alone has 24 controls after `url`; tracked architecture already omits four loaded modules.
+**Consequence:** omitted surfaces cannot be detected, and evidence may change during review without invalidating prior approvals.
 **Correction:** freeze a manifest at Git SHA and tracker snapshot; generate closed inventories and coverage reports; run changed-since/delta checks before every batch and graduation.
 
 #### H3 — Existing authority and supersession contradictions are not forced to closure
 
-**Evidence:** accepted/shipped PRD provenance conflicts with body “Draft” status; ADR 0012 supersedes ADR 0004 while the old status remains `Accepted`; ADR 0012 has an unresolved profile-name maintainer call despite shipped code; `ARCHITECTURE.md` load order is stale.  
-**Consequence:** simply registering conflicts still leaves reviewers unable to know which claim is normative.  
+**Evidence:** accepted/shipped PRD provenance conflicts with body “Draft” status; ADR 0012 supersedes ADR 0004 while the old status remains `Accepted`; ADR 0012 has an unresolved profile-name maintainer call despite shipped code; `ARCHITECTURE.md` load order is stale.
+**Consequence:** simply registering conflicts still leaves reviewers unable to know which claim is normative.
 **Correction:** make contradiction resolution and application to affected durable sources a batch/graduation gate; validate the supersession graph and source-status metadata.
 
 #### H4 — Draft-only red-team review cannot validate evidence claims
 
-**Evidence:** §10:280 gives a reviewer only the draft, while §10 asks them to find unverifiable requirements; §5 requires traceability elsewhere.  
-**Consequence:** the reviewer can assess internal coherence but cannot detect fabricated/stale citations, orphan requirements, inadequate fixtures, or invisible supersession.  
+**Evidence:** §10:280 gives a reviewer only the draft, while §10 asks them to find unverifiable requirements; §5 requires traceability elsewhere.
+**Consequence:** the reviewer can assess internal coherence but cannot detect fabricated/stale citations, orphan requirements, inadequate fixtures, or invisible supersession.
 **Correction:** retain the blind semantic review and add an evidence review against a frozen artifact bundle and draft hash, with durable dispositions and re-review triggers.
 
 #### H5 — Approval and graduation gates are subjective
 
-**Evidence:** “confirmed” (§9:276), “owner approval” (§11:309), “stable” (§11:315), and “full verification gate” (§11:317) are undefined.  
-**Consequence:** incompatible interpretations can move unresolved requirements into normative prose, tracker work, or release.  
+**Evidence:** “confirmed” (§9:276), “owner approval” (§11:309), “stable” (§11:315), and “full verification gate” (§11:317) are undefined.
+**Consequence:** incompatible interpretations can move unresolved requirements into normative prose, tracker work, or release.
 **Correction:** define gate owner, input hashes, required statuses/coverage, exact checks, approval record, failure handling, and stale/reopen semantics.
 
 #### H6 — Traceability and examples are not sufficient to prove testability
 
-**Evidence:** §5.4 maps requirements only to source categories; §7 lists inputs/layers but not case schemas, precise expected outputs, operations/options, oracle independence, revisions, or requirement coverage. Existing tests include characterization snapshots as well as conformance-oriented fixtures.  
-**Consequence:** a normative requirement may have a citation but no falsifiable verification, or a current-behavior characterization may be mistaken for a v3 conformance oracle.  
+**Evidence:** §5.4 maps requirements only to source categories; §7 lists inputs/layers but not case schemas, precise expected outputs, operations/options, oracle independence, revisions, or requirement coverage. Existing tests include characterization snapshots as well as conformance-oriented fixtures.
+**Consequence:** a normative requirement may have a citation but no falsifiable verification, or a current-behavior characterization may be mistaken for a v3 conformance oracle.
 **Correction:** require `REQ-* -> DEC-* -> evidence revision -> CASE/TEST-* -> expected result` links and automated orphan/reverse-coverage checks; classify every test as compatibility, characterization, regression, or conformance.
 
 #### H7 — Tracker scope and mutation rules are unresolved
 
-**Evidence:** §11:313 mandates `RURL-gxqdmpcp`; its live title and history are determinism-specific. Protocol count 22 has no as-of/query definition; current live tree includes the additional review issue.  
-**Consequence:** silent rechartering can obscure existing commitments, while live issue drift breaks reproducibility and premature implementation work remains possible.  
+**Evidence:** §11:313 mandates `RURL-gxqdmpcp`; its live title and history are determinism-specific. Protocol count 22 has no as-of/query definition; current live tree includes the additional review issue.
+**Consequence:** silent rechartering can obscure existing commitments, while live issue drift breaks reproducibility and premature implementation work remains possible.
 **Correction:** obtain a durable owner decision on tracker topology, snapshot it, map every issue to requirement/gate IDs, and enforce implementation-ready status transitions.
 
 #### H8 — Source changes do not invalidate prior decisions or reviews
 
-**Evidence:** no protocol section defines a frozen revision, changed-source check, affected-requirement propagation, or reapproval after normative edits.  
-**Consequence:** approvals can silently apply to an obsolete source/draft.  
+**Evidence:** no protocol section defines a frozen revision, changed-source check, affected-requirement propagation, or reapproval after normative edits.
+**Consequence:** approvals can silently apply to an obsolete source/draft.
 **Correction:** hash all inputs/outputs; attach dependency links; mark downstream records stale on change; require affected batch approval and reviews to rerun.
 
 #### H9 — Historical-draft preservation is asserted, not guaranteed
 
-**Evidence:** §8:241 protects an ignored predecessor but records neither a content hash nor archive location. The successor draft has no exact path.  
-**Consequence:** an overwrite, cleanup, or worktree loss cannot be detected or recovered; reviewers cannot prove which predecessor informed the successor.  
+**Evidence:** §8:241 protects an ignored predecessor but records neither a content hash nor archive location. The successor draft has no exact path.
+**Consequence:** an overwrite, cleanup, or worktree loss cannot be detected or recovered; reviewers cannot prove which predecessor informed the successor.
 **Correction:** snapshot the predecessor by hash in tracked storage or durable content-addressed archive, specify the successor WIP path, and record lineage.
 
 #### H10 — Implementation delay has no enforcement mechanism
 
-**Evidence:** §§2 and 11 say implementation decomposition follows acceptance, but ADR 0012, the predecessor, and the existing epic already contain decomposition/issues.  
-**Consequence:** proposed requirements may be implemented or treated as committed before architecture acceptance.  
+**Evidence:** §§2 and 11 say implementation decomposition follows acceptance, but ADR 0012, the predecessor, and the existing epic already contain decomposition/issues.
+**Consequence:** proposed requirements may be implemented or treated as committed before architecture acceptance.
 **Correction:** classify existing work, block new v3 implementation issue transitions until linked requirements are `ACCEPTED`/`VERIFIED`, and audit the tracker at each gate.
 
 #### H11 — The verification gate is not mapped to actual CI behavior
 
-**Evidence:** §11:317 says “full verification gate” without naming checks. `verify.yml` is the regular PR gate; `full-check.yml` is manual/tag triggered; the determinism probe is explicitly evidence rather than a gate.  
-**Consequence:** teams can disagree whether docs/trace validation, multi-platform checks, determinism probes, package tests, or CRAN checks are required at each stage.  
+**Evidence:** §11:317 says “full verification gate” without naming checks. `verify.yml` is the regular PR gate; `full-check.yml` is manual/tag triggered; the determinism probe is explicitly evidence rather than a gate.
+**Consequence:** teams can disagree whether docs/trace validation, multi-platform checks, determinism probes, package tests, or CRAN checks are required at each stage.
 **Correction:** define exact stage-specific commands/workflows, required event/branch protection, artifacts, platforms, and pass criteria.
 
 ### Moderate
 
 #### M1 — The compact run-state schema is too lossy for handoff
 
-**Evidence:** §5.1 stores only frontier, units, blockers, pending decisions, and paths. Existing prior run state contains an internal correction from 19 to 18 public fields.  
-**Consequence:** stale summaries and path-only pointers can be mistaken for current facts.  
+**Evidence:** §5.1 stores only frontier, units, blockers, pending decisions, and paths. Existing prior run state contains an internal correction from 19 to 18 public fields.
+**Consequence:** stale summaries and path-only pointers can be mistaken for current facts.
 **Correction:** add schema/version, artifact hashes, verified-at SHA/as-of, last gate, unresolved IDs, and a validator/resume command.
 
 #### M2 — External fixture provenance is not revision-complete
 
-**Evidence:** tracked external-vector tests cite WPT and other source references, but key fixture metadata does not consistently pin upstream commit SHA, retrieval date, schema version, or transformation hash.  
-**Consequence:** future reviewers cannot reproduce the exact oracle or distinguish upstream drift from rurl behavior changes.  
+**Evidence:** tracked external-vector tests cite WPT and other source references, but key fixture metadata does not consistently pin upstream commit SHA, retrieval date, schema version, or transformation hash.
+**Consequence:** future reviewers cannot reproduce the exact oracle or distinguish upstream drift from rurl behavior changes.
 **Correction:** require source URL, upstream revision, retrieval time, license, transformation script/version, raw and derived hashes, and oracle limitations per corpus.
 
 #### M3 — Review findings have no disposition/closure lifecycle
 
-**Evidence:** §10:297-305 describes output content and factual verification, not assignment, disposition, closure proof, or re-review.  
-**Consequence:** severe findings can be acknowledged without being resolved, or edits can invalidate earlier review unnoticed.  
+**Evidence:** §10:297-305 describes output content and factual verification, not assignment, disposition, closure proof, or re-review.
+**Consequence:** severe findings can be acknowledged without being resolved, or edits can invalidate earlier review unnoticed.
 **Correction:** maintain versioned `FIND-*` records with owner, severity, affected IDs, disposition, target revision, verification evidence, and reopened/stale states.
 
 #### M4 — Batch boundaries ignore cross-cutting dependencies
 
-**Evidence:** object state and validation are reviewed before serialization, schemes, error behavior, and migration even though these contracts constrain one another. No dependency graph or back-propagation rule exists.  
-**Consequence:** later decisions can invalidate an earlier “confirmed” batch.  
+**Evidence:** object state and validation are reviewed before serialization, schemes, error behavior, and migration even though these contracts constrain one another. No dependency graph or back-propagation rule exists.
+**Consequence:** later decisions can invalidate an earlier “confirmed” batch.
 **Correction:** order atomic decisions by declared dependencies and automatically stale affected downstream approvals.
 
 #### M5 — No restore drill or single-writer responsibility is defined
 
-**Evidence:** protocol has no backup/restore exercise, artifact owner/RACI, lock/merge policy, or responsible approver per phase.  
-**Consequence:** recoverability remains assumed, and concurrent edits can corrupt or fork the control artifacts.  
+**Evidence:** protocol has no backup/restore exercise, artifact owner/RACI, lock/merge policy, or responsible approver per phase.
+**Consequence:** recoverability remains assumed, and concurrent edits can corrupt or fork the control artifacts.
 **Correction:** assign artifact owners, define merge/lock policy, and require one clean-checkout restoration drill before process acceptance.
 
 ## Acceptance criteria from protocol §12

@@ -1,8 +1,8 @@
 # S5 — Comparison keys and URL joins
 
-**Audit status:** protocol reconstruction is incomplete for this slice  
-**Audit scope:** comparison-key and URL-join reconstruction only  
-**Evidence date:** 2026-07-21  
+**Audit status:** protocol reconstruction is incomplete for this slice
+**Audit scope:** comparison-key and URL-join reconstruction only
+**Evidence date:** 2026-07-21
 **Protocol reviewed:** `_scratch/url-v3-spec-reconstruction-protocol.md`
 
 ## Executive verdict
