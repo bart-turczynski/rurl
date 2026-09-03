@@ -46,7 +46,7 @@
     {
       "path": "inst/bench/wpt-url-cases.json",
       "fixture_kind": "imported suite, machine-generated from a pinned upstream artifact",
-      "transformed_fixture_sha256": "5141babf1bad1ab2960421aff80a89e3a9288974b0f702f33e6d3b9c7fb28ae8",
+      "transformed_fixture_sha256": "5d7ec19ffdb43e6b35adb244c689bb8e9ab3cdab115eec0c6073e5fc01eb42b2",
       "case_count": {
         "total": 538,
         "success": 336,
@@ -99,7 +99,7 @@
           ],
           "normative_dependencies_note": "A one-member array: the only normative source this group cites is the WHATWG URL Standard, and it cites it without deriving from it. The array is a NEGATIVE declaration: it records that the source-pinning question was considered and does not apply, rather than leaving the key absent. Silence is what let the original gap hide -- an absent key is indistinguishable from an unasked question -- so the answer is written down. This key is additional to the section-2.3 contract: no section-2.3 field is added, gained, discharged or moved by recording it. Contrast wpt-credentials-fragments in external-url-vectors.csv, which SELECTS rows from this same import and then recomputes their expected href by transcribing the URL serializer: that derivation owes the duty and carries a verified pin. The difference is the derivation, not the bytes -- both groups sit on this one artifact.",
           "claim_kind": "conformance",
-          "applicability_selector": "base = null only -- base-relative rows (including base about:blank) are excluded because rurl is absolute-parse-only and does no relative resolution; success = any base-null non-failure case, all schemes, no scheme restriction; failure = any base-null failure case; NUL inputs dropped",
+          "applicability_selector": "base = null only -- this fixture is the base-null half of the upstream suite; base-relative rows (including base about:blank) are imported separately as tests/testthat/fixtures/wpt-url-base-relative.json (OR-024, the exact complement on `base`), so every upstream row belongs to exactly one of the two; success = any base-null non-failure case, all schemes, no scheme restriction; failure = any base-null failure case; NUL inputs dropped",
           "relocation_verified": "yes",
           "relocation_verified_count": "538/538",
           "relocation_note": "Verified by reproduction, which is stronger than row-level re-location: the generation command at the pinned revision regenerates both arrays byte-identically, so every case is accounted for. The exclusion of base-relative rows is a disclosed scope statement about rurl (absolute parse only), not a selection over outcomes -- it is applied before the failure/success split, so it cannot favour either arm. Two rows were affected, both success-expected bare fragment references ('#x' and '#x:y'); the failure arm is unchanged. This matches the disposition external-url-vectors.csv already records for base-relative rows (runnable = no-relative-resolution)."

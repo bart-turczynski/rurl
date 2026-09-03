@@ -177,9 +177,16 @@ integrity is carried instead by its `manifest.artifacts[]` pin (tamper-evidence)
 and by the executable I1–I5 checks (conformance) — neither of which requires a gate
 re-acceptance to update.
 
-| path | sha256 |
-|---|---|
-| design/work/url-v3/registers/public-surface-inventory.md | 4712cc073e097efe5d6ff0718acc8da1a44682a67a492c6cdd19918f75391e41 |
+The `sha256` column this table used to carry was retired 2026-09-04 as an
+**inert** pin under ADR 0014 and `design/AGENTS.md` (RUL-013, RURL-rooxvstd):
+no gate recomputed it after the `## Inputs` hash comparison was retired
+(`validate-records.R` keeps only the path-resolves half), it had gone stale
+(`4712cc07…` against a file whose digest had moved), and nothing in the tree
+read it. The path list is what the validator still checks, and it stays.
+
+| path |
+|---|
+| design/work/url-v3/registers/public-surface-inventory.md |
 
 ## The closure invariant
 
