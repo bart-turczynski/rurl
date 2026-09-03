@@ -30,10 +30,10 @@
 #
 # SERIALIZATION. The WHATWG and RFC 3986 claims are `serialize_url(x,
 # standard = ...)`; `rfc-syntax` parses under RFC 3986 and is shown with the
-# same serializer. The null posture gets no serialize line: `serialize_url()`
-# does not reject `standard = NULL` -- `match.arg(NULL)` silently resolves it
-# to "whatwg" -- so calling it would print a WHATWG answer under a heading that
-# promised none.
+# same serializer. The null posture gets no serialize line: the null profile
+# names no standard, and `serialize_url(standard = NULL)` is an error
+# (RURL-ouorolhb) -- so the probe never hands NULL through; `serialize = NA`
+# in `posture_args()` skips the call outright.
 #
 # ORACLES.
 #   WHATWG    inst/bench/wpt-url-cases.json (base = null rows; `href` or

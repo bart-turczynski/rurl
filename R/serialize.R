@@ -407,7 +407,10 @@
 #'
 #' @param url A character vector of URLs.
 #' @param standard The standard to serialize to: `"whatwg"` (default) or
-#'   `"rfc3986"`.
+#'   `"rfc3986"`. Unlike the parse surface, `NULL` is not accepted: the parse
+#'   surface's `url_standard = NULL` is a frozen legacy profile that names no
+#'   standard (ADR 0007), so there is nothing to serialize *as*. Passing
+#'   `NULL` is an error rather than a silent `"whatwg"`.
 #' @param form For `standard = "rfc3986"` only, the RFC posture: `"source"`
 #'   (default, source-preserving) or `"normalized"`. Ignored for `"whatwg"`,
 #'   whose serializer has a single spec-defined form.
@@ -445,6 +448,21 @@ serialize_url <- function(url,
                           standard = c("whatwg", "rfc3986"),
                           form = c("source", "normalized"),
                           engine = NULL) {
+  # `NULL` is rejected rather than absorbed, exactly as `url_key_policy()` does
+  # (R/url-key.R). `match.arg(NULL, choices)` quietly returns `choices[[1]]`,
+  # which would make `standard = NULL` a silent "whatwg" -- and on the parse
+  # surface `url_standard = NULL` means the frozen legacy profile that names
+  # no standard at all (ADR 0007). A serialization *as* no standard does not
+  # exist, so the mistake is refused at the edge instead of guessed
+  # (RURL-ouorolhb).
+  if (is.null(standard)) {
+    stop(
+      "`standard` must be named; NULL is not accepted. ",
+      "url_standard = NULL is the frozen legacy parse profile, which names ",
+      "no standard to serialize as. Pass standard = \"whatwg\" or \"rfc3986\".",
+      call. = FALSE
+    )
+  }
   standard <- match.arg(standard)
   form <- match.arg(form)
   engine <- .validate_engine(engine)
