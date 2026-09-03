@@ -852,3 +852,134 @@ test_that("host encoding and IDN handling flow through to the resolved host", {
     get_clean_url("http://münchen.de/p", host_encoding = "unicode")
   )
 })
+
+# --- RURL-bedensww: the `/.` guard at the recomposition seam -----------------
+
+test_that("a resolved path whose first segment is empty keeps its `/.` guard", {
+  # RFC 3986 section 5.2.4 merges `/..//path` against `non-spec:/p` to the
+  # path `//path`, and section 3.3 forbids writing that after no authority: it
+  # re-reads as the authority `path`. WHATWG's serializer emits `/.` for the
+  # same shape and `serialize_url()` already does (test-wpt-full-suite.R); the
+  # resolver was LOSING it by handing the serializer the unguarded string.
+  refs <- c("/.//path", "/..//path", "..//path", "a/..//path")
+  for (std in c("whatwg", "rfc3986")) {
+    for (ref in refs) {
+      expect_identical(
+        rurl:::.resolve_one_raw(ref, "non-spec:/p", std), "non-spec:/.//path",
+        label = paste(std, ref)
+      )
+    }
+    expect_identical(
+      rurl:::.resolve_one_raw("path", "non-spec:/..//p", std),
+      "non-spec:/.//path"
+    )
+    # An absolute reference recomposes through the same seam.
+    expect_identical(
+      rurl:::.resolve_one_raw("non-spec:/..//x", "http://a/b", std),
+      "non-spec:/.//x"
+    )
+    # The guarded string round-trips through the standard's own serializer.
+    expect_identical(
+      resolve_url("/..//path", "non-spec:/p", url_standard = std,
+                  output = "serialized"),
+      "non-spec:/.//path"
+    )
+  }
+  # Only a path that BEGINS with `//` and has no authority is guarded.
+  expect_identical(
+    rurl:::.resolve_one_raw("//h//x", "non-spec:/p", "whatwg"),
+    "non-spec://h//x"
+  )
+  expect_identical(
+    rurl:::.resolve_one_raw("/a//x", "non-spec:/p", "whatwg"), "non-spec:/a//x"
+  )
+})
+
+test_that("url_standard = NULL keeps recomposing the unguarded string", {
+  # ADR 0007: the frozen selector claims no standard, so section 3.3 is not a
+  # constraint it can be wrong against, and its bytes do not move.
+  for (ref in c("/.//path", "/..//path", "..//path", "a/..//path")) {
+    expect_identical(
+      rurl:::.resolve_one_raw(ref, "non-spec:/p"), "non-spec://path"
+    )
+    expect_identical(
+      rurl:::.resolve_one_raw(ref, "non-spec:/p", NULL), "non-spec://path"
+    )
+  }
+})
+
+# --- RURL-ufsltsit: WHATWG `file:` drive-letter rules in resolution ----------
+
+test_that("WHATWG file state rules apply to a drive letter in the reference", {
+  # Each row is a WPT base-relative row (tests/testthat/fixtures/
+  # wpt-url-base-relative.json), scored exactly as that instrument scores it.
+  whatwg <- function(ref, base) {
+    serialize_url(rurl:::.resolve_one_raw(ref, base, "whatwg"),
+                  standard = "whatwg")
+  }
+  # "file state": a remainder that STARTS with a drive letter empties the base
+  # path instead of shortening it, and "path state" normalizes `|` to `:`.
+  expect_identical(whatwg("C|/foo/bar", "file:///tmp/mock/path"),
+                   "file:///C:/foo/bar")
+  expect_identical(whatwg("C|", "file://host/dir/file"), "file://host/C:")
+  expect_identical(whatwg("C|", "file://host/D:/dir1/dir2/file"),
+                   "file://host/C:")
+  expect_identical(whatwg("C|#", "file://host/dir/file"), "file://host/C:#")
+  expect_identical(whatwg("C|?", "file://host/dir/file"), "file://host/C:?")
+  expect_identical(whatwg("C|/", "file://host/dir/file"), "file://host/C:/")
+  expect_identical(whatwg("C|\\", "file://host/dir/file"), "file://host/C:/")
+  # ...through the consumed-scheme entry as well.
+  expect_identical(whatwg("file:c:\\foo\\bar.html", "file:///tmp/mock/path"),
+                   "file:///c:/foo/bar.html")
+  expect_identical(
+    whatwg("  File:c|////foo\\bar.html", "file:///tmp/mock/path"),
+    "file:///c:////foo/bar.html"
+  )
+  # "shorten a URL's path": `..` never removes a lone normalized drive letter.
+  expect_identical(whatwg("..", "file:///C:/"), "file:///C:/")
+  expect_identical(whatwg("..", "file://x/C:/"), "file://x/C:/")
+  expect_identical(whatwg("../..", "file:///C:/a/b"), "file:///C:/")
+  # ...and the base path `/C:` (size 1) is not shortened before the merge.
+  expect_identical(whatwg("foo", "file:///C:"), "file:///C:/foo")
+  # "file slash state": a rooted reference inherits the base's drive letter
+  # unless it carries its own.
+  expect_identical(whatwg("/", "file:///C:/a/b"), "file:///C:/")
+  expect_identical(whatwg("/", "file://h/C:/a/b"), "file://h/C:/")
+  expect_identical(whatwg("/x", "file:///C:/a/b"), "file:///C:/x")
+  expect_identical(whatwg("/D|/x", "file:///C:/a/b"), "file:///D:/x")
+  expect_identical(whatwg("/x", "file:///a/b"), "file:///x")
+  # "file host state" (absolute parser): a drive-letter authority is an empty
+  # host plus a path segment, so `//d:` resolves through it.
+  expect_identical(whatwg("//d:", "file:///C:/a/b"), "file:///d:")
+  expect_identical(whatwg("//d:/..", "file:///C:/a/b"), "file:///d:/")
+  expect_identical(whatwg("//C:/", "file://host/"), "file:///C:/")
+  expect_identical(whatwg("file://C:/", "file://host/"), "file:///C:/")
+  # The rules are the `file:` chain's and nothing else's: an `http:` base with
+  # the same references merges per RFC 3986 section 5.2.
+  expect_identical(whatwg("C|/foo", "http://h/a/b"), "http://h/a/C|/foo")
+  expect_identical(whatwg("..", "http://h/C:/"), "http://h/")
+})
+
+test_that("the file: drive-letter rules are unreachable from rfc3986/NULL", {
+  # RFC 3986 section 5 has no drive-letter concept, and the NULL selector is
+  # byte-frozen (ADR 0007). Both keep the plain section 5.2 merge.
+  frozen <- list(
+    list("C|/foo/bar", "file:///tmp/mock/path", "file:///tmp/mock/C|/foo/bar"),
+    list("..", "file:///C:/", "file:///"),
+    list("/", "file:///C:/a/b", "file:///"),
+    list("C|", "file://host/dir/file", "file://host/dir/C|"),
+    list("foo", "file:///C:", "file:///foo"),
+    list("//d:", "file:///C:/a/b", "file://d:")
+  )
+  for (case in frozen) {
+    for (std in list("rfc3986", NULL)) {
+      expect_identical(
+        rurl:::.resolve_one_raw(case[[1L]], case[[2L]], std), case[[3L]],
+        label = paste(case[[1L]], case[[2L]], if (is.null(std)) "NULL" else std)
+      )
+    }
+    expect_identical(
+      rurl:::.resolve_one_raw(case[[1L]], case[[2L]]), case[[3L]]
+    )
+  }
+})

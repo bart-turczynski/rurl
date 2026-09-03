@@ -121,14 +121,34 @@ strips to the empty string is the empty reference, which resolves to the
 base minus its fragment. RFC 3986 has no strip step -- such bytes are
 required to be percent-encoded -- so under \code{"rfc3986"} and
 \code{NULL} they stay in the reference.
+\item \strong{Against a \code{file:} base, Windows drive letters follow
+the WHATWG \code{file:} state machine.} A reference that \emph{begins}
+with a drive letter empties the base path instead of shortening it, so
+\code{resolve_url("C|/foo", "file:///tmp/mock/path", url_standard =
+    "whatwg", output = "serialized")} is \code{"file:///C:/foo"}; a rooted
+reference inherits the base's drive letter (\code{"/"} against
+\code{"file:///C:/a/b"} is \code{"file:///C:/"}); \code{..} never
+removes a lone drive letter (\code{".."} against \code{"file:///C:/"}
+is \code{"file:///C:/"}); and \code{C|} in the first segment is
+normalized to \code{C:}. A drive letter in the authority position
+(\code{"//d:"}) is an empty host plus a path segment,
+\code{"file:///d:"}. RFC 3986 has no drive-letter concept, so under
+\code{"rfc3986"} and \code{NULL} the plain section 5.2 merge applies.
 }
 
 The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
 every rule above is reachable only through
 \code{url_standard = "whatwg"}.
 
-One further rule applies under \strong{both} named profiles, because the two
-standards agree on it. A scheme is
+Two further rules apply under \strong{both} named profiles, because the two
+standards agree on them. First, a resolved path whose first segment is
+empty is recomposed with the \code{/.} guard: RFC 3986 section 3.3 forbids
+a path beginning with \code{//} after no authority, and the WHATWG URL
+serializer emits the same guard, so \code{resolve_url("/..//path",
+"non-spec:/p", url_standard = "whatwg", output = "serialized")} is
+\code{"non-spec:/.//path"} rather than a string that re-reads as the
+authority \code{path}. The \code{NULL} selector recomposes the unguarded
+string, as it always did. Second, a scheme is
 \code{ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )} -- RFC 3986 section 3.1's
 own grammar, and WHATWG's -- so a relative path whose first segment merely
 \emph{contains} a colon is a path, not an absolute reference:

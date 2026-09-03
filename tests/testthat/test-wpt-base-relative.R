@@ -10,10 +10,12 @@
 # resolution behaviour with zero regression signal over the standard's own
 # relative-resolution corpus. This file is that signal.
 #
-# SCOPE. It is an INSTRUMENT, not a fix. At this commit rurl differs from
-# upstream on 27 of the 274 rows, and those 27 are enumerated below. The test
-# is green because the measured differing set equals the enumerated one --
-# never because a count was tolerated.
+# SCOPE. It is an INSTRUMENT, not a fix. When it landed, rurl differed from
+# upstream on 56 of the 274 rows, and every differing row was enumerated below
+# by family. At this commit ONE row differs, and it is enumerated. The test is
+# green because the measured differing set equals the enumerated one -- never
+# because a count was tolerated -- so an unlisted deviation fails, and so does
+# a listed row that stops deviating.
 #
 # FIXTURE. `tests/testthat/fixtures/wpt-url-base-relative.json`, the exact
 # complement of `inst/bench/wpt-url-cases.json` on `base`, generated from the
@@ -65,17 +67,21 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 
 # ---- the known-differ set ---------------------------------------------------
 #
-# 27 of 274 rows, grouped by the EARLIEST point at which rurl's resolution
-# leaves the WHATWG algorithm, so a later unit can delete one group at a time.
-# Every group is a real, currently-failing family: nothing here is speculative.
+# 1 of 274 rows. The families below were grouped by the EARLIEST point at
+# which rurl's resolution left the WHATWG algorithm, so each unit could delete
+# one group at a time; the DISCHARGED notes keep the history of what each fix
+# was, so a regression names its family instead of moving a count.
 #
-# Two notes on how this differs from the prior measurement recorded on
+# Two notes on how this differed from the prior measurement recorded on
 # RURL-fupsemxr, which counted 62 across a partly different family list:
 #   * the count was 56 when this file landed, not 62 -- the `file:` empty-host
 #     family (RURL-uhwivndf) was discharged in the meantime, and the base-null
 #     suite now scores 336/336. It fell to 43 when the SAME_SCHEME family (14
 #     rows) was discharged by P2.7 D-B, to 29 when the reference preprocessing
-#     families below were, and to 27 with the scheme production;
+#     families below were, to 27 with the scheme production, and to 0 when the
+#     last three families (drive letters, the `/.` guard, the absolute-parse
+#     rows) were discharged together (RURL-ufsltsit, RURL-bedensww,
+#     RURL-lxdwuacn), bar the one absolute-parse row below;
 #   * "rows rurl rejects outright (NA)" is NOT a family here. A reject is a
 #     symptom, not a cause: the NA rows are distributed across the groups below
 #     by the defect that produced them, which is the axis a fix is organised
@@ -128,73 +134,69 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 # group, and only because ADR 0007 freezes it byte-for-byte (measured: zero
 # NULL-path rows move).
 #
-# No row MOVED between families this time: both rows became exact, and the
-# three families below are the previous residue unchanged (18 + 5 + 4).
-
-# Windows drive letters. WHATWG normalises `C|` to `C:`, refuses to shorten a
-# path past a drive letter, and in the file-host state turns a drive-letter
-# "host" into an empty host plus a path segment. rurl has none of that inside
-# resolution, so the drive letter behaves like any other segment or host.
-WPT_REL_DRIVE_LETTER <- c(
-  "file:///tmp/mock/path >> C|/foo/bar",
-  "file:///C:/ >> ..",
-  "file:///C:/a/b >> /",
-  "file://h/C:/a/b >> /",
-  "file:///C:/a/b >> //d:",
-  "file:///C:/a/b >> //d:/..",
-  "file://host/dir/file >> C|",
-  "file://host/D:/dir1/dir2/file >> C|",
-  "file://host/dir/file >> C|#",
-  "file://host/dir/file >> C|?",
-  "file://host/dir/file >> C|/",
-  "file://host/dir/file >> C|\n/",
-  "file://host/dir/file >> C|\\",
-  "file://x/C:/ >> ..",
-  "file://host/ >> //C:/",
-  "file://host/ >> file://C:/",
-  # Ex-WPT_REL_SAME_SCHEME. The scheme is now consumed relatively, so the
-  # resolved path merges against the base (`file:///tmp/mock/c:/foo/bar.html`)
-  # instead of being rejected; the residual gap is WHATWG's file-state rule that
-  # a remainder BEGINNING with a drive letter EMPTIES the path rather than
-  # shortening it, which is this family's machinery and this family's unit.
-  "file:///tmp/mock/path >> file:c:\\foo\\bar.html",
-  # Ex-WPT_REL_C0_OR_SPACE, and the one row this file's count moved BACKWARDS
-  # on. See the DISCHARGED note above: it was exact only because unstripped
-  # leading spaces hid its scheme, and the residual gap is the same drive-letter
-  # rule as the row above it.
-  "file:///tmp/mock/path >>   File:c|////foo\\bar.html"
-)
-
-# A resolved path whose first segment is empty must serialize with the `/.`
-# guard or it re-reads as an authority. `serialize_url()` already emits the
-# guard (see test-wpt-full-suite.R); it is LOST here because resolution hands
-# it a recomposed STRING -- `.recompose_uri()` writes "non-spec://path" -- and
-# the serializer then parses an authority that resolution never intended.
-WPT_REL_PATH_AS_AUTHORITY <- c(
-  "non-spec:/p >> /.//path",
-  "non-spec:/p >> /..//path",
-  "non-spec:/p >> ..//path",
-  "non-spec:/p >> a/..//path",
-  "non-spec:/..//p >> path"
-)
-
+# No row MOVED between families that time: both rows became exact, and the
+# three families below were the residue unchanged (18 + 5 + 4).
+#
+# DISCHARGED: `WPT_REL_DRIVE_LETTER` (18 rows, RURL-ufsltsit) -- Windows drive
+# letters. WHATWG normalises `C|` to `C:`, refuses to shorten a path past a
+# drive letter, empties the base path when the remainder BEGINS with one, and
+# in the file-host state turns a drive-letter "host" into an empty host plus a
+# path segment. Resolution had none of that, so the drive letter behaved like
+# any other segment or host. The first three rules now live in R/resolve.R
+# (`.transform_reference()` under `whatwg_file`, gated on the base's scheme
+# being `file` under `url_standard = "whatwg"`); the fourth was ALREADY in the
+# absolute parser (`.parse_whatwg_file_urls_vec()`) for the `C|` spelling and
+# missed `C:`, which is why `file://C:/` and `//d:` rejected outright. The two
+# conjunction rows -- ex-SAME_SCHEME `file:c:\foo\bar.html` and
+# ex-C0_OR_SPACE `  File:c|////foo\bar.html` -- discharged with the family, as
+# predicted: once the scheme is consumed relatively, what was left wrong about
+# them was exactly the file-state empty-the-path rule. The rows:
+# `file:///tmp/mock/path >> C|/foo/bar`, `file:///C:/ >> ..`,
+# `file:///C:/a/b >> /`, `file://h/C:/a/b >> /`, `file:///C:/a/b >> //d:`,
+# `file:///C:/a/b >> //d:/..`, `file://host/dir/file >> C|` (and its `#`,
+# `?`, `/`, `LF/` and `\` variants), `file://host/D:/dir1/dir2/file >> C|`,
+# `file://x/C:/ >> ..`, `file://host/ >> //C:/`, `file://host/ >> file://C:/`.
+# test-resolve-url.R pins each of them by hand.
+#
+# DISCHARGED: `WPT_REL_PATH_AS_AUTHORITY` (5 rows, RURL-bedensww) -- a resolved
+# path whose first segment is empty must serialize with the `/.` guard or it
+# re-reads as an authority. `serialize_url()` already emitted the guard (see
+# test-wpt-full-suite.R); it was LOST here because resolution hands it a
+# recomposed STRING, and `.recompose_uri()` wrote "non-spec://path".
+# `.recompose_uri()` (R/resolve.R) now emits the guard whenever a standard is
+# selected and the path begins with `//` after no authority -- RFC 3986
+# section 3.3's own constraint under "rfc3986", the serializer's guard under
+# "whatwg", and byte-frozen under NULL (ADR 0007). The rows:
+# `non-spec:/p >> /.//path`, `>> /..//path`, `>> ..//path`, `>> a/..//path`,
+# `non-spec:/..//p >> path`.
+#
+# PARTLY DISCHARGED: `WPT_REL_ABSOLUTE_REF` (3 of 4 rows, RURL-lxdwuacn) --
 # NOT a resolution defect at all: the reference is absolute, so the base is
-# irrelevant and the deviation is in absolute parsing. Kept in the fixture
-# because upstream files these rows with a base, and kept visible here so a
-# resolution fix is not credited with -- or blamed for -- them.
-WPT_REL_ABSOLUTE_REF <- c(
-  "http://example.org/foo/bar >> tel:1234567890",
-  "http://other.com/ >> http://%30%78%63%30%2e%30%32%35%30.01",
-  "http://other.com/ >> http://%30%78%63%30%2e%30%32%35%30.01%2e",
-  paste0("http://other.com/ >> http://",
-         "\uff10\uff38\uff43\uff10\uff0e\uff10\uff12\uff15\uff10\uff0e",
-         "\uff10\uff11")
-)
+# irrelevant and the deviation is in absolute parsing. Kept visible so a
+# resolution fix is not credited with -- or blamed for -- them. The three
+# obfuscated-IPv4 rows are exact: the WHATWG host model read "ends in a
+# number" off the SOURCE token, so `%30%78%63%30%2e%30%32%35%30.01`
+# (percent-encoded `0xc0.0250.01`) was rejected and the fullwidth spelling was
+# accepted as a reg-name; `.apply_host_standard_model_vec()`
+# (R/parse-phases.R) now reads it after percent-decoding and UTS-46 mapping,
+# in the host parser's own order, and all three are `http://192.168.0.1/`.
 
-WPT_REL_KNOWN_DIFFER <- c(
-  WPT_REL_DRIVE_LETTER, WPT_REL_PATH_AS_AUTHORITY,
-  WPT_REL_ABSOLUTE_REF
-)
+# The one row left. `tel:1234567890` matches the scheme-less `<host>:<port>`
+# carve-out in `.general_parsed_mask()` (R/parse-state.R) and is diverted from
+# the opaque parser to the web route, which rejects it, while WHATWG's scheme
+# state reads `tel` as the scheme and `1234567890` as its opaque path. The fix
+# is a one-line gate (the carve-out is off under `rfc3986` already, and has no
+# job under `whatwg` once `scheme_policy = "require"` has switched inference
+# off), but it also flips `www.php.net:80/index.php?test=1` -- external
+# vector yal-009, whose `fsss_whatwg = NA` cell is a FILED acceptance-level
+# deviation (RURL-yeikpnan) with `rurl_deviation` accounting and a sha256 pin
+# in both oracle-provenance.json and the OR-021 register row
+# (design/oracle-fixtures.md). Clearing a filed deviation is a re-baselining
+# decision with an owner, not a side effect of a parser fix, so the row stays
+# enumerated here until that decision is taken.
+WPT_REL_ABSOLUTE_REF <- "http://example.org/foo/bar >> tel:1234567890"
+
+WPT_REL_KNOWN_DIFFER <- WPT_REL_ABSOLUTE_REF
 
 # Assert a property holds of every row except an enumerated deviation set.
 # House style, copied from test-rfc3986-serialization-properties.R: the
@@ -208,8 +210,8 @@ expect_property <- function(violates, input, deviations = character(0)) {
 test_that("the known-differ families are disjoint and sum to the whole", {
   # The constant is itself data, and a duplicated id across two families would
   # make the set-equality below pass while the families lie about ownership.
-  expect_length(WPT_REL_KNOWN_DIFFER, 27L)
-  expect_length(unique(WPT_REL_KNOWN_DIFFER), 27L)
+  expect_length(WPT_REL_KNOWN_DIFFER, 1L)
+  expect_length(unique(WPT_REL_KNOWN_DIFFER), 1L)
 })
 
 test_that("WPT base-relative rows resolve to the standard's own `href`", {

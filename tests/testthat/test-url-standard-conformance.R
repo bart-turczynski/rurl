@@ -173,6 +173,42 @@ test_that("WHATWG rejects obfuscated numeric hosts left literal", {
     url_standard = "whatwg"), "warning-invalid-tld")
 })
 
+test_that("WHATWG reads 'ends in a number' after decoding and UTS-46 mapping", {
+  # RURL-lxdwuacn. The host parser percent-decodes, maps the domain to ASCII,
+  # and only THEN asks whether it ends in a number (#concept-host-parser steps
+  # 3-6). The trigger used to read the SOURCE token, so an obfuscated address
+  # spelled in percent-escapes was rejected and one spelled in fullwidth
+  # digits was accepted as a reg-name. Both are WPT rows with href
+  # `http://192.168.0.1/`.
+  pct <- "http://%30%78%63%30%2e%30%32%35%30.01"
+  pct_dot <- "http://%30%78%63%30%2e%30%32%35%30.01%2e"
+  wide <- paste0(
+    "http://", "\uff10\uff38\uff43\uff10\uff0e\uff10\uff12\uff15\uff10\uff0e",
+    "\uff10\uff11"
+  )
+  for (u in c(pct, pct_dot, wide)) {
+    expect_identical(serialize_url(u, standard = "whatwg"),
+                     "http://192.168.0.1/", label = u)
+    expect_identical(get_host(u, url_standard = "whatwg"), "192.168.0.1",
+                     label = u)
+    expect_identical(get_parse_status(u, url_standard = "whatwg"), "ok",
+                     label = u)
+  }
+  # A mapped host that ends in a number and is NOT an address fails the host
+  # parse, exactly as its ASCII spelling does.
+  expect_identical(
+    get_parse_status("http://\uff41.09", url_standard = "whatwg"), "error"
+  )
+  # A host that does not end in a number after mapping is a domain as before.
+  expect_identical(get_host("http://\uff41.example", url_standard = "whatwg"),
+                   "\uff41.example")
+  # RFC 3986 has no numeric-host rule and no mapping step: unchanged.
+  expect_identical(get_host(pct, url_standard = "rfc3986"), "0xc0.0250.01")
+  expect_identical(
+    serialize_url(wide, standard = "rfc3986"), wide
+  )
+})
+
 # --- get_path()/get_host() honor the selector consistently with get_clean_url
 # (AC #8): spot-check the remaining accessors on a representative fixture row.
 

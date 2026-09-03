@@ -168,11 +168,15 @@
   #> "http://a/b/c/g"
   ```
 
-  Together with the scheme-production fix below, that corpus now scores **247
-  exact with 27 enumerated differences**, each one attributed. Under
-  `"rfc3986"` the merge stays RFC 3986 §5.2–§5.3. **Under the default
-  `url_standard = NULL` nothing moves**: that path is byte-frozen (ADR 0007) and
-  was verified unchanged across the corpus.
+  Together with the scheme-production fix below and the three fixes under
+  *Bug fixes* (the `file:` drive-letter rules, the `/.` guard at the
+  recomposition seam, and the WHATWG host model's "ends in a number" order),
+  that corpus now scores **273 exact with 1 enumerated difference** -- the
+  absolute reference `tel:1234567890`, which is a filed acceptance-level
+  deviation (RURL-yeikpnan), not a resolution defect. Under `"rfc3986"` the
+  merge stays RFC 3986 §5.2–§5.3. **Under the default `url_standard = NULL`
+  nothing moves**: that path is byte-frozen (ADR 0007) and was verified
+  unchanged across the corpus.
 
 - **A colon in a relative path's first segment is no longer mistaken for a
   scheme** (under the two named profiles). The reference splitter matched the
@@ -268,6 +272,63 @@
   (ADR 0015).
 
 ### Bug fixes
+
+- **`resolve_url()` no longer loses the `/.` guard when a resolved path's
+  first segment is empty** (both named profiles; RURL-bedensww). RFC 3986
+  §5.2.4 merges `/..//path` against `non-spec:/p` to the path `//path`, and
+  §3.3 forbids writing that after no authority ("the path cannot begin with two
+  slash characters"): recomposed verbatim, `non-spec://path` re-reads as the
+  *authority* `path`. `serialize_url()` already emitted the guard the WHATWG
+  URL serializer prescribes for this shape, but the resolver handed it the
+  unguarded string, so the guard was lost on the way through.
+
+  ```r
+  resolve_url("/..//path", "non-spec:/p", url_standard = "whatwg",
+              output = "serialized")
+  #> "non-spec:/.//path"    # was "non-spec://path"
+  ```
+
+  §5.3's recomposition now emits `/.` whenever a standard is selected and the
+  path begins with `//` after no authority. `url_standard = NULL` keeps the
+  unguarded string (ADR 0007).
+
+- **`resolve_url(url_standard = "whatwg")` applies the WHATWG `file:` state
+  machine's drive-letter rules** (RURL-ufsltsit). Against a `file:` base,
+  WHATWG's "file state" empties the base path when the reference *begins* with
+  a Windows drive letter, its "file slash state" gives a rooted reference the
+  base's drive letter, "shorten a URL's path" never removes a lone normalized
+  drive letter, and the "path state" normalizes `C|` to `C:` in the first
+  segment. Resolution had none of these, so a drive letter merged like any
+  other segment.
+
+  ```r
+  r <- function(ref, base) {
+    resolve_url(ref, base, url_standard = "whatwg", output = "serialized")
+  }
+  r("C|/foo/bar", "file:///tmp/mock/path")  #> "file:///C:/foo/bar"
+  r("..", "file:///C:/")                    #> "file:///C:/"   (was "file:///")
+  r("/", "file:///C:/a/b")                  #> "file:///C:/"   (was "file:///")
+  r("C|", "file://host/dir/file")           #> "file://host/C:"
+  ```
+
+  The "file host state" half -- a drive letter in the authority position is an
+  empty host plus a path segment -- was already in the absolute parser for the
+  `C|` spelling and missed `C:`, so `file://C:/` was rejected outright; it now
+  parses as `file:///C:/`, and a slash-less `file://d:` as `file:///d:`. All
+  of it is reachable only from `url_standard = "whatwg"` with a `file:` base;
+  `"rfc3986"` and the frozen `NULL` selector keep RFC 3986 §5.2's merge.
+
+- **The WHATWG host model reads "ends in a number" after percent-decoding and
+  UTS-46 mapping** (RURL-lxdwuacn). It used to read the trigger off the
+  *source* token, where the WHATWG host parser reads it after decoding and
+  domain-to-ASCII (#concept-host-parser steps 3--6).
+  `http://%30%78%63%30%2e%30%32%35%30.01` decodes to `0xc0.0250.01` and the
+  fullwidth `http://０Ｘｃ０．０２５０．０１` maps to it; the first was rejected
+  and the second accepted as a reg-name, and both are now `http://192.168.0.1/`
+  as WPT pins. The address grammar is the one already in tree
+  (`.web_ipv4_normalize()`); only the point at which the trigger is read
+  moved, and `R/parse-web.R`'s calibrated host parse is untouched (ADR 0018).
+  `"rfc3986"` and `NULL` are unchanged on every input above.
 
 - **`index_page_handling = "strip"` no longer emits a path ending in `.` or
   `..`.** Dropping a terminal `index.*`/`default.*` page exposes dot segments
