@@ -30,7 +30,7 @@ tree, the tree wins and this card is the file to fix.
 | **WHATWG** | `profile = "whatwg"` — equals `url_standard = "whatwg", scheme_policy = "require", scheme_acceptance = "general", scheme_relative_handling = "error"` | `serialize_url(x, standard = "whatwg")` |
 | **RFC 3986, normalizing** | `url_standard = "rfc3986", scheme_policy = "require", scheme_acceptance = "general"` (governed: `path_normalization = "dot_segments"`, `case_handling = "lower_host"`) | `serialize_url(x, standard = "rfc3986", form = "normalized")` |
 | **RFC 3986, syntax only** | `profile = "rfc-syntax"` — `url_standard = "rfc3986"` with `path_normalization = "none"`, `case_handling = "keep"`, `scheme_relative_handling = "keep"` | `serialize_url(x, standard = "rfc3986", form = "source")` |
-| **Legacy frozen** | `url_standard = NULL, scheme_policy = "infer", scheme_acceptance = "web"` | none — `serialize_url()` rejects `NULL` |
+| **Legacy frozen** | `url_standard = NULL, scheme_policy = "infer", scheme_acceptance = "web"` | none — `serialize_url(standard = NULL)` does **not** error, it silently serializes as WHATWG (`match.arg`), so never pass `NULL` there |
 
 `Rscript tools/posture-probe.R <url>` prints all four side by side with the
 oracle's expected value where a fixture row exists. `url_profile("whatwg")`
@@ -44,8 +44,9 @@ prints exactly what a profile bundles.
   `get_mailto_recipients` defaults to `"rfc3986"`. Name the posture even when
   it equals the default.
 - **The axis is spelled two ways.** `serialize_url()` and `url_key_policy()`
-  take `standard = c("whatwg", "rfc3986")`, default `"whatwg"`, and reject
-  `NULL` — the opposite of the parse surface.
+  take `standard = c("whatwg", "rfc3986")`, default `"whatwg"`. `url_key_policy()`
+  rejects `NULL`; `serialize_url()` silently treats it as `"whatwg"`
+  (RURL-ouorolhb) — either way the opposite of the parse surface.
 - **A profile is not its `url_standard`.** `profile = "whatwg"` sets
   `scheme_policy = "require"` and rejects scheme-less input that
   `url_standard = "whatwg"` alone accepts. `profile = "rfc-syntax"` turns

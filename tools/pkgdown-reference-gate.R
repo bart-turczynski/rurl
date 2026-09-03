@@ -31,6 +31,12 @@
 # Usage:
 #   Rscript tools/pkgdown-reference-gate.R             # scan the repo, exit 1 on a gap
 #   Rscript tools/pkgdown-reference-gate.R --self-test # positive/negative unit checks
+#   Rscript tools/pkgdown-reference-gate.R --regenerate
+#       # append every missing export's topic to an "Uncategorized (TODO:
+#       # place)" section of `_pkgdown.yml`, in place, and exit 0. The gate
+#       # knows which topics are unreachable, not which section they belong
+#       # in -- placement is editorial -- so the section's title carries the
+#       # remaining task. Nothing existing is reordered or rewritten.
 
 # --- inputs ------------------------------------------------------------------
 
@@ -113,6 +119,39 @@ pkgdown_reference_entries <- function(path) {
 
 # --- the check ---------------------------------------------------------------
 
+# Which exports the index reaches, and which it cannot. ONE predicate, shared by
+# the check and by `--regenerate`, so the entry the regenerator writes is the
+# entry the check was complaining about (design/measurement-traps.md section 5:
+# two agreeing regexes are how a generator and its gate drift apart).
+#
+#   undocumented -- exports with no Rd topic at all (nothing can be written)
+#   missing      -- exports whose topic exists but no entry reaches it
+#   topic_of     -- export -> the \name of its Rd topic (NA when undocumented)
+export_coverage <- function(exports, topics, entries) {
+  resolve <- function(name) {
+    hit <- which(vapply(topics, function(t) name %in% t$names, logical(1)))
+    if (length(hit) == 0L) NA_integer_ else hit[[1L]]
+  }
+  resolved <- vapply(entries, resolve, integer(1), USE.NAMES = FALSE)
+  known <- resolved[!is.na(resolved)]
+  covered_names <- unlist(lapply(topics[known], function(t) t$names))
+  undocumented <- character(0)
+  missing <- character(0)
+  topic_of <- stats::setNames(rep(NA_character_, length(exports)), exports)
+  for (e in exports) {
+    owner <- which(vapply(topics, function(t) e %in% t$names, logical(1)))
+    if (length(owner) == 0L) {
+      undocumented <- c(undocumented, e)
+    } else {
+      topic_of[[e]] <- topics[[owner[[1L]]]]$name
+      if (!(e %in% covered_names)) {
+        missing <- c(missing, e)
+      }
+    }
+  }
+  list(undocumented = undocumented, missing = missing, topic_of = topic_of)
+}
+
 # Returns a character vector of violation messages; empty means the index is
 # sound. `topics` is the rd_topics() list.
 check_index <- function(exports, topics, entries) {
@@ -158,17 +197,9 @@ check_index <- function(exports, topics, entries) {
     ))
   }
 
-  covered_names <- unlist(lapply(topics[known], function(t) t$names))
-  undocumented <- character(0)
-  missing <- character(0)
-  for (e in exports) {
-    owner <- which(vapply(topics, function(t) e %in% t$names, logical(1)))
-    if (length(owner) == 0L) {
-      undocumented <- c(undocumented, e)
-    } else if (!(e %in% covered_names)) {
-      missing <- c(missing, e)
-    }
-  }
+  cov <- export_coverage(exports, topics, entries)
+  undocumented <- cov$undocumented
+  missing <- cov$missing
   if (length(undocumented) > 0L) {
     out <- c(out, sprintf(
       "%d export(s) have no Rd topic at all: %s",
@@ -194,6 +225,108 @@ check_repo <- function(root) {
   )
 }
 
+# --- regenerate --------------------------------------------------------------
+
+# The title of the section `--regenerate` appends to. The gate has no notion of
+# WHERE an export belongs -- it checks reachability, not placement, and the
+# curated sections above are editorial -- so a regenerated entry lands here,
+# where the title itself says it still has to be moved. Nothing existing is
+# reordered; when the section already exists the entry joins its list.
+REGEN_SECTION_TITLE <- "Uncategorized (TODO: place)"
+
+# Insert every missing export's topic into `_pkgdown.yml`, in place. Returns
+# (invisibly) a list describing what was written; prints it as it goes.
+# Exports with no Rd topic are reported and skipped: pkgdown would reject an
+# entry naming a topic that does not exist, so writing one would trade a gate
+# finding for a site build error.
+regenerate_index <- function(root) {
+  path <- file.path(root, "_pkgdown.yml")
+  exports <- namespace_exports(file.path(root, "NAMESPACE"))
+  topics <- rd_topics(file.path(root, "man"))
+  entries <- pkgdown_reference_entries(path)
+  if (any(grepl("\\(", entries))) {
+    stop(paste0("_pkgdown.yml uses a pkgdown selector function; the gate ",
+                "cannot score it, so --regenerate refuses to edit it"),
+         call. = FALSE)
+  }
+  cov <- export_coverage(exports, topics, entries)
+
+  for (e in cov$undocumented) {
+    cat(sprintf("  ! cannot add `%s`: it has no Rd topic in man/\n", e))
+  }
+  # One entry per TOPIC: six aliased exports of one Rd file need one line, and
+  # a second would be the duplicate-topic finding the gate also reports.
+  add <- unique(unname(cov$topic_of[cov$missing]))
+  if (length(add) == 0L) {
+    cat("  nothing to regenerate: every documented export reaches the index\n")
+    return(invisible(list(added = character(0), section_created = FALSE)))
+  }
+
+  lines <- readLines(path, warn = FALSE)
+  start <- grep("^reference:\\s*$", lines)[[1L]]
+  rest <- seq.int(start + 1L, length(lines))
+  ends <- rest[grepl("^[A-Za-z_][A-Za-z0-9_]*:", lines[rest])]
+  block_last <- if (length(ends) > 0L) ends[[1L]] - 1L else length(lines)
+  block <- seq.int(start + 1L, block_last)
+
+  # Indentation as the file already spells it: the first `contents:` line and
+  # the first entry under it, so the appended section matches its neighbours.
+  contents_at <- block[grepl("^\\s*contents:\\s*$", lines[block])]
+  item_indent <- "      "
+  title_indent <- "  "
+  if (length(contents_at) > 0L) {
+    ci <- contents_at[[1L]]
+    item_line <- lines[ci + 1L]
+    if (grepl("^\\s*-\\s*\\S", item_line)) {
+      item_indent <- sub("^(\\s*).*$", "\\1", item_line)
+    }
+    title_at <- block[block < ci & grepl("^\\s*-\\s*title:", lines[block])]
+    if (length(title_at) > 0L) {
+      title_indent <- sub("^(\\s*)-.*$", "\\1", lines[title_at[length(title_at)]])
+    }
+  }
+  new_items <- sprintf("%s- %s", item_indent, add)
+
+  section_at <- block[grepl(
+    sprintf("^\\s*-\\s*title:\\s*\"?%s\"?\\s*$",
+            gsub("([][(){}.*+?^$|\\\\])", "\\\\\\1", REGEN_SECTION_TITLE)),
+    lines[block]
+  )]
+  created <- length(section_at) == 0L
+  if (!created) {
+    # Append after the last entry of the existing catch-all section: its
+    # contents run until the next `- title:` in the block or the block's end.
+    after <- block[block > section_at[[1L]] & grepl("^\\s*-\\s*title:", lines[block])]
+    sect_end <- if (length(after) > 0L) after[[1L]] - 1L else block_last
+    while (sect_end > section_at[[1L]] && grepl("^\\s*$", lines[sect_end])) {
+      sect_end <- sect_end - 1L
+    }
+    lines <- append(lines, new_items, after = sect_end)
+  } else {
+    last_content <- block_last
+    while (last_content > start && grepl("^\\s*$", lines[last_content])) {
+      last_content <- last_content - 1L
+    }
+    section <- c(
+      "",
+      sprintf("%s- title: \"%s\"", title_indent, REGEN_SECTION_TITLE),
+      sprintf("%s  desc: >", title_indent),
+      sprintf(paste0("%s    Added by `tools/pkgdown-reference-gate.R ",
+                     "--regenerate`. Move each entry into the section it ",
+                     "belongs to."), title_indent),
+      sprintf("%s  contents:", title_indent),
+      new_items
+    )
+    lines <- append(lines, section, after = last_content)
+  }
+  writeLines(lines, path, useBytes = TRUE)
+
+  cat(sprintf("  %s section \"%s\" with %d entry/entries: %s\n",
+              if (created) "created" else "extended", REGEN_SECTION_TITLE,
+              length(add), paste(add, collapse = ", ")))
+  invisible(list(added = add, section_created = created))
+}
+
 # --- self-test (positive + negative coverage, executable) --------------------
 
 # Build a throwaway package skeleton so the negative cases are real files rather
@@ -217,6 +350,24 @@ write_fixture <- function(dir, exports, rd, contents) {
     file.path(dir, "_pkgdown.yml")
   )
   dir
+}
+
+# The lines `after` holds that `before` did not, PROVIDED every line of
+# `before` survives in order; NULL otherwise. This is the shape a --regenerate
+# self-test has to assert -- "exactly the one entry, nothing rewritten" -- and a
+# set difference cannot say it, because a reordered or duplicated line is
+# invisible to a set.
+lines_added <- function(before, after) {
+  i <- 1L
+  extra <- character(0)
+  for (ln in after) {
+    if (i <= length(before) && identical(ln, before[[i]])) {
+      i <- i + 1L
+    } else {
+      extra <- c(extra, ln)
+    }
+  }
+  if (i <= length(before)) NULL else extra
 }
 
 self_test <- function() {
@@ -278,8 +429,77 @@ self_test <- function() {
     fail("did not refuse to score an index using a pkgdown selector")
   }
 
+  # --regenerate: the measured defect, repaired in place. The fixture is the
+  # `missing` scenario above; after regeneration the gate must pass and the
+  # file must differ from its pre-regeneration bytes by exactly the appended
+  # catch-all section -- nothing reordered, nothing else touched.
+  d <- write_fixture(file.path(base, "regen"), c("alpha", "j_left"), rd_full,
+                     c("alpha"))
+  before <- readLines(file.path(d, "_pkgdown.yml"))
+  if (!any(grepl("absent from", check_repo(d)$violations))) {
+    fail("regenerate fixture is not red before regeneration")
+  }
+  out <- utils::capture.output(res <- regenerate_index(d))
+  after <- readLines(file.path(d, "_pkgdown.yml"))
+  v <- check_repo(d)$violations
+  if (length(v) > 0L) {
+    fail(sprintf("gate still fails after --regenerate: %s",
+                 paste(v, collapse = "; ")))
+  }
+  if (!identical(res$added, "joins") || !isTRUE(res$section_created)) {
+    fail("regenerate did not report the one missing topic as a new section")
+  }
+  added <- lines_added(before, after)
+  if (is.null(added)) {
+    fail("regenerate rewrote or reordered lines that were already there")
+  }
+  if (!identical(sum(grepl("^\\s*- joins\\s*$", added)), 1L) ||
+        !any(grepl(REGEN_SECTION_TITLE, added, fixed = TRUE))) {
+    fail(sprintf("regenerate diff is not exactly the catch-all section: %s",
+                 paste(added, collapse = " / ")))
+  }
+  if (!any(grepl("created section", out))) {
+    fail("regenerate did not print what it changed")
+  }
+
+  # --regenerate, second run: the catch-all already exists, so a further gap
+  # joins it as ONE line rather than opening a second section.
+  writeLines(sprintf("export(%s)", c("alpha", "j_left", "beta")),
+             file.path(d, "NAMESPACE"))
+  writeLines(c("\\name{beta}", "\\alias{beta}", "\\title{x}"),
+             file.path(d, "man", "beta.Rd"))
+  before <- after
+  utils::capture.output(res <- regenerate_index(d))
+  after <- readLines(file.path(d, "_pkgdown.yml"))
+  if (length(check_repo(d)$violations) > 0L || isTRUE(res$section_created) ||
+        length(after) != length(before) + 1L ||
+        !identical(setdiff(after, before), sprintf("      - %s", "beta"))) {
+    fail("regenerate did not extend the existing catch-all by exactly one entry")
+  }
+
+  # --regenerate must refuse to invent an entry for an export with no topic.
+  d <- write_fixture(file.path(base, "regen-undoc"), c("alpha", "orphan"),
+                     rd_full, c("alpha"))
+  before <- readLines(file.path(d, "_pkgdown.yml"))
+  out <- utils::capture.output(res <- regenerate_index(d))
+  if (length(res$added) != 0L ||
+        !identical(readLines(file.path(d, "_pkgdown.yml")), before) ||
+        !any(grepl("cannot add `orphan`", out, fixed = TRUE))) {
+    fail("regenerate wrote an entry for an export that has no Rd topic")
+  }
+
+  # --regenerate is a no-op on a complete index.
+  d <- write_fixture(file.path(base, "regen-noop"), c("alpha", "j_left"),
+                     rd_full, c("alpha", "joins"))
+  before <- readLines(file.path(d, "_pkgdown.yml"))
+  utils::capture.output(regenerate_index(d))
+  if (!identical(readLines(file.path(d, "_pkgdown.yml")), before)) {
+    fail("regenerate touched a file that had nothing to regenerate")
+  }
+
   unlink(base, recursive = TRUE)
-  cat("pkgdown-reference-gate self-test: PASS (2 positive + 5 negative cases)\n")
+  cat(paste0("pkgdown-reference-gate self-test: PASS (2 positive + 5 negative ",
+             "+ 4 regenerate cases)\n"))
   invisible(TRUE)
 }
 
@@ -291,6 +511,12 @@ main <- function() {
 
   if ("--self-test" %in% args) {
     self_test()
+    return(invisible(TRUE))
+  }
+  if ("--regenerate" %in% args) {
+    cat("pkgdown reference-index gate --regenerate\n")
+    regenerate_index(root)
+    cat("regenerated _pkgdown.yml\n")
     return(invisible(TRUE))
   }
 

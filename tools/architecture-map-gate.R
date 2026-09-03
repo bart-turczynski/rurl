@@ -61,6 +61,15 @@
 # Usage:
 #   Rscript tools/architecture-map-gate.R             # scan the repo, exit 1 on a gap
 #   Rscript tools/architecture-map-gate.R --self-test # positive/negative unit checks
+#   Rscript tools/architecture-map-gate.R --regenerate
+#       # repair the three OMISSIONS in place and exit 0: a `Collate:` file
+#       # missing from the load-order block is spliced in at its `Collate:`
+#       # position (no reflow of the other lines); a file with no map entry
+#       # gets a `- **R/<file>** — TODO: describe.` stub after its nearest
+#       # `Collate:` predecessor's entry; an `Imports:` package missing from
+#       # `## Dependencies` gets a stub carrying DESCRIPTION's floor. Existing
+#       # rows are never rewritten, so a stale entry, a wrong order or a
+#       # drifted floor is reported, not repaired -- those need a human.
 #
 # NOT IN SCOPE, on purpose: `## Key internal functions` is a curated SELECTION,
 # not an enumeration. The argument that justifies a bijection over 24 files --
@@ -144,21 +153,31 @@ imports_requirements <- function(path) {
   )
 }
 
+# The line indices of one `## <heading>` section: `first` is the line after the
+# heading, `last` the line before the next `## ` heading (or the end of file).
+# One locator for the three parsers AND for `--regenerate`, so the lines the
+# regenerator edits are the lines the gate reads.
+section_span <- function(lines, heading) {
+  head <- grep(paste0("^## ", heading, "[[:space:]]*$"), lines)
+  if (length(head) == 0L) {
+    stop(sprintf("ARCHITECTURE.md has no `## %s` heading", heading),
+         call. = FALSE)
+  }
+  head <- head[[1L]]
+  stop_at <- grep("^## ", lines)
+  stop_at <- stop_at[stop_at > head]
+  last <- if (length(stop_at) > 0L) stop_at[[1L]] - 1L else length(lines)
+  list(head = head, first = head + 1L, last = last)
+}
+
 # The packages named by `## Dependencies` entries, as the same named vector of
 # written floors. An ENTRY is a list item that OPENS with a backticked name --
 # the same entry-versus-mention distinction the file map needs, and it is load
 # bearing here too: the section closes with a paragraph naming, in backticks, a
 # package that is NO LONGER a dependency -- which must not be read as an import.
 dependency_entries <- function(lines) {
-  head <- grep("^## Dependencies[[:space:]]*$", lines)
-  if (length(head) == 0L) {
-    stop("ARCHITECTURE.md has no `## Dependencies` heading", call. = FALSE)
-  }
-  head <- head[[1L]]
-  stop_at <- grep("^## ", lines)
-  stop_at <- stop_at[stop_at > head]
-  last <- if (length(stop_at) > 0L) stop_at[[1L]] - 1L else length(lines)
-  block <- lines[seq.int(head + 1L, last)]
+  span <- section_span(lines, "Dependencies")
+  block <- lines[seq.int(span$first, span$last)]
 
   items <- grep("^- `[^`]+`", block, value = TRUE)
   if (length(items) == 0L) {
@@ -178,24 +197,29 @@ dependency_entries <- function(lines) {
 # the sequence of filenames it names. The block spells the order with `->`
 # arrows wrapped across lines, so the arrows and whitespace are separators and
 # everything else is a token.
-load_order_files <- function(lines) {
-  head <- grep("^## Load order[[:space:]]*$", lines)
-  if (length(head) == 0L) {
-    stop("ARCHITECTURE.md has no `## Load order` heading", call. = FALSE)
-  }
-  head <- head[[1L]]
-  stop_at <- grep("^## ", lines)
-  stop_at <- stop_at[stop_at > head]
-  last <- if (length(stop_at) > 0L) stop_at[[1L]] - 1L else length(lines)
-  block <- lines[seq.int(head + 1L, last)]
-
+# Absolute line indices of the fenced block's body under `## Load order`.
+load_order_body <- function(lines) {
+  span <- section_span(lines, "Load order")
+  block <- lines[seq.int(span$first, span$last)]
   fences <- grep("^```", block)
   if (length(fences) < 2L) {
     stop("the `## Load order` section has no fenced code block", call. = FALSE)
   }
-  body <- block[seq.int(fences[[1L]] + 1L, fences[[2L]] - 1L)]
-  toks <- unlist(strsplit(paste(body, collapse = " "), "[[:space:]]+"))
-  toks <- toks[nzchar(toks) & toks != "→" & toks != "->"]
+  if (fences[[2L]] - fences[[1L]] < 2L) {
+    return(integer(0))
+  }
+  seq.int(span$first + fences[[1L]], span$first + fences[[2L]] - 2L)
+}
+
+# The arrows and whitespace are separators; everything else is a token.
+load_order_tokens <- function(text) {
+  toks <- unlist(strsplit(paste(text, collapse = " "), "[[:space:]]+"))
+  toks[nzchar(toks) & toks != "→" & toks != "->"]
+}
+
+load_order_files <- function(lines) {
+  body <- lines[load_order_body(lines)]
+  toks <- load_order_tokens(body)
   if (length(toks) == 0L) {
     stop("the `## Load order` block is empty -- refusing to score", call. = FALSE)
   }
@@ -206,17 +230,11 @@ load_order_files <- function(lines) {
 # appearance. Bold is what every existing entry uses to open itself, and it is
 # what distinguishes an ENTRY from a passing mention of the same file in another
 # entry's prose (`R/domain.R` is referenced seven times but is one entry).
+FILE_MAP_HEADING <- "File / responsibility map"
+
 file_map_files <- function(lines) {
-  head <- grep("^## File / responsibility map[[:space:]]*$", lines)
-  if (length(head) == 0L) {
-    stop("ARCHITECTURE.md has no `## File / responsibility map` heading",
-         call. = FALSE)
-  }
-  head <- head[[1L]]
-  stop_at <- grep("^## ", lines)
-  stop_at <- stop_at[stop_at > head]
-  last <- if (length(stop_at) > 0L) stop_at[[1L]] - 1L else length(lines)
-  block <- lines[seq.int(head + 1L, last)]
+  span <- section_span(lines, FILE_MAP_HEADING)
+  block <- lines[seq.int(span$first, span$last)]
 
   hits <- unlist(regmatches(
     block, gregexpr("[*][*]R/[A-Za-z0-9_.-]+[.]R[*][*]", block)
@@ -352,6 +370,155 @@ check_repo <- function(root) {
   )
 }
 
+# --- regenerate --------------------------------------------------------------
+#
+# Three insertions, each derived from the same parsers the check uses, and
+# nothing else: an existing line is never rewritten. The stub text says `TODO:
+# describe` because the gate can prove a file is UNDOCUMENTED, not what it does
+# -- a stub is the gate's finding made visible where a reader will trip over
+# it, not a description.
+
+STUB_TEXT <- "TODO: describe."
+
+# Splice `file` into the load-order block at its `Collate:` position. The
+# block wraps `a.R → b.R →` across lines; the token joins the line holding its
+# nearest `Collate:` predecessor already present, so every other line keeps its
+# bytes. A file with no present predecessor opens the first body line.
+insert_load_order_token <- function(lines, file, collate) {
+  body <- load_order_body(lines)
+  if (length(body) == 0L) {
+    stop("the `## Load order` block is empty -- refusing to regenerate",
+         call. = FALSE)
+  }
+  arrow <- if (any(grepl("→", lines[body], fixed = TRUE))) "→" else "->"
+  present <- load_order_tokens(lines[body])
+  before <- collate[seq_len(match(file, collate) - 1L)]
+  pred <- before[before %in% present]
+  pred <- if (length(pred) > 0L) pred[length(pred)] else NA_character_
+
+  splice <- function(ln, after) {
+    raw <- unlist(strsplit(ln, "[[:space:]]+"))
+    raw <- raw[nzchar(raw)]
+    leading <- length(raw) > 0L && raw[[1L]] %in% c("→", "->")
+    trailing <- length(raw) > 0L && raw[[length(raw)]] %in% c("→", "->")
+    toks <- raw[!(raw %in% c("→", "->"))]
+    toks <- if (is.na(after)) {
+      c(file, toks)
+    } else {
+      at <- match(after, toks)
+      append(toks, file, after = at)
+    }
+    out <- paste(toks, collapse = paste0(" ", arrow, " "))
+    if (leading) out <- paste0(arrow, " ", out)
+    if (trailing) out <- paste0(out, " ", arrow)
+    out
+  }
+  at <- if (is.na(pred)) {
+    body[[1L]]
+  } else {
+    body[vapply(lines[body], function(ln) pred %in% load_order_tokens(ln),
+                logical(1))][[1L]]
+  }
+  lines[at] <- splice(lines[at], pred)
+  lines
+}
+
+# Add a `- **R/<file>** — TODO: describe.` stub to the file map, after the
+# entry of the nearest `Collate:` predecessor that has one, so the map keeps
+# following load order where it already does. An entry runs from its `- `
+# line through its indented continuation lines.
+insert_file_map_stub <- function(lines, file, collate) {
+  span <- section_span(lines, FILE_MAP_HEADING)
+  idx <- seq.int(span$first, span$last)
+  opens <- idx[grepl("^- ", lines[idx])]
+  stub <- sprintf("- **R/%s** — %s", file, STUB_TEXT)
+
+  entry_end <- function(open) {
+    i <- open + 1L
+    while (i <= span$last && grepl("^[[:space:]]+[^[:space:]]", lines[i])) {
+      i <- i + 1L
+    }
+    i - 1L
+  }
+  before <- rev(collate[seq_len(match(file, collate) - 1L)])
+  for (pred in before) {
+    hit <- idx[grepl(sprintf("[*][*]R/%s[*][*]", pred), lines[idx])]
+    if (length(hit) == 0L) next
+    open <- opens[opens <= hit[[1L]]]
+    if (length(open) == 0L) next
+    return(append(lines, stub, after = entry_end(open[length(open)])))
+  }
+  if (length(opens) > 0L) {
+    return(append(lines, stub, after = opens[[1L]] - 1L))
+  }
+  last <- span$last
+  while (last > span$first && grepl("^[[:space:]]*$", lines[last])) {
+    last <- last - 1L
+  }
+  append(lines, stub, after = last)
+}
+
+# Add a `- `pkg` (<floor>) — TODO: describe.` stub after the last entry of
+# `## Dependencies`, carrying the floor exactly as `Imports:` spells it.
+insert_dependency_stub <- function(lines, pkg, floor) {
+  span <- section_span(lines, "Dependencies")
+  idx <- seq.int(span$first, span$last)
+  items <- idx[grepl("^- `[^`]+`", lines[idx])]
+  if (length(items) == 0L) {
+    stop("the `## Dependencies` section lists no packages -- refusing to regenerate",
+         call. = FALSE)
+  }
+  last <- items[length(items)]
+  while (last < span$last &&
+           grepl("^[[:space:]]+[^[:space:]]", lines[last + 1L])) {
+    last <- last + 1L
+  }
+  stub <- if (is.na(floor)) {
+    sprintf("- `%s` — %s", pkg, STUB_TEXT)
+  } else {
+    sprintf("- `%s` (%s) — %s", pkg, floor, STUB_TEXT)
+  }
+  append(lines, stub, after = last)
+}
+
+regenerate_map <- function(root) {
+  description <- file.path(root, "DESCRIPTION")
+  collate <- collate_files(description)
+  imports <- imports_requirements(description)
+  path <- file.path(root, "ARCHITECTURE.md")
+  lines <- architecture_lines(path)
+  changed <- character(0)
+
+  for (f in collate[!(collate %in% load_order_files(lines))]) {
+    lines <- insert_load_order_token(lines, f, collate)
+    changed <- c(changed, sprintf("load order: spliced in `%s`", f))
+  }
+  for (f in collate[!(collate %in% file_map_files(lines))]) {
+    lines <- insert_file_map_stub(lines, f, collate)
+    changed <- c(changed, sprintf("file map: stub entry for `R/%s`", f))
+  }
+  documented <- dependency_entries(lines)
+  for (pkg in names(imports)[!(names(imports) %in% names(documented))]) {
+    lines <- insert_dependency_stub(lines, pkg, imports[[pkg]])
+    changed <- c(changed, sprintf("dependencies: stub entry for `%s`", pkg))
+  }
+
+  if (length(changed) == 0L) {
+    cat("  nothing to regenerate: no omission found\n")
+  } else {
+    writeLines(lines, path, useBytes = TRUE)
+    for (c in changed) cat("  + ", c, "\n", sep = "")
+  }
+  # Whatever is not an omission is not this flag's to fix; say so rather than
+  # exit 0 in silence over a finding the next run will report.
+  left <- c(
+    check_map(collate, load_order_files(lines), file_map_files(lines)),
+    check_dependencies(imports, dependency_entries(lines))
+  )
+  for (v in left) cat("  ! not regenerable, still reported by the gate: ", v, "\n", sep = "")
+  invisible(list(changed = changed, remaining = left))
+}
+
 # --- self-test (positive + negative coverage, executable) --------------------
 
 # Real files rather than hand-built argument lists: the two parsers are as much
@@ -401,6 +568,23 @@ write_fixture <- function(dir, collate, load_order, map_entries,
     file.path(dir, "ARCHITECTURE.md")
   )
   dir
+}
+
+# The lines `after` holds that `before` did not, PROVIDED every line of
+# `before` survives in order; NULL otherwise. A set difference cannot express
+# "exactly one insertion and nothing rewritten", which is the property every
+# --regenerate case below has to prove.
+lines_added <- function(before, after) {
+  i <- 1L
+  extra <- character(0)
+  for (ln in after) {
+    if (i <= length(before) && identical(ln, before[[i]])) {
+      i <- i + 1L
+    } else {
+      extra <- c(extra, ln)
+    }
+  }
+  if (i <= length(before)) NULL else extra
 }
 
 self_test <- function() {
@@ -569,8 +753,115 @@ self_test <- function() {
     fail("scored a `## Dependencies` section with no entries instead of aborting")
   }
 
+  # --- --regenerate ---------------------------------------------------------
+  # Each case: red before, green after, and the file differs from its
+  # pre-regeneration bytes by exactly the one insertion -- asserted on the
+  # bytes, not on the verdict, because a regenerator that rewrote the whole
+  # section would also turn the verdict green.
+  regen <- function(tag, ...) {
+    d <- write_fixture(file.path(base, tag), ...)
+    p <- file.path(d, "ARCHITECTURE.md")
+    before <- readLines(p)
+    if (length(check_repo(d)$violations) == 0L) {
+      fail(sprintf("regenerate fixture `%s` is not red before regeneration", tag))
+    }
+    out <- utils::capture.output(res <- regenerate_map(d))
+    v <- check_repo(d)$violations
+    if (length(v) > 0L) {
+      fail(sprintf("`%s`: gate still fails after --regenerate: %s", tag,
+                   paste(v, collapse = "; ")))
+    }
+    list(before = before, after = readLines(p), out = out, res = res)
+  }
+
+  # The measured defect: a file shipped, the map never updated.
+  r <- regen("regen-map-gap", three, three, c("a.R", "b.R"))
+  added <- lines_added(r$before, r$after)
+  if (!identical(added, "- **R/c.R** — TODO: describe.")) {
+    fail(sprintf("map-gap regenerate diff is not exactly the stub: %s",
+                 paste(added, collapse = " / ")))
+  }
+  if (!any(grepl("stub entry for `R/c.R`", r$out, fixed = TRUE))) {
+    fail("map-gap regenerate did not print what it changed")
+  }
+
+  # The stub lands after its Collate predecessor's entry, not at the end.
+  r <- regen("regen-map-middle", three, three, c("a.R", "c.R"))
+  at <- grep("^- [*][*]R/", r$after)
+  if (!identical(sub("^- [*][*]R/([^*]+)[*][*].*$", "\\1", r$after[at]), three)) {
+    fail("map stub was not placed after its Collate predecessor's entry")
+  }
+
+  # The other measured defect: the load-order block left behind. The token is
+  # spliced into ONE existing line; nothing else in the file moves.
+  r <- regen("regen-order-gap", three, c("a.R", "b.R"), three)
+  if (length(r$after) != length(r$before)) {
+    fail("load-order regenerate changed the line count")
+  }
+  moved <- which(r$after != r$before)
+  if (length(moved) != 1L || !grepl("c.R", r$after[moved], fixed = TRUE)) {
+    fail(sprintf("load-order regenerate diff is not one spliced line: %s",
+                 paste(r$after[moved], collapse = " / ")))
+  }
+
+  # A token missing from the MIDDLE goes between its neighbours, and the
+  # arrows around it are re-spelled from the block, not invented.
+  r <- regen("regen-order-middle", three, c("a.R", "c.R"), three)
+  flat <- paste(r$after[load_order_body(r$after)], collapse = " ")
+  if (!identical(load_order_files(r$after), three) ||
+        sum(r$after != r$before) != 1L ||
+        !grepl("a.R → b.R → c.R", flat, fixed = TRUE)) {
+    fail("load-order regenerate did not splice the middle token in place")
+  }
+
+  # The dependency omission (RURL-rnwfclja): one stub line, floor included
+  # exactly as `Imports:` spells it.
+  r <- regen("regen-dep-gap", three, three, three,
+             imports = c("alpha", "beta (>= 1.0.0)", "utils (>= 4.0)"),
+             deps = c("alpha", "beta (>= 1.0.0)"))
+  added <- lines_added(r$before, r$after)
+  if (!identical(added, "- `utils` (>= 4.0) — TODO: describe.")) {
+    fail(sprintf("dep-gap regenerate diff is not exactly the stub: %s",
+                 paste(added, collapse = " / ")))
+  }
+  r <- regen("regen-dep-gap-nofloor", three, three, three,
+             imports = c("alpha", "beta (>= 1.0.0)", "utils"),
+             deps = c("alpha", "beta (>= 1.0.0)"))
+  if (!identical(lines_added(r$before, r$after),
+                 "- `utils` — TODO: describe.")) {
+    fail("dep-gap regenerate invented a floor `Imports:` does not state")
+  }
+
+  # NOT regenerable: a wrong order, a stale entry and a drifted floor are
+  # findings about EXISTING text, which the flag must leave alone and name.
+  d <- write_fixture(file.path(base, "regen-leaves"), three,
+                     c("a.R", "c.R", "b.R"), c(three, "gone.R"),
+                     imports = c("alpha", "beta (>= 2.0.0)"))
+  p <- file.path(d, "ARCHITECTURE.md")
+  before <- readLines(p)
+  out <- utils::capture.output(res <- regenerate_map(d))
+  if (!identical(readLines(p), before)) {
+    fail("regenerate rewrote existing text to fix a non-omission")
+  }
+  if (length(res$remaining) != 3L ||
+        !any(grepl("WRONG ORDER", out)) ||
+        !any(grepl("renamed or deleted", out)) ||
+        !any(grepl("`beta` says", out))) {
+    fail("regenerate did not report the findings it cannot fix")
+  }
+
+  # A no-op on a complete file.
+  d <- write_fixture(file.path(base, "regen-noop"), three, three, three)
+  p <- file.path(d, "ARCHITECTURE.md")
+  before <- readLines(p)
+  utils::capture.output(regenerate_map(d))
+  if (!identical(readLines(p), before)) {
+    fail("regenerate touched a file that had nothing to regenerate")
+  }
+
   unlink(base, recursive = TRUE)
-  cat("architecture-map-gate self-test: PASS (3 positive + 17 negative cases)\n")
+  cat(paste0("architecture-map-gate self-test: PASS (3 positive + 17 negative ",
+             "+ 8 regenerate cases)\n"))
   invisible(TRUE)
 }
 
@@ -582,6 +873,12 @@ main <- function() {
 
   if ("--self-test" %in% args) {
     self_test()
+    return(invisible(TRUE))
+  }
+  if ("--regenerate" %in% args) {
+    cat("ARCHITECTURE.md load-order + file-map + dependency gate --regenerate\n")
+    regenerate_map(root)
+    cat("regenerated ARCHITECTURE.md\n")
     return(invisible(TRUE))
   }
 
