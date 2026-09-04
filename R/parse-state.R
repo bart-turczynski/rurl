@@ -1321,7 +1321,8 @@
 #   - rfc3986 : keep http/https/ftp/ftps on the web route (existing host model
 #               + path-rootless slice); route file to the RFC 8089 overlay and
 #               every other scheme to the RFC generic host parser.
-.general_parsed_mask <- function(url, url_standard, scheme_acceptance) {
+.general_parsed_mask <- function(url, url_standard, scheme_acceptance,
+                                 scheme_policy = "infer") {
   n <- length(url)
   if (n == 0L) {
     return(rep(FALSE, n))
@@ -1357,6 +1358,20 @@
   # the same lexical ambiguity there deliberately. Only the rfc3986 ROUTING
   # stops consulting it.
   if (identical(url_standard, "rfc3986")) {
+    host_port <- rep(FALSE, n)
+  }
+  # ...nor under `whatwg` once `scheme_policy = "require"` has switched scheme
+  # inference off (RURL-lxdwuacn, RUL-014). The WHATWG scheme start / scheme
+  # states read `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` followed by `:` as
+  # the scheme with NO exception for a dotted token that looks like a host, so
+  # `tel:1234567890` is scheme `tel` + opaque path, and `www.php.net:80/x` is
+  # scheme `www.php.net` + opaque path `80/x` -- exactly what the `rfc3986` arm
+  # already reports above, because RFC 3986 sec 3.1 has the identical scheme
+  # production. The carve-out is the omnibox affordance that `scheme_policy =
+  # "infer"` names (ADR 0010), so it survives there, and under the byte-frozen
+  # `url_standard = NULL` (ADR 0007), untouched. The default `"infer"` keeps
+  # every caller that does not pass the policy byte-identical.
+  if (.is_whatwg(url_standard) && identical(scheme_policy, "require")) {
     host_port <- rep(FALSE, n)
   }
 
@@ -1543,7 +1558,8 @@
 #   authority_payload_kind/query_kind/fragment_kind/host_form : the internal
 #                    state kinds the L3b serializers and the parse-status
 #                    promotion consume.
-.general_parse_vec <- function(url, url_standard, scheme_acceptance) {
+.general_parse_vec <- function(url, url_standard, scheme_acceptance,
+                               scheme_policy = "infer") {
   n <- length(url)
   na <- rep(NA_character_, n)
   out <- list(
@@ -1555,7 +1571,8 @@
     query_kind = rep("absent", n),
     fragment_kind = rep("absent", n), host_form = na
   )
-  gp <- .general_parsed_mask(url, url_standard, scheme_acceptance)
+  gp <- .general_parsed_mask(url, url_standard, scheme_acceptance,
+                             scheme_policy)
   out$general_parsed <- gp
   if (!any(gp)) {
     return(out)

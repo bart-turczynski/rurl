@@ -364,7 +364,8 @@
     # recover the state kinds, build the path/host-kind proxies the classifier
     # needs, then read `!semantic_transform_eligible` (the non-HTTP(S) rows a
     # global SEO transform would skip under general acceptance, ADR 0012 D2).
-    gen_b <- .general_parse_vec(url, opts$url_standard, opts$scheme_acceptance)
+    gen_b <- .general_parse_vec(url, opts$url_standard, opts$scheme_acceptance,
+                                opts$scheme_policy)
     gp <- gen_b$general_parsed & live
     is_special_row <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
     pk <- .whatwg_path_kind(is_special_row, a$raw_path)

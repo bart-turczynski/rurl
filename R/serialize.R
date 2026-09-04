@@ -239,7 +239,7 @@
   # pure parser is re-run on the same stripped input Stage A fed it.
   gen <- .general_parse_vec(
     .strip_whatwg_control_chars_vec(url, opts$url_standard)$url,
-    opts$url_standard, "general"
+    opts$url_standard, "general", opts$scheme_policy
   )
   gp <- gen$general_parsed & ok
 

@@ -103,6 +103,7 @@ The forge moved to GitLab, so the answer is explicit rather than inherited:
 | The same jobs in the CI image, clean clone | **Local**, `tools/local-ci.sh` | On demand; after every merge to `main` |
 | `gates` (~40s) | GitLab | Every push (re-enabled 2026-09-03, RURL-utsbwfvc) |
 | `check` (`R CMD check --as-cran`) | GitLab | Release time only: a tag, or a hand-started pipeline |
+| `pages` (pkgdown site to <https://bart-turczynski.gitlab.io/rurl/>) | GitLab | Release time only: a tag, or a hand-started pipeline (RURL-vkltgopc) |
 | Everything in `.github/workflows/` | **Nowhere** | The account is suspended; none of it can fire |
 
 **The server-side check is the ~40s `gates` job only.** The full gate list

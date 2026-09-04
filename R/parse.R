@@ -112,6 +112,13 @@
 #'     cleaned URL.}
 #'     \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
 #'   }
+#'   Under `url_standard = "whatwg"` every value renders the UTS-46-mapped
+#'   host, because mapping is part of WHATWG host parsing rather than a
+#'   feature of the `idna` dial (`BÜCHER.example` presents as
+#'   `bücher.example`; RUL-002). There `"keep"` preserves only whether the
+#'   input was written as an A-label (`xn--...`), so `get_host()` and
+#'   `get_domain()` agree on the same row. `"rfc3986"` and `NULL` are
+#'   unaffected.
 #' @param path_encoding How to present the path percent-encoding in `clean_url`
 #' — the readable-vs-browser rendering choice (the path analog of
 #' `host_encoding`). Defaults to "keep". This is an orthogonal presentation
@@ -1911,7 +1918,7 @@ safe_parse_urls <- function(url,
   # byte-for-byte no-op unless url_standard == "whatwg".
   gen_input <- .strip_whatwg_control_chars_vec(urls, opts$url_standard)$url
   gen <- .general_parse_vec(gen_input, opts$url_standard,
-                            opts$scheme_acceptance)
+                            opts$scheme_acceptance, opts$scheme_policy)
   general_route <- valid & gen$general_parsed
 
   # Phase 2: the web parse (the only per-URL loop) over the surviving rows.
@@ -2386,7 +2393,7 @@ safe_parse_urls <- function(url,
     # state kinds land on the wrong rows.
     gen_b <- .general_parse_vec(
       .strip_whatwg_control_chars_vec(original_url, opts$url_standard)$url,
-      opts$url_standard, opts$scheme_acceptance
+      opts$url_standard, opts$scheme_acceptance, opts$scheme_policy
     )
     gp <- gen_b$general_parsed & web_ok
     # path_kind / host_kind for eligibility: the L3a classifier proxy for the

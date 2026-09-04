@@ -632,6 +632,44 @@
   stringi::stri_replace_first_regex(path, "^/([A-Za-z])\\|(?=/|$)", "/$1:")
 }
 
+# WHATWG "path state" for a `file:` path rooted at a normalized Windows drive
+# letter (RURL-msefniuz). The standard's `..` step calls "shorten a URL's
+# path", which returns WITHOUT removing anything when "url's scheme is 'file',
+# path's size is 1, and path[0] is a normalized Windows drive letter" -- so
+# `file:///C:/../` is `file:///C:/`, and `file:///C:/a/../..` is `file:///C:/`.
+# The dot-segment resolution every other row gets, Phase 3's
+# `._remove_dot_segments_whatwg()` (`.normalize_path_vec()` below), is RFC 3986
+# section 5.2.4's algorithm and knows no drive letter: it shortened past `C:`
+# and produced `file:///`.
+#
+# Phase 3 receives the path but not the scheme, and `http://h/C:/..` MUST
+# still shorten to `/` -- the drive-letter clause is `file:`-only -- so the
+# rule lives here, in the one parser that only ever sees `file:` rows, and is
+# scoped to the rows where section 5.2.4 gives the wrong answer: a path whose
+# FIRST segment is a normalized drive letter and which carries a dot segment.
+# Every other `file:` path still reaches Phase 3 with its dots intact, exactly
+# as before. The resolver's `.whatwg_file_remove_dot_segments()` (R/resolve.R,
+# the same "shorten" rule for a relative reference) does the walk; WHATWG's
+# dot segments are ATOMS (`.`, `%2e`, case-insensitive; a double-dot is any two
+# of them), and that routine reads only the literal spellings, so whole
+# encoded dot segments are folded to literals first. Phase 3 then finds no dot
+# segment in these rows and leaves them untouched.
+.whatwg_file_shorten_drive_path <- function(path) {
+  mask <- !is.na(path) &
+    stringi::stri_detect_regex(path, "^/[A-Za-z]:(?=/|$)") &
+    stringi::stri_detect_regex(path, "(?i)/(\\.|%2e){1,2}(/|$)")
+  if (!any(mask)) {
+    return(path)
+  }
+  p <- path[mask]
+  p <- stringi::stri_replace_all_regex(p, "(?i)(?<=/)(\\.|%2e){2}(?=/|$)", "..")
+  p <- stringi::stri_replace_all_regex(p, "(?i)(?<=/)%2e(?=/|$)", ".")
+  path[mask] <- vapply(
+    p, .whatwg_file_remove_dot_segments, character(1), USE.NAMES = FALSE
+  )
+  path
+}
+
 .parse_whatwg_file_urls_vec <- function(url, backslash_rewritten) {
   n <- length(url)
   out <- list(
@@ -721,6 +759,7 @@
   }
 
   path <- .whatwg_file_drive_path(path)
+  path <- .whatwg_file_shorten_drive_path(path)
   # A backslash-introduced empty file authority serializes with a double-slash
   # path. `file:` and `file://` proper keep their ordinary single slash.
   empty_backslash_authority <- has_authority & !nzchar(host) &
@@ -2028,11 +2067,13 @@
 # helpers .normalize_and_punycode_vec()/.punycode_to_unicode_vec() (domain.R);
 # this phase only selects the eligible rows and applies the scalar fallback
 # rule (keep the pre-encode host when the encode returns NA, or when the decode
-# returns NA / "").
+# returns NA / ""). Under `whatwg` the default ("keep") presentation is NOT a
+# no-op: it renders the UTS-46-mapped host (RUL-002; see
+# .whatwg_host_presentation_vec()).
 .apply_host_encoding_vec <- function(final_host, host_encoding, is_ip_host,
                                      url_standard = NULL) {
   host_for_clean <- final_host
-  if (host_encoding != "idna" && host_encoding != "unicode") {
+  if (host_encoding == "keep" && !.is_whatwg(url_standard)) {
     return(host_for_clean)
   }
   elig <- !is.na(final_host) & final_host != "" & !is_ip_host
@@ -2058,19 +2099,10 @@
       USE.NAMES = FALSE
     )
   }
-  if (host_encoding == "idna") {
-    if (.is_whatwg(url_standard)) {
-      encoded <- punycoder::host_normalize(
-        subset, check_hyphens = FALSE, use_std3 = FALSE,
-        verify_dns_length = FALSE
-      )
-      retry <- is.na(encoded)
-      if (any(retry)) {
-        encoded[retry] <- .normalize_and_punycode_vec(subset[retry])
-      }
-    } else {
-      encoded <- .normalize_and_punycode_vec(subset)
-    }
+  if (.is_whatwg(url_standard)) {
+    host_for_clean[elig] <- .whatwg_host_presentation_vec(subset, host_encoding)
+  } else if (host_encoding == "idna") {
+    encoded <- .normalize_and_punycode_vec(subset)
     keep_orig <- is.na(encoded)
     encoded[keep_orig] <- subset[keep_orig]
     host_for_clean[elig] <- encoded
@@ -2081,6 +2113,53 @@
     host_for_clean[elig] <- decoded
   }
   host_for_clean
+}
+
+# WHATWG host presentation (RUL-002). The WHATWG host parser runs UTS-46
+# "domain to ASCII" (Transitional_Processing false, CheckHyphens false,
+# UseSTD3ASCIIRules false, VerifyDnsLength false) and the URL record stores that
+# ASCII host; "domain to Unicode" is UTS-46 ToUnicode of it (UTS #46 section 4,
+# 4.2, 4.3). So under `whatwg` every spelling is a rendering of ONE mapped form:
+#   idna    -> ToASCII(host)
+#   unicode -> ToUnicode(ToASCII(host))
+#   keep    -> ToUnicode(ToASCII(host)) for a host written in Unicode, and
+#              ToASCII(host) for a host already carrying an ACE (`xn--`) label,
+#              mirroring how Stage B picks the `domain`/`tld` spelling for
+#              "keep" (`host_is_ace`, R/parse.R) so host and domain agree.
+# The mapped form is computed once via `punycoder::host_normalize()` -- the
+# call the `idna` branch already made, never the ADR 0002 helpers, which stay
+# the reversible (unmapped) renderers of the `rfc3986` and `NULL` arms. When
+# domain-to-ASCII fails the pre-encode host is kept, as before.
+.whatwg_host_presentation_vec <- function(subset, host_encoding) {
+  mapped <- punycoder::host_normalize(
+    subset, check_hyphens = FALSE, use_std3 = FALSE,
+    verify_dns_length = FALSE
+  )
+  retry <- is.na(mapped)
+  if (any(retry)) {
+    mapped[retry] <- .normalize_and_punycode_vec(subset[retry])
+  }
+  keep_orig <- is.na(mapped)
+  mapped[keep_orig] <- subset[keep_orig]
+  if (host_encoding == "idna") {
+    return(mapped)
+  }
+  # Only an ACE label decodes to anything other than itself; skip the
+  # Punycode pass (and its cache) for the all-ASCII majority.
+  decoded <- mapped
+  ace_mapped <- .host_is_ace_vec(mapped)
+  if (any(ace_mapped)) {
+    dec <- .punycode_to_unicode_vec(mapped[ace_mapped])
+    keep_mapped <- is.na(dec) | dec == ""
+    dec[keep_mapped] <- mapped[ace_mapped][keep_mapped]
+    decoded[ace_mapped] <- dec
+  }
+  if (host_encoding == "unicode") {
+    return(decoded)
+  }
+  ace_source <- .host_is_ace_vec(subset)
+  decoded[ace_source] <- mapped[ace_source]
+  decoded
 }
 
 # Phase 9 (scalar wrapper): delegates to .apply_host_encoding_vec().

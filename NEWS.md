@@ -36,6 +36,37 @@
   overrides the bundle, so `profile = "seo", host_encoding = "keep"` restores
   the previous host rendering.
 
+- **Under `url_standard = "whatwg"` the host presentation now applies the
+  WHATWG host parser's UTS-46 mapping — on the default rendering and under
+  `host_encoding = "unicode"`, not only under `"idna"`** (RUL-002,
+  RURL-nuqhbxvc). The WHATWG URL Standard's host parser runs "domain to ASCII"
+  (UTS #46 §4 Processing and §4.2 ToASCII, with `Transitional_Processing`,
+  `CheckHyphens`, `UseSTD3ASCIIRules` and `VerifyDnsLength` all false) and the
+  URL record stores that ASCII host; "domain to Unicode" is §4.3 ToUnicode of
+  it. rurl applied the mapping only when asked for the A-label spelling, so the
+  default and Unicode renderings showed the *unmapped* source characters —
+  a full-width `ｅ`, an `ﬁ` ligature, a zero-width space — for a host whose
+  record already read `example.com`, `file.com`, `ab.com`:
+
+  ```r
+  # before                                        # after
+  get_host("https://BÜCHER.example/", url_standard = "whatwg")
+  #> "bÜcher.example"                             #> "bücher.example"
+  get_host("https://ﬁle.com/", url_standard = "whatwg")
+  #> "ﬁle.com"                                    #> "file.com"
+  get_host("https://ｅxample.com/", url_standard = "whatwg")
+  #> "ｅxample.com"                               #> "example.com"
+  ```
+
+  Both renderings are now `ToUnicode(ToASCII(host))`, so the Unicode
+  presentation of a host and of its own A-label spelling are identical, while
+  the default rendering keeps an input that was *written* as an A-label in
+  ASCII (as the `domain`/`tld` columns already did). `serialize_url(standard =
+  "whatwg")` and `get_url_key()` read the record's ASCII host and do not move.
+  The `rfc3986` arm and the `url_standard = NULL` default are byte-identical
+  (ADR 0016): their `idna`/`unicode` renderings stay the reversible Punycode
+  helpers of ADR 0002, which this change does not touch.
+
 - **`profile = "seo"` now drops the whole query, where it used to keep every
   parameter it did not recognize as a tracker** (`query_handling` moves from
   `"filter"` to `"drop"`, ADR 0017). This closes an anomaly in which asking for
@@ -171,9 +202,10 @@
   Together with the scheme-production fix below and the three fixes under
   *Bug fixes* (the `file:` drive-letter rules, the `/.` guard at the
   recomposition seam, and the WHATWG host model's "ends in a number" order),
-  that corpus now scores **273 exact with 1 enumerated difference** -- the
-  absolute reference `tel:1234567890`, which is a filed acceptance-level
-  deviation (RURL-yeikpnan), not a resolution defect. Under `"rfc3986"` the
+  that corpus now scores **274 exact with no enumerated difference**. The
+  last one, the absolute reference `tel:1234567890`, was never a resolution
+  defect: it was the scheme-less host:port carve-out rejecting the absolute
+  parse, fixed under *Bug fixes* (RURL-lxdwuacn). Under `"rfc3986"` the
   merge stays RFC 3986 §5.2–§5.3. **Under the default `url_standard = NULL`
   nothing moves**: that path is byte-frozen (ADR 0007) and was verified
   unchanged across the corpus.
@@ -314,6 +346,30 @@
   asymmetry is outside RUL-007's two measured families and is pinned by the
   external-vector fixture.
 
+- **A dotted scheme token that looks like `host:port` now parses as a scheme
+  under `scheme_policy = "require"`** (`whatwg`; RURL-lxdwuacn, RUL-014). With
+  `profile = "whatwg"`, `tel:1234567890` and `www.php.net:80/index.php?test=1`
+  were rejected outright: the scheme-less `example.com:8080` carve-out matched
+  them and diverted them from the opaque parser to the web route, which
+  rejects those schemes. The WHATWG URL Standard's *scheme start state* and
+  *scheme state* read `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` followed by
+  `:` as the scheme, with no exception for a token that looks like a host; RFC
+  3986 §3.1 carries the identical production, and the `rfc3986` arm already
+  read it that way. `serialize_url(x, standard = "whatwg")` now returns
+  `tel:1234567890` and `www.php.net:80/index.php?test=1` (scheme
+  `www.php.net`, opaque path `80/index.php`, query `test=1`) instead of `NA`.
+
+  The carve-out is the browser-omnibox affordance `scheme_policy = "infer"`
+  names (ADR 0010), so it is untouched there — `www.php.net:80/index.php?test=1`
+  still reads as host `www.php.net` — and untouched under the byte-frozen
+  `url_standard = NULL` (ADR 0007); both were measured byte-identical. Two
+  fixtures moved with it: the WPT base-relative corpus's last enumerated
+  difference (below) is discharged, and external vector `yal-009` no longer
+  records a deviation (RURL-yeikpnan) — its measured columns and the fixture's
+  sha256 pins were re-baselined per `design/oracle-fixtures.md`, and its
+  `whatwg_expected = "failure"` cell, which recorded rurl's own former output
+  as the standard's mandate, is now `"accept"`.
+
 - **`resolve_url()` no longer loses the `/.` guard when a resolved path's
   first segment is empty** (both named profiles; RURL-bedensww). RFC 3986
   §5.2.4 merges `/..//path` against `non-spec:/p` to the path `//path`, and
@@ -358,6 +414,29 @@
   parses as `file:///C:/`, and a slash-less `file://d:` as `file:///d:`. All
   of it is reachable only from `url_standard = "whatwg"` with a `file:` base;
   `"rfc3986"` and the frozen `NULL` selector keep RFC 3986 §5.2's merge.
+
+- **The absolute WHATWG parser no longer shortens a `file:` path past a lone
+  drive letter** (RURL-msefniuz). The WHATWG URL Standard's "path state"
+  resolves `..` through "shorten a URL's path", which returns without removing
+  anything when "url's scheme is `file`, path's size is 1, and path[0] is a
+  normalized Windows drive letter". The resolver gained that rule for relative
+  references (above), but a `file:` URL parsed on its own still went through
+  RFC 3986 §5.2.4's remover, which knows no drive letter.
+
+  ```r
+  serialize_url("file:///C:/../", standard = "whatwg")
+  #> "file:///C:/"       (was "file:///")
+  serialize_url("file:///C:/a/../..", standard = "whatwg")
+  #> "file:///C:/"       (was "file:///")
+  serialize_url("file://host/C:/..", standard = "whatwg")
+  #> "file://host/C:/"   (was "file://host/")
+  serialize_url("http://h/C:/..", standard = "whatwg")
+  #> "http://h/"         (unchanged: the clause is keyed on the `file` scheme)
+  ```
+
+  Only a `file:` path whose first segment is a normalized drive letter is
+  affected, and only under `url_standard = "whatwg"`; `"rfc3986"` keeps
+  §5.2.4's shortening and the frozen `NULL` selector is untouched.
 
 - **The WHATWG host model reads "ends in a number" after percent-decoding and
   UTS-46 mapping** (RURL-lxdwuacn). It used to read the trigger off the
@@ -1343,6 +1422,14 @@
   all four gaps went unnoticed: no registry cell forced the arguments to exist.
 
 ### Documentation
+
+- **The documentation site moved to GitLab Pages:
+  <https://bart-turczynski.gitlab.io/rurl/>.** The former
+  `bart-turczynski.github.io/rurl` site had no publisher after the GitHub
+  account that built it was suspended. A `pages` job in `.gitlab-ci.yml` now
+  builds the pkgdown site on a tag or a hand-started pipeline, so the live site
+  documents the last release; `DESCRIPTION`'s `URL:` names it first
+  (RURL-vkltgopc).
 
 - **RFC 3986 now has a serialization oracle; it had only an acceptance axis.**
   The conformance evidence has four quadrants — {WHATWG, RFC 3986} ×

@@ -6,7 +6,8 @@
 # (`pre-commit install`) — so "the history is green" meant nothing about whether
 # anything had checked it.
 #
-# THE JOB LIST IS NOT WRITTEN HERE, DELIBERATELY. Both jobs below shell out to
+# THE JOB LIST IS NOT WRITTEN HERE, DELIBERATELY. The `gates` and `check` jobs
+# below shell out to
 # `tools/verify.R`, which derives the gate list from `.github/workflows/verify.yml`
 # at run time. Transcribing the gates into this file would create exactly the
 # drift that script exists to prevent: add a gate to CI and a hand-maintained
@@ -14,13 +15,17 @@
 # stays the single source of truth for WHAT the gates are, regardless of which
 # forge runs them.
 #
-# TWO STAGES, because compute minutes are finite on the free tier:
-#   gates — every push. The gate family needs almost no installed packages
-#           (measured: ~74s for the whole family plus the control plane).
-#   check — RELEASE TIME ONLY: a tag, or a pipeline started by hand. The full
-#           `R CMD check --as-cran`, lint and the locale cell, which need the
-#           toolchain and every dependency, so this is the job that costs real
-#           minutes. Measured locally at 227-290s against ~40s for the gates.
+# THREE STAGES, because compute minutes are finite on the free tier:
+#   gates  — every push. The gate family needs almost no installed packages
+#            (measured: ~74s for the whole family plus the control plane).
+#   check  — RELEASE TIME ONLY: a tag, or a pipeline started by hand. The full
+#            `R CMD check --as-cran`, lint and the locale cell, which need the
+#            toolchain and every dependency, so this is the job that costs real
+#            minutes. Measured locally at 227-290s against ~40s for the gates.
+#   deploy — RELEASE TIME ONLY, same rules as `check`: the `pages` job that
+#            builds the pkgdown site and publishes it to GitLab Pages
+#            (RURL-vkltgopc). It shares `check`'s dependency install, so it
+#            costs about as much as a build; it never runs on a push.
 #
 # WHY `check` NO LONGER RUNS ON THE DEFAULT BRANCH. It used to, and that is what
 # exhausted the allowance: four merge requests in one day meant four branch
@@ -36,8 +41,9 @@
 # exists to remove.
 #
 # NOT COVERED HERE, so nobody reads a green pipeline as more than it is: the
-# cross-platform matrix, rhub, pkgdown, coverage, the determinism matrix and the
+# cross-platform matrix, rhub, coverage, the determinism matrix and the
 # README re-render. Those still live in `.github/workflows/` and do not run.
+# (pkgdown used to be on this list; the `pages` job below took it over.)
 #
 # Before pushing a change to this file, run `glab ci lint .gitlab-ci.yml`. An
 # unquoted `key: value` inside a script entry makes YAML read the `: ` as a
@@ -66,6 +72,7 @@
 stages:
   - gates
   - check
+  - deploy
 
 default:
   image: r-base:latest
@@ -141,6 +148,69 @@ check:
   rules:
     - if: '$CI_COMMIT_TAG'
     - if: '$CI_PIPELINE_SOURCE == "web"'
+    # `glab ci run` / POST /pipeline start a pipeline whose source is "api":
+    # the same deliberate hand-start as the web button (RURL-vkltgopc).
+    - if: '$CI_PIPELINE_SOURCE == "api"'
   script:
     - *check_deps
     - 'Rscript tools/verify.R'
+
+# The documentation site. Published at https://bart-turczynski.gitlab.io/rurl/,
+# which `_pkgdown.yml` names and DESCRIPTION's `URL:` declares first. Copied
+# from pslr's `pages` job (RURL-vkltgopc), with the dependency install swapped
+# for this file's apt-based `.check_deps`, which already carries r-cran-pkgdown
+# and pandoc.
+#
+# SAME RULES AS `check`, DELIBERATELY: a tag, or a hand-started pipeline. A
+# branch push never rebuilds the site, so between releases the published site
+# documents the last release -- the right default for a CRAN package. Run it by
+# hand (Pipelines -> Run pipeline on `main`) after merging documentation worth
+# publishing early. `needs: []` so a hand-started pipeline publishes without
+# waiting for the slow `check` job; the two are independent evidence.
+#
+# The job MUST be named `pages` -- that name is what makes GitLab publish the
+# `public/` artifact -- and `tools/local-ci-plan.R` therefore does not treat
+# `pages` as a reserved top-level key, so `tools/local-ci.sh --list` shows it.
+pages:
+  stage: deploy
+  needs: []
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    # `glab ci run` / POST /pipeline start a pipeline whose source is "api":
+    # the same deliberate hand-start as the web button (RURL-vkltgopc).
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+  script:
+    - *check_deps
+    # `build_site(install = FALSE)` runs the examples against the INSTALLED
+    # package, so install first. This is the same code the tarball would carry.
+    - 'R CMD INSTALL --no-multiarch .'
+    # pkgdown renders every root-level .md that is not README/NEWS/LICENSE/
+    # cran-comments: pkgdown:::package_mds() hardcodes that skip list, so
+    # _pkgdown.yml has no setting that can exclude a file. Left alone it
+    # publishes AGENTS.html and CLAUDE.html and folds their text into
+    # search.json, where it outranks real documentation on ordinary queries.
+    # Both are agent tooling contracts, not user documentation. (FP_CLAUDE.md,
+    # which CLAUDE.md imports, is untracked -- `.git/info/exclude` -- so a CI
+    # clone never has it and it is not listed here.)
+    #
+    # Move them out of the source tree rather than deleting the rendered output:
+    # deleting leaves the search index pointing at pages that 404. This runs
+    # after the install so the installed package is byte-identical to a normal
+    # build, and the CI checkout is disposable, so nothing is restored after.
+    #
+    # This deliberately fails the job if either file is renamed or removed:
+    # the list is a claim about the repository, and a silent skip would quietly
+    # start publishing the file again.
+    - 'mkdir -p /tmp/agent-md'
+    - 'mv AGENTS.md CLAUDE.md /tmp/agent-md/'
+    - 'Rscript -e ''pkgdown::build_site(new_process = FALSE, install = FALSE)'''
+    # GitLab Pages publishes `public/`; _pkgdown.yml sets no `destination:`, so
+    # the site lands in `docs/` (which .gitignore already covers for local
+    # builds). Rename rather than configure, so a local build_site() keeps
+    # writing where .gitignore and design/README.md say it does.
+    - 'mv docs public'
+    - 'test -f public/index.html'
+  artifacts:
+    paths:
+      - public

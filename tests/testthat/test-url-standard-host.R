@@ -60,10 +60,15 @@ test_that("WHATWG accepts empty-hex zero IPv4 parts", {
     url_standard = "rfc3986"), "reg-name")
 })
 
-test_that("WHATWG IDNA presentation applies UTS-46 ignored mappings", {
+test_that("WHATWG host presentation applies UTS-46 ignored mappings", {
   u <- "https://a%C2%ADb/"
 
-  expect_identical(get_host(u, url_standard = "whatwg"), "a\u00adb")
+  # RUL-002: UTS-46 is part of the WHATWG host parser, not a feature of the
+  # `idna` dial, so the DEFAULT presentation renders the mapped host too.
+  expect_identical(get_host(u, url_standard = "whatwg"), "ab")
+  expect_identical(
+    get_host(u, url_standard = "whatwg", host_encoding = "unicode"), "ab"
+  )
   expect_identical(
     get_host(u, url_standard = "whatwg", host_encoding = "idna"), "ab"
   )
@@ -72,10 +77,118 @@ test_that("WHATWG IDNA presentation applies UTS-46 ignored mappings", {
     "https://ab/"
   )
 
+  # Negative controls: the reversible ADR 0002 helpers still own the other
+  # arms, and `NULL` is byte-frozen (ADR 0016).
   expect_identical(
     get_host(u, url_standard = "rfc3986", host_encoding = "idna"),
     "xn--ab-5da"
   )
+  expect_identical(get_host(u, url_standard = "rfc3986"), "a%C2%ADb")
+  expect_identical(get_host(u), "a\u00adb")
+})
+
+# RUL-002. WHATWG URL Standard, host parser: "domain to ASCII" is UTS-46
+# ToASCII with Transitional_Processing false (CheckHyphens, UseSTD3ASCIIRules
+# and VerifyDnsLength false), and the URL record stores that ASCII host;
+# "domain to Unicode" is UTS-46 ToUnicode of it (UTS #46 section 4 Processing,
+# 4.2 ToASCII, 4.3 ToUnicode). Under `url_standard = "whatwg"` the default host
+# presentation and `host_encoding = "unicode"` therefore both render
+# ToUnicode(ToASCII(host)): the mapping is the host parser's, not the `idna`
+# dial's. The `rfc3986` and `NULL` arms keep their reversible (unmapped)
+# rendering: the ADR 0002 helpers are untouched and ADR 0016 forbids
+# selector-caused drift into `NULL`.
+test_that("WHATWG default and unicode presentations map the host", {
+  # Two plain vectors, not one named vector: a `c(name = value)` tag is a
+  # symbol, and under `LC_ALL=C` a non-ASCII symbol cannot be represented, so
+  # the URLs would silently become `<U+00DC>` spellings.
+  urls <- c(
+    "https://B\u00dcCHER.example/p", # uppercase U-umlaut
+    "https://\ufb01le.com/p",        # U+FB01 ligature
+    "https://a\u200bb.com/p",        # U+200B ignored
+    "https://\uff45xample.com/p"     # fullwidth e
+  )
+  mapped <- c("b\u00fccher.example", "file.com", "ab.com", "example.com")
+
+  expect_identical(get_host(urls, url_standard = "whatwg"), mapped)
+  expect_identical(
+    get_host(urls, url_standard = "whatwg", host_encoding = "unicode"), mapped
+  )
+  expect_identical(
+    get_clean_url(urls, url_standard = "whatwg", host_encoding = "unicode"),
+    paste0("https://", mapped, "/p")
+  )
+  expect_identical(
+    safe_parse_urls(urls, profile = "whatwg")$host, mapped
+  )
+
+  # unicode(source) == unicode(idna(source)): the Unicode presentation of the
+  # source spelling equals the Unicode presentation of its A-label spelling.
+  idna <- get_host(urls, url_standard = "whatwg", host_encoding = "idna")
+  expect_identical(
+    get_host(paste0("https://", idna, "/p"), url_standard = "whatwg",
+      host_encoding = "unicode"),
+    get_host(urls, url_standard = "whatwg", host_encoding = "unicode")
+  )
+  expect_identical(
+    get_host(paste0("https://", mapped, "/p"), url_standard = "whatwg",
+      host_encoding = "unicode"),
+    mapped
+  )
+
+  # The URL record stores the ASCII host, so the serializer and the key do not
+  # move: source, mapped-Unicode and A-label spellings serialize and key alike.
+  expect_identical(idna, c("xn--bcher-kva.example", "file.com", "ab.com",
+    "example.com"))
+  for (spelling in list(urls, paste0("https://", mapped, "/p"),
+    paste0("https://", idna, "/p"))) {
+    expect_identical(
+      serialize_url(spelling, standard = "whatwg"),
+      paste0("https://", idna, "/p")
+    )
+    expect_identical(
+      as.character(get_url_key(spelling, url_key_policy("whatwg"))),
+      as.character(get_url_key(urls, url_key_policy("whatwg")))
+    )
+  }
+
+  # Negative controls, looped over the other two arms: neither maps. The
+  # expected values are what `main` rendered before RUL-002.
+  unmapped_keep <- c("b\u00dccher.example", "\ufb01le.com", "a\u200bb.com",
+    "\uff45xample.com")
+  unmapped_idna <- c("xn--bcher-2pa.example", "xn--le-1b1n.com",
+    "xn--ab-g1t.com", "xn--xample-hy68a.com")
+  for (std in list("rfc3986", NULL)) {
+    expect_identical(
+      get_host(urls, url_standard = std), unmapped_keep,
+      info = if (is.null(std)) "NULL" else std
+    )
+    expect_identical(
+      get_host(urls, url_standard = std, host_encoding = "unicode"),
+      unmapped_keep, info = if (is.null(std)) "NULL" else std
+    )
+    expect_identical(
+      get_host(urls, url_standard = std, host_encoding = "idna"),
+      unmapped_idna, info = if (is.null(std)) "NULL" else std
+    )
+  }
+})
+
+test_that("WHATWG default presentation keeps an ACE spelling as ACE", {
+  # "keep" preserves the spelling FAMILY the input used, as the Stage-B
+  # `domain`/`tld` selection does for an ACE host; `unicode` decodes it and
+  # `idna` returns the mapped ASCII form. All three agree on the record.
+  u <- "https://xn--bcher-kva.example/p"
+  expect_identical(get_host(u, url_standard = "whatwg"),
+    "xn--bcher-kva.example")
+  expect_identical(
+    get_host(u, url_standard = "whatwg", host_encoding = "unicode"),
+    "b\u00fccher.example"
+  )
+  expect_identical(
+    get_host(u, url_standard = "whatwg", host_encoding = "idna"),
+    "xn--bcher-kva.example"
+  )
+  expect_identical(serialize_url(u, standard = "whatwg"), u)
 })
 
 test_that("WHATWG IDNA presentation applies UTS-46 compatibility mappings", {
