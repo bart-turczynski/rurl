@@ -1901,6 +1901,30 @@ safe_parse_urls <- function(url,
   url
 }
 
+# The scheme as the prepared input SPELLS it, for the rows where that token is
+# the scheme the parse settled on (RURL-gkmwqpos, RUL-007). `final_scheme` is
+# the ASCII-lowercased classification token; this is its source spelling,
+# which RFC 3986 sec 6.2.2.1 treats as un-normalized and which only
+# `serialize_url(form = "source")` renders. Falls back to `final_scheme` where
+# the prepared input carries no scheme token, where the token differs from the
+# settled scheme other than by case (a fabricated `http://` prefix over a
+# host-port input, a scheme-relative rewrite), or where `final_scheme` is NA --
+# so the spelling can never name a scheme the parse did not find.
+.source_scheme_spelling_vec <- function(prepared, final_scheme) {
+  out <- final_scheme
+  ok <- !is.na(final_scheme) & !is.na(prepared)
+  if (!any(ok)) {
+    return(out)
+  }
+  token <- stringi::stri_match_first_regex(
+    prepared[ok], "^([A-Za-z][A-Za-z0-9+.\\-]*):"
+  )[, 2L]
+  same <- !is.na(token) & .ascii_tolower(token) == final_scheme[ok]
+  idx <- which(ok)[same]
+  out[idx] <- token[same]
+  out
+}
+
 # Stage A (vector): the option-INDEPENDENT parse core (RURL-dkwrebdt). Runs the
 # expensive, presentation-independent phases -- scheme detection + parser input
 # prep (1), the parse and raw-component extraction (2), final-scheme policy
@@ -1992,6 +2016,10 @@ safe_parse_urls <- function(url,
   # failed the first attempt was re-parsed from that copy. See `pqf_bytes` in
   # R/parse-web.R for why a retry-on-failure cannot express the rule.
   pqf_bytes <- .web_pqf_policy(opts$url_standard)
+  # Whether the accepted query/fragment are stored as the source spelled them
+  # (RURL-gkmwqpos, RUL-007). See `pqf_source` in R/parse-web.R: under
+  # `rfc3986` sec 6.2.2.1's hex-case fold is the `normalized` serializer's job.
+  pqf_source <- .web_pqf_source_policy(opts$url_standard)
   # Which host tokens read as an IPv4 address (RURL-ezhzpkhg deletion 4). The
   # last of the compensations: a Phase-1 rewrite canonicalized WHATWG-valid IPv4
   # hosts in the URL STRING so the old engine could read the rest of it. See
@@ -2015,7 +2043,7 @@ safe_parse_urls <- function(url,
       last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes,
       host_charset = host_charset, host_ipv4 = host_ipv4,
       empty_path = empty_path, host_pct_octets = host_pct_octets,
-      port_range = port_range
+      port_range = port_range, pqf_source = pqf_source
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -2090,10 +2118,15 @@ safe_parse_urls <- function(url,
       prep$url_to_parse[web_ok], engine_path[web_ok], pqf_bytes
     )
   }
-  # query/fragment/userinfo are raw pass-throughs; .blank_to_na() maps a
-  # present-but-empty "" component to NA, which is where the long-shipped
-  # "empty component == absent" behavior is enforced (see .blank_to_na in
-  # utils.R).
+  # query/fragment/userinfo are taken from the parser as-is. Whether the
+  # parser's query/fragment ARE the source bytes is `pqf_source`'s question
+  # (R/parse-web.R, RUL-007): under `rfc3986` they are stored as written, so an
+  # existing "%xx" keeps its hex case exactly as the re-derived path does;
+  # under `whatwg` and the no-selector default they carry the component pass's
+  # normalized spelling (bytes >= 0x80 encoded, "%XX" uppercased).
+  # .blank_to_na() maps a present-but-empty "" component to NA, which is where
+  # the long-shipped "empty component == absent" behavior is enforced (see
+  # .blank_to_na in utils.R).
   raw_query <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$query %||% NA_character_
   }, character(1), USE.NAMES = FALSE))
@@ -2237,6 +2270,18 @@ safe_parse_urls <- function(url,
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
   )
+  # The scheme AS SPELLED (RURL-gkmwqpos, RUL-007). Every route ASCII-lowercases
+  # `raw_scheme` -- the web parser at its scheme production, the general parser
+  # in `.general_parse_vec()` -- and every classifier downstream keys off that
+  # folded token, so `final_scheme` keeps it. But RFC 3986 sec 6.2.2.1 makes
+  # scheme case folding a NORMALIZATION, which `serialize_url(form = "source")`
+  # must not apply; it reads the spelling back from here, the same way the
+  # host's source spelling is carried since RURL-xkhbhaje. Read off the
+  # prepared input, and only where the token there IS the scheme the parse
+  # settled on (a fabricated `http://` prefix or a demoted token falls back to
+  # `final_scheme`), so a disagreeing pair never emits a scheme the parse did
+  # not find.
+  source_scheme <- .source_scheme_spelling_vec(prep$url_to_parse, final_scheme)
 
   # Phase 5: IP host detection (on the parsed host, which may be a coerced
   # IPv4).
@@ -2309,6 +2354,7 @@ safe_parse_urls <- function(url,
 
   cols <- list(
     final_scheme = final_scheme,
+    source_scheme = source_scheme,
     final_host = final_host,
     is_ip_host = is_ip_host,
     raw_path = raw_path,
@@ -2749,7 +2795,8 @@ safe_parse_urls <- function(url,
     host_ipv4 = .web_host_ipv4_policy(url_standard),
     empty_path = .web_empty_path_policy(url_standard),
     host_pct_octets = .web_host_pct_octets_policy(url_standard),
-    port_range = .web_port_range_policy(url_standard)
+    port_range = .web_port_range_policy(url_standard),
+    pqf_source = .web_pqf_source_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)

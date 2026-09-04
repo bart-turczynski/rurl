@@ -393,6 +393,14 @@
 # from these plus the presentation options and is never cached.
 .spu_stage_a_fields <- list(
   list(name = "final_scheme", default = NA_character_, template = character(1)),
+  # The scheme as the source SPELLED it (RURL-gkmwqpos, RUL-007): `final_scheme`
+  # is the ASCII-lowercased classification token every route produces, and RFC
+  # 3986 sec 6.2.2.1 makes that fold a normalization the `source` serializer
+  # form must not apply. Equal to `final_scheme` wherever the prepared input's
+  # scheme token is not the one the parse settled on. Cached: a parse fact.
+  list(
+    name = "source_scheme", default = NA_character_, template = character(1)
+  ),
   list(name = "final_host", default = NA_character_, template = character(1)),
   list(name = "is_ip_host", default = NA, template = logical(1)),
   list(name = "raw_path", default = NA_character_, template = character(1)),

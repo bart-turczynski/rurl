@@ -5,7 +5,7 @@
 #   1. rurl's output does not depend on `LC_CTYPE`. The same input yields the
 #      same VALUES and the same `Encoding()` marks under `LC_ALL=C` and under a
 #      UTF-8 locale. The cross-locale half of that is enforced by CI: the
-#      `Tests (LC_ALL=C)` cell in .github/workflows/verify.yml runs this whole
+#      `Tests (LC_ALL=C)` cell in tools/verify-manifest.yml runs this whole
 #      suite under a genuinely non-UTF-8 LC_CTYPE. What THIS file asserts is
 #      the in-process half -- the marks and the bytes -- which is what makes
 #      the two runs agree.

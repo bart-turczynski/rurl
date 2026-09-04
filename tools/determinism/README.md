@@ -24,7 +24,7 @@ runs it only on demand and only as evidence collection — never as a gate; see
 | `parse-dump.R` | Runs the corpus through `safe_parse_urls()` and dumps every output column. Base R + an installed `rurl` only. |
 | `curl-probe.R` | Runs the corpus through **libcurl alone**. Base R + the `curl` package only. What the Docker matrix runs — see [Multi-libcurl matrix](#multi-libcurl-matrix). |
 | `matrix/` | Docker runner that sweeps `curl-probe.R` across many libcurl versions, plus the divergence join. |
-| `../../.github/workflows/determinism-probe.yml` | On-demand GHA sweep over OS × R version × locale/charset — the axes Docker cannot reach. See [GitHub Actions matrix](#github-actions-matrix). |
+| `gha/determinism-probe.yml` | On-demand GHA sweep over OS × R version × locale/charset — the axes Docker cannot reach. Kept as a record with `gha/_determinism-cells.yml` and `gha/determinism-gate.yml`; nothing runs them (RURL-vunvxusf). See [GitHub Actions matrix](#github-actions-matrix). |
 | `out/` | Per-platform dump artifacts. **Gitignored** (`out/.gitignore`) — evidence, not source. |
 | `.gitattributes` | `*.csv -text`: never CRLF-translate the evidence. |
 
@@ -390,7 +390,9 @@ so drop or add a probe file to change the comparison set.
 
 ## GitHub Actions matrix
 
-`.github/workflows/determinism-probe.yml`.
+`gha/determinism-probe.yml` (moved from `.github/workflows/` by RURL-vunvxusf;
+the GitHub account is suspended, so it is a record of the harness, not a job
+that runs).
 
 ### Why, given the Docker matrix already exists
 

@@ -334,6 +334,38 @@ test_that("the RFC source posture reproduces its input for this corpus", {
   expect_identical(once, idempotence_corpus)
 })
 
+test_that("the RFC source posture reproduces its input through the web route", {
+  # The corpus above reaches the serializer through `.parse_opaque_urls_vec()`,
+  # which never folded anything, so it could not see RURL-gkmwqpos: the WEB
+  # route's parser uppercased query/fragment hex and lowercased the scheme on
+  # the record, and `serialize_url()` rendered that (ruling RUL-007). The same
+  # property, stated on the public surface over http/https/ftp rows, with the
+  # two families that used to fail it. `normalized` is the negative control:
+  # sec 6.2.2.1 fires there and only there.
+  web_corpus <- c(
+    "http://h/p?q=%7ca#f%7ca",
+    "https://h/p%7ca?q=%7ca#f%7ca",
+    "ftp://h/p?q=%0ax#f%0ax",
+    "HTTP://EXAMPLE.COM/",
+    "Http://h/p%2f?q%2f#f%2f",
+    "HTTPS://u:p@H:8443/P?Q=%2Fa#F%2f",
+    "http://h/p?#",
+    "http://h/p?",
+    "http://h/p#",
+    "http://h"
+  )
+  expect_identical(
+    serialize_url(web_corpus, standard = "rfc3986", form = "source"),
+    web_corpus
+  )
+  expect_identical(
+    serialize_url(web_corpus[c(1L, 4L, 6L)], standard = "rfc3986",
+                  form = "normalized"),
+    c("http://h/p?q=%7Ca#f%7Ca", "http://example.com/",
+      "https://u:p@h:8443/P?Q=%2Fa#F%2F")
+  )
+})
+
 # --- vectorization ----------------------------------------------------------
 
 test_that("both serializers are vectorized and recycle", {

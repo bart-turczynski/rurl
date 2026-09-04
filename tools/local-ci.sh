@@ -26,11 +26,13 @@
 #
 # WHAT IT STILL DOES NOT COVER, so a green run is not read as more than it is:
 # it is one machine, one architecture, one R. The cross-platform matrix, rhub,
-# coverage, the determinism matrix and the README re-render remain in
-# `.github/workflows/` and run nowhere (pkgdown now publishes from the
-# `pages` job in `.gitlab-ci.yml`, release-time only). And it is pull-based -- nothing makes it
-# run, so it carries the same "someone has to do it" weakness as the hook. It
-# narrows the gap the paused runner opened; it does not close it.
+# coverage and the README re-render run nowhere: their GitHub workflows were
+# deleted (RURL-vunvxusf), and the determinism matrix survives only as the
+# record under `tools/determinism/gha/` (pkgdown now publishes from the
+# `pages` job in `.gitlab-ci.yml`, release-time only). And it is pull-based --
+# nothing makes it run, so it carries the same "someone has to do it"
+# weakness as the hook. It narrows the gap the paused runner opened; it does
+# not close it.
 #
 # Usage:
 #   tools/local-ci.sh                 # jobs for HEAD, as GitLab would pick them

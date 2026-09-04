@@ -61,10 +61,16 @@ test_that("credential serialization is spec-exact per standard", {
 # --- OUT-O3: both RFC postures are reachable ---------------------------------
 
 test_that("the RFC source form normalizes nothing", {
+  # Including the scheme case, since RURL-gkmwqpos (RUL-007): RFC 3986
+  # sec 6.2.2.1 folds it in `normalized` only. Before that ruling this test
+  # pinned `http://...` here and so certified half of sec 6.2.2.1 as "nothing".
   input <- "HTTP://Example.COM:80/a/%7Euser/../x"
   expect_identical(
-    serialize_url(input, standard = "rfc3986", form = "source"),
-    "http://Example.COM:80/a/%7Euser/../x"
+    serialize_url(input, standard = "rfc3986", form = "source"), input
+  )
+  expect_identical(
+    serialize_url(input, standard = "rfc3986", form = "normalized"),
+    "http://example.com/a/x"
   )
 })
 
@@ -204,7 +210,8 @@ test_that("both named standards still serialize byte-identically", {
       "http://xn--b1agh1afp.xn--p1ai/A"
     ),
     rfc3986 = c(
-      "http://User:Pw@Example.COM:80/a/./b/../c?q=1#f",
+      # The scheme's source spelling, since RUL-007 (RURL-gkmwqpos).
+      "HTTP://User:Pw@Example.COM:80/a/./b/../c?q=1#f",
       "https://h:443/",
       "http://h/#",
       "foo://h:80/x?#",

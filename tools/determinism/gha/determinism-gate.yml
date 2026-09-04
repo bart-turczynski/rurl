@@ -15,7 +15,12 @@
 #
 # Tolerance: byte-exact ZERO unapproved divergence (P5.2 part 2). The first live
 # run is also the re-measurement -- a red result is a real finding (divergence)
-# or a wiring/evidence problem, distinguished by the gate manifest, never flake.
+# or a wiring/evidence problem, distinguished by the gate manifest, never flake.#
+# RELOCATED from .github/workflows/ (RURL-vunvxusf). The GitHub account is
+# suspended, so NOTHING runs this workflow; it is kept as the record of the
+# cell matrix and the per-cell locale/charset arming, next to the scripts it
+# drives. The `uses:` paths below point at this directory for consistency and
+# would need to move back under .github/workflows/ to run on GitHub again.
 name: Determinism gate
 
 on:
@@ -28,8 +33,8 @@ on:
       - 'NAMESPACE'
       - 'tools/determinism/**'
       - 'design/work/url-v3/registers/determinism-exceptions.md'
-      - '.github/workflows/determinism-gate.yml'
-      - '.github/workflows/_determinism-cells.yml'
+      - 'tools/determinism/gha/determinism-gate.yml'
+      - 'tools/determinism/gha/_determinism-cells.yml'
   # Release tags retain the complete cross-platform determinism evidence.
   push:
     tags: ['v*']
@@ -48,7 +53,7 @@ concurrency:
 jobs:
   # Produce the 17 cells via the shared matrix (parse-dump always on).
   cells:
-    uses: ./.github/workflows/_determinism-cells.yml
+    uses: ./tools/determinism/gha/_determinism-cells.yml
     with:
       run_parse_dump: true
 

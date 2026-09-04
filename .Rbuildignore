@@ -52,6 +52,7 @@
 ^SECURITY\.md$
 ^SECURITY-INSIGHTS\.yml$
 ^tools/determinism$
+^tools/verify-manifest\.yml$
 ^tools/oracle-audit-rfc3986\.R$
 ^tools/oracle-provenance-gate\.R$
 ^tools/cache-doc-consistency\.R$

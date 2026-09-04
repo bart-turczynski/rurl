@@ -9,9 +9,12 @@
 # `rosv::osv_query()` is version-aware: for a given (package, version) it
 # returns zero rows when that version is unaffected, so a non-empty result is
 # a genuine advisory against the installed version. It is a network test, so
-# it skips on CRAN, offline, or when rosv is not installed. The dedicated
-# osv-audit.yml workflow runs it (weekly + on demand) to drive the README
-# badge; everywhere else it skips cleanly.
+# it skips on CRAN, offline, or when rosv is not installed. A dedicated
+# GitHub workflow (osv-audit.yml) used to run it weekly and on demand to
+# drive the README badge; that workflow was deleted with RURL-vunvxusf (the
+# account is suspended), so it now runs only when the maintainer runs the
+# suite with rosv installed and the network up. Everywhere else it skips
+# cleanly.
 
 test_that("runtime dependencies have no known OSV vulnerabilities", {
   skip_on_cran()

@@ -102,6 +102,9 @@
 #             `.parse_web_url_one()` below.
 #   query/    absent or empty -> NULL; otherwise the same C0/space/DEL
 #   fragment  treatment and the same high-byte encoding + "%XX" uppercasing.
+#             This is `pqf_source = "normalize"`; under `"preserve"` (the
+#             `rfc3986` setting) the verdict is kept and the SOURCE slice is
+#             stored, documented at `.parse_web_url_one()` below.
 
 # Bytes libcurl refuses outright in path/query/fragment: C0 controls, SP, DEL.
 # (NUL cannot reach here -- R strings cannot hold it.) Under
@@ -274,6 +277,27 @@
   paste(unlist(out, use.names = FALSE), collapse = "")
 }
 
+# The >= 0x80 half of `.web_normalize_component()` on its own, for the
+# `pqf_source = "preserve"` query/fragment (RUL-007): every byte >= 0x80 becomes
+# an UPPERCASE "%XX" and every other byte -- an existing "%xx" included -- is
+# left exactly as written. Uppercase directly, like `.web_escape_pqf_bytes()`,
+# because there is no uppercase pass after it to reproduce the swallowed-"%"
+# quirk with -- and under `rfc3986`, the only setting that reaches here, a "%"
+# not followed by two hex digits fails the generic-URI gate anyway.
+.web_escape_high_bytes <- function(s) {
+  if (is.na(s)) {
+    return(s)
+  }
+  b <- .web_bytes(s)
+  high <- b >= 0x80L
+  if (!any(high)) {
+    return(s)
+  }
+  out <- as.list(vapply(b, function(x) rawToChar(as.raw(x)), character(1)))
+  out[high] <- lapply(b[high], function(x) sprintf("%%%02X", x))
+  paste(unlist(out, use.names = FALSE), collapse = "")
+}
+
 # path/query/fragment normalization: deal with the forbidden bytes,
 # percent-encode every byte >= 0x80, then uppercase the "%XX" pairs. Returns
 # NULL on rejection.
@@ -413,6 +437,18 @@
 # `url_standard = "whatwg"`. A dial on the parser cannot reproduce that.
 .web_pqf_policy <- function(url_standard) {
   if (.is_whatwg(url_standard)) "encode" else "reject"
+}
+
+# The `pqf_source` setting each selected standard asks for -- whether the
+# query and fragment are STORED as the source spelled them or as the component
+# pass normalizes them (RURL-gkmwqpos, ruling RUL-007). RFC 3986 sec 6.2.2.1
+# makes hex-digit case folding a NORMALIZATION, so under `rfc3986` it belongs
+# to `serialize_url(form = "normalized")` and not to the parse record, exactly
+# where sec 6.2.2.2's host case folding went in RURL-xkhbhaje. WHATWG and the
+# no-selector baseline keep the normalized spelling, which is what they have
+# always stored.
+.web_pqf_source_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "preserve" else "normalize"
 }
 
 # The `host_ipv4` setting each selected standard asks for -- which token shapes
@@ -991,6 +1027,29 @@
 # spelling are separate axes; a second parse of a rewritten string conflates
 # them by construction.
 #
+# `pqf_source` -- how the ACCEPTED query and fragment are STORED
+# (RURL-gkmwqpos, RUL-007). Acceptance is `pqf_bytes`'s question and is
+# unchanged by this dial: the component pass still runs, and a rejection is
+# still a rejection.
+#
+#   "normalize"  the component pass's output: bytes >= 0x80 percent-encoded,
+#                then every "%XX" uppercased. The no-selector default and the
+#                `whatwg` setting -- what both have always stored.
+#   "preserve"   the source slice with the `pqf_bytes = "encode"` escapes
+#                applied (as `.extract_raw_path_vec()` applies them to the
+#                path via `.web_escape_pqf_bytes()`) and every byte >= 0x80
+#                percent-encoded in uppercase -- and NOTHING folded: an
+#                existing "%xx" keeps its hex case. The `rfc3986` setting:
+#                RFC 3986 sec 6.2.2.1 makes hex-digit case folding a
+#                NORMALIZATION, which the `normalized` serializer form applies
+#                and the `source` form must not. The >= 0x80 encoding is the
+#                one place this is not the path's treatment (the re-derived
+#                path keeps such a byte raw): `external-url-vectors.csv`'s
+#                `fsss_rfc_source` column pins the encoded spelling for the
+#                query and fragment, and RUL-007's two measured families are
+#                the hex-case fold and the scheme case, so that asymmetry is
+#                left where it was rather than moved without a ruling.
+#
 # `host_ipv4` -- which host tokens are read as an IPv4 ADDRESS:
 #
 #   "narrow"  the historical set. No empty hex digits, no trailing dot, a
@@ -1015,7 +1074,8 @@
                                host_ipv4 = "narrow",
                                empty_path = "slash",
                                host_pct_octets = "restricted",
-                               port_range = "u16") {
+                               port_range = "u16",
+                               pqf_source = "normalize") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -1230,16 +1290,22 @@
     path <- "/"
   }
 
+  # The component pass ALWAYS runs, because its NULL is the accept/reject
+  # verdict `pqf_bytes` governs. Under `pqf_source = "preserve"` only its
+  # verdict is kept and the stored value is the source slice with the two
+  # escapes applied and nothing folded (see `pqf_source` above).
   norm_opt <- function(x) {
     if (is.null(x) || !nzchar(x)) {
       return(list(ok = TRUE, value = NULL))
     }
     v <- .web_normalize_component(x, pqf_bytes)
     if (is.null(v)) {
-      list(ok = FALSE, value = NULL)
-    } else {
-      list(ok = TRUE, value = v)
+      return(list(ok = FALSE, value = NULL))
     }
+    if (identical(pqf_source, "preserve")) {
+      v <- .web_escape_high_bytes(.web_escape_pqf_bytes(x))
+    }
+    list(ok = TRUE, value = v)
   }
   qn <- norm_opt(query)
   if (!qn$ok) {

@@ -444,9 +444,12 @@ machine since the port began.
 
 ### They are not blocking gates, but they are no longer manual either
 
-`.github/workflows/oracle-upstream.yml` (`RURL-drkcvzex`). Keeping the fetching
-verifiers out of the merge gate was right; leaving them with **no automated path
-at all** was not. `workflow_dispatch` on `verify.yml` does not help — it widens
+The `oracle-upstream` GitHub workflow (`RURL-drkcvzex`; deleted with
+RURL-vunvxusf once the suspended account meant it could never fire — it is in
+the repository's history as `.github/workflows/oracle-upstream.yml`, and this
+section describes what it did). Keeping the fetching verifiers out of the
+merge gate was right; leaving them with **no automated path at all** was not.
+`workflow_dispatch` on the gate manifest does not help — it widens
 the `if:` conditions on the tier-2 `--self-test` steps, and the full verifiers
 are not steps there in the first place — so the fixture-to-upstream comparison
 ran only when a person remembered to type the command.
@@ -867,6 +870,6 @@ Worth recording from that exercise: the naive-split break is **not** caught by
 `127.0.0.1..` distinguishes them. A single trailing-dot case would have scored a
 truthful pass over a broken transcription.
 
-Both run in CI via the `oracle-rederivation` job in
-`.github/workflows/verify.yml`, and therefore in `Rscript tools/verify.R`, which
-derives its gate list from that workflow.
+Both run via the `oracle-rederivation` job in `tools/verify-manifest.yml`, and
+therefore in `Rscript tools/verify.R`, which derives its gate list from that
+manifest.
