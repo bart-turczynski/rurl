@@ -281,6 +281,91 @@ test_that("WHATWG file parser accepts drive-letter and bare path forms", {
   expect_identical(parsed$path, cases$path)
 })
 
+# RURL-msefniuz. WHATWG "path state" resolves `..` through "shorten a URL's
+# path", which returns without removing anything when "url's scheme is 'file',
+# path's size is 1, and path[0] is a normalized Windows drive letter". The
+# absolute parser handed the path to the RFC 3986 section 5.2.4 remover, which
+# knows no drive letter and shortened `file:///C:/../` to `file:///`.
+test_that("WHATWG file parser never shortens past a lone drive letter", {
+  cases <- data.frame(
+    input = c(
+      "file:///C:/../",
+      "file:///C:/a/../..",
+      "file:///C:/..",
+      "file://host/C:/..",
+      # `C|` is normalized to `C:` in the first segment before shortening.
+      "file:///C|/..",
+      # WHATWG dot segments are atoms: `%2e` counts, case-insensitively.
+      "file:///C:/%2e%2e/",
+      "file:///C:/a/%2E%2E/%2e%2e/",
+      "file:///C:/.%2E/x/%2e",
+      # An ordinary `..` below the drive letter still shortens.
+      "file:///C:/a/../b",
+      # Not a drive letter: two characters, not one, before the colon.
+      "file:///Cx/../"
+    ),
+    serialized = c(
+      "file:///C:/",
+      "file:///C:/",
+      "file:///C:/",
+      "file://host/C:/",
+      "file:///C:/",
+      "file:///C:/",
+      "file:///C:/",
+      "file:///C:/x/",
+      "file:///C:/b",
+      "file:///"
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  expect_identical(
+    serialize_url(cases$input, standard = "whatwg"), cases$serialized
+  )
+  parsed <- safe_parse_urls(cases$input, profile = "whatwg")
+  expect_identical(parsed$parse_status, rep("ok", nrow(cases)))
+  expect_identical(
+    parsed$path, sub("^file://[^/]*", "", cases$serialized, perl = TRUE)
+  )
+
+  # The clause is keyed on the scheme being `file`: a non-file path with the
+  # same shape shortens to `/` exactly as before.
+  expect_identical(
+    serialize_url("http://h/C:/..", standard = "whatwg"), "http://h/"
+  )
+  expect_identical(
+    safe_parse_urls("http://h/C:/..", profile = "whatwg")$path, "/"
+  )
+
+  # Negative controls: the rule is reached only from the WHATWG `file:` state
+  # machine. `rfc3986` keeps section 5.2.4's shortening, and the frozen NULL
+  # selector keeps the byte-frozen no-normalization record (ADR 0007). Both
+  # values equal what `main` produced before this fix.
+  ctrl <- c(
+    "file:///C:/../", "file:///C:/a/../..", "file:///C:/..",
+    "file://host/C:/..", "http://h/C:/.."
+  )
+  expect_identical(
+    serialize_url(ctrl, standard = "rfc3986", form = "normalized"),
+    c("file:///", "file:///", "file:///", "file://host/", "http://h/")
+  )
+  expect_identical(
+    serialize_url(ctrl, standard = "rfc3986", form = "source"), ctrl
+  )
+  expect_identical(
+    safe_parse_urls(
+      ctrl, url_standard = "rfc3986", scheme_policy = "require",
+      scheme_acceptance = "general"
+    )$path,
+    c("/", "/", "/", "/", "/")
+  )
+  frozen <- safe_parse_urls(ctrl)
+  expect_identical(
+    frozen$path, c("/C:/../", "/C:/a/../..", "/C:/..", "/C:/..", "/C:/..")
+  )
+  expect_identical(frozen$clean_url, ctrl)
+})
+
 test_that("WHATWG file parser preserves query and fragment on empty paths", {
   parsed <- safe_parse_urls(
     c("file:?q=v", "file:#frag"),
