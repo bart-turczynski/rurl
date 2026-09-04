@@ -318,6 +318,29 @@
   of it is reachable only from `url_standard = "whatwg"` with a `file:` base;
   `"rfc3986"` and the frozen `NULL` selector keep RFC 3986 §5.2's merge.
 
+- **The absolute WHATWG parser no longer shortens a `file:` path past a lone
+  drive letter** (RURL-msefniuz). The WHATWG URL Standard's "path state"
+  resolves `..` through "shorten a URL's path", which returns without removing
+  anything when "url's scheme is `file`, path's size is 1, and path[0] is a
+  normalized Windows drive letter". The resolver gained that rule for relative
+  references (above), but a `file:` URL parsed on its own still went through
+  RFC 3986 §5.2.4's remover, which knows no drive letter.
+
+  ```r
+  serialize_url("file:///C:/../", standard = "whatwg")
+  #> "file:///C:/"       (was "file:///")
+  serialize_url("file:///C:/a/../..", standard = "whatwg")
+  #> "file:///C:/"       (was "file:///")
+  serialize_url("file://host/C:/..", standard = "whatwg")
+  #> "file://host/C:/"   (was "file://host/")
+  serialize_url("http://h/C:/..", standard = "whatwg")
+  #> "http://h/"         (unchanged: the clause is keyed on the `file` scheme)
+  ```
+
+  Only a `file:` path whose first segment is a normalized drive letter is
+  affected, and only under `url_standard = "whatwg"`; `"rfc3986"` keeps
+  §5.2.4's shortening and the frozen `NULL` selector is untouched.
+
 - **The WHATWG host model reads "ends in a number" after percent-decoding and
   UTS-46 mapping** (RURL-lxdwuacn). It used to read the trigger off the
   *source* token, where the WHATWG host parser reads it after decoding and
