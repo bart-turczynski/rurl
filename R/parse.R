@@ -1188,8 +1188,11 @@ safe_parse_urls <- function(url,
   # existing knobs; no new cleaning machinery.
   #
   # `url_standard` and `host_encoding` implement the clean-URL definition
-  # (RURL-hcntbqku): a clean URL is a WHATWG-parsed URL plus visual tweaks, not
-  # a separate weaker construction. `url_standard = "whatwg"` puts a real
+  # (RURL-hcntbqku, ADR 0017 D1): a clean URL is a lossy policy projection of
+  # a WHATWG-parsed URL, not a separate weaker construction and not "visual
+  # tweaks" -- the editorial knobs below can change the addressed resource,
+  # and RUL-017 keeps them here on purpose (an SEO bundle is a site policy).
+  # `url_standard = "whatwg"` puts a real
   # standard parse underneath -- which is also what RESOLVES dot segments, via
   # the .URL_STANDARD_PROFILES expansion in .parse_options() (path_identity +
   # path_normalization = "dot_segments"). `host_encoding = "unicode"` makes the
