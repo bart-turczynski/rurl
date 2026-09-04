@@ -1887,7 +1887,7 @@ safe_parse_urls <- function(url,
   # byte-for-byte no-op unless url_standard == "whatwg".
   gen_input <- .strip_whatwg_control_chars_vec(urls, opts$url_standard)$url
   gen <- .general_parse_vec(gen_input, opts$url_standard,
-                            opts$scheme_acceptance)
+                            opts$scheme_acceptance, opts$scheme_policy)
   general_route <- valid & gen$general_parsed
 
   # Phase 2: the web parse (the only per-URL loop) over the surviving rows.
@@ -2340,7 +2340,7 @@ safe_parse_urls <- function(url,
     # state kinds land on the wrong rows.
     gen_b <- .general_parse_vec(
       .strip_whatwg_control_chars_vec(original_url, opts$url_standard)$url,
-      opts$url_standard, opts$scheme_acceptance
+      opts$url_standard, opts$scheme_acceptance, opts$scheme_policy
     )
     gp <- gen_b$general_parsed & web_ok
     # path_kind / host_kind for eligibility: the L3a classifier proxy for the
