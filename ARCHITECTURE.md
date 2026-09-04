@@ -30,7 +30,8 @@ The `Collate:` field in `DESCRIPTION` is authoritative. The load order is:
 rurl-package.R → status-constants.R → utils.R → percent-coding.R →
 parse-state.R → query-denylist.R → domain.R → path-query.R → parse-web.R →
 parse-phases.R → parse.R → verdicts.R → profiles.R → diagnostics.R →
-accessors.R → email-diagnostics.R → host-policy.R → canonical_join.R →
+accessors.R → email-diagnostics.R → host-policy.R → scheme-policy.R →
+canonical_join.R →
 resolve.R → serialize.R → format.R → url-key.R → url-join.R → zzz.R
 ```
 
@@ -164,6 +165,16 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   split (`domain-std3-violation` bundles `_` with `+`), so the web/dns
   char-class checks run their own regex over the ASCII host form; everything
   else is read from facts the parser already surfaces.
+- **R/scheme-policy.R** — the scheme-axis counterpart of `host-policy.R`:
+  `check_schemes()`, which reports the scheme facts for a URL vector and, given
+  a caller-supplied `allowed_schemes`, scores them against it. Like its host
+  sibling it is a **policy** layer, not parser conformance — it never changes
+  how a URL parses, and rejecting a conformant scheme at parse time is
+  deliberately not offered, because that would make `parse_status` a function
+  of a caller's local policy rather than of the standard (RUL-021, ADR 0006).
+  The `reasons` vocabulary is descriptive by ruling and carries no risk label.
+  Composed from `get_scheme()` / `get_scheme_class()` and `.SUPPORTED_SCHEMES`,
+  which is why it collates after `accessors.R`.
 - **R/canonical_join.R** — dataset joining by canonicalized URL keys
   (`canonical_join()`). Legacy: its key **is** the cleaned display string. The
   `url-key.R` / `url-join.R` family below exists because that conflation is a
