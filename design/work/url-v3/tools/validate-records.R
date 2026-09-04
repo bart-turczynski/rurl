@@ -888,6 +888,15 @@ if ("--self-test" %in% .vr_args) {
 
   # C: the way the gap arrives in practice -- a NEW export, so both files lack
   # the row AND the roster's bijection counts are stale by one.
+  #
+  # The two expected counts below are LITERALS on purpose: deriving them from
+  # the tree would make this case tautological -- it would pass even if
+  # --regenerate wrote nothing. The cost is that they are the real roster's
+  # counts plus one, so ADDING A REAL EXPORT MOVES THEM. When this case fails
+  # with "roster diff is not {row, exports count, total}" right after a new
+  # export landed, that is what happened: bump both, do not weaken the check.
+  # Note this case does not run locally unless the diff touches a gate
+  # implementation, so CI is usually where it first goes red (RUL-021).
   d <- fixture("new-export")
   cat("export(zz_probe_export)\n", file = file.path(d, "NAMESPACE"), append = TRUE)
   b_dis <- readLines(dis(d), warn = FALSE)
@@ -897,8 +906,8 @@ if ("--self-test" %in% .vr_args) {
   changed <- setdiff(a, b_dis)
   if (length(changed) != 3L ||
         sum(startsWith(changed, "| `zz_probe_export` | TODO")) != 1L ||
-        !any(grepl("^\\| exported functions \\| 41 \\|", changed)) ||
-        !any(grepl("^\\| \\*\\*total\\*\\* \\| \\*\\*63\\*\\* \\|", changed)))
+        !any(grepl("^\\| exported functions \\| 42 \\|", changed)) ||
+        !any(grepl("^\\| \\*\\*total\\*\\* \\| \\*\\*64\\*\\* \\|", changed)))
     fail(sprintf("new-export: roster diff is not {row, exports count, total}: %s",
                  paste(changed, collapse = " / ")))
 
