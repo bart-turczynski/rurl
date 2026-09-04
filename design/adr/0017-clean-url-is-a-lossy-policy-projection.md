@@ -124,6 +124,8 @@ this ADR, not a bundle edit.
 
 **Amendment 2026-09-03 (RUL-001, `design/work/url-v3/registers/rulings.md`).** Row 12 records a mutation that had shipped since the surface existed but was missing from this table: userinfo is always dropped, and the roxygen for `get_clean_url()` has said so throughout. It is added under D2's own rule that a transform not on the table is an amendment to this ADR.
 
+**Amendment 2026-09-04 (RUL-005, `design/work/url-v3/registers/rulings.md`).** Row 5 does not apply when stripping the trailing slash would leave an authority that is only dots: `http://./` cleans to `https://./`, never `https://.`, and likewise for `..`, `...` and any run of dots. The exception is derived from D1 — `https://.` is structurally valid and fails "display-oriented" — and it is scoped to the cleaning surface: the parse is untouched, root-dot FQDNs (`example.com.` → `example.com.`) still strip, and a dots-only host with a non-empty path (`http://./x/` → `https://./x`) still strips. It moves the `url_standard = NULL` arm together with the named arms, which ADR 0016 permits because the cause is this contract, not a standard's rule.
+
 Rows 4, 5 and 6 are the three the eight items omitted; recording them here is
 what closes Q1. **Item 8 of the owner's list — "users can define what a clean URL
 means for their site" — is API policy, not a mutation**, and is deliberately not
