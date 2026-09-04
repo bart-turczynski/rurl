@@ -689,26 +689,26 @@ covers the section.
 | TR-KJ-s7-forwarded-display-cleaning-dials | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:201` |
 | TR-KJ-s7-path-encoding-regression | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:202` |
 | TR-KJ-s7-removal-default-flip | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:203` |
-| TR-KJ-s8-23 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:243` |
-| TR-KJ-s8-22 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:244` |
-| TR-KJ-s8-21 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:245` |
-| TR-KJ-s8-9 | OPEN | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:246` |
-| TR-KJ-s8-1 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:247` |
-| TR-KJ-s8-2 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:248` |
-| TR-KJ-s8-3 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:249` |
-| TR-KJ-s8-4 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:250` |
-| TR-KJ-s8-5 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:251` |
-| TR-KJ-s8-6 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:252` |
-| TR-KJ-s8-7 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:253` |
-| TR-KJ-s8-8 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:254` |
-| TR-KJ-s8-10 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:255` |
-| TR-KJ-s8-11 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:256` |
-| TR-KJ-s8-12 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:257` |
-| TR-KJ-s8-13-19 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:258` |
-| TR-KJ-s8-20 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:259` |
-| TR-KJ-s8-24 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:260` |
-| TR-KJ-s8-25 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:261` |
-| TR-KJ-s8-policy | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:262` |
+| TR-KJ-s8-23 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:245` |
+| TR-KJ-s8-22 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:246` |
+| TR-KJ-s8-21 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:247` |
+| TR-KJ-s8-9 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:248` |
+| TR-KJ-s8-1 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:249` |
+| TR-KJ-s8-2 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:250` |
+| TR-KJ-s8-3 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:251` |
+| TR-KJ-s8-4 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:252` |
+| TR-KJ-s8-5 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:253` |
+| TR-KJ-s8-6 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:254` |
+| TR-KJ-s8-7 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:255` |
+| TR-KJ-s8-8 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:256` |
+| TR-KJ-s8-10 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:257` |
+| TR-KJ-s8-11 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:258` |
+| TR-KJ-s8-12 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:259` |
+| TR-KJ-s8-13-19 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:260` |
+| TR-KJ-s8-20 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:261` |
+| TR-KJ-s8-24 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:262` |
+| TR-KJ-s8-25 | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:263` |
+| TR-KJ-s8-policy | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/key-join-contracts.md:264` |
 | TR-OUT-s1-a | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:90` |
 | TR-OUT-s1-b | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:91` |
 | TR-OUT-s1-c | SETTLED | full-string-slice | PENDING | `design/work/url-v3/contracts/output-contracts.md:92` |
@@ -1023,10 +1023,10 @@ other, and this one summarizes the very thing the record exists to establish.
 | full-string-slice | PENDING | 51 | 49 | 2 |
 | mutation-slice | PENDING | 72 | 58 | 14 |
 | join-slice | PENDING | 77 | 77 | 0 |
-| migration-slice | PENDING | 42 | 37 | 5 |
+| migration-slice | PENDING | 42 | 38 | 4 |
 | host-slice | PENDING | 49 | 43 | 6 |
 | UNASSIGNED | UNASSIGNED | 144 | 114 | 30 |
-| **total** | — | 536 | 478 | 58 |
+| **total** | — | 536 | 479 | 57 |
 
 ### By contract
 
@@ -1035,7 +1035,7 @@ other, and this one summarizes the very thing the record exists to establish.
 | CS | `design/work/url-v3/contracts/canonical-state-contract.md` | 44 | 43 | 1 | 1 |
 | CM | `design/work/url-v3/contracts/cleaning-mutation-contracts.md` | 59 | 45 | 14 | 8 |
 | HA | `design/work/url-v3/contracts/host-annotation-contracts.md` | 41 | 35 | 6 | 10 |
-| KJ | `design/work/url-v3/contracts/key-join-contracts.md` | 95 | 94 | 1 | 8 |
+| KJ | `design/work/url-v3/contracts/key-join-contracts.md` | 95 | 95 | 0 | 8 |
 | OUT | `design/work/url-v3/contracts/output-contracts.md` | 59 | 57 | 2 | 12 |
 | PS | `design/work/url-v3/contracts/public-surface-closure.md` | 8 | 8 | 0 | 1 |
 | PSD | `design/work/url-v3/contracts/public-surface-disposition.md` | 66 | 37 | 29 | 4 |

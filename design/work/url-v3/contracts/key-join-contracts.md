@@ -225,10 +225,12 @@ Two settled facts fix the classification, so no row here is invented:
 Every SETTLED row below therefore cites `P3.1@3b89b94`, per this record's
 projection rule. Artifact 8's matrix is *consumed* for the presentation/input
 split, not cited as a decision, so this section adds no dependency outside the
-envelope. Exactly one dial falls outside that projection and is recorded OPEN
-rather than filled by invention: `scheme_relative_handling` (row 9), which
-artifact 8 classifies as an input axis but which P3.1 does not enumerate among
-either the forwarded parse dials or D-E.4's own argument list. See KJ-O9.
+envelope. One dial fell outside that projection and was recorded OPEN rather than
+filled by invention: `scheme_relative_handling` (row 9), which artifact 8
+classifies as an input axis but which P3.1 does not enumerate among either the
+forwarded parse dials or D-E.4's own argument list. `RUL-018` closed it by
+extending D-E's parse-dial list to four axes rather than by reclassifying the
+dial as presentation — see KJ-O9.
 
 The middle category, **explicit comparison policy**, has **no members today**.
 No shipped `canonical_join()` argument is a comparison policy, because the named
@@ -243,7 +245,7 @@ not a current disposition.
 | 23 | `url_standard` | parse-policy input to the key | explicit standard field of `url_key_policy()`; the key is standard-scoped | P3.1@3b89b94 (D-B, D-E; ratification Q7/B7) | SETTLED |
 | 22 | `scheme_acceptance` | parse-policy input to the key | explicit interpretation field of `url_key_policy()` | P3.1@3b89b94 (D-E) | SETTLED |
 | 21 | `scheme_policy` | parse-policy input to the key | explicit interpretation field of `url_key_policy()` | P3.1@3b89b94 (D-E) | SETTLED |
-| 9 | `scheme_relative_handling` | input-interpretation axis, not a clean transform — so **not** a presentation dial, but P3.1 does not enumerate it among the forwarded parse dials either | explicit interpretation field, alongside the three parse dials above | — (see Open cells KJ-O9) | OPEN |
+| 9 | `scheme_relative_handling` | input-interpretation axis, not a clean transform — so **not** a presentation dial, and D-E's parse-dial list is extended to four axes to hold it | explicit interpretation field of `url_key_policy()`, alongside the three parse dials above | RUL-018 (OWNER, 2026-09-04) | SETTLED |
 | 1 | `protocol_handling` | presentation — warned | display-only; no key participation | P3.1@3b89b94 (D-A.3, D-E.1; ratification Q7/B7) | SETTLED |
 | 2 | `www_handling` | presentation — warned | display-only; `www`/subdomain excluded from the default key | P3.1@3b89b94 (D-A.3, D-B host row, D-E.1) | SETTLED |
 | 3 | `source` (PSL section) | presentation — warned | display-only; suffix rules shape domain/subdomain boundaries, not identity | P3.1@3b89b94 (D-A.3, D-E.1) | SETTLED |
@@ -277,7 +279,8 @@ rather than an idealized one:
 argument-for-argument: the 21 presentation arguments emit one condition of class
 `rurl_legacy_join_dial_warning` per call, and the four input/interpretation axes
 stay silent — the three settled parse dials plus `scheme_relative_handling`,
-which the implementation leaves silent on artifact 8's authority pending KJ-O9.
+which the implementation already left silent on artifact 8's authority and which
+`RUL-018` now sources from this contract too, the two authorities agreeing.
 Values are unchanged — the warning is purely additive, so no caller is silently
 re-matched, which is D-E.3's "no caller is silently re-matched" requirement
 holding trivially for a window in which nothing re-keys.
@@ -310,11 +313,12 @@ Other artifacts consume it without redefining equality:
 
 ## Open cells
 
-**One live open cell remains: `KJ-O9`** (added 2026-09-04 with the D-E.4
-per-argument table, carrier `RURL-bvfivwmc`). All eight cells this contract
-flagged when it was authored — `KJ-O1…KJ-O8`, the exact choices P3.1 did not
-settle — reached their named destination and are **closed at source**: each is applied to its matrix row
-above, citing `P3.2@bb3346e` and the decision letter that closed it.
+**No live open cells remain.** All eight cells this contract flagged when it
+was authored — `KJ-O1…KJ-O8`, the exact choices P3.1 did not settle — reached
+their named destination and are **closed at source**: each is applied to its matrix row
+above, citing `P3.2@bb3346e` and the decision letter that closed it. The ninth,
+`KJ-O9` (added 2026-09-04 with the D-E.4 per-argument table, carrier
+`RURL-bvfivwmc`), is closed the same way by `RUL-018`.
 
 The bullets are retained rather than deleted, marked CLOSED, so the deferral text
 survives as provenance and a reader can see what each cell asked. Their
@@ -391,6 +395,12 @@ single referent all eight resolved to.
   (the canonical_join() v3 identity migration), by either extending D-E's
   parse-dial list to four axes or ruling it a presentation dial. P3.2 closed
   KJ-O1..O8 before this cell existed and does not reach it.
+  → **CLOSED by `RUL-018` (OWNER, 2026-09-04):** D-E's parse-dial list is
+  extended to four axes. The dial carries an `"error"` mode that fails the parse
+  outright (`R/parse-phases.R:918`), and every presentation row in the D-E.4
+  table is "display-only; no key participation" — a dial that can move
+  `parse_status` cannot be display-only, so the presentation reading was not
+  available. Applied at row 9.
 
 ### Not open cells, but not discharged either
 
