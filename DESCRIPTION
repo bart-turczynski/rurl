@@ -42,8 +42,8 @@ Collate:
 Imports:
     utils,
     stringi,
-    punycoder (>= 1.2.0),
-    pslr (>= 1.1.0)
+    punycoder (>= 1.2.1),
+    pslr (>= 1.1.1)
 URL: https://bart-turczynski.gitlab.io/rurl/,
     https://gitlab.com/bart-turczynski/rurl,
     https://CRAN.R-project.org/package=rurl

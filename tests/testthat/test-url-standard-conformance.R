@@ -199,9 +199,15 @@ test_that("WHATWG reads 'ends in a number' after decoding and UTS-46 mapping", {
   expect_identical(
     get_parse_status("http://\uff41.09", url_standard = "whatwg"), "error"
   )
-  # A host that does not end in a number after mapping is a domain as before.
+  # A host that does not end in a number after mapping is a domain as before;
+  # its presentation is the mapped host (RUL-002: the default rendering under
+  # `whatwg` is ToUnicode(ToASCII(host)), so the fullwidth `a` maps to `a`).
   expect_identical(get_host("http://\uff41.example", url_standard = "whatwg"),
-                   "\uff41.example")
+                   "a.example")
+  expect_identical(
+    serialize_url("http://\uff41.example", standard = "whatwg"),
+    "http://a.example/"
+  )
   # RFC 3986 has no numeric-host rule and no mapping step: unchanged.
   expect_identical(get_host(pct, url_standard = "rfc3986"), "0xc0.0250.01")
   expect_identical(

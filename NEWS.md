@@ -36,6 +36,37 @@
   overrides the bundle, so `profile = "seo", host_encoding = "keep"` restores
   the previous host rendering.
 
+- **Under `url_standard = "whatwg"` the host presentation now applies the
+  WHATWG host parser's UTS-46 mapping — on the default rendering and under
+  `host_encoding = "unicode"`, not only under `"idna"`** (RUL-002,
+  RURL-nuqhbxvc). The WHATWG URL Standard's host parser runs "domain to ASCII"
+  (UTS #46 §4 Processing and §4.2 ToASCII, with `Transitional_Processing`,
+  `CheckHyphens`, `UseSTD3ASCIIRules` and `VerifyDnsLength` all false) and the
+  URL record stores that ASCII host; "domain to Unicode" is §4.3 ToUnicode of
+  it. rurl applied the mapping only when asked for the A-label spelling, so the
+  default and Unicode renderings showed the *unmapped* source characters —
+  a full-width `ｅ`, an `ﬁ` ligature, a zero-width space — for a host whose
+  record already read `example.com`, `file.com`, `ab.com`:
+
+  ```r
+  # before                                        # after
+  get_host("https://BÜCHER.example/", url_standard = "whatwg")
+  #> "bÜcher.example"                             #> "bücher.example"
+  get_host("https://ﬁle.com/", url_standard = "whatwg")
+  #> "ﬁle.com"                                    #> "file.com"
+  get_host("https://ｅxample.com/", url_standard = "whatwg")
+  #> "ｅxample.com"                               #> "example.com"
+  ```
+
+  Both renderings are now `ToUnicode(ToASCII(host))`, so the Unicode
+  presentation of a host and of its own A-label spelling are identical, while
+  the default rendering keeps an input that was *written* as an A-label in
+  ASCII (as the `domain`/`tld` columns already did). `serialize_url(standard =
+  "whatwg")` and `get_url_key()` read the record's ASCII host and do not move.
+  The `rfc3986` arm and the `url_standard = NULL` default are byte-identical
+  (ADR 0016): their `idna`/`unicode` renderings stay the reversible Punycode
+  helpers of ADR 0002, which this change does not touch.
+
 - **`profile = "seo"` now drops the whole query, where it used to keep every
   parameter it did not recognize as a tracker** (`query_handling` moves from
   `"filter"` to `"drop"`, ADR 0017). This closes an anomaly in which asking for
@@ -171,9 +202,10 @@
   Together with the scheme-production fix below and the three fixes under
   *Bug fixes* (the `file:` drive-letter rules, the `/.` guard at the
   recomposition seam, and the WHATWG host model's "ends in a number" order),
-  that corpus now scores **273 exact with 1 enumerated difference** -- the
-  absolute reference `tel:1234567890`, which is a filed acceptance-level
-  deviation (RURL-yeikpnan), not a resolution defect. Under `"rfc3986"` the
+  that corpus now scores **274 exact with no enumerated difference**. The
+  last one, the absolute reference `tel:1234567890`, was never a resolution
+  defect: it was the scheme-less host:port carve-out rejecting the absolute
+  parse, fixed under *Bug fixes* (RURL-lxdwuacn). Under `"rfc3986"` the
   merge stays RFC 3986 §5.2–§5.3. **Under the default `url_standard = NULL`
   nothing moves**: that path is byte-frozen (ADR 0007) and was verified
   unchanged across the corpus.
@@ -272,6 +304,30 @@
   (ADR 0015).
 
 ### Bug fixes
+
+- **A dotted scheme token that looks like `host:port` now parses as a scheme
+  under `scheme_policy = "require"`** (`whatwg`; RURL-lxdwuacn, RUL-014). With
+  `profile = "whatwg"`, `tel:1234567890` and `www.php.net:80/index.php?test=1`
+  were rejected outright: the scheme-less `example.com:8080` carve-out matched
+  them and diverted them from the opaque parser to the web route, which
+  rejects those schemes. The WHATWG URL Standard's *scheme start state* and
+  *scheme state* read `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` followed by
+  `:` as the scheme, with no exception for a token that looks like a host; RFC
+  3986 §3.1 carries the identical production, and the `rfc3986` arm already
+  read it that way. `serialize_url(x, standard = "whatwg")` now returns
+  `tel:1234567890` and `www.php.net:80/index.php?test=1` (scheme
+  `www.php.net`, opaque path `80/index.php`, query `test=1`) instead of `NA`.
+
+  The carve-out is the browser-omnibox affordance `scheme_policy = "infer"`
+  names (ADR 0010), so it is untouched there — `www.php.net:80/index.php?test=1`
+  still reads as host `www.php.net` — and untouched under the byte-frozen
+  `url_standard = NULL` (ADR 0007); both were measured byte-identical. Two
+  fixtures moved with it: the WPT base-relative corpus's last enumerated
+  difference (below) is discharged, and external vector `yal-009` no longer
+  records a deviation (RURL-yeikpnan) — its measured columns and the fixture's
+  sha256 pins were re-baselined per `design/oracle-fixtures.md`, and its
+  `whatwg_expected = "failure"` cell, which recorded rurl's own former output
+  as the standard's mandate, is now `"accept"`.
 
 - **`resolve_url()` no longer loses the `/.` guard when a resolved path's
   first segment is empty** (both named profiles; RURL-bedensww). RFC 3986
@@ -1557,6 +1613,23 @@
   inherit two transitive GitHub pins. No version floor changed, so the resolved
   dependency set is unchanged for anyone whose installed siblings already
   satisfied the floors.
+
+- **The dependency floors now name the versions CRAN serves: `punycoder
+  (>= 1.2.1)` and `pslr (>= 1.1.1)`, up from `>= 1.2.0` / `>= 1.1.0`.**
+  Neither old floor was ever a CRAN release — `punycoder` 1.2.0 and `pslr`
+  1.1.0 exist only as git tags, and `tools/dependency-resolvability-gate.R`
+  reported each as "names a version that was never released" — so the floors
+  were satisfiable but not pinnable. The new floors are the lowest CRAN
+  releases that carry every capability rurl calls, read from the released
+  tarballs rather than the local library: `punycoder` 1.2.1 is the first CRAN
+  release whose `host_normalize()` takes `check_hyphens` / `use_std3` /
+  `verify_dns_length` (the CRAN-archived 1.1.0 has `strict =` only), and
+  `pslr` 1.1.1 is the first CRAN release with the `engine =` and `invalid =`
+  arguments. No code changed; a CRAN install already resolved to these
+  versions. In the same change, the punycoder characterization suite pins the
+  Unicode table version and profile token rurl inherits from
+  `punycoder::normalization_profile_info()`, so a future pin move in
+  `punycoder` fails there by name before it shows up as fixture diffs.
 
 - **Authority presence is now recorded as two independent facts instead of one
   ambiguous enum.** The internal state model carried a single three-valued

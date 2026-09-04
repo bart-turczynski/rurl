@@ -402,11 +402,15 @@ test_that("yoU-aRe-a-Liar paper divergences pin to the documented set", {
   # (class C; bytes verified against wspr-ncsu/urlparsing-framework, BSD-3). The
   # oracle is the paper's `whatwg-url` reference column. rurl reproduces both
   # sides of the SOP equivocation across profiles and agrees with the WHATWG
-  # reference on the plain hostname-confusion rows; it diverges on 3, each
-  # triaged in the divergence ledger:
-  #   yal-009 `www.php.net:80/...` -- WHATWG reads a dotted `www.php.net` as a
-  #     SCHEME (dots are legal scheme code points) with an opaque path; rurl
-  #     rejects. A genuine acceptance-level deviation, filed against the parser.
+  # reference on the plain hostname-confusion rows; it diverged on 3, each
+  # triaged in the divergence ledger, and none is left:
+  # yal-009 `www.php.net:80/...` NO LONGER diverges: WHATWG's scheme state reads
+  #   a dotted `www.php.net` as the SCHEME (dots are legal scheme code points)
+  #   with an opaque path, and the `whatwg` profile now does too. The
+  #   scheme-less host:port carve-out in `.general_parsed_mask()` is off under
+  #   `scheme_policy = "require"` (RURL-lxdwuacn, RUL-014); the filed deviation
+  #   (RURL-yeikpnan) and its `rurl_deviation` accounting were re-baselined in
+  #   that slice. `scheme_policy = "infer"` still reads host:port (ADR 0010).
   # yal-005 (non-ASCII host) and yal-008 (`foo://`) NO LONGER diverge: both were
   # surface artifacts (RURL-yeikpnan). Surface (c) keeps the host reversibly
   # Unicode by ADR 0002 and declines `foo:` by the ADR 0004 closed scheme set;
@@ -416,8 +420,10 @@ test_that("yoU-aRe-a-Liar paper divergences pin to the documented set", {
   # profile now strips ASCII tab/CR/LF before parsing (RURL-tyetpjym), matching
   # WHATWG, and surfaces the mutation via the `control-char-stripped` diagnostic
   # (asserted below). rfc3986 still rejects them (RFC has no strip step).
+  # Kept as a set equality against the empty set so a regression re-lists its
+  # row rather than passing on a count.
   diverging_ids <- yal$id[yal$diverges == "yes"]
-  expect_setequal(diverging_ids, "yal-009")
+  expect_setequal(diverging_ids, character(0))
 
   # The two control-character rows now PARSE under whatwg (tab/CR/LF stripped)
   # but still REJECT under rfc3986 (which requires percent-encoding). The whatwg
