@@ -106,6 +106,13 @@ ALLOWLIST <- list(
                    "forbid it")
   ),
   list(
+    path = "tools/verify-manifest.yml",
+    reason = paste("the gate manifest tools/verify.R derives its gate list",
+                   "from; it schedules this gate by file name, so it cannot",
+                   "be curl-free while this gate runs (RURL-vunvxusf moved",
+                   "it here from .github/workflows/, which was out of scope)")
+  ),
+  list(
     path = "tools/determinism",
     reason = paste("the libcurl-version determinism harness (RURL-gxqdmpcp)",
                    "measures libcurl itself and is reference material, not",

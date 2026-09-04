@@ -13,7 +13,7 @@
 #
 # NOT A GATE, AND DELIBERATELY NOT WIRED INTO CI. It reads unicode.org over the
 # network, so it cannot be a blocking step -- the pslr::psl_refresh() posture.
-# .github/workflows/verify.yml names the oracle scripts it runs one by one; this
+# tools/verify-manifest.yml names the oracle scripts it runs one by one; this
 # file is not among them, and must not be added. Run it by hand when bumping the
 # pin or when re-checking it:
 #

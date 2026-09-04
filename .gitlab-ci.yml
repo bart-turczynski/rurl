@@ -7,13 +7,14 @@
 # anything had checked it.
 #
 # THE JOB LIST IS NOT WRITTEN HERE, DELIBERATELY. The `gates` and `check` jobs
-# below shell out to
-# `tools/verify.R`, which derives the gate list from `.github/workflows/verify.yml`
-# at run time. Transcribing the gates into this file would create exactly the
-# drift that script exists to prevent: add a gate to CI and a hand-maintained
-# copy is silently incomplete from that moment. The GitHub workflow therefore
-# stays the single source of truth for WHAT the gates are, regardless of which
-# forge runs them.
+# below shell out to `tools/verify.R`, which derives the gate list from
+# `tools/verify-manifest.yml` at run time. Transcribing the gates into this
+# file would create exactly the drift that script exists to prevent: add a
+# gate to the manifest and a hand-maintained copy is silently incomplete from
+# that moment. The manifest therefore stays the single source of truth for
+# WHAT the gates are, regardless of which forge runs them -- it is
+# forge-neutral (RURL-vunvxusf moved it out of `.github/workflows/`), and this
+# file consumes it by running the script, never by copying it.
 #
 # THREE STAGES, because compute minutes are finite on the free tier:
 #   gates  — every push. The gate family needs almost no installed packages
@@ -42,8 +43,10 @@
 #
 # NOT COVERED HERE, so nobody reads a green pipeline as more than it is: the
 # cross-platform matrix, rhub, coverage, the determinism matrix and the
-# README re-render. Those still live in `.github/workflows/` and do not run.
-# (pkgdown used to be on this list; the `pages` job below took it over.)
+# README re-render. Their GitHub workflows were deleted (RURL-vunvxusf); the
+# determinism matrix is kept as a record under `tools/determinism/gha/`, and
+# none of them runs anywhere. (pkgdown used to be on this list; the `pages`
+# job below took it over.)
 #
 # Before pushing a change to this file, run `glab ci lint .gitlab-ci.yml`. An
 # unquoted `key: value` inside a script entry makes YAML read the `: ` as a

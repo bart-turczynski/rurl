@@ -1658,6 +1658,15 @@
 
 ### Internal
 
+- **The gate manifest moved to `tools/verify-manifest.yml`, and the dead GitHub
+  workflows are deleted (RURL-vunvxusf).** `tools/verify.R` still derives its
+  entire gate list from the manifest at run time, now from a forge-neutral
+  path; `Rscript tools/verify.R --list` prints the same plan before and after
+  the move. `.github/workflows/` is gone — none of it could fire on a
+  suspended account — with the determinism cell matrix kept as a record under
+  `tools/determinism/gha/`. `.gitlab-ci.yml` consumes the same manifest by
+  running the script, as before.
+
 - **The WHATWG conformance suite now runs under `R CMD check`.** Its fixture,
   `inst/bench/wpt-url-cases.json` (the 336 success + 202 failure rows imported
   from web-platform-tests `url/resources/urltestdata.json`), was excluded from

@@ -12,7 +12,12 @@
 # off the pull_request trigger avoids paying for two 17-cell matrices on a
 # harness PR; run it manually when a deep evidence dump is wanted.
 #
-# Cost: 17 jobs incl. Windows (2x) and macOS (10x) minute multipliers.
+# Cost: 17 jobs incl. Windows (2x) and macOS (10x) minute multipliers.#
+# RELOCATED from .github/workflows/ (RURL-vunvxusf). The GitHub account is
+# suspended, so NOTHING runs this workflow; it is kept as the record of the
+# cell matrix and the per-cell locale/charset arming, next to the scripts it
+# drives. The `uses:` paths below point at this directory for consistency and
+# would need to move back under .github/workflows/ to run on GitHub again.
 name: Determinism probe
 
 on:
@@ -34,6 +39,6 @@ jobs:
   cells:
     # Non-gating research posture: run every cell, collect artifacts, never fail
     # on divergence. run_parse_dump honors the dispatch toggle; PRs always run it.
-    uses: ./.github/workflows/_determinism-cells.yml
+    uses: ./tools/determinism/gha/_determinism-cells.yml
     with:
       run_parse_dump: ${{ github.event_name != 'workflow_dispatch' || inputs.run_parse_dump }}

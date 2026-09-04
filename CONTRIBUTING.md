@@ -52,7 +52,7 @@
 - During iteration, run the targeted tests and checks relevant to the change.
   Run `Rscript tools/verify.R` once at the coherent slice tip, before delivery,
   to reproduce CI's fast gate by hand: the ~20
-  gate steps (derived from `.github/workflows/verify.yml`, never transcribed),
+  gate steps (derived from `tools/verify-manifest.yml`, never transcribed),
   `lintr::lint_package()`, `R CMD build` + `R CMD check --as-cran` on the built
   tarball, and the test suite under `LC_ALL=C`. `--fast` runs the gates and lint
   only and is iteration feedback, never sufficient verification for a
@@ -92,11 +92,11 @@ what must already be on CRAN before this checklist starts.
    that section.
 
    **Nothing checks this any more, and the freeze is why.** `rurl` ships as
-   3.0.0 with no further version bumps, so
-   `.github/workflows/news-version.yaml` — which asserts the top NEWS heading is
-   either `(development version)` or the `DESCRIPTION` Version — now compares
-   two constants and can never fail. It is also absent from `verify.yml`, so
-   `tools/verify.R` does not derive it. With the version bump gone as a
+   3.0.0 with no further version bumps, so the `news-version` GitHub workflow —
+   which asserted the top NEWS heading is either `(development version)` or
+   the `DESCRIPTION` Version — compared two constants and could never fail; it
+   was deleted with RURL-vunvxusf. It was never in `tools/verify-manifest.yml`
+   either, so `tools/verify.R` does not derive it. With the version bump gone as a
    checkpoint, `## rurl 3.0.0` accumulates months of work with nothing asserting
    that a user-visible change added an entry. The gate a freeze needs is NEWS
    **completeness**, not NEWS/version **consistency**; until one exists, this

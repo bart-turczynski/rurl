@@ -1069,7 +1069,7 @@ Rscript design/work/url-v3/tools/traceability-gate.R --regenerate
 ```
 
 The gate runs as the `claim-traceability` job in
-`.github/workflows/verify.yml`, self-test first, then the live run.
+`tools/verify-manifest.yml` (relocated 2026-09-04 from the former GitHub workflow file verify.yml, RURL-vunvxusf), self-test first, then the live run.
 
 A second gate consumes this record. `tools/deferral-gate.R` reads
 `## Verification slices` and `## Discharge records` as its claimant registry

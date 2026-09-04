@@ -12,12 +12,18 @@
 # only instrument that knows the difference is a real build plus check.
 #
 # THE GATE LIST IS DERIVED, NOT TRANSCRIBED. The gate steps below are read out
-# of .github/workflows/verify.yml at run time. A hand-maintained copy would be
-# one more list to forget: add a gate to CI, and a local mirror that repeats it
-# by hand is silently incomplete from that moment. Reading the workflow means a
-# new CI gate is picked up here the day it lands, and a gate REMOVED from CI
-# stops running here too. It also means this script cannot claim to mirror CI
-# while quietly running something else.
+# of tools/verify-manifest.yml at run time. A hand-maintained copy would be
+# one more list to forget: add a gate to the manifest, and a local mirror that
+# repeats it by hand is silently incomplete from that moment. Reading the
+# manifest means a new gate is picked up here the day it lands, and a gate
+# REMOVED from it stops running here too. It also means this script cannot
+# claim to mirror the manifest while quietly running something else.
+#
+# The manifest was `.github/workflows/verify.yml` until RURL-vunvxusf moved it
+# under tools/ and deleted the dead GitHub workflows around it. It keeps the
+# GitHub-Actions `jobs:`/`steps:` shape because that shape is what this
+# parser reads and what carries each gate's rationale; no forge executes it.
+# `.gitlab-ci.yml` runs this script, so GitLab consumes the same manifest.
 #
 # GATE SELF-TESTS ARE A SEPARATE RISK CLASS. Their positive/negative fixtures
 # prove the verifier, not the product, so routine runs select them only when the
@@ -25,23 +31,24 @@
 # every self-test. The real tree scans still run in every complete local gate.
 #
 # WHAT IT DOES NOT COVER, stated so nobody reads a green run as more than it is:
-#   * cross-platform and multi-R-version checks (full-check.yml, rhub.yaml) --
-#     this runs one platform, one R;
-#   * README.md re-render (verify.yml `readme`), coverage, the OSV and
-#     security audits, news-version, and the determinism matrix (pkgdown is
-#     the release-time `pages` job in .gitlab-ci.yml) -- all need
+#   * cross-platform and multi-R-version checks -- this runs one platform,
+#     one R, and the GitHub matrix workflows that used to cover the rest
+#     (full-check, rhub) are deleted, so nothing does;
+#   * README.md re-render (the manifest's `readme` job), coverage, the OSV
+#     and security audits, news-version, and the determinism matrix (pkgdown
+#     is the release-time `pages` job in .gitlab-ci.yml) -- all need
 #     network, a pandoc/LaTeX toolchain, or a Docker matrix;
 #   * the C7 curl clean room, which needs its own R CMD check against a poisoned
 #     library. `--release` adds it; the default does not, because it doubles the
 #     slowest stage to re-prove a criterion that only matters at release.
 #
-# It is not a strict subset of CI in either direction, so neither "green here
-# means green there" nor its converse holds. The check stage runs `--as-cran`,
-# which is STRICTER than verify.yml's fast gate (that one passes `--no-manual`
-# alone and leaves `--as-cran` to full-check.yml), so this can fail where CI's
-# fast gate would pass. Everything in the list above runs only in CI. A pass
-# here means "the fast gate's checks hold on this machine" -- not "the release
-# is ready", and not "CI will be green".
+# It is not a strict subset of the manifest in either direction, so neither
+# "green here means green there" nor its converse holds. The check stage runs
+# `--as-cran`, which is STRICTER than the manifest's `check` job (that one
+# passes `--no-manual` alone and left `--as-cran` to the deleted full-check
+# workflow), so this can fail where that job would have passed. A pass here
+# means "the fast gate's checks hold on this machine" -- not "the release is
+# ready", and not "CI will be green".
 #
 # STAGE ORDER is cheapest-first, so a broken tree fails in seconds rather than
 # after a five-minute check. Stages are independent: a failure does not stop the
@@ -89,7 +96,7 @@
 #
 # Base R only. Exits 1 if any BLOCKING stage fails.
 
-WORKFLOW <- ".github/workflows/verify.yml"
+MANIFEST <- "tools/verify-manifest.yml"
 
 # There is no longer an advisory stage. The control-plane gate used to be one:
 # it went red whenever a contract body was edited under an ACCEPTED acceptance
@@ -99,8 +106,9 @@ WORKFLOW <- ".github/workflows/verify.yml"
 #
 # ADR 0014 removed the cause instead of tolerating the symptom: the hash cascade
 # and the seal are gone, and what survives of validate-records.R is structural
-# and clearable by fixing the tree. It is wired into verify.yml as an ordinary
-# blocking gate, so it arrives here through the derived list like any other.
+# and clearable by fixing the tree. It is wired into the manifest as an
+# ordinary blocking gate, so it arrives here through the derived list like any
+# other.
 
 args <- commandArgs(trailingOnly = TRUE)
 opt_gates <- "--gates" %in% args
@@ -121,10 +129,10 @@ repo_root <- function() {
   normalizePath(".")
 }
 
-# Gate invocations as CI actually spells them. `run: Rscript <script> [args]`
-# is the shape every gate step uses; the workflow's other steps are actions or
+# Gate invocations as the manifest spells them. `run: Rscript <script> [args]`
+# is the shape every gate step uses; the manifest's other steps are actions or
 # multi-line shell, and neither is a gate.
-workflow_gates <- function(path) {
+manifest_gates <- function(path) {
   if (!file.exists(path)) {
     stop("cannot read ", path, " -- the gate list is derived from it",
          call. = FALSE)
@@ -135,7 +143,7 @@ workflow_gates <- function(path) {
   unique(trimws(cmds[!grepl(" --self-test", cmds, fixed = TRUE)]))
 }
 
-workflow_self_tests <- function(path) {
+manifest_self_tests <- function(path) {
   lines <- readLines(path, warn = FALSE)
   hits <- grep("^\\s*run: Rscript\\s+\\S+ --self-test\\s*$", lines,
                value = TRUE)
@@ -275,8 +283,8 @@ run_step <- function(label, command, args = character(0), env = character(0),
 # ---- stages -----------------------------------------------------------------
 
 stage_gates <- function(root) {
-  cmds <- workflow_gates(file.path(root, WORKFLOW))
-  cat(sprintf("[gates] %d step(s) derived from %s\n", length(cmds), WORKFLOW))
+  cmds <- manifest_gates(file.path(root, MANIFEST))
+  cat(sprintf("[gates] %d step(s) derived from %s\n", length(cmds), MANIFEST))
   lapply(cmds, function(cmd) {
     parts <- strsplit(cmd, "\\s+")[[1]]
     run_step(cmd, "Rscript", parts)
@@ -284,7 +292,7 @@ stage_gates <- function(root) {
 }
 
 stage_self_tests <- function(root) {
-  cmds <- workflow_self_tests(file.path(root, WORKFLOW))
+  cmds <- manifest_self_tests(file.path(root, MANIFEST))
   changed <- changed_files()
   scripts <- sub(" --self-test$", "", cmds)
   unknown <- inherits(changed, "cannot_tell")
@@ -382,7 +390,7 @@ stage_check <- function(root) {
 # gets parsed in whatever locale the runner happens to be in.
 TESTTHAT_WARNINGS <- "^(=|\u2550){2} Warnings"
 
-# verify.yml's `Tests (LC_ALL=C)` cell. It is here rather than in the check
+# The manifest's `Tests (LC_ALL=C)` cell. It is here rather than in the check
 # stage because R CMD check runs in the ambient locale: a defect that only
 # appears under a non-UTF-8 charset is invisible to every other stage, and this
 # codebase has shipped that exact class of defect before (RURL-kmpnbvdl).
@@ -537,9 +545,9 @@ if (opt_release) {
 if (opt_list) {
   cat("stage plan:", paste(plan, collapse = " -> "), "\n")
   cat("derived gate steps:\n")
-  cat(paste0("  ", workflow_gates(file.path(root, WORKFLOW))), sep = "\n")
+  cat(paste0("  ", manifest_gates(file.path(root, MANIFEST))), sep = "\n")
   cat("\nconditional gate self-tests:\n")
-  cat(paste0("  ", workflow_self_tests(file.path(root, WORKFLOW))), sep = "\n")
+  cat(paste0("  ", manifest_self_tests(file.path(root, MANIFEST))), sep = "\n")
   cat("\n")
   quit(status = 0)
 }
