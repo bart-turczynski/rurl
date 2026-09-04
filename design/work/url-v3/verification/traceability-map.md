@@ -323,15 +323,15 @@ by-slice tally while every rule stayed green (RURL-fymdhizq).
 | SS | s10 | Email rows | UNASSIGNED | RURL-lkyverse |
 | SS | s11 | Resolution rows | UNASSIGNED | RURL-lkyverse |
 | SS | s12 | Diagnostics rows | UNASSIGNED | RURL-lkyverse |
-| VI | s1 | Repair-posture axis rows | UNASSIGNED | RURL-jdnlpydz |
-| VI | s2 | Ordered pipeline / intervention-ledger rows | UNASSIGNED | RURL-jdnlpydz |
+| VI | s1 | Repair-posture axis rows | UNASSIGNED[deferred] | RURL-jdnlpydz |
+| VI | s2 | Ordered pipeline / intervention-ledger rows | UNASSIGNED[deferred] | RURL-jdnlpydz |
 | VI | s3 | Verdict-layer rows | state-slice | — |
 | VI | s4 | Shipped-value → layer map (the C-07 map) | state-slice | — |
 | VI | s5 | Annotation-state resolution rows (S7-F3) | state-slice | — |
 | VI | s6 | π collapse table (legacy `parse_status` projection) | state-slice | — |
-| VI | s7 | Repair / recovery provenance rows | UNASSIGNED | RURL-jdnlpydz |
-| VI | s8 | Repaired-input revalidation rows | UNASSIGNED | RURL-jdnlpydz |
-| VI | s9 | Resolution verdict rows (`resolve_url`) | UNASSIGNED | RURL-jdnlpydz |
+| VI | s7 | Repair / recovery provenance rows | UNASSIGNED[deferred] | RURL-jdnlpydz |
+| VI | s8 | Repaired-input revalidation rows | UNASSIGNED[deferred] | RURL-jdnlpydz |
+| VI | s9 | Resolution verdict rows (`resolve_url`) | UNASSIGNED[deferred] | RURL-jdnlpydz |
 | VI | s10 | Companion-helper surface + migration rows | migration-slice | — |
 
 ### Why these assignments, and where they are contestable
@@ -936,18 +936,18 @@ covers the section.
 | TR-SS-s12-selected-scheme-facts | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:244` |
 | TR-SS-s12-absence-is-not-conformance | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:245` |
 | TR-SS-s12-email-diagnostics | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/standard-scheme-matrices.md:246` |
-| TR-VI-s1-strict | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:88` |
-| TR-VI-s1-compatibility | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:89` |
-| TR-VI-s1-repair | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:90` |
-| TR-VI-s1-posture-per-axis-default-not-a-g | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:91` |
-| TR-VI-s1-3-0-supersession-recorded-not-si | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:92` |
-| TR-VI-s2-1 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:107` |
-| TR-VI-s2-2 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:108` |
-| TR-VI-s2-3 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:109` |
-| TR-VI-s2-4 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:110` |
-| TR-VI-s2-5 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:111` |
-| TR-VI-s2-6 | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:112` |
-| TR-VI-s2-ledger-completeness | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:113` |
+| TR-VI-s1-strict | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:88` |
+| TR-VI-s1-compatibility | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:89` |
+| TR-VI-s1-repair | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:90` |
+| TR-VI-s1-posture-per-axis-default-not-a-g | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:91` |
+| TR-VI-s1-3-0-supersession-recorded-not-si | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:92` |
+| TR-VI-s2-1 | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:107` |
+| TR-VI-s2-2 | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:108` |
+| TR-VI-s2-3 | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:109` |
+| TR-VI-s2-4 | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:110` |
+| TR-VI-s2-5 | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:111` |
+| TR-VI-s2-6 | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:112` |
+| TR-VI-s2-ledger-completeness | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:113` |
 | TR-VI-s3-l1-syntax-parse | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:128` |
 | TR-VI-s3-l2-policy-admission | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:129` |
 | TR-VI-s3-l3-optional-annotation | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:130` |
@@ -985,19 +985,19 @@ covers the section.
 | TR-VI-s6-userinfo-over-psl | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:205` |
 | TR-VI-s6-not-applicable-not-requested-nom | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:206` |
 | TR-VI-s6-dependency-error-nominal-v3-forw | SETTLED | state-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:207` |
-| TR-VI-s7-c-02-browser-fixer-phase-orderin | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:218` |
-| TR-VI-s7-c-03-repeated-rfc-recovery | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:219` |
-| TR-VI-s7-repair-off-tested-no-op | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:220` |
-| TR-VI-s7-per-intervention-provenance | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:221` |
-| TR-VI-s7-absence-is-not-conformance | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:222` |
-| TR-VI-s8-both-verdicts-exposed | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:232` |
-| TR-VI-s8-inferred-candidate-is-not-strict | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:233` |
-| TR-VI-s8-serialized-output-revalidation-b | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:234` |
-| TR-VI-s9-base-url-verdict | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:244` |
-| TR-VI-s9-reference-verdict | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:245` |
-| TR-VI-s9-merged-output-verdict | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:246` |
-| TR-VI-s9-current-na-on-failure | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:247` |
-| TR-VI-s9-resolver-verdict-surface | SETTLED | UNASSIGNED | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:248` |
+| TR-VI-s7-c-02-browser-fixer-phase-orderin | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:218` |
+| TR-VI-s7-c-03-repeated-rfc-recovery | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:219` |
+| TR-VI-s7-repair-off-tested-no-op | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:220` |
+| TR-VI-s7-per-intervention-provenance | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:221` |
+| TR-VI-s7-absence-is-not-conformance | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:222` |
+| TR-VI-s8-both-verdicts-exposed | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:232` |
+| TR-VI-s8-inferred-candidate-is-not-strict | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:233` |
+| TR-VI-s8-serialized-output-revalidation-b | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:234` |
+| TR-VI-s9-base-url-verdict | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:244` |
+| TR-VI-s9-reference-verdict | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:245` |
+| TR-VI-s9-merged-output-verdict | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:246` |
+| TR-VI-s9-current-na-on-failure | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:247` |
+| TR-VI-s9-resolver-verdict-surface | SETTLED | UNASSIGNED[deferred] | UNASSIGNED | `design/work/url-v3/contracts/validation-intervention-contract.md:248` |
 | TR-VI-s10-get-parse-verdicts | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:258` |
 | TR-VI-s10-get-url-diagnostics-unchanged | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:259` |
 | TR-VI-s10-get-host-type-get-scheme-class-u | SETTLED | migration-slice | PENDING | `design/work/url-v3/contracts/validation-intervention-contract.md:260` |
