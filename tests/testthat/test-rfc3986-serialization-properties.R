@@ -444,6 +444,80 @@ test_that("the source posture is byte-preserving on the whole population", {
   expect_identical(src("urn:ietf:rfc:2648"), "urn:ietf:rfc:2648")
 })
 
+test_that("source reproduces raw bytes >= 0x80 in query and fragment", {
+  # RURL-bpfumnbj, ruling RUL-015 -- the residual RUL-007 left in place. The
+  # population above excludes raw octets above 0x7F (RURL-zexwmwxn), so the
+  # zero it measures could not see that a raw non-ASCII byte in the QUERY or
+  # FRAGMENT still came back percent-encoded while the same byte in the PATH
+  # came back raw. RFC 3986 sec 2.1 makes a percent-encoding triplet a
+  # REPRESENTATION of a data octet, and sec 5.3 recomposes components as they
+  # are, so under RUL-007's own reading the source form reproduces the octet
+  # it was handed. Valid UTF-8 only: an invalid sequence aborts the vectorized
+  # call (RURL-zexwmwxn) and is not what this test is about.
+  src <- function(x) serialize_url(x, standard = "rfc3986", form = "source")
+  norm <- function(x) {
+    serialize_url(x, standard = "rfc3986", form = "normalized")
+  }
+  raw <- c(
+    "https://x/ü?ü#ü",             # web route, all three slots
+    "https://localhost#\U0001F525",               # astral, fragment only
+    "http://h/p?q=%7cü#f%7cü",          # beside a lowercase triplet
+    "foo://h/p?q=ü#fü",                 # general route
+    "https://x/�?�#�"              # wptcf-025's input
+  )
+  expect_identical(src(raw), raw)
+
+  # `normalized` keeps encoding them (uppercase, sec 2.1's canonical spelling),
+  # on both routes -- and is the same function of either spelling.
+  enc <- c(
+    "https://x/ü?%C3%BC#%C3%BC",
+    "https://localhost/#%F0%9F%94%A5",
+    "http://h/p?q=%7C%C3%BC#f%7C%C3%BC",
+    "foo://h/p?q=%C3%BC#f%C3%BC",
+    "https://x/�?%EF%BF%BD#%EF%BF%BD"
+  )
+  expect_identical(norm(raw), enc)
+  expect_identical(norm(enc), enc)
+
+  # Input that already spells the octet as a triplet does not move in either
+  # form (wpt-fail-039's shape): `source` is not a decoder.
+  already <- c(
+    "https://x/%EF%BF%BD?%EF%BF%BD#%EF%BF%BD", "https://%EF%BF%BD",
+    "http://h/p?q=%c3%bc#f%c3%bc"
+  )
+  expect_identical(src(already), already)
+  expect_identical(
+    norm(already),
+    c("https://x/%EF%BF%BD?%EF%BF%BD#%EF%BF%BD", "https://%EF%BF%BD/",
+      "http://h/p?q=%C3%BC#f%C3%BC")
+  )
+
+  # The record moves with the serializer under `rfc3986` only. The other two
+  # arms are looped rather than assumed (design/posture-card.md, frame vs
+  # payload): `whatwg` keeps the component pass's encoded spelling and the
+  # frozen `NULL` profile is byte-identical to it.
+  rfc <- safe_parse_urls(raw[1:4], url_standard = "rfc3986",
+                         scheme_policy = "require",
+                         scheme_acceptance = "general")
+  expect_identical(rfc$query, c("ü", NA, "q=%7cü", "q=ü"))
+  expect_identical(
+    rfc$fragment, c("ü", "\U0001F525", "f%7cü", "fü")
+  )
+  w <- safe_parse_urls(raw[1:3], url_standard = "whatwg",
+                       scheme_policy = "require", scheme_acceptance = "general")
+  n <- safe_parse_urls(raw[1:3], url_standard = NULL,
+                       scheme_policy = "infer", scheme_acceptance = "web")
+  for (p in list(w, n)) {
+    expect_identical(p$query, c("%C3%BC", NA, "q=%7C%C3%BC"))
+    expect_identical(p$fragment, c("%C3%BC", "%F0%9F%94%A5", "f%7C%C3%BC"))
+  }
+  expect_identical(
+    serialize_url(raw[1:3], standard = "whatwg"),
+    c("https://x/%C3%BC?%C3%BC#%C3%BC", "https://localhost/#%F0%9F%94%A5",
+      "http://h/p?q=%7C%C3%BC#f%7C%C3%BC")
+  )
+})
+
 # --- the population itself ---------------------------------------------------
 
 test_that("the property population covers both scheme classes at every axis", {

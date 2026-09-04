@@ -277,13 +277,18 @@
   paste(unlist(out, use.names = FALSE), collapse = "")
 }
 
-# The >= 0x80 half of `.web_normalize_component()` on its own, for the
-# `pqf_source = "preserve"` query/fragment (RUL-007): every byte >= 0x80 becomes
-# an UPPERCASE "%XX" and every other byte -- an existing "%xx" included -- is
-# left exactly as written. Uppercase directly, like `.web_escape_pqf_bytes()`,
-# because there is no uppercase pass after it to reproduce the swallowed-"%"
-# quirk with -- and under `rfc3986`, the only setting that reaches here, a "%"
-# not followed by two hex digits fails the generic-URI gate anyway.
+# The >= 0x80 half of `.web_normalize_component()` on its own: every byte
+# >= 0x80 becomes an UPPERCASE "%XX" and every other byte -- an existing "%xx"
+# included -- is left exactly as written. Uppercase directly, like
+# `.web_escape_pqf_bytes()`, because there is no uppercase pass after it to
+# reproduce the swallowed-"%" quirk with.
+#
+# Its consumer is `serialize_url(standard = "rfc3986", form = "normalized")`
+# (`.serialize_rfc_full_vec()`, R/parse-phases.R), which percent-encodes a raw
+# non-ASCII byte in the query and fragment there. It was the `pqf_source =
+# "preserve"` record's own step from RUL-007 until RUL-015 moved it out of the
+# parse: RFC 3986 sec 2.1 makes the triplet a REPRESENTATION of the octet, so
+# writing it is a rendering choice like the hex-case fold, not a parse fact.
 .web_escape_high_bytes <- function(s) {
   if (is.na(s)) {
     return(s)
@@ -1037,18 +1042,17 @@
 #                `whatwg` setting -- what both have always stored.
 #   "preserve"   the source slice with the `pqf_bytes = "encode"` escapes
 #                applied (as `.extract_raw_path_vec()` applies them to the
-#                path via `.web_escape_pqf_bytes()`) and every byte >= 0x80
-#                percent-encoded in uppercase -- and NOTHING folded: an
-#                existing "%xx" keeps its hex case. The `rfc3986` setting:
-#                RFC 3986 sec 6.2.2.1 makes hex-digit case folding a
-#                NORMALIZATION, which the `normalized` serializer form applies
-#                and the `source` form must not. The >= 0x80 encoding is the
-#                one place this is not the path's treatment (the re-derived
-#                path keeps such a byte raw): `external-url-vectors.csv`'s
-#                `fsss_rfc_source` column pins the encoded spelling for the
-#                query and fragment, and RUL-007's two measured families are
-#                the hex-case fold and the scheme case, so that asymmetry is
-#                left where it was rather than moved without a ruling.
+#                path via `.web_escape_pqf_bytes()`) and NOTHING else: an
+#                existing "%xx" keeps its hex case and a raw byte >= 0x80
+#                stays raw, exactly as the re-derived path keeps both. The
+#                `rfc3986` setting: RFC 3986 sec 6.2.2.1 makes hex-digit case
+#                folding a NORMALIZATION, and sec 2.1 makes a triplet a
+#                REPRESENTATION of the octet it encodes, so both spellings
+#                belong to the `normalized` serializer form and neither to the
+#                parse record or the `source` form (RUL-007 for the fold,
+#                RUL-015 for the octet -- which RUL-007 had left encoded here
+#                as a residual, pinned by `external-url-vectors.csv`'s
+#                `fsss_rfc_source` column until that column was re-measured).
 #
 # `host_ipv4` -- which host tokens are read as an IPv4 ADDRESS:
 #
@@ -1292,8 +1296,9 @@
 
   # The component pass ALWAYS runs, because its NULL is the accept/reject
   # verdict `pqf_bytes` governs. Under `pqf_source = "preserve"` only its
-  # verdict is kept and the stored value is the source slice with the two
-  # escapes applied and nothing folded (see `pqf_source` above).
+  # verdict is kept and the stored value is the source slice with the
+  # `pqf_bytes = "encode"` escape applied and nothing else touched -- no fold,
+  # no >= 0x80 encoding (see `pqf_source` above).
   norm_opt <- function(x) {
     if (is.null(x) || !nzchar(x)) {
       return(list(ok = TRUE, value = NULL))
@@ -1303,7 +1308,12 @@
       return(list(ok = FALSE, value = NULL))
     }
     if (identical(pqf_source, "preserve")) {
-      v <- .web_escape_high_bytes(.web_escape_pqf_bytes(x))
+      v <- .web_escape_pqf_bytes(x)
+      # Declared UTF-8 like the host (`.mark_host_utf8()`) and the re-derived
+      # path (stringi output): the slice was cut byte-wise, so a raw byte
+      # >= 0x80 it now keeps (RUL-015) would otherwise carry the session
+      # locale's mark and compare unequal to the same bytes under LC_ALL=C.
+      Encoding(v) <- "UTF-8"
     }
     list(ok = TRUE, value = v)
   }

@@ -24,6 +24,29 @@
   #> "https://münchen.de/a"
   ```
 
+- **The trailing-slash strip on the cleaning surface no longer leaves an
+  authority that is only dots** (RUL-005, derived from ADR 0017 D1: a clean
+  URL is structurally valid *and* display-oriented, and `https://.` fails the
+  second half). For a host matching `^\.+$` under
+  `trailing_slash_handling = "strip"` the separator is kept; root-dot FQDNs
+  (`example.com.`) and a dots-only host with a non-empty path strip as before.
+  The parse is untouched (`host` stays `.` at `warning-invalid-tld`), and the
+  change is selector-independent: the `whatwg`, `rfc3986` and `NULL` arms all
+  moved by the same kept `/`, which ADR 0016 permits because the cause is a
+  clean-surface contract, not a standard's rule.
+
+  ```r
+  # before
+  get_clean_url("http://./", profile = "seo")
+  #> "https://."
+
+  # after
+  get_clean_url("http://./", profile = "seo")
+  #> "https://./"
+  get_clean_url("http://./x/", profile = "seo")
+  #> "https://./x"
+  ```
+
   The Unicode host is the more consequential half: `host_encoding = "keep"`
   echoed whichever spelling the input used, so the same site could yield
   `xn--mnchen-3ya.de` from one row and `münchen.de` from the next. Cleaning the
@@ -380,10 +403,41 @@
   case-insensitive; only the `source` serialization renders the spelling.
   `url_standard = "whatwg"` and the frozen `url_standard = NULL` profile are
   byte-identical to before on every surface, and `form = "normalized"` is
-  unchanged. Not moved: a raw byte ≥ 0x80 in a query or fragment is still
-  percent-encoded on the `rfc3986` record (the path keeps it raw); that
-  asymmetry is outside RUL-007's two measured families and is pinned by the
-  external-vector fixture.
+  unchanged. This slice left one residual, closed by the next bullet: a raw
+  byte ≥ 0x80 in a query or fragment was still percent-encoded on the
+  `rfc3986` record while the path kept it raw.
+
+- **`serialize_url(standard = "rfc3986", form = "source")` now reproduces a
+  raw byte ≥ 0x80 in the query and fragment as written, as it already did in
+  the path** (RURL-bpfumnbj, ruling RUL-015, derived from RUL-007). RFC 3986
+  §2.1 defines a percent-encoding triplet as a *representation* of a data
+  octet, and §5.3 recomposes components as they are, so writing the octet as
+  `%XX` is a rendering choice of the same kind as the §6.2.2.1 hex-case fold
+  and belongs to the same place: `form = "normalized"`, which keeps encoding
+  it (uppercase), not the parse record or the source form.
+
+  ```r
+  serialize_url("https://x/ü?ü#ü", standard = "rfc3986", form = "source")
+  #> before: "https://x/ü?%C3%BC#%C3%BC"
+  #> after:  "https://x/ü?ü#ü"
+  serialize_url("https://x/ü?ü#ü", standard = "rfc3986", form = "normalized")
+  #> "https://x/ü?%C3%BC#%C3%BC"                 <- unchanged
+  ```
+
+  Under `url_standard = "rfc3986"` the `query` and `fragment` columns of
+  `safe_parse_url()`, `get_query(decode = FALSE)`, `get_fragment()` and the
+  `rfc3986` URL key carry the raw byte too (`q=ü`, not `q=%C3%BC`), which is
+  what the general route (`foo://h/p?q=ü`) and the path column already did.
+  `clean_url` does not move. `url_standard = "whatwg"` and the frozen
+  `url_standard = NULL` profile are byte-identical to before on every
+  surface, and `form = "normalized"` is byte-identical for every web-route
+  input. One consequence outside the web route: `form = "normalized"` now
+  percent-encodes a raw non-ASCII query or fragment byte on the general
+  route as well (`foo://h/p?q=ü` → `foo://h/p?q=%C3%BC`), where it used to
+  emit the byte raw — the normalized form is one function of the URL, not of
+  the route that parsed it. Three measured `fsss_rfc_source` cells of the
+  external-vector fixture moved (wptcf-025, wptcf-029, wptcf-043); no claim
+  column did.
 
 - **A dotted scheme token that looks like `host:port` now parses as a scheme
   under `scheme_policy = "require"`** (`whatwg`; RURL-lxdwuacn, RUL-014). With

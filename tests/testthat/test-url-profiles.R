@@ -173,6 +173,25 @@ test_that("seo: folders resolve -- no dot segment survives cleaning", {
   expect_false(any(grepl("/\\.$|/\\.\\.$", cleaned)))
 })
 
+test_that("seo: the trailing-slash strip never leaves a dots-only authority", {
+  # RUL-005 (ADR 0017 D1, RURL-otwfjvnf). The parse is untouched: `.` stays an
+  # accepted host at `warning-invalid-tld`. On the cleaning surface, D2 row 5
+  # does not apply when stripping would leave an authority that is only dots.
+  rows <- c(
+    "http://./" = "https://./",
+    "http://." = "https://./", # WHATWG parse gives path "/"
+    "http://../" = "https://../",
+    "http://.../" = "https://.../",
+    "http://a./" = "https://a.", # root-dot FQDN: unaffected
+    "http://example.com./" = "https://example.com.", # unaffected
+    "http://./x/" = "https://./x" # non-empty path still strips
+  )
+  out <- get_clean_url(names(rows), profile = "seo")
+  expect_identical(out, unname(rows))
+  # No seo output ever ends in "://" followed by dots alone.
+  expect_false(any(grepl("://\\.+$", out)))
+})
+
 test_that("seo: the domain is Unicode regardless of the input spelling", {
   # host_encoding = "keep" echoed whichever spelling the input used, so the
   # same site yielded xn-- from one row and Unicode from the next.
