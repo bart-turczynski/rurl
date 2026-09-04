@@ -341,10 +341,41 @@
   case-insensitive; only the `source` serialization renders the spelling.
   `url_standard = "whatwg"` and the frozen `url_standard = NULL` profile are
   byte-identical to before on every surface, and `form = "normalized"` is
-  unchanged. Not moved: a raw byte ≥ 0x80 in a query or fragment is still
-  percent-encoded on the `rfc3986` record (the path keeps it raw); that
-  asymmetry is outside RUL-007's two measured families and is pinned by the
-  external-vector fixture.
+  unchanged. This slice left one residual, closed by the next bullet: a raw
+  byte ≥ 0x80 in a query or fragment was still percent-encoded on the
+  `rfc3986` record while the path kept it raw.
+
+- **`serialize_url(standard = "rfc3986", form = "source")` now reproduces a
+  raw byte ≥ 0x80 in the query and fragment as written, as it already did in
+  the path** (RURL-bpfumnbj, ruling RUL-015, derived from RUL-007). RFC 3986
+  §2.1 defines a percent-encoding triplet as a *representation* of a data
+  octet, and §5.3 recomposes components as they are, so writing the octet as
+  `%XX` is a rendering choice of the same kind as the §6.2.2.1 hex-case fold
+  and belongs to the same place: `form = "normalized"`, which keeps encoding
+  it (uppercase), not the parse record or the source form.
+
+  ```r
+  serialize_url("https://x/ü?ü#ü", standard = "rfc3986", form = "source")
+  #> before: "https://x/ü?%C3%BC#%C3%BC"
+  #> after:  "https://x/ü?ü#ü"
+  serialize_url("https://x/ü?ü#ü", standard = "rfc3986", form = "normalized")
+  #> "https://x/ü?%C3%BC#%C3%BC"                 <- unchanged
+  ```
+
+  Under `url_standard = "rfc3986"` the `query` and `fragment` columns of
+  `safe_parse_url()`, `get_query(decode = FALSE)`, `get_fragment()` and the
+  `rfc3986` URL key carry the raw byte too (`q=ü`, not `q=%C3%BC`), which is
+  what the general route (`foo://h/p?q=ü`) and the path column already did.
+  `clean_url` does not move. `url_standard = "whatwg"` and the frozen
+  `url_standard = NULL` profile are byte-identical to before on every
+  surface, and `form = "normalized"` is byte-identical for every web-route
+  input. One consequence outside the web route: `form = "normalized"` now
+  percent-encodes a raw non-ASCII query or fragment byte on the general
+  route as well (`foo://h/p?q=ü` → `foo://h/p?q=%C3%BC`), where it used to
+  emit the byte raw — the normalized form is one function of the URL, not of
+  the route that parsed it. Three measured `fsss_rfc_source` cells of the
+  external-vector fixture moved (wptcf-025, wptcf-029, wptcf-043); no claim
+  column did.
 
 - **A dotted scheme token that looks like `host:port` now parses as a scheme
   under `scheme_policy = "require"`** (`whatwg`; RURL-lxdwuacn, RUL-014). With
