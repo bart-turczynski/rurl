@@ -26,6 +26,7 @@
 ^LOCAL_WORKFLOW_NOTES\.md$
 ^\.lintr$
 ^\.tmp$
+^tmp$
 ^\.Rhistory$
 ^\.DS_Store$
 ^CONTRIBUTING\.md$

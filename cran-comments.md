@@ -1,14 +1,33 @@
 ## R CMD check results
 
-Checked with `R CMD check --as-cran` on a clean clone at the submitted commit:
+Checked with `R CMD check --as-cran` on a tarball built from a clean export
+of the submitted commit (`git archive`, then `R CMD build`), so nothing
+untracked in a working clone can reach the check:
 
-- macOS aarch64 (R 4.6.0, local)
-- Ubuntu, R-release (`r-base:latest` container, `tools/local-ci.sh`)
+- macOS aarch64 (`aarch64-apple-darwin23`), R 4.6.0 (2026-04-24), local,
+  2026-09-04
+- Ubuntu, R-release (`r-base:latest` container) is run through
+  `tools/local-ci.sh --all` before the tarball is submitted
 
 The test suite is additionally run under `LC_ALL=C` on Linux, since several of
 this release's fixes concern non-UTF-8 sessions.
 
-Result: **0 errors | 0 warnings | 1 note**
+Result on 2026-09-04: **0 errors | 0 warnings | 3 notes**, of which one is
+expected on CRAN and explained below, and two are local-only and will not
+appear in the submitted tarball's check:
+
+| NOTE | on CRAN? |
+|---|---|
+| CRAN incoming feasibility — maintainer address, and the `BugReports:` 404 | yes; explained below |
+| `checking top-level files` — `Non-standard file/directory found at top level: 'tmp'` | no — excluded by `.Rbuildignore` (`^tmp$`) since 2026-09-04; see below |
+| `checking HTML version of manual` — `Skipping checking math rendering: package 'V8' unavailable` | no; the local library lacks `V8` |
+
+The `tmp` NOTE was a repository-hygiene defect, not a package one: four gate
+logs under `tmp/orchestrate/` are tracked in git and `.Rbuildignore` excluded
+only `^\.tmp$`, so the directory rode into a clean-export tarball. `^tmp$` is
+now excluded as well (RURL-ladruqhn, 2026-09-04); re-check the tarball listing
+(`tar tzf rurl_*.tar.gz | grep '^rurl/tmp/'` must print nothing) when the
+submission tarball is built.
 
 ---
 
@@ -40,30 +59,43 @@ Found the following (possibly) invalid URLs:
   URL: https://gitlab.com/bart-turczynski/rurl/-/issues
     From: DESCRIPTION
     Status: 404
+    Message: Not Found
 ```
 
-The `BugReports:` address is correct and the issue tracker is public. GitLab
-serves 404 for the **HTML** `/-/issues` page to any logged-out client, on every
-project on the platform, as anti-scraping behavior — it is not specific to this
-project and not a visibility setting. The project is `visibility: public` with
-`issues_access_level: enabled`.
+This is a false positive, and not one the package can fix. The `BugReports:`
+address is correct: the page opens normally in a browser session and accepts
+bug reports from anyone with a GitLab account. GitLab.com serves an HTTP 404 to
+any logged-out client requesting an issue-list path, on every project on the
+platform, as an anti-scraping measure. It is not a setting of this project —
+the project is `visibility: public` with `issues_access_level: enabled` (read
+back from the GitLab API), and the response is 404 whether the client identifies
+as `curl`, as a browser, or as R's URL checker.
 
-Verified against three control projects whose trackers are unquestionably
-public, measured unauthenticated on 2026-08-16:
+The behaviour was confirmed to be site-wide rather than a misconfiguration by
+measuring, in the same unauthenticated run (last repeated 2026-09-04), control
+projects whose trackers are unquestionably public:
 
 | URL | anonymous status |
 |---|---|
-| `gitlab.com/gitlab-org/gitlab/-/issues` | 404 |
+| `gitlab.com/gitlab-org/gitlab/-/issues` (GitLab's own tracker) | 404 |
 | `gitlab.com/gitlab-org/gitlab-runner/-/issues` | 404 |
 | `gitlab.com/inkscape/inkscape/-/issues` | 404 |
+| `gitlab.com/bart-turczynski/pslr/-/issues` (sibling package, already on CRAN) | 404 |
 | `gitlab.com/bart-turczynski/rurl/-/issues` | 404 |
-| `gitlab.com/api/v4/projects/bart-turczynski%2Frurl/issues` | **200** |
+| `gitlab.com/bart-turczynski/rurl/-/issues/new` | 302 to sign-in |
+| `gitlab.com/bart-turczynski/rurl` (repository root) | **200** |
+| `gitlab.com/api/v4/projects/bart-turczynski%2Frurl/issues` (anonymous API) | **200** |
 
-GitLab's own issue tracker returning 404 to the same check is the clearest
-demonstration that this reflects the platform rather than the package. The
-tracker is reachable in a browser session and through the anonymous API. No
-change to `DESCRIPTION` is warranted, and repointing `BugReports:` to work
-around a platform-wide behavior would make it less accurate, not more.
+The issue tracker of GitLab itself returning 404 to the same request is the
+clearest demonstration that this reflects the platform rather than the package.
+The repository root and every file path under it return 200 to the same client,
+and the issue list is served to the anonymous API and to a logged-in browser.
+The same NOTE is declared for the sibling `pslr`, whose `BugReports:` points at
+the same host. No change to `DESCRIPTION` is warranted; repointing
+`BugReports:` to work around a platform-wide behaviour would make it less
+accurate, not more.
+
+The project is public and the tracker is open: <https://gitlab.com/bart-turczynski/rurl>.
 
 ---
 
