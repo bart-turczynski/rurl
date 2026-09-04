@@ -217,7 +217,12 @@
 #'     default port under `url_standard = "whatwg"`. This is an explicit
 #'     non-parity override for callers that need the input's port spelling.}
 #'     \item{"strip_default": Keep only non-default ports (using the same
-#'     scheme-default table), independent of `url_standard`.}
+#'     scheme-default table), independent of `url_standard`. Default-ness is
+#'     judged on the scheme the input was **parsed** with, never on the scheme
+#'     `protocol_handling` renders: `http://example.com:443/a` under
+#'     `protocol_handling = "https"` keeps `:443`, and `http://example.com:80/a`
+#'     drops `:80` (RFC 3986 §6.2.3; WHATWG URL Standard port state; RUL-016).
+#'     This is the value `profile = "seo"` pins.}
 #'   }
 #' @param scheme_policy Controls whether scheme-less, host-shaped input is
 #' *accepted* (an input-acceptance axis, distinct from `protocol_handling`,
@@ -313,8 +318,10 @@
 #'   origin-cleaning intent — a **lossy policy projection of a WHATWG-parsed
 #'   URL** (ADR 0017), which claims no resource equivalence:
 #'   `url_standard = "whatwg"` underneath (which also resolves `.`/`..` folder
-#'   segments), https, a Unicode host regardless of the input spelling, and
-#'   strip www / trailing slash / index page, drop the whole query. Inspect
+#'   segments), https, a Unicode host regardless of the input spelling,
+#'   strip www / trailing slash / index page, drop the whole query, and drop
+#'   a **default** port only (`port_handling = "strip_default"`: a
+#'   non-default port names a different origin and survives). Inspect
 #'   the resolved bundle with
 #'   \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
 #'   (forwarded through its \code{...}).
@@ -628,6 +635,8 @@ safe_parse_url <- function(url,
         if (missing(host_encoding)) NULL else match.arg(host_encoding),
       query_handling =
         if (missing(query_handling)) NULL else match.arg(query_handling),
+      port_handling =
+        if (missing(port_handling)) NULL else match.arg(port_handling),
       credential_handling = if (missing(credential_handling)) {
         NULL
       } else {
@@ -782,6 +791,8 @@ safe_parse_urls <- function(url,
         if (missing(host_encoding)) NULL else match.arg(host_encoding),
       query_handling =
         if (missing(query_handling)) NULL else match.arg(query_handling),
+      port_handling =
+        if (missing(port_handling)) NULL else match.arg(port_handling),
       credential_handling = if (missing(credential_handling)) {
         NULL
       } else {
@@ -1200,6 +1211,14 @@ safe_parse_urls <- function(url,
     # leaving it here made `profile = "seo"` LESS clean on parameters than
     # passing no profile at all -- the surface's own default is "drop".
     query_handling = "drop",
+    # RUL-016 (ADR 0017 D2 row 9, amended): drop the DEFAULT port, keep a
+    # non-default one. RFC 3986 sec 6.2.3 and the WHATWG port state make the
+    # default port equivalent to no port; nothing sanctions dropping a
+    # non-default port, which names a different origin (RFC 6454 sec 4).
+    # Inheriting the surface default "exclude" folded `http://host:8080/a`
+    # into `https://host/a`. Pinned here, not changed globally: the surface
+    # default stays "exclude", byte-identical.
+    port_handling = "strip_default",
     # ADR 0017 row 12 / RUL-001: every bundle keeps the surface default. The
     # dial is caller-pickable (iron rule) and never a bundle's opinion.
     credential_handling = "strip"
@@ -1230,6 +1249,7 @@ safe_parse_urls <- function(url,
   index_page_handling = .opt_index_page_handling,
   host_encoding = .opt_host_encoding,
   query_handling = .opt_query_handling,
+  port_handling = .opt_port_handling,
   credential_handling = .opt_credential_handling
 )
 
@@ -2356,6 +2376,7 @@ safe_parse_urls <- function(url,
   cols <- list(
     final_scheme = final_scheme,
     source_scheme = source_scheme,
+    raw_scheme = raw_scheme,
     final_host = final_host,
     is_ip_host = is_ip_host,
     raw_path = raw_path,
@@ -2558,8 +2579,12 @@ safe_parse_urls <- function(url,
 
   query_output <- a$raw_query
   fragment_output <- a$raw_fragment
+  # RUL-016: default-ness is judged on the PARSED scheme. `a$final_scheme` is
+  # already `https` under `protocol_handling = "https"`, which nulled a real
+  # `http://host:443` port and resurrected an `http://host:80` one the WHATWG
+  # record holds as null.
   port_output <- .apply_port_output_policy_vec(
-    a$final_scheme, a$raw_port, opts$port_handling, opts$url_standard
+    a$raw_scheme, a$raw_port, opts$port_handling, opts$url_standard
   )
   if (.is_whatwg(opts$url_standard)) {
     q_idx <- which(!is.na(query_output))
@@ -2629,7 +2654,10 @@ safe_parse_urls <- function(url,
   clean_url <- .build_clean_url_vec(
     cased$scheme, cased$host, cased$path, opts$trailing_slash_handling,
     query = clean_query, port = a$raw_port, port_handling = opts$port_handling,
-    url_standard = opts$url_standard
+    url_standard = opts$url_standard,
+    # RUL-016: `strip_default` keys the default-port table off the parsed
+    # scheme, not the cased/upgraded one the string is rendered with.
+    port_scheme = a$raw_scheme
   )
   # ADR 0012 Layer 4b-2 (RURL-qbnelzku): serializer dispatch. Under general the
   # posture-serialized clean_url REPLACES the special/host-present builder for
@@ -2647,6 +2675,7 @@ safe_parse_urls <- function(url,
         path_kind = gen_b$path_kind[gp], query = gen_b$query[gp],
         query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
         port_handling = opts$port_handling,
+        port_scheme = a$raw_scheme[gp],
         trailing_slash_handling = opts$trailing_slash_handling
       )
     } else {
@@ -2658,7 +2687,8 @@ safe_parse_urls <- function(url,
         path = gen_b$path[gp],
         rfc_path_form = gen_b$rfc_path_form[gp], query = gen_b$query[gp],
         query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
-        port_handling = opts$port_handling
+        port_handling = opts$port_handling,
+        port_scheme = a$raw_scheme[gp]
       )
     }
   }

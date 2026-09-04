@@ -401,6 +401,12 @@
   list(
     name = "source_scheme", default = NA_character_, template = character(1)
   ),
+  # The scheme the PARSE settled on, before `protocol_handling` rewrites it
+  # into `final_scheme` (RUL-016): a port's default-ness is a fact about the
+  # parsed scheme (RFC 3986 sec 6.2.3; WHATWG port state), never about the
+  # scheme the projection renders, so Stage B keys the default-port table off
+  # this column. Cached: a parse fact.
+  list(name = "raw_scheme", default = NA_character_, template = character(1)),
   list(name = "final_host", default = NA_character_, template = character(1)),
   list(name = "is_ip_host", default = NA, template = logical(1)),
   list(name = "raw_path", default = NA_character_, template = character(1)),

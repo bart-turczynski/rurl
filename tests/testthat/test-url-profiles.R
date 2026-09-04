@@ -50,6 +50,7 @@ test_that("url_profile() resolves each bundle to its exact knob set", {
       index_page_handling = "strip",
       host_encoding = "unicode",
       query_handling = "drop",
+      port_handling = "strip_default",
       credential_handling = "strip",
       customized = FALSE
     )
@@ -211,9 +212,42 @@ test_that("seo: the domain is Unicode regardless of the input spelling", {
   }
 })
 
-test_that("seo: the fragment and the port do not survive", {
+test_that("seo: the fragment never survives; a NON-default port does", {
+  # RUL-016 (a), ADR 0017 D2 row 9 amended. The bundle pins
+  # `port_handling = "strip_default"`: RFC 3986 sec 6.2.3 and the WHATWG port
+  # state make a DEFAULT port equivalent to no port, and nothing sanctions
+  # dropping a non-default one -- `:8080` names a different origin (RFC 6454
+  # sec 4). Inheriting the surface default "exclude" folded it.
   expect_identical(
     get_clean_url("https://example.com:8080/a#top", profile = "seo"),
+    "https://example.com:8080/a"
+  )
+})
+
+test_that("seo: default-ness follows the parsed scheme, not rendered https", {
+  # RUL-016 (b). `:80` is http's default and goes; `:443` on an http input is
+  # NOT that input's default and stays even though the output scheme is https;
+  # `:443` on an https input is its default and goes.
+  expect_identical(
+    get_clean_url("http://example.com:80/a", profile = "seo"),
+    "https://example.com/a"
+  )
+  expect_identical(
+    get_clean_url("http://example.com:443/a", profile = "seo"),
+    "https://example.com:443/a"
+  )
+  expect_identical(
+    get_clean_url("https://example.com:443/a", profile = "seo"),
+    "https://example.com/a"
+  )
+  expect_identical(
+    get_clean_url("http://example.com:8080/a", profile = "seo"),
+    "https://example.com:8080/a"
+  )
+  # The iron rule still lets a caller ask for the old fold.
+  expect_identical(
+    get_clean_url("http://example.com:8080/a", profile = "seo",
+                  port_handling = "exclude"),
     "https://example.com/a"
   )
 })

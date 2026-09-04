@@ -117,7 +117,7 @@ this ADR, not a bundle edit.
 | 6 | a terminal index page comes off | `index_page_handling = "strip"` |
 | 7 | the host renders in Unicode regardless of the input spelling | `host_encoding = "unicode"` |
 | 8 | **the whole query is dropped** | `query_handling = "drop"` |
-| 9 | the port is dropped | `port_handling = "exclude"` (surface default) |
+| 9 | the **default** port is dropped and a non-default one kept; default-ness is judged on the parsed scheme, never on the `https` row 3 renders (amended 2026-09-04, RUL-016) | `port_handling = "strip_default"` |
 | 10 | the host case folds | `case_handling = "lower_host"` (surface default) |
 | 11 | no fragment is ever carried | structural — `clean_url` has no fragment |
 | 12 | no userinfo (credentials) is carried | structural today — `clean_url` has no userinfo; RUL-001 adds `credential_handling = c("strip", "reject")`, default `"strip"`, so a caller may ask for `NA` instead of a silently collapsed URL |
@@ -125,6 +125,7 @@ this ADR, not a bundle edit.
 **Amendment 2026-09-03 (RUL-001, `design/work/url-v3/registers/rulings.md`).** Row 12 records a mutation that had shipped since the surface existed but was missing from this table: userinfo is always dropped, and the roxygen for `get_clean_url()` has said so throughout. It is added under D2's own rule that a transform not on the table is an amendment to this ADR.
 
 **Amendment 2026-09-04 (RUL-005, `design/work/url-v3/registers/rulings.md`).** Row 5 does not apply when stripping the trailing slash would leave an authority that is only dots: `http://./` cleans to `https://./`, never `https://.`, and likewise for `..`, `...` and any run of dots. The exception is derived from D1 — `https://.` is structurally valid and fails "display-oriented" — and it is scoped to the cleaning surface: the parse is untouched, root-dot FQDNs (`example.com.` → `example.com.`) still strip, and a dots-only host with a non-empty path (`http://./x/` → `https://./x`) still strips. It moves the `url_standard = NULL` arm together with the named arms, which ADR 0016 permits because the cause is this contract, not a standard's rule.
+**Amendment 2026-09-04 (RUL-016, `design/work/url-v3/registers/rulings.md`).** Row 9 was inherited from the surface default `port_handling = "exclude"` rather than decided, and it folded non-default origins: measured on `main` that day, `http://example.com:8080/a` under `profile = "seo"` cleaned to `https://example.com/a`. RFC 3986 §6.2.3 and the WHATWG URL Standard's port state sanction dropping a *default* port (it is equivalent to no port); nothing sanctions dropping a non-default one, which names a different origin (RFC 6454 §4). The bundle now pins `port_handling = "strip_default"`, and — the same ruling's second half — default-ness is judged on the scheme the input was parsed with, not on the `https` row 3 renders, so `http://example.com:443/a` keeps `:443` and `http://example.com:80/a` drops `:80`. The surface default stays `"exclude"`, byte-identical.
 
 Rows 4, 5 and 6 are the three the eight items omitted; recording them here is
 what closes Q1. **Item 8 of the owner's list — "users can define what a clean URL

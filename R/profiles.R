@@ -34,9 +34,13 @@
 #' folder segments — and \code{host_encoding = "unicode"}, so the host is
 #' canonical in one direction regardless of whether the input spelled it in
 #' Unicode or Punycode. The remaining knobs are the projection: https, strip
-#' www, trailing slash and index page, and \strong{drop the whole query}. The
+#' www, trailing slash and index page, \strong{drop the whole query}, and
+#' drop a \emph{default} port only (\code{port_handling = "strip_default"}):
+#' a non-default port such as \code{:8080} names a different origin and
+#' survives (RFC 3986 §6.2.3; WHATWG URL Standard port state; RFC 6454 §4;
+#' RUL-016). The
 #' result makes no claim of resource equivalence and is not an HTML canonical
-#' URL — forcing https, dropping the port and dropping the query can each
+#' URL — forcing https, stripping www and dropping the query can each
 #' change the resource addressed. As always, an explicit argument overrides the
 #' bundle, so \code{query_handling = "filter"} still buys tracker-only removal.
 #'

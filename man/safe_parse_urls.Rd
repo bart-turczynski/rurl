@@ -262,7 +262,12 @@ behavior. This knob is standalone and standard-independent (editorial, like
 default port under \code{url_standard = "whatwg"}. This is an explicit
 non-parity override for callers that need the input's port spelling.}
 \item{"strip_default": Keep only non-default ports (using the same
-scheme-default table), independent of \code{url_standard}.}
+scheme-default table), independent of \code{url_standard}. Default-ness is
+judged on the scheme the input was \strong{parsed} with, never on the scheme
+\code{protocol_handling} renders: \verb{http://example.com:443/a} under
+\code{protocol_handling = "https"} keeps \verb{:443}, and \verb{http://example.com:80/a}
+drops \verb{:80} (RFC 3986 §6.2.3; WHATWG URL Standard port state; RUL-016).
+This is the value \code{profile = "seo"} pins.}
 }}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
@@ -363,8 +368,10 @@ Chrome-faithful); \code{"whatwg"} is the absolute-URL no-base posture that
 origin-cleaning intent — a \strong{lossy policy projection of a WHATWG-parsed
 URL} (ADR 0017), which claims no resource equivalence:
 \code{url_standard = "whatwg"} underneath (which also resolves \code{.}/\code{..} folder
-segments), https, a Unicode host regardless of the input spelling, and
-strip www / trailing slash / index page, drop the whole query. Inspect
+segments), https, a Unicode host regardless of the input spelling,
+strip www / trailing slash / index page, drop the whole query, and drop
+a \strong{default} port only (\code{port_handling = "strip_default"}: a
+non-default port names a different origin and survives). Inspect
 the resolved bundle with
 \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
 (forwarded through its \code{...}).}
