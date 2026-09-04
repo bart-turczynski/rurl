@@ -2394,8 +2394,15 @@
     scheme_output, port, port_handling, url_standard
   )
   path_part <- ifelse(!is.na(path_output), path_output, "")
+  # RUL-005 (ADR 0017 D1): the strip must not leave an output whose authority
+  # is only dots. "http://./" would otherwise clean to "http://." -- a string
+  # that is structurally valid but not display-oriented, so D2 row 5 does not
+  # apply to a dots-only host. The separator is kept for `.`, `..`, `...` and
+  # any run of dots; root-dot FQDNs ("a.", "example.com.") strip as before,
+  # and a dots-only host with a non-empty path ("http://./x/") still strips.
+  dots_only_host <- has_host & grepl("^\\.+$", host_output)
   if (trailing_slash_handling == "strip") {
-    path_part[path_part == "/"] <- ""
+    path_part[path_part == "/" & !dots_only_host] <- ""
   }
   host_part <- ifelse(has_host, host_output, "")
 
@@ -2539,9 +2546,12 @@
     }
     # List path. Optional trailing-slash strip mirrors .build_clean_url_vec
     # (a lone "/" -> ""); it only ever touches a size-1 path, never the guard.
+    # It also mirrors the RUL-005 exception: a dots-only host ("foo://./",
+    # host ".") keeps its separator, so the output never reads "foo://.".
     p_render <- p
     strip_slash <- identical(trailing_slash_handling, "strip")
-    if (strip_slash && identical(p_render, "/")) {
+    dots_only_host <- !is.na(host[i]) && grepl("^\\.+$", host[i])
+    if (strip_slash && identical(p_render, "/") && !dots_only_host) {
       p_render <- ""
     }
     path_body[i] <- .whatwg_path_percent_encode(p_render)
