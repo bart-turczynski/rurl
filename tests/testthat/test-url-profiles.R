@@ -10,6 +10,7 @@ test_that("url_profile() resolves each bundle to its exact knob set", {
       scheme_policy = "infer",
       scheme_relative_handling = "http",
       fixup_posture = "browser",
+      credential_handling = "strip",
       customized = FALSE
     )
   )
@@ -20,6 +21,7 @@ test_that("url_profile() resolves each bundle to its exact knob set", {
       scheme_acceptance = "general",
       scheme_policy = "require",
       scheme_relative_handling = "error",
+      credential_handling = "strip",
       customized = FALSE
     )
   )
@@ -33,6 +35,7 @@ test_that("url_profile() resolves each bundle to its exact knob set", {
       path_normalization = "none",
       case_handling = "keep",
       path_identity = "none",
+      credential_handling = "strip",
       customized = FALSE
     )
   )
@@ -47,6 +50,7 @@ test_that("url_profile() resolves each bundle to its exact knob set", {
       index_page_handling = "strip",
       host_encoding = "unicode",
       query_handling = "drop",
+      credential_handling = "strip",
       customized = FALSE
     )
   )

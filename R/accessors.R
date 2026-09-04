@@ -53,7 +53,8 @@
                                url_standard = NULL,
                                fixup_posture = "none",
                                engine = NULL,
-                               profile_authorized = NULL) {
+                               profile_authorized = NULL,
+                               credential_handling = "strip") {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -90,7 +91,8 @@
     url_standard = url_standard,
     fixup_posture = fixup_posture,
     engine = engine,
-    profile_authorized = profile_authorized
+    profile_authorized = profile_authorized,
+    credential_handling = credential_handling
   )
   cols <- ._parse_urls_cached(url, opts)
 
@@ -173,7 +175,11 @@ get_parse_status <- function(url,
 #' is a normalized canonical key composed of scheme, host, and path only; port
 #' is dropped (\code{port_handling = "exclude"}), and fragment/userinfo are
 #' always excluded (use \code{\link{get_port}}, \code{\link{get_fragment}}, or
-#' \code{\link{get_userinfo}} for those).
+#' \code{\link{get_userinfo}} for those). A URL that carried credentials is
+#' silently collapsed to its credential-free spelling by default
+#' (\code{credential_handling = "strip"}); pass
+#' \code{credential_handling = "reject"} to get \code{NA} for such a row
+#' instead (RFC 3986 sections 3.2.1, 7.5 and 7.6; ADR 0017 row 12).
 #'
 #' The query string is dropped by default (\code{query_handling = "drop"}), so
 #' the historical scheme/host/path output is byte-identical. Pass
@@ -294,6 +300,9 @@ get_parse_status <- function(url,
 #' u <- c("http://u:pw@example.com/a#frag", "http://example.com/a?q=1")
 #' get_clean_url(u)
 #' # -> both "http://example.com/a"
+#' # Ask for NA instead of a silently collapsed credential-bearing URL:
+#' get_clean_url(u, credential_handling = "reject")
+#' # -> NA, "http://example.com/a"
 #' serialize_url(u[1])
 #' # The identity surface keeps them apart: the query is identity, the
 #' # fragment and userinfo are not.
@@ -332,15 +341,19 @@ get_clean_url <- function(url,
                           scheme_acceptance = c("web", "general"),
                           url_standard = NULL,
                           engine = NULL,
-                          profile = NULL) {
+                          profile = NULL,
+                          credential_handling = c("strip", "reject")) {
   # Capture query_handling's supplied-ness BEFORE match.arg() reassigns it (an
   # assignment to a formal clears its missing() status), so profile resolution
   # can tell an explicit query_handling from the default (seo governs it).
+  # Same for credential_handling (every bundle carries it, RUL-001).
   query_handling_supplied <- !missing(query_handling)
+  credential_handling_supplied <- !missing(credential_handling)
   source <- match.arg(source)
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
   port_handling <- match.arg(port_handling)
+  credential_handling <- match.arg(credential_handling)
   url_standard <- .validate_url_standard(url_standard)
   profile <- .validate_profile(profile)
   # get_clean_url()'s governed formals default to scalars, so match.arg() needs
@@ -384,7 +397,8 @@ get_clean_url <- function(url,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
     url_standard = url_standard,
-    engine = engine
+    engine = engine,
+    credential_handling = credential_handling
   )
   if (!is.null(profile)) {
     extract_args <- .merge_profile_args(extract_args, .resolve_profile(
@@ -441,7 +455,12 @@ get_clean_url <- function(url,
         } else {
           match.arg(host_encoding, .opt_host_encoding)
         },
-        query_handling = if (query_handling_supplied) query_handling else NULL
+        query_handling = if (query_handling_supplied) query_handling else NULL,
+        credential_handling = if (credential_handling_supplied) {
+          credential_handling
+        } else {
+          NULL
+        }
       )
     ))
   }

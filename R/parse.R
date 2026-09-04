@@ -318,6 +318,26 @@
 #'   the resolved bundle with
 #'   \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
 #'   (forwarded through its \code{...}).
+#' @param credential_handling How `clean_url` treats a URL whose parsed
+#'   authority carried a userinfo delimiter (`user@`, `user:password@`, a bare
+#'   `@`, or a repeated `@`). Defaults to "strip". A policy dial on the clean
+#'   surface (ADR 0017, mutation-table row 12; RUL-001), not a standards axis:
+#'   it composes with every `url_standard`, including `NULL`, and never
+#'   touches the `user` / `password` columns, `parse_status`, the diagnostics,
+#'   \code{\link{serialize_url}} or \code{\link{get_url_key}}.
+#'   \itemize{
+#'     \item{"strip": (Default) The userinfo is dropped and the rest of the
+#'     URL is emitted, exactly as before this argument existed.}
+#'     \item{"reject": `clean_url` is `NA` for such a row. RFC 3986 section
+#'     3.2.1 deprecates the `user:password` form and lets an application
+#'     reject it; sections 7.5 and 7.6 describe the credential leak and the
+#'     `https://example.com@evil.example/` semantic attack a silently
+#'     collapsed clean URL would hide. Use this when a cleaned URL that
+#'     \emph{looks} like the credential-free original would be misleading.}
+#'   }
+#'   There is no "keep": \code{\link{serialize_url}} already preserves
+#'   credentials under both standards, and \code{\link{format_url}} redacts
+#'   them for display.
 #' @return A named list with the following components:
 #'   \itemize{
 #'     \item `original_url`: The original URL string provided.
@@ -376,7 +396,9 @@
 #'     excluded (use the dedicated components above to retrieve them). With
 #'     `path_encoding = "decode"` the path is shown decoded, so `clean_url`
 #'     is human-readable rather than guaranteed URL-safe. NA on a parse error,
-#'     or when the host is empty/NA except for a valid hostless `file:` URL.
+#'     when the host is empty/NA except for a valid hostless `file:` URL, or
+#'     under `credential_handling = "reject"` when the authority carried a
+#'     userinfo delimiter.
 #'     \item `parse_status`: Character string indicating parsing outcome
 #'       ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
 #'       "warning-invalid-tld", "warning-public-suffix", "warning-userinfo").
@@ -508,7 +530,8 @@ safe_parse_url <- function(url,
                            scheme_acceptance = c("web", "general"),
                            url_standard = NULL,
                            engine = NULL,
-                           profile = NULL) {
+                           profile = NULL,
+                           credential_handling = c("strip", "reject")) {
   # Enforce scalar input to keep behavior explicit and predictable
   if (length(url) != 1) {
     stop(
@@ -565,7 +588,8 @@ safe_parse_url <- function(url,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
     url_standard = url_standard,
-    engine = engine
+    engine = engine,
+    credential_handling = credential_handling
   )
   if (!is.null(profile)) {
     po_args <- .merge_profile_args(po_args, .resolve_profile(profile, list(
@@ -603,7 +627,12 @@ safe_parse_url <- function(url,
       host_encoding =
         if (missing(host_encoding)) NULL else match.arg(host_encoding),
       query_handling =
-        if (missing(query_handling)) NULL else match.arg(query_handling)
+        if (missing(query_handling)) NULL else match.arg(query_handling),
+      credential_handling = if (missing(credential_handling)) {
+        NULL
+      } else {
+        match.arg(credential_handling)
+      }
     )))
   }
   opts <- do.call(.parse_options, po_args)
@@ -669,7 +698,8 @@ safe_parse_urls <- function(url,
                             scheme_acceptance = c("web", "general"),
                             url_standard = NULL,
                             engine = NULL,
-                            profile = NULL) {
+                            profile = NULL,
+                            credential_handling = c("strip", "reject")) {
   # url_standard (RURL-eqzkkohm): validate + conflict-check the governed knobs
   # the caller explicitly supplied (see safe_parse_url() for the rationale).
   url_standard <- .validate_url_standard(url_standard)
@@ -712,7 +742,8 @@ safe_parse_urls <- function(url,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
     url_standard = url_standard,
-    engine = engine
+    engine = engine,
+    credential_handling = credential_handling
   )
   if (!is.null(profile)) {
     po_args <- .merge_profile_args(po_args, .resolve_profile(profile, list(
@@ -750,7 +781,12 @@ safe_parse_urls <- function(url,
       host_encoding =
         if (missing(host_encoding)) NULL else match.arg(host_encoding),
       query_handling =
-        if (missing(query_handling)) NULL else match.arg(query_handling)
+        if (missing(query_handling)) NULL else match.arg(query_handling),
+      credential_handling = if (missing(credential_handling)) {
+        NULL
+      } else {
+        match.arg(credential_handling)
+      }
     )))
   }
   opts <- do.call(.parse_options, po_args)
@@ -1028,6 +1064,16 @@ safe_parse_urls <- function(url,
 # www_handling/trailing_slash_handling in the cleanup-knob tier -- NOT part of
 # .URL_STANDARD_PROFILES.
 .opt_port_handling <- c("exclude", "keep", "strip_default", "strip_all")
+# credential_handling (RUL-001, ADR 0017 row 12): a policy dial on the clean
+# surface, not a standards axis, so it composes with every `url_standard`
+# including NULL. "strip" (default) is today's behavior byte-for-byte -- the
+# userinfo is dropped and the rest of the URL is emitted. "reject" sets
+# `clean_url` to NA whenever the parsed authority carried any userinfo
+# delimiter (RFC 3986 sec 3.2.1: "user:password" is deprecated and an
+# application may reject it; sec 7.5 / sec 7.6 for the leak and the semantic
+# attack it invites). Nothing else moves. There is deliberately no "keep":
+# serialize_url() already preserves credentials under both standards.
+.opt_credential_handling <- c("strip", "reject")
 
 # --- url_standard selector (RURL-eqzkkohm) -----------------------------------
 #
@@ -1097,7 +1143,8 @@ safe_parse_urls <- function(url,
     scheme_acceptance = "general",
     scheme_policy = "infer",
     scheme_relative_handling = "http",
-    fixup_posture = "browser"
+    fixup_posture = "browser",
+    credential_handling = "strip"
   ),
   # absolute-URL, no-base spec posture. Deliberately sets scheme_policy =
   # "require", so it REJECTS scheme-less input a direct url_standard = "whatwg"
@@ -1106,7 +1153,8 @@ safe_parse_urls <- function(url,
     url_standard = "whatwg",
     scheme_acceptance = "general",
     scheme_policy = "require",
-    scheme_relative_handling = "error"
+    scheme_relative_handling = "error",
+    credential_handling = "strip"
   ),
   # Unicode-tolerant RFC-shaped generic syntax: PARSING, not normalization. The
   # path_normalization/case_handling/path_identity entries are AUTHORIZED
@@ -1120,7 +1168,8 @@ safe_parse_urls <- function(url,
     scheme_relative_handling = "keep",
     path_normalization = "none",
     case_handling = "keep",
-    path_identity = "none"
+    path_identity = "none",
+    credential_handling = "strip"
   ),
   # rurl's ORIGIN cleaning intent, finally named. scheme_acceptance stays "web"
   # (the default) -- the built-in semantic transforms are HTTP(S)-only, which
@@ -1150,7 +1199,10 @@ safe_parse_urls <- function(url,
     # behaves as a name list (`utm=x` survives, `utm_source=x` does not), and
     # leaving it here made `profile = "seo"` LESS clean on parameters than
     # passing no profile at all -- the surface's own default is "drop".
-    query_handling = "drop"
+    query_handling = "drop",
+    # ADR 0017 row 12 / RUL-001: every bundle keeps the surface default. The
+    # dial is caller-pickable (iron rule) and never a bundle's opinion.
+    credential_handling = "strip"
   )
 )
 
@@ -1177,7 +1229,8 @@ safe_parse_urls <- function(url,
   trailing_slash_handling = .opt_trailing_slash_handling,
   index_page_handling = .opt_index_page_handling,
   host_encoding = .opt_host_encoding,
-  query_handling = .opt_query_handling
+  query_handling = .opt_query_handling,
+  credential_handling = .opt_credential_handling
 )
 
 # Validate `profile`: NULL (default) or one of the allowed profile/alias names.
@@ -1451,7 +1504,8 @@ safe_parse_urls <- function(url,
                            fixup_posture = .opt_fixup_posture,
                            url_standard = NULL,
                            engine = NULL,
-                           profile_authorized = NULL) {
+                           profile_authorized = NULL,
+                           credential_handling = .opt_credential_handling) {
   # match.arg first (matches the original error precedence), then validate
   # subdomain_levels_to_keep and the query options.
   opts <- list(
@@ -1475,6 +1529,9 @@ safe_parse_urls <- function(url,
     scheme_policy = match.arg(scheme_policy),
     scheme_acceptance = match.arg(scheme_acceptance),
     fixup_posture = match.arg(fixup_posture),
+    # Stage-B policy dial (RUL-001): excluded from the Stage-A cache key like
+    # every other presentation option.
+    credential_handling = match.arg(credential_handling),
     params_keep = .validate_param_patterns(params_keep, "params_keep"),
     params_drop = .validate_param_patterns(params_drop, "params_drop"),
     sort_params = .validate_flag(sort_params, "sort_params"),
@@ -2082,6 +2139,15 @@ safe_parse_urls <- function(url,
   raw_password <- .blank_to_na(vapply(parsed_list, function(p) {
     if (is.null(p)) NA_character_ else p$password %||% NA_character_
   }, character(1), USE.NAMES = FALSE))
+  # Whether the parsed authority carried a userinfo DELIMITER (RUL-001). Read
+  # off the parser, not off `raw_user`: .parse_web_url_one() returns a non-NULL
+  # (possibly empty) `user` exactly when an "@" split the authority, and the
+  # .blank_to_na() above is what turns the empty `http://@host/` and
+  # `http://:@host/` credentials into NA. The general route is filled in below
+  # from `gen$userinfo` before ITS .blank_to_na() for the same reason.
+  authority_userinfo <- vapply(parsed_list, function(p) {
+    !is.null(p) && !is.null(p$user)
+  }, logical(1), USE.NAMES = FALSE)
   # Which rows carry a userinfo that was actually SPLIT into a username and a
   # password. The web route always splits, so it is TRUE wherever that
   # route produced credentials; the general route sets it per row below. The
@@ -2105,6 +2171,7 @@ safe_parse_urls <- function(url,
     raw_fragment[whatwg_file] <- file_parse$fragment
     raw_user[whatwg_file] <- NA_character_
     raw_password[whatwg_file] <- NA_character_
+    authority_userinfo[whatwg_file] <- FALSE
     raw_port[whatwg_file] <- NA_integer_
   }
 
@@ -2144,6 +2211,9 @@ safe_parse_urls <- function(url,
     # These are the RAW source slices in both cases; the WHATWG userinfo
     # percent-encode set is applied later, and only to the split rows, so a
     # structural ":" is never rendered as "%3A".
+    # Delimiter presence is read BEFORE .blank_to_na(): `sc://@h/` carries an
+    # empty userinfo, which is still a userinfo delimiter (RUL-001).
+    authority_userinfo[general_ok] <- !is.na(gen$userinfo[general_ok])
     gen_ui <- .blank_to_na(gen$userinfo[general_ok])
     gen_split <- !is.na(gen_ui) &
       !is.na(gen$userinfo_kind[general_ok]) &
@@ -2293,6 +2363,7 @@ safe_parse_urls <- function(url,
     raw_user = raw_user,
     raw_password = raw_password,
     general_userinfo_split = general_userinfo_split,
+    authority_userinfo = authority_userinfo,
     raw_port = raw_port,
     domain_ascii = dt_ascii$domain,
     domain_unicode = dt_unicode$domain,
@@ -2663,6 +2734,20 @@ safe_parse_urls <- function(url,
   slu <- a$scheme_less_userinfo & web_ok
   if (any(slu)) {
     result$clean_url[slu] <- NA_character_
+  }
+
+  # credential_handling (RUL-001, ADR 0017 row 12): the clean surface always
+  # drops userinfo; under "reject" a row whose parsed authority carried ANY
+  # userinfo delimiter -- `user@`, `user:pw@`, a bare `@`, `:@`, a repeated
+  # `@` -- gets NA instead of a silently collapsed URL (RFC 3986 sec 3.2.1,
+  # sec 7.5, sec 7.6). Only `clean_url` moves: the components, the verdicts
+  # and the diagnostics read the same Stage-A facts as before, and the identity
+  # surfaces (serialize_url / get_url_key) never pass through here.
+  if (identical(opts$credential_handling, "reject")) {
+    rej <- a$authority_userinfo & web_ok
+    if (any(rej)) {
+      result$clean_url[rej] <- NA_character_
+    }
   }
 
   # Output-side encoding contract: declare the returned character columns UTF-8.

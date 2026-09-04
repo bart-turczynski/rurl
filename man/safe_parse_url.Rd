@@ -29,7 +29,8 @@ safe_parse_url(
   scheme_acceptance = c("web", "general"),
   url_standard = NULL,
   engine = NULL,
-  profile = NULL
+  profile = NULL,
+  credential_handling = c("strip", "reject")
 )
 }
 \arguments{
@@ -368,6 +369,27 @@ strip www / trailing slash / index page, drop the whole query. Inspect
 the resolved bundle with
 \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
 (forwarded through its \code{...}).}
+
+\item{credential_handling}{How \code{clean_url} treats a URL whose parsed
+authority carried a userinfo delimiter (\verb{user@}, \verb{user:password@}, a bare
+\code{@}, or a repeated \code{@}). Defaults to "strip". A policy dial on the clean
+surface (ADR 0017, mutation-table row 12; RUL-001), not a standards axis:
+it composes with every \code{url_standard}, including \code{NULL}, and never
+touches the \code{user} / \code{password} columns, \code{parse_status}, the diagnostics,
+\code{\link{serialize_url}} or \code{\link{get_url_key}}.
+\itemize{
+\item{"strip": (Default) The userinfo is dropped and the rest of the
+URL is emitted, exactly as before this argument existed.}
+\item{"reject": \code{clean_url} is \code{NA} for such a row. RFC 3986 section
+3.2.1 deprecates the \code{user:password} form and lets an application
+reject it; sections 7.5 and 7.6 describe the credential leak and the
+\verb{https://example.com@evil.example/} semantic attack a silently
+collapsed clean URL would hide. Use this when a cleaned URL that
+\emph{looks} like the credential-free original would be misleading.}
+}
+There is no "keep": \code{\link{serialize_url}} already preserves
+credentials under both standards, and \code{\link{format_url}} redacts
+them for display.}
 }
 \value{
 A named list with the following components:
@@ -428,7 +450,9 @@ the port is excluded, as before); fragment and userinfo are always
 excluded (use the dedicated components above to retrieve them). With
 \code{path_encoding = "decode"} the path is shown decoded, so \code{clean_url}
 is human-readable rather than guaranteed URL-safe. NA on a parse error,
-or when the host is empty/NA except for a valid hostless \verb{file:} URL.
+when the host is empty/NA except for a valid hostless \verb{file:} URL, or
+under \code{credential_handling = "reject"} when the authority carried a
+userinfo delimiter.
 \item \code{parse_status}: Character string indicating parsing outcome
 ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
 "warning-invalid-tld", "warning-public-suffix", "warning-userinfo").

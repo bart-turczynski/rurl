@@ -29,7 +29,8 @@ get_clean_url(
   scheme_acceptance = c("web", "general"),
   url_standard = NULL,
   engine = NULL,
-  profile = NULL
+  profile = NULL,
+  credential_handling = c("strip", "reject")
 )
 }
 \arguments{
@@ -368,6 +369,27 @@ strip www / trailing slash / index page, drop the whole query. Inspect
 the resolved bundle with
 \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
 (forwarded through its \code{...}).}
+
+\item{credential_handling}{How \code{clean_url} treats a URL whose parsed
+authority carried a userinfo delimiter (\verb{user@}, \verb{user:password@}, a bare
+\code{@}, or a repeated \code{@}). Defaults to "strip". A policy dial on the clean
+surface (ADR 0017, mutation-table row 12; RUL-001), not a standards axis:
+it composes with every \code{url_standard}, including \code{NULL}, and never
+touches the \code{user} / \code{password} columns, \code{parse_status}, the diagnostics,
+\code{\link{serialize_url}} or \code{\link{get_url_key}}.
+\itemize{
+\item{"strip": (Default) The userinfo is dropped and the rest of the
+URL is emitted, exactly as before this argument existed.}
+\item{"reject": \code{clean_url} is \code{NA} for such a row. RFC 3986 section
+3.2.1 deprecates the \code{user:password} form and lets an application
+reject it; sections 7.5 and 7.6 describe the credential leak and the
+\verb{https://example.com@evil.example/} semantic attack a silently
+collapsed clean URL would hide. Use this when a cleaned URL that
+\emph{looks} like the credential-free original would be misleading.}
+}
+There is no "keep": \code{\link{serialize_url}} already preserves
+credentials under both standards, and \code{\link{format_url}} redacts
+them for display.}
 }
 \value{
 A character vector of cleaned URLs.
@@ -378,7 +400,11 @@ protocol, www, case, and trailing slash handling rules. By default the result
 is a normalized canonical key composed of scheme, host, and path only; port
 is dropped (\code{port_handling = "exclude"}), and fragment/userinfo are
 always excluded (use \code{\link{get_port}}, \code{\link{get_fragment}}, or
-\code{\link{get_userinfo}} for those).
+\code{\link{get_userinfo}} for those). A URL that carried credentials is
+silently collapsed to its credential-free spelling by default
+(\code{credential_handling = "strip"}); pass
+\code{credential_handling = "reject"} to get \code{NA} for such a row
+instead (RFC 3986 sections 3.2.1, 7.5 and 7.6; ADR 0017 row 12).
 }
 \details{
 The query string is dropped by default (\code{query_handling = "drop"}), so
@@ -493,6 +519,9 @@ get_clean_url(
 u <- c("http://u:pw@example.com/a#frag", "http://example.com/a?q=1")
 get_clean_url(u)
 # -> both "http://example.com/a"
+# Ask for NA instead of a silently collapsed credential-bearing URL:
+get_clean_url(u, credential_handling = "reject")
+# -> NA, "http://example.com/a"
 serialize_url(u[1])
 # The identity surface keeps them apart: the query is identity, the
 # fragment and userinfo are not.
