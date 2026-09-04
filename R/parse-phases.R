@@ -2067,11 +2067,13 @@
 # helpers .normalize_and_punycode_vec()/.punycode_to_unicode_vec() (domain.R);
 # this phase only selects the eligible rows and applies the scalar fallback
 # rule (keep the pre-encode host when the encode returns NA, or when the decode
-# returns NA / "").
+# returns NA / ""). Under `whatwg` the default ("keep") presentation is NOT a
+# no-op: it renders the UTS-46-mapped host (RUL-002; see
+# .whatwg_host_presentation_vec()).
 .apply_host_encoding_vec <- function(final_host, host_encoding, is_ip_host,
                                      url_standard = NULL) {
   host_for_clean <- final_host
-  if (host_encoding != "idna" && host_encoding != "unicode") {
+  if (host_encoding == "keep" && !.is_whatwg(url_standard)) {
     return(host_for_clean)
   }
   elig <- !is.na(final_host) & final_host != "" & !is_ip_host
@@ -2097,19 +2099,10 @@
       USE.NAMES = FALSE
     )
   }
-  if (host_encoding == "idna") {
-    if (.is_whatwg(url_standard)) {
-      encoded <- punycoder::host_normalize(
-        subset, check_hyphens = FALSE, use_std3 = FALSE,
-        verify_dns_length = FALSE
-      )
-      retry <- is.na(encoded)
-      if (any(retry)) {
-        encoded[retry] <- .normalize_and_punycode_vec(subset[retry])
-      }
-    } else {
-      encoded <- .normalize_and_punycode_vec(subset)
-    }
+  if (.is_whatwg(url_standard)) {
+    host_for_clean[elig] <- .whatwg_host_presentation_vec(subset, host_encoding)
+  } else if (host_encoding == "idna") {
+    encoded <- .normalize_and_punycode_vec(subset)
     keep_orig <- is.na(encoded)
     encoded[keep_orig] <- subset[keep_orig]
     host_for_clean[elig] <- encoded
@@ -2120,6 +2113,53 @@
     host_for_clean[elig] <- decoded
   }
   host_for_clean
+}
+
+# WHATWG host presentation (RUL-002). The WHATWG host parser runs UTS-46
+# "domain to ASCII" (Transitional_Processing false, CheckHyphens false,
+# UseSTD3ASCIIRules false, VerifyDnsLength false) and the URL record stores that
+# ASCII host; "domain to Unicode" is UTS-46 ToUnicode of it (UTS #46 section 4,
+# 4.2, 4.3). So under `whatwg` every spelling is a rendering of ONE mapped form:
+#   idna    -> ToASCII(host)
+#   unicode -> ToUnicode(ToASCII(host))
+#   keep    -> ToUnicode(ToASCII(host)) for a host written in Unicode, and
+#              ToASCII(host) for a host already carrying an ACE (`xn--`) label,
+#              mirroring how Stage B picks the `domain`/`tld` spelling for
+#              "keep" (`host_is_ace`, R/parse.R) so host and domain agree.
+# The mapped form is computed once via `punycoder::host_normalize()` -- the
+# call the `idna` branch already made, never the ADR 0002 helpers, which stay
+# the reversible (unmapped) renderers of the `rfc3986` and `NULL` arms. When
+# domain-to-ASCII fails the pre-encode host is kept, as before.
+.whatwg_host_presentation_vec <- function(subset, host_encoding) {
+  mapped <- punycoder::host_normalize(
+    subset, check_hyphens = FALSE, use_std3 = FALSE,
+    verify_dns_length = FALSE
+  )
+  retry <- is.na(mapped)
+  if (any(retry)) {
+    mapped[retry] <- .normalize_and_punycode_vec(subset[retry])
+  }
+  keep_orig <- is.na(mapped)
+  mapped[keep_orig] <- subset[keep_orig]
+  if (host_encoding == "idna") {
+    return(mapped)
+  }
+  # Only an ACE label decodes to anything other than itself; skip the
+  # Punycode pass (and its cache) for the all-ASCII majority.
+  decoded <- mapped
+  ace_mapped <- .host_is_ace_vec(mapped)
+  if (any(ace_mapped)) {
+    dec <- .punycode_to_unicode_vec(mapped[ace_mapped])
+    keep_mapped <- is.na(dec) | dec == ""
+    dec[keep_mapped] <- mapped[ace_mapped][keep_mapped]
+    decoded[ace_mapped] <- dec
+  }
+  if (host_encoding == "unicode") {
+    return(decoded)
+  }
+  ace_source <- .host_is_ace_vec(subset)
+  decoded[ace_source] <- mapped[ace_source]
+  decoded
 }
 
 # Phase 9 (scalar wrapper): delegates to .apply_host_encoding_vec().

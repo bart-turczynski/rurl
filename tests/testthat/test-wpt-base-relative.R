@@ -170,33 +170,29 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 # `non-spec:/p >> /.//path`, `>> /..//path`, `>> ..//path`, `>> a/..//path`,
 # `non-spec:/..//p >> path`.
 #
-# PARTLY DISCHARGED: `WPT_REL_ABSOLUTE_REF` (3 of 4 rows, RURL-lxdwuacn) --
-# NOT a resolution defect at all: the reference is absolute, so the base is
-# irrelevant and the deviation is in absolute parsing. Kept visible so a
-# resolution fix is not credited with -- or blamed for -- them. The three
-# obfuscated-IPv4 rows are exact: the WHATWG host model read "ends in a
+# DISCHARGED: `WPT_REL_ABSOLUTE_REF` (4 rows, RURL-lxdwuacn) -- NOT a
+# resolution defect at all: the reference is absolute, so the base is
+# irrelevant and the deviation was in absolute parsing. The three
+# obfuscated-IPv4 rows went first: the WHATWG host model read "ends in a
 # number" off the SOURCE token, so `%30%78%63%30%2e%30%32%35%30.01`
 # (percent-encoded `0xc0.0250.01`) was rejected and the fullwidth spelling was
 # accepted as a reg-name; `.apply_host_standard_model_vec()`
 # (R/parse-phases.R) now reads it after percent-decoding and UTS-46 mapping,
 # in the host parser's own order, and all three are `http://192.168.0.1/`.
-
-# The one row left. `tel:1234567890` matches the scheme-less `<host>:<port>`
-# carve-out in `.general_parsed_mask()` (R/parse-state.R) and is diverted from
-# the opaque parser to the web route, which rejects it, while WHATWG's scheme
-# state reads `tel` as the scheme and `1234567890` as its opaque path. The fix
-# is a one-line gate (the carve-out is off under `rfc3986` already, and has no
-# job under `whatwg` once `scheme_policy = "require"` has switched inference
-# off), but it also flips `www.php.net:80/index.php?test=1` -- external
-# vector yal-009, whose `fsss_whatwg = NA` cell is a FILED acceptance-level
-# deviation (RURL-yeikpnan) with `rurl_deviation` accounting and a sha256 pin
-# in both oracle-provenance.json and the OR-021 register row
-# (design/oracle-fixtures.md). Clearing a filed deviation is a re-baselining
-# decision with an owner, not a side effect of a parser fix, so the row stays
-# enumerated here until that decision is taken.
-WPT_REL_ABSOLUTE_REF <- "http://example.org/foo/bar >> tel:1234567890"
-
-WPT_REL_KNOWN_DIFFER <- WPT_REL_ABSOLUTE_REF
+# The last, `tel:1234567890`, matched the scheme-less `<host>:<port>`
+# carve-out in `.general_parsed_mask()` (R/parse-state.R) and was diverted
+# from the opaque parser to the web route, which rejected it, while WHATWG's
+# scheme state reads `tel` as the scheme and `1234567890` as its opaque path.
+# The carve-out is now off under `whatwg` whenever `scheme_policy =
+# "require"` has switched inference off (RUL-014): the same gate `rfc3986`
+# already had, because RFC 3986 section 3.1 and the WHATWG scheme state carry
+# the identical production. That flipped external vector yal-009
+# (`www.php.net:80/index.php?test=1`) from a FILED deviation (RURL-yeikpnan)
+# to the WHATWG-correct string, and its `rurl_deviation` accounting and sha256
+# pins were re-baselined in the same slice (design/oracle-fixtures.md).
+#
+# No family is left: the corpus is 274/274, and the `expect_property` below
+# runs with an EMPTY deviation set so a regression re-lists its row.
 
 # Assert a property holds of every row except an enumerated deviation set.
 # House style, copied from test-rfc3986-serialization-properties.R: the
@@ -206,13 +202,6 @@ WPT_REL_KNOWN_DIFFER <- WPT_REL_ABSOLUTE_REF
 expect_property <- function(violates, input, deviations = character(0)) {
   expect_setequal(input[violates], deviations)
 }
-
-test_that("the known-differ families are disjoint and sum to the whole", {
-  # The constant is itself data, and a duplicated id across two families would
-  # make the set-equality below pass while the families lie about ownership.
-  expect_length(WPT_REL_KNOWN_DIFFER, 1L)
-  expect_length(unique(WPT_REL_KNOWN_DIFFER), 1L)
-})
 
 test_that("WPT base-relative rows resolve to the standard's own `href`", {
   j <- wpt_base_relative_suite()
@@ -244,5 +233,5 @@ test_that("WPT base-relative rows resolve to the standard's own `href`", {
 
   # A rejected row (NA) differs just as much as a wrongly-spelled one.
   differs <- is.na(got) | got != href
-  expect_property(differs, id, WPT_REL_KNOWN_DIFFER)
+  expect_property(differs, id)
 })
