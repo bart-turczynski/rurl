@@ -323,6 +323,9 @@
   list(
     ok = ok,
     scheme = scheme_lc,
+    # The scheme AS SPELLED, read by `form = "source"` alone (RUL-007): the
+    # key and join surfaces keep reading the folded `scheme` above.
+    source_scheme = a$source_scheme,
     userinfo = lex$userinfo,
     host = host,
     host_kind = host_kind,
@@ -508,7 +511,11 @@ serialize_url <- function(url,
     )
   } else {
     .serialize_rfc_full_vec(
-      scheme = slice(rec$scheme), userinfo = slice(rec$userinfo),
+      # Section 6.2.2.1 folds scheme case in `normalized` only (RUL-007).
+      scheme = slice(
+        if (identical(form, "source")) rec$source_scheme else rec$scheme
+      ),
+      userinfo = slice(rec$userinfo),
       host = slice(rec$host), host_kind = slice(rec$host_kind),
       authority_delimiter_present = slice(rec$authority_delimiter_present),
       path = slice(rec$path), rfc_path_form = slice(rec$rfc_path_form),

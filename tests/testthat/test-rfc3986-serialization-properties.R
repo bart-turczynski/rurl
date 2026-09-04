@@ -185,13 +185,17 @@ rfc_prop_non_ascii <- function(x) {
 
 # Component positions whose percent-spelling the `source` posture DOES preserve,
 # measured byte-for-byte over all 512 triplet spellings. The host is here under
-# BOTH scheme classes since RURL-xkhbhaje; the query and fragment are the only
-# positions still absent, because they fold hex case (RURL-gkmwqpos, the
-# hex-fold family -- numbered 1, not 3, in the test below; the old "family 3"
-# pointer was a mis-citation).
+# BOTH scheme classes since RURL-xkhbhaje, and the query and fragment since
+# RURL-gkmwqpos (ruling RUL-007), which moved sec 6.2.2.1's hex-case fold off
+# the `rfc3986` parse record and into the `normalized` serializer form. Every
+# component position of `rfc_prop_population()` is now listed (the segment
+# shape measured 0 deviations over its 494 accepted rows at the same time), so
+# a position that starts folding again fails the test below by name.
 SRC_PRESERVING_POSITIONS <- c(
   "http://ho%sst/p", "http://u%s@host/p", "http://host/pa%sth",
-  "foo://ho%sst/p", "foo://u%s@host/p", "foo://host/pa%sth", "foo:opa%sque"
+  "http://host/p?q%sx", "http://host/p#f%sx", "http://host/%s/b",
+  "foo://ho%sst/p", "foo://u%s@host/p", "foo://host/pa%sth",
+  "foo://host/p?q%sx", "foo://host/p#f%sx", "foo:opa%sque"
 )
 
 # --- P-G: every serialization is admitted by the RFC 3986 grammar ------------
@@ -352,81 +356,91 @@ test_that("the source posture preserves percent-spelling outside the host", {
   expect_property(keep & out != pop, pop)
 })
 
-test_that("the source posture is not byte-preserving in two known places", {
-  # RURL-gkmwqpos. `?serialize_url` says `source` preserves source bytes; it
-  # does not, on 316 of 5966 accepted population rows in two families. These
-  # are pinned as CHARACTERIZED FACTS, not as approved behavior: the ticket
-  # records that the open question is whether the docs or the code is wrong.
+test_that("the source posture is byte-preserving on the whole population", {
+  # RURL-gkmwqpos, ruling RUL-007. `?serialize_url` says `source` preserves
+  # source bytes, and until this ruling it did not on 316 of the 5967 accepted
+  # population rows, in two families the previous version of this test pinned
+  # as CHARACTERIZED FACTS: the query/fragment hex-case fold (313 rows) and the
+  # scheme case fold (3 rows). Both are halves of RFC 3986 sec 6.2.2.1, which
+  # sits under sec 6 "Normalization and Comparison" -- so both belong to
+  # `form = "normalized"`, where the host's sec 6.2.2.2 fold already went in
+  # RURL-xkhbhaje, and neither to the parse record nor to `form = "source"`.
   #
-  # The accepted count rose 5664 -> 5966 in RURL-crrgaiel, which admitted any
-  # well-formed `pct-encoded` in an `rfc3986` reg-name (RFC 3986 sec 3.2.2). The
-  # 302 are derived, not observed: all 302 are the single shape
-  # `http://ho%XXst/p` (the `foo://` twins already parsed, on the general
-  # route), and they are 173 newly-admitted octets spread over the population's
-  # two hex spellings -- 129 of those octets have a letter-bearing hex pair and
-  # so appear twice, 44 are digits-only and appear once: 129*2 + 44 = 302. The
-  # complement, 27 + 56 = 83, is exactly the octet count that already parsed in
-  # `tools/octet-acceptance-sweep.R`. All 302 BYTE-PRESERVE, which is why the
-  # deviating count below is unchanged at 316.
-  #
-  # Two of the four original families are gone, and neither cost any acceptance
-  # (5664 rows accepted before and after each, as measured at that time):
-  #
-  #   * the host, which was normalized on the parse record -- RURL-xkhbhaje
-  #     moved sec 6.2.2.2 out of the parse and into the `normalized` serializer
-  #     branch, so the host now preserves byte-for-byte at both scheme classes
-  #     (see SRC_PRESERVING_POSITIONS, which it joined).
-  #   * the empty path rendered as "/" -- RURL-epoinamh did the same for
-  #     sec 6.2.3. The parse now leaves `path-abempty`'s empty match empty and
-  #     only `form = "normalized"` roots it, which retired exactly 8 rows from
-  #     the deviating set (`http://h`, `http://h?`, `http://h#`, `http://h?#`
-  #     and the four authority shapes whose "?"/"#" ends the authority) and
-  #     added none. Was 324; the 5668 recorded alongside it was already stale at
-  #     that point -- the population accepts 5664, and did so before this fix
-  #     as well.
+  # History of the deviating count, so the zero below is read as a measurement
+  # and not as a vacuous bound: 324 -> 316 when RURL-epoinamh left
+  # `path-abempty`'s empty match empty (8 rows retired), 316 -> 316 when
+  # RURL-crrgaiel admitted 302 new `http://ho%XXst/p` rows that all preserved,
+  # 316 -> 0 here. The accepted count rose 5664 -> 5966 (RURL-crrgaiel) ->
+  # 5967 (RURL-uafjkaas, `urn:ietf:rfc:2648`) and does not move with this fix:
+  # acceptance is `pqf_bytes`'s question and the parser still asks it.
 
   src <- function(x) serialize_url(x, standard = "rfc3986", form = "source")
-
-  # 1. Query and fragment fold hex case -- half of sec 6.2.2.1, in the posture
-  # defined as applying none of it. Total, not partial: every one of the 156
-  # triplet spellings that HAS a lowercase hex letter folds, at both positions.
-  expect_identical(src("http://host/p?q%0ax"), "http://host/p?q%0Ax")
-  expect_identical(src("http://host/p#f%0ax"), "http://host/p#f%0Ax")
-  for (tmpl in c("http://host/p?q%sx", "http://host/p#f%sx")) {
-    lower <- sprintf(tmpl, sprintf("%%%02x", 0:255))
-    out <- src(lower)
-    expect_identical(sum(out != lower), 156L)
-    # The 156 are exactly the spellings containing a foldable letter, and the
-    # fold is the ONLY change: upper-casing the input reproduces the output.
-    expect_identical(out, sprintf(tmpl, sprintf("%%%02X", 0:255)))
+  norm <- function(x) {
+    serialize_url(x, standard = "rfc3986", form = "normalized")
   }
 
-  # 2. Scheme case -- the other half of sec 6.2.2.1, applied while the host
-  # half is not, so the two forms agree on the scheme and differ on the host.
-  expect_identical(src("HTTP://EXAMPLE.COM/"), "http://EXAMPLE.COM/")
+  # 1. Query and fragment keep their hex case. Total, at both positions: every
+  # one of the 512 triplet spellings comes back as written. `normalized` is the
+  # negative control: it still folds (sec 6.2.2.1) -- and, being a
+  # normalization, is the same function of either spelling.
+  expect_identical(src("http://host/p?q%0ax"), "http://host/p?q%0ax")
+  expect_identical(src("http://host/p#f%0ax"), "http://host/p#f%0ax")
+  expect_identical(norm("http://host/p?q%0ax"), "http://host/p?q%0Ax")
+  expect_identical(norm("http://host/p#f%0ax"), "http://host/p#f%0Ax")
+  expect_identical(
+    src("http://x.test/p%7ca?q=%7ca#f%7ca"), "http://x.test/p%7ca?q=%7ca#f%7ca"
+  )
+  for (tmpl in c("http://host/p?q%sx", "http://host/p#f%sx")) {
+    lower <- sprintf(tmpl, sprintf("%%%02x", 0:255))
+    upper <- sprintf(tmpl, sprintf("%%%02X", 0:255))
+    expect_identical(src(lower), lower)
+    expect_identical(src(upper), upper)
+    expect_identical(norm(lower), norm(upper))
+    expect_false(any(norm(lower) == lower & norm(upper) != upper))
+  }
+
+  # 2. The scheme keeps its case, on the web route and on the general route
+  # alike, while `normalized` folds it (sec 6.2.2.1) and the host stays as
+  # written under `source` (sec 6.2.2.2 is `normalized`'s too).
+  expect_identical(src("HTTP://EXAMPLE.COM/"), "HTTP://EXAMPLE.COM/")
+  expect_identical(src("Http://EXAMPLE.COM/"), "Http://EXAMPLE.COM/")
+  expect_identical(src("FOO://x/"), "FOO://x/")
+  expect_identical(src("URN:ietf:rfc:2648"), "URN:ietf:rfc:2648")
+  expect_identical(norm("HTTP://EXAMPLE.COM/"), "http://example.com/")
+  expect_identical(norm("FOO://x/"), "foo://x/")
+
+  # The record's scheme COLUMN is not the source spelling: it is the
+  # classification token every consumer keys off, and the key contract keeps
+  # scheme identity case-insensitive (key-join-contracts.md "scheme case": raw
+  # spelling is retained for source reproduction only, never key equality).
+  p <- safe_parse_urls(
+    c("HTTP://EXAMPLE.COM/", "http://example.com/"),
+    url_standard = "rfc3986", scheme_policy = "require",
+    scheme_acceptance = "general"
+  )
+  expect_identical(p$scheme, c("http", "http"))
+  # (Same host spelling on both rows: the `rfc3986` key's host is the source
+  # spelling since RURL-xkhbhaje, and that is not what is under test here.)
+  k <- get_url_key(
+    c("HTTP://example.com/", "http://example.com/"),
+    url_key_policy(standard = "rfc3986")
+  )
+  expect_identical(k[[1L]], k[[2L]])
 
   # And the retired family, asserted from the other side so it cannot come back:
   # an authority-only URI keeps its empty path in the `source` posture, and only
   # `normalized` applies sec 6.2.3.
   expect_identical(src(c("http://h", "http://h?")), c("http://h", "http://h?"))
   expect_identical(
-    serialize_url(c("http://h", "http://h?"), standard = "rfc3986",
-                  form = "normalized"),
-    c("http://h/", "http://h/?")
+    norm(c("http://h", "http://h?")), c("http://h/", "http://h/?")
   )
 
-  # And the bound, so two families cannot quietly become three.
-  #
-  # 5966 -> 5967 with RURL-uafjkaas. Exactly one population row moved, and it is
-  # named rather than absorbed: `urn:ietf:rfc:2648` used to serialize to NA
-  # because the colon-greedy host:port carve-out diverted it off the opaque
-  # parser and onto the web route, which rejects `urn:`. It now round-trips. The
-  # `changed` count is untouched, which is the load-bearing half of this
-  # assertion: the row joined the byte-PRESERVING family, so the two known
-  # non-preserving families did not become three.
+  # And the bound: zero, over the whole accepted population, so a family cannot
+  # come back quietly. `urn:ietf:rfc:2648` is still named (RURL-uafjkaas): it
+  # is the one row whose acceptance the count depends on.
   pop <- rfc_prop_serialize("source")
   expect_length(pop$input, 5967L)
-  expect_identical(sum(pop$output != pop$input), 316L)
+  expect_identical(sum(pop$output != pop$input), 0L)
   expect_identical(src("urn:ietf:rfc:2648"), "urn:ietf:rfc:2648")
 })
 
