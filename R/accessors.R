@@ -346,9 +346,11 @@ get_clean_url <- function(url,
   # Capture query_handling's supplied-ness BEFORE match.arg() reassigns it (an
   # assignment to a formal clears its missing() status), so profile resolution
   # can tell an explicit query_handling from the default (seo governs it).
-  # Same for credential_handling (every bundle carries it, RUL-001).
+  # Same for credential_handling (every bundle carries it, RUL-001) and for
+  # port_handling (seo pins `strip_default`, RUL-016).
   query_handling_supplied <- !missing(query_handling)
   credential_handling_supplied <- !missing(credential_handling)
+  port_handling_supplied <- !missing(port_handling)
   source <- match.arg(source)
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
@@ -456,6 +458,7 @@ get_clean_url <- function(url,
           match.arg(host_encoding, .opt_host_encoding)
         },
         query_handling = if (query_handling_supplied) query_handling else NULL,
+        port_handling = if (port_handling_supplied) port_handling else NULL,
         credential_handling = if (credential_handling_supplied) {
           credential_handling
         } else {

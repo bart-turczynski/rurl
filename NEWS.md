@@ -36,6 +36,45 @@
   overrides the bundle, so `profile = "seo", host_encoding = "keep"` restores
   the previous host rendering.
 
+- **`profile = "seo"` (and `"canonical"`) now drops only a *default* port and
+  keeps a non-default one; and `port_handling = "strip_default"` judges
+  default-ness on the scheme the input was parsed with, never on the scheme
+  `protocol_handling = "https"` renders** (RUL-016, RURL-msybcxgq; ADR 0017
+  D2 row 9 amended). RFC 3986 §6.2.3 (scheme-based normalization: the default
+  port is equivalent to no port) and the WHATWG URL Standard's port state (a
+  port equal to the scheme's default is set to null) sanction dropping a
+  default port; nothing sanctions dropping a non-default port, which names a
+  different origin (RFC 6454 §4). The bundle inherited the surface default
+  `port_handling = "exclude"`, and the port builder received the upgraded
+  scheme, so both halves folded origins.
+
+  ```r
+  # before
+  get_clean_url("http://example.com:8080/a", profile = "seo")
+  #> "https://example.com/a"
+  get_clean_url("http://example.com:443/a", url_standard = "whatwg",
+                port_handling = "strip_default", protocol_handling = "https")
+  #> "https://example.com/a"
+
+  # after
+  get_clean_url("http://example.com:8080/a", profile = "seo")
+  #> "https://example.com:8080/a"
+  get_clean_url("http://example.com:443/a", url_standard = "whatwg",
+                port_handling = "strip_default", protocol_handling = "https")
+  #> "https://example.com:443/a"
+  ```
+
+  `http://example.com:80/a` under the same dials now cleans to
+  `https://example.com/a` (it rendered `https://example.com:80/a`, a port the
+  WHATWG record holds as null), and under `url_standard = "whatwg"` the
+  parse-record `port` column agrees with `get_port()` regardless of
+  `protocol_handling`. The surface default `port_handling = "exclude"` and the
+  literal `"keep"` are byte-identical; `profile = "seo", port_handling =
+  "exclude"` restores the old fold. `strip_default` combined with a
+  scheme-rewriting `protocol_handling` moves under `url_standard = NULL` too —
+  a default-path defect fix under ADR 0016, with its witness and signature in
+  `tests/testthat/test-clean-url-port-strip-default.R`.
+
 - **Under `url_standard = "whatwg"` the host presentation now applies the
   WHATWG host parser's UTS-46 mapping — on the default rendering and under
   `host_encoding = "unicode"`, not only under `"idna"`** (RUL-002,

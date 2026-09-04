@@ -2337,7 +2337,11 @@
 # under `url_standard = "whatwg"`; callers use it as an explicit non-parity
 # override when they need to retain a syntactic default port. `scheme` keys the
 # default-port table only -- it is never rendered here (the caller already
-# embeds the cased scheme in `scheme_part`).
+# embeds the cased scheme in `scheme_part`). Callers pass the PARSED scheme
+# (RUL-016): under `protocol_handling = "https"` the rendered scheme is not
+# the one whose default port the input carried (RFC 3986 sec 6.2.3; WHATWG
+# port state), and judging on it folded `http://host:443` into
+# `https://host` while resurrecting `http://host:80` as `https://host:80`.
 .build_port_part_vec <- function(scheme, port, port_handling, url_standard) {
   # Retained for call-site stability; port rendering is selected entirely by
   # `port_handling` now that `keep` is the literal override in every profile.
@@ -2374,11 +2378,16 @@
 # tests) appends nothing, so clean_url stays scheme+host+path only. `port` is
 # the raw (unfiltered) port column; NULL (the scalar wrapper and phase unit
 # tests) or `port_handling = "exclude"` (the default) keeps clean_url
-# port-free, exactly as before.
+# port-free, exactly as before. `port_scheme` is the scheme whose default-port
+# table `strip_default` consults (RUL-016): the PARSED scheme, which differs
+# from `scheme_output` once `protocol_handling` has rewritten it. It defaults
+# to `scheme_output` so the scalar wrapper and the phase unit tests, which
+# never upgrade the scheme, are byte-identical.
 .build_clean_url_vec <- function(scheme_output, host_output, path_output,
                                  trailing_slash_handling, query = NULL,
                                  port = NULL, port_handling = "exclude",
-                                 url_standard = NULL) {
+                                 url_standard = NULL,
+                                 port_scheme = scheme_output) {
   n <- length(host_output)
   clean_url <- rep(NA_character_, n)
   has_host <- !is.na(host_output) & host_output != ""
@@ -2391,7 +2400,7 @@
 
   scheme_part <- ifelse(!is.na(scheme_output), paste0(scheme_output, "://"), "")
   port_part <- .build_port_part_vec(
-    scheme_output, port, port_handling, url_standard
+    port_scheme, port, port_handling, url_standard
   )
   path_part <- ifelse(!is.na(path_output), path_output, "")
   if (trailing_slash_handling == "strip") {
@@ -2494,7 +2503,8 @@
 .serialize_whatwg_vec <- function(scheme, host, host_kind,
                                   authority_delimiter_present, path, path_kind,
                                   query, query_kind, port, port_handling,
-                                  trailing_slash_handling) {
+                                  trailing_slash_handling,
+                                  port_scheme = scheme) {
   # Part of the state the caller hands the serializer, but not consulted: the
   # `//` introducer follows the host, not the source spelling. force() marks it
   # deliberately consumed, as .serialize_rfc_generic_vec() does for host_kind.
@@ -2515,9 +2525,11 @@
   if (!is.null(port)) {
     port <- rep_len(port, n)
   }
+  port_scheme <- rep_len(port_scheme, n)
 
   scheme_prefix <- paste0(scheme, ":")
-  port_part <- .build_port_part_vec(scheme, port, port_handling, "whatwg")
+  # `port_scheme` (RUL-016): the parsed scheme keys the default-port table.
+  port_part <- .build_port_part_vec(port_scheme, port, port_handling, "whatwg")
   is_opaque <- path_kind == "opaque"
 
   # Per-row body encoding + the `/.` guard. The byte encoders are scalar
@@ -2610,7 +2622,8 @@
 .serialize_rfc_generic_vec <- function(scheme, host, host_kind,
                                        authority_delimiter_present, path,
                                        rfc_path_form, query, query_kind,
-                                       port, port_handling) {
+                                       port, port_handling,
+                                       port_scheme = scheme) {
   force(rfc_path_form)
   force(host_kind)
   n <- max(
@@ -2628,9 +2641,13 @@
   if (!is.null(port)) {
     port <- rep_len(port, n)
   }
+  port_scheme <- rep_len(port_scheme, n)
 
   scheme_prefix <- paste0(scheme, ":")
-  port_part <- .build_port_part_vec(scheme, port, port_handling, "rfc3986")
+  # `port_scheme` (RUL-016): the parsed scheme keys the default-port table.
+  port_part <- .build_port_part_vec(
+    port_scheme, port, port_handling, "rfc3986"
+  )
   path_body <- ifelse(is.na(path), "", path) # source-preserving; no encoding
 
   out <- character(n)
