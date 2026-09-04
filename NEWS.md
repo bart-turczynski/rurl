@@ -202,9 +202,10 @@
   Together with the scheme-production fix below and the three fixes under
   *Bug fixes* (the `file:` drive-letter rules, the `/.` guard at the
   recomposition seam, and the WHATWG host model's "ends in a number" order),
-  that corpus now scores **273 exact with 1 enumerated difference** -- the
-  absolute reference `tel:1234567890`, which is a filed acceptance-level
-  deviation (RURL-yeikpnan), not a resolution defect. Under `"rfc3986"` the
+  that corpus now scores **274 exact with no enumerated difference**. The
+  last one, the absolute reference `tel:1234567890`, was never a resolution
+  defect: it was the scheme-less host:port carve-out rejecting the absolute
+  parse, fixed under *Bug fixes* (RURL-lxdwuacn). Under `"rfc3986"` the
   merge stays RFC 3986 §5.2–§5.3. **Under the default `url_standard = NULL`
   nothing moves**: that path is byte-frozen (ADR 0007) and was verified
   unchanged across the corpus.
@@ -303,6 +304,30 @@
   (ADR 0015).
 
 ### Bug fixes
+
+- **A dotted scheme token that looks like `host:port` now parses as a scheme
+  under `scheme_policy = "require"`** (`whatwg`; RURL-lxdwuacn, RUL-014). With
+  `profile = "whatwg"`, `tel:1234567890` and `www.php.net:80/index.php?test=1`
+  were rejected outright: the scheme-less `example.com:8080` carve-out matched
+  them and diverted them from the opaque parser to the web route, which
+  rejects those schemes. The WHATWG URL Standard's *scheme start state* and
+  *scheme state* read `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` followed by
+  `:` as the scheme, with no exception for a token that looks like a host; RFC
+  3986 §3.1 carries the identical production, and the `rfc3986` arm already
+  read it that way. `serialize_url(x, standard = "whatwg")` now returns
+  `tel:1234567890` and `www.php.net:80/index.php?test=1` (scheme
+  `www.php.net`, opaque path `80/index.php`, query `test=1`) instead of `NA`.
+
+  The carve-out is the browser-omnibox affordance `scheme_policy = "infer"`
+  names (ADR 0010), so it is untouched there — `www.php.net:80/index.php?test=1`
+  still reads as host `www.php.net` — and untouched under the byte-frozen
+  `url_standard = NULL` (ADR 0007); both were measured byte-identical. Two
+  fixtures moved with it: the WPT base-relative corpus's last enumerated
+  difference (below) is discharged, and external vector `yal-009` no longer
+  records a deviation (RURL-yeikpnan) — its measured columns and the fixture's
+  sha256 pins were re-baselined per `design/oracle-fixtures.md`, and its
+  `whatwg_expected = "failure"` cell, which recorded rurl's own former output
+  as the standard's mandate, is now `"accept"`.
 
 - **`resolve_url()` no longer loses the `/.` guard when a resolved path's
   first segment is empty** (both named profiles; RURL-bedensww). RFC 3986

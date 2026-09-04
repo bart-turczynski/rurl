@@ -109,7 +109,8 @@
     {
       "path": "tests/testthat/fixtures/external-url-vectors.csv",
       "fixture_kind": "multi-source table of external adversarial/conformance vectors; the row oracle is the SOURCE's expectation, recorded per row in standard + standard_expectation (test-external-url-vectors.R:1-9)",
-      "transformed_fixture_sha256": "0e2c05d827a2c339d7175b261722b2221a29f24b0f32e1d691218aa4d18081ab",
+      "transformed_fixture_sha256": "d28ca21034da85affb2b746dcbbf43934fb31820732053b0c33152688a3479db",
+      "transformed_fixture_sha256_note": "Re-pinned 2026-09-04 (RURL-lxdwuacn, RUL-014): row yal-009 moved from a filed WHATWG deviation (RURL-yeikpnan; fsss_whatwg = NA, rurl_deviation set, whatwg_expected = failure recorded off rurl's own output) to the WHATWG-correct string once the scheme-less host:port carve-out was switched off under scheme_policy = require. Previous digest 0e2c05d827a2c339d7175b261722b2221a29f24b0f32e1d691218aa4d18081ab. Measured columns only (fsss_whatwg, diverges, rurl_deviation, fsss_conforms) plus the whatwg_expected / divergence_class cells the standard itself contradicted; the primary-source cells verify-youarealiar.R freezes did not move.",
       "row_count": 396,
       "row_count_note": "data rows, excluding the CSV header",
       "in_fixture_provenance": "per-row source, source_class and source_reference columns, plus the file header comment at tests/testthat/test-external-url-vectors.R:1-48",
