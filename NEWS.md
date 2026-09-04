@@ -273,6 +273,47 @@
 
 ### Bug fixes
 
+- **`serialize_url(standard = "rfc3986", form = "source")` now reproduces the
+  input's scheme, query and fragment byte-for-byte, as it already did for the
+  path, userinfo and host** (RURL-gkmwqpos, ruling RUL-007). RFC 3986 §6.2.2.1
+  makes both the scheme case fold and the percent-encoding hex-digit case fold
+  *normalizations*, and §5.3 recomposes components as they are; a posture
+  documented as "no normalization" that applied half of §6.2.2.1 — on the
+  scheme and on the query/fragment triplets, but not on the path or host — was
+  defective under its own name. Measured over the 5,967-row RFC property
+  population, 316 rows did not round-trip; now none do.
+
+  ```r
+  # before
+  serialize_url("HTTP://EXAMPLE.COM/p%7ca?q=%7ca#f%7ca",
+                standard = "rfc3986", form = "source")
+  #> "http://EXAMPLE.COM/p%7ca?q=%7Ca#f%7Ca"
+
+  # after
+  serialize_url("HTTP://EXAMPLE.COM/p%7ca?q=%7ca#f%7ca",
+                standard = "rfc3986", form = "source")
+  #> "HTTP://EXAMPLE.COM/p%7ca?q=%7ca#f%7ca"
+  serialize_url("HTTP://EXAMPLE.COM/p%7ca?q=%7ca#f%7ca",
+                standard = "rfc3986", form = "normalized")
+  #> "http://example.com/p%7Ca?q=%7Ca#f%7Ca"      <- §6.2.2.1, where it belongs
+  ```
+
+  The parse record moves with it under `url_standard = "rfc3986"` only: the
+  `query` and `fragment` columns of `safe_parse_url()`, `get_query(decode =
+  FALSE)`, `get_fragment()` and the `rfc3986` URL key now carry the source hex
+  case (`q=%7ca`, not `q=%7Ca`), which is what the path column and the key
+  contract's "exact structural query" already did. `clean_url` does not move:
+  it is a lossy policy projection (ADR 0017) and canonicalizes query hex case
+  on the way out. The `scheme` column stays lower-case — it is the
+  classification token, and the key contract keeps scheme identity
+  case-insensitive; only the `source` serialization renders the spelling.
+  `url_standard = "whatwg"` and the frozen `url_standard = NULL` profile are
+  byte-identical to before on every surface, and `form = "normalized"` is
+  unchanged. Not moved: a raw byte ≥ 0x80 in a query or fragment is still
+  percent-encoded on the `rfc3986` record (the path keeps it raw); that
+  asymmetry is outside RUL-007's two measured families and is pinned by the
+  external-vector fixture.
+
 - **`resolve_url()` no longer loses the `/.` guard when a resolved path's
   first segment is empty** (both named profiles; RURL-bedensww). RFC 3986
   §5.2.4 merges `/..//path` against `non-spec:/p` to the path `//path`, and

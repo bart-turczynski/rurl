@@ -722,13 +722,15 @@ test_that("a presentation dial cannot be silently discarded by serialized", {
 })
 
 test_that("form passes through for rfc3986 and is inert for whatwg", {
-  # Source-preserving keeps the %7E triplet and the host's source case;
+  # Source-preserving keeps the %7E triplet and the source case of the host
+  # AND of the scheme the base contributes (§5.2.2 `T.scheme = Base.scheme`;
+  # the fold is §6.2.2.1's, so `normalized`'s -- RUL-007, RURL-gkmwqpos);
   # normalized applies RFC 3986 §6.2.2/§6.2.3 (case, unreserved decoding,
   # default-port elision).
   expect_identical(
     resolve_url("%7Euser/x", "HTTP://Example.COM:80/b/",
                 url_standard = "rfc3986", output = "serialized"),
-    "http://Example.COM:80/b/%7Euser/x"
+    "HTTP://Example.COM:80/b/%7Euser/x"
   )
   expect_identical(
     resolve_url("%7Euser/x", "HTTP://Example.COM:80/b/",
