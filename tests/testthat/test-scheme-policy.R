@@ -1,242 +1,129 @@
-# Tests for the scheme_policy axis (RURL-vzgeurae): the input-*acceptance*
-# knob for scheme-less host-shaped input. "infer" (default) fabricates
-# "http://"; "require" rejects. Orthogonal to protocol_handling (presentation)
-# and url_standard (interpretation). Covers the protocol_handling x
-# scheme_policy matrix, the scheme_relative_handling interaction, validation,
-# the cache, the accessor surface, and the ada-005 opt-out.
+# check_schemes(): the scheme-axis policy companion (RUL-021, RURL-zfycisur).
 
-# The five protocol_handling values, exercised against scheme_policy.
-ph_values <- c("keep", "none", "strip", "http", "https")
-
-test_that("default 'infer' is byte-for-byte unchanged for scheme-less host", {
-  # No scheme_policy argument -> historical behavior.
-  d_default <- safe_parse_urls("example.com")
-  d_infer <- safe_parse_urls("example.com", scheme_policy = "infer")
-  expect_identical(d_default, d_infer)
-  expect_identical(d_default$parse_status, "ok")
-  expect_identical(d_default$clean_url, "http://example.com/")
-})
-
-test_that("require rejects scheme-less host under every protocol_handling", {
-  for (ph in ph_values) {
-    d <- safe_parse_urls(
-      "example.com", protocol_handling = ph, scheme_policy = "require"
-    )
-    expect_identical(
-      d$parse_status, "error",
-      info = paste("protocol_handling =", ph)
-    )
-    expect_true(is.na(d$clean_url), info = paste("protocol_handling =", ph))
-  }
-})
-
-test_that("require rejects scheme-less host:port under every protocol", {
-  for (ph in ph_values) {
-    d <- safe_parse_urls(
-      "example.com:8080/p", protocol_handling = ph, scheme_policy = "require"
-    )
-    expect_identical(
-      d$parse_status, "error",
-      info = paste("protocol_handling =", ph)
-    )
-  }
-})
-
-test_that("require rejects scheme-less numeric IPv4 under a selector", {
-  # Under url_standard the bare numeric host is host-shaped (add_http path), so
-  # require folds it into the reject set instead of coercing it.
-  for (std in c("rfc3986", "whatwg")) {
-    d <- safe_parse_urls(
-      "2130706433", url_standard = std, scheme_policy = "require"
-    )
-    expect_identical(d$parse_status, "error", info = std)
-  }
-})
-
-test_that("require keeps input that carries an explicit supported scheme", {
-  explicit <- c(
-    "http://example.com/", "https://example.com/a?b=1",
-    "ftp://files.example.com/x"
+test_that("check_schemes reports the scheme facts for a mixed set", {
+  urls <- c(
+    "https://example.com/a",
+    "ftp://example.com/a",
+    "scp://host/a",
+    "smb://server/share",
+    "mailto:someone@example.com",
+    "javascript:alert(1)",
+    "notaurl"
   )
-  for (ph in ph_values) {
-    d <- safe_parse_urls(
-      explicit, protocol_handling = ph, scheme_policy = "require"
-    )
-    expect_false(
-      any(d$parse_status == "error"),
-      info = paste("protocol_handling =", ph)
-    )
-  }
+  r <- check_schemes(urls)
+
+  expect_s3_class(r, "data.frame")
+  expect_identical(nrow(r), length(urls))
+  expect_identical(r$url, urls)
+  expect_named(r, c("url", "scheme", "scheme_class", "web_scheme", "reasons"))
+  expect_identical(
+    r$scheme,
+    c("https", "ftp", "scp", "smb", "mailto", "javascript", NA_character_)
+  )
+  expect_identical(
+    r$scheme_class,
+    c("special", "special", "non-special", "non-special", "non-special",
+      "non-special", "missing-or-error")
+  )
+  expect_identical(
+    r$web_scheme,
+    c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE)
+  )
+  expect_type(r$reasons, "list")
+  expect_identical(r$reasons[[1]], "special-scheme")
+  expect_identical(
+    r$reasons[[3]], c("non-special-scheme", "outside-web-acceptance")
+  )
+  expect_identical(r$reasons[[7]], "no-scheme")
 })
 
-test_that("require and infer agree on already-scheme-bearing input", {
-  # For input that never touches the add_http path, the two policies must
-  # produce byte-identical output.
-  scheme_bearing <- c(
-    "http://example.com/path?q=1#f",
-    "https://sub.example.co.uk/a/b/",
-    "ftp://user@files.example.org:21/x"
-  )
-  for (ph in ph_values) {
-    d_infer <- safe_parse_urls(scheme_bearing, protocol_handling = ph)
-    d_req <- safe_parse_urls(
-      scheme_bearing, protocol_handling = ph, scheme_policy = "require"
-    )
-    expect_identical(d_infer, d_req, info = paste("protocol_handling =", ph))
-  }
+test_that("no allowed column is emitted without an allowlist", {
+  r <- check_schemes("https://example.com/")
+  expect_false("allowed" %in% names(r))
+  # The absence is the point: with no allowlist there is no judgement to make,
+  # so the helper reports facts and stops.
+  expect_false(any(vapply(
+    r$reasons, function(x) "not-in-allowlist" %in% x, logical(1)
+  )))
 })
 
-test_that("scheme-relative //host is governed by scheme_relative_handling", {
-  # //host is scheme-less but has its own axis; scheme_policy = "require" must
-  # NOT reject it. The dedicated scheme_relative_handling knob still decides.
-  srh_keep <- safe_parse_urls(
-    "//cdn.example.com", scheme_policy = "require",
-    scheme_relative_handling = "keep"
-  )
-  expect_identical(srh_keep$parse_status, "ok-scheme-relative")
-  expect_identical(srh_keep$clean_url, "http://cdn.example.com/")
+test_that("allowed_schemes scores the set and adds the token", {
+  urls <- c("https://example.com/a", "scp://host/a", "notaurl")
+  r <- check_schemes(urls, allowed_schemes = c("https", "http"))
 
-  srh_http <- safe_parse_urls(
-    "//cdn.example.com", scheme_policy = "require",
-    scheme_relative_handling = "http"
-  )
-  expect_identical(srh_http$parse_status, "ok")
-
-  # Rejecting //host remains the job of scheme_relative_handling = "error".
-  srh_err <- safe_parse_urls(
-    "//cdn.example.com", scheme_policy = "require",
-    scheme_relative_handling = "error"
-  )
-  expect_identical(srh_err$parse_status, "error")
-
-  # And with scheme_policy = "infer", //host under "error" is still rejected --
-  # confirming the two axes are independent.
-  srh_err_infer <- safe_parse_urls(
-    "//cdn.example.com", scheme_policy = "infer",
-    scheme_relative_handling = "error"
-  )
-  expect_identical(srh_err_infer$parse_status, "error")
+  expect_true("allowed" %in% names(r))
+  expect_identical(r$allowed, c(TRUE, FALSE, FALSE))
+  expect_false("not-in-allowlist" %in% r$reasons[[1]])
+  expect_true("not-in-allowlist" %in% r$reasons[[2]])
+  # A URL with no parsed scheme cannot satisfy an allowlist -- FALSE, not NA,
+  # because "may I act on this?" has a definite answer.
+  expect_true("not-in-allowlist" %in% r$reasons[[3]])
+  expect_false(is.na(r$allowed[3]))
 })
 
-test_that("non-host-shaped scheme-less input (D1) errors under both policies", {
-  junk <- c("asdfghjkl", "hello world", "/relative/path")
-  for (sp in c("infer", "require")) {
-    d <- safe_parse_urls(junk, scheme_policy = sp)
-    expect_true(all(d$parse_status == "error"), info = sp)
-  }
+test_that("allowed_schemes is matched case-insensitively and de-duplicated", {
+  r <- check_schemes(
+    c("HTTPS://example.com/", "https://example.com/"),
+    allowed_schemes = c("HTTPS", "https", " https ")
+  )
+  expect_identical(r$allowed, c(TRUE, TRUE))
 })
 
-test_that("require folds scheme-less userinfo into error", {
-  # Under infer this is warning-userinfo (host still resolves); under require
-  # the whole row is rejected before that classification.
-  infer <- safe_parse_urls("user@example.com", scheme_policy = "infer")
-  expect_identical(infer$parse_status, "warning-userinfo")
-
-  req <- safe_parse_urls("user@example.com", scheme_policy = "require")
-  expect_identical(req$parse_status, "error")
+test_that("an empty allowlist admits nothing but still reports the facts", {
+  r <- check_schemes("https://example.com/", allowed_schemes = character(0))
+  expect_false(r$allowed)
+  expect_true("not-in-allowlist" %in% r$reasons[[1]])
+  expect_identical(r$scheme, "https")
+  expect_identical(r$scheme_class, "special")
 })
 
-test_that("scheme_policy is validated via match.arg", {
+test_that("check_schemes is vectorized, order-preserving, and handles edges", {
+  urls <- c("https://b.example/", NA_character_, "", "ftp://a.example/")
+  r <- check_schemes(urls)
+  expect_identical(nrow(r), 4L)
+  expect_identical(r$url, urls)
+  expect_identical(r$scheme[c(1, 4)], c("https", "ftp"))
+  expect_true(all(is.na(r$scheme[2:3])))
+  expect_identical(check_schemes(character(0))$url, character(0))
+})
+
+test_that("check_schemes rejects bad input rather than guessing", {
+  expect_error(check_schemes(123), "must be a character vector")
   expect_error(
-    safe_parse_urls("example.com", scheme_policy = "strict"),
-    "should be one of"
+    check_schemes(list("https://example.com/")), "must be a character vector"
   )
   expect_error(
-    safe_parse_url("example.com", scheme_policy = "nope"),
-    "should be one of"
+    check_schemes("https://example.com/", allowed_schemes = 1),
+    "`allowed_schemes` must be a character vector"
   )
-  # Partial matching is accepted (match.arg semantics).
+  expect_error(
+    check_schemes("https://example.com/", allowed_schemes = c("https", NA)),
+    "`allowed_schemes` must be a character vector"
+  )
+})
+
+test_that("check_schemes never changes how a URL parses", {
+  urls <- c("scp://host/a", "javascript:alert(1)", "https://example.com/")
+  before <- safe_parse_urls(
+    urls, url_standard = "whatwg", scheme_acceptance = "general"
+  )
+  invisible(check_schemes(urls, allowed_schemes = "https"))
+  after <- safe_parse_urls(
+    urls, url_standard = "whatwg", scheme_acceptance = "general"
+  )
+  expect_identical(before, after)
+  # Scoring a scheme FALSE does not make its URL fail to parse: that is the
+  # whole reason this is a companion rather than a parse-time argument.
+  expect_identical(after$parse_status, rep("ok", 3L))
+})
+
+test_that("both named standards work and scheme_acceptance is honoured", {
   expect_identical(
-    safe_parse_urls("example.com", scheme_policy = "req")$parse_status,
-    "error"
+    check_schemes("scp://host/a", url_standard = "rfc3986")$scheme, "scp"
   )
-})
-
-test_that("scheme_policy is in the parse cache key (no stale reuse)", {
-  # Same URL under both policies within one session must not collide: infer
-  # parses, require rejects.
-  u <- "cache-probe.example.com"
-  infer_status <- function() {
-    safe_parse_urls(u, scheme_policy = "infer")$parse_status
-  }
-  expect_identical(infer_status(), "ok")
-  expect_identical(
-    safe_parse_urls(u, scheme_policy = "require")$parse_status, "error"
-  )
-  # And back again, to catch a one-directional cache poisoning.
-  expect_identical(infer_status(), "ok")
-})
-
-test_that("safe_parse_url (scalar) honors scheme_policy", {
-  expect_null(safe_parse_url("example.com", scheme_policy = "require"))
-  kept <- safe_parse_url("http://example.com", scheme_policy = "require")
-  expect_identical(kept$parse_status, "ok")
-})
-
-test_that("accessors honor scheme_policy for scheme-less input", {
-  # Under require the scheme-less row is rejected, so host/domain/tld/clean_url
-  # accessors fall back to their null_value and parse_status is "error".
-  expect_true(is.na(get_host("example.com", scheme_policy = "require")))
-  expect_true(is.na(get_domain("example.com", scheme_policy = "require")))
-  expect_true(is.na(get_clean_url("example.com", scheme_policy = "require")))
-  expect_identical(
-    get_parse_status("example.com", scheme_policy = "require"), "error"
-  )
-  # infer keeps the historical resolution.
-  expect_identical(
-    get_host("example.com", scheme_policy = "infer"), "example.com"
-  )
-  expect_identical(
-    get_parse_status("example.com", scheme_policy = "infer"), "ok"
-  )
-})
-
-test_that("get_host_type honors scheme_policy under a selector", {
-  # A scheme-less host under a selector is a parseable reg-name with infer, but
-  # a rejected row with require -> host_type NA.
-  ht_infer <- get_host_type(
-    "example.com", url_standard = "whatwg", scheme_policy = "infer"
-  )
-  ht_require <- get_host_type(
-    "example.com", url_standard = "whatwg", scheme_policy = "require"
-  )
-  expect_false(is.na(ht_infer))
-  expect_true(is.na(ht_require))
-})
-
-test_that("ada-005 scheme-inference divergence is opt-out-able (matches Ada)", {
-  # The ada-005 corpus row: scheme-less "example.com`x.example.com". Under the
-  # whatwg profile with the default infer policy rurl accepts it (host-charset
-  # shim keeps the backtick) where Ada rejects the scheme-less form. With
-  # scheme_policy = "require" rurl rejects it too, restoring conformance on the
-  # scheme-inference axis.
-  ada005 <- "example.com`x.example.com"
-
-  accepted <- safe_parse_urls(ada005, url_standard = "whatwg")
-  expect_false(accepted$parse_status == "error")
-
-  rejected <- safe_parse_urls(
-    ada005, url_standard = "whatwg", scheme_policy = "require"
-  )
-  expect_identical(rejected$parse_status, "error")
-})
-
-test_that("yal-009 dotted host-port inference is opt-out-able", {
-  # The yal-009 corpus row: WHATWG can read the dotted token before ":" as a
-  # scheme. rurl's default usability policy instead reads it as host:port and
-  # infers http, while strict parser mode rejects the scheme-less form.
-  yal009 <- "www.php.net:80/index.php?test=1"
-
-  inferred <- safe_parse_urls(yal009, url_standard = "whatwg")
-  expect_identical(inferred$parse_status, "ok")
-  expect_identical(inferred$scheme, "http")
-  expect_identical(inferred$host, "www.php.net")
-  expect_identical(inferred$path, "/index.php")
-  expect_identical(inferred$query, "test=1")
-
-  rejected <- safe_parse_urls(
-    yal009, url_standard = "whatwg", scheme_policy = "require"
-  )
-  expect_identical(rejected$parse_status, "error")
-  expect_true(is.na(rejected$clean_url))
+  # Under scheme_acceptance = "web" a non-web scheme is a parse error, which
+  # is exactly why "general" is this helper's default -- see ?check_schemes.
+  r_web <- check_schemes("scp://host/a", scheme_acceptance = "web")
+  expect_identical(r_web$scheme_class, "missing-or-error")
+  expect_identical(r_web$reasons[[1]], "no-scheme")
 })

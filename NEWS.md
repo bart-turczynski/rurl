@@ -1262,6 +1262,41 @@
 
 ### New features
 
+- **`check_schemes()`, a scheme-axis policy companion** (RUL-021,
+  RURL-zfycisur). rurl already shipped an allowlist —
+  `scheme_acceptance = "web"` admits exactly `http`, `https`, `ftp`, `ftps` and
+  `file` — but not a parameterizable one. A caller needing a single scheme
+  outside those five had to move to `scheme_acceptance = "general"`, which
+  admits every syntactically valid scheme token at once, so `scp:`, `smb:`,
+  `javascript:` and `foo:` all arrived together. That is an all-or-nothing dial
+  where curl offers a set (`CURLOPT_PROTOCOLS_STR`).
+
+  `check_schemes()` reports the facts and lets the caller filter, mirroring
+  `check_hosts()` on the host axis:
+
+  ```r
+  check_schemes(
+    c("https://example.com/a", "scp://host/a", "javascript:alert(1)"),
+    allowed_schemes = c("https", "http")
+  )
+  #>                     url     scheme scheme_class web_scheme allowed
+  #> 1 https://example.com/a      https      special       TRUE    TRUE
+  #> 2          scp://host/a        scp  non-special      FALSE   FALSE
+  #> 3   javascript:alert(1) javascript  non-special      FALSE   FALSE
+  ```
+
+  It is a **policy** layer, not parser conformance: it never changes how a URL
+  parses. Rejecting a conformant scheme at parse time would make the parse
+  result a function of the caller's local policy rather than of the standard,
+  so the allowlist lives in a companion (ADR 0006).
+
+  The `reasons` vocabulary is descriptive by ruling —
+  `"special-scheme"`, `"non-special-scheme"`, `"outside-web-acceptance"`,
+  `"no-scheme"`, `"not-in-allowlist"` — and carries no risk label. Whether a
+  scheme is dangerous depends on what the caller does with the URL, which this
+  package cannot observe; the same reasoning `check_hosts()` already applies
+  with `ip-literal` and `not-registrable`.
+
 - **`credential_handling = c("strip", "reject")` on the clean surface**
   (`get_clean_url()`, `safe_parse_url()`, `safe_parse_urls()` and every
   `url_profile()` bundle; RUL-001, ADR 0017 mutation-table row 12,

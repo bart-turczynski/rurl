@@ -97,6 +97,7 @@ reference:
     contents:
       - is_valid_host
       - check_hosts
+      - check_schemes
 
   - title: "Query introspection"
     desc: "Audit query parameters across a set of URLs."
