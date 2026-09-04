@@ -24,6 +24,29 @@
   #> "https://münchen.de/a"
   ```
 
+- **The trailing-slash strip on the cleaning surface no longer leaves an
+  authority that is only dots** (RUL-005, derived from ADR 0017 D1: a clean
+  URL is structurally valid *and* display-oriented, and `https://.` fails the
+  second half). For a host matching `^\.+$` under
+  `trailing_slash_handling = "strip"` the separator is kept; root-dot FQDNs
+  (`example.com.`) and a dots-only host with a non-empty path strip as before.
+  The parse is untouched (`host` stays `.` at `warning-invalid-tld`), and the
+  change is selector-independent: the `whatwg`, `rfc3986` and `NULL` arms all
+  moved by the same kept `/`, which ADR 0016 permits because the cause is a
+  clean-surface contract, not a standard's rule.
+
+  ```r
+  # before
+  get_clean_url("http://./", profile = "seo")
+  #> "https://."
+
+  # after
+  get_clean_url("http://./", profile = "seo")
+  #> "https://./"
+  get_clean_url("http://./x/", profile = "seo")
+  #> "https://./x"
+  ```
+
   The Unicode host is the more consequential half: `host_encoding = "keep"`
   echoed whichever spelling the input used, so the same site could yield
   `xn--mnchen-3ya.de` from one row and `münchen.de` from the next. Cleaning the
