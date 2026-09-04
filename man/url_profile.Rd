@@ -61,6 +61,27 @@ URL — forcing https, stripping www and dropping the query can each
 change the resource addressed. As always, an explicit argument overrides the
 bundle, so \code{query_handling = "filter"} still buys tracker-only removal.
 }
+\section{Normalization versus editorial knobs in \code{"seo"}}{
+
+
+The bundle applies two kinds of transform, and a reader cannot tell them
+apart from the profile name alone (RUL-017). \strong{Normalization} is
+what a standard says yields the same resource: the WHATWG parse with its
+dot-segment resolution (\code{url_standard = "whatwg"}), host case folding
+and UTS #46 rendering (\code{host_encoding = "unicode"}), and removal of a
+\emph{default} port only (\code{port_handling = "strip_default"}).
+\strong{Editorial} is a claim about how the site is configured that no
+standard settles: forcing https (\code{protocol_handling}), folding
+\code{www.} (\code{www_handling}), stripping a trailing slash
+(\code{trailing_slash_handling}) and a terminal index page
+(\code{index_page_handling}), and dropping the whole query
+(\code{query_handling = "drop"}). Each editorial knob can change the
+addressed resource, and each is in the bundle on purpose: an SEO bundle
+exists to say which URL a page should be known as, which is a site policy.
+Pass any knob explicitly to turn it off, and use \code{\link{get_url_key}}
+when you need resource identity rather than a display string.
+}
+
 \examples{
 url_profile("browser")
 url_profile("seo")

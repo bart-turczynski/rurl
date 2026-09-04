@@ -205,6 +205,15 @@ get_parse_status <- function(url,
 #' Distinct URLs therefore map to the same cleaned string, so this is never an
 #' identity function and never round-trips back to its input.
 #'
+#' Two kinds of knob do the collapsing, and \code{profile = "seo"} carries
+#' both (RUL-017). \emph{Normalization} knobs apply what a standard says
+#' yields the same resource: the WHATWG parse, host case and UTS #46
+#' rendering, and removal of a default port. \emph{Editorial} knobs assert a
+#' fact about the site that no standard settles: https, no \code{www.}, no
+#' trailing slash, no index page, no query. Only the editorial knobs can
+#' change the addressed resource; see \code{\link{url_profile}} for the
+#' per-knob classification.
+#'
 #' It is also \strong{not} the surface rurl's standards-conformance claims are
 #' measured on. When identity or conformance is the goal, use a different
 #' surface:
