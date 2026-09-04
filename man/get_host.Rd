@@ -94,7 +94,14 @@ in addition to any 'www.' prefix. E.g., if N=1,
 \item{"idna": Convert Unicode host labels to Punycode (IDNA) for the
 cleaned URL.}
 \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
-}}
+}
+Under \code{url_standard = "whatwg"} every value renders the UTS-46-mapped
+host, because mapping is part of WHATWG host parsing rather than a
+feature of the \code{idna} dial (\code{BÜCHER.example} presents as
+\code{bücher.example}; RUL-002). There \code{"keep"} preserves only whether the
+input was written as an A-label (\code{xn--...}), so \code{get_host()} and
+\code{get_domain()} agree on the same row. \code{"rfc3986"} and \code{NULL} are
+unaffected.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},

@@ -36,6 +36,37 @@
   overrides the bundle, so `profile = "seo", host_encoding = "keep"` restores
   the previous host rendering.
 
+- **Under `url_standard = "whatwg"` the host presentation now applies the
+  WHATWG host parser's UTS-46 mapping — on the default rendering and under
+  `host_encoding = "unicode"`, not only under `"idna"`** (RUL-002,
+  RURL-nuqhbxvc). The WHATWG URL Standard's host parser runs "domain to ASCII"
+  (UTS #46 §4 Processing and §4.2 ToASCII, with `Transitional_Processing`,
+  `CheckHyphens`, `UseSTD3ASCIIRules` and `VerifyDnsLength` all false) and the
+  URL record stores that ASCII host; "domain to Unicode" is §4.3 ToUnicode of
+  it. rurl applied the mapping only when asked for the A-label spelling, so the
+  default and Unicode renderings showed the *unmapped* source characters —
+  a full-width `ｅ`, an `ﬁ` ligature, a zero-width space — for a host whose
+  record already read `example.com`, `file.com`, `ab.com`:
+
+  ```r
+  # before                                        # after
+  get_host("https://BÜCHER.example/", url_standard = "whatwg")
+  #> "bÜcher.example"                             #> "bücher.example"
+  get_host("https://ﬁle.com/", url_standard = "whatwg")
+  #> "ﬁle.com"                                    #> "file.com"
+  get_host("https://ｅxample.com/", url_standard = "whatwg")
+  #> "ｅxample.com"                               #> "example.com"
+  ```
+
+  Both renderings are now `ToUnicode(ToASCII(host))`, so the Unicode
+  presentation of a host and of its own A-label spelling are identical, while
+  the default rendering keeps an input that was *written* as an A-label in
+  ASCII (as the `domain`/`tld` columns already did). `serialize_url(standard =
+  "whatwg")` and `get_url_key()` read the record's ASCII host and do not move.
+  The `rfc3986` arm and the `url_standard = NULL` default are byte-identical
+  (ADR 0016): their `idna`/`unicode` renderings stay the reversible Punycode
+  helpers of ADR 0002, which this change does not touch.
+
 - **`profile = "seo"` now drops the whole query, where it used to keep every
   parameter it did not recognize as a tracker** (`query_handling` moves from
   `"filter"` to `"drop"`, ADR 0017). This closes an anomaly in which asking for

@@ -112,6 +112,13 @@
 #'     cleaned URL.}
 #'     \item{"unicode": Decode Punycode labels to Unicode for the cleaned URL.}
 #'   }
+#'   Under `url_standard = "whatwg"` every value renders the UTS-46-mapped
+#'   host, because mapping is part of WHATWG host parsing rather than a
+#'   feature of the `idna` dial (`BÜCHER.example` presents as
+#'   `bücher.example`; RUL-002). There `"keep"` preserves only whether the
+#'   input was written as an A-label (`xn--...`), so `get_host()` and
+#'   `get_domain()` agree on the same row. `"rfc3986"` and `NULL` are
+#'   unaffected.
 #' @param path_encoding How to present the path percent-encoding in `clean_url`
 #' — the readable-vs-browser rendering choice (the path analog of
 #' `host_encoding`). Defaults to "keep". This is an orthogonal presentation
