@@ -1,8 +1,12 @@
-# No `url:` until a docs site is actually published somewhere reachable.
-# The previous value (bart-turczynski.github.io/rurl) 404s and has no
-# publisher: it was built by .github/workflows/pkgdown.yaml, and the account
-# that ran it is suspended. RURL-vkltgopc chooses the host and restores this
-# key; DESCRIPTION's URL: field must name the same site when it does.
+# Published by the `pages` job in .gitlab-ci.yml (RURL-vkltgopc), which runs
+# only on a tag or a hand-started pipeline, so the live site documents the
+# last release. DESCRIPTION's URL: field names this same site, first. The
+# previous host (bart-turczynski.github.io/rurl) was built by a GitHub Actions
+# workflow whose account is suspended; that workflow is gone.
+#
+# No `destination:` on purpose: the site builds into docs/ (gitignored), and
+# the `pages` job renames it to public/ for GitLab Pages.
+url: https://bart-turczynski.gitlab.io/rurl/
 
 template:
   bootstrap: 5

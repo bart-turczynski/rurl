@@ -43,9 +43,15 @@ DEFAULT_BRANCH <- "main"
 # Top-level keys that configure the pipeline rather than declaring a job. Keys
 # beginning with "." are YAML anchor holders (`.gate_deps`) and are handled
 # separately -- GitLab treats them as hidden regardless of their content.
+#
+# `pages` is NOT on this list. It is a job name with a special meaning to
+# GitLab (the job whose `public/` artifact becomes the Pages site), not a
+# pipeline keyword; listing it here made the planner drop the `pages` job in
+# `.gitlab-ci.yml` without a word -- the vacuous-selector failure the header
+# above names (RURL-vkltgopc).
 RESERVED <- c(
   "stages", "default", "workflow", "include", "variables", "image",
-  "before_script", "after_script", "cache", "services", "pages"
+  "before_script", "after_script", "cache", "services"
 )
 
 args <- commandArgs(trailingOnly = TRUE)
