@@ -431,6 +431,12 @@
   # structural ":" as "%3A". Cached with the rest of Stage A: it is a fact
   # about the parse, not a presentation choice.
   list(name = "general_userinfo_split", default = FALSE, template = logical(1)),
+  # Whether the PARSED authority carried a userinfo delimiter at all
+  # (RUL-001, ADR 0017 row 12). Distinct from `raw_user`/`raw_password`, which
+  # `.blank_to_na()` empties for `http://@host/` and `http://:@host/`: the
+  # delimiter is a parse fact the `credential_handling = "reject"` dial in
+  # Stage B keys off, so it must survive a cache hit like the other facts.
+  list(name = "authority_userinfo", default = FALSE, template = logical(1)),
   # Whether Stage A produced NO usable parse for this row (invalid input, a
   # Phase-1 rejection, or a parse failure). Cached WITH the other fields rather
   # than signalled by caching a NULL value, so a null row's classifier flags --

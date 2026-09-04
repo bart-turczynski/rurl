@@ -1128,6 +1128,37 @@
 
 ### New features
 
+- **`credential_handling = c("strip", "reject")` on the clean surface**
+  (`get_clean_url()`, `safe_parse_url()`, `safe_parse_urls()` and every
+  `url_profile()` bundle; RUL-001, ADR 0017 mutation-table row 12,
+  RURL-kjrjbhef). `clean_url` has always dropped userinfo, so a URL carrying
+  credentials came back as a plausible-looking credential-free spelling with
+  nothing to say it had been collapsed. RFC 3986 section 3.2.1 deprecates the
+  `user:password` form and lets an application reject it, and sections 7.5
+  and 7.6 name what a silently collapsed spelling hides: the credential leak,
+  and the `https://example.com@evil.example/` semantic attack, where the text
+  before the `@` is the part a reader trusts. `"reject"` returns `NA` for any
+  row whose parsed authority carried a userinfo delimiter — `user@`,
+  `user:password@`, a bare `@`, `:@`, or a repeated `@`:
+
+  ```r
+  u <- c("https://example.com@evil.example/a", "http://@example.com/a",
+         "http://example.com/a")
+  get_clean_url(u)
+  #> "https://evil.example/a" "http://example.com/a" "http://example.com/a"
+  get_clean_url(u, credential_handling = "reject")
+  #> NA NA "http://example.com/a"
+  ```
+
+  Only `clean_url` moves. The `user` / `password` columns, `parse_status`, the
+  diagnostics, `serialize_url()` (which still carries the credentials under
+  both standards) and `get_url_key()` are unchanged, and there is no `"keep"`
+  value because those surfaces already are the way to keep them. The default
+  `"strip"` is byte-identical to before on every surface, including the
+  frozen `url_standard = NULL` arm (ADR 0007): the dial is policy, not a
+  standards axis, so it composes with every selector. Every profile bundle
+  keeps `"strip"`, and an explicit argument overrides the bundle as usual.
+
 - **URL identity is now a first-class surface: `get_url_key()`,
   `url_key_policy()` and six identity-keyed joins.** Deciding whether two URLs
   are the same resource used to mean comparing cleaned strings, and a cleaned
