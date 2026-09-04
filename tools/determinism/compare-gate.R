@@ -284,7 +284,7 @@ read_expected <- function(path) {
 # ---- the gate ---------------------------------------------------------------
 
 # The repeat-run output tag. MUST stay in step with RURL_DETERMINISM_RUN in
-# .github/workflows/_determinism-cells.yml: the harness writes
+# tools/determinism/gha/_determinism-cells.yml: the harness writes
 # `<RURL_DETERMINISM_RUN>-dump-<LABEL>.csv` and the gate reads it back here.
 rerun_prefix_default <- "rerun-"
 

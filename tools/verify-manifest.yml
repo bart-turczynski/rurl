@@ -1,8 +1,32 @@
-# Fast verification gate: lint + a single Ubuntu R CMD check on every push to
-# main and every PR. Coverage and the specialized evidence jobs run only when
-# their declared surfaces change. Release tags run the complete job set; full
-# cross-platform checks live in full-check.yml. Named "R-CMD-check" so tooling
-# that discovers CI by the conventional workflow name sees it.
+# THE GATE MANIFEST (RURL-vunvxusf). This file is the single source of truth
+# for WHAT the gates are. `tools/verify.R` derives its entire gate list from it
+# at run time -- every `run: Rscript <script> [args]` line below is a gate step,
+# and every `run: Rscript <script> --self-test` line is that gate's self-test --
+# so a gate added here runs locally and in GitLab's `gates`/`check` jobs the day
+# it lands, and a gate removed here stops running everywhere. Nothing
+# transcribes this list; `.gitlab-ci.yml` shells out to `tools/verify.R`.
+#
+# It was born as `.github/workflows/verify.yml`, a GitHub Actions workflow, and
+# it KEEPS that shape on purpose: the `jobs:`/`steps:` structure is what carries
+# each gate's trigger surface, its self-test pairing and its rationale, and it
+# is the structure the runner already parses. It is forge-neutral now only in
+# the sense that matters -- no forge reads it. The GitHub account is suspended,
+# the other workflows that lived beside it (full-check, rhub, coverage, the
+# oracle-upstream sweep, the OSV and OSS Index audits, news-version, codemeta)
+# were deleted with the same change, and NOTHING executes this file as a
+# workflow. Read `runs-on:`, `uses:`, `if:` and the `changes` job as a record of
+# how each gate was scoped, not as a promise that anything fires.
+#
+# `tools/verify.R --list` prints what it derives from here. Change the list by
+# editing THIS file; the runner's stage plan (lint, build+check, the LC_ALL=C
+# cell) is the runner's own and mirrors the non-gate jobs below.
+#
+# Original header: "Fast verification gate: lint + a single Ubuntu R CMD check
+# on every push to main and every PR. Coverage and the specialized evidence
+# jobs run only when their declared surfaces change. Release tags run the
+# complete job set; full cross-platform checks live in full-check.yml. Named
+# "R-CMD-check" so tooling that discovers CI by the conventional workflow name
+# sees it."
 name: R-CMD-check
 
 on:
@@ -73,19 +97,19 @@ jobs:
               - 'tools/*doc-consistency.R'
               - 'design/work/url-v3/contracts/**'
               - 'design/work/url-v3/tools/traceability-gate.R'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             locale:
               - 'R/**'
               - 'tests/**'
               - 'DESCRIPTION'
               - 'NAMESPACE'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             coverage:
               - 'R/**'
               - 'tests/**'
               - 'DESCRIPTION'
               - 'NAMESPACE'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             oracle:
               - 'tests/testthat/fixtures/**'
               - 'tests/testthat/helper-rfc3986-*.R'
@@ -95,7 +119,7 @@ jobs:
               - 'tools/oracle-provenance-gate.R'
               - 'design/work/url-v3/registers/oracle-register.md'
               - 'design/work/url-v3/tools/oracle-label-gate.R'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             # The claim-traceability gate used to ride the broad `documentation`
             # filter, which does not mention the verification directory at all
             # -- so ADDING A VERIFICATION RECORD did not run the gate that is
@@ -107,7 +131,7 @@ jobs:
               - 'design/work/url-v3/contracts/**'
               - 'design/work/url-v3/verification/**'
               - 'design/work/url-v3/tools/traceability-gate.R'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             cache_docs_selftest:
               - 'tools/cache-doc-consistency.R'
             oracle_provenance_selftest:
@@ -163,7 +187,7 @@ jobs:
               - 'design/work/url-v3/verification/key-join-discharge.md'
               - 'design/work/url-v3/registers/public-surface-inventory.md'
               - 'design/work/url-v3/tools/citation-gate.R'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             citations_selftest:
               - 'design/work/url-v3/tools/citation-gate.R'
             # NAMESPACE is the trigger that matters: the gap this gate catches
@@ -175,7 +199,7 @@ jobs:
               - 'man/**'
               - '_pkgdown.yml'
               - 'tools/pkgdown-reference-gate.R'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             pkgdown_index_selftest:
               - 'tools/pkgdown-reference-gate.R'
             # DESCRIPTION is the trigger that matters, not 'R/**': `Collate:` is
@@ -191,7 +215,7 @@ jobs:
               - 'DESCRIPTION'
               - 'ARCHITECTURE.md'
               - 'tools/architecture-map-gate.R'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             architecture_map_selftest:
               - 'tools/architecture-map-gate.R'
             # DESCRIPTION is the trigger that matters here too, and for the same
@@ -205,7 +229,7 @@ jobs:
               - 'DESCRIPTION'
               - 'cran-comments.md'
               - 'tools/cran-comments-gate.R'
-              - '.github/workflows/verify.yml'
+              - 'tools/verify-manifest.yml'
             cran_comments_selftest:
               - 'tools/cran-comments-gate.R'
             # tools/verify.R is the local gate RUNNER, not a gate, so it has no

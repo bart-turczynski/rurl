@@ -104,7 +104,7 @@ The forge moved to GitLab, so the answer is explicit rather than inherited:
 | `gates` (~40s) | GitLab | Every push (re-enabled 2026-09-03, RURL-utsbwfvc) |
 | `check` (`R CMD check --as-cran`) | GitLab | Release time only: a tag, or a hand-started pipeline |
 | `pages` (pkgdown site to <https://bart-turczynski.gitlab.io/rurl/>) | GitLab | Release time only: a tag, or a hand-started pipeline (RURL-vkltgopc) |
-| Everything in `.github/workflows/` | **Nowhere** | The account is suspended; none of it can fire |
+| The gate manifest, `tools/verify-manifest.yml` | Read by `tools/verify.R`, so wherever that runs (local hook, GitLab `gates`/`check`) | Forge-neutral: no forge executes it; it is the single source of WHAT the gates are (RURL-vunvxusf) |
 
 **The server-side check is the ~40s `gates` job only.** The full gate list
 runs as `tools/verify.R` in the pre-push hook, which is only installed if you
@@ -219,22 +219,22 @@ what GitHub last held. See [design/backup-mirror.md](design/backup-mirror.md)
 for that namespace, the "never `git fetch` inside the mirror" hazard, and the
 triage of the eight mirror-only branch tips.
 
-`.github/workflows/` is **kept on purpose**, even though not one of those
-workflows can run. The files are in-repo configuration that local tooling and
-the test suite read as data, independently of GitHub:
-
-- `tools/verify.R` derives its entire gate list from `verify.yml` at run time,
-  precisely so the list is never transcribed twice. Deleting it breaks the gate.
-- `tools/determinism/compare-gate.R` reads `determinism-probe.yml` and
-  `_determinism-cells.yml`; `tools/oracle/check-uts46-mapping-pin.R` reads
-  `verify.yml`.
-- `tests/testthat/test-osv.R`, `test-security.R` and `test-locale-invariance.R`
-  assert against their contents.
-
-26 tracked files reference `.github/workflows/` paths. Untangling that — moving
-the gate manifest somewhere forge-neutral so the workflow files can go — is a
-refactor in its own right (RURL-vunvxusf), not part of a URL migration. Until
-then, read those files as manifests, not as promises that anything runs.
+**The gate manifest lives at `tools/verify-manifest.yml`** (RURL-vunvxusf; it
+was `.github/workflows/verify.yml` until 2026-09-04). `tools/verify.R` derives
+its entire gate list from it at run time — every `run: Rscript <script>` line
+is a gate, every `--self-test` line its self-test — precisely so the list is
+never transcribed twice; `.gitlab-ci.yml` consumes the same manifest by
+running the script. Deleting or moving the manifest breaks the gate. It keeps
+its GitHub-Actions `jobs:`/`steps:` shape because that is what the parser
+reads and what carries each gate's rationale, but it is forge-neutral: no forge
+executes it. The `.github/workflows/` directory is gone. The dead workflows
+around the manifest (full-check, rhub, coverage, oracle-upstream, the OSV and
+OSS Index audits, news-version, codemeta) were deleted, and the determinism
+cell matrix — three GitHub workflows nothing can run, kept as the record of
+the per-cell locale/charset arming whose output
+`tools/determinism/compare-gate.R` consumes — moved to
+`tools/determinism/gha/`. Accepted records under `design/` keep their
+`.github/workflows/` citations by convention; read them as history.
 
 `lintr::lint_package()` must stay clean. `.lintr` mirrors the linter set
 `goodpractice::gp()` runs, and its header documents every intentional
