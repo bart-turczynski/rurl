@@ -45,11 +45,13 @@ test_that("rfc3986 query/fragment columns carry the source hex case", {
   # never folded (rows 1 and 4 differ only in scheme).
   expect_identical(p$query[1L], p$query[4L])
   expect_identical(p$fragment[1L], p$fragment[4L])
-  # A pre-existing triplet keeps its case beside a freshly encoded byte, which
-  # is encoded in uppercase like every escape the record writes.
-  expect_identical(p$query[5L], "q=%7c%C3%BC")
-  expect_identical(p$fragment[5L], "f%7c%C3%BC")
-  expect_identical(p$query[6L], "q=%C3%BC")
+  # A pre-existing triplet keeps its case beside a raw non-ASCII byte, which
+  # the record now stores as written too (RUL-015; RFC 3986 sec 2.1 makes the
+  # triplet a representation of the octet, and the path already kept it raw).
+  # `form = "normalized"` is where it is percent-encoded.
+  expect_identical(p$query[5L], "q=%7cü")
+  expect_identical(p$fragment[5L], "f%7cü")
+  expect_identical(p$query[6L], "q=ü")
   # The scheme column is the folded classification token, on every route.
   expect_identical(p$scheme[7:9], c("http", "http", "foo"))
   # Empty delimiters are absent components on the public columns, as before.

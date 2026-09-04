@@ -2120,10 +2120,11 @@ safe_parse_urls <- function(url,
   }
   # query/fragment/userinfo are taken from the parser as-is. Whether the
   # parser's query/fragment ARE the source bytes is `pqf_source`'s question
-  # (R/parse-web.R, RUL-007): under `rfc3986` they are stored as written, so an
-  # existing "%xx" keeps its hex case exactly as the re-derived path does;
-  # under `whatwg` and the no-selector default they carry the component pass's
-  # normalized spelling (bytes >= 0x80 encoded, "%XX" uppercased).
+  # (R/parse-web.R, RUL-007, RUL-015): under `rfc3986` they are stored as
+  # written, so an existing "%xx" keeps its hex case and a raw byte >= 0x80
+  # stays raw, exactly as the re-derived path does; under `whatwg` and the
+  # no-selector default they carry the component pass's normalized spelling
+  # (bytes >= 0x80 encoded, "%XX" uppercased).
   # .blank_to_na() maps a present-but-empty "" component to NA, which is where
   # the long-shipped "empty component == absent" behavior is enforced (see
   # .blank_to_na in utils.R).
