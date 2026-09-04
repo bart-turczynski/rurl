@@ -27,8 +27,9 @@
 # WHAT IT DOES NOT COVER, stated so nobody reads a green run as more than it is:
 #   * cross-platform and multi-R-version checks (full-check.yml, rhub.yaml) --
 #     this runs one platform, one R;
-#   * README.md re-render (verify.yml `readme`), pkgdown, coverage, the OSV and
-#     security audits, news-version, and the determinism matrix -- all need
+#   * README.md re-render (verify.yml `readme`), coverage, the OSV and
+#     security audits, news-version, and the determinism matrix (pkgdown is
+#     the release-time `pages` job in .gitlab-ci.yml) -- all need
 #     network, a pandoc/LaTeX toolchain, or a Docker matrix;
 #   * the C7 curl clean room, which needs its own R CMD check against a poisoned
 #     library. `--release` adds it; the default does not, because it doubles the

@@ -1359,6 +1359,14 @@
 
 ### Documentation
 
+- **The documentation site moved to GitLab Pages:
+  <https://bart-turczynski.gitlab.io/rurl/>.** The former
+  `bart-turczynski.github.io/rurl` site had no publisher after the GitHub
+  account that built it was suspended. A `pages` job in `.gitlab-ci.yml` now
+  builds the pkgdown site on a tag or a hand-started pipeline, so the live site
+  documents the last release; `DESCRIPTION`'s `URL:` names it first
+  (RURL-vkltgopc).
+
 - **RFC 3986 now has a serialization oracle; it had only an acceptance axis.**
   The conformance evidence has four quadrants — {WHATWG, RFC 3986} ×
   {acceptance, full-string serialization} — and three were covered. Nothing in
