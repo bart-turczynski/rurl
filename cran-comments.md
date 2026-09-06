@@ -1,3 +1,45 @@
+## Resubmission
+
+This is a resubmission. Version 3.0.0 did not pass the incoming pre-tests on
+2026-09-06 (`rurl_3.0.0_20260906_162044`): `1 ERROR, 1 NOTE` on
+r-devel-windows-x86_64, `1 NOTE` on r-devel-linux-x86_64-debian-gcc.
+
+**The ERROR is fixed.** Six `testthat` failures on Windows only, all in
+`tests/testthat/test-external-url-vectors.R`. The package's own code was not
+implicated: the failures were in a *test fixture reader*. That file's fixture
+is a corpus of adversarial URL vectors imported from the WHATWG
+web-platform-tests, so by construction its cells carry raw C0 control
+characters, embedded newlines, astral-plane code points and U+FFFF. Reading it
+with `utils::read.csv()` sends those bytes through `scan()`'s `mbrtowc()` path
+whenever `mbcslocale` is TRUE, and on Windows one row parsed a field out of
+register.
+
+The fixture is now read with `LC_CTYPE` pinned to `"C"` and restored on exit,
+which takes `scan()` down its single-byte path. That is the correct reader
+rather than a workaround: UTF-8 is ASCII-transparent, so no multibyte sequence
+can contain a `,` or `"` byte and a bytewise parse of a UTF-8 CSV is exact —
+and exact identically on every platform. The parse is `identical()` to the
+previous one, encoding marks included, on platforms where the previous one was
+already correct.
+
+A second test now pins the corpus's shape (row count, runnable count, class
+counts). Every conformance test in that file filters on `runnable == "yes"`, so
+a mis-parsed row previously left the corpus silently rather than failing; the
+pin makes that condition loud.
+
+No user-facing behavior changed. `NEWS.md` records both under `## rurl 3.0.1
+### Internal`.
+
+**The NOTE is unchanged and is addressed below.** Its two components — the
+maintainer address and the `BugReports:` URL — are explained in the following
+section. The pre-test also reported `IDNA` and `Punycode` as possibly
+misspelled words in `DESCRIPTION`; both are correct spellings of the standards
+named (`IDNA` is RFC 5890's Internationalized Domain Names in Applications;
+`Punycode` is RFC 3492's encoding), and both are already recorded in
+`inst/WORDLIST`, which CRAN's incoming `aspell` run does not consult.
+
+---
+
 ## R CMD check results
 
 Checked with `R CMD check --as-cran` on a tarball built from a clean export
@@ -101,16 +143,18 @@ The project is public and the tracker is open: <https://gitlab.com/bart-turczyns
 
 ## Changes in this version
 
-<!-- submission-span: from=1.2.0 to=3.0.0 -->
+<!-- submission-span: from=1.2.0 to=3.0.1 -->
 <!-- Checked by tools/cran-comments-gate.R. `to` must equal DESCRIPTION's
      Version, and both versions must appear in the prose below, so this pin and
      the sentences a reviewer reads cannot drift apart. `--online` additionally
      checks `from` against what CRAN publishes. -->
 
 This release consolidates all development since the version currently on CRAN.
-It is a large span: CRAN holds **1.2.0**, and this is **3.0.0**, covering
+It is a large span: CRAN holds **1.2.0**, and this is **3.0.1**, covering
 eleven intermediate releases that were made on the development branch and never
-submitted.
+submitted, plus the test-only portability fix described under Resubmission
+above. Version **3.0.0** was submitted on 2026-09-06 and did not clear the
+incoming pre-tests, so it was never published.
 
 **1.3.0 – 1.4.1 — dependency extraction and correctness**
 
@@ -179,7 +223,7 @@ submitted.
   case mapping, which in a Turkish or Azeri session mapped `I` to `ı` and so
   returned a *different domain* than the one requested.
 
-**3.0.0 — identity surfaces, and the removal of the `curl` dependency**
+**3.0.0 / 3.0.1 — identity surfaces, and the removal of the `curl` dependency**
 
 * **`rurl` no longer depends on `curl`.** URL parsing is entirely in-tree, so
   installing `rurl` no longer pulls in `curl` or requires the system `libcurl`
