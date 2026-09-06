@@ -42,7 +42,7 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
 - [`oracle-fixtures.md`](oracle-fixtures.md) — how to read and edit
   `tests/testthat/fixtures/external-url-vectors.csv`: which columns are
   posture-scoped claims, and which are characterization.
-- [`release-chain.md`](release-chain.md) — the seven-package CRAN submission
+- [`release-chain.md`](release-chain.md) — the eight-package CRAN submission
   order and the sibling-pinning rule that protects it.
 
 **Design docs cannot live in `docs/`.** That directory is pkgdown's **output**

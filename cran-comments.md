@@ -193,6 +193,23 @@ submitted.
 * New identity and rendering surfaces: `get_url_key()`, `serialize_url()`,
   `format_url()` (safe rendering of a URL for a human to read),
   `resolve_url(output = "serialized")`, and `get_parse_verdicts()`.
+  `get_url_key()` projects a URL onto a versioned comparison key derived from
+  its canonical state, which no cleaning dial can reach; `url_key_policy()`
+  carries the two identity dials — `standard`, and an opt-in `scheme_equality`
+  treating `http` and `https` as one class.
+* Six identity-keyed joins — `url_inner_join()`, `url_left_join()`,
+  `url_right_join()`, `url_full_join()`, `url_semi_join()` and
+  `url_anti_join()` — join two data frames on that key rather than on a
+  cleaned display string. Duplicate keys are kept as a multiplicity fact;
+  unkeyable rows and rows that parsed with a warning are governed by two
+  independent arguments (`invalid`, `warnings`); and failures raise typed
+  conditions that report row positions and truncated keys, never URL content.
+  `canonical_join()` is unchanged and still matches on `clean_url`.
+* New `check_schemes()`, a scheme-axis policy companion to `check_hosts()`. It
+  reports each URL's scheme, scheme class and membership in a caller-supplied
+  `allowed_schemes`, filling the gap between `scheme_acceptance = "web"`'s
+  fixed five-scheme allowlist and `"general"`'s accept-everything. It is a
+  policy layer and never changes how a URL parses.
 * `resolve_url()` reference resolution is now standard-aware, and a colon in a
   relative path's first segment is no longer mistaken for a scheme (RFC 3986
   §3.1's real scheme production replaces Appendix B's non-validating group).

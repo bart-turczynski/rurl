@@ -296,5 +296,5 @@ Four areas are frozen by ADR. Read the ADR before editing:
   - [design/oracle-fixtures.md](design/oracle-fixtures.md) — which columns of
     `external-url-vectors.csv` are posture-scoped claims and must not be
     "corrected".
-  - [design/release-chain.md](design/release-chain.md) — the seven-package CRAN
+  - [design/release-chain.md](design/release-chain.md) — the eight-package CRAN
     submission order and the sibling-pinning rule.
