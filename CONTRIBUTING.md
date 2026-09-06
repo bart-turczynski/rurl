@@ -83,7 +83,7 @@
 
 Follow these steps in order for every CRAN release. The first three and the
 fast-forward are the easiest to miss — skipping them leaves `NEWS.md`, the
-published version, and `main` out of sync. `rurl` is one link in a seven-package
+published version, and `main` out of sync. `rurl` is one link in an eight-package
 chain; [design/release-chain.md](design/release-chain.md) records the order and
 what must already be on CRAN before this checklist starts.
 

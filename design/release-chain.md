@@ -1,24 +1,47 @@
-# The seven-package release chain
+# The eight-package release chain
 
-`rurl` does not ship alone. Six sibling packages sit above and below it, and the
-order in which they reach CRAN is a constraint on this repository even though
-nothing in the tree encodes it. This is that record.
+`rurl` does not ship alone. Seven sibling packages sit above and below it, and
+the order in which they reach CRAN is a constraint on this repository even
+though nothing in the tree encodes it. This is that record.
 
 ## Order
 
-Bottom-up, each **live on CRAN** before the next is submitted:
+**Corrected 2026-09-06.** The version below replaces an order that put `rurl`
+last. That order was correct when it was written on 2026-07-18 — `rurl` then
+carried `Remotes:` git pins on unreleased siblings, and CRAN held `pslr` 1.0.1
+and `punycoder` 1.1.0. Both of those links have since shipped and `rurl`'s
+`Remotes:` field is gone, so the constraint it encoded no longer exists.
+
+**`rurl`'s upstream is already on CRAN.** Verified 2026-09-06 against live
+CRAN: `punycoder` **1.2.1** and `pslr` **1.1.1**, which are exactly the floors
+`DESCRIPTION` names. Nothing upstream is waiting on anything.
 
 ```
-raddr  ->  punycoder  ->  pslr  ->  rurl 3.0.0  ->  robotstxtr + pagerankr  ->  sitemapr
+                        [on CRAN already]
+                   punycoder 1.2.1   pslr 1.1.1
+                              \       /
+                            rurl 3.0.0            <- the keystone; submit first
+                                  |
+                pagerankr + sitemapr + robotstxtr <- one at a time
+                                  |
+                                seor              <- last
+
+raddr                     parallel, gates nothing (ADR 0018)
+punycoder 1.3.0 -> pslr   parallel, gates nothing downstream
 ```
 
-`raddr` is unattached to `rurl` today (see
-[ADR 0018](adr/0018-ip-literals-belong-to-raddr.md)) and can move in parallel;
-`punycoder` and `pslr` are hard `Imports:` and cannot. `robotstxtr` and
-`pagerankr` are independent of each other and may go together.
+`rurl` 3.0.0 is the single unlock for three packages at once: `pagerankr` needs
+`rurl (>= 3.0.0)`, `sitemapr` `(>= 2.1.0)` and `robotstxtr` `(>= 2.2.1)`, and
+CRAN serves `rurl` **1.2.0**. Those three are also `seor`'s remaining blockers,
+so one submission clears a four-deep chain. `raddr` is unattached to `rurl`
+(see [ADR 0018](adr/0018-ip-literals-belong-to-raddr.md)) and moves in
+parallel.
 
-The orchestration epic is **PSLR-hrpalwzo**, in the `pslr` workspace rather than
-this one.
+The orchestration epic is **SEOR-eqpdrqnl**, in the `seor` workspace. It
+supersedes `PSLR-hrpalwzo`, which carried the order above and was filed inside
+a member's tracker rather than at fleet level — the reason it drifted
+unnoticed. Fleet sequence, gates and submission live in `SEOR-*`; `rurl`'s own
+code work stays in `RURL-*`.
 
 ## Standing decision
 
