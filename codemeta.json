@@ -8,7 +8,7 @@
   "codeRepository": "https://gitlab.com/bart-turczynski/rurl",
   "issueTracker": "https://gitlab.com/bart-turczynski/rurl/-/issues",
   "license": "https://spdx.org/licenses/MIT",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "programmingLanguage": {
     "@type": "ComputerLanguage",
     "name": "R",

@@ -57,7 +57,38 @@ fixture_path <- testthat::test_path("fixtures", "external-url-vectors.csv")
 # SOURCE OF TRUTH; `input` is the human-readable mirror. Reconstruct `input`
 # from it -- but ONLY for runnable rows: non-runnable rows are provenance-only
 # and must keep `input` NA (invariant asserted above).
+#
+# THE READ IS LOCALE-PINNED, and that is load-bearing (RURL-gxgxyzpk). CRAN's
+# 3.0.0 incoming pretest failed on r-devel-windows-x86_64 ONLY -- six failures,
+# every one of them a whole-corpus shape invariant, while every expectation
+# that FILTERS the corpus passed. That split has one cause: a row parsed one
+# field out of register, so non-NA garbage landed in `source_class`,
+# `standard`, `divergence_class`, `runnable` and `rurl_deviation`. Truncation
+# is excluded twice over -- it yields NAs (`anyNA(divergence_class)` passed)
+# and warns `EOF within quoted string` (CRAN reported WARN 0).
+#
+# `utils::read.csv()` -> `scan()` walks quoted fields through `mbrtowc()`
+# whenever `mbcslocale` is TRUE, and this fixture is built to stress exactly
+# that: 35 rows carry raw C0/DEL control characters inside quoted cells, two
+# embed raw newlines, and the corpus includes three astral-plane emoji plus
+# U+FFFF, a Unicode noncharacter -- 4-byte and noncharacter sequences are where
+# a 16-bit `wchar_t` `mbrtowc()` diverges from a 32-bit one.
+#
+# Pinning LC_CTYPE to "C" takes `scan()` down its single-byte path instead.
+# That is not a workaround, it is the correct reader for this file: UTF-8 is
+# ASCII-transparent -- no multibyte sequence contains a `,` or `"` byte -- so a
+# bytewise CSV parse of a UTF-8 file is exact, and it is exact identically on
+# every platform. `encoding = "UTF-8"` still marks the results, so the parse is
+# `identical()` to the unpinned one, encoding marks included, wherever the
+# unpinned one was already right.
+#
+# Read the path, not a connection: `readLines()` in a single-byte locale hands
+# back "bytes"-flagged strings that `scan()` then renders as `<ef><bf><bd>`
+# escapes, which silently corrupts every non-ASCII cell.
 read_vectors <- function() {
+  old_ctype <- Sys.getlocale("LC_CTYPE")
+  Sys.setlocale("LC_CTYPE", "C")
+  on.exit(Sys.setlocale("LC_CTYPE", old_ctype), add = TRUE)
   fx <- utils::read.csv(
     fixture_path, stringsAsFactors = FALSE, colClasses = "character",
     na.strings = "NA", encoding = "UTF-8"
@@ -70,6 +101,35 @@ read_vectors <- function() {
   )
   fx
 }
+
+# THE CORPUS-SHAPE PIN (RURL-gxgxyzpk). Every oracle test below opens with
+# `fx <- fx[fx$runnable == "yes", ]`, so a row that mis-parses does not FAIL
+# those tests -- it silently LEAVES the corpus they check, and they stay green
+# over a smaller one. Nothing pinned `nrow(fx)`, which is how a Windows-only
+# one-field shift surfaced three tests away as six unexplained shape-invariant
+# failures instead of here as one legible count. Same shape as RURL-nknytzxz:
+# an invariant that cannot observe its own corpus shrinking.
+#
+# These counts are the fixture as committed. They move only when a row is
+# deliberately added, removed or reclassified -- in which case update them in
+# the same commit as the row, and say which row in the message.
+test_that("the fixture parses to the same corpus on every platform", {
+  fx <- read_vectors()
+
+  expect_identical(nrow(fx), 396L)
+  expect_identical(sum(fx$runnable == "yes"), 325L)
+  expect_identical(sum(!is.na(fx$rurl_deviation)), 41L)
+
+  expect_identical(sum(fx$source_class == "A"), 375L)
+  expect_identical(sum(fx$source_class == "B"), 0L)
+  expect_identical(sum(fx$source_class == "C"), 21L)
+
+  expect_identical(sum(fx$divergence_class == "aligned"), 36L)
+  expect_identical(sum(fx$divergence_class == "both-accept"), 1L)
+  expect_identical(sum(fx$divergence_class == "both-reject"), 100L)
+  expect_identical(sum(fx$divergence_class == "not-runnable"), 71L)
+  expect_identical(sum(fx$divergence_class == "spec-divergent"), 188L)
+})
 
 test_that("external-url-vectors fixture is well-formed", {
   fx <- read_vectors()
