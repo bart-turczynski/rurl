@@ -1,0 +1,196 @@
+* using log directory 'd:/RCompile/CRANguest/R-devel/rurl.Rcheck'
+* using R Under development (unstable) (2026-09-04 r90492 ucrt)
+* using platform: x86_64-w64-mingw32
+* R was compiled by
+    gcc.exe (GCC) 14.3.0
+    GNU Fortran (GCC) 14.3.0
+* running under: Windows Server 2022 x64 (build 20348)
+* using session charset: UTF-8
+* current time: 2026-09-06 15:34:10 UTC
+* checking for file 'rurl/DESCRIPTION' ... OK
+* checking extension type ... Package
+* this is package 'rurl' version '3.0.1'
+* package encoding: UTF-8
+* checking CRAN incoming feasibility ... NOTE
+Maintainer: 'Bart Turczynski <bartek@turczynski.pl>'
+
+New maintainer:
+  Bart Turczynski <bartek@turczynski.pl>
+Old maintainer(s):
+  Bart Turczynski <bartek+rurl@turczynski.pl>
+
+Possibly misspelled words in DESCRIPTION:
+  IDNA (13:18)
+  Punycode (13:5)
+
+Found the following (possibly) invalid URLs:
+  URL: https://gitlab.com/bart-turczynski/rurl/-/issues
+    From: DESCRIPTION
+    Status: 404
+    Message: Not Found
+* checking package namespace information ... OK
+* checking package dependencies ... OK
+* checking if this is a source package ... OK
+* checking if there is a namespace ... OK
+* checking for hidden files and directories ... OK
+* checking for portable file names ... OK
+* checking whether package 'rurl' can be installed ... OK
+* checking installed package size ... OK
+* checking package directory ... OK
+* checking for future file timestamps ... OK
+* checking 'build' directory ... OK
+* checking DESCRIPTION meta-information ... OK
+* checking top-level files ... OK
+* checking for left-over files ... OK
+* checking index information ... OK
+* checking package subdirectories ... OK
+* checking code files for non-ASCII characters ... OK
+* checking R files for syntax errors ... OK
+* checking whether the package can be loaded ... OK
+* checking whether the package can be loaded with stated dependencies ... OK
+* checking whether the package can be unloaded cleanly ... OK
+* checking whether the namespace can be loaded with stated dependencies ... OK
+* checking whether the namespace can be unloaded cleanly ... OK
+* checking loading without being on the library search path ... OK
+* checking whether startup messages can be suppressed ... OK
+* checking use of S3 registration ... OK
+* checking dependencies in R code ... OK
+* checking S3 generic/method consistency ... OK
+* checking replacement functions ... OK
+* checking foreign function calls ... OK
+* checking R code for possible problems ... [18s] OK
+* checking Rd files ... OK
+* checking Rd metadata ... OK
+* checking Rd line widths ... OK
+* checking Rd cross-references ... OK
+* checking for missing documentation entries ... OK
+* checking for code/documentation mismatches ... OK
+* checking Rd \usage sections ... OK
+* checking Rd contents ... OK
+* checking for unstated dependencies in examples ... OK
+* checking installed files from 'inst/doc' ... OK
+* checking files in 'vignettes' ... OK
+* checking examples ... OK
+* checking for unstated dependencies in 'tests' ... OK
+* checking tests ... [121s] ERROR
+  Running 'testthat.R' [121s]
+Running the tests in 'tests/testthat.R' failed.
+Complete output:
+  > # This file is part of the standard setup for testthat.
+  > # It is recommended that you do not modify it.
+  > #
+  > # Where should you do additional test configuration?
+  > # Learn more about the roles of various files in:
+  > # * https://r-pkgs.org/testing-design.html#sec-tests-files-overview
+  > # * https://testthat.r-lib.org/articles/special-files.html
+  > 
+  > try(Sys.setlocale("LC_CTYPE", "en_US.UTF-8"), silent = TRUE)
+  [1] "en_US.UTF-8"
+  > 
+  > library(testthat)
+  > library(rurl)
+  > 
+  > test_check("rurl")
+  Saving _problems/test-external-url-vectors-119.R
+  Saving _problems/test-external-url-vectors-120.R
+  Saving _problems/test-external-url-vectors-121.R
+  Saving _problems/test-external-url-vectors-123.R
+  Saving _problems/test-external-url-vectors-129.R
+  Saving _problems/test-external-url-vectors-155.R
+  Saving _problems/test-external-url-vectors-156.R
+  Saving _problems/test-external-url-vectors-161.R
+  Saving _problems/test-external-url-vectors-192.R
+  Saving _problems/test-external-url-vectors-243.R
+  Saving _problems/test-external-url-vectors-245.R
+  [ FAIL 11 | WARN 0 | SKIP 8 | PASS 7146 ]
+  
+  ══ Skipped tests (8) ═══════════════════════════════════════════════════════════
+  • Installed punycoder is version 1.2.1; but 1.2.1.9000 is required (1):
+    'test-format-url.R:229:3'
+  • On CRAN (3): 'test-characterization-snapshot.R:36:1', 'test-osv.R:20:3',
+    'test-security.R:17:3'
+  • register not present in an installed check (1): 'test-url-join.R:759:3'
+  • released pslr warns on its sysdata load (PSLR-jzdhhugc) (1):
+    'test-locale-invariance.R:623:3'
+  • tools/oracle/derive-ip-obfuscation.R is not reachable from this run (2):
+    'test-uts46-transcription-pin.R:37:3', 'test-uts46-transcription-pin.R:80:3'
+  
+  ══ Failed tests ════════════════════════════════════════════════════════════════
+  ── Failure ('test-external-url-vectors.R:119:3'): the fixture parses to the same corpus on every platform ──
+  Expected `nrow(fx)` to be identical to 396L.
+  Differences:
+    `actual`: 389
+  `expected`: 396
+  
+  ── Failure ('test-external-url-vectors.R:120:3'): the fixture parses to the same corpus on every platform ──
+  Expected `sum(fx$runnable == "yes")` to be identical to 325L.
+  Differences:
+    `actual`: 316
+  `expected`: 325
+  
+  ── Failure ('test-external-url-vectors.R:121:3'): the fixture parses to the same corpus on every platform ──
+  Expected `sum(!is.na(fx$rurl_deviation))` to be identical to 41L.
+  Differences:
+    `actual`: 43
+  `expected`: 41
+  
+  ── Failure ('test-external-url-vectors.R:123:3'): the fixture parses to the same corpus on every platform ──
+  Expected `sum(fx$source_class == "A")` to be identical to 375L.
+  Differences:
+    `actual`: 367
+  `expected`: 375
+  
+  ── Failure ('test-external-url-vectors.R:129:3'): the fixture parses to the same corpus on every platform ──
+  Expected `sum(fx$divergence_class == "both-reject")` to be identical to 100L.
+  Differences:
+    `actual`:  91
+  `expected`: 100
+  
+  ── Failure ('test-external-url-vectors.R:155:3'): external-url-vectors fixture is well-formed ──
+  Expected `all(fx$source_class %in% c("A", "B", "C"))` to be TRUE.
+  Differences:
+  `actual`:   FALSE
+  `expected`: TRUE 
+  
+  ── Failure ('test-external-url-vectors.R:156:3'): external-url-vectors fixture is well-formed ──
+  Expected `all(fx$standard %in% c("rfc3986", "whatwg", "both"))` to be TRUE.
+  Differences:
+  `actual`:   FALSE
+  `expected`: TRUE 
+  
+  ── Failure ('test-external-url-vectors.R:161:3'): external-url-vectors fixture is well-formed ──
+  Expected `all(is.na(fx$rurl_whatwg_status[!runnable]))` to be TRUE.
+  Differences:
+  `actual`:   FALSE
+  `expected`: TRUE 
+  
+  ── Failure ('test-external-url-vectors.R:190:3'): dual-standard oracle: classes and invariants hold ──
+  Expected `all(...)` to be TRUE.
+  Differences:
+  `actual`:   FALSE
+  `expected`: TRUE 
+  
+  ── Failure ('test-external-url-vectors.R:243:3'): dual-standard oracle: classes and invariants hold ──
+  Expected `all(fx$runnable[dev] == "yes")` to be TRUE.
+  Differences:
+  `actual`:   FALSE
+  `expected`: TRUE 
+  
+  ── Failure ('test-external-url-vectors.R:245:3'): dual-standard oracle: classes and invariants hold ──
+  Expected `all(grepl("ADR [0-9]{4}|RURL-[a-z]+", fx$rurl_deviation[dev]))` to be TRUE.
+  Differences:
+  `actual`:   FALSE
+  `expected`: TRUE 
+  
+  
+  [ FAIL 11 | WARN 0 | SKIP 8 | PASS 7146 ]
+  Error:
+  ! Test failures.
+  Execution halted
+* checking for unstated dependencies in vignettes ... OK
+* checking package vignettes ... OK
+* checking re-building of vignette outputs ... OK
+* checking PDF version of manual ... [17s] OK
+* checking HTML version of manual ... OK
+* DONE
+Status: 1 ERROR, 1 NOTE
