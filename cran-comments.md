@@ -1,3 +1,17 @@
+> **DO NOT SUBMIT — this document is stale as of 2026-09-06.**
+>
+> The claim below that "The ERROR is fixed" is **false**. `rurl_3.0.1.tar.gz`
+> was checked on both win-builder queues on 2026-09-06 and returned
+> `1 ERROR, 1 NOTE` on each — R-devel (2026-09-04 r90492 ucrt) and R-release
+> 4.6.1. The same six `test-external-url-vectors.R` failures 3.0.0 reported are
+> still present, plus five more from the corpus-shape pin this version added.
+> The corpus reads 389 rows on Windows where the fixture has 396. The
+> `LC_CTYPE = "C"` pin changed nothing about the parse.
+>
+> Full transcript and the preserved logs: `design/win-builder.md`. Owner:
+> RURL-gxgxyzpk, reopened. This file's Resubmission section must be rewritten
+> against whatever actually fixes the parse before anything is uploaded.
+
 ## Resubmission
 
 This is a resubmission. Version 3.0.0 did not pass the incoming pre-tests on

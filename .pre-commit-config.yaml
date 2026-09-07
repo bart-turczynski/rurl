@@ -42,10 +42,17 @@ repos:
       # run printed. Editing them after the fact makes the record disagree
       # with a re-run.
       #
+      # design/win-builder-logs/ is the same kind of thing: 00check.log exactly
+      # as win-builder served it, kept because those result URLs are deleted
+      # after ~72 hours. testthat prints its diff lines with trailing spaces
+      # ("`expected`: TRUE "), so a fixer pass silently edits the evidence and
+      # the transcript stops matching the log it cites.
+      #
       # Design prose and registers are deliberately NOT here: they are authored,
-      # so the fixers own their whitespace like any other source file.
+      # so the fixers own their whitespace like any other source file. The
+      # exception above is recorded output that happens to live under design/.
       - id: end-of-file-fixer
-        exclude: &fixer-excludes '^(tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$|inst/LICENSE\.psl$|analysis/.*\.csv$|analysis/.*/run-console\.txt$)'
+        exclude: &fixer-excludes '^(tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$|inst/LICENSE\.psl$|analysis/.*\.csv$|analysis/.*/run-console\.txt$|design/win-builder-logs/)'
       - id: trailing-whitespace
         exclude: *fixer-excludes
       - id: check-merge-conflict
