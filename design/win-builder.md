@@ -88,3 +88,65 @@ same hazard as `input` (35 control characters, 22 non-ASCII), so reconstructing
 `input_json` *is* non-NA on all 396 rows, including the 71 non-runnable rows
 where `input` is NA by invariant — so it does carry every row, and a genuinely
 ASCII-escaped `input_json` would be a complete source.
+
+## 3.0.1.9002 — 2026-09-07 — **GREEN on R-devel**
+
+Probe build 2, uploaded to the R-devel queue only, notified by email at 23:39
+CEST. Result URL `https://win-builder.r-project.org/R8WbZQ5MYFL3`; the logs are
+preserved next to this file as `3.0.1.9002-devel-00check.log`,
+`3.0.1.9002-devel-diagnose-windows-fixture.Rout` and
+`3.0.1.9002-devel-testthat.Rout`.
+
+`Status: 1 NOTE` — incoming feasibility only (large version components, the
+maintainer address, `IDNA`, and the `BugReports:` 404). The suite:
+
+```
+[ FAIL 0 | WARN 0 | SKIP 8 | PASS 7157 ]
+```
+
+The eleven `test-external-url-vectors.R` failures are gone.
+
+### The cause, measured
+
+The probe carried a `tests/diagnose-windows-fixture.R` that ran ahead of
+`testthat.R`, so the mechanism and the verdict are in the same run.
+
+* **The fixture bytes are intact in the check tree.** 280019 bytes, md5
+  `d6ad52f2...`, 413 LF, 0 CR, 17012 quotes, 460 bytes >= 0x80. A locale-free
+  RFC 4180 record count over those bytes gives **396 on Windows**. The bytes
+  describe 396 rows there, same as everywhere.
+* **The `LC_CTYPE = "C"` pin takes, and is irrelevant.** Probe 1
+  (`3.0.1.9001`, `https://win-builder.r-project.org/N17GS24jtbvX`) confirmed
+  `l10n_info()` goes MBCS TRUE -> FALSE and codepage 65001 -> 0 under the pin,
+  and the corpus still read 389. This kills the `mbrtowc()` theory 3.0.1 was
+  built on.
+* **It is the connection layer.** Same process, same locale, same `scan()`:
+  through a file connection, 389 rows; from memory, 396.
+  `read.csv(path)` 389, `textConnection(rawToChar(raw))` 396,
+  `read.csv(text = rawToChar(raw))` 396.
+* **Which bytes.** `readLines(file(fx, "rb"))` reconstructs all 280019 bytes
+  across 413 lines. `readLines(file(fx, "r"))` returns **405 lines / 276576
+  bytes — 3443 short**, and the first byte where the rejoined text differs from
+  the file is offset **45710**, which holds the file's single **`0x1A`**.
+
+### Correcting "What the transcript rules out"
+
+The 2026-09-06 bullet **"Not `0x1A`-as-EOF"** reasoned that text-mode EOF at
+that byte would leave ~105 rows, not 389. That arithmetic is right and the
+conclusion it drew is wrong: the text-mode connection does not *truncate* at
+the `0x1A`, it loses 3443 bytes there and resynchronizes further on. The byte
+was the right suspect; "as-EOF" was the wrong model of what it does. Every
+other bullet in that section stands.
+
+The "unexamined premise" bullet also stands but is now moot: `input_json`
+carrying 17 non-ASCII cells does not matter once the reader never decodes
+through a connection at all.
+
+### The fix
+
+`read_vectors()` reads the file with `readBin()`, marks the string UTF-8 and
+parses it with `read.csv(text = )`. No connection is opened, so no text-mode
+connection can be met. Executable content of the green probe and of the
+submission tree is byte-for-byte identical — the probe differed only in
+`DESCRIPTION`'s version string and in the diagnostic script, both removed
+before the fix landed on `main`.

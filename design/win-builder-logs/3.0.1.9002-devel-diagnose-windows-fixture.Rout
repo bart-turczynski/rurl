@@ -1,0 +1,143 @@
+
+R Under development (unstable) (2026-09-06 r90498 ucrt) -- "Unsuffered Consequences"
+Copyright (C) 2026 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> ## PROBE BUILD 2 -- NOT FOR SUBMISSION. RURL-gxgxyzpk.
+> ##
+> ## Probe 1 (rurl_3.0.1.9001, https://win-builder.r-project.org/N17GS24jtbvX)
+> ## killed the mbrtowc theory and located the layer:
+> ##
+> ##   * The pin TAKES on Windows. l10n_info() goes MBCS TRUE -> FALSE,
+> ##     codepage 65001 -> 0. It is not inert; it is irrelevant.
+> ##   * The bytes are intact in the check tree: 280019, md5 d6ad52f2..., 413 LF,
+> ##     0 CR, 17012 quotes, 460 bytes >= 0x80.
+> ##   * A locale-free RFC 4180 count over those bytes gives 396 records ON
+> ##     WINDOWS. The bytes describe 396 rows there, same as everywhere.
+> ##   * Same process, same locale, same scan(): reading the file through a FILE
+> ##     CONNECTION gives 389 rows; reading the identical bytes from MEMORY gives
+> ##     396. read.csv(path) 389 / 389 pinned, vs textConnection(rawToChar) 396
+> ##     and text=rawToChar 396.
+> ##
+> ## So it is the connection layer, not decoding and not field splitting. Probe 2
+> ## asks the remaining question -- WHICH bytes does the connection layer change
+> ## -- and validates the candidate reader by handing it to the real suite.
+> ##
+> ## Delete this file. It must never reach CRAN.
+> 
+> sep <- function(x) cat("\n== ", x, " ==============================\n", sep = "")
+> kv <- function(k, v) cat(sprintf("  %-36s %s\n", paste0(k, ":"), paste(v, collapse = " ")))
+> 
+> fx <- file.path("testthat", "fixtures", "external-url-vectors.csv")
+> n <- file.size(fx)
+> raw <- readBin(fx, "raw", n)
+> 
+> sep("A. what each read path actually returns, byte for byte")
+
+== A. what each read path actually returns, byte for byte ==============================
+> kv("readBin(path) bytes", length(raw))
+  readBin(path) bytes:                 280019
+> 
+> cb <- file(fx, "rb"); rb <- readBin(cb, "raw", n + 4096L); close(cb)
+> kv("file(fx, 'rb') bytes", length(rb))
+  file(fx, 'rb') bytes:                280019
+> kv("binary connection identical to readBin", identical(raw, rb))
+  binary connection identical to readBin: TRUE
+> 
+> ct <- file(fx, "r"); lines_t <- readLines(ct, warn = FALSE); close(ct)
+> bytes_t <- sum(nchar(lines_t, type = "bytes")) + length(lines_t)
+> kv("readLines(file(fx, 'r')) lines", length(lines_t))
+  readLines(file(fx, 'r')) lines:      405
+> kv("  reconstructed bytes (+1 LF/line)", bytes_t)
+    reconstructed bytes (+1 LF/line):  276576
+> kv("  bytes MISSING vs readBin", length(raw) - bytes_t)
+    bytes MISSING vs readBin:          3443
+> 
+> cbb <- file(fx, "rb"); lines_b <- readLines(cbb, warn = FALSE); close(cbb)
+> bytes_b <- sum(nchar(lines_b, type = "bytes")) + length(lines_b)
+> kv("readLines(file(fx, 'rb')) lines", length(lines_b))
+  readLines(file(fx, 'rb')) lines:     413
+> kv("  reconstructed bytes (+1 LF/line)", bytes_b)
+    reconstructed bytes (+1 LF/line):  280019
+> kv("  bytes MISSING vs readBin", length(raw) - bytes_b)
+    bytes MISSING vs readBin:          0
+> 
+> sep("B. first byte where the text path departs from the bytes")
+
+== B. first byte where the text path departs from the bytes ==============================
+> rejoin <- function(ls) charToRaw(paste0(paste(ls, collapse = "\n"), "\n"))
+> for (nm in c("text", "binary")) {
++   ls <- if (nm == "text") lines_t else lines_b
++   rj <- tryCatch(rejoin(ls), error = function(e) {
++     kv(paste0(nm, ": rejoin failed"), conditionMessage(e)); NULL
++   })
++   if (is.null(rj)) next
++   m <- min(length(rj), length(raw))
++   d <- which(rj[seq_len(m)] != raw[seq_len(m)])
++   kv(paste0(nm, " path: rejoined length"), length(rj))
++   if (!length(d)) {
++     kv(paste0(nm, " path: first difference"), "none in the common prefix")
++     next
++   }
++   i <- d[1]
++   kv(paste0(nm, " path: first difference at"), i)
++   lo <- max(1L, i - 16L); hi <- min(length(raw), i + 16L)
++   cat("    file  :", paste(sprintf("%02x", as.integer(raw[lo:hi])), collapse = " "), "\n")
++   hi2 <- min(length(rj), i + 16L)
++   cat("    reread:", paste(sprintf("%02x", as.integer(rj[lo:hi2])), collapse = " "), "\n")
++   cat("    the byte the file has at", i, ":",
++       sprintf("0x%02x", as.integer(raw[i])), "\n")
++ }
+  text path: rejoined length:          276576
+  text path: first difference at:      45710
+    file  : 20 63 61 73 65 22 2c 22 68 74 74 70 3a 2f 2f 61 1a 62 2f 22 2c 22 22 22 68 74 74 70 3a 2f 2f 61 5c 
+    reread: 20 63 61 73 65 22 2c 22 68 74 74 70 3a 2f 2f 61 65 73 74 64 61 74 61 22 2c 22 57 50 54 20 75 72 6c 
+    the byte the file has at 45710 : 0x1a 
+  binary path: rejoined length:        280019
+  binary path: first difference:       none in the common prefix
+> 
+> sep("C. the candidate reader, measured here")
+
+== C. the candidate reader, measured here ==============================
+> txt <- rawToChar(raw); Encoding(txt) <- "UTF-8"
+> cand <- utils::read.csv(text = txt, stringsAsFactors = FALSE,
++                         colClasses = "character", na.strings = "NA",
++                         encoding = "UTF-8")
+> old <- utils::read.csv(fx, stringsAsFactors = FALSE, colClasses = "character",
++                        na.strings = "NA", encoding = "UTF-8")
+> kv("candidate  nrow / runnable", paste(nrow(cand), "/", sum(cand$runnable == "yes")))
+  candidate  nrow / runnable:          396 / 325
+> kv("3.0.1 path nrow / runnable", paste(nrow(old), "/", sum(old$runnable == "yes")))
+  3.0.1 path nrow / runnable:          389 / 316
+> kv("expected", "396 / 325")
+  expected:                            396 / 325
+> kv("candidate clears the shape pin?",
++    if (nrow(cand) == 396L && sum(cand$runnable == "yes") == 325L) "YES" else "NO")
+  candidate clears the shape pin?:     YES
+> kv("encoding marks kept?",
++    paste(unique(Encoding(cand$input[!is.na(cand$input)])), collapse = "/"))
+  encoding marks kept?:                unknown/UTF-8
+> 
+> sep("D. handing it to the real suite")
+
+== D. handing it to the real suite ==============================
+> cat("tests/testthat/test-external-url-vectors.R now reads the fixture this way.\n")
+tests/testthat/test-external-url-vectors.R now reads the fixture this way.
+> cat("testthat.R runs next; its result is the verdict on the fix.\n")
+testthat.R runs next; its result is the verdict on the fix.
+> 
+> proc.time()
+   user  system elapsed 
+   0.26    0.15    0.42 

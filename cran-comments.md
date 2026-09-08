@@ -1,57 +1,60 @@
-> **DO NOT SUBMIT — this document is stale as of 2026-09-06.**
->
-> The claim below that "The ERROR is fixed" is **false**. `rurl_3.0.1.tar.gz`
-> was checked on both win-builder queues on 2026-09-06 and returned
-> `1 ERROR, 1 NOTE` on each — R-devel (2026-09-04 r90492 ucrt) and R-release
-> 4.6.1. The same six `test-external-url-vectors.R` failures 3.0.0 reported are
-> still present, plus five more from the corpus-shape pin this version added.
-> The corpus reads 389 rows on Windows where the fixture has 396. The
-> `LC_CTYPE = "C"` pin changed nothing about the parse.
->
-> Full transcript and the preserved logs: `design/win-builder.md`. Owner:
-> RURL-gxgxyzpk, reopened. This file's Resubmission section must be rewritten
-> against whatever actually fixes the parse before anything is uploaded.
-
 ## Resubmission
 
 This is a resubmission. Version 3.0.0 did not pass the incoming pre-tests on
 2026-09-06 (`rurl_3.0.0_20260906_162044`): `1 ERROR, 1 NOTE` on
-r-devel-windows-x86_64, `1 NOTE` on r-devel-linux-x86_64-debian-gcc.
+r-devel-windows-x86_64, `1 NOTE` on r-devel-linux-x86_64-debian-gcc. A first
+attempt at the fix was checked on win-builder as 3.0.1 on 2026-09-06, did not
+clear the ERROR, and was never uploaded. The diagnosis below is the one that
+did clear it.
 
-**The ERROR is fixed.** Six `testthat` failures on Windows only, all in
-`tests/testthat/test-external-url-vectors.R`. The package's own code was not
-implicated: the failures were in a *test fixture reader*. That file's fixture
-is a corpus of adversarial URL vectors imported from the WHATWG
-web-platform-tests, so by construction its cells carry raw C0 control
-characters, embedded newlines, astral-plane code points and U+FFFF. Reading it
-with `utils::read.csv()` sends those bytes through `scan()`'s `mbrtowc()` path
-whenever `mbcslocale` is TRUE, and on Windows one row parsed a field out of
-register.
+**The ERROR is fixed, and the fix is confirmed on Windows.** The failures were
+Windows-only and all in `tests/testthat/test-external-url-vectors.R`. The
+package's own code was never implicated: the fault was in a *test fixture
+reader*. That file's fixture is a corpus of adversarial URL vectors imported
+from the WHATWG web-platform-tests, so by construction its cells carry raw C0
+control characters, embedded newlines, astral-plane code points and U+FFFF. On
+Windows one row parsed a field out of register, shifting every row after it: the
+corpus read 389 rows where the file describes 396.
 
-The fixture is now read with `LC_CTYPE` pinned to `"C"` and restored on exit,
-which takes `scan()` down its single-byte path. That is the correct reader
-rather than a workaround: UTF-8 is ASCII-transparent, so no multibyte sequence
-can contain a `,` or `"` byte and a bytewise parse of a UTF-8 CSV is exact —
-and exact identically on every platform. The parse is `identical()` to the
-previous one, encoding marks included, on platforms where the previous one was
-already correct.
+The cause is R's **text-mode file connection** on Windows — not character
+decoding, and not field splitting. Measured on win-builder, in one process at
+one locale: the same bytes yield 389 CSV records read through `file()` and 396
+read from memory. `readLines(file(fx, "r"))` returns 405 lines / 276,576 bytes
+against `readBin()`'s 413 lines / 280,019 bytes, and the first byte at which the
+two diverge is offset 45,710, which holds the file's single `0x1A` (SUB). It is
+not a plain truncation at that byte — the connection resynchronizes and returns
+most of the rest of the file, ending 3,443 bytes and 8 lines short — but that
+byte is where the text path stops tracking the file's actual contents. An
+earlier hypothesis that `scan()`'s `mbrtowc()` path
+was at fault was tested and rejected: pinning `LC_CTYPE` to `"C"` demonstrably
+takes effect on Windows (`l10n_info()` goes MBCS TRUE to FALSE, codepage 65001
+to 0) and changes the parse not at all. That pin was 3.0.1's first attempt; it
+has been removed.
 
-A second test now pins the corpus's shape (row count, runnable count, class
-counts). Every conformance test in that file filters on `runnable == "yes"`, so
-a mis-parsed row previously left the corpus silently rather than failing; the
-pin makes that condition loud.
+The fixture is therefore now read with `readBin()` and parsed from memory
+(`utils::read.csv(text = )`), which opens no connection and so cannot meet a
+text-mode one. That is the correct reader rather than a workaround: UTF-8 is
+ASCII-transparent, so no multibyte sequence can contain a `,` or `"` byte, and a
+bytewise parse of a UTF-8 CSV is exact — exact identically on every platform.
+`encoding = "UTF-8"` still marks the results, so the parse is `identical()` to
+the connection-based one, encoding marks included, on every platform where the
+connection-based one was already correct.
+
+A second test pins the corpus's shape (row count, runnable count, class counts).
+Every conformance test in that file filters on `runnable == "yes"`, so a
+mis-parsed row previously left the corpus silently rather than failing; the pin
+makes that condition loud.
 
 No user-facing behavior changed. `NEWS.md` records both under `## rurl 3.0.1
 ### Internal`.
 
-**The NOTE is unchanged and is addressed below.** Its two components — the
-maintainer address and the `BugReports:` URL — are explained in the following
-section. The pre-test also reported `IDNA` and `Punycode` as possibly
+**The NOTE is unchanged and is addressed below.** Its two substantive components
+— the maintainer address and the `BugReports:` URL — are explained in the
+following section. The pre-test also reported `IDNA` and `Punycode` as possibly
 misspelled words in `DESCRIPTION`; both are correct spellings of the standards
 named (`IDNA` is RFC 5890's Internationalized Domain Names in Applications;
 `Punycode` is RFC 3492's encoding), and both are already recorded in
 `inst/WORDLIST`, which CRAN's incoming `aspell` run does not consult.
-
 ---
 
 ## R CMD check results
@@ -64,6 +67,14 @@ untracked in a working clone can reach the check:
   2026-09-04
 - Ubuntu, R-release (`r-base:latest` container) is run through
   `tools/local-ci.sh --all` before the tarball is submitted
+- Windows Server 2022 x64, R-devel (2026-09-06 r90498 ucrt), win-builder,
+  2026-09-07: **0 errors | 0 warnings | 1 note**, with the suite at
+  `FAIL 0 | WARN 0 | SKIP 8 | PASS 7157`. The note is the incoming-feasibility
+  one explained below. This is the run that confirms the ERROR is gone. It was
+  uploaded as `3.0.1.9002`, a build whose executable content is identical to
+  this one — it differed only in the version string and in one extra
+  diagnostic script under `tests/`, both since removed; the fixture reader and
+  every other line of R code are byte-for-byte the same.
 
 The test suite is additionally run under `LC_ALL=C` on Linux, since several of
 this release's fixes concern non-UTF-8 sessions.
