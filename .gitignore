@@ -20,6 +20,7 @@
 *.tar.gz
 *.Rcheck/
 .tmp/
+tmp/
 _scratch/
 worklog/
 covr_report.html
