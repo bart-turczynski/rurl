@@ -90,9 +90,11 @@ appear in the submitted tarball's check:
 | `checking HTML version of manual` — `Skipping checking math rendering: package 'V8' unavailable` | no; the local library lacks `V8` |
 
 The `tmp` NOTE was a repository-hygiene defect, not a package one: four gate
-logs under `tmp/orchestrate/` are tracked in git and `.Rbuildignore` excluded
-only `^\.tmp$`, so the directory rode into a clean-export tarball. `^tmp$` is
-now excluded as well (RURL-ladruqhn, 2026-09-04); re-check the tarball listing
+logs under `tmp/orchestrate/` were tracked in git and `.Rbuildignore` excluded
+only `^\.tmp$`, so the directory rode into a clean-export tarball. Both sides
+are fixed: `^tmp$` is excluded from the build (RURL-ladruqhn, 2026-09-04), and
+the logs are untracked with `tmp/` in `.gitignore` (2026-09-08), so no future
+gate output can reach a tarball this way. Re-check the tarball listing
 (`tar tzf rurl_*.tar.gz | grep '^rurl/tmp/'` must print nothing) when the
 submission tarball is built.
 
