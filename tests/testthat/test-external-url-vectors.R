@@ -58,39 +58,46 @@ fixture_path <- testthat::test_path("fixtures", "external-url-vectors.csv")
 # from it -- but ONLY for runnable rows: non-runnable rows are provenance-only
 # and must keep `input` NA (invariant asserted above).
 #
-# THE READ IS LOCALE-PINNED, and that is load-bearing (RURL-gxgxyzpk). CRAN's
-# 3.0.0 incoming pretest failed on r-devel-windows-x86_64 ONLY -- six failures,
-# every one of them a whole-corpus shape invariant, while every expectation
-# that FILTERS the corpus passed. That split has one cause: a row parsed one
-# field out of register, so non-NA garbage landed in `source_class`,
-# `standard`, `divergence_class`, `runnable` and `rurl_deviation`. Truncation
-# is excluded twice over -- it yields NAs (`anyNA(divergence_class)` passed)
-# and warns `EOF within quoted string` (CRAN reported WARN 0).
+# THE FIXTURE IS READ FROM MEMORY, NOT THROUGH A CONNECTION, and that is
+# load-bearing (RURL-gxgxyzpk). CRAN's 3.0.0 incoming pretest failed on
+# r-devel-windows-x86_64 ONLY -- six failures, every one of them a whole-corpus
+# shape invariant, while every expectation that FILTERS the corpus passed. That
+# split has one cause: a row parsed one field out of register, so non-NA garbage
+# landed in `source_class`, `standard`, `divergence_class`, `runnable` and
+# `rurl_deviation`. Truncation is excluded twice over -- it yields NAs
+# (`anyNA(divergence_class)` passed) and warns `EOF within quoted string` (CRAN
+# reported WARN 0).
 #
-# `utils::read.csv()` -> `scan()` walks quoted fields through `mbrtowc()`
-# whenever `mbcslocale` is TRUE, and this fixture is built to stress exactly
-# that: 35 rows carry raw C0/DEL control characters inside quoted cells, two
-# embed raw newlines, and the corpus includes three astral-plane emoji plus
-# U+FFFF, a Unicode noncharacter -- 4-byte and noncharacter sequences are where
-# a 16-bit `wchar_t` `mbrtowc()` diverges from a 32-bit one.
+# 3.0.1 pinned `LC_CTYPE` to "C", on the theory that `scan()`'s `mbrtowc()` path
+# mangled the fixture's astral-plane and noncharacter sequences. That theory is
+# wrong and the pin is gone. Two win-builder probes measured it on Windows: the
+# pin TAKES -- `l10n_info()` goes MBCS TRUE -> FALSE, codepage 65001 -> 0 -- and
+# changes nothing. The corpus still read 389 rows where the bytes describe 396.
 #
-# Pinning LC_CTYPE to "C" takes `scan()` down its single-byte path instead.
-# That is not a workaround, it is the correct reader for this file: UTF-8 is
+# The fault is R's TEXT-MODE FILE CONNECTION on Windows. In one process at one
+# locale, the same bytes give 389 records through `file()` and 396 read from
+# memory. `readLines(file(fx, "r"))` returns 405 lines / 276576 bytes against
+# `readBin()`'s 413 lines / 280019 bytes, and the first byte at which the two
+# diverge is offset 45710, which holds the file's single 0x1A (SUB). It is not
+# a plain truncation there -- the connection resynchronizes and returns most of
+# the rest of the file, 3443 bytes and 8 lines short -- but that byte is where
+# the text path stops tracking the file's contents, and everything after it is
+# read out of register.
+#
+# So: read the bytes with `readBin()`, mark them UTF-8, and hand the string to
+# `read.csv(text = )`. That is not a workaround; it is the only reader that
+# cannot meet a text-mode connection, because it opens no connection. UTF-8 is
 # ASCII-transparent -- no multibyte sequence contains a `,` or `"` byte -- so a
-# bytewise CSV parse of a UTF-8 file is exact, and it is exact identically on
-# every platform. `encoding = "UTF-8"` still marks the results, so the parse is
-# `identical()` to the unpinned one, encoding marks included, wherever the
-# unpinned one was already right.
-#
-# Read the path, not a connection: `readLines()` in a single-byte locale hands
-# back "bytes"-flagged strings that `scan()` then renders as `<ef><bf><bd>`
-# escapes, which silently corrupts every non-ASCII cell.
+# bytewise CSV parse of a UTF-8 file is exact, and exact identically on every
+# platform. `encoding = "UTF-8"` still marks the results, so the parse is
+# `identical()` to the connection-based one, encoding marks included, wherever
+# that one was already right.
 read_vectors <- function() {
-  old_ctype <- Sys.getlocale("LC_CTYPE")
-  Sys.setlocale("LC_CTYPE", "C")
-  on.exit(Sys.setlocale("LC_CTYPE", old_ctype), add = TRUE)
+  raw <- readBin(fixture_path, "raw", file.size(fixture_path))
+  txt <- rawToChar(raw)
+  Encoding(txt) <- "UTF-8"
   fx <- utils::read.csv(
-    fixture_path, stringsAsFactors = FALSE, colClasses = "character",
+    text = txt, stringsAsFactors = FALSE, colClasses = "character",
     na.strings = "NA", encoding = "UTF-8"
   )
   testthat::skip_if_not_installed("jsonlite")

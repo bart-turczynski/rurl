@@ -2,7 +2,7 @@
 
 ### Internal
 
-- The external-url-vectors fixture is now read in a pinned single-byte locale, so its raw C0 control characters, embedded newlines and astral-plane code points cannot be mis-parsed by `scan()`'s multibyte path on Windows (RURL-gxgxyzpk).
+- The external-url-vectors fixture is now read with `readBin()` and parsed from memory, so R's Windows text-mode file connection cannot drop bytes at the fixture's `0x1A` and shift the corpus out of register (RURL-gxgxyzpk).
 - The conformance corpus's shape is pinned by a test, so a row that mis-parses fails loudly instead of silently leaving the corpus every oracle test filters (RURL-gxgxyzpk).
 
 ## rurl 3.0.0

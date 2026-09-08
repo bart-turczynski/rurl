@@ -1,0 +1,50 @@
+
+R Under development (unstable) (2026-09-06 r90498 ucrt) -- "Unsuffered Consequences"
+Copyright (C) 2026 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> # This file is part of the standard setup for testthat.
+> # It is recommended that you do not modify it.
+> #
+> # Where should you do additional test configuration?
+> # Learn more about the roles of various files in:
+> # * https://r-pkgs.org/testing-design.html#sec-tests-files-overview
+> # * https://testthat.r-lib.org/articles/special-files.html
+> 
+> try(Sys.setlocale("LC_CTYPE", "en_US.UTF-8"), silent = TRUE)
+[1] "en_US.UTF-8"
+> 
+> library(testthat)
+> library(rurl)
+> 
+> test_check("rurl")
+[ FAIL 0 | WARN 0 | SKIP 8 | PASS 7157 ]
+
+══ Skipped tests (8) ═══════════════════════════════════════════════════════════
+• Installed punycoder is version 1.2.1; but 1.2.1.9000 is required (1):
+  'test-format-url.R:229:3'
+• On CRAN (3): 'test-characterization-snapshot.R:36:1', 'test-osv.R:20:3',
+  'test-security.R:17:3'
+• register not present in an installed check (1): 'test-url-join.R:759:3'
+• released pslr warns on its sysdata load (PSLR-jzdhhugc) (1):
+  'test-locale-invariance.R:623:3'
+• tools/oracle/derive-ip-obfuscation.R is not reachable from this run (2):
+  'test-uts46-transcription-pin.R:37:3', 'test-uts46-transcription-pin.R:80:3'
+
+[ FAIL 0 | WARN 0 | SKIP 8 | PASS 7157 ]
+> 
+> proc.time()
+   user  system elapsed 
+ 166.09   17.12  184.40 
