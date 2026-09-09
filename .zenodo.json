@@ -1,7 +1,7 @@
 {
   "upload_type": "software",
   "title": "rurl: Parse, Clean, and Normalize URLs",
-  "version": "1.4.0",
+  "version": "3.0.1",
   "language": "eng",
   "access_right": "open",
   "license": "MIT",

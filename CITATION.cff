@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "rurl: Parse, Clean, and Normalize URLs"
-version: 1.4.0
-date-released: "2026-06-27"
+version: 3.0.1
+date-released: "2026-09-09"
 doi: 10.5281/zenodo.20972584
 abstract: >-
   A lightweight toolkit for extracting structured information from URLs.
@@ -22,10 +22,13 @@ license: MIT
 identifiers:
   - type: doi
     value: 10.5281/zenodo.20972584
-    description: "Concept DOI (all versions; resolves to the latest release)"
+    description: >-
+      Concept DOI (all deposited versions). Deposits were minted by Zenodo's
+      GitHub integration, which is gone, so the chain stops at 1.4.0 and this
+      resolves there rather than to the current release.
   - type: doi
     value: 10.5281/zenodo.20972585
-    description: "Version DOI for rurl 1.4.0"
+    description: "Version DOI for rurl 1.4.0. Later releases have none."
 keywords:
   - URL parsing
   - URL normalization
