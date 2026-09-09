@@ -114,10 +114,26 @@ what must already be on CRAN before this checklist starts.
    Verify: `git merge-base vX.Y.Z main` equals the tag.
 7. Create the GitLab release from the tag
    (`glab release create vX.Y.Z`).
-8. Open a post-release PR that (a) bumps `DESCRIPTION` to the next development
+8. Open a post-release MR that (a) bumps `DESCRIPTION` to the next development
    version, (b) adds a fresh `## rurl (development version)` NEWS heading, and
    (c) adds the CRAN canonical URL to the `DESCRIPTION` `URL:` field
    (`https://CRAN.R-project.org/package=rurl`), which only exists once accepted.
+
+   **The development version is `X.Y.Z.9000`** — the release just published,
+   plus a fourth component. Not the next patch number: `3.0.2` asserts a release
+   that has not been scoped, while `3.0.1.9000` says only "after 3.0.1", which
+   is the one thing actually known. This matches the rest of the fleet (pslr,
+   punycoder, robotstxtr, sitemapr, raddr, seor all use `.9000`). Do not read
+   the `2.2.1 → 2.2.2` bump in this repo's history as a precedent: it opened a
+   cycle that already carried bug fixes under a `## rurl 2.2.2` heading, so it
+   was a release-in-progress, not post-release housekeeping.
+
+   **Do not touch `cran-comments.md` here.** It describes the submission that
+   just landed, and it stays frozen at `to=X.Y.Z` for the whole development
+   cycle. `tools/cran-comments-gate.R` knows about this and checks the pin
+   against the release the version *names* — `3.0.1` while at `3.0.1.9000` —
+   so the bump does not break it. Rewrite the note at step 3 of the next
+   release, not here (RURL-efbcrhjc).
 9. Sanity check: diff the published CRAN tarball
    (`cran.r-project.org/src/contrib/rurl_X.Y.Z.tar.gz`) against the tag — only
    CRAN's auto-added `DESCRIPTION` fields should differ.

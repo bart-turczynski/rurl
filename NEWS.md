@@ -1,3 +1,9 @@
+## rurl (development version)
+
+### Internal
+
+- `tools/cran-comments-gate.R` no longer requires the `cran-comments.md` span pin to name the development version in `DESCRIPTION`. It checks the pin against the release that version names — `3.0.1` while at `3.0.1.9000` — so the release checklist's post-release version bump is executable, and `--online` compares whichever end of the span CRAN actually serves in each phase (RURL-efbcrhjc).
+
 ## rurl 3.0.1
 
 ### Internal
