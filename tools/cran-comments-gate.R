@@ -22,11 +22,25 @@
 #   1. the file exists at all;
 #   2. it carries exactly one machine-readable span pin,
 #      `<!-- submission-span: from=X to=Y -->`;
-#   3. `to` equals DESCRIPTION's `Version:`;
+#   3. `to` equals the release DESCRIPTION's `Version:` names -- the version
+#      itself while a release is being prepared, and the release the cycle
+#      descends from once `Version:` is a development version (see below);
 #   4. both `from` and `to` appear literally in the visible prose, so the pin
 #      and the sentence a reviewer reads cannot drift apart;
 #   5. `Remotes:` and every dependency floor the note quotes agree with
 #      DESCRIPTION.
+#
+# DEVELOPMENT VERSIONS ARE NOT SUBMISSIONS (RURL-efbcrhjc). Property 3 used to
+# be a literal `to == Version`, which made CONTRIBUTING.md's release checklist
+# step 8 -- "bump DESCRIPTION to the next development version" -- unexecutable:
+# the bump moved `Version:` away from the pin and the gate failed the push, and
+# there was no honest value to put in the pin either, because `3.0.1.9000` will
+# never be submitted to anyone. The rule is now the invariant that actually
+# holds in both phases: the note describes the release `Version:` names. While
+# preparing 3.0.1 that release is 3.0.1; during the cycle that follows it, at
+# `3.0.1.9000`, it is still 3.0.1. This is a real check, not an exemption -- a
+# bump to `3.1.0.9000` with the note still pinned to 3.0.1 is flagged, because
+# naming a new target is exactly when the note has to be rewritten.
 #
 # THE `from` VERSION IS NOT CHECKED OFFLINE, ON PURPOSE. Whether `from` is the
 # version CRAN actually publishes is a fact about the rest of the world, and
@@ -36,6 +50,15 @@
 # fail on a train. Run `--online` before a release. The offline half still
 # catches the defect that actually shipped, because "to" being wrong is what
 # made the note describe the wrong release.
+#
+# WHICH END `--online` COMPARES ALSO DEPENDS ON THE PHASE. Before a submission
+# it is `from` that must name what CRAN serves: `to` is the version not yet
+# published, and the pin claims the release will move CRAN from one to the
+# other. After acceptance that claim has been discharged and `to` is what CRAN
+# serves, so during a development cycle `--online` compares `to` instead.
+# Comparing `from` in both phases would make `--online` fail permanently from
+# the moment a release is accepted until the next note is written, which is
+# most of a package's life.
 #
 # Usage:
 #   Rscript tools/cran-comments-gate.R              # offline, exit 1 on drift
@@ -49,6 +72,38 @@ PIN_RE <- "<!--\\s*submission-span:\\s*from=(\\S+)\\s+to=(\\S+)\\s*-->"
 # looks like -- a gate that parsed them differently could report drift that is
 # only its own.
 FLOOR_RE <- "([A-Za-z][A-Za-z0-9.]*)\\s*\\(\\s*>=\\s*([0-9.-]+)"
+
+# --- versions ----------------------------------------------------------------
+
+# A version's components, or integer(0) if it does not parse. Returning empty
+# rather than erroring keeps a malformed DESCRIPTION on the ordinary literal
+# comparison below, where it produces a readable message, instead of aborting
+# the gate with a parse error about a field that is not what is being checked.
+version_parts <- function(version) {
+  if (length(version) != 1L || is.na(version)) return(integer(0))
+  tryCatch(
+    as.integer(unclass(numeric_version(version))[[1L]]),
+    error = function(e) integer(0),
+    warning = function(w) integer(0)
+  )
+}
+
+# The R convention: a fourth component of 9000 or more marks a development
+# version, i.e. one that exists only between releases and is never submitted.
+is_dev_version <- function(version) {
+  parts <- version_parts(version)
+  length(parts) == 4L && parts[[4L]] >= 9000L
+}
+
+# The release a version names: X.Y.Z for the development version X.Y.Z.9000,
+# and the version itself otherwise.
+release_named_by <- function(version) {
+  if (is_dev_version(version)) {
+    paste(version_parts(version)[1:3], collapse = ".")
+  } else {
+    version
+  }
+}
 
 # --- inputs ------------------------------------------------------------------
 
@@ -133,12 +188,24 @@ check_pin <- function(cc, desc) {
     ))
   }
   pin <- cc$pins[[1L]]
-  if (!identical(pin$to, desc$version)) {
-    out <- c(out, sprintf(
-      paste0("cran-comments.md describes release %s but DESCRIPTION says %s. ",
-             "The note is about a different version than the one being built."),
-      pin$to, desc$version
-    ))
+  expected <- release_named_by(desc$version)
+  if (!identical(pin$to, expected)) {
+    out <- c(out, if (is_dev_version(desc$version)) {
+      sprintf(
+        paste0("DESCRIPTION is at development version %s, so cran-comments.md ",
+               "must still describe the release that cycle descends from ",
+               "(%s); the pin says %s. If %s is the next target, rewrite the ",
+               "note for it rather than repointing the pin alone."),
+        desc$version, expected, pin$to, expected
+      )
+    } else {
+      sprintf(
+        paste0("cran-comments.md describes release %s but DESCRIPTION says ",
+               "%s. The note is about a different version than the one being ",
+               "built."),
+        pin$to, desc$version
+      )
+    })
   }
   for (v in unique(c(pin$from, pin$to))) {
     if (identical(v, "none")) next
@@ -221,7 +288,14 @@ check_from_against_cran <- function(desc, cc) {
     stop("--online needs a well-formed span pin; fix the offline gate first",
          call. = FALSE)
   }
-  from <- cc$pins[[1L]]$from
+  pin <- cc$pins[[1L]]
+  # Before a submission the pin claims CRAN will move `from` -> `to`, so `from`
+  # is the end that must match what CRAN serves. Once the release is accepted
+  # and DESCRIPTION has moved on to a development version, that claim is spent
+  # and `to` is the end CRAN now serves.
+  dev <- is_dev_version(desc$version)
+  end <- if (dev) "to" else "from"
+  claim <- if (dev) pin$to else pin$from
   url <- sprintf("https://crandb.r-pkg.org/%s/all", desc$package)
   got <- tryCatch(jsonlite::fromJSON(url), error = function(e) NULL)
   published <- if (is.null(got)) character(0) else names(got$versions)
@@ -229,12 +303,12 @@ check_from_against_cran <- function(desc, cc) {
               if (length(published) == 0L) "(nothing)"
               else toString(published)))
   latest <- if (length(published) == 0L) "none" else got$latest
-  if (!identical(from, latest)) {
+  if (!identical(claim, latest)) {
     return(sprintf(
-      paste0("the span pin says from=%s, but CRAN currently publishes %s. ",
+      paste0("the span pin says %s=%s, but CRAN currently publishes %s. ",
              "Re-derive the span from crandb, not from NEWS.md and not from ",
              "the note's own previous claim."),
-      from, latest
+      end, claim, latest
     ))
   }
   character(0)
@@ -277,6 +351,22 @@ self_test <- function() {
   if (length(v) > 0L) {
     fail(sprintf("false positive on a first submission: %s",
                  paste(v, collapse = "; ")))
+  }
+
+  # A development version is not a submission: the note still describes the
+  # release the cycle descends from, and must not be forced to name X.Y.Z.9000.
+  v <- scenario("dev-cycle", "3.0.0.9000", "", "pslr (>= 1.1.0)", ok_note)
+  if (length(v) > 0L) {
+    fail(sprintf("false positive during a development cycle: %s",
+                 paste(v, collapse = "; ")))
+  }
+
+  # NEGATIVE: the dev-version rule is a check, not a hole. Naming a new target
+  # without rewriting the note is exactly the drift this gate exists to catch.
+  v <- scenario("dev-cycle-retarget", "3.1.0.9000", "", "pslr (>= 1.1.0)",
+                ok_note)
+  if (!any(grepl("descends from", v, fixed = TRUE))) {
+    fail("did not flag a development version that outran its cran-comments.md")
   }
 
   # NEGATIVE: the measured defect -- the note describes an older release.
@@ -338,7 +428,7 @@ self_test <- function() {
   }
 
   unlink(base, recursive = TRUE)
-  cat("cran-comments-gate self-test: PASS (2 positive + 7 negative cases)\n")
+  cat("cran-comments-gate self-test: PASS (3 positive + 8 negative cases)\n")
   invisible(TRUE)
 }
 
