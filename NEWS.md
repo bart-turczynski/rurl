@@ -2,6 +2,7 @@
 
 ### Internal
 
+- The OSS Index dependency audit in `tests/testthat/test-security.R` now scopes to hard dependencies (`Depends` + `Imports`) instead of the `Suggests` tree, which pulled in oysteR's own dependencies and failed the gate on a `curl` vulnerability that rurl does not ship (RURL-mafkcwnu).
 - `tools/cran-comments-gate.R` no longer requires the `cran-comments.md` span pin to name the development version in `DESCRIPTION`. It checks the pin against the release that version names — `3.0.1` while at `3.0.1.9000` — so the release checklist's post-release version bump is executable, and `--online` compares whichever end of the span CRAN actually serves in each phase (RURL-efbcrhjc).
 
 ## rurl 3.0.1
