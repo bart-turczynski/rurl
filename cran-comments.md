@@ -131,17 +131,17 @@ Found the following (possibly) invalid URLs:
     Message: Not Found
 ```
 
-This is a false positive, and not one the package can fix. The `BugReports:`
-address is correct: the page opens normally in a browser session and accepts
-bug reports from anyone with a GitLab account. GitLab.com serves an HTTP 404 to
-any logged-out client requesting an issue-list path, on every project on the
-platform, as an anti-scraping measure. It is not a setting of this project —
-the project is `visibility: public` with `issues_access_level: enabled` (read
-back from the GitLab API), and the response is 404 whether the client identifies
-as `curl`, as a browser, or as R's URL checker.
+This is a false positive. The `BugReports:` address is correct: the page opens
+normally in a browser session and accepts bug reports from anyone with a GitLab
+account. GitLab has migrated issues to work items, and serves an HTTP 404 to any
+logged-out client requesting the legacy `/-/issues` path, on every project on
+the platform. A browser follows the redirect to `/-/work_items`, which is why
+the page loads by hand. It is not a setting of this project — the project is
+`visibility: public` with `issues_access_level: enabled` (read back from the
+GitLab API).
 
 The behaviour was confirmed to be site-wide rather than a misconfiguration by
-measuring, in the same unauthenticated run (last repeated 2026-09-04), control
+measuring, in the same unauthenticated run (last repeated 2026-09-10), control
 projects whose trackers are unquestionably public:
 
 | URL | anonymous status |
@@ -151,18 +151,31 @@ projects whose trackers are unquestionably public:
 | `gitlab.com/inkscape/inkscape/-/issues` | 404 |
 | `gitlab.com/bart-turczynski/pslr/-/issues` (sibling package, already on CRAN) | 404 |
 | `gitlab.com/bart-turczynski/rurl/-/issues` | 404 |
+| `gitlab.com/gitlab-org/gitlab/-/work_items` | **200** |
+| `gitlab.com/gitlab-org/gitlab-runner/-/work_items` | **200** |
+| `gitlab.com/inkscape/inkscape/-/work_items` | **200** |
+| `gitlab.com/bart-turczynski/pslr/-/work_items` | **200** |
+| `gitlab.com/bart-turczynski/rurl/-/work_items` | **200** |
 | `gitlab.com/bart-turczynski/rurl/-/issues/new` | 302 to sign-in |
 | `gitlab.com/bart-turczynski/rurl` (repository root) | **200** |
 | `gitlab.com/api/v4/projects/bart-turczynski%2Frurl/issues` (anonymous API) | **200** |
 
 The issue tracker of GitLab itself returning 404 to the same request is the
 clearest demonstration that this reflects the platform rather than the package.
-The repository root and every file path under it return 200 to the same client,
-and the issue list is served to the anonymous API and to a logged-in browser.
-The same NOTE is declared for the sibling `pslr`, whose `BugReports:` points at
-the same host. No change to `DESCRIPTION` is warranted; repointing
-`BugReports:` to work around a platform-wide behaviour would make it less
-accurate, not more.
+Note that the same anonymous client receives 200 on every `/-/work_items` path,
+including this package's own: scripted clients are not blocked, the legacy path
+is. The repository root and every file path under it return 200, and the issue
+list is served to the anonymous API and to a logged-in browser.
+
+An earlier version of this file attributed the 404 to an anti-scraping measure
+aimed at logged-out clients. That was wrong, and the `/-/work_items` rows above
+are what disprove it; the original control set established only that the
+behaviour is site-wide, not what caused it. The practical difference is that the
+NOTE is fixable: repointing `BugReports:` at
+`https://gitlab.com/bart-turczynski/rurl/-/work_items` — the path where issues
+are now filed — would clear it. That edit changes `DESCRIPTION` and so
+invalidates the tarball the check rows in this file were measured against, which
+is why it belongs in a release cycle rather than in a submission.
 
 The project is public and the tracker is open: <https://gitlab.com/bart-turczynski/rurl>.
 
