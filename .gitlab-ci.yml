@@ -134,6 +134,20 @@ gates:
     - *gate_deps
     - 'Rscript tools/verify.R --gates'
 
+# CITATION.cff `version:` and .zenodo.json `"version"` must name the release
+# DESCRIPTION's Version names (X.Y.Z.9000 -> X.Y.Z), and every URL those two
+# files declare must also appear in DESCRIPTION's URL: field. Ported from
+# seor's `citation-version` job (seor design/adr/0001). No `rules:` here,
+# deliberately mirroring `gates` above rather than seor's `.on-mr-and-main`
+# anchor, which this file has no equivalent of: `gates` runs on every push by
+# omitting `rules:` entirely, and this job rides the same default.
+citation-version:
+  stage: gates
+  image: python:3.13-alpine
+  script:
+    - python3 scripts/check-citation.py --self-test
+    - python3 scripts/check-citation.py
+
 # The expensive half. A TAG or a HAND-STARTED pipeline, nothing else.
 #
 # Both rules are deliberate and neither is redundant. The tag rule covers the

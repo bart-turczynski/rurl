@@ -97,6 +97,19 @@ repos:
         stages: [pre-push]
         verbose: true
 
+      # CITATION.cff `version:` and .zenodo.json `"version"` must name the
+      # release DESCRIPTION's Version names (X.Y.Z.9000 -> X.Y.Z), and every
+      # URL they declare must also appear in DESCRIPTION's URL: field. Ported
+      # from seor's scripts/check-citation.py (seor design/adr/0001), which is
+      # stdlib-only and hardcodes nothing package-specific.
+      - id: check-citation
+        name: citation metadata vs DESCRIPTION
+        entry: python3 scripts/check-citation.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       # Keeps the local archival mirror from going stale in silence
       # (RURL-eqgqbeti). The `backup` remote was wired once by RURL-ivsyshdj
       # and pushed once; six weeks later it was six commits behind and nothing
