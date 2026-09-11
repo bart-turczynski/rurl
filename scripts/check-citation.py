@@ -1,4 +1,4 @@
-# check-citation v1
+# check-citation v2
 """Citation-metadata consistency gate.
 
 WHY THIS EXISTS. `CITATION.cff` and `.zenodo.json` each duplicate two facts out
@@ -17,13 +17,18 @@ these two files.
 WHAT IT CHECKS.
 
 1. `CITATION.cff` `version:` equals the release the `DESCRIPTION` `Version:`
-   names, per design/adr/0001-citation-metadata-names-the-release.md:
+   names, per design/adr/0002-citation-urls-are-the-ones-about-this-package.md:
    `X.Y.Z.9000` names `X.Y.Z`; a package that has never released (the named
    release is `0.0.0`) carries the development version verbatim.
 2. `.zenodo.json` `"version"`, same rule.
 3. A package that has never released carries no `date-released` and no DOI -
    the honesty clause that makes the exception in (1) defensible.
-4. Every http(s) URL those two files declare appears in `DESCRIPTION`'s `URL:`.
+4. Every http(s) URL those two files declare ABOUT THIS PACKAGE appears in
+   `DESCRIPTION`'s `URL:`. For `.zenodo.json` that means the
+   `related_identifiers` whose `relation` is self-referential and NOT the ones
+   pointing at a dependency or an upstream source, which are not facts
+   duplicated out of `DESCRIPTION` at all - see `SELF_REFERENTIAL_RELATIONS`
+   and design/adr/0002-citation-urls-are-the-ones-about-this-package.md.
 
 WHAT IT DOES NOT CHECK, ON PURPOSE.
 
@@ -57,6 +62,30 @@ from pathlib import Path
 CFF_SCALAR = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):[ \t]+(.+?)[ \t]*$")
 CFF_KEY = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):")
 URL_LIKE = re.compile(r"^https?://", re.IGNORECASE)
+
+# Zenodo/DataCite `relation` values that assert something about THIS package,
+# so the identifier is a fact duplicated out of DESCRIPTION and has to agree
+# with it. Every other relation points at a DIFFERENT artifact -- a dependency,
+# an upstream source -- which has no business in DESCRIPTION's `URL:` field.
+#
+# Measured across the seven repositories carrying `.zenodo.json` (2026-09-11):
+# these three relations account for 10 identifiers, every one of them declared
+# in DESCRIPTION; `requires`, `isRequiredBy` and `isDerivedFrom` account for 7,
+# not one of them declared. 17 entries, no counterexample either way.
+#
+# It is an allowlist of what to CHECK rather than a denylist of what to skip,
+# because the costs are not symmetric. A false positive reds this gate in every
+# repository at once -- it did exactly that in five of seven, which is how this
+# rule was found. A false negative only misses a duplicated URL that
+# `CITATION.cff`'s own `url:` / `repository-code:` fields still cross-check.
+# So an unrecognized relation is exempt rather than flagged. ADR 0002.
+SELF_REFERENTIAL_RELATIONS = frozenset(
+    {
+        "isIdenticalTo",
+        "isDocumentedBy",
+        "isSupplementTo",
+    }
+)
 
 
 def normalize_url(url: str) -> str:
@@ -124,10 +153,18 @@ def read_cff(path: Path) -> tuple[dict[str, str], set[str]]:
 
 
 def zenodo_urls(data: dict) -> list[str]:
-    """Every http(s) identifier .zenodo.json declares."""
+    """Http(s) identifiers .zenodo.json declares ABOUT THIS PACKAGE.
+
+    A `related_identifier` whose `relation` points at a different artifact -- a
+    dependency, an upstream source -- is not a fact duplicated out of
+    DESCRIPTION, so it is not cross-checked against `URL:`. See
+    `SELF_REFERENTIAL_RELATIONS` and ADR 0002.
+    """
     out = []
     for entry in data.get("related_identifiers", []):
         if isinstance(entry, dict):
+            if entry.get("relation") not in SELF_REFERENTIAL_RELATIONS:
+                continue
             value = str(entry.get("identifier", ""))
             if URL_LIKE.match(value):
                 out.append(value)
@@ -174,7 +211,7 @@ def check_repo(root: Path) -> list[str]:
             errors.append(
                 f"CITATION.cff says version {scalars['version']}; DESCRIPTION "
                 f"is {version}, which names release {expected} "
-                f"(design/adr/0001-citation-metadata-names-the-release.md)."
+                f"(design/adr/0002-citation-urls-are-the-ones-about-this-package.md)."
             )
         if never_released:
             for claim in ("date-released", "doi", "identifiers"):
@@ -201,7 +238,7 @@ def check_repo(root: Path) -> list[str]:
                 errors.append(
                     f".zenodo.json says version {data['version']}; DESCRIPTION "
                     f"is {version}, which names release {expected} "
-                    f"(design/adr/0001-citation-metadata-names-the-release.md)."
+                    f"(design/adr/0002-citation-urls-are-the-ones-about-this-package.md)."
                 )
             if never_released and "doi" in data:
                 errors.append(
@@ -296,6 +333,33 @@ def self_test() -> None:
     )
     # POSITIVE: a package with neither file is not in violation.
     expect_clean("absent", version="0.1.2.9000", cff=None, zenodo=None)
+    # POSITIVE: a related identifier pointing at a DIFFERENT artifact is not a
+    # fact duplicated out of DESCRIPTION, so `URL:` must not have to declare
+    # it. This is the measured fleet defect that produced ADR 0002: `requires`,
+    # `isRequiredBy` and `isDerivedFrom` pointers at dependencies and upstream
+    # sources reddened this gate in five of seven repositories.
+    expect_clean(
+        "cross-artifact-relations",
+        version="3.0.1.9000",
+        cff=released_cff,
+        zenodo={
+            "version": "3.0.1",
+            "related_identifiers": [
+                {
+                    "identifier": "https://CRAN.R-project.org/package=pslr",
+                    "relation": "requires",
+                },
+                {
+                    "identifier": "https://CRAN.R-project.org/package=rurl",
+                    "relation": "isRequiredBy",
+                },
+                {
+                    "identifier": "https://github.com/google/robotstxt",
+                    "relation": "isDerivedFrom",
+                },
+            ],
+        },
+    )
 
     # NEGATIVE: the measured pslr/punycoder drift - files behind DESCRIPTION.
     expect_flagged(
@@ -359,7 +423,7 @@ def self_test() -> None:
         zenodo={"version": "1.0.0"},
     )
 
-    print("check-citation self-test: PASS (4 positive + 6 negative cases)")
+    print("check-citation self-test: PASS (5 positive + 6 negative cases)")
 
 
 def main() -> int:
