@@ -6,7 +6,7 @@
   "name": "rurl: Parse, Clean, and Normalize URLs",
   "relatedLink": ["https://CRAN.R-project.org/package=rurl"],
   "codeRepository": "https://gitlab.com/bart-turczynski/rurl",
-  "issueTracker": "https://gitlab.com/bart-turczynski/rurl/-/work_items",
+  "issueTracker": "https://gitlab.com/bart-turczynski/rurl/-/issues",
   "license": "https://spdx.org/licenses/MIT",
   "version": "3.0.1",
   "programmingLanguage": {
