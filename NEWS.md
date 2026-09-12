@@ -1,5 +1,9 @@
 ## rurl (development version)
 
+### Documentation
+
+- `BugReports` points at <https://gitlab.com/bart-turczynski/rurl/-/issues>, the form R's CRAN incoming check requires for a gitlab.com tracker; a browser following that link is redirected to `/-/work_items` (RURL-nomzooml).
+
 ### Internal
 
 - The OSS Index dependency audit in `tests/testthat/test-security.R` now scopes to hard dependencies (`Depends` + `Imports`) instead of the `Suggests` tree, which pulled in oysteR's own dependencies and failed the gate on a `curl` vulnerability that rurl does not ship (RURL-mafkcwnu).
