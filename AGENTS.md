@@ -66,11 +66,19 @@ never fire — it would always run the gate and never skip, silently.
 hook which mechanism actually delivers the values before writing another
 pre-push predicate.
 
-**GitLab CI runs the cheap `gates` job per push again** (re-enabled
-2026-09-03, RURL-utsbwfvc, after the 2026-08 quota pause RURL-psqmlgjf). The
-expensive `check` job still runs only on a tag or a hand-started pipeline. If
-the allowance runs out again, restore the `workflow:` block quoted in
-`.gitlab-ci.yml`'s header rather than leaving red badges up. `tools/local-ci.sh` runs
+**GitLab CI runs the cheap `gates` job on every push that reaches `main`**
+(re-enabled 2026-09-03, RURL-utsbwfvc, after the 2026-08 quota pause
+RURL-psqmlgjf). A push to a feature branch creates no pipeline at all, and
+neither does a merge-request pipeline: `.gitlab-ci.yml` carries a top-level
+`workflow:` block that admits only a tag or a push to the default branch, one
+pipeline per merge instead of three (SEOR-bmgkzhvy). That is a deliberate
+capability loss, not an oversight — a feature branch gets no CI signal from
+the forge; the local pre-push gate is what actually verifies it before the
+push, per the table below. The expensive `check` job still runs only on a tag
+or a hand-started pipeline run against `main` — hand-starting one against any
+other branch now creates nothing, for the same reason. If the allowance runs
+out again, tighten that `workflow:` block further (see its header comment in
+`.gitlab-ci.yml`) rather than assuming no block exists. `tools/local-ci.sh` runs
 the same CI jobs in the same image against a clean clone of a commit, which is
 where environment-shaped defects live that a fully-populated local library hides:
 
@@ -101,9 +109,9 @@ The forge moved to GitLab, so the answer is explicit rather than inherited:
 |---|---|---|
 | Gate list (lint, build, tests, `R CMD check`, record structure) | **Local**, `tools/verify.R` | Every push — it is a pre-push hook |
 | The same jobs in the CI image, clean clone | **Local**, `tools/local-ci.sh` | On demand; after every merge to `main` |
-| `gates` (~40s) | GitLab | Every push (re-enabled 2026-09-03, RURL-utsbwfvc) |
-| `check` (`R CMD check --as-cran`) | GitLab | Release time only: a tag, or a hand-started pipeline |
-| `pages` (pkgdown site to <https://bart-turczynski.gitlab.io/rurl/>) | GitLab | Release time only: a tag, or a hand-started pipeline (RURL-vkltgopc) |
+| `gates` (~40s) | GitLab | Every push to `main`, and every tag; branch pushes and MR pipelines create nothing (SEOR-bmgkzhvy) (re-enabled 2026-09-03, RURL-utsbwfvc) |
+| `check` (`R CMD check --as-cran`) | GitLab | Release time only: a tag, or a hand-started pipeline against `main` |
+| `pages` (pkgdown site to <https://bart-turczynski.gitlab.io/rurl/>) | GitLab | Release time only: a tag, or a hand-started pipeline against `main` (RURL-vkltgopc) |
 | The gate manifest, `tools/verify-manifest.yml` | Read by `tools/verify.R`, so wherever that runs (local hook, GitLab `gates`/`check`) | Forge-neutral: no forge executes it; it is the single source of WHAT the gates are (RURL-vunvxusf) |
 
 **The server-side check is the ~40s `gates` job only.** The full gate list

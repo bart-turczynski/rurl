@@ -17,8 +17,12 @@
 # file consumes it by running the script, never by copying it.
 #
 # THREE STAGES, because compute minutes are finite on the free tier:
-#   gates  — every push. The gate family needs almost no installed packages
-#            (measured: ~74s for the whole family plus the control plane).
+#   gates  — every push to `main`, and every tag. A feature-branch push and a
+#            merge-request pipeline create no pipeline at all (SEOR-bmgkzhvy;
+#            see the `workflow:` block below) -- "every push" no longer means
+#            every push, only every push that reaches `main`. The gate family
+#            needs almost no installed packages (measured: ~74s for the whole
+#            family plus the control plane).
 #   check  — RELEASE TIME ONLY: a tag, or a pipeline started by hand. The full
 #            `R CMD check --as-cran`, lint and the locale cell, which need the
 #            toolchain and every dependency, so this is the job that costs real
@@ -59,18 +63,47 @@
 # requests each fired a branch pipeline AND a main pipeline; a `workflow:` block
 # admitting only `$CI_PIPELINE_SOURCE == "web"` stopped pipeline creation until
 # the monthly reset. The cadence that spent the budget is fixed below: `gates`
-# (~40s) runs per push, `check` (`R CMD check --as-cran`) runs only on a tag or
-# a hand-started pipeline. If the allowance runs out again, restore the block --
-# a red badge that means "no minutes" is worse than no badge:
-#
-#   workflow:
-#     rules:
-#       - if: '$CI_PIPELINE_SOURCE == "web"'
-#       - when: never
+# (~40s) runs on every push that reaches `main`, `check` (`R CMD check
+# --as-cran`) runs only on a tag or a hand-started pipeline. If the allowance
+# runs out again, tighten the `workflow:` block below further (for example,
+# admit only `$CI_PIPELINE_SOURCE == "web"`) rather than assuming none exists
+# -- one has existed unconditionally since SEOR-bmgkzhvy, below, for an
+# unrelated reason (pipeline count, not compute budget). A red badge that
+# means "no minutes" is still worse than no badge, so narrow the existing
+# block rather than layering a second one.
 #
 # `tools/local-ci.sh` still runs these jobs in this image against a clean clone
 # on demand (`--all origin/main` after a merge); it is the pull-based fallback,
 # not a replacement for the per-push server-side run.
+
+# ONE PIPELINE PER MERGE, NOT THREE (SEOR-bmgkzhvy). A branch pipeline and a
+# merge-request pipeline used to fire alongside the pipeline on `main` for
+# every slice -- three pipelines testing at most two distinct trees, on a
+# fleet where several projects share one runner at concurrency 1. The branch
+# pipeline is worse than redundant: the standing slice flow (AGENTS.md)
+# deletes the branch at merge before the runner starts it, so it dies at
+# `get_sources` with exit 128 and leaves a red mark that represents nothing.
+# The merge-request pipeline is worse than that: it can outlive its own MR and
+# hold the runner's only slot for a full check run, blocking the `main`
+# pipeline that actually matters. Neither pipeline ever gated a merge here --
+# `only_allow_merge_if_pipeline_succeeds` is false on this project, and `main`
+# is a protected branch (Maintainer-only push/merge) regardless of CI status --
+# so dropping both costs no verification.
+#
+# COST, STATED PLAINLY: a feature-branch push now gets no CI at all, and
+# neither does a web- or API-triggered pipeline started against a non-default
+# branch -- both fall through to the final `when: never` below. Only a tag, or
+# a push to `main` (including a hand-started pipeline run against `main`),
+# creates a pipeline. rurl had no job keyed on `merge_request_event` before
+# this change, so no job's own `rules:` needed to move -- only which pushes
+# get a pipeline at all changed.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: never
 
 stages:
   - gates
@@ -139,8 +172,9 @@ gates:
 # files declare must also appear in DESCRIPTION's URL: field. Ported from
 # seor's `citation-version` job (seor design/adr/0001). No `rules:` here,
 # deliberately mirroring `gates` above rather than seor's `.on-mr-and-main`
-# anchor, which this file has no equivalent of: `gates` runs on every push by
-# omitting `rules:` entirely, and this job rides the same default.
+# anchor, which this file has no equivalent of: `gates` runs on every push the
+# top-level `workflow:` block admits (`main` and tags) by omitting `rules:`
+# entirely, and this job rides the same default.
 citation-version:
   stage: gates
   image: python:3.13-alpine
@@ -154,7 +188,11 @@ citation-version:
 # release itself, so a version that ships has been checked at full strength on
 # the exact commit that carries the version number. The `web` rule is the
 # finishing touch before that: `/cran` has been worked through, the package is
-# believed ready, and someone presses the button once.
+# believed ready, and someone presses the button once -- against `main`. The
+# top-level `workflow:` block admits a web/API pipeline only when
+# `$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH`, so pressing the button on any
+# other branch creates no pipeline at all for this rule to fire in
+# (SEOR-bmgkzhvy).
 #
 # The default-branch rule that used to sit here is GONE ON PURPOSE. Do not add
 # it back without a reason that outweighs paying for the slowest job on every
