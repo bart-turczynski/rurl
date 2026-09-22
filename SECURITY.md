@@ -18,7 +18,7 @@ Preferred channel — **email the maintainer at bartek@turczynski.pl.**
 
 Alternatively, open a **confidential issue** on the GitLab project:
 
-1. Go to [Issues](https://gitlab.com/bart-turczynski/rurl/-/issues) and click
+1. Go to [Issues](https://gitlab.com/bart-turczynski/rurl/-/work_items) and click
    **New issue**.
 2. Tick **This issue is confidential** before submitting.
 

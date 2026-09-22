@@ -32,9 +32,13 @@ WHAT IT CHECKS.
 
 WHAT IT DOES NOT CHECK, ON PURPOSE.
 
-* `codemeta.json` carries the same stale URL and is deliberately left alone:
-  it is generated, it is known stale, and regenerating it while `Remotes:` is
-  still in `DESCRIPTION` would make it worse (SEOR-tzxuisnf).
+* `codemeta.json` is not read here. It is generated, and its `issueTracker` is
+  deliberately NOT required to equal `DESCRIPTION`'s `BugReports:`: the two
+  differ by design (RURL-ahatycrd). `DESCRIPTION` keeps the legacy
+  `/-/issues` form, which is what R's CRAN incoming check demands and what CRAN
+  has accepted; every human-facing file, `codemeta.json` included, carries
+  `/-/work_items`, the address GitLab actually serves. A gate equating the two
+  would force one of them wrong.
 * Nothing here touches the network. Whether a declared URL resolves is a fact
   about the rest of the world; `R CMD check --as-cran` already fetches declared
   URLs, and wiring a network call into a pre-push gate makes every push fail on
