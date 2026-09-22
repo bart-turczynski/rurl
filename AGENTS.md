@@ -73,10 +73,13 @@ neither does a merge-request pipeline: `.gitlab-ci.yml` carries a top-level
 `workflow:` block that admits only a tag or a push to the default branch, one
 pipeline per merge instead of three (SEOR-bmgkzhvy). That is a deliberate
 capability loss, not an oversight — a feature branch gets no CI signal from
-the forge; the local pre-push gate is what actually verifies it before the
-push, per the table below. The expensive `check` job still runs only on a tag
-or a hand-started pipeline run against `main` — hand-starting one against any
-other branch now creates nothing, for the same reason. If the allowance runs
+the forge *by itself*; the local pre-push gate is what actually verifies it
+before the push, per the table below. To get a server-side answer on a branch
+anyway, start a pipeline by hand at **Build > Pipelines > Run pipeline** and
+pick the ref: a `web` pipeline is the one exception the `workflow:` block
+admits, and it reaches `gates`, `citation-version` and the expensive `check`.
+`pages` is pinned to `main` and stays unreachable there on purpose — the hatch
+verifies a branch, it never publishes one to the live site. If the allowance runs
 out again, tighten that `workflow:` block further (see its header comment in
 `.gitlab-ci.yml`) rather than assuming no block exists. `tools/local-ci.sh` runs
 the same CI jobs in the same image against a clean clone of a commit, which is
@@ -109,8 +112,8 @@ The forge moved to GitLab, so the answer is explicit rather than inherited:
 |---|---|---|
 | Gate list (lint, build, tests, `R CMD check`, record structure) | **Local**, `tools/verify.R` | Every push — it is a pre-push hook |
 | The same jobs in the CI image, clean clone | **Local**, `tools/local-ci.sh` | On demand; after every merge to `main` |
-| `gates` (~40s) | GitLab | Every push to `main`, and every tag; branch pushes and MR pipelines create nothing (SEOR-bmgkzhvy) (re-enabled 2026-09-03, RURL-utsbwfvc) |
-| `check` (`R CMD check --as-cran`) | GitLab | Release time only: a tag, or a hand-started pipeline against `main` |
+| `gates` (~40s) | GitLab | Every push to `main`, and every tag; branch pushes and MR pipelines create nothing, though a hand-started pipeline on a branch does (SEOR-bmgkzhvy) (re-enabled 2026-09-03, RURL-utsbwfvc) |
+| `check` (`R CMD check --as-cran`) | GitLab | A tag, or a hand-started pipeline against **any** ref — this is how you check a branch before merging it |
 | `pages` (pkgdown site to <https://bart-turczynski.gitlab.io/rurl/>) | GitLab | Release time only: a tag, or a hand-started pipeline against `main` (RURL-vkltgopc) |
 | The gate manifest, `tools/verify-manifest.yml` | Read by `tools/verify.R`, so wherever that runs (local hook, GitLab `gates`/`check`) | Forge-neutral: no forge executes it; it is the single source of WHAT the gates are (RURL-vunvxusf) |
 

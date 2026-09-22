@@ -7,7 +7,7 @@
 
 ### Internal
 
-- `.gitlab-ci.yml` now carries a top-level `workflow:` block that suppresses both the branch pipeline and the merge-request pipeline, leaving exactly one pipeline per merge, on `main`. A feature-branch push and a web/API-triggered pipeline on a non-default branch now create no pipeline at all — a deliberate capability loss; the local pre-push gate remains the thing that verifies a change before it merges (SEOR-bmgkzhvy).
+- `.gitlab-ci.yml` now carries a top-level `workflow:` block that suppresses both the branch pipeline and the merge-request pipeline, leaving exactly one pipeline per merge, on `main`. A feature-branch push and an API-triggered pipeline on a non-default branch now create no pipeline at all; a pipeline started by hand from Build > Pipelines > Run pipeline still works on any ref and runs `gates`, `citation-version` and `check` there, while `pages` is pinned to `main` so a branch can be verified but never published. The local pre-push gate remains the thing that verifies a change before it merges (SEOR-bmgkzhvy).
 - The OSS Index dependency audit in `tests/testthat/test-security.R` now scopes to hard dependencies (`Depends` + `Imports`) instead of the `Suggests` tree, which pulled in oysteR's own dependencies and failed the gate on a `curl` vulnerability that rurl does not ship (RURL-mafkcwnu).
 - `tools/cran-comments-gate.R` no longer requires the `cran-comments.md` span pin to name the development version in `DESCRIPTION`. It checks the pin against the release that version names — `3.0.1` while at `3.0.1.9000` — so the release checklist's post-release version bump is executable, and `--online` compares whichever end of the span CRAN actually serves in each phase (RURL-efbcrhjc).
 

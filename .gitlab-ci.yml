@@ -91,18 +91,25 @@
 # so dropping both costs no verification.
 #
 # COST, STATED PLAINLY: a feature-branch push now gets no CI at all, and
-# neither does a web- or API-triggered pipeline started against a non-default
-# branch -- both fall through to the final `when: never` below. Only a tag, or
-# a push to `main` (including a hand-started pipeline run against `main`),
-# creates a pipeline. rurl had no job keyed on `merge_request_event` before
-# this change, so no job's own `rules:` needed to move -- only which pushes
-# get a pipeline at all changed.
+# neither does an API-triggered pipeline started against a non-default branch
+# -- both fall through to the final `when: never` below. rurl had no job keyed
+# on `merge_request_event` before this change, so no job's own `rules:` needed
+# to move -- only which pushes get a pipeline at all changed.
+#
+# THE ONE EXCEPTION is a `web` pipeline, i.e. one a human started from Build >
+# Pipelines > Run pipeline against a ref of their choosing. That is the escape
+# hatch for getting a server-side answer about a branch BEFORE merging it, and
+# it is safe to admit precisely because it cannot fire on its own: the problem
+# above was entirely push- and merge-request-driven. It reaches `gates`,
+# `citation-version` and `check`; `pages` is pinned to the default branch, so
+# the hatch can verify a branch but never publish one (SEOR-bmgkzhvy).
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: never
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
     - when: never
 
 stages:
@@ -231,10 +238,18 @@ pages:
   needs: []
   rules:
     - if: '$CI_COMMIT_TAG'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
+    # Both hand-start rules are pinned to the default branch, and that pin is
+    # load-bearing. This job does not report on a tree, it PUBLISHES one to
+    # <https://bart-turczynski.gitlab.io/rurl/> for a package that is on CRAN.
+    # It was unpinned and harmless only for as long as the `workflow:` block
+    # refused web pipelines on branches outright; once that hatch opened, an
+    # unpinned rule here meant one click on a feature branch would serve
+    # unmerged code from the live site with nothing on the page saying so
+    # (SEOR-bmgkzhvy).
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
     # `glab ci run` / POST /pipeline start a pipeline whose source is "api":
     # the same deliberate hand-start as the web button (RURL-vkltgopc).
-    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
     - *check_deps
     # `build_site(install = FALSE)` runs the examples against the INSTALLED
