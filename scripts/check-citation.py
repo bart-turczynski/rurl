@@ -1,4 +1,4 @@
-# check-citation v2
+# check-citation v3
 """Citation-metadata consistency gate.
 
 WHY THIS EXISTS. `CITATION.cff` and `.zenodo.json` each duplicate two facts out
@@ -55,11 +55,46 @@ same reason; it refuses to guess when the file does not have that shape.
 
 from __future__ import annotations
 
+import ast
+import hashlib
 import json
 import re
 import sys
 import tempfile
 from pathlib import Path
+
+# --- fleet sync --------------------------------------------------------------
+#
+# THIS FILE IS VENDORED. A copy lives in all eight fleet repositories, and it is
+# vendored rather than shared on purpose: each package has to stay
+# self-contained, because a fresh clone's pre-commit hooks and a CRAN tarball
+# cannot depend on a sibling checkout being present.
+#
+# The price of vendoring is silent drift, and the fleet has already paid it.
+# Measured 2026-09-23, the eight copies had five distinct sha256 sums; nothing
+# anywhere recorded which was correct. The digest below is what stops the next
+# one being silent. It covers the IMPLEMENTATION -- every byte below the module
+# docstring, minus this assignment -- so the prose above stays free to differ
+# per repository, which it must (each repository's `codemeta.json` is a
+# different situation, and four separate rewrites of that bullet are what
+# produced the five sums), while any change to behaviour is caught.
+#
+# Bytes rather than a parse-tree hash on purpose: an `ast.dump()` digest would
+# be hostage to the Python version running the gate, which is the same class of
+# failure as SEOR-tcytizic and not one worth importing here.
+#
+# `main()` verifies it on every run, so the check is armed in all eight gates
+# regardless of which of them pass `--self-test`. A logic change therefore
+# cannot land in one repository without someone consciously re-blessing the
+# digest, and because the constant is a literal, whether the fleet agrees is
+# one grep:
+#
+#     grep -h '^IMPLEMENTATION_DIGEST' ~/Projects/*/scripts/check-citation.py | sort -u
+#
+# One line out means eight implementations in sync. Re-bless it in all eight
+# repositories in the same change, never in one (SEOR-tssbiedr).
+IMPLEMENTATION_DIGEST = "f6f0e5a8b5cb6218"
+
 
 # A top-level `key: value` line in a CFF file: no leading whitespace, and not a
 # block opener (`key:` with nothing after it, which starts a mapping or list).
@@ -90,6 +125,57 @@ SELF_REFERENTIAL_RELATIONS = frozenset(
         "isSupplementTo",
     }
 )
+
+
+def module_docstring_end(source: str) -> int:
+    """The 1-based line on which this module's docstring ends, or 0 if none."""
+    body = ast.parse(source).body
+    if body:
+        first = body[0]
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+        ):
+            return first.end_lineno or 0
+    return 0
+
+
+def implementation_source(source: str) -> str:
+    """The bytes of this file that define its behaviour.
+
+    Everything up to and including the module docstring is prose and is
+    excluded, as is the `IMPLEMENTATION_DIGEST` assignment itself -- otherwise
+    the digest would be a hash of its own value. `ast` is used only to find
+    where the docstring ends, never to hash anything, so the result does not
+    move when the interpreter does.
+    """
+    lines = source.splitlines(keepends=True)
+    start = module_docstring_end(source)
+    return "".join(
+        line
+        for line in lines[start:]
+        if not line.startswith("IMPLEMENTATION_DIGEST = ")
+    )
+
+
+def implementation_digest(source: str) -> str:
+    """The recorded digest's counterpart: what this file actually is."""
+    return hashlib.sha256(implementation_source(source).encode()).hexdigest()[:16]
+
+
+def check_vendored_copy() -> list[str]:
+    """Fail when this copy's implementation is not the one it claims to be."""
+    here = Path(__file__).resolve()
+    found = implementation_digest(here.read_text(encoding="utf-8"))
+    if found == IMPLEMENTATION_DIGEST:
+        return []
+    return [
+        f"vendored copy drifted: implementation digest is {found}, "
+        f"IMPLEMENTATION_DIGEST records {IMPLEMENTATION_DIGEST}. Either this "
+        f"copy was edited without re-blessing it, or it was re-blessed without "
+        f"the other seven. Fix all eight in one change (SEOR-tssbiedr)."
+    ]
 
 
 def normalize_url(url: str) -> str:
@@ -427,10 +513,62 @@ def self_test() -> None:
         zenodo={"version": "1.0.0"},
     )
 
-    print("check-citation self-test: PASS (5 positive + 6 negative cases)")
+    # The vendored-copy digest (see IMPLEMENTATION_DIGEST). These cases prove
+    # what it is FOR -- that it ignores prose and catches code -- rather than
+    # only asserting that this copy happens to match today, which main()
+    # already does. The fixtures are built by position, not by replacing a
+    # phrase: any phrase distinctive enough to find in the docstring also
+    # appears in this test, so a replacement would edit the implementation too
+    # and the prose case would fail for the wrong reason.
+    here = Path(__file__).resolve().read_text(encoding="utf-8")
+    lines = here.splitlines(keepends=True)
+    end = module_docstring_end(here)
+
+    if implementation_digest(here) != IMPLEMENTATION_DIGEST:
+        raise SystemExit("self-test FAILED (vendor-untouched): digest mismatch")
+
+    if end == 0:
+        raise SystemExit("self-test FAILED (vendor-prose): no module docstring")
+    prose = "".join(
+        lines[: end - 1] + ["Inserted by the self-test.\n"] + lines[end - 1 :]
+    )
+    if implementation_digest(prose) != IMPLEMENTATION_DIGEST:
+        raise SystemExit(
+            "self-test FAILED (vendor-prose): a docstring edit moved the digest, "
+            "so per-repo prose could not legitimately differ"
+        )
+
+    if implementation_digest(here + "\n_ = None\n") == IMPLEMENTATION_DIGEST:
+        raise SystemExit(
+            "self-test FAILED (vendor-logic): a code edit left the digest alone, "
+            "so drift would go unnoticed"
+        )
+
+    reblessed = here.replace(
+        'IMPLEMENTATION_DIGEST = "' + IMPLEMENTATION_DIGEST + '"',
+        'IMPLEMENTATION_DIGEST = "0000000000000000"',
+    )
+    if reblessed == here:
+        raise SystemExit("self-test FAILED (vendor-rebless): constant not found")
+    if implementation_digest(reblessed) != IMPLEMENTATION_DIGEST:
+        raise SystemExit(
+            "self-test FAILED (vendor-rebless): the digest hashes its own value"
+        )
+
+    print(
+        "check-citation self-test: PASS "
+        "(5 positive + 6 negative cases, 4 vendor-digest cases)"
+    )
 
 
 def main() -> int:
+    drift = check_vendored_copy()
+    if drift:
+        print("check-citation failed:", file=sys.stderr)
+        for error in drift:
+            print(f"  - {error}", file=sys.stderr)
+        return 1
+
     if "--self-test" in sys.argv[1:]:
         self_test()
         return 0
