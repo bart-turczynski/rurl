@@ -61,6 +61,7 @@
 ^tools/diagnostics-doc-consistency\.R$
 ^tools/deferral-gate\.R$
 ^tools/curl-zero-gate\.R$
+^tools/pin-pages-md-filter\.R$
 # The citation gate ported from seor (design/adr/0002 there). Not part
 # of the installable package; without this, --as-cran reports it as a
 # non-standard top-level directory.
