@@ -288,11 +288,17 @@ pages:
     #     navbar names it explicitly (the `acknowledgments` component).
     #   THIRD_PARTY_NOTICES.md -- not present in this repo today; kept on the
     #     list so adding one later needs no edit here.
+    #   ARCHITECTURE.md, RELEASE_NOTES_v1.md -- GRANDFATHERED, deliberately,
+    #     not an oversight. Both are already live and indexed --
+    #     bart-turczynski.gitlab.io/rurl/{ARCHITECTURE,RELEASE_NOTES_v1}.html
+    #     return 200 today and both appear in the published search.json.
+    #     SEOR-wqxhftpv exists to stop an UNKNOWN, NEW file from leaking;
+    #     retiring a page that is already live and linked is a separate
+    #     editorial call, not a side effect of this hygiene fix. Drop them
+    #     from this list only as its own deliberate change.
     #
-    # Everything else at the top level -- AGENTS.md, CLAUDE.md,
-    # ARCHITECTURE.md (the agent/dev map, not user documentation),
-    # RELEASE_NOTES_v1.md (superseded by NEWS.md), and any file added later
-    # under any other name -- is moved out, unnamed included.
+    # Everything else at the top level -- AGENTS.md, CLAUDE.md, and any file
+    # added later under any other name -- is moved out, unnamed included.
     #
     # Move rather than delete, still: deleting leaves the search index
     # pointing at pages that 404. This runs after the install so the
@@ -321,7 +327,7 @@ pages:
       done
       for f in *.md; do
         case "$f" in
-          README.md|NEWS.md|LICENSE.md|CONTRIBUTING.md|SECURITY.md|CODE_OF_CONDUCT.md|THIRD_PARTY_NOTICES.md|ACKNOWLEDGMENTS.md|cran-comments.md)
+          README.md|NEWS.md|LICENSE.md|CONTRIBUTING.md|SECURITY.md|CODE_OF_CONDUCT.md|THIRD_PARTY_NOTICES.md|ACKNOWLEDGMENTS.md|cran-comments.md|ARCHITECTURE.md|RELEASE_NOTES_v1.md)
             ;;
           *)
             mv "$f" /tmp/agent-md/
