@@ -272,8 +272,17 @@ pages:
     # This deliberately fails the job if either file is renamed or removed:
     # the list is a claim about the repository, and a silent skip would quietly
     # start publishing the file again.
-    - 'mkdir -p /tmp/agent-md'
-    - 'mv AGENTS.md CLAUDE.md /tmp/agent-md/'
+    #
+    # tools/pin-pages-md-filter.sh extracts and runs the block between the
+    # markers below verbatim against this repo's tracked top-level .md files,
+    # so keep the markers on their own lines and keep everything the filter
+    # needs (including this mkdir) inside them.
+    - |
+      set -e
+      # --- agent-md-filter:start ---
+      mkdir -p /tmp/agent-md
+      mv AGENTS.md CLAUDE.md /tmp/agent-md/
+      # --- agent-md-filter:end ---
     - 'Rscript -e ''pkgdown::build_site(new_process = FALSE, install = FALSE)'''
     # GitLab Pages publishes `public/`; _pkgdown.yml sets no `destination:`, so
     # the site lands in `docs/` (which .gitignore already covers for local
