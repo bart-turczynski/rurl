@@ -258,20 +258,51 @@ pages:
     # pkgdown renders every root-level .md that is not README/NEWS/LICENSE/
     # cran-comments: pkgdown:::package_mds() hardcodes that skip list, so
     # _pkgdown.yml has no setting that can exclude a file. Left alone it
-    # publishes AGENTS.html and CLAUDE.html and folds their text into
-    # search.json, where it outranks real documentation on ordinary queries.
-    # Both are agent tooling contracts, not user documentation. (FP_CLAUDE.md,
-    # which CLAUDE.md imports, is untracked -- `.git/info/exclude` -- so a CI
-    # clone never has it and it is not listed here.)
+    # publishes whatever top-level .md files exist and folds their text into
+    # search.json, where it can outrank real documentation on ordinary
+    # queries. (FP_CLAUDE.md, which CLAUDE.md imports, is untracked --
+    # `.git/info/exclude` -- so a CI clone never has it either way.)
     #
-    # Move them out of the source tree rather than deleting the rendered output:
-    # deleting leaves the search index pointing at pages that 404. This runs
-    # after the install so the installed package is byte-identical to a normal
-    # build, and the CI checkout is disposable, so nothing is restored after.
+    # KEEP-LIST, NOT DENY-LIST (SEOR-wqxhftpv). This used to name only
+    # AGENTS.md and CLAUDE.md and move those two out, leaving every other
+    # top-level .md file -- named or not -- in place to be published. That is
+    # allow-by-default: a new agent-tooling file under any other name (a
+    # GEMINI.md, a fresh internal contract) would survive and get published
+    # with nothing here noticing, which is how the AGENTS.html/CLAUDE.html
+    # leak this job exists to fix reached four sibling repos after being
+    # fixed in one. Inverted below: only files on the keep list stay, so an
+    # unknown file stays private by default instead of public by default.
     #
-    # This deliberately fails the job if either file is renamed or removed:
-    # the list is a claim about the repository, and a silent skip would quietly
-    # start publishing the file again.
+    # Keep-list, and why each name is on it:
+    #   README.md, NEWS.md, LICENSE.md, cran-comments.md -- pkgdown's own
+    #     hardcoded skip list, named here too so this list is a complete,
+    #     self-contained claim rather than half of one split between this
+    #     file and pkgdown internals.
+    #   CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md -- ordinary
+    #     user-facing repository docs pkgdown renders as articles.
+    #   ACKNOWLEDGMENTS.md -- the one per-repo addition: _pkgdown.yml's
+    #     navbar names it explicitly (the `acknowledgments` component).
+    #   THIRD_PARTY_NOTICES.md -- not present in this repo today; kept on the
+    #     list so adding one later needs no edit here.
+    #
+    # Everything else at the top level -- AGENTS.md, CLAUDE.md,
+    # ARCHITECTURE.md (the agent/dev map, not user documentation),
+    # RELEASE_NOTES_v1.md (superseded by NEWS.md), and any file added later
+    # under any other name -- is moved out, unnamed included.
+    #
+    # Move rather than delete, still: deleting leaves the search index
+    # pointing at pages that 404. This runs after the install so the
+    # installed package is byte-identical to a normal build, and the CI
+    # checkout is disposable, so nothing is restored after.
+    #
+    # FAIL LOUD, both directions. README.md, NEWS.md and LICENSE.md are the
+    # three pkgdown cannot build a sane site without (no home page, no
+    # changelog, a broken licence link), so this deliberately fails the job
+    # if any of them is missing rather than quietly shipping a half-built
+    # site -- the same property the old two-name deny-list had, carried over
+    # so a keep-list cannot silently tolerate a vanished README. The other
+    # keep-list names are optional: their absence is fine, they simply have
+    # nothing to keep.
     #
     # tools/pin-pages-md-filter.sh extracts and runs the block between the
     # markers below verbatim against this repo's tracked top-level .md files,
@@ -281,7 +312,18 @@ pages:
       set -e
       # --- agent-md-filter:start ---
       mkdir -p /tmp/agent-md
-      mv AGENTS.md CLAUDE.md /tmp/agent-md/
+      for req in README.md NEWS.md LICENSE.md; do
+        test -f "$req" || { echo "keep-list file missing: $req" >&2; exit 1; }
+      done
+      for f in *.md; do
+        case "$f" in
+          README.md|NEWS.md|LICENSE.md|CONTRIBUTING.md|SECURITY.md|CODE_OF_CONDUCT.md|THIRD_PARTY_NOTICES.md|ACKNOWLEDGMENTS.md|cran-comments.md)
+            ;;
+          *)
+            mv "$f" /tmp/agent-md/
+            ;;
+        esac
+      done
       # --- agent-md-filter:end ---
     - 'Rscript -e ''pkgdown::build_site(new_process = FALSE, install = FALSE)'''
     # GitLab Pages publishes `public/`; _pkgdown.yml sets no `destination:`, so

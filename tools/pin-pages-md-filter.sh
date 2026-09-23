@@ -41,13 +41,11 @@ fi
 # top-level .md files: that discipline is what makes this a pin rather than a
 # tautology that always agrees with whatever the file currently says.
 default_expected='ACKNOWLEDGMENTS.md
-ARCHITECTURE.md
 CODE_OF_CONDUCT.md
 CONTRIBUTING.md
 LICENSE.md
 NEWS.md
 README.md
-RELEASE_NOTES_v1.md
 SECURITY.md
 cran-comments.md'
 expected="${PIN_EXPECTED_SURVIVORS:-$default_expected}"
