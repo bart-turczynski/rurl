@@ -308,13 +308,13 @@ pages:
     # keep-list names are optional: their absence is fine, they simply have
     # nothing to keep.
     #
-    # tools/pin-pages-md-filter.sh extracts and runs the block between the
+    # tools/pin-pages-md-filter.R extracts and runs the block between the
     # markers below verbatim against this repo's tracked top-level .md files,
     # so keep the markers on their own lines and keep everything the filter
-    # needs (including this mkdir) inside them.
+    # needs (including `set -e` and the mkdir) inside them.
     - |
-      set -e
       # --- agent-md-filter:start ---
+      set -e
       mkdir -p /tmp/agent-md
       for req in README.md NEWS.md LICENSE.md; do
         test -f "$req" || { echo "keep-list file missing: $req" >&2; exit 1; }

@@ -79,6 +79,8 @@ jobs:
       architecture_map_selftest: ${{ steps.filter.outputs.architecture_map_selftest }}
       cran_comments: ${{ steps.filter.outputs.cran_comments }}
       cran_comments_selftest: ${{ steps.filter.outputs.cran_comments_selftest }}
+      agent_md_filter: ${{ steps.filter.outputs.agent_md_filter }}
+      agent_md_filter_selftest: ${{ steps.filter.outputs.agent_md_filter_selftest }}
       verify_runner_selftest: ${{ steps.filter.outputs.verify_runner_selftest }}
     steps:
       - uses: actions/checkout@v7
@@ -232,6 +234,31 @@ jobs:
               - 'tools/verify-manifest.yml'
             cran_comments_selftest:
               - 'tools/cran-comments-gate.R'
+            # .gitlab-ci.yml is the trigger that matters: the drift this gate
+            # catches is created by editing the `pages` job's agent-md-filter
+            # block (or the repo's set of top-level .md files), in a slice
+            # whose author has no reason to open tools/pin-pages-md-filter.R.
+            # Each currently-tracked top-level .md name is listed too, since
+            # ADDING or REMOVING one of them changes what the filter's own
+            # case statement predicts it should keep.
+            agent_md_filter:
+              - '.gitlab-ci.yml'
+              - 'tools/pin-pages-md-filter.R'
+              - 'tools/verify-manifest.yml'
+              - 'ACKNOWLEDGMENTS.md'
+              - 'AGENTS.md'
+              - 'ARCHITECTURE.md'
+              - 'CLAUDE.md'
+              - 'CODE_OF_CONDUCT.md'
+              - 'CONTRIBUTING.md'
+              - 'LICENSE.md'
+              - 'NEWS.md'
+              - 'README.md'
+              - 'RELEASE_NOTES_v1.md'
+              - 'SECURITY.md'
+              - 'cran-comments.md'
+            agent_md_filter_selftest:
+              - 'tools/pin-pages-md-filter.R'
             # tools/verify.R is the local gate RUNNER, not a gate, so it has no
             # `run: Rscript tools/verify.R` entry and must never get one -- the
             # runner derives its gate list from this file and would recurse into
@@ -889,6 +916,40 @@ jobs:
         run: Rscript tools/cran-comments-gate.R --self-test
       - name: The note names this release and its claims match DESCRIPTION
         run: Rscript tools/cran-comments-gate.R
+
+  # The `pages` job's agent-md filter (SEOR-wqxhftpv). pkgdown renders every
+  # top-level .md file except the handful pkgdown:::package_mds() hardcodes,
+  # and _pkgdown.yml cannot exclude one, so the `pages` job keeps a named
+  # allow-list and moves everything else out before build_site() runs. A
+  # deny-list version of that step (name the two known-bad files, leave
+  # everything else) is allow-by-default: a new agent-tooling file under any
+  # other name survives and gets published with nothing noticing -- how the
+  # AGENTS.html/CLAUDE.html leak reached four sibling repos after being fixed
+  # in one. This gate parses the filter's own case statement out of
+  # `.gitlab-ci.yml` (never a hand-copied second list) and RUNS that exact
+  # script text against the repo's real tracked top-level .md files plus one
+  # randomly-named canary, so it catches both the `*)` catch-all arm being
+  # removed and the `for req in ...` fail-loud guard being defeated. Base R
+  # over two tracked files; no package build, no yaml dependency.
+  #
+  # Appended at the end, like oracle-labels, citations, pkgdown-index,
+  # architecture-map and cran-comments: separate insertion points keep
+  # concurrent gate branches off one anchor.
+  agent-md-filter:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.agent_md_filter == 'true'
+    runs-on: ubuntu-latest
+    name: The pages job's agent-md filter matches its own keep-list
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.agent_md_filter_selftest == 'true'
+        run: Rscript tools/pin-pages-md-filter.R --self-test
+      - name: The filter's survivor set matches its own case statement
+        run: Rscript tools/pin-pages-md-filter.R
 
   # The gate RUNNER's own instrument. `run_step()` prints a step's output only
   # when the step fails, so a signal that is real but changes no exit status is
