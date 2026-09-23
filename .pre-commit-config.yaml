@@ -88,6 +88,20 @@ repos:
       # `always_run: true` STAYS. The predicate that was missing is the remote,
       # not the file set: for origin this hook must fire regardless of what
       # changed.
+      # Toolchain drift makes the gate red on a tree nobody changed, and it
+      # arrives disguised as a code defect: a roxygen2 skew aborts the docs
+      # guard, and a package built under a newer R than this one surfaces as an
+      # R CMD check WARNING minutes into the expensive step below. This is
+      # offline and instant, and it runs ahead of that step so the machine is
+      # named as the cause in one line rather than found by elimination
+      # (SEOR-tcytizic).
+      - id: check-toolchain
+        name: toolchain matches what this package pins
+        entry: Rscript scripts/check-toolchain.R
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
       - id: verify
         name: verify (mirrors CI's fast gate)
         entry: tools/verify-on-push.sh
