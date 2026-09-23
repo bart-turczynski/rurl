@@ -94,14 +94,23 @@ parse_required_files <- function(script_lines) {
   strsplit(trimws(m[[2L]]), "\\s+")[[1L]]
 }
 
-tracked_top_level_md <- function(root) {
-  out <- suppressWarnings(system2("git", c("-C", root, "ls-files", "--", "*.md"),
-                                   stdout = TRUE, stderr = FALSE))
-  status <- attr(out, "status")
-  if (!is.null(status) && !identical(as.integer(status), 0L)) {
-    stop("`git ls-files -- *.md` failed", call. = FALSE)
-  }
-  sort(unique(out[!grepl("/", out, fixed = TRUE)]))
+# The filter this gate pins globs the FILESYSTEM (`for f in *.md`), not git's
+# index, so enumerate the same way it does. The first version shelled out to
+# `git ls-files`, which made the gate depend on a binary the `gates` job does
+# not have: that job runs on `r-base:latest` and installs only
+# r-cran-yaml/digest/jsonlite, while GitLab clones the repo from its own helper
+# image. `system2("git", ...)` therefore died with ENOSYS -- "error in running
+# command: 'Function not implemented'" -- and reddened `main` on the merge,
+# after passing locally where git exists.
+#
+# `list.files()` needs no subprocess at all, and it is the more faithful
+# source: an untracked top-level .md (rurl has FP_CLAUDE.md, excluded via
+# .git/info/exclude) is invisible to `git ls-files` but IS seen by the real
+# filter. It is not on the keep-list either way, so the survivor set is
+# unchanged -- this reads the same answer from the right place.
+top_level_md <- function(root) {
+  sort(list.files(root, pattern = "\\.md$", all.files = FALSE,
+                  recursive = FALSE, no.. = TRUE))
 }
 
 # --- execution -----------------------------------------------------------
@@ -361,7 +370,7 @@ main <- function() {
 
   root <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
   ci_path <- file.path(root, ".gitlab-ci.yml")
-  tracked <- tracked_top_level_md(root)
+  tracked <- top_level_md(root)
   canary <- sprintf(
     "AGENT-MD-FILTER-CANARY-%s.md",
     paste(sample(c(letters, LETTERS, 0:9), 16, replace = TRUE), collapse = "")
@@ -371,7 +380,7 @@ main <- function() {
 
   cat(sprintf(
     paste0("pages agent-md filter gate\n",
-           "  %d top-level .md file(s) tracked\n",
+           "  %d top-level .md file(s) found\n",
            "  keep-list parsed from .gitlab-ci.yml: %s\n",
            "  required (fail-loud): %s\n",
            "  canary (must never survive): %s\n"),
