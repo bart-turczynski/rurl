@@ -12,9 +12,13 @@
 # it skips on CRAN, offline, or when rosv is not installed. A dedicated
 # GitHub workflow (osv-audit.yml) used to run it weekly and on demand to
 # drive the README badge; that workflow was deleted with RURL-vunvxusf (the
-# account is suspended), so it now runs only when the maintainer runs the
-# suite with rosv installed and the network up. Everywhere else it skips
-# cleanly.
+# account is suspended).
+#
+# It is EXCLUDED from the pre-push gate's test_local() cell (SEOR-fftbjnpl):
+# test_local() sets NOT_CRAN=true, so skip_on_cran() does not fire there, and
+# a new upstream advisory would block an unrelated push. `R CMD check` leaves
+# NOT_CRAN unset and skips it. So nothing runs it automatically: run it
+# deliberately with `testthat::test_local(filter = "osv")`.
 
 test_that("runtime dependencies have no known OSV vulnerabilities", {
   skip_on_cran()

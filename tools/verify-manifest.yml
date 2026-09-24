@@ -395,6 +395,15 @@ jobs:
       # representable in native encoding will be translated to UTF-8". That is
       # UPSTREAM (PSLR-jzdhhugc) and rurl cannot fix it, so this cell must not
       # be written to fail on it.
+      #
+      # The two third-party advisory audits, test-security.R (OSS Index) and
+      # test-osv.R (OSV), are EXCLUDED here (SEOR-fftbjnpl). test_local() sets
+      # NOT_CRAN=true, so their skip_on_cran() does not fire, and with
+      # credentials in ~/.Renviron they ran live on every push: a new upstream
+      # advisory blocked an unrelated push on 2026-09-09. An advisory is a
+      # fact about the world, not about the tree being pushed. Nothing runs
+      # them automatically now; run them deliberately with
+      # testthat::test_local(filter = "^(security|osv)$").
       - name: Run the test suite under LC_ALL=C
         env:
           LC_ALL: C
@@ -402,7 +411,7 @@ jobs:
         shell: Rscript {0}
         run: |
           stopifnot(identical(Sys.getlocale("LC_CTYPE"), "C"))
-          testthat::test_local(reporter = "summary", stop_on_failure = TRUE)
+          testthat::test_local(reporter = "summary", stop_on_failure = TRUE, filter = "^(security|osv)$", invert = TRUE)
 
   # C-08 documentation-consistency gate (G4.1). The full_parse cache has one
   # authoritative default bound (.FULL_PARSE_MAX_DEFAULT in R/zzz.R); every
