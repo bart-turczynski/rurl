@@ -107,7 +107,33 @@ expr_matches <- function(expr, vars) {
 
 # Returns TRUE/FALSE plus the reason, so --list can say WHY a job was skipped
 # rather than leaving the operator to re-read the YAML and guess.
+# A job that ONLY a pipeline schedule can start: every rule that admits it
+# requires `$CI_PIPELINE_SOURCE == "schedule"`. Those are the dependency
+# audits (osv-audit, security-audit; SEOR-fftbjnpl), which need the network
+# and forge-held credentials and answer a question about the world rather than
+# the tree -- so `--all`, which exists to run the rationed release-time jobs
+# after a merge, leaves them out instead of letting a new upstream advisory (or
+# absent credentials) turn a post-merge run red. Derived from the rules, not a
+# name list, so a new schedule-only job is covered the day it lands.
+schedule_only <- function(job) {
+  rules <- job[["rules"]]
+  if (is.null(rules)) {
+    return(FALSE)
+  }
+  admitting <- Filter(function(rule) {
+    is.list(rule) && !identical(rule[["when"]], "never")
+  }, rules)
+  length(admitting) > 0L && all(vapply(admitting, function(rule) {
+    cond <- rule[["if"]]
+    !is.null(cond) &&
+      grepl('\\$CI_PIPELINE_SOURCE\\s*==\\s*"schedule"', cond)
+  }, logical(1)))
+}
+
 job_verdict <- function(job, vars, ignore_rules) {
+  if (ignore_rules && schedule_only(job)) {
+    return(list(run = FALSE, why = "--all: schedule-only audit, left out"))
+  }
   if (ignore_rules) {
     return(list(run = TRUE, why = "--all: rules ignored"))
   }
