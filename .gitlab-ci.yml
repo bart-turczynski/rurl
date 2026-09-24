@@ -186,12 +186,20 @@ gates:
 # anchor, which this file has no equivalent of: `gates` runs on every push the
 # top-level `workflow:` block admits (`main` and tags) by omitting `rules:`
 # entirely, and this job rides the same default.
+#
+# `check-bugreports.py` rides along here rather than getting a job of its own
+# (SEOR-ocbtrrnl, as in pagerankr): it is stdlib-only, offline and instant,
+# with the same shape as check-citation.py, so it belongs in the job that
+# already has a python3. A separate job would pay the runner-pickup cost for
+# about a second of work.
 citation-version:
   stage: gates
   image: python:3.13-alpine
   script:
     - python3 scripts/check-citation.py --self-test
     - python3 scripts/check-citation.py
+    - python3 scripts/check-bugreports.py --self-test
+    - python3 scripts/check-bugreports.py
 
 # The expensive half. A TAG or a HAND-STARTED pipeline, nothing else.
 #

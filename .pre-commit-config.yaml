@@ -124,6 +124,21 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      # DESCRIPTION's BugReports: keeps the /-/issues form CRAN's incoming
+      # check string-tests for; every human-facing tracker link (codemeta.json,
+      # SECURITY.md, .bestpractices.json) names /-/work_items, and no other
+      # human-facing surface may carry a /-/issues link (SEOR-ocbtrrnl,
+      # RURL-ahatycrd). Ported from pagerankr's scripts/check-bugreports.py;
+      # stdlib-only and offline, wired exactly like check-citation above. Read
+      # the script's docstring for why the two forms must differ.
+      - id: check-bugreports
+        name: BugReports split (DESCRIPTION vs human-facing tracker links)
+        entry: python3 scripts/check-bugreports.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       # Keeps the local archival mirror from going stale in silence
       # (RURL-eqgqbeti). The `backup` remote was wired once by RURL-ivsyshdj
       # and pushed once; six weeks later it was six commits behind and nothing
