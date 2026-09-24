@@ -34,10 +34,13 @@
 #   * cross-platform and multi-R-version checks -- this runs one platform,
 #     one R, and the GitHub matrix workflows that used to cover the rest
 #     (full-check, rhub) are deleted, so nothing does;
-#   * README.md re-render (the manifest's `readme` job), coverage, the OSV
-#     and security audits, news-version, and the determinism matrix (pkgdown
-#     is the release-time `pages` job in .gitlab-ci.yml) -- all need
-#     network, a pandoc/LaTeX toolchain, or a Docker matrix;
+#   * README.md re-render (the manifest's `readme` job), coverage,
+#     news-version, and the determinism matrix (pkgdown is the release-time
+#     `pages` job in .gitlab-ci.yml) -- all need network, a pandoc/LaTeX
+#     toolchain, or a Docker matrix;
+#   * the OSV and OSS Index advisory audits (test-osv.R, test-security.R).
+#     The locale cell EXCLUDES them by name and `R CMD check` skips them
+#     (NOT_CRAN unset), so no stage here runs them -- see stage_locale();
 #   * the C7 curl clean room, which needs its own R CMD check against a poisoned
 #     library. `--release` adds it; the default does not, because it doubles the
 #     slowest stage to re-prove a criterion that only matters at release.
@@ -400,11 +403,24 @@ TESTTHAT_WARNINGS <- "^(=|\u2550){2} Warnings"
 # this step reports PASS and drops it. Hence the `watch` -- the summary reporter
 # emits a warnings section only when there are warnings, so this prints nothing
 # on a clean run and the whole section when there is one.
+#
+# It EXCLUDES the two third-party advisory audits, test-security.R (OSS Index)
+# and test-osv.R (OSV) (SEOR-fftbjnpl). test_local() sets NOT_CRAN=true, so
+# their skip_on_cran() does not fire here, and ~/.Renviron puts the OSS Index
+# credentials in scope -- so both ran live on every push, and a new upstream
+# advisory blocked an unrelated push on 2026-09-09. An advisory is a fact about
+# the world, not about the tree being pushed. `filter` matches the context name
+# (the file name minus `test-` and `.R`); testthat passes `invert` through to
+# the same file filter. Nothing runs the audits automatically after this; run
+# them deliberately with testthat::test_local(filter = "^(security|osv)$").
 stage_locale <- function() {
   cat("[locale] test suite under LC_ALL=C\n")
   code <- paste(
     "stopifnot(identical(Sys.getlocale('LC_CTYPE'), 'C'))",
-    "testthat::test_local(reporter = 'summary', stop_on_failure = TRUE)",
+    paste(
+      "testthat::test_local(reporter = 'summary', stop_on_failure = TRUE,",
+      "filter = '^(security|osv)$', invert = TRUE)"
+    ),
     sep = "; "
   )
   list(run_step("testthat under LC_ALL=C", "Rscript",
