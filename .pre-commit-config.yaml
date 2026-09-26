@@ -124,6 +124,16 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      # bestpractices-url.py is a maintainer tool that reads the network, so the
+      # hook runs only its offline self-test, and only when the script changes.
+      - id: bestpractices-url-self-test
+        name: bestpractices-url self-test
+        entry: python3 scripts/bestpractices-url.py --self-test
+        language: system
+        pass_filenames: false
+        files: ^scripts/bestpractices-url\.py$
+        stages: [pre-push]
+
       # Keeps the local archival mirror from going stale in silence
       # (RURL-eqgqbeti). The `backup` remote was wired once by RURL-ivsyshdj
       # and pushed once; six weeks later it was six commits behind and nothing
