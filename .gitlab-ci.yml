@@ -264,8 +264,7 @@ pages:
     # _pkgdown.yml has no setting that can exclude a file. Left alone it
     # publishes whatever top-level .md files exist and folds their text into
     # search.json, where it can outrank real documentation on ordinary
-    # queries. (FP_CLAUDE.md, which CLAUDE.md imports, is untracked --
-    # `.git/info/exclude` -- so a CI clone never has it either way.)
+    # queries.
     #
     # KEEP-LIST, NOT DENY-LIST (SEOR-wqxhftpv). This used to name only
     # AGENTS.md and CLAUDE.md and move those two out, leaving every other
