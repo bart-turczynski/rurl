@@ -116,7 +116,7 @@
   "vulnerabilities_critical_fixed_status": "Met",
   "vulnerabilities_critical_fixed_justification": "No known unfixed critical vulnerabilities.",
   "static_analysis_status": "Met",
-  "static_analysis_justification": "lintr runs a full-package lint (its linter set mirrors goodpractice::gp()) as a blocking step of tools/verify.R: https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/verify.R . The .lintr header documents every intentional deviation.",
+  "static_analysis_justification": "lintr runs a full-package lint (its linter set mirrors goodpractice::gp()) as a blocking step of tools/verify.R: https://gitlab.com/bart-turczynski/rurl/-/blob/main/tools/verify.R . design/verification.md documents every intentional deviation: https://gitlab.com/bart-turczynski/rurl/-/blob/main/design/verification.md",
   "static_analysis_common_vulnerabilities_status": "Unmet",
   "static_analysis_common_vulnerabilities_justification": "lintr and R CMD check find defects but are not vulnerability scanners. tests/testthat/test-osv.R (https://gitlab.com/bart-turczynski/rurl/-/blob/main/tests/testthat/test-osv.R) checks dependencies against OSV via rosv, but that is SCA, not static analysis of rurl's code, and it runs only when started by hand.",
   "static_analysis_fixed_status": "Met",
