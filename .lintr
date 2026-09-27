@@ -1,33 +1,3 @@
-# This config is intentionally aligned with the linter set that
-# `goodpractice::gp()` runs (goodpractice:::linters_to_lint()), so a local
-# `lintr::lint_package()` surfaces the same findings as the goodpractice report
-# used in review/CI. Regenerate this list after a goodpractice upgrade.
-#
-# Documented deviations from the goodpractice set (test-idiom / public-API
-# reasons):
-#   * object_name_linter / object_usage_linter: not part of the goodpractice
-#     set and deliberately NOT added. canonical_join()'s data_A/col_A/suffix_A/
-#     name_A (and _B) parameters are published API whose mixed-case suffixes
-#     would trip object_name_linter, as would the ._-prefixed internal helpers
-#     and testthat DSL; object_usage_linter misreads the expect_* DSL.
-#   * expect_identical_linter: off. The suite relies on expect_equal()'s numeric
-#     tolerance (e.g. expect_equal(nrow(x), 2) compares integer vs double) and
-#     its string-encoding normalization for IDN output, both of which
-#     identical() rejects. A wholesale swap would mean retyping every literal
-#     for no behavioral gain.
-#   * implicit_assignment_linter: off. Tests use the standard
-#     `expect_warning(res <- f(), "msg")` idiom to capture both the warning and
-#     the return value (expect_warning() returns the condition, not the value).
-#   * library_require_linter: off. tests/testthat.R and the vignette setup chunk
-#     legitimately call library().
-#   * undesirable_operator_linter: configured to keep flagging `<<-`/`->>` but
-#     allow `:::`, which tests use to reach internal (unexported) functions.
-#
-# strings_as_factors_linter is off, as in goodpractice, which dropped it in
-# 1.2.0 (ropensci-review-tools/goodpractice#321). It only guarded the pre-R-4.0
-# data.frame() default, and this package Depends on R >= 4.0.0. The existing
-# stringsAsFactors = FALSE arguments stay: harmless here, and load-bearing on
-# expand.grid().
 linters: linters_with_defaults(
     defaults = list(),
     undesirable_operator_linter = lintr::undesirable_operator_linter(
