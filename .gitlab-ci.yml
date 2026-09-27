@@ -120,6 +120,7 @@ stages:
   - gates
   - check
   - deploy
+  - audit
 
 default:
   image: r-base:latest
@@ -186,12 +187,20 @@ gates:
 # anchor, which this file has no equivalent of: `gates` runs on every push the
 # top-level `workflow:` block admits (`main` and tags) by omitting `rules:`
 # entirely, and this job rides the same default.
+#
+# `check-bugreports.py` rides along here rather than getting a job of its own
+# (SEOR-ocbtrrnl, as in pagerankr): it is stdlib-only, offline and instant,
+# with the same shape as check-citation.py, so it belongs in the job that
+# already has a python3. A separate job would pay the runner-pickup cost for
+# about a second of work.
 citation-version:
   stage: gates
   image: python:3.13-alpine
   script:
     - python3 scripts/check-citation.py --self-test
     - python3 scripts/check-citation.py
+    - python3 scripts/check-bugreports.py --self-test
+    - python3 scripts/check-bugreports.py
 
 # The expensive half. A TAG or a HAND-STARTED pipeline, nothing else.
 #
@@ -344,3 +353,85 @@ pages:
   artifacts:
     paths:
       - public
+
+# ---------------------------------------------------------------------------
+# audit -- the two dependency-vulnerability audits, UNATTENDED, and nothing else
+# (SEOR-fftbjnpl).
+#
+# WHY THEY ARE HERE. tests/testthat/test-osv.R (OSV via {rosv}) and
+# test-security.R (Sonatype OSS Index via {oysteR}) are advisory audits: their
+# answer is a fact about the world, not about the tree, so they were taken out
+# of the pre-push gate's test cell (tools/verify.R filters `security|osv` out
+# of its test_local() run; leave that filter alone). That left nothing running
+# them at all: the GitHub workflows that did were deleted with RURL-vunvxusf,
+# and `check`'s own test run never reached them either (R CMD check leaves
+# NOT_CRAN unset, so both skip_on_cran()). These two jobs are the unattended
+# run.
+#
+# ONLY A PIPELINE SCHEDULE CARRYING THE SELECTOR STARTS THEM. The rule needs
+# both `$CI_PIPELINE_SOURCE == "schedule"` and `$SCHEDULE_KIND ==
+# "dependency-audit"`, then `when: never`, so a push to `main`, a tag, a
+# hand-started pipeline and any other schedule never pay for them. The
+# `workflow:` block above admits a scheduled pipeline because a schedule runs
+# on `main` and `$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH` holds there; `gates`
+# and `citation-version` (no `rules:`) ride along in that pipeline too.
+#
+# OWNER GATE, not settable from a merge request: create the schedule under
+# Build > Pipeline schedules, target `main`, with the variable
+# SCHEDULE_KIND=dependency-audit; and set the OSS Index CI/CD variables
+# OSSINDEX_USER (account email; GitLab refuses to mask a value with `@`) and
+# OSSINDEX_TOKEN (masked). Until the schedule exists neither job runs.
+#
+# BOTH INSTALL rurl FIRST, and that is load-bearing. test-osv.R resolves
+# rurl's runtime closure from installed.packages(); against an uninstalled
+# rurl the closure is empty and the test skips "no resolvable runtime
+# dependencies" -- a green job that audited nothing. test-security.R audits
+# the DESCRIPTION that system.file() resolves. Installing makes both read what
+# a user installs.
+#
+# The dependency install mirrors `.check_deps`: Debian binaries where they
+# exist, CRAN for the rest, then an assertion, because install.packages()
+# reports a failed install as a warning and exits 0.
+#
+# `tools/local-ci-plan.R --all` deliberately leaves these two out: they need
+# the network and forge-held credentials, and a post-merge local run is not
+# the place a new upstream advisory should turn red.
+.audit_deps: &audit_deps
+  - apt-get update -qq
+  - 'apt-get install -y --no-install-recommends
+     r-cran-stringi r-cran-testthat r-cran-pkgload r-cran-withr r-cran-jsonlite
+     r-cran-curl r-cran-httr'
+  - 'Rscript -e ''install.packages(c("punycoder", "pslr", "rosv", "oysteR"))'''
+  - 'Rscript -e ''p <- c("punycoder", "pslr", "testthat", "pkgload", "rosv", "oysteR"); m <- p[!vapply(p, requireNamespace, logical(1), quietly = TRUE)]; if (length(m)) stop("missing dependencies: ", paste(m, collapse = ", "))'''
+  - 'R CMD INSTALL --no-multiarch .'
+
+osv-audit:
+  stage: audit
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "dependency-audit"
+    - when: never
+  variables:
+    # testthat::test_local() sets NOT_CRAN=true itself; explicit anyway, so
+    # skip_on_cran() cannot silently turn the audit into a skip.
+    NOT_CRAN: "true"
+  script:
+    - *audit_deps
+    - 'Rscript -e ''testthat::test_local(filter = "^osv$", stop_on_failure = TRUE)'''
+
+# OSSINDEX_AUDIT_REQUIRED turns every missing precondition in
+# test-security.R (oysteR absent, OSSINDEX_USER / OSSINDEX_TOKEN absent) into
+# a failure instead of a skip. It is set here and nowhere else, so local runs
+# and `R CMD check` still skip.
+security-audit:
+  stage: audit
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "dependency-audit"
+    - when: never
+  variables:
+    NOT_CRAN: "true"
+    OSSINDEX_AUDIT_REQUIRED: "true"
+  script:
+    - *audit_deps
+    - 'Rscript -e ''testthat::test_local(filter = "^security$", stop_on_failure = TRUE)'''
