@@ -104,9 +104,8 @@ parse_required_files <- function(script_lines) {
 # after passing locally where git exists.
 #
 # `list.files()` needs no subprocess at all, and it is the more faithful
-# source: an untracked top-level .md (rurl has FP_CLAUDE.md, excluded via
-# .git/info/exclude) is invisible to `git ls-files` but IS seen by the real
-# filter. It is not on the keep-list either way, so the survivor set is
+# source: an untracked top-level .md (a local agent file, say) is invisible
+# to `git ls-files` but IS seen by the real filter. It is not on the keep-list either way, so the survivor set is
 # unchanged -- this reads the same answer from the right place.
 top_level_md <- function(root) {
   sort(list.files(root, pattern = "\\.md$", all.files = FALSE,
