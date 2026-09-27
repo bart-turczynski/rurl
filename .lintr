@@ -22,6 +22,12 @@
 #     legitimately call library().
 #   * undesirable_operator_linter: configured to keep flagging `<<-`/`->>` but
 #     allow `:::`, which tests use to reach internal (unexported) functions.
+#
+# strings_as_factors_linter is off, as in goodpractice, which dropped it in
+# 1.2.0 (ropensci-review-tools/goodpractice#321). It only guarded the pre-R-4.0
+# data.frame() default, and this package Depends on R >= 4.0.0. The existing
+# stringsAsFactors = FALSE arguments stay: harmless here, and load-bearing on
+# expand.grid().
 linters: linters_with_defaults(
     defaults = list(),
     undesirable_operator_linter = lintr::undesirable_operator_linter(
@@ -69,7 +75,6 @@ linters: linters_with_defaults(
     outer_negation_linter = lintr::outer_negation_linter(),
     paste_linter = lintr::paste_linter(),
     scalar_in_linter = lintr::scalar_in_linter(),
-    strings_as_factors_linter = lintr::strings_as_factors_linter(),
     unnecessary_concatenation_linter = lintr::unnecessary_concatenation_linter(),
     unnecessary_lambda_linter = lintr::unnecessary_lambda_linter(),
     unreachable_code_linter = lintr::unreachable_code_linter(),
