@@ -59,7 +59,7 @@
   behavioral slice; `--list` prints the plan; `--release` adds the curl clean
   room. Its header states what it does **not** cover.
 - Intermediate local commits may temporarily be red while a slice is being
-  assembled. The delivered slice tip and its squash-merged result must pass the
+  assembled. The delivered slice tip and its merged result must pass the
   complete local gate.
 - `devtools::test()` can provide targeted feedback during iteration, but it is
   not a substitute for `tools/verify.R`. A green suite says nothing about

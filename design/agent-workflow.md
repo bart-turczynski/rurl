@@ -33,3 +33,9 @@ Rules that apply to one kind of task. `AGENTS.md` points here; the house
 
 - Locally, `pkgcheck()` reports "no CI". A missing `GITHUB_PAT` causes it;
   do not chase it.
+- A 404 or 403 that GitLab serves a logged-out client says nothing about this
+  project until a known-good peer, measured in the same run, says otherwise.
+  The `/-/issues` 404 was first written up as a project setting, then as
+  anti-scraping; both were wrong (RURL-ladruqhn). `cran-comments.md` keeps the
+  control table, and a control set shows how far a behavior reaches, not what
+  causes it.
