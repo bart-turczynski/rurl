@@ -2,7 +2,7 @@
 # only on a tag or a hand-started pipeline, so the live site documents the
 # last release. DESCRIPTION's URL: field names this same site, first. The
 # previous host (bart-turczynski.github.io/rurl) was built by a GitHub Actions
-# workflow whose account is suspended; that workflow is gone.
+# workflow that is gone; that address now redirects here.
 #
 # No `destination:` on purpose: the site builds into docs/ (gitignored), and
 # the `pages` job renames it to public/ for GitLab Pages.
