@@ -4,6 +4,7 @@
 
 - Conformant behavior is the default, never an opt-in flag (owner mandate; ADRs 0007, 0016). A shipped behavior that a standard calls invalid is a bug: fix it and cite the standard and clause in `NEWS.md`. CRAN compatibility covers gratuitous API churn only.
 - GitLab runs no pipeline for branches or MRs. After each merge, run `tools/local-ci.sh --all origin/main`.
+- Git follows the house `agent-workflow` skill. fp status changes stay decoupled from git (the `fp` skill's `references/decoupling.md`).
 - Frozen by ADR; read the ADR before editing: punycode helpers (0002) and the PSL seam (0001) in `R/domain.R`, retained base-R string operations (0005), `safe_parse_url()` columns (0006).
 
 Before changing parse behavior or a conformance test, read design/posture-card.md; rulings no gate derives are in design/work/url-v3/registers/rulings.md.

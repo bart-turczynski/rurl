@@ -84,7 +84,7 @@
 # this fleet owns and can change, not a platform limit (SEOR-gpafxhua;
 # verified live and recorded in seor's
 # design/adr/0003-fleet-ci-runs-on-self-hosted-runners.md). The branch
-# pipeline is worse than redundant: the standing slice flow (AGENTS.md)
+# pipeline is worse than redundant: the standing slice flow (agent-workflow skill)
 # deletes the branch at merge before the runner starts it, so it dies at
 # `get_sources` with exit 128 and leaves a red mark that represents nothing.
 # The merge-request pipeline is worse than that: it can outlive its own MR and

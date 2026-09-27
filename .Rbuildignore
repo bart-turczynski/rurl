@@ -19,7 +19,6 @@
 ^design$
 ^\.claude$
 ^\.fp$
-^FP_CLAUDE\.md$
 ^lib$
 ^RELEASE_NOTES_v1\.md$
 ^report\.html$
