@@ -53,11 +53,12 @@
   Run `Rscript tools/verify.R` once at the coherent slice tip, before delivery,
   to reproduce CI's fast gate by hand: the ~20
   gate steps (derived from `tools/verify-manifest.yml`, never transcribed),
-  `lintr::lint_package()`, `R CMD build` + `R CMD check --as-cran` on the built
-  tarball, and the test suite under `LC_ALL=C`. `--fast` runs the gates and lint
-  only and is iteration feedback, never sufficient verification for a
-  behavioral slice; `--list` prints the plan; `--release` adds the curl clean
-  room. Its header states what it does **not** cover.
+  `lintr::lint_package()`, `spelling::spell_check_package()` (real words it
+  does not know go in `inst/WORDLIST`), `R CMD build` + `R CMD check --as-cran`
+  on the built tarball, and the test suite under `LC_ALL=C`. `--fast` runs the
+  gates, lint and spelling only and is iteration feedback, never sufficient
+  verification for a behavioral slice; `--list` prints the plan; `--release`
+  adds the curl clean room. Its header states what it does **not** cover.
 - Intermediate local commits may temporarily be red while a slice is being
   assembled. The delivered slice tip and its merged result must pass the
   complete local gate.

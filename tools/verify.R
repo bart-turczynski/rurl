@@ -81,7 +81,7 @@
 # Usage:
 #   Rscript tools/verify.R            # gates + relevant self-tests + full gate
 #   Rscript tools/verify.R --gates    # gates + relevant self-tests ONLY
-#   Rscript tools/verify.R --fast     # the above plus lint
+#   Rscript tools/verify.R --fast     # the above plus lint and spelling
 #   Rscript tools/verify.R --release  # everything, plus the curl clean room
 #   Rscript tools/verify.R --verbose  # print every step's log, passing included
 #   Rscript tools/verify.R --list     # print the stage plan and exit
@@ -329,6 +329,24 @@ stage_lint <- function() {
   list(run_step("lintr::lint_package()", "Rscript", c("-e", shQuote(code))))
 }
 
+# Spelling (SEOR-mtbzfroz). `R CMD check` spell-checks DESCRIPTION only when an
+# English aspell/hunspell dictionary is installed, and on a machine without one
+# it skips the check without a word -- so a typo first surfaced as win-builder's
+# NOTE, after submission. spelling::spell_check_package() bundles its own
+# dictionaries and also covers man/, vignettes and NEWS.md. Words it does not
+# know but that are real go in inst/WORDLIST; a typo gets fixed at its source.
+stage_spelling <- function() {
+  cat("[spelling] spelling::spell_check_package()\n")
+  code <- paste(
+    "bad <- spelling::spell_check_package()",
+    "if (nrow(bad)) { print(bad); quit(status = 1) }",
+    "cat('0 misspelled words\n')",
+    sep = "; "
+  )
+  list(run_step("spelling::spell_check_package()", "Rscript",
+                c("-e", shQuote(code))))
+}
+
 # The load-bearing stage, and the one no `devtools::test()` can stand in for.
 # `R CMD check` must run on a BUILT TARBALL: building is what reads `Collate:`,
 # and checking the tarball is what runs the tests against an INSTALLED package,
@@ -549,7 +567,7 @@ if (opt_self_test) {
 root <- repo_root()
 plan <- c("gates", "selftests")
 if (!opt_gates) {
-  plan <- c(plan, "lint")
+  plan <- c(plan, "lint", "spelling")
 }
 if (!opt_gates && !opt_fast) {
   plan <- c(plan, "check", "locale")
@@ -578,6 +596,7 @@ for (st in plan) {
     gates = stage_gates(root),
     selftests = stage_self_tests(root),
     lint = stage_lint(),
+    spelling = stage_spelling(),
     check = stage_check(root),
     locale = stage_locale(),
     release = stage_release()

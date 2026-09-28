@@ -18,8 +18,8 @@
 # how each gate was scoped, not as a promise that anything fires.
 #
 # `tools/verify.R --list` prints what it derives from here. Change the list by
-# editing THIS file; the runner's stage plan (lint, build+check, the LC_ALL=C
-# cell) is the runner's own and mirrors the non-gate jobs below.
+# editing THIS file; the runner's stage plan (lint, spelling, build+check, the
+# LC_ALL=C cell) is the runner's own and mirrors the non-gate jobs below.
 #
 # Original header: "Fast verification gate: lint + a single Ubuntu R CMD check
 # on every push to main and every PR. Coverage and the specialized evidence
