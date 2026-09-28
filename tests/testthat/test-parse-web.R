@@ -3,7 +3,7 @@
 #
 # EVERY expectation here is a LITERAL, never a differential against
 # `curl::curl_parse_url()`. That is a hard requirement, not a preference:
-# `RURL-cunfohwy`'s curl-zero-reference gate forbids a curl reference anywhere
+# `RURL-cunfohwy`'s curl-zero-reference gate forbids any curl call or load
 # in `tests/`, and an oracle that outlives the dependency is the only kind
 # worth having. The literals were PRODUCED by differential sweeps against
 # libcurl (106,898 inputs across a structural grid, a per-octet sweep of every
