@@ -152,7 +152,8 @@ default:
   - 'apt-get install -y --no-install-recommends
      r-cran-yaml r-cran-digest r-cran-jsonlite r-cran-curl r-cran-stringi
      r-cran-testthat r-cran-pkgload r-cran-lintr r-cran-rcmdcheck
-     r-cran-knitr r-cran-rmarkdown r-cran-pkgdown r-cran-withr pandoc qpdf'
+     r-cran-knitr r-cran-rmarkdown r-cran-pkgdown r-cran-withr r-cran-spelling
+     pandoc qpdf'
   # Not packaged by Debian, all on CRAN. oysteR and rosv are audit-only tools
   # that nothing here calls -- but `R CMD check` treats a missing Suggests as an
   # ERROR ("the suggested packages are required for a complete check"), and they
@@ -171,7 +172,7 @@ default:
   # on purpose: a backslash here crosses YAML *and* the shell before R sees it,
   # and loses a level on the way. A character class needs no escaping in any of
   # the three.
-  - 'Rscript -e ''d <- read.dcf("DESCRIPTION", c("Imports", "Suggests")); p <- trimws(sub("[(].*", "", unlist(strsplit(d[!is.na(d)], ",")))); p <- unique(c(p[nzchar(p)], "pkgload", "lintr", "rcmdcheck")); m <- p[!vapply(p, requireNamespace, logical(1), quietly = TRUE)]; if (length(m)) stop("missing dependencies: ", paste(m, collapse = ", ")); cat("all", length(p), "dependencies present\n")'''
+  - 'Rscript -e ''d <- read.dcf("DESCRIPTION", c("Imports", "Suggests")); p <- trimws(sub("[(].*", "", unlist(strsplit(d[!is.na(d)], ",")))); p <- unique(c(p[nzchar(p)], "pkgload", "lintr", "rcmdcheck", "spelling")); m <- p[!vapply(p, requireNamespace, logical(1), quietly = TRUE)]; if (length(m)) stop("missing dependencies: ", paste(m, collapse = ", ")); cat("all", length(p), "dependencies present\n")'''
 
 gates:
   stage: gates

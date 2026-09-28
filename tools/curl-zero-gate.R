@@ -221,6 +221,16 @@ ALLOWLIST <- list(
                    "with each vector; curl is one of the columns and the",
                    "record is factual, not a rurl behaviour")
   ),
+  # --- vocabulary, not code ---------------------------------------------------
+  list(
+    # A file with no extension; the self-test materializes it as a directory,
+    # which is_allowed() treats the same way.
+    path = "inst/WORDLIST",
+    reason = paste("the spelling dictionary (SEOR-mtbzfroz); it lists",
+                   "`libcurl` because NEWS.md, the historical record this",
+                   "gate leaves out of scope, names it, and",
+                   "spelling::spell_check_package() reads NEWS.md")
+  ),
   # --- the release rule that requires all of the above -----------------------
   list(
     path = "tools/release-rule-check.R",
