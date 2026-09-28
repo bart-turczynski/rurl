@@ -20,7 +20,7 @@ act on, compared case-insensitively. When supplied, the result gains a
 logical \code{allowed} column (\code{FALSE} for a URL with no parsed
 scheme) and the token \code{"not-in-allowlist"} where it is \code{FALSE}.
 When \code{NULL} (default) no \code{allowed} column is emitted and no
-allowlist judgement is made.}
+allowlist judgment is made.}
 
 \item{url_standard}{Standard profile governing scheme interpretation:
 \code{"whatwg"} (default) or \code{"rfc3986"}. Unlike most of the package

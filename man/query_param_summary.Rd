@@ -57,7 +57,7 @@ before choosing a cleaning policy: see the trackers before you strip them.
 \details{
 Parameter names are grouped \emph{faithfully} (case-sensitively and by their
 decoded spelling), so \code{utm_source} and \code{UTM_SOURCE} are reported as separate
-rows. The \code{would_drop} preview, by contrast, honours \code{params_case_sensitive}:
+rows. The \code{would_drop} preview, by contrast, honors \code{params_case_sensitive}:
 with the default \code{params_case_sensitive = FALSE}, \code{UTM_SOURCE} matches the
 built-in denylist and shows \code{would_drop = TRUE}; set it to \code{TRUE} and the
 upper-case spelling no longer matches. The raw \code{query} field is only read,
