@@ -1664,7 +1664,7 @@ get_scheme_class <- function(url, url_standard,
 #'
 #' Parameter names are grouped \emph{faithfully} (case-sensitively and by their
 #' decoded spelling), so `utm_source` and `UTM_SOURCE` are reported as separate
-#' rows. The `would_drop` preview, by contrast, honours `params_case_sensitive`:
+#' rows. The `would_drop` preview, by contrast, honors `params_case_sensitive`:
 #' with the default `params_case_sensitive = FALSE`, `UTM_SOURCE` matches the
 #' built-in denylist and shows `would_drop = TRUE`; set it to `TRUE` and the
 #' upper-case spelling no longer matches. The raw `query` field is only read,
@@ -1713,7 +1713,7 @@ query_param_summary <- function(urls,
   # Read the faithful raw query for every URL in one engine pass, then decompose
   # each into decoded ordered pairs. would_drop is a FILTER-mode preview: the
   # same ._select_params() the cleaner uses, so denylist u params_drop minus
-  # params_keep, plus empty-dropping, all honouring params_case_sensitive.
+  # params_keep, plus empty-dropping, all honoring params_case_sensitive.
   raw <- .extract_from_urls(urls, "query", protocol_handling = "keep")
 
   per_url <- lapply(seq_along(raw), function(i) {

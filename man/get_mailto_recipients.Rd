@@ -115,7 +115,7 @@ Companion helper (ADR 0006) that reports structural, per-recipient
 \code{mailto:} URL --- the comma-separated \code{addr-spec} list before the
 \code{?} (RFC 6068 section 2). Recipients carried in \code{to}/\code{cc}/
 \code{bcc} \emph{hfields} are RFC 5322 address-lists and are deliberately
-\strong{out of scope}; only the positional list is analysed.
+\strong{out of scope}; only the positional list is analyzed.
 }
 \details{
 Each fact \strong{names the grammar it was judged against}. The left of the

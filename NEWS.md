@@ -4,6 +4,7 @@
 
 - `BugReports` points at <https://gitlab.com/bart-turczynski/rurl/-/issues>, the form R's CRAN incoming check requires for a gitlab.com tracker; a browser following that link is redirected to `/-/work_items` (RURL-nomzooml).
 - The human-facing tracker links in `SECURITY.md`, `codemeta.json` and `.bestpractices.json` now give `https://gitlab.com/bart-turczynski/rurl/-/work_items`, the address GitLab serves directly; `DESCRIPTION`'s `BugReports:` deliberately keeps the `/-/issues` form, because only that form clears the CRAN incoming check (RURL-ahatycrd).
+- The help pages and `NEWS.md` are now spelled in US English throughout, matching the package's declared `Language: en-US`, and `inst/WORDLIST` no longer admits British spellings (SEOR-kfiqpymb).
 
 ### Internal
 
@@ -192,7 +193,7 @@
   (plus ws/wss under `url_standard = "whatwg"`) — is now parsed by
   `R/parse-web.R`. Every other route already had an in-tree parser.
 
-  **Output is unchanged.** This was verified as a behaviour-preserving engine
+  **Output is unchanged.** This was verified as a behavior-preserving engine
   swap before the dependency was dropped: 106,898 inputs were compared field by
   field against `curl_parse_url()` — a structural grid, a per-octet sweep of
   every URL position, an IPv6/IPv4/percent-escape fuzz corpus, the WPT
@@ -203,7 +204,7 @@
 
   This is flagged breaking only because a declared dependency disappears: code
   that relied on `rurl` to load `curl` transitively must now declare `curl`
-  itself. Nothing in `rurl`'s own behaviour changed.
+  itself. Nothing in `rurl`'s own behavior changed.
 
   One improvement falls out of it. A host or userinfo carrying invalid UTF-8
   used to be accepted or rejected depending on the session locale, because
@@ -226,7 +227,7 @@
   **Results are unchanged.** The warning is purely additive, and byte-identical
   output was verified across ten dial configurations, so no caller is silently
   re-matched. This is flagged breaking only because a new condition is
-  *signalled*: code running under `options(warn = 2)`, or asserting with
+  *signaled*: code running under `options(warn = 2)`, or asserting with
   `expect_silent()`, will now see an error where it previously saw none. Because
   the condition is classed it can be silenced without hiding other warnings:
 
@@ -738,7 +739,7 @@
   ("a URI that uses the generic syntax for authority with an empty path should be
   normalized to a path of `/`"), keyed on the authority delimiter rather than on
   the scheme — so it also fires on a non-special scheme (`foo://h` normalizes to
-  `foo://h/`), where the previous behaviour depended on which parser owned the
+  `foo://h/`), where the previous behavior depended on which parser owned the
   row rather than on any rule. So `urn://:443` normalizes to `urn://:443/`, and
   likewise for `mailto:` and `data:`. Scheme-specific conformance is orthogonal:
   those strings remain invalid URNs, `mailto` URIs and data URLs under RFC 8141,
@@ -1227,7 +1228,7 @@
   syntax under the RFC.
 
 - **`url_standard = "rfc3986"` now applies RFC 3986's generic-URI grammar to
-  every scheme, not just `file:`.** The grammar gate travelled with the RFC 8089
+  every scheme, not just `file:`.** The grammar gate traveled with the RFC 8089
   `file:` overlay, so which parser happened to own a row decided whether the
   selected standard was enforced: `file://C|/x` was an error while
   `http://a|b/` parsed and reported `host = "a|b"` — though `"|"` is in none of
@@ -1860,7 +1861,7 @@
   skipped every fixture-backed block against the installed package and the
   headline conformance claim was checked only in the source tree. The fixture
   now ships, the suite executes under `R CMD check --as-cran`, and the
-  fixture's BSD-3-Clause notice is recorded in `LICENSE.note`. No behaviour
+  fixture's BSD-3-Clause notice is recorded in `LICENSE.note`. No behavior
   changed; the pinned bytes are the same bytes.
 
 - **The `Remotes:` block is gone; both siblings now install from CRAN.** `pslr`
@@ -1915,7 +1916,7 @@
   (`inst/bench/wpt-url-cases.json`) now covers every scheme, not four.** The
   success arm of the fixture was carved out to `http`/`https`/`ftp`/`file`,
   which silently dropped every non-special and opaque WPT success case — so
-  the oracle could not see a whole category of behaviour that
+  the oracle could not see a whole category of behavior that
   `scheme_acceptance = "general"` parses. The generator's scheme filter is
   removed entirely rather than extended with a list: WHATWG has exactly two
   scheme categories, so "success = any base-null non-failure case" is the
@@ -2020,7 +2021,7 @@
   place), and `internal-source` (the source is in this repository and git-dated).
   Recorded as a separate `not_applicable_reason` rather than as a fourth
   `pin_status` member, since the status axis is closed while the reason axis is
-  open — it went from one recognised reason to three inside a single 13-entry
+  open — it went from one recognized reason to three inside a single 13-entry
   record. PV9 requires the key on exactly the `not-applicable` entries and
   forbids it elsewhere, so a real pin cannot come to read as an exemption
   through a stale copy-paste; its self-test grew 81 → 92 assertions. Test
@@ -2084,7 +2085,7 @@
   optional. The group now carries a **verified** pin at `whatwg/url`
   `9dc3827f…`, and its gate derives *both* readings, requiring the RFC 1035
   §2.3.4 one to equal upstream's own verdict on every row, so the ten-row
-  disagreement is explained rather than tolerated. The lesson generalises: PV10
+  disagreement is explained rather than tolerated. The lesson generalizes: PV10
   makes the source-pinning question mandatory and PV9 makes the answer
   well-formed, but this group answered in the required shape and answered
   *wrongly*, while stating the derivation it denied two sentences later.
@@ -2275,7 +2276,7 @@
   List seam a web host uses (an email domain and an `http` host take identical
   branches). This reuses the existing accessors rather than adding
   email-specific equivalents, and unifies with the scheme-less `user@host`
-  behaviour. `get_user()` / `get_userinfo()` gain the `scheme_policy` /
+  behavior. `get_user()` / `get_userinfo()` gain the `scheme_policy` /
   `scheme_acceptance` / `url_standard` arguments to reach it. Extraction is
   metadata only — a `mailto:` `clean_url` and round-trip are unchanged — and is
   a strict no-op under the default `scheme_acceptance = "web"`. See ADR 0012 D7.
@@ -2747,7 +2748,7 @@
   `n`/`n_urls` counts, and a `would_drop` column previewing what
   `query_handling = "filter"` would remove. Returns a flat
   (long) `data.frame` at `level = "param"` or `level = "value"`. Param names
-  are grouped faithfully (case-sensitively) while `would_drop` honours
+  are grouped faithfully (case-sensitively) while `would_drop` honors
   `params_case_sensitive`, so you can audit a URL set before choosing a policy.
 - The `clean_url` query is deliberately **exempt from `case_handling`** (query
   values are case-sensitive — tokens, IDs, signatures). Under
