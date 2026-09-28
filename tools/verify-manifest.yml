@@ -730,19 +730,10 @@ jobs:
         run: Rscript tools/deferral-gate.R
 
   # curl zero-reference gate (RURL-cunfohwy) -- the v3 line's CRAN release
-  # criterion from P0.4 / RCON-09 section 4.
-  #
-  # THIS GATE IS RED TODAY, ON PURPOSE: curl::curl_parse_url() is still live at
-  # the single remaining parse seam. Its self-test is BLOCKING (the gate itself
-  # must be correct, and it passes), while the tree scan is deliberately
-  # non-blocking -- wiring a known-red criterion as blocking would turn the
-  # headline gate red for every unrelated change, which trains people to ignore
-  # it. The scan's job right now is to publish the exact remaining worklist on
-  # every run.
-  #
-  # WHEN THE REMOVAL LANDS: drop `continue-on-error`, and add the full run
-  # (no --static-only) to the release act. --static-only never satisfies
-  # RCON-09; only the full run's clean room does.
+  # criterion from P0.4 / RCON-09 section 4: rurl does not depend on curl.
+  # It checks the dependency, not the word (RURL-dtzvekmf): a comment, NEWS
+  # entry, fixture or WORDLIST entry that names curl passes. --static-only
+  # never satisfies RCON-09; only the full run's clean room does.
   curl-zero-gate:
     needs: changes
     runs-on: ubuntu-latest
@@ -760,7 +751,7 @@ jobs:
       # scan runs here; the clean room (C7) needs a full R CMD check with the
       # package's dependencies installed, so it runs in the `check` matrix
       # rather than being duplicated on this bare runner.
-      - name: Scan the tree for surviving curl references
+      - name: Check that nothing declares, imports or calls curl
         run: Rscript tools/curl-zero-gate.R --static-only
 
   coverage:

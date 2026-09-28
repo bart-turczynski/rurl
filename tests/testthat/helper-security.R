@@ -24,8 +24,7 @@
 #   B  STALE       an allow-listed advisory NO LONGER reported FAILS. An
 #                  allow-list may not over-permit; a row that has outlived its
 #                  justification is deleted, not left to widen the exemption
-#                  silently. Same rule as C0 in the zero-reference gate
-#                  under tools/.
+#                  silently.
 #   C  DRIFT       past its review date, or audited at a package version later
 #                  than `version_seen`, a row WARNS. Deliberately not a
 #                  failure: a calendar date that turns every run red is how a

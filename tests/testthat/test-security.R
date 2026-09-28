@@ -19,10 +19,8 @@
 # scope audits 89 packages here and reports one of them vulnerable, while
 # `Depends` + `Imports` audits 9 and reports none -- the flagged package is
 # absent from rurl's hard dependency tree entirely. RURL-mafkcwnu carries the
-# advisory identifiers and the measurement; naming the package here would trip
-# the zero-reference gate, which is why they live on the issue and not in this
-# comment. Re-measured 2026-09-24: `Depends` + `Imports` audits 10 packages and
-# reports none.
+# advisory identifiers and the measurement. Re-measured 2026-09-24: `Depends` +
+# `Imports` audits 10 packages and reports none.
 #
 # A package's security posture is what it makes users install, so the audit
 # calls `audit_description()` directly with the narrower `fields`.
