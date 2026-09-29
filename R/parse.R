@@ -392,7 +392,7 @@
 #'     one `domain_ascii` — so consumers can build an encoding-independent key
 #'     from a single parse. NA under the same conditions as `domain`.
 #'     \item `tld_ascii`, `tld_unicode`: The public suffix (TLD) in both
-#'     canonical spellings, the `tld` analogue of `domain_ascii`/
+#'     canonical spellings, the `tld` analog of `domain_ascii`/
 #'     `domain_unicode`. NA under the same conditions as `tld`.
 #'     \item `is_ip_host`: Logical, TRUE if the host is an IP address.
 #'     \item `clean_url`: A normalized canonical key reconstructed from

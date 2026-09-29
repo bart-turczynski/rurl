@@ -433,7 +433,7 @@ block_content <- function(lines, name) {
   lines[seq.int(at[1] + 1L, at[2] - 1L)]
 }
 
-# Repo paths cited in code spans. A path is recognised by a leading known
+# Repo paths cited in code spans. A path is recognized by a leading known
 # top-level directory, so prose in backticks is not mistaken for a file.
 paths_in_record <- function(lines) {
   spans <- unlist(

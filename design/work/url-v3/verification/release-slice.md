@@ -132,7 +132,7 @@ in-place substance edits to a record's body. Frontmatter plus the lifecycle log
 govern; body prose is historical evidence of what was proposed. A checker that
 read body prose would report every ACCEPTED record as unratified, and a
 "cleanup" that rewrote those headings would destroy trace while changing nothing
-about what binds. Fixture 6 pins this behaviour.
+about what binds. Fixture 6 pins this behavior.
 
 ## Positive and negative coverage (§7 G4)
 
