@@ -60,6 +60,39 @@ repos:
       - id: mixed-line-ending
         exclude: *fixer-excludes
       - id: check-case-conflict
+  # British spellings in code, comments, string literals, tooling and design
+  # prose, which spelling::spell_check_package() (the verify gate's spelling
+  # stage) never reads: it covers DESCRIPTION, roxygen, vignettes, README and
+  # NEWS only (SEOR-xtmnpmae; seor design/fleet.md "Prose language"). Only the
+  # en-GB_to_en-US dictionary is enabled, so this is not a general typo
+  # checker. codespell skips dotfiles unless given --check-hidden, so
+  # .bestpractices.json is skipped either way; it is listed so the intent
+  # survives a flag change.
+  #
+  # Excluded, each because its bytes are not ours to respell:
+  #   man/ -- roxygen output; fix the roxygen source in R/ and regenerate.
+  #   tests/testthat/fixtures/ -- byte-pinned oracle fixtures (PV3 hashes
+  #     them, the fixer excludes above) and oracle-provenance.json, the
+  #     recorded provenance for those fixtures: its notes record what was
+  #     verified at pin time, so they are evidence, not prose to modernize.
+  #   tests/testthat/_snaps/ -- testthat owns and rewrites those bytes.
+  #   inst/bench/wpt-url-cases.json, inst/LICENSE.psl -- upstream-owned text
+  #     stored exactly as fetched (RUL-008), same as the fixer excludes above.
+  #   analysis/**/*.csv, analysis/**/run-console.txt, design/win-builder-logs/
+  #     -- recorded measurement output and check logs; editing them makes
+  #     the record disagree with the run it cites.
+  #   design/work/url-v3/{decisions,evidence,worklog}/ -- archival
+  #     (design/AGENTS.md): never updated, not current authority. evidence/
+  #     also holds the tracker snapshot, recorded text regenerated wholesale.
+  #   .bestpractices.json -- mirrors the live bestpractices.dev entry.
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+        name: codespell (British spellings, en-GB_to_en-US; SEOR-xtmnpmae)
+        args: [--builtin, en-GB_to_en-US]
+        stages: [pre-commit, pre-push]
+        exclude: '^(man/|tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$|inst/LICENSE\.psl$|analysis/.*\.csv$|analysis/.*/run-console\.txt$|design/win-builder-logs/|design/work/url-v3/(decisions|evidence|worklog)/|\.bestpractices\.json$)'
   - repo: local
     hooks:
       # Mirrors the CI fast gate. Runs on push (not per commit) since a full
