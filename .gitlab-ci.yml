@@ -153,7 +153,17 @@ default:
      r-cran-yaml r-cran-digest r-cran-jsonlite r-cran-curl r-cran-stringi
      r-cran-testthat r-cran-pkgload r-cran-lintr r-cran-rcmdcheck
      r-cran-knitr r-cran-rmarkdown r-cran-pkgdown r-cran-withr r-cran-spelling
-     pandoc qpdf'
+     r-cran-rcpp pandoc qpdf'
+  # hunspell from CRAN, over the r-cran-hunspell that r-cran-spelling pulls in
+  # (RURL-czvqosis). Debian's build is +dfsg: it drops the bundled dictionaries
+  # and reads the system en_US.aff, whose `WORDCHARS 0123456789` keeps digits
+  # inside a token -- so "PV1" and "sha256" were checked whole here but as "PV"
+  # and "sha" everywhere else, and 61 words passed locally and failed here. The
+  # CRAN build ships the dictionaries every other machine checks against, and
+  # installs into /usr/local/lib/R/site-library, which comes first on
+  # .libPaths(). A failed install leaves Debian's build and the spelling step
+  # red, never green by accident. r-cran-rcpp above spares compiling Rcpp.
+  - 'Rscript -e ''install.packages("hunspell")'''
   # Not packaged by Debian, all on CRAN. oysteR and rosv are audit-only tools
   # that nothing here calls -- but `R CMD check` treats a missing Suggests as an
   # ERROR ("the suggested packages are required for a complete check"), and they
