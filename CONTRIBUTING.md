@@ -138,3 +138,30 @@ what must already be on CRAN before this checklist starts.
 9. Sanity check: diff the published CRAN tarball
    (`cran.r-project.org/src/contrib/rurl_X.Y.Z.tar.gz`) against the tag — only
    CRAN's auto-added `DESCRIPTION` fields should differ.
+10. **Archive the release on Zenodo and record its version DOI.** Zenodo
+    deposits on a GitHub Release on the read-only mirror, not on the tag.
+    Skip this and `CITATION.cff` keeps naming the 1.4.0 version DOI, the last
+    one minted. Details and stall recovery:
+    [seor `design/github-mirror.md` §5](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/github-mirror.md).
+
+    - Confirm the tag object matches on both forges:
+      `git ls-remote --tags origin 'refs/tags/vX.Y.Z'`, then the same against
+      `https://github.com/bart-turczynski/rurl.git`.
+    - Create the GitHub Release from that tag, never letting GitHub create one:
+      `gh release create vX.Y.Z --verify-tag -R bart-turczynski/rurl`.
+    - Wait for the record under the concept DOI `10.5281/zenodo.20972584`. It
+      takes minutes, not seconds. A release stuck at "Received" on Zenodo's
+      GitHub page needs the §5.1 recovery.
+    - Check the record's version and title against the release. Zenodo reads
+      both from `.zenodo.json` in the tagged archive:
+      `curl -s 'https://zenodo.org/api/records?q=conceptrecid:20972584&allversions=true' | jq '.hits.hits[].metadata | [.version, .title]'`.
+      Compare the archived zip with the tag by content, not checksum (§5.2).
+    - Check that doi.org resolves both the concept DOI and the new version DOI:
+      `curl -s -o /dev/null -w '%{http_code}\n' https://doi.org/<doi>` prints
+      `302`. A `404` means DataCite has not registered it yet: wait, and don't
+      commit it (§5.3).
+    - In a follow-up commit, set the version DOI entry in `CITATION.cff`
+      `identifiers:` (value and description) and `date-released` to this
+      release, and drop the concept DOI description's "none since 1.4.0"
+      caveat. `python3 scripts/check-citation.py` (the pre-push
+      `check-citation` hook) must still pass.
