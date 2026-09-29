@@ -24,12 +24,11 @@ identifiers:
     value: 10.5281/zenodo.20972584
     description: >-
       Concept DOI (all deposited versions). Deposits are minted by Zenodo's
-      GitHub integration from a Release on the read-only GitHub mirror. None
-      has been made since 1.4.0, so this resolves there rather than to the
-      current release.
+      GitHub integration from a Release on the read-only GitHub mirror, and
+      this DOI resolves to the latest one.
   - type: doi
-    value: 10.5281/zenodo.20972585
-    description: "Version DOI for rurl 1.4.0. Later releases have none."
+    value: 10.5281/zenodo.23043923
+    description: "Version DOI for rurl 3.0.1"
 keywords:
   - URL parsing
   - URL normalization
