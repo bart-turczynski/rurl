@@ -166,11 +166,17 @@ for JOB in $JOBS; do
   START=$(date +%s)
   # /ci is read-only so a job cannot rewrite its own script mid-run; /repo is
   # the throwaway clone, so a job that dirties the tree costs nothing.
+  # bash when the image has it, POSIX sh otherwise -- as GitLab's own shell
+  # detection does. `python:3.13-alpine` (citation-version) ships only busybox
+  # sh, and a bare `bash` there fails before the job starts (RURL-dswufxky).
+  # `exec` keeps the job's exit status as the container's.
   if docker run --rm \
       -v "$WORK/repo:/repo" \
       -v "$WORK:/ci:ro" \
       -w /repo \
-      "$IMAGE" bash "/ci/$JOB.sh"; then
+      "$IMAGE" sh -c \
+        'if command -v bash >/dev/null 2>&1; then exec bash "$1"; fi; exec sh "$1"' \
+        sh "/ci/$JOB.sh"; then
     echo "--- $JOB PASS ($(( $(date +%s) - START ))s)"
   else
     echo "--- $JOB FAIL ($(( $(date +%s) - START ))s)"
