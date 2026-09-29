@@ -83,7 +83,7 @@ yaml_flow_list <- function(v) {
 # next line carries -- reporting scoped prose as unscoped. Lines are therefore
 # rejoined into blank-line-delimited paragraphs first, and only then split on
 # sentence punctuation. A table row is its own unit, so one register row does
-# not merge with its neighbours.
+# not merge with its neighbors.
 sentences <- function(text) {
   split_para <- function(p) {
     if (length(p) == 0L) {

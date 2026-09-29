@@ -188,7 +188,7 @@ jobs:
               ;;
             *)
               echo "::error::unhandled locale/OS pair '${{ matrix.locale }}-${{ runner.os }}'"
-              echo "Refusing to probe an unrequested locale under a labelled cell."
+              echo "Refusing to probe an unrequested locale under a labeled cell."
               exit 1
               ;;
           esac

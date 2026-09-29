@@ -316,7 +316,7 @@ pages:
     #
     # FAIL LOUD, both directions. README.md, NEWS.md and LICENSE.md are the
     # three pkgdown cannot build a sane site without (no home page, no
-    # changelog, a broken licence link), so this deliberately fails the job
+    # changelog, a broken license link), so this deliberately fails the job
     # if any of them is missing rather than quietly shipping a half-built
     # site -- the same property the old two-name deny-list had, carried over
     # so a keep-list cannot silently tolerate a vanished README. The other

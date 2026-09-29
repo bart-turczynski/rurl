@@ -40,7 +40,7 @@ test_that("check_schemes reports the scheme facts for a mixed set", {
 test_that("no allowed column is emitted without an allowlist", {
   r <- check_schemes("https://example.com/")
   expect_false("allowed" %in% names(r))
-  # The absence is the point: with no allowlist there is no judgement to make,
+  # The absence is the point: with no allowlist there is no judgment to make,
   # so the helper reports facts and stops.
   expect_false(any(vapply(
     r$reasons, function(x) "not-in-allowlist" %in% x, logical(1)
@@ -117,7 +117,7 @@ test_that("check_schemes never changes how a URL parses", {
   expect_identical(after$parse_status, rep("ok", 3L))
 })
 
-test_that("both named standards work and scheme_acceptance is honoured", {
+test_that("both named standards work and scheme_acceptance is honored", {
   expect_identical(
     check_schemes("scp://host/a", url_standard = "rfc3986")$scheme, "scp"
   )

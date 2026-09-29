@@ -72,7 +72,7 @@ test_that("WHATWG opaque host preserves ASCII case and resolves form opaque", {
 # --- WHATWG: forbidden-host reject contract ----------------------------------
 
 test_that("WHATWG opaque host rejects forbidden-host code points", {
-  # Reject is signalled by ok = FALSE (the host parse fails). Space and `<` are
+  # Reject is signaled by ok = FALSE (the host parse fails). Space and `<` are
   # forbidden-host code points; the raw host is retained on the failed row.
   space <- .parse_opaque_urls_vec("foo://ex ample.com", "whatwg")
   expect_false(space$ok)

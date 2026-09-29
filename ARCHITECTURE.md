@@ -438,7 +438,7 @@ only under `port_handling != "exclude"`.
   residual rejections closed at 519/519 was a lower-layer or scheme-specific rule
   gating the scheme-agnostic selector, and four of the five fixes routed the row
   to the parser already right about it — the general/opaque parser — rather than
-  teaching the web route a grammar it never modelled.
+  teaching the web route a grammar it never modeled.
 
 - **Two curl-guidance findings that are not bugs.** Both have been filed as bugs
   on sight. A raw space surviving in `mailto:a b@c.example` is conformant:

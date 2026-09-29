@@ -406,7 +406,7 @@ self_test <- function(root, ns) {
   if (!is.na(r$serialized$source)) {
     fail("serialize_url() produced output for a WPT failure row")
   }
-  if (!any(grepl("FAILURE row", r$text))) fail("failure row not labelled")
+  if (!any(grepl("FAILURE row", r$text))) fail("failure row not labeled")
 
   # The RFC decomposition: absent authority (NA) with the path carrying the
   # host-looking text -- the case Appendix B exists to make visible.

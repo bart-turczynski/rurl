@@ -53,7 +53,7 @@ Both halves of that are false, and the tree falsifies them:
 `.URL_STANDARD_PROFILES` answers one narrow question: **does the selector own
 this knob's value and reject a conflicting explicit one?** That is conflict-matrix
 ownership (`.check_url_standard_conflicts()`, `R/parse.R:1355`). It is not a
-statement about behavioral independence, and it is not a licence to move `NULL`.
+statement about behavioral independence, and it is not a license to move `NULL`.
 
 **The asymmetry that hid this.** ADR 0011 cites ADR 0007; ADR 0007 has never
 cited ADR 0011. The governed side of the rule is discoverable by tripping over

@@ -346,7 +346,7 @@ finding.
 assumed from the table above) and composes the full label, which
 `curl-probe.R` then sanitizes to `[A-Za-z0-9._-]`. Setting
 `RURL_DETERMINISM_LABEL` directly overrides the whole thing — that is how the
-macOS host run is labelled.
+macOS host run is labeled.
 
 ### `out/curl-<LABEL>.csv` schema
 
@@ -601,7 +601,7 @@ ask for exactly `C` and nothing else: a silent upgrade to a UTF-8 locale would
 delete the axis. `default` sets nothing — it is the runner's own locale, and
 the honest baseline. The OS/locale `case` has a hard-failing fallback branch,
 so an unhandled pair can never quietly probe the default locale under a
-labelled cell.
+labeled cell.
 
 #### Two Windows facts, both measured on PR #181
 

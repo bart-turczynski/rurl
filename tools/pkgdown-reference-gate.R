@@ -270,7 +270,7 @@ regenerate_index <- function(root) {
   block <- seq.int(start + 1L, block_last)
 
   # Indentation as the file already spells it: the first `contents:` line and
-  # the first entry under it, so the appended section matches its neighbours.
+  # the first entry under it, so the appended section matches its neighbors.
   contents_at <- block[grepl("^\\s*contents:\\s*$", lines[block])]
   item_indent <- "      "
   title_indent <- "  "

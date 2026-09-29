@@ -51,7 +51,7 @@ test_that("param names are grouped faithfully (case-sensitively)", {
   expect_identical(res$param, c("utm_source", "UTM_SOURCE"))
 })
 
-test_that("would_drop previews FILTER mode honouring params_case_sensitive", {
+test_that("would_drop previews FILTER mode honoring params_case_sensitive", {
   urls <- "http://e.com/?utm_source=a&UTM_SOURCE=b&id=1"
   # Case-insensitive (default): both spellings match the denylist.
   res <- query_param_summary(urls)
@@ -64,7 +64,7 @@ test_that("would_drop previews FILTER mode honouring params_case_sensitive", {
   expect_false(res_cs[res_cs$param == "UTM_SOURCE", ]$would_drop)
 })
 
-test_that("would_drop honours params_drop and params_keep", {
+test_that("would_drop honors params_drop and params_keep", {
   urls <- "http://e.com/?keepme=1&junk=2&utm_source=x"
   res <- query_param_summary(
     urls, params_drop = "junk", params_keep = "utm_source"
@@ -86,7 +86,7 @@ test_that("empty_param_handling = 'drop' flags empty-valued params", {
   expect_false(res_keep[res_keep$param == "ref", ]$would_drop)
 })
 
-test_that("values are decoded before grouping; decode_plus honoured", {
+test_that("values are decoded before grouping; decode_plus honored", {
   # %26 decodes to '&' and groups by the decoded form.
   res <- query_param_summary("http://e.com/?a=x%26y", level = "value")
   expect_identical(res$value, "x&y")

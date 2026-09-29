@@ -191,7 +191,7 @@ test_that("last_at_userinfo splits at the last '@' and encodes the earlier", {
   # WHATWG's authority state buffers to the FINAL "@" and prepends "%40" for
   # each earlier one. Until RURL-ezhzpkhg deletion 3 a pre-parse rewrite
   # (`.encode_excess_authority_at_vec`) did this to the input string because
-  # libcurl refused a second "@"; it is parser behaviour now, and these
+  # libcurl refused a second "@"; it is parser behavior now, and these
   # literals are the ones that rewrite used to produce.
   expect_identical(
     fp("http://username@@@@example.com/", last = TRUE),
@@ -518,7 +518,7 @@ test_that("IPv4 normalization is reproduced, including its refusals", {
 
 test_that("host_ipv4 = 'whatwg' reads the three forms 'narrow' calls names", {
   # The whole content of the `host_ipv4` dial: THREE token shapes that decide
-  # whether a token is an ADDRESS at all. Everything else the two flavours agree
+  # whether a token is an ADDRESS at all. Everything else the two flavors agree
   # on, which is why `whatwg` needs no fallback to `narrow` (RURL-ezhzpkhg
   # deletion 4).
   #
@@ -535,11 +535,11 @@ test_that("host_ipv4 = 'whatwg' reads the three forms 'narrow' calls names", {
   expect_identical(p("http://0Xff/", ipv4 = "whatwg")$host, "0.0.0.255")
   expect_identical(p("http://0Xff/")$host, "0Xff")
   # ONE trailing dot, not two: `1.2.3.4..` is not an address under either
-  # flavour, and a non-address is returned EXACTLY as written -- the strip must
+  # flavor, and a non-address is returned EXACTLY as written -- the strip must
   # not leak into the reg-name answer.
   expect_identical(p("http://1.2.3.4../", ipv4 = "whatwg")$host, "1.2.3.4..")
   expect_identical(p("http://.../", ipv4 = "whatwg")$host, "...")
-  # The forms both flavours already agreed on stay put, with the same VALUE --
+  # The forms both flavors already agreed on stay put, with the same VALUE --
   # the narrow success set is a strict subset, not an overlapping one.
   for (f in c("narrow", "whatwg")) {
     expect_identical(p("http://0x7f.1/", ipv4 = f)$host, "127.0.0.1")

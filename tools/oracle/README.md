@@ -195,7 +195,7 @@ derivation. The three measured reasons:
 | `internal-source` | **Yes** | The source is in this repository, git-dated, and changes in the same pull request as the fixture it would invalidate. |
 
 A separate key rather than a fourth `pin_status` member, because the status axis
-is closed while the reason axis is open — it went from one recognised reason to
+is closed while the reason axis is open — it went from one recognized reason to
 three inside a single 13-entry record.
 
 And citations are **anchor-first**: the stable `<dfn>`
@@ -292,7 +292,7 @@ gate reports `TRANSCRIPTION INTEGRITY`, never `ORACLE RE-DERIVATION`.
 
 That naming is load-bearing. **No gate here can tell you the transcription is
 correct** — there is no algorithm to re-run. It can only establish that the
-committed rows *are* the transcription that was recorded. A gate labelled
+committed rows *are* the transcription that was recorded. A gate labeled
 "re-derivation" would invite a reader to assume an independent check happened,
 which is the more dangerous error, so `verify-youarealiar.R` prints the
 limitation in its own output rather than leaving it to this file.

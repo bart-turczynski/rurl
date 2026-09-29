@@ -96,7 +96,7 @@ atom_matches <- function(atom, vars) {
 
 expr_matches <- function(expr, vars) {
   if (grepl("[()]", expr)) {
-    die("parenthesised CI rule expressions are not implemented: ", expr)
+    die("parenthesized CI rule expressions are not implemented: ", expr)
   }
   ors <- strsplit(expr, "||", fixed = TRUE)[[1]]
   any(vapply(ors, function(clause) {

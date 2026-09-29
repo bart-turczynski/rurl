@@ -15,7 +15,7 @@
 # grew its own parser; the goal was no curl DEPENDENCY, never a ban on naming
 # it. A comment, a NEWS entry, a design note, a fixture's provenance command or
 # a WORDLIST entry that says "curl" or "libcurl" is not a dependency, and the
-# in-tree replacements have to cite the libcurl behaviour they reproduce to stay
+# in-tree replacements have to cite the libcurl behavior they reproduce to stay
 # auditable. The raw-text scan that used to police the word (C6), its allowlist
 # and the allowlist's own staleness check (C0) were retired for that reason.
 # The remaining checks keep their numbers, so C7 is still C7 in tools/verify.R.

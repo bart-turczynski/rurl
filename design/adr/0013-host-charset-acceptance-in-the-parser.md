@@ -100,7 +100,7 @@ its own dial, separate from rendering.**
 - **The no-selector profile does not move at all.** Measured: 0 differing rows
   across every corpus, `default accepted` unchanged in both the original and
   the extended sweep. `host_charset = "narrow"` is byte-for-byte the historical
-  behaviour.
+  behavior.
 - **`whatwg` and `rfc3986` widen, by exactly the enumerated gate gaps.** On the
   original 5298-input octet corpus, all three sweeps report **0 differing rows**
   — the corpus varies host octets inside a fixed `scheme://` frame and so cannot
@@ -110,12 +110,12 @@ its own dial, separate from rendering.**
   15 and exactly the 11 with no negative control moving.
 - **Standing rule, now paid for four times: when a compensation is gated by a
   REGEX, enumerate what the regex CANNOT match before porting its semantics.**
-  That set is part of the behaviour being replaced. ICU semantics are their own
+  That set is part of the behavior being replaced. ICU semantics are their own
   hazard — `.` is not `[^\n]`, and `$` also matches *before* a trailing line
   terminator.
 - **Standing rule: a corpus that varies one axis inside a fixed frame cannot
   falsify a rule gated on the frame.** The three checked-in sweeps scored a
-  truthful 0 here while the behaviour had genuinely moved. The instrument was
+  truthful 0 here while the behavior had genuinely moved. The instrument was
   proven red first (neutering the mask moved 405 octet-sweep rows), which is
   what made the 0 readable as "out of corpus reach" rather than "no change".
 - **ADR 0002, ADR 0004 preserved.** The punycode/reversible-host helpers are

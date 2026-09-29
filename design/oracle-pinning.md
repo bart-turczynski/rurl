@@ -26,7 +26,7 @@ the question and the pin silences it.
 ## Cite by anchor, not by section number
 
 Section numbers move under a Living Standard while anchors hold. Host parsing
-travelled §3.2 → §3.4 → §3.5 across revisions with `#concept-host-parser`
+traveled §3.2 → §3.4 → §3.5 across revisions with `#concept-host-parser`
 resolving throughout. Citations here are anchor-first everywhere.
 
 ## Sweep several revisions when auditing a citation

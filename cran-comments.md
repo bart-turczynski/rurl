@@ -140,7 +140,7 @@ the page loads by hand. It is not a setting of this project — the project is
 `visibility: public` with `issues_access_level: enabled` (read back from the
 GitLab API).
 
-The behaviour was confirmed to be site-wide rather than a misconfiguration by
+The behavior was confirmed to be site-wide rather than a misconfiguration by
 measuring, in the same unauthenticated run (last repeated 2026-09-10), control
 projects whose trackers are unquestionably public:
 
@@ -170,7 +170,7 @@ list is served to the anonymous API and to a logged-in browser.
 An earlier version of this file attributed the 404 to an anti-scraping measure
 aimed at logged-out clients. That was wrong, and the `/-/work_items` rows above
 are what disprove it; the original control set established only that the
-behaviour is site-wide, not what caused it. The practical difference is that the
+behavior is site-wide, not what caused it. The practical difference is that the
 NOTE is fixable: repointing `BugReports:` at
 `https://gitlab.com/bart-turczynski/rurl/-/work_items` — the path where issues
 are now filed — would clear it. That edit changes `DESCRIPTION` and so

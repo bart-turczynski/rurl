@@ -79,7 +79,7 @@ registry_tokens <- function(e) {
 #
 # `url-key.R` / `url-join.R` are the key/join surface's keyability and
 # eligibility vocabularies (`.URL_KEY_REASONS`, `.URL_JOIN_ELIGIBILITY`), whose
-# `invalid-parse` is the same kind of neighbour. Registering them here rather
+# `invalid-parse` is the same kind of neighbor. Registering them here rather
 # than renaming the state is deliberate: the ACCEPTED P3.1 D-C enumerates that
 # state in prose as "invalid parse", so the current literal is the FAITHFUL
 # spelling of a settled contract term, and renaming it to clear a scan would

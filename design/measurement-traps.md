@@ -183,7 +183,7 @@ header carries the rationale for the first two.
 ## 7. Oracles: name what you establish
 
 Re-derivation, re-location and transcription integrity are three different
-claims. A gate labelled *re-derivation* invites the reader to assume an
+claims. A gate labeled *re-derivation* invites the reader to assume an
 independent check happened, so the output banner has to say which one it is.
 [`tools/oracle/README.md`](../tools/oracle/README.md) holds the taxonomy, the
 per-group status table and the per-group findings; two rules generalize beyond
@@ -200,7 +200,7 @@ it and are recorded here:
 
 ## 8. Already recorded elsewhere
 
-This table exists so the document cannot drift against its neighbours. Each row
+This table exists so the document cannot drift against its neighbors. Each row
 is deliberately **not** restated above.
 
 | Rule | Recorded in |

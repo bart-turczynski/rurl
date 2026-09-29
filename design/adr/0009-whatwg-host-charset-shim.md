@@ -10,7 +10,7 @@
   `host_charset` dial. ADR 0013 also records why the pre-parse mechanism was
   not merely obsolete but wrong (its regex eligibility gate made host
   acceptance depend on slash count, on line terminators elsewhere in the URL,
-  and on the scheme). Read ADR 0013 for current behaviour; keep this one for
+  and on the scheme). Read ADR 0013 for current behavior; keep this one for
   the charset analysis and the ada-005/ada-008 corpus history.
 - **Tracking:** RURL-dxwxeamq. Boundary-case reference: RURL-ffrkfdcq (ada-008,
   closed as documented boundary). Relates to ADR 0002 (reversible host), ADR

@@ -95,7 +95,7 @@ explicitly wants `encode` to work under `whatwg`. Presentation belongs with
   flip to assert the layered output; the AC#1 "NULL is byte-for-byte inert"
   corpus gate is untouched.
 
-## Amendment: orthogonality is not a licence to move `NULL` (ADR 0016)
+## Amendment: orthogonality is not a license to move `NULL` (ADR 0016)
 
 *Added RURL-bmxptxxz, 2026-08-23. Appended rather than edited in place so no
 line citation into this file moves.*

@@ -358,7 +358,7 @@ test_that("vectorized and element-wise computation agree", {
 #
 # Asserting the FRAMED FIELDS, not just an inequality: the shipped
 # `expect_false(same("h.com:80/", "http://h.com/"))` above passed even while the
-# presence and port fields were both wrong, because the two errors cancelled.
+# presence and port fields were both wrong, because the two errors canceled.
 state <- function(u, pol = rurl:::.url_key_policy_spec()) {
   rurl:::.url_key_state_vec(u, pol)$fields
 }

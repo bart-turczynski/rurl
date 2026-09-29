@@ -56,7 +56,7 @@ it made the damage legible — and the `LC_CTYPE = "C"` reader **changed nothing
 about the parse**.
 
 `WARN 0` again, and `nrow` is short rather than the columns being NA, so this is
-still rows merging into their neighbours, not truncation.
+still rows merging into their neighbors, not truncation.
 
 ### What the transcript rules out
 
