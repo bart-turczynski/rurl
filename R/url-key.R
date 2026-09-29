@@ -156,7 +156,7 @@
 # below cannot tell a scheme from a host:port: `h.com` satisfies RFC 3986's
 # `scheme` production, so `h.com:80/` matches `^[A-Za-z][A-Za-z0-9+.-]*:` and
 # reads as an explicit scheme. The truth table settles what it actually is --
-# row 9's left state is labelled literally "missing scheme `:80`"
+# row 9's left state is labeled literally "missing scheme `:80`"
 # (`contracts/key-join-contracts.md:113`) -- so the Stage-A flag that exists for
 # exactly this shape (RURL-aldwnots) overrides the regex.
 #

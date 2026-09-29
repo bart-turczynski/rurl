@@ -275,7 +275,7 @@
 # reporting `file`, so `"rfc3986"` and the frozen NULL selector never see them.
 
 # WHATWG "Windows drive letter": two code points, an ASCII alpha then `:` or
-# `|`. "Normalized" narrows the second to `:`. Both spellings are recognised
+# `|`. "Normalized" narrows the second to `:`. Both spellings are recognized
 # where the standard's parsed base would already carry the normalized one
 # (the base here is SPLIT, not parsed, so `file:///C|/a` arrives unnormalized).
 .WHATWG_DRIVE_LETTER_RE <- "^[A-Za-z][:|]"

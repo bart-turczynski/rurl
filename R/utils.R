@@ -171,7 +171,7 @@
 # one supported hostless hierarchical scheme. In the WHATWG profile, `file:`
 # has a small parser slice for drive-letter, host, and backslash state-machine
 # forms; default/RFC behavior remains limited to the plain local forms.
-# ftps is FTP-over-TLS (the https-analogue for ftp), not the unrelated
+# ftps is FTP-over-TLS (the https-analog for ftp), not the unrelated
 # SSH-based sftp.
 # This is the single source of truth: a scheme-bearing input whose scheme is not
 # here is rejected (opaque schemes like mailto:/tel:/data:, and unrecognized
@@ -453,7 +453,7 @@
   list(name = "authority_userinfo", default = FALSE, template = logical(1)),
   # Whether Stage A produced NO usable parse for this row (invalid input, a
   # Phase-1 rejection, or a parse failure). Cached WITH the other fields rather
-  # than signalled by caching a NULL value, so a null row's classifier flags --
+  # than signaled by caching a NULL value, so a null row's classifier flags --
   # `looks_like_protocol` / `original_has_allowed_scheme` /
   # `looks_like_host_port`, which are what distinguish an admission REJECTION
   # from a syntax FAILURE -- survive a cache hit instead of reverting to their

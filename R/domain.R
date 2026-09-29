@@ -39,7 +39,7 @@
   encoded
 }
 
-# Vectorized IDNA/Punycode host encoder. Batch analogue of
+# Vectorized IDNA/Punycode host encoder. Batch analog of
 # .normalize_and_punycode() that preserves its exact per-host semantics:
 # NA/empty hosts pass through unchanged; each remaining host is NFC-normalized
 # then Punycode-encoded, strictly first and falling back to a lenient
@@ -170,7 +170,7 @@
   paste(sane_labels, collapse = ".")
 }
 
-# Vectorized Punycode -> Unicode decoder. Batch analogue of
+# Vectorized Punycode -> Unicode decoder. Batch analog of
 # .punycode_to_unicode() preserving its exact per-host semantics: NA -> NA,
 # "" -> "", and any other host decoded per label with the lenient
 # (strict = FALSE) decode, an undecodable label falling back to its original

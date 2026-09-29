@@ -37,15 +37,15 @@
 # verdict at this seam is load-bearing for `parse_status`, and the profile
 # corrections that surround it (the ADR 0009 host-charset shim, the WHATWG IPv4
 # rewrite, the excess-"@" repair) were all calibrated against libcurl's exact
-# behaviour. Swapping the engine and the semantics in one step would make any
-# conformance movement unattributable. So step 3 is a BEHAVIOUR-PRESERVING
+# behavior. Swapping the engine and the semantics in one step would make any
+# conformance movement unattributable. So step 3 is a BEHAVIOR-PRESERVING
 # engine swap, verified by differential sweep; step 4 then deletes the
 # compensation layer and moves the semantics deliberately, scored against the
 # FSSS/WPT harness.
 #
 # STEP 4 IS UNDER WAY, so the list above is already out of date in two places.
 # The excess-"@" repair is GONE (deletion 3): splitting the authority at the
-# LAST "@" is what the WHATWG authority state does, so it is parser behaviour
+# LAST "@" is what the WHATWG authority state does, so it is parser behavior
 # -- see `last_at_userinfo` below. The host-charset shim is gone ENTIRELY, in
 # two steps: its percent-triplet half first (deletion 2), because which host
 # triplets get decoded is decode ORDER -- see `host_pct` -- and then its literal
@@ -53,11 +53,11 @@
 # literal bytes a host may hold is an accept/reject rule -- see `host_charset`.
 # The pqf fallback is GONE as well (deletion 5): whether an unwritable byte
 # outside the authority is refused or escaped is an accept/reject rule, so it is
-# parser behaviour -- see `pqf_bytes`.
+# parser behavior -- see `pqf_bytes`.
 #
 # Every rule below was derived by MEASUREMENT against
 # libcurl (per-octet acceptance sweeps over host/userinfo/path/query/fragment,
-# plus targeted probes for IPv4/IPv6/authority/port/dot-segment behaviour), not
+# plus targeted probes for IPv4/IPv6/authority/port/dot-segment behavior), not
 # from reading the RFC -- because the thing being reproduced is libcurl, and
 # where libcurl departs from the RFC that departure is the fact of record.
 #
@@ -434,7 +434,7 @@
 # The `pqf_bytes` setting each selected standard asks for, for the same reason
 # as the mapper above: one place, so the vectorized and scalar routes cannot
 # drift. WHATWG escapes what it cannot write literally; RFC 3986 and the
-# no-selector baseline reject, which is the historical behaviour.
+# no-selector baseline reject, which is the historical behavior.
 #
 # Note that the two routes DID drift while this was compensated for outside the
 # parser: the pqf fallback lived in the vectorized path only, so
@@ -512,7 +512,7 @@
 # (RURL-tzmmjeck).
 #
 # The operational objection -- a port that cannot fit a u16 can never be
-# dialled -- is real but belongs to a different axis. It is answered as a FACT,
+# dialed -- is real but belongs to a different axis. It is answered as a FACT,
 # not a gate (ADR 0006): the parse is `ok`, and the numeric `port` accessor is
 # NA for a digit run that has no `integer` representation while the source
 # digits stay recoverable from the record.
@@ -562,17 +562,17 @@
   .web_chr(out)
 }
 
-# IPv4 normalization, in the two flavours rurl ships. This used to be TWO
+# IPv4 normalization, in the two flavors rurl ships. This used to be TWO
 # functions that deliberately disagreed -- this one and
 # `.parse_whatwg_ipv4_host()` in front of the parser (RURL-ezhzpkhg deletion 4)
 # -- and reconciling them is most of that deletion, because what they disagreed
 # about is not how an address is SPELLED but whether a token is an address AT
 # ALL. Three forms, and WHATWG reads every one of them as an address where the
-# narrow flavour reads a registered name:
+# narrow flavor reads a registered name:
 #
 #   empty hex digits   `0x` is the number 0 to WHATWG (its IPv4-number parser
 #                      strips the "0x" and returns 0 for what is left), and the
-#                      name "0x" to the narrow flavour
+#                      name "0x" to the narrow flavor
 #   trailing dot       WHATWG removes one empty final part before splitting, so
 #                      `1.2.3.4.` is the address; narrow keeps it a name
 #   uppercase `0X`     WHATWG's prefix test is case-insensitive and narrow's is
@@ -618,7 +618,7 @@
 }
 
 .web_ipv4_normalize <- function(host, ipv4 = "narrow") {
-  # WHATWG removes ONE empty final part before splitting; the narrow flavour
+  # WHATWG removes ONE empty final part before splitting; the narrow flavor
   # removes none. Cut on the BYTE vector, never with `substring()` on a
   # `nchar(type = "bytes")` length -- the host may hold high bytes here, and
   # mixing byte lengths with character indices is the defect class RURL-kmpnbvdl
@@ -936,7 +936,7 @@
   # IPv4 normalization reads the host AS WRITTEN, before percent-decoding: a
   # host spelled "%30%78%63%30%2e%30%32%35%30.01" decodes to the numeric form
   # "0xc0.0250.01" and yet libcurl leaves it a registered name. Percent-escapes
-  # therefore SUPPRESS the numeric reading entirely -- under BOTH flavours, and
+  # therefore SUPPRESS the numeric reading entirely -- under BOTH flavors, and
   # under `whatwg` for the same reason as before deletion 4: the pre-parse
   # rewrite's own gate (`.host_ends_in_number_vec()`, still the WHATWG host
   # model's trigger) never matched a token holding a "%" either.
@@ -959,7 +959,7 @@
 #
 # FOUR policy dials, all here rather than in front of the parser because all
 # describe *parsing*, not repair. Each defaults to the historical no-selector
-# behaviour, and callers opt in per selected standard.
+# behavior, and callers opt in per selected standard.
 #
 # `last_at_userinfo` -- split the authority at the LAST "@". WHATWG's authority
 # state buffers until the final "@" and prepends "%40" for each earlier one. It
@@ -1240,7 +1240,7 @@
       # removes, and the conformance sweep cannot see it because it compares no
       # port column.
       #
-      # So this is a REPRESENTATION limit, honestly labelled as one, and it is
+      # So this is a REPRESENTATION limit, honestly labeled as one, and it is
       # not the u16 gate wearing a bigger number: every port a transport can
       # actually carry, and five more orders of magnitude besides, now parse.
       # Admitting the remainder needs a character-typed syntactic port threaded

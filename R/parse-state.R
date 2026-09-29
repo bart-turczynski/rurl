@@ -1496,7 +1496,7 @@
 #   foo:////evil.com -> authority EMPTY,  path //evil.com,   form `abempty`
 #
 # So this routes to code that is already right and already covered, instead of
-# teaching the web route a grammar it never modelled. It also fixes
+# teaching the web route a grammar it never modeled. It also fixes
 # `rfc_path_form` for free (RURL-clgbpwla): the general route already reports
 # `absolute` where the web route said `abempty`.
 #
@@ -1527,7 +1527,7 @@
 # bytes but split one selector across two grammars: `serialize_url(standard =
 # "rfc3986")` gave the RFC answer while `safe_parse_urls(url_standard =
 # "rfc3986")` still promoted the path segment into the host, and which you got
-# depended on an unrelated axis. That is the "behaviour changes with the
+# depended on an unrelated axis. That is the "behavior changes with the
 # settings" failure mode, and it is worse than a characterization diff.
 .rfc_odd_slash_run <- function(url, url_standard, scheme_lc, has_scheme,
                                host_port, web_route_scheme) {
@@ -1638,7 +1638,7 @@
   if (any(is_file)) {
     p <- .parse_rfc_file_urls_vec(url[is_file], url_standard)
     # Both parsers now supply `userinfo`, but they mean different things by it,
-    # and the difference is honoured downstream in R/parse.R rather than here:
+    # and the difference is honored downstream in R/parse.R rather than here:
     # the opaque parser's is a WHATWG authority userinfo (split at the first
     # ":" into username/password), while RFC 8089's App. E.1/F production is
     # `[ userinfo "@" ]` UNDIVIDED -- the appendix warns a password there is
