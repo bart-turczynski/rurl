@@ -82,6 +82,7 @@ jobs:
       agent_md_filter: ${{ steps.filter.outputs.agent_md_filter }}
       agent_md_filter_selftest: ${{ steps.filter.outputs.agent_md_filter_selftest }}
       verify_runner_selftest: ${{ steps.filter.outputs.verify_runner_selftest }}
+      local_ci_plan_selftest: ${{ steps.filter.outputs.local_ci_plan_selftest }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
@@ -266,6 +267,18 @@ jobs:
             # runner's own selection needs to find it (RURL-pbihchti).
             verify_runner_selftest:
               - 'tools/verify.R'
+            # tools/local-ci-plan.R is the job PLANNER behind tools/local-ci.sh,
+            # not a gate: run bare it prints a job list and asserts nothing, so
+            # it has no plain `run: Rscript tools/local-ci-plan.R` entry. Only
+            # its self-test is declared (RURL-fzeadcfc). tools/local-ci.sh is
+            # listed because the self-test's shell cases replay the `set -ex`
+            # preamble it writes; .gitlab-ci.yml is NOT, because the self-test
+            # runs on inline fixtures and never reads it. As for every entry
+            # here, tools/verify.R selects the self-test by its OWN script path
+            # alone, so only a change to tools/local-ci-plan.R fires it there.
+            local_ci_plan_selftest:
+              - 'tools/local-ci-plan.R'
+              - 'tools/local-ci.sh'
 
   lint:
     runs-on: ubuntu-latest
@@ -972,3 +985,29 @@ jobs:
           use-public-rspm: true
       - name: Gate self-test (positive/negative coverage)
         run: Rscript tools/verify.R --self-test
+
+  # The local CI runner's job PLANNER. tools/local-ci.sh asks it which jobs a
+  # context selects and what script each one runs, so a planner that drops or
+  # mangles a job makes `tools/local-ci.sh --all` a narrower gate than it
+  # reports. Its self-test pins the single-line and block-scalar renderings of a
+  # job's `script:` and runs both under `bash`; it is fixture-only (no config,
+  # no git, no docker) and exits non-zero on any failed case. RURL-gysfdtcd
+  # added it and nothing ran it; RURL-fzeadcfc wired it here.
+  #
+  # Self-test only. See the `local_ci_plan_selftest` filter for why there is no
+  # accompanying `run: Rscript tools/local-ci-plan.R` step.
+  local-ci-plan:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.local_ci_plan_selftest == 'true'
+    runs-on: ubuntu-latest
+    name: the local CI planner renders job scripts as the job shell runs them
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install gate dependencies
+        shell: Rscript {0}
+        run: install.packages("yaml")
+      - name: Gate self-test (single-line and block-scalar scripts, under bash)
+        run: Rscript tools/local-ci-plan.R --self-test
