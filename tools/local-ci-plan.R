@@ -166,15 +166,23 @@ job_verdict <- function(job, vars, ignore_rules) {
 # ---- scripts -----------------------------------------------------------------
 
 # YAML aliases arrive as nested lists, so a `script:` built from an anchor is a
-# list-of-lists. Flattening is what turns it back into the line sequence the
+# list-of-lists. Flattening is what turns it back into the entry sequence the
 # runner executes.
+#
+# A BLOCK SCALAR (`- |`) IS ONE ENTRY, NOT SEVERAL (RURL-gysfdtcd). It arrives
+# as a single string holding newlines, plus the one trailing newline YAML's
+# default clip chomping adds. GitLab's runner does not split it: it writes the
+# block into the job's shell script as it stands, so the block runs as one unit
+# under the job's errexit, and a failing command inside it fails the job. This
+# emits it the same way, verbatim, dropping only that trailing newline so the
+# entry ends where a single-line one does. The `set -ex` tools/local-ci.sh
+# writes first traces each command in the block as it runs, as it does for a
+# single-line entry. This used to refuse any entry with a newline in it, which
+# stopped the whole plan at the `pages` job.
 job_script <- function(job) {
-  lines <- as.character(unlist(c(job[["before_script"]], job[["script"]]),
-                               use.names = FALSE))
-  if (any(grepl("\n", lines, fixed = TRUE))) {
-    die("a script entry spans multiple lines; the runner emits one per line")
-  }
-  lines
+  entries <- as.character(unlist(c(job[["before_script"]], job[["script"]]),
+                                 use.names = FALSE))
+  sub("\n$", "", entries)
 }
 
 # What `--script` prints: the text tools/local-ci.sh writes after its own
@@ -183,9 +191,16 @@ render_script <- function(entries) {
   paste0(c(entries, ""), "\n", collapse = "")
 }
 
-# One job's script block in the `--list` plan.
+# One job's script block in the `--list` plan. A block entry keeps its lines
+# together under a single `$`, continuation lines indented beneath it.
 render_plan_script <- function(entries) {
-  paste0(c(sprintf("    $ %s", entries), ""), "\n", collapse = "")
+  shown <- vapply(strsplit(entries, "\n", fixed = TRUE), function(lines) {
+    if (!length(lines)) lines <- ""
+    rest <- lines[-1L]
+    rest[nzchar(rest)] <- paste0("      ", rest[nzchar(rest)])
+    paste(c(paste0("    $ ", lines[[1L]]), rest), collapse = "\n")
+  }, character(1))
+  paste0(c(shown, ""), "\n", collapse = "")
 }
 
 # ---- self-test ---------------------------------------------------------------
@@ -254,6 +269,80 @@ self_test <- function() {
   res <- run_bash(render_script(c("echo one", "echo two")))
   expect("single-line: passing entries pass the job",
          res$status == 0L && any(res$out == "two"))
+
+  # A block-scalar entry, the shape of the `pages` job's keep-list filter: it
+  # stays one entry, verbatim, and runs as one shell unit between its
+  # neighbors.
+  multi <- fixture(paste(
+    "job:",
+    "  script:",
+    "    - 'echo first'",
+    "    - |",
+    "      set -e",
+    "      for f in a b; do",
+    "        case \"$f\" in",
+    "          a) echo \"got $f\" ;;",
+    "          *) echo \"other $f\" ;;",
+    "        esac",
+    "      done",
+    "    - 'echo last'",
+    "stripped:",
+    "  script:",
+    "    - |-",
+    "      echo one",
+    "      echo two",
+    "clipped:",
+    "  script:",
+    "    - |",
+    "      echo one",
+    "      echo two",
+    sep = "\n"
+  ))
+  block <- paste(
+    "set -e", "for f in a b; do", "  case \"$f\" in",
+    "    a) echo \"got $f\" ;;", "    *) echo \"other $f\" ;;", "  esac",
+    "done",
+    sep = "\n"
+  )
+  entries <- job_script(multi$job)
+  expect("multi-line: a block scalar stays ONE entry, verbatim",
+         identical(entries, c("echo first", block, "echo last")))
+  expect("multi-line: clip and strip chomping give the same entry",
+         identical(job_script(multi$clipped), job_script(multi$stripped)) &&
+           identical(job_script(multi$clipped), "echo one\necho two"))
+  expect("multi-line: --script text carries the block intact, in order",
+         identical(render_script(entries),
+                   paste0("echo first\n", block, "\necho last\n\n")))
+  expect("multi-line: --list keeps the block under one `$`",
+         identical(render_plan_script(entries), paste0(
+           "    $ echo first\n",
+           "    $ set -e\n",
+           "      for f in a b; do\n",
+           "        case \"$f\" in\n",
+           "          a) echo \"got $f\" ;;\n",
+           "          *) echo \"other $f\" ;;\n",
+           "        esac\n",
+           "      done\n",
+           "    $ echo last\n\n")))
+  res <- run_bash(render_script(entries))
+  expect("multi-line: the block runs as one unit between its neighbors",
+         res$status == 0L &&
+           identical(res$out[!startsWith(res$out, "+")],
+                     c("first", "got a", "other b", "last")))
+  failing <- job_script(fixture(paste(
+    "job:",
+    "  script:",
+    "    - |",
+    "      echo inside",
+    "      false",
+    "      echo after-false",
+    "    - 'echo next-entry'",
+    sep = "\n"
+  ))$job)
+  res <- run_bash(render_script(failing))
+  expect("multi-line: a failing command inside the block fails the job",
+         res$status != 0L && any(res$out == "inside") &&
+           !any(res$out %in% c("after-false", "next-entry")))
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
   if (length(st$fail)) {
