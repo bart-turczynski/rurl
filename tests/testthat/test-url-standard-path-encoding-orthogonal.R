@@ -291,7 +291,7 @@ test_that("the identity family answers the same question invariantly", {
   # MOVES canonical_join()'s match set; this one pins that the identity
   # family's answer to the same question cannot be moved at all.
   #
-  # Deliberately not a duplicate of two neighbouring pins: test-url-key-join-
+  # Deliberately not a duplicate of two neighboring pins: test-url-key-join-
   # api.R :: "no public cleaning or profile dial can reach the exported key"
   # covers get_url_key(), and test-url-join.R :: "the family has no
   # presentation dials to forward" covers the unexported ENGINE. The six

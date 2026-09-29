@@ -7,7 +7,7 @@
 # rurl is absolute-parse-only. rurl HAS a resolver -- `resolve_url()` --  and
 # its merge is RFC 3986 section 5 throughout, which is not what WHATWG
 # specifies for a relative reference. So the repo was about to change
-# resolution behaviour with zero regression signal over the standard's own
+# resolution behavior with zero regression signal over the standard's own
 # relative-resolution corpus. This file is that signal.
 #
 # SCOPE. It is an INSTRUMENT, not a fix. When it landed, rurl differed from
@@ -84,7 +84,7 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 #     RURL-lxdwuacn), bar the one absolute-parse row below;
 #   * "rows rurl rejects outright (NA)" is NOT a family here. A reject is a
 #     symptom, not a cause: the NA rows are distributed across the groups below
-#     by the defect that produced them, which is the axis a fix is organised
+#     by the defect that produced them, which is the axis a fix is organized
 #     around.
 #
 # DISCHARGED: `WPT_REL_SAME_SCHEME` -- the reference carrying the base's OWN
@@ -138,7 +138,7 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 # three families below were the residue unchanged (18 + 5 + 4).
 #
 # DISCHARGED: `WPT_REL_DRIVE_LETTER` (18 rows, RURL-ufsltsit) -- Windows drive
-# letters. WHATWG normalises `C|` to `C:`, refuses to shorten a path past a
+# letters. WHATWG normalizes `C|` to `C:`, refuses to shorten a path past a
 # drive letter, empties the base path when the remainder BEGINS with one, and
 # in the file-host state turns a drive-letter "host" into an empty host plus a
 # path segment. Resolution had none of that, so the drive letter behaved like

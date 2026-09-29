@@ -166,7 +166,7 @@ test_that("character accessors preserve length over mixed-validity input", {
 # test-locale-invariance.R asserts exact octets on host/path/domain/tld -- i.e.
 # on COMPONENTS. The output contract's ENC-2 cell asks for the guarantee on the
 # serialized string itself, which nothing asserted. This is the full-string
-# analogue: the whole clean_url, byte for byte.
+# analog: the whole clean_url, byte for byte.
 test_that("clean_url is byte-exact for an IDN host", {
   u <- "https://bucher.example/p"
   expect_identical(charToRaw(get_clean_url(u)), charToRaw(get_clean_url(u)))
