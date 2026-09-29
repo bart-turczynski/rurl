@@ -150,3 +150,188 @@ test_that("pin: a fully positional call reaches the last pre-alias formal", {
     "governs `path_normalization`"
   )
 })
+
+# --- serialise_url() --------------------------------------------------------
+
+test_that("serialise_url() is serialize_url()", {
+  expect_identical(serialise_url, serialize_url)
+  expect_true("serialise_url" %in% getNamespaceExports("rurl"))
+})
+
+# --- path_normalisation -----------------------------------------------------
+
+# Calls `fn_name` with `url` and the extra named arguments in `args`.
+.pn_call <- function(fn_name, url, args) {
+  do.call(get(fn_name, envir = asNamespace("rurl")), c(list(url), args))
+}
+
+.pn_functions <- names(.pn_formals_before)
+
+test_that("path_normalisation is the last formal, defaulting to NULL", {
+  for (fn_name in .pn_functions) {
+    fml <- formals(get(fn_name, envir = asNamespace("rurl")))
+    expect_named(fml, c(
+      .pn_formals_before[[fn_name]], "path_normalisation"
+    ), label = fn_name)
+    expect_null(fml$path_normalisation, label = fn_name)
+  }
+})
+
+test_that("path_normalisation alone equals path_normalization alone", {
+  for (fn_name in .pn_functions) {
+    for (mode in names(.pn_expected)) {
+      expect_identical(
+        .pn_call(fn_name, .pn_url, list(path_normalisation = mode)),
+        .pn_call(fn_name, .pn_url, list(path_normalization = mode)),
+        label = paste(fn_name, mode)
+      )
+    }
+  }
+  # And it takes effect: a non-default mode changes the path.
+  expect_identical(
+    get_path(.pn_url, path_normalisation = "both"), .pn_expected$both$path
+  )
+})
+
+test_that("an abbreviated alias value resolves like the US spelling", {
+  for (fn_name in .pn_functions) {
+    expect_identical(
+      .pn_call(fn_name, .pn_url, list(path_normalisation = "dot")),
+      .pn_call(fn_name, .pn_url, list(path_normalization = "dot")),
+      label = fn_name
+    )
+  }
+})
+
+test_that("supplying both spellings is an error naming both", {
+  for (fn_name in .pn_functions) {
+    for (pair in list(c("both", "both"), c("none", "dot_segments"))) {
+      expect_error(
+        .pn_call(fn_name, .pn_url, list(
+          path_normalization = pair[[1]], path_normalisation = pair[[2]]
+        )),
+        "`path_normalization`.*`path_normalisation`",
+        label = paste(fn_name, toString(pair))
+      )
+    }
+  }
+})
+
+test_that("the alias counts as supplied in the url_standard conflict check", {
+  # "none" conflicts with whatwg (which resolves dot segments); the US
+  # spelling errors, so the alias must too rather than slip past as missing.
+  for (fn_name in .pn_functions) {
+    expect_error(
+      .pn_call(fn_name, .pn_url, list(
+        path_normalization = "none", url_standard = "whatwg"
+      )),
+      "governs `path_normalization`",
+      label = paste(fn_name, "US")
+    )
+    expect_error(
+      .pn_call(fn_name, .pn_url, list(
+        path_normalisation = "none", url_standard = "whatwg"
+      )),
+      "governs `path_normalization`",
+      label = paste(fn_name, "alias")
+    )
+    expect_identical(
+      .pn_call(fn_name, .pn_url, list(
+        path_normalisation = "dot_segments", url_standard = "whatwg"
+      )),
+      .pn_call(fn_name, .pn_url, list(
+        path_normalization = "dot_segments", url_standard = "whatwg"
+      )),
+      label = paste(fn_name, "compatible")
+    )
+  }
+})
+
+test_that("the alias overrides a profile like the US spelling", {
+  # rfc-syntax preserves dot segments; an explicit knob overrides it.
+  for (fn_name in c("get_clean_url", "safe_parse_url", "safe_parse_urls")) {
+    via_alias <- .pn_call(fn_name, .pn_url, list(
+      profile = "rfc-syntax", path_normalisation = "both"
+    ))
+    expect_identical(
+      via_alias,
+      .pn_call(fn_name, .pn_url, list(
+        profile = "rfc-syntax", path_normalization = "both"
+      )),
+      label = fn_name
+    )
+    expect_false(identical(
+      via_alias,
+      .pn_call(fn_name, .pn_url, list(profile = "rfc-syntax"))
+    ), label = fn_name)
+  }
+})
+
+test_that("url_profile() accepts the alias as a knob override", {
+  # rfc-syntax is the profile that lets an explicit path_normalization through.
+  via_alias <- url_profile("rfc-syntax", path_normalisation = "both")
+  expect_identical(
+    via_alias, url_profile("rfc-syntax", path_normalization = "both")
+  )
+  expect_identical(via_alias$path_normalization, "both")
+  expect_true(via_alias$customized)
+  expect_error(
+    url_profile(
+      "seo", path_normalization = "both", path_normalisation = "both"
+    ),
+    "`path_normalization`.*`path_normalisation`"
+  )
+})
+
+test_that("canonical_join() forwards the alias and warns on it", {
+  a <- data.frame(URL = "http://example.com//a/./b/../c")
+  b <- data.frame(URL = "http://example.com/a/c")
+  us <- cj_legacy(canonical_join(a, b, path_normalization = "both"))
+  expect_identical(nrow(us), 1L)
+  # The legacy-dial warning (P3.1 D-E.1) names the alias it received.
+  expect_warning(
+    via_alias <- canonical_join(a, b, path_normalisation = "both"),
+    "`path_normalisation`",
+    class = "rurl_legacy_join_dial_warning"
+  )
+  expect_identical(via_alias, us)
+  expect_error(
+    canonical_join(
+      a, b, path_normalization = "both", path_normalisation = "both"
+    ),
+    "`path_normalization`.*`path_normalisation`"
+  )
+  # The `...` seam's url_standard conflict check sees the alias too, so the
+  # call fails there, before the legacy-dial warning.
+  expect_error(
+    withCallingHandlers(
+      canonical_join(
+        a, b, url_standard = "whatwg", path_normalisation = "none"
+      ),
+      rurl_legacy_join_dial_warning = function(w) {
+        stop("warned before the conflict check")
+      }
+    ),
+    "governs `path_normalization`"
+  )
+  expect_error(
+    rurl:::.check_url_standard_conflicts_dots(
+      list(url_standard = "whatwg", path_normalisation = "none")
+    ),
+    "governs `path_normalization`"
+  )
+})
+
+test_that("resolve_url() forwards the alias", {
+  expect_identical(
+    resolve_url("x/./y", "http://example.com//a/", path_normalisation = "both"),
+    resolve_url("x/./y", "http://example.com//a/", path_normalization = "both")
+  )
+  expect_error(
+    resolve_url(
+      "x", "http://example.com/", url_standard = "whatwg",
+      path_normalisation = "none"
+    ),
+    "governs `path_normalization`"
+  )
+})

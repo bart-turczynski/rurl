@@ -351,7 +351,16 @@ get_clean_url <- function(url,
                           url_standard = NULL,
                           engine = NULL,
                           profile = NULL,
-                          credential_handling = c("strip", "reject")) {
+                          credential_handling = c("strip", "reject"),
+                          path_normalisation = NULL) {
+  # `path_normalisation` is the British-spelling alias (SEOR-oytkybis). The
+  # assignment clears missing(path_normalization), so the alias counts as
+  # explicitly supplied below, exactly like the US spelling.
+  if (!is.null(path_normalisation)) {
+    path_normalization <- .resolve_path_normalisation_alias(
+      !missing(path_normalization), path_normalisation
+    )
+  }
   # Capture query_handling's supplied-ness BEFORE match.arg() reassigns it (an
   # assignment to a formal clears its missing() status), so profile resolution
   # can tell an explicit query_handling from the default (seo governs it).
@@ -669,8 +678,17 @@ get_path <- function(
   path_encoding = c("keep", "encode", "decode"),
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general"),
-  url_standard = NULL
+  url_standard = NULL,
+  path_normalisation = NULL
 ) {
+  # `path_normalisation` is the British-spelling alias (SEOR-oytkybis). The
+  # assignment clears missing(path_normalization), so the alias counts as
+  # explicitly supplied below, exactly like the US spelling.
+  if (!is.null(path_normalisation)) {
+    path_normalization <- .resolve_path_normalisation_alias(
+      !missing(path_normalization), path_normalisation
+    )
+  }
   # url_standard validation + conflict check must read missing() BEFORE the
   # match.arg() reassignments below (assignment can make missing() FALSE).
   url_standard <- .validate_url_standard(url_standard)

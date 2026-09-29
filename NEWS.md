@@ -1,5 +1,9 @@
 ## rurl (development version)
 
+### New features
+
+- Exported names stay in US English, and their British spellings are now accepted as aliases: `serialise_url()` is the same function as `serialize_url()`, and `get_clean_url()`, `get_path()`, `safe_parse_url()` and `safe_parse_urls()` take `path_normalisation` as an alias of `path_normalization`. The alias is the last formal, so no positional call shifts; supplying both spellings is an error, and the alias counts as explicitly supplied in the `url_standard` conflict check. `url_profile()`, `canonical_join()` and `resolve_url()` accept it through `...`. An abbreviated argument such as `path_normal =` no longer partially matches, because it now fits both spellings; spell the name in full (`SEOR-qwomlgjd`, `SEOR-oytkybis`).
+
 ### Bug fixes
 
 - Under `url_standard = "whatwg"`, a host whose UTS-46 mapping produces a forbidden domain code point now fails the parse, as the WHATWG URL Standard's host parser requires: it tests for one on the result of domain to ASCII (host parsing, the "domain-invalid-code-point" step). The gate tested only the source spelling, so the fullwidth `＃` `／` `？` `：` `％` (U+FF03, U+FF0F, U+FF1F, U+FF1A, U+FF05) and the no-break and ideographic spaces (U+00A0, U+3000) passed layer 1, and `serialize_url()` wrote the mapped `#` `/` `?` `:` `%` or space into the host, where a re-parse reads a different host: `http://127.0.0.1＃.evil.com/` serialized to `http://127.0.0.1#.evil.com/`. These now get `layer1_syntax_verdict = "fail"`, `parse_status = "error"` and an `NA` serialization. `rfc3986` and the frozen `NULL` profile do not move (RURL-crsrkcoh).
