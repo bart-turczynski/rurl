@@ -3,12 +3,17 @@
 Standing record for the bare mirror at `~/Projects/_backups/rurl.git`, wired as
 the `backup` remote. Filed under RURL-ivsyshdj, repaired under RURL-eqgqbeti.
 
-`rurl` has **no server-side gate**. GitLab CI is paused for quota
-(RURL-utsbwfvc) and the `github` remote points at a suspended account whose
-fetch returns 403, so this mirror is the only copy of the history that is not
-the working clone. That makes its freshness load-bearing — and makes a mirror
-that is stale *without saying so* worse than no mirror at all, because absence
-is at least honest.
+Two other copies exist off this machine, and neither covers what this mirror
+covers. GitLab (`origin`) holds what was pushed there. GitLab also push-mirrors
+to GitHub (configured on the GitLab project, not a remote in this clone), but
+for protected branches only, which today is `main`. Neither holds a local-only
+branch, or a tip rewritten or deleted after its push. Outside the working clone,
+this mirror is the only copy of those. A branch also has **no server-side
+gate**: the `.gitlab-ci.yml` `workflow:` rules run pipelines for `main`, tags
+and hand-started runs only (the quota pause, RURL-utsbwfvc, is lifted). That
+makes the mirror's freshness load-bearing — and makes a mirror that is stale
+*without saying so* worse than no mirror at all, because absence is at least
+honest.
 
 ## How it stays fresh
 
