@@ -23,8 +23,13 @@ Proven on `rurl`, then applied to the other two:
 
 1. Write a full-field `.zenodo.json`, and add `^\.zenodo\.json$` to `.Rbuildignore` — it is
    GitHub-only and must not ship to CRAN, exactly like `codemeta.json` and `CITATION.cff`.
-2. Cut a GitHub release at the `DESCRIPTION` version to trigger the mint. All three repos'
-   GitHub releases were behind CRAN at the time, and the release caught them up.
+2. Cut a GitHub release at the `DESCRIPTION` version to trigger the mint, from the tag already
+   on the mirror, never letting GitHub create one:
+   `gh release create vX.Y.Z --verify-tag -R bart-turczynski/rurl`. All three repos' GitHub
+   releases were behind CRAN at the time, and the release caught them up. For `rurl` the
+   release-time procedure is step 10 of the release checklist in `CONTRIBUTING.md`; a mint
+   stalled at "Received" needs
+   [seor `design/github-mirror.md` §5](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/github-mirror.md).
 3. Wire the **concept** DOI into: the README badge and Citation section; `CITATION.cff` (`doi`
    plus an `identifiers` block, and the CRAN `repository` field); the `inst/CITATION` bibentry;
    and the `codemeta.json` identifier.
