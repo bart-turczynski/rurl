@@ -41,7 +41,7 @@ source(here_derive("derive-ip-obfuscation.R"), local = FALSE)
 
 # Accept-or-reject under the URL Standard's own default, for the `http://<host>`
 # and `http://<host>/` shapes this group uses. Anything else aborts rather than
-# being guessed: every row must be recognisably one of those two, or the
+# being guessed: every row must be recognizably one of those two, or the
 # derivation has been pointed at a corpus it does not model.
 dnslen_whatwg_accepts <- function(url) {
   if (!grepl("^http://", url)) {
