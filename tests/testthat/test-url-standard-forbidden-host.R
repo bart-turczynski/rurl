@@ -86,6 +86,59 @@ test_that("rfc3986 rejects a host byte NO production admits", {
                    "warning-no-tld")
 })
 
+# --- a forbidden code point that UTS-46 mapping produces: reject under whatwg -
+#
+# WHATWG tests the forbidden domain code points on the RESULT of domain to
+# ASCII, so a non-ASCII code point that UTS-46 maps to one fails the host parse
+# (RURL-crsrkcoh). The gate used to test only the source spelling, so these
+# passed and `serialize_url()` wrote the mapped separator into the host, where
+# a re-parse reads another host: `http://127.0.0.1＃.evil.com/` serialized to
+# `http://127.0.0.1#.evil.com/`, which libcurl reads as host 127.0.0.1.
+
+mapped_to_forbidden <- c(
+  fullwidth_number_sign = 0xFF03, fullwidth_solidus = 0xFF0F,
+  fullwidth_question_mark = 0xFF1F, fullwidth_colon = 0xFF1A,
+  no_break_space = 0x00A0, ideographic_space = 0x3000,
+  fullwidth_percent_sign = 0xFF05
+)
+
+test_that("whatwg rejects a host whose UTS-46 mapping is forbidden", {
+  for (nm in names(mapped_to_forbidden)) {
+    u <- paste0("http://a", intToUtf8(mapped_to_forbidden[[nm]]), "b.example/")
+    expect_identical(get_parse_status(u, url_standard = "whatwg"), "error",
+                     info = nm)
+    expect_identical(
+      get_parse_verdicts(u, url_standard = "whatwg")$layer1_syntax_verdict,
+      "fail",
+      info = nm
+    )
+    expect_true(is.na(serialize_url(u, standard = "whatwg")), info = nm)
+  }
+})
+
+test_that("whatwg rejects the same code points percent-encoded", {
+  for (u in c("http://a%EF%BC%83b.example/", "http://a%C2%A0b.example/")) {
+    expect_identical(get_parse_status(u, url_standard = "whatwg"), "error",
+                     info = u)
+  }
+})
+
+test_that("a mapped separator no longer serializes into an IPv4 host", {
+  u <- "http://127.0.0.1＃.evil.com/"
+  expect_identical(get_parse_status(u, url_standard = "whatwg"), "error")
+  expect_true(is.na(serialize_url(u, standard = "whatwg")))
+})
+
+test_that("mapped-forbidden hosts do not move under rfc3986 or NULL", {
+  for (nm in names(mapped_to_forbidden)) {
+    u <- paste0("http://a", intToUtf8(mapped_to_forbidden[[nm]]), "b.example/")
+    expect_identical(get_parse_status(u, url_standard = "rfc3986"),
+                     "warning-invalid-tld", info = nm)
+    expect_identical(suppressWarnings(get_parse_status(u)),
+                     "warning-invalid-tld", info = nm)
+  }
+})
+
 # --- no over-rejection of valid hosts ----------------------------------------
 
 test_that("whatwg still accepts valid ASCII / IDN / punycode / IP hosts", {
