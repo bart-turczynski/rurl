@@ -1,4 +1,4 @@
-## rurl (development version)
+## rurl 3.1.0
 
 ### New features
 
