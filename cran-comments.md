@@ -9,7 +9,10 @@ Checked with `R CMD check --as-cran` on a tarball built from a clean export
 of the submitted commit (`git archive`, then `R CMD build`), so nothing
 untracked in a working clone can reach the check:
 
-- macOS aarch64, R 4.6.0, local, 2026-09-29: CHECK-RESULT-PENDING
+- macOS aarch64, R 4.6.0, local, 2026-09-29: **0 errors | 0 warnings |
+  2 notes**. One is the `BugReports:` note explained below. The other,
+  `checking HTML version of manual` ("Skipping checking math rendering:
+  package 'V8' unavailable"), is local-only: the check library lacks `V8`.
 - Ubuntu, R-release (`r-base:latest` container), through
   `tools/local-ci.sh --all`, which reproduces the package's CI jobs against a
   clean clone
@@ -20,11 +23,12 @@ The test suite is additionally run under `LC_ALL=C` on Linux.
 
 ### Expected NOTE: CRAN incoming feasibility, `BugReports:`
 
-As in 3.0.1, the incoming check may report
-`https://gitlab.com/bart-turczynski/rurl/-/issues` as `Status: 404`. That is
-GitLab's behavior for every project, not this one's: GitLab has migrated
-issues to work items and serves 404 to logged-out clients on the legacy
-`/-/issues` path, while a browser is redirected to `/-/work_items`, which
+As in 3.0.1, the incoming check reports
+`https://gitlab.com/bart-turczynski/rurl/-/issues` as `Status: 404`, from
+`DESCRIPTION` and from the `NEWS.md` entry that records the `BugReports:`
+choice. That is GitLab's behavior for every project, not this one's: GitLab
+has migrated issues to work items and serves 404 to logged-out clients on the
+legacy `/-/issues` path, while a browser is redirected to `/-/work_items`, which
 returns 200. The 3.0.1 submission note documents the measurement against
 GitLab's own tracker and other public projects. `BugReports:` keeps the
 `/-/issues` form because that is the form R's incoming check accepts for a
@@ -67,4 +71,8 @@ There is no `Remotes:` field.
 
 ## Downstream dependencies
 
-One reverse dependency is on CRAN, `pagerankr` 0.1.0. REVDEP-RESULT-PENDING
+One reverse dependency is on CRAN, `pagerankr` 0.1.0. REVDEP-STATUS: its
+tests fail against this version (4 failures in `test-canonicalization.R`; 0
+against 3.0.1). The test is a deliberate drift guard that fails whenever
+`get_clean_url()` gains an argument, and 3.1.0 adds the `path_normalisation`
+alias. This must be resolved before submission; see RURL-woljcpfu.
