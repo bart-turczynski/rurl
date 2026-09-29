@@ -18,7 +18,7 @@
 #
 #   locale invariance   run under LC_ALL=C and a UTF-8 locale, diff the two
 #                       outputs -- must be 0 differing rows
-#   behaviour delta     run at a baseline worktree and at HEAD, diff -- every
+#   behavior delta      run at a baseline worktree and at HEAD, diff -- every
 #                       differing row must be explainable
 #   acceptance drift    count rows whose status is neither `error` nor NA, per
 #                       profile; a RISE is a widening and needs justifying
@@ -186,7 +186,7 @@ for (bn in names(bad_seqs)) {
 #               not move when the host rule changes
 #
 # and two conjunctions, because admitting a triplet is exactly the kind of
-# conjunction-guarded behaviour a one-at-a-time corpus cannot falsify: a
+# conjunction-guarded behavior a one-at-a-time corpus cannot falsify: a
 # masked host bypasses the rejection of everything ELSE in it, so the second
 # triplet / the literal gap char is what makes the row reachable.
 pct_shapes <- list(

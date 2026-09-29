@@ -10,7 +10,7 @@
 # transcription IS the primary source, so no gate can ever tell you the
 # transcription is RIGHT -- only that it is intact, exact, and faithfully
 # restated. Claiming more would be the more dangerous error, because a gate
-# labelled "re-derivation" invites the reader to assume an independent check
+# labeled "re-derivation" invites the reader to assume an independent check
 # happened.
 #
 # What it does check, and why each one can actually rot:

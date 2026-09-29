@@ -12,7 +12,7 @@
 # 202 of the fixture's oracle-carrying rows are transcribed from the WHATWG
 # web-platform-tests. WPT is a *WHATWG* oracle: its must-fail expectations say
 # what the WHATWG URL parser rejects, which is NOT the same question as what
-# RFC 3986 rejects. Copying those expectations into a column labelled
+# RFC 3986 rejects. Copying those expectations into a column labeled
 # `rfc3986_expected` creates a CO-CONFIRMATION TRAP: the oracle and rurl agree
 # with each other, the test passes, and the fact that both disagree with the
 # actual RFC goes unseen.

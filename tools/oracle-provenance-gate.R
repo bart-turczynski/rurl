@@ -132,7 +132,7 @@
 # duty does not apply to this source), whose whole purpose is to let a group
 # that owes no pin still answer. It does not itself spell out "every
 # group must carry the key"; PV10 was the rule that said so. The record still
-# practises it -- inst/bench/wpt-url-cases.json's group carries exactly such a
+# practices it -- inst/bench/wpt-url-cases.json's group carries exactly such a
 # negative declaration and explains it as recording "that the source-pinning
 # question was considered and does not apply, rather than leaving the key
 # absent" -- and PV10 made that practice non-optional for the next group.
@@ -292,7 +292,7 @@ NORMATIVE_DEP_STATUS <- c("verified", "missing", "not-applicable")
 # A SEPARATE KEY, NOT A FOURTH pin_status MEMBER, which is what the finding
 # asked for. pin_status answers "what is the state of the pin?" and this answers
 # "why is there no pinning duty?"; one field cannot carry both axes. The status
-# axis is closed while this one is OPEN -- it went from one recognised reason to
+# axis is closed while this one is OPEN -- it went from one recognized reason to
 # three inside a single 13-entry record -- so a member per reason would keep
 # being added, whereas a closed second enum grows where it was built to.
 NORMATIVE_DEP_NA_REASON <- c("no-derivation", "frozen-source",
@@ -801,7 +801,7 @@ rule_pv8 <- function(root, rec) {
 }
 
 # One entry of a group's normative_dependencies array. Returns the defects it
-# has, labelled; character(0) when it is well-formed. Every value check is
+# has, labeled; character(0) when it is well-formed. Every value check is
 # guarded on the key being PRESENT, so an omitted key is reported once by the
 # required-key check rather than twice.
 normative_dep_defects <- function(e, lab) {
@@ -1204,7 +1204,7 @@ self_test <- function() {
     applicability_selector = "base null"
   )
 
-  # Two normative_dependencies entries modelled on the real ip-obfuscation
+  # Two normative_dependencies entries modeled on the real ip-obfuscation
   # array: one pinned source and one read-but-unpinned source. The second is
   # not decoration -- pin_status = missing is the branch where tracking_issue
   # becomes mandatory and where the sha/date requirements must NOT apply.
@@ -1246,7 +1246,7 @@ self_test <- function() {
                        algorithm_anchors = list("IDNA_Mapping_Table"),
                        note = "the mapping table, pinned to a named edition")
 
-  # The NEGATIVE declaration, modelled on inst/bench/wpt-url-cases.json's
+  # The NEGATIVE declaration, modeled on inst/bench/wpt-url-cases.json's
   # group: a group that derives nothing from a standard's text still ANSWERS,
   # through the not-applicable enum member. PV10 has no exemption, so this is
   # the shape that keeps a no-derivation group writable -- if it failed, the

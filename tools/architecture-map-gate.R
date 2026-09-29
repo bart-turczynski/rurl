@@ -804,7 +804,7 @@ self_test <- function() {
                  paste(r$after[moved], collapse = " / ")))
   }
 
-  # A token missing from the MIDDLE goes between its neighbours, and the
+  # A token missing from the MIDDLE goes between its neighbors, and the
   # arrows around it are re-spelled from the block, not invented.
   r <- regen("regen-order-middle", three, c("a.R", "c.R"), three)
   flat <- paste(r$after[load_order_body(r$after)], collapse = " ")

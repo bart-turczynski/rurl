@@ -400,7 +400,7 @@ self_test <- function() {
          is.na(unname(RUNNABLE_LABEL["nul-byte"])), TRUE)
   nul_up <- data.frame(input = "a:1", expected = "a:1", reason = "nul-byte",
                        stringsAsFactors = FALSE)
-  expect("an unlabelled reason fails rather than defaulting",
+  expect("an unlabeled reason fails rather than defaulting",
          length(check_runnable(fx("ada-001", "a:1", "a:1"), nul_up)) > 0L, TRUE)
 
   # ---- the two column checks (RURL-drkcvzex) --------------------------------

@@ -24,7 +24,7 @@
 # tryCatch (one throwing row must not collapse the column). Compare two runs
 # with plain `diff`; run it under LC_ALL=C and a UTF-8 locale for the
 # locale-invariance question, and at a baseline worktree vs HEAD for the
-# behaviour-delta one. A RISE in an accepted count is a widening and needs
+# behavior-delta one. A RISE in an accepted count is a widening and needs
 # justifying.
 #
 # Usage: Rscript tools/authority-at-sweep.R <pkg-dir> <out.tsv>
