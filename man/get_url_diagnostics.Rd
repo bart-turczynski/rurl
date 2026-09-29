@@ -102,6 +102,13 @@ validator. The \emph{absence} of a diagnostic never implies the URL
 conforms to its scheme's specification or to WHATWG/RFC 3986. Full
 per-standard conformance validation is out of scope (ADR 0012 D5).
 
+One token is the exception, and consumers may rely on its absence:
+\code{domain-invalid-ace-label} fires on \emph{every} parsed host that
+meets its predicate (see its entry below), under both \code{"rfc3986"}
+and \code{"whatwg"}. Its absence means each \code{xn--} label of the host
+is, on its own, a genuine A-label. It says nothing about the host's other
+labels or about the DNS rules the other \code{domain-*} tokens report.
+
 Two WHATWG-generic facts gate on the \emph{interpreting standard}, not the
 acceptance axis, so they are reported whenever \code{url_standard =
   "whatwg"} --- including the default \code{"web"} acceptance path (they are
@@ -187,6 +194,27 @@ hyphen rules (leading/trailing hyphen, or \code{"--"} in positions
 3--4 of a non-\code{xn--} label).
 \item \code{domain-std3-violation} --- a label carries a code point
 outside the STD3 LDH set.
+\item \code{domain-invalid-ace-label} --- a label beginning
+\code{xn--} (in any ASCII case) is not a genuine A-label: its Punycode
+decode fails (including an empty or all-ASCII result), or the decoded
+label fails the UTS #46 Validity Criteria (section 4.1) under the
+WHATWG URL Standard's non-strict flags (\code{CheckHyphens},
+\code{UseSTD3ASCIIRules} and \code{VerifyDnsLength} false;
+\code{CheckBidi} and \code{CheckJoiners} true). Each such label is
+judged on its own, so criterion 9 applies as though the label were
+the whole name: a label that is valid alone but fails the Bidi rule
+only because another label makes the name a Bidi domain name does not
+fire it. The host still
+parses: under \code{"whatwg"} the domain parser keeps an ASCII host
+whose ToASCII fails, lowercased. Unlike the rest of this vocabulary,
+this token is \strong{complete}: it fires on every host meeting the
+predicate, so its absence can be relied on. It can co-fire with
+\code{domain-hyphen-violation} (a decoded label beginning
+\code{xn--} breaks both the strict and the non-strict hyphen rule),
+and with \code{domain-empty-label} when another label is empty. Hyphen,
+STD3 and length facts alone never fire it. Where it fires, those three
+facts can be missing: they are computed only for a host whose relaxed
+UTS #46 processing succeeds as a whole.
 \item \code{host-charset-shimmed} --- the host carries one of the 15
 code points WHATWG keeps but the historical parser rejected,
 accepted by the shim (ADR 0009: \code{! $ & ( ) * + , ; =}, plus the

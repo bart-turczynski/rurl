@@ -45,6 +45,7 @@
   "domain-empty-label",
   "domain-hyphen-violation",
   "domain-std3-violation",
+  "domain-invalid-ace-label",
   # --- Layer 5 SELECTED diagnostics (ADR 0012 D5, RURL-izsouyxs) -------------
   # These are SELECTED facts, NOT a conformance oracle: absence of any of them
   # NEVER implies conformance (D5). All fire only under scheme_acceptance =
@@ -289,8 +290,9 @@
 
   # --- DNS-length / UTS-46 diagnostics (RURL-vowqpmdg, T5 design lock) -------
   # Delegates to punycoder::host_normalize() via the .punycoder_host_probe()
-  # seam (domain.R) for 3 of the 5 facts, plus 2 rurl-owned structural
-  # detectors (empty-label, length subtyping); see that seam's header comment
+  # seam (domain.R) for 3 of the 6 facts, plus 2 rurl-owned structural
+  # detectors (empty-label, length subtyping) and a per-label ACE check (the
+  # relaxed call on each `xn--` label alone); see that seam's header comment
   # for the full design. Facts, not policy (same pattern as every other block
   # above): fired identically in BOTH standard modes, keyed to host SHAPE
   # alone. Probed against `final_host` (the resolved, pre-Stage-B host
@@ -311,6 +313,12 @@
     diag, host_probe$hyphen_violation, "domain-hyphen-violation"
   )
   diag <- .diag_add(diag, host_probe$std3_violation, "domain-std3-violation")
+  # Same host-shape keying as its family, so both standards (ruling RUL-023):
+  # an invalid ACE label parses under whatwg (the domain parser runs with
+  # beStrict = false) exactly as it does as an rfc3986 reg-name.
+  diag <- .diag_add(
+    diag, host_probe$invalid_ace_label, "domain-invalid-ace-label"
+  )
 
   # --- Layer 5 SELECTED diagnostics (ADR 0012 D5 + Layer 5, RURL-izsouyxs) ---
   # SELECTED facts, never a conformance oracle: absence of any token below does

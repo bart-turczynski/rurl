@@ -199,6 +199,19 @@ test_that("reasons combines host-shape diagnostics with policy tokens", {
   expect_length(df$reasons[[4]], 0L)
 })
 
+test_that("an invalid ACE label is reported as a host-shape reason", {
+  # It is also an seo footgun, like every domain-* fact, but that cannot move a
+  # verdict today: pslr's IDNA canonicalization already finds no registrable
+  # domain for such a host, so seo is FALSE through `registrable`.
+  df <- check_hosts(c(
+    "http://xn--a.com", "http://xn--xn---ooa.com", "http://xn--bcher-kva.com"
+  ))
+  expect_true("domain-invalid-ace-label" %in% df$reasons[[1]])
+  expect_true("domain-invalid-ace-label" %in% df$reasons[[2]])
+  expect_length(df$reasons[[3]], 0L)
+  expect_identical(df$seo, c(FALSE, FALSE, TRUE))
+})
+
 # --- policy layer never changes how a URL parses (ADR 0006) ------------------
 
 test_that("host-policy failures do not become parse errors", {

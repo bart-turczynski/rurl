@@ -344,3 +344,96 @@ test_that("the Unicode pin rurl inherits from punycoder is the recorded one", {
   expect_identical(info$unicode_version, expected$unicode_version)
   expect_identical(info$profile, expected$profile)
 })
+
+# --- domain-invalid-ace-label: the per-label call (RURL-vicyvlvh) -----------
+#
+# The probe runs each `xn--` label ALONE through the all-relaxed call, which is
+# the non-strict UTS #46 processing WHATWG's domain parser asks for
+# (CheckHyphens, UseSTD3ASCIIRules, VerifyDnsLength false; CheckBidi and
+# CheckJoiners true). These pins record which Validity Criteria (UTS #46
+# section 4.1) the installed punycoder enforces on one label, and the one it
+# does not (criterion 4), which rurl therefore checks itself on the decoded
+# label. Fixtures were Punycode-encoded with Python's standard codec, so none of
+# them round-trips through punycoder's own encoder.
+
+test_that("the all-relaxed per-label call rejects every invalid ACE class", {
+  relaxed <- function(label) {
+    punycoder::host_normalize(
+      label, check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
+    )
+  }
+  invalid <- c(
+    decode_fails = "xn--a",
+    empty_after_prefix = "xn--",
+    ascii_only_result = "xn--ascii-",
+    ascii_only_short = "xn--a-",
+    non_ascii_in_ace = "xn--bücher",
+    not_nfc = "xn--a-ccb", # criterion 1: "a" + U+0308, not NFC
+    leading_mark = "xn--a-wbb", # criterion 6: U+0301 then "a"
+    status_mapped = "xn--7ba", # criterion 7: U+00C4, a mapped code point
+    status_disallowed = "xn--a-ba", # criterion 7: U+0080
+    context_j = "xn--ab-m1t", # criterion 8: ZWJ between two letters
+    bidi_one_label = "xn--a-zhc" # criterion 9: U+05D0 then "a", one label
+  )
+  for (nm in names(invalid)) {
+    expect_true(is.na(relaxed(invalid[[nm]])), info = nm)
+  }
+  valid <- c(
+    "xn--bcher-kva", "xn--nxasmq6b", "xn--zca", "xn--4dbrk0ce", "xn--ls8h",
+    "xn--1-0fa"
+  )
+  for (label in valid) {
+    expect_identical(relaxed(label), label, info = label)
+  }
+  # ASCII case is folded by the UTS #46 mapping step before decoding.
+  expect_identical(relaxed("XN--BCHER-KVA"), "xn--bcher-kva")
+})
+
+test_that("the per-label call misses criterion 4 (decoded label is xn--)", {
+  # UTS #46 section 4.1 criterion 4: "If not CheckHyphens, the label must not
+  # begin with 'xn--'." "xn--xn---ooa" decodes to "xn--" + U+00E4; punycoder
+  # accepts it with check_hyphens = FALSE, so rurl tests the decoded label
+  # itself. If this starts failing, punycoder closed the gap and rurl's own
+  # check has become redundant, not wrong.
+  expect_identical(
+    punycoder::host_normalize(
+      "xn--xn---ooa",
+      check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
+    ),
+    "xn--xn---ooa"
+  )
+  # puny_decode() returns UTF-8 bytes without an encoding mark, so under a
+  # non-UTF-8 locale (the gate's LC_ALL=C cell) the strings compare unequal;
+  # compare the bytes. The probe itself only tests the ASCII "xn--" prefix.
+  decoded_bytes <- function(label) {
+    charToRaw(punycoder::puny_decode(label, strict = FALSE))
+  }
+  expect_identical(decoded_bytes("xn--xn---ooa"), charToRaw("xn--ä"))
+  # The decode must be the lenient one: the strict decode applies STD3 and
+  # errors on a label the relaxed call accepts, such as "a_" + U+00E4.
+  expect_identical(
+    punycoder::host_normalize(
+      "xn--a_-wia",
+      check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
+    ),
+    "xn--a_-wia"
+  )
+  expect_error(punycoder::puny_decode("xn--a_-wia", strict = TRUE))
+  expect_identical(decoded_bytes("xn--a_-wia"), charToRaw("a_ä"))
+  expect_identical(decoded_bytes("xn--xn--_-kra"), charToRaw("xn--_ä"))
+})
+
+test_that("cross-label Bidi fails the whole host but not each label alone", {
+  # Criterion 9 applies only in a Bidi domain name, which depends on the OTHER
+  # labels: "1" + U+00E4 is valid alone and invalid beside a Hebrew label. The
+  # per-label probe cannot see that context, by design; ?get_url_diagnostics
+  # states the exclusion.
+  relaxed <- function(x) {
+    punycoder::host_normalize(
+      x, check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
+    )
+  }
+  expect_true(is.na(relaxed("xn--1-0fa.xn--4dbrk0ce")))
+  expect_identical(relaxed("xn--1-0fa"), "xn--1-0fa")
+  expect_identical(relaxed("xn--4dbrk0ce"), "xn--4dbrk0ce")
+})
