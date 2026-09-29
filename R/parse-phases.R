@@ -1743,7 +1743,10 @@
     #       leaves intact (or, for DEL, silently drops);
     #   (A) a NON-ASCII host fails UTS-46 domain-to-ASCII (U+FFFD/U+FFFF
     #       noncharacters, a soft-hyphen-only label collapsing to empty) -- one
-    #       vectorized punycoder::host_normalize() over just the non-ASCII rows.
+    #       vectorized punycoder::host_normalize() over just the non-ASCII rows;
+    #       or its domain-to-ASCII RESULT holds a forbidden code point, which is
+    #       where WHATWG tests for one: U+FF03, U+FF0F, U+FF1F, U+FF1A, U+FF05,
+    #       U+00A0 and U+3000 map to # / ? : % and space (RURL-crsrkcoh).
     reg <- !is_ip & !is.na(host) & host != ""
     if (any(reg)) {
       bad_cp <- reg &
@@ -1756,7 +1759,10 @@
       nonascii <- reg & !bad_cp &
         stringi::stri_detect_regex(host, "[^\\u0001-\\u007f]")
       nonascii[is.na(nonascii)] <- FALSE
-      fatal <- fatal | (nonascii & is.na(mapped))
+      bad_mapped <- nonascii & !is.na(mapped) &
+        stringi::stri_detect_regex(mapped, .WHATWG_FORBIDDEN_HOST_CP)
+      bad_mapped[is.na(bad_mapped)] <- FALSE
+      fatal <- fatal | (nonascii & is.na(mapped)) | bad_mapped
     }
 
     # WHATWG IPv6 serializer (RURL-thjmzaam): bracketed IPv6 literals serialize
