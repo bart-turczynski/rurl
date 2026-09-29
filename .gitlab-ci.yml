@@ -388,7 +388,7 @@ pages:
 # ignored for a PAT. It is not: with the account email as username a valid PAT
 # returns HTTP 401, and with `x` the same token returns 200 (measured in
 # pagerankr 2026-07-25 by changing only OSSINDEX_USER). A local
-# `curl -u 'x:$PAT'` that succeeds while `security-audit` 401s is this, not a
+# `curl -u "x:$PAT"` that succeeds while `security-audit` 401s is this, not a
 # bad token. A legacy OSS Index API token, if one is ever rotated back in, is
 # the case that takes the email.
 #
