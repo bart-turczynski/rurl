@@ -68,16 +68,30 @@
 #'   whose i-th element is a character vector of the scheme facts observed
 #'   (\code{character(0)} when none). The tokens are \code{"no-scheme"},
 #'   \code{"special-scheme"}, \code{"non-special-scheme"},
-#'   \code{"outside-web-acceptance"} and \code{"not-in-allowlist"}.
+#'   \code{"outside-web-acceptance"}, \code{"no-authority"} and
+#'   \code{"not-in-allowlist"}.
 #'
-#'   There is deliberately no token for \dQuote{carries no authority}. It is
-#'   the natural fact to want for \code{mailto:} and \code{javascript:}, but
-#'   it cannot be computed from the public parse record:
+#'   \code{"no-authority"} marks a URL that has a scheme but carries no
+#'   authority: \code{mailto:someone@example.com}, \code{javascript:alert(1)},
+#'   \code{foo:bar}. It is reported when all three hold: the input has no
+#'   \code{//} after its scheme colon; the parse record's \code{host} is
+#'   \code{NA}; and, under \code{url_standard = "whatwg"}, the scheme is
+#'   non-special. The last condition exists because WHATWG gives every
+#'   special-scheme URL a host, with or without \code{//}:
+#'   \code{http:example.com} parses to host \code{example.com}, and
+#'   \code{file:foo} is the same URL as \code{file:///foo}. Under
+#'   \code{url_standard = "rfc3986"} an authority exists only after \code{//}
+#'   (RFC 3986 section 3), so \code{http:example.com} does get the token there.
+#'   A row with no scheme never gets it: without a scheme there is no
+#'   scheme-driven authority question to answer.
+#'
+#'   The token is computed from the parse, not from \code{\link{get_host}}.
+#'   Under \code{scheme_acceptance = "general"},
 #'   \code{get_host("mailto:someone@example.com")} returns
-#'   \code{"example.com"}, reading the \code{@} as a userinfo delimiter, so a
-#'   token derived from host presence would be wrong for exactly the schemes it
-#'   is most wanted for. Reporting a fact this package cannot compute correctly
-#'   would be worse than not reporting it.
+#'   \code{"example.com"}: that is the first recipient's domain, exposed as
+#'   extraction metadata, not an authority. The parse record agrees that the
+#'   URL has none: its \code{host} is \code{NA} and its path is
+#'   \code{someone@example.com}.
 #' @note \code{scheme_acceptance} defaults to \code{"general"} here, not to the
 #'   package-wide \code{"web"}. Auditing which schemes a URL set carries is
 #'   pointless under an acceptance mode that has already collapsed every
@@ -136,6 +150,9 @@ check_schemes <- function(url,
   )
   have <- !is.na(scheme)
   web_scheme <- have & scheme %in% .SUPPORTED_SCHEMES
+  no_authority <- .scheme_policy_no_authority(
+    url, have, scheme_class, url_standard, scheme_policy, scheme_acceptance
+  )
 
   out <- data.frame(
     url = url,
@@ -166,6 +183,9 @@ check_schemes <- function(url,
       if (!web_scheme[i]) {
         toks <- c(toks, "outside-web-acceptance")
       }
+      if (no_authority[i]) {
+        toks <- c(toks, "no-authority")
+      }
     } else {
       toks <- c(toks, "no-scheme")
     }
@@ -175,4 +195,41 @@ check_schemes <- function(url,
     unique(toks)
   })
   out
+}
+
+# Which rows carry a scheme and no authority (RURL-ktpjscne)? Three conditions,
+# each load-bearing:
+#
+# 1. The input has no `//` after its scheme colon: `.has_explicit_authority()`,
+#    the predicate the parser itself uses for the opaque-path test. Never
+#    `get_host()`: on a `mailto:` that accessor returns the recipient domain as
+#    ADR 0012 D7 extraction metadata, which is not an authority.
+# 2. Under whatwg, the scheme is non-special. A special scheme ALWAYS gets a
+#    host: `http:example.com` and `http:/example.com` reach the special
+#    authority states without `//`, and `file:foo` gets the empty host, the
+#    same record as `file:///foo`. Emitting the token there would make it a
+#    function of input spelling rather than of the URL record. Under rfc3986 an
+#    authority exists only after `//` (RFC 3986 section 3), special scheme or
+#    not, so `http:example.com` carries none and the token is reported.
+# 3. The parse record's host is NA. This is what keeps the token from ever
+#    contradicting the parse; it is also what excludes a scheme-less input to
+#    which `scheme_policy = "infer"` supplied `http://` (host present, no `//`
+#    in the input).
+.scheme_policy_no_authority <- function(url, have, scheme_class, url_standard,
+                                        scheme_policy, scheme_acceptance) {
+  if (length(url) == 0L) {
+    return(logical(0))
+  }
+  host <- safe_parse_urls(url,
+    url_standard = url_standard,
+    scheme_policy = scheme_policy,
+    scheme_acceptance = scheme_acceptance
+  )$host
+  scheme_driven <- if (identical(url_standard, "whatwg")) {
+    scheme_class == "non-special"
+  } else {
+    rep(TRUE, length(url))
+  }
+  have & scheme_driven & is.na(host) &
+    !.has_explicit_authority(url, url_standard)
 }

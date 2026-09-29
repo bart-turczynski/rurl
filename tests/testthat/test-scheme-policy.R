@@ -127,3 +127,141 @@ test_that("both named standards work and scheme_acceptance is honored", {
   expect_identical(r_web$scheme_class, "missing-or-error")
   expect_identical(r_web$reasons[[1]], "no-scheme")
 })
+
+# The authority question (RURL-ktpjscne). These rows pin what the parse record
+# says about each URL's authority, so the reasons vocabulary can be checked
+# against it: a scheme fact must never contradict the parse.
+authority_urls <- c(
+  "mailto:someone@example.com", # non-special, opaque path, no authority
+  "javascript:alert(1)",        # non-special, opaque path, no authority
+  "foo:bar",                    # non-special, opaque path, no authority
+  "scp://host/a",               # non-special, `//` authority
+  "foo://host/x",               # non-special, `//` authority
+  "http:example.com",           # special, no `//` in the input
+  "http:/example.com",          # special, one `/` in the input
+  "https:host",                 # special, no `//` in the input
+  "notaurl"                     # no scheme
+)
+
+test_that("the parse record's authority facts are pinned (whatwg)", {
+  p <- safe_parse_urls(
+    authority_urls, url_standard = "whatwg", scheme_acceptance = "general"
+  )
+  expect_identical(
+    p$parse_status,
+    c(rep("ok", 7L), "warning-no-tld", "error")
+  )
+  # WHATWG: a non-special scheme with no `//` never enters the authority
+  # states, so host is null and `@` stays in the opaque path. A special scheme
+  # gets a host with or without `//` (the special-authority states).
+  expect_identical(
+    p$host,
+    c(NA, NA, NA, "host", "host", "example.com", "example.com", "host", NA)
+  )
+  expect_identical(p$path[1:3], c("someone@example.com", "alert(1)", "bar"))
+  # get_host() on a mailto: is ADR 0012 D7 recipient-extraction metadata, not
+  # an authority parse; it deliberately diverges from the parse record's host.
+  expect_identical(
+    get_host("mailto:someone@example.com",
+      url_standard = "whatwg", scheme_acceptance = "general"
+    ),
+    "example.com"
+  )
+  expect_true(is.na(get_host("foo:bar@baz",
+    url_standard = "whatwg", scheme_acceptance = "general"
+  )))
+})
+
+test_that("the parse record's authority facts are pinned (rfc3986)", {
+  p <- safe_parse_urls(
+    authority_urls, url_standard = "rfc3986", scheme_acceptance = "general"
+  )
+  expect_identical(p$parse_status, c(rep("ok", 8L), "error"))
+  # RFC 3986 section 3: an authority exists only after `//`, special scheme
+  # or not.
+  expect_identical(
+    p$host,
+    c(NA, NA, NA, "host", "host", NA, NA, NA, NA)
+  )
+})
+
+test_that("no-authority marks non-special opaque rows only (whatwg)", {
+  nsp <- c("non-special-scheme", "outside-web-acceptance")
+  r <- check_schemes(authority_urls, url_standard = "whatwg")
+  expect_identical(r$reasons[[1]], c(nsp, "no-authority"))
+  expect_identical(r$reasons[[2]], c(nsp, "no-authority"))
+  expect_identical(r$reasons[[3]], c(nsp, "no-authority"))
+  # Authority-bearing controls.
+  expect_identical(r$reasons[[4]], nsp)
+  expect_identical(r$reasons[[5]], nsp)
+  # WHATWG gives a special scheme a host with or without `//`; the parse
+  # record above says so, and the token must not contradict it.
+  expect_identical(r$reasons[[6]], "special-scheme")
+  expect_identical(r$reasons[[7]], "special-scheme")
+  expect_identical(r$reasons[[8]], "special-scheme")
+  # No scheme, no scheme-driven authority question.
+  expect_identical(r$reasons[[9]], "no-scheme")
+})
+
+test_that("no-authority follows RFC 3986's `//` rule under rfc3986", {
+  nsp <- c("non-special-scheme", "outside-web-acceptance")
+  r <- check_schemes(authority_urls, url_standard = "rfc3986")
+  expect_identical(r$reasons[[1]], c(nsp, "no-authority"))
+  expect_identical(r$reasons[[2]], c(nsp, "no-authority"))
+  expect_identical(r$reasons[[3]], c(nsp, "no-authority"))
+  expect_identical(r$reasons[[4]], nsp)
+  expect_identical(r$reasons[[5]], nsp)
+  # RFC 3986 section 3: no `//`, no authority, special scheme or not -- and
+  # the rfc3986 parse record's host is NA on these rows.
+  expect_identical(r$reasons[[6]], c("special-scheme", "no-authority"))
+  expect_identical(r$reasons[[7]], c("special-scheme", "no-authority"))
+  expect_identical(r$reasons[[8]], c("special-scheme", "no-authority"))
+  expect_identical(r$reasons[[9]], "no-scheme")
+})
+
+test_that("no-authority never contradicts the parse record's host", {
+  urls <- c(authority_urls, "file:foo", "file:///foo", "example.com/x",
+            "foo:/x", "mailto://example.com:8080/p")
+  for (std in c("whatwg", "rfc3986")) {
+    r <- check_schemes(urls, url_standard = std)
+    host <- safe_parse_urls(
+      urls, url_standard = std, scheme_acceptance = "general"
+    )$host
+    tok <- vapply(r$reasons, function(x) "no-authority" %in% x, logical(1))
+    expect_true(all(is.na(host[tok])), info = std)
+  }
+  r <- check_schemes(urls, url_standard = "whatwg")
+  tok <- vapply(r$reasons, function(x) "no-authority" %in% x, logical(1))
+  # file:foo and file:///foo are one WHATWG URL record (empty host), so the
+  # token must not split them on input spelling.
+  expect_false(tok[10])
+  expect_false(tok[11])
+  # A scheme-less input given `http://` by scheme_policy = "infer" has a host.
+  expect_false(tok[12])
+  # A non-special path-absolute URL has no authority either.
+  expect_true(tok[13])
+  # A non-special scheme WITH `//` carries one.
+  expect_false(tok[14])
+})
+
+test_that("no-authority sits before not-in-allowlist in reasons", {
+  r <- check_schemes("mailto:someone@example.com", allowed_schemes = "https")
+  expect_identical(
+    r$reasons[[1]],
+    c("non-special-scheme", "outside-web-acceptance", "no-authority",
+      "not-in-allowlist")
+  )
+})
+
+test_that("check_schemes leaves the authority rows' parse untouched", {
+  for (std in c("whatwg", "rfc3986")) {
+    before <- safe_parse_urls(
+      authority_urls, url_standard = std, scheme_acceptance = "general"
+    )
+    invisible(check_schemes(authority_urls, url_standard = std))
+    after <- safe_parse_urls(
+      authority_urls, url_standard = std, scheme_acceptance = "general"
+    )
+    expect_identical(before, after)
+  }
+})
