@@ -7,6 +7,7 @@
 ### Bug fixes
 
 - Under `url_standard = "whatwg"`, a host whose UTS-46 mapping produces a forbidden domain code point now fails the parse, as the WHATWG URL Standard's host parser requires: it tests for one on the result of domain to ASCII (host parsing, the "domain-invalid-code-point" step). The gate tested only the source spelling, so the fullwidth `＃` `／` `？` `：` `％` (U+FF03, U+FF0F, U+FF1F, U+FF1A, U+FF05) and the no-break and ideographic spaces (U+00A0, U+3000) passed layer 1, and `serialize_url()` wrote the mapped `#` `/` `?` `:` `%` or space into the host, where a re-parse reads a different host: `http://127.0.0.1＃.evil.com/` serialized to `http://127.0.0.1#.evil.com/`. These now get `layer1_syntax_verdict = "fail"`, `parse_status = "error"` and an `NA` serialization. `rfc3986` and the frozen `NULL` profile do not move (RURL-crsrkcoh).
+- `safe_parse_url()`, `safe_parse_urls()` and the accessors built on them no longer fail on a long URL with "variable names are limited to 10000 bytes". The caches store each entry under its key as an R variable name, which R caps at 10,000 bytes, and non-ASCII characters are escaped in the key at six bytes each, so the error came from about 9,900 ASCII characters or about 1,700 non-ASCII ones. An internationalized host whose ASCII form passed 10,000 bytes failed the same way through the Punycode cache, even with `rurl_cache_config(full_parse = FALSE)`. A key past the cap now skips the cache and is recomputed on every call; results are unchanged (RURL-tlmoybsl).
 
 ### Documentation
 

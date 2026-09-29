@@ -181,14 +181,33 @@ rurl_clear_caches <- function() {
   out
 }
 
+# R caps a variable name at 10,000 bytes: exists/get/assign/mget raise
+# "variable names are limited to 10000 bytes" on a longer one (a name of
+# exactly 10,000 bytes is accepted). A derived key past the cap therefore
+# bypasses the cache -- a miss on lookup, a no-op on store -- so a long URL is
+# simply recomputed. The derived key is pure ASCII (bytes == characters), and a
+# \uXXXX escape spends six bytes per non-ASCII code point, so a non-ASCII URL
+# reaches the cap at roughly a sixth of the ASCII length (RURL-tlmoybsl).
+.CACHE_KEY_MAX_BYTES <- 10000L
+
+# Whether each already-derived key can be used as an environment name.
+# Vectorized C (nchar), so the warm path pays one pass over the key vector.
+.cache_key_usable <- function(keys) {
+  nchar(keys, type = "bytes") <= .CACHE_KEY_MAX_BYTES
+}
+
 # Look up `key` in the named cache. Returns the stored value (which may be
-# NULL), or .rurl_cache_sentinel on a miss / when the cache is disabled.
+# NULL), or .rurl_cache_sentinel on a miss / when the cache is disabled / when
+# the key is too long to be a variable name.
 .cache_get <- function(cache_name, key) {
   if (!.cache_enabled(cache_name)) {
     return(.rurl_cache_sentinel)
   }
   env <- .rurl_cache[[cache_name]]
   key <- .cache_key_ascii(key)
+  if (!.cache_key_usable(key)) {
+    return(.rurl_cache_sentinel)
+  }
   if (exists(key, envir = env, inherits = FALSE)) {
     get(key, envir = env, inherits = FALSE)
   } else {
@@ -208,9 +227,11 @@ rurl_clear_caches <- function() {
 
 # Store `value` under an already-ASCII-derived `key` (see .cache_key_ascii()).
 # Split out so .cache_set_many() can derive the whole key vector in one
-# vectorized call instead of once per element on the cold parse path.
+# vectorized call instead of once per element on the cold parse path. A key too
+# long to be a variable name is not stored (see .CACHE_KEY_MAX_BYTES), and is
+# skipped before the bound check so it never triggers a full_parse reset.
 .cache_set_derived <- function(cache_name, key, value) {
-  if (!.cache_enabled(cache_name)) {
+  if (!.cache_enabled(cache_name) || !.cache_key_usable(key)) {
     return(invisible(NULL))
   }
   env <- .rurl_cache[[cache_name]]
@@ -229,7 +250,8 @@ rurl_clear_caches <- function() {
 # Batch lookup: return a list aligned to `keys`, each element the stored value
 # (which may be NULL) or .rurl_cache_sentinel on a miss / when the cache is
 # disabled. One mget() over the whole key vector powers the vector-level warm
-# path in ._parse_urls_cached(). `keys` must already be unique.
+# path in ._parse_urls_cached(). `keys` must already be unique. A key too long
+# to be a variable name reads as a miss and is kept out of the mget() call.
 .cache_get_many <- function(cache_name, keys) {
   n <- length(keys)
   if (n == 0L) {
@@ -240,12 +262,25 @@ rurl_clear_caches <- function() {
   }
   env <- .rurl_cache[[cache_name]]
   keys <- .cache_key_ascii(keys)
-  mget(
-    keys,
-    envir = env,
-    inherits = FALSE,
-    ifnotfound = list(.rurl_cache_sentinel)
-  )
+  usable <- .cache_key_usable(keys)
+  if (all(usable)) {
+    return(mget(
+      keys,
+      envir = env,
+      inherits = FALSE,
+      ifnotfound = list(.rurl_cache_sentinel)
+    ))
+  }
+  out <- rep(list(.rurl_cache_sentinel), n)
+  if (any(usable)) {
+    out[usable] <- mget(
+      keys[usable],
+      envir = env,
+      inherits = FALSE,
+      ifnotfound = list(.rurl_cache_sentinel)
+    )
+  }
+  out
 }
 
 # Batch store: assign each value under its key. Keys are ASCII-derived once for
