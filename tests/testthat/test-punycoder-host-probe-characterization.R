@@ -402,9 +402,13 @@ test_that("the per-label call misses criterion 4 (decoded label is xn--)", {
     ),
     "xn--xn---ooa"
   )
-  expect_identical(
-    punycoder::puny_decode("xn--xn---ooa", strict = FALSE), "xn--ä"
-  )
+  # puny_decode() returns UTF-8 bytes without an encoding mark, so under a
+  # non-UTF-8 locale (the gate's LC_ALL=C cell) the strings compare unequal;
+  # compare the bytes. The probe itself only tests the ASCII "xn--" prefix.
+  decoded_bytes <- function(label) {
+    charToRaw(punycoder::puny_decode(label, strict = FALSE))
+  }
+  expect_identical(decoded_bytes("xn--xn---ooa"), charToRaw("xn--ä"))
   # The decode must be the lenient one: the strict decode applies STD3 and
   # errors on a label the relaxed call accepts, such as "a_" + U+00E4.
   expect_identical(
@@ -415,10 +419,8 @@ test_that("the per-label call misses criterion 4 (decoded label is xn--)", {
     "xn--a_-wia"
   )
   expect_error(punycoder::puny_decode("xn--a_-wia", strict = TRUE))
-  expect_identical(punycoder::puny_decode("xn--a_-wia", strict = FALSE), "a_ä")
-  expect_identical(
-    punycoder::puny_decode("xn--xn--_-kra", strict = FALSE), "xn--_ä"
-  )
+  expect_identical(decoded_bytes("xn--a_-wia"), charToRaw("a_ä"))
+  expect_identical(decoded_bytes("xn--xn--_-kra"), charToRaw("xn--_ä"))
 })
 
 test_that("cross-label Bidi fails the whole host but not each label alone", {
