@@ -159,7 +159,7 @@ count_word_near <- function(text, phrase, before = 40L, after = 80L) {
 # different lines -- "The ten" ending one line and "migration rows" opening the
 # next. Scanning the raw line would report "no count nearby" for a perfectly
 # correct sentence. Table rows are their own paragraph: a `|` line is one record
-# and must never be glued to its neighbours.
+# and must never be glued to its neighbors.
 paragraph_text <- function(lines, k) {
   if (!nzchar(trimws(lines[[k]]))) {
     return("")

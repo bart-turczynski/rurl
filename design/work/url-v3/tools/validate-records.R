@@ -296,7 +296,7 @@ psd_closure_failures <- function(ln, cells, fields, contract_exists, adr_exists)
       }
 
       ## (c) at least one cell the row names is owned by the leaf the row
-      ## names. Rows legitimately mention a neighbouring contract's cell for
+      ## names. Rows legitimately mention a neighboring contract's cell for
       ## contrast (`clean_url` in the key row), so this is "at least one",
       ## not "all" — but it still fails a row assigned to the wrong owner,
       ## which (a) and (b) both pass.

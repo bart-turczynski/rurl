@@ -44,7 +44,7 @@ records **without altering their substance**. `record-schemas.yaml:owner-decisio
 is defined as the *minimum* required field set that P0.1–P0.3 already satisfy;
 records may carry extra fields (e.g. P0.1's `owner_forge_identity`). The
 validator confirms this: P0.1, P0.2, and P0.3 pass unchanged. Any schema that
-could not represent these fields would be incomplete — not a licence to rewrite
+could not represent these fields would be incomplete — not a license to rewrite
 the decision.
 
 ## Completion rule (G0.3)

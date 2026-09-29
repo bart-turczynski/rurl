@@ -447,7 +447,7 @@ these are stable identity keys — a Unicode host and its A-label share
 one \code{domain_ascii} — so consumers can build an encoding-independent key
 from a single parse. NA under the same conditions as \code{domain}.
 \item \code{tld_ascii}, \code{tld_unicode}: The public suffix (TLD) in both
-canonical spellings, the \code{tld} analogue of \code{domain_ascii}/
+canonical spellings, the \code{tld} analog of \code{domain_ascii}/
 \code{domain_unicode}. NA under the same conditions as \code{tld}.
 \item \code{is_ip_host}: Logical, TRUE if the host is an IP address.
 \item \code{clean_url}: A normalized canonical key reconstructed from

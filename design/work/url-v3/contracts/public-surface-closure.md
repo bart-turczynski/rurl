@@ -107,7 +107,7 @@ plus one envelope edit deleting a transcribed export count. What the re-check
 found, per clause:
 
 - **I1 — holds, and the drift moved toward it.** The envelope edit deleted the
-  literal count from the register's `completion_rule` in favour of a derived
+  literal count from the register's `completion_rule` in favor of a derived
   bijection, which is what I1 demands. The only numerals left in artifact 4 are
   this file's header comment recounting the stale prose that was *removed* — a
   description of the failure mode, not a normative count.
