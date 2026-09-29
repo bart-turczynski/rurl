@@ -84,16 +84,30 @@ five \code{scheme_acceptance = "web"} admits), \code{allowed} (only when
 whose i-th element is a character vector of the scheme facts observed
 (\code{character(0)} when none). The tokens are \code{"no-scheme"},
 \code{"special-scheme"}, \code{"non-special-scheme"},
-\code{"outside-web-acceptance"} and \code{"not-in-allowlist"}.
+\code{"outside-web-acceptance"}, \code{"no-authority"} and
+\code{"not-in-allowlist"}.
 
-There is deliberately no token for \dQuote{carries no authority}. It is
-the natural fact to want for \code{mailto:} and \code{javascript:}, but
-it cannot be computed from the public parse record:
+\code{"no-authority"} marks a URL that has a scheme but carries no
+authority: \code{mailto:someone@example.com}, \code{javascript:alert(1)},
+\code{foo:bar}. It is reported when all three hold: the input has no
+\code{//} after its scheme colon; the parse record's \code{host} is
+\code{NA}; and, under \code{url_standard = "whatwg"}, the scheme is
+non-special. The last condition exists because WHATWG gives every
+special-scheme URL a host, with or without \code{//}:
+\code{http:example.com} parses to host \code{example.com}, and
+\code{file:foo} is the same URL as \code{file:///foo}. Under
+\code{url_standard = "rfc3986"} an authority exists only after \code{//}
+(RFC 3986 section 3), so \code{http:example.com} does get the token there.
+A row with no scheme never gets it: without a scheme there is no
+scheme-driven authority question to answer.
+
+The token is computed from the parse, not from \code{\link{get_host}}.
+Under \code{scheme_acceptance = "general"},
 \code{get_host("mailto:someone@example.com")} returns
-\code{"example.com"}, reading the \code{@} as a userinfo delimiter, so a
-token derived from host presence would be wrong for exactly the schemes it
-is most wanted for. Reporting a fact this package cannot compute correctly
-would be worse than not reporting it.
+\code{"example.com"}: that is the first recipient's domain, exposed as
+extraction metadata, not an authority. The parse record agrees that the
+URL has none: its \code{host} is \code{NA} and its path is
+\code{someone@example.com}.
 }
 \description{
 Tabular companion to \code{\link{get_scheme}} and
