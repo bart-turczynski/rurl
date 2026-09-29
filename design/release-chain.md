@@ -6,6 +6,14 @@ though nothing in the tree encodes it. This is that record.
 
 ## Order
 
+**Correction 2026-09-29: `rurl` shipped as 3.0.1, not 3.0.0.** The 3.0.0
+submission failed CRAN's incoming pre-tests on 2026-09-06, and the fix reached
+CRAN as **3.0.1** on 2026-09-09 (`cran-comments.md`, the `## rurl 3.0.1`
+heading in `NEWS.md`, tag `v3.0.1`). There is no `v3.0.0` tag. The diagram and
+the paragraph under it keep the 2026-09-06 plan as written. The downstream
+floors moved with it: `pagerankr`, `sitemapr` and `robotstxtr` now all require
+`rurl (>= 3.0.1)`, and CRAN serves `pagerankr` 0.1.0.
+
 **Corrected 2026-09-06.** The version below replaces an order that put `rurl`
 last. That order was correct when it was written on 2026-07-18 — `rurl` then
 carried `Remotes:` git pins on unreleased siblings, and CRAN held `pslr` 1.0.1
@@ -48,7 +56,9 @@ code work stays in `RURL-*`.
 **Drain the backlogs first, then submit** (2026-08-12). Nothing is submitted
 while a repository still has codable work queued. The paired decision is that
 `rurl` ships as **3.0.0** with no further version bumps — see `CONTRIBUTING.md`
-for what that does to the release checklist.
+for what that does to the release checklist. That held until CRAN's pre-tests
+rejected 3.0.0 on 2026-09-06. The release shipped as 3.0.1, and the freeze
+ended with it.
 
 ## Pinning a sibling: use a commit SHA, not a tag
 
