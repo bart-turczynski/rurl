@@ -36,6 +36,7 @@ test_that("the diagnostics vocabulary is the pinned closed set", {
       "host-charset-shimmed",
       "domain-label-too-long", "domain-name-too-long", "domain-empty-label",
       "domain-hyphen-violation", "domain-std3-violation",
+      "domain-invalid-ace-label",
       # Layer 5 SELECTED diagnostics (ADR 0012 D5, RURL-izsouyxs).
       "invalid-URL-unit", "invalid-credentials",
       "unicode-outside-rfc3986-uri", "transform-skipped-ineligible-scheme",

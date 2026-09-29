@@ -30,7 +30,8 @@
 # policy and are left to get_url_diagnostics().
 .HOST_SHAPE_DIAGNOSTICS <- c(
   "domain-label-too-long", "domain-name-too-long", "domain-empty-label",
-  "domain-hyphen-violation", "domain-std3-violation", "host-charset-shimmed",
+  "domain-hyphen-violation", "domain-std3-violation",
+  "domain-invalid-ace-label", "host-charset-shimmed",
   "ipv4-number-form", "ipv4-non-dotted", "ipv4-short-form",
   "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero", "ipv4-out-of-range"
 )
@@ -43,6 +44,7 @@
 .HOST_SEO_FOOTGUNS <- c(
   "domain-label-too-long", "domain-name-too-long", "domain-empty-label",
   "domain-hyphen-violation", "domain-std3-violation",
+  "domain-invalid-ace-label",
   "ipv4-number-form", "ipv4-non-dotted", "ipv4-short-form",
   "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero", "ipv4-out-of-range"
 )

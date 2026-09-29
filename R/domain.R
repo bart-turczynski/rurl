@@ -402,9 +402,25 @@
 #     NA/non-NA reading is then an independent fact about that one check
 #     alone, regardless of how many OTHER checks are simultaneously failing.
 #   * The 3 isolated calls (`call_a`/`call_b`/`call_c`, one per flag) are only
-#     trustworthy when `baseline` is non-NA; a NA baseline means a structural
-#     problem outside all 3 flags (only "domain-empty-label" in practice, e.g.
-#     "a..com"), never "fails all 3 checks".
+#     trustworthy when `baseline` is non-NA; a NA baseline means a problem
+#     outside all 3 flags, never "fails all 3 checks". It has three causes: an
+#     empty label ("a..com", "domain-empty-label"), an invalid ACE label
+#     ("xn--a.com", "domain-invalid-ace-label"), and a cross-label Bidi failure
+#     (criterion 9 of UTS #46 section 4.1 in a Bidi domain name), which no token
+#     reports. On such a host the three flag facts are unknown and read FALSE.
+#   * `domain-invalid-ace-label` (RURL-vicyvlvh, ruling RUL-023) is decided PER
+#     LABEL, never from `baseline`: each label beginning `xn--` (ASCII
+#     case-insensitive) goes ALONE through the all-relaxed call, which is
+#     WHATWG's non-strict UTS #46 processing, so an empty label or a Bidi
+#     neighbor elsewhere in the host neither masks nor mimics it. The call
+#     rejects a failed decode, an empty or all-ASCII result, and a decoded
+#     label breaking Validity Criteria 1, 6, 7, 8 or single-label 9. It does
+#     NOT enforce criterion 4 ("If not CheckHyphens, the label must not begin
+#     with 'xn--'"), so rurl checks the decoded label for that itself.
+#     Criterion 5 (no U+002E) cannot fail: Punycode deltas never yield an ASCII
+#     code point, and the label was split on dots. The characterization tests
+#     pin all of this; `?get_url_diagnostics` states the completeness
+#     guarantee consumers rely on.
 #   * `domain-empty-label` is a direct strsplit check, not a probe call: it is
 #     cheaper than a scoped `validate_domain()` call and does not compete with
 #     `host_normalize()`'s ambiguity at all (it never inspects other rules).
@@ -436,9 +452,9 @@
 # 4-call probe cost negligible -- ~12 microseconds/host -- so no cheaper
 # design is required here).
 #
-# Returns a list of 5 parallel logical vectors, same length as `host`:
+# Returns a list of 6 parallel logical vectors, same length as `host`:
 #   label_too_long, name_too_long, empty_label, hyphen_violation,
-#   std3_violation.
+#   std3_violation, invalid_ace_label.
 .punycoder_host_probe <- function(host) {
   n <- length(host)
   label_too_long <- rep(FALSE, n)
@@ -446,12 +462,14 @@
   empty_label <- rep(FALSE, n)
   hyphen_violation <- rep(FALSE, n)
   std3_violation <- rep(FALSE, n)
+  invalid_ace_label <- rep(FALSE, n)
   out <- list(
     label_too_long = label_too_long,
     name_too_long = name_too_long,
     empty_label = empty_label,
     hyphen_violation = hyphen_violation,
-    std3_violation = std3_violation
+    std3_violation = std3_violation,
+    invalid_ace_label = invalid_ace_label
   )
 
   probe_idx <- which(!is.na(host) & nzchar(host))
@@ -473,6 +491,8 @@
     function(labels) !all(nzchar(labels)) || length(labels) == 0L,
     logical(1)
   )
+
+  out$invalid_ace_label[probe_idx] <- .invalid_ace_label_any(labels_list)
 
   # Accepted design (T5): all-relaxed baseline, then one flag enabled at a
   # time. Only rows where the baseline succeeds feed the 3 isolated calls.
@@ -514,4 +534,32 @@
   }
 
   out
+}
+
+# For each host's label vector, TRUE when any label beginning `xn--` is not a
+# genuine A-label (see the design summary above). Only ASCII letters are folded
+# to lowercase, which is all the UTS #46 mapping step does to an ASCII label;
+# a non-ASCII code point left in the label fails the relaxed call, as UTS #46
+# section 4 step 4 requires. Each distinct label is probed once.
+.invalid_ace_label_any <- function(labels_list) {
+  all_labels <- unlist(labels_list, use.names = FALSE)
+  ace <- unique(grep("^[Xx][Nn]--", all_labels, value = TRUE))
+  if (length(ace) == 0L) {
+    return(rep(FALSE, length(labels_list)))
+  }
+  folded <- chartr(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", ace
+  )
+  relaxed <- punycoder::host_normalize(
+    folded, check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
+  )
+  bad <- is.na(relaxed)
+  decoded_ok <- which(!bad)
+  if (length(decoded_ok) > 0L) {
+    # Criterion 4, which the relaxed call does not enforce.
+    decoded <- punycoder::puny_decode(folded[decoded_ok], strict = FALSE)
+    bad[decoded_ok] <- startsWith(decoded, "xn--")
+  }
+  invalid <- ace[bad]
+  vapply(labels_list, function(labels) any(labels %in% invalid), logical(1))
 }
