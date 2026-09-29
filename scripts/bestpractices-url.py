@@ -77,7 +77,7 @@ PROPERTY_LINE = re.compile(r"^ {10}([a-z_]+):\s*(\S.*)?$")
 # reason `check-citation.py` is: each repository has to work from a fresh
 # clone on its own. The digest below covers the implementation -- every byte
 # below the module docstring, minus this assignment -- so the prose may differ
-# per repository while any change to behaviour is caught. It is verified on
+# per repository while any change to behavior is caught. It is verified on
 # every run, including `--self-test`, which the pre-push hook runs whenever
 # this file changes. Whether the copies agree is one grep:
 #
@@ -85,7 +85,7 @@ PROPERTY_LINE = re.compile(r"^ {10}([a-z_]+):\s*(\S.*)?$")
 #
 # One line out means every copy is in sync. Re-bless it in all copies in the
 # same change, never in one. The mechanism is check-citation.py's (SEOR-tssbiedr).
-IMPLEMENTATION_DIGEST = "8812f4578a0de769"
+IMPLEMENTATION_DIGEST = "b1bf15292825be4f"
 
 
 def module_docstring_end(source: str) -> int:

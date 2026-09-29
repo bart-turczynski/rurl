@@ -77,7 +77,7 @@ from pathlib import Path
 # docstring, minus this assignment -- so the prose above stays free to differ
 # per repository, which it must (each repository's `codemeta.json` is a
 # different situation, and four separate rewrites of that bullet are what
-# produced the five sums), while any change to behaviour is caught.
+# produced the five sums), while any change to behavior is caught.
 #
 # Bytes rather than a parse-tree hash on purpose: an `ast.dump()` digest would
 # be hostage to the Python version running the gate, which is the same class of
@@ -93,7 +93,7 @@ from pathlib import Path
 #
 # One line out means eight implementations in sync. Re-bless it in all eight
 # repositories in the same change, never in one (SEOR-tssbiedr).
-IMPLEMENTATION_DIGEST = "f6f0e5a8b5cb6218"
+IMPLEMENTATION_DIGEST = "dcbd2df68decbdd3"
 
 
 # A top-level `key: value` line in a CFF file: no leading whitespace, and not a
@@ -142,7 +142,7 @@ def module_docstring_end(source: str) -> int:
 
 
 def implementation_source(source: str) -> str:
-    """The bytes of this file that define its behaviour.
+    """The bytes of this file that define its behavior.
 
     Everything up to and including the module docstring is prose and is
     excluded, as is the `IMPLEMENTATION_DIGEST` assignment itself -- otherwise
