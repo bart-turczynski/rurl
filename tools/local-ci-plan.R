@@ -30,6 +30,7 @@
 #   Rscript tools/local-ci-plan.R --list [context]   # human-readable plan
 #   Rscript tools/local-ci-plan.R --script <job>     # flattened script lines
 #   Rscript tools/local-ci-plan.R --image <job>      # resolved image
+#   Rscript tools/local-ci-plan.R --self-test        # fixture cases, no config
 #
 # Context flags (all optional, defaulting to an empty value):
 #   --branch <name>   $CI_COMMIT_BRANCH      --tag <name>  $CI_COMMIT_TAG
@@ -162,6 +163,115 @@ job_verdict <- function(job, vars, ignore_rules) {
   list(run = FALSE, why = "no rule matched")
 }
 
+# ---- scripts -----------------------------------------------------------------
+
+# YAML aliases arrive as nested lists, so a `script:` built from an anchor is a
+# list-of-lists. Flattening is what turns it back into the line sequence the
+# runner executes.
+job_script <- function(job) {
+  lines <- as.character(unlist(c(job[["before_script"]], job[["script"]]),
+                               use.names = FALSE))
+  if (any(grepl("\n", lines, fixed = TRUE))) {
+    die("a script entry spans multiple lines; the runner emits one per line")
+  }
+  lines
+}
+
+# What `--script` prints: the text tools/local-ci.sh writes after its own
+# `set -ex` line and hands to `bash`. One entry per line, then a blank line.
+render_script <- function(entries) {
+  paste0(c(entries, ""), "\n", collapse = "")
+}
+
+# One job's script block in the `--list` plan.
+render_plan_script <- function(entries) {
+  paste0(c(sprintf("    $ %s", entries), ""), "\n", collapse = "")
+}
+
+# ---- self-test ---------------------------------------------------------------
+
+# Fixtures are inline CI configs, parsed with the same `yaml` reader the real
+# run uses; no file, no git, no docker. The shell cases run the rendered script
+# under `bash` behind the same `set -ex` preamble tools/local-ci.sh writes, so
+# they prove what the job shell does with it, not only what the text is.
+self_test <- function() {
+  st <- new.env()
+  st$pass <- 0L
+  st$fail <- character(0)
+  expect <- function(what, ok) {
+    if (isTRUE(ok)) {
+      st$pass <- st$pass + 1L
+    } else {
+      st$fail <- c(st$fail, what)
+    }
+  }
+  fixture <- function(text) yaml::yaml.load(text)
+  run_bash <- function(script) {
+    path <- tempfile(fileext = ".sh")
+    on.exit(unlink(path))
+    writeLines(paste0("set -ex\n", script), path, sep = "")
+    out <- suppressWarnings(system2("bash", path, stdout = TRUE,
+                                    stderr = TRUE))
+    status <- attr(out, "status")
+    list(status = if (is.null(status)) 0L else status, out = out)
+  }
+
+  # Single-line entries, one of them arriving through an anchor alias, which
+  # yaml hands over as a nested list.
+  single <- fixture(paste(
+    ".deps: &deps",
+    "  - 'apt-get update -qq'",
+    "  - 'apt-get install -y r-cran-yaml'",
+    "job:",
+    "  before_script:",
+    "    - 'echo before'",
+    "  script:",
+    "    - *deps",
+    "    - 'Rscript -e ''cat(1)'''",
+    sep = "\n"
+  ))
+  entries <- job_script(single$job)
+  expect("single-line: anchor flattened, before_script first",
+         identical(entries, c("echo before", "apt-get update -qq",
+                              "apt-get install -y r-cran-yaml",
+                              "Rscript -e 'cat(1)'")))
+  expect("single-line: --script text is one line per entry plus a blank",
+         identical(render_script(entries), paste0(
+           "echo before\napt-get update -qq\n",
+           "apt-get install -y r-cran-yaml\nRscript -e 'cat(1)'\n\n")))
+  expect("single-line: --list text prefixes every entry",
+         identical(render_plan_script(entries), paste0(
+           "    $ echo before\n    $ apt-get update -qq\n",
+           "    $ apt-get install -y r-cran-yaml\n",
+           "    $ Rscript -e 'cat(1)'\n\n")))
+  expect("empty script renders as the bare separator",
+         identical(render_script(character(0)), "\n"))
+
+  # errexit: a failing single-line entry stops the job before the next one.
+  res <- run_bash(render_script(c("echo one", "false", "echo reached")))
+  expect("single-line: a failing entry fails the job",
+         res$status != 0L && !any(res$out == "reached"))
+  res <- run_bash(render_script(c("echo one", "echo two")))
+  expect("single-line: passing entries pass the job",
+         res$status == 0L && any(res$out == "two"))
+
+  cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
+  if (length(st$fail)) {
+    for (f in st$fail) cat(sprintf("  FAILED: %s\n", f))
+    stop("local-ci-plan self-test: FAIL", call. = FALSE)
+  }
+  cat("VERDICT PASS\n")
+  invisible(TRUE)
+}
+
+if ("--self-test" %in% args) {
+  if (!requireNamespace("yaml", quietly = TRUE)) {
+    die("the `yaml` package is required for the self-test")
+  }
+  self_test()
+  quit(save = "no", status = 0L)
+}
+
 # ---- config ------------------------------------------------------------------
 
 if (!file.exists(CONFIG)) {
@@ -184,18 +294,6 @@ job_or_die <- function(nm) {
         paste(job_names, collapse = ", "), ")")
   }
   cfg[[nm]]
-}
-
-# YAML aliases arrive as nested lists, so a `script:` built from an anchor is a
-# list-of-lists. Flattening is what turns it back into the line sequence the
-# runner executes.
-job_script <- function(job) {
-  lines <- as.character(unlist(c(job[["before_script"]], job[["script"]]),
-                               use.names = FALSE))
-  if (any(grepl("\n", lines, fixed = TRUE))) {
-    die("a script entry spans multiple lines; the runner emits one per line")
-  }
-  lines
 }
 
 job_image <- function(job) {
@@ -221,8 +319,7 @@ selected <- Filter(
 # ---- modes -------------------------------------------------------------------
 
 if ("--script" %in% args) {
-  cat(job_script(job_or_die(flag_value("--script"))), sep = "\n")
-  cat("\n")
+  cat(render_script(job_script(job_or_die(flag_value("--script")))))
 } else if ("--image" %in% args) {
   cat(job_image(job_or_die(flag_value("--image"))), "\n", sep = "")
 } else if ("--list" %in% args) {
@@ -242,8 +339,7 @@ if ("--script" %in% args) {
   cat("\n")
   for (nm in selected) {
     cat(sprintf("[%s] image=%s\n", nm, job_image(cfg[[nm]])))
-    cat(paste0("    $ ", job_script(cfg[[nm]])), sep = "\n")
-    cat("\n")
+    cat(render_plan_script(job_script(cfg[[nm]])))
   }
 } else {
   cat(selected, sep = "\n")
