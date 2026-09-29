@@ -526,3 +526,9 @@ serialize_url <- function(url,
   }
   out
 }
+
+#' @rdname serialize_url
+#' @details `serialise_url()` is the British-spelling alias of
+#'   `serialize_url()`: the same function under a second name.
+#' @export
+serialise_url <- serialize_url

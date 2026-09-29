@@ -14,7 +14,8 @@ get_path(
   path_encoding = c("keep", "encode", "decode"),
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general"),
-  url_standard = NULL
+  url_standard = NULL,
+  path_normalisation = NULL
 )
 }
 \arguments{
@@ -67,9 +68,11 @@ index/default pages. Defaults to "keep".
 (case-insensitive).}
 }}
 
-\item{path_normalization}{How to normalize path structure. Defaults to
-"none". rurl owns dot-segment resolution: the path is read from the input
-verbatim (never from a pre-normalized path), so \code{"none"} preserves
+\item{path_normalization, path_normalisation}{How to normalize path
+structure. Defaults to "none". \code{path_normalisation} is the British
+spelling, accepted as an alias: pass one or the other, not both. rurl owns
+dot-segment resolution: the path is read from the input verbatim (never
+from a pre-normalized path), so \code{"none"} preserves
 \code{.} / \code{..} segments (\code{/a/../b} stays \code{/a/../b}) and only
 the settings below change them. Resolution follows RFC 3986 section 5.2.4 and
 acts on \emph{literal} \code{.}/\code{..} segments only — a percent-encoded

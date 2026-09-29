@@ -102,6 +102,16 @@ url_profile <- function(profile = NULL, ...) {
         call. = FALSE
       )
     }
+    # The British alias `path_normalisation` (SEOR-oytkybis) is accepted and
+    # resolved to its US name before the knob-name check.
+    if ("path_normalisation" %in% nms) {
+      alias_value <- .resolve_path_normalisation_alias(
+        "path_normalization" %in% nms, supplied$path_normalisation
+      )
+      supplied <- supplied[nms != "path_normalisation"]
+      supplied["path_normalization"] <- list(alias_value)
+      nms <- names(supplied)
+    }
     unknown <- setdiff(nms, names(.profile_knob_choices))
     if (length(unknown) > 0L) {
       stop(

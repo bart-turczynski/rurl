@@ -2,9 +2,17 @@
 % Please edit documentation in R/serialize.R
 \name{serialize_url}
 \alias{serialize_url}
+\alias{serialise_url}
 \title{Serialize URLs to a standard's own full-string form}
 \usage{
 serialize_url(
+  url,
+  standard = c("whatwg", "rfc3986"),
+  form = c("source", "normalized"),
+  engine = NULL
+)
+
+serialise_url(
   url,
   standard = c("whatwg", "rfc3986"),
   form = c("source", "normalized"),
@@ -37,6 +45,10 @@ Renders each URL as the selected standard would serialize it: the
 \strong{full string}, credentials and fragment included, with a present-but-empty
 \verb{?} or \verb{#} delimiter preserved. This is rurl's \emph{standard serialization}
 surface, and it is deliberately \strong{not} \code{\link[=get_clean_url]{get_clean_url()}}.
+}
+\details{
+\code{serialise_url()} is the British-spelling alias of
+\code{serialize_url()}: the same function under a second name.
 }
 \section{Which surface you want}{
 

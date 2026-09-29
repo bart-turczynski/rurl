@@ -236,6 +236,7 @@ canonical_join <- function(data_A, data_B,
   "trailing_slash_handling",  # row 6
   "index_page_handling",      # row 7
   "path_normalization",       # row 8
+  "path_normalisation",       # row 8, British alias (SEOR-oytkybis)
   "subdomain_levels_to_keep", # row 10
   "host_encoding",            # row 11
   "path_encoding",            # row 12

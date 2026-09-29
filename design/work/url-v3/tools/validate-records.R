@@ -906,8 +906,8 @@ if ("--self-test" %in% .vr_args) {
   changed <- setdiff(a, b_dis)
   if (length(changed) != 3L ||
         sum(startsWith(changed, "| `zz_probe_export` | TODO")) != 1L ||
-        !any(grepl("^\\| exported functions \\| 42 \\|", changed)) ||
-        !any(grepl("^\\| \\*\\*total\\*\\* \\| \\*\\*64\\*\\* \\|", changed)))
+        !any(grepl("^\\| exported functions \\| 43 \\|", changed)) ||
+        !any(grepl("^\\| \\*\\*total\\*\\* \\| \\*\\*65\\*\\* \\|", changed)))
     fail(sprintf("new-export: roster diff is not {row, exports count, total}: %s",
                  paste(changed, collapse = " / ")))
 
