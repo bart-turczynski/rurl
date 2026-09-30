@@ -189,6 +189,39 @@ test_that("hyphen, STD3 and length facts alone never fire the token", {
   }
 })
 
+test_that("rurl's decode judges an A-label's non-LDH basic code point", {
+  # "xn--a_-wia" is "a_" + U+00E4: RFC 3492 decodes it and UseSTD3ASCIIRules
+  # is false under WHATWG, so it is a genuine A-label. punycoder 1.3.0's
+  # decoder rejects it, which put the token on it and hid the STD3 fact until
+  # rurl decoded ACE payloads itself (RURL-mfmgauos). Holds under either
+  # punycoder version.
+  url <- "http://xn--a_-wia.example/"
+  for (s in c("whatwg", "rfc3986")) {
+    expect_identical(diag_list(url, s)[[1]], "domain-std3-violation", info = s)
+  }
+  probe <- rurl:::.punycoder_host_probe(
+    c("xn--a_-wia.example", "xn--a_-wia.example.", "XN--A_-WIA.example")
+  )
+  expect_identical(probe$invalid_ace_label, c(FALSE, FALSE, FALSE))
+  expect_identical(probe$std3_violation, c(TRUE, TRUE, TRUE))
+})
+
+test_that("a decoded label is validated as it stands, never after mapping", {
+  # host_normalize() maps and NFC-normalizes Unicode input, so rurl requires
+  # the decoded label to come back unchanged: U+00C4 (mapped), "a" + U+0308
+  # (not NFC) and U+00AD (ignored) are not genuine A-labels even though their
+  # mapped forms are valid.
+  labels <- c("xn--7ba", "xn--a-ccb", "xn--ab-5da")
+  expect_identical(
+    vapply(substring(labels, 5L), rurl:::.rfc3492_decode, character(1),
+           USE.NAMES = FALSE),
+    c("Ä", "ä", "a­b")
+  )
+  expect_identical(
+    rurl:::.ace_label_table(as.list(labels))$invalid, labels
+  )
+})
+
 test_that("criterion 4 co-fires with the strict hyphen fact", {
   # "xn--" + U+00E4 breaks criterion 2 (hyphens in positions 3-4, a
   # CheckHyphens rule, reported as domain-hyphen-violation) and criterion 4
