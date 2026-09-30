@@ -173,8 +173,10 @@
 # Vectorized Punycode -> Unicode decoder. Batch analog of
 # .punycode_to_unicode() preserving its exact per-host semantics: NA -> NA,
 # "" -> "", and any other host decoded per label with the lenient
-# (strict = FALSE) decode, an undecodable label falling back to its original
-# spelling, iconv sanitizing to valid UTF-8, and the labels rejoined with ".".
+# (strict = FALSE) decode, .ace_decode_settle() retrying a rejected A-label
+# with rurl's own decode and keeping the original spelling of a label that
+# still fails or holds a URL delimiter, iconv sanitizing to valid UTF-8, and
+# the labels rejoined with ".".
 # All hosts are split to labels once and decoded in a single flattened
 # puny_decode call (regrouped by contiguous offsets, not split(), to avoid
 # factor-level ordering pitfalls); on a batch throw or shape mismatch it falls
@@ -229,8 +231,7 @@
       decoded_flat <- unlist(decoded_list, use.names = FALSE)
     }
 
-    na_lab <- is.na(decoded_flat)
-    decoded_flat[na_lab] <- flat[na_lab]
+    decoded_flat <- .ace_decode_settle(flat, decoded_flat)
     sane <- iconv(decoded_flat, from = "UTF-8", to = "UTF-8", sub = "")
     sane[is.na(sane)] <- ""
 
@@ -245,6 +246,38 @@
 
   result[process] <- decoded_uniq[match(d, uniq_hosts)]
   unname(result)
+}
+
+# Settles each label after punycoder's lenient decode (RURL-oizpyvdz). An
+# `xn--` label (any ASCII case) punycoder rejected is decoded by
+# `.rfc3492_decode()`: punycoder 1.3.0 rejects non-LDH basic code points
+# (`xn--a_-wia`), which RFC 3492 section 6.2 accepts and UTS #46 section 4
+# decodes with. An `xn--` label whose payload holds a URL delimiter
+# (# / : ? @) keeps its spelling whichever decoder would have read it, so a
+# rendered host never gains one (RFC 3986 section 3.2.2 reg-name). Any other
+# label a decode fails or empties keeps its spelling too.
+#
+# punycoder 1.2.1 rejected the same delimiter labels, except a `:` whose
+# prefix is not scheme-shaped, which it decoded. Such a label reaches the
+# helper only as a percent-decoded `%3A` under `rfc3986`; everywhere else the
+# rendering is byte-identical to 1.2.1's (measured on 36,149 fuzzed labels).
+# An amendment to ADR 0002 records this.
+#
+# The patterns match bytes (`useBytes = TRUE`) so a label that is not valid
+# UTF-8 neither warns nor throws; `.rfc3492_decode()` returns NA for it.
+.ace_decode_settle <- function(labels, decoded) {
+  ace <- grepl("^[Xx][Nn]--", labels, useBytes = TRUE)
+  delim <- ace & grepl("^[Xx][Nn]--.*[#/:?@]", labels, useBytes = TRUE)
+  retry <- ace & !delim & is.na(decoded)
+  if (any(retry)) {
+    payload <- sub("^[Xx][Nn]--", "", labels[retry], useBytes = TRUE)
+    decoded[retry] <- vapply(payload, .rfc3492_decode, character(1),
+      USE.NAMES = FALSE
+    )
+  }
+  keep <- delim | is.na(decoded) | (retry & !nzchar(decoded))
+  decoded[keep] <- labels[keep]
+  decoded
 }
 
 # Public Suffix List queries are delegated to the pslr package. rurl maps its
