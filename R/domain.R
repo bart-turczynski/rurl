@@ -410,17 +410,21 @@
 #     reports. On such a host the three flag facts are unknown and read FALSE.
 #   * `domain-invalid-ace-label` (RURL-vicyvlvh, ruling RUL-023) is decided PER
 #     LABEL, never from `baseline`: each label beginning `xn--` (ASCII
-#     case-insensitive) goes ALONE through the all-relaxed call, which is
-#     WHATWG's non-strict UTS #46 processing, so an empty label or a Bidi
-#     neighbor elsewhere in the host neither masks nor mimics it. The call
-#     rejects a failed decode, an empty or all-ASCII result, and a decoded
-#     label breaking Validity Criteria 1, 6, 7, 8 or single-label 9. It does
-#     NOT enforce criterion 4 ("If not CheckHyphens, the label must not begin
-#     with 'xn--'"), so rurl checks the decoded label for that itself.
+#     case-insensitive) is judged ALONE, so an empty label or a Bidi neighbor
+#     elsewhere in the host neither masks nor mimics it. rurl decodes the
+#     payload itself (`.rfc3492_decode()`, RURL-mfmgauos), because punycoder's
+#     decoder moved under it once: 1.3.0 rejects non-LDH basic code points,
+#     which RFC 3492 and UTS #46 section 4 step 4 accept. A failed decode, an
+#     empty or all-ASCII result, and a decoded label beginning `xn--`
+#     (criterion 4, "If not CheckHyphens, the label must not begin with
+#     'xn--'") are rurl's own checks. Criteria 1, 6, 7, 8 and single-label 9
+#     come from the all-relaxed call (WHATWG's non-strict UTS #46 processing)
+#     on the decoded label, which must map to itself (`.ace_label_table()`).
 #     Criterion 5 (no U+002E) cannot fail: Punycode deltas never yield an ASCII
 #     code point, and the label was split on dots. The characterization tests
 #     pin all of this; `?get_url_diagnostics` states the completeness
-#     guarantee consumers rely on.
+#     guarantee consumers rely on. Genuine A-labels also reach the baseline
+#     decoded, for the same reason.
 #   * `domain-empty-label` is a direct strsplit check, not a probe call: it is
 #     cheaper than a scoped `validate_domain()` call and does not compete with
 #     `host_normalize()`'s ambiguity at all (it never inspects other rules).
@@ -492,7 +496,29 @@
     logical(1)
   )
 
-  out$invalid_ace_label[probe_idx] <- .invalid_ace_label_any(labels_list)
+  ace_table <- .ace_label_table(labels_list)
+  out$invalid_ace_label[probe_idx] <- .invalid_ace_label_any(
+    labels_list, ace_table$invalid
+  )
+
+  # Genuine A-labels reach punycoder already decoded (RURL-mfmgauos), so the
+  # baseline and the isolated calls below judge the same Unicode label UTS #46
+  # section 4 step 4 validates, and punycoder's own decoder is never on the
+  # path. Invalid ACE labels stay as written and fail the baseline as before.
+  if (length(ace_table$decoded) > 0L) {
+    has_ace <- which(vapply(
+      labels_list, function(labels) any(labels %in% names(ace_table$decoded)),
+      logical(1)
+    ))
+    h[has_ace] <- vapply(has_ace, function(j) {
+      labels <- labels_list[[j]]
+      hit <- labels %in% names(ace_table$decoded)
+      labels[hit] <- ace_table$decoded[labels[hit]]
+      # strsplit() dropped one trailing "" for a trailing dot; restore it.
+      trail <- if (endsWith(h[[j]], ".")) "." else ""
+      paste0(paste(labels, collapse = "."), trail)
+    }, character(1))
+  }
 
   # Accepted design (T5): all-relaxed baseline, then one flag enabled at a
   # time. Only rows where the baseline succeeds feed the 3 isolated calls.
@@ -536,30 +562,146 @@
   out
 }
 
-# For each host's label vector, TRUE when any label beginning `xn--` is not a
-# genuine A-label (see the design summary above). Only ASCII letters are folded
-# to lowercase, which is all the UTS #46 mapping step does to an ASCII label;
-# a non-ASCII code point left in the label fails the relaxed call, as UTS #46
-# section 4 step 4 requires. Each distinct label is probed once.
-.invalid_ace_label_any <- function(labels_list) {
+# RFC 3492 section 6.2 decode of one ACE payload (the label after `xn--`),
+# returning the decoded code points as a UTF-8 string, or NA on any failure.
+# rurl owns this decode (RURL-mfmgauos) so that the `domain-invalid-ace-label`
+# predicate and the relaxed baseline do not move when punycoder's decoder
+# does: punycoder 1.3.0 rejects non-LDH basic code points (`xn--a_-wia`),
+# which RFC 3492 accepts and UTS #46 section 4 step 4 decodes with. This is
+# not one of the ADR 0002 helpers, which stay on punycoder.
+#
+# Follows the RFC's reference decoder exactly: the basic string is everything
+# before the LAST delimiter, and only when that delimiter is not at position
+# 0; a digit outside a-z/A-Z/0-9, a truncated integer, overflow past
+# 0x7FFFFFFF, an inserted basic code point, or a result outside Unicode
+# scalar values fails. Arithmetic is in doubles, exact below 2^53.
+.rfc3492_decode <- function(payload) {
+  base <- 36
+  tmin <- 1
+  tmax <- 26
+  maxint <- 2147483647
+  adapt <- function(delta, numpoints, firsttime) {
+    delta <- if (firsttime) delta %/% 700 else delta %/% 2
+    delta <- delta + delta %/% numpoints
+    k <- 0
+    while (delta > ((base - tmin) * tmax) %/% 2) {
+      delta <- delta %/% (base - tmin)
+      k <- k + base
+    }
+    k + ((base - tmin + 1) * delta) %/% (delta + 38)
+  }
+  cp <- utf8ToInt(payload)
+  if (anyNA(cp) || any(cp >= 128L)) {
+    return(NA_character_)
+  }
+  delims <- which(cp == 45L)
+  b <- if (length(delims) > 0L) max(delims) - 1L else 0L
+  out <- if (b > 0L) cp[seq_len(b)] else integer(0)
+  pos <- if (b > 0L) b + 2L else 1L
+  n <- 128
+  i <- 0
+  bias <- 72
+  len <- length(cp)
+  while (pos <= len) {
+    oldi <- i
+    w <- 1
+    k <- base
+    repeat {
+      if (pos > len) {
+        return(NA_character_)
+      }
+      ch <- cp[pos]
+      pos <- pos + 1L
+      digit <- if (ch >= 48L && ch <= 57L) {
+        ch - 22L
+      } else if (ch >= 65L && ch <= 90L) {
+        ch - 65L
+      } else if (ch >= 97L && ch <= 122L) {
+        ch - 97L
+      } else {
+        return(NA_character_)
+      }
+      if (digit > (maxint - i) %/% w) {
+        return(NA_character_)
+      }
+      i <- i + digit * w
+      t <- if (k <= bias) tmin else if (k >= bias + tmax) tmax else k - bias
+      if (digit < t) {
+        break
+      }
+      if (w > maxint %/% (base - t)) {
+        return(NA_character_)
+      }
+      w <- w * (base - t)
+      k <- k + base
+    }
+    npts <- length(out) + 1
+    bias <- adapt(i - oldi, npts, oldi == 0)
+    if (i %/% npts > maxint - n) {
+      return(NA_character_)
+    }
+    n <- n + i %/% npts
+    i <- i %% npts
+    if (n < 128 || n > 1114111 || (n >= 55296 && n <= 57343)) {
+      return(NA_character_)
+    }
+    out <- append(out, as.integer(n), after = i)
+    i <- i + 1
+  }
+  intToUtf8(out)
+}
+
+# Decode each distinct label that begins `xn--` (ASCII case-insensitive) and
+# judge it against RUL-023's predicate. Returns a list: `invalid`, the labels
+# (as written) that are not genuine A-labels, and `decoded`, a character
+# vector of the genuine ones' decoded forms named by the label as written.
+#
+# Only ASCII letters are folded to lowercase, which is all the UTS #46 mapping
+# step does to an ASCII label. A label is invalid when rurl's RFC 3492 decode
+# fails (a non-ASCII code point in the label included, as section 4 step 4
+# requires), yields an empty or all-ASCII result, or yields a label beginning
+# `xn--` (criterion 4, which punycoder's relaxed call does not enforce). The
+# remaining section 4.1 criteria are judged by the relaxed `host_normalize()`
+# call on the DECODED label, which must come back as the same label: it maps
+# and NFC-normalizes Unicode input, so a decoded label carrying a mapped or
+# ignored code point, or one not in NFC, would otherwise be repaired rather
+# than rejected. The round trip goes through rurl's own decode, so punycoder's
+# decoder is never consulted.
+.ace_label_table <- function(labels_list) {
   all_labels <- unlist(labels_list, use.names = FALSE)
   ace <- unique(grep("^[Xx][Nn]--", all_labels, value = TRUE))
+  none <- list(invalid = character(0), decoded = character(0))
   if (length(ace) == 0L) {
-    return(rep(FALSE, length(labels_list)))
+    return(none)
+  }
+  decode <- function(labels) {
+    vapply(labels, function(x) .rfc3492_decode(substring(x, 5L)),
+           character(1), USE.NAMES = FALSE)
   }
   folded <- chartr(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", ace
   )
-  relaxed <- punycoder::host_normalize(
-    folded, check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
-  )
-  bad <- is.na(relaxed)
-  decoded_ok <- which(!bad)
-  if (length(decoded_ok) > 0L) {
-    # Criterion 4, which the relaxed call does not enforce.
-    decoded <- punycoder::puny_decode(folded[decoded_ok], strict = FALSE)
-    bad[decoded_ok] <- startsWith(decoded, "xn--")
+  decoded <- decode(folded)
+  all_ascii <- nchar(decoded, type = "bytes") == nchar(decoded, type = "chars")
+  bad <- is.na(decoded) | all_ascii | startsWith(decoded, "xn--")
+  check <- which(!bad)
+  if (length(check) > 0L) {
+    relaxed <- punycoder::host_normalize(
+      decoded[check],
+      check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
+    )
+    same <- !is.na(relaxed) & startsWith(relaxed, "xn--") &
+      !grepl(".", relaxed, fixed = TRUE)
+    same[same] <- decode(relaxed[same]) == decoded[check][same]
+    bad[check] <- !same
   }
-  invalid <- ace[bad]
+  good <- decoded[!bad]
+  names(good) <- ace[!bad]
+  list(invalid = ace[bad], decoded = good)
+}
+
+# For each host's label vector, TRUE when any label is in `invalid`.
+.invalid_ace_label_any <- function(labels_list,
+                                   invalid = .ace_label_table(labels_list)$invalid) {
   vapply(labels_list, function(labels) any(labels %in% invalid), logical(1))
 }
