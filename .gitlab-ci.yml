@@ -122,9 +122,13 @@ stages:
   - deploy
   - audit
 
+# Every job names the runner pool it depends on: the fleet's self-hosted
+# Docker runners all carry `local-docker` (with run_untagged still true), so a
+# job never falls back to a GitLab.com shared runner (SEOR-hhtzaknn).
 default:
   image: r-base:latest
   interruptible: true
+  tags: [local-docker]
 
 # Debian's r-cran-* packages install in about a second; install.packages() would
 # compile and cost minutes. Only what the gates actually need.
