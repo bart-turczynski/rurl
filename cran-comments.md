@@ -16,8 +16,16 @@ untracked in a working clone can reach the check:
 - Ubuntu, R-release (`r-base:latest` container), through
   `tools/local-ci.sh --all`, which reproduces the package's CI jobs against a
   clean clone
-- Windows, R-devel, win-builder: to be run on the submission tarball before
-  upload
+- Windows, win-builder, on a clean export of commit 761f17f, 2026-09-30:
+  - R-oldrelease 4.5.3: **1 NOTE**, tests OK. The NOTE is the incoming
+    check's: `IDNA` and `Punycode` as possibly misspelled words in
+    `DESCRIPTION` (both are the standard terms), and the `BugReports:` URL
+    explained below.
+  - R-release 4.6.1 and R-devel: not completed. Both built the package and
+    its binary, then stopped at `checking CRAN incoming feasibility ...`
+    with no result, as they did on two earlier uploads each. The incoming
+    checks are covered by the R-oldrelease run above and the local
+    `--as-cran` run.
 
 The test suite is additionally run under `LC_ALL=C` on Linux.
 
@@ -58,6 +66,10 @@ full list.
   for an `xn--` label that is not a genuine A-label. The parse itself does not
   change, as the WHATWG URL Standard requires.
 * `check_schemes()` reports a new reasons token, `no-authority`.
+* With `host_encoding = "unicode"`, an A-label whose ASCII part holds a code
+  point other than a letter, digit or hyphen (`xn--a_-wia`) keeps rendering
+  in Unicode once punycoder 1.3.0, whose decoder rejects such labels, reaches
+  CRAN: rurl decodes those labels itself (RFC 3492 section 6.2).
 * British spellings of the exported names are accepted as aliases
   (`serialise_url()`, `path_normalisation`).
 
