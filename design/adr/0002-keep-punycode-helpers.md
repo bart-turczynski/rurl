@@ -38,3 +38,36 @@ Keep both helpers. Do **not** replace them with `host_normalize()`.
 - **Standing rule:** do not alter these helpers to force-lowercase or to reject
   tolerated hosts. Revisit only if rurl gains a dedicated "canonical match key"
   surface where lowercasing + UTS-46 strictness are actually desired.
+
+## Amendment: the decode helper settles each label with rurl's own RFC 3492 decode
+
+*Added RURL-oizpyvdz, 2026-09-30, with the owner's approval. Appended rather
+than edited in place so no line citation into this file moves.*
+
+punycoder 1.3.0 makes `puny_decode(strict = FALSE)` require letter-digit-hyphen
+basic code points, so `.punycode_to_unicode_vec()` stopped decoding
+`xn--a_-wia` ("a_" + U+00E4) and rendered the A-label under every arm.
+RFC 3492 §6.2 accepts any basic code point, and UTS #46 §4 (ToUnicode,
+UseSTD3ASCIIRules false) decodes the label.
+
+The helper still decodes with punycoder first. `.ace_decode_settle()` then
+retries an `xn--` label punycoder rejected with `.rfc3492_decode()`
+(RURL-mfmgauos), and keeps the spelling of any `xn--` label whose payload holds
+a URL delimiter (`#` `/` `:` `?` `@`), whichever decoder read it, so a rendered
+host never gains one (RFC 3986 §3.2.2).
+
+- **The standing rule holds.** The helper still preserves case (the basic
+  string is copied as written) and still rejects nothing it tolerated: a label
+  that fails every decode keeps its spelling, as before.
+- **Measured on 36,149 fuzzed labels.** Under punycoder 1.3.0 the helper's
+  output equals its output under a 1.2.1 build without libidn2 on every label.
+  A 1.2.1 build linked against libidn2 also decodes 35 labels by reading `_`
+  as a Punycode digit, which RFC 3492 §5 does not allow; 1.3.0 rejects them,
+  and this change does not reach them. On either build, under 1.2.1 it moves
+  only the 130 labels 1.2.1 decoded with a `:` after a prefix that is not
+  scheme-shaped. Such a host reaches the helper only as a percent-decoded
+  `%3A` under `url_standard = "rfc3986"`; `NULL` and `whatwg` reject it
+  before rendering, so the `NULL` freeze (ADR 0007, ADR 0016) is untouched.
+- The scalar `.punycode_to_unicode()` path with a non-default `decode_fn`
+  exists for test doubles and does not settle labels, so a double's answer is
+  what the caller sees.
