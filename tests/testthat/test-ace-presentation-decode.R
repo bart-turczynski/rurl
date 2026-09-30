@@ -47,11 +47,13 @@ test_that("the fallback decodes exactly what punycoder 1.2.1 decoded", {
     ), charToRaw)
   )
   # A host rendering must not produce a URL delimiter (# / : ? @), so those
-  # labels stay as written, as 1.2.1 left them. So do labels RFC 3492
-  # rejects, and an empty payload.
+  # labels stay as written, as 1.2.1 left them. So do labels both decoders
+  # reject, and an empty payload. (A 1.2.1 build linked against libidn2 reads
+  # `_` as a Punycode digit, so a label such as "xn--a_" is left out: its
+  # answer is punycoder's, and this fix does not reach it.)
   kept <- c(
     "xn--a#-wia", "xn--a/-wia", "xn--a:-wia", "xn--a?-wia", "xn--a@-wia",
-    "xn---", "xn--", "xn--a_", "xn--a_-w!a", "a_b"
+    "xn---", "xn--", "xn--a_-w!a", "a_b"
   )
   expect_identical(
     rurl:::.punycode_to_unicode_vec(paste0(kept, ".example")),

@@ -260,8 +260,10 @@
 # punycoder 1.2.1 rejected the same delimiter labels, except a `:` whose
 # prefix is not scheme-shaped, which it decoded. Such a label reaches the
 # helper only as a percent-decoded `%3A` under `rfc3986`; everywhere else the
-# rendering is byte-identical to 1.2.1's (measured on 36,149 fuzzed labels).
-# An amendment to ADR 0002 records this.
+# rendering is byte-identical to 1.2.1's (measured on 36,149 fuzzed labels,
+# against a 1.2.1 build without libidn2; a build linked against it also reads
+# `_` as a Punycode digit, which RFC 3492 section 5 does not allow, and 1.3.0
+# does not). An amendment to ADR 0002 records this.
 #
 # The patterns match bytes (`useBytes = TRUE`) so a label that is not valid
 # UTF-8 neither warns nor throws; `.rfc3492_decode()` returns NA for it.

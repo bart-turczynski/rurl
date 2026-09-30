@@ -60,7 +60,10 @@ host never gains one (RFC 3986 §3.2.2).
   string is copied as written) and still rejects nothing it tolerated: a label
   that fails every decode keeps its spelling, as before.
 - **Measured on 36,149 fuzzed labels.** Under punycoder 1.3.0 the helper's
-  output equals its output under 1.2.1 on every label. Under 1.2.1 it moves
+  output equals its output under a 1.2.1 build without libidn2 on every label.
+  A 1.2.1 build linked against libidn2 also decodes 35 labels by reading `_`
+  as a Punycode digit, which RFC 3492 §5 does not allow; 1.3.0 rejects them,
+  and this change does not reach them. On either build, under 1.2.1 it moves
   only the 130 labels 1.2.1 decoded with a `:` after a prefix that is not
   scheme-shaped. Such a host reaches the helper only as a percent-decoded
   `%3A` under `url_standard = "rfc3986"`; `NULL` and `whatwg` reject it
