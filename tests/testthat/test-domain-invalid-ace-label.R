@@ -189,7 +189,7 @@ test_that("hyphen, STD3 and length facts alone never fire the token", {
   }
 })
 
-test_that("a non-LDH basic code point in an A-label is judged by rurl's decode", {
+test_that("rurl's decode judges an A-label's non-LDH basic code point", {
   # "xn--a_-wia" is "a_" + U+00E4: RFC 3492 decodes it and UseSTD3ASCIIRules
   # is false under WHATWG, so it is a genuine A-label. punycoder 1.3.0's
   # decoder rejects it, which put the token on it and hid the STD3 fact until

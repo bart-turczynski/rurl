@@ -411,7 +411,7 @@ test_that("the per-label call misses criterion 4 (decoded label is xn--)", {
   expect_identical(decoded_bytes("xn--xn---ooa"), charToRaw("xn--ä"))
 })
 
-test_that("punycoder's decoder is version-dependent on non-LDH basic code points", {
+test_that("punycoder's non-LDH basic code point decode varies by version", {
   # RFC 3492 section 6.2 accepts any basic (ASCII) code point before the last
   # delimiter, and UTS #46 section 4 step 4 decodes with it, so "xn--a_-wia"
   # is "a_" + U+00E4, valid when UseSTD3ASCIIRules is false. punycoder 1.2.1
@@ -469,7 +469,10 @@ test_that("rurl's own RFC 3492 decode is independent of punycoder", {
   )
   # Failures: a digit outside a-z/0-9, a truncated integer, a delimiter at
   # position 0 read as a digit, overflow, and a non-ASCII payload.
-  for (bad in c("a_-w!a", "a-z", "-", "99999999999", "zzzzzzzzzzz", "bücher-")) {
+  bad_payloads <- c(
+    "a_-w!a", "a-z", "-", "99999999999", "zzzzzzzzzzz", "bücher-"
+  )
+  for (bad in bad_payloads) {
     expect_true(is.na(rurl:::.rfc3492_decode(bad)), info = bad)
   }
 })

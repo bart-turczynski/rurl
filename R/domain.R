@@ -701,7 +701,7 @@
 }
 
 # For each host's label vector, TRUE when any label is in `invalid`.
-.invalid_ace_label_any <- function(labels_list,
-                                   invalid = .ace_label_table(labels_list)$invalid) {
+.invalid_ace_label_any <- function(
+    labels_list, invalid = .ace_label_table(labels_list)$invalid) {
   vapply(labels_list, function(labels) any(labels %in% invalid), logical(1))
 }
