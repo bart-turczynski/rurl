@@ -98,3 +98,15 @@ alias. `pagerankr` 0.1.1, published on CRAN on 2026-10-01, accepts the alias.
 (macOS aarch64, R 4.6.0, with `punycoder` 1.3.0 and `pslr` 1.2.1 from CRAN),
 2026-10-01: Status OK, tests 0 failures. The result is the same against
 `rurl` 3.0.1.
+
+## Submission history
+
+### 3.1.0
+
+* Submitted 2026-10-01 21:43:49 UTC with `devtools::submit_cran()`, from a
+  clean clone of `main` at `fe09814db53ed20a56b910d9a572a4111a34e2de`
+  (recorded in `CRAN-SUBMISSION`).
+* Submitted tarball `rurl_3.1.0.tar.gz`, 1013424 bytes, SHA-256
+  `222cf2ab7f534d3f6ee7c5908bd906acbee916469296bb5ea5d12b0cf3a78f3e`.
+  Its `R/`, `man/`, `tests/`, `NAMESPACE` and `NEWS.md` are identical to a
+  `git archive` of that commit.
