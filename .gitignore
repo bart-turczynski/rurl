@@ -47,7 +47,6 @@ doc/*
 # But do NOT ignore the vignette source
 !doc/getting-started.Rmd
 
-CRAN-SUBMISSION
 # cran-comments.md is deliberately TRACKED. It is excluded from the built
 # tarball by .Rbuildignore, so tracking it cannot reach CRAN; what it buys is a
 # diff, a history, and a copy on the backup mirror. Untracked, it drifted eleven
