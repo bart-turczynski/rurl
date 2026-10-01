@@ -415,17 +415,24 @@ test_that("punycoder's non-LDH basic code point decode varies by version", {
   # RFC 3492 section 6.2 accepts any basic (ASCII) code point before the last
   # delimiter, and UTS #46 section 4 step 4 decodes with it, so "xn--a_-wia"
   # is "a_" + U+00E4, valid when UseSTD3ASCIIRules is false. punycoder 1.2.1
-  # decodes it; 1.3.0 requires letter-digit-hyphen basic code points and
-  # returns NA from both calls below. That move is why rurl decodes ACE
-  # payloads itself (RURL-mfmgauos); these expectations describe punycoder,
-  # and rurl depends on neither answer.
+  # decodes it in both calls below. 1.3.0's in-tree decoder requires
+  # letter-digit-hyphen basic code points, so host_normalize(), which always
+  # uses it, returns NA. puny_decode() tries libidn2 first where punycoder was
+  # built with it (CRAN's Debian checks, not its Windows ones), and libidn2
+  # still decodes the label; without libidn2 it returns NA too. That move is
+  # why rurl decodes ACE payloads itself (RURL-mfmgauos); these expectations
+  # describe punycoder, and rurl depends on none of these answers.
   relaxed <- punycoder::host_normalize(
     "xn--a_-wia",
     check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
   )
   lenient <- punycoder::puny_decode("xn--a_-wia", strict = FALSE)
   expect_true(identical(relaxed, "xn--a_-wia") || is.na(relaxed))
-  expect_true(identical(is.na(relaxed), is.na(lenient)))
+  # No punycoder version or backend accepts the label in host_normalize()
+  # while rejecting it in the raw decoder.
+  if (!is.na(relaxed)) {
+    expect_false(is.na(lenient))
+  }
   if (!is.na(lenient)) {
     expect_identical(charToRaw(lenient), charToRaw("a_ä"))
   }
