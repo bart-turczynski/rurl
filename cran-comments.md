@@ -89,8 +89,12 @@ There is no `Remotes:` field.
 
 ## Downstream dependencies
 
-One reverse dependency is on CRAN, `pagerankr` 0.1.0. REVDEP-STATUS: its
-tests fail against this version (4 failures in `test-canonicalization.R`; 0
-against 3.0.1). The test is a deliberate drift guard that fails whenever
+One reverse dependency is on CRAN, `pagerankr` (same maintainer). Its 0.1.0
+tests failed against this version: a deliberate guard in them fails whenever
 `get_clean_url()` gains an argument, and 3.1.0 adds the `path_normalisation`
-alias. This must be resolved before submission; see RURL-woljcpfu.
+alias. `pagerankr` 0.1.1, published on CRAN on 2026-10-01, accepts the alias.
+
+`R CMD check` of the CRAN `pagerankr` 0.1.1 tarball against this version
+(macOS aarch64, R 4.6.0, with `punycoder` 1.3.0 and `pslr` 1.2.1 from CRAN),
+2026-10-01: Status OK, tests 0 failures. The result is the same against
+`rurl` 3.0.1.
