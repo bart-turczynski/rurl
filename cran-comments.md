@@ -3,6 +3,14 @@
 This is an update. CRAN serves `rurl` 3.0.1 (published 2026-09-09); this is
 3.1.0.
 
+This is a resubmission. The 2026-10-01 upload of 3.1.0 failed the incoming
+pre-test on Debian r-devel with one test failure. The failing test describes
+`punycoder`, not `rurl`, and assumed that `punycoder::host_normalize()` and
+`punycoder::puny_decode()` agree on one label. They do not when `punycoder`
+1.3.0 is built with libidn2, as on CRAN's Debian checks. The test now accepts
+every answer `punycoder` gives across its versions and builds. Nothing else
+changed: no code in `R/` and no other test.
+
 This is the `rurl` update announced in the `pagerankr` 0.1.1 submission
 (accepted 2026-10-01). `pagerankr` 0.1.0's tests failed against 3.1.0, so
 `pagerankr` was fixed first, and this update follows it, less than two months
@@ -32,7 +40,9 @@ untracked in a working clone can reach the check:
     checks are covered by the R-oldrelease run above and the local
     `--as-cran` run.
 
-The test suite is additionally run under `LC_ALL=C` on Linux.
+The test suite is additionally run under `LC_ALL=C` on Linux. For this
+resubmission it was also run on macOS against CRAN's `punycoder` 1.3.0 built
+from source both with and without libidn2: 0 failures in each.
 
 ### Expected NOTE: CRAN incoming feasibility, `BugReports:`
 
@@ -101,7 +111,7 @@ alias. `pagerankr` 0.1.1, published on CRAN on 2026-10-01, accepts the alias.
 
 ## Submission history
 
-### 3.1.0
+### 3.1.0, first upload (failed the incoming pre-test)
 
 * Submitted 2026-10-01 21:43:49 UTC with `devtools::submit_cran()`, from a
   clean clone of `main` at `fe09814db53ed20a56b910d9a572a4111a34e2de`
@@ -110,3 +120,7 @@ alias. `pagerankr` 0.1.1, published on CRAN on 2026-10-01, accepts the alias.
   `222cf2ab7f534d3f6ee7c5908bd906acbee916469296bb5ea5d12b0cf3a78f3e`.
   Its `R/`, `man/`, `tests/`, `NAMESPACE` and `NEWS.md` are identical to a
   `git archive` of that commit.
+* The incoming pre-test failed on Debian r-devel: one test failure in
+  `test-punycoder-host-probe-characterization.R`, which assumed two
+  `punycoder` calls agree. They do not when `punycoder` 1.3.0 is built with
+  libidn2. Windows r-devel passed with the expected `BugReports:` NOTE.
