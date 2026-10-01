@@ -3,6 +3,11 @@
 This is an update. CRAN serves `rurl` 3.0.1 (published 2026-09-09); this is
 3.1.0.
 
+This is the `rurl` update announced in the `pagerankr` 0.1.1 submission
+(accepted 2026-10-01). `pagerankr` 0.1.0's tests failed against 3.1.0, so
+`pagerankr` was fixed first, and this update follows it, less than two months
+after 3.0.1.
+
 ## R CMD check results
 
 Checked with `R CMD check --as-cran` on a tarball built from a clean export
@@ -68,8 +73,9 @@ full list.
 * `check_schemes()` reports a new reasons token, `no-authority`.
 * With `host_encoding = "unicode"`, an A-label whose ASCII part holds a code
   point other than a letter, digit or hyphen (`xn--a_-wia`) keeps rendering
-  in Unicode once punycoder 1.3.0, whose decoder rejects such labels, reaches
-  CRAN: rurl decodes those labels itself (RFC 3492 section 6.2).
+  in Unicode under punycoder 1.3.0 (on CRAN since 2026-09-30), whose decoder
+  rejects such labels: rurl decodes those labels itself (RFC 3492 section
+  6.2).
 * British spellings of the exported names are accepted as aliases
   (`serialise_url()`, `path_normalisation`).
 
