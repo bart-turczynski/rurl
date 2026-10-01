@@ -8,7 +8,7 @@
   "codeRepository": "https://gitlab.com/bart-turczynski/rurl",
   "issueTracker": "https://gitlab.com/bart-turczynski/rurl/-/work_items",
   "license": "https://spdx.org/licenses/MIT",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "programmingLanguage": {
     "@type": "ComputerLanguage",
     "name": "R",
@@ -172,7 +172,7 @@
       "@type": "SoftwareApplication",
       "identifier": "punycoder",
       "name": "punycoder",
-      "version": ">= 1.2.0",
+      "version": ">= 1.2.1",
       "provider": {
         "@id": "https://cran.r-project.org",
         "@type": "Organization",
@@ -185,7 +185,7 @@
       "@type": "SoftwareApplication",
       "identifier": "pslr",
       "name": "pslr",
-      "version": ">= 1.1.0",
+      "version": ">= 1.1.1",
       "provider": {
         "@id": "https://cran.r-project.org",
         "@type": "Organization",
