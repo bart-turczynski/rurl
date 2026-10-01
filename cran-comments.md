@@ -124,3 +124,14 @@ alias. `pagerankr` 0.1.1, published on CRAN on 2026-10-01, accepts the alias.
   `test-punycoder-host-probe-characterization.R`, which assumed two
   `punycoder` calls agree. They do not when `punycoder` 1.3.0 is built with
   libidn2. Windows r-devel passed with the expected `BugReports:` NOTE.
+
+### 3.1.0, resubmission
+
+* Submitted 2026-10-01 23:04:28 UTC with `devtools::submit_cran()`, from a
+  clean clone of `main` at `a7fafd66fa06e8741ba2ba73c1a0442dfa054cdc`
+  (recorded in `CRAN-SUBMISSION`). It differs from the first upload only in
+  the fixed test and this file.
+* Submitted tarball `rurl_3.1.0.tar.gz`, 1013562 bytes, SHA-256
+  `fab81cf10a04d78c9e3a8980c56470bbe514c71a6530921e04575054dc6512ae`, the
+  same file CRAN's incoming queue serves. Its `R/`, `man/`, `tests/`,
+  `NAMESPACE` and `NEWS.md` are identical to a `git archive` of that commit.
