@@ -3,7 +3,7 @@ message: "If you use this software, please cite it as below."
 type: software
 title: "rurl: Parse, Clean, and Normalize URLs"
 version: 3.1.0
-date-released: "2026-09-09"
+date-released: "2026-10-02"
 doi: 10.5281/zenodo.20972584
 abstract: >-
   A lightweight toolkit for extracting structured information from URLs.
@@ -27,8 +27,8 @@ identifiers:
       GitHub integration from a Release on the read-only GitHub mirror, and
       this DOI resolves to the latest one.
   - type: doi
-    value: 10.5281/zenodo.23043923
-    description: "Version DOI for rurl 3.0.1"
+    value: 10.5281/zenodo.23106662
+    description: "Version DOI for rurl 3.1.0"
 keywords:
   - URL parsing
   - URL normalization
