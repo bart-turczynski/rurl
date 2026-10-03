@@ -353,7 +353,7 @@ stage_spelling <- function() {
 # where the file layout differs from the source tree. Both defects that got
 # through were invisible to any instrument that skipped one of those two steps.
 #
-# THROUGH rcmdcheck, with error_on = "warning" (the fleet standard, seor
+# THROUGH rcmdcheck, failing on a WARNING (error_on; the fleet standard, seor
 # design/fleet-standard.md, "CI on every push to main"). rcmdcheck builds the
 # tarball and checks it, so the built-tarball property above holds. It stops
 # on a WARNING itself, and the guard after it fails on R CMD check's own exit
@@ -362,7 +362,7 @@ stage_spelling <- function() {
 # printed summary and as a second WARNING tripwire.
 stage_check <- function(root) {
   cat("[check] rcmdcheck: R CMD build + R CMD check --as-cran",
-      "(on the tarball, error_on = \"warning\")\n")
+      "(on the tarball, failing on a WARNING)\n")
   # NOT under tempfile(): R deletes its session tempdir on exit, which would
   # take 00check.log with it -- so the one run you actually want to read, the
   # one that flagged something, is the one whose evidence is already gone.

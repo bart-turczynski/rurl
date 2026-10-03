@@ -23,7 +23,7 @@
 #     citation-version -- CITATION.cff/.zenodo.json and the BugReports split.
 #     check            -- `tools/verify.R`, the whole local gate: the gates,
 #                         lint, spelling, `R CMD check --as-cran` through
-#                         rcmdcheck with error_on = "warning", and the test
+#                         rcmdcheck, failing on a WARNING, and the test
 #                         suite under LC_ALL=C.
 #     coverage         -- covr: the badge regex, a cobertura report, and a
 #                         failure below 95%.
@@ -228,9 +228,9 @@ citation-version:
     - python3 scripts/check-bugreports.py
 
 # The whole local gate, on every pipeline: `tools/verify.R` runs the manifest
-# gates, lint, spelling, `R CMD check --as-cran` through rcmdcheck with
-# error_on = "warning" (CRAN incoming feasibility on), and the test suite under
-# LC_ALL=C (fleet standard, "CI on every push to main").
+# gates, lint, spelling, `R CMD check --as-cran` through rcmdcheck, failing on
+# a WARNING (CRAN incoming feasibility on), and the test suite under LC_ALL=C
+# (fleet standard, "CI on every push to main").
 #
 # ON A TAG, CRAN's version comparison is skipped, and only that. A release tag
 # is pushed after CRAN accepts the version, so incoming feasibility then
