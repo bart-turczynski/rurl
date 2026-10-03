@@ -65,3 +65,9 @@
 # of the installable package; without this, --as-cran reports it as a
 # non-standard top-level directory.
 ^scripts$
+# The deep-check CI library. The .rocker template points R_LIBS_USER here
+# and caches it, so R CMD build packed every installed dependency into the
+# tarball and --as-cran failed on their executables: deep-check pipeline
+# 2909433500, SEOR-nxycpzlk. punycoder carries the same entry. Keep these
+# lines free of unbalanced brackets: R 4.1 reads comment lines as patterns.
+^\.Rlibs$
