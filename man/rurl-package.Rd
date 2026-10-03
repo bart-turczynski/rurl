@@ -44,11 +44,11 @@ Domain and public-suffix extraction is delegated to the \pkg{pslr} package;
 Punycode/IDNA encoding is handled by the \pkg{punycoder} package.
 }
 \author{
-\strong{Maintainer}: Bart Turczynski \email{bartek@turczynski.pl} (\href{https://orcid.org/0000-0002-8788-7980}{ORCID})
+\strong{Maintainer}: Bart Turczynski \email{bartek@turczynski.pl} (\href{https://orcid.org/0000-0002-8788-7980}{ORCID}) [copyright holder]
 
 Authors:
 \itemize{
-  \item Bart Turczynski \email{bartek@turczynski.pl} (\href{https://orcid.org/0000-0002-8788-7980}{ORCID})
+  \item Bart Turczynski \email{bartek@turczynski.pl} (\href{https://orcid.org/0000-0002-8788-7980}{ORCID}) [copyright holder]
 }
 
 }

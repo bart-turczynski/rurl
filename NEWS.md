@@ -1,5 +1,7 @@
 ## rurl (development version)
 
+- `rurl` now declares `Depends: R (>= 4.1.0)`, up from R 4.0.0. It imports `pslr`, which already requires R 4.1.0, so `rurl` could not be installed on R 4.0 anyway. A weekly scheduled check now runs on R 4.1 to keep that floor honest (`SEOR-nxycpzlk`).
+
 ## rurl 3.1.0
 
 ### New features
