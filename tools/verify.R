@@ -352,33 +352,39 @@ stage_spelling <- function() {
 # and checking the tarball is what runs the tests against an INSTALLED package,
 # where the file layout differs from the source tree. Both defects that got
 # through were invisible to any instrument that skipped one of those two steps.
+#
+# THROUGH rcmdcheck, with error_on = "warning" (the fleet standard, seor
+# design/fleet-standard.md, "CI on every push to main"). rcmdcheck builds the
+# tarball and checks it, so the built-tarball property above holds. It stops
+# on a WARNING itself, and the guard after it fails on R CMD check's own exit
+# status, because rcmdcheck reads a check that halted partway as 0/0/0 and
+# returns normally (SEOR-maavnxdm). The 00check.log scan below stays as the
+# printed summary and as a second WARNING tripwire.
 stage_check <- function(root) {
-  cat("[check] R CMD build + R CMD check --as-cran (on the tarball)\n")
+  cat("[check] rcmdcheck: R CMD build + R CMD check --as-cran",
+      "(on the tarball, error_on = \"warning\")\n")
   # NOT under tempfile(): R deletes its session tempdir on exit, which would
   # take 00check.log with it -- so the one run you actually want to read, the
   # one that flagged something, is the one whose evidence is already gone.
   dir <- file.path(root, "_scratch", "verify-check")
   unlink(dir, recursive = TRUE)
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-  owd <- getwd()
-  on.exit(setwd(owd), add = TRUE)
-  setwd(dir)
-  res <- run_step("R CMD build", file.path(R.home("bin"), "R"),
-                  c("CMD", "build", shQuote(root)))
-  if (!res$ok) {
-    return(list(res))
-  }
-  tarball <- list.files(dir, pattern = "^rurl_.*\\.tar\\.gz$")
-  if (length(tarball) != 1L) {
-    cat("  FAIL build produced", length(tarball), "tarballs\n")
-    return(list(res, list(label = "tarball", ok = FALSE, secs = 0)))
-  }
+  code <- paste(
+    sprintf(paste(
+      "res <- rcmdcheck::rcmdcheck(%s, args = c('--no-manual', '--as-cran'),",
+      "build_args = '--no-manual', error_on = 'warning', check_dir = %s)"
+    ), deparse(root), deparse(dir)),
+    paste(
+      "if (!identical(as.integer(res$status), 0L)) stop('R CMD check exited",
+      "with status ', res$status, '; the run did not complete.', call. = FALSE)"
+    ),
+    sep = "; "
+  )
   # _R_CHECK_SYSTEM_CLOCK_: a network-restricted machine cannot reach the time
   # server, and the resulting "unable to verify current time" NOTE is about the
   # sandbox, not the package. Set it for a local `R CMD check` too if you hit
   # that NOTE off-network; it is not needed on a machine with normal access.
-  chk <- run_step("R CMD check --as-cran", file.path(R.home("bin"), "R"),
-                  c("CMD", "check", "--no-manual", "--as-cran", tarball),
+  chk <- run_step("R CMD check --as-cran", "Rscript", c("-e", shQuote(code)),
                   env = "_R_CHECK_SYSTEM_CLOCK_=false")
   out <- file.path(dir, "rurl.Rcheck", "00check.log")
   if (file.exists(out)) {
@@ -400,7 +406,7 @@ stage_check <- function(root) {
     cat("       full log: ", sub(paste0("^", root, "/?"), "", out), "\n",
         sep = "")
   }
-  list(res, chk)
+  list(chk)
 }
 
 # testthat's summary reporter heads its warning section with a rule of box

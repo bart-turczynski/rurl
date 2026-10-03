@@ -16,42 +16,38 @@
 # forge-neutral (RURL-vunvxusf moved it out of `.github/workflows/`), and this
 # file consumes it by running the script, never by copying it.
 #
-# THREE STAGES, because compute minutes are finite on the free tier:
-#   gates  — every push to `main`, and every tag. A feature-branch push and a
-#            merge-request pipeline create no pipeline at all (SEOR-bmgkzhvy;
-#            see the `workflow:` block below) -- "every push" no longer means
-#            every push, only every push that reaches `main`. The gate family
-#            needs almost no installed packages (measured: ~74s for the whole
-#            family plus the control plane).
-#   check  — RELEASE TIME ONLY: a tag, or a pipeline started by hand. The full
-#            `R CMD check --as-cran`, lint and the locale cell, which need the
-#            toolchain and every dependency, so this is the job that costs real
-#            minutes. Measured locally at 227-290s against ~40s for the gates.
-#   deploy — RELEASE TIME ONLY, same rules as `check`: the `pages` job that
-#            builds the pkgdown site and publishes it to GitLab Pages
-#            (RURL-vkltgopc). It shares `check`'s dependency install, so it
-#            costs about as much as a build; it never runs on a push.
+# WHAT RUNS WHEN (the fleet standard, seor design/fleet-standard.md):
+#   every pipeline the `workflow:` block admits (a push to `main`, a tag, a
+#   hand-started pipeline, a schedule):
+#     gates            -- `tools/verify.R --gates` and the news-version gate.
+#     citation-version -- CITATION.cff/.zenodo.json and the BugReports split.
+#     check            -- `tools/verify.R`, the whole local gate: the gates,
+#                         lint, spelling, `R CMD check --as-cran` through
+#                         rcmdcheck with error_on = "warning", and the test
+#                         suite under LC_ALL=C.
+#     coverage         -- covr: the badge regex, a cobertura report, and a
+#                         failure below 95%.
+#   `main` only:
+#     pages            -- the pkgdown site, once `check` has passed.
+#     fossa            -- `fossa analyze` (push only), the FOSSA scan.
+#   the `deep-check` schedule only:
+#     full-check       -- R release, oldrel and devel on rocker/r-ver.
+#     floor-check      -- the declared R floor, from a dated snapshot.
+#   the `dependency-audit` schedule only:
+#     osv-audit, security-audit.
 #
-# WHY `check` NO LONGER RUNS ON THE DEFAULT BRANCH. It used to, and that is what
-# exhausted the allowance: four merge requests in one day meant four branch
-# pipelines AND four main pipelines, each main pipeline paying for the expensive
-# job. The expensive job is now the LAST thing before shipping to CRAN -- run it
-# by hand once `/cran` has been worked through and the package is otherwise
-# ready, as a finishing touch rather than a routine cost. Between merges,
-# `tools/local-ci.sh --all origin/main` runs the same job locally for free.
-#
-# This is deliberately NOT wired into the `/cran` skill. That skill is a
-# pre-submission audit that should stay local and cheap; a check chain that
-# silently starts a billed remote job is exactly the surprise this whole change
-# exists to remove.
+# `check` and `pages` used to run only on a tag or a hand-started pipeline,
+# because GitLab.com's shared-runner minutes ran out (RURL-psqmlgjf). The fleet
+# now runs on its own self-hosted runners (seor
+# design/adr/0003-fleet-ci-runs-on-self-hosted-runners.md), and the fleet
+# standard puts `R CMD check --as-cran`, coverage and the Pages deploy on every
+# push to `main`.
 #
 # NOT COVERED HERE, so nobody reads a green pipeline as more than it is: the
-# cross-platform matrix, rhub, coverage, the determinism matrix and the
-# README re-render. Their GitHub workflows were deleted (RURL-vunvxusf); the
-# determinism matrix is kept as a record under `tools/determinism/gha/`, and
-# none of them runs anywhere. (pkgdown used to be on this list; the `pages`
-# job below took it over.)
-#
+# cross-platform matrix, rhub and the determinism matrix. Their GitHub
+# workflows were deleted (RURL-vunvxusf); the determinism matrix is kept as a
+# record under `tools/determinism/gha/`, and none of them runs anywhere.
+
 # Before pushing a change to this file, run `glab ci lint .gitlab-ci.yml`. An
 # unquoted `key: value` inside a script entry makes YAML read the `: ` as a
 # mapping and GitLab rejects the whole config, creating ZERO jobs — which
@@ -62,11 +58,9 @@
 # The free-tier compute allowance ran out on 2026-08-07 after four merge
 # requests each fired a branch pipeline AND a main pipeline; a `workflow:` block
 # admitting only `$CI_PIPELINE_SOURCE == "web"` stopped pipeline creation until
-# the monthly reset. The cadence that spent the budget is fixed below: `gates`
-# (~40s) runs on every push that reaches `main`, `check` (`R CMD check
-# --as-cran`) runs only on a tag or a hand-started pipeline. If the allowance
-# runs out again, tighten the `workflow:` block below further (for example,
-# admit only `$CI_PIPELINE_SOURCE == "web"`) rather than assuming none exists
+# the monthly reset. If the allowance runs out again, tighten the `workflow:`
+# block below further (for example, admit only `$CI_PIPELINE_SOURCE == "web"`)
+# rather than assuming none exists
 # -- one has existed unconditionally since SEOR-bmgkzhvy, below, for an
 # unrelated reason (pipeline count, not compute budget). A red badge that
 # means "no minutes" is still worse than no badge, so narrow the existing
@@ -188,11 +182,27 @@ default:
   # the three.
   - 'Rscript -e ''d <- read.dcf("DESCRIPTION", c("Imports", "Suggests")); p <- trimws(sub("[(].*", "", unlist(strsplit(d[!is.na(d)], ",")))); p <- unique(c(p[nzchar(p)], "pkgload", "lintr", "rcmdcheck", "spelling")); m <- p[!vapply(p, requireNamespace, logical(1), quietly = TRUE)]; if (length(m)) stop("missing dependencies: ", paste(m, collapse = ", ")); cat("all", length(p), "dependencies present\n")'''
 
+# news-version (the fleet standard's cheap gates): the top NEWS.md heading is
+# either "(development version)" or exactly DESCRIPTION's Version, which
+# catches a stale heading left in at release. Ported from seor's
+# `news-version` job, with the heading level rurl's NEWS.md uses (`## rurl
+# ...`). Pure shell, so it rides in this job instead of taking a runner slot.
 gates:
   stage: gates
   script:
     - *gate_deps
     - 'Rscript tools/verify.R --gates'
+    - |
+      version="$(grep -E '^Version:' DESCRIPTION | head -n1 | sed -E 's/^Version:[[:space:]]*//')"
+      heading="$(grep -m1 -E '^##? ' NEWS.md | sed -E 's/^##?[[:space:]]+(rurl[[:space:]]+)?//')"
+      echo "DESCRIPTION Version : '$version'"
+      echo "Top NEWS heading    : '$heading'"
+      if [ "$heading" = "(development version)" ] || [ "$heading" = "$version" ]; then
+        echo "OK: NEWS heading and version are consistent."
+      else
+        echo "Top NEWS.md heading ('$heading') is neither '(development version)' nor the DESCRIPTION Version ('$version'). Update NEWS.md before release."
+        exit 1
+      fi
 
 # CITATION.cff `version:` and .zenodo.json `"version"` must name the release
 # DESCRIPTION's Version names (X.Y.Z.9000 -> X.Y.Z), and every URL those two
@@ -217,33 +227,54 @@ citation-version:
     - python3 scripts/check-bugreports.py --self-test
     - python3 scripts/check-bugreports.py
 
-# The expensive half. A TAG or a HAND-STARTED pipeline, nothing else.
+# The whole local gate, on every pipeline: `tools/verify.R` runs the manifest
+# gates, lint, spelling, `R CMD check --as-cran` through rcmdcheck with
+# error_on = "warning" (CRAN incoming feasibility on), and the test suite under
+# LC_ALL=C (fleet standard, "CI on every push to main").
 #
-# Both rules are deliberate and neither is redundant. The tag rule covers the
-# release itself, so a version that ships has been checked at full strength on
-# the exact commit that carries the version number. The `web` rule is the
-# finishing touch before that: `/cran` has been worked through, the package is
-# believed ready, and someone presses the button once -- against `main`. The
-# top-level `workflow:` block admits a web/API pipeline only when
-# `$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH`, so pressing the button on any
-# other branch creates no pipeline at all for this rule to fire in
-# (SEOR-bmgkzhvy).
-#
-# The default-branch rule that used to sit here is GONE ON PURPOSE. Do not add
-# it back without a reason that outweighs paying for the slowest job on every
-# merge -- that is what exhausted the allowance, and the same evidence is
-# available for free from `tools/local-ci.sh --all origin/main`.
+# ON A TAG, CRAN's version comparison is skipped, and only that. A release tag
+# is pushed after CRAN accepts the version, so incoming feasibility then
+# compares the tarball against itself on CRAN and reports "Insufficient package
+# version" as a WARNING: the v3.1.0 tag pipeline (#209, 2026-10-02) went red
+# for exactly that. `_R_CHECK_CRAN_INCOMING_SKIP_VERSIONS_` turns off that one
+# comparison; every other incoming check still runs (ADR 0004 in seor).
 check:
   stage: check
   rules:
-    - if: '$CI_COMMIT_TAG'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    # `glab ci run` / POST /pipeline start a pipeline whose source is "api":
-    # the same deliberate hand-start as the web button (RURL-vkltgopc).
-    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: $CI_COMMIT_TAG
+      variables:
+        _R_CHECK_CRAN_INCOMING_SKIP_VERSIONS_: "true"
+    - when: on_success
   script:
     - *check_deps
     - 'Rscript tools/verify.R'
+
+# Coverage, on every pipeline (fleet standard; ADR 0007 in seor). `coverage:`
+# feeds the GitLab badge, the cobertura report feeds the merge request diff
+# annotations, and the job fails below 95% total coverage. It writes
+# cobertura.xml first, so a failing run still annotates. The threshold is
+# never lowered: a package under it adds tests. Debian ships covr and xml2 as
+# binaries, so the install stays apt-fast like `.check_deps`.
+coverage:
+  stage: check
+  needs: []
+  script:
+    - *check_deps
+    - 'apt-get install -y --no-install-recommends r-cran-covr r-cran-xml2'
+    - >
+      Rscript -e 'cov <- covr::package_coverage(quiet = FALSE);
+      print(cov);
+      covr::to_cobertura(cov);
+      pct <- covr::percent_coverage(cov);
+      if (pct < 95) stop(sprintf("total coverage %.2f%% is below the fleet minimum of 95%%; add tests, never lower the threshold", pct), call. = FALSE)'
+  coverage: '/^rurl Coverage: \d+\.\d+\%/'
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: cobertura.xml
 
 # The documentation site. Published at https://bart-turczynski.gitlab.io/rurl/,
 # which `_pkgdown.yml` names and DESCRIPTION's `URL:` declares first. Copied
@@ -251,33 +282,25 @@ check:
 # for this file's apt-based `.check_deps`, which already carries r-cran-pkgdown
 # and pandoc.
 #
-# SAME RULES AS `check`, DELIBERATELY: a tag, or a hand-started pipeline. A
-# branch push never rebuilds the site, so between releases the published site
-# documents the last release -- the right default for a CRAN package. Run it by
-# hand (Pipelines -> Run pipeline on `main`) after merging documentation worth
-# publishing early. `needs: []` so a hand-started pipeline publishes without
-# waiting for the slow `check` job; the two are independent evidence.
+# Every pipeline on `main` deploys it, once `check` has passed (fleet
+# standard, "CI on every push to main"), so the site documents `main`. It used
+# to deploy only on a tag or a hand-started pipeline, while CI minutes were
+# rationed.
 #
 # The job MUST be named `pages` -- that name is what makes GitLab publish the
 # `public/` artifact -- and `tools/local-ci-plan.R` therefore does not treat
 # `pages` as a reserved top-level key, so `tools/local-ci.sh --list` shows it.
 pages:
   stage: deploy
-  needs: []
+  needs: ["check"]
   rules:
-    - if: '$CI_COMMIT_TAG'
-    # Both hand-start rules are pinned to the default branch, and that pin is
-    # load-bearing. This job does not report on a tree, it PUBLISHES one to
+    # Pinned to the default branch, and that pin is load-bearing. This job
+    # does not report on a tree, it PUBLISHES one to
     # <https://bart-turczynski.gitlab.io/rurl/> for a package that is on CRAN.
-    # It was unpinned and harmless only for as long as the `workflow:` block
-    # refused web pipelines on branches outright; once that hatch opened, an
-    # unpinned rule here meant one click on a feature branch would serve
-    # unmerged code from the live site with nothing on the page saying so
-    # (SEOR-bmgkzhvy).
-    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-    # `glab ci run` / POST /pipeline start a pipeline whose source is "api":
-    # the same deliberate hand-start as the web button (RURL-vkltgopc).
-    - if: '$CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    # The `workflow:` block admits a web pipeline on any branch; without the
+    # pin, one click on a feature branch would serve unmerged code from the
+    # live site with nothing on the page saying so (SEOR-bmgkzhvy).
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
     - *check_deps
     # `build_site(install = FALSE)` runs the examples against the INSTALLED
@@ -370,6 +393,169 @@ pages:
       - public
 
 # ---------------------------------------------------------------------------
+# deep-check -- R release, oldrel, devel and the declared floor, on the weekly
+# `deep-check` schedule ONLY (fleet standard, "Scheduled pipelines"; schedule
+# 4472809 sets SCHEDULE_KIND=deep-check). Both rules halves are required, as
+# for the audits below: a job keyed on `$CI_PIPELINE_SOURCE == "schedule"`
+# alone would also fire on the dependency-audit schedule (seor
+# design/fleet.md). Schedule-only also keeps `tools/local-ci.sh --all` from
+# running them (tools/local-ci-plan.R, schedule_only()).
+#
+# Copied from punycoder's `full-check` and `floor-check`, the fleet's model:
+# rocker/r-ver images, which resolve Posit Package Manager binaries, with
+# {pak} installing the dependency tree and its system requirements. The
+# `.rocker` template and the pandoc pin carry punycoder's reasoning in short;
+# read its .gitlab-ci.yml for the measurements behind each line.
+# ---------------------------------------------------------------------------
+.rocker:
+  image: rocker/r-ver:latest
+  interruptible: true
+  variables:
+    R_LIBS_USER: "$CI_PROJECT_DIR/.Rlibs"
+    R_KEEP_PKG_SOURCE: "yes"
+    # `--as-cran`'s "checking CRAN incoming feasibility" reads CRAN metadata
+    # from the repos option, which rocker points at p3m, and p3m serves none
+    # of it: for a package already on CRAN the check halts there and rcmdcheck
+    # reads the cut-off log as 0/0/0 (SEOR-ygzjighu). These move only that
+    # step to CRAN itself; installs still come from p3m.
+    R_CRAN_SRC: "https://cloud.r-project.org"
+    R_CRAN_WEB: "https://cloud.r-project.org"
+  cache:
+    key: "rlibs-$CI_JOB_NAME_SLUG"
+    paths:
+      - .Rlibs/
+  before_script:
+    - mkdir -p "$R_LIBS_USER"
+    # pak from r-lib's own binary repository: rocker/r-ver:devel has no p3m
+    # binaries, and a CRAN source build of pak fails there.
+    - >
+      Rscript -e 'if (!requireNamespace("pak", quietly = TRUE))
+      install.packages("pak", repos = sprintf(
+      "https://r-lib.github.io/p/pak/stable/%s/%s/%s",
+      .Platform$pkgType, R.Version()$os, R.Version()$arch))'
+    # rocker's Renviron.site sets R_LIBS, which wins over R_LIBS_USER, so the
+    # cache directory is put first on .libPaths() here (SEOR-dyzgzyot).
+    - echo '.libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))' >> "${R_HOME}/etc/Rprofile.site"
+    - Rscript -e 'cat("Library paths:\n"); print(.libPaths())'
+
+# Pandoc pinned to the version the vignettes are built with elsewhere, and the
+# architecture derived in the container, because the runner is arm64. A plain
+# anchor, not `!reference`: the pre-commit `check-yaml` hook cannot construct
+# GitLab's custom tag.
+.pandoc_script: &pandoc_script
+  - PANDOC_VERSION=3.10
+  - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
+  - curl -fsSL -o /tmp/pandoc.deb "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-$(dpkg --print-architecture).deb"
+  - dpkg -i /tmp/pandoc.deb
+  - pandoc --version | head -n1
+
+# R release (`latest`), oldrel (pin the tag to the previous minor when a new R
+# minor ships) and devel, each a full `R CMD check --as-cran` with vignettes.
+full-check:
+  extends: .rocker
+  stage: check
+  needs: []
+  image: $R_IMAGE
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "deep-check"
+  parallel:
+    matrix:
+      - R_IMAGE:
+          - "rocker/r-ver:latest"
+          - "rocker/r-ver:4.5"
+          - "rocker/r-ver:devel"
+  script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends qpdf ghostscript
+    - *pandoc_script
+    - Rscript -e 'pak::pak("deps::.", dependencies = TRUE); pak::pak("any::rcmdcheck")'
+    # rcmdcheck reads a check that halted partway as 0/0/0 and returns normally,
+    # so error_on never fires; the guard also fails on R CMD check's own exit
+    # status (SEOR-maavnxdm).
+    - >
+      Rscript -e 'res <- rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran"),
+      build_args = c("--no-manual", "--compact-vignettes=gs+qpdf"),
+      error_on = "warning", check_dir = "check");
+      if (!identical(as.integer(res$status), 0L)) stop("R CMD check exited with status ", res$status, "; the run did not complete.", call. = FALSE)'
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - check/
+
+# The leg at the declared R floor, `Depends: R (>= 4.1.0)`. 4.1 is also the
+# oldest minor with an arm64 rocker/r-ver image, which the runner needs.
+# punycoder's design:
+#
+# - Packages come from one dated Posit Package Manager snapshot,
+#   FLOOR_SNAPSHOT, used in this job alone, so it cannot conflict with what
+#   full-check installs. 2025-04-10 is the day before R 4.5.0, when R 4.1 was
+#   still inside every dependency's support window.
+# - EXCEPT punycoder and pslr, which first reached CRAN in 2026, after the
+#   snapshot. They come from CRAN itself, as source, with dependencies = FALSE:
+#   their own dependencies (Rcpp, cpp11, digest) are already in from the
+#   snapshot, so nothing else moves past it. Both declare R >= 4.1 or lower.
+# - Only what the check needs: the hard dependencies, the test and vignette
+#   Suggests, and rcmdcheck. pkgdown, oysteR and rosv serve the site and the
+#   scheduled audits only; the audit tests skip without them, so
+#   _R_CHECK_FORCE_SUGGESTS_=false lets --as-cran report them as a NOTE.
+# - Vignettes are neither built nor checked: no pandoc here, and the tests
+#   exercise the same functions.
+floor-check:
+  extends: .rocker
+  stage: check
+  needs: []
+  image: rocker/r-ver:4.1.3
+  variables:
+    FLOOR_SNAPSHOT: "https://packagemanager.posit.co/cran/2025-04-10"
+    _R_CHECK_FORCE_SUGGESTS_: "false"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_KIND == "deep-check"
+  script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends pkg-config libcurl4-openssl-dev libssl-dev libicu-dev
+    - >
+      Rscript -e 'install.packages(c("Rcpp", "cpp11", "digest", "stringi", "testthat", "withr", "jsonlite", "knitr", "rmarkdown", "rcmdcheck"),
+      repos = Sys.getenv("FLOOR_SNAPSHOT"), Ncpus = 4L);
+      install.packages(c("punycoder", "pslr"), repos = "https://cloud.r-project.org", dependencies = FALSE);
+      stopifnot(all(vapply(c("stringi", "punycoder", "pslr", "testthat", "withr", "rcmdcheck"), requireNamespace, NA, quietly = TRUE)));
+      print(R.version.string)'
+    # rcmdcheck reads a check that halted partway as 0/0/0 and returns normally,
+    # so error_on never fires; the guard also fails on R CMD check's own exit
+    # status (SEOR-maavnxdm).
+    - >
+      Rscript -e 'res <- rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran", "--ignore-vignettes"),
+      build_args = c("--no-manual", "--no-build-vignettes"),
+      error_on = "warning", check_dir = "check");
+      if (!identical(as.integer(res$status), 0L)) stop("R CMD check exited with status ", res$status, "; the run did not complete.", call. = FALSE)'
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - check/
+
+# ---------------------------------------------------------------------------
+# fossa -- the FOSSA license and security scan, on every push to `main`
+# (fleet standard, "FOSSA": rurl holds one of the five free-plan slots).
+#
+# `fossa analyze` uploads to the project `.fossa.yml` names,
+# git+gitlab.com/bart-turczynski/rurl; the first run creates it, and the README's
+# FOSSA badges read "not found" until then. It reads `FOSSA_API_KEY`, a masked
+# CI/CD variable only the owner can set. The CLI comes from FOSSA's official
+# install script, which picks the linux/arm64 build on this runner. Plain and
+# blocking, like every other job: an unreachable FOSSA turns the pipeline red.
+# Push only, so a schedule or a hand-started pipeline does not re-upload.
+# ---------------------------------------------------------------------------
+fossa:
+  stage: audit
+  image: debian:stable-slim
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates git
+    - 'curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash'
+    - fossa analyze
+
+# ---------------------------------------------------------------------------
 # audit -- the two dependency-vulnerability audits, UNATTENDED, and nothing else
 # (SEOR-fftbjnpl).
 #
@@ -388,8 +574,9 @@ pages:
 # "dependency-audit"`, then `when: never`, so a push to `main`, a tag, a
 # hand-started pipeline and any other schedule never pay for them. The
 # `workflow:` block above admits a scheduled pipeline because a schedule runs
-# on `main` and `$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH` holds there; `gates`
-# and `citation-version` (no `rules:`) ride along in that pipeline too.
+# on `main` and `$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH` holds there; the
+# jobs without `rules:` (`gates`, `citation-version`, `check`, `coverage`) and
+# `pages` ride along in that pipeline too.
 #
 # OWNER GATE, not settable from a merge request: create the schedule under
 # Build > Pipeline schedules, target `main`, with the variable
