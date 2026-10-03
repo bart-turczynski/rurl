@@ -4,7 +4,7 @@ Title: Parse, Clean, and Normalize URLs
 Version: 3.1.0.9000
 Language: en-US
 Authors@R:
-    person("Bart", "Turczynski", email = "bartek@turczynski.pl", role = c("aut", "cre"),
+    person("Bart", "Turczynski", email = "bartek@turczynski.pl", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0000-0002-8788-7980"))
 Description: A lightweight toolkit for extracting structured information from URLs.
     Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs.
@@ -47,6 +47,7 @@ Imports:
     pslr (>= 1.1.1)
 URL: https://bart-turczynski.gitlab.io/rurl/,
     https://gitlab.com/bart-turczynski/rurl,
+    https://bart-turczynski.r-universe.dev/rurl,
     https://CRAN.R-project.org/package=rurl
 BugReports: https://gitlab.com/bart-turczynski/rurl/-/issues
 X-schema.org-keywords: url-parsing, url-parser, url-normalization,
@@ -65,6 +66,6 @@ Suggests:
     jsonlite
 Config/testthat/edition: 3
 Depends:
-    R (>= 4.0.0)
+    R (>= 4.1.0)
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0

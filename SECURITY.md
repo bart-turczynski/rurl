@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-`rurl` is distributed through CRAN. Security fixes are made against the latest
-released version; please upgrade to the most recent release before reporting.
+`rurl` is distributed through CRAN. Security fixes are made against the
+latest released version; please upgrade to the most recent release before
+reporting.
 
 | Version              | Supported          |
 | -------------------- | ------------------ |
@@ -22,10 +23,14 @@ Alternatively, open a **confidential issue** on the GitLab project:
    **New issue**.
 2. Tick **This issue is confidential** before submitting.
 
-A confidential issue is visible only to project members.
+A confidential issue is visible only to you, its assignees and the project
+members whose role lets them see confidential issues.
 
 Email is listed first deliberately: it works whether or not you have a GitLab
 account, and it is the channel the maintainer monitors.
+
+Do not include secrets, credentials, tokens, or private customer data in a
+report, an issue, a merge request or a log.
 
 ## What to expect
 

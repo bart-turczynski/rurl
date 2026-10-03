@@ -8,6 +8,7 @@
 ^_pkgdown\.yml$
 ^docs$
 ^\.github$
+^\.gitlab$
 ^\.git$
 ^doc$
 ^Meta$
@@ -37,7 +38,6 @@
 ^inst/bench/rfc3986-probes\.csv$
 ^inst/bench/make-wpt-fixture\.py$
 ^worklog$
-^_scratch$
 ^.*coverage\.html$
 ^tools/coverage-report\.R$
 ^\.positai$
