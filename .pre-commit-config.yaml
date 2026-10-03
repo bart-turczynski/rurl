@@ -135,6 +135,20 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # The fleet standard's URL check (seor design/fleet-standard.md, "Local
+      # pre-push gate"), copied from punycoder. It fetches every URL the
+      # package declares and fails on a dead one, which `verify`'s --as-cran
+      # reports only as a NOTE. A network blip never rejects a push; zero URLs
+      # checked fails; the only exemption is BugReports' /-/issues URL
+      # answering exactly 404 (SEOR-ocbtrrnl). Ahead of `verify`, so a dead
+      # link is reported in seconds rather than after the full check.
+      - id: check-urls
+        name: declared URLs resolve
+        entry: Rscript scripts/check-urls.R
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
       - id: verify
         name: verify (mirrors CI's fast gate)
         entry: tools/verify-on-push.sh
