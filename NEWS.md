@@ -1,6 +1,7 @@
 ## rurl (development version)
 
 - `rurl` now declares `Depends: R (>= 4.1.0)`, up from R 4.0.0. It imports `pslr`, which already requires R 4.1.0, so `rurl` could not be installed on R 4.0 anyway. A weekly scheduled check now runs on R 4.1 to keep that floor honest (`SEOR-nxycpzlk`).
+- On R 4.1, an IPv6 host is now written with the shortest hexadecimal pieces under `url_standard = "whatwg"`, as the WHATWG URL Standard's IPv6 serializer requires ("the shortest possible lowercase hexadecimal number", host serializing). `get_host("http://[::127.0.0.1]/", url_standard = "whatwg")` gave `[::7f00:0001]` instead of `[::7f00:1]`, and `get_clean_url()`, `serialize_url()` and `format_url()` padded the same way, because before R 4.2.0 `as.character()` on a `hexmode` vector zero-pads every element to the widest one. R 4.2 and later were never affected (`SEOR-nxycpzlk`).
 
 ## rurl 3.1.0
 

@@ -465,6 +465,29 @@ full-check:
           - "rocker/r-ver:4.5"
           - "rocker/r-ver:devel"
   script:
+    # The three images point `repos` at three shapes: `latest` at p3m
+    # `latest`, `4.5` at a FROZEN p3m snapshot (2026-04-23, older than the
+    # punycoder and pslr releases DESCRIPTION requires, so pak failed with
+    # "Can't find package called punycoder, pslr"; deep-check pipeline
+    # 2909433500), and `devel` at cloud.r-project.org. A user .Rprofile, read
+    # after Rprofile.site, rewrites a trailing snapshot date to `latest` and
+    # puts CRAN itself behind it as a source fallback, because p3m `latest`
+    # lags a new CRAN release by up to a day. Testing old R against CURRENT
+    # packages is also what CRAN does. Copied from pagerankr's full-check.
+    - |
+      Rscript -e '
+      current <- getOption("repos")[["CRAN"]]
+      if (is.null(current) || !nzchar(current) || identical(current, "@CRAN@")) {
+        stop("Expected a repo in Rprofile.site, found: ", current, call. = FALSE)
+      }
+      p3m <- sub("/[0-9]{4}-[0-9]{2}-[0-9]{2}$", "/latest", current)
+      writeLines(sprintf("options(repos = c(P3M = %s, CRAN = %s))",
+                         dQuote(p3m, FALSE),
+                         dQuote("https://cloud.r-project.org", FALSE)),
+                 file.path(Sys.getenv("HOME"), ".Rprofile"))
+      cat("Image pins:", current, "\n  using:", p3m,
+          "\n  with CRAN appended as fallback\n")'
+    - Rscript -e 'cat("Effective repos:\n"); print(getOption("repos"))'
     - apt-get update -qq && apt-get install -y --no-install-recommends qpdf ghostscript
     - *pandoc_script
     - Rscript -e 'pak::pak("deps::.", dependencies = TRUE); pak::pak("any::rcmdcheck")'
