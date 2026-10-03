@@ -1539,8 +1539,8 @@
     }
     inner <- paste0(
       m[1L, 2L],
-      as.hexmode(octets[1L] * 256L + octets[2L]), ":",
-      as.hexmode(octets[3L] * 256L + octets[4L])
+      sprintf("%x", octets[1L] * 256L + octets[2L]), ":",
+      sprintf("%x", octets[3L] * 256L + octets[4L])
     )
   }
 
@@ -1592,7 +1592,10 @@
     compress_len <- run$lengths[best]
   }
 
-  rendered <- as.character(as.hexmode(pieces))
+  # sprintf(), not as.character(as.hexmode()): before R 4.2.0 the hexmode
+  # method zero-padded every element to the widest one, so a vector holding
+  # 0x7f00 rendered 1 as "0001" and broke WHATWG's shortest-hex form.
+  rendered <- sprintf("%x", pieces)
   if (is.na(compress_start)) {
     return(paste0("[", paste(rendered, collapse = ":"), "]"))
   }
