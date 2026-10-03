@@ -28,9 +28,9 @@ Practices](https://www.bestpractices.dev/projects/13394/badge)](https://www.best
 [![Last
 commit](https://img.shields.io/gitlab/last-commit/bart-turczynski%2Frurl)](https://gitlab.com/bart-turczynski/rurl/-/commits/main)
 [![FOSSA
-license](https://app.fossa.com/api/projects/git%2Bgitlab.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgitlab.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=license)
+license](https://app.fossa.com/api/projects/custom%2B62973%2Fgit%2Bgitlab.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=license)](https://app.fossa.com/projects/custom%2B62973%2Fgit%2Bgitlab.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=license)
 [![FOSSA
-security](https://app.fossa.com/api/projects/git%2Bgitlab.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgitlab.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=security)
+security](https://app.fossa.com/api/projects/custom%2B62973%2Fgit%2Bgitlab.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=security)](https://app.fossa.com/projects/custom%2B62973%2Fgit%2Bgitlab.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=security)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing,
