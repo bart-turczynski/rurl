@@ -6,10 +6,22 @@ output: github_document
 <!-- badges: start -->
 [![CRAN status](https://www.r-pkg.org/badges/version/rurl)](https://CRAN.R-project.org/package=rurl)
 [![CRAN downloads](https://cranlogs.r-pkg.org/badges/rurl)](https://CRAN.R-project.org/package=rurl)
+[![CRAN checks](https://badges.cranchecks.info/worst/rurl.svg)](https://cran.r-project.org/web/checks/check_results_rurl.html)
+[![r-universe](https://bart-turczynski.r-universe.dev/rurl/badges/version)](https://bart-turczynski.r-universe.dev/rurl)
+[![Pipeline](https://gitlab.com/bart-turczynski/rurl/badges/main/pipeline.svg)](https://gitlab.com/bart-turczynski/rurl/-/pipelines)
+[![Coverage](https://gitlab.com/bart-turczynski/rurl/badges/main/coverage.svg)](https://gitlab.com/bart-turczynski/rurl/-/pipelines)
+[![Docs](https://img.shields.io/website?url=https%3A%2F%2Fbart-turczynski.gitlab.io%2Frurl%2F&label=docs&logo=gitlab&logoColor=white&up_message=pkgdown&up_color=1f75cb)](https://bart-turczynski.gitlab.io/rurl/)
+[![Latest release](https://img.shields.io/gitlab/v/release/bart-turczynski%2Frurl)](https://gitlab.com/bart-turczynski/rurl/-/releases)
 [![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
+[![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20972584.svg)](https://doi.org/10.5281/zenodo.20972584)
 [![Zenodo](https://img.shields.io/badge/Zenodo-all_software-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/search?q=metadata.creators.person_or_org.identifiers.identifier:0000-0002-8788-7980)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13394/badge)](https://www.bestpractices.dev/projects/13394)
+[![License](https://img.shields.io/gitlab/license/bart-turczynski%2Frurl)](https://gitlab.com/bart-turczynski/rurl/-/blob/main/LICENSE.md)
+[![Dependencies](https://tinyverse.netlify.app/badge/rurl)](https://CRAN.R-project.org/package=rurl)
+[![Last commit](https://img.shields.io/gitlab/last-commit/bart-turczynski%2Frurl)](https://gitlab.com/bart-turczynski/rurl/-/commits/main)
+[![FOSSA license](https://app.fossa.com/api/projects/git%2Bgitlab.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgitlab.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=license)
+[![FOSSA security](https://app.fossa.com/api/projects/git%2Bgitlab.com%2Fbart-turczynski%2Frurl.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgitlab.com%2Fbart-turczynski%2Frurl?ref=badge_shield&issueType=security)
 <!-- badges: end -->
 
 `rurl` is a lightweight, vectorized toolkit for URL parsing, normalization,
@@ -293,7 +305,7 @@ record](https://doi.org/10.5281/zenodo.20972584) for a particular release.
 
 ## Code of Conduct
 
-Please note that this package is released with a [Contributor Code of Conduct](https://ropensci.org/code-of-conduct/).
+Please note that this package is released with a [Contributor Code of Conduct](CODE_OF_CONDUCT.md).
 By contributing to this project, you agree to abide by its terms.
 
 ## License

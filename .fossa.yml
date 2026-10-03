@@ -24,8 +24,10 @@
 #   a NEW FOSSA project rather than move the old one, and the old project's
 #   scan history does not follow. The two README badges keyed to the old id
 #   were removed in the same change — they still rendered, but rendered a
-#   result that can never update again. Re-add badges for the new id only
-#   after a scan has actually run against it.
+#   result that can never update again. The fleet standard (SEOR-nxycpzlk)
+#   put badges for the new id back in the same change that added the
+#   `fossa` CI job; they read "not found" until that job's first scan on
+#   `main` creates the project.
 version: 3
 
 project:
