@@ -182,6 +182,54 @@ default:
   # the three.
   - 'Rscript -e ''d <- read.dcf("DESCRIPTION", c("Imports", "Suggests")); p <- trimws(sub("[(].*", "", unlist(strsplit(d[!is.na(d)], ",")))); p <- unique(c(p[nzchar(p)], "pkgload", "lintr", "rcmdcheck", "spelling")); m <- p[!vapply(p, requireNamespace, logical(1), quietly = TRUE)]; if (length(m)) stop("missing dependencies: ", paste(m, collapse = ", ")); cat("all", length(p), "dependencies present\n")'''
 
+# pandoc is PINNED in every job that runs R, as the fleet standard requires
+# (seor design/fleet-standard.md, "CI on every push to `main`"; SEOR-egfbijyi,
+# SEOR-dpjdwhbi). Its markdown writer reflows text and pads tables differently
+# between versions, so README.md is byte-stable only under the pandoc that knit
+# it, and the vignettes and the pkgdown site render with it too. `gates`,
+# `check`, `coverage` and `pages` splice this list into their `before_script`,
+# and `full-check` into its script.
+#
+# AN ANCHORED LIST, NOT A TEMPLATE, and the pin a shell assignment, not a
+# `variables:` entry: tools/local-ci-plan.R follows neither `extends:` nor
+# `variables:`, so either would leave a local run on an unpinned pandoc. A
+# plain anchor also suits the pre-commit `check-yaml` hook, which cannot
+# construct GitLab's `!reference` tag. scripts/check-toolchain.R reads the
+# PANDOC_VERSION line below and fails the pre-push gate when the local pandoc
+# differs; seor's scripts/check-fleet-standard.py checks it against the
+# fleet's version. A bump moves these together, in one change: this
+# PANDOC_VERSION, both sha256 digests (the release's own published values),
+# and README.md, re-knit under the new pandoc.
+#
+# r-base has no curl, hence the apt line. The release .deb goes in over
+# whatever pandoc the image has; `.check_deps` installs Debian's pandoc after
+# it, which apt leaves alone because the release's version is newer. A failed
+# or mismatched download only warns, and those jobs then run on Debian's
+# pandoc. Nothing unverified is ever installed. The download retries and has a
+# ceiling: --max-time bounds each attempt and --retry-max-time the retries, so
+# a stalled CDN reaches the warning in minutes instead of hanging the job. The
+# architecture comes from `dpkg --print-architecture`, because the runner is
+# arm64.
+.pandoc_install: &pandoc_install
+  - PANDOC_VERSION="3.10"
+  - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
+  - |
+    ARCH=$(dpkg --print-architecture)
+    case "$ARCH" in
+      amd64) PANDOC_SHA256=d502599878eb29af3ae5f0cb5d559134df96534125d452c7a0674a5bad2c5ecf ;;
+      arm64) PANDOC_SHA256=b651c8bfd5a0a2f6650d6c0830131747ef67a1d9c0475b1399626611419e2205 ;;
+      *) PANDOC_SHA256=unknown ;;
+    esac
+    if curl -fsSL --retry 3 --retry-delay 5 --retry-max-time 300 --connect-timeout 20 --max-time 120 \
+      -o /tmp/pandoc.deb "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-${ARCH}.deb" \
+      && echo "${PANDOC_SHA256}  /tmp/pandoc.deb" | sha256sum -c - \
+      && dpkg -i /tmp/pandoc.deb; then
+      echo "pandoc ${PANDOC_VERSION} installed"
+    else
+      echo "WARNING: pandoc ${PANDOC_VERSION} not installed; this job runs on the image's or Debian's pandoc"
+    fi
+    if command -v pandoc >/dev/null 2>&1; then pandoc --version | sed -n 1p; else echo "no pandoc on PATH yet"; fi
+
 # news-version (the fleet standard's cheap gates): the top NEWS.md heading is
 # either "(development version)" or exactly DESCRIPTION's Version, which
 # catches a stale heading left in at release. Ported from seor's
@@ -189,6 +237,8 @@ default:
 # ...`). Pure shell, so it rides in this job instead of taking a runner slot.
 gates:
   stage: gates
+  before_script:
+    - *pandoc_install
   script:
     - *gate_deps
     - 'Rscript tools/verify.R --gates'
@@ -245,6 +295,8 @@ check:
       variables:
         _R_CHECK_CRAN_INCOMING_SKIP_VERSIONS_: "true"
     - when: on_success
+  before_script:
+    - *pandoc_install
   script:
     # punycoder's configure enables libidn2 when pkg-config finds it, as on
     # CRAN's Debian flavors; its Windows flavors build without it. The two
@@ -267,6 +319,8 @@ check:
 coverage:
   stage: check
   needs: []
+  before_script:
+    - *pandoc_install
   script:
     - *check_deps
     # The punycoder build without libidn2, as on CRAN's Windows flavors; `check`
@@ -313,6 +367,8 @@ pages:
     # pin, one click on a feature branch would serve unmerged code from the
     # live site with nothing on the page saying so (SEOR-bmgkzhvy).
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - *pandoc_install
   script:
     - *check_deps
     # `build_site(install = FALSE)` runs the examples against the INSTALLED
@@ -416,8 +472,9 @@ pages:
 # Copied from punycoder's `full-check` and `floor-check`, the fleet's model:
 # rocker/r-ver images, which resolve Posit Package Manager binaries, with
 # {pak} installing the dependency tree and its system requirements. The
-# `.rocker` template and the pandoc pin carry punycoder's reasoning in short;
-# read its .gitlab-ci.yml for the measurements behind each line.
+# `.rocker` template carries punycoder's reasoning in short; read its
+# .gitlab-ci.yml for the measurements behind each line. `full-check` installs
+# the pinned pandoc from `.pandoc_install`, as the push jobs do.
 # ---------------------------------------------------------------------------
 .rocker:
   image: rocker/r-ver:latest
@@ -449,17 +506,6 @@ pages:
     # cache directory is put first on .libPaths() here (SEOR-dyzgzyot).
     - echo '.libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))' >> "${R_HOME}/etc/Rprofile.site"
     - Rscript -e 'cat("Library paths:\n"); print(.libPaths())'
-
-# Pandoc pinned to the version the vignettes are built with elsewhere, and the
-# architecture derived in the container, because the runner is arm64. A plain
-# anchor, not `!reference`: the pre-commit `check-yaml` hook cannot construct
-# GitLab's custom tag.
-.pandoc_script: &pandoc_script
-  - PANDOC_VERSION=3.10
-  - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
-  - curl -fsSL -o /tmp/pandoc.deb "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-$(dpkg --print-architecture).deb"
-  - dpkg -i /tmp/pandoc.deb
-  - pandoc --version | head -n1
 
 # R release (`latest`), oldrel (pin the tag to the previous minor when a new R
 # minor ships) and devel, each a full `R CMD check --as-cran` with vignettes.
@@ -501,7 +547,7 @@ full-check:
           "\n  with CRAN appended as fallback\n")'
     - Rscript -e 'cat("Effective repos:\n"); print(getOption("repos"))'
     - apt-get update -qq && apt-get install -y --no-install-recommends qpdf ghostscript
-    - *pandoc_script
+    - *pandoc_install
     - Rscript -e 'pak::pak("deps::.", dependencies = TRUE); pak::pak("any::rcmdcheck")'
     # rcmdcheck reads a check that halted partway as 0/0/0 and returns normally,
     # so error_on never fires; the guard also fails on R CMD check's own exit

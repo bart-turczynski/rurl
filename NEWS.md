@@ -5,6 +5,8 @@
 
 - `check_schemes()` now lowercases `allowed_schemes` as ASCII. Under a Turkish or Azeri locale, `tolower()` mapped `"FILE"` to `"fıle"` (dotless i), so `allowed_schemes = "FILE"` admitted no `file:` URL (`SEOR-rxxuzhmc`).
 
+- Every CI job that runs R on a push to `main` (`gates`, `check`, `coverage` and `pages`), and the scheduled `full-check`, now installs `pandoc` 3.10 from its GitHub release, checked against the release's published SHA-256 digest before it is installed. `pandoc` writes Markdown differently from one version to the next, so `README.md`, the vignettes and the `pkgdown` site render the same only under one pinned version; `full-check` had pinned it without the checksum, and the other jobs ran on Debian's `pandoc`. `scripts/check-toolchain.R` now fails the pre-push gate when the local `rmarkdown::pandoc_version()` differs from the `PANDOC_VERSION` in `.gitlab-ci.yml` (`SEOR-dpjdwhbi`).
+
 - The README gives the r-universe install command next to CRAN's, drops its list of functions, which repeated the reference index, and moves the caching notes to the "Getting Started" vignette. `DESCRIPTION`'s `X-schema.org-keywords` no longer lists `r`, `rstats`, `r-stats` or `r-package`, which r-universe drops (`SEOR-kqmqosji`, `SEOR-nplcfbib`).
 
 - `rurl` has a logo, the fleet's black hex, in `man/figures/logo.svg` and `logo.png`. r-universe shows it on the package card and pkgdown in the site header, and the README heading carries it (`SEOR-wxjuxbtu`).
