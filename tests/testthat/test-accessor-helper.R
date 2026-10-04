@@ -76,3 +76,10 @@ test_that("get_domain source variants route through the shared helper", {
   )
   expect_true(is.na(get_domain("http://192.168.0.1", source = "icann")))
 })
+
+test_that(".if_null treats only NULL as missing", {
+  expect_identical(rurl:::.if_null(NULL, "d"), "d")
+  expect_identical(rurl:::.if_null(character(0), "d"), character(0))
+  expect_identical(rurl:::.if_null(NA_character_, "d"), NA_character_)
+  expect_identical(rurl:::.if_null("", "d"), "")
+})
