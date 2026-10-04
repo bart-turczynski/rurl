@@ -50,8 +50,21 @@
 # that is the whole reason to look at a merge commit. Those rules exist to
 # ration billed minutes on the forge; locally the minutes are free, so the
 # rationing is exactly what you want to override.
+#
+# A JOB THAT NEEDS A CI SECRET IS SKIPPED, NOT FAILED, WHEN THE SECRET IS UNSET
+# HERE (RURL-hlcpduoq). Such a secret lives only as a GitLab CI/CD variable, so
+# locally the job fails on every run whatever the commit holds, and a verdict
+# that is always red says nothing. `SECRET_JOBS` below declares each such job as
+# `job:VARIABLE`; a job may have several entries. When one of its variables is
+# unset or empty, the job prints as SKIPPED, names the variable, and stays out
+# of the verdict, which the other jobs decide (the rule seor's
+# `scripts/check-fleet-standard.py` follows: not judged, not a gap). When all
+# are set, the job runs with them passed into its container and can still fail.
+# The next secret-gated job needs one entry there, nothing else.
 
 set -euo pipefail
+
+SECRET_JOBS="fossa:FOSSA_API_KEY"
 
 usage() { sed -n '/^# Usage:/,/^#$/p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -130,6 +143,8 @@ fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/rurl-local-ci.XXXXXX")"
 FAILED=""
+SKIPPED=""
+RAN=0
 
 cleanup() {
   if [ "$KEEP" -eq 1 ] || [ -n "$FAILED" ]; then
@@ -156,6 +171,30 @@ git clone --quiet --no-hardlinks "$ROOT" "$WORK/repo"
 git -C "$WORK/repo" checkout --quiet --detach "$SHA"
 
 for JOB in $JOBS; do
+  # The job's declared secrets (header): pass the set ones into the container,
+  # skip the job if any is missing. `-e NAME` copies the value from this
+  # environment, so it never appears on a command line.
+  MISSING=""
+  SECRET_ARGS=()
+  for ENTRY in $SECRET_JOBS; do
+    if [ "${ENTRY%%:*}" = "$JOB" ]; then
+      VAR="${ENTRY#*:}"
+      if [ -n "${!VAR:-}" ]; then
+        SECRET_ARGS+=(-e "$VAR")
+      else
+        MISSING="$MISSING $VAR"
+      fi
+    fi
+  done
+  if [ -n "$MISSING" ]; then
+    echo "=== job: $JOB ==============================="
+    echo "--- $JOB SKIPPED, not judged: CI secret unset locally:${MISSING}"
+    echo
+    SKIPPED="$SKIPPED $JOB"
+    continue
+  fi
+  RAN=$((RAN + 1))
+
   IMAGE="$(Rscript tools/local-ci-plan.R --image "$JOB")"
   {
     echo "set -ex"
@@ -169,8 +208,10 @@ for JOB in $JOBS; do
   # bash when the image has it, POSIX sh otherwise -- as GitLab's own shell
   # detection does. `python:3.13-alpine` (citation-version) ships only busybox
   # sh, and a bare `bash` there fails before the job starts (RURL-dswufxky).
-  # `exec` keeps the job's exit status as the container's.
+  # `exec` keeps the job's exit status as the container's. The `+` expansion
+  # keeps an empty SECRET_ARGS legal under `set -u` on macOS's bash 3.2.
   if docker run --rm \
+      ${SECRET_ARGS[@]+"${SECRET_ARGS[@]}"} \
       -v "$WORK/repo:/repo" \
       -v "$WORK:/ci:ro" \
       -w /repo \
@@ -185,6 +226,11 @@ for JOB in $JOBS; do
   echo
 done
 
+[ -n "$SKIPPED" ] && echo "not judged (CI secret unset locally):${SKIPPED}"
+if [ "$RAN" -eq 0 ]; then
+  echo "VERDICT: NONE -- every job was skipped, nothing was judged"
+  exit 0
+fi
 if [ -n "$FAILED" ]; then
   echo "VERDICT: FAIL --${FAILED}"
   exit 1
