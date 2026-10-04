@@ -1,5 +1,5 @@
 
-# rurl <img src="man/figures/logo.png" align="right" height="139" alt="" />
+# rurl <img src="man/figures/logo.png" align="right" height="139" alt="hex logo, white on black" />
 
 <!-- badges: start -->
 
