@@ -246,7 +246,16 @@ check:
         _R_CHECK_CRAN_INCOMING_SKIP_VERSIONS_: "true"
     - when: on_success
   script:
+    # punycoder's configure enables libidn2 when pkg-config finds it, as on
+    # CRAN's Debian flavors; its Windows flavors build without it. The two
+    # builds can decode differently, and rurl 3.1.0's first upload failed
+    # CRAN's Debian pre-test on a probe test that only the libidn2 build broke
+    # (RURL-woljcpfu). So this job builds punycoder with libidn2 and says so
+    # before the suite runs, and `coverage` asserts the build without it
+    # (SEOR-hxxxkmws). r-base ships pkg-config but not libidn2-dev.
+    - apt-get update -qq && apt-get install -y --no-install-recommends libidn2-dev
     - *check_deps
+    - 'Rscript -e ''b <- punycoder:::.backend_info(); print(b); if (!isTRUE(b$has_libidn2)) stop("punycoder was built without libidn2, so this job is not the libidn2 cell (SEOR-hxxxkmws)", call. = FALSE)'''
     - 'Rscript tools/verify.R'
 
 # Coverage, on every pipeline (fleet standard; ADR 0007 in seor). `coverage:`
@@ -260,6 +269,9 @@ coverage:
   needs: []
   script:
     - *check_deps
+    # The punycoder build without libidn2, as on CRAN's Windows flavors; `check`
+    # runs the libidn2 build (SEOR-hxxxkmws).
+    - 'Rscript -e ''b <- punycoder:::.backend_info(); print(b); if (!identical(b$has_libidn2, FALSE)) stop("punycoder was built with libidn2, so this job is not the cell without it (SEOR-hxxxkmws)", call. = FALSE)'''
     - 'apt-get install -y --no-install-recommends r-cran-covr r-cran-xml2'
     - >
       Rscript -e 'cov <- covr::package_coverage(quiet = FALSE);
