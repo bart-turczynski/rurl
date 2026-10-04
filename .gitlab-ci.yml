@@ -319,11 +319,11 @@ coverage:
   needs: []
   script:
     - *check_deps
+    - 'apt-get install -y --no-install-recommends r-cran-covr r-cran-xml2'
     - *pandoc_install
     # The punycoder build without libidn2, as on CRAN's Windows flavors; `check`
     # runs the libidn2 build (SEOR-hxxxkmws).
     - 'Rscript -e ''b <- punycoder:::.backend_info(); print(b); if (!identical(b$has_libidn2, FALSE)) stop("punycoder was built with libidn2, so this job is not the cell without it (SEOR-hxxxkmws)", call. = FALSE)'''
-    - 'apt-get install -y --no-install-recommends r-cran-covr r-cran-xml2'
     - >
       Rscript -e 'cov <- covr::package_coverage(quiet = FALSE);
       print(cov);
