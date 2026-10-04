@@ -29,7 +29,7 @@ test_that(".extract_from_urls honors fun_value and transform (port path)", {
 
 test_that(".extract_from_urls with field=NULL hands over the parsed list", {
   res <- rurl:::.extract_from_urls("http://u:p@example.com", NULL,
-    transform = function(parsed) parsed$user %||% NA_character_
+    transform = function(parsed) rurl:::.if_null(parsed$user, NA_character_)
   )
   expect_equal(unname(res), "u")
 })

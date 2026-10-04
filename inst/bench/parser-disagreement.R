@@ -89,7 +89,9 @@ spu <- if (exists("safe_parse_urls", mode = "function")) {
   rurl::safe_parse_urls
 }
 
-`%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
+if_null_or_zero_length <- function(a, b) {
+  if (is.null(a) || length(a) == 0L) b else a
+}
 
 # ---- component normalizers -------------------------------------------------
 norm_scheme <- function(x) {
@@ -192,12 +194,12 @@ adapt_curl <- function(urls) {
     } else {
       ""
     }
-    out$scheme[i]   <- norm_scheme(r$scheme %||% "")
-    out$host[i]     <- norm_host(r$host %||% "")
-    out$port[i]     <- norm_port(r$port %||% "")
-    out$path[i]     <- norm_path(r$path %||% "")
+    out$scheme[i]   <- norm_scheme(if_null_or_zero_length(r$scheme, ""))
+    out$host[i]     <- norm_host(if_null_or_zero_length(r$host, ""))
+    out$port[i]     <- norm_port(if_null_or_zero_length(r$port, ""))
+    out$path[i]     <- norm_path(if_null_or_zero_length(r$path, ""))
     out$query[i]    <- query
-    out$fragment[i] <- r$fragment %||% ""
+    out$fragment[i] <- if_null_or_zero_length(r$fragment, "")
     out$status[i]   <- "ok"
   }
   out

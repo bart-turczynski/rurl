@@ -1708,14 +1708,14 @@ safe_parse_urls <- function(url,
 # engine would reuse the first engine's memoized domain/TLD (a silent
 # correctness bug). NULL (the session-global default) returns "" so the
 # no-engine key stays byte-identical to the pre-engine format (mirroring how
-# `opts$url_standard %||% ""` handles its NULL). A non-NULL engine is keyed by
-# its snapshot identity (the sha256 of the PSL list content), which is stable
-# across engine objects built from the same list -- so two engines over the
-# same list share a cache entry (correct: identical PSL output) while different
-# lists never collide. If a future pslr ever drops that field, fall back to the
-# matcher's external-pointer address: per-object-unique and stable for the
-# object's lifetime, so it can never produce a cross-engine stale hit (only
-# less cross-object sharing).
+# `.if_null(opts$url_standard, "")` handles its NULL). A non-NULL engine is
+# keyed by its snapshot identity (the sha256 of the PSL list content), which is
+# stable across engine objects built from the same list -- so two engines over
+# the same list share a cache entry (correct: identical PSL output) while
+# different lists never collide. If a future pslr ever drops that field, fall
+# back to the matcher's external-pointer address: per-object-unique and stable
+# for the object's lifetime, so it can never produce a cross-engine stale hit
+# (only less cross-object sharing).
 .engine_cache_token <- function(engine) {
   if (is.null(engine)) {
     return("")
@@ -1757,7 +1757,7 @@ safe_parse_urls <- function(url,
   # "" keeps the no-engine key byte-identical (see .engine_cache_token()).
   cache_key <- paste(urls, opts$protocol_handling, opts$www_handling,
     opts$tld_source, opts$scheme_relative_handling,
-    opts$url_standard %||% "", opts$scheme_policy, opts$scheme_acceptance,
+    .if_null(opts$url_standard, ""), opts$scheme_policy, opts$scheme_acceptance,
     opts$fixup_posture, .engine_cache_token(opts$engine),
     sep = "\x1F"
   )
@@ -2147,10 +2147,10 @@ safe_parse_urls <- function(url,
   # port/fragment/user/password fields of .assemble_parse_result(), using `$`
   # exactly as the scalar code does).
   raw_scheme <- vapply(parsed_list, function(p) {
-    if (is.null(p)) NA_character_ else p$scheme %||% NA_character_
+    if (is.null(p)) NA_character_ else .if_null(p$scheme, NA_character_)
   }, character(1), USE.NAMES = FALSE)
   raw_host <- vapply(parsed_list, function(p) {
-    if (is.null(p)) NA_character_ else p$host %||% NA_character_
+    if (is.null(p)) NA_character_ else .if_null(p$host, NA_character_)
   }, character(1), USE.NAMES = FALSE)
   # The host shim's restore step used to run here (RURL-dxwxeamq /
   # RURL-rgjpcbuk): for rows Phase 1 had masked, the parser's `$host` was
@@ -2180,7 +2180,7 @@ safe_parse_urls <- function(url,
   # $path) so
   # dot segments survive to path_normalization; see .extract_raw_path_vec().
   engine_path <- vapply(parsed_list, function(p) {
-    if (is.null(p)) NA_character_ else p$path %||% NA_character_
+    if (is.null(p)) NA_character_ else .if_null(p$path, NA_character_)
   }, character(1), USE.NAMES = FALSE)
   raw_path <- engine_path
   if (any(web_ok)) {
@@ -2199,16 +2199,16 @@ safe_parse_urls <- function(url,
   # the long-shipped "empty component == absent" behavior is enforced (see
   # .blank_to_na in utils.R).
   raw_query <- .blank_to_na(vapply(parsed_list, function(p) {
-    if (is.null(p)) NA_character_ else p$query %||% NA_character_
+    if (is.null(p)) NA_character_ else .if_null(p$query, NA_character_)
   }, character(1), USE.NAMES = FALSE))
   raw_fragment <- .blank_to_na(vapply(parsed_list, function(p) {
-    if (is.null(p)) NA_character_ else p$fragment %||% NA_character_
+    if (is.null(p)) NA_character_ else .if_null(p$fragment, NA_character_)
   }, character(1), USE.NAMES = FALSE))
   raw_user <- .blank_to_na(vapply(parsed_list, function(p) {
-    if (is.null(p)) NA_character_ else p$user %||% NA_character_
+    if (is.null(p)) NA_character_ else .if_null(p$user, NA_character_)
   }, character(1), USE.NAMES = FALSE))
   raw_password <- .blank_to_na(vapply(parsed_list, function(p) {
-    if (is.null(p)) NA_character_ else p$password %||% NA_character_
+    if (is.null(p)) NA_character_ else .if_null(p$password, NA_character_)
   }, character(1), USE.NAMES = FALSE))
   # Whether the parsed authority carried a userinfo DELIMITER (RUL-001). Read
   # off the parser, not off `raw_user`: .parse_web_url_one() returns a non-NULL
@@ -2230,7 +2230,7 @@ safe_parse_urls <- function(url,
     if (is.null(p)) {
       NA_integer_
     } else {
-      suppressWarnings(as.integer(p$port %||% NA_integer_))
+      suppressWarnings(as.integer(.if_null(p$port, NA_integer_)))
     }
   }, integer(1), USE.NAMES = FALSE)
 

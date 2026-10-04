@@ -296,8 +296,10 @@ check_deferrals <- function(root = ".") {
       }
     }
   }
-  ids <- vapply(rows, function(r) as.character(r[["deferral_id"]] %||% ""),
-                character(1))
+  ids <- vapply(rows, function(r) {
+    id <- r[["deferral_id"]]
+    as.character(if (is.null(id)) "" else id)
+  }, character(1))
   dup <- unique(ids[duplicated(ids)])
   if (length(dup)) {
     bad <- c(bad, sprintf("duplicate deferral_id: %s", toString(dup)))
@@ -399,8 +401,6 @@ check_deferrals <- function(root = ".") {
 
   findings
 }
-
-`%||%` <- function(a, b) if (is.null(a)) b else a
 
 # ---- reporting --------------------------------------------------------------
 

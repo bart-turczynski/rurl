@@ -78,17 +78,18 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   survivor — it writes the spelling WHATWG *stores*, which the parser cannot
   infer because `rfc3986` must stay source-preserving.
 - **R/parse-web.R** — the in-tree syntactic parser for the web/special-scheme
-  route (http/https/ftp/ftps, plus ws/wss under `whatwg`). `.parse_web_url_one()`
-  is the drop-in replacement for the `curl::curl_parse_url()` call Phase 2 used
-  to make: it takes ONE already-prepared URL and returns either `NULL` (parse
-  error) or the nine components libcurl returned, so every downstream `%||%
-  NA_character_` keeps working. Eight of the nine reproduce libcurl's spelling
-  and were verified to; `$url` deliberately does not (it is the prepared input
-  verbatim, not a re-serialization) and nothing in rurl reads it — the file
-  header carries the measured table. This is also where the five ex-compensation
-  dials live as arguments (`host_charset`, `host_pct`, `last_at_userinfo`,
-  `pqf_bytes`, `host_ipv4`), each fed by its `.web_*_policy()` mapper, plus the
-  host parser (`.web_parse_host()`) and the IPv4/IPv6 canonicalizers.
+  route (http/https/ftp/ftps, plus ws/wss under `whatwg`).
+  `.parse_web_url_one()` is the drop-in replacement for the
+  `curl::curl_parse_url()` call Phase 2 used to make: it takes ONE
+  already-prepared URL and returns either `NULL` (parse error) or the nine
+  components libcurl returned, so every downstream `.if_null(x, NA_character_)`
+  keeps working. Eight of the nine reproduce libcurl's spelling and were
+  verified to; `$url` deliberately does not (it is the prepared input verbatim,
+  not a re-serialization) and nothing in rurl reads it — the file header carries
+  the measured table. This is also where the five ex-compensation dials live as
+  arguments (`host_charset`, `host_pct`, `last_at_userinfo`, `pqf_bytes`,
+  `host_ipv4`), each fed by its `.web_*_policy()` mapper, plus the host parser
+  (`.web_parse_host()`) and the IPv4/IPv6 canonicalizers.
 - **R/parse-state.R** — the non-web parse routes and the state model they share
   (ADR 0012 Layers 3a/3c/4a/4b). Five sections: the internal enum vocabularies
   (`.PATH_KIND`, `.HOST_KIND`, `.AUTHORITY_KIND`, `.WHATWG_HOST_FORM`,
@@ -220,7 +221,7 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   `serialize.R`'s record, so it is loaded after it.
 - **R/status-constants.R** — the `.STATUS_*` parse-status constants and the
   `.is_*_status()` predicates (incl. `.is_joinable_status()`).
-- **R/utils.R** — the `%||%` operator, the scheme tables
+- **R/utils.R** — the `.if_null()` NULL-default helper, the scheme tables
   (`.WHATWG_SPECIAL_SCHEMES`, `.SCHEME_DEFAULT_PORTS`, `.SUPPORTED_SCHEMES`),
   and `.spu_result_fields` (the single source of truth for parse result
   columns).

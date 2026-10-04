@@ -243,12 +243,17 @@ check_release_rule <- function(root = ".") {
     evidence_ok <- !is.null(fm$accepted_evidence) &&
       nzchar(fm$accepted_evidence) &&
       !identical(fm$accepted_evidence, "pending")
+    state_shown <- if (is.null(fm$state)) "<none>" else fm$state
+    evidence_shown <- if (is.null(fm$accepted_evidence)) {
+      "<none>"
+    } else {
+      fm$accepted_evidence
+    }
     finding("R1",
             identical(fm$state, "ACCEPTED") &&
               all(c("C-10", "G4.3") %in% affects) && evidence_ok,
             sprintf("P0.4 state=%s affects=[%s] accepted_evidence=%s",
-                    fm$state %||% "<none>", toString(affects),
-                    fm$accepted_evidence %||% "<none>"))
+                    state_shown, toString(affects), evidence_shown))
   })
 
   # R2 -- the contradiction register's C-10 row is ACCEPTED and cites P0.4.
@@ -326,8 +331,6 @@ check_release_rule <- function(root = ".") {
 
   findings
 }
-
-`%||%` <- function(a, b) if (is.null(a)) b else a
 
 print_findings <- function(findings) {
   cat("== rurl 3.0 C-10 release-rule gate (P0.4 / G4.3) ==\n")

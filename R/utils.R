@@ -1,7 +1,9 @@
 # Package-wide utilities and global-variable declarations.
 
-# Null coalescing operator
-`%||%` <- function(x, y) if (!is.null(x)) x else y
+# `x`, or `default` when `x` is NULL. Only NULL counts as missing: a
+# zero-length or NA `x` is returned as it is. A named helper, not base R's
+# NULL-default operator, which exists only from R 4.4.0 (RURL-xtekskxl).
+.if_null <- function(x, default) if (is.null(x)) default else x
 
 # --- byte-indexed string slicing (RURL-kmpnbvdl) -----------------------------
 #
@@ -339,7 +341,7 @@
 # Coerce present-but-empty ("") raw components to NA, vectorized. This dates
 # from the external parse engine, whose treatment of a present-but-empty
 # component (e.g. the query of "https://example.com/?") varied by VERSION:
-# older builds returned NULL (-> NA via %||%), newer ones "". Normalizing
+# older builds returned NULL (-> NA via .if_null()), newer ones "". Normalizing
 # "" -> NA made rurl's raw query/fragment/userinfo output deterministic
 # regardless. The engine is in-tree now and emits NULL for an empty component
 # by contract, so this no longer papers over anything -- it is simply where
