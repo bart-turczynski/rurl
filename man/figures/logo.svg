@@ -1,0 +1,28 @@
+<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="1.732in" height="2in" viewBox="0 0 1732 2000" role="img" aria-labelledby="rurl-title">
+<title id="rurl-title">rurl</title>
+<desc id="rurl-desc">URL library for R</desc>
+<metadata id="rurl-metadata"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#">
+<cc:Work rdf:about="">
+<dc:title>rurl</dc:title>
+<dc:description>URL library for R</dc:description>
+<dc:creator><cc:Agent><dc:title>Bart Turczynski</dc:title></cc:Agent></dc:creator>
+<dc:rights><cc:Agent><dc:title>&#169; 2026 Bart Turczynski. MIT License.</dc:title></cc:Agent></dc:rights>
+<cc:license>https://opensource.org/license/mit</cc:license>
+<dc:date>2026-10-04</dc:date>
+<dc:format>image/svg+xml</dc:format>
+<dc:language>en</dc:language>
+<dc:identifier>rurl</dc:identifier>
+<dc:source>https://github.com/bart-turczynski/rurl</dc:source>
+<dc:relation>https://github.com/bart-turczynski/rurl</dc:relation>
+<dc:relation>https://gitlab.com/bart-turczynski/rurl</dc:relation>
+<dc:relation>https://CRAN.R-project.org/package=rurl</dc:relation>
+<dc:relation>https://bart-turczynski.r-universe.dev/rurl</dc:relation>
+<dc:subject><rdf:Bag><rdf:li>R</rdf:li><rdf:li>rstats</rdf:li><rdf:li>R package</rdf:li><rdf:li>SEO</rdf:li><rdf:li>URL</rdf:li><rdf:li>URL parsing</rdf:li><rdf:li>URL normalization</rdf:li></rdf:Bag></dc:subject>
+<dc:contributor>Name set in IBM Plex Mono (SIL Open Font License 1.1), converted to outlines.</dc:contributor>
+</cc:Work>
+</rdf:RDF></metadata>
+<path id="rurl-border" fill="#F5F5F5" d="M866 0L1732 500L1732 1500L866 2000L0 1500L0 500Z"></path>
+<path id="rurl-background" fill="#000000" d="M866 69.3L1672 534.6L1672 1465.4L866 1930.7L60 1465.4L60 534.6Z"></path>
+<path id="rurl-name-bold" fill="#F5F5F5" d="M744.7 924.6L777.1 924.6L777.1 1020.1Q777.1 1027.2 777.7 1033.2Q778.2 1039.1 780.2 1043.2Q782.3 1047.3 786.4 1049.6Q790.5 1051.8 797.6 1051.8L797.6 1051.8Q804.8 1051.8 808.9 1049.6Q813.0 1047.3 815.0 1043.2Q817.1 1039.1 817.6 1033.2Q818.2 1027.2 818.2 1020.1L818.2 1020.1L818.2 924.6L850.6 924.6L850.6 1015.8Q850.6 1031.3 848.5 1043.0Q846.5 1054.6 840.6 1062.4Q834.8 1070.2 824.4 1074.1Q814.1 1078.0 797.6 1078.0L797.6 1078.0Q781.2 1078.0 770.9 1074.1Q760.5 1070.2 754.7 1062.4Q748.8 1054.6 746.8 1043.0Q744.7 1031.3 744.7 1015.8L744.7 1015.8L744.7 924.6ZM910.8 1019.4L910.8 1075.4L878.9 1075.4L878.9 924.6L937.2 924.6Q948.2 924.6 956.8 928.0Q965.5 931.3 971.4 937.6Q977.3 943.8 980.4 952.7Q983.4 961.6 983.4 972.6L983.4 972.6Q983.4 988.6 976.5 1000Q969.6 1011.4 956.8 1015.1L956.8 1015.1L986.4 1075.4L951.0 1075.4L925.7 1019.4L910.8 1019.4ZM910.8 994.4L929.4 994.4Q940.8 994.4 945.3 990.1Q949.7 985.7 949.7 975.8L949.7 975.8L949.7 969.3Q949.7 959.4 945.3 955.1Q940.8 950.8 929.4 950.8L929.4 950.8L910.8 950.8L910.8 994.4ZM1109.3 1075.4L1011.9 1075.4L1011.9 924.6L1044.5 924.6L1044.5 1048.8L1109.3 1048.8L1109.3 1075.4Z"></path>
+<path id="rurl-name-regular" fill="#F5F5F5" d="M640.8 1011.0L640.8 1075.4L622.7 1075.4L622.7 924.6L677.5 924.6Q698.5 924.6 709.5 936.1Q720.5 947.5 720.5 968.0L720.5 968.0Q720.5 986.4 711.0 997.4Q701.5 1008.4 683.4 1010.2L683.4 1010.2L721.8 1075.4L701.5 1075.4L664.8 1011.0L640.8 1011.0ZM640.8 995.7L677.1 995.7Q688.6 995.7 694.9 990.0Q701.3 984.2 701.3 973.6L701.3 973.6L701.3 962.4Q701.3 951.8 694.9 946.1Q688.6 940.4 677.1 940.4L677.1 940.4L640.8 940.4L640.8 995.7Z"></path>
+</svg>
