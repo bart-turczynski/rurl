@@ -205,6 +205,27 @@ format_url("https://example.com/a%2Fb?x=a%26b%3Dc#%E2%80%AEevil")
 Its output is display only — never feed it back into a parser, a comparison, or
 anything that treats it as an address.
 
+# Caching
+
+`rurl` memoizes URL parsing and punycode round-trips to speed repeated operations
+over large URL vectors; PSL query caching lives in `pslr`. Inspect, clear, and
+configure the caches:
+
+```r
+rurl_cache_info()                          # entries / enabled / max per cache
+rurl_clear_caches()                        # free memory in a long-running session
+rurl_cache_config(max_full_parse = 1e4)    # tighten the full-parse bound
+rurl_cache_config(puny_encode = FALSE)     # disable a cache entirely
+```
+
+`rurl_cache_config()` covers three caches: `full_parse`, `puny_encode`, and
+`puny_decode`. The `full_parse` cache is bounded at 100000 entries by default: a
+hard reset-watermark that caps peak memory (once the bound is hit the cache
+empties completely and rebuilds, rather than evicting per entry). Set
+`max_full_parse = Inf` to opt into the historical unbounded behavior. The
+`puny_encode` and `puny_decode` caches are unbounded by design and can be
+disabled for workloads with very many unique hosts.
+
 # Summary
 
 - Vectorized functions for parsing and cleaning URLs

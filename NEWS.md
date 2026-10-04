@@ -5,6 +5,8 @@
 
 - `check_schemes()` now lowercases `allowed_schemes` as ASCII. Under a Turkish or Azeri locale, `tolower()` mapped `"FILE"` to `"fıle"` (dotless i), so `allowed_schemes = "FILE"` admitted no `file:` URL (`SEOR-rxxuzhmc`).
 
+- The README gives the r-universe install command next to CRAN's, drops its list of functions, which repeated the reference index, and moves the caching notes to the "Getting Started" vignette. `DESCRIPTION`'s `X-schema.org-keywords` no longer lists `r`, `rstats`, `r-stats` or `r-package`, which r-universe drops (`SEOR-kqmqosji`, `SEOR-nplcfbib`).
+
 ## rurl 3.1.0
 
 ### New features

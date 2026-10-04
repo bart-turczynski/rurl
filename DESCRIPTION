@@ -54,7 +54,7 @@ X-schema.org-keywords: url-parsing, url-parser, url-normalization,
     url-cleaning, url-cleaner, url-checker, domain-extraction,
     domain-name-detection, domain-name-checker, public-suffix, tld, tlds,
     tld-extraction, tld-checker, tld-verification, idna, punycode, uri, url,
-    seo, web-scraping, r, rstats, r-stats, r-package
+    seo, web-scraping
 Suggests:
     testthat (>= 3.0.0),
     knitr,

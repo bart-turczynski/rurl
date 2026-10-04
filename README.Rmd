@@ -45,21 +45,16 @@ Current package capabilities include:
 # From CRAN
 install.packages("rurl")
 
+# From r-universe
+install.packages(
+  "rurl",
+  repos = c("https://bart-turczynski.r-universe.dev", "https://cloud.r-project.org")
+)
+
 # Development version from GitLab
 # install.packages("remotes")
 remotes::install_gitlab("bart-turczynski/rurl")
 ```
-
-## Function Overview
-
-- Parsing and normalization: `safe_parse_url()`, `safe_parse_urls()`,
-  `get_clean_url()`
-- Accessors: `get_scheme()`, `get_host()`, `get_subdomain()`, `get_domain()`,
-  `get_tld()`, `get_path()`, `get_query()`, `get_fragment()`, `get_port()`,
-  `get_user()`, `get_password()`, `get_userinfo()`, `get_parse_status()`
-- Query introspection: `query_param_summary()`
-- Matching/joining: `canonical_join()` for deterministic canonical-key joins
-- Cache control: `rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`
 
 ## Quick Start
 
@@ -251,26 +246,14 @@ B <- data.frame(URL = c("https://example.com/page?utm_source=nl", "https://examp
 canonical_join(A, B)
 ```
 
-## Caching
+## Documentation
 
-`rurl` memoizes URL parsing and punycode round-trips to speed repeated operations
-over large URL vectors; PSL query caching lives in `pslr`. Inspect, clear, and
-configure the caches:
-
-```r
-rurl_cache_info()                          # entries / enabled / max per cache
-rurl_clear_caches()                        # free memory in a long-running session
-rurl_cache_config(max_full_parse = 1e5)    # bound the full-parse cache
-rurl_cache_config(puny_encode = FALSE)     # disable a cache entirely
-```
-
-`rurl_cache_config()` covers three caches: `full_parse`, `puny_encode`, and
-`puny_decode`. The `full_parse` cache is bounded at 100000 entries by default: a
-hard reset-watermark that caps peak memory (once the bound is hit the cache
-empties completely and rebuilds, rather than evicting per entry). Set
-`max_full_parse = Inf` to opt into the historical unbounded behavior. The
-`puny_encode` and `puny_decode` caches are unbounded by design and can be
-disabled for workloads with very many unique hosts.
+The [reference index](https://bart-turczynski.gitlab.io/rurl/reference/)
+lists every exported function. The
+[Getting Started](https://bart-turczynski.gitlab.io/rurl/articles/getting-started.html)
+article walks through parsing, extraction and the parse caches, and
+[Standard-conformant parsing](https://bart-turczynski.gitlab.io/rurl/articles/url-standard.html)
+explains the `url_standard` profiles.
 
 ## Public Suffix List
 

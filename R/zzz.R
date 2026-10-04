@@ -50,10 +50,11 @@ names(.CACHE_CONFIG_FIELDS) <- vapply(
 
 # Single source of truth for the shipped full_parse bound. .onLoad initializes
 # .rurl_config$full_parse_max to this value; every piece of documentation that
-# names the default bound (README, the rurl_cache_config/rurl_cache_info roxygen
-# -> man/*.Rd, any vignette, and inline comments) must agree with it. The C-08
-# documentation-consistency gate (tools/cache-doc-consistency.R) reads this
-# literal by sourcing this file and fails the verify chain on any divergence.
+# names the default bound (the rurl_cache_config/rurl_cache_info roxygen ->
+# man/*.Rd, the Getting Started vignette, and inline comments) must agree with
+# it. The C-08 documentation-consistency gate (tools/cache-doc-consistency.R)
+# reads this literal by sourcing this file and fails the verify chain on any
+# divergence.
 # It is a hard reset-watermark bound (peak-memory cap), NOT an LRU/FIFO
 # working set; max_full_parse = Inf opts into the historical unbounded behavior.
 .FULL_PARSE_MAX_DEFAULT <- 100000L
