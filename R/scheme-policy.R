@@ -132,7 +132,9 @@ check_schemes <- function(url,
         call. = FALSE
       )
     }
-    allowed_schemes <- unique(tolower(trimws(allowed_schemes)))
+    # ASCII lowercase: tolower() follows the locale, and under tr_TR "FILE"
+    # became "f\u0131le", which no scheme matches (SEOR-rxxuzhmc).
+    allowed_schemes <- unique(.ascii_tolower(trimws(allowed_schemes)))
   }
   scheme_policy <- match.arg(scheme_policy)
   scheme_acceptance <- match.arg(scheme_acceptance)

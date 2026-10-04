@@ -94,7 +94,9 @@ spu <- if (exists("safe_parse_urls", mode = "function")) {
 # ---- component normalizers -------------------------------------------------
 norm_scheme <- function(x) {
   x <- ifelse(is.na(x), "", as.character(x))
-  sub(":$", "", tolower(x))
+  # ASCII lowercase: tolower() follows the locale (SEOR-rxxuzhmc).
+  x <- chartr(paste(LETTERS, collapse = ""), paste(letters, collapse = ""), x)
+  sub(":$", "", x)
 }
 norm_host <- function(x) ifelse(is.na(x), "", as.character(x))
 norm_port <- function(x) {

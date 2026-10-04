@@ -69,6 +69,24 @@ test_that("allowed_schemes is matched case-insensitively and de-duplicated", {
   expect_identical(r$allowed, c(TRUE, TRUE))
 })
 
+# allowed_schemes is lowercased as ASCII only, so "FILE" still matches under a
+# Turkish or Azeri locale, where tolower() maps "I" to a dotless i. A machine
+# without the locale skips; macOS's libc does not map "I" specially anyway, and
+# .lintr bans tolower() on every machine (SEOR-rxxuzhmc).
+for (locale in c("tr_TR.UTF-8", "az_AZ.UTF-8")) {
+  test_that(paste("allowed_schemes matches the same under", locale), {
+    active <- suppressWarnings(
+      withr::with_locale(c(LC_CTYPE = locale), Sys.getlocale("LC_CTYPE"))
+    )
+    skip_if_not(identical(active, locale), paste(locale, "is not available"))
+    r <- withr::with_locale(
+      c(LC_CTYPE = locale),
+      check_schemes("file:///etc/hosts", allowed_schemes = "FILE")
+    )
+    expect_true(r$allowed)
+  })
+}
+
 test_that("an empty allowlist admits nothing but still reports the facts", {
   r <- check_schemes("https://example.com/", allowed_schemes = character(0))
   expect_false(r$allowed)
