@@ -266,10 +266,10 @@ test_that("normalization lower-cases the scheme and the host", {
   # assert the contradiction.
   r <- rfc_prop_serialize("normalized")
   sch <- rfc_out_scheme(r$output)
-  expect_property(sch != tolower(sch), r$input)
+  expect_property(sch != .ascii_tolower(sch), r$input)
 
   host <- gsub("%[0-9A-Fa-f]{2}", "", rfc_out_host(r$output))
-  expect_property(!is.na(host) & host != tolower(host), r$input)
+  expect_property(!is.na(host) & host != .ascii_tolower(host), r$input)
 })
 
 test_that("normalization upper-cases every surviving percent triplet", {
@@ -278,7 +278,8 @@ test_that("normalization upper-cases every surviving percent triplet", {
   # output string rather than per component.
   r <- rfc_prop_serialize("normalized")
   bad <- vapply(
-    rfc_out_triplets(r$output), function(t) any(t != toupper(t)), logical(1)
+    rfc_out_triplets(r$output), function(t) any(t != .ascii_toupper(t)),
+    logical(1)
   )
   expect_property(bad, r$input)
 })

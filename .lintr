@@ -11,6 +11,7 @@ linters: linters_with_defaults(
     setwd_linter = lintr::undesirable_function_linter(fun = lintr::default_undesirable_functions["setwd"]),
     sapply_linter = lintr::undesirable_function_linter(fun = lintr::default_undesirable_functions["sapply"]),
     installed_packages_linter = lintr::undesirable_function_linter(fun = c(installed.packages = "it can be very slow; use find.package() or system.file() instead.")),
+    case_folding_linter = lintr::undesirable_function_linter(fun = c(tolower = "use .ascii_tolower(): tolower() follows the locale, and a Turkish locale maps I to a dotless i", toupper = "use .ascii_toupper(): toupper() follows the locale, and a Turkish locale maps i to a dotted I", casefold = "use .ascii_tolower() or .ascii_toupper(): casefold() follows the locale, and a Turkish locale maps I to a dotless i")),
     seq_linter = lintr::seq_linter(),
     any_duplicated_linter = lintr::any_duplicated_linter(),
     any_is_na_linter = lintr::any_is_na_linter(),
