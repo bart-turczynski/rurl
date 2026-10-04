@@ -99,86 +99,34 @@ pre-commit run --hook-stage pre-push --all-files
 
 ## CRAN release checklist
 
-Follow these steps in order for every CRAN release. The first three and the
-fast-forward are the easiest to miss — skipping them leaves `NEWS.md`, the
-published version, and `main` out of sync. `rurl` is one link in an eight-package
-chain; [design/release-chain.md](design/release-chain.md) records the order and
-what must already be on CRAN before this checklist starts.
+Follow the fleet checklist,
+[seor `design/release-checklist.md`](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/release-checklist.md).
+rurl's deltas:
 
-1. **Update the NEWS heading.** Ensure the top `NEWS.md` heading matches the
-   release version (e.g. `## rurl 1.2.0`) and fold any unreleased items into
-   that section.
-
-   **Nothing checks this any more, and the freeze is why.** `rurl` ships as
-   3.0.0 with no further version bumps, so the `news-version` GitHub workflow —
-   which asserted the top NEWS heading is either `(development version)` or
-   the `DESCRIPTION` Version — compared two constants and could never fail; it
-   was deleted with RURL-vunvxusf. It was never in `tools/verify-manifest.yml`
-   either, so `tools/verify.R` does not derive it. With the version bump gone as a
-   checkpoint, `## rurl 3.0.0` accumulates months of work with nothing asserting
-   that a user-visible change added an entry. The gate a freeze needs is NEWS
-   **completeness**, not NEWS/version **consistency**; until one exists, this
-   step is entirely manual.
-2. **Set the release version** in `DESCRIPTION`.
-3. Update `cran-comments.md` for this submission.
-4. Run `R CMD build . && R CMD check --as-cran rurl_*.tar.gz` clean. There is no
-   platform CI to confirm — the `R-CMD-check` and R-hub workflows ran on GitHub
-   Actions and cannot fire. Run `tools/local-ci.sh --all origin/main` instead,
-   which reproduces the CI jobs in the CI image against a clean clone.
-5. Submit to CRAN. Once accepted, **tag the released commit**
-   (`git tag -a vX.Y.Z`) and push the tag.
-6. **Fast-forward `main` to the released/tagged commit** so the default branch
-   always reflects what shipped (`git merge --ff-only vX.Y.Z && git push`).
-   Verify: `git merge-base vX.Y.Z main` equals the tag.
-7. Create the GitLab release from the tag
-   (`glab release create vX.Y.Z`).
-8. Open a post-release MR that (a) bumps `DESCRIPTION` to the next development
-   version, (b) adds a fresh `## rurl (development version)` NEWS heading, and
-   (c) adds the CRAN canonical URL to the `DESCRIPTION` `URL:` field
-   (`https://CRAN.R-project.org/package=rurl`), which only exists once accepted.
-
-   **The development version is `X.Y.Z.9000`** — the release just published,
-   plus a fourth component. Not the next patch number: `3.0.2` asserts a release
-   that has not been scoped, while `3.0.1.9000` says only "after 3.0.1", which
-   is the one thing actually known. This matches the rest of the fleet (pslr,
-   punycoder, robotstxtr, sitemapr, raddr, seor all use `.9000`). Do not read
-   the `2.2.1 → 2.2.2` bump in this repo's history as a precedent: it opened a
-   cycle that already carried bug fixes under a `## rurl 2.2.2` heading, so it
-   was a release-in-progress, not post-release housekeeping.
-
-   **Do not touch `cran-comments.md` here.** It describes the submission that
-   just landed, and it stays frozen at `to=X.Y.Z` for the whole development
-   cycle. `tools/cran-comments-gate.R` knows about this and checks the pin
-   against the release the version *names* — `3.0.1` while at `3.0.1.9000` —
-   so the bump does not break it. Rewrite the note at step 3 of the next
-   release, not here (RURL-efbcrhjc).
-9. Sanity check: diff the published CRAN tarball
-   (`cran.r-project.org/src/contrib/rurl_X.Y.Z.tar.gz`) against the tag — only
-   CRAN's auto-added `DESCRIPTION` fields should differ.
-10. **Archive the release on Zenodo and record its version DOI.** Zenodo
-    deposits on a GitHub Release on the read-only mirror, not on the tag.
-    Skip this and `CITATION.cff` keeps naming the 1.4.0 version DOI, the last
-    one minted. Details and stall recovery:
-    [seor `design/github-mirror.md` §5](https://gitlab.com/bart-turczynski/seor/-/blob/main/design/github-mirror.md).
-
-    - Confirm the tag object matches on both forges:
-      `git ls-remote --tags origin 'refs/tags/vX.Y.Z'`, then the same against
-      `https://github.com/bart-turczynski/rurl.git`.
-    - Create the GitHub Release from that tag, never letting GitHub create one:
-      `gh release create vX.Y.Z --verify-tag -R bart-turczynski/rurl`.
-    - Wait for the record under the concept DOI `10.5281/zenodo.20972584`. It
-      takes minutes, not seconds. A release stuck at "Received" on Zenodo's
-      GitHub page needs the §5.1 recovery.
-    - Check the record's version and title against the release. Zenodo reads
-      both from `.zenodo.json` in the tagged archive:
-      `curl -s 'https://zenodo.org/api/records?q=conceptrecid:20972584&allversions=true' | jq '.hits.hits[].metadata | [.version, .title]'`.
-      Compare the archived zip with the tag by content, not checksum (§5.2).
-    - Check that doi.org resolves both the concept DOI and the new version DOI:
-      `curl -s -o /dev/null -w '%{http_code}\n' https://doi.org/<doi>` prints
-      `302`. A `404` means DataCite has not registered it yet: wait, and don't
-      commit it (§5.3).
-    - In a follow-up commit, set the version DOI entry in `CITATION.cff`
-      `identifiers:` (value and description) and `date-released` to this
-      release, and drop the concept DOI description's "none since 1.4.0"
-      caveat. `python3 scripts/check-citation.py` (the pre-push
-      `check-citation` hook) must still pass.
+- **Step 1: rurl is one link in the fleet's release chain.**
+  [design/release-chain.md](design/release-chain.md) records the order and
+  what must already be on CRAN; the live order is seor's SEOR-eqpdrqnl. The
+  next rurl update waits a full two months after the previous one (owner,
+  2026-10-01, after CRAN questioned pagerankr 0.1.1's spacing).
+- **Step 2: check the fleet packages that import rurl, not only CRAN's
+  reverse dependencies.** pagerankr is the CRAN reverse dependency today.
+  Also check robotstxtr's and sitemapr's latest CRAN release, or `main` if
+  they have none: CRAN re-checks every reverse dependency against each later
+  rurl, so a break there blocks the next rurl release (owner, 2026-10-01).
+- **Step 4: keep the `submission-span` pin.** `cran-comments.md` carries one
+  `<!-- submission-span: from=X to=Y -->` line, and
+  `tools/cran-comments-gate.R` (in the pre-push gate) checks it against
+  `DESCRIPTION`: `to` is the version being submitted, and both versions
+  appear in the prose. Leave `cran-comments.md` alone at step 12: while
+  `Version:` is `X.Y.Z.9000` the gate checks the pin against `X.Y.Z`
+  (RURL-efbcrhjc).
+- **Step 5: run punycoder built with libidn2, and run the CI jobs locally.**
+  punycoder's `configure` uses libidn2 when `pkg-config` finds it, as on
+  CRAN's Debian flavors, and rurl's tests can behave differently there. rurl
+  3.1.0's first upload failed CRAN's pre-test on exactly that
+  (RURL-woljcpfu). Install the current CRAN punycoder from source with
+  libidn2 and run the suite against it, besides the binary build. Then run
+  `tools/local-ci.sh --all origin/main`, which reproduces the CI jobs in the
+  CI image against a clean clone.
+- **Step 14: the concept DOI is `10.5281/zenodo.20972584`.** Its
+  `<concept-recid>` in the Zenodo API query is `20972584`.
