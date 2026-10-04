@@ -125,7 +125,9 @@ repos:
       # arrives disguised as a code defect: a roxygen2 skew aborts the docs
       # guard, and a package built under a newer R than this one surfaces as an
       # R CMD check WARNING minutes into the expensive step below. This is
-      # offline and instant, and it runs ahead of that step so the machine is
+      # quick (one request, for CRAN's package index, which the check for a
+      # dependency older than CRAN's reads: SEOR-hxxxkmws), and it runs ahead
+      # of that step so the machine is
       # named as the cause in one line rather than found by elimination
       # (SEOR-tcytizic).
       - id: check-toolchain
