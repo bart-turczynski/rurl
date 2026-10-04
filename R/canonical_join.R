@@ -367,8 +367,8 @@ canonical_join <- function(data_A, data_B,
 # a single object per side.
 .cj_side_state <- function(parsed, data, join_parse_status) {
   n <- nrow(data)
-  key <- parsed$clean_url %||% rep(NA_character_, n)
-  status <- parsed$parse_status %||% rep("error", n)
+  key <- .if_null(parsed$clean_url, rep(NA_character_, n))
+  status <- .if_null(parsed$parse_status, rep("error", n))
   ok <- !is.na(key) & nzchar(key) &
     .is_joinable_status(status, join_parse_status)
   list(data = data, key = key, ok = ok)

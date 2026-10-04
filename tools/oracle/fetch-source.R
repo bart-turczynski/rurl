@@ -48,7 +48,8 @@ oracle_source_pin <- function(group, record = ORACLE_PROVENANCE) {
   rec <- jsonlite::fromJSON(record, simplifyVector = FALSE)
   hit <- NULL
   for (fx in rec$fixtures) {
-    for (g in fx$source_groups %||% list()) {
+    groups <- if (is.null(fx$source_groups)) list() else fx$source_groups
+    for (g in groups) {
       if (identical(g$group, group)) hit <- g
     }
   }
@@ -79,8 +80,6 @@ oracle_source_pin <- function(group, record = ORACLE_PROVENANCE) {
        url = url,
        command = sprintf("curl -fsSL %s -o %s", url, basename(hit$upstream_path)))
 }
-
-`%||%` <- function(x, y) if (is.null(x)) y else x
 
 # A pin that is not in the record: the second anchor of ada-extra-urltestdata is
 # a revision the record names in prose rather than in the section-2.3 fields,

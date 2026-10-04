@@ -81,8 +81,9 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   route (http/https/ftp/ftps, plus ws/wss under `whatwg`). `.parse_web_url_one()`
   is the drop-in replacement for the `curl::curl_parse_url()` call Phase 2 used
   to make: it takes ONE already-prepared URL and returns either `NULL` (parse
-  error) or the nine components libcurl returned, so every downstream `%||%
-  NA_character_` keeps working. Eight of the nine reproduce libcurl's spelling
+  error) or the nine components libcurl returned, so every downstream
+  `.if_null(x, NA_character_)` keeps working. Eight of the nine reproduce
+  libcurl's spelling
   and were verified to; `$url` deliberately does not (it is the prepared input
   verbatim, not a re-serialization) and nothing in rurl reads it — the file
   header carries the measured table. This is also where the five ex-compensation
@@ -220,7 +221,7 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   `serialize.R`'s record, so it is loaded after it.
 - **R/status-constants.R** — the `.STATUS_*` parse-status constants and the
   `.is_*_status()` predicates (incl. `.is_joinable_status()`).
-- **R/utils.R** — the `%||%` operator, the scheme tables
+- **R/utils.R** — the `.if_null()` NULL-default helper, the scheme tables
   (`.WHATWG_SPECIAL_SCHEMES`, `.SCHEME_DEFAULT_PORTS`, `.SUPPORTED_SCHEMES`),
   and `.spu_result_fields` (the single source of truth for parse result
   columns).

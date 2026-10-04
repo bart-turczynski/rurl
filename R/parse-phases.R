@@ -1223,13 +1223,13 @@
 .extract_raw_components <- function(parsed_web, prepared,
                                     pqf_bytes = "reject") {
   list(
-    scheme = parsed_web$scheme %||% NA_character_,
-    host = parsed_web$host %||% NA_character_,
+    scheme = .if_null(parsed_web$scheme, NA_character_),
+    host = .if_null(parsed_web$host, NA_character_),
     path = .extract_raw_path_vec(
-      prepared, parsed_web$path %||% NA_character_, pqf_bytes
+      prepared, .if_null(parsed_web$path, NA_character_), pqf_bytes
     ),
     # .blank_to_na(): present-but-empty query "" -> NA.
-    query = .blank_to_na(parsed_web$query %||% NA_character_)
+    query = .blank_to_na(.if_null(parsed_web$query, NA_character_))
   )
 }
 
@@ -3212,13 +3212,13 @@
     original_url = original_input_url,
     scheme_output = scheme_output,
     host_output = host_output,
-    port = suppressWarnings(as.integer(parsed_web$port %||% NA_integer_)),
+    port = suppressWarnings(as.integer(.if_null(parsed_web$port, NA_integer_))),
     path_output = path_output,
     # .blank_to_na(): present-but-empty raw components "" -> NA (see utils.R).
-    raw_query = .blank_to_na(raw_query %||% NA_character_),
-    fragment = .blank_to_na(parsed_web$fragment %||% NA_character_),
-    user = .blank_to_na(parsed_web$user %||% NA_character_),
-    password = .blank_to_na(parsed_web$password %||% NA_character_),
+    raw_query = .blank_to_na(.if_null(raw_query, NA_character_)),
+    fragment = .blank_to_na(.if_null(parsed_web$fragment, NA_character_)),
+    user = .blank_to_na(.if_null(parsed_web$user, NA_character_)),
+    password = .blank_to_na(.if_null(parsed_web$password, NA_character_)),
     domain = domain,
     tld = tld,
     domain_ascii = domain_ascii,

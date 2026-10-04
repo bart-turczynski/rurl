@@ -62,18 +62,24 @@ find_file <- function(rel) {
   if (is.na(hit)) stop("cannot locate ", rel, " (run from the repo root).")
   hit
 }
-`%||%` <- function(a, b) if (is.null(a) || length(a) == 0L || is.na(a)) b else a
+if_null_zero_length_or_na <- function(a, b) {
+  if (is.null(a) || length(a) == 0L || is.na(a)) b else a
+}
 rej <- function(s) s %in% c("error", "reject")
 blank <- function(x) ifelse(is.na(x), "", as.character(x))
 
 wpt <- jsonlite::fromJSON(find_file("wpt-url-cases.json"),
                           simplifyVector = FALSE)
 succ <- do.call(rbind, lapply(wpt$success, function(e) data.frame(
-  input = e$input, protocol = e$protocol %||% "",
-  username = e$username %||% "", password = e$password %||% "",
-  hostname = e$hostname %||% "",
-  port = e$port %||% "", pathname = e$pathname %||% "",
-  search = e$search %||% "", hash = e$hash %||% "",
+  input = e$input,
+  protocol = if_null_zero_length_or_na(e$protocol, ""),
+  username = if_null_zero_length_or_na(e$username, ""),
+  password = if_null_zero_length_or_na(e$password, ""),
+  hostname = if_null_zero_length_or_na(e$hostname, ""),
+  port = if_null_zero_length_or_na(e$port, ""),
+  pathname = if_null_zero_length_or_na(e$pathname, ""),
+  search = if_null_zero_length_or_na(e$search, ""),
+  hash = if_null_zero_length_or_na(e$hash, ""),
   stringsAsFactors = FALSE)))
 fail_inputs <- vapply(wpt$failure, function(e) e$input, character(1))
 
@@ -160,8 +166,9 @@ general_fail <- score_failure("general")
 # "RFC conformance" by rejecting more of what the RFC allows -- the metric would
 # reward the opposite of conformance. They are reported separately below.
 rp <- utils::read.csv(find_file("rfc3986-probes.csv"), stringsAsFactors = FALSE)
-# Not `%||%`: that helper calls is.na() on its argument, which errors on a
-# vector. These are whole columns, so test for the column's absence directly.
+# Not if_null_zero_length_or_na(): it calls is.na() on its argument, which
+# errors on a vector. These are whole columns, so test for the column's absence
+# directly.
 rp$rurl_deviation <- if (is.null(rp$rurl_deviation)) {
   rep("", nrow(rp))
 } else {

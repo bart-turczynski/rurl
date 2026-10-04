@@ -29,7 +29,7 @@ test_that(".extract_from_urls honors fun_value and transform (port path)", {
 
 test_that(".extract_from_urls with field=NULL hands over the parsed list", {
   res <- rurl:::.extract_from_urls("http://u:p@example.com", NULL,
-    transform = function(parsed) parsed$user %||% NA_character_
+    transform = function(parsed) rurl:::.if_null(parsed$user, NA_character_)
   )
   expect_equal(unname(res), "u")
 })
@@ -75,4 +75,11 @@ test_that("get_domain source variants route through the shared helper", {
     "example.co.uk"
   )
   expect_true(is.na(get_domain("http://192.168.0.1", source = "icann")))
+})
+
+test_that(".if_null treats only NULL as missing", {
+  expect_identical(rurl:::.if_null(NULL, "d"), "d")
+  expect_identical(rurl:::.if_null(character(0), "d"), character(0))
+  expect_identical(rurl:::.if_null(NA_character_, "d"), NA_character_)
+  expect_identical(rurl:::.if_null("", "d"), "")
 })

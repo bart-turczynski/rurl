@@ -13,8 +13,9 @@
 # host-charset shim) and returns either `NULL` (the row is a parse error) or a
 # list of components: `url`, `scheme`, `host`,
 # `port`, `path`, `query`, `fragment`, `user`, `password`. Absent components are
-# `NULL`, exactly as libcurl reported them, so every `%||% NA_character_` and
-# `.blank_to_na()` downstream keeps working unchanged.
+# `NULL`, exactly as libcurl reported them, so every
+# `.if_null(x, NA_character_)` and `.blank_to_na()` downstream keeps working
+# unchanged.
 #
 # EIGHT of those nine reproduce libcurl's spelling and were verified to. `url`
 # DOES NOT, and never did -- read this before reaching for it:
