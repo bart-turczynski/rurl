@@ -41,6 +41,10 @@
 #   tools/local-ci.sh --all [ref]     # every job, ignoring `rules:`
 #   tools/local-ci.sh --keep [ref]    # keep the work tree even on success
 #
+# Exit status: 0 PASS, or no job applies to the ref; 1 FAIL, or the runner
+# could not start; 2 a bad argument or a bad `SECRET_JOBS` entry; 3 NONE, every
+# job that applies was skipped for an unset secret, so nothing was judged.
+#
 # AFTER A MERGE, run it against what actually landed:
 #   git fetch origin main && tools/local-ci.sh --all origin/main
 #
@@ -56,15 +60,26 @@
 # locally the job fails on every run whatever the commit holds, and a verdict
 # that is always red says nothing. `SECRET_JOBS` below declares each such job as
 # `job:VARIABLE`; a job may have several entries. When one of its variables is
-# unset or empty, the job prints as SKIPPED, names the variable, and stays out
-# of the verdict, which the other jobs decide (the rule seor's
-# `scripts/check-fleet-standard.py` follows: not judged, not a gap). When all
-# are set, the job runs with them passed into its container and can still fail.
-# The next secret-gated job needs one entry there, nothing else.
+# not set (exported, non-empty) in this environment, the job prints as SKIPPED,
+# names the variable, and stays out of the judgment, which the other jobs make
+# (the rule seor's `scripts/check-fleet-standard.py` follows: not judged, not a
+# gap); the VERDICT line names it. When all are set, the job runs exactly as
+# any other job and can still fail. A declared secret ONLY decides skip or run:
+# it is never forwarded into the container. Forwarding `FOSSA_API_KEY` would
+# make a local run on any ref upload to the production FOSSA project, past CI's
+# default-branch-only rule. The check runs before the clone, so a run in which
+# every job is skipped costs nothing and ends NONE. The next secret-gated job
+# needs one entry there, nothing else.
 
 set -euo pipefail
 
 SECRET_JOBS="fossa:FOSSA_API_KEY"
+for ENTRY in $SECRET_JOBS; do
+  if ! [[ "$ENTRY" =~ ^[^:]+:[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    echo "SECRET_JOBS: '$ENTRY' is not job:VARIABLE" >&2
+    exit 2
+  fi
+done
 
 usage() { sed -n '/^# Usage:/,/^#$/p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -141,10 +156,35 @@ if [ -z "$JOBS" ]; then
   exit 0
 fi
 
+# The secret gate (header), before the clone. `printenv` sees only exported
+# variables, as a real job's environment would, never this script's own; set
+# but empty counts as unset. `RUN_JOBS` keeps the planner's order.
+RUN_JOBS=""
+SKIPPED=""
+for JOB in $JOBS; do
+  MISSING=""
+  for ENTRY in $SECRET_JOBS; do
+    VAR="${ENTRY#*:}"
+    if [ "${ENTRY%%:*}" = "$JOB" ] && [ -z "$(printenv "$VAR" || true)" ]; then
+      MISSING="$MISSING $VAR"
+    fi
+  done
+  if [ -n "$MISSING" ]; then
+    echo "--- $JOB SKIPPED, not judged: CI secret unset locally:${MISSING}"
+    SKIPPED="${SKIPPED:+$SKIPPED, }$JOB (${MISSING# } unset)"
+  else
+    RUN_JOBS="$RUN_JOBS $JOB"
+  fi
+done
+[ -n "$SKIPPED" ] && echo
+if [ -z "$RUN_JOBS" ]; then
+  echo "VERDICT: NONE -- not judged: $SKIPPED"
+  exit 3
+fi
+NOT_JUDGED="${SKIPPED:+ -- not judged: $SKIPPED}"
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/rurl-local-ci.XXXXXX")"
 FAILED=""
-SKIPPED=""
-RAN=0
 
 cleanup() {
   if [ "$KEEP" -eq 1 ] || [ -n "$FAILED" ]; then
@@ -170,31 +210,7 @@ trap cleanup EXIT
 git clone --quiet --no-hardlinks "$ROOT" "$WORK/repo"
 git -C "$WORK/repo" checkout --quiet --detach "$SHA"
 
-for JOB in $JOBS; do
-  # The job's declared secrets (header): pass the set ones into the container,
-  # skip the job if any is missing. `-e NAME` copies the value from this
-  # environment, so it never appears on a command line.
-  MISSING=""
-  SECRET_ARGS=()
-  for ENTRY in $SECRET_JOBS; do
-    if [ "${ENTRY%%:*}" = "$JOB" ]; then
-      VAR="${ENTRY#*:}"
-      if [ -n "${!VAR:-}" ]; then
-        SECRET_ARGS+=(-e "$VAR")
-      else
-        MISSING="$MISSING $VAR"
-      fi
-    fi
-  done
-  if [ -n "$MISSING" ]; then
-    echo "=== job: $JOB ==============================="
-    echo "--- $JOB SKIPPED, not judged: CI secret unset locally:${MISSING}"
-    echo
-    SKIPPED="$SKIPPED $JOB"
-    continue
-  fi
-  RAN=$((RAN + 1))
-
+for JOB in $RUN_JOBS; do
   IMAGE="$(Rscript tools/local-ci-plan.R --image "$JOB")"
   {
     echo "set -ex"
@@ -208,10 +224,8 @@ for JOB in $JOBS; do
   # bash when the image has it, POSIX sh otherwise -- as GitLab's own shell
   # detection does. `python:3.13-alpine` (citation-version) ships only busybox
   # sh, and a bare `bash` there fails before the job starts (RURL-dswufxky).
-  # `exec` keeps the job's exit status as the container's. The `+` expansion
-  # keeps an empty SECRET_ARGS legal under `set -u` on macOS's bash 3.2.
+  # `exec` keeps the job's exit status as the container's.
   if docker run --rm \
-      ${SECRET_ARGS[@]+"${SECRET_ARGS[@]}"} \
       -v "$WORK/repo:/repo" \
       -v "$WORK:/ci:ro" \
       -w /repo \
@@ -226,13 +240,8 @@ for JOB in $JOBS; do
   echo
 done
 
-[ -n "$SKIPPED" ] && echo "not judged (CI secret unset locally):${SKIPPED}"
-if [ "$RAN" -eq 0 ]; then
-  echo "VERDICT: NONE -- every job was skipped, nothing was judged"
-  exit 0
-fi
 if [ -n "$FAILED" ]; then
-  echo "VERDICT: FAIL --${FAILED}"
+  echo "VERDICT: FAIL --${FAILED}${NOT_JUDGED}"
   exit 1
 fi
-echo "VERDICT: PASS (one machine, one architecture, one R -- see the header)"
+echo "VERDICT: PASS${NOT_JUDGED} (one machine, one architecture, one R -- see the header)"
