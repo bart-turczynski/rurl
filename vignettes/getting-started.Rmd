@@ -214,7 +214,7 @@ configure the caches:
 ```r
 rurl_cache_info()                          # entries / enabled / max per cache
 rurl_clear_caches()                        # free memory in a long-running session
-rurl_cache_config(max_full_parse = 1e5)    # bound the full-parse cache
+rurl_cache_config(max_full_parse = 1e4)    # tighten the full-parse bound
 rurl_cache_config(puny_encode = FALSE)     # disable a cache entirely
 ```
 

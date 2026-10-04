@@ -246,6 +246,15 @@ B <- data.frame(URL = c("https://example.com/page?utm_source=nl", "https://examp
 canonical_join(A, B)
 ```
 
+## Documentation
+
+The [reference index](https://bart-turczynski.gitlab.io/rurl/reference/)
+lists every exported function. The
+[Getting Started](https://bart-turczynski.gitlab.io/rurl/articles/getting-started.html)
+article walks through parsing, extraction and the parse caches, and
+[Standard-conformant parsing](https://bart-turczynski.gitlab.io/rurl/articles/url-standard.html)
+explains the `url_standard` profiles.
+
 ## Public Suffix List
 
 Domain and TLD extraction is delegated to the
