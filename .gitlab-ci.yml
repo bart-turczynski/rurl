@@ -187,8 +187,10 @@ default:
 # SEOR-dpjdwhbi). Its markdown writer reflows text and pads tables differently
 # between versions, so README.md is byte-stable only under the pandoc that knit
 # it, and the vignettes and the pkgdown site render with it too. `gates`,
-# `check`, `coverage` and `pages` splice this list into their `before_script`,
-# and `full-check` into its script.
+# `check`, `coverage`, `pages` and `full-check` splice this list into their
+# script AFTER their apt install, never before it: r-base:latest's Debian
+# pandoc is 3.11 (2026-10-04), and installing it after the pin would replace
+# the pinned one. `dpkg -i` downgrades over it cleanly.
 #
 # AN ANCHORED LIST, NOT A TEMPLATE, and the pin a shell assignment, not a
 # `variables:` entry: tools/local-ci-plan.R follows neither `extends:` nor
@@ -201,15 +203,13 @@ default:
 # PANDOC_VERSION, both sha256 digests (the release's own published values),
 # and README.md, re-knit under the new pandoc.
 #
-# r-base has no curl, hence the apt line. The release .deb goes in over
-# whatever pandoc the image has; `.check_deps` installs Debian's pandoc after
-# it, which apt leaves alone because the release's version is newer. A failed
-# or mismatched download only warns, and those jobs then run on Debian's
-# pandoc. Nothing unverified is ever installed. The download retries and has a
-# ceiling: --max-time bounds each attempt and --retry-max-time the retries, so
-# a stalled CDN reaches the warning in minutes instead of hanging the job. The
-# architecture comes from `dpkg --print-architecture`, because the runner is
-# arm64.
+# r-base has no curl, hence the apt line. A failed or mismatched download
+# only warns, and the job then runs on whatever pandoc it has: Debian's, from
+# `.check_deps`, or none in `gates`, which renders nothing. Nothing unverified
+# is ever installed. The download retries and has a ceiling: --max-time bounds
+# each attempt and --retry-max-time the retries, so a stalled CDN reaches the
+# warning in minutes instead of hanging the job. The architecture comes from
+# `dpkg --print-architecture`, because the runner is arm64.
 .pandoc_install: &pandoc_install
   - PANDOC_VERSION="3.10"
   - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
@@ -237,10 +237,9 @@ default:
 # ...`). Pure shell, so it rides in this job instead of taking a runner slot.
 gates:
   stage: gates
-  before_script:
-    - *pandoc_install
   script:
     - *gate_deps
+    - *pandoc_install
     - 'Rscript tools/verify.R --gates'
     - |
       version="$(grep -E '^Version:' DESCRIPTION | head -n1 | sed -E 's/^Version:[[:space:]]*//')"
@@ -295,8 +294,6 @@ check:
       variables:
         _R_CHECK_CRAN_INCOMING_SKIP_VERSIONS_: "true"
     - when: on_success
-  before_script:
-    - *pandoc_install
   script:
     # punycoder's configure enables libidn2 when pkg-config finds it, as on
     # CRAN's Debian flavors; its Windows flavors build without it. The two
@@ -307,6 +304,7 @@ check:
     # (SEOR-hxxxkmws). r-base ships pkg-config but not libidn2-dev.
     - apt-get update -qq && apt-get install -y --no-install-recommends libidn2-dev
     - *check_deps
+    - *pandoc_install
     - 'Rscript -e ''b <- punycoder:::.backend_info(); print(b); if (!isTRUE(b$has_libidn2)) stop("punycoder was built without libidn2, so this job is not the libidn2 cell (SEOR-hxxxkmws)", call. = FALSE)'''
     - 'Rscript tools/verify.R'
 
@@ -319,10 +317,9 @@ check:
 coverage:
   stage: check
   needs: []
-  before_script:
-    - *pandoc_install
   script:
     - *check_deps
+    - *pandoc_install
     # The punycoder build without libidn2, as on CRAN's Windows flavors; `check`
     # runs the libidn2 build (SEOR-hxxxkmws).
     - 'Rscript -e ''b <- punycoder:::.backend_info(); print(b); if (!identical(b$has_libidn2, FALSE)) stop("punycoder was built with libidn2, so this job is not the cell without it (SEOR-hxxxkmws)", call. = FALSE)'''
@@ -367,10 +364,9 @@ pages:
     # pin, one click on a feature branch would serve unmerged code from the
     # live site with nothing on the page saying so (SEOR-bmgkzhvy).
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  before_script:
-    - *pandoc_install
   script:
     - *check_deps
+    - *pandoc_install
     # `build_site(install = FALSE)` runs the examples against the INSTALLED
     # package, so install first. This is the same code the tarball would carry.
     - 'R CMD INSTALL --no-multiarch .'
