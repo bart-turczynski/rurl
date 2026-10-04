@@ -31,8 +31,8 @@
 #      DESCRIPTION.
 #
 # DEVELOPMENT VERSIONS ARE NOT SUBMISSIONS (RURL-efbcrhjc). Property 3 used to
-# be a literal `to == Version`, which made CONTRIBUTING.md's release checklist
-# step 8 -- "bump DESCRIPTION to the next development version" -- unexecutable:
+# be a literal `to == Version`, which made the release checklist's post-release
+# step -- "bump DESCRIPTION to the next development version" -- unexecutable:
 # the bump moved `Version:` away from the pin and the gate failed the push, and
 # there was no honest value to put in the pin either, because `3.0.1.9000` will
 # never be submitted to anyone. The rule is now the invariant that actually

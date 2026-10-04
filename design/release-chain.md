@@ -55,10 +55,9 @@ code work stays in `RURL-*`.
 
 **Drain the backlogs first, then submit** (2026-08-12). Nothing is submitted
 while a repository still has codable work queued. The paired decision is that
-`rurl` ships as **3.0.0** with no further version bumps — see `CONTRIBUTING.md`
-for what that does to the release checklist. That held until CRAN's pre-tests
-rejected 3.0.0 on 2026-09-06. The release shipped as 3.0.1, and the freeze
-ended with it.
+`rurl` ships as **3.0.0** with no further version bumps. That held until CRAN's
+pre-tests rejected 3.0.0 on 2026-09-06. The release shipped as 3.0.1, and the
+freeze ended with it.
 
 ## Pinning a sibling: use a commit SHA, not a tag
 
@@ -93,5 +92,4 @@ Two related hazards to check at the same time:
 
 - `AGENTS.md` — the resolvability gate, and the rule for reaching into a sibling
   export from a test.
-- `CONTRIBUTING.md` — the CRAN release checklist, and what the 3.0.0 freeze
-  changes about it.
+- `CONTRIBUTING.md` — rurl's deltas to the fleet CRAN release checklist.
