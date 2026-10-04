@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# check-toolchain v1
+# check-toolchain v2
 #
 # Fail fast when the MACHINE, not the tree, is what makes the verify gate red.
 #
@@ -38,6 +38,20 @@
 #    the same major are left alone: R loads them and does not warn, so flagging
 #    them would be noise.
 #
+# 3. No direct hard dependency (Depends, Imports, LinkingTo) is installed at a
+#    version OLDER than the one CRAN serves now (v2, SEOR-hxxxkmws). R CMD
+#    check uses whatever is installed, so a stale library checks the package
+#    against a dependency CRAN no longer ships. rurl 3.1.0's first upload
+#    failed CRAN's pre-test that way on 2026-10-01: CRAN had served punycoder
+#    1.3.0 since 2026-09-30, the machine still held 1.2.1, and the gate passed.
+#    A dependency installed NEWER than CRAN (a development sibling) and one
+#    CRAN does not serve are listed for information, never failed.
+#
+#    CRAN is read from https://cloud.r-project.org, not from the `repos`
+#    option: Posit mirrors lag CRAN by days, which is the lag this check
+#    exists to catch. If CRAN cannot be reached, the check says so and
+#    passes: a network blip must not reject a push.
+#
 # WHAT IT DELIBERATELY DOES NOT DO.
 #
 # * It pins no R version of its own. The rule that matters is RELATIVE -- fleet
@@ -47,7 +61,8 @@
 # * It installs nothing and repairs nothing. It prints the command that fixes
 #   what it found and exits 1. A gate that silently mutates the machine is a
 #   gate nobody can reason about.
-# * It is offline and touches no network.
+# * Checks 1 and 2 are offline. Check 3 makes one request, for CRAN's source
+#   package index.
 #
 #   Rscript scripts/check-toolchain.R              # exit 1 on drift
 #   Rscript scripts/check-toolchain.R --self-test  # positive/negative cases
@@ -135,6 +150,124 @@ installed_builds <- function() {
   stats::setNames(unname(ip[, "Built"]), rownames(ip))
 }
 
+# --- Check 3: dependencies older than CRAN ------------------------------------
+
+cran_url <- "https://cloud.r-project.org"
+
+# Direct hard dependencies named in a DESCRIPTION, without version bounds, R
+# itself, or base packages (which ship with R, not from CRAN).
+hard_dependencies <- function(dcf, base) {
+  fields <- intersect(c("Depends", "Imports", "LinkingTo"), colnames(dcf))
+  values <- dcf[1L, fields]
+  raw <- unlist(strsplit(values[!is.na(values)], ",", fixed = TRUE))
+  pkgs <- trimws(sub("[(].*", "", raw))
+  pkgs <- unique(pkgs[nzchar(pkgs)])
+  setdiff(pkgs, c("R", base))
+}
+
+# `installed` and `cran` are named version strings. Returns the dependencies
+# installed older than CRAN, newer than CRAN, and installed but absent from
+# CRAN. A dependency that is not installed is left to R CMD check, which
+# names it.
+compare_with_cran <- function(installed, cran) {
+  installed <- installed[!is.na(installed)]
+  on_cran <- intersect(names(installed), names(cran))
+  have <- numeric_version(installed[on_cran])
+  want <- numeric_version(cran[on_cran])
+  list(
+    older = on_cran[have < want],
+    newer = on_cran[have > want],
+    absent = setdiff(names(installed), names(cran))
+  )
+}
+
+check_stale <- function(older, installed, cran) {
+  if (!length(older)) {
+    return(character())
+  }
+  older <- sort(older)
+  paste0(
+    "installed older than CRAN: ",
+    paste(
+      sprintf("%s %s < %s", older, installed[older], cran[older]),
+      collapse = ", "
+    ),
+    ". R CMD check uses the installed version, so the gate is not checking ",
+    "this package against what CRAN serves. This is a MACHINE problem. ",
+    "Update them with: Rscript -e 'install.packages(c(",
+    paste(sprintf('"%s"', older), collapse = ", "),
+    "), repos = \"",
+    cran_url,
+    "\", type = \"source\")'"
+  )
+}
+
+# One request: CRAN's source package index. NULL when it cannot be read.
+cran_versions <- function() {
+  old <- options(timeout = 30)
+  on.exit(options(old))
+  db <- tryCatch(
+    utils::available.packages(
+      contriburl = utils::contrib.url(cran_url, "source"),
+      type = "source"
+    ),
+    error = function(e) NULL,
+    warning = function(w) NULL
+  )
+  if (is.null(db) || !nrow(db)) {
+    return(NULL)
+  }
+  stats::setNames(unname(db[, "Version"]), rownames(db))
+}
+
+installed_versions <- function(pkgs) {
+  stats::setNames(
+    vapply(
+      pkgs,
+      function(p) {
+        tryCatch(as.character(utils::packageVersion(p)), error = function(e) {
+          NA_character_
+        })
+      },
+      character(1)
+    ),
+    pkgs
+  )
+}
+
+run_stale_check <- function(root) {
+  base <- rownames(utils::installed.packages(priority = "base"))
+  deps <- hard_dependencies(read.dcf(file.path(root, "DESCRIPTION")), base)
+  if (!length(deps)) {
+    return(character())
+  }
+  cran <- cran_versions()
+  if (is.null(cran)) {
+    cat(
+      "check-toolchain: could not read ",
+      cran_url,
+      "; the check for ",
+      "dependencies older than CRAN was skipped.\n",
+      sep = ""
+    )
+    return(character())
+  }
+  installed <- installed_versions(deps)
+  found <- compare_with_cran(installed, cran)
+  for (p in sort(found$newer)) {
+    cat(sprintf(
+      "check-toolchain: note: %s %s is newer than CRAN's %s.\n",
+      p,
+      installed[[p]],
+      cran[[p]]
+    ))
+  }
+  for (p in sort(found$absent)) {
+    cat(sprintf("check-toolchain: note: %s is not on CRAN.\n", p))
+  }
+  check_stale(found$older, installed, cran)
+}
+
 run_checks <- function(root) {
   installed <- tryCatch(
     as.character(utils::packageVersion("roxygen2")),
@@ -146,7 +279,8 @@ run_checks <- function(root) {
     check_built_versions(
       built_under_newer(installed_builds(), running),
       running
-    )
+    ),
+    run_stale_check(root)
   )
 }
 
@@ -211,9 +345,53 @@ self_test <- function() {
     "MACHINE problem"
   )
 
-  cat(
-    "check-toolchain self-test: PASS (5 roxygen cases, 5 build-version cases)\n"
+  dcf <- read.dcf(textConnection(paste(
+    "Package: x",
+    "Depends: R (>= 4.1.0), utils",
+    "Imports: punycoder (>= 1.2.1),\n    stringi, tools",
+    "LinkingTo: Rcpp",
+    "Suggests: testthat",
+    sep = "\n"
+  )))
+  deps <- hard_dependencies(dcf, base = c("utils", "tools"))
+  expect("deps-hard-only", identical(deps, c("punycoder", "stringi", "Rcpp")))
+  expect(
+    "deps-none",
+    length(hard_dependencies(read.dcf(textConnection("Package: x")), "")) == 0L
   )
+
+  cran <- c(punycoder = "1.3.0", stringi = "1.8.7", rurl = "3.1.0")
+  installed <- c(
+    punycoder = "1.2.1",
+    stringi = "1.8.7",
+    rurl = "3.1.0.9000",
+    robotstxtr = "0.3.0",
+    missing = NA
+  )
+  found <- compare_with_cran(installed, cran)
+  expect("stale-older", identical(found$older, "punycoder"))
+  expect("stale-newer", identical(found$newer, "rurl"))
+  expect("stale-absent", identical(found$absent, "robotstxtr"))
+  expect(
+    "stale-current",
+    !length(compare_with_cran(cran, cran)$older)
+  )
+  flagged(
+    "stale-message",
+    check_stale("punycoder", installed, cran),
+    "punycoder 1.2.1 < 1.3.0"
+  )
+  flagged(
+    "stale-message",
+    check_stale("punycoder", installed, cran),
+    "MACHINE problem"
+  )
+  expect("stale-none", !length(check_stale(character(), installed, cran)))
+
+  cat(paste0(
+    "check-toolchain self-test: PASS (5 roxygen cases, 5 build-version ",
+    "cases, 9 CRAN-version cases)\n"
+  ))
 }
 
 # The self-test runs on EVERY invocation, not only under --self-test. It is
