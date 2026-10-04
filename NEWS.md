@@ -7,7 +7,7 @@
 
 - The README gives the r-universe install command next to CRAN's, drops its list of functions, which repeated the reference index, and moves the caching notes to the "Getting Started" vignette. `DESCRIPTION`'s `X-schema.org-keywords` no longer lists `r`, `rstats`, `r-stats` or `r-package`, which r-universe drops (`SEOR-kqmqosji`, `SEOR-nplcfbib`).
 
-- `rurl` has a logo, the fleet's black hex, in `man/figures/logo.svg` and `logo.png`. r-universe shows it on the package card and pkgdown in the site header, and the README heading carries it (`SEOR-wxjuxbtu`).
+- `rurl` has a logo, the fleet's black hex, in `man/figures/logo.svg` and `logo.png`. r-universe shows it on the package card and pkgdown in the site header, and the README heading carries it with the alt text "hex logo, white on black" (`SEOR-wxjuxbtu`, `SEOR-wfleahtg`).
 
 ## rurl 3.1.0
 
