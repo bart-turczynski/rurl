@@ -24,7 +24,10 @@
 #     check            -- `tools/verify.R`, the whole local gate: the gates,
 #                         lint, spelling, `R CMD check --as-cran` through
 #                         rcmdcheck, failing on a WARNING, and the test
-#                         suite under LC_ALL=C.
+#                         suite under LC_ALL=C. Not its docs stage, which
+#                         `docs-drift` runs.
+#     docs-drift       -- man/, NAMESPACE and DESCRIPTION against the pinned
+#                         roxygen2.
 #     coverage         -- covr: the badge regex, a cobertura report, and a
 #                         failure below 95%.
 #   `main` only:
@@ -306,7 +309,48 @@ check:
     - *check_deps
     - *pandoc_install
     - 'Rscript -e ''b <- punycoder:::.backend_info(); print(b); if (!isTRUE(b$has_libidn2)) stop("punycoder was built without libidn2, so this job is not the libidn2 cell (SEOR-hxxxkmws)", call. = FALSE)'''
-    - 'Rscript tools/verify.R'
+    # VERIFY_SKIP_DOCS drops verify.R's docs stage here, and only that stage:
+    # the `docs-drift` job below runs it instead. The stage needs the roxygen2
+    # DESCRIPTION pins, which Debian does not package, and installing it here
+    # would pull roxygen2's whole dependency tree from CRAN as source builds
+    # into the library this check runs against, shadowing the Debian binaries
+    # `.check_deps` installs (SEOR-nwfmerhu). Set inline, not under
+    # `variables:`, which tools/local-ci-plan.R does not follow.
+    - 'VERIFY_SKIP_DOCS=docs-drift-job Rscript tools/verify.R'
+
+# Generated-docs drift, on every pipeline (SEOR-nwfmerhu): man/ and NAMESPACE
+# must match what the roxygen2 that DESCRIPTION pins in
+# Config/roxygen2/version regenerates from R/. scripts/check-docs-drift.R
+# refuses any other roxygen2, because its output changes between releases,
+# and its header says why the check exists at all.
+#
+# Its own job, not a stage of `check`, because the pinned roxygen2 is
+# usually not the current CRAN release and never a Debian package. Here, on
+# rocker/r-ver, pak resolves from Posit Package Manager, which serves archived
+# versions as binaries too (measured 2026-10-05 in rocker/r-ver:latest on
+# arm64: roxygen2 8.0.0 and its whole tree arrived built, nothing compiled,
+# in under 30s), into a library no other job uses. The script regenerates in place, which is safe in
+# this job's throwaway clone. git is only for the diff it prints on drift.
+#
+# Self-contained rather than `extends: .rocker`: tools/local-ci-plan.R follows
+# no `extends:`, so a template's image and before_script would vanish from a
+# local run.
+docs-drift:
+  stage: check
+  needs: []
+  image: rocker/r-ver:latest
+  script:
+    # Every job that runs R on a push installs the pinned pandoc (fleet
+    # standard), this one included, though roxygen2 does not call it.
+    - *pandoc_install
+    - apt-get install -y --no-install-recommends git
+    - >
+      Rscript -e 'if (!requireNamespace("pak", quietly = TRUE))
+      install.packages("pak", repos = sprintf(
+      "https://r-lib.github.io/p/pak/stable/%s/%s/%s",
+      .Platform$pkgType, R.Version()$os, R.Version()$arch))'
+    - Rscript -e 'pak::pkg_install(c("deps::.", paste0("roxygen2@", read.dcf("DESCRIPTION", "Config/roxygen2/version")[[1]])))'
+    - Rscript scripts/check-docs-drift.R
 
 # Coverage, on every pipeline (fleet standard; ADR 0007 in seor). `coverage:`
 # feeds the GitLab badge, the cobertura report feeds the merge request diff

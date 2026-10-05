@@ -347,6 +347,80 @@ stage_spelling <- function() {
                 c("-e", shQuote(code))))
 }
 
+# Generated-docs drift (SEOR-nwfmerhu). man/ and NAMESPACE are roxygen output,
+# and a stale .Rd is still valid .Rd, so lint and R CMD check both pass it: the
+# logo sweep left man/rurl-package.Rd stale and nothing here noticed (fixed by
+# hand in rurl !176). scripts/check-docs-drift.R regenerates and diffs; read its
+# header for why it uses roxygen's default loader.
+#
+# IT JUDGES THE COMMIT BEING PUSHED, not the working tree, unlike the stages
+# around it. What reaches the remote is the commit; a man/ fix that sits
+# uncommitted on disk does not, so letting it pass would push stale docs.
+# pre-commit exports the pushed commit as $PRE_COMMIT_TO_REF for a pre-push
+# hook, and tools/verify-on-push.sh hands its environment straight through.
+# With several refs in one push, pre-commit names only the first one it would
+# check. A hand run, or a push pre-commit treats as --all-files (a history
+# with no commit on the remote), sets nothing, and HEAD is checked instead. In
+# CI the checked-out commit is HEAD, but the r-base `check` job skips this
+# stage (VERIFY_SKIP_DOCS=docs-drift-job) because the pinned roxygen2 is not
+# a Debian binary; its own `docs-drift` job runs the script there. Only that
+# exact value skips: any other one, say a value left over in a developer's
+# shell, is reported and ignored, so it cannot drop the stage from a push
+# that still reads PASS.
+#
+# It runs on a THROWAWAY EXPORT of that commit (`git archive`), never in
+# `root`: on drift the script rewrites man/ and NAMESPACE where it runs, and
+# `root` is what the check stage below builds from and what a push must not
+# dirty. The export touches no index, ref or stash, so it needs no committer
+# identity and cannot race another git process for index.lock. on.exit()
+# removes it on every path out of this function, failure included.
+stage_docs <- function(root) {
+  skip <- Sys.getenv("VERIFY_SKIP_DOCS")
+  if (identical(skip, "docs-drift-job")) {
+    cat(paste0(
+      "[docs] SKIPPED: VERIFY_SKIP_DOCS=docs-drift-job. Nothing here checks ",
+      "man/ or NAMESPACE; CI's docs-drift job runs scripts/check-docs-drift.R\n"
+    ))
+    return(list())
+  }
+  if (nzchar(skip)) {
+    cat(sprintf(paste0(
+      "[docs] VERIFY_SKIP_DOCS=%s ignored: only CI's `docs-drift-job` ",
+      "value skips this stage\n"
+    ), skip))
+  }
+  ref <- Sys.getenv("PRE_COMMIT_TO_REF")
+  if (!nzchar(ref)) {
+    ref <- "HEAD"
+  }
+  cat(sprintf("[docs] scripts/check-docs-drift.R on an export of %s\n",
+              if (identical(ref, "HEAD")) "HEAD" else
+                paste("the pushed commit", substr(ref, 1L, 12L))))
+  work <- tempfile("docs-drift-")
+  on.exit(unlink(work, recursive = TRUE), add = TRUE)
+  export <- file.path(work, "tree")
+  dir.create(export, recursive = TRUE)
+  tarball <- file.path(work, "tree.tar")
+  # `^{commit}` makes a ref that names no commit fail here, by name, rather
+  # than as an empty export the drift check would then misread.
+  exported <- run_step(
+    sprintf("git archive %s (docs export)", substr(ref, 1L, 12L)), "sh",
+    c("-c", shQuote(sprintf(
+      "git archive --format=tar -o %s %s && tar -xf %s -C %s",
+      shQuote(tarball), shQuote(paste0(ref, "^{commit}")), shQuote(tarball),
+      shQuote(export)
+    )))
+  )
+  if (!exported$ok) {
+    return(list(exported))
+  }
+  list(exported, run_step(
+    "check-docs-drift.R (man/, NAMESPACE vs roxygen)", "Rscript",
+    c(shQuote(file.path(root, "scripts", "check-docs-drift.R")),
+      shQuote(export))
+  ))
+}
+
 # The load-bearing stage, and the one no `devtools::test()` can stand in for.
 # `R CMD check` must run on a BUILT TARBALL: building is what reads `Collate:`,
 # and checking the tarball is what runs the tests against an INSTALLED package,
@@ -576,7 +650,7 @@ if (!opt_gates) {
   plan <- c(plan, "lint", "spelling")
 }
 if (!opt_gates && !opt_fast) {
-  plan <- c(plan, "check", "locale")
+  plan <- c(plan, "docs", "check", "locale")
 }
 if (opt_release) {
   plan <- c(plan, "release")
@@ -603,6 +677,7 @@ for (st in plan) {
     selftests = stage_self_tests(root),
     lint = stage_lint(),
     spelling = stage_spelling(),
+    docs = stage_docs(root),
     check = stage_check(root),
     locale = stage_locale(),
     release = stage_release()
