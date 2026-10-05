@@ -1,7 +1,7 @@
 ## rurl (development version)
 
 - `rurl` now requires R >= 4.1.0 (was 4.0.0), as its dependency `pslr` already did (`SEOR-nxycpzlk`).
-- On R 4.1, `url_standard = "whatwg"` writes an IPv6 host with the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`), as the WHATWG URL Standard's IPv6 serializer requires (`SEOR-nxycpzlk`).
+- On R 4.1, `url_standard = "whatwg"` writes an IPv6 host with the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`), as the WHATWG URL Standard requires (host serializing, IPv6 serializer) (`SEOR-nxycpzlk`).
 - `check_schemes()` lowercases `allowed_schemes` as ASCII, so `"FILE"` admits `file:` URLs under a Turkish or Azeri locale (`SEOR-rxxuzhmc`).
 
 ## rurl 3.1.0
