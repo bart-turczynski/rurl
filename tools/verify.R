@@ -362,8 +362,11 @@ stage_spelling <- function() {
 # check. A hand run, or a push pre-commit treats as --all-files (a history
 # with no commit on the remote), sets nothing, and HEAD is checked instead. In
 # CI the checked-out commit is HEAD, but the r-base `check` job skips this
-# stage (VERIFY_SKIP_DOCS) because the pinned roxygen2 is not a Debian
-# binary; its own `docs-drift` job runs the script there.
+# stage (VERIFY_SKIP_DOCS=docs-drift-job) because the pinned roxygen2 is not
+# a Debian binary; its own `docs-drift` job runs the script there. Only that
+# exact value skips: any other one, say a value left over in a developer's
+# shell, is reported and ignored, so it cannot drop the stage from a push
+# that still reads PASS.
 #
 # It runs on a THROWAWAY EXPORT of that commit (`git archive`), never in
 # `root`: on drift the script rewrites man/ and NAMESPACE where it runs, and
@@ -373,12 +376,18 @@ stage_spelling <- function() {
 # removes it on every path out of this function, failure included.
 stage_docs <- function(root) {
   skip <- Sys.getenv("VERIFY_SKIP_DOCS")
+  if (identical(skip, "docs-drift-job")) {
+    cat(paste0(
+      "[docs] SKIPPED: VERIFY_SKIP_DOCS=docs-drift-job. Nothing here checks ",
+      "man/ or NAMESPACE; CI's docs-drift job runs scripts/check-docs-drift.R\n"
+    ))
+    return(list())
+  }
   if (nzchar(skip)) {
     cat(sprintf(paste0(
-      "[docs] SKIPPED: VERIFY_SKIP_DOCS=%s. Nothing here checks man/ or ",
-      "NAMESPACE; CI's docs-drift job runs scripts/check-docs-drift.R\n"
+      "[docs] VERIFY_SKIP_DOCS=%s ignored: only CI's `docs-drift-job` ",
+      "value skips this stage\n"
     ), skip))
-    return(list())
   }
   ref <- Sys.getenv("PRE_COMMIT_TO_REF")
   if (!nzchar(ref)) {

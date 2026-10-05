@@ -26,7 +26,8 @@
 #                         rcmdcheck, failing on a WARNING, and the test
 #                         suite under LC_ALL=C. Not its docs stage, which
 #                         `docs-drift` runs.
-#     docs-drift       -- man/ and NAMESPACE against the pinned roxygen2.
+#     docs-drift       -- man/, NAMESPACE and DESCRIPTION against the pinned
+#                         roxygen2.
 #     coverage         -- covr: the badge regex, a cobertura report, and a
 #                         failure below 95%.
 #   `main` only:
@@ -339,7 +340,10 @@ docs-drift:
   needs: []
   image: rocker/r-ver:latest
   script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends git
+    # Every job that runs R on a push installs the pinned pandoc (fleet
+    # standard), this one included, though roxygen2 does not call it.
+    - *pandoc_install
+    - apt-get install -y --no-install-recommends git
     - >
       Rscript -e 'if (!requireNamespace("pak", quietly = TRUE))
       install.packages("pak", repos = sprintf(

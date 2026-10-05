@@ -1,8 +1,10 @@
 #!/usr/bin/env Rscript
 #
 # scripts/check-docs-drift.R -- generated-docs drift gate (SEOR-nwfmerhu).
-# Fails if man/ or NAMESPACE differ from what roxygen2 would regenerate from
-# the roxygen comments in R/.
+# Fails if man/, NAMESPACE or DESCRIPTION differ from what roxygen2 would
+# regenerate from the roxygen comments in R/. DESCRIPTION is watched because
+# roxygenise() rewrites its Collate from @include tags; a stale Collate is
+# drift like a stale .Rd.
 #
 # Why this exists: a stale .Rd is still perfectly valid .Rd, so nothing else in
 # the verify chain can see it. lintr::lint_package() reads R/ and never looks at
@@ -79,7 +81,8 @@ if (!identical(pinned, installed)) {
 watched_files <- function(root) {
   rd <- list.files(file.path(root, "man"), pattern = "[.]Rd$",
                    recursive = TRUE)
-  c(if (file.exists(file.path(root, "NAMESPACE"))) "NAMESPACE",
+  c("DESCRIPTION",
+    if (file.exists(file.path(root, "NAMESPACE"))) "NAMESPACE",
     if (length(rd) > 0L) file.path("man", rd))
 }
 
@@ -115,7 +118,10 @@ changed <- Filter(
 )
 
 if (length(added) == 0L && length(removed) == 0L && length(changed) == 0L) {
-  message("Docs in sync: man/ and NAMESPACE match the roxygen comments in R/.")
+  message(
+    "Docs in sync: man/, NAMESPACE and DESCRIPTION match the roxygen ",
+    "comments in R/."
+  )
   quit(status = 0L)
 }
 
@@ -162,7 +168,7 @@ if (length(diff_out) > 0L) {
 
 message("")
 message(
-  "Fix: run devtools::document() and commit the resulting man/ and NAMESPACE ",
-  "changes."
+  "Fix: run devtools::document() and commit the resulting man/, NAMESPACE ",
+  "and DESCRIPTION changes."
 )
 quit(status = 1L)
