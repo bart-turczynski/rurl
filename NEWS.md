@@ -1,21 +1,8 @@
 ## rurl (development version)
 
-- `rurl` now declares `Depends: R (>= 4.1.0)`, up from R 4.0.0. It imports `pslr`, which already requires R 4.1.0, so `rurl` could not be installed on R 4.0 anyway. A weekly scheduled check now runs on R 4.1 to keep that floor honest (`SEOR-nxycpzlk`).
-- On R 4.1, an IPv6 host is now written with the shortest hexadecimal pieces under `url_standard = "whatwg"`, as the WHATWG URL Standard's IPv6 serializer requires ("the shortest possible lowercase hexadecimal number", host serializing). `get_host("http://[::127.0.0.1]/", url_standard = "whatwg")` gave `[::7f00:0001]` instead of `[::7f00:1]`, and `get_clean_url()`, `serialize_url()` and `format_url()` padded the same way, because before R 4.2.0 `as.character()` on a `hexmode` vector zero-pads every element to the widest one. R 4.2 and later were never affected (`SEOR-nxycpzlk`).
-
-- `check_schemes()` now lowercases `allowed_schemes` as ASCII. Under a Turkish or Azeri locale, `tolower()` mapped `"FILE"` to `"fıle"` (dotless i), so `allowed_schemes = "FILE"` admitted no `file:` URL (`SEOR-rxxuzhmc`).
-
-- Every CI job that runs R on a push to `main` (`gates`, `check`, `coverage` and `pages`), and the scheduled `full-check`, now installs `pandoc` 3.10 from its GitHub release, checked against the release's published SHA-256 digest before it is installed. `pandoc` writes Markdown differently from one version to the next, so `README.md`, the vignettes and the `pkgdown` site render the same only under one pinned version; `full-check` had pinned it without the checksum, `check`, `coverage` and `pages` ran on Debian's `pandoc`, and `gates` had none. `scripts/check-toolchain.R` now fails the pre-push gate when the local `rmarkdown::pandoc_version()` differs from the `PANDOC_VERSION` in `.gitlab-ci.yml` (`SEOR-dpjdwhbi`).
-
-- The README gives the r-universe install command next to CRAN's, drops its list of functions, which repeated the reference index, and moves the caching notes to the "Getting Started" vignette. `DESCRIPTION`'s `X-schema.org-keywords` no longer lists `r`, `rstats`, `r-stats` or `r-package`, which r-universe drops (`SEOR-kqmqosji`, `SEOR-nplcfbib`).
-
-- `rurl` has a logo, the fleet's black hex, in `man/figures/logo.svg` and `logo.png`. r-universe shows it on the package card and pkgdown in the site header, and the README heading carries it with the alt text "hex logo, white on black" (`SEOR-wxjuxbtu`, `SEOR-wfleahtg`).
-
-- The HTML help page (`?rurl` under `help_type = "html"`, and the pkgdown reference) shows the logo too: `man/rurl-package.Rd` is regenerated now that `man/figures/logo.svg` exists (`SEOR-oopopupm`).
-
-- The logo files carry full metadata: every project link (GitLab, GitHub, CRAN, r-universe, the documentation site and, where one exists, the Zenodo DOI), a screen-reader description and the standard image metadata fields, written by `scripts/logo-metadata.py` in the `seor` repository (`SEOR-eyfiidrv`).
-
-- The logo's keywords are this package's `X-schema.org-keywords` tags, the ones r-universe indexes, as written in `DESCRIPTION` and after `R`, `rstats` and `R package` (`SEOR-qoqmestu`).
+- `rurl` now requires R >= 4.1.0 (was 4.0.0), as its dependency `pslr` already did (`SEOR-nxycpzlk`).
+- On R 4.1, `url_standard = "whatwg"` writes an IPv6 host with the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`), as the WHATWG URL Standard's IPv6 serializer requires (`SEOR-nxycpzlk`).
+- `check_schemes()` lowercases `allowed_schemes` as ASCII, so `"FILE"` admits `file:` URLs under a Turkish or Azeri locale (`SEOR-rxxuzhmc`).
 
 ## rurl 3.1.0
 
