@@ -24,7 +24,7 @@
 <dc:relation>https://bart-turczynski.r-universe.dev/rurl</dc:relation>
 <dc:relation>https://bart-turczynski.gitlab.io/rurl/</dc:relation>
 <dc:relation>https://doi.org/10.5281/zenodo.20972584</dc:relation>
-<dc:subject><rdf:Bag><rdf:li>R</rdf:li><rdf:li>rstats</rdf:li><rdf:li>R package</rdf:li><rdf:li>SEO</rdf:li><rdf:li>URL</rdf:li><rdf:li>URL parsing</rdf:li><rdf:li>URL normalization</rdf:li></rdf:Bag></dc:subject>
+<dc:subject><rdf:Bag><rdf:li>R</rdf:li><rdf:li>rstats</rdf:li><rdf:li>R package</rdf:li><rdf:li>url-parsing</rdf:li><rdf:li>url-parser</rdf:li><rdf:li>url-normalization</rdf:li><rdf:li>url-cleaning</rdf:li><rdf:li>url-cleaner</rdf:li><rdf:li>url-checker</rdf:li><rdf:li>domain-extraction</rdf:li><rdf:li>domain-name-detection</rdf:li><rdf:li>domain-name-checker</rdf:li><rdf:li>public-suffix</rdf:li><rdf:li>tld</rdf:li><rdf:li>tlds</rdf:li><rdf:li>tld-extraction</rdf:li><rdf:li>tld-checker</rdf:li><rdf:li>tld-verification</rdf:li><rdf:li>idna</rdf:li><rdf:li>punycode</rdf:li><rdf:li>uri</rdf:li><rdf:li>url</rdf:li><rdf:li>seo</rdf:li><rdf:li>web-scraping</rdf:li></rdf:Bag></dc:subject>
 <dc:contributor>Name set in IBM Plex Mono (SIL Open Font License 1.1), converted to outlines.</dc:contributor>
 <dcterms:alternative>rurl logo</dcterms:alternative>
 <dcterms:created>2026-10-04</dcterms:created>
@@ -48,7 +48,7 @@
 <dc:publisher><rdf:Bag><rdf:li>Bart Turczynski</rdf:li></rdf:Bag></dc:publisher>
 <dc:contributor><rdf:Bag><rdf:li>Name set in IBM Plex Mono (SIL Open Font License 1.1), converted to outlines.</rdf:li></rdf:Bag></dc:contributor>
 <dc:rights><rdf:Alt><rdf:li xml:lang="x-default">&#169; 2026 Bart Turczynski. MIT License.</rdf:li></rdf:Alt></dc:rights>
-<dc:subject><rdf:Bag><rdf:li>R</rdf:li><rdf:li>rstats</rdf:li><rdf:li>R package</rdf:li><rdf:li>SEO</rdf:li><rdf:li>URL</rdf:li><rdf:li>URL parsing</rdf:li><rdf:li>URL normalization</rdf:li></rdf:Bag></dc:subject>
+<dc:subject><rdf:Bag><rdf:li>R</rdf:li><rdf:li>rstats</rdf:li><rdf:li>R package</rdf:li><rdf:li>url-parsing</rdf:li><rdf:li>url-parser</rdf:li><rdf:li>url-normalization</rdf:li><rdf:li>url-cleaning</rdf:li><rdf:li>url-cleaner</rdf:li><rdf:li>url-checker</rdf:li><rdf:li>domain-extraction</rdf:li><rdf:li>domain-name-detection</rdf:li><rdf:li>domain-name-checker</rdf:li><rdf:li>public-suffix</rdf:li><rdf:li>tld</rdf:li><rdf:li>tlds</rdf:li><rdf:li>tld-extraction</rdf:li><rdf:li>tld-checker</rdf:li><rdf:li>tld-verification</rdf:li><rdf:li>idna</rdf:li><rdf:li>punycode</rdf:li><rdf:li>uri</rdf:li><rdf:li>url</rdf:li><rdf:li>seo</rdf:li><rdf:li>web-scraping</rdf:li></rdf:Bag></dc:subject>
 <dc:source>https://gitlab.com/bart-turczynski/rurl</dc:source>
 <dc:relation><rdf:Bag><rdf:li>https://gitlab.com/bart-turczynski/rurl</rdf:li><rdf:li>https://github.com/bart-turczynski/rurl</rdf:li><rdf:li>https://CRAN.R-project.org/package=rurl</rdf:li><rdf:li>https://bart-turczynski.r-universe.dev/rurl</rdf:li><rdf:li>https://bart-turczynski.gitlab.io/rurl/</rdf:li><rdf:li>https://doi.org/10.5281/zenodo.20972584</rdf:li></rdf:Bag></dc:relation>
 <dc:identifier>rurl</dc:identifier>
@@ -69,7 +69,7 @@
 <xmpRights:Owner><rdf:Bag><rdf:li>Bart Turczynski</rdf:li></rdf:Bag></xmpRights:Owner>
 <xmpMM:DocumentID>uuid:57082307-eaa6-501e-9c40-aa8ddc45e8a0</xmpMM:DocumentID>
 <xmpMM:OriginalDocumentID>uuid:57082307-eaa6-501e-9c40-aa8ddc45e8a0</xmpMM:OriginalDocumentID>
-<xmpMM:InstanceID>uuid:cf2c456b-52ad-5e9f-bb4b-68a5d6a8f2ad</xmpMM:InstanceID>
+<xmpMM:InstanceID>uuid:50410b5c-6c55-59e1-9e83-80089bb6df22</xmpMM:InstanceID>
 <photoshop:Headline>rurl: URL library for R</photoshop:Headline>
 <photoshop:Credit>Bart Turczynski</photoshop:Credit>
 <photoshop:Source>Bart Turczynski</photoshop:Source>
