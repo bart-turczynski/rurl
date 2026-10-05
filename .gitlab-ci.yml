@@ -216,6 +216,10 @@ default:
 .pandoc_install: &pandoc_install
   - PANDOC_VERSION="3.10"
   - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
+  # `apt-mark hold pandoc`, only after a successful `dpkg -i`, keeps the pin
+  # through any later apt step that would replace it with apt's pandoc. A
+  # failed hold only warns, so it never stops a gate (seor
+  # design/fleet-standard.md; SEOR-vzupmeqj).
   - |
     ARCH=$(dpkg --print-architecture)
     case "$ARCH" in
@@ -227,6 +231,7 @@ default:
       -o /tmp/pandoc.deb "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-${ARCH}.deb" \
       && echo "${PANDOC_SHA256}  /tmp/pandoc.deb" | sha256sum -c - \
       && dpkg -i /tmp/pandoc.deb; then
+      apt-mark hold pandoc || echo "WARNING: pandoc ${PANDOC_VERSION} installed but not held; a later apt step may replace it"
       echo "pandoc ${PANDOC_VERSION} installed"
     else
       echo "WARNING: pandoc ${PANDOC_VERSION} not installed; this job runs on the image's or Debian's pandoc"
