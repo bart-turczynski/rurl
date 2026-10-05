@@ -16,7 +16,7 @@ cannot carry comments.
 | `cran-comments.md`: offline half in the gate, `--online` half at release | `tools/cran-comments-gate.R` header |
 | Mirror freshness, refresh, the frozen `refs/remotes/origin/*` | `design/backup-mirror.md`, `tools/mirror-freshness.sh`, `tools/mirror-refresh.sh` |
 | A red gate on an untouched tree | `scripts/check-toolchain.R` |
-| Generated-docs drift (`man/`, `NAMESPACE` against roxygen), and why its `docs` stage runs on an export of the tracked tree | `scripts/check-docs-drift.R` header, `stage_docs()` in `tools/verify.R` |
+| Generated-docs drift (`man/`, `NAMESPACE` against roxygen), why the `docs` stage checks the pushed commit in a throwaway export, and why CI runs it as its own `docs-drift` job | `scripts/check-docs-drift.R` header, `stage_docs()` in `tools/verify.R`, `docs-drift` in `.gitlab-ci.yml` |
 | Lint deviations | [The linter set](#the-linter-set), below (`.lintr` cannot carry a header) |
 
 Facts that no header records:

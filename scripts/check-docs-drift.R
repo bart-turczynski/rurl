@@ -21,18 +21,20 @@
 # considers clean -- an unfixable failure, the worst kind for a gate to have.
 # rurl has no src/, so that loader compiles nothing and the fidelity is free.
 #
-# Even without a compile, this must not run in the directory tools/verify.R's
-# check stage builds from (the working tree): on drift it rewrites man/ and
-# NAMESPACE, which would dirty the tree during a push and hand R CMD check the
-# regenerated docs instead of the committed ones. tools/verify.R gives it its
-# own `git archive HEAD` export.
+# It regenerates IN PLACE, in whatever directory it is given, so on drift it
+# rewrites man/ and NAMESPACE there. tools/verify.R therefore never runs it in
+# the working tree: its docs stage hands it a throwaway `git archive` export of
+# the commit being pushed and deletes the export afterwards (stage_docs()
+# says why the commit and not the working tree). CI's `docs-drift` job runs it
+# in the job's own clone, which nothing else reads.
 #
 # Usage (from the package root):
 #   Rscript scripts/check-docs-drift.R [package-dir]
 #
-# On drift the script prints the diff, exits 1, and LEAVES the regenerated
-# files in place: run against a working tree, the fix is then already applied
-# and only needs committing.
+# On drift it prints the diff and exits 1. Under tools/verify.R the
+# regenerated files are deleted with the export, so nothing in your tree has
+# changed: run devtools::document() in it and commit the resulting man/ and
+# NAMESPACE changes, then push again.
 
 args <- commandArgs(trailingOnly = TRUE)
 pkg <- if (length(args) > 0L) args[[1L]] else "."

@@ -81,7 +81,7 @@
 # Usage:
 #   Rscript tools/verify.R            # gates + relevant self-tests + full gate
 #   Rscript tools/verify.R --gates    # gates + relevant self-tests ONLY
-#   Rscript tools/verify.R --fast     # the above plus lint, spelling, docs
+#   Rscript tools/verify.R --fast     # the above plus lint and spelling
 #   Rscript tools/verify.R --release  # everything, plus the curl clean room
 #   Rscript tools/verify.R --verbose  # print every step's log, passing included
 #   Rscript tools/verify.R --list     # print the stage plan and exit
@@ -353,36 +353,54 @@ stage_spelling <- function() {
 # hand in rurl !176). scripts/check-docs-drift.R regenerates and diffs; read its
 # header for why it uses roxygen's default loader.
 #
-# It runs on its OWN export, never in `root`: on drift the script rewrites man/
-# and NAMESPACE where it runs, and `root` is what the check stage below builds
-# from and what a push must not dirty. rurl has no src/, so there are no
-# compile leftovers to keep out of the build, only that rewrite.
+# IT JUDGES THE COMMIT BEING PUSHED, not the working tree, unlike the stages
+# around it. What reaches the remote is the commit; a man/ fix that sits
+# uncommitted on disk does not, so letting it pass would push stale docs.
+# pre-commit exports the pushed commit as $PRE_COMMIT_TO_REF for a pre-push
+# hook, and tools/verify-on-push.sh hands its environment straight through.
+# With several refs in one push, pre-commit names only the first one it would
+# check. A hand run, or a push pre-commit treats as --all-files (a history
+# with no commit on the remote), sets nothing, and HEAD is checked instead. In
+# CI the checked-out commit is HEAD, but the r-base `check` job skips this
+# stage (VERIFY_SKIP_DOCS) because the pinned roxygen2 is not a Debian
+# binary; its own `docs-drift` job runs the script there.
 #
-# The export is the tracked files AS THEY STAND IN THE WORKING TREE, the same
-# tree every other stage here judges: `git stash create` records uncommitted
-# edits as a dangling commit without touching the working tree or any ref,
-# and prints nothing on a clean tree, where HEAD is archived instead. Untracked
-# files are not in it. In CI the tree is a clean clone, so it is HEAD. The
-# session tempdir it lives in is deleted when this script exits.
-#
-# The `update-index --refresh` first is load-bearing: when a file's mtime moved
-# but its bytes did not (roxygen run by hand rewrites man/ in place), `git stash
-# create` finds no change only after refreshing the index itself, and then
-# exits 1 without a word, which failed this step on a clean tree. Refreshing
-# first, as `git status` does, leaves it nothing to find. Its own exit status
-# is ignored: non-zero only means real edits exist, which the stash records.
+# It runs on a THROWAWAY EXPORT of that commit (`git archive`), never in
+# `root`: on drift the script rewrites man/ and NAMESPACE where it runs, and
+# `root` is what the check stage below builds from and what a push must not
+# dirty. The export touches no index, ref or stash, so it needs no committer
+# identity and cannot race another git process for index.lock. on.exit()
+# removes it on every path out of this function, failure included.
 stage_docs <- function(root) {
-  cat("[docs] scripts/check-docs-drift.R on an export of the tracked tree\n")
-  export <- tempfile("docs-drift-")
-  dir.create(export)
-  tarball <- tempfile(fileext = ".tar")
+  skip <- Sys.getenv("VERIFY_SKIP_DOCS")
+  if (nzchar(skip)) {
+    cat(sprintf(paste0(
+      "[docs] SKIPPED: VERIFY_SKIP_DOCS=%s. Nothing here checks man/ or ",
+      "NAMESPACE; CI's docs-drift job runs scripts/check-docs-drift.R\n"
+    ), skip))
+    return(list())
+  }
+  ref <- Sys.getenv("PRE_COMMIT_TO_REF")
+  if (!nzchar(ref)) {
+    ref <- "HEAD"
+  }
+  cat(sprintf("[docs] scripts/check-docs-drift.R on an export of %s\n",
+              if (identical(ref, "HEAD")) "HEAD" else
+                paste("the pushed commit", substr(ref, 1L, 12L))))
+  work <- tempfile("docs-drift-")
+  on.exit(unlink(work, recursive = TRUE), add = TRUE)
+  export <- file.path(work, "tree")
+  dir.create(export, recursive = TRUE)
+  tarball <- file.path(work, "tree.tar")
+  # `^{commit}` makes a ref that names no commit fail here, by name, rather
+  # than as an empty export the drift check would then misread.
   exported <- run_step(
-    "git archive of the tracked tree (docs export)", "sh",
-    c("-c", shQuote(sprintf(paste(
-      "git update-index -q --refresh >/dev/null;",
-      "tree=$(git stash create) &&",
-      "git archive -o %s \"${tree:-HEAD}\" && tar -xf %s -C %s"
-    ), shQuote(tarball), shQuote(tarball), shQuote(export))))
+    sprintf("git archive %s (docs export)", substr(ref, 1L, 12L)), "sh",
+    c("-c", shQuote(sprintf(
+      "git archive --format=tar -o %s %s && tar -xf %s -C %s",
+      shQuote(tarball), shQuote(paste0(ref, "^{commit}")), shQuote(tarball),
+      shQuote(export)
+    )))
   )
   if (!exported$ok) {
     return(list(exported))
@@ -620,10 +638,10 @@ if (opt_self_test) {
 root <- repo_root()
 plan <- c("gates", "selftests")
 if (!opt_gates) {
-  plan <- c(plan, "lint", "spelling", "docs")
+  plan <- c(plan, "lint", "spelling")
 }
 if (!opt_gates && !opt_fast) {
-  plan <- c(plan, "check", "locale")
+  plan <- c(plan, "docs", "check", "locale")
 }
 if (opt_release) {
   plan <- c(plan, "release")
