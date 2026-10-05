@@ -364,6 +364,13 @@ stage_spelling <- function() {
 # and prints nothing on a clean tree, where HEAD is archived instead. Untracked
 # files are not in it. In CI the tree is a clean clone, so it is HEAD. The
 # session tempdir it lives in is deleted when this script exits.
+#
+# The `update-index --refresh` first is load-bearing: when a file's mtime moved
+# but its bytes did not (roxygen run by hand rewrites man/ in place), `git stash
+# create` finds no change only after refreshing the index itself, and then
+# exits 1 without a word, which failed this step on a clean tree. Refreshing
+# first, as `git status` does, leaves it nothing to find. Its own exit status
+# is ignored: non-zero only means real edits exist, which the stash records.
 stage_docs <- function(root) {
   cat("[docs] scripts/check-docs-drift.R on an export of the tracked tree\n")
   export <- tempfile("docs-drift-")
@@ -372,6 +379,7 @@ stage_docs <- function(root) {
   exported <- run_step(
     "git archive of the tracked tree (docs export)", "sh",
     c("-c", shQuote(sprintf(paste(
+      "git update-index -q --refresh >/dev/null;",
       "tree=$(git stash create) &&",
       "git archive -o %s \"${tree:-HEAD}\" && tar -xf %s -C %s"
     ), shQuote(tarball), shQuote(tarball), shQuote(export))))
