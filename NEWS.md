@@ -17,6 +17,8 @@
 
 - The logo's keywords are this package's `X-schema.org-keywords` tags, the ones r-universe indexes, as written in `DESCRIPTION` and after `R`, `rstats` and `R package` (`SEOR-qoqmestu`).
 
+- The pre-push gate and the CI `check` job now fail when `man/` or `NAMESPACE` differ from what `roxygen2` regenerates from the comments in `R/`. A stale `.Rd` file is still valid `.Rd`, so neither `lintr` nor `R CMD check` notices it: adding the logo left `man/rurl-package.Rd` stale, and it was fixed by hand. `scripts/check-docs-drift.R` regenerates both with the `roxygen2` version `DESCRIPTION` pins and prints the difference; `devtools::document()` is the fix (`SEOR-nwfmerhu`).
+
 ## rurl 3.1.0
 
 ### New features

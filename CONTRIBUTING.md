@@ -10,8 +10,8 @@ A merge request must pass the verification command below.
 
 Run verification (the pre-push chain: the hygiene hooks, the toolchain check,
 the URL check, the citation and BugReports checks, then `tools/verify.R` in the
-`verify` hook: the manifest gates, lintr, spelling, `R CMD check --as-cran`
-and the test suite under `LC_ALL=C`):
+`verify` hook: the manifest gates, lintr, spelling, the roxygen docs-drift
+check, `R CMD check --as-cran` and the test suite under `LC_ALL=C`):
 
 ```sh
 pre-commit run --hook-stage pre-push --all-files
@@ -71,11 +71,13 @@ pre-commit run --hook-stage pre-push --all-files
   to reproduce CI's fast gate by hand: the ~20
   gate steps (derived from `tools/verify-manifest.yml`, never transcribed),
   `lintr::lint_package()`, `spelling::spell_check_package()` (real words it
-  does not know go in `inst/WORDLIST`), `R CMD build` + `R CMD check --as-cran`
+  does not know go in `inst/WORDLIST`), `scripts/check-docs-drift.R` (fails
+  when `man/` or `NAMESPACE` differ from what the pinned roxygen2 regenerates;
+  the fix is `devtools::document()`), `R CMD build` + `R CMD check --as-cran`
   on the built tarball, and the test suite under `LC_ALL=C`. `--fast` runs the
-  gates, lint and spelling only and is iteration feedback, never sufficient
-  verification for a behavioral slice; `--list` prints the plan; `--release`
-  adds the curl clean room. Its header states what it does **not** cover.
+  gates, lint, spelling and the docs-drift check only and is iteration
+  feedback, never sufficient verification for a behavioral slice; `--list`
+  prints the plan; `--release` adds the curl clean room. Its header states what it does **not** cover.
 - Intermediate local commits may temporarily be red while a slice is being
   assembled. The delivered slice tip and its merged result must pass the
   complete local gate.
