@@ -13,7 +13,9 @@
 
 - The HTML help page (`?rurl` under `help_type = "html"`, and the pkgdown reference) shows the logo too: `man/rurl-package.Rd` is regenerated now that `man/figures/logo.svg` exists (`SEOR-oopopupm`).
 
-- The logo files carry full metadata: every project link (GitLab, GitHub, CRAN, r-universe, the documentation site and, where one exists, the Zenodo DOI), a screen-reader description and the standard image metadata fields, written by `scripts/logo-metadata.py` in the `seor` repository (`SEOR-eyfiidrv`). Their keywords are the `X-schema.org-keywords` tags of `DESCRIPTION`, after `R`, `rstats` and `R package`, so the logo and r-universe list the same tags (`SEOR-qoqmestu`).
+- The logo files carry full metadata: every project link (GitLab, GitHub, CRAN, r-universe, the documentation site and, where one exists, the Zenodo DOI), a screen-reader description and the standard image metadata fields, written by `scripts/logo-metadata.py` in the `seor` repository (`SEOR-eyfiidrv`).
+
+- The logo's keywords are this package's `X-schema.org-keywords` tags, the ones r-universe indexes, as written in `DESCRIPTION` and after `R`, `rstats` and `R package` (`SEOR-qoqmestu`).
 
 ## rurl 3.1.0
 
