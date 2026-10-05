@@ -192,8 +192,9 @@ default:
 # it, and the vignettes and the pkgdown site render with it too. `gates`,
 # `check`, `coverage`, `pages` and `full-check` splice this list into their
 # script AFTER their apt install, never before it: r-base:latest's Debian
-# pandoc is 3.11 (2026-10-04), and installing it after the pin would replace
-# the pinned one. `dpkg -i` downgrades over it cleanly.
+# pandoc is 3.11 (2026-10-04), and installing it after the pin would fail on
+# the hold below (it would replace the pin without one). `dpkg -i` downgrades
+# over it cleanly.
 #
 # AN ANCHORED LIST, NOT A TEMPLATE, and the pin a shell assignment, not a
 # `variables:` entry: tools/local-ci-plan.R follows neither `extends:` nor
@@ -216,9 +217,11 @@ default:
 .pandoc_install: &pandoc_install
   - PANDOC_VERSION="3.10"
   - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
-  # `apt-mark hold pandoc`, only after a successful `dpkg -i`, keeps the pin
-  # through any later apt step that would replace it with apt's pandoc. A
-  # failed hold only warns, so it never stops a gate (seor
+  # `apt-mark hold pandoc`, only after a successful `dpkg -i`: no later apt
+  # step replaces the pin. An upgrade leaves it, and an install that needs
+  # another pandoc fails loudly. Where apt's pandoc is older than the pin, as
+  # on rocker images, apt would not replace it anyway; the hold is the fleet's
+  # canonical shape. A failed hold only warns, so it never stops a gate (seor
   # design/fleet-standard.md; SEOR-vzupmeqj).
   - |
     ARCH=$(dpkg --print-architecture)
