@@ -81,7 +81,7 @@
 # Usage:
 #   Rscript tools/verify.R            # gates + relevant self-tests + full gate
 #   Rscript tools/verify.R --gates    # gates + relevant self-tests ONLY
-#   Rscript tools/verify.R --fast     # the above plus lint and spelling
+#   Rscript tools/verify.R --fast     # the above plus lint, spelling, docs
 #   Rscript tools/verify.R --release  # everything, plus the curl clean room
 #   Rscript tools/verify.R --verbose  # print every step's log, passing included
 #   Rscript tools/verify.R --list     # print the stage plan and exit
@@ -347,6 +347,45 @@ stage_spelling <- function() {
                 c("-e", shQuote(code))))
 }
 
+# Generated-docs drift (SEOR-nwfmerhu). man/ and NAMESPACE are roxygen output,
+# and a stale .Rd is still valid .Rd, so lint and R CMD check both pass it: the
+# logo sweep left man/rurl-package.Rd stale and nothing here noticed (fixed by
+# hand in rurl !176). scripts/check-docs-drift.R regenerates and diffs; read its
+# header for why it uses roxygen's default loader.
+#
+# It runs on its OWN export, never in `root`: on drift the script rewrites man/
+# and NAMESPACE where it runs, and `root` is what the check stage below builds
+# from and what a push must not dirty. rurl has no src/, so there are no
+# compile leftovers to keep out of the build, only that rewrite.
+#
+# The export is the tracked files AS THEY STAND IN THE WORKING TREE, the same
+# tree every other stage here judges: `git stash create` records uncommitted
+# edits as a dangling commit without touching the working tree or any ref,
+# and prints nothing on a clean tree, where HEAD is archived instead. Untracked
+# files are not in it. In CI the tree is a clean clone, so it is HEAD. The
+# session tempdir it lives in is deleted when this script exits.
+stage_docs <- function(root) {
+  cat("[docs] scripts/check-docs-drift.R on an export of the tracked tree\n")
+  export <- tempfile("docs-drift-")
+  dir.create(export)
+  tarball <- tempfile(fileext = ".tar")
+  exported <- run_step(
+    "git archive of the tracked tree (docs export)", "sh",
+    c("-c", shQuote(sprintf(paste(
+      "tree=$(git stash create) &&",
+      "git archive -o %s \"${tree:-HEAD}\" && tar -xf %s -C %s"
+    ), shQuote(tarball), shQuote(tarball), shQuote(export))))
+  )
+  if (!exported$ok) {
+    return(list(exported))
+  }
+  list(exported, run_step(
+    "check-docs-drift.R (man/, NAMESPACE vs roxygen)", "Rscript",
+    c(shQuote(file.path(root, "scripts", "check-docs-drift.R")),
+      shQuote(export))
+  ))
+}
+
 # The load-bearing stage, and the one no `devtools::test()` can stand in for.
 # `R CMD check` must run on a BUILT TARBALL: building is what reads `Collate:`,
 # and checking the tarball is what runs the tests against an INSTALLED package,
@@ -573,7 +612,7 @@ if (opt_self_test) {
 root <- repo_root()
 plan <- c("gates", "selftests")
 if (!opt_gates) {
-  plan <- c(plan, "lint", "spelling")
+  plan <- c(plan, "lint", "spelling", "docs")
 }
 if (!opt_gates && !opt_fast) {
   plan <- c(plan, "check", "locale")
@@ -603,6 +642,7 @@ for (st in plan) {
     selftests = stage_self_tests(root),
     lint = stage_lint(),
     spelling = stage_spelling(),
+    docs = stage_docs(root),
     check = stage_check(root),
     locale = stage_locale(),
     release = stage_release()

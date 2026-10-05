@@ -22,9 +22,10 @@
 #     gates            -- `tools/verify.R --gates` and the news-version gate.
 #     citation-version -- CITATION.cff/.zenodo.json and the BugReports split.
 #     check            -- `tools/verify.R`, the whole local gate: the gates,
-#                         lint, spelling, `R CMD check --as-cran` through
-#                         rcmdcheck, failing on a WARNING, and the test
-#                         suite under LC_ALL=C.
+#                         lint, spelling, roxygen docs drift,
+#                         `R CMD check --as-cran` through rcmdcheck,
+#                         failing on a WARNING, and the test suite under
+#                         LC_ALL=C.
 #     coverage         -- covr: the badge regex, a cobertura report, and a
 #                         failure below 95%.
 #   `main` only:
@@ -277,9 +278,9 @@ citation-version:
     - python3 scripts/check-bugreports.py
 
 # The whole local gate, on every pipeline: `tools/verify.R` runs the manifest
-# gates, lint, spelling, `R CMD check --as-cran` through rcmdcheck, failing on
-# a WARNING (CRAN incoming feasibility on), and the test suite under LC_ALL=C
-# (fleet standard, "CI on every push to main").
+# gates, lint, spelling, roxygen docs drift, `R CMD check --as-cran` through
+# rcmdcheck, failing on a WARNING (CRAN incoming feasibility on), and the test
+# suite under LC_ALL=C (fleet standard, "CI on every push to main").
 #
 # ON A TAG, CRAN's version comparison is skipped, and only that. A release tag
 # is pushed after CRAN accepts the version, so incoming feasibility then
@@ -304,6 +305,20 @@ check:
     # (SEOR-hxxxkmws). r-base ships pkg-config but not libidn2-dev.
     - apt-get update -qq && apt-get install -y --no-install-recommends libidn2-dev
     - *check_deps
+    # verify.R's docs stage (scripts/check-docs-drift.R, SEOR-nwfmerhu) needs
+    # git, to export the tree it regenerates, and the roxygen2 that
+    # DESCRIPTION pins in Config/roxygen2/version: the script refuses any other
+    # version, because roxygen2's output changes between releases. Debian's
+    # r-cran-roxygen2 brings the dependency tree as binaries; pak, from r-lib's
+    # binary repository as in `.rocker`, then installs the pinned roxygen2 over
+    # it when Debian's differs. A failed install is an error, not a warning.
+    - apt-get install -y --no-install-recommends git r-cran-roxygen2
+    - >
+      Rscript -e 'if (!requireNamespace("pak", quietly = TRUE))
+      install.packages("pak", repos = sprintf(
+      "https://r-lib.github.io/p/pak/stable/%s/%s/%s",
+      .Platform$pkgType, R.Version()$os, R.Version()$arch))'
+    - Rscript -e 'pak::pkg_install(paste0("roxygen2@", read.dcf("DESCRIPTION", "Config/roxygen2/version")[[1]]))'
     - *pandoc_install
     - 'Rscript -e ''b <- punycoder:::.backend_info(); print(b); if (!isTRUE(b$has_libidn2)) stop("punycoder was built without libidn2, so this job is not the libidn2 cell (SEOR-hxxxkmws)", call. = FALSE)'''
     - 'Rscript tools/verify.R'
