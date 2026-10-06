@@ -214,7 +214,7 @@ changed_files <- function() {
   if (is.null(base)) {
     return(cannot_tell("no base ref to diff against"))
   }
-  uncommitted <- git_lines(c("diff", "--name-only", "HEAD"))
+  uncommitted <- git_lines(c("diff", "--name-only", "--no-renames", "HEAD"))
   # ON THE BASE BRANCH ITSELF the committed diff is vacuously empty -- nothing
   # has changed relative to main when you ARE main -- so selection quietly
   # picked ZERO self-tests in the job that is supposed to be the thorough one.
@@ -236,7 +236,8 @@ changed_files <- function() {
     }
     return(cannot_tell(sprintf("HEAD is %s and the tree is clean", base)))
   }
-  committed <- git_lines(c("diff", "--name-only", paste0(base, "...HEAD")))
+  committed <- git_lines(c("diff", "--name-only", "--no-renames",
+                           paste0(base, "...HEAD")))
   unique(c(committed, uncommitted))
 }
 
@@ -314,7 +315,16 @@ self_test_filter_map <- function(manifest) {
 
 # A dorny/paths-filter (picomatch) glob as an anchored regex, for the two
 # wildcards the manifest uses: `**` crosses `/`, `*` does not. A `**/` also
-# matches no directory at all, as picomatch has it. Everything else is literal.
+# matches no directory at all, as picomatch has it. Everything else is literal,
+# so a glob using any other picomatch syntax (`?`, `[...]`, `{a,b}`, `!`, or a
+# `**` that is not a whole path segment) would match nothing here while
+# matching in CI; `unsupported_glob()` flags those, and the self-test they gate
+# is treated as unmappable rather than silently skipped.
+unsupported_glob <- function(glob) {
+  grepl("[][{}?!]", glob) ||
+    grepl("[^/]\\*\\*|\\*\\*[^/]", glob)
+}
+
 glob_to_regex <- function(glob) {
   rx <- gsub("([][.+?^$(){}|\\\\])", "\\\\\\1", glob, perl = TRUE)
   rx <- gsub("**/", "\001", rx, fixed = TRUE)
@@ -335,7 +345,10 @@ select_self_tests <- function(map, changed) {
       any(grepl(glob_to_regex(g), changed, perl = TRUE))
     }, logical(1)))
   }
-  unmappable <- names(map)[lengths(map) == 0L]
+  unreadable <- vapply(map, function(globs) {
+    any(vapply(globs, unsupported_glob, logical(1)))
+  }, logical(1))
+  unmappable <- names(map)[lengths(map) == 0L | unreadable]
   sel <- vapply(names(map), function(cmd) {
     cmd %in% unmappable || sub(" --self-test$", "", cmd) %in% changed ||
       touched(map[[cmd]])
@@ -382,10 +395,13 @@ plan_self_tests <- function(root) {
   } else {
     unname(picked)
   }
-  notes <- c(attr(map, "note"), sprintf(
-    "[gate-self-tests] %s maps to no paths filter in %s, so it is selected",
+  # A manifest-wide note (no yaml, or an unparsable manifest) already says why
+  # nothing maps; one line per self-test on top of it would bury the cause.
+  notes <- if (length(attr(map, "note"))) attr(map, "note") else sprintf(
+    paste("[gate-self-tests] %s has no paths filter in %s that this runner",
+          "can read, so it is selected"),
     attr(picked, "unmappable"), MANIFEST
-  ))
+  )
   summary <- sprintf(
     "[gate-self-tests] %d/%d %s", sum(selected), length(cmds),
     if (unknown) {
@@ -712,6 +728,8 @@ selection_cases <- function(case) {
     "            g_selftest:",
     "              - 'tools/g/**'",
     "              - 'tools/*.cfg'",
+    "            u_selftest:",
+    "              - 'tools/{u,v}.R'",
     "  a:",
     "    if: needs.changes.outputs.a_selftest == 'true'",
     "    steps:",
@@ -727,13 +745,19 @@ selection_cases <- function(case) {
     "  undeclared:",
     "    if: needs.changes.outputs.no_such_filter == 'true'",
     "    steps:",
-    "      - run: Rscript tools/undeclared.R --self-test"
+    "      - run: Rscript tools/undeclared.R --self-test",
+    "  u:",
+    "    if: needs.changes.outputs.u_selftest == 'true'",
+    "    steps:",
+    "      - run: Rscript tools/u.R --self-test"
   ), collapse = "\n"))
   map <- self_test_filter_map(fixture)
   sel <- function(...) select_self_tests(map, c(...))
   a <- "tools/a.R --self-test"
   g <- "tools/g.R --self-test"
-  orphans <- c("tools/orphan.R --self-test", "tools/undeclared.R --self-test")
+  u <- "tools/u.R --self-test"
+  orphans <- c("tools/orphan.R --self-test", "tools/undeclared.R --self-test",
+               u)
   unrelated <- sel("R/x.R")
 
   real_ok <- file.exists(MANIFEST)
@@ -773,6 +797,12 @@ selection_cases <- function(case) {
       "an unmappable self-test is SELECTED, and named, on any diff",
       all(unrelated[orphans]) &&
         setequal(attr(unrelated, "unmappable"), orphans)
+    ),
+    case(
+      "a filter glob this runner cannot read makes its self-test unmappable",
+      isTRUE(unrelated[[u]]) && u %in% attr(unrelated, "unmappable") &&
+        unsupported_glob("tools/?.R") && unsupported_glob("tools/**.R") &&
+        !unsupported_glob("tools/g/**") && !unsupported_glob("**/x.R")
     ),
     case(
       "REAL manifest: every self-test maps to a filter covering its script",

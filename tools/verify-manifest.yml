@@ -265,9 +265,13 @@ jobs:
             # `run: Rscript tools/verify.R` entry and must never get one -- the
             # runner derives its gate list from this file and would recurse into
             # itself. Only the self-test is declared, which is exactly what the
-            # runner's own selection needs to find it (RURL-pbihchti).
+            # runner's own selection needs to find it (RURL-pbihchti). This
+            # file is listed too: the self-test checks that every self-test
+            # here maps to a filter, so a manifest edit must re-run it
+            # (RURL-etafkksg).
             verify_runner_selftest:
               - 'tools/verify.R'
+              - 'tools/verify-manifest.yml'
             # tools/local-ci-plan.R is the job PLANNER behind tools/local-ci.sh,
             # not a gate: run bare it prints a job list and asserts nothing, so
             # it has no plain `run: Rscript tools/local-ci-plan.R` entry. Only
