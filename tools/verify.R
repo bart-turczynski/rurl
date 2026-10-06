@@ -26,9 +26,13 @@
 # `.gitlab-ci.yml` runs this script, so GitLab consumes the same manifest.
 #
 # GATE SELF-TESTS ARE A SEPARATE RISK CLASS. Their positive/negative fixtures
-# prove the verifier, not the product, so routine runs select them only when the
-# corresponding script changed relative to main. `--release` deliberately runs
-# every self-test. The real tree scans still run in every complete local gate.
+# prove the verifier, not the product, so routine runs select one only when the
+# diff against main touches a path in the manifest's paths filter that gates it
+# (the `changes` job's `filters:` block), or the self-test's own script. A
+# self-test that maps to no filter is selected and named, never skipped (see
+# "self-test selection" below). `--release` deliberately runs every self-test,
+# and so does a run that cannot tell what changed. The real tree scans still
+# run in every complete local gate.
 #
 # WHAT IT DOES NOT COVER, stated so nobody reads a green run as more than it is:
 #   * cross-platform and multi-R-version checks -- this runs one platform,
@@ -84,8 +88,10 @@
 #   Rscript tools/verify.R --fast     # the above plus lint and spelling
 #   Rscript tools/verify.R --release  # everything, plus the curl clean room
 #   Rscript tools/verify.R --verbose  # print every step's log, passing included
-#   Rscript tools/verify.R --list     # print the stage plan and exit
-#   Rscript tools/verify.R --self-test  # prove the two instruments above
+#   Rscript tools/verify.R --list     # print the stage plan, and the
+#                                     # self-tests this diff selects, and exit
+#   Rscript tools/verify.R --self-test  # prove the two instruments above,
+#                                       # and self-test selection
 # `--fast` is iteration feedback only. It is never sufficient verification for
 # a behavioral slice; the unsuffixed command remains the end-of-slice gate.
 #
@@ -97,7 +103,9 @@
 # to prevent (see "THE GATE LIST IS DERIVED, NOT TRANSCRIBED" above). Like
 # `--fast`, it is not sufficient verification for a behavioral slice.
 #
-# Base R only. Exits 1 if any BLOCKING stage fails.
+# Base R, plus `yaml` to read the self-tests' paths filters; without `yaml`,
+# self-test selection falls back to each script's own path and says so. Exits 1
+# if any BLOCKING stage fails.
 
 MANIFEST <- "tools/verify-manifest.yml"
 
@@ -232,26 +240,163 @@ changed_files <- function() {
   unique(c(committed, uncommitted))
 }
 
-# The self-test commands of a parsed manifest, one per
-# `run: Rscript <script> --self-test` step, with the paths that trigger each.
-self_test_filter_map <- function(manifest) {
-  steps <- unlist(lapply(manifest$jobs, function(job) job$steps),
-                  recursive = FALSE)
-  runs <- trimws(vapply(steps, function(s) {
-    if (is.character(s$run)) s$run[1L] else ""
-  }, character(1)))
-  cmds <- unique(sub("^Rscript\\s+", "Rscript ",
-                     grep("^Rscript\\s+\\S+ --self-test$", runs,
-                          value = TRUE)))
-  cmds <- sub("^Rscript ", "", cmds)
-  stats::setNames(rep(list(character(0)), length(cmds)), cmds)
+# ---- self-test selection (RURL-etafkksg) -----------------------------------
+#
+# A self-test runs when the diff touches a path in the paths filter that gates
+# it in the manifest, not only its own script: the `changes` job declares one
+# filter per self-test, and a self-test can be the only check on a file other
+# than its script (tools/local-ci-plan.R --self-test is the only one on
+# tools/local-ci.sh). The chain is the step running
+# `Rscript <script> --self-test` -> the `needs.changes.outputs.<filter>` its
+# `if:` names (the step's own, else its job's) -> that filter's path list.
+# The two functions below are pure over a parsed manifest, so the self-test
+# feeds them fixtures without a repository.
+
+# The `changes` job's paths filters as a named list, filter -> paths.
+# dorny/paths-filter takes `filters:` as a YAML document inside a YAML string,
+# so it is parsed a second time. A missing or unparsable block yields an empty
+# list: every self-test is then unmappable, and so selected, never skipped.
+manifest_filters <- function(manifest) {
+  steps <- manifest[["jobs"]][["changes"]][["steps"]]
+  hit <- Filter(function(s) {
+    is.list(s) && is.character(s[["uses"]]) &&
+      startsWith(s[["uses"]][1L], "dorny/paths-filter")
+  }, steps)
+  text <- if (length(hit)) hit[[1L]][["with"]][["filters"]]
+  if (!is.character(text) || length(text) != 1L) {
+    return(list())
+  }
+  parsed <- tryCatch(yaml::yaml.load(text), error = function(e) NULL)
+  if (!is.list(parsed)) {
+    return(list())
+  }
+  lapply(parsed, function(p) as.character(unlist(p)))
 }
 
-# Which self-tests a diff selects: by each one's own script path.
+# The filter names an `if:` expression reads.
+if_filters <- function(cond) {
+  if (!is.character(cond) || length(cond) != 1L) {
+    return(character(0))
+  }
+  hits <- regmatches(cond, gregexpr(
+    "needs\\.changes\\.outputs\\.[A-Za-z0-9_-]+", cond
+  ))[[1L]]
+  unique(sub("^needs\\.changes\\.outputs\\.", "", hits))
+}
+
+# Self-test command (as manifest_self_tests() spells it) -> the paths of the
+# filter that gates it. An empty vector means the command maps to no filter
+# with paths: its `if:` names none, or names one the `changes` job lacks.
+self_test_filter_map <- function(manifest) {
+  filters <- manifest_filters(manifest)
+  entries <- unlist(lapply(manifest[["jobs"]], function(job) {
+    lapply(job[["steps"]], function(s) {
+      run <- if (is.list(s)) s[["run"]]
+      if (!is.character(run) || length(run) != 1L ||
+            !grepl("^\\s*Rscript\\s+\\S+ --self-test\\s*$", run)) {
+        return(NULL)
+      }
+      gate <- if_filters(s[["if"]])
+      if (!length(gate)) {
+        gate <- if_filters(job[["if"]])
+      }
+      list(cmd = sub("^Rscript\\s+", "", trimws(run)),
+           paths = unlist(filters[gate], use.names = FALSE))
+    })
+  }), recursive = FALSE)
+  entries <- Filter(Negate(is.null), entries)
+  cmds <- unique(vapply(entries, function(e) e$cmd, character(1)))
+  stats::setNames(lapply(cmds, function(cmd) {
+    mine <- Filter(function(e) identical(e$cmd, cmd), entries)
+    unique(as.character(unlist(lapply(mine, function(e) e$paths))))
+  }), cmds)
+}
+
+# A dorny/paths-filter (picomatch) glob as an anchored regex, for the two
+# wildcards the manifest uses: `**` crosses `/`, `*` does not. A `**/` also
+# matches no directory at all, as picomatch has it. Everything else is literal.
+glob_to_regex <- function(glob) {
+  rx <- gsub("([][.+?^$(){}|\\\\])", "\\\\\\1", glob, perl = TRUE)
+  rx <- gsub("**/", "\001", rx, fixed = TRUE)
+  rx <- gsub("**", "\002", rx, fixed = TRUE)
+  rx <- gsub("*", "[^/]*", rx, fixed = TRUE)
+  rx <- gsub("\001", "(?:.*/)?", rx, fixed = TRUE)
+  rx <- gsub("\002", ".*", rx, fixed = TRUE)
+  paste0("^", rx, "$")
+}
+
+# Which self-tests a diff selects: those whose own script or any filter path
+# matches a changed file, plus every unmappable one, which is SELECTED rather
+# than skipped and named in the `unmappable` attribute so the caller can say
+# so. A self-test the runner cannot reason about must not go quiet.
 select_self_tests <- function(map, changed) {
-  scripts <- sub(" --self-test$", "", names(map))
-  structure(stats::setNames(scripts %in% changed, names(map)),
-            unmappable = character(0))
+  touched <- function(globs) {
+    any(vapply(globs, function(g) {
+      any(grepl(glob_to_regex(g), changed, perl = TRUE))
+    }, logical(1)))
+  }
+  unmappable <- names(map)[lengths(map) == 0L]
+  sel <- vapply(names(map), function(cmd) {
+    cmd %in% unmappable || sub(" --self-test$", "", cmd) %in% changed ||
+      touched(map[[cmd]])
+  }, logical(1))
+  structure(sel, unmappable = unmappable)
+}
+
+# The map for the manifest's self-test commands `cmds`, aligned to them: a
+# command the yaml reading did not find maps to nothing, so it is selected.
+# Without `yaml` (CI's gates image installs r-cran-yaml) each self-test maps
+# to its own script path, the selection before RURL-etafkksg, and the `note`
+# attribute says so.
+read_self_test_map <- function(path, cmds) {
+  if (!requireNamespace("yaml", quietly = TRUE)) {
+    return(structure(
+      stats::setNames(as.list(sub(" --self-test$", "", cmds)), cmds),
+      note = paste("[gate-self-tests] the `yaml` package is not installed,",
+                   "so each self-test is selected by its own script path",
+                   "alone, not by its paths filter")
+    ))
+  }
+  parsed <- tryCatch(yaml::read_yaml(path), error = function(e) e)
+  failed <- inherits(parsed, "error")
+  map <- if (failed) list() else self_test_filter_map(parsed)
+  structure(stats::setNames(lapply(cmds, function(cmd) {
+    if (cmd %in% names(map)) map[[cmd]] else character(0)
+  }), cmds), note = if (failed) {
+    sprintf("[gate-self-tests] cannot parse %s (%s), so no self-test maps",
+            MANIFEST, conditionMessage(parsed))
+  })
+}
+
+# What the [gate-self-tests] stage runs on this diff, and the lines that say
+# why. `--list` prints the same plan without running it.
+plan_self_tests <- function(root) {
+  path <- file.path(root, MANIFEST)
+  cmds <- manifest_self_tests(path)
+  map <- read_self_test_map(path, cmds)
+  changed <- changed_files()
+  unknown <- inherits(changed, "cannot_tell")
+  picked <- select_self_tests(map, changed)
+  selected <- if (opt_release || unknown) {
+    rep(TRUE, length(cmds))
+  } else {
+    unname(picked)
+  }
+  notes <- c(attr(map, "note"), sprintf(
+    "[gate-self-tests] %s maps to no paths filter in %s, so it is selected",
+    attr(picked, "unmappable"), MANIFEST
+  ))
+  summary <- sprintf(
+    "[gate-self-tests] %d/%d %s", sum(selected), length(cmds),
+    if (unknown) {
+      sprintf("-- %s, so running every one", attr(changed, "reason"))
+    } else if (opt_release) {
+      "-- --release runs every one"
+    } else {
+      "-- the diff touches their manifest paths filters"
+    }
+  )
+  list(cmds = cmds, selected = selected, notes = notes, summary = summary)
 }
 
 read_log <- function(path) {
@@ -317,24 +462,9 @@ stage_gates <- function(root) {
 }
 
 stage_self_tests <- function(root) {
-  cmds <- manifest_self_tests(file.path(root, MANIFEST))
-  changed <- changed_files()
-  scripts <- sub(" --self-test$", "", cmds)
-  unknown <- inherits(changed, "cannot_tell")
-  selected <- if (opt_release || unknown) {
-    rep(TRUE, length(cmds))
-  } else {
-    scripts %in% changed
-  }
-  cat(sprintf(
-    "[gate-self-tests] %d/%d %s\n", sum(selected), length(cmds),
-    if (unknown) {
-      sprintf("-- %s, so running every one", attr(changed, "reason"))
-    } else {
-      "corresponding implementation(s) changed"
-    }
-  ))
-  lapply(cmds[selected], function(cmd) {
+  plan <- plan_self_tests(root)
+  cat(paste0(c(plan$notes, plan$summary), "\n"), sep = "")
+  lapply(plan$cmds[plan$selected], function(cmd) {
     parts <- strsplit(cmd, "\\s+")[[1]]
     run_step(cmd, "Rscript", parts)
   })
@@ -785,9 +915,10 @@ if (opt_list) {
   cat("stage plan:", paste(plan, collapse = " -> "), "\n")
   cat("derived gate steps:\n")
   cat(paste0("  ", manifest_gates(file.path(root, MANIFEST))), sep = "\n")
-  cat("\nconditional gate self-tests:\n")
-  cat(paste0("  ", manifest_self_tests(file.path(root, MANIFEST))), sep = "\n")
-  cat("\n")
+  st <- plan_self_tests(root)
+  cat("\nconditional gate self-tests (* = selected for this diff):\n")
+  cat(paste0(ifelse(st$selected, "* ", "  "), st$cmds), sep = "\n")
+  cat(paste0(c(st$notes, st$summary), "\n"), sep = "")
   quit(status = 0)
 }
 

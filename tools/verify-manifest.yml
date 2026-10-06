@@ -276,8 +276,9 @@ jobs:
             # preamble it writes and its plan-from-ref cases run it
             # (RURL-ecwpdtci); .gitlab-ci.yml is NOT, because the self-test
             # runs on inline fixtures and never reads it. As for every entry
-            # here, tools/verify.R selects the self-test by its OWN script path
-            # alone, so only a change to tools/local-ci-plan.R fires it there.
+            # here, tools/verify.R selects the self-test by this filter's path
+            # list plus its own script path, so a change to tools/local-ci.sh
+            # alone fires it there too (RURL-etafkksg).
             local_ci_plan_selftest:
               - 'tools/local-ci-plan.R'
               - 'tools/local-ci.sh'
