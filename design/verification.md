@@ -11,7 +11,8 @@ cannot carry comments.
 | Which gates exist, and each gate's trigger and self-test | `tools/verify-manifest.yml` header |
 | The pre-push skip for local-path mirrors; how pre-commit passes the remote (`PRE_COMMIT_REMOTE_*`, argc=0) | `tools/verify-on-push.sh` header |
 | GitLab stages, the `workflow:` block (tighten it if the CI allowance runs out), and the hand-started pipeline hatch | `.gitlab-ci.yml` header |
-| Running the CI jobs locally in the CI image; why `--all`; skipping a job whose CI secret is unset | `tools/local-ci.sh` header |
+| Running the CI jobs locally in the CI image; why `--all` | `tools/local-ci.sh` header |
+| Skipping, as not judged, a job whose CI secret is unset; the `SECRET_JOBS` list | `tools/local-ci-plan.R` header |
 | Whether released dependencies can serve `DESCRIPTION` (needs the network; not in the gate) | `tools/dependency-resolvability-gate.R` header |
 | `cran-comments.md`: offline half in the gate, `--online` half at release | `tools/cran-comments-gate.R` header |
 | Mirror freshness, refresh, the frozen `refs/remotes/origin/*` | `design/backup-mirror.md`, `tools/mirror-freshness.sh`, `tools/mirror-refresh.sh` |

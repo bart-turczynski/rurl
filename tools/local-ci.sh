@@ -42,8 +42,9 @@
 #   tools/local-ci.sh --keep [ref]    # keep the work tree even on success
 #
 # Exit status: 0 PASS, or no job applies to the ref; 1 FAIL, or the runner
-# could not start; 2 a bad argument or a bad `SECRET_JOBS` entry; 3 NONE, every
-# job that applies was skipped for an unset secret, so nothing was judged.
+# could not start; 2 a bad argument, or a `SECRET_JOBS` entry in
+# tools/local-ci-plan.R that is malformed or names no job; 3 NONE, every job
+# that applies was skipped for an unset secret, so nothing was judged.
 #
 # AFTER A MERGE, run it against what actually landed:
 #   git fetch origin main && tools/local-ci.sh --all origin/main
@@ -56,30 +57,15 @@
 # rationing is exactly what you want to override.
 #
 # A JOB THAT NEEDS A CI SECRET IS SKIPPED, NOT FAILED, WHEN THE SECRET IS UNSET
-# HERE (RURL-hlcpduoq). Such a secret lives only as a GitLab CI/CD variable, so
-# locally the job fails on every run whatever the commit holds, and a verdict
-# that is always red says nothing. `SECRET_JOBS` below declares each such job as
-# `job:VARIABLE`; a job may have several entries. When one of its variables is
-# not set (exported, non-empty) in this environment, the job prints as SKIPPED,
-# names the variable, and stays out of the judgment, which the other jobs make
-# (the rule seor's `scripts/check-fleet-standard.py` follows: not judged, not a
-# gap); the VERDICT line names it. When all are set, the job runs exactly as
-# any other job and can still fail. A declared secret ONLY decides skip or run:
-# it is never forwarded into the container. Forwarding `FOSSA_API_KEY` would
-# make a local run on any ref upload to the production FOSSA project, past CI's
-# default-branch-only rule. The check runs before the clone, so a run in which
-# every job is skipped costs nothing and ends NONE. The next secret-gated job
-# needs one entry there, nothing else.
+# HERE (RURL-hlcpduoq). The planner owns that gate and its one list of
+# job-to-secret entries, `SECRET_JOBS` in tools/local-ci-plan.R, which says why
+# (RURL-bsfwpfil): `--list` shows such a job as NOT JUDGED with the variable
+# named, and a run prints it as SKIPPED, keeps it out of the judgment the other
+# jobs make, and names it on the VERDICT line. A declared secret is never
+# forwarded into the container. The gate runs before the clone, so a run in
+# which every job is skipped costs nothing and ends NONE.
 
 set -euo pipefail
-
-SECRET_JOBS="fossa:FOSSA_API_KEY"
-for ENTRY in $SECRET_JOBS; do
-  if ! [[ "$ENTRY" =~ ^[^:]+:[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-    echo "SECRET_JOBS: '$ENTRY' is not job:VARIABLE" >&2
-    exit 2
-  fi
-done
 
 usage() { sed -n '/^# Usage:/,/^#$/p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -150,36 +136,28 @@ if [ "$LIST_ONLY" -eq 1 ]; then
   exec Rscript tools/local-ci-plan.R --list "${PLAN_ARGS[@]}"
 fi
 
-JOBS="$(Rscript tools/local-ci-plan.R --jobs "${PLAN_ARGS[@]}")"
+# `--jobs` lists the jobs to run, after the secret gate, and exits 3 when every
+# job that applies is not judged; `--not-judged` names those it left out. The
+# planner reads this process's environment, which holds only what the caller
+# exported, as a real job's would.
+PLAN_STATUS=0
+JOBS="$(Rscript tools/local-ci-plan.R --jobs "${PLAN_ARGS[@]}")" || PLAN_STATUS=$?
+case "$PLAN_STATUS" in
+  0|3) ;;
+  *) exit "$PLAN_STATUS" ;;
+esac
+SKIPPED="$(Rscript tools/local-ci-plan.R --not-judged "${PLAN_ARGS[@]}")"
+if [ -n "$SKIPPED" ]; then
+  echo "--- SKIPPED, not judged, CI secret unset locally: $SKIPPED"
+  echo
+fi
+if [ "$PLAN_STATUS" -eq 3 ]; then
+  echo "VERDICT: NONE -- not judged: $SKIPPED"
+  exit 3
+fi
 if [ -z "$JOBS" ]; then
   echo "no job applies to this ref -- nothing to run"
   exit 0
-fi
-
-# The secret gate (header), before the clone. `printenv` sees only exported
-# variables, as a real job's environment would, never this script's own; set
-# but empty counts as unset. `RUN_JOBS` keeps the planner's order.
-RUN_JOBS=""
-SKIPPED=""
-for JOB in $JOBS; do
-  MISSING=""
-  for ENTRY in $SECRET_JOBS; do
-    VAR="${ENTRY#*:}"
-    if [ "${ENTRY%%:*}" = "$JOB" ] && [ -z "$(printenv "$VAR" || true)" ]; then
-      MISSING="$MISSING $VAR"
-    fi
-  done
-  if [ -n "$MISSING" ]; then
-    echo "--- $JOB SKIPPED, not judged: CI secret unset locally:${MISSING}"
-    SKIPPED="${SKIPPED:+$SKIPPED, }$JOB (${MISSING# } unset)"
-  else
-    RUN_JOBS="$RUN_JOBS $JOB"
-  fi
-done
-[ -n "$SKIPPED" ] && echo
-if [ -z "$RUN_JOBS" ]; then
-  echo "VERDICT: NONE -- not judged: $SKIPPED"
-  exit 3
 fi
 NOT_JUDGED="${SKIPPED:+ -- not judged: $SKIPPED}"
 
@@ -210,7 +188,7 @@ trap cleanup EXIT
 git clone --quiet --no-hardlinks "$ROOT" "$WORK/repo"
 git -C "$WORK/repo" checkout --quiet --detach "$SHA"
 
-for JOB in $RUN_JOBS; do
+for JOB in $JOBS; do
   IMAGE="$(Rscript tools/local-ci-plan.R --image "$JOB")"
   {
     echo "set -ex"
