@@ -290,8 +290,10 @@ render_plan_script <- function(entries) {
 # ---- self-test ---------------------------------------------------------------
 
 # Fixtures are inline CI configs, parsed with the same `yaml` reader the real
-# run uses; no repository config, no git, no docker. The script-level cases
-# write theirs to a temp folder and run this script there. The shell cases run
+# run uses; no repository config, no docker. The script-level cases write
+# theirs to a temp folder and run this script there; the plan-from-ref cases
+# commit theirs to a throwaway git repository and run tools/local-ci.sh
+# --list there, and are skipped, visibly, without git. The shell cases run
 # the rendered script
 # under `bash` behind the same `set -ex` preamble tools/local-ci.sh writes, so
 # they prove what the job shell does with it, not only what the text is.
@@ -563,6 +565,97 @@ self_test <- function() {
     res <- plan(job_yaml("plain"), mode, set = TRUE)
     expect(paste("script: an entry naming no job stops", mode, "with exit 2"),
            res$status == 2L && any(grepl("names no job", res$out)))
+  }
+
+  # tools/local-ci.sh PLANS FROM THE REF UNDER TEST (RURL-ecwpdtci). Its jobs
+  # run in a clean clone at the ref, so the job list, images, scripts and the
+  # secret gate must come from that ref's planner and that ref's CI config, not
+  # from whatever the checkout holds. These cases build a throwaway repository
+  # whose working tree disagrees with the ref and run `tools/local-ci.sh
+  # --list` there (no docker: `--list` stops before the clone). They need git,
+  # which the gates job's image does not install, so without it they are
+  # skipped and the skip is printed.
+  runner <- file.path(dirname(self), "local-ci.sh")
+  if (!nzchar(Sys.which("git"))) {
+    cat("self-test: SKIPPED the plan-from-ref cases -- git is not on PATH\n")
+  } else {
+    git_env <- c(
+      "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+      "GIT_AUTHOR_NAME=self-test", "GIT_AUTHOR_EMAIL=self-test@invalid",
+      "GIT_COMMITTER_NAME=self-test", "GIT_COMMITTER_EMAIL=self-test@invalid"
+    )
+    repo <- tempfile("local-ci-ref-")
+    dir.create(file.path(repo, "tools"), recursive = TRUE)
+    git <- function(...) {
+      out <- suppressWarnings(system2("git", c("-C", shQuote(repo), ...),
+                                      stdout = TRUE, stderr = TRUE,
+                                      env = git_env))
+      if (!is.null(attr(out, "status"))) {
+        stop("self-test git call failed: ", paste(c(...), collapse = " "),
+             "\n", paste(out, collapse = "\n"), call. = FALSE)
+      }
+      out
+    }
+    at <- function(path) file.path(repo, path)
+    commit <- function(...) {
+      if (length(c(...))) git("add", ...)
+      git("commit", "-q", "-m", "fixture")
+      git("rev-parse", "HEAD")
+    }
+    list_ref <- function(ref) {
+      old <- setwd(repo)
+      on.exit(setwd(old))
+      out <- suppressWarnings(system2(
+        "bash", c(shQuote(runner), "--list", shQuote(ref)),
+        stdout = TRUE, stderr = TRUE,
+        env = c(git_env, paste0("PATH=", shQuote(paste(
+          R.home("bin"), Sys.getenv("PATH"), sep = .Platform$path.sep))))))
+      status <- attr(out, "status")
+      list(status = if (is.null(status)) 0L else status, out = out)
+    }
+    has <- function(res, pattern) any(grepl(pattern, res$out, fixed = TRUE))
+    # The refusal line itself, not any line: the header names both files too.
+    refuses <- function(res, path) {
+      res$status == 2L && any(grepl(paste0("has no ", path), res$out,
+                                    fixed = TRUE) &
+                                grepl("HEAD", res$out, fixed = TRUE))
+    }
+
+    git("init", "-q")
+    file.copy(self, at("tools/local-ci-plan.R"))
+    writeLines(c(job_yaml("from_ref"), secret_only), at(CONFIG))
+    ref_sha <- commit("tools/local-ci-plan.R", CONFIG)
+    writeLines(c(job_yaml("from_head"), secret_only), at(CONFIG))
+    head_sha <- commit(CONFIG)
+
+    # The motivating case: `--list origin/main` from a feature branch.
+    res <- list_ref(ref_sha)
+    expect("ref: --list <ref> plans with the ref's CI config, not the checkout's",
+           res$status == 0L && has(res, "from_ref") && !has(res, "from_head"))
+    expect("ref: the header names the revision the plan comes from",
+           any(grepl(paste0("^plan: .*", ref_sha), res$out)))
+
+    writeLines("cat('worktree planner\\n')", at("tools/local-ci-plan.R"))
+    res <- list_ref(head_sha)
+    expect("ref: --list <ref> runs the ref's planner, not the checkout's",
+           res$status == 0L && has(res, "from_head") &&
+             !has(res, "worktree planner"))
+    file.copy(self, at("tools/local-ci-plan.R"), overwrite = TRUE)
+
+    # A ref that lacks either file stops with exit 2 and names it; the copy
+    # left in the working tree must not stand in for it.
+    git("rm", "-q", "--cached", CONFIG)
+    commit()
+    res <- list_ref("HEAD")
+    expect("ref: a ref without the CI config exits 2, naming it and the ref",
+           refuses(res, CONFIG) && !has(res, "from_head"))
+    git("add", CONFIG)
+    git("rm", "-q", "--cached", "tools/local-ci-plan.R")
+    commit()
+    res <- list_ref("HEAD")
+    expect("ref: a ref without the planner exits 2, naming it and the ref",
+           refuses(res, "tools/local-ci-plan.R") && !has(res, "from_head"))
+    unlink(repo, recursive = TRUE)
   }
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
