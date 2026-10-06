@@ -993,9 +993,9 @@ jobs:
   # reports. Its self-test pins the single-line and block-scalar renderings of a
   # job's `script:` and runs both under `bash`, and pins the secret gate: which
   # jobs are not judged, the not-judged summary, and the NONE exit status
-  # (RURL-bsfwpfil). It is fixture-only (no config, no git, no docker) and
-  # exits non-zero on any failed case. RURL-gysfdtcd added it and nothing ran
-  # it; RURL-fzeadcfc wired it here.
+  # (RURL-bsfwpfil). It is fixture-only (no repository config, no git, no
+  # docker) and exits non-zero on any failed case. RURL-gysfdtcd added it and
+  # nothing ran it; RURL-fzeadcfc wired it here.
   #
   # Self-test only. See the `local_ci_plan_selftest` filter for why there is no
   # accompanying `run: Rscript tools/local-ci-plan.R` step.

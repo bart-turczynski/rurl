@@ -201,8 +201,10 @@ secret_problems <- function(secrets, job_names) {
   nms <- names(secrets)
   if (is.null(nms)) nms <- rep("", length(secrets))
   bad <- !nzchar(nms) | !grepl("^[A-Za-z_][A-Za-z0-9_]*$", secrets)
+  dup <- !bad & duplicated(paste(nms, secrets))
   c(
     sprintf('`%s = "%s"` is not job = "VARIABLE"', nms[bad], secrets[bad]),
+    sprintf('`%s = "%s"` is declared twice', nms[dup], secrets[dup]),
     sprintf("`%s` names no job in %s", setdiff(unique(nms[!bad]), job_names),
             CONFIG)
   )
@@ -288,7 +290,9 @@ render_plan_script <- function(entries) {
 # ---- self-test ---------------------------------------------------------------
 
 # Fixtures are inline CI configs, parsed with the same `yaml` reader the real
-# run uses; no file, no git, no docker. The shell cases run the rendered script
+# run uses; no repository config, no git, no docker. The script-level cases
+# write theirs to a temp folder and run this script there. The shell cases run
+# the rendered script
 # under `bash` behind the same `set -ex` preamble tools/local-ci.sh writes, so
 # they prove what the job shell does with it, not only what the text is.
 self_test <- function() {
@@ -505,6 +509,61 @@ self_test <- function() {
   probs <- secret_problems(c(upload = "1BAD", "UPLOAD_KEY"), names(gated))
   expect("secret entries: a bad variable or a missing job name is reported",
          length(probs) == 2L && all(grepl("is not job", probs)))
+  probs <- secret_problems(c(upload = "UPLOAD_KEY", upload = "UPLOAD_KEY"),
+                           names(gated))
+  expect("secret entries: a duplicate entry is reported once",
+         length(probs) == 1L && grepl("declared twice", probs))
+
+  # The script-level exits, end to end: this script run as tools/local-ci.sh
+  # runs it, in a temp folder holding a fixture config, against the REAL
+  # SECRET_JOBS, with each declared variable set or emptied (empty counts as
+  # unset) in the child's environment only.
+  self <- normalizePath(sub("^--file=", "", grep(
+    "^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[[1L]]))
+  secret_vars <- unique(unname(SECRET_JOBS))
+  plan <- function(config, mode, set) {
+    dir <- tempfile("local-ci-plan-")
+    dir.create(dir)
+    old <- setwd(dir)
+    on.exit({
+      setwd(old)
+      unlink(dir, recursive = TRUE)
+    })
+    writeLines(config, CONFIG)
+    env <- paste0(secret_vars, "=", if (set) "set" else "")
+    out <- suppressWarnings(system2(
+      file.path(R.home("bin"), "Rscript"), c(shQuote(self), mode),
+      stdout = TRUE, stderr = TRUE, env = env))
+    status <- attr(out, "status")
+    list(status = if (is.null(status)) 0L else status, out = out)
+  }
+  job_yaml <- function(nm) c(paste0(nm, ":"), "  script: ['true']")
+  secret_only <- unlist(lapply(unique(names(SECRET_JOBS)), job_yaml))
+  with_plain <- c(job_yaml("plain"), secret_only)
+
+  res <- plan(secret_only, "--jobs", set = FALSE)
+  expect("script: --jobs exits 3 and lists nothing when every job is not judged",
+         res$status == 3L && !length(res$out))
+  res <- plan(secret_only, "--not-judged", set = FALSE)
+  expect("script: --not-judged names each declared variable",
+         res$status == 0L && length(res$out) == 1L &&
+           all(vapply(secret_vars, grepl, logical(1), x = res$out,
+                      fixed = TRUE)))
+  res <- plan(with_plain, "--jobs", set = FALSE)
+  expect("script: --jobs exits 0 with the judged jobs on a partial skip",
+         res$status == 0L && identical(res$out, "plain"))
+  res <- plan(with_plain, "--jobs", set = TRUE)
+  expect("script: with every secret set, --jobs runs the secret-gated jobs",
+         res$status == 0L &&
+           identical(res$out, c("plain", unique(names(SECRET_JOBS)))))
+  res <- plan(with_plain, "--not-judged", set = TRUE)
+  expect("script: with every secret set, --not-judged prints nothing",
+         res$status == 0L && !length(res$out))
+  for (mode in c("--jobs", "--list")) {
+    res <- plan(job_yaml("plain"), mode, set = TRUE)
+    expect(paste("script: an entry naming no job stops", mode, "with exit 2"),
+           res$status == 2L && any(grepl("names no job", res$out)))
+  }
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
   if (length(st$fail)) {
@@ -607,7 +666,6 @@ if ("--script" %in% args) {
 } else if ("--not-judged" %in% args) {
   if (nzchar(outcome$not_judged)) cat(outcome$not_judged, "\n", sep = "")
 } else {
-  cat(selected, sep = "\n")
-  if (length(selected)) cat("\n")
+  if (length(selected)) cat(paste0(selected, "\n"), sep = "")
   quit(save = "no", status = outcome$status)
 }

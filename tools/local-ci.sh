@@ -96,15 +96,6 @@ REF="${REF:-HEAD}"
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-command -v docker >/dev/null 2>&1 || {
-  echo "docker is required: the point is to run the job in CI's image" >&2
-  exit 1
-}
-docker info >/dev/null 2>&1 || {
-  echo "the docker daemon is not reachable -- start Docker and retry" >&2
-  exit 1
-}
-
 SHA="$(git rev-parse --verify "${REF}^{commit}")"
 
 # GitLab sets exactly one of $CI_COMMIT_BRANCH / $CI_COMMIT_TAG, and the `check`
@@ -148,7 +139,7 @@ case "$PLAN_STATUS" in
 esac
 SKIPPED="$(Rscript tools/local-ci-plan.R --not-judged "${PLAN_ARGS[@]}")"
 if [ -n "$SKIPPED" ]; then
-  echo "--- SKIPPED, not judged, CI secret unset locally: $SKIPPED"
+  echo "--- SKIPPED, not judged: $SKIPPED"
   echo
 fi
 if [ "$PLAN_STATUS" -eq 3 ]; then
@@ -160,6 +151,17 @@ if [ -z "$JOBS" ]; then
   exit 0
 fi
 NOT_JUDGED="${SKIPPED:+ -- not judged: $SKIPPED}"
+
+# Docker only from here: planning, `--list`, a bad SECRET_JOBS entry (exit 2)
+# and a NONE run all answer without it.
+command -v docker >/dev/null 2>&1 || {
+  echo "docker is required: the point is to run the job in CI's image" >&2
+  exit 1
+}
+docker info >/dev/null 2>&1 || {
+  echo "the docker daemon is not reachable -- start Docker and retry" >&2
+  exit 1
+}
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/rurl-local-ci.XXXXXX")"
 FAILED=""
