@@ -24,8 +24,8 @@ Facts that no header records:
 
 - The blocking-step count depends on the diff: about 36 on a clean `main`, about
   19 on a typical branch, because `[gate-self-tests]` runs only the self-tests
-  for gate implementations the diff touched. A lower count is not evidence that
-  a gate was bypassed.
+  whose manifest paths filter (or own script) the diff touched. A lower count
+  is not evidence that a gate was bypassed.
 - Before writing another pre-push predicate, probe which mechanism actually
   delivers the remote (positional or environment).
 - Run `tools/dependency-resolvability-gate.R --all` and

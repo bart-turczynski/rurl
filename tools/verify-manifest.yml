@@ -265,9 +265,13 @@ jobs:
             # `run: Rscript tools/verify.R` entry and must never get one -- the
             # runner derives its gate list from this file and would recurse into
             # itself. Only the self-test is declared, which is exactly what the
-            # runner's own selection needs to find it (RURL-pbihchti).
+            # runner's own selection needs to find it (RURL-pbihchti). This
+            # file is listed too: the self-test checks that every self-test
+            # here maps to a filter, so a manifest edit must re-run it
+            # (RURL-etafkksg).
             verify_runner_selftest:
               - 'tools/verify.R'
+              - 'tools/verify-manifest.yml'
             # tools/local-ci-plan.R is the job PLANNER behind tools/local-ci.sh,
             # not a gate: run bare it prints a job list and asserts nothing, so
             # it has no plain `run: Rscript tools/local-ci-plan.R` entry. Only
@@ -276,8 +280,9 @@ jobs:
             # preamble it writes and its plan-from-ref cases run it
             # (RURL-ecwpdtci); .gitlab-ci.yml is NOT, because the self-test
             # runs on inline fixtures and never reads it. As for every entry
-            # here, tools/verify.R selects the self-test by its OWN script path
-            # alone, so only a change to tools/local-ci-plan.R fires it there.
+            # here, tools/verify.R selects the self-test by this filter's path
+            # list plus its own script path, so a change to tools/local-ci.sh
+            # alone fires it there too (RURL-etafkksg).
             local_ci_plan_selftest:
               - 'tools/local-ci-plan.R'
               - 'tools/local-ci.sh'
