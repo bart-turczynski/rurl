@@ -43,16 +43,20 @@
 #
 # Exit status: 0 PASS, or no job applies to the ref; 1 FAIL, or the runner
 # could not start; 2 a bad argument, a ref that lacks tools/local-ci-plan.R or
-# .gitlab-ci.yml, or a `SECRET_JOBS` entry in tools/local-ci-plan.R that is
-# malformed or names no job; 3 NONE, every job that applies was skipped for an
-# unset secret, so nothing was judged.
+# .gitlab-ci.yml or whose planner is too old for this runner, or a
+# `SECRET_JOBS` entry in tools/local-ci-plan.R that is malformed or names no
+# job; 3 NONE, every job that applies was skipped for an unset secret, so
+# nothing was judged.
 #
 # THE PLAN COMES FROM THE REF UNDER TEST, NOT THIS CHECKOUT (RURL-ecwpdtci):
 # the job list, images, scripts and the `SECRET_JOBS` gate are those of the
 # ref's own tools/local-ci-plan.R reading the ref's own .gitlab-ci.yml, so they
 # match the code the jobs run against. An uncommitted edit to either file is
 # therefore invisible to every mode, `--list` included; the header's `plan:`
-# line names the revision planned from.
+# line names the revision planned from. A ref whose planner predates
+# `--not-judged` is refused with exit 2. The ref's planner runs on this host,
+# outside Docker, with your environment (the secret gate reads it), so run
+# only refs whose code you trust.
 #
 # AFTER A MERGE, run it against what actually landed:
 #   git fetch origin main && tools/local-ci.sh --all origin/main
@@ -167,6 +171,19 @@ for PLAN_FILE in tools/local-ci-plan.R .gitlab-ci.yml; do
   fi
   git show "${SHA}:${PLAN_FILE}" > "$PLAN_DIR/$PLAN_FILE"
 done
+
+# This runner speaks to the ref's planner, so the ref's planner must know every
+# mode the runner asks for. One answers wrong rather than failing: a planner
+# from before RURL-bsfwpfil has no `--not-judged` and falls through to its
+# default, the selected job list, which would be reported as not judged while
+# those same jobs ran -- and that planner judged no secrets at all. The other
+# modes predate this runner's history.
+if ! grep -qF '"--not-judged"' "$PLAN_DIR/tools/local-ci-plan.R"; then
+  echo "local-ci: ${REF} (${SHA})'s tools/local-ci-plan.R predates" \
+    "--not-judged (RURL-bsfwpfil), which this runner needs -- run that ref's" \
+    "own tools/local-ci.sh from a checkout of it" >&2
+  exit 2
+fi
 
 plan() { (cd "$PLAN_DIR" && Rscript tools/local-ci-plan.R "$@"); }
 

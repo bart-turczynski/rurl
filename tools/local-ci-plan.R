@@ -31,7 +31,7 @@
 #   Rscript tools/local-ci-plan.R --list [context]   # human-readable plan
 #   Rscript tools/local-ci-plan.R --script <job>     # flattened script lines
 #   Rscript tools/local-ci-plan.R --image <job>      # resolved image
-#   Rscript tools/local-ci-plan.R --self-test        # fixture cases, no config
+#   Rscript tools/local-ci-plan.R --self-test        # fixtures; git if present
 #
 # Context flags (all optional, defaulting to an empty value):
 #   --branch <name>   $CI_COMMIT_BRANCH      --tag <name>  $CI_COMMIT_TAG
@@ -572,11 +572,22 @@ self_test <- function() {
   # secret gate must come from that ref's planner and that ref's CI config, not
   # from whatever the checkout holds. These cases build a throwaway repository
   # whose working tree disagrees with the ref and run `tools/local-ci.sh
-  # --list` there (no docker: `--list` stops before the clone). They need git,
-  # which the gates job's image does not install, so without it they are
-  # skipped and the skip is printed.
+  # --list` there (no docker: `--list` stops before the clone). They need git
+  # and bash, and the gates job's image installs no git, so without either
+  # they are skipped and the skip is printed.
   runner <- file.path(dirname(self), "local-ci.sh")
-  if (nzchar(Sys.which("git"))) {
+  if (nzchar(Sys.which("git")) && nzchar(Sys.which("bash"))) {
+    # A git hook exports GIT_DIR and friends, and they outrank `git -C`: left
+    # set, the fixture's add, rm and commit would land in the repository whose
+    # hook is running this self-test. Cleared here, restored on exit.
+    git_loc <- c("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+                 "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+                 "GIT_COMMON_DIR", "GIT_NAMESPACE", "GIT_PREFIX")
+    git_saved <- Sys.getenv(git_loc, unset = NA)
+    git_saved <- git_saved[!is.na(git_saved)]
+    Sys.unsetenv(git_loc)
+    on.exit(if (length(git_saved)) do.call(Sys.setenv, as.list(git_saved)),
+            add = TRUE)
     git_env <- c(
       "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
       "GIT_AUTHOR_NAME=self-test", "GIT_AUTHOR_EMAIL=self-test@invalid",
@@ -584,6 +595,7 @@ self_test <- function() {
     )
     repo <- tempfile("local-ci-ref-")
     dir.create(file.path(repo, "tools"), recursive = TRUE)
+    on.exit(unlink(repo, recursive = TRUE), add = TRUE)
     git <- function(...) {
       out <- suppressWarnings(system2("git", c("-C", shQuote(repo), ...),
                                       stdout = TRUE, stderr = TRUE,
@@ -637,12 +649,30 @@ self_test <- function() {
     expect("ref: the header names the revision the plan comes from",
            any(grepl(paste0("^plan: .*", ref_sha), res$out)))
 
+    # Both files dirty in the working tree: neither may reach the plan.
     writeLines("cat('worktree planner\\n')", at("tools/local-ci-plan.R"))
+    writeLines(ci_config("from_dirty"), at(CONFIG))
     res <- list_ref(head_sha)
     expect("ref: --list <ref> runs the ref's planner, not the checkout's",
            res$status == 0L && has(res, "from_head") &&
              !has(res, "worktree planner"))
+    expect("ref: an uncommitted CI config edit never reaches the plan",
+           res$status == 0L && has(res, "from_head") &&
+             !has(res, "from_dirty"))
     file.copy(self, at("tools/local-ci-plan.R"), overwrite = TRUE)
+    writeLines(ci_config("from_head"), at(CONFIG))
+
+    # A ref whose planner predates `--not-judged` would answer that mode with
+    # its default, the job list, and the runner would report every selected
+    # job as not judged; it is refused instead.
+    writeLines("cat('old planner\\n')", at("tools/local-ci-plan.R"))
+    commit("tools/local-ci-plan.R")
+    res <- list_ref("HEAD")
+    expect("ref: a planner that predates --not-judged exits 2, naming it",
+           res$status == 2L && has(res, "predates --not-judged") &&
+             !has(res, "old planner"))
+    file.copy(self, at("tools/local-ci-plan.R"), overwrite = TRUE)
+    commit("tools/local-ci-plan.R")
 
     # A ref that lacks either file stops with exit 2 and names it; the copy
     # left in the working tree must not stand in for it.
@@ -657,9 +687,9 @@ self_test <- function() {
     res <- list_ref("HEAD")
     expect("ref: a ref without the planner exits 2, naming it and the ref",
            refuses(res, "tools/local-ci-plan.R") && !has(res, "from_head"))
-    unlink(repo, recursive = TRUE)
   } else {
-    cat("self-test: SKIPPED the plan-from-ref cases -- git is not on PATH\n")
+    cat("self-test: SKIPPED the plan-from-ref cases --",
+        "git or bash is not on PATH\n")
   }
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
