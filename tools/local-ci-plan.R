@@ -27,6 +27,7 @@
 #
 # Usage:
 #   Rscript tools/local-ci-plan.R --jobs [context]   # job names, one per line
+#   Rscript tools/local-ci-plan.R --not-judged [context]  # secret-skipped jobs
 #   Rscript tools/local-ci-plan.R --list [context]   # human-readable plan
 #   Rscript tools/local-ci-plan.R --script <job>     # flattened script lines
 #   Rscript tools/local-ci-plan.R --image <job>      # resolved image
@@ -36,10 +37,37 @@
 #   --branch <name>   $CI_COMMIT_BRANCH      --tag <name>  $CI_COMMIT_TAG
 #   --source <name>   $CI_PIPELINE_SOURCE    --all         ignore rules entirely
 #
+# Exit status: 0, or 3 from `--jobs` when every job that applies is not judged
+# (see SECRET_JOBS); 2 when a SECRET_JOBS entry is malformed or names no job;
+# 1 for any other error.
+#
 # Base R plus `yaml`, which the gate stage already installs.
 
 CONFIG <- ".gitlab-ci.yml"
 DEFAULT_BRANCH <- "main"
+
+# A JOB THAT NEEDS A CI SECRET IS NOT JUDGED WHEN THE SECRET IS UNSET HERE
+# (RURL-hlcpduoq, moved here from tools/local-ci.sh by RURL-bsfwpfil so that
+# `--list` and a real run say the same thing). Such a secret lives only as a
+# GitLab CI/CD variable, so locally the job fails on every run whatever the
+# commit holds, and a verdict that is always red says nothing. Each entry is
+# `job = "VARIABLE"`; a job may have several. When one of a job's variables is
+# not set (exported, non-empty) in this process's environment -- which, like a
+# real job's, holds only what the caller exported -- a job its rules select
+# becomes NOT JUDGED instead of RUN, and the verdict names the variable. It
+# stays out of the judgment, which the other jobs make (the rule seor's
+# `scripts/check-fleet-standard.py` follows: not judged, not a gap). When all
+# are set, the job runs exactly as any other job and can still fail.
+#
+# A declared secret ONLY decides run or not judged: it is never forwarded into
+# the container. Forwarding `FOSSA_API_KEY` would make a local run on any ref
+# upload to the production FOSSA project, past CI's default-branch-only rule.
+#
+# AN ENTRY THAT NAMES NO JOB IS AN ERROR (exit 2), not a no-op: rename `fossa:`
+# in the CI config and a silent entry would match nothing, and the job would go
+# back to reading red on every run. The next secret-gated job needs one entry
+# here, nothing else.
+SECRET_JOBS <- c(fossa = "FOSSA_API_KEY")
 
 # Top-level keys that configure the pipeline rather than declaring a job. Keys
 # beginning with "." are YAML anchor holders (`.gate_deps`) and are handled
@@ -163,6 +191,62 @@ job_verdict <- function(job, vars, ignore_rules) {
   list(run = FALSE, why = "no rule matched")
 }
 
+# ---- CI secrets ----------------------------------------------------------------
+
+# Set but empty counts as unset, as `$VAR` does in a CI rule.
+local_env <- function(var) Sys.getenv(var, unset = "")
+
+# Each malformed or dangling SECRET_JOBS entry, as a message; none is valid.
+secret_problems <- function(secrets, job_names) {
+  nms <- names(secrets)
+  if (is.null(nms)) nms <- rep("", length(secrets))
+  bad <- !nzchar(nms) | !grepl("^[A-Za-z_][A-Za-z0-9_]*$", secrets)
+  dup <- !bad & duplicated(paste(nms, secrets))
+  c(
+    sprintf('`%s = "%s"` is not job = "VARIABLE"', nms[bad], secrets[bad]),
+    sprintf('`%s = "%s"` is declared twice', nms[dup], secrets[dup]),
+    sprintf("`%s` names no job in %s", setdiff(unique(nms[!bad]), job_names),
+            CONFIG)
+  )
+}
+
+# The rule verdict first, then the secret gate: a job its rules leave out is
+# skipped for that reason, and only a job they select can be not judged.
+# `unset` names the job's missing variables, empty unless it is not judged.
+plan_verdict <- function(nm, job, vars, ignore_rules, secrets,
+                         getenv = local_env) {
+  v <- job_verdict(job, vars, ignore_rules)
+  v$unset <- character(0)
+  if (!v$run) {
+    return(v)
+  }
+  declared <- unname(secrets[names(secrets) == nm])
+  unset <- declared[!nzchar(vapply(declared, getenv, character(1)))]
+  if (length(unset)) {
+    v <- list(run = FALSE, unset = unset, why = paste0(
+      "NOT JUDGED, CI secret unset locally: ", paste(unset, collapse = " "),
+      " (", v$why, ")"))
+  }
+  v
+}
+
+# What the run as a whole does with a set of verdicts: the jobs to run, the
+# not-judged summary the VERDICT line carries, and the status `--jobs` exits
+# with. 3 means jobs applied and none can be judged, so a run would end NONE;
+# no job applying at all stays 0.
+plan_outcome <- function(verdicts) {
+  run <- as.character(names(verdicts)[vapply(verdicts, `[[`, logical(1),
+                                               "run")])
+  unjudged <- Filter(function(v) length(v$unset) > 0L, verdicts)
+  not_judged <- paste(sprintf("%s (%s unset)", names(unjudged),
+                              vapply(unjudged, function(v) {
+                                paste(v$unset, collapse = " ")
+                              }, character(1))),
+                      collapse = ", ")
+  list(run = run, not_judged = not_judged,
+       status = if (!length(run) && length(unjudged)) 3L else 0L)
+}
+
 # ---- scripts -----------------------------------------------------------------
 
 # YAML aliases arrive as nested lists, so a `script:` built from an anchor is a
@@ -206,7 +290,9 @@ render_plan_script <- function(entries) {
 # ---- self-test ---------------------------------------------------------------
 
 # Fixtures are inline CI configs, parsed with the same `yaml` reader the real
-# run uses; no file, no git, no docker. The shell cases run the rendered script
+# run uses; no repository config, no git, no docker. The script-level cases
+# write theirs to a temp folder and run this script there. The shell cases run
+# the rendered script
 # under `bash` behind the same `set -ex` preamble tools/local-ci.sh writes, so
 # they prove what the job shell does with it, not only what the text is.
 self_test <- function() {
@@ -344,6 +430,141 @@ self_test <- function() {
          res$status != 0L && any(res$out == "inside") &&
            !any(res$out %in% c("after-false", "next-entry")))
 
+  # The secret gate, with the environment injected: `env` stands in for the
+  # caller's exported variables, so no case reads or sets a real one.
+  gated <- fixture(paste(
+    "always:",
+    "  script: ['true']",
+    "upload:",
+    "  script: ['true']",
+    "audit:",
+    "  rules:",
+    "    - if: $CI_PIPELINE_SOURCE == \"schedule\"",
+    "  script: ['true']",
+    sep = "\n"
+  ))
+  secrets <- c(upload = "UPLOAD_KEY", upload = "UPLOAD_ORG",
+               audit = "AUDIT_TOKEN")
+  verdicts <- function(env, jobs = names(gated), all = FALSE) {
+    getenv <- function(var) {
+      val <- env[var]
+      if (is.na(val)) "" else unname(val)
+    }
+    vs <- lapply(jobs, function(nm) {
+      plan_verdict(nm, gated[[nm]], list(CI_PIPELINE_SOURCE = "push"), all,
+                   secrets, getenv)
+    })
+    names(vs) <- jobs
+    vs
+  }
+  both <- c(UPLOAD_KEY = "k", UPLOAD_ORG = "o")
+
+  v <- verdicts(c(UPLOAD_KEY = "k"))$upload
+  expect("secret: one unset variable makes a selected job not judged, named",
+         !v$run && identical(v$unset, "UPLOAD_ORG") &&
+           grepl("NOT JUDGED", v$why) && grepl("UPLOAD_ORG", v$why) &&
+           !grepl("UPLOAD_KEY", v$why))
+  v <- verdicts(c(UPLOAD_KEY = "", UPLOAD_ORG = "o"))$upload
+  expect("secret: set but empty counts as unset",
+         !v$run && identical(v$unset, "UPLOAD_KEY"))
+  v <- verdicts(both)$upload
+  expect("secret: every variable set runs the job as any other",
+         v$run && !length(v$unset) && identical(v$why, "no rules: always runs"))
+  v <- verdicts(character(0))$audit
+  expect("secret: a job its rules leave out is skipped for the rule, not judged",
+         !v$run && !length(v$unset) && identical(v$why, "no rule matched"))
+  v <- verdicts(character(0), all = TRUE)$audit
+  expect("secret: --all leaves a schedule-only job out for that reason",
+         !v$run && !length(v$unset) && grepl("schedule-only", v$why))
+  v <- verdicts(character(0))$always
+  expect("secret: a job that declares no secret is untouched",
+         v$run && !length(v$unset))
+
+  out <- plan_outcome(verdicts(character(0)))
+  expect("outcome: partial skip runs the rest and names what was not judged",
+         identical(out$run, "always") && out$status == 0L &&
+           identical(out$not_judged, "upload (UPLOAD_KEY UPLOAD_ORG unset)"))
+  out <- plan_outcome(verdicts(both))
+  expect("outcome: nothing unset judges every selected job",
+         identical(out$run, c("always", "upload")) && out$status == 0L &&
+           identical(out$not_judged, ""))
+  out <- plan_outcome(verdicts(character(0), jobs = "upload"))
+  expect("outcome: every applying job not judged exits 3 (NONE)",
+         !length(out$run) && out$status == 3L &&
+           identical(out$not_judged, "upload (UPLOAD_KEY UPLOAD_ORG unset)"))
+  out <- plan_outcome(verdicts(character(0), jobs = "audit"))
+  expect("outcome: no job applying at all exits 0, not NONE",
+         !length(out$run) && out$status == 0L &&
+           identical(out$not_judged, ""))
+  out <- plan_outcome(list())
+  expect("outcome: an empty config exits 0",
+         identical(out$run, character(0)) && out$status == 0L)
+
+  expect("secret entries: valid entries raise nothing",
+         !length(secret_problems(secrets, names(gated))))
+  probs <- secret_problems(c(renamed = "UPLOAD_KEY", upload = "UPLOAD_KEY"),
+                           names(gated))
+  expect("secret entries: an entry naming no job is reported, by name",
+         length(probs) == 1L && grepl("`renamed` names no job", probs))
+  probs <- secret_problems(c(upload = "1BAD", "UPLOAD_KEY"), names(gated))
+  expect("secret entries: a bad variable or a missing job name is reported",
+         length(probs) == 2L && all(grepl("is not job", probs)))
+  probs <- secret_problems(c(upload = "UPLOAD_KEY", upload = "UPLOAD_KEY"),
+                           names(gated))
+  expect("secret entries: a duplicate entry is reported once",
+         length(probs) == 1L && grepl("declared twice", probs))
+
+  # The script-level exits, end to end: this script run as tools/local-ci.sh
+  # runs it, in a temp folder holding a fixture config, against the REAL
+  # SECRET_JOBS, with each declared variable set or emptied (empty counts as
+  # unset) in the child's environment only.
+  self <- normalizePath(sub("^--file=", "", grep(
+    "^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[[1L]]))
+  secret_vars <- unique(unname(SECRET_JOBS))
+  plan <- function(config, mode, set) {
+    dir <- tempfile("local-ci-plan-")
+    dir.create(dir)
+    old <- setwd(dir)
+    on.exit({
+      setwd(old)
+      unlink(dir, recursive = TRUE)
+    })
+    writeLines(config, CONFIG)
+    env <- paste0(secret_vars, "=", if (set) "set" else "")
+    out <- suppressWarnings(system2(
+      file.path(R.home("bin"), "Rscript"), c(shQuote(self), mode),
+      stdout = TRUE, stderr = TRUE, env = env))
+    status <- attr(out, "status")
+    list(status = if (is.null(status)) 0L else status, out = out)
+  }
+  job_yaml <- function(nm) c(paste0(nm, ":"), "  script: ['true']")
+  secret_only <- unlist(lapply(unique(names(SECRET_JOBS)), job_yaml))
+  with_plain <- c(job_yaml("plain"), secret_only)
+
+  res <- plan(secret_only, "--jobs", set = FALSE)
+  expect("script: --jobs exits 3 and lists nothing when every job is not judged",
+         res$status == 3L && !length(res$out))
+  res <- plan(secret_only, "--not-judged", set = FALSE)
+  expect("script: --not-judged names each declared variable",
+         res$status == 0L && length(res$out) == 1L &&
+           all(vapply(secret_vars, grepl, logical(1), x = res$out,
+                      fixed = TRUE)))
+  res <- plan(with_plain, "--jobs", set = FALSE)
+  expect("script: --jobs exits 0 with the judged jobs on a partial skip",
+         res$status == 0L && identical(res$out, "plain"))
+  res <- plan(with_plain, "--jobs", set = TRUE)
+  expect("script: with every secret set, --jobs runs the secret-gated jobs",
+         res$status == 0L &&
+           identical(res$out, c("plain", unique(names(SECRET_JOBS)))))
+  res <- plan(with_plain, "--not-judged", set = TRUE)
+  expect("script: with every secret set, --not-judged prints nothing",
+         res$status == 0L && !length(res$out))
+  for (mode in c("--jobs", "--list")) {
+    res <- plan(job_yaml("plain"), mode, set = TRUE)
+    expect(paste("script: an entry naming no job stops", mode, "with exit 2"),
+           res$status == 2L && any(grepl("names no job", res$out)))
+  }
+
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))
   if (length(st$fail)) {
     for (f in st$fail) cat(sprintf("  FAILED: %s\n", f))
@@ -377,6 +598,12 @@ job_names <- Filter(function(nm) {
     is.list(cfg[[nm]]) && !is.null(cfg[[nm]][["script"]])
 }, names(cfg))
 
+problems <- secret_problems(SECRET_JOBS, job_names)
+if (length(problems)) {
+  message(paste0("SECRET_JOBS: ", problems, collapse = "\n"))
+  quit(save = "no", status = 2L)
+}
+
 job_or_die <- function(nm) {
   if (!(nm %in% job_names)) {
     die("no job named `", nm, "` in ", CONFIG, " (have: ",
@@ -400,10 +627,12 @@ vars <- list(
 )
 ignore_rules <- "--all" %in% args
 
-selected <- Filter(
-  function(nm) job_verdict(cfg[[nm]], vars, ignore_rules)$run,
-  job_names
-)
+verdicts <- lapply(job_names, function(nm) {
+  plan_verdict(nm, cfg[[nm]], vars, ignore_rules, SECRET_JOBS)
+})
+names(verdicts) <- job_names
+outcome <- plan_outcome(verdicts)
+selected <- outcome$run
 
 # ---- modes -------------------------------------------------------------------
 
@@ -422,15 +651,21 @@ if ("--script" %in% args) {
   }
   cat("\n")
   for (nm in job_names) {
-    v <- job_verdict(cfg[[nm]], vars, ignore_rules)
+    v <- verdicts[[nm]]
     cat(sprintf("  %-4s %-10s %s\n", if (v$run) "RUN" else "skip", nm, v$why))
   }
   cat("\n")
+  if (nzchar(outcome$not_judged)) {
+    cat("not judged: ", outcome$not_judged,
+        if (outcome$status == 3L) " -- a run would end NONE", "\n\n", sep = "")
+  }
   for (nm in selected) {
     cat(sprintf("[%s] image=%s\n", nm, job_image(cfg[[nm]])))
     cat(render_plan_script(job_script(cfg[[nm]])))
   }
+} else if ("--not-judged" %in% args) {
+  if (nzchar(outcome$not_judged)) cat(outcome$not_judged, "\n", sep = "")
 } else {
-  cat(selected, sep = "\n")
-  if (length(selected)) cat("\n")
+  if (length(selected)) cat(paste0(selected, "\n"), sep = "")
+  quit(save = "no", status = outcome$status)
 }
