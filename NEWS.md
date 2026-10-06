@@ -3,7 +3,7 @@
 - `rurl` now requires R >= 4.1.0 (was 4.0.0), as its dependency `pslr` already did (`SEOR-nxycpzlk`).
 - On R 4.1, `url_standard = "whatwg"` writes an IPv6 host with the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`), as the WHATWG URL Standard requires (host serializing, IPv6 serializer) (`SEOR-nxycpzlk`).
 - `check_schemes()` lowercases `allowed_schemes` as ASCII, so `"FILE"` admits `file:` URLs under a Turkish or Azeri locale (`SEOR-rxxuzhmc`).
-- `tools/local-ci-plan.R` now judges secret-gated CI jobs, not `tools/local-ci.sh`: `tools/local-ci.sh --list` shows a job whose CI secret is unset locally (`fossa` without `FOSSA_API_KEY`) as not judged and names the variable, as a real run already did. A `SECRET_JOBS` entry naming a job `.gitlab-ci.yml` lacks now stops the planner with exit status 2 instead of matching nothing, and the planner's self-test covers the skip, partial-skip and all-skipped outcomes (RURL-bsfwpfil).
+- `tools/local-ci-plan.R` now judges secret-gated CI jobs, not `tools/local-ci.sh`: `tools/local-ci.sh --list` shows a job whose CI secret is unset locally (`fossa` without `FOSSA_API_KEY`) as not judged and names the variable, as a real run already did. A `SECRET_JOBS` entry naming a job `.gitlab-ci.yml` lacks now stops the planner with exit status 2 instead of matching nothing, and the planner's self-test covers the skip, partial-skip and all-skipped outcomes (`RURL-bsfwpfil`).
 
 ## rurl 3.1.0
 
