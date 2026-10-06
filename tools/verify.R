@@ -232,6 +232,28 @@ changed_files <- function() {
   unique(c(committed, uncommitted))
 }
 
+# The self-test commands of a parsed manifest, one per
+# `run: Rscript <script> --self-test` step, with the paths that trigger each.
+self_test_filter_map <- function(manifest) {
+  steps <- unlist(lapply(manifest$jobs, function(job) job$steps),
+                  recursive = FALSE)
+  runs <- trimws(vapply(steps, function(s) {
+    if (is.character(s$run)) s$run[1L] else ""
+  }, character(1)))
+  cmds <- unique(sub("^Rscript\\s+", "Rscript ",
+                     grep("^Rscript\\s+\\S+ --self-test$", runs,
+                          value = TRUE)))
+  cmds <- sub("^Rscript ", "", cmds)
+  stats::setNames(rep(list(character(0)), length(cmds)), cmds)
+}
+
+# Which self-tests a diff selects: by each one's own script path.
+select_self_tests <- function(map, changed) {
+  scripts <- sub(" --self-test$", "", names(map))
+  structure(stats::setNames(scripts %in% changed, names(map)),
+            unmappable = character(0))
+}
+
 read_log <- function(path) {
   tryCatch(readLines(path, warn = FALSE), error = function(e) character())
 }
@@ -535,6 +557,107 @@ stage_release <- function() {
 
 # ---- self-test --------------------------------------------------------------
 
+# Self-test selection (RURL-etafkksg). A self-test is selected when the diff
+# touches a path in the paths filter that gates it in the manifest, not only
+# its own script: tools/local-ci-plan.R --self-test holds the only checks on
+# tools/local-ci.sh. The fixture is a manifest in miniature, parsed with the
+# same reader as the real one, and the last two cases read the REAL manifest so
+# that an edit breaking the mapping goes red here.
+selection_cases <- function(case) {
+  if (!requireNamespace("yaml", quietly = TRUE)) {
+    return(list(case(
+      "the `yaml` package is installed (the selection cases need it)", FALSE
+    )))
+  }
+  fixture <- yaml::yaml.load(paste(c(
+    "jobs:",
+    "  changes:",
+    "    steps:",
+    "      - uses: dorny/paths-filter@v3",
+    "        with:",
+    "          filters: |",
+    "            a_selftest:",
+    "              - 'tools/a.R'",
+    "              - 'tools/a-helper.sh'",
+    "            g_selftest:",
+    "              - 'tools/g/**'",
+    "              - 'tools/*.cfg'",
+    "  a:",
+    "    if: needs.changes.outputs.a_selftest == 'true'",
+    "    steps:",
+    "      - run: Rscript tools/a.R --self-test",
+    "  g:",
+    "    if: needs.changes.outputs.other == 'true'",
+    "    steps:",
+    "      - if: needs.changes.outputs.g_selftest == 'true'",
+    "        run: Rscript tools/g.R --self-test",
+    "  orphan:",
+    "    steps:",
+    "      - run: Rscript tools/orphan.R --self-test",
+    "  undeclared:",
+    "    if: needs.changes.outputs.no_such_filter == 'true'",
+    "    steps:",
+    "      - run: Rscript tools/undeclared.R --self-test"
+  ), collapse = "\n"))
+  map <- self_test_filter_map(fixture)
+  sel <- function(...) select_self_tests(map, c(...))
+  a <- "tools/a.R --self-test"
+  g <- "tools/g.R --self-test"
+  orphans <- c("tools/orphan.R --self-test", "tools/undeclared.R --self-test")
+  unrelated <- sel("R/x.R")
+
+  real_ok <- file.exists(MANIFEST)
+  real <- if (real_ok) self_test_filter_map(yaml::read_yaml(MANIFEST))
+  real_cmds <- if (real_ok) manifest_self_tests(MANIFEST)
+  covers <- function(cmd) {
+    sub(" --self-test$", "", cmd) %in% real[[cmd]]
+  }
+
+  list(
+    case(
+      "a change to a non-script path in a self-test's filter selects it",
+      isTRUE(sel("tools/a-helper.sh")[[a]])
+    ),
+    case(
+      "an unrelated change selects neither mapped self-test",
+      !unrelated[[a]] && !unrelated[[g]]
+    ),
+    case(
+      "a self-test's own script selects it even if its filter omits it",
+      isTRUE(sel("tools/g.R")[[g]])
+    ),
+    case(
+      "the STEP's filter gates a self-test, not its job's",
+      !isTRUE(sel("tools/a-helper.sh")[[g]]) &&
+        isTRUE(sel("tools/x.cfg")[[g]])
+    ),
+    case(
+      "a `**` filter entry matches across directories",
+      isTRUE(sel("tools/g/deep/er/x.R")[[g]])
+    ),
+    case(
+      "a `*` filter entry matches within one directory, not across",
+      isTRUE(sel("tools/x.cfg")[[g]]) && !sel("tools/sub/x.cfg")[[g]]
+    ),
+    case(
+      "an unmappable self-test is SELECTED, and named, on any diff",
+      all(unrelated[orphans]) &&
+        setequal(attr(unrelated, "unmappable"), orphans)
+    ),
+    case(
+      "REAL manifest: every self-test maps to a filter covering its script",
+      real_ok && all(real_cmds %in% names(real)) &&
+        all(vapply(real_cmds, covers, logical(1)))
+    ),
+    case(
+      "REAL manifest: a tools/local-ci.sh change selects its planner's test",
+      real_ok && isTRUE(select_self_tests(real, "tools/local-ci.sh")[[
+        "tools/local-ci-plan.R --self-test"
+      ]])
+    )
+  )
+}
+
 # A verbosity feature that finds nothing is indistinguishable from a verbosity
 # feature that is broken, so the cases below are run BOTH ways: every positive
 # control is paired with the negative control that fails on today's code. Case 1
@@ -624,6 +747,7 @@ self_test <- function() {
       !any(grepl("noise", block, fixed = TRUE))
     )
   )
+  cases <- c(cases, selection_cases(case))
 
   ok <- vapply(cases, function(k) isTRUE(k$cond), logical(1))
   for (i in seq_along(cases)) {
@@ -638,7 +762,8 @@ self_test <- function() {
 }
 
 if (opt_self_test) {
-  cat("tools/verify.R --self-test: step output visibility (RURL-pbihchti)\n")
+  cat("tools/verify.R --self-test: step output visibility (RURL-pbihchti)",
+      "and self-test selection (RURL-etafkksg)\n")
   self_test()
 }
 
