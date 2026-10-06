@@ -42,9 +42,21 @@
 #   tools/local-ci.sh --keep [ref]    # keep the work tree even on success
 #
 # Exit status: 0 PASS, or no job applies to the ref; 1 FAIL, or the runner
-# could not start; 2 a bad argument, or a `SECRET_JOBS` entry in
-# tools/local-ci-plan.R that is malformed or names no job; 3 NONE, every job
-# that applies was skipped for an unset secret, so nothing was judged.
+# could not start; 2 a bad argument, a ref that lacks tools/local-ci-plan.R or
+# .gitlab-ci.yml or whose planner is too old for this runner, or a
+# `SECRET_JOBS` entry in tools/local-ci-plan.R that is malformed or names no
+# job; 3 NONE, every job that applies was skipped for an unset secret, so
+# nothing was judged.
+#
+# THE PLAN COMES FROM THE REF UNDER TEST, NOT THIS CHECKOUT (RURL-ecwpdtci):
+# the job list, images, scripts and the `SECRET_JOBS` gate are those of the
+# ref's own tools/local-ci-plan.R reading the ref's own .gitlab-ci.yml, so they
+# match the code the jobs run against. An uncommitted edit to either file is
+# therefore invisible to every mode, `--list` included; the header's `plan:`
+# line names the revision planned from. A ref whose planner predates
+# `--not-judged` is refused with exit 2. The ref's planner runs on this host,
+# outside Docker, with your environment (the secret gate reads it), so run
+# only refs whose code you trust.
 #
 # AFTER A MERGE, run it against what actually landed:
 #   git fetch origin main && tools/local-ci.sh --all origin/main
@@ -119,12 +131,70 @@ fi
 PLAN_ARGS=(--branch "$BRANCH" --tag "$TAG" --source push)
 [ "$IGNORE_RULES" -eq 1 ] && PLAN_ARGS+=(--all)
 
+PLAN_DIR=""
+WORK=""
+FAILED=""
+
+cleanup() {
+  if [ -n "$PLAN_DIR" ]; then
+    rm -rf "$PLAN_DIR"
+  fi
+  if [ -z "$WORK" ]; then
+    return 0
+  fi
+  if [ "$KEEP" -eq 1 ] || [ -n "$FAILED" ]; then
+    echo "work tree kept: $WORK"
+  else
+    rm -rf "$WORK"
+  fi
+}
+trap cleanup EXIT
+
+# THE PLAN COMES FROM THE REF UNDER TEST, NOT FROM THIS CHECKOUT
+# (RURL-ecwpdtci). The jobs run in a clone at $SHA, so the job list, images,
+# scripts and the secret gate must come from $SHA's planner reading $SHA's CI
+# config; planning from the working tree mixed two revisions whenever the ref
+# was not the checkout (`--all origin/main` from a feature branch) or the tree
+# was dirty. The planner reads `.gitlab-ci.yml` from its working directory and
+# nothing else from the tree, so the two files are copied out of $SHA into a
+# scratch folder with the same layout and every planner call runs there. A ref
+# that lacks either file stops here: falling back to the working tree's copy is
+# the defect this replaces. Still no clone and no Docker, so `--list` stays
+# cheap.
+PLAN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rurl-local-ci-plan.XXXXXX")"
+mkdir -p "$PLAN_DIR/tools"
+for PLAN_FILE in tools/local-ci-plan.R .gitlab-ci.yml; do
+  if [ "$(git cat-file -t "${SHA}:${PLAN_FILE}" 2>/dev/null)" != "blob" ]; then
+    echo "local-ci: ${REF} (${SHA}) has no ${PLAN_FILE} -- the plan comes" \
+      "from the ref under test, never from the working tree" >&2
+    exit 2
+  fi
+  git show "${SHA}:${PLAN_FILE}" > "$PLAN_DIR/$PLAN_FILE"
+done
+
+# This runner speaks to the ref's planner, so the ref's planner must know every
+# mode the runner asks for. One answers wrong rather than failing: a planner
+# from before RURL-bsfwpfil has no `--not-judged` and falls through to its
+# default, the selected job list, which would be reported as not judged while
+# those same jobs ran -- and that planner judged no secrets at all. The other
+# modes predate this runner's history.
+if ! grep -qF '"--not-judged"' "$PLAN_DIR/tools/local-ci-plan.R"; then
+  echo "local-ci: ${REF} (${SHA})'s tools/local-ci-plan.R predates" \
+    "--not-judged (RURL-bsfwpfil), which this runner needs -- run that ref's" \
+    "own tools/local-ci.sh from a checkout of it" >&2
+  exit 2
+fi
+
+plan() { (cd "$PLAN_DIR" && Rscript tools/local-ci-plan.R "$@"); }
+
 echo "rurl local CI runner -- $(date '+%Y-%m-%d %H:%M:%S')"
 echo "ref: ${REF} -> ${SHA}  branch='${BRANCH}' tag='${TAG}'"
+echo "plan: tools/local-ci-plan.R and .gitlab-ci.yml as of ${SHA}"
 echo
 
 if [ "$LIST_ONLY" -eq 1 ]; then
-  exec Rscript tools/local-ci-plan.R --list "${PLAN_ARGS[@]}"
+  plan --list "${PLAN_ARGS[@]}"
+  exit 0
 fi
 
 # `--jobs` lists the jobs to run, after the secret gate, and exits 3 when every
@@ -132,12 +202,12 @@ fi
 # planner reads this process's environment, which holds only what the caller
 # exported, as a real job's would.
 PLAN_STATUS=0
-JOBS="$(Rscript tools/local-ci-plan.R --jobs "${PLAN_ARGS[@]}")" || PLAN_STATUS=$?
+JOBS="$(plan --jobs "${PLAN_ARGS[@]}")" || PLAN_STATUS=$?
 case "$PLAN_STATUS" in
   0|3) ;;
   *) exit "$PLAN_STATUS" ;;
 esac
-SKIPPED="$(Rscript tools/local-ci-plan.R --not-judged "${PLAN_ARGS[@]}")"
+SKIPPED="$(plan --not-judged "${PLAN_ARGS[@]}")"
 if [ -n "$SKIPPED" ]; then
   echo "--- SKIPPED, not judged: $SKIPPED"
   echo
@@ -164,16 +234,6 @@ docker info >/dev/null 2>&1 || {
 }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/rurl-local-ci.XXXXXX")"
-FAILED=""
-
-cleanup() {
-  if [ "$KEEP" -eq 1 ] || [ -n "$FAILED" ]; then
-    echo "work tree kept: $WORK"
-  else
-    rm -rf "$WORK"
-  fi
-}
-trap cleanup EXIT
 
 # A CLONE, NOT A WORKTREE, and not the checkout you are sitting in. Three
 # reasons, each of which has a matching defect class:
@@ -191,10 +251,10 @@ git clone --quiet --no-hardlinks "$ROOT" "$WORK/repo"
 git -C "$WORK/repo" checkout --quiet --detach "$SHA"
 
 for JOB in $JOBS; do
-  IMAGE="$(Rscript tools/local-ci-plan.R --image "$JOB")"
+  IMAGE="$(plan --image "$JOB")"
   {
     echo "set -ex"
-    Rscript tools/local-ci-plan.R --script "$JOB"
+    plan --script "$JOB"
   } > "$WORK/$JOB.sh"
 
   echo "=== job: $JOB (image: $IMAGE) ==============================="

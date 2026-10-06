@@ -273,7 +273,8 @@ jobs:
             # it has no plain `run: Rscript tools/local-ci-plan.R` entry. Only
             # its self-test is declared (RURL-fzeadcfc). tools/local-ci.sh is
             # listed because the self-test's shell cases replay the `set -ex`
-            # preamble it writes; .gitlab-ci.yml is NOT, because the self-test
+            # preamble it writes and its plan-from-ref cases run it
+            # (RURL-ecwpdtci); .gitlab-ci.yml is NOT, because the self-test
             # runs on inline fixtures and never reads it. As for every entry
             # here, tools/verify.R selects the self-test by its OWN script path
             # alone, so only a change to tools/local-ci-plan.R fires it there.
@@ -993,8 +994,10 @@ jobs:
   # reports. Its self-test pins the single-line and block-scalar renderings of a
   # job's `script:` and runs both under `bash`, and pins the secret gate: which
   # jobs are not judged, the not-judged summary, and the NONE exit status
-  # (RURL-bsfwpfil). It is fixture-only (no repository config, no git, no
-  # docker) and exits non-zero on any failed case. RURL-gysfdtcd added it and
+  # (RURL-bsfwpfil). It reads no repository config and needs no docker; its
+  # plan-from-ref cases build a throwaway git repository and run
+  # tools/local-ci.sh --list there, and skip, visibly, without git or bash
+  # (RURL-ecwpdtci). It exits non-zero on any failed case. RURL-gysfdtcd added it and
   # nothing ran it; RURL-fzeadcfc wired it here.
   #
   # Self-test only. See the `local_ci_plan_selftest` filter for why there is no
