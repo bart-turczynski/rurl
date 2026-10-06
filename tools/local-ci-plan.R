@@ -576,9 +576,7 @@ self_test <- function() {
   # which the gates job's image does not install, so without it they are
   # skipped and the skip is printed.
   runner <- file.path(dirname(self), "local-ci.sh")
-  if (!nzchar(Sys.which("git"))) {
-    cat("self-test: SKIPPED the plan-from-ref cases -- git is not on PATH\n")
-  } else {
+  if (nzchar(Sys.which("git"))) {
     git_env <- c(
       "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
       "GIT_AUTHOR_NAME=self-test", "GIT_AUTHOR_EMAIL=self-test@invalid",
@@ -621,16 +619,20 @@ self_test <- function() {
                                 grepl("HEAD", res$out, fixed = TRUE))
     }
 
+    # `--list` prints each selected job's image, so the fixture needs one.
+    ci_config <- function(job) {
+      c("default:", "  image: fixture:latest", job_yaml(job), secret_only)
+    }
     git("init", "-q")
     file.copy(self, at("tools/local-ci-plan.R"))
-    writeLines(c(job_yaml("from_ref"), secret_only), at(CONFIG))
+    writeLines(ci_config("from_ref"), at(CONFIG))
     ref_sha <- commit("tools/local-ci-plan.R", CONFIG)
-    writeLines(c(job_yaml("from_head"), secret_only), at(CONFIG))
+    writeLines(ci_config("from_head"), at(CONFIG))
     head_sha <- commit(CONFIG)
 
     # The motivating case: `--list origin/main` from a feature branch.
     res <- list_ref(ref_sha)
-    expect("ref: --list <ref> plans with the ref's CI config, not the checkout's",
+    expect("ref: --list <ref> plans from the ref's CI config, not the tree's",
            res$status == 0L && has(res, "from_ref") && !has(res, "from_head"))
     expect("ref: the header names the revision the plan comes from",
            any(grepl(paste0("^plan: .*", ref_sha), res$out)))
@@ -656,6 +658,8 @@ self_test <- function() {
     expect("ref: a ref without the planner exits 2, naming it and the ref",
            refuses(res, "tools/local-ci-plan.R") && !has(res, "from_head"))
     unlink(repo, recursive = TRUE)
+  } else {
+    cat("self-test: SKIPPED the plan-from-ref cases -- git is not on PATH\n")
   }
 
   cat(sprintf("self-test: %d passed, %d failed\n", st$pass, length(st$fail)))

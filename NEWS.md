@@ -4,6 +4,7 @@
 - On R 4.1, `url_standard = "whatwg"` writes an IPv6 host with the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`), as the WHATWG URL Standard requires (host serializing, IPv6 serializer) (`SEOR-nxycpzlk`).
 - `check_schemes()` lowercases `allowed_schemes` as ASCII, so `"FILE"` admits `file:` URLs under a Turkish or Azeri locale (`SEOR-rxxuzhmc`).
 - `tools/local-ci-plan.R` now judges secret-gated CI jobs, not `tools/local-ci.sh`: `tools/local-ci.sh --list` shows a job whose CI secret is unset locally (`fossa` without `FOSSA_API_KEY`) as not judged and names the variable, as a real run already did. A `SECRET_JOBS` entry naming a job `.gitlab-ci.yml` lacks now stops the planner with exit status 2 instead of matching nothing, and the planner's self-test covers the skip, partial-skip and all-skipped outcomes (`RURL-bsfwpfil`).
+- `tools/local-ci.sh <ref>` now plans from the ref under test: every planner call runs that ref's `tools/local-ci-plan.R` against that ref's `.gitlab-ci.yml`, so the job list, images, scripts and the `SECRET_JOBS` gate match the commit the jobs run on, not whatever the checkout holds (`--all origin/main` from a feature branch used to mix the two). The header names the planned revision, uncommitted edits to either file no longer show in `--list`, and a ref lacking either file stops with exit status 2 naming it instead of falling back to the working tree (`RURL-ecwpdtci`).
 
 ## rurl 3.1.0
 
