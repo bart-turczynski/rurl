@@ -40,7 +40,7 @@ test_that("factor input is accepted under explicit coercion", {
 test_that("the key is a classed non-URL object carrying both versions", {
   k <- key("http://x.com/")
   expect_s3_class(k, "rurl_url_key")
-  expect_identical(attr(k, "key_version"), 1L)
+  expect_identical(attr(k, "key_version"), 2L)
   expect_identical(attr(k, "schema_version"), 1L)
   # Never a URL, and never mistakable for one.
   expect_false(grepl("^https?://", as.character(k)[[1L]]))
@@ -54,7 +54,7 @@ test_that("subsetting preserves class, versions and the aligned reasons", {
   k <- key(c("http://x.com/", NA_character_, "http://y.com/"))
   s <- k[2:3]
   expect_s3_class(s, "rurl_url_key")
-  expect_identical(attr(s, "key_version"), 1L)
+  expect_identical(attr(s, "key_version"), 2L)
   expect_identical(attr(s, "keyability"), c("missing-input", "ok"))
 })
 
@@ -316,6 +316,16 @@ test_that("selecting a different standard changes the key", {
 test_that("keys minted under different policies never compare equal", {
   a <- as.character(key("http://h.com/p", policy(standard = "whatwg")))
   b <- as.character(key("http://h.com/p", policy(standard = "rfc3986")))
+  expect_false(identical(a, b))
+})
+
+test_that("the key version rides inside the key bytes", {
+  # RURL-rntskojq: a key persisted under an earlier version must never compare
+  # equal to one minted now, so the version cannot live in the attribute alone.
+  older <- policy()
+  older$key_version <- older$key_version - 1L
+  a <- as.character(key("http://h.com/p", policy()))
+  b <- as.character(key("http://h.com/p", older))
   expect_false(identical(a, b))
 })
 
