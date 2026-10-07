@@ -5,7 +5,7 @@
 # ideographic). rurl hands the raw string to the web parser, which does not
 # apply
 # UTS-46, so under url_standard = "whatwg" rurl maps these to "." in the
-# AUTHORITY pre-parse. That lets a Unicode-dot host coerce through the IPv4
+# HOST pre-parse (RURL-mkbfseqs narrowed it from the whole authority). That lets a Unicode-dot host coerce through the IPv4
 # parser (an SSRF-relevant loopback/metadata obfuscation) and normalizes IDN
 # separators. RFC 3986 has no UTS-46 mapping, so rfc3986 / no selector keep the
 # bytes literal.
@@ -88,4 +88,44 @@ test_that("mapping is vectorized and per-row", {
   )
   hosts <- get_host(us, url_standard = "whatwg")
   expect_identical(hosts, c("127.0.0.1", "clean.com", "169.254.169.254"))
+})
+
+# --- host-only scope: IPv6 literals and userinfo are not domains -------------
+# RURL-mkbfseqs. The WHATWG host parser sends a host that starts with "[" to the
+# IPv6 parser, which has no UTS-46 step and fails on any code point other than
+# an ASCII hex digit, ":" or "." (IPv6-invalid-code-point,
+# IPv4-in-IPv6-invalid-code-point). Userinfo never reaches domain to ASCII
+# either: it is percent-encoded with the userinfo percent-encode set.
+
+test_that("whatwg rejects a full-stop variant inside an IPv6 literal", {
+  us <- c(
+    paste0("http://[::ffff:127", U3002, "0", U3002, "0", U3002, "1]/"),
+    paste0("http://[::1", UFF0E, "2.3.4]/"),
+    paste0("http://[::1.2", UFF61, "3.4]/")
+  )
+  expect_identical(get_parse_status(us, url_standard = "whatwg"),
+                   rep("error", 3L))
+  expect_identical(get_host(us, url_standard = "whatwg"),
+                   rep(NA_character_, 3L))
+})
+
+test_that("an IPv6 literal with a full-stop variant fails under every arm", {
+  # ADR 0016 witness: NULL and rfc3986 already reject it and must not move.
+  u <- paste0("http://[::ffff:127", U3002, "0", U3002, "0", U3002, "1]/")
+  for (std in list(NULL, "rfc3986", "whatwg")) {
+    expect_identical(get_parse_status(u, url_standard = std), "error")
+  }
+})
+
+test_that("whatwg percent-encodes a full-stop variant in userinfo", {
+  u <- paste0("http://a", U3002, "b:p", UFF0E, "w@example.com/")
+  expect_identical(get_user(u, url_standard = "whatwg"), "a%E3%80%82b")
+  expect_identical(get_password(u, url_standard = "whatwg"), "p%EF%BC%8Ew")
+  expect_identical(get_host(u, url_standard = "whatwg"), "example.com")
+})
+
+test_that("whatwg still maps the host after userinfo", {
+  u <- paste0("http://u", U3002, "x@127", U3002, "0", U3002, "0", U3002, "1/")
+  expect_identical(get_host(u, url_standard = "whatwg"), "127.0.0.1")
+  expect_identical(get_user(u, url_standard = "whatwg"), "u%E3%80%82x")
 })

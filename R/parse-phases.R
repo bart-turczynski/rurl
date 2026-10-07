@@ -298,13 +298,17 @@
 # lets the existing IPv4 coercion and label handling see "127.0.0.1" (and, for
 # names, "例え。jp" -> "例え.jp").
 #
-# SCOPED TO THE AUTHORITY ONLY. A full-stop variant in the path/query/fragment
+# SCOPED TO THE HOST ONLY. A full-stop variant in the path/query/fragment
 # is legitimate content (e.g. a path "/文書。pdf") and MUST NOT be rewritten, so
 # only the authority span -- between the "//" that introduces it and the first
-# "/", "?" or "#" -- is eligible. The whole authority (userinfo + host + port)
-# is mapped rather than the host alone: a variant full stop in userinfo is a
-# negligible edge (userinfo is not itself a domain) and not worth splitting the
-# authority to exclude. Opaque "scheme:foo" inputs (no "//") carry no authority
+# "/", "?" or "#" -- is considered, and within it only the host-and-port part
+# after the LAST "@" (where the WHATWG authority state splits userinfo off).
+# Userinfo is not a domain: WHATWG percent-encodes it with the userinfo
+# percent-encode set, so "a。b@h" keeps "a%E3%80%82b". A host that starts with
+# "[" goes to the IPv6 parser, which has no UTS-46 step and fails on any code
+# point but an ASCII hex digit, ":" or ".", so a bracketed literal is never
+# mapped either (RURL-mkbfseqs). A variant full stop in the port fails the port
+# state whether mapped or not. Opaque "scheme:foo" inputs (no "//") carry no authority
 # and are left untouched; a backslash run has already been collapsed to "//"
 # upstream, so this sees the normalized form. Runs ONLY under url_standard ==
 # "whatwg" (RFC 3986 has no UTS-46 mapping -- these bytes stay literal), and is
@@ -321,20 +325,24 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)?(//)([^/?#]*)(.*)$"
   )
   authority <- m[, 4L]
-  eligible <- !is.na(authority) &
-    stringi::stri_detect_regex(authority, "[\\u3002\\uFF0E\\uFF61]")
+  # Userinfo runs through the last "@"; the host (and port) follow it.
+  split <- stringi::stri_match_first_regex(authority, "^(.*@)?([^@]*)$")
+  userinfo <- ifelse(is.na(split[, 2L]), "", split[, 2L])
+  host_port <- split[, 3L]
+  eligible <- !is.na(host_port) & !startsWith(host_port, "[") &
+    stringi::stri_detect_regex(host_port, "[\\u3002\\uFF0E\\uFF61]")
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
     return(no_op)
   }
   scheme <- ifelse(is.na(m[, 2L]), "", m[, 2L])
-  mapped_authority <- stringi::stri_replace_all_regex(
-    authority, "[\\u3002\\uFF0E\\uFF61]", "."
+  mapped_host_port <- stringi::stri_replace_all_regex(
+    host_port, "[\\u3002\\uFF0E\\uFF61]", "."
   )
   url_out <- url
   url_out[eligible] <- paste0(
-    scheme[eligible], m[eligible, 3L], mapped_authority[eligible],
-    m[eligible, 5L]
+    scheme[eligible], m[eligible, 3L], userinfo[eligible],
+    mapped_host_port[eligible], m[eligible, 5L]
   )
   no_op$url <- url_out
   no_op
@@ -876,11 +884,11 @@
   url <- bs$url
 
   # WHATWG UTS-46 alternative full-stop mapping (RURL-odsmwsxu) runs next: for
-  # eligible rows it maps U+3002/U+FF0E/U+FF61 to ASCII "." in the AUTHORITY
-  # only, so a Unicode-dot host coerces through the existing IPv4/label handling
-  # (and IDN names normalize their separators) instead of reaching the parser
-  # as an
-  # un-splittable literal. A no-op unless url_standard == "whatwg".
+  # eligible rows it maps U+3002/U+FF0E/U+FF61 to ASCII "." in the HOST only
+  # (not userinfo, not a bracketed IPv6 literal), so a Unicode-dot host coerces
+  # through the existing IPv4/label handling (and IDN names normalize their
+  # separators) instead of reaching the parser as an un-splittable literal. A
+  # no-op unless url_standard == "whatwg".
   sep <- .map_whatwg_domain_separators_vec(url, url_standard)
   url <- sep$url
 
