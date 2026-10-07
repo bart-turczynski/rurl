@@ -308,14 +308,14 @@
 # "[" goes to the IPv6 parser, which has no UTS-46 step and fails on any code
 # point but an ASCII hex digit, ":" or ".", so a bracketed literal is never
 # mapped either (RURL-mkbfseqs). A variant full stop in the port fails the port
-# state whether mapped or not. Opaque "scheme:foo" inputs (no "//") carry no authority
-# and are left untouched; a backslash run has already been collapsed to "//"
-# upstream, so this sees the normalized form. Runs ONLY under url_standard ==
-# "whatwg" (RFC 3986 has no UTS-46 mapping -- these bytes stay literal), and is
-# a byte-for-byte no-op otherwise. Recognition only: a percent-encoded form
-# ("%E3%80%82") is inert literal text, never mapped. No diagnostic is emitted --
-# this is ordinary WHATWG host normalization (like host-lowercasing), not a
-# lossy repair of malformed input.
+# state whether mapped or not. Opaque "scheme:foo" inputs (no "//") carry no
+# authority and are left untouched; a backslash run has already been collapsed
+# to "//" upstream, so this sees the normalized form. Runs ONLY under
+# url_standard == "whatwg" (RFC 3986 has no UTS-46 mapping -- these bytes stay
+# literal), and is a byte-for-byte no-op otherwise. Recognition only: a
+# percent-encoded form ("%E3%80%82") is inert literal text, never mapped. No
+# diagnostic is emitted -- this is ordinary WHATWG host normalization (like
+# host-lowercasing), not a lossy repair of malformed input.
 .map_whatwg_domain_separators_vec <- function(url, url_standard) {
   no_op <- list(url = url)
   if (!.is_whatwg(url_standard)) {
@@ -325,11 +325,20 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)?(//)([^/?#]*)(.*)$"
   )
   authority <- m[, 4L]
-  # Userinfo runs through the last "@"; the host (and port) follow it.
-  split <- stringi::stri_match_first_regex(authority, "^(.*@)?([^@]*)$")
-  userinfo <- ifelse(is.na(split[, 2L]), "", split[, 2L])
-  host_port <- split[, 3L]
-  eligible <- !is.na(host_port) & !startsWith(host_port, "[") &
+  eligible <- !is.na(authority) &
+    stringi::stri_detect_regex(authority, "[\\u3002\\uFF0E\\uFF61]")
+  eligible[is.na(eligible)] <- FALSE
+  if (!any(eligible)) {
+    return(no_op)
+  }
+  # Userinfo runs through the LAST "@"; the host (and port) follow it. A fixed
+  # search, not a `.*@` regex: ICU `.` stops at U+000B, U+000C, U+0085, U+2028
+  # and U+2029, which would leave the host unsplit for a later step to map.
+  at <- stringi::stri_locate_last_fixed(authority, "@")[, "end"]
+  at[is.na(at)] <- 0L
+  userinfo <- stringi::stri_sub(authority, 1L, at)
+  host_port <- stringi::stri_sub(authority, at + 1L)
+  eligible <- eligible & !startsWith(host_port, "[") &
     stringi::stri_detect_regex(host_port, "[\\u3002\\uFF0E\\uFF61]")
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {

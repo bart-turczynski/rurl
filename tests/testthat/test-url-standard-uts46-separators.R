@@ -5,7 +5,8 @@
 # ideographic). rurl hands the raw string to the web parser, which does not
 # apply
 # UTS-46, so under url_standard = "whatwg" rurl maps these to "." in the
-# HOST pre-parse (RURL-mkbfseqs narrowed it from the whole authority). That lets a Unicode-dot host coerce through the IPv4
+# HOST pre-parse (RURL-mkbfseqs narrowed it from the whole
+# authority). That lets a Unicode-dot host coerce through the IPv4
 # parser (an SSRF-relevant loopback/metadata obfuscation) and normalizes IDN
 # separators. RFC 3986 has no UTS-46 mapping, so rfc3986 / no selector keep the
 # bytes literal.
@@ -42,7 +43,7 @@ test_that("whatwg maps the separator in an IDN name host", {
   expect_identical(get_host(u, url_standard = "whatwg"), "例え.jp")
 })
 
-# --- authority-only scope: path/query/fragment must NOT be mapped ------------
+# --- host-only scope: path/query/fragment must NOT be mapped -----------------
 
 test_that("a full-stop variant in the path is left untouched", {
   u <- paste0("http://example.com/文書", U3002, "pdf")
@@ -128,4 +129,12 @@ test_that("whatwg still maps the host after userinfo", {
   u <- paste0("http://u", U3002, "x@127", U3002, "0", U3002, "0", U3002, "1/")
   expect_identical(get_host(u, url_standard = "whatwg"), "127.0.0.1")
   expect_identical(get_user(u, url_standard = "whatwg"), "u%E3%80%82x")
+})
+
+test_that("a line terminator in userinfo does not unsplit the host", {
+  # ICU `.` stops at U+000C; the split must still find the last "@", so the
+  # host is mapped here and the parse status agrees with it.
+  u <- paste0("http://a\fb@ex", UFF0E, "com/")
+  expect_identical(get_host(u, url_standard = "whatwg"), "ex.com")
+  expect_identical(get_parse_status(u, url_standard = "whatwg"), "ok")
 })
