@@ -1390,10 +1390,13 @@ get_host_type <- function(url, url_standard,
 #'   conforms to its scheme's specification or to WHATWG/RFC 3986. Full
 #'   per-standard conformance validation is out of scope (ADR 0012 D5).
 #'
-#'   One token is the exception, and consumers may rely on its absence:
-#'   \code{domain-invalid-ace-label} fires on \emph{every} parsed host that
-#'   meets its predicate (see its entry below), under both \code{"rfc3986"}
-#'   and \code{"whatwg"}. Its absence means each \code{xn--} label of the host
+#'   Three tokens are the exception, and consumers may rely on their
+#'   absence: \code{ipv6-non-canonical} and \code{ipv6-embedded-ipv4} (each
+#'   within the scope its entry below states) and
+#'   \code{domain-invalid-ace-label}, which fires on \emph{every} parsed
+#'   host that meets its predicate (see its entry below), under both
+#'   \code{"rfc3986"} and \code{"whatwg"}. Its absence means each
+#'   \code{xn--} label of the host
 #'   is, on its own, a genuine A-label. It says nothing about the host's other
 #'   labels or about the DNS rules the other \code{domain-*} tokens report.
 #'
@@ -1489,7 +1492,8 @@ get_host_type <- function(url, url_standard,
 #'       \code{raddr::addr_embeddings()} for the kind and the IPv4 address.
 #'       Absence means raddr recognizes no embedding, not that the address
 #'       cannot reach IPv4: a network-specific NAT64 prefix (RFC 6052 section
-#'       2.2) is not visible from the address alone.
+#'       2.2) is not visible from the address alone. A caller who knows its
+#'       prefix can test for it with \code{raddr::addr_nat64_embeddings()}.
 #'   }
 #'   An empty result is no evidence that an IPv6 host is safe to fetch:
 #'   \code{[::1]} carries neither token. Judging the destination address is
