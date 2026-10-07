@@ -34,7 +34,7 @@
 # bytes, so a key minted under other semantics can never compare equal to one
 # minted here -- "no release may silently reinterpret a persisted older key".
 .URL_KEY_SCHEMA_VERSION <- 1L
-.URL_KEY_POLICY_VERSION <- 1L
+.URL_KEY_POLICY_VERSION <- 2L
 
 # Typed keyability reasons (P3.1 D-C). `NA` alone is forbidden: it would
 # conflate missing input with an invalid parse, so every non-keyable row carries

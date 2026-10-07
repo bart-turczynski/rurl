@@ -167,7 +167,7 @@ test_that("the policy prints its four equality-deciding fields", {
   expect_match(out, "rurl_url_key_policy")
   expect_match(out, "standard=whatwg")
   expect_match(out, "scheme_equality=exact")
-  expect_match(out, "key_version=1")
+  expect_match(out, "key_version=2")
   expect_match(out, "schema_version=1")
 })
 
