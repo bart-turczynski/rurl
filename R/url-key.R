@@ -59,7 +59,7 @@
 # because equality must stay symmetric and transitive
 # (`contracts/key-join-contracts.md:66`).
 #
-# `standard` defaults to "whatwg" per P3.2 D-A: the key surface is new in v3
+# `standard` defaults to "whatwg" per P3.2 D-A: the key surface was new in v3,
 # with no persisted keys and no back-compat debt, so it anchors to a standard's
 # identity semantics rather than to `parse_url()`'s `NULL` infer-a-scheme
 # heuristic. `NULL` is deliberately NOT accepted -- an unnamed standard cannot

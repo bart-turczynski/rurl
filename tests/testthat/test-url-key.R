@@ -319,6 +319,16 @@ test_that("keys minted under different policies never compare equal", {
   expect_false(identical(a, b))
 })
 
+test_that("the key version rides inside the key bytes", {
+  # RURL-rntskojq: a key persisted under an earlier version must never compare
+  # equal to one minted now, so the version cannot live in the attribute alone.
+  older <- policy()
+  older$key_version <- older$key_version - 1L
+  a <- as.character(key("http://h.com/p", policy()))
+  b <- as.character(key("http://h.com/p", older))
+  expect_false(identical(a, b))
+})
+
 test_that("http_https_missing is refused, not guessed", {
   # RURL-ixxvjjwj, NOT ixlultql: the transitivity clash that once blocked BOTH
   # relaxed modes was resolved by the owner ruling on row 6. What still blocks
