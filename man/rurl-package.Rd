@@ -8,7 +8,7 @@
 \description{
 \if{html}{\figure{logo.svg}{options: style='float: right' alt='logo' width='120'}}
 
-A lightweight toolkit for extracting structured information from URLs. Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs. Domain and public-suffix extraction is delegated to the 'pslr' package, which implements the Public Suffix List from \url{https://publicsuffix.org}. Punycode and IDNA encoding is handled by the 'punycoder' package.
+A lightweight toolkit for extracting structured information from URLs. Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs. Domain and public-suffix extraction is delegated to the 'pslr' package, which implements the Public Suffix List from \url{https://publicsuffix.org}. Punycode and IDNA encoding is handled by the 'punycoder' package, and IP address facts by the 'raddr' package.
 }
 \examples{
 # Parse a vector of URLs into one row each.

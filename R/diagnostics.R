@@ -181,10 +181,10 @@
 
   # ipv6-* diagnostics (RURL-dxwsksor), keyed to the IPv6 literal AS WRITTEN,
   # identically in both modes like the ipv4-* family above. Only rows the host
-  # model classified as IPv6 qualify, so a literal either standard rejects (a
-  # zone ID, IPvFuture) is a null row and reports nothing.
+  # model classified as IPv6 qualify: a zone ID is a parse failure under both
+  # standards, and an IPvFuture literal is never an IPv6 host.
   diag <- .ipv6_host_diagnostics(
-    diag, input_host, live & host_type %in% "ipv6"
+    diag, input_host, live & host_type == "ipv6"
   )
 
   # --- path diagnostics (RURL-gjltzwmp / RURL-bbmuehsx, PRD §6.1, §7) ---------
@@ -583,8 +583,10 @@
 #     of the address (RFC 5952 section 4; never the section 5 mixed form).
 #     The serializer is the one the whatwg arm already renders hosts with.
 #   - ipv6-embedded-ipv4: raddr names an IPv4 embedding. The address ranges
-#     are raddr's (ADR 0018 D1); rurl only projects the fact. The canonical
-#     text is what raddr reads, so the reading cannot differ between arms.
+#     are raddr's (ADR 0018 D1); rurl only projects the fact. raddr reads
+#     the serializer's output, so the reading cannot differ between arms. A
+#     literal the serializer cannot read comes back unchanged, and raddr then
+#     reads the source; no literal the host model calls IPv6 does that.
 .ipv6_host_diagnostics <- function(diag, input_host, mask) {
   mask[is.na(mask)] <- FALSE
   if (!any(mask)) {

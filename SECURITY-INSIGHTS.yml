@@ -39,8 +39,8 @@ project:
       - Unsafe handling of untrusted URL input passed to the parsing and
         normalization functions.
     out-of-scope:
-      - Vulnerabilities in dependencies (curl, stringi, punycoder, pslr); report
-        those upstream.
+      - Vulnerabilities in dependencies (curl, stringi, punycoder, pslr, raddr,
+        rlang, vctrs); report those upstream.
     comment: |
       Please do not report vulnerabilities through public issues. Email the
       maintainer at bartek@turczynski.pl, or open a GitLab issue with the

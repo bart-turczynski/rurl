@@ -1470,8 +1470,9 @@ get_host_type <- function(url, url_standard,
 #'   the literal as written and identical under both standards. Both are
 #'   \strong{complete} for every literal the standard parses: each fires on
 #'   every such host its definition covers, so its absence can be relied on.
-#'   A literal the standard rejects (a zone ID, \code{IPvFuture}) is a parse
-#'   failure and reports nothing.
+#'   Only a host classified as \code{"ipv6"} (see \code{\link{get_host_type}})
+#'   reports them: a zone ID is a parse failure under both standards, and an
+#'   \code{IPvFuture} literal is never an IPv6 host.
 #'   \itemize{
 #'     \item \code{ipv6-non-canonical} --- the literal is not the WHATWG URL
 #'       Standard's IPv6 serialization of its address: leading zeros, an
