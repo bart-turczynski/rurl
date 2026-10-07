@@ -139,14 +139,15 @@ test_that("ipv6-embedded-ipv4 fires on every raddr embedding kind", {
 test_that("ipv6-embedded-ipv4 is exactly raddr's embedding fact", {
   # Completeness: across a sweep of literals, the token is present if and only
   # if raddr names an embedding, so its absence can be relied on. The ISATAP
-  # rows are spelled in hex: the rfc3986 arm still rejects their dotted
-  # spelling (RURL-escneidz), so it would never reach the diagnostics.
+  # rows come in both spellings: the rfc3986 arm reaches the dotted one since
+  # RURL-escneidz.
   hosts <- c(
     "::", "::1", "::2", "::ffff:0", "::1:0:0", "::ffff:1:0:0",
     "::ffff:0:0", "::ffff:255.255.255.255", "::0.0.0.1", "::1.2.3.4",
     "64:ff9b::", "64:ff9b::1:2", "64:ff9b:1::", "64:ff9a::1",
     "2002::", "2002:c000:0201::1", "2001::", "2001:1::1", "2001:db8::",
-    "fe80::5efe:102:304", "fe80::200:5efe:102:304", "fe80::1",
+    "fe80::5efe:102:304", "fe80::200:5efe:102:304", "fe80::5efe:1.2.3.4",
+    "fe80::200:5efe:1.2.3.4", "fe80::1",
     "ff02::1", "fc00::1", "1:2:3:4:5:6:7:8"
   )
   kind <- raddr::addr_embedded_kind(raddr::addr_whatwg(hosts))

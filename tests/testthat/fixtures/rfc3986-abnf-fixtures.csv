@@ -26,3 +26,6 @@
 "ipvfuture","http://[v1.fe80::1]/","accept","IPvFuture form 'v1.fe80::1' inside the bracketed IP-literal","3.2.2"
 "empty-query-frag","http://example.com/?#","accept","present-but-empty query and fragment delimiters are legal (query/fragment are *(...))","3.4/3.5"
 "scheme-only-empty-path","urn:","accept","scheme then path-empty; a URI with an empty hier-part is legal","3.3"
+"ipv6-ls32-ipv4-after-pieces","http://[fe80::5efe:1.2.3.4]/","accept","IPv6address alternative [ *3( h16 "":"" ) h16 ] ""::"" h16 "":"" ls32, with ls32 taking its IPv4address form","3.2.2"
+"ipv6-ls32-ipv4-full","http://[1:2:3:4:5:6:1.2.3.4]/","accept","IPv6address alternative 6( h16 "":"" ) ls32, with ls32 taking its IPv4address form","3.2.2"
+"ipv6-ipv4-leading-zero","http://[::01.2.3.4]/","reject","dec-octet admits no leading zero, so '01.2.3.4' is not an IPv4address and '::01.2.3.4' is not an IPv6address","3.2.2"
