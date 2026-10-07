@@ -6,6 +6,7 @@
 ^README\.html$
 ^data-raw$
 ^_pkgdown\.yml$
+^pkgdown$
 ^docs$
 ^\.github$
 ^\.gitlab$
@@ -61,6 +62,7 @@
 ^tools/deferral-gate\.R$
 ^tools/curl-zero-gate\.R$
 ^tools/pin-pages-md-filter\.R$
+^tools/build-favicons\.sh$
 # The citation gate ported from seor (design/adr/0002 there). Not part
 # of the installable package; without this, --as-cran reports it as a
 # non-standard top-level directory.

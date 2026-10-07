@@ -497,6 +497,14 @@ pages:
         esac
       done
       # --- agent-md-filter:end ---
+    # FAVICONS ARE COMMITTED (RURL-ujczpkqm). With a logo in man/figures/ and
+    # no pkgdown/favicon/, pkgdown's init_site() calls build_favicons(), which
+    # uploads the logo to realfavicongenerator.net -- but only when the CI env
+    # var is unset. Here GitLab sets CI=true, so the call was skipped and the
+    # site shipped without favicons; `tools/local-ci.sh` sets no CI, so its
+    # replay of this job called the API and failed whenever the API did. With
+    # pkgdown/favicon/ committed, neither calls out. tools/build-favicons.sh
+    # regenerates the set offline after a logo change.
     - 'Rscript -e ''pkgdown::build_site(new_process = FALSE, install = FALSE)'''
     # GitLab Pages publishes `public/`; _pkgdown.yml sets no `destination:`, so
     # the site lands in `docs/` (which .gitignore already covers for local
