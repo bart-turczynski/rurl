@@ -1544,13 +1544,11 @@
     )
   }
 
-  parts <- strsplit(inner, "::", fixed = TRUE)[[1L]]
-  # strsplit() drops the empty side after a trailing "::" (`"1::"` -> "1",
-  # `"::"` -> ""), which used to send `[1:2:3:4:5:6:7::]` down the no-"::"
-  # branch and return it unserialized (RURL-sqmhtldq). Restore that side.
-  if (endsWith(inner, "::")) {
-    parts <- c(parts, "")
-  }
+  # stri_split_fixed(), not strsplit(): strsplit() drops an empty last field,
+  # so `"1::"` split to "1" and `[1:2:3:4:5:6:7::]` went down the no-"::"
+  # branch unserialized (RURL-sqmhtldq), and `"8:"` split to "8", quietly
+  # repairing an invalid trailing ":". Empty fields now survive and fail.
+  parts <- stringi::stri_split_fixed(inner, "::")[[1L]]
   if (length(parts) > 2L) {
     return(host)
   }
@@ -1559,7 +1557,7 @@
     if (is.na(x) || x == "") {
       return(character(0))
     }
-    strsplit(x, ":", fixed = TRUE)[[1L]]
+    stringi::stri_split_fixed(x, ":")[[1L]]
   }
   if (length(parts) == 1L) {
     hextets <- split_side(parts[1L])

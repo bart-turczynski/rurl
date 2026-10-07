@@ -359,6 +359,25 @@ test_that("WHATWG serializes an IPv6 literal that ends in `::`", {
     get_host("http://[1:2:3:4:5:6:7::]/"),
     get_host("http://[1:2:3:4:5:6:7::]/", url_standard = NULL)
   )
+  # The serialized URL and the match key follow the host.
+  expect_identical(
+    serialize_url("http://[1:2:3:4:5:6:7::]/a", standard = "whatwg"),
+    "http://[1:2:3:4:5:6:7:0]/a"
+  )
+  expect_identical(
+    get_url_key("http://[1:2:3:4:5:6:7::]/a"),
+    get_url_key("http://[1:2:3:4:5:6:7:0]/a")
+  )
+})
+
+test_that("the WHATWG IPv6 serializer returns an invalid literal as written", {
+  # An empty field from a stray ":" or a second "::" must fail, not be repaired
+  # into a valid-looking literal; the host model rejects these upstream.
+  bad <- c(
+    "[1::2::]", "[1:::]", "[:::]", "[1:2:3:4:5:6:7:8::]",
+    "[1:2:3:4:5:6:7:8:]", "[1::2:]", "[:1::2]"
+  )
+  expect_identical(rurl:::.serialize_whatwg_ipv6_hosts_vec(bad), bad)
 })
 
 test_that("RFC 3986 keeps embedded-IPv4 IPv6 literal spelling", {
