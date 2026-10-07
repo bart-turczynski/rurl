@@ -170,7 +170,10 @@ default:
   # ERROR ("the suggested packages are required for a complete check"), and they
   # cost 27s together. Installing them keeps the check at full strength, which
   # is worth more than the seconds saved by _R_CHECK_FORCE_SUGGESTS_=false.
-  - 'Rscript -e ''install.packages(c("punycoder", "pslr", "oysteR", "rosv"))'''
+  # rlang and vctrs are named although Debian ships them: raddr needs rlang
+  # >= 1.1.7 and vctrs >= 0.7.0, and install.packages() does not upgrade an
+  # installed dependency that is too old, so the CRAN copies must be asked for.
+  - 'Rscript -e ''install.packages(c("rlang", "vctrs", "raddr", "punycoder", "pslr", "oysteR", "rosv"))'''
   # DERIVED FROM DESCRIPTION, not transcribed -- same reason the gate list is.
   # A hand-copied dependency list is one more thing to forget: add a Suggests
   # and `R CMD check` starts ERRORing in CI with a hand-copy that is silently
@@ -627,10 +630,12 @@ full-check:
 #   FLOOR_SNAPSHOT, used in this job alone, so it cannot conflict with what
 #   full-check installs. 2025-04-10 is the day before R 4.5.0, when R 4.1 was
 #   still inside every dependency's support window.
-# - EXCEPT punycoder and pslr, which first reached CRAN in 2026, after the
-#   snapshot. They come from CRAN itself, as source, with dependencies = FALSE:
-#   their own dependencies (Rcpp, cpp11, digest) are already in from the
-#   snapshot, so nothing else moves past it. Both declare R >= 4.1 or lower.
+# - EXCEPT punycoder, pslr and raddr, which first reached CRAN in 2026, after
+#   the snapshot, and the rlang (>= 1.1.7) and vctrs (>= 0.7.0) raddr needs,
+#   newer than the snapshot's. They come from CRAN itself, as source, with
+#   dependencies = FALSE: their own dependencies (Rcpp, cpp11, digest, cli,
+#   glue, lifecycle) are already in from the snapshot, so nothing else moves
+#   past it. All five declare R >= 4.1 or lower.
 # - Only what the check needs: the hard dependencies, the test and vignette
 #   Suggests, and rcmdcheck. pkgdown, oysteR and rosv serve the site and the
 #   scheduled audits only; the audit tests skip without them, so
@@ -650,10 +655,10 @@ floor-check:
   script:
     - apt-get update -qq && apt-get install -y --no-install-recommends pkg-config libcurl4-openssl-dev libssl-dev libicu-dev
     - >
-      Rscript -e 'install.packages(c("Rcpp", "cpp11", "digest", "stringi", "testthat", "withr", "jsonlite", "knitr", "rmarkdown", "rcmdcheck"),
+      Rscript -e 'install.packages(c("Rcpp", "cpp11", "digest", "cli", "glue", "lifecycle", "stringi", "testthat", "withr", "jsonlite", "knitr", "rmarkdown", "rcmdcheck"),
       repos = Sys.getenv("FLOOR_SNAPSHOT"), Ncpus = 4L);
-      install.packages(c("punycoder", "pslr"), repos = "https://cloud.r-project.org", dependencies = FALSE);
-      stopifnot(all(vapply(c("stringi", "punycoder", "pslr", "testthat", "withr", "rcmdcheck"), requireNamespace, NA, quietly = TRUE)));
+      install.packages(c("rlang", "vctrs", "raddr", "punycoder", "pslr"), repos = "https://cloud.r-project.org", dependencies = FALSE);
+      stopifnot(all(vapply(c("stringi", "punycoder", "pslr", "raddr", "testthat", "withr", "rcmdcheck"), requireNamespace, NA, quietly = TRUE)));
       print(R.version.string)'
     # rcmdcheck reads a check that halted partway as 0/0/0 and returns normally,
     # so error_on never fires; the guard also fails on R CMD check's own exit
@@ -749,8 +754,8 @@ fossa:
   - 'apt-get install -y --no-install-recommends
      r-cran-stringi r-cran-testthat r-cran-pkgload r-cran-withr r-cran-jsonlite
      r-cran-curl r-cran-httr'
-  - 'Rscript -e ''install.packages(c("punycoder", "pslr", "rosv", "oysteR"))'''
-  - 'Rscript -e ''p <- c("punycoder", "pslr", "testthat", "pkgload", "rosv", "oysteR"); m <- p[!vapply(p, requireNamespace, logical(1), quietly = TRUE)]; if (length(m)) stop("missing dependencies: ", paste(m, collapse = ", "))'''
+  - 'Rscript -e ''install.packages(c("rlang", "vctrs", "raddr", "punycoder", "pslr", "rosv", "oysteR"))'''
+  - 'Rscript -e ''p <- c("raddr", "punycoder", "pslr", "testthat", "pkgload", "rosv", "oysteR"); m <- p[!vapply(p, requireNamespace, logical(1), quietly = TRUE)]; if (length(m)) stop("missing dependencies: ", paste(m, collapse = ", "))'''
   - 'R CMD INSTALL --no-multiarch .'
 
 osv-audit:

@@ -89,9 +89,20 @@ get_url_diagnostics("http://0x7f.1/", url_standard = "whatwg")
 ```
 
 A diagnostic describes a *shape* of the input; it does not decide what to do
-about it. A link-graph builder can ignore `ipv4-*` tokens when computing keys,
-while an SSRF/allowlist guard can reject any host that carries one. Because they
-are facts, the same token fires under both standards.
+about it. A link-graph builder can ignore `ipv4-*` and `ipv6-*` tokens when
+computing keys, while an SSRF/allowlist guard can reject any host that carries
+one. Because they are facts, the same token fires under both standards.
+
+```{r ipv6-helpers}
+get_url_diagnostics(
+  c("http://[0:00::0:1]/", "http://[::ffff:127.0.0.1]/", "http://[::1]/"),
+  url_standard = "whatwg"
+)
+```
+
+The last URL carries no token: `[::1]` is loopback written canonically.
+Diagnostics flag alternate spellings and embedded IPv4 addresses. Whether
+the address itself may be fetched is a separate check.
 
 ## Ports and backslashes
 

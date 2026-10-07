@@ -2,7 +2,7 @@
   "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
   "@type": "SoftwareSourceCode",
   "identifier": "rurl",
-  "description": "A lightweight toolkit for extracting structured information from URLs. Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs. Domain and public-suffix extraction is delegated to the 'pslr' package, which implements the Public Suffix List from <https://publicsuffix.org>. Punycode and IDNA encoding is handled by the 'punycoder' package.",
+  "description": "A lightweight toolkit for extracting structured information from URLs. Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs. Domain and public-suffix extraction is delegated to the 'pslr' package, which implements the Public Suffix List from <https://publicsuffix.org>. Punycode and IDNA encoding is handled by the 'punycoder' package, and IP address facts by the 'raddr' package.",
   "name": "rurl: Parse, Clean, and Normalize URLs",
   "relatedLink": ["https://CRAN.R-project.org/package=rurl"],
   "codeRepository": "https://gitlab.com/bart-turczynski/rurl",
@@ -195,6 +195,19 @@
       "sameAs": "https://CRAN.R-project.org/package=pslr"
     },
     "6": {
+      "@type": "SoftwareApplication",
+      "identifier": "raddr",
+      "name": "raddr",
+      "version": ">= 0.1.2",
+      "provider": {
+        "@id": "https://cran.r-project.org",
+        "@type": "Organization",
+        "name": "Comprehensive R Archive Network (CRAN)",
+        "url": "https://cran.r-project.org"
+      },
+      "sameAs": "https://CRAN.R-project.org/package=raddr"
+    },
+    "7": {
       "@type": "SoftwareApplication",
       "identifier": "R",
       "name": "R",

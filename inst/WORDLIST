@@ -21,6 +21,7 @@ IDNA
 IDNs
 IPv
 IRI
+ISATAP
 LDH
 LF
 LRU
@@ -50,6 +51,7 @@ Sonatype
 TLD
 TLDs
 TLS
+Teredo
 ToASCII
 ToUnicode
 UNC
@@ -109,8 +111,10 @@ dotless
 drkcvzex
 dswufxky
 dtzvekmf
+dxwsksor
 eTLD
 efbcrhjc
+embeddings
 enum
 errored
 fallbacks
@@ -219,6 +223,7 @@ punycoding
 qfxolldq
 qhwktfcw
 qxpgcwie
+raddr
 recomposition
 regenerable
 registrability

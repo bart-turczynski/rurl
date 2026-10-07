@@ -457,6 +457,9 @@ only under `port_handling != "exclude"`.
   see ADR 0005).
 - `punycoder` (>= 1.2.1) — Punycode encoding/decoding.
 - `pslr` (>= 1.1.1) — Public Suffix List matching.
+- `raddr` (>= 0.1.2) — IP address facts: the `ipv6-embedded-ipv4` diagnostic
+  projects `addr_embedded_kind()` (ADR 0018 and its amendment). It brings in
+  `rlang` and `vctrs`.
 
 The syntactic URL parse is in-tree (`R/parse-web.R`); `curl` is no longer a
 dependency.

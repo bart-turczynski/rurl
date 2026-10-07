@@ -22,7 +22,7 @@
 # supersede the provisional research-doc drafts (`non-decimal-ipv4`,
 # `ambiguous-octet`, `decoded-reserved`). Downstream consumers (pagerankr,
 # sitemapr, semantic) gate on these tokens. The host tickets emit the `ipv4-*`
-# tokens; the path tickets emit `encoded-dot-segment` /
+# and `ipv6-*` tokens; the path tickets emit `encoded-dot-segment` /
 # `encoded-reserved-path-byte`. `.diag_add()` rejects any token not listed here.
 .URL_DIAGNOSTICS <- c(
   "ipv4-number-form",
@@ -32,6 +32,8 @@
   "ipv4-octal",
   "ipv4-leading-zero",
   "ipv4-out-of-range",
+  "ipv6-non-canonical",
+  "ipv6-embedded-ipv4",
   "encoded-dot-segment",
   "encoded-reserved-path-byte",
   "explicit-default-port",
@@ -176,6 +178,14 @@
       diag <- .diag_add(diag, seq_len(n) == i, tok)
     }
   }
+
+  # ipv6-* diagnostics (RURL-dxwsksor), keyed to the IPv6 literal AS WRITTEN,
+  # identically in both modes like the ipv4-* family above. Only rows the host
+  # model classified as IPv6 qualify: a zone ID is a parse failure under both
+  # standards, and an IPvFuture literal is never an IPv6 host.
+  diag <- .ipv6_host_diagnostics(
+    diag, input_host, live & host_type == "ipv6"
+  )
 
   # --- path diagnostics (RURL-gjltzwmp / RURL-bbmuehsx, PRD §6.1, §7) ---------
   # Emit `encoded-dot-segment` when an encoded-dot segment is recognized/removed
@@ -562,6 +572,36 @@
   }
 
   tokens
+}
+
+# --- IPv6 host diagnostics ---------------------------------------------------
+
+# Push the two ipv6-* facts onto the `mask` rows of `diag`. `input_host` is the
+# bracketed source token. Both facts are complete: each fires on every masked
+# row its predicate holds for.
+#   - ipv6-non-canonical: the source text is not the WHATWG IPv6 serialization
+#     of the address (RFC 5952 section 4; never the section 5 mixed form).
+#     The serializer is the one the whatwg arm already renders hosts with.
+#   - ipv6-embedded-ipv4: raddr names an IPv4 embedding. The address ranges
+#     are raddr's (ADR 0018 D1); rurl only projects the fact. raddr reads
+#     the serializer's output, so the reading cannot differ between arms. A
+#     literal the serializer cannot read comes back unchanged, and raddr then
+#     reads the source; no literal the host model calls IPv6 does that.
+.ipv6_host_diagnostics <- function(diag, input_host, mask) {
+  mask[is.na(mask)] <- FALSE
+  if (!any(mask)) {
+    return(diag)
+  }
+  canonical <- rep(NA_character_, length(input_host))
+  canonical[mask] <- .serialize_whatwg_ipv6_hosts_vec(input_host[mask])
+  diag <- .diag_add(
+    diag, mask & input_host != canonical, "ipv6-non-canonical"
+  )
+
+  kind <- rep(NA_character_, length(input_host))
+  addr <- raddr::addr_whatwg(stringi::stri_sub(canonical[mask], 2L, -2L))
+  kind[mask] <- as.character(raddr::addr_embedded_kind(addr))
+  .diag_add(diag, mask & !is.na(kind), "ipv6-embedded-ipv4")
 }
 
 # --- Metadata pipeline -------------------------------------------------------

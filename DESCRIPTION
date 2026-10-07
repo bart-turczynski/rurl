@@ -10,7 +10,8 @@ Description: A lightweight toolkit for extracting structured information from UR
     Includes functions for parsing, normalizing protocols, extracting domains, and constructing clean URLs.
     Domain and public-suffix extraction is delegated to the 'pslr' package,
     which implements the Public Suffix List from <https://publicsuffix.org>.
-    Punycode and IDNA encoding is handled by the 'punycoder' package.
+    Punycode and IDNA encoding is handled by the 'punycoder' package,
+    and IP address facts by the 'raddr' package.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -44,7 +45,8 @@ Imports:
     utils,
     stringi,
     punycoder (>= 1.2.1),
-    pslr (>= 1.1.1)
+    pslr (>= 1.1.1),
+    raddr (>= 0.1.2)
 URL: https://bart-turczynski.gitlab.io/rurl/,
     https://gitlab.com/bart-turczynski/rurl,
     https://bart-turczynski.r-universe.dev/rurl,
