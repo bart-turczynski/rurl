@@ -35,12 +35,19 @@ done
 # 2000 x 2000 canvas: (2000 - 1732) / 2 = 134 units of transparent margin on
 # each side. Keep only the drawing (the title and the <path> elements) and
 # drop the ~10 KB of XMP/RDF metadata, which every page would otherwise load.
-read -r w h < <(sed -n 's/.*viewBox="0 0 \([0-9]*\) \([0-9]*\)".*/\1 \2/p' "$logo" | head -1)
+read -r w h < <(sed -n 's/.*viewBox="0 0 \([0-9]*\) \([0-9]*\)".*/\1 \2/p' "$logo" | head -1) || true
 [ "${w:-}" = 1732 ] && [ "${h:-}" = 2000 ] || {
   echo "expected a 0 0 1732 2000 viewBox in $logo, got '${w:-} ${h:-}': recheck the square padding" >&2
   exit 1
 }
 paths=$(grep '^<path ' "$logo") || { echo "no <path> elements in $logo" >&2; exit 1; }
+# Copying the <path> lines alone is right only while they are the whole
+# drawing. Stop on anything that would be lost or misplaced without its
+# context: an indented path, a group or transform, defs, other shapes, text.
+if grep -Eq '^[[:space:]]+<path |<(g|defs|use|symbol|text|rect|circle|ellipse|line|polyline|polygon|image)[[:space:]>/]|transform=' "$logo"; then
+  echo "$logo has drawing beyond top-level <path> lines: update this script" >&2
+  exit 1
+fi
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
