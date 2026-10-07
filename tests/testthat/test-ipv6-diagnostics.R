@@ -88,6 +88,28 @@ test_that("ipv6-non-canonical follows each RFC 5952 section 4 rule", {
   }
 })
 
+test_that("ipv6-non-canonical sees a literal that ends in `::`", {
+  # The serializer gave up on a trailing "::" until RURL-sqmhtldq, so every
+  # non-canonical literal of this shape was missed. Canonical ones stay quiet.
+  noncanonical <- c(
+    "[2001:DB8::]", "[2001:0db8::]", "[2001:db8:0:0::]", "[0::]",
+    "[1:0::]", "[1:2:3:4:5:6:7::]"
+  )
+  canonical <- c("[2001:db8::]", "[1::]", "[::]", "[1:2:3:4:5:6::]")
+  for (std in c("whatwg", "rfc3986")) {
+    got <- ipv6_tokens(paste0("http://", noncanonical, "/"), std)
+    expect_true(
+      all(vapply(got, function(t) "ipv6-non-canonical" %in% t, logical(1))),
+      label = std
+    )
+    expect_identical(
+      ipv6_tokens(paste0("http://", canonical, "/"), std),
+      rep(list(character(0)), length(canonical)),
+      label = std
+    )
+  }
+})
+
 test_that("ipv6-embedded-ipv4 fires on every raddr embedding kind", {
   # One literal per kind raddr 0.1.2 names; the kinds are raddr's, not rurl's.
   hosts <- c(
