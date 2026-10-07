@@ -1545,6 +1545,12 @@
   }
 
   parts <- strsplit(inner, "::", fixed = TRUE)[[1L]]
+  # strsplit() drops the empty side after a trailing "::" (`"1::"` -> "1",
+  # `"::"` -> ""), which used to send `[1:2:3:4:5:6:7::]` down the no-"::"
+  # branch and return it unserialized (RURL-sqmhtldq). Restore that side.
+  if (endsWith(inner, "::")) {
+    parts <- c(parts, "")
+  }
   if (length(parts) > 2L) {
     return(host)
   }
