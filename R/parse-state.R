@@ -411,26 +411,36 @@
 .RFC3986_PORT_RE <- "\\A[0-9]*\\z"
 
 # IPv4address, and the full dotted quad, for embedded-IPv4 IPv6 forms (S3.2.2).
-.RFC3986_IPV4 <- "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
+# dec-octet = DIGIT / %x31-39 DIGIT / "1" 2DIGIT / "2" %x30-34 DIGIT /
+# "25" %x30-35: no leading zero, so "01" is not a dec-octet (RURL-escneidz).
+.RFC3986_IPV4 <- "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])"
 .RFC3986_IPV4_QUAD <- paste0("(", .RFC3986_IPV4, "\\.){3}", .RFC3986_IPV4)
 
-# IPv6address (RFC 4291) -- the canonical fully-expanded alternation. ASCII-only
-# (no non-ASCII tolerance inside brackets); zone identifiers unsupported.
-.RFC3986_IPV6_RE <- paste0(
-  "\\A(",
-  "([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|",
-  "([0-9A-Fa-f]{1,4}:){1,7}:|",
-  "([0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|",
-  "([0-9A-Fa-f]{1,4}:){1,5}(:[0-9A-Fa-f]{1,4}){1,2}|",
-  "([0-9A-Fa-f]{1,4}:){1,4}(:[0-9A-Fa-f]{1,4}){1,3}|",
-  "([0-9A-Fa-f]{1,4}:){1,3}(:[0-9A-Fa-f]{1,4}){1,4}|",
-  "([0-9A-Fa-f]{1,4}:){1,2}(:[0-9A-Fa-f]{1,4}){1,5}|",
-  "[0-9A-Fa-f]{1,4}:(:[0-9A-Fa-f]{1,4}){1,6}|",
-  ":((:[0-9A-Fa-f]{1,4}){1,7}|:)|",
-  "::([Ff]{4}(:0{1,4})?:)?", .RFC3986_IPV4_QUAD, "|",
-  "([0-9A-Fa-f]{1,4}:){1,4}:", .RFC3986_IPV4_QUAD,
-  ")\\z"
-)
+# IPv6address, transcribed one-to-one from the nine S3.2.2 alternatives, with
+# ls32 = ( h16 ":" h16 ) / IPv4address. The IPv4 form of ls32 may follow any
+# number of `h16 ":"` pieces an alternative allows (`fe80::5efe:1.2.3.4`,
+# `1:2:3:4:5:6:1.2.3.4`); the earlier hand-expanded alternation admitted a
+# dotted tail only after `::`, `::ffff:` or `h16...::` (RURL-escneidz).
+# ASCII-only (no non-ASCII tolerance inside brackets); zone identifiers
+# unsupported.
+.RFC3986_IPV6_RE <- local({
+  h16 <- "[0-9A-Fa-f]{1,4}"
+  ls32 <- paste0("(", h16, ":", h16, "|", .RFC3986_IPV4_QUAD, ")")
+  # [ *k( h16 ":" ) h16 ]
+  lead <- function(k) paste0("((", h16, ":){0,", k, "}", h16, ")?")
+  paste0("\\A(", paste(
+    paste0("(", h16, ":){6}", ls32),
+    paste0("::(", h16, ":){5}", ls32),
+    paste0("(", h16, ")?::(", h16, ":){4}", ls32),
+    paste0(lead(1), "::(", h16, ":){3}", ls32),
+    paste0(lead(2), "::(", h16, ":){2}", ls32),
+    paste0(lead(3), "::", h16, ":", ls32),
+    paste0(lead(4), "::", ls32),
+    paste0(lead(5), "::", h16),
+    paste0(lead(6), "::"),
+    sep = "|"
+  ), ")\\z")
+})
 
 # IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )     (S3.2.2)
 .RFC3986_IPVFUTURE_RE <- paste0(

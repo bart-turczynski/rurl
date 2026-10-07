@@ -152,3 +152,71 @@ test_that("the uniform gate adds only SYNTAX rejections, not policy ones", {
     get_parse_status("example.com/path", url_standard = "rfc3986"), "ok"
   )
 })
+
+# RURL-escneidz. RFC 3986 S3.2.2 lets `ls32` take its IPv4address form after
+# any number of `h16 ":"` pieces an IPv6address alternative allows, and
+# `dec-octet` admits no leading zero. The rfc3986 arm had accepted a dotted
+# tail only after `::`, `::ffff:` or `h16...::`, and let `01` through.
+
+test_that("rfc3986 accepts every IPv6address with an IPv4 ls32", {
+  hosts <- c(
+    "::1.2.3.4", "::ffff:1.2.3.4", "1::1.2.3.4", "::2:1.2.3.4",
+    "1::2:1.2.3.4", "1::ffff:1.2.3.4", "1:2:3:4:5:6:1.2.3.4",
+    "1:2:3:4:5::1.2.3.4", "::2:3:1.2.3.4", "fe80::5efe:1.2.3.4"
+  )
+  urls <- paste0("http://[", hosts, "]/")
+  expect_true(all(rfc3986_abnf_accepts(urls)))
+  for (acc in c("web", "general")) {
+    expect_identical(
+      get_host_type(urls, "rfc3986", scheme_acceptance = acc),
+      rep("ipv6", length(urls)),
+      label = acc
+    )
+  }
+  # ADR 0016 witness: the NULL profile already parsed every row.
+  expect_identical(get_parse_status(urls), rep("ok", length(urls)))
+})
+
+test_that("rfc3986 rejects an IPv4 ls32 with a leading-zero dec-octet", {
+  u <- "foo://[::01.2.3.4]/"
+  expect_false(rfc3986_abnf_accepts(u))
+  expect_identical(
+    get_parse_status(
+      u, url_standard = "rfc3986", scheme_acceptance = "general"
+    ),
+    "error"
+  )
+})
+
+test_that("the IPv6address regex agrees with the ABNF transcription", {
+  # A seeded sweep of IPv6 spellings with and without an IPv4 tail, judged by
+  # the production regex and by the independent transcription (OR-003).
+  set.seed(3986)
+  h16 <- function() {
+    paste(sample(c(0:9, letters[1:6]), sample(1:4, 1), TRUE), collapse = "")
+  }
+  octet <- function() {
+    sample(c("0", "9", "10", "99", "100", "199", "249", "255", "256", "01"), 1)
+  }
+  one <- function() {
+    parts <- vapply(seq_len(sample(0:8, 1)), function(i) h16(), "")
+    if (length(parts) > 0L && runif(1) < 0.5) {
+      parts[length(parts)] <- paste(replicate(4, octet()), collapse = ".")
+    }
+    s <- paste(parts, collapse = ":")
+    cut <- sample(0:length(parts), 1)
+    if (runif(1) < 0.7) {
+      s <- paste0(
+        paste(parts[seq_len(cut)], collapse = ":"), "::",
+        paste(parts[setdiff(seq_along(parts), seq_len(cut + 1L))],
+              collapse = ":")
+      )
+    }
+    s
+  }
+  inner <- unique(replicate(4000, one()))
+  got <- vapply(inner, rurl:::.rfc3986_valid_ip_literal, logical(1))
+  want <- rfc3986_abnf_accepts(paste0("http://[", inner, "]/"))
+  expect_gt(sum(want & grepl(".", inner, fixed = TRUE)), 50L)
+  expect_identical(unname(got), unname(want))
+})
