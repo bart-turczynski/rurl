@@ -325,6 +325,61 @@ test_that("WHATWG serializes embedded-IPv4 IPv6 literals", {
   }
 })
 
+test_that("WHATWG serializes an IPv6 literal that ends in `::`", {
+  # RURL-sqmhtldq. strsplit() dropped the empty side after a trailing "::", so
+  # the serializer gave up and returned the literal as written. The URL
+  # Standard compresses only a run of two or more 0 pieces, so a single
+  # trailing zero piece is written out.
+  cases <- c(
+    "http://[1:2:3:4:5:6:7::]/" = "[1:2:3:4:5:6:7:0]",
+    "foo://[2001:DB8::]/" = "[2001:db8::]",
+    "foo://[1:0::]/" = "[1::]",
+    "foo://[0::]/" = "[::]"
+  )
+  for (u in names(cases)) {
+    expect_identical(
+      get_host(u, url_standard = "whatwg", scheme_acceptance = "general"),
+      unname(cases[[u]]),
+      info = u
+    )
+  }
+  expect_identical(
+    get_host("http://[1:2:3:4:5:6:7::]/", url_standard = "whatwg"),
+    "[1:2:3:4:5:6:7:0]"
+  )
+  # The other arms never run the WHATWG serializer, and do not move.
+  for (std in list(NULL, "rfc3986")) {
+    expect_identical(
+      get_host("http://[1:2:3:4:5:6:7::]/", url_standard = std),
+      "[1:2:3:4:5:6:7::]",
+      info = format(std)
+    )
+  }
+  expect_identical(
+    get_host("http://[1:2:3:4:5:6:7::]/"),
+    get_host("http://[1:2:3:4:5:6:7::]/", url_standard = NULL)
+  )
+  # The serialized URL and the match key follow the host.
+  expect_identical(
+    serialize_url("http://[1:2:3:4:5:6:7::]/a", standard = "whatwg"),
+    "http://[1:2:3:4:5:6:7:0]/a"
+  )
+  expect_identical(
+    get_url_key("http://[1:2:3:4:5:6:7::]/a"),
+    get_url_key("http://[1:2:3:4:5:6:7:0]/a")
+  )
+})
+
+test_that("the WHATWG IPv6 serializer returns an invalid literal as written", {
+  # An empty field from a stray ":" or a second "::" must fail, not be repaired
+  # into a valid-looking literal; the host model rejects these upstream.
+  bad <- c(
+    "[1::2::]", "[1:::]", "[:::]", "[1:2:3:4:5:6:7:8::]",
+    "[1:2:3:4:5:6:7:8:]", "[1::2:]", "[:1::2]"
+  )
+  expect_identical(rurl:::.serialize_whatwg_ipv6_hosts_vec(bad), bad)
+})
+
 test_that("RFC 3986 keeps embedded-IPv4 IPv6 literal spelling", {
   for (u in c("http://[::127.0.0.1]/", "http://[::ffff:127.0.0.1]/")) {
     original_host <- sub("^http://(\\[[^]]+\\])/$", "\\1", u)
