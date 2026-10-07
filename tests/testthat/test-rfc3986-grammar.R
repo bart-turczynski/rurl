@@ -191,7 +191,7 @@ test_that("rfc3986 rejects an IPv4 ls32 with a leading-zero dec-octet", {
 test_that("the IPv6address regex agrees with the ABNF transcription", {
   # A seeded sweep of IPv6 spellings with and without an IPv4 tail, judged by
   # the production regex and by the independent transcription (OR-003).
-  set.seed(3986)
+  withr::local_seed(3986)
   h16 <- function() {
     paste(sample(c(0:9, letters[1:6]), sample(1:4, 1), TRUE), collapse = "")
   }
@@ -219,4 +219,33 @@ test_that("the IPv6address regex agrees with the ABNF transcription", {
   want <- rfc3986_abnf_accepts(paste0("http://[", inner, "]/"))
   expect_gt(sum(want & grepl(".", inner, fixed = TRUE)), 50L)
   expect_identical(unname(got), unname(want))
+})
+
+test_that("whatwg opaque hosts agree with special ones on IPv4 tails", {
+  # `.whatwg_opaque_host_one()` shares the IPv6address regex, so RURL-escneidz
+  # also reaches non-special schemes under whatwg. The WHATWG IPv6 parser
+  # admits an IPv4 part once at most six pieces precede it and fails a
+  # leading-zero IPv4 piece, so both paths must give the same verdict.
+  hosts <- c(
+    "fe80::5efe:1.2.3.4", "1:2:3:4:5:6:1.2.3.4", "::2:1.2.3.4",
+    "::01.2.3.4", "1:2:3:4:5:6::1.2.3.4", "1:2:3:4::5:6:7:8"
+  )
+  want <- c("ok", "ok", "ok", "error", "error", "error")
+  for (scheme in c("http", "foo")) {
+    urls <- paste0(scheme, "://[", hosts, "]/")
+    expect_identical(
+      get_parse_status(
+        urls, url_standard = "whatwg", scheme_acceptance = "general"
+      ),
+      want,
+      label = scheme
+    )
+  }
+  expect_identical(
+    get_host(
+      "foo://[fe80::5efe:1.2.3.4]/", url_standard = "whatwg",
+      scheme_acceptance = "general"
+    ),
+    "[fe80::5efe:102:304]"
+  )
 })

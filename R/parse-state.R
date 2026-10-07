@@ -359,9 +359,10 @@
 #   * IPv4address is subsumed by `reg-name` for ACCEPTANCE (a dotted quad is a
 #     valid reg-name: digits + "." are unreserved), so a distinct IPv4 grammar
 #     is not needed for the gate's verdict.
-#   * IPv6 uses the canonical fully-expanded alternation (RFC 4291 textual
-#     forms incl. `::` compression + trailing embedded IPv4); zone identifiers
-#     are unsupported (RFC 9844 restored RFC 3986's zone-less `IP-literal`).
+#   * IPv6 is the nine S3.2.2 `IPv6address` alternatives transcribed one-to-one
+#     (`::` compression, and `ls32` in its IPv4address form after any pieces
+#     the alternative allows); zone identifiers are unsupported (RFC 9844
+#     restored RFC 3986's zone-less `IP-literal`).
 #   * Scheme-specific restrictions are NOT generic gates (D1 rule 6): a
 #     comma-less `data:` or a `mailto:` with a fragment is an `ok` generic parse
 #     here; those are L5 scheme diagnostics, not gate failures.
