@@ -30,7 +30,8 @@ test_that("the diagnostics vocabulary is the pinned closed set", {
     c(
       "ipv4-number-form", "ipv4-non-dotted", "ipv4-short-form",
       "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero",
-      "ipv4-out-of-range", "encoded-dot-segment", "encoded-reserved-path-byte",
+      "ipv4-out-of-range", "ipv6-non-canonical", "ipv6-embedded-ipv4",
+      "encoded-dot-segment", "encoded-reserved-path-byte",
       "explicit-default-port", "non-default-port", "invalid-reverse-solidus",
       "control-char-stripped", "leading-trailing-stripped",
       "host-charset-shimmed",

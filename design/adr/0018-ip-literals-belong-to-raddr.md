@@ -89,3 +89,40 @@ above. Carried by **RURL-cbrfphfr**. Until it is answered, D3 stands.
 What would justify revisiting this ADR: `raddr` shipping that dialect, or
 `raddr` reaching CRAN and a measured re-run of the 18-host sample showing no
 regression.
+
+## Amendment: projecting `raddr` facts is not IP work in `rurl`
+
+*Added RURL-dxwsksor, 2026-10-07. Appended rather than edited in place so no
+line citation into this file moves.*
+
+**Owner ruling, 2026-09-30.** Projecting `raddr`'s address facts into `rurl`'s
+diagnostic vocabulary is not the "further IP work" D3 holds back. It replaces
+none of `rurl`'s host parsing and builds no adapter on `addr_curl()`, so it does
+not touch the open question above. D2 stands: the host/address boundary stays
+in `rurl`, and only a host `rurl` has already classified as an IPv6 literal is
+handed to `raddr`.
+
+**Owner ruling, 2026-10-07.** `raddr` is an `Imports` dependency, not
+`Suggests`. The owner's reason is that the ecosystem's packages (`rurl`,
+`raddr`, `ssrfr` and the rest) rely on each other rather than on
+alternatives. The diagnostics' reason is that a fact computed only when a
+suggested package happens to be installed would make a missing token mean
+nothing, and the facts exist so that a guard can rely on them. The floor is
+`raddr (>= 0.1.2)`, the current CRAN release on 2026-10-07. It carries
+`addr_embedded_kind()` and `addr_embeddings()` with all eight embedding kinds.
+
+What this changes in the text above:
+
+- §Consequences says the whole `rurl` reference to `raddr` is prose, with no
+  call site. From this amendment there is one: `.ipv6_host_diagnostics()` in
+  `R/diagnostics.R` calls `raddr::addr_whatwg()` and
+  `raddr::addr_embedded_kind()` to emit `ipv6-embedded-ipv4`.
+- D1 still holds: `rurl` holds no address ranges. The second IPv6 token,
+  `ipv6-non-canonical`, compares the literal with `rurl`'s existing WHATWG
+  IPv6 serializer. That serializer is URL-host-layer code that predates this
+  amendment, and no new address code was written for it.
+- D3 still holds for parsing. An adapter that replaces `R/parse-web.R`'s
+  host parse still waits on the open question.
+
+The token definitions and their clauses are ruling RUL-025 in
+`design/work/url-v3/registers/rulings.md`.

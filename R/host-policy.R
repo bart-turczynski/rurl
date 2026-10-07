@@ -26,18 +26,20 @@
 
 # Host-shape diagnostic tokens surfaced verbatim as `reasons` evidence. A subset
 # of .URL_DIAGNOSTICS restricted to the host facts (domain hygiene + IPv4
-# shorthand + the whatwg host-charset shim); path/port/scheme facts are not host
-# policy and are left to get_url_diagnostics().
+# shorthand + IPv6 spelling and embedding + the whatwg host-charset shim);
+# path/port/scheme facts are not host policy and are left to
+# get_url_diagnostics().
 .HOST_SHAPE_DIAGNOSTICS <- c(
   "domain-label-too-long", "domain-name-too-long", "domain-empty-label",
   "domain-hyphen-violation", "domain-std3-violation",
   "domain-invalid-ace-label", "host-charset-shimmed",
   "ipv4-number-form", "ipv4-non-dotted", "ipv4-short-form",
-  "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero", "ipv4-out-of-range"
+  "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero", "ipv4-out-of-range",
+  "ipv6-non-canonical", "ipv6-embedded-ipv4"
 )
 
 # Footgun tokens that disqualify an otherwise-registrable host from `seo`: the
-# domain hygiene facts plus the IPv4-shorthand facts (an IPv4 host is not
+# domain hygiene facts plus the IP literal facts (an IP host is not
 # registrable, but the guard is kept explicit and future-proof). The whatwg
 # host-charset shim is deliberately excluded -- a shimmed host is already caught
 # by the `web` LDH check.
@@ -46,7 +48,8 @@
   "domain-hyphen-violation", "domain-std3-violation",
   "domain-invalid-ace-label",
   "ipv4-number-form", "ipv4-non-dotted", "ipv4-short-form",
-  "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero", "ipv4-out-of-range"
+  "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero", "ipv4-out-of-range",
+  "ipv6-non-canonical", "ipv6-embedded-ipv4"
 )
 
 # Per-label char classes, anchored, case-insensitive. `web` is strict LDH (no

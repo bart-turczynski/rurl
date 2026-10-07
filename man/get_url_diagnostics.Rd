@@ -180,6 +180,34 @@ under \code{"whatwg"}; flags a numeric-looking \code{reg-name} under
 \code{"rfc3986"}, e.g. \code{256.1.1.1}).
 }
 
+\strong{Host --- IPv6 shape.} Facts about an IPv6 literal host, keyed to
+the literal as written and identical under both standards. Both are
+\strong{complete} for every literal the standard parses: each fires on
+every such host its definition covers, so its absence can be relied on.
+A literal the standard rejects (a zone ID, \code{IPvFuture}) is a parse
+failure and reports nothing.
+\itemize{
+\item \code{ipv6-non-canonical} --- the literal is not the WHATWG URL
+Standard's IPv6 serialization of its address: leading zeros, an
+uncompressed or wrongly chosen zero run, uppercase hex digits, or a
+dotted IPv4 tail (\code{[0:00::0:1]}, \code{[::ffff:127.0.0.1]}).
+That serialization follows RFC 5952 section 4 but never uses the
+section 5 mixed notation, so a literal written the way section 5
+recommends still fires it.
+\item \code{ipv6-embedded-ipv4} --- the address carries an IPv4
+address under one of the embeddings \code{raddr::addr_embedded_kind()}
+recognizes: IPv4-mapped, IPv4-compatible, IPv4-translated, the NAT64
+well-known and local-use prefixes, 6to4, Teredo and ISATAP
+(\code{[::ffff:7f00:1]}, \code{[64:ff9b::7f00:1]}). Use
+\code{raddr::addr_embeddings()} for the kind and the IPv4 address.
+Absence means raddr recognizes no embedding, not that the address
+cannot reach IPv4: a network-specific NAT64 prefix (RFC 6052 section
+2.2) is not visible from the address alone.
+}
+An empty result is no evidence that an IPv6 host is safe to fetch:
+\code{[::1]} carries neither token. Judging the destination address is
+the caller's policy, not a diagnostic.
+
 \strong{Host --- DNS length, UTS-46 and charset.} Probed against the
 resolved host; IP literals are excluded.
 \itemize{

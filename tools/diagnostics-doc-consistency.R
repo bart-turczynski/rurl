@@ -200,7 +200,7 @@ finding <- function(id, ok, detail) {
   list(list(id = id, ok = ok, detail = detail))
 }
 
-check_diagnostics_docs <- function(root = ".", expected_n = 33L) {
+check_diagnostics_docs <- function(root = ".", expected_n = 35L) {
   e <- tryCatch(diagnostics_env(root), error = function(err) err)
   if (inherits(e, "error")) {
     return(finding("D0", FALSE, conditionMessage(e)))
