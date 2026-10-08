@@ -140,6 +140,14 @@ for name in "${MIRRORS[@]}"; do
   if ! git push "$name" --tags; then
     echo "mirror-refresh: WARNING pushing tags to '$name' did not fully succeed." >&2
   fi
+  # Archive anchors live under refs/archive/, which is neither heads nor tags,
+  # so neither push above carries them (RURL-bgsonqdo). Guarded because a glob
+  # refspec that matches nothing is an error, and a clone that never fetched
+  # refs/archive/* has nothing to add.
+  if [ -n "$(git for-each-ref --count=1 refs/archive)" ] &&
+     ! git push "$name" 'refs/archive/*:refs/archive/*'; then
+    echo "mirror-refresh: WARNING pushing refs/archive/* to '$name' did not fully succeed." >&2
+  fi
 
   # main is the one ref that is not best-effort: it is what the mirror exists
   # to hold. Pushed from the remote-tracking ref rather than the local branch,

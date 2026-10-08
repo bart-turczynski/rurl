@@ -5,8 +5,10 @@
 - **Tracking:** RURL-wsphrtjc (the blocker this closes), parent epic
   RURL-dorofzmb. Retires the operative half of **P0.1**, **P0.2** and **P0.11**;
   retires gate **G5**. Relates to ADR 0008 (design-docs home).
-- **Archive:** tags `v3-control-plane-final` (integration line) and
-  `v3-control-plane-final-main`.
+- **Archive:** `refs/archive/v3-control-plane-final` (integration line) and
+  `refs/archive/v3-control-plane-final-main`. Tags until 2026-10-08, moved out of
+  `refs/tags/` under RURL-bgsonqdo; fetch them as
+  [`design/backup-mirror.md`](../backup-mirror.md) says.
 
 ## Context
 
@@ -111,7 +113,7 @@ That is what G5 was reaching for and could not provide.
 **The acceptance chain ends here, on purpose.** A later reader will find records
 whose `state:` says `PROPOSED` and no seal recording their acceptance. That is
 accurate: they were merged, and merging is now what acceptance means. The prior
-mechanism and everything it produced remain readable at the archive tags.
+mechanism and everything it produced remain readable at the archive refs.
 
 **What this does not do.** It touches no parser semantics, no public surface, no
 test and no conformance fixture. `design/` is `.Rbuildignore`d, so none of it

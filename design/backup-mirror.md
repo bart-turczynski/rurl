@@ -106,7 +106,7 @@ Measured 2026-08-09 against `origin/main` = `62c9fda`.
 | `feat/v3-protocol-hardening` | `fa5355f` | 2026-08-01 | 107 `-`, 0 `+` | **Abandoned.** Same — fully upstream. |
 | `fix/oracle-spec-pin` | `fa5355f` | 2026-08-01 | 107 `-`, 0 `+` | **Abandoned.** A second name for the same commit as the row above. |
 | `fix/verification-feedback-time` | `a8d109d` | 2026-08-01 | 83 `-`, 0 `+` | **Abandoned.** Same — fully upstream. |
-| `chore/seal-p0.6-g3-acceptance-3` | `584d800` | 2026-07-26 | 0 `-`, 1 `+` | **Abandoned, already declared.** `origin` carries the tag `abandoned/seal-p0.6-g3-acceptance-3` at this exact commit, so the ruling exists on the forge and the object is not mirror-only. It is a phase-3 *seal*, and [ADR 0014](adr/0014-retire-the-v3-control-plane.md) retired seals entirely. |
+| `chore/seal-p0.6-g3-acceptance-3` | `584d800` | 2026-07-26 | 0 `-`, 1 `+` | **Abandoned, already declared.** `origin` carries the archive anchor `refs/archive/abandoned/seal-p0.6-g3-acceptance-3` (a tag until 2026-10-08) at this exact commit, so the ruling exists on the forge and the object is not mirror-only. It is a phase-3 *seal*, and [ADR 0014](adr/0014-retire-the-v3-control-plane.md) retired seals entirely. |
 | `chore/drop-remotes` | `de68e2d` | 2026-07-27 | 0 `-`, 1 `+` | **Abandoned** (owner ruling, 2026-08-09). All three files it touched are accounted for on `main`: `DESCRIPTION` has no `Remotes:` block; the `NEWS.md` bullet it added is present verbatim (`NEWS.md:1243`); and the one `CLAUDE.md` line it edited no longer exists anywhere, that file having since become a thin `@AGENTS.md` import — so that edit is moot rather than lost. |
 | `docs/p0.11-forge-binding` | `85d4b38` | 2026-08-01 | 0 `-`, 2 `+` | **Abandoned** (owner ruling, 2026-08-09). `design/work/url-v3/decisions/P0.11-forge-binding-ratifying-identity.md` at this tip is **byte-identical** to the copy on `origin/main`, so the content landed. |
 | `fix/error-clean-url-invariant` | `70e1eab` | 2026-08-02 | 0 `-`, 2 `+` | **Abandoned** (owner ruling, 2026-08-09). The `clean_url[parse_status == "error"] <- NA_character_` seam and its comment are present verbatim in `R/parse.R` on `origin/main` (line 2548), so the fix landed. |
@@ -129,11 +129,52 @@ through a squash, which rewrites the patch-id. Read a `+` as *unproven*, never a
 
 ### Other refs
 
-- The three `abandoned/*` tags (`gitlab-ci-probe`, `seal-p0.11`,
+- The three `abandoned/*` anchors (`gitlab-ci-probe`, `seal-p0.11`,
   `seal-p0.6-g3-acceptance-3`) all exist **on `origin` too**, at the same
-  objects. Their status is carried in the ref name and is not re-triaged here.
+  objects, now as `refs/archive/abandoned/*` (see "Archive anchors" below). The
+  mirror still holds them as tags as well, because it never deletes. Their
+  status is carried in the ref name and is not re-triaged here.
 - `refs/cmux/last-turn/13f17fc…` is an agent-harness ref that got picked up by
   the `--mirror` clone. It is not project history.
 
 Ref census, 2026-08-09: **39 refs** — 11 `refs/heads`, 19 `refs/tags`,
 8 `refs/remotes`, 1 `refs/cmux`.
+
+## Archive anchors live under `refs/archive/`, not `refs/tags/`
+
+A tag on `origin` is public: GitLab's tag page, the GitHub push mirror and
+r-universe (which lists every tag next to the real releases) all show it. So
+since 2026-10-08 (RURL-bgsonqdo) `refs/tags/` holds **release tags only**
+(`vX.Y.Z`, plus `v1`, the 1.0.0 release tag that `NEWS.md` links to), and every
+internal anchor is a ref under `refs/archive/<name>`, keeping the name it had as
+a tag:
+
+| Anchor | Object | Cited by |
+|---|---|---|
+| `v3/cp-snapshot-1`, `-2`, `-3` | annotated tags `a0280a1`, `acd4a47`, `0c81a4f` | `work/url-v3/` records and `registers/snapshots.log` |
+| `v3-control-plane-final`, `v3-control-plane-final-main` | annotated tags `adb931a`, `78c2a4e` | [ADR 0014](adr/0014-retire-the-v3-control-plane.md) |
+| `abandoned/seal-p0.6-g3-acceptance-3`, `abandoned/seal-p0.11`, `abandoned/gitlab-ci-probe` | commits `584d800`, `904afa7`, `594bc46` | this file |
+
+Each anchor is the same object its tag was, annotated tag objects included.
+`abandoned/seal-p0.11` (1 commit) and `abandoned/gitlab-ci-probe` (3 commits)
+reach commits no branch holds, so these refs are what keeps them on `origin`.
+The archival records under `work/url-v3/` still say "tag" and are not edited
+(`design/AGENTS.md`); read every such name as `refs/archive/<name>`.
+
+A clone does not fetch `refs/archive/*` by default. To get them:
+
+```sh
+git fetch origin 'refs/archive/*:refs/archive/*'
+# or every fetch:
+git config --add remote.origin.fetch '+refs/archive/*:refs/archive/*'
+```
+
+`tools/mirror-refresh.sh` pushes `refs/archive/*` to the mirror when the clone
+holds any.
+
+**New anchors go under `refs/archive/`, never `refs/tags/`:**
+`git update-ref refs/archive/<name> <commit>` and
+`git push origin 'refs/archive/<name>'`. A tag protected by the `v*` rule can be
+deleted only in GitLab's web interface, and a protected tag in a push makes
+GitLab reject every ref in that push, so a wrong tag costs more to remove than
+to never create.
