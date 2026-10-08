@@ -142,8 +142,9 @@ Ref census, 2026-08-09: **39 refs** — 11 `refs/heads`, 19 `refs/tags`,
 
 ## Archive anchors live under `refs/archive/`, not `refs/tags/`
 
-A tag on `origin` is public: GitLab's tag page, the GitHub push mirror and
-r-universe (which lists every tag next to the real releases) all show it. So
+A tag on `origin` is public: GitLab's tag page and r-universe (which lists
+every tag next to the real releases) show it, and the GitHub push mirror has
+carried tags too, even though it is configured for protected branches only. So
 since 2026-10-08 (RURL-bgsonqdo) `refs/tags/` holds **release tags only**
 (`vX.Y.Z`, plus `v1`, the 1.0.0 release tag that `NEWS.md` links to), and every
 internal anchor is a ref under `refs/archive/<name>`, keeping the name it had as
@@ -158,8 +159,9 @@ a tag:
 Each anchor is the same object its tag was, annotated tag objects included.
 `abandoned/seal-p0.11` (1 commit) and `abandoned/gitlab-ci-probe` (3 commits)
 reach commits no branch holds, so these refs are what keeps them on `origin`.
-The archival records under `work/url-v3/` still say "tag" and are not edited
-(`design/AGENTS.md`); read every such name as `refs/archive/<name>`.
+The records under `work/url-v3/` that name these anchors (the `decisions/`
+frontmatter, contracts, registers) are frozen history and still say "tag"; they
+are not edited. Read every such name as `refs/archive/<name>`.
 
 A clone does not fetch `refs/archive/*` by default. To get them:
 
@@ -169,12 +171,24 @@ git fetch origin 'refs/archive/*:refs/archive/*'
 git config --add remote.origin.fetch '+refs/archive/*:refs/archive/*'
 ```
 
-`tools/mirror-refresh.sh` pushes `refs/archive/*` to the mirror when the clone
-holds any.
+`tools/mirror-refresh.sh` fetches `refs/archive/*` from `origin` itself and
+pushes them to the mirror, so the mirror gets them without that config.
+`tools/mirror-freshness.sh` still checks only `main`.
+
+**The mirror still holds the old tags**, because it never deletes, so a
+`git fetch backup` brings them back into the clone as tags, and a later
+`git push --tags` would put them on `origin` again. Delete any that reappear
+(`git tag -d <name>`) and never push `--tags` to `origin`. To stop the import:
+
+```sh
+git config remote.backup.tagOpt --no-tags
+```
 
 **New anchors go under `refs/archive/`, never `refs/tags/`:**
 `git update-ref refs/archive/<name> <commit>` and
-`git push origin 'refs/archive/<name>'`. A tag protected by the `v*` rule can be
-deleted only in GitLab's web interface, and a protected tag in a push makes
-GitLab reject every ref in that push, so a wrong tag costs more to remove than
-to never create.
+`git push origin 'refs/archive/<name>'`. That push goes to a remote, so the
+pre-push hook runs the full gate for it (minutes), as for any push to `origin`.
+A push cannot delete a tag protected by the `v*` rule (GitLab: "You can only
+delete protected tags using the web interface"), and one such ref makes GitLab
+reject every ref in that push, so a wrong tag costs more to remove than to
+never create.

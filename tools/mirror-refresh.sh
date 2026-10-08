@@ -56,8 +56,9 @@
 # to run by hand when you want to know rather than assume.
 #
 # NOTHING IS EVER DELETED. No `--prune`, no `--mirror`, no force. The mirror
-# holds branch tips and `abandoned/*` tags found nowhere else -- see
-# design/backup-mirror.md -- and that is its whole value.
+# holds branch tips found nowhere else, and the old internal tags that
+# origin now keeps only as refs/archive/* -- see design/backup-mirror.md --
+# and that is its whole value.
 #
 # Usage:
 #   tools/mirror-refresh.sh          # fetch upstream, push every local-path mirror
@@ -115,6 +116,11 @@ fi
 # goes to the wire itself and warns if it cannot.
 if ! git fetch --quiet "$UPSTREAM" 2>/dev/null; then
   echo "mirror-refresh: WARNING could not fetch '$UPSTREAM'; refreshing from whatever this clone already has" >&2
+fi
+# The default refspec carries heads only, so archive anchors are fetched by
+# name (RURL-bgsonqdo). A forge with none is not an error.
+if ! git fetch --quiet "$UPSTREAM" '+refs/archive/*:refs/archive/*' 2>/dev/null; then
+  echo "mirror-refresh: WARNING could not fetch refs/archive/* from '$UPSTREAM'" >&2
 fi
 
 UPSTREAM_REF="refs/remotes/$UPSTREAM/main"
