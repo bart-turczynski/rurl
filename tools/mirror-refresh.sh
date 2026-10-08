@@ -56,8 +56,9 @@
 # to run by hand when you want to know rather than assume.
 #
 # NOTHING IS EVER DELETED. No `--prune`, no `--mirror`, no force. The mirror
-# holds branch tips and `abandoned/*` tags found nowhere else -- see
-# design/backup-mirror.md -- and that is its whole value.
+# holds branch tips found nowhere else, and the old internal tags that
+# origin now keeps only as refs/archive/* -- see design/backup-mirror.md --
+# and that is its whole value.
 #
 # Usage:
 #   tools/mirror-refresh.sh          # fetch upstream, push every local-path mirror
@@ -116,6 +117,11 @@ fi
 if ! git fetch --quiet "$UPSTREAM" 2>/dev/null; then
   echo "mirror-refresh: WARNING could not fetch '$UPSTREAM'; refreshing from whatever this clone already has" >&2
 fi
+# The default refspec carries heads only, so archive anchors are fetched by
+# name (RURL-bgsonqdo). A forge with none is not an error.
+if ! git fetch --quiet "$UPSTREAM" '+refs/archive/*:refs/archive/*' 2>/dev/null; then
+  echo "mirror-refresh: WARNING could not fetch refs/archive/* from '$UPSTREAM'" >&2
+fi
 
 UPSTREAM_REF="refs/remotes/$UPSTREAM/main"
 UPSTREAM_SHA="$(git rev-parse --verify --quiet "$UPSTREAM_REF" || true)"
@@ -139,6 +145,14 @@ for name in "${MIRRORS[@]}"; do
   fi
   if ! git push "$name" --tags; then
     echo "mirror-refresh: WARNING pushing tags to '$name' did not fully succeed." >&2
+  fi
+  # Archive anchors live under refs/archive/, which is neither heads nor tags,
+  # so neither push above carries them (RURL-bgsonqdo). Guarded because a glob
+  # refspec that matches nothing is an error, and a clone that never fetched
+  # refs/archive/* has nothing to add.
+  if [ -n "$(git for-each-ref --count=1 refs/archive)" ] &&
+     ! git push "$name" 'refs/archive/*:refs/archive/*'; then
+    echo "mirror-refresh: WARNING pushing refs/archive/* to '$name' did not fully succeed." >&2
   fi
 
   # main is the one ref that is not best-effort: it is what the mirror exists

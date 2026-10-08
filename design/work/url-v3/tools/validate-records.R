@@ -1433,8 +1433,9 @@ con_checks <- (pass + length(fail)) - con_checks_before
 ## fails a machine check -- one clearable by regenerating rather than by a
 ## ratification ceremony.
 ##
-## The gates/ records are deleted with it; both are recoverable from the tag
-## v3-control-plane-final.
+## The gates/ records are deleted with it; both are recoverable from
+## refs/archive/v3-control-plane-final (a tag until 2026-10-08; see
+## design/backup-mirror.md).
 
 ## --- G3 contract-family records (§6 artifacts 3–10 + 4 + the G3.X capstone) ----
 ## The ten design/work/url-v3/contracts/*.md are a record family parallel to the
