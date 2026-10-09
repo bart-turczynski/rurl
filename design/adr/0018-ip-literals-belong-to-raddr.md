@@ -126,3 +126,68 @@ What this changes in the text above:
 
 The token definitions and their clauses are ruling RUL-025 in
 `design/work/url-v3/registers/rulings.md`.
+
+## Amendment: the open question is closed, and D3 is replaced
+
+*Added RURL-cbrfphfr, 2026-10-09. Appended rather than edited in place so no
+line citation into this file moves. The open question, D3 and the 2026-10-07
+amendment's last bullet above stay as written; this section supersedes them.*
+
+**Owner ruling, 2026-10-08: no.** `raddr` does not grow a URL-host-layer curl
+dialect. The open question is closed. `R/parse-web.R` therefore keeps its
+libcurl-style ("narrow") IPv4 reading for good: it is the reading for
+`url_standard = NULL` and `"rfc3986"`, and no `raddr` function replaces it.
+The counter-evidence in §Consequences still binds. `raddr::addr_curl()` is a
+resolver-layer reading, and no adapter is ever built on it.
+
+**D3, replaced.** The old D3 held back IP work "until `raddr` ships a
+URL-host-layer curl dialect". Under the ruling above that wait would never end,
+so the clause is replaced by this one:
+
+> **D3 — new address code goes to `raddr`, never into `rurl`.** `rurl` may
+> adapt one of `raddr`'s dialect readings at the URL layer where that reading
+> is the standard's own. Under `url_standard = "whatwg"` the WHATWG IPv4 host
+> reading is `raddr::addr_whatwg()`, called through an adapter in
+> `R/parse-web.R`. `rurl` keeps everything around the reading that is URL
+> layer and not address layer: the host/address gate
+> (`.host_ends_in_number_vec()`, D2), tab and newline stripping,
+> percent-decoding, bracket syntax, URL failure semantics, the narrow reading
+> for `NULL` and `"rfc3986"`, and its own WHATWG IPv6 serializer. Requests for
+> in-tree IPv6 classification are still answered by projecting `raddr`'s
+> facts, never by new address code here.
+
+What the adapter may and may not do:
+
+- It is called only for a host that the ends-in-a-number gate has already
+  sent to the IPv4 parser, and only under `whatwg`. `raddr` has no reg-name
+  concept (D2), so the gate is what keeps `0xg`, `0x1p`, `.` and `..` names.
+- An `addr_whatwg()` rejection at that point is a WHATWG IPv4 failure, which
+  fails the URL, exactly as the in-tree reading it replaces did. An answer
+  that is not an IPv4 address (`addr_whatwg()` also reads IPv6) is a
+  rejection too.
+- The in-tree WHATWG IPv4 number parser is deleted, not kept as a fallback or
+  as a test oracle. The tests pin the standard's expected output
+  (`tests/testthat/test-url-standard-whatwg-ipv4.R`).
+
+The gain is single ownership of the WHATWG IPv4 reading, not a large deletion.
+At `main` `da6becd` the in-tree WHATWG reading and `addr_whatwg()` agreed on
+all 52 hosts that pass `rurl`'s ends-in-a-number gate. That population is the
+right one for this adapter, because the adapter only ever sees hosts the gate
+has passed. The reg-names the gate keeps out (`0xg`, `0x1p`, `.`, `..`), which
+§Consequences requires a corpus to contain, are covered separately: rurl
+classified no host outside the gate as IPv4, and the expected-output tests pin
+those names staying names.
+
+A known exposure, accepted by the owner: `addr_whatwg()` is read from the
+installed `raddr`, which DESCRIPTION bounds only from below. A `raddr` release
+that changes the reading changes an installed rurl's `whatwg` output, and so
+its `whatwg` URL keys, without a rurl release or a key-version bump. The
+expected-output tests make such a change fail rurl's own checks, which CRAN's
+reverse-dependency check runs on every `raddr` submission. punycoder and pslr
+already expose rurl the same way.
+
+The diagnostics in `R/diagnostics.R` keep their own per-part reader
+(`.parse_ipv4_part_value()`). It computes shape facts identically under
+`whatwg` and `rfc3986`, including an out-of-range value that `addr_whatwg()`
+only reports as a rejection, so it is not the address reading this
+amendment moves.

@@ -563,13 +563,10 @@
   .web_chr(out)
 }
 
-# IPv4 normalization, in the two flavors rurl ships. This used to be TWO
-# functions that deliberately disagreed -- this one and
-# `.parse_whatwg_ipv4_host()` in front of the parser (RURL-ezhzpkhg deletion 4)
-# -- and reconciling them is most of that deletion, because what they disagreed
-# about is not how an address is SPELLED but whether a token is an address AT
-# ALL. Three forms, and WHATWG reads every one of them as an address where the
-# narrow flavor reads a registered name:
+# IPv4 normalization, in the two flavors rurl ships (`host_ipv4`). They
+# disagree not about how an address is SPELLED but about whether a token is an
+# address AT ALL. Three forms, and WHATWG reads every one of them as an address
+# where the narrow flavor reads a registered name:
 #
 #   empty hex digits   `0x` is the number 0 to WHATWG (its IPv4-number parser
 #                      strips the "0x" and returns 0 for what is left), and the
@@ -580,22 +577,24 @@
 #                      not, so `0Xff` is a name and `0xff` the address
 #                      0.0.0.255
 #
-# One function with a flag rather than two functions, so the disagreement is
-# stated in one place instead of having to be rediscovered by diffing them. The
-# narrow success set is a strict SUBSET of the WHATWG one and the two agree on
-# every value in it, which is why the whatwg profile needs no fallback to the
-# narrow one.
+# The narrow flavor is rurl's own: libcurl's URL-host reading, calibrated
+# against real libcurl, for `url_standard = NULL` and `"rfc3986"`. The WHATWG
+# flavor is NOT read here. It is `raddr::addr_whatwg()`, through
+# `.whatwg_ipv4_read()` (ADR 0018, 2026-10-09 amendment: the open question
+# closed "no", so the narrow reading stays in tree for good, and the standard's
+# own reading has one owner). The narrow success set is a strict SUBSET of the
+# WHATWG one and the two agree on every value in it, which is why the whatwg
+# profile needs no fallback to the narrow one.
 #
 # A token that is not an address is returned UNCHANGED -- it is simply a
 # registered name -- never rejected. Under `whatwg` a host that "ends in a
 # number" and is NOT an address is fatal, but that is the standard's host model
 # (`.apply_host_standard_model_vec()`), not the parser's business.
-.web_ipv4_number <- function(part, ipv4) {
+.web_ipv4_number <- function(part) {
   if (!nzchar(part)) {
     return(NA_real_)
   }
-  hex <- if (identical(ipv4, "whatwg")) "^0[xX]" else "^0x"
-  if (grepl(hex, part, useBytes = TRUE)) {
+  if (grepl("^0x", part, useBytes = TRUE)) {
     digits <- substring(part, 3L)
     base <- 16
   } else if (grepl("^0[0-9]+$", part, useBytes = TRUE)) {
@@ -607,8 +606,8 @@
   }
   if (!nzchar(digits)) {
     # Empty only ever means "the prefix was the whole part" -- a wholly empty
-    # `part` returned above -- so this is WHATWG's `0x` -> 0 rule.
-    return(if (identical(ipv4, "whatwg")) 0 else NA_real_)
+    # `part` returned above -- and a bare `0x` is a name to libcurl.
+    return(NA_real_)
   }
   chars <- strsplit(digits, "", fixed = TRUE)[[1L]]
   vals <- match(.ascii_toupper(chars), c(0:9, "A", "B", "C", "D", "E", "F")) - 1
@@ -619,29 +618,17 @@
 }
 
 .web_ipv4_normalize <- function(host, ipv4 = "narrow") {
-  # WHATWG removes ONE empty final part before splitting; the narrow flavor
-  # removes none. Cut on the BYTE vector, never with `substring()` on a
-  # `nchar(type = "bytes")` length -- the host may hold high bytes here, and
-  # mixing byte lengths with character indices is the defect class RURL-kmpnbvdl
-  # was. `work` is what gets read; `host` is what a non-address returns, so a
-  # second trailing dot (`1.2.3.4..`, not an address either way) is given back
-  # exactly as written.
-  work <- host
   if (identical(ipv4, "whatwg")) {
-    hb <- .web_bytes(host)
-    if (length(hb) > 0L && hb[length(hb)] == 0x2EL) {
-      work <- .web_chr(hb[-length(hb)])
-    }
+    return(.web_ipv4_whatwg(host))
   }
-  parts <- strsplit(work, ".", fixed = TRUE)[[1L]]
+  parts <- strsplit(host, ".", fixed = TRUE)[[1L]]
   # `strsplit` drops a trailing empty field, so a trailing dot is detected from
   # the string, not from `parts` -- under `narrow`, `1.2.3.4.` must stay a name.
   if (length(parts) == 0L || length(parts) > 4L ||
-      endsWith(work, ".")) {
+      endsWith(host, ".")) {
     return(host)
   }
-  numbers <- vapply(parts, .web_ipv4_number, numeric(1), ipv4 = ipv4,
-                    USE.NAMES = FALSE)
+  numbers <- vapply(parts, .web_ipv4_number, numeric(1), USE.NAMES = FALSE)
   if (anyNA(numbers)) {
     return(host)
   }
@@ -662,6 +649,54 @@
     floor(value / 256^pow) %% 256
   }, numeric(1), USE.NAMES = FALSE)
   paste(octets, collapse = ".")
+}
+
+# The WHATWG flavor at the parser seam, with the narrow flavor's contract: the
+# dotted quad when the host is an address, the host UNCHANGED otherwise. The
+# ends-in-a-number gate runs first, so `.whatwg_ipv4_read()` only sees a host
+# the standard's host parser would hand to its IPv4 parser; every token the
+# gate passes and the reading rejects stays a name HERE and is fatal in the
+# host model (`.apply_host_standard_model_vec()`). The ASCII test comes before
+# the gate because the gate is an ICU regex, and ICU refuses a declared-UTF-8
+# string holding invalid octets -- which the seam may be judging
+# (RURL-kmpnbvdl). No address holds a non-ASCII byte, so nothing is lost.
+.web_ipv4_whatwg <- function(host) {
+  if (any(.web_bytes(host) >= 0x80L) || !.host_ends_in_number_vec(host)) {
+    return(host)
+  }
+  read <- .whatwg_ipv4_read(host)
+  if (is.na(read)) host else read
+}
+
+# The WHATWG IPv4 parser (https://url.spec.whatwg.org/#concept-ipv4-parser),
+# delegated: the reading is `raddr::addr_whatwg()` (ADR 0018, D3 as replaced
+# 2026-10-09). Vectorized; the dotted quad, or NA where the IPv4 parser
+# returns failure. Call it only on hosts that passed the ends-in-a-number gate
+# (`.host_ends_in_number_vec()`): `raddr` has no reg-name concept, so that gate
+# is what keeps `0xg` and `.` names (D2). Two inputs are rejections here
+# without asking `raddr`, and one answer is a rejection after it:
+#
+#   NA             no host, no address.
+#   non-ASCII      the standard runs its IPv4 parser on the ASCII domain, no
+#                  code point outside ASCII is an IPv4-number digit, and
+#                  `raddr` stops on invalid UTF-8 rather than declining it.
+#   an IPv6 answer `addr_whatwg()` reads IPv6 literals as well. In the host
+#                  position one arrives bracketed and never reaches here, but
+#                  an unbracketed `::1.2.3.4` ends in a number, so the family
+#                  is checked rather than assumed.
+.whatwg_ipv4_read <- function(host) {
+  out <- rep(NA_character_, length(host))
+  ascii <- vapply(host, function(h) {
+    !is.na(h) && all(.web_bytes(h) < 0x80L)
+  }, logical(1), USE.NAMES = FALSE)
+  if (!any(ascii)) {
+    return(out)
+  }
+  addr <- raddr::addr_whatwg(host[ascii])
+  family <- as.character(raddr::addr_family(addr))
+  v4 <- !is.na(family) & family == "v4"
+  out[which(ascii)[v4]] <- as.character(addr)[v4]
+  out
 }
 
 # IPv6 literal: validate, then reproduce libcurl's spelling. This is NOT
@@ -1061,8 +1096,9 @@
 #             lowercase "0x" prefix only. The no-selector default and the
 #             `rfc3986` setting.
 #   "whatwg"  WHATWG's IPv4 parser, which reads all three of them
-#             (`.web_ipv4_normalize()` lists them). A strict SUPERSET of
-#             "narrow", agreeing on every value they both accept.
+#             (`.web_ipv4_normalize()` lists them), as `raddr::addr_whatwg()`
+#             behind `.web_ipv4_whatwg()`. A strict SUPERSET of "narrow",
+#             agreeing on every value they both accept.
 #
 # The last of the five compensations to move in (RURL-ezhzpkhg deletion 4), and
 # the one whose regex gate did more than narrow a set. `(.*)$` let ICU's "$"
