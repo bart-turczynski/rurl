@@ -458,7 +458,10 @@
 # `.parse_whatwg_ipv4_host()` / `.parse_whatwg_ipv4_number()` went with it,
 # reconciled into `.web_ipv4_normalize(host, ipv4)` -- one function with a flag,
 # so the three forms the two flavors disagree about are stated once instead of
-# having to be rediscovered by diffing two near-identical normalizers.
+# having to be rediscovered by diffing two near-identical normalizers. The
+# WHATWG flavor has since left the tree altogether: it is
+# `raddr::addr_whatwg()` behind `.whatwg_ipv4_read()` (RURL-cbrfphfr, ADR 0018's
+# 2026-10-09 amendment).
 #
 # `.host_ends_in_number_vec()` STAYS: it is also the WHATWG host model's trigger
 # in `.apply_host_standard_model_vec()`, which is where "a host that ends in a
@@ -1676,11 +1679,10 @@
 #   - rfc3986: parse faithfully as a reg-name -- restore the original token and
 #     treat it as an IP only if the ORIGINAL was already a canonical quad.
 #     Never fatal (every such token is a valid RFC 3986 reg-name).
-#   - whatwg: adopt the parser's coercion; it is a valid WHATWG IPv4 exactly
-#     when that output is a canonical dotted-quad. When it is not (out-of-range
-#     or > 4 parts, which the parser leaves literal), the WHATWG IPv4 parser
-#     rejects it,
-#     so the row is fatal.
+#   - whatwg: every host that ends in a number is read by the WHATWG IPv4
+#     parser (`.whatwg_ipv4_read()`, i.e. `raddr::addr_whatwg()`). An address
+#     replaces the host; a failure (out-of-range, > 4 parts, a digit outside
+#     its radix) makes the row fatal.
 # Non-attempt hosts (ordinary names, IPv6, missing) pass through untouched.
 # Returns updated `host`, `is_ip`, and a `fatal` mask the caller folds into the
 # null-row set.
@@ -1725,8 +1727,10 @@
     # `192.168.0.1`. The web parser itself never takes the IPv4 reading of a
     # token holding a "%", and that stays so: it reproduces the engine it was
     # calibrated against (ADR 0018); this is the standard's host MODEL, layered
-    # over it, and the address grammar it applies is the one already in tree
-    # (`.web_ipv4_normalize()`).
+    # over it, and the address reading it applies is the standard's IPv4
+    # parser as `raddr` owns it (`.whatwg_ipv4_read()`, ADR 0018's
+    # 2026-10-09 amendment). An NA there is the IPv4 parser's failure, which
+    # fails the host and so the URL.
     reg_like <- !is.na(host) & host != "" &
       !stringi::stri_startswith_fixed(host, "[")
     reg_like[is.na(reg_like)] <- FALSE
@@ -1745,12 +1749,9 @@
     }
     att <- reg_like & .host_ends_in_number_vec(candidate)
     if (any(att)) {
-      ipv4 <- vapply(
-        candidate[att], .web_ipv4_normalize, character(1), ipv4 = "whatwg",
-        USE.NAMES = FALSE
-      )
-      canonical <- .detect_ip_host_vec(ipv4)
-      host[att] <- ipv4
+      ipv4 <- .whatwg_ipv4_read(candidate[att])
+      canonical <- !is.na(ipv4)
+      host[att] <- ifelse(canonical, ipv4, candidate[att])
       is_ip[att] <- canonical
       fatal[att] <- !canonical
     }

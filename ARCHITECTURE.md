@@ -89,7 +89,10 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   header carries the measured table. This is also where the five ex-compensation
   dials live as arguments (`host_charset`, `host_pct`, `last_at_userinfo`,
   `pqf_bytes`, `host_ipv4`), each fed by its `.web_*_policy()` mapper, plus the
-  host parser (`.web_parse_host()`) and the IPv4/IPv6 canonicalizers.
+  host parser (`.web_parse_host()`) and the IPv4/IPv6 canonicalizers. The
+  narrow (libcurl-style) IPv4 reading for `NULL` and `rfc3986` is in tree; the
+  WHATWG IPv4 reading is `raddr::addr_whatwg()` behind `.whatwg_ipv4_read()`
+  (ADR 0018, amended 2026-10-09).
 - **R/parse-state.R** — the non-web parse routes and the state model they share
   (ADR 0012 Layers 3a/3c/4a/4b). Five sections: the internal enum vocabularies
   (`.PATH_KIND`, `.HOST_KIND`, `.AUTHORITY_KIND`, `.WHATWG_HOST_FORM`,
@@ -248,7 +251,10 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   drives the `host_encoding = "keep"` spelling choice.
 - `.apply_host_standard_model_vec()` (R/parse-phases.R) — the `url_standard`
   host IPv4/reg-name model. No-op when `url_standard` is NULL; Stage-A-affecting
-  under a selector (enters the parse cache key). See ADR 0007.
+  under a selector (enters the parse cache key). See ADR 0007. Under `whatwg`
+  a host that ends in a number (`.host_ends_in_number_vec()`) is read by
+  `.whatwg_ipv4_read()` (R/parse-web.R), the adapter over
+  `raddr::addr_whatwg()`; an `NA` there is IPv4 failure and fails the URL.
 
 ## PSL delegation contract (R/domain.R)
 
@@ -458,8 +464,9 @@ only under `port_handling != "exclude"`.
 - `punycoder` (>= 1.2.1) — Punycode encoding/decoding.
 - `pslr` (>= 1.1.1) — Public Suffix List matching.
 - `raddr` (>= 0.1.2) — IP address facts: the `ipv6-embedded-ipv4` diagnostic
-  projects `addr_embedded_kind()` (ADR 0018 and its amendment). It brings in
-  `rlang` and `vctrs`.
+  projects `addr_embedded_kind()`, and under `url_standard = "whatwg"`
+  `addr_whatwg()` is the IPv4 host reading (ADR 0018 and its amendments). It
+  brings in `rlang` and `vctrs`.
 
 The syntactic URL parse is in-tree (`R/parse-web.R`); `curl` is no longer a
 dependency.
