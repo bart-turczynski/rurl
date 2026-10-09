@@ -626,3 +626,32 @@ test_that("the unicode decode seam is label-count preserving", {
     expected
   )
 })
+
+# --- A host of only U+FEFF (RURL-iiehsbfg) -----------------------------------
+#
+# UTS #46 maps U+FEFF to nothing, so WHATWG domain to ASCII leaves an empty
+# host and fails: the row is a parse failure, never an error for the whole
+# call. The raw form used to lose the mark in the backslash rewrite (stringi
+# drops a leading U+FEFF), so "http://﻿/p" read "p" as its host.
+
+test_that("whatwg fails a U+FEFF host as one row", {
+  expect_identical(
+    unname(get_host(c("http://a.com/", "http://%EF%BB%BF/"),
+      url_standard = "whatwg"
+    )),
+    c("a.com", NA)
+  )
+  raw <- c(
+    "http://﻿/p", "http://﻿", "http:﻿/p", "http:\\\\﻿\\p"
+  )
+  for (u in raw) {
+    expect_null(safe_parse_url(u, url_standard = "whatwg"), info = u)
+  }
+  # The mark maps to nothing inside a longer label.
+  expect_identical(
+    unname(get_host(c("http://﻿a.com/p", "http://a﻿.com/p"),
+      url_standard = "whatwg"
+    )),
+    c("a.com", "a.com")
+  )
+})
