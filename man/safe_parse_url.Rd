@@ -228,7 +228,8 @@ query is intentionally EXEMPT from \code{case_handling} (query values are
 case-sensitive — tokens, IDs, signatures), so under
 \code{case_handling = "lower"} or \code{"upper"} the \code{clean_url} is no longer
 uniformly cased: scheme/host/path fold but the query keeps its original
-case. Because \code{clean_url} is the \code{\link{canonical_join}} key, any
+case. Because \code{clean_url} is the key of the deprecated
+\code{\link{canonical_join}}, any
 non-"drop" mode also brings the query into that join key (so \code{?id=1} and
 \code{?id=2} stop collapsing, while \code{utm}-only differences still collapse under
 "filter").}
@@ -377,8 +378,8 @@ strip www / trailing slash / index page, drop the whole query, and drop
 a \strong{default} port only (\code{port_handling = "strip_default"}: a
 non-default port names a different origin and survives). Inspect
 the resolved bundle with
-\code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
-(forwarded through its \code{...}).}
+\code{\link{url_profile}}. Also accepted by the deprecated
+\code{\link{canonical_join}} (forwarded through its \code{...}).}
 
 \item{credential_handling}{How \code{clean_url} treats a URL whose parsed
 authority carried a userinfo delimiter (\verb{user@}, \verb{user:password@}, a bare
