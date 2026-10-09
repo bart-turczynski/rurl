@@ -75,7 +75,27 @@ test_that("the deprecation fires exactly once and names both replacements", {
   expect_match(seen, "4.0.0", fixed = TRUE)
   expect_match(seen, "url_*_join()", fixed = TRUE)
   expect_match(seen, "get_clean_url(A$URL)", fixed = TRUE)
-  expect_match(seen, "merge(A, B, by = \"k\")", fixed = TRUE)
+  expect_match(
+    seen, "merge(A, B, by = \"k\", incomparables = NA)", fixed = TRUE
+  )
+})
+
+test_that("the recipe the warning gives needs incomparables = NA", {
+  # get_clean_url() is NA for a URL with no clean form, and merge() pairs NA
+  # keys with each other unless told not to. canonical_join() never matches
+  # such rows, so the recipe has to say incomparables = NA.
+  A <- data.frame(URL = c("https://Example.com/page", "mailto:x@example.com"),
+                  ValA = 1:2, stringsAsFactors = FALSE)
+  B <- data.frame(URL = c("https://example.com/page?utm_source=nl", "nope"),
+                  ValB = c("x", "y"), stringsAsFactors = FALSE)
+  A$k <- get_clean_url(A$URL)
+  B$k <- get_clean_url(B$URL)
+  expect_identical(nrow(merge(A, B, by = "k")), 2L)
+  recipe <- merge(A, B, by = "k", incomparables = NA)
+  legacy <- cj_deprecated(canonical_join(A[, 1:2], B[, 1:2]))
+  expect_identical(recipe$k, legacy$JoinKey)
+  expect_identical(recipe$ValA, legacy$ValA_A)
+  expect_identical(recipe$ValB, legacy$ValB_B)
 })
 
 test_that("the deprecation can be muted by class alone, results unchanged", {

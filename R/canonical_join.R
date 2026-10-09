@@ -305,7 +305,9 @@ canonical_join <- function(data_A, data_B,
     "url_semi_join(), url_anti_join()). To keep matching on cleaned URLs, ",
     "build the key yourself: ",
     "A$k <- get_clean_url(A$URL); B$k <- get_clean_url(B$URL); ",
-    "merge(A, B, by = \"k\"). Suppress selectively with ",
+    "merge(A, B, by = \"k\", incomparables = NA) (incomparables = NA keeps ",
+    "URLs that have no clean form from matching each other). ",
+    "Suppress selectively with ",
     "suppressWarnings(..., classes = \"rurl_canonical_join_deprecated\")."
   )
   warning(warningCondition(
