@@ -152,7 +152,8 @@
   # the scheme. stringi drops a U+FEFF that starts its input as a byte-order
   # mark, so searching or cutting a span that starts with one ("http://\ufeff/p"
   # leaves "\ufeff/p") would lose it, and "http:///p" would then read "p" as
-  # its host (RURL-iiehsbfg).
+  # its host (RURL-iiehsbfg). A URL that itself starts with U+FEFF still loses
+  # it here, and the scheme match reads past it (`RURL-vhionecz`).
   #
   # The query/fragment boundary is the first literal '?' or '#' -- an
   # unencoded delimiter byte, so it is safe to locate before any rewriting. The

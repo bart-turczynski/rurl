@@ -83,9 +83,9 @@ test_that(".cache_key_ascii is injective for distinct keys", {
 
 test_that(".cache_key_ascii keeps a leading byte-order mark (RURL-iiehsbfg)", {
   # stringi drops one U+FEFF at the start of a string as a byte-order mark, so
-  # an unguarded escape maps "﻿" to "" (which exists() rejects) and
-  # "﻿a.com" onto "a.com".
-  inputs <- c("﻿", "﻿a.com", "a.com", "﻿﻿a.com", "")
+  # an unguarded escape maps "\ufeff" to "" (which exists() rejects) and
+  # "\ufeffa.com" onto "a.com".
+  inputs <- c("\ufeff", "\ufeffa.com", "a.com", "\ufeff\ufeffa.com", "")
   keys <- rurl:::.cache_key_ascii(inputs)
   expect_identical(
     keys,
@@ -93,17 +93,17 @@ test_that(".cache_key_ascii keeps a leading byte-order mark (RURL-iiehsbfg)", {
   )
 
   bad <- rawToChar(as.raw(c(0xef, 0xbb, 0xbf, 0x61, 0xff)))
-  keys_bad <- rurl:::.cache_key_ascii(c(bad, "﻿a", "a"))
+  keys_bad <- rurl:::.cache_key_ascii(c(bad, "\ufeffa", "a"))
   expect_length(unique(keys_bad), 3L)
 })
 
 test_that("a BOM host is a cache key like any other (RURL-iiehsbfg)", {
   rurl_clear_caches()
   withr::defer(rurl_clear_caches())
-  expect_no_error(rurl:::.normalize_and_punycode_vec("﻿"))
+  expect_no_error(rurl:::.normalize_and_punycode_vec("\ufeff"))
   rurl:::.cache_set("puny_encode", "a.com", "a.com")
   expect_identical(
-    rurl:::.cache_get("puny_encode", "﻿a.com"),
+    rurl:::.cache_get("puny_encode", "\ufeffa.com"),
     rurl:::.rurl_cache_sentinel
   )
 
@@ -111,7 +111,7 @@ test_that("a BOM host is a cache key like any other (RURL-iiehsbfg)", {
   # came back with the BOM host's A-label.
   for (std in list(NULL, "rfc3986")) {
     rurl_clear_caches()
-    first <- get_host("http://﻿a.com/",
+    first <- get_host("http://\ufeffa.com/",
       url_standard = std, host_encoding = "idna"
     )
     second <- get_host("http://a.com/",
