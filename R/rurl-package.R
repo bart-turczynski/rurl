@@ -3,7 +3,10 @@
 #' Parsing: [safe_parse_url()], [safe_parse_urls()].
 #' Accessors: [get_host()], [get_domain()], [get_tld()], [get_subdomain()],
 #' [get_path()], [get_query()].
-#' Cleaning and joining: [get_clean_url()], [canonical_join()].
+#' Cleaning: [get_clean_url()].
+#' Identity and joining: [get_url_key()], [url_key_policy()], and the
+#' [url_inner_join()] family. [canonical_join()] is deprecated and will be
+#' removed in rurl 4.0.0.
 #' Query introspection: [query_param_summary()].
 #' Cache management: [rurl_clear_caches()], [rurl_cache_info()],
 #' [rurl_cache_config()].

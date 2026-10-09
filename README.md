@@ -45,7 +45,8 @@ Current package capabilities include:
 - Opt-in query-string handling: drop trackers, keep contentful params,
   and audit params across a URL set with `query_param_summary()`
 - URL component extractors (`get_*` helpers)
-- URL-based joins with `canonical_join()`
+- URL joins on identity with the `url_*_join()` family
+  (`url_inner_join()`, `url_left_join()` and four more)
 - Built-in memoization caches with introspection and configuration
   (`rurl_cache_info()`, `rurl_cache_config()`, `rurl_clear_caches()`)
 
@@ -205,10 +206,10 @@ get_clean_url("https://ex.com/?b=2&a=1",
 #> [1] "https://ex.com/?a=1&b=2"
 ```
 
-The same engine arguments flow through `safe_parse_urls()` (and
-therefore `canonical_join()`), so filtering also shapes the join key —
-`?v=1` and `?v=2` stay distinct while `utm`-only differences still
-collapse under `"filter"`:
+The same engine arguments flow through `safe_parse_urls()`, so
+filtering also shapes a key built from `clean_url` — `?v=1` and `?v=2`
+stay distinct while `utm`-only differences still collapse under
+`"filter"`:
 
 ``` r
 safe_parse_urls(c("https://ex.com/?v=1&utm_source=x", "https://ex.com/?v=2"),
@@ -245,19 +246,35 @@ query_param_summary(urls)
 
 ## URL Joins
 
-`canonical_join()` matches on one canonicalized key per URL and is the
-preferred option for large datasets:
+The `url_*_join()` family (`url_inner_join()`, `url_left_join()`,
+`url_right_join()`, `url_full_join()`, `url_semi_join()`,
+`url_anti_join()`) matches rows on URL identity, the comparison key from
+`get_url_key()`, never on a cleaned display string:
 
 ``` r
-A <- data.frame(URL = c("https://Example.com/page", "https://example.com/other"),
+A <- data.frame(URL = c("https://Example.com:443/page", "https://example.com/other"),
                 ValA = 1:2, stringsAsFactors = FALSE)
-B <- data.frame(URL = c("https://example.com/page?utm_source=nl", "https://example.com/missing"),
+B <- data.frame(URL = c("https://example.com/page", "https://example.com/page?utm_source=nl"),
                 ValB = c("x", "y"), stringsAsFactors = FALSE)
 
-# Default canonicalization lower-cases the host and drops the query, so the
-# first row of each side shares one canonical key.
-canonical_join(A, B)
+# Host case and the default port do not change identity, so the first row of A
+# matches the first row of B. The query does, so B's second row stays apart.
+url_left_join(A, B, by = "URL")
 ```
+
+To match on cleaned URLs instead, build the key with `get_clean_url()`
+and merge on it. Cleaning drops the query here, so the first row of A
+now matches both rows of B. `incomparables = NA` keeps URLs that have no
+clean form from matching each other:
+
+``` r
+A$k <- get_clean_url(A$URL)
+B$k <- get_clean_url(B$URL)
+merge(A, B, by = "k", incomparables = NA)
+```
+
+`canonical_join()`, which joined on the cleaned URL, is deprecated and
+will be removed in rurl 4.0.0.
 
 ## Documentation
 

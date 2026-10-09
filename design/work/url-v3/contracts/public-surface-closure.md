@@ -259,7 +259,7 @@ public-surface slice of it).
 | the 18 public fields + three-valued presence | artifact 3 (G3.3) | every field row of the roster names an artifact-3 field with its presence/provenance | SETTLED |
 | `parse_status` = π(L1,L2,L3) compat projection | artifact 6 (G3.6) | the `parse_status` / `get_parse_status` rows are the π projection, not a core verdict | SETTLED |
 | `clean_url` = clean surface (c), not identity | artifact 7 (G3.7) | the `clean_url` / `get_clean_url` rows are surface (c); `canonical_join` `clean_url` keying is LEGACY | SETTLED |
-| comparison key = `get_url_key`, not `clean_url` | artifact 9 (G3.K) | `canonical_join` migrates off `clean_url` to the identity key | SETTLED |
+| comparison key = `get_url_key`, not `clean_url` | artifact 9 (G3.K) | `canonical_join` never moves onto the identity key: the migration is withdrawn, and the function is deprecated and removed in rurl 4.0.0 (owner decision 2026-10-08, `RURL-atrvocqe`); identity joins are the `url_*_join()` family | SETTLED |
 | host `domain*` = PSL registrable, not full-host | artifact 10 host (G3.H) | the `domain`/`domain_ascii`/… rows are PSL identity keys, not full-host identity | SETTLED |
 | cache config/info/clear semantics | artifact 10 cache (G3.9) | the three `rurl_cache_config` / `rurl_cache_info` / `rurl_clear_caches` rows defer cache semantics to G3.9 | SETTLED |
 | scheme admission/interpretation + profile lattice | artifact 5 (G3.5) | `get_scheme`/`get_scheme_class`/`url_profile` rows defer to G3.5 | SETTLED |

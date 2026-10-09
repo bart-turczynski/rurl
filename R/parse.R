@@ -188,7 +188,8 @@
 #'   case-sensitive — tokens, IDs, signatures), so under
 #'   `case_handling = "lower"` or `"upper"` the `clean_url` is no longer
 #'   uniformly cased: scheme/host/path fold but the query keeps its original
-#'   case. Because `clean_url` is the \code{\link{canonical_join}} key, any
+#'   case. Because `clean_url` is the key of the deprecated
+#'   \code{\link{canonical_join}}, any
 #'   non-"drop" mode also brings the query into that join key (so `?id=1` and
 #'   `?id=2` stop collapsing, while `utm`-only differences still collapse under
 #'   "filter").
@@ -325,8 +326,8 @@
 #'   a **default** port only (`port_handling = "strip_default"`: a
 #'   non-default port names a different origin and survives). Inspect
 #'   the resolved bundle with
-#'   \code{\link{url_profile}}. Also accepted by \code{\link{canonical_join}}
-#'   (forwarded through its \code{...}).
+#'   \code{\link{url_profile}}. Also accepted by the deprecated
+#'   \code{\link{canonical_join}} (forwarded through its \code{...}).
 #' @param credential_handling How `clean_url` treats a URL whose parsed
 #'   authority carried a userinfo delimiter (`user@`, `user:password@`, a bare
 #'   `@`, or a repeated `@`). Defaults to "strip". A policy dial on the clean

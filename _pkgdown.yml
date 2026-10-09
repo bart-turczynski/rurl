@@ -122,13 +122,11 @@ reference:
     desc: >
       Compare and join URLs on identity rather than on a cleaned display
       string: a versioned comparison key, its policy object, and the six
-      identity-keyed joins. canonical_join() is the legacy clean_url-keyed
-      join, retained unchanged.
+      identity-keyed joins.
     contents:
       - get_url_key
       - url_key_policy
       - url_join
-      - canonical_join
 
   - title: "Cache management"
     desc: "Inspect and control the memoization caches."
@@ -136,3 +134,10 @@ reference:
       - rurl_cache_info
       - rurl_cache_config
       - rurl_clear_caches
+
+  - title: "Deprecated"
+    desc: >
+      To be removed in rurl 4.0.0. canonical_join() joins on the cleaned URL;
+      use the url_*_join() family, or merge on get_clean_url() keys.
+    contents:
+      - canonical_join

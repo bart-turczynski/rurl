@@ -102,7 +102,7 @@ matrix, per P1.1@a7e0a59 §1.4); named here as explicit non-omission.
 
 | export | owning contract(s) | v3 disposition | status |
 |---|---|---|---|
-| `canonical_join` | G3.K | migration to identity key, `clean_url` keying typed LEGACY with a deprecation window (P3.1@3b89b94 D-E, Q7/B7) | SETTLED |
+| `canonical_join` | G3.K | `clean_url` keying typed LEGACY with a deprecation window (P3.1@3b89b94 D-E, Q7/B7). The migration to the identity key is withdrawn by owner decision 2026-10-08 (`RURL-atrvocqe`): deprecated in the next release, every call warning, removed in rurl 4.0.0; see G3.K's `canonical_join()` migration rows | SETTLED |
 | `check_hosts` | G3.H | named host policies + no-network SETTLED; typed DNS-policy contract → G3.H HOST-O5 | OPEN (HOST-O5) |
 | `check_schemes` | G3.H (+ G3.6 companion) | scheme-axis policy companion mirroring `check_hosts`: reports scheme facts and scores them against a caller-supplied `allowed_schemes`, never at parse time (RUL-021, `RURL-zfycisur`). The reasons vocabulary is descriptive by ruling — no risk label — on the same ADR 0006 footing as `check_hosts`'s `ip-literal` / `not-registrable` | SETTLED |
 | `format_url` | G3.7 | output surface (d), the safe human-facing display formatter: the surface, its E1–E5 escape/redaction matrix, the `<redacted>` and `<U+XXXX>` tokens and the dual host spelling are decided by P2.7 D-D, whose §7 acceptance criteria are S3-F3's five worked examples; the WHATWG-fixed parse posture and the no-presentation-dial signature are chosen there too. The surface is BUILT (VD-003 discharged, `verification/output-display-discharge.md`) and the contract cells P2.7 §7 projected have moved under `RURL-irfmmoer`, which closed OUT-O4 in `output-contracts.md` | SETTLED |
