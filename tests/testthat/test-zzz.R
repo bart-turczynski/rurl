@@ -81,6 +81,46 @@ test_that(".cache_key_ascii is injective for distinct keys", {
   expect_true(all(stringi::stri_enc_isascii(keys)))
 })
 
+test_that(".cache_key_ascii keeps a leading byte-order mark (RURL-iiehsbfg)", {
+  # stringi drops one U+FEFF at the start of a string as a byte-order mark, so
+  # an unguarded escape maps "﻿" to "" (which exists() rejects) and
+  # "﻿a.com" onto "a.com".
+  inputs <- c("﻿", "﻿a.com", "a.com", "﻿﻿a.com", "")
+  keys <- rurl:::.cache_key_ascii(inputs)
+  expect_identical(
+    keys,
+    c("\\ufeff", "\\ufeffa.com", "a.com", "\\ufeff\\ufeffa.com", "")
+  )
+
+  bad <- rawToChar(as.raw(c(0xef, 0xbb, 0xbf, 0x61, 0xff)))
+  keys_bad <- rurl:::.cache_key_ascii(c(bad, "﻿a", "a"))
+  expect_length(unique(keys_bad), 3L)
+})
+
+test_that("a BOM host is a cache key like any other (RURL-iiehsbfg)", {
+  rurl_clear_caches()
+  withr::defer(rurl_clear_caches())
+  expect_no_error(rurl:::.normalize_and_punycode_vec("﻿"))
+  rurl:::.cache_set("puny_encode", "a.com", "a.com")
+  expect_identical(
+    rurl:::.cache_get("puny_encode", "﻿a.com"),
+    rurl:::.rurl_cache_sentinel
+  )
+
+  # The collision was visible: once the BOM host was cached, a plain host
+  # came back with the BOM host's A-label.
+  for (std in list(NULL, "rfc3986")) {
+    rurl_clear_caches()
+    first <- get_host("http://﻿a.com/",
+      url_standard = std, host_encoding = "idna"
+    )
+    second <- get_host("http://a.com/",
+      url_standard = std, host_encoding = "idna"
+    )
+    expect_identical(unname(c(first, second)), c("xn--a-6m0i.com", "a.com"))
+  }
+})
+
 test_that(".cache_key_ascii depends on the declaration, not the locale", {
   utf8 <- "bücher.example"
   bytes <- rawToChar(charToRaw(utf8))

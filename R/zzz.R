@@ -147,6 +147,12 @@ rurl_clear_caches <- function() {
 # not the locale, decides how the bytes are read; and it is vectorized C code,
 # so .cache_get_many()'s whole-vector warm path stays cheap.
 #
+# stri_escape_unicode() drops one U+FEFF at the start of a string as a
+# byte-order mark, so "\ufeff" would escape to "" (which exists() rejects) and
+# "\ufeffa.com" onto "a.com" (RURL-iiehsbfg). A key that starts with one is
+# escaped behind a placeholder ASCII character, which is then cut off; that
+# keeps every other key's derivation as it was.
+#
 # Bytes that are not valid UTF-8 (a latin1-ish string arriving undeclared) would
 # make stri_escape_unicode() error, so those fall back to a hex rendering of the
 # raw bytes — injective by construction, and disjoint from the escape range
@@ -164,10 +170,10 @@ rurl_clear_caches <- function() {
   risky <- enc == "UTF-8"
   ok <- !risky | stringi::stri_enc_isutf8(keys)
   if (all(ok)) {
-    return(stringi::stri_escape_unicode(keys))
+    return(.cache_key_escape(keys))
   }
   out <- character(length(keys))
-  out[ok] <- stringi::stri_escape_unicode(keys[ok])
+  out[ok] <- .cache_key_escape(keys[ok])
   out[!ok] <- paste0(
     "\\zz",
     vapply(
@@ -178,6 +184,24 @@ rurl_clear_caches <- function() {
       character(1L),
       USE.NAMES = FALSE
     )
+  )
+  out
+}
+
+# stri_escape_unicode() with a leading U+FEFF kept (see .cache_key_ascii()).
+# `keys` must be valid, declared UTF-8 or latin1.
+.cache_key_escape <- function(keys) {
+  # Base startsWith(), not stringi: stringi strips the mark from the pattern
+  # too. Every key is declared by now, so no locale is consulted.
+  lead <- startsWith(keys, "\ufeff")
+  lead[is.na(lead)] <- FALSE
+  if (!any(lead)) {
+    return(stringi::stri_escape_unicode(keys))
+  }
+  out <- character(length(keys))
+  out[!lead] <- stringi::stri_escape_unicode(keys[!lead])
+  out[lead] <- substring(
+    stringi::stri_escape_unicode(paste0("x", keys[lead])), 2L
   )
   out
 }
