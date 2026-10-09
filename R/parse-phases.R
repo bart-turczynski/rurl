@@ -147,28 +147,38 @@
   }
 
   colon_len <- stringi::stri_length(scheme_match[, 1L])
-  rest <- stringi::stri_sub(url, colon_len + 1L)
 
+  # Every span below is located in and cut from `url` itself, which starts with
+  # the scheme. stringi drops a U+FEFF that starts its input as a byte-order
+  # mark, so searching or cutting a span that starts with one ("http://\ufeff/p"
+  # leaves "\ufeff/p") would lose it, and "http:///p" would then read "p" as
+  # its host (RURL-iiehsbfg). A URL that itself starts with U+FEFF still loses
+  # it here, and the scheme match reads past it (`RURL-vhionecz`).
+  #
   # The query/fragment boundary is the first literal '?' or '#' -- an
-  # unencoded delimiter byte, so it is safe to locate before any rewriting.
-  qf_start <- stringi::stri_locate_first_regex(rest, "[?#]")[, 1L]
-  before <- ifelse(
-    is.na(qf_start), rest, stringi::stri_sub(rest, 1L, qf_start - 1L)
-  )
-  after <- ifelse(is.na(qf_start), "", stringi::stri_sub(rest, qf_start))
+  # unencoded delimiter byte, so it is safe to locate before any rewriting. The
+  # scheme holds neither, so it always falls after the colon.
+  qf_start <- stringi::stri_locate_first_regex(url, "[?#]")[, 1L]
+  before_end <- ifelse(is.na(qf_start), -1L, qf_start - 1L)
+  before <- stringi::stri_sub(url, colon_len + 1L, before_end)
+  after <- ifelse(is.na(qf_start), "", stringi::stri_sub(url, qf_start))
 
   # Leading run of one or more '/'/'\' right after "scheme:" -- the
-  # authority-introducing marker, of any length/composition.
-  run <- stringi::stri_match_first_regex(before, "^[/\\\\]+")[, 1L]
+  # authority-introducing marker, of any length/composition. Neither character
+  # is '?' or '#', so the run always lies inside `before`.
+  run <- stringi::stri_match_first_regex(url, "^[^:]*:([/\\\\]+)")[, 2L]
   has_run <- !is.na(run)
 
   run_len <- ifelse(has_run, stringi::stri_length(run), 0L)
-  remainder <- ifelse(has_run, stringi::stri_sub(before, run_len + 1L), before)
+  remainder <- stringi::stri_sub(url, colon_len + run_len + 1L, before_end)
 
   # Beyond the leading run, a literal backslash is a plain separator: rewrite
   # it 1:1 to '/' (path segments, and the authority/path boundary when the
-  # authority had no run of its own, e.g. "http://host\path").
-  rewritten_remainder <- stringi::stri_replace_all_fixed(remainder, "\\", "/")
+  # authority had no run of its own, e.g. "http://host\path"). The marker is
+  # spliced on first so the rewrite never reads a span that starts with U+FEFF.
+  rewritten_remainder <- stringi::stri_replace_all_fixed(
+    paste0("//", remainder), "\\", "/"
+  )
 
   no_run_authority <- eligible & !has_run &
     scheme_lower %in% .SPECIAL_AUTHORITY_SCHEMES &
@@ -178,7 +188,7 @@
   # synthesize the missing authority marker. Otherwise: collapse an existing
   # run to exactly "//" and splice the (possibly rewritten) remainder back on.
   rewritten_before <- ifelse(
-    has_run | no_run_authority, paste0("//", rewritten_remainder), before
+    has_run | no_run_authority, rewritten_remainder, before
   )
 
   run_had_backslash <- has_run & stringi::stri_detect_fixed(run, "\\")
