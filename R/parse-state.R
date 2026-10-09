@@ -457,9 +457,15 @@
   ":]+\\]\\z"
 )
 
-# First 1-based index of the literal `ch` in `s`, or 0L when absent.
+# First 1-based index of the literal `ch` in `s`, or 0L when absent. A literal
+# regex, not stri_locate_first_fixed(): the fixed locator reads past a U+FEFF
+# that starts `s` (see .starts_with_bom()), so in an authority led by one it
+# placed the port colon a character early and `substring()` kept it in the port
+# (RURL-biunpazk).
 .rfc3986_first_index <- function(s, ch) {
-  pos <- stringi::stri_locate_first_fixed(s, ch)[1L, 1L]
+  pos <- stringi::stri_locate_first_regex(
+    s, ch, opts_regex = stringi::stri_opts_regex(literal = TRUE)
+  )[1L, 1L]
   if (is.na(pos)) 0L else as.integer(pos)
 }
 
@@ -645,9 +651,13 @@
   # A "latin1" element decodes by definition -- every octet is a latin1
   # character -- so it walks normally and is never caught here.
   undecodable <- !is.na(url) & Encoding(url) == "UTF-8" & !validUTF8(url)
-  walkable <- !undecodable
+  # A string led by U+FEFF has no scheme (S3.1: the first character is an
+  # ALPHA), but the walk's scheme match reads past the mark (see
+  # .starts_with_bom(), RURL-biunpazk).
+  bom_led <- !undecodable & .starts_with_bom(url)
+  walkable <- !undecodable & !bom_led
   ok <- rep(NA, n)
-  ok[undecodable] <- FALSE
+  ok[undecodable | bom_led] <- FALSE
   if (any(walkable)) {
     ok[walkable] <- vapply(
       url[walkable], .rfc3986_generic_uri_ok_one, logical(1L),
@@ -732,11 +742,15 @@
 # RFC authority carries at most one `@`, enforced separately by the L4a gate).
 # A bracketed IP-literal owns any `:` inside it -- only a trailing `:port` after
 # `]` is the port; a non-bracketed host's first `:` is the port delimiter.
-# authority == "" yields host == "" (empty), userinfo/port NA.
+# authority == "" yields host == "" (empty), userinfo/port NA. Regex locators,
+# not the fixed ones, which read past a U+FEFF that starts the authority or the
+# host (see .rfc3986_first_index(), RURL-biunpazk).
 .split_authority <- function(authority) {
   userinfo <- NA_character_
   hostport <- authority
-  at <- stringi::stri_locate_last_fixed(authority, "@")[1L, 1L]
+  at <- stringi::stri_locate_last_regex(
+    authority, "@", opts_regex = stringi::stri_opts_regex(literal = TRUE)
+  )[1L, 1L]
   if (!is.na(at)) {
     userinfo <- substring(authority, 1L, at - 1L)
     hostport <- substring(authority, at + 1L)
@@ -744,8 +758,8 @@
   host <- hostport
   port <- NA_character_
   if (startsWith(hostport, "[")) {
-    rb <- stringi::stri_locate_first_fixed(hostport, "]")[1L, 1L]
-    if (!is.na(rb)) {
+    rb <- .rfc3986_first_index(hostport, "]")
+    if (rb > 0L) {
       host <- substring(hostport, 1L, rb)
       after <- substring(hostport, rb + 1L)
       if (startsWith(after, ":")) {
@@ -753,8 +767,8 @@
       }
     }
   } else {
-    cpos <- stringi::stri_locate_first_fixed(hostport, ":")[1L, 1L]
-    if (!is.na(cpos)) {
+    cpos <- .rfc3986_first_index(hostport, ":")
+    if (cpos > 0L) {
       host <- substring(hostport, 1L, cpos - 1L)
       port <- substring(hostport, cpos + 1L)
     }
@@ -1340,10 +1354,10 @@
   }
   m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
   scheme_lc <- .ascii_tolower(m[, 2L])
-  # Under WHATWG a row led by U+FEFF has no scheme; the stringi match reads past
-  # the mark (see .starts_with_bom(), RURL-vhionecz).
-  has_scheme <- !is.na(scheme_lc) &
-    !(.is_whatwg(url_standard) & .starts_with_bom(url))
+  # A row led by U+FEFF has no scheme, under every url_standard; the stringi
+  # match reads past the mark (see .starts_with_bom(), RURL-vhionecz,
+  # RURL-biunpazk).
+  has_scheme <- !is.na(scheme_lc) & !.starts_with_bom(url)
   # The host:port carve-out exists for the SCHEME-LESS `example.com:8080` form,
   # which the scheme regex above also matches (a dot is a legal scheme char, so
   # `example.com` reads as a scheme). The authority-part must therefore be

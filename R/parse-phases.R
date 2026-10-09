@@ -226,11 +226,12 @@
 # stringi functions read past a U+FEFF that starts their input, subject and
 # pattern alike, as a byte-order mark: on stringi 1.8.9 (ICU 71.1),
 # stri_match_*_regex(), the *_fixed() family, stri_sub() and
-# stri_escape_unicode() do, while stri_detect_regex(), stri_replace_*_regex()
-# and stri_locate_*() count it. A start-anchored stringi match can therefore
-# succeed on a row led by U+FEFF where none of its patterns could, since U+FEFF
-# is not an ASCII alpha, a C0 control, a space or a slash; callers mask such
-# rows with this (RURL-vhionecz). NA reads FALSE.
+# stri_escape_unicode() do (stri_locate_*_fixed() included), while
+# stri_detect_regex(), stri_replace_*_regex() and stri_locate_*_regex() count
+# it. A start-anchored stringi match can therefore succeed on a row led by
+# U+FEFF where none of its patterns could, since U+FEFF is not an ASCII alpha,
+# a C0 control, a space or a slash; callers mask such rows with this, under
+# every url_standard (RURL-vhionecz, RURL-biunpazk). NA reads FALSE.
 .starts_with_bom <- function(x) {
   grepl("^\ufeff", x, useBytes = TRUE)
 }
@@ -534,7 +535,8 @@
 # example ones starting with `@` or `:`), single-slash (`scheme:/path`) forms,
 # and file-state variants are left outside this change. Literal backslash
 # remains inert/rejected under RFC 3986.
-.rfc3986_path_rootless_vec <- function(url, url_standard) {
+.rfc3986_path_rootless_vec <- function(url, url_standard,
+                                       bom_led = .starts_with_bom(url)) {
   n <- length(url)
   no_op <- list(
     is_path_rootless = rep(FALSE, n),
@@ -558,7 +560,8 @@
     first_segment, "^[A-Za-z0-9._~-]+(\\.[A-Za-z0-9._~-]+)+$"
   )
   host_shaped_first_segment[is.na(host_shaped_first_segment)] <- FALSE
-  eligible <- !is.na(rest) &
+  # A row led by U+FEFF has no scheme (RURL-biunpazk).
+  eligible <- !bom_led & !is.na(rest) &
     scheme_lower %in% .SPECIAL_AUTHORITY_SCHEMES &
     host_shaped_first_segment &
     rest != "" &
@@ -936,12 +939,15 @@
   url <- cc$url
   whatwg_file_input <- url
 
-  # Under WHATWG, a row led by U+FEFF after step 1 has no scheme, so it is never
-  # a scheme or scheme-relative row, and the rewrites below leave it alone. The
-  # stringi matches here read past the mark (see .starts_with_bom()), so this
-  # mask overrides them (RURL-vhionecz). NULL and rfc3986 keep their readings.
-  # No rewrite below changes how a row starts, so the mask holds throughout.
-  bom_led <- .is_whatwg(url_standard) & .starts_with_bom(url)
+  # A row led by U+FEFF (after step 1 under WHATWG) has no scheme, so it is
+  # never a scheme or scheme-relative row, and the rewrites below leave it
+  # alone: WHATWG's scheme start state and RFC 3986 S3.1 both need an ASCII
+  # alpha first, and NULL reads such a row like one led by any other code point
+  # that cannot start a scheme. The stringi matches here read past the mark
+  # (see .starts_with_bom()), so this mask overrides them (RURL-vhionecz,
+  # RURL-biunpazk). No rewrite below changes how a row starts, so the mask
+  # holds throughout.
+  bom_led <- .starts_with_bom(url)
 
   # WHATWG literal backslash recognition (RURL-ledntyab) runs next: for
   # eligible rows it rewrites "\" to "/" ahead of every scheme/host regex
@@ -977,7 +983,7 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):"
   )
   looks_like_protocol <- !is.na(scheme_match[, 2L]) & !bom_led
-  rfc_rootless <- .rfc3986_path_rootless_vec(url, url_standard)
+  rfc_rootless <- .rfc3986_path_rootless_vec(url, url_standard, bom_led)
   original_has_allowed_scheme <-
     original_has_allowed_scheme | rfc_rootless$is_path_rootless
 

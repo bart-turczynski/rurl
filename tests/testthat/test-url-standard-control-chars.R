@@ -259,8 +259,8 @@ test_that("no WHATWG rewrite reads past a leading U+FEFF", {
 })
 
 test_that("a host led by U+FEFF keeps the whole path", {
-  # stri_locate_*() counts a leading U+FEFF and stri_sub() skips it, so the
-  # path was cut one character late: "//x" read "/x" (RURL-vhionecz).
+  # stri_locate_*_regex() counts a leading U+FEFF and stri_sub() skips it, so
+  # the path was cut one character late: "//x" read "/x" (RURL-vhionecz).
   for (std in list(NULL, "rfc3986", "whatwg")) {
     r <- safe_parse_urls(paste0("http://", BOM, "a.com//x"), url_standard = std)
     expect_identical(r$path, "//x", info = format(std))
@@ -272,4 +272,155 @@ test_that("a host led by U+FEFF keeps the whole path", {
   # The same cut, reached through scheme inference.
   r <- safe_parse_urls(paste0(BOM, "a.com://x/y"), url_standard = "whatwg")
   expect_identical(r$path, "//x/y")
+})
+
+# --- U+FEFF under rfc3986 and NULL (RURL-biunpazk) ----------------------------
+#
+# RFC 3986 S3.1 makes a scheme start with an ASCII alpha, so a row led by U+FEFF
+# has none, and NULL reads such a row like one led by any other code point that
+# cannot start a scheme. The scheme readers on both arms used stringi matches
+# that read past the mark. ZWSP (U+200B) is the twin: it cannot start a scheme
+# either, and no stringi function skips it.
+#
+# NULL moves (ADR 0016: a default-path defect, not a selector-caused change).
+# Witness: the pre-fix NULL probes below, which the fix turns. Signature: only
+# rows led by U+FEFF, or whose authority starts with it, move, in every column,
+# under every scheme_policy; every row moved to its twin's reading. whatwg was
+# already right for a leading mark (RURL-vhionecz); its authority-led rows move
+# with the shared authority split.
+
+ZWSP <- intToUtf8(0x200B)
+
+# Every column of `safe_parse_urls()`, with the lead mark spelled the same.
+twin_rows <- function(mark, rest, ...) {
+  r <- safe_parse_urls(paste0(mark, rest), ...)
+  r$original_url <- NULL
+  r[] <- lapply(r, function(v) {
+    if (is.character(v)) gsub(mark, "<mark>", v, fixed = TRUE, useBytes = TRUE)
+    else v
+  })
+  r
+}
+
+BOM_RESTS <- c(
+  "foo://a.com/p", "http:a.com/p", "ftp:a.com", "http://a.com/p",
+  "mailto:x@y.com", "foo:bar", "urn:a:1", "file:///x", "FILE:/x",
+  "file://localhost/path/to/file.txt", "http:///a.com", "https:///evil.com",
+  "http://?", "//a.com/p", "a.com/p", "a.com:8080", "a.com:80/p",
+  "user:pass@example.com", "http:a:b@www.example.com"
+)
+
+test_that("rfc3986 and NULL find no scheme after a leading U+FEFF", {
+  for (pol in c("infer", "require")) {
+    for (acc in c("web", "general")) {
+      got <- twin_rows(BOM, BOM_RESTS,
+        url_standard = "rfc3986", scheme_policy = pol, scheme_acceptance = acc
+      )
+      expect_identical(
+        got,
+        twin_rows(ZWSP, BOM_RESTS,
+          url_standard = "rfc3986", scheme_policy = pol,
+          scheme_acceptance = acc
+        ),
+        info = paste(pol, acc)
+      )
+      # The read-past scheme never surfaces: only an inferred `http` does.
+      expect_true(all(is.na(got$scheme) | got$scheme == "http"),
+        info = paste(pol, acc)
+      )
+    }
+    got <- twin_rows(BOM, BOM_RESTS, scheme_policy = pol)
+    expect_identical(got, twin_rows(ZWSP, BOM_RESTS, scheme_policy = pol),
+      info = pol
+    )
+    expect_identical(got, twin_rows(BOM, BOM_RESTS,
+      url_standard = NULL, scheme_policy = pol
+    ), info = pol)
+  }
+  # The issue's own probes.
+  r <- safe_parse_url(paste0(BOM, "foo://a.com/p"),
+    url_standard = "rfc3986", scheme_acceptance = "general"
+  )
+  expect_null(r)
+  expect_null(safe_parse_url(paste0(BOM, "http:a.com/p"),
+    url_standard = "rfc3986", scheme_policy = "require"
+  ))
+})
+
+test_that("NULL no longer reads a scheme past a leading U+FEFF (ADR 0016)", {
+  # Before RURL-biunpazk, NULL read scheme `file` here, with status `ok` or
+  # `error` depending on the other URLs in the call...
+  u <- paste0(BOM, "file://localhost/path/to/file.txt")
+  for (r in list(safe_parse_urls(u), safe_parse_urls(u, url_standard = NULL))) {
+    expect_identical(r$parse_status, "error")
+    expect_true(is.na(r$scheme))
+  }
+  rurl_clear_caches()
+  neighbor <- paste0(BOM, "https://", intToUtf8(0xFFFF), "y")
+  r <- safe_parse_urls(c(u, neighbor))
+  expect_identical(r$parse_status[[1L]], "error")
+  expect_true(is.na(r$scheme[[1L]]))
+  # ...and rejected this one for its read-past scheme `mailto`, where its twin
+  # takes scheme inference.
+  r <- safe_parse_urls(paste0(BOM, "mailto:a@b.com"))
+  expect_identical(r$parse_status, "warning-userinfo")
+  expect_identical(r$host, "b.com")
+  expect_identical(r$user, paste0(BOM, "mailto"))
+})
+
+test_that("an authority led by U+FEFF splits at the right place", {
+  # stri_locate_*_fixed() reads past a U+FEFF that starts the authority, so a
+  # cut fell one character early: the host lost its last character to the path,
+  # and the port kept its colon.
+  u <- paste0("file://", BOM, "localhost/path/to/file.txt")
+  for (std in list(NULL, "rfc3986")) {
+    r <- safe_parse_urls(u, url_standard = std)
+    expect_identical(r$host, paste0(BOM, "localhost"), info = format(std))
+    expect_identical(r$path, "/path/to/file.txt", info = format(std))
+  }
+  r <- safe_parse_urls(paste0("ftps://", BOM, "files.example.org/pub/"),
+    profile = "whatwg"
+  )
+  expect_identical(r$host, "%EF%BB%BFfiles.example.org")
+  expect_identical(r$path, "/pub/")
+  # The RFC 3986 grammar gate rejected every such authority with a port or a
+  # userinfo.
+  r <- safe_parse_urls(paste0("http://", BOM, "a.com:8080/"),
+    url_standard = "rfc3986"
+  )
+  expect_identical(r$host, paste0(BOM, "a.com"))
+  expect_identical(r$port, 8080L)
+  expect_identical(r$parse_status, "ok")
+  r <- safe_parse_urls(paste0("http://", BOM, "u:p@a.com/"),
+    url_standard = "rfc3986"
+  )
+  expect_identical(r$user, paste0(BOM, "u"))
+  expect_identical(r$host, "a.com")
+  expect_identical(r$parse_status, "ok")
+  # WHATWG opaque hosts: the mark is a host code point, so the host is not
+  # empty, and credentials with an empty host still fail.
+  r <- safe_parse_urls(paste0("sc://", BOM, ":12/"), profile = "whatwg")
+  expect_identical(r$host, "%EF%BB%BF")
+  expect_identical(r$port, 12L)
+  expect_identical(r$path, "/")
+  expect_null(safe_parse_url(paste0("sc://", BOM, "@/"), profile = "whatwg"))
+})
+
+test_that("the RFC 3986 grammar gate finds no scheme after a leading U+FEFF", {
+  expect_identical(
+    .rfc3986_generic_uri_ok(paste0(c(BOM, ZWSP, ""), "foo:bar"))$ok,
+    c(FALSE, FALSE, TRUE)
+  )
+  rests <- c("a.com:8080", "mailto:x@y.com")
+  for (rest in rests) {
+    expect_identical(
+      get_url_diagnostics(paste0(BOM, rest),
+        url_standard = "rfc3986", scheme_acceptance = "general"
+      ),
+      get_url_diagnostics(paste0(ZWSP, rest),
+        url_standard = "rfc3986", scheme_acceptance = "general"
+      ),
+      info = rest
+    )
+  }
 })
