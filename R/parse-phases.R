@@ -679,7 +679,9 @@
   if (is.na(host) || host == "") {
     return("")
   }
-  if (stringi::stri_startswith_fixed(host, "[")) {
+  # Base R, not stri_startswith_fixed(), which reads past a U+FEFF that
+  # starts `host`: "<U+FEFF>[::1]" is a domain, and fails (RURL-azcvukyh).
+  if (startsWith(host, "[")) {
     return(host)
   }
 
@@ -790,17 +792,23 @@
   has_authority <- stringi::stri_detect_regex(file_path_raw, "^[/\\\\]{2}")
   has_authority[is.na(has_authority)] <- FALSE
   if (any(has_authority)) {
-    after_marker <- stringi::stri_sub(file_path_raw[has_authority], 3L)
-    slash <- stringi::stri_locate_first_regex(after_marker, "[/\\\\]")[, 1L]
-    authority <- ifelse(
-      is.na(slash),
-      after_marker,
-      stringi::stri_sub(after_marker, 1L, slash - 1L)
-    )
+    # Every span is located in and cut from the raw path, which starts with
+    # the two-slash marker. Some stringi functions read past a U+FEFF that
+    # starts their input (see .starts_with_bom()), so cutting the authority
+    # from the text after the marker, which can start with one, put the slash
+    # in the host and lost the path's first character (RURL-azcvukyh). The
+    # authority holds no slash or backslash, so it needs no rewrite.
+    raw <- file_path_raw[has_authority]
+    authority_end <- stringi::stri_locate_first_regex(
+      raw, "^[/\\\\]{2}[^/\\\\]*"
+    )[, "end"]
+    slash <- stringi::stri_locate_first_regex(
+      raw, "^[/\\\\]{2}[^/\\\\]*[/\\\\]"
+    )[, "end"]
+    authority <- stringi::stri_sub(raw, 3L, authority_end)
     auth_path <- ifelse(
-      is.na(slash), "/", stringi::stri_sub(after_marker, slash)
+      is.na(slash), "/", stringi::stri_sub(raw, slash)
     )
-    authority <- stringi::stri_replace_all_fixed(authority, "\\", "/")
     auth_path <- stringi::stri_replace_all_fixed(auth_path, "\\", "/")
 
     # WHATWG "file host state": a buffer that is a Windows drive letter -- an

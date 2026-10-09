@@ -274,6 +274,48 @@ test_that("a host led by U+FEFF keeps the whole path", {
   expect_identical(r$path, "//x/y")
 })
 
+test_that("a WHATWG file: host led by U+FEFF parses like its U+200B twin", {
+  # The file parser located the slash with a regex that counts a leading
+  # U+FEFF and cut with stri_sub(), which skips it, so the host kept the slash
+  # and failed, and the path lost its first character (RURL-azcvukyh).
+  zwsp <- intToUtf8(0x200B)
+  bs <- "\\"
+  for (lead in c(BOM, zwsp)) {
+    u <- paste0(
+      c("file://", paste0("file:", bs, bs)), lead, "host",
+      c("/p", paste0(bs, "p"))
+    )
+    r <- safe_parse_urls(u, url_standard = "whatwg")
+    cp <- sprintf("U+%04X", utf8ToInt(lead))
+    expect_identical(r$host, c("host", "host"), info = cp)
+    expect_identical(r$path, c("/p", "/p"), info = cp)
+  }
+  r <- safe_parse_urls(paste0("file://", BOM, c("h.x/p", "%41/p", "host?q")),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$host, c("h.x", "a", "host"))
+  expect_identical(r$path, c("/p", "/p", "/"))
+  expect_identical(r$query, c(NA, NA, "q"))
+  # UTS #46 maps the mark to nothing: "localhost" is then the empty host, and
+  # a host made of the mark alone is empty, which fails. The rewrite of a
+  # slash-less authority dropped such a mark, so "file://<U+FEFF>" had the
+  # empty host and "file://<U+FEFF>C:" a drive letter. "[::1]" after the mark
+  # is no IPv6 literal, and "[" is a forbidden domain code point.
+  expect_identical(
+    serialize_url(paste0("file://", BOM, "localhost/p"), standard = "whatwg"),
+    "file:///p"
+  )
+  for (rest in c("", "?q", "/p", "C:", "[::1]/p", "C:/p", "host:80/p")) {
+    expect_identical(
+      safe_parse_urls(paste0("file://", BOM, rest),
+        url_standard = "whatwg"
+      )$parse_status,
+      "error",
+      info = rest
+    )
+  }
+})
+
 # --- U+FEFF under rfc3986 and NULL (RURL-biunpazk) ----------------------------
 #
 # RFC 3986 S3.1 makes a scheme start with an ASCII alpha, so a row led by U+FEFF
