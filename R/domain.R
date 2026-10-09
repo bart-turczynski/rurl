@@ -443,8 +443,8 @@
 #     invalid ACE label ("xn--a.com", "domain-invalid-ace-label"), and a
 #     cross-label Bidi failure (criterion 9 of UTS #46 section 4.1 in a Bidi
 #     domain name), which no token reports. On such a host the three flag facts
-#     are unknown and read FALSE. From punycoder's -v3 profile the baseline admits
-#     an empty label, as UTS #46 section 4.2 step 4 does without
+#     are unknown and read FALSE. From punycoder's -v3 profile the baseline
+#     admits an empty label, as UTS #46 section 4.2 step 4 does without
 #     VerifyDnsLength, so the isolated calls run on that host and a hyphen,
 #     STD3 or length defect in it co-fires with "domain-empty-label". Every
 #     empty label fails `call_c`; the length subtyping counts octets, so an

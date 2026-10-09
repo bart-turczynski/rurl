@@ -53,8 +53,8 @@ test_that("domain-empty-label does NOT fire on a trailing root-dot FQDN", {
 test_that("an all-relaxed-baseline-failure host gets ONLY domain-empty-label", {
   # Up to punycoder 1.3.0 an empty-label host is NA even under the all-relaxed
   # baseline, and the probe must not misread that as failing the hyphen, STD3
-  # and length checks too (T5's baseline-guard finding). From the -v3 profile the
-  # baseline admits it and the isolated calls find nothing on this host.
+  # and length checks too (T5's baseline-guard finding). From the -v3 profile
+  # the baseline admits it and the isolated calls find nothing on this host.
   diags <- get_url_diagnostics("http://a..com/", url_standard = "whatwg")
   expect_identical(diags, "domain-empty-label")
   expect_false("domain-hyphen-violation" %in% diags)
@@ -91,8 +91,9 @@ test_that("an empty-label host with no other defect reports only that label", {
 })
 
 test_that("other host defects co-fire with domain-empty-label by version", {
-  # punycoder from profile revision -v3 admits an empty label under all-relaxed flags (UTS #46
-  # section 4.2 step 4 rejects one only with VerifyDnsLength), so the isolated
+  # punycoder from profile revision -v3 admits an empty label under
+  # all-relaxed flags (UTS #46 section 4.2 step 4 rejects one only with
+  # VerifyDnsLength), so the isolated
   # calls run on the host and report the defects its other labels carry.
   # Earlier versions fail the baseline, and those facts read FALSE.
   long_label <- strrep("y", 70)
