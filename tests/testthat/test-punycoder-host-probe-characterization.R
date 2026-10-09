@@ -125,6 +125,26 @@ test_that("baseline guard: structural failures stay NA under all-relaxed", {
   expect_false(is.na(all_relaxed("a.com.")))
 })
 
+test_that("the trailing root dot and the DNS-length call do not move", {
+  relaxed_but <- function(host, verify_dns_length = FALSE) {
+    punycoder::host_normalize(
+      host, check_hyphens = FALSE, use_std3 = FALSE,
+      verify_dns_length = verify_dns_length
+    )
+  }
+  # A trailing root dot is no empty label: it survives the all-relaxed call
+  # and the DNS-length call, spelled as written.
+  expect_identical(relaxed_but("a.com."), "a.com.")
+  expect_identical(relaxed_but("a.com.", verify_dns_length = TRUE), "a.com.")
+  # UTS #46 section 4.2 step 4: with VerifyDnsLength true every label must be
+  # 1 to 63 octets, so an empty label fails the DNS-length call on every
+  # punycoder version. The probe's length subtyping runs on these hosts and
+  # must find no length fact unless a label or the name is genuinely too long.
+  for (host in c("a..com", "..com", "a...b.com", ".", "", "a..com.")) {
+    expect_true(is.na(relaxed_but(host, verify_dns_length = TRUE)), info = host)
+  }
+})
+
 # --- domain-empty-label: rurl-owned structural detector (strsplit-based) ---
 
 test_that("the strsplit-based empty-label detector matches host_normalize", {

@@ -62,6 +62,33 @@ test_that("an all-relaxed-baseline-failure host gets ONLY domain-empty-label", {
   expect_false("domain-name-too-long" %in% diags)
 })
 
+test_that("an empty-label host with no other defect reports only that label", {
+  # Stable across punycoder versions: whether or not the all-relaxed baseline
+  # admits an empty label, these hosts break no hyphen, STD3 or length rule.
+  urls <- c(
+    "http://a..com/", "http://..com/", "http://a...b.com/", "http://a..com./",
+    "http://.a.com/", "http://a.com../", "http://./", "http://xn--caf-dma..com/"
+  )
+  for (std in c("whatwg", "rfc3986")) {
+    diags <- get_url_diagnostics(urls, url_standard = std)
+    for (i in seq_along(urls)) {
+      expect_identical(
+        diags[[i]], "domain-empty-label", info = paste(std, urls[[i]])
+      )
+    }
+    expect_identical(
+      get_url_diagnostics("http://xn--a..com/", url_standard = std),
+      c("domain-empty-label", "domain-invalid-ace-label"),
+      info = std
+    )
+    expect_identical(
+      get_url_diagnostics("http://example.com./", url_standard = std),
+      character(0),
+      info = std
+    )
+  }
+})
+
 # --- domain-hyphen-violation --------------------------------------------------
 
 test_that("domain-hyphen-violation fires for leading/trailing/double hyphens", {
