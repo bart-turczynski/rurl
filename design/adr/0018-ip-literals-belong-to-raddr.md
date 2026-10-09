@@ -171,8 +171,20 @@ What the adapter may and may not do:
 
 The gain is single ownership of the WHATWG IPv4 reading, not a large deletion.
 At `main` `da6becd` the in-tree WHATWG reading and `addr_whatwg()` agreed on
-all 52 hosts that pass `rurl`'s ends-in-a-number gate, which is the corpus
-§Consequences asks for: it contains the reg-names the gate keeps out.
+all 52 hosts that pass `rurl`'s ends-in-a-number gate. That population is the
+right one for this adapter, because the adapter only ever sees hosts the gate
+has passed. The reg-names the gate keeps out (`0xg`, `0x1p`, `.`, `..`), which
+§Consequences requires a corpus to contain, are covered separately: rurl
+classified no host outside the gate as IPv4, and the expected-output tests pin
+those names staying names.
+
+A known exposure, accepted by the owner: `addr_whatwg()` is read from the
+installed `raddr`, which DESCRIPTION bounds only from below. A `raddr` release
+that changes the reading changes an installed rurl's `whatwg` output, and so
+its `whatwg` URL keys, without a rurl release or a key-version bump. The
+expected-output tests make such a change fail rurl's own checks, which CRAN's
+reverse-dependency check runs on every `raddr` submission. punycoder and pslr
+already expose rurl the same way.
 
 The diagnostics in `R/diagnostics.R` keep their own per-part reader
 (`.parse_ipv4_part_value()`). It computes shape facts identically under

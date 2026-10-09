@@ -130,6 +130,20 @@ test_that("whatwg fails the URL when a number-ending host is no address", {
   }
 })
 
+test_that("whatwg fails a non-ASCII number-ending host that is no IPv4", {
+  # Domain to ASCII runs first (host parser step 5), then the ends-in-a-number
+  # check on its output (step 7). Fullwidth colons map to ASCII ":", so
+  # "\uff1a\uff1a1.2.3.4" becomes "::1.2.3.4": its last label "4" is a number,
+  # and the IPv4 parser fails on the part "::1" -- the host is not read as the
+  # IPv6 address it would spell inside brackets. ARABIC-INDIC DIGIT ONE (U+0661)
+  # is no IPv4-number digit, so "\u0661.2.3.4" fails the IPv4 parser too.
+  for (h in c("\uff1a\uff1a1.2.3.4", "\u0661.2.3.4")) {
+    expect_identical(
+      get_parse_status(ipv4_url(h), url_standard = "whatwg"), "error", info = h
+    )
+  }
+})
+
 test_that("a WHATWG IPv4 failure leaves no host, type, clean URL or href", {
   for (h in c("4294967296", "1.2.3.4.5", "192.0.048.1", "0x100000000")) {
     u <- ipv4_url(h)
