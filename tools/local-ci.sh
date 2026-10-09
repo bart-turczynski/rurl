@@ -2,18 +2,19 @@
 #
 # Local stand-in for the GitLab runner (RURL-psqmlgjf).
 #
-# WHY THIS EXISTS. `.gitlab-ci.yml` is paused: the free-tier compute allowance
-# ran out mid-slice and every pipeline after it failed for a reason that had
-# nothing to do with the code. That left the pre-push hook as the only gate --
-# which is the exact situation the CI config's own header calls out as
-# insufficient, and for two reasons that are still true with the runner off:
+# WHY THIS EXISTS. It was written while `.gitlab-ci.yml` was paused (2026-08-08
+# to 2026-09-03, RURL-utsbwfvc; CI now runs on self-hosted runners): the
+# free-tier compute allowance ran out mid-slice and every pipeline after it
+# failed for a reason that had nothing to do with the code. That left the
+# pre-push hook as the only gate -- which the CI config's own header calls out
+# as insufficient, for two reasons that hold whether or not the runner is on:
 #
 #   1. A HOOK IS OPT-IN PER CLONE. `pre-commit install --hook-type pre-push`
 #      is a thing a person does, not a property of the repository, so "the
 #      history is green" states nothing about whether anything checked it.
 #   2. A HOOK VERIFIES THE BRANCH TIP, NOT WHAT LANDS. Merges happen on the
 #      forge. A squash-merge produces a commit that has never existed on any
-#      machine, and the pipeline that used to check it was the one on `main`.
+#      machine, and only the pipeline on `main` checks it.
 #
 # So this is not a second copy of `tools/verify.R` -- the hook already runs that
 # against the working tree, on this machine, in the ambient library. This runs
@@ -25,14 +26,11 @@
 # green suite in a developer's fully-populated library.
 #
 # WHAT IT STILL DOES NOT COVER, so a green run is not read as more than it is:
-# it is one machine, one architecture, one R. The cross-platform matrix, rhub,
-# coverage and the README re-render run nowhere: their GitHub workflows were
-# deleted (RURL-vunvxusf), and the determinism matrix survives only as the
-# record under `tools/determinism/gha/` (pkgdown now publishes from the
-# `pages` job in `.gitlab-ci.yml`, release-time only). And it is pull-based --
-# nothing makes it run, so it carries the same "someone has to do it"
-# weakness as the hook. It narrows the gap the paused runner opened; it does
-# not close it.
+# it is one machine, one architecture, one R. The cross-platform matrix, rhub
+# and the README re-render run nowhere: their GitHub workflows were deleted
+# (RURL-vunvxusf), and the determinism matrix survives only as the record
+# under `tools/determinism/gha/`. And it is pull-based -- nothing makes it
+# run, so it carries the same "someone has to do it" weakness as the hook.
 #
 # Usage:
 #   tools/local-ci.sh                 # jobs for HEAD, as GitLab would pick them
