@@ -265,7 +265,8 @@ url_left_join(A, B, by = "URL")
 To match on cleaned URLs instead, build the key with `get_clean_url()`
 and merge on it. Cleaning drops the query here, so the first row of A
 now matches both rows of B. `incomparables = NA` keeps URLs that have no
-clean form from matching each other:
+clean form from matching each other. This is an inner join; add
+`all.x = TRUE` to keep every row of A:
 
 ``` r
 A$k <- get_clean_url(A$URL)

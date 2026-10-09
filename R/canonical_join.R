@@ -16,11 +16,22 @@
 #' merge(A, B, by = "k", incomparables = NA)}
 #'     \code{incomparables = NA} stops URLs that have no clean form from
 #'     matching each other, as \code{canonical_join()} never matches them.
-#'     Two defaults differ: the recipe keeps every row that shares a key,
-#'     where \code{canonical_join()} keeps the first (\code{collision =
-#'     "first"}), and it also matches rows whose parse status is a
-#'     \code{warning-*} one, which \code{canonical_join()} leaves unmatched
-#'     (\code{join_parse_status = "ok"}).
+#'     The recipe is not a drop-in replacement:
+#'     \itemize{
+#'       \item it is an inner join; add \code{all.x = TRUE},
+#'         \code{all.y = TRUE} or \code{all = TRUE} for a left, right or
+#'         full join;
+#'       \item it keeps every row that shares a key, where
+#'         \code{canonical_join()} keeps the first (\code{collision =
+#'         "first"});
+#'       \item it also matches rows with a \code{warning-*} parse status
+#'         that have a clean form, which \code{canonical_join()} leaves
+#'         unmatched (\code{join_parse_status = "ok"});
+#'       \item \code{merge()} sorts by the key unless \code{sort = FALSE},
+#'         and names the columns \code{k}, \code{URL.x} and \code{URL.y}
+#'         rather than \code{JoinKey}, \code{A} and \code{B} with the
+#'         \code{_A}/\code{_B} suffixes.
+#'     }
 #' }
 #'
 #' Performs a join between two data frames by canonicalizing URLs to a shared
@@ -349,7 +360,8 @@ canonical_join <- function(data_A, data_B,
     "build the key yourself: ",
     "A$k <- get_clean_url(A$URL); B$k <- get_clean_url(B$URL); ",
     "merge(A, B, by = \"k\", incomparables = NA) (incomparables = NA keeps ",
-    "URLs that have no clean form from matching each other). ",
+    "URLs that have no clean form from matching each other; this is an ",
+    "inner join, so add all.x, all.y or all = TRUE for the others). ",
     "Suppress selectively with ",
     "suppressWarnings(..., classes = \"rurl_canonical_join_deprecated\")."
   )
