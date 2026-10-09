@@ -112,9 +112,9 @@ test_that("D5: with an explicit scheme, userinfo is dropped into a clean_url", {
 test_that("D5: warning-userinfo rows are non-joinable (NA key)", {
   a <- data.frame(URL = "user@example.com", x = 1L, stringsAsFactors = FALSE)
   b <- data.frame(URL = "user@example.com", y = 2L, stringsAsFactors = FALSE)
-  joined <- canonical_join(
+  joined <- cj_deprecated(canonical_join(
     a, b, join = "left", join_parse_status = "ok_or_warning"
-  )
+  ))
   expect_true(all(is.na(joined$y)))
 })
 

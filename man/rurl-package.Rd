@@ -37,7 +37,10 @@ get_clean_url("https://xn--mnchen-3ya.de/a", profile = "seo",
 Parsing: \code{\link[=safe_parse_url]{safe_parse_url()}}, \code{\link[=safe_parse_urls]{safe_parse_urls()}}.
 Accessors: \code{\link[=get_host]{get_host()}}, \code{\link[=get_domain]{get_domain()}}, \code{\link[=get_tld]{get_tld()}}, \code{\link[=get_subdomain]{get_subdomain()}},
 \code{\link[=get_path]{get_path()}}, \code{\link[=get_query]{get_query()}}.
-Cleaning and joining: \code{\link[=get_clean_url]{get_clean_url()}}, \code{\link[=canonical_join]{canonical_join()}}.
+Cleaning: \code{\link[=get_clean_url]{get_clean_url()}}.
+Identity and joining: \code{\link[=get_url_key]{get_url_key()}}, \code{\link[=url_key_policy]{url_key_policy()}}, and the
+\code{\link[=url_inner_join]{url_inner_join()}} family. \code{\link[=canonical_join]{canonical_join()}} is deprecated and will be
+removed in rurl 4.0.0.
 Query introspection: \code{\link[=query_param_summary]{query_param_summary()}}.
 Cache management: \code{\link[=rurl_clear_caches]{rurl_clear_caches()}}, \code{\link[=rurl_cache_info]{rurl_cache_info()}},
 \code{\link[=rurl_cache_config]{rurl_cache_config()}}.

@@ -243,5 +243,6 @@ url_inner_join(pages, meta, by = "URL",
 }
 \seealso{
 \code{\link[=get_url_key]{get_url_key()}} and \code{\link[=url_key_policy]{url_key_policy()}} for the identity model, and
-\code{\link[=canonical_join]{canonical_join()}} for the legacy join that matches on cleaned strings.
+\code{\link[=canonical_join]{canonical_join()}}, deprecated and removed in rurl 4.0.0, for the legacy
+join that matches on cleaned strings.
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/canonical_join.R
 \name{canonical_join}
 \alias{canonical_join}
-\title{Canonical Join of Two URL Sets (Base R Version)}
+\title{Canonical Join of Two URL Sets (Deprecated)}
 \usage{
 canonical_join(
   data_A,
@@ -101,10 +101,44 @@ Returns an empty data frame with the expected structure if no matches
 are found or if inputs are invalid.
 }
 \description{
+\strong{Deprecated.} \code{canonical_join()} is deprecated in this release
+and will be removed in rurl 4.0.0. Every call emits a warning of class
+\code{"rurl_canonical_join_deprecated"}; results are unchanged. Use one of
+these instead:
+\itemize{
+\item To join on URL identity, the \code{url_*_join()} family
+(\code{\link{url_inner_join}}, \code{\link{url_left_join}},
+\code{\link{url_right_join}}, \code{\link{url_full_join}},
+\code{\link{url_semi_join}}, \code{\link{url_anti_join}}).
+\item To keep matching on cleaned URLs, build the key with
+\code{\link{get_clean_url}} and merge on it:
+\preformatted{A$k <- get_clean_url(A$URL)
+B$k <- get_clean_url(B$URL)
+merge(A, B, by = "k", incomparables = NA)}
+\code{incomparables = NA} stops URLs that have no clean form from
+matching each other, as \code{canonical_join()} never matches them.
+The recipe is not a drop-in replacement:
+\itemize{
+\item it is an inner join; add \code{all.x = TRUE},
+\code{all.y = TRUE} or \code{all = TRUE} for a left, right or
+full join;
+\item it keeps every row that shares a key, where
+\code{canonical_join()} keeps the first (\code{collision =
+        "first"});
+\item it also matches rows with a \code{warning-*} parse status
+that have a clean form, which \code{canonical_join()} leaves
+unmatched (\code{join_parse_status = "ok"});
+\item \code{merge()} sorts by the key unless \code{sort = FALSE},
+and names the columns \code{k}, \code{URL.x} and \code{URL.y}
+rather than \code{JoinKey}, \code{A} and \code{B} with the
+\code{_A}/\code{_B} suffixes.
+}
+}
+}
+\details{
 Performs a join between two data frames by canonicalizing URLs to a shared
 "clean" format using \code{\link{safe_parse_urls}} and then matching on
 that key.
-This is suitable for large crawl exports.
 }
 \section{Legacy presentation dials}{
 
@@ -136,6 +170,20 @@ hiding other warnings:
 classes = "rurl_legacy_join_dial_warning")}.
 }
 
+\section{Two separate warnings}{
+
+The deprecation warning (class \code{"rurl_canonical_join_deprecated"})
+fires on every call, first, before any argument is checked. A call that also
+forwards a legacy presentation dial then gets the dial warning (class
+\code{"rurl_legacy_join_dial_warning"}) as well, unchanged. The two are
+separate conditions, so muting one class leaves the other visible: code that
+already mutes \code{"rurl_legacy_join_dial_warning"} keeps working and now
+also sees the deprecation. To mute both, name both classes:
+\code{suppressWarnings(canonical_join(A, B, www_handling = "strip"),
+classes = c("rurl_canonical_join_deprecated",
+"rurl_legacy_join_dial_warning"))}.
+}
+
 \examples{
 A <- data.frame(
   URL = c("https://Example.com/page", "https://example.com/other"),
@@ -150,6 +198,15 @@ B <- data.frame(
 )
 
 # Default canonicalization lower-cases the host and drops the query, so the
-# first row of each side shares one canonical key.
+# first row of each side shares one canonical key. Deprecated: this call
+# warns.
 canonical_join(A, B)
+
+# The same match, built from get_clean_url() keys.
+A$k <- get_clean_url(A$URL)
+B$k <- get_clean_url(B$URL)
+merge(A, B, by = "k", incomparables = NA)
+
+# Or join on URL identity: the query is part of identity, so these differ.
+url_inner_join(A[, c("URL", "ValA")], B[, c("URL", "ValB")], by = "URL")
 }

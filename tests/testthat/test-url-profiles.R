@@ -356,7 +356,7 @@ test_that("canonical_join() profile via `...` is LEGACY: it warns, re-keys", {
   # MATCH. D-E keeps that as compatibility-only for a deprecation window and
   # requires the dial to warn -- so both halves are pinned here.
   expect_warning(
-    canonical_join(A, B, profile = "seo"),
+    cj_deprecated(canonical_join(A, B, profile = "seo")),
     class = "rurl_legacy_join_dial_warning"
   )
   # seo canonicalization (https + strip www / index / trailing slash / tracking
@@ -376,14 +376,14 @@ test_that("the LEGACY join seam converges on its own default under ADR 0017", {
                   stringsAsFactors = FALSE)
   B <- data.frame(URL = "https://example.com/p?id=8", ValB = 8L,
                   stringsAsFactors = FALSE)
-  bare <- canonical_join(A, B)
-  seo <- suppressWarnings(canonical_join(A, B, profile = "seo"))
+  bare <- cj_deprecated(canonical_join(A, B))
+  seo <- cj_legacy(canonical_join(A, B, profile = "seo"))
   expect_identical(nrow(seo), nrow(bare))
-  expect_identical(cj_legacy(seo)$JoinKey, cj_legacy(bare)$JoinKey)
-  expect_identical(cj_legacy(seo)$JoinKey, "https://example.com/p")
+  expect_identical(seo$JoinKey, bare$JoinKey)
+  expect_identical(seo$JoinKey, "https://example.com/p")
   # still legacy, still non-silent
   expect_warning(
-    canonical_join(A, B, profile = "seo"),
+    cj_deprecated(canonical_join(A, B, profile = "seo")),
     class = "rurl_legacy_join_dial_warning"
   )
 })
@@ -401,15 +401,17 @@ test_that("the LEGACY profile seam skips the conflict matrix (P3.1 D-E)", {
   # rule), exactly as in safe_parse_url(). This must NOT error. It does warn:
   # `profile` is a presentation bundle, and P3.1 D-E.1 makes those non-silent.
   expect_warning(
-    canonical_join(
+    cj_deprecated(canonical_join(
       A, B,
       profile = "seo", url_standard = "whatwg", path_normalization = "none"
-    ),
+    )),
     class = "rurl_legacy_join_dial_warning"
   )
   # Sanity: the same combination WITHOUT a profile still fails fast.
   expect_error(
-    canonical_join(A, B, url_standard = "whatwg", path_normalization = "none"),
+    cj_deprecated(
+      canonical_join(A, B, url_standard = "whatwg", path_normalization = "none")
+    ),
     "governs `path_normalization`"
   )
 })
@@ -418,7 +420,7 @@ test_that("canonical_join() rejects an unknown profile up front", {
   A <- data.frame(URL = "http://ex.com/a", ValA = 1L, stringsAsFactors = FALSE)
   B <- data.frame(URL = "http://ex.com/a", ValB = 2L, stringsAsFactors = FALSE)
   expect_error(
-    canonical_join(A, B, profile = "nope"),
+    cj_deprecated(canonical_join(A, B, profile = "nope")),
     "profile must be NULL or one of"
   )
 })

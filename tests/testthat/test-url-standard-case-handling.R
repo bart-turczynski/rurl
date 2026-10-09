@@ -73,7 +73,9 @@ test_that("canonical_join() enforces case_handling conflict through `...`", {
   B <- data.frame(URL = "http://EX.com/a", ValB = 2L, stringsAsFactors = FALSE)
 
   expect_error(
-    canonical_join(A, B, url_standard = "whatwg", case_handling = "upper"),
+    cj_deprecated(
+      canonical_join(A, B, url_standard = "whatwg", case_handling = "upper")
+    ),
     "governs `case_handling`"
   )
 

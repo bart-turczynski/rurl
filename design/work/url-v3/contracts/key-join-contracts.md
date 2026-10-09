@@ -185,22 +185,22 @@ dplyr version.
 
 ## `canonical_join()` migration rows
 
-`canonical_join()`'s shipped `clean_url` equality is
-**LEGACY / COMPATIBILITY-ONLY**. It is not reinterpreted as the v3 identity
-model. The new family defaults to the independent identity key.
+`canonical_join()`'s shipped `clean_url` equality is **LEGACY / COMPATIBILITY-ONLY**. It is not reinterpreted as the v3 identity model. The new family defaults to the independent identity key.
+**Owner decision, 2026-10-08 (`RURL-atrvocqe`):** `canonical_join()` is deprecated, not migrated. The deprecation window is the next rurl release, in which every call warns (class `rurl_canonical_join_deprecated`) and results stay unchanged; the release after it, rurl 4.0.0, removes the function. Callers move to the six-join family or to an explicit `get_clean_url()` key (`merge(A, B, by = "k", incomparables = NA)`).
+The decision withdraws the v3 migration plan (`RURL-bvfivwmc`): the legacy key policy, the identity opt-in and the dual-key audit below were never shipped. Their status cells stay `SETTLED` because the withdrawal is itself settled; the traceability map reads the row population and line positions of this table.
 
 | phase / surface | contract | owner_decision_ref | status |
 |---|---|---|---|
-| legacy freeze | retain `canonical_join()` for a documented deprecation window; expose its old equality as an explicit legacy key policy | P3.1@3b89b94 (D-E; ratification Q7/B7) | SETTLED |
+| legacy freeze | retain `canonical_join()`, results unchanged, for a documented deprecation window: the next rurl release, every call warning with class `rurl_canonical_join_deprecated`. The explicit legacy key policy is **WITHDRAWN**, not shipped | P3.1@3b89b94 (D-E; ratification Q7/B7); owner decision 2026-10-08 (`RURL-atrvocqe`) | SETTLED |
 | implicit equality dials | close unrestricted `...` as an equality surface; presentation/cleaning arguments warn rather than silently changing matches | P3.1@3b89b94 (D-E; ratification Q7/B7) | SETTLED |
-| identity opt-in | delegate `canonical_join(join = inner/left/right/full)` to the corresponding new family when caller selects identity policy | P3.1@3b89b94 (D-E) | SETTLED |
+| identity opt-in | **WITHDRAWN** by owner decision 2026-10-08, not shipped. Was: delegate `canonical_join(join = inner/left/right/full)` to the corresponding new family when caller selects identity policy. Callers call the family directly | P3.1@3b89b94 (D-E); withdrawn by owner decision 2026-10-08 (`RURL-atrvocqe`) | SETTLED |
 | six-join replacement | `url_inner_join`, `url_left_join`, `url_right_join`, `url_full_join`, `url_semi_join`, `url_anti_join` are the v3 identity-keyed family | P3.1@3b89b94 (D-D, D-E) | SETTLED |
-| audit before switch | provide a dual-key comparison/audit surface that quantifies changed matches without rematching silently | P3.1@3b89b94 (D-E) | SETTLED |
+| audit before switch | **WITHDRAWN** by owner decision 2026-10-08, not shipped. Was: provide a dual-key comparison/audit surface that quantifies changed matches without rematching silently. No caller is rematched: `canonical_join()` keeps its results until removal | P3.1@3b89b94 (D-E); withdrawn by owner decision 2026-10-08 (`RURL-atrvocqe`) | SETTLED |
 | current formal migration | `join` maps to the named family; `collision` is replaced by relationship/multiple axes; `on_parse_error` splits into invalid/warnings; `join_parse_status` maps to typed eligibility policy | P3.1@3b89b94 (D-D, D-E) | SETTLED |
 | forwarded parse dials | `url_standard`, `scheme_acceptance`, and `scheme_policy` may participate only through explicit interpretation/key-policy fields | P3.1@3b89b94 (D-E) | SETTLED |
 | forwarded display/cleaning dials | protocol/www/case/host/path/query/port presentation, `path_encoding`, and `profile` do not affect identity; legacy-policy calls preserve old results during the window and otherwise warn | P3.1@3b89b94 (D-A.3, D-E; ratification Q7/B7) | SETTLED |
 | path-encoding regression | revise the shipped forwarding test to assert key invariance | P3.1@3b89b94 (ratification Q7/B7) | SETTLED |
-| removal/default flip | later versioned step outside this contract; not part of v3.0 | P3.1@3b89b94 (D-E) | SETTLED |
+| removal/default flip | removal, with no default flip: rurl 4.0.0, the release after the deprecation window, removes `canonical_join()`; not part of v3.0 | P3.1@3b89b94 (D-E); owner decision 2026-10-08 (`RURL-atrvocqe`) | SETTLED |
 
 ## Per-argument migration dispositions (D-E.4)
 

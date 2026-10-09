@@ -33,8 +33,10 @@ values:
 
 There is **no default flip**: the selector is purely additive, and `NULL`
 callers are unaffected. It is accepted by `safe_parse_url()`,
-`safe_parse_urls()`, the `get_*()` accessors, `canonical_join()`, and
-`resolve_url()`.
+`safe_parse_urls()`, the `get_*()` accessors, and `resolve_url()`. The
+identity joins (`url_inner_join()` and its family) take the standard from
+their key policy, `url_key_policy(standard = ...)`. The deprecated
+`canonical_join()` still forwards it, until its removal in rurl 4.0.0.
 
 ## The canonical cases
 

@@ -796,7 +796,8 @@
 #'   it carries the complete typed schema.
 #'
 #' @seealso [get_url_key()] and [url_key_policy()] for the identity model, and
-#'   [canonical_join()] for the legacy join that matches on cleaned strings.
+#'   [canonical_join()], deprecated and removed in rurl 4.0.0, for the legacy
+#'   join that matches on cleaned strings.
 #'
 #' @examples
 #' pages <- data.frame(

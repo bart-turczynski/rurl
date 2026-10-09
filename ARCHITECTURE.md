@@ -180,7 +180,8 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   Composed from `get_scheme()` / `get_scheme_class()` and `.SUPPORTED_SCHEMES`,
   which is why it collates after `accessors.R`.
 - **R/canonical_join.R** — dataset joining by canonicalized URL keys
-  (`canonical_join()`). Legacy: its key **is** the cleaned display string. The
+  (`canonical_join()`). Deprecated (warns on every call), removed in rurl 4.0.0
+  (RURL-atrvocqe). Legacy: its key **is** the cleaned display string. The
   `url-key.R` / `url-join.R` family below exists because that conflation is a
   defect, and deliberately does not inherit it.
 - **R/url-key.R** — output surface **(e)**, the comparison key: `get_url_key()`,
@@ -341,7 +342,8 @@ only under `port_handling != "exclude"`.
 - **Diagnostics are companion-only** (ADR 0006): host/scheme/validation
   metadata is exposed through `get_host_type()` / `get_scheme_class()` /
   `get_url_diagnostics()`, never as new parse columns/fields.
-- **`clean_url` is the contract**: `canonical_join()` keys on it and
+- **`clean_url` is the contract**: `canonical_join()` (deprecated, removed in
+  4.0.0) keys on it and
   `resolve_url()` returns it **by default** (`output = "clean"`), so any change
   to `clean_url` assembly is a change to the join/identity semantics.
   `resolve_url(..., output = "serialized")` is the opt-in escape hatch added by
