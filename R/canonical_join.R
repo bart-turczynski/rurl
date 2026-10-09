@@ -126,6 +126,10 @@ canonical_join <- function(data_A, data_B,
                            on_parse_error = c("keep", "drop", "error"),
                            join_parse_status = c("ok", "ok_or_warning"),
                            ...) {
+  # RURL-atrvocqe: deprecated on every call, first, before any check can stop
+  # the call. The legacy dial warning below stays a separate condition, so a
+  # caller muting one class does not mute the other.
+  .cj_warn_deprecated()
   if (is.null(name_A)) name_A <- deparse(substitute(data_A))
   if (is.null(name_B)) name_B <- deparse(substitute(data_B))
   join <- match.arg(join)
@@ -288,6 +292,28 @@ canonical_join <- function(data_A, data_B,
     call = NULL
   ))
   invisible(offenders)
+}
+
+# Emit canonical_join()'s deprecation warning (owner decision 2026-10-08:
+# deprecated in the next release, removed in 4.0.0). Built like the legacy dial
+# warning above: one classed condition, so it can be muted on its own.
+.cj_warn_deprecated <- function() {
+  msg <- paste0(
+    "canonical_join() is deprecated and will be removed in rurl 4.0.0. ",
+    "To join on URL identity, use the url_*_join() family ",
+    "(url_inner_join(), url_left_join(), url_right_join(), url_full_join(), ",
+    "url_semi_join(), url_anti_join()). To keep matching on cleaned URLs, ",
+    "build the key yourself: ",
+    "A$k <- get_clean_url(A$URL); B$k <- get_clean_url(B$URL); ",
+    "merge(A, B, by = \"k\"). Suppress selectively with ",
+    "suppressWarnings(..., classes = \"rurl_canonical_join_deprecated\")."
+  )
+  warning(warningCondition(
+    msg,
+    class = "rurl_canonical_join_deprecated",
+    call = NULL
+  ))
+  invisible(NULL)
 }
 
 # Validate canonical_join() inputs, emitting the same warnings as before and

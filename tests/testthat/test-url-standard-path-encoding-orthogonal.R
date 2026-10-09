@@ -272,7 +272,9 @@ test_that("canonical_join() path_encoding is LEGACY: it warns, it re-keys", {
   # The identity half of the row lives in the next block; neither is complete
   # without the other, because the contract is a CONTRAST between them.
   expect_warning(
-    canonical_join(A, B, url_standard = "whatwg", path_encoding = "encode"),
+    cj_deprecated(
+      canonical_join(A, B, url_standard = "whatwg", path_encoding = "encode")
+    ),
     class = "rurl_legacy_join_dial_warning"
   )
   # encode collapses both spellings of the path to the browser form, so the two

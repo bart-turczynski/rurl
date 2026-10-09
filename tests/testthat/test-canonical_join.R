@@ -121,7 +121,7 @@ test_that("canonical_join supports right/full joins and parse-error handling", {
   expect_false(any(is.na(res_drop$A) & is.na(res_drop$B)))
 
   expect_error(
-    canonical_join(A, B, on_parse_error = "error"),
+    cj_deprecated(canonical_join(A, B, on_parse_error = "error")),
     "parsing errors"
   )
 })
@@ -149,50 +149,52 @@ test_that("canonical_join collision = error stops on duplicates", {
 
 test_that("canonical_join validates inputs and columns", {
   expect_warning(
-    res <- canonical_join(
+    res <- cj_deprecated(canonical_join(
       list(),
       data.frame(URL = "a", stringsAsFactors = FALSE)
-    ),
+    )),
     "data frames"
   )
   expect_s3_class(res, "data.frame")
   expect_equal(nrow(res), 0)
 
   expect_warning(
-    res2 <- canonical_join(data.frame(X = "a", stringsAsFactors = FALSE),
+    res2 <- cj_deprecated(canonical_join(
+      data.frame(X = "a", stringsAsFactors = FALSE),
       data.frame(URL = "b", stringsAsFactors = FALSE),
       col_A = "URL"
-    ),
+    )),
     "not found"
   )
   expect_s3_class(res2, "data.frame")
   expect_equal(nrow(res2), 0)
 
   expect_warning(
-    res3 <- canonical_join(
+    res3 <- cj_deprecated(canonical_join(
       data.frame(URL = 1, stringsAsFactors = FALSE),
       data.frame(URL = "b", stringsAsFactors = FALSE)
-    ),
+    )),
     "must be character"
   )
   expect_s3_class(res3, "data.frame")
   expect_equal(nrow(res3), 0)
 
   expect_warning(
-    res4 <- canonical_join(data.frame(URL = "a", stringsAsFactors = FALSE),
+    res4 <- cj_deprecated(canonical_join(
+      data.frame(URL = "a", stringsAsFactors = FALSE),
       data.frame(X = "b", stringsAsFactors = FALSE),
       col_B = "URL"
-    ),
+    )),
     "not found"
   )
   expect_s3_class(res4, "data.frame")
   expect_equal(nrow(res4), 0)
 
   expect_warning(
-    res5 <- canonical_join(
+    res5 <- cj_deprecated(canonical_join(
       data.frame(URL = "a", stringsAsFactors = FALSE),
       data.frame(URL = 1, stringsAsFactors = FALSE)
-    ),
+    )),
     "must be character"
   )
   expect_s3_class(res5, "data.frame")
@@ -281,7 +283,9 @@ test_that("canonical_join join_parse_status defaults to ok-only", {
   )
 
   # warning-no-tld hosts are not joinable by default.
-  res <- canonical_join(A, B, name_A = "A", name_B = "B", join = "inner")
+  res <- cj_deprecated(
+    canonical_join(A, B, name_A = "A", name_B = "B", join = "inner")
+  )
   expect_equal(nrow(res), 0)
 })
 
@@ -293,12 +297,12 @@ test_that("canonical_join 'ok_or_warning' joins warning statuses", {
     URL = "http://internalhost/path", ValB = "x", stringsAsFactors = FALSE
   )
 
-  res <- canonical_join(
+  res <- cj_deprecated(canonical_join(
     A, B,
     name_A = "A", name_B = "B",
     join = "inner",
     join_parse_status = "ok_or_warning"
-  )
+  ))
   expect_equal(nrow(res), 1)
   expect_equal(res$JoinKey[1], "http://internalhost/path")
   expect_equal(res$ValA[1], 1)

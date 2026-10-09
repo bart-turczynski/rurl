@@ -208,7 +208,7 @@ test_that("canonical_join is unchanged under the default 'drop'", {
     URL = "https://ex.com/p?id=1&utm_source=x", b = 99,
     stringsAsFactors = FALSE
   )
-  j <- canonical_join(A, B)
+  j <- cj_deprecated(canonical_join(A, B))
   # Query-free join key: the id-only differences collapse to one key.
   expect_equal(unique(j$JoinKey), "https://ex.com/p")
 })
@@ -228,7 +228,7 @@ test_that("query_handling is LEGACY: 'filter' re-keys the join (?id splits)", {
   # D-E retains that as compatibility-only for a deprecation window and
   # requires the dial to warn -- so both halves are pinned here.
   expect_warning(
-    canonical_join(A, B, query_handling = "filter"),
+    cj_deprecated(canonical_join(A, B, query_handling = "filter")),
     class = "rurl_legacy_join_dial_warning"
   )
   j <- cj_legacy(canonical_join(A, B, query_handling = "filter"))

@@ -201,18 +201,22 @@ test_that("conflict matrix holds on canonical_join()'s LEGACY `...` seam", {
   # D-E.1 makes comparison-irrelevant dials warn. The warning is additive: the
   # conflict matrix (and the result) are unchanged.
   expect_warning(
-    canonical_join(A, B, url_standard = "rfc3986", path_encoding = "keep"),
+    cj_deprecated(
+      canonical_join(A, B, url_standard = "rfc3986", path_encoding = "keep")
+    ),
     class = "rurl_legacy_join_dial_warning"
   )
   expect_error(
-    canonical_join(A, B, url_standard = "whatwg", path_normalization = "none"),
+    cj_deprecated(
+      canonical_join(A, B, url_standard = "whatwg", path_normalization = "none")
+    ),
     "governs `path_normalization`"
   )
   expect_error(
-    canonical_join(A, B, url_standard = "bogus"),
+    cj_deprecated(canonical_join(A, B, url_standard = "bogus")),
     "url_standard must be NULL"
   )
   # Selector alone forwards cleanly and still joins.
-  joined <- canonical_join(A, B, url_standard = "whatwg")
+  joined <- cj_deprecated(canonical_join(A, B, url_standard = "whatwg"))
   expect_equal(nrow(joined), 1L)
 })

@@ -17,6 +17,11 @@
 # This slice adds the WARNING ONLY. The join key, the match set, and every
 # returned value stay byte-identical -- that is what the invariance block at
 # the bottom of this file proves.
+#
+# Every call also carries the separate deprecation warning
+# ("rurl_canonical_join_deprecated", RURL-atrvocqe; pinned in
+# test-canonical-join-deprecation.R). This file is about the dial warning, so
+# each call mutes the deprecation class alone with cj_deprecated().
 
 make_a <- function() {
   data.frame(
@@ -37,7 +42,7 @@ test_that("a presentation dial forwarded through `...` warns", {
   A <- make_a()
   B <- make_b()
   expect_warning(
-    canonical_join(A, B, www_handling = "strip"),
+    cj_deprecated(canonical_join(A, B, www_handling = "strip")),
     class = "rurl_legacy_join_dial_warning"
   )
 })
@@ -49,7 +54,7 @@ test_that("the warning fires ONCE per call, not once per parsed side", {
   # is emitted from the argument-policy block above them, so it must not
   # double up.
   warnings_seen <- testthat::capture_warnings(
-    canonical_join(A, B, www_handling = "strip")
+    cj_deprecated(canonical_join(A, B, www_handling = "strip"))
   )
   expect_length(warnings_seen, 1L)
 })
@@ -58,10 +63,10 @@ test_that("one warning names every offending dial", {
   A <- make_a()
   B <- make_b()
   warnings_seen <- testthat::capture_warnings(
-    canonical_join(
+    cj_deprecated(canonical_join(
       A, B,
       www_handling = "strip", path_encoding = "decode", port_handling = "keep"
-    )
+    ))
   )
   expect_length(warnings_seen, 1L)
   expect_match(warnings_seen, "www_handling", fixed = TRUE)
@@ -79,10 +84,10 @@ test_that("the condition is classed, so it can be muted selectively", {
   A <- make_a()
   B <- make_b()
   expect_silent(
-    suppressWarnings(
+    cj_deprecated(suppressWarnings(
       canonical_join(A, B, www_handling = "strip"),
       classes = "rurl_legacy_join_dial_warning"
-    )
+    ))
   )
 })
 
@@ -94,19 +99,25 @@ test_that("input and interpretation axes stay silent", {
   # cleaning-semantics rows 9 / 21 / 22 / 23 are the table's four BOUNDARY
   # rows: input-acceptance and interpretation axes, "governed as input, not by
   # cleaning". They are legitimate inputs to identity and must not warn.
-  expect_silent(canonical_join(A, B, url_standard = "rfc3986"))    # row 23
-  expect_silent(canonical_join(A, B, scheme_acceptance = "web"))   # row 22
-  expect_silent(canonical_join(A, B, scheme_policy = "infer"))     # row 21
-  expect_silent(
+  expect_silent(cj_deprecated(
+    canonical_join(A, B, url_standard = "rfc3986")                 # row 23
+  ))
+  expect_silent(cj_deprecated(
+    canonical_join(A, B, scheme_acceptance = "web")                # row 22
+  ))
+  expect_silent(cj_deprecated(
+    canonical_join(A, B, scheme_policy = "infer")                  # row 21
+  ))
+  expect_silent(cj_deprecated(
     canonical_join(A, B, scheme_relative_handling = "https")       # row 9
-  )
-  expect_silent(
+  ))
+  expect_silent(cj_deprecated(
     canonical_join(
       A, B,
       url_standard = "rfc3986", scheme_acceptance = "web",
       scheme_policy = "infer", scheme_relative_handling = "keep"
     )
-  )
+  ))
 })
 
 test_that("every cleaning dial marked key-affecting `no` warns", {
@@ -141,7 +152,7 @@ test_that("every cleaning dial marked key-affecting `no` warns", {
     args <- list(A, B, name_A = "A", name_B = "B")
     args[[dial]] <- reachable[[dial]]
     expect_warning(
-      do.call(canonical_join, args),
+      cj_deprecated(do.call(canonical_join, args)),
       class = "rurl_legacy_join_dial_warning",
       label = dial
     )
@@ -155,7 +166,7 @@ test_that("the PSL engine dial warns (cleaning-semantics row 24)", {
   # engine = NULL is the documented no-op default and is byte-identical to
   # omitting it, so it exercises the classification without changing results.
   expect_warning(
-    canonical_join(A, B, engine = NULL),
+    cj_deprecated(canonical_join(A, B, engine = NULL)),
     class = "rurl_legacy_join_dial_warning"
   )
 })
@@ -170,16 +181,14 @@ test_that("`source` is classified even though the seam cannot reach it", {
   # stays correct if the seam ever widens.
   expect_identical(rurl:::.cj_classify_dots("source"), "source")
   expect_error(
-    suppressWarnings(
-      canonical_join(A, B, source = "icann"),
-      classes = "rurl_legacy_join_dial_warning"
-    ),
+    cj_legacy(canonical_join(A, B, source = "icann")),
     "unused argument"
   )
 })
 
-test_that("a plain call with no forwarded dials stays silent", {
-  expect_silent(canonical_join(make_a(), make_b()))
+test_that("a plain call with no forwarded dials gets no dial warning", {
+  # Its only warning is the deprecation, muted here by class.
+  expect_silent(cj_deprecated(canonical_join(make_a(), make_b())))
 })
 
 test_that("the classifier partitions supplied names, not values", {
@@ -208,13 +217,17 @@ test_that("a governed-knob conflict errors without also warning", {
   A <- make_a()
   B <- make_b()
   # The conflict matrix runs first: a call that cannot proceed errors rather
-  # than warning about dials it will never use.
+  # than warning about dials it will never use. (The deprecation warning does
+  # fire on such a call, before the check; it is muted here by class, so a
+  # dial warning would still surface.)
   expect_error(
-    canonical_join(A, B, url_standard = "whatwg", case_handling = "upper"),
+    cj_deprecated(
+      canonical_join(A, B, url_standard = "whatwg", case_handling = "upper")
+    ),
     "governs `case_handling`"
   )
   expect_error(
-    canonical_join(A, B, profile = "nope"),
+    cj_deprecated(canonical_join(A, B, profile = "nope")),
     "profile must be NULL or one of"
   )
 })

@@ -290,28 +290,30 @@ test_that("canonical_join() forwards the alias and warns on it", {
   expect_identical(nrow(us), 1L)
   # The legacy-dial warning (P3.1 D-E.1) names the alias it received.
   expect_warning(
-    via_alias <- canonical_join(a, b, path_normalisation = "both"),
+    via_alias <- cj_deprecated(
+      canonical_join(a, b, path_normalisation = "both")
+    ),
     "`path_normalisation`",
     class = "rurl_legacy_join_dial_warning"
   )
   expect_identical(via_alias, us)
   expect_error(
-    canonical_join(
+    cj_deprecated(canonical_join(
       a, b, path_normalization = "both", path_normalisation = "both"
-    ),
+    )),
     "`path_normalization`.*`path_normalisation`"
   )
   # The `...` seam's url_standard conflict check sees the alias too, so the
   # call fails there, before the legacy-dial warning.
   expect_error(
-    withCallingHandlers(
+    cj_deprecated(withCallingHandlers(
       canonical_join(
         a, b, url_standard = "whatwg", path_normalisation = "none"
       ),
       rurl_legacy_join_dial_warning = function(w) {
         stop("warned before the conflict check")
       }
-    ),
+    )),
     "governs `path_normalization`"
   )
   expect_error(
