@@ -110,16 +110,26 @@ test_that("enable-one-flag-from-all-relaxed correctly separates 2-of-3/3", {
   expect_true(is.na(call_c(h2)))
 })
 
-# --- Baseline guard: empty label is NA even with all three flags relaxed ---
+# --- Baseline guard: what the all-relaxed call does with an empty label -----
+#
+# UTS #46 section 4.2 step 4 rejects an empty label only when VerifyDnsLength
+# is true. punycoder 1.3.0 and earlier rejected it under all-relaxed flags too,
+# so the probe skipped the three isolated calls on such a host. From the
+# development version 1.3.0.9000 on, the all-relaxed call keeps the host as
+# written and the isolated calls run on it, so a hyphen, STD3 or length defect
+# elsewhere in the host is reported beside domain-empty-label. The boundary
+# names the dev version, the lowest that carries the change.
 
-test_that("baseline guard: structural failures stay NA under all-relaxed", {
+test_that("baseline guard: an empty label under all-relaxed, by version", {
   all_relaxed <- function(host) {
     punycoder::host_normalize(
       host, check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
     )
   }
+  keeps_empty_labels <- utils::packageVersion("punycoder") >= "1.3.0.9000"
   for (host in c("a..com", "..com", ".", "", "a...b.com")) {
-    expect_true(is.na(all_relaxed(host)), info = host)
+    expected <- if (keeps_empty_labels) host else NA_character_
+    expect_identical(all_relaxed(host), expected, info = host)
   }
   # Control: a trailing root dot is NOT an empty label under host_normalize.
   expect_false(is.na(all_relaxed("a.com.")))
@@ -351,18 +361,33 @@ test_that("isolated check_hyphens covers leading/trailing/position-3-4 rules", {
 # version because that is the lowest version that truthfully carries the new
 # table. When punycoder next moves its pin, update the literal for the
 # population it moved on, and record the move in NEWS.md.
+#
+# The development version after 1.3.0 (1.3.0.9000) admits empty labels under
+# relaxed flags (UTS #46 section 4.2 step 4). punycoder's contract increments
+# the profile revision for an accept/reject change to the section 4 algorithm,
+# and whether that change ships as `-v3` is not decided, so from 1.3.0.9000 on
+# either token passes. 1.3.0 itself stays exactly `-v2`.
 
 test_that("the Unicode pin rurl inherits from punycoder is the recorded one", {
   info <- punycoder::normalization_profile_info()
   expect_s3_class(info, "data.frame")
   expect_identical(nrow(info), 1L)
-  expected <- if (utils::packageVersion("punycoder") >= "1.2.1.9000") {
+  version <- utils::packageVersion("punycoder")
+  expected <- if (version >= "1.3.0.9000") {
+    list(
+      unicode_version = "17.0.0",
+      profile = c(
+        "uts46-nontransitional-std3-v2", "uts46-nontransitional-std3-v3"
+      )
+    )
+  } else if (version >= "1.2.1.9000") {
     list(unicode_version = "17.0.0", profile = "uts46-nontransitional-std3-v2")
   } else {
     list(unicode_version = "16.0.0", profile = "uts46-nontransitional-std3-v1")
   }
   expect_identical(info$unicode_version, expected$unicode_version)
-  expect_identical(info$profile, expected$profile)
+  expect_length(info$profile, 1L)
+  expect_true(info$profile %in% expected$profile, info = info$profile)
 })
 
 # --- domain-invalid-ace-label: the per-label call (RURL-vicyvlvh) -----------
