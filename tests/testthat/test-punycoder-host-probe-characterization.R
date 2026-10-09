@@ -110,19 +110,50 @@ test_that("enable-one-flag-from-all-relaxed correctly separates 2-of-3/3", {
   expect_true(is.na(call_c(h2)))
 })
 
-# --- Baseline guard: empty label is NA even with all three flags relaxed ---
+# --- Baseline guard: what the all-relaxed call does with an empty label -----
+#
+# UTS #46 section 4.2 step 4 rejects an empty label only when VerifyDnsLength
+# is true. punycoder 1.3.0 and earlier rejected it under all-relaxed flags too,
+# so the probe skipped the three isolated calls on such a host. From profile
+# revision -v3 on (punycoder's ADR-018), the all-relaxed call keeps the host as
+# written and the isolated calls run on it, so a hyphen, STD3 or length defect
+# elsewhere in the host is reported beside domain-empty-label. The gate reads
+# the token, not the version: 1.3.0.9000 builds exist with and without the
+# change (`punycoder_keeps_empty_labels()`, helper-punycoder.R).
 
-test_that("baseline guard: structural failures stay NA under all-relaxed", {
+test_that("baseline guard: an empty label under all-relaxed, by version", {
   all_relaxed <- function(host) {
     punycoder::host_normalize(
       host, check_hyphens = FALSE, use_std3 = FALSE, verify_dns_length = FALSE
     )
   }
+  keeps_empty_labels <- punycoder_keeps_empty_labels()
   for (host in c("a..com", "..com", ".", "", "a...b.com")) {
-    expect_true(is.na(all_relaxed(host)), info = host)
+    expected <- if (keeps_empty_labels) host else NA_character_
+    expect_identical(all_relaxed(host), expected, info = host)
   }
   # Control: a trailing root dot is NOT an empty label under host_normalize.
   expect_false(is.na(all_relaxed("a.com.")))
+})
+
+test_that("the trailing root dot and the DNS-length call do not move", {
+  relaxed_but <- function(host, verify_dns_length = FALSE) {
+    punycoder::host_normalize(
+      host, check_hyphens = FALSE, use_std3 = FALSE,
+      verify_dns_length = verify_dns_length
+    )
+  }
+  # A trailing root dot is no empty label: it survives the all-relaxed call
+  # and the DNS-length call, spelled as written.
+  expect_identical(relaxed_but("a.com."), "a.com.")
+  expect_identical(relaxed_but("a.com.", verify_dns_length = TRUE), "a.com.")
+  # UTS #46 section 4.2 step 4: with VerifyDnsLength true every label must be
+  # 1 to 63 octets, so an empty label fails the DNS-length call on every
+  # punycoder version. The probe's length subtyping runs on these hosts and
+  # must find no length fact unless a label or the name is genuinely too long.
+  for (host in c("a..com", "..com", "a...b.com", ".", "", "a..com.")) {
+    expect_true(is.na(relaxed_but(host, verify_dns_length = TRUE)), info = host)
+  }
 })
 
 # --- domain-empty-label: rurl-owned structural detector (strsplit-based) ---
@@ -331,18 +362,33 @@ test_that("isolated check_hyphens covers leading/trailing/position-3-4 rules", {
 # version because that is the lowest version that truthfully carries the new
 # table. When punycoder next moves its pin, update the literal for the
 # population it moved on, and record the move in NEWS.md.
+#
+# punycoder's development version after 1.3.0 admits empty labels under
+# relaxed flags (UTS #46 section 4.2 step 4) and, per its contract, increments
+# the profile revision to `-v3` for it (ADR-018). A 1.3.0.9000 build from
+# before that change still reports `-v2`. The token must agree with the
+# behavior: `-v3` exactly when the all-relaxed call keeps empty labels, so a
+# release that changes the behavior without the bump fails here.
 
 test_that("the Unicode pin rurl inherits from punycoder is the recorded one", {
   info <- punycoder::normalization_profile_info()
   expect_s3_class(info, "data.frame")
   expect_identical(nrow(info), 1L)
-  expected <- if (utils::packageVersion("punycoder") >= "1.2.1.9000") {
+  version <- utils::packageVersion("punycoder")
+  keeps <- !is.na(punycoder::host_normalize(
+    "a..com", check_hyphens = FALSE, use_std3 = FALSE,
+    verify_dns_length = FALSE
+  ))
+  expected <- if (keeps) {
+    list(unicode_version = "17.0.0", profile = "uts46-nontransitional-std3-v3")
+  } else if (version >= "1.2.1.9000") {
     list(unicode_version = "17.0.0", profile = "uts46-nontransitional-std3-v2")
   } else {
     list(unicode_version = "16.0.0", profile = "uts46-nontransitional-std3-v1")
   }
   expect_identical(info$unicode_version, expected$unicode_version)
-  expect_identical(info$profile, expected$profile)
+  expect_length(info$profile, 1L)
+  expect_true(info$profile %in% expected$profile, info = info$profile)
 })
 
 # --- domain-invalid-ace-label: the per-label call (RURL-vicyvlvh) -----------

@@ -439,10 +439,16 @@
 #   * The 3 isolated calls (`call_a`/`call_b`/`call_c`, one per flag) are only
 #     trustworthy when `baseline` is non-NA; a NA baseline means a problem
 #     outside all 3 flags, never "fails all 3 checks". It has three causes: an
-#     empty label ("a..com", "domain-empty-label"), an invalid ACE label
-#     ("xn--a.com", "domain-invalid-ace-label"), and a cross-label Bidi failure
-#     (criterion 9 of UTS #46 section 4.1 in a Bidi domain name), which no token
-#     reports. On such a host the three flag facts are unknown and read FALSE.
+#     empty label ("a..com", "domain-empty-label") up to punycoder 1.3.0, an
+#     invalid ACE label ("xn--a.com", "domain-invalid-ace-label"), and a
+#     cross-label Bidi failure (criterion 9 of UTS #46 section 4.1 in a Bidi
+#     domain name), which no token reports. On such a host the three flag facts
+#     are unknown and read FALSE. From punycoder's -v3 profile the baseline
+#     admits an empty label, as UTS #46 section 4.2 step 4 does without
+#     VerifyDnsLength, so the isolated calls run on that host and a hyphen,
+#     STD3 or length defect in it co-fires with "domain-empty-label". Every
+#     empty label fails `call_c`; the length subtyping counts octets, so an
+#     empty label alone never fires a length fact.
 #   * `domain-invalid-ace-label` (RURL-vicyvlvh, ruling RUL-023) is decided PER
 #     LABEL, never from `baseline`: each label beginning `xn--` (ASCII
 #     case-insensitive) is judged ALONE, so an empty label or a Bidi neighbor

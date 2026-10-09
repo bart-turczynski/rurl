@@ -602,6 +602,24 @@
   c(path = path, query = query, fragment = fragment)
 }
 
+# WHATWG domain to ASCII (UTS #46 ToASCII with CheckHyphens, UseSTD3ASCIIRules
+# and VerifyDnsLength false), NA on failure. The standard fails it twice over:
+# when UTS #46 reports an error, and when "result is the empty string". Up to
+# punycoder 1.3.0 a host that maps to nothing (a soft hyphen, U+00AD) came back
+# NA, because the all-relaxed call rejected the empty label. Later punycoder
+# keeps an empty label without VerifyDnsLength, as UTS #46 section 4.2 step 4
+# says, and returns "", so the empty result is folded into NA here and every
+# caller keeps one failure test (RURL-tsmevksk). A non-empty result with empty
+# labels, such as ".", is not the empty string and passes through.
+.whatwg_domain_to_ascii <- function(host) {
+  out <- punycoder::host_normalize(
+    host, check_hyphens = FALSE, use_std3 = FALSE,
+    verify_dns_length = FALSE
+  )
+  out[!is.na(out) & out == ""] <- NA_character_
+  out
+}
+
 # The WHATWG `file:` host, which is NEVER null (RURL-uhwivndf). WHATWG's "file
 # state" sets url's host to the EMPTY STRING before any authority is read, and
 # nothing in the file host state can put it back to null: `localhost` is
@@ -635,10 +653,9 @@
   if (stringi::stri_detect_regex(decoded, .WHATWG_FORBIDDEN_HOST_CP)) {
     return("\u0001")
   }
-  normalized <- punycoder::host_normalize(
-    decoded, check_hyphens = FALSE, use_std3 = FALSE,
-    verify_dns_length = FALSE
-  )
+  # On failure the decoded host is kept; the host model
+  # (`.apply_host_standard_model_vec()`) maps it again and fails the row.
+  normalized <- .whatwg_domain_to_ascii(decoded)
   if (!is.na(normalized)) {
     decoded <- normalized
   }
@@ -1740,10 +1757,7 @@
     nonascii_all[is.na(nonascii_all)] <- FALSE
     mapped <- rep(NA_character_, n)
     if (any(nonascii_all)) {
-      mapped[nonascii_all] <- punycoder::host_normalize(
-        host[nonascii_all], check_hyphens = FALSE, use_std3 = FALSE,
-        verify_dns_length = FALSE
-      )
+      mapped[nonascii_all] <- .whatwg_domain_to_ascii(host[nonascii_all])
       use_mapped <- nonascii_all & !is.na(mapped)
       candidate[use_mapped] <- mapped[use_mapped]
     }
@@ -1767,8 +1781,8 @@
     #       and structural bytes) -- a cheap charclass, catches what UTS-46
     #       leaves intact (or, for DEL, silently drops);
     #   (A) a NON-ASCII host fails UTS-46 domain-to-ASCII (U+FFFD/U+FFFF
-    #       noncharacters, a soft-hyphen-only label collapsing to empty) -- one
-    #       vectorized punycoder::host_normalize() over just the non-ASCII rows;
+    #       noncharacters, a soft-hyphen-only host collapsing to empty) -- one
+    #       vectorized .whatwg_domain_to_ascii() over just the non-ASCII rows;
     #       or its domain-to-ASCII RESULT holds a forbidden code point, which is
     #       where WHATWG tests for one: U+FF03, U+FF0F, U+FF1F, U+FF1A, U+FF05,
     #       U+00A0 and U+3000 map to # / ? : % and space (RURL-crsrkcoh).
@@ -2157,15 +2171,13 @@
 #              ToASCII(host) for a host already carrying an ACE (`xn--`) label,
 #              mirroring how Stage B picks the `domain`/`tld` spelling for
 #              "keep" (`host_is_ace`, R/parse.R) so host and domain agree.
-# The mapped form is computed once via `punycoder::host_normalize()` -- the
-# call the `idna` branch already made, never the ADR 0002 helpers, which stay
-# the reversible (unmapped) renderers of the `rfc3986` and `NULL` arms. When
-# domain-to-ASCII fails the pre-encode host is kept, as before.
+# The mapped form is computed once via `punycoder::host_normalize()`
+# (`.whatwg_domain_to_ascii()`) -- the call the `idna` branch already made,
+# never the ADR 0002 helpers, which stay the reversible (unmapped) renderers of
+# the `rfc3986` and `NULL` arms. When domain-to-ASCII fails the pre-encode host
+# is kept, as before.
 .whatwg_host_presentation_vec <- function(subset, host_encoding) {
-  mapped <- punycoder::host_normalize(
-    subset, check_hyphens = FALSE, use_std3 = FALSE,
-    verify_dns_length = FALSE
-  )
+  mapped <- .whatwg_domain_to_ascii(subset)
   retry <- is.na(mapped)
   if (any(retry)) {
     mapped[retry] <- .normalize_and_punycode_vec(subset[retry])
