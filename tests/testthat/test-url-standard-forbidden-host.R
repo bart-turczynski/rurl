@@ -54,6 +54,31 @@ test_that("whatwg rejects a soft-hyphen-only label (UTS-46 -> empty)", {
                    "error")
 })
 
+# A host that UTS-46 maps to NOTHING fails domain to ASCII: "If result is the
+# empty string, domain-to-ASCII validation error, return failure" (WHATWG URL
+# Standard, domain to ASCII). Up to punycoder 1.3.0 the mapping itself came
+# back NA; later punycoder returns the empty string, which rurl must read as the
+# same failure (RURL-tsmevksk). Every row here is an error under either version.
+test_that("whatwg rejects a host whose UTS-46 mapping is empty", {
+  empty_hosts <- c(
+    soft_hyphens = "https://%C2%AD%C2%AD/",
+    zero_width_space = paste0("https://", intToUtf8(0x200B), "/"),
+    file_pct = "file://%C2%AD/p",
+    file_raw = paste0("file://", intToUtf8(0x00AD), "/p")
+  )
+  for (nm in names(empty_hosts)) {
+    u <- empty_hosts[[nm]]
+    expect_identical(get_parse_status(u, url_standard = "whatwg"), "error",
+                     info = nm)
+    expect_true(is.na(get_clean_url(u, url_standard = "whatwg")), info = nm)
+  }
+})
+
+test_that("an ignored code point inside a label is not a failure", {
+  expect_identical(get_host("https://a%C2%ADb/", url_standard = "whatwg"), "ab")
+  expect_identical(get_host("file://a%C2%ADb/p", url_standard = "whatwg"), "ab")
+})
+
 # --- rfc3986 / default keep RFC reg-name permissiveness -----------------------
 
 test_that("rfc3986 keeps reg-name-legal hosts WHATWG forbids", {
