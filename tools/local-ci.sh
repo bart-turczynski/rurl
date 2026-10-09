@@ -3,18 +3,19 @@
 # Local stand-in for the GitLab runner (RURL-psqmlgjf).
 #
 # WHY THIS EXISTS. It was written while `.gitlab-ci.yml` was paused (2026-08-08
-# to 2026-09-03, RURL-utsbwfvc; CI now runs on self-hosted runners): the
+# to 2026-09-03, re-enabled after the monthly minute reset under RURL-utsbwfvc;
+# jobs have been pinned to self-hosted runners since 2026-09-30): the
 # free-tier compute allowance ran out mid-slice and every pipeline after it
 # failed for a reason that had nothing to do with the code. That left the
-# pre-push hook as the only gate -- which the CI config's own header calls out
-# as insufficient, for two reasons that hold whether or not the runner is on:
+# pre-push hook as the only gate, which is not enough, for two reasons that
+# hold whether or not the runner is on:
 #
 #   1. A HOOK IS OPT-IN PER CLONE. `pre-commit install --hook-type pre-push`
 #      is a thing a person does, not a property of the repository, so "the
 #      history is green" states nothing about whether anything checked it.
 #   2. A HOOK VERIFIES THE BRANCH TIP, NOT WHAT LANDS. Merges happen on the
 #      forge. A squash-merge produces a commit that has never existed on any
-#      machine, and only the pipeline on `main` checks it.
+#      machine, and the pipeline on `main` is what checks it.
 #
 # So this is not a second copy of `tools/verify.R` -- the hook already runs that
 # against the working tree, on this machine, in the ambient library. This runs
@@ -59,12 +60,13 @@
 # AFTER A MERGE, run it against what actually landed:
 #   git fetch origin main && tools/local-ci.sh --all origin/main
 #
-# `--all` IS LOAD-BEARING THERE, not belt-and-braces. The `check` job's rules
-# select a tag or a hand-started pipeline and nothing else, so honoring them on
-# `main` would run the cheap half and silently skip the `R CMD check --as-cran`
-# that is the whole reason to look at a merge commit. Those rules exist to
-# ration billed minutes on the forge; locally the minutes are free, so the
-# rationing is exactly what you want to override.
+# `--all` ignores the jobs' rules. On `main` it now selects the same jobs as a
+# plain run: `check`, `coverage` and `pages` run on every push to `main`
+# (ffd9bb3), where `check` once waited for a tag or a hand-started pipeline to
+# ration billed minutes. It still matters on any other ref, where `pages`'
+# rules skip it. Jobs that only a schedule starts (`full-check`, `floor-check`
+# and the dependency audits) stay out either way: `schedule_only()` in
+# tools/local-ci-plan.R.
 #
 # A JOB THAT NEEDS A CI SECRET IS SKIPPED, NOT FAILED, WHEN THE SECRET IS UNSET
 # HERE (RURL-hlcpduoq). The planner owns that gate and its one list of

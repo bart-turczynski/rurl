@@ -36,12 +36,13 @@
 #
 # WHAT IT DOES NOT COVER, stated so nobody reads a green run as more than it is:
 #   * cross-platform and multi-R-version checks -- this runs one platform,
-#     one R, and the GitHub matrix workflows that used to cover the rest
-#     (full-check, rhub) are deleted, so nothing does;
+#     one R. Multi-R runs only in the `deep-check` schedule's `full-check` and
+#     `floor-check` jobs in .gitlab-ci.yml; cross-platform and rhub run
+#     nowhere since their GitHub workflows were deleted;
 #   * README.md re-render (the manifest's `readme` job), coverage,
-#     news-version, and the determinism matrix (pkgdown is the release-time
-#     `pages` job in .gitlab-ci.yml) -- all need network, a pandoc/LaTeX
-#     toolchain, or a Docker matrix;
+#     news-version, and the determinism matrix (pkgdown is the `pages` job in
+#     .gitlab-ci.yml, on every push to `main`) -- all need network, a
+#     pandoc/LaTeX toolchain, or a Docker matrix;
 #   * the OSV and OSS Index advisory audits (test-osv.R, test-security.R).
 #     The locale cell EXCLUDES them by name and `R CMD check` skips them
 #     (NOT_CRAN unset), so no stage here runs them -- see stage_locale();
