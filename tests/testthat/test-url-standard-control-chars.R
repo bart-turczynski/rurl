@@ -240,3 +240,36 @@ test_that("step 1 keeps a leading U+FEFF and what follows it", {
   expect_true("leading-trailing-stripped" %in%
     get_url_diagnostics(u, url_standard = "whatwg"))
 })
+
+test_that("no WHATWG rewrite reads past a leading U+FEFF", {
+  # The alternative full stop sends a row through the separator map, which
+  # rebuilt the row from a match that skipped the mark.
+  dot <- intToUtf8(0x3002)
+  for (r in paste0(c("http://a", "//a"), dot, "com/p")) {
+    u <- paste0(BOM, r)
+    expect_null(safe_parse_url(u, profile = "whatwg"), info = r)
+    expect_true(is.na(get_host(u, url_standard = "whatwg")), info = r)
+  }
+  # Without a scheme there is no host:port carve-out, as for any other lead.
+  for (lead in c(BOM, E_ACUTE)) {
+    expect_true(is.na(
+      get_host(paste0(lead, "localhost:80/"), url_standard = "whatwg")
+    ))
+  }
+})
+
+test_that("a host led by U+FEFF keeps the whole path", {
+  # stri_locate_*() counts a leading U+FEFF and stri_sub() skips it, so the
+  # path was cut one character late: "//x" read "/x" (RURL-vhionecz).
+  for (std in list(NULL, "rfc3986", "whatwg")) {
+    r <- safe_parse_urls(paste0("http://", BOM, "a.com//x"), url_standard = std)
+    expect_identical(r$path, "//x", info = format(std))
+  }
+  r <- safe_parse_urls(paste0("http://", BOM, "a.com/%7e"),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$path, "/%7e")
+  # The same cut, reached through scheme inference.
+  r <- safe_parse_urls(paste0(BOM, "a.com://x/y"), url_standard = "whatwg")
+  expect_identical(r$path, "//x/y")
+})

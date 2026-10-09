@@ -956,11 +956,8 @@ safe_parse_urls <- function(url,
   }
   u <- ifelse(is.na(url), "", as.character(url))
   u <- .strip_whatwg_control_chars_vec(u, url_standard)$url
-  # Under WHATWG a row led by U+FEFF has no scheme, so no authority after one;
-  # the stringi trim below would drop the mark (RURL-vhionecz).
-  no_scheme <- .is_whatwg(url_standard) & .starts_with_bom(u)
   u <- stringi::stri_replace_first_regex(u, "^[\\u0000-\\u0020]+", "")
-  grepl("^[A-Za-z][A-Za-z0-9+.-]*://", u) & !no_scheme
+  grepl("^[A-Za-z][A-Za-z0-9+.-]*://", u)
 }
 
 # Empty (zero-row) result data.frame with the canonical column set/types.

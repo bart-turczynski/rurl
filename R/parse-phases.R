@@ -130,7 +130,8 @@
 # ALREADY all forward slashes (a plain "http://", or the spec-accurate
 # multi-slash collapse of e.g. "http:///host") changes no backslash, so it does
 # NOT set this flag even though the string may still be rewritten.
-.rewrite_whatwg_backslashes_vec <- function(url, url_standard) {
+.rewrite_whatwg_backslashes_vec <- function(url, url_standard,
+                                            bom_led = .starts_with_bom(url)) {
   n <- length(url)
   no_op <- list(url = url, backslash_rewritten = rep(FALSE, n))
   if (!.is_whatwg(url_standard)) {
@@ -141,10 +142,10 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):"
   )
   scheme_lower <- .ascii_tolower(scheme_match[, 2L])
-  # A row led by U+FEFF has no scheme; stringi's match reads past the mark.
+  # A row led by U+FEFF has no scheme; the stringi match reads past the mark.
   eligible <- !is.na(scheme_lower) &
     scheme_lower %in% .WHATWG_SPECIAL_SCHEMES &
-    !.starts_with_bom(url)
+    !bom_led
   if (!any(eligible)) {
     return(no_op)
   }
@@ -152,10 +153,11 @@
   colon_len <- stringi::stri_length(scheme_match[, 1L])
 
   # Every span below is located in and cut from `url` itself, which starts with
-  # the scheme. stringi drops a U+FEFF that starts its input as a byte-order
-  # mark, so searching or cutting a span that starts with one ("http://\ufeff/p"
-  # leaves "\ufeff/p") would lose it, and "http:///p" would then read "p" as
-  # its host (RURL-iiehsbfg). A row led by U+FEFF is not eligible.
+  # the scheme. Some stringi functions read past a U+FEFF that starts their
+  # input (see .starts_with_bom()), so cutting or rewriting a span that starts
+  # with one ("http://\ufeff/p" leaves "\ufeff/p") would lose it, and
+  # "http:///p" would then read "p" as its host (RURL-iiehsbfg). A row led by
+  # U+FEFF is not eligible.
   #
   # The query/fragment boundary is the first literal '?' or '#' -- an
   # unencoded delimiter byte, so it is safe to locate before any rewriting. The
@@ -220,12 +222,15 @@
   list(url = url_out, backslash_rewritten = changed)
 }
 
-# Whether each string starts with U+FEFF. stringi drops a U+FEFF that starts its
-# input as a byte-order mark, from the subject and from a pattern alike, so this
-# matches bytes with base R instead (RURL-vhionecz). Only a URL led by U+FEFF
-# reaches the WHATWG phases with one there, and none of their start-anchored
-# patterns can match it: U+FEFF is not an ASCII alpha, a C0 control, a space or
-# a slash. NA reads FALSE.
+# Whether each string starts with U+FEFF, matched as bytes with base R. Some
+# stringi functions read past a U+FEFF that starts their input, subject and
+# pattern alike, as a byte-order mark: on stringi 1.8.9 (ICU 71.1),
+# stri_match_*_regex(), the *_fixed() family, stri_sub() and
+# stri_escape_unicode() do, while stri_detect_regex(), stri_replace_*_regex()
+# and stri_locate_*() count it. A start-anchored stringi match can therefore
+# succeed on a row led by U+FEFF where none of its patterns could, since U+FEFF
+# is not an ASCII alpha, a C0 control, a space or a slash; callers mask such
+# rows with this (RURL-vhionecz). NA reads FALSE.
 .starts_with_bom <- function(x) {
   grepl("^\ufeff", x, useBytes = TRUE)
 }
@@ -272,18 +277,11 @@
     return(no_op)
   }
 
-  # stringi drops a U+FEFF that starts its input, from a match and from a
-  # replacement alike, so a row led by one would lose it here. Such a row is
-  # searched behind a placeholder ASCII character that is cut off again below.
-  # U+FEFF is not C0 or space, so the row has nothing to trim at its start
-  # (RURL-vhionecz).
-  bom <- .starts_with_bom(url)
-  url_out <- url
-  url_out[bom] <- paste0("x", url[bom])
-
   # Step 1a: leading/trailing C0-control-or-SPACE. `\z` (true end of input), not
   # `$`: ICU's `$` also matches before a final line terminator, and LF/CR/VT/FF
-  # all live inside this class.
+  # all live inside this class. The regex functions here count a leading
+  # U+FEFF, so a row led by one keeps it (see .starts_with_bom()).
+  url_out <- url
   trimmed <- stringi::stri_replace_first_regex(
     url_out, "^[\\u0000-\\u0020]+", ""
   )
@@ -304,7 +302,6 @@
       url_out[had], "[\\t\\n\\r]", ""
     )
   }
-  url_out[bom] <- substring(url_out[bom], 2L)
 
   list(
     url = url_out,
@@ -347,7 +344,8 @@
 # percent-encoded form ("%E3%80%82") is inert literal text, never mapped. No
 # diagnostic is emitted -- this is ordinary WHATWG host normalization (like
 # host-lowercasing), not a lossy repair of malformed input.
-.map_whatwg_domain_separators_vec <- function(url, url_standard) {
+.map_whatwg_domain_separators_vec <- function(url, url_standard,
+                                              bom_led = .starts_with_bom(url)) {
   no_op <- list(url = url)
   if (!.is_whatwg(url_standard)) {
     return(no_op)
@@ -356,7 +354,9 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)?(//)([^/?#]*)(.*)$"
   )
   authority <- m[, 4L]
-  eligible <- !is.na(authority) &
+  # A row led by U+FEFF has neither a scheme nor "//"; the stringi match reads
+  # past the mark, and rebuilding the row from it would drop the mark.
+  eligible <- !bom_led & !is.na(authority) &
     stringi::stri_detect_regex(authority, "[\\u3002\\uFF0E\\uFF61]")
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
@@ -936,11 +936,18 @@
   url <- cc$url
   whatwg_file_input <- url
 
+  # Under WHATWG, a row led by U+FEFF after step 1 has no scheme, so it is never
+  # a scheme or scheme-relative row, and the rewrites below leave it alone. The
+  # stringi matches here read past the mark (see .starts_with_bom()), so this
+  # mask overrides them (RURL-vhionecz). NULL and rfc3986 keep their readings.
+  # No rewrite below changes how a row starts, so the mask holds throughout.
+  bom_led <- .is_whatwg(url_standard) & .starts_with_bom(url)
+
   # WHATWG literal backslash recognition (RURL-ledntyab) runs next: for
   # eligible rows it rewrites "\" to "/" ahead of every scheme/host regex
   # below, so the rest of this function sees an already-normalized string.
   # A no-op (byte-for-byte `url` unchanged) unless url_standard == "whatwg".
-  bs <- .rewrite_whatwg_backslashes_vec(url, url_standard)
+  bs <- .rewrite_whatwg_backslashes_vec(url, url_standard, bom_led)
   url <- bs$url
 
   # WHATWG UTS-46 alternative full-stop mapping (RURL-odsmwsxu) runs next: for
@@ -949,19 +956,13 @@
   # through the existing IPv4/label handling (and IDN names normalize their
   # separators) instead of reaching the parser as an un-splittable literal. A
   # no-op unless url_standard == "whatwg".
-  sep <- .map_whatwg_domain_separators_vec(url, url_standard)
+  sep <- .map_whatwg_domain_separators_vec(url, url_standard, bom_led)
   url <- sep$url
-
-  # Under WHATWG, a row led by U+FEFF has no scheme, so it is never a file,
-  # scheme or scheme-relative row: stringi's start-anchored checks below read
-  # past the mark, and this mask overrides them (RURL-vhionecz). NULL and
-  # rfc3986 keep their readings.
-  bom_led <- .is_whatwg(url_standard) & .starts_with_bom(url)
 
   url_lower <- .ascii_tolower(url)
   is_whatwg_file <- .is_whatwg(url_standard) &
     stringi::stri_detect_regex(whatwg_file_input, "^[Ff][Ii][Ll][Ee]:")
-  is_whatwg_file[is.na(is_whatwg_file) | bom_led] <- FALSE
+  is_whatwg_file[is.na(is_whatwg_file)] <- FALSE
 
   # A scheme-bearing input is "allowed" only if its scheme is one rurl supports
   # (.SUPPORTED_SCHEMES). any(startsWith(., "<scheme>://")) per row, no loop.
@@ -983,7 +984,7 @@
   has_scheme_slashes <- stringi::stri_detect_regex(
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*):\\/\\/"
   )
-  has_scheme_slashes[is.na(has_scheme_slashes) | bom_led] <- FALSE
+  has_scheme_slashes[is.na(has_scheme_slashes)] <- FALSE
 
   is_scheme_relative <- stringi::stri_startswith_fixed(url, "//")
   is_scheme_relative[is.na(is_scheme_relative) | bom_led] <- FALSE
@@ -1255,25 +1256,36 @@
   if (!any(ok)) {
     return(out)
   }
+  # Positions are found in `body` but every cut is made in `p`, which starts
+  # with the scheme. stri_locate_*() counts a U+FEFF that starts its input,
+  # while stri_sub() and stri_startswith_fixed() read past it, so cutting a body
+  # led by one (a host that starts with U+FEFF) took the path one character off
+  # (RURL-vhionecz).
+  p <- prepared[ok]
+  prefix <- stringi::stri_locate_first_regex(
+    p, "^[a-zA-Z][a-zA-Z0-9+.-]*://"
+  )[, "end"]
+  prefix[is.na(prefix)] <- 0L
   body <- stringi::stri_replace_first_regex(
-    prepared[ok], "^[a-zA-Z][a-zA-Z0-9+.-]*://", ""
+    p, "^[a-zA-Z][a-zA-Z0-9+.-]*://", ""
   )
   first <- stringi::stri_locate_first_regex(body, "[/?#]")[, 1L]
-  empty_authority <- stringi::stri_startswith_fixed(body, "/")
+  empty_authority <- stringi::stri_sub(p, prefix + 1L, prefix + 1L) == "/"
   empty_authority[is.na(empty_authority)] <- FALSE
   has_path <- !is.na(first) &
-    stringi::stri_sub(body, first, first) == "/" &
+    stringi::stri_sub(p, prefix + first, prefix + first) == "/" &
     !empty_authority
+  has_path[is.na(has_path)] <- FALSE
   raw <- engine_path[ok]
   if (any(has_path)) {
-    bp <- body[has_path]
-    start <- first[has_path]
-    tail <- stringi::stri_sub(bp, start)
+    pp <- p[has_path]
+    start <- prefix[has_path] + first[has_path]
+    tail <- stringi::stri_sub(pp, start)
     stop_rel <- stringi::stri_locate_first_regex(tail, "[?#]")[, 1L]
     end <- ifelse(
-      is.na(stop_rel), stringi::stri_length(bp), start + stop_rel - 2L
+      is.na(stop_rel), stringi::stri_length(pp), start + stop_rel - 2L
     )
-    raw[has_path] <- stringi::stri_sub(bp, start, end)
+    raw[has_path] <- stringi::stri_sub(pp, start, end)
   }
   # This slice bypasses the parser's component pass by design (dot segments must
   # survive to `path_normalization`), so under `pqf_bytes = "encode"` it is also

@@ -1340,8 +1340,8 @@
   }
   m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
   scheme_lc <- .ascii_tolower(m[, 2L])
-  # Under WHATWG a row led by U+FEFF has no scheme; stringi's match reads past
-  # the mark (RURL-vhionecz).
+  # Under WHATWG a row led by U+FEFF has no scheme; the stringi match reads past
+  # the mark (see .starts_with_bom(), RURL-vhionecz).
   has_scheme <- !is.na(scheme_lc) &
     !(.is_whatwg(url_standard) & .starts_with_bom(url))
   # The host:port carve-out exists for the SCHEME-LESS `example.com:8080` form,
