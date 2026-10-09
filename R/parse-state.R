@@ -593,7 +593,7 @@
 # Pin the byte->code-point reading this grammar walks, so the VERDICT does not
 # depend on the session locale (RURL-kmpnbvdl).
 #
-# The walk mixes two indexing schemes: `stri_locate_first_fixed()` /
+# The walk mixes two indexing schemes: `stri_locate_first_regex()` /
 # `stri_detect_regex()` count CODE POINTS (stringi decodes first), while
 # `substring()` / `nchar()` count NATIVE characters. For a string marked
 # "unknown" -- which is what `rawToChar()` and most user input produce -- native
