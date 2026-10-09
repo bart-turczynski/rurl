@@ -182,3 +182,61 @@ test_that("the leading/trailing diagnostic never fires under rfc3986", {
   expect_false("leading-trailing-stripped" %in%
                  get_url_diagnostics(u, url_standard = "rfc3986"))
 })
+
+# --- A URL led by U+FEFF (RURL-vhionecz) --------------------------------------
+#
+# Step 1 strips only C0 control or space, so a leading U+FEFF (a byte-order
+# mark, as on the first line of a file saved with one) stays, and the scheme
+# start state, seeing no ASCII alpha, finds no scheme. The row must behave like
+# one led by any other non-scheme code point. stringi drops a U+FEFF that starts
+# its input, which made rurl parse such a row as if the mark were absent.
+
+BOM <- intToUtf8(0xFEFF)
+E_ACUTE <- intToUtf8(0xE9)
+
+test_that("whatwg finds no scheme after a leading U+FEFF", {
+  rest <- c("http://a.com/p", "http:\\\\a.com\\p", "http:a.com/p", "//a.com/p")
+  for (r in rest) {
+    u <- paste0(BOM, r)
+    expect_null(safe_parse_url(u, profile = "whatwg"), info = r)
+    for (pol in c("infer", "require")) {
+      expect_identical(
+        is.na(get_host(u, url_standard = "whatwg", scheme_policy = pol)),
+        is.na(get_host(paste0(E_ACUTE, r),
+          url_standard = "whatwg", scheme_policy = pol
+        )),
+        info = paste(pol, r)
+      )
+    }
+    expect_true(is.na(get_host(u, url_standard = "whatwg")), info = r)
+  }
+  # The general route reads the scheme on its own, and must not either.
+  for (r in c("foo://a.com/p", "mailto:x@y.z")) {
+    u <- paste0(BOM, r)
+    expect_null(safe_parse_url(u, profile = "whatwg"), info = r)
+    expect_true(is.na(get_host(u,
+      url_standard = "whatwg", scheme_policy = "require",
+      scheme_acceptance = "general"
+    )), info = r)
+  }
+})
+
+test_that("step 1 keeps a leading U+FEFF and what follows it", {
+  # The space after the mark is not leading, so it is not stripped.
+  expect_true(is.na(
+    get_host(paste0(BOM, " http://a.com/"), url_standard = "whatwg")
+  ))
+  # A space before the mark is stripped; the mark then leads.
+  expect_true(is.na(
+    get_host(paste0(" ", BOM, "http://a.com/"), url_standard = "whatwg")
+  ))
+  # Trailing C0 or space is still stripped from a row led by the mark, and
+  # scheme inference reads the row as a host, where UTS #46 maps the mark away.
+  u <- paste0(BOM, "a.com/p", " ", TAB)
+  expect_identical(
+    unname(get_host(u, url_standard = "whatwg", scheme_policy = "infer")),
+    "a.com"
+  )
+  expect_true("leading-trailing-stripped" %in%
+    get_url_diagnostics(u, url_standard = "whatwg"))
+})
