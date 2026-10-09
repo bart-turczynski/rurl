@@ -140,8 +140,8 @@ expr_matches <- function(expr, vars) {
 # requires `$CI_PIPELINE_SOURCE == "schedule"`. Those are the dependency
 # audits (osv-audit, security-audit; SEOR-fftbjnpl), which need the network
 # and forge-held credentials and answer a question about the world rather than
-# the tree -- so `--all`, which exists to run the rationed release-time jobs
-# after a merge, leaves them out instead of letting a new upstream advisory (or
+# the tree -- so `--all`, which ignores the jobs' rules after a merge, leaves
+# them out instead of letting a new upstream advisory (or
 # absent credentials) turn a post-merge run red. Derived from the rules, not a
 # name list, so a new schedule-only job is covered the day it lands.
 schedule_only <- function(job) {

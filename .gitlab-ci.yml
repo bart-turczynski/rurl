@@ -58,16 +58,11 @@
 # and no failure reason. Only GraphQL `failureReason` names it.
 
 # PAUSED 2026-08-08 (RURL-psqmlgjf), RE-ENABLED 2026-09-03 (RURL-utsbwfvc).
-# The free-tier compute allowance ran out on 2026-08-07 after four merge
-# requests each fired a branch pipeline AND a main pipeline; a `workflow:` block
-# admitting only `$CI_PIPELINE_SOURCE == "web"` stopped pipeline creation until
-# the monthly reset. If the allowance runs out again, tighten the `workflow:`
-# block below further (for example, admit only `$CI_PIPELINE_SOURCE == "web"`)
-# rather than assuming none exists
-# -- one has existed unconditionally since SEOR-bmgkzhvy, below, for an
-# unrelated reason (pipeline count, not compute budget). A red badge that
-# means "no minutes" is still worse than no badge, so narrow the existing
-# block rather than layering a second one.
+# The pause was for GitLab.com's free-tier compute allowance, which no longer
+# limits this project: every job runs on the fleet's self-hosted runners
+# (`tags: [local-docker]` under `default:` below; SEOR-gpafxhua,
+# SEOR-hhtzaknn). The `workflow:` block below limits how many pipelines fire,
+# not compute (SEOR-bmgkzhvy).
 #
 # `tools/local-ci.sh` still runs these jobs in this image against a clean clone
 # on demand (`--all origin/main` after a merge); it is the pull-based fallback,
