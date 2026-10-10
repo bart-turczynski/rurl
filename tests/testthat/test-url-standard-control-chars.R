@@ -579,9 +579,30 @@ test_that("a WHATWG file: path led by U+FEFF keeps the mark", {
     c("file:///%EF%BB%BF%EF%BB%BFp", "file:///%EF%BB%BFC|/x",
       "file:///%EF%BB%BF/x")
   )
-  # "file:<U+FEFF>C:/x" should be "file:///%EF%BB%BFC:/x", but it still fails
-  # before the file: parser runs, like "file:<U+200B>C:/x" and "file:ab:cd":
-  # a colon before any slash reads as an IP host (RURL-otfaotzq).
+  # A colon before any slash (RURL-otfaotzq). The mark is not "/" or "\", so
+  # the file state hands the input to the path state; a later "\" is a segment
+  # separator, and the colon is path data. rurl read the colon as an IPv6 host
+  # attempt and failed each row before the file: parser ran. Values match Node.
+  expect_identical(
+    serialize_url(
+      paste0("file:", rep(c(BOM, ZWSP), each = 2L), c("C:/x", "\\C:/x")),
+      standard = "whatwg"
+    ),
+    c(
+      "file:///%EF%BB%BFC:/x", "file:///%EF%BB%BF/C:/x",
+      "file:///%E2%80%8BC:/x", "file:///%E2%80%8B/C:/x"
+    )
+  )
+  # Negative controls: NULL and rfc3986 refuse all four rows.
+  for (std in list(NULL, "rfc3986")) {
+    expect_identical(
+      suppressWarnings(get_parse_status(
+        paste0("file:", rep(c(BOM, ZWSP), each = 2L), c("C:/x", "\\C:/x")),
+        url_standard = std
+      )),
+      rep("error", 4L)
+    )
+  }
   # The U+200B twin keeps its mark.
   expect_identical(
     serialize_url(paste0("file:", ZWSP, c("p", "/p", "")), standard = "whatwg"),

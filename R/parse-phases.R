@@ -947,8 +947,15 @@
   # Step 3: `scheme:` with no authority slashes -> `scheme://`, authority-table
   # schemes only. The negative lookahead `(?!//)` leaves an already-slashed
   # `scheme://` (incl. the step-2 output) untouched.
+  # A `file:` row also counts its slashes when either is a backslash: the
+  # WHATWG file slash state reads `\\`, `/\` and `\/` as the two slashes, so
+  # `file:\\[::1]/` already has its authority. Inserting `//` there made the
+  # authority path data (`file:////[::1]/`), and a bad one such as
+  # `file:\\[::1x]\` parsed instead of failing (RURL-otfaotzq).
   url <- stringi::stri_replace_first_regex(
-    url, paste0("(?i)^(", scheme_alt, "):(?!//)"), "$1://"
+    url,
+    paste0("(?i)^(", scheme_alt, "):(?!//)(?!(?<=file:)[/\\\\]{2})"),
+    "$1://"
   )
 
   url
@@ -1110,6 +1117,16 @@
   if (!is.null(url_standard)) {
     bad_ip <- bad_ip & !cls$is_ipv4ish
   }
+  # A WHATWG `file:` row is never judged here (RURL-otfaotzq). The token above
+  # is cut from text after "scheme://", so a host-less `file:C:/x` keeps its
+  # scheme and reads as the IPv6 attempt "file:C", and the row failed before
+  # the file state ran. That state sends a code point other than "/" or "\" to
+  # the path state, where a colon is path data (`file:///C:/x`,
+  # `file:///ab:cd`). A real authority goes to .parse_whatwg_file_urls_vec()
+  # and the host model after it instead, which fail `file://[::1x]/` and
+  # `file://1:2/` as the standard does; that parser does not yet validate
+  # every bracketed literal (`file://[1::2::3]/` parses, RURL-ohtwkdgi).
+  bad_ip <- bad_ip & !is_whatwg_file
   rejected <- rejected | bad_ip
 
   # Rows that get an inferred http:// (scheme-less, non-scheme-relative).

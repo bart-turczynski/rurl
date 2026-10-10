@@ -475,6 +475,49 @@ test_that("hostless invalid file: rows never emit a clean URL", {
   )
 })
 
+test_that("a colon before any slash in a host-less file: path", {
+  # RURL-otfaotzq. WHATWG URL Standard, file state: a code point that is not
+  # "/" or "\" sends the input to the path state, which keeps a Windows drive
+  # letter as the first segment and reads anything else as an ordinary
+  # segment. No host is read, so a colon there is path data. rurl read the
+  # colon as an IPv6 host attempt and failed the row before the file state ran.
+  u <- c("file:C:/x", "file:C:x", "file:a:/x", "file:ab:cd", "file:1:2")
+  want <- c(
+    "file:///C:/x", "file:///C:x", "file:///a:/x", "file:///ab:cd",
+    "file:///1:2"
+  )
+  expect_identical(serialize_url(u, standard = "whatwg"), want)
+  w <- safe_parse_urls(u, profile = "whatwg")
+  expect_identical(w$parse_status, rep("ok", length(u)))
+  expect_identical(w$path, c("/C:/x", "/C:x", "/a:/x", "/ab:cd", "/1:2"))
+  expect_true(all(is.na(w$host)))
+  expect_identical(w$clean_url, want)
+
+  # An authority is still read by the host parser: an invalid IPv6 literal and
+  # a host carrying a port (the file host state has no port) still fail.
+  expect_identical(
+    serialize_url(c("file://[::1x]/", "file://1:2/"), standard = "whatwg"),
+    c(NA_character_, NA_character_)
+  )
+
+  # Negative controls: neither the frozen NULL profile nor `rfc3986` has a
+  # file state, and both still refuse these rows on the web route.
+  for (std in list(NULL, "rfc3986")) {
+    parsed <- suppressWarnings(safe_parse_urls(u, url_standard = std))
+    expect_identical(parsed$parse_status, rep("error", length(u)))
+    expect_true(all(is.na(parsed$clean_url)))
+    expect_identical(parsed$path, c("C:/x", "C:x", "a:/x", "ab:cd", "1:2"))
+  }
+  # The RFC 3986 recipe reads each as `path-rootless`, verbatim.
+  g <- safe_parse_urls(
+    u, url_standard = "rfc3986", scheme_policy = "require",
+    scheme_acceptance = "general"
+  )
+  expect_identical(g$parse_status, rep("ok", length(u)))
+  expect_identical(g$clean_url, u)
+  expect_identical(serialize_url(u, standard = "rfc3986", form = "source"), u)
+})
+
 test_that("the authority guard leaves legitimate hostless file: rows intact", {
   # Companion to RURL-hnddjptl: an absolute path is safe to concatenate, so the
   # guard must not fire on it. Pins the shapes `is_file` exists for.
