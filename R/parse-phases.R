@@ -2892,10 +2892,11 @@
   paste0(out, query_suffix)
 }
 
-# RFC 3986 generic serializer (ADR 0012 D1/D2, rfc-syntax posture). NO
-# normalization, NO opaque/list distinction, NO `/.` guard, NO dot-segment
-# removal, NO case folding: it is a faithful generic serialization that
-# preserves the source path bytes. `//` is emitted iff
+# RFC 3986 generic serializer (ADR 0012 D1/D2). NO normalization, NO
+# opaque/list distinction, NO `/.` guard, NO dot-segment removal, NO case
+# folding: it is a faithful generic serialization of the path it is handed.
+# Under rfc-syntax that is the source path; under the `rfc3986` bundle the
+# caller hands it the normalized one (RUL-027). `//` is emitted iff
 # `authority_delimiter_present` (P1.2 D-C), so `host_kind` -- like
 # `rfc_path_form` -- is now informational under this posture: the path string
 # is already in its final source-preserving shape and host presence no longer
@@ -3235,9 +3236,10 @@
     query <- .rfc_pct_normalize(.rfc_pct_encode_high(query))
     fragment <- .rfc_pct_normalize(.rfc_pct_encode_high(fragment))
     userinfo <- .rfc_pct_normalize(userinfo)
-    # Path segment normalization (section 6.2.2.3) applies to a path that has
-    # an authority or is absolute; a rootless path has no dot-segment meaning
-    # to remove.
+    # Path segment normalization (section 6.2.2.3) applies here to a path that
+    # has an authority or is absolute. A rootless path is left as written; the
+    # general-route clean_url does run section 5.2.4 on one (RUL-027), and
+    # whether this form should follow is not settled.
     seg_norm <- !is.na(path) & startsWith(path, "/")
     if (any(seg_norm)) {
       dotless <- vapply(

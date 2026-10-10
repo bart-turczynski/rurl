@@ -2818,10 +2818,18 @@ safe_parse_urls <- function(url,
       if (opts$path_normalization %in% c("dot_segments", "both")) {
         has_path <- !is.na(rfc_path) & nzchar(rfc_path)
         dotless <- rfc_path
-        dotless[has_path] <- .normalize_path_vec(
-          rfc_path[has_path], "keep", "dot_segments", "keep", "none",
-          path_identity = opts$path_identity
-        )
+        # With no identity step (`rfc-syntax` plus an explicit dial), the dot
+        # step runs alone: .normalize_path_vec() would also uppercase every
+        # triplet's hex there, which is its legacy no-selector `keep` rule.
+        dotless[has_path] <- if (identical(opts$path_identity, "none")) {
+          vapply(rfc_path[has_path], ._remove_dot_segments, character(1),
+                 USE.NAMES = FALSE)
+        } else {
+          .normalize_path_vec(
+            rfc_path[has_path], "keep", "dot_segments", "keep", "none",
+            path_identity = opts$path_identity
+          )
+        }
         adp <- gen_b$authority_delimiter_present[gp]
         hostless <- is.na(adp) | !adp
         names_a_host <- hostless & has_path & startsWith(dotless, "//")

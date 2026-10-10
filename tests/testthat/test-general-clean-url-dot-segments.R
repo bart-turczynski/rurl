@@ -269,6 +269,12 @@ test_that("rfc-syntax: an explicit dot_segments reaches clean_url", {
       label = pn
     )
   }
+  # With no identity step, nothing but the dots moves: triplet hex case stays.
+  expect_identical(
+    general_rows(c("foo:/b/%7e", "foo:/a/../%7e"), profile = "rfc-syntax",
+                 path_normalization = "dot_segments")$clean_url,
+    c("foo:/b/%7e", "foo:/%7e")
+  )
 })
 
 test_that("serialize_url(): a normalized hostless path never starts with //", {
