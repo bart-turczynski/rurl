@@ -553,8 +553,17 @@ test_that("every encoding mark survives a batch, not just the tolerated ones", {
     expect_no_error(
       st <- get_parse_status(c("http://a.example.com/", u, "http://b.com/"))
     )
-    expect_identical(st, c("ok", "error", "ok"), info = enc)
+    # A latin1 mark makes the octet the character U+0080, so that row parses
+    # as its UTF-8 twin "http://\u0080/p" (RURL-buemdwcq); the other marks
+    # leave a lone 0x80 that is no character at all.
+    middle <- if (enc == "latin1") {
+      get_parse_status("http://\u0080/p")
+    } else {
+      "error"
+    }
+    expect_identical(st, c("ok", middle, "ok"), info = enc)
   }
+  expect_identical(get_parse_status("http://\u0080/p"), "warning-no-tld")
 })
 
 test_that("the opaque-authority mask is guarded too, and it is a conjunction", {
