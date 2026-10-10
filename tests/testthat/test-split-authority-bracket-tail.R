@@ -3,9 +3,11 @@
 # "]" and kept the tail only when it was a `:port`. The WHATWG host state
 # instead hands the whole buffer -- up to a `:` outside the brackets, `/`, `?`,
 # `#` or the end -- to the host parser, whose IPv6 branch fails an input that
-# does not end with "]" (WHATWG URL Standard, host state; host parsing, IPv6
-# parser). Every WHATWG expectation below was read from Node v26.3.1's WHATWG
-# `URL` on 2026-10-10 (`new URL(input).href`, or a thrown ERR_INVALID_URL).
+# does not end with "]" (IPv6-unclosed), or, as `[::1]]` and `[::1][::2]` do,
+# holds a code point the IPv6 parser rejects (WHATWG URL Standard, host state;
+# host parsing, IPv6 parser). Every WHATWG expectation below was read from
+# Node v26.3.1's WHATWG `URL` on 2026-10-10 (`new URL(input).href`, or a
+# thrown ERR_INVALID_URL).
 
 # The posture recipes of design/posture-card.md.
 .sabt_rfc_args <- list(
@@ -161,7 +163,7 @@ test_that("NULL: a non-special bracket tail never reaches the general parser", {
 test_that("whatwg: text after the ] of a non-special host fails the parse", {
   # Each tail stays in the host buffer -- `\` is no delimiter for a non-special
   # scheme, and in `[::1]x:80` the buffer ends at the `:` after `x` -- so the
-  # host parser sees an input that does not end with "]" and fails. These
+  # host parser fails it: IPv6-unclosed, or the IPv6 parser itself. These
   # parsed as host `[::1]`, the tail silently dropped: `foo://[::1]x/`
   # serialized as `foo://[::1]/` and `foo://[::1]\x` as `foo://[::1]`.
   urls <- c(
