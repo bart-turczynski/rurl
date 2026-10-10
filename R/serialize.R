@@ -236,7 +236,12 @@
 
   # The general-routed rows' true state kinds. Stage A already installed their
   # COMPONENTS, but not the kinds (they are not cached Stage-A fields), so the
-  # pure parser is re-run on the same stripped input Stage A fed it.
+  # pure parser is re-run here. Stage A feeds it .general_route_input_vec() --
+  # the browser fixer, then the WHATWG strip (RURL-vmsmlflr). Only the strip is
+  # applied here, which is the same string because no posture that reaches this
+  # builder carries `fixup_posture = "browser"`: the FSSS bundles are the
+  # `whatwg` and `rfc-syntax` profiles, and the comparison key's bundle sets no
+  # fixup posture. A browser posture here would need the helper instead.
   gen <- .general_parse_vec(
     .strip_whatwg_control_chars_vec(url, opts$url_standard)$url,
     opts$url_standard, "general", opts$scheme_policy
