@@ -685,6 +685,156 @@ test_that("the selector plays no part on the accessor path", {
 })
 
 
+# --- 4f. The WHATWG step-1 strip flag in a C locale (RURL-bnorcgbv) ----------
+#
+# `.strip_whatwg_control_chars_vec()` set `leading_trailing_stripped` with
+# `trimmed != url`: stringi's UTF-8-marked copy against the caller's native
+# ("unknown") input. Under a UTF-8 LC_CTYPE R reads both as UTF-8 and they
+# compare equal. Under LC_ALL=C R translates the native side through the C
+# charset first, so a non-ASCII row compared UNEQUAL to its own untouched copy
+# and `get_url_diagnostics()` reported a strip that never happened. The parse
+# values never moved; only the diagnostic did.
+#
+# Two departures from the rest of this file, both forced by the mechanism:
+#   - The inputs are built from raw octets, never \u escapes. rawToChar() leaves
+#     the "unknown" mark that a C-locale caller's string carries; an escape is
+#     UTF-8-marked and compares equal in any locale, so it cannot show this.
+#   - The mark alone is not enough (contrast 4b): R's string equality reads
+#     LC_CTYPE, so the locale itself is switched, in-process. The parse cache
+#     key does not carry the locale, so caches are cleared on both sides.
+nat_ue <- rawToChar(as.raw(c(0xC3, 0xBC)))  # "u-umlaut", native mark
+nothing_to_strip <- c(
+  query = paste0("http://h/?", nat_ue),
+  path = paste0("http://h/", nat_ue),
+  fragment = paste0("http://h/#", nat_ue)
+)
+real_strip <- c(
+  leading_space = " http://h/",
+  trailing_c0 = "http://h/\x01",
+  leading_space_non_ascii = paste0(" http://h/?", nat_ue)
+)
+
+with_ctype <- function(locale, utf8, code) {
+  active <- suppressWarnings(
+    withr::with_locale(c(LC_CTYPE = locale), Sys.getlocale("LC_CTYPE"))
+  )
+  skip_if_not(identical(active, locale), paste(locale, "is not available"))
+  rurl_clear_caches()
+  on.exit(rurl_clear_caches(), add = TRUE)
+  withr::with_locale(c(LC_CTYPE = locale), {
+    # A switch that did not reach R's charset would test nothing.
+    skip_if_not(
+      identical(l10n_info()[["UTF-8"]], utf8),
+      paste("LC_CTYPE", locale, "did not set the charset")
+    )
+    force(code)
+  })
+}
+ctypes <- list(C = FALSE, `en_US.UTF-8` = TRUE)
+has_lt_token <- function(urls, std = "whatwg") {
+  diag <- get_url_diagnostics(urls, url_standard = std)
+  if (!is.list(diag)) {
+    diag <- list(diag)  # a length-1 input returns the bare token vector
+  }
+  vapply(
+    diag, function(d) "leading-trailing-stripped" %in% d, logical(1),
+    USE.NAMES = FALSE
+  )
+}
+
+for (loc in names(ctypes)) {
+  test_that(paste("a real leading/trailing strip is flagged under", loc), {
+    with_ctype(loc, ctypes[[loc]], {
+      expect_identical(has_lt_token(real_strip), rep(TRUE, 3))
+      expect_identical(
+        rurl:::.strip_whatwg_control_chars_vec(
+          unname(real_strip), "whatwg"
+        )$leading_trailing_stripped,
+        c(TRUE, TRUE, TRUE)
+      )
+    })
+  })
+
+  test_that(paste("a non-ASCII row with nothing to strip, under", loc), {
+    with_ctype(loc, ctypes[[loc]], {
+      # DEFECT pinned (RURL-bnorcgbv): under C every row reports a strip.
+      expect_identical(has_lt_token(nothing_to_strip), rep(loc == "C", 3))
+      # The seam itself, plus a native row led by U+FEFF: a BOM is not a C0
+      # control, so it is never stripped (the row then fails the scheme gate,
+      # so only the seam can show its flag).
+      bom_led <- paste0(rawToChar(as.raw(c(0xEF, 0xBB, 0xBF))), "http://h/")
+      expect_identical(
+        rurl:::.strip_whatwg_control_chars_vec(
+          c(unname(nothing_to_strip), bom_led), "whatwg"
+        )$leading_trailing_stripped,
+        rep(loc == "C", 4)
+      )
+    })
+  })
+
+  test_that(paste("an undecodable octet is not a strip, under", loc), {
+    with_ctype(loc, ctypes[[loc]], {
+      # Not a locale effect: stringi hands back U+FFFD for the lone 0x80, so
+      # the copy differs from the input in EVERY locale, and the WHATWG parse
+      # must see that copy. The strip fact must not ride on it.
+      # DEFECT pinned (RURL-bnorcgbv): reported in both locales.
+      u <- paste0("http://h/", rawToChar(as.raw(0x80)))
+      expect_true(has_lt_token(u))
+      expect_identical(
+        serialize_url(u, standard = "whatwg"), "http://h/%EF%BF%BD"
+      )
+      # ...while a real leading space on the same row is still a strip.
+      expect_true(has_lt_token(paste0(" ", u)))
+    })
+  })
+
+  test_that(paste("the strip rows parse to the same values under", loc), {
+    with_ctype(loc, ctypes[[loc]], {
+      urls <- c(unname(nothing_to_strip), unname(real_strip))
+      expect_identical(
+        serialize_url(urls, standard = "whatwg"),
+        c("http://h/?%C3%BC", "http://h/%C3%BC", "http://h/#%C3%BC",
+          "http://h/", "http://h/", "http://h/?%C3%BC")
+      )
+      expect_identical(
+        get_parse_status(urls, url_standard = "whatwg"),
+        rep("warning-no-tld", 6)
+      )
+      # What flows on from the seam is the same text in both locales.
+      expect_identical(
+        lapply(
+          rurl:::.strip_whatwg_control_chars_vec(urls, "whatwg")$url,
+          charToRaw
+        ),
+        lapply(
+          c(unname(nothing_to_strip), "http://h/", "http://h/",
+            paste0("http://h/?", nat_ue)),
+          charToRaw
+        )
+      )
+    })
+  })
+
+  test_that(paste("rfc3986 shares the seam but never flags, under", loc), {
+    with_ctype(loc, ctypes[[loc]], {
+      urls <- c(unname(nothing_to_strip), unname(real_strip))
+      # The seam is a byte-for-byte no-op off the WHATWG arm, NULL included.
+      for (std in list("rfc3986", NULL)) {
+        cc <- rurl:::.strip_whatwg_control_chars_vec(urls, std)
+        expect_identical(lapply(cc$url, charToRaw), lapply(urls, charToRaw))
+        expect_identical(cc$leading_trailing_stripped, rep(FALSE, 6))
+        expect_identical(cc$control_char_stripped, rep(FALSE, 6))
+      }
+      expect_identical(has_lt_token(urls, "rfc3986"), rep(FALSE, 6))
+      # NULL has no diagnostic vocabulary at all (ADR 0015).
+      expect_error(
+        get_url_diagnostics(urls, url_standard = NULL), "is required"
+      )
+    })
+  })
+}
+
+
 # --- 5. Meta-guard: no transcoding-from-native in the package ----------------
 
 # Which namespace functions reference `fn`, and how many times. Reads the
