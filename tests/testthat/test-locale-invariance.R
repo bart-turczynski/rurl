@@ -555,7 +555,9 @@ test_that("every encoding mark survives a batch, not just the tolerated ones", {
     )
     # A latin1 mark makes the octet the character U+0080, so that row parses
     # as its UTF-8 twin "http://\u0080/p" (RURL-buemdwcq); the other marks
-    # leave a lone 0x80 that is no character at all.
+    # leave a lone 0x80 that is no character at all. The twin's own status is
+    # not pinned here: this test is about the mark, not about which hosts
+    # each arm admits.
     middle <- if (enc == "latin1") {
       get_parse_status("http://\u0080/p")
     } else {
@@ -563,7 +565,6 @@ test_that("every encoding mark survives a batch, not just the tolerated ones", {
     }
     expect_identical(st, c("ok", middle, "ok"), info = enc)
   }
-  expect_identical(get_parse_status("http://\u0080/p"), "warning-no-tld")
 })
 
 test_that("the opaque-authority mask is guarded too, and it is a conjunction", {

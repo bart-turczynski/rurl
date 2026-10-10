@@ -2,7 +2,7 @@
 #
 # A latin1 mark declares what each octet means: octet 0xNN is the character
 # U+00NN (ISO 8859-1). So `"http://h/?\xfc"` marked latin1 and
-# `"http://h/?ü"` are the same URL, and R agrees -- they compare equal,
+# `"http://h/?\u00fc"` are the same URL, and R agrees -- they compare equal,
 # `unique()` folds them, and the parse cache keys them alike. The tests below
 # hold every arm to that reading. The whole suite also runs under LC_ALL=C (the
 # gate's locale stage), and every expected value here is spelled with \u
@@ -27,8 +27,8 @@ latin1_urls <- latin1(
   c(utf8ToInt("foo://h/"), 0xfc, 0x3f, 0xfc)
 )
 utf8_urls <- c(
-  "http://h/?ü", "http://h/ü?q=ü#ü", "http://hü.com/",
-  "foo://h/ü?ü"
+  "http://h/?\u00fc", "http://h/\u00fc?q=\u00fc#\u00fc", "http://h\u00fc.com/",
+  "foo://h/\u00fc?\u00fc"
 )
 
 # Parse on a cold cache: the twins share a cache key, so a warm cache would
@@ -56,40 +56,40 @@ expect_bytes <- function(actual, expected, label) {
 twin <- list(
   "NULL web" = list(
     args = list(url_standard = NULL),
-    host = c("h", "h", "hü.com", NA),
-    path = c("/", "/ü", "/", NA),
+    host = c("h", "h", "h\u00fc.com", NA),
+    path = c("/", "/\u00fc", "/", NA),
     query = c("%C3%BC", "q=%C3%BC", NA, NA),
     fragment = c(NA, "%C3%BC", NA, NA),
     parse_status = c("warning-no-tld", "warning-no-tld", "ok", "error")
   ),
   "rfc3986 web" = list(
     args = list(url_standard = "rfc3986"),
-    host = c("h", "h", "hü.com", NA),
-    path = c("/", "/ü", "/", NA),
-    query = c("ü", "q=ü", NA, NA),
-    fragment = c(NA, "ü", NA, NA),
+    host = c("h", "h", "h\u00fc.com", NA),
+    path = c("/", "/\u00fc", "/", NA),
+    query = c("\u00fc", "q=\u00fc", NA, NA),
+    fragment = c(NA, "\u00fc", NA, NA),
     parse_status = c("warning-no-tld", "warning-no-tld", "ok", "error")
   ),
   "rfc3986 general" = list(
     args = list(url_standard = "rfc3986", scheme_acceptance = "general"),
-    host = c("h", "h", "hü.com", "h"),
-    path = c("/", "/ü", "/", "/ü"),
-    query = c("ü", "q=ü", NA, "ü"),
-    fragment = c(NA, "ü", NA, NA),
+    host = c("h", "h", "h\u00fc.com", "h"),
+    path = c("/", "/\u00fc", "/", "/\u00fc"),
+    query = c("\u00fc", "q=\u00fc", NA, "\u00fc"),
+    fragment = c(NA, "\u00fc", NA, NA),
     parse_status = c("warning-no-tld", "warning-no-tld", "ok", "ok")
   ),
   "whatwg web" = list(
     args = list(url_standard = "whatwg"),
-    host = c("h", "h", "hü.com", NA),
-    path = c("/", "/ü", "/", NA),
+    host = c("h", "h", "h\u00fc.com", NA),
+    path = c("/", "/\u00fc", "/", NA),
     query = c("%C3%BC", "q=%C3%BC", NA, NA),
     fragment = c(NA, "%C3%BC", NA, NA),
     parse_status = c("warning-no-tld", "warning-no-tld", "ok", "error")
   ),
   "whatwg general" = list(
     args = list(url_standard = "whatwg", scheme_acceptance = "general"),
-    host = c("h", "h", "hü.com", "h"),
-    path = c("/", "/ü", "/", "/ü"),
+    host = c("h", "h", "h\u00fc.com", "h"),
+    path = c("/", "/\u00fc", "/", "/\u00fc"),
     query = c("%C3%BC", "q=%C3%BC", NA, "%C3%BC"),
     fragment = c(NA, "%C3%BC", NA, NA),
     parse_status = c("warning-no-tld", "warning-no-tld", "ok", "ok")
@@ -126,7 +126,7 @@ test_that("original_url echoes a latin1 element untouched", {
 test_that("bytes-marked and undecodable UTF-8 rows still fail, not throw", {
   bytes_row <- latin1(c(utf8ToInt("http://h/?"), 0xfc))
   Encoding(bytes_row) <- "bytes"
-  bad_utf8 <- rawToChar(as.raw(c(utf8ToInt("http://hé.com/"), 0x80)))
+  bad_utf8 <- rawToChar(as.raw(c(utf8ToInt("http://h\u00e9.com/"), 0x80)))
   Encoding(bad_utf8) <- "UTF-8"
   for (arm in names(twin)) {
     r <- do.call(cold_parse,
@@ -214,6 +214,20 @@ test_that("latin1 0x80-0x9F reads as U+0080-U+009F, as whatwg read it", {
   expect_identical(cold_parse(x, url_standard = "whatwg")$query, "%C2%80")
   expect_bytes(cold_parse(x, url_standard = "rfc3986")$query, "\u0080",
                "rfc3986")
+})
+
+test_that("get_mailto_recipients() reads a latin1 recipient as its twin", {
+  x <- latin1(c(utf8ToInt("mailto:"), 0xfc, utf8ToInt("@h.com")))
+  for (std in c("whatwg", "rfc3986")) {
+    rurl_clear_caches()
+    a <- get_mailto_recipients(x, url_standard = std)
+    b <- get_mailto_recipients("mailto:\u00fc@h.com", url_standard = std)
+    expect_identical(nrow(a), 1L, label = std)
+    for (col in setdiff(names(b), "url")) {
+      expect_bytes(a[[col]], b[[col]], paste(std, col))
+    }
+    expect_bytes(a$url, x, paste(std, "url echo"))
+  }
 })
 
 test_that("the accessors and serializers follow the parse", {

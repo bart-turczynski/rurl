@@ -2000,10 +2000,12 @@ safe_parse_urls <- function(url,
 # Called beside .neutralize_bytes_input() at both of its seams. The funnel's
 # call is the one every parse value depends on; the safe_parse_urls() call only
 # keeps .mask_opaque_authority() reading the spelling the parse read, and no
-# input measured so far behaves differently without it. Two internal entries
-# read `url` without passing either seam and call it themselves:
-# .fsss_record_vec() (serialize_url()) and ._url_metadata_vec() (the host
-# helpers).
+# input measured so far behaves differently without it. Three entries read
+# `url` without passing either seam and call it themselves:
+# .fsss_record_vec() (serialize_url()), ._url_metadata_vec() (the host
+# helpers) and get_mailto_recipients(). resolve_url() does not yet: it
+# reshapes the reference as a string before parsing it (RURL-buemdwcq's
+# follow-up).
 .latin1_input_to_utf8 <- function(url) {
   latin1 <- !is.na(url) & Encoding(url) == "latin1"
   if (any(latin1)) {

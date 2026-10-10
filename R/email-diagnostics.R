@@ -527,8 +527,11 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
     return(empty)
   }
 
-  gen <- .general_parse_vec(url, opts$url_standard, opts$scheme_acceptance,
-                            opts$scheme_policy)
+  # Parsed directly, not through safe_parse_urls()'s input seams, so the
+  # latin1 re-spelling happens here (RURL-buemdwcq); the `url` column below
+  # still echoes the caller's element.
+  gen <- .general_parse_vec(.latin1_input_to_utf8(url), opts$url_standard,
+                            opts$scheme_acceptance, opts$scheme_policy)
   is_mailto <- gen$general_parsed &
     !is.na(gen$scheme) &
     .ascii_tolower(gen$scheme) == "mailto"
