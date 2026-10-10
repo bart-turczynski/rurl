@@ -890,7 +890,7 @@ safe_parse_urls <- function(url,
   # so a bytes-marked row elsewhere in the same batch threw there even with the
   # funnel guarded. Measured, not assumed -- see .neutralize_bytes_input() for
   # the reproducer and why the accessors do not show it.
-  parse_input <- .neutralize_bytes_input(parse_input)
+  parse_input <- .latin1_input_to_utf8(.neutralize_bytes_input(parse_input))
   cols <- .mask_opaque_authority(._parse_urls_cached(parse_input, opts), opts,
                                  parse_input)
   cols <- cols[field_names]
@@ -1833,7 +1833,7 @@ safe_parse_urls <- function(url,
   # `match(parse_input, uniq)` expansion below in step. Neutralizing the unique
   # vector would leave the input vector holding bytes the unique vector no
   # longer contains, and every row would gather from the wrong position.
-  parse_input <- .neutralize_bytes_input(parse_input)
+  parse_input <- .latin1_input_to_utf8(.neutralize_bytes_input(parse_input))
   uniq <- unique(parse_input)
   m <- length(uniq)
 
@@ -1974,6 +1974,42 @@ safe_parse_urls <- function(url,
   bytes <- Encoding(url) == "bytes"
   if (any(bytes)) {
     url[bytes] <- NA_character_
+  }
+  url
+}
+
+# Re-spell latin1-marked input as UTF-8 before anything reads it
+# (RURL-buemdwcq).
+#
+# A latin1 mark declares that octet 0xNN is the character U+00NN, so
+# "http://h/?\xfc" marked latin1 IS "http://h/?\u00fc": R compares the two
+# equal, `unique()` folds them, and the parse cache keys them alike. The parse
+# did not read them alike. Only the whatwg web route's encoders honored the
+# mark; elsewhere the octet went through as a byte, so under `NULL` the query
+# became `%FC` where the twin's is `%C3%BC`, under `rfc3986` a UTF-8-marked
+# string holding the lone, invalid octet 0xFC, and a non-ASCII host or any
+# general-routed row failed. The shared cache key then served whichever twin
+# was parsed first to the other, so a row's value depended on call order.
+#
+# `stri_enc_toutf8()` reads the latin1 mark itself and never consults the
+# session locale, unlike `enc2utf8()` (see test-locale-invariance.R, section
+# 5). It maps 0x80-0x9F to U+0080-U+009F, the ISO 8859-1 reading that the
+# cache key (`stri_escape_unicode()`) and the whatwg route already use; R's own
+# translation reads those octets as CP1252.
+#
+# Called beside .neutralize_bytes_input() at both of its seams. The funnel's
+# call is the one every parse value depends on; the safe_parse_urls() call only
+# keeps .mask_opaque_authority() reading the spelling the parse read, and no
+# input measured so far behaves differently without it. Three entries read
+# `url` without passing either seam and call it themselves:
+# .fsss_record_vec() (serialize_url()), ._url_metadata_vec() (the host
+# helpers) and get_mailto_recipients(). resolve_url() does not yet: it
+# reshapes the reference as a string before parsing it (RURL-buemdwcq's
+# follow-up).
+.latin1_input_to_utf8 <- function(url) {
+  latin1 <- !is.na(url) & Encoding(url) == "latin1"
+  if (any(latin1)) {
+    url[latin1] <- stringi::stri_enc_toutf8(url[latin1])
   }
   url
 }

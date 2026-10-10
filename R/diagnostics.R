@@ -618,6 +618,9 @@
 # core once over the unique inputs (uncached; RURL-luwvkwhd owns the Stage-A
 # cache-scope decision) and hands those columns to the emit seam.
 ._url_metadata_vec <- function(url, opts) {
+  # Reads `url` itself, not through safe_parse_urls()'s input seams, so it
+  # re-spells latin1-marked input here too (RURL-buemdwcq).
+  url <- .latin1_input_to_utf8(url)
   n <- length(url)
   empty <- list(host_type = rep(NA_character_, n), diagnostics = .diag_new(n))
 
