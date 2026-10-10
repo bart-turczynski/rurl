@@ -363,27 +363,41 @@
   if (!any(eligible)) {
     return(no_op)
   }
-  # Userinfo runs through the LAST "@"; the host (and port) follow it. A fixed
-  # search, not a `.*@` regex: ICU `.` stops at U+000B, U+000C, U+0085, U+2028
-  # and U+2029, which would leave the host unsplit for a later step to map.
-  at <- stringi::stri_locate_last_fixed(authority, "@")[, "end"]
-  at[is.na(at)] <- 0L
-  userinfo <- stringi::stri_sub(authority, 1L, at)
-  host_port <- stringi::stri_sub(authority, at + 1L)
+  # Every span below is located in and cut from `url` itself, which starts with
+  # the scheme or "//": the stringi fixed locators and stri_sub() read past a
+  # U+FEFF that starts their input (see .starts_with_bom()), so splitting
+  # `authority` dropped a mark that starts the userinfo (RURL-exdlurql). The
+  # authority ends at the first "/", "?" or "#"; userinfo runs through the LAST
+  # "@" in it, found by the greedy class backtracking to it. A negated class,
+  # not `.*`: ICU `.` stops at U+000B, U+000C, U+0085, U+2028 and U+2029, which
+  # would leave the host unsplit for a later step to map.
+  prefix <- "^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)?//"
+  authority_end <- stringi::stri_locate_first_regex(
+    url, paste0(prefix, "[^/?#]*")
+  )[, "end"]
+  at <- stringi::stri_locate_first_regex(
+    url, paste0(prefix, "[^/?#]*@")
+  )[, "end"]
+  host_start <- ifelse(
+    is.na(at),
+    stringi::stri_locate_first_regex(url, prefix)[, "end"],
+    at
+  ) + 1L
+  before_host <- stringi::stri_sub(url, 1L, host_start - 1L)
+  host_port <- stringi::stri_sub(url, host_start, authority_end)
+  after_authority <- stringi::stri_sub(url, authority_end + 1L)
   eligible <- eligible & !startsWith(host_port, "[") &
     stringi::stri_detect_regex(host_port, "[\\u3002\\uFF0E\\uFF61]")
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
     return(no_op)
   }
-  scheme <- ifelse(is.na(m[, 2L]), "", m[, 2L])
   mapped_host_port <- stringi::stri_replace_all_regex(
     host_port, "[\\u3002\\uFF0E\\uFF61]", "."
   )
   url_out <- url
   url_out[eligible] <- paste0(
-    scheme[eligible], m[eligible, 3L], userinfo[eligible],
-    mapped_host_port[eligible], m[eligible, 5L]
+    before_host[eligible], mapped_host_port[eligible], after_authority[eligible]
   )
   no_op$url <- url_out
   no_op

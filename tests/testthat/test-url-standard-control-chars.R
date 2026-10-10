@@ -424,3 +424,42 @@ test_that("the RFC 3986 grammar gate finds no scheme after a leading U+FEFF", {
     )
   }
 })
+
+test_that("the WHATWG full-stop map keeps a U+FEFF that starts the userinfo", {
+  # The map split the authority with stri_locate_last_fixed() and stri_sub(),
+  # which read past a U+FEFF that starts it, so the rebuilt row lost the mark
+  # (RURL-exdlurql). Its U+200B twin and the ASCII-dot row always kept theirs.
+  stop3002 <- "\u3002"
+  for (dot in c(stop3002, "\uff0e", "\uff61", ".")) {
+    r <- safe_parse_urls(paste0("http://", BOM, "u@a", dot, "com/"),
+      url_standard = "whatwg"
+    )
+    expect_identical(r$user, "%EF%BB%BFu", info = dot)
+    expect_identical(r$host, "a.com", info = dot)
+    expect_identical(r$path, "/", info = dot)
+  }
+  r <- safe_parse_urls(paste0("http://", ZWSP, "u@a", stop3002, "com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$user, "%E2%80%8Bu")
+  # Userinfo is not a domain: its own full stop stays encoded, and only the
+  # host after the last "@" is mapped.
+  r <- safe_parse_urls(
+    paste0("http://", BOM, "u", stop3002, "x@y@a", stop3002, "com/p", stop3002),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$user, "%EF%BB%BFu%E3%80%82x%40y")
+  expect_identical(r$host, "a.com")
+  expect_identical(r$path, paste0("/p", stop3002))
+  r <- safe_parse_urls(paste0("//", BOM, "u@a", stop3002, "com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$user, "%EF%BB%BFu")
+  expect_identical(r$host, "a.com")
+  # A host led by the mark maps it to nothing (UTS #46).
+  r <- safe_parse_urls(paste0("http://u@", BOM, "a", stop3002, "com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$user, "u")
+  expect_identical(r$host, "a.com")
+})
