@@ -1043,6 +1043,15 @@ test_that("whatwg file: dot removal keeps a segment-leading U+FEFF", {
                 output = "serialized"),
     "http://h/%EF%BB%BFa/b"
   )
+  # A BASE whose first segment starts with the mark goes through the same
+  # walk: it was `file:///x/z`.
+  serialized <- function(ref, base) {
+    resolve_url(ref, base, url_standard = "whatwg", output = "serialized")
+  }
+  expect_identical(serialized("z", "file:///\ufeffx/y"), "file:///%EF%BB%BFx/z")
+  expect_identical(serialized("z", "http://h/\ufeffx/y"),
+                   "http://h/%EF%BB%BFx/z")
+  expect_identical(serialized("z", "file:///\u200bx/y"), "file:///%E2%80%8Bx/z")
 
   # The helper itself, rooted and not.
   expect_identical(
