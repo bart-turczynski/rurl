@@ -4,9 +4,9 @@
 # The WHATWG URL Standard's authority state percent-encodes each userinfo code
 # point with the userinfo percent-encode set. "%" is not in that set, so an
 # existing triplet is copied as written: `new URL("http://a%7fb:c%c3d@a.com/")`
-# has username `a%7fb` and password `c%c3d` (Node 26.3.1). The hex-digit fold
-# is RFC 3986 sec 6.2.2.1 normalization; the `rfc3986` arm keeps it on the
-# parse record, and the `NULL` profile is frozen (ADR 0007, ADR 0016).
+# has username `a%7fb` and password `c%c3d` (Node 26.3.1). The `rfc3986` arm
+# does not move in this change (its web-route fold is RURL-bxrbpzet), and the
+# `NULL` profile is frozen (ADR 0007, ADR 0016).
 #
 # The `whatwg_*` columns are the Node `username` / `password` (a `""` password
 # is reported as NA by the parse record). Red at the pre-fix baseline (main @
@@ -37,7 +37,7 @@ userinfo_case_cases <- data.frame(
   stringsAsFactors = FALSE
 )
 
-test_that("whatwg: an existing userinfo triplet's hex case (vector and scalar)", {
+test_that("whatwg: an existing userinfo triplet keeps its hex case", {
   u <- userinfo_case_cases$url
   for (args in list(
     list(url_standard = "whatwg"),
@@ -99,7 +99,7 @@ test_that("whatwg: clean_url and get_url_key() never carry the userinfo", {
   expect_identical(k[[1]], k[[3]])
 })
 
-test_that("rfc3986 keeps the sec 6.2.2.1 fold on the parse record", {
+test_that("rfc3986 does not move: its web route still folds", {
   u <- userinfo_case_cases$url[1:6]
   r <- safe_parse_urls(u, url_standard = "rfc3986")
   expect_identical(

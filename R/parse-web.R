@@ -465,8 +465,8 @@
 # existing "%xx" in the userinfo keeps its hex case (RURL-jzwshyqb). The WHATWG
 # authority state copies "%" unchanged (it is not in the userinfo
 # percent-encode set), so `whatwg` stores the userinfo as written. `rfc3986`
-# keeps the sec 6.2.2.1 fold it has always stored, and the no-selector
-# baseline is frozen (ADR 0007).
+# keeps the fold it has always stored on this route (whether it should is
+# RURL-bxrbpzet), and the no-selector baseline is frozen (ADR 0007).
 .web_userinfo_source_policy <- function(url_standard) {
   if (.is_whatwg(url_standard)) "preserve" else "normalize"
 }
@@ -1108,9 +1108,9 @@
 # (RURL-jzwshyqb). Acceptance does not move: the allowed-byte check and the
 # "@" -> "%40" rewrite run first under both settings.
 #
-#   "normalize"  every "%XX" on each side of the ":" uppercased. The
-#                no-selector default and the `rfc3986` setting -- what both
-#                have always stored (RFC 3986 sec 6.2.2.1's hex-case fold).
+#   "normalize"  the two characters after every "%" on each side of the
+#                ":" uppercased. The no-selector default and the `rfc3986`
+#                setting -- what both have always stored on this route.
 #   "preserve"   each side stored as written. The `whatwg` setting: the WHATWG
 #                URL Standard's authority state percent-encodes userinfo code
 #                points with the userinfo percent-encode set, which does not

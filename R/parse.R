@@ -375,8 +375,8 @@
 #'     `"http://a^b@host/"` reports `"a%5Eb"`, and an existing triplet keeps
 #'     its hex case, so `"http://a%7fb@host/"` reports `"a%7fb"`); under
 #'     `url_standard = "rfc3986"` or no selector it is the raw source spelling,
-#'     exactly as written in the URL, except that the hex digits of an
-#'     existing triplet are uppercased (`"a%7Fb"`).
+#'     except that for `http`, `https`, `ftp` and `ftps` the two characters
+#'     after each `%` are uppercased (`"a%7Fb"`).
 #'     Empty is reported as NA.
 #'     \item `password`: The password for authentication, with the same
 #'     encoding contract as `user` (so a ":" inside a WHATWG password is
