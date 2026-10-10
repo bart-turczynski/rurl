@@ -109,7 +109,9 @@
 #   fragment  treatment and the same high-byte encoding + "%XX" uppercasing.
 #             This is `pqf_source = "normalize"`; under `"preserve"` (the
 #             `rfc3986` setting) the verdict is kept and the SOURCE slice is
-#             stored, documented at `.parse_web_url_one()` below.
+#             stored, and under `"whatwg"` the source slice with only its
+#             bytes >= 0x80 encoded, both documented at `.parse_web_url_one()`
+#             below.
 
 # Bytes libcurl refuses outright in path/query/fragment: C0 controls, SP, DEL.
 # (NUL cannot reach here -- R strings cannot hold it.) Under
@@ -288,12 +290,16 @@
 # `.web_escape_pqf_bytes()`, because there is no uppercase pass after it to
 # reproduce the swallowed-"%" quirk with.
 #
-# Its consumer is `serialize_url(standard = "rfc3986", form = "normalized")`
-# (`.serialize_rfc_full_vec()`, R/parse-phases.R), which percent-encodes a raw
+# Two consumers. `serialize_url(standard = "rfc3986", form = "normalized")`
+# (`.serialize_rfc_full_vec()`, R/parse-phases.R) percent-encodes a raw
 # non-ASCII byte in the query and fragment there. It was the `pqf_source =
 # "preserve"` record's own step from RUL-007 until RUL-015 moved it out of the
 # parse: RFC 3986 sec 2.1 makes the triplet a REPRESENTATION of the octet, so
 # writing it is a rendering choice like the hex-case fold, not a parse fact.
+# Under WHATWG it IS a parse fact -- the query and fragment states encode every
+# non-ASCII code point as they read it and copy an existing triplet unchanged
+# -- so the `pqf_source = "whatwg"` record applies it in the parse
+# (RURL-djvqopjk).
 .web_escape_high_bytes <- function(s) {
   if (is.na(s)) {
     return(s)
@@ -454,11 +460,20 @@
 # pass normalizes them (RURL-gkmwqpos, ruling RUL-007). RFC 3986 sec 6.2.2.1
 # makes hex-digit case folding a NORMALIZATION, so under `rfc3986` it belongs
 # to `serialize_url(form = "normalized")` and not to the parse record, exactly
-# where sec 6.2.2.2's host case folding went in RURL-xkhbhaje. WHATWG and the
-# no-selector baseline keep the normalized spelling, which is what they have
-# always stored.
+# where sec 6.2.2.2's host case folding went in RURL-xkhbhaje. The WHATWG URL
+# Standard's query and fragment states copy "%" unchanged (it is in neither
+# encode set), so `whatwg` keeps an existing triplet's case too, but encodes
+# the bytes >= 0x80 that `"preserve"` would keep raw (RURL-djvqopjk). The
+# no-selector baseline keeps the normalized spelling it has always stored
+# (ADR 0007).
 .web_pqf_source_policy <- function(url_standard) {
-  if (identical(url_standard, "rfc3986")) "preserve" else "normalize"
+  if (identical(url_standard, "rfc3986")) {
+    "preserve"
+  } else if (.is_whatwg(url_standard)) {
+    "whatwg"
+  } else {
+    "normalize"
+  }
 }
 
 # The `userinfo_source` setting each selected standard asks for -- whether an
@@ -1088,8 +1103,8 @@
 # still a rejection.
 #
 #   "normalize"  the component pass's output: bytes >= 0x80 percent-encoded,
-#                then every "%XX" uppercased. The no-selector default and the
-#                `whatwg` setting -- what both have always stored.
+#                then every "%XX" uppercased. The no-selector default -- what
+#                it has always stored, frozen by ADR 0007.
 #   "preserve"   the source slice with the `pqf_bytes = "encode"` escapes
 #                applied (as `.extract_raw_path_vec()` applies them to the
 #                path via `.web_escape_pqf_bytes()`) and NOTHING else: an
@@ -1103,6 +1118,25 @@
 #                RUL-015 for the octet -- which RUL-007 had left encoded here
 #                as a residual, pinned by `external-url-vectors.csv`'s
 #                `fsss_rfc_source` column until that column was re-measured).
+#   "whatwg"     the `"preserve"` slice with every byte >= 0x80 then encoded
+#                as an UPPERCASE "%XX" (`.web_escape_high_bytes()`), and an
+#                existing "%xx" still as written. The `whatwg` setting
+#                (RURL-djvqopjk): the WHATWG URL Standard's query and fragment
+#                states percent-encode code points with the (special-)query and
+#                fragment percent-encode sets, which hold every non-ASCII code
+#                point but not "%", so a triplet is copied unchanged
+#                (`new URL("http://h/?q%7f").search` is `?q%7f`) while a raw
+#                non-ASCII byte is written as its uppercase escape. Encoding
+#                here, not only in the encode-set pass that fills the parse
+#                record's `query` / `fragment` columns (R/parse.R), keeps the
+#                Stage A query ASCII for every reader of it -- `get_url_key()`
+#                among them, which would otherwise key `?ü` and `?%C3%BC`
+#                apart. Uppercase directly, so a stray "%" cannot swallow a
+#                fresh escape's own "%" as it does under `"normalize"`
+#                (`?a%2ü` is `a%2%C3%BC`, not `a%2%c3%BC`). The printable ASCII
+#                the encode sets add (`"` `#` `<` `>`, plus `'` in a special
+#                query and `` ` `` in a fragment) is left to that later pass,
+#                as before.
 #
 # `userinfo_source` -- how an existing "%xx" in the userinfo is STORED
 # (RURL-jzwshyqb). Acceptance does not move: the allowed-byte check and the
@@ -1372,7 +1406,8 @@
   # verdict `pqf_bytes` governs. Under `pqf_source = "preserve"` only its
   # verdict is kept and the stored value is the source slice with the
   # `pqf_bytes = "encode"` escape applied and nothing else touched -- no fold,
-  # no >= 0x80 encoding (see `pqf_source` above).
+  # no >= 0x80 encoding; `"whatwg"` adds the >= 0x80 encoding and still no
+  # fold (see `pqf_source` above).
   norm_opt <- function(x) {
     if (is.null(x) || !nzchar(x)) {
       return(list(ok = TRUE, value = NULL))
@@ -1388,6 +1423,9 @@
       # >= 0x80 it now keeps (RUL-015) would otherwise carry the session
       # locale's mark and compare unequal to the same bytes under LC_ALL=C.
       Encoding(v) <- "UTF-8"
+    } else if (identical(pqf_source, "whatwg")) {
+      # Pure ASCII afterwards, so no encoding mark to declare.
+      v <- .web_escape_high_bytes(.web_escape_pqf_bytes(x))
     }
     list(ok = TRUE, value = v)
   }

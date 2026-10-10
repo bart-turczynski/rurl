@@ -126,3 +126,84 @@ test_that("whatwg: special vs non-special query encode sets (does not move)", {
     serialize_url(pqf_case_foo, standard = "whatwg"), pqf_case_foo_node
   )
 })
+
+# The conformance values. `search` / `hash` / `href` of Node 26.3.1's `URL`,
+# with the leading "?" / "#" dropped. Red at the pre-fix baseline (main @
+# d260387): rows 1, 2, 4 and 5 came back with every triplet uppercased, and
+# row 3 with the fresh escape LOWERCASE (`a%2%c3%BC`), because the component
+# pass's uppercase scan let the stray "%" swallow the escape's own "%".
+pqf_case_node <- data.frame(
+  query = c("q%7f", "a%c3%bc%C3%BC", "a%2%C3%BC", "%27%7e%27", "a%20b%7f"),
+  fragment = c("f%7f", "b%c3%bc%C3%BC", "b%2%C3%BC", "'%7e'", "c%20d%7f"),
+  href = c(
+    "http://h/p%7f?q%7f#f%7f",
+    "http://h/p?a%c3%bc%C3%BC#b%c3%bc%C3%BC",
+    "http://h/p?a%2%C3%BC#b%2%C3%BC",
+    "http://h/p?%27%7e%27#'%7e'",
+    "http://h/p?a%20b%7f#c%20d%7f"
+  ),
+  stringsAsFactors = FALSE
+)
+
+test_that("whatwg: an existing query/fragment triplet keeps its hex case", {
+  u <- pqf_case_urls
+  for (args in list(
+    list(url_standard = "whatwg"),
+    list(profile = "whatwg"),
+    pqf_whatwg_args
+  )) {
+    r <- do.call(safe_parse_urls, c(list(u), args))
+    expect_identical(r$query, pqf_case_node$query)
+    expect_identical(r$fragment, pqf_case_node$fragment)
+  }
+  for (i in seq_along(u)) {
+    s <- safe_parse_url(u[i], url_standard = "whatwg")
+    expect_identical(s$query, pqf_case_node$query[i], info = u[i])
+    expect_identical(s$fragment, pqf_case_node$fragment[i], info = u[i])
+  }
+  expect_identical(serialize_url(u, standard = "whatwg"), pqf_case_node$href)
+  expect_identical(
+    get_query(u, decode = FALSE, url_standard = "whatwg"), pqf_case_node$query
+  )
+  expect_identical(
+    get_fragment(u, url_standard = "whatwg"), pqf_case_node$fragment
+  )
+})
+
+test_that("whatwg: special and non-special rows now agree on the triplet", {
+  # Rows 1 and 2 against their `foo:` twins: the general route never folded,
+  # so a special scheme now stores the same triplet spelling a non-special
+  # one does. They still differ where the encode sets do ("'").
+  w <- do.call(safe_parse_urls, c(
+    list(c(pqf_case_urls[1:2], pqf_case_foo)), pqf_whatwg_args
+  ))
+  expect_identical(w$query[1L], sub("'$", "", w$query[3L]))
+  expect_identical(w$fragment[1L], w$fragment[3L])
+  expect_identical(w$query[2L], "a%c3%bc%C3%BC")
+  expect_identical(w$query[4L], "a%c3%C3%BC'")
+})
+
+test_that("whatwg: the key tells apart triplets that serialize apart", {
+  # WHATWG URL equivalence is serialization equality, and Node serializes
+  # `?q%7f` and `?q%7F` apart. The stray-"%" row now spells its fresh escape
+  # as `?a%2%C3%BC` does, so those two share a key.
+  k <- get_url_key(c("http://h/?q%7f", "http://h/?q%7F",
+                     "http://h/?a%2ü", "http://h/?a%2%C3%BC"))
+  expect_false(identical(k[[1L]], k[[2L]]))
+  expect_identical(k[[3L]], k[[4L]])
+})
+
+test_that("the parser dial: whatwg gets its own pqf_source setting", {
+  expect_identical(rurl:::.web_pqf_source_policy("whatwg"), "whatwg")
+  expect_identical(rurl:::.web_pqf_source_policy("rfc3986"), "preserve")
+  one <- rurl:::.parse_web_url_one(
+    "http://h/p?q%7fü#f%7fü", pqf_bytes = "encode",
+    pqf_source = "whatwg"
+  )
+  expect_identical(one$query, "q%7f%C3%BC")
+  expect_identical(one$fragment, "f%7f%C3%BC")
+  # Acceptance is still `pqf_bytes`'s question.
+  expect_null(rurl:::.parse_web_url_one(
+    "http://h/p?q= x", pqf_bytes = "reject", pqf_source = "whatwg"
+  ))
+})
