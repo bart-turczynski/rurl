@@ -276,3 +276,65 @@ test_that("NULL: the index strip and the encoder keep the mark (ADR 0016)", {
                    "﻿/a/index.html")
   expect_identical(safe_parse_url("file:﻿/a")$path, "﻿/a")
 })
+
+# --- Defect: the trailing-slash strip -----------------------------------------
+
+test_that("the trailing-slash strip keeps a mark that starts the path", {
+  # The strip cut with stri_sub(), which read past the mark while
+  # stri_length() counted it, so `﻿/a/` became `/a/`: the mark was lost
+  # and the slash kept.
+  for (arm in list("rfc3986", NULL)) {
+    expect_identical(
+      arm_path("file:﻿/a/", arm, trailing_slash_handling = "strip"),
+      "﻿/a"
+    )
+    expect_identical(
+      arm_path("file:﻿/", arm, trailing_slash_handling = "strip"),
+      "﻿"
+    )
+    expect_identical(
+      arm_path("file:﻿", arm, trailing_slash_handling = "keep"),
+      "﻿/"
+    )
+    expect_identical(
+      arm_path("file:​/", arm, trailing_slash_handling = "strip"),
+      "​"
+    )
+  }
+  expect_identical(
+    arm_path("foo:﻿/a/b/", "rfc3986", trailing_slash_handling = "strip",
+             scheme_acceptance = "general"),
+    "﻿/a/b"
+  )
+  # The strip and the index strip compose: the index strip runs first.
+  expect_identical(
+    arm_path("file:﻿/a/index.html/", "rfc3986",
+             index_page_handling = "strip",
+             trailing_slash_handling = "strip"),
+    "/﻿/a"
+  )
+})
+
+test_that("NULL: the trailing-slash strip keeps the mark (ADR 0016)", {
+  # Witness: the frozen selector's path of `file:﻿/a/` is `﻿/a/`
+  # and the strip returned `/a/`, which no standard or contract sanctions.
+  # Omitting the selector and passing NULL agree.
+  for (p in list(
+    safe_parse_url("file:﻿/a/", trailing_slash_handling = "strip"),
+    safe_parse_url("file:﻿/a/", url_standard = NULL,
+                   trailing_slash_handling = "strip")
+  )) {
+    expect_identical(p$path, "﻿/a")
+    # Signature: only the path moves; the row is a parse error under NULL
+    # before and after, with no `clean_url`. whatwg was already right (its
+    # path is rooted, pinned above) and rfc3986 moves the same way.
+    expect_identical(p$parse_status, "error")
+    expect_identical(p$clean_url, NA_character_)
+  }
+  expect_identical(safe_parse_url("file:﻿/a/")$path, "﻿/a/")
+  expect_identical(
+    safe_parse_url("http://h.example/a/",
+                   trailing_slash_handling = "strip")$path,
+    "/a"
+  )
+})
