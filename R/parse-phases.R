@@ -1726,8 +1726,10 @@
 # Phase 5b helper (scalar): WHATWG IPv6 serializer for bracketed literals. The
 # WHATWG host parser stores IPv6 as eight 16-bit pieces; dotted-quad tails are
 # folded into two pieces before serialization, and the longest zero run is
-# compressed (`[::127.0.0.1]` -> `[::7f00:1]`). Invalid inputs return unchanged;
-# validation/fatal decisions stay with the existing host model.
+# compressed (`[::127.0.0.1]` -> `[::7f00:1]`). Invalid inputs return unchanged,
+# and the host model behind this makes no IPv6 validity decision: a route that
+# builds a bracketed host must validate it first, as `.web_parse_host()` and
+# `.whatwg_file_ipv6_host()` do (RURL-ohtwkdgi).
 .serialize_whatwg_ipv6_host <- function(host) {
   if (is.na(host) || !stringi::stri_detect_regex(host, "^\\[.*\\]$")) {
     return(host)
