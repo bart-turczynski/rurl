@@ -493,10 +493,11 @@ test_that("source reproduces raw bytes >= 0x80 in query and fragment", {
       "http://h/p?q=%C3%BC#f%C3%BC")
   )
 
-  # The record moves with the serializer under `rfc3986` only. The other two
-  # arms are looped rather than assumed (design/posture-card.md, frame vs
-  # payload): `whatwg` keeps the component pass's encoded spelling and the
-  # frozen `NULL` profile is byte-identical to it.
+  # The raw octet stays raw in the record under `rfc3986` only. The other two
+  # arms are pinned rather than assumed (design/posture-card.md, frame vs
+  # payload): both encode the octet as an uppercase triplet, but `whatwg`
+  # keeps an existing triplet's hex case (RURL-djvqopjk) while the frozen
+  # `NULL` profile uppercases it, so row 3 tells them apart.
   rfc <- safe_parse_urls(raw[1:4], url_standard = "rfc3986",
                          scheme_policy = "require",
                          scheme_acceptance = "general")
@@ -504,19 +505,21 @@ test_that("source reproduces raw bytes >= 0x80 in query and fragment", {
   expect_identical(
     rfc$fragment, c("ü", "\U0001F525", "f%7cü", "fü")
   )
+  # Node 26.3.1 `URL` `search` / `hash` / `href`.
   w <- safe_parse_urls(raw[1:3], url_standard = "whatwg",
                        scheme_policy = "require", scheme_acceptance = "general")
-  n <- safe_parse_urls(raw[1:3], url_standard = NULL,
-                       scheme_policy = "infer", scheme_acceptance = "web")
-  for (p in list(w, n)) {
-    expect_identical(p$query, c("%C3%BC", NA, "q=%7C%C3%BC"))
-    expect_identical(p$fragment, c("%C3%BC", "%F0%9F%94%A5", "f%7C%C3%BC"))
-  }
+  expect_identical(w$query, c("%C3%BC", NA, "q=%7c%C3%BC"))
+  expect_identical(w$fragment, c("%C3%BC", "%F0%9F%94%A5", "f%7c%C3%BC"))
   expect_identical(
     serialize_url(raw[1:3], standard = "whatwg"),
     c("https://x/%C3%BC?%C3%BC#%C3%BC", "https://localhost/#%F0%9F%94%A5",
-      "http://h/p?q=%7C%C3%BC#f%7C%C3%BC")
+      "http://h/p?q=%7c%C3%BC#f%7c%C3%BC")
   )
+  # Frozen (ADR 0007): the component pass's normalized spelling.
+  n <- safe_parse_urls(raw[1:3], url_standard = NULL,
+                       scheme_policy = "infer", scheme_acceptance = "web")
+  expect_identical(n$query, c("%C3%BC", NA, "q=%7C%C3%BC"))
+  expect_identical(n$fragment, c("%C3%BC", "%F0%9F%94%A5", "f%7C%C3%BC"))
 })
 
 # --- the population itself ---------------------------------------------------

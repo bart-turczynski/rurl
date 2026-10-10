@@ -3,7 +3,8 @@
 # the scheme's source spelling beside the folded classification token. The
 # serializer-level property lives in test-rfc3986-serialization-properties.R
 # and test-serialize-fsss.R; this file pins the CONSUMER surfaces that move
-# with the record, and the two arms that must not move at all.
+# with the record, the `whatwg` arm that later moved with it for the triplet
+# alone (RURL-djvqopjk), and the frozen `NULL` arm.
 #
 # The frame-vs-payload rule (design/posture-card.md): a behavior claimed
 # invariant across arms is tested by looping the selector, not by varying the
@@ -100,31 +101,35 @@ test_that("the rfc3986 URL key carries the exact structural query", {
   expect_identical(k[[1L]], k[[5L]])
 })
 
-test_that("the whatwg and NULL arms do not move (ADR 0007, ADR 0016)", {
-  # Byte-pinned against the pre-RUL-007 output, which these two arms never
-  # deviated from: the component pass's normalized spelling is still what
-  # they store. `url_standard = NULL` is the frozen profile; if this test
-  # fails there, the fix has leaked past the `rfc3986` selector.
+test_that("the whatwg arm keeps the triplet but encodes the octet", {
+  # RURL-djvqopjk: the WHATWG query and fragment states copy "%" unchanged,
+  # so an existing triplet keeps its hex case as it does under `rfc3986`,
+  # while a raw byte >= 0x80 is stored as its uppercase escape (RUL-015's raw
+  # octet is an `rfc3986`-only reading). Node 26.3.1 `URL` values.
   w <- rul007_parse("whatwg")
   expect_identical(
     w$query[1:6],
-    c("q=%7Ca", "q=%7Ca", "q=%2F&r=%2F", "q=%7ca", "q=%7C%C3%BC", "q=%C3%BC")
+    c("q=%7ca", "q=%7Ca", "q=%2f&r=%2F", "q=%7ca", "q=%7c%C3%BC", "q=%C3%BC")
   )
   expect_identical(
     w$fragment[1:6],
-    c("f%7Ca", "f%7Ca", "f%2F", "f%7ca", "f%7C%C3%BC", "f%C3%BC")
+    c("f%7ca", "f%7Ca", "f%2f", "f%7ca", "f%7c%C3%BC", "f%C3%BC")
   )
   expect_identical(w$scheme[7:9], c("http", "http", "foo"))
   expect_identical(w$query[13:14],
-                   c("a=1&utm_source=%7Cx&b=%7C", "a=%7Ca&A=%7CA"))
-  # (The WHATWG path keeps its spelling -- the re-derived path always did --
-  # while the query and fragment carry the component pass's uppercase.)
+                   c("a=1&utm_source=%7cx&b=%7C", "a=%7ca&A=%7CA"))
   expect_identical(
     serialize_url(rul007_grid[c(1L, 7L, 13L)], standard = "whatwg"),
-    c("http://h/p%7ca?q=%7Ca#f%7Ca", "http://example.com/",
-      "http://h/p?a=1&utm_source=%7Cx&b=%7C")
+    c("http://h/p%7ca?q=%7ca#f%7ca", "http://example.com/",
+      "http://h/p?a=1&utm_source=%7cx&b=%7C")
   )
+})
 
+test_that("the NULL arm does not move (ADR 0007, ADR 0016)", {
+  # Byte-pinned against the pre-RUL-007 output, which this arm never deviated
+  # from: the component pass's normalized spelling is still what it stores.
+  # `url_standard = NULL` is the frozen profile; if this test fails, a fix
+  # has leaked past the `rfc3986` or `whatwg` selector.
   n <- rul007_parse(NULL)
   expect_identical(n$query[1:3], c("q=%7Ca", "q=%7Ca", "q=%2F&r=%2F"))
   expect_identical(n$fragment[1:3], c("f%7Ca", "f%7Ca", "f%2F"))
@@ -138,9 +143,9 @@ test_that("the whatwg and NULL arms do not move (ADR 0007, ADR 0016)", {
   )
 })
 
-test_that("the parser dial is the rfc3986 selector and nothing else", {
+test_that("the parser dial follows the selector", {
   expect_identical(rurl:::.web_pqf_source_policy("rfc3986"), "preserve")
-  expect_identical(rurl:::.web_pqf_source_policy("whatwg"), "normalize")
+  expect_identical(rurl:::.web_pqf_source_policy("whatwg"), "whatwg")
   expect_identical(rurl:::.web_pqf_source_policy(NULL), "normalize")
   # Acceptance is unchanged by the dial: a forbidden byte still rejects under
   # `pqf_bytes = "reject"`, whichever spelling would have been stored.
