@@ -685,8 +685,15 @@
     return(host)
   }
 
-  # `utils::URLdecode()` rebuilds the string with `rawToChar()`, so the decoded
-  # octets come back marked "unknown" (native) -- an INPUT-side gap the host
+  # The host parser percent-decodes the host, and a "%" not followed by two hex
+  # digits survives as a literal "%", a forbidden domain code point, so any
+  # such "%" fails the host (RURL-zkirywwb). `.web_host_percent_decode()`
+  # returns NULL for exactly those hosts, and for a decoded NUL, which is
+  # forbidden too. `utils::URLdecode()`, used here before, dropped a "%" at the
+  # end of the host, so `file://a%41%/p` parsed as host `aa`.
+  #
+  # The decoder rebuilds the string with `rawToChar()`, so the decoded octets
+  # come back marked "unknown" (native) -- an INPUT-side gap the host
   # chokepoint in `.parse_urls_vec()` cannot cover, because the WHATWG `file:`
   # parser is in-tree and produces this host itself. Under `LC_ALL=C` those
   # bytes are then read as native characters, so `file://a%C2%ADb/p` (soft
@@ -695,10 +702,13 @@
   # (`Encoding<-`; never `enc2utf8()`, which would transcode from the session
   # locale) so the forbidden-code-point gate and `host_normalize()` below see
   # the same host in every locale.
-  decoded <- if (grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)) {
-    .mark_host_utf8(tryCatch(utils::URLdecode(host), error = function(e) host))
-  } else {
-    host
+  decoded <- host
+  if (grepl("%", host, fixed = TRUE)) {
+    decoded <- .web_host_percent_decode(host)
+    if (is.null(decoded)) {
+      return("\u0001")
+    }
+    decoded <- .mark_host_utf8(decoded)
   }
   if (stringi::stri_detect_regex(decoded, .WHATWG_FORBIDDEN_HOST_CP)) {
     return("\u0001")
