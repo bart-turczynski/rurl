@@ -163,3 +163,27 @@ test_that("Stage-A cache key differs when only fixup_posture differs", {
   key_browser <- rurl:::.parse_cache_keys("http:x.com", opts_browser)
   expect_false(identical(key_none, key_browser))
 })
+
+# RURL-otfaotzq: the WHATWG file slash state reads `\\`, `/\` and `\/` as the
+# authority's two slashes, so step 3 leaves a `file:` row with them alone.
+# Inserting `//` made the authority path data, and once the host-shape gate
+# stopped judging whatwg `file:` rows a bad authority parsed. Values are Node
+# 26's `new URL(u).href`; the `http:` rows keep their insertion.
+test_that("step 3 counts backslashes as slashes after file:", {
+  u <- c(
+    "file:\\\\[::1]/", "FILE:\\\\[::1]/", "file:/\\h/p", "file:\\/h/p",
+    "file:\\\\localhost\\C:\\x", "file:\\\\[::1x]\\", "file:/\\[g::1]x/",
+    "http:\\\\h/p"
+  )
+  expect_identical(
+    rurl:::.apply_browser_fixup_vec(u, "browser"),
+    c(u[1:7], "http://\\\\h/p")
+  )
+  expect_identical(
+    safe_parse_urls(u, profile = "browser")$clean_url,
+    c(
+      "file://[::1]/", "file://[::1]/", "file://h/p", "file://h/p",
+      "file:///C:/x", NA, NA, "http://h/p"
+    )
+  )
+})
