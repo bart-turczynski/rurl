@@ -688,7 +688,7 @@
   # Base R, not stri_startswith_fixed(), which reads past a U+FEFF that
   # starts `host`: "<U+FEFF>[::1]" is a domain, and fails (RURL-azcvukyh).
   if (startsWith(host, "[")) {
-    return(host)
+    return(.whatwg_file_ipv6_host(host))
   }
 
   # The host parser percent-decodes the host, and a "%" not followed by two hex
@@ -729,6 +729,27 @@
     return("")
   }
   decoded
+}
+
+# A `file:` host that starts with "[" (RURL-ohtwkdgi). The host parser sends
+# it to the IPv6 parser: "If input does not end with U+005D (]), IPv6-unclosed
+# validation error, return failure", and the text between the brackets must
+# pass the IPv6 parser (WHATWG URL Standard, host parsing, IPv6 parser).
+# `.whatwg_file_normalize_host()` used to return such a host unchecked, and the
+# host model behind it reads any bracketed hex-and-colon run as an IP literal
+# and only reserializes it, so `[1:]`, `[1::2::3]`, `[:::]` and `[12345::]`
+# parsed as written. The check is the one the `http:` route runs,
+# `.web_ipv6_serialize()` (NULL on an invalid literal). A failure returns the
+# "\u0001" marker the normalizer's other failures use, which the host model
+# rejects. A valid host goes on as written, not in the libcurl spelling that
+# function returns, and the host model's WHATWG IPv6 serializer writes it.
+.whatwg_file_ipv6_host <- function(host) {
+  hb <- .web_bytes(host)
+  if (hb[length(hb)] != 0x5DL ||
+      is.null(.web_ipv6_serialize(.web_chr(hb[-c(1L, length(hb))])))) {
+    return("\u0001")
+  }
+  host
 }
 
 .whatwg_file_drive_path <- function(path) {
@@ -1705,8 +1726,10 @@
 # Phase 5b helper (scalar): WHATWG IPv6 serializer for bracketed literals. The
 # WHATWG host parser stores IPv6 as eight 16-bit pieces; dotted-quad tails are
 # folded into two pieces before serialization, and the longest zero run is
-# compressed (`[::127.0.0.1]` -> `[::7f00:1]`). Invalid inputs return unchanged;
-# validation/fatal decisions stay with the existing host model.
+# compressed (`[::127.0.0.1]` -> `[::7f00:1]`). Invalid inputs return unchanged,
+# and the host model behind this makes no IPv6 validity decision: a route that
+# builds a bracketed host must validate it first, as `.web_parse_host()` and
+# `.whatwg_file_ipv6_host()` do (RURL-ohtwkdgi).
 .serialize_whatwg_ipv6_host <- function(host) {
   if (is.na(host) || !stringi::stri_detect_regex(host, "^\\[.*\\]$")) {
     return(host)
