@@ -875,9 +875,16 @@ test_that("a resolved path whose first segment is empty keeps its `/.` guard", {
       rurl:::.resolve_one_raw("path", "non-spec:/..//p", std),
       "non-spec:/.//path"
     )
-    # An absolute reference recomposes through the same seam.
+    # An absolute reference recomposes through the same seam under rfc3986.
+    # Under whatwg its path reaches the re-parse as written (RURL-rdkewxlx),
+    # and the serializer emits the same guard.
     expect_identical(
       rurl:::.resolve_one_raw("non-spec:/..//x", "http://a/b", std),
+      if (std == "rfc3986") "non-spec:/.//x" else "non-spec:/..//x"
+    )
+    expect_identical(
+      resolve_url("non-spec:/..//x", "http://a/b", url_standard = std,
+                  output = "serialized"),
       "non-spec:/.//x"
     )
     # The guarded string round-trips through the standard's own serializer.

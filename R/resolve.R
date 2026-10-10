@@ -375,11 +375,21 @@
 # `b` into the target components. Returns a component list (scheme / authority /
 # path / query / fragment). This step is standard-agnostic; what is NOT is which
 # reference reaches it as scheme-bearing (see
-# `.whatwg_reference_is_relative()`), and -- under `whatwg_file` only -- the
-# three drive-letter rules of WHATWG's `file:` chain documented above.
+# `.whatwg_reference_is_relative()`), what a scheme-bearing one's path gets
+# (`whatwg`, below), and -- under `whatwg_file` only -- the three drive-letter
+# rules of WHATWG's `file:` chain documented above.
 # `._remove_dot_segments()` (R/path-query.R) is reused for the mandated
 # dot-segment removal; `whatwg_file` swaps in the drive-letter-aware one.
-.transform_reference <- function(r, b, whatwg_file = FALSE) {
+#
+# `whatwg` (RURL-rdkewxlx): a reference that is still scheme-bearing here is
+# one the WHATWG basic URL parser reads WITHOUT the base, so its path is left
+# exactly as written and the re-parse of the recomposed string does the rest:
+# "path state" removes `.` and `..` (and shortens past a drive letter only as
+# "shorten a URL's path" allows) and "opaque path state" removes nothing. Doing
+# section 5.2.4 here instead turned `foo:a/../b` into `foo:/b`, lost the drive
+# letter of `file:/C:/../x`, and, for a special scheme with no `//`, removed
+# dots from what the re-parse then read as a HOST (`ws:a/../b` gave `ws://b/`).
+.transform_reference <- function(r, b, whatwg_file = FALSE, whatwg = FALSE) {
   remove_dots <- if (whatwg_file) {
     .whatwg_file_remove_dot_segments
   } else {
@@ -389,7 +399,7 @@
     return(list(
       scheme = r$scheme,
       authority = r$authority,
-      path = ._remove_dot_segments(r$path),
+      path = if (whatwg) r$path else ._remove_dot_segments(r$path),
       query = r$query,
       fragment = r$fragment
     ))
@@ -527,7 +537,10 @@
   if (!is.na(r$scheme)) {
     # Absolute reference: base is irrelevant (section 5.2.2 first branch).
     empty_base <- .split_uri_ref(NA_character_, url_standard)
-    return(.recompose_uri(.transform_reference(r, empty_base), url_standard))
+    return(.recompose_uri(
+      .transform_reference(r, empty_base, whatwg = .is_whatwg(url_standard)),
+      url_standard
+    ))
   }
   # Relative reference: the base must be an absolute URL (have a scheme).
   if (is.na(base)) {
@@ -617,6 +630,14 @@
 #'     (\code{"//d:"}) is an empty host plus a path segment,
 #'     \code{"file:///d:"}. RFC 3986 has no drive-letter concept, so under
 #'     \code{"rfc3986"} and \code{NULL} the plain section 5.2 merge applies.
+#'   \item \strong{Any other scheme-bearing reference resolves to its own
+#'     parse.} The base plays no part, and the reference's path is left to the
+#'     WHATWG path state, so an opaque path keeps its dot segments
+#'     (\code{resolve_url("foo:a/../b", "http://h/y", url_standard = "whatwg",
+#'     output = "serialized")} is \code{"foo:a/../b"}) and a \code{file:}
+#'     drive letter survives \code{..} (\code{"file:/C:/../x"} gives
+#'     \code{"file:///C:/x"}). RFC 3986 section 5.2.2 removes the dot segments
+#'     of such a path, so under \code{"rfc3986"} the first is \code{"foo:/b"}.
 #' }
 #'
 #' The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):

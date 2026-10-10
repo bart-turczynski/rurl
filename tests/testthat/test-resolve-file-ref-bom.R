@@ -135,9 +135,11 @@ test_that("whatwg: a mark-led file: reference keeps it whatever the base", {
                 url_standard = "whatwg"),
     "file:///\ufeff/b"
   )
+  # The resolver hands the path to the whatwg re-parse as written
+  # (RURL-rdkewxlx); the re-parse's path state removes the dot segment.
   expect_identical(.resolve_one_raw("file:\ufeff/./b", "http://h/y", "whatwg"),
-                   "file:\ufeff/b")
-  # The same remover serves every scheme other than the base's. An opaque
+                   "file:\ufeff/./b")
+  # Every scheme other than the base's is read the same way. An opaque
   # path keeps the mark; a special scheme whose authority is the mark fails,
   # since domain to ASCII maps it to the empty string (host parsing).
   expect_identical(whatwg_ser("foo:\ufeff../x", "http://h/y"),

@@ -95,3 +95,81 @@ test_that("NULL: the frozen selector's scheme-bearing resolution", {
   expect_identical(resolve_url("file:/C:/../x", "http://h/y"), NA_character_)
   expect_identical(resolve_url("http:/a/../b", "https://h/y"), NA_character_)
 })
+
+# --- Conformance: the reference is read without the base ----------------------
+
+test_that("whatwg: an opaque path keeps its dot segments", {
+  # "opaque path state" removes nothing; RFC 3986 section 5.2.4 used to run
+  # first and gave `foo:/b`, a path that is no longer opaque.
+  expect_identical(whatwg_ser("foo:a/../b", "http://h/y"), "foo:a/../b")
+  expect_identical(whatwg_ser("foo:\ufeff/../b", "http://h/y"),
+                   "foo:%EF%BB%BF/../b")
+  expect_identical(whatwg_ser("foo:\ufeff/./b", "http://h/y"),
+                   "foo:%EF%BB%BF/./b")
+  expect_identical(whatwg_ser("foo:a/./b", "http://h/y"), "foo:a/./b")
+  expect_identical(whatwg_ser("foo:./a", "http://h/y"), "foo:./a")
+  expect_identical(whatwg_ser("foo:..", "http://h/y"), "foo:..")
+  expect_identical(whatwg_ser("foo:a/../b", "foo:/y"), "foo:a/../b")
+  expect_identical(whatwg_ser("foo:a/../b?q/../r#f/../g", "http://h/y"),
+                   "foo:a/../b?q/../r#f/../g")
+  expect_identical(.resolve_one_raw("foo:a/../b", "http://h/y", "whatwg"),
+                   "foo:a/../b")
+})
+
+test_that("whatwg: a file: reference against another base keeps its drive", {
+  # "shorten a URL's path" does not remove a lone normalized drive letter.
+  for (base in c("http://h/y", "https://h/y", "foo://h/y")) {
+    expect_identical(whatwg_ser("file:/C:/../x", base), "file:///C:/x",
+                     label = base)
+    expect_identical(whatwg_ser("file:///C:/../x", base), "file:///C:/x",
+                     label = base)
+    expect_identical(whatwg_ser("file:C|/../x", base), "file:///C:/x",
+                     label = base)
+  }
+  expect_identical(whatwg_ser("file:/C:/..", "http://h/y"), "file:///C:/")
+  expect_identical(whatwg_ser("file:/C|/a/../b", "https://h/y"),
+                   "file:///C:/b")
+  expect_identical(whatwg_ser("file:..", "http://h/y"), "file:///")
+  # The same answer the reference already got against a `file:` base.
+  expect_identical(whatwg_ser("file:/C:/../x", "http://h/y"),
+                   whatwg_ser("file:/C:/../x", "file:///y"))
+  expect_identical(
+    resolve_url("file:/C:/../x", "http://h/y", url_standard = "whatwg"),
+    "file:///C:/x"
+  )
+})
+
+test_that("whatwg: a special scheme without `//` keeps its host", {
+  # "special authority ignore slashes state" reads the first segment as the
+  # host, so dot removal belongs to the path after it, not to the host.
+  expect_identical(whatwg_ser("http:/a/../b", "https://h/y"), "http://a/b")
+  expect_identical(whatwg_ser("https:/a/../b", "http://h/y"), "https://a/b")
+  expect_identical(whatwg_ser("ws:a/../b", "http://h/y"), "ws://a/b")
+  expect_identical(whatwg_ser("ftp:a/../b", "http://h/y"), "ftp://a/b")
+  expect_identical(whatwg_ser("wss:/a/./b/../c", "ws://h/y"), "wss://a/c")
+  expect_identical(whatwg_ser("http:/../x", "https://h/y"), "http://../x")
+  expect_identical(whatwg_ser("https:..", "http://h/y"), "https://../")
+  expect_identical(
+    resolve_url("http:/a/../b", "https://h/y", url_standard = "whatwg"),
+    "http://a/b"
+  )
+})
+
+test_that("whatwg: resolving a scheme-bearing reference equals parsing it", {
+  # The basic URL parser ignores the base unless the reference carries the
+  # base's own special scheme, so each row resolves to its own parse.
+  refs <- c(
+    "foo:a/../b", "foo:\ufeff/../b", "foo:/a/../b", "foo://h/a/../b",
+    "foo:/a/%2e%2e/b", "file:/C:/../x", "file:///C:/../x", "file:C|/../x",
+    "file:/a/./b/../c", "http:/a/../b", "ws:a/../b", "https://h2/a/./b/../c"
+  )
+  for (ref in refs) {
+    expect_identical(whatwg_ser(ref, "foo://h/y"),
+                     serialize_url(ref, standard = "whatwg"), label = ref)
+  }
+  # `https:` against an `https:` base is the one relative row.
+  for (ref in setdiff(refs, "https://h2/a/./b/../c")) {
+    expect_identical(whatwg_ser(ref, "https://h/y"),
+                     serialize_url(ref, standard = "whatwg"), label = ref)
+  }
+})
