@@ -1050,8 +1050,11 @@ get_port <- function(url, protocol_handling = "keep",
 #' Under \code{url_standard = "whatwg"} it carries the standard's
 #' percent-encoded spelling (WHATWG stores the username buffer encoded with the
 #' userinfo percent-encode set, so \code{"http://a^b@host/"} yields
-#' \code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} or no selector it is
-#' the raw source spelling, exactly as written in the URL.
+#' \code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} it is the raw source
+#' spelling, exactly as written in the URL; under no selector it is the raw
+#' source spelling, except that for \code{http}, \code{https}, \code{ftp} and
+#' \code{ftps} the two characters after each \code{\%} are uppercased
+#' (\code{"a\%7Fb"}).
 #'
 #' Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
 #' first recipient (its \code{addr-spec} local-part) is returned, mirroring how
@@ -1090,9 +1093,10 @@ get_user <- function(url, protocol_handling = "keep",
 #' percent-decoded. Under \code{url_standard = "whatwg"} it carries the
 #' standard's percent-encoded spelling (the userinfo percent-encode set is
 #' applied, so a ":" inside the password becomes \code{\%3A}); under
-#' \code{url_standard = "rfc3986"} or no selector it is the raw source
-#' spelling, exactly as written in the URL. This is the same contract as
-#' \code{\link{get_user}}.
+#' \code{url_standard = "rfc3986"} it is the raw source spelling, exactly as
+#' written in the URL; under no selector the two characters after each
+#' \code{\%} are uppercased for \code{http}, \code{https}, \code{ftp} and
+#' \code{ftps}. This is the same contract as \code{\link{get_user}}.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url

@@ -375,7 +375,8 @@
 #'     spelling (the userinfo percent-encode set is applied, so
 #'     `"http://a^b@host/"` reports `"a%5Eb"`, and an existing triplet keeps
 #'     its hex case, so `"http://a%7fb@host/"` reports `"a%7fb"`); under
-#'     `url_standard = "rfc3986"` or no selector it is the raw source spelling,
+#'     `url_standard = "rfc3986"` it is the raw source spelling, exactly as
+#'     written in the URL; under no selector it is the raw source spelling,
 #'     except that for `http`, `https`, `ftp` and `ftps` the two characters
 #'     after each `%` are uppercased (`"a%7Fb"`).
 #'     Empty is reported as NA.
@@ -2098,9 +2099,11 @@ safe_parse_urls <- function(url,
   # (RURL-gkmwqpos, RUL-007). See `pqf_source` in R/parse-web.R: under
   # `rfc3986` sec 6.2.2.1's hex-case fold is the `normalized` serializer's job.
   pqf_source <- .web_pqf_source_policy(opts$url_standard)
-  # Whether an existing userinfo "%xx" keeps its hex case (RURL-jzwshyqb). See
-  # `userinfo_source` in R/parse-web.R: the WHATWG authority state copies "%"
-  # unchanged, so `whatwg` stores the userinfo as written.
+  # Whether an existing userinfo "%xx" keeps its hex case (RURL-jzwshyqb,
+  # RURL-bxrbpzet). See `userinfo_source` in R/parse-web.R: the WHATWG
+  # authority state copies "%" unchanged, and under `rfc3986` sec 6.2.2.1's
+  # hex-case fold is the `normalized` serializer's job, so both store the
+  # userinfo as written.
   userinfo_source <- .web_userinfo_source_policy(opts$url_standard)
   # Which host tokens read as an IPv4 address (RURL-ezhzpkhg deletion 4). The
   # last of the compensations: a Phase-1 rewrite canonicalized WHATWG-valid IPv4
@@ -2207,8 +2210,9 @@ safe_parse_urls <- function(url,
   # "%xx" keeps its hex case too but a byte >= 0x80 is encoded (RURL-djvqopjk);
   # the no-selector default carries the component pass's normalized spelling
   # (bytes >= 0x80 encoded, "%XX" uppercased). The userinfo's hex case is
-  # `userinfo_source`'s question (RURL-jzwshyqb): kept as written under
-  # `whatwg`, uppercased under `rfc3986` and the no-selector default.
+  # `userinfo_source`'s question (RURL-jzwshyqb, RURL-bxrbpzet): kept as
+  # written under `whatwg` and `rfc3986`, uppercased under the no-selector
+  # default.
   # .blank_to_na() maps a present-but-empty "" component to NA, which is where
   # the long-shipped "empty component == absent" behavior is enforced (see
   # .blank_to_na in utils.R).
@@ -2674,7 +2678,8 @@ safe_parse_urls <- function(url,
   # percent-encode set, so under `url_standard = "whatwg"` the PARSED `user` /
   # `password` columns carry that spelling. `a$raw_user` / `a$raw_password` are
   # the source slices and keep the raw spelling untouched (the escape hatch).
-  # Under `rfc3986` or no selector the columns stay source-preserving.
+  # Under `rfc3986` the columns stay source-preserving; under no selector they
+  # carry the web route's hex-case fold (`userinfo_source`, R/parse-web.R).
   #
   # Applied ONLY where the userinfo was actually SPLIT into a username and a
   # password, which is what `a$general_userinfo_split` records. Encoding an

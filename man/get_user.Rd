@@ -116,8 +116,11 @@ Extracts the user component of a URL. The value is never percent-decoded.
 Under \code{url_standard = "whatwg"} it carries the standard's
 percent-encoded spelling (WHATWG stores the username buffer encoded with the
 userinfo percent-encode set, so \code{"http://a^b@host/"} yields
-\code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} or no selector it is
-the raw source spelling, exactly as written in the URL.
+\code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} it is the raw source
+spelling, exactly as written in the URL; under no selector it is the raw
+source spelling, except that for \code{http}, \code{https}, \code{ftp} and
+\code{ftps} the two characters after each \code{\%} are uppercased
+(\code{"a\%7Fb"}).
 }
 \details{
 Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's

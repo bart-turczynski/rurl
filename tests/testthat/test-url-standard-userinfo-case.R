@@ -5,8 +5,8 @@
 # point with the userinfo percent-encode set. "%" is not in that set, so an
 # existing triplet is copied as written: `new URL("http://a%7fb:c%c3d@a.com/")`
 # has username `a%7fb` and password `c%c3d` (Node 26.3.1). The `rfc3986` arm
-# does not move in this change (its web-route fold is RURL-bxrbpzet), and the
-# `NULL` profile is frozen (ADR 0007, ADR 0016).
+# keeps the triplet as written too since RURL-bxrbpzet (RFC 3986 sec 6.2.2.1,
+# RUL-015), and the `NULL` profile is frozen (ADR 0007, ADR 0016).
 #
 # The `whatwg_*` columns are the Node `username` / `password` (a `""` password
 # is reported as NA by the parse record). Red at the pre-fix baseline (main @
@@ -99,17 +99,15 @@ test_that("whatwg: clean_url and get_url_key() never carry the userinfo", {
   expect_identical(k[[1]], k[[3]])
 })
 
-test_that("rfc3986 does not move: its web route still folds", {
+test_that("rfc3986: the web route keeps the triplet as written too", {
+  # RURL-bxrbpzet: RFC 3986 sec 6.2.2.1's fold belongs to `form =
+  # "normalized"` (RUL-007, RUL-015); see test-rfc3986-userinfo-triplet-case.R.
   u <- userinfo_case_cases$url[1:6]
   r <- safe_parse_urls(u, url_standard = "rfc3986")
-  expect_identical(
-    r$user, c("a%7Fb", "a%7Fb", "u", "a%7Fb", "a%7F%3Ab", "a%7Fb")
-  )
-  expect_identical(
-    r$password, c("c%C3d", NA, "p%7F", "c%C3d", "c%3A%7F", "c%C3d")
-  )
+  expect_identical(r$user, userinfo_case_cases$whatwg_user[1:6])
+  expect_identical(r$password, userinfo_case_cases$whatwg_password[1:6])
   s <- safe_parse_url(u[1], url_standard = "rfc3986")
-  expect_identical(c(s$user, s$password), c("a%7Fb", "c%C3d"))
+  expect_identical(c(s$user, s$password), c("a%7fb", "c%c3d"))
   # a malformed triplet or a second "@" is no userinfo under RFC 3986
   expect_identical(
     safe_parse_urls(userinfo_case_cases$url[7:9],

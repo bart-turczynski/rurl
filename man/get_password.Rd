@@ -116,9 +116,10 @@ Extracts the password component of a URL. The value is never
 percent-decoded. Under \code{url_standard = "whatwg"} it carries the
 standard's percent-encoded spelling (the userinfo percent-encode set is
 applied, so a ":" inside the password becomes \code{\%3A}); under
-\code{url_standard = "rfc3986"} or no selector it is the raw source
-spelling, exactly as written in the URL. This is the same contract as
-\code{\link{get_user}}.
+\code{url_standard = "rfc3986"} it is the raw source spelling, exactly as
+written in the URL; under no selector the two characters after each
+\code{\%} are uppercased for \code{http}, \code{https}, \code{ftp} and
+\code{ftps}. This is the same contract as \code{\link{get_user}}.
 }
 \examples{
 get_password("ftp://user:password@ftp.example.com/file.txt")
