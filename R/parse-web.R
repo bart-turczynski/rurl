@@ -109,9 +109,10 @@
 #   fragment  treatment and the same high-byte encoding + "%XX" uppercasing.
 #             This is `pqf_source = "normalize"`; under `"preserve"` (the
 #             `rfc3986` setting) the verdict is kept and the SOURCE slice is
-#             stored, and under `"whatwg"` the source slice with only its
-#             bytes >= 0x80 encoded, both documented at `.parse_web_url_one()`
-#             below.
+#             stored, and under `"whatwg"` the source slice with the
+#             `pqf_bytes = "encode"` escapes of C0/space/DEL, then its bytes
+#             >= 0x80 encoded, and no "%XX" uppercased, both documented at
+#             `.parse_web_url_one()` below.
 
 # Bytes libcurl refuses outright in path/query/fragment: C0 controls, SP, DEL.
 # (NUL cannot reach here -- R strings cannot hold it.) Under
