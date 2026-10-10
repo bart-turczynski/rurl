@@ -313,7 +313,8 @@
 #'   `url_standard` (it bundles acceptance, interpretation, leniency, and
 #'   canonicalization together) and expands only into arguments you did not
 #'   supply explicitly — an explicit argument always overrides the profile.
-#'   `"browser"` is a browser-*like* fix-up posture (http-prepending; not
+#'   `"browser"` is a browser-*like* fix-up posture (http-prepending, and
+#'   input starting with a single `/` read as a local `file:` path; not
 #'   Chrome-faithful); `"whatwg"` is the absolute-URL no-base posture that
 #'   *rejects* scheme-less input (unlike a bare `url_standard = "whatwg"`);
 #'   `"rfc-syntax"` is RFC 3986 generic syntax as parsing, not normalization
@@ -1078,8 +1079,9 @@ safe_parse_urls <- function(url,
 # --- fixup_posture (RURL-jynceqrj, ADR 0012 Layer 6a) -----------------------
 # The input-repair axis: "none" (default) never touches the string; "browser"
 # runs the bounded, deterministic single-pass string fixer BEFORE the WHATWG
-# parser (outer C0/space trim, `;`->`:` and `://` insertion for recognized
-# special schemes). This is the fix-up posture that the future public `browser`
+# parser (outer C0/space trim, `;`->`:` for recognized special schemes, `://`
+# insertion for those but `file`, and `file://` before a leading single `/`).
+# This is the fix-up posture that the future public `browser`
 # profile will set (ADR 0012 standing rule 2); like `scheme_acceptance =
 # "general"`, it is internal-only until the L6b profile lands -- it is NOT on
 # any public signature yet. The step-4 fallback `http` prepend is NOT part of
@@ -1750,7 +1752,8 @@ safe_parse_urls <- function(url,
   # different acceptance would reuse a stale cached row.
   # fixup_posture is Stage-A-affecting (RURL-jynceqrj, ADR 0012 Layer 6a):
   # under "browser" the bounded string fixer rewrites the input (outer trim,
-  # `;`->`:`, `://` insertion) BEFORE the parser sees it, so a fixed parse
+  # `;`->`:`, `://` insertion, the leading-`/` file guess) BEFORE the parser
+  # sees it, so a fixed parse
   # produces a different parser input than the unfixed one. It MUST enter the
   # key, or a
   # fixed parse would collide with an unfixed cached row (PRD Part 1).
