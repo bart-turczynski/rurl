@@ -551,3 +551,30 @@ test_that("the WHATWG userinfo encoder keeps a U+FEFF that leads it", {
   expect_identical(r$password, "%EF%BB%BFa%20b")
   expect_identical(r$host, "a.com")
 })
+
+test_that("a WHATWG file: path led by U+FEFF keeps the mark", {
+  # With no authority, the file state hands the input to the path state, which
+  # percent-encodes the path with the path percent-encode set and removes
+  # nothing (RURL-rjpljsui).
+  # The U+200B twin keeps its mark.
+  expect_identical(
+    serialize_url(paste0("file:", ZWSP, c("p", "/p", "")), standard = "whatwg"),
+    c("file:///%E2%80%8Bp", "file:///%E2%80%8B/p", "file:///%E2%80%8B")
+  )
+  # A mark after a leading "/" or "\" was always kept, and is not a Windows
+  # drive letter.
+  expect_identical(
+    serialize_url(
+      paste0("file:", c("/", "\\", "/"), BOM, c("p", "p", "C|/x")),
+      standard = "whatwg"
+    ),
+    c("file:///%EF%BB%BFp", "file:///%EF%BB%BFp", "file:///%EF%BB%BFC|/x")
+  )
+  # Host-less paths without the mark.
+  expect_identical(
+    serialize_url(c("file:p", "file:/p", "file:\\p", "file:"),
+      standard = "whatwg"
+    ),
+    c("file:///p", "file:///p", "file:///p", "file:///")
+  )
+})
