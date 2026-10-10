@@ -3,8 +3,10 @@
 # The WHATWG URL Standard's path state removes `.` and `..` segments and
 # nothing else, and RFC 3986 section 5.2.4 removes only a `.` or `..` that is
 # a whole segment. A segment that starts with U+FEFF (the byte-order mark) is
-# an ordinary segment under both. Every `whatwg` expected value below is
-# `new URL(ref, base).href` in Node 26.
+# an ordinary segment under both. Every `whatwg` `output = "serialized"`
+# expected value below is `new URL(ref, base).href` in Node 26; the `clean`
+# outputs and the raw resolver values are rurl's own spellings of the same
+# URL, not Node hrefs.
 
 bom <- "\ufeff"
 zwsp <- "\u200b"
