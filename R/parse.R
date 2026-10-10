@@ -2201,8 +2201,9 @@ safe_parse_urls <- function(url,
   # parser's query/fragment ARE the source bytes is `pqf_source`'s question
   # (R/parse-web.R, RUL-007, RUL-015): under `rfc3986` they are stored as
   # written, so an existing "%xx" keeps its hex case and a raw byte >= 0x80
-  # stays raw, exactly as the re-derived path does; under `whatwg` and the
-  # no-selector default they carry the component pass's normalized spelling
+  # stays raw, exactly as the re-derived path does; under `whatwg` an existing
+  # "%xx" keeps its hex case too but a byte >= 0x80 is encoded (RURL-djvqopjk);
+  # the no-selector default carries the component pass's normalized spelling
   # (bytes >= 0x80 encoded, "%XX" uppercased). The userinfo's hex case is
   # `userinfo_source`'s question (RURL-jzwshyqb): kept as written under
   # `whatwg`, uppercased under `rfc3986` and the no-selector default.
