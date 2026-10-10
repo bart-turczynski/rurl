@@ -2735,12 +2735,29 @@ safe_parse_urls <- function(url,
   # `.build_clean_url_vec` verbatim; under "web" `gp` is empty (passthrough).
   if (general_acceptance && any(gp)) {
     if (.is_whatwg(opts$url_standard)) {
+      # The WHATWG path state removes `.` and `..` segments (and their `%2e`
+      # spellings) from every list path while parsing; an opaque path is
+      # exempt. `gen_b$path` is the source path, so the serializer was handed
+      # the dots the `path` column had already dropped: `foo:/a/../b` cleaned
+      # to itself beside path `/b` (RURL-lzsjlxgu). Run the same dot step
+      # Phase 3 ran, and only that step: the other Stage-B path dials are
+      # hierarchical transforms ADR 0012 D2 keeps off a non-special path.
+      whatwg_path <- gen_b$path[gp]
+      list_path <- !is.na(gen_b$path_kind[gp]) &
+        gen_b$path_kind[gp] != "opaque"
+      if (any(list_path)) {
+        whatwg_path[list_path] <- .normalize_path_vec(
+          whatwg_path[list_path], "keep", opts$path_normalization, "keep",
+          "none",
+          path_identity = opts$path_identity
+        )
+      }
       clean_url[gp] <- .serialize_whatwg_vec(
         scheme = cased$scheme[gp], host = gen_b$host[gp],
         host_kind = gen_b$host_kind[gp],
         authority_delimiter_present =
           gen_b$authority_delimiter_present[gp],
-        path = gen_b$path[gp],
+        path = whatwg_path,
         path_kind = gen_b$path_kind[gp], query = gen_b$query[gp],
         query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
         port_handling = opts$port_handling,

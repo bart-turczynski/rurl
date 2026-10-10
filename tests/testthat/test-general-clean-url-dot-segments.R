@@ -101,3 +101,46 @@ test_that("rfc-syntax: no path normalization, so path and clean_url agree", {
   expect_identical(r$path, c("/a/../b", "/a/./b/", "a/../b", "/a/../b"))
   expect_identical(r$clean_url, urls)
 })
+
+# --- The fix -------------------------------------------------------------------
+
+test_that("whatwg: a non-special list path cleans to its parsed path", {
+  # WHATWG URL Standard, path state: a `.` or `..` segment (ASCII
+  # case-insensitively also `%2e`, `.%2e`, `%2e.`, `%2e%2e`) is removed while
+  # parsing, and `..` shortens the path. The URL serializer then writes that
+  # path, with `/.` ahead of a hostless path that starts with an empty segment.
+  urls <- c(
+    "foo:/a/../b", "foo://h/a/../b", "foo://h/a/%2e%2e/b", "foo://h/a/.%2E/b",
+    "foo://h/a/./b/", "foo:/a/./b", "foo://h/a/..", "foo:/.", "foo:/a/..//p",
+    "foo://h/a/../b?q=1#f", "foo:///a/../b"
+  )
+  expected <- c(
+    "foo:/b", "foo://h/b", "foo://h/b", "foo://h/b", "foo://h/a/b/",
+    "foo:/a/b", "foo://h/", "foo:/", "foo:/.//p", "foo://h/b?q=1",
+    "foo:///b"
+  )
+  for (args in list(list(url_standard = "whatwg"),
+                    list(profile = "whatwg"))) {
+    r <- do.call(general_rows, c(list(urls), args))
+    expect_identical(r$clean_url, expected, label = names(args))
+    # One row, one path: re-parsing clean_url gives back the `path` column.
+    again <- do.call(general_rows, c(list(r$clean_url), args))
+    expect_identical(again$path, r$path, label = names(args))
+  }
+})
+
+test_that("whatwg: the trailing-slash strip still sees the dot-removed path", {
+  expect_identical(
+    general_rows(c("foo://h/a/..", "foo://h/a/../b/"), url_standard = "whatwg",
+                 trailing_slash_handling = "strip")$clean_url,
+    c("foo://h", "foo://h/b/")
+  )
+})
+
+test_that("whatwg: resolve_url()'s clean output follows the reference", {
+  expect_identical(
+    resolve_url(c("foo:/a/../b", "foo://h/a/./b", "foo:a/../b"), "http://h/y",
+                url_standard = "whatwg", scheme_acceptance = "general"),
+    c("foo:/b", "foo://h/a/b", "foo:a/../b")
+  )
+})
