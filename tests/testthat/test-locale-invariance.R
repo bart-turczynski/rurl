@@ -757,8 +757,7 @@ for (loc in names(ctypes)) {
 
   test_that(paste("a non-ASCII row with nothing to strip, under", loc), {
     with_ctype(loc, ctypes[[loc]], {
-      # DEFECT pinned (RURL-bnorcgbv): under C every row reports a strip.
-      expect_identical(has_lt_token(nothing_to_strip), rep(loc == "C", 3))
+      expect_identical(has_lt_token(nothing_to_strip), rep(FALSE, 3))
       # The seam itself, plus a native row led by U+FEFF: a BOM is not a C0
       # control, so it is never stripped (the row then fails the scheme gate,
       # so only the seam can show its flag).
@@ -767,7 +766,7 @@ for (loc in names(ctypes)) {
         rurl:::.strip_whatwg_control_chars_vec(
           c(unname(nothing_to_strip), bom_led), "whatwg"
         )$leading_trailing_stripped,
-        rep(loc == "C", 4)
+        rep(FALSE, 4)
       )
     })
   })
@@ -777,9 +776,8 @@ for (loc in names(ctypes)) {
       # Not a locale effect: stringi hands back U+FFFD for the lone 0x80, so
       # the copy differs from the input in EVERY locale, and the WHATWG parse
       # must see that copy. The strip fact must not ride on it.
-      # DEFECT pinned (RURL-bnorcgbv): reported in both locales.
       u <- paste0("http://h/", rawToChar(as.raw(0x80)))
-      expect_true(has_lt_token(u))
+      expect_false(has_lt_token(u))
       expect_identical(
         serialize_url(u, standard = "whatwg"), "http://h/%EF%BF%BD"
       )
