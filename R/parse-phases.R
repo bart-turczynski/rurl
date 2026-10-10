@@ -297,11 +297,25 @@
   trimmed <- stringi::stri_replace_first_regex(
     trimmed, "[\\u0000-\\u0020]+\\z", ""
   )
-  lt <- !is.na(trimmed) & !is.na(url_out) & trimmed != url_out
-  lt[is.na(lt)] <- FALSE
-  if (any(lt)) {
-    url_out[lt] <- trimmed[lt]
+  # `differs` picks the rows that flow on as stringi's copy; it is NOT the strip
+  # fact. `!=` compares a native input with stringi's UTF-8 output, and R reads
+  # the native side in the session charset: under LC_ALL=C every non-ASCII row
+  # differs although nothing was removed (RURL-bnorcgbv). Taking the copy there
+  # hands on the same octets, so no value moves. It also differs, in every
+  # locale, where stringi substituted U+FFFD for an undecodable octet, and that
+  # copy is the one the parse must see.
+  differs <- !is.na(trimmed) & !is.na(url_out) & trimmed != url_out
+  differs[is.na(differs)] <- FALSE
+  if (any(differs)) {
+    url_out[differs] <- trimmed[differs]
   }
+  # The fact: a C0-or-space run at either end, matched by the same classes and
+  # anchors as the strip, so it reads code points and no encoding mark or
+  # session charset can move it.
+  lt <- stringi::stri_detect_regex(
+    url, "^[\\u0000-\\u0020]|[\\u0000-\\u0020]\\z"
+  )
+  lt[is.na(lt)] <- FALSE
 
   # Step 1b: every remaining tab/LF/CR, anywhere.
   had <- stringi::stri_detect_regex(url_out, "[\\t\\n\\r]")
