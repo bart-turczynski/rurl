@@ -920,8 +920,14 @@
 #      becomes `file://` + input (`/Users/me/a.pdf` ->
 #      `file:///Users/me/a.pdf`), as Chromium's SegmentURLInternal()
 #      (components/url_formatter/url_fixer.cc) picks `file:` for a leading
-#      separator on POSIX. `//` stays scheme-relative; `~` is not expanded, as
-#      that needs the caller's home directory (RURL-anubcmpd).
+#      separator on POSIX. `//` stays scheme-relative, counting a `/` or `\`
+#      behind ASCII tab/LF/CR, which WHATWG step 1 removes next; `~` is not
+#      expanded, as that needs the caller's home directory (RURL-anubcmpd).
+#      This step invents a scheme, so it runs only where the infer seam would:
+#      `scheme_policy = "infer"`, and only under `url_standard = "whatwg"`,
+#      whose file state the fixed row is written for. It sits here, not at the
+#      add_http seam, because the `file:` row detection below reads the string
+#      before that seam runs.
 #
 # The recognized-scheme set is .WHATWG_SPECIAL_SCHEMES (referenced directly,
 # not copied); the authority table is that set minus `file`. `ftps` is
@@ -935,7 +941,9 @@
 # WHATWG special authority slashes state would not already do.
 # Step 4 (fallback `http`) is NOT here: it is the existing scheme_policy =
 # "infer" prepend seam (ADR 0012 D4).
-.apply_browser_fixup_vec <- function(url, fixup_posture) {
+.apply_browser_fixup_vec <- function(url, fixup_posture,
+                                     url_standard = "whatwg",
+                                     scheme_policy = "infer") {
   if (!identical(fixup_posture, "browser")) {
     return(url)
   }
@@ -945,15 +953,13 @@
   url <- stringi::stri_replace_first_regex(url, "^[\\x00-\\x20]+", "")
   url <- stringi::stri_replace_first_regex(url, "[\\x00-\\x20]+$", "")
 
-  # Recognized-scheme set = .WHATWG_SPECIAL_SCHEMES; authority table = that set
-  # minus `file`. Schemes are case-insensitive; the ordered `;`/`:` delimiter
-  # after the alternation keeps a longer scheme (https) from being truncated to
-  # a shorter prefix (http) and keeps non-scheme tokens (httpx;) from matching.
+  # Recognized-scheme set = .WHATWG_SPECIAL_SCHEMES; authority table =
+  # .SPECIAL_AUTHORITY_SCHEMES, the same set minus `file`. Schemes are
+  # case-insensitive; the ordered `;`/`:` delimiter after the alternation keeps
+  # a longer scheme (https) from being truncated to a shorter prefix (http) and
+  # keeps non-scheme tokens (httpx;) from matching.
   scheme_alt <- paste(.WHATWG_SPECIAL_SCHEMES, collapse = "|")
-  authority_alt <- paste(
-    setdiff(.WHATWG_SPECIAL_SCHEMES, "file"),
-    collapse = "|"
-  )
+  authority_alt <- paste(.SPECIAL_AUTHORITY_SCHEMES, collapse = "|")
 
   # Step 2: leading `scheme;` -> `scheme:`, recognized schemes only. $1 keeps
   # the matched scheme's original case.
@@ -968,8 +974,13 @@
     url, paste0("(?i)^(", authority_alt, "):(?!//)"), "$1://"
   )
 
-  # Step 3b: a leading single `/` (not `//`, not `/\`) -> `file://` + input.
-  url <- stringi::stri_replace_first_regex(url, "^(?=/(?![/\\\\]))", "file://")
+  # Step 3b: a leading single `/` (not `//`, not `/\`, with tab/LF/CR between
+  # them ignored) -> `file://` + input.
+  if (identical(url_standard, "whatwg") && identical(scheme_policy, "infer")) {
+    url <- stringi::stri_replace_first_regex(
+      url, "^(?=/(?![\\t\\n\\r]*[/\\\\]))", "file://"
+    )
+  }
 
   url
 }
@@ -995,11 +1006,14 @@
   # standards-required WHATWG preprocessing below. It is a deterministic single
   # pass that repairs the input STRING (outer C0/space trim, `;`->`:` and `://`
   # insertion for recognized special schemes, `file://` before a leading single
-  # `/`) so the fixed string flows through the ordinary parse path. A byte-for-byte no-op unless fixup_posture ==
-  # "browser". The step-4 fallback `http` prepend is NOT here: it is the
-  # existing scheme_policy = "infer" seam at the add_http mask below, shared
-  # with the default posture (ADR 0012 D4 -- one prepend impl).
-  url <- .apply_browser_fixup_vec(url, fixup_posture)
+  # `/`) so the fixed string flows through the ordinary parse path. A
+  # byte-for-byte no-op unless fixup_posture == "browser". The step-4 fallback
+  # `http` prepend is NOT here: it is the existing scheme_policy = "infer" seam
+  # at the add_http mask below, shared with the default posture (ADR 0012 D4 --
+  # one prepend impl).
+  url <- .apply_browser_fixup_vec(
+    url, fixup_posture, url_standard, scheme_policy
+  )
 
   # WHATWG input stripping (RURL-tyetpjym, RURL-yvxpanix) runs FIRST -- it is
   # the WHATWG parser's step 1 (trim leading/trailing C0-or-space, then remove

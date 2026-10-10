@@ -1752,7 +1752,8 @@ safe_parse_urls <- function(url,
   # different acceptance would reuse a stale cached row.
   # fixup_posture is Stage-A-affecting (RURL-jynceqrj, ADR 0012 Layer 6a):
   # under "browser" the bounded string fixer rewrites the input (outer trim,
-  # `;`->`:`, `://` insertion) BEFORE the parser sees it, so a fixed parse
+  # `;`->`:`, `://` insertion, the leading-`/` file guess) BEFORE the parser
+  # sees it, so a fixed parse
   # produces a different parser input than the unfixed one. It MUST enter the
   # key, or a
   # fixed parse would collide with an unfixed cached row (PRD Part 1).

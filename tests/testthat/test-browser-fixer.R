@@ -169,11 +169,11 @@ test_that("Stage-A cache key differs when only fixup_posture differs", {
 })
 
 # RURL-otfaotzq: the WHATWG file slash state reads `\\`, `/\` and `\/` as the
-# authority's two slashes, so step 3 leaves a `file:` row with them alone.
-# Inserting `//` made the authority path data, and once the host-shape gate
-# stopped judging whatwg `file:` rows a bad authority parsed. Values are Node
-# 26's `new URL(u).href`; the `http:` rows keep their insertion.
-test_that("step 3 counts backslashes as slashes after file:", {
+# authority's two slashes. Inserting `//` there made the authority path data,
+# and a bad one parsed; step 3 now skips `file` altogether (RURL-anubcmpd), so
+# these rows reach the file state as typed. Values are Node 26's
+# `new URL(u).href`; the `http:` rows keep their insertion.
+test_that("file: rows with backslash slashes reach the file state as typed", {
   u <- c(
     "file:\\\\[::1]/", "FILE:\\\\[::1]/", "file:/\\h/p", "file:\\/h/p",
     "file:\\\\localhost\\C:\\x", "file:\\\\[::1x]\\", "file:/\\[g::1]x/",
@@ -247,6 +247,45 @@ test_that("a leading single slash reads as a file path", {
   expect_identical(rurl:::.apply_browser_fixup_vec(u, "none"), u)
   expect_identical(
     safe_parse_urls("/Users/me/a.pdf", profile = "whatwg")$clean_url,
+    NA_character_
+  )
+})
+
+# WHATWG step 1 removes ASCII tab/LF/CR after the fixer runs, so `/<TAB>/x` is
+# the scheme-relative `//x` and must not be read as a file path.
+test_that("the leading-slash guess sees through tab, LF and CR", {
+  u <- c("/\t/x", "/\n/x", "/\r\n/x", "/\t\\x", "/\ta")
+  expect_identical(
+    rurl:::.apply_browser_fixup_vec(u, "browser"),
+    c(u[1:4], "file:///\ta")
+  )
+  expect_identical(
+    safe_parse_urls(u[1:3], profile = "browser")$clean_url,
+    rep("http://x/", 3L)
+  )
+})
+
+# Step 3b invents a scheme, so it runs only where the infer seam would, and
+# only for the WHATWG file state it writes for.
+test_that("the leading-slash guess follows scheme_policy and url_standard", {
+  expect_identical(
+    rurl:::.apply_browser_fixup_vec("/a/b", "browser", "whatwg", "require"),
+    "/a/b"
+  )
+  expect_identical(
+    rurl:::.apply_browser_fixup_vec("/a/b", "browser", "rfc3986", "infer"),
+    "/a/b"
+  )
+  expect_identical(
+    suppressWarnings(get_clean_url(
+      "/a/b", profile = "browser", scheme_policy = "require"
+    )),
+    NA_character_
+  )
+  expect_identical(
+    suppressWarnings(get_clean_url(
+      "/a/b", profile = "browser", url_standard = "rfc3986"
+    )),
     NA_character_
   )
 })

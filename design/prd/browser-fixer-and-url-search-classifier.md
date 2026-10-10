@@ -102,7 +102,12 @@ Two changes, each with new acceptance rows below:
   `url_fixer.cc` picks `file:` for input starting with a path separator on
   POSIX, so a pasted `/Users/me/a.pdf` opens as `file:///Users/me/a.pdf`.
   rurl does the same on every platform, for exactly one leading `/`: `//` stays
-  scheme-relative (`scheme_relative_handling`) and `/\` is left verbatim.
+  scheme-relative (`scheme_relative_handling`) and `/\` is left verbatim, with
+  ASCII tab/LF/CR between the two ignored, as WHATWG step 1 removes them next.
+  The guess invents a scheme, so it runs only under `scheme_policy = "infer"`,
+  and only under `url_standard = "whatwg"`, whose file state it writes for. It
+  is the one scheme guess inside the fixer rather than at the step-4 seam,
+  because rurl's `file:` row detection reads the string before that seam.
   Chromium's `~` home-directory expansion is **not** copied: it needs the
   caller's home directory, which a parse result must not depend on. Neither is
   its Windows drive and UNC detection. Chromium escapes `?` and `#` as filename
