@@ -372,9 +372,11 @@
 #'     \item `user`: The user name for authentication; never percent-decoded.
 #'     Under `url_standard = "whatwg"` it carries the standard's percent-encoded
 #'     spelling (the userinfo percent-encode set is applied, so
-#'     `"http://a^b@host/"` reports `"a%5Eb"`); under
+#'     `"http://a^b@host/"` reports `"a%5Eb"`, and an existing triplet keeps
+#'     its hex case, so `"http://a%7fb@host/"` reports `"a%7fb"`); under
 #'     `url_standard = "rfc3986"` or no selector it is the raw source spelling,
-#'     exactly as written in the URL.
+#'     except that for `http`, `https`, `ftp` and `ftps` the two characters
+#'     after each `%` are uppercased (`"a%7Fb"`).
 #'     Empty is reported as NA.
 #'     \item `password`: The password for authentication, with the same
 #'     encoding contract as `user` (so a ":" inside a WHATWG password is
@@ -2091,6 +2093,10 @@ safe_parse_urls <- function(url,
   # (RURL-gkmwqpos, RUL-007). See `pqf_source` in R/parse-web.R: under
   # `rfc3986` sec 6.2.2.1's hex-case fold is the `normalized` serializer's job.
   pqf_source <- .web_pqf_source_policy(opts$url_standard)
+  # Whether an existing userinfo "%xx" keeps its hex case (RURL-jzwshyqb). See
+  # `userinfo_source` in R/parse-web.R: the WHATWG authority state copies "%"
+  # unchanged, so `whatwg` stores the userinfo as written.
+  userinfo_source <- .web_userinfo_source_policy(opts$url_standard)
   # Which host tokens read as an IPv4 address (RURL-ezhzpkhg deletion 4). The
   # last of the compensations: a Phase-1 rewrite canonicalized WHATWG-valid IPv4
   # hosts in the URL STRING so the old engine could read the rest of it. See
@@ -2114,7 +2120,8 @@ safe_parse_urls <- function(url,
       last_at_userinfo = last_at, host_pct = host_pct, pqf_bytes = pqf_bytes,
       host_charset = host_charset, host_ipv4 = host_ipv4,
       empty_path = empty_path, host_pct_octets = host_pct_octets,
-      port_range = port_range, pqf_source = pqf_source
+      port_range = port_range, pqf_source = pqf_source,
+      userinfo_source = userinfo_source
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -2193,7 +2200,9 @@ safe_parse_urls <- function(url,
   # written, so an existing "%xx" keeps its hex case and a raw byte >= 0x80
   # stays raw, exactly as the re-derived path does; under `whatwg` and the
   # no-selector default they carry the component pass's normalized spelling
-  # (bytes >= 0x80 encoded, "%XX" uppercased).
+  # (bytes >= 0x80 encoded, "%XX" uppercased). The userinfo's hex case is
+  # `userinfo_source`'s question (RURL-jzwshyqb): kept as written under
+  # `whatwg`, uppercased under `rfc3986` and the no-selector default.
   # .blank_to_na() maps a present-but-empty "" component to NA, which is where
   # the long-shipped "empty component == absent" behavior is enforced (see
   # .blank_to_na in utils.R).
@@ -2876,7 +2885,8 @@ safe_parse_urls <- function(url,
     empty_path = .web_empty_path_policy(url_standard),
     host_pct_octets = .web_host_pct_octets_policy(url_standard),
     port_range = .web_port_range_policy(url_standard),
-    pqf_source = .web_pqf_source_policy(url_standard)
+    pqf_source = .web_pqf_source_policy(url_standard),
+    userinfo_source = .web_userinfo_source_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)

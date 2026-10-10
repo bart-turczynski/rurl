@@ -79,7 +79,11 @@
 #             `last_at_userinfo = FALSE` (the default, and what libcurl did)
 #             only ONE "@" is admitted and a second is a parse error. Either
 #             way: split into user/password at the FIRST ":"; bytes restricted
-#             to 0x21-0x7E minus "@"; NEVER percent-decoded.
+#             to 0x21-0x7E minus "@"; NEVER percent-decoded; the two
+#             characters after every "%" are ASCII-uppercased.
+#             This is `userinfo_source = "normalize"`; under `"preserve"` (the
+#             `whatwg` setting) each side is stored as written, documented at
+#             `.parse_web_url_one()` below.
 #   host      percent-DECODED first (a "%" not followed by two hex digits is a
 #             parse error), then every decoded byte must be in
 #             [A-Za-z0-9._~|-]; then libcurl's IPv4 normalization. A bracketed
@@ -455,6 +459,16 @@
 # always stored.
 .web_pqf_source_policy <- function(url_standard) {
   if (identical(url_standard, "rfc3986")) "preserve" else "normalize"
+}
+
+# The `userinfo_source` setting each selected standard asks for -- whether an
+# existing "%xx" in the userinfo keeps its hex case (RURL-jzwshyqb). The WHATWG
+# authority state copies "%" unchanged (it is not in the userinfo
+# percent-encode set), so `whatwg` stores the userinfo as written. `rfc3986`
+# keeps the fold it has always stored on this route (whether it should is
+# RURL-bxrbpzet), and the no-selector baseline is frozen (ADR 0007).
+.web_userinfo_source_policy <- function(url_standard) {
+  if (.is_whatwg(url_standard)) "preserve" else "normalize"
 }
 
 # The `host_ipv4` setting each selected standard asks for -- which token shapes
@@ -1090,6 +1104,21 @@
 #                as a residual, pinned by `external-url-vectors.csv`'s
 #                `fsss_rfc_source` column until that column was re-measured).
 #
+# `userinfo_source` -- how an existing "%xx" in the userinfo is STORED
+# (RURL-jzwshyqb). Acceptance does not move: the allowed-byte check and the
+# "@" -> "%40" rewrite run first under both settings.
+#
+#   "normalize"  the two characters after every "%" on each side of the
+#                ":" uppercased. The no-selector default and the `rfc3986`
+#                setting -- what both have always stored on this route.
+#   "preserve"   each side stored as written. The `whatwg` setting: the WHATWG
+#                URL Standard's authority state percent-encodes userinfo code
+#                points with the userinfo percent-encode set, which does not
+#                hold "%", so an existing triplet -- or a lone "%", or "%g1" --
+#                is copied unchanged (`new URL("http://a%7fb@h/").username` is
+#                `a%7fb`). `.whatwg_userinfo_percent_encode()` applies the
+#                set later and keeps a triplet's case too.
+#
 # `host_ipv4` -- which host tokens are read as an IPv4 ADDRESS:
 #
 #   "narrow"  the historical set. No empty hex digits, no trailing dot, a
@@ -1116,7 +1145,8 @@
                                empty_path = "slash",
                                host_pct_octets = "restricted",
                                port_range = "u16",
-                               pqf_source = "normalize") {
+                               pqf_source = "normalize",
+                               userinfo_source = "normalize") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -1216,17 +1246,24 @@
           !.web_high_bytes_ok(.web_chr(ub), .WEB_USERINFO_ALLOWED_BYTES)) {
       return(NULL)
     }
-    # Userinfo is never percent-DECODED, but it IS "%XX"-uppercased, on each
-    # side of the ":" independently (measured; the split happens first, so a
-    # "%" straddling the colon cannot pair across it).
+    # Userinfo is never percent-DECODED. Under `userinfo_source =
+    # "normalize"` it IS "%XX"-uppercased, on each side of the ":"
+    # independently (measured; the split happens first, so a "%" straddling
+    # the colon cannot pair across it); under "preserve" each side is stored
+    # as written (see `userinfo_source` above).
+    fold <- if (identical(userinfo_source, "preserve")) {
+      identity
+    } else {
+      .web_uppercase_pct
+    }
     c1 <- which(ub == 0x3AL)
     if (length(c1) > 0L) {
-      user <- .web_chr(.web_uppercase_pct(ub[seq_len(c1[1L] - 1L)]))
+      user <- .web_chr(fold(ub[seq_len(c1[1L] - 1L)]))
       password <- .web_chr(
-        .web_uppercase_pct(ub[seq_len(length(ub) - c1[1L]) + c1[1L]])
+        fold(ub[seq_len(length(ub) - c1[1L]) + c1[1L]])
       )
     } else {
-      user <- .web_chr(.web_uppercase_pct(ub))
+      user <- .web_chr(fold(ub))
     }
   }
 
