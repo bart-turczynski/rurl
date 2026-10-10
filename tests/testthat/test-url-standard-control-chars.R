@@ -551,3 +551,56 @@ test_that("the WHATWG userinfo encoder keeps a U+FEFF that leads it", {
   expect_identical(r$password, "%EF%BB%BFa%20b")
   expect_identical(r$host, "a.com")
 })
+
+test_that("a WHATWG file: path led by U+FEFF keeps the mark", {
+  # With no authority, the file state hands the input to the path state, which
+  # percent-encodes the path with the path percent-encode set and removes
+  # nothing (RURL-rjpljsui). The file: parser rewrote "\" with
+  # stri_replace_all_fixed() and tested for a leading "/" with
+  # stri_startswith_fixed(), which both read past a U+FEFF that starts their
+  # input, so the mark was dropped: "file:<U+FEFF>p" was "file:///p".
+  expect_identical(
+    serialize_url(
+      paste0("file:", BOM, c("p", "/p", "", "\\p", "?q")),
+      standard = "whatwg"
+    ),
+    c(
+      "file:///%EF%BB%BFp", "file:///%EF%BB%BF/p", "file:///%EF%BB%BF",
+      "file:///%EF%BB%BF/p", "file:///%EF%BB%BF?q"
+    )
+  )
+  # Only one of two marks was dropped. A path led by the mark does not start
+  # with a Windows drive letter, so "C|" is kept and ".." removes "C:".
+  expect_identical(
+    serialize_url(
+      paste0("file:", BOM, c(BOM, "", ""), c("p", "C|/x", "/C:/../x")),
+      standard = "whatwg"
+    ),
+    c("file:///%EF%BB%BF%EF%BB%BFp", "file:///%EF%BB%BFC|/x",
+      "file:///%EF%BB%BF/x")
+  )
+  # "file:<U+FEFF>C:/x" should be "file:///%EF%BB%BFC:/x", but it still fails
+  # before the file: parser runs, like "file:<U+200B>C:/x" and "file:ab:cd":
+  # a colon before any slash reads as an IP host (RURL-otfaotzq).
+  # The U+200B twin keeps its mark.
+  expect_identical(
+    serialize_url(paste0("file:", ZWSP, c("p", "/p", "")), standard = "whatwg"),
+    c("file:///%E2%80%8Bp", "file:///%E2%80%8B/p", "file:///%E2%80%8B")
+  )
+  # A mark after a leading "/" or "\" was always kept, and is not a Windows
+  # drive letter.
+  expect_identical(
+    serialize_url(
+      paste0("file:", c("/", "\\", "/"), BOM, c("p", "p", "C|/x")),
+      standard = "whatwg"
+    ),
+    c("file:///%EF%BB%BFp", "file:///%EF%BB%BFp", "file:///%EF%BB%BFC|/x")
+  )
+  # Host-less paths without the mark.
+  expect_identical(
+    serialize_url(c("file:p", "file:/p", "file:\\p", "file:"),
+      standard = "whatwg"
+    ),
+    c("file:///p", "file:///p", "file:///p", "file:///")
+  )
+})

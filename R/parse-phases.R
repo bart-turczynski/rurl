@@ -799,6 +799,19 @@
   parts <- do.call(rbind, split)
   file_path_raw <- parts[, "path"]
   file_path <- stringi::stri_replace_all_fixed(file_path_raw, "\\", "/")
+  # The *_fixed() family reads past a U+FEFF that starts its input (see
+  # .starts_with_bom()), so a host-less path led by the mark lost it
+  # (RURL-rjpljsui): for those rows only, a "/" is spliced on first and cut
+  # off as a byte.
+  bom_path <- .starts_with_bom(file_path_raw)
+  if (any(bom_path)) {
+    file_path[bom_path] <- .byte_substring_vec(
+      stringi::stri_replace_all_fixed(
+        paste0("/", file_path_raw[bom_path]), "\\", "/"
+      ),
+      2L
+    )
+  }
 
   # Empty, not NA: WHATWG's file state gives every `file:` URL a non-null host,
   # and the host-less forms (`file:`, `file:/p`, `file:C|/m/`) carry the empty
@@ -861,7 +874,8 @@
   if (any(no_authority)) {
     no_auth_idx <- which(no_authority)
     path[no_auth_idx] <- ifelse(path[no_auth_idx] == "", "/", path[no_auth_idx])
-    needs_leading <- !stringi::stri_startswith_fixed(path[no_auth_idx], "/")
+    # Base startsWith(): stri_startswith_fixed() reads past a leading U+FEFF.
+    needs_leading <- !startsWith(path[no_auth_idx], "/")
     needs_leading[is.na(needs_leading)] <- FALSE
     lead_idx <- no_auth_idx[needs_leading]
     path[lead_idx] <- paste0("/", path[lead_idx])
