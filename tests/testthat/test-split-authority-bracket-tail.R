@@ -157,3 +157,55 @@ test_that("NULL: a non-special bracket tail never reaches the general parser", {
   expect_identical(omitted$parse_status, rep("error", length(urls)))
   expect_true(all(is.na(omitted$host)))
 })
+
+test_that("whatwg: text after the ] of a non-special host fails the parse", {
+  # Each tail stays in the host buffer -- `\` is no delimiter for a non-special
+  # scheme, and in `[::1]x:80` the buffer ends at the `:` after `x` -- so the
+  # host parser sees an input that does not end with "]" and fails. These
+  # parsed as host `[::1]`, the tail silently dropped: `foo://[::1]x/`
+  # serialized as `foo://[::1]/` and `foo://[::1]\x` as `foo://[::1]`.
+  urls <- c(
+    "foo://[::1]x/", "foo://[::1]]/", "foo://[::1]\\x", "foo://u@[::1]x/",
+    "foo://u:p@[::1]x/", "foo://[::1]x", "foo://[::1]x?q", "foo://[::1]x#f",
+    "foo://[::1]x:80/", "foo://[::1][::2]/", "foo://[::1]%41/",
+    "foo://[::1]./", "mailto://[::1]x/"
+  )
+  # An input that already failed in the IPv6 parser, one per row, so the two
+  # data frames line up row for row.
+  twin <- rep("foo://[1:]/", length(urls))
+  for (args in list(
+    list(profile = "whatwg"),
+    list(url_standard = "whatwg", scheme_acceptance = "general")
+  )) {
+    lab <- paste(names(args), unlist(args), collapse = ", ")
+    p <- do.call(safe_parse_urls, c(list(urls), args))
+    expect_identical(p$parse_status, rep("error", length(urls)), info = lab)
+    expect_true(all(is.na(p$host)), info = lab)
+    expect_true(all(is.na(p$clean_url)), info = lab)
+    # The failure has the shape every other host-parser failure has.
+    t <- do.call(safe_parse_urls, c(list(twin), args))
+    expect_identical(p[-1L], t[-1L], info = lab)
+  }
+  expect_identical(
+    serialize_url(urls, standard = "whatwg"), rep(NA_character_, length(urls))
+  )
+  expect_identical(
+    get_host_type(urls, url_standard = "whatwg", scheme_acceptance = "general"),
+    rep(NA_character_, length(urls))
+  )
+  policy <- url_key_policy(standard = "whatwg")
+  expect_identical(
+    unclass(get_url_key(urls, policy)), unclass(get_url_key(twin, policy))
+  )
+})
+
+test_that("whatwg: a tailed row fails alone; its neighbors keep their values", {
+  mixed <- c("foo://[::1]/a", "foo://[::1]x/", "foo://[::1]:8080/b", "foo://h/")
+  p <- safe_parse_urls(mixed, profile = "whatwg")
+  expect_identical(p$parse_status, c("ok", "error", "ok", "ok"))
+  expect_identical(p$host, c("[::1]", NA, "[::1]", "h"))
+  expect_identical(
+    serialize_url(mixed, standard = "whatwg"),
+    c("foo://[::1]/a", NA_character_, "foo://[::1]:8080/b", "foo://h/")
+  )
+})
