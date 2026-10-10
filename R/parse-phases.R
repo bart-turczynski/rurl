@@ -497,7 +497,9 @@
     paste0("@", userinfo), chars, sprintf("%%%02X", codes),
     vectorize_all = FALSE
   )
-  .byte_substring_vec(encoded, 2L)
+  out <- .byte_substring_vec(encoded, 2L)
+  out[is.na(userinfo)] <- NA_character_
+  out
 }
 
 # The WHATWG IPv4 canonicalization that used to run here is gone
