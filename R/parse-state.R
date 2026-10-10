@@ -741,7 +741,10 @@
 # userinfo is everything before the LAST `@` (WHATWG credentials rule; a valid
 # RFC authority carries at most one `@`, enforced separately by the L4a gate).
 # A bracketed IP-literal owns any `:` inside it -- only a trailing `:port` after
-# `]` is the port; a non-bracketed host's first `:` is the port delimiter.
+# `]` is the port, and any other text after `]` keeps the whole hostport as the
+# host, which the caller then fails (the host parsers on the general route, the
+# RFC 3986 grammar gate on the `file:` overlay); a non-bracketed host's first
+# `:` is the port delimiter.
 # authority == "" yields host == "" (empty), userinfo/port NA. Regex locators,
 # not the fixed ones, which read past a U+FEFF that starts the authority or the
 # host (see .rfc3986_first_index(), RURL-biunpazk).
@@ -759,10 +762,17 @@
   port <- NA_character_
   if (startsWith(hostport, "[")) {
     rb <- .rfc3986_first_index(hostport, "]")
-    if (rb > 0L) {
+    after <- if (rb > 0L) substring(hostport, rb + 1L) else ""
+    # Only an empty tail or a `:port` ends the literal at its `]`. Any other
+    # tail (`[::1]x`, `[::1]]`, `[::1]\x`) stays in the host, where the host
+    # parsers fail it ("must end with `]`", or the IPv6 parser): the WHATWG
+    # host state hands the whole buffer up to `:` (outside brackets), `/`, `?`
+    # or `#` to the host parser, and RFC 3986 sec 3.2.2 lets nothing follow an
+    # IP-literal but `:port`. Cutting at the `]` dropped the tail and parsed
+    # `[::1]` (RURL-rrqzdahp).
+    if (rb > 0L && (!nzchar(after) || startsWith(after, ":"))) {
       host <- substring(hostport, 1L, rb)
-      after <- substring(hostport, rb + 1L)
-      if (startsWith(after, ":")) {
+      if (nzchar(after)) {
         port <- substring(after, 2L)
       }
     }
