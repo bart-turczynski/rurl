@@ -1110,6 +1110,15 @@
   if (!is.null(url_standard)) {
     bad_ip <- bad_ip & !cls$is_ipv4ish
   }
+  # A WHATWG `file:` row is never judged here (RURL-otfaotzq). The token above
+  # is cut from text after "scheme://", so a host-less `file:C:/x` keeps its
+  # scheme and reads as the IPv6 attempt "file:C", and the row failed before
+  # the file state ran. That state sends a code point other than "/" or "\" to
+  # the path state, where a colon is path data (`file:///C:/x`,
+  # `file:///ab:cd`). A real authority still goes through the host parser, in
+  # .parse_whatwg_file_urls_vec() and the host model after it, so
+  # `file://[::1x]/` and `file://1:2/` still fail, as they do in the standard.
+  bad_ip <- bad_ip & !is_whatwg_file
   rejected <- rejected | bad_ip
 
   # Rows that get an inferred http:// (scheme-less, non-scheme-relative).

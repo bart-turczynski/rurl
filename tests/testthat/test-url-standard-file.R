@@ -479,14 +479,26 @@ test_that("a colon before any slash in a host-less file: path", {
   # RURL-otfaotzq. WHATWG URL Standard, file state: a code point that is not
   # "/" or "\" sends the input to the path state, which keeps a Windows drive
   # letter as the first segment and reads anything else as an ordinary
-  # segment. No host is read, so a colon there is path data.
+  # segment. No host is read, so a colon there is path data. rurl read the
+  # colon as an IPv6 host attempt and failed the row before the file state ran.
   u <- c("file:C:/x", "file:C:x", "file:a:/x", "file:ab:cd", "file:1:2")
-  expect_identical(
-    serialize_url(u, standard = "whatwg"), rep(NA_character_, length(u))
+  want <- c(
+    "file:///C:/x", "file:///C:x", "file:///a:/x", "file:///ab:cd",
+    "file:///1:2"
   )
+  expect_identical(serialize_url(u, standard = "whatwg"), want)
   w <- safe_parse_urls(u, profile = "whatwg")
-  expect_identical(w$parse_status, rep("error", length(u)))
-  expect_identical(w$path, rep(NA_character_, length(u)))
+  expect_identical(w$parse_status, rep("ok", length(u)))
+  expect_identical(w$path, c("/C:/x", "/C:x", "/a:/x", "/ab:cd", "/1:2"))
+  expect_true(all(is.na(w$host)))
+  expect_identical(w$clean_url, want)
+
+  # An authority is still read by the host parser: an invalid IPv6 literal and
+  # a host carrying a port (the file host state has no port) still fail.
+  expect_identical(
+    serialize_url(c("file://[::1x]/", "file://1:2/"), standard = "whatwg"),
+    c(NA_character_, NA_character_)
+  )
 
   # Negative controls: neither the frozen NULL profile nor `rfc3986` has a
   # file state, and both still refuse these rows on the web route.

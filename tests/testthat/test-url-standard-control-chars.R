@@ -579,16 +579,19 @@ test_that("a WHATWG file: path led by U+FEFF keeps the mark", {
     c("file:///%EF%BB%BF%EF%BB%BFp", "file:///%EF%BB%BFC|/x",
       "file:///%EF%BB%BF/x")
   )
-  # A colon before any slash (RURL-otfaotzq). Node gives
-  # "file:///%EF%BB%BFC:/x" and "file:///%EF%BB%BF/C:/x" for the U+FEFF rows
-  # and "file:///%E2%80%8BC:/x" and "file:///%E2%80%8B/C:/x" for the U+200B
-  # rows; rurl fails each before the file: parser runs.
+  # A colon before any slash (RURL-otfaotzq). The mark is not "/" or "\", so
+  # the file state hands the input to the path state; a later "\" is a segment
+  # separator, and the colon is path data. rurl read the colon as an IPv6 host
+  # attempt and failed each row before the file: parser ran. Values match Node.
   expect_identical(
     serialize_url(
       paste0("file:", rep(c(BOM, ZWSP), each = 2L), c("C:/x", "\\C:/x")),
       standard = "whatwg"
     ),
-    rep(NA_character_, 4L)
+    c(
+      "file:///%EF%BB%BFC:/x", "file:///%EF%BB%BF/C:/x",
+      "file:///%E2%80%8BC:/x", "file:///%E2%80%8B/C:/x"
+    )
   )
   # Negative controls: NULL and rfc3986 refuse all four rows.
   for (std in list(NULL, "rfc3986")) {
