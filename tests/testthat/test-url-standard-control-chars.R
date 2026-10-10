@@ -505,3 +505,49 @@ test_that("the WHATWG full-stop map keeps a U+FEFF that starts the userinfo", {
   expect_identical(r$user, "u")
   expect_identical(r$host, "a.com")
 })
+
+test_that("the WHATWG userinfo encoder keeps a U+FEFF that leads it", {
+  # The authority state percent-encodes userinfo with the userinfo
+  # percent-encode set and removes nothing. A space, a C0 control or DEL sends
+  # the userinfo through rurl's encoder (RURL-rfgbozdr), whose
+  # stri_replace_all_fixed() read past a U+FEFF that starts its input, so the
+  # mark was dropped: "http://<U+FEFF>a b@a.com/" had user "a%20b".
+  r <- safe_parse_urls(
+    paste0("http://", BOM, c("a b", "a\001b", "a\177b", " b"), "@a.com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(
+    r$user,
+    c("%EF%BB%BFa%20b", "%EF%BB%BFa%01b", "%EF%BB%BFa%7Fb", "%EF%BB%BF%20b")
+  )
+  expect_identical(r$host, rep("a.com", 4L))
+  # Only one of two marks was dropped, and a user made of the mark alone was
+  # lost before its ":".
+  r <- safe_parse_urls(
+    paste0("http://", BOM, c(BOM, ":"), "a b@a.com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$user, c("%EF%BB%BF%EF%BB%BFa%20b", "%EF%BB%BF"))
+  expect_identical(r$password, c(NA, "a%20b"))
+  # Its U+200B twin keeps the mark, for each kind of refused code point.
+  r <- safe_parse_urls(
+    paste0("http://", ZWSP, c("a b", "a\001b", "a\177b"), "@a.com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(
+    r$user, c("%E2%80%8Ba%20b", "%E2%80%8Ba%01b", "%E2%80%8Ba%7Fb")
+  )
+  expect_identical(r$host, rep("a.com", 3L))
+  # A userinfo with none of the refused code points never reaches the encoder.
+  r <- safe_parse_urls(paste0("http://", BOM, "ab@a.com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$user, "%EF%BB%BFab")
+  # A mark after the userinfo's first code point was always kept.
+  r <- safe_parse_urls(paste0("http://u:", BOM, "a b@a.com/"),
+    url_standard = "whatwg"
+  )
+  expect_identical(r$user, "u")
+  expect_identical(r$password, "%EF%BB%BFa%20b")
+  expect_identical(r$host, "a.com")
+})

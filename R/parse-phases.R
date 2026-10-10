@@ -487,13 +487,19 @@
 # `rawToChar(as.raw(0L))` is ""), so the literal table covers 0x01-0x20 and
 # 0x7F; the regex above still names the full 0x00-0x20 range. "%" is absent from
 # the table, so the substitution is idempotent over already-encoded input.
+# The *_fixed() family reads past a U+FEFF that starts its input (see
+# .starts_with_bom()), so a userinfo led by the mark lost it (RURL-rfgbozdr):
+# an "@", absent from the table, is spliced on first and cut off as a byte.
 .percent_encode_userinfo_charset <- function(userinfo) {
   codes <- c(seq.int(1L, 32L), 127L)
   chars <- vapply(codes, function(i) rawToChar(as.raw(i)), character(1))
-  stringi::stri_replace_all_fixed(
-    userinfo, chars, sprintf("%%%02X", codes),
+  encoded <- stringi::stri_replace_all_fixed(
+    paste0("@", userinfo), chars, sprintf("%%%02X", codes),
     vectorize_all = FALSE
   )
+  out <- .byte_substring_vec(encoded, 2L)
+  out[is.na(userinfo)] <- NA_character_
+  out
 }
 
 # The WHATWG IPv4 canonicalization that used to run here is gone
