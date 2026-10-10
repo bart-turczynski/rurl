@@ -364,7 +364,8 @@ the \code{"seo"} alias \code{"canonical"}. A profile is \strong{separate} from
 \code{url_standard} (it bundles acceptance, interpretation, leniency, and
 canonicalization together) and expands only into arguments you did not
 supply explicitly — an explicit argument always overrides the profile.
-\code{"browser"} is a browser-\emph{like} fix-up posture (http-prepending; not
+\code{"browser"} is a browser-\emph{like} fix-up posture (http-prepending, and
+input starting with a single \code{/} read as a local \verb{file:} path; not
 Chrome-faithful); \code{"whatwg"} is the absolute-URL no-base posture that
 \emph{rejects} scheme-less input (unlike a bare \code{url_standard = "whatwg"});
 \code{"rfc-syntax"} is RFC 3986 generic syntax as parsing, not normalization

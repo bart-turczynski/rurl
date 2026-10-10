@@ -37,7 +37,8 @@ supplied, the resolved result is flagged \code{customized = TRUE} and rurl no
 longer claims the result matches the named profile exactly.
 
 The recognized profiles are \code{"browser"} (browser-\emph{like}
-http-prepending fix-up posture; not Chrome-faithful), \code{"whatwg"}
+http-prepending fix-up posture that also reads input starting with a single
+\code{/} as a local \code{file:} path; not Chrome-faithful), \code{"whatwg"}
 (absolute-URL, no-base spec posture that \emph{rejects} scheme-less input),
 \code{"rfc-syntax"} (RFC 3986 generic syntax as \emph{parsing}, not
 normalization: case and dot-segments are preserved), and \code{"seo"}

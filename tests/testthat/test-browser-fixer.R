@@ -2,8 +2,10 @@
 # PRD "browser fixer" Part 1). The fixer is a deterministic single pass, gated
 # on the internal `fixup_posture == "browser"` axis, that repairs the raw input
 # string BEFORE parsing: (1) outer C0/space trim, (2) `;`->`:` for recognized
-# special schemes, (3) `://` insertion for authority-table schemes. Both tables
-# resolve to .WHATWG_SPECIAL_SCHEMES. Step 4 (fallback `http`) is NOT the
+# special schemes, (3) `://` insertion for authority-table schemes, (3b)
+# `file://` before a leading single `/`. The recognized-scheme set is
+# .WHATWG_SPECIAL_SCHEMES; the authority table is that set minus `file`
+# (RURL-anubcmpd). Step 4 (fallback `http`) is NOT the
 # fixer -- it is the existing scheme_policy = "infer" prepend seam (ADR 0012
 # D4). `fixup_posture` is internal-only (no public signature yet), so the axis
 # is driven through rurl::: like scheme_acceptance = "general".
@@ -53,16 +55,18 @@ test_that("step 4 fallback http is the existing infer seam, fed by the fixer", {
   )
 })
 
-test_that("all recognized special schemes fire steps 2 and 3", {
-  # Recognized-scheme set = authority table = .WHATWG_SPECIAL_SCHEMES.
+test_that("recognized special schemes fire step 2; all but file fire step 3", {
+  # Recognized-scheme set = .WHATWG_SPECIAL_SCHEMES; the authority table is
+  # that set minus `file` (RURL-anubcmpd).
   for (scheme in rurl:::.WHATWG_SPECIAL_SCHEMES) {
+    slashed <- paste0(scheme, if (scheme == "file") ":" else "://", "host/p")
     expect_identical(
       rurl:::.apply_browser_fixup_vec(paste0(scheme, ";host/p"), "browser"),
-      paste0(scheme, "://host/p")
+      slashed
     )
     expect_identical(
       rurl:::.apply_browser_fixup_vec(paste0(scheme, ":host/p"), "browser"),
-      paste0(scheme, "://host/p")
+      slashed
     )
   }
 })
@@ -185,5 +189,64 @@ test_that("step 3 counts backslashes as slashes after file:", {
       "file://[::1]/", "file://[::1]/", "file://h/p", "file://h/p",
       "file:///C:/x", NA, NA, "http://h/p"
     )
+  )
+})
+
+# RURL-anubcmpd: step 3 skips `file`. The WHATWG file state sends a host-less
+# `file:` input to the path state, so `file:p` is the path `p`, not the host
+# `p`. Chromium agrees on POSIX: FixupURLInternal() in
+# components/url_formatter/url_fixer.cc hands an explicit `file:` to GURL
+# unchanged, and DoParseFileUrl() in url/url_parse_file.cc reads zero slashes
+# as a local path. Values are Node 26's `new URL(u).href`.
+test_that("step 3 leaves a host-less file: to the WHATWG path state", {
+  u <- c(
+    "file:p", "File:x", "  file:x  ", "file:host/p", "file:ab:cd", "file;p",
+    "file:/p"
+  )
+  expect_identical(
+    rurl:::.apply_browser_fixup_vec(u, "browser"),
+    c(
+      "file:p", "File:x", "file:x", "file:host/p", "file:ab:cd", "file:p",
+      "file:/p"
+    )
+  )
+  expect_identical(
+    safe_parse_urls(u, profile = "browser")$clean_url,
+    c(
+      "file:///p", "file:///x", "file:///x", "file:///host/p",
+      "file:///ab:cd", "file:///p", "file:///p"
+    )
+  )
+})
+
+# RURL-anubcmpd: scheme-less input that starts with one `/` is a local path,
+# as Chromium's SegmentURLInternal() (components/url_formatter/url_fixer.cc)
+# picks `file:` for a leading separator on POSIX. `//` stays scheme-relative,
+# `/\` is left as it was, and `~` is left alone: expanding it needs the
+# caller's home directory. clean_url shows the path unencoded (ADR 0017).
+test_that("a leading single slash reads as a file path", {
+  u <- c(
+    "/Users/me/a.pdf", "/", "/a b/c \u2014 d.pdf", "//host/p", "/\\h/p",
+    "~/a.pdf"
+  )
+  expect_identical(
+    rurl:::.apply_browser_fixup_vec(u, "browser"),
+    c(
+      "file:///Users/me/a.pdf", "file:///", "file:///a b/c \u2014 d.pdf",
+      "//host/p", "/\\h/p", "~/a.pdf"
+    )
+  )
+  expect_identical(
+    safe_parse_urls(u, profile = "browser")$clean_url,
+    c(
+      "file:///Users/me/a.pdf", "file:///", "file:///a b/c \u2014 d.pdf",
+      "http://host/p", NA, NA
+    )
+  )
+  # The guess is the browser profile's alone.
+  expect_identical(rurl:::.apply_browser_fixup_vec(u, "none"), u)
+  expect_identical(
+    safe_parse_urls("/Users/me/a.pdf", profile = "whatwg")$clean_url,
+    NA_character_
   )
 })

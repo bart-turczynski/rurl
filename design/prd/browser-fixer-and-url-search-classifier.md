@@ -52,6 +52,8 @@ A non-classifying fixer, run before the WHATWG parser under the `browser` bundle
   valid scheme).
 - **Missing authority slashes** (`://` insertion) only for schemes in the
   **authority table**.
+- **Leading-slash file guess:** scheme-less input that starts with exactly one
+  `/` gets `file://` in front (amendment below).
 - **Fallback `http`** (NOT https — see Part 3) only on the existing
   scheme-inference path (`scheme_policy=infer`), so http-prepend lives in **one**
   place shared with the `infer` posture (ADR 0012 D4). *(v3.0: `infer` was the
@@ -83,9 +85,34 @@ resolve to the same set and there is no half-repair asymmetry:
   no browser-faithfulness is lost either way.)
 - No "internal/chrome" schemes are recognized — rurl is not a browser.
 
+**Amendment (after rurl 3.1.0, RURL-anubcmpd, maintainer decision 2026-10-10).**
+Two changes, each with new acceptance rows below:
+
+- **`file` leaves the authority table**; it stays in the recognized-scheme set,
+  so `file;p` → `file:p`. The "authority-based = special" equation above is
+  wrong for `file`: the WHATWG file state sends a host-less `file:p` to the path
+  state (`file:///p`), and inserting `//` made `p` a host. For every other
+  special scheme `://` insertion changes nothing the WHATWG special authority
+  slashes state would not already do. Chromium agrees on POSIX:
+  `FixupURLInternal()` in `components/url_formatter/url_fixer.cc` hands an
+  explicit `file:` to GURL unchanged, and `DoParseFileUrl()` in
+  `url/url_parse_file.cc` reads zero slashes after `file:` as a local path (on
+  Windows it reads them as a UNC host, which rurl does not follow).
+- **Step 3b, the leading-slash file guess.** `SegmentURLInternal()` in
+  `url_fixer.cc` picks `file:` for input starting with a path separator on
+  POSIX, so a pasted `/Users/me/a.pdf` opens as `file:///Users/me/a.pdf`.
+  rurl does the same on every platform, for exactly one leading `/`: `//` stays
+  scheme-relative (`scheme_relative_handling`) and `/\` is left verbatim.
+  Chromium's `~` home-directory expansion is **not** copied: it needs the
+  caller's home directory, which a parse result must not depend on. Neither is
+  its Windows drive and UNC detection. Chromium escapes `?` and `#` as filename
+  characters (`FilePathToFileURL`); rurl hands the string to the WHATWG parser,
+  so `/a?b` has the query `b`.
+
 **Ordering** (each step feeds the next; deterministic, single pass):
 1. outer C0/space trim → 2. `;`→`:` (recognized-scheme set only) → 3. `://`
-insertion (authority table only) → 4. `scheme_policy=infer` fallback `http`.
+insertion (authority table only) → 3b. `file://` before a leading single `/` →
+4. `scheme_policy=infer` fallback `http`.
 
 **Worked examples (acceptance cases):**
 
@@ -98,6 +125,11 @@ insertion (authority table only) → 4. `scheme_policy=infer` fallback `http`.
 | `ftps:host/p` | `ftps:host/p` (unchanged) | step 3 skipped (`ftps` non-special → opaque under WHATWG) |
 | `foo:bar` | `foo:bar` (unchanged) | opaque; no step applies |
 | `example.com` | `http://example.com` | step 4 (`scheme_policy=infer`) |
+| `file:p` | `file:p` (unchanged; parses as `file:///p`) | step 3 skipped (`file` not in the authority table) |
+| `file;p` | `file:p` (parses as `file:///p`) | step 2 (`file` recognized) |
+| `/Users/me/a.pdf` | `file:///Users/me/a.pdf` | step 3b |
+| `//host/p` | `//host/p` (unchanged; `http://host/p` via `scheme_relative_handling`) | step 3b skipped (`//`) |
+| `~/a.pdf` | `~/a.pdf` (unchanged; rejected) | no step applies |
 
 Any change to these tables is a versioned change with new acceptance rows, not an
 inline tweak.

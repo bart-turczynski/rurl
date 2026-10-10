@@ -916,10 +916,23 @@
 #   3. `://` insertion -- insert `://` after `scheme:` for a scheme in the
 #      authority table that is missing its authority slashes (e.g.
 #      `http:example.com` -> `http://example.com`). Outside the set: verbatim.
+#   3b. File-path guess -- scheme-less input that starts with exactly one `/`
+#      becomes `file://` + input (`/Users/me/a.pdf` ->
+#      `file:///Users/me/a.pdf`), as Chromium's SegmentURLInternal()
+#      (components/url_formatter/url_fixer.cc) picks `file:` for a leading
+#      separator on POSIX. `//` stays scheme-relative; `~` is not expanded, as
+#      that needs the caller's home directory (RURL-anubcmpd).
 #
-# Both tables resolve to the SAME set = .WHATWG_SPECIAL_SCHEMES (referenced
-# directly, not copied). `ftps` is naturally excluded (it is not special under
-# WHATWG), so `ftps;host`/`ftps:host` stay verbatim -- no special-casing.
+# The recognized-scheme set is .WHATWG_SPECIAL_SCHEMES (referenced directly,
+# not copied); the authority table is that set minus `file`. `ftps` is
+# naturally excluded (it is not special under WHATWG), so `ftps;host` /
+# `ftps:host` stay verbatim -- no special-casing. `file` is left out of step 3
+# because the WHATWG file state sends a host-less `file:p` to the path state
+# (`file:///p`); inserting `//` made `p` a host. Chromium agrees on POSIX:
+# FixupURLInternal() hands an explicit `file:` to GURL unchanged, and
+# DoParseFileUrl() (url/url_parse_file.cc) reads zero slashes as a local path
+# (RURL-anubcmpd). For every other special scheme step 3 changes nothing the
+# WHATWG special authority slashes state would not already do.
 # Step 4 (fallback `http`) is NOT here: it is the existing scheme_policy =
 # "infer" prepend seam (ADR 0012 D4).
 .apply_browser_fixup_vec <- function(url, fixup_posture) {
@@ -932,11 +945,15 @@
   url <- stringi::stri_replace_first_regex(url, "^[\\x00-\\x20]+", "")
   url <- stringi::stri_replace_first_regex(url, "[\\x00-\\x20]+$", "")
 
-  # Recognized-scheme set = authority table = .WHATWG_SPECIAL_SCHEMES. Schemes
-  # are case-insensitive; the ordered `;`/`:` delimiter after the alternation
-  # keeps a longer scheme (https) from being truncated to a shorter prefix
-  # (http) and keeps non-scheme tokens (httpx;) from matching.
+  # Recognized-scheme set = .WHATWG_SPECIAL_SCHEMES; authority table = that set
+  # minus `file`. Schemes are case-insensitive; the ordered `;`/`:` delimiter
+  # after the alternation keeps a longer scheme (https) from being truncated to
+  # a shorter prefix (http) and keeps non-scheme tokens (httpx;) from matching.
   scheme_alt <- paste(.WHATWG_SPECIAL_SCHEMES, collapse = "|")
+  authority_alt <- paste(
+    setdiff(.WHATWG_SPECIAL_SCHEMES, "file"),
+    collapse = "|"
+  )
 
   # Step 2: leading `scheme;` -> `scheme:`, recognized schemes only. $1 keeps
   # the matched scheme's original case.
@@ -947,16 +964,12 @@
   # Step 3: `scheme:` with no authority slashes -> `scheme://`, authority-table
   # schemes only. The negative lookahead `(?!//)` leaves an already-slashed
   # `scheme://` (incl. the step-2 output) untouched.
-  # A `file:` row also counts its slashes when either is a backslash: the
-  # WHATWG file slash state reads `\\`, `/\` and `\/` as the two slashes, so
-  # `file:\\[::1]/` already has its authority. Inserting `//` there made the
-  # authority path data (`file:////[::1]/`), and a bad one such as
-  # `file:\\[::1x]\` parsed instead of failing (RURL-otfaotzq).
   url <- stringi::stri_replace_first_regex(
-    url,
-    paste0("(?i)^(", scheme_alt, "):(?!//)(?!(?<=file:)[/\\\\]{2})"),
-    "$1://"
+    url, paste0("(?i)^(", authority_alt, "):(?!//)"), "$1://"
   )
+
+  # Step 3b: a leading single `/` (not `//`, not `/\`) -> `file://` + input.
+  url <- stringi::stri_replace_first_regex(url, "^(?=/(?![/\\\\]))", "file://")
 
   url
 }
@@ -981,8 +994,8 @@
   # Bounded browser fixer (RURL-jynceqrj, ADR 0012 Layer 6a) runs BEFORE the
   # standards-required WHATWG preprocessing below. It is a deterministic single
   # pass that repairs the input STRING (outer C0/space trim, `;`->`:` and `://`
-  # insertion for recognized special schemes) so the fixed string flows through
-  # the ordinary parse path. A byte-for-byte no-op unless fixup_posture ==
+  # insertion for recognized special schemes, `file://` before a leading single
+  # `/`) so the fixed string flows through the ordinary parse path. A byte-for-byte no-op unless fixup_posture ==
   # "browser". The step-4 fallback `http` prepend is NOT here: it is the
   # existing scheme_policy = "infer" seam at the add_http mask below, shared
   # with the default posture (ADR 0012 D4 -- one prepend impl).
