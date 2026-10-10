@@ -1006,6 +1006,29 @@
   url
 }
 
+# The string the general route parses: the browser fixer's output, then WHATWG
+# step 1's strip (RURL-lsgdeisl), the same two passes in the same order as at
+# the top of .prepare_urls_for_parse_vec(). Stage A and Stage B both call this,
+# so they agree on which rows are general-routed.
+#
+# The general route read the raw input until RURL-vmsmlflr, so a row the fixer
+# rewrote was claimed on its raw spelling while the web route parsed the fixed
+# one. Under `rfc3986`, where the general route owns `file:` (RFC 8089) and the
+# odd-slash `http:` rows, `  file:///a/b` and `file;///a/b` fell to the web
+# route, which read `a` as the host, and `file;p` failed; `http:a/b` kept its
+# raw rootless path although step 3 had written `http://a/b`. A fixed row now
+# parses as its fixed spelling typed directly. The rules that must not reach a
+# non-special scheme stay out: steps 2, 3 and 3b match special schemes only,
+# step 1's trim is scheme-blind by definition (and under `whatwg` the strip
+# already does it), and the special-scheme backslash rewrite is not applied.
+# A byte-for-byte no-op unless fixup_posture == "browser".
+.general_route_input_vec <- function(url, opts) {
+  url <- .apply_browser_fixup_vec(
+    url, opts$fixup_posture, opts$url_standard, opts$scheme_policy
+  )
+  .strip_whatwg_control_chars_vec(url, opts$url_standard)$url
+}
+
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
 # gate, and building the string handed to the parser. Returns the per-URL
 # columns plus

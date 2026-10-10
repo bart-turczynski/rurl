@@ -2045,11 +2045,13 @@ safe_parse_urls <- function(url,
   # `._prepare_urls_vec` (parse-phases.R), so the rows routed off the web route
   # were still handed the raw string -- `foo://ho<TAB>st/` kept the tab and
   # percent-encoded it into the host, and `foo://ho<LF>st/` was rejected
-  # outright (RURL-lsgdeisl). Only the strip is applied here, deliberately NOT
-  # the rest of `prep`: browser fixup and special-scheme backslash rewriting are
-  # separate rules that must not start firing on non-special schemes. A
-  # byte-for-byte no-op unless url_standard == "whatwg".
-  gen_input <- .strip_whatwg_control_chars_vec(urls, opts$url_standard)$url
+  # outright (RURL-lsgdeisl). The special-scheme backslash rewrite is NOT
+  # applied: it must not start firing on non-special schemes. The browser fixer
+  # IS (RURL-vmsmlflr), so a row it rewrote is routed and parsed on its fixed
+  # spelling, as the web route already parses it; see
+  # .general_route_input_vec(). A byte-for-byte no-op unless url_standard ==
+  # "whatwg" or fixup_posture == "browser".
+  gen_input <- .general_route_input_vec(urls, opts)
   gen <- .general_parse_vec(gen_input, opts$url_standard,
                             opts$scheme_acceptance, opts$scheme_policy)
   general_route <- valid & gen$general_parsed
@@ -2542,12 +2544,12 @@ safe_parse_urls <- function(url,
     # routed to the posture parser AND that parsed ok (web_ok is the complement
     # of Stage A's null rows). Cheap and deterministic; only the general posture
     # pays for it.
-    # Stage A feeds the general parser its WHATWG step-1 stripped input
-    # (RURL-lsgdeisl), so this re-parse MUST strip identically -- otherwise the
-    # two stages disagree about which rows are general-routed and the recovered
-    # state kinds land on the wrong rows.
+    # Stage A feeds the general parser its fixed, WHATWG step-1 stripped input
+    # (RURL-lsgdeisl, RURL-vmsmlflr), so this re-parse MUST read the same string
+    # -- otherwise the two stages disagree about which rows are general-routed
+    # and the recovered state kinds land on the wrong rows.
     gen_b <- .general_parse_vec(
-      .strip_whatwg_control_chars_vec(original_url, opts$url_standard)$url,
+      .general_route_input_vec(original_url, opts),
       opts$url_standard, opts$scheme_acceptance, opts$scheme_policy
     )
     gp <- gen_b$general_parsed & web_ok
