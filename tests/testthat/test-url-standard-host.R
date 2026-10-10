@@ -655,3 +655,24 @@ test_that("whatwg fails a U+FEFF host as one row", {
     c("a.com", "a.com")
   )
 })
+
+# --- A stray "%" in a WHATWG file: host (RURL-zkirywwb) ----------------------
+#
+# The host parser percent-decodes the host, and a "%" not followed by two hex
+# digits survives that decode as a literal "%", a forbidden domain code point,
+# so the host fails (WHATWG URL Standard, host parsing). The `file:` host
+# decodes in `.whatwg_file_normalize_host()`, apart from the http path.
+
+test_that("whatwg fails a file: host that keeps a stray percent", {
+  ok <- c("file://a%41/p", "file://a%C2%ADb/p", "file://localhost/p",
+    "file://loc%61lhost/p")
+  expect_identical(get_parse_status(ok, url_standard = "whatwg"),
+    rep("ok", length(ok)))
+  expect_identical(unname(get_host(ok, url_standard = "whatwg")),
+    c("aa", "ab", NA, NA))
+
+  bad <- c("file://a%/p", "file://a%4/p", "file://a%zz/p", "file://a%2541/p",
+    "http://a%41%/p")
+  expect_identical(get_parse_status(bad, url_standard = "whatwg"),
+    rep("error", length(bad)))
+})
