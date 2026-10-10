@@ -137,6 +137,20 @@ test_that("whatwg: the trailing-slash strip still sees the dot-removed path", {
   )
 })
 
+test_that("whatwg: a path_normalization override does not reach clean_url", {
+  # Only the path state's dot removal applies to a non-special list path;
+  # slash collapsing is a hierarchical transform (ADR 0012 D2), and an
+  # explicit "none" over a profile does not undo what the parse removed.
+  urls <- c("foo:/.//p", "foo://h/a//b/../c", "foo:/a/../b")
+  expected <- c("foo:/.//p", "foo://h/a//c", "foo:/b")
+  for (pn in c("both", "collapse_slashes", "none")) {
+    expect_identical(
+      general_rows(urls, profile = "whatwg", path_normalization = pn)$clean_url,
+      expected, label = pn
+    )
+  }
+})
+
 test_that("whatwg: resolve_url()'s clean output follows the reference", {
   expect_identical(
     resolve_url(c("foo:/a/../b", "foo://h/a/./b", "foo:a/../b"), "http://h/y",

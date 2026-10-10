@@ -2739,17 +2739,18 @@ safe_parse_urls <- function(url,
       # spellings) from every list path while parsing; an opaque path is
       # exempt. `gen_b$path` is the source path, so the serializer was handed
       # the dots the `path` column had already dropped: `foo:/a/../b` cleaned
-      # to itself beside path `/b` (RURL-lzsjlxgu). Run the same dot step
-      # Phase 3 ran, and only that step: the other Stage-B path dials are
-      # hierarchical transforms ADR 0012 D2 keeps off a non-special path.
+      # to itself beside path `/b` (RURL-lzsjlxgu). Run the WHATWG dot step,
+      # and only that step, whatever `path_normalization` a caller passed over
+      # a profile, as serialize_url() does: slash collapsing and the other
+      # Stage-B path dials are hierarchical transforms ADR 0012 D2 keeps off a
+      # non-special path.
       whatwg_path <- gen_b$path[gp]
       list_path <- !is.na(gen_b$path_kind[gp]) &
         gen_b$path_kind[gp] != "opaque"
       if (any(list_path)) {
         whatwg_path[list_path] <- .normalize_path_vec(
-          whatwg_path[list_path], "keep", opts$path_normalization, "keep",
-          "none",
-          path_identity = opts$path_identity
+          whatwg_path[list_path], "keep", "dot_segments", "keep", "none",
+          path_identity = ".whatwg_preserve"
         )
       }
       clean_url[gp] <- .serialize_whatwg_vec(
