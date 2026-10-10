@@ -3240,9 +3240,20 @@
     # to remove.
     seg_norm <- !is.na(path) & startsWith(path, "/")
     if (any(seg_norm)) {
-      path[seg_norm] <- vapply(
+      dotless <- vapply(
         path[seg_norm], ._remove_dot_segments, character(1), USE.NAMES = FALSE
       )
+      # Section 3.3: "When authority is not present, the path cannot begin
+      # with two slash characters". Removing dots can produce one
+      # (`foo:/a/..//p` -> "//p"), and RFC 3986 has no escape for it, so
+      # `foo://p` came out, naming a host the URI never had (RURL-dsjqseap).
+      # Such a path keeps its dot segments, as the clean_url does
+      # (RURL-rwlrcvnh).
+      adp <- authority_delimiter_present[seg_norm]
+      hostless <- is.na(adp) | !adp
+      names_a_host <- hostless & startsWith(dotless, "//")
+      dotless[names_a_host] <- path[seg_norm][names_a_host]
+      path[seg_norm] <- dotless
     }
     # Section 6.2.3, verbatim: "a URI that uses the generic syntax for
     # authority with an empty path should be normalized to a path of '/'".

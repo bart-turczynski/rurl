@@ -2767,7 +2767,8 @@ safe_parse_urls <- function(url,
   # ADR 0012 Layer 4b-2 (RURL-qbnelzku): serializer dispatch. Under general the
   # posture-serialized clean_url REPLACES the special/host-present builder for
   # the general-routed rows -- WHATWG (opaque/list, null-vs-empty host, `/.`
-  # guard) or RFC generic (source-preserving). web/special rows keep
+  # guard) or RFC generic (source-preserving serializer, handed the path
+  # `path_normalization` leaves). web/special rows keep
   # `.build_clean_url_vec` verbatim; under "web" `gp` is empty (passthrough).
   if (general_acceptance && any(gp)) {
     if (.is_whatwg(opts$url_standard)) {
@@ -2802,12 +2803,37 @@ safe_parse_urls <- function(url,
         trailing_slash_handling = opts$trailing_slash_handling
       )
     } else {
+      # `path_normalization` governs this path too (RURL-rwlrcvnh, owner
+      # ruling 2026-10-11). The direct `rfc3986` bundle normalizes, so its
+      # clean_url carries the path its `path` column carries: the bundle's
+      # section 6.2.2.2 identity step, then section 5.2.4 dot removal, which
+      # has no rootless exemption (`foo:a/../b` -> `foo:/b`). `rfc-syntax`
+      # sets "none" and keeps the source. Only the dot step runs, as on the
+      # whatwg arm: slash collapsing and the other Stage-B path dials stay off
+      # a non-special path (ADR 0012 D2). Where the result would start with
+      # "//" on a row with no authority, the source path stays: section 3.3
+      # forbids that path, RFC 3986 has no `/.` escape, and `foo://p` would
+      # name a host.
+      rfc_path <- gen_b$path[gp]
+      if (opts$path_normalization %in% c("dot_segments", "both")) {
+        has_path <- !is.na(rfc_path) & nzchar(rfc_path)
+        dotless <- rfc_path
+        dotless[has_path] <- .normalize_path_vec(
+          rfc_path[has_path], "keep", "dot_segments", "keep", "none",
+          path_identity = opts$path_identity
+        )
+        adp <- gen_b$authority_delimiter_present[gp]
+        hostless <- is.na(adp) | !adp
+        names_a_host <- hostless & has_path & startsWith(dotless, "//")
+        dotless[names_a_host] <- rfc_path[names_a_host]
+        rfc_path <- dotless
+      }
       clean_url[gp] <- .serialize_rfc_generic_vec(
         scheme = cased$scheme[gp], host = gen_b$host[gp],
         host_kind = gen_b$host_kind[gp],
         authority_delimiter_present =
           gen_b$authority_delimiter_present[gp],
-        path = gen_b$path[gp],
+        path = rfc_path,
         rfc_path_form = gen_b$rfc_path_form[gp], query = gen_b$query[gp],
         query_kind = gen_b$query_kind[gp], port = gen_b$port[gp],
         port_handling = opts$port_handling,
