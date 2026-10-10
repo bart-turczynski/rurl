@@ -430,7 +430,8 @@ Under \code{url_standard = "whatwg"} it carries the standard's percent-encoded
 spelling (the userinfo percent-encode set is applied, so
 \code{"http://a^b@host/"} reports \code{"a\%5Eb"}, and an existing triplet keeps
 its hex case, so \code{"http://a\%7fb@host/"} reports \code{"a\%7fb"}); under
-\code{url_standard = "rfc3986"} or no selector it is the raw source spelling,
+\code{url_standard = "rfc3986"} it is the raw source spelling, exactly as
+written in the URL; under no selector it is the raw source spelling,
 except that for \code{http}, \code{https}, \code{ftp} and \code{ftps} the two characters
 after each \verb{\%} are uppercased (\code{"a\%7Fb"}).
 Empty is reported as NA.
