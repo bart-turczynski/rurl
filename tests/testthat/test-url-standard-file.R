@@ -502,3 +502,61 @@ test_that("the authority guard leaves legitimate hostless file: rows intact", {
     "file:///etc/passwd"
   )
 })
+
+test_that("an empty file: authority keeps a path segment only for a separator after it", {
+  # RURL-vhuozous. WHATWG URL Standard, file slash state -> file host state:
+  # the second "/" or "\" ends the slashes; the file host state ends at the
+  # next "/", "\", "?", "#" or end of input with an empty buffer (or
+  # "localhost", replaced by the empty string), so the host is empty. The path
+  # start state then consumes ONE "/" or "\", and the path state appends the
+  # buffer at each later separator and at the end. The separator count after
+  # the authority decides the path: none or one gives [""] (`/`), two give
+  # ["", ""] (`//`). A backslash spelling reads exactly as its slash twin.
+  cases <- data.frame(
+    input = c(
+      # Pinned WPT rows (inst/bench/wpt-url-cases.json).
+      r"(file:\\//)",
+      r"(file:\\\\)",
+      r"(file:\\\\?fox)",
+      r"(file:\\\\#guppy)",
+      r"(file:\\localhost//)",
+      r"(file://\/localhost//cat)",
+      # Their forward-slash twins.
+      "file:////",
+      "file://localhost//",
+      # No backslash, no separator after the empty authority.
+      "file://",
+      "file:///",
+      "file://localhost",
+      "file:///?q"
+    ),
+    serialized = c(
+      "file:////",
+      "file:////",
+      "file:////?fox",
+      "file:////#guppy",
+      "file:////",
+      "file:////localhost//cat",
+      "file:////",
+      "file:////",
+      "file:///",
+      "file:///",
+      "file:///",
+      "file:///?q"
+    ),
+    path = c(
+      "//", "//", "//", "//", "//", "//localhost//cat",
+      "//", "//", "/", "/", "/", "/"
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  expect_identical(
+    serialize_url(cases$input, standard = "whatwg"), cases$serialized
+  )
+  parsed <- safe_parse_urls(
+    cases$input, url_standard = "whatwg", query_handling = "keep"
+  )
+  expect_identical(parsed$parse_status, rep("ok", nrow(cases)))
+  expect_identical(parsed$path, cases$path)
+})
