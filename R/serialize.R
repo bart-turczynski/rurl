@@ -409,7 +409,10 @@
 #'   \item{`standard = "rfc3986", form = "normalized"`}{Adds RFC 3986 section
 #'     6.2.2 syntax-based normalization (scheme and host case, percent-encoding
 #'     triplet case and unreserved-octet decoding, dot-segment removal) and the
-#'     section 6.2.3 default-port elision.}
+#'     section 6.2.3 default-port elision. A path with no authority keeps its
+#'     dot segments where removing them would leave it starting with `//`,
+#'     which section 3.3 forbids (`foo:/a/..//p` stays as written rather than
+#'     becoming `foo://p`, a URI with the host `p`).}
 #' }
 #'
 #' Both RFC forms are exposed because choosing one would forfeit either the

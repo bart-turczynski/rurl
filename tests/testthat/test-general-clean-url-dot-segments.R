@@ -85,14 +85,22 @@ test_that("whatwg: a non-special path with no dot segment does not move", {
   )
 })
 
-test_that("rfc3986: the generic serializer keeps the source path", {
-  # Pinned as-is, not ruled on: whether the direct `rfc3986` bundle's
-  # `path_normalization = "dot_segments"` should govern clean_url too is open.
+test_that("rfc3986: clean_url carries the normalized path", {
+  # Owner ruling 2026-10-11 (RURL-rwlrcvnh): `path_normalization` governs the
+  # general-route clean_url. The direct bundle normalizes (RFC 3986 sec
+  # 6.2.2.2, then sec 5.2.4 dot removal, which has no rootless exemption);
+  # where the result would start with "//" with no authority, the row keeps
+  # its source path (sec 3.3). `ws:` and `file:` are general-routed under
+  # rfc3986, so they follow too.
   urls <- c("foo:/a/../b", "foo://h/a/../b", "foo://h/a/%2e%2e/b",
             "foo:a/../b", "foo:/a/..//p", "ws://example.com/a/../b")
   r <- general_rows(urls, url_standard = "rfc3986")
   expect_identical(r$path, c("/b", "/b", "/b", "/b", "//p", "/b"))
-  expect_identical(r$clean_url, urls)
+  expect_identical(
+    r$clean_url,
+    c("foo:/b", "foo://h/b", "foo://h/b", "foo:/b", "foo:/a/..//p",
+      "ws://example.com/b")
+  )
 })
 
 test_that("rfc-syntax: no path normalization, so path and clean_url agree", {
@@ -157,4 +165,128 @@ test_that("whatwg: resolve_url()'s clean output follows the reference", {
                 url_standard = "whatwg", scheme_acceptance = "general"),
     c("foo:/b", "foo://h/a/b", "foo:a/../b")
   )
+})
+
+# --- RURL-rwlrcvnh / RURL-dsjqseap: the rfc3986 arm --------------------------
+#
+# Pins for the ruling that `path_normalization` governs the general-route
+# clean_url under `url_standard = "rfc3986"`, and that a normalized path which
+# would start with "//" on a hostless row keeps its source path (RFC 3986
+# sec 3.3). What that change must not move:
+
+rfc_rows <- c(
+  "foo:/a/../b", "foo://h/a/../b", "foo://h/a/%2e%2e/b", "foo:a/../b",
+  "foo:/a/..//p", "foo://h/a/..//p", "ws://example.com/a/../b",
+  "file:///a/../b", "foo://h/%41b/C%2fd", "foo://h/a/./b/", "foo:a/..",
+  "foo:/a/b", "http:/a/..//p", "urn:a:b/../c"
+)
+
+test_that("rfc3986: the path column is already normalized", {
+  r <- general_rows(rfc_rows, url_standard = "rfc3986")
+  expect_identical(
+    r$path,
+    c(
+      "/b", "/b", "/b", "/b", "//p", "//p", "/b", "/b", "/Ab/C%2Fd", "/a/b/",
+      "/", "/a/b", "//p", "/c"
+    )
+  )
+})
+
+test_that("rfc-syntax: clean_url keeps the source path on the general route", {
+  expect_identical(
+    safe_parse_urls(rfc_rows, profile = "rfc-syntax")$clean_url, rfc_rows
+  )
+  expect_identical(
+    general_rows(rfc_rows, profile = "rfc-syntax")$path,
+    c(
+      "/a/../b", "/a/../b", "/a/%2E%2E/b", "a/../b", "/a/..//p", "/a/..//p",
+      "/a/../b", "/a/../b", "/%41b/C%2Fd", "/a/./b/", "a/..", "/a/b",
+      "/a/..//p", "a:b/../c"
+    )
+  )
+})
+
+test_that("rfc3986: the web route already cleans to the normalized path", {
+  expect_identical(
+    safe_parse_urls(c("http://example.com/a/../b", "https://example.com/./x"),
+                    url_standard = "rfc3986")$clean_url,
+    c("http://example.com/b", "https://example.com/x")
+  )
+})
+
+test_that("serialize_url(): what the //-guard must not move", {
+  # `source` never normalizes; `normalized` removes dots from a path with an
+  # authority or a leading "/", and leaves a rootless path as written.
+  expect_identical(
+    serialize_url(rfc_rows, standard = "rfc3986", form = "source"), rfc_rows
+  )
+  normalized <- serialize_url(rfc_rows, standard = "rfc3986",
+                              form = "normalized")
+  keep <- !rfc_rows %in% c("foo:/a/..//p", "http:/a/..//p")
+  expect_identical(
+    normalized[keep],
+    c(
+      "foo:/b", "foo://h/b", "foo://h/b", "foo:a/../b", "foo://h//p",
+      "ws://example.com/b", "file:///b", "foo://h/Ab/C%2Fd", "foo://h/a/b/",
+      "foo:a/..", "foo:/a/b", "urn:a:b/../c"
+    )
+  )
+  expect_identical(
+    serialize_url(c("foo:/a/..//p", "foo://h/a/..//p"), standard = "whatwg"),
+    c("foo:/.//p", "foo://h//p")
+  )
+})
+
+# --- The rfc3986 fix ---------------------------------------------------------
+
+test_that("rfc3986: every general row cleans to its normalized path", {
+  r <- general_rows(rfc_rows, url_standard = "rfc3986")
+  expect_identical(
+    r$clean_url,
+    c(
+      "foo:/b", "foo://h/b", "foo://h/b", "foo:/b", "foo:/a/..//p",
+      "foo://h//p", "ws://example.com/b", "file:///b", "foo://h/Ab/C%2Fd",
+      "foo://h/a/b/", "foo:/", "foo:/a/b", "http:/a/..//p", "urn:/c"
+    )
+  )
+  # One row, one path: re-parsing clean_url gives back the `path` column,
+  # including the two rows that kept their source path.
+  again <- general_rows(r$clean_url, url_standard = "rfc3986")
+  expect_identical(again$path, r$path)
+  expect_true(all(is.na(again$host[c(1, 4, 5, 11, 12, 13, 14)])))
+})
+
+test_that("rfc-syntax: an explicit dot_segments reaches clean_url", {
+  # The dial governs, not the profile: a caller who asks rfc-syntax for dot
+  # removal gets it in clean_url, and slash collapsing still does not reach a
+  # non-special path (ADR 0012 D2).
+  urls <- c("foo:/a/../b", "foo:/a/..//p", "foo://h/a//b/../c")
+  for (pn in c("dot_segments", "both")) {
+    expect_identical(
+      general_rows(urls, profile = "rfc-syntax",
+                   path_normalization = pn)$clean_url,
+      c("foo:/b", "foo:/a/..//p", "foo://h/a//c"),
+      label = pn
+    )
+  }
+  # With no identity step, nothing but the dots moves: triplet hex case stays.
+  expect_identical(
+    general_rows(c("foo:/b/%7e", "foo:/a/../%7e"), profile = "rfc-syntax",
+                 path_normalization = "dot_segments")$clean_url,
+    c("foo:/b/%7e", "foo:/%7e")
+  )
+})
+
+test_that("serialize_url(): a normalized hostless path never starts with //", {
+  # RURL-dsjqseap. RFC 3986 sec 3.3: "When authority is not present, the
+  # path cannot begin with two slash characters". `foo:/a/..//p` normalized
+  # to `foo://p`, which names the host "p".
+  urls <- c("foo:/a/..//p", "foo:/.//p", "foo:/..//p", "http:/a/..//p")
+  normalized <- serialize_url(urls, standard = "rfc3986", form = "normalized")
+  expect_identical(
+    normalized, c("foo:/a/..//p", "foo:/.//p", "foo:/..//p", "http:/a/..//p")
+  )
+  again <- general_rows(normalized, url_standard = "rfc3986")
+  expect_true(all(is.na(again$host)))
+  expect_identical(again$path, rep("//p", 4L))
 })
