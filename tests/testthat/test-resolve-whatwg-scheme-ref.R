@@ -175,9 +175,9 @@ test_that("whatwg: resolving a scheme-bearing reference equals parsing it", {
 })
 
 test_that("whatwg: a scheme-bearing reference cleans to its own clean_url", {
-  # Under general acceptance a non-special scheme's clean_url keeps the dot
-  # segments its parsed path drops (RURL-lzsjlxgu); the resolved clean output
-  # follows the reference's own parse rather than hiding that.
+  # The resolved clean output is the reference's own clean_url, which under
+  # general acceptance drops the dot segments its parsed list path drops
+  # (RURL-lzsjlxgu) and keeps an opaque path's.
   refs <- c("foo:/a/../b", "foo://h/a/../b", "foo:a/../b", "http:/a/../b")
   for (ref in refs) {
     expect_identical(
@@ -191,6 +191,6 @@ test_that("whatwg: a scheme-bearing reference cleans to its own clean_url", {
   expect_identical(
     resolve_url("foo:/a/../b", "http://h/y", url_standard = "whatwg",
                 scheme_acceptance = "general"),
-    "foo:/a/../b"
+    "foo:/b"
   )
 })
