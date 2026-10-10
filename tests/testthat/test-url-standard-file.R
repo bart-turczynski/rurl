@@ -503,7 +503,7 @@ test_that("the authority guard leaves legitimate hostless file: rows intact", {
   )
 })
 
-test_that("an empty file: authority keeps a path segment only for a separator after it", {
+test_that("separators after an empty file: authority set its path", {
   # RURL-vhuozous. WHATWG URL Standard, file slash state -> file host state:
   # the second "/" or "\" ends the slashes; the file host state ends at the
   # next "/", "\", "?", "#" or end of input with an empty buffer (or
@@ -559,4 +559,51 @@ test_that("an empty file: authority keeps a path segment only for a separator af
   )
   expect_identical(parsed$parse_status, rep("ok", nrow(cases)))
   expect_identical(parsed$path, cases$path)
+})
+
+test_that("a backslash before an empty file: authority adds no segment", {
+  # RURL-vhuozous. Same states as the block above: none or one separator after
+  # the empty authority gives the path [""], so each row is `file:///` like
+  # its slash twin (`file://`, `file:///`, `file://localhost/`). rurl gave
+  # `file:////` whenever a backslash was rewritten and the path was `/`.
+  cases <- data.frame(
+    input = c(
+      r"(file:\\)",
+      r"(file:/\)",
+      r"(file:\/)",
+      r"(file:\\localhost)",
+      # Three: the file host state ends at the third "\" and the path start
+      # state consumes it, so the path state sees only the end of input.
+      r"(file:\\\)",
+      r"(file:\\localhost\)",
+      r"(file:\\?q)",
+      r"(file:\\\?q)",
+      r"(file:\\#f)",
+      # The backslash is after the slashes: the separator that ends the host.
+      r"(file://localhost\)"
+    ),
+    serialized = c(
+      "file:///",
+      "file:///",
+      "file:///",
+      "file:///",
+      "file:///",
+      "file:///",
+      "file:///?q",
+      "file:///?q",
+      "file:///#f",
+      "file:///"
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  expect_identical(
+    serialize_url(cases$input, standard = "whatwg"), cases$serialized
+  )
+  parsed <- safe_parse_urls(
+    cases$input, url_standard = "whatwg", query_handling = "keep"
+  )
+  expect_identical(parsed$parse_status, rep("ok", nrow(cases)))
+  expect_identical(parsed$path, rep("/", nrow(cases)))
+  expect_true(all(is.na(parsed$host)))
 })

@@ -773,7 +773,7 @@
   path
 }
 
-.parse_whatwg_file_urls_vec <- function(url, backslash_rewritten) {
+.parse_whatwg_file_urls_vec <- function(url) {
   n <- length(url)
   out <- list(
     ok = rep(FALSE, n),
@@ -869,12 +869,11 @@
 
   path <- .whatwg_file_drive_path(path)
   path <- .whatwg_file_shorten_drive_path(path)
-  # A backslash-introduced empty file authority serializes with a double-slash
-  # path. `file:` and `file://` proper keep their ordinary single slash.
-  empty_backslash_authority <- has_authority & !nzchar(host) &
-    backslash_rewritten[ok] & path == "/"
-  empty_backslash_authority[is.na(empty_backslash_authority)] <- FALSE
-  path[empty_backslash_authority] <- "//"
+  # No rule for an empty authority introduced by a backslash (RURL-vhuozous):
+  # the path above is cut from the raw input, so it already counts the
+  # separators after the authority, and the WHATWG path start state consumes
+  # one of them whichever spelling it has. `file:\\` is `file:///` like
+  # `file://`, and `file:\\\\` is `file:////` like `file:////`.
 
   out$ok[ok] <- TRUE
   out$host[ok] <- host
