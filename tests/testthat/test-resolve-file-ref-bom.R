@@ -6,8 +6,8 @@
 # an ordinary segment under both. Every `whatwg` expected value below is
 # `new URL(ref, base).href` in Node 26.
 
-bom <- "﻿"
-zwsp <- "​"
+bom <- "\ufeff"
+zwsp <- "\u200b"
 
 whatwg_ser <- function(ref, base) {
   resolve_url(ref, base, url_standard = "whatwg", output = "serialized")
@@ -23,7 +23,7 @@ test_that("whatwg: a mark-led file: reference against a file: base keeps it", {
   expect_identical(
     resolve_url(paste0("file:", bom, "/./b"), "file:///y",
                 url_standard = "whatwg"),
-    "file:///﻿/b"
+    "file:///\ufeff/b"
   )
   expect_identical(whatwg_ser(paste0("file:", bom, "/./b"), "file://h/y"),
                    "file://h/%EF%BB%BF/b")
@@ -37,7 +37,7 @@ test_that("whatwg: the U+200B and http: twins already keep the code point", {
   expect_identical(
     resolve_url(paste0("file:", zwsp, "/./b"), "http://h/y",
                 url_standard = "whatwg"),
-    "file:///​/b"
+    "file:///\u200b/b"
   )
   expect_identical(whatwg_ser(paste0("file:", zwsp, "../x"), "http://h/y"),
                    "file:///%E2%80%8B../x")
@@ -47,7 +47,7 @@ test_that("whatwg: the U+200B and http: twins already keep the code point", {
   expect_identical(whatwg_ser(paste0("http:", zwsp, "/./b"), "http://h/y"),
                    "http://h/%E2%80%8B/b")
   # The mark leading a later segment is not at the start of the walk's input.
-  expect_identical(whatwg_ser("file:/﻿/./b", "http://h/y"),
+  expect_identical(whatwg_ser("file:/\ufeff/./b", "http://h/y"),
                    "file:///%EF%BB%BF/b")
 })
 
@@ -63,12 +63,12 @@ test_that("RFC 3986 dot removal of ordinary segments does not move", {
   expect_identical(._remove_dot_segments("/a/b/c/./../../g"), "/a/g")
   expect_identical(._remove_dot_segments("mid/content=5/../6"), "mid/6")
   # The mark that is a whole segment, or leads a later one, is kept.
-  expect_identical(._remove_dot_segments("﻿.."), "﻿..")
-  expect_identical(._remove_dot_segments("/﻿/./b"), "/﻿/b")
+  expect_identical(._remove_dot_segments("\ufeff.."), "\ufeff..")
+  expect_identical(._remove_dot_segments("/\ufeff/./b"), "/\ufeff/b")
   # The whatwg remover matches with base R and already keeps the mark.
-  expect_identical(._remove_dot_segments_whatwg("﻿../x"), "﻿../x")
-  expect_identical(._remove_dot_segments_whatwg("﻿/./b"), "﻿/b")
-  expect_identical(._remove_dot_segments_whatwg("﻿%2e/b"), "﻿%2e/b")
+  expect_identical(._remove_dot_segments_whatwg("\ufeff../x"), "\ufeff../x")
+  expect_identical(._remove_dot_segments_whatwg("\ufeff/./b"), "\ufeff/b")
+  expect_identical(._remove_dot_segments_whatwg("\ufeff%2e/b"), "\ufeff%2e/b")
 })
 
 test_that("rfc3986 and NULL negative controls do not move", {
@@ -78,9 +78,9 @@ test_that("rfc3986 and NULL negative controls do not move", {
   # Section 5.2.2: a scheme-bearing reference's path is dot-removed as is.
   expect_identical(rfc_ser("foo:a/./b/../c", "http://h/y"), "foo:a/c")
   expect_identical(rfc_ser(paste0("file:", zwsp, "/./b"), "http://h/y"),
-                   "file:​/b")
-  expect_identical(rfc_ser("foo:/﻿/./b", "http://h/y"),
-                   "foo:/﻿/b")
+                   "file:\u200b/b")
+  expect_identical(rfc_ser("foo:/\ufeff/./b", "http://h/y"),
+                   "foo:/\ufeff/b")
   # NULL: the frozen selector's resolution, omitted and explicit alike.
   expect_identical(resolve_url("a/./b/../c", "http://h/y"), "http://h/a/c")
   expect_identical(resolve_url("a/./b/../c", "http://h/y", url_standard = NULL),
@@ -89,13 +89,13 @@ test_that("rfc3986 and NULL negative controls do not move", {
                    "foo:a/c")
   expect_identical(
     .resolve_one_raw(paste0("file:", zwsp, "/./b"), "http://h/y", NULL),
-    "file:​/b"
+    "file:\u200b/b"
   )
   # The parse's dot-segment step runs the same remover.
   expect_identical(
     safe_parse_url(paste0("file:", zwsp, "/./b"),
                    path_normalization = "dot_segments")$path,
-    "​/b"
+    "\u200b/b"
   )
   expect_identical(
     safe_parse_url("file:/a/./b/../c",
