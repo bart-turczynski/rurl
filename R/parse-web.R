@@ -82,8 +82,8 @@
 #             to 0x21-0x7E minus "@"; NEVER percent-decoded; the two
 #             characters after every "%" are ASCII-uppercased.
 #             This is `userinfo_source = "normalize"`; under `"preserve"` (the
-#             `whatwg` setting) each side is stored as written, documented at
-#             `.parse_web_url_one()` below.
+#             `whatwg` and `rfc3986` setting) each side is stored as written,
+#             documented at `.parse_web_url_one()` below.
 #   host      percent-DECODED first (a "%" not followed by two hex digits is a
 #             parse error), then every decoded byte must be in
 #             [A-Za-z0-9._~|-]; then libcurl's IPv4 normalization. A bracketed
@@ -478,13 +478,20 @@
 }
 
 # The `userinfo_source` setting each selected standard asks for -- whether an
-# existing "%xx" in the userinfo keeps its hex case (RURL-jzwshyqb). The WHATWG
-# authority state copies "%" unchanged (it is not in the userinfo
-# percent-encode set), so `whatwg` stores the userinfo as written. `rfc3986`
-# keeps the fold it has always stored on this route (whether it should is
-# RURL-bxrbpzet), and the no-selector baseline is frozen (ADR 0007).
+# existing "%xx" in the userinfo keeps its hex case. The WHATWG authority state
+# copies "%" unchanged (it is not in the userinfo percent-encode set), so
+# `whatwg` stores the userinfo as written (RURL-jzwshyqb). RFC 3986 sec
+# 6.2.2.1 makes hex-digit case folding a NORMALIZATION, so under `rfc3986` it
+# belongs to `serialize_url(form = "normalized")` and the parse record follows
+# the `source` form, as the query and fragment do under `pqf_source`
+# (RUL-007, RUL-015; RURL-bxrbpzet). The no-selector baseline keeps the fold
+# it has always stored (ADR 0007).
 .web_userinfo_source_policy <- function(url_standard) {
-  if (.is_whatwg(url_standard)) "preserve" else "normalize"
+  if (.is_whatwg(url_standard) || identical(url_standard, "rfc3986")) {
+    "preserve"
+  } else {
+    "normalize"
+  }
 }
 
 # The `host_ipv4` setting each selected standard asks for -- which token shapes
@@ -1140,19 +1147,26 @@
 #                as before.
 #
 # `userinfo_source` -- how an existing "%xx" in the userinfo is STORED
-# (RURL-jzwshyqb). Acceptance does not move: the allowed-byte check and the
-# "@" -> "%40" rewrite run first under both settings.
+# (RURL-jzwshyqb, RURL-bxrbpzet). Acceptance does not move: the allowed-byte
+# check and the "@" -> "%40" rewrite run first under both settings.
 #
 #   "normalize"  the two characters after every "%" on each side of the
-#                ":" uppercased. The no-selector default and the `rfc3986`
-#                setting -- what both have always stored on this route.
+#                ":" uppercased. The no-selector default -- what it has always
+#                stored on this route, frozen by ADR 0007.
 #   "preserve"   each side stored as written. The `whatwg` setting: the WHATWG
 #                URL Standard's authority state percent-encodes userinfo code
 #                points with the userinfo percent-encode set, which does not
 #                hold "%", so an existing triplet -- or a lone "%", or "%g1" --
 #                is copied unchanged (`new URL("http://a%7fb@h/").username` is
 #                `a%7fb`). `.whatwg_userinfo_percent_encode()` applies the
-#                set later and keeps a triplet's case too.
+#                set later and keeps a triplet's case too. Also the `rfc3986`
+#                setting: RFC 3986 sec 6.2.2.1 makes hex-digit case folding a
+#                NORMALIZATION, which `serialize_url(form = "normalized")`
+#                applies, so the parse record keeps the spelling the `source`
+#                form writes, as the general route always has (RUL-007,
+#                RUL-015). A "%" that starts no triplet never reaches the
+#                record there: `pct-encoded` is the only "%" in RFC 3986 sec
+#                3.2.1's `userinfo`, so the uniform grammar gate rejects it.
 #
 # `host_ipv4` -- which host tokens are read as an IPv4 ADDRESS:
 #

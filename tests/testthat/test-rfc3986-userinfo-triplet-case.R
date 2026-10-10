@@ -81,3 +81,63 @@ test_that("rfc3986: a % that starts no triplet is no userinfo", {
   expect_identical(r$parse_status, "error")
   expect_null(safe_parse_url("http://a%:b%g1@a.com/", url_standard = "rfc3986"))
 })
+
+# The fix. Red at the pre-fix baseline (main @ 6051635): the web route
+# uppercased every lowercase triplet on both sides of the ":".
+rfc_ui_cases <- data.frame(
+  url = c(
+    "http://a%7fb:c%c3d@h/",
+    "http://a%7fb@a.com/",
+    "http://u:p%7f@a.com/",
+    "http://a%7Fb:c%C3d@a.com/",
+    "http://a%7f%3ab:c%3a%7f@a.com/",
+    "https://a%7fb:c%c3d@h.com/",
+    "ftp://a%7fb:c%c3d@h.com/",
+    "ftps://a%7fb:c%c3d@h.com/"
+  ),
+  user = c(
+    "a%7fb", "a%7fb", "u", "a%7Fb", "a%7f%3ab", "a%7fb", "a%7fb", "a%7fb"
+  ),
+  password = c(
+    "c%c3d", NA, "p%7f", "c%C3d", "c%3a%7f", "c%c3d", "c%c3d", "c%c3d"
+  ),
+  stringsAsFactors = FALSE
+)
+
+test_that("rfc3986: the web route keeps an existing triplet's hex case", {
+  u <- rfc_ui_cases$url
+  for (args in list(
+    list(url_standard = "rfc3986"),
+    list(url_standard = "rfc3986", scheme_acceptance = "general",
+         scheme_policy = "require"),
+    list(profile = "rfc-syntax")
+  )) {
+    r <- do.call(safe_parse_urls, c(list(u), args))
+    expect_false(anyNA(r$host))
+    expect_identical(r$user, rfc_ui_cases$user)
+    expect_identical(r$password, rfc_ui_cases$password)
+  }
+  for (i in seq_along(u)) {
+    s <- safe_parse_url(u[i], url_standard = "rfc3986")
+    expect_identical(s$user, rfc_ui_cases$user[i], info = u[i])
+    expect_identical(s$password, rfc_ui_cases$password[i], info = u[i])
+  }
+  expect_identical(get_user(u, url_standard = "rfc3986"), rfc_ui_cases$user)
+  expect_identical(
+    get_password(u, url_standard = "rfc3986"), rfc_ui_cases$password
+  )
+})
+
+test_that("rfc3986: the record agrees with the general route and source", {
+  web <- safe_parse_urls(rfc_ui_url, url_standard = "rfc3986")
+  gen <- safe_parse_urls(
+    c("ws://a%7fb:c%c3d@h/", "sc://a%7fb:c%c3d@h/"),
+    url_standard = "rfc3986", scheme_acceptance = "general"
+  )
+  expect_identical(rep(web$user, 2L), gen$user)
+  expect_identical(rep(web$password, 2L), gen$password)
+  src <- serialize_url(rfc_ui_url, standard = "rfc3986")
+  expect_identical(
+    src, paste0("http://", web$user, ":", web$password, "@h/")
+  )
+})
