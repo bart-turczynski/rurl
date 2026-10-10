@@ -2118,9 +2118,7 @@ safe_parse_urls <- function(url,
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
-  file_parse <- .parse_whatwg_file_urls_vec(
-    prep$whatwg_file_input[whatwg_file], prep$backslash_rewritten[whatwg_file]
-  )
+  file_parse <- .parse_whatwg_file_urls_vec(prep$whatwg_file_input[whatwg_file])
   file_ok <- rep(FALSE, n)
   file_ok[whatwg_file] <- file_parse$ok
   # General-acceptance rows that parsed successfully (incl. the RFC gate).
