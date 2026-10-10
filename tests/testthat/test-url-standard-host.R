@@ -675,4 +675,13 @@ test_that("whatwg fails a file: host that keeps a stray percent", {
     "http://a%41%/p")
   expect_identical(get_parse_status(bad, url_standard = "whatwg"),
     rep("error", length(bad)))
+
+  # A stray "%" next to a valid triplet decodes to "aA%", not "aA".
+  stray <- c("file://a%41%/p", "file://%41%/p", "file://%%41/p",
+    "file:/\\a%41%/../\\\\")
+  expect_identical(get_parse_status(stray, url_standard = "whatwg"),
+    rep("error", length(stray)))
+  for (u in stray) {
+    expect_null(safe_parse_url(u, url_standard = "whatwg"), info = u)
+  }
 })
