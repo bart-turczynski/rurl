@@ -985,3 +985,85 @@ test_that("the file: drive-letter rules are unreachable from rfc3986/NULL", {
     )
   }
 })
+
+# --- RURL-dglgcwit: a U+FEFF that starts a path segment in a file: result ----
+
+test_that("whatwg file: dot removal keeps a segment-leading U+FEFF", {
+  # The WHATWG URL Standard's "path state" removes only `.` and `..`
+  # segments; a segment that starts with U+FEFF is an ordinary segment. The
+  # `http:` and U+200B twins of each `file:` row sit beside it.
+  whatwg <- function(ref, base) {
+    resolve_url(ref, base, url_standard = "whatwg")
+  }
+  expect_identical(whatwg("/\ufeffa/./b", "file:///x"), "file:///a/b")
+  expect_identical(whatwg("/\ufeffa/./b", "http://h/x"), "http://h/\ufeffa/b")
+  expect_identical(whatwg("/\u200ba/./b", "file:///x"), "file:///\u200ba/b")
+  expect_identical(whatwg("/\u00e9a/./b", "file:///x"), "file:///\u00e9a/b")
+
+  expect_identical(whatwg("\ufeffa/./b", "file:///"), "file:///a/b")
+  expect_identical(whatwg("\ufeffa/./b", "http://h/"), "http://h/\ufeffa/b")
+  expect_identical(whatwg("\u200ba/./b", "file:///"), "file:///\u200ba/b")
+
+  expect_identical(whatwg("/\ufeffa/b/../c", "file:///x"), "file:///a/c")
+  expect_identical(whatwg("/\ufeffa/b/../c", "http://h/x"),
+                   "http://h/\ufeffa/c")
+  expect_identical(whatwg("/\u200ba/b/../c", "file:///x"), "file:///\u200ba/c")
+
+  # A segment that is only the mark.
+  expect_identical(whatwg("/\ufeff/./b", "file:///x"), "file:////b")
+  expect_identical(whatwg("/\ufeff/./b", "http://h/x"), "http://h/\ufeff/b")
+  expect_identical(whatwg("/\u200b/./b", "file:///x"), "file:///\u200b/b")
+  expect_identical(whatwg("\ufeff", "file:///x"), "file:///")
+  expect_identical(whatwg("\ufeff", "http://h/x"), "http://h/\ufeff")
+  expect_identical(whatwg("\u200b", "file:///x"), "file:///\u200b")
+
+  # The mark starting a NON-first segment, or after an inherited drive letter,
+  # is not at the start of the split input and already survives.
+  expect_identical(whatwg("/x/\ufeffa/./b", "file:///x"), "file:///x/\ufeffa/b")
+  expect_identical(whatwg("/x/\ufeff", "file:///x"), "file:///x/\ufeff")
+  expect_identical(whatwg("/\ufeffa/./b", "file:///C:/x"),
+                   "file:///C:/\ufeffa/b")
+  expect_identical(whatwg("\ufeffa/./b", "file:///C:/x"),
+                   "file:///C:/\ufeffa/b")
+
+  # The serialized form is the WHATWG href, byte for byte.
+  expect_identical(
+    resolve_url("/\ufeffa/./b", "file:///x", url_standard = "whatwg",
+                output = "serialized"),
+    "file:///a/b"
+  )
+  expect_identical(
+    resolve_url("/\ufeffa/./b", "http://h/x", url_standard = "whatwg",
+                output = "serialized"),
+    "http://h/%EF%BB%BFa/b"
+  )
+
+  # The helper itself, rooted and not.
+  expect_identical(
+    rurl:::.whatwg_file_remove_dot_segments("\ufeffa/./b"), "a/b"
+  )
+  expect_identical(
+    rurl:::.whatwg_file_remove_dot_segments("/\ufeffa/b/../c"), "/a/c"
+  )
+})
+
+test_that("rfc3986 and NULL keep a segment-leading U+FEFF in a file: result", {
+  # RFC 3986 section 5.2.4 never reached the WHATWG-only walk, and the NULL
+  # selector is byte-frozen (ADR 0007): the same inputs keep today's output.
+  frozen <- list(
+    list("/\ufeffa/./b", "file:///x", "file:///\ufeffa/b"),
+    list("\ufeffa/./b", "file:///", "file:///\ufeffa/b"),
+    list("/\ufeffa/b/../c", "file:///x", "file:///\ufeffa/c"),
+    list("/\ufeff/./b", "file:///x", "file:///\ufeff/b"),
+    list("\ufeff", "file:///x", "file:///\ufeff"),
+    list("/\ufeffa/./b", "file:///C:/x", "file:///\ufeffa/b")
+  )
+  for (case in frozen) {
+    for (std in list("rfc3986", NULL)) {
+      expect_identical(
+        resolve_url(case[[1L]], case[[2L]], url_standard = std), case[[3L]],
+        label = paste(case[[1L]], case[[2L]], if (is.null(std)) "NULL" else std)
+      )
+    }
+  }
+})
