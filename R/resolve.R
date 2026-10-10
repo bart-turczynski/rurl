@@ -495,7 +495,9 @@
 
 # Resolve ONE (reference, base) pair to a raw absolute URI string, or NA when
 # resolution cannot yield an absolute URL (base not absolute and reference not
-# absolute either). ._remove_dot_segments happens inside .transform_reference().
+# absolute either). ._remove_dot_segments happens inside .transform_reference(),
+# except for a scheme-bearing reference under "whatwg", whose path is passed
+# through as written for the WHATWG re-parse (RURL-rdkewxlx).
 # `url_standard` selects the reference-parsing rules that precede the merge
 # (P2.7 D-B); its default NULL is the frozen selector and reproduces the
 # pre-D-B behavior exactly, as does "rfc3986".
@@ -651,7 +653,10 @@
 #' serializer emits the same guard, so \code{resolve_url("/..//path",
 #' "non-spec:/p", url_standard = "whatwg", output = "serialized")} is
 #' \code{"non-spec:/.//path"} rather than a string that re-reads as the
-#' authority \code{path}. The \code{NULL} selector recomposes the unguarded
+#' authority \code{path}. Under \code{"whatwg"} a reference with a scheme of
+#' its own reaches the parse as written, so the WHATWG serializer, not the
+#' resolver, writes its guard: \code{"non-spec:/..//x"} gives
+#' \code{"non-spec:/.//x"}. The \code{NULL} selector recomposes the unguarded
 #' string, as it always did. Second, a scheme is
 #' \code{ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )} -- RFC 3986 section 3.1's
 #' own grammar, and WHATWG's -- so a relative path whose first segment merely

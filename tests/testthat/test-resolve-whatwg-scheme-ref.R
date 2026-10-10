@@ -173,3 +173,24 @@ test_that("whatwg: resolving a scheme-bearing reference equals parsing it", {
                      serialize_url(ref, standard = "whatwg"), label = ref)
   }
 })
+
+test_that("whatwg: a scheme-bearing reference cleans to its own clean_url", {
+  # Under general acceptance a non-special scheme's clean_url keeps the dot
+  # segments its parsed path drops (RURL-lzsjlxgu); the resolved clean output
+  # follows the reference's own parse rather than hiding that.
+  refs <- c("foo:/a/../b", "foo://h/a/../b", "foo:a/../b", "http:/a/../b")
+  for (ref in refs) {
+    expect_identical(
+      resolve_url(ref, "https://h/y", url_standard = "whatwg",
+                  scheme_acceptance = "general"),
+      safe_parse_url(ref, url_standard = "whatwg",
+                     scheme_acceptance = "general")$clean_url,
+      label = ref
+    )
+  }
+  expect_identical(
+    resolve_url("foo:/a/../b", "http://h/y", url_standard = "whatwg",
+                scheme_acceptance = "general"),
+    "foo:/a/../b"
+  )
+})

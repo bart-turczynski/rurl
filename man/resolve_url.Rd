@@ -134,6 +134,14 @@ normalized to \code{C:}. A drive letter in the authority position
 (\code{"//d:"}) is an empty host plus a path segment,
 \code{"file:///d:"}. RFC 3986 has no drive-letter concept, so under
 \code{"rfc3986"} and \code{NULL} the plain section 5.2 merge applies.
+\item \strong{Any other scheme-bearing reference resolves to its own
+parse.} The base plays no part, and the reference's path is left to the
+WHATWG path state, so an opaque path keeps its dot segments
+(\code{resolve_url("foo:a/../b", "http://h/y", url_standard = "whatwg",
+    output = "serialized")} is \code{"foo:a/../b"}) and a \code{file:}
+drive letter survives \code{..} (\code{"file:/C:/../x"} gives
+\code{"file:///C:/x"}). RFC 3986 section 5.2.2 removes the dot segments
+of such a path, so under \code{"rfc3986"} the first is \code{"foo:/b"}.
 }
 
 The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
@@ -147,7 +155,10 @@ a path beginning with \code{//} after no authority, and the WHATWG URL
 serializer emits the same guard, so \code{resolve_url("/..//path",
 "non-spec:/p", url_standard = "whatwg", output = "serialized")} is
 \code{"non-spec:/.//path"} rather than a string that re-reads as the
-authority \code{path}. The \code{NULL} selector recomposes the unguarded
+authority \code{path}. Under \code{"whatwg"} a reference with a scheme of
+its own reaches the parse as written, so the WHATWG serializer, not the
+resolver, writes its guard: \code{"non-spec:/..//x"} gives
+\code{"non-spec:/.//x"}. The \code{NULL} selector recomposes the unguarded
 string, as it always did. Second, a scheme is
 \code{ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )} -- RFC 3986 section 3.1's
 own grammar, and WHATWG's -- so a relative path whose first segment merely
