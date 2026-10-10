@@ -305,14 +305,17 @@
 # spelled `C|` is rewritten to `C:` (the "(platform-independent) Windows drive
 # letter quirk"). The segment cut keeps a TRAILING empty segment -- `strsplit`
 # drops one, and `/C:/` is ["C:", ""] -- which is the same trap the serializer's
-# `/.` guard records (R/parse-phases.R).
+# `/.` guard records (R/parse-phases.R). The cut also reads past a U+FEFF that
+# starts its input (see .starts_with_bom()), so a first segment led by the
+# mark lost it (RURL-dglgcwit): the body is split with a "/" spliced on, and
+# the empty field that "/" opens is dropped.
 .whatwg_file_remove_dot_segments <- function(path) {
   if (is.na(path) || !nzchar(path)) {
     return(path)
   }
   rooted <- startsWith(path, "/")
   body <- if (rooted) substring(path, 2L) else path
-  segs <- stringi::stri_split_fixed(body, "/")[[1L]]
+  segs <- stringi::stri_split_fixed(paste0("/", body), "/")[[1L]][-1L]
   out <- character(0)
   n <- length(segs)
   for (i in seq_len(n)) {

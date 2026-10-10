@@ -995,25 +995,25 @@ test_that("whatwg file: dot removal keeps a segment-leading U+FEFF", {
   whatwg <- function(ref, base) {
     resolve_url(ref, base, url_standard = "whatwg")
   }
-  expect_identical(whatwg("/\ufeffa/./b", "file:///x"), "file:///a/b")
+  expect_identical(whatwg("/\ufeffa/./b", "file:///x"), "file:///\ufeffa/b")
   expect_identical(whatwg("/\ufeffa/./b", "http://h/x"), "http://h/\ufeffa/b")
   expect_identical(whatwg("/\u200ba/./b", "file:///x"), "file:///\u200ba/b")
   expect_identical(whatwg("/\u00e9a/./b", "file:///x"), "file:///\u00e9a/b")
 
-  expect_identical(whatwg("\ufeffa/./b", "file:///"), "file:///a/b")
+  expect_identical(whatwg("\ufeffa/./b", "file:///"), "file:///\ufeffa/b")
   expect_identical(whatwg("\ufeffa/./b", "http://h/"), "http://h/\ufeffa/b")
   expect_identical(whatwg("\u200ba/./b", "file:///"), "file:///\u200ba/b")
 
-  expect_identical(whatwg("/\ufeffa/b/../c", "file:///x"), "file:///a/c")
+  expect_identical(whatwg("/\ufeffa/b/../c", "file:///x"), "file:///\ufeffa/c")
   expect_identical(whatwg("/\ufeffa/b/../c", "http://h/x"),
                    "http://h/\ufeffa/c")
   expect_identical(whatwg("/\u200ba/b/../c", "file:///x"), "file:///\u200ba/c")
 
   # A segment that is only the mark.
-  expect_identical(whatwg("/\ufeff/./b", "file:///x"), "file:////b")
+  expect_identical(whatwg("/\ufeff/./b", "file:///x"), "file:///\ufeff/b")
   expect_identical(whatwg("/\ufeff/./b", "http://h/x"), "http://h/\ufeff/b")
   expect_identical(whatwg("/\u200b/./b", "file:///x"), "file:///\u200b/b")
-  expect_identical(whatwg("\ufeff", "file:///x"), "file:///")
+  expect_identical(whatwg("\ufeff", "file:///x"), "file:///\ufeff")
   expect_identical(whatwg("\ufeff", "http://h/x"), "http://h/\ufeff")
   expect_identical(whatwg("\u200b", "file:///x"), "file:///\u200b")
 
@@ -1026,11 +1026,17 @@ test_that("whatwg file: dot removal keeps a segment-leading U+FEFF", {
   expect_identical(whatwg("\ufeffa/./b", "file:///C:/x"),
                    "file:///C:/\ufeffa/b")
 
-  # The serialized form is the WHATWG href, byte for byte.
+  # The serialized form is the WHATWG href (`new URL(ref, base).href` in
+  # Node 26), byte for byte.
   expect_identical(
     resolve_url("/\ufeffa/./b", "file:///x", url_standard = "whatwg",
                 output = "serialized"),
-    "file:///a/b"
+    "file:///%EF%BB%BFa/b"
+  )
+  expect_identical(
+    resolve_url("\ufeff", "file:///x", url_standard = "whatwg",
+                output = "serialized"),
+    "file:///%EF%BB%BF"
   )
   expect_identical(
     resolve_url("/\ufeffa/./b", "http://h/x", url_standard = "whatwg",
@@ -1040,10 +1046,10 @@ test_that("whatwg file: dot removal keeps a segment-leading U+FEFF", {
 
   # The helper itself, rooted and not.
   expect_identical(
-    rurl:::.whatwg_file_remove_dot_segments("\ufeffa/./b"), "a/b"
+    rurl:::.whatwg_file_remove_dot_segments("\ufeffa/./b"), "\ufeffa/b"
   )
   expect_identical(
-    rurl:::.whatwg_file_remove_dot_segments("/\ufeffa/b/../c"), "/a/c"
+    rurl:::.whatwg_file_remove_dot_segments("/\ufeffa/b/../c"), "/\ufeffa/c"
   )
 })
 
