@@ -263,10 +263,18 @@
 # probe, eq-U6 (LF), yal-002 (TAB), yal-003 (CR/LF), which WHATWG
 # strips-and-accepts.
 #
-# This function is deliberately the single seam shared by prep, the Stage-A
-# general route, the Stage-B general re-parse and `.has_explicit_authority()`:
-# putting step 1 here (never at a call site) is what keeps every stage fed
-# byte-identical input by construction.
+# This function is deliberately the single seam for step 1, shared by prep, the
+# Stage-A general route, the Stage-B general re-parse and
+# `.has_explicit_authority()`: putting step 1 here (never at a call site) is
+# what keeps every stage's strip byte-identical by construction. It is not the
+# whole general-route input, though: prep, Stage A and Stage B run the browser
+# fixer first, Stage A and Stage B through .general_route_input_vec()
+# (RURL-vmsmlflr). A caller that runs this alone sees that input only where the
+# fixer is a no-op or cannot change its answer: `.fsss_record_vec()` and the
+# url-key, resolve and scheme-policy surfaces never run under
+# `fixup_posture = "browser"`, and inside the parse `.has_explicit_authority()`
+# trims a leading C0-or-space run itself and is asked only about `mailto:`,
+# which the fixer otherwise leaves alone.
 .strip_whatwg_control_chars_vec <- function(url, url_standard) {
   n <- length(url)
   no_op <- list(
@@ -935,8 +943,9 @@
 #      token is in the recognized-scheme set. A `;` after any other token is
 #      left verbatim.
 #   3. `://` insertion -- insert `://` after `scheme:` for a scheme in the
-#      authority table that is missing its authority slashes (e.g.
-#      `http:example.com` -> `http://example.com`). Outside the set: verbatim.
+#      authority table that is missing its authority slashes, or one of them
+#      (e.g. `http:example.com` and `http:/example.com` ->
+#      `http://example.com`). Outside the set: verbatim.
 #   3b. File-path guess -- scheme-less input that starts with exactly one `/`
 #      becomes `file://` + input (`/Users/me/a.pdf` ->
 #      `file:///Users/me/a.pdf`), as Chromium's SegmentURLInternal()
@@ -988,11 +997,18 @@
     url, paste0("(?i)^(", scheme_alt, ");"), "$1:"
   )
 
-  # Step 3: `scheme:` with no authority slashes -> `scheme://`, authority-table
-  # schemes only. The negative lookahead `(?!//)` leaves an already-slashed
-  # `scheme://` (incl. the step-2 output) untouched.
+  # Step 3: `scheme:` with fewer than two authority slashes -> `scheme://`,
+  # authority-table schemes only. A single slash is COMPLETED to two, not
+  # prefixed with two more (`http:/a` -> `http://a`, host `a`, as a browser
+  # reads it): writing `http:///a` invented an empty authority, which the
+  # `rfc3986` arm reads as such (RFC 3986 sec 3.2), so the row lost its host
+  # (RURL-vmsmlflr). The `(?!/)` lookahead after the optional slash leaves an
+  # already-slashed `scheme://` (incl. the step-2 output) and a longer run
+  # (`scheme:///`) untouched. Under `whatwg` both spellings were the same URL
+  # (the special authority slashes states skip every slash), so that arm does
+  # not move.
   url <- stringi::stri_replace_first_regex(
-    url, paste0("(?i)^(", authority_alt, "):(?!//)"), "$1://"
+    url, paste0("(?i)^(", authority_alt, "):/?(?!/)"), "$1://"
   )
 
   # Step 3b: a leading single `/` (not `//`, not `/\`, with tab/LF/CR between
@@ -1017,7 +1033,11 @@
 # odd-slash `http:` rows, `  file:///a/b` and `file;///a/b` fell to the web
 # route, which read `a` as the host, and `file;p` failed; `http:a/b` kept its
 # raw rootless path although step 3 had written `http://a/b`. A fixed row now
-# parses as its fixed spelling typed directly. The rules that must not reach a
+# parses as its fixed spelling typed directly. That includes `ws:`/`wss:`,
+# which are not web-route schemes under `rfc3986` (`.general_parsed_mask()`):
+# `  wss://h/x` now reads like `wss://h/x`, a generic URI whose reg-name gets
+# no PSL split (ADR 0012 D2), where the web route used to parse the trimmed
+# string as a special-scheme URL. The rules that must not reach a
 # non-special scheme stay out: steps 2, 3 and 3b match special schemes only,
 # step 1's trim is scheme-blind by definition (and under `whatwg` the strip
 # already does it), and the special-scheme backslash rewrite is not applied.

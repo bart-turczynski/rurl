@@ -9,7 +9,7 @@
 # the one column that must differ between a raw and a fixed spelling.
 .bff_cols <- c(
   "scheme", "host", "port", "path", "query", "fragment", "user", "password",
-  "clean_url", "parse_status"
+  "domain", "tld", "clean_url", "parse_status"
 )
 
 .bff_parse <- function(u, ...) {
@@ -118,8 +118,10 @@ test_that("a fixed row parses as its fixed spelling under either standard", {
   u <- c(
     "  file:///a/b", "file;///a/b", "file;p", "  file:p", "FILE;p",
     "  file:", "file;", "file;//", "  file:/a", "file;//h/p", " file://h/p ",
-    "http;/a", "http;///a", "https;//", "  http://a/b", "http;//a/b",
-    "  mailto:x@y.com", "  urn:a:b ", "  foo:bar", "ws;a"
+    "http;/a", "  http:/a", "http;///a", "https;//", "  http://a/b",
+    "http;//a/b", "  mailto:x@y.com", "  urn:a:b ", "  foo:bar", "ws;a",
+    "  ws:/a", "  wss://Sub.Example.co.uk/x", "wss;Sub.Example.co.uk/x",
+    "WS;//a.example.com/p ", "  https://Sub.Example.co.uk/x"
   )
   for (std in c("whatwg", "rfc3986")) {
     fixed <- rurl:::.apply_browser_fixup_vec(u, "browser", std, "infer")
@@ -134,12 +136,15 @@ test_that("a fixed row parses as its fixed spelling under either standard", {
 
 # Step 3's `://` insertion now reaches the rows the rfc3986 general route used
 # to claim on their raw spelling, so `http:a/b` reads like `  http:a/b` and
-# `http;a/b`, which the web route already read as `http://a/b`.
+# `http;a/b`, which the web route already read as `http://a/b`. A single slash
+# is completed to two, not prefixed with two more: `http:/a` is `http://a`, so
+# `a` is the host, as a browser reads it (WHATWG special authority slashes
+# state), not `http:///a`, which would invent an empty authority.
 test_that("step 3's // insertion holds under browser + rfc3986", {
   u <- c("http:a/b", "  http:a/b", "http;a/b", "http:/a", "HTTPS:a.com")
   r <- .bff_parse(u, profile = "browser", url_standard = "rfc3986")
-  expect_identical(r$host, c("a", "a", "a", NA, "a.com"))
-  expect_identical(r$path, c("/b", "/b", "/b", "/a", ""))
+  expect_identical(r$host, c("a", "a", "a", "a", "a.com"))
+  expect_identical(r$path, c("/b", "/b", "/b", "", ""))
   expect_identical(
     r,
     .bff_parse(
@@ -147,4 +152,62 @@ test_that("step 3's // insertion holds under browser + rfc3986", {
       profile = "browser", url_standard = "rfc3986"
     )
   )
+})
+
+# Step 3 completes a single slash to the authority's two, under either
+# acceptance posture. The step documents itself as repairing a scheme "missing
+# its authority slashes", and a browser reads `http:/a` as host `a` (WHATWG
+# special authority slashes state); the `(?!//)` lookahead wrote `http:///a`,
+# an empty authority (RFC 3986 sec 3.2), so these rows had no host and failed
+# under `web` acceptance (RFC 9110 sec 4.2.1). Three slashes are not repaired:
+# `http;///a` is `http:///a` typed directly, an empty authority under
+# `rfc3986`.
+test_that("step 3 completes a single slash under browser + rfc3986", {
+  u <- c("http:/a", "http;/a", "  http:/a", "  ws:/a", "https:/a.com/x",
+         "http;///a")
+  r <- .bff_parse(u, profile = "browser", url_standard = "rfc3986")
+  expect_identical(r$scheme, c("http", "http", "http", "ws", "https", "http"))
+  expect_identical(r$host, c("a", "a", "a", "a", "a.com", NA))
+  expect_identical(r$path, c("", "", "", "", "/x", "/a"))
+  expect_identical(
+    r$clean_url,
+    c("http://a", "http://a", "http://a", "ws://a", "https://a.com/x",
+      "http:///a")
+  )
+  expect_identical(
+    r$parse_status,
+    c("warning-no-tld", "warning-no-tld", "warning-no-tld", "ok", "ok", "ok")
+  )
+  w <- suppressWarnings(.bff_parse(
+    c("http:/a", "http;/a", "  http:/a", "https:/a.com/x"),
+    profile = "browser", url_standard = "rfc3986", scheme_acceptance = "web"
+  ))
+  expect_identical(w$host, c("a", "a", "a", "a.com"))
+  expect_identical(w$parse_status, c(rep("warning-no-tld", 3L), "ok"))
+})
+
+# ws/wss are not web-route schemes under `rfc3986` (ARCHITECTURE.md;
+# `.general_parsed_mask()`'s `web_route_scheme`): RFC 3986 has no special
+# schemes, so `wss://Sub.Example.co.uk/x` typed directly is a generic URI on the
+# general route, whose reg-name is not asserted to be a DNS name (ADR 0012 D2:
+# PSL fields only for the built-in web schemes). A fixed ws/wss row now reads
+# the same; under the browser profile's default `whatwg` it stays special,
+# with the full host model.
+test_that("a fixed ws/wss row reads like its typed spelling under rfc3986", {
+  u <- c("  wss://Sub.Example.co.uk/x", "wss;Sub.Example.co.uk/x",
+         "wss:Sub.Example.co.uk/x", "wss://Sub.Example.co.uk/x")
+  typed <- .bff_parse("wss://Sub.Example.co.uk/x", url_standard = "rfc3986",
+                      scheme_acceptance = "general")
+  r <- .bff_parse(u, profile = "browser", url_standard = "rfc3986")
+  expect_identical(r$host, rep("sub.example.co.uk", 4L))
+  expect_identical(r$domain, rep(NA_character_, 4L))
+  expect_identical(r$tld, rep(NA_character_, 4L))
+  expect_identical(r$clean_url, rep("wss://Sub.Example.co.uk/x", 4L))
+  for (i in seq_along(u)) {
+    expect_identical(r[i, ], `rownames<-`(typed, i), info = u[[i]])
+  }
+  w <- .bff_parse(u, profile = "browser")
+  expect_identical(w$domain, rep("example.co.uk", 4L))
+  expect_identical(w$tld, rep("co.uk", 4L))
+  expect_identical(w$clean_url, rep("wss://sub.example.co.uk/x", 4L))
 })
