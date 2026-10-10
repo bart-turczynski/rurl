@@ -23,15 +23,15 @@
 
   while (nzchar(input)) {
     if (startsWith(input, "../")) {
-      input <- substring(input, 4L)
+      input <- substring(input, 4L, .Machine$integer.max)
     } else if (startsWith(input, "./")) {
-      input <- substring(input, 3L)
+      input <- substring(input, 3L, .Machine$integer.max)
     } else if (startsWith(input, "/./")) {
-      input <- paste0("/", substring(input, 4L))
+      input <- paste0("/", substring(input, 4L, .Machine$integer.max))
     } else if (identical(input, "/.")) {
       input <- "/"
     } else if (startsWith(input, "/../")) {
-      input <- paste0("/", substring(input, 5L))
+      input <- paste0("/", substring(input, 5L, .Machine$integer.max))
       output <- sub("/?[^/]*$", "", output)
     } else if (identical(input, "/..")) {
       input <- "/"
@@ -42,7 +42,9 @@
       match <- regexpr("^(/?[^/]*)", input, perl = TRUE)
       segment <- regmatches(input, match)
       output <- paste0(output, segment)
-      input <- substring(input, attr(match, "match.length") + 1)
+      input <- substring(
+        input, attr(match, "match.length") + 1, .Machine$integer.max
+      )
     }
   }
 
@@ -88,6 +90,14 @@
 # so "%2e", ".%2e", "%2e.", and "%2e%2e" resolve exactly like their literal
 # counterparts while any percent-triplet that is NOT part of a whole dot
 # segment (e.g. "%2eb") is left untouched as ordinary path data.
+#
+# The cuts are base R `substring()`, in the unit `regexpr()` measured the match
+# in, like `._remove_dot_segments()`, with an explicit `last`: before R 4.6.0
+# `substring()` defaulted to `last = 1000000L` and cut a longer path short.
+# Each cut starts on the `.`, `%` or `/` an anchored pattern matched, so
+# `stri_sub()`, which reads past a U+FEFF that starts its input (see
+# .starts_with_bom()), gave the same answer here; the cut is base R so that a
+# later pattern cannot make it read past one (RURL-zxnxczsw).
 ._remove_dot_segments_whatwg <- function(path) {
   if (is.na(path) || !nzchar(path)) {
     return(path)
@@ -106,17 +116,17 @@
   while (nzchar(input)) {
     len <- match_len(paste0("^", dotdot, "/"), input)
     if (!is.na(len)) {
-      input <- stringi::stri_sub(input, len + 1)
+      input <- substring(input, len + 1L, .Machine$integer.max)
       next
     }
     len <- match_len(paste0("^", dot, "/"), input)
     if (!is.na(len)) {
-      input <- stringi::stri_sub(input, len + 1)
+      input <- substring(input, len + 1L, .Machine$integer.max)
       next
     }
     len <- match_len(paste0("^/", dot, "/"), input)
     if (!is.na(len)) {
-      input <- paste0("/", stringi::stri_sub(input, len + 1))
+      input <- paste0("/", substring(input, len + 1L, .Machine$integer.max))
       next
     }
     len <- match_len(paste0("^/", dot, "$"), input)
@@ -126,7 +136,7 @@
     }
     len <- match_len(paste0("^/", dotdot, "/"), input)
     if (!is.na(len)) {
-      input <- paste0("/", stringi::stri_sub(input, len + 1))
+      input <- paste0("/", substring(input, len + 1L, .Machine$integer.max))
       output <- sub("/?[^/]*$", "", output)
       next
     }
@@ -149,7 +159,9 @@
     match <- regexpr("^(/?[^/]*)", input, perl = TRUE)
     segment <- regmatches(input, match)
     output <- paste0(output, segment)
-    input <- substring(input, attr(match, "match.length") + 1)
+    input <- substring(
+      input, attr(match, "match.length") + 1, .Machine$integer.max
+    )
   }
 
   output
@@ -163,23 +175,29 @@
   path
 }
 
-# Internal helper to strip index/default pages from the end of a path
+# Internal helper to strip index/default pages from the end of a path.
+# stri_match_first_regex() and stri_startswith_fixed() read past a U+FEFF that
+# starts their input (see .starts_with_bom()), so the directory kept from
+# `\ufeff/a/index.html` was `/a`, not `/\ufeff/a` (RURL-zxnxczsw). The match
+# runs on the path behind a spliced "x", which the pattern's `^(.*)` takes
+# into the kept directory and the byte cut removes; the regex itself, and so
+# which paths match, is unchanged. The root test is base R.
 ._strip_index_page <- function(path) {
   if (is.na(path) || !nzchar(path)) {
     return(path)
   }
   match <- stringi::stri_match_first_regex(
-    path,
+    paste0("x", path),
     "(?i)^(.*)/(index|default)\\.[^/]+/?$"
   )
   if (is.na(match[1, 1])) {
     return(path)
   }
-  base <- match[1, 2]
+  base <- .byte_substring(match[1, 2], 2L)
   if (is.na(base) || base == "") {
     return("/")
   }
-  if (!stringi::stri_startswith_fixed(base, "/")) {
+  if (!startsWith(base, "/")) {
     base <- paste0("/", base)
   }
   # Dropping the terminal page can EXPOSE a dot segment the page name was
@@ -200,23 +218,26 @@
   base
 }
 
-# Internal helper to percent-encode path segments
+# Internal helper to percent-encode path segments. The slash tests are base R:
+# stri_startswith_fixed() reads past a U+FEFF that starts its input (see
+# .starts_with_bom()), so the rootless `\ufeff/a` read as rooted and came back
+# as `/%EF%BB%BF/a` (RURL-zxnxczsw).
 ._encode_path_segments <- function(path) {
   if (is.na(path)) {
     return(path)
   }
-  has_leading <- stringi::stri_startswith_fixed(path, "/")
-  has_trailing <- stringi::stri_endswith_fixed(path, "/")
+  has_leading <- startsWith(path, "/")
+  has_trailing <- endsWith(path, "/")
   segments <- strsplit(path, "/", fixed = TRUE)[[1]]
   # .pct_escape() is vectorized: one call escapes every segment (and returns
   # character(0) for a character(0) input), so paste() recomposes identically
   # to the former per-segment vapply().
   encoded_segments <- .pct_escape(segments)
   recomposed <- paste(encoded_segments, collapse = "/")
-  if (has_leading && !stringi::stri_startswith_fixed(recomposed, "/")) {
+  if (has_leading && !startsWith(recomposed, "/")) {
     recomposed <- paste0("/", recomposed)
   }
-  if (has_trailing && !stringi::stri_endswith_fixed(recomposed, "/")) {
+  if (has_trailing && !endsWith(recomposed, "/")) {
     recomposed <- paste0(recomposed, "/")
   }
   recomposed

@@ -1607,16 +1607,19 @@
     }
   }
 
-  # Trailing-slash policy (after normalization/index handling).
+  # Trailing-slash policy (after normalization/index handling). Base R, and the
+  # strip cuts the final "/" as a byte: stri_sub() reads past a U+FEFF that
+  # starts its input while stri_length() counts it (see .starts_with_bom()),
+  # so `\ufeff/a/` lost the mark and kept the slash, `/a/` (RURL-zxnxczsw).
   if (trailing_slash_handling == "strip") {
     mask <- !is.na(path_work) & nzchar(path_work) & path_work != "/" &
-      stringi::stri_endswith_fixed(path_work, "/")
-    path_work[mask] <- stringi::stri_sub(
-      path_work[mask], 1L, stringi::stri_length(path_work[mask]) - 1L
+      endsWith(path_work, "/")
+    path_work[mask] <- .byte_substring_vec(
+      path_work[mask], 1L, .byte_length(path_work[mask]) - 1L
     )
   } else if (trailing_slash_handling == "keep") {
     mask <- !is.na(path_work) & nzchar(path_work) & path_work != "/" &
-      !stringi::stri_endswith_fixed(path_work, "/")
+      !endsWith(path_work, "/")
     path_work[mask] <- paste0(path_work[mask], "/")
   }
 
