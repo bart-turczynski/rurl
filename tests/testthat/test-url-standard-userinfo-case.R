@@ -8,9 +8,9 @@
 # is RFC 3986 sec 6.2.2.1 normalization; the `rfc3986` arm keeps it on the
 # parse record, and the `NULL` profile is frozen (ADR 0007, ADR 0016).
 #
-# PIN: the `whatwg_*` columns record today's output, which still folds the hex
-# digits to uppercase; the fix flips them to the Node values. (A `""` password
-# is reported as NA by the parse record.)
+# The `whatwg_*` columns are the Node `username` / `password` (a `""` password
+# is reported as NA by the parse record). Red at the pre-fix baseline (main @
+# 9f9df4a): every lowercase triplet came back uppercased, and `%g1` as `%G1`.
 
 userinfo_case_cases <- data.frame(
   url = c(
@@ -27,12 +27,12 @@ userinfo_case_cases <- data.frame(
     "http://a%7f@b@c%7fd:e%7f@a.com/"
   ),
   whatwg_user = c(
-    "a%7Fb", "a%7Fb", "u", "a%7Fb", "a%7F%3Ab", "a%7Fb",
-    "a%", "a%7F%40b", "a%7F%40b%40c%7Fd"
+    "a%7fb", "a%7fb", "u", "a%7Fb", "a%7f%3ab", "a%7fb",
+    "a%", "a%7f%40b", "a%7f%40b%40c%7fd"
   ),
   whatwg_password = c(
-    "c%C3d", NA, "p%7F", "c%C3d", "c%3A%7F", "c%C3d",
-    "b%G1", "c%7F", "e%7F"
+    "c%c3d", NA, "p%7f", "c%C3d", "c%3a%7f", "c%c3d",
+    "b%g1", "c%7f", "e%7f"
   ),
   stringsAsFactors = FALSE
 )
