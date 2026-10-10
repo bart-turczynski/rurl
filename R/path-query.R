@@ -8,7 +8,11 @@
   gsub("/+", "/", path, perl = TRUE)
 }
 
-# Internal helper to remove dot segments per RFC 3986
+# Internal helper to remove dot segments per RFC 3986 section 5.2.4. The
+# prefix tests and cuts are base R: stri_startswith_fixed() and stri_sub() read
+# past a U+FEFF that starts their input (see .starts_with_bom()), so a first
+# segment such as `\ufeff..` or `\ufeff` followed by `/./` was read as a dot
+# segment and the mark was dropped (RURL-xrjtdnko).
 ._remove_dot_segments <- function(path) {
   if (is.na(path) || !nzchar(path)) {
     return(path)
@@ -18,16 +22,16 @@
   output <- ""
 
   while (nzchar(input)) {
-    if (stringi::stri_startswith_fixed(input, "../")) {
-      input <- stringi::stri_sub(input, 4)
-    } else if (stringi::stri_startswith_fixed(input, "./")) {
-      input <- stringi::stri_sub(input, 3)
-    } else if (stringi::stri_startswith_fixed(input, "/./")) {
-      input <- paste0("/", stringi::stri_sub(input, 4))
+    if (startsWith(input, "../")) {
+      input <- substring(input, 4L)
+    } else if (startsWith(input, "./")) {
+      input <- substring(input, 3L)
+    } else if (startsWith(input, "/./")) {
+      input <- paste0("/", substring(input, 4L))
     } else if (identical(input, "/.")) {
       input <- "/"
-    } else if (stringi::stri_startswith_fixed(input, "/../")) {
-      input <- paste0("/", stringi::stri_sub(input, 5))
+    } else if (startsWith(input, "/../")) {
+      input <- paste0("/", substring(input, 5L))
       output <- sub("/?[^/]*$", "", output)
     } else if (identical(input, "/..")) {
       input <- "/"
