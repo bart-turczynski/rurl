@@ -56,11 +56,13 @@ WHATWG URL Standard does not strip it (it is not a C0 control or space) and
 RFC 3986 has no rule for it. So a skipping call on a string that can start
 with one drops the mark, reads a prefix past it (a scheme, `//`, `/`,
 `www.`), or returns a position one off from a counting call's.
-`.starts_with_bom()` in `R/parse-phases.R` carries the measured list.
+This list is the reference; the comment above `.starts_with_bom()` in
+`R/parse-phases.R` quotes only part of it.
 
 **Decision.** The helpers below are guarded against the gap on purpose. Each
-uses base R, a `.starts_with_bom()` mask, or a `stringi` call fed an ASCII
-byte spliced on first and cut off as a byte. Do not migrate them back to the
+uses base R, a `.starts_with_bom()` mask, a `stringi` call that counts the
+mark (a `*_regex()` detector, replacer or locator), or a `stringi` call fed an
+ASCII byte spliced on first and cut off as a byte. Do not migrate them back to the
 skipping `stringi` call, and do not swap a counting `stringi` call there for
 a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 
@@ -68,7 +70,7 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 |---|---|---|---|
 | `R/parse-phases.R` | `.starts_with_bom()` | the base-R byte test itself | RURL-vhionecz |
 | `R/parse-phases.R` | `.rewrite_whatwg_backslashes_vec()` | mask; `//` spliced before the fixed rewrite | RURL-iiehsbfg |
-| `R/parse-phases.R` | `.strip_whatwg_control_chars_vec()` | regex strip and flag, which count the mark | RURL-zxnxczsw |
+| `R/parse-phases.R` | `.strip_whatwg_control_chars_vec()` | regex strip and flag, which count the mark | RURL-vhionecz, RURL-bnorcgbv (pinned in RURL-zxnxczsw) |
 | `R/parse-phases.R` | `.map_whatwg_domain_separators_vec()` | mask; spans cut from the whole input | RURL-exdlurql |
 | `R/parse-phases.R` | `.percent_encode_userinfo_charset()` | `@` spliced, cut as a byte | RURL-rfgbozdr |
 | `R/parse-phases.R` | `.rfc3986_path_rootless_vec()` | mask | RURL-biunpazk |
@@ -79,8 +81,8 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 | `R/parse-phases.R` | `.normalize_path_vec()`, trailing-slash branch | `endsWith()`; the slash cut as a byte | RURL-zxnxczsw |
 | `R/parse-state.R` | `.rfc3986_first_index()`, `.split_authority()` | literal regex locators | RURL-biunpazk |
 | `R/parse-state.R` | `.rfc3986_generic_uri_ok()`, `.general_parsed_mask()` | mask | RURL-biunpazk, RURL-vhionecz |
-| `R/path-query.R` | `._remove_dot_segments()` | `startsWith()`, `substring()` | RURL-xrjtdnko |
-| `R/path-query.R` | `._remove_dot_segments_whatwg()` | `substring()` | RURL-zxnxczsw |
+| `R/path-query.R` | `._remove_dot_segments()` | `startsWith()`, `substring()` with an explicit `last` | RURL-xrjtdnko, RURL-zxnxczsw |
+| `R/path-query.R` | `._remove_dot_segments_whatwg()` | `substring()` with an explicit `last` | RURL-zxnxczsw |
 | `R/path-query.R` | `._strip_index_page()` | `x` spliced, cut as a byte; `startsWith()` | RURL-zxnxczsw |
 | `R/path-query.R` | `._encode_path_segments()` | `startsWith()`, `endsWith()` | RURL-zxnxczsw |
 | `R/resolve.R` | `.whatwg_file_remove_dot_segments()` | `/` spliced before the split | RURL-dglgcwit |
@@ -99,6 +101,9 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
   `host_encoding = "unicode"`, the subdomain trim, the URL key's framing, the
   ASCII case helpers' fallback). They are tracked separately and join the
   table when fixed.
+- A base-R suffix cut passes `last` explicitly (`.Machine$integer.max`) or
+  uses `.byte_substring()`: before R 4.6.0, `substring(x, first)` defaulted to
+  `last = 1000000L`, and the package supports R 4.1.0 and later.
 - The measured lists are stringi 1.8.9 behavior. A stringi release that stops
   skipping the mark would make these guards redundant, not wrong; the tests
   would still pass.
