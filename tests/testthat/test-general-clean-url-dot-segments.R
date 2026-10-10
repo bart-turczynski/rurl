@@ -5,10 +5,10 @@
 # Posture: clean surface. `clean_url` is never a conformance oracle (ADR 0017),
 # but one row must not contradict itself: the `path` column and the path inside
 # `clean_url` are two renderings of the same parse. The general route renders
-# its clean_url through `.serialize_whatwg_vec()` / `.serialize_rfc_generic_vec()`
-# (R/parse.R, the ADR 0012 Layer 4b-2 serializer dispatch), not through
-# `.build_clean_url_vec()`, so the special-scheme rows below are the control
-# for the other renderer.
+# its clean_url through `.serialize_whatwg_vec()` or
+# `.serialize_rfc_generic_vec()` (R/parse.R, the ADR 0012 Layer 4b-2
+# serializer dispatch), not through `.build_clean_url_vec()`, so the
+# special-scheme rows below are the control for the other renderer.
 
 general_rows <- function(urls, ...) {
   safe_parse_urls(urls, scheme_acceptance = "general", ...)
@@ -102,7 +102,7 @@ test_that("rfc-syntax: no path normalization, so path and clean_url agree", {
   expect_identical(r$clean_url, urls)
 })
 
-# --- The fix -------------------------------------------------------------------
+# --- The fix -----------------------------------------------------------------
 
 test_that("whatwg: a non-special list path cleans to its parsed path", {
   # WHATWG URL Standard, path state: a `.` or `..` segment (ASCII
