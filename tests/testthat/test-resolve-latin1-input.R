@@ -1,7 +1,7 @@
 # RURL-ummmdiwu: resolve_url() and a latin1-MARKED reference or base.
 #
 # A latin1 mark declares what each octet means: octet 0xNN is U+00NN
-# (ISO 8859-1), so a latin1 "\xfc" and "ü" are the same URL
+# (ISO 8859-1), so a latin1 "\xfc" and "\u00fc" are the same URL
 # (test-latin1-input.R, RURL-buemdwcq). resolve_url() reshapes the reference
 # and the base as STRINGS in .resolve_one_raw() -- split, merge, recompose --
 # before any parse seam reads the mark, so R's own string machinery decided
@@ -25,7 +25,7 @@ latin1 <- function(...) {
 }
 
 # Compare character values octet by octet (`identical()` on strings can match
-# a latin1 "\xfc" against "ü"); NA stays NA.
+# a latin1 "\xfc" against "\u00fc"); NA stays NA.
 expect_bytes <- function(actual, expected, label) {
   as_bytes <- function(v) {
     lapply(v, function(s) if (is.na(s)) NA else charToRaw(s))
@@ -66,8 +66,8 @@ latin1_refs <- latin1(
   c(utf8ToInt("?q="), 0xfc, 0x23, 0xfc),
   utf8ToInt("p")
 )
-utf8_refs <- c("http://h.com/\u009f", "hü.com/p", "?q=ü#ü", "p")
-utf8_bases <- c(rep("http://b.com/a", 3L), "http://bü.com/ü/")
+utf8_refs <- c("http://h.com/\u009f", "h\u00fc.com/p", "?q=\u00fc#\u00fc", "p")
+utf8_bases <- c(rep("http://b.com/a", 3L), "http://b\u00fc.com/\u00fc/")
 latin1_bases <- c(
   rep("http://b.com/a", 3L),
   latin1(c(utf8ToInt("http://b"), 0xfc, utf8ToInt(".com/"), 0xfc, 0x2f))
@@ -76,8 +76,8 @@ latin1_bases <- c(
 # The UTF-8 twin's value on every arm. `query_handling = "keep"` so the clean
 # surface shows the query row; output = "serialized" needs a named standard.
 clean_twin <- c(
-  "http://h.com/\u009f", "http://b.com/hü.com/p",
-  "http://b.com/a?q=%C3%BC", "http://bü.com/ü/p"
+  "http://h.com/\u009f", "http://b.com/h\u00fc.com/p",
+  "http://b.com/a?q=%C3%BC", "http://b\u00fc.com/\u00fc/p"
 )
 arms <- list(
   "NULL clean" = list(
@@ -91,8 +91,8 @@ arms <- list(
   "rfc3986 serialized" = list(
     args = list(url_standard = "rfc3986", output = "serialized"),
     twin = c(
-      "http://h.com/\u009f", "http://b.com/hü.com/p",
-      "http://b.com/a?q=ü#ü", "http://bü.com/ü/p"
+      "http://h.com/\u009f", "http://b.com/h\u00fc.com/p",
+      "http://b.com/a?q=\u00fc#\u00fc", "http://b\u00fc.com/\u00fc/p"
     )
   ),
   "whatwg clean" = list(
@@ -153,42 +153,94 @@ test_that("whatwg in a UTF-8 locale already reads a latin1 row as its twin", {
   })
 })
 
-# --- The defect (pre-fix witness) --------------------------------------------
+# --- The fix -----------------------------------------------------------------
 #
-# DEFECT: these assert today's WRONG values. They are the witness ADR 0016
-# asks for, and the fix flips them to the twin's value.
+# ADR 0016: this fix MOVES `url_standard = NULL` rows. The freeze binds drift a
+# standard causes; this is a defect in the default path itself -- no standard,
+# profile or contract makes a latin1 0x9F mean U+0178, or "\xfc" mean the text
+# "<fc>", and the parse seams already read the mark (RURL-buemdwcq).
+#
+#   1. WITNESS: the first two tests run under the default selector, omitted and
+#      explicit NULL alike. Before the fix they asserted the defect: in a UTF-8
+#      locale the 0x9F row resolved to "http://h.com/\u0178" (bytes c5 b8)
+#      under NULL and rfc3986 (clean and serialized); in the C locale the 0xFC
+#      row resolved to the text "http://b.com/h<fc>.com/p" under NULL and
+#      whatwg, and to NA under rfc3986.
+#   2. SIGNATURE: inputs = a latin1-MARKED reference or base with an octet
+#      >= 0x80 (a UTF-8, ASCII or NA element is untouched, pinned above);
+#      options = any; what moves is the resolved value of such a row, which now
+#      equals its UTF-8 twin's byte for byte. Per arm, measured before the fix
+#      on the four rows above:
+#        NULL clean          -- UTF-8 locale: octets 0x80-0x9F (CP1252 read);
+#                               C locale: every non-ASCII octet (escape text
+#                               in the reference, NA for a latin1 base).
+#        rfc3986 clean and serialized -- UTF-8 locale: octets 0x80-0x9F;
+#                               C locale: every row with a non-ASCII latin1
+#                               element was NA.
+#        whatwg clean and serialized  -- UTF-8 locale: already correct (pinned
+#                               above; the strip step and the parse funnel read
+#                               the mark). C locale: the absolute row was
+#                               correct; relative rows carried escape text and
+#                               the latin1-base row was NA.
 
-test_that("DEFECT: UTF-8 locale reads latin1 0x9F as CP1252 U+0178", {
+test_that("NULL witness: latin1 0x9F reads as U+009F in a UTF-8 locale", {
   with_ctype("en_US.UTF-8", TRUE, {
     for (args in list(list(), list(url_standard = NULL))) {
       expect_bytes(
         cold_resolve(latin1_refs[1], latin1_bases[1], args),
-        "http://h.com/Ÿ", "NULL"
+        "http://h.com/\u009f", "NULL"
       )
     }
     for (out in c("clean", "serialized")) {
       expect_bytes(
         cold_resolve(latin1_refs[1], latin1_bases[1],
                      list(url_standard = "rfc3986", output = out)),
-        "http://h.com/Ÿ", paste("rfc3986", out)
+        "http://h.com/\u009f", paste("rfc3986", out)
       )
     }
   })
 })
 
-test_that("DEFECT: C locale merges the escape text of a latin1 octet", {
+test_that("NULL witness: latin1 0xFC merges as U+00FC in the C locale", {
   with_ctype("C", FALSE, {
     for (args in list(list(), list(url_standard = NULL),
-                      list(url_standard = "whatwg"))) {
+                      list(url_standard = "whatwg"),
+                      list(url_standard = "rfc3986"))) {
       expect_bytes(
         cold_resolve(latin1_refs[2], latin1_bases[2], args),
-        "http://b.com/h<fc>.com/p", paste(args, collapse = " ")
+        "http://b.com/h\u00fc.com/p", paste(args, collapse = " ")
       )
     }
-    expect_identical(
-      cold_resolve(latin1_refs[2], latin1_bases[2],
-                   list(url_standard = "rfc3986")),
-      NA_character_
-    )
   })
+})
+
+test_that("every arm resolves a latin1 row as its UTF-8 twin, both locales", {
+  for (loc in names(ctypes)) {
+    with_ctype(loc, ctypes[[loc]], {
+      for (arm in names(arms)) {
+        args <- arms[[arm]]$args
+        a <- cold_resolve(latin1_refs, latin1_bases, args)
+        b <- cold_resolve(utf8_refs, utf8_bases, args)
+        expect_bytes(a, b, paste(loc, arm, "twin"))
+        expect_identical(Encoding(a), Encoding(b), label = paste(loc, arm))
+        expect_bytes(a, arms[[arm]]$twin, paste(loc, arm))
+        # Latin1 reference against a latin1 base, and the twins mixed.
+        expect_bytes(cold_resolve(latin1_refs[2], latin1_bases[4], args),
+                     cold_resolve(utf8_refs[2], utf8_bases[4], args),
+                     paste(loc, arm, "both latin1"))
+      }
+    })
+  }
+})
+
+test_that("omitting url_standard equals passing NULL on latin1 rows", {
+  for (loc in names(ctypes)) {
+    with_ctype(loc, ctypes[[loc]], {
+      expect_bytes(
+        cold_resolve(latin1_refs, latin1_bases, list()),
+        cold_resolve(latin1_refs, latin1_bases, list(url_standard = NULL)),
+        loc
+      )
+    })
+  }
 })
