@@ -4,10 +4,11 @@
 # (R/domain.R), decodes each A-label and rejoins them. The split is a stringi
 # call, and stringi skips a U+FEFF that starts its input (ADR 0005, the U+FEFF
 # amendment), so the first label lost the mark and a mark-led `xn--` label was
-# read as an A-label. A U+FEFF is ordinary data in an RFC 3986 reg-name
-# (section 3.2.2), and a label that starts with it does not start with the ACE
-# prefix (RFC 5890 section 2.3.2.1), so it is not an A-label and keeps its
-# spelling. Each U+FEFF row has a U+200B twin: a zero-width code point stringi
+# read as an A-label. The rfc3986 arm keeps a raw non-ASCII host as written
+# (the RFC 3986 reg-name, section 3.2.2, admits only its percent-encoded
+# form), and the mark is no exception; a label that starts with it does not
+# start with the ACE prefix (RFC 5890 section 2.3.2.1), so it is not an
+# A-label and keeps its spelling. Each U+FEFF row has a U+200B twin: a zero-width code point stringi
 # does not skip, so a twin that already gives the right answer shows the defect
 # is the mark's alone.
 
@@ -124,6 +125,9 @@ test_that("signature: the other encodings and the PSL columns do not move", {
                      "xn--xn--nxasmq6b-7n50e.com", label = an)
     p <- arm_parse(u, arm, host_encoding = "unicode")
     expect_identical(p$parse_status, "ok", label = an)
+    # Known gap, pinned as the ADR 0016 signature: pslr's UTS-46 mapping
+    # drops the mark, so `domain` stays the decoded spelling and is no longer
+    # a suffix of the mark-led `host` (RURL-tbmnnauj review; not this fix).
     expect_identical(p$domain, paste0(beta, ".com"), label = an)
     expect_identical(p$tld, "com", label = an)
   }
