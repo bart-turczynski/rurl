@@ -177,7 +177,12 @@
     u <- stringi::stri_replace_first_regex(u, "^[\\u0000-\\u0020]+", "")
   }
   out <- rep("inferred", length(u))
-  out[stringi::stri_startswith_fixed(u, "//")] <- "scheme-relative"
+  # A `*_regex()` detector, not stri_startswith_fixed(): the fixed matcher
+  # reads past a U+FEFF that starts its input, so `﻿//h/p` read as
+  # scheme-relative while its U+200B twin read inferred. The detector counts
+  # the mark, as the scheme test below does (ADR 0005; RURL-dquaxcaz).
+  rel <- stringi::stri_detect_regex(u, "^//")
+  out[!is.na(rel) & rel] <- "scheme-relative"
   explicit <- stringi::stri_detect_regex(u, "^[A-Za-z][A-Za-z0-9+.\\-]*:")
   out[!is.na(explicit) & explicit] <- "explicit"
   hp <- !is.na(looks_like_host_port) & looks_like_host_port
@@ -241,6 +246,13 @@
 # transcoded value, so the frame is identical under every locale. Lengths are
 # only ever COUNTED here, never used to slice, so the code-point/native-index
 # does not arise.
+#
+# The transcode is fed an ASCII `x` spliced on first and cut off after it.
+# stri_enc_toutf8() reads a U+FEFF that starts its input as a byte-order mark
+# and drops it, so `﻿h.example.com` framed as `13:h.example.com` and the
+# key collided with its unmarked twin's. The mark is field data (ADR 0005), so
+# it must reach the frame; the cut is one ASCII character, hence one byte, and
+# stri_numbytes() counts the mark.
 .url_key_frame <- function(fields) {
   n <- unique(lengths(fields))
   stopifnot(length(n) == 1L)
@@ -249,7 +261,8 @@
   }
   pieces <- lapply(fields, function(x) {
     x <- as.character(x)
-    enc <- stringi::stri_enc_toutf8(x, validate = TRUE)
+    enc <- stringi::stri_enc_toutf8(paste0("x", x), validate = TRUE)
+    enc <- substring(enc, 2L, .Machine$integer.max)
     out <- paste0(stringi::stri_numbytes(enc), ":", enc)
     out[is.na(x)] <- "-:"
     out

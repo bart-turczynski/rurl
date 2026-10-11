@@ -164,37 +164,46 @@ test_that("the key has no NULL arm, and the version is not bumped again", {
 # --- Defect: the framing drops a mark that starts a field ---------------------
 
 test_that("the frame keeps a mark that starts the field", {
-  # DEFECT (RURL-dquaxcaz): stri_enc_toutf8() reads the mark as a byte-order
-  # mark and drops it, so `﻿ab` frames as `2:ab`, the frame of `ab`.
-  expect_identical(.url_key_frame(list(paste0(bom, "ab"))), "2:ab")
+  # stri_enc_toutf8() read the mark as a byte-order mark and dropped it, so
+  # `﻿ab` framed as `2:ab`, the frame of `ab`. It is three more bytes.
+  expect_identical(.url_key_frame(list(paste0(bom, "ab"))),
+                   paste0("5:", bom, "ab"))
+  expect_identical(.url_key_frame(list(bom)), paste0("3:", bom))
   withr::with_locale(c(LC_CTYPE = "C"), {
-    expect_identical(.url_key_frame(list(paste0(bom, "ab"))), "2:ab")
+    expect_identical(.url_key_frame(list(paste0(bom, "ab"))),
+                     paste0("5:", bom, "ab"))
   })
 })
 
 test_that("a mark-led field no longer collides with its unmarked twin", {
-  # DEFECT (RURL-dquaxcaz): each marked row keys like its unmarked twin.
+  # Signature, per policy: `rfc3986` moves a host, path or query that starts
+  # with the mark, since its record keeps each as written (RFC 3986 has no
+  # rule for U+FEFF); `whatwg` moves only a non-special query, the one field
+  # its record leaves unencoded. A special host, a special query, a
+  # non-special host and an opaque path were already right (pinned above),
+  # and the fragment and userinfo stay out of the key. Each marked row keyed
+  # like its unmarked twin; it now frames the mark, as its U+200B twin does.
   for (row in marked_rows) {
     std <- row[[1L]]
     marked <- fill(row[[3L]], bom)
     k <- key(c(marked, fill(row[[3L]], "")), std)
-    expect_identical(k[[1L]], k[[2L]], label = marked)
-    expect_false(has_frame(k[[1L]], fill(row[[4L]], bom)), label = marked)
+    expect_false(k[[1L]] == k[[2L]], label = marked)
+    expect_true(has_frame(k[[1L]], fill(row[[4L]], bom)), label = marked)
   }
   # The ticket's row, as a dedup would see it.
   u <- c(paste0(bom, "h.example.com/p"), "h.example.com/p")
   expect_identical(duplicated(get_url_key(u, url_key_policy("rfc3986"))),
-                   c(FALSE, TRUE))
+                   c(FALSE, FALSE))
 })
 
 test_that("scheme presence reads a mark-led `//` as written", {
-  # DEFECT (RURL-dquaxcaz), latent: stri_startswith_fixed() read past the mark,
-  # so `﻿//h/p` read as scheme-relative where its twin reads inferred.
-  # The row fails the parse (pinned above), so no key moves.
+  # Latent: stri_startswith_fixed() read past the mark, so `﻿//h/p` read
+  # as scheme-relative where its twin reads inferred. The row fails the parse
+  # (pinned above), so no key moves.
   for (std in list(NULL, "rfc3986", "whatwg")) {
     expect_identical(
       .url_key_scheme_presence(paste0(bom, "//h/p"), std, FALSE),
-      "scheme-relative", label = arm_label(std)
+      "inferred", label = arm_label(std)
     )
   }
 })
