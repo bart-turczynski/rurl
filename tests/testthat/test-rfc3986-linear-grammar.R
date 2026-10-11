@@ -13,13 +13,13 @@
 
 # One verdict per element for `s` checked against component `comp`.
 .lin_comp_ok <- function(s, comp) {
-  re <- switch(comp,
-    host = .RFC3986_HOST_RE,
-    userinfo = .RFC3986_USERINFO_RE,
-    path = .RFC3986_PATH_RE,
-    qf = .RFC3986_QF_RE
+  bad <- switch(comp,
+    host = .RFC3986_HOST_BAD_RE,
+    userinfo = .RFC3986_USERINFO_BAD_RE,
+    path = .RFC3986_PATH_BAD_RE,
+    qf = .RFC3986_QF_BAD_RE
   )
-  vapply(s, .rfc3986_match, logical(1L), re = re, USE.NAMES = FALSE)
+  .rfc3986_class_ok(s, bad)
 }
 
 # The component-specific characters each production adds to
@@ -110,6 +110,17 @@ test_that("non-ASCII scalars keep the ADR 0002 tolerance at every boundary", {
       .lin_comp_ok(bad, comp), rep(FALSE, length(bad)),
       info = comp
     )
+    # The full anchored oracle, non-ASCII range included, run by PCRE in UTF
+    # mode (every element here holds a non-ASCII scalar).
+    oracle <- paste0(
+      "\\A(?:[A-Za-z0-9._~\\-!$&'()*+,;=", .lin_extra[[comp]],
+      "\\x{0080}-\\x{10FFFF}]|%[0-9A-Fa-f]{2})*\\z"
+    )
+    expect_identical(
+      .lin_comp_ok(c(ok, bad), comp),
+      grepl(oracle, c(ok, bad), perl = TRUE),
+      info = comp
+    )
   }
   # U+2028 (LS) and U+0085 (NEL) are non-ASCII scalars, so the tolerance admits
   # them as data, at the end of a component too; only the ASCII LF above fails.
@@ -121,6 +132,25 @@ test_that("non-ASCII scalars keep the ADR 0002 tolerance at every boundary", {
 
 test_that("a missing input is rejected", {
   expect_identical(.lin_comp_ok(NA_character_, "path"), FALSE)
+})
+
+test_that("a mixed vector gets one verdict per element, NA rejected", {
+  # `grepl()` reports no match for an NA element, so the matcher must reject
+  # NA itself rather than read "no offending byte" as valid.
+  s <- c("a", NA, "%zz", "", "﻿a", "a%2", "%41", NA, "a b")
+  want <- c(TRUE, FALSE, FALSE, TRUE, TRUE, FALSE, TRUE, FALSE, FALSE)
+  for (comp in names(.lin_extra)) {
+    expect_identical(.lin_comp_ok(s, comp), want, info = comp)
+  }
+})
+
+test_that("the matcher is total on bytes that do not decode", {
+  # Never reached through the gate (`.rfc3986_generic_uri_ok()` rejects an
+  # undecodable element before walking), but the matcher must not throw.
+  x <- "a\x80b"
+  Encoding(x) <- "UTF-8"
+  expect_no_error(.lin_comp_ok(x, "path"))
+  expect_false(.rfc3986_generic_uri_ok(paste0("foo:/", x))$ok)
 })
 
 # --- long components through the parse surface --------------------------------
@@ -151,24 +181,32 @@ test_that("a missing input is rejected", {
   )
 }
 
-test_that("a 1.5e6-character component under rfc3986 throws (pinned bug)", {
+test_that("a 1.5e6-character component under rfc3986 gets its own verdict", {
   rows <- .lin_long_rows()
-  expect_error(
-    safe_parse_urls(rows, url_standard = "rfc3986"),
-    "backtrack stack overflow"
-  )
+  expect_no_error(res <- safe_parse_urls(rows, url_standard = "rfc3986"))
+  expect_identical(nrow(res), length(rows))
+  status <- stats::setNames(res$parse_status, names(rows))
+  bad <- grepl("_bad$", names(rows))
+  # Each good row parses, each tail-invalid twin fails alone, and the short
+  # neighbors are untouched.
+  expect_true(all(status[!bad] != "error"), info = toString(status[!bad]))
+  expect_true(all(status[bad] == "error"), info = toString(status[bad]))
 })
 
-test_that("a 1.5e6-character file: path under NULL throws (pinned bug)", {
+test_that("a 1.5e6-character file: path under NULL gets its own verdict", {
   rows <- .lin_long_rows()[c("neighbor_a", "file", "file_bad", "neighbor_z")]
-  expect_error(
-    safe_parse_urls(rows, url_standard = NULL),
-    "backtrack stack overflow"
+  expect_no_error(res <- safe_parse_urls(rows, url_standard = NULL))
+  expect_identical(
+    res$parse_status,
+    c("warning-invalid-tld", "ok", "error", "warning-invalid-tld")
   )
 })
 
 test_that("a 1.5e6-character component under whatwg returns a row each", {
-  rows <- .lin_long_rows()
-  res <- safe_parse_urls(rows, url_standard = "whatwg")
+  # The RFC 3986 grammar does not bind under whatwg; this only proves no
+  # throw. The cheap rows suffice (the long userinfo, host, query and fragment
+  # rows cost seconds each in the WHATWG parser, outside the grammar check).
+  rows <- .lin_long_rows()[c("neighbor_a", "path", "file", "neighbor_z")]
+  expect_no_error(res <- safe_parse_urls(rows, url_standard = "whatwg"))
   expect_identical(nrow(res), length(rows))
 })
