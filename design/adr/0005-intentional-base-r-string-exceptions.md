@@ -92,6 +92,7 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 | `R/url-key.R` | `.url_key_frame()` | mask; `x` spliced before `stri_enc_toutf8()`, then cut; `stri_numbytes()` counts the mark | RURL-dquaxcaz |
 | `R/url-key.R` | `.url_key_scheme_presence()` | `stri_detect_regex()`, which counts the mark | RURL-dquaxcaz |
 | `R/domain.R` | `.split_host_labels()` | mask; `x` spliced before the split, cut off the first label as a byte | RURL-tbmnnauj |
+| `R/utils.R` | `.ascii_case_fallback()`, under `.ascii_tolower()` / `.ascii_toupper()` | mask; `0` spliced before the fixed replace, cut as a byte | RURL-bqhfznkg |
 
 **Consequences.**
 
