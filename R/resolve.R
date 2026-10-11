@@ -820,8 +820,14 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     )
   }
 
-  ref <- as.character(relative_or_absolute)
-  base <- as.character(base_url)
+  # A latin1-MARKED element becomes its UTF-8 twin before anything reads it
+  # (RURL-ummmdiwu). .resolve_one_raw() splits, merges and recomposes the two
+  # as strings, and R's string functions translate latin1 by LOCALE: CP1252
+  # in a UTF-8 one (0x9F became U+0178), escape text such as "<fc>" in the C
+  # locale. .latin1_input_to_utf8() (R/parse.R) reads the mark instead, as
+  # ISO 8859-1, which is what the parse seams already do.
+  ref <- .latin1_input_to_utf8(as.character(relative_or_absolute))
+  base <- .latin1_input_to_utf8(as.character(base_url))
 
   # A zero-length operand yields a zero-length result, as R vectorized ops do.
   if (length(ref) == 0L || length(base) == 0L) {
