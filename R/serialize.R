@@ -406,8 +406,10 @@
 #' `"rfc-syntax"` profiles (see [url_profile()]). Both accept any scheme, and
 #' both **require** a scheme: neither standard defines a base-URL-free parse of
 #' `example.com/x`, so scheme-less input returns `NA` rather than being silently
-#' upgraded to `https://`. Input that the standard's parser rejects also returns
-#' `NA`.
+#' upgraded to `https://`. That includes a `//host` network-path reference such
+#' as `//example.com/x`: it is a relative reference (RFC 3986 section 4.2), not
+#' a URI, so it returns `NA` even where the `"rfc-syntax"` parse accepts it.
+#' Input that the standard's parser rejects also returns `NA`.
 #'
 #' @section Standards and forms:
 #'
@@ -454,7 +456,9 @@
 #'   session-global engine.
 #'
 #' @return A character vector the same length as `url`. `NA_character_` for
-#'   input the selected standard's parser does not accept.
+#'   input the selected standard's parser does not accept, and for input with
+#'   no scheme, a `//host` network-path reference included (see "Parse
+#'   posture").
 #'
 #' @seealso [get_clean_url()] for the cleaning surface, [safe_parse_url()] for
 #'   the parsed components, and [url_profile()] for the parse postures used

@@ -38,7 +38,9 @@ session-global engine.}
 }
 \value{
 A character vector the same length as \code{url}. \code{NA_character_} for
-input the selected standard's parser does not accept.
+input the selected standard's parser does not accept, and for input with
+no scheme, a \verb{//host} network-path reference included (see "Parse
+posture").
 }
 \description{
 Renders each URL as the selected standard would serialize it: the
@@ -79,8 +81,10 @@ Each standard is parsed under its own spec posture -- the \code{"whatwg"} and
 \code{"rfc-syntax"} profiles (see \code{\link[=url_profile]{url_profile()}}). Both accept any scheme, and
 both \strong{require} a scheme: neither standard defines a base-URL-free parse of
 \code{example.com/x}, so scheme-less input returns \code{NA} rather than being silently
-upgraded to \verb{https://}. Input that the standard's parser rejects also returns
-\code{NA}.
+upgraded to \verb{https://}. That includes a \verb{//host} network-path reference such
+as \verb{//example.com/x}: it is a relative reference (RFC 3986 section 4.2), not
+a URI, so it returns \code{NA} even where the \code{"rfc-syntax"} parse accepts it.
+Input that the standard's parser rejects also returns \code{NA}.
 }
 
 \section{Standards and forms}{
