@@ -88,6 +88,7 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 | `R/resolve.R` | `.whatwg_file_remove_dot_segments()` | `/` spliced before the split | RURL-dglgcwit |
 | `R/zzz.R` | `.cache_key_escape()`, under `.cache_key_ascii()` | `startsWith()` mask; `x` spliced before `stri_escape_unicode()`, then cut | RURL-iiehsbfg |
 | `R/serialize.R` | `.fsss_source_lex()` | mask on the stripped source | RURL-rynmvtwp |
+| `R/accessors.R` | `.subdomain_labels_vec()` | `endsWith()`; the prefix cut as bytes (`.byte_substring_vec()`, `.byte_length()`) | RURL-fyiadctm |
 
 **Consequences.**
 

@@ -8,8 +8,8 @@
 # has a U+200B twin: a zero-width code point stringi does not skip, so a twin
 # that already gives the right answer shows the defect is the mark's alone.
 
-bom <- "﻿"
-zwsp <- "​"
+bom <- "\ufeff"
+zwsp <- "\u200b"
 
 # get_subdomain() under one arm. `NULL` omits the selector, as the default call
 # does; the NULL test below also passes it explicitly.
@@ -83,37 +83,39 @@ test_that("whatwg: UTS-46 removes the mark before the subdomain trim", {
 # --- Defect: the subdomain trim reads past the mark ---------------------------
 
 test_that("a mark-led subdomain keeps its mark", {
-  # DEFECT (pinned pre-fix): `.subdomain_labels_vec()` cut the prefix with
+  # `.subdomain_labels_vec()` cut the prefix with
   # stri_sub(), which read past the mark, while stri_length() counted it, so
-  # `﻿h.example.com` gave `h`. A lone `﻿www` lost the mark and was
+  # `\ufeffh.example.com` gave `h`. A lone `\ufeffwww` lost the mark and was
   # then dropped as `www`.
   for (an in names(keeping_arms)) {
     arm <- keeping_arms[[an]]
-    expect_identical(arm_sub(paste0(bom, "h.example.com/p"), arm), "h",
-                     label = an)
+    expect_identical(arm_sub(paste0(bom, "h.example.com/p"), arm),
+                     paste0(bom, "h"), label = an)
     expect_identical(arm_sub(paste0("http://", bom, "h.example.com/p"), arm),
-                     "h", label = an)
+                     paste0(bom, "h"), label = an)
     expect_identical(arm_sub(paste0("http://", bom, "H.Example.COM/p"), arm),
-                     "h", label = an)
+                     paste0(bom, "h"), label = an)
     expect_identical(
       arm_sub(paste0("http://", bom, "a.h.example.com/p"), arm,
               format = "labels"),
-      list(c("a", "h")), label = an
+      list(c(paste0(bom, "a"), "h")), label = an
     )
+    # The mark-led label is not `www`, as its U+200B twin shows, so it stays.
     expect_identical(arm_sub(paste0("http://", bom, "www.example.com/"), arm),
-                     NA_character_, label = an)
+                     paste0(bom, "www"), label = an)
     expect_identical(
       arm_sub(paste0("http://", bom, "www.example.com/"), arm,
               include_www = TRUE),
-      "www", label = an
+      paste0(bom, "www"), label = an
     )
   }
 })
 
 test_that("the trim helper keeps the mark, in any LC_CTYPE", {
-  # DEFECT (pinned pre-fix): the helper itself, fed the engine's columns.
+  # The helper itself, fed the engine's columns. The cut is in bytes, so the
+  # session's LC_CTYPE cannot move it.
   host <- paste0(c(bom, zwsp, ""), "h.example.com")
-  want <- list("h", paste0(zwsp, "h"), "h")
+  want <- list(paste0(bom, "h"), paste0(zwsp, "h"), "h")
   expect_identical(
     .subdomain_labels_vec(host, rep("example.com", 3L), rep(FALSE, 3L), FALSE),
     want
@@ -131,17 +133,23 @@ test_that("the trim helper keeps the mark, in any LC_CTYPE", {
                           FALSE),
     list(character(0))
   )
+  # A mark alone before the suffix is a one-label subdomain, as its twin is.
+  expect_identical(
+    .subdomain_labels_vec(paste0(c(bom, zwsp), ".example.com"),
+                          rep("example.com", 2L), rep(FALSE, 2L), FALSE),
+    list(bom, zwsp)
+  )
 })
 
 test_that("NULL: the subdomain keeps the mark (ADR 0016)", {
   # Witness: under the frozen selector the parsed host of
-  # `﻿h.example.com/p` is `﻿h.example.com` and its domain
+  # `\ufeffh.example.com/p` is `\ufeffh.example.com` and its domain
   # `example.com`, and get_subdomain() returned `h`, which no standard or
   # documented contract sanctions: a default-path defect, not selector-caused
   # drift. Omitting the selector and passing NULL agree.
   u <- paste0(bom, "h.example.com/p")
-  expect_identical(get_subdomain(u), "h")
-  expect_identical(get_subdomain(u, url_standard = NULL), "h")
+  expect_identical(get_subdomain(u), paste0(bom, "h"))
+  expect_identical(get_subdomain(u, url_standard = NULL), paste0(bom, "h"))
   # Signature: only get_subdomain() moves, and only on a host whose first code
   # point is U+FEFF; the parse record does not move. Per arm: whatwg was
   # already right (UTS-46 removes the mark first, pinned above); rfc3986 keeps

@@ -1183,16 +1183,20 @@ get_userinfo <- function(url, protocol_handling = "keep",
     return(result)
   }
 
+  # Base-R bytes, not stringi: stri_sub() reads past a U+FEFF that starts the
+  # host while stri_length() counts it, so `\ufeffh.example.com` lost the mark
+  # and gave `h` (RURL-fyiadctm; ADR 0005's U+FEFF amendment). endsWith() and
+  # the byte cut count the mark, and keep the arithmetic in bytes throughout.
   suffix <- character(n)
   suffix[usable] <- paste0(".", domain_l[usable])
   ends <- logical(n)
-  ends[usable] <- stringi::stri_endswith_fixed(host_l[usable], suffix[usable])
+  ends[usable] <- endsWith(host_l[usable], suffix[usable])
 
   take <- which(ends)
-  sub_part <- stringi::stri_sub(
+  sub_part <- .byte_substring_vec(
     host_l[take],
-    1,
-    stringi::stri_length(host_l[take]) - stringi::stri_length(suffix[take])
+    1L,
+    .byte_length(host_l[take]) - .byte_length(suffix[take])
   )
   have_sub <- take[nzchar(sub_part)]
   if (length(have_sub) == 0L) {
