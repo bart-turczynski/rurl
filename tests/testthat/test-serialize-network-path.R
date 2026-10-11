@@ -52,16 +52,40 @@ test_that("controls: the parse surface reads the host, with no scheme", {
   expect_identical(p$path, "/p")
 })
 
-test_that("DEFECT (pinned): the RFC arm drops the host of a //host input", {
-  # Today's output: the stand-in `http` scheme, no authority. Wrong under any
-  # reading -- the input is scheme-less (documented NA), and even a reading
-  # that inferred a scheme would have to keep the host `h`.
+test_that("a //host input is NA under both RFC forms, as scheme-less input", {
+  # It gave the stand-in `http` scheme with no authority: `http:/a/../b` and
+  # `http:/p` (source), `http:/b` and `http:/p` (normalized).
+  for (form in c("source", "normalized")) {
+    expect_identical(
+      serialize_url(network_path, standard = "rfc3986", form = form),
+      c(NA_character_, NA_character_),
+      label = form
+    )
+  }
+})
+
+test_that("no RFC form drops the authority of any //host input", {
+  # Every network-path shape: userinfo, port, query and fragment (which gave
+  # `http:/p?q#f`), an empty path (`http:`), an empty authority (`///p`, also
+  # `http:`), and a path the normalized form rewrites.
+  x <- c(network_path, "//u@h:8/p?q#f", "//h", "///p", "//H/%7e/a/./b")
+  for (form in c("source", "normalized")) {
+    out <- serialize_url(x, standard = "rfc3986", form = form)
+    expect_identical(out, rep(NA_character_, length(x)), label = form)
+  }
   expect_identical(
-    serialize_url(network_path, standard = "rfc3986", form = "source"),
-    c("http:/a/../b", "http:/p")
+    serialize_url(x, standard = "whatwg"), rep(NA_character_, length(x))
+  )
+})
+
+test_that("an absolute URI in the same call is unaffected", {
+  x <- c("//h/p", "http://h/p", NA, "", "foo://u@h:8/a/../b?q#f")
+  expect_identical(
+    serialize_url(x, standard = "rfc3986"),
+    c(NA, "http://h/p", NA, NA, "foo://u@h:8/a/../b?q#f")
   )
   expect_identical(
-    serialize_url(network_path, standard = "rfc3986", form = "normalized"),
-    c("http:/b", "http:/p")
+    serialize_url(x, standard = "rfc3986", form = "normalized"),
+    c(NA, "http://h/p", NA, NA, "foo://u@h:8/b?q#f")
   )
 })

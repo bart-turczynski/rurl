@@ -363,7 +363,14 @@
     # `ws://h:80/` stay DISTINCT from their portless spellings
     # (`contracts/key-join-contracts.md:116-117`, P3.1 ratification Q8) even
     # though WHATWG's parser elides all five defaults.
-    syntactic_port = a$raw_port
+    syntactic_port = a$raw_port,
+    # TRUE where the source is a `//host` network-path reference. A posture
+    # with `scheme_relative_handling = "keep"` (the `rfc-syntax` profile)
+    # parses such a row behind a stand-in `http:` prefix, so `scheme` above
+    # holds a token the source never spelled. Surface (b) reads this to refuse
+    # the row (RURL-xjyrhqin); surface (e) frames the row's scheme presence
+    # itself and does not read it.
+    scheme_relative = a$is_scheme_relative
   )
 }
 
@@ -518,7 +525,14 @@ serialize_url <- function(url,
 
   rec <- .fsss_record_vec(url, standard, engine)
   out <- rep(NA_character_, n)
-  keep <- which(rec$ok)
+  # A `//host` network-path reference has no scheme: it is a relative
+  # reference (RFC 3986 section 4.2), not a URI (section 3), and with no base
+  # there is no absolute form to serialize -- the documented NA for scheme-less
+  # input. `whatwg` already rejects it at the parse (`scheme_relative_handling
+  # = "error"`); the `rfc-syntax` posture parses it behind a stand-in `http:`
+  # scheme, which emitted that scheme and, finding no `://` in the source, no
+  # authority (`//h/p` gave `http:/p`) (RURL-xjyrhqin).
+  keep <- which(rec$ok & !rec$scheme_relative)
   if (length(keep) == 0L) {
     return(out)
   }
