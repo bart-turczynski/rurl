@@ -113,12 +113,14 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
   and in the table: host case mapping (RURL-opwjlnla),
   `host_encoding = "unicode"` (RURL-tbmnnauj), the subdomain trim
   (RURL-fyiadctm), the URL key's framing (RURL-dquaxcaz) and the ASCII case
-  helpers' fallback (RURL-bqhfznkg). One follow-up is open: under `whatwg`,
-  the www and subdomain policies read the host before UTS-46 mapping
-  (RURL-fobwctml).
+  helpers' fallback (RURL-bqhfznkg). A related follow-up is open: under
+  `whatwg`, the www and subdomain policies read the host before UTS-46
+  mapping (RURL-fobwctml).
 - A base-R suffix cut passes `last` explicitly (`.Machine$integer.max`) or
   uses `.byte_substring()`: before R 4.6.0, `substring(x, first)` defaulted to
   `last = 1000000L`, and the package supports R 4.1.0 and later.
+  `tools/substring-last-gate.R` now enforces this on every `substring()` call
+  in `R/`.
 - The measured lists are stringi 1.8.9 behavior. A stringi release that stops
   skipping the mark would make these guards redundant, not wrong; the tests
   would still pass.
