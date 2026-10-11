@@ -193,24 +193,157 @@ for (loc in names(ctypes)) {
     })
   })
 
-  # DEFECT WITNESS (ADR 0016), pre-fix. Under the no-selector default -- with
-  # the argument omitted and passed as NULL alike -- and under rfc3986, one
-  # undecodable octet after the authority aborts the whole call.
-  test_that(paste("DEFECT: an undecodable octet throws the batch under", loc), {
+  # The ADR 0016 WITNESS, kept as the regression test. Before the fix every
+  # call below threw `invalid UTF-8 byte sequence detected` -- under the
+  # no-selector default (argument omitted and passed as NULL alike) and under
+  # rfc3986, in both locales and for both marks.
+  #
+  # DECLARED SIGNATURE, per arm. What may move: rows holding an undecodable
+  # octet after the authority, and the batch, which no longer throws. Nothing
+  # else: the valid rows are asserted byte-identical to the batch parsed
+  # without the bad row.
+  #   NULL     A row whose PATH holds the octet fails (`parse_status`
+  #            "error", every component NA). That includes the `?q=1` shape,
+  #            which parsed ALONE was `ok` with the undecodable octet raw in
+  #            `path` -- an answer no contract sanctions, since Stage B could
+  #            not read it (`path_encoding = "encode"` gave "/NA",
+  #            `path_normalization = "dot_segments"` threw). A row whose
+  #            QUERY or FRAGMENT holds it keeps the `ok` it gets alone, the
+  #            octet percent-encoded, as pinned above.
+  #   rfc3986  Already correct: the uniform grammar gate rejects every one of
+  #            these rows (RURL-kmpnbvdl). Only the throw moves.
+  #   whatwg   Already correct and unmoved (pinned above): the octet is read
+  #            as U+FFFD.
+  test_that(paste("an undecodable octet fails its row, not the batch, under",
+                  loc), {
     with_ctype(loc, ctypes[[loc]], {
       for (mark in c("unknown", "UTF-8")) {
         for (shape in names(bad_rows)) {
           bad <- marked(bad_rows[[shape]], mark)
           for (arm in c("omitted", "null", "rfc3986")) {
+            what <- paste(mark, shape, arm)
+            ref <- parse_arm(valid, arms[[arm]])
             rurl_clear_caches()
-            expect_error(
-              parse_arm(c(valid, bad), arms[[arm]]),
-              "invalid UTF-8 byte sequence",
-              info = paste(mark, shape, arm)
-            )
+            expect_no_error(res <- parse_arm(c(valid, bad), arms[[arm]]))
+            expect_identical(nrow(res), 5L, info = what)
+            expect_identical(res[1:4, ], ref, info = what)
+            expect_identical(res$original_url[5L], bad, info = what)
+            if (shape %in% in_path || arm == "rfc3986") {
+              expect_identical(res$parse_status[5L], "error", info = what)
+              expect_identical(res$path[5L], NA_character_, info = what)
+              expect_identical(res$host[5L], NA_character_, info = what)
+              expect_identical(res$clean_url[5L], NA_character_, info = what)
+            } else {
+              expect_identical(res$parse_status[5L], "ok", info = what)
+              expect_identical(res$path[5L], "/a", info = what)
+            }
           }
         }
       }
     })
   })
+
+  test_that(paste("omitting url_standard equals passing NULL under", loc), {
+    with_ctype(loc, ctypes[[loc]], {
+      for (mark in c("unknown", "UTF-8")) {
+        batch <- c(valid, marked(unname(bad_rows), mark))
+        rurl_clear_caches()
+        omitted <- safe_parse_urls(batch)
+        rurl_clear_caches()
+        expect_identical(safe_parse_urls(batch, url_standard = NULL), omitted)
+      }
+    })
+  })
+
+  test_that(paste("the NULL failure holds under every path option, under",
+                  loc), {
+    # The options that could not read an undecodable path in Stage B.
+    with_ctype(loc, ctypes[[loc]], {
+      batch <- c(valid, unname(bad_rows[c("query", "dots")]))
+      for (opt in list(list(path_encoding = "encode"),
+                       list(path_encoding = "decode"),
+                       list(path_normalization = "dot_segments"),
+                       list(index_page_handling = "strip"),
+                       list(trailing_slash_handling = "strip"))) {
+        rurl_clear_caches()
+        expect_no_error(res <- do.call(safe_parse_urls, c(list(batch), opt)))
+        expect_identical(res$parse_status[5:6], c("error", "error"))
+        expect_identical(res$path[5:6], c(NA_character_, NA_character_))
+      }
+    })
+  })
+
+  test_that(paste("an rfc3986 path-rootless octet fails its row under", loc), {
+    # `http:example.com/...` is RFC 3986 path-rootless, split by
+    # `.rfc3986_path_rootless_vec()` rather than the web parser. Its
+    # `nchar()` threw `invalid multibyte string` out of the batch.
+    with_ctype(loc, ctypes[[loc]], {
+      rootless <- c(oct("http:example.com/caf", 0xE9),
+                    oct("http:example.com/a?q=caf", 0xE9),
+                    oct("http:example.com/a#caf", 0xE9))
+      ref <- safe_parse_urls(valid, url_standard = "rfc3986")
+      for (mark in c("unknown", "UTF-8")) {
+        rurl_clear_caches()
+        expect_no_error(
+          res <- safe_parse_urls(
+            c(valid, marked(rootless, mark)), url_standard = "rfc3986"
+          )
+        )
+        expect_identical(res[1:4, ], ref, info = mark)
+        expect_identical(res$parse_status[5:7], rep("error", 3L), info = mark)
+      }
+    })
+  })
+
+  test_that(paste("the accessors survive the bad row too, under", loc), {
+    with_ctype(loc, ctypes[[loc]], {
+      batch <- c(valid, bad_rows[["end"]])
+      for (std in list(NULL, "rfc3986")) {
+        rurl_clear_caches()
+        expect_identical(
+          get_parse_status(batch, url_standard = std),
+          c("ok", "ok", "ok", "ok-ftp", "error")
+        )
+        expect_identical(get_path(batch, url_standard = std)[5L], NA_character_)
+        expect_identical(
+          get_clean_url(batch, url_standard = std)[5L], NA_character_
+        )
+        verdicts <- get_parse_verdicts(batch, url_standard = std)
+        expect_identical(verdicts$layer1_syntax_verdict[5L], "fail")
+      }
+      rurl_clear_caches()
+      expect_no_error(get_url_diagnostics(batch, url_standard = "rfc3986"))
+      expect_identical(
+        serialize_url(batch, standard = "rfc3986")[5L], NA_character_
+      )
+    })
+  })
 }
+
+test_that(".extract_raw_path_vec() cuts an undecodable path without throwing", {
+  bad <- utf8_marked(bad_rows[["end"]])
+  out <- rurl:::.extract_raw_path_vec(
+    c("http://example.com/a", "http://example.com/b?q", bad),
+    c("/a", "/b", "/x")
+  )
+  expect_identical(out[1:2], c("/a", "/b"))
+  expect_identical(
+    charToRaw(out[3L]), c(charToRaw("/caf"), as.raw(0xE9))
+  )
+})
+
+test_that(".rfc3986_path_rootless_vec() splits in bytes, totally", {
+  bad <- utf8_marked(oct("http:example.com/caf", 0xE9, "?q#f"))
+  out <- rurl:::.rfc3986_path_rootless_vec(
+    c("http:example.com/a?q=1#f", "http:example.com/caf\u00e9?#", bad),
+    "rfc3986"
+  )
+  expect_identical(out$is_path_rootless, c(TRUE, TRUE, TRUE))
+  expect_identical(out$path[1:2], c("example.com/a", "example.com/caf\u00e9"))
+  expect_identical(out$query, c("q=1", NA, "q"))
+  expect_identical(out$fragment, c("f", NA, "f"))
+  expect_identical(
+    charToRaw(out$path[3L]),
+    c(charToRaw("example.com/caf"), as.raw(0xE9))
+  )
+})

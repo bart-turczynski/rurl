@@ -623,28 +623,36 @@
     return(no_op)
   }
 
+  # Located and cut in BYTES (RURL-otrpfhmq). `rest` is a
+  # `stri_match_first_regex()` capture, marked UTF-8 whatever its octets, and
+  # `nchar()`/`substr()` THROW `invalid multibyte string` on one holding
+  # invalid octets, which aborted the whole batch. The delimiters are ASCII, so
+  # a byte cut yields the same substrings as a character cut on every decodable
+  # element; an undecodable one is now split too, and the uniform RFC 3986
+  # gate rejects it (RURL-kmpnbvdl).
   split <- lapply(rest[eligible], function(x) {
-    hash <- regexpr("#", x, fixed = TRUE)[1L]
-    qmark <- regexpr("?", x, fixed = TRUE)[1L]
+    hash <- .first_byte_index(x, "#")
+    qmark <- .first_byte_index(x, "?")
+    n_bytes <- nchar(x, type = "bytes")
 
-    end_path <- nchar(x)
+    end_path <- n_bytes
     if (qmark > 0L) {
       end_path <- min(end_path, qmark - 1L)
     }
     if (hash > 0L) {
       end_path <- min(end_path, hash - 1L)
     }
-    path <- if (end_path > 0L) substr(x, 1L, end_path) else ""
+    path <- if (end_path > 0L) .byte_substring(x, 1L, end_path) else ""
 
     query <- NA_character_
-    if (qmark > 0L && (hash < 0L || qmark < hash)) {
-      query_end <- if (hash > 0L) hash - 1L else nchar(x)
-      query <- substr(x, qmark + 1L, query_end)
+    if (qmark > 0L && (hash == 0L || qmark < hash)) {
+      query_end <- if (hash > 0L) hash - 1L else n_bytes
+      query <- .byte_substring(x, qmark + 1L, query_end)
     }
 
     fragment <- NA_character_
     if (hash > 0L) {
-      fragment <- substr(x, hash + 1L, nchar(x))
+      fragment <- .byte_substring(x, hash + 1L, n_bytes)
     }
 
     c(path = path, query = query, fragment = fragment)
@@ -1469,9 +1477,15 @@
     start <- prefix[has_path] + first[has_path]
     tail <- stringi::stri_sub(pp, start)
     stop_rel <- stringi::stri_locate_first_regex(tail, "[?#]")[, 1L]
-    end <- ifelse(
-      is.na(stop_rel), stringi::stri_length(pp), start + stop_rel - 2L
-    )
+    # A path running to the end of the input is cut with `to = -1L` (the last
+    # character), not with `stri_length()`, which THROWS `invalid UTF-8 byte
+    # sequence detected` on an element holding invalid octets -- and it sat in
+    # an `ifelse()` branch that R evaluates over EVERY row once one row needs
+    # it, so one undecodable path, query or fragment aborted the whole batch
+    # (RURL-otrpfhmq). The locators and `stri_sub()` above are total over such
+    # elements; `._parse_stage_a_vec()` rejects the row the cut returns.
+    end <- start + stop_rel - 2L
+    end[is.na(stop_rel)] <- -1L
     raw[has_path] <- stringi::stri_sub(pp, start, end)
   }
   # This slice bypasses the parser's component pass by design (dot segments must
