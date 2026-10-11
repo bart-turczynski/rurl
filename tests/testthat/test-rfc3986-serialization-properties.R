@@ -86,6 +86,7 @@ rfc_prop_population <- local({
     "http://host/a/./b/../c", "http://host/../a", "http://host/./",
     "http://host/a/..", "http://host/a/.", "http://host//a//",
     "http://host/a/../../..", "foo:a/./b/../c", "foo:/a/./b",
+    "foo:a/../b", "foo:a/..//p", "foo:/a/..//p",
     # sec 6.2.2.2 unreserved
     "http://host/%7Euser", "http://host/%7euser", "http://host/%2F",
     "http://%7Euser@host/", "http://host/?%7E#%7E", "http://host/?%7e#%7e",
@@ -300,14 +301,17 @@ test_that("normalization decodes every triplet encoding an unreserved octet", {
 
 # --- N3 / N4: sec 6.2.2.3 path segments, sec 6.2.3 default port --------------
 
-test_that("normalization removes dot segments from a rooted path", {
-  # sec 6.2.2.3. A rootless path has no dot-segment meaning to remove, so the
-  # property is conditioned on a leading "/" -- the same condition the
-  # serializer applies, stated here independently from the output string.
+test_that("normalization removes dot segments from every path", {
+  # sec 6.2.2.3, rootless paths included (RUL-028). The exemption is not a
+  # deviation but RUL-027's sec 3.3 guard: a path with no authority keeps its
+  # dots where removing them would leave it starting with "//". It is listed
+  # by input, and each listed input must come back exactly as written.
+  sec_3_3_guard <- c("foo:a/..//p", "foo:/a/..//p")
   r <- rfc_prop_serialize("normalized")
   path <- rfc_out_path(r$output)
-  bad <- startsWith(path, "/") & grepl("(^|/)\\.\\.?(/|$)", path)
+  bad <- grepl("(^|/)\\.\\.?(/|$)", path) & !r$input %in% sec_3_3_guard
   expect_property(bad, r$input)
+  expect_identical(r$output[r$input %in% sec_3_3_guard], sec_3_3_guard)
 })
 
 test_that("normalization elides a port equal to the scheme default", {
@@ -373,7 +377,8 @@ test_that("the source posture is byte-preserving on the whole population", {
   # RURL-crrgaiel admitted 302 new `http://ho%XXst/p` rows that all preserved,
   # 316 -> 0 here. The accepted count rose 5664 -> 5966 (RURL-crrgaiel) ->
   # 5967 (RURL-uafjkaas, `urn:ietf:rfc:2648`) and does not move with this fix:
-  # acceptance is `pqf_bytes`'s question and the parser still asks it.
+  # acceptance is `pqf_bytes`'s question and the parser still asks it. It rose
+  # 5967 -> 5970 when RURL-yvaapvkg (RUL-028) added three dot-segment shapes.
 
   src <- function(x) serialize_url(x, standard = "rfc3986", form = "source")
   norm <- function(x) {
@@ -440,7 +445,7 @@ test_that("the source posture is byte-preserving on the whole population", {
   # come back quietly. `urn:ietf:rfc:2648` is still named (RURL-uafjkaas): it
   # is the one row whose acceptance the count depends on.
   pop <- rfc_prop_serialize("source")
-  expect_length(pop$input, 5967L)
+  expect_length(pop$input, 5970L)
   expect_identical(sum(pop$output != pop$input), 0L)
   expect_identical(src("urn:ietf:rfc:2648"), "urn:ietf:rfc:2648")
 })

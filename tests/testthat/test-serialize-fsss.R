@@ -208,14 +208,20 @@ test_that("the normalized posture applies section 6.2.2 and 6.2.3", {
   )
 })
 
-test_that("normalization leaves a rootless path's dot segments alone", {
-  # Section 6.2.2.3 has no rootless dot-segment meaning to remove.
-  expect_identical(
+test_that("normalization removes a rootless path's dot segments", {
+  # Section 6.2.2.3 has no rootless exemption, and section 5.2.2 runs
+  # remove_dot_segments on any reference with a scheme (RUL-028). A ".."
+  # that consumes the first segment leaves the path absolute.
+  rootless <- function(path) {
     r_row("normalized", host = NA_character_, host_kind = "absent",
-          authority_delimiter_present = FALSE, path = "a/./b",
-          rfc_path_form = "rootless"),
-    "http:a/./b"
-  )
+          authority_delimiter_present = FALSE, path = path,
+          rfc_path_form = "rootless")
+  }
+  expect_identical(rootless("a/./b"), "http:a/b")
+  expect_identical(rootless("a/../b"), "http:/b")
+  expect_identical(rootless("a/.."), "http:/")
+  # Section 3.3 still wins: "//p" would name a host, so the source stays.
+  expect_identical(rootless("a/..//p"), "http:a/..//p")
 })
 
 test_that("the RFC serializer keeps the undivided userinfo in both postures", {

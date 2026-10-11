@@ -3236,11 +3236,18 @@
     query <- .rfc_pct_normalize(.rfc_pct_encode_high(query))
     fragment <- .rfc_pct_normalize(.rfc_pct_encode_high(fragment))
     userinfo <- .rfc_pct_normalize(userinfo)
-    # Path segment normalization (section 6.2.2.3) applies here to a path that
-    # has an authority or is absolute. A rootless path is left as written; the
-    # general-route clean_url does run section 5.2.4 on one (RUL-027), and
-    # whether this form should follow is not settled.
-    seg_norm <- !is.na(path) & startsWith(path, "/")
+    # Path segment normalization (section 6.2.2.3) applies to every non-empty
+    # path, rootless included (RUL-028): section 5.2.2 runs remove_dot_segments
+    # on any reference that has a scheme, and Appendix D.2 applies it "to all
+    # URI reference paths". So `foo:a/../b` -> `foo:/b`, as resolve_url() and
+    # the rfc3986 bundle's general-route clean_url (RUL-027) render it. That is
+    # generic equivalence only; a scheme may disagree (section 6.1).
+    #
+    # Only a path holding a dot segment is handed to the scalar algorithm: on
+    # any other path it is the identity, and it is quadratic in the segment
+    # count, which a large rootless `data:` URI would otherwise pay. A `%2E`
+    # spelling was decoded to "." by the 6.2.2.2 step above.
+    seg_norm <- !is.na(path) & grepl("(^|/)\\.\\.?(/|$)", path)
     if (any(seg_norm)) {
       dotless <- vapply(
         path[seg_norm], ._remove_dot_segments, character(1), USE.NAMES = FALSE

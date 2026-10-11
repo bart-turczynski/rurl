@@ -101,8 +101,12 @@ preserved and the undivided \code{userinfo} slice is emitted verbatim (RFC
 \item{\verb{standard = "rfc3986", form = "normalized"}}{Adds RFC 3986 section
 6.2.2 syntax-based normalization (scheme and host case, percent-encoding
 triplet case and unreserved-octet decoding, dot-segment removal) and the
-section 6.2.3 default-port elision. A path with no authority keeps its
-dot segments where removing them would leave it starting with \verb{//},
+section 6.2.3 default-port elision. Dot segments are removed from a path
+without a leading \code{/} too (\code{foo:a/../b} becomes \verb{foo:/b}), as section
+5.2.2 does for any reference with a scheme; the result is equivalent
+in the generic syntax, which a scheme's own rules may not share. A path
+with no authority keeps its dot segments where removing them would
+leave it starting with \verb{//},
 which section 3.3 forbids (\verb{foo:/a/..//p} stays as written rather than
 becoming \verb{foo://p}, a URI with the host \code{p}).}
 }
