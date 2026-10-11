@@ -11,9 +11,9 @@
 # does not skip, so a twin that already gives the right answer shows the defect
 # is the mark's alone.
 
-bom <- "﻿"
-zwsp <- "​"
-beta <- "βόλοσ" # the U-label of xn--nxasmq6b
+bom <- "\ufeff"
+zwsp <- "\u200b"
+beta <- "\u03b2\u03cc\u03bb\u03bf\u03c3" # the U-label of xn--nxasmq6b
 
 # The parsed record under one arm. `NULL` omits the selector, as the default
 # call does; the NULL test below also passes it explicitly.
@@ -132,62 +132,72 @@ test_that("signature: the other encodings and the PSL columns do not move", {
 # --- Defect: the split read past the mark -------------------------------------
 
 test_that("the split keeps a mark that starts the first label", {
-  # DEFECT (pinned before the fix): stri_split_fixed() skips the mark.
+  # stri_split_fixed() skipped the mark, so the first label came back as
+  # `xn--nxasmq6b`. The fix splices an ASCII byte on first and cuts it off the
+  # first label as a byte; the label count, root dot included, is unchanged.
   expect_identical(
     .split_host_labels(paste0(bom, "xn--nxasmq6b.example"))[[1L]],
-    c("xn--nxasmq6b", "example")
+    c(paste0(bom, "xn--nxasmq6b"), "example")
   )
   expect_identical(.split_host_labels(paste0(bom, "a.b."))[[1L]],
-                   c("a", "b", ""))
-  expect_identical(.split_host_labels(bom)[[1L]], "")
-  expect_identical(.split_host_labels(paste0(bom, "."))[[1L]], c("", ""))
+                   c(paste0(bom, "a"), "b", ""))
+  expect_identical(.split_host_labels(bom)[[1L]], bom)
+  expect_identical(.split_host_labels(paste0(bom, "."))[[1L]], c(bom, ""))
+  expect_identical(.split_host_labels(paste0(bom, bom, "a"))[[1L]],
+                   paste0(bom, bom, "a"))
   expect_identical(
     .split_host_labels(c(paste0(bom, "a.b"), "c.d.", NA)),
-    list(c("a", "b"), c("c", "d", ""), NA_character_)
+    list(c(paste0(bom, "a"), "b"), c("c", "d", ""), NA_character_)
   )
 })
 
 test_that("a mark-led xn-- label is not decoded as an A-label", {
-  # DEFECT (pinned before the fix): both decode paths read the label as
-  # `xn--nxasmq6b` and decoded it; a plain first label lost the mark.
+  # Both decode paths read the label as `xn--nxasmq6b` and decoded it to the
+  # U-label, and a plain first label lost the mark. The label starts with
+  # U+FEFF, not the ACE prefix (RFC 5890 section 2.3.2.1), so it keeps its
+  # spelling, as its U+200B twin does.
   expect_identical(
     .punycode_to_unicode_vec(c(paste0(bom, "xn--nxasmq6b.example"),
                                paste0(bom, "a.example."))),
-    c(paste0(beta, ".example"), "a.example.")
+    c(paste0(bom, "xn--nxasmq6b.example"), paste0(bom, "a.example."))
   )
   double <- function(x, strict) punycoder::puny_decode(x, strict = strict)
   expect_identical(
     .punycode_to_unicode(paste0(bom, "xn--nxasmq6b.example"),
                          decode_fn = double),
-    paste0(beta, ".example")
+    paste0(bom, "xn--nxasmq6b.example")
   )
   for (arm in list("rfc3986", NULL)) {
     p <- arm_parse(paste0("http://", bom, "xn--nxasmq6b.example/"), arm,
                    host_encoding = "unicode")
-    expect_identical(p$host, paste0(beta, ".example"))
-    expect_identical(p$clean_url, paste0("http://", beta, ".example/"))
+    expect_identical(p$host, paste0(bom, "xn--nxasmq6b.example"))
+    expect_identical(p$clean_url,
+                     paste0("http://", bom, "xn--nxasmq6b.example/"))
     expect_identical(
       arm_parse(paste0("http://", bom, "a.example./"), arm,
                 host_encoding = "unicode")$host,
-      "a.example."
+      paste0(bom, "a.example.")
     )
   }
 })
 
-test_that("NULL: the unicode rendering drops the mark (ADR 0016)", {
+test_that("NULL: the unicode rendering keeps the mark (ADR 0016)", {
   # Witness: under the frozen selector the host of
-  # `http://﻿xn--nxasmq6b.com/` is `﻿xn--nxasmq6b.com` (keep, pinned
-  # above), and the unicode rendering returned `βόλος.com`: it dropped a code
-  # point and decoded a label that is not an A-label. No standard or
-  # documented contract sanctions that, so it is a default-path defect, not
-  # selector-caused drift. Omitting the selector and passing NULL agree.
+  # `http://\ufeffxn--nxasmq6b.com/` is `\ufeffxn--nxasmq6b.com` (keep, pinned
+  # above), and before the fix the unicode rendering returned the U-label
+  # `beta.com`: it dropped a code point and decoded a label that is not an
+  # A-label. No standard or documented contract sanctions that, so it is a
+  # default-path defect, not selector-caused drift. Omitting the selector and
+  # passing NULL agree.
   u <- paste0("http://", bom, "xn--nxasmq6b.com/")
   for (p in list(
     safe_parse_url(u, host_encoding = "unicode"),
     safe_parse_url(u, url_standard = NULL, host_encoding = "unicode")
   )) {
-    expect_identical(p$host, paste0(beta, ".com"))
-    expect_identical(p$clean_url, paste0("http://", beta, ".com/"))
+    expect_identical(p$host, paste0(bom, "xn--nxasmq6b.com"))
+    expect_identical(p$clean_url, paste0("http://", bom, "xn--nxasmq6b.com/"))
+    expect_identical(p$parse_status, "ok")
+    expect_identical(p$domain, paste0(beta, ".com"))
   }
   expect_identical(
     unname(get_host(u, host_encoding = "unicode")),

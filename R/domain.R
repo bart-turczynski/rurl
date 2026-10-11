@@ -120,8 +120,26 @@
 # equivalence gap is the reason to take the `stringi` side of it, not to avoid
 # it. Do not "align" this back to `strsplit` for consistency with the splits
 # ADR 0005 names.
+#
+# `stri_split_fixed()` also skips a U+FEFF that starts its input (ADR 0005, the
+# U+FEFF amendment), so a mark-led first label lost the mark, and
+# `\ufeffxn--nxasmq6b` was decoded as the A-label it does not spell
+# (RURL-tbmnnauj). For a host that starts with the mark, an ASCII `x` is
+# spliced on first, so the mark is no longer the first code point, and cut off
+# the first label as a byte afterwards. The label count is unchanged.
 .split_host_labels <- function(hosts) {
-  stringi::stri_split_fixed(hosts, ".")
+  labels <- stringi::stri_split_fixed(hosts, ".")
+  bom <- .starts_with_bom(hosts)
+  if (any(bom)) {
+    labels[bom] <- lapply(
+      stringi::stri_split_fixed(paste0("x", hosts[bom]), "."),
+      function(parts) {
+        parts[1L] <- .byte_substring(parts[1L], 2L)
+        parts
+      }
+    )
+  }
+  labels
 }
 
 # Internal helper to decode Punycode domain parts to Unicode. With the default
