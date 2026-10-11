@@ -2638,6 +2638,26 @@ safe_parse_urls <- function(url,
   # for opaque paths is ADR 0011's separate escape hatch (deferred to L3b/L4b);
   # L3c only skips the hierarchical transforms here.
   if (general_acceptance) {
+    # A general-routed row's path gets the dot step `path_normalization`
+    # asks for but never slash collapsing (RURL-kbjzwrkt): ADR 0012 D2 keeps
+    # that hierarchical transform off a non-special path, and RUL-027 leaves
+    # the general-route clean_url only the identity and dot steps, so the
+    # `path` column collapsed `//` its own clean_url kept. Reachable only
+    # through a named profile plus an explicit dial (ADR 0012 D6); never
+    # under `url_standard = NULL`, which rejects `scheme_acceptance =
+    # "general"`.
+    general_norm <- switch(opts$path_normalization,
+      both = "dot_segments",
+      collapse_slashes = "none",
+      opts$path_normalization
+    )
+    if (any(gp) && !identical(general_norm, opts$path_normalization)) {
+      path_final[gp] <- .normalize_path_vec(
+        a$raw_path[gp], opts$path_encoding, general_norm,
+        opts$index_page_handling, opts$trailing_slash_handling,
+        path_identity = opts$path_identity
+      )
+    }
     revert <- !elig$path_eligible
     path_final[revert] <- a$raw_path[revert]
   }

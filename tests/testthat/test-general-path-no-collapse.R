@@ -103,44 +103,50 @@ test_that("dot_segments and none already leave the slashes alone", {
   }
 })
 
-# --- The defect ---------------------------------------------------------------
+# --- The fix ------------------------------------------------------------------
+# Each test below was a DEFECT witness pinning the collapsed path (`/a/b/c`,
+# `/a/b/./c`) before RURL-kbjzwrkt.
 
-test_that("DEFECT: both collapses the path column of a general-routed row", {
-  # Today's (wrong) values: the `path` column collapses `//` that clean_url
-  # keeps. RURL-kbjzwrkt flips these.
+test_that("both: the general path column keeps the slashes clean_url keeps", {
   url <- "foo://h/a//b/./c"
   for (prof in c("rfc-syntax", "whatwg", "browser")) {
-    expect_identical(
-      safe_parse_urls(url, profile = prof, path_normalization = "both")$path,
-      "/a/b/c", label = prof
-    )
+    r <- safe_parse_urls(url, profile = prof, path_normalization = "both")
+    expect_identical(r$path, "/a//b/c", label = prof)
+    expect_identical(r$clean_url, paste0("foo://h", r$path), label = prof)
   }
-  expect_identical(
-    safe_parse_urls(url, profile = "browser", url_standard = "rfc3986",
-                    path_normalization = "both")$path,
-    "/a/b/c"
-  )
+  r <- safe_parse_urls(url, profile = "browser", url_standard = "rfc3986",
+                       path_normalization = "both")
+  expect_identical(r$path, "/a//b/c")
+  expect_identical(r$clean_url, "foo://h/a//b/c")
 })
 
-test_that("DEFECT: collapse_slashes collapses the general path column", {
+test_that("collapse_slashes: the general path column matches none", {
   url <- "foo://h/a//b/./c"
   for (prof in c("rfc-syntax", "whatwg")) {
     expect_identical(
       safe_parse_urls(url, profile = prof,
                       path_normalization = "collapse_slashes")$path,
-      "/a/b/./c", label = prof
+      safe_parse_urls(url, profile = prof, path_normalization = "none")$path,
+      label = prof
     )
   }
+  # rfc-syntax: no dot step either, so the path matches clean_url exactly.
+  r <- safe_parse_urls(url, profile = "rfc-syntax",
+                       path_normalization = "collapse_slashes")
+  expect_identical(r$path, "/a//b/./c")
+  expect_identical(r$clean_url, "foo://h/a//b/./c")
 })
 
-test_that("DEFECT: every general-routed row under rfc-syntax collapses", {
+test_that("every general-routed row under rfc-syntax keeps its slashes", {
   # Under rfc3986, ws:, file:, rootless paths and the odd-slash http: rows
   # take the general route and its generic serializer.
   urls <- c("ws://h/a//b/./c", "file:///a//b/./c", "foo:a//b/./c",
             "http:/a//b/./c", "urn:a//b")
   r <- safe_parse_urls(urls, profile = "rfc-syntax",
                        path_normalization = "both")
-  expect_identical(r$path, c("/a/b/c", "/a/b/c", "a/b/c", "/a/b/c", "a/b"))
+  expect_identical(
+    r$path, c("/a//b/c", "/a//b/c", "a//b/c", "/a//b/c", "a//b")
+  )
   expect_identical(
     r$clean_url,
     c("ws://h/a//b/c", "file:///a//b/c", "foo:a//b/c", "http:/a//b/c",
@@ -148,18 +154,18 @@ test_that("DEFECT: every general-routed row under rfc-syntax collapses", {
   )
 })
 
-test_that("DEFECT: seo and canonical with general acceptance collapse too", {
+test_that("seo and canonical with general acceptance keep the slashes", {
   for (prof in c("seo", "canonical")) {
     r <- safe_parse_urls("foo://h/a//b/./c", profile = prof,
                          scheme_acceptance = "general",
                          path_normalization = "both")
-    expect_identical(r$path, "/a/b/c", label = prof)
+    expect_identical(r$path, "/a//b/c", label = prof)
   }
 })
 
-test_that("DEFECT: a mixed call collapses only by scheme, not by route", {
+test_that("a mixed call collapses by route, row by row", {
   r <- safe_parse_urls(c("foo://h/a//b/./c", "http://h.com/a//b/./c"),
                        profile = "rfc-syntax", path_normalization = "both")
-  expect_identical(r$path, c("/a/b/c", "/a/b/c"))
+  expect_identical(r$path, c("/a//b/c", "/a/b/c"))
   expect_identical(r$clean_url, c("foo://h/a//b/c", "http://h.com/a/b/c"))
 })
