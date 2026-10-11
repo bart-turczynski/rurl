@@ -1183,10 +1183,17 @@ get_userinfo <- function(url, protocol_handling = "keep",
     return(result)
   }
 
+  # stri_sub() reads past a U+FEFF that starts the host while stri_length()
+  # counts it, so `\ufeffh.example.com` lost the mark and gave `h`
+  # (RURL-fyiadctm; ADR 0005's U+FEFF amendment). A host led by the mark is cut
+  # in bytes instead, where endsWith() and the byte lengths all count it. The
+  # other rows keep the one vectorized stringi cut: the byte cut loops per
+  # element over a non-ASCII host, which more than doubled the cost on IDN
+  # input.
   suffix <- character(n)
   suffix[usable] <- paste0(".", domain_l[usable])
   ends <- logical(n)
-  ends[usable] <- stringi::stri_endswith_fixed(host_l[usable], suffix[usable])
+  ends[usable] <- endsWith(host_l[usable], suffix[usable])
 
   take <- which(ends)
   sub_part <- stringi::stri_sub(
@@ -1194,6 +1201,14 @@ get_userinfo <- function(url, protocol_handling = "keep",
     1,
     stringi::stri_length(host_l[take]) - stringi::stri_length(suffix[take])
   )
+  lead <- .starts_with_bom(host_l[take])
+  if (any(lead)) {
+    sub_part[lead] <- .byte_substring_vec(
+      host_l[take][lead],
+      1L,
+      .byte_length(host_l[take][lead]) - .byte_length(suffix[take][lead])
+    )
+  }
   have_sub <- take[nzchar(sub_part)]
   if (length(have_sub) == 0L) {
     return(result)
