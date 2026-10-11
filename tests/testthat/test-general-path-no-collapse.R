@@ -163,6 +163,29 @@ test_that("seo and canonical with general acceptance keep the slashes", {
   }
 })
 
+test_that("the general path column skips index, trailing-slash and case steps", {
+  # RUL-027: only the identity and dot steps reach the general-route
+  # clean_url, so the path column must not strip index pages, strip trailing
+  # slashes or fold case either (RURL-kbjzwrkt review).
+  urls <- c("foo://h/a/index.html", "foo://h/a/", "foo://h/A//B")
+  r <- safe_parse_urls(urls, profile = "rfc-syntax",
+                       path_normalization = "both",
+                       index_page_handling = "strip",
+                       trailing_slash_handling = "strip",
+                       case_handling = "lower")
+  expect_identical(r$path, c("/a/index.html", "/a/", "/A//B"))
+  expect_identical(r$clean_url,
+                   c("foo://h/a/index.html", "foo://h/a/", "foo://h/A//B"))
+  # Control: the special-scheme route still takes every step.
+  s <- safe_parse_urls(c("http://h.com/a/index.html", "http://h.com/A//B/"),
+                       profile = "rfc-syntax",
+                       path_normalization = "both",
+                       index_page_handling = "strip",
+                       trailing_slash_handling = "strip",
+                       case_handling = "lower")
+  expect_identical(s$path, c("/a", "/a/b"))
+})
+
 test_that("a mixed call collapses by route, row by row", {
   r <- safe_parse_urls(c("foo://h/a//b/./c", "http://h.com/a//b/./c"),
                        profile = "rfc-syntax", path_normalization = "both")
