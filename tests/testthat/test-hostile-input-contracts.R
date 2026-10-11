@@ -71,7 +71,7 @@ known_failures <- rbind(
   # the query throws "missing value where TRUE/FALSE needed" out of the
   # whole call (strsplit() on the query).
   kf(c("safe_parse_urls", "get_clean_url"), "rfc3986", "invalid_utf8",
-     "query", "UNFILED-1")
+     "query", "RURL-kzbqvxpk")
 )
 
 # Cases outside the matrix: inputs too costly to run for every export, each
