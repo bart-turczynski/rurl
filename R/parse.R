@@ -2645,9 +2645,10 @@ safe_parse_urls <- function(url,
     # depend on an HTTP(S) URL, and RUL-027 leaves the general-route clean_url
     # only the identity and dot steps, so the `path` column collapsed `//`,
     # stripped `index.html` and folded case that its own clean_url kept.
-    # Reachable only through a named profile plus an explicit dial (ADR 0012
-    # D6); never under `url_standard = NULL`, which rejects
-    # `scheme_acceptance = "general"`.
+    # The governed dials reach here only through a named profile plus an
+    # explicit override (ADR 0012 D6); index and trailing-slash handling also
+    # under a direct `url_standard`. Never under `url_standard = NULL`, which
+    # rejects `scheme_acceptance = "general"`.
     general_norm <- switch(opts$path_normalization,
       both = "dot_segments",
       collapse_slashes = "none",
