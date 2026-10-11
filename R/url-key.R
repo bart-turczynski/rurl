@@ -178,7 +178,7 @@
   }
   out <- rep("inferred", length(u))
   # A `*_regex()` detector, not stri_startswith_fixed(): the fixed matcher
-  # reads past a U+FEFF that starts its input, so `﻿//h/p` read as
+  # reads past a U+FEFF that starts its input, so `\ufeff//h/p` read as
   # scheme-relative while its U+200B twin read inferred. The detector counts
   # the mark, as the scheme test below does (ADR 0005; RURL-dquaxcaz).
   rel <- stringi::stri_detect_regex(u, "^//")
@@ -249,7 +249,7 @@
 #
 # The transcode is fed an ASCII `x` spliced on first and cut off after it.
 # stri_enc_toutf8() reads a U+FEFF that starts its input as a byte-order mark
-# and drops it, so `﻿h.example.com` framed as `13:h.example.com` and the
+# and drops it, so `\ufeffh.example.com` framed as `13:h.example.com` and the
 # key collided with its unmarked twin's. The mark is field data (ADR 0005), so
 # it must reach the frame; the cut is one ASCII character, hence one byte, and
 # stri_numbytes() counts the mark.

@@ -14,8 +14,8 @@
 # only the `whatwg` and `rfc3986` arms. `.url_key_scheme_presence()` takes a
 # `url_standard`, so its guard is also asserted with `NULL` passed directly.
 
-bom <- "﻿"
-zwsp <- "​"
+bom <- "\ufeff"
+zwsp <- "\u200b"
 
 key <- function(u, std) {
   as.character(get_url_key(u, url_key_policy(std)))
@@ -101,7 +101,7 @@ test_that("negative controls: no mark, a mark not first, NA and empty", {
 
 test_that("whatwg: a special host maps the mark to nothing, so twins agree", {
   # UTS #46 maps U+FEFF and U+200B to nothing, and the WHATWG host parser
-  # runs domain to ASCII, so `﻿h.example.com/p` IS `h.example.com/p`
+  # runs domain to ASCII, so `\ufeffh.example.com/p` IS `h.example.com/p`
   # under this policy. That collision is the standard's, not the framing's.
   k <- key(c(paste0(bom, "h.example.com/p"), paste0(zwsp, "h.example.com/p"),
              "h.example.com/p"), "whatwg")
@@ -165,7 +165,7 @@ test_that("the key has no NULL arm, and the version is not bumped again", {
 
 test_that("the frame keeps a mark that starts the field", {
   # stri_enc_toutf8() read the mark as a byte-order mark and dropped it, so
-  # `﻿ab` framed as `2:ab`, the frame of `ab`. It is three more bytes.
+  # `\ufeffab` framed as `2:ab`, the frame of `ab`. It is three more bytes.
   expect_identical(.url_key_frame(list(paste0(bom, "ab"))),
                    paste0("5:", bom, "ab"))
   expect_identical(.url_key_frame(list(bom)), paste0("3:", bom))
@@ -197,7 +197,7 @@ test_that("a mark-led field no longer collides with its unmarked twin", {
 })
 
 test_that("scheme presence reads a mark-led `//` as written", {
-  # Latent: stri_startswith_fixed() read past the mark, so `﻿//h/p` read
+  # Latent: stri_startswith_fixed() read past the mark, so `\ufeff//h/p` read
   # as scheme-relative where its twin reads inferred. The row fails the parse
   # (pinned above), so no key moves.
   for (std in list(NULL, "rfc3986", "whatwg")) {
