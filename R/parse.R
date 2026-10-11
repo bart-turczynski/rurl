@@ -2383,6 +2383,25 @@ safe_parse_urls <- function(url,
     raw_user[is_mailto_gen] <- rp$user
   }
 
+  # A path whose octets are not valid UTF-8 is a parse failure
+  # (RURL-otrpfhmq). It used to THROW out of the whole batch instead, from
+  # `.extract_raw_path_vec()` (and, under `rfc3986`, from
+  # `.rfc3986_path_rootless_vec()`). Failing the row is the RURL-kmpnbvdl
+  # contract: under `rfc3986` the uniform grammar gate already rejects these
+  # rows, and under the no-selector default no reading of the octets is
+  # sanctioned -- a "keep" path would hand Stage B bytes its path steps cannot
+  # read. `whatwg` never gets here: it parses a scalar-value string, the octet
+  # already read as U+FFFD. `validUTF8()` is a byte test, so the verdict is
+  # the same in every locale. The path is blanked so Stage B, which runs over
+  # null rows too, never reads it. Every route has installed its path by here.
+  # "latin1" is exempt, as in `.grepl_decodable()`: every octet decodes there.
+  path_undecodable <- !is.na(raw_path) & !validUTF8(raw_path) &
+    Encoding(raw_path) != "latin1"
+  if (any(path_undecodable)) {
+    null_row <- null_row | path_undecodable
+    raw_path[path_undecodable] <- NA_character_
+  }
+
   # Every host source (web route, shim restore, `file:`, the general/opaque
   # parser,
   # mailto) has merged into `raw_host` by here, so this is the single vector-
