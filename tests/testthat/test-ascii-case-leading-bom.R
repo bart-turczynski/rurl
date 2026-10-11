@@ -83,56 +83,81 @@ test_that("whatwg: the host parser drops the mark before the case map", {
   }
 })
 
-# --- Defect: one rejected row drops every other row's leading mark ------------
+# --- Fixed: one rejected row no longer drops another row's leading mark -------
 
 test_that("the fallback keeps every element's leading mark", {
-  skip_if_not(chartr_rejects(), "chartr() accepts U+FFFF on this build")
-  # DEFECT: the mark of the second element is dropped because the first
-  # element sent the whole vector to stri_replace_all_fixed().
-  expect_identical(.ascii_tolower(c(poison_chr, paste0(bom, "A"))),
-                   c("\uffffa", "a"))
-  expect_identical(.ascii_toupper(c("\uffffa", paste0(bom, "a"))),
-                   c("\uffffA", "A"))
-  # DEFECT: two leading marks lose one.
-  expect_identical(.ascii_tolower(c(poison_chr, paste0(bom, bom, "A"))),
-                   c("\uffffa", paste0(bom, "a")))
+  # Called directly, so this holds on a build whose chartr() takes U+FFFF.
+  # Before RURL-bqhfznkg stri_replace_all_fixed() read past the first mark:
+  # "\ufeffA" came back as "a" and "\ufeff\ufeffA" as "\ufeffa".
+  x <- c("\uffffA", "\ufeffA", "\ufeff\ufeffA", NA, "", "\u200bA", "A\ufeffB")
+  expect_identical(
+    .ascii_case_fallback(x, LETTERS, letters),
+    c("\uffffa", "\ufeffa", "\ufeff\ufeffa", NA, "", "\u200ba", "a\ufeffb")
+  )
+  expect_identical(
+    .ascii_case_fallback(c("\ufeffa", "\ufeff0z"), letters, LETTERS),
+    c("\ufeffA", "\ufeff0Z")
+  )
+  expect_identical(.ascii_case_fallback(character(0), LETTERS, letters),
+                   character(0))
 })
 
-test_that("one rejected row changes another row's public output", {
+test_that("one rejected element does not change another element's result", {
   skip_if_not(chartr_rejects(), "chartr() accepts U+FFFF on this build")
-  # DEFECT: alone, the row keeps its mark (pinned above); next to a row
-  # chartr() rejects it loses it.
-  expect_identical(get_clean_url(c(mark_url, poison_url))[[1L]],
-                   "http://h.example/")
+  expect_identical(.ascii_tolower(c(poison_chr, paste0(bom, "A"))),
+                   c("\uffffa", paste0(bom, "a")))
+  expect_identical(.ascii_toupper(c("\uffffa", paste0(bom, "a"))),
+                   c("\uffffA", paste0(bom, "A")))
+  expect_identical(.ascii_tolower(c(poison_chr, paste0(bom, bom, "A"))),
+                   c("\uffffa", paste0(bom, bom, "a")))
+  # Each element as if it were alone in the vector.
+  x <- c(poison_chr, paste0(bom, "AB"), paste0(zwsp, "AB"), "A\ufeffB", NA)
+  expect_identical(.ascii_tolower(x),
+                   vapply(x, .ascii_tolower, character(1L),
+                          USE.NAMES = FALSE))
+})
+
+test_that("one rejected row no longer changes another row's public output", {
+  skip_if_not(chartr_rejects(), "chartr() accepts U+FFFF on this build")
+  # Each row matches its value alone (pinned above). Before RURL-bqhfznkg the
+  # mark-led row came back as `http://h.example/`, host `h.example`.
+  expect_identical(get_clean_url(c(mark_url, poison_url)),
+                   c(paste0("http://", bom, "h.example/"), poison_url))
   expect_identical(
     serialize_url(c(mark_url, poison_url), standard = "rfc3986",
                   form = "normalized")[[1L]],
-    "http://h.example/"
+    paste0("http://", bom, "h.example/")
   )
   expect_identical(
     safe_parse_urls(c(mark_url, poison_url), url_standard = "rfc3986")$host,
-    c("h.example", "\uffff.example")
+    c(paste0(bom, "h.example"), "\uffff.example")
   )
 })
 
 test_that("NULL: the frozen selector reaches the fallback (ADR 0016)", {
   skip_if_not(chartr_rejects(), "chartr() accepts U+FFFF on this build")
   # Witness: under the frozen selector, the default call and an explicit NULL
-  # agree, and both drop the mark of a row that shares its vector with a row
-  # chartr() rejects. DEFECT: the row's own value is `http://\ufeffh.example/`.
+  # agree. Before RURL-bqhfznkg both returned host `h.example` and clean_url
+  # `http://h.example/` for the mark-led row whenever its vector held a row
+  # chartr() rejects, while the row alone kept the mark. No standard or
+  # documented contract lets one row change another, so this is a default-path
+  # defect, not selector-caused drift.
   for (p in list(
     safe_parse_urls(c(mark_url, poison_url)),
     safe_parse_urls(c(mark_url, poison_url), url_standard = NULL)
   )) {
-    expect_identical(p$host[[1L]], "h.example")
-    expect_identical(p$clean_url[[1L]], "http://h.example/")
+    expect_identical(p$host[[1L]], paste0(bom, "h.example"))
+    expect_identical(p$clean_url[[1L]], paste0("http://", bom, "h.example/"))
   }
-  # Signature: only `host` and `clean_url` of the mark-led row move, and only
-  # when the vector holds a row chartr() rejects. Every other column of that
-  # row, and the rejected row itself, match the rows parsed alone.
+  # Signature: only `host` and `clean_url` of a row whose host starts with
+  # U+FEFF move, only when its vector holds a row chartr() rejects, and only
+  # to the row's own value alone. Every column of both rows now matches the
+  # rows parsed alone; the status never moved. Per arm: whatwg was already
+  # right (UTS-46 drops the mark first, pinned above); rfc3986 reads the same
+  # host and moves the same way (pinned in the previous test).
   alone <- safe_parse_urls(mark_url)
   mixed <- safe_parse_urls(c(mark_url, poison_url))
-  for (col in setdiff(names(alone), c("host", "clean_url"))) {
+  for (col in names(alone)) {
     expect_identical(mixed[[col]][[1L]], alone[[col]], label = col)
   }
   poison_alone <- safe_parse_urls(poison_url)

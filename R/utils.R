@@ -303,23 +303,34 @@
 .ascii_tolower <- function(x) {
   tryCatch(
     chartr(.ASCII_UPPER, .ASCII_LOWER, x),
-    error = function(e) {
-      stringi::stri_replace_all_fixed(x, LETTERS, letters,
-        vectorize_all = FALSE
-      )
-    }
+    error = function(e) .ascii_case_fallback(x, LETTERS, letters)
   )
 }
 
 .ascii_toupper <- function(x) {
   tryCatch(
     chartr(.ASCII_LOWER, .ASCII_UPPER, x),
-    error = function(e) {
-      stringi::stri_replace_all_fixed(x, letters, LETTERS,
-        vectorize_all = FALSE
-      )
-    }
+    error = function(e) .ascii_case_fallback(x, letters, LETTERS)
   )
+}
+
+# The fallback above, for a vector `chartr()` rejected. `chartr()` throws for
+# the whole vector, so EVERY element lands here, not only the one it refused,
+# and each must come back exactly as `chartr()` would have returned it
+# (RURL-bqhfznkg). `stri_replace_all_fixed()` reads past a U+FEFF that starts
+# its input (see `.starts_with_bom()`), so a mark-led element would lose the
+# mark because some other element held a U+FFFF. Those elements get an ASCII
+# "0" spliced on first -- not a letter, so no replacement touches it -- and the
+# byte cut off afterwards, so the fixed call sees the mark mid-string, where it
+# counts it. A regex replacer would also count the mark, but it rewrites the
+# bytes of an invalid UTF-8 element to U+FFFD, which the fixed call does not.
+.ascii_case_fallback <- function(x, from, to) {
+  bom_led <- .starts_with_bom(x)
+  x[bom_led] <- paste0("0", x[bom_led])
+  out <- stringi::stri_replace_all_fixed(x, from, to, vectorize_all = FALSE)
+  out[bom_led] <- vapply(out[bom_led], .byte_substring, character(1L),
+                         first = 2L, USE.NAMES = FALSE)
+  out
 }
 
 # Explicit non-tailoring ICU locale for the sites where the user has asked for
