@@ -2061,8 +2061,9 @@
 }
 
 # Phase 6 (vector): apply the www-prefix policy to (non-IP) hosts.
+# `url_standard` reaches only the "if_no_subdomain" branch (RURL-opwjlnla).
 .apply_www_policy_vec <- function(raw_host, www_handling, is_ip_host,
-                                  engine = NULL) {
+                                  engine = NULL, url_standard = NULL) {
   final_host <- raw_host
   elig <- !is_ip_host & !is.na(raw_host) & raw_host != ""
   if (!any(elig)) {
@@ -2095,7 +2096,9 @@
       final_host[no_www] <- paste0("www.", raw_host[no_www])
     }
   } else if (www_handling == "if_no_subdomain") {
-    final_host[elig] <- .apply_www_if_no_subdomain_vec(raw_host[elig], engine)
+    final_host[elig] <- .apply_www_if_no_subdomain_vec(
+      raw_host[elig], engine, url_standard
+    )
   }
   final_host
 }
@@ -2105,7 +2108,8 @@
 # The STRUCTURAL decision uses pslr's canonical decomposition (batched over the
 # eligible hosts) so an A-label host and its Unicode equivalent take the same
 # branch; the emitted host keeps the input spelling (candidate_host).
-.apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL) {
+.apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL,
+                                           url_standard = NULL) {
   ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
   lower <- .ascii_tolower(raw_host)
 
@@ -2125,10 +2129,17 @@
   # that starts its input (see .starts_with_bom()): the mark-led apex
   # "<U+FEFF>www.com" is not www-prefixed, so it gets "www." like its U+200B
   # twin (RURL-opwjlnla). A row that passes starts with "www.", so the stringi
-  # match below cannot meet the mark.
+  # match below cannot meet the mark. Except under `whatwg`: that arm keeps
+  # the stringi reading, the match included, so its output does not move. The
+  # policy reads the host there before UTS-46 maps the mark away, which is
+  # RURL-fobwctml's to settle.
   host_for_domain_check <- candidate_host
   cand_lower <- .ascii_tolower(candidate_host)
-  cw <- startsWith(cand_lower, "www.")
+  cw <- if (.is_whatwg(url_standard)) {
+    stringi::stri_startswith_fixed(cand_lower, "www.")
+  } else {
+    startsWith(cand_lower, "www.")
+  }
   cw[is.na(cw)] <- FALSE
   if (any(cw)) {
     match_res_bare <- stringi::stri_match_first_regex(
@@ -2282,7 +2293,7 @@
 # runs via vapply on the affected hosts only.
 .apply_subdomain_policy_vec <- function(final_host, domain,
                                         subdomain_levels_to_keep, is_ip_host,
-                                        engine = NULL) {
+                                        engine = NULL, url_standard = NULL) {
   if (is.null(subdomain_levels_to_keep)) {
     return(final_host)
   }
@@ -2295,16 +2306,35 @@
   idx <- which(can_trim)
   fh <- final_host[idx]
   lower <- .ascii_tolower(fh)
-  # Base R on bytes: stri_startswith_fixed() and stri_sub() read past a U+FEFF
-  # that starts their input (see .starts_with_bom()), so "<U+FEFF>www." read as
-  # the www prefix and the mark-led label was never trimmed. That label is a
-  # subdomain label like its U+200B twin's (RURL-opwjlnla). The prefix is four
-  # ASCII bytes, so the cut is a byte cut.
-  has_www_prefix <- startsWith(lower, "www.")
+  # `startsWith()`, not stri_startswith_fixed(), which reads past a U+FEFF
+  # that starts its input (see .starts_with_bom()): "<U+FEFF>www." read as the
+  # www prefix, and stri_sub() then cut the mark off with it. The mark-led
+  # label is a subdomain label like its U+200B twin's (RURL-opwjlnla). A row
+  # that passes starts with "www.", so stri_sub() cannot meet the mark.
+  # Under `whatwg` the policy reads the host before UTS-46 maps the mark away;
+  # that arm keeps the stringi reading, so its output does not move
+  # (RURL-fobwctml owns the pre-mapping read).
+  whatwg <- .is_whatwg(url_standard)
+  has_www_prefix <- if (whatwg) {
+    stringi::stri_startswith_fixed(lower, "www.")
+  } else {
+    startsWith(lower, "www.")
+  }
+  has_www_prefix[is.na(has_www_prefix)] <- FALSE
+  # The rows the stringi reading took for www-prefixed: one mark, then "www.".
+  # When the policy trims none of their labels they stay as written, rather
+  # than take the rebuild below, which lowercases the registrable labels; the
+  # stringi reading left "<U+FEFF>WWW.Example.com" as written too.
+  bom_www <- !whatwg & .starts_with_bom(fh)
+  if (any(bom_www)) {
+    bom_www[bom_www] <- startsWith(
+      .byte_substring_vec(lower[bom_www], 4L), "www."
+    )
+  }
 
   host_part <- fh
   if (any(has_www_prefix)) {
-    host_part[has_www_prefix] <- .byte_substring_vec(fh[has_www_prefix], 5L)
+    host_part[has_www_prefix] <- stringi::stri_sub(fh[has_www_prefix], 5L)
   }
 
   decomp <- .psl_suffix_extract(host_part, "all", engine)
@@ -2317,7 +2347,8 @@
   num_sub_labels <- lengths(sub_split)
   num_raw_labels <- lengths(raw_split)
 
-  act <- has_subdomain & (num_raw_labels > num_sub_labels)
+  act <- has_subdomain & (num_raw_labels > num_sub_labels) &
+    !(bom_www & subdomain_levels_to_keep >= num_sub_labels)
   act_pos <- which(act)
   if (length(act_pos) > 0L) {
     slk <- subdomain_levels_to_keep

@@ -23,6 +23,11 @@ arm_parse <- function(url, arm, ...) {
   }
 }
 
+# The columns a fix may not move: all but host, clean_url and `also`.
+unmoved_cols <- function(p, also = character(0)) {
+  p[setdiff(names(p), c("host", "clean_url", also))]
+}
+
 # `case_handling` is governed by both selectors, so a named arm reaches
 # `"upper"` or `"lower"` only through a profile with an explicit override
 # (ADR 0012 D6): `profile = "rfc-syntax"` is the rfc3986 arm.
@@ -211,9 +216,31 @@ test_that("NULL: the case policy keeps the mark (ADR 0016)", {
   expect_identical(p$clean_url, NA_character_)
   expect_identical(safe_parse_urls(u_host)$host, paste0(bom, "ab.example"))
   expect_identical(safe_parse_urls(u_path)$path, paste0(bom, "aB"))
+  # The case policy writes only host, path, scheme and clean_url, so every
+  # other column of a moved row equals the `keep` parse, which the fix does
+  # not reach.
+  for (ch in c("upper", "lower")) {
+    for (u in c(u_host, u_path, paste0("http://", bom, "www.a.example.com/"))) {
+      p <- safe_parse_urls(u, case_handling = ch)
+      expect_identical(unmoved_cols(p, c("path", "scheme")),
+                       unmoved_cols(safe_parse_urls(u, case_handling = "keep"),
+                                    c("path", "scheme")),
+                       label = paste(ch, u))
+    }
+  }
 })
 
 # --- Subdomain trim -----------------------------------------------------------
+
+# Under whatwg the subdomain and www policies read the host before UTS-46 maps
+# the mark away; this fix leaves that arm as it was (RURL-fobwctml owns the
+# pre-mapping read), so these are pinned for the arm and for the profile.
+whatwg_parse <- function(url, arm, ...) {
+  switch(arm,
+    std = safe_parse_urls(url, url_standard = "whatwg", ...),
+    profile = safe_parse_urls(url, profile = "whatwg", ...)
+  )
+}
 
 test_that("subdomain trim: the U+200B twins and the negative controls", {
   # The twin's mark-led first label is a subdomain label, not the `www.`
@@ -246,24 +273,110 @@ test_that("subdomain trim: the U+200B twins and the negative controls", {
 })
 
 test_that("subdomain trim reads a mark-led www label as a subdomain label", {
-  # stri_startswith_fixed() read `www.` past the mark, so the trim kept the
-  # whole host as if it were www-prefixed. The mark-led label is a subdomain
-  # label, trimmed like its U+200B twin.
+  # stri_startswith_fixed() read `www.` past the mark, so the trim took the
+  # host for www-prefixed: stri_sub() then cut the mark off with `www.`. The
+  # mark-led label is a subdomain label, trimmed like its U+200B twin.
   expect_identical(
     .apply_subdomain_policy_vec(
       c(paste0(bom, "www.example.com"), paste0(bom, "WWW.example.com"),
-        paste0(zwsp, "www.example.com")),
-      rep("example.com", 3L), 0, rep(FALSE, 3L)
+        paste0(zwsp, "www.example.com"), paste0(bom, "www.a.example.com")),
+      rep("example.com", 4L), 0, rep(FALSE, 4L)
     ),
-    rep("example.com", 3L)
+    rep("example.com", 4L)
   )
-  for (an in names(arms)) {
-    p <- arm_parse(paste0("http://", bom, "www.example.com/"), arms[[an]],
-                   subdomain_levels_to_keep = 0)
-    expect_identical(
-      p$host, "example.com", label = an
-    )
+  expect_identical(
+    .apply_subdomain_policy_vec(paste0(bom, "www.a.example.com"),
+                                "example.com", 1, FALSE),
+    "a.example.com"
+  )
+  for (an in c("rfc3986", "NULL")) {
+    sub_host <- function(u, k) {
+      arm_parse(u, arms[[an]], subdomain_levels_to_keep = k)$host
+    }
+    # A host led by the mark, `www.` and a registrable domain: the trim kept
+    # it whole; keep = 0 now drops the mark-led label.
+    expect_identical(sub_host(paste0("http://", bom, "www.example.com/"), 0),
+                     "example.com", label = an)
+    expect_identical(sub_host(paste0("http://", bom, "www.example.com/"), 1),
+                     paste0(bom, "www.example.com"), label = an)
+    # With more labels, the trim dropped the mark, kept `www.` and trimmed
+    # the rest (`www.example.com`, `www.a.example.com`). The mark-led label
+    # now counts and is trimmed first; a keep that trims nothing leaves the
+    # host as written (it was `www.a.example.com`).
+    u <- paste0("http://", bom, "www.a.example.com/")
+    expect_identical(sub_host(u, 0), "example.com", label = an)
+    expect_identical(sub_host(u, 1), "a.example.com", label = an)
+    expect_identical(sub_host(u, 2), paste0(bom, "www.a.example.com"),
+                     label = an)
+    expect_identical(sub_host(u, 5), paste0(bom, "www.a.example.com"),
+                     label = an)
   }
+})
+
+test_that("rfc-syntax: a mark-led www host left whole keeps its case", {
+  # The trim rebuilds a host it acts on and lowercases its registrable labels.
+  # The stringi reading never rebuilt `<U+FEFF>WWW.Example.com`, as it found
+  # no subdomain past `www.`; a keep that trims none of its labels still
+  # leaves it as written. Only a row the policy trims is rebuilt.
+  u <- paste0("http://", bom, "WWW.Example.com/A")
+  rs <- function(u, k) {
+    safe_parse_urls(u, profile = "rfc-syntax", subdomain_levels_to_keep = k)
+  }
+  for (k in c(1, 2, 5)) {
+    p <- rs(u, k)
+    expect_identical(p$host, paste0(bom, "WWW.Example.com"), label = k)
+    expect_identical(p$clean_url, paste0("http://", bom, "WWW.Example.com/A"),
+                     label = k)
+  }
+  expect_identical(rs(u, 0)$host, "example.com")
+  u <- paste0("http://", bom, "www.a.B.Example.com/")
+  expect_identical(rs(u, 5)$host, paste0(bom, "www.a.B.Example.com"))
+  expect_identical(rs(u, 3)$host, paste0(bom, "www.a.B.Example.com"))
+  expect_identical(rs(u, 2)$host, "a.B.example.com")
+  # Hosts the stringi reading did not take for www-prefixed are rebuilt as
+  # before: no mark, two marks, a mark not followed by `www.`, the twin.
+  expect_identical(
+    rs(c("http://a.B.Example.com/", paste0("http://", bom, "a.B.Example.com/"),
+         paste0("http://", bom, bom, "www.a.Example.com/"),
+         paste0("http://", zwsp, "www.a.B.Example.com/")), 5)$host,
+    c("a.B.example.com", paste0(bom, "a.B.example.com"),
+      paste0(bom, bom, "www.a.example.com"),
+      paste0(zwsp, "www.a.B.example.com"))
+  )
+})
+
+test_that("whatwg: the subdomain trim does not move", {
+  # The values the trim gave before this fix: it read `www.` past the mark.
+  for (arm in c("std", "profile")) {
+    sub_host <- function(u, k) {
+      whatwg_parse(u, arm, subdomain_levels_to_keep = k)$host
+    }
+    for (k in c(0, 1)) {
+      expect_identical(
+        sub_host(paste0("http://", bom, "www.example.com/"), k),
+        "www.example.com", label = paste(arm, k)
+      )
+      expect_identical(
+        sub_host(paste0("http://", bom, "WWW.Example.com/A"), k),
+        "www.example.com", label = paste(arm, k)
+      )
+    }
+    u <- paste0("http://", bom, "www.a.example.com/")
+    expect_identical(sub_host(u, 0), "www.example.com", label = arm)
+    expect_identical(sub_host(u, 1), "www.a.example.com", label = arm)
+    expect_identical(sub_host(u, 2), "www.a.example.com", label = arm)
+    p <- whatwg_parse(u, arm, subdomain_levels_to_keep = 0)
+    expect_identical(p$clean_url, "http://www.example.com/", label = arm)
+    expect_identical(p$parse_status, "ok", label = arm)
+  }
+  # The helper itself, as the pipeline calls it under whatwg.
+  expect_identical(
+    .apply_subdomain_policy_vec(
+      c(paste0(bom, "www.example.com"), paste0(bom, "www.a.example.com")),
+      rep("example.com", 2L), 0, rep(FALSE, 2L), url_standard = "whatwg"
+    ),
+    c(paste0(bom, "www.example.com"), "www.example.com")
+  )
 })
 
 test_that("NULL: the subdomain trim treats the mark as data (ADR 0016)", {
@@ -271,23 +384,107 @@ test_that("NULL: the subdomain trim treats the mark as data (ADR 0016)", {
   # `subdomain_levels_to_keep = 0` kept its subdomain label, while its U+200B
   # twin trims to `example.com`. Omitting the selector and passing NULL agree.
   u <- paste0("http://", bom, "www.example.com/")
+  u2 <- paste0("http://", bom, "www.a.example.com/")
   for (p in list(
-    safe_parse_urls(u, subdomain_levels_to_keep = 0),
-    safe_parse_urls(u, url_standard = NULL, subdomain_levels_to_keep = 0)
+    safe_parse_urls(c(u, u2), subdomain_levels_to_keep = 0),
+    safe_parse_urls(c(u, u2), url_standard = NULL,
+                    subdomain_levels_to_keep = 0)
   )) {
-    expect_identical(p$host, "example.com")
-    expect_identical(p$clean_url, "http://example.com/")
-    # Signature: only host and clean_url move, for a host led by the mark and
-    # then `www.`, under a non-NULL `subdomain_levels_to_keep` that drops the
-    # label. Status and domain do not move. Per arm: rfc3986 and whatwg move
-    # the same way (whatwg maps the mark away only at presentation, after the
-    # trim), asserted above.
-    expect_identical(p$parse_status, "ok")
-    expect_identical(p$domain, "example.com")
+    expect_identical(p$host, c("example.com", "example.com"))
+    expect_identical(p$clean_url,
+                     c("http://example.com/", "http://example.com/"))
+  }
+  # Signature: only host and clean_url move, for a host led by one mark and
+  # then `www.`, under a non-NULL `subdomain_levels_to_keep`. Every other
+  # column equals the parse without the trim, which the fix does not reach.
+  # Per arm: rfc3986 moves the same way (asserted above); whatwg does not
+  # move (asserted above).
+  for (k in c(0, 1, 2, 5)) {
+    for (uu in c(u, u2)) {
+      expect_identical(
+        unmoved_cols(safe_parse_urls(uu, subdomain_levels_to_keep = k)),
+        unmoved_cols(safe_parse_urls(uu)), label = paste(k, uu)
+      )
+    }
   }
   expect_identical(safe_parse_urls(u, subdomain_levels_to_keep = 1)$host,
                    paste0(bom, "www.example.com"))
   expect_identical(safe_parse_urls(u)$host, paste0(bom, "www.example.com"))
+  # Other option combinations: without a trim the www policies leave these
+  # hosts as they were, and `www_handling = "keep"` puts a `www.` in front of
+  # the mark, so the trim never meets it first.
+  uu <- c(u, u2, paste0("http://", bom, "www.com/"))
+  for (w in c("none", "strip")) {
+    expect_identical(
+      safe_parse_urls(uu, www_handling = w)$host,
+      paste0(bom, c("www.example.com", "www.a.example.com", "www.com")),
+      label = w
+    )
+  }
+  expect_identical(
+    safe_parse_urls(uu, www_handling = "keep",
+                    subdomain_levels_to_keep = 0)$host,
+    c("www.example.com", "www.example.com", paste0("www.", bom, "www.com"))
+  )
+  expect_identical(
+    safe_parse_urls(uu, host_encoding = "idna",
+                    subdomain_levels_to_keep = 1)$host,
+    c("xn--www-3z6s.example.com", "a.example.com", "xn--www-3z6s.com")
+  )
+})
+
+test_that("rows the subdomain fix does not reach keep their values", {
+  # Byte-identical to the trim before this fix: no mark, a mark not first,
+  # two marks, a mark not followed by `www.`, and the U+200B twin.
+  u <- c("http://www.example.com/", "http://WWW.Example.com/A",
+         "http://www.a.B.Example.com/", "http://a.B.Example.com/",
+         "http://www.com/", "http://example.com/",
+         "http://www.m\u00fcnchen.de/", "http://a.m\u00fcnchen.de/",
+         paste0("http://", zwsp, "www.a.B.Example.com/"),
+         paste0("http://a", bom, "b.www.Example.com/"),
+         paste0("http://", bom, bom, "www.a.Example.com/"),
+         paste0("http://", bom, "a.B.Example.com/"),
+         paste0("http://", bom, "Example.com/"))
+  rs <- function(k) {
+    safe_parse_urls(u, profile = "rfc-syntax",
+                    subdomain_levels_to_keep = k)$host
+  }
+  expect_identical(rs(0), c(
+    "www.example.com", "WWW.Example.com", "www.example.com", "example.com",
+    "www.com", "example.com", "www.m\u00fcnchen.de", "m\u00fcnchen.de",
+    "example.com", "example.com", "example.com", "example.com",
+    "\ufeffExample.com"
+  ))
+  expect_identical(rs(1), c(
+    "www.example.com", "WWW.Example.com", "www.B.example.com", "B.example.com",
+    "www.com", "example.com", "www.m\u00fcnchen.de", "a.m\u00fcnchen.de",
+    "B.example.com", "www.example.com", "a.example.com", "B.example.com",
+    "\ufeffExample.com"
+  ))
+  expect_identical(rs(2), c(
+    "www.example.com", "WWW.Example.com", "www.a.B.example.com",
+    "a.B.example.com", "www.com", "example.com", "www.m\u00fcnchen.de",
+    "a.m\u00fcnchen.de", "a.B.example.com", "a\ufeffb.www.example.com",
+    "\ufeff\ufeffwww.a.example.com", "\ufeffa.B.example.com",
+    "\ufeffExample.com"
+  ))
+  expect_identical(
+    safe_parse_urls(u, url_standard = "whatwg",
+                    subdomain_levels_to_keep = 2)$host,
+    c("www.example.com", "www.example.com", "www.a.b.example.com",
+      "a.b.example.com", "www.com", "example.com", "www.m\u00fcnchen.de",
+      "a.m\u00fcnchen.de", "a.b.example.com", "ab.www.example.com",
+      "www.a.example.com", "a.b.example.com", "example.com")
+  )
+  expect_identical(
+    safe_parse_urls(u, profile = "rfc-syntax",
+                    www_handling = "if_no_subdomain")$host,
+    c("www.example.com", "www.Example.com", "www.a.B.Example.com",
+      "a.B.Example.com", "www.com", "www.example.com", "www.m\u00fcnchen.de",
+      "a.m\u00fcnchen.de", "\u200bwww.a.B.Example.com",
+      "a\ufeffb.www.Example.com", "\ufeff\ufeffwww.a.Example.com",
+      "\ufeffa.B.Example.com", "www.\ufeffExample.com")
+  )
 })
 
 # --- www_handling = "if_no_subdomain" -----------------------------------------
@@ -338,10 +535,33 @@ test_that("if_no_subdomain reads a mark-led www label as part of the apex", {
               www_handling = "if_no_subdomain")$host,
     paste0("www.", bom, "www.com")
   )
+})
+
+test_that("whatwg: if_no_subdomain does not move", {
+  # The values the policy gave before this fix: it read `www.` past the mark,
+  # so the apex counted as www-prefixed. WHATWG's own host is `www.com`.
+  for (arm in c("std", "profile")) {
+    www_parse <- function(u) {
+      whatwg_parse(u, arm, www_handling = "if_no_subdomain")
+    }
+    p <- www_parse(paste0("http://", bom, "www.com/"))
+    expect_identical(p$host, "www.com", label = arm)
+    expect_identical(p$clean_url, "http://www.com/", label = arm)
+    expect_identical(p$parse_status, "ok", label = arm)
+    expect_identical(www_parse(paste0("http://", bom, "WWW.com/"))$host,
+                     "www.com", label = arm)
+    expect_identical(www_parse(paste0("http://", bom, "www.co.uk/"))$host,
+                     "www.co.uk", label = arm)
+  }
   expect_identical(
-    arm_parse(paste0("http://", bom, "www.com/"), "whatwg",
-              www_handling = "if_no_subdomain")$host,
-    "www.www.com"
+    .apply_www_if_no_subdomain_vec(paste0(bom, "www.com"),
+                                   url_standard = "whatwg"),
+    paste0(bom, "www.com")
+  )
+  expect_identical(
+    .apply_www_policy_vec(paste0(bom, "www.com"), "if_no_subdomain", FALSE,
+                          url_standard = "whatwg"),
+    paste0(bom, "www.com")
   )
 })
 
@@ -355,15 +575,22 @@ test_that("NULL: if_no_subdomain treats the mark as data (ADR 0016)", {
   )) {
     expect_identical(p$host, paste0("www.", bom, "www.com"))
     expect_identical(p$clean_url, paste0("http://www.", bom, "www.com/"))
-    # Signature: only host and clean_url move, for an apex host led by the
-    # mark and then `www.`, under `www_handling = "if_no_subdomain"`. Status
-    # does not move. Per arm: rfc3986 and whatwg move the same way (whatwg
-    # maps the mark away only at presentation), asserted above.
-    expect_identical(p$parse_status, "ok")
+    # Signature: only host and clean_url move, for an apex host led by one
+    # mark and then `www.`, under `www_handling = "if_no_subdomain"`. Every
+    # other column equals the parse without the policy. Per arm: rfc3986
+    # moves the same way (asserted above); whatwg does not move (asserted
+    # above).
+    expect_identical(unmoved_cols(p), unmoved_cols(safe_parse_urls(u)))
   }
   expect_identical(safe_parse_urls(u)$host, paste0(bom, "www.com"))
   expect_identical(safe_parse_urls(u, www_handling = "strip")$host,
                    paste0(bom, "www.com"))
+  # A host with a subdomain past the mark-led label is no apex either way.
+  expect_identical(
+    safe_parse_urls(paste0("http://", bom, "www.example.com/"),
+                    www_handling = "if_no_subdomain")$host,
+    paste0(bom, "www.example.com")
+  )
 })
 
 # --- Host helpers with no output difference in the pipeline ------------------
