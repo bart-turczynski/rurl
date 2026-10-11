@@ -1,6 +1,6 @@
 # ADR 0005: Intentional base-R string exceptions (the `stringi` migration is not total)
 
-- **Status:** Accepted
+- **Status:** Accepted; superseded in part by [ADR 0019](0019-string-operations-run-in-base-r.md) (Proposed), see the note at the end
 - **Date:** 2026
 - **Tracking:** n/a (recorded during the stringi migration)
 
@@ -124,3 +124,17 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 - The measured lists are stringi 1.8.9 behavior. A stringi release that stops
   skipping the mark would make these guards redundant, not wrong; the tests
   would still pass.
+
+## Note: superseded in part by ADR 0019
+
+*Added RURL-lbccaixb, 2026-10-12. Appended, so no line citation into this file
+moves. It takes effect when ADR 0019 is accepted.*
+
+[ADR 0019](0019-string-operations-run-in-base-r.md) supersedes one
+consequence: "New string code should still prefer `stringi` unless it hits one
+of these documented equivalence gaps." String operations now run in base R,
+and each declares its semantics. This ADR's other rules still apply: the
+`strsplit()` split contract, the rejection of migrating a call for consistency
+alone, the U+FEFF-as-data rule with its U+200B twin, the guard table (in force
+for each helper until a migration slice moves it), and the explicit-`last`
+rule for `substring()`.
