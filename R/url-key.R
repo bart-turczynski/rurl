@@ -209,13 +209,15 @@
   out
 }
 
-# The query as the selected standard's URL record holds it. The WHATWG query
+# The query as the WHATWG URL Standard's URL record holds it. The WHATWG query
 # state percent-encodes each code point with the query percent-encode set, or
-# the special-query set under a special scheme, so the record holds the query
-# encoded and two URLs that serialize alike ARE one query -- the key-policy rows
-# frame "the selected standard's normalized identity, not source-byte equality"
-# (`contracts/key-join-contracts.md`). `.fsss_record_vec()` keeps a
-# general-routed query as written and leaves that encoding to the serializer
+# the special-query set under a special scheme, so the spec's URL record holds
+# the query encoded and two URLs that serialize alike ARE one query -- the
+# key-policy rows frame "the selected standard's normalized identity, not
+# source-byte equality" (`contracts/key-join-contracts.md`). rurl's
+# serializer-input record (`.fsss_record_vec()`) keeps the query as written
+# (on the special route only non-ASCII is already escaped; `'` and `"` stay
+# raw) and leaves that encoding to the serializer
 # (`.whatwg_query_suffix_vec()`), so the key applies the serializer's own
 # encoder here: `foo:/p?<U+200B>q` and `foo:/p?%E2%80%8Bq` both frame
 # `%E2%80%8Bq`, and `http://h/p?'q` and `http://h/p?%27q` both frame `%27q`
@@ -227,15 +229,19 @@
 # special scheme. An inferred scheme reads as the `http` the parse inferred,
 # whose query the parse record encodes the same way. `rfc3986` keeps the query
 # as written: section 6.2.2.2 normalization is not the key's.
+#
+# The encoder walks bytes in R, so only rows holding a byte it could change go
+# through it: one outside printable ASCII (C0, SP, DEL, non-ASCII) or one of
+# `"` `#` `<` `>` `'`. Every other query is already in its encoded form.
 .url_key_query <- function(query, scheme, standard) {
   if (!identical(standard, "whatwg")) {
     return(query)
   }
-  vapply(
-    seq_along(query),
-    function(i) .whatwg_query_percent_encode(query[i], scheme[i]),
-    character(1), USE.NAMES = FALSE
-  )
+  todo <- grep("[^!-~]|[\"#<>']", query, useBytes = TRUE)
+  for (i in todo) {
+    query[i] <- .whatwg_query_percent_encode(query[i], scheme[i])
+  }
+  query
 }
 
 # The relaxed scheme collapse (key-policy `:81`, truth-table rows 6-7 as

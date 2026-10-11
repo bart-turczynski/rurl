@@ -202,7 +202,8 @@ test_that("a mark-led field no longer collides with its unmarked twin", {
   # Signature, per policy: `rfc3986` moves a host, path or query that starts
   # with the mark, since its record keeps each as written (RFC 3986 has no
   # rule for U+FEFF). Under `whatwg` the mark is percent-encoded in every key
-  # field it can start, including a non-special query (RURL-pjrqnqvb), so no
+  # field it can start except a non-special list path (RURL-ommuyaqi),
+  # including a non-special query (RURL-pjrqnqvb), so no
   # `whatwg` row is left here (pinned above), and the fragment and userinfo
   # stay out of the key. Each marked row keyed
   # like its unmarked twin; it now frames the mark, as its U+200B twin does.

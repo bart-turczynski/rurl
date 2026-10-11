@@ -9,8 +9,9 @@
 # (contracts/key-join-contracts.md, Key-policy rows), so two URLs the standard
 # serializes alike must key alike.
 #
-# The serializer-input record (`.fsss_record_vec()`) is lossless: it keeps a
-# general-routed query as written and leaves the encoding to the serializer.
+# The serializer-input record (`.fsss_record_vec()`) is lossless: it keeps the
+# query as written (on the special route only non-ASCII is already escaped;
+# `'` and `"` stay raw) and leaves the encoding to the serializer.
 # The key framed that record field as it stood, so `foo:/p?<U+200B>q` and
 # `foo:/p?%E2%80%8Bq` keyed apart although `serialize_url()` gives
 # `foo:/p?%E2%80%8Bq` for both. A special query kept its apostrophe and double
