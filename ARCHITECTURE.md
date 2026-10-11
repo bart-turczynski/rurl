@@ -27,8 +27,8 @@ that dependency is gone. `rurl` owns the normalization policy, the canonical
 The `Collate:` field in `DESCRIPTION` is authoritative. The load order is:
 
 ```
-rurl-package.R → status-constants.R → utils.R → percent-coding.R →
-parse-state.R → query-denylist.R → domain.R → path-query.R → parse-web.R →
+rurl-package.R → status-constants.R → utils.R → strings-base.R →
+percent-coding.R → parse-state.R → query-denylist.R → domain.R → path-query.R → parse-web.R →
 parse-phases.R → parse.R → verdicts.R → profiles.R → diagnostics.R →
 accessors.R → email-diagnostics.R → host-policy.R → scheme-policy.R →
 canonical_join.R →
@@ -229,6 +229,14 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   (`.WHATWG_SPECIAL_SCHEMES`, `.SCHEME_DEFAULT_PORTS`, `.SUPPORTED_SCHEMES`),
   and `.spu_result_fields` (the single source of truth for parse result
   columns).
+- **R/strings-base.R** — the byte-mode base-R string layer that
+  [ADR 0019](design/adr/0019-string-operations-run-in-base-r.md) moves string
+  operations onto: `.bytes_detect()`, `.bytes_replace()`, `.bytes_locate()`,
+  `.bytes_capture()`, `.bytes_cut()` and `.bytes_split_fixed()`. They run
+  `perl = TRUE, useBytes = TRUE`, so a leading U+FEFF is data, an
+  invalid-UTF-8 row gets its own result, and positions and cuts are both in
+  bytes. Each result is declared UTF-8 again. `.bytes_check_pattern()` refuses
+  regex constructs whose byte-mode meaning depends on the locale.
 - **R/query-denylist.R** — the built-in tracker-parameter denylist for
   `query_handling = "filter"`.
 - **R/zzz.R** — package init (`.onLoad`), the cache registry
