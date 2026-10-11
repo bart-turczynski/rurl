@@ -143,6 +143,16 @@
   authority <- stringi::stri_match_first_regex(
     hier, "^[A-Za-z][A-Za-z0-9+.\\-]*://([^/]*)"
   )[, 2L]
+  # stri_match_*_regex() reads past a U+FEFF that starts its input (see
+  # .starts_with_bom()), so it lexed an authority out of a source led by the
+  # mark, where no scheme can start: a scheme starts with an ASCII letter (RFC
+  # 3986 section 3.1; WHATWG scheme start state), and neither standard strips
+  # the mark. The mask runs on `hier`, after the WHATWG strip, because that
+  # strip can leave the mark in front (`" \ufeffhttp://h/"`) (RURL-rynmvtwp).
+  # The rest of this function needs no guard: the strip and the backslash
+  # rewrite are guarded helpers (ADR 0005), and every locate and cut below is
+  # base R on bytes.
+  authority[.starts_with_bom(hier)] <- NA_character_
   #
   # The host slice is recovered here too, and for the same reason: the parse
   # percent-decodes and case-folds the host before this point, so Stage
