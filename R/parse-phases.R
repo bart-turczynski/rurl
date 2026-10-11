@@ -40,9 +40,12 @@
   has_userinfo[is.na(has_userinfo)] <- FALSE
 
   # Host = authority after any userinfo, minus the port. Bracketed IPv6 keeps
-  # its "[...]"; otherwise drop a single trailing ":port".
+  # its "[...]"; otherwise drop a single trailing ":port". `startsWith()`, not
+  # stri_startswith_fixed(), which reads past a U+FEFF that starts its input
+  # (see .starts_with_bom()): a host led by the mark is not bracketed
+  # (RURL-opwjlnla).
   host_ui <- stringi::stri_replace_first_regex(authority, "^.*@", "")
-  bracketed <- stringi::stri_startswith_fixed(host_ui, "[")
+  bracketed <- startsWith(host_ui, "[")
   bracketed[is.na(bracketed)] <- FALSE
   host_token <- ifelse(
     bracketed,
@@ -462,7 +465,12 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)(.*)$"
   )
   authority <- m[, 4L]
-  has_at <- !is.na(authority) & stringi::stri_count_fixed(authority, "@") > 0L
+  # A row led by U+FEFF has no scheme; the stringi match reads past the mark,
+  # and rebuilding the row from it would drop the mark, so it is masked
+  # (RURL-opwjlnla). The pipeline never hands this helper such a row today:
+  # Phase 1 prefixes "http://" to every row led by the mark (`add_http`).
+  has_at <- !is.na(authority) & !.starts_with_bom(url) &
+    stringi::stri_count_fixed(authority, "@") > 0L
   has_at[is.na(has_at)] <- FALSE
 
   # Any of the 30 parser-refused code points inside the userinfo span
@@ -1730,12 +1738,16 @@
   balanced <- valid_h & (has_open == has_close)
   balanced[is.na(balanced)] <- FALSE
 
-  tail_match <- stringi::stri_match_first_regex(
+  # A detector, not stri_match_first_regex(), which reads past a U+FEFF that
+  # starts its input (see .starts_with_bom()) and so read an address in
+  # a mark-led host (RURL-opwjlnla); stri_detect_regex() counts the mark.
+  tail_match <- stringi::stri_detect_regex(
     raw_host,
     paste0("^\\[?[0-9a-fA-F:]+:(", oct, "(?:\\.", oct, "){3})\\]?$")
   )
+  tail_match[is.na(tail_match)] <- FALSE
   # The tail regex already enforces canonical octets, so a match is sufficient.
-  has_tail <- balanced & !is.na(tail_match[, 1L])
+  has_tail <- balanced & tail_match
   ipv6[has_tail] <- TRUE
 
   # Conservative check for balanced hosts without an embedded dotted-quad tail.
@@ -1981,8 +1993,10 @@
     # parser as `raddr` owns it (`.whatwg_ipv4_read()`, ADR 0018's
     # 2026-10-09 amendment). An NA there is the IPv4 parser's failure, which
     # fails the host and so the URL.
-    reg_like <- !is.na(host) & host != "" &
-      !stringi::stri_startswith_fixed(host, "[")
+    # `startsWith()`: stri_startswith_fixed() reads past a U+FEFF that starts
+    # its input (see .starts_with_bom()), and a host led by the mark is not
+    # bracketed (RURL-opwjlnla).
+    reg_like <- !is.na(host) & host != "" & !startsWith(host, "[")
     reg_like[is.na(reg_like)] <- FALSE
     candidate <- host
     nonascii_all <- reg_like &
@@ -2107,9 +2121,14 @@
     candidate_host[has_www] <- paste0("www.", bare_part[has_www])
   }
 
+  # `startsWith()`, not stri_startswith_fixed(), which reads past a U+FEFF
+  # that starts its input (see .starts_with_bom()): the mark-led apex
+  # "<U+FEFF>www.com" is not www-prefixed, so it gets "www." like its U+200B
+  # twin (RURL-opwjlnla). A row that passes starts with "www.", so the stringi
+  # match below cannot meet the mark.
   host_for_domain_check <- candidate_host
   cand_lower <- .ascii_tolower(candidate_host)
-  cw <- stringi::stri_startswith_fixed(cand_lower, "www.")
+  cw <- startsWith(cand_lower, "www.")
   cw[is.na(cw)] <- FALSE
   if (any(cw)) {
     match_res_bare <- stringi::stri_match_first_regex(
@@ -2128,8 +2147,7 @@
   # Apex iff the canonical decomposition has no subdomain labels.
   host_equals_domain <- !is.na(derived_subdomain) & derived_subdomain == ""
 
-  cand_has_www <- stringi::stri_startswith_fixed(cand_lower, "www.")
-  cand_has_www[is.na(cand_has_www)] <- FALSE
+  cand_has_www <- cw
 
   result <- candidate_host
   add_www <- !no_derived_domain & host_equals_domain & !cand_has_www
@@ -2277,11 +2295,16 @@
   idx <- which(can_trim)
   fh <- final_host[idx]
   lower <- .ascii_tolower(fh)
-  has_www_prefix <- stringi::stri_startswith_fixed(lower, "www.")
+  # Base R on bytes: stri_startswith_fixed() and stri_sub() read past a U+FEFF
+  # that starts their input (see .starts_with_bom()), so "<U+FEFF>www." read as
+  # the www prefix and the mark-led label was never trimmed. That label is a
+  # subdomain label like its U+200B twin's (RURL-opwjlnla). The prefix is four
+  # ASCII bytes, so the cut is a byte cut.
+  has_www_prefix <- startsWith(lower, "www.")
 
   host_part <- fh
   if (any(has_www_prefix)) {
-    host_part[has_www_prefix] <- stringi::stri_sub(fh[has_www_prefix], 5L)
+    host_part[has_www_prefix] <- .byte_substring_vec(fh[has_www_prefix], 5L)
   }
 
   decomp <- .psl_suffix_extract(host_part, "all", engine)
@@ -2444,6 +2467,26 @@
   .apply_host_encoding_vec(final_host, host_encoding, is_ip_host, url_standard)
 }
 
+# Unicode case mapping, pinned to .ASCII_SAFE_ICU_LOCALE, that keeps a leading
+# U+FEFF. stri_trans_toupper() and stri_trans_tolower() drop a U+FEFF that
+# starts their input (see .starts_with_bom()), so `case_handling` lost the mark
+# from a host or path led by it (RURL-opwjlnla). A row led by the mark is mapped
+# with an ASCII "0" spliced on first and cut off as a byte: "0" maps to itself
+# in both directions and is neither cased nor case-ignorable, so it ends a
+# Final_Sigma context exactly as the start of the string does. Other rows take
+# the plain call, so they cannot move.
+.unicode_case_map_vec <- function(x, upper) {
+  map <- if (upper) stringi::stri_trans_toupper else stringi::stri_trans_tolower
+  out <- map(x, locale = .ASCII_SAFE_ICU_LOCALE)
+  bom_led <- .starts_with_bom(x)
+  if (any(bom_led)) {
+    out[bom_led] <- .byte_substring_vec(
+      map(paste0("0", x[bom_led]), locale = .ASCII_SAFE_ICU_LOCALE), 2L
+    )
+  }
+  out
+}
+
 # Phase 10 (vector): apply the case policy to host, path, and scheme.
 .apply_case_policy_vec <- function(host_output, path_output, scheme_output,
                                    case_handling) {
@@ -2475,9 +2518,8 @@
         .ascii_tolower(host_output[h_mask])
       )
     } else if (case_handling == "upper") {
-      host_output[h_mask] <- stringi::stri_trans_toupper(
-        host_output[h_mask],
-        locale = .ASCII_SAFE_ICU_LOCALE
+      host_output[h_mask] <- .unicode_case_map_vec(
+        host_output[h_mask], upper = TRUE
       )
     }
   }
@@ -2493,14 +2535,12 @@
   p_mask <- !is.na(path_output)
   if (any(p_mask)) {
     if (case_handling == "lower") {
-      path_output[p_mask] <- stringi::stri_trans_tolower(
-        path_output[p_mask],
-        locale = .ASCII_SAFE_ICU_LOCALE
+      path_output[p_mask] <- .unicode_case_map_vec(
+        path_output[p_mask], upper = FALSE
       )
     } else if (case_handling == "upper") {
-      path_output[p_mask] <- stringi::stri_trans_toupper(
-        path_output[p_mask],
-        locale = .ASCII_SAFE_ICU_LOCALE
+      path_output[p_mask] <- .unicode_case_map_vec(
+        path_output[p_mask], upper = TRUE
       )
     }
   }

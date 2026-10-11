@@ -131,63 +131,71 @@ test_that("whatwg: no cased string starts with the mark", {
 # --- Case policy: the defect --------------------------------------------------
 
 test_that("case policy keeps a mark that starts the host or the path", {
-  # DEFECT (pinned before the fix): stri_trans_toupper() and
-  # stri_trans_tolower() drop a U+FEFF that starts their input.
+  # stri_trans_toupper() and stri_trans_tolower() drop a U+FEFF that starts
+  # their input: the host became `AB.EXAMPLE` and the paths `/AB`, `/ab`,
+  # and the sigma rows lost the mark. Like the U+200B twins above, the mark
+  # now stays, a second mark included, and the sigma context is unchanged.
   r <- .apply_case_policy_vec(
     paste0(bom, "ab.example"),
     c("\ufeff/aB", paste0(bom, bom, "aB")), "http", "upper"
   )
-  expect_identical(r$host, "AB.EXAMPLE")
-  expect_identical(r$path, c("/AB", paste0(bom, "AB")))
+  expect_identical(r$host, paste0(bom, "AB.EXAMPLE"))
+  expect_identical(r$path, c("\ufeff/AB", paste0(bom, bom, "AB")))
   r <- .apply_case_policy_vec(
     NA_character_,
     c("\ufeff/aB", paste0(bom, "\u03a3"), paste0(bom, "A\u03a3")),
     NA_character_, "lower"
   )
-  expect_identical(r$path, c("/ab", "\u03c3", "a\u03c2"))
+  expect_identical(
+    r$path,
+    c("\ufeff/ab", paste0(bom, "\u03c3"), paste0(bom, "a\u03c2"))
+  )
 })
 
 test_that("rfc3986 (rfc-syntax + override): the case policy keeps the mark", {
-  # DEFECT (pinned before the fix).
+  # The profile override reaches the same helper, so this arm lost the mark
+  # too (host `AB.EXAMPLE`, paths `AB` and `ab`). It keeps it now.
   p <- case_parse(paste0("http://", bom, "ab.example/x"), "rfc3986", "upper")
-  expect_identical(p$host, "AB.EXAMPLE")
-  expect_identical(p$clean_url, "HTTP://AB.EXAMPLE/X")
+  expect_identical(p$host, paste0(bom, "AB.EXAMPLE"))
+  expect_identical(p$clean_url, paste0("HTTP://", bom, "AB.EXAMPLE/X"))
   expect_identical(p$parse_status, "warning-invalid-tld")
   expect_identical(
-    case_parse(paste0("file:", bom, "aB"), "rfc3986", "upper")$path, "AB"
+    case_parse(paste0("file:", bom, "aB"), "rfc3986", "upper")$path,
+    paste0(bom, "AB")
   )
   expect_identical(
-    case_parse(paste0("file:", bom, "aB"), "rfc3986", "lower")$path, "ab"
+    case_parse(paste0("file:", bom, "aB"), "rfc3986", "lower")$path,
+    paste0(bom, "ab")
   )
 })
 
 test_that("NULL: the case policy keeps the mark (ADR 0016)", {
   # Witness: under the frozen selector, `case_handling = "upper"` dropped a
-  # U+FEFF that starts the host or the path, and `"lower"` one that starts the
-  # path. No standard or documented contract sanctions dropping data, so this
-  # is a default-path defect, not selector-caused drift. Omitting the selector
-  # and passing NULL agree.
-  # DEFECT (pinned before the fix).
+  # U+FEFF that starts the host or the path (host `AB.EXAMPLE`, clean_url
+  # `HTTP://AB.EXAMPLE/X`, path `AB`), and `"lower"` one that starts the path
+  # (`ab`). No standard or documented contract sanctions dropping data, so
+  # this is a default-path defect, not selector-caused drift. Omitting the
+  # selector and passing NULL agree.
   u_host <- paste0("http://", bom, "ab.example/x")
   u_path <- paste0("file:", bom, "aB")
   for (p in list(
     safe_parse_urls(u_host, case_handling = "upper"),
     safe_parse_urls(u_host, url_standard = NULL, case_handling = "upper")
   )) {
-    expect_identical(p$host, "AB.EXAMPLE")
-    expect_identical(p$clean_url, "HTTP://AB.EXAMPLE/X")
+    expect_identical(p$host, paste0(bom, "AB.EXAMPLE"))
+    expect_identical(p$clean_url, paste0("HTTP://", bom, "AB.EXAMPLE/X"))
   }
   for (p in list(
     safe_parse_urls(u_path, case_handling = "upper"),
     safe_parse_urls(u_path, url_standard = NULL, case_handling = "upper")
   )) {
-    expect_identical(p$path, "AB")
+    expect_identical(p$path, paste0(bom, "AB"))
   }
   for (p in list(
     safe_parse_urls(u_path, case_handling = "lower"),
     safe_parse_urls(u_path, url_standard = NULL, case_handling = "lower")
   )) {
-    expect_identical(p$path, "ab")
+    expect_identical(p$path, paste0(bom, "ab"))
   }
   # Signature: only the host, path and clean_url of a host or path that starts
   # with the mark move, and only under `case_handling = "upper"` (host, path)
@@ -238,25 +246,22 @@ test_that("subdomain trim: the U+200B twins and the negative controls", {
 })
 
 test_that("subdomain trim reads a mark-led www label as a subdomain label", {
-  # DEFECT (pinned before the fix): stri_startswith_fixed() read `www.` past
-  # the mark, so the trim kept the whole host as if it were www-prefixed.
+  # stri_startswith_fixed() read `www.` past the mark, so the trim kept the
+  # whole host as if it were www-prefixed. The mark-led label is a subdomain
+  # label, trimmed like its U+200B twin.
   expect_identical(
     .apply_subdomain_policy_vec(
       c(paste0(bom, "www.example.com"), paste0(bom, "WWW.example.com"),
         paste0(zwsp, "www.example.com")),
       rep("example.com", 3L), 0, rep(FALSE, 3L)
     ),
-    c(paste0(bom, "www.example.com"), paste0(bom, "WWW.example.com"),
-      "example.com")
+    rep("example.com", 3L)
   )
   for (an in names(arms)) {
     p <- arm_parse(paste0("http://", bom, "www.example.com/"), arms[[an]],
                    subdomain_levels_to_keep = 0)
     expect_identical(
-      p$host,
-      if (an == "whatwg") "www.example.com" else
-        paste0(bom, "www.example.com"),
-      label = an
+      p$host, "example.com", label = an
     )
   }
 })
@@ -265,14 +270,13 @@ test_that("NULL: the subdomain trim treats the mark as data (ADR 0016)", {
   # Witness: under the frozen selector `\ufeffwww.example.com` with
   # `subdomain_levels_to_keep = 0` kept its subdomain label, while its U+200B
   # twin trims to `example.com`. Omitting the selector and passing NULL agree.
-  # DEFECT (pinned before the fix).
   u <- paste0("http://", bom, "www.example.com/")
   for (p in list(
     safe_parse_urls(u, subdomain_levels_to_keep = 0),
     safe_parse_urls(u, url_standard = NULL, subdomain_levels_to_keep = 0)
   )) {
-    expect_identical(p$host, paste0(bom, "www.example.com"))
-    expect_identical(p$clean_url, paste0("http://", bom, "www.example.com/"))
+    expect_identical(p$host, "example.com")
+    expect_identical(p$clean_url, "http://example.com/")
     # Signature: only host and clean_url move, for a host led by the mark and
     # then `www.`, under a non-NULL `subdomain_levels_to_keep` that drops the
     # label. Status and domain do not move. Per arm: rfc3986 and whatwg move
@@ -320,38 +324,37 @@ test_that("if_no_subdomain: the U+200B twins and the negative controls", {
 })
 
 test_that("if_no_subdomain reads a mark-led www label as part of the apex", {
-  # DEFECT (pinned before the fix): stri_startswith_fixed() read `www.` past
-  # the mark, so the apex `\ufeffwww.com` counted as already www-prefixed.
+  # stri_startswith_fixed() read `www.` past the mark, so the apex
+  # `\ufeffwww.com` counted as already www-prefixed and got no `www.`.
   expect_identical(
     .apply_www_if_no_subdomain_vec(
       c(paste0(bom, "www.com"), paste0(bom, "WWW.com"), paste0(zwsp, "www.com"))
     ),
-    c(paste0(bom, "www.com"), paste0(bom, "WWW.com"),
+    c(paste0("www.", bom, "www.com"), paste0("www.", bom, "WWW.com"),
       paste0("www.", zwsp, "www.com"))
   )
   expect_identical(
     arm_parse(paste0("http://", bom, "www.com/"), "rfc3986",
               www_handling = "if_no_subdomain")$host,
-    paste0(bom, "www.com")
+    paste0("www.", bom, "www.com")
   )
   expect_identical(
     arm_parse(paste0("http://", bom, "www.com/"), "whatwg",
               www_handling = "if_no_subdomain")$host,
-    "www.com"
+    "www.www.com"
   )
 })
 
 test_that("NULL: if_no_subdomain treats the mark as data (ADR 0016)", {
   # Witness: under the frozen selector the apex `\ufeffwww.com` got no `www.`,
   # while its U+200B twin does. Omitting the selector and passing NULL agree.
-  # DEFECT (pinned before the fix).
   u <- paste0("http://", bom, "www.com/")
   for (p in list(
     safe_parse_urls(u, www_handling = "if_no_subdomain"),
     safe_parse_urls(u, url_standard = NULL, www_handling = "if_no_subdomain")
   )) {
-    expect_identical(p$host, paste0(bom, "www.com"))
-    expect_identical(p$clean_url, paste0("http://", bom, "www.com/"))
+    expect_identical(p$host, paste0("www.", bom, "www.com"))
+    expect_identical(p$clean_url, paste0("http://www.", bom, "www.com/"))
     # Signature: only host and clean_url move, for an apex host led by the
     # mark and then `www.`, under `www_handling = "if_no_subdomain"`. Status
     # does not move. Per arm: rfc3986 and whatwg move the same way (whatwg
@@ -366,21 +369,21 @@ test_that("NULL: if_no_subdomain treats the mark as data (ADR 0016)", {
 # --- Host helpers with no output difference in the pipeline ------------------
 
 test_that("the strict IP detector does not read an address past the mark", {
-  # DEFECT (pinned before the fix): the dotted-quad tail match read past the
-  # mark. In the pipeline no such host parses, so no output moved.
+  # The dotted-quad tail match read past the mark and called the first two
+  # hosts addresses. In the pipeline no such host parses, so no output moved.
   expect_identical(
     .detect_ip_host_vec(c(
       paste0(bom, "::1.2.3.4"), paste0(bom, "[::1.2.3.4]"),
       paste0(zwsp, "::1.2.3.4"), paste0(zwsp, "[::1.2.3.4]"),
       "::1.2.3.4", "[::1.2.3.4]", paste0(bom, "1.2.3.4"), "1.2.3.4"
     )),
-    c(TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE, TRUE)
+    c(FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE, TRUE)
   )
 })
 
 test_that("the host-shape gate does not read a bracket past the mark", {
-  # DEFECT (pinned before the fix): stri_startswith_fixed() read `[` past the
-  # mark, so the token kept its brackets and read as a canonical IPv6 literal.
+  # stri_startswith_fixed() read `[` past the mark, so the token kept its
+  # brackets and read as a canonical IPv6 literal. It now cuts like the twin.
   cl <- .classify_input_host_vec(c(
     paste0("http://", bom, "[::1.2.3.4]/"),
     paste0("http://", zwsp, "[::1.2.3.4]/"),
@@ -388,9 +391,9 @@ test_that("the host-shape gate does not read a bracket past the mark", {
   ))
   expect_identical(
     cl$host_token,
-    c(paste0(bom, "[::1.2.3.4]"), paste0(zwsp, "[:"), "[::1.2.3.4]")
+    c(paste0(bom, "[:"), paste0(zwsp, "[:"), "[::1.2.3.4]")
   )
-  expect_identical(cl$is_canonical_ip, c(TRUE, FALSE, TRUE))
+  expect_identical(cl$is_canonical_ip, c(FALSE, FALSE, TRUE))
   # Signature: every arm fails these rows before and after.
   for (an in names(arms)) {
     expect_identical(
@@ -403,25 +406,27 @@ test_that("the host-shape gate does not read a bracket past the mark", {
 })
 
 test_that("the WHATWG host model does not read a bracket past the mark", {
-  # DEFECT (pinned before the fix): a mark-led host was read as bracketed, so
-  # it skipped domain to ASCII. The row fails either way.
+  # A mark-led host was read as bracketed, so it skipped domain to ASCII and
+  # kept the mark. It now maps like its twin; the row fails either way.
   hosts <- c(paste0(bom, "[a.1"), paste0(zwsp, "[a.1"), "[a.1")
   m <- .apply_host_standard_model_vec(hosts, hosts, rep(FALSE, 3L), "whatwg",
                                       rep(FALSE, 3L))
-  expect_identical(m$host, c(paste0(bom, "[a.1"), "[a.1", "[a.1"))
+  expect_identical(m$host, c("[a.1", "[a.1", "[a.1"))
   expect_identical(m$fatal, c(TRUE, TRUE, TRUE))
   expect_identical(m$is_ip, c(FALSE, FALSE, FALSE))
 })
 
 test_that("the WHATWG userinfo rewrite leaves a mark-led row alone", {
-  # DEFECT (pinned before the fix): the `^scheme:` match read past the mark
-  # and the rebuilt row lost it. Phase 1 prefixes `http://` to every row led
-  # by the mark, so the pipeline never hands this helper one.
+  # The `^scheme:` match read past the mark and the rebuilt row lost it
+  # (`http://a%20b@h/`); the row is now left alone, like its twin. Phase 1
+  # prefixes `http://` to every row led by the mark, so the pipeline never
+  # hands this helper one.
   u <- c(paste0(bom, "http://a b@h/"), paste0(zwsp, "http://a b@h/"),
          "http://a b@h/", paste0("http://", bom, "a b@h/"))
   expect_identical(
     .encode_userinfo_charset_vec(u, "whatwg")$url,
-    c("http://a%20b@h/", paste0(zwsp, "http://a b@h/"), "http://a%20b@h/",
+    c(paste0(bom, "http://a b@h/"), paste0(zwsp, "http://a b@h/"),
+      "http://a%20b@h/",
       paste0("http://", bom, "a%20b@h/"))
   )
   expect_identical(

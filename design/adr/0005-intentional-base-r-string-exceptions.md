@@ -93,6 +93,12 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 | `R/url-key.R` | `.url_key_scheme_presence()` | `stri_detect_regex()`, which counts the mark | RURL-dquaxcaz |
 | `R/domain.R` | `.split_host_labels()` | mask; `x` spliced before the split, cut off the first label as a byte | RURL-tbmnnauj |
 | `R/utils.R` | `.ascii_case_fallback()`, under `.ascii_tolower()` / `.ascii_toupper()` | mask; `0` spliced before the fixed replace, cut as a byte | RURL-bqhfznkg |
+| `R/parse-phases.R` | `.apply_case_policy_vec()`, via `.unicode_case_map_vec()` | mask; `0` spliced before `stri_trans_toupper()` / `stri_trans_tolower()`, cut as a byte | RURL-opwjlnla |
+| `R/parse-phases.R` | `.apply_subdomain_policy_vec()` | `startsWith()`; the `www.` prefix cut with `.byte_substring_vec()` | RURL-opwjlnla |
+| `R/parse-phases.R` | `.apply_www_if_no_subdomain_vec()` | `startsWith()` | RURL-opwjlnla |
+| `R/parse-phases.R` | `.detect_ip_host_vec()` | regex detector for the dotted-quad tail, which counts the mark | RURL-opwjlnla |
+| `R/parse-phases.R` | `.classify_input_host_vec()`, `.apply_host_standard_model_vec()` | `startsWith()` | RURL-opwjlnla |
+| `R/parse-phases.R` | `.encode_userinfo_charset_vec()` | mask | RURL-opwjlnla |
 
 **Consequences.**
 
