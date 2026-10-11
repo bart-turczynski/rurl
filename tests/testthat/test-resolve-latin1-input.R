@@ -59,7 +59,7 @@ cold_resolve <- function(ref, base, args) {
 
 # Rows: an absolute reference carrying 0x9F (the CP1252 split); a relative
 # path with 0xFC; a query and fragment with 0xFC; an ASCII reference against a
-# base with 0xFC in host and path.
+# base with 0xFC in its host and 0x9F in its path.
 latin1_refs <- latin1(
   c(utf8ToInt("http://h.com/"), 0x9f),
   c(utf8ToInt("h"), 0xfc, utf8ToInt(".com/p")),
@@ -67,17 +67,17 @@ latin1_refs <- latin1(
   utf8ToInt("p")
 )
 utf8_refs <- c("http://h.com/\u009f", "h\u00fc.com/p", "?q=\u00fc#\u00fc", "p")
-utf8_bases <- c(rep("http://b.com/a", 3L), "http://b\u00fc.com/\u00fc/")
+utf8_bases <- c(rep("http://b.com/a", 3L), "http://b\u00fc.com/\u009f/")
 latin1_bases <- c(
   rep("http://b.com/a", 3L),
-  latin1(c(utf8ToInt("http://b"), 0xfc, utf8ToInt(".com/"), 0xfc, 0x2f))
+  latin1(c(utf8ToInt("http://b"), 0xfc, utf8ToInt(".com/"), 0x9f, 0x2f))
 )
 
 # The UTF-8 twin's value on every arm. `query_handling = "keep"` so the clean
 # surface shows the query row; output = "serialized" needs a named standard.
 clean_twin <- c(
   "http://h.com/\u009f", "http://b.com/h\u00fc.com/p",
-  "http://b.com/a?q=%C3%BC", "http://b\u00fc.com/\u00fc/p"
+  "http://b.com/a?q=%C3%BC", "http://b\u00fc.com/\u009f/p"
 )
 arms <- list(
   "NULL clean" = list(
@@ -92,7 +92,7 @@ arms <- list(
     args = list(url_standard = "rfc3986", output = "serialized"),
     twin = c(
       "http://h.com/\u009f", "http://b.com/h\u00fc.com/p",
-      "http://b.com/a?q=\u00fc#\u00fc", "http://b\u00fc.com/\u00fc/p"
+      "http://b.com/a?q=\u00fc#\u00fc", "http://b\u00fc.com/\u009f/p"
     )
   ),
   "whatwg clean" = list(
@@ -103,7 +103,7 @@ arms <- list(
     args = list(url_standard = "whatwg", output = "serialized"),
     twin = c(
       "http://h.com/%C2%9F", "http://b.com/h%C3%BC.com/p",
-      "http://b.com/a?q=%C3%BC#%C3%BC", "http://xn--b-eha.com/%C3%BC/p"
+      "http://b.com/a?q=%C3%BC#%C3%BC", "http://xn--b-eha.com/%C2%9F/p"
     )
   )
 )
@@ -142,12 +142,14 @@ test_that("an ASCII reference and base resolve as before on every arm", {
   }
 })
 
-test_that("whatwg in a UTF-8 locale already reads a latin1 row as its twin", {
+test_that("whatwg in a UTF-8 locale already reads a latin1 REFERENCE right", {
+  # Rows 1-3 only: the reference passes the whatwg strip step, which reads the
+  # mark. A latin1 BASE did not (row 4 read 0x9F as CP1252, "%C5%B8").
   with_ctype("en_US.UTF-8", TRUE, {
     for (arm in c("whatwg clean", "whatwg serialized")) {
       expect_bytes(
-        cold_resolve(latin1_refs, latin1_bases, arms[[arm]]$args),
-        arms[[arm]]$twin, arm
+        cold_resolve(latin1_refs[1:3], latin1_bases[1:3], arms[[arm]]$args),
+        arms[[arm]]$twin[1:3], arm
       )
     }
   })
@@ -177,11 +179,13 @@ test_that("whatwg in a UTF-8 locale already reads a latin1 row as its twin", {
 #        rfc3986 clean and serialized -- UTF-8 locale: octets 0x80-0x9F;
 #                               C locale: every row with a non-ASCII latin1
 #                               element was NA.
-#        whatwg clean and serialized  -- UTF-8 locale: already correct (pinned
-#                               above; the strip step and the parse funnel read
-#                               the mark). C locale: the absolute row was
-#                               correct; relative rows carried escape text and
-#                               the latin1-base row was NA.
+#        whatwg clean and serialized  -- UTF-8 locale: a latin1 reference was
+#                               already correct (pinned above; the strip step
+#                               reads the mark), a latin1 base's 0x80-0x9F was
+#                               CP1252 (row 4: "%C5%B8" for "%C2%9F"). C locale:
+#                               the absolute row was correct; relative rows
+#                               carried escape text and the latin1-base row
+#                               was NA.
 
 test_that("NULL witness: latin1 0x9F reads as U+009F in a UTF-8 locale", {
   with_ctype("en_US.UTF-8", TRUE, {
