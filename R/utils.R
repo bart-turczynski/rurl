@@ -316,8 +316,9 @@
 
 # The fallback above, for a vector `chartr()` rejected. `chartr()` throws for
 # the whole vector, so EVERY element lands here, not only the one it refused,
-# and each must come back exactly as `chartr()` would have returned it
-# (RURL-bqhfznkg). `stri_replace_all_fixed()` reads past a U+FEFF that starts
+# and each element's value must come back exactly as `chartr()` would have
+# returned it (RURL-bqhfznkg). (Names are not: the fixed call drops them, as it
+# always has.) `stri_replace_all_fixed()` reads past a U+FEFF that starts
 # its input (see `.starts_with_bom()`), so a mark-led element would lose the
 # mark because some other element held a U+FFFF. Those elements get an ASCII
 # "0" spliced on first -- not a letter, so no replacement touches it -- and the
