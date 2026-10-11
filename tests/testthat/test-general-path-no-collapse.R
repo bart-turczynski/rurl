@@ -163,7 +163,7 @@ test_that("seo and canonical with general acceptance keep the slashes", {
   }
 })
 
-test_that("the general path column skips index, trailing-slash and case steps", {
+test_that("the general path column skips index, trailing and case steps", {
   # RUL-027: only the identity and dot steps reach the general-route
   # clean_url, so the path column must not strip index pages, strip trailing
   # slashes or fold case either (RURL-kbjzwrkt review).
