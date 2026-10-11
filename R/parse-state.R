@@ -1673,6 +1673,10 @@
     }
     out$ok[reg] <- p$ok
   }
+  # The RFC 8089 overlay throws on such a row too (`substring()` in
+  # `.parse_rfc_file_url_one()`), so it is withheld the same way: the row keeps
+  # `ok = FALSE` and the rest of the batch parses (RURL-otrpfhmq).
+  is_file <- is_file & decodable
   if (any(is_file)) {
     p <- .parse_rfc_file_urls_vec(url[is_file], url_standard)
     # Both parsers now supply `userinfo`, but they mean different things by it,

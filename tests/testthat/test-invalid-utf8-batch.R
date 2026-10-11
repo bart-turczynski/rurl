@@ -206,8 +206,9 @@ for (loc in names(ctypes)) {
   #            "error", every component NA). That includes the `?q=1` shape,
   #            which parsed ALONE was `ok` with the undecodable octet raw in
   #            `path` -- an answer no contract sanctions, since Stage B could
-  #            not read it (`path_encoding = "encode"` gave "/NA",
-  #            `path_normalization = "dot_segments"` threw). A row whose
+  #            not read it (`path_encoding = "encode"` gave "/NA"; with
+  #            `path_normalization = "dot_segments"` a dotted path threw). A
+  #            row whose
   #            QUERY or FRAGMENT holds it keeps the `ok` it gets alone, the
   #            octet percent-encoded, as pinned above.
   #   rfc3986  Already correct: the uniform grammar gate rejects every one of
@@ -257,7 +258,7 @@ for (loc in names(ctypes)) {
 
   test_that(paste("the NULL failure holds under every path option, under",
                   loc), {
-    # The options that could not read an undecodable path in Stage B.
+    # The options that run over the path in Stage B.
     with_ctype(loc, ctypes[[loc]], {
       batch <- c(valid, unname(bad_rows[c("query", "dots")]))
       for (opt in list(list(path_encoding = "encode"),
@@ -319,6 +320,29 @@ for (loc in names(ctypes)) {
     })
   })
 }
+
+test_that("a file: row with an undecodable path fails alone, in any locale", {
+  # The RFC 8089 overlay threw `invalid multibyte string` for the batch under
+  # NULL and rfc3986 (review of RURL-otrpfhmq); it is withheld like the opaque
+  # route now.
+  bad <- oct("file:///caf", 0xE9)
+  ok_row <- "file:///a/b"
+  for (ctype in c("C", "en_US.UTF-8")) {
+    withr::with_locale(c(LC_CTYPE = ctype), {
+      rurl_clear_caches()
+      for (std in list(NULL, "rfc3986")) {
+        lab <- paste(ctype, if (is.null(std)) "NULL" else std)
+        r <- safe_parse_urls(c(ok_row, bad), url_standard = std)
+        expect_identical(nrow(r), 2L, label = lab)
+        expect_identical(r$parse_status[2], "error", label = lab)
+        alone <- safe_parse_urls(ok_row, url_standard = std)
+        expect_identical(r[1, ], alone[1, ], label = lab,
+                         ignore_attr = TRUE)
+      }
+      rurl_clear_caches()
+    })
+  }
+})
 
 test_that(".extract_raw_path_vec() cuts an undecodable path without throwing", {
   bad <- utf8_marked(bad_rows[["end"]])
