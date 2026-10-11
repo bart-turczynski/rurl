@@ -9,29 +9,29 @@
 # zero-width code point stringi does not skip, so a twin that already gives the
 # right answer shows the defect is the mark's alone.
 
-bom <- "﻿"
-zwsp <- "​"
+bom <- "\ufeff"
+zwsp <- "\u200b"
 # A row `chartr()` rejects, so its vector takes the fallback.
-poison_chr <- "￿A"
-poison_url <- "http://￿.example/"
+poison_chr <- "\uffffA"
+poison_url <- "http://\uffff.example/"
 
 chartr_rejects <- function() {
-  inherits(try(chartr("a", "a", "￿"), silent = TRUE), "try-error")
+  inherits(try(chartr("a", "a", "\uffff"), silent = TRUE), "try-error")
 }
 
-mark_url <- "http://﻿H.example/"
-twin_url <- "http://​H.example/"
+mark_url <- "http://\ufeffH.example/"
+twin_url <- "http://\u200bH.example/"
 
 # --- Pins: behavior the fix must not move -------------------------------------
 
 test_that("the U+200B twins already keep their code point in the fallback", {
   expect_identical(
     .ascii_tolower(c(poison_chr, paste0(zwsp, "AB"))),
-    c("￿a", paste0(zwsp, "ab"))
+    c("\uffffa", paste0(zwsp, "ab"))
   )
   expect_identical(
-    .ascii_toupper(c("￿a", paste0(zwsp, "ab"))),
-    c("￿A", paste0(zwsp, "AB"))
+    .ascii_toupper(c("\uffffa", paste0(zwsp, "ab"))),
+    c("\uffffA", paste0(zwsp, "AB"))
   )
   expect_identical(
     get_clean_url(c(twin_url, poison_url))[[1L]],
@@ -51,12 +51,12 @@ test_that("negative controls: no fallback, or a mark that is not first", {
   # In the fallback, a mark after the first code point is kept.
   expect_identical(
     .ascii_tolower(c(poison_chr, paste0("A", bom, "B"))),
-    c("￿a", paste0("a", bom, "b"))
+    c("\uffffa", paste0("a", bom, "b"))
   )
   # NA, "" and non-ASCII letters pass through the fallback unchanged.
   expect_identical(
-    .ascii_tolower(c(poison_chr, NA, "", "ÄB")),
-    c("￿a", NA, "", "Äb")
+    .ascii_tolower(c(poison_chr, NA, "", "\u00c4B")),
+    c("\uffffa", NA, "", "\u00c4b")
   )
   expect_identical(.ascii_tolower(character(0)), character(0))
   # The public rows alone, and a vector with no rejected row.
@@ -90,12 +90,12 @@ test_that("the fallback keeps every element's leading mark", {
   # DEFECT: the mark of the second element is dropped because the first
   # element sent the whole vector to stri_replace_all_fixed().
   expect_identical(.ascii_tolower(c(poison_chr, paste0(bom, "A"))),
-                   c("￿a", "a"))
-  expect_identical(.ascii_toupper(c("￿a", paste0(bom, "a"))),
-                   c("￿A", "A"))
+                   c("\uffffa", "a"))
+  expect_identical(.ascii_toupper(c("\uffffa", paste0(bom, "a"))),
+                   c("\uffffA", "A"))
   # DEFECT: two leading marks lose one.
   expect_identical(.ascii_tolower(c(poison_chr, paste0(bom, bom, "A"))),
-                   c("￿a", paste0(bom, "a")))
+                   c("\uffffa", paste0(bom, "a")))
 })
 
 test_that("one rejected row changes another row's public output", {
@@ -111,7 +111,7 @@ test_that("one rejected row changes another row's public output", {
   )
   expect_identical(
     safe_parse_urls(c(mark_url, poison_url), url_standard = "rfc3986")$host,
-    c("h.example", "￿.example")
+    c("h.example", "\uffff.example")
   )
 })
 
@@ -119,7 +119,7 @@ test_that("NULL: the frozen selector reaches the fallback (ADR 0016)", {
   skip_if_not(chartr_rejects(), "chartr() accepts U+FFFF on this build")
   # Witness: under the frozen selector, the default call and an explicit NULL
   # agree, and both drop the mark of a row that shares its vector with a row
-  # chartr() rejects. DEFECT: the row's own value is `http://﻿h.example/`.
+  # chartr() rejects. DEFECT: the row's own value is `http://\ufeffh.example/`.
   for (p in list(
     safe_parse_urls(c(mark_url, poison_url)),
     safe_parse_urls(c(mark_url, poison_url), url_standard = NULL)
