@@ -72,6 +72,7 @@ jobs:
       deferral_selftest: ${{ steps.filter.outputs.deferral_selftest }}
       curl_zero_selftest: ${{ steps.filter.outputs.curl_zero_selftest }}
       substring_last_selftest: ${{ steps.filter.outputs.substring_last_selftest }}
+      stringi_call_selftest: ${{ steps.filter.outputs.stringi_call_selftest }}
       oracle_labels_selftest: ${{ steps.filter.outputs.oracle_labels_selftest }}
       citations: ${{ steps.filter.outputs.citations }}
       citations_selftest: ${{ steps.filter.outputs.citations_selftest }}
@@ -180,6 +181,8 @@ jobs:
               - 'tools/curl-zero-gate.R'
             substring_last_selftest:
               - 'tools/substring-last-gate.R'
+            stringi_call_selftest:
+              - 'tools/stringi-call-gate.R'
             oracle_labels_selftest:
               - 'design/work/url-v3/tools/oracle-label-gate.R'
             # The citation gate resolves key-join-discharge.md's and
@@ -798,6 +801,31 @@ jobs:
         run: Rscript tools/substring-last-gate.R --self-test
       - name: Check that no substring() call relies on the default last
         run: Rscript tools/substring-last-gate.R
+
+  # stringi call gate (RURL-lbccaixb, ADR 0019). String operations are moving
+  # off `stringi`, which drops a leading U+FEFF, so no NEW stringi reference
+  # may land in R/ or NAMESPACE while the migration runs. It parses the code
+  # and counts every reference form: `::`, `:::`, aliases, bare `stri_*`,
+  # `library()`, `requireNamespace()`, roxygen and NAMESPACE imports. The
+  # allowlist, tools/stringi-call-allowlist.csv, is keyed on file, enclosing
+  # top-level function and reference, with a count and no line numbers, so a
+  # moved or removed call never fails. Removals print "allowlist can shrink".
+  # Unconditional, because any R/ edit can add a call. Base R, no package
+  # build.
+  stringi-call-gate:
+    needs: changes
+    runs-on: ubuntu-latest
+    name: no new stringi reference in R/ or NAMESPACE
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.stringi_call_selftest == 'true'
+        run: Rscript tools/stringi-call-gate.R --self-test
+      - name: Check that no new stringi reference landed
+        run: Rscript tools/stringi-call-gate.R
 
   coverage:
     needs: [check, changes]
