@@ -208,9 +208,9 @@ for (loc in names(ctypes)) {
   #            `path` -- an answer no contract sanctions, since Stage B could
   #            not read it (`path_encoding = "encode"` gave "/NA"; with
   #            `path_normalization = "dot_segments"` a dotted path threw). A
-  #            row whose
-  #            QUERY or FRAGMENT holds it keeps the `ok` it gets alone, the
-  #            octet percent-encoded, as pinned above.
+  #            web-route row whose QUERY or FRAGMENT holds it keeps the `ok`
+  #            it gets alone, the octet percent-encoded, as pinned above; a
+  #            `file:` row fails wherever the octet is (see the file: test).
   #   rfc3986  Already correct: the uniform grammar gate rejects every one of
   #            these rows (RURL-kmpnbvdl). Only the throw moves.
   #   whatwg   Already correct and unmoved (pinned above): the octet is read
@@ -321,28 +321,36 @@ for (loc in names(ctypes)) {
   })
 }
 
-test_that("a file: row with an undecodable path fails alone, in any locale", {
-  # The RFC 8089 overlay threw `invalid multibyte string` for the batch under
-  # NULL and rfc3986 (review of RURL-otrpfhmq); it is withheld like the opaque
-  # route now.
-  bad <- oct("file:///caf", 0xE9)
-  ok_row <- "file:///a/b"
-  for (ctype in c("C", "en_US.UTF-8")) {
-    withr::with_locale(c(LC_CTYPE = ctype), {
-      rurl_clear_caches()
+for (loc in names(ctypes)) {
+  test_that(paste("a file: row with an undecodable octet fails alone, under",
+                  loc), {
+    # The RFC 8089 overlay threw `invalid multibyte string` for the batch
+    # under NULL and rfc3986 (review of RURL-otrpfhmq); it is withheld like
+    # the opaque route now. The withholding reads the whole row, so a file:
+    # row fails wherever the octet is -- path, query or fragment -- unlike a
+    # web-route row, whose query or fragment octet is percent-encoded.
+    bad <- c(
+      path = oct("file:///caf", 0xE9),
+      query = oct("file:///a?q=caf", 0xE9),
+      fragment = oct("file:///a#caf", 0xE9)
+    )
+    bad <- c(bad, setNames(utf8_marked(bad), paste0(names(bad), "_utf8")))
+    ok_row <- "file:///a/b"
+    with_ctype(loc, ctypes[[loc]], {
       for (std in list(NULL, "rfc3986")) {
-        lab <- paste(ctype, if (is.null(std)) "NULL" else std)
-        r <- safe_parse_urls(c(ok_row, bad), url_standard = std)
-        expect_identical(nrow(r), 2L, label = lab)
-        expect_identical(r$parse_status[2], "error", label = lab)
         alone <- safe_parse_urls(ok_row, url_standard = std)
-        expect_identical(r[1, ], alone[1, ], label = lab,
-                         ignore_attr = TRUE)
+        for (nm in names(bad)) {
+          lab <- paste(loc, if (is.null(std)) "NULL" else std, nm)
+          r <- safe_parse_urls(c(ok_row, bad[[nm]]), url_standard = std)
+          expect_identical(nrow(r), 2L, label = lab)
+          expect_identical(r$parse_status[2], "error", label = lab)
+          expect_identical(r[1, ], alone[1, ], label = lab,
+                           ignore_attr = TRUE)
+        }
       }
-      rurl_clear_caches()
     })
-  }
-})
+  })
+}
 
 test_that(".extract_raw_path_vec() cuts an undecodable path without throwing", {
   bad <- utf8_marked(bad_rows[["end"]])
