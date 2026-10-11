@@ -67,13 +67,16 @@ test_that("case policy: the U+200B twins already keep the code point", {
     expect_identical(p$host, paste0(zwsp, "AB.EXAMPLE"), label = an)
     expect_identical(p$clean_url, paste0("HTTP://", zwsp, "AB.EXAMPLE/X"),
                      label = an)
+    # Under rfc-syntax a `file:` URL takes the general route, whose path
+    # column gets no case fold (ADR 0012 D2, RUL-027; RURL-kbjzwrkt).
+    general <- identical(an, "rfc3986")
     expect_identical(
       case_parse(paste0("file:", zwsp, "aB"), an, "upper")$path,
-      paste0(zwsp, "AB"), label = an
+      paste0(zwsp, if (general) "aB" else "AB"), label = an
     )
     expect_identical(
       case_parse(paste0("file:", zwsp, "aB"), an, "lower")$path,
-      paste0(zwsp, "ab"), label = an
+      paste0(zwsp, if (general) "aB" else "ab"), label = an
     )
   }
 })
@@ -164,13 +167,16 @@ test_that("rfc3986 (rfc-syntax + override): the case policy keeps the mark", {
   expect_identical(p$host, paste0(bom, "AB.EXAMPLE"))
   expect_identical(p$clean_url, paste0("HTTP://", bom, "AB.EXAMPLE/X"))
   expect_identical(p$parse_status, "warning-invalid-tld")
+  # A `file:` URL takes the general route under rfc-syntax, whose path column
+  # gets no case fold (ADR 0012 D2, RUL-027; RURL-kbjzwrkt): the mark stays
+  # and so does the case.
   expect_identical(
     case_parse(paste0("file:", bom, "aB"), "rfc3986", "upper")$path,
-    paste0(bom, "AB")
+    paste0(bom, "aB")
   )
   expect_identical(
     case_parse(paste0("file:", bom, "aB"), "rfc3986", "lower")$path,
-    paste0(bom, "ab")
+    paste0(bom, "aB")
   )
 })
 

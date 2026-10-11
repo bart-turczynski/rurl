@@ -301,10 +301,12 @@ test_that("the trailing-slash strip keeps a mark that starts the path", {
       "\u200b"
     )
   }
+  # A general-routed path gets no trailing-slash handling (ADR 0012 D2,
+  # RUL-027; RURL-kbjzwrkt), so the mark and the slash both stay.
   expect_identical(
     arm_path("foo:\ufeff/a/b/", "rfc3986", trailing_slash_handling = "strip",
              scheme_acceptance = "general"),
-    "\ufeff/a/b"
+    "\ufeff/a/b/"
   )
   # The strip and the index strip compose: the index strip runs first.
   expect_identical(

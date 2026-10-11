@@ -2638,6 +2638,31 @@ safe_parse_urls <- function(url,
   # for opaque paths is ADR 0011's separate escape hatch (deferred to L3b/L4b);
   # L3c only skips the hierarchical transforms here.
   if (general_acceptance) {
+    # A general-routed row's path gets the identity and dot steps
+    # `path_normalization` asks for and nothing else (RURL-kbjzwrkt): no slash
+    # collapsing, index stripping or trailing-slash handling here, and no case
+    # fold in Phase 10 below. ADR 0012 D2 makes those hierarchical transforms
+    # depend on an HTTP(S) URL, and RUL-027 leaves the general-route clean_url
+    # only the identity and dot steps, so the `path` column collapsed `//`,
+    # stripped `index.html` and folded case that its own clean_url kept.
+    # The governed dials reach here only through a named profile plus an
+    # explicit override (ADR 0012 D6); index and trailing-slash handling also
+    # under a direct `url_standard`. Never under `url_standard = NULL`, which
+    # rejects `scheme_acceptance = "general"`.
+    general_norm <- switch(opts$path_normalization,
+      both = "dot_segments",
+      collapse_slashes = "none",
+      opts$path_normalization
+    )
+    if (any(gp) && (!identical(general_norm, opts$path_normalization) ||
+                      opts$index_page_handling != "keep" ||
+                      opts$trailing_slash_handling != "none")) {
+      path_final[gp] <- .normalize_path_vec(
+        a$raw_path[gp], opts$path_encoding, general_norm,
+        "keep", "none",
+        path_identity = opts$path_identity
+      )
+    }
     revert <- !elig$path_eligible
     path_final[revert] <- a$raw_path[revert]
   }
@@ -2678,6 +2703,8 @@ safe_parse_urls <- function(url,
     cased$host[!elig$host_transform_eligible] <-
       host_for_clean[!elig$host_transform_eligible]
     cased$path[!elig$path_eligible] <- path_final[!elig$path_eligible]
+    # No case fold on a general-routed path either (RURL-kbjzwrkt; see Phase 3).
+    cased$path[gp] <- path_final[gp]
   }
 
   # Query filtering: derive the canonical query to append to clean_url per
