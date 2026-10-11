@@ -177,7 +177,12 @@
     u <- stringi::stri_replace_first_regex(u, "^[\\u0000-\\u0020]+", "")
   }
   out <- rep("inferred", length(u))
-  out[stringi::stri_startswith_fixed(u, "//")] <- "scheme-relative"
+  # A `*_regex()` detector, not stri_startswith_fixed(): the fixed matcher
+  # reads past a U+FEFF that starts its input, so `\ufeff//h/p` read as
+  # scheme-relative while its U+200B twin read inferred. The detector counts
+  # the mark, as the scheme test below does (ADR 0005; RURL-dquaxcaz).
+  rel <- stringi::stri_detect_regex(u, "^//")
+  out[!is.na(rel) & rel] <- "scheme-relative"
   explicit <- stringi::stri_detect_regex(u, "^[A-Za-z][A-Za-z0-9+.\\-]*:")
   out[!is.na(explicit) & explicit] <- "explicit"
   hp <- !is.na(looks_like_host_port) & looks_like_host_port
@@ -239,8 +244,19 @@
 #
 # Byte counts come from `stringi::stri_numbytes()` over an explicitly UTF-8
 # transcoded value, so the frame is identical under every locale. Lengths are
-# only ever COUNTED here, never used to slice, so the code-point/native-index
-# does not arise.
+# only ever COUNTED here, never used to slice a field, so the
+# code-point/native-index does not arise.
+#
+# A field that starts with U+FEFF is transcoded with an ASCII `x` spliced on
+# first, and that one byte is cut off after it. stri_enc_toutf8() reads a
+# U+FEFF that starts its input as a byte-order mark and drops it, so
+# `\ufeffh.example.com` framed as `13:h.example.com` and the key collided with
+# its unmarked twin's. The mark is field data (ADR 0005), so it must reach the
+# frame, and stri_numbytes() counts it. Only those rows are spliced, as in
+# .cache_key_escape(): a splice on every row costs a paste per field, and
+# paste0() translates a field that is not UTF-8 by the locale, which the
+# transcode alone does not. A field led by the mark holds a code point latin1
+# cannot spell, so it is UTF-8 or native already (RURL-dquaxcaz).
 .url_key_frame <- function(fields) {
   n <- unique(lengths(fields))
   stopifnot(length(n) == 1L)
@@ -250,6 +266,13 @@
   pieces <- lapply(fields, function(x) {
     x <- as.character(x)
     enc <- stringi::stri_enc_toutf8(x, validate = TRUE)
+    lead <- .starts_with_bom(x)
+    if (any(lead)) {
+      enc[lead] <- substring(
+        stringi::stri_enc_toutf8(paste0("x", x[lead]), validate = TRUE),
+        2L, .Machine$integer.max
+      )
+    }
     out <- paste0(stringi::stri_numbytes(enc), ":", enc)
     out[is.na(x)] <- "-:"
     out

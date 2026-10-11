@@ -89,6 +89,8 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 | `R/zzz.R` | `.cache_key_escape()`, under `.cache_key_ascii()` | `startsWith()` mask; `x` spliced before `stri_escape_unicode()`, then cut | RURL-iiehsbfg |
 | `R/serialize.R` | `.fsss_source_lex()` | mask on the stripped source | RURL-rynmvtwp |
 | `R/accessors.R` | `.subdomain_labels_vec()` | `endsWith()`; mask, the prefix of a mark-led host cut as bytes (`.byte_substring_vec()`, `.byte_length()`) | RURL-fyiadctm |
+| `R/url-key.R` | `.url_key_frame()` | mask; `x` spliced before `stri_enc_toutf8()`, then cut; `stri_numbytes()` counts the mark | RURL-dquaxcaz |
+| `R/url-key.R` | `.url_key_scheme_presence()` | `stri_detect_regex()`, which counts the mark | RURL-dquaxcaz |
 
 **Consequences.**
 
