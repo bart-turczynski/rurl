@@ -363,7 +363,14 @@
     # `ws://h:80/` stay DISTINCT from their portless spellings
     # (`contracts/key-join-contracts.md:116-117`, P3.1 ratification Q8) even
     # though WHATWG's parser elides all five defaults.
-    syntactic_port = a$raw_port
+    syntactic_port = a$raw_port,
+    # TRUE where the source is a `//host` network-path reference. A posture
+    # with `scheme_relative_handling = "keep"` (the `rfc-syntax` profile)
+    # parses such a row behind a stand-in `http:` prefix, so `scheme` above
+    # holds a token the source never spelled. Surface (b) reads this to refuse
+    # the row (RURL-xjyrhqin); surface (e) frames the row's scheme presence
+    # itself and does not read it.
+    scheme_relative = a$is_scheme_relative
   )
 }
 
@@ -399,8 +406,10 @@
 #' `"rfc-syntax"` profiles (see [url_profile()]). Both accept any scheme, and
 #' both **require** a scheme: neither standard defines a base-URL-free parse of
 #' `example.com/x`, so scheme-less input returns `NA` rather than being silently
-#' upgraded to `https://`. Input that the standard's parser rejects also returns
-#' `NA`.
+#' upgraded to `https://`. That includes a `//host` network-path reference such
+#' as `//example.com/x`: it is a relative reference (RFC 3986 section 4.2), not
+#' a URI, so it returns `NA` even where the `"rfc-syntax"` parse accepts it.
+#' Input that the standard's parser rejects also returns `NA`.
 #'
 #' @section Standards and forms:
 #'
@@ -447,7 +456,9 @@
 #'   session-global engine.
 #'
 #' @return A character vector the same length as `url`. `NA_character_` for
-#'   input the selected standard's parser does not accept.
+#'   input the selected standard's parser does not accept, and for input with
+#'   no scheme, a `//host` network-path reference included (see "Parse
+#'   posture").
 #'
 #' @seealso [get_clean_url()] for the cleaning surface, [safe_parse_url()] for
 #'   the parsed components, and [url_profile()] for the parse postures used
@@ -518,7 +529,14 @@ serialize_url <- function(url,
 
   rec <- .fsss_record_vec(url, standard, engine)
   out <- rep(NA_character_, n)
-  keep <- which(rec$ok)
+  # A `//host` network-path reference has no scheme: it is a relative
+  # reference (RFC 3986 section 4.2), not a URI (section 3), and with no base
+  # there is no absolute form to serialize -- the documented NA for scheme-less
+  # input. `whatwg` already rejects it at the parse (`scheme_relative_handling
+  # = "error"`); the `rfc-syntax` posture parses it behind a stand-in `http:`
+  # scheme, which emitted that scheme and, finding no `://` in the source, no
+  # authority (`//h/p` gave `http:/p`) (RURL-xjyrhqin).
+  keep <- which(rec$ok & !rec$scheme_relative)
   if (length(keep) == 0L) {
     return(out)
   }
