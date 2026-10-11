@@ -3161,7 +3161,7 @@
       colon <- regexpr(":", ui, fixed = TRUE)
       if (colon > 0L) {
         username <- substring(ui, 1L, colon - 1L)
-        password <- substring(ui, colon + 1L)
+        password <- substring(ui, colon + 1L, .Machine$integer.max)
       } else {
         username <- ui
         password <- ""

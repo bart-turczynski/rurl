@@ -734,8 +734,9 @@
     return(none)
   }
   decode <- function(labels) {
-    vapply(labels, function(x) .rfc3492_decode(substring(x, 5L)),
-           character(1), USE.NAMES = FALSE)
+    vapply(labels, function(x) {
+      .rfc3492_decode(substring(x, 5L, .Machine$integer.max))
+    }, character(1), USE.NAMES = FALSE)
   }
   folded <- chartr(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", ace

@@ -67,7 +67,7 @@
   if (length(matches) == 0L) {
     return(path)
   }
-  codes <- strtoi(substring(matches, 2L), base = 16L)
+  codes <- strtoi(substring(matches, 2L, .Machine$integer.max), base = 16L)
   is_unreserved <- (codes >= 65L & codes <= 90L) | # A-Z
     (codes >= 97L & codes <= 122L) | # a-z
     (codes >= 48L & codes <= 57L) | # 0-9

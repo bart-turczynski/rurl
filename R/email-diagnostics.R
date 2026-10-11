@@ -115,7 +115,7 @@
 # dotted-quad or an "IPv6:"-tagged literal. Bounded, not a full validator.
 .email_valid_address_literal <- function(inner) {
   if (startsWith(inner, "IPv6:")) {
-    v6 <- substring(inner, 6L)
+    v6 <- substring(inner, 6L, .Machine$integer.max)
     return(grepl(":", v6, fixed = TRUE) && grepl("^[0-9A-Fa-f:.]+$", v6))
   }
   oct <- strsplit(inner, ".", fixed = TRUE)[[1L]]

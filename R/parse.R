@@ -2348,7 +2348,8 @@ safe_parse_urls <- function(url,
       has_colon <- colon > 0L
       ui <- gen_ui[gen_split]
       pw <- rep(NA_character_, length(ui))
-      pw[has_colon] <- substring(ui[has_colon], colon[has_colon] + 1L)
+      pw[has_colon] <- substring(ui[has_colon], colon[has_colon] + 1L,
+                                 .Machine$integer.max)
       ui[has_colon] <- substring(ui[has_colon], 1L, colon[has_colon] - 1L)
       gen_ui[gen_split] <- .blank_to_na(ui)
       gen_pw[gen_split] <- .blank_to_na(pw)
