@@ -41,9 +41,7 @@ marked_rows <- list(
   list("rfc3986", "host", "%sh.example.com/p", "%sh.example.com"),
   list("rfc3986", "host", "http://%sh.com/", "%sh.com"),
   list("rfc3986", "path", "foo:%sa", "%sa"),
-  list("rfc3986", "query", "http://h/p?%sq", "%sq"),
-  list("whatwg", "query", "mailto:a@b?%sto=x", "%sto=x"),
-  list("whatwg", "query", "foo:/p?%sq", "%sq")
+  list("rfc3986", "query", "http://h/p?%sq", "%sq")
 )
 
 fill <- function(template, mark) {
@@ -114,6 +112,15 @@ test_that("whatwg: a special host maps the mark to nothing, so twins agree", {
   expect_true(has_frame(k[[1L]], "%EF%BB%BFq"))
   expect_true(has_frame(k[[2L]], "%EF%BB%BFh"))
   expect_true(has_frame(k[[3L]], "%EF%BB%BFa"))
+  # A non-special query is keyed as the standard serializes it, with the
+  # query percent-encode set, so it frames the escape too (RURL-pjrqnqvb).
+  # It still keys apart from its unmarked twin.
+  for (tmpl in c("mailto:a@b?%sto=x", "foo:/p?%sq")) {
+    k <- key(c(fill(tmpl, bom), fill(tmpl, "")), "whatwg")
+    expect_true(has_frame(k[[1L]], fill(sub("^.*[?]", "", tmpl), "%EF%BB%BF")),
+                label = tmpl)
+    expect_false(k[[1L]] == k[[2L]], label = tmpl)
+  }
 })
 
 test_that("the fragment and userinfo stay invisible with a mark in them", {
@@ -194,10 +201,10 @@ test_that("the frame reads a latin1 field by its mark, in any locale", {
 test_that("a mark-led field no longer collides with its unmarked twin", {
   # Signature, per policy: `rfc3986` moves a host, path or query that starts
   # with the mark, since its record keeps each as written (RFC 3986 has no
-  # rule for U+FEFF); `whatwg` moves only a non-special query, the one field
-  # its record leaves unencoded. A special host, a special query, a
-  # non-special host and an opaque path were already right (pinned above),
-  # and the fragment and userinfo stay out of the key. Each marked row keyed
+  # rule for U+FEFF). Under `whatwg` the mark is percent-encoded in every key
+  # field it can start, including a non-special query (RURL-pjrqnqvb), so no
+  # `whatwg` row is left here (pinned above), and the fragment and userinfo
+  # stay out of the key. Each marked row keyed
   # like its unmarked twin; it now frames the mark, as its U+200B twin does.
   for (row in marked_rows) {
     std <- row[[1L]]
