@@ -2437,7 +2437,8 @@ safe_parse_urls <- function(url,
 
   # Phase 6: www-prefix policy shapes the host fed to the PSL decomposition.
   final_host <- .apply_www_policy_vec(
-    model_host, opts$www_handling, is_ip_host, opts$engine
+    model_host, opts$www_handling, is_ip_host, opts$engine,
+    url_standard = opts$url_standard
   )
   # ADR 0012 D2 (the one edit inside the cached Stage-A path): a general
   # non-special / opaque / reg-name / empty host does NOT get www-stripping.
@@ -2624,7 +2625,8 @@ safe_parse_urls <- function(url,
 
   # Phase 8: subdomain-level policy (may trim labels from the host).
   final_host <- .apply_subdomain_policy_vec(
-    a$final_host, domain, opts$subdomain_levels_to_keep, is_ip_host, opts$engine
+    a$final_host, domain, opts$subdomain_levels_to_keep, is_ip_host,
+    opts$engine, url_standard = opts$url_standard
   )
   # D2 "Host presentation" / "DNS/PSL derivation": revert host-transform for
   # ineligible (opaque/IP/empty/non-domain) hosts to the pre-trim host.

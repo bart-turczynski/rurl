@@ -40,9 +40,12 @@
   has_userinfo[is.na(has_userinfo)] <- FALSE
 
   # Host = authority after any userinfo, minus the port. Bracketed IPv6 keeps
-  # its "[...]"; otherwise drop a single trailing ":port".
+  # its "[...]"; otherwise drop a single trailing ":port". `startsWith()`, not
+  # stri_startswith_fixed(), which reads past a U+FEFF that starts its input
+  # (see .starts_with_bom()): a host led by the mark is not bracketed
+  # (RURL-opwjlnla).
   host_ui <- stringi::stri_replace_first_regex(authority, "^.*@", "")
-  bracketed <- stringi::stri_startswith_fixed(host_ui, "[")
+  bracketed <- startsWith(host_ui, "[")
   bracketed[is.na(bracketed)] <- FALSE
   host_token <- ifelse(
     bracketed,
@@ -462,7 +465,12 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)(.*)$"
   )
   authority <- m[, 4L]
-  has_at <- !is.na(authority) & stringi::stri_count_fixed(authority, "@") > 0L
+  # A row led by U+FEFF has no scheme; the stringi match reads past the mark,
+  # and rebuilding the row from it would drop the mark, so it is masked
+  # (RURL-opwjlnla). The pipeline never hands this helper such a row today:
+  # Phase 1 prefixes "http://" to every row led by the mark (`add_http`).
+  has_at <- !is.na(authority) & !.starts_with_bom(url) &
+    stringi::stri_count_fixed(authority, "@") > 0L
   has_at[is.na(has_at)] <- FALSE
 
   # Any of the 30 parser-refused code points inside the userinfo span
@@ -1730,12 +1738,16 @@
   balanced <- valid_h & (has_open == has_close)
   balanced[is.na(balanced)] <- FALSE
 
-  tail_match <- stringi::stri_match_first_regex(
+  # A detector, not stri_match_first_regex(), which reads past a U+FEFF that
+  # starts its input (see .starts_with_bom()) and so read an address in
+  # a mark-led host (RURL-opwjlnla); stri_detect_regex() counts the mark.
+  tail_match <- stringi::stri_detect_regex(
     raw_host,
     paste0("^\\[?[0-9a-fA-F:]+:(", oct, "(?:\\.", oct, "){3})\\]?$")
   )
+  tail_match[is.na(tail_match)] <- FALSE
   # The tail regex already enforces canonical octets, so a match is sufficient.
-  has_tail <- balanced & !is.na(tail_match[, 1L])
+  has_tail <- balanced & tail_match
   ipv6[has_tail] <- TRUE
 
   # Conservative check for balanced hosts without an embedded dotted-quad tail.
@@ -1981,8 +1993,10 @@
     # parser as `raddr` owns it (`.whatwg_ipv4_read()`, ADR 0018's
     # 2026-10-09 amendment). An NA there is the IPv4 parser's failure, which
     # fails the host and so the URL.
-    reg_like <- !is.na(host) & host != "" &
-      !stringi::stri_startswith_fixed(host, "[")
+    # `startsWith()`: stri_startswith_fixed() reads past a U+FEFF that starts
+    # its input (see .starts_with_bom()), and a host led by the mark is not
+    # bracketed (RURL-opwjlnla).
+    reg_like <- !is.na(host) & host != "" & !startsWith(host, "[")
     reg_like[is.na(reg_like)] <- FALSE
     candidate <- host
     nonascii_all <- reg_like &
@@ -2047,8 +2061,9 @@
 }
 
 # Phase 6 (vector): apply the www-prefix policy to (non-IP) hosts.
+# `url_standard` reaches only the "if_no_subdomain" branch (RURL-opwjlnla).
 .apply_www_policy_vec <- function(raw_host, www_handling, is_ip_host,
-                                  engine = NULL) {
+                                  engine = NULL, url_standard = NULL) {
   final_host <- raw_host
   elig <- !is_ip_host & !is.na(raw_host) & raw_host != ""
   if (!any(elig)) {
@@ -2081,7 +2096,9 @@
       final_host[no_www] <- paste0("www.", raw_host[no_www])
     }
   } else if (www_handling == "if_no_subdomain") {
-    final_host[elig] <- .apply_www_if_no_subdomain_vec(raw_host[elig], engine)
+    final_host[elig] <- .apply_www_if_no_subdomain_vec(
+      raw_host[elig], engine, url_standard
+    )
   }
   final_host
 }
@@ -2091,7 +2108,8 @@
 # The STRUCTURAL decision uses pslr's canonical decomposition (batched over the
 # eligible hosts) so an A-label host and its Unicode equivalent take the same
 # branch; the emitted host keeps the input spelling (candidate_host).
-.apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL) {
+.apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL,
+                                           url_standard = NULL) {
   ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
   lower <- .ascii_tolower(raw_host)
 
@@ -2107,9 +2125,21 @@
     candidate_host[has_www] <- paste0("www.", bare_part[has_www])
   }
 
+  # `startsWith()`, not stri_startswith_fixed(), which reads past a U+FEFF
+  # that starts its input (see .starts_with_bom()): the mark-led apex
+  # "<U+FEFF>www.com" is not www-prefixed, so it gets "www." like its U+200B
+  # twin (RURL-opwjlnla). A row that passes starts with "www.", so the stringi
+  # match below cannot meet the mark. Except under `whatwg`: that arm keeps
+  # the stringi reading, the match included, so its output does not move. The
+  # policy reads the host there before UTS-46 maps the mark away, which is
+  # RURL-fobwctml's to settle.
   host_for_domain_check <- candidate_host
   cand_lower <- .ascii_tolower(candidate_host)
-  cw <- stringi::stri_startswith_fixed(cand_lower, "www.")
+  cw <- if (.is_whatwg(url_standard)) {
+    stringi::stri_startswith_fixed(cand_lower, "www.")
+  } else {
+    startsWith(cand_lower, "www.")
+  }
   cw[is.na(cw)] <- FALSE
   if (any(cw)) {
     match_res_bare <- stringi::stri_match_first_regex(
@@ -2128,8 +2158,7 @@
   # Apex iff the canonical decomposition has no subdomain labels.
   host_equals_domain <- !is.na(derived_subdomain) & derived_subdomain == ""
 
-  cand_has_www <- stringi::stri_startswith_fixed(cand_lower, "www.")
-  cand_has_www[is.na(cand_has_www)] <- FALSE
+  cand_has_www <- cw
 
   result <- candidate_host
   add_www <- !no_derived_domain & host_equals_domain & !cand_has_www
@@ -2264,7 +2293,7 @@
 # runs via vapply on the affected hosts only.
 .apply_subdomain_policy_vec <- function(final_host, domain,
                                         subdomain_levels_to_keep, is_ip_host,
-                                        engine = NULL) {
+                                        engine = NULL, url_standard = NULL) {
   if (is.null(subdomain_levels_to_keep)) {
     return(final_host)
   }
@@ -2277,7 +2306,31 @@
   idx <- which(can_trim)
   fh <- final_host[idx]
   lower <- .ascii_tolower(fh)
-  has_www_prefix <- stringi::stri_startswith_fixed(lower, "www.")
+  # `startsWith()`, not stri_startswith_fixed(), which reads past a U+FEFF
+  # that starts its input (see .starts_with_bom()): "<U+FEFF>www." read as the
+  # www prefix, and stri_sub() then cut the mark off with it. The mark-led
+  # label is a subdomain label like its U+200B twin's (RURL-opwjlnla). A row
+  # that passes starts with "www.", so stri_sub() cannot meet the mark.
+  # Under `whatwg` the policy reads the host before UTS-46 maps the mark away;
+  # that arm keeps the stringi reading, so its output does not move
+  # (RURL-fobwctml owns the pre-mapping read).
+  whatwg <- .is_whatwg(url_standard)
+  has_www_prefix <- if (whatwg) {
+    stringi::stri_startswith_fixed(lower, "www.")
+  } else {
+    startsWith(lower, "www.")
+  }
+  has_www_prefix[is.na(has_www_prefix)] <- FALSE
+  # The rows the stringi reading took for www-prefixed: one mark, then "www.".
+  # When the policy trims none of their labels they stay as written, rather
+  # than take the rebuild below, which lowercases the registrable labels; the
+  # stringi reading left "<U+FEFF>WWW.Example.com" as written too.
+  bom_www <- !whatwg & .starts_with_bom(fh)
+  if (any(bom_www)) {
+    bom_www[bom_www] <- startsWith(
+      .byte_substring_vec(lower[bom_www], 4L), "www."
+    )
+  }
 
   host_part <- fh
   if (any(has_www_prefix)) {
@@ -2294,7 +2347,8 @@
   num_sub_labels <- lengths(sub_split)
   num_raw_labels <- lengths(raw_split)
 
-  act <- has_subdomain & (num_raw_labels > num_sub_labels)
+  act <- has_subdomain & (num_raw_labels > num_sub_labels) &
+    !(bom_www & subdomain_levels_to_keep >= num_sub_labels)
   act_pos <- which(act)
   if (length(act_pos) > 0L) {
     slk <- subdomain_levels_to_keep
@@ -2444,6 +2498,26 @@
   .apply_host_encoding_vec(final_host, host_encoding, is_ip_host, url_standard)
 }
 
+# Unicode case mapping, pinned to .ASCII_SAFE_ICU_LOCALE, that keeps a leading
+# U+FEFF. stri_trans_toupper() and stri_trans_tolower() drop a U+FEFF that
+# starts their input (see .starts_with_bom()), so `case_handling` lost the mark
+# from a host or path led by it (RURL-opwjlnla). A row led by the mark is mapped
+# with an ASCII "0" spliced on first and cut off as a byte: "0" maps to itself
+# in both directions and is neither cased nor case-ignorable, so it ends a
+# Final_Sigma context exactly as the start of the string does. Other rows take
+# the plain call, so they cannot move.
+.unicode_case_map_vec <- function(x, upper) {
+  map <- if (upper) stringi::stri_trans_toupper else stringi::stri_trans_tolower
+  out <- map(x, locale = .ASCII_SAFE_ICU_LOCALE)
+  bom_led <- .starts_with_bom(x)
+  if (any(bom_led)) {
+    out[bom_led] <- .byte_substring_vec(
+      map(paste0("0", x[bom_led]), locale = .ASCII_SAFE_ICU_LOCALE), 2L
+    )
+  }
+  out
+}
+
 # Phase 10 (vector): apply the case policy to host, path, and scheme.
 .apply_case_policy_vec <- function(host_output, path_output, scheme_output,
                                    case_handling) {
@@ -2475,9 +2549,8 @@
         .ascii_tolower(host_output[h_mask])
       )
     } else if (case_handling == "upper") {
-      host_output[h_mask] <- stringi::stri_trans_toupper(
-        host_output[h_mask],
-        locale = .ASCII_SAFE_ICU_LOCALE
+      host_output[h_mask] <- .unicode_case_map_vec(
+        host_output[h_mask], upper = TRUE
       )
     }
   }
@@ -2493,14 +2566,12 @@
   p_mask <- !is.na(path_output)
   if (any(p_mask)) {
     if (case_handling == "lower") {
-      path_output[p_mask] <- stringi::stri_trans_tolower(
-        path_output[p_mask],
-        locale = .ASCII_SAFE_ICU_LOCALE
+      path_output[p_mask] <- .unicode_case_map_vec(
+        path_output[p_mask], upper = FALSE
       )
     } else if (case_handling == "upper") {
-      path_output[p_mask] <- stringi::stri_trans_toupper(
-        path_output[p_mask],
-        locale = .ASCII_SAFE_ICU_LOCALE
+      path_output[p_mask] <- .unicode_case_map_vec(
+        path_output[p_mask], upper = TRUE
       )
     }
   }
