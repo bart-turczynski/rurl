@@ -12,8 +12,8 @@
 # stringi does not skip, so a twin that already lexes no authority shows the
 # defect is the mark's alone.
 
-bom <- "﻿"
-zwsp <- "​"
+bom <- "\ufeff"
+zwsp <- "\u200b"
 lex_arms <- c("whatwg", "rfc3986")
 
 test_that("the U+200B twins lex no authority under either standard", {
@@ -89,6 +89,13 @@ test_that("whatwg: the mark that leads after the C0-or-space strip counts", {
   # The guard reads the mark after the strip, not before (RURL-rynmvtwp).
   expect_identical(lex$userinfo, NA_character_)
   expect_identical(lex$host, NA_character_)
+  # The U+200B twin: after the strip the zero-width space leads, and the
+  # match, which does not skip it, finds no scheme either.
+  twin <- rurl:::.fsss_source_lex(paste0(" ", zwsp, "http://u@h/"), "whatwg")
+  expect_identical(twin$userinfo, NA_character_)
+  expect_identical(twin$host, NA_character_)
+  # Control, not a pin: under rfc3986 the space still leads, so no scheme
+  # matches with or without the guard.
   lex <- rurl:::.fsss_source_lex(src, "rfc3986")
   expect_identical(lex$userinfo, NA_character_)
   expect_identical(lex$host, NA_character_)
