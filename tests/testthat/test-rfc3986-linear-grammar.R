@@ -131,7 +131,7 @@ test_that("non-ASCII scalars keep the ADR 0002 tolerance at every boundary", {
 })
 
 test_that("a missing input is rejected", {
-  expect_identical(.lin_comp_ok(NA_character_, "path"), FALSE)
+  expect_false(.lin_comp_ok(NA_character_, "path"))
 })
 
 test_that("a mixed vector gets one verdict per element, NA rejected", {
@@ -150,7 +150,7 @@ test_that("the matcher is total on bytes that do not decode", {
   x <- "a\x80b"
   Encoding(x) <- "UTF-8"
   expect_no_error(.lin_comp_ok(x, "path"))
-  expect_false(.rfc3986_generic_uri_ok(paste0("foo:/", x))$ok)
+  expect_false(.rfc3986_generic_uri_ok(sprintf("foo:/%s", x))$ok)
 })
 
 # --- long components through the parse surface --------------------------------
