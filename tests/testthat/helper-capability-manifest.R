@@ -25,12 +25,19 @@
 #   template    "web" or "mailto": the URL shape the hostile rows are cut
 #               into (see test-hostile-input-contracts.R).
 #   options     Option sets crossed with every standard; `list()` is the
-#               default call. Not a Cartesian product of every knob.
+#               default call. Not a Cartesian product of every knob. A name
+#               starting with "." is not an argument: `.standards` limits the
+#               set to the standards it names.
+#   positions   The template positions to cut hostile rows into; NULL is all
+#               of them. Narrowed only where a call is expensive.
+#   long_n      Length of the `long` payload; NULL is the harness default.
 #   shape       What one input row maps to:
-#                 "vector"     one element of an atomic vector;
+#                 "vector"     one element of a vector (a list under an
+#                              option such as get_query(format = "list"));
 #                 "key"        one element of a rurl_url_key plus its
 #                              keyability attribute;
-#                 "list"       one element of a list;
+#                 "list"       one element of a list; a length-1 input
+#                              returns that element bare;
 #                 "frame"      one row of a data frame;
 #                 "expanded"   zero or more rows of a data frame, in input
 #                              order (get_mailto_recipients());
@@ -43,23 +50,26 @@
 cap_entry <- function(standards, shape, selector = "url_standard",
                       unsupported = character(0), operands = "url",
                       template = "web", options = list(list()),
-                      echoes = character(0)) {
+                      echoes = character(0), positions = NULL,
+                      long_n = NULL) {
   list(
     selector = selector, standards = standards, unsupported = unsupported,
     operands = operands, template = template, options = options,
-    shape = shape, echoes = echoes
+    shape = shape, echoes = echoes, positions = positions, long_n = long_n
   )
 }
 
 cap_all3 <- c("NULL", "whatwg", "rfc3986")
 cap_named <- c("whatwg", "rfc3986")
+cap_join_positions <- "host"
 
 capability_manifest <- list(
   # --- Parse surface -------------------------------------------------------
   safe_parse_urls = cap_entry(
     cap_all3, "frame",
     options = list(list(), list(path_encoding = "encode",
-                                trailing_slash_handling = "strip")),
+                                trailing_slash_handling = "strip",
+                                query_handling = "keep")),
     echoes = c("path", "query", "fragment", "userinfo", "host")
   ),
   safe_parse_url = cap_entry(cap_all3, "scalar"),
@@ -79,10 +89,7 @@ capability_manifest <- list(
     options = list(list(), list(host_encoding = "idna")), echoes = "host"
   ),
   get_domain = cap_entry(cap_all3, "vector"),
-  get_subdomain = cap_entry(
-    cap_all3, "vector",
-    options = list(list(), list(format = "labels"))
-  ),
+  get_subdomain = cap_entry(cap_all3, "vector"),
   get_tld = cap_entry(cap_all3, "vector"),
   get_port = cap_entry(cap_all3, "vector"),
   get_path = cap_entry(
@@ -104,13 +111,17 @@ capability_manifest <- list(
   get_url_diagnostics = cap_entry(cap_named, "list", unsupported = "NULL"),
   get_scheme_class = cap_entry(cap_named, "vector", unsupported = "NULL"),
   # --- Host and scheme policy ----------------------------------------------
+  # check_hosts() returns every rule's verdict, so is_valid_host() crosses
+  # none.
   check_hosts = cap_entry(cap_all3, "frame"),
-  is_valid_host = cap_entry(cap_all3, "vector",
-                            options = list(list(), list(rule = "dns"))),
+  is_valid_host = cap_entry(cap_all3, "vector"),
   # Default scheme_acceptance = "general", which NULL rejects.
   check_schemes = cap_entry(cap_named, "frame", unsupported = "NULL"),
+  # The recipient splitter's time grows with the square of the local part
+  # and domain length, so its long payload is shorter.
   get_mailto_recipients = cap_entry(
-    cap_named, "expanded", unsupported = "NULL", template = "mailto"
+    cap_named, "expanded", unsupported = "NULL", template = "mailto",
+    long_n = 2000L
   ),
   # --- Serializers and display ---------------------------------------------
   serialize_url = cap_entry(
@@ -132,24 +143,36 @@ capability_manifest <- list(
   # --- Reference resolution: both operands are URLs ------------------------
   resolve_url = cap_entry(
     cap_all3, "vector", operands = c("relative_or_absolute", "base_url"),
-    options = list(list(), list(output = "serialized"))
+    # output = "serialized" under NULL is an error (no standard to
+    # serialize as), pinned with the other rejected selectors.
+    options = list(list(), list(output = "serialized",
+                                .standards = cap_named))
   ),
   # --- Joins ---------------------------------------------------------------
+  # Every join reads its keys through get_url_key() or safe_parse_urls(),
+  # whose entries cross every position, and a join call is costly; a join is
+  # held to hostile hosts, on both of its tables.
   url_inner_join = cap_entry(cap_named, "join", selector = "policy",
-                             unsupported = "NULL", operands = c("x", "y")),
+                             unsupported = "NULL", operands = c("x", "y"),
+                             positions = cap_join_positions),
   url_left_join = cap_entry(cap_named, "join", selector = "policy",
-                            unsupported = "NULL", operands = c("x", "y")),
+                            unsupported = "NULL", operands = c("x", "y"),
+                            positions = cap_join_positions),
   url_right_join = cap_entry(cap_named, "join", selector = "policy",
-                             unsupported = "NULL", operands = c("x", "y")),
+                             unsupported = "NULL", operands = c("x", "y"),
+                             positions = cap_join_positions),
   url_full_join = cap_entry(cap_named, "join", selector = "policy",
-                            unsupported = "NULL", operands = c("x", "y")),
+                            unsupported = "NULL", operands = c("x", "y"),
+                            positions = cap_join_positions),
   url_semi_join = cap_entry(cap_named, "join", selector = "policy",
-                            unsupported = "NULL", operands = c("x", "y")),
+                            unsupported = "NULL", operands = c("x", "y"),
+                            positions = cap_join_positions),
   url_anti_join = cap_entry(cap_named, "join", selector = "policy",
-                            unsupported = "NULL", operands = c("x", "y")),
+                            unsupported = "NULL", operands = c("x", "y"),
+                            positions = cap_join_positions),
   canonical_join = cap_entry(
     cap_all3, "join", selector = "dots", operands = c("data_A", "data_B"),
-    options = list(list(join = "inner"), list(join = "full"))
+    options = list(list(join = "full")), positions = cap_join_positions
   )
 )
 

@@ -56,7 +56,7 @@ test_that("every manifest entry is well formed against the live formals", {
     expect_true(e$shape %in% shapes, label = fn)
     expect_true(e$selector %in% selectors, label = fn)
     expect_true(e$template %in% c("web", "mailto"), label = fn)
-    expect_true(length(e$standards) > 0L, label = fn)
+    expect_gt(length(e$standards), 0L, label = fn)
     if (e$selector == "none") {
       expect_identical(e$standards, "none", label = fn)
     } else {
@@ -71,10 +71,16 @@ test_that("every manifest entry is well formed against the live formals", {
     # Every URL operand and every crossed option is a live formal (or reaches
     # the export through its `...`).
     takes_dots <- "..." %in% fm
-    for (arg in c(e$operands, unlist(lapply(e$options, names)))) {
+    opt_names <- as.character(unlist(lapply(e$options, names)))
+    for (arg in c(e$operands, opt_names[!startsWith(opt_names, ".")])) {
       expect_true(arg %in% fm || takes_dots,
                   label = paste(fn, "formal", arg))
     }
+    for (o in e$options) {
+      expect_true(all(o$.standards %in% e$standards), label = fn)
+    }
+    expect_true(all(e$positions %in% hi_positions(e$template)), label = fn)
+    expect_true(all(e$echoes %in% hi_positions(e$template)), label = fn)
     sel_formal <- switch(e$selector,
                          url_standard = "url_standard",
                          standard = "standard",
