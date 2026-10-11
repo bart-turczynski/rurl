@@ -495,18 +495,20 @@
     if (!.rfc3986_valid_ip_literal(substring(hp, 2L, rb - 1L))) {
       return(FALSE)
     }
-    after <- substring(hp, rb + 1L)
+    after <- substring(hp, rb + 1L, .Machine$integer.max)
     if (!nzchar(after)) {
       return(TRUE)
     }
     if (!startsWith(after, ":")) {
       return(FALSE) # junk after the "]" that is not a port
     }
-    return(.rfc3986_match(substring(after, 2L), .RFC3986_PORT_RE))
+    return(.rfc3986_match(substring(after, 2L, .Machine$integer.max),
+                          .RFC3986_PORT_RE))
   }
   cpos <- .rfc3986_first_index(hp, ":")
   if (cpos > 0L) {
-    if (!.rfc3986_match(substring(hp, cpos + 1L), .RFC3986_PORT_RE)) {
+    if (!.rfc3986_match(substring(hp, cpos + 1L, .Machine$integer.max),
+                        .RFC3986_PORT_RE)) {
       return(FALSE)
     }
     return(.rfc3986_match(substring(hp, 1L, cpos - 1L), .RFC3986_HOST_RE))
@@ -530,7 +532,9 @@
     if (!.rfc3986_match(userinfo, .RFC3986_USERINFO_RE)) {
       return(FALSE)
     }
-    return(.rfc3986_valid_hostport(substring(authority, apos + 1L)))
+    return(.rfc3986_valid_hostport(
+      substring(authority, apos + 1L, .Machine$integer.max)
+    ))
   }
   .rfc3986_valid_hostport(authority)
 }
@@ -543,11 +547,11 @@
   if (!startsWith(hp, "//")) {
     return(.rfc3986_match(hp, .RFC3986_PATH_RE))
   }
-  ap <- substring(hp, 3L)
+  ap <- substring(hp, 3L, .Machine$integer.max)
   spos <- .rfc3986_first_index(ap, "/")
   if (spos > 0L) {
     authority <- substring(ap, 1L, spos - 1L)
-    path <- substring(ap, spos)
+    path <- substring(ap, spos, .Machine$integer.max)
   } else {
     authority <- ap
     path <- ""
@@ -570,11 +574,12 @@
   if (is.na(m[1L, 1L])) {
     return(FALSE)
   }
-  rest <- substring(x, nchar(m[1L, 2L]) + 2L)
+  rest <- substring(x, nchar(m[1L, 2L]) + 2L, .Machine$integer.max)
   # fragment = everything after the FIRST "#" (S3.5).
   hpos <- .rfc3986_first_index(rest, "#")
   if (hpos > 0L) {
-    if (!.rfc3986_match(substring(rest, hpos + 1L), .RFC3986_QF_RE)) {
+    if (!.rfc3986_match(substring(rest, hpos + 1L, .Machine$integer.max),
+                        .RFC3986_QF_RE)) {
       return(FALSE)
     }
     rest <- substring(rest, 1L, hpos - 1L)
@@ -582,7 +587,8 @@
   # query = everything after the FIRST "?" in what remains (S3.4).
   qpos <- .rfc3986_first_index(rest, "?")
   if (qpos > 0L) {
-    if (!.rfc3986_match(substring(rest, qpos + 1L), .RFC3986_QF_RE)) {
+    if (!.rfc3986_match(substring(rest, qpos + 1L, .Machine$integer.max),
+                        .RFC3986_QF_RE)) {
       return(FALSE)
     }
     rest <- substring(rest, 1L, qpos - 1L)
@@ -756,13 +762,17 @@
   )[1L, 1L]
   if (!is.na(at)) {
     userinfo <- substring(authority, 1L, at - 1L)
-    hostport <- substring(authority, at + 1L)
+    hostport <- substring(authority, at + 1L, .Machine$integer.max)
   }
   host <- hostport
   port <- NA_character_
   if (startsWith(hostport, "[")) {
     rb <- .rfc3986_first_index(hostport, "]")
-    after <- if (rb > 0L) substring(hostport, rb + 1L) else ""
+    after <- if (rb > 0L) {
+      substring(hostport, rb + 1L, .Machine$integer.max)
+    } else {
+      ""
+    }
     # Only an empty tail or a `:port` ends the literal at its `]`. Any other
     # tail (`[::1]x`, `[::1]]`, `[::1]\x`) stays in the host, where the host
     # parsers fail it ("must end with `]`", or the IPv6 parser): the WHATWG
@@ -773,14 +783,14 @@
     if (rb > 0L && (!nzchar(after) || startsWith(after, ":"))) {
       host <- substring(hostport, 1L, rb)
       if (nzchar(after)) {
-        port <- substring(after, 2L)
+        port <- substring(after, 2L, .Machine$integer.max)
       }
     }
   } else {
     cpos <- .rfc3986_first_index(hostport, ":")
     if (cpos > 0L) {
       host <- substring(hostport, 1L, cpos - 1L)
-      port <- substring(hostport, cpos + 1L)
+      port <- substring(hostport, cpos + 1L, .Machine$integer.max)
     }
   }
   list(userinfo = userinfo, host = host, port = port)
@@ -884,12 +894,12 @@
   rest <- remainder
   hpos <- .rfc3986_first_index(rest, "#")
   if (hpos > 0L) {
-    fragment <- substring(rest, hpos + 1L)
+    fragment <- substring(rest, hpos + 1L, .Machine$integer.max)
     rest <- substring(rest, 1L, hpos - 1L)
   }
   qpos <- .rfc3986_first_index(rest, "?")
   if (qpos > 0L) {
-    query <- substring(rest, qpos + 1L)
+    query <- substring(rest, qpos + 1L, .Machine$integer.max)
     rest <- substring(rest, 1L, qpos - 1L)
   }
 
@@ -920,11 +930,11 @@
     path <- .whatwg_opaque_path_encode(rest, hpos > 0L || qpos > 0L)
     authority <- na
   } else if (startsWith(rest, "//")) {
-    after <- substring(rest, 3L)
+    after <- substring(rest, 3L, .Machine$integer.max)
     spos <- .rfc3986_first_index(after, "/")
     if (spos > 0L) {
       authority <- substring(after, 1L, spos - 1L)
-      path <- substring(after, spos)
+      path <- substring(after, spos, .Machine$integer.max)
     } else {
       authority <- after
       path <- ""
@@ -1188,12 +1198,12 @@
   fragment <- na
   hpos <- .rfc3986_first_index(rest, "#")
   if (hpos > 0L) {
-    fragment <- substring(rest, hpos + 1L)
+    fragment <- substring(rest, hpos + 1L, .Machine$integer.max)
     rest <- substring(rest, 1L, hpos - 1L)
   }
   qpos <- .rfc3986_first_index(rest, "?")
   if (qpos > 0L) {
-    query <- substring(rest, qpos + 1L)
+    query <- substring(rest, qpos + 1L, .Machine$integer.max)
     rest <- substring(rest, 1L, qpos - 1L)
   }
 
@@ -1203,11 +1213,11 @@
   is_v6 <- FALSE
   is_v4 <- FALSE
   if (startsWith(rest, "//")) {
-    after <- substring(rest, 3L)
+    after <- substring(rest, 3L, .Machine$integer.max)
     spos <- .rfc3986_first_index(after, "/")
     if (spos > 0L) {
       authority <- substring(after, 1L, spos - 1L)
-      path <- substring(after, spos)
+      path <- substring(after, spos, .Machine$integer.max)
     } else {
       authority <- after
       path <- ""

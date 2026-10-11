@@ -314,7 +314,7 @@
     return(path)
   }
   rooted <- startsWith(path, "/")
-  body <- if (rooted) substring(path, 2L) else path
+  body <- if (rooted) substring(path, 2L, .Machine$integer.max) else path
   segs <- stringi::stri_split_fixed(paste0("/", body), "/")[[1L]][-1L]
   out <- character(0)
   n <- length(segs)
@@ -425,7 +425,9 @@
           # `file:///C:/a/b` is `file:///C:/`, not `file:///`.
           drive <- .whatwg_file_base_drive(b$path)
           if (!is.na(drive) &&
-                !.whatwg_file_ref_starts_with_drive(substring(p, 2L))) {
+                !.whatwg_file_ref_starts_with_drive(
+                  substring(p, 2L, .Machine$integer.max)
+                )) {
             p <- paste0("/", drive, ":", p)
           }
         }

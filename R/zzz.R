@@ -201,7 +201,8 @@ rurl_clear_caches <- function() {
   out <- character(length(keys))
   out[!lead] <- stringi::stri_escape_unicode(keys[!lead])
   out[lead] <- substring(
-    stringi::stri_escape_unicode(paste0("x", keys[lead])), 2L
+    stringi::stri_escape_unicode(paste0("x", keys[lead])),
+    2L, .Machine$integer.max
   )
   out
 }

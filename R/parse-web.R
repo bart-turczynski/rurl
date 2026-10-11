@@ -632,10 +632,10 @@
     return(NA_real_)
   }
   if (grepl("^0x", part, useBytes = TRUE)) {
-    digits <- substring(part, 3L)
+    digits <- substring(part, 3L, .Machine$integer.max)
     base <- 16
   } else if (grepl("^0[0-9]+$", part, useBytes = TRUE)) {
-    digits <- substring(part, 2L)
+    digits <- substring(part, 2L, .Machine$integer.max)
     base <- 8
   } else {
     digits <- part
@@ -790,7 +790,7 @@
   if (has_dc) {
     dc <- stringi::stri_locate_first_fixed(inner, "::")[1L, 1L]
     left_s <- substring(inner, 1L, dc - 1L)
-    right_s <- substring(inner, dc + 2L)
+    right_s <- substring(inner, dc + 2L, .Machine$integer.max)
     if (grepl("::", right_s, fixed = TRUE, useBytes = TRUE)) {
       return(NULL) # more than one "::"
     }
