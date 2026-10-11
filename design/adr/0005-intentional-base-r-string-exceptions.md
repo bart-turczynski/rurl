@@ -79,6 +79,12 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 | `R/parse-phases.R` | `.prepare_urls_for_parse_vec()` | mask | RURL-vhionecz |
 | `R/parse-phases.R` | `.extract_raw_path_vec()` | regex locators, which count the mark | RURL-vhionecz |
 | `R/parse-phases.R` | `.normalize_path_vec()`, trailing-slash branch | `endsWith()`; the slash cut as a byte | RURL-zxnxczsw |
+| `R/parse-phases.R` | `.apply_case_policy_vec()`, via `.unicode_case_map_vec()` | mask; `0` spliced before `stri_trans_toupper()` / `stri_trans_tolower()`, cut as a byte | RURL-opwjlnla |
+| `R/parse-phases.R` | `.apply_subdomain_policy_vec()` | `startsWith()`, then `stri_sub()` on rows it passes; the stringi reading kept under `whatwg` | RURL-opwjlnla |
+| `R/parse-phases.R` | `.apply_www_if_no_subdomain_vec()` | `startsWith()`; the stringi reading kept under `whatwg` | RURL-opwjlnla |
+| `R/parse-phases.R` | `.detect_ip_host_vec()` | regex detector for the dotted-quad tail, which counts the mark | RURL-opwjlnla |
+| `R/parse-phases.R` | `.classify_input_host_vec()`, `.apply_host_standard_model_vec()` | `startsWith()` | RURL-opwjlnla |
+| `R/parse-phases.R` | `.encode_userinfo_charset_vec()` | mask | RURL-opwjlnla |
 | `R/parse-state.R` | `.rfc3986_first_index()`, `.split_authority()` | literal regex locators | RURL-biunpazk |
 | `R/parse-state.R` | `.rfc3986_generic_uri_ok()`, `.general_parsed_mask()` | mask | RURL-biunpazk, RURL-vhionecz |
 | `R/path-query.R` | `._remove_dot_segments()` | `startsWith()`, `substring()` with an explicit `last` | RURL-xrjtdnko, RURL-zxnxczsw |
