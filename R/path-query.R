@@ -261,10 +261,10 @@
 #
 # That makes the encoder a table lookup, and the lookup vectorizes: one
 # `grepl()` finds the rows holding an octet that changes, and those rows go
-# through ONE `charToRaw()` / table index / `paste()` / `substring()` pass
-# together, instead of an R-level loop per octet per row (RURL-khcicsca: about
-# 1 us per byte before). Rows with nothing to change, NA and "" come back as
-# they went in.
+# through ONE `paste()` / `charToRaw()` / table index / `rawToChar()` /
+# `substring()` pass together, instead of an R-level loop per octet per row
+# (RURL-khcicsca: about 1 us per byte before). Rows with nothing to change, NA
+# and "" come back as they went in.
 #
 # The byte extraction is the INPUT-side counterpart of the host chokepoint's
 # `.mark_host_utf8()`. This used to read `charToRaw(enc2utf8(x))`, and that
@@ -288,7 +288,7 @@
 # makes (R/parse-state.R) is the length-one case. `batch_bytes` exists so a
 # test can force several batches; callers leave it alone.
 .whatwg_component_percent_encode <- function(x, encode_set,
-                                             batch_bytes = 2e8) {
+                                             batch_bytes = 4194304) {
   out <- x
   todo <- which(!is.na(x) & grepl(
     .whatwg_encode_pattern(encode_set), x, perl = TRUE, useBytes = TRUE
@@ -299,8 +299,8 @@
   tab <- .whatwg_encode_table(encode_set)
   s <- .mark_host_utf8(x[todo])
   n_bytes <- nchar(s, type = "bytes")
-  # Bound each batch's pasted output (at most 3 octets per input octet) well
-  # under R's 2^31 - 1 byte string limit. Ordinary input is one batch.
+  # Batches of about `batch_bytes` input octets bound the transient index
+  # vectors (two integers per output octet). Ordinary input is one batch.
   batch <- cumsum(as.numeric(n_bytes)) %/% batch_bytes
   for (b in unique(batch)) {
     rows <- which(batch == b)
@@ -310,20 +310,17 @@
 }
 
 # Encode a batch of non-empty, same-mark rows: one octet pass, then cut the
-# concatenated ASCII output back into rows. A row's output length is its octet
-# count plus two per octet that became a triplet.
+# concatenated ASCII output back into rows. Octet `b` emits the first
+# `tab$width[b + 1]` octets of column `b + 1` of `tab$octets`, so a row's
+# output length is its octet count plus two per octet that became a triplet.
 .whatwg_encode_batch <- function(s, n_bytes, tab) {
-  bytes <- as.integer(charToRaw(paste(s, collapse = ""))) + 1L
-  width <- nchar(tab, type = "bytes")[bytes]
+  bytes <- as.integer(charToRaw(paste(s, collapse = "")))
+  width <- tab$width[bytes + 1L]
+  octets <- tab$octets[rep.int(bytes * 3L, width) + sequence(width)]
   out_end <- cumsum(width)[cumsum(n_bytes)]
   out_start <- c(1L, out_end[-length(out_end)] + 1L)
-  substring(paste(tab[bytes], collapse = ""), out_start, out_end)
+  substring(rawToChar(octets), out_start, out_end)
 }
-
-# Printable ASCII, one character per octet 0x20-0x7E.
-.WHATWG_PRINTABLE_ASCII <- strsplit(
-  rawToChar(as.raw(0x20:0x7e)), "", fixed = TRUE
-)[[1L]]
 
 # Encode tables and prefilter patterns, built once per distinct encode set.
 .whatwg_encode_cache <- new.env(parent = emptyenv())
@@ -332,7 +329,10 @@
   paste(sort(unique(as.integer(encode_set))), collapse = ",")
 }
 
-# The 256-entry octet -> output token table (index = octet + 1).
+# The octet -> output table for one encode set: `octets` is a 3 x 256 raw
+# matrix whose column `b + 1` holds octet `b`'s output -- `%` and two uppercase
+# hex digits, or the octet itself in row 1 -- and `width` says how many of
+# those three rows it uses (3, or 1 for a pass-through octet).
 .whatwg_encode_table <- function(encode_set) {
   key <- paste0("tab:", .whatwg_encode_key(encode_set))
   tab <- .whatwg_encode_cache[[key]]
@@ -347,9 +347,15 @@
       call. = FALSE
     )
   }
-  tab <- sprintf("%%%02X", 0:255)
+  hex <- charToRaw("0123456789ABCDEF")
+  octets <- rbind(
+    rep(charToRaw("%"), 256L), hex[0:255 %/% 16L + 1L], hex[0:255 %% 16L + 1L]
+  )
   keep <- setdiff(0x20:0x7e, encode_set)
-  tab[keep + 1L] <- .WHATWG_PRINTABLE_ASCII[keep - 0x1fL]
+  octets[1L, keep + 1L] <- as.raw(keep)
+  width <- rep(3L, 256L)
+  width[keep + 1L] <- 1L
+  tab <- list(octets = octets, width = width)
   assign(key, tab, envir = .whatwg_encode_cache)
   tab
 }
