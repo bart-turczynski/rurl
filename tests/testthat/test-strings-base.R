@@ -8,9 +8,9 @@
 # Non-ASCII literals are \u escapes, which parse to UTF-8-marked strings in
 # any locale.
 
-bom <- "﻿"
-zwsp <- "​"
-e_acute <- "é"
+bom <- "\ufeff"
+zwsp <- "\u200b"
+e_acute <- "\u00e9"
 bad <- "a\x80b"
 Encoding(bad) <- "UTF-8"
 
@@ -249,13 +249,22 @@ for (loc in names(ctypes)) {
                    "\\C", "[[:alpha:]]", "[^[:space:]]", "(*UTF)a",
                    "(*UCP)a", "(?i)\\xe9", "(?i)[\\x{c0}-\\x{c5}]",
                    "(?i:a)\\x80", "(?i)(a)\\1", "(?i)\\o{351}",
-                   paste0("(?i)", e_acute), "[\\s\\S]")
+                   paste0("(?i)", e_acute), "[\\s\\S]",
+                   # Word boundaries read the locale's tables too.
+                   "x[[:>:]]", "[[:<:]]x",
+                   # A back-reference under (?i) folds what its group took.
+                   "(?i)(?P<n>.)(?P=n)", "(?i)(?P<n>.)(?P>n)",
+                   "(?i)(?<n>.)\\k<n>", "(?i)(.)\\g1",
+                   # The end anchor is \z; `$` also matches before a final \n.
+                   "a$", "^a$", "(a|b$)", "[a]$")
       for (p in refused) {
         expect_error(.bytes_detect("a", p), "ADR 0019", label = p)
       }
       allowed <- c("\\\\s", "(?i)abc", "[\\x00-\\x20]+", "(?s:.)", "\\A\\z",
                    "%(?![0-9A-Fa-f]{2})", "(?-i)a", "\\x80", "(a)\\1",
-                   "[\\t\\n\\r]", "a\\.b", "\\[", "(?i)%2e")
+                   "[\\t\\n\\r]", "a\\.b", "\\[", "(?i)%2e",
+                   "(?P<n>.)(?P=n)", "\\$", "a\\$\\z", "[$]", "[^$]",
+                   "[]$]", "[\\]$]", "\\\\[$]")
       for (p in allowed) {
         expect_no_error(.bytes_detect("a", p))
       }
@@ -280,6 +289,32 @@ for (loc in names(ctypes)) {
       expect_error(.bytes_replace("ab", "(a)", "\\U\\1"), "locale")
       expect_identical(.bytes_replace("ab", "a", "\\U", fixed = TRUE), "\\Ub")
       expect_error(.bytes_replace("ab", "a", NA_character_), "one string")
+      # The pattern, replacement and separator are bytes re-declared UTF-8
+      # too, so a latin1 or bytes mark on them stops as on the subject.
+      expect_error(.bytes_detect("café", latin1), "latin1")
+      expect_error(.bytes_detect("a", raw_bytes, fixed = TRUE), "bytes")
+      expect_error(.bytes_replace("a", "a", latin1), "latin1")
+      expect_error(.bytes_split_fixed("a", raw_bytes, TRUE), "bytes")
+      # `first` and `last` recycle from length 1 only, never truncate.
+      expect_error(.bytes_cut(c("abc", "def", "ghi"), c(1L, 2L), 3L),
+                   "`first`")
+      expect_error(.bytes_cut("abc", 1L, c(2L, 3L)), "`last`")
+      expect_identical(.bytes_cut(c("abc", "def"), c(1L, 2L), 2L),
+                       c("ab", "e"))
+    })
+  })
+
+  test_that(sprintf("replace refuses \\0, which base R writes as 0 [%s]",
+                    loc), {
+    in_ctype(loc, utf8, {
+      # `sub()` has no whole-match reference: "[\\0]" would give "a[0]c".
+      expect_error(.bytes_replace("abc", "b", "[\\0]"), "\\\\0")
+      expect_error(.bytes_replace("abc", "b", "\\0", all = TRUE), "\\\\0")
+      expect_identical(.bytes_replace("abc", "(b)", "[\\1]"), "a[b]c")
+      # An escaped backslash before 0 is a literal backslash, then "0".
+      expect_identical(.bytes_replace("abc", "b", "\\\\0"), "a\\0c")
+      expect_identical(.bytes_replace("abc", "b", "\\0", fixed = TRUE),
+                       "a\\0c")
     })
   })
 }

@@ -15,10 +15,13 @@
 # tools/stringi-call-allowlist.csv is (file, enclosing top-level function,
 # reference, count). No row holds a line number, so an edit that moves a call
 # within its function changes nothing. A key found fewer times than allowed,
-# or not at all, passes. The gate then prints an "allowlist can shrink" line,
-# because peers remove calls concurrently and a slice is not required to
-# shrink the list in the same commit. Only a key found MORE times than
-# allowed, or not listed at all, fails. One consequence is deliberate: a call
+# or not at all, passes. The gate then prints an "allowlist can shrink" line
+# rather than failing, because peer branches remove calls concurrently and
+# one branch's removal must not fail another's run. The shrink itself is not
+# optional: each migration slice runs `--write-allowlist` and commits the
+# shrink in the same MR, so the list shrinks at every merge (ADR 0019,
+# decision 4). Only a key found MORE times than allowed, or not listed at
+# all, fails. One consequence is deliberate: a call
 # moved into a new top-level function, or kept through a rename, counts as
 # new, because a reviewer has to see it.
 #
@@ -58,8 +61,8 @@
 #   Rscript tools/stringi-call-gate.R --root DIR         # scan another tree
 #   Rscript tools/stringi-call-gate.R --write-allowlist  # rewrite the allowlist
 #       # from the tree. This blesses every reference present, so use it only
-#       # to shrink the list after a slice, and read the diff: a grown count
-#       # or a new row in it is a new stringi reference.
+#       # to shrink the list in a migration slice's MR, and read the diff: a
+#       # grown count or a new row in it is a new stringi reference.
 
 ALLOWLIST <- file.path("tools", "stringi-call-allowlist.csv")
 ALLOW_COLS <- c("file", "function", "reference", "count")

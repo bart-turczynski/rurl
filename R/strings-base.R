@@ -34,7 +34,9 @@
 # INPUT. The input boundary (RURL-cwzickqy) declares every entry point's input
 # UTF-8. Here "unknown" input counts as UTF-8 bytes and "UTF-8" input is taken
 # as declared. Input marked "latin1" or "bytes" is a programming error and
-# stops: re-declaring those bytes as UTF-8 would change the text.
+# stops: re-declaring those bytes as UTF-8 would change the text. The same
+# rule covers the pattern, the replacement and the separator, whose bytes
+# reach the result or decide the match just as the subject's do.
 #
 # NA in, NA out, per row. A zero-length input gives a zero-length result.
 
@@ -49,23 +51,25 @@
   x
 }
 
-#' Check a subject vector for the byte layer
+#' Check a subject vector, pattern, replacement or separator for the byte layer
 #'
 #' Stops on a non-character vector, or on elements marked "latin1" or
 #' "bytes". See INPUT in the file header.
-#' @param x The subject vector.
+#' @param x The vector.
+#' @param what The argument's name, for the error message.
 #' @return `TRUE`, invisibly.
 #' @noRd
-.bytes_check_input <- function(x) {
+.bytes_check_input <- function(x, what = "input") {
   if (!is.character(x)) {
     stop("internal: the byte string layer takes a character vector",
          call. = FALSE)
   }
   enc <- Encoding(x)
   if (any(enc == "latin1") || any(enc == "bytes")) {
-    stop("internal: the byte string layer takes UTF-8 or unknown-marked ",
-         "input, not latin1 or bytes; declare input UTF-8 at the boundary",
-         call. = FALSE)
+    stop(sprintf(paste(
+      "internal: the byte string layer takes UTF-8 or unknown-marked %s,",
+      "not latin1 or bytes; declare it UTF-8 at the boundary"
+    ), what), call. = FALSE)
   }
   invisible(TRUE)
 }
@@ -93,15 +97,52 @@
   out
 }
 
+# Whether `pattern` holds a `$` that is neither escaped nor inside a
+# character class. Read from the raw bytes, like `.bytes_escape_codes()`. A
+# `]` right after `[` or `[^` is a literal member, as PCRE reads it.
+.bytes_has_bare_dollar <- function(pattern) {
+  b <- as.integer(charToRaw(pattern))
+  n <- length(b)
+  in_class <- FALSE
+  i <- 1L
+  while (i <= n) {
+    if (b[i] == 92L) {
+      i <- i + 2L
+      next
+    }
+    if (in_class) {
+      if (b[i] == 93L) {
+        in_class <- FALSE
+      }
+    } else if (b[i] == 36L) {
+      return(TRUE)
+    } else if (b[i] == 91L) {
+      in_class <- TRUE
+      if (i < n && b[i + 1L] == 94L) {
+        i <- i + 1L
+      }
+      if (i < n && b[i + 1L] == 93L) {
+        i <- i + 1L
+      }
+    }
+    i <- i + 1L
+  }
+  FALSE
+}
+
 #' Check a pattern for the byte layer
 #'
-#' A pattern is one non-empty string. A regex must not use a construct whose
-#' byte-mode meaning depends on the locale (see the file header): the escapes
-#' in `.BYTES_REFUSED_ESCAPE_CODES`, a POSIX `[:name:]` class, or a leading
-#' `(*...)` option verb. Under `(?i)` it must not name a byte at or above
-#' 0x80, as a literal, a `\x` or `\o` escape, an octal escape or a
-#' back-reference, because the locale's tables fold those bytes. `[\s\S]` is
-#' written `(?s:.)`.
+#' A pattern is one non-empty string, not marked "latin1" or "bytes". A regex
+#' must not use a construct whose byte-mode meaning depends on the locale
+#' (see the file header): the escapes in `.BYTES_REFUSED_ESCAPE_CODES`, a
+#' POSIX `[:name:]` class or `[[:<:]]` / `[[:>:]]` word boundary, or a
+#' leading `(*...)` option verb. Under `(?i)` it must not name a byte at or
+#' above 0x80, as a literal, a `\x` or `\o` escape or an octal escape, and
+#' must not use a back-reference in any form (`\1`, `\g`, `\k`, `(?P=name)`,
+#' `(?P>name)`), because the locale's tables fold those bytes and a
+#' back-reference matches whatever bytes its group took. A bare `$` is
+#' refused: the end anchor is written `\z` (ADR 0019); `\$` and `[$]` match a
+#' dollar sign. `[\s\S]` is written `(?s:.)`.
 #' @param pattern The pattern.
 #' @param fixed Whether `pattern` is a literal.
 #' @param what The argument's name, for the error message.
@@ -113,6 +154,7 @@
     stop(sprintf("internal: `%s` must be one non-empty string", what),
          call. = FALSE)
   }
+  .bytes_check_input(pattern, sprintf("`%s`", what))
   if (fixed) {
     return(invisible(TRUE))
   }
@@ -128,11 +170,21 @@
       "UTF-8 sequence; spell the ASCII class out"
     ), intToUtf8(bad[1L])))
   }
-  if (grepl("\\[:\\^?[A-Za-z]+:\\]", pattern, perl = TRUE, useBytes = TRUE)) {
-    refuse("uses a POSIX class, which reads the locale; spell it out")
+  if (grepl("\\[:\\^?([A-Za-z]+|<|>):\\]", pattern, perl = TRUE,
+            useBytes = TRUE)) {
+    refuse(paste(
+      "uses a POSIX class or word boundary, which reads the locale;",
+      "spell it out"
+    ))
   }
   if (grepl("^\\(\\*[A-Z_]", pattern, perl = TRUE, useBytes = TRUE)) {
     refuse("starts with a (*...) option verb, which changes the matching mode")
+  }
+  if (.bytes_has_bare_dollar(pattern)) {
+    refuse(paste(
+      "uses a bare $, which also matches before a final newline; write the",
+      "end anchor \\z, and a dollar sign \\$ or [$]"
+    ))
   }
   if (grepl("\\(\\?\\^?[A-Za-z]*i", pattern, perl = TRUE, useBytes = TRUE)) {
     high <- grepl("[^\\x01-\\x7f]", pattern, perl = TRUE, useBytes = TRUE)
@@ -142,10 +194,12 @@
     ))[[1L]]
     hex <- gsub("[^0-9A-Fa-f]", "", substring(hex, 3L, nchar(hex)))
     high <- high || any(strtoi(hex, 16L) >= 128L)
-    if (high || any(esc %in% utf8ToInt("ogk0123456789"))) {
+    backref <- any(esc %in% utf8ToInt("gk0123456789")) ||
+      grepl("\\(\\?P[=>]", pattern, perl = TRUE, useBytes = TRUE)
+    if (high || backref || any(esc == utf8ToInt("o"))) {
       refuse(paste(
-        "is case-insensitive and names a byte at or above 0x80 (or an",
-        "escape that can), which the locale's tables fold"
+        "is case-insensitive and names a byte at or above 0x80 (or a",
+        "back-reference or escape that can), which the locale's tables fold"
       ))
     }
   }
@@ -169,9 +223,12 @@
 
 #' Replace the first (or every) match in each element, in bytes
 #'
-#' `replacement` refers to groups as `\\1` ... `\\9` and to the whole match
-#' as `\\0` (base-R syntax, not stringi's `$1`). The `\\U`, `\\L` and `\\E`
-#' case conversions are refused: they follow the locale.
+#' `replacement` refers to groups as `\\1` ... `\\9` (base-R syntax, not
+#' stringi's `$1`). Base R has no whole-match reference: `sub()` writes `\\0`
+#' as a literal "0", so `\\0` is refused; wrap the pattern in a group and use
+#' `\\1`. The `\\U`, `\\L` and `\\E` case conversions are refused: they follow
+#' the locale. With `fixed = TRUE` the replacement is a literal and none of
+#' this applies.
 #' @param x A character vector.
 #' @param pattern A PCRE pattern, or a literal when `fixed = TRUE`.
 #' @param replacement One string.
@@ -187,10 +244,16 @@
         is.na(replacement)) {
     stop("internal: `replacement` must be one string", call. = FALSE)
   }
+  .bytes_check_input(replacement, "`replacement`")
   if (!fixed && grepl("\\\\[ULE]", replacement, perl = TRUE,
                       useBytes = TRUE)) {
     stop("internal: `replacement` uses \\U, \\L or \\E, which follow the ",
          "locale (ADR 0019)", call. = FALSE)
+  }
+  if (!fixed && any(.bytes_escape_codes(replacement) == utf8ToInt("0"))) {
+    stop("internal: `replacement` uses \\0, which base R writes as a ",
+         "literal 0; wrap the pattern in a group and use \\1 (ADR 0019)",
+         call. = FALSE)
   }
   out <- if (all) {
     gsub(pattern, replacement, x, perl = !fixed, fixed = fixed,
@@ -207,7 +270,13 @@
 #' Positions are 1-based byte offsets, inclusive. An empty match at byte `i`
 #' gives `start = i`, `end = i - 1`. Rows where `x` is NA or nothing matches
 #' are NA. "Last" is the last of the non-overlapping matches found scanning
-#' left to right.
+#' left to right. It departs from `stringi::stri_locate_last_regex()` on a
+#' pattern that can match empty: after an earlier match, base R's scan stops
+#' at the end of the string and never reports an empty match there, so
+#' `"ab"` with `"b*"` gives `start = 2, end = 2`, where stringi gives the
+#' empty match `start = 3, end = 2`. Whether a regex can match empty is not
+#' decidable from its text by a simple check, so such a pattern is not
+#' refused; a caller that needs the end-of-string empty match tests for it.
 #' @param x A character vector.
 #' @param pattern A PCRE pattern, or a literal when `fixed = TRUE`.
 #' @param fixed Whether `pattern` is a literal.
@@ -285,10 +354,12 @@
 
 #' Cut each element by byte position
 #'
-#' Bytes `first` to `last` of each element, inclusive and 1-based; `first` and
-#' `last` recycle to `length(x)`. As with `substring()`, an index past either
-#' end is clamped, `first > last` gives `""`, and an NA index gives NA. Pass
-#' `.Machine$integer.max` as `last` for a suffix. A cut may split a multibyte
+#' Bytes `first` to `last` of each element, inclusive and 1-based. `first`
+#' and `last` each have length 1, which recycles, or `length(x)`; any other
+#' length stops rather than being truncated. As with `substring()`, an index
+#' past either end is clamped, `first > last` gives `""`, and an NA index
+#' gives NA. Pass `.Machine$integer.max` as `last` for a suffix. A cut may
+#' split a multibyte
 #' character; offsets from `.bytes_locate()` or `.bytes_capture()` on an
 #' ASCII pattern never do.
 #' @param x A character vector.
@@ -298,6 +369,14 @@
 .bytes_cut <- function(x, first, last) {
   .bytes_check_input(x)
   n <- length(x)
+  check_length <- function(v, arg) {
+    if (!length(v) %in% c(1L, n)) {
+      stop(sprintf("internal: `%s` must have length 1 or length(x)", arg),
+           call. = FALSE)
+    }
+  }
+  check_length(first, "first")
+  check_length(last, "last")
   first <- rep_len(as.integer(first), n)
   last <- rep_len(as.integer(last), n)
   # Marked "bytes", `substring()` counts bytes and never decodes, so an

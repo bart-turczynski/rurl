@@ -67,16 +67,19 @@ that is correct for it:
   `.bytes_locate()`, `.bytes_capture()`, `.bytes_cut()` and
   `.bytes_split_fixed()`. Each declares its result UTF-8 again and refuses
   the locale-table constructs above (`\w \s \d \b`, their negations, `\h \v
-  \R`, `\p \P \X \C`, POSIX classes, leading `(*...)` verbs, and high bytes
-  under `(?i)`). An end anchor is written `\z`: ICU's `$` also matches before
-  a final `\r`, U+0085 or U+2028, and PCRE's matches only before a final
-  `\n`. A class of non-ASCII code points can be written in byte mode as its
-  UTF-8 byte sequences (for example, the WHATWG domain separators as
+  \R`, `\p \P \X \C`, POSIX classes and the `[[:<:]]` / `[[:>:]]` word
+  boundaries, leading `(*...)` verbs, and, under `(?i)`, high bytes and
+  back-references). An end anchor is written `\z`: ICU's `$` also matches
+  before a final `\r`, U+0085 or U+2028, and PCRE's matches only before a
+  final `\n`. So the pattern check refuses a bare `$`; a dollar sign is
+  written `\$` or `[$]`. A class of non-ASCII code points can be written in
+  byte mode as its UTF-8 byte sequences (for example, the WHATWG domain
+  separators as
   `(?:\xe3\x80\x82|\xef\xbc\x8e|\xef\xbd\xa1)`).
 - **UTF-8 PCRE mode**, `perl = TRUE` without `useBytes`, on input declared
   UTF-8, is for a match that has to see code points and that byte literals
-  express badly. In this mode `grepl()` warns and returns NA for an invalid row,
-  and `gsub()` throws for the whole vector, so the caller masks undecodable
+  express badly. In this mode `grepl()` warns and returns FALSE for an invalid
+  row, and `gsub()` throws for the whole vector, so the caller masks undecodable
   rows first, as `.grepl_decodable()` and `.gsub_decodable()` do in
   `R/utils.R`.
 - **`stringi`** stays only where Unicode tables are needed: NFC before
@@ -95,7 +98,8 @@ with `stri_numbytes()`), and the Unicode glob (`.glob_to_regex()`).
 `Encoding<-`, never by converting from the session locale. Until it lands,
 `R/strings-base.R` reads "unknown" input as UTF-8 bytes, takes "UTF-8" input
 as declared, and stops on "latin1" or "bytes" input, because re-declaring
-those bytes would change the text.
+those bytes would change the text. The same check covers the pattern, the
+replacement and the separator.
 
 **3. The migration is split by kind of operation, not by file.** Offset-bearing
 chains move together, so that a position and the cut that uses it always
@@ -106,7 +110,7 @@ count the same unit.
 | RURL-oahhlnvf | boolean and replacement operations: detect, prefix test, count, replace | 112 |
 | RURL-yqmoztoj | offset-bearing operations: locate, capture, cut, length, split, and the `stri_opts_regex()` objects their consumers take | 64 |
 | RURL-yyeohqah | the semantic exceptions, and confining NFC and case mapping to `stringi` | 14 |
-| RURL-dddxutjf | close-out: shrink the allowlist to the calls that stay, remove the ADR 0005 guards that the migration made redundant, settle `Imports:` | none |
+| RURL-dddxutjf | close-out: confirm the allowlist holds only the calls that stay, remove the ADR 0005 guards that the migration made redundant, settle `Imports:` | none |
 
 Rejected: a split by file (it separates a locate from the cut in another
 helper that consumes its position, and it mixes kinds of risk in one review),
@@ -118,7 +122,10 @@ parses `R/` and `NAMESPACE` and fails on any `stringi` reference beyond
 `stri_*`, `library()`/`requireNamespace()`, and roxygen and NAMESPACE imports.
 The allowlist is keyed on file, enclosing top-level function and reference,
 with a count, so a moved or removed call never fails. A removal prints
-"allowlist can shrink", and each slice shrinks the list.
+"allowlist can shrink". Each migration slice runs
+`Rscript tools/stringi-call-gate.R --write-allowlist` and commits the shrink
+in the same MR, so the list shrinks at every merge; the close-out only
+confirms what is left.
 
 **5. Guard policy until the epic closes.** A newly found U+FEFF defect is
 fixed through a migration slice, not with a new per-call guard. One exception:

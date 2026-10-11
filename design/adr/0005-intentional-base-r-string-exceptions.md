@@ -1,6 +1,6 @@
 # ADR 0005: Intentional base-R string exceptions (the `stringi` migration is not total)
 
-- **Status:** Accepted; superseded in part by [ADR 0019](0019-string-operations-run-in-base-r.md) (Proposed), see the note at the end
+- **Status:** Accepted; to be superseded in part by [ADR 0019](0019-string-operations-run-in-base-r.md) (Proposed), effective on its acceptance; see the note at the end
 - **Date:** 2026
 - **Tracking:** n/a (recorded during the stringi migration)
 

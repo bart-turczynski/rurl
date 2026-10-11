@@ -56,9 +56,12 @@ refactor moves into a new top-level function counts as a new call.
   - `yyeohqah`: RURL-yyeohqah, the semantic exceptions (the cache-key escape,
     encoding conversion, the Unicode glob) and confining NFC and case mapping
     to `stringi`.
-  - RURL-dddxutjf, the close-out, owns no call. It shrinks the allowlist to
-    the calls that stay, removes the ADR 0005 U+FEFF guards that the migration
-    made redundant, and settles `Imports:`.
+  - RURL-dddxutjf, the close-out, owns no call. The allowlist shrinks at
+    every merge: each migration slice runs
+    `Rscript tools/stringi-call-gate.R --write-allowlist` and commits the
+    shrink in the same MR (ADR 0019, decision 4). The close-out confirms that
+    the list holds only the calls that stay, removes the ADR 0005 U+FEFF
+    guards that the migration made redundant, and settles `Imports:`.
 
 ## Totals
 
