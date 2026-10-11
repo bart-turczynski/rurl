@@ -68,6 +68,8 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 
 | File | Helper | Guard | Ticket |
 |---|---|---|---|
+| `R/accessors.R` | `.subdomain_labels_vec()` | `endsWith()`; mask, the prefix of a mark-led host cut as bytes (`.byte_substring_vec()`, `.byte_length()`) | RURL-fyiadctm |
+| `R/domain.R` | `.split_host_labels()` | mask; `x` spliced before the split, cut off the first label as a byte | RURL-tbmnnauj |
 | `R/parse-phases.R` | `.starts_with_bom()` | the base-R byte test itself | RURL-vhionecz |
 | `R/parse-phases.R` | `.rewrite_whatwg_backslashes_vec()` | mask; `//` spliced before the fixed rewrite | RURL-iiehsbfg |
 | `R/parse-phases.R` | `.strip_whatwg_control_chars_vec()` | regex strip and flag, which count the mark | RURL-vhionecz, RURL-bnorcgbv (pinned in RURL-zxnxczsw) |
@@ -92,13 +94,11 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 | `R/path-query.R` | `._strip_index_page()` | `x` spliced, cut as a byte; `startsWith()` | RURL-zxnxczsw |
 | `R/path-query.R` | `._encode_path_segments()` | `startsWith()`, `endsWith()` | RURL-zxnxczsw |
 | `R/resolve.R` | `.whatwg_file_remove_dot_segments()` | `/` spliced before the split | RURL-dglgcwit |
-| `R/zzz.R` | `.cache_key_escape()`, under `.cache_key_ascii()` | `startsWith()` mask; `x` spliced before `stri_escape_unicode()`, then cut | RURL-iiehsbfg |
 | `R/serialize.R` | `.fsss_source_lex()` | mask on the stripped source | RURL-rynmvtwp |
-| `R/accessors.R` | `.subdomain_labels_vec()` | `endsWith()`; mask, the prefix of a mark-led host cut as bytes (`.byte_substring_vec()`, `.byte_length()`) | RURL-fyiadctm |
 | `R/url-key.R` | `.url_key_frame()` | mask; `x` spliced before `stri_enc_toutf8()`, then cut; `stri_numbytes()` counts the mark | RURL-dquaxcaz |
 | `R/url-key.R` | `.url_key_scheme_presence()` | `stri_detect_regex()`, which counts the mark | RURL-dquaxcaz |
-| `R/domain.R` | `.split_host_labels()` | mask; `x` spliced before the split, cut off the first label as a byte | RURL-tbmnnauj |
 | `R/utils.R` | `.ascii_case_fallback()`, under `.ascii_tolower()` / `.ascii_toupper()` | mask; `0` spliced before the fixed replace, cut as a byte | RURL-bqhfznkg |
+| `R/zzz.R` | `.cache_key_escape()`, under `.cache_key_ascii()` | `startsWith()` mask; `x` spliced before `stri_escape_unicode()`, then cut | RURL-iiehsbfg |
 
 **Consequences.**
 
@@ -109,10 +109,13 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
   states why its input cannot start with U+FEFF. A fix's test pairs each
   U+FEFF row with a U+200B twin, a zero-width code point `stringi` does not
   skip, so the test shows the defect is the mark's alone.
-- The RURL-zxnxczsw audit found further unguarded sites (host case mapping,
-  `host_encoding = "unicode"`, the subdomain trim, the URL key's framing, the
-  ASCII case helpers' fallback). They are tracked separately and join the
-  table when fixed.
+- The RURL-zxnxczsw audit found further unguarded sites. All are now guarded
+  and in the table: host case mapping (RURL-opwjlnla),
+  `host_encoding = "unicode"` (RURL-tbmnnauj), the subdomain trim
+  (RURL-fyiadctm), the URL key's framing (RURL-dquaxcaz) and the ASCII case
+  helpers' fallback (RURL-bqhfznkg). One follow-up is open: under `whatwg`,
+  the www and subdomain policies read the host before UTS-46 mapping
+  (RURL-fobwctml).
 - A base-R suffix cut passes `last` explicitly (`.Machine$integer.max`) or
   uses `.byte_substring()`: before R 4.6.0, `substring(x, first)` defaulted to
   `last = 1000000L`, and the package supports R 4.1.0 and later.
