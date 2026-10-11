@@ -300,13 +300,15 @@ test_that("normalization decodes every triplet encoding an unreserved octet", {
 
 # --- N3 / N4: sec 6.2.2.3 path segments, sec 6.2.3 default port --------------
 
-test_that("normalization removes dot segments from a rooted path", {
-  # sec 6.2.2.3. A rootless path has no dot-segment meaning to remove, so the
-  # property is conditioned on a leading "/" -- the same condition the
-  # serializer applies, stated here independently from the output string.
+test_that("normalization removes dot segments from every path", {
+  # sec 6.2.2.3, rootless paths included (RUL-028). The one exemption is a
+  # path with no authority that sec 3.3 forces to keep its dots because
+  # removing them would leave it starting with "//" (RUL-027); such a path
+  # necessarily still contains "//".
   r <- rfc_prop_serialize("normalized")
   path <- rfc_out_path(r$output)
-  bad <- startsWith(path, "/") & grepl("(^|/)\\.\\.?(/|$)", path)
+  sec_3_3_guard <- is.na(rfc_out_authority(r$output)) & grepl("//", path)
+  bad <- grepl("(^|/)\\.\\.?(/|$)", path) & !sec_3_3_guard
   expect_property(bad, r$input)
 })
 

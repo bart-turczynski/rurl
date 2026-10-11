@@ -215,8 +215,8 @@ test_that("rfc3986: the web route already cleans to the normalized path", {
 })
 
 test_that("serialize_url(): what the //-guard must not move", {
-  # `source` never normalizes; `normalized` removes dots from a path with an
-  # authority or a leading "/", and leaves a rootless path as written.
+  # `source` never normalizes; `normalized` removes dots from every path,
+  # rootless included (RUL-028), so it renders what clean_url renders.
   expect_identical(
     serialize_url(rfc_rows, standard = "rfc3986", form = "source"), rfc_rows
   )
@@ -226,9 +226,9 @@ test_that("serialize_url(): what the //-guard must not move", {
   expect_identical(
     normalized[keep],
     c(
-      "foo:/b", "foo://h/b", "foo://h/b", "foo:a/../b", "foo://h//p",
+      "foo:/b", "foo://h/b", "foo://h/b", "foo:/b", "foo://h//p",
       "ws://example.com/b", "file:///b", "foo://h/Ab/C%2Fd", "foo://h/a/b/",
-      "foo:a/..", "foo:/a/b", "urn:a:b/../c"
+      "foo:/", "foo:/a/b", "urn:/c"
     )
   )
   expect_identical(
