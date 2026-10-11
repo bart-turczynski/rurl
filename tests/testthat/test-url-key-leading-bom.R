@@ -175,6 +175,22 @@ test_that("the frame keeps a mark that starts the field", {
   })
 })
 
+test_that("the frame reads a latin1 field by its mark, in any locale", {
+  # The splice is only for mark-led rows: a paste0() splice on every row would
+  # translate a latin1 field by the locale (`caf<e9>` under C).
+  latin1_cafe <- "caf\xe9"
+  Encoding(latin1_cafe) <- "latin1"
+  for (ctype in c("C", "en_US.UTF-8")) {
+    withr::with_locale(c(LC_CTYPE = ctype), {
+      expect_identical(
+        .url_key_frame(list(c(latin1_cafe, paste0(bom, "ab")))),
+        c("5:caf\u00e9", paste0("5:", bom, "ab")),
+        label = ctype
+      )
+    })
+  }
+})
+
 test_that("a mark-led field no longer collides with its unmarked twin", {
   # Signature, per policy: `rfc3986` moves a host, path or query that starts
   # with the mark, since its record keeps each as written (RFC 3986 has no
