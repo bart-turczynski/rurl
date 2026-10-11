@@ -8,9 +8,9 @@
 # (the RFC 3986 reg-name, section 3.2.2, admits only its percent-encoded
 # form), and the mark is no exception; a label that starts with it does not
 # start with the ACE prefix (RFC 5890 section 2.3.2.1), so it is not an
-# A-label and keeps its spelling. Each U+FEFF row has a U+200B twin: a zero-width code point stringi
-# does not skip, so a twin that already gives the right answer shows the defect
-# is the mark's alone.
+# A-label and keeps its spelling. Each U+FEFF row has a U+200B twin: a
+# zero-width code point stringi does not skip, so a twin that already gives
+# the right answer shows the defect is the mark's alone.
 
 bom <- "\ufeff"
 zwsp <- "\u200b"
