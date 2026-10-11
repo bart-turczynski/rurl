@@ -1,7 +1,7 @@
 # RURL-vewhvxnb: the RFC 3986 component grammar check (`.rfc3986_generic_uri_ok`
 # in R/parse-state.R) must answer in linear time and never throw. The anchored
 # matcher `\A(?:[class]|%XX)*\z` kept ICU backtrack state per repetition, so a
-# component of about 6e5 characters stopped the WHOLE vectorized call with
+# component of about 5e5 characters stopped the WHOLE vectorized call with
 # "Regular expression backtrack stack overflow" -- every other row lost with it.
 #
 # The grammar is RFC 3986 section 3 and does not change here: host (S3.2.2),
@@ -135,8 +135,8 @@ test_that("a missing input is rejected", {
 })
 
 test_that("a mixed vector gets one verdict per element, NA rejected", {
-  # `grepl()` reports no match for an NA element, so the matcher must reject
-  # NA itself rather than read "no offending byte" as valid.
+  # `stri_detect_regex()` answers NA for an NA element, so the matcher must
+  # reject NA itself rather than let it through as "no offending character".
   s <- c("a", NA, "%zz", "", "﻿a", "a%2", "%41", NA, "a b")
   want <- c(TRUE, FALSE, FALSE, TRUE, TRUE, FALSE, TRUE, FALSE, FALSE)
   for (comp in names(.lin_extra)) {
@@ -146,10 +146,12 @@ test_that("a mixed vector gets one verdict per element, NA rejected", {
 
 test_that("the matcher is total on bytes that do not decode", {
   # Never reached through the gate (`.rfc3986_generic_uri_ok()` rejects an
-  # undecodable element before walking), but the matcher must not throw.
+  # undecodable element before walking), but the matcher must not throw. It
+  # does not judge decodability itself (stringi reads the stray octet as a
+  # non-ASCII character), so the rejection comes from the gate's preflight.
   x <- "a\x80b"
   Encoding(x) <- "UTF-8"
-  expect_no_error(.lin_comp_ok(x, "path"))
+  expect_no_error(suppressWarnings(.lin_comp_ok(x, "path")))
   expect_false(.rfc3986_generic_uri_ok(sprintf("foo:/%s", x))$ok)
 })
 
@@ -182,6 +184,7 @@ test_that("the matcher is total on bytes that do not decode", {
 }
 
 test_that("a 1.5e6-character component under rfc3986 gets its own verdict", {
+  skip_on_cran() # about 5 s and tens of MB; the defect is not R-version bound
   rows <- .lin_long_rows()
   expect_no_error(res <- safe_parse_urls(rows, url_standard = "rfc3986"))
   expect_identical(nrow(res), length(rows))
@@ -194,6 +197,7 @@ test_that("a 1.5e6-character component under rfc3986 gets its own verdict", {
 })
 
 test_that("a 1.5e6-character file: path under NULL gets its own verdict", {
+  skip_on_cran() # about 5 s and tens of MB; the defect is not R-version bound
   rows <- .lin_long_rows()[c("neighbor_a", "file", "file_bad", "neighbor_z")]
   expect_no_error(res <- safe_parse_urls(rows, url_standard = NULL))
   expect_identical(
@@ -203,6 +207,7 @@ test_that("a 1.5e6-character file: path under NULL gets its own verdict", {
 })
 
 test_that("a 1.5e6-character component under whatwg returns a row each", {
+  skip_on_cran() # about 5 s and tens of MB; the defect is not R-version bound
   # The RFC 3986 grammar does not bind under whatwg; this only proves no
   # throw. The cheap rows suffice (the long userinfo, host, query and fragment
   # rows cost seconds each in the WHATWG parser, outside the grammar check).

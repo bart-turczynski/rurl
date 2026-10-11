@@ -374,37 +374,30 @@
 # scalar values are admitted wherever a data character is admitted, then flagged
 # separately. Admitting them here does NOT relax the ASCII grammar -- an
 # otherwise-invalid ASCII portion still fails even with non-ASCII present.
-#
-# Written as the BYTE range 0x80-0xFF because the component search below runs
-# in byte mode. Over the strings that reach it the two readings coincide: the
-# walk only sees elements that decode (`.rfc3986_generic_uri_ok()` rejects
-# undecodable UTF-8 before walking), in valid UTF-8 every byte >= 0x80 belongs
-# to a scalar value in U+0080..U+10FFFF and every such scalar is spelled only
-# with bytes >= 0x80, and a latin1 byte >= 0x80 is the scalar U+0080..U+00FF.
-.RFC3986_NONASCII_BYTES <- "\\x80-\\xff"
+.RFC3986_NONASCII <- "\\x{0080}-\\x{10FFFF}"
 
-# Build the search for the FIRST byte that cannot appear in a
+# Build the search for the FIRST character that cannot appear in a
 # "*(data / pct-encoded)" production whose data class is the unreserved +
 # sub-delims + non-ASCII set plus the component-specific `extra` characters
-# (e.g. ":" for userinfo, ":@/" for a path): any byte outside the class and
+# (e.g. ":" for userinfo, ":@/" for a path): any character outside the class and
 # not "%", or a "%" not followed by two hex digits. The component is valid iff
 # the search finds nothing (`.rfc3986_class_ok()`).
 #
 # Why a search and not the anchored `\A(?:[class]|%XX)*\z` match it replaces
 # (RURL-vewhvxnb): ICU keeps backtrack state for every repetition of that
-# group, so a component of about 6e5 characters threw "Regular expression
+# group, so a component of about 5e5 characters threw "Regular expression
 # backtrack stack overflow" and the throw took the whole vectorized call with
-# it. The search has no repetition to backtrack over; it is linear and total.
+# it. The search has no repetition to backtrack over, so it runs in linear time.
 #
 # No anchors are needed, so the `$`-before-a-line-terminator trap cannot arise:
-# a trailing LF, VT, FF or CR is an ASCII byte outside every class, found like
-# any other (RURL-dergzwku: a general-scheme userinfo accepted `u\n` when the
-# grammar used `^...$`). RFC 3986 has no removal step, so the grammar REJECTS
-# these rather than stripping them the way the WHATWG parser does.
+# a trailing LF, VT, FF or CR is an ASCII character outside every class, found
+# like any other (RURL-dergzwku: a general-scheme userinfo accepted `u\n` when
+# the grammar used `^...$`). RFC 3986 has no removal step, so the grammar
+# REJECTS these rather than stripping them the way the WHATWG parser does.
 .rfc3986_class_bad_re <- function(extra) {
   paste0(
     "[^", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, extra,
-    .RFC3986_NONASCII_BYTES, "%]|%(?![0-9A-Fa-f]{2})"
+    .RFC3986_NONASCII, "%]|%(?![0-9A-Fa-f]{2})"
   )
 }
 
@@ -486,14 +479,17 @@
   isTRUE(stringi::stri_detect_regex(s, re))
 }
 
-# Component class check: TRUE iff `s` contains no byte the `bad` search (built
-# by `.rfc3986_class_bad_re()`) finds. The empty string passes -- an empty
-# reg-name/userinfo/path/query/fragment is legal. Vectorized; a missing element
-# is FALSE, tested on `s` itself because `grepl()` reports no match, not NA, for
-# an NA element. Byte mode (`useBytes = TRUE`) is total on any octets and reads
-# a leading U+FEFF as data like any other non-ASCII scalar.
+# Component class check: TRUE iff `s` contains no character the `bad` search
+# (built by `.rfc3986_class_bad_re()`) finds. The empty string passes -- an
+# empty reg-name/userinfo/path/query/fragment is legal. Vectorized; a missing
+# element, or one `stri_detect_regex()` cannot read (NA), is FALSE. The search
+# stays in stringi, as ADR 0005 asks of new string code. It does not judge
+# decodability (stringi reads a stray octet as a non-ASCII character), so
+# validity rests on the undecodable preflight in `.rfc3986_generic_uri_ok()`,
+# the only caller path.
 .rfc3986_class_ok <- function(s, bad) {
-  !is.na(s) & !grepl(bad, s, perl = TRUE, useBytes = TRUE)
+  hit <- stringi::stri_detect_regex(s, bad)
+  !is.na(s) & !is.na(hit) & !hit
 }
 
 # IP-literal inner form: IPv6address / IPvFuture (S3.2.2). Empty inner (`[]`) or
@@ -644,8 +640,7 @@
 # invalid -- a declared-UTF-8 string holding `<80>` is caught by the
 # `undecodable` preflight in `.rfc3986_generic_uri_ok()` and rejected in EVERY
 # locale, which is the correct answer: a lone continuation byte is not a scalar
-# value and no RFC 3986 production admits it. (The byte-mode component search
-# admits every byte >= 0x80, so it relies on that preflight.)
+# value and no RFC 3986 production admits it.
 .rfc3986_declare_native_utf8 <- function(url) {
   native <- !is.na(url) & Encoding(url) == "unknown"
   if (any(native)) {
