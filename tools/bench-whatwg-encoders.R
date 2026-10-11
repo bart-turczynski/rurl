@@ -50,7 +50,7 @@ reps <- as.integer(arg_value("--reps", "3"))
 suppressMessages(devtools::load_all(tree, quiet = TRUE, export_all = TRUE))
 ns <- asNamespace("rurl")
 
-# ---- batches ------------------------------------------------------------------
+# ---- batches -----------------------------------------------------------------
 octets <- function(...) rawToChar(as.raw(c(...)))
 make_batch <- function(kind, n) {
   # A row-number suffix keeps every row distinct, so the parse surfaces'
@@ -89,7 +89,7 @@ make_batch <- function(kind, n) {
 kinds <- c("ascii", "idn", "invalid", "long")
 batches <- setNames(lapply(kinds, make_batch, n = rows), kinds)
 
-# ---- encoders, vectorized or driven row by row ------------------------------------
+# ---- encoders, vectorized or driven row by row -------------------------------
 vector_or_rows <- function(f) {
   vectorized <- tryCatch(
     length(f(c("a b", "c d"))) == 2L,
@@ -157,7 +157,9 @@ results$ns_per_octet <- round(
   1e6 * results$ms / batch_bytes[results$batch], 1
 )
 is_ascii <- results$batch == "ascii"
-ascii_ms <- results$ms[is_ascii][match(results$target, results$target[is_ascii])]
+ascii_ms <- results$ms[is_ascii][
+  match(results$target, results$target[is_ascii])
+]
 ascii_ns <- results$ns_per_octet[is_ascii][
   match(results$target, results$target[is_ascii])
 ]

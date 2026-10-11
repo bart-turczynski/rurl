@@ -427,7 +427,8 @@
   out <- .whatwg_component_percent_encode(path, integer(0))
   delimiter_follows <- rep_len(as.logical(delimiter_follows), length(path))
   trailing <- which(
-    !is.na(out) & delimiter_follows %in% TRUE & endsWith(out, " ")
+    !is.na(out) & !is.na(delimiter_follows) & delimiter_follows &
+      endsWith(out, " ")
   )
   if (length(trailing) > 0L) {
     out[trailing] <- paste0(

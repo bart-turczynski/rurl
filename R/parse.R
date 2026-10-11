@@ -2775,7 +2775,7 @@ safe_parse_urls <- function(url,
     } else {
       rep(TRUE, length(a$raw_user))
     }
-    split_userinfo <- split_userinfo %in% TRUE
+    split_userinfo <- !is.na(split_userinfo) & split_userinfo
     user_output[split_userinfo] <- .whatwg_userinfo_percent_encode(
       user_output[split_userinfo]
     )

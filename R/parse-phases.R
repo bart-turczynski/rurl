@@ -2900,7 +2900,7 @@
   guard <- rep("", n)
   # Opaque path: WHATWG C0-control percent-encode set (empty extra set ->
   # encodes only C0/DEL/non-ASCII). No `/.` guard for opaque paths.
-  opaque_rows <- !is.na(path) & is_opaque %in% TRUE
+  opaque_rows <- !is.na(path) & !is.na(is_opaque) & is_opaque
   path_body[opaque_rows] <- .whatwg_component_percent_encode(
     path[opaque_rows], integer(0)
   )
@@ -2908,7 +2908,7 @@
   # (a lone "/" -> ""); it only ever touches a size-1 path, never the guard.
   # It also mirrors the RUL-005 exception: a dots-only host ("foo://./",
   # host ".") keeps its separator, so the output never reads "foo://.".
-  list_rows <- !is.na(path) & is_opaque %in% FALSE
+  list_rows <- !is.na(path) & !is.na(is_opaque) & !is_opaque
   p_render <- path[list_rows]
   if (identical(trailing_slash_handling, "strip")) {
     host_list <- host[list_rows]
@@ -2937,7 +2937,8 @@
   # measures as size 1 and the guard misses -- emitting `non-spec://`, which
   # re-reads as an empty AUTHORITY rather than a path. That was a real defect
   # against WPT rows `non-spec:/.//`, `non-spec:/..//` and `non-spec:/a/..//`.
-  guard[list_rows & host_kind %in% "absent" & startsWith(path, "//")] <- "/."
+  null_host <- !is.na(host_kind) & host_kind == "absent"
+  guard[list_rows & null_host & startsWith(path, "//")] <- "/."
 
   query_suffix <- .whatwg_query_suffix_vec(query, query_kind, scheme)
 
@@ -3034,8 +3035,8 @@
 .whatwg_query_suffix_vec <- function(query, query_kind, scheme) {
   n <- length(query_kind)
   suffix <- rep("", n)
-  suffix[query_kind %in% "empty"] <- "?"
-  present <- which(query_kind %in% "present")
+  suffix[!is.na(query_kind) & query_kind == "empty"] <- "?"
+  present <- which(query_kind == "present")
   if (length(present) > 0L) {
     encoded <- .whatwg_query_percent_encode(query[present], scheme[present])
     encoded[is.na(encoded)] <- ""
@@ -3148,12 +3149,12 @@
   # An opaque path's trailing space is encoded only when a `?`/`#` actually
   # follows it. Unlike the clean serializer, the FSSS emits the fragment too,
   # so the fragment counts as a following delimiter here.
-  opaque_rows <- !is.na(path) & is_opaque %in% TRUE
+  opaque_rows <- !is.na(path) & !is.na(is_opaque) & is_opaque
   delimiter_follows <- query_kind != "absent" | fragment_kind != "absent"
   path_body[opaque_rows] <- .whatwg_opaque_path_encode(
     path[opaque_rows], delimiter_follows[opaque_rows]
   )
-  list_rows <- !is.na(path) & is_opaque %in% FALSE
+  list_rows <- !is.na(path) & !is.na(is_opaque) & !is_opaque
   path_body[list_rows] <- .whatwg_path_percent_encode(path[list_rows])
 
   # Four-condition `/.` guard -- identical to the clean serializer's, but
@@ -3161,7 +3162,8 @@
   # dial this surface does not take. See .serialize_whatwg_vec for the
   # segment-derivation reasoning, including why this must NOT be re-derived
   # by splitting on "/".
-  guard[list_rows & host_kind %in% "absent" & startsWith(path, "//")] <- "/."
+  null_host <- !is.na(host_kind) & host_kind == "absent"
+  guard[list_rows & null_host & startsWith(path, "//")] <- "/."
 
   out <- character(n)
   out[is_opaque] <- paste0(scheme_prefix[is_opaque], path_body[is_opaque])
@@ -3193,8 +3195,8 @@
 .whatwg_fragment_suffix_vec <- function(fragment, fragment_kind) {
   n <- length(fragment_kind)
   suffix <- rep("", n)
-  suffix[fragment_kind %in% "empty"] <- "#"
-  present <- which(fragment_kind %in% "present")
+  suffix[!is.na(fragment_kind) & fragment_kind == "empty"] <- "#"
+  present <- which(fragment_kind == "present")
   if (length(present) > 0L) {
     encoded <- .whatwg_fragment_percent_encode(fragment[present])
     encoded[is.na(encoded)] <- ""

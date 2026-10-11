@@ -175,7 +175,7 @@ test_that("the opaque-path trailing space is encoded only before a delimiter", {
 test_that("the vector callers render mixed-mark rows like single rows", {
   n <- length(mixed_marks)
   kinds <- ifelse(is.na(mixed_marks), "absent", "present")
-  kinds[mixed_marks %in% ""] <- "empty"
+  kinds[!is.na(mixed_marks) & mixed_marks == ""] <- "empty"
   schemes <- rep_len(c("http", "foo"), n)
   expect_identical(
     rurl:::.whatwg_query_suffix_vec(mixed_marks, kinds, schemes),
