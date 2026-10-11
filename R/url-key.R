@@ -209,6 +209,35 @@
   out
 }
 
+# The query as the selected standard's URL record holds it. The WHATWG query
+# state percent-encodes each code point with the query percent-encode set, or
+# the special-query set under a special scheme, so the record holds the query
+# encoded and two URLs that serialize alike ARE one query -- the key-policy rows
+# frame "the selected standard's normalized identity, not source-byte equality"
+# (`contracts/key-join-contracts.md`). `.fsss_record_vec()` keeps a
+# general-routed query as written and leaves that encoding to the serializer
+# (`.whatwg_query_suffix_vec()`), so the key applies the serializer's own
+# encoder here: `foo:/p?<U+200B>q` and `foo:/p?%E2%80%8Bq` both frame
+# `%E2%80%8Bq`, and `http://h/p?'q` and `http://h/p?%27q` both frame `%27q`
+# (RURL-pjrqnqvb). The encoder copies an existing triplet as written, so the
+# hex case stays significant (RUL-026), and it is idempotent on a query the
+# record already encoded.
+#
+# `scheme` is the row's OWN scheme, never the collapsed token, which is no
+# special scheme. An inferred scheme reads as the `http` the parse inferred,
+# whose query the parse record encodes the same way. `rfc3986` keeps the query
+# as written: section 6.2.2.2 normalization is not the key's.
+.url_key_query <- function(query, scheme, standard) {
+  if (!identical(standard, "whatwg")) {
+    return(query)
+  }
+  vapply(
+    seq_along(query),
+    function(i) .whatwg_query_percent_encode(query[i], scheme[i]),
+    character(1), USE.NAMES = FALSE
+  )
+}
+
 # The relaxed scheme collapse (key-policy `:81`, truth-table rows 6-7 as
 # amended). Applied to the framed scheme field ONLY, and only for the two named
 # web schemes -- "every other valid scheme remains exact", so the ws/wss pair,
@@ -328,7 +357,7 @@
       rfc_path_form = rec$rfc_path_form,
       path = rec$path,
       query_kind = rec$query_kind,
-      query = rec$query
+      query = .url_key_query(rec$query, rec$scheme, policy$standard)
     )
   )
 }

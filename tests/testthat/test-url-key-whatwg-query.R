@@ -122,21 +122,35 @@ test_that("the key version is not bumped again", {
   expect_identical(url_key_policy()$schema_version, 1L)
 })
 
-# --- Defect: the whatwg key frames the query as written -----------------------
+# --- Fix: the whatwg key frames the query as the standard serializes it -------
 
-test_that("DEFECT: whatwg keys a query twin pair apart", {
-  # The twins serialize alike (pinned above) but frame their raw spelling.
+test_that("whatwg keys a query twin pair alike", {
+  # The twins serialize alike (pinned above). Each framed its raw spelling,
+  # so the pair keyed apart; both now frame the serialized query.
   for (tw in wq_twins) {
-    expect_false(wq_same(c(tw[[1L]], tw[[2L]])), label = tw[[1L]])
+    expect_true(wq_same(c(tw[[1L]], tw[[2L]])), label = tw[[1L]])
   }
   k <- wq_key(c("foo:/p?\u200bq", "foo:/p?%E2%80%8Bq"))
-  expect_true(wq_has_frame(k[[1L]], paste0(zwsp, "q")))
-  expect_true(wq_has_frame(k[[2L]], "%E2%80%8Bq"))
+  expect_true(wq_has_frame(k[[1L]], "%E2%80%8Bq"))
+  expect_false(wq_has_frame(k[[1L]], paste0(zwsp, "q")))
   expect_identical(
     duplicated(get_url_key(c("foo:/p?\u200bq", "foo:/p?%E2%80%8Bq"),
                            url_key_policy("whatwg"))),
-    c(FALSE, FALSE)
+    c(FALSE, TRUE)
   )
   # An inferred scheme reads as `http`, whose parse record encodes `'`.
-  expect_false(wq_same(c("h.com/p?'q", "h.com/p?%27q")))
+  expect_true(wq_same(c("h.com/p?'q", "h.com/p?%27q")))
+})
+
+test_that("whatwg: the key's query is the parse record's and serializer's", {
+  u <- vapply(wq_twins, `[[`, character(1), 1L)
+  q <- wq_fields(u)$query
+  expect_identical(
+    q,
+    safe_parse_urls(u, url_standard = "whatwg", scheme_policy = "require",
+                    scheme_acceptance = "general")$query
+  )
+  s <- serialize_url(u, standard = "whatwg")
+  expect_identical(paste0("?", q),
+                   stringi::stri_extract_first_regex(s, "[?][^#]*$"))
 })
