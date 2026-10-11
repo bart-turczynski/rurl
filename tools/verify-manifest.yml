@@ -71,6 +71,7 @@ jobs:
       diagnostics_docs_selftest: ${{ steps.filter.outputs.diagnostics_docs_selftest }}
       deferral_selftest: ${{ steps.filter.outputs.deferral_selftest }}
       curl_zero_selftest: ${{ steps.filter.outputs.curl_zero_selftest }}
+      substring_last_selftest: ${{ steps.filter.outputs.substring_last_selftest }}
       oracle_labels_selftest: ${{ steps.filter.outputs.oracle_labels_selftest }}
       citations: ${{ steps.filter.outputs.citations }}
       citations_selftest: ${{ steps.filter.outputs.citations_selftest }}
@@ -177,6 +178,8 @@ jobs:
               - 'tools/deferral-gate.R'
             curl_zero_selftest:
               - 'tools/curl-zero-gate.R'
+            substring_last_selftest:
+              - 'tools/substring-last-gate.R'
             oracle_labels_selftest:
               - 'design/work/url-v3/tools/oracle-label-gate.R'
             # The citation gate resolves key-join-discharge.md's and
@@ -773,6 +776,28 @@ jobs:
       # rather than being duplicated on this bare runner.
       - name: Check that nothing declares, imports or calls curl
         run: Rscript tools/curl-zero-gate.R --static-only
+
+  # substring() explicit-`last` gate (RURL-hxeaefzp). Before R 4.6.0,
+  # `substring(x, first)` defaulted to `last = 1000000L` and cut any longer
+  # string short; DESCRIPTION admits R 4.1.0. The R these gates run on cannot
+  # reproduce the truncation, so this static scan is the pin: every
+  # `substring()` call in R/ passes `last` (ADR 0005, Consequences). It parses
+  # rather than greps and keeps no exceptions list. Unconditional, because any
+  # R/ edit can add a call. Base R, no package build.
+  substring-last-gate:
+    needs: changes
+    runs-on: ubuntu-latest
+    name: every substring() call in R/ passes an explicit last
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Gate self-test (positive/negative coverage)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.substring_last_selftest == 'true'
+        run: Rscript tools/substring-last-gate.R --self-test
+      - name: Check that no substring() call relies on the default last
+        run: Rscript tools/substring-last-gate.R
 
   coverage:
     needs: [check, changes]
