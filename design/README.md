@@ -44,6 +44,11 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
   posture-scoped claims, and which are characterization.
 - [`release-chain.md`](release-chain.md) — the eight-package CRAN submission
   order and the sibling-pinning rule that protects it.
+- [`stringi-inventory.md`](stringi-inventory.md) — a snapshot of every
+  `stringi::` reference in `R/` at `80d4f0e`, with its operation family, where
+  ICU and byte-mode PCRE differ for it, and the slice that migrates it
+  ([ADR 0019](adr/0019-string-operations-run-in-base-r.md)). The live list is
+  `tools/stringi-call-allowlist.csv`.
 
 **Design docs cannot live in `docs/`.** That directory is pkgdown's **output**
 (`build_site_github_pages`, `clean = TRUE`), so anything written there is
