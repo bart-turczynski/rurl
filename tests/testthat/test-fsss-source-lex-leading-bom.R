@@ -69,10 +69,11 @@ test_that("a mark-led source lexes no authority", {
     lex <- rurl:::.fsss_source_lex(
       c(paste0(bom, "http://u@h:1/p?q#f"), paste0(bom, "http://h/")), arm
     )
-    # DEFECT (RURL-rynmvtwp): the start-anchored stringi match reads past the
-    # mark and lexes `u` and `h` out of a source that has no scheme.
-    expect_identical(lex$userinfo, c("u", NA), label = arm)
-    expect_identical(lex$host, c("h", "h"), label = arm)
+    # The start-anchored stringi match read past the mark and lexed `u` and
+    # `h` out of a source that has no scheme (RURL-rynmvtwp).
+    expect_identical(lex$userinfo, c(NA_character_, NA_character_),
+                     label = arm)
+    expect_identical(lex$host, c(NA_character_, NA_character_), label = arm)
     # The delimiter facts are cut as bytes and do not depend on the mark.
     expect_identical(lex$query_kind, c("present", "absent"), label = arm)
     expect_identical(lex$fragment_kind, c("present", "absent"), label = arm)
@@ -85,9 +86,9 @@ test_that("whatwg: the mark that leads after the C0-or-space strip counts", {
   # nothing, so there the space still leads and no scheme matches.
   src <- paste0(" ", bom, "http://u@h/")
   lex <- rurl:::.fsss_source_lex(src, "whatwg")
-  # DEFECT (RURL-rynmvtwp): as above, once the strip has run.
-  expect_identical(lex$userinfo, "u")
-  expect_identical(lex$host, "h")
+  # The guard reads the mark after the strip, not before (RURL-rynmvtwp).
+  expect_identical(lex$userinfo, NA_character_)
+  expect_identical(lex$host, NA_character_)
   lex <- rurl:::.fsss_source_lex(src, "rfc3986")
   expect_identical(lex$userinfo, NA_character_)
   expect_identical(lex$host, NA_character_)
