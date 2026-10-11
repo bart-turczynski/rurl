@@ -131,9 +131,9 @@ test_that("invalid UTF-8 and a leading U+FEFF encode octet by octet", {
   expect_identical(enc_query(octets(0xc3)), "%C3")
   expect_identical(enc_fragment(octets(0xe2, 0x80)), "%E2%80")
   expect_identical(enc_userinfo(octets(0x61, 0x20, 0xff, 0x20)), "a%20%FF%20")
-  expect_identical(enc_path("﻿/a"), "%EF%BB%BF/a")
-  expect_identical(enc_c0("﻿"), "%EF%BB%BF")
-  expect_identical(enc_query("a﻿ b", "http"), "a%EF%BB%BF%20b")
+  expect_identical(enc_path("\ufeff/a"), "%EF%BB%BF/a")
+  expect_identical(enc_c0("\ufeff"), "%EF%BB%BF")
+  expect_identical(enc_query("a\ufeff b", "http"), "a%EF%BB%BF%20b")
 })
 
 test_that("NA and the empty string come back as they went in", {
@@ -203,7 +203,7 @@ test_that("the full serializer encodes userinfo, path and fragment per row", {
     authority_delimiter_present = c(TRUE, FALSE, FALSE, TRUE),
     path = c(
       marked(octets(0x2f, 0xc3, 0xa9, 0x20), "UTF-8"), "op aque ",
-      "//x y", "/﻿"
+      "//x y", "/\ufeff"
     ),
     path_kind = c("list", "opaque", "list", "list"),
     query = c("q'", NA, "a b", NA),
@@ -226,7 +226,7 @@ test_that("the clean serializer encodes list and opaque paths per row", {
     host = c(".", "h", NA, NA),
     host_kind = c("present", "present", "absent", "absent"),
     authority_delimiter_present = c(TRUE, TRUE, FALSE, FALSE),
-    path = c("/", "/", "a b ", "//﻿"),
+    path = c("/", "/", "a b ", "//\ufeff"),
     path_kind = c("list", "list", "opaque", "list"),
     query = c(NA, NA, "x'", NA),
     query_kind = c("absent", "absent", "present", "absent"),
@@ -258,4 +258,87 @@ test_that("encoder output does not depend on the session charset", {
       }
     })
   }
+})
+
+# --- the vector contract (RURL-khcicsca) -------------------------------------
+
+# Every encoder takes a whole vector in one call. A mixed-mark vector is the
+# hard case: `paste()` across rows would transcode a latin1 row if the rows did
+# not share one declaration first.
+pool <- c(
+  mixed_marks,
+  octets(0x61, 0xff, 0x62), "\ufeff/a b", "%", "%4", "%%", "a\"b#c<d>e'f",
+  marked(rawToChar(as.raw(0x80:0xff)), "bytes"),
+  marked("x\xe9:y@z", "latin1"), octets(0x01, 0x7f, 0x20)
+)
+
+test_that("a whole-vector call matches the row-by-row result", {
+  run <- function() {
+    schemes <- rep_len(c("http", "foo", NA, "WSS"), length(pool))
+    list(
+      path = list(enc_path(pool), each(enc_path, pool)),
+      userinfo = list(enc_userinfo(pool), each(enc_userinfo, pool)),
+      fragment = list(enc_fragment(pool), each(enc_fragment, pool)),
+      c0 = list(enc_c0(pool), each(enc_c0, pool)),
+      query = list(
+        enc_query(pool, schemes),
+        vapply(seq_along(pool), function(i) enc_query(pool[i], schemes[i]),
+               character(1))
+      )
+    )
+  }
+  for (loc in names(ctypes)) {
+    with_ctype(loc, ctypes[[loc]], {
+      for (pair in run()) {
+        expect_identical(hex_of(pair[[1]]), hex_of(pair[[2]]))
+      }
+    })
+  }
+  expect_identical(
+    enc_query(c("'", "'", "'"), c("http", "foo", NA)), c("%27", "'", "'")
+  )
+  expect_identical(enc_query(c("'", "'"), "https"), c("%27", "%27"))
+})
+
+test_that("several batches stitch back into the same rows", {
+  one <- rurl:::.whatwg_component_percent_encode(
+    pool, rurl:::.WHATWG_PATH_ENCODE_SET
+  )
+  many <- rurl:::.whatwg_component_percent_encode(
+    pool, rurl:::.WHATWG_PATH_ENCODE_SET, batch_bytes = 5
+  )
+  expect_identical(hex_of(many), hex_of(one))
+})
+
+test_that("the encoders keep length, names and the empty vector", {
+  expect_identical(enc_path(character(0)), character(0))
+  expect_identical(enc_query(character(0), character(0)), character(0))
+  expect_identical(
+    rurl:::.whatwg_opaque_path_encode(character(0), logical(0)), character(0)
+  )
+  named <- c(a = "x y", b = NA, c = "z")
+  expect_identical(enc_path(named), c(a = "x%20y", b = NA, c = "z"))
+  # The opaque-host parser's scalar call (R/parse-state.R) is unchanged.
+  expect_identical(
+    rurl:::.whatwg_component_percent_encode("h\u00e9", integer(0)), "h%C3%A9"
+  )
+})
+
+test_that("opaque-path trailing space works across a vector", {
+  got <- rurl:::.whatwg_opaque_path_encode(
+    c("a ", "a ", "a ", NA, "", octets(0xff, 0x20), "b  "),
+    c(TRUE, FALSE, NA, TRUE, TRUE, TRUE, TRUE)
+  )
+  expect_identical(got, c("a%20", "a ", "a ", NA, "", "%FF%20", "b %20"))
+})
+
+test_that("an encode set naming `%` or a hex digit is refused", {
+  # The table lookup is only the old re-emit rule because `%` and the hex
+  # digits pass through; a set that encoded them would silently diverge.
+  expect_error(
+    rurl:::.whatwg_component_percent_encode("%41", 0x25L), "internal error"
+  )
+  expect_error(
+    rurl:::.whatwg_component_percent_encode("a", 0x61L), "internal error"
+  )
 })

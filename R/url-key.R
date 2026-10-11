@@ -230,17 +230,15 @@
 # whose query the parse record encodes the same way. `rfc3986` keeps the query
 # as written: section 6.2.2.2 normalization is not the key's.
 #
-# The encoder walks bytes in R, so only rows holding a byte it could change go
-# through it: one outside printable ASCII (C0, SP, DEL, non-ASCII) or one of
-# `"` `#` `<` `>` `'`. Every other query is already in its encoded form.
+# Only rows holding a byte the encoder could change go through it, in one
+# vectorized call: one outside printable ASCII (C0, SP, DEL, non-ASCII) or one
+# of `"` `#` `<` `>` `'`. Every other query is already in its encoded form.
 .url_key_query <- function(query, scheme, standard) {
   if (!identical(standard, "whatwg")) {
     return(query)
   }
   todo <- grep("[^!-~]|[\"#<>']", query, useBytes = TRUE)
-  for (i in todo) {
-    query[i] <- .whatwg_query_percent_encode(query[i], scheme[i])
-  }
+  query[todo] <- .whatwg_query_percent_encode(query[todo], scheme[todo])
   query
 }
 
