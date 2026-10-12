@@ -238,9 +238,9 @@ test_that("NULL: the case policy keeps the mark (ADR 0016)", {
 
 # --- Subdomain trim -----------------------------------------------------------
 
-# Under whatwg the subdomain and www policies read the host before UTS-46 maps
-# the mark away; this fix leaves that arm as it was (RURL-fobwctml owns the
-# pre-mapping read), so these are pinned for the arm and for the profile.
+# Under whatwg the subdomain and www policies read the host after UTS-46 maps
+# the mark away (RURL-fobwctml), so a mark-led host gets its unmarked twin's
+# output. These are pinned for the arm and for the profile.
 whatwg_parse <- function(url, arm, ...) {
   switch(arm,
     std = safe_parse_urls(url, url_standard = "whatwg", ...),
@@ -249,16 +249,17 @@ whatwg_parse <- function(url, arm, ...) {
 }
 
 test_that("subdomain trim: the U+200B twins and the negative controls", {
-  # The twin's mark-led first label is a subdomain label, not the `www.`
-  # prefix the trim keeps. Under whatwg the host presentation maps the code
-  # point away after the trim.
+  # Under rfc3986 and NULL the twin's mark-led first label is a subdomain
+  # label, not the `www.` prefix the trim keeps. Under whatwg the trim reads
+  # the mapped host, whose first label is `www` (RURL-fobwctml).
   for (an in names(arms)) {
     arm <- arms[[an]]
     sub_host <- function(u, k) {
       arm_parse(u, arm, subdomain_levels_to_keep = k)$host
     }
     expect_identical(sub_host(paste0("http://", zwsp, "www.example.com/"), 0),
-                     "example.com", label = an)
+                     if (an == "whatwg") "www.example.com" else "example.com",
+                     label = an)
     expect_identical(
       sub_host(paste0("http://", zwsp, "www.example.com/"), 1),
       if (an == "whatwg") "www.example.com" else
@@ -351,8 +352,10 @@ test_that("rfc-syntax: a mark-led www host left whole keeps its case", {
   )
 })
 
-test_that("whatwg: the subdomain trim does not move", {
-  # The values the trim gave before this fix: it read `www.` past the mark.
+test_that("whatwg: the subdomain trim reads the mapped host", {
+  # Before RURL-fobwctml the trim read `www.` past this mark only because
+  # stri_startswith_fixed() skips it; it now reads the UTS-46-mapped host,
+  # which no longer holds the mark, and the values are unchanged.
   for (arm in c("std", "profile")) {
     sub_host <- function(u, k) {
       whatwg_parse(u, arm, subdomain_levels_to_keep = k)$host
@@ -375,13 +378,15 @@ test_that("whatwg: the subdomain trim does not move", {
     expect_identical(p$clean_url, "http://www.example.com/", label = arm)
     expect_identical(p$parse_status, "ok", label = arm)
   }
-  # The helper itself, as the pipeline calls it under whatwg.
+  # The helper itself, as the pipeline calls it under whatwg: it maps the
+  # mark away before the trim, for U+FEFF and U+200B alike.
   expect_identical(
     .apply_subdomain_policy_vec(
-      c(paste0(bom, "www.example.com"), paste0(bom, "www.a.example.com")),
-      rep("example.com", 2L), 0, rep(FALSE, 2L), url_standard = "whatwg"
+      c(paste0(bom, "www.example.com"), paste0(bom, "www.a.example.com"),
+        paste0(zwsp, "www.a.example.com")),
+      rep("example.com", 3L), 0, rep(FALSE, 3L), url_standard = "whatwg"
     ),
-    c(paste0(bom, "www.example.com"), "www.example.com")
+    rep("www.example.com", 3L)
   )
 })
 
@@ -479,7 +484,7 @@ test_that("rows the subdomain fix does not reach keep their values", {
                     subdomain_levels_to_keep = 2)$host,
     c("www.example.com", "www.example.com", "www.a.b.example.com",
       "a.b.example.com", "www.com", "example.com", "www.m\u00fcnchen.de",
-      "a.m\u00fcnchen.de", "a.b.example.com", "ab.www.example.com",
+      "a.m\u00fcnchen.de", "www.a.b.example.com", "ab.www.example.com",
       "www.a.example.com", "a.b.example.com", "example.com")
   )
   expect_identical(
@@ -496,8 +501,9 @@ test_that("rows the subdomain fix does not reach keep their values", {
 # --- www_handling = "if_no_subdomain" -----------------------------------------
 
 test_that("if_no_subdomain: the U+200B twins and the negative controls", {
-  # `\u200bwww.com` is an apex (registrable domain, no subdomain), so it gets
-  # `www.`; a host that starts with `www.` does not.
+  # Under rfc3986 and NULL `\u200bwww.com` is an apex (registrable domain, no
+  # subdomain), so it gets `www.`; a host that starts with `www.` does not.
+  # Under whatwg the policy reads the mapped host `www.com` (RURL-fobwctml).
   for (an in names(arms)) {
     arm <- arms[[an]]
     www_host <- function(u) {
@@ -505,7 +511,7 @@ test_that("if_no_subdomain: the U+200B twins and the negative controls", {
     }
     expect_identical(
       www_host(paste0("http://", zwsp, "www.com/")),
-      if (an == "whatwg") "www.www.com" else paste0("www.", zwsp, "www.com"),
+      if (an == "whatwg") "www.com" else paste0("www.", zwsp, "www.com"),
       label = an
     )
     expect_identical(www_host("http://www.com/"), "www.com", label = an)
@@ -543,9 +549,10 @@ test_that("if_no_subdomain reads a mark-led www label as part of the apex", {
   )
 })
 
-test_that("whatwg: if_no_subdomain does not move", {
-  # The values the policy gave before this fix: it read `www.` past the mark,
-  # so the apex counted as www-prefixed. WHATWG's own host is `www.com`.
+test_that("whatwg: if_no_subdomain reads the mapped host", {
+  # WHATWG's own host is `www.com`. Before RURL-fobwctml the policy reached
+  # it only because stri_startswith_fixed() skips the mark; it now reads the
+  # UTS-46-mapped host, and the values are unchanged.
   for (arm in c("std", "profile")) {
     www_parse <- function(u) {
       whatwg_parse(u, arm, www_handling = "if_no_subdomain")
@@ -559,15 +566,13 @@ test_that("whatwg: if_no_subdomain does not move", {
     expect_identical(www_parse(paste0("http://", bom, "www.co.uk/"))$host,
                      "www.co.uk", label = arm)
   }
+  # The mapping is the caller's: the www policy maps the host, then hands the
+  # mapped host to the if_no_subdomain helper.
   expect_identical(
-    .apply_www_if_no_subdomain_vec(paste0(bom, "www.com"),
-                                   url_standard = "whatwg"),
-    paste0(bom, "www.com")
-  )
-  expect_identical(
-    .apply_www_policy_vec(paste0(bom, "www.com"), "if_no_subdomain", FALSE,
+    .apply_www_policy_vec(c(paste0(bom, "www.com"), paste0(zwsp, "www.com")),
+                          "if_no_subdomain", c(FALSE, FALSE),
                           url_standard = "whatwg"),
-    paste0(bom, "www.com")
+    c("www.com", "www.com")
   )
 })
 

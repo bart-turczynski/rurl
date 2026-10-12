@@ -87,9 +87,13 @@ test_that("negative controls: no mark, a mark not first, NA and empty", {
   expect_identical(
     .url_key_frame(list(c("x", "y"), c(paste0(bom, "z"), NA)))[[2L]], "1:y-:"
   )
+  # A mark that does not start the path field: `rfc3986` frames it as
+  # written, and `whatwg` frames the path as its URL record holds it, with
+  # the path percent-encode set applied (RURL-ommuyaqi).
   for (std in c("whatwg", "rfc3986")) {
     k <- key(c(paste0("foo://h/", bom), "foo://h/"), std)
-    expect_true(has_frame(k[[1L]], paste0("/", bom)), label = std)
+    want <- if (std == "whatwg") "/%EF%BB%BF" else paste0("/", bom)
+    expect_true(has_frame(k[[1L]], want), label = std)
     expect_false(k[[1L]] == k[[2L]], label = std)
   }
   k <- key(c(paste0("http://h", bom, ".com/"), "http://h.com/"), "rfc3986")
@@ -202,8 +206,8 @@ test_that("a mark-led field no longer collides with its unmarked twin", {
   # Signature, per policy: `rfc3986` moves a host, path or query that starts
   # with the mark, since its record keeps each as written (RFC 3986 has no
   # rule for U+FEFF). Under `whatwg` the mark is percent-encoded in every key
-  # field it can start except a non-special list path (RURL-ommuyaqi),
-  # including a non-special query (RURL-pjrqnqvb), so no
+  # field it can start, a list path (RURL-ommuyaqi) and a non-special query
+  # (RURL-pjrqnqvb) included, so no
   # `whatwg` row is left here (pinned above), and the fragment and userinfo
   # stay out of the key. Each marked row keyed
   # like its unmarked twin; it now frames the mark, as its U+200B twin does.

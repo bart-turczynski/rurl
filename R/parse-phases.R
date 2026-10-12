@@ -271,10 +271,10 @@
 # `.has_explicit_authority()`: putting step 1 here (never at a call site) is
 # what keeps every stage's strip byte-identical by construction. It is not the
 # whole general-route input, though: prep, Stage A and Stage B run the browser
-# fixer first, Stage A and Stage B through .general_route_input_vec()
-# (RURL-vmsmlflr). A caller that runs this alone sees that input only where the
-# fixer is a no-op or cannot change its answer: `.fsss_record_vec()` and the
-# url-key, resolve and scheme-policy surfaces never run under
+# fixer first, Stage A, Stage B and `.fsss_record_vec()` through
+# .general_route_input_vec() (RURL-vmsmlflr). A caller that runs this alone
+# sees that input only where the fixer is a no-op or cannot change its answer:
+# the url-key, resolve and scheme-policy surfaces never run under
 # `fixup_posture = "browser"`, and inside the parse `.has_explicit_authority()`
 # trims a leading C0-or-space run itself and is asked only about `mailto:`,
 # which the fixer otherwise leaves alone.
@@ -1071,12 +1071,38 @@
 # non-special scheme stay out: steps 2, 3 and 3b match special schemes only,
 # step 1's trim is scheme-blind by definition (and under `whatwg` the strip
 # already does it), and the special-scheme backslash rewrite is not applied.
-# A byte-for-byte no-op unless fixup_posture == "browser".
+# A byte-for-byte no-op unless fixup_posture == "browser", or a `//` row under
+# `rfc3986` with "keep" (below).
+#
+# Under `rfc3986` with `scheme_relative_handling = "keep"`, a `//`-led row is
+# also handed the same `http:` stand-in Phase 1 gives the web route
+# (RURL-ozpxupgq). The general route's own rules then decide which of these
+# rows the web route cannot read: `.rfc_odd_slash_run()` claims `///p` and
+# `////p`, `.rfc_empty_authority_host()` claims `//`, `//u@/p` and `//:80/x`,
+# and every `//host` row stays on the web route, byte-identical. The web route
+# models the special-scheme authority, whose state skips a slash run, so
+# `///p` read as host `p`, the reading of `//p`. RFC 3986 section 4.2 makes a
+# network-path reference `"//" authority path-abempty`, and section 3.2's
+# `reg-name` may be empty, so `///p` is an empty authority and the path `/p`.
+# The general parser reads it that way: under `rfc3986` it is the generic
+# syntax, in which the stand-in is only a label, never a special scheme. The
+# row reports no scheme, as every "keep" row does (Phase 13). The other
+# postures assume a scheme, and `whatwg` and the no-selector default read the
+# slash run the special-scheme way, so none of them gets the stand-in here.
 .general_route_input_vec <- function(url, opts) {
   url <- .apply_browser_fixup_vec(
     url, opts$fixup_posture, opts$url_standard, opts$scheme_policy
   )
-  .strip_whatwg_control_chars_vec(url, opts$url_standard)$url
+  url <- .strip_whatwg_control_chars_vec(url, opts$url_standard)$url
+  if (identical(opts$url_standard, "rfc3986") &&
+        identical(opts$scheme_relative_handling, "keep")) {
+    # The same mask Phase 1 draws: a U+FEFF-led row is never scheme-relative,
+    # and stri_startswith_fixed() reads past the mark (see .starts_with_bom()).
+    rel <- stringi::stri_startswith_fixed(url, "//")
+    rel <- !is.na(rel) & rel & !.starts_with_bom(url)
+    url[rel] <- paste0("http:", url[rel])
+  }
+  url
 }
 
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
@@ -2068,15 +2094,36 @@
   list(host = host, is_ip = is_ip, fatal = fatal)
 }
 
+# The host the www and subdomain policies read (RURL-fobwctml). Under
+# `whatwg` that is the host the WHATWG host parser defines: its domain to
+# ASCII step runs UTS #46 processing, whose first step maps the input (UTS #46
+# section 4, step 1), and the mapping removes the code points UTS-46 ignores,
+# U+200B, U+00AD and U+FEFF among them. Phase 9 renders that same mapped form
+# (`.whatwg_host_presentation_vec()`, RUL-002), so a policy reading the source
+# spelling policed `<U+200B>www.com` as a host whose first label is not
+# `www`, a different host from the `www.com` WHATWG records. The policies now
+# run after the mapping instead: they read the `keep` rendering, which Phase 9
+# maps to itself under every `host_encoding`. `rfc3986` and the `NULL` arm
+# have no mapping step and read the host as written.
+.policy_host_vec <- function(host, elig, url_standard) {
+  if (.is_whatwg(url_standard) && any(elig)) {
+    host[elig] <- .whatwg_host_presentation_vec(host[elig], "keep")
+  }
+  host
+}
+
 # Phase 6 (vector): apply the www-prefix policy to (non-IP) hosts.
-# `url_standard` reaches only the "if_no_subdomain" branch (RURL-opwjlnla).
+# Under `whatwg` every policy but "none" reads the UTS-46-mapped host
+# (`.policy_host_vec()`, RURL-fobwctml).
 .apply_www_policy_vec <- function(raw_host, www_handling, is_ip_host,
                                   engine = NULL, url_standard = NULL) {
   final_host <- raw_host
   elig <- !is_ip_host & !is.na(raw_host) & raw_host != ""
-  if (!any(elig)) {
+  if (!any(elig) || www_handling == "none") {
     return(final_host)
   }
+  raw_host <- .policy_host_vec(raw_host, elig, url_standard)
+  final_host <- raw_host
   ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
 
   if (www_handling == "strip") {
@@ -2104,9 +2151,7 @@
       final_host[no_www] <- paste0("www.", raw_host[no_www])
     }
   } else if (www_handling == "if_no_subdomain") {
-    final_host[elig] <- .apply_www_if_no_subdomain_vec(
-      raw_host[elig], engine, url_standard
-    )
+    final_host[elig] <- .apply_www_if_no_subdomain_vec(raw_host[elig], engine)
   }
   final_host
 }
@@ -2115,9 +2160,10 @@
 # when the host is itself an apex (registrable domain with no subdomain labels).
 # The STRUCTURAL decision uses pslr's canonical decomposition (batched over the
 # eligible hosts) so an A-label host and its Unicode equivalent take the same
-# branch; the emitted host keeps the input spelling (candidate_host).
-.apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL,
-                                           url_standard = NULL) {
+# branch; the emitted host keeps the input spelling (candidate_host). Under
+# `whatwg` that input is already the UTS-46-mapped host (`.policy_host_vec()`,
+# applied by the caller, RURL-fobwctml), so this helper takes no selector.
+.apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL) {
   ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
   lower <- .ascii_tolower(raw_host)
 
@@ -2137,17 +2183,11 @@
   # that starts its input (see .starts_with_bom()): the mark-led apex
   # "<U+FEFF>www.com" is not www-prefixed, so it gets "www." like its U+200B
   # twin (RURL-opwjlnla). A row that passes starts with "www.", so the stringi
-  # match below cannot meet the mark. Except under `whatwg`: that arm keeps
-  # the stringi reading, the match included, so its output does not move. The
-  # policy reads the host there before UTS-46 maps the mark away, which is
-  # RURL-fobwctml's to settle.
+  # match below cannot meet the mark. Under `whatwg` the caller hands over the
+  # UTS-46-mapped host, which no longer holds the mark (RURL-fobwctml).
   host_for_domain_check <- candidate_host
   cand_lower <- .ascii_tolower(candidate_host)
-  cw <- if (.is_whatwg(url_standard)) {
-    stringi::stri_startswith_fixed(cand_lower, "www.")
-  } else {
-    startsWith(cand_lower, "www.")
-  }
+  cw <- startsWith(cand_lower, "www.")
   cw[is.na(cw)] <- FALSE
   if (any(cw)) {
     match_res_bare <- stringi::stri_match_first_regex(
@@ -2176,8 +2216,10 @@
 
 # Phase 6 (scalar wrapper): delegates to .apply_www_policy_vec().
 .apply_www_policy <- function(raw_host, www_handling, is_ip_host,
-                              engine = NULL) {
-  .apply_www_policy_vec(raw_host, www_handling, is_ip_host, engine)
+                              engine = NULL, url_standard = NULL) {
+  .apply_www_policy_vec(
+    raw_host, www_handling, is_ip_host, engine, url_standard
+  )
 }
 
 # Phase 7 (vector, RURL-jhsbzmsj): the PSL ANNOTATION candidate for a host.
@@ -2312,28 +2354,22 @@
   }
 
   idx <- which(can_trim)
-  fh <- final_host[idx]
+  # Under `whatwg` the trim reads the UTS-46-mapped host (RURL-fobwctml).
+  fh <- .policy_host_vec(final_host[idx], rep(TRUE, length(idx)), url_standard)
   lower <- .ascii_tolower(fh)
   # `startsWith()`, not stri_startswith_fixed(), which reads past a U+FEFF
   # that starts its input (see .starts_with_bom()): "<U+FEFF>www." read as the
   # www prefix, and stri_sub() then cut the mark off with it. The mark-led
   # label is a subdomain label like its U+200B twin's (RURL-opwjlnla). A row
   # that passes starts with "www.", so stri_sub() cannot meet the mark.
-  # Under `whatwg` the policy reads the host before UTS-46 maps the mark away;
-  # that arm keeps the stringi reading, so its output does not move
-  # (RURL-fobwctml owns the pre-mapping read).
-  whatwg <- .is_whatwg(url_standard)
-  has_www_prefix <- if (whatwg) {
-    stringi::stri_startswith_fixed(lower, "www.")
-  } else {
-    startsWith(lower, "www.")
-  }
+  has_www_prefix <- startsWith(lower, "www.")
   has_www_prefix[is.na(has_www_prefix)] <- FALSE
   # The rows the stringi reading took for www-prefixed: one mark, then "www.".
   # When the policy trims none of their labels they stay as written, rather
   # than take the rebuild below, which lowercases the registrable labels; the
-  # stringi reading left "<U+FEFF>WWW.Example.com" as written too.
-  bom_www <- !whatwg & .starts_with_bom(fh)
+  # stringi reading left "<U+FEFF>WWW.Example.com" as written too. A mapped
+  # `whatwg` host holds no mark, so this only reaches `rfc3986` and `NULL`.
+  bom_www <- .starts_with_bom(fh)
   if (any(bom_www)) {
     bom_www[bom_www] <- startsWith(
       .byte_substring_vec(lower[bom_www], 4L), "www."
@@ -2396,9 +2432,10 @@
 # Phase 8 (scalar wrapper): delegates to .apply_subdomain_policy_vec().
 .apply_subdomain_policy <- function(final_host, domain,
                                     subdomain_levels_to_keep, is_ip_host,
-                                    engine = NULL) {
+                                    engine = NULL, url_standard = NULL) {
   .apply_subdomain_policy_vec(
-    final_host, domain, subdomain_levels_to_keep, is_ip_host, engine
+    final_host, domain, subdomain_levels_to_keep, is_ip_host, engine,
+    url_standard = url_standard
   )
 }
 
