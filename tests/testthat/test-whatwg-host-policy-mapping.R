@@ -8,7 +8,7 @@
 # Every source here spells the marks as `\u` escapes, never as raw invisible
 # characters.
 
-marks <- c(zwsp = "​", shy = "­", bom = "﻿")
+marks <- c(zwsp = "\u200b", shy = "\u00ad", bom = "\ufeff")
 
 # The hosts and the policies each test walks: every www_handling value and two
 # subdomain levels.
@@ -79,38 +79,38 @@ test_that("whatwg: IDN and ACE twins keep their policy output", {
   # Hosts UTS-46 maps without an ignorable code point (case, an IDN, an ACE
   # label, a fullwidth letter): the policies already read them the WHATWG
   # way, and the fix must not move them.
-  urls <- c("http://www.bücher.de/", "http://BÜCHER.de/",
-            "http://www.xn--bcher-kva.de/", "http://a.b.bücher.de/",
-            "http://www.ｅxample.com/")
+  urls <- c("http://www.b\u00fccher.de/", "http://B\u00dcCHER.de/",
+            "http://www.xn--bcher-kva.de/", "http://a.b.b\u00fccher.de/",
+            "http://www.\uff45xample.com/")
   host <- function(policy) policy_parse(urls, "whatwg", policy)$host
   expect_identical(host("none"), c(
-    "www.bücher.de", "bücher.de", "www.xn--bcher-kva.de",
-    "a.b.bücher.de", "www.example.com"
+    "www.b\u00fccher.de", "b\u00fccher.de", "www.xn--bcher-kva.de",
+    "a.b.b\u00fccher.de", "www.example.com"
   ))
   expect_identical(host("strip"), c(
-    "bücher.de", "bücher.de", "xn--bcher-kva.de",
-    "a.b.bücher.de", "example.com"
+    "b\u00fccher.de", "b\u00fccher.de", "xn--bcher-kva.de",
+    "a.b.b\u00fccher.de", "example.com"
   ))
   expect_identical(host("keep"), c(
-    "www.bücher.de", "www.bücher.de", "www.xn--bcher-kva.de",
-    "www.a.b.bücher.de", "www.example.com"
+    "www.b\u00fccher.de", "www.b\u00fccher.de", "www.xn--bcher-kva.de",
+    "www.a.b.b\u00fccher.de", "www.example.com"
   ))
   expect_identical(host("if_no_subdomain"), c(
-    "www.bücher.de", "www.bücher.de", "www.xn--bcher-kva.de",
-    "a.b.bücher.de", "www.example.com"
+    "www.b\u00fccher.de", "www.b\u00fccher.de", "www.xn--bcher-kva.de",
+    "a.b.b\u00fccher.de", "www.example.com"
   ))
   expect_identical(host("sub0"), c(
-    "www.bücher.de", "bücher.de", "www.xn--bcher-kva.de",
-    "bücher.de", "www.example.com"
+    "www.b\u00fccher.de", "b\u00fccher.de", "www.xn--bcher-kva.de",
+    "b\u00fccher.de", "www.example.com"
   ))
   expect_identical(host("sub1"), c(
-    "www.bücher.de", "bücher.de", "www.xn--bcher-kva.de",
-    "b.bücher.de", "www.example.com"
+    "www.b\u00fccher.de", "b\u00fccher.de", "www.xn--bcher-kva.de",
+    "b.b\u00fccher.de", "www.example.com"
   ))
   expect_identical(
     policy_parse(urls, "whatwg", "strip")$domain,
-    c("bücher.de", "bücher.de", "xn--bcher-kva.de",
-      "bücher.de", "example.com")
+    c("b\u00fccher.de", "b\u00fccher.de", "xn--bcher-kva.de",
+      "b\u00fccher.de", "example.com")
   )
 })
 
@@ -147,5 +147,84 @@ test_that("rfc3986 and NULL: an ignorable-led host keeps the code point", {
         expect_identical(p$parse_status, rep("ok", length(urls)), label = lab)
       }
     }
+  }
+})
+
+# --- The fix: the policies read the mapped host ------------------------------
+
+test_that("whatwg: an ignorable-led host gets its twin's policy output", {
+  # The policies used to read the host before domain to ASCII: `\u200bwww.com`
+  # with `if_no_subdomain` became `www.www.com`, `strip` and `keep` never saw
+  # the `www.` prefix, and the trim counted `\u200bwww` as a subdomain label.
+  # Every column but the input matches the twin's, under every www mode and
+  # both trim levels, for the url_standard and the profile.
+  twin_urls <- paste0("http://", policy_hosts, "/")
+  for (posture in c("whatwg", "whatwg-profile")) {
+    for (policy in names(policies)) {
+      twin <- policy_parse(twin_urls, posture, policy)
+      twin$original_url <- NULL
+      for (mk in names(marks)) {
+        p <- policy_parse(paste0("http://", marks[[mk]], policy_hosts, "/"),
+                          posture, policy)
+        p$original_url <- NULL
+        expect_identical(p, twin, label = paste(mk, posture, policy))
+      }
+    }
+  }
+})
+
+test_that("whatwg: a mixed ACE host trims to the spelling of its domain", {
+  # The `keep` rendering of a host that carries an ACE label is ToASCII of
+  # the whole host, which is the spelling `domain` takes, so that host and
+  # domain agree (`.whatwg_host_presentation_vec()`, RUL-002). The trim used
+  # to drop the ACE label from the source spelling and leave the Unicode
+  # `<U+043F><U+0440>.com`, a spelling neither column holds; it now trims the
+  # mapped host. `www_handling = "keep"` puts `www.` back in front.
+  urls <- c("https://xn--bcher-kva.\u043f\u0440.com/",
+            "http://xn--bcher-kva.m\u00fcnchen.de/")
+  for (posture in c("whatwg", "whatwg-profile")) {
+    whole <- policy_parse(urls, posture, "none")
+    expect_identical(whole$host, c("xn--bcher-kva.xn--o1ac.com",
+                                   "xn--bcher-kva.xn--mnchen-3ya.de"),
+                     label = posture)
+    for (www in c("none", "strip", "keep", "if_no_subdomain")) {
+      p <- if (posture == "whatwg") {
+        safe_parse_urls(urls, url_standard = "whatwg", www_handling = www,
+                        subdomain_levels_to_keep = 0)
+      } else {
+        safe_parse_urls(urls, profile = "whatwg", www_handling = www,
+                        subdomain_levels_to_keep = 0)
+      }
+      lab <- paste(posture, www)
+      trimmed <- c("xn--o1ac.com", "xn--mnchen-3ya.de")
+      expect_identical(p$domain, trimmed, label = lab)
+      expect_identical(
+        p$host, if (www == "keep") paste0("www.", trimmed) else trimmed,
+        label = lab
+      )
+      expect_true(all(endsWith(whole$host, paste0(".", trimmed))), label = lab)
+    }
+    expect_identical(policy_parse(urls, posture, "sub1")$host, whole$host,
+                     label = posture)
+  }
+  # rfc3986 and NULL read the host as written and do not move.
+  for (posture in c("rfc3986", "NULL", "NULL-explicit")) {
+    expect_identical(policy_parse(urls, posture, "sub0")$host,
+                     c("\u043f\u0440.com", "m\u00fcnchen.de"), label = posture)
+  }
+})
+
+test_that("whatwg: pure ACE and pure Unicode hosts keep their spelling", {
+  urls <- c("http://www.xn--bcher-kva.de/", "http://a.b.xn--bcher-kva.de/",
+            "http://www.b\u00fccher.de/", "http://a.b.b\u00fccher.de/")
+  for (posture in c("whatwg", "whatwg-profile")) {
+    expect_identical(policy_parse(urls, posture, "sub0")$host, c(
+      "www.xn--bcher-kva.de", "xn--bcher-kva.de", "www.b\u00fccher.de",
+      "b\u00fccher.de"
+    ), label = posture)
+    expect_identical(policy_parse(urls, posture, "strip")$host, c(
+      "xn--bcher-kva.de", "a.b.xn--bcher-kva.de", "b\u00fccher.de",
+      "a.b.b\u00fccher.de"
+    ), label = posture)
   }
 })
