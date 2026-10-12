@@ -227,17 +227,18 @@ test_that("serialize_url() and the key both read the shared step", {
   # The serializer's own encoders (R/parse-phases.R) still run over the step's
   # output and change no byte of it, so skipping the step in serialize_url()
   # would not move its output. The wiring is asserted directly instead.
-  seen <- character(0)
+  calls <- new.env()
+  calls$seen <- character(0)
   real <- .fsss_encode_record_vec
   local_mocked_bindings(.fsss_encode_record_vec = function(rec, standard) {
-    seen <<- c(seen, standard)
+    calls$seen <- c(calls$seen, standard)
     real(rec, standard)
   })
   serialize_url("http://h/p{", "whatwg")
   serialize_url("http://h/p", "rfc3986")
   get_url_key("http://h/p{", url_key_policy("whatwg"))
   get_url_key("http://h/p", url_key_policy("rfc3986"))
-  expect_identical(seen, c("whatwg", "rfc3986", "whatwg", "rfc3986"))
+  expect_identical(calls$seen, c("whatwg", "rfc3986", "whatwg", "rfc3986"))
 })
 
 test_that("whatwg: the key's path and query are the serialization's", {
