@@ -103,8 +103,8 @@ not promise). Also out of scope: dev tooling not shipped in the package (`tools/
 ## How you rate severity
 
 - **Critical**: a parse differential that lets a URL through `ssrfr`'s default policy to
-  any address that policy treats as loopback or cloud metadata (for example
-  `127.0.0.0/8`, `0.0.0.0/8`, `::1`, `::ffff:7f00:1`, `169.254.169.254`,
+  any address that policy blocks as loopback, this-network or cloud metadata (for
+  example `127.0.0.0/8`, `0.0.0.0/8`, `::1`, `::ffff:7f00:1`, `169.254.169.254`,
   `fd00:ec2::254`): under `whatwg`, rurl reports a host or IP outside those while a
   WHATWG client connects to one of them (for example an IPv4 number form, a mapped
   separator or a backslash read differently).
