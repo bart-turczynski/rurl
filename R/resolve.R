@@ -843,13 +843,28 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   ref <- rep_len(ref, n)
   base <- rep_len(base, n)
   # A string that is not valid UTF-8 cannot be split as one, in any locale,
-  # so the boundary's verdict decides here: an undecodable reference
-  # resolves to NA, and an undecodable base is no base (NA, as a bytes one
-  # already is), so an absolute reference still resolves without it. The
-  # parse seams leave this verdict to each standard's parser; this function
-  # reshapes the strings before any parser sees them.
-  ref[!rep_len(ref_in$decodable, n)] <- NA_character_
-  base[!rep_len(base_in$decodable, n)] <- NA_character_
+  # so the boundary's verdict decides here, as each standard's parser decides
+  # it at the parse seams; this function reshapes the strings before any
+  # parser sees them. `whatwg` parses a scalar-value string, so it reads an
+  # undecodable octet as U+FFFD, as its parse seam does (UTF-8 decode with
+  # replacement); the conversion validates, so it is the same in every
+  # locale. Under `rfc3986` and `NULL` an undecodable reference resolves to
+  # NA, and an undecodable base is no base (NA, as a bytes one already is),
+  # so an absolute reference still resolves without it.
+  ref_bad <- !rep_len(ref_in$decodable, n)
+  base_bad <- !rep_len(base_in$decodable, n)
+  if (.is_whatwg(url_standard)) {
+    # The replacement is the reading, not a fault, and the parse seam reads
+    # the same octet without a warning; stringi's "fixing" notice is muffled.
+    replace <- function(x) {
+      suppressWarnings(stringi::stri_enc_toutf8(x, validate = TRUE))
+    }
+    ref[ref_bad] <- replace(ref[ref_bad])
+    base[base_bad] <- replace(base[base_bad])
+  } else {
+    ref[ref_bad] <- NA_character_
+    base[base_bad] <- NA_character_
+  }
 
   resolved_raw <- vapply(
     seq_len(n),

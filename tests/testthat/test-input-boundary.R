@@ -309,13 +309,14 @@ ib_resolve <- function(ref, base, sel, ...) {
 # Signature. Inputs: a reference or base that is bytes-marked, or not valid
 # UTF-8 once unmarked bytes are read as UTF-8. Options: resolve_url() under
 # any url_standard and either output. Output: that row's element only, which
-# becomes NA (a bytes or undecodable base is no base, so an absolute
-# reference still resolves); every other row is unchanged. Per arm: rfc3986
-# had all three defects, through the same string code as NULL. whatwg had the
-# bytes and the base defects; its reference was already locale-invariant,
-# because the WHATWG strip read it with U+FFFD replacement, and that row moves
-# from "http://b.com/h<U+FFFD>.com" to NA with the other two arms.
-test_that("resolve_url(): an undecodable reference is NA for its row only", {
+# under NULL and rfc3986 becomes NA (a bytes or undecodable base is no base,
+# so an absolute reference still resolves); every other row is unchanged. Per
+# arm: rfc3986 had all three defects, through the same string code as NULL.
+# whatwg had the bytes defect, and its undecodable base resolved under
+# LC_CTYPE C only; it now reads an undecodable reference or base with U+FFFD
+# replacement in every locale, as its parse seam does, so its reference row
+# does not move ("http://b.com/h<U+FFFD>.com") and its base rows resolve.
+test_that("resolve_url(): an undecodable reference fails or reads alone", {
   skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
   for (loc in c(ib_utf8, "C")) {
     for (s in names(ib_selectors)) {
@@ -323,8 +324,12 @@ test_that("resolve_url(): an undecodable reference is NA for its row only", {
         ib_resolve(c(ib_bad_ref, "g"), "http://b.com/a", ib_selectors[[s]])
       ))
       expect_true(got$ok, label = paste(s, loc))
-      expect_identical(got$value, c(NA, "http://b.com/g"),
-                       label = paste(s, loc))
+      want <- if (identical(s, "whatwg")) {
+        c("http://b.com/h\ufffd.com", "http://b.com/g")
+      } else {
+        c(NA, "http://b.com/g")
+      }
+      expect_identical(got$value, want, label = paste(s, loc))
     }
   }
 })
@@ -351,7 +356,7 @@ test_that("resolve_url(): a bytes-marked base is no base", {
   }
 })
 
-test_that("resolve_url(): an undecodable base is NA in every locale", {
+test_that("resolve_url(): an undecodable base reads the same in every locale", {
   skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
   for (loc in c(ib_utf8, "C")) {
     for (s in names(ib_selectors)) {
@@ -359,10 +364,15 @@ test_that("resolve_url(): an undecodable base is NA in every locale", {
       got <- hi_in_ctype(loc, ib_resolve(
         "x", c(ib_bad_bases, "http://example.com/cafe"), ib_selectors[[s]]
       ))
-      expect_identical(got, c(NA, NA, "http://example.com/x"), label = lab)
+      want <- if (identical(s, "whatwg")) {
+        c("file:///x", "http://example.com/x", "http://example.com/x")
+      } else {
+        c(NA, NA, "http://example.com/x")
+      }
+      expect_identical(got, want, label = lab)
       # The parse seams call both bases errors under the frozen default and
-      # rfc3986; whatwg reads them with U+FFFD replacement, and resolution
-      # does not (see .prepare_url_input()).
+      # rfc3986; whatwg reads them with U+FFFD replacement, and so does its
+      # resolution.
       sel <- if (identical(s, "omitted")) NULL else ib_selectors[[s]]
       if (!identical(sel, "whatwg")) {
         st <- hi_in_ctype(loc, get_parse_status(ib_bad_bases,
@@ -529,5 +539,20 @@ test_that("every export reads its URL operands through the input boundary", {
         }
       }
     }
+  }
+})
+
+test_that("resolve_url(): whatwg reads an undecodable operand as U+FFFD", {
+  skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
+  abs_ref <- ib_str("http://h.com/caf", 0xe9)
+  for (loc in c(ib_utf8, "C")) {
+    got <- hi_in_ctype(loc, expect_no_warning(resolve_url(
+      abs_ref, "http://b.com/", url_standard = "whatwg", output = "serialized"
+    )))
+    expect_identical(got, "http://h.com/caf%EF%BF%BD", label = loc)
+    # The parse seam reads the same octet the same way.
+    expect_identical(
+      hi_in_ctype(loc, serialize_url(abs_ref, "whatwg")), got, label = loc
+    )
   }
 })
