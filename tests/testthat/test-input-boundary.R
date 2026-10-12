@@ -441,3 +441,93 @@ test_that("diagnostics re-parse the string Stage A's general route reads", {
     expect_identical(g, c(TRUE, TRUE, TRUE, FALSE))
   }
 })
+
+# --- Ownership: no export reads a URL string around the boundary -----------
+#
+# .prepare_url_input() is swapped for a copy that also turns each SENTINEL
+# into its TARGET: a URL that differs from it in every fact an export reads
+# (scheme, authority, path, host). An export whose result depends on its URL
+# operand only through the boundary then returns, for the sentinels, exactly
+# what it returns for the targets, once any echo of the caller's own element
+# is mapped to its target. A read that skips the boundary -- a string helper
+# handed the raw operand, a second parse of it -- sees the sentinel and
+# moves the result. The manifest decides which exports and operands are held
+# to it, so a new export is held to it the day it gets its entry.
+ib_sentinels <- list(
+  web = c(
+    "zz://sentinel-one.invalid/x" = "mailto:a@b.example.com",
+    "sentinel-two" = "http://u:pw@h.example.com:8080/p/../q?x=1&utm_x=y#f",
+    "https://sentinel-three.invalid/" = "file:///C:/dir/f.txt",
+    "SENTINEL:four" = ib_str("https://b", 0xc3, 0xbc, "cher.example.com/",
+                             0xc3, 0xa9, "?q=", 0xc3, 0xbc, mark = "UTF-8"),
+    # A row of the other table in a join (hi_neighbors), so a join matches.
+    "sentinel-five" = "https://good-two.example.com/b/"
+  ),
+  mailto = c(
+    "mailto:sentinel@zz.invalid" = "mailto:a@b.example.com,c@d.example.com",
+    "http://sentinel.invalid/" = "mailto:x@y.example.com?subject=s"
+  ),
+  reference = c(
+    "sentinel-one" = "g/h?x=1#y",
+    "/abs/sentinel" = "../up/",
+    "zz:opaque-sentinel" = "//other.example.com/p",
+    "#frag-sentinel" = "?q=2"
+  ),
+  base = c(
+    "sentinel-base" = "http://base.example.com/dir/page?bq=1#bf",
+    "zz://sentinel.invalid/" = "https://a.example.com/x/y",
+    "http://sentinel.invalid/q/r" = "file:///C:/d/e",
+    "ftp://sentinel.invalid/" = "http://h.example.com/"
+  )
+)
+
+# Calls whose result does not depend on the URL at all, so no pair can show
+# teeth there.
+ib_no_teeth <- c(
+  "is_valid_host NULL url" =
+    "with no standard there is no host type, so every rule is NA"
+)
+
+ib_sentinel_set <- function(fn, entry, operand) {
+  if (fn == "resolve_url") {
+    return(ib_sentinels[[if (operand == "base_url") "base" else "reference"]])
+  }
+  ib_sentinels[[entry$template]]
+}
+
+test_that("every export reads its URL operands through the input boundary", {
+  skip_on_cran()
+  real <- .prepare_url_input
+  pairs <- NULL
+  local_mocked_bindings(.prepare_url_input = function(url) {
+    p <- real(url)
+    hit <- !is.na(p$url) & p$url %in% names(pairs)
+    p$url[hit] <- unname(pairs[p$url[hit]])
+    p
+  })
+  to_target <- function(s) {
+    hit <- !is.na(s) & s %in% names(pairs)
+    s[hit] <- unname(pairs[s[hit]])
+    s
+  }
+  for (fn in names(capability_manifest)) {
+    e <- capability_manifest[[fn]]
+    for (std in e$standards) {
+      for (op in e$operands) {
+        pairs <- ib_sentinel_set(fn, e, op)
+        lab <- paste(fn, std, op)
+        via <- ib_run_export(fn, e, std, list(), op, names(pairs))
+        want <- ib_run_export(fn, e, std, list(), op, unname(pairs))
+        expect_identical(hi_map_strings(via, to_target), want, label = lab)
+        # The pair has teeth: read raw, the sentinels give another result.
+        pairs_off <- pairs
+        pairs <- character(0)
+        raw <- ib_run_export(fn, e, std, list(), op, names(pairs_off))
+        pairs <- pairs_off
+        if (!lab %in% names(ib_no_teeth)) {
+          expect_false(identical(raw, want), label = paste(lab, "teeth"))
+        }
+      }
+    }
+  }
+})
