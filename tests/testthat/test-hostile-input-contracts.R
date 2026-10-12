@@ -74,41 +74,78 @@ known_failures <- rbind(
      "query", "RURL-kzbqvxpk")
 )
 
-# Cases outside the matrix: inputs too costly to run for every export, each
-# run alone by the probe test below. `class` names a probe in `probes`.
+# Cases outside the matrix: inputs too costly to run for every export. The
+# probe test runs every case of every probe -- each standard at each position
+# -- alone. `class` is the input class the probe cuts in.
 probes <- list(
-  long_6e5 = list(class = "long", long_n = 600000L, template = "web"),
-  file_long_6e5 = list(class = "long", long_n = 600000L, template = "file")
+  long_6e5 = list(class = "long", long_n = 600000L, template = "web",
+                  export = "safe_parse_urls",
+                  standards = c("NULL", "whatwg", "rfc3986"),
+                  positions = c("host", "path")),
+  file_long_6e5 = list(class = "long", long_n = 600000L, template = "file",
+                       export = "safe_parse_urls",
+                       standards = c("NULL", "whatwg", "rfc3986"),
+                       positions = "path")
 )
-known_probe_failures <- rbind(
-  # U_REGEX_STACK_OVERFLOW out of the whole call.
-  kf("safe_parse_urls", "rfc3986", "long_6e5", c("host", "path"),
-     "RURL-vewhvxnb"),
-  kf("safe_parse_urls", "NULL", "file_long_6e5", "path", "RURL-vewhvxnb")
-)
+# The probe cases that fail today: (export, standard, probe, position), the
+# owning issue, and `detail`, a regular expression the failure's detail must
+# match, so a listed case that starts failing some other way is not taken for
+# the failure its issue tracks. A probe case not listed must pass.
+#
+# Empty: every probe case passes. The 6e5-octet cases overflowed ICU's
+# backtrack stack (U_REGEX_STACK_OVERFLOW) under rfc3986 and on the NULL
+# `file:` route until RURL-vewhvxnb; this empty table is its regression
+# guard. A new entry is a row of
+#   kpf(export, standard, probe, position, issue, detail)
+kpf <- function(export, standard, class, position, issue, detail) {
+  out <- kf(export, standard, class, position, issue)
+  out$detail <- rep_len(detail, nrow(out))
+  out
+}
+known_probe_failures <- kpf(character(0), character(0), character(0),
+                            character(0), character(0), character(0))
 
 key_cols <- c("export", "standard", "class", "position")
 case_key <- function(d) do.call(paste, c(d[key_cols], sep = " | "))
+probe_keys <- unlist(lapply(names(probes), function(pn) {
+  p <- probes[[pn]]
+  case_key(kf(p$export, p$standards, pn, p$positions, ""))
+}))
 
 test_that("the known-failure tables are well formed", {
-  all_known <- rbind(known_failures, known_probe_failures)
+  all_known <- rbind(known_failures,
+                     known_probe_failures[names(known_failures)])
   expect_false(anyDuplicated(case_key(all_known)) > 0L)
   expect_true(all(all_known$export %in% names(capability_manifest)))
   expect_true(all(grepl("^(RURL-[a-z]{8}|UNFILED-[0-9]+)$", all_known$issue)))
-  for (i in seq_len(nrow(known_failures))) {
+  for (i in seq_len(NROW(known_failures))) {
     e <- capability_manifest[[known_failures$export[i]]]
     expect_true(known_failures$standard[i] %in% e$standards,
                 label = case_key(known_failures[i, ]))
     expect_true(known_failures$class[i] %in% hi_classes,
                 label = case_key(known_failures[i, ]))
   }
-  expect_true(all(known_probe_failures$class %in% names(probes)))
+  # A listed probe case the probe test does not run would never be checked.
+  expect_identical(setdiff(case_key(known_probe_failures), probe_keys),
+                   character(0), label = "listed probe cases no probe runs")
+  expect_true(all(nzchar(known_probe_failures$detail)))
+  for (p in probes) {
+    e <- capability_manifest[[p$export]]
+    expect_true(all(p$standards %in% e$standards), label = p$export)
+    expect_true(all(p$positions %in% hi_positions(p$template)),
+                label = p$export)
+  }
 })
 
 utf8 <- hi_utf8_locale()
 
 for (fn in names(capability_manifest)) {
   test_that(paste0(fn, "(): hostile rows keep their contracts"), {
+    # The table is strict both ways, and some of its entries (the locale
+    # contract under LC_CTYPE C above all) are what this platform's C library
+    # and ICU build do: hold it where the suite is run on purpose, not on
+    # every CRAN flavor.
+    skip_on_cran()
     skip_if(is.na(utf8), "no UTF-8 LC_CTYPE is available")
     v <- hi_check_entry(fn, utf8 = utf8)
     observed <- unique(v[key_cols])
@@ -129,35 +166,67 @@ for (fn in names(capability_manifest)) {
   })
 }
 
-test_that("each probe case still fails as its issue describes", {
+test_that("a probe case passes unless listed, and a listed one still fails", {
   # The overflow point is ICU's backtrack stack limit, which a platform or a
   # stringi build can move: hold it where the suite is run on purpose.
   skip_on_cran()
   skip_if(is.na(utf8), "no UTF-8 LC_CTYPE is available")
-  for (i in seq_len(nrow(known_probe_failures))) {
-    k <- known_probe_failures[i, ]
-    p <- probes[[k$class]]
-    e <- capability_manifest[[k$export]]
+  for (pn in names(probes)) {
+    p <- probes[[pn]]
+    e <- capability_manifest[[p$export]]
     e$template <- p$template
-    v <- hi_check_export(k$export, e, k$standard, list(), e$operands[1L],
-                         utf8, c_loc = NA_character_, classes = p$class,
-                         positions = k$position, long_n = p$long_n)
-    expect_gt(nrow(v), 0L,
-              label = paste(case_key(k), "violations (remove it if fixed)"))
+    for (std in p$standards) {
+      for (pos in p$positions) {
+        key <- case_key(kf(p$export, std, pn, pos, ""))
+        v <- hi_check_export(p$export, e, std, list(), e$operands[1L], utf8,
+                             c_loc = NA_character_, classes = p$class,
+                             positions = pos, long_n = p$long_n)
+        listed <- known_probe_failures[case_key(known_probe_failures) == key, ]
+        if (NROW(listed) == 0L) {
+          expect_identical(sprintf("[%s] %s", v$check, v$detail), character(0),
+                           label = paste(key, "violations no entry lists"))
+        } else {
+          expect_true(any(grepl(listed$detail, v$detail)),
+                      label = paste0(key, " fails with /", listed$detail,
+                                     "/ (remove it if fixed)"))
+        }
+      }
+    }
   }
 })
+
+# The error each rejected selector value raises. For the "policy" exports
+# (get_url_key() and the url_*_join() family) the rejection is raised inside
+# url_key_policy(), which hi_selector_args() calls to build the `policy`
+# argument: the export itself never sees the bad value.
+rejection_pattern <- function(e, std) {
+  if (std == "bogus") {
+    return(switch(e$selector,
+      url_standard = ,
+      dots = "url_standard must be NULL, \"rfc3986\", or \"whatwg\"",
+      standard = ,
+      policy = "should be one of"
+    ))
+  }
+  switch(e$selector,
+    # get_host_type(), get_url_diagnostics(), get_scheme_class() (ADR 0015);
+    # check_schemes() and get_mailto_recipients() (scheme_acceptance =
+    # "general" under NULL).
+    url_standard = paste0("`url_standard` is required",
+                          "|requires an explicit url_standard"),
+    standard = ,
+    policy = "must be named; NULL is not accepted"
+  )
+}
 
 test_that("unsupported selectors and malformed arguments keep their errors", {
   for (fn in names(capability_manifest)) {
     e <- capability_manifest[[fn]]
     plain <- hi_plain(e$template)
-    for (std in e$unsupported) {
+    rejected <- c(e$unsupported, if (e$selector != "none") "bogus")
+    for (std in rejected) {
       expect_error(hi_runner(fn, e, std, list(), e$operands[1L])$run(plain),
-                   label = paste(fn, std))
-    }
-    if (e$selector != "none") {
-      expect_error(hi_runner(fn, e, "bogus", list(), e$operands[1L])$run(plain),
-                   label = paste(fn, "bogus"))
+                   rejection_pattern(e, std), label = paste(fn, std))
     }
   }
   # The URL operand must be URL strings where the export says so.

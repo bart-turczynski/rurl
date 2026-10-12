@@ -48,10 +48,14 @@ hi_classes <- c("bom", "zwsp", "invalid_utf8", "bytes", "latin1",
 
 # URL templates, as named parts. A position is the name of the part the
 # payload is put in front of; `lead` puts it before the whole URL.
+#
+# Every host sits under a public suffix ("com"): under ".example", which the
+# PSL does not list, get_domain(), get_tld() and get_subdomain() return NA for
+# every row and their contracts would compare NA with NA.
 hi_templates <- list(
-  web = c(lead = "", "http://", userinfo = "u", "@", host = "h.example", "/",
-          path = "p", "?", query = "q=v", "#", fragment = "f"),
-  mailto = c(lead = "", "mailto:", local = "l", "@", domain = "h.example",
+  web = c(lead = "", "http://", userinfo = "u", "@", host = "h.example.com",
+          "/", path = "p", "?", query = "q=v", "#", fragment = "f"),
+  mailto = c(lead = "", "mailto:", local = "l", "@", domain = "h.example.com",
              "?", query = "subject=s"),
   file = c(lead = "", "file:///", path = "p")
 )
@@ -65,9 +69,11 @@ hi_plain <- function(template) {
 
 # Good neighbors that sit between the hostile rows of a batch.
 hi_neighbors <- list(
-  web = c("http://good-one.example/a?x=1#y", "https://good-two.example/b/"),
-  mailto = c("mailto:one@good.example", "mailto:two@good.example?subject=hi"),
-  file = c("file:///good/one", "https://good-two.example/b/")
+  web = c("http://good-one.example.com/a?x=1#y",
+          "https://good-two.example.com/b/"),
+  mailto = c("mailto:one@good.example.com",
+             "mailto:two@good.example.com?subject=hi"),
+  file = c("file:///good/one", "https://good-two.example.com/b/")
 )
 
 # One hostile row: `class`'s payload in front of `position`.
@@ -134,7 +140,7 @@ hi_option_id <- function(opts) {
   paste(names(o), unlist(o), sep = "=", collapse = ",")
 }
 
-hi_base_url <- "http://base.example/dir/page?bq=1#bf"
+hi_base_url <- "http://base.example.com/dir/page?bq=1#bf"
 hi_relative <- "g/h?x=1#y"
 
 # A runner for one (export, standard, option set, URL operand): `run(urls)`
@@ -267,16 +273,20 @@ hi_map_strings <- function(x, f) {
 
 # Decode every ACE label ("xn--...") to Unicode, so a host that keeps the
 # mark (under rfc3986 and NULL, host_encoding = "idna" encodes the host as
-# written) compares as the code points it encodes.
+# written) compares as the code points it encodes. A label punycoder cannot
+# decode (it throws on "xn--zzzz-") stays as written.
 hi_decode_ace <- function(s) {
   hit <- !is.na(s) & grepl("xn--", s, fixed = TRUE)
   if (!any(hit)) {
     return(s)
   }
   m <- gregexpr("xn--[A-Za-z0-9-]+", s[hit])
-  regmatches(s[hit], m) <- lapply(regmatches(s[hit], m), function(lab) {
-    dec <- suppressWarnings(punycoder::puny_decode(lab))
-    ifelse(is.na(dec), lab, dec)
+  regmatches(s[hit], m) <- lapply(regmatches(s[hit], m), function(labs) {
+    vapply(labs, function(lab) {
+      dec <- tryCatch(suppressWarnings(punycoder::puny_decode(lab)),
+                      error = function(e) lab)
+      if (length(dec) != 1L || is.na(dec)) lab else dec
+    }, "", USE.NAMES = FALSE)
   })
   s
 }
@@ -284,18 +294,24 @@ hi_decode_ace <- function(s) {
 # Rewrite every U+FEFF spelling in an output to its U+200B spelling, so the
 # output for a `bom` row can be compared with its `zwsp` twin.
 hi_bom_to_zwsp <- function(s) {
-  from <- c("﻿", "%EF%BB%BF", "%ef%bb%bf", "<U+FEFF>")
-  to <- c("​", "%E2%80%8B", "%e2%80%8b", "<U+200B>")
+  from <- c("\ufeff", "%EF%BB%BF", "%ef%bb%bf", "<U+FEFF>")
+  to <- c("\u200b", "%E2%80%8B", "%e2%80%8b", "<U+200B>")
   for (k in seq_along(from)) {
     s <- gsub(from[k], to[k], s, fixed = TRUE)
   }
   s
 }
 
+# A one-line description of a value for a violation's detail. A value holding
+# octets the locale cannot print (a latin1 name str() cannot translate) still
+# describes itself, so the violation is reported rather than an error.
 hi_short <- function(x) {
-  s <- paste(utils::capture.output(utils::str(x, nchar.max = 60,
-                                              vec.len = 2)),
-             collapse = " ")
+  s <- tryCatch(
+    paste(utils::capture.output(utils::str(x, nchar.max = 60, vec.len = 2)),
+          collapse = " "),
+    error = function(e) deparse1(x)
+  )
+  s <- iconv(enc2utf8(s), "UTF-8", "UTF-8", sub = "byte")
   substr(gsub("\\s+", " ", s), 1L, 160L)
 }
 
@@ -398,7 +414,15 @@ hi_check_export <- function(fn, entry, std, opts, operand, utf8,
   piece_of <- function(s) {
     if (is.null(rn$pieces)) s else rn$pieces(s, list(s))[[1L]]
   }
+  # A good neighbor that throws on its own leaves the batches without the
+  # values they compare against: that is a broken contract of its own, and
+  # every class skips its batch.
   nb_solo <- lapply(nb, solo_of)
+  nb_okv <- vapply(nb_solo, `[[`, TRUE, "ok")
+  for (i in which(!nb_okv)) {
+    add("neighbor", paste0("neighbor", i), "error", nb_solo[[i]]$msg)
+  }
+  nb_ok <- all(nb_okv)
   values <- list()
 
   for (class in classes) {
@@ -426,6 +450,15 @@ hi_check_export <- function(fn, entry, std, opts, operand, utf8,
       }
       next
     }
+
+    # Only the rows whose solo call returned go into the batch: a row that
+    # throws alone is already an `error` violation, and it would otherwise
+    # take the isolation and locale contracts of every other row with it.
+    if (!nb_ok || !any(ok)) {
+      next
+    }
+    rows <- rows[ok]
+    solos <- solos[ok]
 
     # The batch: each hostile row between two good neighbors. Where the
     # locale contract applies (the first option set, a class with non-ASCII
@@ -459,18 +492,14 @@ hi_check_export <- function(fn, entry, std, opts, operand, utf8,
       alone <- FALSE
       for (k in seq_along(rows)) {
         r <- hi_in_ctype(utf8, hi_try(rn$run(c(nb[1L], rows[[k]], nb[2L]))))
-        if (!r$ok && ok[k]) {
+        if (!r$ok) {
           alone <- TRUE
           add(class, names(rows)[k], "error", paste("in a batch:", r$msg))
         }
-        alone <- alone || !ok[k]
       }
       if (!alone) {
         add(class, "combined", "error", b$msg)
       }
-      next
-    }
-    if (!all(ok) || !all(vapply(nb_solo, `[[`, TRUE, "ok"))) {
       next
     }
     batch_solos <- vector("list", length(batch))

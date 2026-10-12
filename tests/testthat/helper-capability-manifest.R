@@ -170,9 +170,13 @@ capability_manifest <- list(
   url_anti_join = cap_entry(cap_named, "join", selector = "policy",
                             unsupported = "NULL", operands = c("x", "y"),
                             positions = cap_join_positions),
+  # collision = "first" (the default) keeps the first row per canonical key
+  # by design, which a batch that repeats its good neighbors breaks; under
+  # "all" each row keeps its own matches.
   canonical_join = cap_entry(
     cap_all3, "join", selector = "dots", operands = c("data_A", "data_B"),
-    options = list(list(join = "full")), positions = cap_join_positions
+    options = list(list(join = "full", collision = "all")),
+    positions = cap_join_positions
   )
 )
 
