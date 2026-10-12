@@ -17,8 +17,10 @@
 #   * The key is derived from the CANONICAL IDENTITY STATE -- after standard
 #     interpretation, before any cleaning or display transform -- and NEVER from
 #     `clean_url` or any other presentation string (P3.1 D-A, C-06). It shares
-#     `.fsss_record_vec()` with surface (b) for exactly that reason: that
-#     builder is the only place the identity record is assembled.
+#     `.fsss_record_vec()` and `.fsss_encode_record_vec()` with surface (b) for
+#     exactly that reason: that builder is the only place the identity record
+#     is assembled, and that step the only place its path and query are
+#     encoded as the standard's URL record holds them.
 #   * NO PRESENTATION DIAL reaches it (P3.1 D-A.3). The posture below pins every
 #     cleaning/display knob to its identity value, so `path_encoding`,
 #     `host_encoding`, `www_handling`, case, query cleaning, `port_handling`,
@@ -209,39 +211,6 @@
   out
 }
 
-# The query as the WHATWG URL Standard's URL record holds it. The WHATWG query
-# state percent-encodes each code point with the query percent-encode set, or
-# the special-query set under a special scheme, so the spec's URL record holds
-# the query encoded and two URLs that serialize alike ARE one query -- the
-# key-policy rows frame "the selected standard's normalized identity, not
-# source-byte equality" (`contracts/key-join-contracts.md`). rurl's
-# serializer-input record (`.fsss_record_vec()`) keeps the query as written
-# (on the special route only non-ASCII is already escaped; `'` and `"` stay
-# raw) and leaves that encoding to the serializer
-# (`.whatwg_query_suffix_vec()`), so the key applies the serializer's own
-# encoder here: `foo:/p?<U+200B>q` and `foo:/p?%E2%80%8Bq` both frame
-# `%E2%80%8Bq`, and `http://h/p?'q` and `http://h/p?%27q` both frame `%27q`
-# (RURL-pjrqnqvb). The encoder copies an existing triplet as written, so the
-# hex case stays significant (RUL-026), and it is idempotent on a query the
-# record already encoded.
-#
-# `scheme` is the row's OWN scheme, never the collapsed token, which is no
-# special scheme. An inferred scheme reads as the `http` the parse inferred,
-# whose query the parse record encodes the same way. `rfc3986` keeps the query
-# as written: section 6.2.2.2 normalization is not the key's.
-#
-# Only rows holding a byte the encoder could change go through it, in one
-# vectorized call: one outside printable ASCII (C0, SP, DEL, non-ASCII) or one
-# of `"` `#` `<` `>` `'`. Every other query is already in its encoded form.
-.url_key_query <- function(query, scheme, standard) {
-  if (!identical(standard, "whatwg")) {
-    return(query)
-  }
-  todo <- grep("[^!-~]|[\"#<>']", query, useBytes = TRUE)
-  query[todo] <- .whatwg_query_percent_encode(query[todo], scheme[todo])
-  query
-}
-
 # The relaxed scheme collapse (key-policy `:81`, truth-table rows 6-7 as
 # amended). Applied to the framed scheme field ONLY, and only for the two named
 # web schemes -- "every other valid scheme remains exact", so the ws/wss pair,
@@ -323,9 +292,20 @@
 # distinction it adds over `host_kind` for a keyable row is a userinfo-only
 # (`//user@/p` against `///p`), and that is precisely a userinfo distinction,
 # which Q5 excludes from identity.
+#
+# The path and the query are read from `.fsss_encode_record_vec()`, the step
+# `serialize_url()` reads too, so under `whatwg` each is framed as the URL
+# record holds it -- percent-encoded by the standard's own sets -- and two URLs
+# whose WHATWG serializations agree on them frame the same bytes: `http://h/p{`
+# and `http://h/p%7B` both frame `/p%7B`, `foo:/p?<U+200B>q` and
+# `foo:/p?%E2%80%8Bq` both frame `%E2%80%8Bq` (RURL-pjrqnqvb, RURL-ommuyaqi).
+# Under `rfc3986` that step returns the record as written.
 .url_key_state_vec <- function(url, policy, engine = NULL) {
   opts <- .url_key_parse_options(policy, engine)
-  rec <- .fsss_record_vec(url, policy$standard, engine, opts = opts)
+  rec <- .fsss_encode_record_vec(
+    .fsss_record_vec(url, policy$standard, engine, opts = opts),
+    policy$standard
+  )
   # Stage A under the SAME options object `.fsss_record_vec()` just used, so
   # this is a cache hit rather than a second parse, and the flag cannot come
   # from a posture the record did not see.
@@ -361,7 +341,7 @@
       rfc_path_form = rec$rfc_path_form,
       path = rec$path,
       query_kind = rec$query_kind,
-      query = .url_key_query(rec$query, rec$scheme, policy$standard)
+      query = rec$query
     )
   )
 }

@@ -304,17 +304,29 @@ test_that("the identity family answers the same question invariantly", {
   B <- data.frame(URL = "https://ex.com/%C3%A9cole", ValB = 2L,
     stringsAsFactors = FALSE)
 
-  # Identity gives a DIFFERENT answer, not a coincidentally equal one:
-  # `path_encoding = "encode"` collapses both spellings onto one legacy key and
-  # joins them (1 row, above), while identity holds `/école` and `/%C3%A9cole`
-  # apart, so nothing matches. Worth stating because a test that happened to
-  # agree with the legacy result here could pass while the invariance it claims
-  # to check was broken.
+  # Identity joins these two for the STANDARD's reason, not the dial's: the
+  # WHATWG path state percent-encodes `é`, so both URL records hold
+  # `/%C3%A9cole` and both serialize as `https://ex.com/%C3%A9cole`, and the
+  # whatwg key frames the path as the record holds it (RURL-ommuyaqi). The
+  # key held them apart until then, which was the defect.
   k <- get_url_key(c(A$URL, B$URL))
+  expect_true(identical(k[[1]], k[[2]]))
+  expect_identical(nrow(url_inner_join(A, B, by = "URL")), 1L)
+  # The contrast with the dial survives on a pair the standard keeps apart:
+  # `path_encoding = "decode"` folds `%2F` into `/` (pinned above), so the
+  # legacy frames join `/a%2Fb` with `/a/b`, while identity keeps them distinct.
+  C <- data.frame(URL = "http://ex.com/a%2Fb", ValA = 1L,
+    stringsAsFactors = FALSE)
+  D <- data.frame(URL = "http://ex.com/a/b", ValB = 2L,
+    stringsAsFactors = FALSE)
+  k <- get_url_key(c(C$URL, D$URL))
   expect_false(identical(k[[1]], k[[2]]))
-  expect_identical(nrow(url_inner_join(A, B, by = "URL")), 0L)
+  expect_identical(nrow(url_inner_join(C, D, by = "URL")), 0L)
+  expect_identical(nrow(cj_legacy(canonical_join(C, D,
+    url_standard = "whatwg", path_encoding = "decode"))), 1L)
 
-  # And that 0 cannot be argued up to 1: no member of canonical_join()'s own
+  # And that 0 cannot be argued up to 1 (the `%2F` pair's identity answer): no
+  # member of canonical_join()'s own
   # presentation-dial list is a formal of any of the six. Derived from
   # .CJ_LEGACY_PRESENTATION_DIALS rather than transcribed, so a dial added
   # there is covered here for free. `engine` is the single admitted member,

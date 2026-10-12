@@ -187,8 +187,14 @@ test_that("the vector callers render mixed-mark rows like single rows", {
     c("#caf%E9%20x", "#c%FF", "#%C3%A9%20", "#%E2%80%8B'", "", "#",
       "#plain", "#%zz%41%")
   )
+  # The record step the URL key and serialize_url() share (RURL-ommuyaqi).
+  rec <- list(
+    scheme = schemes, path = rep(NA_character_, n),
+    path_kind = rep(NA_character_, n), query = mixed_marks,
+    query_kind = kinds, fragment_kind = rep("absent", n)
+  )
   expect_identical(
-    rurl:::.url_key_query(mixed_marks, schemes, "whatwg"),
+    rurl:::.fsss_encode_record_vec(rec, "whatwg")$query,
     c("caf%E9%20x", "c%FF", "%C3%A9%20", "%E2%80%8B'", NA, "", "plain",
       "%zz%41%")
   )

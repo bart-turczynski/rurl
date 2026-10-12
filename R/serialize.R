@@ -374,6 +374,63 @@
   )
 }
 
+# The record as the selected standard's URL record holds it: the one step that
+# percent-encodes the components the URL key shares with the serializer
+# (RURL-ommuyaqi). Both read its output -- `serialize_url()` and
+# `.url_key_state_vec()` -- so the key frames the path and query as the
+# serialization spells them. The WHATWG serializer still re-applies the
+# same idempotent encoders to this output, which changes no byte; making it
+# read the step alone needs an edit in R/parse-phases.R.
+#
+# Under `whatwg` the parser encodes as it reads: the path state encodes a list
+# path with the path percent-encode set, the opaque path state uses the
+# C0-control set (and `%20` for a space right before the `?` or `#` that ends
+# the path), and the query state uses the query set, or the special-query set
+# under a special scheme. `.fsss_record_vec()` keeps a list path and the
+# query as written, so this step applies the same encoders
+# (R/path-query.R) the serializer does; the record itself stays lossless for
+# `format_url()`, which escapes for display instead. An encoder copies `%` and
+# hex digits as written, so it is idempotent: a triplet keeps its hex case
+# (RUL-026), and the serializer's own pass over this output changes no byte.
+# Each encoder touches only the rows holding an octet it would change.
+#
+# Under `rfc3986` the record is returned as it came: the source spelling is
+# the identity there, and section 6.2.2 normalization belongs to `form =
+# "normalized"` inside the serializer, never to the key (RUL-007).
+#
+# NOT encoded here, and why: the fragment and the userinfo are in no key
+# (ratification Q5), and the serializer splits the undivided userinfo at its
+# first `:` before encoding each half, which a pre-encoded `:` would defeat.
+# The serializer encodes both itself.
+.fsss_encode_record_vec <- function(rec, standard) {
+  if (!identical(standard, "whatwg")) {
+    return(rec)
+  }
+  path <- rec$path
+  kind <- rec$path_kind
+  has_path <- !is.na(path) & !is.na(kind)
+  list_rows <- which(has_path & kind != "opaque")
+  rec$path[list_rows] <- .whatwg_path_percent_encode(path[list_rows])
+  # An opaque path reaches the record already encoded (the parser's opaque
+  # path state), so this pass is a no-op on it today; it stays so the step,
+  # not the parser, is what the key and the serializer rely on.
+  opaque_rows <- which(has_path & kind == "opaque")
+  if (length(opaque_rows) > 0L) {
+    follows <- rec$query_kind[opaque_rows] != "absent" |
+      rec$fragment_kind[opaque_rows] != "absent"
+    rec$path[opaque_rows] <- .whatwg_opaque_path_encode(
+      path[opaque_rows], follows
+    )
+  }
+  # The row's OWN scheme picks the set, never a collapsed key token; a row
+  # whose scheme the key's posture inferred reads as that inferred `http`.
+  q_rows <- which(!is.na(rec$query))
+  rec$query[q_rows] <- .whatwg_query_percent_encode(
+    rec$query[q_rows], rec$scheme[q_rows]
+  )
+  rec
+}
+
 #' Serialize URLs to a standard's own full-string form
 #'
 #' Renders each URL as the selected standard would serialize it: the
@@ -527,7 +584,9 @@ serialize_url <- function(url,
     )
   }
 
-  rec <- .fsss_record_vec(url, standard, engine)
+  rec <- .fsss_encode_record_vec(
+    .fsss_record_vec(url, standard, engine), standard
+  )
   out <- rep(NA_character_, n)
   # A `//host` network-path reference has no scheme: it is a relative
   # reference (RFC 3986 section 4.2), not a URI (section 3), and with no base
