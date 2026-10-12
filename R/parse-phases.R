@@ -2190,8 +2190,10 @@
 
 # Phase 6 (scalar wrapper): delegates to .apply_www_policy_vec().
 .apply_www_policy <- function(raw_host, www_handling, is_ip_host,
-                              engine = NULL) {
-  .apply_www_policy_vec(raw_host, www_handling, is_ip_host, engine)
+                              engine = NULL, url_standard = NULL) {
+  .apply_www_policy_vec(
+    raw_host, www_handling, is_ip_host, engine, url_standard
+  )
 }
 
 # Phase 7 (vector, RURL-jhsbzmsj): the PSL ANNOTATION candidate for a host.
@@ -2404,9 +2406,10 @@
 # Phase 8 (scalar wrapper): delegates to .apply_subdomain_policy_vec().
 .apply_subdomain_policy <- function(final_host, domain,
                                     subdomain_levels_to_keep, is_ip_host,
-                                    engine = NULL) {
+                                    engine = NULL, url_standard = NULL) {
   .apply_subdomain_policy_vec(
-    final_host, domain, subdomain_levels_to_keep, is_ip_host, engine
+    final_host, domain, subdomain_levels_to_keep, is_ip_host, engine,
+    url_standard = url_standard
   )
 }
 

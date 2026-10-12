@@ -3043,7 +3043,9 @@ safe_parse_urls <- function(url,
   is_ip_host <- .detect_ip_host(raw_host)
 
   # Phase 6: www prefix policy
-  final_host <- .apply_www_policy(raw_host, www_handling, is_ip_host, engine)
+  final_host <- .apply_www_policy(
+    raw_host, www_handling, is_ip_host, engine, url_standard
+  )
 
   # Phase 7: registered-domain and TLD derivation. `domain`/`tld` follow
   # host_encoding (a rendering choice); the two fixed spellings (idna/unicode)
@@ -3064,7 +3066,8 @@ safe_parse_urls <- function(url,
 
   # Phase 8: subdomain-level policy
   final_host <- .apply_subdomain_policy(
-    final_host, domain, subdomain_levels_to_keep, is_ip_host, engine
+    final_host, domain, subdomain_levels_to_keep, is_ip_host, engine,
+    url_standard
   )
 
   # Phase 9: host encoding (idna / unicode)

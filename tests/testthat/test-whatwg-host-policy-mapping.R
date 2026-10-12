@@ -77,8 +77,9 @@ test_that("whatwg: the mapped twins keep their policy output", {
 
 test_that("whatwg: IDN and ACE twins keep their policy output", {
   # Hosts UTS-46 maps without an ignorable code point (case, an IDN, an ACE
-  # label, a fullwidth letter): the policies already read them the WHATWG
-  # way, and the fix must not move them.
+  # label, a fullwidth letter outside the www label): the policies already
+  # read them the WHATWG way, and the fix must not move them. A www label
+  # UTS-46 maps to `www` does move; see the next test.
   urls <- c("http://www.b\u00fccher.de/", "http://B\u00dcCHER.de/",
             "http://www.xn--bcher-kva.de/", "http://a.b.b\u00fccher.de/",
             "http://www.\uff45xample.com/")
@@ -227,4 +228,44 @@ test_that("whatwg: pure ACE and pure Unicode hosts keep their spelling", {
       "a.b.b\u00fccher.de"
     ), label = posture)
   }
+})
+
+test_that("whatwg: a first label UTS-46 maps to www is policed as www", {
+  # Fullwidth, circled, a mark inside the label, a percent-encoded mark: each
+  # maps to `www`, so each gets its plain `www.example.com` twin's output under
+  # every policy, as the WHATWG host parser records the same host.
+  marked <- c("http://ＷＷＷ.example.com/",
+              "http://ⓦⓦⓦ.example.com/",
+              "http://w​ww.example.com/",
+              "http://%E2%80%8Bwww.example.com/")
+  twin <- "http://www.example.com/"
+  for (posture in c("whatwg", "whatwg-profile")) {
+    for (policy in names(policies)) {
+      want <- policy_parse(twin, posture, policy)$host
+      got <- policy_parse(marked, posture, policy)$host
+      expect_identical(got, rep(want, length(marked)),
+        label = paste(posture, policy))
+    }
+  }
+  # rfc3986 has no mapping step: the label is not `www`, so strip leaves it.
+  expect_identical(
+    policy_parse(marked[[1]], "rfc3986", "strip")$host,
+    "ＷＷＷ.example.com"
+  )
+})
+
+test_that("whatwg: the scalar engine polices the mapped host too", {
+  scalar <- function(www, levels) {
+    rurl:::._safe_parse_url_impl(
+      url = "http://​www.example.com/", protocol_handling = "keep",
+      www_handling = www, tld_source = "all", case_handling = "keep",
+      trailing_slash_handling = "none", index_page_handling = "keep",
+      path_normalization = "none", scheme_relative_handling = "keep",
+      subdomain_levels_to_keep = levels, host_encoding = "keep",
+      path_encoding = "keep", url_standard = "whatwg"
+    )$host
+  }
+  expect_identical(scalar("strip", NULL), "example.com")
+  expect_identical(scalar("keep", NULL), "www.example.com")
+  expect_identical(scalar("none", 0), "www.example.com")
 })
