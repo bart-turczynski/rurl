@@ -99,7 +99,7 @@ test_that("//host rows keep their parse under the postures that assume http", {
   )
 })
 
-test_that("//host rows keep their parse under whatwg, NULL and the SEO bundle", {
+test_that("//host rows keep their parse under whatwg, NULL and seo", {
   web_keep <- srel_host_rows$fields(
     srel_na5, srel_path_web,
     c("http://p/", "http://p/", "http://example.com/a", "http://h.com/x",
@@ -211,4 +211,99 @@ test_that("serialize_url() gives NA for every // row, both standards", {
   expect_identical(serialize_url(x, "rfc3986"), na)
   expect_identical(serialize_url(x, "rfc3986", form = "normalized"), na)
   expect_identical(serialize_url(x, "whatwg"), na)
+})
+
+# --- the fix ----------------------------------------------------------------
+#
+# Under the rfc3986 "keep" posture the empty-authority shapes go to the RFC
+# generic parser, which reads them as RFC 3986 sections 3.2 and 4.2 do.
+
+test_that("///p is an empty authority and the path /p under rfc-syntax", {
+  r <- safe_parse_urls(c("///p", "//p"), profile = "rfc-syntax")
+  expect_identical(r$scheme, c(NA_character_, NA_character_))
+  expect_identical(r$host, c(NA_character_, "p"))
+  expect_identical(r$path, c("/p", ""))
+  # "keep" parses using http and reports no scheme, so clean_url keeps the
+  # stand-in, in the shape the corrected parse gives.
+  expect_identical(r$clean_url, c("http:///p", "http://p"))
+  expect_identical(r$parse_status, c("ok-scheme-relative", "warning-no-tld"))
+})
+
+test_that("every empty-authority shape reads per RFC 3986 under rfc-syntax", {
+  x <- c("///p", "////p", "///", "//", "//u@/p", "//:80/x",
+         "///example.com/x", "//?q")
+  r <- safe_parse_urls(x, profile = "rfc-syntax")
+  expect_identical(r$scheme, rep(NA_character_, 8L))
+  expect_identical(r$host, rep(NA_character_, 8L))
+  expect_identical(r$path, c("/p", "//p", "/", "", "/p", "/x",
+                             "/example.com/x", ""))
+  expect_identical(r$port, c(rep(NA_integer_, 5L), 80L, NA, NA))
+  expect_identical(r$user, c(rep(NA_character_, 4L), "u", rep(NA, 3L)))
+  expect_identical(r$query, c(rep(NA_character_, 7L), "q"))
+  expect_identical(r$parse_status, rep("ok-scheme-relative", 8L))
+  # The same components the explicit `http:` twin gets under this profile.
+  twin <- safe_parse_urls(paste0("http:", x), profile = "rfc-syntax")
+  for (cl in c("host", "port", "path", "query", "user", "clean_url")) {
+    expect_identical(r[[cl]], twin[[cl]], label = cl)
+  }
+})
+
+test_that("url_standard = 'rfc3986' reads ///p as its http: twin does", {
+  # The default `web` acceptance rejects an empty host on a web-route scheme
+  # (RURL-mugcdtrv), as it rejects `http:///p` here.
+  x <- c("///p", "///example.com/x")
+  r <- safe_parse_urls(x, url_standard = "rfc3986")
+  twin <- safe_parse_urls(paste0("http:", x), url_standard = "rfc3986")
+  expect_identical(r$parse_status, c("error", "error"))
+  expect_identical(r$parse_status, twin$parse_status)
+  expect_identical(r$host, twin$host)
+  r <- safe_parse_urls(x, url_standard = "rfc3986",
+                       scheme_acceptance = "general",
+                       scheme_policy = "require")
+  expect_identical(r$host, c(NA_character_, NA_character_))
+  expect_identical(r$path, c("/p", "/example.com/x"))
+})
+
+test_that("///p and //p key apart under the rfc3986 key policy", {
+  expect_false(srel_same("///p", "//p"))
+  expect_false(srel_same("///example.com/x", "//example.com/x"))
+  expect_false(srel_same("///p", "/p"))
+  expect_false(srel_same("///p", "http:///p"))
+  expect_false(srel_same("//", "///"))
+  k <- srel_key(c("//p", "///p", "//"), "rfc3986")
+  expect_identical(attr(k, "keyability"), rep("ok", 3L))
+  expect_identical(
+    as.character(unclass(k)),
+    c(
+      paste0("1:21:17:rfc39865:exact15:scheme-relative-:1:T7:present1:p",
+             "-:4:list7:abempty0:6:absent-:"),
+      paste0("1:21:17:rfc39865:exact15:scheme-relative-:1:T5:empty0:",
+             "-:4:list7:abempty2:/p6:absent-:"),
+      paste0("1:21:17:rfc39865:exact15:scheme-relative-:1:T5:empty0:",
+             "-:4:list7:abempty0:6:absent-:")
+    )
+  )
+})
+
+test_that("the record gives a // row no scheme and its leading // delimiter", {
+  x <- c("//p", "///p", "//h.com/a?q", "//")
+  key_opts <- rurl:::.url_key_parse_options(
+    url_key_policy(standard = "rfc3986")
+  )
+  for (opts in list(NULL, key_opts)) {
+    rec <- rurl:::.fsss_record_vec(x, "rfc3986", NULL, opts = opts)
+    expect_identical(rec$ok, rep(TRUE, 4L))
+    expect_identical(rec$scheme, rep(NA_character_, 4L))
+    expect_identical(rec$source_scheme, rep(NA_character_, 4L))
+    expect_identical(rec$authority_delimiter_present, rep(TRUE, 4L))
+    expect_identical(rec$host_kind, c("present", "empty", "present", "empty"))
+    expect_identical(rec$path, c("", "/p", "/a", ""))
+    expect_identical(rec$path_kind, rep("list", 4L))
+    expect_identical(rec$rfc_path_form, rep("abempty", 4L))
+    expect_identical(rec$scheme_relative, rep(TRUE, 4L))
+  }
+  # An absolute URI in the same call keeps its own scheme and delimiter.
+  rec <- rurl:::.fsss_record_vec(c("//p", "http://p", "http:/p"), "rfc3986")
+  expect_identical(rec$scheme, c(NA, "http", "http"))
+  expect_identical(rec$authority_delimiter_present, c(TRUE, TRUE, FALSE))
 })

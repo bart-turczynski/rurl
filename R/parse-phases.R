@@ -271,10 +271,10 @@
 # `.has_explicit_authority()`: putting step 1 here (never at a call site) is
 # what keeps every stage's strip byte-identical by construction. It is not the
 # whole general-route input, though: prep, Stage A and Stage B run the browser
-# fixer first, Stage A and Stage B through .general_route_input_vec()
-# (RURL-vmsmlflr). A caller that runs this alone sees that input only where the
-# fixer is a no-op or cannot change its answer: `.fsss_record_vec()` and the
-# url-key, resolve and scheme-policy surfaces never run under
+# fixer first, Stage A, Stage B and `.fsss_record_vec()` through
+# .general_route_input_vec() (RURL-vmsmlflr). A caller that runs this alone
+# sees that input only where the fixer is a no-op or cannot change its answer:
+# the url-key, resolve and scheme-policy surfaces never run under
 # `fixup_posture = "browser"`, and inside the parse `.has_explicit_authority()`
 # trims a leading C0-or-space run itself and is asked only about `mailto:`,
 # which the fixer otherwise leaves alone.
@@ -1072,11 +1072,36 @@
 # step 1's trim is scheme-blind by definition (and under `whatwg` the strip
 # already does it), and the special-scheme backslash rewrite is not applied.
 # A byte-for-byte no-op unless fixup_posture == "browser".
+#
+# Under `rfc3986` with `scheme_relative_handling = "keep"`, a `//`-led row is
+# also handed the same `http:` stand-in Phase 1 gives the web route
+# (RURL-ozpxupgq). The general route's own rules then decide which of these
+# rows the web route cannot read: `.rfc_odd_slash_run()` claims `///p` and
+# `////p`, `.rfc_empty_authority_host()` claims `//`, `//u@/p` and `//:80/x`,
+# and every `//host` row stays on the web route, byte-identical. The web route
+# models the special-scheme authority, whose state skips a slash run, so
+# `///p` read as host `p`, the reading of `//p`. RFC 3986 section 4.2 makes a
+# network-path reference `"//" authority path-abempty`, and section 3.2's
+# `reg-name` may be empty, so `///p` is an empty authority and the path `/p`.
+# The general parser reads it that way: under `rfc3986` it is the generic
+# syntax, in which the stand-in is only a label, never a special scheme. The
+# row reports no scheme, as every "keep" row does (Phase 13). The other
+# postures assume a scheme, and `whatwg` and the no-selector default read the
+# slash run the special-scheme way, so none of them gets the stand-in here.
 .general_route_input_vec <- function(url, opts) {
   url <- .apply_browser_fixup_vec(
     url, opts$fixup_posture, opts$url_standard, opts$scheme_policy
   )
-  .strip_whatwg_control_chars_vec(url, opts$url_standard)$url
+  url <- .strip_whatwg_control_chars_vec(url, opts$url_standard)$url
+  if (identical(opts$url_standard, "rfc3986") &&
+        identical(opts$scheme_relative_handling, "keep")) {
+    # The same mask Phase 1 draws: a U+FEFF-led row is never scheme-relative,
+    # and stri_startswith_fixed() reads past the mark (see .starts_with_bom()).
+    rel <- stringi::stri_startswith_fixed(url, "//")
+    rel <- !is.na(rel) & rel & !.starts_with_bom(url)
+    url[rel] <- paste0("http:", url[rel])
+  }
+  url
 }
 
 # Phase 1 (vector): scheme detection, supported-scheme policy, the host-shape
