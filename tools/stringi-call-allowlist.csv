@@ -86,6 +86,7 @@
 "R/parse-state.R",".parse_opaque_url_one","stringi::stri_match_first_regex",1
 "R/parse-state.R",".parse_rfc_file_url_one","stringi::stri_detect_regex",1
 "R/parse-state.R",".parse_rfc_file_url_one","stringi::stri_match_first_regex",1
+"R/parse-state.R",".rfc3986_class_ok","stringi::stri_detect_regex",1
 "R/parse-state.R",".rfc3986_first_index","stringi::stri_locate_first_regex",1
 "R/parse-state.R",".rfc3986_first_index","stringi::stri_opts_regex",1
 "R/parse-state.R",".rfc3986_generic_uri_ok","stringi::stri_detect_regex",1

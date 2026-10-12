@@ -29,6 +29,14 @@ and `R/url-key.R`, and may remove rows in those files. A removed row leaves
 the gate green (it prints an "allowlist can shrink" line). A call that a
 refactor moves into a new top-level function counts as a new call.
 
+**Since the snapshot.** MR !235 (RURL-vewhvxnb, merge `f6b9b8d`) kept the
+RFC 3986 class check in stringi, as ADR 0005 still requires until this ADR is
+accepted, and moved it into a new function: `.rfc3986_class_ok()` in
+`R/parse-state.R` now holds one `stri_detect_regex` (the linear inverted
+search over the same `\x{0080}-\x{10FFFF}` class; slice oahhlnvf), and row
+141 (`.rfc3986_match()`) now serves only the port regex. The allowlist was
+regenerated on that base: 191 references under 123 keys.
+
 ## Legend
 
 - **Family**: what the call does. *detect* returns a logical. *count*
@@ -160,10 +168,11 @@ with ICU 71.1, under `en_US.UTF-8` and under `LC_ALL=C`.
   `[^\u0001-\u007f]` (3 rows).** In byte mode these are `[^\x00-\x7f]` /
   `[^\x01-\x7f]`, which give the same answer on valid UTF-8 and also flag an
   invalid row. Today that row's result depends on how `stringi` treats it.
-- **A `\x{0080}-\x{10FFFF}` range (1 row, `.rfc3986_match()`).** Byte mode
+- **A `\x{0080}-\x{10FFFF}` range (1 row, `.rfc3986_class_ok()` since MR !235; `.rfc3986_match()` in the snapshot).** Byte mode
   spells it as `\x80-\xff`, which matches each byte of a multibyte character
-  and also the bytes of an invalid sequence. The peer unit replacing this
-  call owns that decision.
+  and also the bytes of an invalid sequence. RURL-vewhvxnb kept it in stringi
+  (MR !235); the oahhlnvf slice decides, relying on the gate's undecodable
+  preflight.
 - **Code-point offsets, 22 rows** (`stri_sub`, `stri_length`), together with
   the 12 locate rows and 21 capture rows. `stri_*` indexes code points and
   base R with `useBytes = TRUE` indexes bytes. A chain moves as a whole
@@ -335,7 +344,7 @@ Rows are in file order, then source order.
 | 138 | `parse-state.R` | `.rfc_host_form` | `stri_detect_regex` | detect | `<.RFC3986_BRACKET_IPVFUTURE_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
 | 139 | `parse-state.R` | `.rfc3986_first_index` | `stri_locate_first_regex` | locate | `<ch>` | none (one ASCII delimiter, literal flag) | bytes | yqmoztoj |
 | 140 | `parse-state.R` | `.rfc3986_first_index` | `stri_opts_regex` | options |  | literal flag | dropped with its consumers | yqmoztoj |
-| 141 | `parse-state.R` | `.rfc3986_match` | `stri_detect_regex` | detect | `<re>` | RFC 3986 class regexes with a `\x{0080}-\x{10FFFF}` range (byte mode: `\x80-\xff`); `\A`...`\z`; a peer unit is replacing this call concurrently | bytes | oahhlnvf |
+| 141 | `parse-state.R` | `.rfc3986_match` | `stri_detect_regex` | detect | `<re>` | port regex `\A[0-9]*\z` only since MR !235 (the class regexes moved to `.rfc3986_class_ok()`, see "Since the snapshot") | bytes | oahhlnvf |
 | 142 | `parse-state.R` | `.rfc3986_valid_ip_literal` | `stri_detect_regex` | detect | `<.RFC3986_IPV6_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
 | 143 | `parse-state.R` | `.rfc3986_valid_ip_literal` | `stri_detect_regex` | detect | `<.RFC3986_IPVFUTURE_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
 | 144 | `parse-state.R` | `.rfc3986_valid_authority` | `stri_count_fixed` | count | `@` | none (ASCII literal) | bytes | oahhlnvf |
