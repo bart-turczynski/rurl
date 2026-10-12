@@ -248,6 +248,24 @@
 # percent sign spelling so `%2e`, `%2E`, `%`, and `%2z` do not get decoded,
 # hex-normalized, or double-encoded.
 #
+# ONE TOKEN PER OCTET. The output is a pure function of each input octet on
+# its own: C0 controls (0x00-0x1F), DEL and every octet >= 0x80 become an
+# uppercase `%XX` triplet, so do the members of `encode_set`, and every other
+# printable ASCII octet passes through. `%` and the hex digits are printable
+# ASCII and no WHATWG encode set names them, so an existing triplet (`%2e`) and
+# a malformed one (`%`, `%2z`) both pass through verbatim -- which is what the
+# former per-byte loop's special `%XX` re-emit branch did, and why that branch
+# never changed a byte. `.whatwg_encode_table()` refuses a set that would break
+# this (one naming `%` or a hex digit), because the re-emit rule would then
+# disagree with a plain lookup.
+#
+# That makes the encoder a table lookup, and the lookup vectorizes: one
+# `grepl()` finds the rows holding an octet that changes, and those rows go
+# through ONE `paste()` / `charToRaw()` / table index / `rawToChar()` /
+# `substring()` pass together, instead of an R-level loop per octet per row
+# (RURL-khcicsca: about 1 us per byte before). Rows with nothing to change, NA
+# and "" come back as they went in.
+#
 # The byte extraction is the INPUT-side counterpart of the host chokepoint's
 # `.mark_host_utf8()`. This used to read `charToRaw(enc2utf8(x))`, and that
 # `enc2utf8()` was the locale sensitivity: a path/query/fragment carrying
@@ -259,46 +277,121 @@
 # UTF-8 octets WHATWG's percent-encode set is defined over, in every locale. In
 # a UTF-8 session this is byte-for-byte the old behavior (`enc2utf8()` on
 # already-UTF-8 bytes is the identity).
-.whatwg_component_percent_encode <- function(x, encode_set) {
-  if (is.na(x) || !nzchar(x)) {
-    return(x)
+#
+# The declaration is also what makes the batched `paste()` safe: it gives
+# every non-ASCII row the SAME mark (ASCII rows carry none), so `paste()` has
+# nothing to translate and concatenates the octets as they are. With mixed
+# marks it would transcode a latin1-marked row to UTF-8 first and change its
+# octets. The output is ASCII by construction, so it carries no mark.
+#
+# Vectorized over `x`; the scalar call `(x, integer(0))` the opaque-host parser
+# makes (R/parse-state.R) is the length-one case. `batch_bytes` exists so a
+# test can force several batches; callers leave it alone.
+.whatwg_component_percent_encode <- function(x, encode_set,
+                                             batch_bytes = 4194304) {
+  out <- x
+  todo <- which(!is.na(x) & grepl(
+    .whatwg_encode_pattern(encode_set), x, perl = TRUE, useBytes = TRUE
+  ))
+  if (length(todo) == 0L) {
+    return(out)
   }
-
-  bytes <- as.integer(charToRaw(.mark_host_utf8(x)))
-  out <- character(length(bytes))
-  j <- 1L
-  i <- 1L
-  hex <- as.integer(charToRaw("0123456789ABCDEFabcdef"))
-
-  while (i <= length(bytes)) {
-    byte <- bytes[i]
-    if (byte == 0x25L) {
-      out[j] <- "%"
-      j <- j + 1L
-      if (i + 2L <= length(bytes) &&
-          bytes[i + 1L] %in% hex &&
-          bytes[i + 2L] %in% hex) {
-        out[j] <- rawToChar(as.raw(bytes[i + 1L]))
-        out[j + 1L] <- rawToChar(as.raw(bytes[i + 2L]))
-        j <- j + 2L
-        i <- i + 3L
-      } else {
-        i <- i + 1L
-      }
-      next
-    }
-
-    if (byte <= 0x1FL || byte >= 0x7FL || byte %in% encode_set) {
-      out[j] <- sprintf("%%%02X", byte)
-    } else {
-      out[j] <- rawToChar(as.raw(byte))
-    }
-    j <- j + 1L
-    i <- i + 1L
+  tab <- .whatwg_encode_table(encode_set)
+  s <- .mark_host_utf8(x[todo])
+  n_bytes <- nchar(s, type = "bytes")
+  # Batches of about `batch_bytes` input octets bound the transient index
+  # vectors (two integers per output octet). Ordinary input is one batch.
+  batch <- cumsum(as.numeric(n_bytes)) %/% batch_bytes
+  for (b in unique(batch)) {
+    rows <- which(batch == b)
+    out[todo[rows]] <- .whatwg_encode_batch(s[rows], n_bytes[rows], tab)
   }
-
-  paste(out[seq_len(j - 1L)], collapse = "")
+  out
 }
+
+# Encode a batch of non-empty, same-mark rows: one octet pass, then cut the
+# concatenated ASCII output back into rows. Octet `b` emits the first
+# `tab$width[b + 1]` octets of column `b + 1` of `tab$octets`, so a row's
+# output length is its octet count plus two per octet that became a triplet.
+.whatwg_encode_batch <- function(s, n_bytes, tab) {
+  bytes <- as.integer(charToRaw(paste(s, collapse = "")))
+  width <- tab$width[bytes + 1L]
+  octets <- tab$octets[rep.int(bytes * 3L, width) + sequence(width)]
+  out_end <- cumsum(width)[cumsum(n_bytes)]
+  out_start <- c(1L, out_end[-length(out_end)] + 1L)
+  substring(rawToChar(octets), out_start, out_end)
+}
+
+# Encode tables and prefilter patterns, built once per distinct encode set.
+.whatwg_encode_cache <- new.env(parent = emptyenv())
+
+.whatwg_encode_key <- function(encode_set) {
+  paste(sort(unique(as.integer(encode_set))), collapse = ",")
+}
+
+# The octet -> output table for one encode set: `octets` is a 3 x 256 raw
+# matrix whose column `b + 1` holds octet `b`'s output -- `%` and two uppercase
+# hex digits, or the octet itself in row 1 -- and `width` says how many of
+# those three rows it uses (3, or 1 for a pass-through octet).
+.whatwg_encode_table <- function(encode_set) {
+  key <- paste0("tab:", .whatwg_encode_key(encode_set))
+  tab <- .whatwg_encode_cache[[key]]
+  if (!is.null(tab)) {
+    return(tab)
+  }
+  passthrough <- c(0x25L, 0x30:0x39, 0x41:0x46, 0x61:0x66)
+  if (any(encode_set %in% passthrough)) {
+    stop(
+      "internal error: a WHATWG encode set may not name `%` or a hex digit; ",
+      "the table lookup relies on both passing through.",
+      call. = FALSE
+    )
+  }
+  hex <- charToRaw("0123456789ABCDEF")
+  octets <- rbind(
+    rep(charToRaw("%"), 256L), hex[0:255 %/% 16L + 1L], hex[0:255 %% 16L + 1L]
+  )
+  keep <- setdiff(0x20:0x7e, encode_set)
+  octets[1L, keep + 1L] <- as.raw(keep)
+  width <- rep(3L, 256L)
+  width[keep + 1L] <- 1L
+  tab <- list(octets = octets, width = width)
+  assign(key, tab, envir = .whatwg_encode_cache)
+  tab
+}
+
+# PCRE byte-mode class matching any octet the table changes: C0, DEL, every
+# octet >= 0x80, and the encode set.
+.whatwg_encode_pattern <- function(encode_set) {
+  key <- paste0("pat:", .whatwg_encode_key(encode_set))
+  pat <- .whatwg_encode_cache[[key]]
+  if (!is.null(pat)) {
+    return(pat)
+  }
+  pat <- paste0(
+    "[\\x00-\\x1f\\x7f-\\xff",
+    paste(sprintf("\\x%02x", unique(as.integer(encode_set))), collapse = ""),
+    "]"
+  )
+  assign(key, pat, envir = .whatwg_encode_cache)
+  pat
+}
+
+# WHATWG percent-encode sets, as octet values beyond the C0-control set that
+# every one of them shares. The query set is SP `"` `#` `<` `>`; the
+# special-query set adds `'`; the path set adds `?` `^` `` ` `` `{` `}` to the
+# query set; the userinfo set adds `/` `:` `;` `=` `@` `[` `\` `]` `|` to the
+# path set; the fragment set is SP `"` `<` `>` `` ` ``.
+.WHATWG_QUERY_ENCODE_SET <- c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL)
+.WHATWG_SPECIAL_QUERY_ENCODE_SET <- c(.WHATWG_QUERY_ENCODE_SET, 0x27L)
+.WHATWG_PATH_ENCODE_SET <- c(
+  .WHATWG_QUERY_ENCODE_SET, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL
+)
+.WHATWG_USERINFO_ENCODE_SET <- c(
+  .WHATWG_PATH_ENCODE_SET,
+  0x2FL, 0x3AL, 0x3BL, 0x3DL, 0x40L, 0x5BL, 0x5CL, 0x5DL, 0x7CL
+)
+.WHATWG_FRAGMENT_ENCODE_SET <- c(0x20L, 0x22L, 0x3CL, 0x3EL, 0x60L)
 
 # WHATWG path serializer for `url_standard = "whatwg"` +
 # `path_encoding = "encode"`: uses the path percent-encode set -- the query set
@@ -306,12 +399,9 @@
 # the set is the query set and "U+003F (?), U+005E (^), U+0060 (`), U+007B ({),
 # and U+007D (})", which WPT pins (`foo://host/...^...` -> `%5E`). It is NOT a
 # member of the C0-control set an OPAQUE path uses, so `^` stays literal there
-# -- see `.whatwg_opaque_path_encode()`.
+# -- see `.whatwg_opaque_path_encode()`. Vectorized.
 .whatwg_path_percent_encode <- function(path) {
-  .whatwg_component_percent_encode(
-    path,
-    c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL)
-  )
+  .whatwg_component_percent_encode(path, .WHATWG_PATH_ENCODE_SET)
 }
 
 # WHATWG opaque-path serializer (#opaque-path-state). An opaque path is
@@ -328,32 +418,50 @@
 # is removed by the parser's leading/trailing strip instead. The reason is
 # round-tripping: a trailing space would otherwise be stripped when the
 # serialized URL is re-parsed.
+#
+# Vectorized over `path`; `delimiter_follows` recycles, and only TRUE counts.
+# The C0-control set leaves a space literal and the encoder maps octets one to
+# one, so the encoded row still ends in that space; rewriting the final output
+# character is the same as encoding all but the last octet and appending `%20`.
 .whatwg_opaque_path_encode <- function(path, delimiter_follows) {
-  if (is.na(path) || !nzchar(path)) {
-    return(path)
-  }
-  trailing_space <- isTRUE(delimiter_follows) && endsWith(path, " ")
-  if (trailing_space) {
-    path <- substring(path, 1L, nchar(path) - 1L)
-  }
   out <- .whatwg_component_percent_encode(path, integer(0))
-  if (trailing_space) {
-    out <- paste0(out, "%20")
+  delimiter_follows <- rep_len(as.logical(delimiter_follows), length(path))
+  trailing <- which(
+    !is.na(out) & !is.na(delimiter_follows) & delimiter_follows &
+      endsWith(out, " ")
+  )
+  if (length(trailing) > 0L) {
+    out[trailing] <- paste0(
+      substr(out[trailing], 1L, nchar(out[trailing]) - 1L), "%20"
+    )
   }
   out
 }
 
-# WHATWG query serializer for special schemes: uses the special-query
-# percent-encode set (`" # < > '` plus C0/non-ASCII). rurl's WHATWG profile is
-# scoped to special schemes for WPT parity; non-special additions keep the
-# regular query set and therefore leave apostrophe literal.
+# WHATWG query serializer: the special-query percent-encode set (`" # < > '`
+# plus C0/non-ASCII) under a special scheme, the query set otherwise -- a
+# non-special scheme leaves the apostrophe literal. Vectorized over `query`;
+# `scheme` has length 1 or `length(query)`; NA reads as non-special.
 .whatwg_query_percent_encode <- function(query, scheme = NA_character_) {
-  encode_set <- c(0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL)
-  if (!is.na(scheme) &&
-      .ascii_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES) {
-    encode_set <- c(encode_set, 0x27L)
+  if (!length(scheme) %in% c(1L, length(query))) {
+    stop("`scheme` must have length 1 or the length of `query`.",
+         call. = FALSE)
   }
-  .whatwg_component_percent_encode(query, encode_set)
+  scheme <- rep_len(as.character(scheme), length(query))
+  special <- !is.na(scheme) &
+    .ascii_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES
+  out <- query
+  if (any(special)) {
+    out[special] <- .whatwg_component_percent_encode(
+      query[special], .WHATWG_SPECIAL_QUERY_ENCODE_SET
+    )
+  }
+  if (!all(special)) {
+    out[!special] <- .whatwg_component_percent_encode(
+      query[!special], .WHATWG_QUERY_ENCODE_SET
+    )
+  }
+  out
 }
 
 # WHATWG userinfo serializer (#userinfo-percent-encode-set): the path
@@ -364,28 +472,19 @@
 # `raw_user` / `raw_password`, which keep the source spelling.
 #
 # Reusing `.whatwg_component_percent_encode()` is what makes this idempotent:
-# its `%` branch re-emits an existing percent triplet verbatim, so `u%40ser`
-# stays `u%40ser` and `%25DOMAIN` stays `%25DOMAIN` rather than becoming
-# `%2525DOMAIN`. It also encodes every C0 control, DEL and non-ASCII byte, so a
-# non-ASCII userinfo gains escapes too (WHATWG-correct).
+# `%` and the hex digits pass through, so an existing percent triplet is
+# re-emitted verbatim -- `u%40ser` stays `u%40ser` and `%25DOMAIN` stays
+# `%25DOMAIN` rather than becoming `%2525DOMAIN`. It also encodes every C0
+# control, DEL and non-ASCII byte, so a non-ASCII userinfo gains escapes too
+# (WHATWG-correct). Vectorized.
 .whatwg_userinfo_percent_encode <- function(x) {
-  .whatwg_component_percent_encode(
-    x,
-    c(
-      # path percent-encode set
-      0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL,
-      # userinfo additions
-      0x2FL, 0x3AL, 0x3BL, 0x3DL, 0x40L, 0x5BL, 0x5CL, 0x5DL, 0x7CL
-    )
-  )
+  .whatwg_component_percent_encode(x, .WHATWG_USERINFO_ENCODE_SET)
 }
 
 # WHATWG fragment serializer: uses the fragment percent-encode set
-# (`" < > ` plus C0/non-ASCII).
+# (`" < > ` plus C0/non-ASCII). Vectorized.
 .whatwg_fragment_percent_encode <- function(fragment) {
-  .whatwg_component_percent_encode(
-    fragment, c(0x20L, 0x22L, 0x3CL, 0x3EL, 0x60L)
-  )
+  .whatwg_component_percent_encode(fragment, .WHATWG_FRAGMENT_ENCODE_SET)
 }
 
 # Internal helper to parse query strings into a list.

@@ -1669,13 +1669,7 @@
   }
 
   if (whatwg_encode) {
-    mask <- !is.na(path_work)
-    if (any(mask)) {
-      path_work[mask] <- vapply(
-        path_work[mask], .whatwg_path_percent_encode, character(1),
-        USE.NAMES = FALSE
-      )
-    }
+    path_work <- .whatwg_path_percent_encode(path_work)
   } else if (path_encoding == "encode") {
     mask <- !is.na(path_work)
     if (any(mask)) {
@@ -2900,58 +2894,54 @@
   port_part <- .build_port_part_vec(port_scheme, port, port_handling, "whatwg")
   is_opaque <- path_kind == "opaque"
 
-  # Per-row body encoding + the `/.` guard. The byte encoders are scalar
-  # (they walk one string), so this row loop is the vectorization seam; the
-  # structural assembly below stays mask-based.
+  # Body encoding + the `/.` guard, by mask: the byte encoders are vectorized
+  # (R/path-query.R), so each path kind is one encoder call.
   path_body <- character(n)
   guard <- rep("", n)
-  for (i in seq_len(n)) {
-    p <- path[i]
-    if (is.na(p)) {
-      path_body[i] <- ""
-      next
-    }
-    if (is_opaque[i]) {
-      # Opaque path: WHATWG C0-control percent-encode set (empty extra set ->
-      # encodes only C0/DEL/non-ASCII). No `/.` guard for opaque paths.
-      path_body[i] <- .whatwg_component_percent_encode(p, integer(0))
-      next
-    }
-    # List path. Optional trailing-slash strip mirrors .build_clean_url_vec
-    # (a lone "/" -> ""); it only ever touches a size-1 path, never the guard.
-    # It also mirrors the RUL-005 exception: a dots-only host ("foo://./",
-    # host ".") keeps its separator, so the output never reads "foo://.".
-    p_render <- p
-    strip_slash <- identical(trailing_slash_handling, "strip")
-    dots_only_host <- !is.na(host[i]) && grepl("^\\.+$", host[i])
-    if (strip_slash && identical(p_render, "/") && !dots_only_host) {
-      p_render <- ""
-    }
-    path_body[i] <- .whatwg_path_percent_encode(p_render)
-
-    # Four-condition `/.` guard (ADR 0012 A.1 #concept-url-serializer): fires
-    # when host is null (host_kind "absent"), the path is a list (not opaque),
-    # its size is > 1, and its FIRST segment is empty -- i.e. the serialized
-    # path would begin with "//" and be misread as an authority.
-    #
-    # SEGMENT DERIVATION: rurl holds a list path as its serialized STRING (each
-    # WHATWG path segment rendered as "/" + segment, so a rooted list path
-    # always begins with "/"). On that rendering the two path conditions
-    # collapse into ONE string test: the first segment is empty exactly when
-    # the string begins with "//", and any such string carries at least two
-    # "/" -- hence at least two segments -- so `size > 1` is implied and need
-    # not be tested separately. "/bar" -> ["bar"]; "//bar" -> ["","bar"];
-    # "//" -> ["",""]; "/" -> [""].
-    #
-    # Do NOT re-derive this by splitting on "/": `strsplit` drops a single
-    # TRAILING "", so a path of exactly "//" (WHATWG list ["",""], size 2)
-    # measures as size 1 and the guard misses -- emitting `non-spec://`, which
-    # re-reads as an empty AUTHORITY rather than a path. That was a real defect
-    # against WPT rows `non-spec:/.//`, `non-spec:/..//` and `non-spec:/a/..//`.
-    if (host_kind[i] == "absent" && isTRUE(startsWith(p, "//"))) {
-      guard[i] <- "/."
-    }
+  # Opaque path: WHATWG C0-control percent-encode set (empty extra set ->
+  # encodes only C0/DEL/non-ASCII). No `/.` guard for opaque paths.
+  opaque_rows <- !is.na(path) & !is.na(is_opaque) & is_opaque
+  path_body[opaque_rows] <- .whatwg_component_percent_encode(
+    path[opaque_rows], integer(0)
+  )
+  # List path. Optional trailing-slash strip mirrors .build_clean_url_vec
+  # (a lone "/" -> ""); it only ever touches a size-1 path, never the guard.
+  # It also mirrors the RUL-005 exception: a dots-only host ("foo://./",
+  # host ".") keeps its separator, so the output never reads "foo://.".
+  list_rows <- !is.na(path) & !is.na(is_opaque) & !is_opaque
+  p_render <- path[list_rows]
+  if (identical(trailing_slash_handling, "strip")) {
+    host_list <- host[list_rows]
+    dots_only_host <- !is.na(host_list) &
+      grepl("^\\.+$", host_list, useBytes = TRUE)
+    p_render[p_render == "/" & !dots_only_host] <- ""
   }
+  path_body[list_rows] <- .whatwg_path_percent_encode(p_render)
+
+  # Four-condition `/.` guard (ADR 0012 A.1 #concept-url-serializer): fires
+  # when host is null (host_kind "absent"), the path is a list (not opaque),
+  # its size is > 1, and its FIRST segment is empty -- i.e. the serialized
+  # path would begin with "//" and be misread as an authority.
+  #
+  # SEGMENT DERIVATION: rurl holds a list path as its serialized STRING (each
+  # WHATWG path segment rendered as "/" + segment, so a rooted list path
+  # always begins with "/"). On that rendering the two path conditions
+  # collapse into ONE string test: the first segment is empty exactly when
+  # the string begins with "//", and any such string carries at least two
+  # "/" -- hence at least two segments -- so `size > 1` is implied and need
+  # not be tested separately. "/bar" -> ["bar"]; "//bar" -> ["","bar"];
+  # "//" -> ["",""]; "/" -> [""].
+  #
+  # Do NOT re-derive this by splitting on "/": `strsplit` drops a single
+  # TRAILING "", so a path of exactly "//" (WHATWG list ["",""], size 2)
+  # measures as size 1 and the guard misses -- emitting `non-spec://`, which
+  # re-reads as an empty AUTHORITY rather than a path. That was a real defect
+  # against WPT rows `non-spec:/.//`, `non-spec:/..//` and `non-spec:/a/..//`.
+  # Every parsed record carries a host kind; an NA here would silently skip
+  # the guard and emit a `//` path as an authority, so fail loudly instead.
+  stopifnot(!anyNA(host_kind))
+  null_host <- host_kind == "absent"
+  guard[list_rows & null_host & startsWith(path, "//")] <- "/."
 
   query_suffix <- .whatwg_query_suffix_vec(query, query_kind, scheme)
 
@@ -3048,16 +3038,12 @@
 .whatwg_query_suffix_vec <- function(query, query_kind, scheme) {
   n <- length(query_kind)
   suffix <- rep("", n)
-  for (i in seq_len(n)) {
-    if (query_kind[i] == "empty") {
-      suffix[i] <- "?"
-    } else if (query_kind[i] == "present") {
-      encoded <- .whatwg_query_percent_encode(query[i], scheme[i])
-      if (is.na(encoded)) {
-        encoded <- ""
-      }
-      suffix[i] <- paste0("?", encoded)
-    }
+  suffix[!is.na(query_kind) & query_kind == "empty"] <- "?"
+  present <- which(query_kind == "present")
+  if (length(present) > 0L) {
+    encoded <- .whatwg_query_percent_encode(query[present], scheme[present])
+    encoded[is.na(encoded)] <- ""
+    suffix[present] <- paste0("?", encoded)
   }
   suffix
 }
@@ -3087,18 +3073,6 @@
 # `port` is the identity port and is emitted whenever it is non-NA. The
 # public projection's default-port nulling is a projection policy applied
 # downstream; it is not this surface's business.
-
-# WHATWG userinfo percent-encode set (#userinfo-percent-encode-set): the path
-# set plus `/ : ; = @ [ \ ] ^ |`. `^` is already a path-set member.
-.whatwg_userinfo_percent_encode <- function(x) {
-  .whatwg_component_percent_encode(
-    x,
-    c(
-      0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5EL, 0x60L, 0x7BL, 0x7DL,
-      0x2FL, 0x3AL, 0x3BL, 0x3DL, 0x40L, 0x5BL, 0x5CL, 0x5DL, 0x7CL
-    )
-  )
-}
 
 # WHATWG full-string serializer (#concept-url-serializer, ADR 0012 A.1 + D2).
 #
@@ -3148,64 +3122,54 @@
   has_port <- !is.na(port)
   port_part[has_port] <- paste0(":", port[has_port])
 
+  # Credentials: split the recorded userinfo at the FIRST ":" into the WHATWG
+  # username/password pair, then apply #concept-url-serializer. The split is
+  # on bytes: `:` is ASCII, so it never sits inside a multi-byte sequence and
+  # the first `:` octet is the first `:` code point.
   cred_part <- character(n)
+  has_ui <- !is.na(userinfo)
+  ui <- userinfo[has_ui]
+  has_colon <- grepl(":", ui, fixed = TRUE, useBytes = TRUE)
+  username <- sub("(?s):.*", "", ui, perl = TRUE, useBytes = TRUE)
+  password <- rep("", length(ui))
+  password[has_colon] <- sub(
+    "(?s)^[^:]*:", "", ui[has_colon], perl = TRUE, useBytes = TRUE
+  )
+  # "includes credentials" is false when both halves are empty: WHATWG then
+  # drops the whole userinfo, delimiter included.
+  includes <- nzchar(username) | nzchar(password)
+  out_cred <- .whatwg_userinfo_percent_encode(username)
+  with_pw <- nzchar(password)
+  out_cred[with_pw] <- paste0(
+    out_cred[with_pw], ":", .whatwg_userinfo_percent_encode(password[with_pw])
+  )
+  cred_ui <- rep("", length(ui))
+  cred_ui[includes] <- paste0(out_cred[includes], "@")
+  cred_part[has_ui] <- cred_ui
+
   path_body <- character(n)
   guard <- rep("", n)
-  for (i in seq_len(n)) {
-    # Credentials: split the recorded userinfo at the FIRST ":" into the
-    # WHATWG username/password pair, then apply #concept-url-serializer.
-    ui <- userinfo[i]
-    if (is.na(ui)) {
-      cred_part[i] <- ""
-    } else {
-      colon <- regexpr(":", ui, fixed = TRUE)
-      if (colon > 0L) {
-        username <- substring(ui, 1L, colon - 1L)
-        password <- substring(ui, colon + 1L, .Machine$integer.max)
-      } else {
-        username <- ui
-        password <- ""
-      }
-      if (nzchar(username) || nzchar(password)) {
-        out_cred <- .whatwg_userinfo_percent_encode(username)
-        if (nzchar(password)) {
-          out_cred <- paste0(
-            out_cred, ":", .whatwg_userinfo_percent_encode(password)
-          )
-        }
-        cred_part[i] <- paste0(out_cred, "@")
-      } else {
-        # "includes credentials" is false -- both halves empty. WHATWG drops
-        # the whole userinfo, delimiter included.
-        cred_part[i] <- ""
-      }
-    }
+  # An opaque path's trailing space is encoded only when a `?`/`#` actually
+  # follows it. Unlike the clean serializer, the FSSS emits the fragment too,
+  # so the fragment counts as a following delimiter here.
+  opaque_rows <- !is.na(path) & !is.na(is_opaque) & is_opaque
+  delimiter_follows <- query_kind != "absent" | fragment_kind != "absent"
+  path_body[opaque_rows] <- .whatwg_opaque_path_encode(
+    path[opaque_rows], delimiter_follows[opaque_rows]
+  )
+  list_rows <- !is.na(path) & !is.na(is_opaque) & !is_opaque
+  path_body[list_rows] <- .whatwg_path_percent_encode(path[list_rows])
 
-    p <- path[i]
-    if (is.na(p)) {
-      path_body[i] <- ""
-      next
-    }
-    if (is_opaque[i]) {
-      # An opaque path's trailing space is encoded only when a `?`/`#`
-      # actually follows it. Unlike the clean serializer, the FSSS emits the
-      # fragment too, so the fragment counts as a following delimiter here.
-      delimiter_follows <- query_kind[i] != "absent" ||
-        fragment_kind[i] != "absent"
-      path_body[i] <- .whatwg_opaque_path_encode(p, delimiter_follows)
-      next
-    }
-    path_body[i] <- .whatwg_path_percent_encode(p)
-
-    # Four-condition `/.` guard -- identical to the clean serializer's, but
-    # with no trailing-slash strip ahead of it, since that is a presentation
-    # dial this surface does not take. See .serialize_whatwg_vec for the
-    # segment-derivation reasoning, including why this must NOT be re-derived
-    # by splitting on "/".
-    if (host_kind[i] == "absent" && isTRUE(startsWith(p, "//"))) {
-      guard[i] <- "/."
-    }
-  }
+  # Four-condition `/.` guard -- identical to the clean serializer's, but
+  # with no trailing-slash strip ahead of it, since that is a presentation
+  # dial this surface does not take. See .serialize_whatwg_vec for the
+  # segment-derivation reasoning, including why this must NOT be re-derived
+  # by splitting on "/".
+  # Every parsed record carries a host kind; an NA here would silently skip
+  # the guard and emit a `//` path as an authority, so fail loudly instead.
+  stopifnot(!anyNA(host_kind))
+  null_host <- host_kind == "absent"
+  guard[list_rows & null_host & startsWith(path, "//")] <- "/."
 
   out <- character(n)
   out[is_opaque] <- paste0(scheme_prefix[is_opaque], path_body[is_opaque])
@@ -3237,16 +3201,12 @@
 .whatwg_fragment_suffix_vec <- function(fragment, fragment_kind) {
   n <- length(fragment_kind)
   suffix <- rep("", n)
-  for (i in seq_len(n)) {
-    if (fragment_kind[i] == "empty") {
-      suffix[i] <- "#"
-    } else if (fragment_kind[i] == "present") {
-      encoded <- .whatwg_fragment_percent_encode(fragment[i])
-      if (is.na(encoded)) {
-        encoded <- ""
-      }
-      suffix[i] <- paste0("#", encoded)
-    }
+  suffix[!is.na(fragment_kind) & fragment_kind == "empty"] <- "#"
+  present <- which(fragment_kind == "present")
+  if (length(present) > 0L) {
+    encoded <- .whatwg_fragment_percent_encode(fragment[present])
+    encoded[is.na(encoded)] <- ""
+    suffix[present] <- paste0("#", encoded)
   }
   suffix
 }

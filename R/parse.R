@@ -2739,22 +2739,10 @@ safe_parse_urls <- function(url,
     a$raw_scheme, a$raw_port, opts$port_handling, opts$url_standard
   )
   if (.is_whatwg(opts$url_standard)) {
-    q_idx <- which(!is.na(query_output))
-    if (length(q_idx) > 0L) {
-      query_output[q_idx] <- mapply(
-        .whatwg_query_percent_encode,
-        query_output[q_idx],
-        a$final_scheme[q_idx],
-        USE.NAMES = FALSE
-      )
-    }
-    f_idx <- which(!is.na(fragment_output))
-    if (length(f_idx) > 0L) {
-      fragment_output[f_idx] <- vapply(
-        fragment_output[f_idx], .whatwg_fragment_percent_encode, character(1),
-        USE.NAMES = FALSE
-      )
-    }
+    query_output <- .whatwg_query_percent_encode(
+      query_output, a$final_scheme
+    )
+    fragment_output <- .whatwg_fragment_percent_encode(fragment_output)
   }
 
   # Userinfo identity (RURL-micalqvh, half b): WHATWG's authority state stores
@@ -2787,20 +2775,13 @@ safe_parse_urls <- function(url,
     } else {
       rep(TRUE, length(a$raw_user))
     }
-    u_idx <- which(split_userinfo & !is.na(user_output))
-    if (length(u_idx) > 0L) {
-      user_output[u_idx] <- vapply(
-        user_output[u_idx], .whatwg_userinfo_percent_encode, character(1),
-        USE.NAMES = FALSE
-      )
-    }
-    p_idx <- which(split_userinfo & !is.na(password_output))
-    if (length(p_idx) > 0L) {
-      password_output[p_idx] <- vapply(
-        password_output[p_idx], .whatwg_userinfo_percent_encode, character(1),
-        USE.NAMES = FALSE
-      )
-    }
+    split_userinfo <- !is.na(split_userinfo) & split_userinfo
+    user_output[split_userinfo] <- .whatwg_userinfo_percent_encode(
+      user_output[split_userinfo]
+    )
+    password_output[split_userinfo] <- .whatwg_userinfo_percent_encode(
+      password_output[split_userinfo]
+    )
   }
 
   # Phase 11: clean URL reconstruction (with the filtered query appended).
