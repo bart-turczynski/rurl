@@ -375,39 +375,41 @@
 # separately. Admitting them here does NOT relax the ASCII grammar -- an
 # otherwise-invalid ASCII portion still fails even with non-ASCII present.
 .RFC3986_NONASCII <- "\\x{0080}-\\x{10FFFF}"
-.RFC3986_PCT <- "%[0-9A-Fa-f]{2}"
 
-# Every anchor in this transcription is `\A`/`\z` (true start/end of input), NOT
-# `^`/`$`. ICU's `$` also matches BEFORE a trailing line terminator, so an
-# `^...$` grammar silently admits a component ending in LF, VT, FF, CR, NEL,
-# LS or PS -- none of which any RFC 3986 production allows, since none is in
-# `unreserved` / `sub-delims` / `pchar`. That leak made a general-scheme
-# userinfo accept `u\n` and emit the raw control verbatim (RURL-dergzwku); RFC
-# 3986 has no removal step, so the grammar REJECTS these rather than stripping
-# them the way the WHATWG parser does. The same `$`-before-terminator trap is
-# recorded at `R/parse-phases.R:251`.
-.RFC3986_ANCHOR_START <- "\\A"
-.RFC3986_ANCHOR_END <- "\\z"
-
-# Build an anchored "*(data / pct-encoded)" matcher whose data class is the
-# unreserved + sub-delims + non-ASCII set plus the component-specific `extra`
-# characters (e.g. ":" for userinfo, ":@/" for a path).
-.rfc3986_class_re <- function(extra) {
+# Build the search for the FIRST character that cannot appear in a
+# "*(data / pct-encoded)" production whose data class is the unreserved +
+# sub-delims + non-ASCII set plus the component-specific `extra` characters
+# (e.g. ":" for userinfo, ":@/" for a path): any character outside the class and
+# not "%", or a "%" not followed by two hex digits. The component is valid iff
+# the search finds nothing (`.rfc3986_class_ok()`).
+#
+# Why a search and not the anchored `\A(?:[class]|%XX)*\z` match it replaces
+# (RURL-vewhvxnb): ICU keeps backtrack state for every repetition of that
+# group, so a component of about 5e5 characters threw "Regular expression
+# backtrack stack overflow" and the throw took the whole vectorized call with
+# it. The search has no repetition to backtrack over, so it runs in linear time.
+#
+# No anchors are needed, so the `$`-before-a-line-terminator trap cannot arise:
+# a trailing LF, VT, FF or CR is an ASCII character outside every class, found
+# like any other (RURL-dergzwku: a general-scheme userinfo accepted `u\n` when
+# the grammar used `^...$`). RFC 3986 has no removal step, so the grammar
+# REJECTS these rather than stripping them the way the WHATWG parser does.
+.rfc3986_class_bad_re <- function(extra) {
   paste0(
-    .RFC3986_ANCHOR_START, "(?:[", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS,
-    extra, .RFC3986_NONASCII, "]|", .RFC3986_PCT, ")*", .RFC3986_ANCHOR_END
+    "[^", .RFC3986_UNRESERVED, .RFC3986_SUBDELIMS, extra,
+    .RFC3986_NONASCII, "%]|%(?![0-9A-Fa-f]{2})"
   )
 }
 
 # reg-name = *( unreserved / pct-encoded / sub-delims )                (S3.2.2)
-.RFC3986_HOST_RE <- .rfc3986_class_re("")
+.RFC3986_HOST_BAD_RE <- .rfc3986_class_bad_re("")
 # userinfo = *( unreserved / pct-encoded / sub-delims / ":" )          (S3.2.1)
-.RFC3986_USERINFO_RE <- .rfc3986_class_re(":")
+.RFC3986_USERINFO_BAD_RE <- .rfc3986_class_bad_re(":")
 # path segments: pchar = unreserved / pct-encoded / sub-delims / ":" / "@",
 # joined by "/". A raw "@"/":" is a LEGAL pchar (why `mailto:a@b.com` accepts).
-.RFC3986_PATH_RE <- .rfc3986_class_re(":@/")
+.RFC3986_PATH_BAD_RE <- .rfc3986_class_bad_re(":@/")
 # query / fragment = *( pchar / "/" / "?" )                        (S3.4/S3.5)
-.RFC3986_QF_RE <- .rfc3986_class_re(":@/?")
+.RFC3986_QF_BAD_RE <- .rfc3986_class_bad_re(":@/?")
 # port = *DIGIT (empty port is legal); non-ASCII is NOT tolerated here (S3.2.3).
 .RFC3986_PORT_RE <- "\\A[0-9]*\\z"
 
@@ -469,11 +471,25 @@
   if (is.na(pos)) 0L else as.integer(pos)
 }
 
-# Whole-string match of a pre-built component regex (empty string matches the
-# "*(...)" productions -- an empty reg-name/userinfo/path/query/fragment/port is
-# legal). Returns a single TRUE/FALSE.
+# Whole-string match of the anchored port regex (`.RFC3986_PORT_RE`; an empty
+# port is legal). Returns a single TRUE/FALSE. Its single-class repetition
+# keeps no per-repetition backtrack state, unlike the component classes, which
+# use `.rfc3986_class_ok()`.
 .rfc3986_match <- function(s, re) {
   isTRUE(stringi::stri_detect_regex(s, re))
+}
+
+# Component class check: TRUE iff `s` contains no character the `bad` search
+# (built by `.rfc3986_class_bad_re()`) finds. The empty string passes -- an
+# empty reg-name/userinfo/path/query/fragment is legal. Vectorized; a missing
+# element, or one `stri_detect_regex()` cannot read (NA), is FALSE. The search
+# stays in stringi, as ADR 0005 asks of new string code. It does not judge
+# decodability (stringi reads a stray octet as a non-ASCII character), so
+# validity rests on the undecodable preflight in `.rfc3986_generic_uri_ok()`,
+# the only caller path.
+.rfc3986_class_ok <- function(s, bad) {
+  hit <- stringi::stri_detect_regex(s, bad)
+  !is.na(s) & !is.na(hit) & !hit
 }
 
 # IP-literal inner form: IPv6address / IPvFuture (S3.2.2). Empty inner (`[]`) or
@@ -511,9 +527,10 @@
                         .RFC3986_PORT_RE)) {
       return(FALSE)
     }
-    return(.rfc3986_match(substring(hp, 1L, cpos - 1L), .RFC3986_HOST_RE))
+    return(.rfc3986_class_ok(substring(hp, 1L, cpos - 1L),
+                             .RFC3986_HOST_BAD_RE))
   }
-  .rfc3986_match(hp, .RFC3986_HOST_RE)
+  .rfc3986_class_ok(hp, .RFC3986_HOST_BAD_RE)
 }
 
 # authority = [ userinfo "@" ] host [ ":" port ] (S3.2). userinfo and reg-name
@@ -529,7 +546,7 @@
   if (n_at == 1L) {
     apos <- .rfc3986_first_index(authority, "@")
     userinfo <- substring(authority, 1L, apos - 1L)
-    if (!.rfc3986_match(userinfo, .RFC3986_USERINFO_RE)) {
+    if (!.rfc3986_class_ok(userinfo, .RFC3986_USERINFO_BAD_RE)) {
       return(FALSE)
     }
     return(.rfc3986_valid_hostport(
@@ -545,7 +562,7 @@
 # legal pchar, so a scheme-less rootless path like `example.com/path` is fine).
 .rfc3986_valid_hier_part <- function(hp) {
   if (!startsWith(hp, "//")) {
-    return(.rfc3986_match(hp, .RFC3986_PATH_RE))
+    return(.rfc3986_class_ok(hp, .RFC3986_PATH_BAD_RE))
   }
   ap <- substring(hp, 3L, .Machine$integer.max)
   spos <- .rfc3986_first_index(ap, "/")
@@ -559,7 +576,7 @@
   if (!.rfc3986_valid_authority(authority)) {
     return(FALSE)
   }
-  .rfc3986_match(path, .RFC3986_PATH_RE)
+  .rfc3986_class_ok(path, .RFC3986_PATH_BAD_RE)
 }
 
 # Scalar core: TRUE / FALSE / NA for one input (see the wrapper's contract).
@@ -578,8 +595,8 @@
   # fragment = everything after the FIRST "#" (S3.5).
   hpos <- .rfc3986_first_index(rest, "#")
   if (hpos > 0L) {
-    if (!.rfc3986_match(substring(rest, hpos + 1L, .Machine$integer.max),
-                        .RFC3986_QF_RE)) {
+    if (!.rfc3986_class_ok(substring(rest, hpos + 1L, .Machine$integer.max),
+                           .RFC3986_QF_BAD_RE)) {
       return(FALSE)
     }
     rest <- substring(rest, 1L, hpos - 1L)
@@ -587,8 +604,8 @@
   # query = everything after the FIRST "?" in what remains (S3.4).
   qpos <- .rfc3986_first_index(rest, "?")
   if (qpos > 0L) {
-    if (!.rfc3986_match(substring(rest, qpos + 1L, .Machine$integer.max),
-                        .RFC3986_QF_RE)) {
+    if (!.rfc3986_class_ok(substring(rest, qpos + 1L, .Machine$integer.max),
+                           .RFC3986_QF_BAD_RE)) {
       return(FALSE)
     }
     rest <- substring(rest, 1L, qpos - 1L)
@@ -620,8 +637,8 @@
 # sensitivity being removed. Only "unknown" (native) elements are touched: an
 # explicit "UTF-8"/"latin1"/"bytes" declaration is already locale-invariant and
 # is the caller stating what the bytes mean, so it stands. Invalid octets stay
-# invalid -- a declared-UTF-8 string holding `<80>` makes `stri_detect_regex()`
-# return NA, `isTRUE()` folds that to FALSE, and the row is rejected in EVERY
+# invalid -- a declared-UTF-8 string holding `<80>` is caught by the
+# `undecodable` preflight in `.rfc3986_generic_uri_ok()` and rejected in EVERY
 # locale, which is the correct answer: a lone continuation byte is not a scalar
 # value and no RFC 3986 production admits it.
 .rfc3986_declare_native_utf8 <- function(url) {
