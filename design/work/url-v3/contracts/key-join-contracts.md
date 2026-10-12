@@ -430,9 +430,13 @@ serializer therefore read one record, built in two steps in `R/serialize.R`:
 `.fsss_record_vec()` assembles the lossless serializer-input record, and
 `.fsss_encode_record_vec()` percent-encodes it as the standard's URL record
 holds it. Both `serialize_url()` and `get_url_key()` call both steps, so a
-shared component cannot be spelled two ways (`RURL-ommuyaqi`; it replaced the
+shared component is spelled the same way by both (`RURL-ommuyaqi`; it replaced the
 query-only `.url_key_query()` of `RURL-pjrqnqvb`). `format_url()` reads the
-first step only, because it escapes for display instead.
+first step only, because it escapes for display instead. The WHATWG
+serializer (`.serialize_whatwg_full_vec()`, `R/parse-phases.R`) still runs
+its own encoders over the step's output; they are the same idempotent
+encoders, so that pass changes no byte, but the agreement rests on both
+sites calling them rather than on the serializer reading the step alone.
 
 | component | under `whatwg` | under `rfc3986` | basis |
 |---|---|---|---|

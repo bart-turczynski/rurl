@@ -377,15 +377,17 @@
 # The record as the selected standard's URL record holds it: the one step that
 # percent-encodes the components the URL key shares with the serializer
 # (RURL-ommuyaqi). Both read its output -- `serialize_url()` and
-# `.url_key_state_vec()` -- so the key cannot frame a path or query the
-# serialization spells differently.
+# `.url_key_state_vec()` -- so the key frames the path and query as the
+# serialization spells them. The WHATWG serializer still re-applies the
+# same idempotent encoders to this output, which changes no byte; making it
+# read the step alone needs an edit in R/parse-phases.R.
 #
 # Under `whatwg` the parser encodes as it reads: the path state encodes a list
 # path with the path percent-encode set, the opaque path state uses the
 # C0-control set (and `%20` for a space right before the `?` or `#` that ends
 # the path), and the query state uses the query set, or the special-query set
-# under a special scheme. `.fsss_record_vec()` keeps the path and query as
-# written, so this step applies the same encoders
+# under a special scheme. `.fsss_record_vec()` keeps a list path and the
+# query as written, so this step applies the same encoders
 # (R/path-query.R) the serializer does; the record itself stays lossless for
 # `format_url()`, which escapes for display instead. An encoder copies `%` and
 # hex digits as written, so it is idempotent: a triplet keeps its hex case
@@ -409,6 +411,9 @@
   has_path <- !is.na(path) & !is.na(kind)
   list_rows <- which(has_path & kind != "opaque")
   rec$path[list_rows] <- .whatwg_path_percent_encode(path[list_rows])
+  # An opaque path reaches the record already encoded (the parser's opaque
+  # path state), so this pass is a no-op on it today; it stays so the step,
+  # not the parser, is what the key and the serializer rely on.
   opaque_rows <- which(has_path & kind == "opaque")
   if (length(opaque_rows) > 0L) {
     follows <- rec$query_kind[opaque_rows] != "absent" |
