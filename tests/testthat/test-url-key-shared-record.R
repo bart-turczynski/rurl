@@ -160,3 +160,115 @@ test_that("the fragment and userinfo stay out of the key", {
                 label = std)
   }
 })
+
+# --- Fix: the whatwg key frames the components the serializer writes ----------
+
+# Twins: a raw spelling and its WHATWG serialization, across the special,
+# non-special, `file:` and inferred-scheme list-path routes.
+sr_path_twins <- list(
+  c("foo:/p\u200b", "foo:/p%E2%80%8B"),
+  c("http://h/p\u200b", "http://h/p%E2%80%8B"),
+  c("http://h/p{", "http://h/p%7B"),
+  c("http://h/p\"q\"", "http://h/p%22q%22"),
+  c("https://h/a b", "https://h/a%20b"),
+  c("foo://h/p^`{}", "foo://h/p%5E%60%7B%7D"),
+  c("file:///p\u200b", "file:///p%E2%80%8B"),
+  c("file:///C:/a{", "file:///C:/a%7B"),
+  c("http://[::1]/p{", "http://[::1]/p%7B")
+)
+
+test_that("whatwg keys a list-path twin pair alike", {
+  for (tw in sr_path_twins) {
+    expect_identical(serialize_url(tw, "whatwg"), c(tw[[2L]], tw[[2L]]),
+                     label = tw[[2L]])
+    expect_true(sr_same(tw), label = tw[[1L]])
+  }
+  # A row whose scheme the key infers reads its path as the `http` it parses
+  # under, so its twins key alike too.
+  expect_true(sr_same(c("h.com/p{", "h.com/p%7B")))
+  expect_identical(
+    sr_fields(c("http://h/p{", "foo:/p\u200b", "file:///C:/a{"))$path,
+    c("/p%7B", "/p%E2%80%8B", "/C:/a%7B")
+  )
+  expect_identical(
+    duplicated(get_url_key(c("http://h/p{", "http://h/p%7B"))),
+    c(FALSE, TRUE)
+  )
+})
+
+test_that("whatwg: twins the standard serializes apart still key apart", {
+  # A triplet keeps its hex case (RUL-026), `{` is in no query set, and an
+  # opaque path leaves `^` literal.
+  expect_false(sr_same(c("http://h/p%7b", "http://h/p%7B")))
+  expect_false(sr_same(c("http://h/?q{", "http://h/?q%7B")))
+  expect_false(sr_same(c("foo:a^", "foo:a%5E")))
+  expect_false(sr_same(c("http://h/p/", "http://h/p%2F")))
+})
+
+test_that("the shared step leaves rfc3986 and the non-shared fields alone", {
+  rec <- .fsss_record_vec(sr_rfc_rows, "rfc3986")
+  expect_identical(.fsss_encode_record_vec(rec, "rfc3986"), rec)
+  u <- c("http://u\u200b:p w@h/p{?q'#f\u200b", "foo:a ?q", "foo:/p")
+  raw <- .fsss_record_vec(u, "whatwg")
+  enc <- .fsss_encode_record_vec(raw, "whatwg")
+  moved <- names(raw)[!vapply(names(raw), function(f) {
+    identical(raw[[f]], enc[[f]])
+  }, logical(1))]
+  expect_identical(moved, c("path", "query"))
+  expect_identical(enc$path, c("/p%7B", "a%20", "/p"))
+  expect_identical(enc$query, c("q%27", "q", NA))
+  expect_identical(enc$userinfo, raw$userinfo)
+  expect_identical(enc$fragment, raw$fragment)
+  # Idempotent: the serializer's own encoders change no byte of it.
+  expect_identical(.fsss_encode_record_vec(enc, "whatwg"), enc)
+})
+
+test_that("serialize_url() and the key both read the shared step", {
+  # The serializer's own encoders (R/parse-phases.R) still run over the step's
+  # output and change no byte of it, so skipping the step in serialize_url()
+  # would not move its output. The wiring is asserted directly instead.
+  seen <- character(0)
+  real <- .fsss_encode_record_vec
+  local_mocked_bindings(.fsss_encode_record_vec = function(rec, standard) {
+    seen <<- c(seen, standard)
+    real(rec, standard)
+  })
+  serialize_url("http://h/p{", "whatwg")
+  serialize_url("http://h/p", "rfc3986")
+  get_url_key("http://h/p{", url_key_policy("whatwg"))
+  get_url_key("http://h/p", url_key_policy("rfc3986"))
+  expect_identical(seen, c("whatwg", "rfc3986", "whatwg", "rfc3986"))
+})
+
+test_that("whatwg: the key's path and query are the serialization's", {
+  # Re-keying a URL's WHATWG serialization must reproduce the path and query
+  # fields its key framed: they are the shared identity. Other fields may
+  # move: authority-delimiter presence (`file:/p` against `file:///p`) and
+  # the ftp/ws/wss default ports are key-policy decisions, not serializer
+  # ones.
+  skip_if_not_installed("jsonlite")
+  path <- system.file("bench", "wpt-url-cases.json", package = "rurl")
+  skip_if(!nzchar(path) || !file.exists(path), "WPT import not installed")
+  wpt <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  u <- c(
+    vapply(wpt$success, function(r) r$input, character(1)),
+    unlist(sr_path_twins),
+    "foo:op aque ?q", "foo:a #f", "http://h/p\u200b?\u200b#\u200b"
+  )
+  s <- serialize_url(u, "whatwg")
+  u <- u[!is.na(s)]
+  s <- s[!is.na(s)]
+  expect_gt(length(u), 300L)
+  fu <- sr_fields(u)
+  fs <- sr_fields(s)
+  for (f in c("path_kind", "path", "query_kind", "query")) {
+    expect_identical(fu[[f]], fs[[f]], label = f)
+  }
+  # And the whole key agrees wherever no key-policy field differs.
+  policy_same <- fu$authority_delimiter_present ==
+    fs$authority_delimiter_present &
+    ((is.na(fu$port) & is.na(fs$port)) |
+       (!is.na(fu$port) & !is.na(fs$port) & fu$port == fs$port))
+  expect_gt(sum(policy_same), 300L)
+  expect_identical(sr_key(u)[policy_same], sr_key(s)[policy_same])
+})
