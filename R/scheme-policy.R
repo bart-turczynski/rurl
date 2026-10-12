@@ -140,12 +140,16 @@ check_schemes <- function(url,
   scheme_acceptance <- match.arg(scheme_acceptance)
   url_standard <- .validate_url_standard(url_standard)
 
-  scheme <- get_scheme(url,
+  # Every fact below reads the prepared string; the `url` column echoes the
+  # caller's element (RURL-cwzickqy). .scheme_policy_no_authority() used to
+  # take the raw string, so a bytes-marked element threw out of the call.
+  prepared <- .prepare_url_input(url)$url
+  scheme <- get_scheme(prepared,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
     url_standard = url_standard
   )
-  scheme_class <- get_scheme_class(url,
+  scheme_class <- get_scheme_class(prepared,
     url_standard = url_standard,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance
@@ -153,7 +157,8 @@ check_schemes <- function(url,
   have <- !is.na(scheme)
   web_scheme <- have & scheme %in% .SUPPORTED_SCHEMES
   no_authority <- .scheme_policy_no_authority(
-    url, have, scheme_class, url_standard, scheme_policy, scheme_acceptance
+    prepared, have, scheme_class, url_standard, scheme_policy,
+    scheme_acceptance
   )
 
   out <- data.frame(
