@@ -49,6 +49,7 @@
 ^\.fossa\.yml$
 ^\.fossa$
 ^\.bestpractices\.json$
+^\.oss-scanner$
 ^SECURITY\.md$
 ^SECURITY-INSIGHTS\.yml$
 ^tools/determinism$
