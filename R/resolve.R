@@ -822,14 +822,17 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     )
   }
 
-  # A latin1-MARKED element becomes its UTF-8 twin before anything reads it
-  # (RURL-ummmdiwu). .resolve_one_raw() splits, merges and recomposes the two
-  # as strings, and R's string functions translate latin1 by LOCALE: CP1252
-  # in a UTF-8 one (0x9F became U+0178), escape text such as "<fc>" in the C
-  # locale. .latin1_input_to_utf8() (R/parse.R) reads the mark instead, as
-  # ISO 8859-1, which is what the parse seams already do.
-  ref <- .latin1_input_to_utf8(as.character(relative_or_absolute))
-  base <- .latin1_input_to_utf8(as.character(base_url))
+  # Both operands pass the input boundary before anything reads them
+  # (RURL-cwzickqy). .resolve_one_raw() splits, merges and recomposes them as
+  # strings, and R's string functions read a string by LOCALE: a latin1 one
+  # as CP1252 in a UTF-8 locale (0x9F became U+0178, RURL-ummmdiwu) and an
+  # unmarked one holding invalid UTF-8 as an error there (the whole call
+  # threw) and as single bytes in the C locale (the row resolved). A
+  # bytes-marked base resolved too, although the parser refuses it.
+  ref_in <- .prepare_url_input(as.character(relative_or_absolute))
+  base_in <- .prepare_url_input(as.character(base_url))
+  ref <- ref_in$url
+  base <- base_in$url
 
   # A zero-length operand yields a zero-length result, as R vectorized ops do.
   if (length(ref) == 0L || length(base) == 0L) {
@@ -839,6 +842,14 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   n <- max(length(ref), length(base))
   ref <- rep_len(ref, n)
   base <- rep_len(base, n)
+  # A string that is not valid UTF-8 cannot be split as one, in any locale,
+  # so the boundary's verdict decides here: an undecodable reference
+  # resolves to NA, and an undecodable base is no base (NA, as a bytes one
+  # already is), so an absolute reference still resolves without it. The
+  # parse seams leave this verdict to each standard's parser; this function
+  # reshapes the strings before any parser sees them.
+  ref[!rep_len(ref_in$decodable, n)] <- NA_character_
+  base[!rep_len(base_in$decodable, n)] <- NA_character_
 
   resolved_raw <- vapply(
     seq_len(n),
