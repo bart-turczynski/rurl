@@ -98,6 +98,49 @@ selected standard's normalized identity, not source-byte equality.
 | missing/invalid | non-keyable → `NA` key + typed reason; default never-match | opt-in missing equality, if later exposed, may match missing-input only to missing-input and never invalid parse | P3.1@3b89b94 (D-C) | SETTLED |
 | persisted-key stability | key carries policy version + schema version | no release may silently reinterpret a persisted older key | P3.1@3b89b94 (D-A.2, D-B) | SETTLED |
 
+### What the key shares with the serializer, and what stays key policy
+
+`exact` above is the selected standard's normalized identity. For a
+component the key frames, that identity is the spelling the standard's URL
+record holds, which is the spelling `serialize_url()` writes. The key and the
+serializer therefore read one record, built in two steps in `R/serialize.R`:
+`.fsss_record_vec()` assembles the lossless serializer-input record, and
+`.fsss_encode_record_vec()` percent-encodes it as the standard's URL record
+holds it. Both `serialize_url()` and `get_url_key()` call both steps, so a
+shared component cannot be spelled two ways (`RURL-ommuyaqi`; it replaced the
+query-only `.url_key_query()` of `RURL-pjrqnqvb`). `format_url()` reads the
+first step only, because it escapes for display instead.
+
+| component | under `whatwg` | under `rfc3986` | basis |
+|---|---|---|---|
+| list path | **shared**: encoded with the path percent-encode set | **shared**: as written | WHATWG path state; RFC 3986 §6.2.2 is a ladder the key does not climb (below) |
+| opaque path | **shared**: encoded with the C0-control set, `%20` for a space before a following `?` or `#` | (no opaque kind) | WHATWG opaque path state |
+| query | **shared**: encoded with the query set, or the special-query set under the row's own special scheme | **shared**: as written | WHATWG query state |
+| scheme, host, path kind, query kind | **shared**: read from the same record (folded scheme; IDNA host per artifact 10) | **shared**: folded scheme; source host spelling | WHATWG scheme and host parsers; RUL-007 |
+| userinfo | **not keyed** under any policy (Q5), so not part of the shared step; the serializer encodes it itself, after splitting the undivided slice at its first `:` | not keyed | ratification Q5 (`userinfo` row) |
+| fragment | **not keyed** (Q5); the serializer encodes it itself | not keyed | ratification Q5 (`fragment` row) |
+
+These stay **key-policy decisions**, never the serializer's, so a key may keep
+apart two URLs whose serializations are equal, but only on one of these grounds:
+
+- **Component presence.** `scheme_presence` (explicit, inferred,
+  scheme-relative) and `authority_delimiter_present` are framed as independent
+  identity (`scheme source` row; P1.2 D-A), so `file:/p` and `file:///p` key
+  apart though WHATWG serializes both as `file:///p`. Query presence stays
+  three-valued (`query presence` row), as it is in the record.
+- **Default ports.** The key reads the port as written and normalizes only
+  `http` `:80` and `https` `:443` under the row's own explicit scheme (`port`
+  row; ratification Q4/Q8), where WHATWG's parser elides all five special
+  defaults, so `ftp://h:21/` and `ftp://h/` key apart.
+- **The scheme collapse.** `http_https` collapses the framed scheme field
+  only, after the port rule (truth table); the shared step and the serializer
+  always see the row's own scheme.
+- **rfc3986 source preservation.** The `rfc3986` key frames the source
+  spelling. RFC 3986 §6.2.2 syntax-based normalization (case, percent-encoding
+  and path-segment normalization) is a comparison ladder §6.2 leaves to the
+  application; rurl applies it in `serialize_url(standard = "rfc3986", form =
+  "normalized")`, not in the key (RUL-007).
+
 ## Scheme and port truth table
 
 Default-port normalization occurs **before** optional scheme collapsing and uses
