@@ -73,9 +73,13 @@ not promise). Also out of scope: dev tooling not shipped in the package (`tools/
 
 ## How to exercise it
 
-- The image: source at `/src`, rurl installed from it, every Import and Suggest
-  installed (testthat, jsonlite, withr, pkgload), no network. No native code, so gdb,
-  valgrind and sanitizers have nothing to instrument.
+- The image: source at `/src`, rurl installed from it, all Imports and Suggests
+  (`DESCRIPTION`) installed, plus pkgload via testthat; the `tr_TR.UTF-8` and
+  `az_AZ.UTF-8` locales; no network. rurl has no native code, so gdb and valgrind
+  (both installed) only reach R itself and compiled dependencies such as `stringi`.
+  For a crash or a memory error inside one:
+  `R -d gdb --debugger-args='-batch -ex run -ex bt' -e 'library(rurl); get_host("http://example.com/")'`
+  `R -d valgrind -e 'library(rurl); get_host("http://example.com/")'`
 - Full suite: `Rscript -e 'testthat::test_local("/src")'`. One area:
   `Rscript -e 'testthat::test_local("/src", filter = "url-standard-host")'`.
   The dependency audits `test-osv.R` and `test-security.R` skip offline.
@@ -99,9 +103,11 @@ not promise). Also out of scope: dev tooling not shipped in the package (`tools/
 ## How you rate severity
 
 - **Critical**: a parse differential that lets a URL through `ssrfr`'s default policy to
-  loopback or cloud-metadata addresses: under `whatwg`, rurl reports a host or IP that is
-  neither while a WHATWG client connects to `127.0.0.0/8`, `::1` or `169.254.169.254`
-  (for example an IPv4 number form, a mapped separator or a backslash read differently).
+  any address that policy treats as loopback or cloud metadata (for example
+  `127.0.0.0/8`, `0.0.0.0/8`, `::1`, `::ffff:7f00:1`, `169.254.169.254`,
+  `fd00:ec2::254`): under `whatwg`, rurl reports a host or IP outside those while a
+  WHATWG client connects to one of them (for example an IPv4 number form, a mapped
+  separator or a backslash read differently).
 - **High**: any other host, port, scheme or userinfo boundary that differs from the
   posture's reference reading in a way that changes a caller's allow/deny decision.
   The reference is the WHATWG URL Standard under `whatwg`, RFC 3986 under `rfc3986`, and
@@ -130,7 +136,8 @@ not promise). Also out of scope: dev tooling not shipped in the package (`tools/
   not report that it does not classify loopback, private or link-local addresses.
 - Documented opt-outs and facts: `scheme_acceptance = "general"` accepts `javascript:`,
   `file:` and any other scheme; `file://server/share` is a UNC path; `get_query()` and
-  `path_encoding = "decode"` return decoded bytes, CR and LF included (RUL-004);
+  `path_encoding = "decode"` return decoded bytes, CR and LF included (`SECURITY.md`,
+  "What is out of scope"; the security note in `?get_query`);
   `get_user()`, `get_password()` and `serialize_url()` return credentials by design.
 - `get_clean_url()` is a lossy policy projection (ADR 0017) and never a conformance
   oracle; judge conformance on `serialize_url()` and `safe_parse_urls()` components.
@@ -140,18 +147,28 @@ not promise). Also out of scope: dev tooling not shipped in the package (`tools/
 - Settled rulings in `design/work/url-v3/registers/rulings.md`, for example: an `xn--`
   label that is not a genuine A-label still parses under `whatwg` (RUL-023, reported by
   the diagnostic); `get_host("mailto:a@b")` returns the recipient domain as metadata
-  (ADR 0012 D7); a raw space in a `mailto:` opaque path is conformant.
-- Cases listed in `known_failures` in `tests/testthat/test-hostile-input-contracts.R`
-  (bytes-marked elements, invalid UTF-8 in `resolve_url()`), and the long-input limits
-  the latest `NEWS.md` entry for RURL-vewhvxnb names: both are tracked.
+  (ADR 0012 D7).
+- Under `whatwg`, a raw space left in an opaque path such as a `mailto:` one: the
+  WHATWG opaque path state encodes only the space just before the `?` or `#` that ends
+  the path (`NEWS.md`, RURL-qxpgcwie; `tests/testthat/test-general-acceptance.R`).
+- Readings that come from `scheme_policy = "infer"` (the default, which adds `http://`
+  to scheme-less input) or from `profile = "browser"`: both are by design
+  (`design/posture-card.md`). Compare against WHATWG only under `profile = "whatwg"`
+  (or `url_standard = "whatwg"` with `scheme_policy = "require"`).
+- Cases in the `known_failures` table in `tests/testthat/test-hostile-input-contracts.R`,
+  and those the `NEWS.md` entry for RURL-vewhvxnb records: both are tracked.
 - Bugs inside `pslr`, `punycoder` or `raddr`: report them against that package.
 
 Patches:
 - Minimal R in the package's style: `stringi` for strings, except where ADR 0005 keeps
   base R; cut strings by byte position with the `R/utils.R` helpers; no new dependency.
-- A conformance fix changes the default; never put it behind an opt-in flag (ADRs 0007,
-  0016). Respect the frozen areas or say why the patch cannot: the punycode helpers
-  (ADR 0002) and the PSL seam (ADR 0001) in `R/domain.R`, the retained base-R string
+- A conformance fix applies under the posture it names (`whatwg` or `rfc3986`), with no
+  new opt-in flag (ADRs 0007, 0016). It must not move `url_standard = NULL` output
+  (the default of `safe_parse_urls()`, `resolve_url()` and the accessors) unless it
+  fixes a defect in the `NULL` path itself; such a fix carries ADR 0016's two pieces of
+  evidence in its test file: a witness test showing the defect under `NULL`, and a
+  declared signature of the inputs, options and output fields it may move.
+- Respect the frozen areas or say why the patch cannot: the punycode helpers (ADR 0002) and the PSL seam (ADR 0001) in `R/domain.R`, the retained base-R string
   operations (ADR 0005), the `safe_parse_url()` columns (ADR 0006: new facts go to the
   companion helpers, never to a new column).
 - A `testthat` regression test next to the existing tests for that area (for example
