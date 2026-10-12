@@ -270,3 +270,174 @@ test_that("every export keeps its output on ASCII and UTF-8 rows", {
     expect_identical(moved, character(0), label = paste("moved under", loc))
   }
 })
+
+# --- Fixed: entry points that prepared their input themselves --------------
+#
+# Each case below failed on 6623cab and passes once the entry point reads its
+# operand through .prepare_url_input().
+
+ib_bad_ref <- ib_str("h", 0xfc, ".com")
+ib_bytes_base <- ib_str("http://h.com/", 0xfc, mark = "bytes")
+ib_bad_bases <- c(ib_str("file:///caf", 0xe9),
+                  ib_str("http://example.com/caf", 0xe9))
+ib_selectors <- list(omitted = "omitted", `NULL` = NULL, whatwg = "whatwg",
+                     rfc3986 = "rfc3986")
+ib_resolve <- function(ref, base, sel, ...) {
+  if (identical(sel, "omitted")) {
+    resolve_url(ref, base, ...)
+  } else {
+    resolve_url(ref, base, url_standard = sel, ...)
+  }
+}
+
+# ADR 0016: these move `url_standard = NULL` output, so the evidence the ADR
+# asks for is here.
+#
+# Witness. On 6623cab, under url_standard = NULL (omitted or explicit):
+#   resolve_url(c(<"h" 0xFC ".com", unmarked>, "g"), "http://b.com/a")
+#     threw "invalid multibyte string" out of the whole call under a UTF-8
+#     LC_CTYPE (both rows lost), and gave NA for the row under LC_CTYPE C;
+#   resolve_url("g", <"http://h.com/" 0xFC, marked bytes>) gave
+#     "http://h.com/g", although safe_parse_urls() calls that base an error;
+#   resolve_url("x", <"file:///caf" 0xE9, unmarked>) gave "file:///x" under
+#     LC_CTYPE C and NA under a UTF-8 one, and the same for
+#     "http://example.com/caf" 0xE9; safe_parse_urls() calls both errors.
+# No profile, standard or contract sanctions a result that throws for the
+# whole vector, depends on LC_CTYPE, or resolves against a base the parser
+# refuses: this is a default-path defect, not selector-caused drift.
+#
+# Signature. Inputs: a reference or base that is bytes-marked, or not valid
+# UTF-8 once unmarked bytes are read as UTF-8. Options: resolve_url() under
+# any url_standard and either output. Output: that row's element only, which
+# becomes NA (a bytes or undecodable base is no base, so an absolute
+# reference still resolves); every other row is unchanged. Per arm: rfc3986
+# had all three defects, through the same string code as NULL. whatwg had the
+# bytes and the base defects; its reference was already locale-invariant,
+# because the WHATWG strip read it with U+FFFD replacement, and that row moves
+# from "http://b.com/h<U+FFFD>.com" to NA with the other two arms.
+test_that("resolve_url(): an undecodable reference is NA for its row only", {
+  skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
+  for (loc in c(ib_utf8, "C")) {
+    for (s in names(ib_selectors)) {
+      got <- hi_in_ctype(loc, hi_try(
+        ib_resolve(c(ib_bad_ref, "g"), "http://b.com/a", ib_selectors[[s]])
+      ))
+      expect_true(got$ok, label = paste(s, loc))
+      expect_identical(got$value, c(NA, "http://b.com/g"),
+                       label = paste(s, loc))
+    }
+  }
+})
+
+test_that("resolve_url(): a bytes-marked base is no base", {
+  skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
+  for (loc in c(ib_utf8, "C")) {
+    for (s in names(ib_selectors)) {
+      lab <- paste(s, loc)
+      got <- hi_in_ctype(loc, ib_resolve(
+        c("g", "g", "https://x.com/y"),
+        c(ib_bytes_base, "http://h.com/a", ib_bytes_base), ib_selectors[[s]]
+      ))
+      expect_identical(got, c(NA, "http://h.com/g", "https://x.com/y"),
+                       label = lab)
+    }
+    for (s in c("whatwg", "rfc3986")) {
+      got <- hi_in_ctype(loc, resolve_url(
+        "g", c(ib_bytes_base, "http://h.com/a"), url_standard = s,
+        output = "serialized"
+      ))
+      expect_identical(got, c(NA, "http://h.com/g"), label = paste(s, loc))
+    }
+  }
+})
+
+test_that("resolve_url(): an undecodable base is NA in every locale", {
+  skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
+  for (loc in c(ib_utf8, "C")) {
+    for (s in names(ib_selectors)) {
+      lab <- paste(s, loc)
+      got <- hi_in_ctype(loc, ib_resolve(
+        "x", c(ib_bad_bases, "http://example.com/cafe"), ib_selectors[[s]]
+      ))
+      expect_identical(got, c(NA, NA, "http://example.com/x"), label = lab)
+      # The parse seams call both bases errors under the frozen default and
+      # rfc3986; whatwg reads them with U+FFFD replacement, and resolution
+      # does not (see .prepare_url_input()).
+      sel <- if (identical(s, "omitted")) NULL else ib_selectors[[s]]
+      if (!identical(sel, "whatwg")) {
+        st <- hi_in_ctype(loc, get_parse_status(ib_bad_bases,
+                                                url_standard = sel))
+        expect_identical(st, c("error", "error"), label = lab)
+      }
+    }
+  }
+})
+
+test_that("a bytes-marked row is refused, not thrown, at every entry point", {
+  good <- "http://u@h.example.com/p?q=v#f"
+  b <- ib_str("http://h.example.com/p", 0xfc, mark = "bytes")
+  for (s in c("whatwg", "rfc3986")) {
+    ser <- serialize_url(c(good, b, good), standard = s)
+    expect_identical(ser[2L], NA_character_, label = s)
+    expect_identical(ser[c(1L, 3L)],
+                     rep(serialize_url(good, standard = s), 2L), label = s)
+    k <- get_url_key(c(good, b), url_key_policy(standard = s))
+    expect_identical(attr(k, "keyability"), c("ok", "invalid-parse"),
+                     label = s)
+    expect_identical(get_host_type(c(good, b), url_standard = s),
+                     c("domain", NA), label = s)
+    expect_identical(get_url_diagnostics(c(good, b), url_standard = s)[[2L]],
+                     character(0), label = s)
+    expect_identical(is_valid_host(c(good, b), url_standard = s),
+                     c(TRUE, NA), label = s)
+    cs <- check_schemes(c(good, b), url_standard = s)
+    expect_identical(cs$scheme, c("http", NA), label = s)
+    m <- get_mailto_recipients(
+      c("mailto:a@b.example.com",
+        ib_str("mailto:a", 0xfc, "@b.example.com", mark = "bytes")),
+      url_standard = s
+    )
+    expect_identical(m$url, "mailto:a@b.example.com", label = s)
+  }
+  expect_identical(format_url(c(good, b))[2L], NA_character_)
+})
+
+test_that("outputs that echo the input keep the caller's own element", {
+  b <- ib_str("http://h.example.com/p", 0xfc, mark = "bytes")
+  l <- ib_str("http://h.example.com/p", 0xfc, mark = "latin1")
+  n <- ib_str("http://h.example.com/p", 0xe9)
+  input <- c(b, l, n)
+  for (s in c("whatwg", "rfc3986")) {
+    expect_identical(check_schemes(input, url_standard = s)$url, input,
+                     label = s)
+    expect_identical(check_hosts(input, url_standard = s)$url, input,
+                     label = s)
+  }
+  expect_identical(safe_parse_urls(input)$original_url, input)
+})
+
+test_that("diagnostics re-parse the string Stage A's general route reads", {
+  # Under rfc3986 with scheme_relative_handling = "keep" (the companion
+  # helpers' setting), Stage A hands a `//` row the `http:` stand-in before
+  # the general route reads it (RURL-ozpxupgq), which claims `///p`, `//` and
+  # `//u@/p` and leaves `//h/p` on the web route. The diagnostics' second
+  # general parse, which feeds the eligibility classifier, read the raw
+  # string and claimed none of them. Every general parse one diagnostics call
+  # runs must agree with Stage A's.
+  real <- .general_parse_vec
+  acc <- new.env()
+  acc$seen <- list()
+  local_mocked_bindings(.general_parse_vec = function(url, ...) {
+    r <- real(url, ...)
+    acc$seen[[length(acc$seen) + 1L]] <- r$general_parsed
+    r
+  })
+  u <- c("///p", "//", "//u@/p", "//h/p")
+  get_url_diagnostics(u, url_standard = "rfc3986",
+                      scheme_acceptance = "general")
+  routed <- Filter(function(g) length(g) == length(u), acc$seen)
+  expect_gte(length(routed), 2L)
+  for (g in routed) {
+    expect_identical(g, c(TRUE, TRUE, TRUE, FALSE))
+  }
+})
