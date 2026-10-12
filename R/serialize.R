@@ -249,14 +249,13 @@
 
   # The general-routed rows' true state kinds. Stage A already installed their
   # COMPONENTS, but not the kinds (they are not cached Stage-A fields), so the
-  # pure parser is re-run here. Stage A feeds it .general_route_input_vec() --
-  # the browser fixer, then the WHATWG strip (RURL-vmsmlflr). Only the strip is
-  # applied here, which is the same string because no posture that reaches this
-  # builder carries `fixup_posture = "browser"`: the FSSS bundles are the
-  # `whatwg` and `rfc-syntax` profiles, and the comparison key's bundle sets no
-  # fixup posture. A browser posture here would need the helper instead.
+  # pure parser is re-run here, on the string Stage A gave it:
+  # .general_route_input_vec(), the browser fixer, then the WHATWG strip
+  # (RURL-vmsmlflr), then the `http:` stand-in for a `//` row under the
+  # rfc3986 "keep" posture (RURL-ozpxupgq). Reading only the strip here missed
+  # that stand-in, so `///p` was never claimed as general-routed.
   gen <- .general_parse_vec(
-    .strip_whatwg_control_chars_vec(url, opts$url_standard)$url,
+    .general_route_input_vec(url, opts),
     opts$url_standard, "general", opts$scheme_policy
   )
   gp <- gen$general_parsed & ok
@@ -292,6 +291,12 @@
     rfc_path_form[gp] <- gen$rfc_path_form[gp]
     authority_delimiter_present[gp] <- gen$authority_delimiter_present[gp]
   }
+  # A `//` row's authority delimiter is the `//` that starts it (RFC 3986
+  # section 4.2, `"//" authority path-abempty`). `.has_explicit_authority()`
+  # looks for `scheme://`, which a scheme-less row never spells, so it
+  # reported every `//host` row as having no authority (RURL-ozpxupgq).
+  scheme_relative <- a$is_scheme_relative
+  authority_delimiter_present[scheme_relative] <- TRUE
 
   elig <- .stage_b_eligibility(
     "general", a$final_scheme, opts$url_standard,
@@ -338,12 +343,24 @@
     host[take] <- src_host[take]
   }
 
+  # Under "keep" a `//` row was parsed behind a stand-in `http:` the source
+  # never spelled, and the parse surface already reports its scheme as NA
+  # (Phase 13). The record says the same, so the key frames no scheme for a
+  # network-path reference, where it framed the stand-in (RURL-ozpxupgq). Read
+  # only after the path kind above, which takes the stand-in's special-ness:
+  # a reference with an authority has a list path, never an opaque one.
+  stand_in <- scheme_relative &
+    identical(opts$scheme_relative_handling, "keep")
+  scheme_lc[stand_in] <- NA_character_
+  source_scheme <- a$source_scheme
+  source_scheme[stand_in] <- NA_character_
+
   list(
     ok = ok,
     scheme = scheme_lc,
     # The scheme AS SPELLED, read by `form = "source"` alone (RUL-007): the
     # key and join surfaces keep reading the folded `scheme` above.
-    source_scheme = a$source_scheme,
+    source_scheme = source_scheme,
     userinfo = lex$userinfo,
     host = host,
     host_kind = host_kind,
@@ -366,11 +383,11 @@
     syntactic_port = a$raw_port,
     # TRUE where the source is a `//host` network-path reference. A posture
     # with `scheme_relative_handling = "keep"` (the `rfc-syntax` profile)
-    # parses such a row behind a stand-in `http:` prefix, so `scheme` above
-    # holds a token the source never spelled. Surface (b) reads this to refuse
-    # the row (RURL-xjyrhqin); surface (e) frames the row's scheme presence
-    # itself and does not read it.
-    scheme_relative = a$is_scheme_relative
+    # parses such a row behind a stand-in `http:` prefix, and `scheme` above is
+    # NA for it. Surface (b) reads this to refuse the row (RURL-xjyrhqin), as
+    # a relative reference has no absolute form to serialize; surface (e)
+    # frames the row's scheme presence itself and does not read it.
+    scheme_relative = scheme_relative
   )
 }
 
