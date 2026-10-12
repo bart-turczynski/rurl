@@ -1071,7 +1071,8 @@
 # non-special scheme stay out: steps 2, 3 and 3b match special schemes only,
 # step 1's trim is scheme-blind by definition (and under `whatwg` the strip
 # already does it), and the special-scheme backslash rewrite is not applied.
-# A byte-for-byte no-op unless fixup_posture == "browser".
+# A byte-for-byte no-op unless fixup_posture == "browser", or a `//` row under
+# `rfc3986` with "keep" (below).
 #
 # Under `rfc3986` with `scheme_relative_handling = "keep"`, a `//`-led row is
 # also handed the same `http:` stand-in Phase 1 gives the web route

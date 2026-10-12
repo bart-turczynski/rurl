@@ -2086,7 +2086,8 @@ safe_parse_urls <- function(url,
   # IS (RURL-vmsmlflr), so a row it rewrote is routed and parsed on its fixed
   # spelling, as the web route already parses it; see
   # .general_route_input_vec(). A byte-for-byte no-op unless url_standard ==
-  # "whatwg" or fixup_posture == "browser".
+  # "whatwg", fixup_posture == "browser", or a `//` row under `rfc3986` with
+  # scheme_relative_handling = "keep" (its `http:` stand-in, RURL-ozpxupgq).
   gen_input <- .general_route_input_vec(urls, opts)
   gen <- .general_parse_vec(gen_input, opts$url_standard,
                             opts$scheme_acceptance, opts$scheme_policy)
