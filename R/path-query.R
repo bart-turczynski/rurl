@@ -441,8 +441,12 @@
 # WHATWG query serializer: the special-query percent-encode set (`" # < > '`
 # plus C0/non-ASCII) under a special scheme, the query set otherwise -- a
 # non-special scheme leaves the apostrophe literal. Vectorized over `query`;
-# `scheme` recycles, NA reads as non-special.
+# `scheme` has length 1 or `length(query)`; NA reads as non-special.
 .whatwg_query_percent_encode <- function(query, scheme = NA_character_) {
+  if (!length(scheme) %in% c(1L, length(query))) {
+    stop("`scheme` must have length 1 or the length of `query`.",
+         call. = FALSE)
+  }
   scheme <- rep_len(as.character(scheme), length(query))
   special <- !is.na(scheme) &
     .ascii_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES

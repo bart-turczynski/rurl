@@ -2937,7 +2937,10 @@
   # measures as size 1 and the guard misses -- emitting `non-spec://`, which
   # re-reads as an empty AUTHORITY rather than a path. That was a real defect
   # against WPT rows `non-spec:/.//`, `non-spec:/..//` and `non-spec:/a/..//`.
-  null_host <- !is.na(host_kind) & host_kind == "absent"
+  # Every parsed record carries a host kind; an NA here would silently skip
+  # the guard and emit a `//` path as an authority, so fail loudly instead.
+  stopifnot(!anyNA(host_kind))
+  null_host <- host_kind == "absent"
   guard[list_rows & null_host & startsWith(path, "//")] <- "/."
 
   query_suffix <- .whatwg_query_suffix_vec(query, query_kind, scheme)
@@ -3162,7 +3165,10 @@
   # dial this surface does not take. See .serialize_whatwg_vec for the
   # segment-derivation reasoning, including why this must NOT be re-derived
   # by splitting on "/".
-  null_host <- !is.na(host_kind) & host_kind == "absent"
+  # Every parsed record carries a host kind; an NA here would silently skip
+  # the guard and emit a `//` path as an authority, so fail loudly instead.
+  stopifnot(!anyNA(host_kind))
+  null_host <- host_kind == "absent"
   guard[list_rows & null_host & startsWith(path, "//")] <- "/."
 
   out <- character(n)
