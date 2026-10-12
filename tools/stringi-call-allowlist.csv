@@ -13,12 +13,10 @@
 "R/email-diagnostics.R",".email_has_non_ascii","stringi::stri_detect_regex",1
 "R/parse-phases.R",".apply_browser_fixup_vec","stringi::stri_replace_first_regex",5
 "R/parse-phases.R",".apply_host_standard_model_vec","stringi::stri_detect_regex",4
-"R/parse-phases.R",".apply_subdomain_policy_vec","stringi::stri_startswith_fixed",1
 "R/parse-phases.R",".apply_subdomain_policy_vec","stringi::stri_sub",1
 "R/parse-phases.R",".apply_www_if_no_subdomain_vec","stringi::stri_detect_regex",1
 "R/parse-phases.R",".apply_www_if_no_subdomain_vec","stringi::stri_match_first_regex",2
 "R/parse-phases.R",".apply_www_if_no_subdomain_vec","stringi::stri_opts_regex",1
-"R/parse-phases.R",".apply_www_if_no_subdomain_vec","stringi::stri_startswith_fixed",1
 "R/parse-phases.R",".apply_www_policy_vec","stringi::stri_detect_regex",1
 "R/parse-phases.R",".apply_www_policy_vec","stringi::stri_match_first_regex",1
 "R/parse-phases.R",".apply_www_policy_vec","stringi::stri_opts_regex",1
@@ -35,6 +33,7 @@
 "R/parse-phases.R",".extract_raw_path_vec","stringi::stri_locate_first_regex",3
 "R/parse-phases.R",".extract_raw_path_vec","stringi::stri_replace_first_regex",1
 "R/parse-phases.R",".extract_raw_path_vec","stringi::stri_sub",4
+"R/parse-phases.R",".general_route_input_vec","stringi::stri_startswith_fixed",1
 "R/parse-phases.R",".host_ends_in_number_vec","stringi::stri_detect_regex",2
 "R/parse-phases.R",".host_ends_in_number_vec","stringi::stri_replace_first_regex",2
 "R/parse-phases.R",".map_whatwg_domain_separators_vec","stringi::stri_detect_regex",2
@@ -107,12 +106,14 @@
 "R/parse-web.R",".web_ipv6_serialize","stringi::stri_match_first_regex",1
 "R/parse.R",".has_explicit_authority","stringi::stri_replace_first_regex",1
 "R/parse.R",".latin1_input_to_utf8","stringi::stri_enc_toutf8",1
+"R/parse.R",".prepare_url_input","stringi::stri_enc_mark",1
 "R/parse.R",".source_scheme_spelling_vec","stringi::stri_match_first_regex",1
 "R/path-query.R","._strip_index_page","stringi::stri_detect_regex",1
 "R/path-query.R","._strip_index_page","stringi::stri_match_first_regex",1
 "R/path-query.R",".param_matches","stringi::stri_detect_regex",1
 "R/path-query.R",".token_is_opaque","stringi::stri_detect_regex",1
 "R/resolve.R",".whatwg_file_remove_dot_segments","stringi::stri_split_fixed",1
+"R/resolve.R","resolve_url","stringi::stri_enc_toutf8",1
 "R/serialize.R",".fsss_source_lex","stringi::stri_match_first_regex",1
 "R/serialize.R",".fsss_source_lex","stringi::stri_replace_first_regex",1
 "R/serialize.R",".fsss_source_lex","stringi::stri_replace_last_regex",1

@@ -37,6 +37,17 @@ search over the same `\x{0080}-\x{10FFFF}` class; slice oahhlnvf), and row
 141 (`.rfc3986_match()`) now serves only the port regex. The allowlist was
 regenerated on that base: 191 references under 123 keys.
 
+Later merges moved four calls. MR !240 (RURL-fobwctml) removed the two
+whatwg-only `stri_startswith_fixed` calls in `.apply_subdomain_policy_vec()`
+and `.apply_www_if_no_subdomain_vec()`, and MR !241 (RURL-ozpxupgq) added one
+in `.general_route_input_vec()` (R/parse-phases.R). The allowlist was
+regenerated on main `6623cab`: 190 references under 122 keys. Two keys are
+listed ahead of their code, so this MR and MR !242 (RURL-cwzickqy, parked)
+pass the gate in either merge order: `stri_enc_mark` in `.prepare_url_input()`
+(R/parse.R) and `stri_enc_toutf8` in `resolve_url()` (R/resolve.R). Until
+MR !242 merges, the gate prints an "allowlist can shrink" line for each,
+which passes.
+
 ## Legend
 
 - **Family**: what the call does. *detect* returns a logical. *count*
