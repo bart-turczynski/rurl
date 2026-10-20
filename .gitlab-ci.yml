@@ -205,7 +205,13 @@ default:
 # PANDOC_VERSION, both sha256 digests (the release's own published values),
 # and README.md, re-knit under the new pandoc.
 #
-# r-base has no curl, hence the apt line. A failed or mismatched download
+# r-base has no curl, hence the apt line. r-base:latest is Debian testing
+# with some packages, libcurl4t64 among them, from unstable, so testing's curl
+# can need an older libcurl than the image carries: on 2026-10-20 curl 8.22.0
+# (testing) wanted libcurl4t64 8.22.0 against the image's 8.23.0~rc2, and the
+# install failed every r-base job that ran it. Unstable's curl matches
+# unstable's libcurl, so the line falls back to it. On images where the first
+# install works, the fallback never runs. A failed or mismatched download
 # only warns, and the job then runs on whatever pandoc it has: Debian's, from
 # `.check_deps`, or none in `gates`, which renders nothing. Nothing unverified
 # is ever installed. The download retries and has a ceiling: --max-time bounds
@@ -214,7 +220,7 @@ default:
 # `dpkg --print-architecture`, because the runner is arm64.
 .pandoc_install: &pandoc_install
   - PANDOC_VERSION="3.10"
-  - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
+  - apt-get update -qq && { apt-get install -y --no-install-recommends curl ca-certificates || apt-get install -y --no-install-recommends -t unstable curl ca-certificates; }
   # `apt-mark hold pandoc`, only after a successful `dpkg -i`: no later apt
   # step replaces the pin. An upgrade leaves it, and an install that needs
   # another pandoc fails loudly. Where apt's pandoc is older than the pin, as
