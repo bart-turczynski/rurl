@@ -336,6 +336,10 @@
   )
 }
 
+# The three code points UTS #46 maps to ASCII "." (section 4, step 1): U+3002,
+# U+FF0E and U+FF61, as one ICU character class.
+.UTS46_FULL_STOP_VARIANTS <- "[\\u3002\\uFF0E\\uFF61]"
+
 # WHATWG / UTS-46 alternative full-stop mapping (RURL-odsmwsxu). UTS-46
 # domain-to-ASCII -- the "map" step the WHATWG host parser runs for special
 # schemes -- maps three alternative full-stop code points to ASCII "." before a
@@ -384,7 +388,7 @@
   # A row led by U+FEFF has neither a scheme nor "//"; the stringi match reads
   # past the mark, and rebuilding the row from it would drop the mark.
   eligible <- !bom_led & !is.na(authority) &
-    stringi::stri_detect_regex(authority, "[\\u3002\\uFF0E\\uFF61]")
+    stringi::stri_detect_regex(authority, .UTS46_FULL_STOP_VARIANTS)
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
     return(no_op)
@@ -413,13 +417,13 @@
   host_port <- stringi::stri_sub(url, host_start, authority_end)
   after_authority <- stringi::stri_sub(url, authority_end + 1L)
   eligible <- eligible & !startsWith(host_port, "[") &
-    stringi::stri_detect_regex(host_port, "[\\u3002\\uFF0E\\uFF61]")
+    stringi::stri_detect_regex(host_port, .UTS46_FULL_STOP_VARIANTS)
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
     return(no_op)
   }
   mapped_host_port <- stringi::stri_replace_all_regex(
-    host_port, "[\\u3002\\uFF0E\\uFF61]", "."
+    host_port, .UTS46_FULL_STOP_VARIANTS, "."
   )
   url_out <- url
   url_out[eligible] <- paste0(
@@ -2041,16 +2045,19 @@
     # unmapped, a trailing one failed the row: punycoder 1.3.0's domain to
     # ASCII rejects the empty last label a MAPPED full stop leaves (`a。`
     # gives NA where `a.` gives `a.`), so `http://example.com%E3%80%82/` was
-    # an error where WHATWG gives the host `example.com.`.
-    if (any(reg_like)) {
-      host[reg_like] <- stringi::stri_replace_all_regex(
-        host[reg_like], "[\\u3002\\uFF0E\\uFF61]", "."
-      )
-    }
-    candidate <- host
+    # an error where WHATWG gives the host `example.com.`. Only a non-ASCII
+    # host can hold one, and a host that held nothing else is ASCII after it.
     nonascii_all <- reg_like &
       stringi::stri_detect_regex(host, "[^\\u0001-\\u007f]")
     nonascii_all[is.na(nonascii_all)] <- FALSE
+    if (any(nonascii_all)) {
+      host[nonascii_all] <- stringi::stri_replace_all_regex(
+        host[nonascii_all], .UTS46_FULL_STOP_VARIANTS, "."
+      )
+      nonascii_all[nonascii_all] <-
+        stringi::stri_detect_regex(host[nonascii_all], "[^\\u0001-\\u007f]")
+    }
+    candidate <- host
     mapped <- rep(NA_character_, n)
     if (any(nonascii_all)) {
       mapped[nonascii_all] <- .whatwg_domain_to_ascii(host[nonascii_all])
