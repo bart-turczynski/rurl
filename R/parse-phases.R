@@ -367,7 +367,8 @@
 # to "//" upstream, so this sees the normalized form. Runs ONLY under
 # url_standard == "whatwg" (RFC 3986 has no UTS-46 mapping -- these bytes stay
 # literal), and is a byte-for-byte no-op otherwise. Recognition only: a
-# percent-encoded form ("%E3%80%82") is inert literal text, never mapped. No
+# percent-encoded form ("%E3%80%82") is left as written here; the WHATWG host
+# model maps it once the host is decoded (.apply_host_standard_model_vec()). No
 # diagnostic is emitted -- this is ordinary WHATWG host normalization (like
 # host-lowercasing), not a lossy repair of malformed input.
 .map_whatwg_domain_separators_vec <- function(url, url_standard,
@@ -2032,6 +2033,20 @@
     # bracketed (RURL-opwjlnla).
     reg_like <- !is.na(host) & host != "" & !startsWith(host, "[")
     reg_like[is.na(reg_like)] <- FALSE
+    # A percent-encoded U+3002, U+FF0E or U+FF61 is a full stop once decoded,
+    # as a raw one is (RURL-esztpdhx): UTS #46 maps all three to "." before it
+    # splits labels. The raw spelling was mapped before the parse
+    # (.map_whatwg_domain_separators_vec()), so the decoded one is mapped here,
+    # and both spellings reach the PSL and the status as the same host. Left
+    # unmapped, a trailing one failed the row: punycoder 1.3.0's domain to
+    # ASCII rejects the empty last label a MAPPED full stop leaves (`a。`
+    # gives NA where `a.` gives `a.`), so `http://example.com%E3%80%82/` was
+    # an error where WHATWG gives the host `example.com.`.
+    if (any(reg_like)) {
+      host[reg_like] <- stringi::stri_replace_all_regex(
+        host[reg_like], "[\\u3002\\uFF0E\\uFF61]", "."
+      )
+    }
     candidate <- host
     nonascii_all <- reg_like &
       stringi::stri_detect_regex(host, "[^\\u0001-\\u007f]")

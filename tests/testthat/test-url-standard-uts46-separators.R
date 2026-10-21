@@ -153,6 +153,8 @@ test_that("whatwg maps an encoded full-stop variant between labels", {
   )
   expect_identical(get_host(us, url_standard = "whatwg"),
                    rep("example.com", 3L))
+  expect_identical(get_parse_status(us, url_standard = "whatwg"),
+                   rep("ok", 3L))
 })
 
 test_that("whatwg maps a raw trailing full-stop variant to a trailing dot", {
@@ -163,7 +165,7 @@ test_that("whatwg maps a raw trailing full-stop variant to a trailing dot", {
                    rep("ok", 3L))
 })
 
-test_that("whatwg maps an encoded trailing full-stop variant to a trailing dot", {
+test_that("whatwg maps an encoded trailing full-stop variant to a dot", {
   us <- c(
     "http://example.com%E3%80%82/",
     "http://example.com%EF%BC%8E/",
@@ -174,6 +176,15 @@ test_that("whatwg maps an encoded trailing full-stop variant to a trailing dot",
   expect_identical(get_clean_url(us, url_standard = "whatwg"),
                    rep("http://example.com./", 3L))
   expect_false(any(get_parse_status(us, url_standard = "whatwg") == "error"))
+})
+
+test_that("an encoded full-stop variant parses like its raw spelling", {
+  raw <- paste0("http://", c("example.com", "example"), U3002,
+                c("/", "com/"))
+  enc <- c("http://example.com%E3%80%82/", "http://example%E3%80%82com/")
+  cols <- c("host", "domain", "tld", "parse_status", "clean_url")
+  expect_identical(safe_parse_urls(enc, url_standard = "whatwg")[, cols],
+                   safe_parse_urls(raw, url_standard = "whatwg")[, cols])
 })
 
 test_that("whatwg reads an IPv4 host with an encoded trailing full stop", {
