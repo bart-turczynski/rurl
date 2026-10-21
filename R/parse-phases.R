@@ -1528,6 +1528,12 @@
   # never has one: its input already reads the octet as U+FFFD. Rows off the
   # web route (`file:` and the general route) keep the undecodable-path
   # failure in `._parse_stage_a_vec()`.
+  # The escape runs for every caller, ungated: no profile or `pqf_source` is in
+  # scope here, and none is needed. It is observable ONLY under the NULL
+  # profile, because the rfc3986 grammar gate rejects these rows before their
+  # path is read and whatwg input already holds U+FFFD, never a raw ill-formed
+  # octet (RUL-029). A profile that let such a row reach here would inherit
+  # the escape; gate it here first.
   undecodable <- !is.na(raw) & !validUTF8(raw)
   if (any(undecodable)) {
     raw[undecodable] <- vapply(
@@ -1710,6 +1716,23 @@
           character(1),
           USE.NAMES = FALSE
         )
+      }
+      # A `%XX` that decodes to an octet outside well-formed UTF-8 (`%E9`, or
+      # the triplet the raw-path cut writes for an undecodable octet under the
+      # no-selector default, RUL-029) has no character to present. "decode"
+      # wrote the raw octet into `path` and `clean_url`, a string stringi
+      # downstream cannot read, so it keeps that octet as its uppercase
+      # triplet; every other triplet in the path still decodes (RURL-yarkccco).
+      # "encode" needs no mask: `._encode_path_segments()` splits such a path
+      # in bytes and re-encodes the octet as the same triplet.
+      if (path_encoding == "decode") {
+        bad <- !is.na(decoded) & !validUTF8(decoded)
+        if (any(bad)) {
+          decoded[bad] <- vapply(
+            decoded[bad], .web_escape_undecodable_bytes, character(1),
+            USE.NAMES = FALSE
+          )
+        }
       }
       path_work[mask] <- decoded
     }

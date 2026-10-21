@@ -222,13 +222,22 @@
 # stri_startswith_fixed() reads past a U+FEFF that starts its input (see
 # .starts_with_bom()), so the rootless `\ufeff/a` read as rooted and came back
 # as `/%EF%BB%BF/a` (RURL-zxnxczsw).
+#
+# A path that is not valid UTF-8 is split in bytes. The step before this one
+# percent-decodes, so a `%E9` (or, under the no-selector default, a raw octet
+# the raw-path cut already escaped, RUL-029) arrives as the lone octet 0xE9; a
+# character-mode strsplit() warned "invalid UTF-8" and returned NA, and the
+# path became the literal "/NA" (RURL-yarkccco). `.pct_escape()` is bytewise,
+# so the octet comes back as `%E9`. A valid path takes the old split.
 ._encode_path_segments <- function(path) {
   if (is.na(path)) {
     return(path)
   }
   has_leading <- startsWith(path, "/")
   has_trailing <- endsWith(path, "/")
-  segments <- strsplit(path, "/", fixed = TRUE)[[1]]
+  segments <- strsplit(
+    path, "/", fixed = TRUE, useBytes = !validUTF8(path)
+  )[[1]]
   # .pct_escape() is vectorized: one call escapes every segment (and returns
   # character(0) for a character(0) input), so paste() recomposes identically
   # to the former per-segment vapply().
