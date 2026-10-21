@@ -269,7 +269,7 @@ test_that(".web_escape_undecodable_bytes() escapes only ill-formed octets", {
   expect_identical(
     esc(c(0x2F, 0xC3, 0xA9, 0xE9, 0xE2, 0x82, 0xAC, 0xF0, 0x9F, 0x98, 0x80,
           0xFF)),
-    "/é%E9€\U0001F600%FF"
+    "/\u00e9%E9\u20ac\U0001F600%FF"
   )
   expect_identical(Encoding(esc(c(0x2F, 0xC3, 0xA9, 0xE9))), "UTF-8")
   # Valid input, NA and a latin1-marked element pass through unchanged.
