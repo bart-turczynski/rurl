@@ -101,14 +101,61 @@ for (loc in names(ctypes)) {
         for (opt in opts) {
           what <- paste(mk, paste(names(opt), opt, collapse = " "))
           rurl_clear_caches()
-          expect_no_error(
-            rb <- suppressWarnings(do.call(null_arm, c(list(bad), opt)))
-          )
-          rt <- suppressWarnings(do.call(null_arm, c(list(twin), opt)))
+          expect_no_warning(rb <- do.call(null_arm, c(list(bad), opt)))
+          expect_no_warning(rt <- do.call(null_arm, c(list(twin), opt)))
           expect_identical(drop_original(rb), drop_original(rt), info = what)
           expect_identical(rb$original_url, unname(bad), info = what)
         }
       }
+    })
+  })
+
+  test_that(paste("encode and decode keep the %XX octet in the path under",
+                  loc), {
+    # The presentation step decodes first; the decoded octet is still not
+    # valid UTF-8, so "encode" re-encodes it bytewise and "decode" keeps it as
+    # its triplet. Neither writes "/NA" or the raw octet (RURL-yarkccco).
+    in_ctype(loc, ctypes[[loc]], {
+      want <- list(
+        encode = c(end = "/caf%E9", query = "/caf%E9", fragment = "/caf%E9",
+                   dots = "/a/../caf%E9/./b", pair = "/%C3%28",
+                   mixed = "/caf%C3%A9%E9", schemeless = "/caf%E9",
+                   ftp = "/caf%E9"),
+        decode = c(end = "/caf%E9", query = "/caf%E9", fragment = "/caf%E9",
+                   dots = "/a/../caf%E9/./b", pair = "/%C3(",
+                   mixed = "/café%E9", schemeless = "/caf%E9",
+                   ftp = "/caf%E9")
+      )
+      for (mk in names(marks)) {
+        bad <- marks[[mk]](vapply(path_twins, `[[`, "", 1L))
+        for (pe in names(want)) {
+          rurl_clear_caches()
+          expect_no_warning(r <- null_arm(bad, path_encoding = pe))
+          expect_identical(r$path, unname(want[[pe]]), info = paste(mk, pe))
+          expect_true(all(validUTF8(r$clean_url)), info = paste(mk, pe))
+        }
+      }
+    })
+  })
+
+  test_that(paste("a long path with scattered bad octets escapes in linear",
+                  "time under", loc), {
+    skip_on_cran()
+    in_ctype(loc, ctypes[[loc]], {
+      chunk <- oct("abcdefghi", 0xE9)
+      long_path <- function(n) {
+        paste0("/", strrep(chunk, n %/% nchar(chunk, type = "bytes")))
+      }
+      p200k <- long_path(200000L)
+      elapsed <- system.time(
+        out <- rurl:::.web_escape_undecodable_bytes(p200k)
+      )[["elapsed"]]
+      expect_lt(elapsed, 5)
+      expect_true(validUTF8(out))
+      expect_identical(
+        nchar(out, type = "bytes"),
+        nchar(p200k, type = "bytes") + 2L * (200000L %/% 10L)
+      )
     })
   })
 
@@ -205,6 +252,35 @@ for (loc in names(ctypes)) {
     })
   })
 }
+
+test_that(".web_escape_undecodable_bytes() escapes only ill-formed octets", {
+  esc <- function(octets) {
+    rurl:::.web_escape_undecodable_bytes(rawToChar(as.raw(octets)))
+  }
+  # A surrogate and an overlong form are ill-formed whole: every octet.
+  expect_identical(esc(c(0x2F, 0xED, 0xA0, 0x80)), "/%ED%A0%80")
+  expect_identical(esc(c(0x2F, 0xC0, 0xAF)), "/%C0%AF")
+  # Above U+10FFFF.
+  expect_identical(esc(c(0x2F, 0xF4, 0x90, 0x80, 0x80)), "/%F4%90%80%80")
+  # A truncated sequence at the end, and one cut short by ASCII.
+  expect_identical(esc(c(0x2F, 0x61, 0xE2, 0x82)), "/a%E2%82")
+  expect_identical(esc(c(0x2F, 0xE2, 0x82, 0x61)), "/%E2%82a")
+  # Valid 2-, 3- and 4-byte characters beside a bad octet stay raw.
+  expect_identical(
+    esc(c(0x2F, 0xC3, 0xA9, 0xE9, 0xE2, 0x82, 0xAC, 0xF0, 0x9F, 0x98, 0x80,
+          0xFF)),
+    "/é%E9€\U0001F600%FF"
+  )
+  expect_identical(Encoding(esc(c(0x2F, 0xC3, 0xA9, 0xE9))), "UTF-8")
+  # Valid input, NA and a latin1-marked element pass through unchanged.
+  expect_identical(rurl:::.web_escape_undecodable_bytes("/café"),
+                   "/café")
+  expect_identical(rurl:::.web_escape_undecodable_bytes(NA_character_),
+                   NA_character_)
+  l1 <- rawToChar(as.raw(c(0x2F, 0xE9)))
+  Encoding(l1) <- "latin1"
+  expect_identical(rurl:::.web_escape_undecodable_bytes(l1), l1)
+})
 
 test_that("every lone high octet in a NULL path is escaped, row ok", {
   rurl_clear_caches()

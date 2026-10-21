@@ -278,14 +278,61 @@ for (loc in names(ctypes)) {
                        list(index_page_handling = "strip"),
                        list(trailing_slash_handling = "strip"))) {
         rurl_clear_caches()
-        expect_no_error(
-          res <- suppressWarnings(do.call(safe_parse_urls, c(list(batch), opt)))
+        expect_no_warning(
+          res <- do.call(safe_parse_urls, c(list(batch), opt))
         )
-        ref <- suppressWarnings(do.call(safe_parse_urls, c(list(twins), opt)))
+        expect_no_warning(
+          ref <- do.call(safe_parse_urls, c(list(twins), opt))
+        )
         expect_identical(res$parse_status[5:6], c("ok", "ok"))
         expect_identical(res$path, ref$path)
         expect_identical(res$clean_url, ref$clean_url)
       }
+    })
+  })
+
+  test_that(paste("an undecodable path octet survives encode and decode, under",
+                  loc), {
+    # `path_encoding` decodes before it presents. A decode that yields an
+    # octet that is not valid UTF-8 (the raw row, and a valid `%E9` row, under
+    # NULL and rfc3986 alike) gave the literal path "/NA" under "encode" (a
+    # strsplit() warning) and wrote the raw octet into `path` and `clean_url`
+    # under "decode". Both now keep that octet as its "%XX" triplet.
+    with_ctype(loc, ctypes[[loc]], {
+      rows <- list(
+        list(x = bad_rows[["end"]], std = list(NULL)),
+        list(x = "http://example.com/caf%E9", std = list(NULL, "rfc3986")),
+        list(x = "http://example.com/caf%e9", std = list(NULL, "rfc3986"))
+      )
+      for (row in rows) {
+        for (std in row$std) {
+          for (pe in c("encode", "decode")) {
+            what <- paste(pe, format(std))
+            rurl_clear_caches()
+            expect_no_warning(
+              r <- safe_parse_urls(row$x, path_encoding = pe,
+                                   url_standard = std)
+            )
+            expect_identical(r$parse_status, "ok", info = what)
+            expect_identical(r$path, "/caf%E9", info = what)
+            expect_identical(r$clean_url, "http://example.com/caf%E9",
+                             info = what)
+          }
+        }
+      }
+      # Decode still decodes every triplet that is valid UTF-8 beside it;
+      # encode re-encodes the whole path.
+      rurl_clear_caches()
+      expect_no_warning(
+        d <- safe_parse_urls("http://example.com/a%20%C3%A9%E9",
+                             path_encoding = "decode")
+      )
+      expect_identical(d$path, "/a é%E9")
+      expect_no_warning(
+        e <- safe_parse_urls("http://example.com/a%20%C3%A9%E9/b",
+                             path_encoding = "encode")
+      )
+      expect_identical(e$path, "/a%20%C3%A9%E9/b")
     })
   })
 
@@ -320,6 +367,10 @@ for (loc in names(ctypes)) {
       )
       expect_identical(get_path(batch)[5L], "/caf%E9")
       expect_identical(get_clean_url(batch)[5L], "http://example.com/caf%E9")
+      # The row parses, so its NULL syntax verdict is a pass (RURL-yarkccco).
+      verdicts <- get_parse_verdicts(batch)
+      expect_identical(verdicts$layer1_syntax_verdict, rep("pass", 5L))
+      expect_identical(verdicts$layer2_policy_verdict[5L], "admitted")
       rurl_clear_caches()
       std <- "rfc3986"
       expect_identical(
