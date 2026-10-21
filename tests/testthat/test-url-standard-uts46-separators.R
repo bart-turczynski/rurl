@@ -138,3 +138,45 @@ test_that("a line terminator in userinfo does not unsplit the host", {
   expect_identical(get_host(u, url_standard = "whatwg"), "ex.com")
   expect_identical(get_parse_status(u, url_standard = "whatwg"), "ok")
 })
+
+# --- percent-encoded full stops reach domain to ASCII (RURL-esztpdhx) --------
+# The host parser percent-decodes the host before domain to ASCII (host
+# parsing, steps 4-5), so an encoded variant full stop is mapped to "." like a
+# raw one, wherever it stands. A trailing one leaves an empty last label, which
+# WHATWG keeps: `http://example.com%E3%80%82/` has host `example.com.`.
+
+test_that("whatwg maps an encoded full-stop variant between labels", {
+  us <- c(
+    "http://example%E3%80%82com/",
+    "http://example%EF%BC%8Ecom/",
+    "http://example%EF%BD%A1com/"
+  )
+  expect_identical(get_host(us, url_standard = "whatwg"),
+                   rep("example.com", 3L))
+})
+
+test_that("whatwg maps a raw trailing full-stop variant to a trailing dot", {
+  us <- paste0("http://example.com", c(U3002, UFF0E, UFF61), "/")
+  expect_identical(get_host(us, url_standard = "whatwg"),
+                   rep("example.com.", 3L))
+  expect_identical(get_parse_status(us, url_standard = "whatwg"),
+                   rep("ok", 3L))
+})
+
+test_that("whatwg maps an encoded trailing full-stop variant to a trailing dot", {
+  us <- c(
+    "http://example.com%E3%80%82/",
+    "http://example.com%EF%BC%8E/",
+    "http://example.com%EF%BD%A1/"
+  )
+  expect_identical(get_host(us, url_standard = "whatwg"),
+                   rep("example.com.", 3L))
+  expect_identical(get_clean_url(us, url_standard = "whatwg"),
+                   rep("http://example.com./", 3L))
+  expect_false(any(get_parse_status(us, url_standard = "whatwg") == "error"))
+})
+
+test_that("whatwg reads an IPv4 host with an encoded trailing full stop", {
+  u <- "http://127%E3%80%820%E3%80%820%E3%80%821%E3%80%82/"
+  expect_identical(get_host(u, url_standard = "whatwg"), "127.0.0.1")
+})
