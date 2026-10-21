@@ -315,6 +315,52 @@
   paste(unlist(out, use.names = FALSE), collapse = "")
 }
 
+# Percent-encode, as an UPPERCASE "%XX", every octet of `s` that is not part
+# of a well-formed UTF-8 sequence, and leave everything else as written: a
+# valid multibyte character stays raw (its encoding belongs to `path_encoding`
+# and the serializer) and an existing "%xx" keeps its hex case. One caller:
+# the re-derived raw path (`.extract_raw_path_vec()`), so that under the
+# no-selector default an undecodable path octet comes out as the same triplet
+# the parser's component pass already writes for one in the query or fragment
+# (RURL-yarkccco, RUL-029). RFC 3986 sec 2.1 makes the triplet the octet's
+# representation, so no byte is lost. The scan is bytewise, so the result is
+# the same in every locale. A "latin1" element is exempt, as in
+# `.grepl_decodable()`: every octet decodes there.
+.web_escape_undecodable_bytes <- function(s) {
+  if (is.na(s) || validUTF8(s) || Encoding(s) == "latin1") {
+    return(s)
+  }
+  b <- .web_bytes(s)
+  n <- length(b)
+  out <- character(0)
+  i <- 1L
+  while (i <= n) {
+    x <- b[i]
+    len <- if (x < 0x80L) {
+      1L
+    } else if (x >= 0xC2L && x <= 0xDFL) {
+      2L
+    } else if (x >= 0xE0L && x <= 0xEFL) {
+      3L
+    } else if (x >= 0xF0L && x <= 0xF4L) {
+      4L
+    } else {
+      0L
+    }
+    end <- i + len - 1L
+    if (len > 0L && end <= n && validUTF8(.web_chr(b[i:end]))) {
+      out <- c(out, .web_chr(b[i:end]))
+      i <- end + 1L
+    } else {
+      out <- c(out, sprintf("%%%02X", x))
+      i <- i + 1L
+    }
+  }
+  res <- paste(out, collapse = "")
+  Encoding(res) <- "UTF-8"
+  res
+}
+
 # path/query/fragment normalization: deal with the forbidden bytes,
 # percent-encode every byte >= 0x80, then uppercase the "%XX" pairs. Returns
 # NULL on rejection.

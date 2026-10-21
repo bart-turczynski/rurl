@@ -79,10 +79,8 @@ for (loc in names(ctypes)) {
         )
         # Omitting url_standard is the same NULL profile.
         rurl_clear_caches()
-        expect_identical(
-          safe_parse_urls(marks[[mk]](oct("http://example.com/caf", 0xE9)))$path,
-          "/caf%E9", info = mk
-        )
+        lone <- marks[[mk]](oct("http://example.com/caf", 0xE9))
+        expect_identical(safe_parse_urls(lone)$path, "/caf%E9", info = mk)
       }
     })
   })
