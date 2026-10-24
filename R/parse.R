@@ -890,7 +890,7 @@ safe_parse_urls <- function(url,
   # so a bytes-marked row elsewhere in the same batch threw there even with the
   # funnel guarded. Measured, not assumed -- see .neutralize_bytes_input() for
   # the reproducer and why the accessors do not show it.
-  parse_input <- .latin1_input_to_utf8(.neutralize_bytes_input(parse_input))
+  parse_input <- .prepare_url_input(parse_input)$url
   cols <- .mask_opaque_authority(._parse_urls_cached(parse_input, opts), opts,
                                  parse_input)
   cols <- cols[field_names]
@@ -1785,7 +1785,14 @@ safe_parse_urls <- function(url,
 ._safe_parse_url_scalar <- function(url, opts) {
   # Early return for invalid input (never cached, matching the historical
   # scalar pipeline that returned NULL for these before touching the cache).
-  if (is.na(url) || !is.character(url) || url == "") {
+  if (is.na(url) || !is.character(url)) {
+    return(NULL)
+  }
+  # The funnel prepares its own copy; .mask_opaque_authority() below reads
+  # `url` too, so it reads the prepared one (RURL-cwzickqy). A bytes-marked
+  # element prepares to NA, the null row it always was.
+  url <- .prepare_url_input(url)$url
+  if (is.na(url) || url == "") {
     return(NULL)
   }
 
@@ -1833,7 +1840,7 @@ safe_parse_urls <- function(url,
   # `match(parse_input, uniq)` expansion below in step. Neutralizing the unique
   # vector would leave the input vector holding bytes the unique vector no
   # longer contains, and every row would gather from the wrong position.
-  parse_input <- .latin1_input_to_utf8(.neutralize_bytes_input(parse_input))
+  parse_input <- .prepare_url_input(parse_input)$url
   uniq <- unique(parse_input)
   m <- length(uniq)
 
@@ -1955,6 +1962,7 @@ safe_parse_urls <- function(url,
 # column from the untouched input vector, so the caller still gets their own
 # bytes back in the echo and can see WHICH row was refused.
 #
+# Reached through .prepare_url_input(), the one input boundary, below.
 # Idempotent and O(n) in C, so calling it at more than one seam is cheap. It has
 # to be called at more than one, and that is MEASURED rather than assumed:
 # `.mask_opaque_authority()` is a SIBLING consumer of the same input vector, not
@@ -1997,20 +2005,76 @@ safe_parse_urls <- function(url,
 # cache key (`stri_escape_unicode()`) and the whatwg route already use; R's own
 # translation reads those octets as CP1252.
 #
-# Called beside .neutralize_bytes_input() at both of its seams. The funnel's
-# call is the one every parse value depends on; the safe_parse_urls() call only
-# keeps .mask_opaque_authority() reading the spelling the parse read, and no
-# input measured so far behaves differently without it. Four entries read
-# `url` without passing either seam and call it themselves:
-# .fsss_record_vec() (serialize_url()), ._url_metadata_vec() (the host
-# helpers), get_mailto_recipients() and resolve_url(), which reshapes the
-# reference and the base as strings before parsing them (RURL-ummmdiwu).
+# Called only by .prepare_url_input(), below, which every entry point goes
+# through.
 .latin1_input_to_utf8 <- function(url) {
   latin1 <- !is.na(url) & Encoding(url) == "latin1"
   if (any(latin1)) {
     url[latin1] <- stringi::stri_enc_toutf8(url[latin1])
   }
   url
+}
+
+# The one input boundary (RURL-cwzickqy). R hands rurl a string in one of four
+# representations -- UTF-8, latin1, bytes, or unmarked native bytes that may
+# not be valid UTF-8 -- and every entry point that reshapes a URL string used
+# to prepare them itself. The copies drifted: the parse seams ran both helpers
+# above, serialize_url(), the host helpers, get_mailto_recipients() and
+# resolve_url() copied only the latin1 half, and check_schemes() handed the
+# raw string back to .has_explicit_authority(). A bytes row then threw out of
+# the whole call at every entry point but the parse, and resolve_url() read an
+# invalid-UTF-8 row by the session locale.
+#
+# Returns `list(url, decodable)`:
+#
+#   * `url`: the input with a bytes-marked element as NA
+#     (.neutralize_bytes_input()), a latin1 element re-spelled as UTF-8
+#     (.latin1_input_to_utf8()), and an unmarked element declared UTF-8 with
+#     `Encoding<-`, never `enc2utf8()`, which would transcode from the session
+#     locale. The bytes do not move, only the reading of them stops depending
+#     on LC_CTYPE (the rule .rfc3986_declare_native_utf8() and
+#     .mark_host_utf8() already apply further in). An element already marked
+#     UTF-8 is untouched.
+#   * `decodable`: per element, whether `url` is valid UTF-8 (TRUE for NA, which
+#     has nothing to decode). The boundary reports the verdict and does not act
+#     on it: whether an undecodable string is an error, or is read with
+#     U+FFFD replacement, is the parser's question under each standard, and
+#     the parsers answer it today (the whatwg arm replaces, the rfc3986 arm
+#     rejects, and the frozen default percent-encodes the octet in a web
+#     URL's path, query or fragment and rejects it elsewhere, RURL-yarkccco).
+#     An entry point that cannot hand the row to a parser acts on the verdict
+#     itself, as that parser would: resolve_url() reshapes both operands as
+#     strings first, so it reads an undecodable one as U+FFFD under whatwg,
+#     as NA under rfc3986, and under the frozen default resolves its octets
+#     and lets the parse of the result decide.
+#
+# Ownership. The function that READS a URL string calls this, not its caller:
+# the parse funnel (._parse_urls_cached()) and the scalar and vector parse
+# entries, the serializer record (.fsss_record_vec(), behind serialize_url(),
+# format_url() and the key), the metadata engine (._url_metadata_vec(), behind
+# the companion helpers and the host policy), the key state, and every export
+# that reads the string itself before or beside those (resolve_url(),
+# check_schemes(), get_mailto_recipients()). A wrapper that only forwards the
+# string to one of them is prepared by it and cannot skip it. It is idempotent,
+# so a string prepared twice is the string prepared once. What an output
+# ECHOES (safe_parse_urls()'s `original_url`, check_schemes()'s `url`, the
+# recipient table's `url`) is the caller's own element, never this one.
+# test-input-boundary.R holds every export to it.
+#
+# ASCII fast path: stri_enc_mark() reads the per-string flags R already keeps,
+# without scanning the bytes, so a vector with no non-ASCII element (nearly
+# every call) returns as it came.
+.prepare_url_input <- function(url) {
+  mark <- stringi::stri_enc_mark(url)
+  if (!any(mark != "ASCII", na.rm = TRUE)) {
+    return(list(url = url, decodable = rep(TRUE, length(url))))
+  }
+  url <- .latin1_input_to_utf8(.neutralize_bytes_input(url))
+  native <- !is.na(mark) & mark == "native"
+  if (any(native)) {
+    Encoding(url[native]) <- "UTF-8"
+  }
+  list(url = url, decodable = is.na(url) | validUTF8(url))
 }
 
 # The scheme as the prepared input SPELLS it, for the rows where that token is

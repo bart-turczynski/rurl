@@ -164,9 +164,13 @@
   opts <- .url_key_parse_options(policy, engine)
   v <- attr(._parse_urls_cached(unname(as.character(url)), opts), "verdicts")
   rec <- .fsss_record_vec(url, policy$standard, engine, opts = opts)
+  # The scheme presence and Stage A read the string here, outside the record
+  # and the funnel, so they read it prepared (RURL-cwzickqy).
+  prepared <- .prepare_url_input(as.character(url))$url
   presence <- .url_key_scheme_presence(
-    url, opts$url_standard,
-    looks_like_host_port = ._parse_stage_a_vec(url, opts)$looks_like_host_port
+    prepared, opts$url_standard,
+    looks_like_host_port =
+      ._parse_stage_a_vec(prepared, opts)$looks_like_host_port
   )
 
   # Keyable-but-not-a-resolved-web-reference, then the warning refinement, then

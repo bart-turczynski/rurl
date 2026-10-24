@@ -528,9 +528,10 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   }
 
   # Parsed directly, not through safe_parse_urls()'s input seams, so the
-  # latin1 re-spelling happens here (RURL-buemdwcq); the `url` column below
-  # still echoes the caller's element.
-  gen <- .general_parse_vec(.latin1_input_to_utf8(url), opts$url_standard,
+  # input boundary is here (RURL-cwzickqy): a bytes-marked element is a row
+  # with no recipients, where it used to throw out of the whole call. The
+  # `url` column below still echoes the caller's element.
+  gen <- .general_parse_vec(.prepare_url_input(url)$url, opts$url_standard,
                             opts$scheme_acceptance, opts$scheme_policy)
   is_mailto <- gen$general_parsed &
     !is.na(gen$scheme) &

@@ -234,8 +234,10 @@
 # copy is the alternative, and it is the one that silently narrows.
 .fsss_record_vec <- function(url, standard, engine = NULL, opts = NULL) {
   # The record reads `url` itself, not through safe_parse_urls()'s input
-  # seams, so it re-spells latin1-marked input there too (RURL-buemdwcq).
-  url <- .latin1_input_to_utf8(url)
+  # seams, so it owns the input boundary for serialize_url(), format_url() and
+  # the key (RURL-cwzickqy): a bytes-marked element is a row that does not
+  # parse, where it used to throw out of the whole call.
+  url <- .prepare_url_input(url)$url
   n <- length(url)
   is_whatwg <- identical(standard, "whatwg")
   if (is.null(opts)) {
