@@ -426,6 +426,27 @@ test_that("the matcher handles NULL, empty and NA patterns", {
   expect_identical(pm(c("a", "b"), c(NA, "", "b")), c(FALSE, TRUE))
 })
 
+test_that("the case-sensitive matcher checks its byte-mode regex at compile", {
+  # A glob cannot compile to a refused construct, so one is injected: the
+  # check must fire when the matcher is built, not when it is applied.
+  local_mocked_bindings(.glob_to_regex = function(x) "^\\w+\\z")
+  expect_error(.compile_param_matcher("x", TRUE), "ADR 0019")
+  expect_no_error(.compile_param_matcher("x", FALSE))
+})
+
+test_that("the case-sensitive arm keeps NA names NA", {
+  m <- .compile_param_matcher("a*", TRUE)
+  expect_identical(.param_matches(c("ab", NA, "b"), m), c(TRUE, NA, FALSE))
+})
+
+test_that("applying a compiled matcher does not recheck its pattern", {
+  m <- .compile_param_matcher("a*", TRUE)
+  local_mocked_bindings(
+    .bytes_check_pattern = function(...) stop("pattern rechecked")
+  )
+  expect_identical(.param_matches(c("ab", "b"), m), c(TRUE, FALSE))
+})
+
 test_that("a latin1 glob matches its UTF-8 name in both arms", {
   l1 <- octets(0x63, 0x61, 0x66, 0xe9, enc = "latin1")
   for (cs in c(FALSE, TRUE)) {

@@ -610,13 +610,20 @@
 # the anchored alternatives are OR-joined.
 # A latin1 pattern is spelled in UTF-8 first (.latin1_input_to_utf8()), so it
 # matches the UTF-8 name it names; the compiled regex is declared UTF-8.
+# The case-sensitive arm runs the regex in byte mode, so it is checked here,
+# once, against the constructs the byte layer refuses (.bytes_check_pattern()),
+# rather than on every .param_matches() call.
 .compile_param_matcher <- function(patterns, case_sensitive) {
   patterns <- patterns[!is.na(patterns) & nzchar(patterns)]
   if (length(patterns) == 0L) {
     return(NULL)
   }
   regexes <- .glob_to_regex(unname(.latin1_input_to_utf8(patterns)))
-  list(regex = paste(regexes, collapse = "|"), case_sensitive = case_sensitive)
+  regex <- paste(regexes, collapse = "|")
+  if (case_sensitive) {
+    .bytes_check_pattern(regex, fixed = FALSE)
+  }
+  list(regex = regex, case_sensitive = case_sensitive)
 }
 
 # Apply a compiled matcher to decoded param names. NULL matcher matches nothing.
@@ -642,7 +649,15 @@
     Encoding(names[unknown]) <- "UTF-8"
   }
   if (matcher$case_sensitive) {
-    return(.bytes_detect(names, matcher$regex))
+    # .bytes_detect() inlined: its pattern check already ran once, in
+    # .compile_param_matcher(), and is interpreted code that would otherwise
+    # rerun on every call. The input check and NA rule are kept as
+    # .bytes_detect() applies them; the result is logical, so there is no
+    # output encoding to declare.
+    .bytes_check_input(names)
+    out <- grepl(matcher$regex, names, perl = TRUE, useBytes = TRUE)
+    out[is.na(names)] <- NA
+    return(out)
   }
   stringi::stri_detect_regex(names, matcher$regex, case_insensitive = TRUE)
 }
