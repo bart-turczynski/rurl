@@ -232,3 +232,14 @@ test_that("the source lexer strips only C0 controls and spaces at the ends", {
     c("http://h/p#f%20%E2%80%A8", "http://h/p#f%20%C2%85", "http://u@h/")
   )
 })
+
+test_that("latin1-marked input still reads at the internal byte checks", {
+  # .prepare_url_input() converts latin1 at every export, but these helpers
+  # document latin1 as legal input, and the byte layer refuses that mark.
+  x <- "http://caf\xe9@h/p"
+  Encoding(x) <- "latin1"
+  expect_true(.rfc3986_generic_uri_ok(x)$ok)
+  y <- "caf\xe9"
+  Encoding(y) <- "latin1"
+  expect_identical(.email_has_non_ascii(c(y, "cafe", NA)), c(TRUE, FALSE, NA))
+})

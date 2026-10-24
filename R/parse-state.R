@@ -573,11 +573,9 @@
 # repeated raw "@" (`scheme://username@@@@example.com`) is a generic-grammar
 # FAILURE even though a permissive splitter can recover a host.
 .rfc3986_valid_authority <- function(authority) {
-  # The number of raw "@" bytes: the bytes a literal byte-mode removal drops.
-  n_at <- nchar(authority, type = "bytes") - nchar(
-    .bytes_replace(authority, "@", "", all = TRUE, fixed = TRUE),
-    type = "bytes"
-  )
+  # The number of raw "@" bytes, counted on the raw bytes so a latin1-marked
+  # authority (legal on this walk) is read as it is; the byte layer refuses it.
+  n_at <- sum(charToRaw(authority) == as.raw(0x40L))
   if (n_at > 1L) {
     return(FALSE)
   }
