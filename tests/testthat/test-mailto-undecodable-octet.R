@@ -178,3 +178,15 @@ test_that("the ticket batch returns every row", {
                        "invalid", "ascii-dot-atom-text"), label = loc)
   }
 })
+
+test_that("hostile scale: a long undecodable run and many bad recipients", {
+  big <- paste0("mailto:", strrep("%E9", 1e4), "@b.com")
+  many <- paste0("mailto:", paste(rep("a%E9@b.com", 500L), collapse = ","))
+  urls <- c(big, many, mu_neighbors[1L])
+  for (loc in mu_locales()) {
+    r <- mu_in_ctype(loc, mu_facts(urls, smtp_wire = TRUE))
+    expect_identical(nrow(r), 502L, label = loc)
+    expect_identical(r$mailto_local_part_form,
+                     c(rep("invalid", 501L), "dot-atom-text"), label = loc)
+  }
+})
