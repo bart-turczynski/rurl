@@ -253,13 +253,13 @@ test_that("the browser fixer repairs ASCII case variants of a scheme only", {
   expect_identical(out$scheme, "http")
 })
 
-# The host:port routing test ends at the true end now (`\z`), in step with its
-# twin in R/parse-state.R: a port is digits only (WHATWG URL Standard, port
+# The host:port routing test ends at the true end now (`\z`), as its twin
+# in R/parse-state.R does: a port is digits only (WHATWG URL Standard, port
 # state; RFC 3986 section 3.2.3), and ICU's `$` also took the point before a
 # final U+0085, U+2028 or U+2029. Those rows no longer read as host:port.
 test_that("the Phase-1 host:port test reads the true end", {
   x <- c("example.com:8080", "example.com:8080/p", "tel:123x",
-         "example.com:8080 ", "example.com:8080\u0085", "tel:123 ",
+         "example.com:8080\u2028", "example.com:8080\u0085", "tel:123\u2029",
          "tel:123\n")
   prep <- rurl:::.prepare_urls_for_parse_vec(
     x, "keep", "keep", "whatwg", "infer", "general"
@@ -268,19 +268,141 @@ test_that("the Phase-1 host:port test reads the true end", {
   # row is stripped by WHATWG step 1 first and stays a host:port.
   expect_identical(prep$looks_like_host_port,
                    c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE))
-  # The URL key's scheme presence: `tel:123x` is explicit. A row ending in
-  # U+2028 is not keyable on this route either way.
-  k <- get_url_key(c("tel:123x", "tel:123 ", "example.com:8080 "),
+  # With the routing twin, such a row is keyed like its non-digit sibling
+  # `tel:123x`: an explicit scheme and an opaque path.
+  k <- get_url_key(c("tel:123x", "tel:123\u0085", "example.com:8080\u2028"),
                    url_key_policy("whatwg"))
-  expect_identical(attr(k, "keyability"),
-                   c("ok", "invalid-parse", "invalid-parse"))
-  expect_match(unclass(k)[1L], "8:explicit3:tel", fixed = TRUE)
+  expect_identical(attr(k, "keyability"), c("ok", "ok", "ok"))
+  expect_match(unclass(k), "8:explicit", fixed = TRUE)
+  expect_match(unclass(k)[1:2], "8:explicit3:tel", fixed = TRUE)
+  expect_match(unclass(k)[3L], "8:explicit11:example.com", fixed = TRUE)
   # Under RFC 3986 with any scheme accepted, `h:1<U+2028>` was diverted to
   # the host:port route and failed; it now parses as `h:1x` does.
-  out <- safe_parse_urls(c("h:1x", "h:1 ", "h:1\u0085"),
+  out <- safe_parse_urls(c("h:1x", "h:1\u2028", "h:1\u0085", "h:1\u2029"),
                          profile = "rfc-syntax")
-  expect_identical(out$scheme, c("h", "h", "h"))
-  expect_identical(out$parse_status, c("ok", "ok", "ok"))
+  expect_identical(out$scheme, c("h", "h", "h", "h"))
+  expect_identical(out$parse_status, c("ok", "ok", "ok", "ok"))
+})
+
+# --- ICU's `.*` and `$`, exact and linear (RURL-oahhlnvf review) -------------
+
+# Strings over the terminators, the delimiters the cuts look for, and the
+# lead bytes 0xC2 and 0xE2 of a terminator and of other characters.
+icu_fuzz_rows <- function(n, seed) {
+  alpha <- enc2utf8(c(
+    "a", "1", "0x", ".", "@", "/", "?", "#", "[", "]", ":", "\n", "\r",
+    "\r\n", "\v", "\f", "\u0085", "\u2028", "\u2029", "\u00e9", "\u20ac",
+    "\u00a2", "\u2027"
+  ))
+  withr::with_seed(seed, {
+    x <- vapply(seq_len(n), function(i) {
+      paste(sample(alpha, sample(0:8, 1L), TRUE), collapse = "")
+    }, character(1))
+  })
+  unique(enc2utf8(c(x, "", "[", "[]", "[]\r\n", "a.1\r\n", "a\r\n", "\r\n")))
+}
+
+test_that("`.ICU_END` is ICU's `$`, a final CRLF taken whole", {
+  x <- icu_fuzz_rows(4000, 11)
+  got <- gsub(rurl:::.ICU_END, "X", x, perl = TRUE, useBytes = TRUE)
+  Encoding(got) <- "UTF-8"
+  expect_identical(utf8_bytes(got),
+                   utf8_bytes(stringi::stri_replace_all_regex(x, "$", "X")))
+  # ICU's `$` does not take the point between the CR and LF of a final CRLF.
+  expect_identical(gsub(rurl:::.ICU_END, "X", "a\r\n", perl = TRUE),
+                   "aX\r\nX")
+})
+
+test_that("the line-aware cuts are ICU's `.*` cuts", {
+  x <- icu_fuzz_rows(4000, 12)
+  st <- function(pat, rep) stringi::stri_replace_first_regex(x, pat, rep)
+  expect_identical(utf8_bytes(rurl:::.icu_cut_tail(x)),
+                   utf8_bytes(st("[/?#].*$", "")))
+  expect_identical(utf8_bytes(rurl:::.icu_cut_through_last_at(x)),
+                   utf8_bytes(st("^.*@", "")))
+  expect_identical(utf8_bytes(rurl:::.icu_cut_after_bracket(x)),
+                   utf8_bytes(st("^(\\[[^\\]]*\\]).*$", "$1")))
+  expect_identical(rurl:::.ipv6_bracketed_shape(x),
+                   stringi::stri_detect_regex(x, "^\\[.*\\]$"))
+  last <- stringi::stri_replace_first_regex(st("\\.$", ""), "^.*\\.", "")
+  expect_identical(
+    rurl:::.host_ends_in_number_vec(x),
+    x != "" & (stringi::stri_detect_regex(last, "^[0-9]+$") |
+                 stringi::stri_detect_regex(last, "^0[xX][0-9a-fA-F]*$"))
+  )
+  expect_identical(rurl:::.icu_cut_tail(c(NA, "a/b")), c(NA, "a"))
+  expect_identical(rurl:::.icu_cut_through_last_at(c(NA, "u@h")), c(NA, "h"))
+  expect_identical(rurl:::.icu_cut_after_bracket(c(NA, "[a]b")), c(NA, "[a]"))
+})
+
+test_that("a multi-megabyte row is cut, not left whole by PCRE's limit", {
+  # A group repeated per byte or per character hit PCRE's match limit here;
+  # `sub()` only warned, left the row uncut, and the classifier read the
+  # wrong host.
+  big <- 6e6
+  x <- enc2utf8(c(
+    paste0("localhost/x", strrep("x", big)),
+    paste0(strrep("u", big), "@localhost/p"),
+    paste0("localhost/p", strrep("\u20ac", big / 3)),
+    paste0(strrep("u@", big / 2), "localhost/p")
+  ))
+  expect_no_warning(cls <- rurl:::.classify_input_host_vec(x))
+  expect_identical(cls$host_token, rep("localhost", 4L))
+  expect_identical(cls$has_userinfo, c(FALSE, TRUE, FALSE, TRUE))
+  expect_no_warning(out <- safe_parse_urls(x[1:2]))
+  expect_identical(out$host, c("localhost", "localhost"))
+  expect_identical(out$parse_status, c("warning-no-tld", "warning-userinfo"))
+  expect_no_warning(ein <- rurl:::.host_ends_in_number_vec(c(
+    paste0(strrep("a.", big / 2), "1"), enc2utf8(strrep("\u20ac.", big / 4))
+  )))
+  expect_identical(ein, c(TRUE, FALSE))
+  v6 <- enc2utf8(paste0("[", strrep("\u20ac", big / 3), "]"))
+  expect_no_warning(expect_identical(rurl:::.serialize_whatwg_ipv6_host(v6),
+                                     v6))
+  # The embedded-IPv4 test retried its dotted quad after every ":".
+  colons <- paste0("[", strrep("1:", big / 2), "]")
+  expect_no_warning(expect_identical(
+    rurl:::.detect_ip_host_vec(c(colons, paste0(colons, "x"))), c(TRUE, FALSE)
+  ))
+})
+
+test_that("the path cut is linear past an inner line terminator", {
+  # The cut retried every "/" before the terminator, each time scanning to
+  # it: quadratic, and 1e5 segments did not finish.
+  x <- paste0("http://a.com/", strrep("x/", 1e5), "\nq")
+  elapsed <- system.time(
+    cls <- rurl:::.classify_input_host_vec(x)
+  )[["elapsed"]]
+  # The last line holds no "/", so nothing is cut, as under ICU.
+  expect_true(identical(cls$host_token, substring(x, 8L)))
+  expect_lt(elapsed, 5)
+})
+
+test_that("each constant the helpers run unchecked passes the byte check", {
+  # `.const_detect()`, `.const_replace()` and the line-aware cuts call base R
+  # without `.bytes_check_pattern()`, for speed; this is where their
+  # patterns are checked: no locale-table class, no bare `$`, no `(?i)`.
+  pats <- list(
+    end = .ICU_END, term = .ICU_TERMINATOR,
+    final = .ICU_FINAL_TERMINATOR, inner = .ICU_INNER_TERMINATOR,
+    from_delim = .ICU_FROM_PATH_DELIM, last_at = .ICU_THROUGH_LAST_AT,
+    bracket = .ICU_BRACKET_HEAD, v6_shape = .IPV6_BRACKETED_SHAPE,
+    v4 = .ICU_IPV4_CANONICAL, v6_tail = .ICU_IPV6_IPV4_TAIL,
+    v6_hex = .ICU_IPV6_HEX_SHAPE, v6_ser = .ICU_IPV6_SERIALIZABLE,
+    trailing_dot = .ICU_TRAILING_DOT, number = .ICU_NUMBER_LAST_LABEL
+  )
+  for (nm in names(pats)) {
+    expect_true(.bytes_check_pattern(pats[[nm]], fixed = FALSE), info = nm)
+  }
+})
+
+test_that("the per-host helpers do not recheck their constant patterns", {
+  local_mocked_bindings(
+    .bytes_check_pattern = function(...) stop("pattern rechecked")
+  )
+  expect_identical(.host_ends_in_number_vec(c("a.b.1", "a.0x", "a.b", NA)),
+                   c(TRUE, TRUE, FALSE, FALSE))
+  expect_identical(.serialize_whatwg_ipv6_hosts_vec("[0:0::1]"), "[::1]")
 })
 
 test_that("no other migrated pattern dropped a non-ASCII fold", {
