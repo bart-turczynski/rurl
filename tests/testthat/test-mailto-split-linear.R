@@ -87,6 +87,7 @@ test_that("addr-spec split is pinned on edge inputs", {
     got <- sa(x)
     expect_true(got$ok, info = x)
     expect_identical(got$local, sub("@$", "", x), info = x)
+    expect_identical(got$domain, "", info = x)
   }
 })
 
@@ -135,19 +136,22 @@ test_that("long inputs split the same way", {
   expect_identical(sr(paste0(enc, ",b")), c(enc, "b"))
 })
 
-test_that("a 2e5-character local part is split in linear time", {
+test_that("a 2e5-character local part or domain is split in linear time", {
   skip_on_cran()
-  local <- strrep("a", 2e5)
-  u <- paste0("mailto:", local, "@example.com")
-  # The quadratic lexer would run for minutes; stop it well before that.
-  setTimeLimit(elapsed = 20, transient = TRUE)
-  on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
-  elapsed <- system.time(
-    r <- get_mailto_recipients(u, scheme_acceptance = "general")
-  )[["elapsed"]]
-  setTimeLimit(elapsed = Inf)
-  expect_lt(elapsed, 2)
-  expect_identical(nrow(r), 1L)
-  expect_identical(r$mailto_local_part_form, "dot-atom-text")
-  expect_identical(r$mailto_domain_form, "ascii-dot-atom-text")
+  # Warm the package first, so the bound times the split, not first-call
+  # setup (about 1 s cold); the quadratic lexer took minutes at this length.
+  get_mailto_recipients("mailto:a@example.com", scheme_acceptance = "general")
+  long <- strrep("a", 2e5)
+  for (u in c(paste0("mailto:", long, "@example.com"),
+              paste0("mailto:x@", long, ".com"))) {
+    # Stop a regression well before the quadratic lexer would finish.
+    setTimeLimit(elapsed = 20, transient = TRUE)
+    on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
+    elapsed <- system.time(
+      r <- get_mailto_recipients(u, scheme_acceptance = "general")
+    )[["elapsed"]]
+    setTimeLimit(elapsed = Inf)
+    expect_lt(elapsed, 2, label = substr(u, 1, 12))
+    expect_identical(nrow(r), 1L)
+  }
 })

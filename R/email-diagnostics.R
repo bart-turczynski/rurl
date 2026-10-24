@@ -125,9 +125,10 @@
 
 # --- The provenance-preserving lexer -----------------------------------------
 
-# Explode a raw string into UNITS, where a `%XX` percent-triplet is one unit and
-# every other byte is its own unit. Classification and separator detection then
-# operate on units so an encoded delimiter is a single, recognizable token.
+# Explode a raw string into UNITS, where a `%XX` percent-triplet is one unit
+# and every other character is its own unit. Classification and separator
+# detection then operate on units so an encoded delimiter is a single,
+# recognizable token.
 #
 # Linear in the input (RURL-tnlbvcpl): the triplets are found in one vectorized
 # pass rather than by appending units one at a time. A hex digit is never `%`,
