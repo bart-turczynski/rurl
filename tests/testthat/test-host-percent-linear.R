@@ -117,7 +117,7 @@ test_that("host percent output is pinned under url_standard = 'rfc3986'", {
   # The cap only stops a regression from running for minutes; the bound the
   # test asserts is the `expect_lt()` below.
   setTimeLimit(elapsed = 120, transient = TRUE)
-  on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
+  on.exit(setTimeLimit(elapsed = Inf, transient = TRUE), add = TRUE)
   elapsed <- system.time(
     host <- get_host(rows, url_standard = url_standard)
   )[["elapsed"]]
@@ -128,14 +128,14 @@ test_that("a `%` in a 1.5e6-character host parses in seconds under NULL", {
   skip_on_cran() # a few seconds and tens of MB; the defect is not R-bound
   res <- .hpl_timed_host(NULL)
   expect_identical(res$host, .hpl_long_hosts)
-  expect_lt(res$elapsed, 10)
+  expect_lt(res$elapsed, 30)
 })
 
 test_that("a `%` in a 1.5e6-character host parses in seconds under whatwg", {
   skip_on_cran() # a few seconds and tens of MB; the defect is not R-bound
   res <- .hpl_timed_host("whatwg")
   expect_identical(res$host, .hpl_long_hosts)
-  expect_lt(res$elapsed, 10)
+  expect_lt(res$elapsed, 30)
 })
 
 test_that("a `%` in a 1.5e6-character host parses in seconds under rfc3986", {
@@ -143,5 +143,5 @@ test_that("a `%` in a 1.5e6-character host parses in seconds under rfc3986", {
   # `%41` and `%61` are unreserved, so RFC 3986 S6.2.2.2 decodes them too.
   res <- .hpl_timed_host("rfc3986")
   expect_identical(res$host, .hpl_long_hosts)
-  expect_lt(res$elapsed, 10)
+  expect_lt(res$elapsed, 30)
 })

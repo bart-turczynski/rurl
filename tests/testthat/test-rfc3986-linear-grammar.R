@@ -168,9 +168,7 @@ test_that("the matcher is total on bytes that do not decode", {
     userinfo = paste0("http://", .lin_long, "@h.example/p"),
     userinfo_bad = paste0("http://", .lin_long, "%@h.example/p"),
     host = paste0("http://", .lin_long, ".example/p"),
-    # `^`, not `%`: a `%` in a long host is quadratic elsewhere (host
-    # percent-decoding), which is not the grammar check under test.
-    host_bad = paste0("http://", .lin_long, ".example^/p"),
+    host_bad = paste0("http://", .lin_long, ".example%/p"),
     path = paste0("http://h.example/", .lin_long),
     path_bad = paste0("http://h.example/", .lin_long, "%"),
     query = paste0("http://h.example/p?", .lin_long),
