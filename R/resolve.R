@@ -495,6 +495,39 @@
   out
 }
 
+# Octets resolve_url() splits under `url_standard = NULL` for a row that is
+# not valid UTF-8 (RURL-cwzickqy). R's string functions cannot split such a
+# string in a UTF-8 locale (they throw) and split it byte by byte in the C
+# locale, so the row's answer depended on LC_CTYPE. The resolution reads only
+# ASCII delimiters, so every octet 0x80-0xFF of BOTH operands is spelled as
+# the private-use code point U+F700 + octet while it runs, and the result is
+# spelled back octet for octet: the C-locale split, in every locale. Both
+# operands of the row are hidden, so every non-ASCII code point in the result
+# is a hidden octet and the mapping back is exact, whatever the input held.
+.hide_high_octets <- function(x) {
+  vapply(x, function(s) {
+    if (is.na(s)) {
+      return(NA_character_)
+    }
+    b <- as.integer(charToRaw(s))
+    high <- b >= 0x80L
+    b[high] <- b[high] + 0xF700L
+    intToUtf8(b)
+  }, character(1), USE.NAMES = FALSE)
+}
+
+.restore_high_octets <- function(x) {
+  vapply(x, function(s) {
+    if (is.na(s)) {
+      return(NA_character_)
+    }
+    cp <- utf8ToInt(s)
+    high <- cp >= 0x80L
+    cp[high] <- cp[high] - 0xF700L
+    rawToChar(as.raw(cp))
+  }, character(1), USE.NAMES = FALSE)
+}
+
 # Resolve ONE (reference, base) pair to a raw absolute URI string, or NA when
 # resolution cannot yield an absolute URL (base not absolute and reference not
 # absolute either). ._remove_dot_segments happens inside .transform_reference(),
@@ -843,16 +876,20 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   ref <- rep_len(ref, n)
   base <- rep_len(base, n)
   # A string that is not valid UTF-8 cannot be split as one, in any locale,
-  # so the boundary's verdict decides here, as each standard's parser decides
-  # it at the parse seams; this function reshapes the strings before any
-  # parser sees them. `whatwg` parses a scalar-value string, so it reads an
-  # undecodable octet as U+FFFD, as its parse seam does (UTF-8 decode with
-  # replacement); the conversion validates, so it is the same in every
-  # locale. Under `rfc3986` and `NULL` an undecodable reference resolves to
-  # NA, and an undecodable base is no base (NA, as a bytes one already is),
-  # so an absolute reference still resolves without it.
+  # so each standard reads the row here as its parser reads it at the parse
+  # seams; this function reshapes the strings before any parser sees them.
+  # `whatwg` parses a scalar-value string, so it reads an undecodable octet
+  # as U+FFFD, as its parse seam does (UTF-8 decode with replacement); the
+  # conversion validates, so it is the same in every locale. `rfc3986`
+  # rejects the octet (RFC 3986 section 2: a URI is a sequence of
+  # characters), so an undecodable reference resolves to NA and an
+  # undecodable base is no base (NA, as a bytes one already is), and an
+  # absolute reference still resolves without it. `NULL` accepts the octet
+  # in some components (a path, query or fragment of a web URL, RURL-yarkccco)
+  # and not in others, so its parser decides: see below.
   ref_bad <- !rep_len(ref_in$decodable, n)
   base_bad <- !rep_len(base_in$decodable, n)
+  hidden <- logical(n)
   if (.is_whatwg(url_standard)) {
     # The replacement is the reading, not a fault, and the parse seam reads
     # the same octet without a warning; stringi's "fixing" notice is muffled.
@@ -861,9 +898,24 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     }
     ref[ref_bad] <- replace(ref[ref_bad])
     base[base_bad] <- replace(base[base_bad])
-  } else {
+  } else if (!is.null(url_standard)) {
     ref[ref_bad] <- NA_character_
     base[base_bad] <- NA_character_
+  } else {
+    # `NULL`: an undecodable base the parser refuses is no base. One it
+    # accepts, and every undecodable reference, resolves octet for octet,
+    # and the parser below reads the result as it reads any URL: a path
+    # octet becomes %XX, one in the host fails the row.
+    if (any(base_bad)) {
+      st <- safe_parse_urls(base[base_bad], url_standard = NULL,
+                            ...)$parse_status
+      refused <- which(base_bad)[st == "error"]
+      base[refused] <- NA_character_
+      base_bad[refused] <- FALSE
+    }
+    hidden <- ref_bad | base_bad
+    ref[hidden] <- .hide_high_octets(ref[hidden])
+    base[hidden] <- .hide_high_octets(base[hidden])
   }
 
   resolved_raw <- vapply(
@@ -871,6 +923,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     function(i) .resolve_one_raw(ref[[i]], base[[i]], url_standard),
     character(1)
   )
+  resolved_raw[hidden] <- .restore_high_octets(resolved_raw[hidden])
 
   if (identical(output, "serialized")) {
     # Surface (b): hand the resolved absolute string to the standard serializer
