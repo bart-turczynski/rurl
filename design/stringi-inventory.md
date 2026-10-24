@@ -60,12 +60,14 @@ MR !242 merged the same day (`325f787`), so those two keys now match code:
 194 references under 125 keys.
 
 RURL-yyeohqah decided the semantic exceptions (ADR 0019, "Semantic
-exceptions"). By row of the table below, and the key MR !242 added:
+exceptions"); the allowlist was regenerated on that branch after main
+`91b8ad0`: 187 references under 120 keys. By row of the table below, and
+the key MR !242 added:
 
 | Row(s) | Call | Disposition |
 |---|---|---|
 | 187 | `stri_enc_isutf8` in `.cache_key_ascii` | removed: the base-R key needs no validity test |
-| 188-190 | `stri_escape_unicode` in `.cache_key_escape` | removed: octets hexed in base R |
+| 188-190 | `stri_escape_unicode` in `.cache_key_escape` | removed: each octet at or above 0x80 written `\xHH` in base R |
 | 168 | `stri_enc_toutf8` in `.latin1_input_to_utf8` | removed: exact ISO 8859-1 map |
 | (MR !242) | `stri_enc_mark` in `.prepare_url_input` | removed: base `Encoding()` |
 | 184 | `stri_replace_all_regex` in `.glob_to_regex` | removed: byte layer, ASCII punctuation only |
