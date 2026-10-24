@@ -163,6 +163,34 @@
   .bytes_utf8(out)
 }
 
+# The ICU capture `stri_match_first_regex(x, paste0(prefix, "(.*)$"))`, in
+# bytes (RURL-yqmoztoj). `prefix` is start-anchored and holds its own groups;
+# the last column is the `(.*)` group. Byte mode runs `prefix` then the rest
+# of the row to the true end, so `prefix` takes the span ICU's first attempt
+# gave it. ICU's `.*$` then needs that rest to hold no terminator but a final
+# one, which it leaves out of the group and the match. Giving `prefix` back a
+# byte only lengthens the rest, so a row that fails there fails everywhere:
+# it is no match, all NA. The rest is split once at its terminators, so the
+# check is linear. A row led by U+FEFF is read as data, where stringi read
+# past the mark; every caller already masks such a row.
+.icu_capture_to_end <- function(x, prefix) {
+  m <- .bytes_capture(x, paste0(prefix, "((?s:.*))\\z"))
+  last <- ncol(m)
+  multi <- !is.na(m[, last]) &
+    grepl(.ICU_TERMINATOR, m[, last], perl = TRUE, useBytes = TRUE)
+  if (any(multi)) {
+    p <- .icu_split_lines(m[multi, last])
+    whole <- m[multi, 1L]
+    keep <- nchar(whole, type = "bytes") - nchar(p$final, type = "bytes")
+    rows <- m[multi, , drop = FALSE]
+    rows[, 1L] <- .bytes_cut(whole, 1L, keep)
+    rows[, last] <- p$line
+    rows[p$head != "", ] <- NA_character_
+    m[multi, ] <- rows
+  }
+  m
+}
+
 # The WHATWG forbidden domain code points (`.WHATWG_FORBIDDEN_HOST_CP`,
 # R/utils.R) as a byte-mode class: the same ASCII set, with the ICU `\u`
 # escapes PCRE does not read written as `\x`.
@@ -632,12 +660,13 @@
   if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
-  m <- stringi::stri_match_first_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)?(//)([^/?#]*)(.*)$"
+  m <- .icu_capture_to_end(
+    url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)?(//)([^/?#]*)"
   )
   authority <- m[, 4L]
-  # A row led by U+FEFF has neither a scheme nor "//"; the stringi match reads
-  # past the mark, and rebuilding the row from it would drop the mark.
+  # A row led by U+FEFF has neither a scheme nor "//". The byte-mode capture
+  # reads the mark as data and finds neither; the mask is the ADR 0005 guard
+  # from the stringi match, kept until the close-out retires it.
   eligible <- !bom_led & !is.na(authority) &
     .bytes_detect(authority, .UTS46_FULL_STOP_VARIANTS)
   eligible[is.na(eligible)] <- FALSE
@@ -645,28 +674,23 @@
     return(no_op)
   }
   # Every span below is located in and cut from `url` itself, which starts with
-  # the scheme or "//": the stringi fixed locators and stri_sub() read past a
-  # U+FEFF that starts their input (see .starts_with_bom()), so splitting
-  # `authority` dropped a mark that starts the userinfo (RURL-exdlurql). The
-  # authority ends at the first "/", "?" or "#"; userinfo runs through the LAST
-  # "@" in it, found by the greedy class backtracking to it. A negated class,
-  # not `.*`: ICU `.` stops at U+000B, U+000C, U+0085, U+2028 and U+2029, which
-  # would leave the host unsplit for a later step to map.
+  # the scheme or "//", in bytes from locator to cut (ADR 0019): the stringi
+  # fixed locators and stri_sub() read past a U+FEFF that starts their input,
+  # so splitting `authority` once dropped a mark that starts the userinfo
+  # (RURL-exdlurql). The authority ends at the first "/", "?" or "#"; userinfo
+  # runs through the LAST "@" in it, found by the greedy class backtracking to
+  # it. A negated class, not `.*`: ICU `.` stops at U+000B, U+000C, U+0085,
+  # U+2028 and U+2029, which would leave the host unsplit for a later step to
+  # map.
   prefix <- "^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)?//"
-  authority_end <- stringi::stri_locate_first_regex(
-    url, paste0(prefix, "[^/?#]*")
-  )[, "end"]
-  at <- stringi::stri_locate_first_regex(
-    url, paste0(prefix, "[^/?#]*@")
-  )[, "end"]
+  authority_end <- .bytes_locate(url, paste0(prefix, "[^/?#]*"))[, "end"]
+  at <- .bytes_locate(url, paste0(prefix, "[^/?#]*@"))[, "end"]
   host_start <- ifelse(
-    is.na(at),
-    stringi::stri_locate_first_regex(url, prefix)[, "end"],
-    at
+    is.na(at), .bytes_locate(url, prefix)[, "end"], at
   ) + 1L
-  before_host <- stringi::stri_sub(url, 1L, host_start - 1L)
-  host_port <- stringi::stri_sub(url, host_start, authority_end)
-  after_authority <- stringi::stri_sub(url, authority_end + 1L)
+  before_host <- .bytes_cut(url, 1L, host_start - 1L)
+  host_port <- .bytes_cut(url, host_start, authority_end)
+  after_authority <- .bytes_cut(url, authority_end + 1L, .Machine$integer.max)
   eligible <- eligible & !startsWith(host_port, "[") &
     .bytes_detect(host_port, .UTS46_FULL_STOP_VARIANTS)
   eligible[is.na(eligible)] <- FALSE
@@ -717,13 +741,15 @@
     return(no_op)
   }
 
-  m <- stringi::stri_match_first_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)(.*)$"
+  m <- .icu_capture_to_end(
+    url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)"
   )
   authority <- m[, 4L]
-  # A row led by U+FEFF has no scheme; the stringi match reads past the mark,
+  # A row led by U+FEFF has no scheme. The stringi match read past the mark,
   # and rebuilding the row from it would drop the mark, so it is masked
-  # (RURL-opwjlnla). The pipeline never hands this helper such a row today:
+  # (RURL-opwjlnla); the byte-mode capture finds no scheme there, and the mask
+  # stays as the ADR 0005 guard until the close-out. The pipeline never hands
+  # this helper such a row today:
   # Phase 1 prefixes "http://" to every row led by the mark (`add_http`).
   has_at <- !is.na(authority) & !.starts_with_bom(url) &
     .bytes_detect(authority, "@", fixed = TRUE)
@@ -747,7 +773,7 @@
   repaired <- vapply(which(eligible), function(i) {
     a <- authority[i]
     # Byte-indexed for the same reason as the shim's slice (RURL-kmpnbvdl):
-    # `authority` is a stringi capture, so it is declared UTF-8 no matter what
+    # `authority` is a capture, so it is declared UTF-8 no matter what
     # octets it holds, and `substr()` threw on `http://a@@<80>b/`.
     last <- .last_byte_index(a, "@")
     paste0(
@@ -855,9 +881,7 @@
     return(no_op)
   }
 
-  m <- stringi::stri_match_first_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*):(.*)$"
-  )
+  m <- .icu_capture_to_end(url, "^([a-zA-Z][a-zA-Z0-9+.-]*):")
   scheme <- m[, 2L]
   rest <- m[, 3L]
   scheme_lower <- .ascii_tolower(scheme)
@@ -886,9 +910,9 @@
     return(no_op)
   }
 
-  # Located and cut in BYTES (RURL-otrpfhmq). `rest` is a
-  # `stri_match_first_regex()` capture, marked UTF-8 whatever its octets, and
-  # `nchar()`/`substr()` THROW `invalid multibyte string` on one holding
+  # Located and cut in BYTES (RURL-otrpfhmq). `rest` is a capture, marked
+  # UTF-8 whatever its octets, and `nchar()`/`substr()` THROW `invalid
+  # multibyte string` on one holding
   # invalid octets, which aborted the whole batch. The delimiters are ASCII, so
   # a byte cut yields the same substrings as a character cut on every decodable
   # element; an undecodable one is now split too, and the uniform RFC 3986
@@ -1118,9 +1142,7 @@
     return(out)
   }
 
-  m <- stringi::stri_match_first_regex(
-    url, "^[Ff][Ii][Ll][Ee]:(.*)$"
-  )
+  m <- .icu_capture_to_end(url, "^[Ff][Ii][Ll][Ee]:")
   rest <- m[, 2L]
   ok <- !is.na(rest)
   if (!any(ok)) {
@@ -1156,21 +1178,18 @@
   has_authority[is.na(has_authority)] <- FALSE
   if (any(has_authority)) {
     # Every span is located in and cut from the raw path, which starts with
-    # the two-slash marker. Some stringi functions read past a U+FEFF that
-    # starts their input (see .starts_with_bom()), so cutting the authority
-    # from the text after the marker, which can start with one, put the slash
-    # in the host and lost the path's first character (RURL-azcvukyh). The
-    # authority holds no slash or backslash, so it needs no rewrite.
+    # the two-slash marker, in bytes from locator to cut (ADR 0019). Some
+    # stringi functions read past a U+FEFF that starts their input, so cutting
+    # the authority from the text after the marker, which can start with one,
+    # once put the slash in the host and lost the path's first character
+    # (RURL-azcvukyh). The authority holds no slash or backslash, so it needs
+    # no rewrite.
     raw <- file_path_raw[has_authority]
-    authority_end <- stringi::stri_locate_first_regex(
-      raw, "^[/\\\\]{2}[^/\\\\]*"
-    )[, "end"]
-    slash <- stringi::stri_locate_first_regex(
-      raw, "^[/\\\\]{2}[^/\\\\]*[/\\\\]"
-    )[, "end"]
-    authority <- stringi::stri_sub(raw, 3L, authority_end)
+    authority_end <- .bytes_locate(raw, "^[/\\\\]{2}[^/\\\\]*")[, "end"]
+    slash <- .bytes_locate(raw, "^[/\\\\]{2}[^/\\\\]*[/\\\\]")[, "end"]
+    authority <- .bytes_cut(raw, 3L, authority_end)
     auth_path <- ifelse(
-      is.na(slash), "/", stringi::stri_sub(raw, slash)
+      is.na(slash), "/", .bytes_cut(raw, slash, .Machine$integer.max)
     )
     auth_path <- .bytes_replace(auth_path, "\\", "/", all = TRUE,
                                 fixed = TRUE)
@@ -1194,7 +1213,7 @@
       )
       auth_path[drive_authority] <- paste0(
         "/",
-        stringi::stri_sub(authority[drive_authority], 1L, 1L),
+        .bytes_cut(authority[drive_authority], 1L, 1L),
         ":",
         drive_tail
       )
