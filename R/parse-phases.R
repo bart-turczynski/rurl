@@ -243,6 +243,15 @@
 .ICU_IPV6_HEX_SHAPE <- paste0("^\\[?[0-9a-fA-F:]++\\]?", .ICU_END)
 .ICU_IPV6_SERIALIZABLE <- paste0("^\\[[0-9A-Fa-f:.]++\\]", .ICU_END)
 .ICU_TRAILING_DOT <- paste0("\\.", .ICU_END)
+# `.serialize_whatwg_ipv6_host()`'s ICU capture `^(.*:)(<quad>)$` over the
+# inside of a bracketed host, which holds no line terminator, so ICU's `.`
+# and `$` are `(?s).` and `\z`. The quad holds no ":", so it can only follow
+# the last ":"; the atomic group stops at that one and never retries the quad
+# after an earlier ":" (RURL-yqmoztoj).
+.IPV6_QUAD_TAIL <- local({
+  oct <- "(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
+  paste0("(?s)^((?>.*:))(", oct, "\\.", oct, "\\.", oct, "\\.", oct, ")\\z")
+})
 .ICU_NUMBER_LAST_LABEL <- paste0(
   "(?:\\A|\\.)(?:[0-9]++|0[xX][0-9a-fA-F]*+)", .ICU_END
 )
@@ -263,6 +272,20 @@
 .const_replace <- function(x, re, replacement) {
   .bytes_check_input(x)
   .bytes_utf8(sub(re, replacement, x, perl = TRUE, useBytes = TRUE))
+}
+# `.bytes_split_fixed(s, sep, keep_trailing_empty = TRUE)[[1L]]` for one
+# non-NA string and a constant separator, without the separator check, for
+# the per-host IPv6 serializer. The trailing-field rule is the wrapper's: a
+# trailing empty field and `""` -> `""` survive, as `stri_split_fixed()`
+# gave (ADR 0005), and the dropped field is found by counting bytes.
+.const_split_keep_trailing <- function(s, sep) {
+  .bytes_check_input(s)
+  p <- strsplit(s, sep, fixed = TRUE, useBytes = TRUE)[[1L]]
+  used <- sum(nchar(p, type = "bytes")) + length(p) * nchar(sep, type = "bytes")
+  if (nchar(s, type = "bytes") == used) {
+    p <- c(p, "")
+  }
+  .bytes_utf8(p)
 }
 
 # Each ASCII letter of `x` as a two-case class, `http` -> `[Hh][Tt][Tt][Pp]`.
@@ -2212,30 +2235,42 @@
     return(host)
   }
 
-  inner <- stringi::stri_sub(host, 2L, -2L)
-  oct <- "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
-  m <- stringi::stri_match_first_regex(
-    inner, paste0("^(.*:)(", oct, "\\.", oct, "\\.", oct, "\\.", oct, ")$")
-  )
-  if (!is.na(m[1L, 1L])) {
-    quad <- strsplit(m[1L, 3L], ".", fixed = TRUE)[[1L]]
+  # The shape test lets one final line terminator follow the "]". The stringi
+  # cut `stri_sub(host, 2L, -2L)` then dropped only the terminator, `inner`
+  # kept the "]", no hextet parsed and the host came back unchanged, as it
+  # does here directly. Every other row ends in "]" and holds no terminator,
+  # so `inner` is bytes 2 to n - 1 (ADR 0019) and ICU's `.` and `$` are
+  # `(?s).` and `\z`.
+  if (!endsWith(host, "]")) {
+    return(host)
+  }
+  inner <- .bytes_cut(host, 2L, nchar(host, type = "bytes") - 1L)
+  # The capture runs base R on a constant of this file, as `.const_detect()`
+  # does: group 1 starts at byte 1, so it is bytes 1 to its length.
+  m <- regexpr(.IPV6_QUAD_TAIL, inner, perl = TRUE, useBytes = TRUE)
+  if (m > 0L) {
+    cs <- attr(m, "capture.start")
+    cl <- attr(m, "capture.length")
+    quad <- .bytes_cut(inner, cs[1L, 2L], cs[1L, 2L] + cl[1L, 2L] - 1L)
+    quad <- strsplit(quad, ".", fixed = TRUE)[[1L]]
     octets <- suppressWarnings(as.integer(quad))
     if (length(octets) != 4L || anyNA(octets) ||
         any(octets < 0L | octets > 255L)) {
       return(host)
     }
     inner <- paste0(
-      m[1L, 2L],
+      .bytes_cut(inner, 1L, cl[1L, 1L]),
       sprintf("%x", octets[1L] * 256L + octets[2L]), ":",
       sprintf("%x", octets[3L] * 256L + octets[4L])
     )
   }
 
-  # stri_split_fixed(), not strsplit(): strsplit() drops an empty last field,
-  # so `"1::"` split to "1" and `[1:2:3:4:5:6:7::]` went down the no-"::"
-  # branch unserialized (RURL-sqmhtldq), and `"8:"` split to "8", quietly
-  # repairing an invalid trailing ":". Empty fields now survive and fail.
-  parts <- stringi::stri_split_fixed(inner, "::")[[1L]]
+  # Both splits keep a trailing empty field (the stri_split_fixed() reading,
+  # ADR 0005), not strsplit()'s: strsplit() drops an empty last field, so
+  # `"1::"` split to "1" and `[1:2:3:4:5:6:7::]` went down the no-"::" branch
+  # unserialized (RURL-sqmhtldq), and `"8:"` split to "8", quietly repairing
+  # an invalid trailing ":". Empty fields now survive and fail.
+  parts <- .const_split_keep_trailing(inner, "::")
   if (length(parts) > 2L) {
     return(host)
   }
@@ -2244,7 +2279,7 @@
     if (is.na(x) || x == "") {
       return(character(0))
     }
-    stringi::stri_split_fixed(x, ":")[[1L]]
+    .const_split_keep_trailing(x, ":")
   }
   if (length(parts) == 1L) {
     hextets <- split_side(parts[1L])
@@ -2497,6 +2532,21 @@
   host
 }
 
+# The host after its www prefix: the ICU caseless capture
+# `^(www[0-9]*\.)(.*)`, group 2, in bytes (RURL-yqmoztoj). For rows that
+# start with the prefix (the callers test it first). The prefix is spelled
+# as ASCII letter classes (ADR 0019); ICU folds no other code point to "w".
+# ICU's `.*` stops at the first line terminator, so the capture is cut there.
+# Both steps are single scans, linear in the host.
+.www_bare_host <- function(x) {
+  pre_end <- .bytes_locate(x, "^[Ww][Ww][Ww][0-9]*\\.")[, "end"]
+  rest <- .bytes_cut(x, pre_end + 1L, .Machine$integer.max)
+  stop <- .bytes_locate(rest, .ICU_TERMINATOR)[, "start"]
+  cut <- !is.na(stop)
+  rest[cut] <- .bytes_cut(rest[cut], 1L, stop[cut] - 1L)
+  rest
+}
+
 # Phase 6 (vector): apply the www-prefix policy to (non-IP) hosts.
 # Under `whatwg` every policy but "none" reads the UTS-46-mapped host
 # (`.policy_host_vec()`, RURL-fobwctml).
@@ -2509,7 +2559,6 @@
   }
   raw_host <- .policy_host_vec(raw_host, elig, url_standard)
   final_host <- raw_host
-  ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
 
   if (www_handling == "strip") {
     # Was the ICU caseless `^(www[0-9]*\.)(.*)` -> `$2`, which drops the
@@ -2525,15 +2574,7 @@
     hw <- elig & has_www
     no_www <- elig & !has_www
     if (any(hw)) {
-      match_res <- stringi::stri_match_first_regex(
-        raw_host, "^(www[0-9]*\\.)(.*)", opts_regex = ci
-      )
-      bare_host_part <- match_res[, 3L]
-      # Group 3 (.*) always matches once the prefix is confirmed; the fallback
-      # is defensive only.
-      bare_host_part[is.na(bare_host_part)] <-
-        raw_host[is.na(bare_host_part)] # nocov
-      final_host[hw] <- paste0("www.", bare_host_part[hw])
+      final_host[hw] <- paste0("www.", .www_bare_host(raw_host[hw]))
     }
     if (any(no_www)) {
       final_host[no_www] <- paste0("www.", raw_host[no_www])
@@ -2552,38 +2593,28 @@
 # `whatwg` that input is already the UTS-46-mapped host (`.policy_host_vec()`,
 # applied by the caller, RURL-fobwctml), so this helper takes no selector.
 .apply_www_if_no_subdomain_vec <- function(raw_host, engine = NULL) {
-  ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
   lower <- .ascii_tolower(raw_host)
 
   candidate_host <- raw_host
   has_www <- .bytes_detect(lower, "^www[0-9]*\\.")
   has_www[is.na(has_www)] <- FALSE
   if (any(has_www)) {
-    match_res <- stringi::stri_match_first_regex(
-      raw_host, "^(www[0-9]*\\.)(.*)", opts_regex = ci
+    candidate_host[has_www] <- paste0(
+      "www.", .www_bare_host(raw_host[has_www])
     )
-    bare_part <- match_res[, 3L]
-    bare_part[is.na(bare_part)] <- raw_host[is.na(bare_part)]
-    candidate_host[has_www] <- paste0("www.", bare_part[has_www])
   }
 
   # `startsWith()`, not stri_startswith_fixed(), which reads past a U+FEFF
   # that starts its input (see .starts_with_bom()): the mark-led apex
   # "<U+FEFF>www.com" is not www-prefixed, so it gets "www." like its U+200B
-  # twin (RURL-opwjlnla). A row that passes starts with "www.", so the stringi
-  # match below cannot meet the mark. Under `whatwg` the caller hands over the
+  # twin (RURL-opwjlnla). Under `whatwg` the caller hands over the
   # UTS-46-mapped host, which no longer holds the mark (RURL-fobwctml).
   host_for_domain_check <- candidate_host
   cand_lower <- .ascii_tolower(candidate_host)
   cw <- startsWith(cand_lower, "www.")
   cw[is.na(cw)] <- FALSE
   if (any(cw)) {
-    match_res_bare <- stringi::stri_match_first_regex(
-      candidate_host, "^www\\.(.*)", opts_regex = ci
-    )
-    bare_host <- match_res_bare[, 2L]
-    bare_host[is.na(bare_host)] <- candidate_host[is.na(bare_host)] # nocov
-    host_for_domain_check[cw] <- bare_host[cw]
+    host_for_domain_check[cw] <- .www_bare_host(candidate_host[cw])
   }
 
   decomp <- .psl_suffix_extract(host_for_domain_check, "all", engine)
@@ -2749,7 +2780,7 @@
   # that starts its input (see .starts_with_bom()): "<U+FEFF>www." read as the
   # www prefix, and stri_sub() then cut the mark off with it. The mark-led
   # label is a subdomain label like its U+200B twin's (RURL-opwjlnla). A row
-  # that passes starts with "www.", so stri_sub() cannot meet the mark.
+  # that passes starts with "www.", four bytes, which the byte cut drops.
   has_www_prefix <- startsWith(lower, "www.")
   has_www_prefix[is.na(has_www_prefix)] <- FALSE
   # The rows the stringi reading took for www-prefixed: one mark, then "www.".
@@ -2766,7 +2797,9 @@
 
   host_part <- fh
   if (any(has_www_prefix)) {
-    host_part[has_www_prefix] <- stringi::stri_sub(fh[has_www_prefix], 5L)
+    host_part[has_www_prefix] <- .bytes_cut(
+      fh[has_www_prefix], 5L, .Machine$integer.max
+    )
   }
 
   decomp <- .psl_suffix_extract(host_part, "all", engine)

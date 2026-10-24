@@ -41,7 +41,8 @@ test_that("the WHATWG backslash rewrite cuts at the same spans", {
   ))
   r <- rurl:::.rewrite_whatwg_backslashes_vec(url, "whatwg")
   expect_same_bytes(r$url, c(
-    "http://h/p/q?x=\\y#\\z", "\u00e9http:\\\\h\\p", "http://\u00e9\u4f8b/p/q?a\\b",
+    "http://h/p/q?x=\\y#\\z", "\u00e9http:\\\\h\\p",
+    "http://\u00e9\u4f8b/p/q?a\\b",
     "\ufeffhttp:\\\\h\\p", "\u200bhttp:\\\\h\\p", "http://h/p", "https://h/p?q",
     "file://h/p", "file:///p", "http://h/p\n", "http://h/p\u2028",
     "http://h/p\nq", NA, "", "mailto:a\\b",
@@ -103,7 +104,8 @@ test_that("the userinfo charset encoding rebuilds from the same captures", {
 test_that("the RFC 3986 path-rootless split keeps its captures", {
   url <- off_u(c(
     "http:ex.com/p?q#f", "https:a.b", "ftp:a.b.c?x", "http:ex.com/p\n",
-    "http:ex.com/p\nx", "http:ex.com\u2028", "http:ex.com/\u00e9\u4f8b?\u00e9#\u4f8b",
+    "http:ex.com/p\nx", "http:ex.com\u2028",
+    "http:ex.com/\u00e9\u4f8b?\u00e9#\u4f8b",
     "\ufeffhttp:ex.com/p", "http:\ufeffex.com/p", "http:ex.com#a?b",
     "http:ex.com/p\r\n", NA, "", "http:/ex.com", "mailto:a.b",
     off_inv(c(charToRaw("http:ex.com/"), 0xff, charToRaw("?q#f")))
@@ -192,6 +194,29 @@ test_that("the WHATWG IPv6 serializer splits and cuts as before", {
     "[::1]\r\n", "[::1]\u2028", "[1:2:3:4:5:6:102:304]", "[1:2:3:4:5:6:7:8]",
     "[::]", "[1:2:3:4:5:6:7]", "[1:2:3:4:5:6:7:]", "[:1:2:3:4:5:6:7]"
   ))
+})
+
+test_that("the IPv6 serializer's unchecked pattern and split hold", {
+  # The per-host serializer runs its constant without the byte layer's
+  # pattern check (as `.const_detect()` does); the check runs here.
+  expect_true(rurl:::.bytes_check_pattern(rurl:::.IPV6_QUAD_TAIL,
+                                          fixed = FALSE))
+  # Its split is `.bytes_split_fixed(keep_trailing_empty = TRUE)`.
+  s <- c("", ":", "::", ":::", "::::", "1::", "::1", "1::2", "1:2:", "a::b::",
+         "1:::2", "8:")
+  for (sep in c("::", ":")) {
+    for (x in s) {
+      expect_identical(
+        rurl:::.const_split_keep_trailing(x, sep),
+        rurl:::.bytes_split_fixed(x, sep, keep_trailing_empty = TRUE)[[1L]],
+        info = paste(sep, x)
+      )
+    }
+  }
+  # A long run of groups stays linear: the atomic group never retries the
+  # quad after an earlier ":".
+  long <- paste0("[", strrep("1:", 2e5), "1.2.3.4]")
+  expect_identical(rurl:::.serialize_whatwg_ipv6_host(long), long)
 })
 
 test_that("the www policies capture the bare host up to ICU's `.*` stop", {
