@@ -48,6 +48,15 @@ pass the gate in either merge order: `stri_enc_mark` in `.prepare_url_input()`
 MR !242 merges, the gate prints an "allowlist can shrink" line for each,
 which passes.
 
+On 2026-10-24 main `3c49b0a` was merged in. MR !246 (RURL-esztpdhx, the
+whatwg full-stop variants in a percent-decoded host) added two calls in
+`.apply_host_standard_model_vec()` (R/parse-phases.R): one more
+`stri_detect_regex` (the non-ASCII host test `[^\u0001-\u007f]`; slice
+oahhlnvf) and one `stri_replace_all_regex` (the UTS #46 full-stop variants to
+"."; slice oahhlnvf, byte mode with the variants' UTF-8 byte sequences). The
+allowlist was regenerated: 192 references under 123 keys, plus the two keys
+still listed ahead of MR !242's code.
+
 ## Legend
 
 - **Family**: what the call does. *detect* returns a logical. *count*

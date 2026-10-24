@@ -12,7 +12,8 @@
 "R/domain.R",".split_host_labels","stringi::stri_split_fixed",2
 "R/email-diagnostics.R",".email_has_non_ascii","stringi::stri_detect_regex",1
 "R/parse-phases.R",".apply_browser_fixup_vec","stringi::stri_replace_first_regex",5
-"R/parse-phases.R",".apply_host_standard_model_vec","stringi::stri_detect_regex",4
+"R/parse-phases.R",".apply_host_standard_model_vec","stringi::stri_detect_regex",5
+"R/parse-phases.R",".apply_host_standard_model_vec","stringi::stri_replace_all_regex",1
 "R/parse-phases.R",".apply_subdomain_policy_vec","stringi::stri_sub",1
 "R/parse-phases.R",".apply_www_if_no_subdomain_vec","stringi::stri_detect_regex",1
 "R/parse-phases.R",".apply_www_if_no_subdomain_vec","stringi::stri_match_first_regex",2
