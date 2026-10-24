@@ -382,7 +382,13 @@
     # recover the state kinds, build the path/host-kind proxies the classifier
     # needs, then read `!semantic_transform_eligible` (the non-HTTP(S) rows a
     # global SEO transform would skip under general acceptance, ADR 0012 D2).
-    gen_b <- .general_parse_vec(url, opts$url_standard, opts$scheme_acceptance,
+    # It reads the string Stage A's general route reads
+    # (.general_route_input_vec()), not the raw input: under rfc3986 with
+    # scheme_relative_handling = "keep" that string gives a `//` row the
+    # `http:` stand-in (RURL-ozpxupgq), so the raw one disagreed with Stage A
+    # about which `//` rows are general-routed (RURL-cwzickqy).
+    gen_b <- .general_parse_vec(.general_route_input_vec(url, opts),
+                                opts$url_standard, opts$scheme_acceptance,
                                 opts$scheme_policy)
     gp <- gen_b$general_parsed & live
     is_special_row <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
@@ -619,8 +625,9 @@
 # cache-scope decision) and hands those columns to the emit seam.
 ._url_metadata_vec <- function(url, opts) {
   # Reads `url` itself, not through safe_parse_urls()'s input seams, so it
-  # re-spells latin1-marked input here too (RURL-buemdwcq).
-  url <- .latin1_input_to_utf8(url)
+  # owns the input boundary for the companion helpers and the host policy
+  # (RURL-cwzickqy).
+  url <- .prepare_url_input(url)$url
   n <- length(url)
   empty <- list(host_type = rep(NA_character_, n), diagnostics = .diag_new(n))
 

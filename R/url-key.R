@@ -301,6 +301,9 @@
 # `foo:/p?%E2%80%8Bq` both frame `%E2%80%8Bq` (RURL-pjrqnqvb, RURL-ommuyaqi).
 # Under `rfc3986` that step returns the record as written.
 .url_key_state_vec <- function(url, policy, engine = NULL) {
+  # The state reads `url` three times below, two of them outside the record,
+  # so it owns the input boundary for the key (RURL-cwzickqy).
+  url <- .prepare_url_input(url)$url
   opts <- .url_key_parse_options(policy, engine)
   rec <- .fsss_encode_record_vec(
     .fsss_record_vec(url, policy$standard, engine, opts = opts),
@@ -399,6 +402,9 @@
   }
 
   st <- .url_key_state_vec(url, policy, engine)
+  # The reason reads the caller's element, not the prepared one: a
+  # bytes-marked row prepares to NA, but the caller passed a value, so it is
+  # an invalid parse rather than missing input.
   reason <- .url_key_reason_vec(url, st$ok)
   value <- rep(NA_character_, n)
   keep <- which(st$ok)

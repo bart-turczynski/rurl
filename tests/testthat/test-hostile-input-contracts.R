@@ -36,6 +36,7 @@ kf <- function(export, standard, class, position, issue) {
   out$issue <- issue
   out
 }
+# Spellings for kf() entries.
 web_pos <- hi_positions("web")
 mailto_pos <- hi_positions("mailto")
 named <- c("whatwg", "rfc3986")
@@ -43,30 +44,6 @@ joins <- c("url_inner_join", "url_left_join", "url_right_join",
            "url_full_join", "url_semi_join", "url_anti_join")
 
 known_failures <- rbind(
-  # A bytes-marked element throws "bytes encoding is not supported by this
-  # function" out of the whole call at every entry point that reads the
-  # string with stringi before it reaches the parse (safe_parse_urls() and
-  # its accessors fail the row instead). The general per-entry-point input
-  # boundary.
-  kf(c("get_host_type", "get_url_diagnostics", "check_hosts", "is_valid_host",
-       "check_schemes", "serialize_url", "serialise_url", "get_url_key"),
-     named, "bytes", web_pos, "RURL-cwzickqy"),
-  kf("format_url", "none", "bytes", web_pos, "RURL-cwzickqy"),
-  kf("get_mailto_recipients", named, "bytes", mailto_pos, "RURL-cwzickqy"),
-  kf(joins, named, "bytes", c("x:host", "y:host"), "RURL-cwzickqy"),
-  kf("resolve_url", named, "bytes",
-     c(paste0("relative_or_absolute:", web_pos), "base_url:userinfo",
-       "base_url:host"),
-     "RURL-cwzickqy"),
-  # resolve_url(): invalid UTF-8 in the reference throws "invalid multibyte
-  # string"; in the base it resolves differently under LC_CTYPE C.
-  kf("resolve_url", c("NULL", "rfc3986"), "invalid_utf8",
-     c(paste0("relative_or_absolute:", web_pos),
-       paste0("base_url:", c("path", "query", "fragment"))),
-     "RURL-cwzickqy"),
-  kf("resolve_url", "whatwg", "invalid_utf8",
-     paste0("base_url:", c("userinfo", "path", "query", "fragment")),
-     "RURL-cwzickqy"),
   # rfc3986 with query_handling other than "drop": an invalid-UTF-8 octet in
   # the query throws "missing value where TRUE/FALSE needed" out of the
   # whole call (strsplit() on the query).
