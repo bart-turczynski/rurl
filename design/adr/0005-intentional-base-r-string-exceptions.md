@@ -98,7 +98,7 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 | `R/url-key.R` | `.url_key_frame()` | mask; `x` spliced before `stri_enc_toutf8()`, then cut; `stri_numbytes()` counts the mark | RURL-dquaxcaz |
 | `R/url-key.R` | `.url_key_scheme_presence()` | `stri_detect_regex()`, which counts the mark | RURL-dquaxcaz |
 | `R/utils.R` | `.ascii_case_fallback()`, under `.ascii_tolower()` / `.ascii_toupper()` | mask; `0` spliced before the fixed replace, cut as a byte | RURL-bqhfznkg |
-| `R/zzz.R` | `.cache_key_escape()`, under `.cache_key_ascii()` | `startsWith()` mask; `x` spliced before `stri_escape_unicode()`, then cut | RURL-iiehsbfg |
+| `R/zzz.R` | `.cache_key_escape()`, under `.cache_key_ascii()` | Retired 2026-10-24 by RURL-yyeohqah (ADR 0019): the key escapes each octet in base R, so a leading U+FEFF is data and needs no guard. Was a `startsWith()` mask, with `x` spliced before `stri_escape_unicode()`, then cut | RURL-iiehsbfg, RURL-yyeohqah |
 
 **Consequences.**
 

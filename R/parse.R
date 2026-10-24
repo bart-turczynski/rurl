@@ -2007,7 +2007,9 @@ safe_parse_urls <- function(url,
 # test-locale-invariance.R, section 5).
 #
 # Called by .prepare_url_input(), below, which every entry point goes
-# through, and by the cache key (.cache_key_ascii()).
+# through, by the cache key (.cache_key_ascii()), and by the parameter-name
+# globs (.compile_param_matcher() for the patterns, .param_matches() for the
+# names).
 .latin1_input_to_utf8 <- function(url) {
   latin1 <- !is.na(url) & Encoding(url) == "latin1"
   if (any(latin1)) {
