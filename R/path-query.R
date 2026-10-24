@@ -608,24 +608,43 @@
 # Compile a set of glob patterns into a single case-aware matcher, or NULL when
 # there is nothing to match. Each pattern is anchored via .glob_to_regex() and
 # the anchored alternatives are OR-joined.
+# A latin1 pattern is spelled in UTF-8 first (.latin1_input_to_utf8()), so it
+# matches the UTF-8 name it names; the compiled regex is declared UTF-8.
 .compile_param_matcher <- function(patterns, case_sensitive) {
   patterns <- patterns[!is.na(patterns) & nzchar(patterns)]
   if (length(patterns) == 0L) {
     return(NULL)
   }
-  regexes <- vapply(patterns, .glob_to_regex, character(1), USE.NAMES = FALSE)
+  regexes <- .glob_to_regex(unname(.latin1_input_to_utf8(patterns)))
   list(regex = paste(regexes, collapse = "|"), case_sensitive = case_sensitive)
 }
 
 # Apply a compiled matcher to decoded param names. NULL matcher matches nothing.
+# Both arms read the names declared UTF-8 (latin1 converted, unknown declared),
+# never by the session locale (RURL-yyeohqah, ADR 0019).
+#
+#   * Case-sensitive: base R in byte mode. The regex is ASCII structure around
+#     literal octets, so a match in bytes is a match in code points, and an
+#     undecodable name gets its own answer ('*' matches it).
+#   * Case-insensitive: stays in stringi, a declared ADR 0019 exception, for
+#     ICU's caseless matching, which uses Unicode full case folding ("SS"
+#     matches U+00DF, "k" matches U+212A KELVIN SIGN) and does not follow the
+#     ICU default locale (no Turkish dotless-i fold). Base R has no Unicode
+#     case folding. ICU counts a leading U+FEFF in the subject here, so no
+#     splice is needed: "utm_*" does not match U+FEFF "utm_source".
 .param_matches <- function(names, matcher) {
   if (is.null(matcher) || length(names) == 0L) {
     return(logical(length(names)))
   }
-  stringi::stri_detect_regex(
-    names, matcher$regex,
-    case_insensitive = !matcher$case_sensitive
-  )
+  names <- .latin1_input_to_utf8(names)
+  unknown <- Encoding(names) == "unknown"
+  if (any(unknown)) {
+    Encoding(names[unknown]) <- "UTF-8"
+  }
+  if (matcher$case_sensitive) {
+    return(.bytes_detect(names, matcher$regex))
+  }
+  stringi::stri_detect_regex(names, matcher$regex, case_insensitive = TRUE)
 }
 
 # Decide, per decoded pair, which survive under the given mode. Returns a

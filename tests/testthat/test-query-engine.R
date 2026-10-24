@@ -91,12 +91,14 @@ test_that("glob matching: only '*' special, on decoded names, case rules", {
 })
 
 test_that(".glob_to_regex treats only '*' as special", {
-  expect_equal(rurl:::.glob_to_regex("utm_*"), "^utm_.*$")
-  expect_equal(rurl:::.glob_to_regex("gclid"), "^gclid$")
+  # '*' is any run, line terminators included, and the anchor is \z
+  # (RURL-yyeohqah): the regex reads the same in PCRE and ICU.
+  expect_equal(rurl:::.glob_to_regex("utm_*"), "^utm_(?s:.*)\\z")
+  expect_equal(rurl:::.glob_to_regex("gclid"), "^gclid\\z")
   # '.' and '?' are literals, not regex metacharacters.
-  expect_equal(rurl:::.glob_to_regex("a.b"), "^a\\.b$")
-  expect_true(grepl(rurl:::.glob_to_regex("a.b"), "a.b"))
-  expect_false(grepl(rurl:::.glob_to_regex("a.b"), "axb"))
+  expect_equal(rurl:::.glob_to_regex("a.b"), "^a\\.b\\z")
+  expect_true(grepl(rurl:::.glob_to_regex("a.b"), "a.b", perl = TRUE))
+  expect_false(grepl(rurl:::.glob_to_regex("a.b"), "axb", perl = TRUE))
 })
 
 # --- decode / re-encode + opaque contract -----------------------------------

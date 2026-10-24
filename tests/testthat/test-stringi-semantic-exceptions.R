@@ -330,6 +330,41 @@ test_that("an undecodable name still matches '*' and nothing narrower", {
   }
 })
 
+test_that("the glob compiler escapes only ASCII punctuation", {
+  expect_identical(.glob_to_regex(c("café*", paste0(bom, "x"), "a.b_c")),
+                   c("^café(?s:.*)\\z", paste0("^", bom, "x\\z"),
+                     "^a\\.b_c\\z"))
+  expect_identical(.glob_to_regex("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~"),
+                   paste0("^", gsub("(.)", "\\\\\\1",
+                                    "!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~"),
+                          "\\z"))
+  expect_identical(Encoding(.glob_to_regex("café")), "UTF-8")
+})
+
+test_that("'*' matches any run, line terminators included, in both arms", {
+  # ICU's `.` stopped at CR, LF, U+0085, U+2028 and U+2029 and its `$`
+  # matched before a final one; the glob is now `(?s:.*)` anchored by `\z`.
+  names <- c("utm_x\n", "utm_\nx", "utm_x\r", "utm_\rx", "utm_ x",
+             "utm_x\u0085", "utm_\r\n")
+  for (cs in c(FALSE, TRUE)) {
+    expect_identical(pm(names, "utm_*", cs), rep(TRUE, length(names)))
+    expect_identical(pm(c("a\n", "a\r\n", "a ", "a"), "a", cs),
+                     c(FALSE, FALSE, FALSE, TRUE))
+  }
+  f <- ._filter_query_params
+  expect_identical(f("utm_x%0A=1&utm_%0Ax=2&utm_%0Dx=3&a=4", "filter"), "a=4")
+})
+
+test_that("the case-sensitive arm matches an undecodable name by its octets", {
+  # Byte mode compares octets, so an invalid 0xFF is not the U+FFFD that
+  # ICU's decoder would read it as. The case-insensitive arm, still ICU,
+  # does read it as U+FFFD.
+  bad <- octets(0xff)
+  expect_false(pm(bad, fffd, TRUE))
+  expect_true(pm(bad, fffd, FALSE))
+  expect_true(pm(fffd, fffd, TRUE))
+})
+
 test_that("the matcher handles NULL, empty and NA patterns", {
   expect_null(.compile_param_matcher(c(NA, ""), FALSE))
   expect_identical(.param_matches(c("a", "b"), NULL), c(FALSE, FALSE))
