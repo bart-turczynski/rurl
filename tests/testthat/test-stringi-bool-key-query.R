@@ -103,6 +103,10 @@ for (loc in names(ctypes)) {
     in_ctype(loc, ctypes[[loc]], {
       expect_true(rurl:::.bytes_check_pattern(rurl:::.DOT_SEGMENT_TAIL_RE,
                                               fixed = FALSE))
+      expect_true(rurl:::.bytes_check_pattern(rurl:::.TOKEN_OPAQUE_RE,
+                                              fixed = FALSE))
+      expect_identical(rurl:::.token_is_opaque(c("a%2", "a%2f", NA, "%zz")),
+                       c(TRUE, FALSE, NA, TRUE))
       s <- function(p) rurl:::._strip_index_page(p)
       expect_identical(s("/a/../index.html"), "/")
       expect_identical(s("/a/b/../index.html"), "/a/")

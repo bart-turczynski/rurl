@@ -118,6 +118,10 @@ for (loc in names(ctypes)) {
                                               format = "list")[[1L]],
                            info = paste(mk, qh))
           expect_length(q, 1L + length(bad))
+          # An rfc3986 error row has no query pairs, as under "drop".
+          for (j in seq_along(bad)) {
+            expect_identical(q[[1L + j]], list(), info = paste(mk, qh, j))
+          }
         }
       }
     })

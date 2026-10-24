@@ -618,8 +618,15 @@
 # Byte mode (ADR 0019): the pattern is ASCII, so the answer on valid UTF-8 is
 # the one stringi gave, and a token that is not valid UTF-8 gets its own answer
 # where stringi gave NA (RURL-kzbqvxpk).
+# A `%` not followed by two hex digits. A constant byte-mode pattern, checked
+# by .bytes_check_pattern() in a test, so the per-call check is skipped: this
+# runs twice per query row on the filter path (RURL-oahhlnvf review).
+.TOKEN_OPAQUE_RE <- "%(?![0-9A-Fa-f]{2})"
+
 .token_is_opaque <- function(x) {
-  .bytes_detect(x, "%(?![0-9A-Fa-f]{2})")
+  out <- grepl(.TOKEN_OPAQUE_RE, x, perl = TRUE, useBytes = TRUE)
+  out[is.na(x)] <- NA
+  out
 }
 
 # Decode non-opaque tokens (opaque ones pass through unchanged). decode_plus
