@@ -1077,11 +1077,12 @@
 # step 1's trim is scheme-blind by definition (and under `whatwg` the strip
 # already does it), and the special-scheme backslash rewrite is not applied.
 # A byte-for-byte no-op unless fixup_posture == "browser", or a `//` row under
-# `rfc3986` with "keep" (below).
+# `rfc3986` with "keep", "http" or "https" (below).
 #
-# Under `rfc3986` with `scheme_relative_handling = "keep"`, a `//`-led row is
-# also handed the same `http:` stand-in Phase 1 gives the web route
-# (RURL-ozpxupgq). The general route's own rules then decide which of these
+# Under `rfc3986`, a `//`-led row is also handed the prefix Phase 1 gives the
+# web route: the `http:` stand-in under `scheme_relative_handling = "keep"`
+# (RURL-ozpxupgq), and the assumed `http:` or `https:` under "http" or "https"
+# (RURL-vubwgoxo). The general route's own rules then decide which of these
 # rows the web route cannot read: `.rfc_odd_slash_run()` claims `///p` and
 # `////p`, `.rfc_empty_authority_host()` claims `//`, `//u@/p` and `//:80/x`,
 # and every `//host` row stays on the web route, byte-identical. The web route
@@ -1090,22 +1091,27 @@
 # network-path reference `"//" authority path-abempty`, and section 3.2's
 # `reg-name` may be empty, so `///p` is an empty authority and the path `/p`.
 # The general parser reads it that way: under `rfc3986` it is the generic
-# syntax, in which the stand-in is only a label, never a special scheme. The
-# row reports no scheme, as every "keep" row does (Phase 13). The other
-# postures assume a scheme, and `whatwg` and the no-selector default read the
-# slash run the special-scheme way, so none of them gets the stand-in here.
+# syntax, in which the prefix is only a scheme name, never a special scheme.
+# Under "keep" the row reports no scheme, as every "keep" row does (Phase 13);
+# under "http" or "https" it reports the assumed scheme, so the row parses as
+# its spelled `http:///p` or `https:///p` twin does. "error" rejects the row
+# in Phase 1, and `whatwg` and the no-selector default read the slash run the
+# special-scheme way, so none of them gets the prefix here.
 .general_route_input_vec <- function(url, opts) {
   url <- .apply_browser_fixup_vec(
     url, opts$fixup_posture, opts$url_standard, opts$scheme_policy
   )
   url <- .strip_whatwg_control_chars_vec(url, opts$url_standard)$url
+  srh <- opts$scheme_relative_handling
   if (identical(opts$url_standard, "rfc3986") &&
-        identical(opts$scheme_relative_handling, "keep")) {
+        isTRUE(srh %in% c("keep", "http", "https"))) {
     # The same mask Phase 1 draws: a U+FEFF-led row is never scheme-relative,
     # and stri_startswith_fixed() reads past the mark (see .starts_with_bom()).
     rel <- stringi::stri_startswith_fixed(url, "//")
     rel <- !is.na(rel) & rel & !.starts_with_bom(url)
-    url[rel] <- paste0("http:", url[rel])
+    # The prefix Phase 1 writes: "keep" parses behind `http:`.
+    prefix <- if (identical(srh, "https")) "https:" else "http:"
+    url[rel] <- paste0(prefix, url[rel])
   }
   url
 }
