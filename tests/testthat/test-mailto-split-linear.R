@@ -131,7 +131,7 @@ test_that("long inputs split the same way", {
   expect_identical(sr(paste(many, collapse = ",")), many)
 
   # A long run of percent-triplets and quotes.
-  enc <- paste(rep("%41%22%2C%22", 500L), collapse = "")
+  enc <- strrep("%41%22%2C%22", 500L)
   expect_identical(sr(paste0(enc, ",b")), c(enc, "b"))
 })
 

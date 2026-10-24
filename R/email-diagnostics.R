@@ -128,45 +128,84 @@
 # Explode a raw string into UNITS, where a `%XX` percent-triplet is one unit and
 # every other byte is its own unit. Classification and separator detection then
 # operate on units so an encoded delimiter is a single, recognizable token.
+#
+# Linear in the input (RURL-tnlbvcpl): the triplets are found in one vectorized
+# pass rather than by appending units one at a time. A hex digit is never `%`,
+# so two triplet starts can never overlap and the left-to-right scan this
+# replaces found exactly these starts. Mode: exact string equality on
+# the characters `strsplit(fixed = TRUE)` returns; no pattern, no locale table.
+.EMAIL_HEX_DIGITS <- c(as.character(0:9), LETTERS[1:6], letters[1:6])
+
 .email_units <- function(s) {
   ch <- strsplit(s, "", fixed = TRUE)[[1L]]
   n <- length(ch)
-  units <- character(0)
-  i <- 1L
-  while (i <= n) {
-    hex_next <- i + 2L <= n && grepl("^[0-9A-Fa-f]$", ch[i + 1L]) &&
-      grepl("^[0-9A-Fa-f]$", ch[i + 2L])
-    if (identical(ch[i], "%") && hex_next) {
-      units <- c(units, paste0("%", ch[i + 1L], ch[i + 2L]))
-      i <- i + 3L
-    } else {
-      units <- c(units, ch[i])
-      i <- i + 1L
-    }
+  if (n < 3L) {
+    return(ch)
   }
+  hex <- ch %in% .EMAIL_HEX_DIGITS
+  lead <- seq_len(n - 2L)
+  start <- which(ch[lead] == "%" & hex[lead + 1L] & hex[lead + 2L])
+  if (length(start) == 0L) {
+    return(ch)
+  }
+  keep <- rep(TRUE, n)
+  keep[c(start + 1L, start + 2L)] <- FALSE
+  units <- ch[keep]
+  units[cumsum(keep)[start]] <-
+    paste0(ch[start], ch[start + 1L], ch[start + 2L])
   units
 }
 
-# Structural role of a unit. A RAW delimiter and its percent-encoded spelling
-# share a role (so `%22`/`%5B`/`%5D`/`%5C` protect commas just like raw ones);
-# `%2C`/`%40` are DATA (role "other") and never act as separators.
+# Structural role of each unit (vectorized). A RAW delimiter and its
+# percent-encoded spelling share a role (so `%22`/`%5B`/`%5D`/`%5C` protect
+# commas just like raw ones); `%2C`/`%40` are DATA (role "other") and never act
+# as separators. A triplet's hex digits fold ASCII-only: both spellings are
+# listed, so no case mapping (and no locale) is involved.
+.EMAIL_UNIT_ROLES <- c(
+  "\"" = "quote", "%22" = "quote",
+  "[" = "bopen", "%5B" = "bopen", "%5b" = "bopen",
+  "]" = "bclose", "%5D" = "bclose", "%5d" = "bclose",
+  "\\" = "bslash", "%5C" = "bslash", "%5c" = "bslash",
+  "," = "comma",
+  "@" = "at"
+)
+
 .email_unit_role <- function(u) {
-  up <- .ascii_toupper(u)
-  if (identical(u, "\"") || identical(up, "%22")) {
-    "quote"
-  } else if (identical(u, "[") || identical(up, "%5B")) {
-    "bopen"
-  } else if (identical(u, "]") || identical(up, "%5D")) {
-    "bclose"
-  } else if (identical(u, "\\") || identical(up, "%5C")) {
-    "bslash"
-  } else if (identical(u, ",")) {
-    "comma"
-  } else if (identical(u, "@")) {
-    "at"
-  } else {
-    "other"
+  role <- unname(.EMAIL_UNIT_ROLES[match(u, names(.EMAIL_UNIT_ROLES))])
+  role[is.na(role)] <- "other"
+  role
+}
+
+# Positions of the units with role `target` that stand outside quote and
+# bracket context. Inside quotes a backslash escapes the next unit, whatever
+# its role. Only structural units can change the context, so the loop visits
+# those alone and the scan stays linear in the input.
+.email_structural_positions <- function(units, target) {
+  role <- .email_unit_role(units)
+  idx <- which(role != "other")
+  hit <- logical(length(idx))
+  in_quote <- FALSE
+  in_bracket <- FALSE
+  escaped <- 0L
+  for (k in seq_along(idx)) {
+    i <- idx[k]
+    if (i == escaped) {
+      next
+    }
+    r <- role[i]
+    if (in_quote && r == "bslash") {
+      escaped <- i + 1L
+    } else if (r == "quote" && !in_bracket) {
+      in_quote <- !in_quote
+    } else if (r == "bopen" && !in_quote) {
+      in_bracket <- TRUE
+    } else if (r == "bclose" && !in_quote) {
+      in_bracket <- FALSE
+    } else if (r == target && !in_quote && !in_bracket) {
+      hit[k] <- TRUE
+    }
   }
+  idx[hit]
 }
 
 # Split a raw positional `to` into raw recipient tokens on separator commas
@@ -178,35 +217,17 @@
     return(character(0))
   }
   units <- .email_units(raw_to)
-  in_quote <- FALSE
-  in_bracket <- FALSE
-  tokens <- character(0)
-  cur <- character(0)
-  i <- 1L
-  n <- length(units)
-  while (i <= n) {
-    role <- .email_unit_role(units[i])
-    if (in_quote && identical(role, "bslash")) {
-      cur <- c(cur, units[i], if (i < n) units[i + 1L] else NULL)
-      i <- i + 2L
-      next
-    }
-    if (identical(role, "quote") && !in_bracket) {
-      in_quote <- !in_quote
-    } else if (identical(role, "bopen") && !in_quote) {
-      in_bracket <- TRUE
-    } else if (identical(role, "bclose") && !in_quote) {
-      in_bracket <- FALSE
-    } else if (identical(role, "comma") && !in_quote && !in_bracket) {
-      tokens <- c(tokens, paste(cur, collapse = ""))
-      cur <- character(0)
-      i <- i + 1L
-      next
-    }
-    cur <- c(cur, units[i])
-    i <- i + 1L
+  cuts <- .email_structural_positions(units, "comma")
+  if (length(cuts) == 0L) {
+    return(paste(units, collapse = ""))
   }
-  c(tokens, paste(cur, collapse = ""))
+  is_sep <- logical(length(units))
+  is_sep[cuts] <- TRUE
+  # Token k holds the units after separator k - 1; a factor with every level
+  # keeps the empty tokens that adjacent or edge separators delimit.
+  token <- factor(cumsum(is_sep)[!is_sep], levels = 0:length(cuts))
+  parts <- split(units[!is_sep], token)
+  vapply(parts, paste, character(1L), collapse = "", USE.NAMES = FALSE)
 }
 
 # Split a raw recipient into (raw local-part, raw domain) at the STRUCTURAL `@`
@@ -215,36 +236,16 @@
 # resolved recipient). Never splits at an encoded `%40` or a quoted `@`.
 .email_split_addr_spec <- function(raw_recipient) {
   units <- .email_units(raw_recipient)
-  in_quote <- FALSE
-  in_bracket <- FALSE
-  at_positions <- integer(0)
-  i <- 1L
-  n <- length(units)
-  while (i <= n) {
-    role <- .email_unit_role(units[i])
-    if (in_quote && identical(role, "bslash")) {
-      i <- i + 2L
-      next
-    }
-    if (identical(role, "quote") && !in_bracket) {
-      in_quote <- !in_quote
-    } else if (identical(role, "bopen") && !in_quote) {
-      in_bracket <- TRUE
-    } else if (identical(role, "bclose") && !in_quote) {
-      in_bracket <- FALSE
-    } else if (identical(role, "at") && !in_quote && !in_bracket) {
-      at_positions <- c(at_positions, i)
-    }
-    i <- i + 1L
-  }
+  at_positions <- .email_structural_positions(units, "at")
   if (length(at_positions) != 1L) {
     return(list(ok = FALSE, local = NA_character_, domain = NA_character_))
   }
   p <- at_positions[1L]
+  n <- length(units)
   list(
     ok = TRUE,
     local = paste(units[seq_len(p - 1L)], collapse = ""),
-    domain = paste(units[seq.int(p + 1L, n)], collapse = "")
+    domain = paste(units[seq_len(n - p) + p], collapse = "")
   )
 }
 
