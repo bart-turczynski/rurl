@@ -80,6 +80,12 @@ the key MR !242 added:
 The gate then reports 187 references, with five "allowlist can shrink"
 lines for the removed keys.
 
+RURL-oahhlnvf's key and query partition (MR for refactor/stringi-bool-key-query)
+moved the boolean and replacement calls in `R/url-key.R`, `R/parse.R`,
+`R/path-query.R` and `R/utils.R` to byte mode, and with them the query split
+of RURL-kzbqvxpk: the allowlist was regenerated on that branch at main
+`e6d6263` to 180 references under 114 keys.
+
 ## Legend
 
 - **Family**: what the call does. *detect* returns a logical. *count*
