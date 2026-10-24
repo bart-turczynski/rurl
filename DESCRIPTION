@@ -19,6 +19,7 @@ Collate:
     'rurl-package.R'
     'status-constants.R'
     'utils.R'
+    'strings-base.R'
     'percent-coding.R'
     'parse-state.R'
     'query-denylist.R'
