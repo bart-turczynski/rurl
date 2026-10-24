@@ -138,3 +138,95 @@ test_that("a line terminator in userinfo does not unsplit the host", {
   expect_identical(get_host(u, url_standard = "whatwg"), "ex.com")
   expect_identical(get_parse_status(u, url_standard = "whatwg"), "ok")
 })
+
+# --- percent-encoded full stops reach domain to ASCII (RURL-esztpdhx) --------
+# The host parser percent-decodes the host before domain to ASCII (host
+# parsing, steps 4-5), so an encoded variant full stop is mapped to "." like a
+# raw one, wherever it stands. A trailing one leaves an empty last label, which
+# WHATWG keeps: `http://example.com%E3%80%82/` has host `example.com.`.
+
+test_that("whatwg maps an encoded full-stop variant between labels", {
+  us <- c(
+    "http://example%E3%80%82com/",
+    "http://example%EF%BC%8Ecom/",
+    "http://example%EF%BD%A1com/"
+  )
+  expect_identical(get_host(us, url_standard = "whatwg"),
+                   rep("example.com", 3L))
+  expect_identical(get_parse_status(us, url_standard = "whatwg"),
+                   rep("ok", 3L))
+})
+
+test_that("whatwg maps a raw trailing full-stop variant to a trailing dot", {
+  us <- paste0("http://example.com", c(U3002, UFF0E, UFF61), "/")
+  expect_identical(get_host(us, url_standard = "whatwg"),
+                   rep("example.com.", 3L))
+  expect_identical(get_parse_status(us, url_standard = "whatwg"),
+                   rep("ok", 3L))
+})
+
+test_that("whatwg maps an encoded trailing full-stop variant to a dot", {
+  us <- c(
+    "http://example.com%E3%80%82/",
+    "http://example.com%EF%BC%8E/",
+    "http://example.com%EF%BD%A1/"
+  )
+  expect_identical(get_host(us, url_standard = "whatwg"),
+                   rep("example.com.", 3L))
+  expect_identical(get_clean_url(us, url_standard = "whatwg"),
+                   rep("http://example.com./", 3L))
+  expect_identical(get_parse_status(us, url_standard = "whatwg"),
+                   rep("ok", 3L))
+})
+
+test_that("an encoded full-stop variant parses like its raw spelling", {
+  raw <- paste0("http://", c("example.com", "example"), U3002,
+                c("/", "com/"))
+  enc <- c("http://example.com%E3%80%82/", "http://example%E3%80%82com/")
+  cols <- c("host", "domain", "tld", "parse_status", "clean_url")
+  expect_identical(safe_parse_urls(enc, url_standard = "whatwg")[, cols],
+                   safe_parse_urls(raw, url_standard = "whatwg")[, cols])
+})
+
+test_that("an encoded full stop matches its raw twin on the file route", {
+  enc <- "file://example.com%E3%80%82/p"
+  cols <- c("host", "domain", "tld", "parse_status", "clean_url")
+  expect_identical(
+    safe_parse_urls(enc, url_standard = "whatwg")[, cols],
+    safe_parse_urls(paste0("file://example.com", U3002, "/p"),
+                    url_standard = "whatwg")[, cols]
+  )
+  expect_identical(get_host(enc, url_standard = "whatwg"), "example.com.")
+  expect_identical(get_parse_status(enc, url_standard = "whatwg"), "ok")
+})
+
+test_that("an encoded full stop matches its raw twin under each encoding", {
+  enc <- c("http://b%C3%BCcher.example%E3%80%82/",
+           "http://b%C3%BCcher%EF%BC%8Ede/")
+  raw <- c(paste0("http://bücher.example", U3002, "/"),
+           paste0("http://bücher", UFF0E, "de/"))
+  cols <- c("host", "domain", "tld", "parse_status", "clean_url")
+  parse <- function(x, he) {
+    safe_parse_urls(x, url_standard = "whatwg", host_encoding = he)[, cols]
+  }
+  for (he in c("idna", "unicode")) {
+    expect_identical(parse(enc, he), parse(raw, he), info = he)
+  }
+})
+
+test_that("an encoded full stop matches its raw twin under www stripping", {
+  enc <- c("http://www%E3%80%82example.com/",
+           "http://www.example.com%EF%BD%A1/")
+  raw <- c(paste0("http://www", U3002, "example.com/"),
+           paste0("http://www.example.com", UFF61, "/"))
+  cols <- c("host", "domain", "tld", "parse_status", "clean_url")
+  parse <- function(x) {
+    safe_parse_urls(x, url_standard = "whatwg", www_handling = "strip")[, cols]
+  }
+  expect_identical(parse(enc), parse(raw))
+})
+
+test_that("whatwg reads an IPv4 host with an encoded trailing full stop", {
+  u <- "http://127%E3%80%820%E3%80%820%E3%80%821%E3%80%82/"
+  expect_identical(get_host(u, url_standard = "whatwg"), "127.0.0.1")
+})

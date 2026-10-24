@@ -262,7 +262,7 @@ for JOB in $JOBS; do
   # /ci is read-only so a job cannot rewrite its own script mid-run; /repo is
   # the throwaway clone, so a job that dirties the tree costs nothing.
   # bash when the image has it, POSIX sh otherwise -- as GitLab's own shell
-  # detection does. `python:3.13-alpine` (citation-version) ships only busybox
+  # detection does. `python:3.14-alpine` (citation-version) ships only busybox
   # sh, and a bare `bash` there fails before the job starts (RURL-dswufxky).
   # `exec` keeps the job's exit status as the container's.
   if docker run --rm \

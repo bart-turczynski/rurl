@@ -315,6 +315,55 @@
   paste(unlist(out, use.names = FALSE), collapse = "")
 }
 
+# Percent-encode, as an UPPERCASE "%XX", every octet of `s` that is not part
+# of a well-formed UTF-8 sequence, and leave everything else as written: a
+# valid multibyte character stays raw (its encoding belongs to `path_encoding`
+# and the serializer) and an existing "%xx" keeps its hex case. One caller:
+# the re-derived raw path (`.extract_raw_path_vec()`), so that under the
+# no-selector default an undecodable path octet comes out as the same triplet
+# the parser's component pass already writes for one in the query or fragment
+# (RURL-yarkccco, RUL-029). RFC 3986 sec 2.1 makes the triplet the octet's
+# representation, so no byte is lost. The scan is bytewise, so the result is
+# the same in every locale. A "latin1" element is exempt, as in
+# `.grepl_decodable()`: every octet decodes there.
+#
+# Linear time: one bytewise regex pass tokenizes `s` into well-formed UTF-8
+# sequences (RFC 3629 section 4: no overlong form, no surrogate, nothing above
+# U+10FFFF) and single leftover octets, each leftover >= 0x80 is ill-formed,
+# and the output is built in one preallocated raw vector. The former
+# octet-by-octet `c()` growth was quadratic (a 40,000-byte path took ~3 s).
+.web_utf8_token_regex <- paste0(
+  "(?s)[\\x00-\\x7F]|[\\xC2-\\xDF][\\x80-\\xBF]",
+  "|\\xE0[\\xA0-\\xBF][\\x80-\\xBF]|[\\xE1-\\xEC\\xEE\\xEF][\\x80-\\xBF]{2}",
+  "|\\xED[\\x80-\\x9F][\\x80-\\xBF]",
+  "|\\xF0[\\x90-\\xBF][\\x80-\\xBF]{2}|[\\xF1-\\xF3][\\x80-\\xBF]{3}",
+  "|\\xF4[\\x80-\\x8F][\\x80-\\xBF]{2}|."
+)
+.web_hex_digits <- charToRaw("0123456789ABCDEF")
+
+.web_escape_undecodable_bytes <- function(s) {
+  if (is.na(s) || validUTF8(s) || Encoding(s) == "latin1") {
+    return(s)
+  }
+  b <- charToRaw(s)
+  tok <- gregexpr(.web_utf8_token_regex, s, perl = TRUE, useBytes = TRUE)[[1]]
+  starts <- as.integer(tok)
+  single <- starts[attr(tok, "match.length") == 1L]
+  bad <- logical(length(b))
+  bad[single[b[single] >= as.raw(0x80)]] <- TRUE
+  ends <- cumsum(1L + 2L * bad)
+  out <- raw(ends[length(ends)])
+  out[ends[!bad]] <- b[!bad]
+  e <- ends[bad]
+  v <- as.integer(b[bad])
+  out[e - 2L] <- as.raw(0x25)
+  out[e - 1L] <- .web_hex_digits[v %/% 16L + 1L]
+  out[e] <- .web_hex_digits[v %% 16L + 1L]
+  res <- rawToChar(out)
+  Encoding(res) <- "UTF-8"
+  res
+}
+
 # path/query/fragment normalization: deal with the forbidden bytes,
 # percent-encode every byte >= 0x80, then uppercase the "%XX" pairs. Returns
 # NULL on rejection.
