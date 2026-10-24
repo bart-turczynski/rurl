@@ -316,20 +316,21 @@ ib_resolve <- function(ref, base, sel, ...) {
 # selector-caused drift.
 #
 # Signature. Inputs: a reference or base that is bytes-marked, or not valid
-# UTF-8 once unmarked bytes are read as UTF-8. Options: resolve_url() under
-# any url_standard and either output. Output: that row's element only; every
-# other row is unchanged. Per arm: under NULL, a bytes base is no base, and
-# otherwise an undecodable row resolves octet for octet and the parser reads
-# the result, so an undecodable path octet comes out as %XX and one in the
-# host fails the row (the LC_CTYPE C answer, now in every locale). As for a
-# decodable base, the parser is not asked about the base itself. rfc3986 had all three defects, through the same string code
-# as NULL; there a bytes or undecodable operand gives NA (an absolute
-# reference still resolves without the base), as its parser rejects the
-# octet. whatwg had the bytes defect, and its undecodable base resolved under
-# LC_CTYPE C only; it now reads an undecodable reference or base with U+FFFD
-# replacement in every locale, as its parse seam does, so its reference row
-# does not move ("http://b.com/h<U+FFFD>.com") and its base rows resolve.
-test_that("resolve_url(): an undecodable reference reads as its parser reads it", {
+# UTF-8 once unmarked bytes are read as UTF-8. Options: resolve_url() under any
+# url_standard and either output. Output: that row's element only; every other
+# row is unchanged. Per arm: under NULL, a bytes base is no base, and otherwise
+# an undecodable row resolves octet for octet and the parser reads the result,
+# so an undecodable path octet comes out as %XX and one in the host fails the
+# row (the LC_CTYPE C answer, now in every locale). As for a decodable base,
+# the parser is not asked about the base itself. rfc3986 had all three defects,
+# through the same string code as NULL; there a bytes or undecodable operand
+# gives NA (an absolute reference still resolves without the base), as its
+# parser rejects the octet. whatwg had the bytes defect, and its undecodable
+# base resolved under LC_CTYPE C only; it now reads an undecodable reference or
+# base with U+FFFD replacement in every locale, as its parse seam does, so its
+# reference row does not move ("http://b.com/h<U+FFFD>.com") and its base rows
+# resolve.
+test_that("resolve_url(): an undecodable reference reads as its parser does", {
   skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
   for (loc in c(ib_utf8, "C")) {
     for (s in names(ib_selectors)) {
