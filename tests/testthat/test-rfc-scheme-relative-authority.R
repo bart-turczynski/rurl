@@ -124,11 +124,11 @@ test_that("the whatwg profile rejects every // row", {
   expect_identical(r$host, rep(NA_character_, 11L))
 })
 
-# The empty-authority shapes under every posture but the rfc3986 keep one. A
-# posture other than "keep" assumes a scheme, and `whatwg` and `NULL` read the
-# leading slashes the WHATWG way: the special authority state skips the slash
-# run, so `///p` reads host `p`, and `////p` has no WHATWG answer rurl
-# reproduces (rejected). None of them is moved by RURL-ozpxupgq.
+# The empty-authority shapes under `whatwg`, `NULL` and the profiles built on
+# them. They read the leading slashes the WHATWG way: the special authority
+# state skips the slash run, so `///p` reads host `p`, and `////p` has no
+# WHATWG answer rurl reproduces (rejected). Neither RURL-ozpxupgq nor
+# RURL-vubwgoxo moves them; rfc3986 with "http"/"https" is pinned below.
 srel_empty_fields <- function(scheme, path, clean_url) {
   list(
     scheme = c(scheme, rep(NA, 5L)),
@@ -152,16 +152,14 @@ test_that("other postures keep reading the empty-authority shapes as before", {
               srel_empty_fields(NA, "/", "https://p"), "canonical")
   srel_expect(srel_empty, list(scheme_relative_handling = "http"),
               srel_empty_fields("http", "/", "http://p/"), "NULL http")
-  srel_expect(
-    srel_empty,
-    list(url_standard = "rfc3986", scheme_relative_handling = "http"),
-    srel_empty_fields("http", "", "http://p"), "rfc3986 http"
-  )
-  srel_expect(
-    srel_empty,
-    list(url_standard = "rfc3986", scheme_relative_handling = "https"),
-    srel_empty_fields("https", "", "https://p"), "rfc3986 https"
-  )
+  srel_expect(srel_empty, list(scheme_relative_handling = "https"),
+              srel_empty_fields("https", "/", "https://p/"), "NULL https")
+  srel_expect(srel_empty,
+              list(url_standard = "whatwg", scheme_relative_handling = "http"),
+              srel_empty_fields("http", "/", "http://p/"), "whatwg http")
+  srel_expect(srel_empty,
+              list(url_standard = "whatwg", scheme_relative_handling = "https"),
+              srel_empty_fields("https", "/", "https://p/"), "whatwg https")
   for (std in list(NULL, "rfc3986", "whatwg")) {
     r <- safe_parse_urls(srel_empty, url_standard = std,
                          scheme_relative_handling = "error")
@@ -306,4 +304,102 @@ test_that("the record gives a // row no scheme and its leading // delimiter", {
   rec <- rurl:::.fsss_record_vec(c("//p", "http://p", "http:/p"), "rfc3986")
   expect_identical(rec$scheme, c(NA, "http", "http"))
   expect_identical(rec$authority_delimiter_present, c(TRUE, TRUE, FALSE))
+})
+
+# --- RURL-vubwgoxo: rfc3986 with "http" / "https" ----------------------------
+#
+# These handlings read a `//` row as if it began with that scheme, so under
+# `rfc3986` the row parses as its spelled `http:` / `https:` twin does
+# (RFC 3986 sections 3.2 and 4.2; the RURL-kmkyicpt ruling). Before the fix
+# the web route read the stand-in with the special-scheme authority, which
+# skips a slash run, so `///p` read as host `p` and the other empty-authority
+# shapes failed where their twins parse under general acceptance.
+
+srel_twin_rows <- c(srel_empty, "///example.com/x", "//?q")
+srel_twin_cols <- c("scheme", "host", "port", "path", "query", "fragment",
+                    "user", "password", "domain", "tld", "domain_ascii",
+                    "domain_unicode", "tld_ascii", "tld_unicode", "is_ip_host",
+                    "clean_url", "parse_status")
+
+srel_twin_check <- function(x, handling, acceptance, policy) {
+  args <- list(url_standard = "rfc3986", scheme_relative_handling = handling,
+               scheme_acceptance = acceptance, scheme_policy = policy)
+  r <- do.call(safe_parse_urls, c(list(x), args))
+  twin <- do.call(safe_parse_urls, c(list(paste0(handling, ":", x)), args))
+  for (cl in srel_twin_cols) {
+    expect_identical(r[[cl]], twin[[cl]],
+                     label = paste(handling, acceptance, policy, cl))
+  }
+}
+
+test_that("rfc3986 http/https: empty-authority rows read as their twins", {
+  for (h in c("http", "https")) {
+    for (acc in c("web", "general")) {
+      for (sp in c("infer", "require")) {
+        srel_twin_check(srel_twin_rows, h, acc, sp)
+      }
+    }
+  }
+})
+
+test_that("rfc3986 http/https: //host rows still read as their twins", {
+  for (h in c("http", "https")) {
+    for (acc in c("web", "general")) {
+      srel_twin_check(srel_hosts, h, acc, "infer")
+    }
+  }
+})
+
+test_that("rfc3986 http: ///p is an empty authority and the path /p", {
+  r <- safe_parse_urls(c("///p", "//p", "////p", "//u@/p", "//:80/x"),
+                       url_standard = "rfc3986",
+                       scheme_relative_handling = "http",
+                       scheme_acceptance = "general")
+  expect_identical(r$scheme, rep("http", 5L))
+  expect_identical(r$host, c(NA, "p", NA, NA, NA))
+  expect_identical(r$path, c("/p", "", "//p", "/p", "/x"))
+  expect_identical(r$port, c(NA, NA, NA, NA, 80L))
+  expect_identical(r$user, c(NA, NA, NA, "u", NA))
+  expect_identical(r$clean_url, c("http:///p", "http://p", "http:////p",
+                                  "http:///p", "http:///x"))
+  expect_identical(r$parse_status,
+                   c("ok", "warning-no-tld", "ok", "ok", "ok"))
+  r <- safe_parse_urls(c("///p", "///"), url_standard = "rfc3986",
+                       scheme_relative_handling = "https",
+                       scheme_acceptance = "general")
+  expect_identical(r$scheme, c("https", "https"))
+  expect_identical(r$host, c(NA_character_, NA_character_))
+  expect_identical(r$path, c("/p", "/"))
+  expect_identical(r$clean_url, c("https:///p", "https:///"))
+  # Under the default web acceptance the empty host fails, as it does for
+  # `http:///p` (RURL-mugcdtrv), where `///p` had parsed as host `p`.
+  r <- safe_parse_urls("///p", url_standard = "rfc3986",
+                       scheme_relative_handling = "http")
+  expect_identical(r$parse_status, "error")
+  expect_identical(r$host, NA_character_)
+})
+
+test_that("the rfc3986 key and serializer read // rows under keep", {
+  # The key's rfc3986 posture is the rfc-syntax bundle, so a caller's
+  # "http"/"https" choice never reaches it.
+  key_opts <- rurl:::.url_key_parse_options(
+    url_key_policy(standard = "rfc3986")
+  )
+  expect_identical(key_opts$scheme_relative_handling, "keep")
+  k <- srel_key(c("///p", "//p", "////p", "//u@/p", "//:80/x"), "rfc3986")
+  expect_identical(attr(k, "keyability"), rep("ok", 5L))
+  # The userinfo is in no key (ratification Q5), so `//u@/p` keys as `///p`.
+  pre <- "1:21:17:rfc39865:exact15:scheme-relative-:1:T"
+  expect_identical(
+    as.character(unclass(k)),
+    paste0(pre, c(
+      "5:empty0:-:4:list7:abempty2:/p6:absent-:",
+      "7:present1:p-:4:list7:abempty0:6:absent-:",
+      "5:empty0:-:4:list7:abempty3://p6:absent-:",
+      "5:empty0:-:4:list7:abempty2:/p6:absent-:",
+      "5:empty0:2:804:list7:abempty2:/x6:absent-:"
+    ))
+  )
+  x <- c(srel_hosts, srel_empty)
+  expect_identical(serialize_url(x, "rfc3986"), rep(NA_character_, 11L))
 })
