@@ -2040,12 +2040,13 @@ safe_parse_urls <- function(url,
 #     on it: whether an undecodable string is an error, or is read with
 #     U+FFFD replacement, is the parser's question under each standard, and
 #     the parsers answer it today (the whatwg arm replaces, the rfc3986 arm
-#     and the frozen default reject). An entry point that cannot hand the row
-#     to a parser acts on the verdict itself, as that parser would:
-#     resolve_url() reshapes both operands as strings first, so it reads an
-#     undecodable one as U+FFFD under whatwg, as NA under rfc3986, and under
-#     the frozen default resolves its octets and lets the parser read the
-#     result (a base the parser refuses is no base).
+#     rejects, and the frozen default percent-encodes the octet in a web
+#     URL's path, query or fragment and rejects it elsewhere, RURL-yarkccco).
+#     An entry point that cannot hand the row to a parser acts on the verdict
+#     itself, as that parser would: resolve_url() reshapes both operands as
+#     strings first, so it reads an undecodable one as U+FFFD under whatwg,
+#     as NA under rfc3986, and under the frozen default resolves its octets
+#     and lets the parse of the result decide.
 #
 # Ownership. The function that READS a URL string calls this, not its caller:
 # the parse funnel (._parse_urls_cached()) and the scalar and vector parse

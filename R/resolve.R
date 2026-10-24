@@ -886,7 +886,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # undecodable base is no base (NA, as a bytes one already is), and an
   # absolute reference still resolves without it. `NULL` accepts the octet
   # in some components (a path, query or fragment of a web URL, RURL-yarkccco)
-  # and not in others, so its parser decides: see below.
+  # and not in others, so the parse of the resolved URL decides: see below.
   ref_bad <- !rep_len(ref_in$decodable, n)
   base_bad <- !rep_len(base_in$decodable, n)
   hidden <- logical(n)
@@ -902,17 +902,11 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     ref[ref_bad] <- NA_character_
     base[base_bad] <- NA_character_
   } else {
-    # `NULL`: an undecodable base the parser refuses is no base. One it
-    # accepts, and every undecodable reference, resolves octet for octet,
-    # and the parser below reads the result as it reads any URL: a path
-    # octet becomes %XX, one in the host fails the row.
-    if (any(base_bad)) {
-      st <- safe_parse_urls(base[base_bad], url_standard = NULL,
-                            ...)$parse_status
-      refused <- which(base_bad)[st == "error"]
-      base[refused] <- NA_character_
-      base_bad[refused] <- FALSE
-    }
+    # `NULL`: an undecodable row resolves octet for octet, as a decodable one
+    # resolves character for character, and the parser below reads the
+    # result as it reads any URL: a path octet becomes %XX, one in the host
+    # fails the row. As for a decodable base, the parser is not asked about
+    # the base itself.
     hidden <- ref_bad | base_bad
     ref[hidden] <- .hide_high_octets(ref[hidden])
     base[hidden] <- .hide_high_octets(base[hidden])

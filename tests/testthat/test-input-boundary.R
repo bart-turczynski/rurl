@@ -311,17 +311,18 @@ ib_resolve <- function(ref, base, sel, ...) {
 #     "http://example.com/a", "http://example.com/caf%E9"; under a UTF-8
 #     LC_CTYPE it threw).
 # No profile, standard or contract sanctions a result that throws for the
-# whole vector, depends on LC_CTYPE, or resolves against a base the parser
-# refuses: this is a default-path defect, not selector-caused drift.
+# whole vector or depends on LC_CTYPE, or that resolves against a
+# bytes-marked base, which is not text: this is a default-path defect, not
+# selector-caused drift.
 #
 # Signature. Inputs: a reference or base that is bytes-marked, or not valid
 # UTF-8 once unmarked bytes are read as UTF-8. Options: resolve_url() under
 # any url_standard and either output. Output: that row's element only; every
-# other row is unchanged. Per arm: under NULL, a bytes base is no base, an
-# undecodable base the parser calls an error is no base, and otherwise the
-# row resolves octet for octet and the parser reads the result, so an
-# undecodable path octet comes out as %XX (the LC_CTYPE C answer, now in
-# every locale). rfc3986 had all three defects, through the same string code
+# other row is unchanged. Per arm: under NULL, a bytes base is no base, and
+# otherwise an undecodable row resolves octet for octet and the parser reads
+# the result, so an undecodable path octet comes out as %XX and one in the
+# host fails the row (the LC_CTYPE C answer, now in every locale). As for a
+# decodable base, the parser is not asked about the base itself. rfc3986 had all three defects, through the same string code
 # as NULL; there a bytes or undecodable operand gives NA (an absolute
 # reference still resolves without the base), as its parser rejects the
 # octet. whatwg had the bytes defect, and its undecodable base resolved under
@@ -376,8 +377,19 @@ test_that("resolve_url(): an undecodable path octet in a reference", {
                                          ib_selectors[[s]]))
       expect_identical(got, hi_in_ctype(loc, get_clean_url(raw)),
                        label = paste(s, loc))
-      expect_identical(got[[1]], "http://b.com/caf%E9/x", label = loc)
-      expect_identical(got[[2]], NA_character_, label = loc)
+      expect_identical(got[[1]], "http://b.com/caf%E9/x",
+                       label = paste(s, loc))
+      expect_identical(got[[2]], NA_character_, label = paste(s, loc))
+      # The octets are hidden as U+F780..U+F7FF while the row resolves; a
+      # code point already in that range comes back as itself.
+      got <- hi_in_ctype(loc, ib_resolve(
+        c(ib_str("\uf7e9", 0xe9), ib_str(0xe9)), c("http://x/a", "http://x//"),
+        ib_selectors[[s]]
+      ))
+      expect_identical(got, hi_in_ctype(loc, get_clean_url(c(
+        ib_str("http://x/\uf7e9", 0xe9), ib_str("http://x//", 0xe9)
+      ))), label = paste(s, loc))
+      expect_identical(got[[2]], "http://x//%E9", label = paste(s, loc))
     }
   }
 })
@@ -416,13 +428,15 @@ test_that("resolve_url(): an undecodable base reads the same in every locale", {
         whatwg = c("file:///x", "http://example.com/x",
                    "http://example.com/x"),
         rfc3986 = c(NA, NA, "http://example.com/x"),
-        c(NA, "http://example.com/x", "http://example.com/x")
+        c("file:///x", "http://example.com/x", "http://example.com/x")
       )
       expect_identical(got, want, label = lab)
-      # Each standard resolves against the bases its parse seam accepts:
-      # rfc3986 calls both errors; the frozen default calls the file: one an
-      # error and reads the http one's path octet as %E9 (RURL-yarkccco);
-      # whatwg reads both with U+FFFD replacement.
+      # rfc3986 calls both bases errors and resolves against neither. The
+      # frozen default calls the file: one an error and reads the http one's
+      # path octet as %E9 (RURL-yarkccco), but resolves against both octet for
+      # octet, as it resolves against a decodable base it refuses
+      # ("http://exa mple.com/a"): the parse of the result decides. whatwg
+      # reads both with U+FFFD replacement.
       sel <- if (identical(s, "omitted")) NULL else ib_selectors[[s]]
       if (!identical(sel, "whatwg")) {
         st <- hi_in_ctype(loc, get_parse_status(ib_bad_bases,
@@ -434,7 +448,7 @@ test_that("resolve_url(): an undecodable base reads the same in every locale", {
   }
 })
 
-test_that("resolve_url(): NULL resolves against the undecodable bases it parses", {
+test_that("resolve_url(): NULL resolves an undecodable base octet for octet", {
   skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
   bases <- c(
     ib_str("file:///caf", 0xe9),
@@ -454,19 +468,26 @@ test_that("resolve_url(): NULL resolves against the undecodable bases it parses"
       got <- hi_in_ctype(loc, ib_resolve(
         c("x", "x", "x", "x", "x", "x", "x"), bases, ib_selectors[[s]]
       ))
+      # The base is not asked about itself, as a decodable one is not: the
+      # host octet survives into "http://h\xe9.com/x", which fails its parse.
       expect_identical(got, c(
-        NA, "http://example.com/x", "https://example.com/x",
+        "file:///x", "http://example.com/x", "https://example.com/x",
         "ftp://example.com/x", NA, "http://example.com/x",
         "http://example.com/x"
       ), label = lab)
-      # A base the parser refuses is no base even for a network-path
-      # reference, which takes only its scheme.
+      # A network-path reference takes only the base's scheme, so the
+      # base's octet is gone from the result.
       got <- hi_in_ctype(loc, ib_resolve("//o.com/y", bases,
                                          ib_selectors[[s]]))
       expect_identical(got, c(
-        NA, "http://o.com/y", "https://o.com/y", "ftp://o.com/y", NA,
-        "http://o.com/y", "http://o.com/y"
+        "file://o.com/y", "http://o.com/y", "https://o.com/y",
+        "ftp://o.com/y", "http://o.com/y", "http://o.com/y", "http://o.com/y"
       ), label = lab)
+      expect_identical(
+        hi_in_ctype(loc, ib_resolve("//o.com/y", "http://exa mple.com/a",
+                                    ib_selectors[[s]])),
+        "http://o.com/y", label = lab
+      )
       # The base's own octet survives where the reference keeps it.
       got <- hi_in_ctype(loc, ib_resolve(
         c("?z", "#f", ""), bases[c(3, 4, 2)], ib_selectors[[s]]
