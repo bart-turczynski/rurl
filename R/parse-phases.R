@@ -264,8 +264,10 @@
   # it 1:1 to '/' (path segments, and the authority/path boundary when the
   # authority had no run of its own, e.g. "http://host\path"). The marker is
   # spliced on first so the rewrite never reads a span that starts with U+FEFF.
-  rewritten_remainder <- stringi::stri_replace_all_fixed(
-    paste0("//", remainder), "\\", "/"
+  # (The byte-mode replace reads the mark as data anyway; the splice is the
+  # ADR 0005 guard, kept until the close-out retires it.)
+  rewritten_remainder <- .bytes_replace(
+    paste0("//", remainder), "\\", "/", all = TRUE, fixed = TRUE
   )
 
   no_run_authority <- eligible & !has_run &
@@ -279,10 +281,10 @@
     has_run | no_run_authority, rewritten_remainder, before
   )
 
-  run_had_backslash <- has_run & stringi::stri_detect_fixed(run, "\\")
+  run_had_backslash <- has_run & .bytes_detect(run, "\\", fixed = TRUE)
   run_had_backslash[is.na(run_had_backslash)] <- FALSE
   remainder_had_backslash <- (has_run | no_run_authority) &
-    stringi::stri_detect_fixed(remainder, "\\")
+    .bytes_detect(remainder, "\\", fixed = TRUE)
   remainder_had_backslash[is.na(remainder_had_backslash)] <- FALSE
   # file:///path carries an empty file authority. Collapsing an all-forward-
   # slash run from "///" to "//" would turn it into file://path, which the
@@ -372,15 +374,22 @@
 
   # Step 1a: leading/trailing C0-control-or-SPACE. `\z` (true end of input), not
   # `$`: ICU's `$` also matches before a final line terminator, and LF/CR/VT/FF
-  # all live inside this class. The regex functions here count a leading
-  # U+FEFF, so a row led by one keeps it (see .starts_with_bom()).
+  # all live inside this class. The regex calls here count a leading U+FEFF,
+  # so a row led by one keeps it (see .starts_with_bom()).
+  #
+  # The leading trim STAYS ON STRINGI (RURL-oahhlnvf): its ICU read is also
+  # the decode this route relies on. stringi writes U+FFFD for each octet that
+  # is not UTF-8, as the URL Standard's input does (its parser reads scalar
+  # values, and a decoder writes U+FFFD for an undecodable sequence), and
+  # every later step of the `whatwg` route, the `file:` parser among them,
+  # sees only that decoded copy (`differs` below). Byte mode would hand the
+  # raw octets on. Replacing it is an encoding decision, the semantic
+  # exceptions' slice (RURL-yyeohqah, ADR 0019), not a byte-mode rewrite.
   url_out <- url
   trimmed <- stringi::stri_replace_first_regex(
     url_out, "^[\\u0000-\\u0020]+", ""
   )
-  trimmed <- stringi::stri_replace_first_regex(
-    trimmed, "[\\u0000-\\u0020]+\\z", ""
-  )
+  trimmed <- .bytes_replace(trimmed, "[\\x00-\\x20]+\\z", "")
   # `differs` picks the rows that flow on as stringi's copy; it is NOT the strip
   # fact. `!=` compares a native input with stringi's UTF-8 output, and R reads
   # the native side in the session charset: under LC_ALL=C every non-ASCII row
@@ -396,18 +405,14 @@
   # The fact: a C0-or-space run at either end, matched by the same classes and
   # anchors as the strip, so it reads code points and no encoding mark or
   # session charset can move it.
-  lt <- stringi::stri_detect_regex(
-    url, "^[\\u0000-\\u0020]|[\\u0000-\\u0020]\\z"
-  )
+  lt <- .bytes_detect(url, "^[\\x00-\\x20]|[\\x00-\\x20]\\z")
   lt[is.na(lt)] <- FALSE
 
   # Step 1b: every remaining tab/LF/CR, anywhere.
-  had <- stringi::stri_detect_regex(url_out, "[\\t\\n\\r]")
+  had <- .bytes_detect(url_out, "[\\t\\n\\r]")
   had[is.na(had)] <- FALSE
   if (any(had)) {
-    url_out[had] <- stringi::stri_replace_all_regex(
-      url_out[had], "[\\t\\n\\r]", ""
-    )
+    url_out[had] <- .bytes_replace(url_out[had], "[\\t\\n\\r]", "", all = TRUE)
   }
 
   list(
@@ -418,8 +423,11 @@
 }
 
 # The three code points UTS #46 maps to ASCII "." (section 4, step 1): U+3002,
-# U+FF0E and U+FF61, as one ICU character class.
-.UTS46_FULL_STOP_VARIANTS <- "[\\u3002\\uFF0E\\uFF61]"
+# U+FF0E and U+FF61, as a byte-mode alternation of their UTF-8 sequences
+# (ADR 0019): E3 80 82, EF BC 8E and EF BD A1. UTF-8 is self-synchronizing, so
+# each sequence matches only the code point it spells.
+.UTS46_FULL_STOP_VARIANTS <-
+  "(?:\\xe3\\x80\\x82|\\xef\\xbc\\x8e|\\xef\\xbd\\xa1)"
 
 # WHATWG / UTS-46 alternative full-stop mapping (RURL-odsmwsxu). UTS-46
 # domain-to-ASCII -- the "map" step the WHATWG host parser runs for special
@@ -469,7 +477,7 @@
   # A row led by U+FEFF has neither a scheme nor "//"; the stringi match reads
   # past the mark, and rebuilding the row from it would drop the mark.
   eligible <- !bom_led & !is.na(authority) &
-    stringi::stri_detect_regex(authority, .UTS46_FULL_STOP_VARIANTS)
+    .bytes_detect(authority, .UTS46_FULL_STOP_VARIANTS)
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
     return(no_op)
@@ -498,13 +506,13 @@
   host_port <- stringi::stri_sub(url, host_start, authority_end)
   after_authority <- stringi::stri_sub(url, authority_end + 1L)
   eligible <- eligible & !startsWith(host_port, "[") &
-    stringi::stri_detect_regex(host_port, .UTS46_FULL_STOP_VARIANTS)
+    .bytes_detect(host_port, .UTS46_FULL_STOP_VARIANTS)
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
     return(no_op)
   }
-  mapped_host_port <- stringi::stri_replace_all_regex(
-    host_port, .UTS46_FULL_STOP_VARIANTS, "."
+  mapped_host_port <- .bytes_replace(
+    host_port, .UTS46_FULL_STOP_VARIANTS, ".", all = TRUE
   )
   url_out <- url
   url_out[eligible] <- paste0(
@@ -556,20 +564,16 @@
   # (RURL-opwjlnla). The pipeline never hands this helper such a row today:
   # Phase 1 prefixes "http://" to every row led by the mark (`add_http`).
   has_at <- !is.na(authority) & !.starts_with_bom(url) &
-    stringi::stri_count_fixed(authority, "@") > 0L
+    .bytes_detect(authority, "@", fixed = TRUE)
   has_at[is.na(has_at)] <- FALSE
 
   # Any of the 30 parser-refused code points inside the userinfo span
-  # (everything before the LAST "@"). `[\s\S]` rather than `.` because ICU
-  # excludes U+000B/U+000C from `.`, and those are in the set.
+  # (everything before the LAST "@"). The first match of `@[^@]*\z` starts at
+  # the last "@", so `sub()` cuts what stringi's replace-last did.
   eligible <- rep(FALSE, length(url))
   if (any(has_at)) {
-    userinfo_span <- stringi::stri_replace_last_regex(
-      authority[has_at], "@[^@]*\\z", ""
-    )
-    hit <- stringi::stri_detect_regex(
-      userinfo_span, "[\\u0000-\\u0020\\u007F]"
-    )
+    userinfo_span <- .bytes_replace(authority[has_at], "@[^@]*\\z", "")
+    hit <- .bytes_detect(userinfo_span, "[\\x00-\\x20\\x7f]")
     hit[is.na(hit)] <- FALSE
     eligible[has_at] <- hit
   }
@@ -609,10 +613,14 @@
 .percent_encode_userinfo_charset <- function(userinfo) {
   codes <- c(seq.int(1L, 32L), 127L)
   chars <- vapply(codes, function(i) rawToChar(as.raw(i)), character(1))
-  encoded <- stringi::stri_replace_all_fixed(
-    paste0("@", userinfo), chars, sprintf("%%%02X", codes),
-    vectorize_all = FALSE
-  )
+  # One literal at a time, in table order, as `vectorize_all = FALSE` did. No
+  # replacement holds a byte of the table, so the order cannot matter.
+  encoded <- paste0("@", userinfo)
+  for (k in seq_along(codes)) {
+    encoded <- .bytes_replace(
+      encoded, chars[k], sprintf("%%%02X", codes[k]), all = TRUE, fixed = TRUE
+    )
+  }
   out <- .byte_substring_vec(encoded, 2L)
   out[is.na(userinfo)] <- NA_character_
   out
@@ -849,7 +857,11 @@
     }
     decoded <- .mark_host_utf8(decoded)
   }
-  if (stringi::stri_detect_regex(decoded, .WHATWG_FORBIDDEN_HOST_CP)) {
+  # Byte mode, `perl = TRUE, useBytes = TRUE` (ADR 0019), base R rather than
+  # `.bytes_detect()`: this runs once per `file:` host, inside a vapply, and
+  # the pattern is a constant ASCII class. `decoded` is declared UTF-8 above.
+  if (grepl(.WHATWG_FORBIDDEN_HOST_CP_BYTES, decoded, perl = TRUE,
+            useBytes = TRUE)) {
     return("\u0001")
   }
   # On failure the decoded host is kept; the host model
@@ -886,7 +898,9 @@
 }
 
 .whatwg_file_drive_path <- function(path) {
-  stringi::stri_replace_first_regex(path, "^/([A-Za-z])\\|(?=/|$)", "/$1:")
+  .bytes_replace(
+    path, paste0("^/([A-Za-z])\\|(?=/|", .ICU_END, ")"), "/\\1:"
+  )
 }
 
 # WHATWG "path state" for a `file:` path rooted at a normalized Windows drive
@@ -912,15 +926,19 @@
 # encoded dot segments are folded to literals first. Phase 3 then finds no dot
 # segment in these rows and leaves them untouched.
 .whatwg_file_shorten_drive_path <- function(path) {
+  # Byte mode (ADR 0019): `%2e` either case is spelled `%2[eE]`, which loses
+  # no fold (ICU folds nothing else to "e"), and `$` is ICU's (`.ICU_END`).
+  end <- paste0("(?:/|", .ICU_END, ")")
   mask <- !is.na(path) &
-    stringi::stri_detect_regex(path, "^/[A-Za-z]:(?=/|$)") &
-    stringi::stri_detect_regex(path, "(?i)/(\\.|%2e){1,2}(/|$)")
+    .bytes_detect(path, paste0("^/[A-Za-z]:(?=/|", .ICU_END, ")")) &
+    .bytes_detect(path, paste0("/(?:\\.|%2[eE]){1,2}", end))
   if (!any(mask)) {
     return(path)
   }
   p <- path[mask]
-  p <- stringi::stri_replace_all_regex(p, "(?i)(?<=/)(\\.|%2e){2}(?=/|$)", "..")
-  p <- stringi::stri_replace_all_regex(p, "(?i)(?<=/)%2e(?=/|$)", ".")
+  p <- .bytes_replace(p, paste0("(?<=/)(?:\\.|%2[eE]){2}(?=", end, ")"), "..",
+                      all = TRUE)
+  p <- .bytes_replace(p, paste0("(?<=/)%2[eE](?=", end, ")"), ".", all = TRUE)
   path[mask] <- vapply(
     p, .whatwg_file_remove_dot_segments, character(1), USE.NAMES = FALSE
   )
@@ -952,7 +970,8 @@
   split <- lapply(rest[ok], .whatwg_file_split_rest)
   parts <- do.call(rbind, split)
   file_path_raw <- parts[, "path"]
-  file_path <- stringi::stri_replace_all_fixed(file_path_raw, "\\", "/")
+  file_path <- .bytes_replace(file_path_raw, "\\", "/", all = TRUE,
+                              fixed = TRUE)
   # The *_fixed() family reads past a U+FEFF that starts its input (see
   # .starts_with_bom()), so a host-less path led by the mark lost it
   # (RURL-rjpljsui): for those rows only, a "/" is spliced on first and cut
@@ -960,8 +979,9 @@
   bom_path <- .starts_with_bom(file_path_raw)
   if (any(bom_path)) {
     file_path[bom_path] <- .byte_substring_vec(
-      stringi::stri_replace_all_fixed(
-        paste0("/", file_path_raw[bom_path]), "\\", "/"
+      .bytes_replace(
+        paste0("/", file_path_raw[bom_path]), "\\", "/", all = TRUE,
+        fixed = TRUE
       ),
       2L
     )
@@ -972,7 +992,7 @@
   # string. See .whatwg_file_normalize_host().
   host <- rep("", length(file_path))
   path <- file_path
-  has_authority <- stringi::stri_detect_regex(file_path_raw, "^[/\\\\]{2}")
+  has_authority <- .bytes_detect(file_path_raw, "^[/\\\\]{2}")
   has_authority[is.na(has_authority)] <- FALSE
   if (any(has_authority)) {
     # Every span is located in and cut from the raw path, which starts with
@@ -992,7 +1012,8 @@
     auth_path <- ifelse(
       is.na(slash), "/", stringi::stri_sub(raw, slash)
     )
-    auth_path <- stringi::stri_replace_all_fixed(auth_path, "\\", "/")
+    auth_path <- .bytes_replace(auth_path, "\\", "/", all = TRUE,
+                                fixed = TRUE)
 
     # WHATWG "file host state": a buffer that is a Windows drive letter -- an
     # ASCII alpha followed by `:` OR `|` -- is not a host at all; the state
@@ -1000,7 +1021,9 @@
     # the empty string the file state set. `file://C:/` is `file:///C:/`
     # exactly as `file://C|/` is (RURL-ufsltsit: the `:` spelling was missed,
     # so `file://C:/` was rejected outright).
-    drive_authority <- stringi::stri_detect_regex(authority, "^[A-Za-z][:|]$")
+    drive_authority <- .bytes_detect(
+      authority, paste0("^[A-Za-z][:|]", .ICU_END)
+    )
     drive_authority[is.na(drive_authority)] <- FALSE
     if (any(drive_authority)) {
       # The buffer IS the first path segment, so a slash-less `file://d:` has
@@ -1104,23 +1127,32 @@
   }
 
   # Step 1: outer C0/space trim (U+0000..U+0020 at either end). NA passes
-  # through stringi unchanged.
-  url <- stringi::stri_replace_first_regex(url, "^[\\x00-\\x20]+", "")
-  url <- stringi::stri_replace_first_regex(url, "[\\x00-\\x20]+$", "")
+  # through unchanged. Byte mode (ADR 0019). The end is ICU's `$`, which the
+  # trim has always used: the class takes every ASCII line terminator, but not
+  # a final U+0085, U+2028 or U+2029, before which the run is still trimmed.
+  url <- .bytes_replace(url, "^[\\x00-\\x20]+", "")
+  url <- .bytes_replace(url, paste0("[\\x00-\\x20]+", .ICU_END), "")
 
   # Recognized-scheme set = .WHATWG_SPECIAL_SCHEMES; authority table =
-  # .SPECIAL_AUTHORITY_SCHEMES, the same set minus `file`. Schemes are
-  # case-insensitive; the ordered `;`/`:` delimiter after the alternation keeps
-  # a longer scheme (https) from being truncated to a shorter prefix (http) and
-  # keeps non-scheme tokens (httpx;) from matching.
-  scheme_alt <- paste(.WHATWG_SPECIAL_SCHEMES, collapse = "|")
-  authority_alt <- paste(.SPECIAL_AUTHORITY_SCHEMES, collapse = "|")
-
-  # Step 2: leading `scheme;` -> `scheme:`, recognized schemes only. $1 keeps
-  # the matched scheme's original case.
-  url <- stringi::stri_replace_first_regex(
-    url, paste0("(?i)^(", scheme_alt, ");"), "$1:"
+  # .SPECIAL_AUTHORITY_SCHEMES, the same set minus `file`. Schemes are ASCII
+  # case-insensitive (WHATWG URL Standard, scheme state; RFC 3986 section
+  # 3.1), so each letter is a two-case class: byte mode does no
+  # case-insensitive matching (ADR 0019, decision 2). The ICU `(?i)` this
+  # replaced also folded U+017F, U+00DF and U+FB01 (`httpſ;`, `wß;`,
+  # `ﬁle;`), which are not ASCII case variants of a scheme. The ordered
+  # `;`/`:` delimiter after the alternation keeps a longer scheme (https) from
+  # being truncated to a shorter prefix (http) and keeps non-scheme tokens
+  # (httpx;) from matching.
+  scheme_alt <- paste(
+    .ascii_letter_classes(.WHATWG_SPECIAL_SCHEMES), collapse = "|"
   )
+  authority_alt <- paste(
+    .ascii_letter_classes(.SPECIAL_AUTHORITY_SCHEMES), collapse = "|"
+  )
+
+  # Step 2: leading `scheme;` -> `scheme:`, recognized schemes only. \1 keeps
+  # the matched scheme's original case.
+  url <- .bytes_replace(url, paste0("^(", scheme_alt, ");"), "\\1:")
 
   # Step 3: `scheme:` with fewer than two authority slashes -> `scheme://`,
   # authority-table schemes only. A single slash is COMPLETED to two, not
@@ -1132,14 +1164,14 @@
   # (`scheme:///`) untouched. Under `whatwg` both spellings were the same URL
   # (the special authority slashes states skip every slash), so that arm does
   # not move.
-  url <- stringi::stri_replace_first_regex(
-    url, paste0("(?i)^(", authority_alt, "):/?(?!/)"), "$1://"
+  url <- .bytes_replace(
+    url, paste0("^(", authority_alt, "):/?(?!/)"), "\\1://"
   )
 
   # Step 3b: a leading single `/` (not `//`, not `/\`, with tab/LF/CR between
   # them ignored) -> `file://` + input.
   if (identical(url_standard, "whatwg") && identical(scheme_policy, "infer")) {
-    url <- stringi::stri_replace_first_regex(
+    url <- .bytes_replace(
       url, "^(?=/(?![\\t\\n\\r]*[/\\\\]))", "file://"
     )
   }
@@ -1195,9 +1227,10 @@
   srh <- opts$scheme_relative_handling
   if (identical(opts$url_standard, "rfc3986") &&
         isTRUE(srh %in% c("keep", "http", "https"))) {
-    # The same mask Phase 1 draws: a U+FEFF-led row is never scheme-relative,
-    # and stri_startswith_fixed() reads past the mark (see .starts_with_bom()).
-    rel <- stringi::stri_startswith_fixed(url, "//")
+    # The same mask Phase 1 draws: a U+FEFF-led row is never scheme-relative.
+    # Base `startsWith()` reads the mark as data, so the mask is now the ADR
+    # 0005 guard only, kept until the close-out retires it.
+    rel <- startsWith(url, "//")
     rel <- !is.na(rel) & rel & !.starts_with_bom(url)
     # The prefix Phase 1 writes: "keep" parses behind `http:`.
     prefix <- if (identical(srh, "https")) "https:" else "http:"
@@ -1273,7 +1306,7 @@
 
   url_lower <- .ascii_tolower(url)
   is_whatwg_file <- .is_whatwg(url_standard) &
-    stringi::stri_detect_regex(whatwg_file_input, "^[Ff][Ii][Ll][Ee]:")
+    .bytes_detect(whatwg_file_input, "^[Ff][Ii][Ll][Ee]:")
   is_whatwg_file[is.na(is_whatwg_file)] <- FALSE
 
   # A scheme-bearing input is "allowed" only if its scheme is one rurl supports
@@ -1293,12 +1326,10 @@
   original_has_allowed_scheme <-
     original_has_allowed_scheme | rfc_rootless$is_path_rootless
 
-  has_scheme_slashes <- stringi::stri_detect_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*):\\/\\/"
-  )
+  has_scheme_slashes <- .bytes_detect(url, "^[a-zA-Z][a-zA-Z0-9+.-]*://")
   has_scheme_slashes[is.na(has_scheme_slashes)] <- FALSE
 
-  is_scheme_relative <- stringi::stri_startswith_fixed(url, "//")
+  is_scheme_relative <- startsWith(url, "//")
   is_scheme_relative[is.na(is_scheme_relative) | bom_led] <- FALSE
 
   rejected <- rep(FALSE, n)
@@ -1327,7 +1358,14 @@
     # `sc:x:80`, `urn:isbn:0451450523` -- and only a trailing `?`/`#` rescued
     # it, by breaking the `($|/)` anchor. RURL-jnvtttfm repaired the sibling
     # site only; this is the second one (RURL-uafjkaas).
-    lhp <- stringi::stri_detect_regex(url, "^[^/:]+:[0-9]+($|/)")
+    #
+    # Byte mode (ADR 0019), with the true end `\z`, as its twin in
+    # R/parse-state.R now has: ICU's `$` also took the point before a final
+    # U+0085, U+2028 or U+2029, so `example.com:8080<U+2028>` read as a
+    # host:port where `example.com:8080x` reads as a scheme and an opaque
+    # path. A port is digits only (WHATWG URL Standard, port state; RFC 3986
+    # section 3.2.3), so those rows now read like the `x` row.
+    lhp <- .bytes_detect(url, "^[^/:]+:[0-9]+(?:\\z|/)")
     lhp[is.na(lhp)] <- FALSE
     looks_like_host_port[maybe_host_port] <- lhp[maybe_host_port]
   }
@@ -1588,9 +1626,7 @@
     p, "^[a-zA-Z][a-zA-Z0-9+.-]*://"
   )[, "end"]
   prefix[is.na(prefix)] <- 0L
-  body <- stringi::stri_replace_first_regex(
-    p, "^[a-zA-Z][a-zA-Z0-9+.-]*://", ""
-  )
+  body <- .bytes_replace(p, "^[a-zA-Z][a-zA-Z0-9+.-]*://", "")
   first <- stringi::stri_locate_first_regex(body, "[/?#]")[, 1L]
   empty_authority <- stringi::stri_sub(p, prefix + 1L, prefix + 1L) == "/"
   empty_authority[is.na(empty_authority)] <- FALSE
@@ -1706,7 +1742,7 @@
     # encoded dot (%2E / %2E%2E) to a literal "."/".." segment, which the
     # dot_segments step below then resolves via the existing literal matcher.
     # Reserved bytes (%2F, %3F, %23, ...) are never decoded here.
-    mask <- !is.na(path_work) & stringi::stri_detect_fixed(path_work, "%")
+    mask <- !is.na(path_work) & .bytes_detect(path_work, "%", fixed = TRUE)
     if (any(mask)) {
       path_work[mask] <- vapply(
         path_work[mask], .rfc_unreserved_normalize, character(1),
@@ -1718,7 +1754,7 @@
     # canonicalize existing percent-triplets. Dot-segment resolution below uses
     # the encoded-dot-aware remover, so encoded dot segments (%2e/%2e%2e) still
     # resolve without a general decode.
-    mask <- !is.na(path_work) & stringi::stri_detect_fixed(path_work, "%")
+    mask <- !is.na(path_work) & .bytes_detect(path_work, "%", fixed = TRUE)
     if (any(mask)) {
       path_work[mask] <- vapply(
         path_work[mask], .whatwg_preserve_normalize, character(1),
@@ -1729,7 +1765,7 @@
     # Preserve the historical no-selector `keep` contract after Stage A became
     # byte-faithful: percent-triplet hex case is canonicalized here instead of
     # during raw extraction.
-    mask <- !is.na(path_work) & stringi::stri_detect_fixed(path_work, "%")
+    mask <- !is.na(path_work) & .bytes_detect(path_work, "%", fixed = TRUE)
     if (any(mask)) {
       path_work[mask] <- .uppercase_percent_hex(path_work[mask])
     }
@@ -1753,13 +1789,15 @@
     } else {
       ._remove_dot_segments
     }
+    # Byte mode (ADR 0019): `%2e` either case is `%2[eE]`, which loses no fold
+    # (ICU folds nothing else to "e"), and `$` is ICU's (`.ICU_END`).
     detect_pattern <- if (is_whatwg) {
-      "(?i)(^|/)(\\.|%2e){1,2}(/|$)"
+      paste0("(?:^|/)(?:\\.|%2[eE]){1,2}(?:/|", .ICU_END, ")")
     } else {
-      "(^|/)\\.{1,2}(/|$)"
+      paste0("(?:^|/)\\.{1,2}(?:/|", .ICU_END, ")")
     }
     mask <- !is.na(path_work) & nzchar(path_work) &
-      stringi::stri_detect_regex(path_work, detect_pattern)
+      .bytes_detect(path_work, detect_pattern)
     if (any(mask)) {
       path_work[mask] <- vapply(
         path_work[mask], dot_remover, character(1), USE.NAMES = FALSE
@@ -1770,7 +1808,7 @@
   # Index/default page stripping (only where such a trailing segment appears).
   if (index_page_handling == "strip") {
     mask <- !is.na(path_work) & nzchar(path_work) &
-      stringi::stri_detect_regex(path_work, "(?i)/(index|default)\\.[^/]+/?$")
+      .bytes_detect(path_work, .INDEX_PAGE_TAIL)
     if (any(mask)) {
       path_work[mask] <- vapply(
         path_work[mask], ._strip_index_page, character(1), USE.NAMES = FALSE
@@ -1900,24 +1938,26 @@
 
   # IPv4.
   ipv4 <- rep(FALSE, n)
-  ipv4_re <- paste0("^", oct, "(\\.", oct, "){3}$")
-  match4 <- stringi::stri_detect_regex(raw_host, ipv4_re)
+  # Byte mode (ADR 0019) with ICU's `$` (`.ICU_END`), so a host that ends in
+  # a final line terminator reads as it did.
+  ipv4_re <- paste0("^", oct, "(?:\\.", oct, "){3}", .ICU_END)
+  match4 <- .bytes_detect(raw_host, ipv4_re)
   match4[is.na(match4)] <- FALSE
   ipv4 <- valid_h & match4
 
   # IPv6.
   ipv6 <- rep(FALSE, n)
-  has_open <- stringi::stri_detect_fixed(raw_host, "[")
-  has_close <- stringi::stri_detect_fixed(raw_host, "]")
+  has_open <- .bytes_detect(raw_host, "[", fixed = TRUE)
+  has_close <- .bytes_detect(raw_host, "]", fixed = TRUE)
   balanced <- valid_h & (has_open == has_close)
   balanced[is.na(balanced)] <- FALSE
 
   # A detector, not stri_match_first_regex(), which reads past a U+FEFF that
   # starts its input (see .starts_with_bom()) and so read an address in
-  # a mark-led host (RURL-opwjlnla); stri_detect_regex() counts the mark.
-  tail_match <- stringi::stri_detect_regex(
+  # a mark-led host (RURL-opwjlnla); byte mode counts the mark.
+  tail_match <- .bytes_detect(
     raw_host,
-    paste0("^\\[?[0-9a-fA-F:]+:(", oct, "(?:\\.", oct, "){3})\\]?$")
+    paste0("^\\[?[0-9a-fA-F:]+:(?:", oct, "(?:\\.", oct, "){3})\\]?", .ICU_END)
   )
   tail_match[is.na(tail_match)] <- FALSE
   # The tail regex already enforces canonical octets, so a match is sufficient.
@@ -1927,9 +1967,11 @@
   # Conservative check for balanced hosts without an embedded dotted-quad tail.
   no_tail <- balanced & !has_tail
   if (any(no_tail)) {
-    hex_shape <- stringi::stri_detect_regex(raw_host, "^\\[?[0-9a-fA-F:]+\\]?$")
+    hex_shape <- .bytes_detect(
+      raw_host, paste0("^\\[?[0-9a-fA-F:]+\\]?", .ICU_END)
+    )
     hex_shape[is.na(hex_shape)] <- FALSE
-    has_colon <- stringi::stri_detect_fixed(raw_host, ":")
+    has_colon <- .bytes_detect(raw_host, ":", fixed = TRUE)
     has_colon[is.na(has_colon)] <- FALSE
     ipv6[no_tail] <- (hex_shape & has_colon)[no_tail]
   }
@@ -1960,10 +2002,12 @@
     return(rep(FALSE, n))
   }
   # Drop one trailing "." (a single empty final part), then take the last label.
-  trimmed <- stringi::stri_replace_first_regex(host, "\\.$", "")
-  last <- stringi::stri_replace_first_regex(trimmed, "^.*\\.", "")
-  is_dec <- stringi::stri_detect_regex(last, "^[0-9]+$")
-  is_hex <- stringi::stri_detect_regex(last, "^0[xX][0-9a-fA-F]*$")
+  # Byte mode (ADR 0019), keeping ICU's `$` and `.`: a final line terminator
+  # stays after the trimmed dot, and a last-label cut stops at a terminator.
+  trimmed <- .bytes_replace(host, paste0("\\.", .ICU_END), "")
+  last <- .bytes_replace(trimmed, paste0("^", .ICU_DOT, "*\\."), "")
+  is_dec <- .bytes_detect(last, paste0("^[0-9]+", .ICU_END))
+  is_hex <- .bytes_detect(last, paste0("^0[xX][0-9a-fA-F]*", .ICU_END))
   is_dec[is.na(is_dec)] <- FALSE
   is_hex[is.na(is_hex)] <- FALSE
   ok & (is_dec | is_hex)
@@ -1977,7 +2021,11 @@
 # builds a bracketed host must validate it first, as `.web_parse_host()` and
 # `.whatwg_file_ipv6_host()` do (RURL-ohtwkdgi).
 .serialize_whatwg_ipv6_host <- function(host) {
-  if (is.na(host) || !stringi::stri_detect_regex(host, "^\\[.*\\]$")) {
+  # Byte mode, `perl = TRUE, useBytes = TRUE` (ADR 0019), with ICU's `.` and
+  # `$`. Base R rather than `.bytes_detect()`: this runs once per bracketed
+  # host, inside a vapply.
+  if (is.na(host) ||
+        !grepl(.IPV6_BRACKETED_SHAPE, host, perl = TRUE, useBytes = TRUE)) {
     return(host)
   }
 
@@ -2089,7 +2137,7 @@
 .serialize_whatwg_ipv6_hosts_vec <- function(host) {
   out <- host
   elig <- !is.na(host) &
-    stringi::stri_detect_regex(host, "^\\[[0-9A-Fa-f:.]+\\]$")
+    .bytes_detect(host, paste0("^\\[[0-9A-Fa-f:.]+\\]", .ICU_END))
   elig[is.na(elig)] <- FALSE
   if (any(elig)) {
     out[elig] <- vapply(
@@ -2182,15 +2230,14 @@
     # gives NA where `a.` gives `a.`), so `http://example.com%E3%80%82/` was
     # an error where WHATWG gives the host `example.com.`. Only a non-ASCII
     # host can hold one, and a host that held nothing else is ASCII after it.
-    nonascii_all <- reg_like &
-      stringi::stri_detect_regex(host, "[^\\u0001-\\u007f]")
+    nonascii_all <- reg_like & .bytes_detect(host, .NON_ASCII_BYTE)
     nonascii_all[is.na(nonascii_all)] <- FALSE
     if (any(nonascii_all)) {
-      host[nonascii_all] <- stringi::stri_replace_all_regex(
-        host[nonascii_all], .UTS46_FULL_STOP_VARIANTS, "."
+      host[nonascii_all] <- .bytes_replace(
+        host[nonascii_all], .UTS46_FULL_STOP_VARIANTS, ".", all = TRUE
       )
       nonascii_all[nonascii_all] <-
-        stringi::stri_detect_regex(host[nonascii_all], "[^\\u0001-\\u007f]")
+        .bytes_detect(host[nonascii_all], .NON_ASCII_BYTE)
     }
     candidate <- host
     mapped <- rep(NA_character_, n)
@@ -2226,18 +2273,16 @@
     #       U+00A0 and U+3000 map to # / ? : % and space (RURL-crsrkcoh).
     reg <- !is_ip & !is.na(host) & host != ""
     if (any(reg)) {
-      bad_cp <- reg &
-        stringi::stri_detect_regex(host, .WHATWG_FORBIDDEN_HOST_CP)
+      bad_cp <- reg & .bytes_detect(host, .WHATWG_FORBIDDEN_HOST_CP_BYTES)
       bad_cp[is.na(bad_cp)] <- FALSE
       fatal <- fatal | bad_cp
 
       # `mapped` is the one domain-to-ASCII pass above, computed over every
       # non-ASCII reg-name; a row still non-ASCII here was not an address.
-      nonascii <- reg & !bad_cp &
-        stringi::stri_detect_regex(host, "[^\\u0001-\\u007f]")
+      nonascii <- reg & !bad_cp & .bytes_detect(host, .NON_ASCII_BYTE)
       nonascii[is.na(nonascii)] <- FALSE
       bad_mapped <- nonascii & !is.na(mapped) &
-        stringi::stri_detect_regex(mapped, .WHATWG_FORBIDDEN_HOST_CP)
+        .bytes_detect(mapped, .WHATWG_FORBIDDEN_HOST_CP_BYTES)
       bad_mapped[is.na(bad_mapped)] <- FALSE
       fatal <- fatal | (nonascii & is.na(mapped)) | bad_mapped
     }
@@ -2284,12 +2329,15 @@
   ci <- stringi::stri_opts_regex(case_insensitive = TRUE)
 
   if (www_handling == "strip") {
-    final_host[elig] <- stringi::stri_replace_first_regex(
-      raw_host[elig], "^(www[0-9]*\\.)(.*)", "$2", opts_regex = ci
+    # Was the ICU caseless `^(www[0-9]*\.)(.*)` -> `$2`, which drops the
+    # prefix and keeps the rest whatever ICU's `.` stopped at. Byte mode
+    # spells the case (ADR 0019); ICU folds no non-ASCII code point to "w".
+    final_host[elig] <- .bytes_replace(
+      raw_host[elig], "^[Ww][Ww][Ww][0-9]*\\.", ""
     )
   } else if (www_handling == "keep") {
     lower <- .ascii_tolower(raw_host)
-    has_www <- stringi::stri_detect_regex(lower, "^www[0-9]*\\.")
+    has_www <- .bytes_detect(lower, "^www[0-9]*\\.")
     has_www[is.na(has_www)] <- FALSE
     hw <- elig & has_www
     no_www <- elig & !has_www
@@ -2325,7 +2373,7 @@
   lower <- .ascii_tolower(raw_host)
 
   candidate_host <- raw_host
-  has_www <- stringi::stri_detect_regex(lower, "^www[0-9]*\\.")
+  has_www <- .bytes_detect(lower, "^www[0-9]*\\.")
   has_www[is.na(has_www)] <- FALSE
   if (any(has_www)) {
     match_res <- stringi::stri_match_first_regex(
@@ -2411,7 +2459,7 @@
 # soft hyphen is mapped away by IDNA).
 .psl_annotation_host_vec <- function(hosts) {
   candidate <- hosts
-  pct <- stringi::stri_detect_fixed(hosts, "%")
+  pct <- .bytes_detect(hosts, "%", fixed = TRUE)
   pct[is.na(pct)] <- FALSE
   if (!any(pct)) {
     return(candidate)

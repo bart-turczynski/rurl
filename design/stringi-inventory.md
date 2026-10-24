@@ -247,16 +247,16 @@ Rows are in file order, then source order.
 | 14 | `domain.R` | `.split_host_labels` | `stri_split_fixed` | split | `.` | keeps trailing empty field | bytes | yqmoztoj |
 | 15 | `domain.R` | `.split_host_labels` | `stri_split_fixed` | split | `.` | keeps trailing empty field | bytes | yqmoztoj |
 | 16 | `email-diagnostics.R` | `.email_has_non_ascii` | `stri_detect_regex` | detect | `[^\u0000-\u007F]` | non-ASCII detector | bytes (`[^\x01-\x7f]`) | oahhlnvf |
-| 17 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^[a-zA-Z][a-zA-Z0-9+.-]*://` | none (ASCII structural) | bytes | oahhlnvf |
-| 18 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^//` | none (ASCII structural) | bytes | oahhlnvf |
-| 19 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `[/?#].*$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf |
-| 20 | `parse-phases.R` | `.classify_input_host_vec` | `stri_detect_fixed` | detect | `@` | none (ASCII literal) | bytes | oahhlnvf |
-| 21 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^.*@` | ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf |
-| 22 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^(\[[^\]]*\]).*$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf |
-| 23 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `:[^:]*$` | ICU `$` | bytes | oahhlnvf |
-| 24 | `parse-phases.R` | `.classify_input_host_vec` | `stri_detect_regex` | detect | `^[^.]+(\.[^.]+)+$` | ICU `$` | bytes | oahhlnvf |
-| 25 | `parse-phases.R` | `.classify_input_host_vec` | `stri_detect_regex` | detect | `^(0[xX][0-9a-fA-F]*\|[0-9]+)(\.(0[xX][0-9a-fA-F]*\|[0-9]+))*$` | ICU `$` | bytes | oahhlnvf |
-| 26 | `parse-phases.R` | `.classify_input_host_vec` | `stri_detect_fixed` | detect | `:` | none (ASCII literal) | bytes | oahhlnvf |
+| 17 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^[a-zA-Z][a-zA-Z0-9+.-]*://` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 18 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^//` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 19 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `[/?#].*$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf: moved, bytes |
+| 20 | `parse-phases.R` | `.classify_input_host_vec` | `stri_detect_fixed` | detect | `@` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 21 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^.*@` | ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf: moved, bytes |
+| 22 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^(\[[^\]]*\]).*$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf: moved, bytes |
+| 23 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `:[^:]*$` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 24 | `parse-phases.R` | `.classify_input_host_vec` | `stri_detect_regex` | detect | `^[^.]+(\.[^.]+)+$` | ICU `$` | bytes | oahhlnvf: moved, bytes, linear check (RURL-rrumztrf) |
+| 25 | `parse-phases.R` | `.classify_input_host_vec` | `stri_detect_regex` | detect | `^(0[xX][0-9a-fA-F]*\|[0-9]+)(\.(0[xX][0-9a-fA-F]*\|[0-9]+))*$` | ICU `$` | bytes | oahhlnvf: moved, bytes, linear check (RURL-rrumztrf) |
+| 26 | `parse-phases.R` | `.classify_input_host_vec` | `stri_detect_fixed` | detect | `:` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
 | 27 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_match_first_regex` | capture | `^([a-zA-Z][a-zA-Z0-9+.-]*):` | none (ASCII structural) | bytes | yqmoztoj |
 | 28 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_length` | length (offset) |  | indexes code points | bytes | yqmoztoj |
 | 29 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_locate_first_regex` | locate | `[?#]` | none (ASCII structural) | bytes | yqmoztoj |
@@ -265,106 +265,106 @@ Rows are in file order, then source order.
 | 32 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_match_first_regex` | capture | `^[^:]*:([/\\]+)` | none (ASCII structural) | bytes | yqmoztoj |
 | 33 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_length` | length (offset) |  | indexes code points | bytes | yqmoztoj |
 | 34 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
-| 35 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_replace_all_fixed` | replace | `\` | none (ASCII literal) | bytes | oahhlnvf |
-| 36 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_detect_fixed` | detect | `\` | none (ASCII literal) | bytes | oahhlnvf |
-| 37 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_detect_fixed` | detect | `\` | none (ASCII literal) | bytes | oahhlnvf |
-| 38 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf |
-| 39 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_replace_first_regex` | replace | `[\u0000-\u0020]+\z` | none (ASCII structural) | bytes | oahhlnvf |
-| 40 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_detect_regex` | detect | `^[\u0000-\u0020]\|[\u0000-\u0020]\z` | none (ASCII structural) | bytes | oahhlnvf |
-| 41 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_detect_regex` | detect | `[\t\n\r]` | none (ASCII structural) | bytes | oahhlnvf |
-| 42 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_replace_all_regex` | replace | `[\t\n\r]` | none (ASCII structural) | bytes | oahhlnvf |
+| 35 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_replace_all_fixed` | replace | `\` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 36 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_detect_fixed` | detect | `\` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 37 | `parse-phases.R` | `.rewrite_whatwg_backslashes_vec` | `stri_detect_fixed` | detect | `\` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 38 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf: stays stringi (its read is the `whatwg` route's U+FFFD decode; RURL-yyeohqah) |
+| 39 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_replace_first_regex` | replace | `[\u0000-\u0020]+\z` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 40 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_detect_regex` | detect | `^[\u0000-\u0020]\|[\u0000-\u0020]\z` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 41 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_detect_regex` | detect | `[\t\n\r]` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 42 | `parse-phases.R` | `.strip_whatwg_control_chars_vec` | `stri_replace_all_regex` | replace | `[\t\n\r]` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
 | 43 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_match_first_regex` | capture | `^([a-zA-Z][a-zA-Z0-9+.-]*:)?(//)([^/?#]*)(.*)$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | yqmoztoj |
-| 44 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_detect_regex` | detect | `[\u3002\uFF0E\uFF61]` | non-ASCII code points (\u3002 \uFF0E \uFF61) | bytes (UTF-8 byte literals) or UTF-8 PCRE | oahhlnvf |
+| 44 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_detect_regex` | detect | `[\u3002\uFF0E\uFF61]` | non-ASCII code points (\u3002 \uFF0E \uFF61) | bytes (UTF-8 byte literals) or UTF-8 PCRE | oahhlnvf: moved, bytes |
 | 45 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_locate_first_regex` | locate | `<paste0(prefix, "[^/?#]*")>` | none (ASCII structural) | bytes | yqmoztoj |
 | 46 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_locate_first_regex` | locate | `<paste0(prefix, "[^/?#]*@")>` | none (ASCII structural) | bytes | yqmoztoj |
 | 47 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_locate_first_regex` | locate | `<prefix>` | none (ASCII structural) | bytes | yqmoztoj |
 | 48 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 49 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 50 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
-| 51 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_detect_regex` | detect | `[\u3002\uFF0E\uFF61]` | non-ASCII code points (\u3002 \uFF0E \uFF61) | bytes (UTF-8 byte literals) or UTF-8 PCRE | oahhlnvf |
-| 52 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_replace_all_regex` | replace | `[\u3002\uFF0E\uFF61]` | non-ASCII code points (\u3002 \uFF0E \uFF61) | bytes (UTF-8 byte literals) or UTF-8 PCRE | oahhlnvf |
+| 51 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_detect_regex` | detect | `[\u3002\uFF0E\uFF61]` | non-ASCII code points (\u3002 \uFF0E \uFF61) | bytes (UTF-8 byte literals) or UTF-8 PCRE | oahhlnvf: moved, bytes |
+| 52 | `parse-phases.R` | `.map_whatwg_domain_separators_vec` | `stri_replace_all_regex` | replace | `[\u3002\uFF0E\uFF61]` | non-ASCII code points (\u3002 \uFF0E \uFF61) | bytes (UTF-8 byte literals) or UTF-8 PCRE | oahhlnvf: moved, bytes |
 | 53 | `parse-phases.R` | `.encode_userinfo_charset_vec` | `stri_match_first_regex` | capture | `^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)(.*)$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | yqmoztoj |
-| 54 | `parse-phases.R` | `.encode_userinfo_charset_vec` | `stri_count_fixed` | count | `@` | none (ASCII literal) | bytes | oahhlnvf |
-| 55 | `parse-phases.R` | `.encode_userinfo_charset_vec` | `stri_replace_last_regex` | replace | `@[^@]*\z` | none (ASCII structural) | bytes | oahhlnvf |
-| 56 | `parse-phases.R` | `.encode_userinfo_charset_vec` | `stri_detect_regex` | detect | `[\u0000-\u0020\u007F]` | none (ASCII structural) | bytes | oahhlnvf |
-| 57 | `parse-phases.R` | `.percent_encode_userinfo_charset` | `stri_replace_all_fixed` | replace | `<chars>` | none (33 ASCII control bytes, `vectorize_all = FALSE`) | bytes | oahhlnvf |
+| 54 | `parse-phases.R` | `.encode_userinfo_charset_vec` | `stri_count_fixed` | count | `@` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 55 | `parse-phases.R` | `.encode_userinfo_charset_vec` | `stri_replace_last_regex` | replace | `@[^@]*\z` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 56 | `parse-phases.R` | `.encode_userinfo_charset_vec` | `stri_detect_regex` | detect | `[\u0000-\u0020\u007F]` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 57 | `parse-phases.R` | `.percent_encode_userinfo_charset` | `stri_replace_all_fixed` | replace | `<chars>` | none (33 ASCII control bytes, `vectorize_all = FALSE`) | bytes | oahhlnvf: moved, bytes |
 | 58 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_match_first_regex` | capture | `^([a-zA-Z][a-zA-Z0-9+.-]*):(.*)$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | yqmoztoj |
-| 59 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_replace_first_regex` | replace | `[/?#].*$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf |
-| 60 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_detect_regex` | detect | `^[A-Za-z0-9._~-]+(\.[A-Za-z0-9._~-]+)+$` | ICU `$` | bytes | oahhlnvf |
-| 61 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_startswith_fixed` | detect (prefix) | `/` | none (ASCII literal) | bytes | oahhlnvf |
-| 62 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_startswith_fixed` | detect (prefix) | `\` | none (ASCII literal) | bytes | oahhlnvf |
-| 63 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_detect_fixed` | detect | `\` | none (ASCII literal) | bytes | oahhlnvf |
-| 64 | `parse-phases.R` | `.whatwg_file_normalize_host` | `stri_detect_regex` | detect | `<.WHATWG_FORBIDDEN_HOST_CP>` | none (ASCII class, `R/utils.R`) | bytes | oahhlnvf |
-| 65 | `parse-phases.R` | `.whatwg_file_drive_path` | `stri_replace_first_regex` | replace | `^/([A-Za-z])\\|(?=/\|$)` | ICU `$` | bytes | oahhlnvf |
-| 66 | `parse-phases.R` | `.whatwg_file_shorten_drive_path` | `stri_detect_regex` | detect | `^/[A-Za-z]:(?=/\|$)` | ICU `$` | bytes | oahhlnvf |
-| 67 | `parse-phases.R` | `.whatwg_file_shorten_drive_path` | `stri_detect_regex` | detect | `(?i)/(\.\|%2e){1,2}(/\|$)` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf |
-| 68 | `parse-phases.R` | `.whatwg_file_shorten_drive_path` | `stri_replace_all_regex` | replace | `(?i)(?<=/)(\.\|%2e){2}(?=/\|$)` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf |
-| 69 | `parse-phases.R` | `.whatwg_file_shorten_drive_path` | `stri_replace_all_regex` | replace | `(?i)(?<=/)%2e(?=/\|$)` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf |
+| 59 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_replace_first_regex` | replace | `[/?#].*$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf: moved, bytes |
+| 60 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_detect_regex` | detect | `^[A-Za-z0-9._~-]+(\.[A-Za-z0-9._~-]+)+$` | ICU `$` | bytes | oahhlnvf: moved, bytes, linear check (RURL-rrumztrf) |
+| 61 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_startswith_fixed` | detect (prefix) | `/` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 62 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_startswith_fixed` | detect (prefix) | `\` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 63 | `parse-phases.R` | `.rfc3986_path_rootless_vec` | `stri_detect_fixed` | detect | `\` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 64 | `parse-phases.R` | `.whatwg_file_normalize_host` | `stri_detect_regex` | detect | `<.WHATWG_FORBIDDEN_HOST_CP>` | none (ASCII class, `R/utils.R`) | bytes | oahhlnvf: moved, bytes |
+| 65 | `parse-phases.R` | `.whatwg_file_drive_path` | `stri_replace_first_regex` | replace | `^/([A-Za-z])\\|(?=/\|$)` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 66 | `parse-phases.R` | `.whatwg_file_shorten_drive_path` | `stri_detect_regex` | detect | `^/[A-Za-z]:(?=/\|$)` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 67 | `parse-phases.R` | `.whatwg_file_shorten_drive_path` | `stri_detect_regex` | detect | `(?i)/(\.\|%2e){1,2}(/\|$)` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 68 | `parse-phases.R` | `.whatwg_file_shorten_drive_path` | `stri_replace_all_regex` | replace | `(?i)(?<=/)(\.\|%2e){2}(?=/\|$)` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 69 | `parse-phases.R` | `.whatwg_file_shorten_drive_path` | `stri_replace_all_regex` | replace | `(?i)(?<=/)%2e(?=/\|$)` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf: moved, bytes |
 | 70 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_match_first_regex` | capture | `^[Ff][Ii][Ll][Ee]:(.*)$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | yqmoztoj |
-| 71 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_replace_all_fixed` | replace | `\` | none (ASCII literal) | bytes | oahhlnvf |
-| 72 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_replace_all_fixed` | replace | `\` | none (ASCII literal) | bytes | oahhlnvf |
-| 73 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_detect_regex` | detect | `^[/\\]{2}` | none (ASCII structural) | bytes | oahhlnvf |
+| 71 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_replace_all_fixed` | replace | `\` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 72 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_replace_all_fixed` | replace | `\` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 73 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_detect_regex` | detect | `^[/\\]{2}` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
 | 74 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_locate_first_regex` | locate | `^[/\\]{2}[^/\\]*` | none (ASCII structural) | bytes | yqmoztoj |
 | 75 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_locate_first_regex` | locate | `^[/\\]{2}[^/\\]*[/\\]` | none (ASCII structural) | bytes | yqmoztoj |
 | 76 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 77 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
-| 78 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_replace_all_fixed` | replace | `\` | none (ASCII literal) | bytes | oahhlnvf |
-| 79 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_detect_regex` | detect | `^[A-Za-z][:\|]$` | ICU `$` | bytes | oahhlnvf |
+| 78 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_replace_all_fixed` | replace | `\` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 79 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_detect_regex` | detect | `^[A-Za-z][:\|]$` | ICU `$` | bytes | oahhlnvf: moved, bytes |
 | 80 | `parse-phases.R` | `.parse_whatwg_file_urls_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
-| 81 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `^[\x00-\x20]+` | none (ASCII structural) | bytes | oahhlnvf |
-| 82 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `[\x00-\x20]+$` | ICU `$` | bytes | oahhlnvf |
-| 83 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `<paste0("(?i)^(", scheme_alt, ");")>` | (?i) on an ASCII pattern (special-scheme names) | bytes | oahhlnvf |
-| 84 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `<paste0("(?i)^(", authority_alt, "):/?(?!/)")>` | (?i) on an ASCII pattern (special-scheme names) | bytes | oahhlnvf |
-| 85 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `^(?=/(?![\t\n\r]*[/\\]))` | none (ASCII structural) | bytes | oahhlnvf |
-| 86 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_detect_regex` | detect | `^[Ff][Ii][Ll][Ee]:` | none (ASCII structural) | bytes | oahhlnvf |
+| 81 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `^[\x00-\x20]+` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 82 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `[\x00-\x20]+$` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 83 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `<paste0("(?i)^(", scheme_alt, ");")>` | (?i) on an ASCII pattern (special-scheme names) | bytes | oahhlnvf: moved, bytes, ASCII letter classes; drops the ICU folds (NEWS) |
+| 84 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `<paste0("(?i)^(", authority_alt, "):/?(?!/)")>` | (?i) on an ASCII pattern (special-scheme names) | bytes | oahhlnvf: moved, bytes, ASCII letter classes; drops the ICU folds (NEWS) |
+| 85 | `parse-phases.R` | `.apply_browser_fixup_vec` | `stri_replace_first_regex` | replace | `^(?=/(?![\t\n\r]*[/\\]))` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 86 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_detect_regex` | detect | `^[Ff][Ii][Ll][Ee]:` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
 | 87 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_match_first_regex` | capture | `^([a-zA-Z][a-zA-Z0-9+.-]*):` | none (ASCII structural) | bytes | yqmoztoj |
-| 88 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_detect_regex` | detect | `^([a-zA-Z][a-zA-Z0-9+.-]*):\/\/` | none (ASCII structural) | bytes | oahhlnvf |
-| 89 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_startswith_fixed` | detect (prefix) | `//` | none (ASCII literal) | bytes | oahhlnvf |
-| 90 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_detect_regex` | detect | `^[^/:]+:[0-9]+($\|/)` | ICU `$` | bytes | oahhlnvf |
+| 88 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_detect_regex` | detect | `^([a-zA-Z][a-zA-Z0-9+.-]*):\/\/` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
+| 89 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_startswith_fixed` | detect (prefix) | `//` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 90 | `parse-phases.R` | `.prepare_urls_for_parse_vec` | `stri_detect_regex` | detect | `^[^/:]+:[0-9]+($\|/)` | ICU `$` | bytes | oahhlnvf: moved, bytes, `z` (host:port rows ending in U+0085/U+2028/U+2029 move, with the `R/parse-state.R` twin) |
 | 91 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_locate_first_regex` | locate | `^[a-zA-Z][a-zA-Z0-9+.-]*://` | none (ASCII structural) | bytes | yqmoztoj |
-| 92 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_replace_first_regex` | replace | `^[a-zA-Z][a-zA-Z0-9+.-]*://` | none (ASCII structural) | bytes | oahhlnvf |
+| 92 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_replace_first_regex` | replace | `^[a-zA-Z][a-zA-Z0-9+.-]*://` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
 | 93 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_locate_first_regex` | locate | `[/?#]` | none (ASCII structural) | bytes | yqmoztoj |
 | 94 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 95 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 96 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 97 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_locate_first_regex` | locate | `[?#]` | none (ASCII structural) | bytes | yqmoztoj |
 | 98 | `parse-phases.R` | `.extract_raw_path_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
-| 99 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_fixed` | detect | `%` | none (ASCII literal) | bytes | oahhlnvf |
-| 100 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_fixed` | detect | `%` | none (ASCII literal) | bytes | oahhlnvf |
-| 101 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_fixed` | detect | `%` | none (ASCII literal) | bytes | oahhlnvf |
-| 102 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_regex` | detect | `<detect_pattern>` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf |
-| 103 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_regex` | detect | `(?i)/(index\|default)\.[^/]+/?$` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf |
-| 104 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_regex` | detect | `<ipv4_re>` | ASCII dotted quad; ICU `$` | bytes | oahhlnvf |
-| 105 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_fixed` | detect | `[` | none (ASCII literal) | bytes | oahhlnvf |
-| 106 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_fixed` | detect | `]` | none (ASCII literal) | bytes | oahhlnvf |
-| 107 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_regex` | detect | `<paste0("^\\[?[0-9a-fA-F:]+:(", oct, "(?:\\.", oct, "){3})\\]?$")>` | ASCII grammar; ICU `$` | bytes | oahhlnvf |
-| 108 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_regex` | detect | `^\[?[0-9a-fA-F:]+\]?$` | ICU `$` | bytes | oahhlnvf |
-| 109 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_fixed` | detect | `:` | none (ASCII literal) | bytes | oahhlnvf |
-| 110 | `parse-phases.R` | `.host_ends_in_number_vec` | `stri_replace_first_regex` | replace | `\.$` | ICU `$` | bytes | oahhlnvf |
-| 111 | `parse-phases.R` | `.host_ends_in_number_vec` | `stri_replace_first_regex` | replace | `^.*\.` | ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf |
-| 112 | `parse-phases.R` | `.host_ends_in_number_vec` | `stri_detect_regex` | detect | `^[0-9]+$` | ICU `$` | bytes | oahhlnvf |
-| 113 | `parse-phases.R` | `.host_ends_in_number_vec` | `stri_detect_regex` | detect | `^0[xX][0-9a-fA-F]*$` | ICU `$` | bytes | oahhlnvf |
-| 114 | `parse-phases.R` | `.serialize_whatwg_ipv6_host` | `stri_detect_regex` | detect | `^\[.*\]$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf |
+| 99 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_fixed` | detect | `%` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 100 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_fixed` | detect | `%` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 101 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_fixed` | detect | `%` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 102 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_regex` | detect | `<detect_pattern>` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 103 | `parse-phases.R` | `.normalize_path_vec` | `stri_detect_regex` | detect | `(?i)/(index\|default)\.[^/]+/?$` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 104 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_regex` | detect | `<ipv4_re>` | ASCII dotted quad; ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 105 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_fixed` | detect | `[` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 106 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_fixed` | detect | `]` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 107 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_regex` | detect | `<paste0("^\\[?[0-9a-fA-F:]+:(", oct, "(?:\\.", oct, "){3})\\]?$")>` | ASCII grammar; ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 108 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_regex` | detect | `^\[?[0-9a-fA-F:]+\]?$` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 109 | `parse-phases.R` | `.detect_ip_host_vec` | `stri_detect_fixed` | detect | `:` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 110 | `parse-phases.R` | `.host_ends_in_number_vec` | `stri_replace_first_regex` | replace | `\.$` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 111 | `parse-phases.R` | `.host_ends_in_number_vec` | `stri_replace_first_regex` | replace | `^.*\.` | ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf: moved, bytes |
+| 112 | `parse-phases.R` | `.host_ends_in_number_vec` | `stri_detect_regex` | detect | `^[0-9]+$` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 113 | `parse-phases.R` | `.host_ends_in_number_vec` | `stri_detect_regex` | detect | `^0[xX][0-9a-fA-F]*$` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 114 | `parse-phases.R` | `.serialize_whatwg_ipv6_host` | `stri_detect_regex` | detect | `^\[.*\]$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf: moved, bytes |
 | 115 | `parse-phases.R` | `.serialize_whatwg_ipv6_host` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 116 | `parse-phases.R` | `.serialize_whatwg_ipv6_host` | `stri_match_first_regex` | capture | `<paste0("^(.*:)(", oct, "\\.", oct, "\\.", oct, "\\.", oct, ")$")>` | ASCII grammar; ICU `$`; ICU `.` | bytes | yqmoztoj |
 | 117 | `parse-phases.R` | `.serialize_whatwg_ipv6_host` | `stri_split_fixed` | split | `::` | keeps trailing empty field | bytes | yqmoztoj |
 | 118 | `parse-phases.R` | `.serialize_whatwg_ipv6_host` | `stri_split_fixed` | split | `:` | keeps trailing empty field | bytes | yqmoztoj |
-| 119 | `parse-phases.R` | `.serialize_whatwg_ipv6_hosts_vec` | `stri_detect_regex` | detect | `^\[[0-9A-Fa-f:.]+\]$` | ICU `$` | bytes | oahhlnvf |
-| 120 | `parse-phases.R` | `.apply_host_standard_model_vec` | `stri_detect_regex` | detect | `[^\u0001-\u007f]` | non-ASCII detector | bytes (`[^\x01-\x7f]`) | oahhlnvf |
-| 121 | `parse-phases.R` | `.apply_host_standard_model_vec` | `stri_detect_regex` | detect | `<.WHATWG_FORBIDDEN_HOST_CP>` | none (ASCII class, `R/utils.R`) | bytes | oahhlnvf |
-| 122 | `parse-phases.R` | `.apply_host_standard_model_vec` | `stri_detect_regex` | detect | `[^\u0001-\u007f]` | non-ASCII detector | bytes (`[^\x01-\x7f]`) | oahhlnvf |
-| 123 | `parse-phases.R` | `.apply_host_standard_model_vec` | `stri_detect_regex` | detect | `<.WHATWG_FORBIDDEN_HOST_CP>` | none (ASCII class, `R/utils.R`) | bytes | oahhlnvf |
+| 119 | `parse-phases.R` | `.serialize_whatwg_ipv6_hosts_vec` | `stri_detect_regex` | detect | `^\[[0-9A-Fa-f:.]+\]$` | ICU `$` | bytes | oahhlnvf: moved, bytes |
+| 120 | `parse-phases.R` | `.apply_host_standard_model_vec` | `stri_detect_regex` | detect | `[^\u0001-\u007f]` | non-ASCII detector | bytes (`[^\x01-\x7f]`) | oahhlnvf: moved, bytes |
+| 121 | `parse-phases.R` | `.apply_host_standard_model_vec` | `stri_detect_regex` | detect | `<.WHATWG_FORBIDDEN_HOST_CP>` | none (ASCII class, `R/utils.R`) | bytes | oahhlnvf: moved, bytes |
+| 122 | `parse-phases.R` | `.apply_host_standard_model_vec` | `stri_detect_regex` | detect | `[^\u0001-\u007f]` | non-ASCII detector | bytes (`[^\x01-\x7f]`) | oahhlnvf: moved, bytes |
+| 123 | `parse-phases.R` | `.apply_host_standard_model_vec` | `stri_detect_regex` | detect | `<.WHATWG_FORBIDDEN_HOST_CP>` | none (ASCII class, `R/utils.R`) | bytes | oahhlnvf: moved, bytes |
 | 124 | `parse-phases.R` | `.apply_www_policy_vec` | `stri_opts_regex` | options |  | ICU case-insensitive flag | dropped with its consumers | yqmoztoj |
-| 125 | `parse-phases.R` | `.apply_www_policy_vec` | `stri_replace_first_regex` | replace | `^(www[0-9]*\.)(.*)` | ICU case-insensitive on an ASCII pattern; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf |
-| 126 | `parse-phases.R` | `.apply_www_policy_vec` | `stri_detect_regex` | detect | `^www[0-9]*\.` | none (ASCII structural) | bytes | oahhlnvf |
+| 125 | `parse-phases.R` | `.apply_www_policy_vec` | `stri_replace_first_regex` | replace | `^(www[0-9]*\.)(.*)` | ICU case-insensitive on an ASCII pattern; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf: moved, bytes |
+| 126 | `parse-phases.R` | `.apply_www_policy_vec` | `stri_detect_regex` | detect | `^www[0-9]*\.` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
 | 127 | `parse-phases.R` | `.apply_www_policy_vec` | `stri_match_first_regex` | capture | `^(www[0-9]*\.)(.*)` | ICU case-insensitive on an ASCII pattern; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | yqmoztoj |
 | 128 | `parse-phases.R` | `.apply_www_if_no_subdomain_vec` | `stri_opts_regex` | options |  | ICU case-insensitive flag | dropped with its consumers | yqmoztoj |
-| 129 | `parse-phases.R` | `.apply_www_if_no_subdomain_vec` | `stri_detect_regex` | detect | `^www[0-9]*\.` | none (ASCII structural) | bytes | oahhlnvf |
+| 129 | `parse-phases.R` | `.apply_www_if_no_subdomain_vec` | `stri_detect_regex` | detect | `^www[0-9]*\.` | none (ASCII structural) | bytes | oahhlnvf: moved, bytes |
 | 130 | `parse-phases.R` | `.apply_www_if_no_subdomain_vec` | `stri_match_first_regex` | capture | `^(www[0-9]*\.)(.*)` | ICU case-insensitive on an ASCII pattern; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | yqmoztoj |
-| 131 | `parse-phases.R` | `.apply_www_if_no_subdomain_vec` | `stri_startswith_fixed` | detect (prefix) | `www.` | none (ASCII literal) | bytes | oahhlnvf |
+| 131 | `parse-phases.R` | `.apply_www_if_no_subdomain_vec` | `stri_startswith_fixed` | detect (prefix) | `www.` | none (ASCII literal) | bytes | oahhlnvf: gone before the slice (MR !240) |
 | 132 | `parse-phases.R` | `.apply_www_if_no_subdomain_vec` | `stri_match_first_regex` | capture | `^www\.(.*)` | ICU case-insensitive on an ASCII pattern; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | yqmoztoj |
-| 133 | `parse-phases.R` | `.psl_annotation_host_vec` | `stri_detect_fixed` | detect | `%` | none (ASCII literal) | bytes | oahhlnvf |
-| 134 | `parse-phases.R` | `.apply_subdomain_policy_vec` | `stri_startswith_fixed` | detect (prefix) | `www.` | none (ASCII literal) | bytes | oahhlnvf |
+| 133 | `parse-phases.R` | `.psl_annotation_host_vec` | `stri_detect_fixed` | detect | `%` | none (ASCII literal) | bytes | oahhlnvf: moved, bytes |
+| 134 | `parse-phases.R` | `.apply_subdomain_policy_vec` | `stri_startswith_fixed` | detect (prefix) | `www.` | none (ASCII literal) | bytes | oahhlnvf: gone before the slice (MR !240) |
 | 135 | `parse-phases.R` | `.apply_subdomain_policy_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 136 | `parse-phases.R` | `.unicode_case_map_vec` | `stri_trans_toupper` | case map |  | Unicode full case map: stays stringi | stringi (stays) | yyeohqah |
 | 137 | `parse-phases.R` | `.unicode_case_map_vec` | `stri_trans_tolower` | case map |  | Unicode full case map: stays stringi | stringi (stays) | yyeohqah |

@@ -229,3 +229,71 @@ test_that("the IPv6 host serializer picks the same rows", {
     c("[::7f00:1]", "[::1]", "[::1]\n", "h", NA)
   )
 })
+
+# The one behavior change in the slice (ADR 0019, decision 2). The browser
+# fixer matched the special-scheme names with ICU's caseless `(?i)`, which
+# also folds U+017F (long s) to "s", U+00DF (sharp s) to "ss" and U+FB01 (the
+# fi ligature) to "fi". A scheme is matched ASCII case-insensitively (WHATWG
+# URL Standard, "ASCII case-insensitive"; RFC 3986 section 3.1), so only the
+# ASCII case variants are repaired now.
+test_that("the browser fixer repairs ASCII case variants of a scheme only", {
+  fx <- function(x) rurl:::.apply_browser_fixup_vec(x, "browser")
+  expect_identical(
+    fx(c("HTTPS;h", "hTtP:h", "WsS;h", "FiLe;///a", "fTp:/h")),
+    c("HTTPS://h", "hTtP://h", "WsS://h", "FiLe:///a", "fTp://h")
+  )
+  folds <- c("http\u017f;h.com", "http\u017f:h", "w\u00df;h", "w\u017fs:h",
+             "\ufb01le;///a")
+  # Was "httpſ://h.com", "httpſ://h", "wß://h", "wſs://h", "ﬁle:///a".
+  expect_identical(utf8_bytes(fx(folds)), utf8_bytes(folds))
+  # Not a scheme, the long-s row now parses as a host, as its U+017F maps to
+  # "s" under UTS #46: the infer seam reads it like "https;h.com".
+  out <- safe_parse_urls("http\u017f;h.com", profile = "browser")
+  expect_identical(out$host, "https;h.com")
+  expect_identical(out$scheme, "http")
+})
+
+# The host:port routing test ends at the true end now (`\z`), in step with its
+# twin in R/parse-state.R: a port is digits only (WHATWG URL Standard, port
+# state; RFC 3986 section 3.2.3), and ICU's `$` also took the point before a
+# final U+0085, U+2028 or U+2029. Those rows no longer read as host:port.
+test_that("the Phase-1 host:port test reads the true end", {
+  x <- c("example.com:8080", "example.com:8080/p", "tel:123x",
+         "example.com:8080 ", "example.com:8080\u0085", "tel:123 ",
+         "tel:123\n")
+  prep <- rurl:::.prepare_urls_for_parse_vec(
+    x, "keep", "keep", "whatwg", "infer", "general"
+  )
+  # Was TRUE for the three rows ending in U+2028, U+0085 or U+2029; the LF
+  # row is stripped by WHATWG step 1 first and stays a host:port.
+  expect_identical(prep$looks_like_host_port,
+                   c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE))
+  # The URL key's scheme presence: `tel:123x` is explicit. A row ending in
+  # U+2028 is not keyable on this route either way.
+  k <- get_url_key(c("tel:123x", "tel:123 ", "example.com:8080 "),
+                   url_key_policy("whatwg"))
+  expect_identical(attr(k, "keyability"),
+                   c("ok", "invalid-parse", "invalid-parse"))
+  expect_match(unclass(k)[1L], "8:explicit3:tel", fixed = TRUE)
+  # Under RFC 3986 with any scheme accepted, `h:1<U+2028>` was diverted to
+  # the host:port route and failed; it now parses as `h:1x` does.
+  out <- safe_parse_urls(c("h:1x", "h:1 ", "h:1\u0085"),
+                         profile = "rfc-syntax")
+  expect_identical(out$scheme, c("h", "h", "h"))
+  expect_identical(out$parse_status, c("ok", "ok", "ok"))
+})
+
+test_that("no other migrated pattern dropped a non-ASCII fold", {
+  # ICU's caseless match folds nothing else onto "e", "w", "index" or
+  # "default", so these rows read as they did.
+  expect_identical(
+    rurl:::.apply_www_policy_vec(c("\u1e98ww.a.com", "WwW.a.com"), "strip",
+                                 c(FALSE, FALSE)),
+    c("\u1e98ww.a.com", "a.com")
+  )
+  np <- function(x) {
+    rurl:::.normalize_path_vec(x, "keep", "none", "strip", "none")
+  }
+  expect_identical(np(c("/\u0130ndex.html", "/\u0131ndex.html", "/INDEX.x")),
+                   c("/\u0130ndex.html", "/\u0131ndex.html", "/"))
+})
