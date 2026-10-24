@@ -49,7 +49,8 @@ for (loc in names(ctypes)) {
       want_keep <- list(
         character(0), character(0), c("\u00fc", "\u00fc"), "a", c("x", "y"),
         "\u00e9", paste0(bom, "a"), paste0(zwsp, "a"), paste0(bom, "\u00fc"),
-        paste0(zwsp, "\u00fc"), "a", c("www", "sub"), character(0), character(0),
+        paste0(zwsp, "\u00fc"), "a", c("www", "sub"), character(0),
+        character(0),
         character(0), character(0), character(0)
       )
       got <- get_subdomain(url, format = "labels")
@@ -189,9 +190,8 @@ for (loc in names(ctypes)) {
       expect_identical(s("/a/index."), "/a/index.")
       expect_identical(s(NA_character_), NA_character_)
       expect_identical(s(""), "")
-      expect_identical(s(paste0(bom, "/a/index.html")), paste0("/", bom, "/a"))
-      expect_identical(s(paste0(zwsp, "/a/index.html")),
-                       paste0("/", zwsp, "/a"))
+      expect_identical(s("\ufeff/a/index.html"), "/\ufeff/a")
+      expect_identical(s("\u200b/a/index.html"), "/\u200b/a")
       expect_identical(s(paste0(bom, "index.html")), paste0(bom, "index.html"))
       # An invalid-UTF-8 directory is cut by its bytes.
       bad <- u8("/\xe9/index.html")
@@ -200,10 +200,10 @@ for (loc in names(ctypes)) {
       expect_identical(Encoding(s("/\u00fc/index.html")), "UTF-8")
       # Linear: a multi-megabyte path with a million candidate pages cuts
       # without a PCRE match-limit warning.
-      long <- paste0(strrep("/index.a", 1e6), "/index.html")
+      long <- sprintf("%s/index.html", strrep("/index.a", 1e6))
       expect_no_warning(got <- s(long))
       expect_identical(nchar(got), nchar(long) - 11L)
-      expect_no_warning(got <- s(paste0(strrep("/index.a", 1e6), "/x")))
+      expect_no_warning(got <- s(sprintf("%s/x", strrep("/index.a", 1e6))))
       expect_identical(nchar(got), 8000002L)
     })
   })
