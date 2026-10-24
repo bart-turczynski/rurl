@@ -498,9 +498,15 @@
 # the Phase-1 classifier's own `ipv4ish` test, so the diagnostics are keyed to
 # exactly the tokens the host model treats as IPv4 attempts. WHATWG treats a
 # bare `0x` prefix as zero after stripping the prefix, so the hex digit run may
-# be empty.
-.RE_IPV4ISH <-
-  "^(0[xX][0-9a-fA-F]*|[0-9]+)(\\.(0[xX][0-9a-fA-F]*|[0-9]+))*$"
+# be empty. Read as the inverted search for one part that is not such a
+# group (at the start or after a dot, a part not followed by a dot or the true
+# end), which is linear in the token; the repeated group
+# `^(0[xX][0-9a-fA-F]*|[0-9]+)(\.(0[xX][0-9a-fA-F]*|[0-9]+))*$` is the
+# backtracking shape RURL-rrumztrf removed. Byte mode (ADR 0019). `\z`, as the
+# base-R `$` it replaces was the true end; the classifier's own test keeps
+# ICU's `$` instead.
+.RE_IPV4ISH_BAD_PART <-
+  "(?:^|\\.)(?!(?:0[xX][0-9a-fA-F]*|[0-9]+)(?:\\.|\\z))"
 
 # Parse one IPv4 part to its numeric value (as a double, so 32-bit values stay
 # exact) honoring the WHATWG radix rules: `0x`/`0X` prefix -> hex, a leading
@@ -534,7 +540,10 @@
 # octal rows of §6.2): a leading-zero octal part is at once octal, leading-zero,
 # and non-decimal.
 .ipv4_host_diagnostics <- function(token) {
-  if (is.na(token) || !grepl(.RE_IPV4ISH, token)) {
+  # Byte mode stated at the call, not `.bytes_detect()`: this runs once per
+  # host token, and its pattern is a constant ASCII one.
+  if (is.na(token) ||
+        grepl(.RE_IPV4ISH_BAD_PART, token, perl = TRUE, useBytes = TRUE)) {
     return(character(0))
   }
   parts <- strsplit(token, ".", fixed = TRUE)[[1]]

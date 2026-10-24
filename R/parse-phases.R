@@ -18,6 +18,72 @@
 # and extracts the raw columns itself.
 # ---------------------------------------------------------------------------
 
+# Byte-mode spellings of the two ICU regex behaviors the boolean and
+# replacement calls in this file had, and keep, since they moved off stringi
+# (RURL-oahhlnvf, ADR 0019). R/strings-base.R refuses a bare `$`, so a
+# pattern names the end it means.
+#
+# `.ICU_END` is ICU's `$` outside multiline mode: the true end of the input,
+# or the point before a final line terminator (LF, VT, FF, CR, CRLF, U+0085,
+# U+2028 or U+2029, spelled as UTF-8 bytes). `\z` is the true end only. A
+# site whose class before the anchor absorbs every terminator writes `\z`,
+# which is then the same; the rest write `.ICU_END`, so a row such as
+# "1.2.3.4\n" keeps the reading it had (the `NULL` profile is byte-frozen,
+# ADR 0016).
+.ICU_END <- paste0(
+  "(?=(?:\\r\\n|[\\n\\x0b\\x0c\\r]|\\xc2\\x85|\\xe2\\x80[\\xa8\\xa9])?\\z)"
+)
+
+# `.ICU_DOT` is ICU's `.`: any code point but those eight terminators. Byte
+# mode's `.` is any byte but LF. Read a byte at a time, as a run (`.ICU_DOT*`)
+# it covers the same text as ICU's `.*`.
+.ICU_DOT <- paste0(
+  "(?:[^\\n\\x0b\\x0c\\r\\xc2\\xe2]|\\xc2(?!\\x85)|\\xe2(?!\\x80[\\xa8\\xa9]))"
+)
+
+# The WHATWG forbidden domain code points (`.WHATWG_FORBIDDEN_HOST_CP`,
+# R/utils.R) as a byte-mode class: the same ASCII set, with the ICU `\u`
+# escapes PCRE does not read written as `\x`.
+.WHATWG_FORBIDDEN_HOST_CP_BYTES <- "[\\x01-\\x1f\\x7f #%/:<>?@\\[\\]\\\\^|]"
+
+# A byte outside 0x01-0x7F: the byte-mode form of the ICU class
+# `[^\u0001-\u007f]`. On valid UTF-8 the two find the same rows; ICU read an
+# undecodable octet as U+FFFD, which is non-ASCII too.
+.NON_ASCII_BYTE <- "[^\\x01-\\x7f]"
+
+# One part of a host that is not an IPv4-attempt number: at the start or
+# after a dot, a part that is not `0x` + hex digits or decimal digits
+# followed by a dot or ICU's end. A host is an IPv4 attempt when no such part
+# exists (`.classify_input_host_vec()`, RURL-rrumztrf).
+.IPV4ISH_BAD_PART <- paste0(
+  "(?:^|\\.)(?!(?:0[xX][0-9a-fA-F]*|[0-9]+)(?:\\.|", .ICU_END, "))"
+)
+
+# A last path segment `index.*` or `default.*`, any ASCII case, with an
+# optional trailing "/": the rows `index_page_handling = "strip"` hands to
+# `._strip_index_page()`. Was the ICU `(?i)/(index|default)\.[^/]+/?$`; ICU
+# folds no non-ASCII code point to these letters, so the classes lose no
+# match, and `$` stays ICU's.
+.INDEX_PAGE_TAIL <- paste0(
+  "/(?:[Ii][Nn][Dd][Ee][Xx]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt])\\.[^/]+/?", .ICU_END
+)
+
+# A host bracketed end to end: the ICU `^\[.*\]$`, with ICU's `.` and `$`
+# (`.serialize_whatwg_ipv6_host()`).
+.IPV6_BRACKETED_SHAPE <- paste0("^\\[", .ICU_DOT, "*\\]", .ICU_END)
+
+# Each ASCII letter of `x` as a two-case class, `http` -> `[Hh][Tt][Tt][Pp]`.
+# Byte mode does no case-insensitive matching (ADR 0019, decision 2). `x` is
+# ASCII letters and digits only, here the special-scheme names.
+.ascii_letter_classes <- function(x) {
+  vapply(x, function(w) {
+    ch <- strsplit(w, "", fixed = TRUE)[[1L]]
+    up <- chartr("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", ch)
+    lo <- chartr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", ch)
+    paste(ifelse(up == lo, ch, paste0("[", up, lo, "]")), collapse = "")
+  }, character(1), USE.NAMES = FALSE)
+}
+
 # Phase 1 helper (vector): classify the host token of each raw input for the
 # host-shape gate. rurl only fabricates a scheme for URL-shaped input, so we
 # must isolate and inspect the host before the web parse. Returns, per element:
@@ -32,11 +98,15 @@
 .classify_input_host_vec <- function(url) {
   # Strip a leading "scheme://" or scheme-relative "//", then the path/query/
   # fragment, to isolate the authority (userinfo + host + port).
-  s <- stringi::stri_replace_first_regex(url, "^[a-zA-Z][a-zA-Z0-9+.-]*://", "")
-  s <- stringi::stri_replace_first_regex(s, "^//", "")
-  authority <- stringi::stri_replace_first_regex(s, "[/?#].*$", "")
+  # Byte mode (ADR 0019). ICU's `.` and `$` are kept (`.ICU_DOT`,
+  # `.ICU_END`), so an interior line terminator still ends the cut as before.
+  s <- .bytes_replace(url, "^[a-zA-Z][a-zA-Z0-9+.-]*://", "")
+  s <- .bytes_replace(s, "^//", "")
+  authority <- .bytes_replace(
+    s, paste0("[/?#]", .ICU_DOT, "*", .ICU_END), ""
+  )
 
-  has_userinfo <- stringi::stri_detect_fixed(authority, "@")
+  has_userinfo <- .bytes_detect(authority, "@", fixed = TRUE)
   has_userinfo[is.na(has_userinfo)] <- FALSE
 
   # Host = authority after any userinfo, minus the port. Bracketed IPv6 keeps
@@ -44,30 +114,41 @@
   # stri_startswith_fixed(), which reads past a U+FEFF that starts its input
   # (see .starts_with_bom()): a host led by the mark is not bracketed
   # (RURL-opwjlnla).
-  host_ui <- stringi::stri_replace_first_regex(authority, "^.*@", "")
+  host_ui <- .bytes_replace(authority, paste0("^", .ICU_DOT, "*@"), "")
   bracketed <- startsWith(host_ui, "[")
   bracketed[is.na(bracketed)] <- FALSE
+  # `[^:]*` takes every line terminator, so `\z` reads as ICU's `$` did.
   host_token <- ifelse(
     bracketed,
-    stringi::stri_replace_first_regex(host_ui, "^(\\[[^\\]]*\\]).*$", "$1"),
-    stringi::stri_replace_first_regex(host_ui, ":[^:]*$", "")
+    .bytes_replace(
+      host_ui, paste0("^(\\[[^\\]]*\\])", .ICU_DOT, "*", .ICU_END), "\\1"
+    ),
+    .bytes_replace(host_ui, ":[^:]*\\z", "")
   )
 
   host_lower <- .ascii_tolower(host_token)
   is_localhost <- host_lower %in% .SPECIAL_SINGLE_LABEL_HOSTS
 
-  is_dotted_name <- stringi::stri_detect_regex(host_token, "^[^.]+(\\.[^.]+)+$")
+  # Two or more non-empty dot-separated labels. A linear check, not the
+  # repeated group `^[^.]+(\.[^.]+)+$`: ICU's backtrack stack overflowed on a
+  # host of about 4e5 labels and threw for the whole vector (RURL-rrumztrf).
+  # A dot, and no empty label: none first, last or doubled. `[^.]` took a line
+  # terminator too, so ICU's `$` added nothing there.
+  is_dotted_name <- .bytes_detect(host_token, ".", fixed = TRUE) &
+    !.bytes_detect(host_token, "^\\.|\\.\\.|\\.\\z")
   is_dotted_name[is.na(is_dotted_name)] <- FALSE
 
   # inet_aton / WHATWG IPv4 attempts: dotted groups each all-decimal or 0x-hex
   # (12345, 0x7f000001, 0x, 017700000001, 192.168, 1.2.3.4, 256.1.1.1,
   # 1.2.3.4.5), plus any ':' host (IPv6, incl. bracketed). WHATWG's IPv4
   # number parser treats a bare "0x" prefix as zero after stripping the prefix.
-  ipv4ish <- stringi::stri_detect_regex(
-    host_token, "^(0[xX][0-9a-fA-F]*|[0-9]+)(\\.(0[xX][0-9a-fA-F]*|[0-9]+))*$"
-  )
+  # Read as the inverted search for one bad part, linear in the host, where
+  # the repeated group `^(...)(\.(...))*$` overflowed ICU's backtrack stack on
+  # a many-label host (RURL-rrumztrf). A part starts at the start or after a
+  # dot, and must be a number followed by a dot or ICU's end (`.ICU_END`).
+  ipv4ish <- !.bytes_detect(host_token, .IPV4ISH_BAD_PART)
   ipv4ish[is.na(ipv4ish)] <- FALSE
-  ipv6ish <- stringi::stri_detect_fixed(host_token, ":")
+  ipv6ish <- .bytes_detect(host_token, ":", fixed = TRUE)
   ipv6ish[is.na(ipv6ish)] <- FALSE
   is_ipish <- ipv4ish | ipv6ish
 
@@ -610,19 +691,28 @@
   scheme <- m[, 2L]
   rest <- m[, 3L]
   scheme_lower <- .ascii_tolower(scheme)
-  first_segment <- stringi::stri_replace_first_regex(rest, "[/?#].*$", "")
-  host_shaped_first_segment <- stringi::stri_detect_regex(
-    first_segment, "^[A-Za-z0-9._~-]+(\\.[A-Za-z0-9._~-]+)+$"
+  first_segment <- .bytes_replace(
+    rest, paste0("[/?#]", .ICU_DOT, "*", .ICU_END), ""
   )
+  # `^[A-Za-z0-9._~-]+(\.[A-Za-z0-9._~-]+)+$`, read without its repeated
+  # group, whose backtracking a many-label segment overflowed (RURL-rrumztrf):
+  # every byte in the class up to ICU's end, and a dot with a class byte on
+  # either side. The class holds ".", so one such dot is all the group asked.
+  seg_class <- "[A-Za-z0-9._~-]"
+  host_shaped_first_segment <-
+    .bytes_detect(first_segment, paste0("^", seg_class, "+", .ICU_END)) &
+    .bytes_detect(first_segment, paste0("(?<=", seg_class, ")\\.", seg_class))
   host_shaped_first_segment[is.na(host_shaped_first_segment)] <- FALSE
-  # A row led by U+FEFF has no scheme (RURL-biunpazk).
+  # A row led by U+FEFF has no scheme (RURL-biunpazk). A host-shaped first
+  # segment starts with a class byte, so `rest` cannot start with "/", "\" or
+  # the mark on an eligible row; the two prefix tests are base R.
   eligible <- !bom_led & !is.na(rest) &
     scheme_lower %in% .SPECIAL_AUTHORITY_SCHEMES &
     host_shaped_first_segment &
     rest != "" &
-    !stringi::stri_startswith_fixed(rest, "/") &
-    !stringi::stri_startswith_fixed(rest, "\\") &
-    !stringi::stri_detect_fixed(rest, "\\")
+    !startsWith(rest, "/") &
+    !startsWith(rest, "\\") &
+    !.bytes_detect(rest, "\\", fixed = TRUE)
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
     return(no_op)

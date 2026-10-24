@@ -35,6 +35,16 @@ test_that("the linear classifiers give the old answers on many labels", {
   expect_identical(cls$is_ipv4ish, c(FALSE, TRUE, TRUE, FALSE, FALSE, FALSE))
 })
 
+test_that("the rootless-path carve-out reads a many-label segment", {
+  # `^[A-Za-z0-9._~-]+(\.[A-Za-z0-9._~-]+)+$` had the same repeated group.
+  r <- rurl:::.rfc3986_path_rootless_vec(c(
+    paste0("http:", strrep("a.", 4e5), "b/c"),
+    paste0("http:", strrep("a.", 4e5), "b!/c"),
+    "http:a.b/c"
+  ), "rfc3986")
+  expect_identical(r$is_path_rootless, c(TRUE, FALSE, TRUE))
+})
+
 test_that("the IPv4-shape diagnostics read a many-label host", {
   expect_identical(
     rurl:::.ipv4_host_diagnostics(paste0(strrep("a.", 4e5), "com")),
@@ -47,7 +57,8 @@ test_that("the IPv4-shape diagnostics read a many-label host", {
   # final LF is not an IPv4 attempt, unlike the Phase-1 classifier's ICU `$`.
   expect_identical(rurl:::.ipv4_host_diagnostics("1.2"), "ipv4-short-form")
   expect_identical(
-    rurl:::.ipv4_host_diagnostics("0x"), c("ipv4-number-form", "ipv4-non-decimal")
+    rurl:::.ipv4_host_diagnostics("0x"),
+    c("ipv4-number-form", "ipv4-non-decimal")
   )
   expect_identical(rurl:::.ipv4_host_diagnostics("0x1.010.1"), c(
     "ipv4-short-form", "ipv4-non-decimal", "ipv4-octal", "ipv4-leading-zero"
