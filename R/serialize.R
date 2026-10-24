@@ -105,8 +105,13 @@
   u <- ifelse(is.na(url), "", as.character(url))
   if (.is_whatwg(url_standard)) {
     u <- .strip_whatwg_control_chars_vec(u, url_standard)$url
-    u <- stringi::stri_replace_first_regex(u, "^[\\u0000-\\u0020]+", "")
-    u <- stringi::stri_replace_last_regex(u, "[\\u0000-\\u0020]+$", "")
+    # Leading and trailing C0 control or space (WHATWG URL, basic URL parser
+    # step 1), in byte mode (ADR 0019). The end anchor is `\z`: ICU's `$`
+    # also matched before a final U+0085 or U+2028, so a run of spaces in
+    # front of one was stripped although neither code point is a C0 control
+    # or space.
+    u <- .bytes_replace(u, "\\A[\\x00-\\x20]+", "")
+    u <- .bytes_replace(u, "[\\x00-\\x20]+\\z", "")
     # Reverse-solidus rewrite, exactly as the parser performs it before reading
     # the authority. Lexing the RAW source instead would let a "\" that the
     # standard maps to the authority/path boundary stay inside the authority

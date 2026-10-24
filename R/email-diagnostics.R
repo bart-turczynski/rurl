@@ -30,8 +30,17 @@
 
 # --- Small structural predicates ---------------------------------------------
 
+# A byte outside ASCII, in byte mode (ADR 0019). In valid UTF-8 a non-ASCII
+# code point is exactly a run of such bytes, so this reads as the code-point
+# class `[^\u0000-\u007F]` did; stringi read a stray octet as U+FFFD, which is
+# non-ASCII too.
 .email_has_non_ascii <- function(x) {
-  stringi::stri_detect_regex(x, "[^\\u0000-\\u007F]")
+  # Base grepl() in byte mode, not .bytes_detect(): that layer refuses latin1,
+  # and a latin1 byte above 0x7F is non-ASCII as well. The pattern is a
+  # constant ASCII class, so the layer's pattern check has nothing to refuse.
+  out <- grepl("[^\\x00-\\x7f]", x, perl = TRUE, useBytes = TRUE)
+  out[is.na(x)] <- NA
+  out
 }
 
 # dot-atom-text = 1*atext *("." 1*atext): no leading/trailing/double dot, every

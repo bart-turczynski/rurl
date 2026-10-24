@@ -165,7 +165,7 @@
   # no registrable-domain CONCEPT -- IP literal, `file:` host, general/opaque
   # authority, and any row with no host to annotate -- is `not-applicable`,
   # never `unknown`: a lookup that does not apply is not a lookup that failed.
-  host_has_dot <- stringi::stri_detect_fixed(final_host, ".")
+  host_has_dot <- .bytes_detect(final_host, ".", fixed = TRUE)
   host_has_dot[is.na(host_has_dot)] <- FALSE
   tld_empty <- is.na(tld) | !nzchar(tld)
   domain_empty <- is.na(domain) | !nzchar(domain)

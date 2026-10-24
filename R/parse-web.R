@@ -159,6 +159,11 @@
 # Userinfo allowed ASCII set: printable ASCII except "@" (0x40).
 .WEB_USERINFO_ALLOWED_BYTES <- setdiff(seq.int(0x21L, 0x7EL), 0x40L)
 
+# A path holding a dot segment, plain or percent-encoded ("." or "%2e", either
+# case, once or twice, between slashes or at an end), in byte mode. Gates the
+# dot-segment removal in `.parse_web_url_one()`.
+.WEB_DOT_SEGMENT_RE <- "(?:\\A|/)(?:\\.|%2[Ee]){1,2}(?:/|\\z)"
+
 # Host and userinfo are the only components that can carry RAW bytes >= 0x80 out
 # of this parser (path/query/fragment get them percent-encoded), and there they
 # are accepted only as WELL-FORMED UTF-8: `http://aéb/` parses, a lone 0x80 does
@@ -1455,9 +1460,14 @@
     if (is.null(path)) {
       return(NULL)
     }
-    # Safe to hand to stringi/ICU now: `.web_normalize_component()` has
-    # percent-encoded every byte >= 0x80, so `path` is pure ASCII.
-    if (stringi::stri_detect_regex(path, "(?i)(\\A|/)(\\.|%2e){1,2}(/|\\z)")) {
+    # `.web_normalize_component()` has percent-encoded every byte >= 0x80, so
+    # `path` is pure ASCII. Byte mode (ADR 0019), with the hex digit's case
+    # spelled as a class, since byte mode refuses `(?i)`; on ASCII text that
+    # is what the caseless match did. `grepl()` directly, not
+    # `.bytes_detect()`: this runs once per row, and `.WEB_DOT_SEGMENT_RE` is
+    # a constant that test-stringi-bool-state-diag.R checks with
+    # `.bytes_check_pattern()`.
+    if (grepl(.WEB_DOT_SEGMENT_RE, path, perl = TRUE, useBytes = TRUE)) {
       path <- ._remove_dot_segments_whatwg(path)
     }
   }
