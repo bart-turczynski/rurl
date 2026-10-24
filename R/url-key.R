@@ -249,13 +249,20 @@
 # only ever COUNTED here, never used to slice a field, so the
 # code-point/native-index does not arise.
 #
+# The transcode, `stri_enc_toutf8(validate = TRUE)`, is a declared ADR 0019
+# exception (RURL-yyeohqah): it decodes an invalid sequence with one U+FFFD
+# per maximal subpart, as the WHATWG Encoding Standard's UTF-8 decoder does,
+# which base R has no call for. test-stringi-semantic-exceptions.R pins it on
+# a fixture table of truncated, overlong, surrogate and above-U+10FFFF
+# sequences.
+#
 # A field that starts with U+FEFF is transcoded with an ASCII `x` spliced on
 # first, and that one byte is cut off after it. stri_enc_toutf8() reads a
 # U+FEFF that starts its input as a byte-order mark and drops it, so
 # `\ufeffh.example.com` framed as `13:h.example.com` and the key collided with
 # its unmarked twin's. The mark is field data (ADR 0005), so it must reach the
-# frame, and stri_numbytes() counts it. Only those rows are spliced, as in
-# .cache_key_escape(): a splice on every row costs a paste per field, and
+# frame, and stri_numbytes() counts it. Only those rows are spliced: a splice
+# on every row costs a paste per field, and
 # paste0() translates a field that is not UTF-8 by the locale, which the
 # transcode alone does not. A field led by the mark holds a code point latin1
 # cannot spell, so it is UTF-8 or native already (RURL-dquaxcaz).

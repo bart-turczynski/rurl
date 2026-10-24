@@ -59,6 +59,27 @@ still listed ahead of MR !242's code.
 MR !242 merged the same day (`325f787`), so those two keys now match code:
 194 references under 125 keys.
 
+RURL-yyeohqah decided the semantic exceptions (ADR 0019, "Semantic
+exceptions"); the allowlist was regenerated on that branch after main
+`91b8ad0`: 187 references under 120 keys. By row of the table below, and
+the key MR !242 added:
+
+| Row(s) | Call | Disposition |
+|---|---|---|
+| 187 | `stri_enc_isutf8` in `.cache_key_ascii` | removed: the base-R key needs no validity test |
+| 188-190 | `stri_escape_unicode` in `.cache_key_escape` | removed: each octet at or above 0x80 written `\xHH` in base R |
+| 168 | `stri_enc_toutf8` in `.latin1_input_to_utf8` | removed: exact ISO 8859-1 map |
+| (MR !242) | `stri_enc_mark` in `.prepare_url_input` | removed: base `Encoding()` |
+| 184 | `stri_replace_all_regex` in `.glob_to_regex` | removed: byte layer, ASCII punctuation only |
+| 173 | `stri_detect_regex` in `.param_matches` | **stays**: case-insensitive arm, ICU full case folding; the case-sensitive arm moved to the byte layer |
+| 181, 182 | `stri_enc_toutf8` in `.url_key_frame` | **stays**: U+FFFD decode, WHATWG maximal subpart, with its U+FEFF splice |
+| 183 | `stri_numbytes` in `.url_key_frame` | not moved in this slice (left for a later one) |
+| 12, 13 | `stri_trans_nfc` in the Punycode helpers | **stays** (ADR 0002); counts a leading U+FEFF, no guard |
+| 136, 137 | `stri_trans_toupper` / `stri_trans_tolower` in `.unicode_case_map_vec` | **stays**, `"en_US_POSIX"` locale and `"0"` splice guard |
+
+The gate then reports 187 references, with five "allowlist can shrink"
+lines for the removed keys.
+
 ## Legend
 
 - **Family**: what the call does. *detect* returns a logical. *count*

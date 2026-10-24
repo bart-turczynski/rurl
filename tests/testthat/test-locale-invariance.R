@@ -512,8 +512,10 @@ test_that("the byte-slice helpers cut positions, not characters", {
 # kmpnbvdl guards structurally cannot catch: those scope on `validUTF8()` and on
 # `Encoding()` being "UTF-8"/"latin1", and a "bytes" mark is neither. stringi
 # refuses a bytes-marked string WHOLESALE -- it is not a question of which
-# octets it holds -- so the throw arrives from `stri_escape_unicode()` in the
-# CACHE KEY, before the parser has looked at the input at all.
+# octets it holds -- so the throw arrived from the stringi escape that the
+# CACHE KEY used then, before the parser had looked at the input at all. The
+# key is now built in base R from the octets (RURL-yyeohqah, ADR 0019), but
+# the pins below still guard every entry point against the throw.
 #
 # `error` is the right verdict and is not in dispute: `Encoding(x) <- "bytes"`
 # is the caller declaring the value is not text, and rurl already treats that

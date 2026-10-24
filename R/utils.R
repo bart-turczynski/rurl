@@ -258,12 +258,23 @@
 # escaped to a literal, so a query param named "a.b" or "a[0]" matches only
 # itself and a literal '*' in a pattern is unsupported (documented). Used to
 # compile the built-in denylist and user params_keep/params_drop into matchers.
-# Implementation: escape every non-word char (so '*' becomes the two-char '\*'),
-# then turn that escaped star back into the regex '.*', then anchor.
+#
+# Base R in byte mode (RURL-yyeohqah, ADR 0019), vectorized over `glob`, which
+# must be UTF-8 or unknown-marked (.compile_param_matcher() converts latin1).
+# Only ASCII punctuation other than '*' and '_' is escaped, with a backslash,
+# which both PCRE and ICU read as that literal character. A non-ASCII
+# character passes through as its own octets: escaping each octet of a
+# multibyte character would corrupt it, and none of them is a metacharacter.
+# A leading U+FEFF is an ordinary literal. '*' becomes `(?s:.*)`, any run of
+# characters including line terminators, and the end anchor is `\z`, not `$`
+# (ICU's `$` also matches before a final line terminator, ICU's `.` stops at
+# CR, LF, U+0085, U+2028 and U+2029, and PCRE's at LF only). The result reads
+# the same in PCRE and in ICU, so both arms of .param_matches() take it.
 .glob_to_regex <- function(glob) {
-  escaped <- stringi::stri_replace_all_regex(glob, "([^A-Za-z0-9_])", "\\\\$1")
-  escaped <- gsub("\\*", ".*", escaped, fixed = TRUE)
-  paste0("^", escaped, "$")
+  escaped <- .bytes_replace(glob, "([!-)+-/:-@\\[-\\^`{-~])", "\\\\\\1",
+                            all = TRUE)
+  escaped <- .bytes_replace(escaped, "*", "(?s:.*)", all = TRUE, fixed = TRUE)
+  paste0("^", escaped, "\\z")
 }
 
 # ASCII-only case mapping for URL SYNTAX (RURL-ugfpuotu). Scheme and host case

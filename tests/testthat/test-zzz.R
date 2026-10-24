@@ -87,9 +87,12 @@ test_that(".cache_key_ascii keeps a leading byte-order mark (RURL-iiehsbfg)", {
   # "\ufeffa.com" onto "a.com".
   inputs <- c("\ufeff", "\ufeffa.com", "a.com", "\ufeff\ufeffa.com", "")
   keys <- rurl:::.cache_key_ascii(inputs)
+  # The base-R key (RURL-yyeohqah) escapes each non-ASCII octet, so the mark
+  # is octets EF BB BF like any other code point.
   expect_identical(
     keys,
-    c("\\ufeff", "\\ufeffa.com", "a.com", "\\ufeff\\ufeffa.com", "")
+    c("\\xef\\xbb\\xbf", "\\xef\\xbb\\xbfa.com", "a.com",
+      "\\xef\\xbb\\xbf\\xef\\xbb\\xbfa.com", "")
   )
 
   bad <- rawToChar(as.raw(c(0xef, 0xbb, 0xbf, 0x61, 0xff)))

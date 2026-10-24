@@ -106,8 +106,6 @@
 "R/parse-web.R",".web_ipv6_serialize","stringi::stri_locate_first_fixed",1
 "R/parse-web.R",".web_ipv6_serialize","stringi::stri_match_first_regex",1
 "R/parse.R",".has_explicit_authority","stringi::stri_replace_first_regex",1
-"R/parse.R",".latin1_input_to_utf8","stringi::stri_enc_toutf8",1
-"R/parse.R",".prepare_url_input","stringi::stri_enc_mark",1
 "R/parse.R",".source_scheme_spelling_vec","stringi::stri_match_first_regex",1
 "R/path-query.R","._strip_index_page","stringi::stri_detect_regex",1
 "R/path-query.R","._strip_index_page","stringi::stri_match_first_regex",1
@@ -123,7 +121,4 @@
 "R/url-key.R",".url_key_scheme_presence","stringi::stri_detect_regex",2
 "R/url-key.R",".url_key_scheme_presence","stringi::stri_replace_first_regex",1
 "R/utils.R",".ascii_case_fallback","stringi::stri_replace_all_fixed",1
-"R/utils.R",".glob_to_regex","stringi::stri_replace_all_regex",1
 "R/verdicts.R",".derive_verdict_layers_vec","stringi::stri_detect_fixed",1
-"R/zzz.R",".cache_key_ascii","stringi::stri_enc_isutf8",1
-"R/zzz.R",".cache_key_escape","stringi::stri_escape_unicode",3
