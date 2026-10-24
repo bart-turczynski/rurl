@@ -1999,18 +1999,22 @@ safe_parse_urls <- function(url,
 # general-routed row failed. The shared cache key then served whichever twin
 # was parsed first to the other, so a row's value depended on call order.
 #
-# `stri_enc_toutf8()` reads the latin1 mark itself and never consults the
-# session locale, unlike `enc2utf8()` (see test-locale-invariance.R, section
-# 5). It maps 0x80-0x9F to U+0080-U+009F, the ISO 8859-1 reading that the
-# cache key (`stri_escape_unicode()`) and the whatwg route already use; R's own
-# translation reads those octets as CP1252.
+# The conversion is the exact ISO 8859-1 map, in base R (RURL-yyeohqah, ADR
+# 0019): octet 0xNN becomes code point U+00NN, so 0x80-0x9F are the C1
+# controls U+0080-U+009F, as the whatwg route reads them. It never consults
+# the session locale. `enc2utf8()` and `iconv(from = "latin1")` are not used:
+# R's own translation reads 0x80-0x9F as CP1252 on Windows (see
+# test-locale-invariance.R, section 5).
 #
-# Called only by .prepare_url_input(), below, which every entry point goes
-# through.
+# Called by .prepare_url_input(), below, which every entry point goes
+# through, and by the cache key (.cache_key_ascii()).
 .latin1_input_to_utf8 <- function(url) {
   latin1 <- !is.na(url) & Encoding(url) == "latin1"
   if (any(latin1)) {
-    url[latin1] <- stringi::stri_enc_toutf8(url[latin1])
+    url[latin1] <- vapply(
+      url[latin1], function(s) intToUtf8(as.integer(charToRaw(s))),
+      character(1L), USE.NAMES = FALSE
+    )
   }
   url
 }
@@ -2061,16 +2065,26 @@ safe_parse_urls <- function(url,
 # recipient table's `url`) is the caller's own element, never this one.
 # test-input-boundary.R holds every export to it.
 #
-# ASCII fast path: stri_enc_mark() reads the per-string flags R already keeps,
-# without scanning the bytes, so a vector with no non-ASCII element (nearly
-# every call) returns as it came.
+# ASCII fast path: a vector with no non-ASCII element (nearly every call)
+# returns as it came, with an unnamed verdict. Base `Encoding()` reads the
+# marks (RURL-yyeohqah, ADR 0019). It reports an ASCII element and an unmarked
+# non-ASCII one alike as "unknown", so the unmarked elements are told apart by
+# a byte-mode scan for an octet at or above 0x80. A non-character `url` (a
+# number, a logical NA) has no marks and returns as it came.
 .prepare_url_input <- function(url) {
-  mark <- stringi::stri_enc_mark(url)
-  if (!any(mark != "ASCII", na.rm = TRUE)) {
+  if (!is.character(url)) {
+    return(list(url = url, decodable = rep(TRUE, length(url))))
+  }
+  enc <- Encoding(url)
+  native <- enc == "unknown"
+  if (any(native)) {
+    high <- .bytes_detect(url[native], "[\\x80-\\xff]")
+    native[native] <- !is.na(high) & high
+  }
+  if (!any(native) && all(enc == "unknown")) {
     return(list(url = url, decodable = rep(TRUE, length(url))))
   }
   url <- .latin1_input_to_utf8(.neutralize_bytes_input(url))
-  native <- !is.na(mark) & mark == "native"
   if (any(native)) {
     Encoding(url[native]) <- "UTF-8"
   }
