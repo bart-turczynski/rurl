@@ -408,28 +408,43 @@
     (x >= 0x61L & x <= 0x66L)
 }
 
+# The value of one hex-digit byte; the caller has already checked `.web_hexdig`.
+.web_hexval <- function(x) {
+  x - 0x30L - 7L * (x >= 0x41L) - 32L * (x >= 0x61L)
+}
+
+# The "%" positions of a host's byte vector, or NULL when any "%" is not
+# followed by two hex digits (libcurl's parse error). Vectorized on purpose:
+# the byte-at-a-time scan this replaces grew its output with `c()` per byte,
+# which made a long host holding one "%" quadratic (RURL-adlwbqxn).
+#
+# Testing EVERY "%" is the same rule as the sequential scan it replaces: a
+# well-formed triplet consumes two hex digits, never a "%", so the scan reaches
+# every "%" in the host, and the first malformed one it reaches fails it.
+.web_host_pct_hits <- function(b) {
+  hits <- which(b == 0x25L)
+  n <- length(b)
+  if (any(hits + 2L > n)) {
+    return(NULL)
+  }
+  if (!all(.web_hexdig(b[hits + 1L]) & .web_hexdig(b[hits + 2L]))) {
+    return(NULL)
+  }
+  hits
+}
+
 .web_host_percent_decode <- function(host) {
   b <- .web_bytes(host)
-  hits <- which(b == 0x25L)
-  if (length(hits) == 0L) {
+  if (!any(b == 0x25L)) {
     return(host)
   }
-  hexd <- .web_hexdig
-  n <- length(b)
-  out <- integer(0)
-  i <- 1L
-  while (i <= n) {
-    if (b[i] == 0x25L) {
-      if (i + 2L > n || !hexd(b[i + 1L]) || !hexd(b[i + 2L])) {
-        return(NULL)
-      }
-      out <- c(out, strtoi(.web_chr(b[(i + 1L):(i + 2L)]), base = 16L))
-      i <- i + 3L
-    } else {
-      out <- c(out, b[i])
-      i <- i + 1L
-    }
+  hits <- .web_host_pct_hits(b)
+  if (is.null(hits)) {
+    return(NULL)
   }
+  # Each triplet becomes its octet in the "%" slot; its two hex digits go.
+  b[hits] <- .web_hexval(b[hits + 1L]) * 16L + .web_hexval(b[hits + 2L])
+  out <- b[-c(hits + 1L, hits + 2L)]
   # A decoded NUL cannot be carried in an R string, and libcurl rejects it in a
   # host anyway (0x00 is outside the allowed set), so reject rather than
   # truncate.
@@ -623,29 +638,19 @@
   if (!any(b == 0x25L)) {
     return(host)
   }
-  n <- length(b)
-  out <- integer(0)
-  i <- 1L
-  while (i <= n) {
-    if (b[i] == 0x25L) {
-      if (i + 2L > n || !.web_hexdig(b[i + 1L]) || !.web_hexdig(b[i + 2L])) {
-        return(NULL)
-      }
-      pair <- b[(i + 1L):(i + 2L)]
-      code <- strtoi(.web_chr(pair), base = 16L)
-      out <- if (code %in% .WEB_HOST_UNRESERVED_BYTES) {
-        c(out, code)
-      } else {
-        lower <- pair >= 0x61L & pair <= 0x7AL
-        pair[lower] <- pair[lower] - 32L
-        c(out, 0x25L, pair)
-      }
-      i <- i + 3L
-    } else {
-      out <- c(out, b[i])
-      i <- i + 1L
-    }
+  hits <- .web_host_pct_hits(b)
+  if (is.null(hits)) {
+    return(NULL)
   }
+  code <- .web_hexval(b[hits + 1L]) * 16L + .web_hexval(b[hits + 2L])
+  dec <- code %in% .WEB_HOST_UNRESERVED_BYTES
+  # An unreserved triplet becomes its octet and drops its pair; every other
+  # one stays encoded with its pair uppercased (only a-f can be lowercase).
+  b[hits[dec]] <- code[dec]
+  pair <- c(hits[!dec] + 1L, hits[!dec] + 2L)
+  lower <- b[pair] >= 0x61L
+  b[pair[lower]] <- b[pair[lower]] - 32L
+  out <- if (any(dec)) b[-c(hits[dec] + 1L, hits[dec] + 2L)] else b
   .web_chr(out)
 }
 

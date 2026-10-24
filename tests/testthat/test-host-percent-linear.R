@@ -17,27 +17,32 @@
   "http://example.com%4/",
   "http://%%41b.com/",
   "http://caf%C3%A9.com/",
-  "http://bücher%41.de/",
+  "http://b\u00fccher%41.de/",
   "http://a%00b.com/",
   "http://%7f.com/",
   "http://a%60b.com/",
   "http://a%2fb.com/",
-  "http://caf%c3%a9.com/"
+  "http://caf%c3%a9.com/",
+  # One non-hex digit in an otherwise admissible spot: a decode that skipped
+  # either digit's check would yield a byte the later gates accept.
+  "http://a%4gb.com/",
+  "http://a%g4b.com/"
 )
 
-.hpl_cafe <- "café.com"
-.hpl_buecher <- "büchera.de"
+.hpl_cafe <- "caf\u00e9.com"
+.hpl_buecher <- "b\u00fcchera.de"
 
 test_that("host percent output is pinned under url_standard = NULL", {
   host <- c(
     "example.com", "example.com", "a-b.com", "a~b.com",
     NA, NA, NA, NA, NA, NA, .hpl_cafe, .hpl_buecher, NA, "\x7f.com",
-    NA, NA, .hpl_cafe
+    NA, NA, .hpl_cafe, NA, NA
   )
   status <- c(
     "ok", "ok", "ok", "warning-invalid-tld",
     "error", "error", "error", "error", "error", "error", "ok", "ok",
-    "error", "warning-invalid-tld", "error", "error", "ok"
+    "error", "warning-invalid-tld", "error", "error", "ok",
+    "error", "error"
   )
   clean <- ifelse(is.na(host), NA_character_, paste0("http://", host, "/"))
   expect_identical(get_host(.hpl_urls, url_standard = NULL), host)
@@ -51,12 +56,13 @@ test_that("host percent output is pinned under url_standard = 'whatwg'", {
   host <- c(
     "example.com", "example.com", "a-b.com", "a~b.com",
     NA, NA, NA, NA, NA, NA, .hpl_cafe, .hpl_buecher, NA, NA,
-    "a`b.com", NA, .hpl_cafe
+    "a`b.com", NA, .hpl_cafe, NA, NA
   )
   status <- c(
     "ok", "ok", "ok", "warning-invalid-tld",
     "error", "error", "error", "error", "error", "error", "ok", "ok",
-    "error", "error", "warning-invalid-tld", "error", "ok"
+    "error", "error", "warning-invalid-tld", "error", "ok",
+    "error", "error"
   )
   clean <- ifelse(is.na(host), NA_character_, paste0("http://", host, "/"))
   expect_identical(get_host(.hpl_urls, url_standard = "whatwg"), host)
@@ -70,13 +76,13 @@ test_that("host percent output is pinned under url_standard = 'rfc3986'", {
   host <- c(
     "example.com", "example.com", "a-b.com", "a~b.com",
     "a%2Fb.com", NA, NA, NA, NA, NA, "caf%C3%A9.com", .hpl_buecher,
-    "a%00b.com", "%7F.com", "a%60b.com", "a%2Fb.com", "caf%C3%A9.com"
+    "a%00b.com", "%7F.com", "a%60b.com", "a%2Fb.com", "caf%C3%A9.com", NA, NA
   )
   status <- c(
     "ok", "ok", "ok", "warning-invalid-tld",
     "warning-invalid-tld", "error", "error", "error", "error", "error",
     "ok", "ok", "warning-invalid-tld", "warning-invalid-tld",
-    "warning-invalid-tld", "warning-invalid-tld", "ok"
+    "warning-invalid-tld", "warning-invalid-tld", "ok", "error", "error"
   )
   clean <- ifelse(is.na(host), NA_character_, paste0("http://", host, "/"))
   expect_identical(get_host(.hpl_urls, url_standard = "rfc3986"), host)
@@ -100,8 +106,9 @@ test_that("host percent output is pinned under url_standard = 'rfc3986'", {
   )
 }
 
+# `%41` decodes to "A", which the host then lowercases, as "ex%41mple" above.
 .hpl_long_hosts <- c(
-  paste0(strrep("a", .hpl_n), "A.example"),
+  paste0(strrep("a", .hpl_n + 1), ".example"),
   paste0(strrep("a", .hpl_n / 3), ".example")
 )
 
