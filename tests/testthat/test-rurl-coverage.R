@@ -329,26 +329,21 @@ test_that(".cache_enabled returns FALSE for an unknown cache name", {
 })
 
 test_that("derive_parse_status coerces NA host-has-dot to no-TLD warning", {
-  # stri_detect_fixed(final_host, ".") can in principle return NA; the
-  # defensive guard coerces that to FALSE so the host is treated as dotless
-  # (warning-no-tld) instead of erroring on `if (NA)`.
-  ns <- asNamespace("stringi")
-  orig <- get("stri_detect_fixed", envir = ns)
-  was_locked <- bindingIsLocked("stri_detect_fixed", ns)
-  if (was_locked) unlockBinding("stri_detect_fixed", ns)
-  withr::defer(
-    {
-      assign("stri_detect_fixed", orig, envir = ns)
-      if (was_locked) lockBinding("stri_detect_fixed", ns)
+  # .bytes_detect(final_host, ".", fixed = TRUE) can in principle return NA;
+  # the defensive guard coerces that to FALSE so the host is treated as
+  # dotless (warning-no-tld) instead of erroring on `if (NA)`. Only the
+  # verdict's call gets the NA: the input-host classifier makes the same call.
+  orig <- rurl:::.bytes_detect
+  testthat::local_mocked_bindings(
+    .bytes_detect = function(x, pattern, fixed = FALSE) {
+      caller <- deparse(sys.call(-1L)[[1L]])
+      if (identical(caller, ".derive_verdict_layers_vec") &&
+        identical(x, "example.com") && identical(pattern, ".") && fixed) {
+        return(NA)
+      }
+      orig(x, pattern, fixed = fixed)
     }
   )
-
-  assign("stri_detect_fixed", function(str, pattern, ...) {
-    if (identical(str, "example.com") && identical(pattern, ".")) {
-      return(NA)
-    }
-    orig(str, pattern, ...)
-  }, envir = ns)
 
   rurl_clear_caches()
   res <- rurl:::._safe_parse_url_impl(

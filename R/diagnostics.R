@@ -154,7 +154,7 @@
   host_type[live & host_missing] <- "missing"
 
   is_ip <- a$is_ip_host & !is.na(a$is_ip_host)
-  host_has_colon <- stringi::stri_detect_fixed(final_host, ":")
+  host_has_colon <- .bytes_detect(final_host, ":", fixed = TRUE)
   host_has_colon[is.na(host_has_colon)] <- FALSE
   host_type[live & !host_missing & is_ip & host_has_colon] <- "ipv6"
   host_type[live & !host_missing & is_ip & !host_has_colon] <- "ipv4"
@@ -202,13 +202,20 @@
   }
   has_path <- live & !is.na(raw_path)
 
+  # Byte mode (ADR 0019). The hex digit's case is spelled as a class: the
+  # wrappers refuse `(?i)`, and no non-ASCII code point folds to `e` or `f`,
+  # so ICU's caseless match found the same rows. The end anchor is `\z`: a
+  # segment that ends in U+2028 or CR is not `%2e` (WHATWG URL, "single-dot
+  # URL path segment"), where ICU's `$` matched before such a final
+  # terminator.
   has_reserved_byte <- has_path &
-    stringi::stri_detect_regex(raw_path, "(?i)%(2f|3f|23)")
+    .bytes_detect(raw_path, "%(?:2[Ff]|3[Ff]|23)")
   diag <- .diag_add(diag, has_reserved_byte, "encoded-reserved-path-byte")
 
   has_encoded_dot <- has_path &
-    stringi::stri_detect_regex(
-      raw_path, "(?i)(^|/)(%2e|\\.%2e|%2e\\.|%2e%2e)(/|$)"
+    .bytes_detect(
+      raw_path,
+      "(?:\\A|/)(?:%2[Ee]|\\.%2[Ee]|%2[Ee]\\.|%2[Ee]%2[Ee])(?:/|\\z)"
     )
   diag <- .diag_add(diag, has_encoded_dot, "encoded-dot-segment")
 
@@ -367,8 +374,9 @@
     # | ^). Backslash and C0 controls are excluded -- they are surfaced by
     # `invalid-reverse-solidus` / `control-char-stripped` /
     # `leading-trailing-stripped`.
-    malformed_pct <- stringi::stri_detect_regex(url, "%(?![0-9A-Fa-f]{2})")
-    non_url_cp <- stringi::stri_detect_regex(url, "[ \"<>\\u0060{}|^]")
+    # Byte mode (ADR 0019); PCRE has no `\u` escape, so U+0060 is a literal.
+    malformed_pct <- .bytes_detect(url, "%(?![0-9A-Fa-f]{2})")
+    non_url_cp <- .bytes_detect(url, "[ \"<>`{}|^]")
     bad_unit <- malformed_pct | non_url_cp
     bad_unit[is.na(bad_unit)] <- FALSE
     diag <- .diag_add(diag, live & bad_unit, "invalid-URL-unit")
@@ -446,16 +454,20 @@
     )
     # `data`: missing the mandatory comma (RFC 2397).
     data_has_comma <- !is.na(gen_b$path) &
-      stringi::stri_detect_fixed(gen_b$path, ",")
+      .bytes_detect(gen_b$path, ",", fixed = TRUE)
     diag <- .diag_add(
       diag, gp & gs == "data" & !data_has_comma, "data-missing-comma"
     )
     # `tel`: a LOCAL number (no leading "+") missing the required
     # `;phone-context=` parameter (RFC 3966; parameter name case-insensitive).
+    # Byte mode with each letter spelled as an ASCII class (ADR 0019). No
+    # non-ASCII code point folds to a letter of the name or to a run of them,
+    # so ICU's caseless match found the same rows.
     tel_num <- gen_b$path
     tel_global <- !is.na(tel_num) & startsWith(tel_num, "+")
-    tel_ctx <- !is.na(tel_num) &
-      stringi::stri_detect_regex(tel_num, "(?i);phone-context=")
+    tel_ctx <- !is.na(tel_num) & .bytes_detect(
+      tel_num, ";[Pp][Hh][Oo][Nn][Ee]-[Cc][Oo][Nn][Tt][Ee][Xx][Tt]="
+    )
     diag <- .diag_add(
       diag, gp & gs == "tel" & !tel_global & !tel_ctx,
       "tel-missing-phone-context"
@@ -498,9 +510,15 @@
 # the Phase-1 classifier's own `ipv4ish` test, so the diagnostics are keyed to
 # exactly the tokens the host model treats as IPv4 attempts. WHATWG treats a
 # bare `0x` prefix as zero after stripping the prefix, so the hex digit run may
-# be empty.
-.RE_IPV4ISH <-
-  "^(0[xX][0-9a-fA-F]*|[0-9]+)(\\.(0[xX][0-9a-fA-F]*|[0-9]+))*$"
+# be empty. Read as the inverted search for one part that is not such a
+# group (at the start or after a dot, a part not followed by a dot or the true
+# end), which is linear in the token; the repeated group
+# `^(0[xX][0-9a-fA-F]*|[0-9]+)(\.(0[xX][0-9a-fA-F]*|[0-9]+))*$` is the
+# backtracking shape RURL-rrumztrf removed. Byte mode (ADR 0019). `\z`, as the
+# base-R `$` it replaces was the true end; the classifier's own test keeps
+# ICU's `$` instead.
+.RE_IPV4ISH_BAD_PART <-
+  "(?:^|\\.)(?!(?:0[xX][0-9a-fA-F]*|[0-9]+)(?:\\.|\\z))"
 
 # Parse one IPv4 part to its numeric value (as a double, so 32-bit values stay
 # exact) honoring the WHATWG radix rules: `0x`/`0X` prefix -> hex, a leading
@@ -534,7 +552,10 @@
 # octal rows of §6.2): a leading-zero octal part is at once octal, leading-zero,
 # and non-decimal.
 .ipv4_host_diagnostics <- function(token) {
-  if (is.na(token) || !grepl(.RE_IPV4ISH, token)) {
+  # Byte mode stated at the call, not `.bytes_detect()`: this runs once per
+  # host token, and its pattern is a constant ASCII one.
+  if (is.na(token) ||
+        grepl(.RE_IPV4ISH_BAD_PART, token, perl = TRUE, useBytes = TRUE)) {
     return(character(0))
   }
   parts <- strsplit(token, ".", fixed = TRUE)[[1]]

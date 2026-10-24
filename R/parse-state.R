@@ -232,8 +232,7 @@
   present_non_ip <- !is.na(host) & host != "" & !v4 & !v6
   if (isTRUE(resolve)) {
     is_ipvf <- present_non_ip &
-      stringi::stri_detect_regex(host, .RFC3986_BRACKET_IPVFUTURE_RE)
-    is_ipvf[is.na(is_ipvf)] <- FALSE
+      .state_bytes_test(host, .RFC3986_BRACKET_IPVFUTURE_RE)
     out[present_non_ip & !is_ipvf] <- "reg-name"
     out[is_ipvf] <- "ipvfuture"
   }
@@ -374,7 +373,14 @@
 # scalar values are admitted wherever a data character is admitted, then flagged
 # separately. Admitting them here does NOT relax the ASCII grammar -- an
 # otherwise-invalid ASCII portion still fails even with non-ASCII present.
-.RFC3986_NONASCII <- "\\x{0080}-\\x{10FFFF}"
+#
+# Spelled in bytes (ADR 0019, RURL-oahhlnvf): the class searches run in byte
+# mode, where `\x80-\xff` is every byte of a multibyte UTF-8 sequence, so on
+# valid UTF-8 it admits exactly what the code-point range `\x{0080}-\x{10FFFF}`
+# admitted. On invalid UTF-8 it would also admit a stray octet, so validity
+# rests on decodability, checked twice: by the undecodable preflight in
+# `.rfc3986_generic_uri_ok()` and by the mask in `.rfc3986_class_ok()`.
+.RFC3986_NONASCII <- "\\x80-\\xff"
 
 # Build the search for the FIRST character that cannot appear in a
 # "*(data / pct-encoded)" production whose data class is the unreserved +
@@ -412,12 +418,37 @@
 .RFC3986_QF_BAD_RE <- .rfc3986_class_bad_re(":@/?")
 # port = *DIGIT (empty port is legal); non-ASCII is NOT tolerated here (S3.2.3).
 .RFC3986_PORT_RE <- "\\A[0-9]*\\z"
+# A WHATWG non-null port: one or more ASCII digits (`.parse_opaque_url_one()`).
+.WHATWG_PORT_RE <- "\\A[0-9]+\\z"
+
+# The forbidden HOST code points of `.WHATWG_FORBIDDEN_HOST_ONLY_CP`
+# (R/utils.R) in a byte-mode class: the same ASCII set, with U+0020 written
+# as a literal space, because PCRE has no `\u` escape. A test checks the two
+# classes agree on every ASCII character.
+.WHATWG_FORBIDDEN_HOST_ONLY_BYTES <- "[ #/:<>?@\\[\\]\\\\^|]"
+
+# Byte-mode test for the per-row helpers of the grammar walk and the opaque
+# and RFC host parsers (ADR 0019: `perl = TRUE, useBytes = TRUE`). They run
+# once per component per row, so they call `grepl()` directly rather than
+# `.bytes_detect()`, whose per-call pattern check walks the pattern's bytes in
+# R: about 0.9 ms a call for `.RFC3986_IPV6_RE`, against 0.08 ms for the match
+# itself. Every pattern passed here is a constant of this file, and
+# tests/testthat/test-stringi-bool-state-diag.R runs each through
+# `.bytes_check_pattern()`, so none uses a construct that reads the locale.
+# Their characters are ASCII apart from the byte range `.RFC3986_NONASCII`,
+# so on valid UTF-8 they match the same text in bytes as in code points
+# (UTF-8 is self-synchronizing). An NA element gives FALSE.
+.state_bytes_test <- function(s, re) {
+  grepl(re, s, perl = TRUE, useBytes = TRUE)
+}
 
 # IPv4address, and the full dotted quad, for embedded-IPv4 IPv6 forms (S3.2.2).
 # dec-octet = DIGIT / %x31-39 DIGIT / "1" 2DIGIT / "2" %x30-34 DIGIT /
 # "25" %x30-35: no leading zero, so "01" is not a dec-octet (RURL-escneidz).
 .RFC3986_IPV4 <- "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])"
 .RFC3986_IPV4_QUAD <- paste0("(", .RFC3986_IPV4, "\\.){3}", .RFC3986_IPV4)
+# The whole host as an IPv4address (`.rfc_host_one()`).
+.RFC3986_IPV4_RE <- paste0("\\A", .RFC3986_IPV4_QUAD, "\\z")
 
 # IPv6address, transcribed one-to-one from the nine S3.2.2 alternatives, with
 # ls32 = ( h16 ":" h16 ) / IPv4address. The IPv4 form of ls32 may follow any
@@ -476,27 +507,30 @@
 # keeps no per-repetition backtrack state, unlike the component classes, which
 # use `.rfc3986_class_ok()`.
 .rfc3986_match <- function(s, re) {
-  isTRUE(stringi::stri_detect_regex(s, re))
+  isTRUE(.state_bytes_test(s, re))
 }
 
 # Component class check: TRUE iff `s` contains no character the `bad` search
 # (built by `.rfc3986_class_bad_re()`) finds. The empty string passes -- an
 # empty reg-name/userinfo/path/query/fragment is legal. Vectorized; a missing
-# element, or one `stri_detect_regex()` cannot read (NA), is FALSE. The search
-# stays in stringi, as ADR 0005 asks of new string code. It does not judge
-# decodability (stringi reads a stray octet as a non-ASCII character), so
-# validity rests on the undecodable preflight in `.rfc3986_generic_uri_ok()`,
-# the only caller path.
+# element is FALSE. The search runs in byte mode (ADR 0019), where the
+# non-ASCII range `.RFC3986_NONASCII` admits any high byte, so the search
+# alone does not judge decodability. This is an acceptance seam, so it keeps
+# the decodable mask (ADR 0019, "Acceptance at host seams"): an element that
+# is not valid UTF-8 fails, as no RFC 3986 production admits a stray octet.
+# A latin1-marked element decodes by definition, as in `.grepl_decodable()`.
+# The undecodable preflight in `.rfc3986_generic_uri_ok()`, the only caller
+# path, rejects such a row before the walk in any case.
 .rfc3986_class_ok <- function(s, bad) {
-  hit <- stringi::stri_detect_regex(s, bad)
-  !is.na(s) & !is.na(hit) & !hit
+  decodable <- validUTF8(s) | Encoding(s) == "latin1"
+  !is.na(s) & decodable & !.state_bytes_test(s, bad)
 }
 
 # IP-literal inner form: IPv6address / IPvFuture (S3.2.2). Empty inner (`[]`) or
 # any malformation (non-hex, missing groups) -> FALSE.
 .rfc3986_valid_ip_literal <- function(inner) {
-  isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPV6_RE)) ||
-    isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPVFUTURE_RE))
+  isTRUE(.state_bytes_test(inner, .RFC3986_IPV6_RE)) ||
+    isTRUE(.state_bytes_test(inner, .RFC3986_IPVFUTURE_RE))
 }
 
 # host [ ":" port ] (S3.2.2/S3.2.3). A bracketed IP-literal owns any ":" inside
@@ -539,7 +573,9 @@
 # repeated raw "@" (`scheme://username@@@@example.com`) is a generic-grammar
 # FAILURE even though a permissive splitter can recover a host.
 .rfc3986_valid_authority <- function(authority) {
-  n_at <- stringi::stri_count_fixed(authority, "@")
+  # The number of raw "@" bytes, counted on the raw bytes so a latin1-marked
+  # authority (legal on this walk) is read as it is; the byte layer refuses it.
+  n_at <- sum(charToRaw(authority) == as.raw(0x40L))
   if (n_at > 1L) {
     return(FALSE)
   }
@@ -616,8 +652,8 @@
 # Pin the byte->code-point reading this grammar walks, so the VERDICT does not
 # depend on the session locale (RURL-kmpnbvdl).
 #
-# The walk mixes two indexing schemes: `stri_locate_first_regex()` /
-# `stri_detect_regex()` count CODE POINTS (stringi decodes first), while
+# The walk mixes two indexing schemes: `stri_locate_first_regex()` counts
+# CODE POINTS (stringi decodes first), while
 # `substring()` / `nchar()` count NATIVE characters. For a string marked
 # "unknown" -- which is what `rawToChar()` and most user input produce -- native
 # means the session encoding, so `<C3><A9>` is ONE character under a UTF-8
@@ -626,7 +662,7 @@
 # was admitted (`ok-ftp`) under a UTF-8 session and REJECTED (`error`) under
 # `LC_ALL=C`, on byte-identical input.
 #
-# `\x{0080}-\x{10FFFF}` in the data class admits directly-written non-ASCII
+# The non-ASCII range in the data class (`.RFC3986_NONASCII`) admits non-ASCII
 # SCALAR VALUES, and a scalar value only exists once an encoding is fixed. UTF-8
 # is that encoding everywhere else in the package (`.mark_host_utf8()`,
 # `.web_high_bytes_ok()`), so declaring it here makes the gate agree with the
@@ -659,7 +695,7 @@
   # is a shortcut for a proof, not a convenience: the walk covers the whole
   # string (scheme / authority / path / query / fragment leave no byte
   # unclassified), every production is ASCII apart from the
-  # `\x{0080}-\x{10FFFF}` scalar-value tolerance, and an octet sequence that is
+  # `.RFC3986_NONASCII` scalar-value tolerance, and an octet sequence that is
   # not valid UTF-8 denotes no scalar value. So an undecodable element must
   # fail whichever component it lands in -- FALSE is the answer the walk would
   # have reached had it been able to run.
@@ -687,8 +723,13 @@
       USE.NAMES = FALSE
     )
   }
-  has_non_ascii <- stringi::stri_detect_regex(url, "\\P{ASCII}")
-  has_non_ascii[is.na(has_non_ascii)] <- FALSE
+  # A byte outside ASCII. In valid UTF-8 a non-ASCII code point is exactly a
+  # run of high bytes, and in latin1 a high byte is one, so this reads the
+  # same as `\P{ASCII}` for both marks a walkable row may carry; an
+  # undecodable row is never `ok`, so its answer is not read. `grepl()`
+  # directly, not `.bytes_detect()`: a latin1 element is legal here (see
+  # above) and the wrapper refuses that mark. An NA element gives FALSE.
+  has_non_ascii <- grepl("[^\\x00-\\x7f]", url, perl = TRUE, useBytes = TRUE)
   diagnostic <- rep(NA_character_, n)
   flagged <- !is.na(ok) & ok & has_non_ascii
   diagnostic[flagged] <- "unicode-outside-rfc3986-uri"
@@ -831,7 +872,7 @@
       return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
     }
     inner <- substring(host, 2L, nchar(host) - 1L)
-    if (!isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPV6_RE))) {
+    if (!isTRUE(.state_bytes_test(inner, .RFC3986_IPV6_RE))) {
       return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
     }
     return(list(
@@ -839,7 +880,10 @@
       is_v6 = TRUE, is_v4 = FALSE
     ))
   }
-  forbidden <- stringi::stri_detect_regex(host, .WHATWG_FORBIDDEN_HOST_ONLY_CP)
+  # The class is ASCII, so byte mode finds the same characters in an
+  # undecodable host as stringi did (it read each stray octet as U+FFFD, which
+  # is outside the class): the reject side is unchanged for every row.
+  forbidden <- .state_bytes_test(host, .WHATWG_FORBIDDEN_HOST_ONLY_BYTES)
   if (isTRUE(forbidden)) {
     return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
   }
@@ -859,17 +903,15 @@
       return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
     }
     inner <- substring(host, 2L, nchar(host) - 1L)
-    if (isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPV6_RE))) {
+    if (isTRUE(.state_bytes_test(inner, .RFC3986_IPV6_RE))) {
       return(list(ok = TRUE, host = host, is_v6 = TRUE, is_v4 = FALSE))
     }
-    if (isTRUE(stringi::stri_detect_regex(inner, .RFC3986_IPVFUTURE_RE))) {
+    if (isTRUE(.state_bytes_test(inner, .RFC3986_IPVFUTURE_RE))) {
       return(list(ok = TRUE, host = host, is_v6 = FALSE, is_v4 = FALSE))
     }
     return(list(ok = FALSE, host = host, is_v6 = FALSE, is_v4 = FALSE))
   }
-  is_v4 <- isTRUE(stringi::stri_detect_regex(
-    host, paste0("\\A", .RFC3986_IPV4_QUAD, "\\z")
-  ))
+  is_v4 <- isTRUE(.state_bytes_test(host, .RFC3986_IPV4_RE))
   list(ok = TRUE, host = host, is_v6 = FALSE, is_v4 = is_v4)
 }
 
@@ -985,7 +1027,7 @@
       # step 1 removes them.
       has_port <- !is.na(port) && nzchar(port)
       if (has_port &&
-        (!isTRUE(stringi::stri_detect_regex(port, "\\A[0-9]+\\z")) ||
+        (!isTRUE(.state_bytes_test(port, .WHATWG_PORT_RE)) ||
           suppressWarnings(as.numeric(port)) > 65535)) {
         ok <- FALSE
       }
@@ -1259,7 +1301,7 @@
       if (identical(port_policy, "reject")) {
         return(blank)
       }
-      if (!isTRUE(stringi::stri_detect_regex(port, "\\A[0-9]*\\z"))) {
+      if (!isTRUE(.state_bytes_test(port, .RFC3986_PORT_RE))) {
         return(blank)
       }
     }
@@ -1402,9 +1444,13 @@
   # as "authority `urn:ietf:rfc`, port 2648", was withheld from the opaque
   # parser, and fell through to the web path that rejects `urn:`. Any opaque
   # payload ending in `:<digits>` was unparseable -- `urn:a:1`, `sc:x:80` -- and
-  # only a trailing `?`/`#` saved it, by breaking the `($|/)` anchor
-  # (RURL-jnvtttfm).
-  host_port <- stringi::stri_detect_regex(url, "^[^/:]+:[0-9]+($|/)")
+  # only a trailing `?`/`#` saved it, by breaking the end anchor
+  # (RURL-jnvtttfm). Byte mode (ADR 0019): the end anchor is `\z`, not ICU's
+  # `$`, which also matched before a final CR, LF, U+0085 or U+2028 and so
+  # read `example.com:80<U+2028>` as a port of 80. A port is digits only
+  # (RFC 3986 sec 3.2.3; WHATWG port state), so that row is a scheme
+  # `example.com` with an opaque path, as for any other trailing non-digit.
+  host_port <- .bytes_detect(url, "\\A[^/:]+:[0-9]+(?:\\z|/)")
   host_port[is.na(host_port)] <- FALSE
   # ...and the carve-out does not apply under `rfc3986` AT ALL (RURL-kkuirsnz).
   # It encodes rurl's browser-omnibox affordance -- "a bare `example.com:8080`
@@ -1525,10 +1571,10 @@
   }
   # Authority = what sits between the `//` and the first `/`, `?` or `#`. It has
   # no host when it is empty, or holds only a userinfo (`...@`) and/or an empty
-  # `:port`.
-  hostless <- stringi::stri_detect_regex(
+  # `:port`. Byte mode (ADR 0019): `(?s:.)` is the any-byte that `[\s\S]` was.
+  hostless <- .bytes_detect(
     url,
-    "\\A[A-Za-z][A-Za-z0-9+.\\-]*://([^/?#@]*@)?(:[0-9]*)?([/?#][\\s\\S]*)?\\z"
+    "\\A[A-Za-z][A-Za-z0-9+.\\-]*://([^/?#@]*@)?(:[0-9]*)?([/?#](?s:.)*)?\\z"
   )
   hostless[is.na(hostless)] <- FALSE
   out <- has_scheme & !host_port & scheme_lc %in% web_route_scheme & hostless
