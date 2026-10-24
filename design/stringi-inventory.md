@@ -234,19 +234,19 @@ Rows are in file order, then source order.
 | 1 | `accessors.R` | `.subdomain_labels_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 2 | `accessors.R` | `.subdomain_labels_vec` | `stri_length` | length (offset) |  | indexes code points | bytes | yqmoztoj |
 | 3 | `accessors.R` | `.subdomain_labels_vec` | `stri_length` | length (offset) |  | indexes code points | bytes | yqmoztoj |
-| 4 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_fixed` | detect | `:` | none (ASCII literal) | bytes | oahhlnvf |
-| 5 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `(?i)%(2f\|3f\|23)` | (?i) on an ASCII pattern | bytes | oahhlnvf |
-| 6 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `(?i)(^\|/)(%2e\|\.%2e\|%2e\.\|%2e%2e)(/\|$)` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf |
-| 7 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `%(?![0-9A-Fa-f]{2})` | none (ASCII structural) | bytes | oahhlnvf |
-| 8 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `[ "<>\u0060{}\|^]` | none (ASCII structural) | bytes | oahhlnvf |
-| 9 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_fixed` | detect | `,` | none (ASCII literal) | bytes | oahhlnvf |
-| 10 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `(?i);phone-context=` | (?i) on an ASCII pattern | bytes | oahhlnvf |
+| 4 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_fixed` | detect | `:` | none (ASCII literal) | bytes | oahhlnvf (migrated, see below) |
+| 5 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `(?i)%(2f\|3f\|23)` | (?i) on an ASCII pattern | bytes | oahhlnvf (migrated, see below) |
+| 6 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `(?i)(^\|/)(%2e\|\.%2e\|%2e\.\|%2e%2e)(/\|$)` | (?i) on an ASCII pattern; ICU `$` | bytes | oahhlnvf (migrated, see below) |
+| 7 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `%(?![0-9A-Fa-f]{2})` | none (ASCII structural) | bytes | oahhlnvf (migrated, see below) |
+| 8 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `[ "<>\u0060{}\|^]` | none (ASCII structural) | bytes | oahhlnvf (migrated, see below) |
+| 9 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_fixed` | detect | `,` | none (ASCII literal) | bytes | oahhlnvf (migrated, see below) |
+| 10 | `diagnostics.R` | `.derive_url_metadata_vec` | `stri_detect_regex` | detect | `(?i);phone-context=` | (?i) on an ASCII pattern | bytes | oahhlnvf (migrated, see below) |
 | 11 | `diagnostics.R` | `.ipv6_host_diagnostics` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 12 | `domain.R` | `.normalize_and_punycode` | `stri_trans_nfc` | normalization |  | Unicode NFC (UCD tables): stays stringi | stringi (stays) | yyeohqah |
 | 13 | `domain.R` | `.normalize_and_punycode_vec` | `stri_trans_nfc` | normalization |  | Unicode NFC (UCD tables): stays stringi | stringi (stays) | yyeohqah |
 | 14 | `domain.R` | `.split_host_labels` | `stri_split_fixed` | split | `.` | keeps trailing empty field | bytes | yqmoztoj |
 | 15 | `domain.R` | `.split_host_labels` | `stri_split_fixed` | split | `.` | keeps trailing empty field | bytes | yqmoztoj |
-| 16 | `email-diagnostics.R` | `.email_has_non_ascii` | `stri_detect_regex` | detect | `[^\u0000-\u007F]` | non-ASCII detector | bytes (`[^\x01-\x7f]`) | oahhlnvf |
+| 16 | `email-diagnostics.R` | `.email_has_non_ascii` | `stri_detect_regex` | detect | `[^\u0000-\u007F]` | non-ASCII detector | bytes (`[^\x01-\x7f]`) | oahhlnvf (migrated, see below) |
 | 17 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^[a-zA-Z][a-zA-Z0-9+.-]*://` | none (ASCII structural) | bytes | oahhlnvf |
 | 18 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `^//` | none (ASCII structural) | bytes | oahhlnvf |
 | 19 | `parse-phases.R` | `.classify_input_host_vec` | `stri_replace_first_regex` | replace | `[/?#].*$` | ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | oahhlnvf |
@@ -368,35 +368,35 @@ Rows are in file order, then source order.
 | 135 | `parse-phases.R` | `.apply_subdomain_policy_vec` | `stri_sub` | cut |  | indexes code points | bytes | yqmoztoj |
 | 136 | `parse-phases.R` | `.unicode_case_map_vec` | `stri_trans_toupper` | case map |  | Unicode full case map: stays stringi | stringi (stays) | yyeohqah |
 | 137 | `parse-phases.R` | `.unicode_case_map_vec` | `stri_trans_tolower` | case map |  | Unicode full case map: stays stringi | stringi (stays) | yyeohqah |
-| 138 | `parse-state.R` | `.rfc_host_form` | `stri_detect_regex` | detect | `<.RFC3986_BRACKET_IPVFUTURE_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
+| 138 | `parse-state.R` | `.rfc_host_form` | `stri_detect_regex` | detect | `<.RFC3986_BRACKET_IPVFUTURE_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf (migrated, see below) |
 | 139 | `parse-state.R` | `.rfc3986_first_index` | `stri_locate_first_regex` | locate | `<ch>` | none (one ASCII delimiter, literal flag) | bytes | yqmoztoj |
 | 140 | `parse-state.R` | `.rfc3986_first_index` | `stri_opts_regex` | options |  | literal flag | dropped with its consumers | yqmoztoj |
-| 141 | `parse-state.R` | `.rfc3986_match` | `stri_detect_regex` | detect | `<re>` | port regex `\A[0-9]*\z` only since MR !235 (the class regexes moved to `.rfc3986_class_ok()`, see "Since the snapshot") | bytes | oahhlnvf |
-| 142 | `parse-state.R` | `.rfc3986_valid_ip_literal` | `stri_detect_regex` | detect | `<.RFC3986_IPV6_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
-| 143 | `parse-state.R` | `.rfc3986_valid_ip_literal` | `stri_detect_regex` | detect | `<.RFC3986_IPVFUTURE_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
-| 144 | `parse-state.R` | `.rfc3986_valid_authority` | `stri_count_fixed` | count | `@` | none (ASCII literal) | bytes | oahhlnvf |
+| 141 | `parse-state.R` | `.rfc3986_match` | `stri_detect_regex` | detect | `<re>` | port regex `\A[0-9]*\z` only since MR !235 (the class regexes moved to `.rfc3986_class_ok()`, see "Since the snapshot") | bytes | oahhlnvf (migrated, see below) |
+| 142 | `parse-state.R` | `.rfc3986_valid_ip_literal` | `stri_detect_regex` | detect | `<.RFC3986_IPV6_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf (migrated, see below) |
+| 143 | `parse-state.R` | `.rfc3986_valid_ip_literal` | `stri_detect_regex` | detect | `<.RFC3986_IPVFUTURE_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf (migrated, see below) |
+| 144 | `parse-state.R` | `.rfc3986_valid_authority` | `stri_count_fixed` | count | `@` | none (ASCII literal) | bytes | oahhlnvf (migrated, see below) |
 | 145 | `parse-state.R` | `.rfc3986_generic_uri_ok_one` | `stri_match_first_regex` | capture | `^([A-Za-z][A-Za-z0-9+.\-]*):` | none (ASCII structural) | bytes | yqmoztoj |
-| 146 | `parse-state.R` | `.rfc3986_generic_uri_ok` | `stri_detect_regex` | detect | `\P{ASCII}` | Unicode property \P{ASCII} | bytes (UTF-8 byte literals) or UTF-8 PCRE | oahhlnvf |
+| 146 | `parse-state.R` | `.rfc3986_generic_uri_ok` | `stri_detect_regex` | detect | `\P{ASCII}` | Unicode property \P{ASCII} | bytes (UTF-8 byte literals) or UTF-8 PCRE | oahhlnvf (migrated, see below) |
 | 147 | `parse-state.R` | `.split_authority` | `stri_locate_last_regex` | locate | `@` | none (ASCII structural) | bytes | yqmoztoj |
 | 148 | `parse-state.R` | `.split_authority` | `stri_opts_regex` | options |  | literal flag | dropped with its consumers | yqmoztoj |
-| 149 | `parse-state.R` | `.whatwg_opaque_host_one` | `stri_detect_regex` | detect | `<.RFC3986_IPV6_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
-| 150 | `parse-state.R` | `.whatwg_opaque_host_one` | `stri_detect_regex` | detect | `<.WHATWG_FORBIDDEN_HOST_ONLY_CP>` | none (ASCII class, `R/utils.R`) | bytes | oahhlnvf |
-| 151 | `parse-state.R` | `.rfc_host_one` | `stri_detect_regex` | detect | `<.RFC3986_IPV6_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
-| 152 | `parse-state.R` | `.rfc_host_one` | `stri_detect_regex` | detect | `<.RFC3986_IPVFUTURE_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
-| 153 | `parse-state.R` | `.rfc_host_one` | `stri_detect_regex` | detect | `<paste0("\\A", .RFC3986_IPV4_QUAD, "\\z")>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf |
+| 149 | `parse-state.R` | `.whatwg_opaque_host_one` | `stri_detect_regex` | detect | `<.RFC3986_IPV6_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf (migrated, see below) |
+| 150 | `parse-state.R` | `.whatwg_opaque_host_one` | `stri_detect_regex` | detect | `<.WHATWG_FORBIDDEN_HOST_ONLY_CP>` | none (ASCII class, `R/utils.R`) | bytes | oahhlnvf (migrated, see below) |
+| 151 | `parse-state.R` | `.rfc_host_one` | `stri_detect_regex` | detect | `<.RFC3986_IPV6_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf (migrated, see below) |
+| 152 | `parse-state.R` | `.rfc_host_one` | `stri_detect_regex` | detect | `<.RFC3986_IPVFUTURE_RE>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf (migrated, see below) |
+| 153 | `parse-state.R` | `.rfc_host_one` | `stri_detect_regex` | detect | `<paste0("\\A", .RFC3986_IPV4_QUAD, "\\z")>` | none (ASCII grammar, `\A`...`\z`) | bytes | oahhlnvf (migrated, see below) |
 | 154 | `parse-state.R` | `.parse_opaque_url_one` | `stri_match_first_regex` | capture | `^([A-Za-z][A-Za-z0-9+.\-]*):([\s\S]*)$` | `[\s\S]` (byte mode: `(?s:.)`); ICU `$` | bytes | yqmoztoj |
-| 155 | `parse-state.R` | `.parse_opaque_url_one` | `stri_detect_regex` | detect | `\A[0-9]+\z` | none (ASCII structural) | bytes | oahhlnvf |
+| 155 | `parse-state.R` | `.parse_opaque_url_one` | `stri_detect_regex` | detect | `\A[0-9]+\z` | none (ASCII structural) | bytes | oahhlnvf (migrated, see below) |
 | 156 | `parse-state.R` | `.parse_rfc_file_url_one` | `stri_match_first_regex` | capture | `^([Ff][Ii][Ll][Ee]):([\s\S]*)$` | `[\s\S]` (byte mode: `(?s:.)`); ICU `$` | bytes | yqmoztoj |
-| 157 | `parse-state.R` | `.parse_rfc_file_url_one` | `stri_detect_regex` | detect | `\A[0-9]*\z` | none (ASCII structural) | bytes | oahhlnvf |
+| 157 | `parse-state.R` | `.parse_rfc_file_url_one` | `stri_detect_regex` | detect | `\A[0-9]*\z` | none (ASCII structural) | bytes | oahhlnvf (migrated, see below) |
 | 158 | `parse-state.R` | `.general_parsed_mask` | `stri_match_first_regex` | capture | `^([A-Za-z][A-Za-z0-9+.\-]*):` | none (ASCII structural) | bytes | yqmoztoj |
-| 159 | `parse-state.R` | `.general_parsed_mask` | `stri_detect_regex` | detect | `^[^/:]+:[0-9]+($\|/)` | ICU `$` | bytes | oahhlnvf |
-| 160 | `parse-state.R` | `.rfc_empty_authority_host` | `stri_detect_regex` | detect | `\A[A-Za-z][A-Za-z0-9+.\-]*://([^/?#@]*@)?(:[0-9]*)?([/?#][\s\S]*)?\z` | `[\s\S]` (byte mode: `(?s:.)`) | bytes | oahhlnvf |
+| 159 | `parse-state.R` | `.general_parsed_mask` | `stri_detect_regex` | detect | `^[^/:]+:[0-9]+($\|/)` | ICU `$` | bytes | oahhlnvf (migrated, see below) |
+| 160 | `parse-state.R` | `.rfc_empty_authority_host` | `stri_detect_regex` | detect | `\A[A-Za-z][A-Za-z0-9+.\-]*://([^/?#@]*@)?(:[0-9]*)?([/?#][\s\S]*)?\z` | `[\s\S]` (byte mode: `(?s:.)`) | bytes | oahhlnvf (migrated, see below) |
 | 161 | `parse-state.R` | `.rfc_odd_slash_run` | `stri_match_first_regex` | capture | `^[A-Za-z][A-Za-z0-9+.\-]*:(/*)` | none (ASCII structural) | bytes | yqmoztoj |
 | 162 | `parse-state.R` | `.rfc_odd_slash_run` | `stri_length` | length (offset) |  | indexes code points | bytes | yqmoztoj |
 | 163 | `parse-state.R` | `.general_parse_vec` | `stri_match_first_regex` | capture | `^([A-Za-z][A-Za-z0-9+.\-]*):` | none (ASCII structural) | bytes | yqmoztoj |
 | 164 | `parse-web.R` | `.web_ipv6_serialize` | `stri_match_first_regex` | capture | `<paste0("\\A(.*:)(", oct, "\\.", oct, "\\.", oct, "\\.", oct, ")\\z")>` | ASCII grammar; ICU `.` | bytes | yqmoztoj |
 | 165 | `parse-web.R` | `.web_ipv6_serialize` | `stri_locate_first_fixed` | locate | `::` | none (ASCII literal) | bytes | yqmoztoj |
-| 166 | `parse-web.R` | `.parse_web_url_one` | `stri_detect_regex` | detect | `(?i)(\A\|/)(\.\|%2e){1,2}(/\|\z)` | (?i) on an ASCII pattern | bytes | oahhlnvf |
+| 166 | `parse-web.R` | `.parse_web_url_one` | `stri_detect_regex` | detect | `(?i)(\A\|/)(\.\|%2e){1,2}(/\|\z)` | (?i) on an ASCII pattern | bytes | oahhlnvf (migrated, see below) |
 | 167 | `parse.R` | `.has_explicit_authority` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf |
 | 168 | `parse.R` | `.latin1_input_to_utf8` | `stri_enc_toutf8` | encoding |  | encoding conversion/validation | semantic exception | yyeohqah |
 | 169 | `parse.R` | `.source_scheme_spelling_vec` | `stri_match_first_regex` | capture | `^([A-Za-z][A-Za-z0-9+.\-]*):` | none (ASCII structural) | bytes | yqmoztoj |
@@ -405,8 +405,8 @@ Rows are in file order, then source order.
 | 172 | `path-query.R` | `.token_is_opaque` | `stri_detect_regex` | detect | `%(?![0-9A-Fa-f]{2})` | none (ASCII structural) | bytes | oahhlnvf |
 | 173 | `path-query.R` | `.param_matches` | `stri_detect_regex` | detect | `<matcher$regex>` | ICU case-insensitive (Unicode folding); user glob compiled by `.glob_to_regex()` | stringi or UTF-8 PCRE (open) | yyeohqah |
 | 174 | `resolve.R` | `.whatwg_file_remove_dot_segments` | `stri_split_fixed` | split | `/` | keeps trailing empty field | bytes | yqmoztoj |
-| 175 | `serialize.R` | `.fsss_source_lex` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf |
-| 176 | `serialize.R` | `.fsss_source_lex` | `stri_replace_last_regex` | replace | `[\u0000-\u0020]+$` | ICU `$` | bytes | oahhlnvf |
+| 175 | `serialize.R` | `.fsss_source_lex` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf (migrated, see below) |
+| 176 | `serialize.R` | `.fsss_source_lex` | `stri_replace_last_regex` | replace | `[\u0000-\u0020]+$` | ICU `$` | bytes | oahhlnvf (migrated, see below) |
 | 177 | `serialize.R` | `.fsss_source_lex` | `stri_match_first_regex` | capture | `^[A-Za-z][A-Za-z0-9+.\-]*://([^/]*)` | none (ASCII structural) | bytes | yqmoztoj |
 | 178 | `url-key.R` | `.url_key_scheme_presence` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf |
 | 179 | `url-key.R` | `.url_key_scheme_presence` | `stri_detect_regex` | detect | `^//` | none (ASCII structural) | bytes | oahhlnvf |
@@ -416,8 +416,37 @@ Rows are in file order, then source order.
 | 183 | `url-key.R` | `.url_key_frame` | `stri_numbytes` | length (bytes) |  | none (byte count) | semantic exception | yyeohqah |
 | 184 | `utils.R` | `.glob_to_regex` | `stri_replace_all_regex` | replace | `([^A-Za-z0-9_])` | `[^A-Za-z0-9_]` takes one code point; per-byte escaping breaks a multibyte glob | semantic exception | yyeohqah |
 | 185 | `utils.R` | `.ascii_case_fallback` | `stri_replace_all_fixed` | replace | `<from>` | none (ASCII letters, `vectorize_all = FALSE`) | bytes | oahhlnvf |
-| 186 | `verdicts.R` | `.derive_verdict_layers_vec` | `stri_detect_fixed` | detect | `.` | none (ASCII literal) | bytes | oahhlnvf |
+| 186 | `verdicts.R` | `.derive_verdict_layers_vec` | `stri_detect_fixed` | detect | `.` | none (ASCII literal) | bytes | oahhlnvf (migrated, see below) |
 | 187 | `zzz.R` | `.cache_key_ascii` | `stri_enc_isutf8` | encoding |  | UTF-8 validity test | semantic exception | yyeohqah |
 | 188 | `zzz.R` | `.cache_key_escape` | `stri_escape_unicode` | escape |  | escapes every non-ASCII code point as \uXXXX/\UXXXXXXXX | semantic exception | yyeohqah |
 | 189 | `zzz.R` | `.cache_key_escape` | `stri_escape_unicode` | escape |  | escapes every non-ASCII code point as \uXXXX/\UXXXXXXXX | semantic exception | yyeohqah |
 | 190 | `zzz.R` | `.cache_key_escape` | `stri_escape_unicode` | escape |  | escapes every non-ASCII code point as \uXXXX/\UXXXXXXXX | semantic exception | yyeohqah |
+
+### Migrated in RURL-oahhlnvf: state, diagnostics, web, serialize, email, verdicts
+
+The 27 rows marked "migrated, see below" (in `R/parse-state.R`,
+`R/diagnostics.R`, `R/parse-web.R`, `R/serialize.R`, `R/email-diagnostics.R`
+and `R/verdicts.R`) now run in byte mode, as does the post-snapshot
+`.rfc3986_class_ok()` search: 28 references in all.
+
+- The vectorized calls go through `.bytes_detect()` and `.bytes_replace()`.
+  The count in `.rfc3986_valid_authority()` is the byte length a literal
+  removal of `@` drops.
+- The per-row helpers of the grammar walk and the host parsers
+  (`.state_bytes_test()`), and the web dot-segment gate, call
+  `grepl(perl = TRUE, useBytes = TRUE)` directly: the wrapper's pattern check
+  costs more than the match (0.9 ms against 0.08 ms for `.RFC3986_IPV6_RE`).
+  `test-stringi-bool-state-diag.R` runs each of those constant patterns
+  through `.bytes_check_pattern()`. `.rfc3986_generic_uri_ok()` also calls
+  `grepl()` directly, because a latin1 row may reach it and the wrapper
+  refuses that mark.
+- `\x{0080}-\x{10FFFF}` became `\x80-\xff`, and `.rfc3986_class_ok()` keeps
+  a decodable mask. `\P{ASCII}` and `[^\u0000-\u007F]` became
+  `[^\x00-\x7f]`. The ` ` and ``` escapes became literals; the
+  forbidden-host class has a byte twin, `.WHATWG_FORBIDDEN_HOST_ONLY_BYTES`.
+- The four `(?i)` patterns became ASCII letter classes and drop no fold. No
+  non-ASCII code point folds to a letter of their keywords, or to a run of
+  two or three letters (measured over every code point with stringi 1.8.9).
+- Three ICU `$` anchors became `\z`. Two moved output, recorded in `NEWS.md`:
+  the bare `host:port` carve-out and the `encoded-dot-segment` fact no
+  longer treat a final U+0085, U+2028 or U+2029 as the end.
