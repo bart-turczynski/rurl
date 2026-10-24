@@ -2151,7 +2151,8 @@ safe_parse_urls <- function(url,
   # spelling, as the web route already parses it; see
   # .general_route_input_vec(). A byte-for-byte no-op unless url_standard ==
   # "whatwg", fixup_posture == "browser", or a `//` row under `rfc3986` with
-  # scheme_relative_handling = "keep" (its `http:` stand-in, RURL-ozpxupgq).
+  # scheme_relative_handling = "keep", "http" or "https" (its `http:` or
+  # `https:` prefix, RURL-ozpxupgq, RURL-vubwgoxo).
   gen_input <- .general_route_input_vec(urls, opts)
   gen <- .general_parse_vec(gen_input, opts$url_standard,
                             opts$scheme_acceptance, opts$scheme_policy)

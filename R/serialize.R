@@ -253,9 +253,10 @@
   # COMPONENTS, but not the kinds (they are not cached Stage-A fields), so the
   # pure parser is re-run here, on the string Stage A gave it:
   # .general_route_input_vec(), the browser fixer, then the WHATWG strip
-  # (RURL-vmsmlflr), then the `http:` stand-in for a `//` row under the
-  # rfc3986 "keep" posture (RURL-ozpxupgq). Reading only the strip here missed
-  # that stand-in, so `///p` was never claimed as general-routed.
+  # (RURL-vmsmlflr), then the `http:` or `https:` prefix for a `//` row under
+  # rfc3986 with "keep", "http" or "https" (RURL-ozpxupgq, RURL-vubwgoxo).
+  # Reading only the strip here missed that prefix, so `///p` was never
+  # claimed as general-routed.
   gen <- .general_parse_vec(
     .general_route_input_vec(url, opts),
     opts$url_standard, "general", opts$scheme_policy

@@ -384,9 +384,10 @@
     # global SEO transform would skip under general acceptance, ADR 0012 D2).
     # It reads the string Stage A's general route reads
     # (.general_route_input_vec()), not the raw input: under rfc3986 with
-    # scheme_relative_handling = "keep" that string gives a `//` row the
-    # `http:` stand-in (RURL-ozpxupgq), so the raw one disagreed with Stage A
-    # about which `//` rows are general-routed (RURL-cwzickqy).
+    # scheme_relative_handling = "keep", "http" or "https" that string gives a
+    # `//` row an `http:` or `https:` prefix (RURL-ozpxupgq, RURL-vubwgoxo), so
+    # the raw one disagreed with Stage A about which `//` rows are
+    # general-routed (RURL-cwzickqy).
     gen_b <- .general_parse_vec(.general_route_input_vec(url, opts),
                                 opts$url_standard, opts$scheme_acceptance,
                                 opts$scheme_policy)
