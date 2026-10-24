@@ -82,11 +82,11 @@ test_that("the cache stays transparent for ordinary URLs", {
   }
 })
 
-# Long inputs: a 12,000-character ASCII URL, and a 2,000 x "e-acute" path whose
-# \uXXXX-escaped key spends six bytes per code point. Both keys are past R's
-# 10,000-byte variable-name cap.
+# Long inputs: a 12,000-character ASCII URL, and a 3,000 x "e-acute" path whose
+# key spells each of its 6,000 non-ASCII octets as four bytes, `\x` and two hex
+# digits (RURL-yyeohqah). Both keys are past R's 10,000-byte variable-name cap.
 lk_long_ascii <- paste0("http://a.example.com/", strrep("a", 12000L - 21L))
-lk_long_utf8 <- paste0("http://a.example.com/", strrep("é", 2000L))
+lk_long_utf8 <- paste0("http://a.example.com/", strrep("é", 3000L))
 
 test_that("a long ASCII URL parses with the cache on", {
   lk_local_caches()

@@ -175,6 +175,9 @@
   path
 }
 
+# A path that ends in a dot segment ("." or ".."), for ._strip_index_page().
+.DOT_SEGMENT_TAIL_RE <- "(^|/)\\.{1,2}\\z"
+
 # Internal helper to strip index/default pages from the end of a path.
 # stri_match_first_regex() and stri_startswith_fixed() read past a U+FEFF that
 # starts their input (see .starts_with_bom()), so the directory kept from
@@ -209,7 +212,15 @@
   # Under a selector this branch is unreachable -- both standard profiles set
   # `path_normalization = "dot_segments"`, which runs first (processing-order
   # step 2) and leaves no dot segment for the strip to expose. RURL-ogruzocw.
-  if (stringi::stri_detect_regex(base, "(^|/)\\.{1,2}$")) {
+  #
+  # The test is base R in byte mode (ADR 0019), inlined rather than through
+  # .bytes_detect() because this runs once per row and the pattern is a
+  # constant that test-stringi-bool-key-query.R holds to .bytes_check_pattern().
+  # `base` is a byte cut declared UTF-8, never latin1 or bytes. The end anchor
+  # is `\z`, not ICU's `$`, which also matched before a final CR, LF, U+0085,
+  # U+2028 or U+2029; the two agree here, because the capture's ICU `.` stops
+  # at those terminators, so `base` never holds one.
+  if (grepl(.DOT_SEGMENT_TAIL_RE, base, perl = TRUE, useBytes = TRUE)) {
     base <- ._remove_dot_segments(base)
     if (!nzchar(base)) {
       return("/")
@@ -508,17 +519,24 @@
 # strsplit(fixed = TRUE) semantics (trailing empties dropped, so "x=" and "x=="
 # both yield an empty value; "a=b=c" and "a==b" re-join the tail with "="), and
 # empty inter-"&" segments are skipped.
+#
+# Both splits run in bytes (`.bytes_split_fixed()`, ADR 0019) with ADR 0005's
+# strsplit() reading (`keep_trailing_empty = FALSE`). A character-mode
+# strsplit() returned NA for a query that is not valid UTF-8, after a warning,
+# and the caller's next `if ()` stopped the whole vectorized call
+# (RURL-kzbqvxpk). "&" and "=" are ASCII, so on valid UTF-8 the byte split is
+# the character split.
 ._parse_query_string <- function(query, decode = TRUE) {
   if (is.na(query) || !nzchar(query)) {
     return(list())
   }
-  parts <- strsplit(query, "&", fixed = TRUE)[[1]]
+  parts <- .bytes_split_fixed(query, "&", keep_trailing_empty = FALSE)[[1L]]
   parts <- parts[nzchar(parts)]
   if (length(parts) == 0L) {
     return(list())
   }
 
-  kv <- strsplit(parts, "=", fixed = TRUE)
+  kv <- .bytes_split_fixed(parts, "=", keep_trailing_empty = FALSE)
   keys <- vapply(kv, function(p) p[1L], character(1), USE.NAMES = FALSE)
   values <- vapply(
     kv,
@@ -566,39 +584,62 @@
 # skipped (matching ._parse_query_string). Keys/values are RAW (percent-encoded)
 # here; decoding happens in the engine. A bare "a" (no '=') yields value "" --
 # v1 does not distinguish "?a" from "?a=". Returns list(key=<chr>, value=<chr>).
+#
+# The split, the "=" search and the cuts run in bytes (R/strings-base.R), so a
+# query that is not valid UTF-8 gives its own pairs rather than NA, which
+# stopped the whole vectorized call (RURL-kzbqvxpk; see
+# ._parse_query_string()). The delimiters are ASCII, so a byte offset never
+# falls inside a multibyte character.
 ._parse_query_pairs <- function(query) {
   empty <- list(key = character(0), value = character(0))
   if (is.na(query) || !nzchar(query)) {
     return(empty)
   }
-  parts <- strsplit(query, "&", fixed = TRUE)[[1]]
+  parts <- .bytes_split_fixed(query, "&", keep_trailing_empty = FALSE)[[1L]]
   parts <- parts[nzchar(parts)]
   if (length(parts) == 0L) {
     return(empty)
   }
-  eq <- regexpr("=", parts, fixed = TRUE)
-  has_eq <- eq > 0L
-  key <- ifelse(has_eq, substr(parts, 1L, eq - 1L), parts)
-  value <- ifelse(has_eq, substr(parts, eq + 1L, nchar(parts)), "")
+  eq <- .bytes_locate(parts, "=", fixed = TRUE)[, "start"]
+  has_eq <- !is.na(eq)
+  key <- parts
+  value <- rep("", length(parts))
+  if (any(has_eq)) {
+    at <- eq[has_eq]
+    key[has_eq] <- .bytes_cut(parts[has_eq], 1L, at - 1L)
+    value[has_eq] <- .bytes_cut(parts[has_eq], at + 1L, .Machine$integer.max)
+  }
   list(key = key, value = value)
 }
 
 # TRUE where a token is malformed-opaque: it contains a '%' NOT followed by two
 # hex digits. Opaque tokens are used as-is for matching and emitted byte-for-
 # byte on output (their '%' is never turned into '%25'). Vectorized.
+# Byte mode (ADR 0019): the pattern is ASCII, so the answer on valid UTF-8 is
+# the one stringi gave, and a token that is not valid UTF-8 gets its own answer
+# where stringi gave NA (RURL-kzbqvxpk).
+# A `%` not followed by two hex digits. A constant byte-mode pattern, checked
+# by .bytes_check_pattern() in a test, so the per-call check is skipped: this
+# runs twice per query row on the filter path (RURL-oahhlnvf review).
+.TOKEN_OPAQUE_RE <- "%(?![0-9A-Fa-f]{2})"
+
 .token_is_opaque <- function(x) {
-  stringi::stri_detect_regex(x, "%(?![0-9A-Fa-f]{2})")
+  out <- grepl(.TOKEN_OPAQUE_RE, x, perl = TRUE, useBytes = TRUE)
+  out[is.na(x)] <- NA
+  out
 }
 
 # Decode non-opaque tokens (opaque ones pass through unchanged). decode_plus
-# applies to VALUES only: '+' -> space before percent-decoding.
+# applies to VALUES only: '+' -> space before percent-decoding. The '+'
+# rewrite runs in bytes, so a token that is not valid UTF-8 does not stop the
+# call (RURL-kzbqvxpk).
 .decode_query_tokens <- function(tokens, opaque, is_value, decode_plus) {
   out <- tokens
   live <- !opaque
   if (any(live)) {
     x <- tokens[live]
     if (is_value && decode_plus) {
-      x <- gsub("+", " ", x, fixed = TRUE)
+      x <- .bytes_replace(x, "+", " ", all = TRUE, fixed = TRUE)
     }
     out[live] <- .query_unescape(x)
   }
@@ -608,24 +649,58 @@
 # Compile a set of glob patterns into a single case-aware matcher, or NULL when
 # there is nothing to match. Each pattern is anchored via .glob_to_regex() and
 # the anchored alternatives are OR-joined.
+# A latin1 pattern is spelled in UTF-8 first (.latin1_input_to_utf8()), so it
+# matches the UTF-8 name it names; the compiled regex is declared UTF-8.
+# The case-sensitive arm runs the regex in byte mode, so it is checked here,
+# once, against the constructs the byte layer refuses (.bytes_check_pattern()),
+# rather than on every .param_matches() call.
 .compile_param_matcher <- function(patterns, case_sensitive) {
   patterns <- patterns[!is.na(patterns) & nzchar(patterns)]
   if (length(patterns) == 0L) {
     return(NULL)
   }
-  regexes <- vapply(patterns, .glob_to_regex, character(1), USE.NAMES = FALSE)
-  list(regex = paste(regexes, collapse = "|"), case_sensitive = case_sensitive)
+  regexes <- .glob_to_regex(unname(.latin1_input_to_utf8(patterns)))
+  regex <- paste(regexes, collapse = "|")
+  if (case_sensitive) {
+    .bytes_check_pattern(regex, fixed = FALSE)
+  }
+  list(regex = regex, case_sensitive = case_sensitive)
 }
 
 # Apply a compiled matcher to decoded param names. NULL matcher matches nothing.
+# Both arms read the names declared UTF-8 (latin1 converted, unknown declared),
+# never by the session locale (RURL-yyeohqah, ADR 0019).
+#
+#   * Case-sensitive: base R in byte mode. The regex is ASCII structure around
+#     literal octets, so a match in bytes is a match in code points, and an
+#     undecodable name gets its own answer ('*' matches it).
+#   * Case-insensitive: stays in stringi, a declared ADR 0019 exception, for
+#     ICU's caseless matching, which uses Unicode full case folding ("SS"
+#     matches U+00DF, "k" matches U+212A KELVIN SIGN) and does not follow the
+#     ICU default locale (no Turkish dotless-i fold). Base R has no Unicode
+#     case folding. ICU counts a leading U+FEFF in the subject here, so no
+#     splice is needed: "utm_*" does not match U+FEFF "utm_source".
 .param_matches <- function(names, matcher) {
   if (is.null(matcher) || length(names) == 0L) {
     return(logical(length(names)))
   }
-  stringi::stri_detect_regex(
-    names, matcher$regex,
-    case_insensitive = !matcher$case_sensitive
-  )
+  names <- .latin1_input_to_utf8(names)
+  unknown <- Encoding(names) == "unknown"
+  if (any(unknown)) {
+    Encoding(names[unknown]) <- "UTF-8"
+  }
+  if (matcher$case_sensitive) {
+    # .bytes_detect() inlined: its pattern check already ran once, in
+    # .compile_param_matcher(), and is interpreted code that would otherwise
+    # rerun on every call. The input check and NA rule are kept as
+    # .bytes_detect() applies them; the result is logical, so there is no
+    # output encoding to declare.
+    .bytes_check_input(names)
+    out <- grepl(matcher$regex, names, perl = TRUE, useBytes = TRUE)
+    out[is.na(names)] <- NA
+    return(out)
+  }
+  stringi::stri_detect_regex(names, matcher$regex, case_insensitive = TRUE)
 }
 
 # Decide, per decoded pair, which survive under the given mode. Returns a

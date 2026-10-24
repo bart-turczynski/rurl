@@ -172,20 +172,22 @@
 # `looks_like_host_port` has NO default on purpose: the compensation described
 # above is re-introducible by any caller that omits it, so omitting it is made
 # impossible rather than merely discouraged.
+#
+# The trim and both tests run in bytes (R/strings-base.R, ADR 0019): every
+# pattern is ASCII, so on valid UTF-8 they answer as stringi did, and byte
+# mode counts a leading U+FEFF, as the stringi regex calls here already did
+# (`\ufeff//h/p` is not scheme-relative; RURL-dquaxcaz). A latin1 element is
+# spelled in UTF-8 first, as stringi read it.
 .url_key_scheme_presence <- function(url, url_standard, looks_like_host_port) {
-  u <- ifelse(is.na(url), "", as.character(url))
+  u <- ifelse(is.na(url), "", .latin1_input_to_utf8(as.character(url)))
   if (.is_whatwg(url_standard)) {
     u <- .strip_whatwg_control_chars_vec(u, url_standard)$url
-    u <- stringi::stri_replace_first_regex(u, "^[\\u0000-\\u0020]+", "")
+    u <- .bytes_replace(u, "^[\\x00-\\x20]+", "")
   }
   out <- rep("inferred", length(u))
-  # A `*_regex()` detector, not stri_startswith_fixed(): the fixed matcher
-  # reads past a U+FEFF that starts its input, so `\ufeff//h/p` read as
-  # scheme-relative while its U+200B twin read inferred. The detector counts
-  # the mark, as the scheme test below does (ADR 0005; RURL-dquaxcaz).
-  rel <- stringi::stri_detect_regex(u, "^//")
+  rel <- .bytes_detect(u, "^//")
   out[!is.na(rel) & rel] <- "scheme-relative"
-  explicit <- stringi::stri_detect_regex(u, "^[A-Za-z][A-Za-z0-9+.\\-]*:")
+  explicit <- .bytes_detect(u, "^[A-Za-z][A-Za-z0-9+.\\-]*:")
   out[!is.na(explicit) & explicit] <- "explicit"
   hp <- !is.na(looks_like_host_port) & looks_like_host_port
   out[hp & out == "explicit"] <- "inferred"
@@ -249,13 +251,20 @@
 # only ever COUNTED here, never used to slice a field, so the
 # code-point/native-index does not arise.
 #
+# The transcode, `stri_enc_toutf8(validate = TRUE)`, is a declared ADR 0019
+# exception (RURL-yyeohqah): it decodes an invalid sequence with one U+FFFD
+# per maximal subpart, as the WHATWG Encoding Standard's UTF-8 decoder does,
+# which base R has no call for. test-stringi-semantic-exceptions.R pins it on
+# a fixture table of truncated, overlong, surrogate and above-U+10FFFF
+# sequences.
+#
 # A field that starts with U+FEFF is transcoded with an ASCII `x` spliced on
 # first, and that one byte is cut off after it. stri_enc_toutf8() reads a
 # U+FEFF that starts its input as a byte-order mark and drops it, so
 # `\ufeffh.example.com` framed as `13:h.example.com` and the key collided with
 # its unmarked twin's. The mark is field data (ADR 0005), so it must reach the
-# frame, and stri_numbytes() counts it. Only those rows are spliced, as in
-# .cache_key_escape(): a splice on every row costs a paste per field, and
+# frame, and stri_numbytes() counts it. Only those rows are spliced: a splice
+# on every row costs a paste per field, and
 # paste0() translates a field that is not UTF-8 by the locale, which the
 # transcode alone does not. A field led by the mark holds a code point latin1
 # cannot spell, so it is UTF-8 or native already (RURL-dquaxcaz).
