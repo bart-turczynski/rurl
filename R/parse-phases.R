@@ -412,11 +412,11 @@
     return(no_op)
   }
 
-  scheme_match <- stringi::stri_match_first_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*):"
-  )
+  scheme_match <- .bytes_capture(url, "^([a-zA-Z][a-zA-Z0-9+.-]*):")
   scheme_lower <- .ascii_tolower(scheme_match[, 2L])
-  # A row led by U+FEFF has no scheme; the stringi match reads past the mark.
+  # A row led by U+FEFF has no scheme. The stringi match read past the mark;
+  # the byte-mode capture does not, and the mask stays as the ADR 0005 guard
+  # until the close-out.
   eligible <- !is.na(scheme_lower) &
     scheme_lower %in% .WHATWG_SPECIAL_SCHEMES &
     !bom_led
@@ -424,31 +424,35 @@
     return(no_op)
   }
 
-  colon_len <- stringi::stri_length(scheme_match[, 1L])
+  # `nchar(NA, type = "bytes")` is 2, so a row with no scheme is set NA.
+  colon_len <- nchar(scheme_match[, 1L], type = "bytes")
+  colon_len[is.na(scheme_match[, 1L])] <- NA_integer_
 
   # Every span below is located in and cut from `url` itself, which starts with
-  # the scheme. Some stringi functions read past a U+FEFF that starts their
-  # input (see .starts_with_bom()), so cutting or rewriting a span that starts
-  # with one ("http://\ufeff/p" leaves "\ufeff/p") would lose it, and
-  # "http:///p" would then read "p" as its host (RURL-iiehsbfg). A row led by
-  # U+FEFF is not eligible.
+  # the scheme, in bytes from locator to cut (ADR 0019). Some stringi
+  # functions read past a U+FEFF that starts their input, so cutting or
+  # rewriting a span that starts with one ("http://\ufeff/p" leaves
+  # "\ufeff/p") once lost it, and "http:///p" then read "p" as its host
+  # (RURL-iiehsbfg).
   #
   # The query/fragment boundary is the first literal '?' or '#' -- an
   # unencoded delimiter byte, so it is safe to locate before any rewriting. The
   # scheme holds neither, so it always falls after the colon.
-  qf_start <- stringi::stri_locate_first_regex(url, "[?#]")[, 1L]
-  before_end <- ifelse(is.na(qf_start), -1L, qf_start - 1L)
-  before <- stringi::stri_sub(url, colon_len + 1L, before_end)
-  after <- ifelse(is.na(qf_start), "", stringi::stri_sub(url, qf_start))
+  qf_start <- .bytes_locate(url, "[?#]")[, "start"]
+  before_end <- ifelse(is.na(qf_start), .Machine$integer.max, qf_start - 1L)
+  before <- .bytes_cut(url, colon_len + 1L, before_end)
+  after <- ifelse(
+    is.na(qf_start), "", .bytes_cut(url, qf_start, .Machine$integer.max)
+  )
 
   # Leading run of one or more '/'/'\' right after "scheme:" -- the
   # authority-introducing marker, of any length/composition. Neither character
   # is '?' or '#', so the run always lies inside `before`.
-  run <- stringi::stri_match_first_regex(url, "^[^:]*:([/\\\\]+)")[, 2L]
+  run <- .bytes_capture(url, "^[^:]*:([/\\\\]+)")[, 2L]
   has_run <- !is.na(run)
 
-  run_len <- ifelse(has_run, stringi::stri_length(run), 0L)
-  remainder <- stringi::stri_sub(url, colon_len + run_len + 1L, before_end)
+  run_len <- ifelse(has_run, nchar(run, type = "bytes"), 0L)
+  remainder <- .bytes_cut(url, colon_len + run_len + 1L, before_end)
 
   # Beyond the leading run, a literal backslash is a plain separator: rewrite
   # it 1:1 to '/' (path segments, and the authority/path boundary when the
@@ -1497,10 +1501,12 @@
   original_has_allowed_scheme[is.na(original_has_allowed_scheme)] <- FALSE
   original_has_allowed_scheme <- original_has_allowed_scheme | is_whatwg_file
 
-  scheme_match <- stringi::stri_match_first_regex(
-    url, "^([a-zA-Z][a-zA-Z0-9+.-]*):"
-  )
-  looks_like_protocol <- !is.na(scheme_match[, 2L]) & !bom_led
+  # Only whether the scheme capture matched was read, so this is a detect.
+  # The mask is the ADR 0005 guard from the stringi match, which read past a
+  # leading U+FEFF; the byte-mode detect does not.
+  looks_like_protocol <- .bytes_detect(url, "^[a-zA-Z][a-zA-Z0-9+.-]*:") &
+    !bom_led
+  looks_like_protocol[is.na(looks_like_protocol)] <- FALSE
   rfc_rootless <- .rfc3986_path_rootless_vec(url, url_standard, bom_led)
   original_has_allowed_scheme <-
     original_has_allowed_scheme | rfc_rootless$is_path_rootless
@@ -1796,39 +1802,34 @@
     return(out)
   }
   # Positions are found in `body` but every cut is made in `p`, which starts
-  # with the scheme. stri_locate_*() counts a U+FEFF that starts its input,
-  # while stri_sub() and stri_startswith_fixed() read past it, so cutting a body
-  # led by one (a host that starts with U+FEFF) took the path one character off
-  # (RURL-vhionecz).
+  # with the scheme, all in bytes (ADR 0019). Under stringi, stri_locate_*()
+  # counted a U+FEFF that starts its input while stri_sub() read past it, so
+  # cutting a body led by one (a host that starts with U+FEFF) took the path
+  # one character off (RURL-vhionecz).
   p <- prepared[ok]
-  prefix <- stringi::stri_locate_first_regex(
-    p, "^[a-zA-Z][a-zA-Z0-9+.-]*://"
-  )[, "end"]
+  prefix <- .bytes_locate(p, "^[a-zA-Z][a-zA-Z0-9+.-]*://")[, "end"]
   prefix[is.na(prefix)] <- 0L
   body <- .bytes_replace(p, "^[a-zA-Z][a-zA-Z0-9+.-]*://", "")
-  first <- stringi::stri_locate_first_regex(body, "[/?#]")[, 1L]
-  empty_authority <- stringi::stri_sub(p, prefix + 1L, prefix + 1L) == "/"
+  first <- .bytes_locate(body, "[/?#]")[, "start"]
+  empty_authority <- .bytes_cut(p, prefix + 1L, prefix + 1L) == "/"
   empty_authority[is.na(empty_authority)] <- FALSE
   has_path <- !is.na(first) &
-    stringi::stri_sub(p, prefix + first, prefix + first) == "/" &
+    .bytes_cut(p, prefix + first, prefix + first) == "/" &
     !empty_authority
   has_path[is.na(has_path)] <- FALSE
   raw <- engine_path[ok]
   if (any(has_path)) {
     pp <- p[has_path]
     start <- prefix[has_path] + first[has_path]
-    tail <- stringi::stri_sub(pp, start)
-    stop_rel <- stringi::stri_locate_first_regex(tail, "[?#]")[, 1L]
-    # A path running to the end of the input is cut with `to = -1L` (the last
-    # character), not with `stri_length()`, which THROWS `invalid UTF-8 byte
-    # sequence detected` on an element holding invalid octets -- and it sat in
-    # an `ifelse()` branch that R evaluates over EVERY row once one row needs
-    # it, so one undecodable path, query or fragment aborted the whole batch
-    # (RURL-otrpfhmq). The locators and `stri_sub()` above are total over such
-    # elements.
+    tail <- .bytes_cut(pp, start, .Machine$integer.max)
+    stop_rel <- .bytes_locate(tail, "[?#]")[, "start"]
+    # A path running to the end of the input is cut to the last byte. Under
+    # stringi the bound was `to = -1L`, not `stri_length()`, which THROWS on an
+    # element holding invalid octets and aborted the whole batch
+    # (RURL-otrpfhmq); the byte layer is total over such elements.
     end <- start + stop_rel - 2L
-    end[is.na(stop_rel)] <- -1L
-    raw[has_path] <- stringi::stri_sub(pp, start, end)
+    end[is.na(stop_rel)] <- .Machine$integer.max
+    raw[has_path] <- .bytes_cut(pp, start, end)
   }
   # An octet that is not valid UTF-8 is percent-encoded here (RURL-yarkccco,
   # RUL-029), as the parser's component pass already encodes one in the query
