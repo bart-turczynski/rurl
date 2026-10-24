@@ -37,7 +37,7 @@ in_ctype <- function(locale, utf8, code) {
 }
 ctypes <- list(C = FALSE, `en_US.UTF-8` = TRUE)
 
-good <- "http://a.example/?k=v&utm_source=x"
+good <- "http://www.example.com/?k=v&utm_source=x"
 bad_rows <- list(
   # The ticket's row: one lone 0xE9 in a query value.
   value = oct("http://h.example/p?q=", 0xE9),
@@ -139,9 +139,12 @@ for (loc in names(ctypes)) {
         )
         expect_identical(out, "a=1&q=%E9&%E9=x&b=", info = mk)
         expect_no_warning(g <- rurl:::._parse_query_string(q, decode = FALSE))
-        expect_identical(names(g), c("a", "q", oct("", 0xE9), "b"), info = mk)
+        # identical(), not expect_named(): the marks are part of the pin.
+        keys <- names(g)
+        expect_identical(keys, mark_utf8(c("a", "q", oct("", 0xE9), "b")),
+                         info = mk)
         expect_identical(unname(unlist(g)),
-                         c("1", oct("", 0xE9), "x", ""), info = mk)
+                         mark_utf8(c("1", oct("", 0xE9), "x", "")), info = mk)
       }
     })
   })

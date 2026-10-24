@@ -43,13 +43,13 @@ named <- c("whatwg", "rfc3986")
 joins <- c("url_inner_join", "url_left_join", "url_right_join",
            "url_full_join", "url_semi_join", "url_anti_join")
 
-known_failures <- rbind(
-  # rfc3986 with query_handling other than "drop": an invalid-UTF-8 octet in
-  # the query throws "missing value where TRUE/FALSE needed" out of the
-  # whole call (strsplit() on the query).
-  kf(c("safe_parse_urls", "get_clean_url"), "rfc3986", "invalid_utf8",
-     "query", "RURL-kzbqvxpk")
-)
+# Empty: every matrix case keeps its contract. The last entry, an rfc3986
+# invalid-UTF-8 query that stopped safe_parse_urls() and get_clean_url()
+# (RURL-kzbqvxpk), went when the query split moved to bytes. A new entry is a
+# row of
+#   kf(export, standard, class, position, issue)
+known_failures <- kf(character(0), character(0), character(0), character(0),
+                     character(0))
 
 # Cases outside the matrix: inputs too costly to run for every export. The
 # probe test runs every case of every probe -- each standard at each position

@@ -508,17 +508,24 @@
 # strsplit(fixed = TRUE) semantics (trailing empties dropped, so "x=" and "x=="
 # both yield an empty value; "a=b=c" and "a==b" re-join the tail with "="), and
 # empty inter-"&" segments are skipped.
+#
+# Both splits run in bytes (`.bytes_split_fixed()`, ADR 0019) with ADR 0005's
+# strsplit() reading (`keep_trailing_empty = FALSE`). A character-mode
+# strsplit() returned NA for a query that is not valid UTF-8, after a warning,
+# and the caller's next `if ()` stopped the whole vectorized call
+# (RURL-kzbqvxpk). "&" and "=" are ASCII, so on valid UTF-8 the byte split is
+# the character split.
 ._parse_query_string <- function(query, decode = TRUE) {
   if (is.na(query) || !nzchar(query)) {
     return(list())
   }
-  parts <- strsplit(query, "&", fixed = TRUE)[[1]]
+  parts <- .bytes_split_fixed(query, "&", keep_trailing_empty = FALSE)[[1L]]
   parts <- parts[nzchar(parts)]
   if (length(parts) == 0L) {
     return(list())
   }
 
-  kv <- strsplit(parts, "=", fixed = TRUE)
+  kv <- .bytes_split_fixed(parts, "=", keep_trailing_empty = FALSE)
   keys <- vapply(kv, function(p) p[1L], character(1), USE.NAMES = FALSE)
   values <- vapply(
     kv,
@@ -566,39 +573,55 @@
 # skipped (matching ._parse_query_string). Keys/values are RAW (percent-encoded)
 # here; decoding happens in the engine. A bare "a" (no '=') yields value "" --
 # v1 does not distinguish "?a" from "?a=". Returns list(key=<chr>, value=<chr>).
+#
+# The split, the "=" search and the cuts run in bytes (R/strings-base.R), so a
+# query that is not valid UTF-8 gives its own pairs rather than NA, which
+# stopped the whole vectorized call (RURL-kzbqvxpk; see
+# ._parse_query_string()). The delimiters are ASCII, so a byte offset never
+# falls inside a multibyte character.
 ._parse_query_pairs <- function(query) {
   empty <- list(key = character(0), value = character(0))
   if (is.na(query) || !nzchar(query)) {
     return(empty)
   }
-  parts <- strsplit(query, "&", fixed = TRUE)[[1]]
+  parts <- .bytes_split_fixed(query, "&", keep_trailing_empty = FALSE)[[1L]]
   parts <- parts[nzchar(parts)]
   if (length(parts) == 0L) {
     return(empty)
   }
-  eq <- regexpr("=", parts, fixed = TRUE)
-  has_eq <- eq > 0L
-  key <- ifelse(has_eq, substr(parts, 1L, eq - 1L), parts)
-  value <- ifelse(has_eq, substr(parts, eq + 1L, nchar(parts)), "")
+  eq <- .bytes_locate(parts, "=", fixed = TRUE)[, "start"]
+  has_eq <- !is.na(eq)
+  key <- parts
+  value <- rep("", length(parts))
+  if (any(has_eq)) {
+    at <- eq[has_eq]
+    key[has_eq] <- .bytes_cut(parts[has_eq], 1L, at - 1L)
+    value[has_eq] <- .bytes_cut(parts[has_eq], at + 1L, .Machine$integer.max)
+  }
   list(key = key, value = value)
 }
 
 # TRUE where a token is malformed-opaque: it contains a '%' NOT followed by two
 # hex digits. Opaque tokens are used as-is for matching and emitted byte-for-
 # byte on output (their '%' is never turned into '%25'). Vectorized.
+# Byte mode (ADR 0019): the pattern is ASCII, so the answer on valid UTF-8 is
+# the one stringi gave, and a token that is not valid UTF-8 gets its own answer
+# where stringi gave NA (RURL-kzbqvxpk).
 .token_is_opaque <- function(x) {
-  stringi::stri_detect_regex(x, "%(?![0-9A-Fa-f]{2})")
+  .bytes_detect(x, "%(?![0-9A-Fa-f]{2})")
 }
 
 # Decode non-opaque tokens (opaque ones pass through unchanged). decode_plus
-# applies to VALUES only: '+' -> space before percent-decoding.
+# applies to VALUES only: '+' -> space before percent-decoding. The '+'
+# rewrite runs in bytes, so a token that is not valid UTF-8 does not stop the
+# call (RURL-kzbqvxpk).
 .decode_query_tokens <- function(tokens, opaque, is_value, decode_plus) {
   out <- tokens
   live <- !opaque
   if (any(live)) {
     x <- tokens[live]
     if (is_value && decode_plus) {
-      x <- gsub("+", " ", x, fixed = TRUE)
+      x <- .bytes_replace(x, "+", " ", all = TRUE, fixed = TRUE)
     }
     out[live] <- .query_unescape(x)
   }
