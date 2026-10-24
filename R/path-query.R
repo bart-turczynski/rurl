@@ -175,6 +175,9 @@
   path
 }
 
+# A path that ends in a dot segment ("." or ".."), for ._strip_index_page().
+.DOT_SEGMENT_TAIL_RE <- "(^|/)\\.{1,2}\\z"
+
 # Internal helper to strip index/default pages from the end of a path.
 # stri_match_first_regex() and stri_startswith_fixed() read past a U+FEFF that
 # starts their input (see .starts_with_bom()), so the directory kept from
@@ -209,7 +212,15 @@
   # Under a selector this branch is unreachable -- both standard profiles set
   # `path_normalization = "dot_segments"`, which runs first (processing-order
   # step 2) and leaves no dot segment for the strip to expose. RURL-ogruzocw.
-  if (stringi::stri_detect_regex(base, "(^|/)\\.{1,2}$")) {
+  #
+  # The test is base R in byte mode (ADR 0019), inlined rather than through
+  # .bytes_detect() because this runs once per row and the pattern is a
+  # constant that test-stringi-bool-key-query.R holds to .bytes_check_pattern().
+  # `base` is a byte cut declared UTF-8, never latin1 or bytes. The end anchor
+  # is `\z`, not ICU's `$`, which also matched before a final CR, LF, U+0085,
+  # U+2028 or U+2029; the two agree here, because the capture's ICU `.` stops
+  # at those terminators, so `base` never holds one.
+  if (grepl(.DOT_SEGMENT_TAIL_RE, base, perl = TRUE, useBytes = TRUE)) {
     base <- ._remove_dot_segments(base)
     if (!nzchar(base)) {
       return("/")

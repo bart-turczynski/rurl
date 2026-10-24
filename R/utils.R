@@ -304,7 +304,7 @@
 # a few code points some platforms refuse to widen (e.g. the U+FFFF
 # noncharacter, which reaches this code from the hostile-input corpora). Those
 # rows must survive the parse exactly as they did under stringi, so the fallback
-# does the same 26 ASCII substitutions with `stri_replace_all_fixed()`
+# does the same 26 ASCII substitutions as literal byte replacements
 # (case-sensitive literal matching -- no case folding, hence still no locale and
 # no ICU case tables). Sequential A->a ... Z->z cannot cascade because every
 # replacement is lowercase and every pattern uppercase.
@@ -328,20 +328,22 @@
 # The fallback above, for a vector `chartr()` rejected. `chartr()` throws for
 # the whole vector, so EVERY element lands here, not only the one it refused,
 # and each element's value must come back exactly as `chartr()` would have
-# returned it (RURL-bqhfznkg). (Names are not: the fixed call drops them, as it
-# always has.) `stri_replace_all_fixed()` reads past a U+FEFF that starts
-# its input (see `.starts_with_bom()`), so a mark-led element would lose the
-# mark because some other element held a U+FFFF. Those elements get an ASCII
-# "0" spliced on first -- not a letter, so no replacement touches it -- and the
-# byte cut off afterwards, so the fixed call sees the mark mid-string, where it
-# counts it. A regex replacer would also count the mark, but it rewrites the
-# bytes of an invalid UTF-8 element to U+FFFD, which the fixed call does not.
+# returned it (RURL-bqhfznkg). (Names are not: they are dropped, as the
+# stringi call this replaced always dropped them.)
+#
+# Each letter is a literal replacement in bytes (`.bytes_replace()`, ADR
+# 0019). An ASCII letter never occurs inside a multibyte UTF-8 sequence, so the
+# byte rewrite is the character rewrite; an element that is not valid UTF-8
+# keeps its other bytes as they were; and byte mode counts a U+FEFF that starts
+# an element, so the mark needs no guard. The former `stringi` fixed replacer
+# read past such a mark, and the "0" splice that guarded it (RURL-bqhfznkg)
+# went with it. A latin1 element is spelled in UTF-8 first, as stringi read
+# it.
 .ascii_case_fallback <- function(x, from, to) {
-  bom_led <- .starts_with_bom(x)
-  x[bom_led] <- paste0("0", x[bom_led])
-  out <- stringi::stri_replace_all_fixed(x, from, to, vectorize_all = FALSE)
-  out[bom_led] <- vapply(out[bom_led], .byte_substring, character(1L),
-                         first = 2L, USE.NAMES = FALSE)
+  out <- .latin1_input_to_utf8(unname(x))
+  for (i in seq_along(from)) {
+    out <- .bytes_replace(out, from[i], to[i], all = TRUE, fixed = TRUE)
+  }
   out
 }
 
