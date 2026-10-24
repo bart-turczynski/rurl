@@ -86,6 +86,15 @@ moved the boolean and replacement calls in `R/url-key.R`, `R/parse.R`,
 of RURL-kzbqvxpk: the allowlist was regenerated on that branch at main
 `e6d6263` to 180 references under 114 keys.
 
+RURL-oahhlnvf's parse-phases and state/diagnostics partitions, landed together
+(MR for refactor/stringi-bool-phases-state), moved the boolean and replacement
+calls in `R/parse-phases.R`, `R/parse-state.R`, `R/diagnostics.R`,
+`R/parse-web.R`, `R/serialize.R`, `R/email-diagnostics.R` and `R/verdicts.R`
+to byte mode: the allowlist was regenerated on that branch at main `164f7cc`
+to 74 references under 53 keys. One call stays: the WHATWG leading trim in
+`.strip_whatwg_control_chars_vec()`, whose ICU read supplies the U+FFFD decode
+the whatwg route relies on.
+
 ## Legend
 
 - **Family**: what the call does. *detect* returns a logical. *count*
