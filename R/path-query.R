@@ -204,7 +204,14 @@
     return(path)
   }
   base <- .bytes_cut(path, 1L, m - 1L)
-  if (grepl(.ICU_TERMINATOR, base, perl = TRUE, useBytes = TRUE)) {
+  # A terminator is LF, VT, FF or CR (0x0A-0x0D), or a sequence led by 0xC2
+  # (U+0085) or 0xE2 (U+2028, U+2029); the regex runs only on a directory
+  # holding one of those lead bytes, as compiling it costs more per row than
+  # the page search.
+  b <- charToRaw(base)
+  if (any(b >= as.raw(0x0a) & b <= as.raw(0x0d)) ||
+        (any(b == as.raw(0xc2) | b == as.raw(0xe2)) &&
+           grepl(.ICU_TERMINATOR, base, perl = TRUE, useBytes = TRUE))) {
     return(path)
   }
   if (base == "") {
