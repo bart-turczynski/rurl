@@ -98,5 +98,5 @@ test_that("an email IPv6 address literal is judged on its whole body", {
 test_that("a long parse-cache key led by U+FEFF keeps its tail", {
   skip_long_on_cran()
   expect_identical(.cache_key_ascii(paste0("\ufeff", tail_z)),
-                   paste0("\\zzefbbbf", strrep("61", 1000000L), "7a"))
+                   paste0("\\xef\\xbb\\xbf", tail_z))
 })

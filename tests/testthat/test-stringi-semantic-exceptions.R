@@ -49,6 +49,11 @@ ck_inputs <- function() {
     list(octets(0x61, 0xff, 0x62)),
     list(octets(0x61, 0xfe, 0x62)),
     list(octets(0xef, 0xbb, 0xbf, 0x61, 0xff)),
+    # ASCII spellings of the escapes of the entries above.
+    list("\\xc3\\xa9"),
+    list("a\\xffb"),
+    list("\\\\xc3\\\\xa9"),
+    list("\\zNA"),
     list("\\zz61ff62"),
     list("\\zzc3a9"),
     list("\\u00e9"),
@@ -79,23 +84,72 @@ test_that("an ASCII key without a backslash is its own cache key", {
   expect_identical(.cache_key_ascii(x), x)
 })
 
-test_that("cache keys take three disjoint shapes", {
-  # ASCII: itself, `\` doubled. Non-ASCII: "\\zz" + lowercase octet hex.
-  # NA: "\\zNA".
+test_that("cache keys spell each octet on its own", {
+  # An ASCII octet is itself, `\` is `\\`, an octet >= 0x80 is `\x` + two
+  # lowercase hex digits. NA is "\\zNA".
   expect_identical(
-    .cache_key_ascii(c("a\\b", "\\zz61", "\\zNA", "a\tb\"'")),
-    c("a\\\\b", "\\\\zz61", "\\\\zNA", "a\tb\"'")
+    .cache_key_ascii(c("a\\b", "\\zz61", "\\zNA", "a\tb\"'", "\\x41")),
+    c("a\\\\b", "\\\\zz61", "\\\\zNA", "a\tb\"'", "\\\\x41")
   )
   expect_identical(.cache_key_ascii(c("é", octets(0x61, 0xff))),
-                   c("\\zzc3a9", "\\zz61ff"))
-  expect_identical(.cache_key_ascii(octets(0xe9, enc = "latin1")), "\\zzc3a9")
+                   c("\\xc3\\xa9", "a\\xff"))
+  expect_identical(.cache_key_ascii(paste0("a\\", "é", "\\")),
+                   "a\\\\\\xc3\\xa9\\\\")
+  expect_identical(.cache_key_ascii(octets(0x80, 0x9f, 0xa0, 0xff)),
+                   "\\x80\\x9f\\xa0\\xff")
+  expect_identical(.cache_key_ascii(octets(0xe9, enc = "latin1")),
+                   "\\xc3\\xa9")
   expect_identical(.cache_key_ascii(octets(0xc3, 0xa9, enc = "latin1")),
-                   "\\zzc383c2a9")
+                   "\\xc3\\x83\\xc2\\xa9")
   expect_identical(.cache_key_ascii(octets(0x61, 0xff, enc = "bytes")),
-                   "\\zz61ff")
+                   "a\\xff")
   expect_identical(.cache_key_ascii(c(NA, "NA", "a")), c("\\zNA", "NA", "a"))
   expect_identical(.cache_key_ascii(character(0)), character(0))
   expect_identical(.cache_key_ascii(c(k = "a")), "a")
+})
+
+test_that("a mostly-ASCII key stays about its own length", {
+  # Escaping per octet, not per key: one non-ASCII octet costs four bytes
+  # and the ASCII run costs its own length, so a 5,000-byte URL with one
+  # "é" stays under the 10,000-byte variable-name cap.
+  u <- paste0("http://a.com/", strrep("a", 5000L), "é", 1L)
+  n <- nchar(u, type = "bytes")
+  key <- .cache_key_ascii(u)
+  expect_lt(nchar(key, type = "bytes"), 1.1 * n + 8)
+  expect_identical(key, paste0("http://a.com/", strrep("a", 5000L),
+                               "\\xc3\\xa91"))
+})
+
+test_that("mostly-ASCII 5,000-byte URLs hit the warm parse cache", {
+  before <- rurl_cache_info()
+  withr::defer({
+    rurl_cache_config(
+      full_parse = before$enabled[before$cache == "full_parse"],
+      max_full_parse = before$max_entries[before$cache == "full_parse"]
+    )
+    rurl_clear_caches()
+  })
+  rurl_cache_config(full_parse = TRUE)
+  rurl_clear_caches()
+  urls <- paste0("http://a.com/", strrep("a", 5000L), "é", 1:20)
+  cold <- safe_parse_urls(urls)
+  entries <- function() {
+    info <- rurl_cache_info()
+    info$entries[info$cache == "full_parse"]
+  }
+  expect_identical(entries(), length(urls))
+  # A warm hit skips Stage A, so the recorder sees no input.
+  seen <- new.env(parent = emptyenv())
+  seen$urls <- character()
+  orig <- get("._parse_stage_a_vec", envir = asNamespace("rurl"))
+  local_mocked_bindings(
+    ._parse_stage_a_vec = function(parse_input, opts) {
+      seen$urls <- c(seen$urls, parse_input)
+      orig(parse_input, opts)
+    }
+  )
+  expect_identical(safe_parse_urls(urls), cold)
+  expect_identical(seen$urls, character())
 })
 
 test_that("an NA key is cached like any other key", {

@@ -238,19 +238,26 @@ a separate second-opinion consultation that agreed, with one amendment each.
 `tests/testthat/test-stringi-semantic-exceptions.R` pins each one, and runs
 under `LC_ALL=C` and a UTF-8 locale.
 
-1. **Cache key (`.cache_key_ascii()`, `R/zzz.R`): base R.** Three disjoint
-   ASCII shapes: an ASCII key is itself with each `\` doubled; a non-ASCII
-   key, valid UTF-8 or not, is `\zz` followed by the lowercase hex of its
-   octets; `NA` is `\zNA`. A latin1 key is first spelled in UTF-8 by the
-   exact ISO 8859-1 map (amendment: raw octets alone collide, since latin1
-   `Ã©` holds the octets C3 A9 of UTF-8 `é`). The U+FEFF placeholder splice
-   and the invalid-UTF-8 fallback are gone, because octets are data.
-   `validUTF8()` turned out not to be needed: valid and invalid non-ASCII
-   keys take the same hex path, so the key needs no validity test. The caches
-   live in memory only, so the change invalidates nothing persistent. The
-   warm parse path over a mixed vector runs as fast as before; deriving 1e5
-   non-ASCII keys at once takes about 2.7 times as long (0.28 s against
-   0.10 s), and ASCII keys are about 5 times faster.
+1. **Cache key (`.cache_key_ascii()`, `R/zzz.R`): base R.** Each octet is
+   spelled on its own: an ASCII octet other than `\` is itself, `\` is `\\`,
+   and an octet at or above 0x80, from valid UTF-8 or not, is `\x` and its
+   two lowercase hex digits; `NA` is `\zNA`. A single `\` in a key's image is
+   only ever followed by `\` or `x` and two hex digits, so the map is
+   injective and `NA`'s spelling is disjoint from it. Escaping per octet, not
+   per key, keeps a mostly-ASCII key about its own length: hexing a whole key
+   once it held one non-ASCII octet doubled it, so a 5,000-byte URL with one
+   `é` passed R's 10,000-byte variable-name cap and was never cached. A key
+   of non-ASCII text grows to about four times its octets instead. An
+   all-ASCII key only has its `\` doubled, in one vectorized `gsub()`; only a
+   key holding an octet at or above 0x80 is taken apart into octets;
+   deriving 1e5 such keys at once takes about 0.3 s, as the whole-key hex
+   did. A latin1 key is first spelled in UTF-8 by the exact ISO 8859-1 map
+   (amendment: raw octets alone collide, since latin1 `Ã©` holds the octets
+   C3 A9 of UTF-8 `é`). The U+FEFF placeholder splice and the invalid-UTF-8
+   fallback are gone, because octets are data. `validUTF8()` turned out not
+   to be needed: valid and invalid non-ASCII keys take the same path, so the
+   key needs no validity test. The caches live in memory only, so the change
+   invalidates nothing persistent.
 2. **Encoding calls.** (a) latin1 to UTF-8 by the exact map
    `intToUtf8(as.integer(charToRaw(s)))` per latin1 element
    (`.latin1_input_to_utf8()`), never `iconv()` or `enc2utf8()`, which read
