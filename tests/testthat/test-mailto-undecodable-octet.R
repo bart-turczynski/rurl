@@ -71,7 +71,7 @@ test_that("the good neighbors keep their facts", {
   r <- mu_isolated(mu_neighbors[1L], smtp_wire = TRUE)
   expect_identical(unlist(r[1L, form_cols], use.names = FALSE),
                    c("dot-atom-text", "ascii-dot-atom-text", "domain"))
-  expect_identical(r$public_suffix_known, TRUE)
+  expect_true(r$public_suffix_known)
   expect_identical(r$smtp_envelope_wire_mode, "ascii")
 })
 
@@ -104,4 +104,77 @@ test_that("one undecodable recipient leaves its list neighbor alone", {
   expect_identical(r$recipient_index, 1:2)
   expect_identical(r$mailto_domain_form, c("ascii-dot-atom-text", "invalid"))
   expect_identical(r$public_suffix_known, c(TRUE, NA))
+})
+
+# --- The defect: these rows threw "invalid multibyte string" -----------------
+
+# The address has no wire projection; the intact half keeps its own fact
+# (the domain's wire form, the local part's length), as for any other invalid
+# half.
+no_wire <- function(r, bad = c("local", "domain")) {
+  bad <- match.arg(bad)
+  expect_identical(r$smtp_domain_wire_form,
+                   if (bad == "local") "ascii-domain" else "unavailable")
+  expect_identical(r$smtp_local_part_length_ok,
+                   if (bad == "local") NA else TRUE)
+  expect_identical(r$smtp_envelope_wire_mode, "unavailable")
+  expect_identical(r$smtp_envelope_address_requires_smtputf8, NA)
+  expect_identical(r$smtp_direct_forward_path_fits, NA)
+}
+
+test_that("an undecodable octet in the local part is the row's invalid", {
+  for (w in c(FALSE, TRUE)) {
+    r <- mu_isolated("mailto:a%E9@b.com", smtp_wire = w)
+    expect_identical(nrow(r), 1L)
+    expect_identical(unlist(r[1L, form_cols], use.names = FALSE),
+                     c("invalid", "ascii-dot-atom-text", "domain"))
+    expect_true(r$public_suffix_known)
+    if (w) no_wire(r, "local")
+  }
+})
+
+test_that("a truncated UTF-8 sequence in the local part is invalid", {
+  r <- mu_isolated("mailto:a%C3@b.com", smtp_wire = TRUE)
+  expect_identical(r$mailto_local_part_form, "invalid")
+  no_wire(r, "local")
+})
+
+test_that("an undecodable octet in a quoted local part is invalid", {
+  r <- mu_isolated("mailto:%22a%E9%22@b.com", smtp_wire = TRUE)
+  expect_identical(r$mailto_local_part_form, "invalid")
+  expect_identical(r$mailto_domain_form, "ascii-dot-atom-text")
+  no_wire(r, "local")
+})
+
+test_that("an undecodable octet in a bracketed domain is invalid", {
+  for (u in c("mailto:a@[%E9]", "mailto:a@[1.2.3.%E9]",
+              "mailto:a@[IPv6:%E9:1]")) {
+    r <- mu_isolated(u, smtp_wire = TRUE)
+    expect_identical(unlist(r[1L, form_cols], use.names = FALSE),
+                     c("dot-atom-text", "invalid", "invalid"), label = u)
+    expect_identical(r$public_suffix_known, NA, label = u)
+    no_wire(r, "domain")
+  }
+})
+
+test_that("the undecodable local part leaves its list neighbors alone", {
+  r <- mu_isolated("mailto:x@y.com,a%E9@b.com,z@w.com")
+  expect_identical(r$recipient_index, 1:3)
+  expect_identical(r$mailto_local_part_form,
+                   c("dot-atom-text", "invalid", "dot-atom-text"))
+})
+
+test_that("the ticket batch returns every row", {
+  urls <- c(mu_neighbors[1L], "mailto:a%E9@b.com", "mailto:a@b%E9.com",
+            mu_neighbors[2L])
+  for (loc in mu_locales()) {
+    r <- mu_in_ctype(loc, mu_facts(urls, smtp_wire = TRUE))
+    expect_identical(r$url, urls, label = loc)
+    expect_identical(r$mailto_local_part_form,
+                     c("dot-atom-text", "invalid", "dot-atom-text",
+                       "dot-atom-text"), label = loc)
+    expect_identical(r$mailto_domain_form,
+                     c("ascii-dot-atom-text", "ascii-dot-atom-text",
+                       "invalid", "ascii-dot-atom-text"), label = loc)
+  }
 })
