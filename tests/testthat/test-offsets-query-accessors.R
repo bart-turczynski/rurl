@@ -198,6 +198,21 @@ for (loc in names(ctypes)) {
       expect_no_warning(got <- s(bad))
       expect_identical(charToRaw(got), charToRaw("/\xe9"))
       expect_identical(Encoding(s("/\u00fc/index.html")), "UTF-8")
+      # Linear: a multi-megabyte path with a million candidate pages cuts
+      # without a PCRE match-limit warning.
+      long <- paste0(strrep("/index.a", 1e6), "/index.html")
+      expect_no_warning(got <- s(long))
+      expect_identical(nchar(got), nchar(long) - 11L)
+      expect_no_warning(got <- s(paste0(strrep("/index.a", 1e6), "/x")))
+      expect_identical(nchar(got), 8000002L)
+    })
+  })
+
+  test_that(paste("._strip_index_page()'s byte patterns pass the byte-mode",
+                  "check under", loc), {
+    in_ctype(loc, ctypes[[loc]], {
+      expect_true(rurl:::.bytes_check_pattern(rurl:::.INDEX_PAGE_TAIL, FALSE))
+      expect_true(rurl:::.bytes_check_pattern(rurl:::.ICU_TERMINATOR, FALSE))
     })
   })
 
