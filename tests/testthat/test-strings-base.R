@@ -255,14 +255,18 @@ for (loc in names(ctypes)) {
                    # A back-reference under (?i) folds what its group took.
                    "(?i)(?P<n>.)(?P=n)", "(?i)(?P<n>.)(?P>n)",
                    "(?i)(?<n>.)\\k<n>", "(?i)(.)\\g1",
+                   # Case-insensitive matching in any spelling folds by the
+                   # locale's tables, even on an ASCII pattern (ADR 0019).
+                   "(?i)abc", "(?i)%2e", "(?i:a)b", "(?mi)a", "(?im)a",
+                   "(?^i)a", "a(?i)b", "(?x-s:(?i)a)",
                    # The end anchor is \z; `$` also matches before a final \n.
                    "a$", "^a$", "(a|b$)", "[a]$")
       for (p in refused) {
         expect_error(.bytes_detect("a", p), "ADR 0019", label = p)
       }
-      allowed <- c("\\\\s", "(?i)abc", "[\\x00-\\x20]+", "(?s:.)", "\\A\\z",
+      allowed <- c("\\\\s", "[\\x00-\\x20]+", "(?s:.)", "\\A\\z",
                    "%(?![0-9A-Fa-f]{2})", "(?-i)a", "\\x80", "(a)\\1",
-                   "[\\t\\n\\r]", "a\\.b", "\\[", "(?i)%2e",
+                   "[\\t\\n\\r]", "a\\.b", "\\[", "(?m)a",
                    "(?P<n>.)(?P=n)", "\\$", "a\\$\\z", "[$]", "[^$]",
                    "[]$]", "[\\]$]", "\\\\[$]")
       for (p in allowed) {

@@ -1,6 +1,6 @@
 # ADR 0005: Intentional base-R string exceptions (the `stringi` migration is not total)
 
-- **Status:** Accepted; to be superseded in part by [ADR 0019](0019-string-operations-run-in-base-r.md) (Proposed), effective on its acceptance; see the note at the end
+- **Status:** Accepted; superseded in part by [ADR 0019](0019-string-operations-run-in-base-r.md) (accepted 2026-10-24); see the note at the end
 - **Date:** 2026
 - **Tracking:** n/a (recorded during the stringi migration)
 
@@ -128,7 +128,7 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 ## Note: superseded in part by ADR 0019
 
 *Added RURL-lbccaixb, 2026-10-12. Appended, so no line citation into this file
-moves. It takes effect when ADR 0019 is accepted.*
+moves. It took effect when ADR 0019 was accepted, on 2026-10-24.*
 
 [ADR 0019](0019-string-operations-run-in-base-r.md) supersedes one
 consequence: "New string code should still prefer `stringi` unless it hits one

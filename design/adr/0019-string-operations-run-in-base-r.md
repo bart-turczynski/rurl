@@ -1,6 +1,6 @@
 # ADR 0019: String operations run in base R, each with declared semantics
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-24)
 - **Date:** 2026-10-12
 - **Tracking:** RURL-lbccaixb (this ADR and the migration foundation), in
   epic RURL-bjdcjeel. Slices: RURL-oahhlnvf, RURL-yqmoztoj, RURL-yyeohqah,
@@ -68,8 +68,9 @@ that is correct for it:
   `.bytes_split_fixed()`. Each declares its result UTF-8 again and refuses
   the locale-table constructs above (`\w \s \d \b`, their negations, `\h \v
   \R`, `\p \P \X \C`, POSIX classes and the `[[:<:]]` / `[[:>:]]` word
-  boundaries, leading `(*...)` verbs, and, under `(?i)`, high bytes and
-  back-references). An end anchor is written `\z`: ICU's `$` also matches
+  boundaries, leading `(*...)` verbs, and case-insensitive matching in
+  any spelling: `(?i)`, `(?i:...)`, `(?mi)`, `(?^i)`; a letter is spelled
+  as a class, `[Hh][Tt][Tt][Pp]`). An end anchor is written `\z`: ICU's `$` also matches
   before a final `\r`, U+0085 or U+2028, and PCRE's matches only before a
   final `\n`. So the pattern check refuses a bare `$`; a dollar sign is
   written `\$` or `[$]`. A class of non-ASCII code points can be written in
@@ -164,11 +165,15 @@ Decision 1 replaces it. It **keeps** three of ADR 0005's contracts:
 - **Acceptance at host seams.** Byte mode answers for an invalid row, where
   `.grepl_decodable()` folds such a row to FALSE. ARCHITECTURE.md warns that
   `useBytes = TRUE` on a host-charset grep widens acceptance. A slice that
-  moves a call feeding an acceptance mask shows that the same rows are still
-  rejected, or keeps the decodable mask at that seam.
+  moves a call feeding an acceptance mask keeps the decodable mask at that
+  seam (`.grepl_decodable()`, or the input boundary's per-row verdict where
+  the seam has it), and plain byte mode is used elsewhere. Combining masks
+  never turns an undecodable row into an accepted one, and the row lands on
+  the reject or `NA` side its component's status contract names.
 - **Semantics a slice must check, per call** (the inventory lists them):
   ICU `$` (37 references), ICU `.` (17), `(?i)` and the ICU
-  case-insensitive flag on ASCII patterns, `[\s\S]` (written `(?s:.)`),
+  case-insensitive flag on ASCII patterns (rewritten as ASCII letter
+  classes), `[\s\S]` (written `(?s:.)`),
   non-ASCII classes, and code-point offsets.
 - **Easier:** a field that starts with U+FEFF needs no guard; offsets have
   one unit; invalid rows no longer abort a batch at a migrated site.
@@ -180,28 +185,38 @@ Decision 1 replaces it. It **keeps** three of ADR 0005's contracts:
   byte-mode PCRE tables from the locale (the pattern check could then
   relax).
 
-## Open questions
+## Decisions at acceptance
 
-For the maintainer at acceptance:
+The five questions the draft left open were settled by the maintainer on
+2026-10-24. Each recommendation was also put to a separate second-opinion
+consultation, and each consultation agreed:
 
-1. **Refuse or rewrite?** `R/strings-base.R` refuses locale-table constructs
-   in a byte-mode pattern rather than rewriting them, so a slice spells
-   classes out (`[ \t\n\r\f\v]` for `\s`). Is refusal the policy you want?
-2. **`(?i)` in a single-byte locale.** Byte-mode `(?i)` relies on the
-   locale's tables folding an ASCII letter only to its ASCII partner. That
-   was measured true under `C` and `en_US.UTF-8`. It was not measured under a
-   single-byte locale such as ISO-8859-9 (Turkish), where the C library may
-   fold `i` to 0xDD, a UTF-8 lead byte. Accept the risk, or refuse `(?i)` in
-   byte mode and spell `[Ii]`? Today 12 patterns use `(?i)` and 4 calls use
-   the ICU flag.
-3. **Undecodable rows at acceptance seams.** Proposed: slices keep the
-   `.grepl_decodable()` mask wherever a migrated call feeds an acceptance
-   mask, and use plain byte mode elsewhere. Confirm, or ask for a per-seam
-   proof instead.
-4. **`stringi` in `Imports:` after the close-out.** NFC and case mapping keep
-   it unless `punycoder` or base R covers them; base R has no NFC. Proposed:
-   `stringi` stays in `Imports:` for those calls only.
-5. **The existing byte helpers.** `.byte_substring()`, `.byte_substring_vec()`
-   and `.first_byte_index*()` in `R/utils.R` keep the input's encoding mark
-   instead of declaring UTF-8. Fold them into `.bytes_cut()` and
-   `.bytes_locate()` at the close-out, or keep both?
+1. **Refuse, do not rewrite.** `R/strings-base.R` refuses locale-table
+   constructs in a byte-mode pattern, and a slice spells the class out
+   (`[ \t\n\r\f\v]` for `\s`). A refusal is a prompt to review the call's
+   semantics: a call that needs code points moves to UTF-8 PCRE mode instead
+   of being expanded into byte classes.
+2. **No case-insensitive matching in byte mode.** Byte-mode `(?i)` folds by
+   the locale's tables, and that was measured under `C` and `en_US.UTF-8`
+   only, not in a single-byte locale such as ISO-8859-9. Turkish-locale case
+   folding broke `pslr` 1.2.1 (`tolower("ICANN")` gave `"ıcann"`), so the
+   pattern check refuses every spelling that turns it on (`(?i)`,
+   `(?i:...)`, `(?mi)`, `(?^i)`), on ASCII patterns too, and the wrappers
+   take no `ignore.case` argument. A slice spells each letter as a class
+   (`[Hh][Tt][Tt][Pp]`). The 12 `(?i)` patterns and 4 calls with the ICU
+   flag are rewritten that way.
+3. **Keep the decodable mask at acceptance seams**, with no per-seam proof
+   asked for instead (Consequences, "Acceptance at host seams").
+4. **`stringi` stays in `Imports:`** for NFC before Punycode and full case
+   mapping only, and for `.param_matches()` if RURL-yyeohqah keeps it. The
+   close-out allowlist holds those calls and no others. Dropping the import
+   is revisited only when `punycoder` or base R covers each of them with the
+   same semantics. The case mapping that stays is tested in more than one
+   locale.
+5. **Fold the old byte helpers in at the close-out.** `.byte_substring()`,
+   `.byte_substring_vec()` and `.first_byte_index*()` in `R/utils.R` move
+   into `.bytes_cut()` and `.bytes_locate()` in RURL-dddxutjf, not earlier, so
+   each slice's diff stays scoped. Before and after, the tests compare
+   encoding marks as well as values, byte offsets, `NA` and empty input,
+   and invalid rows. Declaring a result UTF-8 does not make a byte slice
+   valid UTF-8.

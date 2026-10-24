@@ -136,11 +136,11 @@
 #' must not use a construct whose byte-mode meaning depends on the locale
 #' (see the file header): the escapes in `.BYTES_REFUSED_ESCAPE_CODES`, a
 #' POSIX `[:name:]` class or `[[:<:]]` / `[[:>:]]` word boundary, or a
-#' leading `(*...)` option verb. Under `(?i)` it must not name a byte at or
-#' above 0x80, as a literal, a `\x` or `\o` escape or an octal escape, and
-#' must not use a back-reference in any form (`\1`, `\g`, `\k`, `(?P=name)`,
-#' `(?P>name)`), because the locale's tables fold those bytes and a
-#' back-reference matches whatever bytes its group took. A bare `$` is
+#' leading `(*...)` option verb. It must not turn on case-insensitive
+#' matching in any spelling (`(?i)`, `(?i:...)`, `(?mi)`, `(?^i)`), even on an
+#' ASCII pattern: the locale's tables do the folding, and that was not
+#' measured in a single-byte locale such as ISO-8859-9 (ADR 0019); a caller
+#' spells each letter as a class (`[Hh][Tt][Tt][Pp]`). A bare `$` is
 #' refused: the end anchor is written `\z` (ADR 0019); `\$` and `[$]` match a
 #' dollar sign. `[\s\S]` is written `(?s:.)`.
 #' @param pattern The pattern.
@@ -187,21 +187,10 @@
     ))
   }
   if (grepl("\\(\\?\\^?[A-Za-z]*i", pattern, perl = TRUE, useBytes = TRUE)) {
-    high <- grepl("[^\\x01-\\x7f]", pattern, perl = TRUE, useBytes = TRUE)
-    hex <- regmatches(pattern, gregexpr(
-      "\\\\x(\\{[0-9A-Fa-f]+\\}|[0-9A-Fa-f]{1,2})", pattern,
-      perl = TRUE, useBytes = TRUE
-    ))[[1L]]
-    hex <- gsub("[^0-9A-Fa-f]", "", substring(hex, 3L, nchar(hex)))
-    high <- high || any(strtoi(hex, 16L) >= 128L)
-    backref <- any(esc %in% utf8ToInt("gk0123456789")) ||
-      grepl("\\(\\?P[=>]", pattern, perl = TRUE, useBytes = TRUE)
-    if (high || backref || any(esc == utf8ToInt("o"))) {
-      refuse(paste(
-        "is case-insensitive and names a byte at or above 0x80 (or a",
-        "back-reference or escape that can), which the locale's tables fold"
-      ))
-    }
+    refuse(paste(
+      "turns on case-insensitive matching, which folds by the locale's",
+      "tables; spell each ASCII letter as a class ([Hh][Tt][Tt][Pp])"
+    ))
   }
   invisible(TRUE)
 }
