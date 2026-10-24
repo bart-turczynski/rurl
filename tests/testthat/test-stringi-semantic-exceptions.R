@@ -79,6 +79,35 @@ test_that("an ASCII key without a backslash is its own cache key", {
   expect_identical(.cache_key_ascii(x), x)
 })
 
+test_that("cache keys take three disjoint shapes", {
+  # ASCII: itself, `\` doubled. Non-ASCII: "\\zz" + lowercase octet hex.
+  # NA: "\\zNA".
+  expect_identical(
+    .cache_key_ascii(c("a\\b", "\\zz61", "\\zNA", "a\tb\"'")),
+    c("a\\\\b", "\\\\zz61", "\\\\zNA", "a\tb\"'")
+  )
+  expect_identical(.cache_key_ascii(c("é", octets(0x61, 0xff))),
+                   c("\\zzc3a9", "\\zz61ff"))
+  expect_identical(.cache_key_ascii(octets(0xe9, enc = "latin1")), "\\zzc3a9")
+  expect_identical(.cache_key_ascii(octets(0xc3, 0xa9, enc = "latin1")),
+                   "\\zzc383c2a9")
+  expect_identical(.cache_key_ascii(octets(0x61, 0xff, enc = "bytes")),
+                   "\\zz61ff")
+  expect_identical(.cache_key_ascii(c(NA, "NA", "a")), c("\\zNA", "NA", "a"))
+  expect_identical(.cache_key_ascii(character(0)), character(0))
+  expect_identical(.cache_key_ascii(c(k = "a")), "a")
+})
+
+test_that("an NA key is cached like any other key", {
+  rurl_clear_caches()
+  withr::defer(rurl_clear_caches())
+  expect_identical(.cache_get("puny_encode", NA_character_),
+                   .rurl_cache_sentinel)
+  .cache_set("puny_encode", NA_character_, "na")
+  expect_identical(.cache_get("puny_encode", NA_character_), "na")
+  expect_identical(.cache_get("puny_encode", "NA"), .rurl_cache_sentinel)
+})
+
 test_that("a BOM host is a cache key of its own end to end", {
   rurl_clear_caches()
   withr::defer(rurl_clear_caches())
@@ -101,15 +130,16 @@ test_that("latin1 input is read as ISO 8859-1, octet by octet (0x80-0xFF)", {
   for (b in 0x80:0xff) {
     l1 <- octets(0x61, b, enc = "latin1")
     out <- .latin1_input_to_utf8(l1)
-    expect_identical(out, paste0("a", intToUtf8(b)), label = sprintf("%02X", b))
-    expect_identical(Encoding(out), "UTF-8")
-    expect_identical(charToRaw(out), charToRaw(enc2utf8(paste0("a", intToUtf8(b)))))
+    lbl <- sprintf("%02X", b)
+    # U+00NN in UTF-8 is C2 or C3, then 0x80 + NN mod 64.
+    want <- as.raw(c(0x61, 0xc2 + (b >= 0xc0), 0x80 + b %% 64))
+    expect_identical(charToRaw(out), want, label = lbl)
+    expect_identical(utf8ToInt(out), c(0x61L, b), label = lbl)
+    expect_identical(Encoding(out), "UTF-8", label = lbl)
   }
   # 0x80-0x9F are the C1 controls U+0080-U+009F, not CP1252's punctuation.
-  expect_identical(utf8ToInt(.latin1_input_to_utf8(octets(0x80, enc = "latin1"))),
-                   0x80L)
-  expect_identical(utf8ToInt(.latin1_input_to_utf8(octets(0x9f, enc = "latin1"))),
-                   0x9fL)
+  c1 <- octets(0x80, 0x9f, enc = "latin1")
+  expect_identical(utf8ToInt(.latin1_input_to_utf8(c1)), c(0x80L, 0x9fL))
   all_high <- octets(0x80:0xff, enc = "latin1")
   expect_identical(utf8ToInt(.latin1_input_to_utf8(all_high)), 0x80:0xff)
 })
@@ -319,8 +349,9 @@ test_that("query filtering through the globs end to end", {
   expect_identical(f("utm_source=1&a=2", "filter"), "a=2")
   expect_identical(f("%EF%BB%BFutm_source=1&a=2", "filter"),
                    "%EF%BB%BFutm_source=1&a=2")
-  expect_identical(f("%EF%BB%BFx=1&x=2", "filter", params_drop = paste0(bom, "x")),
-                   "x=2")
+  expect_identical(
+    f("%EF%BB%BFx=1&x=2", "filter", params_drop = paste0(bom, "x")), "x=2"
+  )
   expect_identical(f("stra%C3%9Fe=1&a=2", "filter", params_drop = "STRASSE"),
                    "a=2")
   expect_identical(f("%E2%84%AA=1&a=2", "filter", params_drop = "k"), "a=2")

@@ -138,72 +138,70 @@ rurl_clear_caches <- function() {
 # (C locale, win-builder). Deriving an ASCII key here — one seam beneath every
 # caller — removes the translation entirely rather than silencing the warning.
 #
-# Scheme: declare the encoding explicitly (never consult the session locale —
-# no enc2utf8()/iconv()-from-native, which is the locale sensitivity this epic
-# removes), then stringi::stri_escape_unicode(). That is total onto ASCII (every
-# non-ASCII code point becomes \uXXXX / \UXXXXXXXX) and injective (it is a
-# backslash escape whose own escape character is doubled, so it is invertible
-# and therefore collision-free). It is locale-invariant because the declaration,
-# not the locale, decides how the bytes are read; and it is vectorized C code,
-# so .cache_get_many()'s whole-vector warm path stays cheap.
+# Scheme, in base R (RURL-yyeohqah, ADR 0019). Three disjoint shapes:
 #
-# stri_escape_unicode() drops one U+FEFF at the start of a string as a
-# byte-order mark, so "\ufeff" would escape to "" (which exists() rejects) and
-# "\ufeffa.com" onto "a.com" (RURL-iiehsbfg). A key that starts with one is
-# escaped behind a placeholder ASCII character, which is then cut off; that
-# keeps every other key's derivation as it was.
+#   * an ASCII key is itself, with each `\` doubled, so no ASCII key's image
+#     holds a single `\` followed by anything but `\`;
+#   * a non-ASCII key, valid UTF-8 or not, is "\\zz" followed by the lowercase
+#     hex of its octets, and hex is injective on octet strings;
+#   * NA is "\\zNA", which neither shape above can produce.
 #
-# Bytes that are not valid UTF-8 (a latin1-ish string arriving undeclared) would
-# make stri_escape_unicode() error, so those fall back to a hex rendering of the
-# raw bytes — injective by construction, and disjoint from the escape range
-# because it is prefixed with "\\zz" and \z is not a sequence that
-# stri_escape_unicode() ever emits.
+# So the map is total onto ASCII and injective. It reads a key by its
+# declaration, never the session locale: "unknown" octets are read as UTF-8,
+# as the input boundary does, and a latin1 key is first spelled in UTF-8 by
+# the exact ISO 8859-1 map (.latin1_input_to_utf8()). A latin1 key names the
+# same text as its UTF-8 twin and must share its key, while its raw octets
+# would collide with a different UTF-8 text (latin1 C3 A9, U+00C3 U+00A9,
+# holds the octets of UTF-8 U+00E9). A "bytes" key is hexed as the octets it
+# holds.
+#
+# Octets are data, so a leading U+FEFF is hexed like every other code point:
+# no placeholder splice is needed, and an invalid-UTF-8 key takes the same
+# path as a valid one. The caches live in memory only, so a change of scheme
+# invalidates nothing persistent.
 .cache_key_ascii <- function(keys) {
-  enc <- Encoding(keys)
-  unknown <- enc == "unknown"
-  if (any(unknown)) {
-    enc[unknown] <- "UTF-8"
-    Encoding(keys) <- enc
+  na <- is.na(keys)
+  latin1 <- !na & Encoding(keys) == "latin1"
+  if (any(latin1)) {
+    keys[latin1] <- .latin1_input_to_utf8(keys[latin1])
   }
-  # Only UTF-8-declared keys can carry invalid bytes here; latin1 is a total
-  # single-byte encoding and always converts.
-  risky <- enc == "UTF-8"
-  ok <- !risky | stringi::stri_enc_isutf8(keys)
-  if (all(ok)) {
-    return(.cache_key_escape(keys))
-  }
-  out <- character(length(keys))
-  out[ok] <- .cache_key_escape(keys[ok])
-  out[!ok] <- paste0(
-    "\\zz",
-    vapply(
-      keys[!ok],
-      function(k) {
-        paste(sprintf("%02x", as.integer(charToRaw(k))), collapse = "")
-      },
-      character(1L),
-      USE.NAMES = FALSE
-    )
-  )
+  # Byte mode reads the octets whatever the mark says, so no declaration is
+  # needed. Called directly rather than through .bytes_detect(): this is the
+  # cache's per-lookup path, the pattern is a fixed octet class with none of
+  # the constructs that wrapper refuses, and its pattern check would cost more
+  # than the match.
+  wide <- grepl("[\\x80-\\xff]", keys, perl = TRUE, useBytes = TRUE)
+  wide[na] <- FALSE
+  out <- .cache_key_escape(keys, wide)
+  out[na] <- "\\zNA"
   out
 }
 
-# stri_escape_unicode() with a leading U+FEFF kept (see .cache_key_ascii()).
-# `keys` must be valid, declared UTF-8 or latin1.
-.cache_key_escape <- function(keys) {
-  # Base startsWith(), not stringi: stringi strips the mark from the pattern
-  # too. Every key is declared by now, so no locale is consulted.
-  lead <- startsWith(keys, "\ufeff")
-  lead[is.na(lead)] <- FALSE
-  if (!any(lead)) {
-    return(stringi::stri_escape_unicode(keys))
+# The lowercase hex digits, as octets, for .cache_key_escape().
+.HEX_DIGIT_OCTETS <- charToRaw("0123456789abcdef")
+
+# The two non-NA shapes of .cache_key_ascii(): `\` doubled where `wide` is
+# FALSE (an ASCII key), "\\zz" and the lowercase octet hex where it is TRUE.
+# The hex is built for all wide keys at once, in vectorized code: one hex
+# string over their concatenated octets (high nibble, then low), cut back into
+# keys at twice their byte lengths.
+.cache_key_escape <- function(keys, wide) {
+  out <- unname(keys)
+  narrow <- !wide
+  if (any(narrow)) {
+    out[narrow] <- gsub("\\", "\\\\", out[narrow], fixed = TRUE,
+                        useBytes = TRUE)
   }
-  out <- character(length(keys))
-  out[!lead] <- stringi::stri_escape_unicode(keys[!lead])
-  out[lead] <- substring(
-    stringi::stri_escape_unicode(paste0("x", keys[lead])),
-    2L, .Machine$integer.max
-  )
+  if (any(wide)) {
+    octets <- lapply(out[wide], charToRaw)
+    width <- 2 * lengths(octets)
+    byte <- as.integer(unlist(octets, use.names = FALSE))
+    hex <- rawToChar(
+      .HEX_DIGIT_OCTETS[rbind(byte %/% 16L, byte %% 16L) + 1L]
+    )
+    end <- cumsum(width)
+    out[wide] <- paste0("\\zz", substring(hex, end - width + 1, end))
+  }
   out
 }
 
@@ -212,8 +210,8 @@ rurl_clear_caches <- function() {
 # exactly 10,000 bytes is accepted). A derived key past the cap therefore
 # bypasses the cache -- a miss on lookup, a no-op on store -- so a long URL is
 # simply recomputed. The derived key is pure ASCII (bytes == characters), and a
-# \uXXXX escape spends six bytes per non-ASCII code point, so a non-ASCII URL
-# reaches the cap at roughly a sixth of the ASCII length (RURL-tlmoybsl).
+# non-ASCII key is hexed whole, two bytes per octet, so a non-ASCII URL
+# reaches the cap at about half the ASCII length (RURL-tlmoybsl).
 .CACHE_KEY_MAX_BYTES <- 10000L
 
 # Whether each already-derived key can be used as an environment name.
