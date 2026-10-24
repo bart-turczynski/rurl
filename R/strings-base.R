@@ -140,7 +140,9 @@
 #' matching in any spelling (`(?i)`, `(?i:...)`, `(?mi)`, `(?^i)`), even on an
 #' ASCII pattern: the locale's tables do the folding, and that was not
 #' measured in a single-byte locale such as ISO-8859-9 (ADR 0019); a caller
-#' spells each letter as a class (`[Hh][Tt][Tt][Pp]`). A bare `$` is
+#' spells each letter as a class (`[Hh][Tt][Tt][Pp]`). The check reads the
+#' raw pattern text, so it also refuses `(?i)` inside a class, a `\Q...\E`
+#' quote or a comment, a loud and safe failure. A bare `$` is
 #' refused: the end anchor is written `\z` (ADR 0019); `\$` and `[$]` match a
 #' dollar sign. `[\s\S]` is written `(?s:.)`.
 #' @param pattern The pattern.

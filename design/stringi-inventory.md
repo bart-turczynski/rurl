@@ -169,8 +169,13 @@ with ICU 71.1, under `en_US.UTF-8` and under `LC_ALL=C`.
   it).** In byte mode, under C and UTF-8 locales, an
   ASCII letter folds only to its ASCII partner. A high-byte range does not:
   `(?i)[\xc0-\xc5]` also matches `\xe0`-`\xe5` under `en_US.UTF-8` and does
-  not under C. `R/strings-base.R` therefore refuses `(?i)` in a pattern that
-  names a byte at or above `0x80`.
+  not under C, and no single-byte locale was measured. Since ADR 0019's
+  acceptance (decision 2), `R/strings-base.R` refuses case-insensitive
+  matching in byte mode in every spelling, ASCII patterns included, and a
+  slice spells each letter as a class (`[Hh][Tt][Tt][Pp]`). That rewrite is
+  not meaning-preserving: ICU's caseless match also folds U+017F to `s` and
+  U+212A to `k` (`stri_detect_regex("httpſ", "(?i)^https$")` is `TRUE`).
+  Each such row is a behavior change, with its own NEWS entry and test.
 - **Locale-table classes.** No current row uses one, apart from the `[\s\S]`
   idiom (3 rows). In byte mode R builds PCRE's character tables from the
   locale. `\s` matches the byte `0xA0`, `\w` matches 65 high bytes, and

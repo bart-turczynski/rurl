@@ -204,7 +204,14 @@ consultation, and each consultation agreed:
    `(?i:...)`, `(?mi)`, `(?^i)`), on ASCII patterns too, and the wrappers
    take no `ignore.case` argument. A slice spells each letter as a class
    (`[Hh][Tt][Tt][Pp]`). The 12 `(?i)` patterns and 4 calls with the ICU
-   flag are rewritten that way.
+   flag are to be rewritten that way, in slices oahhlnvf and yqmoztoj. The
+   rewrite changes behavior: ICU's caseless match also folds U+017F (ſ) to
+   `s` and U+212A (Kelvin sign) to `k`, so `"httpſ"` matches `(?i)^https$`
+   today and will not after the rewrite. The URL standards match schemes
+   and these keywords ASCII case-insensitively (WHATWG URL Standard,
+   "ASCII case-insensitive"; RFC 3986 section 3.1), so the change moves
+   toward conformance, and each slice that makes it carries a NEWS entry
+   and a test for the non-ASCII fold it drops (AGENTS.md).
 3. **Keep the decodable mask at acceptance seams**, with no per-seam proof
    asked for instead (Consequences, "Acceptance at host seams").
 4. **`stringi` stays in `Imports:`** for NFC before Punycode and full case

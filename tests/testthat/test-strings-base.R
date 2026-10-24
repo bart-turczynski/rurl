@@ -252,13 +252,13 @@ for (loc in names(ctypes)) {
                    paste0("(?i)", e_acute), "[\\s\\S]",
                    # Word boundaries read the locale's tables too.
                    "x[[:>:]]", "[[:<:]]x",
-                   # A back-reference under (?i) folds what its group took.
-                   "(?i)(?P<n>.)(?P=n)", "(?i)(?P<n>.)(?P>n)",
-                   "(?i)(?<n>.)\\k<n>", "(?i)(.)\\g1",
                    # Case-insensitive matching in any spelling folds by the
-                   # locale's tables, even on an ASCII pattern (ADR 0019).
-                   "(?i)abc", "(?i)%2e", "(?i:a)b", "(?mi)a", "(?im)a",
-                   "(?^i)a", "a(?i)b", "(?x-s:(?i)a)",
+                   # locale's tables, even on an ASCII pattern (ADR 0019),
+                   # with or without high bytes or back-references.
+                   "(?i)(?P<n>.)(?P=n)", "(?i)(?P<n>.)(?P>n)",
+                   "(?i)(?<n>.)\\k<n>", "(?i)(.)\\g1", "(?i)abc", "(?i)%2e",
+                   "(?i:a)b", "(?mi)a", "(?im)a", "(?^i)a", "a(?i)b",
+                   "(?x-s:(?i)a)",
                    # The end anchor is \z; `$` also matches before a final \n.
                    "a$", "^a$", "(a|b$)", "[a]$")
       for (p in refused) {
