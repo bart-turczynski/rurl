@@ -56,6 +56,8 @@ oahhlnvf) and one `stri_replace_all_regex` (the UTS #46 full-stop variants to
 "."; slice oahhlnvf, byte mode with the variants' UTF-8 byte sequences). The
 allowlist was regenerated: 192 references under 123 keys, plus the two keys
 still listed ahead of MR !242's code.
+MR !242 merged the same day (`325f787`), so those two keys now match code:
+194 references under 125 keys.
 
 ## Legend
 
