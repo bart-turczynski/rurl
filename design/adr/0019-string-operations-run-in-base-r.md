@@ -87,12 +87,15 @@ that is correct for it:
   Punycode (`stri_trans_nfc()` in the Punycode helpers that ADR 0002 freezes)
   and full case mapping (`.unicode_case_map_vec()`). `.param_matches()`, a
   case-insensitive match of user globs, may join them; RURL-yyeohqah decides.
+  (It joined them, with the URL key's U+FFFD decode: see "Semantic
+  exceptions" below.)
 
 The semantic exceptions get their own decision in RURL-yyeohqah, because
 their behavior is the operation: the cache-key escape (`stri_escape_unicode()`
 and `stri_enc_isutf8()` in `R/zzz.R`), encoding conversion
 (`stri_enc_toutf8()` in `.latin1_input_to_utf8()` and `.url_key_frame()`,
-with `stri_numbytes()`), and the Unicode glob (`.glob_to_regex()`).
+with `stri_numbytes()`), and the Unicode glob (`.glob_to_regex()`). The
+decisions are recorded under "Semantic exceptions" below.
 
 **2. Input reaches these operations declared UTF-8.** The input boundary
 (RURL-cwzickqy) makes every entry point declare its input UTF-8 with
@@ -227,3 +230,70 @@ consultation, and each consultation agreed:
    encoding marks as well as values, byte offsets, `NA` and empty input,
    and invalid rows. Declaring a result UTF-8 does not make a byte slice
    valid UTF-8.
+
+## Semantic exceptions (RURL-yyeohqah)
+
+The maintainer decided the four semantic exceptions on 2026-10-24, each after
+a separate second-opinion consultation that agreed, with one amendment each.
+`tests/testthat/test-stringi-semantic-exceptions.R` pins each one, and runs
+under `LC_ALL=C` and a UTF-8 locale.
+
+1. **Cache key (`.cache_key_ascii()`, `R/zzz.R`): base R.** Three disjoint
+   ASCII shapes: an ASCII key is itself with each `\` doubled; a non-ASCII
+   key, valid UTF-8 or not, is `\zz` followed by the lowercase hex of its
+   octets; `NA` is `\zNA`. A latin1 key is first spelled in UTF-8 by the
+   exact ISO 8859-1 map (amendment: raw octets alone collide, since latin1
+   `Ã©` holds the octets C3 A9 of UTF-8 `é`). The U+FEFF placeholder splice
+   and the invalid-UTF-8 fallback are gone, because octets are data.
+   `validUTF8()` turned out not to be needed: valid and invalid non-ASCII
+   keys take the same hex path, so the key needs no validity test. The caches
+   live in memory only, so the change invalidates nothing persistent. The
+   warm parse path over a mixed vector runs as fast as before; deriving 1e5
+   non-ASCII keys at once takes about 2.7 times as long (0.28 s against
+   0.10 s), and ASCII keys are about 5 times faster.
+2. **Encoding calls.** (a) latin1 to UTF-8 by the exact map
+   `intToUtf8(as.integer(charToRaw(s)))` per latin1 element
+   (`.latin1_input_to_utf8()`), never `iconv()` or `enc2utf8()`, which read
+   0x80-0x9F as CP1252 on Windows. (b) Validity: see 1. (c) Base
+   `Encoding()` in `.prepare_url_input()` (amendment: `Encoding()` reports
+   ASCII and unmarked non-ASCII alike as `"unknown"`, so a byte-mode scan for
+   an octet at or above 0x80 tells them apart, and the ASCII fast path still
+   returns the vector as it came). Byte-identical on the existing tests.
+   (d) **Kept in `stringi`:** `stri_enc_toutf8(validate = TRUE)` in
+   `.url_key_frame()` (`R/url-key.R`), for its U+FFFD decode. A fixture
+   table (truncated, overlong, surrogate, above U+10FFFF, F5-FF leads) shows
+   it replaces one U+FFFD per maximal subpart, the WHATWG Encoding Standard's
+   UTF-8 decoder rule (amendment). It keeps its `"x"` splice, because it
+   drops a leading U+FEFF and the key frames the mark. `stri_numbytes()` in
+   the same function was left for a later slice.
+3. **Parameter globs (`.glob_to_regex()`, `.param_matches()`).** The glob
+   compiler and the case-sensitive arm move to base R in byte mode. The glob
+   compiler escapes only ASCII punctuation (amendment: escaping each
+   non-alphanumeric octet corrupts a multibyte literal), compiles `*` to
+   `(?s:.*)` and anchors with `\z`, so the regex reads the same in PCRE and
+   ICU. **Kept in `stringi`:** the case-insensitive arm,
+   `stri_detect_regex(case_insensitive = TRUE)`, for ICU's caseless match,
+   which uses Unicode full case folding (`SS` matches U+00DF, `k` matches
+   U+212A) and does not follow the ICU default locale (tested with
+   `stri_locale_set("tr_TR")`). Measured first, as the decision asked:
+   `stri_detect_regex("﻿utm_source", "^utm_.*$")` is `FALSE`, so the
+   regex engine counts a leading mark and the arm needs no guard. A leading
+   U+FEFF is data on both sides: `utm_*` does not match it, `*utm_*` does,
+   and a pattern may carry the mark. The move changes two outputs, both in
+   `NEWS.md`: `*` now matches line terminators (ICU's `.` stopped at CR, LF,
+   U+0085, U+2028 and U+2029, and its `$` matched before a final one), and
+   in the case-sensitive arm an undecodable name no longer matches a pattern
+   spelled with U+FFFD.
+4. **NFC and case mapping stay in `stringi`.** The two `stri_trans_nfc()`
+   calls stay in `R/domain.R`, frozen by ADR 0002; "confined" means the
+   allowlist names exactly these reviewed calls (file, function, operation),
+   with no file move. `stri_trans_nfc()` counts a leading U+FEFF, so it has
+   no splice guard and needs none; a test shows NFC keeps the mark.
+   `.unicode_case_map_vec()` keeps its `"0"` splice guard, with a test. Its
+   locale stays `.ASCII_SAFE_ICU_LOCALE` (`"en_US_POSIX"`), not `"root"` as
+   the decision proposed: measured on stringi 1.8.9 / ICU 71.1, after
+   `stri_locale_set("tr_TR")` both `locale = "root"` and `locale = "und"`
+   lowercase `WIKI` to `wıkı`, as `""` does, while `"en_US_POSIX"` gives
+   `wiki`. The Turkish regression test sets and restores stringi's default
+   with `stri_locale_set("tr_TR")` (amendment) and goes red when the locale
+   is `"root"`.
