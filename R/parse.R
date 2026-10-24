@@ -2118,9 +2118,10 @@ safe_parse_urls <- function(url,
   if (!any(ok)) {
     return(out)
   }
-  token <- stringi::stri_match_first_regex(
-    prepared[ok], "^([A-Za-z][A-Za-z0-9+.\\-]*):"
-  )[, 2L]
+  # Byte mode (ADR 0019): the pattern is ASCII, so it reads valid UTF-8 as
+  # ICU did, and a leading U+FEFF, which stringi read past, is data that no
+  # scheme starts with.
+  token <- .bytes_capture(prepared[ok], "^([A-Za-z][A-Za-z0-9+.\\-]*):")[, 2L]
   same <- !is.na(token) & .ascii_tolower(token) == final_scheme[ok]
   idx <- which(ok)[same]
   out[idx] <- token[same]

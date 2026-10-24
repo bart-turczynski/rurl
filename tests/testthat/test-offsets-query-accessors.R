@@ -244,6 +244,11 @@ for (loc in names(ctypes)) {
           c("http", "http", "http", "ab", "1a", NA, "http", "http", "http")),
         c("HTTP", "http", "http", "Ab", "1a", NA, "http", "http", "http")
       )
+      # A leading U+FEFF is data that no scheme starts with: stringi read past
+      # it and spelled `HTTP` here. No public surface reaches this row (the
+      # parse settles no scheme for it, above), so nothing visible moves.
+      expect_identical(f(paste0(bom, "HTTP://x"), "http"), "http")
+      expect_identical(f(c("HTTP://x", "x"), c("http", "x")), c("HTTP", "x"))
       expect_identical(f(character(0), character(0)), character(0))
     })
   })
