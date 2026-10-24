@@ -14,7 +14,9 @@
 # twin. Their output for every input representation is pinned here under the
 # frozen default and both named standards, and under LC_CTYPE C and a UTF-8
 # LC_CTYPE. `status` and `clean` are readable; `md5` covers every other
-# column (helper-input-boundary.R, ib_canon()). Measured on 6623cab.
+# column (helper-input-boundary.R, ib_canon()). Measured on 6623cab; null_web
+# re-measured on main at 3c49b0a, after RURL-yarkccco percent-encoded an
+# undecodable path octet under NULL (rows `invalid` and `invalid_marked`).
 #
 # Row order: ascii, utf8, utf8_host, native, native_host, latin1, latin1_host,
 # bytes, bytes_host, invalid, invalid_query, invalid_host, invalid_marked,
@@ -22,17 +24,18 @@
 ib_seam_pins <- list(
   null_web = list(
     status = c(
-      "ok", "ok", "ok", "ok", "ok", "ok", "ok", "error", "error", "error",
-      "ok", "error", "error", "error", "error", "error"
+      "ok", "ok", "ok", "ok", "ok", "ok", "ok", "error", "error", "ok",
+      "ok", "error", "ok", "error", "error", "error"
     ),
     clean = c(
       "http://h.example.com/p", "http://h.example.com/p\u00fc",
       "http://b\u00fccher.example.com/", "http://h.example.com/p\u00fc",
       "http://b\u00fccher.example.com/", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", NA, NA, NA, "http://h.example.com/p",
-      NA, NA, NA, NA, NA
+      "http://b\u00fccher.example.com/", NA, NA,
+      "http://h.example.com/caf%E9", "http://h.example.com/p", NA,
+      "http://h.example.com/p%80", NA, NA, NA
     ),
-    md5 = "acf901d3ea73ee5cb67678255762d201"
+    md5 = "2f62b62a0c530664db10e5ed081d4574"
   ),
   whatwg_web = list(
     status = c(
@@ -301,22 +304,31 @@ ib_resolve <- function(ref, base, sel, ...) {
 #     "http://h.com/g", although safe_parse_urls() calls that base an error;
 #   resolve_url("x", <"file:///caf" 0xE9, unmarked>) gave "file:///x" under
 #     LC_CTYPE C and NA under a UTF-8 one, and the same for
-#     "http://example.com/caf" 0xE9; safe_parse_urls() calls both errors.
+#     "http://example.com/caf" 0xE9. safe_parse_urls() calls the file: base
+#     an error; since RURL-yarkccco (main 3c49b0a) it reads the http one as
+#     `ok` with path /caf%E9, so that base resolves (main under LC_CTYPE C
+#     gave "http://example.com/x" and, for the reference "caf" 0xE9 against
+#     "http://example.com/a", "http://example.com/caf%E9"; under a UTF-8
+#     LC_CTYPE it threw).
 # No profile, standard or contract sanctions a result that throws for the
 # whole vector, depends on LC_CTYPE, or resolves against a base the parser
 # refuses: this is a default-path defect, not selector-caused drift.
 #
 # Signature. Inputs: a reference or base that is bytes-marked, or not valid
 # UTF-8 once unmarked bytes are read as UTF-8. Options: resolve_url() under
-# any url_standard and either output. Output: that row's element only, which
-# under NULL and rfc3986 becomes NA (a bytes or undecodable base is no base,
-# so an absolute reference still resolves); every other row is unchanged. Per
-# arm: rfc3986 had all three defects, through the same string code as NULL.
-# whatwg had the bytes defect, and its undecodable base resolved under
+# any url_standard and either output. Output: that row's element only; every
+# other row is unchanged. Per arm: under NULL, a bytes base is no base, an
+# undecodable base the parser calls an error is no base, and otherwise the
+# row resolves octet for octet and the parser reads the result, so an
+# undecodable path octet comes out as %XX (the LC_CTYPE C answer, now in
+# every locale). rfc3986 had all three defects, through the same string code
+# as NULL; there a bytes or undecodable operand gives NA (an absolute
+# reference still resolves without the base), as its parser rejects the
+# octet. whatwg had the bytes defect, and its undecodable base resolved under
 # LC_CTYPE C only; it now reads an undecodable reference or base with U+FFFD
 # replacement in every locale, as its parse seam does, so its reference row
 # does not move ("http://b.com/h<U+FFFD>.com") and its base rows resolve.
-test_that("resolve_url(): an undecodable reference fails or reads alone", {
+test_that("resolve_url(): an undecodable reference reads as its parser reads it", {
   skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
   for (loc in c(ib_utf8, "C")) {
     for (s in names(ib_selectors)) {
@@ -324,12 +336,48 @@ test_that("resolve_url(): an undecodable reference fails or reads alone", {
         ib_resolve(c(ib_bad_ref, "g"), "http://b.com/a", ib_selectors[[s]])
       ))
       expect_true(got$ok, label = paste(s, loc))
-      want <- if (identical(s, "whatwg")) {
-        c("http://b.com/h\ufffd.com", "http://b.com/g")
-      } else {
-        c(NA, "http://b.com/g")
-      }
+      want <- switch(s,
+        whatwg = c("http://b.com/h\ufffd.com", "http://b.com/g"),
+        rfc3986 = c(NA, "http://b.com/g"),
+        c("http://b.com/h%FC.com", "http://b.com/g")
+      )
       expect_identical(got$value, want, label = paste(s, loc))
+    }
+  }
+})
+
+test_that("resolve_url(): an undecodable path octet in a reference", {
+  skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
+  ref <- ib_str("caf", 0xe9)
+  for (loc in c(ib_utf8, "C")) {
+    for (s in names(ib_selectors)) {
+      lab <- paste(s, loc)
+      got <- hi_in_ctype(loc, hi_try(
+        ib_resolve(ref, "http://example.com/a", ib_selectors[[s]])
+      ))
+      expect_true(got$ok, label = lab)
+      want <- switch(s,
+        whatwg = "http://example.com/caf\ufffd",
+        rfc3986 = NA_character_,
+        "http://example.com/caf%E9"
+      )
+      expect_identical(got$value, want, label = lab)
+    }
+    # Under NULL the row is what the parser makes of the octets the
+    # resolution yields, dot segments, query and fragment included.
+    refs <- c(ib_str("../caf", 0xe9, "/./x"), ib_str("//h", 0xfc, ".com/"),
+              ib_str("p?q=", 0xe9), ib_str("caf", 0xe9, "/", 0xc3, 0xbc))
+    raw <- c(ib_str("http://b.com/caf", 0xe9, "/x"),
+             ib_str("http://h", 0xfc, ".com/"),
+             ib_str("http://b.com/a/p?q=", 0xe9),
+             ib_str("http://b.com/a/caf", 0xe9, "/", 0xc3, 0xbc))
+    for (s in c("omitted", "NULL")) {
+      got <- hi_in_ctype(loc, ib_resolve(refs, "http://b.com/a/b",
+                                         ib_selectors[[s]]))
+      expect_identical(got, hi_in_ctype(loc, get_clean_url(raw)),
+                       label = paste(s, loc))
+      expect_identical(got[[1]], "http://b.com/caf%E9/x", label = loc)
+      expect_identical(got[[2]], NA_character_, label = loc)
     }
   }
 })
@@ -364,21 +412,71 @@ test_that("resolve_url(): an undecodable base reads the same in every locale", {
       got <- hi_in_ctype(loc, ib_resolve(
         "x", c(ib_bad_bases, "http://example.com/cafe"), ib_selectors[[s]]
       ))
-      want <- if (identical(s, "whatwg")) {
-        c("file:///x", "http://example.com/x", "http://example.com/x")
-      } else {
-        c(NA, NA, "http://example.com/x")
-      }
+      want <- switch(s,
+        whatwg = c("file:///x", "http://example.com/x",
+                   "http://example.com/x"),
+        rfc3986 = c(NA, NA, "http://example.com/x"),
+        c(NA, "http://example.com/x", "http://example.com/x")
+      )
       expect_identical(got, want, label = lab)
-      # The parse seams call both bases errors under the frozen default and
-      # rfc3986; whatwg reads them with U+FFFD replacement, and so does its
-      # resolution.
+      # Each standard resolves against the bases its parse seam accepts:
+      # rfc3986 calls both errors; the frozen default calls the file: one an
+      # error and reads the http one's path octet as %E9 (RURL-yarkccco);
+      # whatwg reads both with U+FFFD replacement.
       sel <- if (identical(s, "omitted")) NULL else ib_selectors[[s]]
       if (!identical(sel, "whatwg")) {
         st <- hi_in_ctype(loc, get_parse_status(ib_bad_bases,
                                                 url_standard = sel))
-        expect_identical(st, c("error", "error"), label = lab)
+        want_st <- if (is.null(sel)) c("error", "ok") else c("error", "error")
+        expect_identical(st, want_st, label = lab)
       }
+    }
+  }
+})
+
+test_that("resolve_url(): NULL resolves against the undecodable bases it parses", {
+  skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
+  bases <- c(
+    ib_str("file:///caf", 0xe9),
+    ib_str("http://example.com/caf", 0xe9, "?q=1"),
+    ib_str("https://example.com/caf", 0xe9),
+    ib_str("ftp://example.com/caf", 0xe9),
+    ib_str("http://h", 0xe9, ".com/a"),
+    ib_str("http://example.com/a?q=", 0xe9),
+    ib_str("http://example.com/a#", 0xe9)
+  )
+  for (loc in c(ib_utf8, "C")) {
+    st <- hi_in_ctype(loc, get_parse_status(bases))
+    expect_identical(st, c("error", "ok", "ok", "ok-ftp", "error", "ok", "ok"),
+                     label = loc)
+    for (s in c("omitted", "NULL")) {
+      lab <- paste(s, loc)
+      got <- hi_in_ctype(loc, ib_resolve(
+        c("x", "x", "x", "x", "x", "x", "x"), bases, ib_selectors[[s]]
+      ))
+      expect_identical(got, c(
+        NA, "http://example.com/x", "https://example.com/x",
+        "ftp://example.com/x", NA, "http://example.com/x",
+        "http://example.com/x"
+      ), label = lab)
+      # A base the parser refuses is no base even for a network-path
+      # reference, which takes only its scheme.
+      got <- hi_in_ctype(loc, ib_resolve("//o.com/y", bases,
+                                         ib_selectors[[s]]))
+      expect_identical(got, c(
+        NA, "http://o.com/y", "https://o.com/y", "ftp://o.com/y", NA,
+        "http://o.com/y", "http://o.com/y"
+      ), label = lab)
+      # The base's own octet survives where the reference keeps it.
+      got <- hi_in_ctype(loc, ib_resolve(
+        c("?z", "#f", ""), bases[c(3, 4, 2)], ib_selectors[[s]]
+      ))
+      expect_identical(got, hi_in_ctype(loc, get_clean_url(c(
+        ib_str("https://example.com/caf", 0xe9, "?z"),
+        ib_str("ftp://example.com/caf", 0xe9, "#f"),
+        ib_str("http://example.com/caf", 0xe9, "?q=1")
+      ))), label = lab)
+      expect_identical(got[[1]], "https://example.com/caf%E9", label = lab)
     }
   }
 })
