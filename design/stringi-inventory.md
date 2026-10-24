@@ -80,6 +80,12 @@ the key MR !242 added:
 The gate then reports 187 references, with five "allowlist can shrink"
 lines for the removed keys.
 
+RURL-oahhlnvf's key and query partition (MR for refactor/stringi-bool-key-query)
+moved the boolean and replacement calls in `R/url-key.R`, `R/parse.R`,
+`R/path-query.R` and `R/utils.R` to byte mode, and with them the query split
+of RURL-kzbqvxpk: the allowlist was regenerated on that branch at main
+`e6d6263` to 180 references under 114 keys.
+
 ## Legend
 
 - **Family**: what the call does. *detect* returns a logical. *count*
@@ -418,25 +424,25 @@ Rows are in file order, then source order.
 | 164 | `parse-web.R` | `.web_ipv6_serialize` | `stri_match_first_regex` | capture | `<paste0("\\A(.*:)(", oct, "\\.", oct, "\\.", oct, "\\.", oct, ")\\z")>` | ASCII grammar; ICU `.` | bytes | yqmoztoj |
 | 165 | `parse-web.R` | `.web_ipv6_serialize` | `stri_locate_first_fixed` | locate | `::` | none (ASCII literal) | bytes | yqmoztoj |
 | 166 | `parse-web.R` | `.parse_web_url_one` | `stri_detect_regex` | detect | `(?i)(\A\|/)(\.\|%2e){1,2}(/\|\z)` | (?i) on an ASCII pattern | bytes | oahhlnvf |
-| 167 | `parse.R` | `.has_explicit_authority` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf |
+| 167 | `parse.R` | `.has_explicit_authority` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes (moved: RURL-oahhlnvf) | oahhlnvf |
 | 168 | `parse.R` | `.latin1_input_to_utf8` | `stri_enc_toutf8` | encoding |  | encoding conversion/validation | semantic exception | yyeohqah |
 | 169 | `parse.R` | `.source_scheme_spelling_vec` | `stri_match_first_regex` | capture | `^([A-Za-z][A-Za-z0-9+.\-]*):` | none (ASCII structural) | bytes | yqmoztoj |
 | 170 | `path-query.R` | `._strip_index_page` | `stri_match_first_regex` | capture | `(?i)^(.*)/(index\|default)\.[^/]+/?$` | (?i) on an ASCII pattern; ICU `$`; ICU `.` (excludes \r, U+0085, U+2028/9) | bytes | yqmoztoj |
-| 171 | `path-query.R` | `._strip_index_page` | `stri_detect_regex` | detect | `(^\|/)\.{1,2}$` | ICU `$` | bytes | oahhlnvf |
-| 172 | `path-query.R` | `.token_is_opaque` | `stri_detect_regex` | detect | `%(?![0-9A-Fa-f]{2})` | none (ASCII structural) | bytes | oahhlnvf |
+| 171 | `path-query.R` | `._strip_index_page` | `stri_detect_regex` | detect | `(^\|/)\.{1,2}$` | ICU `$` | bytes (moved: RURL-oahhlnvf) | oahhlnvf |
+| 172 | `path-query.R` | `.token_is_opaque` | `stri_detect_regex` | detect | `%(?![0-9A-Fa-f]{2})` | none (ASCII structural) | bytes (moved: RURL-oahhlnvf) | oahhlnvf |
 | 173 | `path-query.R` | `.param_matches` | `stri_detect_regex` | detect | `<matcher$regex>` | ICU case-insensitive (Unicode folding); user glob compiled by `.glob_to_regex()` | stringi or UTF-8 PCRE (open) | yyeohqah |
 | 174 | `resolve.R` | `.whatwg_file_remove_dot_segments` | `stri_split_fixed` | split | `/` | keeps trailing empty field | bytes | yqmoztoj |
 | 175 | `serialize.R` | `.fsss_source_lex` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf |
 | 176 | `serialize.R` | `.fsss_source_lex` | `stri_replace_last_regex` | replace | `[\u0000-\u0020]+$` | ICU `$` | bytes | oahhlnvf |
 | 177 | `serialize.R` | `.fsss_source_lex` | `stri_match_first_regex` | capture | `^[A-Za-z][A-Za-z0-9+.\-]*://([^/]*)` | none (ASCII structural) | bytes | yqmoztoj |
-| 178 | `url-key.R` | `.url_key_scheme_presence` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes | oahhlnvf |
-| 179 | `url-key.R` | `.url_key_scheme_presence` | `stri_detect_regex` | detect | `^//` | none (ASCII structural) | bytes | oahhlnvf |
-| 180 | `url-key.R` | `.url_key_scheme_presence` | `stri_detect_regex` | detect | `^[A-Za-z][A-Za-z0-9+.\-]*:` | none (ASCII structural) | bytes | oahhlnvf |
+| 178 | `url-key.R` | `.url_key_scheme_presence` | `stri_replace_first_regex` | replace | `^[\u0000-\u0020]+` | none (ASCII structural) | bytes (moved: RURL-oahhlnvf) | oahhlnvf |
+| 179 | `url-key.R` | `.url_key_scheme_presence` | `stri_detect_regex` | detect | `^//` | none (ASCII structural) | bytes (moved: RURL-oahhlnvf) | oahhlnvf |
+| 180 | `url-key.R` | `.url_key_scheme_presence` | `stri_detect_regex` | detect | `^[A-Za-z][A-Za-z0-9+.\-]*:` | none (ASCII structural) | bytes (moved: RURL-oahhlnvf) | oahhlnvf |
 | 181 | `url-key.R` | `.url_key_frame` | `stri_enc_toutf8` | encoding |  | encoding conversion/validation | semantic exception | yyeohqah |
 | 182 | `url-key.R` | `.url_key_frame` | `stri_enc_toutf8` | encoding |  | encoding conversion/validation | semantic exception | yyeohqah |
 | 183 | `url-key.R` | `.url_key_frame` | `stri_numbytes` | length (bytes) |  | none (byte count) | semantic exception | yyeohqah |
 | 184 | `utils.R` | `.glob_to_regex` | `stri_replace_all_regex` | replace | `([^A-Za-z0-9_])` | `[^A-Za-z0-9_]` takes one code point; per-byte escaping breaks a multibyte glob | semantic exception | yyeohqah |
-| 185 | `utils.R` | `.ascii_case_fallback` | `stri_replace_all_fixed` | replace | `<from>` | none (ASCII letters, `vectorize_all = FALSE`) | bytes | oahhlnvf |
+| 185 | `utils.R` | `.ascii_case_fallback` | `stri_replace_all_fixed` | replace | `<from>` | none (ASCII letters, `vectorize_all = FALSE`) | bytes (moved: RURL-oahhlnvf) | oahhlnvf |
 | 186 | `verdicts.R` | `.derive_verdict_layers_vec` | `stri_detect_fixed` | detect | `.` | none (ASCII literal) | bytes | oahhlnvf |
 | 187 | `zzz.R` | `.cache_key_ascii` | `stri_enc_isutf8` | encoding |  | UTF-8 validity test | semantic exception | yyeohqah |
 | 188 | `zzz.R` | `.cache_key_escape` | `stri_escape_unicode` | escape |  | escapes every non-ASCII code point as \uXXXX/\UXXXXXXXX | semantic exception | yyeohqah |
