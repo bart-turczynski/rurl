@@ -490,6 +490,18 @@
   ":]+\\]\\z"
 )
 
+# The scheme of each element: `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`
+# before a ":" at the very start (RFC 3986 S3.1; WHATWG scheme start and scheme
+# states), or NA. Byte mode (ADR 0019): a leading U+FEFF is data, so a row it
+# leads has no scheme, where stringi's match read past the mark and found one;
+# each caller already rejected such a row on its own. The pattern is ASCII, so
+# the capture's byte length is the offset of its colon in the unit
+# `.bytes_cut()` cuts in. NA in, NA out.
+.SCHEME_PREFIX_RE <- "\\A([A-Za-z][A-Za-z0-9+.\\-]*+):"
+.scheme_prefix <- function(x) {
+  .bytes_capture(x, .SCHEME_PREFIX_RE)[, 2L]
+}
+
 # First 1-based index of the literal `ch` in `s`, or 0L when absent. A literal
 # regex, not stri_locate_first_fixed(): the fixed locator reads past a U+FEFF
 # that starts `s` (see .starts_with_bom()), so in an authority led by one it
@@ -1431,11 +1443,11 @@
   if (n == 0L) {
     return(rep(FALSE, n))
   }
-  m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
-  scheme_lc <- .ascii_tolower(m[, 2L])
-  # A row led by U+FEFF has no scheme, under every url_standard; the stringi
-  # match reads past the mark (see .starts_with_bom(), RURL-vhionecz,
-  # RURL-biunpazk).
+  scheme_lc <- .ascii_tolower(.scheme_prefix(url))
+  # A row led by U+FEFF has no scheme, under every url_standard. The byte-mode
+  # capture already finds none there; the mask is the ADR 0005 guard from when
+  # this was a stringi match that read past the mark (RURL-vhionecz,
+  # RURL-biunpazk), left for the ADR 0019 close-out to retire.
   has_scheme <- !is.na(scheme_lc) & !.starts_with_bom(url)
   # The host:port carve-out exists for the SCHEME-LESS `example.com:8080` form,
   # which the scheme regex above also matches (a dot is a legal scheme char, so
@@ -1645,10 +1657,11 @@
   if (!identical(url_standard, "rfc3986")) {
     return(rep(FALSE, length(url)))
   }
-  run <- stringi::stri_match_first_regex(
-    url, "^[A-Za-z][A-Za-z0-9+.\\-]*:(/*)"
-  )[, 2L]
-  n_slash <- stringi::stri_length(run)
+  # Byte mode (ADR 0019). The run is ASCII, so its byte count is its length;
+  # `nchar(NA, "bytes")` is 2, so a row with no scheme is set back to NA.
+  run <- .bytes_capture(url, "\\A[A-Za-z][A-Za-z0-9+.\\-]*+:(/*+)")[, 2L]
+  n_slash <- nchar(run, type = "bytes")
+  n_slash[is.na(run)] <- NA_integer_
   out <- has_scheme & !host_port & scheme_lc %in% web_route_scheme &
     !is.na(n_slash) & n_slash != 2L
   out[is.na(out)] <- FALSE
@@ -1689,9 +1702,7 @@
     return(out)
   }
   is_whatwg <- .is_whatwg(url_standard)
-  scheme_lc <- .ascii_tolower(
-    stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")[, 2L]
-  )
+  scheme_lc <- .ascii_tolower(.scheme_prefix(url))
 
   # D1 RFC generic-grammar gate: a general-routed row under rfc3986 must pass or
   # it is a parse error (the tolerated non-ASCII extension does NOT cause
