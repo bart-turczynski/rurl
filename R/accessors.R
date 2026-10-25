@@ -1430,7 +1430,8 @@ get_host_type <- function(url, url_standard,
 #'   reported only where the parse produced one with a host. A URL whose parse
 #'   has none (a WHATWG opaque path such as \code{mailto:a@x.de}; an RFC 3986
 #'   \code{path-rootless} or \code{path-absolute} path, with no authority)
-#'   reports none of them, even where \code{\link{get_user}} or \code{\link{get_host}} return a
+#'   reports none of them, even where \code{\link{get_user}} or
+#'   \code{\link{get_host}} return a
 #'   \code{mailto:} recipient's local part or domain (ADR 0012 D7): a
 #'   recipient's domain is not a URL host. \code{\link{get_mailto_recipients}}
 #'   judges recipients.
