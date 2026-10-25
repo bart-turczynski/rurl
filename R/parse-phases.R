@@ -246,12 +246,14 @@
 # `.serialize_whatwg_ipv6_host()`'s ICU capture `^(.*:)(<quad>)$` over the
 # inside of a bracketed host, which holds no line terminator, so ICU's `.`
 # and `$` are `(?s).` and `\z`. The quad holds no ":", so it can only follow
-# the last ":"; the atomic group stops at that one and never retries the quad
-# after an earlier ":" (RURL-yqmoztoj).
-.IPV6_QUAD_TAIL <- local({
-  oct <- "(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
-  paste0("(?s)^((?>.*:))(", oct, "\\.", oct, "\\.", oct, "\\.", oct, ")\\z")
-})
+# the last ":". Possessive runs of ":"-free bytes, each ending in ":", reach
+# that ":" without giving a byte back, so the quad is tried once; an atomic
+# `(?>.*:)` still backtracked byte by byte to the last ":" and hit PCRE's
+# match limit on a long last group (RURL-yqmoztoj). Group 2 is the quad.
+.IPV6_QUAD_TAIL <- paste0(
+  "(?s)^((?:[^:]*+:)++)(", .ICU_IPV4_OCTET, "\\.", .ICU_IPV4_OCTET, "\\.",
+  .ICU_IPV4_OCTET, "\\.", .ICU_IPV4_OCTET, ")\\z"
+)
 .ICU_NUMBER_LAST_LABEL <- paste0(
   "(?:\\A|\\.)(?:[0-9]++|0[xX][0-9a-fA-F]*+)", .ICU_END
 )
