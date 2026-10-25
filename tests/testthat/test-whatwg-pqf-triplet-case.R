@@ -56,6 +56,13 @@ test_that("rfc3986 keeps the query and fragment as written (does not move)", {
       NA,
       "http://h/p?'%7e'#'%7e'")
   )
+  # Row 2's ASCII-only twin keeps the coverage that row lost: lowercase
+  # multibyte triplets are kept as written in the query and fragment.
+  twin <- "http://h/p?a%c3%bc#b%c3%bc"
+  r <- do.call(safe_parse_urls, c(list(twin), rfc))
+  expect_identical(r$query, "a%c3%bc")
+  expect_identical(r$fragment, "b%c3%bc")
+  expect_identical(serialize_url(twin, standard = "rfc3986"), twin)
   # The rfc3986 key frames the exact structural query, case included.
   pol <- url_key_policy(standard = "rfc3986")
   k <- get_url_key(c("http://h/?q%7f", "http://h/?q%7F"), pol)

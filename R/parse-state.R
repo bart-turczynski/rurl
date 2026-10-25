@@ -740,7 +740,10 @@
   # is a shortcut for a proof, not a convenience: the walk covers the whole
   # string (scheme / authority / path / query / fragment leave no byte
   # unclassified), every production is ASCII apart from the
-  # `.RFC3986_NONASCII` scalar-value tolerance, and an octet sequence that is
+  # `.RFC3986_NONASCII` scalar-value tolerance of the component classes (which
+  # decides a verdict only under `ascii_only = FALSE`, the frozen NULL `file:`
+  # overlay; by default the whole-string test below rejects any non-ASCII
+  # row whatever the walk says), and an octet sequence that is
   # not valid UTF-8 denotes no scalar value. So an undecodable element must
   # fail whichever component it lands in -- FALSE is the answer the walk would
   # have reached had it been able to run.
