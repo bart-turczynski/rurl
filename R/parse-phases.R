@@ -46,9 +46,12 @@
 # (`.icu_split_lines()`), and then cut a part that holds none, where ICU's
 # `.` is byte mode's `(?s:.)`. PCRE's match limit also counts each retry of
 # a group or an assertion after a repeat gives back a byte, so a repeat here
-# is possessive, or is followed by a literal, or the pattern is unanchored
-# (each start is a fresh match); every cut and test below is linear in the
-# row and stays under the limit at any length.
+# is possessive, or is followed by a literal its class excludes (PCRE then
+# makes it possessive), or ends the match; a repeat that may give back must
+# not be retried at every byte. Each iteration of a repeated group counts
+# too, so a group is not repeated once per delimiter of the row. Every cut and
+# test below is linear in the row and stays under the limit at any length
+# (RURL-atlidhyh).
 
 # A line terminator, and the same at the true end.
 .ICU_TERMINATOR <- paste0(
@@ -64,9 +67,14 @@
 )
 
 # On a part with no terminator: from the first "/", "?" or "#" to the end;
-# through the last "@"; a leading "[" through the first "]".
+# through the last "@"; a leading "[" through the first "]". The cut through
+# the last "@" ends where this match starts: the only "@" from which "@"-free
+# bytes run to the end is the last one. The anchored `\A(?s:.)*@` ran to the
+# end and gave the row back byte by byte to reach that "@", and past ~1e7
+# bytes hit PCRE's match limit (RURL-atlidhyh); unanchored, each start is a
+# fresh match and the possessive run gives nothing back.
 .ICU_FROM_PATH_DELIM <- "(?s)[/?#].*\\z"
-.ICU_THROUGH_LAST_AT <- "\\A(?s:.)*@"
+.ICU_THROUGH_LAST_AT <- "@[^@]*+\\z"
 .ICU_BRACKET_HEAD <- "\\A\\[[^\\]]*+\\]"
 
 # Split each row into `head` (through its last inner terminator, or ""),
@@ -134,10 +142,10 @@
   first <- regexpr(.ICU_TERMINATOR, y, perl = TRUE, useBytes = TRUE)
   line1_end <- ifelse(first > 0L, first - 1L, nchar(y, type = "bytes"))
   line1 <- .bytes_cut(y, 1L, line1_end)
+  # `m` is the byte of the last "@" in line 1, so the cut keeps what follows.
   m <- regexpr(.ICU_THROUGH_LAST_AT, line1, perl = TRUE, useBytes = TRUE)
   hit <- m > 0L
-  y[hit] <- .bytes_cut(y[hit], attr(m, "match.length")[hit] + 1L,
-                       .Machine$integer.max)
+  y[hit] <- .bytes_cut(y[hit], m[hit] + 1L, .Machine$integer.max)
   out[todo] <- y
   .bytes_utf8(out)
 }

@@ -42,3 +42,20 @@ test_that(".classify_input_host_vec() reads the host after the last \"@\"", {
   expect_identical(cls$has_userinfo, c(TRUE, TRUE, TRUE))
   expect_identical(cls$is_canonical_ip, c(FALSE, TRUE, TRUE))
 })
+
+# PCRE2's default match limit is 1e7; a row a little past it. The long rows
+# below run through the helper that cuts or tests them, not a full parse, so
+# the file stays fast.
+long_n <- 10500000L
+
+test_that("the last-\"@\" cut stays under the match limit on a long row", {
+  # `\A(?s:.)*@` ran to the end and gave the row back byte by byte to the
+  # last "@": past ~1e7 bytes `regexpr()` warned and the row went uncut, so
+  # the userinfo read as part of the host token.
+  host <- paste0("h", strrep("a", long_n), "。b")
+  expect_no_warning(out <- .icu_cut_through_last_at(paste0("u。i@", host)))
+  # `expect_true(identical())`: a failure must not print the row.
+  expect_true(identical(out, host))
+  expect_no_warning(out <- .icu_cut_through_last_at(strrep("@", long_n)))
+  expect_identical(out, "")
+})
