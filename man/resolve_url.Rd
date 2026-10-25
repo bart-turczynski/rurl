@@ -146,8 +146,7 @@ required to be percent-encoded -- so under \code{"rfc3986"} and
 \code{NULL} they stay in the reference. The base gets the same step
 under \code{"whatwg"}, so \code{" http://a/b/c "} is the base
 \code{"http://a/b/c"}; only this step: a base that the parser would
-otherwise respell (a backslash, an uppercase scheme) is not normalized
-first.
+otherwise respell (a backslash for a slash) is not normalized first.
 \item \strong{A base with an opaque path takes only a fragment.} Under
 \code{"whatwg"}, a base such as \code{"mailto:x"} (a non-special scheme
 with no \code{//} and no leading \code{/}) admits only a reference

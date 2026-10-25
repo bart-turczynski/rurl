@@ -164,3 +164,14 @@ test_that("an opaque-path base takes only a fragment under whatwg", {
     "sc:/a/g"
   )
 })
+
+test_that("rfc3986 and NULL still merge against an opaque-path base", {
+  # RFC 3986 section 5.2 merges against any base; NULL is frozen (ADR 0007).
+  expect_identical(
+    resolve_url("g", "mailto:x", url_standard = "rfc3986",
+                output = "serialized"),
+    "mailto:g"
+  )
+  expect_identical(rurl:::.resolve_one_raw("g", "sc:x", NULL), "sc:g")
+  expect_identical(rurl:::.resolve_one_raw("g", "sc:x", "rfc3986"), "sc:g")
+})

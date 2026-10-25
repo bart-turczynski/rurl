@@ -590,7 +590,9 @@
 
 # Resolve ONE (reference, base) pair to a raw absolute URI string, or NA when
 # resolution cannot yield an absolute URL (base not absolute and reference not
-# absolute either). ._remove_dot_segments happens inside .transform_reference(),
+# absolute either; under "whatwg", also a non-fragment reference against a
+# base with an opaque path). The caller strips a whatwg base (resolve_url()).
+# ._remove_dot_segments happens inside .transform_reference(),
 # except for a scheme-bearing reference under "whatwg", whose path is passed
 # through as written for the WHATWG re-parse (RURL-rdkewxlx).
 # `url_standard` selects the reference-parsing rules that precede the merge
@@ -611,13 +613,6 @@
   # section 5.2.2's "base minus its fragment" branch, which
   # `.transform_reference()` below already implements.
   ref <- .strip_whatwg_control_chars_vec(ref, url_standard)$url
-  # The API URL parser runs the basic URL parser on the BASE too, so the base
-  # gets the same step 1, through the same helper (RURL-mvjgpthk). The
-  # refused-base mask reads its own `serialize_url()`, which runs step 1
-  # itself, so it agrees with this either way.
-  if (!is.na(base)) {
-    base <- .strip_whatwg_control_chars_vec(base, url_standard)$url
-  }
   r <- .split_uri_ref(ref, url_standard)
   base_scheme <- .whatwg_special_base_scheme(base, url_standard)
   if (.whatwg_reference_is_relative(r$scheme, base_scheme)) {
@@ -734,8 +729,7 @@
 #'     \code{NULL} they stay in the reference. The base gets the same step
 #'     under \code{"whatwg"}, so \code{" http://a/b/c "} is the base
 #'     \code{"http://a/b/c"}; only this step: a base that the parser would
-#'     otherwise respell (a backslash, an uppercase scheme) is not normalized
-#'     first.
+#'     otherwise respell (a backslash for a slash) is not normalized first.
 #'   \item \strong{A base with an opaque path takes only a fragment.} Under
 #'     \code{"whatwg"}, a base such as \code{"mailto:x"} (a non-special scheme
 #'     with no \code{//} and no leading \code{/}) admits only a reference
@@ -1030,6 +1024,13 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   }
   # Recycle both inputs to the common length (base_url is commonly scalar).
   n <- max(length(ref), length(base))
+  # WHATWG basic URL parser step 1 on the BASE (RURL-mvjgpthk): the API URL
+  # parser runs the basic URL parser on the base too. The reference gets the
+  # same step inside `.resolve_one_raw()`; the base is stripped here, once
+  # and vectorized, before it is recycled. The refused-base mask reads its
+  # own `serialize_url()`, which runs step 1 itself. A no-op under "rfc3986"
+  # and NULL.
+  base <- .strip_whatwg_control_chars_vec(base, resolution_standard)$url
   ref <- rep_len(ref, n)
   base <- rep_len(base, n)
   # A string that is not valid UTF-8 cannot be split as one, in any locale,
