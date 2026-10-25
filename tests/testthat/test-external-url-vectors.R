@@ -252,11 +252,16 @@ test_that("dual-standard oracle: classes and invariants hold", {
   expect_true(all(grepl("ADR [0-9]{4}|RURL-[a-z]+", fx$rurl_deviation[dev])))
   # the two axes are independent: `rurl_deviation` is not a function of the
   # class, because some class holds both deviating and conforming rows, so
-  # the class cannot tell you whether a row deviates. This is the invariant
-  # whose absence hid RURL-nknytzxz. It used to be asserted as "deviations
-  # span more than one class"; after the RUL-031 re-baselining (RURL-viypghfg)
+  # the class cannot tell you whether a row deviates. This keeps
+  # `divergence_class` purely standard-vs-standard, the way the RURL-nknytzxz
+  # repair split it from the retired `parser-boundary` value. It does not
+  # validate either oracle: the co-confirmation trap itself is guarded by the
+  # `oracle-vs-grammar` test below. It used to be asserted as "deviations span
+  # more than one class"; after the RUL-031 re-baselining (RURL-viypghfg)
   # every remaining deviation is spec-divergent, alongside 166 spec-divergent
-  # rows that conform, which that proxy could not tell from a collapse.
+  # rows that conform, which that proxy could not tell from a collapse. A
+  # deviation may still sit in any class (ADR 0002 / ADR 0009 once cited
+  # both-reject rows), so the distribution is not pinned.
   mixed <- tapply(dev, fx$divergence_class, function(d) any(d) && !all(d))
   expect_true(any(mixed))
 })
