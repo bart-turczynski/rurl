@@ -904,7 +904,9 @@
 #' @param ... Additional arguments forwarded to \code{\link{safe_parse_urls}}
 #'   (e.g. \code{port_handling}, \code{query_handling}, \code{host_encoding}).
 #'   Passing a governed low-level knob that conflicts with \code{url_standard}
-#'   errors, exactly as it does for \code{\link{safe_parse_url}}. A
+#'   errors, exactly as it does for \code{\link{safe_parse_url}}; with a
+#'   \code{profile}, as there, the check is skipped and the knob overrides
+#'   the profile's. A
 #'   \code{profile} passed here selects the standard it bundles (see
 #'   \code{\link{url_profile}}) for the resolution as well as for the parse:
 #'   \code{profile = "rfc-syntax"} resolves as \code{url_standard = "rfc3986"}
