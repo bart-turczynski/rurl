@@ -94,6 +94,16 @@ them. The complete token vocabulary is enumerated below under
 A single URL can carry several diagnostics, so the return shape is not a
 plain scalar-per-URL vector (see \emph{Value}). \code{parse_status} stays
 coarse; diagnostics are never encoded into it.
+
+One token reports why a URL \emph{failed} rather than a fact about one that
+parsed: \code{unicode-outside-rfc3986-uri}. Under \code{url_standard =
+"rfc3986"} a directly written non-ASCII character in any component is a
+parse error, because RFC 3986 admits only US-ASCII (section 2) and writes
+non-ASCII data as percent-encoded UTF-8 octets (section 2.5); a host is an
+ASCII \code{reg-name} (section 3.2.2). Write \code{ä} as \code{\%C3\%A4},
+or parse Unicode input with \code{url_standard = "whatwg"}. rurl has no
+RFC 3987 (IRI) mode. Such a row reports this token alone, under either
+\code{scheme_acceptance}; every other failed row reports none.
 }
 \section{Selected facts, not a conformance oracle}{
  The diagnostics are
@@ -129,9 +139,6 @@ With \code{scheme_acceptance = "general"} (the general-parser posture) a
 further set of selected facts is reported. These fire \emph{only} under
 \code{"general"}; the default \code{"web"} acceptance never emits them:
 \itemize{
-\item \code{unicode-outside-rfc3986-uri} --- under \code{"rfc3986"}, a
-directly-written non-ASCII scalar value accepted by the sole RFC 3986
-generic-grammar tolerance (not RFC 3987/IRI conformance).
 \item \code{transform-skipped-ineligible-scheme} --- the scheme is
 non-HTTP(S) and so ineligible for the SEO/semantic Stage-B transforms.
 \item scheme-specific facts: \code{ws-fragment-forbidden} /
@@ -294,8 +301,11 @@ conformance oracle} above.
 \code{\%}-escape or a non-URL code point. \code{"whatwg"} only.
 \item \code{invalid-credentials} --- WHATWG validation error:
 credentials (userinfo) are present. \code{"whatwg"} only.
-\item \code{unicode-outside-rfc3986-uri} --- \emph{general}; a
-directly-written non-ASCII scalar value under \code{"rfc3986"}.
+\item \code{unicode-outside-rfc3986-uri} --- the rejection reason for
+a URL that failed under \code{"rfc3986"} because it carries a
+directly written non-ASCII character (RFC 3986 sections 2, 2.5 and
+3.2.2). Both acceptance postures; \code{"rfc3986"} only. See the
+description above.
 \item \code{transform-skipped-ineligible-scheme} --- \emph{general};
 a non-HTTP(S) scheme, ineligible for the Stage-B transforms.
 \item \code{ws-fragment-forbidden} --- \emph{general}; a fragment on a
