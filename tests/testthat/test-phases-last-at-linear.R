@@ -116,3 +116,25 @@ test_that("the host:port test stays under the match limit on a long port", {
   expect_no_warning(out <- prep_host_port(x))
   expect_false(out)
 })
+
+test_that("the IPv6 dotted-quad tail follows the last \":\" of a run", {
+  x <- c("[::ffff:1.2.3.4]", "::1.2.3.4", "[:1.2.3.4]", "[1::01.2.3.4]",
+         "[a:b:255.255.255.255]\n", "[a:b:255.255.255.255]\r\n", "[::1]",
+         "1.2.3.4", "[::ffff:1.2.3.256]", "[::1a.2.3.4]", "[g::1.2.3.4]",
+         "[::1.2.3.4]]", "[::1.2.3.4]\n\n", NA)
+  expect_identical(
+    .const_detect(x, .ICU_IPV6_IPV4_TAIL),
+    c(TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE,
+      FALSE, FALSE, FALSE, NA)
+  )
+})
+
+test_that("the IPv6 tail test stays under the match limit on a long run", {
+  # The atomic `(?>[0-9a-fA-F:]+:)` still ran to the end of the hex run and
+  # gave it back byte by byte to the last ":": with ~1e7 hex digits after
+  # it, it warned.
+  x <- c(paste0("[::", strrep("a", long_n), "]"),
+         paste0("[", strrep("a:", long_n %/% 2L), "1.2.3.4]"))
+  expect_no_warning(out <- .const_detect(x, .ICU_IPV6_IPV4_TAIL))
+  expect_identical(out, c(FALSE, TRUE))
+})

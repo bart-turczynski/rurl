@@ -244,13 +244,26 @@
 .ICU_IPV4_CANONICAL <- paste0(
   "^", .ICU_IPV4_OCTET, "(?:\\.", .ICU_IPV4_OCTET, "){3}", .ICU_END
 )
-# The hex-and-colon run of `.ICU_IPV6_IPV4_TAIL` is atomic: the dotted quad
-# holds no ":", so it can only follow the last ":" of the run, and the regex
-# need not retry the quad after every earlier ":". Retrying it there hit
-# PCRE's match limit on a host of millions of groups.
+# `.ICU_IPV6_IPV4_TAIL` was the ICU `^\[?([0-9a-fA-F:]+:)<quad>\]?$`. The
+# dotted quad holds no ":", so its first octet is the digits after the last
+# ":" of the hex-and-colon run, up to the first "."; the run is taken whole,
+# possessively, and a lookbehind checks that it ends in ":" and a canonical
+# octet, with a run byte before the ":". Retrying the quad after every
+# earlier ":" hit PCRE's match limit on a host of millions of groups, and an
+# atomic `(?>[0-9a-fA-F:]+:)` still gave a long last group back byte by byte
+# (RURL-atlidhyh). Each lookbehind branch is fixed-length, which every PCRE
+# release accepts.
+.ICU_IPV6_RUN_BYTE <- "[0-9a-fA-F:]"
+.ICU_IPV6_RUN_ENDS_IN_OCTET <- paste0(
+  "(?<=",
+  paste0(.ICU_IPV6_RUN_BYTE, ":",
+         c("25[0-5]", "2[0-4][0-9]", "1[0-9][0-9]", "[1-9][0-9]", "[0-9]"),
+         collapse = "|"),
+  ")"
+)
 .ICU_IPV6_IPV4_TAIL <- paste0(
-  "^\\[?(?>[0-9a-fA-F:]+:)(?:", .ICU_IPV4_OCTET, "(?:\\.", .ICU_IPV4_OCTET,
-  "){3})\\]?", .ICU_END
+  "^\\[?", .ICU_IPV6_RUN_BYTE, "++", .ICU_IPV6_RUN_ENDS_IN_OCTET,
+  "(?:\\.", .ICU_IPV4_OCTET, "){3}\\]?", .ICU_END
 )
 .ICU_IPV6_HEX_SHAPE <- paste0("^\\[?[0-9a-fA-F:]++\\]?", .ICU_END)
 .ICU_IPV6_SERIALIZABLE <- paste0("^\\[[0-9A-Fa-f:.]++\\]", .ICU_END)
