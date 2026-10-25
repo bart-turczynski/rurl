@@ -183,3 +183,38 @@ test_that("a whatwg-bundling profile refuses a scheme-less base", {
   expect_identical(resolve_url("https://x.com/y", "example.com/a/b"),
                    "https://x.com/y")
 })
+
+# RURL-frwyfdhp: the url_standard conflict check is skipped on the profile
+# path, as in safe_parse_url() and canonical_join(). A profile authorizes its
+# own knob combination, and an explicit knob overrides it.
+test_that("pin: without a profile a governed knob still conflicts", {
+  for (std in c("rfc3986", "whatwg")) {
+    expect_error(
+      resolve_url("b", "https://example.org/a/", url_standard = std,
+                  path_normalization = "none"),
+      "governs `path_normalization`", info = std
+    )
+  }
+})
+
+test_that("a profile plus a governed knob resolves as safe_parse_url() parses", {
+  cases <- list(
+    list(std = "rfc3986", profile = "rfc-syntax"),
+    list(std = "whatwg", profile = "whatwg")
+  )
+  for (cs in cases) {
+    expect_identical(
+      resolve_url("b", "https://example.org/a/", url_standard = cs$std,
+                  profile = cs$profile, path_normalization = "none"),
+      safe_parse_url("https://example.org/a/b", url_standard = cs$std,
+                     profile = cs$profile,
+                     path_normalization = "none")$clean_url,
+      info = cs$profile
+    )
+  }
+  expect_identical(
+    resolve_url("b", "https://example.org/a/", url_standard = "rfc3986",
+                prof = "rfc-syntax", path_normalization = "none"),
+    "https://example.org/a/b"
+  )
+})
