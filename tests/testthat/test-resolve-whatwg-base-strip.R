@@ -52,3 +52,62 @@ test_that("pin: whatwg resolves against an unpadded base", {
     resolve_url("g", "http://a/b/c", profile = "whatwg"), "http://a/b/g"
   )
 })
+
+test_that("whatwg strips a padded base before resolving against it", {
+  for (b in padded_bases) {
+    expect_identical(
+      resolve_url("g", b, url_standard = "whatwg", output = "serialized"),
+      "http://a/b/g", info = b
+    )
+    expect_identical(
+      resolve_url("g", b, url_standard = "whatwg"), "http://a/b/g", info = b
+    )
+    expect_identical(
+      resolve_url("g", b, profile = "whatwg"), "http://a/b/g", info = b
+    )
+  }
+})
+
+test_that("whatwg removes an interior tab or newline from the base", {
+  expect_identical(
+    resolve_url("g", "http://a/b\n/c", url_standard = "whatwg",
+                output = "serialized"),
+    "http://a/b/g"
+  )
+  # A tab or newline inside the scheme or the `//` is visible to the split of
+  # the base: only a base stripped before the split has a scheme and an
+  # authority to merge with.
+  expect_identical(
+    resolve_url("g", "h\nttp://a/b/c", url_standard = "whatwg",
+                output = "serialized"),
+    "http://a/b/g"
+  )
+  expect_identical(
+    resolve_url("/g", "http:/\r/a/b/c", url_standard = "whatwg",
+                output = "serialized"),
+    "http://a/g"
+  )
+})
+
+test_that("whatwg agrees with its own parser on a padded base", {
+  b <- " http://a/b/c "
+  expect_identical(
+    serialize_url(b, standard = "whatwg"),
+    serialize_url("http://a/b/c", standard = "whatwg")
+  )
+  expect_identical(
+    resolve_url(c("g", "../x", "?y", "#z"), b, url_standard = "whatwg",
+                output = "serialized"),
+    resolve_url(c("g", "../x", "?y", "#z"), "http://a/b/c",
+                url_standard = "whatwg", output = "serialized")
+  )
+})
+
+test_that("an NA or all-padding base stays no base under whatwg", {
+  expect_identical(
+    resolve_url("g", NA_character_, url_standard = "whatwg"), NA_character_
+  )
+  expect_identical(
+    resolve_url("g", " \t ", url_standard = "whatwg"), NA_character_
+  )
+})

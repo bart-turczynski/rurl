@@ -1052,6 +1052,15 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     ref[hidden] <- .hide_high_octets(ref[hidden])
     base[hidden] <- .hide_high_octets(base[hidden])
   }
+  # WHATWG basic URL parser step 1, applied to the BASE (RURL-mvjgpthk): the
+  # API URL parser runs the basic URL parser on the base too, so a leading or
+  # trailing C0-control-or-SPACE run is stripped and every ASCII tab/LF/CR
+  # removed before the base is split. The reference gets the same step inside
+  # `.resolve_one_raw()`, through the same single seam. Done here, before the
+  # refused-base mask, so the mask's oracle (`serialize_url()`, which runs
+  # step 1 itself) and the resolver read the same string. A byte-for-byte
+  # no-op under "rfc3986" and NULL.
+  base <- .strip_whatwg_control_chars_vec(base, resolution_standard)$url
   # Under `rfc3986` the REFERENCE must itself be an RFC 3986 URI-reference
   # (section 4.1: URI / relative-ref), or there is nothing to resolve: the row
   # is NA. Checking only the resolved URL is not enough, because section
