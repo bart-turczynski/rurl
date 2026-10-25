@@ -282,8 +282,10 @@
 # decoded octets are not UTF-8 (`a%E9`, a truncated `%C3`) is no RFC 6068
 # addr-spec part: the recipient's own "invalid", never the "invalid multibyte
 # string" throw nchar() and strsplit() raise on it, which stopped the whole
-# vectorized call (RURL-lotjvpnt). validUTF8() is a byte test, so the verdict
-# is the same under every locale.
+# vectorized call (RURL-lotjvpnt). .email_decode_field() already turns such a
+# field into NA, so for its callers the validUTF8() here is a second line of
+# defense for any caller that decodes on its own. validUTF8() is a byte test,
+# so the verdict is the same under every locale.
 .email_decoded_ok <- function(dec) {
   !is.na(dec) && nzchar(dec) && validUTF8(dec)
 }

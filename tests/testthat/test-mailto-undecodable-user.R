@@ -41,11 +41,12 @@ uu_parts <- function(url) {
                          label = label)
         solo_user <- get_user(url, url_standard = std,
                               scheme_acceptance = "general")
+        solo_host <- get_host(url, url_standard = std,
+                              scheme_acceptance = "general")
         expect_identical(user[2L], solo_user, label = label)
+        expect_identical(host[2L], solo_host, label = label)
         expect_true(is.na(solo_user) || validUTF8(solo_user), label = label)
-        list(user = solo_user,
-             host = get_host(url, url_standard = std,
-                             scheme_acceptance = "general"))
+        list(user = solo_user, host = solo_host)
       })
     }
   }
@@ -97,16 +98,17 @@ test_that("both halves undecodable is NA user and NA host", {
                    list(user = NA_character_, host = NA_character_))
 })
 
-test_that("an undecodable second recipient leaves the first alone", {
-  expect_identical(uu_parts("mailto:x@y.com,a%E9@b.com"),
-                   list(user = "x", host = "y.com"))
+test_that("an undecodable first recipient is the NA user, later ones aside", {
+  expect_identical(uu_parts("mailto:a%E9@b.com,c@d.com"),
+                   list(user = NA_character_, host = "b.com"))
 })
 
-test_that("the reported row's user no longer throws in nchar()", {
+test_that("get_userinfo() is NA for an undecodable local part too", {
   for (std in uu_standards) {
-    u <- get_user("mailto:a%E9@b.com", url_standard = std,
-                  scheme_acceptance = "general")
-    expect_no_error(nchar(u, type = "chars"))
-    expect_identical(u, NA_character_, label = std)
+    expect_identical(
+      get_userinfo("mailto:a%E9@b.com", url_standard = std,
+                   scheme_acceptance = "general"),
+      NA_character_, label = std
+    )
   }
 })
