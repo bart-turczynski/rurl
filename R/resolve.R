@@ -904,7 +904,9 @@
 #' @param ... Additional arguments forwarded to \code{\link{safe_parse_urls}}
 #'   (e.g. \code{port_handling}, \code{query_handling}, \code{host_encoding}).
 #'   Passing a governed low-level knob that conflicts with \code{url_standard}
-#'   errors, exactly as it does for \code{\link{safe_parse_url}}. A
+#'   errors, exactly as it does for \code{\link{safe_parse_url}}; with a
+#'   \code{profile}, as there, the check is skipped and the knob overrides
+#'   the profile's. A
 #'   \code{profile} passed here selects the standard it bundles (see
 #'   \code{\link{url_profile}}) for the resolution as well as for the parse:
 #'   \code{profile = "rfc-syntax"} resolves as \code{url_standard = "rfc3986"}
@@ -983,13 +985,6 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
         call. = FALSE
       )
     }
-  } else {
-    # url_standard conflict check across the `...` seam (same contract as
-    # canonical_join(): missing() cannot see through `...`, so read the governed
-    # knobs straight from the captured dots).
-    .check_url_standard_conflicts_dots(
-      c(list(url_standard = url_standard), dots)
-    )
   }
   # The standard the RESOLUTION reads (RURL-nwujwmft). A named profile bundles
   # a `url_standard` (`.URL_PROFILES`, R/parse.R) and the parse below reads it
@@ -1013,6 +1008,17 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   profile <- .validate_profile(
     if (length(profile_at) == 1L) dots[[profile_at]] else NULL
   )
+  # url_standard conflict check across the `...` seam (same contract as
+  # canonical_join(): missing() cannot see through `...`, so read the governed
+  # knobs straight from the captured dots). On the profile path it is skipped,
+  # as in safe_parse_url() and canonical_join(): a profile authorizes its own
+  # knob combination, and an explicit knob overrides it (RURL-frwyfdhp). Under
+  # output = "serialized" the dots are empty, so the check has nothing to read.
+  if (is.null(profile)) {
+    .check_url_standard_conflicts_dots(
+      c(list(url_standard = url_standard), dots)
+    )
+  }
   resolution_standard <- if (is.null(profile)) {
     url_standard
   } else {

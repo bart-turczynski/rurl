@@ -183,3 +183,67 @@ test_that("a whatwg-bundling profile refuses a scheme-less base", {
   expect_identical(resolve_url("https://x.com/y", "example.com/a/b"),
                    "https://x.com/y")
 })
+
+# RURL-frwyfdhp: the url_standard conflict check is skipped on the profile
+# path, as in safe_parse_url() and canonical_join(). A profile authorizes its
+# own knob combination, and an explicit knob overrides it.
+test_that("pin: without a profile a governed knob still conflicts", {
+  for (std in c("rfc3986", "whatwg")) {
+    expect_error(
+      resolve_url("b", "https://example.org/a/", url_standard = std,
+                  path_normalization = "none"),
+      "governs `path_normalization`", info = std
+    )
+  }
+})
+
+test_that("a profile plus a governed knob resolves as safe_parse_url() does", {
+  cases <- list(
+    list(std = "rfc3986", profile = "rfc-syntax"),
+    list(std = "whatwg", profile = "whatwg")
+  )
+  for (cs in cases) {
+    expect_identical(
+      resolve_url("b", "https://example.org/a/", url_standard = cs$std,
+                  profile = cs$profile, path_normalization = "none"),
+      safe_parse_url("https://example.org/a/b", url_standard = cs$std,
+                     profile = cs$profile,
+                     path_normalization = "none")$clean_url,
+      info = cs$profile
+    )
+  }
+  expect_identical(
+    resolve_url("b", "https://example.org/a/", url_standard = "rfc3986",
+                prof = "rfc-syntax", path_normalization = "none"),
+    "https://example.org/a/b"
+  )
+})
+
+test_that("with a profile an explicit governed knob overrides the profile's", {
+  cases <- list(
+    list(std = "rfc3986", profile = "rfc-syntax"),
+    list(std = "whatwg", profile = "whatwg")
+  )
+  for (cs in cases) {
+    for (knob in list(list(path_normalization = "collapse_slashes"),
+                      list(case_handling = "lower"))) {
+      got <- do.call(resolve_url, c(
+        list("a//B", "https://e.org/", url_standard = cs$std,
+             profile = cs$profile),
+        knob
+      ))
+      want <- do.call(safe_parse_url, c(
+        list("https://e.org/a//B", url_standard = cs$std,
+             profile = cs$profile),
+        knob
+      ))$clean_url
+      expect_identical(got, want, info = paste(cs$profile, names(knob)))
+      expect_false(
+        identical(got, resolve_url("a//B", "https://e.org/",
+                                   url_standard = cs$std,
+                                   profile = cs$profile)),
+        info = paste(cs$profile, names(knob))
+      )
+    }
+  }
+})
