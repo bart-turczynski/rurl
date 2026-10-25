@@ -60,3 +60,39 @@ test_that("D7 extraction on mailto does not move", {
     "domain"
   )
 })
+
+# --- Targets: no authority, no authority facts -----------------------------
+
+ma_skip <- "transform-skipped-ineligible-scheme"
+
+test_that("an opaque-path mailto carries no invalid-credentials (whatwg)", {
+  expect_identical(ma_diag("mailto:a@x.de"), ma_skip)
+  expect_identical(ma_diag("mailto:u:p@x.de"), ma_skip)
+  # path-absolute: still no authority.
+  expect_identical(ma_diag("mailto:/a@x.de"), ma_skip)
+})
+
+test_that("a mailto recipient domain carries no host-shape facts", {
+  for (std in c("whatwg", "rfc3986")) {
+    expect_identical(ma_diag("mailto:a@256.256.256.256", std), ma_skip,
+                     label = std)
+    expect_identical(ma_diag("mailto:a@0x7f.1", std), ma_skip, label = std)
+    expect_identical(ma_diag("mailto:a@ex--ample.com", std), ma_skip,
+                     label = std)
+  }
+  expect_identical(ma_diag("mailto:a@[::1]"), ma_skip)
+})
+
+test_that("the rule is the parse's authority, not the scheme name", {
+  for (std in c("whatwg", "rfc3986")) {
+    expect_identical(ma_diag("sc:a@1.2.3.999", std), ma_skip, label = std)
+    expect_identical(ma_diag("news:a@1.2.3.999", std), ma_skip, label = std)
+  }
+})
+
+test_that("get_mailto_recipients() loses the false tokens with no edit", {
+  r <- get_mailto_recipients("mailto:a@x.de,b@256.256.256.256",
+                             url_standard = "whatwg",
+                             scheme_acceptance = "general")
+  expect_identical(r$url_diagnostics, rep(list(ma_skip), 2L))
+})
