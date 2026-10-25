@@ -197,7 +197,7 @@ test_that("pin: without a profile a governed knob still conflicts", {
   }
 })
 
-test_that("a profile plus a governed knob resolves as safe_parse_url() parses", {
+test_that("a profile plus a governed knob resolves as safe_parse_url() does", {
   cases <- list(
     list(std = "rfc3986", profile = "rfc-syntax"),
     list(std = "whatwg", profile = "whatwg")
