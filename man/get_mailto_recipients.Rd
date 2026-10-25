@@ -18,9 +18,10 @@ get_mailto_recipients(
 allowlist does not accept) contribute no rows.}
 
 \item{url_standard}{Standard profile passed to the general parser. A
-\code{mailto:} path is opaque, so this does not affect the classification;
-it defaults to \code{"rfc3986"} because the general parser requires a
-selector.}
+\code{mailto:} path is opaque, so this does not affect the recipient
+classification; it decides \code{parse_status} and
+\code{url_diagnostics}. It defaults to \code{"rfc3986"} because the
+general parser requires a selector.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
@@ -107,6 +108,16 @@ local-part at most 64 octets; \code{NA} when unavailable.}
 length of \code{"<" + Mailbox + ">"} is at most 256; \code{NA} when
 unavailable. The familiar 254 is the RFC 3696 EID 1690 derivation of
 this path limit, not a standalone production.}
+\item{\code{parse_status}}{the source URL's parse status, as
+\code{\link{safe_parse_urls}} reports it (see the corresponding
+section); the same for every recipient of that URL.}
+\item{\code{url_diagnostics}}{a list-column whose element is the
+character vector of the source URL's
+\code{\link{get_url_diagnostics}} tokens (\code{character(0)} when
+none). A token is a fact, not always a fault: a \code{mailto:} URL
+that parses usually carries
+\code{"transform-skipped-ineligible-scheme"}, so select on
+\code{parse_status}, not on an empty list.}
 }
 }
 \description{
@@ -132,6 +143,23 @@ a conformance oracle and never a validator. A recipient's classification
 never turns a parse into an error, and the absence of an \code{invalid}
 value does not imply the address is deliverable or fully RFC-conformant.
 No DNS resolution or deliverability check is performed.
+}
+
+\section{The URL's own verdict}{
+ The recipients are read from the
+\code{mailto:} path whether or not the URL parses under
+\code{url_standard}, so a URL the standard rejects still yields its
+recipients, for diagnosis. Each row says whether the URL itself parsed:
+\code{parse_status} is the URL's \code{\link{safe_parse_urls}} status and
+\code{url_diagnostics} its \code{\link{get_url_diagnostics}} tokens,
+under the same \code{url_standard}, \code{scheme_policy} and
+\code{scheme_acceptance}. Under \code{"rfc3986"}, \code{mailto:a@bücher.de}
+yields a recipient whose domain is \code{"idna2008-domain"}, with
+\code{parse_status} \code{"error"} and the token
+\code{"unicode-outside-rfc3986-uri"}: RFC 3986 (sections 2, 2.5) and
+RFC 6068 (section 2) write a non-ASCII character only percent-encoded as
+UTF-8, and \code{mailto:a@b\%C3\%BCcher.de} parses. Filter on
+\code{parse_status} to keep only the recipients of URLs that parse.
 }
 
 \section{SMTP wire-projection facts (opt-in)}{

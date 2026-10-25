@@ -118,7 +118,11 @@ test_that("the parse seams keep their output for every input representation", {
 # `get_url_diagnostics rfc3986` digest moved once more when the token was
 # withheld where percent-encoding does not rescue the row: the two rows led
 # by U+00FC (`<U+00FC>http://u@...`, marked and native) fail as no URL, and
-# so does their `%C3%BC` twin.
+# so does their `%C3%BC` twin. The two `get_mailto_recipients` digests moved
+# when RUL-031 added the `parse_status` and `url_diagnostics` columns; with
+# those two columns dropped, both still give the old shared digest
+# d9b6731f96d2f346a7fbabaafdcae7e9, and the new ones split by standard because
+# the URL verdict and diagnostics differ there.
 ib_export_pins <- c(
   "safe_parse_urls NULL 1 url" = "6fa9dfd2e2244270d25dfb29cb79e930",
   "safe_parse_urls NULL 2 url" = "4fef8dde29a59b3367d086e720665ae7",
@@ -200,8 +204,8 @@ ib_export_pins <- c(
   "is_valid_host rfc3986 1 url" = "f00abd61f44b03c0bbe119b6834e8e2f",
   "check_schemes whatwg 1 url" = "c7cdbdfe37f2ee743dcb6688136206c4",
   "check_schemes rfc3986 1 url" = "08fd1bc14d418606e1f691ca7c4a5cce",
-  "get_mailto_recipients whatwg 1 url" = "d9b6731f96d2f346a7fbabaafdcae7e9",
-  "get_mailto_recipients rfc3986 1 url" = "d9b6731f96d2f346a7fbabaafdcae7e9",
+  "get_mailto_recipients whatwg 1 url" = "36bcb26049457530afc39ec85b2e56c5",
+  "get_mailto_recipients rfc3986 1 url" = "a1fbda3ca7d06433ac3535b7c7b471e1",
   "serialize_url whatwg 1 url" = "3a98bee0eb2552cef63a681eec4e238b",
   "serialize_url whatwg 2 url" = "3a98bee0eb2552cef63a681eec4e238b",
   "serialize_url rfc3986 1 url" = "5b00ec80f41c9b025f8eea66fe5afb67",

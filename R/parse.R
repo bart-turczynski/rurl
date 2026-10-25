@@ -121,6 +121,14 @@
 #'   input was written as an A-label (`xn--...`), so `get_host()` and
 #'   `get_domain()` agree on the same row. `"rfc3986"` and `NULL` are
 #'   unaffected.
+#'
+#'   `"unicode"` is a display form. Under `url_standard = "rfc3986"` it can
+#'   present a host that the same standard rejects on re-parse:
+#'   `http://xn--bcher-kva.de/` presents as `http://bücher.de/`, and RFC 3986
+#'   writes a non-ASCII host only percent-encoded as UTF-8 (sections 2.5,
+#'   3.2.2). Use `"idna"` or `"keep"` for a host that parses again. A
+#'   `path_encoding = "decode"` path is a display form in the same way: under
+#'   `"rfc3986"`, `http://h.de/%C3%A4` presents as `http://h.de/ä`.
 #' @param path_encoding How to present the path percent-encoding in `clean_url`
 #' — the readable-vs-browser rendering choice (the path analog of
 #' `host_encoding`). Defaults to "keep". This is an orthogonal presentation

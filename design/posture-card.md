@@ -54,7 +54,11 @@ prints exactly what a profile bundles.
 - **`rfc3986` is US-ASCII.** A raw code point above U+007F in any component
   is a parse error there (RFC 3986 §2, §2.5, §3.2.2; RUL-030); only its
   percent-encoded UTF-8 spelling parses. Unicode input belongs to `whatwg`;
-  there is no IRI mode. `NULL` keeps the old tolerance, frozen.
+  there is no IRI mode. `NULL` keeps the old tolerance, frozen. RUL-031:
+  `get_mailto_recipients()` still yields a rejected URL's recipients, each
+  row carrying the URL's `parse_status` and `url_diagnostics`; and
+  `host_encoding = "unicode"` (like `path_encoding = "decode"`) is a display
+  form of a URL that parsed, which need not re-parse.
 - **Ungoverned is not selector-independent.** `port_handling` no-ops outside
   WHATWG; `host_encoding` decodes only under `rfc3986`; `path_encoding`
   switches encoder under WHATWG. [ADR 0016](adr/0016-null-freeze-binds-selector-caused-drift.md)

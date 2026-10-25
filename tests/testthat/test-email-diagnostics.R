@@ -151,8 +151,10 @@ test_that("the return shape is a stable data.frame for degenerate input", {
       "mailto_domain_form", "smtp_mailbox_rhs_syntax_form",
       "public_suffix_known", "smtp_domain_wire_form",
       "smtp_envelope_wire_mode", "smtp_envelope_address_requires_smtputf8",
-      "smtp_local_part_length_ok", "smtp_direct_forward_path_fits")
+      "smtp_local_part_length_ok", "smtp_direct_forward_path_fits",
+      "parse_status", "url_diagnostics")
   )
+  expect_type(z$url_diagnostics, "list")
 })
 
 test_that("mixed vectors keep per-URL provenance and skip non-mailto rows", {
@@ -173,7 +175,7 @@ test_that("non-character input is rejected", {
 test_that("wire columns are always present but sentinel by default", {
   r <- get_mailto_recipients("mailto:a@example.com",
     scheme_acceptance = "general")
-  expect_identical(ncol(r), 11L)
+  expect_identical(ncol(r), 13L)
   expect_identical(r$smtp_domain_wire_form, "unavailable")
   expect_identical(r$smtp_envelope_wire_mode, "unavailable")
   expect_true(is.na(r$smtp_envelope_address_requires_smtputf8))
