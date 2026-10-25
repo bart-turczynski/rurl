@@ -846,8 +846,11 @@
     a <- authority[i]
     # Byte-indexed for the same reason as the shim's slice (RURL-kmpnbvdl):
     # `authority` is a capture, so it is declared UTF-8 no matter what
-    # octets it holds, and `substr()` threw on `http://a@@<80>b/`.
-    last <- .last_byte_index(a, "@")
+    # octets it holds, and `substr()` threw on `http://a@@<80>b/`. The last
+    # "@" is where `.ICU_THROUGH_LAST_AT` starts: `.last_byte_index()` lists
+    # every "@" with a fixed `gregexpr()`, quadratic in their number
+    # (RURL-atlidhyh).
+    last <- regexpr(.ICU_THROUGH_LAST_AT, a, perl = TRUE, useBytes = TRUE)[1L]
     paste0(
       .percent_encode_userinfo_charset(.byte_substring(a, 1L, last - 1L)),
       .byte_substring(a, last)

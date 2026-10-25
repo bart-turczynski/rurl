@@ -201,3 +201,15 @@ test_that("the full-stop map's last-\"@\" locate stays under the match limit", {
     out, paste0("http://", strrep("@", long_n), "u\u3002i@h.b/p")
   ))
 })
+
+test_that("the userinfo repair finds its last \"@\" in linear time", {
+  # `.last_byte_index()` lists every "@" with a fixed `gregexpr()`, which is
+  # quadratic in their number: 4e5 of them took about 2.7 s.
+  skip_on_cran()
+  url <- paste0("http://\x01", strrep("@", 400000L), "h/")
+  elapsed <- system.time(
+    out <- .encode_userinfo_charset_vec(url, "whatwg")$url
+  )[["elapsed"]]
+  expect_true(identical(out, paste0("http://%01", strrep("@", 400000L), "h/")))
+  expect_lt(elapsed, 0.5)
+})
