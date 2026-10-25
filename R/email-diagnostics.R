@@ -439,6 +439,21 @@
 #'   value does not imply the address is deliverable or fully RFC-conformant.
 #'   No DNS resolution or deliverability check is performed.
 #'
+#' @section The URL's own verdict: The recipients are read from the
+#'   \code{mailto:} path whether or not the URL parses under
+#'   \code{url_standard}, so a URL the standard rejects still yields its
+#'   recipients, for diagnosis. Each row says whether the URL itself parsed:
+#'   \code{parse_status} is the URL's \code{\link{safe_parse_urls}} status and
+#'   \code{url_diagnostics} its \code{\link{get_url_diagnostics}} tokens,
+#'   under the same \code{url_standard}, \code{scheme_policy} and
+#'   \code{scheme_acceptance}. Under \code{"rfc3986"}, \code{mailto:a@bücher.de}
+#'   yields a recipient whose domain is \code{"idna2008-domain"}, with
+#'   \code{parse_status} \code{"error"} and the token
+#'   \code{"unicode-outside-rfc3986-uri"}: RFC 3986 (sections 2, 2.5) and
+#'   RFC 6068 (section 2) write a non-ASCII character only percent-encoded as
+#'   UTF-8, and \code{mailto:a@b\%C3\%BCcher.de} parses. Filter on
+#'   \code{parse_status} to keep only the recipients of URLs that parse.
+#'
 #' @section SMTP wire-projection facts (opt-in): Set \code{smtp_wire = TRUE} to
 #'   additionally compute the SMTP transport facts that require an actual
 #'   serialized wire projection of the address (octet-length limits per RFC 5321
@@ -459,9 +474,10 @@
 #'   \code{scheme_acceptance = "web"}, all \code{mailto:} URLs, which the web
 #'   allowlist does not accept) contribute no rows.
 #' @param url_standard Standard profile passed to the general parser. A
-#'   \code{mailto:} path is opaque, so this does not affect the classification;
-#'   it defaults to \code{"rfc3986"} because the general parser requires a
-#'   selector.
+#'   \code{mailto:} path is opaque, so this does not affect the recipient
+#'   classification; it decides \code{parse_status} and
+#'   \code{url_diagnostics}. It defaults to \code{"rfc3986"} because the
+#'   general parser requires a selector.
 #' @param smtp_wire Logical; when \code{TRUE}, compute the opt-in SMTP
 #'   wire-projection columns (see the corresponding section). Defaults to
 #'   \code{FALSE}.
@@ -499,6 +515,13 @@
 #'       length of \code{"<" + Mailbox + ">"} is at most 256; \code{NA} when
 #'       unavailable. The familiar 254 is the RFC 3696 EID 1690 derivation of
 #'       this path limit, not a standalone production.}
+#'     \item{\code{parse_status}}{the source URL's parse status, as
+#'       \code{\link{safe_parse_urls}} reports it (see the corresponding
+#'       section); the same for every recipient of that URL.}
+#'     \item{\code{url_diagnostics}}{a list-column whose element is the
+#'       character vector of the source URL's
+#'       \code{\link{get_url_diagnostics}} tokens (\code{character(0)} when
+#'       none).}
 #'   }
 #' @seealso \code{\link{get_url_diagnostics}}, \code{\link{safe_parse_url}}
 #' @export
@@ -545,8 +568,10 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
     smtp_envelope_address_requires_smtputf8 = logical(0),
     smtp_local_part_length_ok = logical(0),
     smtp_direct_forward_path_fits = logical(0),
+    parse_status = character(0),
     stringsAsFactors = FALSE
   )
+  empty$url_diagnostics <- list()
   if (length(url) == 0L) {
     return(empty)
   }
@@ -561,8 +586,24 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
     !is.na(gen$scheme) &
     .ascii_tolower(gen$scheme) == "mailto"
 
+  # The recipients are split from the general parser's path whatever the URL
+  # parse verdict, so each row also carries that verdict and its diagnostics
+  # (maintainer ruling 2026-10-25, RUL-031): a recipient of a URL the selected
+  # standard rejects is a diagnostic fact, never a validity claim. Both come
+  # from the same entry points the caller would use, so they cannot drift.
+  mailto_idx <- which(is_mailto)
+  verdict <- rep(NA_character_, length(url))
+  diags <- vector("list", length(url))
+  if (length(mailto_idx) > 0L) {
+    verdict[mailto_idx] <- safe_parse_urls(url[mailto_idx],
+      url_standard = opts$url_standard, scheme_policy = opts$scheme_policy,
+      scheme_acceptance = opts$scheme_acceptance
+    )$parse_status
+    diags[mailto_idx] <- ._url_metadata_vec(url[mailto_idx], opts)$diagnostics
+  }
+
   rows <- vector("list", length(url))
-  for (i in which(is_mailto)) {
+  for (i in mailto_idx) {
     recips <- .email_split_recipients(gen$path[i])
     if (length(recips) == 0L) {
       next
@@ -574,8 +615,10 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
       do.call(rbind.data.frame, c(per, list(
         stringsAsFactors = FALSE, make.row.names = FALSE
       ))),
+      parse_status = verdict[i],
       stringsAsFactors = FALSE
     )
+    rows[[i]]$url_diagnostics <- rep(list(diags[[i]]), length(recips))
   }
   rows <- rows[!vapply(rows, is.null, logical(1L))]
   if (length(rows) == 0L) {

@@ -1010,3 +1010,35 @@ RFC 3987 (IRI) mode replaces it: Unicode input belongs to `url_standard =
   the rejection of the non-ASCII itself is a separate whole-string test. A row
   that breaks both fails, and reports no token, since percent-encoding alone
   would not rescue it.
+
+## Amendment (2026-10-25, second): the three surfaces RUL-030 left open
+
+*Added RURL-pntbujzc, 2026-10-25, after the amendment above merged. Appended so
+that amendment stays as written; this section settles the
+`get_mailto_recipients()` bullet it left "not yet covered".*
+
+**Owner ruling (2026-10-25), RUL-031.** The principle: the parse verdict, and
+the arguments that name what is parsed against, are exact; a companion helper
+(ADR 0006) still informs the caller about input the verdict rejects, so the
+caller can collect diagnostic facts from it.
+
+- **`get_mailto_recipients()` keeps the recipients and carries the verdict.**
+  It still reads the recipients from the `mailto:` path whatever the URL's
+  verdict, and every recipient row now carries `parse_status` (the URL's
+  `safe_parse_urls()` status) and `url_diagnostics` (its
+  `get_url_diagnostics()` tokens), under the call's own `url_standard`,
+  `scheme_policy` and `scheme_acceptance`. Under `rfc3986`,
+  `mailto:a@bücher.de` yields an `idna2008-domain` recipient with
+  `parse_status` `"error"` and `unicode-outside-rfc3986-uri`. The
+  classification is a diagnostic fact, never a validity claim; the verdict is
+  not softened. This is the one surface that reads the `rfc3986` parse
+  without following it, and it says so on every row.
+- **`host_encoding = "unicode"` is a display form.** Under `rfc3986` it can
+  present a host the standard rejects on re-parse (`xn--bcher-kva.de` as
+  `bücher.de`; sections 2.5, 3.2.2). The documentation says so and names
+  `"idna"` and `"keep"` as the forms that parse again. It is not
+  percent-encoded, which would change the representation asked for, and not
+  `NA`, which would discard it.
+- **The stale `rurl_deviation` cells** in `external-url-vectors.csv` are
+  cleared in a separate re-baselining change, not with the parser change
+  (`design/oracle-fixtures.md`).
