@@ -49,6 +49,8 @@ test_that(".classify_input_host_vec() reads the host after the last \"@\"", {
 long_n <- 10500000L
 
 test_that("the last-\"@\" cut stays under the match limit on a long row", {
+  # A ~10 MB row, copied several times: not on CRAN.
+  skip_on_cran()
   # `\A(?s:.)*@` ran to the end and gave the row back byte by byte to the
   # last "@": past ~1e7 bytes `regexpr()` warned and the row went uncut, so
   # the userinfo read as part of the host token.
@@ -70,6 +72,8 @@ test_that("the host classifier drops only the last \":port\"", {
 })
 
 test_that("the port cut stays under the match limit on a long row", {
+  # A ~10 MB row, copied several times: not on CRAN.
+  skip_on_cran()
   # `:[^:]*\z` gave back the run after each earlier ":" byte by byte: with
   # ~1e7 bytes before the last ":" it warned and the port stayed on.
   host <- paste0("h:", strrep("a", long_n))
@@ -90,6 +94,8 @@ test_that("the userinfo encoder reads the span before the last \"@\"", {
 })
 
 test_that("the userinfo span stays under the match limit on a long row", {
+  # A ~10 MB row, copied several times: not on CRAN.
+  skip_on_cran()
   # `@[^@]*\z` gave back the run after each earlier "@" byte by byte: with
   # ~1e7 bytes between two "@" it warned and read the host as userinfo.
   url <- paste0("http://u@", strrep("a", long_n), "@h\x01/")
@@ -110,6 +116,8 @@ test_that("Phase 1 reads a scheme-less host:port before \"/\" or the end", {
 })
 
 test_that("the host:port test stays under the match limit on a long port", {
+  # A ~10 MB row, copied several times: not on CRAN.
+  skip_on_cran()
   # `[0-9]+(?:\z|/)` gave a digit run back byte by byte before failing: with
   # ~1e7 digits and no "/" or end after them it warned.
   x <- paste0("h:", strrep("1", long_n), "x")
@@ -130,6 +138,8 @@ test_that("the IPv6 dotted-quad tail follows the last \":\" of a run", {
 })
 
 test_that("the IPv6 tail test stays under the match limit on a long run", {
+  # A ~10 MB row, copied several times: not on CRAN.
+  skip_on_cran()
   # The atomic `(?>[0-9a-fA-F:]+:)` still ran to the end of the hex run and
   # gave it back byte by byte to the last ":": with ~1e7 hex digits after
   # it, it warned.
@@ -160,6 +170,8 @@ test_that("the trailing C0/space trims cut the final run only", {
 })
 
 test_that("the trailing trims stay under the match limit on a long run", {
+  # A ~10 MB row, copied several times: not on CRAN.
+  skip_on_cran()
   # Tried at each byte of an inner run, the greedy run gave the rest of it
   # back byte by byte: with ~1e7 bytes in one run it warned.
   x <- paste0("http://a/", strrep(" ", long_n), "b")
@@ -172,10 +184,13 @@ test_that("the trailing trims stay under the match limit on a long run", {
 test_that("the trailing trims are linear in an inner run", {
   # Below the limit the same retries were quadratic: an inner run of 2e4
   # spaces took about 2 s in the strip and 14 s in the browser fixer.
+  # The bound sits far from both: the old retries take over 10 s on this
+  # run, linear trims well under 1 s, so a loaded machine does not flake it.
   skip_on_cran()
-  x <- paste0("http://a/", strrep(" ", 20000L), "b")
-  expect_lt(system.time(strip_trim(x))[["elapsed"]], 0.5)
-  expect_lt(system.time(fixup_trim(x))[["elapsed"]], 0.5)
+  skip_on_covr()
+  x <- paste0("http://a/", strrep(" ", 50000L), "b")
+  expect_lt(system.time(strip_trim(x))[["elapsed"]], 3)
+  expect_lt(system.time(fixup_trim(x))[["elapsed"]], 3)
 })
 
 map_sep <- function(x) .map_whatwg_domain_separators_vec(x, "whatwg")$url
@@ -192,6 +207,8 @@ test_that("the full-stop map starts the host after the last \"@\"", {
 })
 
 test_that("the full-stop map's last-\"@\" locate stays under the match limit", {
+  # A ~10 MB row, copied several times: not on CRAN.
+  skip_on_cran()
   # Possessive runs repeated once per "@" still counted one step each: an
   # authority of ~1e7 "@" warned, the "@" went unfound, and the userinfo
   # was mapped as host.
@@ -205,11 +222,14 @@ test_that("the full-stop map's last-\"@\" locate stays under the match limit", {
 test_that("the userinfo repair finds its last \"@\" in linear time", {
   # `.last_byte_index()` lists every "@" with a fixed `gregexpr()`, which is
   # quadratic in their number: 4e5 of them took about 2.7 s.
+  # The bound sits far from both: the quadratic listing takes about 10 s
+  # on this run, the linear locate about 1 s.
   skip_on_cran()
-  url <- paste0("http://\x01", strrep("@", 400000L), "h/")
+  skip_on_covr()
+  url <- paste0("http://\x01", strrep("@", 800000L), "h/")
   elapsed <- system.time(
     out <- .encode_userinfo_charset_vec(url, "whatwg")$url
   )[["elapsed"]]
-  expect_true(identical(out, paste0("http://%01", strrep("@", 400000L), "h/")))
-  expect_lt(elapsed, 0.5)
+  expect_true(identical(out, paste0("http://%01", strrep("@", 800000L), "h/")))
+  expect_lt(elapsed, 4)
 })
