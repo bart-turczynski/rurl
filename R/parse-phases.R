@@ -46,9 +46,12 @@
 # (`.icu_split_lines()`), and then cut a part that holds none, where ICU's
 # `.` is byte mode's `(?s:.)`. PCRE's match limit also counts each retry of
 # a group or an assertion after a repeat gives back a byte, so a repeat here
-# is possessive, or is followed by a literal, or the pattern is unanchored
-# (each start is a fresh match); every cut and test below is linear in the
-# row and stays under the limit at any length.
+# is possessive, or is followed by a literal its class excludes (PCRE then
+# makes it possessive), or ends the match; a repeat that may give back must
+# not be retried at every byte. Each iteration of a repeated group counts
+# too, so a group is not repeated once per delimiter of the row. Every cut and
+# test below is linear in the row and stays under the limit at any length
+# (RURL-atlidhyh).
 
 # A line terminator, and the same at the true end.
 .ICU_TERMINATOR <- paste0(
@@ -64,10 +67,26 @@
 )
 
 # On a part with no terminator: from the first "/", "?" or "#" to the end;
-# through the last "@"; a leading "[" through the first "]".
+# through the last "@"; a leading "[" through the first "]". The cut through
+# the last "@" ends where this match starts: the only "@" from which "@"-free
+# bytes run to the end is the last one. The anchored `\A(?s:.)*@` ran to the
+# end and gave the row back byte by byte to reach that "@", and past ~1e7
+# bytes hit PCRE's match limit (RURL-atlidhyh); unanchored, each start is a
+# fresh match and the possessive run gives nothing back.
 .ICU_FROM_PATH_DELIM <- "(?s)[/?#].*\\z"
-.ICU_THROUGH_LAST_AT <- "\\A(?s:.)*@"
+.ICU_THROUGH_LAST_AT <- "@[^@]*+\\z"
 .ICU_BRACKET_HEAD <- "\\A\\[[^\\]]*+\\]"
+
+# A whole run of C0 controls and spaces, for a trailing trim: the pattern
+# appends the end it means. The lookbehind lets the run start only where a
+# run starts, and the run is possessive. A shorter run from the same start
+# ends before a run byte, which no end follows: every ASCII line terminator
+# is a run byte, and U+0085, U+2028 and U+2029 can only follow the whole run.
+# So the match is the one `[\x00-\x20]+` found, but where that pattern was
+# tried at each byte of an inner run and gave the rest back byte by byte,
+# quadratic in the run and over PCRE's match limit past ~1e7 bytes
+# (RURL-atlidhyh), this is tried once per run and gives nothing back.
+.C0_SPACE_RUN <- "(?<![\\x00-\\x20])[\\x00-\\x20]++"
 
 # Split each row into `head` (through its last inner terminator, or ""),
 # `line` (the rest, without the final terminator; it holds no terminator)
@@ -134,10 +153,10 @@
   first <- regexpr(.ICU_TERMINATOR, y, perl = TRUE, useBytes = TRUE)
   line1_end <- ifelse(first > 0L, first - 1L, nchar(y, type = "bytes"))
   line1 <- .bytes_cut(y, 1L, line1_end)
+  # `m` is the byte of the last "@" in line 1, so the cut keeps what follows.
   m <- regexpr(.ICU_THROUGH_LAST_AT, line1, perl = TRUE, useBytes = TRUE)
   hit <- m > 0L
-  y[hit] <- .bytes_cut(y[hit], attr(m, "match.length")[hit] + 1L,
-                       .Machine$integer.max)
+  y[hit] <- .bytes_cut(y[hit], m[hit] + 1L, .Machine$integer.max)
   out[todo] <- y
   .bytes_utf8(out)
 }
@@ -236,13 +255,26 @@
 .ICU_IPV4_CANONICAL <- paste0(
   "^", .ICU_IPV4_OCTET, "(?:\\.", .ICU_IPV4_OCTET, "){3}", .ICU_END
 )
-# The hex-and-colon run of `.ICU_IPV6_IPV4_TAIL` is atomic: the dotted quad
-# holds no ":", so it can only follow the last ":" of the run, and the regex
-# need not retry the quad after every earlier ":". Retrying it there hit
-# PCRE's match limit on a host of millions of groups.
+# `.ICU_IPV6_IPV4_TAIL` was the ICU `^\[?([0-9a-fA-F:]+:)<quad>\]?$`. The
+# dotted quad holds no ":", so its first octet is the digits after the last
+# ":" of the hex-and-colon run, up to the first "."; the run is taken whole,
+# possessively, and a lookbehind checks that it ends in ":" and a canonical
+# octet, with a run byte before the ":". Retrying the quad after every
+# earlier ":" hit PCRE's match limit on a host of millions of groups, and an
+# atomic `(?>[0-9a-fA-F:]+:)` still gave a long last group back byte by byte
+# (RURL-atlidhyh). Each lookbehind branch is fixed-length, which every PCRE
+# release accepts.
+.ICU_IPV6_RUN_BYTE <- "[0-9a-fA-F:]"
+.ICU_IPV6_RUN_ENDS_IN_OCTET <- paste0(
+  "(?<=",
+  paste0(.ICU_IPV6_RUN_BYTE, ":",
+         c("25[0-5]", "2[0-4][0-9]", "1[0-9][0-9]", "[1-9][0-9]", "[0-9]"),
+         collapse = "|"),
+  ")"
+)
 .ICU_IPV6_IPV4_TAIL <- paste0(
-  "^\\[?(?>[0-9a-fA-F:]+:)(?:", .ICU_IPV4_OCTET, "(?:\\.", .ICU_IPV4_OCTET,
-  "){3})\\]?", .ICU_END
+  "^\\[?", .ICU_IPV6_RUN_BYTE, "++", .ICU_IPV6_RUN_ENDS_IN_OCTET,
+  "(?:\\.", .ICU_IPV4_OCTET, "){3}\\]?", .ICU_END
 )
 .ICU_IPV6_HEX_SHAPE <- paste0("^\\[?[0-9a-fA-F:]++\\]?", .ICU_END)
 .ICU_IPV6_SERIALIZABLE <- paste0("^\\[[0-9A-Fa-f:.]++\\]", .ICU_END)
@@ -338,11 +370,14 @@
   host_ui <- .icu_cut_through_last_at(authority)
   bracketed <- startsWith(host_ui, "[")
   bracketed[is.na(bracketed)] <- FALSE
-  # `[^:]*` takes every line terminator, so `\z` reads as ICU's `$` did.
+  # `[^:]*` takes every line terminator, so `\z` reads as ICU's `$` did. The
+  # run is possessive: a shorter run never reaches `\z`, and giving it back
+  # byte by byte after each earlier ":" hit PCRE's match limit on a long row
+  # (RURL-atlidhyh).
   host_token <- ifelse(
     bracketed,
     .icu_cut_after_bracket(host_ui),
-    .bytes_replace(host_ui, ":[^:]*\\z", "")
+    .bytes_replace(host_ui, ":[^:]*+\\z", "")
   )
 
   host_lower <- .ascii_tolower(host_token)
@@ -611,7 +646,7 @@
   trimmed <- stringi::stri_replace_first_regex(
     url_out, "^[\\u0000-\\u0020]+", ""
   )
-  trimmed <- .bytes_replace(trimmed, "[\\x00-\\x20]+\\z", "")
+  trimmed <- .bytes_replace(trimmed, paste0(.C0_SPACE_RUN, "\\z"), "")
   # `differs` picks the rows that flow on as stringi's copy; it is NOT the strip
   # fact. `!=` compares a native input with stringi's UTF-8 output, and R reads
   # the native side in the session charset: under LC_ALL=C every non-ASCII row
@@ -709,19 +744,21 @@
   # fixed locators and stri_sub() read past a U+FEFF that starts their input,
   # so splitting `authority` once dropped a mark that starts the userinfo
   # (RURL-exdlurql). The authority ends at the first "/", "?" or "#"; userinfo
-  # runs through the LAST "@" in it. Possessive runs of "@"-free bytes, each
-  # ending in "@", reach that "@" without giving a byte back, so the locate
-  # is linear: a greedy `[^/?#]*@` backtracked byte by byte from the end of
-  # the authority and hit PCRE's match limit on a long one (RURL-yqmoztoj).
-  # A negated class, not `.*`: ICU `.` stops at U+000B, U+000C, U+0085,
-  # U+2028 and U+2029, which would leave the host unsplit for a later step to
-  # map.
+  # runs through the LAST "@" in it, where `.ICU_THROUGH_LAST_AT` starts in
+  # the authority's bytes. A greedy `[^/?#]*@` backtracked byte by byte from
+  # the end of the authority and hit PCRE's match limit on a long one
+  # (RURL-yqmoztoj); the possessive `(?:[^/?#@]*+@)++` that replaced it still
+  # counted a step per "@" and hit it on ~1e7 of them, and a fixed
+  # `gregexpr()` is quadratic in the number of matches (RURL-atlidhyh). A
+  # negated class, not `.*`: ICU `.` stops at U+000B, U+000C, U+0085, U+2028
+  # and U+2029, which would leave the host unsplit for a later step to map.
   prefix <- "^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)?//"
+  prefix_end <- .bytes_locate(url, prefix)[, "end"]
   authority_end <- .bytes_locate(url, paste0(prefix, "[^/?#]*+"))[, "end"]
-  at <- .bytes_locate(url, paste0(prefix, "(?:[^/?#@]*+@)++"))[, "end"]
-  host_start <- ifelse(
-    is.na(at), .bytes_locate(url, prefix)[, "end"], at
-  ) + 1L
+  userinfo_at <- .bytes_locate(
+    .bytes_cut(url, prefix_end + 1L, authority_end), .ICU_THROUGH_LAST_AT
+  )[, "start"]
+  host_start <- prefix_end + ifelse(is.na(userinfo_at), 0L, userinfo_at) + 1L
   before_host <- .bytes_cut(url, 1L, host_start - 1L)
   host_port <- .bytes_cut(url, host_start, authority_end)
   after_authority <- .bytes_cut(url, authority_end + 1L, .Machine$integer.max)
@@ -789,11 +826,13 @@
   has_at[is.na(has_at)] <- FALSE
 
   # Any of the 30 parser-refused code points inside the userinfo span
-  # (everything before the LAST "@"). The first match of `@[^@]*\z` starts at
-  # the last "@", so `sub()` cuts what stringi's replace-last did.
+  # (everything before the LAST "@"). The first match of `@[^@]*+\z` starts at
+  # the last "@", so `sub()` cuts what stringi's replace-last did. The run is
+  # possessive: a greedy one gave back the bytes after each earlier "@" one by
+  # one and hit PCRE's match limit on a long row (RURL-atlidhyh).
   eligible <- rep(FALSE, length(url))
   if (any(has_at)) {
-    userinfo_span <- .bytes_replace(authority[has_at], "@[^@]*\\z", "")
+    userinfo_span <- .bytes_replace(authority[has_at], "@[^@]*+\\z", "")
     hit <- .bytes_detect(userinfo_span, "[\\x00-\\x20\\x7f]")
     hit[is.na(hit)] <- FALSE
     eligible[has_at] <- hit
@@ -807,8 +846,11 @@
     a <- authority[i]
     # Byte-indexed for the same reason as the shim's slice (RURL-kmpnbvdl):
     # `authority` is a capture, so it is declared UTF-8 no matter what
-    # octets it holds, and `substr()` threw on `http://a@@<80>b/`.
-    last <- .last_byte_index(a, "@")
+    # octets it holds, and `substr()` threw on `http://a@@<80>b/`. The last
+    # "@" is where `.ICU_THROUGH_LAST_AT` starts: `.last_byte_index()` lists
+    # every "@" with a fixed `gregexpr()`, quadratic in their number
+    # (RURL-atlidhyh).
+    last <- regexpr(.ICU_THROUGH_LAST_AT, a, perl = TRUE, useBytes = TRUE)[1L]
     paste0(
       .percent_encode_userinfo_charset(.byte_substring(a, 1L, last - 1L)),
       .byte_substring(a, last)
@@ -1340,7 +1382,7 @@
   # trim has always used: the class takes every ASCII line terminator, but not
   # a final U+0085, U+2028 or U+2029, before which the run is still trimmed.
   url <- .bytes_replace(url, "^[\\x00-\\x20]+", "")
-  url <- .bytes_replace(url, paste0("[\\x00-\\x20]+", .ICU_END), "")
+  url <- .bytes_replace(url, paste0(.C0_SPACE_RUN, .ICU_END), "")
 
   # Recognized-scheme set = .WHATWG_SPECIAL_SCHEMES; authority table =
   # .SPECIAL_AUTHORITY_SCHEMES, the same set minus `file`. Schemes are ASCII
@@ -1570,8 +1612,11 @@
     # before a final U+0085, U+2028 or U+2029, so `example.com:8080<U+2028>`
     # read as a host:port where `example.com:8080x` reads as a scheme and an
     # opaque path. A port is digits only (WHATWG URL Standard, port state;
-    # RFC 3986 section 3.2.3), so those rows now read like the `x` row.
-    lhp <- .bytes_detect(url, "^[^/:]+:[0-9]+(?:\\z|/)")
+    # RFC 3986 section 3.2.3), so those rows now read like the `x` row. The
+    # digit run is possessive, the same rows as the twin's `[0-9]+`: a shorter
+    # run is followed by a digit, neither end nor "/", and giving a long run
+    # back byte by byte hit PCRE's match limit (RURL-atlidhyh).
+    lhp <- .bytes_detect(url, "^[^/:]+:[0-9]++(?:\\z|/)")
     lhp[is.na(lhp)] <- FALSE
     looks_like_host_port[maybe_host_port] <- lhp[maybe_host_port]
   }
