@@ -300,7 +300,7 @@ test_that("each distinct base is parsed once, not once per row", {
   expect_identical(seen$calls[[1L]], c(valid_base, ws_bad))
 })
 
-test_that("whatwg: an empty or scheme-less base fails, so an absolute ref is NA", {
+test_that("whatwg: an empty or scheme-less base makes an absolute ref NA", {
   # `new URL("https://z.com/q", "")` throws: the base is parsed first and an
   # empty or scheme-less string fails the basic URL parser. An NA base is no
   # base, so the absolute reference still resolves against it.
