@@ -101,7 +101,7 @@ prep_host_port <- function(x) {
   .prepare_urls_for_parse_vec(x, "keep", "keep")$looks_like_host_port
 }
 
-test_that("Phase 1 reads a scheme-less host:port only before \"/\" or the end", {
+test_that("Phase 1 reads a scheme-less host:port before \"/\" or the end", {
   expect_identical(
     prep_host_port(c("example.com:8080", "example.com:8080/p", "h:1x",
                      "urn:a:1", "h:80?q", "h:", "h:8080\u2028")),
@@ -180,7 +180,7 @@ test_that("the trailing trims are linear in an inner run", {
 
 map_sep <- function(x) .map_whatwg_domain_separators_vec(x, "whatwg")$url
 
-test_that("the full-stop map starts the host after the authority's last \"@\"", {
+test_that("the full-stop map starts the host after the last \"@\"", {
   expect_identical(
     map_sep(c("http://u\u3002i@h\u3002b/p", "http://a@b@h\uff0eb/c@d",
               "//h\uff61b?x@y", "http://@h\u3002b", "http://h/\u3002@x",
