@@ -95,6 +95,21 @@ to 74 references under 53 keys. One call stays: the WHATWG leading trim in
 `.strip_whatwg_control_chars_vec()`, whose ICU read supplies the U+FFFD decode
 the whatwg route relies on.
 
+RURL-dddxutjf's close-out (slice 3, 2026-10-25) settled the last calls
+outside ADR 0019's kept set; the maintainer delegated the calls, and a
+second-opinion consultation agreed. The allowlist was regenerated on that
+branch at main `302a670` to 8 references under 7 keys, which are exactly the
+kept set: NFC (2), full case mapping (2), `.param_matches()`'s caseless arm,
+and the semantic exception 2(d) decode (`.url_key_frame()` 2, and the new
+shared `.utf8_decode_replacing()`).
+
+| Row(s) | Call | Disposition |
+|---|---|---|
+| 14, 15 | `stri_split_fixed` in `.split_host_labels` | removed: `.bytes_split_fixed(keep_trailing_empty = TRUE)`; the U+FEFF splice guard is gone with it |
+| 38 | `stri_replace_first_regex` in `.strip_whatwg_control_chars_vec` | removed: byte-mode trim; the U+FFFD decode its ICU read supplied is now explicit, `.utf8_decode_replacing()` on the rows that are not valid UTF-8 |
+| (MR !242) | `stri_enc_toutf8` in `resolve_url` | moved into `.utf8_decode_replacing()`, shared with the trim; **stays** under exception 2(d) |
+| 183 | `stri_numbytes` in `.url_key_frame` | removed: `nchar(type = "bytes")` |
+
 ## Legend
 
 - **Family**: what the call does. *detect* returns a logical. *count*

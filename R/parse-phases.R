@@ -574,10 +574,29 @@
 # a C0 control, a space or a slash; callers masked such rows with this, under
 # every url_standard (RURL-vhionecz, RURL-biunpazk). Byte mode reads the mark
 # as data (ADR 0019), so only the guards that still front a stringi call use
-# this: ADR 0005's table, and the whatwg `stri_enc_toutf8()` splice in
-# resolve_url() (ADR 0019 decision 4, still open). NA reads FALSE.
+# this: ADR 0005's table, and the `stri_enc_toutf8()` splices of
+# .utf8_decode_replacing() and .url_key_frame() (ADR 0019 semantic exception
+# 2(d)). NA reads FALSE.
 .starts_with_bom <- function(x) {
   grepl("^\ufeff", x, useBytes = TRUE)
+}
+
+# Decode `x` as the URL Standard's input is decoded: UTF-8 with one U+FFFD
+# per maximal subpart of an undecodable sequence (the WHATWG Encoding
+# Standard's UTF-8 decoder). This is ADR 0019's semantic exception 2(d),
+# kept in stringi because base R has no such decode; the result is UTF-8.
+# stri_enc_toutf8() reads a U+FEFF that starts its input as a byte-order mark
+# and drops it, but in a URL the code point is data, so a row led by the mark
+# is decoded with an ASCII `x` spliced on first, and that one byte is cut off
+# after (RURL-tfttelwo). Shared by the `whatwg` input trim and resolve_url().
+# The caller passes UTF-8 or unknown-marked strings, so paste0() does not
+# translate them by the locale.
+.utf8_decode_replacing <- function(x) {
+  lead <- .starts_with_bom(x)
+  x[lead] <- paste0("x", x[lead])
+  out <- suppressWarnings(stringi::stri_enc_toutf8(x, validate = TRUE))
+  out[lead] <- .bytes_cut(out[lead], 2L, .Machine$integer.max)
+  out
 }
 
 # WHATWG input stripping -- the basic URL parser's step 1, BOTH halves
@@ -631,32 +650,26 @@
   }
 
   # Step 1a: leading/trailing C0-control-or-SPACE. `\z` (true end of input), not
-  # `$`: ICU's `$` also matches before a final line terminator, and LF/CR/VT/FF
-  # all live inside this class. The regex calls here count a leading U+FEFF,
-  # so a row led by one keeps it (see .starts_with_bom()).
+  # `$`, because LF/CR/VT/FF all live inside this class. Both trims run in byte
+  # mode (ADR 0019), which counts a leading U+FEFF, so a row led by one keeps
+  # it (see .starts_with_bom()).
   #
-  # The leading trim STAYS ON STRINGI (RURL-oahhlnvf): its ICU read is also
-  # the decode this route relies on. stringi writes U+FFFD for each octet that
-  # is not UTF-8, as the URL Standard's input does (its parser reads scalar
-  # values, and a decoder writes U+FFFD for an undecodable sequence), and
-  # every later step of the `whatwg` route, the `file:` parser among them,
-  # sees only that decoded copy (`differs` below). Byte mode would hand the
-  # raw octets on. Replacing it is an encoding decision, the semantic
-  # exceptions' slice (RURL-yyeohqah, ADR 0019), not a byte-mode rewrite.
+  # The URL Standard's parser reads scalar values, and the decoder that gives
+  # them writes U+FFFD for each undecodable sequence, so every later step of
+  # the `whatwg` route, the `file:` parser among them, must see that decoded
+  # copy. The leading trim used to be stringi's ICU regex, whose read was that
+  # decode; it is now explicit, the semantic exception 2(d) decode in
+  # .utf8_decode_replacing(), on the rows that are not valid UTF-8 only, and
+  # the trims are base R (RURL-dddxutjf). The two decodes write the same
+  # U+FFFD per maximal subpart (test-stringi-semantic-exceptions.R).
   url_out <- url
-  trimmed <- stringi::stri_replace_first_regex(
-    url_out, "^[\\u0000-\\u0020]+", ""
-  )
+  bad <- !is.na(url) & !validUTF8(url)
+  if (any(bad)) {
+    url_out[bad] <- .utf8_decode_replacing(url[bad])
+  }
+  trimmed <- .bytes_replace(url_out, "\\A[\\x00-\\x20]++", "")
   trimmed <- .bytes_replace(trimmed, paste0(.C0_SPACE_RUN, "\\z"), "")
-  # `differs` picks the rows that flow on as stringi's copy; it is NOT the strip
-  # fact. `!=` compares a native input with stringi's UTF-8 output, and R reads
-  # the native side in the session charset: under LC_ALL=C every non-ASCII row
-  # differs although nothing was removed (RURL-bnorcgbv). Taking the copy there
-  # hands on the same octets, so no value moves. It also differs, in every
-  # locale, where stringi substituted U+FFFD for an undecodable octet, and that
-  # copy is the one the parse must see.
-  differs <- !is.na(trimmed) & !is.na(url_out) & trimmed != url_out
-  differs[is.na(differs)] <- FALSE
+  differs <- !is.na(trimmed) & trimmed != url_out
   if (any(differs)) {
     url_out[differs] <- trimmed[differs]
   }

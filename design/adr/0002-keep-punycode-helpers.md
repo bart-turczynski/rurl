@@ -71,3 +71,19 @@ host never gains one (RFC 3986 §3.2.2).
 - The scalar `.punycode_to_unicode()` path with a non-default `decode_fn`
   exists for test doubles and does not settle labels, so a double's answer is
   what the caller sees.
+
+## Note: the label split runs in byte mode
+
+*Added RURL-dddxutjf, 2026-10-25, the ADR 0019 close-out. The maintainer
+delegated the call, and a second-opinion consultation agreed. Appended so no
+line citation moves.*
+
+`.split_host_labels()`, which both helpers use to split a host into labels,
+now calls `.bytes_split_fixed(hosts, ".", keep_trailing_empty = TRUE)` instead
+of `stringi::stri_split_fixed()`. It keeps the trailing empty label, so
+`example.com.` still renders as written. It reads a U+FEFF that starts the
+host as data, so the splice guard that stood in for that (RURL-tbmnnauj) is
+gone. A differential over the WPT inputs, the determinism corpus and a host
+fuzz (Punycode, U+FEFF, U+3002, empty labels), in the C and UTF-8 locales,
+moved no value and no encoding mark. **The standing rule holds**: no label
+changes case, and nothing tolerated is rejected.

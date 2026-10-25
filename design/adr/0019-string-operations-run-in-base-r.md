@@ -304,3 +304,29 @@ under `LC_ALL=C` and a UTF-8 locale.
    `wiki`. The Turkish regression test sets and restores stringi's default
    with `stri_locale_set("tr_TR")` (amendment) and goes red when the locale
    is `"root"`.
+
+## Close-out (RURL-dddxutjf)
+
+The calls outside decision 4's kept set were settled on 2026-10-25. The
+maintainer delegated the calls to an agent recommendation that a separate
+second-opinion consultation had to agree with, and it did, on each one:
+
+- `.split_host_labels()` (R/domain.R, ADR 0002's helpers): moved to
+  `.bytes_split_fixed(keep_trailing_empty = TRUE)`, and its U+FEFF guard was
+  removed. ADR 0002 carries a dated note.
+- `.url_key_frame()`'s `stri_numbytes()`: moved to `nchar(type = "bytes")`.
+- `resolve_url()`'s `stri_enc_toutf8()` decode: kept under semantic exception
+  2(d), now through `.utf8_decode_replacing()` (R/parse-phases.R), which the
+  whatwg input trim shares.
+- `.strip_whatwg_control_chars_vec()`'s leading `stri_replace_first_regex()`:
+  removed. Its ICU read was also the U+FFFD decode the whatwg route relies on,
+  so that decode is now explicit (`.utf8_decode_replacing()` on the rows that
+  are not valid UTF-8) and both trims run in byte mode. This adds no
+  exception beyond 2(d). The two decodes write the same U+FFFD per maximal
+  subpart on 2(d)'s fixture classes, and the merge was gated on a differential
+  (WPT inputs, the determinism corpus and a byte fuzz; parse, clean,
+  serialize, key and resolve; C and UTF-8 locales) that moved no value and no
+  encoding mark.
+
+The allowlist now holds the kept set and nothing else: 8 references under 7
+keys.
