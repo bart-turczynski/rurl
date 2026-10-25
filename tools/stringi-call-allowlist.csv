@@ -2,9 +2,6 @@
 # Read by tools/stringi-call-gate.R; see its header. A key found fewer
 # times than its count passes; more times, or unlisted, fails.
 "file","function","reference","count"
-"R/accessors.R",".subdomain_labels_vec","stringi::stri_length",2
-"R/accessors.R",".subdomain_labels_vec","stringi::stri_sub",1
-"R/diagnostics.R",".ipv6_host_diagnostics","stringi::stri_sub",1
 "R/domain.R",".normalize_and_punycode","stringi::stri_trans_nfc",1
 "R/domain.R",".normalize_and_punycode_vec","stringi::stri_trans_nfc",1
 "R/domain.R",".split_host_labels","stringi::stri_split_fixed",2
@@ -47,8 +44,6 @@
 "R/parse-state.R",".split_authority","stringi::stri_opts_regex",1
 "R/parse-web.R",".web_ipv6_serialize","stringi::stri_locate_first_fixed",1
 "R/parse-web.R",".web_ipv6_serialize","stringi::stri_match_first_regex",1
-"R/parse.R",".source_scheme_spelling_vec","stringi::stri_match_first_regex",1
-"R/path-query.R","._strip_index_page","stringi::stri_match_first_regex",1
 "R/path-query.R",".param_matches","stringi::stri_detect_regex",1
 "R/resolve.R",".whatwg_file_remove_dot_segments","stringi::stri_split_fixed",1
 "R/resolve.R","resolve_url","stringi::stri_enc_toutf8",1
