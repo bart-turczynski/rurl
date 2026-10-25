@@ -127,9 +127,12 @@
 # mark-led first label lost it and `\ufeffxn--nxasmq6b` was decoded as the
 # A-label it does not spell (RURL-tbmnnauj); the splice guard that worked
 # around it is gone with the call (RURL-dddxutjf). The label count is
-# unchanged, and the labels are declared UTF-8 as stringi declared them.
+# unchanged, and the labels are declared UTF-8 as stringi declared them. A
+# latin1 host is spelled in UTF-8 first by the exact ISO 8859-1 map, as
+# stringi transcoded it; the byte layer takes no latin1 input.
 .split_host_labels <- function(hosts) {
-  .bytes_split_fixed(hosts, ".", keep_trailing_empty = TRUE)
+  .bytes_split_fixed(.latin1_input_to_utf8(hosts), ".",
+                     keep_trailing_empty = TRUE)
 }
 
 # Internal helper to decode Punycode domain parts to Unicode. With the default

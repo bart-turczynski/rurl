@@ -1075,9 +1075,8 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     # exception 2(d) decode (ADR 0019), which keeps a leading U+FEFF as data
     # (RURL-tfttelwo). Every element here is marked UTF-8 by the input
     # boundary.
-    replace <- .utf8_decode_replacing
-    ref[ref_bad] <- replace(ref[ref_bad])
-    base[base_bad] <- replace(base[base_bad])
+    ref[ref_bad] <- .utf8_decode_replacing(ref[ref_bad])
+    base[base_bad] <- .utf8_decode_replacing(base[base_bad])
   } else if (!is.null(resolution_standard)) {
     ref[ref_bad] <- NA_character_
     base[base_bad] <- NA_character_

@@ -47,6 +47,10 @@ test_that("the host label split keeps the trailing empty label and a U+FEFF", {
   expect_identical(labels[[4]], "")
   expect_identical(labels[[5]], NA_character_)
   expect_identical(Encoding(labels[[3]][1]), "UTF-8")
+  # A latin1 host is spelled in UTF-8 first, as stringi transcoded it.
+  latin1 <- "caf\xe9.de"
+  Encoding(latin1) <- "latin1"
+  expect_identical(.split_host_labels(latin1), list(c("caf\u00e9", "de")))
 })
 
 test_that("the key frame counts the bytes of a field, a U+FEFF included", {

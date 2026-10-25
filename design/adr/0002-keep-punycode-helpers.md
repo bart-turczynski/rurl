@@ -83,7 +83,8 @@ now calls `.bytes_split_fixed(hosts, ".", keep_trailing_empty = TRUE)` instead
 of `stringi::stri_split_fixed()`. It keeps the trailing empty label, so
 `example.com.` still renders as written. It reads a U+FEFF that starts the
 host as data, so the splice guard that stood in for that (RURL-tbmnnauj) is
-gone. A differential over the WPT inputs, the determinism corpus and a host
+gone. A latin1-marked host is spelled in UTF-8 first, as stringi
+transcoded it. A differential over the WPT inputs, the determinism corpus and a host
 fuzz (Punycode, U+FEFF, U+3002, empty labels), in the C and UTF-8 locales,
 moved no value and no encoding mark. **The standing rule holds**: no label
 changes case, and nothing tolerated is rejected.

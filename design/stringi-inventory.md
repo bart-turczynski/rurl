@@ -73,7 +73,7 @@ the key MR !242 added:
 | 184 | `stri_replace_all_regex` in `.glob_to_regex` | removed: byte layer, ASCII punctuation only |
 | 173 | `stri_detect_regex` in `.param_matches` | **stays**: case-insensitive arm, ICU full case folding; the case-sensitive arm moved to the byte layer |
 | 181, 182 | `stri_enc_toutf8` in `.url_key_frame` | **stays**: U+FFFD decode, WHATWG maximal subpart, with its U+FEFF splice |
-| 183 | `stri_numbytes` in `.url_key_frame` | not moved in this slice (left for a later one) |
+| 183 | `stri_numbytes` in `.url_key_frame` | not moved in this slice (removed in the close-out, below) |
 | 12, 13 | `stri_trans_nfc` in the Punycode helpers | **stays** (ADR 0002); counts a leading U+FEFF, no guard |
 | 136, 137 | `stri_trans_toupper` / `stri_trans_tolower` in `.unicode_case_map_vec` | **stays**, `"en_US_POSIX"` locale and `"0"` splice guard |
 

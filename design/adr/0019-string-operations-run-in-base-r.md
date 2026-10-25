@@ -272,7 +272,9 @@ under `LC_ALL=C` and a UTF-8 locale.
    it replaces one U+FFFD per maximal subpart, the WHATWG Encoding Standard's
    UTF-8 decoder rule (amendment). It keeps its `"x"` splice, because it
    drops a leading U+FEFF and the key frames the mark. `stri_numbytes()` in
-   the same function was left for a later slice.
+   the same function was left for a later slice. (The close-out moved it to
+   base R and routed `resolve_url()`'s and the whatwg trim's decode through
+   the same exception: see "Close-out" below.)
 3. **Parameter globs (`.glob_to_regex()`, `.param_matches()`).** The glob
    compiler and the case-sensitive arm move to base R in byte mode. The glob
    compiler escapes only ASCII punctuation (amendment: escaping each
@@ -307,7 +309,9 @@ under `LC_ALL=C` and a UTF-8 locale.
 
 ## Close-out (RURL-dddxutjf)
 
-The calls outside decision 4's kept set were settled on 2026-10-25. The
+The calls outside the kept set were settled on 2026-10-25. The kept set is
+acceptance decision 4 (NFC, full case mapping, `.param_matches()`) plus the
+`stri_enc_toutf8()` decode of semantic exception 2(d). The
 maintainer delegated the calls to an agent recommendation that a separate
 second-opinion consultation had to agree with, and it did, on each one:
 
@@ -328,5 +332,6 @@ second-opinion consultation had to agree with, and it did, on each one:
   serialize, key and resolve; C and UTF-8 locales) that moved no value and no
   encoding mark.
 
-The allowlist now holds the kept set and nothing else: 8 references under 7
-keys.
+The allowlist now holds that kept set and nothing else: 8 references under 7
+keys, three of them the 2(d) decode (`.url_key_frame()` twice and
+`.utf8_decode_replacing()`).
