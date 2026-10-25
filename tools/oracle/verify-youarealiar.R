@@ -422,8 +422,12 @@ self_test <- function() {
   bentd$fsss_host[bentd$id == "yal-001"] <- "yahoo.com"
   expect("restatement check notices an undocumented fsss_host difference",
          length(check_restatement(bentd, r)) > 0L, TRUE)
-  # yal-005 carries a deviation, so a differing fsss_host there is ALLOWED.
+  # A row that carries a deviation may differ on fsss_host. The deviation is
+  # set here rather than read off the fixture: yal-005's own cell was cleared
+  # 2026-10-25 (RURL-viypghfg, RUL-031), and the branch under test must not
+  # depend on which rows the owner has re-baselined.
   bente <- cm
+  bente$rurl_deviation[bente$id == "yal-005"] <- "ADR 0002 (self-test)"
   bente$fsss_host[bente$id == "yal-005"] <- "something.else"
   expect("a documented deviation may differ on fsss_host",
          length(check_restatement(bente, r)), 0L)

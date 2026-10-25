@@ -65,8 +65,12 @@ source(here("check-fsss-conformance.R"), local = FALSE)
 # the group that gives the unconditional FSSS comparison its whole subject --
 # ada-003 and ada-006 are the deviating rows, named in
 # FSSS_REQUIRED_DEVIATION_IDS rather than merely counted.
+# Re-measured 2026-10-25 (RURL-viypghfg, RUL-031): 1 of the 14 now carries a
+# `rurl_deviation`, and none of the 13 fsss rows. The owner cleared the cells
+# on ada-003 and ada-006, which recorded an rfc3986 acceptance of raw non-ASCII
+# input that RUL-030 removed; both stay graded by FSSS_REQUIRED_DEVIATION_IDS.
 WHATWG_EXPECTED_FLOOR <- 14L
-WHATWG_EXPECTED_DEVIATION_FLOOR <- 3L
+WHATWG_EXPECTED_DEVIATION_FLOOR <- 1L
 FSSS_FLOOR <- 13L
 
 # This group runs every row it can, so its `runnable` column spells the

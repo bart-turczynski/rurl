@@ -39,9 +39,13 @@ source(here("check-fsss-conformance.R"), local = FALSE)
 # FLOORS for the two column checks, so neither can erode to a population that
 # passes for nothing. Measured on the committed block: 202 of the 267 rows carry
 # a `whatwg_expected` (the other 65 are divergence_class `aligned` or
-# `not-runnable`), and 21 of those 202 carry a documented `rurl_deviation`.
+# `not-runnable`), and 16 of those 202 carry a documented `rurl_deviation`.
+# Re-measured 2026-10-25 (RURL-viypghfg, RUL-031): it was 21 until the owner
+# cleared the deviation on five rows (wpt-fail-038, -208, -240, -242, -244)
+# whose rfc3986 non-ASCII tolerance RUL-030 removed; those rows are now scored
+# by the fixture's own conformance test instead.
 WHATWG_EXPECTED_FLOOR <- 202L
-WHATWG_EXPECTED_DEVIATION_FLOOR <- 21L
+WHATWG_EXPECTED_DEVIATION_FLOOR <- 16L
 
 # ZERO, AND STATED RATHER THAN DISCOVERED. This group is the upstream FAILURE
 # arm, so every row's oracle_value is NA and there is no serialization for

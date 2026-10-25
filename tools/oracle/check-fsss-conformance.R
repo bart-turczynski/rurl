@@ -41,6 +41,12 @@
 # and the conformance surface still has to agree. REQUIRED_DEVIATION_IDS below
 # names those two rows so that reasoning cannot be undone by a floor that erodes
 # to zero deviating rows without anyone noticing.
+#
+# 2026-10-25 (RURL-viypghfg, RUL-031): the two rows no longer carry a
+# `rurl_deviation`. Their cells recorded an rfc3986 acceptance of raw
+# non-ASCII input, which RUL-030 removed, and the owner cleared them. The ids
+# stay required: what they guarantee is that these rows are graded, which
+# never depended on the deviation column.
 
 # The two rows whose coverage is the whole argument above. A caller states them
 # explicitly rather than trusting a count, because "2 deviating rows are graded"
