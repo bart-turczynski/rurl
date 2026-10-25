@@ -573,8 +573,9 @@
 # U+FEFF where none of its patterns could, since U+FEFF is not an ASCII alpha,
 # a C0 control, a space or a slash; callers masked such rows with this, under
 # every url_standard (RURL-vhionecz, RURL-biunpazk). Byte mode reads the mark
-# as data (ADR 0019), so only the guards ADR 0005's table still lists call
-# this. NA reads FALSE.
+# as data (ADR 0019), so only the guards that still front a stringi call use
+# this: ADR 0005's table, and the whatwg `stri_enc_toutf8()` splice in
+# resolve_url() (ADR 0019 decision 4, still open). NA reads FALSE.
 .starts_with_bom <- function(x) {
   grepl("^\ufeff", x, useBytes = TRUE)
 }

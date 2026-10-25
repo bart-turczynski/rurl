@@ -10,7 +10,9 @@
 # the parse, so the record never used the slices and no output moved: the
 # defect is latent. Each U+FEFF row has a U+200B twin, a zero-width code point
 # stringi does not skip, so a twin that already lexes no authority shows the
-# defect is the mark's alone.
+# defect is the mark's alone. The match now runs in byte mode, where
+# `\A[A-Za-z]` cannot match the mark's first byte, and the mask that guarded
+# it is retired (ADR 0019, RURL-dddxutjf); these rows pin that capture.
 
 bom <- "\ufeff"
 zwsp <- "\u200b"
@@ -86,7 +88,7 @@ test_that("whatwg: the mark that leads after the C0-or-space strip counts", {
   # nothing, so there the space still leads and no scheme matches.
   src <- paste0(" ", bom, "http://u@h/")
   lex <- rurl:::.fsss_source_lex(src, "whatwg")
-  # The guard reads the mark after the strip, not before (RURL-rynmvtwp).
+  # The capture reads the mark after the strip, not before (RURL-rynmvtwp).
   expect_identical(lex$userinfo, NA_character_)
   expect_identical(lex$host, NA_character_)
   # The U+200B twin: after the strip the zero-width space leads, and the
@@ -95,7 +97,7 @@ test_that("whatwg: the mark that leads after the C0-or-space strip counts", {
   expect_identical(twin$userinfo, NA_character_)
   expect_identical(twin$host, NA_character_)
   # Control, not a pin: under rfc3986 the space still leads, so no scheme
-  # matches with or without the guard.
+  # matches at all.
   lex <- rurl:::.fsss_source_lex(src, "rfc3986")
   expect_identical(lex$userinfo, NA_character_)
   expect_identical(lex$host, NA_character_)
