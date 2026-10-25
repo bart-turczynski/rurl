@@ -144,3 +144,58 @@ test_that("an undecodable UTF-8 half stays NA (RURL-gndbrpam)", {
   expect_identical(dn_parts("mailto:a@b%E9.com"),
                    list(user = "a", host = NA_character_))
 })
+
+# --- The defect: .pct_unescape() stops at a decoded NUL, so the prefix before
+# it was classified and returned as if it were the whole field. NUL is neither
+# atext nor dtext (RFC 5322 sections 3.2.3 and 3.4.1; RFC 6068 section 2). ---
+
+test_that("a decoded NUL in the local part makes it invalid, the user NA", {
+  for (u in c("mailto:a%00zz@b.com", "mailto:%00@b.com", "mailto:a%00@b.com",
+              "mailto:a%000@b.com", "mailto:a%00%C3%A9@b.com",
+              "mailto:%22a%00b%22@b.com", "mailto:a%00zz@b.com?subject=hi")) {
+    row <- dn_row(u)
+    dn_invalid_local(row)
+    expect_identical(row$mailto_domain_form, "ascii-dot-atom-text",
+                     label = u)
+    expect_identical(row$smtp_domain_wire_form, "ascii-domain", label = u)
+    expect_true(row$public_suffix_known, label = u)
+    expect_identical(dn_parts(u), list(user = NA_character_, host = "b.com"),
+                     label = u)
+  }
+})
+
+test_that("a decoded NUL in the domain makes it invalid, the host NA", {
+  for (u in c("mailto:a@b.com%00evil", "mailto:a@evil.com%00.good.com",
+              "mailto:a@%00b.com", "mailto:a@b.com%00")) {
+    row <- dn_row(u)
+    dn_invalid_domain(row)
+    expect_identical(row$mailto_local_part_form, "dot-atom-text", label = u)
+    expect_true(row$smtp_local_part_length_ok, label = u)
+    expect_identical(dn_parts(u), list(user = "a", host = NA_character_),
+                     label = u)
+  }
+})
+
+test_that("a decoded NUL in both halves leaves nothing valid", {
+  row <- dn_row("mailto:a%00@b%00.com")
+  dn_invalid_local(row)
+  dn_invalid_domain(row)
+  expect_identical(dn_parts("mailto:a%00@b%00.com"),
+                   list(user = NA_character_, host = NA_character_))
+})
+
+test_that("only the recipient holding the NUL is invalid", {
+  r <- get_mailto_recipients("mailto:a%00@b.com,c@d.com", smtp_wire = TRUE)
+  expect_identical(r$mailto_local_part_form, c("invalid", "dot-atom-text"))
+  expect_identical(r$smtp_envelope_wire_mode, c("unavailable", "ascii"))
+  expect_identical(dn_parts("mailto:a%00@b.com,c@d.com"),
+                   list(user = NA_character_, host = "b.com"))
+})
+
+test_that("an encoded percent before 00 is a literal, not a NUL", {
+  row <- dn_row("mailto:a%2500@b.com")
+  expect_identical(row$mailto_local_part_form, "dot-atom-text")
+  expect_identical(row$smtp_envelope_wire_mode, "ascii")
+  expect_identical(dn_parts("mailto:a%2500@b.com"),
+                   list(user = "a%00", host = "b.com"))
+})
