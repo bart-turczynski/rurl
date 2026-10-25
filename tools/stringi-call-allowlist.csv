@@ -4,11 +4,8 @@
 "file","function","reference","count"
 "R/domain.R",".normalize_and_punycode","stringi::stri_trans_nfc",1
 "R/domain.R",".normalize_and_punycode_vec","stringi::stri_trans_nfc",1
-"R/domain.R",".split_host_labels","stringi::stri_split_fixed",2
-"R/parse-phases.R",".strip_whatwg_control_chars_vec","stringi::stri_replace_first_regex",1
 "R/parse-phases.R",".unicode_case_map_vec","stringi::stri_trans_tolower",1
 "R/parse-phases.R",".unicode_case_map_vec","stringi::stri_trans_toupper",1
+"R/parse-phases.R",".utf8_decode_replacing","stringi::stri_enc_toutf8",1
 "R/path-query.R",".param_matches","stringi::stri_detect_regex",1
-"R/resolve.R","resolve_url","stringi::stri_enc_toutf8",1
 "R/url-key.R",".url_key_frame","stringi::stri_enc_toutf8",2
-"R/url-key.R",".url_key_frame","stringi::stri_numbytes",1

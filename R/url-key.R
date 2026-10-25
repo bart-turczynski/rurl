@@ -246,8 +246,9 @@
 # mistaken for a field boundary. That is what makes collision a structural
 # impossibility rather than an escaping problem.
 #
-# Byte counts come from `stringi::stri_numbytes()` over an explicitly UTF-8
-# transcoded value, so the frame is identical under every locale. Lengths are
+# Byte counts come from `nchar(type = "bytes")` over an explicitly UTF-8
+# transcoded value, so the frame is identical under every locale. It counts
+# octets as `stri_numbytes()` did (RURL-dddxutjf). Lengths are
 # only ever COUNTED here, never used to slice a field, so the
 # code-point/native-index does not arise.
 #
@@ -263,7 +264,7 @@
 # U+FEFF that starts its input as a byte-order mark and drops it, so
 # `\ufeffh.example.com` framed as `13:h.example.com` and the key collided with
 # its unmarked twin's. The mark is field data (ADR 0005), so it must reach the
-# frame, and stri_numbytes() counts it. Only those rows are spliced: a splice
+# frame, and the byte count counts it. Only those rows are spliced: a splice
 # on every row costs a paste per field, and
 # paste0() translates a field that is not UTF-8 by the locale, which the
 # transcode alone does not. A field led by the mark holds a code point latin1
@@ -284,7 +285,7 @@
         2L, .Machine$integer.max
       )
     }
-    out <- paste0(stringi::stri_numbytes(enc), ":", enc)
+    out <- paste0(nchar(enc, type = "bytes"), ":", enc)
     out[is.na(x)] <- "-:"
     out
   })

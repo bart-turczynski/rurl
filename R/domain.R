@@ -121,25 +121,18 @@
 # it. Do not "align" this back to `strsplit` for consistency with the splits
 # ADR 0005 names.
 #
-# `stri_split_fixed()` also skips a U+FEFF that starts its input (ADR 0005, the
-# U+FEFF amendment), so a mark-led first label lost the mark, and
-# `\ufeffxn--nxasmq6b` was decoded as the A-label it does not spell
-# (RURL-tbmnnauj). For a host that starts with the mark, an ASCII `x` is
-# spliced on first, so the mark is no longer the first code point, and cut off
-# the first label as a byte afterwards. The label count is unchanged.
+# The split runs in byte mode (`.bytes_split_fixed()`, ADR 0019), which keeps
+# the trailing empty label as `stri_split_fixed()` did and reads a U+FEFF that
+# starts the host as data. `stri_split_fixed()` skipped that mark, so a
+# mark-led first label lost it and `\ufeffxn--nxasmq6b` was decoded as the
+# A-label it does not spell (RURL-tbmnnauj); the splice guard that worked
+# around it is gone with the call (RURL-dddxutjf). The label count is
+# unchanged, and the labels are declared UTF-8 as stringi declared them. A
+# latin1 host is spelled in UTF-8 first by the exact ISO 8859-1 map, as
+# stringi transcoded it; the byte layer takes no latin1 input.
 .split_host_labels <- function(hosts) {
-  labels <- stringi::stri_split_fixed(hosts, ".")
-  bom <- .starts_with_bom(hosts)
-  if (any(bom)) {
-    labels[bom] <- lapply(
-      stringi::stri_split_fixed(paste0("x", hosts[bom]), "."),
-      function(parts) {
-        parts[1L] <- .byte_substring(parts[1L], 2L)
-        parts
-      }
-    )
-  }
-  labels
+  .bytes_split_fixed(.latin1_input_to_utf8(hosts), ".",
+                     keep_trailing_empty = TRUE)
 }
 
 # Internal helper to decode Punycode domain parts to Unicode. With the default
