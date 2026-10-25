@@ -179,7 +179,10 @@ a recipient whose address cannot be projected (an invalid mailbox).
 \strong{raw} (still percent-encoded) source before decoding, so an encoded
 comma (\code{\%2C}) is never a recipient separator and an encoded quote or
 bracket (\code{\%22}, \code{\%5B}/\code{\%5D}) still protects a raw comma;
-each field is then percent-decoded exactly once and classified.
+each field is then percent-decoded exactly once and classified. A field
+whose decoded octets are not valid UTF-8, or that holds \code{\%00} (a
+null octet, no \code{addr-spec} character), is classified
+\code{"invalid"}.
 }
 
 \examples{

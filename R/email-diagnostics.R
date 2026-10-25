@@ -269,7 +269,19 @@
 # get_host(), not into the classifiers, which read NA as "invalid". Both the
 # accessor extraction and get_mailto_recipients() decode here, so they cannot
 # disagree on a field. validUTF8() is a byte test: the same in every locale.
+#
+# A `%00` triplet is NA too (RURL-rujjbahq). .pct_unescape() stops at a
+# decoded NUL (an R string cannot hold one), so decoding it would hand the
+# classifiers and accessors only the prefix before it, judged as if it were
+# the whole field (`a%00zz` read as `a`, `evil.com%00.good.com` as
+# `evil.com`). NUL is neither atext nor dtext (RFC 5322 sections 3.2.3 and
+# 3.4.1, the addr-spec RFC 6068 section 2 adopts), so a field holding one is
+# invalid whatever surrounds it. `%00` has no hex letter, so the fixed match
+# covers every case spelling, and no other triplet can overlap it.
 .email_decode_field <- function(raw) {
+  if (!is.na(raw) && grepl("%00", raw, fixed = TRUE, useBytes = TRUE)) {
+    return(NA_character_)
+  }
   dec <- .pct_unescape(raw)
   if (is.na(dec) || !validUTF8(dec)) NA_character_ else dec
 }
@@ -403,12 +415,12 @@
 # input path, the recipient DOMAIN (decoded; only for a domain-form RHS -- NA
 # for an address-literal / invalid / absent RHS, which is not a domain to
 # decompose) as `host`, and the decoded local-part as `user` (whenever the
-# addr-spec is well-formed and the local part decodes to valid UTF-8,
-# independent of the RHS form; NA otherwise, as for the host -- see
-# .email_decode_field()). Multi-recipient: the
-# FIRST recipient (the full list is get_mailto_recipients()'s job). This feeds
-# the standard accessors (get_host/get_domain/get_tld/get_subdomain/get_user)
-# so a mailto recipient decomposes exactly like a web host; it is EXTRACTION
+# addr-spec is well-formed and the local part decodes, with no NUL, to valid
+# UTF-8, independent of the RHS form; NA otherwise, as for the host -- see
+# .email_decode_field()). Multi-recipient: the FIRST recipient (the full list
+# is get_mailto_recipients()'s job). This feeds the standard accessors
+# (get_host/get_domain/get_tld/get_subdomain/get_user) so a mailto recipient
+# decomposes exactly like a web host; it is EXTRACTION
 # metadata only and never touches clean_url / round-trip serialization.
 .mailto_first_recipient_parts <- function(paths) {
   n <- length(paths)
@@ -487,7 +499,10 @@
 #'   \strong{raw} (still percent-encoded) source before decoding, so an encoded
 #'   comma (\code{\%2C}) is never a recipient separator and an encoded quote or
 #'   bracket (\code{\%22}, \code{\%5B}/\code{\%5D}) still protects a raw comma;
-#'   each field is then percent-decoded exactly once and classified.
+#'   each field is then percent-decoded exactly once and classified. A field
+#'   whose decoded octets are not valid UTF-8, or that holds \code{\%00} (a
+#'   null octet, no \code{addr-spec} character), is classified
+#'   \code{"invalid"}.
 #'
 #' @param url A character vector of URLs. Non-\code{mailto:} URLs (and, under
 #'   \code{scheme_acceptance = "web"}, all \code{mailto:} URLs, which the web
