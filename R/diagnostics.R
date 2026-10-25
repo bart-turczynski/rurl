@@ -627,11 +627,16 @@
   )
 
   kind <- rep(NA_character_, length(input_host))
-  # The address inside the brackets, cut in bytes (ADR 0019): the first and
-  # last bytes are the ASCII "[" and "]" of the bracketed source token.
-  addr <- raddr::addr_whatwg(.bytes_cut(
-    canonical[mask], 2L, nchar(canonical[mask], type = "bytes") - 1L
-  ))
+  # The address inside the brackets, cut in bytes (ADR 0019). The cut drops
+  # one byte at each end, so it runs only where those bytes are the ASCII
+  # "[" and "]"; any other token gives raddr NA, never a split code point.
+  inner <- canonical[mask]
+  framed <- !is.na(inner) & startsWith(inner, "[") & endsWith(inner, "]")
+  cut <- rep(NA_character_, length(inner))
+  cut[framed] <- .bytes_cut(
+    inner[framed], 2L, .byte_length(inner[framed]) - 1L
+  )
+  addr <- raddr::addr_whatwg(cut)
   kind[mask] <- as.character(raddr::addr_embedded_kind(addr))
   .diag_add(diag, mask & !is.na(kind), "ipv6-embedded-ipv4")
 }
