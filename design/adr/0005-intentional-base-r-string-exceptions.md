@@ -68,34 +68,34 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
 
 | File | Helper | Guard | Ticket |
 |---|---|---|---|
-| `R/accessors.R` | `.subdomain_labels_vec()` | `endsWith()`; mask, the prefix of a mark-led host cut as bytes (`.byte_substring_vec()`, `.byte_length()`) | RURL-fyiadctm |
-| `R/domain.R` | `.split_host_labels()` | mask; `x` spliced before the split, cut off the first label as a byte | RURL-tbmnnauj |
+| `R/accessors.R` | `.subdomain_labels_vec()` | Retired 2026-10-25 by RURL-yqmoztoj, !256 (ADR 0019): every host's prefix is cut in bytes with `.bytes_cut()` after the base-R `endsWith()`, so a mark-led host needs no mask. Was: `endsWith()`; mask, the prefix of a mark-led host cut as bytes (`.byte_substring_vec()`, `.byte_length()`) | RURL-fyiadctm |
+| `R/domain.R` | `.split_host_labels()` | mask; `x` spliced before the split, cut off the first label as a byte. Kept until the split moves to byte mode: the two `stri_split_fixed()` calls still skip a leading U+FEFF. They sit outside ADR 0001's `.psl_*` seam (design/stringi-inventory.md); read ADR 0001 before moving them | RURL-tbmnnauj |
 | `R/parse-phases.R` | `.starts_with_bom()` | the base-R byte test itself | RURL-vhionecz |
-| `R/parse-phases.R` | `.rewrite_whatwg_backslashes_vec()` | mask; `//` spliced before the fixed rewrite | RURL-iiehsbfg |
-| `R/parse-phases.R` | `.strip_whatwg_control_chars_vec()` | regex strip and flag, which count the mark | RURL-vhionecz, RURL-bnorcgbv (pinned in RURL-zxnxczsw) |
-| `R/parse-phases.R` | `.map_whatwg_domain_separators_vec()` | mask; spans cut from the whole input | RURL-exdlurql |
-| `R/parse-phases.R` | `.percent_encode_userinfo_charset()` | `@` spliced, cut as a byte | RURL-rfgbozdr |
-| `R/parse-phases.R` | `.rfc3986_path_rootless_vec()` | mask | RURL-biunpazk |
+| `R/parse-phases.R` | `.rewrite_whatwg_backslashes_vec()` | Retired 2026-10-25 by RURL-dddxutjf, the ADR 0019 close-out (guard removal): the scheme capture and the `\` rewrite run in byte mode, which reads a leading U+FEFF as data, so a mark-led row is never eligible; `//` is now the collapsed run, joined after the rewrite. Was: mask; `//` spliced before the fixed rewrite | RURL-iiehsbfg |
+| `R/parse-phases.R` | `.strip_whatwg_control_chars_vec()` | regex strip and flag, which count the mark. Kept: the leading strip's `stri_replace_first_regex()` is still on the ADR 0019 allowlist, and a `*_regex()` replacer counts the mark | RURL-vhionecz, RURL-bnorcgbv (pinned in RURL-zxnxczsw) |
+| `R/parse-phases.R` | `.map_whatwg_domain_separators_vec()` | Retired 2026-10-25 by RURL-dddxutjf, the ADR 0019 close-out (guard removal): the captures and locators run in byte mode and find no scheme or `//` on a mark-led row. Was: mask; spans cut from the whole input | RURL-exdlurql |
+| `R/parse-phases.R` | `.percent_encode_userinfo_charset()` | Retired 2026-10-25 by RURL-dddxutjf, the ADR 0019 close-out (guard removal): the replaces run in byte mode, which keeps a leading U+FEFF. Was: `@` spliced, cut as a byte | RURL-rfgbozdr |
+| `R/parse-phases.R` | `.rfc3986_path_rootless_vec()` | Retired 2026-10-25 by RURL-dddxutjf, the ADR 0019 close-out (guard removal): the scheme capture runs in byte mode and finds none on a mark-led row. Was: mask | RURL-biunpazk |
 | `R/parse-phases.R` | `.whatwg_file_normalize_host()` | `startsWith()` | RURL-azcvukyh |
-| `R/parse-phases.R` | `.parse_whatwg_file_urls_vec()` | `/` spliced, cut as a byte; `startsWith()` | RURL-rjpljsui, RURL-azcvukyh |
-| `R/parse-phases.R` | `.prepare_urls_for_parse_vec()` | mask | RURL-vhionecz |
-| `R/parse-phases.R` | `.extract_raw_path_vec()` | regex locators, which count the mark | RURL-vhionecz |
+| `R/parse-phases.R` | `.parse_whatwg_file_urls_vec()` | Retired 2026-10-25 by RURL-dddxutjf, the ADR 0019 close-out (guard removal): the `\` rewrite of the path runs in byte mode, which keeps a leading U+FEFF; the prefix tests are base R or byte mode. Was: `/` spliced, cut as a byte. Still live: `startsWith()` | RURL-rjpljsui, RURL-azcvukyh |
+| `R/parse-phases.R` | `.prepare_urls_for_parse_vec()` | Retired 2026-10-25 by RURL-dddxutjf, the ADR 0019 close-out, with the same mask in `.general_route_input_vec()`: every scheme and `//` test runs in byte mode or base R, which find no scheme and no `//` on a mark-led row. Was: mask | RURL-vhionecz |
+| `R/parse-phases.R` | `.extract_raw_path_vec()` | Retired 2026-10-25 by RURL-yqmoztoj, !259 (ADR 0019): the locators and cuts run in byte mode, which counts the mark. Was: regex locators, which count the mark | RURL-vhionecz |
 | `R/parse-phases.R` | `.normalize_path_vec()`, trailing-slash branch | `endsWith()`; the slash cut as a byte | RURL-zxnxczsw |
-| `R/parse-phases.R` | `.apply_case_policy_vec()`, via `.unicode_case_map_vec()` | mask; `0` spliced before `stri_trans_toupper()` / `stri_trans_tolower()`, cut as a byte | RURL-opwjlnla |
+| `R/parse-phases.R` | `.apply_case_policy_vec()`, via `.unicode_case_map_vec()` | mask; `0` spliced before `stri_trans_toupper()` / `stri_trans_tolower()`, cut as a byte. Kept under ADR 0019: full case mapping stays in `stringi` (its "Semantic exceptions", 4), and those calls still drop a leading U+FEFF | RURL-opwjlnla |
 | `R/parse-phases.R` | `.apply_subdomain_policy_vec()` | `startsWith()`, then `stri_sub()` on rows it passes; the stringi reading kept under `whatwg` | RURL-opwjlnla |
 | `R/parse-phases.R` | `.apply_www_if_no_subdomain_vec()` | `startsWith()`; the stringi reading kept under `whatwg` | RURL-opwjlnla |
-| `R/parse-phases.R` | `.detect_ip_host_vec()` | regex detector for the dotted-quad tail, which counts the mark | RURL-opwjlnla |
+| `R/parse-phases.R` | `.detect_ip_host_vec()` | Retired 2026-10-25 by RURL-oahhlnvf, !254 (ADR 0019): the detectors run in byte mode, which counts the mark. Was: regex detector for the dotted-quad tail, which counts the mark | RURL-opwjlnla |
 | `R/parse-phases.R` | `.classify_input_host_vec()`, `.apply_host_standard_model_vec()` | `startsWith()` | RURL-opwjlnla |
-| `R/parse-phases.R` | `.encode_userinfo_charset_vec()` | mask | RURL-opwjlnla |
-| `R/parse-state.R` | `.rfc3986_first_index()`, `.split_authority()` | literal regex locators | RURL-biunpazk |
+| `R/parse-phases.R` | `.encode_userinfo_charset_vec()` | Retired 2026-10-25 by RURL-dddxutjf, the ADR 0019 close-out (guard removal): the capture runs in byte mode and finds no scheme on a mark-led row. Was: mask | RURL-opwjlnla |
+| `R/parse-state.R` | `.rfc3986_first_index()`, `.split_authority()` | Retired 2026-10-25 by RURL-yqmoztoj, !258 (ADR 0019): the locators are fixed byte-mode `regexpr()` and `.last_byte_index()`, and the cuts `.bytes_cut()`, all counting the mark. Was: literal regex locators | RURL-biunpazk |
 | `R/parse-state.R` | `.rfc3986_generic_uri_ok()`, `.general_parsed_mask()` | mask | RURL-biunpazk, RURL-vhionecz |
 | `R/path-query.R` | `._remove_dot_segments()` | `startsWith()`, `substring()` with an explicit `last` | RURL-xrjtdnko, RURL-zxnxczsw |
 | `R/path-query.R` | `._remove_dot_segments_whatwg()` | `substring()` with an explicit `last` | RURL-zxnxczsw |
-| `R/path-query.R` | `._strip_index_page()` | `x` spliced, cut as a byte; `startsWith()` | RURL-zxnxczsw |
+| `R/path-query.R` | `._strip_index_page()` | Retired 2026-10-25 by RURL-yqmoztoj, !256 (ADR 0019): the page search runs in byte mode, which reads a leading U+FEFF as data, and the kept directory is cut in bytes. Was: `x` spliced, cut as a byte. Still live: `startsWith()` | RURL-zxnxczsw |
 | `R/path-query.R` | `._encode_path_segments()` | `startsWith()`, `endsWith()` | RURL-zxnxczsw |
-| `R/resolve.R` | `.whatwg_file_remove_dot_segments()` | `/` spliced before the split | RURL-dglgcwit |
+| `R/resolve.R` | `.whatwg_file_remove_dot_segments()` | Retired 2026-10-25 by RURL-yqmoztoj, !260 (ADR 0019): the segments split in byte mode, so a U+FEFF that starts the body stays on its segment. Was: `/` spliced before the split | RURL-dglgcwit |
 | `R/serialize.R` | `.fsss_source_lex()` | mask on the stripped source | RURL-rynmvtwp |
-| `R/url-key.R` | `.url_key_frame()` | mask; `x` spliced before `stri_enc_toutf8()`, then cut; `stri_numbytes()` counts the mark | RURL-dquaxcaz |
+| `R/url-key.R` | `.url_key_frame()` | mask; `x` spliced before `stri_enc_toutf8()`, then cut; `stri_numbytes()` counts the mark. Kept under ADR 0019: `stri_enc_toutf8()` stays for its U+FFFD decode (its "Semantic exceptions", 2(d)) and still drops a leading U+FEFF | RURL-dquaxcaz |
 | `R/url-key.R` | `.url_key_scheme_presence()` | Retired 2026-10-24 by RURL-oahhlnvf (ADR 0019): the scheme tests run in byte mode, which reads a leading U+FEFF as data. Was: `stri_detect_regex()`, which counts the mark | RURL-dquaxcaz |
 | `R/utils.R` | `.ascii_case_fallback()`, under `.ascii_tolower()` / `.ascii_toupper()` | Retired 2026-10-24 by RURL-oahhlnvf (ADR 0019): the 26 fixed replacements run in byte mode, which keeps a leading U+FEFF; still pinned by `test-ascii-case-leading-bom.R`. Was: mask; `0` spliced before the fixed replace, cut as a byte | RURL-bqhfznkg |
 | `R/zzz.R` | `.cache_key_escape()`, under `.cache_key_ascii()` | Retired 2026-10-24 by RURL-yyeohqah (ADR 0019): the key escapes each octet in base R, so a leading U+FEFF is data and needs no guard. Was a `startsWith()` mask, with `x` spliced before `stri_escape_unicode()`, then cut | RURL-iiehsbfg, RURL-yyeohqah |

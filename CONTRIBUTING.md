@@ -46,8 +46,13 @@ pre-commit run --hook-stage pre-push --all-files
 - Do not alter the Punycode helpers (`.normalize_and_punycode()`,
   `.punycode_to_unicode()`) or their hardcoded TLD workarounds; see
   [ADR 0002](design/adr/0002-keep-punycode-helpers.md). `AGENTS.md` lists the
-  protected areas, and [ADR 0005](design/adr/0005-intentional-base-r-string-exceptions.md)
-  covers the intentional base-R string exceptions.
+  protected areas. String operations run through the `R/strings-base.R`
+  wrappers, or base R with its mode stated, and `stringi` only where
+  `tools/stringi-call-allowlist.csv` names it; see
+  [ADR 0019](design/adr/0019-string-operations-run-in-base-r.md), and
+  [ADR 0005](design/adr/0005-intentional-base-r-string-exceptions.md) for what
+  it keeps: the split contract, U+FEFF as data with its U+200B twin, the live
+  guard table and the explicit-`last` `substring()` rule.
 - Public Suffix List data, its parsing, and its refresh (`pslr::psl_refresh()`)
   live in the `pslr` package. `rurl` ships no PSL list of its own and queries
   `pslr` through the `R/domain.R` seam. The delegation contract is in
