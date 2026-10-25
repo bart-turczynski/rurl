@@ -114,7 +114,11 @@ test_that("the parse seams keep their output for every input representation", {
 # the 36 `rfc3986` digests that read a UTF-8 twin re-measured after RUL-030
 # (RURL-pntbujzc) made a raw non-ASCII code point a parse error under
 # `rfc3986` (RFC 3986 sections 2, 2.5, 3.2.2). No NULL or whatwg digest moved,
-# and each re-measured digest is the same under both LC_CTYPEs.
+# and each re-measured digest is the same under both LC_CTYPEs. The
+# `get_url_diagnostics rfc3986` digest moved once more when the token was
+# withheld where percent-encoding does not rescue the row: the two rows led
+# by U+00FC (`<U+00FC>http://u@...`, marked and native) fail as no URL, and
+# so does their `%C3%BC` twin.
 ib_export_pins <- c(
   "safe_parse_urls NULL 1 url" = "6fa9dfd2e2244270d25dfb29cb79e930",
   "safe_parse_urls NULL 2 url" = "4fef8dde29a59b3367d086e720665ae7",
@@ -185,7 +189,7 @@ ib_export_pins <- c(
   "get_host_type whatwg 1 url" = "c9fe530808487909696702f18b03d27b",
   "get_host_type rfc3986 1 url" = "1ad222f31e5a1bb23b2d1400d9a3c94f",
   "get_url_diagnostics whatwg 1 url" = "09523da4d1306b09d59f8ed8bb5adce7",
-  "get_url_diagnostics rfc3986 1 url" = "504befca36558dca92abbc1ba8e0ad5e",
+  "get_url_diagnostics rfc3986 1 url" = "03057a9c13a884f5bcc17a55d46a3925",
   "get_scheme_class whatwg 1 url" = "5ac05eb1f13a70f637c439692c74f854",
   "get_scheme_class rfc3986 1 url" = "5c22a78946a1fd3d6682dabf7339dea5",
   "check_hosts NULL 1 url" = "5a7d211969c40bc04c320d4928111191",
