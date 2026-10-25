@@ -198,7 +198,7 @@ test_that("the constant byte-mode patterns run without the per-call check", {
   # Each runs through base R directly on a per-row path, so the check the
   # wrappers make on every call is made here once (ADR 0019).
   for (re in list(.SCHEME_PREFIX_RE, .FILE_SCHEME_PREFIX_RE,
-                  .WEB_IPV6_QUAD_TAIL_RE)) {
+                  .WEB_IPV6_QUAD_RE)) {
     expect_true(.bytes_check_pattern(re, fixed = FALSE))
   }
   x <- u8(c("foo:x", "Foo+b.c-1:", "\ufefffoo:", "\u200bfoo:", "1a:", ":",

@@ -856,8 +856,8 @@
 .split_authority <- function(authority) {
   userinfo <- NA_character_
   hostport <- authority
-  at <- .bytes_locate(authority, "@", fixed = TRUE, last = TRUE)[1L, 1L]
-  if (!is.na(at)) {
+  at <- if (is.na(authority)) 0L else .last_byte_index(authority, "@")
+  if (at > 0L) {
     userinfo <- .bytes_cut(authority, 1L, at - 1L)
     hostport <- .bytes_cut(authority, at + 1L, .Machine$integer.max)
   }

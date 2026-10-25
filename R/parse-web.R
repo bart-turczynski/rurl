@@ -803,15 +803,17 @@
 # verbatim, case and dotted quad intact. Returns NULL when the literal is
 # invalid.
 #
-# An embedded dotted-quad tail, and the prefix before it through its colon.
-# Byte mode (ADR 0019); `inner` is ASCII by the guard below, so bytes are
-# characters. ICU's `.` stops at the ASCII line terminators LF, VT, FF and CR
-# (the others are non-ASCII and cannot occur here), so its `.*` is spelled as
-# the class that excludes exactly those four. A constant run by `regexpr()`
-# directly, once per literal, and held to `.bytes_check_pattern()` by a test.
+# An embedded dotted-quad tail. Byte mode (ADR 0019); `inner` is ASCII by the
+# guard below, so bytes are characters. This was ICU's `\\A(.*:)quad\\z`. A
+# quad holds no ":", so that capture always ended at the LAST ":", and ICU's
+# `.` (which stops at LF, VT, FF and CR; the other terminators are non-ASCII
+# and cannot occur here) required the prefix to hold none of those four. The
+# serializer finds the last ":" by index and matches only the tail against
+# this anchored quad, so no regex backtracks over a long literal. A constant
+# run by `regexpr()` directly and held to `.bytes_check_pattern()` by a test.
 .WEB_IPV6_OCTET <- "(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
-.WEB_IPV6_QUAD_TAIL_RE <- paste0(
-  "\\A([^\\n\\x0b\\x0c\\r]*:)", .WEB_IPV6_OCTET, "\\.", .WEB_IPV6_OCTET,
+.WEB_IPV6_QUAD_RE <- paste0(
+  "\\A", .WEB_IPV6_OCTET, "\\.", .WEB_IPV6_OCTET,
   "\\.", .WEB_IPV6_OCTET, "\\.", .WEB_IPV6_OCTET, "\\z"
 )
 .web_ipv6_serialize <- function(inner) {
@@ -837,13 +839,14 @@
   # the end -- `inner` itself is consumed by the quad split below.
   src_inner <- inner
   quad <- NA_character_
-  # Group 1 is the prefix through the colon before the quad; it starts at
-  # byte 1, so its length is where the quad begins.
-  m <- regexpr(.WEB_IPV6_QUAD_TAIL_RE, inner, perl = TRUE, useBytes = TRUE)
-  if (!is.na(m) && m > 0L) {
-    plen <- attr(m, "capture.length")[1L, 1L]
-    quad <- .bytes_cut(inner, plen + 1L, .Machine$integer.max)
-    prefix <- .bytes_cut(inner, 1L, plen)
+  # The prefix runs through the last ":"; the quad is what follows it.
+  plen <- .last_byte_index(inner, ":")
+  quad_tail <- if (plen > 0L) .bytes_cut(inner, plen + 1L, .Machine$integer.max)
+  prefix <- if (plen > 0L) .bytes_cut(inner, 1L, plen)
+  if (plen > 0L &&
+        grepl(.WEB_IPV6_QUAD_RE, quad_tail, perl = TRUE, useBytes = TRUE) &&
+        !grepl("[\\n\\x0b\\x0c\\r]", prefix, perl = TRUE, useBytes = TRUE)) {
+    quad <- quad_tail
     # The prefix always ends in the ":" that separated the quad, and that colon
     # is dropped -- UNLESS it is the second colon of a "::", which belongs to
     # the compression marker and must survive. Without this, `[::127.0.0.1]` had
@@ -854,7 +857,6 @@
     }
     inner <- prefix
   }
-  sides <- strsplit(inner, "::", fixed = TRUE)
   # `strsplit("::", "::")` yields character(0); `strsplit("a::", "::")` yields
   # "a". Detect the "::" and the empty sides from the string itself.
   has_dc <- grepl("::", inner, fixed = TRUE, useBytes = TRUE)
