@@ -20,8 +20,11 @@
 # to the other mis-slices under `LC_ALL=C`. Locating and cutting in the SAME
 # unit -- bytes -- is invariant by construction.
 #
-# The encoding DECLARATION is carried across the cut rather than recomputed:
-# these helpers move bytes, they do not reinterpret them.
+# The cut and the first-match locate are the byte layer's `.bytes_cut()` and
+# `.bytes_locate()` (R/strings-base.R), which declare the result UTF-8; the old
+# `.byte_substring*()` and `.first_byte_index*()` were folded into them
+# (ADR 0019 decision 5, RURL-dddxutjf). What stays here measures and scans
+# bytes for them.
 
 # 1-based byte index of the last occurrence of a single-byte literal `ch` in
 # `s`, or 0L when absent. `s` is one non-NA string and `ch` one byte; anything
@@ -38,77 +41,16 @@
   if (length(pos) == 0L) 0L else pos[length(pos)]
 }
 
-# 1-based byte index of the FIRST occurrence of `ch` in `s`, or 0L when absent.
-.first_byte_index <- function(s, ch) {
-  pos <- regexpr(ch, s, fixed = TRUE, useBytes = TRUE)[1L]
-  if (pos == -1L) 0L else as.integer(pos)
-}
-
-# `substring()` on BYTES: the bytes of `s` from byte `first` to byte `last`
-# inclusive, keeping the input's encoding declaration. Out-of-range indices
-# clamp to "" exactly as `substring()` does, and `first = NA` yields NA as it
-# does there too.
-#
-# ONE deliberate difference: `last = NA` means "to the end of `s`" rather than
-# `substring()`'s NA, because it is this function's default argument -- callers
-# say `.byte_substring(s, i)` to take a suffix.
-.byte_substring <- function(s, first, last = NA_integer_) {
-  first <- as.integer(first)
-  if (is.na(first)) {
-    return(NA_character_)
-  }
-  b <- charToRaw(s)
-  n <- length(b)
-  if (is.na(last)) {
-    last <- n
-  }
-  first <- max(first, 1L)
-  last <- min(as.integer(last), n)
-  out <- if (first > last) "" else rawToChar(b[first:last])
-  Encoding(out) <- Encoding(s)
-  out
-}
-
-# Vector form of `.byte_substring()`. `first`/`last` recycle to `length(s)`;
-# NA input stays NA. Pure-ASCII elements keep the vectorized `substring()` C
-# path -- byte and character indices coincide there, so it is exact -- and only
-# the multi-byte or undecodable elements pay for the per-element cut.
-.byte_substring_vec <- function(s, first, last = NA_integer_) {
-  n <- length(s)
-  first <- rep_len(as.integer(first), n)
-  last <- rep_len(as.integer(last), n)
-  out <- rep(NA_character_, n)
-  present <- !is.na(s)
-  ascii <- present & !grepl("[^\001-\177]", s, perl = TRUE, useBytes = TRUE)
-  if (any(ascii)) {
-    stop_at <- last[ascii]
-    stop_at[is.na(stop_at)] <- .Machine$integer.max
-    out[ascii] <- substring(s[ascii], first[ascii], stop_at)
-  }
-  for (i in which(present & !ascii)) {
-    out[i] <- .byte_substring(s[i], first[i], last[i])
-  }
-  out
-}
-
 # Octet count of each element, NA where the element is NA. `nchar(type =
 # "bytes")` counts without decoding, so unlike `stringi::stri_length()` -- which
 # THROWS `invalid UTF-8 byte sequence detected` -- it is total over declared-
 # UTF-8 elements holding invalid octets. Use it whenever a length feeds a
-# `.byte_substring*()` offset, so the measuring and the cutting share one unit.
+# `.bytes_cut()` offset, so the measuring and the cutting share one unit.
 .byte_length <- function(s) {
   out <- rep(NA_integer_, length(s))
   ok <- !is.na(s)
   out[ok] <- nchar(s[ok], type = "bytes")
   out
-}
-
-# 1-based BYTE index of the first occurrence of `ch` in each element of `s`, or
-# 0L where absent. Vector form of `.first_byte_index()`.
-.first_byte_index_vec <- function(s, ch) {
-  pos <- regexpr(ch, s, fixed = TRUE, useBytes = TRUE)
-  pos[is.na(pos) | pos < 0L] <- 0L
-  as.integer(pos)
 }
 
 # `grepl()` on an UNDECODABLE element: FALSE, quietly and in every locale.

@@ -401,7 +401,7 @@ test_that("the undecodable short-circuit is exactly as severe as the walk", {
 })
 
 test_that(".byte_length() counts octets and is total", {
-  # It exists so a length feeding a `.byte_substring*()` offset is measured in
+  # It exists so a length feeding a `.bytes_cut()` offset is measured in
   # the SAME unit as the cut, and because `stringi::stri_length()` throws on
   # exactly the input this seam must survive.
   declared <- rawToChar(as.raw(c(0x61, 0x80)))
@@ -412,18 +412,18 @@ test_that(".byte_length() counts octets and is total", {
   )
 })
 
-test_that(".byte_substring() matches substring() including NA indices", {
-  # The helper documents itself as clamping "exactly as substring() does". On
-  # pure ASCII the two MUST agree, byte and character indices being the same
-  # there -- so this is a real oracle, not a restatement of the implementation.
-  # `last = NA` is the ONE deliberate difference (it is the default, meaning
-  # "to the end"), so it is excluded rather than asserted away.
+test_that(".bytes_cut() matches substring() including NA indices", {
+  # The cut clamps "as substring() does". On pure ASCII the two MUST agree,
+  # byte and character indices being the same there -- so this is a real
+  # oracle, not a restatement of the implementation. The old
+  # `.byte_substring()` took `last = NA` as "to the end"; `.bytes_cut()` does
+  # not (ADR 0019 decision 5), so NA is asserted on both bounds here.
   idx <- c(NA, -3L, -1L, 0L, 1L, 2L, 5L, 6L, 7L, 100L)
   for (s in c("abcdef", "a", "")) {
     for (first in idx) {
-      for (last in idx[!is.na(idx)]) {
+      for (last in idx) {
         expect_identical(
-          .byte_substring(s, first, last), substring(s, first, last),
+          .bytes_cut(s, first, last), substring(s, first, last),
           info = paste("s=", s, "first=", first, "last=", last)
         )
       }
@@ -497,28 +497,70 @@ test_that("undecodable bytes reject on every rfc3986-gated surface", {
 })
 
 test_that("the byte-slice helpers cut positions, not characters", {
-  # `.byte_substring()` / `.last_byte_index()` / `.first_byte_index()` are the
-  # shared seam helpers. They must survive a DECLARED-UTF-8 string holding
-  # invalid octets -- which is what every `stri_match_first_regex()` capture
-  # is, since stringi marks its captures unconditionally.
+  # `.bytes_cut()` / `.bytes_locate()` / `.last_byte_index()` are the shared
+  # seam helpers (the old `.byte_substring*()` and `.first_byte_index*()`
+  # were folded into the first two, ADR 0019 decision 5). They must survive a
+  # DECLARED-UTF-8 string holding invalid octets, which is what a byte-mode
+  # capture is.
   s <- rawToChar(as.raw(c(0x61, 0x80, 0x40, 0x68, 0x2e, 0x63)))  # "a<80>@h.c"
   Encoding(s) <- "UTF-8"
+  max <- .Machine$integer.max
   expect_identical(rurl:::.last_byte_index(s, "@"), 3L)
-  expect_identical(rurl:::.first_byte_index(s, "@"), 3L)
-  expect_no_error(tail <- rurl:::.byte_substring(s, 4L))
+  expect_identical(
+    rurl:::.bytes_locate(s, "@", fixed = TRUE)[[1L, "start"]], 3L
+  )
+  expect_no_error(tail <- rurl:::.bytes_cut(s, 4L, max))
   expect_identical(charToRaw(tail), as.raw(c(0x68, 0x2e, 0x63)))
-  expect_no_error(head_part <- rurl:::.byte_substring(s, 1L, 2L))
+  expect_no_error(head_part <- rurl:::.bytes_cut(s, 1L, 2L))
   expect_identical(charToRaw(head_part), as.raw(c(0x61, 0x80)))
-  # Absent needle, and out-of-range indices clamping to "" as substring() does.
+  # The cut is declared UTF-8 whatever it holds; an ASCII cut stays unknown.
+  expect_identical(Encoding(head_part), "UTF-8")
+  expect_identical(Encoding(tail), "unknown")
+  # Absent needle (0L from the last-byte scan, NA from the locate), and
+  # out-of-range indices clamping to "" as substring() does.
   expect_identical(rurl:::.last_byte_index(s, "?"), 0L)
-  expect_identical(rurl:::.byte_substring(s, 99L), "")
+  expect_identical(
+    rurl:::.bytes_locate(s, "?", fixed = TRUE)[[1L, "start"]], NA_integer_
+  )
+  expect_identical(rurl:::.bytes_cut(s, 99L, max), "")
   # A multi-byte scalar is cut by BYTE, so the helper never re-indexes by
   # locale: "é" is 2 bytes whatever LC_CTYPE says.
   e <- rawToChar(as.raw(c(0xC3, 0xA9, 0x40, 0x78)))
   expect_identical(rurl:::.last_byte_index(e, "@"), 3L)
   expect_identical(
-    charToRaw(rurl:::.byte_substring(e, 1L, 2L)), as.raw(c(0xC3, 0xA9))
+    charToRaw(rurl:::.bytes_cut(e, 1L, 2L)), as.raw(c(0xC3, 0xA9))
   )
+})
+
+test_that("the byte cut and locate keep values; marks, NA and empty pinned", {
+  max <- .Machine$integer.max
+  # An unknown-marked non-ASCII string is cut to the same bytes and declared
+  # UTF-8; the old `.byte_substring()` kept "unknown". Every converted call
+  # site sees UTF-8 or ASCII input, so no output moved (ADR 0019 decision 5).
+  native <- rawToChar(as.raw(c(0xC3, 0xA9, 0x23, 0x78)))
+  cut <- rurl:::.bytes_cut(native, 1L, 2L)
+  expect_identical(charToRaw(cut), as.raw(c(0xC3, 0xA9)))
+  expect_identical(Encoding(cut), "UTF-8")
+  expect_identical(
+    rurl:::.bytes_locate(native, "#", fixed = TRUE)[[1L, "start"]], 3L
+  )
+  # NA in, NA out; no match is NA, not 0L; zero length gives zero length.
+  expect_identical(rurl:::.bytes_cut(NA_character_, 1L, max), NA_character_)
+  expect_identical(
+    rurl:::.bytes_locate(c("a#b", NA, "ab"), "#", fixed = TRUE)[, "start"],
+    c(2L, NA, NA)
+  )
+  expect_identical(rurl:::.bytes_cut(character(0), 1L, max), character(0))
+  expect_identical(
+    nrow(rurl:::.bytes_locate(character(0), "#", fixed = TRUE)), 0L
+  )
+  expect_identical(rurl:::.bytes_cut("", 1L, max), "")
+  # A latin1-marked string stops: the input boundary spells it in UTF-8
+  # first, so no call site receives one.
+  latin1 <- "caf\xe9"
+  Encoding(latin1) <- "latin1"
+  expect_error(rurl:::.bytes_cut(latin1, 1L, 2L), "latin1")
+  expect_error(rurl:::.bytes_locate(latin1, "#", fixed = TRUE), "latin1")
 })
 
 

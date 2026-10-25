@@ -413,9 +413,9 @@ only under `port_handling != "exclude"`.
   `invalid multibyte string` and aborts the whole vectorized call rather than
   the row. Locate and cut in the same unit — bytes — using the
   `R/strings-base.R` wrappers (`.bytes_locate()`, `.bytes_cut()`; ADR 0019),
-  or the older `.byte_substring()` / `.first_byte_index()` /
-  `.last_byte_index()` family in `R/utils.R` (ADR 0019 decision 5 is to fold
-  `.byte_substring*()` and `.first_byte_index*()` into them),
+  plus `.last_byte_index()` and `.byte_length()` in `R/utils.R` (the old
+  `.byte_substring*()` and `.first_byte_index*()` were folded into the
+  wrappers, ADR 0019 decision 5),
   with `.grepl_decodable()` at an acceptance seam; declare native-marked input
   UTF-8 with `Encoding<-` (never `enc2utf8()`) and validate with
   `validUTF8()`.

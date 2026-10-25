@@ -866,8 +866,8 @@
     # fix and stays.)
     last <- regexpr(.ICU_THROUGH_LAST_AT, a, perl = TRUE, useBytes = TRUE)[1L]
     paste0(
-      .percent_encode_userinfo_charset(.byte_substring(a, 1L, last - 1L)),
-      .byte_substring(a, last)
+      .percent_encode_userinfo_charset(.bytes_cut(a, 1L, last - 1L)),
+      .bytes_cut(a, last, .Machine$integer.max)
     )
   }, character(1), USE.NAMES = FALSE)
 
@@ -1008,28 +1008,28 @@
   # element; an undecodable one is now split too, and the uniform RFC 3986
   # gate rejects it (RURL-kmpnbvdl).
   split <- lapply(rest[eligible], function(x) {
-    hash <- .first_byte_index(x, "#")
-    qmark <- .first_byte_index(x, "?")
+    hash <- .bytes_locate(x, "#", fixed = TRUE)[[1L, "start"]]
+    qmark <- .bytes_locate(x, "?", fixed = TRUE)[[1L, "start"]]
     n_bytes <- nchar(x, type = "bytes")
 
     end_path <- n_bytes
-    if (qmark > 0L) {
+    if (!is.na(qmark)) {
       end_path <- min(end_path, qmark - 1L)
     }
-    if (hash > 0L) {
+    if (!is.na(hash)) {
       end_path <- min(end_path, hash - 1L)
     }
-    path <- if (end_path > 0L) .byte_substring(x, 1L, end_path) else ""
+    path <- if (end_path > 0L) .bytes_cut(x, 1L, end_path) else ""
 
     query <- NA_character_
-    if (qmark > 0L && (hash == 0L || qmark < hash)) {
-      query_end <- if (hash > 0L) hash - 1L else n_bytes
-      query <- .byte_substring(x, qmark + 1L, query_end)
+    if (!is.na(qmark) && (is.na(hash) || qmark < hash)) {
+      query_end <- if (!is.na(hash)) hash - 1L else n_bytes
+      query <- .bytes_cut(x, qmark + 1L, query_end)
     }
 
     fragment <- NA_character_
-    if (hash > 0L) {
-      fragment <- .byte_substring(x, hash + 1L, n_bytes)
+    if (!is.na(hash)) {
+      fragment <- .bytes_cut(x, hash + 1L, n_bytes)
     }
 
     c(path = path, query = query, fragment = fragment)
@@ -1051,27 +1051,27 @@
 # whole vector (RURL-yqmoztoj). The delimiters are ASCII, so a byte cut gives
 # the same substrings as a character cut on every decodable rest.
 .whatwg_file_split_rest <- function(rest) {
-  hash <- .first_byte_index(rest, "#")
-  qmark <- .first_byte_index(rest, "?")
+  hash <- .bytes_locate(rest, "#", fixed = TRUE)[[1L, "start"]]
+  qmark <- .bytes_locate(rest, "?", fixed = TRUE)[[1L, "start"]]
   n_bytes <- nchar(rest, type = "bytes")
 
   end_path <- n_bytes
-  if (qmark > 0L) {
+  if (!is.na(qmark)) {
     end_path <- min(end_path, qmark - 1L)
   }
-  if (hash > 0L) {
+  if (!is.na(hash)) {
     end_path <- min(end_path, hash - 1L)
   }
   path <- if (end_path > 0L) .bytes_cut(rest, 1L, end_path) else ""
 
   query <- NA_character_
-  if (qmark > 0L && (hash == 0L || qmark < hash)) {
-    query_end <- if (hash > 0L) hash - 1L else n_bytes
+  if (!is.na(qmark) && (is.na(hash) || qmark < hash)) {
+    query_end <- if (!is.na(hash)) hash - 1L else n_bytes
     query <- .bytes_cut(rest, qmark + 1L, query_end)
   }
 
   fragment <- NA_character_
-  if (hash > 0L) {
+  if (!is.na(hash)) {
     fragment <- .bytes_cut(rest, hash + 1L, n_bytes)
   }
 
@@ -2083,7 +2083,7 @@
   if (trailing_slash_handling == "strip") {
     mask <- !is.na(path_work) & nzchar(path_work) & path_work != "/" &
       endsWith(path_work, "/")
-    path_work[mask] <- .byte_substring_vec(
+    path_work[mask] <- .bytes_cut(
       path_work[mask], 1L, .byte_length(path_work[mask]) - 1L
     )
   } else if (trailing_slash_handling == "keep") {
@@ -2867,7 +2867,7 @@
   bom_www <- .starts_with_bom(fh)
   if (any(bom_www)) {
     bom_www[bom_www] <- startsWith(
-      .byte_substring_vec(lower[bom_www], 4L), "www."
+      .bytes_cut(lower[bom_www], 4L, .Machine$integer.max), "www."
     )
   }
 
@@ -3053,8 +3053,9 @@
   out <- map(x, locale = .ASCII_SAFE_ICU_LOCALE)
   bom_led <- .starts_with_bom(x)
   if (any(bom_led)) {
-    out[bom_led] <- .byte_substring_vec(
-      map(paste0("0", x[bom_led]), locale = .ASCII_SAFE_ICU_LOCALE), 2L
+    out[bom_led] <- .bytes_cut(
+      map(paste0("0", x[bom_led]), locale = .ASCII_SAFE_ICU_LOCALE), 2L,
+      .Machine$integer.max
     )
   }
   out
