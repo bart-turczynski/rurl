@@ -57,7 +57,9 @@ test_that("a base the standard accepts is a base even when `web` refuses it", {
   # `non-spec:/p` is a valid URL under both standards; rurl's default
   # scheme_acceptance = "web" refuses it, but that is acceptance policy
   # (ADR 0004), not a standard's parse failure, so it stays a base.
-  out <- c("non-spec:/g", "non-spec://o.com/y", "non-spec:/p", "https://z.com/q")
+  out <- c(
+    "non-spec:/g", "non-spec://o.com/y", "non-spec:/p", "https://z.com/q"
+  )
   for (s in c("whatwg", "rfc3986")) {
     expect_identical(
       resolve_url(refs, "non-spec:/p", url_standard = s, output = "serialized"),
@@ -92,7 +94,7 @@ test_that("NULL keeps resolving against a base its parser calls an error", {
   }
 })
 
-test_that("recycling: a scalar base over refs, a base vector over a scalar ref", {
+test_that("recycling: scalar base over refs, base vector over scalar ref", {
   for (s in list(NULL, "whatwg", "rfc3986")) {
     label <- if (is.null(s)) "NULL" else s
     expect_identical(
@@ -133,4 +135,167 @@ test_that("every WPT base-relative row resolves through the public surface", {
     url_standard = "whatwg", output = "serialized"
   )
   expect_identical(got, field("href"))
+})
+
+# ---- the rule (RURL-vrvxxfvm) ------------------------------------------------
+#
+# A base the selected standard's parser refuses is no base.
+#
+#   * "whatwg": the URL Standard's API URL parser (used by `new URL(url,
+#     base)`) parses the base first and returns failure when that fails,
+#     before it reads the input, so every row with such a base is NA -- an
+#     absolute reference included.
+#   * "rfc3986": section 5.1 requires a base URI to conform to <absolute-URI>,
+#     and section 5.2.2 reads the base only when the reference has no scheme,
+#     so a relative reference is NA and an absolute one still resolves.
+#
+# "Refuses" means the standard's own parser, `serialize_url()` NA -- not
+# get_parse_status(), whose default `web` acceptance refuses valid URLs such
+# as `non-spec:/p` (pinned above).
+
+ws_bad <- "http://exa mple.com/a" # U+0020 is a forbidden host code point
+port_bad <- "http://example.com:99999/cafe" # WHATWG: port > 65535 fails
+frag_bad <- "https://example.org/##link" # RFC 3986: `#` is not in fragment
+
+test_that("whatwg: a refused base makes every row NA, absolute included", {
+  for (base in c(ws_bad, port_bad, "http://exa mple.com/café")) {
+    expect_true(is.na(serialize_url(base, standard = "whatwg")))
+    expect_identical(
+      resolve_url(refs, base, url_standard = "whatwg"),
+      rep(NA_character_, 4L),
+      label = base
+    )
+    expect_identical(
+      resolve_url(refs, base, url_standard = "whatwg", output = "serialized"),
+      rep(NA_character_, 4L),
+      label = base
+    )
+  }
+})
+
+test_that("rfc3986: a refused base fails relative rows, not absolute ones", {
+  out <- c(NA, NA, NA, "https://z.com/q")
+  for (base in c(ws_bad, frag_bad, "http://exa mple.com/café")) {
+    expect_true(is.na(serialize_url(base, standard = "rfc3986")))
+    expect_identical(
+      resolve_url(refs, base, url_standard = "rfc3986"), out, label = base
+    )
+    expect_identical(
+      resolve_url(refs, base, url_standard = "rfc3986", output = "serialized"),
+      out,
+      label = base
+    )
+  }
+  for (r in c("?q", "#f", "")) {
+    expect_identical(
+      resolve_url(r, ws_bad, url_standard = "rfc3986", output = "serialized"),
+      NA_character_,
+      label = r
+    )
+  }
+})
+
+test_that("the standards disagree on the base, so the rows do", {
+  # `##link` is a WHATWG base (the fragment state keeps the second `#` as a
+  # fragment code point) and WPT resolves `#link` against it; port 99999 is an
+  # RFC 3986 base (`port = *DIGIT`). Each stays a base where its standard says
+  # so.
+  expect_identical(
+    resolve_url("#link", frag_bad, url_standard = "whatwg",
+                output = "serialized"),
+    "https://example.org/#link"
+  )
+  expect_identical(
+    resolve_url("g", port_bad, url_standard = "rfc3986",
+                output = "serialized"),
+    "http://example.com:99999/g"
+  )
+  expect_identical(
+    resolve_url("g", port_bad, url_standard = "whatwg", output = "serialized"),
+    NA_character_
+  )
+})
+
+test_that("a refused base fails its own row only (vector base)", {
+  bases <- c(valid_base, ws_bad, valid_base, port_bad)
+  expect_identical(
+    resolve_url("g", bases, url_standard = "whatwg"),
+    c("http://example.com/a/g", NA, "http://example.com/a/g", NA)
+  )
+  expect_identical(
+    resolve_url("https://z.com/q", bases, url_standard = "whatwg"),
+    c("https://z.com/q", NA, "https://z.com/q", NA)
+  )
+  expect_identical(
+    resolve_url("g", bases, url_standard = "rfc3986"),
+    c("http://example.com/a/g", NA, "http://example.com/a/g",
+      "http://example.com/g")
+  )
+  expect_identical(
+    resolve_url("https://z.com/q", bases, url_standard = "rfc3986"),
+    rep("https://z.com/q", 4L)
+  )
+  # Paired vectors: each row is judged on its own base.
+  expect_identical(
+    resolve_url(refs, c(ws_bad, valid_base, valid_base, ws_bad),
+                url_standard = "rfc3986"),
+    c(NA, "http://o.com/y", "http://example.com/p", "https://z.com/q")
+  )
+  expect_identical(
+    resolve_url(refs, c(ws_bad, valid_base, valid_base, ws_bad),
+                url_standard = "whatwg"),
+    c(NA, "http://o.com/y", "http://example.com/p", NA)
+  )
+})
+
+test_that("a recycled scalar refused base fails every row it reaches", {
+  expect_identical(
+    resolve_url(refs, ws_bad, url_standard = "whatwg"), rep(NA_character_, 4L)
+  )
+  expect_identical(
+    resolve_url(refs, ws_bad, url_standard = "rfc3986"),
+    c(NA, NA, NA, "https://z.com/q")
+  )
+  # ...and a scalar valid base over the same refs is untouched.
+  for (s in c("whatwg", "rfc3986")) {
+    expect_identical(
+      resolve_url(refs, valid_base, url_standard = s), valid_out, label = s
+    )
+  }
+})
+
+test_that("an NA base is no base, not a failing one", {
+  for (s in c("whatwg", "rfc3986")) {
+    expect_identical(
+      resolve_url(c("https://z.com/q", "g"), NA_character_, url_standard = s),
+      c("https://z.com/q", NA),
+      label = s
+    )
+  }
+})
+
+test_that("`...` acceptance options do not change which base is refused", {
+  for (s in c("whatwg", "rfc3986")) {
+    expect_identical(
+      resolve_url(refs, ws_bad, url_standard = s,
+                  scheme_acceptance = "general"),
+      resolve_url(refs, ws_bad, url_standard = s),
+      label = s
+    )
+  }
+})
+
+test_that("each distinct base is parsed once, not once per row", {
+  seen <- new.env()
+  seen$calls <- list()
+  real <- serialize_url
+  local_mocked_bindings(serialize_url = function(url, ...) {
+    seen$calls[[length(seen$calls) + 1L]] <- url
+    real(url, ...)
+  })
+  bases <- rep_len(c(valid_base, ws_bad), 1000L)
+  resolve_url(rep_len(c("g", "https://z.com/q"), 1000L), bases,
+              url_standard = "whatwg")
+  expect_length(seen$calls, 1L)
+  expect_identical(seen$calls[[1L]], c(valid_base, ws_bad))
 })
