@@ -327,3 +327,51 @@ test_that("the public API keeps its values over the moved chains", {
     "invalid-parse", "invalid-parse", "ok", "missing-input"
   ))
 })
+
+test_that("the userinfo split finds the last \"@\" of a long authority", {
+  # The authority after the "@" is just long enough that the greedy
+  # `[^/?#]*@` exceeded PCRE's match limit by backtracking byte by byte: the
+  # "@" was not found and the userinfo was mapped as host (RURL-yqmoztoj).
+  a <- strrep("a", 1e7)
+  url <- off_u(paste0("http://u。i@h", a, "。b/p"))
+  expect_no_warning(
+    r <- rurl:::.map_whatwg_domain_separators_vec(url, "whatwg")
+  )
+  expect_true(identical(r$url, off_u(paste0("http://u。i@h", a, ".b/p"))))
+  # With no "@" the failing locate backtracked as far, and only warned.
+  url <- off_u(paste0("http://h", a, "。b/p"))
+  expect_no_warning(
+    r <- rurl:::.map_whatwg_domain_separators_vec(url, "whatwg")
+  )
+  expect_true(identical(r$url, off_u(paste0("http://h", a, ".b/p"))))
+  # The last "@" before the first "/", "?" or "#" still wins.
+  url <- off_u(c(
+    "http://a@b。c@d。e/f@g。h", "http://a。b?c@d。e",
+    "http://a。b#c@d", "http://@a。b", "http://a@。b",
+    "http://a@@b。c"
+  ))
+  expect_same_bytes(rurl:::.map_whatwg_domain_separators_vec(url, "whatwg")$url,
+                    c("http://a@b。c@d.e/f@g。h", "http://a.b?c@d。e",
+                      "http://a.b#c@d", "http://@a.b", "http://a@.b",
+                      "http://a@@b.c"))
+})
+
+test_that("the IPv6 quad tail stays linear on a long last group", {
+  # The last group is just long enough that `(?>.*:)` exceeded PCRE's match
+  # limit by backtracking to the last ":" (RURL-yqmoztoj).
+  host <- paste0("[1:", strrep("1", 1e7), "]")
+  expect_no_warning(got <- rurl:::.serialize_whatwg_ipv6_host(host))
+  expect_true(identical(got, host))
+})
+
+test_that("the WHATWG file parser splits an invalid-UTF-8 rest per row", {
+  url <- off_u(c("file:/ok", off_inv(c(charToRaw("file:/a"), 0xff,
+                                       charToRaw("b?q#f"))), "file:/p?q#f"))
+  r <- rurl:::.parse_whatwg_file_urls_vec(url)
+  expect_identical(r$ok, c(TRUE, TRUE, TRUE))
+  expect_identical(r$host, c("", "", ""))
+  expect_same_bytes(r$path, c("/ok", off_inv(c(charToRaw("/a"), 0xff,
+                                               charToRaw("b"))), "/p"))
+  expect_identical(r$query, c(NA, "q", "q"))
+  expect_identical(r$fragment, c(NA, "f", "f"))
+})
