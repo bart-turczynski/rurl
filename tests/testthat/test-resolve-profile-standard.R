@@ -218,3 +218,32 @@ test_that("a profile plus a governed knob resolves as safe_parse_url() parses", 
     "https://example.org/a/b"
   )
 })
+
+test_that("with a profile an explicit governed knob overrides the profile's", {
+  cases <- list(
+    list(std = "rfc3986", profile = "rfc-syntax"),
+    list(std = "whatwg", profile = "whatwg")
+  )
+  for (cs in cases) {
+    for (knob in list(list(path_normalization = "collapse_slashes"),
+                      list(case_handling = "lower"))) {
+      got <- do.call(resolve_url, c(
+        list("a//B", "https://e.org/", url_standard = cs$std,
+             profile = cs$profile),
+        knob
+      ))
+      want <- do.call(safe_parse_url, c(
+        list("https://e.org/a//B", url_standard = cs$std,
+             profile = cs$profile),
+        knob
+      ))$clean_url
+      expect_identical(got, want, info = paste(cs$profile, names(knob)))
+      expect_false(
+        identical(got, resolve_url("a//B", "https://e.org/",
+                                   url_standard = cs$std,
+                                   profile = cs$profile)),
+        info = paste(cs$profile, names(knob))
+      )
+    }
+  }
+})
