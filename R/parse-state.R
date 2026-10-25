@@ -1529,7 +1529,11 @@
   # read `example.com:80<U+2028>` as a port of 80. A port is digits only
   # (RFC 3986 sec 3.2.3; WHATWG port state), so that row is a scheme
   # `example.com` with an opaque path, as for any other trailing non-digit.
-  host_port <- .bytes_detect(url, "\\A[^/:]+:[0-9]+(?:\\z|/)")
+  # The digit run is possessive, as in its Phase 1 twin (R/parse-phases.R):
+  # a shorter run is followed by a digit, which is neither end nor "/", so it
+  # matches the same rows, and it no longer gives a long run back byte by
+  # byte, which hit PCRE's match limit on ~1e7 digits (RURL-rweowcfz).
+  host_port <- .bytes_detect(url, "\\A[^/:]+:[0-9]++(?:\\z|/)")
   host_port[is.na(host_port)] <- FALSE
   # ...and the carve-out does not apply under `rfc3986` AT ALL (RURL-kkuirsnz).
   # It encodes rurl's browser-omnibox affordance -- "a bare `example.com:8080`
