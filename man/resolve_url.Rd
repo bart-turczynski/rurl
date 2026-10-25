@@ -58,7 +58,13 @@ argument-is-inert-where-it-does-not-apply contract
 \item{...}{Additional arguments forwarded to \code{\link{safe_parse_urls}}
 (e.g. \code{port_handling}, \code{query_handling}, \code{host_encoding}).
 Passing a governed low-level knob that conflicts with \code{url_standard}
-errors, exactly as it does for \code{\link{safe_parse_url}}. These are
+errors, exactly as it does for \code{\link{safe_parse_url}}. A
+\code{profile} passed here selects the standard it bundles (see
+\code{\link{url_profile}}) for the resolution as well as for the parse:
+\code{profile = "rfc-syntax"} resolves as \code{url_standard = "rfc3986"}
+and \code{"whatwg"}, \code{"browser"} and \code{"seo"} as
+\code{"whatwg"}. An explicit \code{url_standard} overrides the
+profile's, as it does for \code{\link{safe_parse_url}}. These are
 presentation dials consumed by the \code{"clean"} path only; supplying any
 of them together with \code{output = "serialized"} is an error, because
 \code{\link{serialize_url}} takes no presentation arguments and the dial
@@ -156,7 +162,8 @@ of such a path, so under \code{"rfc3986"} the first is \code{"foo:/b"}.
 
 The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
 every rule above is reachable only through
-\code{url_standard = "whatwg"}.
+\code{url_standard = "whatwg"}, or through a \code{profile} that bundles it
+(see \code{...}).
 
 Two further rules apply under \strong{both} named profiles, because the two
 standards agree on them. First, a resolved path whose first segment is

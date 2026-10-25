@@ -739,7 +739,8 @@
 #'
 #' The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
 #' every rule above is reachable only through
-#' \code{url_standard = "whatwg"}.
+#' \code{url_standard = "whatwg"}, or through a \code{profile} that bundles it
+#' (see \code{...}).
 #'
 #' Two further rules apply under \strong{both} named profiles, because the two
 #' standards agree on them. First, a resolved path whose first segment is
@@ -858,7 +859,13 @@
 #' @param ... Additional arguments forwarded to \code{\link{safe_parse_urls}}
 #'   (e.g. \code{port_handling}, \code{query_handling}, \code{host_encoding}).
 #'   Passing a governed low-level knob that conflicts with \code{url_standard}
-#'   errors, exactly as it does for \code{\link{safe_parse_url}}. These are
+#'   errors, exactly as it does for \code{\link{safe_parse_url}}. A
+#'   \code{profile} passed here selects the standard it bundles (see
+#'   \code{\link{url_profile}}) for the resolution as well as for the parse:
+#'   \code{profile = "rfc-syntax"} resolves as \code{url_standard = "rfc3986"}
+#'   and \code{"whatwg"}, \code{"browser"} and \code{"seo"} as
+#'   \code{"whatwg"}. An explicit \code{url_standard} overrides the
+#'   profile's, as it does for \code{\link{safe_parse_url}}. These are
 #'   presentation dials consumed by the \code{"clean"} path only; supplying any
 #'   of them together with \code{output = "serialized"} is an error, because
 #'   \code{\link{serialize_url}} takes no presentation arguments and the dial
@@ -937,6 +944,23 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
       c(list(url_standard = url_standard), dots)
     )
   }
+  # The standard the RESOLUTION reads (RURL-nwujwmft). A named profile bundles
+  # a `url_standard` (`.URL_PROFILES`, R/parse.R) and the parse below reads it
+  # through `...`; the rules that run before the parse -- the undecodable-octet
+  # reading, the rfc3986 URI-reference gate, the refused-base rule and the
+  # merge -- must read the same one, or `profile = "rfc-syntax"` parses as
+  # RFC 3986 but resolves as the frozen NULL selector. It comes from
+  # `.resolve_profile()`, the helper safe_parse_url() uses, so an explicit
+  # `url_standard` overrides the bundle's exactly as it does there (the iron
+  # rule). `serialized` takes no `...`, so there it is `url_standard`.
+  profile <- .validate_profile(dots$profile)
+  resolution_standard <- if (is.null(profile)) {
+    url_standard
+  } else {
+    .resolve_profile(
+      profile, list(url_standard = url_standard)
+    )$opts$url_standard
+  }
 
   # Both operands pass the input boundary before anything reads them
   # (RURL-cwzickqy). .resolve_one_raw() splits, merges and recomposes them as
@@ -973,7 +997,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   ref_bad <- !rep_len(ref_in$decodable, n)
   base_bad <- !rep_len(base_in$decodable, n)
   hidden <- logical(n)
-  if (.is_whatwg(url_standard)) {
+  if (.is_whatwg(resolution_standard)) {
     # The replacement is the reading, not a fault, and the parse seam reads
     # the same octet without a warning; stringi's "fixing" notice is muffled.
     # stri_enc_toutf8() reads a U+FEFF that starts its input as a byte-order
@@ -994,7 +1018,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     }
     ref[ref_bad] <- replace(ref[ref_bad])
     base[base_bad] <- replace(base[base_bad])
-  } else if (!is.null(url_standard)) {
+  } else if (!is.null(resolution_standard)) {
     ref[ref_bad] <- NA_character_
     base[base_bad] <- NA_character_
   } else {
@@ -1015,7 +1039,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # distinct reference is checked once, row by row, so one refused reference
   # moves no other row. `whatwg` has no such gate (its parser reads the
   # reference with the base), and `NULL` is frozen (ADR 0007).
-  if (identical(url_standard, "rfc3986")) {
+  if (identical(resolution_standard, "rfc3986")) {
     distinct <- unique(ref[!is.na(ref)])
     if (length(distinct) > 0L) {
       refused_ref <- distinct[!.rfc3986_uri_reference_ok(distinct)]
@@ -1033,15 +1057,15 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # selector is frozen (ADR 0007) and ADR 0016 moves it only with a witness
   # that the default path is defective and a declared signature, which this
   # change does not carry.
-  refused <- .refused_base_mask(base, url_standard)
+  refused <- .refused_base_mask(base, resolution_standard)
   base[refused] <- NA_character_
-  if (.is_whatwg(url_standard)) {
+  if (.is_whatwg(resolution_standard)) {
     ref[refused] <- NA_character_
   }
 
   resolved_raw <- vapply(
     seq_len(n),
-    function(i) .resolve_one_raw(ref[[i]], base[[i]], url_standard),
+    function(i) .resolve_one_raw(ref[[i]], base[[i]], resolution_standard),
     character(1)
   )
   resolved_raw[hidden] <- .restore_high_octets(resolved_raw[hidden])

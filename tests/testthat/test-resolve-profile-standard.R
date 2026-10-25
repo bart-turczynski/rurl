@@ -88,3 +88,76 @@ test_that("pin: WPT base-relative rows resolve under the WHATWG recipe", {
     got
   )
 })
+
+# ---- the rule (RURL-nwujwmft) ------------------------------------------------
+#
+# The resolution reads the standard the profile bundles, through the same
+# `.resolve_profile()` the parse uses.
+
+test_that("profile = 'rfc-syntax' refuses an RFC 3986 base with a second #", {
+  # RFC 3986 section 3.5: `fragment = *( pchar / "/" / "?" )`, so `##link`
+  # is no URI, and section 5.1 requires the base to be one.
+  expect_identical(
+    resolve_url("g", frag_bad, profile = "rfc-syntax"), NA_character_
+  )
+  # An absolute reference does not read the base (section 5.2.2).
+  expect_identical(
+    resolve_url("https://z.com/q", frag_bad, profile = "rfc-syntax"),
+    "https://z.com/q"
+  )
+})
+
+test_that("a whatwg-bundling profile fails every row on a failing base", {
+  # The URL Standard's API URL parser parses the base first and returns
+  # failure when that fails, before it reads the input.
+  for (p in c("whatwg", "browser", "seo", "canonical")) {
+    expect_identical(
+      resolve_url("https://z.com/q", ws_bad, profile = p), NA_character_,
+      label = p
+    )
+  }
+  # WHATWG keeps `##link` as a fragment, so under it that base is a base.
+  expect_identical(
+    resolve_url("g", frag_bad, profile = "whatwg"), "https://example.org/g"
+  )
+})
+
+test_that("a profile reaches the WHATWG reference-parsing rules", {
+  # "special relative or authority state": the base's own special scheme is
+  # consumed, so the reference is relative (P2.7 D-B).
+  expect_identical(
+    resolve_url("http:foo.com", "http://example.org/foo/bar",
+                profile = "whatwg"),
+    "http://example.org/foo/foo.com"
+  )
+})
+
+test_that("profile and url_standard + profile agree on WPT base-relative", {
+  w <- wpt_rel_rows()
+  std <- c(
+    whatwg = "whatwg", browser = "whatwg", seo = "whatwg",
+    canonical = "whatwg", `rfc-syntax` = "rfc3986"
+  )
+  for (p in names(std)) {
+    expect_identical(
+      resolve_url(w$input, w$base, profile = p),
+      resolve_url(w$input, w$base, url_standard = std[[p]], profile = p),
+      label = p
+    )
+  }
+  # ...and `profile = "whatwg"` is the posture card's recipe.
+  expect_identical(
+    resolve_url(w$input, w$base, profile = "whatwg"),
+    do.call(resolve_url, c(list(w$input, w$base), whatwg_knobs))
+  )
+})
+
+test_that("no profile and an invalid profile behave as before", {
+  # No profile: the NULL selector, frozen (ADR 0007), resolves against the
+  # base its parser calls an error.
+  expect_identical(resolve_url("g", frag_bad), "https://example.org/g")
+  expect_error(
+    resolve_url("g", "http://a/b", profile = "nope"),
+    "profile must be NULL or one of"
+  )
+})
