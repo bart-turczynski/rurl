@@ -705,13 +705,16 @@
   # fixed locators and stri_sub() read past a U+FEFF that starts their input,
   # so splitting `authority` once dropped a mark that starts the userinfo
   # (RURL-exdlurql). The authority ends at the first "/", "?" or "#"; userinfo
-  # runs through the LAST "@" in it, found by the greedy class backtracking to
-  # it. A negated class, not `.*`: ICU `.` stops at U+000B, U+000C, U+0085,
+  # runs through the LAST "@" in it. Possessive runs of "@"-free bytes, each
+  # ending in "@", reach that "@" without giving a byte back, so the locate
+  # is linear: a greedy `[^/?#]*@` backtracked byte by byte from the end of
+  # the authority and hit PCRE's match limit on a long one (RURL-yqmoztoj).
+  # A negated class, not `.*`: ICU `.` stops at U+000B, U+000C, U+0085,
   # U+2028 and U+2029, which would leave the host unsplit for a later step to
   # map.
   prefix <- "^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)?//"
-  authority_end <- .bytes_locate(url, paste0(prefix, "[^/?#]*"))[, "end"]
-  at <- .bytes_locate(url, paste0(prefix, "[^/?#]*@"))[, "end"]
+  authority_end <- .bytes_locate(url, paste0(prefix, "[^/?#]*+"))[, "end"]
+  at <- .bytes_locate(url, paste0(prefix, "(?:[^/?#@]*+@)++"))[, "end"]
   host_start <- ifelse(
     is.na(at), .bytes_locate(url, prefix)[, "end"], at
   ) + 1L
