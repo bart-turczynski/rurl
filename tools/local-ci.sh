@@ -77,12 +77,8 @@
 # forwarded into the container. The gate runs before the clone, so a run in
 # which every job is skipped costs nothing and ends NONE.
 #
-# THE CLONE IS BIND-MOUNTED AT /repo, AND `pages` DOES NOT RUN THERE
-# (RURL-nviibwoo). On Docker Desktop for macOS the mount is virtiofs, which
-# denies the chmod pkgdown makes on the `docs/` it creates, so `pages` failed
-# here with EACCES while passing on the forge. Jobs listed in
-# CONTAINER_LOCAL_JOBS (below) first copy /repo to a container-local /work and
-# run their script, verbatim from .gitlab-ci.yml, there.
+# THE CLONE IS BIND-MOUNTED AT /repo, AND `pages` DOES NOT RUN THERE: see
+# CONTAINER_LOCAL_JOBS below (RURL-nviibwoo).
 
 set -euo pipefail
 
@@ -151,6 +147,11 @@ cleanup() {
   fi
   if [ "$KEEP" -eq 1 ] || [ -n "$FAILED" ]; then
     echo "work tree kept: $WORK"
+    for J in $FAILED; do
+      case " ${CONTAINER_LOCAL_JOBS:-} " in
+        *" $J "*) echo "  ($J ran on a container-local copy: its state is not in the kept tree)" ;;
+      esac
+    done
   else
     rm -rf "$WORK"
   fi
@@ -263,11 +264,15 @@ git -C "$WORK/repo" checkout --quiet --detach "$SHA"
 # $WORK/repo is virtiofs, which refuses that chmod -- `[EACCES] Failed to set
 # permissions for directory '/repo/docs'` -- while the forge job, on a
 # container-local checkout, passes. So for the jobs named here the runner, not
-# the job, copies /repo into the container's own filesystem first and the job
-# script runs there unchanged, as GitLab runs it. Nothing reads such a job's
-# output back: its tree dies with the container, and `--keep` keeps only the
-# clone as it was before the job. The other jobs stay on the bind mount so a
-# failure leaves its output (e.g. `rurl.Rcheck/`) in the kept work tree.
+# the job, copies /repo into the container's own filesystem first, and the job
+# script, verbatim from .gitlab-ci.yml, runs there. The copy carries whatever
+# earlier jobs of this run left in /repo (e.g. `rurl.Rcheck/`), which a fresh
+# forge checkout would not have. The copy and the cd are separate lines so
+# `set -e` stops the job if either fails, instead of running it on the bind
+# mount. Nothing reads such a job's output back: its tree dies with the
+# container, and `--keep` keeps only the clone as it was before the job. The
+# other jobs stay on the bind mount so a failure leaves its output in the kept
+# work tree.
 CONTAINER_LOCAL_JOBS="pages"
 
 for JOB in $JOBS; do
@@ -275,7 +280,11 @@ for JOB in $JOBS; do
   {
     echo "set -ex"
     case " $CONTAINER_LOCAL_JOBS " in
-      *" $JOB "*) echo "cp -a /repo /work && cd /work" ;;
+      *" $JOB "*)
+        echo "mkdir -p /work"
+        echo "cp -a /repo/. /work/"
+        echo "cd /work"
+        ;;
     esac
     plan --script "$JOB"
   } > "$WORK/$JOB.sh"
