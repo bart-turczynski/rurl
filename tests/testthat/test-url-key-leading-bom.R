@@ -2,9 +2,10 @@
 #
 # Some stringi functions skip a U+FEFF (the byte-order mark) at the start of
 # their input (ADR 0005, "a leading U+FEFF is a third equivalence gap"). A
-# U+FEFF is ordinary data in a URL: RFC 3986 has no rule for it, and the WHATWG
-# URL Standard strips only C0 controls and spaces. So a key field that starts
-# with one must frame the mark, or the key collides with its unmarked twin.
+# U+FEFF is ordinary data to the WHATWG URL Standard, which strips only C0
+# controls and spaces (under `rfc3986` it is a parse error, RUL-030). So a
+# key field that starts with one must frame the mark, or the key collides
+# with its unmarked twin.
 # Each U+FEFF row has a U+200B twin: a zero-width code point stringi does not
 # skip, so a twin that already gives the right answer shows the defect is the
 # mark's alone.
@@ -48,6 +49,18 @@ fill <- function(template, mark) {
   sprintf(template, mark)
 }
 
+# RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): under `rfc3986` a raw
+# non-ASCII code point, U+FEFF and U+200B included, is a parse error (RFC 3986
+# sections 2, 2.5 and 3.2.2: a URI is US-ASCII, non-ASCII data is written as
+# percent-encoded UTF-8, and `reg-name` admits no raw non-ASCII). Every
+# `marked_rows` row, its U+200B twin and any other rfc3986 row holding the
+# mark is therefore not keyable: NA, typed `invalid-parse`. The framing fix
+# itself stays covered by the `.url_key_frame()` assertions below.
+expect_unkeyable <- function(k, label) {
+  expect_identical(as.character(k), NA_character_, label = label)
+  expect_identical(attr(k, "keyability"), "invalid-parse", label = label)
+}
+
 arm_label <- function(std) {
   if (is.null(std)) "NULL" else std
 }
@@ -55,12 +68,16 @@ arm_label <- function(std) {
 # --- Pins: behavior the fix must not move -------------------------------------
 
 test_that("the record holds the mark in every field the fix reaches", {
-  # The defect is in the framing, not the record: the record already holds
-  # the mark, as it holds the U+200B twin's code point.
+  # The defect is in the framing, not the record: the web-route state already
+  # holds the mark, as it holds the U+200B twin's code point. The general
+  # route's `foo:` row is now rejected by the RFC 3986 gate (RUL-030), so its
+  # path field is NA; no row here is keyable (pinned below).
   for (row in marked_rows) {
     for (mark in c(bom, zwsp)) {
       f <- key_fields(fill(row[[3L]], mark), row[[1L]])[[row[[2L]]]]
-      expect_identical(f, fill(row[[4L]], mark),
+      want <- if (startsWith(row[[3L]], "foo:")) NA_character_ else
+        fill(row[[4L]], mark)
+      expect_identical(f, want,
                        label = paste(row[[1L]], row[[3L]], utf8ToInt(mark)))
     }
   }
@@ -71,9 +88,11 @@ test_that("the U+200B twins already frame the code point", {
     std <- row[[1L]]
     twin <- fill(row[[3L]], zwsp)
     plain <- fill(row[[3L]], "")
-    k <- key(c(twin, plain), std)
-    expect_true(has_frame(k[[1L]], fill(row[[4L]], zwsp)), label = twin)
-    expect_false(k[[1L]] == k[[2L]], label = twin)
+    # RUL-030: the twin is a parse error under rfc3986, so it has no key;
+    # the plain row keeps its own.
+    k <- get_url_key(c(twin, plain), url_key_policy(std))
+    expect_unkeyable(k[1L], label = twin)
+    expect_false(is.na(as.character(k)[[2L]]), label = twin)
   }
   expect_identical(.url_key_frame(list(paste0(zwsp, "ab"))),
                    paste0("5:", zwsp, "ab"))
@@ -87,18 +106,16 @@ test_that("negative controls: no mark, a mark not first, NA and empty", {
   expect_identical(
     .url_key_frame(list(c("x", "y"), c(paste0(bom, "z"), NA)))[[2L]], "1:y-:"
   )
-  # A mark that does not start the path field: `rfc3986` frames it as
-  # written, and `whatwg` frames the path as its URL record holds it, with
-  # the path percent-encode set applied (RURL-ommuyaqi).
-  for (std in c("whatwg", "rfc3986")) {
-    k <- key(c(paste0("foo://h/", bom), "foo://h/"), std)
-    want <- if (std == "whatwg") "/%EF%BB%BF" else paste0("/", bom)
-    expect_true(has_frame(k[[1L]], want), label = std)
-    expect_false(k[[1L]] == k[[2L]], label = std)
-  }
-  k <- key(c(paste0("http://h", bom, ".com/"), "http://h.com/"), "rfc3986")
-  expect_true(has_frame(k[[1L]], paste0("h", bom, ".com")))
+  # A mark that does not start the path field: `whatwg` frames the path as
+  # its URL record holds it, with the path percent-encode set applied
+  # (RURL-ommuyaqi). Under `rfc3986` the raw mark is a parse error (RUL-030).
+  k <- key(c(paste0("foo://h/", bom), "foo://h/"), "whatwg")
+  expect_true(has_frame(k[[1L]], "/%EF%BB%BF"))
   expect_false(k[[1L]] == k[[2L]])
+  expect_unkeyable(get_url_key(paste0("foo://h/", bom),
+                               url_key_policy("rfc3986")), "rfc3986 path")
+  expect_unkeyable(get_url_key(paste0("http://h", bom, ".com/"),
+                               url_key_policy("rfc3986")), "rfc3986 host")
 })
 
 test_that("whatwg: a special host maps the mark to nothing, so twins agree", {
@@ -130,11 +147,16 @@ test_that("whatwg: a special host maps the mark to nothing, so twins agree", {
 test_that("the fragment and userinfo stay invisible with a mark in them", {
   # Ratification Q5: neither is web-resource identity, so a mark there must
   # not reach the key under either policy.
-  for (std in c("whatwg", "rfc3986")) {
-    k <- key(c(paste0("http://u:", bom, "pw@h/p#", bom, "f"), "http://h/p"),
-             std)
-    expect_identical(k[[1L]], k[[2L]], label = std)
-  }
+  k <- key(c(paste0("http://u:", bom, "pw@h/p#", bom, "f"), "http://h/p"),
+           "whatwg")
+  expect_identical(k[[1L]], k[[2L]])
+  # Under rfc3986 the raw mark is a parse error wherever it stands (RUL-030),
+  # so the marked row has no key at all rather than its twin's.
+  expect_unkeyable(
+    get_url_key(paste0("http://u:", bom, "pw@h/p#", bom, "f"),
+                url_key_policy("rfc3986")),
+    "rfc3986"
+  )
 })
 
 test_that("scheme presence: the U+200B twin and the unmarked rows", {
@@ -203,20 +225,22 @@ test_that("the frame reads a latin1 field by its mark, in any locale", {
 })
 
 test_that("a mark-led field no longer collides with its unmarked twin", {
-  # Signature, per policy: `rfc3986` moves a host, path or query that starts
-  # with the mark, since its record keeps each as written (RFC 3986 has no
-  # rule for U+FEFF). Under `whatwg` the mark is percent-encoded in every key
+  # Signature, per policy: `rfc3986` once moved a host, path or query that
+  # started with the mark; under RUL-030 such a row is a parse error (RFC 3986
+  # sections 2, 2.5). Under `whatwg` the mark is percent-encoded in every key
   # field it can start, a list path (RURL-ommuyaqi) and a non-special query
   # (RURL-pjrqnqvb) included, so no
   # `whatwg` row is left here (pinned above), and the fragment and userinfo
   # stay out of the key. Each marked row keyed
   # like its unmarked twin; it now frames the mark, as its U+200B twin does.
+  # Under RUL-030 every such rfc3986 row is a parse error, so it cannot
+  # collide with its unmarked twin: it has no key.
   for (row in marked_rows) {
     std <- row[[1L]]
     marked <- fill(row[[3L]], bom)
-    k <- key(c(marked, fill(row[[3L]], "")), std)
-    expect_false(k[[1L]] == k[[2L]], label = marked)
-    expect_true(has_frame(k[[1L]], fill(row[[4L]], bom)), label = marked)
+    k <- get_url_key(c(marked, fill(row[[3L]], "")), url_key_policy(std))
+    expect_unkeyable(k[1L], label = marked)
+    expect_false(is.na(as.character(k)[[2L]]), label = marked)
   }
   # The ticket's row, as a dedup would see it.
   u <- c(paste0(bom, "h.example.com/p"), "h.example.com/p")

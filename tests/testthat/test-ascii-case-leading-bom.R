@@ -37,10 +37,13 @@ test_that("the U+200B twins already keep their code point in the fallback", {
     get_clean_url(c(twin_url, poison_url))[[1L]],
     paste0("http://", zwsp, "h.example/")
   )
+  # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): rfc3986 rejects a raw
+  # non-ASCII code point (RFC 3986 sections 2, 2.5, 3.2.2), so the rfc3986
+  # serializer has no record here; the NULL clean_url carries the coverage.
   expect_identical(
     serialize_url(c(twin_url, poison_url), standard = "rfc3986",
                   form = "normalized")[[1L]],
-    paste0("http://", zwsp, "h.example/")
+    NA_character_
   )
 })
 
@@ -65,9 +68,12 @@ test_that("negative controls: no fallback, or a mark that is not first", {
   expect_identical(get_clean_url(c(mark_url, "http://B.example/")),
                    c(paste0("http://", bom, "h.example/"),
                      "http://b.example/"))
+  # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): rfc3986 rejects a raw
+  # non-ASCII code point (RFC 3986 sections 2, 2.5, 3.2.2), so the rfc3986
+  # serializer has no record here; the NULL clean_url carries the coverage.
   expect_identical(
     serialize_url(mark_url, standard = "rfc3986", form = "normalized"),
-    paste0("http://", bom, "h.example/")
+    NA_character_
   )
   expect_identical(get_clean_url(poison_url), poison_url)
 })
@@ -123,14 +129,17 @@ test_that("one rejected row no longer changes another row's public output", {
   # mark-led row came back as `http://h.example/`, host `h.example`.
   expect_identical(get_clean_url(c(mark_url, poison_url)),
                    c(paste0("http://", bom, "h.example/"), poison_url))
+  # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): rfc3986 rejects a raw
+  # non-ASCII code point (RFC 3986 sections 2, 2.5, 3.2.2), so the rfc3986
+  # serializer has no record here; the NULL clean_url carries the coverage.
   expect_identical(
     serialize_url(c(mark_url, poison_url), standard = "rfc3986",
                   form = "normalized")[[1L]],
-    paste0("http://", bom, "h.example/")
+    NA_character_
   )
   expect_identical(
     safe_parse_urls(c(mark_url, poison_url), url_standard = "rfc3986")$host,
-    c(paste0(bom, "h.example"), "\uffff.example")
+    c(NA_character_, NA_character_)
   )
 })
 
@@ -153,8 +162,8 @@ test_that("NULL: the frozen selector reaches the fallback (ADR 0016)", {
   # U+FEFF move, only when its vector holds a row chartr() rejects, and only
   # to the row's own value alone. Every column of both rows now matches the
   # rows parsed alone; the status never moved. Per arm: whatwg was already
-  # right (UTS-46 drops the mark first, pinned above); rfc3986 reads the same
-  # host and moves the same way (pinned in the previous test).
+  # right (UTS-46 drops the mark first, pinned above); rfc3986 now rejects
+  # both rows (RUL-030, pinned in the previous test).
   alone <- safe_parse_urls(mark_url)
   mixed <- safe_parse_urls(c(mark_url, poison_url))
   for (col in names(alone)) {

@@ -95,8 +95,13 @@ test_that("reject covers every delimiter shape, including the empty ones", {
                 info = std)
     expect_identical(at(reject$parse_status, "empty_at"), "ok", info = std)
     # eq-U8: the `@` is preceded by host-looking text; rurl's parse keeps the
-    # userinfo interpretation (host e.gg), so it is a credential row here too
-    expect_identical(at(reject$host, "eq_u8"), "e.gg", info = std)
+    # userinfo interpretation (host e.gg), so it is a credential row here too.
+    # Under rfc3986 the raw U+0130 in the userinfo is a parse error (RFC 3986
+    # sections 2, 2.5; RUL-030, owner ruling 2026-10-12, RURL-pntbujzc).
+    expect_identical(
+      at(reject$host, "eq_u8"), if (std == "rfc3986") NA_character_ else "e.gg",
+      info = std
+    )
     expect_true(is.na(at(reject$clean_url, "eq_u8")), info = std)
   }
   # the repeated `@` parses under WHATWG (last-`@` split) and is rejected

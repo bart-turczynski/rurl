@@ -215,7 +215,10 @@ test_that("both named standards still serialize byte-identically", {
       "https://h:443/",
       "http://h/#",
       "foo://h:80/x?#",
-      "http://\u041f\u0420\u0418\u0412\u0415\u0422.\u0440\u0444/A"
+      # A raw Cyrillic reg-name is a parse error: reg-name admits only its
+      # percent-encoded UTF-8 form (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030,
+      # owner ruling 2026-10-12, RURL-pntbujzc).
+      NA_character_
     )
   )
   for (standard in c("whatwg", "rfc3986")) {

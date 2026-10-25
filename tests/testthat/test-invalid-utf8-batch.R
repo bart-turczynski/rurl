@@ -110,6 +110,19 @@ expected_valid <- list(
 )
 expected_valid$omitted <- expected_valid$null
 expected_valid$whatwg <- expected_valid$rfc3986
+for (arm in names(expected_valid)) {
+  expected_valid[[arm]]$host <-
+    c("www.example.com", "example.com", "example.com", "example.com")
+  expected_valid[[arm]]$query <- c(NA, NA, "q=caf%C3%A9", NA)
+  expected_valid[[arm]]$parse_status <- c("ok", "ok", "ok", "ok-ftp")
+}
+# Row 2 writes U+00E9 raw. Under rfc3986 that is a parse error: a URI is
+# US-ASCII and non-ASCII data is percent-encoded UTF-8 (RFC 3986 sections 2,
+# 2.5; RUL-030, RURL-pntbujzc). The NULL and whatwg arms do not move.
+expected_valid$rfc3986$path[2L] <- NA_character_
+expected_valid$rfc3986$clean_url[2L] <- NA_character_
+expected_valid$rfc3986$host[2L] <- NA_character_
+expected_valid$rfc3986$parse_status[2L] <- "error"
 
 for (loc in names(ctypes)) {
   test_that(paste("the valid controls parse to today's values under", loc), {
@@ -120,14 +133,10 @@ for (loc in names(ctypes)) {
         expect_identical(
           res$clean_url, expected_valid[[arm]]$clean_url, info = arm
         )
+        expect_identical(res$host, expected_valid[[arm]]$host, info = arm)
+        expect_identical(res$query, expected_valid[[arm]]$query, info = arm)
         expect_identical(
-          res$host,
-          c("www.example.com", "example.com", "example.com", "example.com"),
-          info = arm
-        )
-        expect_identical(res$query, c(NA, NA, "q=caf%C3%A9", NA), info = arm)
-        expect_identical(
-          res$parse_status, c("ok", "ok", "ok", "ok-ftp"), info = arm
+          res$parse_status, expected_valid[[arm]]$parse_status, info = arm
         )
       }
     })
@@ -373,9 +382,11 @@ for (loc in names(ctypes)) {
       expect_identical(verdicts$layer2_policy_verdict[5L], "admitted")
       rurl_clear_caches()
       std <- "rfc3986"
+      # Row 2 (raw U+00E9) fails under rfc3986 (RFC 3986 sections 2, 2.5;
+      # RUL-030, RURL-pntbujzc).
       expect_identical(
         get_parse_status(batch, url_standard = std),
-        c("ok", "ok", "ok", "ok-ftp", "error")
+        c("ok", "error", "ok", "ok-ftp", "error")
       )
       expect_identical(get_path(batch, url_standard = std)[5L], NA_character_)
       expect_identical(

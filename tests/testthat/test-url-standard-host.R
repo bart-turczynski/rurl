@@ -157,18 +157,23 @@ test_that("WHATWG default and unicode presentations map the host", {
     "\uff45xample.com")
   unmapped_idna <- c("xn--bcher-2pa.example", "xn--le-1b1n.com",
     "xn--ab-g1t.com", "xn--xample-hy68a.com")
-  for (std in list("rfc3986", NULL)) {
+  # rfc3986 no longer parses these at all: every host is raw non-ASCII,
+  # which reg-name does not admit (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030,
+  # owner ruling 2026-10-12, RURL-pntbujzc), so neither maps.
+  std <- NULL
+  expect_identical(get_host(urls, url_standard = std), unmapped_keep)
+  expect_identical(
+    get_host(urls, url_standard = std, host_encoding = "unicode"),
+    unmapped_keep
+  )
+  expect_identical(
+    get_host(urls, url_standard = std, host_encoding = "idna"),
+    unmapped_idna
+  )
+  for (enc in c("keep", "unicode", "idna")) {
     expect_identical(
-      get_host(urls, url_standard = std), unmapped_keep,
-      info = if (is.null(std)) "NULL" else std
-    )
-    expect_identical(
-      get_host(urls, url_standard = std, host_encoding = "unicode"),
-      unmapped_keep, info = if (is.null(std)) "NULL" else std
-    )
-    expect_identical(
-      get_host(urls, url_standard = std, host_encoding = "idna"),
-      unmapped_idna, info = if (is.null(std)) "NULL" else std
+      get_host(urls, url_standard = "rfc3986", host_encoding = enc),
+      rep(NA_character_, 4L), info = enc
     )
   }
 })
@@ -242,15 +247,24 @@ test_that("WHATWG rejects UTS-46 join controls that cannot normalize", {
 })
 
 test_that("RFC IDNA presentation remains the reversible punycode path", {
+  # The raw spellings are parse errors under rfc3986: reg-name admits no raw
+  # non-ASCII (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030, owner ruling
+  # 2026-10-12, RURL-pntbujzc). The reversible path is reached from the
+  # A-label, which `unicode` decodes without a UTS-46 mapping and `idna`
+  # keeps as written.
+  raw <- c("https://①.com/", "https://ﬃ.com/")
   expect_identical(
-    get_host("https://①.com/", url_standard = "rfc3986",
-             host_encoding = "idna"),
-    "xn--orh.com"
+    get_host(raw, url_standard = "rfc3986", host_encoding = "idna"),
+    c(NA_character_, NA_character_)
+  )
+  ace <- c("https://xn--orh.com/", "https://xn--lm6c.com/")
+  expect_identical(
+    get_host(ace, url_standard = "rfc3986", host_encoding = "idna"),
+    c("xn--orh.com", "xn--lm6c.com")
   )
   expect_identical(
-    get_host("https://ﬃ.com/", url_standard = "rfc3986",
-             host_encoding = "idna"),
-    "xn--lm6c.com"
+    get_host(ace, url_standard = "rfc3986", host_encoding = "unicode"),
+    c("①.com", "ﬃ.com")
   )
 })
 

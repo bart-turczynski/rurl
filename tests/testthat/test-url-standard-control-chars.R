@@ -261,10 +261,18 @@ test_that("no WHATWG rewrite reads past a leading U+FEFF", {
 test_that("a host led by U+FEFF keeps the whole path", {
   # stri_locate_*_regex() counts a leading U+FEFF and stri_sub() skips it, so
   # the path was cut one character late: "//x" read "/x" (RURL-vhionecz).
-  for (std in list(NULL, "rfc3986", "whatwg")) {
+  for (std in list(NULL, "whatwg")) {
     r <- safe_parse_urls(paste0("http://", BOM, "a.com//x"), url_standard = std)
     expect_identical(r$path, "//x", info = format(std))
   }
+  # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): under rfc3986 the raw
+  # mark is a parse error (RFC 3986 sections 2, 2.5 and 3.2.2), so the row
+  # has no path there.
+  r <- safe_parse_urls(paste0("http://", BOM, "a.com//x"),
+    url_standard = "rfc3986"
+  )
+  expect_identical(r$path, NA_character_)
+  expect_identical(r$parse_status, "error")
   r <- safe_parse_urls(paste0("http://", BOM, "a.com/%7e"),
     url_standard = "whatwg"
   )
@@ -415,30 +423,40 @@ test_that("an authority led by U+FEFF splits at the right place", {
   # cut fell one character early: the host lost its last character to the path,
   # and the port kept its colon.
   u <- paste0("file://", BOM, "localhost/path/to/file.txt")
-  for (std in list(NULL, "rfc3986")) {
-    r <- safe_parse_urls(u, url_standard = std)
-    expect_identical(r$host, paste0(BOM, "localhost"), info = format(std))
-    expect_identical(r$path, "/path/to/file.txt", info = format(std))
-  }
+  r <- safe_parse_urls(u)
+  expect_identical(r$host, paste0(BOM, "localhost"))
+  expect_identical(r$path, "/path/to/file.txt")
+  # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): under rfc3986 a raw
+  # non-ASCII code point, the mark included, is a parse error (RFC 3986
+  # sections 2, 2.5 and 3.2.2: `reg-name` admits no raw non-ASCII), so the
+  # rows below have no components there; NULL keeps the split coverage.
+  r <- safe_parse_urls(u, url_standard = "rfc3986")
+  expect_identical(r$host, NA_character_)
+  expect_identical(r$path, NA_character_)
   r <- safe_parse_urls(paste0("ftps://", BOM, "files.example.org/pub/"),
     profile = "whatwg"
   )
   expect_identical(r$host, "%EF%BB%BFfiles.example.org")
   expect_identical(r$path, "/pub/")
-  # The RFC 3986 grammar gate rejected every such authority with a port or a
-  # userinfo.
+  # The RFC 3986 grammar gate once rejected every such authority with a port
+  # or a userinfo, then accepted them; under RUL-030 it rejects them again,
+  # now for the raw mark itself, like any other row holding one.
   r <- safe_parse_urls(paste0("http://", BOM, "a.com:8080/"),
     url_standard = "rfc3986"
   )
-  expect_identical(r$host, paste0(BOM, "a.com"))
-  expect_identical(r$port, 8080L)
-  expect_identical(r$parse_status, "ok")
+  expect_identical(r$host, NA_character_)
+  expect_identical(r$port, NA_integer_)
+  expect_identical(r$parse_status, "error")
   r <- safe_parse_urls(paste0("http://", BOM, "u:p@a.com/"),
     url_standard = "rfc3986"
   )
-  expect_identical(r$user, paste0(BOM, "u"))
-  expect_identical(r$host, "a.com")
-  expect_identical(r$parse_status, "ok")
+  expect_identical(r$user, NA_character_)
+  expect_identical(r$host, NA_character_)
+  expect_identical(r$parse_status, "error")
+  # NULL keeps the split for both shapes.
+  r <- safe_parse_urls(paste0("http://", BOM, "a.com:8080/"))
+  expect_identical(r$host, paste0(BOM, "a.com"))
+  expect_identical(r$port, 8080L)
   # WHATWG opaque hosts: the mark is a host code point, so the host is not
   # empty, and credentials with an empty host still fail.
   r <- safe_parse_urls(paste0("sc://", BOM, ":12/"), profile = "whatwg")

@@ -154,12 +154,23 @@ test_that("an empty label elsewhere neither masks nor mimics the token", {
   )
 })
 
-test_that("a non-ASCII code point inside an xn-- label fires under rfc3986", {
+test_that("a non-ASCII code point inside an xn-- label fails both standards", {
   # Under whatwg such a host fails the parse (ToASCII fails on a non-ASCII
   # domain, which the non-strict carve-out does not cover), so there is no
-  # host to report on.
+  # host to report on. Under rfc3986 the raw code point is itself a parse
+  # error (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030, owner ruling 2026-10-12,
+  # RURL-pntbujzc): the row reports only the repurposed rejection reason.
+  # The probe's predicate still holds for such a label.
   url <- "http://xn--bücher.example/"
-  expect_true(diag_has_ace(url, "rfc3986"))
+  expect_identical(get_parse_status(url, url_standard = "rfc3986"), "error")
+  expect_identical(
+    get_url_diagnostics(url, url_standard = "rfc3986"),
+    "unicode-outside-rfc3986-uri"
+  )
+  expect_false(diag_has_ace(url, "rfc3986"))
+  expect_true(
+    rurl:::.punycoder_host_probe("xn--bücher.example")$invalid_ace_label
+  )
   expect_identical(get_parse_status(url, url_standard = "whatwg"), "error")
 })
 

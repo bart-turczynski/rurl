@@ -79,10 +79,12 @@ test_that("rfc3986 and NULL negative controls do not move", {
   }
   # Section 5.2.2: a scheme-bearing reference's path is dot-removed as is.
   expect_identical(rfc_ser("foo:a/./b/../c", "http://h/y"), "foo:a/c")
+  # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): under rfc3986 a raw
+  # non-ASCII code point, U+200B and U+FEFF included, is a parse error (RFC
+  # 3986 sections 2 and 2.5), so these references do not resolve there.
   expect_identical(rfc_ser(paste0("file:", zwsp, "/./b"), "http://h/y"),
-                   "file:\u200b/b")
-  expect_identical(rfc_ser("foo:/\ufeff/./b", "http://h/y"),
-                   "foo:/\ufeff/b")
+                   NA_character_)
+  expect_identical(rfc_ser("foo:/\ufeff/./b", "http://h/y"), NA_character_)
   # NULL: the frozen selector's resolution, omitted and explicit alike.
   expect_identical(resolve_url("a/./b/../c", "http://h/y"), "http://h/a/c")
   expect_identical(resolve_url("a/./b/../c", "http://h/y", url_standard = NULL),
@@ -161,21 +163,22 @@ test_that("RFC 3986 dot removal keeps a mark-led first segment", {
   expect_identical(._remove_dot_segments("\u200b../x"), "\u200b../x")
 })
 
-test_that("rfc3986: a mark-led reference path keeps the mark", {
+test_that("rfc3986: a mark-led reference is a parse error", {
   rfc_ser <- function(ref, base) {
     resolve_url(ref, base, url_standard = "rfc3986", output = "serialized")
   }
-  # Section 5.2.2: T.path = remove_dot_segments(R.path).
-  expect_identical(rfc_ser("foo:\ufeff../x", "http://h/y"), "foo:\ufeff../x")
-  expect_identical(rfc_ser("file:\ufeff/./b", "http://h/y"), "file:\ufeff/b")
-  expect_identical(rfc_ser("http:\ufeff./x", "http://h/y"), "http:\ufeff./x")
-  # Section 5.2.3: no authority and an empty base path merge to R.path.
-  expect_identical(rfc_ser("\ufeff../x", "foo:"), "foo:\ufeff../x")
-  # The parse's dot-segment step (section 6.2.2.3) runs the same remover.
-  expect_identical(
+  # These resolved with the mark kept (section 5.2.2 / 5.2.3). Under RUL-030
+  # (owner ruling 2026-10-12, RURL-pntbujzc) the raw U+FEFF is a parse error
+  # (RFC 3986 sections 2 and 2.5: a URI is US-ASCII, non-ASCII data is
+  # percent-encoded UTF-8), so none of them resolves. The remover itself is
+  # pinned on the mark above, and the NULL arm below still reaches it.
+  expect_identical(rfc_ser("foo:\ufeff../x", "http://h/y"), NA_character_)
+  expect_identical(rfc_ser("file:\ufeff/./b", "http://h/y"), NA_character_)
+  expect_identical(rfc_ser("http:\ufeff./x", "http://h/y"), NA_character_)
+  expect_identical(rfc_ser("\ufeff../x", "foo:"), NA_character_)
+  expect_null(
     safe_parse_url("http:\ufeff/./b", url_standard = "rfc3986",
-                   scheme_acceptance = "general")$path,
-    "\ufeff/b"
+                   scheme_acceptance = "general")
   )
 })
 

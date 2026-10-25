@@ -72,14 +72,16 @@ test_that("rfc3986: the key frames the query as written", {
   # rfc3986 key keeps the source spelling and these twins key apart.
   k <- wq_key(c("foo:/p?\u200bq", "foo:/p?%E2%80%8Bq", "http://h/p?'q",
                 "http://h/p?%27q"), "rfc3986")
-  expect_true(wq_has_frame(k[[1L]], paste0(zwsp, "q")))
+  # The raw U+200B row is a parse error with no key (RFC 3986 sections 2,
+  # 2.5; RUL-030, owner ruling 2026-10-12, RURL-pntbujzc); only its
+  # percent-encoded twin keys.
+  expect_true(is.na(k[[1L]]))
   expect_true(wq_has_frame(k[[2L]], "%E2%80%8Bq"))
   expect_true(wq_has_frame(k[[3L]], "'q"))
   expect_true(wq_has_frame(k[[4L]], "%27q"))
-  expect_false(k[[1L]] == k[[2L]])
   expect_false(k[[3L]] == k[[4L]])
   expect_identical(wq_fields("foo:/p?\u200bq", "rfc3986")$query,
-                   paste0(zwsp, "q"))
+                   NA_character_)
 })
 
 test_that("whatwg: a special query's non-ASCII bytes already key alike", {

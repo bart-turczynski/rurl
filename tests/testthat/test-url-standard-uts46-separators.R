@@ -61,10 +61,15 @@ test_that("a full-stop variant in the query is not mapped to a dot", {
 
 # --- rfc3986 / no selector keep the literal separators -----------------------
 
-test_that("rfc3986 leaves the Unicode separators literal (no UTS-46 mapping)", {
+test_that("rfc3986 never maps the Unicode separators (no UTS-46 mapping)", {
+  # A raw U+3002 is not RFC 3986 syntax (sections 2, 2.5, 3.2.2): the row is
+  # a parse error rather than a mapped IPv4 host (RUL-030, owner ruling
+  # 2026-10-12, RURL-pntbujzc). Its percent-encoded form stays a reg-name.
   u <- paste0("http://127", U3002, "0", U3002, "0", U3002, "1/")
-  expect_identical(get_clean_url(u, url_standard = "rfc3986"),
-                   paste0("http://127", U3002, "0", U3002, "0", U3002, "1/"))
+  expect_identical(get_clean_url(u, url_standard = "rfc3986"), NA_character_)
+  expect_identical(get_parse_status(u, url_standard = "rfc3986"), "error")
+  enc <- "http://127%E3%80%820%E3%80%820%E3%80%821/"
+  expect_false(get_host(enc, url_standard = "rfc3986") == "127.0.0.1")
 })
 
 test_that("no selector keeps the strict default (separators left literal)", {

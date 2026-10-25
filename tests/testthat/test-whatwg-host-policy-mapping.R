@@ -135,10 +135,13 @@ test_that("rfc3986 and NULL: an ignorable-led host keeps the code point", {
     sub1 = c("{m}www.com", "{m}www.example.com", "a.example.com",
              "{m}example.com", "b.example.com", "{m}www.example.com")
   )
+  # rfc3986 no longer reaches the policies: the raw mark is not RFC 3986
+  # syntax (sections 2, 2.5, 3.2.2), so every row is a parse error with no
+  # host (RUL-030, owner ruling 2026-10-12, RURL-pntbujzc). NULL is frozen.
   for (mk in names(marks)) {
     m <- marks[[mk]]
     urls <- paste0("http://", m, policy_hosts, "/")
-    for (posture in c("rfc3986", "NULL", "NULL-explicit")) {
+    for (posture in c("NULL", "NULL-explicit")) {
       for (policy in names(policies)) {
         want <- gsub("{m}", m, expected[[policy]], fixed = TRUE)
         p <- policy_parse(urls, posture, policy)
@@ -147,6 +150,15 @@ test_that("rfc3986 and NULL: an ignorable-led host keeps the code point", {
         expect_identical(p$clean_url, paste0("http://", want, "/"), label = lab)
         expect_identical(p$parse_status, rep("ok", length(urls)), label = lab)
       }
+    }
+    for (policy in names(policies)) {
+      p <- policy_parse(urls, "rfc3986", policy)
+      lab <- paste(mk, "rfc3986", policy)
+      expect_identical(p$host, rep(NA_character_, length(urls)), label = lab)
+      expect_identical(p$clean_url, rep(NA_character_, length(urls)),
+                       label = lab)
+      expect_identical(p$parse_status, rep("error", length(urls)),
+                       label = lab)
     }
   }
 })
@@ -208,11 +220,15 @@ test_that("whatwg: a mixed ACE host trims to the spelling of its domain", {
     expect_identical(policy_parse(urls, posture, "sub1")$host, whole$host,
                      label = posture)
   }
-  # rfc3986 and NULL read the host as written and do not move.
-  for (posture in c("rfc3986", "NULL", "NULL-explicit")) {
+  # NULL reads the host as written and does not move. rfc3986 rejects the raw
+  # non-ASCII label (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030, owner ruling
+  # 2026-10-12, RURL-pntbujzc).
+  for (posture in c("NULL", "NULL-explicit")) {
     expect_identical(policy_parse(urls, posture, "sub0")$host,
                      c("\u043f\u0440.com", "m\u00fcnchen.de"), label = posture)
   }
+  expect_identical(policy_parse(urls, "rfc3986", "sub0")$host,
+                   c(NA_character_, NA_character_))
 })
 
 test_that("whatwg: pure ACE and pure Unicode hosts keep their spelling", {
@@ -247,10 +263,17 @@ test_that("whatwg: a first label UTS-46 maps to www is policed as www", {
         label = paste(posture, policy))
     }
   }
-  # rfc3986 has no mapping step: the label is not `www`, so strip leaves it.
+  # rfc3986 has no mapping step, and the raw fullwidth label is not RFC 3986
+  # syntax (sections 2, 2.5, 3.2.2): a parse error, never policed as www
+  # (RUL-030, owner ruling 2026-10-12, RURL-pntbujzc). The percent-encoded
+  # mark is RFC syntax and, unmapped, is not www either.
   expect_identical(
     policy_parse(marked[[1]], "rfc3986", "strip")$host,
-    "ＷＷＷ.example.com"
+    NA_character_
+  )
+  expect_identical(
+    policy_parse(marked[[4]], "rfc3986", "strip")$host,
+    "%E2%80%8Bwww.example.com"
   )
 })
 

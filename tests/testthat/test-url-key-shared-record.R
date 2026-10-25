@@ -66,25 +66,28 @@ sr_rfc_rows <- c(
 )
 
 test_that("serialize_url(standard = \"rfc3986\") output is pinned", {
+  # Rows 5, 6 and 8 carry a raw U+200B, which is not RFC 3986 syntax
+  # (sections 2, 2.5): parse errors, so both forms give NA (RUL-030, owner
+  # ruling 2026-10-12, RURL-pntbujzc).
   expect_identical(serialize_url(sr_rfc_rows, "rfc3986", "source"), c(
     "HTTP://u:pw@Example.COM:80/a/../b?q=1#f",
     "foo://H/p%7e?x",
     "foo:op/aque?q",
     "file:///C:/a/../b",
-    "http://[2001:DB8::1]:8080/p\u200b",
-    "http://h/p\u200b?\u200b#\u200b",
+    NA,
+    NA,
     "foo:/.//p",
-    "foo:/p\u200b"
+    NA
   ))
   expect_identical(serialize_url(sr_rfc_rows, "rfc3986", "normalized"), c(
     "http://u:pw@example.com/b?q=1#f",
     "foo://h/p~?x",
     "foo:op/aque?q",
     "file:///C:/b",
-    "http://[2001:db8::1]:8080/p\u200b",
-    "http://h/p\u200b?%E2%80%8B#%E2%80%8B",
+    NA,
+    NA,
     "foo:/.//p",
-    "foo:/p\u200b"
+    NA
   ))
 })
 
@@ -98,15 +101,18 @@ test_that("rfc3986 keys are pinned byte for byte", {
            "8:rootless7:op/aque7:present1:q"),
     paste0("1:21:17:rfc39865:exact8:explicit4:file1:T5:empty0:-:4:list",
            "7:abempty10:/C:/a/../b6:absent-:"),
-    paste0("1:21:17:rfc39865:exact8:explicit4:http1:T7:present",
-           "13:[2001:DB8::1]4:80804:list7:abempty5:/p\u200b6:absent-:"),
-    paste0("1:21:17:rfc39865:exact8:explicit4:http1:T7:present1:h-:4:list",
-           "7:abempty5:/p\u200b7:present3:\u200b"),
+    # Rows 5, 6 and 8: raw U+200B, a parse error under RUL-030 (RFC 3986
+    # sections 2, 2.5), so no key.
+    NA,
+    NA,
     paste0("1:21:17:rfc39865:exact8:explicit3:foo1:F6:absent-:-:4:list",
            "8:absolute5:/.//p6:absent-:"),
-    paste0("1:21:17:rfc39865:exact8:explicit3:foo1:F6:absent-:-:4:list",
-           "8:absolute5:/p\u200b6:absent-:")
+    NA
   ))
+  expect_identical(
+    attr(get_url_key(sr_rfc_rows, url_key_policy("rfc3986")), "keyability"),
+    c(rep("ok", 4L), "invalid-parse", "invalid-parse", "ok", "invalid-parse")
+  )
 })
 
 test_that("rfc3986 keeps raw and encoded twins apart, path and query", {
@@ -120,11 +126,17 @@ test_that("rfc3986 keeps raw and encoded twins apart, path and query", {
     c("foo:a\u200b", "foo:a%E2%80%8B"),
     c("http://h/?\u200b", "http://h/?%E2%80%8B")
   )
+  # Under RUL-030 (RFC 3986 sections 2, 2.5) the raw spelling is a parse
+  # error with no key, so only the encoded twin keys; the two stay apart.
   for (tw in twins) {
-    expect_false(sr_same(tw, "rfc3986"), label = tw[[1L]])
+    k <- get_url_key(tw, url_key_policy("rfc3986"))
+    expect_identical(attr(k, "keyability"), c("invalid-parse", "ok"),
+                     label = tw[[1L]])
+    expect_true(is.na(as.character(k)[[1L]]), label = tw[[1L]])
   }
-  f <- sr_fields(c("foo:/p\u200b", "foo:a\u200b"), "rfc3986")
-  expect_identical(f$path, c("/p\u200b", "a\u200b"))
+  f <- sr_fields(c("foo:/p\u200b", "foo:a\u200b", "foo:/p%E2%80%8B",
+                   "foo:a%E2%80%8B"), "rfc3986")
+  expect_identical(f$path, c(NA, NA, "/p%E2%80%8B", "a%E2%80%8B"))
 })
 
 test_that("whatwg: the query keys as the standard serializes it", {
@@ -155,10 +167,19 @@ test_that("whatwg: an opaque path already keys as the standard holds it", {
 })
 
 test_that("the fragment and userinfo stay out of the key", {
-  for (std in c("whatwg", "rfc3986")) {
-    expect_true(sr_same(c("http://u\u200b:p@h/p#\u200b", "http://h/p"), std),
-                label = std)
-  }
+  expect_true(
+    sr_same(c("http://u\u200b:p@h/p#\u200b", "http://h/p"), "whatwg")
+  )
+  # rfc3986: the raw U+200B is a parse error (RUL-030; RFC 3986 sections 2,
+  # 2.5), so use its percent-encoded twin to hold the same property.
+  expect_true(sr_same(
+    c("http://u%E2%80%8B:p@h/p#%E2%80%8B", "http://h/p"), "rfc3986"
+  ))
+  expect_identical(
+    attr(get_url_key(c("http://u\u200b:p@h/p#\u200b", "http://h/p"),
+                     url_key_policy("rfc3986")), "keyability"),
+    c("invalid-parse", "ok")
+  )
 })
 
 # --- Fix: the whatwg key frames the components the serializer writes ----------

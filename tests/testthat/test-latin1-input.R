@@ -62,21 +62,26 @@ twin <- list(
     fragment = c(NA, "%C3%BC", NA, NA),
     parse_status = c("warning-no-tld", "warning-no-tld", "ok", "error")
   ),
+  # Every twin writes U+00FC raw, so under rfc3986 every row is a parse
+  # error on both routes: a URI is US-ASCII and non-ASCII data is written
+  # as percent-encoded UTF-8 (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030,
+  # RURL-pntbujzc). A latin1 element still reads as its twin, so it fails
+  # the same way.
   "rfc3986 web" = list(
     args = list(url_standard = "rfc3986"),
-    host = c("h", "h", "h\u00fc.com", NA),
-    path = c("/", "/\u00fc", "/", NA),
-    query = c("\u00fc", "q=\u00fc", NA, NA),
-    fragment = c(NA, "\u00fc", NA, NA),
-    parse_status = c("warning-no-tld", "warning-no-tld", "ok", "error")
+    host = rep(NA_character_, 4L),
+    path = rep(NA_character_, 4L),
+    query = rep(NA_character_, 4L),
+    fragment = rep(NA_character_, 4L),
+    parse_status = rep("error", 4L)
   ),
   "rfc3986 general" = list(
     args = list(url_standard = "rfc3986", scheme_acceptance = "general"),
-    host = c("h", "h", "h\u00fc.com", "h"),
-    path = c("/", "/\u00fc", "/", "/\u00fc"),
-    query = c("\u00fc", "q=\u00fc", NA, "\u00fc"),
-    fragment = c(NA, "\u00fc", NA, NA),
-    parse_status = c("warning-no-tld", "warning-no-tld", "ok", "ok")
+    host = rep(NA_character_, 4L),
+    path = rep(NA_character_, 4L),
+    query = rep(NA_character_, 4L),
+    fragment = rep(NA_character_, 4L),
+    parse_status = rep("error", 4L)
   ),
   "whatwg web" = list(
     args = list(url_standard = "whatwg"),
@@ -212,8 +217,16 @@ test_that("latin1 0x80-0x9F reads as U+0080-U+009F, as whatwg read it", {
   x <- latin1(c(utf8ToInt("http://h/?"), 0x80))
   expect_identical(cold_parse(x)$query, "%C2%80")
   expect_identical(cold_parse(x, url_standard = "whatwg")$query, "%C2%80")
-  expect_bytes(cold_parse(x, url_standard = "rfc3986")$query, "\u0080",
-               "rfc3986")
+  # rfc3986 reads the same U+0080 and rejects it as raw non-ASCII (RFC 3986
+  # sections 2, 2.5; RUL-030); the grammar's tolerant walk still admits it
+  # as one scalar value, the reading the cache key shares.
+  expect_identical(cold_parse(x, url_standard = "rfc3986")$query,
+                   NA_character_)
+  expect_identical(
+    get_url_diagnostics(x, url_standard = "rfc3986"),
+    "unicode-outside-rfc3986-uri"
+  )
+  expect_true(.rfc3986_generic_uri_ok(x, ascii_only = FALSE)$ok)
 })
 
 test_that("get_mailto_recipients() reads a latin1 recipient as its twin", {

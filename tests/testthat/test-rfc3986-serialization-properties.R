@@ -471,10 +471,15 @@ test_that("source reproduces raw bytes >= 0x80 in query and fragment", {
     "foo://h/p?q=ü#fü",                 # general route
     "https://x/�?�#�"              # wptcf-025's input
   )
-  expect_identical(src(raw), raw)
+  # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): a raw non-ASCII code
+  # point is not RFC 3986 syntax (sections 2, 2.5), so every raw row is now a
+  # parse error and both forms give NA. The octet reaches the serializer only
+  # as a percent-encoded triplet, which neither form decodes (below).
+  expect_identical(src(raw), rep(NA_character_, 5L))
+  expect_identical(norm(raw), rep(NA_character_, 5L))
 
-  # `normalized` keeps encoding them (uppercase, sec 2.1's canonical spelling),
-  # on both routes -- and is the same function of either spelling.
+  # The encoded twins: rows 1 and 5 still carry a raw path octet, so they
+  # fail too; the fully encoded spelling is the same in both forms.
   enc <- c(
     "https://x/ü?%C3%BC#%C3%BC",
     "https://localhost/#%F0%9F%94%A5",
@@ -482,8 +487,13 @@ test_that("source reproduces raw bytes >= 0x80 in query and fragment", {
     "foo://h/p?q=%C3%BC#f%C3%BC",
     "https://x/�?%EF%BF%BD#%EF%BF%BD"
   )
-  expect_identical(norm(raw), enc)
-  expect_identical(norm(enc), enc)
+  ascii <- c(NA, enc[2:4], NA)
+  expect_identical(norm(enc), ascii)
+  expect_identical(src(enc), ascii)
+  full <- c("https://x/%C3%BC?%C3%BC#%C3%BC",
+            "https://x/%EF%BF%BD?%EF%BF%BD#%EF%BF%BD")
+  expect_identical(norm(full), full)
+  expect_identical(src(full), full)
 
   # Input that already spells the octet as a triplet does not move in either
   # form (wpt-fail-039's shape): `source` is not a decoder.
@@ -498,18 +508,18 @@ test_that("source reproduces raw bytes >= 0x80 in query and fragment", {
       "http://h/p?q=%C3%BC#f%C3%BC")
   )
 
-  # The raw octet stays raw in the record under `rfc3986` only. The other two
-  # arms are pinned rather than assumed (design/posture-card.md, frame vs
-  # payload): both encode the octet as an uppercase triplet, but `whatwg`
-  # keeps an existing triplet's hex case (RURL-djvqopjk) while the frozen
-  # `NULL` profile uppercases it, so row 3 tells them apart.
+  # Under `rfc3986` the raw rows are parse errors (RUL-030; RFC 3986 sections
+  # 2, 2.5), so the record has no query or fragment. The other two arms are
+  # pinned rather than assumed (design/posture-card.md, frame vs payload):
+  # both encode the octet as an uppercase triplet, but `whatwg` keeps an
+  # existing triplet's hex case (RURL-djvqopjk) while the frozen `NULL`
+  # profile uppercases it, so row 3 tells them apart.
   rfc <- safe_parse_urls(raw[1:4], url_standard = "rfc3986",
                          scheme_policy = "require",
                          scheme_acceptance = "general")
-  expect_identical(rfc$query, c("ü", NA, "q=%7cü", "q=ü"))
-  expect_identical(
-    rfc$fragment, c("ü", "\U0001F525", "f%7cü", "fü")
-  )
+  expect_identical(rfc$parse_status, rep("error", 4L))
+  expect_identical(rfc$query, rep(NA_character_, 4L))
+  expect_identical(rfc$fragment, rep(NA_character_, 4L))
   # Node 26.3.1 `URL` `search` / `hash` / `href`.
   w <- safe_parse_urls(raw[1:3], url_standard = "whatwg",
                        scheme_policy = "require", scheme_acceptance = "general")

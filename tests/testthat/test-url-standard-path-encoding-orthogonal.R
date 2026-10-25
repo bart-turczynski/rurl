@@ -28,15 +28,30 @@ test_that("path_encoding = 'keep' is the profile's canonical identity", {
 
 test_that("path_encoding = 'encode' renders the browser form under a profile", {
   # Retires benchmark caveat #3: a readable non-ASCII path emits its
-  # percent-encoded UTF-8 form under either profile.
-  for (std in c("rfc3986", "whatwg")) {
-    expect_identical(
-      get_path("https://ex.com/école", url_standard = std,
-        path_encoding = "encode"),
-      "/%C3%A9cole",
-      info = std
-    )
-  }
+  # percent-encoded UTF-8 form under either profile. Under rfc3986 the raw
+  # spelling is a parse error (RFC 3986 sections 2, 2.5; RUL-030, owner
+  # ruling 2026-10-12, RURL-pntbujzc), so the readable path reaches it only
+  # as the encoded input, which `encode` keeps and `decode` renders readable.
+  expect_identical(
+    get_path("https://ex.com/école", url_standard = "whatwg",
+      path_encoding = "encode"),
+    "/%C3%A9cole"
+  )
+  expect_identical(
+    get_path("https://ex.com/école", url_standard = "rfc3986",
+      path_encoding = "encode"),
+    NA_character_
+  )
+  expect_identical(
+    get_path("https://ex.com/%C3%A9cole", url_standard = "rfc3986",
+      path_encoding = "encode"),
+    "/%C3%A9cole"
+  )
+  expect_identical(
+    get_path("https://ex.com/%C3%A9cole", url_standard = "rfc3986",
+      path_encoding = "decode"),
+    "/école"
+  )
 })
 
 test_that("whatwg path_encoding = 'encode' uses the WHATWG path encode set", {

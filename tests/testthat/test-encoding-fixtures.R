@@ -71,7 +71,15 @@ test_that("url_standard does not force path percent-encoding by default", {
   # separate, larger change -- the profile currently governs path_encoding.)
   readable <- "http://ex.com/école"
   expect_identical(get_clean_url(readable, url_standard = "whatwg"), readable)
-  expect_identical(get_clean_url(readable, url_standard = "rfc3986"), readable)
+  # rfc3986 rejects the raw code point (RFC 3986 sections 2, 2.5; RUL-030,
+  # owner ruling 2026-10-12, RURL-pntbujzc); its percent-encoded UTF-8 twin
+  # keeps the encoded spelling, not a decoded or re-encoded one.
+  expect_identical(get_clean_url(readable, url_standard = "rfc3986"),
+                   NA_character_)
+  expect_identical(
+    get_clean_url("http://ex.com/%C3%A9cole", url_standard = "rfc3986"),
+    "http://ex.com/%C3%A9cole"
+  )
 })
 
 test_that("raw query fidelity honors the decode flag", {
