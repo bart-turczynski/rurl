@@ -776,7 +776,9 @@
 #' no triplet) and
 #' \code{"10.0.0.7:8080/x"} (section 4.2: a first segment holding a colon
 #' cannot start a relative-path reference; write \code{"./10.0.0.7:8080/x"}).
-#' \code{"whatwg"} and \code{NULL} do not check the reference.
+#' \code{"whatwg"} and \code{NULL} do not check the reference. Each rule in
+#' this section applies to the standard \code{url_standard} names, or to the
+#' one a \code{profile} in \code{...} bundles.
 #'
 #' @section Which output surface you want:
 #'
@@ -824,19 +826,24 @@
 #'   Each may be relative (\code{"../b"}, \code{"?q=1"}, \code{"#frag"},
 #'   \code{"//host/p"}) or already absolute (\code{"https://host/p"}). An
 #'   absolute reference takes nothing from \code{base_url}, except that under
-#'   \code{url_standard = "whatwg"} a base that standard refuses makes the
-#'   row \code{NA} (see \code{base_url}).
+#'   \code{url_standard = "whatwg"} (or a \code{profile} that bundles it) a
+#'   base that standard refuses makes the row \code{NA} (see
+#'   \code{base_url}). That includes a scheme-less base such as
+#'   \code{"example.com/a/b"}, even where the profile's own parse would fix
+#'   the base up.
 #' @param base_url A character vector of base URLs, recycled against
 #'   \code{relative_or_absolute}. Each base must itself be an absolute URL
 #'   (carry a scheme); a relative reference resolved against a scheme-less or
-#'   \code{NA} base yields \code{NA}. Under a named \code{url_standard}, a base
+#'   \code{NA} base yields \code{NA}. Under a named \code{url_standard}
+#'   (given here or bundled by a \code{profile}), a base
 #'   that standard's parser refuses (\code{\link{serialize_url}} gives
 #'   \code{NA}) is no base, row by row: under \code{"whatwg"} the row is
 #'   \code{NA} even for an absolute reference (the URL Standard's API URL
 #'   parser fails on a failing base before it reads the input); under
 #'   \code{"rfc3986"} a relative reference is \code{NA} and an absolute one
 #'   still resolves (RFC 3986 sections 5.1 and 5.2.2). The frozen \code{NULL}
-#'   selector does not check the base.
+#'   selector (no \code{url_standard} and no \code{profile}) does not check
+#'   the base.
 #' @param url_standard Optional standard profile forwarded to the parse:
 #'   \code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
 #'   \code{\link{safe_parse_url}} for the axes it governs, and
@@ -863,9 +870,10 @@
 #'   \code{profile} passed here selects the standard it bundles (see
 #'   \code{\link{url_profile}}) for the resolution as well as for the parse:
 #'   \code{profile = "rfc-syntax"} resolves as \code{url_standard = "rfc3986"}
-#'   and \code{"whatwg"}, \code{"browser"} and \code{"seo"} as
-#'   \code{"whatwg"}. An explicit \code{url_standard} overrides the
-#'   profile's, as it does for \code{\link{safe_parse_url}}. These are
+#'   and \code{"whatwg"}, \code{"browser"}, \code{"seo"} and its alias
+#'   \code{"canonical"} as \code{"whatwg"}. An explicit
+#'   \code{url_standard} overrides the profile's, as it does for
+#'   \code{\link{safe_parse_url}}. These are
 #'   presentation dials consumed by the \code{"clean"} path only; supplying any
 #'   of them together with \code{output = "serialized"} is an error, because
 #'   \code{\link{serialize_url}} takes no presentation arguments and the dial
@@ -875,7 +883,8 @@
 #'   canonical \code{clean_url} of the resolved reference; under
 #'   \code{output = "serialized"} it is the standard's full-string
 #'   serialization of the resolved absolute URL. \code{NA} where resolution
-#'   cannot produce an absolute URL, where under \code{"rfc3986"} the
+#'   cannot produce an absolute URL, where under \code{"rfc3986"} (named or
+#'   bundled by a \code{profile}) the
 #'   reference is no RFC 3986 URI-reference, or where the resolved URL is not
 #'   accepted by the parser (\code{"clean"}) or by the selected standard's
 #'   parser (\code{"serialized"}).
@@ -953,7 +962,19 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # `.resolve_profile()`, the helper safe_parse_url() uses, so an explicit
   # `url_standard` overrides the bundle's exactly as it does there (the iron
   # rule). `serialized` takes no `...`, so there it is `url_standard`.
-  profile <- .validate_profile(dots$profile)
+  # `...` reaches safe_parse_urls(), which matches an abbreviated `prof =`
+  # to its `profile` formal, so read it the same way here.
+  dot_names <- names(dots)
+  if (is.null(dot_names)) {
+    dot_names <- rep("", length(dots))
+  }
+  spu_formals <- names(formals(safe_parse_urls))
+  dot_formals <- spu_formals[pmatch(dot_names, spu_formals,
+                                    duplicates.ok = TRUE)]
+  profile_at <- which(dot_formals == "profile")
+  profile <- .validate_profile(
+    if (length(profile_at) == 1L) dots[[profile_at]] else NULL
+  )
   resolution_standard <- if (is.null(profile)) {
     url_standard
   } else {

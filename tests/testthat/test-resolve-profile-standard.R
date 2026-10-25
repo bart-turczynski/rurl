@@ -161,3 +161,25 @@ test_that("no profile and an invalid profile behave as before", {
     "profile must be NULL or one of"
   )
 })
+
+test_that("an abbreviated profile argument selects the standard too", {
+  # safe_parse_urls() matches `prof =` to `profile`, so the resolution must.
+  expect_identical(
+    resolve_url("g", "https://example.org/##link", prof = "rfc-syntax"),
+    NA_character_
+  )
+})
+
+test_that("a whatwg-bundling profile refuses a scheme-less base", {
+  # The URL Standard's API URL parser fails on a base that does not parse,
+  # before it reads the input, even an absolute one; the browser profile's
+  # own parse fixing the base up does not make it a base.
+  for (p in c("browser", "seo", "canonical", "whatwg")) {
+    expect_identical(
+      resolve_url("https://x.com/y", "example.com/a/b", profile = p),
+      NA_character_, label = p
+    )
+  }
+  expect_identical(resolve_url("https://x.com/y", "example.com/a/b"),
+                   "https://x.com/y")
+})
