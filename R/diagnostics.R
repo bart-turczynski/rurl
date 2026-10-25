@@ -147,6 +147,39 @@
   }
   live <- !null_row
 
+  # --- authority presence (RURL-cjxdaqym) -------------------------------------
+  # The host-shape and credentials facts below describe a URL AUTHORITY, so
+  # they fire only on a row whose parse produced one. Read off the general
+  # parser's own `host_kind`: "absent" exactly where no authority was parsed,
+  # i.e. a WHATWG opaque path (URL Standard, basic URL parser, "opaque path
+  # state") or an RFC 3986 path-rootless / path-absolute hier-part (RFC 3986
+  # section 3). A web-route row counts as having one here, but a WHATWG
+  # special-scheme row such as `file:u@1.2.3.999` can still parse no host, so
+  # the host-shape facts below also require a parsed host. Stage A cannot say
+  # this on
+  # its own: ADR 0012 D7 installs a mailto recipient's domain and local part
+  # as `host` / `user` on such rows, extraction metadata for the accessors
+  # that is not an authority. The same pure re-parse feeds the Layer 5 block.
+  general <- identical(opts$scheme_acceptance, "general")
+  gen_b <- NULL
+  gp <- rep(FALSE, n)
+  if (general && !is.null(url)) {
+    # It reads the string Stage A's general route reads
+    # (.general_route_input_vec()), not the raw input: under rfc3986 with
+    # scheme_relative_handling = "keep" (the only handling these callers
+    # pass) that string gives a `//` row the `http:` stand-in (RURL-ozpxupgq),
+    # so the raw one disagreed with Stage A about which `//` rows are
+    # general-routed (RURL-cwzickqy).
+    gen_b <- .general_parse_vec(.general_route_input_vec(url, opts),
+                                opts$url_standard, opts$scheme_acceptance,
+                                opts$scheme_policy)
+    gp <- gen_b$general_parsed & live
+  }
+  has_authority <- live
+  if (any(gp)) {
+    has_authority[gp] <- gen_b$host_kind[gp] != "absent"
+  }
+
   # --- host model (RURL-luwvkwhd, PRD §6.2) ----------------------------------
   # host_type is an (host, url_standard) function. Read the POST-model Stage-A
   # host/IP flag (a$final_host / a$is_ip_host: RFC reg-name vs WHATWG-coerced
@@ -170,12 +203,15 @@
   # ipv4-* diagnostics keyed to the ORIGINAL host SHAPE, in BOTH modes ("facts
   # not policy"): a numeric-looking reg-name under RFC carries the same tokens
   # it would under WHATWG. Suppressed on null rows (a WHATWG-fatal numeric host
-  # is an error, so it reports no diagnostics).
+  # is an error, so it reports no diagnostics) and on rows with no authority
+  # or no parsed host, where `input_host` is Phase 1's guess at a host inside
+  # a path (`file:u@1.2.3.999` under whatwg: the host is NA, the path
+  # `/u@1.2.3.999`).
   input_host <- a$input_host
   if (is.null(input_host)) {
     input_host <- rep(NA_character_, n)
   }
-  for (i in which(live)) {
+  for (i in which(has_authority & !host_missing)) {
     tokens <- .ipv4_host_diagnostics(input_host[i])
     for (tok in tokens) {
       diag <- .diag_add(diag, seq_len(n) == i, tok)
@@ -187,7 +223,7 @@
   # model classified as IPv6 qualify: a zone ID is a parse failure under both
   # standards, and an IPvFuture literal is never an IPv6 host.
   diag <- .ipv6_host_diagnostics(
-    diag, input_host, live & host_type == "ipv6"
+    diag, input_host, has_authority & host_type == "ipv6"
   )
 
   # --- path diagnostics (RURL-gjltzwmp / RURL-bbmuehsx, PRD §6.1, §7) ---------
@@ -322,9 +358,11 @@
   # are excluded from the probe: `use_std3` flags a bracketed IPv6 literal's
   # "[", "]", ":" as violations (verified empirically), which would
   # misclassify every IPv6 host as a STD3 violation, and DNS-length/UTS-46
-  # rules are meaningless for an IP literal in the first place.
+  # rules are meaningless for an IP literal in the first place. A D7 mailto
+  # recipient domain is not probed either: it is a recipient's domain, not
+  # a URL host (no authority, see above).
   probe_host <- final_host
-  probe_host[!(live & !host_missing & !is_ip)] <- NA_character_
+  probe_host[!(has_authority & !host_missing & !is_ip)] <- NA_character_
   host_probe <- .punycoder_host_probe(probe_host)
   diag <- .diag_add(diag, host_probe$label_too_long, "domain-label-too-long")
   diag <- .diag_add(diag, host_probe$name_too_long, "domain-name-too-long")
@@ -346,25 +384,27 @@
   # only through PURE RE-CALLS (.general_parse_vec / .rfc3986_generic_uri_ok /
   # .stage_b_eligibility), the codebase's established Stage-B pattern; Stage A
   # stays cacheable.
-  general <- identical(opts$scheme_acceptance, "general")
   is_whatwg <- .is_whatwg(opts$url_standard)
   is_rfc <- identical(opts$url_standard, "rfc3986")
 
   # WHATWG-GENERIC validation-error facts (invalid-credentials / invalid-URL-
   # unit) gate on the INTERPRETING standard, not the acceptance axis (ADR 0012
-  # D5, RURL-sgjzbqzk). They are route-independent, string-level facts -- any
-  # credentials present; a malformed `%`-escape or a non-URL code point -- true
-  # of the input regardless of which parser ran, so they fire whenever
-  # url_standard is WHATWG, INCLUDING the default `web` acceptance path. The
+  # D5, RURL-sgjzbqzk). They are route-independent -- credentials in a parsed
+  # authority; a malformed `%`-escape or a non-URL code point -- so they fire
+  # whenever url_standard is WHATWG, INCLUDING the default `web` acceptance
+  # path, under either parser. The
   # DEFAULT combo (web + url_standard = NULL) is untouched because is_whatwg is
-  # FALSE there, so the D4 byte-identity / CRAN contract holds. userinfo is
-  # carried by the web-route parser on the special-scheme route
-  # (http/https/ftp/ws/wss); the
-  # general parser sets user/password NA for opaque/RFC rows, so this bounded
-  # detection covers the WHATWG special-scheme routes. All OTHER Layer 5 facts
-  # stay general-gated below: they are parse-structural or ride the general
-  # parser (ws/wss are only admissible under general acceptance at all).
-  has_userinfo <- !is.na(a$raw_user) | !is.na(a$raw_password)
+  # FALSE there, so the D4 byte-identity / CRAN contract holds. Credentials
+  # are an authority's userinfo, so they count only where the parse produced
+  # an authority (`has_authority` above): the web route's special schemes and
+  # a non-special `//` authority. A row with no authority has no username or
+  # password (WHATWG opaque path; RFC 3986 section 3), even though ADR 0012 D7
+  # puts a mailto recipient's local part in `raw_user` (RURL-cjxdaqym). All
+  # OTHER Layer 5 facts stay general-gated below: they are parse-structural or
+  # ride the general parser (ws/wss are only admissible under general
+  # acceptance at all).
+  has_userinfo <- has_authority &
+    (!is.na(a$raw_user) | !is.na(a$raw_password))
   if (is_whatwg && !is.null(url)) {
     # `invalid-credentials` (WHATWG, verbatim): raised for ANY credentials in a
     # URL -- not specifically the multiple-`@` case (ADR 0012 D5 / A.1).
@@ -427,16 +467,7 @@
     # recover the state kinds, build the path/host-kind proxies the classifier
     # needs, then read `!semantic_transform_eligible` (the non-HTTP(S) rows a
     # global SEO transform would skip under general acceptance, ADR 0012 D2).
-    # It reads the string Stage A's general route reads
-    # (.general_route_input_vec()), not the raw input: under rfc3986 with
-    # scheme_relative_handling = "keep" (the only handling these callers
-    # pass) that string gives a `//` row the `http:` stand-in (RURL-ozpxupgq),
-    # so the raw one disagreed with Stage A about which `//` rows are
-    # general-routed (RURL-cwzickqy).
-    gen_b <- .general_parse_vec(.general_route_input_vec(url, opts),
-                                opts$url_standard, opts$scheme_acceptance,
-                                opts$scheme_policy)
-    gp <- gen_b$general_parsed & live
+    # `gen_b` / `gp` are that re-parse, run once above for `has_authority`.
     is_special_row <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
     pk <- .whatwg_path_kind(is_special_row, a$raw_path)
     hk <- .host_kind(a$final_host)
