@@ -24,7 +24,8 @@
 # these helpers move bytes, they do not reinterpret them.
 
 # 1-based byte index of the last occurrence of a single-byte literal `ch` in
-# `s`, or 0L when absent. The scan compares raw octets, so an invalid UTF-8
+# `s`, or 0L when absent. `s` is one non-NA string and `ch` one byte; anything
+# else is an internal error. The scan compares raw octets, so an invalid UTF-8
 # row is read as its bytes and warns about nothing. A fixed `gregexpr()`
 # listed every match, quadratic in their number: 8e5 "@" took about 7 s
 # (RURL-rweowcfz).

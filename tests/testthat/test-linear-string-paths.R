@@ -9,7 +9,7 @@ long_n <- 10500000L
 
 test_that("the general route's host:port carve-out reads digits to / or end", {
   x <- c("example.com:8080", "example.com:8080/p", "h:1x", "urn:a:1",
-         "h:80?q", "h:", "h:8080 ", "sc:x:80", "h:80/", NA)
+         "h:80?q", "h:", "h:8080\u2028", "sc:x:80", "h:80/", NA)
   want <- c(FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE)
   expect_identical(.general_parsed_mask(x, "whatwg", "general"), want)
   expect_identical(.general_parsed_mask(x, NULL, "general"), want)
@@ -31,9 +31,9 @@ test_that(".last_byte_index() finds the last single-byte literal", {
   expect_identical(.last_byte_index("abc", ":"), 0L)
   expect_identical(.last_byte_index("", ":"), 0L)
   # Positions are bytes, and an undecodable row is read as its octets.
-  expect_identical(.last_byte_index("é@é", "@"), 3L)
+  expect_identical(.last_byte_index("\u00e9@\u00e9", "@"), 3L)
   expect_identical(.last_byte_index("\xff@\xfe", "@"), 2L)
-  expect_identical(.last_byte_index("﻿:", ":"), 4L)
+  expect_identical(.last_byte_index("\ufeff:", ":"), 4L)
 })
 
 test_that(".last_byte_index() is linear in the number of matches", {
@@ -65,7 +65,7 @@ test_that(".bytes_locate(fixed, last) reports the last non-overlapping match", {
   )
   # A multibyte needle, in bytes.
   expect_identical(
-    locate_last(c("aééb", "é"), "é"),
+    locate_last(c("a\u00e9\u00e9b", "\u00e9"), "\u00e9"),
     m(4L, 5L, 1L, 2L)
   )
   # Regex metacharacters are literals.

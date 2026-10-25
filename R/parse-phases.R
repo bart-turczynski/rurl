@@ -279,15 +279,13 @@
 .ICU_IPV6_HEX_SHAPE <- paste0("^\\[?[0-9a-fA-F:]++\\]?", .ICU_END)
 .ICU_IPV6_SERIALIZABLE <- paste0("^\\[[0-9A-Fa-f:.]++\\]", .ICU_END)
 .ICU_TRAILING_DOT <- paste0("\\.", .ICU_END)
-# `.serialize_whatwg_ipv6_host()`'s ICU capture `^(.*:)(<quad>)$` over the
-# inside of a bracketed host, which holds no line terminator, so ICU's `.`
-# and `$` are `(?s).` and `\z`. The quad holds no ":", so it can only follow
-# the last ":": group 1 is the inside through its last ":", and group 2 the
-# rest when it is a quad. The serializer cuts at the last ":" and tests the
-# rest against this pattern whole. In one regex, an atomic `(?>.*:)` gave
-# bytes back to the last ":" one by one (RURL-yqmoztoj), and possessive
-# `(?:[^:]*+:)++` counted a step per ":", so both hit PCRE's match limit on
-# a host of ~1e7 bytes (RURL-rweowcfz).
+# The dotted-quad tail of a bracketed IPv6 host, matched whole. The ICU
+# capture it replaces was `^(.*:)(<quad>)$`; the quad holds no ":", so it can
+# only follow the last ":". `.serialize_whatwg_ipv6_host()` cuts at the last
+# ":" and tests the rest against this pattern. In one regex, an atomic
+# `(?>.*:)` gave bytes back to the last ":" one by one (RURL-yqmoztoj), and
+# possessive `(?:[^:]*+:)++` counted a step per ":", so both hit PCRE's
+# match limit on a host of ~1e7 bytes (RURL-rweowcfz).
 .IPV6_QUAD_TAIL <- paste0(
   "\\A", .ICU_IPV4_OCTET, "\\.", .ICU_IPV4_OCTET, "\\.",
   .ICU_IPV4_OCTET, "\\.", .ICU_IPV4_OCTET, "\\z"
@@ -850,9 +848,9 @@
     # Byte-indexed for the same reason as the shim's slice (RURL-kmpnbvdl):
     # `authority` is a capture, so it is declared UTF-8 no matter what
     # octets it holds, and `substr()` threw on `http://a@@<80>b/`. The last
-    # "@" is where `.ICU_THROUGH_LAST_AT` starts: `.last_byte_index()` lists
-    # every "@" with a fixed `gregexpr()`, quadratic in their number
-    # (RURL-atlidhyh).
+    # "@" is where `.ICU_THROUGH_LAST_AT` starts. (`.last_byte_index()` is
+    # linear too since RURL-rweowcfz; this one regex was the RURL-atlidhyh
+    # fix and stays.)
     last <- regexpr(.ICU_THROUGH_LAST_AT, a, perl = TRUE, useBytes = TRUE)[1L]
     paste0(
       .percent_encode_userinfo_charset(.byte_substring(a, 1L, last - 1L)),
@@ -2285,8 +2283,7 @@
   # cut `stri_sub(host, 2L, -2L)` then dropped only the terminator, `inner`
   # kept the "]", no hextet parsed and the host came back unchanged, as it
   # does here directly. Every other row ends in "]" and holds no terminator,
-  # so `inner` is bytes 2 to n - 1 (ADR 0019) and ICU's `.` and `$` are
-  # `(?s).` and `\z`.
+  # so `inner` is bytes 2 to n - 1 (ADR 0019).
   if (!endsWith(host, "]")) {
     return(host)
   }
