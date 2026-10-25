@@ -521,7 +521,10 @@
 #'     \item{\code{url_diagnostics}}{a list-column whose element is the
 #'       character vector of the source URL's
 #'       \code{\link{get_url_diagnostics}} tokens (\code{character(0)} when
-#'       none).}
+#'       none). A token is a fact, not always a fault: a \code{mailto:} URL
+#'       that parses usually carries
+#'       \code{"transform-skipped-ineligible-scheme"}, so select on
+#'       \code{parse_status}, not on an empty list.}
 #'   }
 #' @seealso \code{\link{get_url_diagnostics}}, \code{\link{safe_parse_url}}
 #' @export
@@ -580,8 +583,13 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   # input boundary is here (RURL-cwzickqy): a bytes-marked element is a row
   # with no recipients, where it used to throw out of the whole call. The
   # `url` column below still echoes the caller's element.
-  gen <- .general_parse_vec(.prepare_url_input(url)$url, opts$url_standard,
-                            opts$scheme_acceptance, opts$scheme_policy)
+  # The general route's own input step (the WHATWG step 1 strip under
+  # "whatwg"), so the recipients are split from the string the verdict below
+  # is decided on: `mailto:a@b\t.de` is `mailto:a@b.de` there.
+  gen <- .general_parse_vec(
+    .general_route_input_vec(.prepare_url_input(url)$url, opts),
+    opts$url_standard, opts$scheme_acceptance, opts$scheme_policy
+  )
   is_mailto <- gen$general_parsed &
     !is.na(gen$scheme) &
     .ascii_tolower(gen$scheme) == "mailto"

@@ -114,7 +114,10 @@ section); the same for every recipient of that URL.}
 \item{\code{url_diagnostics}}{a list-column whose element is the
 character vector of the source URL's
 \code{\link{get_url_diagnostics}} tokens (\code{character(0)} when
-none).}
+none). A token is a fact, not always a fault: a \code{mailto:} URL
+that parses usually carries
+\code{"transform-skipped-ineligible-scheme"}, so select on
+\code{parse_status}, not on an empty list.}
 }
 }
 \description{

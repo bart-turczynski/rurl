@@ -1031,14 +1031,19 @@ caller can collect diagnostic facts from it.
   `mailto:a@bücher.de` yields an `idna2008-domain` recipient with
   `parse_status` `"error"` and `unicode-outside-rfc3986-uri`. The
   classification is a diagnostic fact, never a validity claim; the verdict is
-  not softened. This is the one surface that reads the `rfc3986` parse
-  without following it, and it says so on every row.
+  not softened. It is the one surface that yields output from a URL the
+  `rfc3986` parse rejects, and it says so on every row. It splits the
+  recipients from the general route's own input (`.general_route_input_vec()`,
+  the WHATWG step 1 strip under `whatwg`), so the recipients and the verdict
+  read the same string.
 - **`host_encoding = "unicode"` is a display form.** Under `rfc3986` it can
   present a host the standard rejects on re-parse (`xn--bcher-kva.de` as
   `bücher.de`; sections 2.5, 3.2.2). The documentation says so and names
-  `"idna"` and `"keep"` as the forms that parse again. It is not
-  percent-encoded, which would change the representation asked for, and not
-  `NA`, which would discard it.
+  `"idna"` and `"keep"` as the forms that parse again; `path_encoding =
+  "decode"` is the same kind of display form for the path. This is not an
+  exception to the verdict: the input parsed, and only the requested
+  presentation is outside the grammar. It is not percent-encoded, which would
+  change the representation asked for, and not `NA`, which would discard it.
 - **The stale `rurl_deviation` cells** in `external-url-vectors.csv` are
   cleared in a separate re-baselining change, not with the parser change
   (`design/oracle-fixtures.md`).

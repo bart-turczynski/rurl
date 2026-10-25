@@ -107,7 +107,9 @@ unaffected.
 present a host that the same standard rejects on re-parse:
 \verb{http://xn--bcher-kva.de/} presents as \verb{http://bücher.de/}, and RFC 3986
 writes a non-ASCII host only percent-encoded as UTF-8 (sections 2.5,
-3.2.2). Use \code{"idna"} or \code{"keep"} for a \code{clean_url} to parse again.}
+3.2.2). Use \code{"idna"} or \code{"keep"} for a host that parses again. A
+\code{path_encoding = "decode"} path is a display form in the same way: under
+\code{"rfc3986"}, \verb{http://h.de/\%C3\%A4} presents as \verb{http://h.de/ä}.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},

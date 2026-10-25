@@ -12,9 +12,9 @@ he_status <- function(url) {
   safe_parse_urls(url, url_standard = "rfc3986")$parse_status
 }
 
-test_that("unicode presents the decoded host, which rfc3986 rejects on re-parse", {
+test_that("unicode presents a decoded host that rfc3986 rejects on re-parse", {
   out <- he_clean("http://xn--bcher-kva.de/", "unicode")
-  expect_identical(out, "http://bücher.de/")
+  expect_identical(out, "http://b\u00fccher.de/")
   expect_identical(he_status(out), "error")
 })
 
