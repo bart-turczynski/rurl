@@ -102,8 +102,14 @@ parse error, because RFC 3986 admits only US-ASCII (section 2) and writes
 non-ASCII data as percent-encoded UTF-8 octets (section 2.5); a host is an
 ASCII \code{reg-name} (section 3.2.2). Write \code{ä} as \code{\%C3\%A4},
 or parse Unicode input with \code{url_standard = "whatwg"}. rurl has no
-RFC 3987 (IRI) mode. Such a row reports this token alone, under either
-\code{scheme_acceptance}; every other failed row reports none.
+RFC 3987 (IRI) mode. The token fires only where that advice holds: the
+row's twin, each non-ASCII octet written as its \code{\%XX} triplet, parses
+under the same options. A row that also fails for another reason (a
+scheme-less input that is not host-like, \code{scheme_policy =
+"require"}, a scheme the \code{"web"} acceptance refuses, or an ASCII
+grammar fault) reports no token. Such a row reports this token alone,
+under either \code{scheme_acceptance}; every other failed row reports
+none.
 }
 \section{Selected facts, not a conformance oracle}{
  The diagnostics are
@@ -304,8 +310,8 @@ credentials (userinfo) are present. \code{"whatwg"} only.
 \item \code{unicode-outside-rfc3986-uri} --- the rejection reason for
 a URL that failed under \code{"rfc3986"} because it carries a
 directly written non-ASCII character (RFC 3986 sections 2, 2.5 and
-3.2.2). Both acceptance postures; \code{"rfc3986"} only. See the
-description above.
+3.2.2) and whose percent-encoded twin parses. Both acceptance
+postures; \code{"rfc3986"} only. See the description above.
 \item \code{transform-skipped-ineligible-scheme} --- \emph{general};
 a non-HTTP(S) scheme, ineligible for the Stage-B transforms.
 \item \code{ws-fragment-forbidden} --- \emph{general}; a fragment on a
