@@ -552,6 +552,21 @@
   !is.na(base) & base %in% failing
 }
 
+# The WHATWG serialization of each base, the base the URL Standard's resolver
+# merges against (RURL-vgmyrgxb); NA for an NA base and for one the parser
+# refuses. Each distinct base is parsed once and mapped back to its rows.
+.whatwg_parsed_base <- function(base) {
+  out <- rep(NA_character_, length(base))
+  present <- !is.na(base)
+  distinct <- unique(base[present])
+  if (length(distinct) == 0L) {
+    return(out)
+  }
+  parsed <- serialize_url(distinct, standard = "whatwg")
+  out[present] <- parsed[match(base[present], distinct)]
+  out
+}
+
 # TRUE where `ref` is an RFC 3986 URI-reference (section 4.1:
 # `URI-reference = URI / relative-ref`), FALSE where it is not, NA for NA.
 # Built on the package's one RFC 3986 grammar, `.rfc3986_generic_uri_ok()`
@@ -1108,17 +1123,50 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # selector is frozen (ADR 0007) and ADR 0016 moves it only with a witness
   # that the default path is defective and a declared signature, which this
   # change does not carry.
-  refused <- .refused_base_mask(base, resolution_standard)
-  base[refused] <- NA_character_
+  #
+  parsed_base <- rep(NA_character_, n)
   if (.is_whatwg(resolution_standard)) {
+    parsed_base <- .whatwg_parsed_base(base)
+    refused <- !is.na(base) & is.na(parsed_base)
     ref[refused] <- NA_character_
+  } else {
+    refused <- .refused_base_mask(base, resolution_standard)
   }
+  base[refused] <- NA_character_
 
-  resolved_raw <- vapply(
-    seq_len(n),
-    function(i) .resolve_one_raw(ref[[i]], base[[i]], resolution_standard),
-    character(1)
-  )
+  resolve_rows <- function(rows, bases) {
+    vapply(
+      rows,
+      function(i) .resolve_one_raw(ref[[i]], bases[[i]], resolution_standard),
+      character(1)
+    )
+  }
+  resolved_raw <- resolve_rows(seq_len(n), base)
+  # `whatwg` merges against the base its parser produced, not the base as
+  # written (RURL-vgmyrgxb): the API URL parser parses the base into a URL
+  # record before it reads the input, so `http:\\a\b\c` is the base
+  # `http://a/b/c` ("special authority slashes state" reads `\` as `/`) and
+  # `http:x` is `http://x/` ("special relative or authority state"). The
+  # record's serialization stands for that record. A row is resolved again
+  # against it only where it is spelled differently from the base as written,
+  # and that result replaces the first only where the two are different URLs
+  # by the standard's own serializer: where they are the same URL, the
+  # spelling as written stays, so `output = "clean"` keeps a Unicode host or
+  # path of a base the parser would only re-encode. A base that merged wrongly
+  # as written takes the serialized spelling, Unicode included. Each distinct
+  # result is serialized once.
+  respelled <- which(!is.na(parsed_base) & parsed_base != base)
+  if (length(respelled) > 0L) {
+    alt <- resolve_rows(respelled, parsed_base)
+    first <- resolved_raw[respelled]
+    results <- unique(c(first, alt))
+    serialized <- serialize_url(results, standard = "whatwg")
+    first_ser <- serialized[match(first, results)]
+    alt_ser <- serialized[match(alt, results)]
+    differs <- is.na(first_ser) != is.na(alt_ser) |
+      (!is.na(first_ser) & !is.na(alt_ser) & first_ser != alt_ser)
+    resolved_raw[respelled[differs]] <- alt[differs]
+  }
   resolved_raw[hidden] <- .restore_high_octets(resolved_raw[hidden])
 
   if (identical(output, "serialized")) {
