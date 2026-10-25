@@ -400,11 +400,12 @@ Both tier-3 gates assert `fsss_host == oracle_value` **only where
   the dotted-İ folds into the host) while `rurl` reads the `@` as a userinfo
   delimiter and lands on `e.gg`. That disagreement **is** the row's point, and a
   `rurl_deviation` citation owns it.
-- `yal-005` is the latent-trap case: it is a host row that *does* carry a
-  deviation (ADR 0002 — the host stays reversibly Unicode and Punycode is a
-  separate presentation phase) and happens to satisfy the equality anyway. An
-  unconditional check passes there **by luck**, and would fail wrongly the moment
-  that documented presentation phase changed.
+- `yal-005` was the latent-trap case: a host row that *did* carry a deviation
+  (ADR 0002) and happened to satisfy the equality anyway, so an unconditional
+  check passed there **by luck**. Its cell recorded an rfc3986 tolerance that
+  RUL-030 removed, and the owner cleared it on 2026-10-25 (RURL-viypghfg,
+  RUL-031); the self-test now sets a deviation on a copy of the row to keep
+  covering the case.
 
 Either way, an unconditional check would force the next author to choose between
 writing a false oracle and deleting a documented deviation — which is exactly the
@@ -690,7 +691,7 @@ failure is attributed to the arm that owns it:
 
 ```
 ORACLE RE-LOCATION: PASS
-fsss conformance: 13 row(s) graded, 2 of them carrying a documented rurl_deviation
+fsss conformance: 13 row(s) graded, 0 of them carrying a documented rurl_deviation
 IMPLEMENTATION FSSS CONFORMANCE: PASS
 ```
 
@@ -729,12 +730,15 @@ So it now has an owner, deriving from pinned bytes only:
 
 | Group | Rows graded | Of those, deviating | Derived from |
 | --- | --- | --- | --- |
-| `wpt-urltestdata` | 202 | 21 | upstream's own `failure: true` at the pin |
-| `ada-extra-urltestdata` | 14 | 3 | the pin, or the **second anchor** on a drift-ledgered row |
+| `wpt-urltestdata` | 202 | 16 | upstream's own `failure: true` at the pin |
+| `ada-extra-urltestdata` | 14 | 1 | the pin, or the **second anchor** on a drift-ledgered row |
 | `ada-verifydnslength` | 0 | 0 | nothing to grade — all 17 are `aligned`, so the column is NA |
 
 Both floors are "at least", so the corpus may grow but may not drain: dropping
-`ada-003`'s value fails on the row count *and* on the deviating-row count. And a
+`ada-003`'s value fails on the row count, and dropping `ada-020`'s (the one
+deviating row left since the 2026-10-25 re-baselining, RURL-viypghfg) fails on
+the deviating-row count too. The deviating counts were 21 and 3 before that
+re-baselining cleared five wpt and two ada cells. And a
 graded row whose expectation cannot be derived at all is a **failure**, never a
 skip — "we could not check it" must not report as "it agrees".
 

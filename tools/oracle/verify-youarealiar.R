@@ -192,14 +192,13 @@ check_restatement <- function(committed, roster) {
     }
     # Where the expectation names a host, the FSSS host column must be that
     # host -- UNLESS a `rurl_deviation` owns the difference. That condition is
-    # the correct rule rather than a loosening, and it is a latent trap without
-    # it: yal-005 is a host row that DOES carry a deviation (ADR 0002 -- rurl
-    # keeps the host reversibly Unicode and Punycode is a separate presentation
-    # phase) and happens to satisfy the equality anyway. An unconditional check
-    # therefore passes today by luck, and would fail wrongly the moment the
-    # documented presentation phase changed -- forcing either a false oracle or
-    # a deleted deviation, which is the co-confirmation trap RURL-nknytzxz was
-    # filed for.
+    # the correct rule rather than a loosening: eq-U8 is a host row whose
+    # deviation (RURL-dxwxeamq) IS the difference. Without the condition, the
+    # next deviating host row would force either a false oracle or a deleted
+    # deviation, which is the co-confirmation trap RURL-nknytzxz was filed for.
+    # (yal-005 was the other example, a deviating row that happened to satisfy
+    # the equality; its cell was cleared 2026-10-25, RURL-viypghfg, RUL-031,
+    # and the self-test now sets a deviation of its own to cover that case.)
     if (identical(p$kind, "host") && is.na(cm$rurl_deviation[i]) &&
           !identical(cm$fsss_host[i], p$value)) {
       fail <- c(fail, sprintf(
@@ -422,8 +421,12 @@ self_test <- function() {
   bentd$fsss_host[bentd$id == "yal-001"] <- "yahoo.com"
   expect("restatement check notices an undocumented fsss_host difference",
          length(check_restatement(bentd, r)) > 0L, TRUE)
-  # yal-005 carries a deviation, so a differing fsss_host there is ALLOWED.
+  # A row that carries a deviation may differ on fsss_host. The deviation is
+  # set here rather than read off the fixture: yal-005's own cell was cleared
+  # 2026-10-25 (RURL-viypghfg, RUL-031), and the branch under test must not
+  # depend on which rows the owner has re-baselined.
   bente <- cm
+  bente$rurl_deviation[bente$id == "yal-005"] <- "ADR 0002 (self-test)"
   bente$fsss_host[bente$id == "yal-005"] <- "something.else"
   expect("a documented deviation may differ on fsss_host",
          length(check_restatement(bente, r)), 0L)
