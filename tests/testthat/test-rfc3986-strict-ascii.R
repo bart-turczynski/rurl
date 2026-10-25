@@ -18,7 +18,7 @@ frame <- function(url, ...) {
 }
 
 a_uml <- "ä"
-bom <- "﻿"
+bom <- "\ufeff"
 raw_rows <- c(
   paste0("http://b", "ü", "cher.de/"),
   paste0("http://h.de/", a_uml),
@@ -140,7 +140,87 @@ test_that("NULL: raw non-ASCII rows keep their parse (frozen, ADR 0016)", {
   # The `file:` overlay runs the RFC 3986 grammar under NULL too; its
   # non-ASCII tolerance there is the frozen NULL behavior.
   expect_identical(
-    get_parse_status(c(paste0("file:///", a_uml), paste0(hb, "/p"))),
+    get_parse_status(c(paste0("file:///", a_uml), file.path(hb, "p"))),
     c("ok", "ok")
   )
+})
+
+# --- The change: raw non-ASCII is a parse error under rfc3986 ----------------
+
+test_that("rfc3986: a raw non-ASCII code point fails in every component", {
+  # raw_rows covers the host, path, query, fragment, userinfo, a mark that
+  # starts the host, and (general route) an opaque path and a non-special
+  # authority. RFC 3986 S2, S2.5, S3.2.2.
+  expect_identical(
+    get_parse_status(raw_rows[1:6], url_standard = "rfc3986"),
+    rep("error", 6L)
+  )
+  for (acc in c("web", "general")) {
+    p <- safe_parse_urls(raw_rows, url_standard = "rfc3986",
+                         scheme_acceptance = acc)
+    expect_identical(p$parse_status, rep("error", 8L), label = acc)
+    expect_true(all(is.na(p$clean_url)), label = acc)
+    expect_true(all(is.na(p$host)), label = acc)
+  }
+  p <- safe_parse_urls(raw_rows, profile = "rfc-syntax")
+  expect_identical(p$parse_status, rep("error", 8L))
+  # Scheme inference does not launder it: a scheme-less Unicode host fails.
+  expect_identical(
+    get_parse_status(paste0("b", "ü", "cher.de"),
+                     url_standard = "rfc3986"),
+    "error"
+  )
+  # A latin1-marked twin fails like its UTF-8 spelling.
+  l1 <- "http://h.de/\xe4"
+  Encoding(l1) <- "latin1"
+  expect_identical(get_parse_status(l1, url_standard = "rfc3986"), "error")
+})
+
+test_that("every rfc3986 surface follows the parse error", {
+  x <- c(raw_rows[c(1L, 2L, 5L)], "http://h.de/%C3%A4")
+  want <- c(NA, NA, NA, "http://h.de/%C3%A4")
+  expect_identical(serialize_url(x, standard = "rfc3986"), want)
+  expect_identical(
+    serialize_url(x, standard = "rfc3986", form = "normalized"), want
+  )
+  key <- get_url_key(x, url_key_policy("rfc3986"))
+  expect_identical(attr(key, "keyability"),
+                   c(rep("invalid-parse", 3L), "ok"))
+  expect_identical(
+    resolve_url(c(a_uml, "x"), "http://h.de/", url_standard = "rfc3986"),
+    c(NA, "http://h.de/x")
+  )
+  # A refused base leaves a relative reference unresolved (RFC 3986 S5.1).
+  expect_identical(
+    resolve_url("x", paste0("http://h.de/", a_uml), url_standard = "rfc3986"),
+    NA_character_
+  )
+  expect_identical(
+    check_schemes(x, url_standard = "rfc3986")$scheme,
+    c(NA, NA, NA, "http")
+  )
+  expect_identical(unname(get_host(x, url_standard = "rfc3986")),
+                   c(NA, NA, NA, "h.de"))
+  expect_identical(unname(get_clean_url(x, url_standard = "rfc3986")), want)
+  expect_identical(get_host_type(x, "rfc3986"), c(NA, NA, NA, "domain"))
+  expect_identical(
+    get_parse_verdicts(x, url_standard = "rfc3986")$layer1_syntax_verdict,
+    c("fail", "fail", "fail", "pass")
+  )
+  expect_null(safe_parse_url(raw_rows[2L], url_standard = "rfc3986"))
+})
+
+test_that("unicode-outside-rfc3986-uri is the rejection reason", {
+  for (acc in c("web", "general")) {
+    d <- get_url_diagnostics(c(raw_rows, "http://h.de/%C3%A4"), "rfc3986",
+                             scheme_acceptance = acc)
+    expect_identical(d[1:8], rep(list("unicode-outside-rfc3986-uri"), 8L),
+                     label = acc)
+    expect_false("unicode-outside-rfc3986-uri" %in% d[[9L]], label = acc)
+  }
+  # whatwg never reports it.
+  d <- get_url_diagnostics(raw_rows, "whatwg", scheme_acceptance = "general")
+  expect_false(any(vapply(d, function(t) {
+    "unicode-outside-rfc3986-uri" %in% t
+  }, logical(1L))))
 })

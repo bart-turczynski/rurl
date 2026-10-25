@@ -51,11 +51,14 @@
   # --- Layer 5 SELECTED diagnostics (ADR 0012 D5, RURL-izsouyxs) -------------
   # These are SELECTED facts, NOT a conformance oracle: absence of any of them
   # NEVER implies conformance (D5). All fire only under scheme_acceptance =
-  # "general" (the general-parser branch); the WHATWG validation-error names are
-  # WHATWG-verbatim (deliberate mixed case for `invalid-URL-unit`). The
-  # per-scheme facts below are rurl-coined kebab tokens (no reserved names exist
-  # for them in ADR 0012 or the design PRDs; the email PRD's `userinfo-form`
-  # etc. govern the SEPARATE D7 scheme-less thread, not these).
+  # "general" (the general-parser branch), except the two WHATWG-generic
+  # names and `unicode-outside-rfc3986-uri`, which RUL-030 (2026-10-12)
+  # repurposed as the rfc3986 rejection reason on both acceptance routes and
+  # the one token that fires on a failed row. The WHATWG validation-error
+  # names are WHATWG-verbatim (deliberate mixed case for `invalid-URL-unit`).
+  # The per-scheme facts below are rurl-coined kebab tokens (no reserved names
+  # exist for them in ADR 0012 or the design PRDs; the email PRD's
+  # `userinfo-form` etc. govern the SEPARATE D7 scheme-less thread, not these).
   "invalid-URL-unit",
   "invalid-credentials",
   "unicode-outside-rfc3986-uri",
@@ -382,6 +385,22 @@
     diag <- .diag_add(diag, live & bad_unit, "invalid-URL-unit")
   }
 
+  # `unicode-outside-rfc3986-uri`: REPURPOSED by RUL-030 (owner ruling
+  # 2026-10-12) from a tolerance flag on an accepted row into the REJECTION
+  # REASON of a failed one. Under `rfc3986` a directly-written non-ASCII code
+  # point is a parse error (RFC 3986 sections 2, 2.5, 3.2.2), so the row is
+  # null and every other token above is suppressed; this one names why, on
+  # both acceptance routes. It is the one token that fires on a failed row.
+  # The name is kept because callers already match on it. The gate returns it
+  # in `$diagnostic` for exactly those rows; thread it out, keyed to the
+  # failure so it never contradicts `parse_status`.
+  if (is_rfc && !is.null(url)) {
+    g <- .rfc3986_generic_uri_ok(url)
+    diag <- .diag_add(
+      diag, !live & !is.na(g$diagnostic), "unicode-outside-rfc3986-uri"
+    )
+  }
+
   if (general && !is.null(url)) {
     scheme_lc <- .ascii_tolower(a$final_scheme)
 
@@ -416,17 +435,6 @@
       diag, live & !elig$semantic_transform_eligible,
       "transform-skipped-ineligible-scheme"
     )
-
-    # `unicode-outside-rfc3986-uri`: the sole D1 Unicode tolerance (rfc3986
-    # posture, a directly-written non-ASCII scalar value accepted by the generic
-    # grammar gate). The gate already returns the literal token in `$diagnostic`
-    # for exactly those rows; thread it out.
-    if (is_rfc) {
-      g <- .rfc3986_generic_uri_ok(url)
-      diag <- .diag_add(
-        diag, live & !is.na(g$diagnostic), "unicode-outside-rfc3986-uri"
-      )
-    }
 
     if (is_whatwg) {
       # ws/wss (RFC 6455 forbids both a fragment AND userinfo) -- TWO separate

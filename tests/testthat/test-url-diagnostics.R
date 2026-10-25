@@ -194,9 +194,12 @@ gd <- function(u, standard = "whatwg") {
   get_url_diagnostics(u, url_standard = standard, scheme_acceptance = "general")
 }
 
-# The general-only L5 facts (everything except the two WHATWG-generic ones).
+# The general-only L5 facts (everything except the two WHATWG-generic ones
+# and `unicode-outside-rfc3986-uri`, which RUL-030 made the rfc3986 rejection
+# reason on both acceptance routes).
+l5_rfc_reason <- "unicode-outside-rfc3986-uri"
 l5_general_only <- c(
-  "unicode-outside-rfc3986-uri", "transform-skipped-ineligible-scheme",
+  "transform-skipped-ineligible-scheme",
   "ws-fragment-forbidden", "ws-userinfo-forbidden",
   "mailto-fragment-discouraged", "tel-missing-phone-context",
   "data-missing-comma", "file-non-absolute-path",
@@ -232,7 +235,7 @@ test_that("the true default (url_standard = NULL) stays silent for all L5", {
   # REQUIRES a selector (ADR 0015) -- the claim is about the parse path that
   # safe_parse_url() and friends still run at url_standard = NULL, which
   # outlives the helper arm that used to expose it.
-  l5 <- c(l5_general_only, l5_whatwg_generic)
+  l5 <- c(l5_general_only, l5_whatwg_generic, l5_rfc_reason)
   opts <- rurl:::.parse_options(url_standard = NULL)
   meta <- rurl:::._url_metadata_vec("http://user@ex.com/%zz", opts)
   def <- meta$diagnostics[[1L]]
@@ -277,10 +280,31 @@ test_that("invalid-URL-unit fires on malformed %-escapes and non-URL cps", {
   expect_false("invalid-URL-unit" %in% gd("http://ex.com/a\\b"))
 })
 
-test_that("unicode-outside-rfc3986-uri fires on the sole D1 tolerance", {
-  expect_true(
-    "unicode-outside-rfc3986-uri" %in% gd("http://ex.com/ä", "rfc3986")
-  )
+test_that("unicode-outside-rfc3986-uri names the rfc3986 rejection", {
+  # RUL-030 (RFC 3986 S2, S2.5, S3.2.2): a raw non-ASCII code point is a
+  # parse error under rfc3986 and this token, alone, names why -- on both
+  # acceptance routes. Every other token is suppressed on the failed row.
+  for (acc in c("general", "web")) {
+    expect_identical(
+      get_url_diagnostics("http://ex.com/ä", url_standard = "rfc3986",
+                          scheme_acceptance = acc),
+      "unicode-outside-rfc3986-uri", label = acc
+    )
+    expect_identical(
+      get_parse_status("http://ex.com/ä", url_standard = "rfc3986",
+                       scheme_acceptance = acc),
+      "error", label = acc
+    )
+    # The percent-encoded twin parses and carries no token.
+    expect_false(
+      "unicode-outside-rfc3986-uri" %in%
+        get_url_diagnostics("http://ex.com/%C3%A4", url_standard = "rfc3986",
+                            scheme_acceptance = acc),
+      label = acc
+    )
+  }
+  # A row failing for an ASCII reason only does not carry it.
+  expect_identical(gd("http://a|b/", "rfc3986"), character(0))
   # ASCII-only rfc3986 input does not fire it; nor does a whatwg parse.
   expect_false(
     "unicode-outside-rfc3986-uri" %in% gd("http://ex.com/x", "rfc3986")
