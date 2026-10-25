@@ -640,8 +640,12 @@
 # runs twice per query row on the filter path (RURL-oahhlnvf review).
 .TOKEN_OPAQUE_RE <- "%(?![0-9A-Fa-f]{2})"
 
+# A token holding `%00` is opaque too (RURL-fpujlvoq): an R string cannot
+# hold the NUL it decodes to, so the token is matched and emitted as written,
+# and `%00` stays apart from a decoded `%2500`.
 .token_is_opaque <- function(x) {
-  out <- grepl(.TOKEN_OPAQUE_RE, x, perl = TRUE, useBytes = TRUE)
+  out <- grepl(.TOKEN_OPAQUE_RE, x, perl = TRUE, useBytes = TRUE) |
+    grepl("%00", x, fixed = TRUE, useBytes = TRUE)
   out[is.na(x)] <- NA
   out
 }

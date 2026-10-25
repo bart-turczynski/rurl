@@ -11,7 +11,7 @@
 
 nul_paths <- c(
   "http://e.com/a%00b/c", "http://e.com/%00", "http://e.com/a%00/",
-  "http://e.com/%00%00x/"
+  "http://e.com/%00%00x/", "http://e.com/a//%00b", "http://e.com/%00//"
 )
 
 test_that("pin: a path without %00 presents as before", {
@@ -58,6 +58,40 @@ test_that("get_query() keeps everything after a %00", {
   expect_identical(
     get_query(u, url_standard = "rfc3986", format = "list"),
     list(list(a = "b%00c", `d%00x` = "1"))
+  )
+})
+
+test_that("the query filter and sort paths keep a %00 token as written", {
+  q <- function(u, ...) get_clean_url(u, url_standard = "rfc3986", ...)
+  expect_identical(
+    q("http://e.com/x?z=1&a=b%00c", query_handling = "keep",
+      sort_params = TRUE),
+    "http://e.com/x?a=b%00c&z=1"
+  )
+  # `%00` and `%2500` stay two different values.
+  expect_identical(
+    q(c("http://e.com/x?a=b%00c", "http://e.com/x?a=b%2500c"),
+      query_handling = "filter"),
+    c("http://e.com/x?a=b%00c", "http://e.com/x?a=b%2500c")
+  )
+  # A token holding `%00` is matched as written, and is not empty.
+  expect_identical(
+    get_query("http://e.com/?ref%00x=1&a=2", params_drop = "ref",
+              query_handling = "filter", url_standard = "rfc3986"),
+    "ref%00x=1&a=2"
+  )
+  expect_identical(
+    get_query("http://e.com/x?a=%00&z=1", query_handling = "filter",
+              empty_param_handling = "drop", url_standard = "rfc3986"),
+    "a=%00&z=1"
+  )
+})
+
+test_that("pin: encode keeps a %2500 apart from a %00 in the path", {
+  expect_identical(
+    get_clean_url(c("http://e.com/a%00b", "http://e.com/a%2500b"),
+                  path_encoding = "encode", url_standard = "rfc3986"),
+    c("http://e.com/a%00b", "http://e.com/a%2500b")
   )
 })
 
