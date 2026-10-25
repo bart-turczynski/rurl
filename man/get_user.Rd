@@ -126,9 +126,13 @@ source spelling, except that for \code{http}, \code{https}, \code{ftp} and
 Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
 first recipient (its \code{addr-spec} local-part) is returned, mirroring how
 \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
-domain (ADR 0012 D7). As with \code{\link{get_host}}, this deliberately
-diverges from \code{\link{safe_parse_url}}, whose \code{user} column is
-\code{NA} for a \code{mailto:} URL (an opaque path carries no authority).
+domain (ADR 0012 D7). That local-part is percent-decoded, and it is
+\code{NA} when the decoded octets are not valid UTF-8 (RFC 6068 section 2),
+as the host is for a domain that does not decode. As with
+\code{\link{get_host}}, this deliberately diverges from
+\code{\link{safe_parse_url}}, whose
+\code{user} column is \code{NA} for a \code{mailto:} URL (an opaque path
+carries no authority).
 Under the default \code{"web"} acceptance a \code{mailto:} URL is not parsed
 and this returns \code{NA}.
 }
