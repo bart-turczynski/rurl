@@ -77,6 +77,17 @@
 .ICU_THROUGH_LAST_AT <- "@[^@]*+\\z"
 .ICU_BRACKET_HEAD <- "\\A\\[[^\\]]*+\\]"
 
+# A whole run of C0 controls and spaces, for a trailing trim: the pattern
+# appends the end it means. The lookbehind lets the run start only where a
+# run starts, and the run is possessive. A shorter run from the same start
+# ends before a run byte, which no end follows: every ASCII line terminator
+# is a run byte, and U+0085, U+2028 and U+2029 can only follow the whole run.
+# So the match is the one `[\x00-\x20]+` found, but where that pattern was
+# tried at each byte of an inner run and gave the rest back byte by byte,
+# quadratic in the run and over PCRE's match limit past ~1e7 bytes
+# (RURL-atlidhyh), this is tried once per run and gives nothing back.
+.C0_SPACE_RUN <- "(?<![\\x00-\\x20])[\\x00-\\x20]++"
+
 # Split each row into `head` (through its last inner terminator, or ""),
 # `line` (the rest, without the final terminator; it holds no terminator)
 # and `final` (the final terminator, or ""). For non-NA rows. Every
@@ -635,7 +646,7 @@
   trimmed <- stringi::stri_replace_first_regex(
     url_out, "^[\\u0000-\\u0020]+", ""
   )
-  trimmed <- .bytes_replace(trimmed, "[\\x00-\\x20]+\\z", "")
+  trimmed <- .bytes_replace(trimmed, paste0(.C0_SPACE_RUN, "\\z"), "")
   # `differs` picks the rows that flow on as stringi's copy; it is NOT the strip
   # fact. `!=` compares a native input with stringi's UTF-8 output, and R reads
   # the native side in the session charset: under LC_ALL=C every non-ASCII row
@@ -1366,7 +1377,7 @@
   # trim has always used: the class takes every ASCII line terminator, but not
   # a final U+0085, U+2028 or U+2029, before which the run is still trimmed.
   url <- .bytes_replace(url, "^[\\x00-\\x20]+", "")
-  url <- .bytes_replace(url, paste0("[\\x00-\\x20]+", .ICU_END), "")
+  url <- .bytes_replace(url, paste0(.C0_SPACE_RUN, .ICU_END), "")
 
   # Recognized-scheme set = .WHATWG_SPECIAL_SCHEMES; authority table =
   # .SPECIAL_AUTHORITY_SCHEMES, the same set minus `file`. Schemes are ASCII

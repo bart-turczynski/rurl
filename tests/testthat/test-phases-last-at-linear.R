@@ -138,3 +138,42 @@ test_that("the IPv6 tail test stays under the match limit on a long run", {
   expect_no_warning(out <- .const_detect(x, .ICU_IPV6_IPV4_TAIL))
   expect_identical(out, c(FALSE, TRUE))
 })
+
+trim_rows <- c(
+  "http://a/ \t", "http://a/ b ", "  http://a/  ", "http://a/\r\n",
+  "http://a/ \u2028", "http://a/ \r\n\n", " ", "", "http://a/\u2028 ", NA
+)
+strip_trim <- function(x) .strip_whatwg_control_chars_vec(x, "whatwg")$url
+fixup_trim <- function(x) .apply_browser_fixup_vec(x, "browser", "whatwg")
+
+test_that("the trailing C0/space trims cut the final run only", {
+  # The WHATWG strip ends at the true end; the browser fixer at ICU's `$`,
+  # so it also trims a run before a final U+2028.
+  expect_identical(strip_trim(trim_rows), c(
+    "http://a/", "http://a/ b", "http://a/", "http://a/", "http://a/ \u2028",
+    "http://a/", "", "", "http://a/\u2028", NA
+  ))
+  expect_identical(fixup_trim(trim_rows), c(
+    "http://a/", "http://a/ b", "http://a/", "http://a/", "http://a/\u2028",
+    "http://a/", "", "", "http://a/\u2028", NA
+  ))
+})
+
+test_that("the trailing trims stay under the match limit on a long run", {
+  # Tried at each byte of an inner run, the greedy run gave the rest of it
+  # back byte by byte: with ~1e7 bytes in one run it warned.
+  x <- paste0("http://a/", strrep(" ", long_n), "b")
+  expect_no_warning(out <- strip_trim(x))
+  expect_true(identical(out, x))
+  expect_no_warning(out <- fixup_trim(x))
+  expect_true(identical(out, x))
+})
+
+test_that("the trailing trims are linear in an inner run", {
+  # Below the limit the same retries were quadratic: an inner run of 2e4
+  # spaces took about 2 s in the strip and 14 s in the browser fixer.
+  skip_on_cran()
+  x <- paste0("http://a/", strrep(" ", 20000L), "b")
+  expect_lt(system.time(strip_trim(x))[["elapsed"]], 0.5)
+  expect_lt(system.time(fixup_trim(x))[["elapsed"]], 0.5)
+})
