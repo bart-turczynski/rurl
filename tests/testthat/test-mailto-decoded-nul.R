@@ -199,3 +199,19 @@ test_that("an encoded percent before 00 is a literal, not a NUL", {
   expect_identical(dn_parts("mailto:a%2500@b.com"),
                    list(user = "a%00", host = "b.com"))
 })
+
+test_that("every accessor of a NUL half is NA, the other half kept", {
+  for (std in c("rfc3986", "whatwg")) {
+    acc <- function(f, u) {
+      f(u, url_standard = std, scheme_acceptance = "general")
+    }
+    d <- "mailto:a@evil.com%00.good.com"
+    for (f in list(get_host, get_domain, get_tld, get_subdomain)) {
+      expect_identical(acc(f, d), NA_character_, info = std)
+    }
+    expect_identical(acc(get_user, d), "a", info = std)
+    l <- "mailto:a%00zz@b.com"
+    expect_identical(acc(get_userinfo, l), NA_character_, info = std)
+    expect_identical(acc(get_domain, l), "b.com", info = std)
+  }
+})

@@ -582,9 +582,11 @@ get_scheme <- function(url, protocol_handling = "keep",
 #' diverges from \code{\link{safe_parse_url}}, whose \code{host} column is
 #' \code{NA} for a \code{mailto:} URL: a \code{mailto:} is a WHATWG opaque path
 #' and has no authority, so the recipient domain is surfaced here as extraction
-#' metadata rather than presented as a parsed authority. Under the default
-#' \code{"web"} acceptance a \code{mailto:} URL is not parsed and this returns
-#' \code{NA}.
+#' metadata rather than presented as a parsed authority. That domain is
+#' \code{NA} when it is not a domain-form right-hand side, when it does not
+#' percent-decode to valid UTF-8, or when it holds a null octet
+#' (\code{\%00}). Under the default \code{"web"} acceptance a \code{mailto:}
+#' URL is not parsed and this returns \code{NA}.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -1060,8 +1062,9 @@ get_port <- function(url, protocol_handling = "keep",
 #' first recipient (its \code{addr-spec} local-part) is returned, mirroring how
 #' \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
 #' domain (ADR 0012 D7). That local-part is percent-decoded, and it is
-#' \code{NA} when the decoded octets are not valid UTF-8 (RFC 6068 section 2),
-#' as the host is for a domain that does not decode. As with
+#' \code{NA} when the decoded octets are not valid UTF-8 (RFC 6068 section 2)
+#' or hold a null octet (\code{\%00}, which is no \code{addr-spec} character,
+#' RFC 5322 section 3.2.3), as the host is for such a domain. As with
 #' \code{\link{get_host}}, this deliberately diverges from
 #' \code{\link{safe_parse_url}}, whose
 #' \code{user} column is \code{NA} for a \code{mailto:} URL (an opaque path
