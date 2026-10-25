@@ -9,7 +9,6 @@
 "R/parse-phases.R",".unicode_case_map_vec","stringi::stri_trans_tolower",1
 "R/parse-phases.R",".unicode_case_map_vec","stringi::stri_trans_toupper",1
 "R/path-query.R",".param_matches","stringi::stri_detect_regex",1
-"R/resolve.R",".whatwg_file_remove_dot_segments","stringi::stri_split_fixed",1
 "R/resolve.R","resolve_url","stringi::stri_enc_toutf8",1
 "R/url-key.R",".url_key_frame","stringi::stri_enc_toutf8",2
 "R/url-key.R",".url_key_frame","stringi::stri_numbytes",1

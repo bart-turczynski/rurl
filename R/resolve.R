@@ -303,19 +303,21 @@
 # normalized drive letter ("shorten a URL's path"), `.` and a final `..` leave
 # an empty segment behind exactly as section 5.2.4 does, and a first segment
 # spelled `C|` is rewritten to `C:` (the "(platform-independent) Windows drive
-# letter quirk"). The segment cut keeps a TRAILING empty segment -- `strsplit`
-# drops one, and `/C:/` is ["C:", ""] -- which is the same trap the serializer's
-# `/.` guard records (R/parse-phases.R). The cut also reads past a U+FEFF that
-# starts its input (see .starts_with_bom()), so a first segment led by the
-# mark lost it (RURL-dglgcwit): the body is split with a "/" spliced on, and
-# the empty field that "/" opens is dropped.
+# letter quirk"). The segment cut keeps a TRAILING empty segment -- plain
+# `strsplit` drops one, and `/C:/` is ["C:", ""] -- which is the same trap the
+# serializer's `/.` guard records (R/parse-phases.R); hence
+# `keep_trailing_empty = TRUE`, which is also what the stringi split it
+# replaces did (ADR 0019). The split runs in byte mode, so a U+FEFF that
+# starts the body is data and stays on its segment: the "/" once spliced on
+# to shield it from stringi's mark skipping (RURL-dglgcwit) is no longer
+# needed. An empty body (`path` is "/") gives one empty segment, as before.
 .whatwg_file_remove_dot_segments <- function(path) {
   if (is.na(path) || !nzchar(path)) {
     return(path)
   }
   rooted <- startsWith(path, "/")
   body <- if (rooted) substring(path, 2L, .Machine$integer.max) else path
-  segs <- stringi::stri_split_fixed(paste0("/", body), "/")[[1L]][-1L]
+  segs <- .bytes_split_fixed(body, "/", keep_trailing_empty = TRUE)[[1L]]
   out <- character(0)
   n <- length(segs)
   for (i in seq_len(n)) {
