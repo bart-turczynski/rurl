@@ -59,7 +59,8 @@ source(here("relocate-wpt-format.R"), local = FALSE)
 source(here("check-fsss-conformance.R"), local = FALSE)
 
 # FLOORS, measured on the committed block, so neither column check can erode to
-# a population that passes for nothing. 14 of the 24 rows carry a
+# a population that passes for nothing. (First measurement; superseded by the
+# re-measurement below.) 14 of the 24 rows carry a
 # `whatwg_expected` and 3 of those carry a documented `rurl_deviation`; 13 rows
 # carry both an `fsss_whatwg` and an `oracle_value`, 2 of them deviating. This is
 # the group that gives the unconditional FSSS comparison its whole subject --

@@ -43,10 +43,16 @@
 # to zero deviating rows without anyone noticing.
 #
 # 2026-10-25 (RURL-viypghfg, RUL-031): the two rows no longer carry a
-# `rurl_deviation`. Their cells recorded an rfc3986 acceptance of raw
-# non-ASCII input, which RUL-030 removed, and the owner cleared them. The ids
-# stay required: what they guarantee is that these rows are graded, which
-# never depended on the deviation column.
+# `rurl_deviation`, and the reading above was never what their cells said.
+# The cells' own text recorded an rfc3986 ACCEPTANCE of raw non-ASCII input,
+# which RUL-030 removed, so the owner cleared them. Their `clean_url` still
+# differs from the WHATWG serialization (`yağız.com`, `/école`), but
+# `clean_url` is a characterization column that makes no claim
+# (design/oracle-fixtures.md), so no deviation is owed for it. The live run
+# therefore grades 0 deviating rows: the real-data subject is gone, and the
+# guard against conditioning on `rurl_deviation` is now the self-test's
+# deviating-row case. The ids stay required because they still name the two
+# rows whose `fsss_whatwg` must equal the oracle while `clean_url` differs.
 
 # The two rows whose coverage is the whole argument above. A caller states them
 # explicitly rather than trusting a count, because "2 deviating rows are graded"
@@ -87,9 +93,9 @@ fsss_check_conformance <- function(committed, min_rows, require_ids = character(
   if (length(uncovered)) {
     fail <- c(fail, sprintf(
       paste0("%d row(s) that MUST stay covered are not graded: %s -- these are ",
-             "the deviation-carrying rows the unconditional comparison exists ",
-             "for; losing them would quietly restore the rurl_deviation ",
-             "conditioning this check refuses"),
+             "the rows whose clean_url differs from the WHATWG serialization ",
+             "while fsss_whatwg must still equal the oracle; losing them ",
+             "drops that case from the unconditional comparison"),
       length(uncovered), paste(uncovered, collapse = ", ")))
   }
   attr(fail, "graded") <- length(graded)

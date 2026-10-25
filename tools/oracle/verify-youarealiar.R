@@ -192,14 +192,13 @@ check_restatement <- function(committed, roster) {
     }
     # Where the expectation names a host, the FSSS host column must be that
     # host -- UNLESS a `rurl_deviation` owns the difference. That condition is
-    # the correct rule rather than a loosening, and it is a latent trap without
-    # it: yal-005 is a host row that DOES carry a deviation (ADR 0002 -- rurl
-    # keeps the host reversibly Unicode and Punycode is a separate presentation
-    # phase) and happens to satisfy the equality anyway. An unconditional check
-    # therefore passes today by luck, and would fail wrongly the moment the
-    # documented presentation phase changed -- forcing either a false oracle or
-    # a deleted deviation, which is the co-confirmation trap RURL-nknytzxz was
-    # filed for.
+    # the correct rule rather than a loosening: eq-U8 is a host row whose
+    # deviation (RURL-dxwxeamq) IS the difference. Without the condition, the
+    # next deviating host row would force either a false oracle or a deleted
+    # deviation, which is the co-confirmation trap RURL-nknytzxz was filed for.
+    # (yal-005 was the other example, a deviating row that happened to satisfy
+    # the equality; its cell was cleared 2026-10-25, RURL-viypghfg, RUL-031,
+    # and the self-test now sets a deviation of its own to cover that case.)
     if (identical(p$kind, "host") && is.na(cm$rurl_deviation[i]) &&
           !identical(cm$fsss_host[i], p$value)) {
       fail <- c(fail, sprintf(

@@ -252,7 +252,7 @@ test_that("dual-standard oracle: classes and invariants hold", {
   expect_true(all(grepl("ADR [0-9]{4}|RURL-[a-z]+", fx$rurl_deviation[dev])))
   # the two axes are independent: `rurl_deviation` is not a function of the
   # class, because some class holds both deviating and conforming rows, so
-  # neither column can be reconstructed from the other. This is the invariant
+  # the class cannot tell you whether a row deviates. This is the invariant
   # whose absence hid RURL-nknytzxz. It used to be asserted as "deviations
   # span more than one class"; after the RUL-031 re-baselining (RURL-viypghfg)
   # every remaining deviation is spec-divergent, alongside 166 spec-divergent
