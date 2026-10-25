@@ -79,7 +79,7 @@
 #
 # Located AND cut in BYTES (RURL-kmpnbvdl). Shared with the parse-side shim, so
 # both sides of the seam have to survive the same input: an authority captured
-# by stringi arrives DECLARED UTF-8 whatever its octets, and character-indexed
+# in byte mode arrives DECLARED UTF-8 whatever its octets, and character-indexed
 # slicing throws `invalid multibyte string` on `<80>:80`. Byte indices are also
 # the only ones that agree with the locating scan under `LC_ALL=C`.
 .fsss_host_slice <- function(s) {

@@ -532,6 +532,37 @@ test_that("the byte-slice helpers cut positions, not characters", {
   )
 })
 
+test_that("the byte cut and locate keep values; marks, NA and empty pinned", {
+  max <- .Machine$integer.max
+  # An unknown-marked non-ASCII string is cut to the same bytes and declared
+  # UTF-8; the old `.byte_substring()` kept "unknown". Every converted call
+  # site sees UTF-8 or ASCII input, so no output moved (ADR 0019 decision 5).
+  native <- rawToChar(as.raw(c(0xC3, 0xA9, 0x23, 0x78)))
+  cut <- rurl:::.bytes_cut(native, 1L, 2L)
+  expect_identical(charToRaw(cut), as.raw(c(0xC3, 0xA9)))
+  expect_identical(Encoding(cut), "UTF-8")
+  expect_identical(
+    rurl:::.bytes_locate(native, "#", fixed = TRUE)[[1L, "start"]], 3L
+  )
+  # NA in, NA out; no match is NA, not 0L; zero length gives zero length.
+  expect_identical(rurl:::.bytes_cut(NA_character_, 1L, max), NA_character_)
+  expect_identical(
+    rurl:::.bytes_locate(c("a#b", NA, "ab"), "#", fixed = TRUE)[, "start"],
+    c(2L, NA, NA)
+  )
+  expect_identical(rurl:::.bytes_cut(character(0), 1L, max), character(0))
+  expect_identical(
+    nrow(rurl:::.bytes_locate(character(0), "#", fixed = TRUE)), 0L
+  )
+  expect_identical(rurl:::.bytes_cut("", 1L, max), "")
+  # A latin1-marked string stops: the input boundary spells it in UTF-8
+  # first, so no call site receives one.
+  latin1 <- "caf\xe9"
+  Encoding(latin1) <- "latin1"
+  expect_error(rurl:::.bytes_cut(latin1, 1L, 2L), "latin1")
+  expect_error(rurl:::.bytes_locate(latin1, "#", fixed = TRUE), "latin1")
+})
+
 
 # --- 4d. A "bytes" MARK, where 4b/4c were about undecodable OCTETS -----------
 #
