@@ -83,7 +83,7 @@
 
 - The WHATWG percent-encoding of paths, queries, fragments and credentials now runs once per call instead of once per row: `serialize_url()`, `safe_parse_urls()` under the WHATWG profile and `get_url_key()` under its `whatwg` policy encode every row in one pass over a byte table, where each row's bytes used to be walked one at a time in R. The encoding step alone is about 20 to 40 times faster (2,000 rows of 2 KB queries: about 3.8 s before, 0.13 s after); whole calls gain less, because the rest of the parse dominates. Output is unchanged (`RURL-khcicsca`).
 
-- `tools/local-ci.sh --all` now runs the `pages` job on a container-local copy of the clone. On Docker Desktop for macOS the clone's bind mount is virtiofs, which refused the permission change pkgdown makes on the `docs/` it creates, so the local `pages` replay failed with `EACCES` while the forge job passed. The job script is still the one in `.gitlab-ci.yml`, unchanged (`RURL-nviibwoo`).
+- `tools/local-ci.sh --all` now runs the `pages` job on a container-local copy of the clone. On Docker Desktop for macOS the bind-mounted clone refused the permission change pkgdown makes on the `docs/` it creates, so the local `pages` replay failed with `EACCES` while the forge job passed. The job script is still the one in `.gitlab-ci.yml`, unchanged (`RURL-nviibwoo`).
 
 ### Deprecated
 
