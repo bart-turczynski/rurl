@@ -391,14 +391,32 @@
   # point is a parse error (RFC 3986 sections 2, 2.5, 3.2.2), so the row is
   # null and every other token above is suppressed; this one names why, on
   # both acceptance routes. It is the one token that fires on a failed row.
-  # The name is kept because callers already match on it. The gate returns it
-  # in `$diagnostic` for exactly those rows; thread it out, keyed to the
+  # The name is kept because callers already match on it. The gate returns
+  # `$diagnostic` for every decodable row carrying non-ASCII; keyed to the
   # failure so it never contradicts `parse_status`.
+  #
+  # Its advice is "percent-encode it as UTF-8", so it fires only where that
+  # advice holds: the row's twin, each octet >= 0x80 written as its `%XX`
+  # triplet (RFC 3986 section 2.5), must parse under the same options. A row
+  # that fails for another reason as well -- before the grammar gate (a D1
+  # not-host-like input, `scheme_policy = "require"`, a scheme the `web`
+  # acceptance refuses) or in its ASCII grammar -- has a failing twin and
+  # carries no token, since naming the non-ASCII alone would misstate why it
+  # failed. The twins are parsed only for those candidate rows.
   if (is_rfc && !is.null(url)) {
     g <- .rfc3986_generic_uri_ok(url)
-    diag <- .diag_add(
-      diag, !live & !is.na(g$diagnostic), "unicode-outside-rfc3986-uri"
-    )
+    cand <- which(!live & !is.na(g$diagnostic))
+    if (length(cand) > 0L) {
+      twin <- vapply(url[cand], .web_escape_high_bytes, character(1),
+                     USE.NAMES = FALSE)
+      twin_null <- attr(._parse_stage_a_vec(twin, opts), "null_row")
+      if (is.null(twin_null)) {
+        twin_null <- rep(FALSE, length(cand))
+      }
+      rescued <- logical(n)
+      rescued[cand[!twin_null]] <- TRUE
+      diag <- .diag_add(diag, rescued, "unicode-outside-rfc3986-uri")
+    }
   }
 
   if (general && !is.null(url)) {

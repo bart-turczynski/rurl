@@ -552,6 +552,42 @@
   !is.na(base) & base %in% failing
 }
 
+# TRUE where `ref` is an RFC 3986 URI-reference (section 4.1:
+# `URI-reference = URI / relative-ref`), FALSE where it is not, NA for NA.
+# Built on the package's one RFC 3986 grammar, `.rfc3986_generic_uri_ok()`
+# (R/parse-state.R), which accepts only the `URI` alternative (a scheme is
+# required), strict US-ASCII included (RUL-030):
+#
+#   * A reference with a scheme (section 3.1, the same production
+#     `.split_uri_ref()` uses under "rfc3986") is a `URI`: walked as written.
+#   * A reference without one is a `relative-ref` (section 4.2):
+#     `relative-part [ "?" query ] [ "#" fragment ]`. Its `relative-part`
+#     alternatives are `hier-part`'s one for one (`"//" authority
+#     path-abempty`, `path-absolute`, `path-empty`), except that
+#     `path-noscheme` stands where `hier-part` has `path-rootless`; the two
+#     differ only in the first segment, which `path-noscheme` writes as
+#     `segment-nz-nc` (no ":"). So the reference is walked behind a one-letter
+#     scheme, `x:`, which reads the rest as exactly that `hier-part`, query and
+#     fragment, and a first segment holding a ":" is then refused. That segment
+#     is the run before the first "/", "?" or "#", and a ":" in it is what
+#     `\A[^/?#]*:` finds; a reference starting "/", "?" or "#" has an empty
+#     first segment and never matches.
+.rfc3986_uri_reference_ok <- function(ref) {
+  ok <- rep(NA, length(ref))
+  present <- !is.na(ref)
+  absolute <- present & !is.na(.scheme_prefix_len(ref))
+  relative <- present & !absolute
+  if (any(absolute)) {
+    ok[absolute] <- .rfc3986_generic_uri_ok(ref[absolute])$ok
+  }
+  if (any(relative)) {
+    rel <- ref[relative]
+    ok[relative] <- .rfc3986_generic_uri_ok(paste0("x:", rel))$ok &
+      !.state_bytes_test(rel, "\\A[^/?#]*:")
+  }
+  ok
+}
+
 # Resolve ONE (reference, base) pair to a raw absolute URI string, or NA when
 # resolution cannot yield an absolute URL (base not absolute and reference not
 # absolute either). ._remove_dot_segments happens inside .transform_reference(),
@@ -722,11 +758,24 @@
 #' \emph{contains} a colon is a path, not an absolute reference:
 #' \code{resolve_url("[61:24:74]:98", "http://example.org/foo/bar",
 #' url_standard = "whatwg", output = "serialized")} is
-#' \code{"http://example.org/foo/[61:24:74]:98"}, and \code{"rfc3986"} merges
-#' the same way. The \code{NULL} selector instead keeps RFC 3986 Appendix B's
+#' \code{"http://example.org/foo/[61:24:74]:98"}. \code{"rfc3986"} reads no
+#' scheme there either, but refuses the reference (see below). The \code{NULL}
+#' selector instead keeps RFC 3986 Appendix B's
 #' explicitly \emph{non-validating} \code{[^:/?#]+}, which reads
 #' \code{"10.0.0.7"} as a scheme and discards the base; that is frozen behavior
 #' (ADR 0007), not a recommendation.
+#'
+#' Under \code{"rfc3986"} the reference must itself be an RFC 3986
+#' URI-reference (section 4.1: a \code{URI} or a \code{relative-ref}), or the
+#' row is \code{NA}. This is checked on the reference as written, before the
+#' merge, so a segment that dot-segment removal would delete still counts:
+#' \code{resolve_url("a/\\u00e4/../b", "http://b.de/", url_standard =
+#' "rfc3986")} is \code{NA}, since U+00E4 is a raw non-ASCII code point
+#' (sections 2 and 2.5), as are \code{"/\%zz/../b"} (a \code{\%} that starts
+#' no triplet) and
+#' \code{"10.0.0.7:8080/x"} (section 4.2: a first segment holding a colon
+#' cannot start a relative-path reference; write \code{"./10.0.0.7:8080/x"}).
+#' \code{"whatwg"} and \code{NULL} do not check the reference.
 #'
 #' @section Which output surface you want:
 #'
@@ -819,9 +868,10 @@
 #'   canonical \code{clean_url} of the resolved reference; under
 #'   \code{output = "serialized"} it is the standard's full-string
 #'   serialization of the resolved absolute URL. \code{NA} where resolution
-#'   cannot produce an absolute URL, or where the resolved URL is not accepted
-#'   by the parser (\code{"clean"}) or by the selected standard's parser
-#'   (\code{"serialized"}).
+#'   cannot produce an absolute URL, where under \code{"rfc3986"} the
+#'   reference is no RFC 3986 URI-reference, or where the resolved URL is not
+#'   accepted by the parser (\code{"clean"}) or by the selected standard's
+#'   parser (\code{"serialized"}).
 #' @seealso \code{\link{safe_parse_url}}, \code{\link{get_clean_url}},
 #'   \code{\link{serialize_url}}
 #' @export
@@ -956,6 +1006,21 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     hidden <- ref_bad | base_bad
     ref[hidden] <- .hide_high_octets(ref[hidden])
     base[hidden] <- .hide_high_octets(base[hidden])
+  }
+  # Under `rfc3986` the REFERENCE must itself be an RFC 3986 URI-reference
+  # (section 4.1: URI / relative-ref), or there is nothing to resolve: the row
+  # is NA. Checking only the resolved URL is not enough, because section
+  # 5.2.4's dot-segment removal can delete the segment that breaks the
+  # grammar (`a/ä/../b`, `/%zz/../b` resolve to valid URIs). Each
+  # distinct reference is checked once, row by row, so one refused reference
+  # moves no other row. `whatwg` has no such gate (its parser reads the
+  # reference with the base), and `NULL` is frozen (ADR 0007).
+  if (identical(url_standard, "rfc3986")) {
+    distinct <- unique(ref[!is.na(ref)])
+    if (length(distinct) > 0L) {
+      refused_ref <- distinct[!.rfc3986_uri_reference_ok(distinct)]
+      ref[!is.na(ref) & ref %in% refused_ref] <- NA_character_
+    }
   }
   # A base the selected standard's parser refuses is no base (RURL-vrvxxfvm).
   # `whatwg`: the URL Standard's API URL parser returns failure when the base

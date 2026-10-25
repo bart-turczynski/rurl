@@ -57,7 +57,10 @@ test_that("whatwg: the base's own special scheme stays relative", {
 test_that("rfc3986: a scheme-bearing reference's path is dot-removed", {
   # Section 5.2.2: T.path = remove_dot_segments(R.path), whatever the scheme.
   expect_identical(rfc_ser("foo:a/../b", "http://h/y"), "foo:/b")
-  expect_identical(rfc_ser("foo:\ufeff/../b", "http://h/y"), "foo:/b")
+  # A raw U+FEFF makes the reference no RFC 3986 URI-reference (sections 2,
+  # 4.1; RUL-030), so there is nothing to resolve, even though dot-segment
+  # removal would delete the segment holding it (RURL-pntbujzc).
+  expect_identical(rfc_ser("foo:\ufeff/../b", "http://h/y"), NA_character_)
   expect_identical(rfc_ser("file:/C:/../x", "http://h/y"), "file:/x")
   expect_identical(rfc_ser("file:/C:/../x", "file:///y"), "file:/x")
   expect_identical(rfc_ser("http:/a/../b", "https://h/y"), "http:/b")

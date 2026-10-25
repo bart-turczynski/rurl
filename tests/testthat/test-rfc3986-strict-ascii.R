@@ -211,16 +211,105 @@ test_that("every rfc3986 surface follows the parse error", {
 })
 
 test_that("unicode-outside-rfc3986-uri is the rejection reason", {
-  for (acc in c("web", "general")) {
-    d <- get_url_diagnostics(c(raw_rows, "http://h.de/%C3%A4"), "rfc3986",
-                             scheme_acceptance = acc)
-    expect_identical(d[1:8], rep(list("unicode-outside-rfc3986-uri"), 8L),
-                     label = acc)
-    expect_false("unicode-outside-rfc3986-uri" %in% d[[9L]], label = acc)
-  }
+  tok <- "unicode-outside-rfc3986-uri"
+  # Under `general` every raw row's percent-encoded twin parses, so each
+  # failed row names the non-ASCII as its reason.
+  d <- get_url_diagnostics(c(raw_rows, "http://h.de/%C3%A4"), "rfc3986",
+                           scheme_acceptance = "general")
+  expect_identical(d[1:8], rep(list(tok), 8L))
+  expect_false(tok %in% d[[9L]])
+  # Under `web` the two `foo:` rows fail on their scheme too: their twins
+  # (`foo:%C3%A4`, `foo://%C3%A4/x`) are errors there, so percent-encoding
+  # would not rescue them and the token does not claim it would.
+  d <- get_url_diagnostics(c(raw_rows, "http://h.de/%C3%A4"), "rfc3986",
+                           scheme_acceptance = "web")
+  expect_identical(d[1:6], rep(list(tok), 6L))
+  expect_identical(d[7:9], rep(list(character(0)), 3L))
   # whatwg never reports it.
   d <- get_url_diagnostics(raw_rows, "whatwg", scheme_acceptance = "general")
   expect_false(any(vapply(d, function(t) {
     "unicode-outside-rfc3986-uri" %in% t
   }, logical(1L))))
+})
+
+test_that("the token is withheld where percent-encoding would not rescue", {
+  # The token's advice is "percent-encode it as UTF-8": it fires only on a
+  # failed row whose percent-encoded twin parses, so a row that also fails
+  # for another reason (a D1 not-host-like input, `scheme_policy =
+  # "require"`, an ASCII grammar fault) carries no token.
+  tok <- "unicode-outside-rfc3986-uri"
+  rows <- c(paste0("h", a_uml, "llo w"), paste0("http://h.de/", a_uml, "|"))
+  twins <- c("h%C3%A4llo w", "http://h.de/%C3%A4|")
+  expect_identical(get_parse_status(rows, url_standard = "rfc3986"),
+                   c("error", "error"))
+  expect_identical(get_parse_status(twins, url_standard = "rfc3986"),
+                   c("error", "error"))
+  expect_identical(get_url_diagnostics(rows, url_standard = "rfc3986"),
+                   list(character(0), character(0)))
+  sl <- paste0("b", "ü", "cher.de/p")
+  expect_identical(
+    get_parse_status(c(sl, "b%C3%BCcher.de/p"), url_standard = "rfc3986",
+                     scheme_policy = "require"),
+    c("error", "error")
+  )
+  expect_identical(
+    get_url_diagnostics(sl, url_standard = "rfc3986",
+                        scheme_policy = "require"),
+    character(0)
+  )
+  # Without `require` the twin infers its scheme and parses, so the raw row
+  # names its non-ASCII.
+  expect_identical(get_parse_status("b%C3%BCcher.de/p",
+                                    url_standard = "rfc3986"), "ok")
+  expect_identical(get_url_diagnostics(sl, url_standard = "rfc3986"),
+                   tok)
+})
+
+# --- resolve_url(): the reference itself must be an RFC 3986 URI-reference --
+
+test_that("rfc3986 resolve_url() refuses a reference outside the grammar", {
+  # RFC 3986 section 4.1: URI-reference = URI / relative-ref. A reference
+  # outside that grammar is no reference to resolve, even where section
+  # 5.2.4's dot-segment removal would delete the offending segment.
+  base <- "http://b.de/a/"
+  bad <- c(
+    "https://h.de/a/ä/../b",
+    "ä/../b",
+    "https://h.de/a/|/../b",
+    "/%zz/../b",
+    "foo:/a/ä/../b",
+    # section 4.2: a first segment holding a colon cannot start a
+    # relative-path reference (path-noscheme, segment-nz-nc).
+    "1a:b"
+  )
+  good <- c("g", "../g", "?q", "#f", "//h/p", "%C3%A4/../b", "", "./1a:b")
+  good_want <- c(
+    "http://b.de/a/g", "http://b.de/g", "http://b.de/a/?q",
+    "http://b.de/a/#f", "http://h/p", "http://b.de/a/b", "http://b.de/a/",
+    "http://b.de/a/1a:b"
+  )
+  # Interleaved, so one refused row moves no other row.
+  refs <- c(rbind(bad, good[seq_along(bad)]), good[-seq_along(bad)])
+  want <- c(rbind(rep(NA_character_, length(bad)),
+                  good_want[seq_along(bad)]),
+            good_want[-seq_along(bad)])
+  expect_identical(
+    resolve_url(refs, base, url_standard = "rfc3986", output = "serialized"),
+    want
+  )
+  expect_identical(
+    resolve_url(bad, base, url_standard = "rfc3986"),
+    rep(NA_character_, length(bad))
+  )
+  # whatwg and the frozen NULL default do not move.
+  expect_identical(
+    resolve_url(bad, base, url_standard = "whatwg", output = "serialized"),
+    c("https://h.de/a/b", "http://b.de/a/b", "https://h.de/a/b",
+      "http://b.de/b", "foo:/a/b", "http://b.de/a/1a:b")
+  )
+  expect_identical(
+    resolve_url(bad, base),
+    c("https://h.de/a/b", "http://b.de/a/b", "https://h.de/a/b",
+      "http://b.de/b", NA, NA)
+  )
 })

@@ -591,14 +591,27 @@ test_that("url_standard = NULL is byte-frozen against the production", {
   expect_identical(
     resolve_url("10.0.0.7:8080/foo.html", fbase), "http://10.0.0.7/foo.html"
   )
-  # Only a selected standard reaches the real production, and both do.
-  for (std in c("rfc3986", "whatwg")) {
-    expect_identical(
-      resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = std,
-                  output = "serialized"),
-      "file:///some/dir/10.0.0.7:8080/foo.html"
-    )
-  }
+  # Only a selected standard reaches the real production, and both read the
+  # reference as scheme-less. whatwg resolves it as a path.
+  expect_identical(
+    resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = "whatwg",
+                output = "serialized"),
+    "file:///some/dir/10.0.0.7:8080/foo.html"
+  )
+  # rfc3986 refuses it: section 4.2 bars a first segment holding a colon from
+  # a relative-path reference (`path-noscheme` = `segment-nz-nc ...`), so it
+  # is no RFC 3986 URI-reference (section 4.1) and the row is NA. Its
+  # dot-segment spelling is one, and resolves (RURL-pntbujzc).
+  expect_identical(
+    resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = "rfc3986",
+                output = "serialized"),
+    NA_character_
+  )
+  expect_identical(
+    resolve_url("./10.0.0.7:8080/foo.html", fbase, url_standard = "rfc3986",
+                output = "serialized"),
+    "file:///some/dir/10.0.0.7:8080/foo.html"
+  )
 })
 
 test_that("resolved output equals a direct parse of the resolved URL", {
