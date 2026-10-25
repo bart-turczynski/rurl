@@ -84,14 +84,14 @@
 # the only ones that agree with the locating scan under `LC_ALL=C`.
 .fsss_host_slice <- function(s) {
   if (startsWith(s, "[")) {
-    close <- .first_byte_index(s, "]")
-    return(if (close > 0L) .byte_substring(s, 1L, close) else s)
+    close <- .bytes_locate(s, "]", fixed = TRUE)[[1L, "start"]]
+    return(if (!is.na(close)) .bytes_cut(s, 1L, close) else s)
   }
   pos <- .last_byte_index(s, ":")
   if (pos == 0L) {
     return(s)
   }
-  .byte_substring(s, 1L, pos - 1L)
+  .bytes_cut(s, 1L, pos - 1L)
 }
 
 .fsss_source_lex <- function(url, url_standard) {
@@ -129,17 +129,17 @@
   # have, whichever answer it lands on.
   fragment <- rep(NA_character_, n)
   body <- u
-  hash <- .first_byte_index_vec(u, "#")
-  hit <- hash > 0L
-  fragment[hit] <- .byte_substring_vec(u[hit], hash[hit] + 1L)
-  body[hit] <- .byte_substring_vec(u[hit], 1L, hash[hit] - 1L)
+  hash <- .bytes_locate(u, "#", fixed = TRUE)[, "start"]
+  hit <- !is.na(hash)
+  fragment[hit] <- .bytes_cut(u[hit], hash[hit] + 1L, .Machine$integer.max)
+  body[hit] <- .bytes_cut(u[hit], 1L, hash[hit] - 1L)
 
   query <- rep(NA_character_, n)
-  qmark <- .first_byte_index_vec(body, "?")
-  qhit <- qmark > 0L
-  query[qhit] <- .byte_substring_vec(body[qhit], qmark[qhit] + 1L)
+  qmark <- .bytes_locate(body, "?", fixed = TRUE)[, "start"]
+  qhit <- !is.na(qmark)
+  query[qhit] <- .bytes_cut(body[qhit], qmark[qhit] + 1L, .Machine$integer.max)
   hier <- body
-  hier[qhit] <- .byte_substring_vec(body[qhit], 1L, qmark[qhit] - 1L)
+  hier[qhit] <- .bytes_cut(body[qhit], 1L, qmark[qhit] - 1L)
 
   # Authority payload: everything after `scheme://` up to the path start. The
   # userinfo is what precedes the LAST "@" in it -- last, not first, because
@@ -192,14 +192,16 @@
     found <- at > 0L
     slice[found] <- vapply(
       which(found),
-      function(i) .byte_substring(auth[i], 1L, at[i] - 1L),
+      function(i) .bytes_cut(auth[i], 1L, at[i] - 1L),
       character(1), USE.NAMES = FALSE
     )
     userinfo[has_auth] <- slice
 
     host[has_auth] <- vapply(
       seq_along(auth),
-      function(i) .fsss_host_slice(.byte_substring(auth[i], at[i] + 1L)),
+      function(i) {
+        .fsss_host_slice(.bytes_cut(auth[i], at[i] + 1L, .Machine$integer.max))
+      },
       character(1), USE.NAMES = FALSE
     )
   }

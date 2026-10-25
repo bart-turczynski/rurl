@@ -117,8 +117,9 @@ a skipping one (a `*_regex()` locator for a `*_fixed()` one):
   helpers' fallback (RURL-bqhfznkg). A related follow-up is open: under
   `whatwg`, the www and subdomain policies read the host before UTS-46
   mapping (RURL-fobwctml).
-- A base-R suffix cut passes `last` explicitly (`.Machine$integer.max`) or
-  uses `.byte_substring()`: before R 4.6.0, `substring(x, first)` defaulted to
+- A base-R suffix cut passes `last` explicitly (`.Machine$integer.max`), as
+  `.bytes_cut()` callers do (`.byte_substring()`, which defaulted it, was
+  folded into `.bytes_cut()` by ADR 0019 decision 5): before R 4.6.0, `substring(x, first)` defaulted to
   `last = 1000000L`, and the package supports R 4.1.0 and later.
   `tools/substring-last-gate.R` now enforces this on every `substring()` call
   in `R/`.

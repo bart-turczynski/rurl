@@ -335,3 +335,15 @@ second-opinion consultation had to agree with, and it did, on each one:
 The allowlist now holds that kept set and nothing else: 8 references under 7
 keys, three of them the 2(d) decode (`.url_key_frame()` twice and
 `.utf8_decode_replacing()`).
+
+Decision 5 was carried out on the same day in a second close-out slice. Every
+caller of `.byte_substring()`, `.byte_substring_vec()`, `.first_byte_index()`
+and `.first_byte_index_vec()` now calls `.bytes_cut()` (with `last` explicit,
+`.Machine$integer.max` for a suffix) or `.bytes_locate(fixed = TRUE)` (NA, not
+0, where there is no match), and the four helpers are gone from `R/utils.R`.
+`.last_byte_index()` and `.byte_length()` stay: the first is the linear
+last-byte scan, the second the NA-total byte count. The cut now declares its
+result UTF-8 where the old helpers carried the input's mark. A differential
+over the same inputs and surfaces as above, plus case mapping, trailing-slash,
+subdomain and general-acceptance paths, moved no value and no encoding mark
+in either locale, because every caller's input is already UTF-8 or ASCII.

@@ -9,8 +9,8 @@
 # PR#18851), so on a current R the truncation cannot be reproduced at all --
 # and DESCRIPTION still admits R (>= 4.1.0), where it can. A URL path, query,
 # fragment or userinfo can be that long. ADR 0005's Consequences carry the rule:
-# a base-R suffix cut passes `last` explicitly (`.Machine$integer.max`) or uses
-# `.byte_substring()`.
+# a base-R suffix cut passes `last` explicitly (`.Machine$integer.max`), as a
+# `.bytes_cut()` call does.
 #
 # Because the defect is invisible on the R this repository's gates run, a value
 # test cannot pin it; this static check is the pin. It has NO exceptions list on
@@ -401,7 +401,7 @@ main <- function() {
   if (length(res$hits)) {
     cat(sprintf("%d substring() site(s) without an acceptable explicit `last`",
                 length(res$hits)),
-        "(ADR 0005: pass .Machine$integer.max, or use .byte_substring()):\n")
+        "(ADR 0005: pass .Machine$integer.max):\n")
     for (h in res$hits) cat(sprintf("  %s\n", h))
     cat("VERDICT FAIL\n")
     stop("substring-last-gate: FAIL", call. = FALSE)
