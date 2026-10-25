@@ -52,10 +52,29 @@ test_that("the last-\"@\" cut stays under the match limit on a long row", {
   # `\A(?s:.)*@` ran to the end and gave the row back byte by byte to the
   # last "@": past ~1e7 bytes `regexpr()` warned and the row went uncut, so
   # the userinfo read as part of the host token.
-  host <- paste0("h", strrep("a", long_n), "。b")
-  expect_no_warning(out <- .icu_cut_through_last_at(paste0("u。i@", host)))
+  host <- paste0("h", strrep("a", long_n), "\u3002b")
+  expect_no_warning(out <- .icu_cut_through_last_at(paste0("u\u3002i@", host)))
   # `expect_true(identical())`: a failure must not print the row.
   expect_true(identical(out, host))
   expect_no_warning(out <- .icu_cut_through_last_at(strrep("@", long_n)))
   expect_identical(out, "")
+})
+
+test_that("the host classifier drops only the last \":port\"", {
+  tok <- function(x) .classify_input_host_vec(x)$host_token
+  expect_identical(
+    tok(c("http://h:80/", "http://h:1:2/", "http://h/", "http://h:/",
+          "u@h:8", "http://a:b@h:9/", "h:1\v2", NA)),
+    c("h", "h:1", "h", "h", "h", "h", "h", NA)
+  )
+})
+
+test_that("the port cut stays under the match limit on a long row", {
+  # `:[^:]*\z` gave back the run after each earlier ":" byte by byte: with
+  # ~1e7 bytes before the last ":" it warned and the port stayed on.
+  host <- paste0("h:", strrep("a", long_n))
+  expect_no_warning(
+    cls <- .classify_input_host_vec(paste0("http://", host, ":80/p"))
+  )
+  expect_true(identical(cls$host_token, host))
 })

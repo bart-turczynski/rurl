@@ -346,11 +346,14 @@
   host_ui <- .icu_cut_through_last_at(authority)
   bracketed <- startsWith(host_ui, "[")
   bracketed[is.na(bracketed)] <- FALSE
-  # `[^:]*` takes every line terminator, so `\z` reads as ICU's `$` did.
+  # `[^:]*` takes every line terminator, so `\z` reads as ICU's `$` did. The
+  # run is possessive: a shorter run never reaches `\z`, and giving it back
+  # byte by byte after each earlier ":" hit PCRE's match limit on a long row
+  # (RURL-atlidhyh).
   host_token <- ifelse(
     bracketed,
     .icu_cut_after_bracket(host_ui),
-    .bytes_replace(host_ui, ":[^:]*\\z", "")
+    .bytes_replace(host_ui, ":[^:]*+\\z", "")
   )
 
   host_lower <- .ascii_tolower(host_token)
