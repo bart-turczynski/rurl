@@ -20,25 +20,25 @@ test_that(".icu_cut_through_last_at() cuts through the last \"@\" of line 1", {
   expect_identical(cut("a@b\nc@d"), "b\nc@d")
   expect_identical(cut("a\n@b"), "a\n@b")
   expect_identical(cut("a@b\r\nc@d"), "b\r\nc@d")
-  expect_identical(cut("a@b c@d"), "b c@d")
+  expect_identical(cut("a@b\u2028c@d"), "b\u2028c@d")
   expect_identical(cut("a@b\u0085c@d"), "b\u0085c@d")
   expect_identical(cut("a@b\vc@d"), "b\vc@d")
   # U+3002 and other multibyte code points are data; positions are bytes.
-  expect_identical(cut("u。i@h。b"), "h。b")
-  expect_identical(cut("ü@ß@é"), "é")
+  expect_identical(cut("u\u3002i@h\u3002b"), "h\u3002b")
+  expect_identical(cut("\u00fc@\u00df@\u00e9"), "\u00e9")
   # A leading U+FEFF is data, cut with the userinfo or kept with the host.
-  expect_identical(cut("﻿u@h"), "h")
-  expect_identical(cut("﻿@h"), "h")
-  expect_identical(cut("﻿h"), "﻿h")
-  expect_identical(cut("u@﻿h"), "﻿h")
-  expect_identical(Encoding(cut("u@hé")), "UTF-8")
+  expect_identical(cut("\ufeffu@h"), "h")
+  expect_identical(cut("\ufeff@h"), "h")
+  expect_identical(cut("\ufeffh"), "\ufeffh")
+  expect_identical(cut("u@\ufeffh"), "\ufeffh")
+  expect_identical(Encoding(cut("u@h\u00e9")), "UTF-8")
 })
 
 test_that(".classify_input_host_vec() reads the host after the last \"@\"", {
   cls <- .classify_input_host_vec(c(
-    "http://u。i@ha。b/p", "http://a@b@1.2.3.4:80/", "//x@[::1]:8/"
+    "http://u\u3002i@ha\u3002b/p", "http://a@b@1.2.3.4:80/", "//x@[::1]:8/"
   ))
-  expect_identical(cls$host_token, c("ha。b", "1.2.3.4", "[::1]"))
+  expect_identical(cls$host_token, c("ha\u3002b", "1.2.3.4", "[::1]"))
   expect_identical(cls$has_userinfo, c(TRUE, TRUE, TRUE))
   expect_identical(cls$is_canonical_ip, c(FALSE, TRUE, TRUE))
 })
