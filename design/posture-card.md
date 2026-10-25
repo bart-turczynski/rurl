@@ -51,6 +51,10 @@ prints exactly what a profile bundles.
   `scheme_policy = "require"` and rejects scheme-less input that
   `url_standard = "whatwg"` alone accepts. `profile = "rfc-syntax"` turns
   normalization off; `url_standard = "rfc3986"` turns it on.
+- **`rfc3986` is US-ASCII.** A raw code point above U+007F in any component
+  is a parse error there (RFC 3986 §2, §2.5, §3.2.2; RUL-030); only its
+  percent-encoded UTF-8 spelling parses. Unicode input belongs to `whatwg`;
+  there is no IRI mode. `NULL` keeps the old tolerance, frozen.
 - **Ungoverned is not selector-independent.** `port_handling` no-ops outside
   WHATWG; `host_encoding` decodes only under `rfc3986`; `path_encoding`
   switches encoder under WHATWG. [ADR 0016](adr/0016-null-freeze-binds-selector-caused-drift.md)

@@ -946,3 +946,45 @@ recorded in those decisions, not relisted here.
 origin intent, nameless today — ships first among profiles even though the parser
 layers (L2–L4) gate the spec ones. This is a shipping-order call for the layer
 roadmap, not an acceptance question for this ADR.
+
+## Amendment (2026-10-25): `rfc3986` is strict US-ASCII; the Unicode tolerance is withdrawn
+
+*Added RURL-pntbujzc, 2026-10-25. Appended rather than edited in place so no
+line citation into this file moves. D1's "Directly-written non-ASCII scalar
+values are the one deliberate syntax extension" bullet, the **Non-ASCII input
+posture** paragraph and the Layer 5 `unicode-outside-rfc3986-uri` lines above
+stay as written as the record of what was decided then; this section
+supersedes them for `url_standard = "rfc3986"`.*
+
+**Owner ruling (2026-10-12), RUL-030.** Under `url_standard = "rfc3986"` — on
+both `scheme_acceptance` routes and under `profile = "rfc-syntax"` — a directly
+written code point above U+007F in any component is a parse `error`. The
+"Unicode-tolerant, RFC-shaped syntax" posture is withdrawn for `rfc3986`, and no
+RFC 3987 (IRI) mode replaces it: Unicode input belongs to `url_standard =
+"whatwg"`.
+
+- **Basis.** RFC 3986 section 2 (a URI is "a sequence of characters chosen from
+  a limited subset of the repertoire of US-ASCII characters"); section 2.5
+  (non-ASCII data is written as percent-encoded UTF-8 octets); section 3.2.2
+  (`reg-name = *( unreserved / pct-encoded / sub-delims )`, all ASCII). The
+  posture paragraph above already conceded that "a strict URI reading would
+  reject a directly-written non-ASCII *character*"; AGENTS.md (ADRs 0007, 0016)
+  makes the conformant reading the default, so the tolerance was a shipped
+  behavior the standard calls invalid.
+- **Where it binds.** `.rfc3986_generic_uri_ok()` (R/parse-state.R) rejects a
+  decodable non-ASCII row by default. The one call that passes
+  `ascii_only = FALSE` is the RFC 8089 `file:` overlay under the frozen `NULL`
+  selector, whose output may not move without an ADR 0016 witness; no such
+  witness exists, so `NULL` keeps the historical reading. `whatwg` never runs
+  this grammar and does not move. Because the uniform gate (RURL-qrfrvmkg) is
+  the single convergence point of every route, every surface that reads the
+  `rfc3986` parse follows without a per-surface guard.
+- **The diagnostic is repurposed, not retired.** `unicode-outside-rfc3986-uri`
+  is public vocabulary that callers match on, so its name stays. It now names
+  the *rejection*: it fires on the failed `rfc3986` row, under either
+  acceptance value, and is the one token reported for a failed row. The D5
+  "selected facts" framing is otherwise unchanged.
+- **D1 still holds for the ASCII grammar.** The component walk keeps admitting
+  non-ASCII bytes in its data classes so that it judges only the ASCII portion;
+  the rejection of the non-ASCII itself is a separate whole-string test. A row
+  that breaks both reports the token, since either fault alone is fatal.
