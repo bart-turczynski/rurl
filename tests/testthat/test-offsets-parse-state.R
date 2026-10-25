@@ -36,9 +36,9 @@ expect_row <- function(x, std, expected) {
 
 test_that("rfc3986 general: the authority and ?/# cuts after multibyte text", {
   expect_row(
-    "foo://é日:p@hé:81/pé?qé#fé", "rfc3986",
-    row("foo", "é日", "p", "hé", 81L, "/pé", "qé",
-        "fé", parse_status = "ok")
+    "foo://\u00e9\u65e5:p@h\u00e9:81/p\u00e9?q\u00e9#f\u00e9", "rfc3986",
+    row("foo", "\u00e9\u65e5", "p", "h\u00e9", 81L, "/p\u00e9", "q\u00e9",
+        "f\u00e9", parse_status = "ok")
   )
   expect_row(
     "foo://\U0001F600@[::1]:8/x", "rfc3986",
@@ -46,89 +46,89 @@ test_that("rfc3986 general: the authority and ?/# cuts after multibyte text", {
         parse_status = "ok")
   )
   expect_row(
-    "foo:é#é?x", "rfc3986",
-    row("foo", path = "é", fragment = "é?x", parse_status = "ok")
+    "foo:\u00e9#\u00e9?x", "rfc3986",
+    row("foo", path = "\u00e9", fragment = "\u00e9?x", parse_status = "ok")
   )
   expect_row(
-    "foo:日?é#", "rfc3986",
-    row("foo", path = "日", query = "é", parse_status = "ok")
+    "foo:\u65e5?\u00e9#", "rfc3986",
+    row("foo", path = "\u65e5", query = "\u00e9", parse_status = "ok")
   )
   # Two raw `@` fail the RFC 3986 authority (S3.2.1).
-  expect_row("foo://é@a@h/", "rfc3986", row(parse_status = "error"))
+  expect_row("foo://\u00e9@a@h/", "rfc3986", row(parse_status = "error"))
 })
 
 test_that("whatwg general: the last `@` splits userinfo after multibyte text", {
   expect_row(
-    "foo://é日:p@a@hé:81/pé?qé#fé", "whatwg",
-    row("foo", "%C3%A9%E6%97%A5", "p%40a", "h%C3%A9", 81L, "/pé",
+    "foo://\u00e9\u65e5:p@a@h\u00e9:81/p\u00e9?q\u00e9#f\u00e9", "whatwg",
+    row("foo", "%C3%A9%E6%97%A5", "p%40a", "h%C3%A9", 81L, "/p\u00e9",
         "q%C3%A9", "f%C3%A9", parse_status = "ok")
   )
   expect_row(
-    "foo://é@[::1]:8/x", "whatwg",
+    "foo://\u00e9@[::1]:8/x", "whatwg",
     row("foo", "%C3%A9", host = "[::1]", port = 8L, path = "/x",
         parse_status = "ok")
   )
   expect_row(
-    "foo:é#é?x", "whatwg",
+    "foo:\u00e9#\u00e9?x", "whatwg",
     row("foo", path = "%C3%A9", fragment = "%C3%A9?x", parse_status = "ok")
   )
 })
 
 test_that("rfc3986 file overlay: cuts after multibyte text", {
   expect_row(
-    "file://é@hé/pé?q#f", "rfc3986",
-    row("file", "é", host = "hé", path = "/pé", query = "q",
+    "file://\u00e9@h\u00e9/p\u00e9?q#f", "rfc3986",
+    row("file", "\u00e9", host = "h\u00e9", path = "/p\u00e9", query = "q",
         fragment = "f", parse_status = "ok")
   )
   expect_row(
-    "FILE:///é?é#é", "rfc3986",
-    row("file", path = "/é", query = "é", fragment = "é",
+    "FILE:///\u00e9?\u00e9#\u00e9", "rfc3986",
+    row("file", path = "/\u00e9", query = "\u00e9", fragment = "\u00e9",
         parse_status = "ok")
   )
 })
 
 test_that("a leading U+FEFF is data: no scheme, as for its U+200B twin", {
   for (std in c("rfc3986", "whatwg")) {
-    for (lead in c("﻿", "​", "\U0001F600")) {
+    for (lead in c("\ufeff", "\u200b", "\U0001F600")) {
       expect_row(paste0(lead, "foo://u@h/"), std, row(parse_status = "error"))
       expect_row(paste0(lead, "file:///p"), std, row(parse_status = "error"))
     }
   }
   # A mark inside the authority is userinfo data.
   expect_row(
-    "foo://﻿u@h/", "rfc3986",
-    row("foo", "﻿u", host = "h", path = "/", parse_status = "ok")
+    "foo://\ufeffu@h/", "rfc3986",
+    row("foo", "\ufeffu", host = "h", path = "/", parse_status = "ok")
   )
   expect_row(
-    "foo://﻿u@h/", "whatwg",
+    "foo://\ufeffu@h/", "whatwg",
     row("foo", "%EF%BB%BFu", host = "h", path = "/", parse_status = "ok")
   )
   expect_identical(
-    .rfc3986_generic_uri_ok(u8(c("﻿foo://h/", "​foo://h/",
-                                 "foo://h/﻿")))$ok,
+    .rfc3986_generic_uri_ok(u8(c("\ufefffoo://h/", "\u200bfoo://h/",
+                                 "foo://h/\ufeff")))$ok,
     c(FALSE, FALSE, TRUE)
   )
 })
 
 test_that("rfc3986: a slash run other than two after a web scheme", {
-  expect_row("http:///hé/p", "rfc3986",
-             row("http", path = "/hé/p", parse_status = "ok"))
-  expect_row("http:/hé/p", "rfc3986",
-             row("http", path = "/hé/p", parse_status = "ok"))
+  expect_row("http:///h\u00e9/p", "rfc3986",
+             row("http", path = "/h\u00e9/p", parse_status = "ok"))
+  expect_row("http:/h\u00e9/p", "rfc3986",
+             row("http", path = "/h\u00e9/p", parse_status = "ok"))
   expect_row("http:////h/p", "rfc3986",
              row("http", path = "//h/p", parse_status = "ok"))
-  expect_row("http://hé/p", "rfc3986",
-             row("http", host = "hé", path = "/p",
+  expect_row("http://h\u00e9/p", "rfc3986",
+             row("http", host = "h\u00e9", path = "/p",
                  parse_status = "warning-no-tld"))
-  expect_row("http:///hé/p", "whatwg",
-             row("http", host = "hé", path = "/p",
+  expect_row("http:///h\u00e9/p", "whatwg",
+             row("http", host = "h\u00e9", path = "/p",
                  parse_status = "warning-no-tld"))
 })
 
 test_that("the rfc3986 grammar walk on invalid UTF-8, NA and a latin1 row", {
   bad <- c("foo://a\x80@h/", "foo://h/\xff", "\x80foo://h/")
   Encoding(bad) <- "UTF-8"
-  g <- .rfc3986_generic_uri_ok(c(bad, NA, "foo://é@h:1/p?q#f"))
+  g <- .rfc3986_generic_uri_ok(c(bad, NA, "foo://\u00e9@h:1/p?q#f"))
   expect_identical(g$ok, c(FALSE, FALSE, FALSE, NA, TRUE))
   expect_identical(g$diagnostic,
                    c(NA, NA, NA, NA, "unicode-outside-rfc3986-uri"))
@@ -142,15 +142,15 @@ test_that("the rfc3986 grammar walk on invalid UTF-8, NA and a latin1 row", {
                        scheme_acceptance = "general")
   expect_identical(p$parse_status, c("ok", "ok", "error", "error"))
   expect_identical(p$user, c("a%EF%BF%BD", NA, NA, NA))
-  expect_identical(p$path, c("/", "/�", NA, NA))
+  expect_identical(p$path, c("/", "/\ufffd", NA, NA))
 })
 
 test_that("bracketed IPv6 literals: the `::` and embedded-IPv4 cuts", {
   v <- c("http://[::ffff:1.2.3.4]/", "http://[1::2:3.4.5.6]/",
          "http://[::1.2.3.4]/", "http://[1:2:3:4:5:6:7:8]/",
-         "http://[1::2]:8/", "http://[::1::2]/", "http://ué@[a::b]/",
-         "http://[::1]é/", "ftp://[::1:1.2.3.4]/", "http://[::é]/",
-         "http://[1:2::é:1.2.3.4]/")
+         "http://[1::2]:8/", "http://[::1::2]/", "http://u\u00e9@[a::b]/",
+         "http://[::1]\u00e9/", "ftp://[::1:1.2.3.4]/", "http://[::\u00e9]/",
+         "http://[1:2::\u00e9:1.2.3.4]/")
   legacy <- c("[::ffff:1.2.3.4]", "[1::2:3.4.5.6]", "[::1.2.3.4]",
               "[1:2:3:4:5:6:7:8]", "[1::2]", NA, "[a::b]", NA,
               "[::1:1.2.3.4]", NA, NA)
@@ -173,23 +173,41 @@ test_that("bracketed IPv6 literals: the `::` and embedded-IPv4 cuts", {
 })
 
 test_that("serialize_url: the authority slice after multibyte text", {
-  s <- u8(c("http://é日:p@a@hé:81/p", "http://u@h/",
-            "﻿http://u@h/", "​http://u@h/", "http://hé/",
+  s <- u8(c("http://\u00e9\u65e5:p@a@h\u00e9:81/p", "http://u@h/",
+            "\ufeffhttp://u@h/", "\u200bhttp://u@h/", "http://h\u00e9/",
             "http://[::1]:8/", NA, "http://\U0001F600@h/",
-            "http://é:日@HÉ/p?q#f"))
+            "http://\u00e9:\u65e5@H\u00c9/p?q#f"))
   w <- c("http://%C3%A9%E6%97%A5:p%40a@xn--h-bga:81/p", "http://u@h/", NA,
          NA, "http://xn--h-bga/", "http://[::1]:8/", NA,
          "http://%F0%9F%98%80@h/",
          "http://%C3%A9:%E6%97%A5@xn--h-bga/p?q#f")
   expect_identical(serialize_url(s, "whatwg", "source"), w)
   expect_identical(serialize_url(s, "whatwg", "normalized"), w)
-  r <- c(NA, "http://u@h/", NA, NA, "http://hé/", "http://[::1]:8/",
-         NA, "http://\U0001F600@h/", "http://é:日@HÉ/p?q#f")
+  r <- c(NA, "http://u@h/", NA, NA, "http://h\u00e9/", "http://[::1]:8/",
+         NA, "http://\U0001F600@h/", "http://\u00e9:\u65e5@H\u00c9/p?q#f")
   expect_identical(serialize_url(s, "rfc3986", "source"), r)
 })
 
 test_that("get_url_key: multibyte userinfo and a leading mark", {
-  k <- get_url_key(u8(c("http://é@hé/p", "﻿http://h/",
-                        "​http://h/", "http://hé/p")))
+  k <- get_url_key(u8(c("http://\u00e9@h\u00e9/p", "\ufeffhttp://h/",
+                        "\u200bhttp://h/", "http://h\u00e9/p")))
   expect_identical(is.na(as.character(k)), c(FALSE, TRUE, TRUE, FALSE))
+})
+
+test_that("the constant byte-mode patterns run without the per-call check", {
+  # Each runs through base R directly on a per-row path, so the check the
+  # wrappers make on every call is made here once (ADR 0019).
+  for (re in list(.SCHEME_PREFIX_RE, .FILE_SCHEME_PREFIX_RE,
+                  .WEB_IPV6_QUAD_TAIL_RE)) {
+    expect_true(.bytes_check_pattern(re, fixed = FALSE))
+  }
+  x <- u8(c("foo:x", "Foo+b.c-1:", "\ufefffoo:", "\u200bfoo:", "1a:", ":",
+            "f\u00e9:", NA, ""))
+  expect_identical(.scheme_prefix_len(x),
+                   c(3L, 9L, NA, NA, NA, NA, NA, NA, NA))
+  expect_identical(.scheme_prefix(x),
+                   c("foo", "Foo+b.c-1", NA, NA, NA, NA, NA, NA, NA))
+  expect_identical(.rfc3986_first_index(u8("\u00e9\ufeff#"), "#"), 6L)
+  expect_identical(.rfc3986_first_index(NA_character_, "#"), 0L)
+  expect_identical(.rfc3986_first_index("", "#"), 0L)
 })
