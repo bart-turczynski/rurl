@@ -152,14 +152,13 @@
   )[, 2L]
   # A source led by U+FEFF has no scheme: a scheme starts with an ASCII letter
   # (RFC 3986 section 3.1; WHATWG scheme start state), and neither standard
-  # strips the mark. The byte-mode capture finds none there. The mask is the
-  # ADR 0005 guard from when this was a stringi match that read past the mark
-  # (RURL-rynmvtwp), left for the ADR 0019 close-out to retire. It runs on
-  # `hier`, after the WHATWG strip, because that strip can leave the mark in
-  # front (`" \ufeffhttp://h/"`). The rest of this function needs no guard:
-  # the strip and the backslash rewrite are guarded helpers (ADR 0005), and
-  # every locate and cut below is base R on bytes.
-  authority[.starts_with_bom(hier)] <- NA_character_
+  # strips the mark. The byte-mode capture reads `hier`, after the WHATWG
+  # strip, which can leave the mark in front (`" \ufeffhttp://h/"`), and finds
+  # no scheme there, so it needs no mask (ADR 0005's guard, RURL-rynmvtwp,
+  # retired by ADR 0019, RURL-dddxutjf). The rest of this function needs no
+  # guard either: the control-character strip is a guarded helper (ADR 0005),
+  # the backslash rewrite runs in byte mode, and every locate and cut below
+  # is base R on bytes.
   #
   # The host slice is recovered here too, and for the same reason: the parse
   # percent-decodes and case-folds the host before this point, so Stage
