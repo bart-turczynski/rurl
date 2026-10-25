@@ -69,6 +69,8 @@ test_that("whatwg strips a padded base before resolving against it", {
 })
 
 test_that("whatwg removes an interior tab or newline from the base", {
+  # Control, not a pin: the final serialize_url() strips the merged string,
+  # so this row gave http://a/b/g before the base strip too.
   expect_identical(
     resolve_url("g", "http://a/b\n/c", url_standard = "whatwg",
                 output = "serialized"),
@@ -109,5 +111,56 @@ test_that("an NA or all-padding base stays no base under whatwg", {
   )
   expect_identical(
     resolve_url("g", " \t ", url_standard = "whatwg"), NA_character_
+  )
+})
+
+test_that("an absolute reference ignores a padded whatwg base", {
+  expect_identical(
+    resolve_url("https://z.com/q", " http://a/ ", url_standard = "whatwg",
+                output = "serialized"),
+    "https://z.com/q"
+  )
+})
+
+test_that("a padded undecodable base decodes, then strips, under whatwg", {
+  expect_identical(
+    resolve_url("g", " http://a/\xff/c ", url_standard = "whatwg",
+                output = "serialized"),
+    "http://a/%EF%BF%BD/g"
+  )
+})
+
+# RURL-vuczsypb: the URL Standard's no scheme state fails a reference that
+# does not start with "#" against a base with an opaque path. The base strip
+# made a padded opaque base reach the merge, so both spellings are pinned.
+test_that("an opaque-path base takes only a fragment under whatwg", {
+  for (b in c("mailto:x", " mailto:x", "javascript:alert(1)",
+              " javascript:alert(1)", " data:,x", "sc:")) {
+    for (ref in c("g", "?q", "/p", "../x", "")) {
+      expect_identical(
+        resolve_url(ref, b, url_standard = "whatwg", output = "serialized"),
+        NA_character_, info = paste(ref, b)
+      )
+      expect_identical(
+        resolve_url(ref, b, profile = "whatwg"), NA_character_,
+        info = paste(ref, b)
+      )
+    }
+  }
+  expect_identical(
+    resolve_url("#f", " mailto:x", url_standard = "whatwg",
+                output = "serialized"),
+    "mailto:x#f"
+  )
+  expect_identical(
+    resolve_url("#f", "mailto:x", url_standard = "whatwg",
+                output = "serialized"),
+    "mailto:x#f"
+  )
+  # A non-special base with a path that starts with "/" is no opaque path.
+  expect_identical(
+    resolve_url("g", "sc:/a/b", url_standard = "whatwg",
+                output = "serialized"),
+    "sc:/a/g"
   )
 })
