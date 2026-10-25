@@ -145,18 +145,20 @@
   # userinfo is what precedes the LAST "@" in it -- last, not first, because
   # "@" is legal (percent-encoded or not) inside a userinfo but terminates it
   # only once, at the host boundary.
-  authority <- stringi::stri_match_first_regex(
-    hier, "^[A-Za-z][A-Za-z0-9+.\\-]*://([^/]*)"
+  # Byte mode (ADR 0019): `[^/]` takes every byte but "/", as ICU's negated
+  # class took every code point but "/", line terminators included.
+  authority <- .bytes_capture(
+    hier, "\\A[A-Za-z][A-Za-z0-9+.\\-]*+://([^/]*+)"
   )[, 2L]
-  # stri_match_*_regex() reads past a U+FEFF that starts its input (see
-  # .starts_with_bom()), so it lexed an authority out of a source led by the
-  # mark, where no scheme can start: a scheme starts with an ASCII letter (RFC
-  # 3986 section 3.1; WHATWG scheme start state), and neither standard strips
-  # the mark. The mask runs on `hier`, after the WHATWG strip, because that
-  # strip can leave the mark in front (`" \ufeffhttp://h/"`) (RURL-rynmvtwp).
-  # The rest of this function needs no guard: the strip and the backslash
-  # rewrite are guarded helpers (ADR 0005), and every locate and cut below is
-  # base R on bytes.
+  # A source led by U+FEFF has no scheme: a scheme starts with an ASCII letter
+  # (RFC 3986 section 3.1; WHATWG scheme start state), and neither standard
+  # strips the mark. The byte-mode capture finds none there. The mask is the
+  # ADR 0005 guard from when this was a stringi match that read past the mark
+  # (RURL-rynmvtwp), left for the ADR 0019 close-out to retire. It runs on
+  # `hier`, after the WHATWG strip, because that strip can leave the mark in
+  # front (`" \ufeffhttp://h/"`). The rest of this function needs no guard:
+  # the strip and the backslash rewrite are guarded helpers (ADR 0005), and
+  # every locate and cut below is base R on bytes.
   authority[.starts_with_bom(hier)] <- NA_character_
   #
   # The host slice is recovered here too, and for the same reason: the parse
@@ -171,9 +173,10 @@
   # "." does not match a line terminator and "$" matches before a trailing one,
   # so an authority carrying a raw NEL/LS/PS -- all of which reach here, since
   # the RFC posture strips nothing -- would keep its userinfo and emit it twice.
-  # The position is a BYTE position (RURL-kmpnbvdl). `authority` comes from
-  # `stri_match_first_regex()`, which declares every capture UTF-8 whatever
-  # octets it holds, so a source carrying a stray `<80>` made `substring()`
+  # The position is a BYTE position (RURL-kmpnbvdl). `authority` is declared
+  # UTF-8 whatever octets it holds (it came from `stri_match_first_regex()`
+  # then, from `.bytes_capture()` now), so a source carrying a stray `<80>`
+  # made `substring()`
   # throw `invalid multibyte string` and took the whole `serialize_url()` call
   # -- the FSSS conformance oracle -- down with it. Bytes also keep the locate
   # and the cut in the same unit, which is what makes the slice agree with

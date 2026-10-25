@@ -490,16 +490,43 @@
   ":]+\\]\\z"
 )
 
-# First 1-based index of the literal `ch` in `s`, or 0L when absent. A literal
-# regex, not stri_locate_first_fixed(): the fixed locator reads past a U+FEFF
-# that starts `s` (see .starts_with_bom()), so in an authority led by one it
-# placed the port colon a character early and `substring()` kept it in the port
-# (RURL-biunpazk).
+# The scheme of each element: `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`
+# before a ":" at the very start (RFC 3986 S3.1; WHATWG scheme start and scheme
+# states), or NA. Byte mode (ADR 0019): a leading U+FEFF is data, so a row it
+# leads has no scheme, where stringi's match read past the mark and found one;
+# each caller already rejected such a row on its own. The pattern is ASCII, so
+# the scheme's byte length is the offset of its colon in the unit
+# `.bytes_cut()` cuts in. NA in, NA out.
+#
+# `.scheme_prefix_len()` runs a constant byte-mode `regexpr()` rather than
+# `.bytes_capture()`: the scalar grammar walk and the opaque decomposer call it
+# once per row, and the wrapper's interpreted pattern check cost more than the
+# match. A test holds the pattern to `.bytes_check_pattern()`, as
+# `.TOKEN_OPAQUE_RE` is held (RURL-oahhlnvf review).
+.SCHEME_PREFIX_RE <- "\\A[A-Za-z][A-Za-z0-9+.\\-]*+:"
+.scheme_prefix_len <- function(x) {
+  m <- regexpr(.SCHEME_PREFIX_RE, x, perl = TRUE, useBytes = TRUE)
+  len <- attr(m, "match.length") - 1L
+  len[is.na(m) | m < 1L] <- NA_integer_
+  len
+}
+.scheme_prefix <- function(x) {
+  .bytes_cut(x, 1L, .scheme_prefix_len(x))
+}
+# A `file:` scheme, ASCII case-insensitive, spelled as letter classes.
+.FILE_SCHEME_PREFIX_RE <- "\\A[Ff][Ii][Ll][Ee]:"
+
+# First 1-based BYTE index of the literal `ch` in `s`, or 0L when absent.
+# Byte mode (ADR 0019), so every caller cuts at it with `.bytes_cut()`, in the
+# same unit: a position in characters cut in bytes, or the reverse, mis-slices
+# multibyte text. A U+FEFF that starts `s` is a byte run like any other; the
+# stringi fixed locator read past it and placed the port colon a character
+# early (RURL-biunpazk). `s` is one string. A fixed byte-mode `regexpr()`, the
+# one `.bytes_locate(fixed = TRUE)` runs, called directly because the walk
+# calls it several times per row; `ch` is one ASCII byte at every call site.
 .rfc3986_first_index <- function(s, ch) {
-  pos <- stringi::stri_locate_first_regex(
-    s, ch, opts_regex = stringi::stri_opts_regex(literal = TRUE)
-  )[1L, 1L]
-  if (is.na(pos)) 0L else as.integer(pos)
+  pos <- regexpr(ch, s, fixed = TRUE, useBytes = TRUE)
+  if (is.na(pos) || pos < 1L) 0L else as.integer(pos)
 }
 
 # Whole-string match of the anchored port regex (`.RFC3986_PORT_RE`; an empty
@@ -542,26 +569,26 @@
     if (rb == 0L) {
       return(FALSE) # bracket opened but never closed
     }
-    if (!.rfc3986_valid_ip_literal(substring(hp, 2L, rb - 1L))) {
+    if (!.rfc3986_valid_ip_literal(.bytes_cut(hp, 2L, rb - 1L))) {
       return(FALSE)
     }
-    after <- substring(hp, rb + 1L, .Machine$integer.max)
+    after <- .bytes_cut(hp, rb + 1L, .Machine$integer.max)
     if (!nzchar(after)) {
       return(TRUE)
     }
     if (!startsWith(after, ":")) {
       return(FALSE) # junk after the "]" that is not a port
     }
-    return(.rfc3986_match(substring(after, 2L, .Machine$integer.max),
+    return(.rfc3986_match(.bytes_cut(after, 2L, .Machine$integer.max),
                           .RFC3986_PORT_RE))
   }
   cpos <- .rfc3986_first_index(hp, ":")
   if (cpos > 0L) {
-    if (!.rfc3986_match(substring(hp, cpos + 1L, .Machine$integer.max),
+    if (!.rfc3986_match(.bytes_cut(hp, cpos + 1L, .Machine$integer.max),
                         .RFC3986_PORT_RE)) {
       return(FALSE)
     }
-    return(.rfc3986_class_ok(substring(hp, 1L, cpos - 1L),
+    return(.rfc3986_class_ok(.bytes_cut(hp, 1L, cpos - 1L),
                              .RFC3986_HOST_BAD_RE))
   }
   .rfc3986_class_ok(hp, .RFC3986_HOST_BAD_RE)
@@ -581,12 +608,12 @@
   }
   if (n_at == 1L) {
     apos <- .rfc3986_first_index(authority, "@")
-    userinfo <- substring(authority, 1L, apos - 1L)
+    userinfo <- .bytes_cut(authority, 1L, apos - 1L)
     if (!.rfc3986_class_ok(userinfo, .RFC3986_USERINFO_BAD_RE)) {
       return(FALSE)
     }
     return(.rfc3986_valid_hostport(
-      substring(authority, apos + 1L, .Machine$integer.max)
+      .bytes_cut(authority, apos + 1L, .Machine$integer.max)
     ))
   }
   .rfc3986_valid_hostport(authority)
@@ -600,11 +627,11 @@
   if (!startsWith(hp, "//")) {
     return(.rfc3986_class_ok(hp, .RFC3986_PATH_BAD_RE))
   }
-  ap <- substring(hp, 3L, .Machine$integer.max)
+  ap <- .bytes_cut(hp, 3L, .Machine$integer.max)
   spos <- .rfc3986_first_index(ap, "/")
   if (spos > 0L) {
-    authority <- substring(ap, 1L, spos - 1L)
-    path <- substring(ap, spos, .Machine$integer.max)
+    authority <- .bytes_cut(ap, 1L, spos - 1L)
+    path <- .bytes_cut(ap, spos, .Machine$integer.max)
   } else {
     authority <- ap
     path <- ""
@@ -615,52 +642,59 @@
   .rfc3986_class_ok(path, .RFC3986_PATH_BAD_RE)
 }
 
-# Scalar core: TRUE / FALSE / NA for one input (see the wrapper's contract).
-.rfc3986_generic_uri_ok_one <- function(x) {
-  if (is.na(x)) {
-    return(NA)
-  }
+# The walk: TRUE / FALSE / NA per input (see the wrapper's contract). The
+# scheme, fragment and query are split off for the whole vector at once, and
+# only the hier-part is walked per row. Every locate and cut counts bytes
+# (ADR 0019). A row that has failed is not read further, as the scalar walk
+# returned at its first failure.
+.rfc3986_generic_uri_ok_walk <- function(x) {
+  out <- rep(NA, length(x))
   # scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":" (S3.1). A missing
   # scheme means the string is not a generic URI at all -> reject. Non-ASCII in
   # the scheme position fails this ASCII-only match (scheme is never tolerant).
-  m <- stringi::stri_match_first_regex(x, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
-  if (is.na(m[1L, 1L])) {
-    return(FALSE)
+  scheme_len <- .scheme_prefix_len(x)
+  out[!is.na(x) & is.na(scheme_len)] <- FALSE
+  go <- which(!is.na(scheme_len))
+  if (length(go) == 0L) {
+    return(out)
   }
-  rest <- substring(x, nchar(m[1L, 2L]) + 2L, .Machine$integer.max)
-  # fragment = everything after the FIRST "#" (S3.5).
-  hpos <- .rfc3986_first_index(rest, "#")
-  if (hpos > 0L) {
-    if (!.rfc3986_class_ok(substring(rest, hpos + 1L, .Machine$integer.max),
-                           .RFC3986_QF_BAD_RE)) {
-      return(FALSE)
+  rest <- .bytes_cut(x[go], scheme_len[go] + 2L, .Machine$integer.max)
+  ok <- rep(TRUE, length(go))
+  # fragment = everything after the FIRST "#" (S3.5), then query = everything
+  # after the FIRST "?" in what remains (S3.4).
+  for (delim in c("#", "?")) {
+    pos <- .bytes_locate(rest, delim, fixed = TRUE)[, "start"]
+    hit <- ok & !is.na(pos)
+    if (any(hit)) {
+      ok[hit] <- .rfc3986_class_ok(
+        .bytes_cut(rest[hit], pos[hit] + 1L, .Machine$integer.max),
+        .RFC3986_QF_BAD_RE
+      )
+      rest[hit] <- .bytes_cut(rest[hit], 1L, pos[hit] - 1L)
     }
-    rest <- substring(rest, 1L, hpos - 1L)
   }
-  # query = everything after the FIRST "?" in what remains (S3.4).
-  qpos <- .rfc3986_first_index(rest, "?")
-  if (qpos > 0L) {
-    if (!.rfc3986_class_ok(substring(rest, qpos + 1L, .Machine$integer.max),
-                           .RFC3986_QF_BAD_RE)) {
-      return(FALSE)
-    }
-    rest <- substring(rest, 1L, qpos - 1L)
+  if (any(ok)) {
+    ok[ok] <- vapply(rest[ok], .rfc3986_valid_hier_part, logical(1L),
+                     USE.NAMES = FALSE)
   }
-  .rfc3986_valid_hier_part(rest)
+  out[go] <- ok
+  out
 }
 
 # Pin the byte->code-point reading this grammar walks, so the VERDICT does not
 # depend on the session locale (RURL-kmpnbvdl).
 #
-# The walk mixes two indexing schemes: `stri_locate_first_regex()` counts
-# CODE POINTS (stringi decodes first), while
+# The walk used to mix two indexing schemes: `stri_locate_first_regex()`
+# counted CODE POINTS (stringi decodes first), while
 # `substring()` / `nchar()` count NATIVE characters. For a string marked
 # "unknown" -- which is what `rawToChar()` and most user input produce -- native
 # means the session encoding, so `<C3><A9>` is ONE character under a UTF-8
 # locale and TWO under `LC_ALL=C`. The two schemes then disagree and the
 # grammar slices the authority at the wrong offset: `ftp://é:é@example.com/p`
 # was admitted (`ok-ftp`) under a UTF-8 session and REJECTED (`error`) under
-# `LC_ALL=C`, on byte-identical input.
+# `LC_ALL=C`, on byte-identical input. The walk now locates and cuts in bytes
+# (ADR 0019), one unit throughout; the declaration still fixes what the
+# non-ASCII class and the decodable mask read.
 #
 # The non-ASCII range in the data class (`.RFC3986_NONASCII`) admits non-ASCII
 # SCALAR VALUES, and a scalar value only exists once an encoding is fixed. UTF-8
@@ -700,27 +734,33 @@
   # fail whichever component it lands in -- FALSE is the answer the walk would
   # have reached had it been able to run.
   #
-  # It cannot run: the walk slices with `substring()`/`nchar()`, which THROW
+  # The walk once sliced with `substring()`/`nchar()`, which THROW
   # `invalid multibyte string` on a declared-UTF-8 string holding invalid
   # octets. That throw aborted the entire vectorized call -- `get_host()` over
   # 1000 URLs lost all 1000 because one carried a stray `<80>` (RURL-kmpnbvdl).
-  # `safe_parse_urls()` is named for the promise this broke.
+  # `safe_parse_urls()` is named for the promise this broke. It now cuts in
+  # bytes and would not throw, but the verdict above stands either way.
   #
   # Scoped to elements DECLARED UTF-8 (including the ones just declared above).
   # A "latin1" element decodes by definition -- every octet is a latin1
   # character -- so it walks normally and is never caught here.
   undecodable <- !is.na(url) & Encoding(url) == "UTF-8" & !validUTF8(url)
   # A string led by U+FEFF has no scheme (S3.1: the first character is an
-  # ALPHA), but the walk's scheme match reads past the mark (see
-  # .starts_with_bom(), RURL-biunpazk).
+  # ALPHA). The byte-mode scheme capture already finds none; the mask is the
+  # ADR 0005 guard from when it was a stringi match that read past the mark
+  # (RURL-biunpazk), left for the ADR 0019 close-out to retire.
   bom_led <- !undecodable & .starts_with_bom(url)
   walkable <- !undecodable & !bom_led
   ok <- rep(NA, n)
   ok[undecodable | bom_led] <- FALSE
   if (any(walkable)) {
-    ok[walkable] <- vapply(
-      url[walkable], .rfc3986_generic_uri_ok_one, logical(1L),
-      USE.NAMES = FALSE
+    # The byte layer refuses a latin1 mark, so a latin1 element walks as its
+    # exact UTF-8 spelling (`.latin1_input_to_utf8()`). Every delimiter is
+    # ASCII and each latin1 character becomes one non-ASCII scalar value,
+    # which the class admits as it admitted the latin1 character, so the
+    # verdict is the one the latin1 text earns.
+    ok[walkable] <- .rfc3986_generic_uri_ok_walk(
+      .latin1_input_to_utf8(url[walkable])
     )
   }
   # A byte outside ASCII. In valid UTF-8 a non-ASCII code point is exactly a
@@ -809,25 +849,24 @@
 # host, which the caller then fails (the host parsers on the general route, the
 # RFC 3986 grammar gate on the `file:` overlay); a non-bracketed host's first
 # `:` is the port delimiter.
-# authority == "" yields host == "" (empty), userinfo/port NA. Regex locators,
-# not the fixed ones, which read past a U+FEFF that starts the authority or the
-# host (see .rfc3986_first_index(), RURL-biunpazk).
+# authority == "" yields host == "" (empty), userinfo/port NA. Every locate and
+# cut is in bytes (ADR 0019), where a U+FEFF that starts the authority or the
+# host is data; the stringi fixed locators read past it (see
+# .rfc3986_first_index(), RURL-biunpazk).
 .split_authority <- function(authority) {
   userinfo <- NA_character_
   hostport <- authority
-  at <- stringi::stri_locate_last_regex(
-    authority, "@", opts_regex = stringi::stri_opts_regex(literal = TRUE)
-  )[1L, 1L]
-  if (!is.na(at)) {
-    userinfo <- substring(authority, 1L, at - 1L)
-    hostport <- substring(authority, at + 1L, .Machine$integer.max)
+  at <- if (is.na(authority)) 0L else .last_byte_index(authority, "@")
+  if (at > 0L) {
+    userinfo <- .bytes_cut(authority, 1L, at - 1L)
+    hostport <- .bytes_cut(authority, at + 1L, .Machine$integer.max)
   }
   host <- hostport
   port <- NA_character_
   if (startsWith(hostport, "[")) {
     rb <- .rfc3986_first_index(hostport, "]")
     after <- if (rb > 0L) {
-      substring(hostport, rb + 1L, .Machine$integer.max)
+      .bytes_cut(hostport, rb + 1L, .Machine$integer.max)
     } else {
       ""
     }
@@ -839,16 +878,16 @@
     # IP-literal but `:port`. Cutting at the `]` dropped the tail and parsed
     # `[::1]` (RURL-rrqzdahp).
     if (rb > 0L && (!nzchar(after) || startsWith(after, ":"))) {
-      host <- substring(hostport, 1L, rb)
+      host <- .bytes_cut(hostport, 1L, rb)
       if (nzchar(after)) {
-        port <- substring(after, 2L, .Machine$integer.max)
+        port <- .bytes_cut(after, 2L, .Machine$integer.max)
       }
     }
   } else {
     cpos <- .rfc3986_first_index(hostport, ":")
     if (cpos > 0L) {
-      host <- substring(hostport, 1L, cpos - 1L)
-      port <- substring(hostport, cpos + 1L, .Machine$integer.max)
+      host <- .bytes_cut(hostport, 1L, cpos - 1L)
+      port <- .bytes_cut(hostport, cpos + 1L, .Machine$integer.max)
     }
   }
   list(userinfo = userinfo, host = host, port = port)
@@ -915,9 +954,41 @@
   list(ok = TRUE, host = host, is_v6 = FALSE, is_v4 = is_v4)
 }
 
+# Split each element at its FIRST `#`, then at the FIRST `?` in what remains
+# (RFC 3986 S3.4/S3.5; WHATWG path, query and fragment states), for the whole
+# vector at once. Query and fragment are captured empty-but-present so
+# `.presence_kind` can mark "empty", and NA where the delimiter is absent.
+# `delimited` says whether either delimiter ended the path. Bytes throughout
+# (ADR 0019). An NA element stays NA in `rest`.
+.split_query_fragment_vec <- function(rest) {
+  n <- length(rest)
+  query <- rep(NA_character_, n)
+  fragment <- rep(NA_character_, n)
+  hpos <- .bytes_locate(rest, "#", fixed = TRUE)[, "start"]
+  hhit <- !is.na(hpos)
+  if (any(hhit)) {
+    fragment[hhit] <- .bytes_cut(rest[hhit], hpos[hhit] + 1L,
+                                 .Machine$integer.max)
+    rest[hhit] <- .bytes_cut(rest[hhit], 1L, hpos[hhit] - 1L)
+  }
+  qpos <- .bytes_locate(rest, "?", fixed = TRUE)[, "start"]
+  qhit <- !is.na(qpos)
+  if (any(qhit)) {
+    query[qhit] <- .bytes_cut(rest[qhit], qpos[qhit] + 1L,
+                              .Machine$integer.max)
+    rest[qhit] <- .bytes_cut(rest[qhit], 1L, qpos[qhit] - 1L)
+  }
+  list(rest = rest, query = query, fragment = fragment,
+       delimited = hhit | qhit)
+}
+
 # Decompose ONE scheme-bearing non-special / general input (ADR 0012 D1/D2,
-# Appendix A.1). See `.parse_opaque_urls_vec` for the column contract.
-.parse_opaque_url_one <- function(url, url_standard) {
+# Appendix A.1). See `.parse_opaque_urls_vec` for the column contract. The
+# vectorized caller has already cut the scheme, the remainder after its colon,
+# and the query and fragment off the remainder (`rest` is what is left); an NA
+# `scheme` means the input had none.
+.parse_opaque_url_one <- function(scheme, remainder, rest, query, fragment,
+                                  delimited, url_standard) {
   na <- NA_character_
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
@@ -927,40 +998,11 @@
     fragment_kind = "absent", host_form = na,
     userinfo = na, userinfo_kind = na
   )
-  if (is.na(url)) {
-    return(blank)
-  }
-  # `[\s\S]`, not `.`: ICU counts U+000B (VT) and U+000C (FF) as line
-  # terminators, so `.` does not match them and any input carrying one failed to
-  # decompose at all (`sc://a<VT>b/` was a parse error rather than a host with a
-  # percent-encoded control). Tab/LF/CR are stripped upstream, but VT/FF are not
-  # -- WHATWG keeps them and the C0 encoder handles them (RURL-qxpgcwie).
-  m <- stringi::stri_match_first_regex(
-    url, "^([A-Za-z][A-Za-z0-9+.\\-]*):([\\s\\S]*)$"
-  )
-  if (is.na(m[1L, 1L])) {
+  if (is.na(scheme)) {
     return(blank) # not a scheme-bearing input -> cannot decompose
   }
-  scheme <- m[1L, 2L]
-  remainder <- m[1L, 3L]
   is_special <- .ascii_tolower(scheme) %in% .WHATWG_SPECIAL_SCHEMES
   is_whatwg <- identical(url_standard, "whatwg")
-
-  # Query and fragment split on the FIRST `#`, then the FIRST `?` in what
-  # remains -- captured empty-but-present so `.presence_kind` can mark "empty".
-  query <- na
-  fragment <- na
-  rest <- remainder
-  hpos <- .rfc3986_first_index(rest, "#")
-  if (hpos > 0L) {
-    fragment <- substring(rest, hpos + 1L, .Machine$integer.max)
-    rest <- substring(rest, 1L, hpos - 1L)
-  }
-  qpos <- .rfc3986_first_index(rest, "?")
-  if (qpos > 0L) {
-    query <- substring(rest, qpos + 1L, .Machine$integer.max)
-    rest <- substring(rest, 1L, qpos - 1L)
-  }
 
   path_kind <- na
   rfc_path_form <- na
@@ -986,14 +1028,14 @@
     # this is parse-time identity, not `path_encoding` presentation: the
     # `pathname` getter returns the encoded spelling. `delimiter_follows` is the
     # `?`/`#` that ended the path, which decides the trailing-space rule.
-    path <- .whatwg_opaque_path_encode(rest, hpos > 0L || qpos > 0L)
+    path <- .whatwg_opaque_path_encode(rest, delimited)
     authority <- na
   } else if (startsWith(rest, "//")) {
-    after <- substring(rest, 3L, .Machine$integer.max)
+    after <- .bytes_cut(rest, 3L, .Machine$integer.max)
     spos <- .rfc3986_first_index(after, "/")
     if (spos > 0L) {
-      authority <- substring(after, 1L, spos - 1L)
-      path <- substring(after, spos, .Machine$integer.max)
+      authority <- .bytes_cut(after, 1L, spos - 1L)
+      path <- .bytes_cut(after, spos, .Machine$integer.max)
     } else {
       authority <- after
       path <- ""
@@ -1120,7 +1162,21 @@
     }
     return(out)
   }
-  rows <- lapply(url, .parse_opaque_url_one, url_standard = url_standard)
+  # The remainder is every byte after the scheme's colon, cut by position, not
+  # matched: ICU's `.` stops at VT and FF, so a `.`-based capture failed to
+  # decompose any input carrying one (`sc://a<VT>b/` was a parse error rather
+  # than a host with a percent-encoded control; RURL-qxpgcwie). Tab/LF/CR are
+  # stripped upstream, but VT/FF are not -- WHATWG keeps them and the C0
+  # encoder handles them. Bytes throughout (ADR 0019); an NA length cuts to
+  # NA, so a row with no scheme carries NA down to the scalar parser.
+  scheme_len <- .scheme_prefix_len(url)
+  scheme <- .bytes_cut(url, 1L, scheme_len)
+  remainder <- .bytes_cut(url, scheme_len + 2L, .Machine$integer.max)
+  qf <- .split_query_fragment_vec(remainder)
+  rows <- lapply(seq_len(n), function(i) {
+    .parse_opaque_url_one(scheme[i], remainder[i], qf$rest[i], qf$query[i],
+                          qf$fragment[i], qf$delimited[i], url_standard)
+  })
   out <- list()
   for (f in lgl_fields) {
     out[[f]] <- vapply(rows, `[[`, logical(1L), f, USE.NAMES = FALSE)
@@ -1231,7 +1287,11 @@
   if (identical(url_standard, "rfc3986")) "fact" else "reject"
 }
 
-.parse_rfc_file_url_one <- function(url, localhost_policy = "empty",
+# The vectorized caller has already cut the scheme and split the query and
+# fragment off what follows its colon (`rest` is what is left); an NA `scheme`
+# means the input is not a `file:` URL.
+.parse_rfc_file_url_one <- function(scheme, rest, query, fragment,
+                                    localhost_policy = "empty",
                                     port_policy = "reject") {
   na <- NA_character_
   blank <- list(
@@ -1242,28 +1302,8 @@
     query_kind = "absent",
     fragment_kind = "absent", host_form = na
   )
-  # `[\s\S]`, not `.` -- the same ICU VT/FF line-terminator trap the opaque
-  # decomposer above documents.
-  m <- stringi::stri_match_first_regex(
-    url, "^([Ff][Ii][Ll][Ee]):([\\s\\S]*)$"
-  )
-  if (is.na(m[1L, 1L])) {
+  if (is.na(scheme)) {
     return(blank)
-  }
-  scheme <- m[1L, 2L]
-  rest <- m[1L, 3L]
-
-  query <- na
-  fragment <- na
-  hpos <- .rfc3986_first_index(rest, "#")
-  if (hpos > 0L) {
-    fragment <- substring(rest, hpos + 1L, .Machine$integer.max)
-    rest <- substring(rest, 1L, hpos - 1L)
-  }
-  qpos <- .rfc3986_first_index(rest, "?")
-  if (qpos > 0L) {
-    query <- substring(rest, qpos + 1L, .Machine$integer.max)
-    rest <- substring(rest, 1L, qpos - 1L)
   }
 
   host <- na
@@ -1272,11 +1312,11 @@
   is_v6 <- FALSE
   is_v4 <- FALSE
   if (startsWith(rest, "//")) {
-    after <- substring(rest, 3L, .Machine$integer.max)
+    after <- .bytes_cut(rest, 3L, .Machine$integer.max)
     spos <- .rfc3986_first_index(after, "/")
     if (spos > 0L) {
-      authority <- substring(after, 1L, spos - 1L)
-      path <- substring(after, spos, .Machine$integer.max)
+      authority <- .bytes_cut(after, 1L, spos - 1L)
+      path <- .bytes_cut(after, spos, .Machine$integer.max)
     } else {
       authority <- after
       path <- ""
@@ -1374,10 +1414,25 @@
     }
     return(out)
   }
-  rows <- lapply(
-    url, .parse_rfc_file_url_one, localhost_policy = localhost_policy,
-    port_policy = port_policy
-  )
+  # The rest is cut by position after the colon, not matched with `.` -- the
+  # same ICU VT/FF line-terminator trap the opaque decomposer documents.
+  # Bytes throughout (ADR 0019); `file:` is five bytes. A constant byte-mode
+  # `grepl()`, its pattern held to `.bytes_check_pattern()` by a test (see
+  # `.scheme_prefix_len()`).
+  is_file <- !is.na(url) &
+    grepl(.FILE_SCHEME_PREFIX_RE, url, perl = TRUE, useBytes = TRUE)
+  scheme <- rep(NA_character_, n)
+  rest <- rep(NA_character_, n)
+  if (any(is_file)) {
+    scheme[is_file] <- .bytes_cut(url[is_file], 1L, 4L)
+    rest[is_file] <- .bytes_cut(url[is_file], 6L, .Machine$integer.max)
+  }
+  qf <- .split_query_fragment_vec(rest)
+  rows <- lapply(seq_len(n), function(i) {
+    .parse_rfc_file_url_one(scheme[i], qf$rest[i], qf$query[i],
+                            qf$fragment[i], localhost_policy = localhost_policy,
+                            port_policy = port_policy)
+  })
   out <- list()
   for (f in lgl_fields) {
     out[[f]] <- vapply(rows, `[[`, logical(1L), f, USE.NAMES = FALSE)
@@ -1431,11 +1486,11 @@
   if (n == 0L) {
     return(rep(FALSE, n))
   }
-  m <- stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")
-  scheme_lc <- .ascii_tolower(m[, 2L])
-  # A row led by U+FEFF has no scheme, under every url_standard; the stringi
-  # match reads past the mark (see .starts_with_bom(), RURL-vhionecz,
-  # RURL-biunpazk).
+  scheme_lc <- .ascii_tolower(.scheme_prefix(url))
+  # A row led by U+FEFF has no scheme, under every url_standard. The byte-mode
+  # capture already finds none there; the mask is the ADR 0005 guard from when
+  # this was a stringi match that read past the mark (RURL-vhionecz,
+  # RURL-biunpazk), left for the ADR 0019 close-out to retire.
   has_scheme <- !is.na(scheme_lc) & !.starts_with_bom(url)
   # The host:port carve-out exists for the SCHEME-LESS `example.com:8080` form,
   # which the scheme regex above also matches (a dot is a legal scheme char, so
@@ -1645,10 +1700,11 @@
   if (!identical(url_standard, "rfc3986")) {
     return(rep(FALSE, length(url)))
   }
-  run <- stringi::stri_match_first_regex(
-    url, "^[A-Za-z][A-Za-z0-9+.\\-]*:(/*)"
-  )[, 2L]
-  n_slash <- stringi::stri_length(run)
+  # Byte mode (ADR 0019). The run is ASCII, so its byte count is its length;
+  # `nchar(NA, "bytes")` is 2, so a row with no scheme is set back to NA.
+  run <- .bytes_capture(url, "\\A[A-Za-z][A-Za-z0-9+.\\-]*+:(/*+)")[, 2L]
+  n_slash <- nchar(run, type = "bytes")
+  n_slash[is.na(run)] <- NA_integer_
   out <- has_scheme & !host_port & scheme_lc %in% web_route_scheme &
     !is.na(n_slash) & n_slash != 2L
   out[is.na(out)] <- FALSE
@@ -1689,9 +1745,7 @@
     return(out)
   }
   is_whatwg <- .is_whatwg(url_standard)
-  scheme_lc <- .ascii_tolower(
-    stringi::stri_match_first_regex(url, "^([A-Za-z][A-Za-z0-9+.\\-]*):")[, 2L]
-  )
+  scheme_lc <- .ascii_tolower(.scheme_prefix(url))
 
   # D1 RFC generic-grammar gate: a general-routed row under rfc3986 must pass or
   # it is a parse error (the tolerated non-ASCII extension does NOT cause
@@ -1709,7 +1763,8 @@
   # existing WHATWG file state machine.)
   is_file <- gp & !is_whatwg & !is.na(scheme_lc) & scheme_lc == "file"
   # A row whose BYTES are not valid UTF-8 is withheld from the opaque parser.
-  # `.parse_opaque_urls_vec()` reaches `substring()`, which THROWS "invalid
+  # `.parse_opaque_urls_vec()` reaches `substring()` (in the host parsers; its
+  # own cuts are in bytes since RURL-yqmoztoj), which THROWS "invalid
   # multibyte string" on such input, so the row escaped as an error CONDITION
   # rather than the `error` verdict it is owed -- measured as 8 THROW rows in
   # the octet sweep's conjunction block (`http://<80>@/p` and friends). They
@@ -1747,7 +1802,8 @@
     out$ok[reg] <- p$ok
   }
   # The RFC 8089 overlay throws on such a row too (`substring()` in
-  # `.parse_rfc_file_url_one()`), so it is withheld the same way: the row keeps
+  # `.rfc_host_one()`; its own cuts are in bytes since RURL-yqmoztoj), so it is
+  # withheld the same way: the row keeps
   # `ok = FALSE` and the rest of the batch parses (RURL-otrpfhmq).
   is_file <- is_file & decodable
   if (any(is_file)) {
