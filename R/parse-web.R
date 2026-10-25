@@ -211,19 +211,28 @@
 # mark can diverge by locale here.
 .web_uppercase_pct <- function(b) {
   n <- length(b)
-  i <- 1L
-  while (i <= n) {
-    if (b[i] == 0x25L && i + 2L <= n) {
-      for (j in c(i + 1L, i + 2L)) {
-        if (b[j] >= 0x61L && b[j] <= 0x7AL) {
-          b[j] <- b[j] - 32L
-        }
+  # Each "%" with two bytes after it, in order. A "%" inside the pair an
+  # earlier claiming "%" consumed claims nothing, so when no "%" sits within
+  # two bytes of the one before it every "%" claims its pair; otherwise the
+  # "%" positions, not the bytes, are walked in order (RURL-iyjdljln).
+  pct <- which(b == 0x25L)
+  pct <- pct[pct + 2L <= n]
+  if (length(pct) == 0L) {
+    return(b)
+  }
+  claims <- rep(TRUE, length(pct))
+  if (any(diff(pct) < 3L)) {
+    free <- 1L
+    for (k in seq_along(pct)) {
+      claims[k] <- pct[k] >= free
+      if (claims[k]) {
+        free <- pct[k] + 3L
       }
-      i <- i + 3L
-    } else {
-      i <- i + 1L
     }
   }
+  pair <- c(pct[claims] + 1L, pct[claims] + 2L)
+  lower <- pair[b[pair] >= 0x61L & b[pair] <= 0x7AL]
+  b[lower] <- b[lower] - 32L
   b
 }
 
@@ -237,9 +246,7 @@
   if (!any(b == 0x40L)) {
     return(b)
   }
-  unlist(lapply(b, function(x) {
-    if (x == 0x40L) c(0x25L, 0x34L, 0x30L) else x
-  }), use.names = FALSE)
+  .web_escape_selected(b, b == 0x40L, .web_hex_upper)
 }
 
 # Percent-escape the selected byte positions, LOWERCASE. The case is
@@ -249,12 +256,30 @@
 # `/foo%2<C3><82>z` really does come back `/foo%2%c3%82z`. Emitting uppercase
 # here would hide that interaction rather than reproduce it.
 .web_escape_bytes <- function(b, sel) {
-  out <- vector("list", length(b))
-  out[!sel] <- lapply(b[!sel], identity)
-  out[sel] <- lapply(b[sel], function(x) {
-    c(0x25L, .web_bytes(sprintf("%02x", x)))
-  })
-  unlist(out, use.names = FALSE)
+  .web_escape_selected(b, sel, .web_hex_lower)
+}
+
+# Codes of the hex digits, lowercase and uppercase.
+.web_hex_lower <- utf8ToInt("0123456789abcdef")
+.web_hex_upper <- utf8ToInt("0123456789ABCDEF")
+
+# Replace each selected byte code of `b` by "%" and its two hex digits from
+# `digits`, in one pass over a byte table rather than one call per byte
+# (RURL-iyjdljln): each byte's end in the output is a running sum of its
+# width, 3 for a selected byte and 1 for any other.
+.web_escape_selected <- function(b, sel, digits) {
+  if (!any(sel)) {
+    return(b)
+  }
+  ends <- cumsum(1L + 2L * sel)
+  out <- integer(ends[length(ends)])
+  out[ends[!sel]] <- b[!sel]
+  e <- ends[sel]
+  v <- b[sel]
+  out[e - 2L] <- 0x25L
+  out[e - 1L] <- digits[v %/% 16L + 1L]
+  out[e] <- digits[v %% 16L + 1L]
+  out
 }
 
 # The forbidden-byte half of `.web_normalize_component()`, on its own, for the
@@ -285,9 +310,14 @@
   if (!any(bad)) {
     return(s)
   }
-  out <- as.list(vapply(b, function(x) rawToChar(as.raw(x)), character(1)))
-  out[bad] <- lapply(b[bad], function(x) sprintf("%%%02X", x))
-  paste(unlist(out, use.names = FALSE), collapse = "")
+  .web_escaped_string(b, bad)
+}
+
+# The byte codes `b` with the selected bytes written as uppercase triplets, as
+# a string with no encoding mark, as the paste() of per-byte strings it
+# replaces returned it.
+.web_escaped_string <- function(b, sel) {
+  .web_chr(.web_escape_selected(b, sel, .web_hex_upper))
 }
 
 # The >= 0x80 half of `.web_normalize_component()` on its own: every byte
@@ -315,9 +345,7 @@
   if (!any(high)) {
     return(s)
   }
-  out <- as.list(vapply(b, function(x) rawToChar(as.raw(x)), character(1)))
-  out[high] <- lapply(b[high], function(x) sprintf("%%%02X", x))
-  paste(unlist(out, use.names = FALSE), collapse = "")
+  .web_escaped_string(b, high)
 }
 
 # Percent-encode, as an UPPERCASE "%XX", every octet of `s` that is not part
@@ -395,12 +423,7 @@
     # that introduces a freshly encoded octet and leave that octet's hex
     # lowercase. `/foo%2<C3><82>z` really does come back `/foo%2%c3%82z` from
     # libcurl. Encoding uppercase here would hide that interaction.
-    out <- vector("list", length(b))
-    out[!high] <- lapply(b[!high], identity)
-    out[high] <- lapply(b[high], function(x) {
-      c(0x25L, .web_bytes(sprintf("%02x", x)))
-    })
-    b <- unlist(out, use.names = FALSE)
+    b <- .web_escape_bytes(b, high)
   }
   .web_chr(.web_uppercase_pct(b))
 }
