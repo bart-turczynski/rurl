@@ -432,22 +432,20 @@
 # ALREADY all forward slashes (a plain "http://", or the spec-accurate
 # multi-slash collapse of e.g. "http:///host") changes no backslash, so it does
 # NOT set this flag even though the string may still be rewritten.
-.rewrite_whatwg_backslashes_vec <- function(url, url_standard,
-                                            bom_led = .starts_with_bom(url)) {
+.rewrite_whatwg_backslashes_vec <- function(url, url_standard) {
   n <- length(url)
   no_op <- list(url = url, backslash_rewritten = rep(FALSE, n))
   if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
 
+  # Byte mode (ADR 0019): a row led by U+FEFF has no scheme, so it is never
+  # eligible. The stringi match read past the mark and needed a mask
+  # (RURL-iiehsbfg); the close-out removed it (RURL-dddxutjf).
   scheme_match <- .bytes_capture(url, "^([a-zA-Z][a-zA-Z0-9+.-]*):")
   scheme_lower <- .ascii_tolower(scheme_match[, 2L])
-  # A row led by U+FEFF has no scheme. The stringi match read past the mark;
-  # the byte-mode capture does not, and the mask stays as the ADR 0005 guard
-  # until the close-out.
   eligible <- !is.na(scheme_lower) &
-    scheme_lower %in% .WHATWG_SPECIAL_SCHEMES &
-    !bom_led
+    scheme_lower %in% .WHATWG_SPECIAL_SCHEMES
   if (!any(eligible)) {
     return(no_op)
   }
@@ -484,12 +482,11 @@
 
   # Beyond the leading run, a literal backslash is a plain separator: rewrite
   # it 1:1 to '/' (path segments, and the authority/path boundary when the
-  # authority had no run of its own, e.g. "http://host\path"). The marker is
-  # spliced on first so the rewrite never reads a span that starts with U+FEFF.
-  # (The byte-mode replace reads the mark as data anyway; the splice is the
-  # ADR 0005 guard, kept until the close-out retires it.)
-  rewritten_remainder <- .bytes_replace(
-    paste0("//", remainder), "\\", "/", all = TRUE, fixed = TRUE
+  # authority had no run of its own, e.g. "http://host\path"), behind the
+  # collapsed "//" marker. The byte-mode replace reads a U+FEFF that starts
+  # `remainder` as data.
+  rewritten_remainder <- paste0(
+    "//", .bytes_replace(remainder, "\\", "/", all = TRUE, fixed = TRUE)
   )
 
   no_run_authority <- eligible & !has_run &
@@ -538,8 +535,10 @@
 # stri_detect_regex(), stri_replace_*_regex() and stri_locate_*_regex() count
 # it. A start-anchored stringi match can therefore succeed on a row led by
 # U+FEFF where none of its patterns could, since U+FEFF is not an ASCII alpha,
-# a C0 control, a space or a slash; callers mask such rows with this, under
-# every url_standard (RURL-vhionecz, RURL-biunpazk). NA reads FALSE.
+# a C0 control, a space or a slash; callers masked such rows with this, under
+# every url_standard (RURL-vhionecz, RURL-biunpazk). Byte mode reads the mark
+# as data (ADR 0019), so only the guards ADR 0005's table still lists call
+# this. NA reads FALSE.
 .starts_with_bom <- function(x) {
   grepl("^\ufeff", x, useBytes = TRUE)
 }
@@ -686,20 +685,19 @@
 # model maps it once the host is decoded (.apply_host_standard_model_vec()). No
 # diagnostic is emitted -- this is ordinary WHATWG host normalization (like
 # host-lowercasing), not a lossy repair of malformed input.
-.map_whatwg_domain_separators_vec <- function(url, url_standard,
-                                              bom_led = .starts_with_bom(url)) {
+.map_whatwg_domain_separators_vec <- function(url, url_standard) {
   no_op <- list(url = url)
   if (!.is_whatwg(url_standard)) {
     return(no_op)
   }
+  # A row led by U+FEFF has neither a scheme nor "//": the byte-mode capture
+  # reads the mark as data and finds neither (ADR 0019), so the mask the
+  # stringi match needed is gone (RURL-dddxutjf).
   m <- .icu_capture_to_end(
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)?(//)([^/?#]*)"
   )
   authority <- m[, 4L]
-  # A row led by U+FEFF has neither a scheme nor "//". The byte-mode capture
-  # reads the mark as data and finds neither; the mask is the ADR 0005 guard
-  # from the stringi match, kept until the close-out retires it.
-  eligible <- !bom_led & !is.na(authority) &
+  eligible <- !is.na(authority) &
     .bytes_detect(authority, .UTS46_FULL_STOP_VARIANTS)
   eligible[is.na(eligible)] <- FALSE
   if (!any(eligible)) {
@@ -780,13 +778,12 @@
     url, "^([a-zA-Z][a-zA-Z0-9+.-]*:)(//)([^/?#]*)"
   )
   authority <- m[, 4L]
-  # A row led by U+FEFF has no scheme. The stringi match read past the mark,
-  # and rebuilding the row from it would drop the mark, so it is masked
-  # (RURL-opwjlnla); the byte-mode capture finds no scheme there, and the mask
-  # stays as the ADR 0005 guard until the close-out. The pipeline never hands
-  # this helper such a row today:
-  # Phase 1 prefixes "http://" to every row led by the mark (`add_http`).
-  has_at <- !is.na(authority) & !.starts_with_bom(url) &
+  # A row led by U+FEFF has no scheme, so the byte-mode capture finds none
+  # and the row is left as written (ADR 0019); the mask the stringi match
+  # needed (RURL-opwjlnla) is gone (RURL-dddxutjf). The pipeline never hands
+  # this helper such a row anyway: Phase 1 prefixes "http://" to every row
+  # led by the mark (`add_http`).
+  has_at <- !is.na(authority) &
     .bytes_detect(authority, "@", fixed = TRUE)
   has_at[is.na(has_at)] <- FALSE
 
@@ -830,21 +827,21 @@
 # `rawToChar(as.raw(0L))` is ""), so the literal table covers 0x01-0x20 and
 # 0x7F; the regex above still names the full 0x00-0x20 range. "%" is absent from
 # the table, so the substitution is idempotent over already-encoded input.
-# The *_fixed() family reads past a U+FEFF that starts its input (see
-# .starts_with_bom()), so a userinfo led by the mark lost it (RURL-rfgbozdr):
-# an "@", absent from the table, is spliced on first and cut off as a byte.
+# The replaces run in byte mode (ADR 0019), so a userinfo led by U+FEFF keeps
+# the mark. The stringi fixed replace read past it and lost it
+# (RURL-rfgbozdr), so an "@" was spliced on first and cut off as a byte; the
+# close-out removed the splice (RURL-dddxutjf).
 .percent_encode_userinfo_charset <- function(userinfo) {
   codes <- c(seq.int(1L, 32L), 127L)
   chars <- vapply(codes, function(i) rawToChar(as.raw(i)), character(1))
   # One literal at a time, in table order, as `vectorize_all = FALSE` did. No
   # replacement holds a byte of the table, so the order cannot matter.
-  encoded <- paste0("@", userinfo)
+  out <- userinfo
   for (k in seq_along(codes)) {
-    encoded <- .bytes_replace(
-      encoded, chars[k], sprintf("%%%02X", codes[k]), all = TRUE, fixed = TRUE
+    out <- .bytes_replace(
+      out, chars[k], sprintf("%%%02X", codes[k]), all = TRUE, fixed = TRUE
     )
   }
-  out <- .byte_substring_vec(encoded, 2L)
   out[is.na(userinfo)] <- NA_character_
   out
 }
@@ -902,8 +899,7 @@
 # example ones starting with `@` or `:`), single-slash (`scheme:/path`) forms,
 # and file-state variants are left outside this change. Literal backslash
 # remains inert/rejected under RFC 3986.
-.rfc3986_path_rootless_vec <- function(url, url_standard,
-                                       bom_led = .starts_with_bom(url)) {
+.rfc3986_path_rootless_vec <- function(url, url_standard) {
   n <- length(url)
   no_op <- list(
     is_path_rootless = rep(FALSE, n),
@@ -930,10 +926,12 @@
     .bytes_detect(first_segment, paste0("^", seg_class, "++", .ICU_END)) &
     .bytes_detect(first_segment, paste0("(?<=", seg_class, ")\\.", seg_class))
   host_shaped_first_segment[is.na(host_shaped_first_segment)] <- FALSE
-  # A row led by U+FEFF has no scheme (RURL-biunpazk). A host-shaped first
-  # segment starts with a class byte, so `rest` cannot start with "/", "\" or
-  # the mark on an eligible row; the two prefix tests are base R.
-  eligible <- !bom_led & !is.na(rest) &
+  # A row led by U+FEFF has no scheme (RURL-biunpazk): the byte-mode capture
+  # finds none, so `rest` is NA there and the mask the stringi match needed is
+  # gone (RURL-dddxutjf). A host-shaped first segment starts with a class
+  # byte, so `rest` cannot start with "/", "\" or the mark on an eligible
+  # row; the two prefix tests are base R.
+  eligible <- !is.na(rest) &
     scheme_lower %in% .SPECIAL_AUTHORITY_SCHEMES &
     host_shaped_first_segment &
     rest != "" &
@@ -1194,22 +1192,11 @@
   split <- lapply(rest[ok], .whatwg_file_split_rest)
   parts <- do.call(rbind, split)
   file_path_raw <- parts[, "path"]
+  # Byte mode (ADR 0019): a host-less path led by U+FEFF keeps the mark. The
+  # stringi fixed replace read past it and lost it (RURL-rjpljsui), so those
+  # rows took a spliced "/", which the close-out removed (RURL-dddxutjf).
   file_path <- .bytes_replace(file_path_raw, "\\", "/", all = TRUE,
                               fixed = TRUE)
-  # The *_fixed() family reads past a U+FEFF that starts its input (see
-  # .starts_with_bom()), so a host-less path led by the mark lost it
-  # (RURL-rjpljsui): for those rows only, a "/" is spliced on first and cut
-  # off as a byte.
-  bom_path <- .starts_with_bom(file_path_raw)
-  if (any(bom_path)) {
-    file_path[bom_path] <- .byte_substring_vec(
-      .bytes_replace(
-        paste0("/", file_path_raw[bom_path]), "\\", "/", all = TRUE,
-        fixed = TRUE
-      ),
-      2L
-    )
-  }
 
   # Empty, not NA: WHATWG's file state gives every `file:` URL a non-null host,
   # and the host-less forms (`file:`, `file:/p`, `file:C|/m/`) carry the empty
@@ -1448,11 +1435,10 @@
   srh <- opts$scheme_relative_handling
   if (identical(opts$url_standard, "rfc3986") &&
         isTRUE(srh %in% c("keep", "http", "https"))) {
-    # The same mask Phase 1 draws: a U+FEFF-led row is never scheme-relative.
-    # Base `startsWith()` reads the mark as data, so the mask is now the ADR
-    # 0005 guard only, kept until the close-out retires it.
+    # The same test Phase 1 draws: a U+FEFF-led row is never scheme-relative.
+    # Base `startsWith()` reads the mark as data, so it needs no mask.
     rel <- startsWith(url, "//")
-    rel <- !is.na(rel) & rel & !.starts_with_bom(url)
+    rel <- !is.na(rel) & rel
     # The prefix Phase 1 writes: "keep" parses behind `http:`.
     prefix <- if (identical(srh, "https")) "https:" else "http:"
     url[rel] <- paste0(prefix, url[rel])
@@ -1503,17 +1489,16 @@
   # never a scheme or scheme-relative row, and the rewrites below leave it
   # alone: WHATWG's scheme start state and RFC 3986 S3.1 both need an ASCII
   # alpha first, and NULL reads such a row like one led by any other code point
-  # that cannot start a scheme. The stringi matches here read past the mark
-  # (see .starts_with_bom()), so this mask overrides them (RURL-vhionecz,
-  # RURL-biunpazk). No rewrite below changes how a row starts, so the mask
-  # holds throughout.
-  bom_led <- .starts_with_bom(url)
+  # that cannot start a scheme. Every scheme and "//" test below runs in byte
+  # mode or base R, which reads the mark as data (ADR 0019), so the
+  # `.starts_with_bom()` mask the stringi matches needed (RURL-vhionecz,
+  # RURL-biunpazk) is gone (RURL-dddxutjf).
 
   # WHATWG literal backslash recognition (RURL-ledntyab) runs next: for
   # eligible rows it rewrites "\" to "/" ahead of every scheme/host regex
   # below, so the rest of this function sees an already-normalized string.
   # A no-op (byte-for-byte `url` unchanged) unless url_standard == "whatwg".
-  bs <- .rewrite_whatwg_backslashes_vec(url, url_standard, bom_led)
+  bs <- .rewrite_whatwg_backslashes_vec(url, url_standard)
   url <- bs$url
 
   # WHATWG UTS-46 alternative full-stop mapping (RURL-odsmwsxu) runs next: for
@@ -1522,7 +1507,7 @@
   # through the existing IPv4/label handling (and IDN names normalize their
   # separators) instead of reaching the parser as an un-splittable literal. A
   # no-op unless url_standard == "whatwg".
-  sep <- .map_whatwg_domain_separators_vec(url, url_standard, bom_led)
+  sep <- .map_whatwg_domain_separators_vec(url, url_standard)
   url <- sep$url
 
   url_lower <- .ascii_tolower(url)
@@ -1540,12 +1525,9 @@
   original_has_allowed_scheme <- original_has_allowed_scheme | is_whatwg_file
 
   # Only whether the scheme capture matched was read, so this is a detect.
-  # The mask is the ADR 0005 guard from the stringi match, which read past a
-  # leading U+FEFF; the byte-mode detect does not.
-  looks_like_protocol <- .bytes_detect(url, "^[a-zA-Z][a-zA-Z0-9+.-]*:") &
-    !bom_led
+  looks_like_protocol <- .bytes_detect(url, "^[a-zA-Z][a-zA-Z0-9+.-]*:")
   looks_like_protocol[is.na(looks_like_protocol)] <- FALSE
-  rfc_rootless <- .rfc3986_path_rootless_vec(url, url_standard, bom_led)
+  rfc_rootless <- .rfc3986_path_rootless_vec(url, url_standard)
   original_has_allowed_scheme <-
     original_has_allowed_scheme | rfc_rootless$is_path_rootless
 
@@ -1553,7 +1535,7 @@
   has_scheme_slashes[is.na(has_scheme_slashes)] <- FALSE
 
   is_scheme_relative <- startsWith(url, "//")
-  is_scheme_relative[is.na(is_scheme_relative) | bom_led] <- FALSE
+  is_scheme_relative[is.na(is_scheme_relative)] <- FALSE
 
   rejected <- rep(FALSE, n)
   if (scheme_relative_handling == "error") {
