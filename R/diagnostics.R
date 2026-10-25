@@ -153,7 +153,10 @@
   # parser's own `host_kind`: "absent" exactly where no authority was parsed,
   # i.e. a WHATWG opaque path (URL Standard, basic URL parser, "opaque path
   # state") or an RFC 3986 path-rootless / path-absolute hier-part (RFC 3986
-  # section 3). A web-route row always parsed one. Stage A cannot say this on
+  # section 3). A web-route row counts as having one here, but a WHATWG
+  # special-scheme row such as `file:u@1.2.3.999` can still parse no host, so
+  # the host-shape facts below also require a parsed host. Stage A cannot say
+  # this on
   # its own: ADR 0012 D7 installs a mailto recipient's domain and local part
   # as `host` / `user` on such rows, extraction metadata for the accessors
   # that is not an authority. The same pure re-parse feeds the Layer 5 block.
@@ -200,13 +203,15 @@
   # ipv4-* diagnostics keyed to the ORIGINAL host SHAPE, in BOTH modes ("facts
   # not policy"): a numeric-looking reg-name under RFC carries the same tokens
   # it would under WHATWG. Suppressed on null rows (a WHATWG-fatal numeric host
-  # is an error, so it reports no diagnostics) and on rows with no authority,
-  # where `input_host` is Phase 1's guess at a host inside a path.
+  # is an error, so it reports no diagnostics) and on rows with no authority
+  # or no parsed host, where `input_host` is Phase 1's guess at a host inside
+  # a path (`file:u@1.2.3.999` under whatwg: the host is NA, the path
+  # `/u@1.2.3.999`).
   input_host <- a$input_host
   if (is.null(input_host)) {
     input_host <- rep(NA_character_, n)
   }
-  for (i in which(has_authority)) {
+  for (i in which(has_authority & !host_missing)) {
     tokens <- .ipv4_host_diagnostics(input_host[i])
     for (tok in tokens) {
       diag <- .diag_add(diag, seq_len(n) == i, tok)
@@ -384,10 +389,10 @@
 
   # WHATWG-GENERIC validation-error facts (invalid-credentials / invalid-URL-
   # unit) gate on the INTERPRETING standard, not the acceptance axis (ADR 0012
-  # D5, RURL-sgjzbqzk). They are route-independent, string-level facts -- any
-  # credentials present; a malformed `%`-escape or a non-URL code point -- true
-  # of the input regardless of which parser ran, so they fire whenever
-  # url_standard is WHATWG, INCLUDING the default `web` acceptance path. The
+  # D5, RURL-sgjzbqzk). They are route-independent -- credentials in a parsed
+  # authority; a malformed `%`-escape or a non-URL code point -- so they fire
+  # whenever url_standard is WHATWG, INCLUDING the default `web` acceptance
+  # path, under either parser. The
   # DEFAULT combo (web + url_standard = NULL) is untouched because is_whatwg is
   # FALSE there, so the D4 byte-identity / CRAN contract holds. Credentials
   # are an authority's userinfo, so they count only where the parse produced

@@ -96,3 +96,22 @@ test_that("get_mailto_recipients() loses the false tokens with no edit", {
                              scheme_acceptance = "general")
   expect_identical(r$url_diagnostics, rep(list(ma_skip), 2L))
 })
+
+test_that("a row with no parsed host gets no host-shape facts", {
+  no_ipv4 <- function(d) !any(startsWith(d, "ipv4-"))
+  for (std in c("whatwg", "rfc3986")) {
+    expect_true(no_ipv4(ma_diag("tel:a@256.1.1.1", std)), label = std)
+  }
+  expect_true(no_ipv4(ma_diag("file:u@1.2.3.999", "rfc3986")))
+  # WHATWG routes `file:` through the web parser, which finds no host there
+  # (the path is `/u@1.2.3.999`), under either acceptance.
+  for (acc in c("web", "general")) {
+    expect_true(no_ipv4(ma_diag("file:u@1.2.3.999", "whatwg", acc)),
+                label = acc)
+    expect_true(no_ipv4(ma_diag("file:u@0x7f.1", "whatwg", acc)),
+                label = acc)
+  }
+  # Control: a parsed host keeps its facts.
+  expect_true("ipv4-out-of-range" %in%
+                ma_diag("sc://u@1.2.3.999/", "whatwg"))
+})

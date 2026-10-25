@@ -122,11 +122,20 @@ Three tokens are the exception, and consumers may rely on their
 absence: \code{ipv6-non-canonical} and \code{ipv6-embedded-ipv4} (each
 within the scope its entry below states) and
 \code{domain-invalid-ace-label}, which fires on \emph{every} parsed
-host that meets its predicate (see its entry below), under both
+URL host that meets its predicate (see its entry below), under both
 \code{"rfc3986"} and \code{"whatwg"}. Its absence means each
 \code{xn--} label of the host
 is, on its own, a genuine A-label. It says nothing about the host's other
 labels or about the DNS rules the other \code{domain-*} tokens report.
+
+Credentials and host facts describe a URL \emph{authority}, so they are
+reported only where the parse produced one with a host. A URL whose parse
+has none (a WHATWG opaque path such as \code{mailto:a@x.de}; an RFC 3986
+\code{path-rootless} or \code{path-absolute} path, with no authority)
+reports none of them, even where \code{\link{get_user}} or \code{\link{get_host}} return a
+\code{mailto:} recipient's local part or domain (ADR 0012 D7): a
+recipient's domain is not a URL host. \code{\link{get_mailto_recipients}}
+judges recipients.
 
 Two WHATWG-generic facts gate on the \emph{interpreting standard}, not the
 acceptance axis, so they are reported whenever \code{url_standard =
@@ -135,8 +144,8 @@ route-independent, string-level facts; RURL-sgjzbqzk):
 \itemize{
 \item \code{invalid-URL-unit} / \code{invalid-credentials} --- WHATWG
 validation errors (WHATWG-verbatim names): a malformed \code{\%}-escape
-or a non-URL code point, and any credentials (userinfo) present.
-Bounded detection.
+or a non-URL code point, and credentials (userinfo) in a parsed
+authority. Bounded detection.
 }
 The default combination (\code{"web"} acceptance with \code{url_standard =
   NULL}) emits no diagnostics at all, so it is unaffected.
