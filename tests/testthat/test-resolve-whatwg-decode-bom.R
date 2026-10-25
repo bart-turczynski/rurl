@@ -59,7 +59,7 @@ swap_mark <- function(x) {
 base <- "http://h/d/"
 
 for (ct in names(ctypes)) {
-  test_that(paste("a decodable operand led by either mark resolves alike,", ct), {
+  test_that(paste("a decodable mark-led operand resolves alike,", ct), {
     with_ctype(ct, ctypes[[ct]], {
       for (std in list("whatwg", "rfc3986", NULL)) {
         label <- paste(ct, if (is.null(std)) "NULL" else std)
@@ -78,7 +78,7 @@ for (ct in names(ctypes)) {
     })
   })
 
-  test_that(paste("an undecodable operand not led by U+FEFF keeps its reading,", ct), {
+  test_that(paste("an undecodable operand not led by U+FEFF holds,", ct), {
     with_ctype(ct, ctypes[[ct]], {
       zw_ref <- octets(zwsp, 0x61, 0xff)
       mid_ref <- octets(0x61, bom, 0xff)
@@ -120,7 +120,7 @@ for (ct in names(ctypes)) {
     })
   })
 
-  test_that(paste("rfc3986 and NULL keep U+FEFF on an undecodable operand,", ct), {
+  test_that(paste("rfc3986 and NULL keep an undecodable U+FEFF,", ct), {
     with_ctype(ct, ctypes[[ct]], {
       bom_ref <- octets(bom, 0x61, 0xff)
       bom_base <- octets(bom, utf8ToInt(base), 0xff)
@@ -139,6 +139,58 @@ for (ct in names(ctypes)) {
       expect_bytes(
         cold_resolve("a", bom_base, NULL), NA_character_,
         label = paste(ct, "NULL base")
+      )
+    })
+  })
+
+  test_that(paste("whatwg keeps a leading U+FEFF through the decode,", ct), {
+    with_ctype(ct, ctypes[[ct]], {
+      # Each U+FEFF row beside its U+200B twin. The invalid tails cover a
+      # lone FF, a lone continuation byte, a truncated 3-byte sequence and a
+      # surrogate, so the splice is shown not to touch the replacement.
+      tails <- list(0xff, 0x80, c(0xe2, 0x82), c(0xed, 0xa0, 0x80))
+      for (tail in tails) {
+        bom_refs <- c(octets(bom, 0x61, tail),
+                      octets(bom, utf8ToInt("http://x/"), tail))
+        zw_refs <- c(octets(zwsp, 0x61, tail),
+                     octets(zwsp, utf8ToInt("http://x/"), tail))
+        label <- paste(ct, "tail", paste(tail, collapse = " "))
+        expect_bytes(
+          cold_resolve(bom_refs, base, "whatwg"),
+          swap_mark(cold_resolve(zw_refs, base, "whatwg")),
+          label = paste(label, "references")
+        )
+        # A base led by either mark has no scheme, so the URL Standard's
+        # API URL parser fails on it and the row is NA, an absolute
+        # reference included.
+        bom_base <- octets(bom, utf8ToInt(base), tail)
+        zw_base <- octets(zwsp, utf8ToInt(base), tail)
+        expect_bytes(
+          cold_resolve(c("a", "http://x/p"), bom_base, "whatwg"),
+          swap_mark(cold_resolve(c("a", "http://x/p"), zw_base, "whatwg")),
+          label = paste(label, "bases")
+        )
+      }
+      expect_bytes(
+        cold_resolve(octets(bom, 0x61, 0xff), base, "whatwg"),
+        "http://h/d/﻿a�",
+        label = paste(ct, "the reported reference row")
+      )
+      expect_bytes(
+        cold_resolve(c("a", "http://x/p"), octets(bom, utf8ToInt(base), 0xff),
+                     "whatwg"),
+        c(NA_character_, NA_character_),
+        label = paste(ct, "the reported base row")
+      )
+      # A vector mixing led and unled rows, decodable and not.
+      expect_bytes(
+        cold_resolve(
+          c(octets(bom, 0x61, 0xff), "b", octets(0x63, 0xff), "﻿d", NA),
+          base, "whatwg"
+        ),
+        c("http://h/d/﻿a�", "http://h/d/b", "http://h/d/c�",
+          "http://h/d/﻿d", NA_character_),
+        label = paste(ct, "a mixed vector")
       )
     })
   })
