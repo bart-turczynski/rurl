@@ -338,17 +338,24 @@
 # trivially preserved.
 #
 # It is NOT wired to the punycode/domain helpers (ADR 0002) and does NOT touch
-# them. It is NOT an RFC 3987 (IRI) validator: directly-written non-ASCII scalar
-# values are the ONE tolerated syntax extension (ADR 0002 reversibility) --
-# carried through and flagged `unicode-outside-rfc3986-uri`, never advertised as
-# IRI conformance. That tolerance does NOT relax the surrounding ASCII grammar.
+# them. It is NOT an RFC 3987 (IRI) validator. A directly-written non-ASCII
+# scalar value is a grammar violation (RFC 3986 section 2: a URI is drawn from
+# a subset of US-ASCII; section 2.5: non-ASCII data is written only as
+# percent-encoded UTF-8 octets). Owner ruling 2026-10-12 (RUL-030, ADR 0012
+# amendment 2026-10-25) withdrew the "Unicode-tolerant" extension this gate
+# once carried; Unicode input belongs to `url_standard = "whatwg"`.
+#
+# `ascii_only = FALSE` keeps that withdrawn tolerance for ONE caller: the
+# RFC 8089 `file:` overlay under the frozen NULL selector (ADR 0007, ADR 0016),
+# whose output must not move. Every `rfc3986` caller takes the default.
 #
 # Return value: list(ok = <logical>, diagnostic = <character>), each length-n.
 #   - ok        : TRUE = accepted by the generic URI grammar; FALSE = a generic
 #                 grammar violation; NA = NA input.
-#   - diagnostic: "unicode-outside-rfc3986-uri" iff the row is accepted AND
-#                 carries a directly-written non-ASCII scalar value; NA
-#                 otherwise (including every rejected row).
+#   - diagnostic: "unicode-outside-rfc3986-uri" iff the row is decodable and
+#                 carries a directly-written non-ASCII scalar value, which is
+#                 by itself a reason the strict grammar rejects it; NA
+#                 otherwise (an undecodable row is rejected without it).
 #
 # DELIBERATE ABNF SIMPLIFICATIONS (documented per the task):
 #   * Component validation is per-component character-class + pct-encoding regex
@@ -369,10 +376,12 @@
 # character-class fragments (contents for a `[...]`), RFC 3986 section 2.2/2.3.
 .RFC3986_UNRESERVED <- "A-Za-z0-9._~\\-"
 .RFC3986_SUBDELIMS <- "!$&'()*+,;="
-# The ONE tolerated extension (ADR 0002 / D1 rule 5): directly-written non-ASCII
-# scalar values are admitted wherever a data character is admitted, then flagged
-# separately. Admitting them here does NOT relax the ASCII grammar -- an
-# otherwise-invalid ASCII portion still fails even with non-ASCII present.
+# The class admits directly-written non-ASCII scalar values wherever a data
+# character is admitted, so the component walk judges only the ASCII grammar:
+# an otherwise-invalid ASCII portion fails even with non-ASCII present. The
+# strict rejection of the non-ASCII itself (RUL-030) is a separate whole-string
+# test in `.rfc3986_generic_uri_ok()`, skipped only for `ascii_only = FALSE`
+# (the frozen NULL `file:` overlay).
 #
 # Spelled in bytes (ADR 0019, RURL-oahhlnvf): the class searches run in byte
 # mode, where `\x80-\xff` is every byte of a multibyte UTF-8 sequence, so on
@@ -719,17 +728,22 @@
   url
 }
 
-# Vectorized public-internal gate. `diagnostic` fires ONLY on an accepted row
-# that carries a non-ASCII scalar value; a rejected row is never flagged (D1:
-# the Unicode tolerance never rescues an otherwise-invalid ASCII portion).
-.rfc3986_generic_uri_ok <- function(url) {
+# Vectorized public-internal gate. Under the default `ascii_only = TRUE` a row
+# carrying a directly-written non-ASCII scalar value is rejected and flagged
+# with `diagnostic`, whatever its ASCII portion does (RUL-030). Under
+# `ascii_only = FALSE` (the frozen NULL `file:` overlay only) such a row is
+# judged on its ASCII grammar alone, as before the ruling.
+.rfc3986_generic_uri_ok <- function(url, ascii_only = TRUE) {
   n <- length(url)
   url <- .rfc3986_declare_native_utf8(url)
   # Bytes that do not decode are rejected WITHOUT walking the grammar, and that
   # is a shortcut for a proof, not a convenience: the walk covers the whole
   # string (scheme / authority / path / query / fragment leave no byte
   # unclassified), every production is ASCII apart from the
-  # `.RFC3986_NONASCII` scalar-value tolerance, and an octet sequence that is
+  # `.RFC3986_NONASCII` scalar-value tolerance of the component classes (which
+  # decides a verdict only under `ascii_only = FALSE`, the frozen NULL `file:`
+  # overlay; by default the whole-string test below rejects any non-ASCII
+  # row whatever the walk says), and an octet sequence that is
   # not valid UTF-8 denotes no scalar value. So an undecodable element must
   # fail whichever component it lands in -- FALSE is the answer the walk would
   # have reached had it been able to run.
@@ -765,13 +779,22 @@
   }
   # A byte outside ASCII. In valid UTF-8 a non-ASCII code point is exactly a
   # run of high bytes, and in latin1 a high byte is one, so this reads the
-  # same as `\P{ASCII}` for both marks a walkable row may carry; an
-  # undecodable row is never `ok`, so its answer is not read. `grepl()`
-  # directly, not `.bytes_detect()`: a latin1 element is legal here (see
-  # above) and the wrapper refuses that mark. An NA element gives FALSE.
+  # same as `\P{ASCII}` for both marks a decodable row may carry; an
+  # undecodable row is already FALSE and is not flagged, since its octets
+  # denote no scalar value. `grepl()` directly, not `.bytes_detect()`: a
+  # latin1 element is legal here (see above) and the wrapper refuses that
+  # mark. An NA element gives FALSE.
+  #
+  # The strict test reads the whole string, not one component: RFC 3986
+  # section 2 bounds every character of a URI to US-ASCII, so no component
+  # (scheme, userinfo, host, port, path, query, fragment) is exempt, and a
+  # U+FEFF that leads the string is rejected by the same rule.
   has_non_ascii <- grepl("[^\\x00-\\x7f]", url, perl = TRUE, useBytes = TRUE)
+  flagged <- !is.na(url) & !undecodable & has_non_ascii
+  if (ascii_only) {
+    ok[flagged] <- FALSE
+  }
   diagnostic <- rep(NA_character_, n)
-  flagged <- !is.na(ok) & ok & has_non_ascii
   diagnostic[flagged] <- "unicode-outside-rfc3986-uri"
   list(ok = ok, diagnostic = diagnostic)
 }
@@ -1441,8 +1464,12 @@
     out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
   }
   # Gate 1: a `file:` string that is not a valid RFC 3986 URI is a parse
-  # failure, whatever RFC 8089's appendices tolerate in the wild.
-  gate <- .rfc3986_generic_uri_ok(url)$ok
+  # failure, whatever RFC 8089's appendices tolerate in the wild. Under
+  # `rfc3986` a raw non-ASCII code point fails it (RUL-030); under the frozen
+  # NULL selector the overlay keeps the historical tolerance (ADR 0016).
+  gate <- .rfc3986_generic_uri_ok(
+    url, ascii_only = identical(url_standard, "rfc3986")
+  )$ok
   gate[is.na(gate)] <- FALSE
   out$ok <- out$ok & gate
   out
@@ -1748,8 +1775,7 @@
   scheme_lc <- .ascii_tolower(.scheme_prefix(url))
 
   # D1 RFC generic-grammar gate: a general-routed row under rfc3986 must pass or
-  # it is a parse error (the tolerated non-ASCII extension does NOT cause
-  # failure; its diagnostic surfacing is L5, out of scope here).
+  # it is a parse error, a raw non-ASCII code point included (RUL-030).
   gate_ok <- rep(TRUE, n)
   if (identical(url_standard, "rfc3986")) {
     g <- .rfc3986_generic_uri_ok(url[gp])

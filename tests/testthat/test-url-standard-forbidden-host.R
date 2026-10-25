@@ -154,11 +154,17 @@ test_that("a mapped separator no longer serializes into an IPv4 host", {
   expect_true(is.na(serialize_url(u, standard = "whatwg")))
 })
 
-test_that("mapped-forbidden hosts do not move under rfc3986 or NULL", {
+test_that("mapped-forbidden hosts: NULL does not move, rfc3986 rejects", {
+  # rfc3986 has no mapping step, but every code point here is raw non-ASCII,
+  # which reg-name does not admit (RFC 3986 sections 2, 2.5, 3.2.2): a parse
+  # error naming the reason (RUL-030, owner ruling 2026-10-12,
+  # RURL-pntbujzc). The frozen NULL default keeps the reg-name.
   for (nm in names(mapped_to_forbidden)) {
     u <- paste0("http://a", intToUtf8(mapped_to_forbidden[[nm]]), "b.example/")
     expect_identical(get_parse_status(u, url_standard = "rfc3986"),
-                     "warning-invalid-tld", info = nm)
+                     "error", info = nm)
+    expect_identical(get_url_diagnostics(u, url_standard = "rfc3986"),
+                     "unicode-outside-rfc3986-uri", info = nm)
     expect_identical(suppressWarnings(get_parse_status(u)),
                      "warning-invalid-tld", info = nm)
   }
@@ -217,11 +223,21 @@ test_that("a line terminator in the userinfo does not leak into the host", {
 })
 
 test_that("the mis-slice does not survive into the RFC host either", {
+  # A raw NEL / LS / PS is not RFC 3986 syntax (sections 2, 2.5): the row is
+  # a parse error with no host (RUL-030, owner ruling 2026-10-12,
+  # RURL-pntbujzc). The percent-encoded spelling is the RFC form, and its
+  # host slices clean.
   for (nm in names(rurl_ui_terminators)) {
     u <- paste0("http://u", rurl_ui_terminators[[nm]], "ser@h%7F.com/p")
-    expect_identical(get_host(u, url_standard = "rfc3986"), "h%7F.com",
+    expect_identical(get_host(u, url_standard = "rfc3986"), NA_character_,
+                     info = nm)
+    expect_identical(get_parse_status(u, url_standard = "rfc3986"), "error",
                      info = nm)
   }
+  enc <- c("http://u%C2%85ser@h%7F.com/p", "http://u%E2%80%A8ser@h%7F.com/p",
+           "http://u%E2%80%A9ser@h%7F.com/p")
+  expect_identical(get_host(enc, url_standard = "rfc3986"),
+                   rep("h%7F.com", 3L))
 })
 
 test_that("a userinfo terminator still percent-encodes in the serialization", {

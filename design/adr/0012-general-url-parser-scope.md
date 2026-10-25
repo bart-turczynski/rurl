@@ -946,3 +946,67 @@ recorded in those decisions, not relisted here.
 origin intent, nameless today — ships first among profiles even though the parser
 layers (L2–L4) gate the spec ones. This is a shipping-order call for the layer
 roadmap, not an acceptance question for this ADR.
+
+## Amendment (2026-10-25): `rfc3986` is strict US-ASCII; the Unicode tolerance is withdrawn
+
+*Added RURL-pntbujzc, 2026-10-25. Appended rather than edited in place so no
+line citation into this file moves. D1's "Directly-written non-ASCII scalar
+values are the one deliberate syntax extension" bullet, the **Non-ASCII input
+posture** paragraph and the Layer 5 `unicode-outside-rfc3986-uri` lines above
+stay as written as the record of what was decided then; this section
+supersedes them for `url_standard = "rfc3986"`.*
+
+**Owner ruling (2026-10-12), RUL-030.** Under `url_standard = "rfc3986"` — on
+both `scheme_acceptance` routes and under `profile = "rfc-syntax"` — a directly
+written code point above U+007F in any component is a parse `error`. The
+"Unicode-tolerant, RFC-shaped syntax" posture is withdrawn for `rfc3986`, and no
+RFC 3987 (IRI) mode replaces it: Unicode input belongs to `url_standard =
+"whatwg"`.
+
+- **Basis.** RFC 3986 section 2 (a URI is "a sequence of characters chosen from
+  a limited subset of the repertoire of US-ASCII characters"); section 2.5
+  (non-ASCII data is written as percent-encoded UTF-8 octets); section 3.2.2
+  (`reg-name = *( unreserved / pct-encoded / sub-delims )`, all ASCII). The
+  posture paragraph above already conceded that "a strict URI reading would
+  reject a directly-written non-ASCII *character*"; AGENTS.md (ADRs 0007, 0016)
+  makes the conformant reading the default, so the tolerance was a shipped
+  behavior the standard calls invalid.
+- **Where it binds.** `.rfc3986_generic_uri_ok()` (R/parse-state.R) rejects a
+  decodable non-ASCII row by default. The one call that passes
+  `ascii_only = FALSE` is the RFC 8089 `file:` overlay under the frozen `NULL`
+  selector, whose output may not move without an ADR 0016 witness; no such
+  witness exists, so `NULL` keeps the historical reading. `whatwg` never runs
+  this grammar and does not move. Because the uniform gate (RURL-qrfrvmkg) is
+  the single convergence point of every route, the surfaces that read the
+  `rfc3986` parse verdict (components, `clean_url`, `serialize_url()`,
+  `get_url_key()`, `check_schemes()`) follow without a per-surface guard.
+  Two surfaces need more than that:
+  - `resolve_url()` reads the parse of the *resolved* URL, which section
+    5.2.4's dot-segment removal can clean (`ä/../b` resolves to a valid
+    URI). So under `rfc3986` it also checks the reference as written against
+    section 4.1 (`URI-reference = URI / relative-ref`, with section 4.2's
+    `path-noscheme` rule) before the merge, and a reference outside that
+    grammar gives `NA`.
+  - `get_mailto_recipients()` is **not yet covered**. It classifies
+    recipients whatever the parse verdict, and its documentation says
+    `url_standard` does not affect that classification, so a raw non-ASCII
+    `mailto:` row still yields its recipients under `rfc3986`. Whether it
+    should follow the verdict awaits a maintainer ruling; until then it stays
+    verdict-independent.
+- **The diagnostic is repurposed, not retired.** `unicode-outside-rfc3986-uri`
+  is public vocabulary that callers match on, so its name stays. It now names
+  the *rejection*: it fires on the failed `rfc3986` row, under either
+  acceptance value, and is the one token reported for a failed row. Its
+  advice is "percent-encode it as UTF-8", so it fires only where that advice
+  holds: the row's twin, each octet at or above 0x80 written as its `%XX`
+  triplet, must parse under the same options. A row that also fails for
+  another reason (a scheme-less input that is not host-like,
+  `scheme_policy = "require"`, a scheme the `web` acceptance refuses, an
+  ASCII grammar fault, or a row led by a non-ASCII character such as
+  U+FEFF, whose twin then has no scheme) reports no token. The D5 "selected facts" framing is
+  otherwise unchanged.
+- **D1 still holds for the ASCII grammar.** The component walk keeps admitting
+  non-ASCII bytes in its data classes so that it judges only the ASCII portion;
+  the rejection of the non-ASCII itself is a separate whole-string test. A row
+  that breaks both fails, and reports no token, since percent-encoding alone
+  would not rescue it.

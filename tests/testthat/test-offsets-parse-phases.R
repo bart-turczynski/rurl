@@ -296,9 +296,10 @@ test_that("the public API keeps its values over the moved chains", {
   r <- safe_parse_urls(off_u(c(
     "http:example.com/\u00e9?q#f", "https:a.example.com", "http:example.com/p"
   )), url_standard = "rfc3986")
-  expect_same_bytes(r$path, c("example.com/\u00e9", "a.example.com",
-                              "example.com/p"))
-  expect_identical(r$query, c("q", NA, NA))
+  # Row 1's raw U+00E9 is a parse error under rfc3986 (RFC 3986 sections 2,
+  # 2.5; RUL-030, RURL-pntbujzc); the ASCII rows keep their offsets.
+  expect_same_bytes(r$path, c(NA, "a.example.com", "example.com/p"))
+  expect_identical(r$query, c(NA_character_, NA, NA))
   hosts <- off_u(c(
     "WWW3.Example.com/p", "www.\u00e9\u4f8b.com/", "a.b.example.com/",
     "\ufeffwww.example.com/"

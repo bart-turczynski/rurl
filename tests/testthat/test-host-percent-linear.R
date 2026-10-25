@@ -73,15 +73,18 @@ test_that("host percent output is pinned under url_standard = 'whatwg'", {
 })
 
 test_that("host percent output is pinned under url_standard = 'rfc3986'", {
+  # Row 12 carries a raw U+00FC, which rfc3986 rejects: reg-name admits only
+  # its percent-encoded UTF-8 form (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030,
+  # owner ruling 2026-10-12, RURL-pntbujzc). Row 11 is its encoded twin.
   host <- c(
     "example.com", "example.com", "a-b.com", "a~b.com",
-    "a%2Fb.com", NA, NA, NA, NA, NA, "caf%C3%A9.com", .hpl_buecher,
+    "a%2Fb.com", NA, NA, NA, NA, NA, "caf%C3%A9.com", NA,
     "a%00b.com", "%7F.com", "a%60b.com", "a%2Fb.com", "caf%C3%A9.com", NA, NA
   )
   status <- c(
     "ok", "ok", "ok", "warning-invalid-tld",
     "warning-invalid-tld", "error", "error", "error", "error", "error",
-    "ok", "ok", "warning-invalid-tld", "warning-invalid-tld",
+    "ok", "error", "warning-invalid-tld", "warning-invalid-tld",
     "warning-invalid-tld", "warning-invalid-tld", "ok", "error", "error"
   )
   clean <- ifelse(is.na(host), NA_character_, paste0("http://", host, "/"))

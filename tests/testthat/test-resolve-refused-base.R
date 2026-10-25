@@ -35,18 +35,30 @@ test_that("a valid base resolves every reference kind under every selector", {
   }
 })
 
-test_that("a non-ASCII valid base resolves under every selector", {
+test_that("a non-ASCII valid base resolves under NULL and whatwg", {
   base <- "http://example.com/café"
   out <- c(
     "http://example.com/g", "http://o.com/y", "http://example.com/p",
     "https://z.com/q"
   )
-  for (s in list(NULL, "whatwg", "rfc3986")) {
+  for (s in list(NULL, "whatwg")) {
     expect_identical(
       resolve_url(refs, base, url_standard = s), out,
       label = if (is.null(s)) "NULL" else s
     )
   }
+  # Under rfc3986 the raw U+00E9 makes the base a parse error (RFC 3986
+  # sections 2, 2.5; RUL-030, RURL-pntbujzc), so it is a refused base: only
+  # the absolute reference resolves. Its percent-encoded twin is a base.
+  expect_identical(
+    resolve_url(refs, base, url_standard = "rfc3986"),
+    c(NA, NA, NA, "https://z.com/q")
+  )
+  expect_identical(
+    resolve_url(refs, "http://example.com/caf%C3%A9",
+                url_standard = "rfc3986"),
+    out
+  )
   expect_identical(
     resolve_url("", base, url_standard = "whatwg", output = "serialized"),
     "http://example.com/caf%C3%A9"

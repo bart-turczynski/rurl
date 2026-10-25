@@ -44,15 +44,25 @@ pqf_whatwg_args <- list(
 test_that("rfc3986 keeps the query and fragment as written (does not move)", {
   rfc <- list(url_standard = "rfc3986", scheme_policy = "require",
               scheme_acceptance = "general")
+  # Row 2 carries a raw U+00FC, which is not RFC 3986 syntax (sections 2,
+  # 2.5): a parse error with no components (RUL-030, owner ruling 2026-10-12,
+  # RURL-pntbujzc). The ASCII rows keep their source spelling.
   r <- do.call(safe_parse_urls, c(list(pqf_case_urls[c(1L, 2L, 4L)]), rfc))
-  expect_identical(r$query, c("q%7f", "a%c3%bcü", "'%7e'"))
-  expect_identical(r$fragment, c("f%7f", "b%c3%bcü", "'%7e'"))
+  expect_identical(r$query, c("q%7f", NA, "'%7e'"))
+  expect_identical(r$fragment, c("f%7f", NA, "'%7e'"))
   expect_identical(
     serialize_url(pqf_case_urls[c(1L, 2L, 4L)], standard = "rfc3986"),
     c("http://h/p%7f?q%7f#f%7f",
-      "http://h/p?a%c3%bcü#b%c3%bcü",
+      NA,
       "http://h/p?'%7e'#'%7e'")
   )
+  # Row 2's ASCII-only twin keeps the coverage that row lost: lowercase
+  # multibyte triplets are kept as written in the query and fragment.
+  twin <- "http://h/p?a%c3%bc#b%c3%bc"
+  r <- do.call(safe_parse_urls, c(list(twin), rfc))
+  expect_identical(r$query, "a%c3%bc")
+  expect_identical(r$fragment, "b%c3%bc")
+  expect_identical(serialize_url(twin, standard = "rfc3986"), twin)
   # The rfc3986 key frames the exact structural query, case included.
   pol <- url_key_policy(standard = "rfc3986")
   k <- get_url_key(c("http://h/?q%7f", "http://h/?q%7F"), pol)

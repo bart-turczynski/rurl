@@ -276,12 +276,24 @@ test_that("the Phase-1 host:port test reads the true end", {
   expect_match(unclass(k), "8:explicit", fixed = TRUE)
   expect_match(unclass(k)[1:2], "8:explicit3:tel", fixed = TRUE)
   expect_match(unclass(k)[3L], "8:explicit11:example.com", fixed = TRUE)
-  # Under RFC 3986 with any scheme accepted, `h:1<U+2028>` was diverted to
-  # the host:port route and failed; it now parses as `h:1x` does.
-  out <- safe_parse_urls(c("h:1x", "h:1\u2028", "h:1\u0085", "h:1\u2029"),
-                         profile = "rfc-syntax")
-  expect_identical(out$scheme, c("h", "h", "h", "h"))
-  expect_identical(out$parse_status, c("ok", "ok", "ok", "ok"))
+  # With any scheme accepted, `h:1<U+2028>` was diverted to the host:port
+  # route and failed; it now routes as `h:1x` does. Under `whatwg` it parses
+  # as an opaque path.
+  hp <- c("h:1x", "h:1\u2028", "h:1\u0085", "h:1\u2029")
+  wg <- safe_parse_urls(hp, url_standard = "whatwg",
+                        scheme_acceptance = "general")
+  expect_identical(wg$scheme, c("h", "h", "h", "h"))
+  expect_identical(wg$parse_status, c("ok", "ok", "ok", "ok"))
+  # Under RFC 3986 the three terminator rows are now parse errors for the
+  # raw non-ASCII code point itself, not for the routing: a URI is US-ASCII
+  # (RFC 3986 sections 2, 2.5; RUL-030, RURL-pntbujzc).
+  out <- safe_parse_urls(hp, profile = "rfc-syntax")
+  expect_identical(out$scheme, c("h", NA, NA, NA))
+  expect_identical(out$parse_status, c("ok", "error", "error", "error"))
+  expect_identical(
+    get_url_diagnostics(hp[-1L], "rfc3986", scheme_acceptance = "general"),
+    rep(list("unicode-outside-rfc3986-uri"), 3L)
+  )
 })
 
 # --- ICU's `.*` and `$`, exact and linear (RURL-oahhlnvf review) -------------

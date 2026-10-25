@@ -28,6 +28,24 @@ arm_parse <- function(url, arm, ...) {
 
 arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986", "NULL" = NULL)
 
+# RUL-030 (RURL-pntbujzc): under rfc3986 every host below that carries
+# U+FEFF, U+200B or a U-label is a parse error, not a reg-name kept as
+# written: RFC 3986 section 2 bounds a URI to US-ASCII, section 2.5 writes
+# non-ASCII data as percent-encoded UTF-8, and section 3.2.2's reg-name is
+# ASCII. Each rfc3986 pin that used to read the kept host now reads that
+# error, under every host_encoding; the NULL arm keeps the rendering pins.
+expect_rfc3986_rejects <- function(u, ...) {
+  for (enc in c("unicode", "keep", "idna")) {
+    expect_null(safe_parse_url(u, url_standard = "rfc3986",
+                               host_encoding = enc), label = paste(u, enc))
+    expect_identical(
+      safe_parse_urls(u, url_standard = "rfc3986",
+                      host_encoding = enc)$parse_status,
+      "error", label = paste(u, enc)
+    )
+  }
+}
+
 # --- Pins: behavior the fix must not move -------------------------------------
 
 test_that("the split keeps the label count, root dot included", {
@@ -70,7 +88,18 @@ test_that("the U+200B twins and a mark not first already keep the code point", {
 })
 
 test_that("host_encoding = 'unicode': U+200B twins and negative controls", {
-  for (an in c("rfc3986", "NULL")) {
+  expect_rfc3986_rejects(paste0("http://", zwsp, "xn--nxasmq6b.example/"))
+  expect_rfc3986_rejects(paste0("http://", zwsp, "a.example./"))
+  expect_rfc3986_rejects(
+    paste0("http://xn--nxasmq6b.", bom, "xn--nxasmq6b.example/")
+  )
+  # The all-ASCII control still renders under rfc3986.
+  expect_identical(
+    safe_parse_url("http://xn--nxasmq6b.example/", url_standard = "rfc3986",
+                   host_encoding = "unicode")$host,
+    paste0(beta, ".example")
+  )
+  for (an in "NULL") {
     arm <- arms[[an]]
     expect_identical(
       arm_parse(paste0("http://", zwsp, "xn--nxasmq6b.example/"), arm,
@@ -114,7 +143,11 @@ test_that("signature: the other encodings and the PSL columns do not move", {
   # Only `host_encoding = "unicode"` renders through the split. "keep"
   # returns the host as parsed, and "idna" encodes the whole label, mark and
   # all; the domain and TLD come from the PSL seam (pslr), not the split.
-  for (an in c("rfc3986", "NULL")) {
+  # Under rfc3986 the mark-led host is a parse error (see the header), so the
+  # "known gap" below -- a domain that is not a suffix of its host -- cannot
+  # arise there; the pin stays on the frozen NULL arm.
+  expect_rfc3986_rejects(paste0("http://", bom, "xn--nxasmq6b.com/"))
+  for (an in "NULL") {
     arm <- arms[[an]]
     u <- paste0("http://", bom, "xn--nxasmq6b.com/")
     k <- arm_parse(u, arm, host_encoding = "keep")
@@ -171,7 +204,9 @@ test_that("a mark-led xn-- label is not decoded as an A-label", {
                          decode_fn = double),
     paste0(bom, "xn--nxasmq6b.example")
   )
-  for (arm in list("rfc3986", NULL)) {
+  expect_rfc3986_rejects(paste0("http://", bom, "xn--nxasmq6b.example/"))
+  expect_rfc3986_rejects(paste0("http://", bom, "a.example./"))
+  for (arm in list(NULL)) {
     p <- arm_parse(paste0("http://", bom, "xn--nxasmq6b.example/"), arm,
                    host_encoding = "unicode")
     expect_identical(p$host, paste0(bom, "xn--nxasmq6b.example"))
@@ -212,5 +247,6 @@ test_that("NULL: the unicode rendering keeps the mark (ADR 0016)", {
   # and only under host_encoding = "unicode". The status, domain and TLD do
   # not move (pinned above), nor do "keep" and "idna". Per arm: whatwg was
   # already right (UTS #46 maps the mark to nothing before rendering);
-  # rfc3986 renders through the same split as NULL and moves the same way.
+  # rfc3986 rendered through the same split as NULL until RUL-030 made the
+  # mark-led host a parse error there (RFC 3986 sections 2, 2.5, 3.2.2).
 })

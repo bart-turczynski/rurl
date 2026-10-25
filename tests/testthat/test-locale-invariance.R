@@ -379,7 +379,11 @@ test_that("the undecodable short-circuit is exactly as severe as the walk", {
   }
 
   # The symmetric risk: a VALID sequence must never be short-circuited. These
-  # are the tolerance's own endpoints and its awkward interior members.
+  # are the tolerance's own endpoints and its awkward interior members. The
+  # strict gate rejects each as raw non-ASCII (RFC 3986 sections 2, 2.5;
+  # RUL-030, RURL-pntbujzc) and names that reason, which an undecodable row
+  # never gets; the tolerant walk (`ascii_only = FALSE`, the frozen NULL
+  # `file:` overlay) still admits each one.
   valid <- list(
     c(0xC2, 0x80), c(0xC3, 0xA9), c(0xE2, 0x82, 0xAC),
     c(0xF4, 0x8F, 0xBF, 0xBF), c(0xEF, 0xBF, 0xBF), c(0xEF, 0xBF, 0xBD)
@@ -389,7 +393,10 @@ test_that("the undecodable short-circuit is exactly as severe as the walk", {
       0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x61, seq, 0x62, 0x2f, 0x70
     )))
     expect_true(validUTF8(u))
-    expect_true(.rfc3986_generic_uri_ok(u)$ok)
+    expect_true(.rfc3986_generic_uri_ok(u, ascii_only = FALSE)$ok)
+    strict <- .rfc3986_generic_uri_ok(u)
+    expect_false(strict$ok)
+    expect_identical(strict$diagnostic, "unicode-outside-rfc3986-uri")
   }
 })
 
@@ -447,15 +454,24 @@ test_that("the rfc3986 verdict does not depend on the encoding mark", {
     serialize_url(eacute_userinfo, standard = "rfc3986"),
     serialize_url(marked, standard = "rfc3986")
   )
-  # ...and the answer both marks agree on is the accepting one: U+00E9 is a
-  # Unicode scalar value, which the RFC 3986 gate admits wherever a data
-  # character is admitted (ADR 0002 / D1 rule 5).
+  # ...and the answer both marks agree on is the rejecting one: U+00E9 is
+  # raw non-ASCII, which RFC 3986 admits only percent-encoded (sections 2,
+  # 2.5; RUL-030, RURL-pntbujzc). The byte walk itself still slices the
+  # authority the same way under both marks: the tolerant walk accepts both.
   expect_identical(
-    get_parse_status(eacute_userinfo, url_standard = "rfc3986"), "ok-ftp"
+    get_parse_status(eacute_userinfo, url_standard = "rfc3986"), "error"
   )
   expect_identical(
-    get_host(eacute_userinfo, url_standard = "rfc3986"), "example.com"
+    get_host(eacute_userinfo, url_standard = "rfc3986"), NA_character_
   )
+  expect_identical(
+    .rfc3986_generic_uri_ok(c(eacute_userinfo, marked),
+                            ascii_only = FALSE)$ok,
+    c(TRUE, TRUE)
+  )
+  # The byte-offset coverage stays on the NULL arm, which parses the row.
+  expect_identical(get_host(eacute_userinfo), get_host(marked))
+  expect_identical(get_host(eacute_userinfo), "example.com")
 })
 
 test_that("undecodable bytes reject on every rfc3986-gated surface", {
@@ -686,7 +702,17 @@ test_that("the selector plays no part on the accessor path", {
   }
   fresh <- lapply(arms, pull, engine = pslr::psl_engine())
   default <- lapply(arms, pull, engine = NULL)
-  expect_identical(fresh$whatwg, fresh$rfc3986)
+  # The IDN row writes its host in raw Cyrillic, a parse error under rfc3986
+  # (RFC 3986 sections 2, 3.2.2: a reg-name is ASCII, non-ASCII only
+  # percent-encoded; RUL-030, RURL-pntbujzc), so that arm matches the others
+  # on the ASCII rows and is NA on the IDN row.
+  expect_identical(lapply(fresh$whatwg, `[`, 1:3),
+                   lapply(fresh$rfc3986, `[`, 1:3))
+  expect_identical(
+    lapply(fresh$rfc3986, `[`, 4L),
+    list(host = NA_character_, domain = NA_character_,
+         subdomain = NA_character_)
+  )
   expect_identical(fresh$whatwg, fresh$none)
   expect_identical(fresh, default)
   expect_identical(

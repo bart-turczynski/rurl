@@ -111,16 +111,20 @@ test_that("a BOM host is a cache key like any other (RURL-iiehsbfg)", {
   )
 
   # The collision was visible: once the BOM host was cached, a plain host
-  # came back with the BOM host's A-label.
-  for (std in list(NULL, "rfc3986")) {
+  # came back with the BOM host's A-label. Under "rfc3986" the BOM host is
+  # now a parse error (RFC 3986 section 2; RUL-030), so its host is NA; the
+  # plain host after it still proves the cache did not collide.
+  expected <- list(c("xn--a-6m0i.com", "a.com"), c(NA_character_, "a.com"))
+  stds <- list(NULL, "rfc3986")
+  for (k in seq_along(stds)) {
     rurl_clear_caches()
     first <- get_host("http://\ufeffa.com/",
-      url_standard = std, host_encoding = "idna"
+      url_standard = stds[[k]], host_encoding = "idna"
     )
     second <- get_host("http://a.com/",
-      url_standard = std, host_encoding = "idna"
+      url_standard = stds[[k]], host_encoding = "idna"
     )
-    expect_identical(unname(c(first, second)), c("xn--a-6m0i.com", "a.com"))
+    expect_identical(unname(c(first, second)), expected[[k]])
   }
 })
 

@@ -84,16 +84,17 @@ arms <- list(
     args = list(url_standard = NULL, query_handling = "keep"),
     twin = clean_twin
   ),
+  # Every row's reference or base writes a raw non-ASCII code point, which
+  # RFC 3986 admits only percent-encoded (sections 2, 2.5, 3.2.2; RUL-030,
+  # RURL-pntbujzc): under rfc3986 each fails to parse and resolves to NA. A
+  # latin1 element still reads as its twin, so it fails the same way.
   "rfc3986 clean" = list(
     args = list(url_standard = "rfc3986", query_handling = "keep"),
-    twin = clean_twin
+    twin = rep(NA_character_, 4L)
   ),
   "rfc3986 serialized" = list(
     args = list(url_standard = "rfc3986", output = "serialized"),
-    twin = c(
-      "http://h.com/\u009f", "http://b.com/h\u00fc.com/p",
-      "http://b.com/a?q=\u00fc#\u00fc", "http://b\u00fc.com/\u009f/p"
-    )
+    twin = rep(NA_character_, 4L)
   ),
   "whatwg clean" = list(
     args = list(url_standard = "whatwg", query_handling = "keep"),
@@ -195,11 +196,13 @@ test_that("NULL witness: latin1 0x9F reads as U+009F in a UTF-8 locale", {
         "http://h.com/\u009f", "NULL"
       )
     }
+    # rfc3986 reads the same U+009F and rejects it as raw non-ASCII (RFC
+    # 3986 sections 2, 2.5; RUL-030, RURL-pntbujzc).
     for (out in c("clean", "serialized")) {
-      expect_bytes(
+      expect_identical(
         cold_resolve(latin1_refs[1], latin1_bases[1],
                      list(url_standard = "rfc3986", output = out)),
-        "http://h.com/\u009f", paste("rfc3986", out)
+        NA_character_, label = paste("rfc3986", out)
       )
     }
   })
@@ -208,13 +211,19 @@ test_that("NULL witness: latin1 0x9F reads as U+009F in a UTF-8 locale", {
 test_that("NULL witness: latin1 0xFC merges as U+00FC in the C locale", {
   with_ctype("C", FALSE, {
     for (args in list(list(), list(url_standard = NULL),
-                      list(url_standard = "whatwg"),
-                      list(url_standard = "rfc3986"))) {
+                      list(url_standard = "whatwg"))) {
       expect_bytes(
         cold_resolve(latin1_refs[2], latin1_bases[2], args),
         "http://b.com/h\u00fc.com/p", paste(args, collapse = " ")
       )
     }
+    # rfc3986 rejects the raw U+00FC (RFC 3986 sections 2, 2.5; RUL-030,
+    # RURL-pntbujzc), whichever mark spells it.
+    expect_identical(
+      cold_resolve(latin1_refs[2], latin1_bases[2],
+                   list(url_standard = "rfc3986")),
+      NA_character_
+    )
   })
 })
 

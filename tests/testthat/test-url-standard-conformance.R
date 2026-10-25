@@ -152,14 +152,19 @@ test_that("WHATWG rejects obfuscated numeric hosts left literal", {
       is.na(get_clean_url(u, url_standard = "whatwg")),
       label = paste("whatwg clean_url NA for", u)
     )
-    # rfc3986 is unchanged: a numeric-looking reg-name with no valid TLD.
+    # rfc3986 is unchanged: a numeric-looking reg-name with no valid TLD --
+    # except the raw U+1F4A9 row, which is not RFC 3986 syntax (sections 2,
+    # 2.5, 3.2.2) and is a parse error (RUL-030, owner ruling 2026-10-12,
+    # RURL-pntbujzc).
+    raw_non_ascii <- grepl("[^\\x01-\\x7f]", u, perl = TRUE, useBytes = TRUE)
     expect_identical(
-      get_parse_status(u, url_standard = "rfc3986"), "warning-invalid-tld",
+      get_parse_status(u, url_standard = "rfc3986"),
+      if (raw_non_ascii) "error" else "warning-invalid-tld",
       label = paste("rfc3986 keeps reg-name for", u)
     )
-    expect_false(
-      is.na(get_clean_url(u, url_standard = "rfc3986")),
-      label = paste("rfc3986 clean_url non-NA for", u)
+    expect_identical(
+      is.na(get_clean_url(u, url_standard = "rfc3986")), raw_non_ascii,
+      label = paste("rfc3986 clean_url NA only for raw non-ASCII", u)
     )
   }
 
@@ -208,10 +213,13 @@ test_that("WHATWG reads 'ends in a number' after decoding and UTS-46 mapping", {
     serialize_url("http://\uff41.example", standard = "whatwg"),
     "http://a.example/"
   )
-  # RFC 3986 has no numeric-host rule and no mapping step: unchanged.
+  # RFC 3986 has no numeric-host rule and no mapping step: unchanged. The
+  # raw fullwidth spelling is not RFC 3986 syntax at all (sections 2, 2.5,
+  # 3.2.2): a parse error, so no serialization (RUL-030, owner ruling
+  # 2026-10-12, RURL-pntbujzc).
   expect_identical(get_host(pct, url_standard = "rfc3986"), "0xc0.0250.01")
   expect_identical(
-    serialize_url(wide, standard = "rfc3986"), wide
+    serialize_url(wide, standard = "rfc3986"), NA_character_
   )
 })
 

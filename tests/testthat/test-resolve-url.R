@@ -591,14 +591,27 @@ test_that("url_standard = NULL is byte-frozen against the production", {
   expect_identical(
     resolve_url("10.0.0.7:8080/foo.html", fbase), "http://10.0.0.7/foo.html"
   )
-  # Only a selected standard reaches the real production, and both do.
-  for (std in c("rfc3986", "whatwg")) {
-    expect_identical(
-      resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = std,
-                  output = "serialized"),
-      "file:///some/dir/10.0.0.7:8080/foo.html"
-    )
-  }
+  # Only a selected standard reaches the real production, and both read the
+  # reference as scheme-less. whatwg resolves it as a path.
+  expect_identical(
+    resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = "whatwg",
+                output = "serialized"),
+    "file:///some/dir/10.0.0.7:8080/foo.html"
+  )
+  # rfc3986 refuses it: section 4.2 bars a first segment holding a colon from
+  # a relative-path reference (`path-noscheme` = `segment-nz-nc ...`), so it
+  # is no RFC 3986 URI-reference (section 4.1) and the row is NA. Its
+  # dot-segment spelling is one, and resolves (RURL-pntbujzc).
+  expect_identical(
+    resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = "rfc3986",
+                output = "serialized"),
+    NA_character_
+  )
+  expect_identical(
+    resolve_url("./10.0.0.7:8080/foo.html", fbase, url_standard = "rfc3986",
+                output = "serialized"),
+    "file:///some/dir/10.0.0.7:8080/foo.html"
+  )
 })
 
 test_that("resolved output equals a direct parse of the resolved URL", {
@@ -1069,9 +1082,12 @@ test_that("whatwg file: dot removal keeps a segment-leading U+FEFF", {
   )
 })
 
-test_that("rfc3986 and NULL keep a segment-leading U+FEFF in a file: result", {
-  # RFC 3986 section 5.2.4 never reached the WHATWG-only walk, and the NULL
-  # selector is byte-frozen (ADR 0007): the same inputs keep today's output.
+test_that("NULL keeps a segment-leading U+FEFF; rfc3986 rejects it", {
+  # The NULL selector is byte-frozen (ADR 0007): the same inputs keep
+  # today's output. Under rfc3986 a reference holding a raw U+FEFF is not a
+  # URI reference at all (RFC 3986 sections 2, 2.5: US-ASCII only, non-ASCII
+  # percent-encoded; RUL-030, RURL-pntbujzc), so it resolves to NA; its
+  # percent-encoded twin still takes section 5.2.4's dot removal.
   frozen <- list(
     list("/\ufeffa/./b", "file:///x", "file:///\ufeffa/b"),
     list("\ufeffa/./b", "file:///", "file:///\ufeffa/b"),
@@ -1081,11 +1097,18 @@ test_that("rfc3986 and NULL keep a segment-leading U+FEFF in a file: result", {
     list("/\ufeffa/./b", "file:///C:/x", "file:///\ufeffa/b")
   )
   for (case in frozen) {
-    for (std in list("rfc3986", NULL)) {
-      expect_identical(
-        resolve_url(case[[1L]], case[[2L]], url_standard = std), case[[3L]],
-        label = paste(case[[1L]], case[[2L]], if (is.null(std)) "NULL" else std)
-      )
-    }
+    expect_identical(
+      resolve_url(case[[1L]], case[[2L]]), case[[3L]],
+      label = paste(case[[1L]], case[[2L]], "NULL")
+    )
+    expect_identical(
+      resolve_url(case[[1L]], case[[2L]], url_standard = "rfc3986"),
+      NA_character_,
+      label = paste(case[[1L]], case[[2L]], "rfc3986")
+    )
   }
+  expect_identical(
+    resolve_url("/%EF%BB%BFa/./b", "file:///x", url_standard = "rfc3986"),
+    "file:///%EF%BB%BFa/b"
+  )
 })

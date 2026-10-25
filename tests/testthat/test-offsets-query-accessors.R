@@ -71,18 +71,22 @@ for (loc in names(ctypes)) {
           paste0(bom, "a"), paste0(zwsp, "a"), paste0(bom, "\u00fc"),
           paste0(zwsp, "\u00fc"), "a", "www.sub", NA, NA, NA, NA, NA)
       )
-      for (std in c("whatwg", "rfc3986")) {
-        expect_identical(
-          get_subdomain(url, url_standard = std)[c(1:6, 11:17)],
-          c(NA, NA, "\u00fc.\u00fc", "a", "x.y", "\u00e9", "a", "www.sub",
-            NA, NA, NA, NA, NA),
-          info = std
-        )
-      }
+      expect_identical(
+        get_subdomain(url, url_standard = "whatwg")[c(1:6, 11:17)],
+        c(NA, NA, "\u00fc.\u00fc", "a", "x.y", "\u00e9", "a", "www.sub",
+          NA, NA, NA, NA, NA)
+      )
+      # Rows 1-10 write their host with raw non-ASCII, a parse error under
+      # rfc3986: a reg-name is ASCII and non-ASCII data is percent-encoded
+      # UTF-8 (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030, RURL-pntbujzc). The
+      # multibyte cuts stay covered by the NULL and whatwg calls above.
+      expect_identical(
+        get_subdomain(url, url_standard = "rfc3986")[c(1:6, 11:17)],
+        c(NA, NA, NA, NA, NA, NA, "a", "www.sub", NA, NA, NA, NA, NA)
+      )
       expect_identical(
         get_subdomain(url[7:10], url_standard = "rfc3986"),
-        c(paste0(bom, "a"), paste0(zwsp, "a"), paste0(bom, "\u00fc"),
-          paste0(zwsp, "\u00fc"))
+        rep(NA_character_, 4L)
       )
       expect_no_error(got_bad <- get_subdomain(bad, format = "labels"))
       expect_identical(got_bad, list(character(0), character(0)))
@@ -144,14 +148,21 @@ for (loc in names(ctypes)) {
                 paste0("/", zwsp, "/a"), "/a", "/a", "/a/index.html/x", "/",
                 "/a", "/a/indexhtml", "/\u00fc\u00fc/b", NA, "/",
                 "/a/%C3%BC")
+      # Rows 2, 3, 4, 9 and 11 write a raw non-ASCII code point (U+00FC,
+      # U+FEFF, U+200B): parse errors under rfc3986, so their path is NA
+      # there (RFC 3986 sections 2, 2.5; RUL-030, RURL-pntbujzc). The byte
+      # cuts on those rows stay covered by NULL and whatwg.
+      want_rfc <- want
+      want_rfc[c(2L, 3L, 4L, 9L, 11L)] <- NA_character_
       for (std in list(NULL, "whatwg", "rfc3986")) {
+        w <- if (identical(std, "rfc3986")) want_rfc else want
         expect_identical(get_path(url, index_page_handling = "strip",
-                                  url_standard = std), want,
+                                  url_standard = std), w,
                          info = format(std))
         expect_identical(
           safe_parse_urls(url, index_page_handling = "strip",
                           url_standard = std)$path,
-          want, info = format(std)
+          w, info = format(std)
         )
       }
     })
@@ -224,11 +235,17 @@ for (loc in names(ctypes)) {
                "mailto:a@b.c", "MAILTO:a@b.c", paste0(bom, "HTTP://e.com/"),
                paste0(zwsp, "HTTP://e.com/"), "e.com/x", NA,
                "\u017Fhttp://x/", "HTTP://b\u00fccher.co.uk/")
+      # The last row's raw U+00FC host is a parse error under rfc3986, so
+      # no source form exists (RFC 3986 sections 2, 3.2.2; RUL-030,
+      # RURL-pntbujzc). The percent-encoded twin keeps the scheme spelling.
       expect_identical(
         serialize_url(url, standard = "rfc3986"),
         c("HTTP://Example.COM/a", "HtTpS://e.com/", "Foo+X.y://h/x",
-          "mailto:a@b.c", "MAILTO:a@b.c", NA, NA, NA, NA, NA,
-          "HTTP://b\u00fccher.co.uk/")
+          "mailto:a@b.c", "MAILTO:a@b.c", NA, NA, NA, NA, NA, NA)
+      )
+      expect_identical(
+        serialize_url("HTTP://b%C3%BCcher.co.uk/", standard = "rfc3986"),
+        "HTTP://b%C3%BCcher.co.uk/"
       )
       expect_identical(
         serialize_url(url, standard = "whatwg"),

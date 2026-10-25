@@ -56,21 +56,45 @@ test_that("all 8 RURL-wncwfasl false-reject inputs get their verdict", {
   )
 })
 
-test_that("directly-written non-ASCII is tolerated and flagged, not rejected", {
+test_that("directly-written non-ASCII is rejected and flagged (RUL-030)", {
+  # RFC 3986 S2: a URI is drawn from a subset of US-ASCII; S2.5: non-ASCII
+  # data is written as percent-encoded UTF-8; S3.2.2: reg-name is ASCII. The
+  # owner ruling of 2026-10-12 withdrew the former "Unicode-tolerant"
+  # acceptance; the token now names the rejection.
   res <- .rfc3986_generic_uri_ok("http://exämple.com/")
-  expect_true(isTRUE(res$ok))
+  expect_false(isTRUE(res$ok))
   expect_identical(res$diagnostic, "unicode-outside-rfc3986-uri")
+  # The percent-encoded twin is valid and carries no token.
+  twin <- .rfc3986_generic_uri_ok("http://ex%C3%A4mple.com/")
+  expect_true(isTRUE(twin$ok))
+  expect_true(is.na(twin$diagnostic))
 
   # a pure-ASCII accept carries NO diagnostic
   ascii <- .rfc3986_generic_uri_ok("http://example.com/")
   expect_true(isTRUE(ascii$ok))
   expect_true(is.na(ascii$diagnostic))
 
-  # the tolerance does NOT relax the ASCII grammar: a bad triplet still FAILS
-  # even with non-ASCII present, and a reject is never flagged.
+  # A row that ALSO breaks the ASCII grammar fails and still carries the
+  # token: the non-ASCII code point is a reason on its own.
   bad <- .rfc3986_generic_uri_ok("http://a%2 b/ä")
   expect_false(isTRUE(bad$ok))
-  expect_true(is.na(bad$diagnostic))
+  expect_identical(bad$diagnostic, "unicode-outside-rfc3986-uri")
+
+  # Every component, not only the host (S2 bounds the whole string).
+  rows <- c("http://h.de/ä", "http://h.de/?q=ä", "http://h.de/#ä",
+            "http://ä@h.de/", "http://\ufeffh.de/", "foo:ä", "foo://ä/x",
+            "\ufeffhttp://h.de/")
+  g <- .rfc3986_generic_uri_ok(rows)
+  expect_identical(g$ok, rep(FALSE, length(rows)))
+  expect_identical(g$diagnostic,
+                   rep("unicode-outside-rfc3986-uri", length(rows)))
+
+  # `ascii_only = FALSE` is the frozen NULL `file:` overlay's reading only:
+  # the ASCII grammar alone, as before the ruling (ADR 0016).
+  legacy <- .rfc3986_generic_uri_ok(
+    c("http://exämple.com/", "http://a%2 b/ä"), ascii_only = FALSE
+  )
+  expect_identical(legacy$ok, c(TRUE, FALSE))
 })
 
 test_that("the gate is a pure function, independent of parser leniency", {
@@ -128,12 +152,17 @@ test_that("the uniform gate leaves whatwg and the NULL selector untouched", {
 })
 
 test_that("the uniform gate adds only SYNTAX rejections, not policy ones", {
-  # ADR 0002 / ADR 0011: a directly-written non-ASCII host is rurl's ONE
-  # tolerated extension and the gate FLAGS it rather than failing it, so
-  # binding the gate uniformly must not turn that diagnostic into an error.
-  res <- safe_parse_url("http://exämple.com/", url_standard = "rfc3986")
-  expect_identical(res$parse_status, "ok")
-  expect_identical(res$clean_url, "http://exämple.com/")
+  # A directly-written non-ASCII host is a SYNTAX rejection since RUL-030
+  # (RFC 3986 S2, S2.5, S3.2.2): it fails on the web route like any other
+  # character no production admits, and its percent-encoded twin parses.
+  expect_identical(
+    get_parse_status("http://exämple.com/", url_standard = "rfc3986"),
+    "error"
+  )
+  expect_identical(
+    get_parse_status("http://ex%C3%A4mple.com/", url_standard = "rfc3986"),
+    "ok"
+  )
   expect_identical(
     .rfc3986_generic_uri_ok("http://exämple.com/")$diagnostic,
     "unicode-outside-rfc3986-uri"

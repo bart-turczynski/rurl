@@ -70,9 +70,10 @@ A character vector the same length as the recycled inputs, unnamed
 canonical \code{clean_url} of the resolved reference; under
 \code{output = "serialized"} it is the standard's full-string
 serialization of the resolved absolute URL. \code{NA} where resolution
-cannot produce an absolute URL, or where the resolved URL is not accepted
-by the parser (\code{"clean"}) or by the selected standard's parser
-(\code{"serialized"}).
+cannot produce an absolute URL, where under \code{"rfc3986"} the
+reference is no RFC 3986 URI-reference, or where the resolved URL is not
+accepted by the parser (\code{"clean"}) or by the selected standard's
+parser (\code{"serialized"}).
 }
 \description{
 Resolves a relative or absolute URL reference against a base URL following
@@ -174,11 +175,24 @@ own grammar, and WHATWG's -- so a relative path whose first segment merely
 \emph{contains} a colon is a path, not an absolute reference:
 \code{resolve_url("[61:24:74]:98", "http://example.org/foo/bar",
 url_standard = "whatwg", output = "serialized")} is
-\code{"http://example.org/foo/[61:24:74]:98"}, and \code{"rfc3986"} merges
-the same way. The \code{NULL} selector instead keeps RFC 3986 Appendix B's
+\code{"http://example.org/foo/[61:24:74]:98"}. \code{"rfc3986"} reads no
+scheme there either, but refuses the reference (see below). The \code{NULL}
+selector instead keeps RFC 3986 Appendix B's
 explicitly \emph{non-validating} \code{[^:/?#]+}, which reads
 \code{"10.0.0.7"} as a scheme and discards the base; that is frozen behavior
 (ADR 0007), not a recommendation.
+
+Under \code{"rfc3986"} the reference must itself be an RFC 3986
+URI-reference (section 4.1: a \code{URI} or a \code{relative-ref}), or the
+row is \code{NA}. This is checked on the reference as written, before the
+merge, so a segment that dot-segment removal would delete still counts:
+\code{resolve_url("a/\\u00e4/../b", "http://b.de/", url_standard =
+"rfc3986")} is \code{NA}, since U+00E4 is a raw non-ASCII code point
+(sections 2 and 2.5), as are \code{"/\%zz/../b"} (a \code{\%} that starts
+no triplet) and
+\code{"10.0.0.7:8080/x"} (section 4.2: a first segment holding a colon
+cannot start a relative-path reference; write \code{"./10.0.0.7:8080/x"}).
+\code{"whatwg"} and \code{NULL} do not check the reference.
 }
 
 \section{Which output surface you want}{
