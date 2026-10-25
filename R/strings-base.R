@@ -284,7 +284,17 @@
     return(out)
   }
   if (last) {
-    g <- gregexpr(pattern, x, perl = !fixed, fixed = fixed, useBytes = TRUE)
+    # A fixed `gregexpr()` is quadratic in the number of matches (1e6 "@"
+    # took about 15 s), and the PCRE one is linear (RURL-rweowcfz). So a
+    # literal is matched as PCRE with each ASCII punctuation byte escaped.
+    # Both scans report the same leftmost non-overlapping matches. A byte at
+    # or above 0x80 stays as it is: byte mode reads it as itself, and a
+    # backslash before it could read as an escape under the locale's tables.
+    if (fixed) {
+      pattern <- gsub("([\\x01-\\x2f\\x3a-\\x40\\x5b-\\x60\\x7b-\\x7f])",
+                      "\\\\\\1", pattern, perl = TRUE, useBytes = TRUE)
+    }
+    g <- gregexpr(pattern, x, perl = TRUE, useBytes = TRUE)
     for (i in which(!is.na(x))) {
       s <- g[[i]]
       k <- length(s)
