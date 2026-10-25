@@ -106,10 +106,10 @@ RFC 3987 (IRI) mode. The token fires only where that advice holds: the
 row's twin, each non-ASCII octet written as its \code{\%XX} triplet, parses
 under the same options. A row that also fails for another reason (a
 scheme-less input that is not host-like, \code{scheme_policy =
-"require"}, a scheme the \code{"web"} acceptance refuses, or an ASCII
-grammar fault) reports no token. Such a row reports this token alone,
-under either \code{scheme_acceptance}; every other failed row reports
-none.
+"require"}, a scheme the \code{"web"} acceptance refuses, an ASCII
+grammar fault, or a row led by a non-ASCII character, whose twin then has
+no scheme) reports no token. A row that reports this token reports it
+alone, under either \code{scheme_acceptance}.
 }
 \section{Selected facts, not a conformance oracle}{
  The diagnostics are

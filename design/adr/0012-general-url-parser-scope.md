@@ -1002,7 +1002,8 @@ RFC 3987 (IRI) mode replaces it: Unicode input belongs to `url_standard =
   triplet, must parse under the same options. A row that also fails for
   another reason (a scheme-less input that is not host-like,
   `scheme_policy = "require"`, a scheme the `web` acceptance refuses, an
-  ASCII grammar fault) reports no token. The D5 "selected facts" framing is
+  ASCII grammar fault, or a row led by a non-ASCII character such as
+  U+FEFF, whose twin then has no scheme) reports no token. The D5 "selected facts" framing is
   otherwise unchanged.
 - **D1 still holds for the ASCII grammar.** The component walk keeps admitting
   non-ASCII bytes in its data classes so that it judges only the ASCII portion;
