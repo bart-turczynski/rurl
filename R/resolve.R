@@ -528,6 +528,28 @@
   }, character(1), USE.NAMES = FALSE)
 }
 
+# TRUE where `base` is a base the selected standard's own parser refuses
+# (RURL-vrvxxfvm); all FALSE under `url_standard = NULL`, which is frozen
+# (ADR 0007), and FALSE for an NA base, which is NO base rather than a failing
+# one. The standard's parser is `serialize_url()`, the standards surface, which
+# is NA exactly where that parser fails. `get_parse_status()` is not the
+# oracle: under the default `scheme_acceptance = "web"` it calls `non-spec:/p`
+# or `about:blank` an "error" by rurl's acceptance policy (ADR 0004), not by
+# either standard, and every one of those is a base WPT resolves against.
+# Each distinct base is parsed once and mapped back to its rows.
+.refused_base_mask <- function(base, url_standard) {
+  refused <- logical(length(base))
+  if (is.null(url_standard)) {
+    return(refused)
+  }
+  distinct <- unique(base[!is.na(base)])
+  if (length(distinct) == 0L) {
+    return(refused)
+  }
+  failing <- distinct[is.na(serialize_url(distinct, standard = url_standard))]
+  !is.na(base) & base %in% failing
+}
+
 # Resolve ONE (reference, base) pair to a raw absolute URI string, or NA when
 # resolution cannot yield an absolute URL (base not absolute and reference not
 # absolute either). ._remove_dot_segments happens inside .transform_reference(),
@@ -748,12 +770,21 @@
 #'
 #' @param relative_or_absolute A character vector of URL references to resolve.
 #'   Each may be relative (\code{"../b"}, \code{"?q=1"}, \code{"#frag"},
-#'   \code{"//host/p"}) or already absolute (\code{"https://host/p"}); an
-#'   absolute reference ignores \code{base_url}.
+#'   \code{"//host/p"}) or already absolute (\code{"https://host/p"}). An
+#'   absolute reference takes nothing from \code{base_url}, except that under
+#'   \code{url_standard = "whatwg"} a base that standard refuses makes the
+#'   row \code{NA} (see \code{base_url}).
 #' @param base_url A character vector of base URLs, recycled against
 #'   \code{relative_or_absolute}. Each base must itself be an absolute URL
 #'   (carry a scheme); a relative reference resolved against a scheme-less or
-#'   \code{NA} base yields \code{NA}.
+#'   \code{NA} base yields \code{NA}. Under a named \code{url_standard}, a base
+#'   that standard's parser refuses (\code{\link{serialize_url}} gives
+#'   \code{NA}) is no base, row by row: under \code{"whatwg"} the row is
+#'   \code{NA} even for an absolute reference (the URL Standard's API URL
+#'   parser fails on a failing base before it reads the input); under
+#'   \code{"rfc3986"} a relative reference is \code{NA} and an absolute one
+#'   still resolves (RFC 3986 sections 5.1 and 5.2.2). The frozen \code{NULL}
+#'   selector does not check the base.
 #' @param url_standard Optional standard profile forwarded to the parse:
 #'   \code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
 #'   \code{\link{safe_parse_url}} for the axes it governs, and
@@ -796,7 +827,7 @@
 #' resolve_url("../g", "http://a/b/c/d;p?q") # -> "http://a/b/g"
 #' resolve_url("g", "http://a/b/c/d;p?q") # -> "http://a/b/c/g"
 #' resolve_url("//example.org/p", "http://a/b/c") # -> "http://example.org/p"
-#' resolve_url("https://x.com/y", "http://a/b/c") # absolute ref, base ignored
+#' resolve_url("https://x.com/y", "http://a/b/c") # absolute ref, base unused
 #' resolve_url(c("g", "../h"), "http://a/b/c/") # vectorized
 #'
 #' # The standards surface keeps the query and the fragment RFC 3986 section
@@ -910,6 +941,22 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     hidden <- ref_bad | base_bad
     ref[hidden] <- .hide_high_octets(ref[hidden])
     base[hidden] <- .hide_high_octets(base[hidden])
+  }
+  # A base the selected standard's parser refuses is no base (RURL-vrvxxfvm).
+  # `whatwg`: the URL Standard's API URL parser returns failure when the base
+  # fails to parse, before it reads the input, so the whole row is NA, an
+  # absolute reference included. `rfc3986`: section 5.1 requires the base to
+  # be an absolute URI, and section 5.2.2 reads the base only when the
+  # reference has no scheme, so the row resolves as against an NA base: a
+  # relative reference gives NA, an absolute one resolves. `NULL` is not
+  # asked: it resolves against such a base as it always has, because the
+  # selector is frozen (ADR 0007) and ADR 0016 moves it only with a witness
+  # that the default path is defective and a declared signature, which this
+  # change does not carry.
+  refused <- .refused_base_mask(base, url_standard)
+  base[refused] <- NA_character_
+  if (.is_whatwg(url_standard)) {
+    ref[refused] <- NA_character_
   }
 
   resolved_raw <- vapply(

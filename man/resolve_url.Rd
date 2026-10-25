@@ -16,13 +16,22 @@ resolve_url(
 \arguments{
 \item{relative_or_absolute}{A character vector of URL references to resolve.
 Each may be relative (\code{"../b"}, \code{"?q=1"}, \code{"#frag"},
-\code{"//host/p"}) or already absolute (\code{"https://host/p"}); an
-absolute reference ignores \code{base_url}.}
+\code{"//host/p"}) or already absolute (\code{"https://host/p"}). An
+absolute reference takes nothing from \code{base_url}, except that under
+\code{url_standard = "whatwg"} a base that standard refuses makes the
+row \code{NA} (see \code{base_url}).}
 
 \item{base_url}{A character vector of base URLs, recycled against
 \code{relative_or_absolute}. Each base must itself be an absolute URL
 (carry a scheme); a relative reference resolved against a scheme-less or
-\code{NA} base yields \code{NA}.}
+\code{NA} base yields \code{NA}. Under a named \code{url_standard}, a base
+that standard's parser refuses (\code{\link{serialize_url}} gives
+\code{NA}) is no base, row by row: under \code{"whatwg"} the row is
+\code{NA} even for an absolute reference (the URL Standard's API URL
+parser fails on a failing base before it reads the input); under
+\code{"rfc3986"} a relative reference is \code{NA} and an absolute one
+still resolves (RFC 3986 sections 5.1 and 5.2.2). The frozen \code{NULL}
+selector does not check the base.}
 
 \item{url_standard}{Optional standard profile forwarded to the parse:
 \code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
@@ -220,7 +229,7 @@ first and pass the result to \code{\link{safe_parse_url}}.
 resolve_url("../g", "http://a/b/c/d;p?q") # -> "http://a/b/g"
 resolve_url("g", "http://a/b/c/d;p?q") # -> "http://a/b/c/g"
 resolve_url("//example.org/p", "http://a/b/c") # -> "http://example.org/p"
-resolve_url("https://x.com/y", "http://a/b/c") # absolute ref, base ignored
+resolve_url("https://x.com/y", "http://a/b/c") # absolute ref, base unused
 resolve_url(c("g", "../h"), "http://a/b/c/") # vectorized
 
 # The standards surface keeps the query and the fragment RFC 3986 section
