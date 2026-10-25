@@ -1152,17 +1152,19 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # and that result replaces the first only where the two are different URLs
   # by the standard's own serializer: where they are the same URL, the
   # spelling as written stays, so `output = "clean"` keeps a Unicode host or
-  # path of a base the parser would only re-encode.
+  # path of a base the parser would only re-encode. A base that merged wrongly
+  # as written takes the serialized spelling, Unicode included. Each distinct
+  # result is serialized once.
   respelled <- which(!is.na(parsed_base) & parsed_base != base)
   if (length(respelled) > 0L) {
     alt <- resolve_rows(respelled, parsed_base)
     first <- resolved_raw[respelled]
-    differs <- !mapply(
-      identical,
-      serialize_url(first, standard = "whatwg"),
-      serialize_url(alt, standard = "whatwg"),
-      USE.NAMES = FALSE
-    )
+    results <- unique(c(first, alt))
+    serialized <- serialize_url(results, standard = "whatwg")
+    first_ser <- serialized[match(first, results)]
+    alt_ser <- serialized[match(alt, results)]
+    differs <- is.na(first_ser) != is.na(alt_ser) |
+      (!is.na(first_ser) & !is.na(alt_ser) & first_ser != alt_ser)
     resolved_raw[respelled[differs]] <- alt[differs]
   }
   resolved_raw[hidden] <- .restore_high_octets(resolved_raw[hidden])

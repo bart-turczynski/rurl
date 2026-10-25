@@ -77,3 +77,10 @@ test_that("a respelled base resolves the same in a vector of rows", {
     c("http://a/b/g", "http://a/b/g", NA, "http://x/g", "http://a/b/g")
   )
 })
+
+test_that("a row that moves takes the parsed spelling of a Unicode base", {
+  expect_identical(
+    resolve_url("g", "http:\\\\bücher.de\\ä\\b", url_standard = "whatwg"),
+    "http://xn--bcher-kva.de/%C3%A4/g"
+  )
+})
