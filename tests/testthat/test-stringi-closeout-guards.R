@@ -6,8 +6,8 @@
 # reads exactly as its U+200B twin, a zero-width code point stringi never
 # skipped, with the mark swapped back in.
 
-bom <- "﻿"
-zwsp <- "​"
+bom <- "\ufeff"
+zwsp <- "\u200b"
 
 # Swap U+200B for U+FEFF, raw and percent-encoded, in every character vector
 # of `x`, recursively, so a U+200B result can be compared with a U+FEFF one.
@@ -133,7 +133,7 @@ test_that("a U+FEFF that leads a userinfo stays in it", {
 })
 
 test_that("a WHATWG file path led by U+FEFF keeps the mark", {
-  # .parse_whatwg_file_urls_vec(): the raw path `﻿\a\b` starts with the
+  # .parse_whatwg_file_urls_vec(): the raw path `<U+FEFF>\a\b` starts with the
   # mark, and the byte-mode "\" rewrite keeps it, so the spliced "/" did
   # nothing. The file state then roots the path.
   expect_identical(

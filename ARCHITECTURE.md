@@ -414,7 +414,8 @@ only under `port_handling != "exclude"`.
   the row. Locate and cut in the same unit — bytes — using the
   `R/strings-base.R` wrappers (`.bytes_locate()`, `.bytes_cut()`; ADR 0019),
   or the older `.byte_substring()` / `.first_byte_index()` /
-  `.last_byte_index()` family in `R/utils.R` that ADR 0019 folds into them,
+  `.last_byte_index()` family in `R/utils.R` (ADR 0019 decision 5 is to fold
+  `.byte_substring*()` and `.first_byte_index*()` into them),
   with `.grepl_decodable()` at an acceptance seam; declare native-marked input
   UTF-8 with `Encoding<-` (never `enc2utf8()`) and validate with
   `validUTF8()`.
@@ -472,10 +473,16 @@ only under `port_handling != "exclude"`.
 
 - `utils` — base-R helpers: `URLdecode()` on the host-decode path,
   `head()`/`tail()` for label slicing, `capture.output()` for engine identity.
-- `stringi` — Unicode tables only (NFC before Punycode, full case mapping,
+- `stringi` — mainly Unicode tables (NFC before Punycode, full case mapping,
   the case-insensitive glob, the U+FFFD decode), at the calls
-  `tools/stringi-call-allowlist.csv` names. Other string operations run in
-  base R; see [ADR 0019](design/adr/0019-string-operations-run-in-base-r.md).
+  `tools/stringi-call-allowlist.csv` names; that list is authoritative and
+  still holds a few non-table calls the close-out has not moved (the host-label
+  split, the URL-key byte count, the WHATWG leading strip). Other string
+  operations run in base R; see
+  [ADR 0019](design/adr/0019-string-operations-run-in-base-r.md). The guards
+  kept around the remaining `stringi` calls, U+FEFF as data with its U+200B
+  twin, and the explicit-`last` `substring()` rule are in
+  [ADR 0005](design/adr/0005-intentional-base-r-string-exceptions.md).
 - `punycoder` (>= 1.2.1) — Punycode encoding/decoding.
 - `pslr` (>= 1.1.1) — Public Suffix List matching.
 - `raddr` (>= 0.1.2) — IP address facts: the `ipv6-embedded-ipv4` diagnostic
