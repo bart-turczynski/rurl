@@ -212,9 +212,9 @@
 .web_uppercase_pct <- function(b) {
   n <- length(b)
   # Each "%" with two bytes after it, in order. A "%" inside the pair an
-  # earlier claiming "%" consumed claims nothing, so only a "%" within two
-  # bytes of the one before it needs the sequential scan, and only those
-  # positions are walked (RURL-iyjdljln).
+  # earlier claiming "%" consumed claims nothing, so when no "%" sits within
+  # two bytes of the one before it every "%" claims its pair; otherwise the
+  # "%" positions, not the bytes, are walked in order (RURL-iyjdljln).
   pct <- which(b == 0x25L)
   pct <- pct[pct + 2L <= n]
   if (length(pct) == 0L) {
