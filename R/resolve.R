@@ -590,7 +590,9 @@
 
 # Resolve ONE (reference, base) pair to a raw absolute URI string, or NA when
 # resolution cannot yield an absolute URL (base not absolute and reference not
-# absolute either). ._remove_dot_segments happens inside .transform_reference(),
+# absolute either; under "whatwg", also a non-fragment reference against a
+# base with an opaque path). The caller strips a whatwg base (resolve_url()).
+# ._remove_dot_segments happens inside .transform_reference(),
 # except for a scheme-bearing reference under "whatwg", whose path is passed
 # through as written for the WHATWG re-parse (RURL-rdkewxlx).
 # `url_standard` selects the reference-parsing rules that precede the merge
@@ -649,6 +651,17 @@
   # place that must say so.
   b <- .split_uri_ref(base, url_standard)
   if (is.na(b$scheme)) {
+    return(NA_character_)
+  }
+  # WHATWG "no scheme state": a base with an opaque path (a non-special scheme
+  # with no authority whose path does not start with "/", e.g. `mailto:x`)
+  # admits only a reference that starts with "#"; anything else is a
+  # missing-scheme-non-relative-URL validation error and the parse fails
+  # (RURL-vuczsypb). RFC 3986 section 5.2 merges against any base, and NULL
+  # is frozen (ADR 0007), so this is whatwg only.
+  if (.is_whatwg(url_standard) && is.na(base_scheme) &&
+        is.na(b$authority) && (is.na(b$path) || !startsWith(b$path, "/")) &&
+        !startsWith(ref, "#")) {
     return(NA_character_)
   }
   # `base_scheme` is already NA unless the selector is "whatwg" and the base's
@@ -713,7 +726,17 @@
 #'     strips to the empty string is the empty reference, which resolves to the
 #'     base minus its fragment. RFC 3986 has no strip step -- such bytes are
 #'     required to be percent-encoded -- so under \code{"rfc3986"} and
-#'     \code{NULL} they stay in the reference.
+#'     \code{NULL} they stay in the reference. The base gets the same step
+#'     under \code{"whatwg"}, so \code{" http://a/b/c "} is the base
+#'     \code{"http://a/b/c"}; only this step: a base that the parser would
+#'     otherwise respell (a backslash for a slash) is not normalized first.
+#'   \item \strong{A base with an opaque path takes only a fragment.} Under
+#'     \code{"whatwg"}, a base such as \code{"mailto:x"} (a non-special scheme
+#'     with no \code{//} and no leading \code{/}) admits only a reference
+#'     that starts with \code{#}: \code{resolve_url("#f", "mailto:x",
+#'     url_standard = "whatwg", output = "serialized")} is
+#'     \code{"mailto:x#f"}, and any other relative reference is \code{NA}
+#'     (the URL Standard's no scheme state).
 #'   \item \strong{Against a \code{file:} base, Windows drive letters follow
 #'     the WHATWG \code{file:} state machine.} A reference that \emph{begins}
 #'     with a drive letter empties the base path instead of shortening it, so
@@ -1001,6 +1024,13 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   }
   # Recycle both inputs to the common length (base_url is commonly scalar).
   n <- max(length(ref), length(base))
+  # WHATWG basic URL parser step 1 on the BASE (RURL-mvjgpthk): the API URL
+  # parser runs the basic URL parser on the base too. The reference gets the
+  # same step inside `.resolve_one_raw()`; the base is stripped here, once
+  # and vectorized, before it is recycled. The refused-base mask reads its
+  # own `serialize_url()`, which runs step 1 itself. A no-op under "rfc3986"
+  # and NULL.
+  base <- .strip_whatwg_control_chars_vec(base, resolution_standard)$url
   ref <- rep_len(ref, n)
   base <- rep_len(base, n)
   # A string that is not valid UTF-8 cannot be split as one, in any locale,

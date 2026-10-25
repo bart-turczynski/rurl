@@ -143,7 +143,17 @@ so \code{" foo.com "} resolves as \code{"foo.com"} does. A reference that
 strips to the empty string is the empty reference, which resolves to the
 base minus its fragment. RFC 3986 has no strip step -- such bytes are
 required to be percent-encoded -- so under \code{"rfc3986"} and
-\code{NULL} they stay in the reference.
+\code{NULL} they stay in the reference. The base gets the same step
+under \code{"whatwg"}, so \code{" http://a/b/c "} is the base
+\code{"http://a/b/c"}; only this step: a base that the parser would
+otherwise respell (a backslash for a slash) is not normalized first.
+\item \strong{A base with an opaque path takes only a fragment.} Under
+\code{"whatwg"}, a base such as \code{"mailto:x"} (a non-special scheme
+with no \code{//} and no leading \code{/}) admits only a reference
+that starts with \code{#}: \code{resolve_url("#f", "mailto:x",
+    url_standard = "whatwg", output = "serialized")} is
+\code{"mailto:x#f"}, and any other relative reference is \code{NA}
+(the URL Standard's no scheme state).
 \item \strong{Against a \code{file:} base, Windows drive letters follow
 the WHATWG \code{file:} state machine.} A reference that \emph{begins}
 with a drive letter empties the base path instead of shortening it, so
