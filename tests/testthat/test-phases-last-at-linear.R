@@ -177,3 +177,27 @@ test_that("the trailing trims are linear in an inner run", {
   expect_lt(system.time(strip_trim(x))[["elapsed"]], 0.5)
   expect_lt(system.time(fixup_trim(x))[["elapsed"]], 0.5)
 })
+
+map_sep <- function(x) .map_whatwg_domain_separators_vec(x, "whatwg")$url
+
+test_that("the full-stop map starts the host after the authority's last \"@\"", {
+  expect_identical(
+    map_sep(c("http://u\u3002i@h\u3002b/p", "http://a@b@h\uff0eb/c@d",
+              "//h\uff61b?x@y", "http://@h\u3002b", "http://h/\u3002@x",
+              "http://u\u3002i@[::1]/", "\ufeffu@h\u3002b", NA)),
+    c("http://u\u3002i@h.b/p", "http://a@b@h.b/c@d", "//h.b?x@y",
+      "http://@h.b", "http://h/\u3002@x", "http://u\u3002i@[::1]/",
+      "\ufeffu@h\u3002b", NA)
+  )
+})
+
+test_that("the full-stop map's last-\"@\" locate stays under the match limit", {
+  # Possessive runs repeated once per "@" still counted one step each: an
+  # authority of ~1e7 "@" warned, the "@" went unfound, and the userinfo
+  # was mapped as host.
+  url <- paste0("http://", strrep("@", long_n), "u\u3002i@h\u3002b/p")
+  expect_no_warning(out <- map_sep(url))
+  expect_true(identical(
+    out, paste0("http://", strrep("@", long_n), "u\u3002i@h.b/p")
+  ))
+})

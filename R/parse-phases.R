@@ -744,19 +744,21 @@
   # fixed locators and stri_sub() read past a U+FEFF that starts their input,
   # so splitting `authority` once dropped a mark that starts the userinfo
   # (RURL-exdlurql). The authority ends at the first "/", "?" or "#"; userinfo
-  # runs through the LAST "@" in it. Possessive runs of "@"-free bytes, each
-  # ending in "@", reach that "@" without giving a byte back, so the locate
-  # is linear: a greedy `[^/?#]*@` backtracked byte by byte from the end of
-  # the authority and hit PCRE's match limit on a long one (RURL-yqmoztoj).
-  # A negated class, not `.*`: ICU `.` stops at U+000B, U+000C, U+0085,
-  # U+2028 and U+2029, which would leave the host unsplit for a later step to
-  # map.
+  # runs through the LAST "@" in it, where `.ICU_THROUGH_LAST_AT` starts in
+  # the authority's bytes. A greedy `[^/?#]*@` backtracked byte by byte from
+  # the end of the authority and hit PCRE's match limit on a long one
+  # (RURL-yqmoztoj); the possessive `(?:[^/?#@]*+@)++` that replaced it still
+  # counted a step per "@" and hit it on ~1e7 of them, and a fixed
+  # `gregexpr()` is quadratic in the number of matches (RURL-atlidhyh). A
+  # negated class, not `.*`: ICU `.` stops at U+000B, U+000C, U+0085, U+2028
+  # and U+2029, which would leave the host unsplit for a later step to map.
   prefix <- "^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)?//"
+  prefix_end <- .bytes_locate(url, prefix)[, "end"]
   authority_end <- .bytes_locate(url, paste0(prefix, "[^/?#]*+"))[, "end"]
-  at <- .bytes_locate(url, paste0(prefix, "(?:[^/?#@]*+@)++"))[, "end"]
-  host_start <- ifelse(
-    is.na(at), .bytes_locate(url, prefix)[, "end"], at
-  ) + 1L
+  userinfo_at <- .bytes_locate(
+    .bytes_cut(url, prefix_end + 1L, authority_end), .ICU_THROUGH_LAST_AT
+  )[, "start"]
+  host_start <- prefix_end + ifelse(is.na(userinfo_at), 0L, userinfo_at) + 1L
   before_host <- .bytes_cut(url, 1L, host_start - 1L)
   host_port <- .bytes_cut(url, host_start, authority_end)
   after_authority <- .bytes_cut(url, authority_end + 1L, .Machine$integer.max)
