@@ -2083,6 +2083,7 @@
   # cleaning have decided which structural rules fire. Legacy `encode` still
   # means decode then segment-encode; the difference is that both presentation
   # operations now happen after index/trailing-slash handling.
+  nul_kept <- logical(length(path_work))
   if (path_encoding %in% c("decode", "encode") && !whatwg_encode) {
     mask <- !is.na(path_work)
     if (any(mask)) {
@@ -2114,6 +2115,32 @@
             USE.NAMES = FALSE
           )
         }
+      } else {
+        # The decode keeps a `%00` triplet as written (RURL-fpujlvoq), and
+        # the segment encode below would escape its `%` to `%2500`. So a
+        # path holding the triplet is decoded and encoded between its `%00`s,
+        # and the triplets are put back between the pieces. `%00` has no hex
+        # letter, so the fixed split finds every spelling of it.
+        nul_kept[mask] <- grepl("%00", path_work[mask], fixed = TRUE,
+                                useBytes = TRUE)
+        if (any(nul_kept)) {
+          decoded[nul_kept[mask]] <- vapply(
+            path_work[nul_kept],
+            function(p) {
+              pieces <- strsplit(paste0(p, "/"), "%00", fixed = TRUE,
+                                 useBytes = TRUE)[[1]]
+              pieces[length(pieces)] <- sub("/$", "", pieces[length(pieces)],
+                                            useBytes = TRUE)
+              paste(
+                vapply(.pct_unescape(pieces), ._encode_path_segments,
+                       character(1), USE.NAMES = FALSE),
+                collapse = "%00"
+              )
+            },
+            character(1),
+            USE.NAMES = FALSE
+          )
+        }
       }
       path_work[mask] <- decoded
     }
@@ -2122,7 +2149,7 @@
   if (whatwg_encode) {
     path_work <- .whatwg_path_percent_encode(path_work)
   } else if (path_encoding == "encode") {
-    mask <- !is.na(path_work)
+    mask <- !is.na(path_work) & !nul_kept
     if (any(mask)) {
       path_work[mask] <- vapply(
         path_work[mask], ._encode_path_segments, character(1), USE.NAMES = FALSE

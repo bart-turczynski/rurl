@@ -95,12 +95,14 @@ test_that("a malformed percent passes through byte-for-byte", {
   expect_identical(rurl:::.pct_unescape("%4%41"), "%4A")
 })
 
-test_that("a decoded NUL truncates the value", {
-  # Inherited from libcurl handing back a NUL-terminated C string, and kept
-  # deliberately: an R string cannot carry an embedded NUL either, so the
-  # alternative would smuggle the tail past callers that never see it today.
-  expect_identical(rurl:::.pct_unescape("a%00b"), "a")
-  expect_identical(rurl:::.pct_unescape("%00"), "")
+test_that("a %00 triplet stays as written and the rest still decodes", {
+  # An R string cannot carry the NUL it decodes to. Truncating there, as
+  # libcurl's NUL-terminated string did, lost the rest of a path or query
+  # (RURL-fpujlvoq); dropping the NUL would read `a%00b` as `ab`.
+  expect_identical(rurl:::.pct_unescape("a%00b"), "a%00b")
+  expect_identical(rurl:::.pct_unescape("%00"), "%00")
+  expect_identical(rurl:::.pct_unescape("a%00%41%00"), "a%00A%00")
+  expect_identical(rurl:::.pct_unescape("%2500"), "%00")
 })
 
 test_that("unescape is not form decoding", {

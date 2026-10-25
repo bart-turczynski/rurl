@@ -113,27 +113,24 @@
   chunks <- vector("list", 2L * length(starts) + 1L)
   k <- 0L
   pos <- 1L
-  truncated <- FALSE
   for (st in starts) {
     if (st > pos) {
       k <- k + 1L
       chunks[[k]] <- raw_in[pos:(st - 1L)]
     }
     value <- strtoi(rawToChar(raw_in[(st + 1L):(st + 2L)]), base = 16L)
-    if (value == 0L) {
-      # libcurl hands back a NUL-terminated C string, so a decoded %00 ends the
-      # result and discards the remainder. Preserved deliberately: R strings
-      # cannot carry an embedded NUL either, and the alternative (dropping the
-      # NUL but keeping the tail) would silently smuggle the tail past a caller
-      # that today never sees it.
-      truncated <- TRUE
-      break
-    }
     k <- k + 1L
-    chunks[[k]] <- as.raw(value)
+    # An R string cannot hold the NUL a `%00` decodes to, so the triplet stays
+    # as written and the rest of the value still decodes (RURL-fpujlvoq). It
+    # used to end the result, as libcurl's NUL-terminated string does, so a
+    # path or query lost everything after it, though `%00` is URI data (RFC
+    # 3986 sections 2.1 and 2.4). Dropping the NUL instead would make `a%00b`
+    # read as `ab`. A caller that must judge the NUL itself, the mailto field
+    # decode, tests for the triplet before it decodes.
+    chunks[[k]] <- if (value == 0L) raw_in[st:(st + 2L)] else as.raw(value)
     pos <- st + 3L
   }
-  if (!truncated && pos <= n) {
+  if (pos <= n) {
     k <- k + 1L
     chunks[[k]] <- raw_in[pos:n]
   }
