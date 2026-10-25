@@ -452,9 +452,9 @@
     return(no_op)
   }
 
-  # `nchar(NA, type = "bytes")` is 2, so a row with no scheme is set NA.
-  colon_len <- nchar(scheme_match[, 1L], type = "bytes")
-  colon_len[is.na(scheme_match[, 1L])] <- NA_integer_
+  # `nchar(NA, type = "bytes")` is 2 by default; `keepNA = TRUE` keeps a row
+  # with no scheme NA.
+  colon_len <- nchar(scheme_match[, 1L], type = "bytes", keepNA = TRUE)
 
   # Every span below is located in and cut from `url` itself, which starts with
   # the scheme, in bytes from locator to cut (ADR 0019). Some stringi
