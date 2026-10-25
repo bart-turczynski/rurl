@@ -18,20 +18,25 @@ resolve_url(
 Each may be relative (\code{"../b"}, \code{"?q=1"}, \code{"#frag"},
 \code{"//host/p"}) or already absolute (\code{"https://host/p"}). An
 absolute reference takes nothing from \code{base_url}, except that under
-\code{url_standard = "whatwg"} a base that standard refuses makes the
-row \code{NA} (see \code{base_url}).}
+\code{url_standard = "whatwg"} (or a \code{profile} that bundles it) a
+base that standard refuses makes the row \code{NA} (see
+\code{base_url}). That includes a scheme-less base such as
+\code{"example.com/a/b"}, even where the profile's own parse would fix
+the base up.}
 
 \item{base_url}{A character vector of base URLs, recycled against
 \code{relative_or_absolute}. Each base must itself be an absolute URL
 (carry a scheme); a relative reference resolved against a scheme-less or
-\code{NA} base yields \code{NA}. Under a named \code{url_standard}, a base
+\code{NA} base yields \code{NA}. Under a named \code{url_standard}
+(given here or bundled by a \code{profile}), a base
 that standard's parser refuses (\code{\link{serialize_url}} gives
 \code{NA}) is no base, row by row: under \code{"whatwg"} the row is
 \code{NA} even for an absolute reference (the URL Standard's API URL
 parser fails on a failing base before it reads the input); under
 \code{"rfc3986"} a relative reference is \code{NA} and an absolute one
 still resolves (RFC 3986 sections 5.1 and 5.2.2). The frozen \code{NULL}
-selector does not check the base.}
+selector (no \code{url_standard} and no \code{profile}) does not check
+the base.}
 
 \item{url_standard}{Optional standard profile forwarded to the parse:
 \code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
@@ -58,7 +63,14 @@ argument-is-inert-where-it-does-not-apply contract
 \item{...}{Additional arguments forwarded to \code{\link{safe_parse_urls}}
 (e.g. \code{port_handling}, \code{query_handling}, \code{host_encoding}).
 Passing a governed low-level knob that conflicts with \code{url_standard}
-errors, exactly as it does for \code{\link{safe_parse_url}}. These are
+errors, exactly as it does for \code{\link{safe_parse_url}}. A
+\code{profile} passed here selects the standard it bundles (see
+\code{\link{url_profile}}) for the resolution as well as for the parse:
+\code{profile = "rfc-syntax"} resolves as \code{url_standard = "rfc3986"}
+and \code{"whatwg"}, \code{"browser"}, \code{"seo"} and its alias
+\code{"canonical"} as \code{"whatwg"}. An explicit
+\code{url_standard} overrides the profile's, as it does for
+\code{\link{safe_parse_url}}. These are
 presentation dials consumed by the \code{"clean"} path only; supplying any
 of them together with \code{output = "serialized"} is an error, because
 \code{\link{serialize_url}} takes no presentation arguments and the dial
@@ -70,7 +82,8 @@ A character vector the same length as the recycled inputs, unnamed
 canonical \code{clean_url} of the resolved reference; under
 \code{output = "serialized"} it is the standard's full-string
 serialization of the resolved absolute URL. \code{NA} where resolution
-cannot produce an absolute URL, where under \code{"rfc3986"} the
+cannot produce an absolute URL, where under \code{"rfc3986"} (named or
+bundled by a \code{profile}) the
 reference is no RFC 3986 URI-reference, or where the resolved URL is not
 accepted by the parser (\code{"clean"}) or by the selected standard's
 parser (\code{"serialized"}).
@@ -130,7 +143,17 @@ so \code{" foo.com "} resolves as \code{"foo.com"} does. A reference that
 strips to the empty string is the empty reference, which resolves to the
 base minus its fragment. RFC 3986 has no strip step -- such bytes are
 required to be percent-encoded -- so under \code{"rfc3986"} and
-\code{NULL} they stay in the reference.
+\code{NULL} they stay in the reference. The base gets the same step
+under \code{"whatwg"}, so \code{" http://a/b/c "} is the base
+\code{"http://a/b/c"}; only this step: a base that the parser would
+otherwise respell (a backslash for a slash) is not normalized first.
+\item \strong{A base with an opaque path takes only a fragment.} Under
+\code{"whatwg"}, a base such as \code{"mailto:x"} (a non-special scheme
+with no \code{//} and no leading \code{/}) admits only a reference
+that starts with \code{#}: \code{resolve_url("#f", "mailto:x",
+    url_standard = "whatwg", output = "serialized")} is
+\code{"mailto:x#f"}, and any other relative reference is \code{NA}
+(the URL Standard's no scheme state).
 \item \strong{Against a \code{file:} base, Windows drive letters follow
 the WHATWG \code{file:} state machine.} A reference that \emph{begins}
 with a drive letter empties the base path instead of shortening it, so
@@ -156,7 +179,8 @@ of such a path, so under \code{"rfc3986"} the first is \code{"foo:/b"}.
 
 The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
 every rule above is reachable only through
-\code{url_standard = "whatwg"}.
+\code{url_standard = "whatwg"}, or through a \code{profile} that bundles it
+(see \code{...}).
 
 Two further rules apply under \strong{both} named profiles, because the two
 standards agree on them. First, a resolved path whose first segment is
@@ -192,7 +216,9 @@ merge, so a segment that dot-segment removal would delete still counts:
 no triplet) and
 \code{"10.0.0.7:8080/x"} (section 4.2: a first segment holding a colon
 cannot start a relative-path reference; write \code{"./10.0.0.7:8080/x"}).
-\code{"whatwg"} and \code{NULL} do not check the reference.
+\code{"whatwg"} and \code{NULL} do not check the reference. Each rule in
+this section applies to the standard \code{url_standard} names, or to the
+one a \code{profile} in \code{...} bundles.
 }
 
 \section{Which output surface you want}{

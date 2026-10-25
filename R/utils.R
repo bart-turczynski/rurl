@@ -24,11 +24,18 @@
 # these helpers move bytes, they do not reinterpret them.
 
 # 1-based byte index of the last occurrence of a single-byte literal `ch` in
-# `s`, or 0L when absent. `useBytes = TRUE` also suppresses the "input string
-# is invalid UTF-8" warning that the same scan emits without it.
+# `s`, or 0L when absent. `s` is one non-NA string and `ch` one byte; anything
+# else is an internal error. The scan compares raw octets, so an invalid UTF-8
+# row is read as its bytes and warns about nothing. A fixed `gregexpr()`
+# listed every match, quadratic in their number: 8e5 "@" took about 7 s
+# (RURL-rweowcfz).
 .last_byte_index <- function(s, ch) {
-  pos <- gregexpr(ch, s, fixed = TRUE, useBytes = TRUE)[[1L]]
-  if (pos[1L] == -1L) 0L else as.integer(pos[length(pos)])
+  if (is.na(s) || nchar(ch, type = "bytes") != 1L) {
+    stop("internal: `s` must not be NA and `ch` must be one byte",
+         call. = FALSE)
+  }
+  pos <- which(charToRaw(s) == charToRaw(ch))
+  if (length(pos) == 0L) 0L else pos[length(pos)]
 }
 
 # 1-based byte index of the FIRST occurrence of `ch` in `s`, or 0L when absent.

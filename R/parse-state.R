@@ -760,13 +760,11 @@
   # character -- so it walks normally and is never caught here.
   undecodable <- !is.na(url) & Encoding(url) == "UTF-8" & !validUTF8(url)
   # A string led by U+FEFF has no scheme (S3.1: the first character is an
-  # ALPHA). The byte-mode scheme capture already finds none; the mask is the
-  # ADR 0005 guard from when it was a stringi match that read past the mark
-  # (RURL-biunpazk), left for the ADR 0019 close-out to retire.
-  bom_led <- !undecodable & .starts_with_bom(url)
-  walkable <- !undecodable & !bom_led
+  # ALPHA), and the walk's byte-mode scheme capture finds none there, so it
+  # needs no mask (ADR 0005's guard retired by ADR 0019, RURL-dddxutjf).
+  walkable <- !undecodable
   ok <- rep(NA, n)
-  ok[undecodable | bom_led] <- FALSE
+  ok[undecodable] <- FALSE
   if (any(walkable)) {
     # The byte layer refuses a latin1 mark, so a latin1 element walks as its
     # exact UTF-8 spelling (`.latin1_input_to_utf8()`). Every delimiter is
@@ -1514,11 +1512,10 @@
     return(rep(FALSE, n))
   }
   scheme_lc <- .ascii_tolower(.scheme_prefix(url))
-  # A row led by U+FEFF has no scheme, under every url_standard. The byte-mode
-  # capture already finds none there; the mask is the ADR 0005 guard from when
-  # this was a stringi match that read past the mark (RURL-vhionecz,
-  # RURL-biunpazk), left for the ADR 0019 close-out to retire.
-  has_scheme <- !is.na(scheme_lc) & !.starts_with_bom(url)
+  # A row led by U+FEFF has no scheme, under every url_standard, and the
+  # byte-mode capture finds none there, so it needs no mask (ADR 0005's guard
+  # retired by ADR 0019, RURL-dddxutjf).
+  has_scheme <- !is.na(scheme_lc)
   # The host:port carve-out exists for the SCHEME-LESS `example.com:8080` form,
   # which the scheme regex above also matches (a dot is a legal scheme char, so
   # `example.com` reads as a scheme). The authority-part must therefore be
@@ -1532,7 +1529,11 @@
   # read `example.com:80<U+2028>` as a port of 80. A port is digits only
   # (RFC 3986 sec 3.2.3; WHATWG port state), so that row is a scheme
   # `example.com` with an opaque path, as for any other trailing non-digit.
-  host_port <- .bytes_detect(url, "\\A[^/:]+:[0-9]+(?:\\z|/)")
+  # The digit run is possessive, as in its Phase 1 twin (R/parse-phases.R):
+  # a shorter run is followed by a digit, which is neither end nor "/", so it
+  # matches the same rows, and it no longer gives a long run back byte by
+  # byte, which hit PCRE's match limit on ~1e7 digits (RURL-rweowcfz).
+  host_port <- .bytes_detect(url, "\\A[^/:]+:[0-9]++(?:\\z|/)")
   host_port[is.na(host_port)] <- FALSE
   # ...and the carve-out does not apply under `rfc3986` AT ALL (RURL-kkuirsnz).
   # It encodes rurl's browser-omnibox affordance -- "a bare `example.com:8080`

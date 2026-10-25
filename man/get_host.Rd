@@ -208,9 +208,11 @@ uses, so \code{\link{get_domain}} / \code{\link{get_tld}} /
 diverges from \code{\link{safe_parse_url}}, whose \code{host} column is
 \code{NA} for a \code{mailto:} URL: a \code{mailto:} is a WHATWG opaque path
 and has no authority, so the recipient domain is surfaced here as extraction
-metadata rather than presented as a parsed authority. Under the default
-\code{"web"} acceptance a \code{mailto:} URL is not parsed and this returns
-\code{NA}.
+metadata rather than presented as a parsed authority. That domain is
+\code{NA} when it is not a domain-form right-hand side, when it does not
+percent-decode to valid UTF-8, or when it holds a null octet
+(\code{\%00}). Under the default \code{"web"} acceptance a \code{mailto:}
+URL is not parsed and this returns \code{NA}.
 }
 \examples{
 get_host("http://sub.example.com:8080")

@@ -582,9 +582,11 @@ get_scheme <- function(url, protocol_handling = "keep",
 #' diverges from \code{\link{safe_parse_url}}, whose \code{host} column is
 #' \code{NA} for a \code{mailto:} URL: a \code{mailto:} is a WHATWG opaque path
 #' and has no authority, so the recipient domain is surfaced here as extraction
-#' metadata rather than presented as a parsed authority. Under the default
-#' \code{"web"} acceptance a \code{mailto:} URL is not parsed and this returns
-#' \code{NA}.
+#' metadata rather than presented as a parsed authority. That domain is
+#' \code{NA} when it is not a domain-form right-hand side, when it does not
+#' percent-decode to valid UTF-8, or when it holds a null octet
+#' (\code{\%00}). Under the default \code{"web"} acceptance a \code{mailto:}
+#' URL is not parsed and this returns \code{NA}.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -1059,9 +1061,14 @@ get_port <- function(url, protocol_handling = "keep",
 #' Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
 #' first recipient (its \code{addr-spec} local-part) is returned, mirroring how
 #' \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
-#' domain (ADR 0012 D7). As with \code{\link{get_host}}, this deliberately
-#' diverges from \code{\link{safe_parse_url}}, whose \code{user} column is
-#' \code{NA} for a \code{mailto:} URL (an opaque path carries no authority).
+#' domain (ADR 0012 D7). That local-part is percent-decoded, and it is
+#' \code{NA} when the decoded octets are not valid UTF-8 (RFC 6068 section 2)
+#' or hold a null octet (\code{\%00}, which is no \code{addr-spec} character,
+#' RFC 5322 section 3.2.3), as the host is for such a domain. As with
+#' \code{\link{get_host}}, this deliberately diverges from
+#' \code{\link{safe_parse_url}}, whose
+#' \code{user} column is \code{NA} for a \code{mailto:} URL (an opaque path
+#' carries no authority).
 #' Under the default \code{"web"} acceptance a \code{mailto:} URL is not parsed
 #' and this returns \code{NA}.
 #'
@@ -1420,11 +1427,21 @@ get_host_type <- function(url, url_standard,
 #'   absence: \code{ipv6-non-canonical} and \code{ipv6-embedded-ipv4} (each
 #'   within the scope its entry below states) and
 #'   \code{domain-invalid-ace-label}, which fires on \emph{every} parsed
-#'   host that meets its predicate (see its entry below), under both
+#'   URL host that meets its predicate (see its entry below), under both
 #'   \code{"rfc3986"} and \code{"whatwg"}. Its absence means each
 #'   \code{xn--} label of the host
 #'   is, on its own, a genuine A-label. It says nothing about the host's other
 #'   labels or about the DNS rules the other \code{domain-*} tokens report.
+#'
+#'   Credentials and host facts describe a URL \emph{authority}, so they are
+#'   reported only where the parse produced one with a host. A URL whose parse
+#'   has none (a WHATWG opaque path such as \code{mailto:a@x.de}; an RFC 3986
+#'   \code{path-rootless} or \code{path-absolute} path, with no authority)
+#'   reports none of them, even where \code{\link{get_user}} or
+#'   \code{\link{get_host}} return a
+#'   \code{mailto:} recipient's local part or domain (ADR 0012 D7): a
+#'   recipient's domain is not a URL host. \code{\link{get_mailto_recipients}}
+#'   judges recipients.
 #'
 #'   Two WHATWG-generic facts gate on the \emph{interpreting standard}, not the
 #'   acceptance axis, so they are reported whenever \code{url_standard =
@@ -1433,8 +1450,8 @@ get_host_type <- function(url, url_standard,
 #'   \itemize{
 #'     \item \code{invalid-URL-unit} / \code{invalid-credentials} --- WHATWG
 #'       validation errors (WHATWG-verbatim names): a malformed \code{\%}-escape
-#'       or a non-URL code point, and any credentials (userinfo) present.
-#'       Bounded detection.
+#'       or a non-URL code point, and credentials (userinfo) in a parsed
+#'       authority. Bounded detection.
 #'   }
 #'   The default combination (\code{"web"} acceptance with \code{url_standard =
 #'   NULL}) emits no diagnostics at all, so it is unaffected.

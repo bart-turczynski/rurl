@@ -279,16 +279,16 @@
 .ICU_IPV6_HEX_SHAPE <- paste0("^\\[?[0-9a-fA-F:]++\\]?", .ICU_END)
 .ICU_IPV6_SERIALIZABLE <- paste0("^\\[[0-9A-Fa-f:.]++\\]", .ICU_END)
 .ICU_TRAILING_DOT <- paste0("\\.", .ICU_END)
-# `.serialize_whatwg_ipv6_host()`'s ICU capture `^(.*:)(<quad>)$` over the
-# inside of a bracketed host, which holds no line terminator, so ICU's `.`
-# and `$` are `(?s).` and `\z`. The quad holds no ":", so it can only follow
-# the last ":". Possessive runs of ":"-free bytes, each ending in ":", reach
-# that ":" without giving a byte back, so the quad is tried once; an atomic
-# `(?>.*:)` still backtracked byte by byte to the last ":" and hit PCRE's
-# match limit on a long last group (RURL-yqmoztoj). Group 2 is the quad.
+# The dotted-quad tail of a bracketed IPv6 host, matched whole. The ICU
+# capture it replaces was `^(.*:)(<quad>)$`; the quad holds no ":", so it can
+# only follow the last ":". `.serialize_whatwg_ipv6_host()` cuts at the last
+# ":" and tests the rest against this pattern. In one regex, an atomic
+# `(?>.*:)` gave bytes back to the last ":" one by one (RURL-yqmoztoj), and
+# possessive `(?:[^:]*+:)++` counted a step per ":", so both hit PCRE's
+# match limit on a host of ~1e7 bytes (RURL-rweowcfz).
 .IPV6_QUAD_TAIL <- paste0(
-  "(?s)^((?:[^:]*+:)++)(", .ICU_IPV4_OCTET, "\\.", .ICU_IPV4_OCTET, "\\.",
-  .ICU_IPV4_OCTET, "\\.", .ICU_IPV4_OCTET, ")\\z"
+  "\\A", .ICU_IPV4_OCTET, "\\.", .ICU_IPV4_OCTET, "\\.",
+  .ICU_IPV4_OCTET, "\\.", .ICU_IPV4_OCTET, "\\z"
 )
 .ICU_NUMBER_LAST_LABEL <- paste0(
   "(?:\\A|\\.)(?:[0-9]++|0[xX][0-9a-fA-F]*+)", .ICU_END
@@ -573,8 +573,9 @@
 # U+FEFF where none of its patterns could, since U+FEFF is not an ASCII alpha,
 # a C0 control, a space or a slash; callers masked such rows with this, under
 # every url_standard (RURL-vhionecz, RURL-biunpazk). Byte mode reads the mark
-# as data (ADR 0019), so only the guards ADR 0005's table still lists call
-# this. NA reads FALSE.
+# as data (ADR 0019), so only the guards that still front a stringi call use
+# this: ADR 0005's table, and the whatwg `stri_enc_toutf8()` splice in
+# resolve_url() (ADR 0019 decision 4, still open). NA reads FALSE.
 .starts_with_bom <- function(x) {
   grepl("^\ufeff", x, useBytes = TRUE)
 }
@@ -847,9 +848,9 @@
     # Byte-indexed for the same reason as the shim's slice (RURL-kmpnbvdl):
     # `authority` is a capture, so it is declared UTF-8 no matter what
     # octets it holds, and `substr()` threw on `http://a@@<80>b/`. The last
-    # "@" is where `.ICU_THROUGH_LAST_AT` starts: `.last_byte_index()` lists
-    # every "@" with a fixed `gregexpr()`, quadratic in their number
-    # (RURL-atlidhyh).
+    # "@" is where `.ICU_THROUGH_LAST_AT` starts. (`.last_byte_index()` is
+    # linear too since RURL-rweowcfz; this one regex was the RURL-atlidhyh
+    # fix and stays.)
     last <- regexpr(.ICU_THROUGH_LAST_AT, a, perl = TRUE, useBytes = TRUE)[1L]
     paste0(
       .percent_encode_userinfo_charset(.byte_substring(a, 1L, last - 1L)),
@@ -2282,19 +2283,21 @@
   # cut `stri_sub(host, 2L, -2L)` then dropped only the terminator, `inner`
   # kept the "]", no hextet parsed and the host came back unchanged, as it
   # does here directly. Every other row ends in "]" and holds no terminator,
-  # so `inner` is bytes 2 to n - 1 (ADR 0019) and ICU's `.` and `$` are
-  # `(?s).` and `\z`.
+  # so `inner` is bytes 2 to n - 1 (ADR 0019).
   if (!endsWith(host, "]")) {
     return(host)
   }
   inner <- .bytes_cut(host, 2L, nchar(host, type = "bytes") - 1L)
-  # The capture runs base R on a constant of this file, as `.const_detect()`
-  # does: group 1 starts at byte 1, so it is bytes 1 to its length.
-  m <- regexpr(.IPV6_QUAD_TAIL, inner, perl = TRUE, useBytes = TRUE)
-  if (m > 0L) {
-    cs <- attr(m, "capture.start")
-    cl <- attr(m, "capture.length")
-    quad <- .bytes_cut(inner, cs[1L, 2L], cs[1L, 2L] + cl[1L, 2L] - 1L)
+  # The test runs base R on a constant of this file, as `.const_detect()`
+  # does. `colon` is the byte length of the head through the last ":".
+  colon <- .last_byte_index(inner, ":")
+  quad <- if (colon > 0L) {
+    .bytes_cut(inner, colon + 1L, nchar(inner, type = "bytes"))
+  } else {
+    ""
+  }
+  if (colon > 0L &&
+        grepl(.IPV6_QUAD_TAIL, quad, perl = TRUE, useBytes = TRUE)) {
     quad <- strsplit(quad, ".", fixed = TRUE)[[1L]]
     octets <- suppressWarnings(as.integer(quad))
     if (length(octets) != 4L || anyNA(octets) ||
@@ -2302,7 +2305,7 @@
       return(host)
     }
     inner <- paste0(
-      .bytes_cut(inner, 1L, cl[1L, 1L]),
+      .bytes_cut(inner, 1L, colon),
       sprintf("%x", octets[1L] * 256L + octets[2L]), ":",
       sprintf("%x", octets[3L] * 256L + octets[4L])
     )
