@@ -802,9 +802,21 @@
 # if it came out SHORTER than the source text; otherwise the source stands
 # verbatim, case and dotted quad intact. Returns NULL when the literal is
 # invalid.
+#
+# An embedded dotted-quad tail, and the prefix before it through its colon.
+# Byte mode (ADR 0019); `inner` is ASCII by the guard below, so bytes are
+# characters. ICU's `.` stops at the ASCII line terminators LF, VT, FF and CR
+# (the others are non-ASCII and cannot occur here), so its `.*` is spelled as
+# the class that excludes exactly those four. A constant run by `regexpr()`
+# directly, once per literal, and held to `.bytes_check_pattern()` by a test.
+.WEB_IPV6_OCTET <- "(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
+.WEB_IPV6_QUAD_TAIL_RE <- paste0(
+  "\\A([^\\n\\x0b\\x0c\\r]*:)", .WEB_IPV6_OCTET, "\\.", .WEB_IPV6_OCTET,
+  "\\.", .WEB_IPV6_OCTET, "\\.", .WEB_IPV6_OCTET, "\\z"
+)
 .web_ipv6_serialize <- function(inner) {
-  # ASCII guard before any ICU call: an IPv6 literal is ASCII by construction,
-  # and `stringi` refuses a declared-UTF-8 string holding invalid octets.
+  # ASCII guard: an IPv6 literal is ASCII by construction. It also keeps the
+  # byte-mode capture and cuts below on text where a byte is a character.
   if (any(.web_bytes(inner) >= 0x80L)) {
     return(NULL)
   }
@@ -825,20 +837,20 @@
   # the end -- `inner` itself is consumed by the quad split below.
   src_inner <- inner
   quad <- NA_character_
-  oct <- "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
-  m <- stringi::stri_match_first_regex(
-    inner, paste0("\\A(.*:)(", oct, "\\.", oct, "\\.", oct, "\\.", oct, ")\\z")
-  )
-  if (!is.na(m[1L, 1L])) {
-    quad <- m[1L, 3L]
-    prefix <- m[1L, 2L]
+  # Group 1 is the prefix through the colon before the quad; it starts at
+  # byte 1, so its length is where the quad begins.
+  m <- regexpr(.WEB_IPV6_QUAD_TAIL_RE, inner, perl = TRUE, useBytes = TRUE)
+  if (!is.na(m) && m > 0L) {
+    plen <- attr(m, "capture.length")[1L, 1L]
+    quad <- .bytes_cut(inner, plen + 1L, .Machine$integer.max)
+    prefix <- .bytes_cut(inner, 1L, plen)
     # The prefix always ends in the ":" that separated the quad, and that colon
     # is dropped -- UNLESS it is the second colon of a "::", which belongs to
     # the compression marker and must survive. Without this, `[::127.0.0.1]` had
     # its
     # "::" cut down to a lone ":" and was rejected as malformed.
     if (!endsWith(prefix, "::")) {
-      prefix <- substring(prefix, 1L, nchar(prefix) - 1L)
+      prefix <- .bytes_cut(prefix, 1L, nchar(prefix, type = "bytes") - 1L)
     }
     inner <- prefix
   }
@@ -847,9 +859,9 @@
   # "a". Detect the "::" and the empty sides from the string itself.
   has_dc <- grepl("::", inner, fixed = TRUE, useBytes = TRUE)
   if (has_dc) {
-    dc <- stringi::stri_locate_first_fixed(inner, "::")[1L, 1L]
-    left_s <- substring(inner, 1L, dc - 1L)
-    right_s <- substring(inner, dc + 2L, .Machine$integer.max)
+    dc <- .bytes_locate(inner, "::", fixed = TRUE)[1L, 1L]
+    left_s <- .bytes_cut(inner, 1L, dc - 1L)
+    right_s <- .bytes_cut(inner, dc + 2L, .Machine$integer.max)
     if (grepl("::", right_s, fixed = TRUE, useBytes = TRUE)) {
       return(NULL) # more than one "::"
     }
