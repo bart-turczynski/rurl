@@ -800,11 +800,13 @@
   has_at[is.na(has_at)] <- FALSE
 
   # Any of the 30 parser-refused code points inside the userinfo span
-  # (everything before the LAST "@"). The first match of `@[^@]*\z` starts at
-  # the last "@", so `sub()` cuts what stringi's replace-last did.
+  # (everything before the LAST "@"). The first match of `@[^@]*+\z` starts at
+  # the last "@", so `sub()` cuts what stringi's replace-last did. The run is
+  # possessive: a greedy one gave back the bytes after each earlier "@" one by
+  # one and hit PCRE's match limit on a long row (RURL-atlidhyh).
   eligible <- rep(FALSE, length(url))
   if (any(has_at)) {
-    userinfo_span <- .bytes_replace(authority[has_at], "@[^@]*\\z", "")
+    userinfo_span <- .bytes_replace(authority[has_at], "@[^@]*+\\z", "")
     hit <- .bytes_detect(userinfo_span, "[\\x00-\\x20\\x7f]")
     hit[is.na(hit)] <- FALSE
     eligible[has_at] <- hit

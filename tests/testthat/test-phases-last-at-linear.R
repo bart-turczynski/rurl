@@ -78,3 +78,21 @@ test_that("the port cut stays under the match limit on a long row", {
   )
   expect_true(identical(cls$host_token, host))
 })
+
+test_that("the userinfo encoder reads the span before the last \"@\"", {
+  enc <- function(x) .encode_userinfo_charset_vec(x, "whatwg")$url
+  expect_identical(
+    enc(c("http://u v@h/", "http://u@h v/", "http://a b@c d@h/", "http://h/",
+          "https://u\x01@h@x/", "http://u@h\x01/", NA)),
+    c("http://u%20v@h/", "http://u@h v/", "http://a%20b@c%20d@h/", "http://h/",
+      "https://u%01@h@x/", "http://u@h\x01/", NA)
+  )
+})
+
+test_that("the userinfo span stays under the match limit on a long row", {
+  # `@[^@]*\z` gave back the run after each earlier "@" byte by byte: with
+  # ~1e7 bytes between two "@" it warned and read the host as userinfo.
+  url <- paste0("http://u@", strrep("a", long_n), "@h\x01/")
+  expect_no_warning(out <- .encode_userinfo_charset_vec(url, "whatwg")$url)
+  expect_true(identical(out, url))
+})
