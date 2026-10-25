@@ -81,3 +81,32 @@ test_that("an undecodable domain is the NA host", {
                      label = u)
   }
 })
+
+# --- The defect: get_user() handed back the raw octets ("a\xe9") -------------
+
+test_that("an undecodable local part is the NA user", {
+  for (u in c("mailto:a%E9@b.com", "mailto:a%C3@b.com",
+              "mailto:%22a%E9%22@b.com", "mailto:a%E9@b.com?subject=hi")) {
+    expect_identical(uu_parts(u), list(user = NA_character_, host = "b.com"),
+                     label = u)
+  }
+})
+
+test_that("both halves undecodable is NA user and NA host", {
+  expect_identical(uu_parts("mailto:a%E9@b%E9.com"),
+                   list(user = NA_character_, host = NA_character_))
+})
+
+test_that("an undecodable second recipient leaves the first alone", {
+  expect_identical(uu_parts("mailto:x@y.com,a%E9@b.com"),
+                   list(user = "x", host = "y.com"))
+})
+
+test_that("the reported row's user no longer throws in nchar()", {
+  for (std in uu_standards) {
+    u <- get_user("mailto:a%E9@b.com", url_standard = std,
+                  scheme_acceptance = "general")
+    expect_no_error(nchar(u, type = "chars"))
+    expect_identical(u, NA_character_, label = std)
+  }
+})
