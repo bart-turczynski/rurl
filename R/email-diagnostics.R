@@ -261,8 +261,20 @@
 
 # --- Classifiers (operate on the ONCE-decoded field) -------------------------
 
+# A decoded field the classifiers can judge: present, non-empty, and valid
+# UTF-8. RFC 6068 section 2 has every non-ASCII character of a mailto URI
+# encoded as UTF-8 and then percent-encoded octet by octet, so a field whose
+# decoded octets are not UTF-8 (`a%E9`, a truncated `%C3`) is no RFC 6068
+# addr-spec part: the recipient's own "invalid", never the "invalid multibyte
+# string" throw nchar() and strsplit() raise on it, which stopped the whole
+# vectorized call (RURL-lotjvpnt). validUTF8() is a byte test, so the verdict
+# is the same under every locale.
+.email_decoded_ok <- function(dec) {
+  !is.na(dec) && nzchar(dec) && validUTF8(dec)
+}
+
 .email_classify_local <- function(dec) {
-  if (is.na(dec) || !nzchar(dec)) {
+  if (!.email_decoded_ok(dec)) {
     return("invalid")
   }
   if (nchar(dec) >= 2L && startsWith(dec, "\"") && endsWith(dec, "\"")) {
@@ -274,7 +286,7 @@
 }
 
 .email_classify_mailto_domain <- function(dec) {
-  if (is.na(dec) || !nzchar(dec)) {
+  if (!.email_decoded_ok(dec)) {
     return("invalid")
   }
   if (startsWith(dec, "[") && endsWith(dec, "]")) {
@@ -288,7 +300,7 @@
 }
 
 .email_classify_smtp_rhs <- function(dec) {
-  if (is.na(dec) || !nzchar(dec)) {
+  if (!.email_decoded_ok(dec)) {
     return("invalid")
   }
   if (startsWith(dec, "[") && endsWith(dec, "]")) {
@@ -330,7 +342,8 @@
 # non-ASCII local-part is invalid RFC 6068 syntax yet is precisely the SMTPUTF8
 # trigger. Returns "ascii", "smtputf8", or "unavailable".
 .email_smtp_localpart_mode <- function(ld) {
-  if (is.na(ld) || !nzchar(ld)) {
+  # Octets that are not UTF-8 have no SMTPUTF8 (RFC 6531) projection either.
+  if (!.email_decoded_ok(ld)) {
     return("unavailable")
   }
   ok <- if (nchar(ld) >= 2L && startsWith(ld, "\"") && endsWith(ld, "\"")) {
