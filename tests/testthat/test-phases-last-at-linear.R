@@ -96,3 +96,23 @@ test_that("the userinfo span stays under the match limit on a long row", {
   expect_no_warning(out <- .encode_userinfo_charset_vec(url, "whatwg")$url)
   expect_true(identical(out, url))
 })
+
+prep_host_port <- function(x) {
+  .prepare_urls_for_parse_vec(x, "keep", "keep")$looks_like_host_port
+}
+
+test_that("Phase 1 reads a scheme-less host:port only before \"/\" or the end", {
+  expect_identical(
+    prep_host_port(c("example.com:8080", "example.com:8080/p", "h:1x",
+                     "urn:a:1", "h:80?q", "h:", "h:8080\u2028")),
+    c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE)
+  )
+})
+
+test_that("the host:port test stays under the match limit on a long port", {
+  # `[0-9]+(?:\z|/)` gave a digit run back byte by byte before failing: with
+  # ~1e7 digits and no "/" or end after them it warned.
+  x <- paste0("h:", strrep("1", long_n), "x")
+  expect_no_warning(out <- prep_host_port(x))
+  expect_false(out)
+})

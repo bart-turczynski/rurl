@@ -1583,8 +1583,11 @@
     # before a final U+0085, U+2028 or U+2029, so `example.com:8080<U+2028>`
     # read as a host:port where `example.com:8080x` reads as a scheme and an
     # opaque path. A port is digits only (WHATWG URL Standard, port state;
-    # RFC 3986 section 3.2.3), so those rows now read like the `x` row.
-    lhp <- .bytes_detect(url, "^[^/:]+:[0-9]+(?:\\z|/)")
+    # RFC 3986 section 3.2.3), so those rows now read like the `x` row. The
+    # digit run is possessive, the same rows as the twin's `[0-9]+`: a shorter
+    # run is followed by a digit, neither end nor "/", and giving a long run
+    # back byte by byte hit PCRE's match limit (RURL-atlidhyh).
+    lhp <- .bytes_detect(url, "^[^/:]+:[0-9]++(?:\\z|/)")
     lhp[is.na(lhp)] <- FALSE
     looks_like_host_port[maybe_host_port] <- lhp[maybe_host_port]
   }
