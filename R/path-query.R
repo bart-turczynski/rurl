@@ -179,25 +179,42 @@
 .DOT_SEGMENT_TAIL_RE <- "(^|/)\\.{1,2}\\z"
 
 # Internal helper to strip index/default pages from the end of a path.
-# stri_match_first_regex() and stri_startswith_fixed() read past a U+FEFF that
-# starts their input (see .starts_with_bom()), so the directory kept from
-# `\ufeff/a/index.html` was `/a`, not `/\ufeff/a` (RURL-zxnxczsw). The match
-# runs on the path behind a spliced "x", which the pattern's `^(.*)` takes
-# into the kept directory and the byte cut removes; the regex itself, and so
-# which paths match, is unchanged. The root test is base R.
+#
+# Byte mode (ADR 0019). This was the ICU capture
+# `(?i)^(.*)/(index|default)\.[^/]+/?$`, run behind a spliced "x" because
+# stringi reads past a U+FEFF that starts its input (RURL-zxnxczsw). The page
+# part is `.INDEX_PAGE_TAIL` (R/parse-phases.R): the letters as ASCII case
+# classes (ICU folds no non-ASCII code point to them) and ICU's `$`. Its
+# `[^/]+/?` admits no "/" but one just before the end, so at most one "/" in
+# a path can start a match, and the unanchored search finds it in linear time
+# with no `.*` to give bytes back. ICU's greedy `(.*)` took everything before
+# that "/", and matched only when that stretch held no line terminator
+# (ICU's `.` stops at LF, VT, FF, CR, U+0085, U+2028 and U+2029); the kept
+# directory is that stretch, cut in bytes, and a terminator in it means no
+# match, as before. A leading U+FEFF is data, so no splice is needed. The
+# pattern is a constant held to `.bytes_check_pattern()` by
+# test-offsets-query-accessors.R, so this per-row call runs base R directly.
 ._strip_index_page <- function(path) {
   if (is.na(path) || !nzchar(path)) {
     return(path)
   }
-  match <- stringi::stri_match_first_regex(
-    paste0("x", path),
-    "(?i)^(.*)/(index|default)\\.[^/]+/?$"
-  )
-  if (is.na(match[1, 1])) {
+  .bytes_check_input(path)
+  m <- regexpr(.INDEX_PAGE_TAIL, path, perl = TRUE, useBytes = TRUE)
+  if (m < 1L) {
     return(path)
   }
-  base <- .byte_substring(match[1, 2], 2L)
-  if (is.na(base) || base == "") {
+  base <- .bytes_cut(path, 1L, m - 1L)
+  # A terminator is LF, VT, FF or CR (0x0A-0x0D), or a sequence led by 0xC2
+  # (U+0085) or 0xE2 (U+2028, U+2029); the regex runs only on a directory
+  # holding one of those lead bytes, as compiling it costs more per row than
+  # the page search.
+  b <- charToRaw(base)
+  if (any(b >= as.raw(0x0a) & b <= as.raw(0x0d)) ||
+        (any(b == as.raw(0xc2) | b == as.raw(0xe2)) &&
+           grepl(.ICU_TERMINATOR, base, perl = TRUE, useBytes = TRUE))) {
+    return(path)
+  }
+  if (base == "") {
     return("/")
   }
   if (!startsWith(base, "/")) {
