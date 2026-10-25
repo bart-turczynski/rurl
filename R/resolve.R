@@ -926,8 +926,21 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   if (.is_whatwg(url_standard)) {
     # The replacement is the reading, not a fault, and the parse seam reads
     # the same octet without a warning; stringi's "fixing" notice is muffled.
+    # stri_enc_toutf8() reads a U+FEFF that starts its input as a byte-order
+    # mark and drops it (ADR 0019 RC2), but in a URL the code point is data:
+    # the URL Standard strips no U+FEFF and percent-encodes it in a path
+    # (RURL-tfttelwo). So a row led by the mark is decoded with an ASCII `x`
+    # spliced on first, and that one byte is cut off after, as
+    # .url_key_frame() does. The decode stays stringi's, for its one U+FFFD
+    # per maximal subpart (ADR 0019, semantic exception 2(d)). Every element
+    # here is marked UTF-8 by the input boundary, so paste0() does not
+    # translate it by the locale.
     replace <- function(x) {
-      suppressWarnings(stringi::stri_enc_toutf8(x, validate = TRUE))
+      lead <- .starts_with_bom(x)
+      x[lead] <- paste0("x", x[lead])
+      out <- suppressWarnings(stringi::stri_enc_toutf8(x, validate = TRUE))
+      out[lead] <- .bytes_cut(out[lead], 2L, .Machine$integer.max)
+      out
     }
     ref[ref_bad] <- replace(ref[ref_bad])
     base[base_bad] <- replace(base[base_bad])
