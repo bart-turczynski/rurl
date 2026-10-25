@@ -2083,8 +2083,25 @@
   # cleaning have decided which structural rules fire. Legacy `encode` still
   # means decode then segment-encode; the difference is that both presentation
   # operations now happen after index/trailing-slash handling.
+  # The decode keeps a `%00` triplet as written (RURL-fpujlvoq), and the
+  # segment encode below would escape its `%` to `%2500`. So under "encode" a
+  # path holding the triplet is decoded and encoded between its `%00`s, every
+  # "/" kept, the triplets are put back between the pieces, and the encode
+  # below skips the row. `%00` has no hex letter, so the fixed split finds
+  # every spelling of it.
+  nul_kept <- logical(length(path_work))
+  if (path_encoding == "encode" && !whatwg_encode) {
+    nul_kept <- !is.na(path_work) &
+      grepl("%00", path_work, fixed = TRUE, useBytes = TRUE)
+    if (any(nul_kept)) {
+      path_work[nul_kept] <- vapply(
+        path_work[nul_kept], .pct_recode_path_keep_nul, character(1),
+        USE.NAMES = FALSE
+      )
+    }
+  }
   if (path_encoding %in% c("decode", "encode") && !whatwg_encode) {
-    mask <- !is.na(path_work)
+    mask <- !is.na(path_work) & !nul_kept
     if (any(mask)) {
       decoded <- tryCatch(
         .pct_unescape(path_work[mask]),
@@ -2122,7 +2139,7 @@
   if (whatwg_encode) {
     path_work <- .whatwg_path_percent_encode(path_work)
   } else if (path_encoding == "encode") {
-    mask <- !is.na(path_work)
+    mask <- !is.na(path_work) & !nul_kept
     if (any(mask)) {
       path_work[mask] <- vapply(
         path_work[mask], ._encode_path_segments, character(1), USE.NAMES = FALSE

@@ -270,14 +270,15 @@
 # accessor extraction and get_mailto_recipients() decode here, so they cannot
 # disagree on a field. validUTF8() is a byte test: the same in every locale.
 #
-# A `%00` triplet is NA too (RURL-rujjbahq). .pct_unescape() stops at a
-# decoded NUL (an R string cannot hold one), so decoding it would hand the
-# classifiers and accessors only the prefix before it, judged as if it were
-# the whole field (`a%00zz` read as `a`, `evil.com%00.good.com` as
-# `evil.com`). NUL is neither atext nor dtext (RFC 5322 sections 3.2.3 and
-# 3.4.1, the addr-spec RFC 6068 section 2 adopts), so a field holding one is
-# invalid whatever surrounds it. `%00` has no hex letter, so the fixed match
-# covers every case spelling, and no other triplet can overlap it.
+# A `%00` triplet is NA too (RURL-rujjbahq). An R string cannot hold the
+# NUL it decodes to. .pct_unescape() used to stop there, handing on only the
+# prefix (`a%00zz` read as `a`, `evil.com%00.good.com` as `evil.com`); it now
+# keeps the triplet as written (RURL-fpujlvoq), which the classifiers would
+# judge as three addr-spec characters. NUL is neither atext nor dtext (RFC
+# 5322 sections 3.2.3 and 3.4.1, the addr-spec RFC 6068 section 2 adopts), so
+# a field holding one is invalid whatever surrounds it. `%00` has no hex
+# letter, so the fixed match covers every case spelling, and no other triplet
+# can overlap it.
 .email_decode_field <- function(raw) {
   if (!is.na(raw) && grepl("%00", raw, fixed = TRUE, useBytes = TRUE)) {
     return(NA_character_)
