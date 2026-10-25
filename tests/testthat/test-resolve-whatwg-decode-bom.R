@@ -63,9 +63,16 @@ for (ct in names(ctypes)) {
     with_ctype(ct, ctypes[[ct]], {
       for (std in list("whatwg", "rfc3986", NULL)) {
         label <- paste(ct, if (is.null(std)) "NULL" else std)
+        # Under rfc3986 either mark is a raw non-ASCII code point, so the
+        # reference is no RFC 3986 URI-reference (sections 2, 4.1; RUL-030,
+        # RURL-pntbujzc) and both rows are NA, alike.
         expect_bytes(
           cold_resolve(c("﻿a", "​a"), base, std),
-          c("http://h/d/﻿a", "http://h/d/​a"),
+          if (identical(std, "rfc3986")) {
+            c(NA_character_, NA_character_)
+          } else {
+            c("http://h/d/﻿a", "http://h/d/​a")
+          },
           label = paste(label, "reference")
         )
         # A base led by either mark has no scheme, so it is no base.

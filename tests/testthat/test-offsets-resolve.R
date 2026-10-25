@@ -77,11 +77,16 @@ test_that("NULL and rfc3986 file resolution stay where they were", {
     "file:///", NA, NA, NA
   )
   expect_identical(resolve_url(file_refs, file_base), want)
+  # Under rfc3986 the four references holding a raw non-ASCII code point are
+  # no RFC 3986 URI-reference (sections 2, 2.5, 4.1; RUL-030, RURL-pntbujzc),
+  # so those rows are NA; the ASCII rows do not move.
+  want_rfc <- want
+  want_rfc[12:15] <- NA_character_
   expect_identical(resolve_url(file_refs, file_base, url_standard = "rfc3986"),
-                   want)
+                   want_rfc)
   expect_identical(
     resolve_url(file_refs, file_base, url_standard = "rfc3986",
                 output = "serialized"),
-    want
+    want_rfc
   )
 })
