@@ -166,3 +166,55 @@ test_that("the public API reads U+FEFF-led inputs as their U+200B twins", {
     }
   }
 })
+
+# The second close-out slice: the masks in .rfc3986_generic_uri_ok(),
+# .general_parsed_mask() (R/parse-state.R) and .fsss_source_lex()
+# (R/serialize.R). Each sat in front of a scheme test that now runs in byte
+# mode, where `\A[A-Za-z]` cannot match the mark's first byte.
+scheme_rows <- c(
+  "{M}http://h/", "{M}foo:x", "{M}urn:a:1", "{M}file:///p", "{M}http:///h",
+  "{M}http:/h", "{M}https://h/", "{M}ws://h/", "{M}mailto:x@y",
+  "{M}example.com:8080", "{M}http://u@h:1/p?q#f"
+)
+
+test_that("the RFC 3986 grammar reads a U+FEFF-led row as its U+200B twin", {
+  # A mark-led row has no scheme (S3.1), so the walk rejects it; the
+  # whole-string ASCII test flags it as well.
+  b <- paste0(bom, sub("{M}", "", scheme_rows, fixed = TRUE))
+  Encoding(b) <- "UTF-8"
+  for (ascii_only in c(TRUE, FALSE)) {
+    g <- rurl:::.rfc3986_generic_uri_ok(b, ascii_only = ascii_only)
+    expect_identical(g$ok, rep(FALSE, length(b)), label = ascii_only)
+    expect_identical(g$diagnostic,
+                     rep("unicode-outside-rfc3986-uri", length(b)),
+                     label = ascii_only)
+    expect_twins(scheme_rows, function(u) {
+      rurl:::.rfc3986_generic_uri_ok(u, ascii_only = ascii_only)
+    }, label = paste("grammar", ascii_only))
+  }
+})
+
+test_that("a U+FEFF-led row is never general-routed, as its U+200B twin", {
+  b <- paste0(bom, sub("{M}", "", scheme_rows, fixed = TRUE))
+  Encoding(b) <- "UTF-8"
+  for (an in names(arms)) {
+    for (acc in c("web", "general")) {
+      for (pol in c("infer", "require")) {
+        f <- function(u) {
+          rurl:::.general_parsed_mask(u, arms[[an]], acc, scheme_policy = pol)
+        }
+        expect_identical(f(b), rep(FALSE, length(b)),
+                         label = paste(an, acc, pol))
+        expect_twins(scheme_rows, f, label = paste(an, acc, pol))
+      }
+    }
+  }
+})
+
+test_that("the serializer's source lex reads a U+FEFF-led row as its twin", {
+  rows <- c(scheme_rows, " {M}http://u@h/", "\t{M}http://u@h/")
+  for (arm in c("whatwg", "rfc3986")) {
+    expect_twins(rows, function(u) rurl:::.fsss_source_lex(u, arm),
+                 label = arm)
+  }
+})
