@@ -184,10 +184,11 @@ test_that("the RFC 3986 grammar reads a U+FEFF-led row as its U+200B twin", {
   Encoding(b) <- "UTF-8"
   for (ascii_only in c(TRUE, FALSE)) {
     g <- rurl:::.rfc3986_generic_uri_ok(b, ascii_only = ascii_only)
-    expect_identical(g$ok, rep(FALSE, length(b)), label = ascii_only)
+    expect_identical(g$ok, rep(FALSE, length(b)),
+                     label = paste("ok, ascii_only =", ascii_only))
     expect_identical(g$diagnostic,
                      rep("unicode-outside-rfc3986-uri", length(b)),
-                     label = ascii_only)
+                     label = paste("diagnostic, ascii_only =", ascii_only))
     expect_twins(scheme_rows, function(u) {
       rurl:::.rfc3986_generic_uri_ok(u, ascii_only = ascii_only)
     }, label = paste("grammar", ascii_only))
@@ -213,8 +214,28 @@ test_that("a U+FEFF-led row is never general-routed, as its U+200B twin", {
 
 test_that("the serializer's source lex reads a U+FEFF-led row as its twin", {
   rows <- c(scheme_rows, " {M}http://u@h/", "\t{M}http://u@h/")
-  for (arm in c("whatwg", "rfc3986")) {
-    expect_twins(rows, function(u) rurl:::.fsss_source_lex(u, arm),
-                 label = arm)
+  for (an in names(arms)) {
+    expect_twins(rows, function(u) rurl:::.fsss_source_lex(u, arms[[an]]),
+                 label = an)
+  }
+})
+
+test_that("a native-marked U+FEFF-led row finds no scheme either", {
+  # The old masks were byte tests, so they caught the mark under any encoding
+  # mark; the byte-mode scheme capture must too.
+  b <- paste0("\xef\xbb\xbf", sub("{M}", "", scheme_rows, fixed = TRUE))
+  Encoding(b) <- "unknown"
+  for (ascii_only in c(TRUE, FALSE)) {
+    g <- rurl:::.rfc3986_generic_uri_ok(b, ascii_only = ascii_only)
+    expect_identical(g$ok, rep(FALSE, length(b)),
+                     label = paste("ok, ascii_only =", ascii_only))
+  }
+  for (an in names(arms)) {
+    expect_identical(
+      rurl:::.general_parsed_mask(b, arms[[an]], "general"),
+      rep(FALSE, length(b)), label = an
+    )
+    lex <- rurl:::.fsss_source_lex(b, arms[[an]])
+    expect_identical(lex$host, rep(NA_character_, length(b)), label = an)
   }
 })
