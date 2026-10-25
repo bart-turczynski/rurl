@@ -76,6 +76,13 @@
 # jobs make, and names it on the VERDICT line. A declared secret is never
 # forwarded into the container. The gate runs before the clone, so a run in
 # which every job is skipped costs nothing and ends NONE.
+#
+# THE CLONE IS BIND-MOUNTED AT /repo, AND `pages` DOES NOT RUN THERE
+# (RURL-nviibwoo). On Docker Desktop for macOS the mount is virtiofs, which
+# denies the chmod pkgdown makes on the `docs/` it creates, so `pages` failed
+# here with EACCES while passing on the forge. Jobs listed in
+# CONTAINER_LOCAL_JOBS (below) first copy /repo to a container-local /work and
+# run their script, verbatim from .gitlab-ci.yml, there.
 
 set -euo pipefail
 
@@ -250,17 +257,34 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/rurl-local-ci.XXXXXX")"
 git clone --quiet --no-hardlinks "$ROOT" "$WORK/repo"
 git -C "$WORK/repo" checkout --quiet --detach "$SHA"
 
+# JOBS THAT RUN ON A CONTAINER-LOCAL COPY, NOT ON THE BIND MOUNT
+# (RURL-nviibwoo). `pages` calls pkgdown's init_site(), which sets permissions
+# on the `docs/` it creates. On Docker Desktop for macOS the bind mount of
+# $WORK/repo is virtiofs, which refuses that chmod -- `[EACCES] Failed to set
+# permissions for directory '/repo/docs'` -- while the forge job, on a
+# container-local checkout, passes. So for the jobs named here the runner, not
+# the job, copies /repo into the container's own filesystem first and the job
+# script runs there unchanged, as GitLab runs it. Nothing reads such a job's
+# output back: its tree dies with the container, and `--keep` keeps only the
+# clone as it was before the job. The other jobs stay on the bind mount so a
+# failure leaves its output (e.g. `rurl.Rcheck/`) in the kept work tree.
+CONTAINER_LOCAL_JOBS="pages"
+
 for JOB in $JOBS; do
   IMAGE="$(plan --image "$JOB")"
   {
     echo "set -ex"
+    case " $CONTAINER_LOCAL_JOBS " in
+      *" $JOB "*) echo "cp -a /repo /work && cd /work" ;;
+    esac
     plan --script "$JOB"
   } > "$WORK/$JOB.sh"
 
   echo "=== job: $JOB (image: $IMAGE) ==============================="
   START=$(date +%s)
   # /ci is read-only so a job cannot rewrite its own script mid-run; /repo is
-  # the throwaway clone, so a job that dirties the tree costs nothing.
+  # the throwaway clone, so a job that dirties the tree costs nothing (a job
+  # in CONTAINER_LOCAL_JOBS copies it to /work first and leaves it untouched).
   # bash when the image has it, POSIX sh otherwise -- as GitLab's own shell
   # detection does. `python:3.14-alpine` (citation-version) ships only busybox
   # sh, and a bare `bash` there fails before the job starts (RURL-dswufxky).
