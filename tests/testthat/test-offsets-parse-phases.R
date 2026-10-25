@@ -375,3 +375,35 @@ test_that("the WHATWG file parser splits an invalid-UTF-8 rest per row", {
   expect_identical(r$query, c(NA, "q", "q"))
   expect_identical(r$fragment, c(NA, "f", "f"))
 })
+
+test_that("a U+FEFF-led file: row stays off the WHATWG file parser", {
+  # `.parse_whatwg_file_urls_vec()` does not mask a row led by the mark; its
+  # caller never selects one, because its `^[Ff][Ii][Ll][Ee]:` test reads the
+  # mark as data too. The public whatwg path keeps main's value.
+  url <- off_u(c("\ufefffile:///C:/x", "\ufefffile:/p?q#f",
+                 "\ufefffile://host/share/p"))
+  w <- safe_parse_urls(url, url_standard = "whatwg")
+  expect_identical(w$parse_status, rep("error", 3))
+  expect_identical(w$clean_url, rep(NA_character_, 3))
+  expect_identical(w$host, rep(NA_character_, 3))
+  expect_identical(w$path, rep(NA_character_, 3))
+  expect_identical(attr(get_url_key(url), "keyability"),
+                   rep("invalid-parse", 3))
+  # Called directly, the byte-mode capture finds no `file:` scheme there;
+  # stringi read past the mark and parsed these rows.
+  expect_identical(rurl:::.parse_whatwg_file_urls_vec(url)$ok,
+                   rep(FALSE, 3))
+})
+
+test_that("the raw path of a U+FEFF-led prepared row is cut where located", {
+  # Unreachable from the public API: Phase 1 prefixes "http://" to every row
+  # led by U+FEFF, so no prepared row starts with the mark. Under stringi the
+  # locate counted the mark and the cut read past it, landing one character
+  # late; in bytes the locate and the cut both count it, so the path starts
+  # at the located "/". The byte value is the consistent one.
+  prepared <- off_u(c("\ufeffhttp://h/p/q?x", "\ufeffhttp://\u00e9/p#f"))
+  expect_same_bytes(
+    rurl:::.extract_raw_path_vec(prepared, c("/E", "/E")),
+    c("//h/p/q", "//\u00e9/p")
+  )
+})

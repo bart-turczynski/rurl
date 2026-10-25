@@ -172,7 +172,10 @@
 # byte only lengthens the rest, so a row that fails there fails everywhere:
 # it is no match, all NA. The rest is split once at its terminators, so the
 # check is linear. A row led by U+FEFF is read as data, where stringi read
-# past the mark; every caller already masks such a row.
+# past the mark, so the prefix does not match there. The other callers
+# mask such a row themselves; `.parse_whatwg_file_urls_vec()` does not, but
+# its only caller hands it no such row, since the `^[Ff][Ii][Ll][Ee]:` test
+# that selects its rows is byte mode too.
 .icu_capture_to_end <- function(x, prefix) {
   m <- .bytes_capture(x, paste0(prefix, "((?s:.*))\\z"))
   last <- ncol(m)
