@@ -986,28 +986,35 @@
   no_op
 }
 
+# Split one `file:` rest into path, query and fragment, located and cut in
+# BYTES (ADR 0019), as the RFC 3986 rootless split is. `rest` is a byte-mode
+# capture, declared UTF-8 whatever its octets, and `nchar()`/`substr()` threw
+# `invalid multibyte string` on one holding invalid octets, which aborted the
+# whole vector (RURL-yqmoztoj). The delimiters are ASCII, so a byte cut gives
+# the same substrings as a character cut on every decodable rest.
 .whatwg_file_split_rest <- function(rest) {
-  hash <- regexpr("#", rest, fixed = TRUE)[1L]
-  qmark <- regexpr("?", rest, fixed = TRUE)[1L]
+  hash <- .first_byte_index(rest, "#")
+  qmark <- .first_byte_index(rest, "?")
+  n_bytes <- nchar(rest, type = "bytes")
 
-  end_path <- nchar(rest)
+  end_path <- n_bytes
   if (qmark > 0L) {
     end_path <- min(end_path, qmark - 1L)
   }
   if (hash > 0L) {
     end_path <- min(end_path, hash - 1L)
   }
-  path <- if (end_path > 0L) substr(rest, 1L, end_path) else ""
+  path <- if (end_path > 0L) .bytes_cut(rest, 1L, end_path) else ""
 
   query <- NA_character_
-  if (qmark > 0L && (hash < 0L || qmark < hash)) {
-    query_end <- if (hash > 0L) hash - 1L else nchar(rest)
-    query <- substr(rest, qmark + 1L, query_end)
+  if (qmark > 0L && (hash == 0L || qmark < hash)) {
+    query_end <- if (hash > 0L) hash - 1L else n_bytes
+    query <- .bytes_cut(rest, qmark + 1L, query_end)
   }
 
   fragment <- NA_character_
   if (hash > 0L) {
-    fragment <- substr(rest, hash + 1L, nchar(rest))
+    fragment <- .bytes_cut(rest, hash + 1L, n_bytes)
   }
 
   c(path = path, query = query, fragment = fragment)
