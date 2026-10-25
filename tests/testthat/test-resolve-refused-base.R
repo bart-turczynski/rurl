@@ -299,3 +299,23 @@ test_that("each distinct base is parsed once, not once per row", {
   expect_length(seen$calls, 1L)
   expect_identical(seen$calls[[1L]], c(valid_base, ws_bad))
 })
+
+test_that("whatwg: an empty or scheme-less base fails, so an absolute ref is NA", {
+  # `new URL("https://z.com/q", "")` throws: the base is parsed first and an
+  # empty or scheme-less string fails the basic URL parser. An NA base is no
+  # base, so the absolute reference still resolves against it.
+  for (b in c("", "example.com", "/a", "//h/p")) {
+    expect_identical(
+      resolve_url("https://z.com/q", b, url_standard = "whatwg"),
+      NA_character_, label = b
+    )
+  }
+  expect_identical(
+    resolve_url("https://z.com/q", NA_character_, url_standard = "whatwg"),
+    "https://z.com/q"
+  )
+  expect_identical(
+    resolve_url("https://z.com/q", "", url_standard = "rfc3986"),
+    "https://z.com/q"
+  )
+})
