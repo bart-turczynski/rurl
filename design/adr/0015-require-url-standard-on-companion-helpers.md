@@ -1,6 +1,6 @@
 # ADR 0015: `url_standard` is required on the three companion helpers
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0020
 - **Date:** 2026-08-23
 - **Tracking:** RURL-kbpyivuk (this decision). Rejects RURL-hikovisr's
   sentinel. Narrows **ADR 0007** §Consequences; relates to **ADR 0006**.
@@ -125,3 +125,13 @@ ambiguous state unreachable rather than nameable.
   argument for one has to first show a profile-neutral answer they could
   return. If such an answer is ever found for a given helper, that is the new
   information that would justify revisiting — for that helper alone.
+
+## Superseded by ADR 0020
+
+*Added RURL-njwxywsw, 2026-10-26.*
+
+This ADR required `url_standard` on the three helpers because `NULL` could not
+answer. [ADR 0020](0020-literal-execution-of-the-standards.md) makes `NULL` read
+as `"whatwg"` and gives the helpers the default `"whatwg"` (D4), so the reason
+is gone, and so is the standing rule "do not reintroduce a default on these
+three".

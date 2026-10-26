@@ -4,6 +4,11 @@ One page. Every recipe below was read from `R/parse.R` (`.URL_PROFILES`,
 `.URL_STANDARD_PROFILES`) on 2026-09-03; when a value here disagrees with the
 tree, the tree wins and this card is the file to fix.
 
+**ADR 0020 (2026-10-26) retires the frozen `NULL` profile:** the default becomes
+`"whatwg"` and `NULL` is read as `"whatwg"`. Until RURL-mbhuhwzk lands, the tree
+still behaves as this card describes; after it, the "Legacy frozen" row and the
+per-function default list below go.
+
 ## Three questions, in this order
 
 1. **Which standard?** `url_standard = "whatwg"` | `"rfc3986"` | `NULL`.

@@ -260,7 +260,8 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   drives the `host_encoding = "keep"` spelling choice.
 - `.apply_host_standard_model_vec()` (R/parse-phases.R) — the `url_standard`
   host IPv4/reg-name model. No-op when `url_standard` is NULL; Stage-A-affecting
-  under a selector (enters the parse cache key). See ADR 0007. Under `whatwg`
+  under a selector (enters the parse cache key). See ADR 0007; [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md)
+  makes `"whatwg"` the default and retires the `NULL` arm (RURL-mbhuhwzk). Under `whatwg`
   a host that ends in a number (`.host_ends_in_number_vec()`) is read by
   `.whatwg_ipv4_read()` (R/parse-web.R), the adapter over
   `raddr::addr_whatwg()`; an `NA` there is IPv4 failure and fails the URL.

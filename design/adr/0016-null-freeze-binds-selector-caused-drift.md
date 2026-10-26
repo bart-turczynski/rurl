@@ -1,6 +1,6 @@
 # ADR 0016: the `NULL` freeze binds selector-caused drift, not default-path defects
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0020
 - **Date:** 2026-08-23
 - **Tracking:** RURL-bmxptxxz (this decision). Bounds **ADR 0007** §Consequences
   on a second, different axis from [ADR 0015](0015-require-url-standard-on-companion-helpers.md);
@@ -133,3 +133,15 @@ override it (ADR 0012 D6). None of that speaks to `NULL` compatibility.
 - **What would justify revisiting.** A future ADR that makes some axis formally
   selector-independent — proven, not asserted — could narrow the evidence
   requirement for that axis. Nothing in the tree supports such a claim today.
+
+## Superseded by ADR 0020
+
+*Added RURL-njwxywsw, 2026-10-26.*
+
+[ADR 0020](0020-literal-execution-of-the-standards.md) retires the `NULL` freeze
+this ADR bounded: the default becomes `"whatwg"` and `NULL` is read as
+`"whatwg"`, so no arm is left that standard-driven fixes must not reach. The
+witness-plus-signature requirement and "no fix moves `NULL` on the strength of
+an axis label" no longer apply. Its finding that the ungoverned dials are not
+selector-independent (`host_encoding`, `path_encoding`, `port_handling`) is
+still true of the code, and is a fact, not a rule.
