@@ -1987,9 +1987,9 @@
   #      readable-vs-browser rendering, which LAYERS on any identity mode.
   # Presentation is terminal: identity normalization and the cleaning policies
   # below must inspect the pre-presentation path, where an encoded separator is
-  # data rather than structure. WHATWG `encode` is deliberately different from
-  # the legacy encoder: the standard's path serializer preserves existing
-  # percent spellings, so it never full-decodes before encoding.
+  # data rather than structure. `encode` escapes with the WHATWG path
+  # percent-encode set under the WHATWG profile and with what RFC 3986 `pchar`
+  # leaves out otherwise; both preserve existing percent spellings.
   whatwg_encode <- path_encoding == "encode" &&
     identical(path_identity, ".whatwg_preserve")
 
@@ -2021,10 +2021,12 @@
         USE.NAMES = FALSE
       )
     }
-  } else if (path_identity == "none" && path_encoding == "keep") {
+  } else if (path_identity == "none" &&
+               path_encoding %in% c("keep", "encode")) {
     # Preserve the historical no-selector `keep` contract after Stage A became
     # byte-faithful: percent-triplet hex case is canonicalized here instead of
-    # during raw extraction.
+    # during raw extraction. `encode` gets the same, since it no longer
+    # decodes (RURL-dbyavcjt) and its old decode-and-escape wrote uppercase.
     mask <- !is.na(path_work) & .bytes_detect(path_work, "%", fixed = TRUE)
     if (any(mask)) {
       path_work[mask] <- .uppercase_percent_hex(path_work[mask])
@@ -2093,28 +2095,10 @@
   }
 
   # Terminal path presentation. Decode only after identity normalization and
-  # cleaning have decided which structural rules fire. Legacy `encode` still
-  # means decode then segment-encode; the difference is that both presentation
-  # operations now happen after index/trailing-slash handling.
-  # The decode keeps a `%00` triplet as written (RURL-fpujlvoq), and the
-  # segment encode below would escape its `%` to `%2500`. So under "encode" a
-  # path holding the triplet is decoded and encoded between its `%00`s, every
-  # "/" kept, the triplets are put back between the pieces, and the encode
-  # below skips the row. `%00` has no hex letter, so the fixed split finds
-  # every spelling of it.
-  nul_kept <- logical(length(path_work))
-  if (path_encoding == "encode" && !whatwg_encode) {
-    nul_kept <- !is.na(path_work) &
-      grepl("%00", path_work, fixed = TRUE, useBytes = TRUE)
-    if (any(nul_kept)) {
-      path_work[nul_kept] <- vapply(
-        path_work[nul_kept], .pct_recode_path_keep_nul, character(1),
-        USE.NAMES = FALSE
-      )
-    }
-  }
-  if (path_encoding %in% c("decode", "encode") && !whatwg_encode) {
-    mask <- !is.na(path_work) & !nul_kept
+  # cleaning have decided which structural rules fire; both presentation
+  # operations happen after index/trailing-slash handling.
+  if (path_encoding == "decode" && !whatwg_encode) {
+    mask <- !is.na(path_work)
     if (any(mask)) {
       decoded <- tryCatch(
         .pct_unescape(path_work[mask]),
@@ -2134,30 +2118,27 @@
       # wrote the raw octet into `path` and `clean_url`, a string stringi
       # downstream cannot read, so it keeps that octet as its uppercase
       # triplet; every other triplet in the path still decodes (RURL-yarkccco).
-      # "encode" needs no mask: `._encode_path_segments()` splits such a path
-      # in bytes and re-encodes the octet as the same triplet.
-      if (path_encoding == "decode") {
-        bad <- !is.na(decoded) & !validUTF8(decoded)
-        if (any(bad)) {
-          decoded[bad] <- vapply(
-            decoded[bad], .web_escape_undecodable_bytes, character(1),
-            USE.NAMES = FALSE
-          )
-        }
+      bad <- !is.na(decoded) & !validUTF8(decoded)
+      if (any(bad)) {
+        decoded[bad] <- vapply(
+          decoded[bad], .web_escape_undecodable_bytes, character(1),
+          USE.NAMES = FALSE
+        )
       }
       path_work[mask] <- decoded
     }
   }
 
+  # "encode" only adds escapes, under every standard: it never decodes, so an
+  # existing triplet (`%2F`, `%00`, `%41`) and every "/" and empty segment
+  # stay as written (RURL-dbyavcjt). It used to decode the whole path and
+  # escape each segment again, which turned `%2F` into a separator and lost
+  # trailing empty segments: `/a%2Fb/` came back `/a/b/`, `/a//` came back
+  # `/a/`.
   if (whatwg_encode) {
     path_work <- .whatwg_path_percent_encode(path_work)
   } else if (path_encoding == "encode") {
-    mask <- !is.na(path_work) & !nul_kept
-    if (any(mask)) {
-      path_work[mask] <- vapply(
-        path_work[mask], ._encode_path_segments, character(1), USE.NAMES = FALSE
-      )
-    }
+    path_work <- .rfc3986_path_percent_encode(path_work)
   }
 
   path_work

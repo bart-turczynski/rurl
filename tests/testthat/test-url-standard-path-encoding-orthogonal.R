@@ -215,45 +215,58 @@ test_that("path presentation runs after index and trailing-slash cleaning", {
     slash_input
   )
 
-  for (encoding in c("decode", "encode")) {
-    # Presentation alone may render the encoded slash as "/". Combining it
-    # with cleaning must not retroactively expose a separator to that earlier
-    # cleaning step and change which index/slash rule fires.
-    expect_identical(
-      get_clean_url(index_input, path_encoding = encoding),
-      "https://ex.com/a/index.html",
-      info = encoding
-    )
-    expect_identical(
-      get_clean_url(
-        index_input,
-        index_page_handling = "strip",
-        path_encoding = encoding
-      ),
-      "https://ex.com/a/index.html",
-      info = encoding
-    )
-    expect_identical(
-      get_clean_url(slash_input, path_encoding = encoding),
-      "https://ex.com/a/",
-      info = encoding
-    )
-    expect_identical(
-      get_clean_url(
-        slash_input,
-        trailing_slash_handling = "strip",
-        path_encoding = encoding
-      ),
-      "https://ex.com/a/",
-      info = encoding
-    )
-  }
+  # "decode" alone renders the encoded slash as "/". Combining it with
+  # cleaning must not retroactively expose a separator to that earlier
+  # cleaning step and change which index/slash rule fires.
+  expect_identical(
+    get_clean_url(index_input, path_encoding = "decode"),
+    "https://ex.com/a/index.html"
+  )
+  expect_identical(
+    get_clean_url(
+      index_input,
+      index_page_handling = "strip",
+      path_encoding = "decode"
+    ),
+    "https://ex.com/a/index.html"
+  )
+  expect_identical(
+    get_clean_url(slash_input, path_encoding = "decode"),
+    "https://ex.com/a/"
+  )
+  expect_identical(
+    get_clean_url(
+      slash_input,
+      trailing_slash_handling = "strip",
+      path_encoding = "decode"
+    ),
+    "https://ex.com/a/"
+  )
+
+  # "encode" decodes nothing, so `%2F` stays data through the cleaning dials
+  # too (RURL-dbyavcjt; RFC 3986 section 2.2).
+  expect_identical(
+    get_clean_url(
+      index_input,
+      index_page_handling = "strip",
+      path_encoding = "encode"
+    ),
+    index_input
+  )
+  expect_identical(
+    get_clean_url(
+      slash_input,
+      trailing_slash_handling = "strip",
+      path_encoding = "encode"
+    ),
+    slash_input
+  )
 })
 
-test_that("encode/decode are presentation not identity: reserved octets fold", {
-  # Documented consequence (ADR 0011): the presentation forms may re-encode or
-  # decode reserved octets, so a profile's %2F identity does NOT survive them.
-  # keep is the value that preserves it.
+test_that("decode folds reserved octets; encode keeps them", {
+  # Documented consequence (ADR 0011): "decode" decodes reserved octets, so a
+  # profile's %2F identity does NOT survive it. "keep" and "encode" preserve
+  # it: encode only adds escapes (RURL-dbyavcjt, ADR 0020).
   expect_identical(
     get_path("http://ex.com/a%2Fb/c", url_standard = "whatwg"), "/a%2Fb/c"
   )
@@ -262,6 +275,14 @@ test_that("encode/decode are presentation not identity: reserved octets fold", {
       path_encoding = "decode"),
     "/a/b/c"
   )
+  for (std in list(NULL, "rfc3986", "whatwg")) {
+    expect_identical(
+      get_path("http://ex.com/a%2Fb//", url_standard = std,
+        path_encoding = "encode"),
+      "/a%2Fb//",
+      info = format(std)
+    )
+  }
 })
 
 test_that("path_encoding composes with host_encoding under a profile", {

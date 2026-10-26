@@ -135,10 +135,11 @@
 #' knob: it is independent of `url_standard` and layers on top of any profile
 #' (e.g. `url_standard = "whatwg", path_encoding = "encode"` emits the
 #' WHATWG-parsed path in browser form), exactly like `host_encoding`. Only
-#' "keep" preserves a profile's canonical identity path verbatim; "encode" and
-#' "decode" are presentation forms that may re-encode or decode reserved octets
-#' (so `%2F` may fold to a path-separating `/`), independent of whether a
-#' profile is set.
+#' "keep" preserves a profile's canonical identity path verbatim. "encode"
+#' only adds escapes, so every existing triplet, `/` and empty segment stays;
+#' "decode" is a presentation form that decodes reserved octets too (so `%2F`
+#' may fold to a path-separating `/`), independent of whether a profile is
+#' set.
 #'   \itemize{
 #'     \item{"keep": Leave the path percent-encoding untouched (the path is
 #'     preserved as written in the URL, so `%2F` stays `%2F` rather than
@@ -151,9 +152,15 @@
 #'     `url_standard = "whatwg"`, existing percent-triplet
 #'     spelling is preserved byte-for-byte. Use "encode" to additionally
 #'     normalize which bytes are encoded.}
-#'     \item{"encode": The browser/percent-encoded rendering. Decodes the path
-#'     first, then percent-encodes each segment (slashes preserved), so a
-#'     readable non-ASCII path is emitted in its percent-encoded UTF-8 form.}
+#'     \item{"encode": The browser/percent-encoded rendering. Percent-encodes
+#'     every octet the selected standard does not allow in a path and decodes
+#'     nothing, so a readable non-ASCII path is emitted in its percent-encoded
+#'     UTF-8 form while `%2F`, `/a//` and every other existing triplet stay as
+#'     written (with no `url_standard`, hex case is uppercased as under
+#'     "keep"). Under `url_standard = "whatwg"` the escaped octets are the
+#'     WHATWG path percent-encode set; otherwise they are those outside
+#'     RFC 3986 `pchar` (sub-delimiters, `:` and `@` stay literal) and a `%`
+#'     that does not begin a triplet, which becomes `%25`.}
 #'     \item{"decode": The readable rendering. Percent-decodes UTF-8 sequences
 #'     in the path, so a percent-encoded segment is shown as readable text.}
 #'   }

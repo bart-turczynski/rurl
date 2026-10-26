@@ -185,35 +185,6 @@ writes a non-ASCII host only percent-encoded as UTF-8 (sections 2.5,
 \code{path_encoding = "decode"} path is a display form in the same way: under
 \code{"rfc3986"}, \verb{http://h.de/\%C3\%A4} presents as \verb{http://h.de/ä}.}
 
-\item{path_encoding}{How to present the path percent-encoding in \code{clean_url}
-— the readable-vs-browser rendering choice (the path analog of
-\code{host_encoding}). Defaults to "keep". This is an orthogonal presentation
-knob: it is independent of \code{url_standard} and layers on top of any profile
-(e.g. \verb{url_standard = "whatwg", path_encoding = "encode"} emits the
-WHATWG-parsed path in browser form), exactly like \code{host_encoding}. Only
-"keep" preserves a profile's canonical identity path verbatim; "encode" and
-"decode" are presentation forms that may re-encode or decode reserved octets
-(so \verb{\%2F} may fold to a path-separating \code{/}), independent of whether a
-profile is set.
-\itemize{
-\item{"keep": Leave the path percent-encoding untouched (the path is
-preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
-decoding into a path-separating \code{/}). With no \code{url_standard}, rurl keeps
-its historical RFC-style percent-hex case canonicalization, so \verb{\%2f}
-becomes \verb{\%2F}. Under \code{url_standard = "rfc3986"}, the profile's RFC 3986
-§6.2.2.2 normalization applies: a triplet encoding an unreserved byte is
-decoded, every other triplet stays encoded with uppercased hex, so
-\verb{\%7E} becomes \code{~} while \verb{\%2F} stays \verb{\%2F}. Under
-\code{url_standard = "whatwg"}, existing percent-triplet
-spelling is preserved byte-for-byte. Use "encode" to additionally
-normalize which bytes are encoded.}
-\item{"encode": The browser/percent-encoded rendering. Decodes the path
-first, then percent-encodes each segment (slashes preserved), so a
-readable non-ASCII path is emitted in its percent-encoded UTF-8 form.}
-\item{"decode": The readable rendering. Percent-decodes UTF-8 sequences
-in the path, so a percent-encoded segment is shown as readable text.}
-}}
-
 \item{query_handling}{A character string controlling whether (and how) the
 query string is included in \code{clean_url}. Defaults to "drop", which preserves
 the historical query-free \code{clean_url}. The raw \code{query} result field is never
@@ -499,8 +470,9 @@ hex case to uppercase.
 
 That normalization is part of the path a URL denotes, and only
 \code{path_encoding = "keep"} (the default) preserves it verbatim ---
-\code{"encode"} and \code{"decode"} layer a presentation form on top and may
-fold a reserved octet such as \code{\%2F} into a path-separating \code{/}.
+\code{"encode"} only adds escapes, and \code{"decode"} layers a readable
+form on top that may fold a reserved octet such as \code{\%2F} into a
+path-separating \code{/}.
 See \code{vignette("url-standard")}.
 }
 

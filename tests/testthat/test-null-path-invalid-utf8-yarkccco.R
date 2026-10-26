@@ -112,13 +112,14 @@ for (loc in names(ctypes)) {
 
   test_that(paste("encode and decode keep the %XX octet in the path under",
                   loc), {
-    # The presentation step decodes first; the decoded octet is still not
-    # valid UTF-8, so "encode" re-encodes it bytewise and "decode" keeps it as
-    # its triplet. Neither writes "/NA" or the raw octet (RURL-yarkccco).
+    # "encode" decodes nothing, so the triplet stays and a `(` stays literal
+    # (RFC 3986 `pchar`, RURL-dbyavcjt); "decode" decodes, and an octet that is
+    # still not valid UTF-8 stays its triplet. Neither writes "/NA" or the raw
+    # octet (RURL-yarkccco).
     in_ctype(loc, ctypes[[loc]], {
       want <- list(
         encode = c(end = "/caf%E9", query = "/caf%E9", fragment = "/caf%E9",
-                   dots = "/a/../caf%E9/./b", pair = "/%C3%28",
+                   dots = "/a/../caf%E9/./b", pair = "/%C3(",
                    mixed = "/caf%C3%A9%E9", schemeless = "/caf%E9",
                    ftp = "/caf%E9"),
         decode = c(end = "/caf%E9", query = "/caf%E9", fragment = "/caf%E9",

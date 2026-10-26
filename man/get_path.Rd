@@ -86,35 +86,6 @@ preserved exactly as written.}
 \item{"both": Apply both collapse_slashes and dot_segments.}
 }}
 
-\item{path_encoding}{How to present the path percent-encoding in \code{clean_url}
-— the readable-vs-browser rendering choice (the path analog of
-\code{host_encoding}). Defaults to "keep". This is an orthogonal presentation
-knob: it is independent of \code{url_standard} and layers on top of any profile
-(e.g. \verb{url_standard = "whatwg", path_encoding = "encode"} emits the
-WHATWG-parsed path in browser form), exactly like \code{host_encoding}. Only
-"keep" preserves a profile's canonical identity path verbatim; "encode" and
-"decode" are presentation forms that may re-encode or decode reserved octets
-(so \verb{\%2F} may fold to a path-separating \code{/}), independent of whether a
-profile is set.
-\itemize{
-\item{"keep": Leave the path percent-encoding untouched (the path is
-preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
-decoding into a path-separating \code{/}). With no \code{url_standard}, rurl keeps
-its historical RFC-style percent-hex case canonicalization, so \verb{\%2f}
-becomes \verb{\%2F}. Under \code{url_standard = "rfc3986"}, the profile's RFC 3986
-§6.2.2.2 normalization applies: a triplet encoding an unreserved byte is
-decoded, every other triplet stays encoded with uppercased hex, so
-\verb{\%7E} becomes \code{~} while \verb{\%2F} stays \verb{\%2F}. Under
-\code{url_standard = "whatwg"}, existing percent-triplet
-spelling is preserved byte-for-byte. Use "encode" to additionally
-normalize which bytes are encoded.}
-\item{"encode": The browser/percent-encoded rendering. Decodes the path
-first, then percent-encodes each segment (slashes preserved), so a
-readable non-ASCII path is emitted in its percent-encoded UTF-8 form.}
-\item{"decode": The readable rendering. Percent-decodes UTF-8 sequences
-in the path, so a percent-encoded segment is shown as readable text.}
-}}
-
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
 which only controls how the scheme is \emph{presented}, and from \code{url_standard},

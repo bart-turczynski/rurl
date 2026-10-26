@@ -246,40 +246,6 @@
   base
 }
 
-# Internal helper to percent-encode path segments. The slash tests are base R:
-# stri_startswith_fixed() reads past a U+FEFF that starts its input (see
-# .starts_with_bom()), so the rootless `\ufeff/a` read as rooted and came back
-# as `/%EF%BB%BF/a` (RURL-zxnxczsw).
-#
-# A path that is not valid UTF-8 is split in bytes. The step before this one
-# percent-decodes, so a `%E9` (or, under the no-selector default, a raw octet
-# the raw-path cut already escaped, RUL-029) arrives as the lone octet 0xE9; a
-# character-mode strsplit() warned "invalid UTF-8" and returned NA, and the
-# path became the literal "/NA" (RURL-yarkccco). `.pct_escape()` is bytewise,
-# so the octet comes back as `%E9`. A valid path takes the old split.
-._encode_path_segments <- function(path) {
-  if (is.na(path)) {
-    return(path)
-  }
-  has_leading <- startsWith(path, "/")
-  has_trailing <- endsWith(path, "/")
-  segments <- strsplit(
-    path, "/", fixed = TRUE, useBytes = !validUTF8(path)
-  )[[1]]
-  # .pct_escape() is vectorized: one call escapes every segment (and returns
-  # character(0) for a character(0) input), so paste() recomposes identically
-  # to the former per-segment vapply().
-  encoded_segments <- .pct_escape(segments)
-  recomposed <- paste(encoded_segments, collapse = "/")
-  if (has_leading && !startsWith(recomposed, "/")) {
-    recomposed <- paste0("/", recomposed)
-  }
-  if (has_trailing && !endsWith(recomposed, "/")) {
-    recomposed <- paste0(recomposed, "/")
-  }
-  recomposed
-}
-
 # WHATWG component serializer core: encode C0 controls, non-ASCII UTF-8 bytes,
 # and the component-specific encode set, while preserving every existing
 # percent sign spelling so `%2e`, `%2E`, `%`, and `%2z` do not get decoded,
@@ -439,6 +405,32 @@
 # -- see `.whatwg_opaque_path_encode()`. Vectorized.
 .whatwg_path_percent_encode <- function(path) {
   .whatwg_component_percent_encode(path, .WHATWG_PATH_ENCODE_SET)
+}
+
+# RFC 3986 path serializer for `path_encoding = "encode"` under
+# `url_standard = NULL` and `"rfc3986"` (RURL-dbyavcjt). A path segment is
+# `pchar`: unreserved, `pct-encoded`, sub-delims, `:` and `@` (section 3.3),
+# with `/` between segments. Every other octet is escaped: the printable ASCII
+# below, plus C0 controls, DEL and every octet >= 0x80, which
+# `.whatwg_component_percent_encode()` escapes under every set. Nothing is
+# decoded: a reserved character and its percent-encoded octet are not
+# equivalent (section 2.2), so `%2F` stays `%2F` and `;` stays `;`, and an
+# empty segment is a segment (section 3.3), so `/a//` stays `/a//`. A `%`
+# that does not begin a triplet is not `pct-encoded`, so it becomes `%25`; a
+# `%00` is a triplet and stays.
+.RFC3986_PATH_ENCODE_SET <- c(
+  0x20L, 0x22L, 0x23L, 0x3CL, 0x3EL, 0x3FL, 0x5BL, 0x5CL, 0x5DL, 0x5EL,
+  0x60L, 0x7BL, 0x7CL, 0x7DL
+)
+
+.rfc3986_path_percent_encode <- function(path) {
+  bare <- !is.na(path) & .bytes_detect(path, "%(?![0-9A-Fa-f]{2})")
+  if (any(bare)) {
+    path[bare] <- .bytes_replace(
+      path[bare], "%(?![0-9A-Fa-f]{2})", "%25", all = TRUE
+    )
+  }
+  .whatwg_component_percent_encode(path, .RFC3986_PATH_ENCODE_SET)
 }
 
 # WHATWG opaque-path serializer (#opaque-path-state). An opaque path is

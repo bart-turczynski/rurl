@@ -234,15 +234,15 @@ test_that("index-page strip keeps a mark that starts the kept directory", {
   }
 })
 
-test_that("the segment encoder keeps a mark-led path rootless", {
+test_that("the path encoder keeps a mark-led path rootless", {
   # RFC 3986 section 3.3: a path-rootless path does not begin with "/".
   # The encoder read `\ufeff/a` as rooted and returned `/%EF%BB%BF/a`.
-  expect_identical(._encode_path_segments("\ufeff/a"), "%EF%BB%BF/a")
-  expect_identical(._encode_path_segments("\ufeff/a/"), "%EF%BB%BF/a/")
-  expect_identical(._encode_path_segments("\ufeff"), "%EF%BB%BF")
-  expect_identical(._encode_path_segments("\u200b/a"), "%E2%80%8B/a")
-  expect_identical(._encode_path_segments("/\ufeff/a"), "/%EF%BB%BF/a")
-  expect_identical(._encode_path_segments("/a b/"), "/a%20b/")
+  expect_identical(.rfc3986_path_percent_encode("\ufeff/a"), "%EF%BB%BF/a")
+  expect_identical(.rfc3986_path_percent_encode("\ufeff/a/"), "%EF%BB%BF/a/")
+  expect_identical(.rfc3986_path_percent_encode("\ufeff"), "%EF%BB%BF")
+  expect_identical(.rfc3986_path_percent_encode("\u200b/a"), "%E2%80%8B/a")
+  expect_identical(.rfc3986_path_percent_encode("/\ufeff/a"), "/%EF%BB%BF/a")
+  expect_identical(.rfc3986_path_percent_encode("/a b/"), "/a%20b/")
   for (an in c("rfc3986", "NULL")) {
     expect_identical(
       arm_path("file:\ufeff/a", arms[[an]], path_encoding = "encode"),

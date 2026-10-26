@@ -128,8 +128,10 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   `.host_is_ace()`).
 - **R/path-query.R** — low-level path normalization
   (`._collapse_path_slashes()`, `._remove_dot_segments()`,
-  `._strip_index_page()`, `._encode_path_segments()`, and the per-standard
-  `.rfc_unreserved_normalize()` / `.whatwg_preserve_normalize()`) and
+  `._strip_index_page()`, and the per-standard
+  `.rfc_unreserved_normalize()` / `.whatwg_preserve_normalize()`), the
+  per-standard `path_encoding = "encode"` serializers
+  (`.rfc3986_path_percent_encode()` / `.whatwg_path_percent_encode()`) and
   query-string parsing (`._parse_query_string()`).
 - **R/percent-coding.R** — the in-tree percent-coding primitives `.pct_escape()`
   / `.pct_unescape()`, byte-exact replacements for `curl::curl_escape()` /
