@@ -6,8 +6,11 @@ tree, the tree wins and this card is the file to fix.
 
 **ADR 0020 (2026-10-26) retires the frozen `NULL` profile:** the default becomes
 `"whatwg"` and `NULL` is read as `"whatwg"`. Until RURL-mbhuhwzk lands, the tree
-still behaves as this card describes; after it, the "Legacy frozen" row and the
-per-function default list below go.
+still behaves as this card describes. With it, these change: question 1 (`NULL`
+byte-frozen, an error on the companion helpers), the "Legacy frozen" row, the
+per-function default list (updated: `get_mailto_recipients()` keeps
+`"rfc3986"`), the `NULL` clause of the `rfc3986` US-ASCII bullet and the
+ADR 0016 bullet.
 
 ## Three questions, in this order
 

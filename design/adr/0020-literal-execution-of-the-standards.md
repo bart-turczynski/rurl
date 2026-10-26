@@ -20,7 +20,7 @@ The earlier ADRs were written around what the code could do at the time. Several
 of them protect output that a standard calls invalid, or that names a different
 resource from the input:
 
-- **ADR 0007** made `url_standard = NULL` the default and froze its output
+- **ADR 0007** kept `url_standard = NULL` as the default and froze its output
   byte for byte, "whether it is right" or not (its P2.7 D-B amendment). The
   posture card calls it "the byte-frozen pre-selector profile" that "names no
   standard".
@@ -46,7 +46,8 @@ the 441 unique inputs of `tests/testthat/fixtures/parse-corpus.csv` and
 | `"rfc3986"` | 200 |
 | both | 68 |
 
-So 68 inputs (15%) get an answer from the default that neither standard gives.
+So 68 inputs (15%) get an answer from the default that neither named arm gives
+(both arms measured under the default `scheme_policy` and `scheme_acceptance`).
 
 **A per-axis mix is not a standard.** One way out was to keep `NULL` as rurl's
 own dialect, unfrozen, and to require only that each of its behaviors be
@@ -60,8 +61,10 @@ cannot be the literal execution of anything.
 calls invalid, or that names a different URL than the standard's processing of
 the same input, is a bug. That holds when an ADR, a ruling, a test or the
 `NULL` freeze pins it. Fix it, and cite the standard and clause in `NEWS.md`.
-An ADR or ruling that pins such a behavior is superseded on that point,
-by a note appended to it (never edited in place, so line citations hold).
+An ADR that pins such a behavior is superseded on that point by a note
+appended to it, plus its Status line; its body is never edited, so line
+citations hold. A ruling is superseded by a new row in
+`design/work/url-v3/registers/rulings.md` that names it.
 
 **D2: compatibility protects the API, not output.** What stays protected is
 gratuitous API churn: renaming or removing an argument, a function, an enum
@@ -83,14 +86,30 @@ no test pins it. The three companion helpers of ADR 0015 (`get_host_type()`,
 ADR 0015 required the argument because `NULL` could not answer, and `NULL` now
 answers as WHATWG. A function that already defaults to a named standard
 (`check_hosts()`, `is_valid_host()`: `"whatwg"`; `get_mailto_recipients()`:
-`"rfc3986"`) keeps its default under this ADR.
+`"rfc3986"`) keeps its default under this ADR, and there too `NULL` means
+`"whatwg"`: `get_mailto_recipients(x, url_standard = NULL)` reads as WHATWG
+while `get_mailto_recipients(x)` reads as RFC 3986.
+
+**D4a: a governed knob under the default.** `path_normalization` and
+`case_handling` are governed: today an explicit value that differs from the
+selector's is an error, and dropping `url_standard` (falling back to `NULL`) was
+the way out. That way out goes. Under the default `"whatwg"`, an explicit
+governed knob may still shape `clean_url`, which is cleaning policy (ADR 0017),
+but it never changes the parse record, the components or a serialization: those
+stay WHATWG. Where a knob value cannot be confined to `clean_url`, the conflict
+error stands and names `url_standard = "rfc3986"` (or `profile = "rfc-syntax"`)
+when that arm offers the value. RURL-mbhuhwzk decides each value.
 
 **D5: presentation and policy dials still answer to the standard.** `clean_url`
 stays a lossy policy projection (ADR 0017): a documented cleaning transform is
-not a conformance defect. A dial that changes a component accessor, a
-`safe_parse_urls()` column or a serialization is held to the standard, and so
-is any dial that changes which resource a URL names without saying so. The
-`path_encoding = "encode"` `%2F` fold is the standing example.
+not a conformance defect. A documented display form (`host_encoding =
+"unicode"`, RUL-031) is not one either: it is labeled as a rendering for people
+and need not re-parse. Any other dial that changes a component accessor, a
+`safe_parse_urls()` column or a serialization is held to the standard, and so is
+a dial that claims a standard's form and does not give it. The standing example
+is `path_encoding = "encode"`, which claims the percent-encoded form and folds
+`%2F` into a path-separating `/`. Whether `path_encoding = "decode"` is a
+display form that may do the same is RURL-eokizmdi's question.
 
 ## Consequences
 
@@ -101,16 +120,18 @@ is any dial that changes which resource a URL names without saying so. The
 - **Rules retired with the freeze.** "No fix moves `NULL` on the strength of an
   axis label" (ADR 0016) and the witness-plus-signature requirement no longer
   apply: there is no frozen arm to protect. The Appendix B scheme group in
-  `.split_uri_ref()`, `NULL`'s RFC 8089 `file:` overlay and the other
-  `NULL`-only behaviors in ARCHITECTURE.md go with it.
+  `.split_uri_ref()`, `NULL`'s use of the RFC 8089 `file:` overlay
+  (`ascii_only = FALSE`) and the other `NULL`-only behaviors in ARCHITECTURE.md
+  go with it.
 - **Other default dials are audited, not assumed.** `scheme_policy`,
   `scheme_acceptance` (the ADR 0004 five-scheme allowlist) and
   `scheme_relative_handling` can make the default posture differ from the
   WHATWG parser even with `url_standard = "whatwg"`. RURL-ongkcidw decides each
   against D1.
-- **Rulings stay rows.** A ruling that pins non-conformant output is superseded
-  by a new row in `design/work/url-v3/registers/rulings.md` that names it,
-  per that register's standing rule.
+- **Rulings stay rows.** RURL-mbhuhwzk adds the row that supersedes the
+  rulings resting on the `NULL` freeze (RUL-014, RUL-015, RUL-026, RUL-029,
+  RUL-030 at least) on their `NULL` clauses. Until it lands they describe the
+  tree as it is.
 - **What would justify revisiting.** A standard that leaves the behavior open
   (a "may", or a case it does not cover) is where an OWNER ruling still
   decides, as before. Nothing here makes a cleaning policy conformant or

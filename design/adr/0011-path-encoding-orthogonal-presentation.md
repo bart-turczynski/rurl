@@ -126,9 +126,9 @@ never that justification.
 
 [ADR 0020](0020-literal-execution-of-the-standards.md) supersedes the clause
 "`encode` cannot be redefined (byte-compat is a hard constraint)" and the
-consequence that `encode` may fold `%2F` into a path-separating `/`. Encoding is
-additive under both standards: the WHATWG path percent-encode set never decodes
-an existing triplet, and RFC 3986 §2.2 makes a reserved character and its
-percent-encoded octet non-equivalent. RURL-dbyavcjt fixes `encode`;
+consequence that `encode` may fold `%2F` into a path-separating `/`. Neither
+standard's percent-encoding decodes a reserved octet's triplet: the WHATWG path
+percent-encode set leaves an existing triplet as written, and RFC 3986 §2.2
+makes a reserved character and its percent-encoded octet non-equivalent. RURL-dbyavcjt fixes `encode`;
 RURL-eokizmdi decides `decode`. Orthogonality (no conflict with the selector)
 stands.
