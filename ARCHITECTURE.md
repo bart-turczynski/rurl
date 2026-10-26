@@ -489,7 +489,7 @@ only under `port_handling != "exclude"`.
   twin, and the explicit-`last` `substring()` rule are in
   [ADR 0005](design/adr/0005-intentional-base-r-string-exceptions.md).
 - `punycoder` (>= 1.2.1) — Punycode encoding/decoding.
-- `pslr` (>= 1.1.1) — Public Suffix List matching.
+- `pslr` (>= 1.2.2) — Public Suffix List matching.
 - `raddr` (>= 0.1.2) — IP address facts: the `ipv6-embedded-ipv4` diagnostic
   projects `addr_embedded_kind()`, and under `url_standard = "whatwg"`
   `addr_whatwg()` is the IPv4 host reading (ADR 0018 and its amendments). It
