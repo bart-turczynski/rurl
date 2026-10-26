@@ -20,7 +20,7 @@
 #   every pipeline the `workflow:` block admits (a push to `main`, a tag, a
 #   hand-started pipeline, a schedule):
 #     gates            -- `tools/verify.R --gates` and the news-version gate.
-#     citation-version -- CITATION.cff/.zenodo.json and the BugReports split.
+#     citation-version -- CITATION.cff/.zenodo.json and the tracker links.
 #     check            -- `tools/verify.R`, the whole local gate: the gates,
 #                         lint, spelling, `R CMD check --as-cran` through
 #                         rcmdcheck, failing on a WARNING, and the test
@@ -277,11 +277,13 @@ gates:
 # top-level `workflow:` block admits (`main` and tags) by omitting `rules:`
 # entirely, and this job rides the same default.
 #
-# `check-bugreports.py` rides along here rather than getting a job of its own
-# (SEOR-ocbtrrnl, as in pagerankr): it is stdlib-only, offline and instant,
-# with the same shape as check-citation.py, so it belongs in the job that
-# already has a python3. A separate job would pay the runner-pickup cost for
-# about a second of work.
+# `check-bugreports.py` rides along here rather than getting a job of its own:
+# DESCRIPTION's BugReports: and every tracker link name /-/work_items (seor
+# ADR 0011,
+# https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md).
+# It is stdlib-only, offline and instant, with the same shape as
+# check-citation.py, so it belongs in the job that already has a python3. A
+# separate job would pay the runner-pickup cost for about a second of work.
 citation-version:
   stage: gates
   image: python:3.14-alpine

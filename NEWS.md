@@ -119,7 +119,7 @@
 
 ### Documentation
 
-- `BugReports` points at <https://gitlab.com/bart-turczynski/rurl/-/issues>, the form R's CRAN incoming check requires for a gitlab.com tracker; a browser following that link is redirected to `/-/work_items` (RURL-nomzooml).
+- `BugReports` points at `https://gitlab.com/bart-turczynski/rurl/-/issues`, the form R's CRAN incoming check requires for a gitlab.com tracker; a browser following that link is redirected to `/-/work_items` (RURL-nomzooml).
 - The human-facing tracker links in `SECURITY.md`, `codemeta.json` and `.bestpractices.json` now give `https://gitlab.com/bart-turczynski/rurl/-/work_items`, the address GitLab serves directly; `DESCRIPTION`'s `BugReports:` deliberately keeps the `/-/issues` form, because only that form clears the CRAN incoming check (RURL-ahatycrd).
 - The help pages and `NEWS.md` are now spelled in US English throughout, matching the package's declared `Language: en-US`, and `inst/WORDLIST` no longer admits British spellings (SEOR-kfiqpymb).
 

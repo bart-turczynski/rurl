@@ -141,9 +141,9 @@ repos:
       # pre-push gate"), copied from punycoder. It fetches every URL the
       # package declares and fails on a dead one, which `verify`'s --as-cran
       # reports only as a NOTE. A network blip never rejects a push; zero URLs
-      # checked fails; the only exemption is BugReports' /-/issues URL
-      # answering exactly 404 (SEOR-ocbtrrnl). Ahead of `verify`, so a dead
-      # link is reported in seconds rather than after the full check.
+      # checked fails; nothing is exempt (seor ADR 0011). Ahead of `verify`,
+      # so a dead link is reported in seconds rather than after the full
+      # check.
       - id: check-urls
         name: declared URLs resolve
         entry: Rscript scripts/check-urls.R
@@ -173,15 +173,15 @@ repos:
         always_run: true
         stages: [pre-push]
 
-      # DESCRIPTION's BugReports: keeps the /-/issues form CRAN's incoming
-      # check string-tests for; every human-facing tracker link (codemeta.json,
-      # SECURITY.md, .bestpractices.json) names /-/work_items, and no other
-      # human-facing surface may carry a /-/issues link (SEOR-ocbtrrnl,
-      # RURL-ahatycrd). Ported from pagerankr's scripts/check-bugreports.py;
-      # stdlib-only and offline, wired exactly like check-citation above. Read
-      # the script's docstring for why the two forms must differ.
+      # DESCRIPTION's BugReports: and every tracker link (codemeta.json,
+      # .bestpractices.json, CONTRIBUTING.md, SECURITY.md) name /-/work_items,
+      # and no human-facing file may carry a /-/issues link (seor ADR 0011,
+      # https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md).
+      # Ported from seor's scripts/check-bugreports.py (SEOR-sptibjph); the
+      # reasoning is in its docstring. Offline, stdlib-only, wired exactly like
+      # check-citation above.
       - id: check-bugreports
-        name: BugReports split (DESCRIPTION vs human-facing tracker links)
+        name: BugReports and tracker links name /-/work_items
         entry: python3 scripts/check-bugreports.py
         language: system
         pass_filenames: false

@@ -21,8 +21,8 @@
 # the full check.
 
 # Sort the rows `tools:::check_url_db()` returns into what they mean for the
-# gate: "red" (a real defect: fail), "warn" (no answer at all: report, pass) or
-# "exempt" (the one known, deliberate 404). Pure and offline, so
+# gate: "red" (a real defect: fail) or "warn" (no answer at all: report,
+# pass). Pure and offline, so
 # verify_url_self_test() can pin it with a constructed data frame.
 #
 # check_url_db() returns only the URLs it objects to, one row each. Its
@@ -37,19 +37,19 @@
 #
 # So only "Error" rows with no static complaint are downgraded to a warning: a
 # transient network blip must never reject a push. Everything else
-# check_url_db() returns is red, except the exemption below. That includes 403,
+# check_url_db() returns is red. That includes 403,
 # which R CMD check's incoming step drops by default
 # (`_R_CHECK_URLS_TAKE_403_STATUS_AS_OK_`) because bot-shy hosts answer it;
 # GitLab answers 403, not 404, for a project that does not exist, so here it
 # stays a failure.
 #
-# The exemption. DESCRIPTION's BugReports keeps GitLab's `/-/issues` form,
-# which 404s for a signed-out client since GitLab moved issues to
-# `/-/work_items`. That is a fleet decision, not a defect: CRAN's incoming
-# check string-tests BugReports for `/issues` (SEOR-ocbtrrnl;
-# scripts/check-bugreports.py holds the split). So exactly that URL, in exactly
-# that form, answering exactly 404, is exempt. Nothing else is.
-verify_classify_urls <- function(bad, bugreports = NA_character_) {
+# There is no exemption. Until SEOR-sptibjph, DESCRIPTION's BugReports kept
+# GitLab's `/-/issues` form, which 404s for a non-browser client, and its 404
+# was waved through (SEOR-ocbtrrnl). BugReports now names `/-/work_items`, as
+# CRAN invited on 2026-10-23 (seor ADR 0011,
+# https://gitlab.com/bart-turczynski/seor/-/blob/main/design/adr/0011-bugreports-names-work-items.md),
+# so a `/-/issues` 404 is red like any other.
+verify_classify_urls <- function(bad) {
   absent <- setdiff(c("URL", "Status", "Message"), names(bad))
   if (length(absent)) {
     stop(
@@ -71,13 +71,8 @@ verify_classify_urls <- function(bad, bugreports = NA_character_) {
     complaint("Spaces") |
     complaint("R")
 
-  issues <- bugreports[
-    !is.na(bugreports) & grepl("/-/issues/?$", bugreports)
-  ]
-
   kind <- rep("red", n)
   kind[bad$Status == "Error" & !static] <- "warn"
-  kind[bad$Status == "404" & bad$URL %in% issues & !static] <- "exempt"
   kind
 }
 
@@ -100,38 +95,35 @@ verify_url_self_test <- function() {
     )
   }
   cases <- list(
-    list(row(br, "404", "Not Found"), br, "exempt"),
-    list(row(br, "403", "Forbidden"), br, "red"), # the exemption is 404 only
-    list(row(wi, "404", "Not Found"), wi, "red"), # and /-/issues form only
-    list(row(br, "404", "Not Found"), NA_character_, "red"), # not BugReports
-    list(row("https://x.example/", "404", "Not Found"), br, "red"),
-    list(row("https://x.example/", "500", "Server Error"), br, "red"),
-    list(row("https://nonexistent.invalid/", "Error", "error 6"), br, "warn"),
-    list(row("https://10.255.255.1/", "Error", "error 28"), br, "warn"),
+    list(row(br, "404", "Not Found"), "red"), # the old exemption is gone
+    list(row(wi, "404", "Not Found"), "red"),
+    list(row(br, "403", "Forbidden"), "red"),
+    list(row("https://x.example/", "404", "Not Found"), "red"),
+    list(row("https://x.example/", "500", "Server Error"), "red"),
+    list(row("https://nonexistent.invalid/", "Error", "error 6"), "warn"),
+    list(row("https://10.255.255.1/", "Error", "error 28"), "warn"),
     list(
       row("https://x.example/a", "200", new = "https://x.example/b"),
-      br,
       "red"
     ),
-    list(row("", "", "Empty URL"), br, "red")
+    list(row("", "", "Empty URL"), "red")
   )
   for (case in cases) {
-    got <- verify_classify_urls(case[[1L]], case[[2L]])
-    if (!identical(got, case[[3L]])) {
+    got <- verify_classify_urls(case[[1L]])
+    if (!identical(got, case[[2L]])) {
       stop(
         sprintf(
-          "URL classifier self-test: %s (status %s, BugReports %s) gave %s, ",
+          "URL classifier self-test: %s (status %s) gave %s, ",
           case[[1L]]$URL,
           case[[1L]]$Status,
-          case[[2L]],
           toString(got)
         ),
-        sprintf("expected %s.", case[[3L]]),
+        sprintf("expected %s.", case[[2L]]),
         call. = FALSE
       )
     }
   }
-  if (length(verify_classify_urls(row(br, "404")[0L, ], br))) {
+  if (length(verify_classify_urls(row(br, "404")[0L, ]))) {
     stop(
       "URL classifier self-test: an empty result was not empty.",
       call. = FALSE
@@ -190,8 +182,7 @@ verify_urls <- function(dir = ".") {
   on.exit(options(old), add = TRUE)
   bad <- check_url_db(db)
 
-  bugreports <- read.dcf(file.path(dir, "DESCRIPTION"), "BugReports")[[1L]]
-  kind <- verify_classify_urls(bad, bugreports)
+  kind <- verify_classify_urls(bad)
 
   cat(sprintf(
     "  checked %d URL(s) from %s\n",
@@ -217,13 +208,6 @@ verify_urls <- function(dir = ".") {
       }
     }
   }
-  show(
-    "exempt",
-    paste(
-      "  exempted (DESCRIPTION's BugReports keeps the CRAN-incoming /-/issues",
-      "form by fleet decision, SEOR-ocbtrrnl):"
-    )
-  )
   show(
     "warn",
     "  WARNING, not reached (no HTTP status; network, not the URL):"
