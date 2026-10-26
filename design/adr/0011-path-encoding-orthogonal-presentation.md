@@ -1,6 +1,6 @@
 # ADR 0011: `path_encoding` is an orthogonal presentation axis, not a governed knob
 
-- **Status:** Accepted
+- **Status:** Accepted; superseded in part by ADR-0020 (the `encode` byte-compat clause)
 - **Date:** 2026-07-08
 - **Tracking:** RURL-sjnqhwtl (parent RURL-osrjtiwk, the HERO paper). Sibling:
   RURL-ndrgrwcz (Scope A — shipped the public `keep`/`encode`/`decode` knob).
@@ -119,3 +119,16 @@ selector-derived `.whatwg_preserve` identity (citations in ADR 0016, measured on
 may move ADR 0007's frozen `NULL` output: a witness that the defect is in the
 `NULL` path, plus a declared signature. Orthogonality on this ADR's axis is
 never that justification.
+
+## Amendment: `encode` may be redefined to conform (ADR 0020)
+
+*Added RURL-njwxywsw, 2026-10-26.*
+
+[ADR 0020](0020-literal-execution-of-the-standards.md) supersedes the clause
+"`encode` cannot be redefined (byte-compat is a hard constraint)" and the
+consequence that `encode` may fold `%2F` into a path-separating `/`. Neither
+standard's percent-encoding decodes a reserved octet's triplet: the WHATWG path
+percent-encode set leaves an existing triplet as written, and RFC 3986 §2.2
+makes a reserved character and its percent-encoded octet non-equivalent. RURL-dbyavcjt fixes `encode`;
+RURL-eokizmdi decides `decode`. Orthogonality (no conflict with the selector)
+stands.

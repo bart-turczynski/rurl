@@ -260,7 +260,8 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   drives the `host_encoding = "keep"` spelling choice.
 - `.apply_host_standard_model_vec()` (R/parse-phases.R) — the `url_standard`
   host IPv4/reg-name model. No-op when `url_standard` is NULL; Stage-A-affecting
-  under a selector (enters the parse cache key). See ADR 0007. Under `whatwg`
+  under a selector (enters the parse cache key). See ADR 0007; [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md)
+  makes `"whatwg"` the default and retires the `NULL` arm (RURL-mbhuhwzk). Under `whatwg`
   a host that ends in a number (`.host_ends_in_number_vec()`) is read by
   `.whatwg_ipv4_read()` (R/parse-web.R), the adapter over
   `raddr::addr_whatwg()`; an `NA` there is IPv4 failure and fails the URL.
@@ -374,7 +375,9 @@ only under `port_handling != "exclude"`.
   before the RFC 3986 §5 merge — a reference carrying the base's own special
   scheme is relative, `\` reads as `/`, leading slash runs are skipped, and
   leading/trailing C0-or-space is stripped. Under `"rfc3986"` the merge is RFC
-  3986 §5.2–§5.3. Under `NULL` it is byte-frozen (ADR 0007). Only the scheme
+  3986 §5.2–§5.3. Under `NULL` it is byte-frozen (ADR 0007; retired by
+  [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md),
+  RURL-mbhuhwzk). Only the scheme
   production (RFC 3986 §3.1) is shared by both named profiles, because the two
   standards agree on it. Measured over the WHATWG's own base-carrying corpus
   (`tests/testthat/test-wpt-base-relative.R`): 247 of 274 rows exact, 27
@@ -433,7 +436,9 @@ only under `port_handling != "exclude"`.
   the parser as a dial and leave rendering to the serializer, escaping only the
   bytes whose **acceptance** the dial changes.
 
-- **The Appendix B scheme production holds the NULL freeze.** `.split_uri_ref()`
+- **The Appendix B scheme production holds the NULL freeze** (current code;
+  [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md) retires the
+  freeze, and RURL-mbhuhwzk removes this carve-out). `.split_uri_ref()`
   (`R/resolve.R`) keeps RFC 3986 Appendix B's loose `[^:/?#]+` scheme group on
   the `url_standard = NULL` path **deliberately**. It looks like an obvious bug
   to tighten — Appendix B is self-described as non-validating — but the NULL path

@@ -4,6 +4,14 @@ One page. Every recipe below was read from `R/parse.R` (`.URL_PROFILES`,
 `.URL_STANDARD_PROFILES`) on 2026-09-03; when a value here disagrees with the
 tree, the tree wins and this card is the file to fix.
 
+**ADR 0020 (2026-10-26) retires the frozen `NULL` profile:** the default becomes
+`"whatwg"` and `NULL` is read as `"whatwg"`. Until RURL-mbhuhwzk lands, the tree
+still behaves as this card describes. With it, these change: question 1 (`NULL`
+byte-frozen, an error on the companion helpers), the "Legacy frozen" row, the
+per-function default list (updated: `get_mailto_recipients()` keeps
+`"rfc3986"`), the `NULL` clause of the `rfc3986` US-ASCII bullet and the
+ADR 0016 bullet.
+
 ## Three questions, in this order
 
 1. **Which standard?** `url_standard = "whatwg"` | `"rfc3986"` | `NULL`.

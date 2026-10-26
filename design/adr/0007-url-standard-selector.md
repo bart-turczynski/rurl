@@ -1,6 +1,6 @@
 # ADR 0007: `url_standard` as an opt-in coherent-profile selector (no default flip)
 
-- **Status:** Accepted
+- **Status:** Accepted; superseded in part by ADR-0020 (the default and the `NULL` freeze)
 - **Date:** 2026-07-05
 - **Tracking:** epics RURL-eqzkkohm (v1) and RURL-uyjheruh (v2). Specs:
   [`../prd/url-standard-selector.md`](../prd/url-standard-selector.md),
@@ -146,3 +146,16 @@ covers; ADR 0016 says *which kind of change* it forbids on that surface.
 
 See also **[ADR 0011](0011-path-encoding-orthogonal-presentation.md)**, which
 this ADR had never cited in the other direction.
+
+## Amendment: the default is `"whatwg"`, and the `NULL` freeze is retired (ADR 0020)
+
+*Added RURL-njwxywsw, 2026-10-26. Appended so no line citation into this file
+moves.*
+
+[ADR 0020](0020-literal-execution-of-the-standards.md) supersedes §Consequences
+"No default flip" and every statement in this file that `url_standard = NULL`
+stays byte-for-byte compatible, including the P2.7 D-B amendment's "the freeze
+governs whether output may *move*, not whether it is right". The default
+becomes `"whatwg"`, `NULL` is read as `"whatwg"`, and the frozen pre-selector
+profile is retired (RURL-mbhuhwzk). The selector itself, the conflict matrix
+and the governed axes stand.
