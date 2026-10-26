@@ -46,7 +46,7 @@ Imports:
     utils,
     stringi,
     punycoder (>= 1.2.1),
-    pslr (>= 1.1.1),
+    pslr (>= 1.2.2),
     raddr (>= 0.1.2)
 URL: https://bart-turczynski.gitlab.io/rurl/,
     https://gitlab.com/bart-turczynski/rurl,
