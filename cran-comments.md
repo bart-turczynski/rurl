@@ -94,7 +94,7 @@ The default `url_standard = NULL` profile is unchanged.
 ## Dependencies
 
 `rurl` depends on R (>= 4.1.0). It imports `utils`, `stringi`,
-`punycoder (>= 1.2.1)` and `pslr (>= 1.1.1)`, both floors already on CRAN.
+`punycoder (>= 1.2.1)` and `pslr (>= 1.2.2)`, both floors already on CRAN.
 There is no `Remotes:` field.
 
 ## Downstream dependencies
