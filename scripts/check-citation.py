@@ -32,8 +32,7 @@ WHAT IT CHECKS.
 
 WHAT IT DOES NOT CHECK, ON PURPOSE.
 
-* `codemeta.json` is out of scope: it is generated rather than authored, so a
-  drift gate over it would be asserting facts about a generator's output. Its
+* `codemeta.json` is not read here. It is hand-maintained, and its
   `issueTracker` must equal `DESCRIPTION`'s `BugReports:` (both name
   `/-/work_items`, seor ADR 0011); `scripts/check-bugreports.py` enforces
   that, not this check.
