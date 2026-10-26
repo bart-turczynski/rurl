@@ -191,10 +191,11 @@ writes a non-ASCII host only percent-encoded as UTF-8 (sections 2.5,
 knob: it is independent of \code{url_standard} and layers on top of any profile
 (e.g. \verb{url_standard = "whatwg", path_encoding = "encode"} emits the
 WHATWG-parsed path in browser form), exactly like \code{host_encoding}. Only
-"keep" preserves a profile's canonical identity path verbatim; "encode" and
-"decode" are presentation forms that may re-encode or decode reserved octets
-(so \verb{\%2F} may fold to a path-separating \code{/}), independent of whether a
-profile is set.
+"keep" preserves a profile's canonical identity path verbatim. "encode"
+only adds escapes, so every existing triplet, \code{/} and empty segment stays;
+"decode" is a presentation form that decodes reserved octets too (so \verb{\%2F}
+may fold to a path-separating \code{/}), independent of whether a profile is
+set.
 \itemize{
 \item{"keep": Leave the path percent-encoding untouched (the path is
 preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
@@ -207,9 +208,16 @@ decoded, every other triplet stays encoded with uppercased hex, so
 \code{url_standard = "whatwg"}, existing percent-triplet
 spelling is preserved byte-for-byte. Use "encode" to additionally
 normalize which bytes are encoded.}
-\item{"encode": The browser/percent-encoded rendering. Decodes the path
-first, then percent-encodes each segment (slashes preserved), so a
-readable non-ASCII path is emitted in its percent-encoded UTF-8 form.}
+\item{"encode": The browser/percent-encoded rendering. Percent-encodes
+every octet the selected standard does not allow in a path and decodes
+nothing, so a readable non-ASCII path is emitted in its percent-encoded
+UTF-8 form while \verb{\%2F}, \verb{/a//} and every other existing triplet stay as
+written (with no \code{url_standard}, hex case is uppercased as under
+"keep"). Under \code{url_standard = "whatwg"} the escaped octets are the
+WHATWG path percent-encode set; otherwise they are those outside
+RFC 3986 \code{pchar} (sub-delimiters, \code{:} and \code{@} stay literal) and a \verb{\%}
+that does not begin a triplet, which becomes \verb{\%25}.
+}
 \item{"decode": The readable rendering. Percent-decodes UTF-8 sequences
 in the path, so a percent-encoded segment is shown as readable text.}
 }}

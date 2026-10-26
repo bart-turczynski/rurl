@@ -174,17 +174,3 @@
   }
   out
 }
-
-# Decode and re-encode one path as `path_encoding = "encode"` does, for a path
-# holding a `%00` triplet (RURL-fpujlvoq). The text between the triplets is
-# decoded and each "/"-separated segment escaped, and the triplets go back
-# between the pieces, so a `%00` stays `%00` and a `%2500` stays `%2500`.
-# Empty segments are kept, so no "/" next to a triplet is lost.
-.pct_recode_path_keep_nul <- function(path) {
-  pieces <- .bytes_split_fixed(path, "%00", keep_trailing_empty = TRUE)[[1L]]
-  recoded <- vapply(.pct_unescape(pieces), function(piece) {
-    segments <- .bytes_split_fixed(piece, "/", keep_trailing_empty = TRUE)
-    paste(.pct_escape(segments[[1L]]), collapse = "/")
-  }, character(1), USE.NAMES = FALSE)
-  paste(recoded, collapse = "%00")
-}

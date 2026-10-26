@@ -248,10 +248,11 @@ get_parse_status <- function(url,
 #'   hex case to uppercase.
 #' }
 #'
-#' That normalization is part of the path a URL denotes, and only
-#' \code{path_encoding = "keep"} (the default) preserves it verbatim ---
-#' \code{"encode"} and \code{"decode"} layer a presentation form on top and may
-#' fold a reserved octet such as \code{\%2F} into a path-separating \code{/}.
+#' That normalization is part of the path a URL denotes.
+#' \code{path_encoding = "keep"} (the default) preserves it verbatim, and
+#' \code{"encode"} keeps it while escaping the octets the standard does not
+#' allow in a path. \code{"decode"} layers a readable form on top that may fold
+#' a reserved octet such as \code{\%2F} into a path-separating \code{/}.
 #' See \code{vignette("url-standard")}.
 #'
 #' @param url A character vector containing URLs to be parsed.

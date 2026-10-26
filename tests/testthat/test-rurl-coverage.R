@@ -297,8 +297,10 @@ test_that("internal path helpers cover edge cases", {
   expect_equal(rurl:::._strip_index_page(NA_character_), NA_character_)
   expect_equal(rurl:::._strip_index_page("foo/index.html"), "/foo")
 
-  expect_equal(rurl:::._encode_path_segments(NA_character_), NA_character_)
-  expect_equal(rurl:::._encode_path_segments("/a b/"), "/a%20b/")
+  expect_equal(
+    rurl:::.rfc3986_path_percent_encode(NA_character_), NA_character_
+  )
+  expect_equal(rurl:::.rfc3986_path_percent_encode("/a b/"), "/a%20b/")
 })
 
 test_that("punycode_to_unicode never errors on malformed A-labels", {
@@ -408,12 +410,11 @@ test_that("query parser percent-decodes both sides unless decode = FALSE", {
   expect_equal(rurl:::._parse_query_string("%"), list(`%` = ""))
 })
 
-test_that("encode_path_segments handles empty and multi-segment paths", {
-  # Empty-segment behavior: "" stays "", character(0) recomposes to "".
-  expect_equal(rurl:::._encode_path_segments(""), "")
-  expect_equal(rurl:::._encode_path_segments("/"), "/")
-  # Every segment is escaped by the single vectorized .pct_escape() call.
-  expect_equal(rurl:::._encode_path_segments("/a b/c d"), "/a%20b/c%20d")
+test_that("the RFC 3986 path encoder handles empty and multi-segment paths", {
+  expect_equal(rurl:::.rfc3986_path_percent_encode(""), "")
+  expect_equal(rurl:::.rfc3986_path_percent_encode("/"), "/")
+  expect_equal(rurl:::.rfc3986_path_percent_encode("/a b/c d"), "/a%20b/c%20d")
+  expect_equal(rurl:::.rfc3986_path_percent_encode(character(0)), character(0))
 })
 
 test_that("getters return NA on parse failures", {
