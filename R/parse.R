@@ -160,7 +160,8 @@
 #'     "keep"). Under `url_standard = "whatwg"` the escaped octets are the
 #'     WHATWG path percent-encode set; otherwise they are those outside
 #'     RFC 3986 `pchar` (sub-delimiters, `:` and `@` stay literal) and a `%`
-#'     that does not begin a triplet, which becomes `%25`.}
+#'     that does not begin a triplet, which becomes `%25`.
+#'     }
 #'     \item{"decode": The readable rendering. Percent-decodes UTF-8 sequences
 #'     in the path, so a percent-encoded segment is shown as readable text.}
 #'   }
