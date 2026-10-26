@@ -6,8 +6,9 @@ nothing here affects `R CMD check` or the pkgdown site. See
 
 - **Before you touch `R/parse*.R` or a conformance test, the reading list is
   eight documents, not this tree:** [`posture-card.md`](posture-card.md);
-  ADR 0020 (literal execution; the WHATWG default); ADR 0007 (the selector); ADR 0012 (scope); whichever of ADR 0010 / 0011 /
-  0013 governs the axis you are changing; [`oracle-fixtures.md`](oracle-fixtures.md);
+  ADR 0020 (literal execution; the WHATWG default); ADR 0007 (the selector);
+  ADR 0012 (scope); whichever of ADR 0010 / 0011 / 0013 governs the axis you
+  are changing; [`oracle-fixtures.md`](oracle-fixtures.md);
   [`oracle-pinning.md`](oracle-pinning.md) with [`measurement-traps.md`](measurement-traps.md);
   and, only if the change flips a contract claim, the one owning contract under
   `work/url-v3/contracts/`. `decisions/`, `evidence/` and `worklog/` are
