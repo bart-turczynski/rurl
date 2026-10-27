@@ -1064,8 +1064,11 @@ get_port <- function(url, protocol_handling = "keep",
 #' \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
 #' domain (ADR 0012 D7). That local-part is percent-decoded, and it is
 #' \code{NA} when the decoded octets are not valid UTF-8 (RFC 6068 section 2)
-#' or hold a null octet (\code{\%00}, which is no \code{addr-spec} character,
-#' RFC 5322 section 3.2.3), as the host is for such a domain. As with
+#' or hold a null octet (\code{\%00}), because an R string cannot hold either,
+#' as the host is for such a domain. This is a limit of the decoded text, not
+#' a mailbox-syntax ruling: the value is not validated (\code{"a\%20b"} gives
+#' \code{"a b"}), and \code{\link{get_mailto_recipients}} reports each
+#' local-part's form and its as-written spelling. As with
 #' \code{\link{get_host}}, this deliberately diverges from
 #' \code{\link{safe_parse_url}}, whose
 #' \code{user} column is \code{NA} for a \code{mailto:} URL (an opaque path

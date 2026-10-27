@@ -81,6 +81,11 @@ input) with one row per positional-\code{to} recipient and columns:
 \item{\code{url}}{the source URL the recipient came from.}
 \item{\code{recipient_index}}{1-based index of the recipient within that
 URL's positional list.}
+\item{\code{mailto_local_part_raw}}{the recipient's local-part exactly
+as written in the URL, still percent-encoded (\code{"a\%00zz"},
+\code{"caf\%C3\%A9"}), so a local-part classified \code{"invalid"}
+is still at hand; \code{NA} when the recipient has no single
+structural \code{@}.}
 \item{\code{mailto_local_part_form}}{RFC 6068 local-part form:
 \code{"dot-atom-text"}, \code{"quoted-string"}, \code{"invalid"}, or
 \code{"indeterminate"}.}

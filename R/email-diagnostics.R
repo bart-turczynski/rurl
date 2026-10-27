@@ -523,6 +523,11 @@
 #'     \item{\code{url}}{the source URL the recipient came from.}
 #'     \item{\code{recipient_index}}{1-based index of the recipient within that
 #'       URL's positional list.}
+#'     \item{\code{mailto_local_part_raw}}{the recipient's local-part exactly
+#'       as written in the URL, still percent-encoded (\code{"a\%00zz"},
+#'       \code{"caf\%C3\%A9"}), so a local-part classified \code{"invalid"}
+#'       is still at hand; \code{NA} when the recipient has no single
+#'       structural \code{@}.}
 #'     \item{\code{mailto_local_part_form}}{RFC 6068 local-part form:
 #'       \code{"dot-atom-text"}, \code{"quoted-string"}, \code{"invalid"}, or
 #'       \code{"indeterminate"}.}
@@ -597,6 +602,7 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   empty <- data.frame(
     url = character(0),
     recipient_index = integer(0),
+    mailto_local_part_raw = character(0),
     mailto_local_part_form = character(0),
     mailto_domain_form = character(0),
     smtp_mailbox_rhs_syntax_form = character(0),
@@ -676,6 +682,7 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
 # `smtp_wire` is TRUE and the address projects.
 .email_recipient_facts <- function(raw_recipient, smtp_wire) {
   out <- list(
+    mailto_local_part_raw = NA_character_,
     mailto_local_part_form = "invalid",
     mailto_domain_form = "invalid",
     smtp_mailbox_rhs_syntax_form = "invalid",
@@ -690,6 +697,7 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   if (!split$ok) {
     return(out)
   }
+  out$mailto_local_part_raw <- split$local
   ld <- .email_decode_field(split$local)
   dd <- .email_decode_field(split$domain)
   out$mailto_local_part_form <- .email_classify_local(ld)
