@@ -2097,35 +2097,37 @@
   # Terminal path presentation. Decode only after identity normalization and
   # cleaning have decided which structural rules fire; both presentation
   # operations happen after index/trailing-slash handling.
+  # "decode" decodes only what names the same path: a triplet for an
+  # unreserved octet (RFC 3986 section 6.2.2.2) and a run of triplets that
+  # forms well-formed non-ASCII UTF-8 (the readable rendering). Every other
+  # ASCII triplet stays as written -- reserved (`%2F`, `%3F`, `%23`, ...),
+  # `%25`, controls, space and the other octets outside unreserved -- since
+  # a reserved character and its triplet are not equivalent (section 2.2)
+  # and `%2541` must not become a new triplet `%41` (RURL-eokizmdi). It used
+  # to decode every triplet, so `/a%2Fb/c` presented as `/a/b/c`.
   if (path_encoding == "decode" && !whatwg_encode) {
-    mask <- !is.na(path_work)
+    ok <- !is.na(path_work)
+    mask <- ok & .bytes_detect(path_work, "%", fixed = TRUE)
+    # The decoded path is declared UTF-8, as `.pct_unescape()` declared it.
+    pass <- ok & !mask
+    if (any(pass)) {
+      Encoding(path_work[pass]) <- "UTF-8"
+    }
     if (any(mask)) {
-      decoded <- tryCatch(
-        .pct_unescape(path_work[mask]),
-        error = function(e) NULL
+      path_work[mask] <- vapply(
+        path_work[mask], .path_decode_readable_one, character(1),
+        USE.NAMES = FALSE
       )
-      if (!is.character(decoded) || length(decoded) != sum(mask)) {
-        decoded <- vapply(
-          path_work[mask],
-          function(p) tryCatch(.pct_unescape(p), error = function(e) p),
-          character(1),
-          USE.NAMES = FALSE
-        )
-      }
-      # A `%XX` that decodes to an octet outside well-formed UTF-8 (`%E9`, or
-      # the triplet the raw-path cut writes for an undecodable octet under the
-      # no-selector default, RUL-029) has no character to present. "decode"
-      # wrote the raw octet into `path` and `clean_url`, a string stringi
-      # downstream cannot read, so it keeps that octet as its uppercase
-      # triplet; every other triplet in the path still decodes (RURL-yarkccco).
-      bad <- !is.na(decoded) & !validUTF8(decoded)
-      if (any(bad)) {
-        decoded[bad] <- vapply(
-          decoded[bad], .web_escape_undecodable_bytes, character(1),
-          USE.NAMES = FALSE
-        )
-      }
-      path_work[mask] <- decoded
+    }
+    # A literal octet outside well-formed UTF-8 that reached the path has no
+    # character to present either; it is kept as its uppercase triplet, as a
+    # triplet run that is not well-formed UTF-8 is (RURL-yarkccco).
+    bad <- !is.na(path_work) & !validUTF8(path_work)
+    if (any(bad)) {
+      path_work[bad] <- vapply(
+        path_work[bad], .web_escape_undecodable_bytes, character(1),
+        USE.NAMES = FALSE
+      )
     }
   }
 
@@ -2156,6 +2158,102 @@
     index_page_handling, trailing_slash_handling,
     path_identity = path_identity
   )
+}
+
+# The `path_encoding = "decode"` rendering of one path holding a "%"
+# (RURL-eokizmdi). Each maximal run of `%XX` triplets is read as octets: an
+# ASCII octet decodes only when it is RFC 3986 unreserved, and otherwise its
+# triplet stays as written (hex case included); the non-ASCII octets decode
+# where they form well-formed UTF-8 (`.web_utf8_token_regex`, RFC 3629) and
+# are kept as uppercase triplets where they do not (RURL-yarkccco). A `%`
+# that does not begin a triplet is left alone. Built from raw bytes, so the
+# result is the same in every locale.
+.path_decode_readable_one <- function(s) {
+  raw_in <- charToRaw(s)
+  m <- gregexpr("(?:%[0-9A-Fa-f]{2})+", s, perl = TRUE, useBytes = TRUE)[[1]]
+  starts <- as.integer(m)
+  if (starts[1L] == -1L) {
+    Encoding(s) <- "UTF-8"
+    return(s)
+  }
+  lens <- attr(m, "match.length")
+  chunks <- vector("list", 2L * length(starts) + 1L)
+  k <- 0L
+  pos <- 1L
+  for (j in seq_along(starts)) {
+    st <- starts[j]
+    if (st > pos) {
+      k <- k + 1L
+      chunks[[k]] <- raw_in[pos:(st - 1L)]
+    }
+    k <- k + 1L
+    chunks[[k]] <- .path_decode_triplet_run(raw_in[st:(st + lens[j] - 1L)])
+    pos <- st + lens[j]
+  }
+  if (pos <= length(raw_in)) {
+    k <- k + 1L
+    chunks[[k]] <- raw_in[pos:length(raw_in)]
+  }
+  out <- rawToChar(unlist(chunks[seq_len(k)], use.names = FALSE))
+  Encoding(out) <- "UTF-8"
+  out
+}
+
+# ALPHA / DIGIT / "-" / "." / "_" / "~" (RFC 3986 section 2.3), as octets.
+.path_unreserved_octets <- c(
+  0x30:0x39, 0x41:0x5A, 0x61:0x7A, 0x2D, 0x2E, 0x5F, 0x7E
+)
+
+# One run of triplets (raw bytes, "%XX%XX...") rendered per the rule above.
+.path_decode_triplet_run <- function(run) {
+  at <- seq.int(1L, length(run), by = 3L)
+  txt <- rawToChar(run)
+  oct <- strtoi(substring(txt, at + 1L, at + 2L), base = 16L)
+  n <- length(oct)
+  pieces <- vector("list", n)
+  i <- 1L
+  while (i <= n) {
+    if (oct[i] < 0x80) {
+      pieces[[i]] <- if (oct[i] %in% .path_unreserved_octets) {
+        as.raw(oct[i])
+      } else {
+        run[at[i] + 0:2]
+      }
+      i <- i + 1L
+      next
+    }
+    # A maximal run of non-ASCII octets: none is NUL, so it is a valid R
+    # string to tokenize into well-formed sequences and lone octets.
+    end <- i
+    while (end < n && oct[end + 1L] >= 0x80) {
+      end <- end + 1L
+    }
+    pieces[[i]] <- .path_decode_utf8_octets(oct[i:end])
+    i <- end + 1L
+  }
+  unlist(pieces, use.names = FALSE)
+}
+
+.path_decode_utf8_octets <- function(oct) {
+  b <- as.raw(oct)
+  tok <- gregexpr(
+    .web_utf8_token_regex, rawToChar(b), perl = TRUE, useBytes = TRUE
+  )[[1]]
+  starts <- as.integer(tok)
+  lens <- attr(tok, "match.length")
+  out <- vector("list", length(starts))
+  for (t in seq_along(starts)) {
+    if (lens[t] > 1L) {
+      out[[t]] <- b[starts[t]:(starts[t] + lens[t] - 1L)]
+    } else {
+      v <- oct[starts[t]]
+      out[[t]] <- c(
+        as.raw(0x25), .web_hex_digits[v %/% 16L + 1L],
+        .web_hex_digits[v %% 16L + 1L]
+      )
+    }
+  }
+  unlist(out, use.names = FALSE)
 }
 
 # Phase 4 (vector): resolve the final scheme according to protocol policy.
