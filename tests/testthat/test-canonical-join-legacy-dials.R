@@ -235,28 +235,31 @@ test_that("a governed-knob conflict errors without also warning", {
 # --- D-E.3: the warning is additive, results are byte-identical --------------
 
 test_that("path_encoding results are unchanged by the warning", {
-  # Values captured from the shipped (pre-warning) implementation.
+  # Values captured from the shipped (pre-warning) implementation, re-pinned
+  # by RURL-eokizmdi: "decode" no longer folds `%2F` into `/` (RFC 3986
+  # section 2.2), and under url_standard = NULL a kept triplet keeps its hex
+  # case, so `A%2fB` and `A%2FB` no longer share a key.
   joined <- cj_legacy(canonical_join(
     make_a(), make_b(),
     name_A = "A", name_B = "B", path_encoding = "decode", join = "full"
   ))
   expect_identical(
     joined$A,
-    c("http://www.Example.com/A%2fB/", "https://Example.com/x", NA)
+    c("http://www.Example.com/A%2fB/", "https://Example.com/x", NA, NA)
   )
   expect_identical(
     joined$B,
-    c("http://www.example.com/A%2FB/", NA, "https://www.example.com/x")
+    c(NA, NA, "http://www.example.com/A%2FB/", "https://www.example.com/x")
   )
   expect_identical(
     joined$JoinKey,
     c(
-      "http://www.example.com/A/B/", "https://example.com/x",
-      "https://www.example.com/x"
+      "http://www.example.com/A%2fB/", "https://example.com/x",
+      "http://www.example.com/A%2FB/", "https://www.example.com/x"
     )
   )
-  expect_identical(joined$ValA_A, c(1L, 2L, NA))
-  expect_identical(joined$ValB_B, c("p", NA, "q"))
+  expect_identical(joined$ValA_A, c(1L, 2L, NA, NA))
+  expect_identical(joined$ValB_B, c(NA, NA, "p", "q"))
 })
 
 test_that("www_handling results are unchanged by the warning", {

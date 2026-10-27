@@ -329,14 +329,15 @@ for (loc in names(ctypes)) {
           }
         }
       }
-      # Decode still decodes every triplet that is valid UTF-8 beside it;
-      # encode re-encodes the whole path.
+      # Decode still decodes every UTF-8 run that is valid beside it, and
+      # keeps `%20`, which is not unreserved (RURL-eokizmdi); encode
+      # re-encodes the whole path.
       rurl_clear_caches()
       expect_no_warning(
         d <- safe_parse_urls("http://example.com/a%20%C3%A9%E9",
                              path_encoding = "decode")
       )
-      expect_identical(d$path, "/a é%E9")
+      expect_identical(d$path, "/a%20é%E9")
       expect_no_warning(
         e <- safe_parse_urls("http://example.com/a%20%C3%A9%E9/b",
                              path_encoding = "encode")

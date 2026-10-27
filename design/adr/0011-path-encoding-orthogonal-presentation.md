@@ -132,3 +132,8 @@ percent-encode set leaves an existing triplet as written, and RFC 3986 §2.2
 makes a reserved character and its percent-encoded octet non-equivalent. RURL-dbyavcjt fixes `encode`;
 RURL-eokizmdi decides `decode`. Orthogonality (no conflict with the selector)
 stands.
+
+*Added RURL-eokizmdi, 2026-10-28.* `decode` is decided: it decodes only a
+triplet for an unreserved octet (RFC 3986 §6.2.2.2) and a run of triplets that
+forms well-formed non-ASCII UTF-8. Every other ASCII triplet, `%2F`, `%25` and
+the rest of the reserved set included, stays as written (§2.2).

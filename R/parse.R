@@ -137,9 +137,10 @@
 #' WHATWG-parsed path in browser form), exactly like `host_encoding`. Only
 #' "keep" preserves a profile's canonical identity path verbatim. "encode"
 #' only adds escapes, so every existing triplet, `/` and empty segment stays;
-#' "decode" is a presentation form that decodes reserved octets too (so `%2F`
-#' may fold to a path-separating `/`), independent of whether a profile is
-#' set.
+#' "decode" is a display form that decodes only unreserved triplets (which
+#' RFC 3986 §6.2.2.2 makes equivalent) and well-formed UTF-8, so a reserved
+#' octet such as `%2F` stays encoded and never becomes a path-separating
+#' `/`, under every `url_standard`.
 #'   \itemize{
 #'     \item{"keep": Leave the path percent-encoding untouched (the path is
 #'     preserved as written in the URL, so `%2F` stays `%2F` rather than
@@ -162,8 +163,17 @@
 #'     RFC 3986 `pchar` (sub-delimiters, `:` and `@` stay literal) and a `%`
 #'     that does not begin a triplet, which becomes `%25`.
 #'     }
-#'     \item{"decode": The readable rendering. Percent-decodes UTF-8 sequences
-#'     in the path, so a percent-encoded segment is shown as readable text.}
+#'     \item{"decode": The readable rendering. Percent-decodes a triplet
+#'     for an RFC 3986 unreserved octet (`A-Z`, `a-z`, `0-9`, `-`, `.`, `_`,
+#'     `~`; section 6.2.2.2) and a run of triplets that forms well-formed
+#'     non-ASCII UTF-8, so a percent-encoded segment is shown as readable
+#'     text: `/%7Ecaf%C3%A9` becomes `/~café`. Every other ASCII triplet
+#'     stays as written, hex case included: reserved octets (`%2F`, `%3F`,
+#'     `%23`, ...), `%25`, controls, space and the rest, since RFC 3986
+#'     section 2.2 makes a reserved character and its triplet
+#'     non-equivalent. So `/a%2Fb` stays `/a%2Fb` and `/a%2541` stays
+#'     `/a%2541`. A triplet run that is not well-formed UTF-8 (`%E9`) stays
+#'     as its uppercase triplet.}
 #'   }
 #' @param subdomain_levels_to_keep An integer or NULL. Determines how many
 #' levels of subdomains are kept,
@@ -425,11 +435,12 @@
 #'     `port_handling != "exclude"` (the default is "exclude", so by default
 #'     the port is excluded, as before); fragment and userinfo are always
 #'     excluded (use the dedicated components above to retrieve them). With
-#'     `path_encoding = "decode"` the path is shown decoded, so `clean_url`
-#'     is human-readable rather than guaranteed URL-safe. NA on a parse error,
-#'     when the host is empty/NA except for a valid hostless `file:` URL, or
-#'     under `credential_handling = "reject"` when the authority carried a
-#'     userinfo delimiter.
+#'     `path_encoding = "decode"` the path shows its unreserved and UTF-8
+#'     triplets decoded (reserved ones such as `%2F` stay encoded), so
+#'     `clean_url` is human-readable rather than guaranteed URL-safe. NA on
+#'     a parse error, when the host is empty/NA except for a valid hostless
+#'     `file:` URL, or under `credential_handling = "reject"` when the
+#'     authority carried a userinfo delimiter.
 #'     \item `parse_status`: Character string indicating parsing outcome
 #'       ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
 #'       "warning-invalid-tld", "warning-public-suffix", "warning-userinfo").

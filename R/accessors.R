@@ -251,8 +251,9 @@ get_parse_status <- function(url,
 #' That normalization is part of the path a URL denotes.
 #' \code{path_encoding = "keep"} (the default) preserves it verbatim, and
 #' \code{"encode"} keeps it while escaping the octets the standard does not
-#' allow in a path. \code{"decode"} layers a readable form on top that may fold
-#' a reserved octet such as \code{\%2F} into a path-separating \code{/}.
+#' allow in a path. \code{"decode"} layers a readable form on top: it decodes
+#' unreserved and well-formed UTF-8 triplets only, so a reserved octet such
+#' as \code{\%2F} stays encoded and never becomes a path-separating \code{/}.
 #' See \code{vignette("url-standard")}.
 #'
 #' @param url A character vector containing URLs to be parsed.

@@ -90,8 +90,9 @@ excluded — read them from the dedicated components (`get_port()`,
 `get_query()`, `get_fragment()`, `get_userinfo()`) instead. The query can be
 selectively kept on `clean_url` via `query_handling` on either
 `safe_parse_url()` or `get_clean_url()` (see [Query handling](#query-handling)).
-With `path_encoding = "decode"` the path is shown decoded, so `clean_url` is
-human-readable rather than guaranteed URL-safe.
+With `path_encoding = "decode"` the path shows its percent-encoded UTF-8 and
+unreserved characters decoded, so `clean_url` is human-readable rather than
+guaranteed URL-safe; reserved triplets such as `%2F` stay encoded.
 
 Scheme-relative URL handling is configurable:
 
@@ -143,11 +144,11 @@ get_clean_url("http://münich.com/a%20b",
               case_handling = "lower_host")
 #> [1] "http://xn--mnich-kva.com/a%20b"
 
-get_clean_url("http://xn--mnich-kva.com/a%20b",
+get_clean_url("http://xn--mnich-kva.com/caf%C3%A9%2Fx",
               host_encoding = "unicode",
               path_encoding = "decode",
               case_handling = "keep")
-#> [1] "http://münich.com/a b"
+#> [1] "http://münich.com/café%2Fx"
 ```
 
 ## Accessors

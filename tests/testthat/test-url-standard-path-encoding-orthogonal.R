@@ -215,12 +215,12 @@ test_that("path presentation runs after index and trailing-slash cleaning", {
     slash_input
   )
 
-  # "decode" alone renders the encoded slash as "/". Combining it with
-  # cleaning must not retroactively expose a separator to that earlier
-  # cleaning step and change which index/slash rule fires.
+  # "decode" keeps the encoded slash as data (RURL-eokizmdi; RFC 3986
+  # section 2.2), alone and combined with cleaning, so it exposes no
+  # separator to the earlier cleaning step either.
   expect_identical(
     get_clean_url(index_input, path_encoding = "decode"),
-    "https://ex.com/a/index.html"
+    index_input
   )
   expect_identical(
     get_clean_url(
@@ -228,11 +228,11 @@ test_that("path presentation runs after index and trailing-slash cleaning", {
       index_page_handling = "strip",
       path_encoding = "decode"
     ),
-    "https://ex.com/a/index.html"
+    index_input
   )
   expect_identical(
     get_clean_url(slash_input, path_encoding = "decode"),
-    "https://ex.com/a/"
+    slash_input
   )
   expect_identical(
     get_clean_url(
@@ -240,7 +240,7 @@ test_that("path presentation runs after index and trailing-slash cleaning", {
       trailing_slash_handling = "strip",
       path_encoding = "decode"
     ),
-    "https://ex.com/a/"
+    slash_input
   )
 
   # "encode" decodes nothing, so `%2F` stays data through the cleaning dials
@@ -263,17 +263,17 @@ test_that("path presentation runs after index and trailing-slash cleaning", {
   )
 })
 
-test_that("decode folds reserved octets; encode keeps them", {
-  # Documented consequence (ADR 0011): "decode" decodes reserved octets, so a
-  # profile's %2F identity does NOT survive it. "keep" and "encode" preserve
-  # it: encode only adds escapes (RURL-dbyavcjt, ADR 0020).
+test_that("decode and encode keep reserved octets", {
+  # A profile's %2F identity survives every presentation: encode only adds
+  # escapes (RURL-dbyavcjt) and decode decodes only unreserved and UTF-8
+  # triplets (RURL-eokizmdi; RFC 3986 section 2.2, ADR 0020 over ADR 0011).
   expect_identical(
     get_path("http://ex.com/a%2Fb/c", url_standard = "whatwg"), "/a%2Fb/c"
   )
   expect_identical(
     get_path("http://ex.com/a%2Fb/c", url_standard = "whatwg",
       path_encoding = "decode"),
-    "/a/b/c"
+    "/a%2Fb/c"
   )
   for (std in list(NULL, "rfc3986", "whatwg")) {
     expect_identical(
@@ -348,9 +348,10 @@ test_that("the identity family answers the same question invariantly", {
   k <- get_url_key(c(A$URL, B$URL))
   expect_true(identical(k[[1]], k[[2]]))
   expect_identical(nrow(url_inner_join(A, B, by = "URL")), 1L)
-  # The contrast with the dial survives on a pair the standard keeps apart:
-  # `path_encoding = "decode"` folds `%2F` into `/` (pinned above), so the
-  # legacy frames join `/a%2Fb` with `/a/b`, while identity keeps them distinct.
+  # A pair the standard keeps apart: identity keeps `/a%2Fb` and `/a/b`
+  # distinct, and since RURL-eokizmdi `path_encoding = "decode"` no longer
+  # folds `%2F` into `/` (pinned above), so the legacy frames keep them apart
+  # too. It used to join them.
   C <- data.frame(URL = "http://ex.com/a%2Fb", ValA = 1L,
     stringsAsFactors = FALSE)
   D <- data.frame(URL = "http://ex.com/a/b", ValB = 2L,
@@ -359,7 +360,7 @@ test_that("the identity family answers the same question invariantly", {
   expect_false(identical(k[[1]], k[[2]]))
   expect_identical(nrow(url_inner_join(C, D, by = "URL")), 0L)
   expect_identical(nrow(cj_legacy(canonical_join(C, D,
-    url_standard = "whatwg", path_encoding = "decode"))), 1L)
+    url_standard = "whatwg", path_encoding = "decode"))), 0L)
 
   # And that 0 cannot be argued up to 1 (the `%2F` pair's identity answer): no
   # member of canonical_join()'s own

@@ -884,8 +884,9 @@ test_that("path_encoding decode and encode work as expected", {
     path_encoding = "decode",
     case_handling = "keep"
   )
-  expect_equal(res_decode$path, "/a b")
-  expect_equal(res_decode$clean_url, "http://example.com/a b")
+  # "decode" keeps `%20`: space is not an unreserved octet (RURL-eokizmdi).
+  expect_equal(res_decode$path, "/a%20b")
+  expect_equal(res_decode$clean_url, "http://example.com/a%20b")
 
   res_encode <- safe_parse_url(
     "http://example.com/a%20b",

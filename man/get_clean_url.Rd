@@ -193,9 +193,10 @@ knob: it is independent of \code{url_standard} and layers on top of any profile
 WHATWG-parsed path in browser form), exactly like \code{host_encoding}. Only
 "keep" preserves a profile's canonical identity path verbatim. "encode"
 only adds escapes, so every existing triplet, \code{/} and empty segment stays;
-"decode" is a presentation form that decodes reserved octets too (so \verb{\%2F}
-may fold to a path-separating \code{/}), independent of whether a profile is
-set.
+"decode" is a display form that decodes only unreserved triplets (which
+RFC 3986 §6.2.2.2 makes equivalent) and well-formed UTF-8, so a reserved
+octet such as \verb{\%2F} stays encoded and never becomes a path-separating
+\code{/}, under every \code{url_standard}.
 \itemize{
 \item{"keep": Leave the path percent-encoding untouched (the path is
 preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
@@ -218,8 +219,17 @@ WHATWG path percent-encode set; otherwise they are those outside
 RFC 3986 \code{pchar} (sub-delimiters, \code{:} and \code{@} stay literal) and a \verb{\%}
 that does not begin a triplet, which becomes \verb{\%25}.
 }
-\item{"decode": The readable rendering. Percent-decodes UTF-8 sequences
-in the path, so a percent-encoded segment is shown as readable text.}
+\item{"decode": The readable rendering. Percent-decodes a triplet
+for an RFC 3986 unreserved octet (\code{A-Z}, \code{a-z}, \code{0-9}, \code{-}, \code{.}, \verb{_},
+\code{~}; section 6.2.2.2) and a run of triplets that forms well-formed
+non-ASCII UTF-8, so a percent-encoded segment is shown as readable
+text: \verb{/\%7Ecaf\%C3\%A9} becomes \verb{/~café}. Every other ASCII triplet
+stays as written, hex case included: reserved octets (\verb{\%2F}, \verb{\%3F},
+\verb{\%23}, ...), \verb{\%25}, controls, space and the rest, since RFC 3986
+section 2.2 makes a reserved character and its triplet
+non-equivalent. So \verb{/a\%2Fb} stays \verb{/a\%2Fb} and \verb{/a\%2541} stays
+\verb{/a\%2541}. A triplet run that is not well-formed UTF-8 (\verb{\%E9}) stays
+as its uppercase triplet.}
 }}
 
 \item{query_handling}{A character string controlling whether (and how) the
@@ -508,8 +518,9 @@ hex case to uppercase.
 That normalization is part of the path a URL denotes.
 \code{path_encoding = "keep"} (the default) preserves it verbatim, and
 \code{"encode"} keeps it while escaping the octets the standard does not
-allow in a path. \code{"decode"} layers a readable form on top that may fold
-a reserved octet such as \code{\%2F} into a path-separating \code{/}.
+allow in a path. \code{"decode"} layers a readable form on top: it decodes
+unreserved and well-formed UTF-8 triplets only, so a reserved octet such
+as \code{\%2F} stays encoded and never becomes a path-separating \code{/}.
 See \code{vignette("url-standard")}.
 }
 
