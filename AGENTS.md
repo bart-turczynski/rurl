@@ -9,7 +9,7 @@
 
 Before changing parse behavior or a conformance test, read design/posture-card.md; rulings no gate derives are in design/work/url-v3/registers/rulings.md.
 For parser internals, see ARCHITECTURE.md.
-For workflow, validation policy and the CRAN release checklist, see CONTRIBUTING.md.
+For workflow, see design/workflow.md; validation policy, design/validation.md; the CRAN release deltas, design/release-deltas.md.
 For gates, lint deviations, the backup mirror and a red gate on an untouched tree, see design/verification.md.
 For hook setup, reading a gate run, sibling-package tests and known false alarms, see design/agent-workflow.md.
 For the design tree, instrument traps, oracle pins and fixtures, and the release order, see design/README.md.

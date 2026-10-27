@@ -44,6 +44,12 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
   posture-scoped claims, and which are characterization.
 - [`release-chain.md`](release-chain.md) — the eight-package CRAN submission
   order and the sibling-pinning rule that protects it.
+- [`release-deltas.md`](release-deltas.md) — rurl's deltas to the fleet CRAN
+  release checklist.
+- [`workflow.md`](workflow.md) — the contribution workflow and the protected
+  areas.
+- [`validation.md`](validation.md) — the validation policy: the local gate,
+  when to run it, and what the whitespace fixers must skip.
 - [`stringi-inventory.md`](stringi-inventory.md) — a snapshot of every
   `stringi::` reference in `R/` at `80d4f0e`, with its operation family, where
   ICU and byte-mode PCRE differ for it, and the slice that migrates it
