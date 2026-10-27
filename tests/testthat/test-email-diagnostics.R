@@ -158,7 +158,8 @@ test_that("the return shape is a stable data.frame for degenerate input", {
   expect_type(z$url_diagnostics, "list")
 })
 
-test_that("mailto_local_part_raw is each local part as written (RURL-xwsyfkwh)", {
+test_that("mailto_local_part_raw is each local part as written", {
+  # RURL-xwsyfkwh
   locals <- c("a%00zz", "a%FF", "a%20b", "jane", "caf%C3%A9")
   r <- get_mailto_recipients(paste0("mailto:", locals, "@b.com"),
     scheme_acceptance = "general")
