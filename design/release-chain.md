@@ -92,4 +92,4 @@ Two related hazards to check at the same time:
 
 - `AGENTS.md` — the resolvability gate, and the rule for reaching into a sibling
   export from a test.
-- `CONTRIBUTING.md` — rurl's deltas to the fleet CRAN release checklist.
+- [`release-deltas.md`](release-deltas.md) — rurl's deltas to the fleet CRAN release checklist.

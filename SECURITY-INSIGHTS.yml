@@ -20,7 +20,7 @@ project:
   documentation:
     quickstart-guide: https://CRAN.R-project.org/web/packages/rurl/vignettes/getting-started.html
     detailed-guide: https://CRAN.R-project.org/web/packages/rurl/rurl.pdf
-    release-process: https://gitlab.com/bart-turczynski/rurl/-/blob/main/CONTRIBUTING.md
+    release-process: https://gitlab.com/bart-turczynski/rurl/-/blob/main/design/release-deltas.md
   repositories:
     - name: rurl
       url: https://gitlab.com/bart-turczynski/rurl
