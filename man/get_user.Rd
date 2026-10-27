@@ -112,7 +112,8 @@ on any profile), IDNA rendering, or query handling.}
 A character vector of user names.
 }
 \description{
-Extracts the user component of a URL. The value is never percent-decoded.
+Extracts the user component of a URL. The value is not percent-decoded,
+except for a \code{mailto:} local-part (below).
 Under \code{url_standard = "whatwg"} it carries the standard's
 percent-encoded spelling (WHATWG stores the username buffer encoded with the
 userinfo percent-encode set, so \code{"http://a^b@host/"} yields
@@ -128,9 +129,9 @@ first recipient (its \code{addr-spec} local-part) is returned, mirroring how
 \code{\link{get_host}} / \code{\link{get_domain}} extract that recipient's
 domain (ADR 0012 D7). That local-part is percent-decoded, and it is
 \code{NA} when the decoded octets are not valid UTF-8 (RFC 6068 section 2)
-or hold a null octet (\code{\%00}), because an R string cannot hold either,
-as the host is for such a domain. This is a limit of the decoded text, not
-a mailbox-syntax ruling: the value is not validated (\code{"a\%20b"} gives
+or hold a null octet (\code{\%00}, which an R string cannot hold), as the
+host is for such a domain. This is a limit of the decoded text, not a
+mailbox-syntax ruling: the value is not validated (\code{"a\%20b"} gives
 \code{"a b"}), and \code{\link{get_mailto_recipients}} reports each
 local-part's form and its as-written spelling. As with
 \code{\link{get_host}}, this deliberately diverges from

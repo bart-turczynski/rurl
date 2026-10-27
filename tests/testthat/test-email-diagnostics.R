@@ -178,6 +178,13 @@ test_that("mailto_local_part_raw is each local part as written (RURL-xwsyfkwh)",
   )
   expect_identical(m$mailto_local_part_raw, c("x", "%22b,c%22", "d%2Ce"))
 
+  # Under "whatwg" the column is the parsed path's spelling, not the input's.
+  w <- get_mailto_recipients(
+    c("mailto:caf\u00e9@b.com", "mailto:j\tane@b.com", "mailto:a%00zz@b.com"),
+    url_standard = "whatwg", scheme_acceptance = "general"
+  )
+  expect_identical(w$mailto_local_part_raw, c("caf%C3%A9", "jane", "a%00zz"))
+
   # No single structural @: no local part to report.
   n <- get_mailto_recipients("mailto:nobody", scheme_acceptance = "general")
   expect_identical(n$mailto_local_part_raw, NA_character_)
