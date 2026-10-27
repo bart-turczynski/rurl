@@ -243,41 +243,41 @@ dn_obs_local <- function(u, form) {
   }
 }
 
-test_that("an obs-qp NUL in a quoted local part is invalid (pinned)", {
+test_that("an obs-qp NUL in a quoted local part is a quoted-string", {
+  # The decoded local part holds a NUL, which an R string cannot hold: the
+  # user stays NA though the form is valid.
   for (u in c("mailto:%22%5C%00%22@b.com", "mailto:%22a%5C%00b%22@b.com",
               "mailto:%22%5C%00%5C%00%22@b.com")) {
-    dn_obs_local(u, "invalid")
+    dn_obs_local(u, "quoted-string")
     expect_identical(dn_parts(u), list(user = NA_character_, host = "b.com"),
                      label = u)
   }
 })
 
-test_that("an obs-qp CR, LF or C0 control is invalid (pinned)", {
+test_that("an obs-qp CR, LF or C0 control is a quoted-string", {
   for (u in c("mailto:%22%5C%0D%22@b.com", "mailto:%22%5C%0A%22@b.com",
               "mailto:%22%5C%01%22@b.com", "mailto:%22%5C%7F%22@b.com")) {
-    dn_obs_local(u, "invalid")
+    dn_obs_local(u, "quoted-string")
   }
 })
 
-test_that("an obs-qtext C0 control in quotes is invalid (pinned)", {
+test_that("an obs-qtext C0 control in quotes is a quoted-string", {
   for (u in c("mailto:%22%01%22@b.com", "mailto:%22a%1Fb%22@b.com")) {
-    dn_obs_local(u, "invalid")
+    dn_obs_local(u, "quoted-string")
   }
   expect_identical(dn_parts("mailto:%22%01%22@b.com"),
                    list(user = "\"\001\"", host = "b.com"))
 })
 
-test_that("an obs-qtext DEL is invalid yet projects to the wire (pinned)", {
-  row <- dn_row("mailto:%22%7F%22@b.com")
-  expect_identical(row$mailto_local_part_form, "invalid")
-  expect_identical(row$smtp_envelope_wire_mode, "ascii")
-  expect_true(row$smtp_local_part_length_ok)
+test_that("an obs-qtext DEL is a quoted-string with no wire projection", {
+  # RFC 6531 UTF8-non-ascii starts at U+0080, so DEL is no SMTPUTF8 qtext.
+  dn_obs_local("mailto:%22%7F%22@b.com", "quoted-string")
 })
 
 test_that("no obsolete form admits these: they stay invalid", {
   # A bare NUL is not obs-qtext (obs-NO-WS-CTL starts at %d1), a bare CR or LF
   # is neither obs-qtext nor FWS, an obs form outside quotes is no
-  # dot-atom-text, a dangling backslash escapes the closing quote.
+  # dot-atom-text, and a NUL after the closing quote is outside it.
   for (u in c("mailto:a%00zz@b.com", "mailto:%22%00%22@b.com",
               "mailto:%22a%00b%22@b.com", "mailto:%22%0D%22@b.com",
               "mailto:%22%0A%22@b.com", "mailto:a%01@b.com",
@@ -291,5 +291,13 @@ test_that("no obsolete form admits these: they stay invalid", {
 test_that("an obs-qp NUL leaves the domain half's NUL invalid", {
   row <- dn_row("mailto:%22%5C%00%22@b%00.com")
   dn_invalid_domain(row)
-  expect_identical(row$mailto_local_part_form, "invalid")
+  expect_identical(row$mailto_local_part_form, "quoted-string")
+})
+
+test_that("only the obs-qp recipient changes form in a list", {
+  r <- get_mailto_recipients("mailto:%22%5C%00%22@b.com,c@d.com",
+                             smtp_wire = TRUE)
+  expect_identical(r$mailto_local_part_form,
+                   c("quoted-string", "dot-atom-text"))
+  expect_identical(r$smtp_envelope_wire_mode, c("unavailable", "ascii"))
 })

@@ -57,37 +57,49 @@
 
 # RFC 5322 quoted-string content (surrounding quotes already stripped):
 # qtext (%d33 / %d35-91 / %d93-126) or quoted-pair ("\" followed by VCHAR/WSP).
-# With allow_utf8 = TRUE (the SMTPUTF8 projection), non-ASCII scalar values are
-# additionally admitted as qtext.
-.email_valid_quoted_content <- function(inner, allow_utf8 = FALSE) {
-  # Percent-decoded mailto content is UTF-8 (RFC 6068); declare that so the
-  # per-character split and utf8ToInt() below read code points, not raw bytes.
-  # This MUST be `Encoding<-` and NOT enc2utf8(): enc2utf8() transcodes *from
-  # the session locale*, so an unmarked string would decode differently under
-  # LC_ALL=C than under a UTF-8 session. Marking before strsplit() is also what
-  # makes the character split itself locale-invariant (a byte-split of a
-  # multi-byte scalar would otherwise leak into the code-point checks).
-  Encoding(inner) <- "UTF-8"
-  cs <- strsplit(inner, "", fixed = TRUE)[[1L]]
+# With allow_utf8 = TRUE (the SMTPUTF8 projection), non-ASCII scalar values
+# (RFC 6531 UTF8-non-ascii, from U+0080) are additionally admitted as qtext.
+#
+# With allow_obs = TRUE (the RFC 6068 local part, RURL-mxsyzrho), RFC 5322
+# section 4.1's obsolete forms are admitted too: obs-qtext (obs-NO-WS-CTL:
+# %d1-8 / %d11 / %d12 / %d14-31 / %d127) and obs-qp ("\" followed by %d0,
+# obs-NO-WS-CTL, LF or CR). RFC 6068 section 2 takes `local-part =
+# dot-atom-text / quoted-string` from RFC 5322 and drops the obsolete forms
+# only for the domain (dtext-no-obs). RFC 5321 section 4.1.2 has no obsolete
+# forms, so the SMTP projection never sets it.
+#
+# `code` is the content as integer code points, NUL included as 0L: an R string
+# cannot hold the NUL an obs-qp may escape, so the caller hands code points.
+.email_valid_quoted_codes <- function(code, allow_utf8 = FALSE,
+                                      allow_obs = FALSE) {
+  if (anyNA(code)) {
+    return(FALSE)
+  }
+  obs_ctl <- function(x) {
+    (x >= 1L && x <= 8L) || x == 11L || x == 12L ||
+      (x >= 14L && x <= 31L) || x == 127L
+  }
   i <- 1L
-  n <- length(cs)
+  n <- length(code)
   while (i <= n) {
-    ch <- cs[i]
-    if (identical(ch, "\\")) {
+    x <- code[i]
+    if (x == 92L) {
       if (i == n) {
         return(FALSE) # dangling escape
       }
-      code <- utf8ToInt(cs[i + 1L])[1L]
-      if (!((code >= 33L && code <= 126L) || code == 32L || code == 9L)) {
+      y <- code[i + 1L]
+      ok <- (y >= 33L && y <= 126L) || y == 32L || y == 9L ||
+        (allow_obs && (y == 0L || y == 10L || y == 13L || obs_ctl(y)))
+      if (!ok) {
         return(FALSE)
       }
       i <- i + 2L
-    } else if (identical(ch, "\"")) {
+    } else if (x == 34L) {
       return(FALSE) # bare quote inside content
     } else {
-      code <- utf8ToInt(ch)[1L]
-      ok <- code == 33L || (code >= 35L && code <= 91L) ||
-        (code >= 93L && code <= 126L) || (allow_utf8 && code > 126L)
+      ok <- x == 33L || (x >= 35L && x <= 91L) ||
+        (x >= 93L && x <= 126L) || (allow_utf8 && x >= 128L) ||
+        (allow_obs && obs_ctl(x))
       if (!ok) {
         return(FALSE)
       }
@@ -95,6 +107,16 @@
     }
   }
   TRUE
+}
+
+# The string form of the check above. Percent-decoded mailto content is UTF-8
+# (RFC 6068), and utf8ToInt() reads the bytes as UTF-8 whatever the string's
+# mark and the session locale (RURL-iwtrwayz), so no enc2utf8() transcode from
+# the locale is involved. Octets that are not UTF-8 give NA, hence FALSE.
+.email_valid_quoted_content <- function(inner, allow_utf8 = FALSE,
+                                        allow_obs = FALSE) {
+  .email_valid_quoted_codes(utf8ToInt(inner), allow_utf8 = allow_utf8,
+    allow_obs = allow_obs)
 }
 
 # SMTPUTF8 dot-atom: like dot-atom-text but non-ASCII scalar values are admitted
@@ -277,8 +299,9 @@
 # judge as three addr-spec characters. NUL is neither atext (RFC 5322 section
 # 3.2.3) nor RFC 6068's dtext-no-obs, so a domain holding one is invalid. A
 # local part admits one only as RFC 5322's obsolete quoted-pair (section 4.1,
-# obs-qp: `"\<NUL>"`), which this NA still classifies "invalid"
-# (RURL-mxsyzrho). `%00` has no hex
+# obs-qp: `"\<NUL>"`), so the local-part form is judged on the code points
+# .email_local_codes() gives, NUL included, never on this NA (RURL-mxsyzrho);
+# the decoded local part itself (get_user()) stays NA. `%00` has no hex
 # letter, so the fixed match covers every case spelling, and no other triplet
 # can overlap it.
 .email_decode_field <- function(raw) {
@@ -305,16 +328,50 @@
   !is.na(dec) && nzchar(dec) && validUTF8(dec)
 }
 
-.email_classify_local <- function(dec) {
-  if (!.email_decoded_ok(dec)) {
+# The once-decoded code points of a raw local part, a `%00` triplet read as the
+# NUL (0L) it encodes, or NULL when a stretch between `%00` triplets does not
+# decode to UTF-8 (RFC 6068 section 2). An R string cannot hold NUL, so the
+# stretches are decoded by .email_decode_field() one by one and joined with 0L;
+# a UTF-8 sequence never holds a 0x00 octet, so cutting at one splits no
+# character. `%00` is a single unit of .email_units(), so `%2500` holds none.
+.email_local_codes <- function(raw) {
+  if (is.na(raw)) {
+    return(NULL)
+  }
+  units <- .email_units(raw)
+  is_nul <- units == "%00"
+  stretch <- factor(cumsum(is_nul)[!is_nul], levels = 0:sum(is_nul))
+  parts <- split(units[!is_nul], stretch)
+  codes <- vector("list", length(parts))
+  for (k in seq_along(parts)) {
+    dec <- .email_decode_field(paste(parts[[k]], collapse = ""))
+    if (is.na(dec) || !validUTF8(dec)) {
+      return(NULL)
+    }
+    codes[[k]] <- c(if (k > 1L) 0L, utf8ToInt(dec))
+  }
+  unlist(codes, use.names = FALSE)
+}
+
+# RFC 6068 local-part form of the code points .email_local_codes() gives. A
+# quoted-string admits RFC 5322 section 4.1's obsolete obs-qtext and obs-qp
+# (RFC 6068 section 2 drops the obsolete forms only for the domain), so
+# `"\<NUL>"` is a "quoted-string" (RURL-mxsyzrho). dot-atom-text has no
+# obsolete form here (RFC 5322's obs-local-part is not RFC 6068 syntax).
+.email_classify_local_codes <- function(code) {
+  n <- length(code)
+  if (n == 0L || anyNA(code)) {
     return("invalid")
   }
-  if (nchar(dec) >= 2L && startsWith(dec, "\"") && endsWith(dec, "\"")) {
-    inner <- substring(dec, 2L, nchar(dec) - 1L)
-    return(if (.email_valid_quoted_content(inner)) "quoted-string" else
-      "invalid")
+  if (n >= 2L && code[1L] == 34L && code[n] == 34L) {
+    ok <- .email_valid_quoted_codes(code[-c(1L, n)], allow_obs = TRUE)
+    return(if (ok) "quoted-string" else "invalid")
   }
-  if (.email_valid_dot_atom_text(dec)) "dot-atom-text" else "invalid"
+  if (any(code == 0L)) {
+    return("invalid")
+  }
+  if (.email_valid_dot_atom_text(intToUtf8(code))) "dot-atom-text" else
+    "invalid"
 }
 
 .email_classify_mailto_domain <- function(dec) {
@@ -373,6 +430,12 @@
 # independent of the RFC 6068 `mailto_local_part_form` verdict, since a bare
 # non-ASCII local-part is invalid RFC 6068 syntax yet is precisely the SMTPUTF8
 # trigger. Returns "ascii", "smtputf8", or "unavailable".
+#
+# RFC 5321 section 4.1.2 has no obsolete forms (qtextSMTP and quoted-pairSMTP
+# are %d32-126 only), so a local part that is an RFC 6068 quoted-string only by
+# RFC 5322's obs-qtext / obs-qp (a C0 control or DEL, an escaped NUL, CR or
+# LF) has no wire projection: "unavailable" (RURL-mxsyzrho). A NUL local part
+# reaches here as the NA .email_decode_field() gives.
 .email_smtp_localpart_mode <- function(ld) {
   # Octets that are not UTF-8 have no SMTPUTF8 (RFC 6531) projection either.
   if (!.email_decoded_ok(ld)) {
@@ -503,9 +566,13 @@
 #'   comma (\code{\%2C}) is never a recipient separator and an encoded quote or
 #'   bracket (\code{\%22}, \code{\%5B}/\code{\%5D}) still protects a raw comma;
 #'   each field is then percent-decoded exactly once and classified. A field
-#'   whose decoded octets are not valid UTF-8, or that holds \code{\%00} (a
-#'   null octet, no \code{addr-spec} character), is classified
-#'   \code{"invalid"}.
+#'   whose decoded octets are not valid UTF-8 is classified \code{"invalid"},
+#'   and so is a domain holding \code{\%00} (a null octet). A local-part
+#'   admits a null octet only as RFC 5322's obsolete quoted-pair (section
+#'   4.1, \code{obs-qp}), inside a quoted-string: the local-part of
+#'   \code{mailto:\%22\%5C\%00\%22@b.com} is a \code{"quoted-string"}, while \code{a\%00zz} and \code{\%22\%00\%22}
+#'   are \code{"invalid"}. Its decoded text cannot be held in an R string, so
+#'   \code{\link{get_user}} gives \code{NA} for it.
 #'
 #' @param url A character vector of URLs. Non-\code{mailto:} URLs (and, under
 #'   \code{scheme_acceptance = "web"}, all \code{mailto:} URLs, which the web
@@ -535,7 +602,13 @@
 #'       when the recipient has no single structural \code{@}.}
 #'     \item{\code{mailto_local_part_form}}{RFC 6068 local-part form:
 #'       \code{"dot-atom-text"}, \code{"quoted-string"}, \code{"invalid"}, or
-#'       \code{"indeterminate"}.}
+#'       \code{"indeterminate"}. RFC 6068 section 2 takes the
+#'       \code{quoted-string} of RFC 5322 whole, so its obsolete forms
+#'       (section 4.1: \code{obs-qtext}, a C0 control or U+007F, and
+#'       \code{obs-qp}, a backslash before a null octet, a carriage return, a
+#'       line feed or such a control) are a \code{"quoted-string"}; RFC 5321
+#'       (section 4.1.2) has no obsolete forms, so such a local-part has no
+#'       SMTP wire projection (\code{"unavailable"}).}
 #'     \item{\code{mailto_domain_form}}{RFC 6068 domain form:
 #'       \code{"ascii-dot-atom-text"}, \code{"idna2008-domain"},
 #'       \code{"bracketed-domain"}, \code{"invalid"}, or
@@ -705,7 +778,8 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   out$mailto_local_part_raw <- split$local
   ld <- .email_decode_field(split$local)
   dd <- .email_decode_field(split$domain)
-  out$mailto_local_part_form <- .email_classify_local(ld)
+  out$mailto_local_part_form <-
+    .email_classify_local_codes(.email_local_codes(split$local))
   out$mailto_domain_form <- .email_classify_mailto_domain(dd)
   out$smtp_mailbox_rhs_syntax_form <- .email_classify_smtp_rhs(dd)
   out$public_suffix_known <- if (out$mailto_domain_form %in%
