@@ -162,9 +162,9 @@ test_that("a U+FFFF mailto local part does not error", {
 })
 
 test_that("a non-ASCII quoted SMTPUTF8 local part classifies stably", {
-  # `.email_valid_quoted_content()` splits the percent-decoded local part into
-  # characters and reads each code point (RURL-iwtrwayz). Before it declared
-  # its input UTF-8, that split ran byte-wise under LC_ALL=C, so a multi-byte
+  # `.email_valid_quoted_content()` reads the percent-decoded local part as
+  # code points with `utf8ToInt()` (RURL-iwtrwayz, RURL-mxsyzrho). Before it
+  # read UTF-8, its split ran byte-wise under LC_ALL=C, so a multi-byte
   # scalar leaked into the qtext check and the SMTPUTF8 verdict flipped by
   # locale. `mailto:"<U+00E9>"@example.com`, percent-encoded, must project to
   # `smtputf8` in every locale.
@@ -938,8 +938,8 @@ test_that("enc2utf8() is gone from the whole namespace", {
   #
   # The last two calls lived in `.email_valid_quoted_content()`
   # (R/email-diagnostics.R) and were removed by RURL-iwtrwayz: the function now
-  # declares its percent-decoded input UTF-8 with `Encoding<-` before the
-  # per-character split, so `utf8ToInt()` reads code points directly. Any new
+  # reads its percent-decoded input with `utf8ToInt()`, which reads UTF-8
+  # whatever the mark and the locale (RURL-mxsyzrho). Any new
   # caller of `enc2utf8()` is a regression until proven otherwise.
   expect_identical(
     ns_callers("enc2utf8"), setNames(integer(0), character(0))

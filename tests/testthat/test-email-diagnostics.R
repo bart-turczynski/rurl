@@ -278,6 +278,32 @@ test_that("an unprojectable (mailto bracketed, non-literal) RHS is unavailable
   expect_true(is.na(r$smtp_direct_forward_path_fits))
 })
 
+test_that("of the obsolete quoted forms only an escaped NUL passes allow_obs", {
+  # RURL-mxsyzrho: RFC 6068 section 2 forbids <NO-WS-CTL> (item 2) and
+  # whitespace (item 3) in a local part, so of RFC 5322 section 4.1's obs-qp
+  # and obs-qtext only "\" before %d0 stands. RFC 5321 section 4.1.2 has no
+  # obsolete forms, so the SMTP projection (allow_obs = FALSE) refuses it too.
+  q <- rurl:::.email_valid_quoted_codes
+  expect_true(q(c(92L, 0L), allow_obs = TRUE))
+  expect_false(q(c(92L, 0L)))
+  expect_false(q(c(92L, 0L), allow_utf8 = TRUE))
+  # obs-qtext, an escaped control or DEL, an escaped CR or LF, a bare NUL, CR
+  # or LF, a dangling escape, a bare quote.
+  for (code in list(1L, 8L, 11L, 12L, 14L, 31L, 127L, c(92L, 10L),
+                    c(92L, 13L), c(92L, 1L), c(92L, 127L), 0L, 10L, 13L, 92L,
+                    34L)) {
+    expect_false(q(code, allow_obs = TRUE), label = toString(code))
+    expect_false(q(code), label = toString(code))
+  }
+  expect_true(q(c(97L, 92L, 34L, 98L)))
+  expect_true(q(233L, allow_utf8 = TRUE))
+  expect_false(q(233L, allow_obs = TRUE))
+  expect_identical(rurl:::.email_smtp_localpart_mode("\"\001\""),
+                   "unavailable")
+  expect_identical(rurl:::.email_smtp_localpart_mode("\"\177\""),
+                   "unavailable")
+})
+
 test_that("smtp_wire must be a valid flag", {
   expect_error(
     get_mailto_recipients("mailto:a@b.com", scheme_acceptance = "general",

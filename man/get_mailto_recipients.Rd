@@ -91,7 +91,14 @@ UTF-8, and a tab or newline is removed). \code{NA}
 when the recipient has no single structural \code{@}.}
 \item{\code{mailto_local_part_form}}{RFC 6068 local-part form:
 \code{"dot-atom-text"}, \code{"quoted-string"}, \code{"invalid"}, or
-\code{"indeterminate"}.}
+\code{"indeterminate"}. RFC 6068 section 2 forbids RFC 5322's
+\code{obs-local-part} and \code{NO-WS-CTL} (a C0 control other
+than a null octet, tab, line feed or carriage return, or U+007F) and
+whitespace in a local-part, so of RFC 5322's obsolete forms (section
+4.1) only \code{obs-qp} before a null octet, a backslash then
+\code{\%00} inside the quotes, is a \code{"quoted-string"}; RFC 5321
+(section 4.1.2) has no obsolete forms, so such a local-part has no
+SMTP wire projection (\code{"unavailable"}).}
 \item{\code{mailto_domain_form}}{RFC 6068 domain form:
 \code{"ascii-dot-atom-text"}, \code{"idna2008-domain"},
 \code{"bracketed-domain"}, \code{"invalid"}, or
@@ -188,9 +195,14 @@ a recipient whose address cannot be projected (an invalid mailbox).
 comma (\code{\%2C}) is never a recipient separator and an encoded quote or
 bracket (\code{\%22}, \code{\%5B}/\code{\%5D}) still protects a raw comma;
 each field is then percent-decoded exactly once and classified. A field
-whose decoded octets are not valid UTF-8, or that holds \code{\%00} (a
-null octet, no \code{addr-spec} character), is classified
-\code{"invalid"}.
+whose decoded octets are not valid UTF-8 is classified \code{"invalid"},
+and so is a domain holding \code{\%00} (a null octet). A local-part
+admits a null octet only as RFC 5322's obsolete quoted-pair (section
+4.1, \code{obs-qp}), inside a quoted-string: the local-part of
+\code{mailto:\%22\%5C\%00\%22@b.com} is a \code{"quoted-string"}, while
+\code{a\%00zz} and \code{\%22\%00\%22} are \code{"invalid"}. Its decoded
+text cannot be held in an R string, so \code{\link{get_user}} gives
+\code{NA} for it.
 }
 
 \examples{
