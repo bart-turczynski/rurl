@@ -570,9 +570,10 @@
 #'   and so is a domain holding \code{\%00} (a null octet). A local-part
 #'   admits a null octet only as RFC 5322's obsolete quoted-pair (section
 #'   4.1, \code{obs-qp}), inside a quoted-string: the local-part of
-#'   \code{mailto:\%22\%5C\%00\%22@b.com} is a \code{"quoted-string"}, while \code{a\%00zz} and \code{\%22\%00\%22}
-#'   are \code{"invalid"}. Its decoded text cannot be held in an R string, so
-#'   \code{\link{get_user}} gives \code{NA} for it.
+#'   \code{mailto:\%22\%5C\%00\%22@b.com} is a \code{"quoted-string"}, while
+#'   \code{a\%00zz} and \code{\%22\%00\%22} are \code{"invalid"}. Its decoded
+#'   text cannot be held in an R string, so \code{\link{get_user}} gives
+#'   \code{NA} for it.
 #'
 #' @param url A character vector of URLs. Non-\code{mailto:} URLs (and, under
 #'   \code{scheme_acceptance = "web"}, all \code{mailto:} URLs, which the web
