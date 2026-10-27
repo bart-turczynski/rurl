@@ -137,9 +137,10 @@
 #' WHATWG-parsed path in browser form), exactly like `host_encoding`. Only
 #' "keep" preserves a profile's canonical identity path verbatim. "encode"
 #' only adds escapes, so every existing triplet, `/` and empty segment stays;
-#' "decode" decodes only triplets that name the same path once decoded, so a
-#' reserved octet such as `%2F` stays encoded and never becomes a
-#' path-separating `/`, under every `url_standard`.
+#' "decode" is a display form that decodes only unreserved triplets (which
+#' RFC 3986 §6.2.2.2 makes equivalent) and well-formed UTF-8, so a reserved
+#' octet such as `%2F` stays encoded and never becomes a path-separating
+#' `/`, under every `url_standard`.
 #'   \itemize{
 #'     \item{"keep": Leave the path percent-encoding untouched (the path is
 #'     preserved as written in the URL, so `%2F` stays `%2F` rather than
@@ -434,11 +435,12 @@
 #'     `port_handling != "exclude"` (the default is "exclude", so by default
 #'     the port is excluded, as before); fragment and userinfo are always
 #'     excluded (use the dedicated components above to retrieve them). With
-#'     `path_encoding = "decode"` the path is shown decoded, so `clean_url`
-#'     is human-readable rather than guaranteed URL-safe. NA on a parse error,
-#'     when the host is empty/NA except for a valid hostless `file:` URL, or
-#'     under `credential_handling = "reject"` when the authority carried a
-#'     userinfo delimiter.
+#'     `path_encoding = "decode"` the path shows its unreserved and UTF-8
+#'     triplets decoded (reserved ones such as `%2F` stay encoded), so
+#'     `clean_url` is human-readable rather than guaranteed URL-safe. NA on
+#'     a parse error, when the host is empty/NA except for a valid hostless
+#'     `file:` URL, or under `credential_handling = "reject"` when the
+#'     authority carried a userinfo delimiter.
 #'     \item `parse_status`: Character string indicating parsing outcome
 #'       ("ok", "ok-ftp", "ok-scheme-relative", "error", "warning-no-tld",
 #'       "warning-invalid-tld", "warning-public-suffix", "warning-userinfo").

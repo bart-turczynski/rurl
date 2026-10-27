@@ -2097,8 +2097,8 @@
   # Terminal path presentation. Decode only after identity normalization and
   # cleaning have decided which structural rules fire; both presentation
   # operations happen after index/trailing-slash handling.
-  # "decode" decodes only what names the same path: a triplet for an
-  # unreserved octet (RFC 3986 section 6.2.2.2) and a run of triplets that
+  # "decode" decodes only what RFC 3986 lets it decode without naming another
+  # path: a triplet for an unreserved octet (section 6.2.2.2) and a run that
   # forms well-formed non-ASCII UTF-8 (the readable rendering). Every other
   # ASCII triplet stays as written -- reserved (`%2F`, `%3F`, `%23`, ...),
   # `%25`, controls, space and the other octets outside unreserved -- since

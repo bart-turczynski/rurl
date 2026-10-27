@@ -94,9 +94,10 @@ knob: it is independent of \code{url_standard} and layers on top of any profile
 WHATWG-parsed path in browser form), exactly like \code{host_encoding}. Only
 "keep" preserves a profile's canonical identity path verbatim. "encode"
 only adds escapes, so every existing triplet, \code{/} and empty segment stays;
-"decode" decodes only triplets that name the same path once decoded, so a
-reserved octet such as \verb{\%2F} stays encoded and never becomes a
-path-separating \code{/}, under every \code{url_standard}.
+"decode" is a display form that decodes only unreserved triplets (which
+RFC 3986 §6.2.2.2 makes equivalent) and well-formed UTF-8, so a reserved
+octet such as \verb{\%2F} stays encoded and never becomes a path-separating
+\code{/}, under every \code{url_standard}.
 \itemize{
 \item{"keep": Leave the path percent-encoding untouched (the path is
 preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
