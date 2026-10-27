@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | id | `audit-standards-literal` |
-| tracked_location | `design/work/url-v3/evidence/2026-10-28-standards-literal-audit.md` |
+| tracked_location | `design/standards-literal-audit-2026-10-28.md` |
 | purpose | ADR 0020 D1 sweep: find behavior an ADR, a ruling, a test or a dial pins that the selected standard calls invalid or that names a different URL; one numbered finding per ticket for the dispatcher |
 | owning issue | `RURL-ongkcidw` |
 | validation_command | none (a point-in-time audit; each finding names the probe that reproduces it) |
@@ -13,13 +13,11 @@
 `devtools::load_all()`. The record is dated, not live (ADR 0014): it says what
 was true at that commit.
 
-**Home.** `evidence/` is archival (design/README.md): nothing reads it and it
-is never the current authority. That fits a point-in-time audit, whose
-authority passes to the tickets filed from it. No gate globs `evidence/`
-(`tools/release-rule-check.R` excludes it by name; `verification/` would
-trip `traceability-gate.R`'s unregistered-file check), and the frozen
-`SHA256SUMS.txt` lists only the eleven graduated files, so a new file here
-moves no checksum.
+**Home.** A dated top-level snapshot, like `stringi-inventory.md`, not
+`work/url-v3/evidence/`, which holds the frozen G0.1 bundle. The tickets filed
+from it cite it as dated observation on the base commit, not as current
+authority: the ADRs and the shipped tests stay that. The numbered findings
+stand in for a claims table; each is settled by its own ticket.
 
 **Out of scope.** The `url_standard = NULL` arm: RURL-mbhuhwzk retires it and
 makes `NULL` read as `"whatwg"` (ADR 0020 D4), so NULL-only behavior is not
@@ -100,10 +98,12 @@ each finding repeats its reproducing call and output.
   only `//g` differs (`http://g/`), which section 6.2.3's empty-path rule for
   `http` sanctions.
 - **RFC 3986 acceptance.** Of 2,394 ABNF-valid URIs in the corpus, rurl's
-  `rfc3986` arm rejects 8 (findings 13 and 14); it accepts no string the ABNF
-  rejects other than the two `//host` network-path references, which it
+  `rfc3986` arm rejects 8 (findings 13 and 14); on the `scheme_policy =
+  "require"` base of the method it accepts no string the ABNF rejects other
+  than the two `//host` network-path references, which it
   reports as `ok-scheme-relative`, not `ok` (a relative reference, section
-  4.2). Percent-encoded `reg-name` octets (`http://a%2Fb/`) parse, so the open
+  4.2). Under the default `"infer"` it also accepts scheme-less input such as
+  `example.com` (finding 1). Percent-encoded `reg-name` octets (`http://a%2Fb/`) parse, so the open
   question ADR 0013 left is closed in the tree.
 - **Governed dials.** `case_handling` (`keep`, `lower`, `upper`) and
   `path_normalization` (`none`, `collapse_slashes`, `both`) are errors under
@@ -309,9 +309,11 @@ empty label), RURL-mbhuhwzk (the `NULL` default).
   (`get_path("http://ex.com/a%2Fb", url_standard = "whatwg")` is `"/a%2Fb"`),
   and `path_encoding = "encode"` gives `"/%C3%A9cole"`. 82 corpus rows differ
   from the WHATWG path; the query and fragment columns differ on none.
-- **Severity.** Rejected string: a raw `<`, `"` or non-ASCII code point in a
-  path is an `invalid-URL-unit` the standard encodes; the record path is a
-  string the standard never produces (same resource).
+- **Severity.** Rejected string for `<`, `"` and the other non-URL code
+  points, which the path state reports as an `invalid-URL-unit`; other for a
+  non-ASCII code point such as `é`, which is a URL code point (U+00A0 to
+  U+10FFFD) and valid input but is still not the path the standard's record
+  holds, the percent-encoded one (same resource in both cases).
 - **Pinned by.** ADR 0011 ("`keep` = identity presentation"); the
   `path_encoding` roxygen ("Under `url_standard = "whatwg"`, existing
   percent-triplet spelling is preserved byte-for-byte"); the `@return` `path`
@@ -330,7 +332,7 @@ empty label), RURL-mbhuhwzk (the `NULL` default).
   `get_scheme("ftp://h/x", protocol_handling = "https", url_standard = "whatwg")`;
   `safe_parse_urls(c("HTTP://EXAMPLE.COM/", "file://localhost/x"), url_standard = "whatwg", protocol_handling = "strip")`.
 - **Observed.** `ok`, `https`, `example.com`, `user`, `user@example.com`;
-  `"https"` (with `get_parse_status()` `"warning-no-tld"`, was `"ok-ftp"`);
+  `"https"`;
   `strip`: scheme `NA` for both, and `file://localhost/x` becomes `error`.
 - **Expected.** The parse of the input: `mailto`, host `NA`, user `NA`, path
   `user@example.com`; `get_scheme()` `"ftp"`; `file://localhost/x` parses
@@ -399,7 +401,7 @@ empty label), RURL-mbhuhwzk (the `NULL` default).
 - **Control.** Without the dial the column is `NA` for `:80` and `8080` for
   `:8080`. 48 corpus rows move.
 - **Severity.** Other: equivalent URL, but the column holds a value the
-  record nulls, and `safe_parse_urls()` and `get_port()` disagree on one row.
+  record nulls (`get_port()` has no `port_handling` dial, so it gives `NA`).
 - **Pinned by.** The `port_handling` roxygen ("an explicit non-parity
   override for callers that need the input's port spelling"), which describes
   `clean_url`, not the column.
@@ -435,8 +437,9 @@ empty label), RURL-mbhuhwzk (the `NULL` default).
   `safe_parse_urls(...)$host`.
 - **Observed.** host `"b.com"`, user `"a"`, domain `"b.com"`, host type
   `"domain"`, record host `NA`, under both standards.
-- **Expected.** `NA` for host, user and domain, and no host type, matching
-  the parse record.
+- **Expected.** `NA` for host and user, and no host type, matching the parse
+  record. `get_domain()` reads a PSL fact no URL standard defines; it follows
+  whatever `get_host()` gives.
 - **Control.** `get_host("foo:a@b.com", url_standard = "whatwg",
   scheme_acceptance = "general")` is `NA`.
 - **Severity.** Other: a component accessor names a component the URL does
@@ -525,14 +528,16 @@ empty label), RURL-mbhuhwzk (the `NULL` default).
   move, all on the port.
 - **Severity.** Other: an equivalent URI under the scheme's port semantics,
   but not the source form the dial claims.
-- **Pinned by.** RUL-007 (`source` "reproduces the input bytes"), which this
-  contradicts; `tests/testthat/test-parse-web.R`
+- **Pinned by.** RUL-007 describes `source` as the form with no
+  normalization (its "reproduces the input bytes" names the scheme, query and
+  fragment, not the port), and this port rewrite is a normalization;
+  `tests/testthat/test-parse-web.R`
   (`expect_identical(p("http://example.com:080/")$port, "80")` pins the
-  record's port as a number, which is where the spelling is lost).
+  normalized port string `"80"`, which is where the spelling is lost).
 
 ## Open cells
 
-None: every finding goes to the dispatcher for one ticket each.
+None: every finding has its own ticket (label `standards-audit`).
 
 ## Consequences
 
@@ -543,5 +548,5 @@ the `whatwg` record and so the `safe_parse_urls()` columns the URL key reads
 (check `get_url_key()`'s key version). Findings 6-8 share one mechanism
 (Stage B presentation writing the record, ADR 0003) and may land as one
 change. ARCHITECTURE.md's "247 of 274 rows exact, 27 enumerated differences"
-is stale against the 274/274 its own test pins; that is documentation, not a
-standards finding.
+was stale against the 274/274 its own test pins; the MR that adds this record
+corrects it.
