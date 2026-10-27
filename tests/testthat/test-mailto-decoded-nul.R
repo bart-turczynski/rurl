@@ -217,10 +217,11 @@ test_that("every accessor of a NUL half is NA, the other half kept", {
 })
 
 # --- RURL-mxsyzrho: RFC 6068 section 2 takes `local-part = dot-atom-text /
-# quoted-string` from RFC 5322 and drops the obsolete forms only for the
-# domain (dtext-no-obs). RFC 5322 section 4.1 admits, inside a quoted-string,
-# obs-qtext (obs-NO-WS-CTL: %d1-8, %d11, %d12, %d14-31, %d127) and obs-qp
-# ("\" followed by %d0, obs-NO-WS-CTL, LF or CR). ---
+# quoted-string` from RFC 5322 but forbids <obs-local-part> and <NO-WS-CTL>
+# (item 2) and whitespace (item 3). Of RFC 5322 section 4.1's obsolete
+# quoted forms, obs-qtext (obs-NO-WS-CTL: %d1-8, %d11, %d12, %d14-31, %d127)
+# and obs-qp ("\" followed by %d0, obs-NO-WS-CTL, LF or CR), only "\" before
+# %d0 survives both bans. ---
 
 # A quoted local part whose only fault, if any, is an obsolete form: the domain
 # is a plain ascii one, and the SMTP wire has no projection of the local part
@@ -254,24 +255,15 @@ test_that("an obs-qp NUL in a quoted local part is a quoted-string", {
   }
 })
 
-test_that("an obs-qp CR, LF or C0 control is a quoted-string", {
+test_that("an obsolete form RFC 6068 forbids stays invalid", {
+  # NO-WS-CTL (item 2): obs-qtext, or obs-qp escaping a control or DEL.
+  # Whitespace (item 3): obs-qp escaping a CR or LF.
   for (u in c("mailto:%22%5C%0D%22@b.com", "mailto:%22%5C%0A%22@b.com",
-              "mailto:%22%5C%01%22@b.com", "mailto:%22%5C%7F%22@b.com")) {
-    dn_obs_local(u, "quoted-string")
+              "mailto:%22%5C%01%22@b.com", "mailto:%22%5C%7F%22@b.com",
+              "mailto:%22%01%22@b.com", "mailto:%22a%1Fb%22@b.com",
+              "mailto:%22%7F%22@b.com")) {
+    dn_obs_local(u, "invalid")
   }
-})
-
-test_that("an obs-qtext C0 control in quotes is a quoted-string", {
-  for (u in c("mailto:%22%01%22@b.com", "mailto:%22a%1Fb%22@b.com")) {
-    dn_obs_local(u, "quoted-string")
-  }
-  expect_identical(dn_parts("mailto:%22%01%22@b.com"),
-                   list(user = "\"\001\"", host = "b.com"))
-})
-
-test_that("an obs-qtext DEL is a quoted-string with no wire projection", {
-  # RFC 6531 UTF8-non-ascii starts at U+0080, so DEL is no SMTPUTF8 qtext.
-  dn_obs_local("mailto:%22%7F%22@b.com", "quoted-string")
 })
 
 test_that("no obsolete form admits these: they stay invalid", {

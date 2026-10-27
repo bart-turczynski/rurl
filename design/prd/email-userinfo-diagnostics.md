@@ -211,7 +211,9 @@ address-list parser, no DNS-resolution verdict, no deliverability.
 ## Standards grounding (email/SMTP)
 
 - Three *distinct* local-part grammars: RFC 6068 §2 `dot-atom-text /
-  quoted-string` on the percent-decoded `addr-spec` (obs excluded); RFC 5322
+  quoted-string` on the percent-decoded `addr-spec` (obs excluded: §2 item 2
+  forbids `obs-local-part` and `NO-WS-CTL`, item 3 whitespace; the one obsolete
+  form neither touches, `obs-qp` before `%d0`, stands, RURL-mxsyzrho); RFC 5322
   §3.4.1 `dot-atom` (allowing surrounding CFWS) `/ quoted-string` plus
   `obs-local-part`; SMTP RFC 5321 §4.1.2 `Dot-string / Quoted-string` with
   stricter domains and specific address-literal forms.

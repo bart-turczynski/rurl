@@ -60,12 +60,12 @@
 # With allow_utf8 = TRUE (the SMTPUTF8 projection), non-ASCII scalar values
 # (RFC 6531 UTF8-non-ascii, from U+0080) are additionally admitted as qtext.
 #
-# With allow_obs = TRUE (the RFC 6068 local part, RURL-mxsyzrho), RFC 5322
-# section 4.1's obsolete forms are admitted too: obs-qtext (obs-NO-WS-CTL:
-# %d1-8 / %d11 / %d12 / %d14-31 / %d127) and obs-qp ("\" followed by %d0,
-# obs-NO-WS-CTL, LF or CR). RFC 6068 section 2 takes `local-part =
-# dot-atom-text / quoted-string` from RFC 5322 and drops the obsolete forms
-# only for the domain (dtext-no-obs). RFC 5321 section 4.1.2 has no obsolete
+# With allow_obs = TRUE (the RFC 6068 local part, RURL-mxsyzrho), the one
+# obsolete form RFC 6068 leaves standing is admitted too: RFC 5322 section
+# 4.1's obs-qp with a null octet, "\" followed by %d0. RFC 6068 section 2
+# forbids <NO-WS-CTL> (item 2), so obs-qtext and an obs-qp escaping a control
+# or DEL stay invalid, and whitespace in a local part (item 3), so an escaped
+# CR or LF stays invalid as well. RFC 5321 section 4.1.2 has no obsolete
 # forms, so the SMTP projection never sets it.
 #
 # `code` is the content as integer code points, NUL included as 0L: an R string
@@ -74,10 +74,6 @@
                                       allow_obs = FALSE) {
   if (anyNA(code)) {
     return(FALSE)
-  }
-  obs_ctl <- function(x) {
-    (x >= 1L && x <= 8L) || x == 11L || x == 12L ||
-      (x >= 14L && x <= 31L) || x == 127L
   }
   i <- 1L
   n <- length(code)
@@ -89,7 +85,7 @@
       }
       y <- code[i + 1L]
       ok <- (y >= 33L && y <= 126L) || y == 32L || y == 9L ||
-        (allow_obs && (y == 0L || y == 10L || y == 13L || obs_ctl(y)))
+        (allow_obs && y == 0L)
       if (!ok) {
         return(FALSE)
       }
@@ -98,8 +94,7 @@
       return(FALSE) # bare quote inside content
     } else {
       ok <- x == 33L || (x >= 35L && x <= 91L) ||
-        (x >= 93L && x <= 126L) || (allow_utf8 && x >= 128L) ||
-        (allow_obs && obs_ctl(x))
+        (x >= 93L && x <= 126L) || (allow_utf8 && x >= 128L)
       if (!ok) {
         return(FALSE)
       }
@@ -354,10 +349,11 @@
 }
 
 # RFC 6068 local-part form of the code points .email_local_codes() gives. A
-# quoted-string admits RFC 5322 section 4.1's obsolete obs-qtext and obs-qp
-# (RFC 6068 section 2 drops the obsolete forms only for the domain), so
-# `"\<NUL>"` is a "quoted-string" (RURL-mxsyzrho). dot-atom-text has no
-# obsolete form here (RFC 5322's obs-local-part is not RFC 6068 syntax).
+# quoted-string admits RFC 5322 section 4.1's obs-qp before a null octet, the
+# one obsolete form RFC 6068 section 2 does not forbid (items 2 and 3 forbid
+# <NO-WS-CTL> and whitespace), so `"\<NUL>"` is a "quoted-string"
+# (RURL-mxsyzrho). dot-atom-text has no obsolete form here (item 2 forbids
+# RFC 5322's obs-local-part).
 .email_classify_local_codes <- function(code) {
   n <- length(code)
   if (n == 0L || anyNA(code)) {
@@ -433,9 +429,8 @@
 #
 # RFC 5321 section 4.1.2 has no obsolete forms (qtextSMTP and quoted-pairSMTP
 # are %d32-126 only), so a local part that is an RFC 6068 quoted-string only by
-# RFC 5322's obs-qtext / obs-qp (a C0 control or DEL, an escaped NUL, CR or
-# LF) has no wire projection: "unavailable" (RURL-mxsyzrho). A NUL local part
-# reaches here as the NA .email_decode_field() gives.
+# RFC 5322's obs-qp before a null octet has no wire projection: "unavailable"
+# (RURL-mxsyzrho). It reaches here as the NA .email_decode_field() gives.
 .email_smtp_localpart_mode <- function(ld) {
   # Octets that are not UTF-8 have no SMTPUTF8 (RFC 6531) projection either.
   if (!.email_decoded_ok(ld)) {
@@ -603,11 +598,12 @@
 #'       when the recipient has no single structural \code{@}.}
 #'     \item{\code{mailto_local_part_form}}{RFC 6068 local-part form:
 #'       \code{"dot-atom-text"}, \code{"quoted-string"}, \code{"invalid"}, or
-#'       \code{"indeterminate"}. RFC 6068 section 2 takes the
-#'       \code{quoted-string} of RFC 5322 whole, so its obsolete forms
-#'       (section 4.1: \code{obs-qtext}, a C0 control or U+007F, and
-#'       \code{obs-qp}, a backslash before a null octet, a carriage return, a
-#'       line feed or such a control) are a \code{"quoted-string"}; RFC 5321
+#'       \code{"indeterminate"}. RFC 6068 section 2 forbids RFC 5322's
+#'       \code{obs-local-part} and \code{NO-WS-CTL} (a C0 control other
+#'       than a null octet, tab, line feed or carriage return, or U+007F) and
+#'       whitespace in a local-part, so of RFC 5322's obsolete forms (section
+#'       4.1) only \code{obs-qp} before a null octet, a backslash then
+#'       \code{\%00} inside the quotes, is a \code{"quoted-string"}; RFC 5321
 #'       (section 4.1.2) has no obsolete forms, so such a local-part has no
 #'       SMTP wire projection (\code{"unavailable"}).}
 #'     \item{\code{mailto_domain_form}}{RFC 6068 domain form:

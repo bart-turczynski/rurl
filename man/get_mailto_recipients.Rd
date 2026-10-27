@@ -91,11 +91,12 @@ UTF-8, and a tab or newline is removed). \code{NA}
 when the recipient has no single structural \code{@}.}
 \item{\code{mailto_local_part_form}}{RFC 6068 local-part form:
 \code{"dot-atom-text"}, \code{"quoted-string"}, \code{"invalid"}, or
-\code{"indeterminate"}. RFC 6068 section 2 takes the
-\code{quoted-string} of RFC 5322 whole, so its obsolete forms
-(section 4.1: \code{obs-qtext}, a C0 control or U+007F, and
-\code{obs-qp}, a backslash before a null octet, a carriage return, a
-line feed or such a control) are a \code{"quoted-string"}; RFC 5321
+\code{"indeterminate"}. RFC 6068 section 2 forbids RFC 5322's
+\code{obs-local-part} and \code{NO-WS-CTL} (a C0 control other
+than a null octet, tab, line feed or carriage return, or U+007F) and
+whitespace in a local-part, so of RFC 5322's obsolete forms (section
+4.1) only \code{obs-qp} before a null octet, a backslash then
+\code{\%00} inside the quotes, is a \code{"quoted-string"}; RFC 5321
 (section 4.1.2) has no obsolete forms, so such a local-part has no
 SMTP wire projection (\code{"unavailable"}).}
 \item{\code{mailto_domain_form}}{RFC 6068 domain form:
