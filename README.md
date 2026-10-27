@@ -100,8 +100,9 @@ are always excluded — read them from the dedicated components
 instead. The query can be selectively kept on `clean_url` via
 `query_handling` on either `safe_parse_url()` or `get_clean_url()` (see
 [Query handling](#query-handling)). With `path_encoding = "decode"` the
-path is shown decoded, so `clean_url` is human-readable rather than
-guaranteed URL-safe.
+path shows its percent-encoded UTF-8 and unreserved characters decoded,
+so `clean_url` is human-readable rather than guaranteed URL-safe;
+reserved triplets such as `%2F` stay encoded.
 
 Scheme-relative URL handling is configurable:
 
@@ -154,11 +155,11 @@ get_clean_url("http://münich.com/a%20b",
               case_handling = "lower_host")
 #> [1] "http://xn--mnich-kva.com/a%20b"
 
-get_clean_url("http://xn--mnich-kva.com/a%20b",
+get_clean_url("http://xn--mnich-kva.com/caf%C3%A9%2Fx",
               host_encoding = "unicode",
               path_encoding = "decode",
               case_handling = "keep")
-#> [1] "http://münich.com/a b"
+#> [1] "http://münich.com/café%2Fx"
 ```
 
 ## Accessors
@@ -206,10 +207,9 @@ get_clean_url("https://ex.com/?b=2&a=1",
 #> [1] "https://ex.com/?a=1&b=2"
 ```
 
-The same engine arguments flow through `safe_parse_urls()`, so
-filtering also shapes a key built from `clean_url` — `?v=1` and `?v=2`
-stay distinct while `utm`-only differences still collapse under
-`"filter"`:
+The same engine arguments flow through `safe_parse_urls()`, so filtering
+also shapes a key built from `clean_url` — `?v=1` and `?v=2` stay
+distinct while `utm`-only differences still collapse under `"filter"`:
 
 ``` r
 safe_parse_urls(c("https://ex.com/?v=1&utm_source=x", "https://ex.com/?v=2"),
