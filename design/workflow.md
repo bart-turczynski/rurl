@@ -30,7 +30,7 @@ Moved from `CONTRIBUTING.md` unchanged (SEOR-ogreubsr).
 
 - Do not alter the Punycode helpers (`.normalize_and_punycode()`,
   `.punycode_to_unicode()`) or their hardcoded TLD workarounds; see
-  [ADR 0002](adr/0002-keep-punycode-helpers.md). `AGENTS.md` lists the
+  [ADR 0002](adr/0002-keep-punycode-helpers.md). [AGENTS.md](../AGENTS.md) lists the
   protected areas. String operations run through the `R/strings-base.R`
   wrappers, or base R with its mode stated, and `stringi` only where
   `tools/stringi-call-allowlist.csv` names it; see
