@@ -147,7 +147,8 @@ test_that("the return shape is a stable data.frame for degenerate input", {
   expect_identical(nrow(z), 0L)
   expect_named(
     z,
-    c("url", "recipient_index", "mailto_local_part_form",
+    c("url", "recipient_index", "mailto_local_part_raw",
+      "mailto_local_part_form",
       "mailto_domain_form", "smtp_mailbox_rhs_syntax_form",
       "public_suffix_known", "smtp_domain_wire_form",
       "smtp_envelope_wire_mode", "smtp_envelope_address_requires_smtputf8",
@@ -155,6 +156,39 @@ test_that("the return shape is a stable data.frame for degenerate input", {
       "parse_status", "url_diagnostics")
   )
   expect_type(z$url_diagnostics, "list")
+})
+
+test_that("mailto_local_part_raw is each local part as written", {
+  # RURL-xwsyfkwh
+  locals <- c("a%00zz", "a%FF", "a%20b", "jane", "caf%C3%A9")
+  r <- get_mailto_recipients(paste0("mailto:", locals, "@b.com"),
+    scheme_acceptance = "general")
+  expect_identical(r$mailto_local_part_raw, locals)
+  expect_identical(r$mailto_local_part_form[1:2], c("invalid", "invalid"))
+  # get_user() is unchanged: decoded, NA only for a NUL or invalid UTF-8.
+  expect_identical(
+    get_user(paste0("mailto:", locals, "@b.com"),
+      scheme_acceptance = "general", url_standard = "rfc3986"),
+    c(NA, NA, "a b", "jane", "caf\u00e9")
+  )
+
+  # A quoted local part keeps its comma, and each recipient gets its own.
+  m <- get_mailto_recipients(
+    "mailto:x@a.com,%22b,c%22@b.org,d%2Ce@c.net",
+    scheme_acceptance = "general"
+  )
+  expect_identical(m$mailto_local_part_raw, c("x", "%22b,c%22", "d%2Ce"))
+
+  # Under "whatwg" the column is the parsed path's spelling, not the input's.
+  w <- get_mailto_recipients(
+    c("mailto:caf\u00e9@b.com", "mailto:j\tane@b.com", "mailto:a%00zz@b.com"),
+    url_standard = "whatwg", scheme_acceptance = "general"
+  )
+  expect_identical(w$mailto_local_part_raw, c("caf%C3%A9", "jane", "a%00zz"))
+
+  # No single structural @: no local part to report.
+  n <- get_mailto_recipients("mailto:nobody", scheme_acceptance = "general")
+  expect_identical(n$mailto_local_part_raw, NA_character_)
 })
 
 test_that("mixed vectors keep per-URL provenance and skip non-mailto rows", {
@@ -175,7 +209,7 @@ test_that("non-character input is rejected", {
 test_that("wire columns are always present but sentinel by default", {
   r <- get_mailto_recipients("mailto:a@example.com",
     scheme_acceptance = "general")
-  expect_identical(ncol(r), 13L)
+  expect_identical(ncol(r), 14L)
   expect_identical(r$smtp_domain_wire_form, "unavailable")
   expect_identical(r$smtp_envelope_wire_mode, "unavailable")
   expect_true(is.na(r$smtp_envelope_address_requires_smtputf8))

@@ -274,9 +274,11 @@
 # NUL it decodes to. .pct_unescape() used to stop there, handing on only the
 # prefix (`a%00zz` read as `a`, `evil.com%00.good.com` as `evil.com`); it now
 # keeps the triplet as written (RURL-fpujlvoq), which the classifiers would
-# judge as three addr-spec characters. NUL is neither atext nor dtext (RFC
-# 5322 sections 3.2.3 and 3.4.1, the addr-spec RFC 6068 section 2 adopts), so
-# a field holding one is invalid whatever surrounds it. `%00` has no hex
+# judge as three addr-spec characters. NUL is neither atext (RFC 5322 section
+# 3.2.3) nor RFC 6068's dtext-no-obs, so a domain holding one is invalid. A
+# local part admits one only as RFC 5322's obsolete quoted-pair (section 4.1,
+# obs-qp: `"\<NUL>"`), which this NA still classifies "invalid"
+# (RURL-mxsyzrho). `%00` has no hex
 # letter, so the fixed match covers every case spelling, and no other triplet
 # can overlap it.
 .email_decode_field <- function(raw) {
@@ -523,6 +525,14 @@
 #'     \item{\code{url}}{the source URL the recipient came from.}
 #'     \item{\code{recipient_index}}{1-based index of the recipient within that
 #'       URL's positional list.}
+#'     \item{\code{mailto_local_part_raw}}{the recipient's local-part as it
+#'       stands in the URL's path, before any percent-decoding
+#'       (\code{"a\%00zz"}), so a local-part classified \code{"invalid"} is
+#'       still at hand. Under \code{"rfc3986"} that is the input's own
+#'       spelling; under \code{"whatwg"} it is the spelling the standard's
+#'       parse gives the path (a non-ASCII character is percent-encoded as
+#'       UTF-8, and a tab or newline is removed). \code{NA}
+#'       when the recipient has no single structural \code{@}.}
 #'     \item{\code{mailto_local_part_form}}{RFC 6068 local-part form:
 #'       \code{"dot-atom-text"}, \code{"quoted-string"}, \code{"invalid"}, or
 #'       \code{"indeterminate"}.}
@@ -597,6 +607,7 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   empty <- data.frame(
     url = character(0),
     recipient_index = integer(0),
+    mailto_local_part_raw = character(0),
     mailto_local_part_form = character(0),
     mailto_domain_form = character(0),
     smtp_mailbox_rhs_syntax_form = character(0),
@@ -676,6 +687,7 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
 # `smtp_wire` is TRUE and the address projects.
 .email_recipient_facts <- function(raw_recipient, smtp_wire) {
   out <- list(
+    mailto_local_part_raw = NA_character_,
     mailto_local_part_form = "invalid",
     mailto_domain_form = "invalid",
     smtp_mailbox_rhs_syntax_form = "invalid",
@@ -690,6 +702,7 @@ get_mailto_recipients <- function(url, url_standard = "rfc3986",
   if (!split$ok) {
     return(out)
   }
+  out$mailto_local_part_raw <- split$local
   ld <- .email_decode_field(split$local)
   dd <- .email_decode_field(split$domain)
   out$mailto_local_part_form <- .email_classify_local(ld)

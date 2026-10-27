@@ -125,7 +125,9 @@ test_that("the parse seams keep their output for every input representation", {
 # the URL verdict and diagnostics differ there. The whatwg one moved again
 # when RURL-cjxdaqym stopped reading the D7 recipient's local part as
 # credentials: its `url_diagnostics` lost `invalid-credentials` and is now
-# `transform-skipped-ineligible-scheme` alone, under both LC_CTYPEs.
+# `transform-skipped-ineligible-scheme` alone, under both LC_CTYPEs. Both
+# moved again when RURL-xwsyfkwh added `mailto_local_part_raw`; with that
+# column dropped, each still gives its previous digest, under both LC_CTYPEs.
 ib_export_pins <- c(
   "safe_parse_urls NULL 1 url" = "6fa9dfd2e2244270d25dfb29cb79e930",
   "safe_parse_urls NULL 2 url" = "4fef8dde29a59b3367d086e720665ae7",
@@ -207,8 +209,8 @@ ib_export_pins <- c(
   "is_valid_host rfc3986 1 url" = "f00abd61f44b03c0bbe119b6834e8e2f",
   "check_schemes whatwg 1 url" = "c7cdbdfe37f2ee743dcb6688136206c4",
   "check_schemes rfc3986 1 url" = "08fd1bc14d418606e1f691ca7c4a5cce",
-  "get_mailto_recipients whatwg 1 url" = "c5488c4e6a659a608c20ee36bb59139b",
-  "get_mailto_recipients rfc3986 1 url" = "a1fbda3ca7d06433ac3535b7c7b471e1",
+  "get_mailto_recipients whatwg 1 url" = "e164f745c2023e5c0898a2fa79c6dedb",
+  "get_mailto_recipients rfc3986 1 url" = "804c950f295ff2e3d3fd157349e53a4e",
   "serialize_url whatwg 1 url" = "3a98bee0eb2552cef63a681eec4e238b",
   "serialize_url whatwg 2 url" = "3a98bee0eb2552cef63a681eec4e238b",
   "serialize_url rfc3986 1 url" = "5b00ec80f41c9b025f8eea66fe5afb67",
