@@ -40,7 +40,7 @@
   "report_tracker_status": "Met",
   "report_tracker_justification": "GitLab Issues serve as the bug tracker: https://gitlab.com/bart-turczynski/rurl/-/work_items .",
   "report_process_status": "Met",
-  "report_process_justification": "Users submit bug reports through the GitLab issue tracker: https://gitlab.com/bart-turczynski/rurl/-/work_items . DESCRIPTION names the same tracker as BugReports by its legacy /-/issues address, the form R's CRAN incoming check requires; GitLab redirects that address here.",
+  "report_process_justification": "Users submit bug reports through the GitLab issue tracker: https://gitlab.com/bart-turczynski/rurl/-/work_items , the address DESCRIPTION names as BugReports.",
   "report_responses_status": "Met",
   "report_responses_justification": "Maintainer responds to issue reports on the tracker: https://gitlab.com/bart-turczynski/rurl/-/work_items",
   "enhancement_responses_status": "Met",
