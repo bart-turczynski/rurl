@@ -2904,28 +2904,48 @@ safe_parse_urls <- function(url,
   # ADR 0020 D4a: a governed knob value the caller set under "whatwg" that
   # .check_url_standard_conflicts() confined to clean_url. The record above
   # took the governed values; clean_url is built from these instead. Slash
-  # collapsing runs on the parsed path, whose dot segments the WHATWG path
-  # state has already removed; the case fold runs on the projection exactly
+  # collapsing runs on the dot-resolved path (the WHATWG path state removes
+  # dot segments first), and index-page and trailing-slash handling then run
+  # on the collapsed path, so Phase 3 is re-run for the rows holding a `//`
+  # (no other row can change). The case fold runs on the projection exactly
   # as Phase 10 would, with the same eligibility reverts.
   clean_cased <- cased
   if (length(opts$clean_only) > 0L) {
     clean_path <- path_final
+    collapse <- rep(FALSE, length(clean_path))
     if (identical(opts$clean_only$path_normalization, "both")) {
-      collapse <- !is.na(clean_path) & nzchar(clean_path)
+      collapse <- !is.na(a$raw_path) &
+        .bytes_detect(a$raw_path, "//", fixed = TRUE)
       if (general_acceptance) {
         collapse <- collapse & elig$path_eligible & !gp
       }
-      clean_path[collapse] <- gsub("/+", "/", clean_path[collapse], perl = TRUE)
+      if (any(collapse)) {
+        clean_path[collapse] <- .normalize_path_vec(
+          a$raw_path[collapse], opts$path_encoding, opts$path_normalization,
+          opts$index_page_handling, opts$trailing_slash_handling,
+          path_identity = opts$path_identity, collapse_after_dots = TRUE
+        )
+      }
     }
-    clean_case <- .if_null(opts$clean_only$case_handling, opts$case_handling)
-    clean_cased <- .apply_case_policy_vec(
-      host_for_clean, clean_path, a$final_scheme, clean_case
-    )
-    if (general_acceptance) {
-      keep_host <- !elig$host_transform_eligible
-      clean_cased$host[keep_host] <- host_for_clean[keep_host]
-      keep_path <- !elig$path_eligible | gp
-      clean_cased$path[keep_path] <- path_final[keep_path]
+    if (is.null(opts$clean_only$case_handling)) {
+      # Only the collapsed rows' paths differ from the record: fold just those.
+      if (any(collapse)) {
+        clean_cased$path[collapse] <- .apply_case_policy_vec(
+          NA_character_, clean_path[collapse], NA_character_,
+          opts$case_handling
+        )$path
+      }
+    } else {
+      clean_cased <- .apply_case_policy_vec(
+        host_for_clean, clean_path, a$final_scheme,
+        opts$clean_only$case_handling
+      )
+      if (general_acceptance) {
+        keep_host <- !elig$host_transform_eligible
+        clean_cased$host[keep_host] <- host_for_clean[keep_host]
+        keep_path <- !elig$path_eligible | gp
+        clean_cased$path[keep_path] <- path_final[keep_path]
+      }
     }
   }
 

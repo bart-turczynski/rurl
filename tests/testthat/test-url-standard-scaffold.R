@@ -140,6 +140,40 @@ test_that("explicit governed knobs conflicting with the profile error", {
   )
 })
 
+test_that("whatwg's clean_url-only collapse precedes index and slash rules", {
+  # ADR 0020 D4a confines an explicit `path_normalization = "both"` to
+  # clean_url under "whatwg". The collapse runs on the dot-resolved path and
+  # index-page and trailing-slash handling run on the collapsed path, as they
+  # do under `profile = "rfc-syntax"`: collapsing after them left the slash a
+  # repeated `//` was reduced to, so `/a//` stripped to `/a/`.
+  expect_identical(
+    get_clean_url("http://example.com/a//",
+      path_normalization = "both", trailing_slash_handling = "strip"
+    ),
+    "http://example.com/a"
+  )
+  expect_identical(
+    get_clean_url("http://example.com/a/index.html//",
+      path_normalization = "both", index_page_handling = "strip"
+    ),
+    "http://example.com/a"
+  )
+  # Dot segments resolve first (the WHATWG path state), then the collapse.
+  expect_identical(
+    get_clean_url("http://example.com/a//b/../c//",
+      path_normalization = "both"
+    ),
+    "http://example.com/a/c/"
+  )
+  # The record keeps the WHATWG path.
+  expect_identical(
+    safe_parse_url("http://example.com/a//",
+      path_normalization = "both", trailing_slash_handling = "strip"
+    )$path,
+    "/a/"
+  )
+})
+
 test_that("no conflict without url_standard or with the selector alone", {
   u <- "http://ex.com/%41%42"
   expect_silent(safe_parse_url(u, path_encoding = "decode"))

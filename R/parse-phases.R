@@ -1953,7 +1953,8 @@
                                 path_normalization,
                                 index_page_handling,
                                 trailing_slash_handling,
-                                path_identity = "none") {
+                                path_identity = "none",
+                                collapse_after_dots = FALSE) {
   path_work <- raw_path
 
   # Two ORTHOGONAL axes (ADR 0011), applied as independent, composing steps:
@@ -2043,6 +2044,15 @@
         path_work[mask], dot_remover, character(1), USE.NAMES = FALSE
       )
     }
+  }
+
+  # Slash collapsing on the dot-resolved path: the `whatwg` arm's clean_url-only
+  # "both" (ADR 0020 D4a), where the WHATWG path state removes dot segments
+  # first. It runs before index and trailing-slash handling, which then see
+  # the collapsed path.
+  if (isTRUE(collapse_after_dots)) {
+    mask <- !is.na(path_work) & nzchar(path_work)
+    path_work[mask] <- gsub("/+", "/", path_work[mask], perl = TRUE)
   }
 
   # Index/default page stripping (only where such a trailing segment appears).
