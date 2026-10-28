@@ -7,7 +7,7 @@
 resolve_url(
   relative_or_absolute,
   base_url,
-  url_standard = NULL,
+  url_standard = "whatwg",
   output = c("clean", "serialized"),
   form = c("source", "normalized"),
   ...
@@ -27,23 +27,21 @@ the base up.}
 \item{base_url}{A character vector of base URLs, recycled against
 \code{relative_or_absolute}. Each base must itself be an absolute URL
 (carry a scheme); a relative reference resolved against a scheme-less or
-\code{NA} base yields \code{NA}. Under a named \code{url_standard}
-(given here or bundled by a \code{profile}), a base
+\code{NA} base yields \code{NA}. Under the \code{url_standard}
+(given here, the default, or bundled by a \code{profile}), a base
 that standard's parser refuses (\code{\link{serialize_url}} gives
 \code{NA}) is no base, row by row: under \code{"whatwg"} the row is
 \code{NA} even for an absolute reference (the URL Standard's API URL
 parser fails on a failing base before it reads the input); under
 \code{"rfc3986"} a relative reference is \code{NA} and an absolute one
-still resolves (RFC 3986 sections 5.1 and 5.2.2). The frozen \code{NULL}
-selector (no \code{url_standard} and no \code{profile}) does not check
-the base.}
+still resolves (RFC 3986 sections 5.1 and 5.2.2).}
 
-\item{url_standard}{Optional standard profile forwarded to the parse:
-\code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
-\code{\link{safe_parse_url}} for the axes it governs, and
-\emph{Reference resolution is standard-aware} for the reference-parsing
-rules \code{"whatwg"} adds ahead of the merge. Required (non-\code{NULL})
-when \code{output = "serialized"}.}
+\item{url_standard}{The standard the reference is resolved and parsed
+under: \code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL}
+means \code{"whatwg"} (ADR 0020). See \code{\link{safe_parse_url}} for
+the axes it governs, and \emph{Reference resolution is standard-aware}
+for the reference-parsing rules \code{"whatwg"} adds ahead of the
+merge.}
 
 \item{output}{Which output surface to return: \code{"clean"} (default,
 today's canonical \code{clean_url} bytes) or \code{"serialized"} (the
@@ -107,9 +105,9 @@ direct \code{safe_parse_url()} call on the resolved URL.
 
 The merge itself (empty reference, fragment-only, query-only, scheme-relative
 \code{//host} reference, absolute-path reference, and relative-path merge) is
-RFC 3986 section 5.2--5.3 under \code{url_standard = "rfc3986"} and under the
-default \code{NULL} selector, with one exception under \code{"rfc3986"} noted
-last below. Under \code{url_standard = "whatwg"} the WHATWG
+RFC 3986 section 5.2--5.3 under \code{url_standard = "rfc3986"}, with one
+exception noted last below. Under \code{url_standard = "whatwg"} (the
+default; \code{NULL} means the same, ADR 0020) the WHATWG
 URL Standard's reference-parsing rules are applied first, because they are
 rules the two standards genuinely disagree on rather than composition of the
 axes \code{url_standard} already governs (decision P2.7 D-B,
@@ -144,8 +142,8 @@ control or SPACE (U+0000--U+0020) and then every ASCII tab, LF and CR,
 so \code{" foo.com "} resolves as \code{"foo.com"} does. A reference that
 strips to the empty string is the empty reference, which resolves to the
 base minus its fragment. RFC 3986 has no strip step -- such bytes are
-required to be percent-encoded -- so under \code{"rfc3986"} and
-\code{NULL} they stay in the reference. The base gets the same step
+required to be percent-encoded -- so under \code{"rfc3986"} they stay
+in the reference. The base gets the same step
 under \code{"whatwg"}, so \code{" http://a/b/c "} is the base
 \code{"http://a/b/c"}; only this step: a base that the parser would
 otherwise respell (a backslash for a slash) is not normalized first.
@@ -168,7 +166,7 @@ is \code{"file:///C:/"}); and \code{C|} in the first segment is
 normalized to \code{C:}. A drive letter in the authority position
 (\code{"//d:"}) is an empty host plus a path segment,
 \code{"file:///d:"}. RFC 3986 has no drive-letter concept, so under
-\code{"rfc3986"} and \code{NULL} the plain section 5.2 merge applies.
+\code{"rfc3986"} the plain section 5.2 merge applies.
 \item \strong{Any other scheme-bearing reference resolves to its own
 parse.} The base plays no part, and the reference's path is left to the
 WHATWG path state, so an opaque path keeps its dot segments
@@ -179,10 +177,9 @@ drive letter survives \code{..} (\code{"file:/C:/../x"} gives
 of such a path, so under \code{"rfc3986"} the first is \code{"foo:/b"}.
 }
 
-The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
-every rule above is reachable only through
-\code{url_standard = "whatwg"}, or through a \code{profile} that bundles it
-(see \code{...}).
+Every rule above applies under \code{url_standard = "whatwg"} (the default)
+or a \code{profile} that bundles it (see \code{...}), never under
+\code{"rfc3986"} (P2.7 D-C).
 
 Two further rules apply under \strong{both} named profiles, because the two
 standards agree on them. First, a resolved path whose first segment is
@@ -194,19 +191,14 @@ serializer emits the same guard, so \code{resolve_url("/..//path",
 authority \code{path}. Under \code{"whatwg"} a reference with a scheme of
 its own reaches the parse as written, so the WHATWG serializer, not the
 resolver, writes its guard: \code{"non-spec:/..//x"} gives
-\code{"non-spec:/.//x"}. The \code{NULL} selector recomposes the unguarded
-string, as it always did. Second, a scheme is
+\code{"non-spec:/.//x"}. Second, a scheme is
 \code{ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )} -- RFC 3986 section 3.1's
 own grammar, and WHATWG's -- so a relative path whose first segment merely
 \emph{contains} a colon is a path, not an absolute reference:
 \code{resolve_url("[61:24:74]:98", "http://example.org/foo/bar",
 url_standard = "whatwg", output = "serialized")} is
 \code{"http://example.org/foo/[61:24:74]:98"}. \code{"rfc3986"} reads no
-scheme there either, but refuses the reference (see below). The \code{NULL}
-selector instead keeps RFC 3986 Appendix B's
-explicitly \emph{non-validating} \code{[^:/?#]+}, which reads
-\code{"10.0.0.7"} as a scheme and discards the base; that is frozen behavior
-(ADR 0007), not a recommendation.
+scheme there either, but refuses the reference (see below).
 
 Under \code{"rfc3986"} the reference must itself be an RFC 3986
 URI-reference (section 4.1: a \code{URI} or a \code{relative-ref}), or the
@@ -218,7 +210,7 @@ merge, so a segment that dot-segment removal would delete still counts:
 no triplet) and
 \code{"10.0.0.7:8080/x"} (section 4.2: a first segment holding a colon
 cannot start a relative-path reference; write \code{"./10.0.0.7:8080/x"}).
-\code{"whatwg"} and \code{NULL} do not check the reference. Each rule in
+\code{"whatwg"} does not check the reference. Each rule in
 this section applies to the standard \code{url_standard} names, or to the
 one a \code{profile} in \code{...} bundles.
 }
@@ -254,10 +246,9 @@ expectations are reproduced exactly (\code{resolve_url("?y",
 is \code{"http://a/b/c/d;p?y"}).
 }
 
-\code{output = "serialized"} \strong{requires} an explicit
-\code{url_standard}: \code{NULL} selects no standard, so there is nothing to
-serialize \emph{to}, and the combination is an error rather than a silent
-choice of one. Because \code{\link{serialize_url}} accepts no presentation
+\code{output = "serialized"} serializes to \code{url_standard}, which is
+\code{"whatwg"} by default (and for \code{NULL}). Because
+\code{\link{serialize_url}} accepts no presentation
 options at all, \code{output = "serialized"} also rejects any \code{...}
 argument: honoring, say, \code{port_handling = "exclude"} is impossible on
 that surface, and accepting-then-discarding it would misreport what was

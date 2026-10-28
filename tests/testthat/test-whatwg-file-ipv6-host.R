@@ -127,19 +127,23 @@ test_that("whatwg file: malformed bracketed hosts that already fail stay so", {
   )
 })
 
-test_that("NULL and rfc3986 do not move for file: IPv6 literals", {
+test_that("rfc3986 does not move for file: IPv6 literals", {
   bad <- c(
     "file://[1:]/", "file://[1::2::3]/", "file://[:::]/", "file://[12345::]/"
   )
   good <- c("file://[::1]/", "file://[1:0::]/")
-  for (std in list(NULL, "rfc3986")) {
-    lab <- if (is.null(std)) "NULL" else std
+  # The default (and NULL) is whatwg (ADR 0020), pinned above; it runs the
+  # WHATWG IPv6 serializer.
+  expect_identical(safe_parse_urls(c(bad, good), url_standard = NULL),
+                   safe_parse_urls(c(bad, good), url_standard = "whatwg"))
+  for (std in list("rfc3986")) {
+    lab <- std
     b <- safe_parse_urls(bad, url_standard = std)
     expect_identical(b$parse_status, rep("error", length(bad)), info = lab)
     expect_true(all(is.na(b$host)), info = lab)
     expect_true(all(is.na(b$clean_url)), info = lab)
 
-    # Neither arm runs the WHATWG IPv6 serializer: the literal keeps its
+    # rfc3986 does not run the WHATWG IPv6 serializer: the literal keeps its
     # spelling.
     g <- safe_parse_urls(good, url_standard = std)
     expect_identical(g$parse_status, c("ok", "ok"), info = lab)

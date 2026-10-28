@@ -74,29 +74,31 @@ test_that("rfc3986: a scheme-bearing reference's path is dot-removed", {
                    "non-spec:/.//x")
 })
 
-test_that("NULL: the frozen selector's scheme-bearing resolution", {
-  frozen <- list(
-    c("foo:a/../b", "http://h/y", "foo:/b"),
-    c("foo:\ufeff/../b", "http://h/y", "foo:/b"),
-    c("file:/C:/../x", "http://h/y", "file:/x"),
-    c("file:///C:/../x", "http://h/y", "file:///x"),
-    c("http:/a/../b", "https://h/y", "http:/b"),
-    c("ws:a/../b", "http://h/y", "ws:/b"),
-    c("http:../x", "http://h/a/b", "http:x"),
-    c("non-spec:/..//x", "http://a/b", "non-spec://x")
+test_that("the default and NULL resolve a scheme-bearing reference as whatwg", {
+  # ADR 0020 retired the frozen NULL selector; the default and NULL are
+  # "whatwg".
+  rows <- list(
+    c("foo:a/../b", "http://h/y"),
+    c("file:/C:/../x", "http://h/y"),
+    c("file:///C:/../x", "http://h/y"),
+    c("http:/a/../b", "https://h/y"),
+    c("ws:a/../b", "http://h/y"),
+    c("http:../x", "http://h/a/b"),
+    c("non-spec:/..//x", "http://a/b")
   )
-  for (row in frozen) {
-    expect_identical(.resolve_one_raw(row[[1L]], row[[2L]]), row[[3L]],
-                     label = row[[1L]])
-    expect_identical(.resolve_one_raw(row[[1L]], row[[2L]], NULL), row[[3L]],
-                     label = paste("NULL", row[[1L]]))
+  for (row in rows) {
+    want <- whatwg_ser(row[[1L]], row[[2L]])
+    expect_identical(resolve_url(row[[1L]], row[[2L]], output = "serialized"),
+                     want, label = row[[1L]])
+    expect_identical(
+      resolve_url(row[[1L]], row[[2L]], url_standard = NULL,
+                  output = "serialized"),
+      want, label = paste("NULL", row[[1L]])
+    )
   }
   expect_identical(resolve_url("https://h2/a/./b/../c", "http://h/y"),
                    "https://h2/a/c")
-  expect_identical(resolve_url("file:///C:/../x", "http://h/y"),
-                   "file:///x")
-  expect_identical(resolve_url("file:/C:/../x", "http://h/y"), NA_character_)
-  expect_identical(resolve_url("http:/a/../b", "https://h/y"), NA_character_)
+  expect_identical(resolve_url("http:../x", "http://h/a/b"), "http://h/x")
 })
 
 # --- Conformance: the reference is read without the base ----------------------

@@ -23,17 +23,18 @@
 #               scheme_acceptance = "general"   (the normalizing RFC posture;
 #                                            no profile bundles exactly this)
 #   rfc-syntax  profile = "rfc-syntax"    -- expanded from `.URL_PROFILES`
-#   null        url_standard = NULL       -- the frozen legacy profile (ADR
-#                                            0007 / 0016). NOT a conformance
-#                                            posture: it names no standard,
-#                                            so nothing is an oracle for it.
+#   default     no arguments              -- the bare default: url_standard =
+#                                            "whatwg" (NULL means the same,
+#                                            ADR 0020) with scheme_policy =
+#                                            "infer" and scheme_acceptance =
+#                                            "web". NOT the WHATWG recipe, so
+#                                            nothing is an oracle for it.
 #
 # SERIALIZATION. The WHATWG and RFC 3986 claims are `serialize_url(x,
 # standard = ...)`; `rfc-syntax` parses under RFC 3986 and is shown with the
-# same serializer. The null posture gets no serialize line: the null profile
-# names no standard, and `serialize_url(standard = NULL)` is an error
-# (RURL-ouorolhb) -- so the probe never hands NULL through; `serialize = NA`
-# in `posture_args()` skips the call outright.
+# same serializer. The default posture gets no serialize line: its parse is
+# the WHATWG serializer's anyway, and its acceptance dials are not the
+# recipe's, so `serialize = NA` in `posture_args()` skips the call outright.
 #
 # ORACLES.
 #   WHATWG    inst/bench/wpt-url-cases.json (base = null rows; `href` or
@@ -53,7 +54,7 @@
 # Suggests / the dev toolchain); reads only tracked files.
 #
 # Usage:
-#   Rscript tools/posture-probe.R <url> [--posture whatwg|rfc3986|rfc-syntax|null] [--base <base-url>]
+#   Rscript tools/posture-probe.R <url> [--posture whatwg|rfc3986|rfc-syntax|default] [--base <base-url>]
 #   Rscript tools/posture-probe.R --self-test
 
 # --- locate the tree ---------------------------------------------------------
@@ -84,7 +85,7 @@ need <- function(pkg) {
 
 # --- the postures ------------------------------------------------------------
 
-POSTURES <- c("whatwg", "rfc3986", "rfc-syntax", "null")
+POSTURES <- c("whatwg", "rfc3986", "rfc-syntax", "default")
 
 # The argument set for a posture, as a list ready for do.call(), plus the
 # serializer standard the posture admits (NA for none). Profile postures are
@@ -102,8 +103,7 @@ posture_args <- function(posture, ns) {
     `rfc-syntax` = list(args = list(profile = "rfc-syntax"),
                         serialize = "rfc3986",
                         expands = ns$.URL_PROFILES[["rfc-syntax"]]),
-    null = list(args = list(url_standard = NULL), serialize = NA_character_,
-                expands = NULL),
+    default = list(args = list(), serialize = NA_character_, expands = NULL),
     stop("unknown posture: ", posture, call. = FALSE)
   )
 }
@@ -158,11 +158,10 @@ probe_serialize <- function(url, standard, ns) {
 }
 
 # Reference resolution for --base. `resolve_url(output = "serialized")` is the
-# standard's own answer and needs an explicit standard; the null posture only
-# has the clean output.
+# standard's own answer; the default posture shows the clean output.
 probe_resolve <- function(url, base, posture, ns) {
   std <- switch(posture, whatwg = "whatwg", rfc3986 = , `rfc-syntax` = "rfc3986",
-                null = NULL)
+                default = NULL)
   if (is.null(std)) {
     ns$resolve_url(url, base)
   } else {
@@ -289,11 +288,16 @@ COMPONENT_NAMES <- c("scheme", "userinfo", "host", "port", "path", "query",
 probe_posture <- function(url, posture, ns, root, base = NULL, oracle_env = NULL) {
   spec <- posture_args(posture, ns)
   out <- c(sprintf("== %s", posture))
-  if (identical(posture, "null")) {
-    out <- c(out, paste0("   note: url_standard = NULL is the frozen legacy ",
-                         "profile (ADR 0007/0016), not a conformance posture"))
+  if (identical(posture, "default")) {
+    out <- c(out, paste0("   note: the bare default (url_standard = \"whatwg\", ",
+                         "scheme_policy = \"infer\", scheme_acceptance = ",
+                         "\"web\") is not the WHATWG recipe"))
   }
-  out <- c(out, sprintf("   call: safe_parse_url(url, %s)", fmt_args(spec$args)))
+  call_args <- fmt_args(spec$args)
+  out <- c(out, sprintf(
+    "   call: safe_parse_url(url%s)",
+    if (nzchar(call_args)) paste0(", ", call_args) else ""
+  ))
   if (!is.null(spec$expands)) {
     out <- c(out, sprintf("         profile expands to: %s", fmt_args(spec$expands)))
   }
@@ -303,7 +307,7 @@ probe_posture <- function(url, posture, ns, root, base = NULL, oracle_env = NULL
   if (!is.null(base)) {
     resolved <- probe_resolve(url, base, posture, ns)
     out <- c(out, sprintf("   resolve_url(url, base, %s): %s",
-                          if (identical(posture, "null")) "url_standard = NULL" else
+                          if (identical(posture, "default")) "default arguments" else
                             sprintf("url_standard = %s, output = \"serialized\"",
                                     deparse(if (posture == "whatwg") "whatwg" else "rfc3986")),
                           show(resolved)))
@@ -432,11 +436,11 @@ self_test <- function(root, ns) {
         !any(grepl("oracle: none", r$text, fixed = TRUE))) {
     fail("an input with no fixture row did not print `oracle: none`")
   }
-  r <- probe_posture("http://no-such-row.invalid/zzz", "null", ns, root)
+  r <- probe_posture("http://no-such-row.invalid/zzz", "default", ns, root)
   if (!identical(r$oracle_kind, "none") || !is.null(r$serialized) ||
-        !any(grepl("not a conformance posture", r$text, fixed = TRUE)) ||
+        !any(grepl("is not the WHATWG recipe", r$text, fixed = TRUE)) ||
         any(grepl("serialize_url", r$text, fixed = TRUE))) {
-    fail("the null posture printed an oracle or a serialization")
+    fail("the default posture printed an oracle or a serialization")
   }
 
   # --base: the base-relative fixture is keyed by the pair, and rurl's

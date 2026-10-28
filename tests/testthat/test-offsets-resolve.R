@@ -69,14 +69,19 @@ test_that("whatwg file resolution through the split is pinned", {
   ))
 })
 
-test_that("NULL and rfc3986 file resolution stay where they were", {
+test_that("rfc3986 file resolution stays where it was; the default is whatwg", {
+  # The default and NULL are "whatwg" (ADR 0020), pinned above.
+  expect_identical(resolve_url(file_refs, file_base),
+                   resolve_url(file_refs, file_base, url_standard = "whatwg"))
+  expect_identical(resolve_url(file_refs, file_base, url_standard = NULL),
+                   resolve_url(file_refs, file_base, url_standard = "whatwg"))
+  # The plain RFC 3986 section 5.2 merge.
   want <- c(
     file_head,
     "file:///C:/dir/sub/\u00e9t\u00e9/", "file:///C:/dir/sub/\ufeffx/",
     "file:///C:/dir/sub/x/\ufeff/", "file:///C:/dir/sub/a\u200b/b//",
     "file:///", NA, NA, NA
   )
-  expect_identical(resolve_url(file_refs, file_base), want)
   # Under rfc3986 the four references holding a raw non-ASCII code point are
   # no RFC 3986 URI-reference (sections 2, 2.5, 4.1; RUL-030, RURL-pntbujzc),
   # so those rows are NA; the ASCII rows do not move.

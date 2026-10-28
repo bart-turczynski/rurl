@@ -23,9 +23,8 @@ When \code{NULL} (default) no \code{allowed} column is emitted and no
 allowlist judgment is made.}
 
 \item{url_standard}{Standard profile governing scheme interpretation:
-\code{"whatwg"} (default) or \code{"rfc3986"}. Unlike most of the package
-this argument has a non-\code{NULL} default, because a scheme
-classification is undefined without a named standard.}
+\code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL} means
+\code{"whatwg"} (ADR 0020).}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
@@ -53,9 +52,9 @@ outside it is \code{parse_status = "error"}. This is the historical,
 byte-for-byte compatible behavior.}
 \item{"general": Admit any syntactically valid scheme token and parse
 opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
-Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
-decides the interpretation; \code{general} with \code{url_standard = NULL} is an
-error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+\code{url_standard} (\code{"whatwg"} by default, or \code{"rfc3986"}) decides the
+interpretation. Non-special / opaque hosts receive no www-stripping,
+no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.
 A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
 authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are

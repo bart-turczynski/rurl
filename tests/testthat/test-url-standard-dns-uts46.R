@@ -6,7 +6,8 @@
 # domain-empty-label, domain-hyphen-violation, domain-std3-violation.
 #
 # These are FACTS about host shape, not policy: they fire identically under
-# both "rfc3986" and "whatwg" (PRD D4), and never at all with no selector.
+# both "rfc3986" and "whatwg" (PRD D4); with no selector the default is whatwg
+# (ADR 0020).
 
 # --- clean host: no false positives ------------------------------------------
 
@@ -285,24 +286,24 @@ test_that("IPv4/IPv6 hosts never spuriously fire DNS/UTS-46 diagnostics", {
   )
 })
 
-# --- no selector: an error, not an empty answer (ADR 0015) -------------------
+# --- no selector: the whatwg answer, not an empty one (ADR 0020 D4) ---------
 
-test_that("no url_standard is an error, not a silent empty result", {
-  # This block used to assert that the same three hosts yielded character(0)
-  # with no selector -- indistinguishable from a host that raises nothing.
-  expect_error(
-    get_url_diagnostics("http://a..com/"), "`url_standard` is required"
-  )
-  expect_error(
-    get_url_diagnostics("http://-example.com/"), "`url_standard` is required"
-  )
-  expect_error(
-    get_url_diagnostics(paste0("http://", strrep("a", 300), ".com/")),
-    "`url_standard` is required"
-  )
+test_that("no url_standard reads as whatwg, not a silent empty result", {
+  # This block once asserted that the same three hosts yielded character(0)
+  # with no selector, then (ADR 0015) that the call errors. The default is now
+  # whatwg, so it reports the whatwg tokens.
+  urls <- c("http://a..com/", "http://-example.com/",
+            paste0("http://", strrep("a", 300), ".com/"))
+  for (u in urls) {
+    want <- get_url_diagnostics(u, url_standard = "whatwg")
+    expect_gt(length(want), 0L)
+    expect_identical(get_url_diagnostics(u), want, info = u)
+    expect_identical(get_url_diagnostics(u, url_standard = NULL), want,
+                     info = u)
+  }
 })
 
-test_that("no url_standard leaves safe_parse_url() byte-for-byte unchanged", {
+test_that("omitting url_standard equals passing NULL in safe_parse_url()", {
   urls <- c(
     "http://a..com/", "http://-example.com/", "http://exa_mple.com/"
   )

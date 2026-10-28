@@ -6,7 +6,9 @@
 # D1: scheme-less host-plausibility gate -------------------------------------
 
 test_that("D1: scheme-less non-host-like input is error, not fabricated", {
-  for (u in c("asdfghjkl", "example", "hello world", "/relative/path", "255")) {
+  # "255" is no longer here: under the default whatwg a host that ends in a
+  # number is an IPv4 address (pinned in the D2 test below).
+  for (u in c("asdfghjkl", "example", "hello world", "/relative/path")) {
     expect_identical(unname(get_parse_status(u)), "error", info = u)
     expect_identical(unname(get_clean_url(u)), NA_character_, info = u)
     expect_identical(unname(get_host(u)), NA_character_, info = u)
@@ -42,23 +44,36 @@ test_that("D1: host-shaped scheme-less input still parses", {
 
 # D2/D3: strict IP validation on the input token -----------------------------
 
-test_that("D2: inet_aton coercion forms are rejected, scheme or not", {
+# The frozen NULL profile rejected every numeric shorthand below as a coerced
+# IP. The default is now whatwg (ADR 0020), whose IPv4 parser reads a host
+# that ends in a number as an address -- decimal, hex and octal parts, fewer
+# than four parts included -- and fails a part out of range or a fifth part
+# (WHATWG URL Standard, IPv4 parser). Scheme-less rows reach it through
+# `scheme_policy = "infer"`.
+test_that("D2: numeric hosts follow the WHATWG IPv4 parser, scheme or not", {
   coerced <- c(
-    "12345", "http://12345/", "2130706433", "0x7f000001",
-    "017700000001", "192.168", "1.1", "256.1.1.1", "1.2.3.4.5",
-    "999.999.999.999"
+    "255" = "0.0.0.255", "12345" = "0.0.48.57",
+    "http://12345/" = "0.0.48.57", "2130706433" = "127.0.0.1",
+    "0x7f000001" = "127.0.0.1", "017700000001" = "127.0.0.1",
+    "192.168" = "192.0.0.168", "1.1" = "1.0.0.1"
   )
-  for (u in coerced) {
+  for (u in names(coerced)) {
+    expect_identical(unname(get_parse_status(u)), "ok", info = u)
+    expect_identical(unname(get_host(u)), coerced[[u]], info = u)
+    expect_identical(unname(get_clean_url(u)),
+                     paste0("http://", coerced[[u]], "/"), info = u)
+  }
+  for (u in c("256.1.1.1", "1.2.3.4.5", "999.999.999.999")) {
     expect_identical(unname(get_parse_status(u)), "error", info = u)
     expect_identical(unname(get_clean_url(u)), NA_character_, info = u)
   }
 })
 
-test_that("D3: leading-zero (octal) octets are rejected, not rewritten", {
-  # "192.168.010.1" is 192.168.8.1 under inet_aton -- a different host.
-  for (u in c("192.168.010.1", "http://192.168.010.1/", "127.0.0.01")) {
-    expect_identical(unname(get_parse_status(u)), "error", info = u)
-  }
+test_that("D3: leading-zero (octal) parts are read as octal (WHATWG)", {
+  # "010" is octal 8 under the WHATWG IPv4 number parser.
+  expect_identical(unname(get_host(c("192.168.010.1", "http://192.168.010.1/",
+                                     "127.0.0.01"))),
+                   c("192.168.8.1", "192.168.8.1", "127.0.0.1"))
 })
 
 test_that("D2: canonical IP literals are still accepted", {

@@ -80,7 +80,7 @@ clean_twin <- c(
   "http://b.com/a?q=%C3%BC", "http://b\u00fc.com/\u009f/p"
 )
 arms <- list(
-  "NULL clean" = list(
+  "default clean" = list(
     args = list(url_standard = NULL, query_handling = "keep"),
     twin = clean_twin
   ),
@@ -126,7 +126,7 @@ test_that("a UTF-8 twin resolves to these values on every arm and locale", {
 
 test_that("an ASCII reference and base resolve as before on every arm", {
   ascii <- list(
-    "NULL clean" = "http://a/b/g?y=", "rfc3986 clean" = "http://a/b/g?y=",
+    "default clean" = "http://a/b/g?y=", "rfc3986 clean" = "http://a/b/g?y=",
     "rfc3986 serialized" = "http://a/b/g?y#s",
     "whatwg clean" = "http://a/b/g?y=", "whatwg serialized" = "http://a/b/g?y#s"
   )
@@ -158,7 +158,9 @@ test_that("whatwg in a UTF-8 locale already reads a latin1 REFERENCE right", {
 
 # --- The fix -----------------------------------------------------------------
 #
-# ADR 0016: this fix MOVES `url_standard = NULL` rows. The freeze binds drift a
+# ADR 0016 (superseded by ADR 0020, which made the default whatwg and NULL
+# its alias): this fix MOVED the then-frozen `url_standard = NULL` rows.
+# The freeze binds drift a
 # standard causes; this is a defect in the default path itself -- no standard,
 # profile or contract makes a latin1 0x9F mean U+0178, or "\xfc" mean the text
 # "<fc>", and the parse seams already read the mark (RURL-buemdwcq).
@@ -188,7 +190,7 @@ test_that("whatwg in a UTF-8 locale already reads a latin1 REFERENCE right", {
 #                               carried escape text and the latin1-base row
 #                               was NA.
 
-test_that("NULL witness: latin1 0x9F reads as U+009F in a UTF-8 locale", {
+test_that("default witness: latin1 0x9F reads as U+009F in a UTF-8 locale", {
   with_ctype("en_US.UTF-8", TRUE, {
     for (args in list(list(), list(url_standard = NULL))) {
       expect_bytes(
@@ -208,7 +210,7 @@ test_that("NULL witness: latin1 0x9F reads as U+009F in a UTF-8 locale", {
   })
 })
 
-test_that("NULL witness: latin1 0xFC merges as U+00FC in the C locale", {
+test_that("default witness: latin1 0xFC merges as U+00FC in the C locale", {
   with_ctype("C", FALSE, {
     for (args in list(list(), list(url_standard = NULL),
                       list(url_standard = "whatwg"))) {

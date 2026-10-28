@@ -69,6 +69,22 @@ test_that("explicit overrides win and flag customized", {
   expect_false(url_profile("browser")$customized)
 })
 
+test_that("a url_standard = NULL override reads as \"whatwg\" (ADR 0020 D4)", {
+  # NULL means "whatwg" everywhere, so url_profile() reports the standard the
+  # parse uses. It used to resolve NULL with match.arg(), which picks the
+  # first choice, "rfc3986".
+  expect_identical(
+    url_profile("seo", url_standard = NULL)$url_standard, "whatwg"
+  )
+  expect_identical(
+    url_profile("rfc-syntax", url_standard = NULL)$url_standard, "whatwg"
+  )
+  expect_identical(
+    url_profile("rfc-syntax", url_standard = NULL)$url_standard,
+    rurl:::.parse_options(url_standard = NULL)$url_standard
+  )
+})
+
 test_that("url_profile() rejects unknown profiles and overrides", {
   expect_error(url_profile("nope"), "profile must be NULL")
   expect_error(url_profile(), "requires a profile name")
@@ -321,17 +337,20 @@ test_that("seo: an explicit dial still overrides the profile (iron rule)", {
   expect_identical(res$host_encoding, "keep")
 })
 
-test_that("seo enrichment does not disturb the ADR 0007 NULL-selector freeze", {
+test_that("seo enrichment stays inside the bundle", {
   # The definition is delivered entirely inside the `seo` bundle, so a caller
-  # who passes no profile must be byte-identical to before. Sentinels chosen
-  # from the rows the seo column actually moved.
+  # who passes no profile gets the plain default (whatwg since ADR 0020) and
+  # none of seo's editorial knobs. Sentinels chosen from the rows the seo
+  # column actually moved: the default keeps the A-label spelling
+  # (host_encoding = "keep") and the root-dot host, and resolves the dot
+  # segments as the WHATWG path state does.
   expect_identical(
     safe_parse_urls("https://xn--mnchen-3ya.de/")$clean_url,
     "https://xn--mnchen-3ya.de/"
   )
   expect_identical(
     safe_parse_urls("https://example.com/a/./b/../c")$clean_url,
-    "https://example.com/a/./b/../c"
+    "https://example.com/a/c"
   )
   expect_identical(
     safe_parse_urls("https://example.com./")$clean_url,
@@ -422,5 +441,19 @@ test_that("canonical_join() rejects an unknown profile up front", {
   expect_error(
     cj_deprecated(canonical_join(A, B, profile = "nope")),
     "profile must be NULL or one of"
+  )
+})
+
+test_that("a url_standard override is validated as at every entry point", {
+  # match.arg() would partial-match "rfc" or pick the first of two values;
+  # safe_parse_url() refuses both, and so does url_profile() (RURL-mbhuhwzk
+  # second-pass review).
+  expect_error(url_profile("seo", url_standard = "rfc"), "url_standard must be")
+  expect_error(
+    url_profile("seo", url_standard = c("whatwg", "rfc3986")),
+    "url_standard must be"
+  )
+  expect_identical(
+    url_profile("seo", url_standard = "rfc3986")$url_standard, "rfc3986"
   )
 })

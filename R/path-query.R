@@ -408,7 +408,7 @@
 }
 
 # RFC 3986 path serializer for `path_encoding = "encode"` under
-# `url_standard = NULL` and `"rfc3986"` (RURL-dbyavcjt). A path segment is
+# `url_standard = "rfc3986"` (RURL-dbyavcjt). A path segment is
 # `pchar`: unreserved, `pct-encoded`, sub-delims, `:` and `@` (section 3.3),
 # with `/` between segments. Every other octet is escaped: the printable ASCII
 # below, plus C0 controls, DEL and every octet >= 0x80, which

@@ -204,9 +204,19 @@ canonical_join <- function(data_A, data_B,
   # behavior via .check_url_standard_conflicts_dots(). Validate the profile up
   # front so a bad name fails here rather than deep in safe_parse_urls().
   dots <- list(...)
-  profile <- .validate_profile(dots$profile)
+  # safe_parse_urls() matches each forwarded name exactly or by unique prefix
+  # (`prof` is `profile`), so the pre-check reads the dots under the names the
+  # parser will bind; otherwise an abbreviated profile goes unseen and the
+  # default standard's conflict rule rejects a knob the profile authorizes.
+  parse_dots <- dots
+  if (!is.null(names(parse_dots))) {
+    formal_names <- names(formals(safe_parse_urls))
+    hit <- pmatch(names(parse_dots), formal_names, duplicates.ok = FALSE)
+    names(parse_dots)[!is.na(hit)] <- formal_names[hit[!is.na(hit)]]
+  }
+  profile <- .validate_profile(parse_dots$profile)
   if (is.null(profile)) {
-    .check_url_standard_conflicts_dots(dots)
+    .check_url_standard_conflicts_dots(parse_dots)
   }
   # P3.1 D-E.1: the unrestricted `...` that makes every cleaning/display dial
   # an equality dial is closed by WARNING (results stay byte-identical). Warn

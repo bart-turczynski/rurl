@@ -32,26 +32,6 @@
 .hpl_cafe <- "caf\u00e9.com"
 .hpl_buecher <- "b\u00fcchera.de"
 
-test_that("host percent output is pinned under url_standard = NULL", {
-  host <- c(
-    "example.com", "example.com", "a-b.com", "a~b.com",
-    NA, NA, NA, NA, NA, NA, .hpl_cafe, .hpl_buecher, NA, "\x7f.com",
-    NA, NA, .hpl_cafe, NA, NA
-  )
-  status <- c(
-    "ok", "ok", "ok", "warning-invalid-tld",
-    "error", "error", "error", "error", "error", "error", "ok", "ok",
-    "error", "warning-invalid-tld", "error", "error", "ok",
-    "error", "error"
-  )
-  clean <- ifelse(is.na(host), NA_character_, paste0("http://", host, "/"))
-  expect_identical(get_host(.hpl_urls, url_standard = NULL), host)
-  expect_identical(
-    safe_parse_urls(.hpl_urls, url_standard = NULL)$parse_status, status
-  )
-  expect_identical(get_clean_url(.hpl_urls, url_standard = NULL), clean)
-})
-
 test_that("host percent output is pinned under url_standard = 'whatwg'", {
   host <- c(
     "example.com", "example.com", "a-b.com", "a~b.com",
@@ -126,13 +106,6 @@ test_that("host percent output is pinned under url_standard = 'rfc3986'", {
   )[["elapsed"]]
   list(host = host, elapsed = elapsed)
 }
-
-test_that("a `%` in a 1.5e6-character host parses in seconds under NULL", {
-  skip_on_cran() # a few seconds and tens of MB; the defect is not R-bound
-  res <- .hpl_timed_host(NULL)
-  expect_identical(res$host, .hpl_long_hosts)
-  expect_lt(res$elapsed, 30)
-})
 
 test_that("a `%` in a 1.5e6-character host parses in seconds under whatwg", {
   skip_on_cran() # a few seconds and tens of MB; the defect is not R-bound

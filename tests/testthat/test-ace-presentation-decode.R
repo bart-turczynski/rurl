@@ -10,9 +10,7 @@
 test_that("a non-LDH A-label renders in Unicode under every arm", {
   url <- "http://xn--a_-wia.example/"
   expected <- charToRaw("a_ä.example")
-  # The NULL arm: the pre-fix output under punycoder 1.2.1, which 1.3.0 moved.
-  # Restoring it keeps NULL at its frozen bytes (ADR 0007, ADR 0016); omitting
-  # the selector and passing NULL must agree.
+  # The default (whatwg) arm, omitted and passed as NULL alike (ADR 0020 D4).
   expect_identical(
     charToRaw(get_host(url, host_encoding = "unicode")), expected
   )

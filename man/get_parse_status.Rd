@@ -12,7 +12,7 @@ get_parse_status(
   source = c("all", "private", "icann"),
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general"),
-  url_standard = NULL
+  url_standard = "whatwg"
 )
 }
 \arguments{
@@ -108,9 +108,9 @@ outside it is \code{parse_status = "error"}. This is the historical,
 byte-for-byte compatible behavior.}
 \item{"general": Admit any syntactically valid scheme token and parse
 opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
-Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
-decides the interpretation; \code{general} with \code{url_standard = NULL} is an
-error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+\code{url_standard} (\code{"whatwg"} by default, or \code{"rfc3986"}) decides the
+interpretation. Non-special / opaque hosts receive no www-stripping,
+no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.
 A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
 authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are
@@ -129,20 +129,20 @@ it reaches a remote SMB share. rurl parses \verb{file:} URLs; it never opens
 them. Restricting schemes before anything dereferences them is the
 caller's job — see \code{SECURITY.md}.}
 
-\item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
-\code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
-individual low-level options select (fully backward compatible). When set,
-it selects a coherent set of standard-conformant behaviors for the axes it
-governs — path percent/dot handling, the host IPv4/reg-name model, and
-\code{case_handling} — so callers do not have to hand-assemble the low-level
-knobs. Passing a governed low-level knob (\code{path_normalization} or
-\code{case_handling}) with a value the selected
-profile would not choose is an error; passing the value the profile would
-pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
-selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
-also lowercases the path, which neither standard sanctions). Added as the
-last argument so existing positional calls keep their meaning; always
-pass it by name. Under \code{"whatwg"} the selector additionally recognizes a
+\item{url_standard}{The standard the URL is parsed under: \code{"whatwg"}
+(default; the WHATWG URL Standard, the URL behavior of the web) or
+\code{"rfc3986"}. \code{NULL} is accepted and means \code{"whatwg"} (ADR 0020). The
+standard selects a coherent set of standard-conformant behaviors for the
+axes it governs — path percent/dot handling, the host IPv4/reg-name
+model, and \code{case_handling} — so callers do not have to hand-assemble the
+low-level knobs. Passing a governed low-level knob (\code{path_normalization}
+or \code{case_handling}) with the value the standard would pick is accepted.
+Under \code{"whatwg"} a value that can shape \code{clean_url} alone
+(\code{case_handling = "lower"} or \code{"upper"}, \code{path_normalization = "both"})
+is applied to \code{clean_url} only, and the parsed components keep the WHATWG
+values; any other value, and any other value under \code{"rfc3986"}, is an
+error that names \code{profile = "rfc-syntax"}, which offers it. Always pass
+it by name. Under \code{"whatwg"} the selector additionally recognizes a
 literal backslash as a path separator for WHATWG-special schemes
 (\code{http}/\code{https}/\code{ftp}) and nulls default ports in parse output; use
 \code{port_handling = "strip_default"} for spec-style clean URL port rendering.

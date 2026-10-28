@@ -35,8 +35,9 @@ host at all.}
 }}
 
 \item{url_standard}{Standard profile governing host interpretation:
-\code{"whatwg"} (default; the living web standard) or \code{"rfc3986"}. The
-verdict can depend on the standard --- \code{2130706433} is an
+\code{"whatwg"} (default; the living web standard) or \code{"rfc3986"};
+\code{NULL} means \code{"whatwg"} (ADR 0020). The verdict can depend on
+the standard --- \code{2130706433} is an
 \code{"ipv4"} host (\code{web = TRUE}) under \code{"whatwg"} but a reg-name
 under \code{"rfc3986"}.}
 
@@ -66,9 +67,9 @@ outside it is \code{parse_status = "error"}. This is the historical,
 byte-for-byte compatible behavior.}
 \item{"general": Admit any syntactically valid scheme token and parse
 opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
-Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
-decides the interpretation; \code{general} with \code{url_standard = NULL} is an
-error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+\code{url_standard} (\code{"whatwg"} by default, or \code{"rfc3986"}) decides the
+interpretation. Non-special / opaque hosts receive no www-stripping,
+no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.
 A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
 authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are

@@ -5,11 +5,10 @@
 # whatever the code currently emits). It documents rurl's intended contract for
 # percent-encoding and path structure and pins it against engine drift.
 #
-# rurl's default profile is an RFC 3986 parser, NOT a WHATWG URL parser. Cases
-# drawn from
-# the WHATWG URL test data where rurl *intentionally* diverges (encoded-dot
-# resolution, backslash-as-separator) are kept and annotated, so a future
-# accidental behavior change is caught rather than silently "conforming".
+# rurl's default is the WHATWG URL Standard (ADR 0020). The fixture CSV's
+# `expected` column was written for the retired frozen `url_standard = NULL`
+# profile, which diverged from WHATWG (encoded-dot resolution,
+# backslash-as-separator).
 
 test_that("path/encoding fixtures match explicit expectations", {
   path <- testthat::test_path("fixtures", "encoding-fixtures.csv")
@@ -83,17 +82,18 @@ test_that("url_standard does not force path percent-encoding by default", {
 })
 
 test_that("raw query fidelity honors the decode flag", {
-  # get_query returns the raw query string; decode=FALSE keeps percent-encoding
-  # (hex uppercased), decode=TRUE percent-decodes.
+  # get_query returns the raw query string; decode=FALSE keeps percent-encoding,
+  # decode=TRUE percent-decodes.
   expect_identical(
     get_query("http://ex.com/p?x=a%2Fb&y=1", decode = FALSE), "x=a%2Fb&y=1"
   )
   expect_identical(
     get_query("http://ex.com/p?x=a%2Fb&y=1", decode = TRUE), "x=a/b&y=1"
   )
-  # Lowercase hex in the query is uppercased too (section 6.2.2.1).
+  # The default whatwg record keeps an existing triplet's hex case (WHATWG
+  # query state copies `%` unchanged; RUL-026).
   expect_identical(
-    get_query("http://ex.com/p?x=a%2fb", decode = FALSE), "x=a%2Fb"
+    get_query("http://ex.com/p?x=a%2fb", decode = FALSE), "x=a%2fb"
   )
   # A bare key keeps no fabricated "=" (raw pass-through).
   expect_identical(get_query("http://ex.com/p?flag", decode = FALSE), "flag")
@@ -142,37 +142,36 @@ test_that("whatwg applies the userinfo percent-encode set to user/password", {
   expect_identical(sp$user, "a%20b")
 })
 
-test_that("rfc3986 and no selector keep the raw userinfo spelling", {
+test_that("rfc3986 keeps the raw userinfo spelling", {
   rfc <- safe_parse_urls(
     c("http://u:p:q@ex.com/", "http://a;b@ex.com/", "file://u;v@h/p"),
     url_standard = "rfc3986"
   )
   expect_identical(rfc$user, c("u", "a;b", "u;v"))
   expect_identical(rfc$password, c("p:q", NA_character_, NA_character_))
-  nul <- safe_parse_urls(c("http://u:p:q@ex.com/", "http://a^b@host/"))
-  expect_identical(nul$user, c("u", "a^b"))
-  expect_identical(nul$password, c("p:q", NA_character_))
+  # The default is whatwg (ADR 0020), whose userinfo encode set is pinned
+  # above.
+  def <- safe_parse_urls(c("http://u:p:q@ex.com/", "http://a^b@host/"))
+  expect_identical(def$user, c("u", "a%5Eb"))
+  expect_identical(def$password, c("p%3Aq", NA_character_))
 })
 
 test_that("canonical_join equivalence follows the encoding contract", {
   eq <- function(a, b, ...) {
     identical(get_clean_url(a, ...), get_clean_url(b, ...))
   }
-  # %2f and %2F are RFC 3986-equivalent -> same join key.
-  expect_true(eq("http://ex.com/a%2fb", "http://ex.com/a%2Fb"))
+  # %2f and %2F are RFC 3986-equivalent (section 6.2.2.1), so rfc3986 gives
+  # them one key; the default whatwg keeps each triplet's hex case (path
+  # state), so it does not.
+  expect_true(eq("http://ex.com/a%2fb", "http://ex.com/a%2Fb",
+                 url_standard = "rfc3986"))
+  expect_false(eq("http://ex.com/a%2fb", "http://ex.com/a%2Fb"))
   # %2F and its double-encoding are distinct -> different keys.
   expect_false(eq("http://ex.com/a%2Fb", "http://ex.com/a%252Fb"))
-  # dot segments are distinct under the default, equal once resolved.
-  expect_false(eq("http://ex.com/a/../b", "http://ex.com/b"))
-  expect_true(
-    eq("http://ex.com/a/../b", "http://ex.com/b",
-       path_normalization = "dot_segments")
-  )
-  # An encoded dot never equals a literal one (rurl treats %2e as a byte).
-  expect_false(
-    eq("http://ex.com/a/%2e%2e/b", "http://ex.com/a/../b",
-       path_normalization = "dot_segments")
-  )
+  # The default whatwg resolves dot segments, the encoded `%2e` spelling
+  # included (WHATWG path state, single-dot and double-dot path segments).
+  expect_true(eq("http://ex.com/a/../b", "http://ex.com/b"))
+  expect_true(eq("http://ex.com/a/%2e%2e/b", "http://ex.com/a/../b"))
 })
 
 # Input-side locale invariance (RURL-pqrutnio). The host chokepoint declares the

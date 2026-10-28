@@ -6,7 +6,7 @@
 # existing triplet is copied as written: `new URL("http://a%7fb:c%c3d@a.com/")`
 # has username `a%7fb` and password `c%c3d` (Node 26.3.1). The `rfc3986` arm
 # keeps the triplet as written too since RURL-bxrbpzet (RFC 3986 sec 6.2.2.1,
-# RUL-015), and the `NULL` profile is frozen (ADR 0007, ADR 0016).
+# RUL-015). `NULL`, like the default, is whatwg (ADR 0020 D4).
 #
 # The `whatwg_*` columns are the Node `username` / `password` (a `""` password
 # is reported as NA by the parse record). Red at the pre-fix baseline (main @
@@ -116,16 +116,13 @@ test_that("rfc3986: the web route keeps the triplet as written too", {
   )
 })
 
-test_that("url_standard = NULL is frozen: the fold stays", {
-  u <- userinfo_case_cases$url[1:7]
-  r <- safe_parse_urls(u)
-  expect_identical(
-    r$user, c("a%7Fb", "a%7Fb", "u", "a%7Fb", "a%7F%3Ab", "a%7Fb", "a%")
-  )
-  expect_identical(
-    r$password, c("c%C3d", NA, "p%7F", "c%C3d", "c%3A%7F", "c%C3d", "b%G1")
-  )
-  s <- safe_parse_url(u[1])
-  expect_identical(c(s$user, s$password), c("a%7Fb", "c%C3d"))
-  expect_null(safe_parse_url(userinfo_case_cases$url[8]))
+test_that("url_standard = NULL and the default are whatwg: no fold", {
+  # The frozen profile's hex-case fold is retired (ADR 0020 D4, RUL-032).
+  u <- userinfo_case_cases$url
+  expect_identical(safe_parse_urls(u),
+                   safe_parse_urls(u, url_standard = "whatwg"))
+  expect_identical(safe_parse_urls(u, url_standard = NULL),
+                   safe_parse_urls(u, url_standard = "whatwg"))
+  s <- safe_parse_url(u[1], url_standard = NULL)
+  expect_identical(c(s$user, s$password), c("a%7fb", "c%c3d"))
 })

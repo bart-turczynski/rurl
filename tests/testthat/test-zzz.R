@@ -111,20 +111,33 @@ test_that("a BOM host is a cache key like any other (RURL-iiehsbfg)", {
   )
 
   # The collision was visible: once the BOM host was cached, a plain host
-  # came back with the BOM host's A-label. Under "rfc3986" the BOM host is
-  # now a parse error (RFC 3986 section 2; RUL-030), so its host is NA; the
-  # plain host after it still proves the cache did not collide.
-  expected <- list(c("xn--a-6m0i.com", "a.com"), c(NA_character_, "a.com"))
-  stds <- list(NULL, "rfc3986")
-  for (k in seq_along(stds)) {
+  # came back with the BOM host's A-label. Each pair below caches two entries
+  # that differ, so a key that dropped the mark would hand the second call
+  # the first call's answer. The A-label pair: the encoder keeps the mark as a
+  # code point, so the BOM host's A-label is not the plain host's.
+  rurl_clear_caches()
+  expect_identical(
+    c(
+      rurl:::.normalize_and_punycode_vec("\ufeffb\u00fccher.de"),
+      rurl:::.normalize_and_punycode_vec("b\u00fccher.de")
+    ),
+    c("xn--bcher-kva10366b.de", "xn--bcher-kva.de")
+  )
+  # The parse cache, end to end: a URL led by U+FEFF has no scheme under
+  # either standard (the WHATWG basic URL parser strips only C0 control or
+  # space, and RFC 3986 section 3.1 needs an ALPHA first), so it fails, while
+  # its plain twin parses. (A BOM inside the host no longer separates the
+  # two: "whatwg" maps U+FEFF away by UTS-46, and "rfc3986" rejects it,
+  # RUL-030.)
+  for (std in c("whatwg", "rfc3986")) {
     rurl_clear_caches()
-    first <- get_host("http://\ufeffa.com/",
-      url_standard = stds[[k]], host_encoding = "idna"
+    first <- safe_parse_urls("\ufeffhttp://a.com/", url_standard = std)
+    second <- safe_parse_urls("http://a.com/", url_standard = std)
+    expect_identical(
+      c(first$parse_status, second$parse_status), c("error", "ok"),
+      info = std
     )
-    second <- get_host("http://a.com/",
-      url_standard = stds[[k]], host_encoding = "idna"
-    )
-    expect_identical(unname(c(first, second)), expected[[k]])
+    expect_identical(second$host, "a.com", info = std)
   }
 })
 

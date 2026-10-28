@@ -1,6 +1,7 @@
 # Invalid UTF-8 after the authority must not abort the batch (RURL-otrpfhmq).
 #
-# Under `url_standard = NULL` (the default) and `"rfc3986"`, one row holding an
+# Under the then-default frozen `url_standard = NULL` profile and `"rfc3986"`,
+# one row holding an
 # octet sequence that is not valid UTF-8 in its path, query or fragment made
 # the whole `safe_parse_urls()` call throw `invalid UTF-8 byte sequence
 # detected`, in every locale, so every good row in the same vector was lost.
@@ -8,6 +9,11 @@
 # reached from `._parse_stage_a_vec()`. It is the same broken promise
 # RURL-kmpnbvdl fixed for the rfc3986 AUTHORITY (test-locale-invariance.R,
 # section 4b), at a different site.
+#
+# ADR 0020 retired the frozen profile: the default is now "whatwg", and
+# `NULL` (passed or omitted) reads as "whatwg", which reads such an octet as
+# U+FFFD. The NULL arm's own percent-encoding of a path octet (RURL-yarkccco,
+# RUL-029) went with it (RUL-032).
 #
 # The trigger is a conjunction. `stri_length()` sat in the `no` branch of an
 # `ifelse()`, which R evaluates over EVERY row as soon as one row has a path
@@ -42,11 +48,6 @@ bad_rows <- c(
   in_query = oct("http://example.com/a?q=caf", 0xE9),
   in_fragment = oct("http://example.com/a#caf", 0xE9)
 )
-in_path <- c("end", "query", "dots", "pair", "schemeless", "ftp")
-# Under NULL a path octet is percent-encoded and the row parses
-# (RURL-yarkccco, RUL-029), with the path the "%XX" spelling gives.
-null_path <- c(end = "/caf%E9", query = "/caf%E9", dots = "/a/../caf%E9",
-               pair = "/%C3(", schemeless = "/caf%E9", ftp = "/caf%E9")
 
 # Rows holding an undecodable octet IN the authority. The parser rejects them
 # before the path is cut (whatwg reads the userinfo octet as U+FFFD instead),
@@ -97,19 +98,15 @@ marked <- function(x, mark) if (mark == "UTF-8") utf8_marked(x) else x
 # Today's values for the valid controls. These rows hold no invalid octet, so
 # the fix must leave every one of them byte-identical.
 expected_valid <- list(
-  null = list(
-    path = c("/a", "/caf\u00e9", "/a/../b", "/x"),
-    clean_url = c("https://www.example.com/a", "http://example.com/caf\u00e9",
-                  "http://example.com/a/../b", "ftp://example.com/x")
-  ),
   rfc3986 = list(
     path = c("/a", "/caf\u00e9", "/b", "/x"),
     clean_url = c("https://www.example.com/a", "http://example.com/caf\u00e9",
                   "http://example.com/b", "ftp://example.com/x")
   )
 )
-expected_valid$omitted <- expected_valid$null
 expected_valid$whatwg <- expected_valid$rfc3986
+expected_valid$omitted <- expected_valid$whatwg
+expected_valid$null <- expected_valid$whatwg
 for (arm in names(expected_valid)) {
   expected_valid[[arm]]$host <-
     c("www.example.com", "example.com", "example.com", "example.com")
@@ -118,7 +115,7 @@ for (arm in names(expected_valid)) {
 }
 # Row 2 writes U+00E9 raw. Under rfc3986 that is a parse error: a URI is
 # US-ASCII and non-ASCII data is percent-encoded UTF-8 (RFC 3986 sections 2,
-# 2.5; RUL-030, RURL-pntbujzc). The NULL and whatwg arms do not move.
+# 2.5; RUL-030, RURL-pntbujzc). The whatwg arm does not move.
 expected_valid$rfc3986$path[2L] <- NA_character_
 expected_valid$rfc3986$clean_url[2L] <- NA_character_
 expected_valid$rfc3986$host[2L] <- NA_character_
@@ -144,43 +141,47 @@ for (loc in names(ctypes)) {
 
   test_that(paste("whatwg already returns one row per input under", loc), {
     # WHATWG parses a scalar-value string: the undecodable octet is read as
-    # U+FFFD. Already correct; the fix must not move it.
+    # U+FFFD. Already correct; the fix must not move it. The default, passed
+    # or omitted as NULL, is the same arm (ADR 0020).
     with_ctype(loc, ctypes[[loc]], {
-      ref <- safe_parse_urls(valid, url_standard = "whatwg")
-      for (mark in c("unknown", "UTF-8")) {
-        for (shape in names(bad_rows)) {
-          rurl_clear_caches()
-          res <- safe_parse_urls(
-            c(valid, marked(bad_rows[[shape]], mark)), url_standard = "whatwg"
+      for (arm in c("omitted", "null", "whatwg")) {
+        ref <- parse_arm(valid, arms[[arm]])
+        for (mark in c("unknown", "UTF-8")) {
+          for (shape in names(bad_rows)) {
+            what <- paste(arm, mark, shape)
+            rurl_clear_caches()
+            res <- parse_arm(c(valid, marked(bad_rows[[shape]], mark)),
+                             arms[[arm]])
+            expect_identical(nrow(res), 5L, info = what)
+            expect_identical(res[1:4, ], ref, info = what)
+            expect_identical(res$original_url[5L],
+                             marked(bad_rows[[shape]], mark), info = what)
+          }
+          res <- parse_arm(c(valid, marked(bad_rows[["end"]], mark)),
+                           arms[[arm]])
+          expect_identical(res$parse_status[5L], "ok", info = mark)
+          expect_identical(res$path[5L], "/caf\ufffd", info = mark)
+          expect_identical(
+            res$clean_url[5L], "http://example.com/caf\ufffd", info = mark
           )
-          expect_identical(nrow(res), 5L, info = paste(mark, shape))
-          expect_identical(res[1:4, ], ref, info = paste(mark, shape))
         }
-        res <- safe_parse_urls(
-          c(valid, marked(bad_rows[["end"]], mark)), url_standard = "whatwg"
-        )
-        expect_identical(res$parse_status[5L], "ok", info = mark)
-        expect_identical(res$path[5L], "/caf\ufffd", info = mark)
-        expect_identical(
-          res$clean_url[5L], "http://example.com/caf\ufffd", info = mark
-        )
       }
     })
   })
 
   test_that(paste("a lone query or fragment octet parses under", loc), {
     # Parsed ALONE, an invalid octet in the query or fragment never threw: the
-    # no-selector default percent-encodes it, and rfc3986 rejects it through
-    # its uniform grammar gate (RURL-kmpnbvdl). Those verdicts must survive.
+    # default whatwg reads it as U+FFFD and percent-encodes that, and rfc3986
+    # rejects it through its uniform grammar gate (RURL-kmpnbvdl).
     with_ctype(loc, ctypes[[loc]], {
       qf <- unname(bad_rows[c("in_query", "in_fragment")])
-      for (arm in c("omitted", "null")) {
+      for (arm in c("omitted", "null", "whatwg")) {
         rurl_clear_caches()
         res <- parse_arm(qf, arms[[arm]])
         expect_identical(res$parse_status, c("ok", "ok"), info = arm)
         expect_identical(res$path, c("/a", "/a"), info = arm)
-        expect_identical(res$query, c("q=caf%E9", NA), info = arm)
-        expect_identical(res$fragment, c(NA, "caf%E9"), info = arm)
+        expect_identical(res$query, c("q=caf%EF%BF%BD", NA), info = arm)
+        expect_identical(res$fragment, c(NA, "caf%EF%BF%BD"), info = arm)
       }
       rurl_clear_caches()
       res <- safe_parse_urls(qf, url_standard = "rfc3986")
@@ -191,8 +192,8 @@ for (loc in names(ctypes)) {
   test_that(paste("an authority octet never threw the batch under", loc), {
     with_ctype(loc, ctypes[[loc]], {
       expected <- list(
-        omitted = c("error", "error", "error"),
-        null = c("error", "error", "error"),
+        omitted = c("ok", "ok", "error"),
+        null = c("ok", "ok", "error"),
         rfc3986 = c("error", "error", "error"),
         whatwg = c("ok", "ok", "error")
       )
@@ -207,55 +208,28 @@ for (loc in names(ctypes)) {
   })
 
   # The ADR 0016 WITNESS, kept as the regression test. Before the fix every
-  # call below threw `invalid UTF-8 byte sequence detected` -- under the
-  # no-selector default (argument omitted and passed as NULL alike) and under
-  # rfc3986, in both locales and for both marks.
-  #
-  # DECLARED SIGNATURE, per arm. What may move: rows holding an undecodable
-  # octet after the authority, and the batch, which no longer throws. Nothing
-  # else: the valid rows are asserted byte-identical to the batch parsed
-  # without the bad row.
-  #   NULL     A web-route row whose PATH holds the octet parses `ok` with
-  #            the octet percent-encoded (`/caf%E9`), as its QUERY or
-  #            FRAGMENT octet already was (RURL-yarkccco, RUL-029; RURL-otrpfhmq
-  #            failed the row instead). The `?q=1` shape, which parsed ALONE
-  #            was `ok` with the octet raw in `path`, now has `/caf%E9` too. A
-  #            `file:` row fails wherever the octet is (see the file: test).
-  #   rfc3986  Already correct: the uniform grammar gate rejects every one of
-  #            these rows (RURL-kmpnbvdl). Only the throw moves.
-  #   whatwg   Already correct and unmoved (pinned above): the octet is read
-  #            as U+FFFD.
+  # call below threw `invalid UTF-8 byte sequence detected` under rfc3986 (and
+  # under the then-default frozen NULL profile), in both locales and for both
+  # marks. The uniform grammar gate rejects every one of these rows
+  # (RURL-kmpnbvdl); only the throw moved. The default whatwg arm reads the
+  # octet as U+FFFD (pinned above).
   test_that(paste("an undecodable octet fails its row, not the batch, under",
                   loc), {
     with_ctype(loc, ctypes[[loc]], {
       for (mark in c("unknown", "UTF-8")) {
         for (shape in names(bad_rows)) {
           bad <- marked(bad_rows[[shape]], mark)
-          for (arm in c("omitted", "null", "rfc3986")) {
-            what <- paste(mark, shape, arm)
-            ref <- parse_arm(valid, arms[[arm]])
-            rurl_clear_caches()
-            expect_no_error(res <- parse_arm(c(valid, bad), arms[[arm]]))
-            expect_identical(nrow(res), 5L, info = what)
-            expect_identical(res[1:4, ], ref, info = what)
-            expect_identical(res$original_url[5L], bad, info = what)
-            if (arm == "rfc3986") {
-              expect_identical(res$parse_status[5L], "error", info = what)
-              expect_identical(res$path[5L], NA_character_, info = what)
-              expect_identical(res$host[5L], NA_character_, info = what)
-              expect_identical(res$clean_url[5L], NA_character_, info = what)
-            } else if (shape %in% in_path) {
-              expect_identical(
-                res$parse_status[5L], if (shape == "ftp") "ok-ftp" else "ok",
-                info = what
-              )
-              expect_identical(res$path[5L], null_path[[shape]], info = what)
-              expect_identical(res$host[5L], "example.com", info = what)
-            } else {
-              expect_identical(res$parse_status[5L], "ok", info = what)
-              expect_identical(res$path[5L], "/a", info = what)
-            }
-          }
+          what <- paste(mark, shape)
+          ref <- parse_arm(valid, "rfc3986")
+          rurl_clear_caches()
+          expect_no_error(res <- parse_arm(c(valid, bad), "rfc3986"))
+          expect_identical(nrow(res), 5L, info = what)
+          expect_identical(res[1:4, ], ref, info = what)
+          expect_identical(res$original_url[5L], bad, info = what)
+          expect_identical(res$parse_status[5L], "error", info = what)
+          expect_identical(res$path[5L], NA_character_, info = what)
+          expect_identical(res$host[5L], NA_character_, info = what)
+          expect_identical(res$clean_url[5L], NA_character_, info = what)
         }
       }
     })
@@ -273,45 +247,18 @@ for (loc in names(ctypes)) {
     })
   })
 
-  test_that(paste("the NULL encoded path holds under every path option, under",
-                  loc), {
-    # The options that run over the path in Stage B. Each bad row gives what
-    # its "%E9" spelling gives (RURL-yarkccco).
-    with_ctype(loc, ctypes[[loc]], {
-      batch <- c(valid, unname(bad_rows[c("query", "dots")]))
-      twins <- c(valid, "http://example.com/caf%E9?q=1",
-                 "http://example.com/a/../caf%E9")
-      for (opt in list(list(path_encoding = "encode"),
-                       list(path_encoding = "decode"),
-                       list(path_normalization = "dot_segments"),
-                       list(index_page_handling = "strip"),
-                       list(trailing_slash_handling = "strip"))) {
-        rurl_clear_caches()
-        expect_no_warning(
-          res <- do.call(safe_parse_urls, c(list(batch), opt))
-        )
-        expect_no_warning(
-          ref <- do.call(safe_parse_urls, c(list(twins), opt))
-        )
-        expect_identical(res$parse_status[5:6], c("ok", "ok"))
-        expect_identical(res$path, ref$path)
-        expect_identical(res$clean_url, ref$clean_url)
-      }
-    })
-  })
-
   test_that(paste("an undecodable path octet survives encode and decode, under",
                   loc), {
     # `path_encoding` decodes before it presents. A decode that yields an
-    # octet that is not valid UTF-8 (the raw row, and a valid `%E9` row, under
-    # NULL and rfc3986 alike) gave the literal path "/NA" under "encode" (a
-    # strsplit() warning) and wrote the raw octet into `path` and `clean_url`
-    # under "decode". Both now keep that octet as its "%XX" triplet.
+    # octet that is not valid UTF-8 (a valid `%E9` row) gave the literal path
+    # "/NA" under "encode" (a strsplit() warning) and wrote the raw octet
+    # into `path` and `clean_url` under "decode". Both now keep that octet as
+    # its "%XX" triplet. Under rfc3986 the hex case is normalized; whatwg
+    # keeps an existing triplet's hex case.
     with_ctype(loc, ctypes[[loc]], {
       rows <- list(
-        list(x = bad_rows[["end"]], std = list(NULL)),
-        list(x = "http://example.com/caf%E9", std = list(NULL, "rfc3986")),
-        list(x = "http://example.com/caf%e9", std = list(NULL, "rfc3986"))
+        list(x = "http://example.com/caf%E9", std = list("rfc3986", "whatwg")),
+        list(x = "http://example.com/caf%e9", std = list("rfc3986"))
       )
       for (row in rows) {
         for (std in row$std) {
@@ -375,9 +322,9 @@ for (loc in names(ctypes)) {
       expect_identical(
         get_parse_status(batch), c("ok", "ok", "ok", "ok-ftp", "ok")
       )
-      expect_identical(get_path(batch)[5L], "/caf%E9")
-      expect_identical(get_clean_url(batch)[5L], "http://example.com/caf%E9")
-      # The row parses, so its NULL syntax verdict is a pass (RURL-yarkccco).
+      expect_identical(get_path(batch)[5L], "/caf\ufffd")
+      expect_identical(get_clean_url(batch)[5L], "http://example.com/caf\ufffd")
+      # The row parses (whatwg reads U+FFFD), so its syntax verdict is a pass.
       verdicts <- get_parse_verdicts(batch)
       expect_identical(verdicts$layer1_syntax_verdict, rep("pass", 5L))
       expect_identical(verdicts$layer2_policy_verdict[5L], "admitted")
@@ -408,8 +355,10 @@ for (loc in names(ctypes)) {
   test_that(paste("a file: row with an undecodable octet fails alone, under",
                   loc), {
     # The RFC 8089 overlay threw `invalid multibyte string` for the batch
-    # under NULL and rfc3986 (review of RURL-otrpfhmq); it is withheld like
-    # the opaque route now. The withholding reads the whole row, so a file:
+    # under rfc3986 (review of RURL-otrpfhmq); it is withheld like the opaque
+    # route now. (The default whatwg reads the octet as U+FFFD; its `file:`
+    # state machine is not the overlay.) The withholding reads the whole row,
+    # so a file:
     # row fails wherever the octet is -- path, query or fragment -- unlike a
     # web-route row, whose query or fragment octet is percent-encoded.
     bad <- c(
@@ -420,10 +369,10 @@ for (loc in names(ctypes)) {
     bad <- c(bad, setNames(utf8_marked(bad), paste0(names(bad), "_utf8")))
     ok_row <- "file:///a/b"
     with_ctype(loc, ctypes[[loc]], {
-      for (std in list(NULL, "rfc3986")) {
+      for (std in list("rfc3986")) {
         alone <- safe_parse_urls(ok_row, url_standard = std)
         for (nm in names(bad)) {
-          lab <- paste(loc, if (is.null(std)) "NULL" else std, nm)
+          lab <- paste(loc, std, nm)
           r <- safe_parse_urls(c(ok_row, bad[[nm]]), url_standard = std)
           expect_identical(nrow(r), 2L, label = lab)
           expect_identical(r$parse_status[2], "error", label = lab)
@@ -436,13 +385,15 @@ for (loc in names(ctypes)) {
 }
 
 test_that(".extract_raw_path_vec() cuts an undecodable path without throwing", {
-  # ... and percent-encodes its undecodable octet (RURL-yarkccco).
+  # ... and keeps its octets as they are: no selector hands it one now (the
+  # escape of the retired NULL profile, RURL-yarkccco, went with it).
   bad <- utf8_marked(bad_rows[["end"]])
   out <- rurl:::.extract_raw_path_vec(
     c("http://example.com/a", "http://example.com/b?q", bad),
     c("/a", "/b", "/x")
   )
-  expect_identical(out, c("/a", "/b", "/caf%E9"))
+  expect_identical(out[1:2], c("/a", "/b"))
+  expect_identical(charToRaw(out[3L]), c(charToRaw("/caf"), as.raw(0xE9)))
 })
 
 test_that(".rfc3986_path_rootless_vec() splits in bytes, totally", {

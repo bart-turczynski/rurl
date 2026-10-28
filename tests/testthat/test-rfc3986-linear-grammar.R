@@ -194,13 +194,16 @@ test_that("a 1.5e6-character component under rfc3986 gets its own verdict", {
   expect_true(all(status[bad] == "error"), info = toString(status[bad]))
 })
 
-test_that("a 1.5e6-character file: path under NULL gets its own verdict", {
+test_that("a 1.5e6-character file: path gets its own verdict by default", {
   skip_on_cran() # about 5 s and tens of MB; the defect is not R-version bound
+  # The default is whatwg (ADR 0020). Its file state machine reads a `%` that
+  # begins no triplet as path data (a validation error, not a failure), so
+  # `file_bad` parses too; the RFC 8089 overlay is the rfc3986 arm's alone.
   rows <- .lin_long_rows()[c("neighbor_a", "file", "file_bad", "neighbor_z")]
   expect_no_error(res <- safe_parse_urls(rows, url_standard = NULL))
   expect_identical(
     res$parse_status,
-    c("warning-invalid-tld", "ok", "error", "warning-invalid-tld")
+    c("warning-invalid-tld", "ok", "ok", "warning-invalid-tld")
   )
 })
 

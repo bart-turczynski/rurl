@@ -16,8 +16,15 @@ test_that("get_clean_url lowercases scheme + host but keeps path by default", {
 })
 
 test_that("get_clean_url preserves all casing with case_handling = 'keep'", {
+  # ADR 0020 D4a: under the default whatwg the parsed host is already folded,
+  # so "keep" cannot be confined to clean_url and errors; rfc-syntax offers it.
+  expect_error(
+    get_clean_url("Http://Example.Com/MyPath/", case_handling = "keep"),
+    "governs `case_handling`"
+  )
   expect_equal(
-    unname(get_clean_url("Http://Example.Com/MyPath/", case_handling = "keep")),
+    unname(get_clean_url("Http://Example.Com/MyPath/", case_handling = "keep",
+                         profile = "rfc-syntax")),
     "http://Example.Com/MyPath/"
   )
 })
@@ -128,7 +135,9 @@ test_that("get_parse_status validates allowed schemes only", {
 
 test_that("get_parse_status rejects unsupported or malformed schemes", {
   expect_equal(unname(get_parse_status("mailto:x@example.com")), "error")
-  expect_equal(unname(get_parse_status("ftp:example.com")), "error")
+  # A special scheme without its slashes is the URL `ftp://example.com/` under
+  # the default whatwg ("special authority slashes state").
+  expect_equal(unname(get_parse_status("ftp:example.com")), "ok-ftp")
   expect_equal(unname(get_parse_status("s3://bucket-name")), "error")
   expect_equal(unname(get_parse_status("data:text/plain,hello")), "error")
   expect_equal(unname(get_parse_status("htp://fake.com")), "error")
@@ -217,9 +226,16 @@ test_that("get_host extracts host or returns NA", {
 })
 
 test_that("get_host respects case_handling", {
+  # The host is a parsed component that url_standard governs (ADR 0020 D4a):
+  # "upper" cannot be confined to clean_url here, so it errors; "lower" folds
+  # the host as "lower_host" does.
+  expect_error(
+    get_host("http://Example.Com", case_handling = "upper"),
+    "governs `case_handling`"
+  )
   expect_equal(
-    unname(get_host("http://Example.Com", case_handling = "upper")),
-    "EXAMPLE.COM"
+    unname(get_host("http://Example.Com", case_handling = "lower")),
+    "example.com"
   )
 })
 
@@ -400,16 +416,18 @@ test_that("get_query decode = FALSE renders the canonical re-encoded form", {
 })
 
 test_that("get_query passes opaque tokens through byte-for-byte", {
-  # Malformed %zz and a lone % are opaque: unchanged in both render modes.
+  # Malformed %zz and a lone % are opaque: unchanged in both render modes. The
+  # default whatwg record keeps the two characters after a `%` that starts no
+  # triplet as written (WHATWG query state; RUL-026).
   expect_equal(
     unname(get_query("http://e.com/?a=%zz", query_handling = "filter")),
-    "a=%ZZ"
+    "a=%zz"
   )
   expect_equal(
     unname(get_query(
       "http://e.com/?a=%zz", query_handling = "filter", decode = FALSE
     )),
-    "a=%ZZ"
+    "a=%zz"
   )
   expect_equal(
     unname(get_query("http://e.com/?a=50%", query_handling = "filter")),
@@ -881,8 +899,7 @@ test_that("case_handling lower_host keeps path casing", {
 test_that("path_encoding decode and encode work as expected", {
   res_decode <- safe_parse_url(
     "http://example.com/a%20b",
-    path_encoding = "decode",
-    case_handling = "keep"
+    path_encoding = "decode"
   )
   # "decode" keeps `%20`: space is not an unreserved octet (RURL-eokizmdi).
   expect_equal(res_decode$path, "/a%20b")
@@ -890,25 +907,38 @@ test_that("path_encoding decode and encode work as expected", {
 
   res_encode <- safe_parse_url(
     "http://example.com/a%20b",
-    path_encoding = "encode",
-    case_handling = "keep"
+    path_encoding = "encode"
   )
   expect_equal(res_encode$path, "/a%20b")
   expect_equal(res_encode$clean_url, "http://example.com/a%20b")
 })
 
 test_that("path_normalization collapses slashes and resolves dot segments", {
+  # The knob's own semantics, on the arm that offers every value.
   res_slashes <- safe_parse_url(
     "http://example.com//a///b",
     path_normalization = "collapse_slashes",
-    case_handling = "keep"
+    profile = "rfc-syntax"
   )
   expect_equal(res_slashes$path, "/a/b")
+  # Under the default whatwg (ADR 0020 D4a) "both" collapses slashes in
+  # clean_url only; the parsed path is the WHATWG path, and
+  # "collapse_slashes" cannot be confined, so it errors.
+  res_both <- safe_parse_url(
+    "http://example.com//a///b",
+    path_normalization = "both"
+  )
+  expect_equal(res_both$path, "//a///b")
+  expect_equal(res_both$clean_url, "http://example.com/a/b")
+  expect_error(
+    safe_parse_url("http://example.com//a///b",
+                   path_normalization = "collapse_slashes"),
+    "governs `path_normalization`"
+  )
 
   res_dot <- safe_parse_url(
     "http://example.com/a/b/../c",
-    path_normalization = "dot_segments",
-    case_handling = "keep"
+    path_normalization = "dot_segments"
   )
   expect_equal(res_dot$path, "/a/c")
 })
@@ -959,15 +989,13 @@ test_that("scheme_relative_handling error rejects scheme-relative URLs", {
 test_that("host_encoding handles IDNA round-trips", {
   res_idna <- safe_parse_url(
     "http://münich.com/path",
-    host_encoding = "idna",
-    case_handling = "keep"
+    host_encoding = "idna"
   )
   expect_match(res_idna$clean_url, "xn--")
 
   res_unicode <- safe_parse_url(
     "http://xn--mnich-kva.com/path",
-    host_encoding = "unicode",
-    case_handling = "keep"
+    host_encoding = "unicode"
   )
   expect_equal(res_unicode$clean_url, "http://münich.com/path")
 })
@@ -1236,10 +1264,10 @@ test_that("get_*() accessors error if passed a parsed object, not a string", {
 #
 # These four accessors took only presentation dials, so each was unable to
 # return a value its own safe_parse_url() column carries. The tests below pin
-# BOTH halves of every fix: the WHATWG spelling is now reachable, and the
-# source-preserving branches (rfc3986, and no selector at all) are byte-for-
-# byte what they were. That second half is the load-bearing one -- sitemapr
-# and pagerankr read these columns with no url_standard set.
+# BOTH halves of every fix: the WHATWG spelling is reachable, and the
+# source-preserving rfc3986 branch is byte-for-byte what it was. The default
+# (and NULL) is "whatwg" since ADR 0020, so a call with no url_standard gets
+# the WHATWG spelling.
 # ---------------------------------------------------------------------------
 
 test_that("get_password() reaches the WHATWG userinfo spelling", {
@@ -1248,7 +1276,7 @@ test_that("get_password() reaches the WHATWG userinfo spelling", {
   expect_identical(get_password(u, url_standard = "whatwg"), "p%3Aq")
   # ... and NOT under the source-preserving profiles.
   expect_identical(get_password(u, url_standard = "rfc3986"), "p:q")
-  expect_identical(get_password(u), "p:q")
+  expect_identical(get_password(u), "p%3Aq")
   # The accessor now agrees with the column it mirrors.
   expect_identical(
     get_password(u, url_standard = "whatwg"),
@@ -1262,7 +1290,7 @@ test_that("get_query() reaches the WHATWG query spelling", {
   expect_identical(
     get_query(u, decode = FALSE, url_standard = "whatwg"), "a=b%22c"
   )
-  expect_identical(get_query(u, decode = FALSE), "a=b\"c")
+  expect_identical(get_query(u, decode = FALSE), "a=b%22c")
   expect_identical(
     get_query(u, decode = FALSE, url_standard = "whatwg"),
     safe_parse_url(u, url_standard = "whatwg")$query
@@ -1285,7 +1313,7 @@ test_that("get_query() reaches the WHATWG query spelling", {
 test_that("get_fragment() reaches the WHATWG fragment spelling", {
   u <- "http://example.com/p#a\"b"
   expect_identical(get_fragment(u, url_standard = "whatwg"), "a%22b")
-  expect_identical(get_fragment(u), "a\"b")
+  expect_identical(get_fragment(u), "a%22b")
   expect_identical(
     get_fragment(u, url_standard = "whatwg"),
     safe_parse_url(u, url_standard = "whatwg")$fragment
@@ -1304,7 +1332,7 @@ test_that("get_port() reports the WHATWG default-port drop", {
     url_standard = "whatwg"), NA_integer_)
   expect_identical(get_port("http://example.com:80/",
     url_standard = "rfc3986"), 80L)
-  expect_identical(get_port("http://example.com:80/"), 80L)
+  expect_identical(get_port("http://example.com:80/"), NA_integer_)
   # A non-default port is unaffected in every profile.
   for (std in list(NULL, "rfc3986", "whatwg")) {
     expect_identical(
@@ -1321,7 +1349,7 @@ test_that("the new axes leave the default output byte-identical", {
     "not a url"
   )
   # Passing the arguments at their documented defaults must be a no-op, which
-  # is what keeps the NULL-selector compatibility story airtight.
+  # (NULL reads as the default "whatwg", ADR 0020).
   expect_identical(
     get_password(urls),
     get_password(urls, scheme_policy = "infer", scheme_acceptance = "web",

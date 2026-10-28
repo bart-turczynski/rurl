@@ -6,7 +6,7 @@
 \usage{
 get_parse_verdicts(
   url,
-  url_standard = NULL,
+  url_standard = "whatwg",
   protocol_handling = c("keep", "none", "strip", "http", "https"),
   scheme_relative_handling = c("keep", "http", "https", "error"),
   scheme_policy = c("infer", "require"),
@@ -17,9 +17,9 @@ get_parse_verdicts(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{url_standard}{Standard profile governing interpretation: \code{NULL}
-(default), \code{"rfc3986"}, or \code{"whatwg"}. Unlike the other
-companion helpers this argument does not gate the result.}
+\item{url_standard}{Standard profile governing interpretation:
+\code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL} means
+\code{"whatwg"} (ADR 0020).}
 
 \item{protocol_handling}{A character string specifying how to handle
 protocols. Defaults to "keep".
@@ -80,9 +80,9 @@ outside it is \code{parse_status = "error"}. This is the historical,
 byte-for-byte compatible behavior.}
 \item{"general": Admit any syntactically valid scheme token and parse
 opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
-Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
-decides the interpretation; \code{general} with \code{url_standard = NULL} is an
-error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+\code{url_standard} (\code{"whatwg"} by default, or \code{"rfc3986"}) decides the
+interpretation. Non-special / opaque hosts receive no www-stripping,
+no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.
 A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
 authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are
@@ -128,35 +128,11 @@ parse). Recovering that distinction is what this helper is for.
 
 Like the other companion helpers this never widens the
 \code{\link{safe_parse_url}} frame --- the parse table keeps its 18 columns
-and the verdicts live here. Unlike \code{\link{get_host_type}} and
-\code{\link{get_scheme_class}}, which require a selector, it is fully
-defined at \code{url_standard = NULL}: layers 1 and 2 describe the parse
-that actually occurred, which happens with or without a standard selector.
+and the verdicts live here. Layers 1 and 2 describe the parse that
+actually occurred under the selected standard (\code{"whatwg"} by
+default), so projecting the reported layers reproduces the reported
+\code{parse_status}.
 }
-\section{Why this helper is not gated on \code{url_standard}}{
-
-\code{\link{get_host_type}} and \code{\link{get_scheme_class}}
-\emph{require} a selector and error without one (ADR 0015). That
-requirement is not a house style --- it is a consequence of what those
-helpers report. Their content is \emph{standard-relative}: whether a host
-is an IPv4 address, or a scheme is special, is a question only a standard
-can answer, so without a selector there is no fact to return.
-
-Verdict layers are not standard-relative in that way. A syntax failure
-(layer 1) and an admission rejection (layer 2) are facts about the parse
-\emph{that this call actually performed}, under whatever options were
-supplied. Those facts exist at \code{url_standard = NULL} exactly as they
-do under a selector, so there is nothing to withhold.
-
-Gating anyway would also break the helper's central guarantee. Because
-\code{parse_status} is the projection of these three layers, projecting
-the reported layers must reproduce the reported status. Refusing to answer
-at \code{url_standard = NULL} while \code{parse_status} still reports a
-real value would make the companion contradict the column it exists to
-explain --- on the most common call, and precisely when a caller is asking
-why a default-options parse failed.
-}
-
 \section{Layers}{
 
 \strong{Layer 1 --- syntax} (\code{"pass"} / \code{"fail"}). Whether a

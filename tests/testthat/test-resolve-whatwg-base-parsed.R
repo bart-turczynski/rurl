@@ -5,11 +5,11 @@
 # base as written. A special-scheme base spelled with backslashes
 # (`http:\\a\b\c`, "special authority slashes state") or without its slashes
 # (`http:x`, "special relative or authority state") is the base
-# `http://a/b/c` or `http://x/`. RFC 3986 has no such reading, and the NULL
-# selector is frozen (ADR 0007).
+# `http://a/b/c` or `http://x/`. RFC 3986 has no such reading. The default and
+# `url_standard = NULL` are "whatwg" (ADR 0020).
 #
-# This file opens with PINS: the rfc3986 and NULL rows, and a base the parser
-# only re-encodes, must not move.
+# This file opens with PINS: the rfc3986 rows, and a base the parser only
+# re-encodes, must not move.
 
 respelled <- list(
   list(base = "http:\\\\a\\b\\c", ref = "g", want = "http://a/b/g"),
@@ -22,7 +22,7 @@ respelled <- list(
   list(base = "ws:/a", ref = "g", want = "ws://a/g")
 )
 
-test_that("pin: rfc3986 and NULL read a respelled base as written", {
+test_that("pin: rfc3986 reads a respelled base as written", {
   expect_identical(
     resolve_url("g", "http:\\\\a\\b\\c", url_standard = "rfc3986",
                 output = "serialized"),
@@ -33,7 +33,10 @@ test_that("pin: rfc3986 and NULL read a respelled base as written", {
                 output = "serialized"),
     "http:g"
   )
-  expect_identical(resolve_url("g", "http:x"), NA_character_)
+  # The default reads it as whatwg does.
+  expect_identical(resolve_url("g", "http:x"), "http://x/g")
+  expect_identical(resolve_url("g", "http:x", url_standard = NULL),
+                   "http://x/g")
 })
 
 test_that("pin: a base the parser only re-encodes keeps its spelling", {

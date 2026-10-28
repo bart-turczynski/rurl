@@ -48,8 +48,8 @@ ib_parse_rows <- function() {
   )
 }
 
-# The parse postures the seam pins cross: the frozen default and both named
-# standards, each named one under both acceptances.
+# The parse postures the seam pins cross: NULL (which reads as the default
+# whatwg, ADR 0020 D4) and both standards, each under both acceptances.
 ib_postures <- list(
   null_web = list(url_standard = NULL),
   whatwg_web = list(url_standard = "whatwg"),

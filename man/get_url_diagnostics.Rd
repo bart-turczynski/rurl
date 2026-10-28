@@ -6,7 +6,7 @@
 \usage{
 get_url_diagnostics(
   url,
-  url_standard,
+  url_standard = "whatwg",
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general")
 )
@@ -14,11 +14,11 @@ get_url_diagnostics(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{url_standard}{Standard profile governing interpretation: either
-\code{"rfc3986"} or \code{"whatwg"}. \strong{Required, with no default}
-(ADR 0015): the vocabulary is profile-dependent --- several tokens fire
-under one standard only --- so there is no profile-neutral set of findings
-a default could stand for.}
+\item{url_standard}{Standard profile governing interpretation:
+\code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL} means
+\code{"whatwg"} (ADR 0020, which supersedes ADR 0015's requirement to
+name it). The vocabulary is profile-dependent --- several tokens fire
+under one standard only.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
@@ -46,9 +46,9 @@ outside it is \code{parse_status = "error"}. This is the historical,
 byte-for-byte compatible behavior.}
 \item{"general": Admit any syntactically valid scheme token and parse
 opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
-Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
-decides the interpretation; \code{general} with \code{url_standard = NULL} is an
-error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+\code{url_standard} (\code{"whatwg"} by default, or \code{"rfc3986"}) decides the
+interpretation. Non-special / opaque hosts receive no www-stripping,
+no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.
 A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
 authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are
@@ -74,10 +74,8 @@ diagnostic tokens for that URL. For a length-n \code{url} (including
 vector of that URL's tokens (\code{character(0)} when it has none).
 
 \strong{An empty result means exactly one thing:} that URL raised no
-diagnostics under the standard you named. It can no longer also mean that
-no selector was passed, because omitting \code{url_standard} is an error
-rather than a mode (ADR 0015). \code{character(0)} is therefore evidence
-that the URL is clean under that profile.
+diagnostics under the selected standard. \code{character(0)} is
+evidence that the URL is clean under that profile.
 }
 \description{
 Companion helper for the \code{url_standard} selector: reports the

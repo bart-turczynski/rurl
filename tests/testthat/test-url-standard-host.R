@@ -1,6 +1,7 @@
 # Host IPv4/reg-name model per selector (RURL-luwvkwhd, epic RURL-eqzkkohm;
-# PRD §6.2, §5.1). Under a url_standard selector rurl parses numeric hosts
-# faithfully instead of hard-rejecting them: RFC 3986 keeps them as reg-names,
+# PRD §6.2, §5.1). rurl parses numeric hosts faithfully instead of
+# hard-rejecting them (the default, and NULL, is whatwg; ADR 0020): RFC 3986
+# keeps them as reg-names,
 # WHATWG coerces valid numeric IPv4 forms (and rejects out-of-range / >4-part
 # forms as fatal). Diagnostics fire in BOTH modes keyed to host shape ("facts
 # not policy"). Diagnostic-token subsets follow the "emit every applicable fact"
@@ -77,14 +78,14 @@ test_that("WHATWG host presentation applies UTS-46 ignored mappings", {
     "https://ab/"
   )
 
-  # Negative controls: the reversible ADR 0002 helpers still own the other
-  # arms, and `NULL` is byte-frozen (ADR 0016).
+  # Negative control: the reversible ADR 0002 helpers still own the rfc3986
+  # arm. The default (and NULL) is whatwg (ADR 0020).
   expect_identical(
     get_host(u, url_standard = "rfc3986", host_encoding = "idna"),
     "xn--ab-5da"
   )
   expect_identical(get_host(u, url_standard = "rfc3986"), "a%C2%ADb")
-  expect_identical(get_host(u), "a\u00adb")
+  expect_identical(get_host(u), "ab")
 })
 
 # RUL-002. WHATWG URL Standard, host parser: "domain to ASCII" is UTS-46
@@ -94,9 +95,8 @@ test_that("WHATWG host presentation applies UTS-46 ignored mappings", {
 # 4.2 ToASCII, 4.3 ToUnicode). Under `url_standard = "whatwg"` the default host
 # presentation and `host_encoding = "unicode"` therefore both render
 # ToUnicode(ToASCII(host)): the mapping is the host parser's, not the `idna`
-# dial's. The `rfc3986` and `NULL` arms keep their reversible (unmapped)
-# rendering: the ADR 0002 helpers are untouched and ADR 0016 forbids
-# selector-caused drift into `NULL`.
+# dial's. The `rfc3986` arm rejects these raw non-ASCII hosts (RUL-030); the
+# default (and NULL) is whatwg (ADR 0020).
 test_that("WHATWG default and unicode presentations map the host", {
   # Two plain vectors, not one named vector: a `c(name = value)` tag is a
   # symbol, and under `LC_ALL=C` a non-ASCII symbol cannot be represented, so
@@ -151,25 +151,17 @@ test_that("WHATWG default and unicode presentations map the host", {
     )
   }
 
-  # Negative controls, looped over the other two arms: neither maps. The
-  # expected values are what `main` rendered before RUL-002.
-  unmapped_keep <- c("b\u00dccher.example", "\ufb01le.com", "a\u200bb.com",
-    "\uff45xample.com")
-  unmapped_idna <- c("xn--bcher-2pa.example", "xn--le-1b1n.com",
-    "xn--ab-g1t.com", "xn--xample-hy68a.com")
+  # The default (and NULL) maps exactly as whatwg does (ADR 0020 D4).
+  for (enc in c("keep", "unicode", "idna")) {
+    expect_identical(
+      get_host(urls, url_standard = NULL, host_encoding = enc),
+      get_host(urls, url_standard = "whatwg", host_encoding = enc),
+      info = enc
+    )
+  }
   # rfc3986 no longer parses these at all: every host is raw non-ASCII,
   # which reg-name does not admit (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030,
-  # owner ruling 2026-10-12, RURL-pntbujzc), so neither maps.
-  std <- NULL
-  expect_identical(get_host(urls, url_standard = std), unmapped_keep)
-  expect_identical(
-    get_host(urls, url_standard = std, host_encoding = "unicode"),
-    unmapped_keep
-  )
-  expect_identical(
-    get_host(urls, url_standard = std, host_encoding = "idna"),
-    unmapped_idna
-  )
+  # owner ruling 2026-10-12, RURL-pntbujzc), so it does not map.
   for (enc in c("keep", "unicode", "idna")) {
     expect_identical(
       get_host(urls, url_standard = "rfc3986", host_encoding = enc),
@@ -361,14 +353,13 @@ test_that("WHATWG serializes an IPv6 literal that ends in `::`", {
     get_host("http://[1:2:3:4:5:6:7::]/", url_standard = "whatwg"),
     "[1:2:3:4:5:6:7:0]"
   )
-  # The other arms never run the WHATWG serializer, and do not move.
-  for (std in list(NULL, "rfc3986")) {
-    expect_identical(
-      get_host("http://[1:2:3:4:5:6:7::]/", url_standard = std),
-      "[1:2:3:4:5:6:7::]",
-      info = format(std)
-    )
-  }
+  # rfc3986 never runs the WHATWG serializer, and does not move. The default
+  # (and NULL) is whatwg (ADR 0020).
+  expect_identical(
+    get_host("http://[1:2:3:4:5:6:7::]/", url_standard = "rfc3986"),
+    "[1:2:3:4:5:6:7::]"
+  )
+  expect_identical(get_host("http://[1:2:3:4:5:6:7::]/"), "[1:2:3:4:5:6:7:0]")
   expect_identical(
     get_host("http://[1:2:3:4:5:6:7::]/"),
     get_host("http://[1:2:3:4:5:6:7::]/", url_standard = NULL)
@@ -401,7 +392,6 @@ test_that("RFC 3986 keeps embedded-IPv4 IPv6 literal spelling", {
       info = u)
     expect_identical(get_clean_url(u, url_standard = "rfc3986"), u,
       info = u)
-    expect_identical(get_host(u), original_host, info = u)
   }
 })
 
@@ -464,19 +454,27 @@ test_that("switching url_standard does not return a stale cached host", {
   expect_identical(get_host(u, url_standard = "rfc3986"), "2130706433")
   expect_identical(get_host(u, url_standard = "whatwg"), "127.0.0.1")
   expect_identical(get_host(u, url_standard = "rfc3986"), "2130706433")
-  expect_true(is.na(get_host(u)))
+  expect_identical(get_host(u), "127.0.0.1") # the default is whatwg
   expect_identical(get_host(u, url_standard = "whatwg"), "127.0.0.1")
 })
 
-# --- AC #1: NULL selector preserves the historical hard reject --------------
+# --- the default reads numeric hosts as whatwg (ADR 0020 D4) ----------------
 
-test_that("without a selector numeric hosts stay rejected (unchanged)", {
-  for (h in c("2130706433", "0x7f000001", "192.168.010.1", "256.1.1.1",
-    "1.2.3.4.5")) {
+test_that("without a selector numeric hosts read as whatwg", {
+  # The frozen NULL profile's hard reject is retired: the default (and NULL)
+  # coerces the valid numeric forms and fails the WHATWG-fatal ones.
+  ok <- c("2130706433" = "127.0.0.1", "0x7f000001" = "127.0.0.1",
+          "192.168.010.1" = "192.168.8.1")
+  for (h in names(ok)) {
+    expect_identical(get_host(url_of(h)), unname(ok[[h]]), info = h)
+    expect_identical(get_parse_status(url_of(h)), "ok", info = h)
+    expect_identical(get_host(url_of(h), url_standard = NULL),
+                     unname(ok[[h]]), info = h)
+  }
+  for (h in c("256.1.1.1", "1.2.3.4.5")) {
     expect_true(is.na(get_host(url_of(h))), info = h)
     expect_identical(get_parse_status(url_of(h)), "error", info = h)
   }
-  # Canonical IPv4 is accepted with no selector, as always.
   expect_identical(get_host(url_of("127.0.0.1")), "127.0.0.1")
 })
 
@@ -580,9 +578,9 @@ test_that("rfc3986 admits any well-formed host triplet, kept encoded", {
     rep("error", length(bad)))
 })
 
-test_that("whatwg and NULL keep rejecting host triplets they always did", {
+test_that("whatwg (the default) keeps rejecting host triplets it always did", {
   # WHATWG's forbidden host code points are judged on the DECODED host, so these
-  # must keep failing there; the no-selector baseline is byte-frozen.
+  # must keep failing there, and under the default (ADR 0020).
   urls <- paste0("http://ho", c("%00", "%1F", "%2F", "%25", "%40"), "st/")
   expect_identical(get_parse_status(urls, url_standard = "whatwg"),
     rep("error", length(urls)))

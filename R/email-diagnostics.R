@@ -576,8 +576,10 @@
 #' @param url_standard Standard profile passed to the general parser. A
 #'   \code{mailto:} path is opaque, so this does not affect the recipient
 #'   classification; it decides \code{parse_status} and
-#'   \code{url_diagnostics}. It defaults to \code{"rfc3986"} because the
-#'   general parser requires a selector.
+#'   \code{url_diagnostics}. It defaults to \code{"rfc3986"}, the generic
+#'   syntax RFC 6068 builds on; \code{NULL} means \code{"whatwg"}, as it does
+#'   everywhere \code{url_standard} is a parameter (ADR 0020 D4), so
+#'   \code{url_standard = NULL} is not the same as omitting the argument here.
 #' @param smtp_wire Logical; when \code{TRUE}, compute the opt-in SMTP
 #'   wire-projection columns (see the corresponding section). Defaults to
 #'   \code{FALSE}.

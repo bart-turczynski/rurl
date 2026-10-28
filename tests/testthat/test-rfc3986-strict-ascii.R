@@ -8,8 +8,8 @@
 # input belongs to `url_standard = "whatwg"`; no RFC 3987 (IRI) mode exists.
 #
 # The first block pins what must NOT move: the percent-encoded twins and ASCII
-# rows under `rfc3986`, and every raw non-ASCII row under `whatwg` and under
-# the frozen `NULL` default (ADR 0007, ADR 0016).
+# rows under `rfc3986`, and every raw non-ASCII row under `whatwg`, the
+# default (`NULL` reads as `whatwg`, ADR 0020).
 
 cols <- c("parse_status", "host", "path", "query", "fragment", "clean_url")
 frame <- function(url, ...) {
@@ -125,20 +125,14 @@ test_that("whatwg: raw non-ASCII rows keep their parse on both routes", {
   expect_identical(attr(get_url_key(raw_rows), "keyability"), rep("ok", 8L))
 })
 
-test_that("NULL: raw non-ASCII rows keep their parse (frozen, ADR 0016)", {
+test_that("NULL and the default read raw non-ASCII rows as whatwg", {
+  # ADR 0020 D4: the frozen profile's tolerance is retired; NULL is whatwg.
   hb <- paste0("b", "ü", "cher.de")
-  expect_identical(frame(raw_rows), list(
-    parse_status = c("ok", "ok", "ok", "ok", "ok", "ok", "error", "error"),
-    host = c(hb, "h.de", "h.de", "h.de", "h.de", paste0(bom, "h.de"), NA, NA),
-    path = c("/", paste0("/", a_uml), "/", "/", "/", "/", NA, NA),
-    query = c(NA, NA, "q=%C3%A4", NA, NA, NA, NA, NA),
-    fragment = c(NA, NA, NA, "%C3%A4", NA, NA, NA, NA),
-    clean_url = c(paste0("http://", hb, "/"), paste0("http://h.de/", a_uml),
-                  "http://h.de/", "http://h.de/", "http://h.de/",
-                  paste0("http://", bom, "h.de/"), NA, NA)
-  ))
-  # The `file:` overlay runs the RFC 3986 grammar under NULL too; its
-  # non-ASCII tolerance there is the frozen NULL behavior.
+  expect_identical(frame(raw_rows), frame(raw_rows, url_standard = "whatwg"))
+  expect_identical(frame(raw_rows, url_standard = NULL),
+                   frame(raw_rows, url_standard = "whatwg"))
+  # WHATWG has its own `file:` state machine; the RFC 8089 overlay is the
+  # rfc3986 arm's alone.
   expect_identical(
     get_parse_status(c(paste0("file:///", a_uml), file.path(hb, "p"))),
     c("ok", "ok")
@@ -301,15 +295,12 @@ test_that("rfc3986 resolve_url() refuses a reference outside the grammar", {
     resolve_url(bad, base, url_standard = "rfc3986"),
     rep(NA_character_, length(bad))
   )
-  # whatwg and the frozen NULL default do not move.
+  # whatwg, the default, does not check the reference.
   expect_identical(
     resolve_url(bad, base, url_standard = "whatwg", output = "serialized"),
     c("https://h.de/a/b", "http://b.de/a/b", "https://h.de/a/b",
       "http://b.de/b", "foo:/a/b", "http://b.de/a/1a:b")
   )
-  expect_identical(
-    resolve_url(bad, base),
-    c("https://h.de/a/b", "http://b.de/a/b", "https://h.de/a/b",
-      "http://b.de/b", NA, NA)
-  )
+  expect_identical(resolve_url(bad, base),
+                   resolve_url(bad, base, url_standard = "whatwg"))
 })

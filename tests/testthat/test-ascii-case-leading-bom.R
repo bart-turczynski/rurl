@@ -33,13 +33,12 @@ test_that("the U+200B twins already keep their code point in the fallback", {
     .ascii_toupper(c("\uffffa", paste0(zwsp, "ab"))),
     c("\uffffA", paste0(zwsp, "AB"))
   )
-  expect_identical(
-    get_clean_url(c(twin_url, poison_url))[[1L]],
-    paste0("http://", zwsp, "h.example/")
-  )
   # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): rfc3986 rejects a raw
   # non-ASCII code point (RFC 3986 sections 2, 2.5, 3.2.2), so the rfc3986
-  # serializer has no record here; the NULL clean_url carries the coverage.
+  # serializer has no record here. The pipeline reached the fallback with a
+  # mark-led host only under the frozen NULL profile, which ADR 0020 retired;
+  # the default whatwg maps the mark away first (pinned below), so the helper
+  # pins carry the coverage.
   expect_identical(
     serialize_url(c(twin_url, poison_url), standard = "rfc3986",
                   form = "normalized")[[1L]],
@@ -62,20 +61,23 @@ test_that("negative controls: no fallback, or a mark that is not first", {
     c("\uffffa", NA, "", "\u00c4b")
   )
   expect_identical(.ascii_tolower(character(0)), character(0))
-  # The public rows alone, and a vector with no rejected row.
-  expect_identical(get_clean_url(mark_url),
-                   paste0("http://", bom, "h.example/"))
+  # The public rows alone, and a vector with no rejected row: the default
+  # whatwg host parser maps the mark to nothing (UTS-46).
+  expect_identical(get_clean_url(mark_url), "http://h.example/")
   expect_identical(get_clean_url(c(mark_url, "http://B.example/")),
-                   c(paste0("http://", bom, "h.example/"),
-                     "http://b.example/"))
+                   c("http://h.example/", "http://b.example/"))
   # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): rfc3986 rejects a raw
   # non-ASCII code point (RFC 3986 sections 2, 2.5, 3.2.2), so the rfc3986
-  # serializer has no record here; the NULL clean_url carries the coverage.
+  # serializer has no record here. The pipeline reached the fallback with a
+  # mark-led host only under the frozen NULL profile, which ADR 0020 retired;
+  # the default whatwg maps the mark away first (pinned below), so the helper
+  # pins carry the coverage.
   expect_identical(
     serialize_url(mark_url, standard = "rfc3986", form = "normalized"),
     NA_character_
   )
-  expect_identical(get_clean_url(poison_url), poison_url)
+  # U+FFFF is disallowed by UTS-46, so the WHATWG host parse fails.
+  expect_identical(get_clean_url(poison_url), NA_character_)
 })
 
 test_that("whatwg: the host parser drops the mark before the case map", {
@@ -125,13 +127,15 @@ test_that("one rejected element does not change another element's result", {
 
 test_that("one rejected row no longer changes another row's public output", {
   skip_if_not(chartr_rejects(), "chartr() accepts U+FFFF on this build")
-  # Each row matches its value alone (pinned above). Before RURL-bqhfznkg the
-  # mark-led row came back as `http://h.example/`, host `h.example`.
+  # Each row matches its value alone (pinned above).
   expect_identical(get_clean_url(c(mark_url, poison_url)),
-                   c(paste0("http://", bom, "h.example/"), poison_url))
+                   c("http://h.example/", NA_character_))
   # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): rfc3986 rejects a raw
   # non-ASCII code point (RFC 3986 sections 2, 2.5, 3.2.2), so the rfc3986
-  # serializer has no record here; the NULL clean_url carries the coverage.
+  # serializer has no record here. The pipeline reached the fallback with a
+  # mark-led host only under the frozen NULL profile, which ADR 0020 retired;
+  # the default whatwg maps the mark away first (pinned below), so the helper
+  # pins carry the coverage.
   expect_identical(
     serialize_url(c(mark_url, poison_url), standard = "rfc3986",
                   form = "normalized")[[1L]],
@@ -141,37 +145,4 @@ test_that("one rejected row no longer changes another row's public output", {
     safe_parse_urls(c(mark_url, poison_url), url_standard = "rfc3986")$host,
     c(NA_character_, NA_character_)
   )
-})
-
-test_that("NULL: the frozen selector reaches the fallback (ADR 0016)", {
-  skip_if_not(chartr_rejects(), "chartr() accepts U+FFFF on this build")
-  # Witness: under the frozen selector, the default call and an explicit NULL
-  # agree. Before RURL-bqhfznkg both returned host `h.example` and clean_url
-  # `http://h.example/` for the mark-led row whenever its vector held a row
-  # chartr() rejects, while the row alone kept the mark. No standard or
-  # documented contract lets one row change another, so this is a default-path
-  # defect, not selector-caused drift.
-  for (p in list(
-    safe_parse_urls(c(mark_url, poison_url)),
-    safe_parse_urls(c(mark_url, poison_url), url_standard = NULL)
-  )) {
-    expect_identical(p$host[[1L]], paste0(bom, "h.example"))
-    expect_identical(p$clean_url[[1L]], paste0("http://", bom, "h.example/"))
-  }
-  # Signature: only `host` and `clean_url` of a row whose host starts with
-  # U+FEFF move, only when its vector holds a row chartr() rejects, and only
-  # to the row's own value alone. Every column of both rows now matches the
-  # rows parsed alone; the status never moved. Per arm: whatwg was already
-  # right (UTS-46 drops the mark first, pinned above); rfc3986 now rejects
-  # both rows (RUL-030, pinned in the previous test).
-  alone <- safe_parse_urls(mark_url)
-  mixed <- safe_parse_urls(c(mark_url, poison_url))
-  for (col in names(alone)) {
-    expect_identical(mixed[[col]][[1L]], alone[[col]], label = col)
-  }
-  poison_alone <- safe_parse_urls(poison_url)
-  for (col in names(poison_alone)) {
-    expect_identical(mixed[[col]][[2L]], poison_alone[[col]], label = col)
-  }
-  expect_identical(alone$parse_status, "warning-invalid-tld")
 })

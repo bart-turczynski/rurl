@@ -509,11 +509,10 @@ test_that("source reproduces raw bytes >= 0x80 in query and fragment", {
   )
 
   # Under `rfc3986` the raw rows are parse errors (RUL-030; RFC 3986 sections
-  # 2, 2.5), so the record has no query or fragment. The other two arms are
-  # pinned rather than assumed (design/posture-card.md, frame vs payload):
-  # both encode the octet as an uppercase triplet, but `whatwg` keeps an
-  # existing triplet's hex case (RURL-djvqopjk) while the frozen `NULL`
-  # profile uppercases it, so row 3 tells them apart.
+  # 2, 2.5), so the record has no query or fragment. The `whatwg` arm is
+  # pinned rather than assumed (design/posture-card.md, frame vs payload): it
+  # encodes the octet as an uppercase triplet and keeps an existing triplet's
+  # hex case (RURL-djvqopjk), so row 3 shows `%7c`.
   rfc <- safe_parse_urls(raw[1:4], url_standard = "rfc3986",
                          scheme_policy = "require",
                          scheme_acceptance = "general")
@@ -530,11 +529,12 @@ test_that("source reproduces raw bytes >= 0x80 in query and fragment", {
     c("https://x/%C3%BC?%C3%BC#%C3%BC", "https://localhost/#%F0%9F%94%A5",
       "http://h/p?q=%7c%C3%BC#f%7c%C3%BC")
   )
-  # Frozen (ADR 0007): the component pass's normalized spelling.
+  # `url_standard = NULL` reads as whatwg (ADR 0020 D4); the frozen profile's
+  # uppercased spelling is retired.
   n <- safe_parse_urls(raw[1:3], url_standard = NULL,
                        scheme_policy = "infer", scheme_acceptance = "web")
-  expect_identical(n$query, c("%C3%BC", NA, "q=%7C%C3%BC"))
-  expect_identical(n$fragment, c("%C3%BC", "%F0%9F%94%A5", "f%7C%C3%BC"))
+  expect_identical(n$query, c("%C3%BC", NA, "q=%7c%C3%BC"))
+  expect_identical(n$fragment, c("%C3%BC", "%F0%9F%94%A5", "f%7c%C3%BC"))
 })
 
 # --- the population itself ---------------------------------------------------

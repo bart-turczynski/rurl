@@ -4,11 +4,11 @@
 # space run from its input and removes every ASCII tab or newline from it
 # (step 1). The API URL parser runs the basic URL parser on the base too, so
 # under `whatwg` a padded base is the base it pads. RFC 3986 strips nothing
-# (a space or control is no URI character, section 2), and the NULL selector
-# is frozen (ADR 0007).
+# (a space or control is no URI character, section 2). The default and
+# `url_standard = NULL` are "whatwg" (ADR 0020).
 #
-# This file opens with PINS: the rfc3986 and NULL rows, and the unpadded
-# whatwg row, must not move when the whatwg base is stripped.
+# This file opens with PINS: the rfc3986 rows, and the unpadded whatwg row,
+# must not move when the whatwg base is stripped.
 
 padded_bases <- c(
   " http://a/b/c ",
@@ -33,9 +33,11 @@ test_that("pin: rfc3986 refuses a padded base for a relative reference", {
   }
 })
 
-test_that("pin: the NULL selector leaves a padded base unresolved", {
+test_that("the default and NULL strip a padded base, as whatwg", {
   for (b in padded_bases) {
-    expect_identical(resolve_url("g", b), NA_character_, info = b)
+    expect_identical(resolve_url("g", b), "http://a/b/g", info = b)
+    expect_identical(resolve_url("g", b, url_standard = NULL),
+                     "http://a/b/g", info = b)
   }
 })
 
@@ -165,13 +167,12 @@ test_that("an opaque-path base takes only a fragment under whatwg", {
   )
 })
 
-test_that("rfc3986 and NULL still merge against an opaque-path base", {
-  # RFC 3986 section 5.2 merges against any base; NULL is frozen (ADR 0007).
+test_that("rfc3986 still merges against an opaque-path base", {
+  # RFC 3986 section 5.2 merges against any base.
   expect_identical(
     resolve_url("g", "mailto:x", url_standard = "rfc3986",
                 output = "serialized"),
     "mailto:g"
   )
-  expect_identical(rurl:::.resolve_one_raw("g", "sc:x", NULL), "sc:g")
   expect_identical(rurl:::.resolve_one_raw("g", "sc:x", "rfc3986"), "sc:g")
 })

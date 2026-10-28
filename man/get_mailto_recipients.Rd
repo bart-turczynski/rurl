@@ -20,8 +20,10 @@ allowlist does not accept) contribute no rows.}
 \item{url_standard}{Standard profile passed to the general parser. A
 \code{mailto:} path is opaque, so this does not affect the recipient
 classification; it decides \code{parse_status} and
-\code{url_diagnostics}. It defaults to \code{"rfc3986"} because the
-general parser requires a selector.}
+\code{url_diagnostics}. It defaults to \code{"rfc3986"}, the generic
+syntax RFC 6068 builds on; \code{NULL} means \code{"whatwg"}, as it does
+everywhere \code{url_standard} is a parameter (ADR 0020 D4), so
+\code{url_standard = NULL} is not the same as omitting the argument here.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
@@ -49,9 +51,9 @@ outside it is \code{parse_status = "error"}. This is the historical,
 byte-for-byte compatible behavior.}
 \item{"general": Admit any syntactically valid scheme token and parse
 opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
-Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
-decides the interpretation; \code{general} with \code{url_standard = NULL} is an
-error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+\code{url_standard} (\code{"whatwg"} by default, or \code{"rfc3986"}) decides the
+interpretation. Non-special / opaque hosts receive no www-stripping,
+no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.
 A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
 authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are

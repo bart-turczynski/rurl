@@ -4,7 +4,8 @@
 # (http/https/ftp/file -- NOT ftps), a literal "\" is treated identically to "/"
 # wherever the WHATWG state machine checks for a slash: the scheme-relative
 # "//" marker, the authority/path boundary, and path-segment separators.
-# rfc3986, no selector, and any non-special scheme leave "\" fully inert.
+# rfc3986 and any non-special scheme leave "\" fully inert. The default (and
+# `url_standard = NULL`) is whatwg (ADR 0020 D4).
 
 # --- WHATWG + special scheme: backslash recognized as slash ------------------
 
@@ -70,18 +71,15 @@ test_that("ftps backslash stays inert under rfc3986", {
   expect_identical(rfc, no_selector)
 })
 
-# --- rfc3986 / no selector: byte-for-byte unchanged baseline ------------------
+# --- rfc3986: no rewrite, and no acceptance -----------------------------------
 
 test_that("rfc3986 never REWRITES a backslash (no \\ -> / mapping)", {
   # The thing this file governs is the WHATWG `\` -> `/` REWRITE, and rfc3986
-  # must never perform it. The three inputs below are rejected under both the
-  # rfc3986 selector and the no-selector default, so the absence of the rewrite
-  # is still asserted byte-for-byte.
+  # must never perform it. The three inputs below are rejected under the
+  # rfc3986 selector, so the absence of the rewrite is asserted directly.
   single_backslash <- paste0("http:", "\\", "host", "\\", "path")
   urls <- c(single_backslash, "http:\\\\host\\path", "http://host\\path")
-  no_selector <- lapply(urls, safe_parse_url)
   rfc <- lapply(urls, safe_parse_url, url_standard = "rfc3986")
-  expect_identical(rfc, no_selector)
   expect_true(all(vapply(rfc, is.null, logical(1))))
 })
 
@@ -95,17 +93,18 @@ test_that("rfc3986 rejects a raw backslash rather than carrying it", {
   # string (the grammar's subject) are different claims; only the first is a
   # backslash-handling decision.
   expect_null(safe_parse_url("http://host/a\\b\\c", url_standard = "rfc3986"))
-  # The no-selector default is un-governed and still carries it verbatim.
+  # The default is whatwg (ADR 0020 D4), which reads "\" as "/" in a special
+  # scheme's path.
   expect_identical(
-    get_clean_url("http://host/a\\b\\c"), "http://host/a\\b\\c"
+    get_clean_url("http://host/a\\b\\c"), "http://host/a/b/c"
   )
 })
 
-test_that("no url_standard leaves backslash fully inert (today's baseline)", {
-  # A colon+backslash "scheme-relative" form and a bare backslash after the
-  # authority are not host-shaped once "\" is inert, so today's pipeline
-  # rejects/mis-parses them exactly as it always has -- this pins that this
-  # ticket introduces NO behavior change when no selector is given.
+test_that("omitting url_standard equals NULL equals whatwg for backslashes", {
+  expect_identical(
+    safe_parse_url("http://host\\path"),
+    safe_parse_url("http://host\\path", url_standard = "whatwg")
+  )
   expect_identical(
     safe_parse_url("http://host\\path"),
     safe_parse_url("http://host\\path", url_standard = NULL)

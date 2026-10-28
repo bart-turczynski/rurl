@@ -28,9 +28,9 @@
 # U+2028 or U+2029, spelled as UTF-8 bytes). `\z` is the true end only. A
 # site whose class before the anchor absorbs every terminator writes `\z`,
 # which is then the same; the rest write `.ICU_END`, so a row such as
-# "1.2.3.4\n" keeps the reading it had (the `NULL` profile is byte-frozen,
-# ADR 0016). The lookbehind refuses the point between the CR and LF of a
-# final CRLF, which ICU's `$` does not take: CRLF is one terminator.
+# "1.2.3.4\n" keeps the reading it had. The lookbehind refuses the point
+# between the CR and LF of a final CRLF, which ICU's `$` does not take: CRLF
+# is one terminator.
 .ICU_END <- paste0(
   "(?=(?:\\r\\n|[\\n\\x0b\\x0c\\r]|\\xc2\\x85|\\xe2\\x80[\\xa8\\xa9])?\\z)",
   "(?!(?<=\\r)\\n)"
@@ -1482,8 +1482,8 @@
 # Under "keep" the row reports no scheme, as every "keep" row does (Phase 13);
 # under "http" or "https" it reports the assumed scheme, so the row parses as
 # its spelled `http:///p` or `https:///p` twin does. "error" rejects the row
-# in Phase 1, and `whatwg` and the no-selector default read the slash run the
-# special-scheme way, so none of them gets the prefix here.
+# in Phase 1, and `whatwg` reads the slash run the special-scheme way, so
+# none of them gets the prefix here.
 .general_route_input_vec <- function(url, opts) {
   url <- .apply_browser_fixup_vec(
     url, opts$fixup_posture, opts$url_standard, opts$scheme_policy
@@ -1514,7 +1514,7 @@
 .prepare_urls_for_parse_vec <- function(url,
                                        protocol_handling,
                                        scheme_relative_handling,
-                                       url_standard = NULL,
+                                       url_standard = "whatwg",
                                        scheme_policy = "infer",
                                        scheme_acceptance = "web",
                                        fixup_posture = "none") {
@@ -1545,8 +1545,7 @@
   # A row led by U+FEFF (after step 1 under WHATWG) has no scheme, so it is
   # never a scheme or scheme-relative row, and the rewrites below leave it
   # alone: WHATWG's scheme start state and RFC 3986 S3.1 both need an ASCII
-  # alpha first, and NULL reads such a row like one led by any other code point
-  # that cannot start a scheme. Every scheme and "//" test below runs in byte
+  # alpha first. Every scheme and "//" test below runs in byte
   # mode or base R, which reads the mark as data (ADR 0019), so the
   # `.starts_with_bom()` mask the stringi matches needed (RURL-vhionecz,
   # RURL-biunpazk) is gone (RURL-dddxutjf).
@@ -1663,11 +1662,8 @@
   # reg-name, WHATWG coerces it (and only the post-parse model, not this gate,
   # decides WHATWG-fatal cases like 256.1.1.1 / 1.2.3.4.5). So the reject is
   # suppressed for the ipv4-ish attempts; non-canonical IPv6 (ipv6ish) stays
-  # rejected in both modes. NULL selector keeps the historical hard reject.
-  bad_ip <- cls$is_ipish & !cls$is_canonical_ip
-  if (!is.null(url_standard)) {
-    bad_ip <- bad_ip & !cls$is_ipv4ish
-  }
+  # rejected in both modes.
+  bad_ip <- cls$is_ipish & !cls$is_canonical_ip & !cls$is_ipv4ish
   # A WHATWG `file:` row is never judged here (RURL-otfaotzq). The token above
   # is cut from text after "scheme://", so a host-less `file:C:/x` keeps its
   # scheme and reads as the IPv6 attempt "file:C", and the row failed before
@@ -1686,16 +1682,14 @@
 
   # D1: only fabricate a scheme when the token is host-shaped -- a canonical IP,
   # localhost, a dotted name, or an explicit host:port. Otherwise the input is
-  # not a URL (asdfghjkl, "hello world", /relative/path, bare 12345). Under a
-  # selector, a numeric IPv4 attempt (bare 2130706433, 0x7f000001) is host-like
-  # too, so scheme-less numeric hosts reach the host model rather than D1.
+  # not a URL (asdfghjkl, "hello world", /relative/path, bare 12345). A
+  # numeric IPv4 attempt (bare 2130706433, 0x7f000001) is host-like too, so
+  # scheme-less numeric hosts reach the host model rather than D1.
   host_like <- cls$is_canonical_ip |
     cls$is_localhost |
     cls$is_dotted_name |
-    looks_like_host_port
-  if (!is.null(url_standard)) {
-    host_like <- host_like | cls$is_ipv4ish
-  }
+    looks_like_host_port |
+    cls$is_ipv4ish
   rejected <- rejected | (add_http & !host_like)
 
   # scheme_policy == "require" (RURL-vzgeurae): strict acceptance. Scheme
@@ -1824,35 +1818,6 @@
   )
 }
 
-
-# Uppercase the two hex digits of every %XX percent-triplet, leaving the rest of
-# the string untouched (`%2f` -> `%2F`). This keeps the historical no-selector
-# `path_encoding = "keep"` behavior and the RFC 3986 section 6.2.2.1 case
-# canonicalization path. Malformed `%` (not followed by two hex digits) is left
-# as-is. `\U\1` (perl) uppercases just the captured pair.
-#
-# The `\U` case mapping is locale-proof here (the captured pair is hex by
-# construction, and no locale case-maps `[0-9a-f]` outside `[0-9A-F]`), but the
-# ENCODING MARK of `gsub(perl = TRUE)` is not: handed native (`"unknown"`)
-# bytes it returns them still `"unknown"` under `LC_ALL=C` and marked `"UTF-8"`
-# under a UTF-8 session -- identical bytes, divergent mark, on every path/query
-# value that carries a non-ASCII byte. `.mark_host_utf8()` pins the mark the
-# same way the input and output chokepoints do: it DECLARES with `Encoding<-`
-# and never transcodes (`enc2utf8()` would re-decode in the session locale,
-# which is the locale sensitivity being removed). Pure-ASCII values are
-# unaffected -- R ignores a mark on them -- so this only touches the rows that
-# diverged.
-.uppercase_percent_hex <- function(x) {
-  na <- is.na(x)
-  if (all(na)) {
-    return(x)
-  }
-  x[!na] <- .mark_host_utf8(
-    gsub("%([0-9a-fA-F]{2})", "%\\U\\1", x[!na], perl = TRUE)
-  )
-  x
-}
-
 # Recover the raw request path from the prepared URL string (the exact bytes
 # the parser was handed), rather than `parsed_web$path`. Its `$path` applies
 # two normalizations even under `decode = FALSE`: it uppercases percent-hex and
@@ -1911,28 +1876,11 @@
     end[is.na(stop_rel)] <- .Machine$integer.max
     raw[has_path] <- .bytes_cut(pp, start, end)
   }
-  # An octet that is not valid UTF-8 is percent-encoded here (RURL-yarkccco,
-  # RUL-029), as the parser's component pass already encodes one in the query
-  # and fragment, so under the no-selector default the row parses with
-  # `/caf%E9` instead of failing (RURL-otrpfhmq). Stage B then reads a valid
-  # string, the same one the input `/caf%E9` gives. `rfc3986` does not move:
-  # its uniform grammar gate has already rejected every such row. `whatwg`
-  # never has one: its input already reads the octet as U+FFFD. Rows off the
-  # web route (`file:` and the general route) keep the undecodable-path
-  # failure in `._parse_stage_a_vec()`.
-  # The escape runs for every caller, ungated: no profile or `pqf_source` is in
-  # scope here, and none is needed. It is observable ONLY under the NULL
-  # profile, because the rfc3986 grammar gate rejects these rows before their
-  # path is read and whatwg input already holds U+FFFD, never a raw ill-formed
-  # octet (RUL-029). A profile that let such a row reach here would inherit
-  # the escape; gate it here first.
-  undecodable <- !is.na(raw) & !validUTF8(raw)
-  if (any(undecodable)) {
-    raw[undecodable] <- vapply(
-      raw[undecodable], .web_escape_undecodable_bytes, character(1),
-      USE.NAMES = FALSE
-    )
-  }
+  # No path reaching here holds an octet that is not valid UTF-8: the
+  # `rfc3986` grammar gate rejects such a row before its path is read, and
+  # `whatwg` input already reads the octet as U+FFFD. The escape the frozen
+  # `url_standard = NULL` profile ran here (RURL-yarkccco, RUL-029) went with
+  # that profile (ADR 0020).
   # This slice bypasses the parser's component pass by design (dot segments must
   # survive to `path_normalization`), so under `pqf_bytes = "encode"` it is also
   # the one place a C0/SP/DEL byte could reach a public surface UNESCAPED --
@@ -1975,7 +1923,8 @@
                                 path_normalization,
                                 index_page_handling,
                                 trailing_slash_handling,
-                                path_identity = "none") {
+                                path_identity = "none",
+                                collapse_after_dots = FALSE) {
   path_work <- raw_path
 
   # Two ORTHOGONAL axes (ADR 0011), applied as independent, composing steps:
@@ -2021,17 +1970,11 @@
         USE.NAMES = FALSE
       )
     }
-  } else if (path_identity == "none" &&
-               path_encoding %in% c("keep", "encode")) {
-    # Preserve the historical no-selector `keep` contract after Stage A became
-    # byte-faithful: percent-triplet hex case is canonicalized here instead of
-    # during raw extraction. `encode` gets the same, since it no longer
-    # decodes (RURL-dbyavcjt) and its old decode-and-escape wrote uppercase.
-    mask <- !is.na(path_work) & .bytes_detect(path_work, "%", fixed = TRUE)
-    if (any(mask)) {
-      path_work[mask] <- .uppercase_percent_hex(path_work[mask])
-    }
   }
+  # "none" (`profile = "rfc-syntax"`: RFC 3986 syntax, no normalization) has
+  # no identity step, so a triplet keeps its source hex case. The retired
+  # no-selector profile uppercased it here, which is RFC 3986 section 6.2.2.1
+  # case normalization (RURL-mbhuhwzk).
 
   # Slash collapsing.
   if (path_normalization %in% c("collapse_slashes", "both")) {
@@ -2065,6 +2008,15 @@
         path_work[mask], dot_remover, character(1), USE.NAMES = FALSE
       )
     }
+  }
+
+  # Slash collapsing on the dot-resolved path: the `whatwg` arm's clean_url-only
+  # "both" (ADR 0020 D4a), where the WHATWG path state removes dot segments
+  # first. It runs before index and trailing-slash handling, which then see
+  # the collapsed path.
+  if (isTRUE(collapse_after_dots)) {
+    mask <- !is.na(path_work) & nzchar(path_work)
+    path_work[mask] <- gsub("/+", "/", path_work[mask], perl = TRUE)
   }
 
   # Index/default page stripping (only where such a trailing segment appears).
@@ -2116,16 +2068,6 @@
     if (any(mask)) {
       path_work[mask] <- vapply(
         path_work[mask], .path_decode_readable_one, character(1),
-        USE.NAMES = FALSE
-      )
-    }
-    # A literal octet outside well-formed UTF-8 that reached the path has no
-    # character to present either; it is kept as its uppercase triplet, as a
-    # triplet run that is not well-formed UTF-8 is (RURL-yarkccco).
-    bad <- !is.na(path_work) & !validUTF8(path_work)
-    if (any(bad)) {
-      path_work[bad] <- vapply(
-        path_work[bad], .web_escape_undecodable_bytes, character(1),
         USE.NAMES = FALSE
       )
     }
@@ -2522,10 +2464,7 @@
 }
 
 # Phase 5b (vector): the url_standard host IPv4/reg-name model (RURL-luwvkwhd,
-# PRD §6.2). A no-op when url_standard is NULL (returns the parsed host / IP
-# flag
-# unchanged, never fatal), so the default pipeline is byte-for-byte unaffected
-# (AC #1).
+# PRD §6.2).
 #
 # The web parser already coerces numeric IPv4 forms itself (2130706433 ->
 # 127.0.0.1,
@@ -2550,9 +2489,6 @@
   host <- engine_host
   is_ip <- is_ip_engine
   fatal <- rep(FALSE, n)
-  if (is.null(url_standard)) {
-    return(list(host = host, is_ip = is_ip, fatal = fatal))
-  }
 
   if (identical(url_standard, "rfc3986")) {
     # Reg-name: keep the original token; IP only if it was already canonical.
@@ -2678,8 +2614,8 @@
 # spelling policed `<U+200B>www.com` as a host whose first label is not
 # `www`, a different host from the `www.com` WHATWG records. The policies now
 # run after the mapping instead: they read the `keep` rendering, which Phase 9
-# maps to itself under every `host_encoding`. `rfc3986` and the `NULL` arm
-# have no mapping step and read the host as written.
+# maps to itself under every `host_encoding`. `rfc3986` has no mapping step
+# and reads the host as written.
 .policy_host_vec <- function(host, elig, url_standard) {
   if (.is_whatwg(url_standard) && any(elig)) {
     host[elig] <- .whatwg_host_presentation_vec(host[elig], "keep")
@@ -2706,7 +2642,7 @@
 # Under `whatwg` every policy but "none" reads the UTS-46-mapped host
 # (`.policy_host_vec()`, RURL-fobwctml).
 .apply_www_policy_vec <- function(raw_host, www_handling, is_ip_host,
-                                  engine = NULL, url_standard = NULL) {
+                                  engine = NULL, url_standard = "whatwg") {
   final_host <- raw_host
   elig <- !is_ip_host & !is.na(raw_host) & raw_host != ""
   if (!any(elig) || www_handling == "none") {
@@ -2790,7 +2726,7 @@
 
 # Phase 6 (scalar wrapper): delegates to .apply_www_policy_vec().
 .apply_www_policy <- function(raw_host, www_handling, is_ip_host,
-                              engine = NULL, url_standard = NULL) {
+                              engine = NULL, url_standard = "whatwg") {
   .apply_www_policy_vec(
     raw_host, www_handling, is_ip_host, engine, url_standard
   )
@@ -2917,7 +2853,8 @@
 # runs via vapply on the affected hosts only.
 .apply_subdomain_policy_vec <- function(final_host, domain,
                                         subdomain_levels_to_keep, is_ip_host,
-                                        engine = NULL, url_standard = NULL) {
+                                        engine = NULL,
+                                        url_standard = "whatwg") {
   if (is.null(subdomain_levels_to_keep)) {
     return(final_host)
   }
@@ -2942,7 +2879,7 @@
   # When the policy trims none of their labels they stay as written, rather
   # than take the rebuild below, which lowercases the registrable labels; the
   # stringi reading left "<U+FEFF>WWW.Example.com" as written too. A mapped
-  # `whatwg` host holds no mark, so this only reaches `rfc3986` and `NULL`.
+  # `whatwg` host holds no mark, so this only reaches `rfc3986`.
   bom_www <- .starts_with_bom(fh)
   if (any(bom_www)) {
     bom_www[bom_www] <- startsWith(
@@ -3008,7 +2945,7 @@
 # Phase 8 (scalar wrapper): delegates to .apply_subdomain_policy_vec().
 .apply_subdomain_policy <- function(final_host, domain,
                                     subdomain_levels_to_keep, is_ip_host,
-                                    engine = NULL, url_standard = NULL) {
+                                    engine = NULL, url_standard = "whatwg") {
   .apply_subdomain_policy_vec(
     final_host, domain, subdomain_levels_to_keep, is_ip_host, engine,
     url_standard = url_standard
@@ -3024,7 +2961,7 @@
 # no-op: it renders the UTS-46-mapped host (RUL-002; see
 # .whatwg_host_presentation_vec()).
 .apply_host_encoding_vec <- function(final_host, host_encoding, is_ip_host,
-                                     url_standard = NULL) {
+                                     url_standard = "whatwg") {
   host_for_clean <- final_host
   if (host_encoding == "keep" && !.is_whatwg(url_standard)) {
     return(host_for_clean)
@@ -3044,9 +2981,9 @@
   # change what the host IS (the ADR 0011 separation).
   #
   # Scoped to `rfc3986` precisely because that is the only profile that leaves
-  # a triplet standing; `whatwg` and the no-selector default have already
-  # decoded the host once, and decoding again would strip a LEVEL of encoding
-  # (`a%2560b` -> `a%60b` -> "a`b") rather than reveal one.
+  # a triplet standing; `whatwg` has already decoded the host once, and
+  # decoding again would strip a LEVEL of encoding (`a%2560b` -> `a%60b` ->
+  # "a`b") rather than reveal one.
   if (identical(url_standard, "rfc3986")) {
     subset <- vapply(subset, .whatwg_percent_decode_host, character(1),
       USE.NAMES = FALSE
@@ -3082,7 +3019,7 @@
 # The mapped form is computed once via `punycoder::host_normalize()`
 # (`.whatwg_domain_to_ascii()`) -- the call the `idna` branch already made,
 # never the ADR 0002 helpers, which stay the reversible (unmapped) renderers of
-# the `rfc3986` and `NULL` arms. When domain-to-ASCII fails the pre-encode host
+# the `rfc3986` arm. When domain-to-ASCII fails the pre-encode host
 # is kept, as before.
 .whatwg_host_presentation_vec <- function(subset, host_encoding) {
   mapped <- .whatwg_domain_to_ascii(subset)
@@ -3115,7 +3052,7 @@
 
 # Phase 9 (scalar wrapper): delegates to .apply_host_encoding_vec().
 .apply_host_encoding <- function(final_host, host_encoding, is_ip_host,
-                                 url_standard = NULL) {
+                                 url_standard = "whatwg") {
   .apply_host_encoding_vec(final_host, host_encoding, is_ip_host, url_standard)
 }
 
@@ -3355,7 +3292,7 @@
 .build_clean_url_vec <- function(scheme_output, host_output, path_output,
                                  trailing_slash_handling, query = NULL,
                                  port = NULL, port_handling = "exclude",
-                                 url_standard = NULL,
+                                 url_standard = "whatwg",
                                  port_scheme = scheme_output) {
   n <- length(host_output)
   clean_url <- rep(NA_character_, n)
@@ -3418,7 +3355,8 @@
 # unless a caller explicitly opts into the port arguments.
 .build_clean_url <- function(scheme_output, host_output, path_output,
                              trailing_slash_handling, port = NULL,
-                             port_handling = "exclude", url_standard = NULL) {
+                             port_handling = "exclude",
+                             url_standard = "whatwg") {
   .build_clean_url_vec(
     scheme_output, host_output, path_output, trailing_slash_handling,
     port = port, port_handling = port_handling, url_standard = url_standard
@@ -4129,7 +4067,7 @@
     # consistent with the raw path/query. Under `url_standard = "whatwg"` the
     # caller has already re-encoded these three with their WHATWG percent-encode
     # sets (fragment / userinfo) before they reach this assembler; under
-    # `rfc3986` or no selector they are the raw source spelling.
+    # `rfc3986` they are the raw source spelling.
     fragment = fragment,
     user = user,
     password = password,

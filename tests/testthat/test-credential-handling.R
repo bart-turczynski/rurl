@@ -5,8 +5,8 @@
 # back for a row whose parsed authority carried a userinfo DELIMITER: "strip"
 # (default) is the historical, silently collapsed URL; "reject" is NA. Nothing
 # else moves -- components, `parse_status`, diagnostics, `serialize_url()` and
-# `get_url_key()` are pinned unchanged, under BOTH named standards and, for the
-# default, byte-identical under `url_standard = NULL` (ADR 0007).
+# `get_url_key()` are pinned unchanged, under BOTH named standards, and the
+# default "strip" is byte-identical to omitting the dial.
 #
 # Red at baseline (2026-09-04, main @ 359840a): every call below that names the
 # argument failed with `unused argument (credential_handling = "reject")`, and
@@ -199,7 +199,7 @@ test_that("the dial validates like every other match.arg() option", {
   expect_true(is.na(get_clean_url(u, credential_handling = "rej")))
 })
 
-test_that("url_standard = NULL: strip is byte-identical; reject composes", {
+test_that("the default: strip is byte-identical; reject composes", {
   corpus <- c(
     urls,
     read.csv(
@@ -215,7 +215,7 @@ test_that("url_standard = NULL: strip is byte-identical; reject composes", {
     get_clean_url(corpus, credential_handling = "strip"),
     get_clean_url(corpus)
   )
-  # the dial is policy, not a standards axis, so the frozen arm accepts it
+  # the dial is policy, not a standards axis, so the default arm accepts it
   strip <- safe_parse_urls(urls)
   reject <- safe_parse_urls(urls, credential_handling = "reject")
   expect_true(all(is.na(reject$clean_url[has_cred])))

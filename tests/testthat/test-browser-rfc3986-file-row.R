@@ -42,7 +42,7 @@ test_that("the browser profile's default whatwg arm reads fixed file: rows", {
     r$clean_url,
     c("file:///a/b", "file:///a/b", "file:///p", "file:///p", "file:///p")
   )
-  # An explicit NULL is not an override: the browser bundle's whatwg stands.
+  # An explicit NULL reads as "whatwg" (ADR 0020 D4), the browser bundle's own.
   expect_identical(
     .bff_parse(u, profile = "browser", url_standard = NULL), r
   )

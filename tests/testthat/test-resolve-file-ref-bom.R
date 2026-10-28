@@ -73,7 +73,7 @@ test_that("RFC 3986 dot removal of ordinary segments does not move", {
   expect_identical(._remove_dot_segments_whatwg("\ufeff%2e/b"), "\ufeff%2e/b")
 })
 
-test_that("rfc3986 and NULL negative controls do not move", {
+test_that("rfc3986 negative controls do not move", {
   rfc_ser <- function(ref, base) {
     resolve_url(ref, base, url_standard = "rfc3986", output = "serialized")
   }
@@ -85,27 +85,10 @@ test_that("rfc3986 and NULL negative controls do not move", {
   expect_identical(rfc_ser(paste0("file:", zwsp, "/./b"), "http://h/y"),
                    NA_character_)
   expect_identical(rfc_ser("foo:/\ufeff/./b", "http://h/y"), NA_character_)
-  # NULL: the frozen selector's resolution, omitted and explicit alike.
+  # The default and NULL are "whatwg" (ADR 0020).
   expect_identical(resolve_url("a/./b/../c", "http://h/y"), "http://h/a/c")
   expect_identical(resolve_url("a/./b/../c", "http://h/y", url_standard = NULL),
                    "http://h/a/c")
-  expect_identical(.resolve_one_raw("foo:a/./b/../c", "http://h/y", NULL),
-                   "foo:a/c")
-  expect_identical(
-    .resolve_one_raw(paste0("file:", zwsp, "/./b"), "http://h/y", NULL),
-    "file:\u200b/b"
-  )
-  # The parse's dot-segment step runs the same remover.
-  expect_identical(
-    safe_parse_url(paste0("file:", zwsp, "/./b"),
-                   path_normalization = "dot_segments")$path,
-    "\u200b/b"
-  )
-  expect_identical(
-    safe_parse_url("file:/a/./b/../c",
-                   path_normalization = "dot_segments")$path,
-    "/a/c"
-  )
 })
 
 # --- Conformance: the mark-led first segment survives -------------------------
@@ -171,7 +154,7 @@ test_that("rfc3986: a mark-led reference is a parse error", {
   # (owner ruling 2026-10-12, RURL-pntbujzc) the raw U+FEFF is a parse error
   # (RFC 3986 sections 2 and 2.5: a URI is US-ASCII, non-ASCII data is
   # percent-encoded UTF-8), so none of them resolves. The remover itself is
-  # pinned on the mark above, and the NULL arm below still reaches it.
+  # pinned on the mark above.
   expect_identical(rfc_ser("foo:\ufeff../x", "http://h/y"), NA_character_)
   expect_identical(rfc_ser("file:\ufeff/./b", "http://h/y"), NA_character_)
   expect_identical(rfc_ser("http:\ufeff./x", "http://h/y"), NA_character_)
@@ -182,29 +165,16 @@ test_that("rfc3986: a mark-led reference is a parse error", {
   )
 })
 
-test_that("NULL: the default path keeps a mark-led first segment (ADR 0016)", {
-  # Witness: the frozen selector runs the same RFC 3986 section 5.2.4
-  # remover, and dropping the mark is sanctioned by no standard, so this is a
-  # default-path defect, not selector-caused drift. Omitted and explicit
-  # `NULL` agree.
-  for (p in list(
-    safe_parse_url("file:\ufeff/./b", path_normalization = "dot_segments"),
-    safe_parse_url("file:\ufeff/./b", url_standard = NULL,
-                   path_normalization = "dot_segments")
-  )) {
-    expect_identical(p$path, "\ufeff/b")
+test_that("the default reads a mark-led file: reference as whatwg", {
+  # The frozen NULL selector's RFC 3986 reading was retired (ADR 0020); the
+  # default and NULL are "whatwg", pinned above.
+  for (std in list(NULL, "whatwg")) {
+    expect_identical(
+      resolve_url(paste0("file:", bom, "/./b"), "http://h/y",
+                  url_standard = std),
+      "file:///\ufeff/b"
+    )
   }
-  expect_identical(.resolve_one_raw("foo:\ufeff../x", "http://h/y", NULL),
-                   "foo:\ufeff../x")
-  expect_identical(.resolve_one_raw("file:\ufeff/./b", "http://h/y", NULL),
-                   "file:\ufeff/b")
-  # Signature: the fix moves only a path whose first segment starts with the
-  # mark. `resolve_url()`'s clean output under NULL rejects these rows before
-  # and after, and the parse's own path and clean_url without dot removal do
-  # not move.
-  expect_identical(resolve_url("file:\ufeff/./b", "http://h/y"), NA_character_)
-  expect_identical(resolve_url("foo:\ufeff../x", "http://h/y"), NA_character_)
-  p <- safe_parse_url("file:\ufeff/./b")
-  expect_identical(p$path, "\ufeff/./b")
-  expect_identical(p$clean_url, NA_character_)
+  expect_identical(resolve_url(paste0("file:", bom, "/./b"), "http://h/y"),
+                   "file:///\ufeff/b")
 })

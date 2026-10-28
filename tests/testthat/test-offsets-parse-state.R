@@ -89,16 +89,16 @@ test_that("rfc3986 file overlay: cuts after multibyte text", {
   x <- c("file://\u00e9@h\u00e9/p\u00e9?q#f", "FILE:///\u00e9?\u00e9#\u00e9")
   # RUL-030: a parse error under rfc3986 (RFC 3986 S2, S2.5, S3.2.2).
   for (u in x) expect_row(u, "rfc3986", row(parse_status = "error"))
-  # The frozen NULL selector runs the same overlay with its historical
-  # tolerance (ADR 0016), so the cuts stay pinned on the public record there.
-  p <- safe_parse_urls(u8(x))
+  # No public record reaches the overlay's cuts with a multibyte row now (the
+  # frozen NULL profile that did is retired, ADR 0020), so they are pinned on
+  # the overlay itself, whose gate fails the row.
+  p <- .parse_rfc_file_urls_vec(u8(x))
   expect_identical(
-    as.list(p[, c("scheme", "user", "host", "path", "query", "fragment",
-                  "parse_status")]),
-    list(scheme = c("file", "file"), user = c("\u00e9", NA),
-         host = c("h\u00e9", NA), path = c("/p\u00e9", "/\u00e9"),
-         query = c("q", "\u00e9"), fragment = c("f", "\u00e9"),
-         parse_status = c("ok", "ok"))
+    p[c("ok", "scheme", "userinfo", "host", "path", "query", "fragment")],
+    list(ok = c(FALSE, FALSE), scheme = c("file", "FILE"),
+         userinfo = c("\u00e9", NA), host = c("h\u00e9", ""),
+         path = c("/p\u00e9", "/\u00e9"), query = c("q", "\u00e9"),
+         fragment = c("f", "\u00e9"))
   )
 })
 
@@ -121,10 +121,9 @@ test_that("a leading U+FEFF is data: no scheme, as for its U+200B twin", {
   )
   marks <- u8(c("\ufefffoo://h/", "\u200bfoo://h/", "foo://h/\ufeff"))
   expect_identical(.rfc3986_generic_uri_ok(marks)$ok, c(FALSE, FALSE, FALSE))
-  # On its ASCII grammar alone (the NULL `file:` reading) only the mark-led
-  # rows fail: a leading mark leaves no scheme (S3.1).
-  expect_identical(.rfc3986_generic_uri_ok(marks, ascii_only = FALSE)$ok,
-                   c(FALSE, FALSE, TRUE))
+  # On its ASCII grammar alone (the component walk) only the mark-led rows
+  # fail: a leading mark leaves no scheme (S3.1).
+  expect_identical(.rfc3986_generic_uri_ok_walk(marks), c(FALSE, FALSE, TRUE))
 })
 
 test_that("rfc3986: a slash run other than two after a web scheme", {
@@ -149,18 +148,15 @@ test_that("the rfc3986 grammar walk on invalid UTF-8, NA and a latin1 row", {
   expect_identical(g$ok, c(FALSE, FALSE, FALSE, NA, FALSE))
   expect_identical(g$diagnostic,
                    c(NA, NA, NA, NA, "unicode-outside-rfc3986-uri"))
-  expect_identical(
-    .rfc3986_generic_uri_ok(c(bad, NA, "foo://\u00e9@h:1/p?q#f"),
-                            ascii_only = FALSE)$ok,
-    c(FALSE, FALSE, FALSE, NA, TRUE)
-  )
+  # The component walk alone admits the multibyte row on its ASCII grammar.
+  expect_true(.rfc3986_generic_uri_ok_walk("foo://\u00e9@h:1/p?q#f"))
   l1 <- "foo://caf\xe9@h\xe9:1/p\xe9?q\xe9#\xe9"
   Encoding(l1) <- "latin1"
   expect_false(.rfc3986_generic_uri_ok(l1)$ok)
   expect_identical(.rfc3986_generic_uri_ok(l1)$diagnostic,
                    "unicode-outside-rfc3986-uri")
   # The latin1 walk itself still reads the text it earns.
-  expect_true(.rfc3986_generic_uri_ok(l1, ascii_only = FALSE)$ok)
+  expect_true(.rfc3986_generic_uri_ok_walk(.latin1_input_to_utf8(l1)))
   p <- safe_parse_urls(c(bad, NA), url_standard = "rfc3986",
                        scheme_acceptance = "general")
   expect_identical(p$parse_status, rep("error", 4L))
@@ -182,11 +178,10 @@ test_that("bracketed IPv6 literals: the `::` and embedded-IPv4 cuts", {
               "[::1:1.2.3.4]", NA, NA)
   status <- c("ok", "ok", "ok", "ok", "ok", "error", "ok", "error", "ok-ftp",
               "error", "error")
-  p <- safe_parse_urls(u8(v))
-  expect_identical(p$host, legacy)
-  expect_identical(p$parse_status, status)
-  # rfc3986 differs only on `http://ué@[a::b]/`: a raw non-ASCII
-  # userinfo is a parse error there (RUL-030; RFC 3986 S2, S2.5, S3.2.1).
+  # `legacy` is the source spelling the frozen NULL profile reported; rfc3986
+  # keeps it except on `http://ué@[a::b]/`: a raw non-ASCII userinfo is a
+  # parse error there (RUL-030; RFC 3986 S2, S2.5, S3.2.1). The default is
+  # whatwg (ADR 0020), asserted below.
   p <- safe_parse_urls(u8(v), url_standard = "rfc3986")
   expect_identical(p$host, replace(legacy, 7L, NA))
   expect_identical(p$parse_status, replace(status, 7L, "error"))
@@ -198,6 +193,7 @@ test_that("bracketed IPv6 literals: the `::` and embedded-IPv4 cuts", {
       NA, NA)
   )
   expect_identical(p$parse_status, status)
+  expect_identical(safe_parse_urls(u8(v)), p)
   expect_identical(get_host(u8("http://[1::2]:8/")), "[1::2]")
 })
 

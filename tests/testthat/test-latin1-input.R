@@ -218,7 +218,7 @@ test_that("latin1 0x80-0x9F reads as U+0080-U+009F, as whatwg read it", {
   expect_identical(cold_parse(x)$query, "%C2%80")
   expect_identical(cold_parse(x, url_standard = "whatwg")$query, "%C2%80")
   # rfc3986 reads the same U+0080 and rejects it as raw non-ASCII (RFC 3986
-  # sections 2, 2.5; RUL-030); the grammar's tolerant walk still admits it
+  # sections 2, 2.5; RUL-030); the grammar's component walk still admits it
   # as one scalar value, the reading the cache key shares.
   expect_identical(cold_parse(x, url_standard = "rfc3986")$query,
                    NA_character_)
@@ -226,7 +226,7 @@ test_that("latin1 0x80-0x9F reads as U+0080-U+009F, as whatwg read it", {
     get_url_diagnostics(x, url_standard = "rfc3986"),
     "unicode-outside-rfc3986-uri"
   )
-  expect_true(.rfc3986_generic_uri_ok(x, ascii_only = FALSE)$ok)
+  expect_true(.rfc3986_generic_uri_ok_walk(.latin1_input_to_utf8(x)))
 })
 
 test_that("get_mailto_recipients() reads a latin1 recipient as its twin", {

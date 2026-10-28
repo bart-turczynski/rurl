@@ -102,12 +102,14 @@ test_that("values are decoded before grouping; decode_plus honored", {
 })
 
 test_that("opaque tokens group by their raw form", {
-  # Malformed %zz (the parser upper-cases to %ZZ) is opaque and grouped raw.
+  # Malformed %zz is opaque and grouped raw; the default whatwg query state
+  # copies a "%" that starts no triplet and what follows it unchanged
+  # (RUL-026), so it stays %zz.
   res <- query_param_summary(
     c("http://e.com/?a=%zz", "http://e.com/?a=%zz"),
     level = "value"
   )
-  expect_identical(res$value, "%ZZ")
+  expect_identical(res$value, "%zz")
   expect_identical(res$n, 2L)
 })
 

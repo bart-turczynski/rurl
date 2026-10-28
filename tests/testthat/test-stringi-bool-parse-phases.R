@@ -215,9 +215,18 @@ test_that("the www policies read the host as before", {
   expect_identical(
     rurl:::.apply_www_policy_vec(
       c("WWW.a.com", "www2.b.com", "\ufeffwww.c.com", "wwwx.d.com", "1.2.3.4"),
-      "strip", c(FALSE, FALSE, FALSE, FALSE, TRUE)
+      "strip", c(FALSE, FALSE, FALSE, FALSE, TRUE), url_standard = "rfc3986"
     ),
     c("a.com", "b.com", "\ufeffwww.c.com", "wwwx.d.com", "1.2.3.4")
+  )
+  # Under whatwg (the helper's default) the host is UTS-46-mapped first, so
+  # the mark-led row is the bare `www.` host.
+  expect_identical(
+    rurl:::.apply_www_policy_vec(
+      c("WWW.a.com", "www2.b.com", "\ufeffwww.c.com", "wwwx.d.com", "1.2.3.4"),
+      "strip", c(FALSE, FALSE, FALSE, FALSE, TRUE)
+    ),
+    c("a.com", "b.com", "c.com", "wwwx.d.com", "1.2.3.4")
   )
 })
 

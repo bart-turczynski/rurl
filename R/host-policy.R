@@ -215,8 +215,9 @@
 #'       host at all.}
 #'   }
 #' @param url_standard Standard profile governing host interpretation:
-#'   \code{"whatwg"} (default; the living web standard) or \code{"rfc3986"}. The
-#'   verdict can depend on the standard --- \code{2130706433} is an
+#'   \code{"whatwg"} (default; the living web standard) or \code{"rfc3986"};
+#'   \code{NULL} means \code{"whatwg"} (ADR 0020). The verdict can depend on
+#'   the standard --- \code{2130706433} is an
 #'   \code{"ipv4"} host (\code{web = TRUE}) under \code{"whatwg"} but a reg-name
 #'   under \code{"rfc3986"}.
 #' @inheritParams safe_parse_url
@@ -277,7 +278,8 @@ is_valid_host <- function(url,
 #'   \code{"seo"} (all five by default). See \code{\link{is_valid_host}} for
 #'   each rule's meaning.
 #' @param url_standard Standard profile governing host interpretation:
-#'   \code{"whatwg"} (default) or \code{"rfc3986"}.
+#'   \code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL} means
+#'   \code{"whatwg"} (ADR 0020).
 #' @inheritParams safe_parse_url
 #' @return A \code{data.frame} with one row per input URL (input order
 #'   preserved): \code{url}, \code{host} (the parsed host, or \code{NA}),

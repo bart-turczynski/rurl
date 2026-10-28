@@ -116,17 +116,17 @@ test_that("encoded-reserved-path-byte fires on the whatwg profile", {
   )
 })
 
-# --- AC #1: NULL selector is untouched ---------------------------------------
+# --- the default is whatwg (ADR 0020 D4) -------------------------------------
 
-test_that("without a selector the historical path_encoding behavior is intact",
-  {
-    # The web parser uppercases percent-triplet hex by default, independent of
-    # url_standard; the dot segment is left literal (no dot resolution without
-    # an explicit path_normalization).
-    expect_identical(get_path("http://ex.com/%2e%2e/a"), "/%2E%2E/a")
-    expect_identical(
-      get_path("http://ex.com/a/../b", path_normalization = "dot_segments"),
-      "/b"
-    )
-  }
-)
+test_that("without a selector the path is the whatwg path", {
+  # The frozen profile (hex uppercased, dot segments literal) is retired: the
+  # default, and NULL, resolves `%2e%2e` as a dot segment, as the WHATWG path
+  # state does.
+  expect_identical(get_path("http://ex.com/%2e%2e/a"), "/a")
+  expect_identical(get_path("http://ex.com/%2e%2e/a", url_standard = NULL),
+                   get_path("http://ex.com/%2e%2e/a", url_standard = "whatwg"))
+  expect_identical(
+    get_path("http://ex.com/a/../b", path_normalization = "dot_segments"),
+    "/b"
+  )
+})

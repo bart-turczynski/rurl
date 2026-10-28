@@ -5,9 +5,10 @@
 #
 # The strip lives in the shared builder (`.build_clean_url_vec`), so the fix is
 # selector-independent: all three `url_standard` arms exhibited the defect and
-# move identically. Because this moves `url_standard = NULL` output, the file
-# carries the two ADR 0016 evidence items inline: the NULL witness (kept as the
-# regression test) and the declared signature the fix stays inside.
+# move identically. The file carries the two ADR 0016 evidence items the fix
+# needed when `NULL` was a frozen arm (ADR 0020 retired it; `NULL` now reads
+# as WHATWG): the NULL witness, kept as the regression test, and the declared
+# signature.
 
 dots_only <- c(
   "http://./", "http://.", "http://../", "http://.../", "http://./x/"
@@ -21,8 +22,9 @@ dots_only_kept <- c(
 root_dot <- c("http://a./", "http://example.com./")
 root_dot_stripped <- c("http://a.", "http://example.com.")
 
-# The no-slash spelling "http://." parses to path "/" under WHATWG and under
-# the frozen NULL arm, so it behaves like "http://./" there. Under `rfc3986`
+# The no-slash spelling "http://." parses to path "/" under WHATWG (and so
+# under NULL, which reads as WHATWG, ADR 0020), so it behaves like "http://./"
+# there. Under `rfc3986`
 # the parse records an EMPTY path (RFC 3986 §3.3 admits path-abempty = ""), so
 # the arm renders "http://." under `keep` and `strip` alike: that string is the
 # parse's, not the strip's, and RUL-005 leaves the parse untouched. The

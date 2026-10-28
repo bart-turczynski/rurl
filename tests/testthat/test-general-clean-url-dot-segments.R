@@ -37,21 +37,21 @@ test_that("special schemes already clean to the dot-removed path", {
   expect_identical(r$clean_url, expected[1:2])
 })
 
-test_that("NULL: the frozen arm's clean_url follows path_normalization", {
-  # `scheme_acceptance = "general"` is an error under url_standard = NULL, so
-  # the general-route serializers are unreachable from the NULL arm. Its
-  # default `path_normalization = "none"` keeps the dots in both columns.
+test_that("the default and NULL are the whatwg arm (ADR 0020)", {
+  # The frozen NULL arm, which kept the dots, was retired: the default and
+  # NULL read as "whatwg", whose path state removes the dot segments.
   urls <- c("http://example.com/a/../b", "https://example.com/a/./b/../c")
   for (r in list(safe_parse_urls(urls),
                  safe_parse_urls(urls, url_standard = NULL))) {
-    expect_identical(r$path, c("/a/../b", "/a/./b/../c"))
-    expect_identical(r$clean_url, urls)
+    expect_identical(r$path, c("/b", "/a/c"))
+    expect_identical(r$clean_url,
+                     c("http://example.com/b", "https://example.com/a/c"))
   }
+  # The general route is reachable from the default too.
   expect_identical(
-    safe_parse_urls(urls, path_normalization = "dot_segments")$clean_url,
-    c("http://example.com/b", "https://example.com/a/c")
+    general_rows("foo:/a/../b"),
+    general_rows("foo:/a/../b", url_standard = "whatwg")
   )
-  expect_error(safe_parse_urls("foo:/a/../b", scheme_acceptance = "general"))
 })
 
 test_that("whatwg: an opaque path keeps its dot segments", {
@@ -196,11 +196,13 @@ test_that("rfc-syntax: clean_url keeps the source path on the general route", {
   expect_identical(
     safe_parse_urls(rfc_rows, profile = "rfc-syntax")$clean_url, rfc_rows
   )
+  # The path column keeps the source hex case too: rfc-syntax runs no RFC
+  # 3986 section 6.2.2.1 case normalization (RURL-mbhuhwzk).
   expect_identical(
     general_rows(rfc_rows, profile = "rfc-syntax")$path,
     c(
-      "/a/../b", "/a/../b", "/a/%2E%2E/b", "a/../b", "/a/..//p", "/a/..//p",
-      "/a/../b", "/a/../b", "/%41b/C%2Fd", "/a/./b/", "a/..", "/a/b",
+      "/a/../b", "/a/../b", "/a/%2e%2e/b", "a/../b", "/a/..//p", "/a/..//p",
+      "/a/../b", "/a/../b", "/%41b/C%2fd", "/a/./b/", "a/..", "/a/b",
       "/a/..//p", "a:b/../c"
     )
   )

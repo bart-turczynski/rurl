@@ -453,12 +453,12 @@ test_that("VT and FF are escaped like any other C0 control under whatwg", {
       paste0("/a", hexpair, "b"),
       info = hexpair
     )
-    # `rfc3986` and the no-selector baseline still reject: the dial is scoped
-    # to the WHATWG profile, which is the only one with an escape-it rule.
+    # `rfc3986` still rejects: the dial is scoped to the WHATWG profile, which
+    # is the only one with an escape-it rule. The default is whatwg (ADR 0020).
     expect_identical(
       get_parse_status(u, url_standard = "rfc3986"), "error",
       info = hexpair
     )
-    expect_identical(get_parse_status(u), "error", info = hexpair)
+    expect_identical(get_parse_status(u), "ok", info = hexpair)
   }
 })

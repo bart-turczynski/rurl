@@ -42,10 +42,8 @@
 # The resolution call passes `url_standard = "whatwg"` because that is the
 # standard this file scores against. Reference resolution stopped being
 # standard-agnostic with P2.7 D-B (R/resolve.R): the WHATWG reference-parsing
-# rules are reachable ONLY through that selector, and the NULL selector stays
-# byte-frozen under ADR 0007 / P2.7 D-C. Scoring with the NULL selector would
-# hold rurl to WHATWG's oracle while denying it WHATWG's rules -- and would go
-# silently stale as each rule lands.
+# rules are reachable ONLY through that selector (the default; NULL reads as
+# it, ADR 0020). The suite names it explicitly.
 
 wpt_base_relative_suite <- function() {
   skip_if_not_installed("jsonlite")
@@ -130,9 +128,8 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 # and byte-identical to WHATWG's scheme states, so unlike every other rule in
 # this file it ships under `"rfc3986"` too -- and unlike them it is not gated on
 # `.whatwg_special_base_scheme()`, because a reference's scheme production does
-# not depend on the base at all. Only `url_standard = NULL` keeps the loose
-# group, and only because ADR 0007 freezes it byte-for-byte (measured: zero
-# NULL-path rows move).
+# not depend on the base at all. The frozen `url_standard = NULL` profile kept
+# the loose group until ADR 0020 retired it (RURL-mbhuhwzk).
 #
 # No row MOVED between families that time: both rows became exact, and the
 # three families below were the residue unchanged (18 + 5 + 4).
@@ -166,7 +163,7 @@ wpt_rel_id <- function(base, input) paste0(base, " >> ", input)
 # `.recompose_uri()` (R/resolve.R) now emits the guard whenever a standard is
 # selected and the path begins with `//` after no authority -- RFC 3986
 # section 3.3's own constraint under "rfc3986", the serializer's guard under
-# "whatwg", and byte-frozen under NULL (ADR 0007). The rows:
+# "whatwg" (NULL reads as "whatwg", ADR 0020). The rows:
 # `non-spec:/p >> /.//path`, `>> /..//path`, `>> ..//path`, `>> a/..//path`,
 # `non-spec:/..//p >> path`.
 #

@@ -7,7 +7,8 @@
 
 .pn_url <- "http://example.com//a/./b/../c"
 
-# Each mode's expected path and clean URL for `.pn_url`.
+# Each mode's expected path and clean URL for `.pn_url` on the arm that
+# offers every value, `profile = "rfc-syntax"`.
 .pn_expected <- list(
   none = list(path = "//a/./b/../c", clean = "http://example.com//a/./b/../c"),
   collapse_slashes = list(
@@ -15,6 +16,13 @@
   ),
   dot_segments = list(path = "//a/c", clean = "http://example.com//a/c"),
   both = list(path = "/a/c", clean = "http://example.com/a/c")
+)
+# Under the default whatwg (ADR 0020 D4a) the parsed path is always the WHATWG
+# path (dot segments removed by the path state); "both" collapses slashes in
+# clean_url only, and "none" / "collapse_slashes" are an error.
+.pn_expected_whatwg <- list(
+  dot_segments = list(path = "//a/c", clean = "http://example.com//a/c"),
+  both = list(path = "//a/c", clean = "http://example.com/a/c")
 )
 
 # The formals as they stood before the alias was added. A new formal may only
@@ -66,18 +74,42 @@ test_that("pin: the pre-alias formals keep their positions", {
 })
 
 test_that("pin: path_normalization by name", {
+  rs <- "rfc-syntax"
   for (mode in names(.pn_expected)) {
     want <- .pn_expected[[mode]]
     expect_identical(
+      get_clean_url(.pn_url, path_normalization = mode, profile = rs),
+      want$clean
+    )
+    expect_identical(
+      safe_parse_url(.pn_url, path_normalization = mode, profile = rs)$path,
+      want$path
+    )
+    expect_identical(
+      safe_parse_urls(.pn_url, path_normalization = mode, profile = rs)$path,
+      want$path
+    )
+  }
+  # The default whatwg arm.
+  for (mode in names(.pn_expected_whatwg)) {
+    want <- .pn_expected_whatwg[[mode]]
+    expect_identical(
       get_clean_url(.pn_url, path_normalization = mode), want$clean
     )
-    expect_identical(get_path(.pn_url, path_normalization = mode), want$path)
     expect_identical(
       safe_parse_url(.pn_url, path_normalization = mode)$path, want$path
     )
     expect_identical(
-      safe_parse_urls(.pn_url, path_normalization = mode)$path, want$path
+      safe_parse_urls(.pn_url, path_normalization = mode)$clean_url, want$clean
     )
+  }
+  expect_identical(get_path(.pn_url, path_normalization = "dot_segments"),
+                   .pn_expected_whatwg$dot_segments$path)
+  for (mode in c("none", "collapse_slashes")) {
+    expect_error(get_clean_url(.pn_url, path_normalization = mode),
+                 "governs `path_normalization`")
+    expect_error(safe_parse_urls(.pn_url, path_normalization = mode),
+                 "governs `path_normalization`")
   }
 })
 
@@ -92,20 +124,20 @@ test_that("pin: path_normalization by position", {
   )
   expect_identical(
     get_path(.pn_url, "keep", "lower_host", "none", "keep", "dot_segments"),
-    .pn_expected$dot_segments$path
+    .pn_expected_whatwg$dot_segments$path
   )
-  expect_identical(
+  expect_error(
     safe_parse_url(
       .pn_url, "keep", "none", "all", "lower_host", "none", "keep",
       "collapse_slashes"
-    )$path,
-    .pn_expected$collapse_slashes$path
+    ),
+    "governs `path_normalization`"
   )
   expect_identical(
     safe_parse_urls(
       .pn_url, "keep", "none", "all", "lower_host", "none", "keep", "both"
-    )$path,
-    .pn_expected$both$path
+    )$clean_url,
+    .pn_expected_whatwg$both$clean
   )
 })
 
@@ -132,7 +164,7 @@ test_that("pin: a fully positional call reaches the last pre-alias formal", {
     kept <- .pn_call_positional(fn_name, cred, list(
       path_normalization = "both", credential_handling = "strip"
     ))
-    expect_identical(kept$path, .pn_expected$both$path, label = fn_name)
+    expect_identical(kept$path, .pn_expected_whatwg$both$path, label = fn_name)
     expect_identical(kept$clean_url, .pn_expected$both$clean, label = fn_name)
   }
   # get_path() ends in url_standard: a positional "whatwg" there must still
@@ -141,7 +173,7 @@ test_that("pin: a fully positional call reaches the last pre-alias formal", {
     .pn_call_positional("get_path", .pn_url, list(
       path_normalization = "dot_segments", url_standard = "whatwg"
     )),
-    .pn_expected$dot_segments$path
+    .pn_expected_whatwg$dot_segments$path
   )
   expect_error(
     .pn_call_positional("get_path", .pn_url, list(
@@ -180,16 +212,22 @@ test_that("path_normalisation is the last formal, defaulting to NULL", {
 test_that("path_normalisation alone equals path_normalization alone", {
   for (fn_name in .pn_functions) {
     for (mode in names(.pn_expected)) {
+      # A value the default whatwg cannot honor errors under either spelling.
+      as_value <- function(args) {
+        tryCatch(.pn_call(fn_name, .pn_url, args),
+                 error = function(e) conditionMessage(e))
+      }
       expect_identical(
-        .pn_call(fn_name, .pn_url, list(path_normalisation = mode)),
-        .pn_call(fn_name, .pn_url, list(path_normalization = mode)),
+        as_value(list(path_normalisation = mode)),
+        as_value(list(path_normalization = mode)),
         label = paste(fn_name, mode)
       )
     }
   }
-  # And it takes effect: a non-default mode changes the path.
+  # And it takes effect: "both" collapses clean_url's slashes.
   expect_identical(
-    get_path(.pn_url, path_normalisation = "both"), .pn_expected$both$path
+    get_clean_url(.pn_url, path_normalisation = "both"),
+    .pn_expected_whatwg$both$clean
   )
 })
 

@@ -116,9 +116,9 @@ test_that("plain literal dot segments and clean paths carry no path tokens", {
   )
 })
 
-# --- AC #1: NULL selector is untouched ---------------------------------------
+# --- AC #1: the default (whatwg) path_encoding behavior ---------------------
 
-test_that("without a selector the historical path_encoding behavior is intact",
+test_that("without a selector the default whatwg path_encoding holds",
   {
     expect_identical(get_path("http://ex.com/%41%42"), "/%41%42")
     expect_identical(

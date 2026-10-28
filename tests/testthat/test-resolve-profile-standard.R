@@ -153,8 +153,7 @@ test_that("profile and url_standard + profile agree on WPT base-relative", {
 })
 
 test_that("no profile and an invalid profile behave as before", {
-  # No profile: the NULL selector, frozen (ADR 0007), resolves against the
-  # base its parser calls an error.
+  # No profile: the default whatwg accepts a second `#` in the fragment.
   expect_identical(resolve_url("g", frag_bad), "https://example.org/g")
   expect_error(
     resolve_url("g", "http://a/b", profile = "nope"),
@@ -180,7 +179,12 @@ test_that("a whatwg-bundling profile refuses a scheme-less base", {
       NA_character_, label = p
     )
   }
+  # So does the default, which is "whatwg" (ADR 0020); rfc3986 reads only the
+  # absolute reference.
   expect_identical(resolve_url("https://x.com/y", "example.com/a/b"),
+                   NA_character_)
+  expect_identical(resolve_url("https://x.com/y", "example.com/a/b",
+                               url_standard = "rfc3986"),
                    "https://x.com/y")
 })
 

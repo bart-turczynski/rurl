@@ -17,7 +17,9 @@ zwsp <- "\u200b"
 beta <- "\u03b2\u03cc\u03bb\u03bf\u03c3" # the U-label of xn--nxasmq6b
 
 # The parsed record under one arm. `NULL` omits the selector, as the default
-# call does; the NULL test below also passes it explicitly.
+# call does. The frozen NULL profile, which rendered a mark-led host through
+# the split, is retired (ADR 0020): `NULL` reads as whatwg, whose UTS #46
+# mapping drops the mark first (pinned below).
 arm_parse <- function(url, arm, ...) {
   if (is.null(arm)) {
     safe_parse_url(url, ...)
@@ -26,14 +28,14 @@ arm_parse <- function(url, arm, ...) {
   }
 }
 
-arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986", "NULL" = NULL)
 
 # RUL-030 (RURL-pntbujzc): under rfc3986 every host below that carries
 # U+FEFF, U+200B or a U-label is a parse error, not a reg-name kept as
 # written: RFC 3986 section 2 bounds a URI to US-ASCII, section 2.5 writes
 # non-ASCII data as percent-encoded UTF-8, and section 3.2.2's reg-name is
 # ASCII. Each rfc3986 pin that used to read the kept host now reads that
-# error, under every host_encoding; the NULL arm keeps the rendering pins.
+# error, under every host_encoding; the helper pins keep the rendering
+# coverage.
 expect_rfc3986_rejects <- function(u, ...) {
   for (enc in c("unicode", "keep", "idna")) {
     expect_null(safe_parse_url(u, url_standard = "rfc3986",
@@ -99,29 +101,6 @@ test_that("host_encoding = 'unicode': U+200B twins and negative controls", {
                    host_encoding = "unicode")$host,
     paste0(beta, ".example")
   )
-  for (an in "NULL") {
-    arm <- arms[[an]]
-    expect_identical(
-      arm_parse(paste0("http://", zwsp, "xn--nxasmq6b.example/"), arm,
-                host_encoding = "unicode")$host,
-      paste0(zwsp, "xn--nxasmq6b.example"), label = an
-    )
-    expect_identical(
-      arm_parse(paste0("http://", zwsp, "a.example./"), arm,
-                host_encoding = "unicode")$host,
-      paste0(zwsp, "a.example."), label = an
-    )
-    expect_identical(
-      arm_parse("http://xn--nxasmq6b.example/", arm,
-                host_encoding = "unicode")$host,
-      paste0(beta, ".example"), label = an
-    )
-    expect_identical(
-      arm_parse(paste0("http://xn--nxasmq6b.", bom, "xn--nxasmq6b.example/"),
-                arm, host_encoding = "unicode")$host,
-      paste0(beta, ".", bom, "xn--nxasmq6b.example"), label = an
-    )
-  }
 })
 
 test_that("whatwg: UTS #46 maps both marks to nothing, already right", {
@@ -143,27 +122,18 @@ test_that("signature: the other encodings and the PSL columns do not move", {
   # Only `host_encoding = "unicode"` renders through the split. "keep"
   # returns the host as parsed, and "idna" encodes the whole label, mark and
   # all; the domain and TLD come from the PSL seam (pslr), not the split.
-  # Under rfc3986 the mark-led host is a parse error (see the header), so the
-  # "known gap" below -- a domain that is not a suffix of its host -- cannot
-  # arise there; the pin stays on the frozen NULL arm.
+  # Under rfc3986 the mark-led host is a parse error (see the header); under
+  # whatwg (the default) UTS #46 drops the mark, so the encodings agree.
   expect_rfc3986_rejects(paste0("http://", bom, "xn--nxasmq6b.com/"))
-  for (an in "NULL") {
-    arm <- arms[[an]]
-    u <- paste0("http://", bom, "xn--nxasmq6b.com/")
-    k <- arm_parse(u, arm, host_encoding = "keep")
-    expect_identical(k$host, paste0(bom, "xn--nxasmq6b.com"), label = an)
-    expect_identical(k$clean_url, paste0("http://", bom, "xn--nxasmq6b.com/"),
-                     label = an)
-    expect_identical(arm_parse(u, arm, host_encoding = "idna")$host,
-                     "xn--xn--nxasmq6b-7n50e.com", label = an)
-    p <- arm_parse(u, arm, host_encoding = "unicode")
-    expect_identical(p$parse_status, "ok", label = an)
-    # Known gap, pinned as the ADR 0016 signature: pslr's UTS-46 mapping
-    # drops the mark, so `domain` stays the decoded spelling and is no longer
-    # a suffix of the mark-led `host` (RURL-tbmnnauj review; not this fix).
-    expect_identical(p$domain, paste0(beta, ".com"), label = an)
-    expect_identical(p$tld, "com", label = an)
-  }
+  u <- paste0("http://", bom, "xn--nxasmq6b.com/")
+  expect_identical(safe_parse_url(u, host_encoding = "keep")$host,
+                   paste0(beta, ".com"))
+  expect_identical(safe_parse_url(u, host_encoding = "idna")$host,
+                   "xn--nxasmq6b.com")
+  p <- safe_parse_url(u, host_encoding = "unicode")
+  expect_identical(p$host, paste0(beta, ".com"))
+  expect_identical(p$domain, paste0(beta, ".com"))
+  expect_identical(p$tld, "com")
 })
 
 # --- Defect: the split read past the mark -------------------------------------
@@ -206,47 +176,4 @@ test_that("a mark-led xn-- label is not decoded as an A-label", {
   )
   expect_rfc3986_rejects(paste0("http://", bom, "xn--nxasmq6b.example/"))
   expect_rfc3986_rejects(paste0("http://", bom, "a.example./"))
-  for (arm in list(NULL)) {
-    p <- arm_parse(paste0("http://", bom, "xn--nxasmq6b.example/"), arm,
-                   host_encoding = "unicode")
-    expect_identical(p$host, paste0(bom, "xn--nxasmq6b.example"))
-    expect_identical(p$clean_url,
-                     paste0("http://", bom, "xn--nxasmq6b.example/"))
-    expect_identical(
-      arm_parse(paste0("http://", bom, "a.example./"), arm,
-                host_encoding = "unicode")$host,
-      paste0(bom, "a.example.")
-    )
-  }
-})
-
-test_that("NULL: the unicode rendering keeps the mark (ADR 0016)", {
-  # Witness: under the frozen selector the host of
-  # `http://\ufeffxn--nxasmq6b.com/` is `\ufeffxn--nxasmq6b.com` (keep, pinned
-  # above), and before the fix the unicode rendering returned the U-label
-  # `beta.com`: it dropped a code point and decoded a label that is not an
-  # A-label. No standard or documented contract sanctions that, so it is a
-  # default-path defect, not selector-caused drift. Omitting the selector and
-  # passing NULL agree.
-  u <- paste0("http://", bom, "xn--nxasmq6b.com/")
-  for (p in list(
-    safe_parse_url(u, host_encoding = "unicode"),
-    safe_parse_url(u, url_standard = NULL, host_encoding = "unicode")
-  )) {
-    expect_identical(p$host, paste0(bom, "xn--nxasmq6b.com"))
-    expect_identical(p$clean_url, paste0("http://", bom, "xn--nxasmq6b.com/"))
-    expect_identical(p$parse_status, "ok")
-    expect_identical(p$domain, paste0(beta, ".com"))
-  }
-  expect_identical(
-    unname(get_host(u, host_encoding = "unicode")),
-    unname(get_host(u, url_standard = NULL, host_encoding = "unicode"))
-  )
-  # Signature: under NULL and rfc3986 only `host`, and `clean_url` that
-  # carries it, move, only for a host whose first label starts with U+FEFF,
-  # and only under host_encoding = "unicode". The status, domain and TLD do
-  # not move (pinned above), nor do "keep" and "idna". Per arm: whatwg was
-  # already right (UTS #46 maps the mark to nothing before rendering);
-  # rfc3986 rendered through the same split as NULL until RUL-030 made the
-  # mark-led host a parse error there (RFC 3986 sections 2, 2.5, 3.2.2).
 })

@@ -88,13 +88,6 @@ test_that("directly-written non-ASCII is rejected and flagged (RUL-030)", {
   expect_identical(g$ok, rep(FALSE, length(rows)))
   expect_identical(g$diagnostic,
                    rep("unicode-outside-rfc3986-uri", length(rows)))
-
-  # `ascii_only = FALSE` is the frozen NULL `file:` overlay's reading only:
-  # the ASCII grammar alone, as before the ruling (ADR 0016).
-  legacy <- .rfc3986_generic_uri_ok(
-    c("http://exämple.com/", "http://a%2 b/ä"), ascii_only = FALSE
-  )
-  expect_identical(legacy$ok, c(TRUE, FALSE))
 })
 
 test_that("the gate is a pure function, independent of parser leniency", {
@@ -138,17 +131,19 @@ test_that("rfc3986 rejects a forbidden ASCII byte on EVERY route", {
   expect_false(any(.rfc3986_generic_uri_ok(inputs)$ok))
 })
 
-test_that("the uniform gate leaves whatwg and the NULL selector untouched", {
+test_that("the uniform gate leaves whatwg, the default, untouched", {
   inputs <- c("http://a|b/", "file://C|/x", "http://u|v@e.com/")
   # whatwg has its own host model and file state machine; the RFC grammar gate
   # must not reach them. `file://C|/x` in particular STAYS parseable there.
   whatwg <- safe_parse_urls(inputs, url_standard = "whatwg")
   expect_identical(whatwg$parse_status[2L], "ok")
   expect_identical(whatwg$clean_url[2L], "file:///C:/x")
-  # the no-selector default is the historical baseline and is unchanged.
-  base <- safe_parse_urls(inputs)
-  expect_identical(base$parse_status[1L], "warning-no-tld")
-  expect_identical(base$clean_url[1L], "http://a|b/")
+  # WHATWG forbids `|` in a host (forbidden domain code point), so its own
+  # host parser fails the first row; no RFC gate is involved.
+  expect_identical(whatwg$parse_status[1L], "error")
+  # The default (and NULL) is whatwg (ADR 0020 D4).
+  expect_identical(safe_parse_urls(inputs), whatwg)
+  expect_identical(safe_parse_urls(inputs, url_standard = NULL), whatwg)
 })
 
 test_that("the uniform gate adds only SYNTAX rejections, not policy ones", {

@@ -15,11 +15,12 @@
 #                 "dots"          `url_standard` passed through `...`
 #                                 (canonical_join());
 #                 "none"          the export takes no standard.
-#   standards   The supported values, spelled as strings: "NULL" is the
-#               byte-frozen pre-selector profile (ADR 0007), "none" means the
-#               export takes no selector.
-#   unsupported Selector values the export rejects with an error (ADR 0015
-#               and the scheme_acceptance = "general" conflict check).
+#   standards   The supported values, spelled as strings: "NULL" reads as
+#               "whatwg" wherever `url_standard` is a parameter (ADR 0020
+#               D4), "none" means the export takes no selector.
+#   unsupported Selector values the export rejects with an error (a
+#               `standard` or key-policy formal, which must name its
+#               standard).
 #   operands    The formals that carry URL strings. For a join they are the
 #               two tables' URL columns.
 #   template    "web" or "mailto": the URL shape the hostile rows are cut
@@ -106,21 +107,20 @@ capability_manifest <- list(
   get_user = cap_entry(cap_all3, "vector", echoes = "userinfo"),
   get_password = cap_entry(cap_all3, "vector"),
   get_userinfo = cap_entry(cap_all3, "vector", echoes = "userinfo"),
-  # --- Companion helpers: the standard is required (ADR 0015) --------------
-  get_host_type = cap_entry(cap_named, "vector", unsupported = "NULL"),
-  get_url_diagnostics = cap_entry(cap_named, "list", unsupported = "NULL"),
-  get_scheme_class = cap_entry(cap_named, "vector", unsupported = "NULL"),
+  # --- Companion helpers: NULL reads as "whatwg" (ADR 0020 D4) -------------
+  get_host_type = cap_entry(cap_all3, "vector"),
+  get_url_diagnostics = cap_entry(cap_all3, "list"),
+  get_scheme_class = cap_entry(cap_all3, "vector"),
   # --- Host and scheme policy ----------------------------------------------
   # check_hosts() returns every rule's verdict, so is_valid_host() crosses
   # none.
   check_hosts = cap_entry(cap_all3, "frame"),
   is_valid_host = cap_entry(cap_all3, "vector"),
-  # Default scheme_acceptance = "general", which NULL rejects.
-  check_schemes = cap_entry(cap_named, "frame", unsupported = "NULL"),
+  check_schemes = cap_entry(cap_all3, "frame"),
   # The recipient splitter's time grows with the square of the local part
   # and domain length, so its long payload is shorter.
   get_mailto_recipients = cap_entry(
-    cap_named, "expanded", unsupported = "NULL", template = "mailto",
+    cap_all3, "expanded", template = "mailto",
     long_n = 2000L
   ),
   # --- Serializers and display ---------------------------------------------
@@ -143,10 +143,7 @@ capability_manifest <- list(
   # --- Reference resolution: both operands are URLs ------------------------
   resolve_url = cap_entry(
     cap_all3, "vector", operands = c("relative_or_absolute", "base_url"),
-    # output = "serialized" under NULL is an error (no standard to
-    # serialize as), pinned with the other rejected selectors.
-    options = list(list(), list(output = "serialized",
-                                .standards = cap_named))
+    options = list(list(), list(output = "serialized"))
   ),
   # --- Joins ---------------------------------------------------------------
   # Every join reads its keys through get_url_key() or safe_parse_urls(),

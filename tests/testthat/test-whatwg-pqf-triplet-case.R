@@ -8,8 +8,8 @@
 # 26.3.1). Every `node` value below was read off Node 26.3.1's `URL`.
 #
 # This file first pins what must NOT move: the `rfc3986` arm (which already
-# keeps the source spelling, RUL-007 and RUL-015), the frozen `NULL` profile
-# (ADR 0007, ADR 0016), the WHATWG path, the uppercase spelling of a FRESH
+# keeps the source spelling, RUL-007 and RUL-015), `NULL` reading as whatwg
+# (ADR 0020 D4), the WHATWG path, the uppercase spelling of a FRESH
 # escape, and the special vs non-special query percent-encode sets.
 
 pqf_case_urls <- c(
@@ -69,23 +69,20 @@ test_that("rfc3986 keeps the query and fragment as written (does not move)", {
   expect_false(identical(k[[1L]], k[[2L]]))
 })
 
-test_that("the frozen NULL profile keeps its normalized spelling", {
-  n <- safe_parse_urls(pqf_case_urls[1:4], url_standard = NULL,
-                       scheme_policy = "infer", scheme_acceptance = "web")
-  # Byte-pinned: every triplet uppercased, a raw >= 0x80 byte encoded, and
-  # the swallowed-"%" quirk of the component pass kept (row 3's `%c3`).
-  expect_identical(
-    n$query, c("q%7F", "a%C3%BC%C3%BC", "a%2%c3%BC", "'%7E'")
-  )
-  expect_identical(
-    n$fragment, c("f%7F", "b%C3%BC%C3%BC", "b%2%c3%BC", "'%7E'")
-  )
-  expect_identical(n$path[1L], "/p%7F")
+test_that("NULL and the default store the whatwg spelling (ADR 0020 D4)", {
+  # The frozen profile's normalized spelling (every triplet uppercased) is
+  # retired (RUL-032 supersedes RUL-026's NULL clause).
+  args <- list(scheme_policy = "infer", scheme_acceptance = "web")
+  w <- do.call(safe_parse_urls,
+               c(list(pqf_case_urls[1:4], url_standard = "whatwg"), args))
+  n <- do.call(safe_parse_urls,
+               c(list(pqf_case_urls[1:4], url_standard = NULL), args))
+  expect_identical(n, w)
+  expect_identical(n$path[1L], "/p%7f")
   expect_identical(
     get_query(pqf_case_urls[1:2], decode = FALSE),
-    c("q%7F", "a%C3%BC%C3%BC")
+    w$query[1:2]
   )
-  expect_identical(rurl:::.web_pqf_source_policy(NULL), "normalize")
 })
 
 test_that("whatwg: the path keeps its spelling (does not move)", {

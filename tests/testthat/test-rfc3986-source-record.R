@@ -4,7 +4,7 @@
 # serializer-level property lives in test-rfc3986-serialization-properties.R
 # and test-serialize-fsss.R; this file pins the CONSUMER surfaces that move
 # with the record, the `whatwg` arm that later moved with it for the triplet
-# alone (RURL-djvqopjk), and the frozen `NULL` arm.
+# alone (RURL-djvqopjk), and `NULL`, which reads as whatwg (ADR 0020 D4).
 #
 # The frame-vs-payload rule (design/posture-card.md): a behavior claimed
 # invariant across arms is tested by looping the selector, not by varying the
@@ -125,28 +125,22 @@ test_that("the whatwg arm keeps the triplet but encodes the octet", {
   )
 })
 
-test_that("the NULL arm does not move (ADR 0007, ADR 0016)", {
-  # Byte-pinned against the pre-RUL-007 output, which this arm never deviated
-  # from: the component pass's normalized spelling is still what it stores.
-  # `url_standard = NULL` is the frozen profile; if this test fails, a fix
-  # has leaked past the `rfc3986` or `whatwg` selector.
-  n <- rul007_parse(NULL)
-  expect_identical(n$query[1:3], c("q=%7Ca", "q=%7Ca", "q=%2F&r=%2F"))
-  expect_identical(n$fragment[1:3], c("f%7Ca", "f%7Ca", "f%2F"))
-  expect_identical(n$query[5:6], c("q=%7C%C3%BC", "q=%C3%BC"))
-  expect_identical(n$scheme[7:8], c("http", "http"))
-  expect_identical(n$query[13:14],
-                   c("a=1&utm_source=%7Cx&b=%7C", "a=%7Ca&A=%7CA"))
+test_that("NULL and the default are the whatwg arm (ADR 0020 D4)", {
+  # The frozen profile's normalized spelling is retired (RUL-032): the
+  # default, and NULL, store what whatwg stores, an existing triplet's hex
+  # case included.
+  w <- safe_parse_urls(rul007_grid, url_standard = "whatwg",
+                       scheme_policy = "infer", scheme_acceptance = "web")
+  expect_identical(rul007_parse(NULL), w)
   expect_identical(
     get_query(rul007_grid[c(1L, 13L)], decode = FALSE),
-    c("q=%7Ca", "a=1&utm_source=%7Cx&b=%7C")
+    w$query[c(1L, 13L)]
   )
 })
 
 test_that("the parser dial follows the selector", {
   expect_identical(rurl:::.web_pqf_source_policy("rfc3986"), "preserve")
   expect_identical(rurl:::.web_pqf_source_policy("whatwg"), "whatwg")
-  expect_identical(rurl:::.web_pqf_source_policy(NULL), "normalize")
   # Acceptance is unchanged by the dial: a forbidden byte still rejects under
   # `pqf_bytes = "reject"`, whichever spelling would have been stored.
   expect_null(rurl:::.parse_web_url_one(

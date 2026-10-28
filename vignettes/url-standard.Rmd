@@ -23,16 +23,19 @@ library(rurl)
 several of them consistent at once, and getting one wrong yields subtly
 non-conformant output.
 
-The `url_standard` selector does that assembly for you. It takes one of three
+The `url_standard` selector does that assembly for you. It takes one of two
 values:
 
-- `NULL` (default) — today's behavior, exactly. Fully backward compatible:
-  byte-for-byte identical output and unchanged result shape.
+- `"whatwg"` (default) — the WHATWG URL Standard profile (on the axes `rurl`
+  governs): the URL behavior of the web.
 - `"rfc3986"` — the RFC 3986 profile.
-- `"whatwg"` — the WHATWG URL Standard profile (on the axes `rurl` governs).
 
-There is **no default flip**: the selector is purely additive, and `NULL`
-callers are unaffected. It is accepted by `safe_parse_url()`,
+`NULL` is still accepted and means `"whatwg"`. Before ADR 0020 it selected a
+frozen pre-selector profile that named no standard; that profile is retired,
+and the default output moved with it (see `NEWS.md`). The other default dials
+stay as they were (`scheme_policy = "infer"`, `scheme_acceptance = "web"`), so
+the bare default is not the same thing as `profile = "whatwg"`. The selector
+is accepted by `safe_parse_url()`,
 `safe_parse_urls()`, the `get_*()` accessors, and `resolve_url()`. The
 identity joins (`url_inner_join()` and its family) take the standard from
 their key policy, `url_key_policy(standard = ...)`. The deprecated
@@ -77,12 +80,12 @@ get_url_diagnostics("http://2130706433/", url_standard = "rfc3986")
 
 ## Diagnostics are facts, not policy
 
-`url_standard` also unlocks three companion helpers. They **require** a
-selector and error without one — a host type, a diagnostic set and a
-special-scheme classification are all functions of the profile, so there is no
-profile-neutral answer they could return (ADR 0015). Importantly, they never
-widen the parse result shape: metadata is surfaced only through these helpers,
-never as new columns or fields.
+`url_standard` also drives three companion helpers. A host type, a
+diagnostic set and a special-scheme classification are all functions of the
+profile, so each helper answers under the selected standard — `"whatwg"` by
+default, as everywhere else. Importantly, they never widen the parse result
+shape: metadata is surfaced only through these helpers, never as new columns
+or fields.
 
 ```{r helpers}
 get_host_type("http://example.com/", url_standard = "whatwg")
@@ -113,7 +116,8 @@ standalone editorial knob (independent of `url_standard`), but under `"whatwg"`
 its `"keep"` value elides a port that matches its special scheme's default.
 
 ```{r ports}
-get_clean_url("http://example.com:80/p", port_handling = "keep")
+get_clean_url("http://example.com:80/p", port_handling = "keep",
+              url_standard = "rfc3986")
 get_clean_url("http://example.com:80/p", port_handling = "keep",
               url_standard = "whatwg")
 get_clean_url("http://example.com:8080/p", port_handling = "keep",
@@ -135,19 +139,19 @@ get_clean_url("http://example.com/a\\b", url_standard = "rfc3986")
 canonicalizes the result with the same machinery, so `url_standard` and the
 other options flow straight through.
 
-Resolution itself is one of the axes the selector governs. Under `"rfc3986"` —
-and under the default `NULL` — the merge is RFC 3986 §5 exactly.
+Resolution itself is one of the axes the selector governs. Under `"rfc3986"`
+the merge is RFC 3986 §5 exactly.
 
 ```{r resolve}
-resolve_url("../g", "http://a/b/c/d;p?q")
-resolve_url("//other.example/p", "http://a/b/c")
-resolve_url(c("g", "../h"), "http://a/b/c/")
+resolve_url("../g", "http://a/b/c/d;p?q", url_standard = "rfc3986")
+resolve_url("//other.example/p", "http://a/b/c", url_standard = "rfc3986")
+resolve_url(c("g", "../h"), "http://a/b/c/", url_standard = "rfc3986")
 ```
 
 ### What `"whatwg"` changes
 
-Under `"whatwg"` the WHATWG URL Standard's reference-*parsing* rules run before
-the merge. Four of them are visible:
+Under `"whatwg"`, the default, the WHATWG URL Standard's reference-*parsing*
+rules run before the merge. Four of them are visible:
 
 ```{r resolve-whatwg}
 # 1. A reference carrying the base's OWN special scheme is relative, not
@@ -186,12 +190,10 @@ resolve_url("10.0.0.7:8080/foo.html", "file:///some/dir/bar.html",
 resolve_url("g", "10.0.0.7:8080/dir/x", url_standard = "rfc3986")
 ```
 
-`url_standard = NULL` keeps the loose group. Tightening it there would move
-frozen bytes rather than merely improve them, and the freeze governs whether
-output may *move*, not whether it is right — so the fix ships on the two
-selectors that claim a standard, and the one that claims none is left alone.
+The default reads it the same way: `"whatwg"` refuses that base too. (The
+retired `NULL` profile kept the loose group and resolved against it.)
 
-```{r resolve-null-frozen}
+```{r resolve-default-scheme}
 resolve_url("g", "10.0.0.7:8080/dir/x")
 ```
 
@@ -207,16 +209,31 @@ resolve_url("../g", "http://u:pw@a/b/c/d?q#f", url_standard = "whatwg",
             output = "serialized")
 ```
 
-`output = "serialized"` requires an explicit `url_standard`, since `NULL`
-selects no standard to serialize *to*.
+`output = "serialized"` serializes to `url_standard`: `"whatwg"` by default.
 
 ## Migration notes
 
-- **Pin `url_standard = "whatwg"`** for WHATWG-aligned link identity on the
-  governed axes (path percent/dot handling, the host IPv4/reg-name model). This
-  collapses a hand-tuned multi-knob profile down to one argument. It is
+- **`"whatwg"` is the default now** (ADR 0020), and `NULL` means the same.
+  Code that relied on the retired `NULL` profile sees the moves `NEWS.md`
+  lists: scheme-less and numeric hosts, host percent-encoding and UTS-46
+  mapping, path dot segments and percent-encoding, the query, fragment and
+  userinfo encode sets, default ports, and reference resolution. Pin
+  `url_standard = "rfc3986"` for the RFC 3986 reading. The selector is
   deliberately narrower than "browser-faithful": IDNA rendering and query
-  handling are not governed by the selector.
+  handling are not governed by it.
+- **A governed knob under the default.** `case_handling` and
+  `path_normalization` are governed by the standard. Under `"whatwg"`,
+  `case_handling = "lower"` or `"upper"` and `path_normalization = "both"`
+  shape `clean_url` only, and the parsed components stay WHATWG's;
+  `case_handling = "keep"`, `path_normalization = "none"` and
+  `"collapse_slashes"` are an error, because they ask for case or dot segments
+  the parse has already removed. `profile = "rfc-syntax"` offers them.
+
+```{r governed}
+get_clean_url("http://Example.COM/A//b/../c", case_handling = "lower",
+              path_normalization = "both")
+get_path("http://Example.COM/A//b/../c")
+```
 - **`path_encoding = "keep"` is a stopgap, not a profile.** If you adopted
   `path_encoding = "keep"` earlier to stop `%2F` reserved-byte false joins, keep
   in mind it is a collision fix, not behavior-equivalent to `"whatwg"`: it

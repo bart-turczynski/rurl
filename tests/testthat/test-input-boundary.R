@@ -11,32 +11,17 @@
 #
 # The parse seams (safe_parse_urls() and every accessor behind it) already
 # turned a bytes-marked row into an error row and a latin1 row into its UTF-8
-# twin. Their output for every input representation is pinned here under the
-# frozen default and both named standards, and under LC_CTYPE C and a UTF-8
-# LC_CTYPE. `status` and `clean` are readable; `md5` covers every other
-# column (helper-input-boundary.R, ib_canon()). Measured on 6623cab; null_web
-# re-measured on main at 3c49b0a, after RURL-yarkccco percent-encoded an
-# undecodable path octet under NULL (rows `invalid` and `invalid_marked`).
+# twin. Their output for every input representation is pinned here under
+# `url_standard = NULL` and both named standards, and under LC_CTYPE C and a
+# UTF-8 LC_CTYPE. `status` and `clean` are readable; `md5` covers every other
+# column (helper-input-boundary.R, ib_canon()). Measured on 6623cab. ADR 0020
+# retired the frozen NULL profile: `NULL` reads as "whatwg", so null_web
+# carries the whatwg_web pins (RURL-mbhuhwzk).
 #
 # Row order: ascii, utf8, utf8_host, native, native_host, latin1, latin1_host,
 # bytes, bytes_host, invalid, invalid_query, invalid_host, invalid_marked,
 # mailto_latin1, na, empty.
 ib_seam_pins <- list(
-  null_web = list(
-    status = c(
-      "ok", "ok", "ok", "ok", "ok", "ok", "ok", "error", "error", "ok",
-      "ok", "error", "ok", "error", "error", "error"
-    ),
-    clean = c(
-      "http://h.example.com/p", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", NA, NA,
-      "http://h.example.com/caf%E9", "http://h.example.com/p", NA,
-      "http://h.example.com/p%80", NA, NA, NA
-    ),
-    md5 = "2f62b62a0c530664db10e5ed081d4574"
-  ),
   whatwg_web = list(
     status = c(
       "ok", "ok", "ok", "ok", "ok", "ok", "ok", "error", "error", "ok", "ok",
@@ -83,6 +68,7 @@ ib_seam_pins <- list(
     md5 = "b8bb77cb27dcc5b5f20dd1022b00ffbc"
   )
 )
+ib_seam_pins$null_web <- ib_seam_pins$whatwg_web
 
 ib_utf8 <- hi_utf8_locale()
 
@@ -114,6 +100,11 @@ test_that("the parse seams keep their output for every input representation", {
 # the 36 `rfc3986` digests that read a UTF-8 twin re-measured after RUL-030
 # (RURL-pntbujzc) made a raw non-ASCII code point a parse error under
 # `rfc3986` (RFC 3986 sections 2, 2.5, 3.2.2). No NULL or whatwg digest moved,
+# then. The eight NULL digests that read differently from whatwg moved to the
+# whatwg digest when ADR 0020 made NULL read as "whatwg" (RURL-mbhuhwzk),
+# and the seven NULL keys added then (the companion helpers, check_schemes(),
+# get_mailto_recipients() and serialized resolve_url(), which rejected NULL)
+# carry the whatwg digest too;
 # and each re-measured digest is the same under both LC_CTYPEs. The
 # `get_url_diagnostics rfc3986` digest moved once more when the token was
 # withheld where percent-encoding does not rescue the row: the two rows led
@@ -129,13 +120,13 @@ test_that("the parse seams keep their output for every input representation", {
 # moved again when RURL-xwsyfkwh added `mailto_local_part_raw`; with that
 # column dropped, each still gives its previous digest, under both LC_CTYPEs.
 ib_export_pins <- c(
-  "safe_parse_urls NULL 1 url" = "6fa9dfd2e2244270d25dfb29cb79e930",
-  "safe_parse_urls NULL 2 url" = "4fef8dde29a59b3367d086e720665ae7",
+  "safe_parse_urls NULL 1 url" = "fa2e5fefaab3afdc95f71948583d6572",
+  "safe_parse_urls NULL 2 url" = "b59fa78bdb9c20f7bec9f30bb5b5e971",
   "safe_parse_urls whatwg 1 url" = "fa2e5fefaab3afdc95f71948583d6572",
   "safe_parse_urls whatwg 2 url" = "b59fa78bdb9c20f7bec9f30bb5b5e971",
   "safe_parse_urls rfc3986 1 url" = "639d33dd3f6c5ddddde9865bf28aedb3",
   "safe_parse_urls rfc3986 2 url" = "39c42a884a867428d299bebd6dcbf388",
-  "safe_parse_url NULL 1 url" = "f8c051ffbeccf3c0e23062f3a95728c3",
+  "safe_parse_url NULL 1 url" = "923c41a7c30d799192efbb9291c06d92",
   "safe_parse_url whatwg 1 url" = "923c41a7c30d799192efbb9291c06d92",
   "safe_parse_url rfc3986 1 url" = "3f96613be42b629df6b449399eb52468",
   "get_parse_status NULL 1 url" = "615b3db3d471ae82a316696057e710f6",
@@ -186,29 +177,34 @@ ib_export_pins <- c(
   "get_fragment NULL 1 url" = "3ce84122e3ebc579e8e3e8d00d5b9cd7",
   "get_fragment whatwg 1 url" = "3ce84122e3ebc579e8e3e8d00d5b9cd7",
   "get_fragment rfc3986 1 url" = "a3af14d7529eb5f7c5a4fed4adb2f9c0",
-  "get_user NULL 1 url" = "3dd72c5c8c631f1040cc3b9cdd6862de",
+  "get_user NULL 1 url" = "ebaccf4855fa77710b89ae9ded68534a",
   "get_user whatwg 1 url" = "ebaccf4855fa77710b89ae9ded68534a",
   "get_user rfc3986 1 url" = "1ce1614eba6af95daec660cfa694ba82",
   "get_password NULL 1 url" = "2849f40a184fe9d3279aedd383dbc12b",
   "get_password whatwg 1 url" = "2849f40a184fe9d3279aedd383dbc12b",
   "get_password rfc3986 1 url" = "2849f40a184fe9d3279aedd383dbc12b",
-  "get_userinfo NULL 1 url" = "3dd72c5c8c631f1040cc3b9cdd6862de",
+  "get_userinfo NULL 1 url" = "ebaccf4855fa77710b89ae9ded68534a",
   "get_userinfo whatwg 1 url" = "ebaccf4855fa77710b89ae9ded68534a",
   "get_userinfo rfc3986 1 url" = "1ce1614eba6af95daec660cfa694ba82",
+  "get_host_type NULL 1 url" = "c9fe530808487909696702f18b03d27b",
   "get_host_type whatwg 1 url" = "c9fe530808487909696702f18b03d27b",
   "get_host_type rfc3986 1 url" = "1ad222f31e5a1bb23b2d1400d9a3c94f",
+  "get_url_diagnostics NULL 1 url" = "09523da4d1306b09d59f8ed8bb5adce7",
   "get_url_diagnostics whatwg 1 url" = "09523da4d1306b09d59f8ed8bb5adce7",
   "get_url_diagnostics rfc3986 1 url" = "03057a9c13a884f5bcc17a55d46a3925",
+  "get_scheme_class NULL 1 url" = "5ac05eb1f13a70f637c439692c74f854",
   "get_scheme_class whatwg 1 url" = "5ac05eb1f13a70f637c439692c74f854",
   "get_scheme_class rfc3986 1 url" = "5c22a78946a1fd3d6682dabf7339dea5",
-  "check_hosts NULL 1 url" = "5a7d211969c40bc04c320d4928111191",
+  "check_hosts NULL 1 url" = "3737a77f6634499b1b4040449ae0e672",
   "check_hosts whatwg 1 url" = "3737a77f6634499b1b4040449ae0e672",
   "check_hosts rfc3986 1 url" = "e14c54863437d3e37af9f6b5593868cb",
-  "is_valid_host NULL 1 url" = "f3158a74899479f7b1adda4005a69e6b",
+  "is_valid_host NULL 1 url" = "9afb18471bac9a899b04fae50954c705",
   "is_valid_host whatwg 1 url" = "9afb18471bac9a899b04fae50954c705",
   "is_valid_host rfc3986 1 url" = "f00abd61f44b03c0bbe119b6834e8e2f",
+  "check_schemes NULL 1 url" = "c7cdbdfe37f2ee743dcb6688136206c4",
   "check_schemes whatwg 1 url" = "c7cdbdfe37f2ee743dcb6688136206c4",
   "check_schemes rfc3986 1 url" = "08fd1bc14d418606e1f691ca7c4a5cce",
+  "get_mailto_recipients NULL 1 url" = "e164f745c2023e5c0898a2fa79c6dedb",
   "get_mailto_recipients whatwg 1 url" = "e164f745c2023e5c0898a2fa79c6dedb",
   "get_mailto_recipients rfc3986 1 url" = "804c950f295ff2e3d3fd157349e53a4e",
   "serialize_url whatwg 1 url" = "3a98bee0eb2552cef63a681eec4e238b",
@@ -222,8 +218,11 @@ ib_export_pins <- c(
   "get_url_key rfc3986 1 url" = "45a9a90a2d9908c298236048ad1c4e3c",
   "query_param_summary none 1 urls" = "07833a06dd1855a5a5497ca218720135",
   "resolve_url NULL 1 relative_or_absolute" =
-    "78aca5f110e8f4d8a9e31c7abe230fdc",
+    "a933a97453ba4c17ee0425f8a06d68c4",
   "resolve_url NULL 1 base_url" = "bfe4b31f6c0ade011d498929d7a3b1b8",
+  "resolve_url NULL 2 relative_or_absolute" =
+    "4066e92c245f802e7bf7122aad4202e7",
+  "resolve_url NULL 2 base_url" = "7d3f7d59cea2e3e9916e8fe57ecaba06",
   "resolve_url whatwg 1 relative_or_absolute" =
     "a933a97453ba4c17ee0425f8a06d68c4",
   "resolve_url whatwg 1 base_url" = "bfe4b31f6c0ade011d498929d7a3b1b8",
@@ -323,18 +322,15 @@ ib_resolve <- function(ref, base, sel, ...) {
 # Signature. Inputs: a reference or base that is bytes-marked, or not valid
 # UTF-8 once unmarked bytes are read as UTF-8. Options: resolve_url() under any
 # url_standard and either output. Output: that row's element only; every other
-# row is unchanged. Per arm: under NULL, a bytes base is no base, and otherwise
-# an undecodable row resolves octet for octet and the parser reads the result,
-# so an undecodable path octet comes out as %XX and one in the host fails the
-# row (the LC_CTYPE C answer, now in every locale). As for a decodable base,
-# the parser is not asked about the base itself. rfc3986 had all three defects,
-# through the same string code as NULL; there a bytes or undecodable operand
+# row is unchanged. Per arm: rfc3986 had all three defects; there a bytes or
+# undecodable operand
 # gives NA (an absolute reference still resolves without the base), as its
 # parser rejects the octet. whatwg had the bytes defect, and its undecodable
 # base resolved under LC_CTYPE C only; it now reads an undecodable reference or
 # base with U+FFFD replacement in every locale, as its parse seam does, so its
 # reference row does not move ("http://b.com/h<U+FFFD>.com") and its base rows
-# resolve.
+# resolve. The frozen NULL arm, which resolved an undecodable row octet for
+# octet, is retired (ADR 0020): `NULL`, passed or omitted, reads as whatwg.
 test_that("resolve_url(): an undecodable reference reads as its parser does", {
   skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
   for (loc in c(ib_utf8, "C")) {
@@ -344,9 +340,8 @@ test_that("resolve_url(): an undecodable reference reads as its parser does", {
       ))
       expect_true(got$ok, label = paste(s, loc))
       want <- switch(s,
-        whatwg = c("http://b.com/h\ufffd.com", "http://b.com/g"),
         rfc3986 = c(NA, "http://b.com/g"),
-        c("http://b.com/h%FC.com", "http://b.com/g")
+        c("http://b.com/h\ufffd.com", "http://b.com/g")
       )
       expect_identical(got$value, want, label = paste(s, loc))
     }
@@ -364,38 +359,10 @@ test_that("resolve_url(): an undecodable path octet in a reference", {
       ))
       expect_true(got$ok, label = lab)
       want <- switch(s,
-        whatwg = "http://example.com/caf\ufffd",
         rfc3986 = NA_character_,
-        "http://example.com/caf%E9"
+        "http://example.com/caf\ufffd"
       )
       expect_identical(got$value, want, label = lab)
-    }
-    # Under NULL the row is what the parser makes of the octets the
-    # resolution yields, dot segments, query and fragment included.
-    refs <- c(ib_str("../caf", 0xe9, "/./x"), ib_str("//h", 0xfc, ".com/"),
-              ib_str("p?q=", 0xe9), ib_str("caf", 0xe9, "/", 0xc3, 0xbc))
-    raw <- c(ib_str("http://b.com/caf", 0xe9, "/x"),
-             ib_str("http://h", 0xfc, ".com/"),
-             ib_str("http://b.com/a/p?q=", 0xe9),
-             ib_str("http://b.com/a/caf", 0xe9, "/", 0xc3, 0xbc))
-    for (s in c("omitted", "NULL")) {
-      got <- hi_in_ctype(loc, ib_resolve(refs, "http://b.com/a/b",
-                                         ib_selectors[[s]]))
-      expect_identical(got, hi_in_ctype(loc, get_clean_url(raw)),
-                       label = paste(s, loc))
-      expect_identical(got[[1]], "http://b.com/caf%E9/x",
-                       label = paste(s, loc))
-      expect_identical(got[[2]], NA_character_, label = paste(s, loc))
-      # The octets are hidden as U+F780..U+F7FF while the row resolves; a
-      # code point already in that range comes back as itself.
-      got <- hi_in_ctype(loc, ib_resolve(
-        c(ib_str("\uf7e9", 0xe9), ib_str(0xe9)), c("http://x/a", "http://x//"),
-        ib_selectors[[s]]
-      ))
-      expect_identical(got, hi_in_ctype(loc, get_clean_url(c(
-        ib_str("http://x/\uf7e9", 0xe9), ib_str("http://x//", 0xe9)
-      ))), label = paste(s, loc))
-      expect_identical(got[[2]], "http://x//%E9", label = paste(s, loc))
     }
   }
 })
@@ -437,73 +404,13 @@ test_that("resolve_url(): an undecodable base reads the same in every locale", {
         c("file:///x", "http://example.com/x", "http://example.com/x")
       )
       expect_identical(got, want, label = lab)
-      # rfc3986 calls both bases errors and resolves against neither. The
-      # frozen default calls the file: one an error and reads the http one's
-      # path octet as %E9 (RURL-yarkccco), but resolves against both octet for
-      # octet, as it resolves against a decodable base it refuses
-      # ("http://exa mple.com/a"): the parse of the result decides. whatwg
-      # reads both with U+FFFD replacement.
-      sel <- if (identical(s, "omitted")) NULL else ib_selectors[[s]]
-      if (!identical(sel, "whatwg")) {
+      # rfc3986 calls both bases errors and resolves against neither. whatwg
+      # (the default, and NULL) reads both with U+FFFD replacement.
+      if (identical(s, "rfc3986")) {
         st <- hi_in_ctype(loc, get_parse_status(ib_bad_bases,
-                                                url_standard = sel))
-        want_st <- if (is.null(sel)) c("error", "ok") else c("error", "error")
-        expect_identical(st, want_st, label = lab)
+                                                url_standard = "rfc3986"))
+        expect_identical(st, c("error", "error"), label = lab)
       }
-    }
-  }
-})
-
-test_that("resolve_url(): NULL resolves an undecodable base octet for octet", {
-  skip_if(is.na(ib_utf8), "no UTF-8 LC_CTYPE is available")
-  bases <- c(
-    ib_str("file:///caf", 0xe9),
-    ib_str("http://example.com/caf", 0xe9, "?q=1"),
-    ib_str("https://example.com/caf", 0xe9),
-    ib_str("ftp://example.com/caf", 0xe9),
-    ib_str("http://h", 0xe9, ".com/a"),
-    ib_str("http://example.com/a?q=", 0xe9),
-    ib_str("http://example.com/a#", 0xe9)
-  )
-  for (loc in c(ib_utf8, "C")) {
-    st <- hi_in_ctype(loc, get_parse_status(bases))
-    expect_identical(st, c("error", "ok", "ok", "ok-ftp", "error", "ok", "ok"),
-                     label = loc)
-    for (s in c("omitted", "NULL")) {
-      lab <- paste(s, loc)
-      got <- hi_in_ctype(loc, ib_resolve(
-        c("x", "x", "x", "x", "x", "x", "x"), bases, ib_selectors[[s]]
-      ))
-      # The base is not asked about itself, as a decodable one is not: the
-      # host octet survives into "http://h\xe9.com/x", which fails its parse.
-      expect_identical(got, c(
-        "file:///x", "http://example.com/x", "https://example.com/x",
-        "ftp://example.com/x", NA, "http://example.com/x",
-        "http://example.com/x"
-      ), label = lab)
-      # A network-path reference takes only the base's scheme, so the
-      # base's octet is gone from the result.
-      got <- hi_in_ctype(loc, ib_resolve("//o.com/y", bases,
-                                         ib_selectors[[s]]))
-      expect_identical(got, c(
-        "file://o.com/y", "http://o.com/y", "https://o.com/y",
-        "ftp://o.com/y", "http://o.com/y", "http://o.com/y", "http://o.com/y"
-      ), label = lab)
-      expect_identical(
-        hi_in_ctype(loc, ib_resolve("//o.com/y", "http://exa mple.com/a",
-                                    ib_selectors[[s]])),
-        "http://o.com/y", label = lab
-      )
-      # The base's own octet survives where the reference keeps it.
-      got <- hi_in_ctype(loc, ib_resolve(
-        c("?z", "#f", ""), bases[c(3, 4, 2)], ib_selectors[[s]]
-      ))
-      expect_identical(got, hi_in_ctype(loc, get_clean_url(c(
-        ib_str("https://example.com/caf", 0xe9, "?z"),
-        ib_str("ftp://example.com/caf", 0xe9, "#f"),
-        ib_str("http://example.com/caf", 0xe9, "?q=1")
-      ))), label = lab)
-      expect_identical(got[[1]], "https://example.com/caf%E9", label = lab)
     }
   }
 })

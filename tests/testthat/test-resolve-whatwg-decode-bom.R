@@ -61,8 +61,8 @@ base <- "http://h/d/"
 for (ct in names(ctypes)) {
   test_that(paste("a decodable mark-led operand resolves alike,", ct), {
     with_ctype(ct, ctypes[[ct]], {
-      for (std in list("whatwg", "rfc3986", NULL)) {
-        label <- paste(ct, if (is.null(std)) "NULL" else std)
+      for (std in c("whatwg", "rfc3986")) {
+        label <- paste(ct, std)
         # Under rfc3986 either mark is a raw non-ASCII code point, so the
         # reference is no RFC 3986 URI-reference (sections 2, 4.1; RUL-030,
         # RURL-pntbujzc) and both rows are NA, alike.
@@ -114,20 +114,16 @@ for (ct in names(ctypes)) {
         c(NA_character_, NA_character_),
         label = paste(ct, "rfc3986 bases")
       )
+      # NULL is "whatwg" (ADR 0020).
       expect_bytes(
-        cold_resolve(c(zw_ref, mid_ref), base, NULL),
-        c("http://h/d/​a%FF", "http://h/d/a﻿%FF"),
+        cold_resolve(c(zw_ref, mid_ref, zw_abs), base, NULL),
+        cold_resolve(c(zw_ref, mid_ref, zw_abs), base, "whatwg"),
         label = paste(ct, "NULL references")
-      )
-      expect_bytes(
-        cold_resolve("a", c(zw_base, mid_base), NULL),
-        c(NA_character_, "http://h/﻿d/a"),
-        label = paste(ct, "NULL bases")
       )
     })
   })
 
-  test_that(paste("rfc3986 and NULL keep an undecodable U+FEFF,", ct), {
+  test_that(paste("rfc3986 refuses an undecodable U+FEFF,", ct), {
     with_ctype(ct, ctypes[[ct]], {
       bom_ref <- octets(bom, 0x61, 0xff)
       bom_base <- octets(bom, utf8ToInt(base), 0xff)
@@ -138,14 +134,6 @@ for (ct in names(ctypes)) {
       expect_bytes(
         cold_resolve("a", bom_base, "rfc3986"), NA_character_,
         label = paste(ct, "rfc3986 base")
-      )
-      expect_bytes(
-        cold_resolve(bom_ref, base, NULL), "http://h/d/﻿a%FF",
-        label = paste(ct, "NULL reference")
-      )
-      expect_bytes(
-        cold_resolve("a", bom_base, NULL), NA_character_,
-        label = paste(ct, "NULL base")
       )
     })
   })

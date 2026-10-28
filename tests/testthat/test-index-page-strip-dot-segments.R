@@ -8,23 +8,12 @@
 # step 3 had an unstated precondition -- a resolved path -- that step 2 does
 # not guarantee, because `path_normalization` defaults to "none".
 #
-# This fix MOVES `url_standard = NULL` rows, which ADR 0007 freezes, and ADR
-# 0016 is what licenses it: the freeze binds selector-CAUSED drift, and this
-# is a defect in the default path itself -- `http://example.com/..` escapes the
-# document root under no standard, profile or documented contract. Per ADR 0016
-# the fix carries a witness (the tests below run under the default selector, and
-# the first pins that omitting the argument and passing NULL explicitly agree)
-# and a signature (index_page_handling = "strip" on paths whose strip leaves a
-# dot segment in FINAL position -- the "path_normalization = 'none'" test below
-# bounds it from the other side).
-#
-# The named arms were ALREADY correct, by a different route: their
-# path_normalization = "dot_segments" resolves at step 2, so the new branch is
-# unreachable there ("selector arms are unreachable", below). One defect did not
-# manifest identically across the three arms -- which is exactly why membership
-# in `.URL_STANDARD_PROFILES` does NOT license this fix. That table is
-# conflict-matrix ownership, not behavioral independence; ADR 0016 falsifies the
-# reading this comment used to assert.
+# The fix was made on the then-default frozen `url_standard = NULL` profile.
+# ADR 0020 retired that profile: the default is now "whatwg" (NULL reads as
+# it), whose path_normalization = "dot_segments" resolves at step 2 and
+# leaves the strip nothing to expose ("selector arms", below). The branch
+# stays reachable where path_normalization is "none": `profile =
+# "rfc-syntax"`, whose own value it is, and which these tests now drive.
 
 test_that("stripping an index page never exposes a trailing dot segment", {
   inputs <- c(
@@ -42,16 +31,8 @@ test_that("stripping an index page never exposes a trailing dot segment", {
     "http://example.com/"
   )
   expect_identical(
-    safe_parse_urls(inputs, index_page_handling = "strip")$clean_url,
-    expected
-  )
-  # ADR 0016's witness requirement: the omitted argument and an explicit NULL
-  # are the same arm, so the defect this file fixes is demonstrably in the
-  # frozen default path rather than in a selector arm.
-  expect_identical(
-    safe_parse_urls(inputs,
-      url_standard = NULL, index_page_handling = "strip"
-    )$clean_url,
+    safe_parse_urls(inputs, profile = "rfc-syntax",
+                    index_page_handling = "strip")$clean_url,
     expected
   )
 })
@@ -89,18 +70,12 @@ test_that("path_normalization = 'none' still means none for visible dots", {
   # normalization choice to make; resolving them would be an unrequested
   # normalization. Only a dot segment the strip left in FINAL position is
   # resolved.
-  expect_identical(
-    get_path("http://example.com/a/./b/index.html",
-      index_page_handling = "strip"
-    ),
-    "/a/./b"
-  )
-  expect_identical(
-    get_path("http://example.com/a/../b/index.html",
-      index_page_handling = "strip"
-    ),
-    "/a/../b"
-  )
+  rs <- function(u) {
+    safe_parse_urls(u, profile = "rfc-syntax",
+                    index_page_handling = "strip")$path
+  }
+  expect_identical(rs("http://example.com/a/./b/index.html"), "/a/./b")
+  expect_identical(rs("http://example.com/a/../b/index.html"), "/a/../b")
 })
 
 test_that("index_page_handling = 'keep' output is untouched", {
@@ -110,7 +85,8 @@ test_that("index_page_handling = 'keep' output is untouched", {
     "http://example.com/a/../default.aspx"
   )
   expect_identical(
-    safe_parse_urls(inputs, index_page_handling = "keep")$clean_url,
+    safe_parse_urls(inputs, profile = "rfc-syntax",
+                    index_page_handling = "keep")$clean_url,
     inputs
   )
 })
@@ -155,11 +131,22 @@ test_that("the invariant holds across the frame, not just one URL shape", {
                       stringsAsFactors = FALSE)
   urls <- sprintf(grid$frame, grid$payload, "index.html")
 
-  for (pn in c("none", "collapse_slashes", "dot_segments", "both")) {
+  # "none" and "collapse_slashes" are reachable on rfc-syntax only (the
+  # default whatwg rejects them, ADR 0020 D4a); the other two run on both.
+  arms <- list(
+    list(pn = "none", profile = "rfc-syntax"),
+    list(pn = "collapse_slashes", profile = "rfc-syntax"),
+    list(pn = "dot_segments", profile = "rfc-syntax"),
+    list(pn = "both", profile = "rfc-syntax"),
+    list(pn = "dot_segments", profile = NULL),
+    list(pn = "both", profile = NULL)
+  )
+  for (arm in arms) {
+    pn <- arm$pn
     for (ts in c("none", "keep", "strip")) {
       cleaned <- safe_parse_urls(urls,
         index_page_handling = "strip", path_normalization = pn,
-        trailing_slash_handling = ts
+        trailing_slash_handling = ts, profile = arm$profile
       )$clean_url
       paths <- get_path(cleaned)
       offenders <- cleaned[!is.na(paths) &

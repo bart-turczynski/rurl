@@ -2,8 +2,10 @@
 #
 # Some stringi functions skip a U+FEFF (the byte-order mark) at the start of
 # their input (see .starts_with_bom()). A path led by the mark is ordinary path
-# data under the WHATWG URL Standard (path state) and under the NULL selector,
-# so the path dials must treat it like any other code point. Under rfc3986 it
+# data under the WHATWG URL Standard (path state), so the path dials must
+# treat it like any other code point. The frozen NULL selector, which handed
+# the dials a rootless mark-led `file:` path, is retired (ADR 0020): `NULL`
+# reads as whatwg, whose file state roots the path first. Under rfc3986 it
 # is a parse error (RUL-030; RFC 3986 sections 2 and 2.5). Each U+FEFF row
 # has a U+200B twin: a zero-width code point stringi does not skip, so a twin
 # that already gives the right answer shows the defect is the mark's alone.
@@ -12,7 +14,7 @@ bom <- "\ufeff"
 zwsp <- "\u200b"
 
 # The parsed path under one arm. `NULL` omits the selector, as the default call
-# does; the NULL test below also passes it explicitly.
+# does.
 arm_path <- function(url, arm, ...) {
   if (is.null(arm)) {
     safe_parse_url(url, ...)$path
@@ -21,13 +23,14 @@ arm_path <- function(url, arm, ...) {
   }
 }
 
-arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986", "NULL" = NULL)
+arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986")
 
 # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): under rfc3986 a raw
 # non-ASCII code point, U+FEFF and U+200B included, is a parse error (RFC 3986
 # sections 2, 2.5 and 3.2.2: a URI is US-ASCII and non-ASCII data is written
 # as percent-encoded UTF-8), so `safe_parse_url()` returns NULL for such a row
-# there and the path dials never see it. The NULL arm keeps the coverage.
+# there and the path dials never see it. The direct helper calls keep the
+# coverage of a mark-led rootless path.
 rfc_null <- function(an, value) {
   if (identical(an, "rfc3986")) NULL else value
 }
@@ -36,11 +39,11 @@ rfc_null <- function(an, value) {
 
 test_that("the U+200B twins already keep the code point in every arm", {
   # Under whatwg the file state roots the path first, so the code point is not
-  # the first character any helper sees. Under rfc3986 and NULL the path is
-  # rootless. `._strip_index_page()` roots the directory it keeps
+  # the first character any helper sees. Under rfc3986 the row is an error.
+  # `._strip_index_page()` roots the directory it keeps
   # (`foo/index.html` gives `/foo`, pinned in test-rurl-coverage.R); the
   # encoder and the trailing-slash strip keep a rootless path rootless.
-  rooted <- list(whatwg = TRUE, rfc3986 = FALSE, "NULL" = FALSE)
+  rooted <- list(whatwg = TRUE, rfc3986 = FALSE)
   for (an in names(arms)) {
     arm <- arms[[an]]
     lead <- if (rooted[[an]]) "/" else ""
@@ -221,7 +224,7 @@ test_that("index-page strip keeps a mark that starts the kept directory", {
   expect_identical(._strip_index_page("/a/INDEX.PHP"), "/a")
   expect_identical(._strip_index_page("index.html"), "index.html")
   expect_identical(._strip_index_page("a/index.html"), "/a")
-  for (an in c("rfc3986", "NULL")) {
+  for (an in "rfc3986") {
     arm <- arms[[an]]
     expect_identical(
       arm_path("file:\ufeff/index.html", arm, index_page_handling = "strip"),
@@ -243,7 +246,7 @@ test_that("the path encoder keeps a mark-led path rootless", {
   expect_identical(.rfc3986_path_percent_encode("\u200b/a"), "%E2%80%8B/a")
   expect_identical(.rfc3986_path_percent_encode("/\ufeff/a"), "/%EF%BB%BF/a")
   expect_identical(.rfc3986_path_percent_encode("/a b/"), "/a%20b/")
-  for (an in c("rfc3986", "NULL")) {
+  for (an in "rfc3986") {
     expect_identical(
       arm_path("file:\ufeff/a", arms[[an]], path_encoding = "encode"),
       rfc_null(an, "%EF%BB%BF/a"), label = an
@@ -255,46 +258,13 @@ test_that("the path encoder keeps a mark-led path rootless", {
   )
 })
 
-test_that("NULL: the index strip and the encoder keep the mark (ADR 0016)", {
-  # Witness: under the frozen selector the parsed path of `file:\ufeff/a`
-  # is `\ufeff/a`, and the two dials dropped or rooted the mark. No standard
-  # or documented contract sanctions either, so this is a default-path defect,
-  # not selector-caused drift. Omitting the selector and passing NULL agree.
-  for (p in list(
-    safe_parse_url("file:\ufeff/a/index.html", index_page_handling = "strip"),
-    safe_parse_url("file:\ufeff/a/index.html", url_standard = NULL,
-                   index_page_handling = "strip")
-  )) {
-    expect_identical(p$path, "/\ufeff/a")
-  }
-  for (p in list(
-    safe_parse_url("file:\ufeff/a", path_encoding = "encode"),
-    safe_parse_url("file:\ufeff/a", url_standard = NULL,
-                   path_encoding = "encode")
-  )) {
-    expect_identical(p$path, "%EF%BB%BF/a")
-  }
-  # Signature: only the `path` of a path that starts with the mark moves, and
-  # only under `index_page_handling = "strip"` or `path_encoding = "encode"`.
-  # These rows are parse errors under NULL before and after; the status and
-  # `clean_url` do not move, nor does the path without the dial. Per arm:
-  # whatwg was already right (its file state roots the path first, pinned
-  # above); rfc3986 rejects the row (RUL-030, pinned above).
-  p <- safe_parse_url("file:\ufeff/a/index.html", index_page_handling = "strip")
-  expect_identical(p$parse_status, "error")
-  expect_identical(p$clean_url, NA_character_)
-  expect_identical(safe_parse_url("file:\ufeff/a/index.html")$path,
-                   "\ufeff/a/index.html")
-  expect_identical(safe_parse_url("file:\ufeff/a")$path, "\ufeff/a")
-})
-
 # --- Defect: the trailing-slash strip -----------------------------------------
 
 test_that("the trailing-slash strip keeps a mark that starts the path", {
   # The strip cut with stri_sub(), which read past the mark while
   # stri_length() counted it, so `\ufeff/a/` became `/a/`: the mark was lost
   # and the slash kept.
-  for (an in c("rfc3986", "NULL")) {
+  for (an in "rfc3986") {
     arm <- arms[[an]]
     expect_identical(
       arm_path("file:\ufeff/a/", arm, trailing_slash_handling = "strip"),
@@ -319,7 +289,8 @@ test_that("the trailing-slash strip keeps a mark that starts the path", {
     arm_path("foo:\ufeff/a/b/", "rfc3986", trailing_slash_handling = "strip",
              scheme_acceptance = "general")
   )
-  # The strip and the index strip compose: the index strip runs first.
+  # The strip and the index strip compose: the index strip runs first. The
+  # default whatwg roots the path first.
   expect_identical(
     arm_path("file:\ufeff/a/index.html/", NULL,
              index_page_handling = "strip",
@@ -330,30 +301,6 @@ test_that("the trailing-slash strip keeps a mark that starts the path", {
     arm_path("file:\ufeff/a/index.html/", "rfc3986",
              index_page_handling = "strip",
              trailing_slash_handling = "strip")
-  )
-})
-
-test_that("NULL: the trailing-slash strip keeps the mark (ADR 0016)", {
-  # Witness: the frozen selector's path of `file:\ufeff/a/` is `\ufeff/a/`
-  # and the strip returned `/a/`, which no standard or contract sanctions.
-  # Omitting the selector and passing NULL agree.
-  for (p in list(
-    safe_parse_url("file:\ufeff/a/", trailing_slash_handling = "strip"),
-    safe_parse_url("file:\ufeff/a/", url_standard = NULL,
-                   trailing_slash_handling = "strip")
-  )) {
-    expect_identical(p$path, "\ufeff/a")
-    # Signature: only the path moves; the row is a parse error under NULL
-    # before and after, with no `clean_url`. whatwg was already right (its
-    # path is rooted, pinned above) and rfc3986 rejects the row (RUL-030).
-    expect_identical(p$parse_status, "error")
-    expect_identical(p$clean_url, NA_character_)
-  }
-  expect_identical(safe_parse_url("file:\ufeff/a/")$path, "\ufeff/a/")
-  expect_identical(
-    safe_parse_url("http://h.example/a/",
-                   trailing_slash_handling = "strip")$path,
-    "/a"
   )
 })
 

@@ -32,16 +32,15 @@ test_that("the scheme_class vocabulary is special/non-special/missing", {
   )
 })
 
-# --- get_scheme_class() with no selector (ADR 0015) ---------------------------
+# --- get_scheme_class() with no selector (ADR 0020 D4) ------------------------
 
-test_that("get_scheme_class requires url_standard", {
+test_that("get_scheme_class reads a missing or NULL url_standard as whatwg", {
   u <- c("http://example.com/", "ftps://example.com/", "not-a-url")
   # The classification tokens are standard-invariant, but the parse that
-  # resolves the scheme is not, so the profile still has to be named.
-  expect_error(get_scheme_class(u), "`url_standard` is required")
-  expect_error(
-    get_scheme_class(u, url_standard = NULL), "`url_standard` is required"
-  )
+  # resolves the scheme is not; the default names whatwg (ADR 0020 D4).
+  want <- get_scheme_class(u, url_standard = "whatwg")
+  expect_identical(get_scheme_class(u), want)
+  expect_identical(get_scheme_class(u, url_standard = NULL), want)
 })
 
 # --- Classification under a selector ------------------------------------------
