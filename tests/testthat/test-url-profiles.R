@@ -69,6 +69,22 @@ test_that("explicit overrides win and flag customized", {
   expect_false(url_profile("browser")$customized)
 })
 
+test_that("a url_standard = NULL override reads as \"whatwg\" (ADR 0020 D4)", {
+  # NULL means "whatwg" everywhere, so url_profile() reports the standard the
+  # parse uses. It used to resolve NULL with match.arg(), which picks the
+  # first choice, "rfc3986".
+  expect_identical(
+    url_profile("seo", url_standard = NULL)$url_standard, "whatwg"
+  )
+  expect_identical(
+    url_profile("rfc-syntax", url_standard = NULL)$url_standard, "whatwg"
+  )
+  expect_identical(
+    url_profile("rfc-syntax", url_standard = NULL)$url_standard,
+    rurl:::.parse_options(url_standard = NULL)$url_standard
+  )
+})
+
 test_that("url_profile() rejects unknown profiles and overrides", {
   expect_error(url_profile("nope"), "profile must be NULL")
   expect_error(url_profile(), "requires a profile name")

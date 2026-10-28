@@ -124,6 +124,11 @@ url_profile <- function(profile = NULL, ...) {
         call. = FALSE
       )
     }
+    # A NULL url_standard means "whatwg" (ADR 0020 D4), as it does at every
+    # entry point; match.arg(NULL, ...) would pick the first choice instead.
+    if ("url_standard" %in% nms && is.null(supplied$url_standard)) {
+      supplied["url_standard"] <- list(.validate_url_standard(NULL))
+    }
     for (knob in nms) {
       supplied[[knob]] <- match.arg(
         supplied[[knob]], .profile_knob_choices[[knob]]
