@@ -28,9 +28,9 @@
 # U+2028 or U+2029, spelled as UTF-8 bytes). `\z` is the true end only. A
 # site whose class before the anchor absorbs every terminator writes `\z`,
 # which is then the same; the rest write `.ICU_END`, so a row such as
-# "1.2.3.4\n" keeps the reading it had (the `NULL` profile is byte-frozen,
-# ADR 0016). The lookbehind refuses the point between the CR and LF of a
-# final CRLF, which ICU's `$` does not take: CRLF is one terminator.
+# "1.2.3.4\n" keeps the reading it had. The lookbehind refuses the point
+# between the CR and LF of a final CRLF, which ICU's `$` does not take: CRLF
+# is one terminator.
 .ICU_END <- paste0(
   "(?=(?:\\r\\n|[\\n\\x0b\\x0c\\r]|\\xc2\\x85|\\xe2\\x80[\\xa8\\xa9])?\\z)",
   "(?!(?<=\\r)\\n)"
@@ -1482,8 +1482,8 @@
 # Under "keep" the row reports no scheme, as every "keep" row does (Phase 13);
 # under "http" or "https" it reports the assumed scheme, so the row parses as
 # its spelled `http:///p` or `https:///p` twin does. "error" rejects the row
-# in Phase 1, and `whatwg` and the no-selector default read the slash run the
-# special-scheme way, so none of them gets the prefix here.
+# in Phase 1, and `whatwg` reads the slash run the special-scheme way, so
+# none of them gets the prefix here.
 .general_route_input_vec <- function(url, opts) {
   url <- .apply_browser_fixup_vec(
     url, opts$fixup_posture, opts$url_standard, opts$scheme_policy
@@ -1545,8 +1545,7 @@
   # A row led by U+FEFF (after step 1 under WHATWG) has no scheme, so it is
   # never a scheme or scheme-relative row, and the rewrites below leave it
   # alone: WHATWG's scheme start state and RFC 3986 S3.1 both need an ASCII
-  # alpha first, and NULL reads such a row like one led by any other code point
-  # that cannot start a scheme. Every scheme and "//" test below runs in byte
+  # alpha first. Every scheme and "//" test below runs in byte
   # mode or base R, which reads the mark as data (ADR 0019), so the
   # `.starts_with_bom()` mask the stringi matches needed (RURL-vhionecz,
   # RURL-biunpazk) is gone (RURL-dddxutjf).
@@ -2465,10 +2464,7 @@
 }
 
 # Phase 5b (vector): the url_standard host IPv4/reg-name model (RURL-luwvkwhd,
-# PRD §6.2). A no-op when url_standard is NULL (returns the parsed host / IP
-# flag
-# unchanged, never fatal), so the default pipeline is byte-for-byte unaffected
-# (AC #1).
+# PRD §6.2).
 #
 # The web parser already coerces numeric IPv4 forms itself (2130706433 ->
 # 127.0.0.1,
@@ -2618,8 +2614,8 @@
 # spelling policed `<U+200B>www.com` as a host whose first label is not
 # `www`, a different host from the `www.com` WHATWG records. The policies now
 # run after the mapping instead: they read the `keep` rendering, which Phase 9
-# maps to itself under every `host_encoding`. `rfc3986` and the `NULL` arm
-# have no mapping step and read the host as written.
+# maps to itself under every `host_encoding`. `rfc3986` has no mapping step
+# and reads the host as written.
 .policy_host_vec <- function(host, elig, url_standard) {
   if (.is_whatwg(url_standard) && any(elig)) {
     host[elig] <- .whatwg_host_presentation_vec(host[elig], "keep")
@@ -2883,7 +2879,7 @@
   # When the policy trims none of their labels they stay as written, rather
   # than take the rebuild below, which lowercases the registrable labels; the
   # stringi reading left "<U+FEFF>WWW.Example.com" as written too. A mapped
-  # `whatwg` host holds no mark, so this only reaches `rfc3986` and `NULL`.
+  # `whatwg` host holds no mark, so this only reaches `rfc3986`.
   bom_www <- .starts_with_bom(fh)
   if (any(bom_www)) {
     bom_www[bom_www] <- startsWith(
@@ -2985,9 +2981,9 @@
   # change what the host IS (the ADR 0011 separation).
   #
   # Scoped to `rfc3986` precisely because that is the only profile that leaves
-  # a triplet standing; `whatwg` and the no-selector default have already
-  # decoded the host once, and decoding again would strip a LEVEL of encoding
-  # (`a%2560b` -> `a%60b` -> "a`b") rather than reveal one.
+  # a triplet standing; `whatwg` has already decoded the host once, and
+  # decoding again would strip a LEVEL of encoding (`a%2560b` -> `a%60b` ->
+  # "a`b") rather than reveal one.
   if (identical(url_standard, "rfc3986")) {
     subset <- vapply(subset, .whatwg_percent_decode_host, character(1),
       USE.NAMES = FALSE
@@ -3023,7 +3019,7 @@
 # The mapped form is computed once via `punycoder::host_normalize()`
 # (`.whatwg_domain_to_ascii()`) -- the call the `idna` branch already made,
 # never the ADR 0002 helpers, which stay the reversible (unmapped) renderers of
-# the `rfc3986` and `NULL` arms. When domain-to-ASCII fails the pre-encode host
+# the `rfc3986` arm. When domain-to-ASCII fails the pre-encode host
 # is kept, as before.
 .whatwg_host_presentation_vec <- function(subset, host_encoding) {
   mapped <- .whatwg_domain_to_ascii(subset)
@@ -4071,7 +4067,7 @@
     # consistent with the raw path/query. Under `url_standard = "whatwg"` the
     # caller has already re-encoded these three with their WHATWG percent-encode
     # sets (fragment / userinfo) before they reach this assembler; under
-    # `rfc3986` or no selector they are the raw source spelling.
+    # `rfc3986` they are the raw source spelling.
     fragment = fragment,
     user = user,
     password = password,

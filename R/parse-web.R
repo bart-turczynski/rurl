@@ -89,7 +89,7 @@
 #             [A-Za-z0-9._~|-]; then libcurl's IPv4 normalization. A bracketed
 #             host is an IPv6 literal, validated and re-serialized.
 #             This is `host_pct = "decode"` with `host_charset = "narrow"`, the
-#             no-selector default. `host_pct` changes how a parsed host is
+#             parser defaults. `host_pct` changes how a parsed host is
 #             SPELLED BACK and `host_charset` which literal bytes it may hold;
 #             both are documented at `.parse_web_url_one()` below.
 #   port      ":" then ASCII digits only, value <= 65535, leading zeros
@@ -467,8 +467,7 @@
 #   "restricted"  the decoded octet is judged against the literal set, so
 #                 "%2F", "%25", "%40" and the C0 range fail whichever way they
 #                 are written. This is libcurl's rule and WHATWG's
-#                 forbidden-host code points, and what the no-selector baseline
-#                 froze.
+#                 forbidden-host code points.
 #   "any"         any well-formed triplet is admissible whatever it denotes.
 #                 RFC 3986 S3.2.2's `reg-name = *( unreserved / pct-encoded /
 #                 sub-delims )` constrains which LITERAL bytes a reg-name holds
@@ -546,8 +545,8 @@
 # front of the parser until RURL-ezhzpkhg deletion 4, where it had to be
 # `whatwg`-only for a reason that no longer holds: the rewrite existed because
 # the OLD engine could not read `0x.0x.0`, not because `rfc3986` wants a
-# different address grammar than the no-selector baseline. Both still get
-# `narrow`, so nothing moves for them.
+# different address grammar than the libcurl reading. It still gets
+# `narrow`, so nothing moves for it.
 .web_host_ipv4_policy <- function(url_standard) {
   if (.is_whatwg(url_standard)) "whatwg" else "narrow"
 }
@@ -557,8 +556,7 @@
 #
 #   "slash"  the authority-only URL carries the path "/". WHATWG's
 #            path-start state pushes an empty segment for a special scheme, so
-#            `https://example.com` really does parse to path "/" there, and the
-#            no-selector baseline reproduces libcurl, which did the same.
+#            `https://example.com` really does parse to path "/" there.
 #   "keep"   the path stays EMPTY. RFC 3986 sec 3: `hier-part = "//" authority
 #            path-abempty` and `path-abempty = *( "/" segment )` -- zero or
 #            more, so the empty string is a well-formed path, and it is what
@@ -581,8 +579,7 @@
 #
 #   "u16"        the value must be <= 65535, or the parse fails. This is
 #                WHATWG's port state ("if port is greater than 2^16 - 1,
-#                port-out-of-range validation error, return failure") and what
-#                the no-selector baseline froze.
+#                port-out-of-range validation error, return failure").
 #   "unbounded"  any digit run is admissible. RFC 3986 sec 3.2.3 is
 #                `port = *DIGIT` with NO upper bound -- the 16-bit ceiling comes
 #                from TCP/UDP, the TRANSPORT layer, not from the URI generic
@@ -652,7 +649,7 @@
 #                      0.0.0.255
 #
 # The narrow flavor is rurl's own: libcurl's URL-host reading, calibrated
-# against real libcurl, for `url_standard = NULL` and `"rfc3986"`. The WHATWG
+# against real libcurl, for `url_standard = "rfc3986"`. The WHATWG
 # flavor is NOT read here. It is `raddr::addr_whatwg()`, through
 # `.whatwg_ipv4_read()` (ADR 0018, 2026-10-09 amendment: the open question
 # closed "no", so the narrow reading stays in tree for good, and the standard's
@@ -1082,8 +1079,9 @@
 # matching BEFORE a trailing one -- that this codebase has lost two sessions to.
 #
 # FOUR policy dials, all here rather than in front of the parser because all
-# describe *parsing*, not repair. Each defaults to the historical no-selector
-# behavior, and callers opt in per selected standard.
+# describe *parsing*, not repair. Each defaults to the behavior of the retired
+# no-selector profile (ADR 0020), and callers opt in per selected standard; a
+# default no selector asks for is kept as a parser mode only.
 #
 # `last_at_userinfo` -- split the authority at the LAST "@". WHATWG's authority
 # state buffers until the final "@" and prepends "%40" for each earlier one. It
@@ -1094,7 +1092,7 @@
 #
 # `host_pct` -- how a host that PARSED is spelled back. Rendering only:
 #
-#   "decode"  report the host with every triplet decoded. The no-selector
+#   "decode"  report the host with every triplet decoded. The parser
 #             default, and what WHATWG stores.
 #   "keep"    report it with only the unreserved triplets decoded and the rest
 #             left encoded, hex uppercased (RFC 3986 sections 6.2.2.2 and
@@ -1110,7 +1108,7 @@
 # only, and a property of the selected standard that no input can reveal:
 #
 #   "narrow"  libcurl's measured host set (`.WEB_HOST_ALLOWED_BYTES`). The
-#             no-selector default.
+#             parser default; no selector asks for it (ADR 0020).
 #   "whatwg"  plus the 15 code points WHATWG keeps in a host
 #             (`.WEB_HOST_GAP_BYTES`), literally AND percent-encoded: WHATWG's
 #             host parser percent-decodes first and only then checks forbidden
@@ -1122,10 +1120,10 @@
 #
 # The two are SEPARATE dials because the three standards do not agree on the
 # diagonal: `rfc3986` pairs "keep" rendering with the 11-byte literal set,
-# `whatwg` pairs "decode" with the 15-byte one, and the no-selector baseline
-# pairs "decode" with neither. A single dial had to pick one axis and smuggle
-# the other, which is how a value named after percent-decoding ended up
-# deciding whether a literal "!" was a legal host byte.
+# `whatwg` pairs "decode" with the 15-byte one, and the retired no-selector
+# profile paired "decode" with neither. A single dial had to pick one axis
+# and smuggle the other, which is how a value named after percent-decoding
+# ended up deciding whether a literal "!" was a legal host byte.
 #
 # Both were compensated for OUTSIDE the parser until ADR 0013, and each
 # compensation failed in its own way. The percent half masked every host
@@ -1137,7 +1135,7 @@
 #
 # `pqf_bytes` -- what a C0 control, SP or DEL in path/query/fragment means:
 #
-#   "reject"  a parse error, which is what libcurl did. The no-selector default
+#   "reject"  a parse error, which is what libcurl did. The parser default
 #             and the `rfc3986` setting -- neither `pchar`, `query` nor
 #             `fragment` admits those octets raw, and RFC 3986 has no
 #             escape-it-for-me rule to fall back on.
@@ -1162,8 +1160,9 @@
 # still a rejection.
 #
 #   "normalize"  the component pass's output: bytes >= 0x80 percent-encoded,
-#                then every "%XX" uppercased. The no-selector default -- what
-#                it has always stored, frozen by ADR 0007.
+#                then every "%XX" uppercased. The parser default, the retired
+#                no-selector profile's spelling; no selector asks for it
+#                (ADR 0020).
 #   "preserve"   the source slice with the `pqf_bytes = "encode"` escapes
 #                applied (as `.extract_raw_path_vec()` applies them to the
 #                path via `.web_escape_pqf_bytes()`) and NOTHING else: an
@@ -1202,8 +1201,8 @@
 # check and the "@" -> "%40" rewrite run first under both settings.
 #
 #   "normalize"  the two characters after every "%" on each side of the
-#                ":" uppercased. The no-selector default -- what it has always
-#                stored on this route, frozen by ADR 0007.
+#                ":" uppercased. The parser default, the retired no-selector
+#                profile's spelling; no selector asks for it (ADR 0020).
 #   "preserve"   each side stored as written. The `whatwg` setting: the WHATWG
 #                URL Standard's authority state percent-encodes userinfo code
 #                points with the userinfo percent-encode set, which does not
@@ -1222,7 +1221,7 @@
 # `host_ipv4` -- which host tokens are read as an IPv4 ADDRESS:
 #
 #   "narrow"  the historical set. No empty hex digits, no trailing dot, a
-#             lowercase "0x" prefix only. The no-selector default and the
+#             lowercase "0x" prefix only. The parser default and the
 #             `rfc3986` setting.
 #   "whatwg"  WHATWG's IPv4 parser, which reads all three of them
 #             (`.web_ipv4_normalize()` lists them), as `raddr::addr_whatwg()`

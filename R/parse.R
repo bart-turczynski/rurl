@@ -1136,10 +1136,8 @@ safe_parse_urls <- function(url,
 # (default) keeps the curated web-scheme allowlist -- scheme-bearing input
 # outside http/https/ftp/ftps/file is an error, now decoupled from
 # protocol_handling. "general" admits any syntactically valid scheme token and
-# defers interpretation to url_standard (hence D3's composition rule: general
-# requires a non-NULL url_standard). "general" is internal-only until the L3/L4
-# shapers land (ADR 0012 Layer-2 build-order gate); it is NOT on any public
-# signature yet.
+# defers interpretation to url_standard (D3's composition rule; every call
+# names a standard now that NULL reads as "whatwg", ADR 0020 D4).
 .opt_scheme_acceptance <- c("web", "general")
 # --- fixup_posture (RURL-jynceqrj, ADR 0012 Layer 6a) -----------------------
 # The input-repair axis: "none" (default) never touches the string; "browser"
@@ -1167,8 +1165,8 @@ safe_parse_urls <- function(url,
 # .URL_STANDARD_PROFILES.
 .opt_port_handling <- c("exclude", "keep", "strip_default", "strip_all")
 # credential_handling (RUL-001, ADR 0017 row 12): a policy dial on the clean
-# surface, not a standards axis, so it composes with every `url_standard`
-# including NULL. "strip" (default) is today's behavior byte-for-byte -- the
+# surface, not a standards axis, so it composes with every `url_standard`.
+# "strip" (default) is today's behavior byte-for-byte -- the
 # userinfo is dropped and the rest of the URL is emitted. "reject" sets
 # `clean_url` to NA whenever the parsed authority carried any userinfo
 # delimiter (RFC 3986 sec 3.2.1: "user:password" is deprecated and an
@@ -1179,14 +1177,10 @@ safe_parse_urls <- function(url,
 
 # --- url_standard selector (RURL-eqzkkohm) -----------------------------------
 #
-# `url_standard` is the top-level coherent-profile selector: NULL (today's
-# behavior, exactly) or one of the two governed standards. It is threaded
-# through every public parse/accessor function and stored on `opts` so later
-# tickets can consume it in Stage A/B. In THIS ticket (T1, RURL-bbojhnhu) the
-# profile->behavior mapping is a deliberate NO-OP: the argument exists,
-# validates, and conflict-checks, but path/host output is byte-for-byte
-# unchanged. T3/T4/T5 replace the placeholder behavior WITHOUT changing the
-# conflict matrix defined below.
+# `url_standard` is the top-level coherent-profile selector: one of the two
+# governed standards, "whatwg" by default; NULL is accepted and reads as
+# "whatwg" (ADR 0020 D4). It is threaded through every public parse/accessor
+# function and stored on `opts` for Stage A/B.
 .url_standard_choices <- c("rfc3986", "whatwg")
 
 # Final conflict matrix (PRD §5, D3; amended by ADR 0011 / RURL-sjnqhwtl). For
@@ -1836,8 +1830,8 @@ safe_parse_urls <- function(url,
 # List MUST key a distinct cache entry -- otherwise a second call under another
 # engine would reuse the first engine's memoized domain/TLD (a silent
 # correctness bug). NULL (the session-global default) returns "" so the
-# no-engine key stays byte-identical to the pre-engine format (mirroring how
-# `.if_null(opts$url_standard, "")` handles its NULL). A non-NULL engine is
+# no-engine key stays byte-identical to the pre-engine format. A non-NULL
+# engine is
 # keyed by its snapshot identity (the sha256 of the PSL list content), which is
 # stable across engine objects built from the same list -- so two engines over
 # the same list share a cache entry (correct: identical PSL output) while
@@ -1864,7 +1858,8 @@ safe_parse_urls <- function(url,
   # detection / host rejection / final host in Stage A, so it MUST enter the key
   # or a second call under a different standard would return a stale cached host
   # (AC #9). Option (a) from the PRD: one extra cache entry per URL per standard
-  # actually used. NULL maps to "" so the no-selector key is stable.
+  # actually used. opts$url_standard always names a standard (NULL reads as
+  # "whatwg" before it reaches opts, ADR 0020 D4).
   # scheme_policy is Stage-A-affecting (RURL-vzgeurae): under "require" it folds
   # scheme-less host-shaped rows into the reject set, changing what is parsed
   # (and whether a row survives at all). So it MUST enter the key, or a second
@@ -2170,13 +2165,10 @@ safe_parse_urls <- function(url,
 #     on it: whether an undecodable string is an error, or is read with
 #     U+FFFD replacement, is the parser's question under each standard, and
 #     the parsers answer it today (the whatwg arm replaces, the rfc3986 arm
-#     rejects, and the frozen default percent-encodes the octet in a web
-#     URL's path, query or fragment and rejects it elsewhere, RURL-yarkccco).
-#     An entry point that cannot hand the row to a parser acts on the verdict
-#     itself, as that parser would: resolve_url() reshapes both operands as
-#     strings first, so it reads an undecodable one as U+FFFD under whatwg,
-#     as NA under rfc3986, and under the frozen default resolves its octets
-#     and lets the parse of the result decide.
+#     rejects). An entry point that cannot hand the row to a parser acts on
+#     the verdict itself, as that parser would: resolve_url() reshapes both
+#     operands as strings first, so it reads an undecodable one as U+FFFD
+#     under whatwg and as NA under rfc3986.
 #
 # Ownership. The function that READS a URL string calls this, not its caller:
 # the parse funnel (._parse_urls_cached()) and the scalar and vector parse
@@ -2307,8 +2299,7 @@ safe_parse_urls <- function(url,
     !general_route
   # Splitting the authority at the LAST "@" is the WHATWG authority state, so it
   # is on for exactly that standard. NOT for `rfc3986`, which rejects a repeated
-  # raw "@" (P2.1 C-03; test-url-standard-authority.R), and not for the
-  # no-selector baseline.
+  # raw "@" (P2.1 C-03; test-url-standard-authority.R).
   #
   # The deleted pre-parse repair was gated `!is.null(url_standard)` instead, and
   # reproducing that here WIDENS `rfc3986` by 165 rows of the at-sweep corpus.
@@ -2392,9 +2383,9 @@ safe_parse_urls <- function(url,
   # is itself an RFC 3986 production, so a row admitted under it has no claim to
   # skip the grammar that defines it.
   #
-  # The mask is all-TRUE under `whatwg` and under the NULL no-selector default,
-  # so every non-rfc3986 output is bit-identical. `.parse_cache_keys()` already
-  # carries `url_standard`, so no cross-standard cache entry can go stale.
+  # The mask is all-TRUE under `whatwg`, so its output is bit-identical.
+  # `.parse_cache_keys()` already carries `url_standard`, so no cross-standard
+  # cache entry can go stale.
   parse_ok <- parse_ok &
     .rfc3986_uniform_gate_ok(prep$rfc_gate_input, opts$url_standard)
   null_row <- !parse_ok
@@ -2449,12 +2440,9 @@ safe_parse_urls <- function(url,
   # (R/parse-web.R, RUL-007, RUL-015): under `rfc3986` they are stored as
   # written, so an existing "%xx" keeps its hex case and a raw byte >= 0x80
   # stays raw, exactly as the re-derived path does; under `whatwg` an existing
-  # "%xx" keeps its hex case too but a byte >= 0x80 is encoded (RURL-djvqopjk);
-  # the no-selector default carries the component pass's normalized spelling
-  # (bytes >= 0x80 encoded, "%XX" uppercased). The userinfo's hex case is
-  # `userinfo_source`'s question (RURL-jzwshyqb, RURL-bxrbpzet): kept as
-  # written under `whatwg` and `rfc3986`, uppercased under the no-selector
-  # default.
+  # "%xx" keeps its hex case too but a byte >= 0x80 is encoded (RURL-djvqopjk).
+  # The userinfo's hex case is `userinfo_source`'s question (RURL-jzwshyqb,
+  # RURL-bxrbpzet): kept as written under `whatwg` and `rfc3986`.
   # .blank_to_na() maps a present-but-empty "" component to NA, which is where
   # the long-shipped "empty component == absent" behavior is enforced (see
   # .blank_to_na in utils.R).
@@ -2596,8 +2584,7 @@ safe_parse_urls <- function(url,
   # `.extract_raw_path_vec()` (and, under `rfc3986`, from
   # `.rfc3986_path_rootless_vec()`). Failing the row is the RURL-kmpnbvdl
   # contract: under `rfc3986` the uniform grammar gate already rejects these
-  # rows, and under the no-selector default no reading of the octets is
-  # sanctioned -- a "keep" path would hand Stage B bytes its path steps cannot
+  # rows -- a "keep" path would hand Stage B bytes its path steps cannot
   # read. `whatwg` never gets here: it parses a scalar-value string, the octet
   # already read as U+FFFD. `validUTF8()` is a byte test, so the verdict is
   # the same in every locale. The path is blanked so Stage B, which runs over
@@ -2639,11 +2626,10 @@ safe_parse_urls <- function(url,
   is_ip_host <- .detect_ip_host_vec(raw_host)
   is_ip_pre_model <- is_ip_host
 
-  # Phase 5b: url_standard host IPv4/reg-name model (RURL-luwvkwhd). No-op when
-  # url_standard is NULL. Under a selector it restores the RFC reg-name spelling
-  # (or keeps the parser's WHATWG coercion) and marks WHATWG-fatal numeric
-  # hosts,
-  # which are folded into the null-row set so they present as parse errors.
+  # Phase 5b: url_standard host IPv4/reg-name model (RURL-luwvkwhd). It
+  # restores the RFC reg-name spelling (or keeps the parser's WHATWG coercion)
+  # and marks WHATWG-fatal numeric hosts, which are folded into the null-row
+  # set so they present as parse errors.
   model <- .apply_host_standard_model_vec(
     prep$input_host, raw_host, is_ip_host, opts$url_standard,
     prep$is_ipv4_attempt
@@ -2855,8 +2841,7 @@ safe_parse_urls <- function(url,
     # stripped `index.html` and folded case that its own clean_url kept.
     # The governed dials reach here only through a named profile plus an
     # explicit override (ADR 0012 D6); index and trailing-slash handling also
-    # under a direct `url_standard`. Never under `url_standard = NULL`, which
-    # rejects `scheme_acceptance = "general"`.
+    # under a direct call, the default "whatwg" included.
     general_norm <- switch(opts$path_normalization,
       both = "dot_segments",
       collapse_slashes = "none",
@@ -3005,8 +2990,7 @@ safe_parse_urls <- function(url,
   # percent-encode set, so under `url_standard = "whatwg"` the PARSED `user` /
   # `password` columns carry that spelling. `a$raw_user` / `a$raw_password` are
   # the source slices and keep the raw spelling untouched (the escape hatch).
-  # Under `rfc3986` the columns stay source-preserving; under no selector they
-  # carry the web route's hex-case fold (`userinfo_source`, R/parse-web.R).
+  # Under `rfc3986` the columns stay source-preserving.
   #
   # Applied ONLY where the userinfo was actually SPLIT into a username and a
   # password, which is what `a$general_userinfo_split` records. Encoding an

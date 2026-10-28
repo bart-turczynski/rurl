@@ -799,9 +799,8 @@
 # it takes (web, path-rootless, `file:`, general): selecting a standard
 # selects its grammar, uniformly.
 #
-# Byte-identity elsewhere is by construction: any other selector (including the
-# NULL no-selector default) returns an all-TRUE mask, so `parse_ok` is
-# unchanged bit for bit.
+# Byte-identity elsewhere is by construction: `whatwg` returns an all-TRUE
+# mask, so `parse_ok` is unchanged bit for bit.
 #
 # NA input yields NA from the grammar; it is folded to FALSE here because such
 # rows are already non-parseable, and a mask must be a plain logical.
@@ -1200,7 +1199,7 @@
 
 # RFC 8089 `file:` overlay (ADR 0012 D1 / A.2, RURL-yutinyhb; two-gate model
 # RURL-obsweger). A THIN overlay used wherever `file:` is routed off the web
-# under the RFC model (`url_standard = "rfc3986"` and the NULL selector) -- the
+# under the RFC model (`url_standard = "rfc3986"`) -- the
 # WHATWG `file:` path (`.parse_whatwg_file_urls_vec`) is a SEPARATE state
 # machine and is left verbatim.
 #
@@ -1493,8 +1492,7 @@
   # scheme `www.php.net` + opaque path `80/x` -- exactly what the `rfc3986` arm
   # already reports above, because RFC 3986 sec 3.1 has the identical scheme
   # production. The carve-out is the omnibox affordance that `scheme_policy =
-  # "infer"` names (ADR 0010), so it survives there, and under the byte-frozen
-  # `url_standard = NULL` (ADR 0007), untouched. The default `"infer"` keeps
+  # "infer"` names (ADR 0010), so it survives there. The default `"infer"` keeps
   # every caller that does not pass the policy byte-identical.
   if (.is_whatwg(url_standard) && identical(scheme_policy, "require")) {
     host_port <- rep(FALSE, n)
@@ -1643,9 +1641,9 @@
 # shape the slice claims, the general parser returns the identical
 # scheme/path/query/fragment.
 #
-# `whatwg` and the no-selector default are untouched -- the mask is gated on
-# `url_standard == "rfc3986"` and returns all-FALSE for anything else, so both
-# stay byte-identical by construction.
+# `whatwg` is untouched -- the mask is gated on `url_standard == "rfc3986"`
+# and returns all-FALSE for anything else, so it stays byte-identical by
+# construction.
 #
 # It fires on EVERY acceptance posture, deliberately. Restricting it to
 # `scheme_acceptance == "general"` (the first attempt) preserved `web`-posture
