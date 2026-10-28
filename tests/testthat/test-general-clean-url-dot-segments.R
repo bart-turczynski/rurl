@@ -196,11 +196,13 @@ test_that("rfc-syntax: clean_url keeps the source path on the general route", {
   expect_identical(
     safe_parse_urls(rfc_rows, profile = "rfc-syntax")$clean_url, rfc_rows
   )
+  # The path column keeps the source hex case too: rfc-syntax runs no RFC
+  # 3986 section 6.2.2.1 case normalization (RURL-mbhuhwzk).
   expect_identical(
     general_rows(rfc_rows, profile = "rfc-syntax")$path,
     c(
-      "/a/../b", "/a/../b", "/a/%2E%2E/b", "a/../b", "/a/..//p", "/a/..//p",
-      "/a/../b", "/a/../b", "/%41b/C%2Fd", "/a/./b/", "a/..", "/a/b",
+      "/a/../b", "/a/../b", "/a/%2e%2e/b", "a/../b", "/a/..//p", "/a/..//p",
+      "/a/../b", "/a/../b", "/%41b/C%2fd", "/a/./b/", "a/..", "/a/b",
       "/a/..//p", "a:b/../c"
     )
   )

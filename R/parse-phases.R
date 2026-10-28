@@ -1819,35 +1819,6 @@
   )
 }
 
-
-# Uppercase the two hex digits of every %XX percent-triplet, leaving the rest of
-# the string untouched (`%2f` -> `%2F`). This keeps the historical no-selector
-# `path_encoding = "keep"` behavior and the RFC 3986 section 6.2.2.1 case
-# canonicalization path. Malformed `%` (not followed by two hex digits) is left
-# as-is. `\U\1` (perl) uppercases just the captured pair.
-#
-# The `\U` case mapping is locale-proof here (the captured pair is hex by
-# construction, and no locale case-maps `[0-9a-f]` outside `[0-9A-F]`), but the
-# ENCODING MARK of `gsub(perl = TRUE)` is not: handed native (`"unknown"`)
-# bytes it returns them still `"unknown"` under `LC_ALL=C` and marked `"UTF-8"`
-# under a UTF-8 session -- identical bytes, divergent mark, on every path/query
-# value that carries a non-ASCII byte. `.mark_host_utf8()` pins the mark the
-# same way the input and output chokepoints do: it DECLARES with `Encoding<-`
-# and never transcodes (`enc2utf8()` would re-decode in the session locale,
-# which is the locale sensitivity being removed). Pure-ASCII values are
-# unaffected -- R ignores a mark on them -- so this only touches the rows that
-# diverged.
-.uppercase_percent_hex <- function(x) {
-  na <- is.na(x)
-  if (all(na)) {
-    return(x)
-  }
-  x[!na] <- .mark_host_utf8(
-    gsub("%([0-9a-fA-F]{2})", "%\\U\\1", x[!na], perl = TRUE)
-  )
-  x
-}
-
 # Recover the raw request path from the prepared URL string (the exact bytes
 # the parser was handed), rather than `parsed_web$path`. Its `$path` applies
 # two normalizations even under `decode = FALSE`: it uppercases percent-hex and
@@ -2000,17 +1971,11 @@
         USE.NAMES = FALSE
       )
     }
-  } else if (path_identity == "none" &&
-               path_encoding %in% c("keep", "encode")) {
-    # Preserve the historical no-selector `keep` contract after Stage A became
-    # byte-faithful: percent-triplet hex case is canonicalized here instead of
-    # during raw extraction. `encode` gets the same, since it no longer
-    # decodes (RURL-dbyavcjt) and its old decode-and-escape wrote uppercase.
-    mask <- !is.na(path_work) & .bytes_detect(path_work, "%", fixed = TRUE)
-    if (any(mask)) {
-      path_work[mask] <- .uppercase_percent_hex(path_work[mask])
-    }
   }
+  # "none" (`profile = "rfc-syntax"`: RFC 3986 syntax, no normalization) has
+  # no identity step, so a triplet keeps its source hex case. The retired
+  # no-selector profile uppercased it here, which is RFC 3986 section 6.2.2.1
+  # case normalization (RURL-mbhuhwzk).
 
   # Slash collapsing.
   if (path_normalization %in% c("collapse_slashes", "both")) {

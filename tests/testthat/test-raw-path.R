@@ -1,10 +1,11 @@
 # Raw-path extraction (RURL-chdrlyci): path_normalization = "none" is lossless.
 #
 # rurl reads the request path from the input verbatim rather than from the
-# parser's
-# pre-normalized $path, so dot segments (and percent-encoded dot forms) survive
-# to path_normalization. The only parser normalization replayed is percent-hex
-# case (RFC 3986 section 6.2.2.1), which keeps %2F/%2f join-equivalent.
+# parser's pre-normalized $path, so dot segments (and percent-encoded dot
+# forms) survive to path_normalization. Under `profile = "rfc-syntax"` no
+# parser normalization is replayed, percent-hex case included: uppercasing
+# it is RFC 3986 section 6.2.2.1 case normalization, and rfc-syntax is
+# syntax with no normalization (RURL-mbhuhwzk).
 #
 # The default is `url_standard = "whatwg"` (ADR 0020), whose path state
 # resolves dot segments, `%2e` spellings included, and keeps a triplet's hex
@@ -60,26 +61,34 @@ test_that("dot_segments / both resolve literal . and .. (rurl-owned)", {
 })
 
 test_that("percent-encoded %2e is a path byte, not a dot (rfc-syntax)", {
-  # Preserved under "none" (hex-uppercased) ...
+  # Preserved under "none", hex case as written ...
   expect_equal(
     rs("http://ex.com/a/%2e%2e/b")$clean_url,
-    "http://ex.com/a/%2E%2E/b"
+    "http://ex.com/a/%2e%2e/b"
   )
   # ... and NOT collapsed even when dot-segment resolution is requested
   # (RFC 3986 section 5.2.4 operates on literal segments only).
   expect_equal(
     rs("http://ex.com/a/%2e%2e/b",
        path_normalization = "dot_segments")$clean_url,
-    "http://ex.com/a/%2E%2E/b"
+    "http://ex.com/a/%2e%2e/b"
   )
 })
 
-test_that("percent-hex case is canonicalized to uppercase (rfc-syntax)", {
-  expect_equal(rs("http://ex.com/a%2fb")$clean_url, "http://ex.com/a%2Fb")
+test_that("percent-hex case keeps the source spelling (rfc-syntax)", {
+  # rfc-syntax is RFC 3986 syntax with no normalization, so the section
+  # 6.2.2.1 hex-case fold does not run: `%2f` and `%7e` stay as written
+  # (RURL-mbhuhwzk; the uppercasing was the retired NULL profile's `keep`).
+  expect_equal(rs("http://ex.com/a%2fb")$clean_url, "http://ex.com/a%2fb")
   expect_equal(rs("http://ex.com/a%2Fb")$clean_url, "http://ex.com/a%2Fb")
+  expect_equal(rs("http://ex.com/%7e")$path, "/%7e")
   expect_equal(
-    rs("http://ex.com/a%2fb")$clean_url,
-    rs("http://ex.com/a%2Fb")$clean_url
+    safe_parse_url("http://a.com/%7e", profile = "rfc-syntax")$path,
+    "/%7e"
+  )
+  expect_equal(
+    rs("http://ex.com/%7e", path_encoding = "encode")$path,
+    "/%7e"
   )
 })
 
