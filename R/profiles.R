@@ -124,10 +124,13 @@ url_profile <- function(profile = NULL, ...) {
         call. = FALSE
       )
     }
-    # A NULL url_standard means "whatwg" (ADR 0020 D4), as it does at every
-    # entry point; match.arg(NULL, ...) would pick the first choice instead.
-    if ("url_standard" %in% nms && is.null(supplied$url_standard)) {
-      supplied["url_standard"] <- list(.validate_url_standard(NULL))
+    # url_standard is validated as at every entry point: NULL means "whatwg"
+    # (ADR 0020 D4), and a partial or multi-valued string is an error, where
+    # match.arg() would pick the first choice or partial-match.
+    if ("url_standard" %in% nms) {
+      supplied["url_standard"] <- list(
+        .validate_url_standard(supplied$url_standard)
+      )
     }
     for (knob in nms) {
       supplied[[knob]] <- match.arg(

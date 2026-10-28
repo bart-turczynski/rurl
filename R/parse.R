@@ -1577,7 +1577,10 @@ safe_parse_urls <- function(url,
   escape <- if (is.null(component)) {
     "parse with profile = \"rfc-syntax\""
   } else {
-    sprintf("use safe_parse_urls(profile = \"rfc-syntax\")$%s", component)
+    sprintf(
+      "use safe_parse_urls(x, profile = \"rfc-syntax\", %s = \"%s\")$%s",
+      knob, value, component
+    )
   }
   stop(
     sprintf(

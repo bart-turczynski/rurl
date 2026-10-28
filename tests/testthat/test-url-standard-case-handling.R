@@ -97,14 +97,22 @@ test_that("get_host/get_path/get_clean_url enforce case_handling conflict", {
 test_that("the conflict error names a way out the caller can take", {
   u <- "http://EX.com/Path"
   # get_host() and get_path() take no `profile`, so they point at the
-  # safe_parse_urls() column instead.
+  # safe_parse_urls() column instead, with the knob the caller passed.
   expect_error(
     get_host(u, case_handling = "upper"),
-    "safe_parse_urls(profile = \"rfc-syntax\")$host", fixed = TRUE
+    paste0(
+      "safe_parse_urls(x, profile = \"rfc-syntax\", ",
+      "case_handling = \"upper\")$host"
+    ),
+    fixed = TRUE
   )
   expect_error(
     get_path(u, case_handling = "upper"),
-    "safe_parse_urls(profile = \"rfc-syntax\")$path", fixed = TRUE
+    paste0(
+      "safe_parse_urls(x, profile = \"rfc-syntax\", ",
+      "case_handling = \"upper\")$path"
+    ),
+    fixed = TRUE
   )
   # The escape says what else rfc-syntax changes, since following it can
   # drop a scheme-less row.

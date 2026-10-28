@@ -443,3 +443,17 @@ test_that("canonical_join() rejects an unknown profile up front", {
     "profile must be NULL or one of"
   )
 })
+
+test_that("a url_standard override is validated as at every entry point", {
+  # match.arg() would partial-match "rfc" or pick the first of two values;
+  # safe_parse_url() refuses both, and so does url_profile() (RURL-mbhuhwzk
+  # second-pass review).
+  expect_error(url_profile("seo", url_standard = "rfc"), "url_standard must be")
+  expect_error(
+    url_profile("seo", url_standard = c("whatwg", "rfc3986")),
+    "url_standard must be"
+  )
+  expect_identical(
+    url_profile("seo", url_standard = "rfc3986")$url_standard, "rfc3986"
+  )
+})
