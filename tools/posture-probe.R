@@ -293,7 +293,11 @@ probe_posture <- function(url, posture, ns, root, base = NULL, oracle_env = NULL
                          "scheme_policy = \"infer\", scheme_acceptance = ",
                          "\"web\") is not the WHATWG recipe"))
   }
-  out <- c(out, sprintf("   call: safe_parse_url(url, %s)", fmt_args(spec$args)))
+  call_args <- fmt_args(spec$args)
+  out <- c(out, sprintf(
+    "   call: safe_parse_url(url%s)",
+    if (nzchar(call_args)) paste0(", ", call_args) else ""
+  ))
   if (!is.null(spec$expands)) {
     out <- c(out, sprintf("         profile expands to: %s", fmt_args(spec$expands)))
   }
