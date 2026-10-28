@@ -271,9 +271,11 @@ get_parse_status <- function(url,
 #' get_clean_url("Example.COM/Path") # Default lower_host: host folds, path kept
 #' get_clean_url(
 #'   "Example.COM/Path",
-#'   case_handling = "keep",
+#'   case_handling = "lower", # shapes clean_url only under "whatwg"
 #'   trailing_slash_handling = "keep"
 #' )
+#' # Keeping the input's case is RFC 3986 syntax with no normalization:
+#' get_clean_url("http://Example.COM/Path", profile = "rfc-syntax")
 #' get_clean_url(
 #'   "Example.COM/Path/",
 #'   case_handling = "upper",
