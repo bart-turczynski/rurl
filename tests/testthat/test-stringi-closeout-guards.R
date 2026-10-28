@@ -182,17 +182,20 @@ test_that("the RFC 3986 grammar reads a U+FEFF-led row as its U+200B twin", {
   # whole-string ASCII test flags it as well.
   b <- paste0(bom, sub("{M}", "", scheme_rows, fixed = TRUE))
   Encoding(b) <- "UTF-8"
-  for (ascii_only in c(TRUE, FALSE)) {
-    g <- rurl:::.rfc3986_generic_uri_ok(b, ascii_only = ascii_only)
-    expect_identical(g$ok, rep(FALSE, length(b)),
-                     label = paste("ok, ascii_only =", ascii_only))
-    expect_identical(g$diagnostic,
-                     rep("unicode-outside-rfc3986-uri", length(b)),
-                     label = paste("diagnostic, ascii_only =", ascii_only))
-    expect_twins(scheme_rows, function(u) {
-      rurl:::.rfc3986_generic_uri_ok(u, ascii_only = ascii_only)
-    }, label = paste("grammar", ascii_only))
-  }
+  g <- rurl:::.rfc3986_generic_uri_ok(b)
+  expect_identical(g$ok, rep(FALSE, length(b)), label = "ok")
+  expect_identical(g$diagnostic,
+                   rep("unicode-outside-rfc3986-uri", length(b)),
+                   label = "diagnostic")
+  # The component walk alone rejects the row too: no scheme.
+  expect_identical(rurl:::.rfc3986_generic_uri_ok_walk(b),
+                   rep(FALSE, length(b)), label = "walk")
+  expect_twins(scheme_rows, function(u) {
+    rurl:::.rfc3986_generic_uri_ok(u)
+  }, label = "grammar")
+  expect_twins(scheme_rows, function(u) {
+    rurl:::.rfc3986_generic_uri_ok_walk(u)
+  }, label = "walk")
 })
 
 test_that("a U+FEFF-led row is never general-routed, as its U+200B twin", {
@@ -225,11 +228,8 @@ test_that("a native-marked U+FEFF-led row finds no scheme either", {
   # mark; the byte-mode scheme capture must too.
   b <- paste0("\xef\xbb\xbf", sub("{M}", "", scheme_rows, fixed = TRUE))
   Encoding(b) <- "unknown"
-  for (ascii_only in c(TRUE, FALSE)) {
-    g <- rurl:::.rfc3986_generic_uri_ok(b, ascii_only = ascii_only)
-    expect_identical(g$ok, rep(FALSE, length(b)),
-                     label = paste("ok, ascii_only =", ascii_only))
-  }
+  g <- rurl:::.rfc3986_generic_uri_ok(b)
+  expect_identical(g$ok, rep(FALSE, length(b)), label = "ok")
   for (an in names(arms)) {
     expect_identical(
       rurl:::.general_parsed_mask(b, arms[[an]], "general"),

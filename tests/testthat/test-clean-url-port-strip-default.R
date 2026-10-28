@@ -140,15 +140,20 @@ test_that("whatwg: the parse-record port column uses the parsed scheme", {
   )$port
   expect_identical(got, c(NA, 443L, 8080L, NA, 8080L, 80L))
   expect_identical(got, get_port(.port_inputs, url_standard = "whatwg"))
-  # rfc3986 and NULL report the raw syntactic port: unchanged.
-  for (s in list("rfc3986", NULL)) {
-    expect_identical(
-      safe_parse_urls(
-        .port_inputs, url_standard = s, protocol_handling = "https"
-      )$port,
-      c(80L, 443L, 8080L, 443L, 8080L, 80L)
-    )
-  }
+  # NULL is "whatwg" (ADR 0020).
+  expect_identical(
+    safe_parse_urls(
+      .port_inputs, url_standard = NULL, protocol_handling = "https"
+    )$port,
+    got
+  )
+  # rfc3986 reports the raw syntactic port: unchanged.
+  expect_identical(
+    safe_parse_urls(
+      .port_inputs, url_standard = "rfc3986", protocol_handling = "https"
+    )$port,
+    c(80L, 443L, 8080L, 443L, 8080L, 80L)
+  )
 })
 
 test_that("general: a non-special scheme upgraded to https keeps :443", {

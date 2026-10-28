@@ -6,33 +6,41 @@
 # it. The `path` column and the path inside clean_url are two renderings of the
 # same parse, so they must not disagree on the slashes.
 #
-# Reachability. `scheme_acceptance = "general"` is an error under
-# `url_standard = NULL`, and a direct `url_standard = "rfc3986"` or
-# `"whatwg"` rejects an explicit `path_normalization` as selector-governed.
-# The only route to a general-routed row with a collapsing dial is a named
-# profile plus an explicit override (ADR 0012 D6). The default `NULL` path can
-# therefore never reach this code, so no NULL output moves and no ADR 0016
-# drift evidence applies; the NULL test below pins both refusals.
+# Reachability. A direct `url_standard = "rfc3986"` rejects an explicit
+# collapsing `path_normalization` as selector-governed. Under `"whatwg"`, the
+# default since ADR 0020 (NULL reads as it), "collapse_slashes" is rejected
+# too and "both" collapses slashes in clean_url only (D4a) -- and not on a
+# general-routed row, whose clean_url keeps its slashes. The other route to a
+# general-routed row with a collapsing dial is a named profile plus an
+# explicit override (ADR 0012 D6).
 
 dials <- c("both", "collapse_slashes")
 
 # --- Reachability -------------------------------------------------------------
 
-test_that("NULL and the direct selectors cannot reach a collapsing dial", {
+test_that("the direct selectors cannot reach a collapsing dial", {
   for (pn in dials) {
     expect_error(
-      safe_parse_urls("foo://h/a//b", scheme_acceptance = "general",
+      safe_parse_urls("foo://h/a//b", url_standard = "rfc3986",
+                      scheme_acceptance = "general",
                       path_normalization = pn),
-      "requires an explicit url_standard"
+      "governs `path_normalization`"
     )
-    for (std in c("rfc3986", "whatwg")) {
-      expect_error(
-        safe_parse_urls("foo://h/a//b", url_standard = std,
-                        scheme_acceptance = "general",
-                        path_normalization = pn),
-        "governs `path_normalization`"
-      )
-    }
+  }
+  for (std in list(NULL, "whatwg")) {
+    expect_error(
+      safe_parse_urls("foo://h/a//b", url_standard = std,
+                      scheme_acceptance = "general",
+                      path_normalization = "collapse_slashes"),
+      "governs `path_normalization`"
+    )
+    # "both" is confined to clean_url, which a general-routed row keeps
+    # uncollapsed; the path column is the WHATWG path.
+    r <- safe_parse_urls("foo://h/a//b", url_standard = std,
+                         scheme_acceptance = "general",
+                         path_normalization = "both")
+    expect_identical(r$path, "/a//b")
+    expect_identical(r$clean_url, "foo://h/a//b")
   }
 })
 
@@ -50,14 +58,18 @@ test_that("special schemes still collapse under both", {
                        profile = "whatwg", path_normalization = "both")
   expect_identical(r$path, c("/a/b/c", "/a/b/c"))
   expect_identical(r$clean_url, c("ws://h/a/b/c", "file:///a/b/c"))
-  # The default NULL arm collapses on request, as before.
+  # The default whatwg arm collapses clean_url on request (ADR 0020 D4a);
+  # the path column is the WHATWG path, and "collapse_slashes" cannot be
+  # confined, so it errors.
   r <- safe_parse_urls(c("http://h.com/a//b/./c", "file:///a//b/./c"),
                        path_normalization = "both")
-  expect_identical(r$path, c("/a/b/c", "/a/b/c"))
+  expect_identical(r$path, c("/a//b/c", "/a//b/c"))
   expect_identical(r$clean_url, c("http://h.com/a/b/c", "file:///a/b/c"))
-  r <- safe_parse_urls("http://h.com//a///b",
-                       path_normalization = "collapse_slashes")
-  expect_identical(r$path, "/a/b")
+  expect_error(
+    safe_parse_urls("http://h.com//a///b",
+                    path_normalization = "collapse_slashes"),
+    "governs `path_normalization`"
+  )
 })
 
 test_that("general-route clean_url keeps the slashes under either dial", {

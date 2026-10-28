@@ -9,14 +9,22 @@
 
 # --- composition rule (ADR 0012 D3) -----------------------------------------
 
-test_that("general with url_standard = NULL is a validation error (D3)", {
-  expect_error(
-    safe_parse_urls("mailto:a@b.com", scheme_acceptance = "general"),
-    "url_standard"
+test_that("general with url_standard = NULL reads it as whatwg (ADR 0020)", {
+  # D3's composition rule needs a standard to interpret the scheme; the
+  # default and NULL are "whatwg".
+  w <- safe_parse_urls("mailto:a@b.com", scheme_acceptance = "general",
+                       url_standard = "whatwg")
+  expect_identical(
+    safe_parse_urls("mailto:a@b.com", scheme_acceptance = "general"), w
   )
-  expect_error(
-    safe_parse_url("mailto:a@b.com", scheme_acceptance = "general"),
-    "url_standard"
+  expect_identical(
+    safe_parse_urls("mailto:a@b.com", scheme_acceptance = "general",
+                    url_standard = NULL),
+    w
+  )
+  expect_identical(
+    safe_parse_url("mailto:a@b.com", scheme_acceptance = "general")$path,
+    w$path
   )
   # web needs no url_standard and never errors on composition.
   expect_silent(
@@ -420,9 +428,7 @@ test_that("the :<digits> opaque payload parses under EVERY selector", {
   u <- c("urn:ietf:rfc:2648", "urn:a:1", "sc:x:80", "sc:x:80/p",
          "urn:a:abc", "tel:+1-234")
   want <- c("ietf:rfc:2648", "a:1", "x:80", "x:80/p", "a:abc", "+1-234")
-  # Both selectors, and only these two: `scheme_acceptance = "general"` requires
-  # an explicit `url_standard`, so a NULL-selector frame is unreachable here by
-  # construction rather than by omission.
+  # Both selectors; the default and NULL are "whatwg" (ADR 0020).
   for (sel in c("rfc3986", "whatwg")) {
     d <- do.call(safe_parse_urls, c(list(u), args, list(url_standard = sel)))
     expect_false(any(d$parse_status == "error"), info = sel)
@@ -494,10 +500,9 @@ test_that("get_scheme carries scheme_acceptance (opaque schemes resolve)", {
       url_standard = "whatwg", scheme_acceptance = "general"),
     "ws"
   )
-  # general still requires an explicit url_standard.
-  expect_error(
-    get_scheme("mailto:x", scheme_acceptance = "general"),
-    "requires an explicit url_standard"
+  # The default url_standard is "whatwg" (ADR 0020).
+  expect_identical(
+    get_scheme("mailto:x", scheme_acceptance = "general"), "mailto"
   )
 })
 

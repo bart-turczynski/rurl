@@ -1906,28 +1906,11 @@
     end[is.na(stop_rel)] <- .Machine$integer.max
     raw[has_path] <- .bytes_cut(pp, start, end)
   }
-  # An octet that is not valid UTF-8 is percent-encoded here (RURL-yarkccco,
-  # RUL-029), as the parser's component pass already encodes one in the query
-  # and fragment, so under the no-selector default the row parses with
-  # `/caf%E9` instead of failing (RURL-otrpfhmq). Stage B then reads a valid
-  # string, the same one the input `/caf%E9` gives. `rfc3986` does not move:
-  # its uniform grammar gate has already rejected every such row. `whatwg`
-  # never has one: its input already reads the octet as U+FFFD. Rows off the
-  # web route (`file:` and the general route) keep the undecodable-path
-  # failure in `._parse_stage_a_vec()`.
-  # The escape runs for every caller, ungated: no profile or `pqf_source` is in
-  # scope here, and none is needed. It is observable ONLY under the NULL
-  # profile, because the rfc3986 grammar gate rejects these rows before their
-  # path is read and whatwg input already holds U+FFFD, never a raw ill-formed
-  # octet (RUL-029). A profile that let such a row reach here would inherit
-  # the escape; gate it here first.
-  undecodable <- !is.na(raw) & !validUTF8(raw)
-  if (any(undecodable)) {
-    raw[undecodable] <- vapply(
-      raw[undecodable], .web_escape_undecodable_bytes, character(1),
-      USE.NAMES = FALSE
-    )
-  }
+  # No path reaching here holds an octet that is not valid UTF-8: the
+  # `rfc3986` grammar gate rejects such a row before its path is read, and
+  # `whatwg` input already reads the octet as U+FFFD. The escape the frozen
+  # `url_standard = NULL` profile ran here (RURL-yarkccco, RUL-029) went with
+  # that profile (ADR 0020).
   # This slice bypasses the parser's component pass by design (dot segments must
   # survive to `path_normalization`), so under `pqf_bytes = "encode"` it is also
   # the one place a C0/SP/DEL byte could reach a public surface UNESCAPED --
@@ -2111,16 +2094,6 @@
     if (any(mask)) {
       path_work[mask] <- vapply(
         path_work[mask], .path_decode_readable_one, character(1),
-        USE.NAMES = FALSE
-      )
-    }
-    # A literal octet outside well-formed UTF-8 that reached the path has no
-    # character to present either; it is kept as its uppercase triplet, as a
-    # triplet run that is not well-formed UTF-8 is (RURL-yarkccco).
-    bad <- !is.na(path_work) & !validUTF8(path_work)
-    if (any(bad)) {
-      path_work[bad] <- vapply(
-        path_work[bad], .web_escape_undecodable_bytes, character(1),
         USE.NAMES = FALSE
       )
     }

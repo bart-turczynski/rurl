@@ -11,14 +11,17 @@
 bom <- "\ufeff"
 zwsp <- "\u200b"
 
-arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986", "NULL" = NULL)
+# `url_standard = NULL` reads as "whatwg" (ADR 0020), so it is no arm of its
+# own here.
+arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986")
 
 # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): under rfc3986 a raw
 # non-ASCII code point, U+FEFF and U+200B included, is a parse error (RFC 3986
 # sections 2, 2.5 and 3.2.2: a URI is US-ASCII, non-ASCII data is written as
 # percent-encoded UTF-8, and `reg-name` admits no raw non-ASCII), so the
-# record's components are NA there. The mark handling these tests guard is
-# still reached on the NULL arm.
+# record's components are NA there. The pipeline mark handling these tests
+# guarded was reached only by the frozen `url_standard = NULL` profile, which
+# ADR 0020 retired; the helpers keep their own pins below.
 rfc_na <- function(an, value) {
   if (identical(an, "rfc3986")) NA_character_ else value
 }
@@ -30,8 +33,7 @@ rfc_na_rows <- function(urls, value) {
   value
 }
 
-# One parse under one arm. `NULL` omits the selector, as the default call does;
-# the NULL tests below also pass it explicitly.
+# One parse under one arm.
 arm_parse <- function(url, arm, ...) {
   if (is.null(arm)) {
     safe_parse_urls(url, ...)
@@ -53,8 +55,7 @@ case_parse <- function(url, arm, case_handling) {
     whatwg = safe_parse_urls(url, profile = "whatwg",
                              case_handling = case_handling),
     rfc3986 = safe_parse_urls(url, profile = "rfc-syntax",
-                              case_handling = case_handling),
-    "NULL" = safe_parse_urls(url, case_handling = case_handling)
+                              case_handling = case_handling)
   )
 }
 
@@ -79,7 +80,7 @@ test_that("case policy: the U+200B twins already keep the code point", {
     r$path,
     c("\u200b/ab", paste0(zwsp, "\u03c3"), paste0(zwsp, "a\u03c2"))
   )
-  for (an in c("rfc3986", "NULL")) {
+  for (an in "rfc3986") {
     p <- case_parse(paste0("http://", zwsp, "ab.example/x"), an, "upper")
     expect_identical(p$host, rfc_na(an, paste0(zwsp, "AB.EXAMPLE")),
                      label = an)
@@ -125,7 +126,7 @@ test_that("case policy negative controls: no mark, or a mark not first", {
       "\ufeff/aB", label = ch
     )
   }
-  for (an in c("rfc3986", "NULL")) {
+  for (an in "rfc3986") {
     p <- case_parse(paste0("http://h.example/", bom, "aB"), an, "upper")
     expect_identical(p$path, rfc_na(an, paste0("/", bom, "AB")), label = an)
     expect_identical(case_parse("http://Ab.example/aB", an, "upper")$host,
@@ -195,62 +196,6 @@ test_that("rfc3986 (rfc-syntax + override): a mark-led row is a parse error", {
   )
 })
 
-test_that("NULL: the case policy keeps the mark (ADR 0016)", {
-  # Witness: under the frozen selector, `case_handling = "upper"` dropped a
-  # U+FEFF that starts the host or the path (host `AB.EXAMPLE`, clean_url
-  # `HTTP://AB.EXAMPLE/X`, path `AB`), and `"lower"` one that starts the path
-  # (`ab`). No standard or documented contract sanctions dropping data, so
-  # this is a default-path defect, not selector-caused drift. Omitting the
-  # selector and passing NULL agree.
-  u_host <- paste0("http://", bom, "ab.example/x")
-  u_path <- paste0("file:", bom, "aB")
-  for (p in list(
-    safe_parse_urls(u_host, case_handling = "upper"),
-    safe_parse_urls(u_host, url_standard = NULL, case_handling = "upper")
-  )) {
-    expect_identical(p$host, paste0(bom, "AB.EXAMPLE"))
-    expect_identical(p$clean_url, paste0("HTTP://", bom, "AB.EXAMPLE/X"))
-  }
-  for (p in list(
-    safe_parse_urls(u_path, case_handling = "upper"),
-    safe_parse_urls(u_path, url_standard = NULL, case_handling = "upper")
-  )) {
-    expect_identical(p$path, paste0(bom, "AB"))
-  }
-  for (p in list(
-    safe_parse_urls(u_path, case_handling = "lower"),
-    safe_parse_urls(u_path, url_standard = NULL, case_handling = "lower")
-  )) {
-    expect_identical(p$path, paste0(bom, "ab"))
-  }
-  # Signature: only the host, path and clean_url of a host or path that starts
-  # with the mark move, and only under `case_handling = "upper"` (host, path)
-  # or `"lower"` (path). Status, domain and scheme do not move; `keep` and
-  # `lower_host` do not move. Per arm: rfc3986 rejects these rows (RUL-030,
-  # asserted above); whatwg was already right (asserted above).
-  p <- safe_parse_urls(u_host, case_handling = "upper")
-  expect_identical(p$parse_status, "warning-invalid-tld")
-  expect_identical(p$scheme, "HTTP")
-  expect_identical(p$domain, NA_character_)
-  p <- safe_parse_urls(u_path, case_handling = "upper")
-  expect_identical(p$parse_status, "error")
-  expect_identical(p$clean_url, NA_character_)
-  expect_identical(safe_parse_urls(u_host)$host, paste0(bom, "ab.example"))
-  expect_identical(safe_parse_urls(u_path)$path, paste0(bom, "aB"))
-  # The case policy writes only host, path, scheme and clean_url, so every
-  # other column of a moved row equals the `keep` parse, which the fix does
-  # not reach.
-  for (ch in c("upper", "lower")) {
-    for (u in c(u_host, u_path, paste0("http://", bom, "www.a.example.com/"))) {
-      p <- safe_parse_urls(u, case_handling = ch)
-      expect_identical(unmoved_cols(p, c("path", "scheme")),
-                       unmoved_cols(safe_parse_urls(u, case_handling = "keep"),
-                                    c("path", "scheme")),
-                       label = paste(ch, u))
-    }
-  }
-})
-
 # --- Subdomain trim -----------------------------------------------------------
 
 # Under whatwg the subdomain and www policies read the host after UTS-46 maps
@@ -264,8 +209,8 @@ whatwg_parse <- function(url, arm, ...) {
 }
 
 test_that("subdomain trim: the U+200B twins and the negative controls", {
-  # Under rfc3986 and NULL the twin's mark-led first label is a subdomain
-  # label, not the `www.` prefix the trim keeps. Under whatwg the trim reads
+  # Under rfc3986 the twin's row is a parse error (RUL-030). Under whatwg the
+  # trim reads
   # the mapped host, whose first label is `www` (RURL-fobwctml).
   for (an in names(arms)) {
     arm <- arms[[an]]
@@ -298,21 +243,24 @@ test_that("subdomain trim: the U+200B twins and the negative controls", {
 test_that("subdomain trim reads a mark-led www label as a subdomain label", {
   # stri_startswith_fixed() read `www.` past the mark, so the trim took the
   # host for www-prefixed: stri_sub() then cut the mark off with `www.`. The
-  # mark-led label is a subdomain label, trimmed like its U+200B twin.
+  # mark-led label is a subdomain label, trimmed like its U+200B twin. This is
+  # the helper's non-WHATWG reading (the whatwg one maps the mark away first,
+  # pinned below).
   expect_identical(
     .apply_subdomain_policy_vec(
       c(paste0(bom, "www.example.com"), paste0(bom, "WWW.example.com"),
         paste0(zwsp, "www.example.com"), paste0(bom, "www.a.example.com")),
-      rep("example.com", 4L), 0, rep(FALSE, 4L)
+      rep("example.com", 4L), 0, rep(FALSE, 4L), url_standard = "rfc3986"
     ),
     rep("example.com", 4L)
   )
   expect_identical(
     .apply_subdomain_policy_vec(paste0(bom, "www.a.example.com"),
-                                "example.com", 1, FALSE),
+                                "example.com", 1, FALSE,
+                                url_standard = "rfc3986"),
     "a.example.com"
   )
-  for (an in c("rfc3986", "NULL")) {
+  for (an in "rfc3986") {
     sub_host <- function(u, k) {
       arm_parse(u, arms[[an]], subdomain_levels_to_keep = k)$host
     }
@@ -403,60 +351,6 @@ test_that("whatwg: the subdomain trim reads the mapped host", {
   )
 })
 
-test_that("NULL: the subdomain trim treats the mark as data (ADR 0016)", {
-  # Witness: under the frozen selector `\ufeffwww.example.com` with
-  # `subdomain_levels_to_keep = 0` kept its subdomain label, while its U+200B
-  # twin trims to `example.com`. Omitting the selector and passing NULL agree.
-  u <- paste0("http://", bom, "www.example.com/")
-  u2 <- paste0("http://", bom, "www.a.example.com/")
-  for (p in list(
-    safe_parse_urls(c(u, u2), subdomain_levels_to_keep = 0),
-    safe_parse_urls(c(u, u2), url_standard = NULL,
-                    subdomain_levels_to_keep = 0)
-  )) {
-    expect_identical(p$host, c("example.com", "example.com"))
-    expect_identical(p$clean_url,
-                     c("http://example.com/", "http://example.com/"))
-  }
-  # Signature: only host and clean_url move, for a host led by one mark and
-  # then `www.`, under a non-NULL `subdomain_levels_to_keep`. Every other
-  # column equals the parse without the trim, which the fix does not reach.
-  # Per arm: rfc3986 rejects these rows (RUL-030, asserted above); whatwg
-  # does not move (asserted above).
-  for (k in c(0, 1, 2, 5)) {
-    for (uu in c(u, u2)) {
-      expect_identical(
-        unmoved_cols(safe_parse_urls(uu, subdomain_levels_to_keep = k)),
-        unmoved_cols(safe_parse_urls(uu)), label = paste(k, uu)
-      )
-    }
-  }
-  expect_identical(safe_parse_urls(u, subdomain_levels_to_keep = 1)$host,
-                   paste0(bom, "www.example.com"))
-  expect_identical(safe_parse_urls(u)$host, paste0(bom, "www.example.com"))
-  # Other option combinations: without a trim the www policies leave these
-  # hosts as they were, and `www_handling = "keep"` puts a `www.` in front of
-  # the mark, so the trim never meets it first.
-  uu <- c(u, u2, paste0("http://", bom, "www.com/"))
-  for (w in c("none", "strip")) {
-    expect_identical(
-      safe_parse_urls(uu, www_handling = w)$host,
-      paste0(bom, c("www.example.com", "www.a.example.com", "www.com")),
-      label = w
-    )
-  }
-  expect_identical(
-    safe_parse_urls(uu, www_handling = "keep",
-                    subdomain_levels_to_keep = 0)$host,
-    c("www.example.com", "www.example.com", paste0("www.", bom, "www.com"))
-  )
-  expect_identical(
-    safe_parse_urls(uu, host_encoding = "idna",
-                    subdomain_levels_to_keep = 1)$host,
-    c("xn--www-3z6s.example.com", "a.example.com", "xn--www-3z6s.com")
-  )
-})
-
 test_that("rows the subdomain fix does not reach keep their values", {
   # Byte-identical to the trim before this fix: no mark, a mark not first,
   # two marks, a mark not followed by `www.`, and the U+200B twin.
@@ -518,9 +412,9 @@ test_that("rows the subdomain fix does not reach keep their values", {
 # --- www_handling = "if_no_subdomain" -----------------------------------------
 
 test_that("if_no_subdomain: the U+200B twins and the negative controls", {
-  # Under rfc3986 and NULL `\u200bwww.com` is an apex (registrable domain, no
-  # subdomain), so it gets `www.`; a host that starts with `www.` does not.
-  # Under whatwg the policy reads the mapped host `www.com` (RURL-fobwctml).
+  # Under rfc3986 a raw non-ASCII row is a parse error (RUL-030); a host that
+  # starts with `www.` gets no `www.`. Under whatwg the policy reads the
+  # mapped host `www.com` (RURL-fobwctml).
   for (an in names(arms)) {
     arm <- arms[[an]]
     www_host <- function(u) {
@@ -561,7 +455,7 @@ test_that("if_no_subdomain reads a mark-led www label as part of the apex", {
       paste0("www.", zwsp, "www.com"))
   )
   # Under rfc3986 the row is a parse error (RUL-030; RFC 3986 sections 2,
-  # 2.5, 3.2.2); the NULL witness below carries the pipeline coverage.
+  # 2.5, 3.2.2); the helper pin above carries the coverage.
   expect_identical(
     arm_parse(paste0("http://", bom, "www.com/"), "rfc3986",
               www_handling = "if_no_subdomain")$host,
@@ -593,34 +487,6 @@ test_that("whatwg: if_no_subdomain reads the mapped host", {
                           "if_no_subdomain", c(FALSE, FALSE),
                           url_standard = "whatwg"),
     c("www.com", "www.com")
-  )
-})
-
-test_that("NULL: if_no_subdomain treats the mark as data (ADR 0016)", {
-  # Witness: under the frozen selector the apex `\ufeffwww.com` got no `www.`,
-  # while its U+200B twin does. Omitting the selector and passing NULL agree.
-  u <- paste0("http://", bom, "www.com/")
-  for (p in list(
-    safe_parse_urls(u, www_handling = "if_no_subdomain"),
-    safe_parse_urls(u, url_standard = NULL, www_handling = "if_no_subdomain")
-  )) {
-    expect_identical(p$host, paste0("www.", bom, "www.com"))
-    expect_identical(p$clean_url, paste0("http://www.", bom, "www.com/"))
-    # Signature: only host and clean_url move, for an apex host led by one
-    # mark and then `www.`, under `www_handling = "if_no_subdomain"`. Every
-    # other column equals the parse without the policy. Per arm: rfc3986
-    # rejects the row (RUL-030, asserted above); whatwg does not move
-    # (asserted above).
-    expect_identical(unmoved_cols(p), unmoved_cols(safe_parse_urls(u)))
-  }
-  expect_identical(safe_parse_urls(u)$host, paste0(bom, "www.com"))
-  expect_identical(safe_parse_urls(u, www_handling = "strip")$host,
-                   paste0(bom, "www.com"))
-  # A host with a subdomain past the mark-led label is no apex either way.
-  expect_identical(
-    safe_parse_urls(paste0("http://", bom, "www.example.com/"),
-                    www_handling = "if_no_subdomain")$host,
-    paste0(bom, "www.example.com")
   )
 })
 

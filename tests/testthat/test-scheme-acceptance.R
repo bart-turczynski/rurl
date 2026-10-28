@@ -1,17 +1,22 @@
 # Tests for the scheme_acceptance axis (RURL-pcobmxwv, ADR 0012 D3): the
 # scheme-*acceptance* knob, orthogonal to protocol_handling (presentation) and
 # url_standard (interpretation). "web" (default) keeps the curated web-scheme
-# allowlist; "general" admits any valid scheme token and requires an explicit
-# url_standard. "general" is internal-only (Layer-2 build-order gate), so the
-# axis is driven through rurl::: rather than any public signature. Also covers
+# allowlist; "general" admits any valid scheme token, interpreted under
+# url_standard ("whatwg" by default, ADR 0020). "general" is internal-only
+# (Layer-2 build-order gate), so the axis is driven through rurl::: rather
+# than any public signature. Also covers
 # the Option B decoupling: the unsupported-scheme reject fires on the acceptance
 # axis, regardless of protocol_handling.
 
-test_that("general requires an explicit url_standard", {
-  err <- expect_error(
-    rurl:::.parse_options(scheme_acceptance = "general", url_standard = NULL)
+test_that("general with url_standard = NULL reads it as whatwg", {
+  # ADR 0020 D4: NULL means "whatwg", so general always has a standard.
+  opts <- rurl:::.parse_options(scheme_acceptance = "general",
+                                url_standard = NULL)
+  expect_identical(opts$url_standard, "whatwg")
+  expect_identical(
+    rurl:::.parse_options(scheme_acceptance = "general")$url_standard,
+    "whatwg"
   )
-  expect_match(conditionMessage(err), "url_standard")
 })
 
 test_that("general composes with either governed standard", {

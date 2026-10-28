@@ -205,10 +205,9 @@ test_that("the verdicts do not depend on cache warmth", {
 
 # ---- surface contract ------------------------------------------------------
 
-test_that("get_parse_verdicts is defined at url_standard = NULL", {
-  # Unlike get_host_type() / get_scheme_class(), the layered verdicts are NOT
-  # gated by the selector: L1 and L2 describe the parse that actually occurred,
-  # which happens with or without one (P2.3 §2 Q1).
+test_that("get_parse_verdicts under the default reads as whatwg", {
+  # L1 and L2 describe the parse that actually occurred, under the default
+  # "whatwg" (NULL means the same, ADR 0020 D4). The example is ok under both.
   v <- get_parse_verdicts("http://example.com/")
   expect_false(anyNA(unlist(v)))
   expect_identical(v$layer1_syntax_verdict, "pass")

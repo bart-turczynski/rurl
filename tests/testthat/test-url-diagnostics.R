@@ -99,16 +99,16 @@ test_that(".diag_add rejects tokens outside the vocabulary", {
   )
 })
 
-# --- get_host_type() requires a selector (ADR 0015) --------------------------
+# --- get_host_type() defaults to whatwg (ADR 0020 D4) -----------------------
 
-test_that("get_host_type requires url_standard", {
+test_that("get_host_type reads a missing or NULL url_standard as whatwg", {
   u <- c("http://example.com/", "http://2130706433/", "not-a-url")
-  # Omitted and explicitly NULL are the same error: the mode is gone, not
-  # merely undefaulted.
-  expect_error(get_host_type(u), "`url_standard` is required")
-  expect_error(
-    get_host_type(u, url_standard = NULL), "`url_standard` is required"
-  )
+  # ADR 0020 D4 supersedes ADR 0015: omitted and explicitly NULL are both
+  # the whatwg answer, not an error.
+  want <- get_host_type(u, url_standard = "whatwg")
+  expect_identical(want, c("domain", "ipv4", NA))
+  expect_identical(get_host_type(u), want)
+  expect_identical(get_host_type(u, url_standard = NULL), want)
 })
 
 test_that("get_host_type classifies per selector (host model, RURL-luwvkwhd)", {
@@ -154,7 +154,7 @@ test_that("get_url_diagnostics returns a length-n list for a vector url", {
 })
 
 test_that("get_url_diagnostics handles length-0 and validates input", {
-  expect_error(get_url_diagnostics(character(0)), "`url_standard` is required")
+  expect_identical(get_url_diagnostics(character(0)), list())
   expect_identical(
     get_url_diagnostics(character(0), url_standard = "rfc3986"), list()
   )
@@ -228,18 +228,14 @@ test_that("WHATWG-generic L5 facts fire under web + whatwg (RURL-sgjzbqzk)", {
   expect_length(intersect(clean, l5_whatwg_generic), 0L)
 })
 
-test_that("the true default (url_standard = NULL) stays silent for all L5", {
-  # The D4 byte-identity / CRAN lock: the DEFAULT parse combination (web
-  # acceptance + url_standard = NULL) fires NONE of the L5 facts, generic ones
-  # included. Reached through the internals because the public helper now
-  # REQUIRES a selector (ADR 0015) -- the claim is about the parse path that
-  # safe_parse_url() and friends still run at url_standard = NULL, which
-  # outlives the helper arm that used to expose it.
-  l5 <- c(l5_general_only, l5_whatwg_generic, l5_rfc_reason)
-  opts <- rurl:::.parse_options(url_standard = NULL)
-  meta <- rurl:::._url_metadata_vec("http://user@ex.com/%zz", opts)
-  def <- meta$diagnostics[[1L]]
-  expect_length(intersect(def, l5), 0L)
+test_that("the default (and NULL) fires the whatwg-generic L5 facts", {
+  # ADR 0020 D4: the default parse is whatwg, so the frozen profile's silence
+  # is retired; the default reports what whatwg reports.
+  u <- "http://user@ex.com/%zz"
+  want <- get_url_diagnostics(u, url_standard = "whatwg")
+  expect_true(all(c("invalid-credentials", "invalid-URL-unit") %in% want))
+  expect_identical(get_url_diagnostics(u), want)
+  expect_identical(get_url_diagnostics(u, url_standard = NULL), want)
 })
 
 test_that("transform-skipped-ineligible-scheme fires on non-HTTP(S) rows", {
@@ -405,31 +401,30 @@ test_that("file rfc-syntax shape facts fire (RFC 8089)", {
   expect_true(
     "file-component-outside-rfc8089" %in% gd("file://h:8080/p", "rfc3986")
   )
-  # The NULL default is byte-frozen (ADR 0012 D4) and still rejects.
+  # The default whatwg rejects it too: a WHATWG file host takes no port.
   expect_identical(
     suppressWarnings(get_parse_status("file://h:8080/p")), "error"
   )
 })
 
-# The return contract of the three selector-gated helpers, pinned because the
+# The return contract of the three companion helpers, pinned because the
 # roxygen @return sections make claims about it that nothing else would catch
-# drifting (RURL-hikovisr, then RURL-kbpyivuk / ADR 0015).
+# drifting (RURL-hikovisr, then RURL-kbpyivuk / ADR 0015, ADR 0020).
 #
 # Before ADR 0015 these pinned an AMBIGUITY: NA and character(0) each meant
-# both "no selector" and a real finding, and the docs warned about the overload
-# at length. Making url_standard required removed the first meaning from every
-# one of them, so what is pinned now is the absence of that overload -- which
-# is the whole point of the change and would be silently lost if a default ever
-# crept back.
-test_that("all three helpers reject a missing selector identically", {
+# both "no selector" and a real finding. ADR 0015 made url_standard required;
+# ADR 0020 D4 gives it the default "whatwg", which names a standard, so the
+# overload stays gone: what is pinned now is that a missing selector answers
+# exactly as whatwg does.
+test_that("all three helpers read a missing selector as whatwg identically", {
+  # ADR 0020 D4 supersedes ADR 0015: the default names a standard, so NA and
+  # character(0) still mean only a finding, never "no selector".
   u <- c("http://example.com/", "http://2130706433/", "not a url")
   for (fn in list(get_host_type, get_url_diagnostics, get_scheme_class)) {
-    expect_error(fn(u), "`url_standard` is required")
-    expect_error(fn(u, url_standard = NULL), "`url_standard` is required")
+    want <- fn(u, url_standard = "whatwg")
+    expect_identical(fn(u), want)
+    expect_identical(fn(u, url_standard = NULL), want)
   }
-  # The message names both profiles, so the fix is in the error itself.
-  expect_error(get_host_type(u), "whatwg")
-  expect_error(get_host_type(u), "rfc3986")
 })
 
 test_that("get_host_type(): NA now means unclassifiable, and nothing else", {
@@ -472,7 +467,8 @@ test_that("get_url_diagnostics(): empty IS a clean verdict now", {
   expect_identical(
     get_url_diagnostics(clean, url_standard = "whatwg"), character(0)
   )
-  # ... and there is no selector-less call that could make the dirty URL look
-  # like the clean one.
-  expect_error(get_url_diagnostics(dirty), "`url_standard` is required")
+  # ... and the default call is the whatwg one, so it cannot make the dirty
+  # URL look like the clean one.
+  expect_identical(get_url_diagnostics(dirty),
+                   get_url_diagnostics(dirty, url_standard = "whatwg"))
 })

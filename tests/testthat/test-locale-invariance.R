@@ -382,8 +382,8 @@ test_that("the undecodable short-circuit is exactly as severe as the walk", {
   # are the tolerance's own endpoints and its awkward interior members. The
   # strict gate rejects each as raw non-ASCII (RFC 3986 sections 2, 2.5;
   # RUL-030, RURL-pntbujzc) and names that reason, which an undecodable row
-  # never gets; the tolerant walk (`ascii_only = FALSE`, the frozen NULL
-  # `file:` overlay) still admits each one.
+  # never gets; the component walk alone (`.rfc3986_generic_uri_ok_walk()`,
+  # which judges only the ASCII grammar) still admits each one.
   valid <- list(
     c(0xC2, 0x80), c(0xC3, 0xA9), c(0xE2, 0x82, 0xAC),
     c(0xF4, 0x8F, 0xBF, 0xBF), c(0xEF, 0xBF, 0xBF), c(0xEF, 0xBF, 0xBD)
@@ -393,7 +393,7 @@ test_that("the undecodable short-circuit is exactly as severe as the walk", {
       0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x61, seq, 0x62, 0x2f, 0x70
     )))
     expect_true(validUTF8(u))
-    expect_true(.rfc3986_generic_uri_ok(u, ascii_only = FALSE)$ok)
+    expect_true(.rfc3986_generic_uri_ok_walk(u))
     strict <- .rfc3986_generic_uri_ok(u)
     expect_false(strict$ok)
     expect_identical(strict$diagnostic, "unicode-outside-rfc3986-uri")
@@ -457,7 +457,7 @@ test_that("the rfc3986 verdict does not depend on the encoding mark", {
   # ...and the answer both marks agree on is the rejecting one: U+00E9 is
   # raw non-ASCII, which RFC 3986 admits only percent-encoded (sections 2,
   # 2.5; RUL-030, RURL-pntbujzc). The byte walk itself still slices the
-  # authority the same way under both marks: the tolerant walk accepts both.
+  # authority the same way under both marks: the component walk accepts both.
   expect_identical(
     get_parse_status(eacute_userinfo, url_standard = "rfc3986"), "error"
   )
@@ -465,11 +465,10 @@ test_that("the rfc3986 verdict does not depend on the encoding mark", {
     get_host(eacute_userinfo, url_standard = "rfc3986"), NA_character_
   )
   expect_identical(
-    .rfc3986_generic_uri_ok(c(eacute_userinfo, marked),
-                            ascii_only = FALSE)$ok,
+    .rfc3986_generic_uri_ok_walk(c(eacute_userinfo, marked)),
     c(TRUE, TRUE)
   )
-  # The byte-offset coverage stays on the NULL arm, which parses the row.
+  # The byte-offset coverage of a parsed row: the default whatwg parses it.
   expect_identical(get_host(eacute_userinfo), get_host(marked))
   expect_identical(get_host(eacute_userinfo), "example.com")
 })
@@ -896,17 +895,18 @@ for (loc in names(ctypes)) {
   test_that(paste("rfc3986 shares the seam but never flags, under", loc), {
     with_ctype(loc, ctypes[[loc]], {
       urls <- c(unname(nothing_to_strip), unname(real_strip))
-      # The seam is a byte-for-byte no-op off the WHATWG arm, NULL included.
-      for (std in list("rfc3986", NULL)) {
+      # The seam is a byte-for-byte no-op off the WHATWG arm.
+      for (std in list("rfc3986")) {
         cc <- rurl:::.strip_whatwg_control_chars_vec(urls, std)
         expect_identical(lapply(cc$url, charToRaw), lapply(urls, charToRaw))
         expect_identical(cc$leading_trailing_stripped, rep(FALSE, 6))
         expect_identical(cc$control_char_stripped, rep(FALSE, 6))
       }
       expect_identical(has_lt_token(urls, "rfc3986"), rep(FALSE, 6))
-      # NULL has no diagnostic vocabulary at all (ADR 0015).
-      expect_error(
-        get_url_diagnostics(urls, url_standard = NULL), "is required"
+      # NULL reads as whatwg (ADR 0020, which supersedes ADR 0015's error).
+      expect_identical(
+        get_url_diagnostics(urls, url_standard = NULL),
+        get_url_diagnostics(urls, url_standard = "whatwg")
       )
     })
   })

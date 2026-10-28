@@ -2,8 +2,9 @@
 # policies police the host the WHATWG host parser defines, which is the host
 # AFTER domain to ASCII (UTS #46 processing step 1, "Map") has removed the
 # code points UTS-46 ignores: U+200B (zero-width space), U+00AD (soft hyphen)
-# and U+FEFF (zero-width no-break space). RFC 3986 has no mapping step, so the
-# `rfc3986` and `NULL` arms keep the code point as data.
+# and U+FEFF (zero-width no-break space). RFC 3986 has no mapping step and
+# rejects the raw code point (RUL-030). The default, and NULL, is whatwg
+# (ADR 0020).
 #
 # Every source here spells the marks as `\u` escapes, never as raw invisible
 # characters.
@@ -23,7 +24,8 @@ policies <- list(
   sub1 = list(subdomain_levels_to_keep = 1)
 )
 
-# One parse of `url` under `posture` with the named policy's options.
+# One parse of `url` under `posture` with the named policy's options. The
+# "NULL" posture omits url_standard (the default); "NULL-explicit" passes NULL.
 policy_parse <- function(url, posture, policy) {
   args <- c(list(url), policies[[policy]])
   if (identical(posture, "whatwg")) {
@@ -115,43 +117,21 @@ test_that("whatwg: IDN and ACE twins keep their policy output", {
   )
 })
 
-test_that("rfc3986 and NULL: an ignorable-led host keeps the code point", {
-  # RFC 3986 has no mapping step: the mark is data in the first label, so the
-  # www prefix never matches and the mark-led label counts as a subdomain
-  # label. "{m}" stands for the mark. Both arms lowercase the host here.
-  expected <- list(
-    none = c("{m}www.com", "{m}www.example.com", "{m}www.a.example.com",
-             "{m}example.com", "{m}a.b.example.com", "{m}www.example.com"),
-    strip = c("{m}www.com", "{m}www.example.com", "{m}www.a.example.com",
-              "{m}example.com", "{m}a.b.example.com", "{m}www.example.com"),
-    keep = c("www.{m}www.com", "www.{m}www.example.com",
-             "www.{m}www.a.example.com", "www.{m}example.com",
-             "www.{m}a.b.example.com", "www.{m}www.example.com"),
-    if_no_subdomain = c("www.{m}www.com", "{m}www.example.com",
-                        "{m}www.a.example.com", "www.{m}example.com",
-                        "{m}a.b.example.com", "{m}www.example.com"),
-    sub0 = c("{m}www.com", "example.com", "example.com", "{m}example.com",
-             "example.com", "example.com"),
-    sub1 = c("{m}www.com", "{m}www.example.com", "a.example.com",
-             "{m}example.com", "b.example.com", "{m}www.example.com")
-  )
+test_that("rfc3986 rejects an ignorable-led host; the default is whatwg", {
   # rfc3986 no longer reaches the policies: the raw mark is not RFC 3986
   # syntax (sections 2, 2.5, 3.2.2), so every row is a parse error with no
-  # host (RUL-030, owner ruling 2026-10-12, RURL-pntbujzc). NULL is frozen.
+  # host (RUL-030, owner ruling 2026-10-12, RURL-pntbujzc). The default, and
+  # NULL, gives the whatwg output (ADR 0020 D4); the frozen profile that kept
+  # the mark as data is retired.
   for (mk in names(marks)) {
     m <- marks[[mk]]
     urls <- paste0("http://", m, policy_hosts, "/")
-    for (posture in c("NULL", "NULL-explicit")) {
-      for (policy in names(policies)) {
-        want <- gsub("{m}", m, expected[[policy]], fixed = TRUE)
-        p <- policy_parse(urls, posture, policy)
-        lab <- paste(mk, posture, policy)
-        expect_identical(p$host, want, label = lab)
-        expect_identical(p$clean_url, paste0("http://", want, "/"), label = lab)
-        expect_identical(p$parse_status, rep("ok", length(urls)), label = lab)
-      }
-    }
     for (policy in names(policies)) {
+      w <- policy_parse(urls, "whatwg", policy)
+      for (posture in c("NULL", "NULL-explicit")) {
+        expect_identical(policy_parse(urls, posture, policy), w,
+                         label = paste(mk, posture, policy))
+      }
       p <- policy_parse(urls, "rfc3986", policy)
       lab <- paste(mk, "rfc3986", policy)
       expect_identical(p$host, rep(NA_character_, length(urls)), label = lab)
@@ -220,12 +200,12 @@ test_that("whatwg: a mixed ACE host trims to the spelling of its domain", {
     expect_identical(policy_parse(urls, posture, "sub1")$host, whole$host,
                      label = posture)
   }
-  # NULL reads the host as written and does not move. rfc3986 rejects the raw
+  # The default, and NULL, is whatwg (ADR 0020 D4). rfc3986 rejects the raw
   # non-ASCII label (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030, owner ruling
   # 2026-10-12, RURL-pntbujzc).
   for (posture in c("NULL", "NULL-explicit")) {
     expect_identical(policy_parse(urls, posture, "sub0")$host,
-                     c("\u043f\u0440.com", "m\u00fcnchen.de"), label = posture)
+                     c("xn--o1ac.com", "xn--mnchen-3ya.de"), label = posture)
   }
   expect_identical(policy_parse(urls, "rfc3986", "sub0")$host,
                    c(NA_character_, NA_character_))

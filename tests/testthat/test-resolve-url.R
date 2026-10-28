@@ -9,8 +9,9 @@
 #   * "standard-agnostic ... adds NO per-standard behavior of its own" --
 #     FALSIFIED by measurement (P2.7 D-B, RURL-fupsemxr). Under
 #     `url_standard = "whatwg"` the WHATWG reference-PARSING rules run before
-#     the merge; under "rfc3986" it is RFC 3986 section 5.2-5.3; under NULL it
-#     is byte-frozen (ADR 0007). The scheme production is RFC 3986 section 3.1's
+#     the merge; under "rfc3986" it is RFC 3986 section 5.2-5.3; NULL reads
+#     as "whatwg", the default (ADR 0020). The scheme production is RFC 3986
+#     section 3.1's
 #     and ships under both named profiles. See the P2.7 D-B block below.
 #   * "The return is the CANONICAL clean_url" -- true only of the DEFAULT
 #     `output = "clean"`. `output = "serialized"` (P2.7 D-A) returns
@@ -156,15 +157,14 @@ test_that("WHATWG backslash-as-slash flows from url_standard", {
   )
   # rfc3986 does NOT map "\" to "/" -- and, since RURL-qrfrvmkg, does not carry
   # the raw byte either: the resolved absolute URL `http://a/b/c/g\h` matches no
-  # RFC 3986 production, so the downstream parse rejects it. The no-selector
-  # default is un-governed and still returns it verbatim, which is what shows
-  # the rewrite genuinely did not happen.
+  # RFC 3986 production, so the downstream parse rejects it. The default is
+  # "whatwg" (ADR 0020), so it maps the backslash.
   expect_true(is.na(
     resolve_url("g\\h", "http://a/b/c/", url_standard = "rfc3986")
   ))
   expect_identical(
     resolve_url("g\\h", "http://a/b/c/"),
-    "http://a/b/c/g\\h"
+    "http://a/b/c/g/h"
   )
 })
 
@@ -281,32 +281,25 @@ test_that("rfc3986 keeps the same-scheme reference ABSOLUTE", {
   )
 })
 
-test_that("url_standard = NULL is byte-frozen against the new rule", {
-  # ADR 0007 / P2.7 D-C: every reference-parsing rule is reachable ONLY through
-  # url_standard = "whatwg". At NULL the same inputs keep RFC 3986's answer.
+test_that("the default and NULL read the base's own special scheme as whatwg", {
+  # ADR 0020 D3/D4: the default is "whatwg" and NULL reads as "whatwg", so the
+  # same-special-scheme rule applies without naming the selector.
   wbase <- "http://example.org/foo/bar"
-  # The raw merge -- the locus of the change -- is untouched at NULL, and the
-  # internal's DEFAULT argument is that frozen path rather than the new one.
-  expect_identical(
-    rurl:::.resolve_one_raw("http:foo.com", wbase), "http:foo.com"
-  )
+  # The internal's default argument is the whatwg path too.
   expect_identical(
     rurl:::.resolve_one_raw("http:foo.com", wbase),
-    rurl:::.resolve_one_raw("http:foo.com", wbase, NULL)
+    "http://example.org/foo/foo.com"
   )
   expect_identical(
-    rurl:::.resolve_one_raw("file:test", "file:///tmp/mock/path"), "file:test"
+    resolve_url("http:foo.com", wbase), "http://example.org/foo/foo.com"
   )
-  # ... and so is the clean surface it feeds. These references resolve to an
-  # authority-less absolute URL that rurl's parser rejects, exactly as a direct
-  # parse of it does; the NA is pre-existing behavior, not a new one.
   expect_identical(
-    resolve_url("http:foo.com", wbase), get_clean_url("http:foo.com")
+    resolve_url("http:foo.com", wbase, url_standard = NULL),
+    "http://example.org/foo/foo.com"
   )
-  expect_true(is.na(resolve_url("http:foo.com", wbase)))
-  expect_true(is.na(resolve_url("file:test", "file:///tmp/mock/path")))
-  # The whatwg selector is the ONLY way to reach the new rule: same input, same
-  # surface, and only there does it resolve against the base.
+  expect_identical(
+    resolve_url("file:test", "file:///tmp/mock/path"), "file:///tmp/mock/test"
+  )
   expect_identical(
     resolve_url("http:foo.com", wbase, url_standard = "whatwg"),
     "http://example.org/foo/foo.com"
@@ -426,8 +419,8 @@ test_that("whatwg strips C0-or-space from the reference before reading it", {
   )
 })
 
-test_that("rfc3986 and NULL are byte-frozen against BOTH new rules", {
-  # ADR 0007 / P2.7 D-C. Asserted on the raw merge, which is the locus of the
+test_that("rfc3986 is unaffected by BOTH new rules", {
+  # P2.7 D-C. Asserted on the raw merge, which is the locus of the
   # change: `\` stays an ordinary path byte, `//` is the whole authority
   # production, and no byte is stripped from the reference.
   wbase <- "http://example.org/foo/bar"
@@ -442,23 +435,13 @@ test_that("rfc3986 and NULL are byte-frozen against BOTH new rules", {
     expect_identical(
       rurl:::.resolve_one_raw(case[[1L]], wbase, "rfc3986"), case[[2L]]
     )
-    # NULL is the DEFAULT argument as well as an explicit value; both are the
-    # frozen path, and neither may drift from "rfc3986" here.
-    expect_identical(rurl:::.resolve_one_raw(case[[1L]], wbase), case[[2L]])
-    expect_identical(
-      rurl:::.resolve_one_raw(case[[1L]], wbase, NULL), case[[2L]]
-    )
   }
-  # ... and the clean surface the NULL merge feeds: identical to a direct parse
-  # of the un-stripped, un-rewritten recomposition, which is what shows neither
-  # rule fired. (The padded reference resolves to a URL rurl's parser rejects at
-  # NULL -- pre-existing behavior, and exactly what the direct parse gives.)
-  expect_identical(
-    resolve_url("  foo.com  ", wbase),
-    get_clean_url("http://example.org/foo/  foo.com  ")
-  )
-  expect_true(is.na(resolve_url("  foo.com  ", wbase)))
-  expect_identical(resolve_url("\\x", wbase), "http://example.org/foo/\\x")
+  # The default (and NULL) is "whatwg" (ADR 0020), so both rules fire there.
+  expect_identical(resolve_url("  foo.com  ", wbase),
+                   "http://example.org/foo/foo.com")
+  expect_identical(resolve_url("\\x", wbase), "http://example.org/x")
+  expect_identical(resolve_url("\\x", wbase, url_standard = NULL),
+                   "http://example.org/x")
 })
 
 # --- the scheme production (RURL-fupsemxr T2.4b) -----------------------------
@@ -468,10 +451,9 @@ test_that("rfc3986 and NULL are byte-frozen against BOTH new rules", {
 # 3.1's own scheme grammar, and byte-identical to WHATWG's scheme-start/scheme
 # states -- the two standards do not disagree. What the resolver had been
 # reading is Appendix B's *non-validating* `[^:/?#]+`, which the RFC itself
-# describes as deliberately permissive. So the fix ships on BOTH selectors that
-# name a standard, and the split is not "whatwg vs the rest" but "a standard is
-# selected vs none is": `url_standard = NULL` keeps the loose group solely
-# because ADR 0007 freezes it.
+# describes as deliberately permissive. So the fix ships on BOTH standards;
+# the frozen `url_standard = NULL` profile that kept the loose group was
+# retired by ADR 0020, and NULL now reads as "whatwg".
 
 test_that("a colon in a relative path's first segment is not a scheme", {
   wbase <- "http://example.org/foo/bar"
@@ -493,7 +475,7 @@ test_that("a colon in a relative path's first segment is not a scheme", {
   }
   # A first segment that is a syntactically VALID scheme still makes the
   # reference absolute -- the production was tightened, not removed.
-  for (std in list(NULL, "rfc3986", "whatwg")) {
+  for (std in c("rfc3986", "whatwg")) {
     expect_identical(
       rurl:::.resolve_one_raw("a+b-c.d:x", wbase, std), "a+b-c.d:x"
     )
@@ -549,50 +531,31 @@ test_that("the BASE is read with the same production as the reference", {
   loose_base <- "10.0.0.7:8080/dir/x"
   expect_true(is.na(rurl:::.resolve_one_raw("g", loose_base, "rfc3986")))
   expect_true(is.na(rurl:::.resolve_one_raw("g", loose_base, "whatwg")))
-  # ... and NULL keeps the old answer, which is the freeze, not an endorsement.
-  expect_identical(
-    rurl:::.resolve_one_raw("g", loose_base), "10.0.0.7:8080/dir/g"
-  )
+  # ... and so does the default, which is "whatwg" (ADR 0020).
+  expect_true(is.na(rurl:::.resolve_one_raw("g", loose_base)))
 })
 
-test_that("url_standard = NULL is byte-frozen against the production", {
-  # ADR 0007. This is the one rule in this file that IS a conformance fix under
-  # "rfc3986" as well as "whatwg", so the freeze had to be asserted rather than
-  # inherited from a whatwg-only gate: NULL is the surface that claims no
-  # standard, and it keeps Appendix B's answer byte for byte.
+test_that("the default reads the real production, as both standards do", {
+  # ADR 0020 retired the frozen NULL profile that kept Appendix B's loose
+  # group; the default and NULL are "whatwg".
   wbase <- "http://example.org/foo/bar"
   fbase <- "file:///some/dir/bar.html"
-  frozen <- list(
-    c("[61:24:74]:98", "[61:24:74]:98"),
-    c("1foo:bar", "1foo:bar"),
-    c("_foo:bar", "_foo:bar"),
-    c("9:00/am", "9:00/am"),
-    c("-x:y", "-x:y"),
-    c("fo o:bar", "fo o:bar")
-  )
-  for (case in frozen) {
-    # The DEFAULT argument is the frozen path as well as the explicit NULL.
-    expect_identical(rurl:::.resolve_one_raw(case[[1L]], wbase), case[[2L]])
-    expect_identical(
-      rurl:::.resolve_one_raw(case[[1L]], wbase, NULL), case[[2L]]
-    )
+  for (ref in c("[61:24:74]:98", "1foo:bar", "_foo:bar", "9:00/am", "-x:y",
+                "fo o:bar")) {
+    expect_identical(rurl:::.resolve_one_raw(ref, wbase),
+                     paste0("http://example.org/foo/", ref))
   }
   expect_identical(
-    rurl:::.resolve_one_raw("10.0.0.7:8080/foo.html", fbase),
-    "10.0.0.7:8080/foo.html"
-  )
-  # ... and the clean surface the NULL merge feeds. `10.0.0.7:8080/foo.html` is
-  # still read as absolute there -- identical to a direct parse of it, which is
-  # what shows the base was never consulted.
-  expect_identical(
-    resolve_url("10.0.0.7:8080/foo.html", fbase),
-    get_clean_url("10.0.0.7:8080/foo.html")
+    resolve_url("10.0.0.7:8080/foo.html", fbase, output = "serialized"),
+    "file:///some/dir/10.0.0.7:8080/foo.html"
   )
   expect_identical(
-    resolve_url("10.0.0.7:8080/foo.html", fbase), "http://10.0.0.7/foo.html"
+    resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = NULL,
+                output = "serialized"),
+    "file:///some/dir/10.0.0.7:8080/foo.html"
   )
-  # Only a selected standard reaches the real production, and both read the
-  # reference as scheme-less. whatwg resolves it as a path.
+  # Both standards read the reference as scheme-less. whatwg resolves it as a
+  # path.
   expect_identical(
     resolve_url("10.0.0.7:8080/foo.html", fbase, url_standard = "whatwg",
                 output = "serialized"),
@@ -629,8 +592,13 @@ test_that("resolved output equals a direct parse of the resolved URL", {
 
 test_that("a governed knob conflicting with url_standard errors", {
   expect_error(
-    resolve_url("g", base, url_standard = "whatwg", case_handling = "upper"),
+    resolve_url("g", base, url_standard = "whatwg", case_handling = "keep"),
     "governs `case_handling`"
+  )
+  # D4a (ADR 0020): under whatwg "upper" shapes clean_url only.
+  expect_identical(
+    resolve_url("g", base, url_standard = "whatwg", case_handling = "upper"),
+    "HTTP://A/B/C/G"
   )
   expect_error(
     resolve_url("g", base, url_standard = "rfc3986",
@@ -700,14 +668,17 @@ test_that("RFC 3986 §5.4 query/fragment cases are exact under serialized", {
   )
 })
 
-test_that("output = \"serialized\" requires an explicit url_standard", {
-  expect_error(
-    resolve_url("g", base, output = "serialized"),
-    "requires an explicit `url_standard`"
-  )
-  # ... and NULL is the only rejected value; both profiles are accepted.
+test_that("output = \"serialized\" serializes the default and NULL as whatwg", {
+  # ADR 0020 D4: NULL means "whatwg", so there is always a standard to
+  # serialize to.
   expect_identical(
     resolve_url("g", base, url_standard = "whatwg", output = "serialized"),
+    "http://a/b/c/g"
+  )
+  expect_identical(resolve_url("g", base, output = "serialized"),
+                   "http://a/b/c/g")
+  expect_identical(
+    resolve_url("g", base, url_standard = NULL, output = "serialized"),
     "http://a/b/c/g"
   )
 })
@@ -836,17 +807,17 @@ test_that("the default output surface is unchanged by the new argument", {
   )
 })
 
-test_that("url_standard = NULL stays byte-frozen under the new signature", {
-  # ADR 0007 D-C: the NULL selector does not move. output = "serialized" is an
-  # error at NULL rather than a second NULL rendering.
-  expect_identical(resolve_url("g\\h", "http://a/b/c/"), "http://a/b/c/g\\h")
+test_that("the default reads as whatwg on both output surfaces", {
+  # ADR 0020 D3/D4: the default and NULL are "whatwg", clean and serialized.
+  expect_identical(resolve_url("g\\h", "http://a/b/c/"), "http://a/b/c/g/h")
   expect_identical(
     resolve_url("g\\h", "http://a/b/c/", output = "clean"),
-    "http://a/b/c/g\\h"
+    "http://a/b/c/g/h"
   )
-  expect_error(
+  expect_identical(
     resolve_url("g\\h", "http://a/b/c/", output = "serialized"),
-    "requires an explicit `url_standard`"
+    resolve_url("g\\h", "http://a/b/c/", url_standard = "whatwg",
+                output = "serialized")
   )
 })
 
@@ -917,15 +888,17 @@ test_that("a resolved path whose first segment is empty keeps its `/.` guard", {
   )
 })
 
-test_that("url_standard = NULL keeps recomposing the unguarded string", {
-  # ADR 0007: the frozen selector claims no standard, so section 3.3 is not a
-  # constraint it can be wrong against, and its bytes do not move.
+test_that("the default recomposes the guarded string", {
+  # The frozen NULL selector's unguarded recomposition was retired with it
+  # (ADR 0020); the default and NULL are "whatwg".
   for (ref in c("/.//path", "/..//path", "..//path", "a/..//path")) {
     expect_identical(
-      rurl:::.resolve_one_raw(ref, "non-spec:/p"), "non-spec://path"
+      rurl:::.resolve_one_raw(ref, "non-spec:/p"), "non-spec:/.//path"
     )
     expect_identical(
-      rurl:::.resolve_one_raw(ref, "non-spec:/p", NULL), "non-spec://path"
+      resolve_url(ref, "non-spec:/p", url_standard = NULL,
+                  output = "serialized"),
+      "non-spec:/.//path"
     )
   }
 })
@@ -982,9 +955,9 @@ test_that("WHATWG file state rules apply to a drive letter in the reference", {
   expect_identical(whatwg("..", "http://h/C:/"), "http://h/")
 })
 
-test_that("the file: drive-letter rules are unreachable from rfc3986/NULL", {
-  # RFC 3986 section 5 has no drive-letter concept, and the NULL selector is
-  # byte-frozen (ADR 0007). Both keep the plain section 5.2 merge.
+test_that("the file: drive-letter rules are unreachable from rfc3986", {
+  # RFC 3986 section 5 has no drive-letter concept, so it keeps the plain
+  # section 5.2 merge.
   frozen <- list(
     list("C|/foo/bar", "file:///tmp/mock/path", "file:///tmp/mock/C|/foo/bar"),
     list("..", "file:///C:/", "file:///"),
@@ -994,14 +967,9 @@ test_that("the file: drive-letter rules are unreachable from rfc3986/NULL", {
     list("//d:", "file:///C:/a/b", "file://d:")
   )
   for (case in frozen) {
-    for (std in list("rfc3986", NULL)) {
-      expect_identical(
-        rurl:::.resolve_one_raw(case[[1L]], case[[2L]], std), case[[3L]],
-        label = paste(case[[1L]], case[[2L]], if (is.null(std)) "NULL" else std)
-      )
-    }
     expect_identical(
-      rurl:::.resolve_one_raw(case[[1L]], case[[2L]]), case[[3L]]
+      rurl:::.resolve_one_raw(case[[1L]], case[[2L]], "rfc3986"), case[[3L]],
+      label = paste(case[[1L]], case[[2L]], "rfc3986")
     )
   }
 })
@@ -1082,9 +1050,9 @@ test_that("whatwg file: dot removal keeps a segment-leading U+FEFF", {
   )
 })
 
-test_that("NULL keeps a segment-leading U+FEFF; rfc3986 rejects it", {
-  # The NULL selector is byte-frozen (ADR 0007): the same inputs keep
-  # today's output. Under rfc3986 a reference holding a raw U+FEFF is not a
+test_that("rfc3986 rejects a segment-leading U+FEFF", {
+  # The default whatwg arm is pinned above. Under rfc3986 a reference holding a
+  # raw U+FEFF is not a
   # URI reference at all (RFC 3986 sections 2, 2.5: US-ASCII only, non-ASCII
   # percent-encoded; RUL-030, RURL-pntbujzc), so it resolves to NA; its
   # percent-encoded twin still takes section 5.2.4's dot removal.
@@ -1097,10 +1065,6 @@ test_that("NULL keeps a segment-leading U+FEFF; rfc3986 rejects it", {
     list("/\ufeffa/./b", "file:///C:/x", "file:///\ufeffa/b")
   )
   for (case in frozen) {
-    expect_identical(
-      resolve_url(case[[1L]], case[[2L]]), case[[3L]],
-      label = paste(case[[1L]], case[[2L]], "NULL")
-    )
     expect_identical(
       resolve_url(case[[1L]], case[[2L]], url_standard = "rfc3986"),
       NA_character_,

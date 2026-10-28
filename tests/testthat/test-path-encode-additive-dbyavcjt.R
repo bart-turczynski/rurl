@@ -3,7 +3,9 @@
 # written under every `url_standard` (RFC 3986 sections 2.2 and 3.3; the WHATWG
 # path percent-encode set; ADR 0020).
 
-stds <- list(`NULL` = NULL, rfc3986 = "rfc3986", whatwg = "whatwg")
+# `url_standard = NULL` reads as "whatwg" (ADR 0020 D4), so it is not a third
+# arm here.
+stds <- list(rfc3986 = "rfc3986", whatwg = "whatwg")
 
 test_that("encode keeps empty segments and %2F in every surface", {
   cases <- c(
@@ -30,28 +32,35 @@ test_that("encode keeps empty segments and %2F in every surface", {
   }
 })
 
-test_that("encode under the RFC 3986 arms escapes only what pchar excludes", {
-  for (sn in c("NULL", "rfc3986")) {
-    std <- stds[[sn]]
-    # Sub-delimiters, ":" and "@" are pchar and stay literal; a `%00` is a
-    # triplet and stays.
-    expect_identical(
-      get_path("http://example.com/a;b=c:d@e/!$&'()*+,/%00",
-               path_encoding = "encode", url_standard = std),
-      "/a;b=c:d@e/!$&'()*+,/%00", info = sn
-    )
-  }
+test_that("encode under rfc3986 escapes only what pchar excludes", {
+  # Sub-delimiters, ":" and "@" are pchar and stay literal; a `%00` is a
+  # triplet and stays.
+  expect_identical(
+    get_path("http://example.com/a;b=c:d@e/!$&'()*+,/%00",
+             path_encoding = "encode", url_standard = "rfc3986"),
+    "/a;b=c:d@e/!$&'()*+,/%00"
+  )
   # A raw non-ASCII character is not URI syntax, so "rfc3986" rejects it
-  # before presentation; NULL accepts it and encodes its UTF-8 octets.
+  # before presentation.
+  expect_identical(
+    get_path("http://example.com/école", path_encoding = "encode",
+             url_standard = "rfc3986"),
+    NA_character_
+  )
+})
+
+test_that("encode under the default whatwg uses the path percent-encode set", {
+  # The WHATWG path percent-encode set holds every code point above U+007E,
+  # so a raw non-ASCII character is written as its UTF-8 octets; it holds no
+  # `%`, so a `%` that begins no triplet and an existing triplet stay as
+  # written, hex case included.
   expect_identical(
     get_path("http://example.com/école", path_encoding = "encode"),
     "/%C3%A9cole"
   )
-  # Under NULL a `%` that does not begin a triplet becomes `%25`, an existing
-  # triplet is not decoded, and its hex is uppercased as under "keep".
   expect_identical(
     get_path("http://example.com/%zz/%41/%2f", path_encoding = "encode"),
-    "/%25zz/%41/%2F"
+    "/%zz/%41/%2f"
   )
 })
 

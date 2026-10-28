@@ -125,7 +125,8 @@ test_that("PRD §9.3 required regression assertions hold", {
   expect_equal(get_host_type("http://2130706433/", url_standard = "whatwg"),
     "ipv4")
 
-  # NULL selector leaves the output shape untouched (no new columns/fields)
+  # NULL reads as the default whatwg and leaves the output shape untouched
+  # (no new columns/fields; ADR 0020 D4).
   expect_named(
     safe_parse_urls("http://ex.com/", url_standard = NULL),
     names(safe_parse_urls("http://ex.com/"))
@@ -135,7 +136,7 @@ test_that("PRD §9.3 required regression assertions hold", {
 # --- RURL-cdjnhnvf: WHATWG "ends in a number" hosts the web parser leaves as
 # reg-names (mixed reg-name/number, hex/octal final labels, trailing-dot forms,
 # >4 parts) must reject under whatwg -- not slip through as warning-invalid-tld.
-# rfc3986/NULL keep the reg-name (RFC 3986 has no numeric-host rule).
+# rfc3986 keeps the reg-name (RFC 3986 has no numeric-host rule).
 
 test_that("WHATWG rejects obfuscated numeric hosts left literal", {
   bucket_a <- c(
@@ -245,8 +246,8 @@ test_that("get_parse_status/domain/tld/subdomain honor the standard (AC #8)", {
 # ASCII code points WHATWG keeps in the host. Under whatwg the shim accepts
 # them (the parser
 # parses a filler-substituted host for structure; rurl restores the true host).
-# RFC 3986 uses the same restore seam for its literal reg-name sub-delims;
-# NULL keeps the parser's stricter charset.
+# RFC 3986 uses the same restore seam for its literal reg-name sub-delims.
+# NULL reads as the default whatwg (ADR 0020), so it takes the shim too.
 
 test_that("host-charset shim accepts selector-valid literal host bytes", {
   gap <- c("!", "\"", "$", "&", "'", "(", ")", "*",
@@ -296,11 +297,13 @@ test_that("host-charset shim accepts selector-valid literal host bytes", {
       )
     }
 
-    # NULL: the parser's stricter charset is inherited unchanged.
-    expect_true(
-      is.na(get_clean_url(u, url_standard = NULL)),
-      label = paste("NULL selector drops", ch)
+    # NULL is the default whatwg (ADR 0020 D4).
+    expect_identical(
+      get_clean_url(u, url_standard = NULL), get_clean_url(u),
+      label = paste("NULL is the default for", ch)
     )
+    expect_identical(get_clean_url(u), u,
+                     label = paste("default clean_url preserved for", ch))
     expect_false(
       "host-charset-shimmed" %in%
         get_url_diagnostics(u, url_standard = "rfc3986"),

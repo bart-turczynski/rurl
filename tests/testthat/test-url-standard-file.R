@@ -2,9 +2,9 @@
 # file as a special scheme; RFC 3986 admits it as an ordinary registered
 # hierarchical scheme. rurl supports the plain hostless forms `file:///...` and
 # `file://localhost/...`. The localhost authority DECOMPOSES differently per
-# selector -- collapsed to an empty host under `whatwg` and the byte-frozen NULL
-# baseline, reported as an ordinary `reg-name` under `rfc3986` (RURL-zyytztdd,
-# and see `.rfc_file_localhost_policy()`).
+# selector -- collapsed to an empty host under `whatwg` (the default; NULL
+# means the same, ADR 0020), reported as an ordinary `reg-name` under
+# `rfc3986` (RURL-zyytztdd).
 
 test_that("file URLs parse under both standard profiles", {
   urls <- c(
@@ -88,8 +88,8 @@ test_that("whatwg and NULL keep the localhost empty-host mapping", {
     c("file:///path/to/file.txt", "file:///path/to/file.txt")
   )
 
-  # The no-selector baseline is byte-frozen (ADR 0012 D4), so it keeps the
-  # collapse even though `rfc3986` no longer applies it.
+  # The default (and NULL) is whatwg (ADR 0020 D4), so it keeps the collapse,
+  # which `rfc3986` does not apply.
   expect_identical(
     serialize_url(u, form = "source"),
     c("file:///path/to/file.txt", "file:///path/to/file.txt")
@@ -120,8 +120,8 @@ test_that("legacy and RFC file forms are parsed by the in-tree overlay", {
   expect_identical(
     get_parse_status(urls, url_standard = "rfc3986"), c("ok", "ok")
   )
-  # The NULL selector and "rfc3986" agree by construction: both route file: to
-  # the same overlay (RURL-obsweger decision (a)).
+  # The default whatwg file state machine and the "rfc3986" overlay agree on
+  # these two (RURL-obsweger decision (a) routed rfc3986 to the overlay).
   expect_identical(
     get_clean_url(urls), get_clean_url(urls, url_standard = "rfc3986")
   )
@@ -140,22 +140,14 @@ test_that("file: Gate 1 rejects forms that are not valid RFC 3986", {
   # `drive-letter = ALPHA ":" / ALPHA "|"`, but "|" is absent from `pchar`.
   # Gate 1 rejects those; the whatwg profile repairs them instead.
   bs <- paste0("file:///path", rawToChar(as.raw(92L)), "to")
-  for (std in list(NULL, "rfc3986")) {
-    status <- function(x) {
-      if (is.null(std)) {
-        get_parse_status(x)
-      } else {
-        get_parse_status(x, url_standard = std)
-      }
-    }
-    expect_identical(status("file://C|/x"), "error")
-    expect_identical(status(bs), "error")
-    expect_identical(status("file://[example]/"), "error")
-  }
+  status <- function(x) get_parse_status(x, url_standard = "rfc3986")
+  expect_identical(status("file://C|/x"), "error")
+  expect_identical(status(bs), "error")
+  expect_identical(status("file://[example]/"), "error")
   # Percent-encoding is the LEGAL way to carry "|" in a reg-name, so the
   # encoded form is accepted where the bare form is not. Confirmed against
   # Ruby's URI::RFC3986_Parser, which draws the same line.
-  expect_identical(get_parse_status("file://C%7C"), "ok")
+  expect_identical(status("file://C%7C"), "ok")
   # WHATWG repairs rather than rejects (matches adaR / Node `new URL()`).
   expect_identical(
     get_path("file://C|/x", url_standard = "whatwg"), "/C:/x"
@@ -163,23 +155,29 @@ test_that("file: Gate 1 rejects forms that are not valid RFC 3986", {
 })
 
 test_that("file: Gate 2 applies RFC 8089 S2's narrowing of the authority", {
-  # No port: S2's `file-auth = "localhost" / host` has none, and no appendix
-  # supplies a production for one -> parse failure. This is the NULL default,
-  # byte-frozen by ADR 0012 D4. The `rfc3986` selector no longer agrees --
-  # see the test below (RURL-uhkofhjf).
-  expect_identical(get_parse_status("file://example.com:80/path"), "error")
+  # The overlay is the `rfc3986` arm's alone (the frozen NULL reading that
+  # failed a port, ADR 0012 D4, is retired by ADR 0020); a port is a fact
+  # there -- see the test below (RURL-uhkofhjf).
+  std <- "rfc3986"
   # userinfo IS admitted, by App. E.1/F's production, and is surfaced as a
   # fact rather than silently discarded.
   u <- "file://user@example.com/path"
-  expect_identical(get_parse_status(u), "ok")
-  expect_identical(get_user(u), "user")
-  expect_identical(get_host(u), "example.com")
+  expect_identical(get_parse_status(u, url_standard = std), "ok")
+  expect_identical(get_user(u, url_standard = std), "user")
+  expect_identical(get_host(u, url_standard = std), "example.com")
   # query/fragment survive: RFC 8089 never mentions either, and RFC 3986 S3.5
   # forbids scheme specs from restricting the fragment at all. RFC 8118 S3
   # depends on this working (application/pdf `#page=`).
-  expect_identical(get_parse_status("file:///doc.pdf#page=2"), "ok")
-  expect_identical(get_fragment("file:///doc.pdf#page=2"), "page=2")
-  expect_identical(get_query("file:///data.csv?v=2"), "v=2")
+  expect_identical(
+    get_parse_status("file:///doc.pdf#page=2", url_standard = std), "ok"
+  )
+  expect_identical(
+    get_fragment("file:///doc.pdf#page=2", url_standard = std), "page=2"
+  )
+  expect_identical(get_query("file:///data.csv?v=2", url_standard = std), "v=2")
+  # The default whatwg file host state has no userinfo: "@" is a forbidden
+  # host code point, so the row fails there.
+  expect_identical(get_parse_status(u), "error")
 })
 
 test_that("under rfc3986 a file: port is a FACT, not a Gate 2 failure", {
@@ -221,8 +219,8 @@ test_that("under rfc3986 a file: port is a FACT, not a Gate 2 failure", {
   expect_identical(do.call(get_port, c(list("file://example:/"), args)),
                    NA_integer_)
 
-  # The other two profiles do not move. The NULL default is byte-frozen
-  # (ADR 0012 D4) and WHATWG runs its own `file:` state machine.
+  # WHATWG, the default, does not move: it runs its own `file:` state machine,
+  # whose file host state has no port.
   expect_identical(
     suppressWarnings(get_parse_status(u)), rep("error", 3L)
   )
@@ -338,9 +336,8 @@ test_that("WHATWG file parser never shortens past a lone drive letter", {
   )
 
   # Negative controls: the rule is reached only from the WHATWG `file:` state
-  # machine. `rfc3986` keeps section 5.2.4's shortening, and the frozen NULL
-  # selector keeps the byte-frozen no-normalization record (ADR 0007). Both
-  # values equal what `main` produced before this fix.
+  # machine. `rfc3986` keeps section 5.2.4's shortening, which equals what
+  # `main` produced before this fix.
   ctrl <- c(
     "file:///C:/../", "file:///C:/a/../..", "file:///C:/..",
     "file://host/C:/..", "http://h/C:/.."
@@ -359,11 +356,10 @@ test_that("WHATWG file parser never shortens past a lone drive letter", {
     )$path,
     c("/", "/", "/", "/", "/")
   )
-  frozen <- safe_parse_urls(ctrl)
+  # The default is whatwg (ADR 0020): its clean_url is the serialization.
   expect_identical(
-    frozen$path, c("/C:/../", "/C:/a/../..", "/C:/..", "/C:/..", "/C:/..")
+    safe_parse_urls(ctrl)$clean_url, serialize_url(ctrl, standard = "whatwg")
   )
-  expect_identical(frozen$clean_url, ctrl)
 })
 
 test_that("WHATWG file parser preserves query and fragment on empty paths", {
@@ -460,19 +456,23 @@ test_that("hostless invalid file: rows never emit a clean URL", {
   # "file:C:/W" emitted "file://C:/W" (authority "C:" -- an SMB fetch on
   # Windows), "file:etc/passwd" -> "file://etc/passwd", "file:." -> "file://.".
   # All three are parse errors, so there is no canonical spelling to emit.
+  # They are errors under `rfc3986`, which has no file state.
   offenders <- c("file:C:/W", "file:etc/passwd", "file:.")
-  for (std in list(NULL, "rfc3986")) {
-    parsed <- safe_parse_urls(offenders, url_standard = std)
-    expect_identical(parsed$parse_status, rep("error", length(offenders)))
-    # An error row has no canonical spelling to emit. This also covers the
-    # RFC-normalized empty-path edge: "file:." must not become "file://".
-    expect_true(all(is.na(parsed$clean_url)))
-  }
+  parsed <- safe_parse_urls(offenders, url_standard = "rfc3986")
+  expect_identical(parsed$parse_status, rep("error", length(offenders)))
+  # An error row has no canonical spelling to emit. This also covers the
+  # RFC-normalized empty-path edge: "file:." must not become "file://".
+  expect_true(all(is.na(parsed$clean_url)))
   # The path column still reports what was read: the guard suppresses only the
   # reassembled key, it does not discard the parse facts.
-  expect_identical(
-    safe_parse_urls(offenders)$path, c("C:/W", "etc/passwd", ".")
-  )
+  expect_identical(parsed$path, c("C:/W", "etc/passwd", ""))
+  # The default whatwg file state reads each as a path with an empty host, so
+  # the rows parse and clean_url is their serialization (no authority made).
+  w <- safe_parse_urls(offenders)
+  expect_identical(w$parse_status, rep("ok", length(offenders)))
+  expect_identical(w$clean_url, serialize_url(offenders, standard = "whatwg"))
+  expect_identical(w$clean_url,
+                   c("file:///C:/W", "file:///etc/passwd", "file:///"))
 })
 
 test_that("a colon before any slash in a host-less file: path", {
@@ -500,14 +500,14 @@ test_that("a colon before any slash in a host-less file: path", {
     c(NA_character_, NA_character_)
   )
 
-  # Negative controls: neither the frozen NULL profile nor `rfc3986` has a
-  # file state, and both still refuse these rows on the web route.
-  for (std in list(NULL, "rfc3986")) {
-    parsed <- suppressWarnings(safe_parse_urls(u, url_standard = std))
-    expect_identical(parsed$parse_status, rep("error", length(u)))
-    expect_true(all(is.na(parsed$clean_url)))
-    expect_identical(parsed$path, c("C:/x", "C:x", "a:/x", "ab:cd", "1:2"))
-  }
+  # The default (and NULL) is whatwg (ADR 0020 D4), so it gives the same.
+  expect_identical(safe_parse_urls(u)$clean_url, want)
+  # Negative control: `rfc3986` has no file state, and still refuses these
+  # rows on the web route.
+  parsed <- suppressWarnings(safe_parse_urls(u, url_standard = "rfc3986"))
+  expect_identical(parsed$parse_status, rep("error", length(u)))
+  expect_true(all(is.na(parsed$clean_url)))
+  expect_identical(parsed$path, c("C:/x", "C:x", "a:/x", "ab:cd", "1:2"))
   # The RFC 3986 recipe reads each as `path-rootless`, verbatim.
   g <- safe_parse_urls(
     u, url_standard = "rfc3986", scheme_policy = "require",

@@ -22,7 +22,9 @@ deep_alabel <- "a.b.xn--mnich-kva.com"
 # "keep" A-label output and a "keep" Unicode output compare equal once the
 # A-label-vs-Unicode spelling difference is removed. We re-parse the bare host
 # under host_encoding = "unicode" with all structural policies neutral so this
-# helper only ever changes ENCODING, never structure.
+# helper only ever changes ENCODING, never structure. (The default whatwg host
+# is already lowercase, so no case_handling is passed: `"keep"` is a conflict
+# under it, ADR 0020 D4a.)
 to_common <- function(host) {
   if (is.na(host) || !nzchar(host)) {
     return(host)
@@ -31,8 +33,7 @@ to_common <- function(host) {
     paste0("http://", host),
     www_handling = "none",
     subdomain_levels_to_keep = NULL,
-    host_encoding = "unicode",
-    case_handling = "keep"
+    host_encoding = "unicode"
   )$host
 }
 
@@ -204,12 +205,18 @@ test_that("non-IDN subdomain trim unchanged", {
 })
 
 test_that("non-IDN mixed-case keep lowercases domain, keeps subdomain case", {
+  # The default whatwg folds the host case in the parse, and
+  # `case_handling = "keep"` is a conflict there (ADR 0020 D4a); the
+  # case-keeping trim is reached through `profile = "rfc-syntax"`.
   expect_equal(
     parse_host(
-      "A.B.Example.COM",
-      subdomain_levels_to_keep = 1, host_encoding = "keep",
-      case_handling = "keep"
+      "A.B.Example.COM", profile = "rfc-syntax",
+      subdomain_levels_to_keep = 1, host_encoding = "keep"
     ),
     "B.example.com"
+  )
+  expect_error(
+    parse_host("A.B.Example.COM", case_handling = "keep"),
+    "governs `case_handling`"
   )
 })

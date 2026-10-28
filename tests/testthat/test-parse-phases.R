@@ -422,22 +422,23 @@ test_that("case_handling = 'upper' on a host stays Unicode and locale-pinned", {
   # transform -- no standard uppercases a host -- so it keeps full Unicode case
   # mapping under the pinned non-tailoring locale. A future refactor that
   # "unifies" the host branch on the ASCII helpers would produce the mixed-case
-  # "BüCHER.EXAMPLE" and fail here.
+  # "BüCHER.EXAMPLE" and fail here. Under the default whatwg the fold shapes
+  # clean_url only (ADR 0020 D4a), so it is read there.
   expect_identical(
-    get_host("https://bücher.example/", case_handling = "upper"),
-    "BÜCHER.EXAMPLE"
+    get_clean_url("https://bücher.example/", case_handling = "upper"),
+    "HTTPS://BÜCHER.EXAMPLE/"
   )
 
   .with_turkish_stri_locale({
     # Unicode-aware ...
     expect_identical(
-      get_host("https://bücher.example/", case_handling = "upper"),
-      "BÜCHER.EXAMPLE"
+      get_clean_url("https://bücher.example/", case_handling = "upper"),
+      "HTTPS://BÜCHER.EXAMPLE/"
     )
     # ... AND locale-invariant: Turkish would uppercase "i" to the dotted "İ".
     expect_identical(
-      get_host("https://wiki.example.com/", case_handling = "upper"),
-      "WIKI.EXAMPLE.COM"
+      get_clean_url("https://wiki.example.com/", case_handling = "upper"),
+      "HTTPS://WIKI.EXAMPLE.COM/"
     )
   })
 })
@@ -446,17 +447,20 @@ test_that("path case_handling is locale-pinned, not session-dependent", {
   # The path keeps full Unicode case mapping (it is a user-requested transform
   # of free text) but pins an explicit non-tailoring locale. NOTE: "root" and
   # "und" do NOT override the ambient locale in stringi -- see
-  # .ASCII_SAFE_ICU_LOCALE in R/utils.R.
-  baseline <- safe_parse_url(
+  # .ASCII_SAFE_ICU_LOCALE in R/utils.R. Under the default whatwg the fold
+  # shapes clean_url only (ADR 0020 D4a); the `path` component keeps its case.
+  parsed <- safe_parse_url(
     "https://example.com/PATH/WIKI", case_handling = "lower"
-  )$path
-  expect_identical(baseline, "/path/wiki")
+  )
+  baseline <- parsed$clean_url
+  expect_identical(baseline, "https://example.com/path/wiki")
+  expect_identical(parsed$path, "/PATH/WIKI")
 
   .with_turkish_stri_locale({
     expect_identical(
       safe_parse_url(
         "https://example.com/PATH/WIKI", case_handling = "lower"
-      )$path,
+      )$clean_url,
       baseline
     )
   })

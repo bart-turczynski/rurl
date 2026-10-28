@@ -1,12 +1,12 @@
-# Under `url_standard = NULL`, an octet that is not valid UTF-8 in a web-route
-# PATH is percent-encoded, as the same octet in the query and fragment already
-# is (RURL-yarkccco, ruling RUL-029). RURL-otrpfhmq made such a row fail
-# (`parse_status = "error"`, every component NA) to stop it aborting the
-# batch; the owner ruled instead that the path keeps the octet as its "%XX"
-# triplet: RFC 3986 sec 2.1 allows `%E9` in a path and forbids only the raw
-# octet. `file:` rows and the `rfc3986` and `whatwg` profiles do not move.
+# A web-route URL whose PATH holds an octet that is not valid UTF-8. The
+# default `url_standard = "whatwg"` reads the octet as U+FFFD, as its parser
+# reads a scalar-value string (UTF-8 decode with replacement), and the row
+# parses; `rfc3986` rejects the row at its grammar gate (RFC 3986 sec 2: a URI
+# is a sequence of characters).
 #
-# Not byte-for-byte CRAN 3.1.0: 3.1.0 read the path octet as U+FFFD.
+# RURL-yarkccco (ruling RUL-029) percent-encoded such an octet under the
+# frozen `url_standard = NULL` profile; ADR 0020 retired that profile, and
+# RUL-032 supersedes RUL-029, so `NULL` now reads the octet as WHATWG does.
 #
 # Every bad input is built from raw octets with `rawToChar()`, so it carries
 # the "unknown" mark real user input has; each is also run marked "UTF-8".
@@ -37,59 +37,51 @@ in_ctype <- function(locale, utf8, code) {
 }
 ctypes <- list(C = FALSE, `en_US.UTF-8` = TRUE)
 
-# Each bad path row and the row that spells its octets as "%XX" triplets.
+# Each bad path row and the row that spells its ill-formed octets as U+FFFD.
+fffd <- "�"
 path_twins <- list(
-  end = list(oct("http://example.com/caf", 0xE9), "http://example.com/caf%E9"),
+  end = list(oct("http://example.com/caf", 0xE9),
+             paste0("http://example.com/caf", fffd)),
   query = list(oct("http://example.com/caf", 0xE9, "?q=1"),
-               "http://example.com/caf%E9?q=1"),
+               paste0("http://example.com/caf", fffd, "?q=1")),
   fragment = list(oct("http://example.com/caf", 0xE9, "#f"),
-                  "http://example.com/caf%E9#f"),
+                  paste0("http://example.com/caf", fffd, "#f")),
   dots = list(oct("http://example.com/a/../caf", 0xE9, "/./b"),
-              "http://example.com/a/../caf%E9/./b"),
-  # A truncated 2-byte sequence: the lead octet alone is escaped.
-  pair = list(oct("http://example.com/", 0xC3, "("),
-              "http://example.com/%C3("),
-  # A valid "é" beside an invalid octet: only the invalid one is escaped.
+              paste0("http://example.com/a/../caf", fffd, "/./b")),
   mixed = list(oct("http://example.com/caf", c(0xC3, 0xA9, 0xE9)),
-               "http://example.com/café%E9"),
-  schemeless = list(oct("example.com/caf", 0xE9), "example.com/caf%E9"),
-  ftp = list(oct("ftp://example.com/caf", 0xE9), "ftp://example.com/caf%E9")
+               paste0("http://example.com/café", fffd)),
+  schemeless = list(oct("example.com/caf", 0xE9),
+                    paste0("example.com/caf", fffd)),
+  ftp = list(oct("ftp://example.com/caf", 0xE9),
+             paste0("ftp://example.com/caf", fffd))
 )
-
-null_arm <- function(x, ...) safe_parse_urls(x, url_standard = NULL, ...)
 drop_original <- function(df) df[setdiff(names(df), "original_url")]
 
 for (loc in names(ctypes)) {
-  test_that(paste("a NULL path octet is percent-encoded, row ok, under", loc), {
+  test_that(paste("the default reads a path octet as U+FFFD under", loc), {
     in_ctype(loc, ctypes[[loc]], {
       for (mk in names(marks)) {
+        x <- marks[[mk]](c(oct("http://example.com/caf", 0xE9),
+                           oct("http://example.com/caf", 0xE9, "?q=1"),
+                           oct("file:///caf", 0xE9)))
+        for (std in list(NULL, "whatwg")) {
+          rurl_clear_caches()
+          r <- safe_parse_urls(x, url_standard = std)
+          expect_identical(r$parse_status, c("ok", "ok", "ok"), info = mk)
+          expect_identical(r$path, rep(paste0("/caf", fffd), 3L), info = mk)
+          expect_identical(r$query, c(NA, "q=1", NA), info = mk)
+        }
         rurl_clear_caches()
-        r <- null_arm(marks[[mk]](c(
-          oct("http://example.com/caf", 0xE9),
-          oct("http://example.com/caf", 0xE9, "?q=1")
-        )))
-        expect_identical(r$parse_status, c("ok", "ok"), info = mk)
-        expect_identical(r$path, c("/caf%E9", "/caf%E9"), info = mk)
-        expect_identical(r$host, c("example.com", "example.com"), info = mk)
-        expect_identical(r$query, c(NA, "q=1"), info = mk)
-        expect_identical(
-          r$clean_url,
-          c("http://example.com/caf%E9", "http://example.com/caf%E9"),
-          info = mk
-        )
-        # Omitting url_standard is the same NULL profile.
-        rurl_clear_caches()
-        lone <- marks[[mk]](oct("http://example.com/caf", 0xE9))
-        expect_identical(safe_parse_urls(lone)$path, "/caf%E9", info = mk)
+        expect_identical(safe_parse_urls(x)$path, rep(paste0("/caf", fffd), 3L),
+                         info = mk)
       }
     })
   })
 
-  test_that(paste("a NULL path octet row equals its %XX twin under", loc), {
+  test_that(paste("a path octet row equals its U+FFFD twin under", loc), {
     in_ctype(loc, ctypes[[loc]], {
       opts <- list(
         list(),
-        list(path_normalization = "dot_segments"),
         list(index_page_handling = "strip"),
         list(trailing_slash_handling = "strip"),
         list(path_encoding = "encode"),
@@ -101,62 +93,14 @@ for (loc in names(ctypes)) {
         for (opt in opts) {
           what <- paste(mk, paste(names(opt), opt, collapse = " "))
           rurl_clear_caches()
-          expect_no_warning(rb <- do.call(null_arm, c(list(bad), opt)))
-          expect_no_warning(rt <- do.call(null_arm, c(list(twin), opt)))
+          expect_no_warning(rb <- do.call(safe_parse_urls, c(list(bad), opt)))
+          expect_no_warning(rt <- do.call(safe_parse_urls, c(list(twin), opt)))
           expect_identical(drop_original(rb), drop_original(rt), info = what)
           expect_identical(rb$original_url, unname(bad), info = what)
+          expect_true(all(validUTF8(rb$clean_url[!is.na(rb$clean_url)])),
+                      info = what)
         }
       }
-    })
-  })
-
-  test_that(paste("encode and decode keep the %XX octet in the path under",
-                  loc), {
-    # "encode" decodes nothing, so the triplet stays and a `(` stays literal
-    # (RFC 3986 `pchar`, RURL-dbyavcjt); "decode" decodes, and an octet that is
-    # still not valid UTF-8 stays its triplet. Neither writes "/NA" or the raw
-    # octet (RURL-yarkccco).
-    in_ctype(loc, ctypes[[loc]], {
-      want <- list(
-        encode = c(end = "/caf%E9", query = "/caf%E9", fragment = "/caf%E9",
-                   dots = "/a/../caf%E9/./b", pair = "/%C3(",
-                   mixed = "/caf%C3%A9%E9", schemeless = "/caf%E9",
-                   ftp = "/caf%E9"),
-        decode = c(end = "/caf%E9", query = "/caf%E9", fragment = "/caf%E9",
-                   dots = "/a/../caf%E9/./b", pair = "/%C3(",
-                   mixed = "/café%E9", schemeless = "/caf%E9",
-                   ftp = "/caf%E9")
-      )
-      for (mk in names(marks)) {
-        bad <- marks[[mk]](vapply(path_twins, `[[`, "", 1L))
-        for (pe in names(want)) {
-          rurl_clear_caches()
-          expect_no_warning(r <- null_arm(bad, path_encoding = pe))
-          expect_identical(r$path, unname(want[[pe]]), info = paste(mk, pe))
-          expect_true(all(validUTF8(r$clean_url)), info = paste(mk, pe))
-        }
-      }
-    })
-  })
-
-  test_that(paste("a long path with scattered bad octets escapes in linear",
-                  "time under", loc), {
-    skip_on_cran()
-    in_ctype(loc, ctypes[[loc]], {
-      chunk <- oct("abcdefghi", 0xE9)
-      long_path <- function(n) {
-        paste0("/", strrep(chunk, n %/% nchar(chunk, type = "bytes")))
-      }
-      p200k <- long_path(200000L)
-      elapsed <- system.time(
-        out <- rurl:::.web_escape_undecodable_bytes(p200k)
-      )[["elapsed"]]
-      expect_lt(elapsed, 5)
-      expect_true(validUTF8(out))
-      expect_identical(
-        nchar(out, type = "bytes"),
-        nchar(p200k, type = "bytes") + 2L * (200000L %/% 10L)
-      )
     })
   })
 
@@ -164,64 +108,25 @@ for (loc in names(ctypes)) {
     in_ctype(loc, ctypes[[loc]], {
       x <- c(oct("http://example.com/caf", 0xE9),
              oct("http://example.com/caf", 0xE9, "?q=1"))
-      expect_identical(get_path(x), c("/caf%E9", "/caf%E9"))
+      expect_identical(get_path(x), rep(paste0("/caf", fffd), 2L))
       expect_identical(get_parse_status(x), c("ok", "ok"))
-      expect_identical(
-        get_clean_url(x),
-        c("http://example.com/caf%E9", "http://example.com/caf%E9")
-      )
-    })
-  })
-
-  # --- Pins of what does not move -----------------------------------------
-
-  test_that(paste("a NULL query or fragment octet is unchanged under", loc), {
-    in_ctype(loc, ctypes[[loc]], {
-      for (mk in names(marks)) {
-        rurl_clear_caches()
-        r <- null_arm(marks[[mk]](c(
-          oct("http://e.com/a?q=caf", 0xE9),
-          oct("http://e.com/a#caf", 0xE9)
-        )))
-        expect_identical(r$parse_status, c("ok", "ok"), info = mk)
-        expect_identical(r$path, c("/a", "/a"), info = mk)
-        expect_identical(r$query, c("q=caf%E9", NA), info = mk)
-        expect_identical(r$fragment, c(NA, "caf%E9"), info = mk)
-        expect_identical(r$clean_url, c("http://e.com/a", "http://e.com/a"),
-                         info = mk)
-      }
+      expect_identical(get_clean_url(x),
+                       rep(paste0("http://example.com/caf", fffd), 2L))
     })
   })
 
   test_that(paste("an existing %E9 and a valid UTF-8 path are unchanged under",
                   loc), {
     in_ctype(loc, ctypes[[loc]], {
-      r <- null_arm(c("http://example.com/caf%E9", "http://example.com/caf%e9",
-                      "http://example.com/café"))
+      r <- safe_parse_urls(c("http://example.com/caf%E9",
+                             "http://example.com/caf%e9",
+                             "http://example.com/café"))
       expect_identical(r$parse_status, c("ok", "ok", "ok"))
-      expect_identical(r$path, c("/caf%E9", "/caf%E9", "/café"))
-      expect_identical(
-        r$clean_url,
-        c("http://example.com/caf%E9", "http://example.com/caf%E9",
-          "http://example.com/café")
-      )
+      expect_identical(r$path, c("/caf%E9", "/caf%e9", "/caf\u00e9"))
     })
   })
 
-  test_that(paste("a file: octet row still fails under NULL, under", loc), {
-    in_ctype(loc, ctypes[[loc]], {
-      for (mk in names(marks)) {
-        rurl_clear_caches()
-        r <- null_arm(marks[[mk]](c(oct("file:///caf", 0xE9),
-                                    oct("file:///a?q=caf", 0xE9),
-                                    oct("file:///a#caf", 0xE9))))
-        expect_identical(r$parse_status, rep("error", 3L), info = mk)
-        expect_identical(r$path, rep(NA_character_, 3L), info = mk)
-      }
-    })
-  })
-
-  test_that(paste("rfc3986 still rejects every octet row under", loc), {
+  test_that(paste("rfc3986 rejects every octet row under", loc), {
     in_ctype(loc, ctypes[[loc]], {
       for (mk in names(marks)) {
         bad <- marks[[mk]](c(vapply(path_twins, `[[`, "", 1L),
@@ -235,60 +140,14 @@ for (loc in names(ctypes)) {
       }
     })
   })
-
-  test_that(paste("whatwg still reads the octet as U+FFFD under", loc), {
-    in_ctype(loc, ctypes[[loc]], {
-      for (mk in names(marks)) {
-        rurl_clear_caches()
-        r <- safe_parse_urls(
-          marks[[mk]](c(oct("http://example.com/caf", 0xE9),
-                        oct("http://example.com/caf", 0xE9, "?q=1"),
-                        oct("file:///caf", 0xE9))),
-          url_standard = "whatwg"
-        )
-        expect_identical(r$parse_status, c("ok", "ok", "ok"), info = mk)
-        expect_identical(r$path, rep("/caf�", 3L), info = mk)
-        expect_identical(r$query, c(NA, "q=1", NA), info = mk)
-      }
-    })
-  })
 }
 
-test_that(".web_escape_undecodable_bytes() escapes only ill-formed octets", {
-  esc <- function(octets) {
-    rurl:::.web_escape_undecodable_bytes(rawToChar(as.raw(octets)))
-  }
-  # A surrogate and an overlong form are ill-formed whole: every octet.
-  expect_identical(esc(c(0x2F, 0xED, 0xA0, 0x80)), "/%ED%A0%80")
-  expect_identical(esc(c(0x2F, 0xC0, 0xAF)), "/%C0%AF")
-  # Above U+10FFFF.
-  expect_identical(esc(c(0x2F, 0xF4, 0x90, 0x80, 0x80)), "/%F4%90%80%80")
-  # A truncated sequence at the end, and one cut short by ASCII.
-  expect_identical(esc(c(0x2F, 0x61, 0xE2, 0x82)), "/a%E2%82")
-  expect_identical(esc(c(0x2F, 0xE2, 0x82, 0x61)), "/%E2%82a")
-  # Valid 2-, 3- and 4-byte characters beside a bad octet stay raw.
-  expect_identical(
-    esc(c(0x2F, 0xC3, 0xA9, 0xE9, 0xE2, 0x82, 0xAC, 0xF0, 0x9F, 0x98, 0x80,
-          0xFF)),
-    "/\u00e9%E9\u20ac\U0001F600%FF"
-  )
-  expect_identical(Encoding(esc(c(0x2F, 0xC3, 0xA9, 0xE9))), "UTF-8")
-  # Valid input, NA and a latin1-marked element pass through unchanged.
-  expect_identical(rurl:::.web_escape_undecodable_bytes("/café"),
-                   "/café")
-  expect_identical(rurl:::.web_escape_undecodable_bytes(NA_character_),
-                   NA_character_)
-  l1 <- rawToChar(as.raw(c(0x2F, 0xE9)))
-  Encoding(l1) <- "latin1"
-  expect_identical(rurl:::.web_escape_undecodable_bytes(l1), l1)
-})
-
-test_that("every lone high octet in a NULL path is escaped, row ok", {
+test_that("every lone high octet in a path reads as U+FFFD, row ok", {
   rurl_clear_caches()
   on.exit(rurl_clear_caches(), add = TRUE)
   octets <- 0x80:0xFF
   bad <- vapply(octets, function(o) oct("http://example.com/x", o), "")
-  r <- null_arm(bad)
+  r <- safe_parse_urls(bad)
   expect_identical(r$parse_status, rep("ok", length(bad)))
-  expect_identical(r$path, sprintf("/x%%%02X", octets))
+  expect_identical(r$path, rep(paste0("/x", fffd), length(bad)))
 })

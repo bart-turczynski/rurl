@@ -104,13 +104,14 @@ test_that("rfc3986: a tail after the IP-literal is a grammar failure", {
 
 test_that("file: the RFC 8089 overlay's bracket tails do not move", {
   # `.parse_rfc_file_urls_vec()` is the other caller of `.split_authority()`,
-  # and the only one `url_standard = NULL` reaches. Every tailed row already
-  # failed under all three selectors. Under WHATWG `file:` is special: the
+  # reached under `rfc3986`. Every tailed row fails under both selectors (and
+  # the default, which is whatwg; ADR 0020). Under WHATWG `file:` is special:
+  # the
   # file host state ends the host at "\", so `file://[::1]\x` is the host
   # `[::1]` and the path `/x` there, as Node gives it.
   bad <- c("file://[::1]x/", "file://[::1]]/", "file://u@[::1]x/")
-  for (std in list(NULL, "whatwg", "rfc3986")) {
-    lab <- if (is.null(std)) "NULL" else std
+  for (std in c("whatwg", "rfc3986")) {
+    lab <- std
     b <- safe_parse_urls(bad, url_standard = std)
     expect_identical(b$parse_status, rep("error", length(bad)), info = lab)
     expect_true(all(is.na(b$host)), info = lab)
@@ -135,20 +136,17 @@ test_that("file: the RFC 8089 overlay's bracket tails do not move", {
     c(w$parse_status, w$host, w$path), c("ok", "[::1]", "/x")
   )
   expect_identical(serialize_url(bs, standard = "whatwg"), "file://[::1]/x")
-  for (std in list(NULL, "rfc3986")) {
-    lab <- if (is.null(std)) "NULL" else std
-    expect_identical(
-      safe_parse_urls(bs, url_standard = std)$parse_status, "error",
-      info = lab
-    )
-  }
+  expect_identical(safe_parse_urls(bs), w)
+  expect_identical(
+    safe_parse_urls(bs, url_standard = "rfc3986")$parse_status, "error"
+  )
   expect_identical(serialize_url(bs, standard = "rfc3986"), NA_character_)
 })
 
-test_that("NULL: a non-special bracket tail never reaches the general parser", {
-  # `scheme_acceptance = "general"` is an error without a selector, so the
-  # frozen profile reads `foo:` through the web route, which rejects it
-  # outright. Omitting `url_standard` and passing NULL agree.
+test_that("default web acceptance: a non-special bracket tail is rejected", {
+  # Under the default `scheme_acceptance = "web"` a `foo:` URL is outside the
+  # allowlist and is rejected before any host parse. Omitting `url_standard`
+  # and passing NULL agree (both read as whatwg; ADR 0020 D4).
   urls <- c(
     "foo://[::1]x/", "foo://[::1]]/", "foo://[::1]\\x", "foo://u@[::1]x/",
     "foo://[::1]x", "foo://[::1]/", "foo://[::1]:80/"

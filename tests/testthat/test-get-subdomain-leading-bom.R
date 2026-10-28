@@ -2,7 +2,8 @@
 #
 # Some stringi functions skip a U+FEFF (the byte-order mark) at the start of
 # their input (see .starts_with_bom() and ADR 0005's U+FEFF amendment). A host
-# led by the mark keeps it under NULL. Under rfc3986 the raw mark is a parse
+# led by the mark kept it under the frozen NULL profile, which ADR 0020
+# retired (`NULL` now reads as whatwg). Under rfc3986 the raw mark is a parse
 # error (RUL-030, below). Under whatwg, UTS-46 maps both U+FEFF and
 # U+200B to nothing before the host reaches the subdomain trim. Each U+FEFF row
 # has a U+200B twin: a zero-width code point stringi does not skip, so a twin
@@ -12,7 +13,7 @@ bom <- "\ufeff"
 zwsp <- "\u200b"
 
 # get_subdomain() under one arm. `NULL` omits the selector, as the default call
-# does; the NULL test below also passes it explicitly.
+# does.
 arm_sub <- function(url, arm, ...) {
   if (is.null(arm)) {
     get_subdomain(url, ...)
@@ -21,8 +22,9 @@ arm_sub <- function(url, arm, ...) {
   }
 }
 
-# The arms that once kept a leading mark in the host. NULL still does.
-keeping_arms <- list(rfc3986 = "rfc3986", "NULL" = NULL)
+# The arm that once kept a leading mark in the host (rfc3986 now rejects the
+# row), and every arm: `NULL` reads as whatwg.
+keeping_arms <- list(rfc3986 = "rfc3986")
 all_arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986", "NULL" = NULL)
 
 # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): under rfc3986 a raw
@@ -30,7 +32,7 @@ all_arms <- list(whatwg = "whatwg", rfc3986 = "rfc3986", "NULL" = NULL)
 # sections 2, 2.5 and 3.2.2: a URI is US-ASCII, non-ASCII data is written as
 # percent-encoded UTF-8, and `reg-name` admits no raw non-ASCII), so such a
 # row has no subdomain there: NA, or no labels under `format = "labels"`.
-# The NULL arm keeps the mark-handling coverage.
+# The trim helper pins below keep the mark-handling coverage.
 rfc_na <- function(an, value) {
   if (!identical(an, "rfc3986")) {
     return(value)
@@ -153,22 +155,9 @@ test_that("the trim helper keeps the mark, in any LC_CTYPE", {
     list(bom, zwsp)
   )
 })
-
-test_that("NULL: the subdomain keeps the mark (ADR 0016)", {
-  # Witness: under the frozen selector the parsed host of
-  # `\ufeffh.example.com/p` is `\ufeffh.example.com` and its domain
-  # `example.com`, and get_subdomain() returned `h`, which no standard or
-  # documented contract sanctions: a default-path defect, not selector-caused
-  # drift. Omitting the selector and passing NULL agree.
+test_that("NULL reads as whatwg: UTS-46 removes the mark (ADR 0020)", {
   u <- paste0(bom, "h.example.com/p")
-  expect_identical(get_subdomain(u), paste0(bom, "h"))
-  expect_identical(get_subdomain(u, url_standard = NULL), paste0(bom, "h"))
-  # Signature: only get_subdomain() moves, and only on a host whose first code
-  # point is U+FEFF; the parse record does not move. Per arm: whatwg was
-  # already right (UTS-46 removes the mark first, pinned above); rfc3986 now
-  # rejects the row (RUL-030, pinned above).
-  p <- safe_parse_url(u)
-  expect_identical(p$host, paste0(bom, "h.example.com"))
-  expect_identical(p$domain, "example.com")
-  expect_identical(p$parse_status, "ok")
+  expect_identical(get_subdomain(u), "h")
+  expect_identical(get_subdomain(u, url_standard = NULL), "h")
+  expect_identical(safe_parse_url(u)$host, "h.example.com")
 })

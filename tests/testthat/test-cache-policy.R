@@ -63,23 +63,27 @@ test_that("disabling caches preserves correctness", {
 
 test_that("punycode caches populate and preserve correctness", {
   reset_caches()
+  # The ADR 0002 punycode helpers (and so these caches) render the `rfc3986`
+  # host; the default `whatwg` host goes through UTS-46 mapping instead
+  # (RUL-002). RFC 3986 writes a non-ASCII host percent-encoded (RUL-030).
   idn <- c(
-    "https://münchen.de/a", "http://例え.jp/b",
-    "https://bücher.example.com/c", "https://xn--mnchen-3ya.de/d"
+    "https://m%C3%BCnchen.de/a", "http://%E4%BE%8B%E3%81%88.jp/b",
+    "https://b%C3%BCcher.example.com/c", "https://xn--mnchen-3ya.de/d"
   )
+  puny <- function(enc) {
+    safe_parse_urls(idn, host_encoding = enc, url_standard = "rfc3986")
+  }
   # Distinct full URLs so the full_parse cache never hides the punycode path.
-  enabled <- safe_parse_urls(idn, host_encoding = "idna")
-  enabled_uni <- safe_parse_urls(idn, host_encoding = "unicode")
+  enabled <- puny("idna")
+  enabled_uni <- puny("unicode")
   info <- rurl_cache_info()
   expect_gt(info$entries[info$cache == "puny_encode"], 0)
   expect_gt(info$entries[info$cache == "puny_decode"], 0)
 
   reset_caches()
   rurl_cache_config(puny_encode = FALSE, puny_decode = FALSE)
-  expect_identical(safe_parse_urls(idn, host_encoding = "idna"), enabled)
-  expect_identical(
-    safe_parse_urls(idn, host_encoding = "unicode"), enabled_uni
-  )
+  expect_identical(puny("idna"), enabled)
+  expect_identical(puny("unicode"), enabled_uni)
   # Disabled puny caches must not store anything.
   info_off <- rurl_cache_info()
   expect_equal(info_off$entries[info_off$cache == "puny_encode"], 0)

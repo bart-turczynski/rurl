@@ -30,8 +30,12 @@ test_that("rfc3986 rejects a repeated raw at-sign instead of recovering", {
   expect_false(isTRUE(.rfc3986_generic_uri_ok(u)$ok))
 })
 
-test_that("no selector leaves repeated at-sign authority baseline unchanged", {
-  expect_null(safe_parse_url("http://username@@@@example.com"))
+test_that("the default recovers a repeated at-sign authority as whatwg does", {
+  # ADR 0020 D4: the default (and NULL) is whatwg, which takes the last "@".
+  u <- "http://username@@@@example.com"
+  expect_identical(safe_parse_url(u),
+                   safe_parse_url(u, url_standard = "whatwg"))
+  expect_identical(safe_parse_url(u, url_standard = NULL)$host, "example.com")
 })
 
 test_that("whatwg recovers authority for special schemes without slashes", {
@@ -120,20 +124,19 @@ test_that("rfc3986 reads a scheme-shaped host:port as scheme + rootless path", {
   expect_identical(rec$path, c("8080/x", "80/index.php"))
   expect_identical(rec$query, c(NA_character_, "test=1"))
 
-  # The carve-out still does its job everywhere else. WHATWG and the no-selector
-  # baseline keep reading these as host:port, which is what makes this a
-  # per-selector routing change rather than the removal of a feature.
+  # The carve-out still does its job under WHATWG (the default) with
+  # `scheme_policy = "infer"`, which keeps reading these as host:port, so this
+  # is a per-selector routing change rather than the removal of a feature.
   expect_identical(get_host(urls, url_standard = "whatwg"),
                    c("example.com", "www.php.net"))
   # `:80` comes back NA under whatwg because it IS http's default port and the
-  # WHATWG port state nulls it -- the port was read, then elided. The
-  # no-selector baseline does not elide, so it still reports 80. Both read the
-  # authority; they differ only on default-port presentation.
+  # WHATWG port state nulls it -- the port was read, then elided. The default
+  # is whatwg, so it elides too.
   expect_identical(get_port(urls, url_standard = "whatwg"),
                    c(8080L, NA_integer_))
   expect_identical(suppressWarnings(get_host(urls)),
                    c("example.com", "www.php.net"))
-  expect_identical(suppressWarnings(get_port(urls)), c(8080L, 80L))
+  expect_identical(suppressWarnings(get_port(urls)), c(8080L, NA_integer_))
 })
 
 test_that("rfc3986 reads a 2-slash authority with no host per the grammar", {
@@ -172,8 +175,8 @@ test_that("rfc3986 reads a 2-slash authority with no host per the grammar", {
   expect_identical(hrec$host,
                    c("example.com", "example.com", "example.com", "[::1]"))
 
-  # whatwg and the no-selector baseline do not move: both still reject, because
-  # a special-scheme authority always has a host in the model they implement.
+  # whatwg (also the default) does not move: it still rejects, because a
+  # special-scheme authority always has a host in the model it implements.
   expect_identical(get_parse_status(urls, url_standard = "whatwg"),
                    rep("error", length(urls)))
   expect_identical(suppressWarnings(get_parse_status(urls)),
@@ -218,7 +221,6 @@ test_that("a gate-rejected general row is an error, never a thrown condition", {
   for (sel in list("rfc3986", "whatwg", NULL)) {
     label <- if (is.null(sel)) "NULL" else sel
     for (posture in c("web", "general")) {
-      if (posture == "general" && is.null(sel)) next
       st <- expect_no_error(
         suppressWarnings(get_parse_status(bad, url_standard = sel,
                                           scheme_acceptance = posture))
@@ -231,11 +233,15 @@ test_that("a gate-rejected general row is an error, never a thrown condition", {
   expect_false(rurl:::.rfc3986_generic_uri_ok(bad)$ok)
 })
 
-test_that("no selector keeps special schemes without slashes as errors", {
+test_that("the default recovers special schemes without slashes (whatwg)", {
+  # ADR 0020 D4: the frozen profile rejected these; the default is whatwg,
+  # whose special authority slashes state recovers the authority.
   urls <- c("http:example.com", "https:example.com/path")
-
-  expect_true(all(is.na(get_clean_url(urls))))
-  expect_identical(get_parse_status(urls), c("error", "error"))
+  expect_identical(get_clean_url(urls),
+                   get_clean_url(urls, url_standard = "whatwg"))
+  expect_identical(get_clean_url(urls),
+                   c("http://example.com/", "https://example.com/path"))
+  expect_identical(get_parse_status(urls), c("ok", "ok"))
 })
 
 test_that("rfc3986 empty authority does not duplicate host into path", {
@@ -528,14 +534,16 @@ test_that("rfc3986 still rejects a space or control in userinfo", {
   expect_identical(ok$password, c("pw", "foobar", "p%40ss"))
 })
 
-test_that("no-selector default is untouched by userinfo charset acceptance", {
+test_that("the default accepts the userinfo charset as whatwg does", {
+  # ADR 0020 D4: the default (and NULL) is whatwg, which percent-encodes a
+  # space or C0 control in the userinfo instead of rejecting the row.
   soh <- rawToChar(as.raw(1L))
-  res <- safe_parse_urls(
-    c("http://a b@host/", paste0("http://a", soh, "b@host/"),
-      "http://u:pw@h/")
-  )
-  expect_identical(res$parse_status[1:2], c("error", "error"))
-  expect_identical(res$user[3], "u")
+  u <- c("http://a b@host/", paste0("http://a", soh, "b@host/"),
+         "http://u:pw@h/")
+  res <- safe_parse_urls(u)
+  expect_identical(res, safe_parse_urls(u, url_standard = "whatwg"))
+  expect_identical(res$parse_status[1:2], rep("warning-no-tld", 2L))
+  expect_identical(res$user, c("a%20b", "a%01b", "u"))
 })
 
 test_that("newly accepted userinfo rows report the credential diagnostics", {

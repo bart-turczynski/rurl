@@ -6,9 +6,9 @@
 # that is valid under the selected standard but refused by rurl's web
 # acceptance policy (`non-spec:/p`) is still a base, an RFC 3986 base with a
 # port above 65535 is still a base under "rfc3986" (RFC 3986 section 3.2.3:
-# `port = *DIGIT`; the 16-bit ceiling is transport, not syntax), and the
-# frozen NULL selector keeps resolving against bases its parser calls an error
-# (ADR 0007; ADR 0016 needs a witness and a declared signature to move it).
+# `port = *DIGIT`; the 16-bit ceiling is transport, not syntax). The default
+# and `url_standard = NULL` are "whatwg" (ADR 0020), so they refuse a base the
+# WHATWG parser fails, absolute rows included.
 
 refs <- c("g", "//o.com/y", "/p", "https://z.com/q")
 
@@ -92,16 +92,16 @@ test_that("rfc3986: a port above 65535 does not refuse the base", {
   )
 })
 
-test_that("NULL keeps resolving against a base its parser calls an error", {
-  # Frozen (ADR 0007). ADR 0016 lets a fix move NULL only with a witness that
-  # the default path is defective and a declared signature; this unit has
-  # neither, so these rows are pinned as they are.
-  null_out <- c(NA, "http://o.com/y", NA, "https://z.com/q")
+test_that("the default and NULL refuse a base the WHATWG parser fails", {
+  # ADR 0020: the default is "whatwg", whose API URL parser fails on a
+  # failing base before it reads the input, so every row is NA.
   for (base in c("http://exa mple.com/a", "http://example.com:99999/cafe")) {
     expect_identical(get_parse_status(base), "error")
-    expect_identical(resolve_url(refs, base), null_out, label = base)
+    expect_identical(resolve_url(refs, base), rep(NA_character_, 4L),
+                     label = base)
     expect_identical(
-      resolve_url(refs, base, url_standard = NULL), null_out, label = base
+      resolve_url(refs, base, url_standard = NULL), rep(NA_character_, 4L),
+      label = base
     )
   }
 })
@@ -120,14 +120,15 @@ test_that("recycling: scalar base over refs, base vector over scalar ref", {
       label = label
     )
   }
-  # NULL, mixed vector: the refused base fails only its own relative row.
+  # The default (whatwg), mixed vector: the refused base fails only its own
+  # row, the absolute reference included.
   expect_identical(
     resolve_url("g", c(valid_base, "http://exa mple.com/a", valid_base)),
     c("http://example.com/a/g", NA, "http://example.com/a/g")
   )
   expect_identical(
     resolve_url("//o.com/y", c(valid_base, "http://exa mple.com/a")),
-    c("http://o.com/y", "http://o.com/y")
+    c("http://o.com/y", NA)
   )
 })
 

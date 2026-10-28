@@ -172,9 +172,11 @@ test_that("the raw path is cut from the prepared row at the same bytes", {
     "http://h/\ufeffp", NA
   ))
   engine <- c(rep("/E", 13), NA)
+  # The undecodable row keeps its octets: the escape the frozen NULL profile
+  # ran here went with it (ADR 0020).
   expect_same_bytes(rurl:::.extract_raw_path_vec(prepared, engine), c(
     "/p/q", "/p\u00e9", "/p", "/p", "/E", "/E", "/E", "/p", "/p", "/p\n",
-    "/\u2028/x", "/caf%E9", "/\ufeffp", NA
+    "/\u2028/x", off_inv(c(charToRaw("/caf"), 0xe9)), "/\ufeffp", NA
   ))
 })
 
@@ -226,7 +228,9 @@ test_that("the www policies capture the bare host up to ICU's `.*` stop", {
     "\u200bwww.ex.com", "www.\ufeffex.com", "www12.a.b",
     off_inv(c(charToRaw("www."), 0xff, charToRaw(".com")))
   ))
-  keep <- rurl:::.apply_www_policy_vec(host, "keep", rep(FALSE, 12))
+  # The helper's non-WHATWG reading: whatwg maps the host first.
+  keep <- rurl:::.apply_www_policy_vec(host, "keep", rep(FALSE, 12),
+                                       url_standard = "rfc3986")
   expect_same_bytes(keep, c(
     "www.ex.com", "www.Ex.com", "www.\u00e9\u4f8b.com", "www.ex.com", "www.ex",
     "www.ex.com", "www.ex.com", "www.\ufeffwww.ex.com", "www.\u200bwww.ex.com",
@@ -241,7 +245,8 @@ test_that("the www policies capture the bare host up to ICU's `.*` stop", {
                                              charToRaw(".com")))
   ))
   expect_identical(
-    rurl:::.apply_www_policy_vec(host, "if_no_subdomain", rep(FALSE, 12)),
+    rurl:::.apply_www_policy_vec(host, "if_no_subdomain", rep(FALSE, 12),
+                                 url_standard = "rfc3986"),
     ins
   )
   expect_identical(rurl:::.apply_www_if_no_subdomain_vec(character(0)),
@@ -257,12 +262,14 @@ test_that("the subdomain trim cuts the www prefix at the same byte", {
     "ex.com", "ex.co.uk", "\u4f8b.com", "ex.com", "ex.com", "ex.com", "ex.com"
   ))
   expect_same_bytes(
-    rurl:::.apply_subdomain_policy_vec(host, dom, 0, rep(FALSE, 7)),
+    rurl:::.apply_subdomain_policy_vec(host, dom, 0, rep(FALSE, 7),
+                                       url_standard = "rfc3986"),
     c("www.ex.com", "www.ex.co.uk", "www.\u4f8b.com", "ex.com", "ex.com",
       "ex.com", "www.ex.com")
   )
   expect_same_bytes(
-    rurl:::.apply_subdomain_policy_vec(host, dom, 1, rep(FALSE, 7)),
+    rurl:::.apply_subdomain_policy_vec(host, dom, 1, rep(FALSE, 7),
+                                       url_standard = "rfc3986"),
     c("www.a.ex.com", "www.b.ex.co.uk", "www.\u00e9.\u4f8b.com", "a.ex.com",
       "a.ex.com", "b.ex.com", "www.ex.com")
   )
@@ -288,10 +295,11 @@ test_that("the public API keeps its values over the moved chains", {
     "\u00e9\u4f8b.com", "h.example.com", "example.com", "host", NA,
     "[1:0:0:2::3]", "[::7f00:1]", "example.com", NA, NA, "example.com", NA
   ))
-  n <- safe_parse_urls(url)
-  expect_same_bytes(n$path, c(
-    NA, "/p\u3002q", NA, "/\u00e9", NA, "/", "/", "/p\u00e9", NA, NA,
-    "/caf%E9", NA
+  # The default is whatwg (ADR 0020).
+  expect_identical(safe_parse_urls(url), w)
+  expect_same_bytes(w$path, c(
+    "/p/q", "/p\u3002q", "/p", "/\u00e9", "/C:/x", "/", "/", "/p\u00e9", NA,
+    NA, "/caf\ufffd", NA
   ))
   r <- safe_parse_urls(off_u(c(
     "http:example.com/\u00e9?q#f", "https:a.example.com", "http:example.com/p"
@@ -304,18 +312,20 @@ test_that("the public API keeps its values over the moved chains", {
     "WWW3.Example.com/p", "www.\u00e9\u4f8b.com/", "a.b.example.com/",
     "\ufeffwww.example.com/"
   ))
+  # Under the default whatwg, UTS-46 maps the leading U+FEFF away first.
   expect_same_bytes(safe_parse_urls(hosts, www_handling = "keep")$host, c(
     "www.example.com", "www.\u00e9\u4f8b.com", "www.a.b.example.com",
-    "www.\ufeffwww.example.com"
+    "www.example.com"
   ))
   expect_same_bytes(
     safe_parse_urls(hosts, www_handling = "if_no_subdomain")$host,
     c("www.example.com", "www.\u00e9\u4f8b.com", "a.b.example.com",
-      "\ufeffwww.example.com")
+      "www.example.com")
   )
   expect_same_bytes(
     safe_parse_urls(hosts, subdomain_levels_to_keep = 0)$host,
-    c("example.com", "www.\u00e9\u4f8b.com", "example.com", "example.com")
+    c("example.com", "www.\u00e9\u4f8b.com", "example.com",
+      "www.example.com")
   )
   k <- get_url_key(url)
   expect_identical(unclass(k)[c(1, 4, 8, 11)], c(

@@ -174,7 +174,8 @@ test_that("standard = NULL is refused, not absorbed as whatwg", {
   # RURL-ouorolhb. `match.arg(NULL, choices)` silently returns the first
   # choice, so before this guard `serialize_url("http://a/", standard = NULL)`
   # returned "http://a/" -- a WHATWG answer for a selector value that, on the
-  # parse surface, names the frozen legacy profile and no standard (ADR 0007).
+  # parse surface, reads as "whatwg" (ADR 0020 D4); a serialization must
+  # name its standard.
   # The message shape mirrors url_key_policy(standard = NULL) (R/url-key.R).
   expect_error(
     serialize_url("http://a/", standard = NULL),

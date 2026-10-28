@@ -8,8 +8,8 @@
 # HOST pre-parse (RURL-mkbfseqs narrowed it from the whole
 # authority). That lets a Unicode-dot host coerce through the IPv4
 # parser (an SSRF-relevant loopback/metadata obfuscation) and normalizes IDN
-# separators. RFC 3986 has no UTS-46 mapping, so rfc3986 / no selector keep the
-# bytes literal.
+# separators. RFC 3986 has no UTS-46 mapping, so rfc3986 keeps the bytes
+# literal. The default (and NULL) is whatwg (ADR 0020).
 
 U3002 <- "。" # ideographic full stop
 UFF0E <- "．" # fullwidth full stop
@@ -59,7 +59,7 @@ test_that("a full-stop variant in the query is not mapped to a dot", {
   expect_false(grepl(".", q, fixed = TRUE))
 })
 
-# --- rfc3986 / no selector keep the literal separators -----------------------
+# --- rfc3986 keeps the literal separators -------------------------------------
 
 test_that("rfc3986 never maps the Unicode separators (no UTS-46 mapping)", {
   # A raw U+3002 is not RFC 3986 syntax (sections 2, 2.5, 3.2.2): the row is
@@ -72,10 +72,11 @@ test_that("rfc3986 never maps the Unicode separators (no UTS-46 mapping)", {
   expect_false(get_host(enc, url_standard = "rfc3986") == "127.0.0.1")
 })
 
-test_that("no selector keeps the strict default (separators left literal)", {
+test_that("no selector maps the separators as whatwg does (ADR 0020)", {
   u <- paste0("http://127", U3002, "0", U3002, "0", U3002, "1/")
-  expect_identical(get_host(u),
-                   paste0("127", U3002, "0", U3002, "0", U3002, "1"))
+  expect_identical(get_host(u), "127.0.0.1")
+  expect_identical(get_host(u, url_standard = NULL),
+                   get_host(u, url_standard = "whatwg"))
 })
 
 # --- no-op + vectorization ---------------------------------------------------
@@ -116,7 +117,7 @@ test_that("whatwg rejects a full-stop variant inside an IPv6 literal", {
 })
 
 test_that("an IPv6 literal with a full-stop variant fails under every arm", {
-  # ADR 0016 witness: NULL and rfc3986 already reject it and must not move.
+  # rfc3986 and whatwg (also NULL, ADR 0020) reject it.
   u <- paste0("http://[::ffff:127", U3002, "0", U3002, "0", U3002, "1]/")
   for (std in list(NULL, "rfc3986", "whatwg")) {
     expect_identical(get_parse_status(u, url_standard = std), "error")

@@ -4,8 +4,9 @@
 # forbidden domain code point, or when domain-to-ASCII itself fails (a
 # disallowed / ignored-to-empty code point). rurl previously surfaced these as
 # reg-names with `warning-no-tld`; the whatwg profile now rejects them (flips
-# the ADR 0004 boundary into a governed axis, ADR 0007). rfc3986 and the default
-# (NULL) keep RFC reg-name permissiveness -- an expected profile divergence.
+# the ADR 0004 boundary into a governed axis, ADR 0007). rfc3986 keeps RFC
+# reg-name permissiveness -- an expected profile divergence. The default (and
+# NULL) is whatwg (ADR 0020).
 
 # --- ASCII forbidden host code points: reject under whatwg --------------------
 
@@ -106,9 +107,9 @@ test_that("rfc3986 rejects a host byte NO production admits", {
   # the independent ABNF referee in test-external-url-vectors.R rejects it too.
   expect_identical(get_parse_status("http://a|b/", url_standard = "rfc3986"),
                    "error")
-  # The no-selector default is NOT governed by any standard and is unchanged.
-  expect_identical(suppressWarnings(get_parse_status("http://a|b/")),
-                   "warning-no-tld")
+  # The default (and NULL) is whatwg (ADR 0020), whose forbidden host code
+  # points include "|".
+  expect_identical(suppressWarnings(get_parse_status("http://a|b/")), "error")
 })
 
 # --- a forbidden code point that UTS-46 mapping produces: reject under whatwg -
@@ -154,19 +155,20 @@ test_that("a mapped separator no longer serializes into an IPv4 host", {
   expect_true(is.na(serialize_url(u, standard = "whatwg")))
 })
 
-test_that("mapped-forbidden hosts: NULL does not move, rfc3986 rejects", {
+test_that("mapped-forbidden hosts: rejected by the default and by rfc3986", {
   # rfc3986 has no mapping step, but every code point here is raw non-ASCII,
   # which reg-name does not admit (RFC 3986 sections 2, 2.5, 3.2.2): a parse
   # error naming the reason (RUL-030, owner ruling 2026-10-12,
-  # RURL-pntbujzc). The frozen NULL default keeps the reg-name.
+  # RURL-pntbujzc). The default is whatwg (ADR 0020), which rejects the
+  # mapped forbidden code point.
   for (nm in names(mapped_to_forbidden)) {
     u <- paste0("http://a", intToUtf8(mapped_to_forbidden[[nm]]), "b.example/")
     expect_identical(get_parse_status(u, url_standard = "rfc3986"),
                      "error", info = nm)
     expect_identical(get_url_diagnostics(u, url_standard = "rfc3986"),
                      "unicode-outside-rfc3986-uri", info = nm)
-    expect_identical(suppressWarnings(get_parse_status(u)),
-                     "warning-invalid-tld", info = nm)
+    expect_identical(suppressWarnings(get_parse_status(u)), "error",
+                     info = nm)
   }
 })
 

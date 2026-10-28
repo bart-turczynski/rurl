@@ -67,10 +67,10 @@ test_that("the grammar's non-ASCII diagnostic reads bytes per row", {
   x <- enc2utf8(c("foo://h/é", "foo://h/a", "foo://h/﻿",
                   "foo://h/​", NA))
   # RUL-030: each non-ASCII row is rejected (RFC 3986 S2, S2.5); on the
-  # ASCII grammar alone (the frozen NULL `file:` reading) it passes.
+  # ASCII grammar alone (the component walk) it passes.
   g <- .rfc3986_generic_uri_ok(x)
   expect_identical(g$ok, c(FALSE, TRUE, FALSE, FALSE, NA))
-  expect_identical(.rfc3986_generic_uri_ok(x, ascii_only = FALSE)$ok,
+  expect_identical(.rfc3986_generic_uri_ok_walk(x),
                    c(TRUE, TRUE, TRUE, TRUE, NA))
   expect_identical(
     g$diagnostic,
@@ -244,7 +244,7 @@ test_that("latin1-marked input still reads at the internal byte checks", {
   Encoding(x) <- "latin1"
   # The walk reads the latin1 text; the strict test then rejects its
   # non-ASCII character (RUL-030; RFC 3986 S2, S2.5).
-  expect_true(.rfc3986_generic_uri_ok(x, ascii_only = FALSE)$ok)
+  expect_true(.rfc3986_generic_uri_ok_walk(.latin1_input_to_utf8(x)))
   expect_false(.rfc3986_generic_uri_ok(x)$ok)
   expect_identical(.rfc3986_generic_uri_ok(x)$diagnostic,
                    "unicode-outside-rfc3986-uri")

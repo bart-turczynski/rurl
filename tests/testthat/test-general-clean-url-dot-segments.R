@@ -37,21 +37,21 @@ test_that("special schemes already clean to the dot-removed path", {
   expect_identical(r$clean_url, expected[1:2])
 })
 
-test_that("NULL: the frozen arm's clean_url follows path_normalization", {
-  # `scheme_acceptance = "general"` is an error under url_standard = NULL, so
-  # the general-route serializers are unreachable from the NULL arm. Its
-  # default `path_normalization = "none"` keeps the dots in both columns.
+test_that("the default and NULL are the whatwg arm (ADR 0020)", {
+  # The frozen NULL arm, which kept the dots, was retired: the default and
+  # NULL read as "whatwg", whose path state removes the dot segments.
   urls <- c("http://example.com/a/../b", "https://example.com/a/./b/../c")
   for (r in list(safe_parse_urls(urls),
                  safe_parse_urls(urls, url_standard = NULL))) {
-    expect_identical(r$path, c("/a/../b", "/a/./b/../c"))
-    expect_identical(r$clean_url, urls)
+    expect_identical(r$path, c("/b", "/a/c"))
+    expect_identical(r$clean_url,
+                     c("http://example.com/b", "https://example.com/a/c"))
   }
+  # The general route is reachable from the default too.
   expect_identical(
-    safe_parse_urls(urls, path_normalization = "dot_segments")$clean_url,
-    c("http://example.com/b", "https://example.com/a/c")
+    general_rows("foo:/a/../b"),
+    general_rows("foo:/a/../b", url_standard = "whatwg")
   )
-  expect_error(safe_parse_urls("foo:/a/../b", scheme_acceptance = "general"))
 })
 
 test_that("whatwg: an opaque path keeps its dot segments", {

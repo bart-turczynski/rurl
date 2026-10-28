@@ -7,21 +7,23 @@
 # record follows the source serializer (RUL-015). The query and fragment
 # already do (`pqf_source = "preserve"`).
 #
-# This file first pins what must NOT move: the frozen `NULL` profile (ADR 0007,
-# ADR 0016), the `whatwg` record (RURL-jzwshyqb), the `rfc3986` general route,
-# both `rfc3986` serializer forms, and the userinfo-free surfaces (`clean_url`,
+# This file first pins what must NOT move: the default and `NULL`, which read
+# as whatwg (ADR 0020 D4), the `whatwg` record (RURL-jzwshyqb), the `rfc3986`
+# general route, both `rfc3986` serializer forms, and the userinfo-free
+# surfaces (`clean_url`,
 # `get_url_key()`).
 
 rfc_ui_url <- "http://a%7fb:c%c3d@h/"
 
-test_that("NULL is frozen: the web route still folds the userinfo", {
+test_that("the default and NULL keep the userinfo as written (whatwg)", {
+  # The frozen profile's hex-case fold is retired (ADR 0020, RUL-032).
   r <- safe_parse_urls(c(rfc_ui_url, "http://a%:b%g1@a.com/"))
-  expect_identical(r$user, c("a%7Fb", "a%"))
-  expect_identical(r$password, c("c%C3d", "b%G1"))
-  s <- safe_parse_url(rfc_ui_url)
-  expect_identical(c(s$user, s$password), c("a%7Fb", "c%C3d"))
-  expect_identical(get_user(rfc_ui_url), "a%7Fb")
-  expect_identical(get_password(rfc_ui_url), "c%C3d")
+  expect_identical(r$user, c("a%7fb", "a%"))
+  expect_identical(r$password, c("c%c3d", "b%g1"))
+  s <- safe_parse_url(rfc_ui_url, url_standard = NULL)
+  expect_identical(c(s$user, s$password), c("a%7fb", "c%c3d"))
+  expect_identical(get_user(rfc_ui_url), "a%7fb")
+  expect_identical(get_password(rfc_ui_url), "c%c3d")
 })
 
 test_that("whatwg keeps the userinfo as written", {

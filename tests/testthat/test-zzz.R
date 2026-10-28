@@ -113,9 +113,11 @@ test_that("a BOM host is a cache key like any other (RURL-iiehsbfg)", {
   # The collision was visible: once the BOM host was cached, a plain host
   # came back with the BOM host's A-label. Under "rfc3986" the BOM host is
   # now a parse error (RFC 3986 section 2; RUL-030), so its host is NA; the
-  # plain host after it still proves the cache did not collide.
-  expected <- list(c("xn--a-6m0i.com", "a.com"), c(NA_character_, "a.com"))
-  stds <- list(NULL, "rfc3986")
+  # plain host after it still proves the cache did not collide. Under the
+  # default "whatwg" UTS-46 maps U+FEFF away (it is ignored), so both hosts
+  # are "a.com" by the standard, not by a cache hit.
+  expected <- list(c("a.com", "a.com"), c(NA_character_, "a.com"))
+  stds <- list("whatwg", "rfc3986")
   for (k in seq_along(stds)) {
     rurl_clear_caches()
     first <- get_host("http://\ufeffa.com/",

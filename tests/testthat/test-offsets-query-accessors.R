@@ -46,10 +46,13 @@ for (loc in names(ctypes)) {
         "http://[::1]/", "http://1.2.3.4/", NA, "", "http://example.com/"
       )
       bad <- u8(c("http://a.ex\xe9.co.uk/", "http://\xe9.example.com/"))
+      # Rows 7-10: the default whatwg host parser maps the leading U+FEFF and
+      # U+200B to nothing (UTS-46) before the trim; the mark-led cuts are
+      # pinned on the helper below.
       want_keep <- list(
         character(0), character(0), c("\u00fc", "\u00fc"), "a", c("x", "y"),
-        "\u00e9", paste0(bom, "a"), paste0(zwsp, "a"), paste0(bom, "\u00fc"),
-        paste0(zwsp, "\u00fc"), "a", c("www", "sub"), character(0),
+        "\u00e9", "a", "a", "\u00fc", "\u00fc", "a", c("www", "sub"),
+        character(0),
         character(0),
         character(0), character(0), character(0)
       )
@@ -61,15 +64,14 @@ for (loc in names(ctypes)) {
       expect_identical(
         get_subdomain(url, format = "labels", host_encoding = "idna"),
         list(character(0), character(0), c("xn--tda", "xn--tda"), "a",
-             c("x", "y"), "xn--9ca", "xn--a-6m0i", "xn--a-pgn",
-             "xn--tda7611k", "xn--tda510n", "a", c("www", "sub"), character(0),
+             c("x", "y"), "xn--9ca", "a", "a", "xn--tda", "xn--tda", "a",
+             c("www", "sub"), character(0),
              character(0), character(0), character(0), character(0))
       )
       expect_identical(
         get_subdomain(url, include_www = TRUE),
-        c(NA, "www", "\u00fc.\u00fc", "a", "x.y", "\u00e9",
-          paste0(bom, "a"), paste0(zwsp, "a"), paste0(bom, "\u00fc"),
-          paste0(zwsp, "\u00fc"), "a", "www.sub", NA, NA, NA, NA, NA)
+        c(NA, "www", "\u00fc.\u00fc", "a", "x.y", "\u00e9", "a", "a",
+          "\u00fc", "\u00fc", "a", "www.sub", NA, NA, NA, NA, NA)
       )
       expect_identical(
         get_subdomain(url, url_standard = "whatwg")[c(1:6, 11:17)],
@@ -79,7 +81,7 @@ for (loc in names(ctypes)) {
       # Rows 1-10 write their host with raw non-ASCII, a parse error under
       # rfc3986: a reg-name is ASCII and non-ASCII data is percent-encoded
       # UTF-8 (RFC 3986 sections 2, 2.5, 3.2.2; RUL-030, RURL-pntbujzc). The
-      # multibyte cuts stay covered by the NULL and whatwg calls above.
+      # multibyte cuts stay covered by the default (whatwg) calls above.
       expect_identical(
         get_subdomain(url, url_standard = "rfc3986")[c(1:6, 11:17)],
         c(NA, NA, NA, NA, NA, NA, "a", "www.sub", NA, NA, NA, NA, NA)

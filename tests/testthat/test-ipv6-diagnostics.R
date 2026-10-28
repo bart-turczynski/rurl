@@ -11,10 +11,9 @@
 # rurl holds no address ranges (ADR 0018 D1); the second fact is raddr's,
 # projected (ADR 0018, amendment of 2026-10-07).
 #
-# ADR 0016 evidence. (1) The NULL arm cannot carry this defect:
-# get_url_diagnostics() is an error under url_standard = NULL (ADR 0015), and
-# the frozen parse surface reports no diagnostics at all; the last test pins
-# both. (2) Signature: the fix moves get_url_diagnostics() tokens and
+# ADR 0016 evidence, recorded when NULL was a frozen arm (ADR 0020 retired it;
+# NULL now reads as whatwg, and the last test pins that). (2) Signature: the
+# fix moves get_url_diagnostics() tokens and
 # check_hosts() `reasons` on rows whose host_type is "ipv6", and nothing else;
 # the host, host_type and policy verdicts are pinned below. (3) Arms: both
 # named arms were wrong in the same way -- each reported no `ipv6-*` token,
@@ -198,7 +197,7 @@ test_that("check_hosts() reports the ipv6 facts and no verdict moves", {
   }
 })
 
-test_that("the parse record and the NULL arm do not move", {
+test_that("the parse record does not move; the default is whatwg", {
   urls <- c(
     "http://[0:00::0:1]/", "http://[::ffff:127.0.0.1]/",
     "http://[2001:0:0:0:0:0:0:1]/"
@@ -215,12 +214,11 @@ test_that("the parse record and the NULL arm do not move", {
   for (std in c("whatwg", "rfc3986")) {
     expect_identical(get_host_type(urls, std), rep("ipv6", 3L))
   }
-  # (1) of the ADR 0016 evidence: no diagnostics surface exists under NULL.
-  expect_error(get_url_diagnostics(urls), "url_standard")
-  expect_error(get_url_diagnostics(urls, url_standard = NULL), "url_standard")
-  expect_identical(
-    get_host(urls),
-    c("[::1]", "[::ffff:127.0.0.1]", "[2001::1]")
-  )
+  # The default, and NULL, read as whatwg (ADR 0020 D4).
+  expect_identical(get_url_diagnostics(urls),
+                   get_url_diagnostics(urls, url_standard = "whatwg"))
+  expect_identical(get_url_diagnostics(urls, url_standard = NULL),
+                   get_url_diagnostics(urls, url_standard = "whatwg"))
+  expect_identical(get_host(urls), get_host(urls, url_standard = "whatwg"))
   expect_identical(get_host(urls), get_host(urls, url_standard = NULL))
 })

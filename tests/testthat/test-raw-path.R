@@ -5,15 +5,43 @@
 # pre-normalized $path, so dot segments (and percent-encoded dot forms) survive
 # to path_normalization. The only parser normalization replayed is percent-hex
 # case (RFC 3986 section 6.2.2.1), which keeps %2F/%2f join-equivalent.
+#
+# The default is `url_standard = "whatwg"` (ADR 0020), whose path state
+# resolves dot segments, `%2e` spellings included, and keeps a triplet's hex
+# case; there `path_normalization = "none"` is a conflict (ADR 0020 D4a). The
+# lossless raw path is reached through `profile = "rfc-syntax"` (RFC 3986
+# syntax, no normalization), which these pins use with the web acceptance.
 
-test_that("path_normalization = 'none' preserves dot segments (default)", {
-  expect_equal(get_clean_url("http://ex.com/a/../b"), "http://ex.com/a/../b")
-  expect_equal(get_clean_url("http://ex.com/a/./b"), "http://ex.com/a/./b")
+rs <- function(url, ...) {
+  safe_parse_urls(url, profile = "rfc-syntax", scheme_acceptance = "web", ...)
+}
+
+test_that("the default whatwg path state resolves dot segments", {
+  expect_equal(get_clean_url("http://ex.com/a/../b"), "http://ex.com/b")
+  expect_equal(get_clean_url("http://ex.com/a/./b"), "http://ex.com/a/b")
   expect_equal(
     get_clean_url("http://ex.com/a//b/./c/../d"),
+    "http://ex.com/a//b/d"
+  )
+  expect_equal(get_path("http://ex.com/a/../b"), "/b")
+  # A `%2e` spelling is a dot segment in the WHATWG path state.
+  expect_equal(get_clean_url("http://ex.com/a/%2e%2e/b"), "http://ex.com/b")
+  # An existing triplet keeps its hex case.
+  expect_equal(get_clean_url("http://ex.com/a%2fb"), "http://ex.com/a%2fb")
+  expect_error(
+    get_clean_url("http://ex.com/a/../b", path_normalization = "none"),
+    "governs `path_normalization`"
+  )
+})
+
+test_that("path_normalization = 'none' preserves dot segments (rfc-syntax)", {
+  expect_equal(rs("http://ex.com/a/../b")$clean_url, "http://ex.com/a/../b")
+  expect_equal(rs("http://ex.com/a/./b")$clean_url, "http://ex.com/a/./b")
+  expect_equal(
+    rs("http://ex.com/a//b/./c/../d")$clean_url,
     "http://ex.com/a//b/./c/../d"
   )
-  expect_equal(get_path("http://ex.com/a/../b"), "/a/../b")
+  expect_equal(rs("http://ex.com/a/../b")$path, "/a/../b")
 })
 
 test_that("dot_segments / both resolve literal . and .. (rurl-owned)", {
@@ -31,29 +59,27 @@ test_that("dot_segments / both resolve literal . and .. (rurl-owned)", {
   )
 })
 
-test_that("percent-encoded %2e is a path byte, never a dot segment", {
+test_that("percent-encoded %2e is a path byte, not a dot (rfc-syntax)", {
   # Preserved under "none" (hex-uppercased) ...
   expect_equal(
-    get_clean_url("http://ex.com/a/%2e%2e/b"),
+    rs("http://ex.com/a/%2e%2e/b")$clean_url,
     "http://ex.com/a/%2E%2E/b"
   )
   # ... and NOT collapsed even when dot-segment resolution is requested
-  # (RFC 3986 section 5.2.4 operates on literal segments only). This kills the
-  # silent encoded-dot traversal that the parser's $path performs.
+  # (RFC 3986 section 5.2.4 operates on literal segments only).
   expect_equal(
-    get_clean_url(
-      "http://ex.com/a/%2e%2e/b", path_normalization = "dot_segments"
-    ),
+    rs("http://ex.com/a/%2e%2e/b",
+       path_normalization = "dot_segments")$clean_url,
     "http://ex.com/a/%2E%2E/b"
   )
 })
 
-test_that("percent-hex case is canonicalized to uppercase under 'keep'", {
-  expect_equal(get_clean_url("http://ex.com/a%2fb"), "http://ex.com/a%2Fb")
-  expect_equal(get_clean_url("http://ex.com/a%2Fb"), "http://ex.com/a%2Fb")
+test_that("percent-hex case is canonicalized to uppercase (rfc-syntax)", {
+  expect_equal(rs("http://ex.com/a%2fb")$clean_url, "http://ex.com/a%2Fb")
+  expect_equal(rs("http://ex.com/a%2Fb")$clean_url, "http://ex.com/a%2Fb")
   expect_equal(
-    get_clean_url("http://ex.com/a%2fb"),
-    get_clean_url("http://ex.com/a%2Fb")
+    rs("http://ex.com/a%2fb")$clean_url,
+    rs("http://ex.com/a%2Fb")$clean_url
   )
 })
 
@@ -71,11 +97,11 @@ test_that("query/fragment slashes never leak into the path", {
 
 test_that("scheme-relative and userinfo/port authorities extract correctly", {
   expect_equal(
-    get_clean_url("//ex.com/a/../b", scheme_relative_handling = "http"),
+    rs("//ex.com/a/../b", scheme_relative_handling = "http")$clean_url,
     "http://ex.com/a/../b"
   )
   expect_equal(
-    get_path("http://user:pass@ex.com:8080/a/../b"),
+    rs("http://user:pass@ex.com:8080/a/../b")$path,
     "/a/../b"
   )
 })
@@ -86,19 +112,19 @@ test_that("empty path falls back to canonical '/'", {
   expect_equal(get_path("http://ex.com"), "/")
 })
 
-test_that("dot-segment paths yield distinct canonical_join keys by default", {
-  # canonical_join keys on clean_url, so preserving dot segments means
-  # /a/../b no longer collides with /b.
+test_that("dot-segment paths and canonical_join keys", {
+  # canonical_join keys on clean_url. The default whatwg resolves the dot
+  # segments, so /a/../b collides with /b ...
+  expect_identical(
+    get_clean_url("http://ex.com/a/../b"),
+    get_clean_url("http://ex.com/b")
+  )
+  # ... and the raw rfc-syntax path keeps them apart.
   expect_false(
     identical(
-      get_clean_url("http://ex.com/a/../b"),
-      get_clean_url("http://ex.com/b")
+      rs("http://ex.com/a/../b")$clean_url,
+      rs("http://ex.com/b")$clean_url
     )
-  )
-  # ... but they DO collide once dot segments are resolved, as expected.
-  expect_identical(
-    get_clean_url("http://ex.com/a/../b", path_normalization = "dot_segments"),
-    get_clean_url("http://ex.com/b", path_normalization = "dot_segments")
   )
 })
 
@@ -114,11 +140,11 @@ test_that("vector and standalone scalar engines agree on raw paths", {
       trailing_slash_handling = "none", index_page_handling = "keep",
       path_normalization = "none", scheme_relative_handling = "keep",
       subdomain_levels_to_keep = NULL, host_encoding = "keep",
-      path_encoding = "keep"
+      path_encoding = "keep", url_standard = "rfc3986"
     )
     if (is.null(res)) NA_character_ else res$clean_url
   }
-  vec <- safe_parse_urls(urls, case_handling = "keep")$clean_url
+  vec <- rs(urls)$clean_url
   scal <- vapply(urls, scalar_impl, character(1), USE.NAMES = FALSE)
   expect_equal(vec, scal)
 })

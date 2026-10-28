@@ -321,17 +321,20 @@ test_that("seo: an explicit dial still overrides the profile (iron rule)", {
   expect_identical(res$host_encoding, "keep")
 })
 
-test_that("seo enrichment does not disturb the ADR 0007 NULL-selector freeze", {
+test_that("seo enrichment stays inside the bundle", {
   # The definition is delivered entirely inside the `seo` bundle, so a caller
-  # who passes no profile must be byte-identical to before. Sentinels chosen
-  # from the rows the seo column actually moved.
+  # who passes no profile gets the plain default (whatwg since ADR 0020) and
+  # none of seo's editorial knobs. Sentinels chosen from the rows the seo
+  # column actually moved: the default keeps the A-label spelling
+  # (host_encoding = "keep") and the root-dot host, and resolves the dot
+  # segments as the WHATWG path state does.
   expect_identical(
     safe_parse_urls("https://xn--mnchen-3ya.de/")$clean_url,
     "https://xn--mnchen-3ya.de/"
   )
   expect_identical(
     safe_parse_urls("https://example.com/a/./b/../c")$clean_url,
-    "https://example.com/a/./b/../c"
+    "https://example.com/a/c"
   )
   expect_identical(
     safe_parse_urls("https://example.com./")$clean_url,

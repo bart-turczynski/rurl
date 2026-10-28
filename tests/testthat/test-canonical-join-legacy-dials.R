@@ -222,7 +222,7 @@ test_that("a governed-knob conflict errors without also warning", {
   # dial warning would still surface.)
   expect_error(
     cj_deprecated(
-      canonical_join(A, B, url_standard = "whatwg", case_handling = "upper")
+      canonical_join(A, B, url_standard = "whatwg", case_handling = "keep")
     ),
     "governs `case_handling`"
   )
@@ -237,8 +237,8 @@ test_that("a governed-knob conflict errors without also warning", {
 test_that("path_encoding results are unchanged by the warning", {
   # Values captured from the shipped (pre-warning) implementation, re-pinned
   # by RURL-eokizmdi: "decode" no longer folds `%2F` into `/` (RFC 3986
-  # section 2.2), and under url_standard = NULL a kept triplet keeps its hex
-  # case, so `A%2fB` and `A%2FB` no longer share a key.
+  # section 2.2), and under the default whatwg a kept triplet keeps its hex
+  # case (path state), so `A%2fB` and `A%2FB` no longer share a key.
   joined <- cj_legacy(canonical_join(
     make_a(), make_b(),
     name_A = "A", name_B = "B", path_encoding = "decode", join = "full"
@@ -263,67 +263,70 @@ test_that("path_encoding results are unchanged by the warning", {
 })
 
 test_that("www_handling results are unchanged by the warning", {
-  # Values captured from the shipped (pre-warning) implementation. Note this
-  # dial MOVES the match set (3 rows -> 2): that is the legacy behavior the
-  # warning surfaces, and it must be preserved, not corrected, in this slice.
+  # Note this dial MOVES the match set (4 rows -> 3): that is the legacy
+  # behavior the warning surfaces. Re-pinned for the whatwg default
+  # (ADR 0020): the path keeps each triplet's hex case, so `A%2fB` and
+  # `A%2FB` stay apart.
   joined <- cj_legacy(canonical_join(
     make_a(), make_b(),
     name_A = "A", name_B = "B", www_handling = "strip", join = "full"
   ))
   expect_identical(
     joined$A,
-    c("http://www.Example.com/A%2fB/", "https://Example.com/x")
+    c("https://Example.com/x", "http://www.Example.com/A%2fB/", NA)
   )
   expect_identical(
     joined$B,
-    c("http://www.example.com/A%2FB/", "https://www.example.com/x")
+    c("https://www.example.com/x", NA, "http://www.example.com/A%2FB/")
   )
   expect_identical(
     joined$JoinKey,
-    c("http://example.com/A%2FB/", "https://example.com/x")
+    c("https://example.com/x", "http://example.com/A%2fB/",
+      "http://example.com/A%2FB/")
   )
-  expect_identical(joined$ValA_A, 1:2)
-  expect_identical(joined$ValB_B, c("p", "q"))
+  expect_identical(joined$ValA_A, c(2L, 1L, NA))
+  expect_identical(joined$ValB_B, c("q", NA, "p"))
 })
 
 test_that("path_normalization results are unchanged by the warning", {
-  # Captured by running the pre-change HEAD definition of canonical_join()
-  # against these exact inputs, not by re-recording post-change output.
   # path_normalization is one of the counter-pinned dials a later unit
-  # depends on, so its results-unchanged property is pinned explicitly here.
+  # depends on, so its results are pinned explicitly here. Re-pinned for the
+  # whatwg default (ADR 0020): the path keeps each triplet's hex case, so
+  # `A%2fB` and `A%2FB` stay apart.
   joined <- cj_legacy(canonical_join(
     make_a(), make_b(),
     name_A = "A", name_B = "B", path_normalization = "both", join = "full"
   ))
   expect_identical(
     joined$A,
-    c("http://www.Example.com/A%2fB/", "https://Example.com/x", NA)
+    c("http://www.Example.com/A%2fB/", "https://Example.com/x", NA, NA)
   )
   expect_identical(
     joined$B,
-    c("http://www.example.com/A%2FB/", NA, "https://www.example.com/x")
+    c(NA, NA, "http://www.example.com/A%2FB/", "https://www.example.com/x")
   )
   expect_identical(
     joined$JoinKey,
     c(
-      "http://www.example.com/A%2FB/", "https://example.com/x",
-      "https://www.example.com/x"
+      "http://www.example.com/A%2fB/", "https://example.com/x",
+      "http://www.example.com/A%2FB/", "https://www.example.com/x"
     )
   )
-  expect_identical(joined$ValA_A, c(1L, 2L, NA))
-  expect_identical(joined$ValB_B, c("p", NA, "q"))
+  expect_identical(joined$ValA_A, c(1L, 2L, NA, NA))
+  expect_identical(joined$ValB_B, c(NA, NA, "p", "q"))
 })
 
 test_that("protocol_handling results are unchanged by the warning", {
-  # Values captured from the shipped (pre-warning) implementation.
+  # Re-pinned for the whatwg default (ADR 0020); see above.
   joined <- cj_legacy(canonical_join(
     make_a(), make_b(),
     name_A = "A", name_B = "B", protocol_handling = "strip", join = "full"
   ))
   expect_identical(
     joined$JoinKey,
-    c("www.example.com/A%2FB/", "example.com/x", "www.example.com/x")
+    c("www.example.com/A%2fB/", "example.com/x", "www.example.com/A%2FB/",
+      "www.example.com/x")
   )
-  expect_identical(joined$ValA_A, c(1L, 2L, NA))
-  expect_identical(joined$ValB_B, c("p", NA, "q"))
+  expect_identical(joined$ValA_A, c(1L, 2L, NA, NA))
+  expect_identical(joined$ValB_B, c(NA, NA, "p", "q"))
 })

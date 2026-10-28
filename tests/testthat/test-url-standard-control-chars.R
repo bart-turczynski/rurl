@@ -5,7 +5,8 @@
 # (the parser errors) -- correct under RFC 3986, which requires such bytes to
 # be
 # percent-encoded and has no strip step. So the strip runs ONLY under
-# url_standard = "whatwg"; rfc3986 and no selector keep rejecting. Stripping is
+# url_standard = "whatwg" (the default; NULL means the same); rfc3986 keeps
+# rejecting. Stripping is
 # surfaced, not silent: it fires the `control-char-stripped` diagnostic
 # (ADR 0006). Built via paste0() so the exact control byte is unambiguous.
 
@@ -38,7 +39,7 @@ test_that("stripping is surfaced via the control-char-stripped diagnostic", {
                 get_url_diagnostics(u, url_standard = "whatwg"))
 })
 
-# --- rfc3986 / no selector keep rejecting ------------------------------------
+# --- rfc3986 keeps rejecting; the default strips (whatwg) ---------------------
 
 test_that("rfc3986 rejects a control char in the authority (no strip step)", {
   u <- paste0("http://ex", TAB, "ample.com/")
@@ -46,9 +47,11 @@ test_that("rfc3986 rejects a control char in the authority (no strip step)", {
   expect_true(is.na(get_clean_url(u, url_standard = "rfc3986")))
 })
 
-test_that("no selector keeps the strict default (rejects control chars)", {
+test_that("the default strips control chars as whatwg does (ADR 0020)", {
   u <- paste0("http://ex", TAB, "ample.com/")
-  expect_identical(get_parse_status(u), "error")
+  expect_identical(get_parse_status(u), "ok")
+  expect_identical(safe_parse_urls(u, url_standard = NULL),
+                   safe_parse_urls(u, url_standard = "whatwg"))
 })
 
 test_that("the diagnostic never fires under rfc3986", {
@@ -87,7 +90,7 @@ test_that("stripping is vectorized and per-row", {
 # trailing C0-control-or-SPACE (U+0000..U+0020), then (1b) remove all tab/LF/CR
 # anywhere. Half 1a is a DIFFERENT fact from half 1b, so it carries its own
 # `leading-trailing-stripped` diagnostic. Like 1b it must not run under
-# url_standard = "rfc3986" / no selector, which have no strip step.
+# url_standard = "rfc3986", which has no strip step.
 
 # U+0001..U+0020, i.e. every C0 control plus SPACE. U+0000 is deliberately
 # absent: an R character string cannot carry an embedded NUL at all.
@@ -160,10 +163,10 @@ test_that("the two step-1 halves emit two independent diagnostics", {
                    c(FALSE, TRUE, TRUE, FALSE))
 })
 
-test_that("half 1a is a byte-for-byte no-op under rfc3986 / no selector", {
+test_that("half 1a is a byte-for-byte no-op under rfc3986", {
   us <- c("  http://example.com/a", "http://example.com/a  ",
           "http://example.com/b")
-  for (std in list("rfc3986", NULL)) {
+  for (std in list("rfc3986")) {
     stripped <- rurl:::.strip_whatwg_control_chars_vec(us, std)
     # The rfc3986 row keeps its input spelling, byte for byte.
     expect_identical(stripped$url, us)
@@ -171,10 +174,11 @@ test_that("half 1a is a byte-for-byte no-op under rfc3986 / no selector", {
     expect_identical(stripped$control_char_stripped, rep(FALSE, 3L))
   }
   # And nothing is rescued at the public surface: rfc3986 requires such bytes
-  # to be percent-encoded, so both rows stay errors under either selector.
+  # to be percent-encoded, so both rows stay errors there. The default is
+  # whatwg (ADR 0020), which strips them.
   expect_identical(get_parse_status(us[1:2], url_standard = "rfc3986"),
                    c("error", "error"))
-  expect_identical(get_parse_status(us[1:2]), c("error", "error"))
+  expect_identical(get_parse_status(us[1:2]), c("ok", "ok"))
 })
 
 test_that("the leading/trailing diagnostic never fires under rfc3986", {
@@ -324,20 +328,15 @@ test_that("a WHATWG file: host led by U+FEFF parses like its U+200B twin", {
   }
 })
 
-# --- U+FEFF under rfc3986 and NULL (RURL-biunpazk) ----------------------------
+# --- U+FEFF under rfc3986 (RURL-biunpazk) -------------------------------------
 #
 # RFC 3986 S3.1 makes a scheme start with an ASCII alpha, so a row led by U+FEFF
-# has none, and NULL reads such a row like one led by any other code point that
-# cannot start a scheme. The scheme readers on both arms used stringi matches
-# that read past the mark. ZWSP (U+200B) is the twin: it cannot start a scheme
-# either, and no stringi function skips it.
-#
-# NULL moves (ADR 0016: a default-path defect, not a selector-caused change).
-# Witness: the pre-fix NULL probes below, which the fix turns. Signature: only
-# rows led by U+FEFF, or whose authority starts with it, move, in every column,
-# under every scheme_policy; every row moved to its twin's reading. whatwg was
-# already right for a leading mark (RURL-vhionecz); its authority-led rows move
-# with the shared authority split.
+# has none. The scheme readers used stringi matches that read past the mark.
+# ZWSP (U+200B) is the twin: it cannot start a scheme either, and no stringi
+# function skips it. (The frozen NULL arm, which also moved under
+# RURL-biunpazk, is retired: NULL is whatwg, ADR 0020. whatwg was already right
+# for a leading mark, RURL-vhionecz; its authority-led rows move with the
+# shared authority split.)
 
 ZWSP <- intToUtf8(0x200B)
 
@@ -360,7 +359,7 @@ BOM_RESTS <- c(
   "user:pass@example.com", "http:a:b@www.example.com"
 )
 
-test_that("rfc3986 and NULL find no scheme after a leading U+FEFF", {
+test_that("rfc3986 finds no scheme after a leading U+FEFF", {
   for (pol in c("infer", "require")) {
     for (acc in c("web", "general")) {
       got <- twin_rows(BOM, BOM_RESTS,
@@ -379,13 +378,6 @@ test_that("rfc3986 and NULL find no scheme after a leading U+FEFF", {
         info = paste(pol, acc)
       )
     }
-    got <- twin_rows(BOM, BOM_RESTS, scheme_policy = pol)
-    expect_identical(got, twin_rows(ZWSP, BOM_RESTS, scheme_policy = pol),
-      info = pol
-    )
-    expect_identical(got, twin_rows(BOM, BOM_RESTS,
-      url_standard = NULL, scheme_policy = pol
-    ), info = pol)
   }
   # The issue's own probes.
   r <- safe_parse_url(paste0(BOM, "foo://a.com/p"),
@@ -397,9 +389,10 @@ test_that("rfc3986 and NULL find no scheme after a leading U+FEFF", {
   ))
 })
 
-test_that("NULL no longer reads a scheme past a leading U+FEFF (ADR 0016)", {
-  # Before RURL-biunpazk, NULL read scheme `file` here, with status `ok` or
-  # `error` depending on the other URLs in the call...
+test_that("the default reads no scheme past a leading U+FEFF (whatwg)", {
+  # Before RURL-biunpazk, the then-default frozen NULL arm read scheme `file`
+  # here, with status `ok` or `error` depending on the other URLs in the call.
+  # The default is now whatwg (ADR 0020), which finds no scheme either...
   u <- paste0(BOM, "file://localhost/path/to/file.txt")
   for (r in list(safe_parse_urls(u), safe_parse_urls(u, url_standard = NULL))) {
     expect_identical(r$parse_status, "error")
@@ -410,12 +403,12 @@ test_that("NULL no longer reads a scheme past a leading U+FEFF (ADR 0016)", {
   r <- safe_parse_urls(c(u, neighbor))
   expect_identical(r$parse_status[[1L]], "error")
   expect_true(is.na(r$scheme[[1L]]))
-  # ...and rejected this one for its read-past scheme `mailto`, where its twin
-  # takes scheme inference.
+  # ...and takes scheme inference for this one, as its twin does; the WHATWG
+  # userinfo percent-encode set writes the mark encoded.
   r <- safe_parse_urls(paste0(BOM, "mailto:a@b.com"))
   expect_identical(r$parse_status, "warning-userinfo")
   expect_identical(r$host, "b.com")
-  expect_identical(r$user, paste0(BOM, "mailto"))
+  expect_identical(r$user, "%EF%BB%BFmailto")
 })
 
 test_that("an authority led by U+FEFF splits at the right place", {
@@ -423,13 +416,16 @@ test_that("an authority led by U+FEFF splits at the right place", {
   # cut fell one character early: the host lost its last character to the path,
   # and the port kept its colon.
   u <- paste0("file://", BOM, "localhost/path/to/file.txt")
+  # The default is whatwg: UTS #46 maps the mark to nothing, so the host is
+  # `localhost`, which the file host state empties.
   r <- safe_parse_urls(u)
-  expect_identical(r$host, paste0(BOM, "localhost"))
+  expect_identical(r$host, NA_character_)
   expect_identical(r$path, "/path/to/file.txt")
+  expect_identical(serialize_url(u), "file:///path/to/file.txt")
   # RUL-030 (owner ruling 2026-10-12, RURL-pntbujzc): under rfc3986 a raw
   # non-ASCII code point, the mark included, is a parse error (RFC 3986
   # sections 2, 2.5 and 3.2.2: `reg-name` admits no raw non-ASCII), so the
-  # rows below have no components there; NULL keeps the split coverage.
+  # rows below have no components there.
   r <- safe_parse_urls(u, url_standard = "rfc3986")
   expect_identical(r$host, NA_character_)
   expect_identical(r$path, NA_character_)
@@ -453,9 +449,9 @@ test_that("an authority led by U+FEFF splits at the right place", {
   expect_identical(r$user, NA_character_)
   expect_identical(r$host, NA_character_)
   expect_identical(r$parse_status, "error")
-  # NULL keeps the split for both shapes.
+  # The default (whatwg) splits at the port and maps the mark away.
   r <- safe_parse_urls(paste0("http://", BOM, "a.com:8080/"))
-  expect_identical(r$host, paste0(BOM, "a.com"))
+  expect_identical(r$host, "a.com")
   expect_identical(r$port, 8080L)
   # WHATWG opaque hosts: the mark is a host code point, so the host is not
   # empty, and credentials with an empty host still fail.
@@ -611,8 +607,8 @@ test_that("a WHATWG file: path led by U+FEFF keeps the mark", {
       "file:///%E2%80%8BC:/x", "file:///%E2%80%8B/C:/x"
     )
   )
-  # Negative controls: NULL and rfc3986 refuse all four rows.
-  for (std in list(NULL, "rfc3986")) {
+  # Negative control: rfc3986 refuses all four rows.
+  for (std in list("rfc3986")) {
     expect_identical(
       suppressWarnings(get_parse_status(
         paste0("file:", rep(c(BOM, ZWSP), each = 2L), c("C:/x", "\\C:/x")),

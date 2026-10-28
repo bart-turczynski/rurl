@@ -180,17 +180,16 @@ rejection_pattern <- function(e, std) {
   if (std == "bogus") {
     return(switch(e$selector,
       url_standard = ,
-      dots = "url_standard must be NULL, \"rfc3986\", or \"whatwg\"",
+      dots = "url_standard must be \"whatwg\", \"rfc3986\", or NULL",
       standard = ,
       policy = "should be one of"
     ))
   }
   switch(e$selector,
-    # get_host_type(), get_url_diagnostics(), get_scheme_class() (ADR 0015);
-    # check_schemes() and get_mailto_recipients() (scheme_acceptance =
-    # "general" under NULL).
-    url_standard = paste0("`url_standard` is required",
-                          "|requires an explicit url_standard"),
+    # No export rejects `url_standard = NULL` now: it reads as "whatwg"
+    # (ADR 0020, superseding ADR 0015's required selector and the `general`
+    # acceptance error under NULL). Any url_standard rejection left names it.
+    url_standard = "url_standard",
     standard = ,
     policy = "must be named; NULL is not accepted"
   )
@@ -219,9 +218,13 @@ test_that("unsupported selectors and malformed arguments keep their errors", {
   x <- data.frame(url = "http://a.example/", stringsAsFactors = FALSE)
   expect_error(url_left_join(x, x, by = "url", policy = "whatwg"), "policy")
   expect_error(url_left_join(x, x, by = "nope"), "nope")
-  # resolve_url(): serialized output names a standard and takes no dials.
-  expect_error(resolve_url("g", "http://a.example/", output = "serialized"),
-               "url_standard")
+  # resolve_url(): serialized output serializes to the default whatwg (and
+  # NULL reads as whatwg, ADR 0020) and takes no dials.
+  expect_identical(
+    resolve_url("g", "http://a.example/", output = "serialized"),
+    resolve_url("g", "http://a.example/", url_standard = "whatwg",
+                output = "serialized")
+  )
   expect_error(resolve_url("g", "http://a.example/", url_standard = "whatwg",
                            output = "serialized", port_handling = "keep"),
                "port_handling")

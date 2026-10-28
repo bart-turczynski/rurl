@@ -3,11 +3,11 @@
 # conflict-checks, and threads through every public entry point, but does not
 # change path/host output. T3 (RURL-gjltzwmp)/T4 (RURL-luwvkwhd)/T5
 # (RURL-bbmuehsx) replace the placeholder behavior WITHOUT changing the
-# conflict matrix these tests assert (still covered below), and reuse the
-# AC#1 corpus gate below (which remains the release-safety invariant: NULL
-# stays byte-for-byte inert forever).
+# conflict matrix these tests assert (still covered below). ADR 0020 made
+# "whatwg" the default and reads NULL as "whatwg", so the AC#1 gate below now
+# asserts that NULL equals the default.
 
-# --- AC #1: url_standard = NULL is byte-for-byte inert (no output/shape drift)
+# --- AC #1: url_standard = NULL equals the default (no output/shape drift)
 
 test_that("url_standard = NULL reproduces the full corpus byte-for-byte", {
   urls <- parse_corpus_urls()
@@ -54,12 +54,12 @@ test_that("invalid url_standard values error clearly", {
   for (val in list("rfc", "RFC3986", "", NA_character_, 1L)) {
     expect_error(
       safe_parse_url("http://ex.com/", url_standard = val),
-      "url_standard must be NULL"
+      "url_standard must be"
     )
   }
   expect_error(
     safe_parse_url("http://ex.com/", url_standard = c("rfc3986", "whatwg")),
-    "url_standard must be NULL"
+    "url_standard must be"
   )
   # Valid values are accepted (no error) even though behavior is a no-op here.
   expect_silent(safe_parse_url("http://ex.com/", url_standard = "rfc3986"))
@@ -89,11 +89,9 @@ test_that("a positional 2nd arg still binds to the historical parameter", {
 test_that("the governed-knob set is exactly what ADR 0016 documents", {
   # ADR 0016 rules that membership in `.URL_STANDARD_PROFILES` means
   # conflict-matrix OWNERSHIP and nothing else -- it is not behavioral
-  # independence and it never licenses moving ADR 0007's frozen NULL output.
-  # That prose names the three keys, so pin them: adding a fourth governed knob
-  # must fail here rather than let the ADR rot silently. This guards the
-  # DOCUMENTATION; the guard against NULL drift is ADR 0016's witness-plus-
-  # signature requirement, which no test can stand in for.
+  # independence. That prose names the three keys, so pin them: adding a fourth
+  # governed knob must fail here rather than let the ADR rot silently. This
+  # guards the DOCUMENTATION.
   governed <- unlist(lapply(.URL_STANDARD_PROFILES, names), use.names = FALSE)
   expect_identical(
     sort(unique(governed)),
@@ -122,9 +120,11 @@ test_that("explicit governed knobs conflicting with the profile error", {
   }
 
   # path_normalization: profiles resolve dot segments, so only "dot_segments"
-  # is accepted; every other value conflicts.
+  # is accepted; every other value conflicts, except that whatwg confines
+  # "both" to clean_url (ADR 0020 D4a).
   for (std in c("rfc3986", "whatwg")) {
-    for (pn in c("none", "collapse_slashes", "both")) {
+    bad <- c("none", "collapse_slashes", if (std == "rfc3986") "both")
+    for (pn in bad) {
       expect_error(
         safe_parse_url(u, url_standard = std, path_normalization = pn),
         "governs `path_normalization`"
@@ -135,6 +135,9 @@ test_that("explicit governed knobs conflicting with the profile error", {
       safe_parse_url(u, url_standard = std, path_normalization = "dot_segments")
     )
   }
+  expect_silent(
+    safe_parse_url(u, url_standard = "whatwg", path_normalization = "both")
+  )
 })
 
 test_that("no conflict without url_standard or with the selector alone", {
@@ -173,7 +176,7 @@ test_that("get_path()/get_clean_url() enforce the conflict matrix", {
   # path_encoding is orthogonal (ADR 0011): it layers on a profile, no error.
   expect_silent(get_path(u, url_standard = "rfc3986", path_encoding = "decode"))
   expect_error(
-    get_clean_url(u, url_standard = "whatwg", path_normalization = "both"),
+    get_clean_url(u, url_standard = "whatwg", path_normalization = "none"),
     "governs `path_normalization`"
   )
   expect_silent(get_path(u, url_standard = "rfc3986"))
@@ -214,7 +217,7 @@ test_that("conflict matrix holds on canonical_join()'s LEGACY `...` seam", {
   )
   expect_error(
     cj_deprecated(canonical_join(A, B, url_standard = "bogus")),
-    "url_standard must be NULL"
+    "url_standard must be"
   )
   # Selector alone forwards cleanly and still joins.
   joined <- cj_deprecated(canonical_join(A, B, url_standard = "whatwg"))
