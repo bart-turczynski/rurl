@@ -50,6 +50,9 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
   areas.
 - [`validation.md`](validation.md) — the validation policy: the local gate,
   when to run it, and what the whitespace fixers must skip.
+- [`standards-literal-audit-2026-10-28.md`](standards-literal-audit-2026-10-28.md)
+  — a dated snapshot: the ADR 0020 audit of ADRs, rulings, tests and dials
+  against the standards' text (RURL-ongkcidw), one ticket per finding.
 - [`stringi-inventory.md`](stringi-inventory.md) — a snapshot of every
   `stringi::` reference in `R/` at `80d4f0e`, with its operation family, where
   ICU and byte-mode PCRE differ for it, and the slice that migrates it

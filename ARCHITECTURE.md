@@ -382,10 +382,9 @@ only under `port_handling != "exclude"`.
   RURL-mbhuhwzk). Only the scheme
   production (RFC 3986 §3.1) is shared by both named profiles, because the two
   standards agree on it. Measured over the WHATWG's own base-carrying corpus
-  (`tests/testthat/test-wpt-base-relative.R`): 247 of 274 rows exact, 27
-  enumerated differences. That is a **separate** population from the base-null
+  (`tests/testthat/test-wpt-base-relative.R`): all 274 rows exact. That is a **separate** population from the base-null
   WPT headline (336/336, `tests/testthat/test-wpt-full-suite.R`); the two are
-  never summed and the 247/274 split is not quoted as a conformance rate.
+  never summed and the 274/274 figure is not quoted as a conformance rate.
 
   **Which conformance numbers may be quoted.** Every figure here is
   dial-dependent, so measure at the canonical bundle and never at the defaults.
@@ -405,7 +404,7 @@ only under `port_handling != "exclude"`.
   posture's **176/336**, because the other 160 are ADR 0004 allowlist rejections
   and not conformance misses; any RFC percentage out of
   `inst/bench/standard-parity.R`, whose oracle is 37 hand-authored probes and
-  cannot cover a grammar; and the base-relative 247/274 above. `analysis/` is
+  cannot cover a grammar; and the base-relative 274/274 above. `analysis/` is
   read by no test, so nothing catches a stale figure there — re-derive from the
   harness before citing one.
 
