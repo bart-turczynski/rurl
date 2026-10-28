@@ -17,8 +17,8 @@
 # grammar, identical to WHATWG's, so it is a conformance fix under BOTH named
 # profiles rather than a WHATWG rule -- see `.split_uri_ref()`.
 #
-# The NULL selector is frozen byte-for-byte throughout (ADR 0007): no rule in
-# this file, including the scheme production, is reachable from it.
+# There is no third arm: `url_standard = NULL` is read as "whatwg" (ADR 0020
+# D4), and "whatwg" is the default.
 
 # The scheme production, `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`. It is
 # RFC 3986 section 3.1's own grammar and, byte for byte, WHATWG's "scheme start
@@ -29,18 +29,6 @@
 # splitter was the one place in the package reading a looser one.
 .URI_SCHEME_PRODUCTION <- "[A-Za-z][A-Za-z0-9+.\\-]*"
 
-# The Appendix B scheme group as actually written in RFC 3986's own
-# **non-validating** reference regex: "any run of bytes that are not `: / ? #`".
-# Appendix B says of itself that it is deliberately permissive, and that
-# permissiveness is a defect for reference resolution specifically: a relative
-# PATH whose first segment merely contains a colon (`10.0.0.7:8080/foo.html`,
-# `[61:24:74]:98`) is read as a scheme, so section 5.2.2's first branch fires
-# and the base is discarded. RFC 3986 section 4.2 names the hazard itself.
-#
-# It is retained ONLY for `url_standard = NULL`, which ADR 0007 freezes
-# byte-for-byte; see `.split_uri_ref()`.
-.URI_SCHEME_PRODUCTION_APPENDIX_B <- "[^:/?#]+"
-
 # Split a URI reference into its five components using the RFC 3986 Appendix B
 # regular expression. Each of scheme / authority / query / fragment is either a
 # string (the component was PRESENT, possibly empty) or NA (ABSENT -- e.g. no
@@ -48,22 +36,14 @@
 # a string (RFC 3986 always matches a, possibly empty, path). Returns NA fields
 # for an NA input.
 #
-# The SCHEME production is the one part that is not standard-agnostic, and not
-# because the standards disagree -- they agree (`.URI_SCHEME_PRODUCTION`). What
-# differs is what each SELECTOR is allowed to change:
-#
-#   * `"rfc3986"` and `"whatwg"` both get the real production. Under "rfc3986"
-#     that is the RFC's own section 3.1 grammar replacing Appendix B's
-#     self-described non-validating shorthand, so it is a conformance fix on the
-#     profile's own terms, not an import from the other standard.
-#   * `NULL` keeps Appendix B's loose group. It is observably looser -- under
-#     the real production `resolve_url("10.0.0.7:8080/x", "http://a/b/c")`
-#     stops being an absolute reference and starts merging against the base --
-#     and the NULL selector is frozen byte-for-byte by ADR 0007. The freeze
-#     governs whether the bytes may move, not whether they are right; the fix
-#     ships on the two selectors that CLAIM a standard, and NULL is the surface
-#     that claims none.
-.split_uri_ref <- function(ref, url_standard = NULL) {
+# The SCHEME group is the real production (`.URI_SCHEME_PRODUCTION`), on which
+# the two standards agree, not Appendix B's self-described non-validating
+# `[^:/?#]+`: that looser group reads a relative PATH whose first segment
+# merely contains a colon (`10.0.0.7:8080/foo.html`, `[61:24:74]:98`) as a
+# scheme, so section 5.2.2's first branch fires and the base is discarded
+# (RFC 3986 section 4.2 names the hazard). The frozen `NULL` selector kept the
+# loose group until ADR 0020 retired it (RURL-mbhuhwzk).
+.split_uri_ref <- function(ref) {
   na_ref <- list(
     scheme = NA_character_, authority = NA_character_, path = NA_character_,
     query = NA_character_, fragment = NA_character_
@@ -71,11 +51,7 @@
   if (is.na(ref)) {
     return(na_ref)
   }
-  scheme_re <- if (is.null(url_standard)) {
-    .URI_SCHEME_PRODUCTION_APPENDIX_B
-  } else {
-    .URI_SCHEME_PRODUCTION
-  }
+  scheme_re <- .URI_SCHEME_PRODUCTION
   # ^((<scheme>):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?
   # Groups: 2 scheme, 4 authority, 5 path, 7 query, 9 fragment.
   m <- regmatches(
@@ -168,7 +144,7 @@
   # The leading strip uses the REAL scheme production
   # (`.URI_SCHEME_PRODUCTION`), not Appendix B's loose group, and
   # unconditionally: both call sites are gated
-  # on `.whatwg_special_base_scheme()`, so NULL and "rfc3986" never reach here
+  # on `.whatwg_special_base_scheme()`, so "rfc3986" never reaches here
   # and neither can move. Appendix B's group would break the scheme-LESS entry
   # outright -- once `.split_uri_ref()` stopped calling `10.0.0.7:8080/foo.html`
   # scheme-bearing, that reference started arriving here, and a loose strip
@@ -215,12 +191,12 @@
 # scheme: "special relative or authority state", "relative slash state" ->
 # "special authority ignore slashes state", and `file`'s own file-slash chain.
 # A non-special base (`non-spec:/p`) reaches none of them and so is untouched,
-# and so is the frozen NULL selector and `"rfc3986"` (ADR 0007 / P2.7 D-C).
+# and so is `"rfc3986"` (P2.7 D-C).
 .whatwg_special_base_scheme <- function(base, url_standard) {
   if (!.is_whatwg(url_standard) || is.na(base)) {
     return(NA_character_)
   }
-  base_scheme <- .split_uri_ref(base, url_standard)$scheme
+  base_scheme <- .split_uri_ref(base)$scheme
   if (is.na(base_scheme)) {
     return(NA_character_)
   }
@@ -272,7 +248,7 @@
 # (`.parse_whatwg_file_urls_vec()`, R/parse-phases.R), because the resolver's
 # output is re-parsed there and the same rule applies to `file://C:/` typed
 # directly. Every rule here is reached only from `.whatwg_special_base_scheme()`
-# reporting `file`, so `"rfc3986"` and the frozen NULL selector never see them.
+# reporting `file`, so `"rfc3986"` never sees them.
 
 # WHATWG "Windows drive letter": two code points, an ASCII alpha then `:` or
 # `|`. "Normalized" narrows the second to `:`. Both spellings are recognized
@@ -472,19 +448,16 @@
 # implements (`.serialize_whatwg_full_vec`, R/parse-phases.R) and was LOSING
 # here because it was handed the unguarded string.
 #
-# Gated on a SELECTED standard, like the scheme production: it is RFC 3986's
-# own section 3.3 constraint under "rfc3986" and the serializer's guard under
-# "whatwg", and `url_standard = NULL` is byte-frozen (ADR 0007), so the frozen
-# selector keeps emitting the unguarded string it always did.
-.recompose_uri <- function(t, url_standard = NULL) {
+# It applies under both standards: it is RFC 3986's own section 3.3
+# constraint under "rfc3986" and the serializer's guard under "whatwg".
+.recompose_uri <- function(t) {
   out <- ""
   if (!is.na(t$scheme)) {
     out <- paste0(out, t$scheme, ":")
   }
   if (!is.na(t$authority)) {
     out <- paste0(out, "//", t$authority)
-  } else if (!is.null(url_standard) && !is.na(t$path) &&
-               startsWith(t$path, "//")) {
+  } else if (!is.na(t$path) && startsWith(t$path, "//")) {
     out <- sprintf("%s/.", out)
   }
   out <- paste0(out, if (!is.na(t$path)) t$path else "")
@@ -497,43 +470,10 @@
   out
 }
 
-# Octets resolve_url() splits under `url_standard = NULL` for a row that is
-# not valid UTF-8 (RURL-cwzickqy). R's string functions cannot split such a
-# string in a UTF-8 locale (they throw) and split it byte by byte in the C
-# locale, so the row's answer depended on LC_CTYPE. The resolution reads only
-# ASCII delimiters, so every octet 0x80-0xFF of BOTH operands is spelled as
-# the private-use code point U+F700 + octet while it runs, and the result is
-# spelled back octet for octet: the C-locale split, in every locale. Both
-# operands of the row are hidden, so every non-ASCII code point in the result
-# is a hidden octet and the mapping back is exact, whatever the input held.
-.hide_high_octets <- function(x) {
-  vapply(x, function(s) {
-    if (is.na(s)) {
-      return(NA_character_)
-    }
-    b <- as.integer(charToRaw(s))
-    high <- b >= 0x80L
-    b[high] <- b[high] + 0xF700L
-    intToUtf8(b)
-  }, character(1), USE.NAMES = FALSE)
-}
-
-.restore_high_octets <- function(x) {
-  vapply(x, function(s) {
-    if (is.na(s)) {
-      return(NA_character_)
-    }
-    cp <- utf8ToInt(s)
-    high <- cp >= 0x80L
-    cp[high] <- cp[high] - 0xF700L
-    rawToChar(as.raw(cp))
-  }, character(1), USE.NAMES = FALSE)
-}
-
 # TRUE where `base` is a base the selected standard's own parser refuses
-# (RURL-vrvxxfvm); all FALSE under `url_standard = NULL`, which is frozen
-# (ADR 0007), and FALSE for an NA base, which is NO base rather than a failing
-# one. The standard's parser is `serialize_url()`, the standards surface, which
+# (RURL-vrvxxfvm), and FALSE for an NA base, which is NO base rather than a
+# failing one. The standard's parser is `serialize_url()`, the standards
+# surface, which
 # is NA exactly where that parser fails. `get_parse_status()` is not the
 # oracle: under the default `scheme_acceptance = "web"` it calls `non-spec:/p`
 # or `about:blank` an "error" by rurl's acceptance policy (ADR 0004), not by
@@ -541,9 +481,6 @@
 # Each distinct base is parsed once and mapped back to its rows.
 .refused_base_mask <- function(base, url_standard) {
   refused <- logical(length(base))
-  if (is.null(url_standard)) {
-    return(refused)
-  }
   distinct <- unique(base[!is.na(base)])
   if (length(distinct) == 0L) {
     return(refused)
@@ -611,9 +548,8 @@
 # except for a scheme-bearing reference under "whatwg", whose path is passed
 # through as written for the WHATWG re-parse (RURL-rdkewxlx).
 # `url_standard` selects the reference-parsing rules that precede the merge
-# (P2.7 D-B); its default NULL is the frozen selector and reproduces the
-# pre-D-B behavior exactly, as does "rfc3986".
-.resolve_one_raw <- function(ref, base, url_standard = NULL) {
+# (P2.7 D-B); "rfc3986" reproduces the pre-D-B behavior exactly.
+.resolve_one_raw <- function(ref, base, url_standard = "whatwg") {
   if (is.na(ref)) {
     return(NA_character_)
   }
@@ -623,12 +559,12 @@
   # `.strip_whatwg_control_chars_vec()` (R/parse-phases.R) and that function is
   # deliberately the single seam for it, so this reuses it rather than
   # re-spelling the character classes. It self-gates on the selector and is a
-  # byte-for-byte no-op under "rfc3986" and under NULL. Stripping to the EMPTY
+  # byte-for-byte no-op under "rfc3986". Stripping to the EMPTY
   # string is meaningful, not a degenerate case: an empty reference is RFC 3986
   # section 5.2.2's "base minus its fragment" branch, which
   # `.transform_reference()` below already implements.
   ref <- .strip_whatwg_control_chars_vec(ref, url_standard)$url
-  r <- .split_uri_ref(ref, url_standard)
+  r <- .split_uri_ref(ref)
   base_scheme <- .whatwg_special_base_scheme(base, url_standard)
   if (.whatwg_reference_is_relative(r$scheme, base_scheme)) {
     # The base's own special scheme: consume it and continue relatively.
@@ -650,10 +586,9 @@
   }
   if (!is.na(r$scheme)) {
     # Absolute reference: base is irrelevant (section 5.2.2 first branch).
-    empty_base <- .split_uri_ref(NA_character_, url_standard)
+    empty_base <- .split_uri_ref(NA_character_)
     return(.recompose_uri(
-      .transform_reference(r, empty_base, whatwg = .is_whatwg(url_standard)),
-      url_standard
+      .transform_reference(r, empty_base, whatwg = .is_whatwg(url_standard))
     ))
   }
   # Relative reference: the base must be an absolute URL (have a scheme).
@@ -664,7 +599,7 @@
   # scheme is only a scheme under Appendix B's loose group (`10.0.0.7:8080/x`)
   # is not an absolute URL, and the `is.na(b$scheme)` guard below is exactly the
   # place that must say so.
-  b <- .split_uri_ref(base, url_standard)
+  b <- .split_uri_ref(base)
   if (is.na(b$scheme)) {
     return(NA_character_)
   }
@@ -672,8 +607,8 @@
   # with no authority whose path does not start with "/", e.g. `mailto:x`)
   # admits only a reference that starts with "#"; anything else is a
   # missing-scheme-non-relative-URL validation error and the parse fails
-  # (RURL-vuczsypb). RFC 3986 section 5.2 merges against any base, and NULL
-  # is frozen (ADR 0007), so this is whatwg only.
+  # (RURL-vuczsypb). RFC 3986 section 5.2 merges against any base, so this is
+  # whatwg only.
   if (.is_whatwg(url_standard) && is.na(base_scheme) &&
         is.na(b$authority) && (is.na(b$path) || !startsWith(b$path, "/")) &&
         !startsWith(ref, "#")) {
@@ -683,7 +618,7 @@
   # scheme is special, so this is the WHATWG `file:` chain's gate and nothing
   # else's.
   whatwg_file <- identical(base_scheme, "file")
-  .recompose_uri(.transform_reference(r, b, whatwg_file), url_standard)
+  .recompose_uri(.transform_reference(r, b, whatwg_file))
 }
 
 #' Resolve a URL reference against a base URL
@@ -703,9 +638,9 @@
 #'
 #' The merge itself (empty reference, fragment-only, query-only, scheme-relative
 #' \code{//host} reference, absolute-path reference, and relative-path merge) is
-#' RFC 3986 section 5.2--5.3 under \code{url_standard = "rfc3986"} and under the
-#' default \code{NULL} selector, with one exception under \code{"rfc3986"} noted
-#' last below. Under \code{url_standard = "whatwg"} the WHATWG
+#' RFC 3986 section 5.2--5.3 under \code{url_standard = "rfc3986"}, with one
+#' exception noted last below. Under \code{url_standard = "whatwg"} (the
+#' default; \code{NULL} means the same, ADR 0020) the WHATWG
 #' URL Standard's reference-parsing rules are applied first, because they are
 #' rules the two standards genuinely disagree on rather than composition of the
 #' axes \code{url_standard} already governs (decision P2.7 D-B,
@@ -740,8 +675,8 @@
 #'     so \code{" foo.com "} resolves as \code{"foo.com"} does. A reference that
 #'     strips to the empty string is the empty reference, which resolves to the
 #'     base minus its fragment. RFC 3986 has no strip step -- such bytes are
-#'     required to be percent-encoded -- so under \code{"rfc3986"} and
-#'     \code{NULL} they stay in the reference. The base gets the same step
+#'     required to be percent-encoded -- so under \code{"rfc3986"} they stay
+#'     in the reference. The base gets the same step
 #'     under \code{"whatwg"}, so \code{" http://a/b/c "} is the base
 #'     \code{"http://a/b/c"}; only this step: a base that the parser would
 #'     otherwise respell (a backslash for a slash) is not normalized first.
@@ -764,7 +699,7 @@
 #'     normalized to \code{C:}. A drive letter in the authority position
 #'     (\code{"//d:"}) is an empty host plus a path segment,
 #'     \code{"file:///d:"}. RFC 3986 has no drive-letter concept, so under
-#'     \code{"rfc3986"} and \code{NULL} the plain section 5.2 merge applies.
+#'     \code{"rfc3986"} the plain section 5.2 merge applies.
 #'   \item \strong{Any other scheme-bearing reference resolves to its own
 #'     parse.} The base plays no part, and the reference's path is left to the
 #'     WHATWG path state, so an opaque path keeps its dot segments
@@ -775,10 +710,9 @@
 #'     of such a path, so under \code{"rfc3986"} the first is \code{"foo:/b"}.
 #' }
 #'
-#' The \code{NULL} selector is frozen and unaffected (ADR 0007; P2.7 D-C):
-#' every rule above is reachable only through
-#' \code{url_standard = "whatwg"}, or through a \code{profile} that bundles it
-#' (see \code{...}).
+#' Every rule above applies under \code{url_standard = "whatwg"} (the default)
+#' or a \code{profile} that bundles it (see \code{...}), never under
+#' \code{"rfc3986"} (P2.7 D-C).
 #'
 #' Two further rules apply under \strong{both} named profiles, because the two
 #' standards agree on them. First, a resolved path whose first segment is
@@ -790,19 +724,14 @@
 #' authority \code{path}. Under \code{"whatwg"} a reference with a scheme of
 #' its own reaches the parse as written, so the WHATWG serializer, not the
 #' resolver, writes its guard: \code{"non-spec:/..//x"} gives
-#' \code{"non-spec:/.//x"}. The \code{NULL} selector recomposes the unguarded
-#' string, as it always did. Second, a scheme is
+#' \code{"non-spec:/.//x"}. Second, a scheme is
 #' \code{ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )} -- RFC 3986 section 3.1's
 #' own grammar, and WHATWG's -- so a relative path whose first segment merely
 #' \emph{contains} a colon is a path, not an absolute reference:
 #' \code{resolve_url("[61:24:74]:98", "http://example.org/foo/bar",
 #' url_standard = "whatwg", output = "serialized")} is
 #' \code{"http://example.org/foo/[61:24:74]:98"}. \code{"rfc3986"} reads no
-#' scheme there either, but refuses the reference (see below). The \code{NULL}
-#' selector instead keeps RFC 3986 Appendix B's
-#' explicitly \emph{non-validating} \code{[^:/?#]+}, which reads
-#' \code{"10.0.0.7"} as a scheme and discards the base; that is frozen behavior
-#' (ADR 0007), not a recommendation.
+#' scheme there either, but refuses the reference (see below).
 #'
 #' Under \code{"rfc3986"} the reference must itself be an RFC 3986
 #' URI-reference (section 4.1: a \code{URI} or a \code{relative-ref}), or the
@@ -814,7 +743,7 @@
 #' no triplet) and
 #' \code{"10.0.0.7:8080/x"} (section 4.2: a first segment holding a colon
 #' cannot start a relative-path reference; write \code{"./10.0.0.7:8080/x"}).
-#' \code{"whatwg"} and \code{NULL} do not check the reference. Each rule in
+#' \code{"whatwg"} does not check the reference. Each rule in
 #' this section applies to the standard \code{url_standard} names, or to the
 #' one a \code{profile} in \code{...} bundles.
 #'
@@ -848,10 +777,9 @@
 #'     is \code{"http://a/b/c/d;p?y"}).
 #' }
 #'
-#' \code{output = "serialized"} \strong{requires} an explicit
-#' \code{url_standard}: \code{NULL} selects no standard, so there is nothing to
-#' serialize \emph{to}, and the combination is an error rather than a silent
-#' choice of one. Because \code{\link{serialize_url}} accepts no presentation
+#' \code{output = "serialized"} serializes to \code{url_standard}, which is
+#' \code{"whatwg"} by default (and for \code{NULL}). Because
+#' \code{\link{serialize_url}} accepts no presentation
 #' options at all, \code{output = "serialized"} also rejects any \code{...}
 #' argument: honoring, say, \code{port_handling = "exclude"} is impossible on
 #' that surface, and accepting-then-discarding it would misreport what was
@@ -872,22 +800,20 @@
 #' @param base_url A character vector of base URLs, recycled against
 #'   \code{relative_or_absolute}. Each base must itself be an absolute URL
 #'   (carry a scheme); a relative reference resolved against a scheme-less or
-#'   \code{NA} base yields \code{NA}. Under a named \code{url_standard}
-#'   (given here or bundled by a \code{profile}), a base
+#'   \code{NA} base yields \code{NA}. Under the \code{url_standard}
+#'   (given here, the default, or bundled by a \code{profile}), a base
 #'   that standard's parser refuses (\code{\link{serialize_url}} gives
 #'   \code{NA}) is no base, row by row: under \code{"whatwg"} the row is
 #'   \code{NA} even for an absolute reference (the URL Standard's API URL
 #'   parser fails on a failing base before it reads the input); under
 #'   \code{"rfc3986"} a relative reference is \code{NA} and an absolute one
-#'   still resolves (RFC 3986 sections 5.1 and 5.2.2). The frozen \code{NULL}
-#'   selector (no \code{url_standard} and no \code{profile}) does not check
-#'   the base.
-#' @param url_standard Optional standard profile forwarded to the parse:
-#'   \code{NULL} (default), \code{"rfc3986"}, or \code{"whatwg"}. See
-#'   \code{\link{safe_parse_url}} for the axes it governs, and
-#'   \emph{Reference resolution is standard-aware} for the reference-parsing
-#'   rules \code{"whatwg"} adds ahead of the merge. Required (non-\code{NULL})
-#'   when \code{output = "serialized"}.
+#'   still resolves (RFC 3986 sections 5.1 and 5.2.2).
+#' @param url_standard The standard the reference is resolved and parsed
+#'   under: \code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL}
+#'   means \code{"whatwg"} (ADR 0020). See \code{\link{safe_parse_url}} for
+#'   the axes it governs, and \emph{Reference resolution is standard-aware}
+#'   for the reference-parsing rules \code{"whatwg"} adds ahead of the
+#'   merge.
 #' @param output Which output surface to return: \code{"clean"} (default,
 #'   today's canonical \code{clean_url} bytes) or \code{"serialized"} (the
 #'   selected standard's full-string serialization of the resolved absolute
@@ -945,27 +871,22 @@
 #' resolve_url("#s", "http://a/b/c/d;p?q",
 #'             url_standard = "whatwg", output = "serialized")
 #' resolve_url("#s", "http://a/b/c/d;p?q")
-resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
+resolve_url <- function(relative_or_absolute, base_url,
+                        url_standard = "whatwg",
                         output = c("clean", "serialized"),
                         form = c("source", "normalized"),
                         ...) {
+  url_standard_supplied <- !missing(url_standard)
   url_standard <- .validate_url_standard(url_standard)
   output <- match.arg(output)
   form <- match.arg(form)
   dots <- list(...)
 
   if (identical(output, "serialized")) {
-    # `NULL` selects no standard, so there is nothing to serialize TO; and
-    # serialize_url() takes no presentation arguments, so a `...` dial provably
-    # cannot apply. Both are errors rather than silent choices (P2.7 D-A).
-    if (is.null(url_standard)) {
-      stop(
-        "output = \"serialized\" requires an explicit `url_standard` ",
-        "(\"rfc3986\" or \"whatwg\"): url_standard = NULL selects no ",
-        "standard, so there is no serialization to return.",
-        call. = FALSE
-      )
-    }
+    # serialize_url() takes no presentation arguments, so a `...` dial
+    # provably cannot apply: an error rather than a silent choice (P2.7 D-A).
+    # A NULL `url_standard` is read as "whatwg" (ADR 0020 D4), so there is
+    # always a standard to serialize to.
     if (length(dots) > 0L) {
       nm <- names(dots)
       if (is.null(nm)) {
@@ -991,7 +912,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # through `...`; the rules that run before the parse -- the undecodable-octet
   # reading, the rfc3986 URI-reference gate, the refused-base rule and the
   # merge -- must read the same one, or `profile = "rfc-syntax"` parses as
-  # RFC 3986 but resolves as the frozen NULL selector. It comes from
+  # RFC 3986 but resolves as the default WHATWG. It comes from
   # `.resolve_profile()`, the helper safe_parse_url() uses, so an explicit
   # `url_standard` overrides the bundle's exactly as it does there (the iron
   # rule). `serialized` takes no `...`, so there it is `url_standard`.
@@ -1023,7 +944,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     url_standard
   } else {
     .resolve_profile(
-      profile, list(url_standard = url_standard)
+      profile, list(url_standard = if (url_standard_supplied) url_standard)
     )$opts$url_standard
   }
 
@@ -1049,8 +970,8 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # parser runs the basic URL parser on the base too. The reference gets the
   # same step inside `.resolve_one_raw()`; the base is stripped here, once
   # and vectorized, before it is recycled. The refused-base mask reads its
-  # own `serialize_url()`, which runs step 1 itself. A no-op under "rfc3986"
-  # and NULL.
+  # own `serialize_url()`, which runs step 1 itself. A no-op under
+  # "rfc3986".
   base <- .strip_whatwg_control_chars_vec(base, resolution_standard)$url
   ref <- rep_len(ref, n)
   base <- rep_len(base, n)
@@ -1063,12 +984,9 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # rejects the octet (RFC 3986 section 2: a URI is a sequence of
   # characters), so an undecodable reference resolves to NA and an
   # undecodable base is no base (NA, as a bytes one already is), and an
-  # absolute reference still resolves without it. `NULL` accepts the octet
-  # in some components (a path, query or fragment of a web URL, RURL-yarkccco)
-  # and not in others, so the parse of the resolved URL decides: see below.
+  # absolute reference still resolves without it.
   ref_bad <- !rep_len(ref_in$decodable, n)
   base_bad <- !rep_len(base_in$decodable, n)
-  hidden <- logical(n)
   if (.is_whatwg(resolution_standard)) {
     # The replacement is the reading, not a fault, and the parse seam reads
     # the same octet the same way: .utf8_decode_replacing(), the semantic
@@ -1077,18 +995,9 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
     # boundary.
     ref[ref_bad] <- .utf8_decode_replacing(ref[ref_bad])
     base[base_bad] <- .utf8_decode_replacing(base[base_bad])
-  } else if (!is.null(resolution_standard)) {
+  } else {
     ref[ref_bad] <- NA_character_
     base[base_bad] <- NA_character_
-  } else {
-    # `NULL`: an undecodable row resolves octet for octet, as a decodable one
-    # resolves character for character, and the parser below reads the
-    # result as it reads any URL: a path octet becomes %XX, one in the host
-    # fails the row. As for a decodable base, the parser is not asked about
-    # the base itself.
-    hidden <- ref_bad | base_bad
-    ref[hidden] <- .hide_high_octets(ref[hidden])
-    base[hidden] <- .hide_high_octets(base[hidden])
   }
   # Under `rfc3986` the REFERENCE must itself be an RFC 3986 URI-reference
   # (section 4.1: URI / relative-ref), or there is nothing to resolve: the row
@@ -1097,7 +1006,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # grammar (`a/ä/../b`, `/%zz/../b` resolve to valid URIs). Each
   # distinct reference is checked once, row by row, so one refused reference
   # moves no other row. `whatwg` has no such gate (its parser reads the
-  # reference with the base), and `NULL` is frozen (ADR 0007).
+  # reference with the base).
   if (identical(resolution_standard, "rfc3986")) {
     distinct <- unique(ref[!is.na(ref)])
     if (length(distinct) > 0L) {
@@ -1111,12 +1020,7 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # absolute reference included. `rfc3986`: section 5.1 requires the base to
   # be an absolute URI, and section 5.2.2 reads the base only when the
   # reference has no scheme, so the row resolves as against an NA base: a
-  # relative reference gives NA, an absolute one resolves. `NULL` is not
-  # asked: it resolves against such a base as it always has, because the
-  # selector is frozen (ADR 0007) and ADR 0016 moves it only with a witness
-  # that the default path is defective and a declared signature, which this
-  # change does not carry.
-  #
+  # relative reference gives NA, an absolute one resolves.
   parsed_base <- rep(NA_character_, n)
   if (.is_whatwg(resolution_standard)) {
     parsed_base <- .whatwg_parsed_base(base)
@@ -1160,7 +1064,6 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
       (!is.na(first_ser) & !is.na(alt_ser) & first_ser != alt_ser)
     resolved_raw[respelled[differs]] <- alt[differs]
   }
-  resolved_raw[hidden] <- .restore_high_octets(resolved_raw[hidden])
 
   if (identical(output, "serialized")) {
     # Surface (b): hand the resolved absolute string to the standard serializer
@@ -1175,7 +1078,12 @@ resolve_url <- function(relative_or_absolute, base_url, url_standard = NULL,
   # Delegate ALL normalization/rendering/diagnostics to the shared parser so
   # resolve_url() adds no divergent behavior. safe_parse_urls() memoizes, so
   # duplicate resolved URLs cost only a match().
-  parsed <- safe_parse_urls(resolved_raw, url_standard = url_standard, ...)
+  # The resolution standard, so a profile in `...` parses as it resolved: an
+  # explicit `url_standard` already overrode the bundle's above, and an
+  # omitted one leaves the bundle's, exactly as safe_parse_urls() would.
+  parsed <- safe_parse_urls(
+    resolved_raw, url_standard = resolution_standard, ...
+  )
   out <- parsed$clean_url
   # A reference that could not resolve to an absolute URL (NA raw) is NA here
   # anyway, since safe_parse_urls() returns NA clean_url for an NA input.

@@ -345,10 +345,6 @@
 # amendment 2026-10-25) withdrew the "Unicode-tolerant" extension this gate
 # once carried; Unicode input belongs to `url_standard = "whatwg"`.
 #
-# `ascii_only = FALSE` keeps that withdrawn tolerance for ONE caller: the
-# RFC 8089 `file:` overlay under the frozen NULL selector (ADR 0007, ADR 0016),
-# whose output must not move. Every `rfc3986` caller takes the default.
-#
 # Return value: list(ok = <logical>, diagnostic = <character>), each length-n.
 #   - ok        : TRUE = accepted by the generic URI grammar; FALSE = a generic
 #                 grammar violation; NA = NA input.
@@ -380,8 +376,7 @@
 # character is admitted, so the component walk judges only the ASCII grammar:
 # an otherwise-invalid ASCII portion fails even with non-ASCII present. The
 # strict rejection of the non-ASCII itself (RUL-030) is a separate whole-string
-# test in `.rfc3986_generic_uri_ok()`, skipped only for `ascii_only = FALSE`
-# (the frozen NULL `file:` overlay).
+# test in `.rfc3986_generic_uri_ok()`.
 #
 # Spelled in bytes (ADR 0019, RURL-oahhlnvf): the class searches run in byte
 # mode, where `\x80-\xff` is every byte of a multibyte UTF-8 sequence, so on
@@ -728,12 +723,10 @@
   url
 }
 
-# Vectorized public-internal gate. Under the default `ascii_only = TRUE` a row
-# carrying a directly-written non-ASCII scalar value is rejected and flagged
-# with `diagnostic`, whatever its ASCII portion does (RUL-030). Under
-# `ascii_only = FALSE` (the frozen NULL `file:` overlay only) such a row is
-# judged on its ASCII grammar alone, as before the ruling.
-.rfc3986_generic_uri_ok <- function(url, ascii_only = TRUE) {
+# Vectorized public-internal gate. A row carrying a directly-written non-ASCII
+# scalar value is rejected and flagged with `diagnostic`, whatever its ASCII
+# portion does (RUL-030).
+.rfc3986_generic_uri_ok <- function(url) {
   n <- length(url)
   url <- .rfc3986_declare_native_utf8(url)
   # Bytes that do not decode are rejected WITHOUT walking the grammar, and that
@@ -741,8 +734,7 @@
   # string (scheme / authority / path / query / fragment leave no byte
   # unclassified), every production is ASCII apart from the
   # `.RFC3986_NONASCII` scalar-value tolerance of the component classes (which
-  # decides a verdict only under `ascii_only = FALSE`, the frozen NULL `file:`
-  # overlay; by default the whole-string test below rejects any non-ASCII
+  # never decides a verdict: the whole-string test below rejects any non-ASCII
   # row whatever the walk says), and an octet sequence that is
   # not valid UTF-8 denotes no scalar value. So an undecodable element must
   # fail whichever component it lands in -- FALSE is the answer the walk would
@@ -789,9 +781,7 @@
   # U+FEFF that leads the string is rejected by the same rule.
   has_non_ascii <- grepl("[^\\x00-\\x7f]", url, perl = TRUE, useBytes = TRUE)
   flagged <- !is.na(url) & !undecodable & has_non_ascii
-  if (ascii_only) {
-    ok[flagged] <- FALSE
-  }
+  ok[flagged] <- FALSE
   diagnostic <- rep(NA_character_, n)
   diagnostic[flagged] <- "unicode-outside-rfc3986-uri"
   list(ok = ok, diagnostic = diagnostic)
@@ -1232,8 +1222,10 @@
 #   Gate 2 -- does RFC 8089 Section 2 narrow it further? Enforce that narrowing,
 #     UNLESS an Appendix F production restores the form AND the result is still
 #     RFC 3986-valid.
-#       port      -- REJECTED. Section 2's `file-auth = "localhost" / host`
-#                    has no port and NO appendix supplies one.
+#       port      -- PARSED and surfaced as a fact. Section 2's
+#                    `file-auth = "localhost" / host` has no port and NO
+#                    appendix supplies one, but the generic syntax does (see
+#                    below).
 #       userinfo  -- PARSED and surfaced as a fact. App. E.1/F supply
 #                    `file-auth = "localhost" / [ userinfo "@" ] host`, and
 #                    `userinfo` is an RFC 3986 production, so it stays inside
@@ -1252,68 +1244,26 @@
 #
 # No drive-letter or backslash rewriting (those are WHATWG-specific).
 #
-# What a `localhost` authority DECOMPOSES to, keyed on `url_standard` -- the
-# same one-place shape as the `.web_*_policy()` mappers in R/parse-web.R, so
-# the selector cannot mean two different grammars on two routes (ADR 0007).
+# A `localhost` authority is reported as itself, on the ordinary reg-name
+# seam. RFC 3986 S3.2.2 gives `reg-name` no special names, and RFC 8089 S2's
+# `file-auth = "localhost" / host` lists empty, `localhost` and `host` as
+# three legal authority FORMS -- it never rewrites one into another. App. B
+# makes `file://localhost/p` EQUIVALENT to `file:///p`; equivalence is not
+# identical decomposition. ADR 0012 D5 scopes the collapse to the empty host
+# to WHATWG, whose `file:` state machine is separate (RURL-zyytztdd).
 #
-#   "empty"     `localhost` collapses to an empty host. WHATWG's file host state
-#               says "if host is localhost, set host to the empty string", and
-#               the no-selector baseline reproduces it (byte-frozen, ADR 0012
-#               D4).
-#   "reg-name"  `localhost` is reported as itself, on the ordinary reg-name
-#               seam. RFC 3986 S3.2.2 gives `reg-name` no special names, and
-#               RFC 8089 S2's `file-auth = "localhost" / host` lists empty,
-#               `localhost` and `host` as three legal authority FORMS -- it
-#               never rewrites one into another. App. B makes
-#               `file://localhost/p` EQUIVALENT to `file:///p`; equivalence is
-#               not identical decomposition, and ADR 0007 puts `file` expansion
-#               out of the selector's scope.
+# A port parses and is surfaced as a diagnostic: `rfc3986` is the
+# scheme-AGNOSTIC generic syntax, where `port = *DIGIT` and the authority is
+# well-formed, so an RFC 8089 narrowing may not gate the parse (ADR 0012,
+# owner-ruled: "Scheme-specific restrictions are overlays, not generic parse
+# gates"; RURL-uhkofhjf). D5 lists userinfo, port, query and fragment
+# TOGETHER, and all four are facts.
 #
-# ADR 0012 D5 scopes the collapse to WHATWG explicitly, by contrast with the
-# `rfc-syntax` clause in the same bullet ("`file` under `rfc-syntax`:
-# non-absolute path; userinfo, port, query, or fragment present ... Under
-# WHATWG, `file://localhost/...` maps `localhost` to the empty host"). Layer
-# 4b's "preserve WHATWG's `file://localhost/` -> empty-host mapping" is
-# attributive -- it names the mapping's owner, and is not a mandate to run it
-# under `rfc-syntax`. Emptying it there scored as the last `host`-field
-# divergence in `tools/rfc3986-conformance-sweep.R` (RURL-zyytztdd).
-.rfc_file_localhost_policy <- function(url_standard) {
-  if (identical(url_standard, "rfc3986")) "reg-name" else "empty"
-}
-
-# What a port in a `file:` authority MEANS -- the fourth of ADR 0012 D5's four
-# "scheme-specific facts (parseable != valid-for-the-scheme)" items for `file`
-# under rfc-syntax. Keyed on the selector, exactly like
-# `.rfc_file_localhost_policy()` above and for the same reason.
-#
-#   "reject"  a port is a parse FAILURE. RFC 8089 sec 2's
-#             `file-auth = "localhost" / host` has no port production and no
-#             appendix supplies one. This is the NULL default, byte-frozen by
-#             ADR 0012 D4.
-#   "fact"    the port parses and is surfaced as a diagnostic. `rfc3986` is the
-#             scheme-AGNOSTIC generic syntax, where `port = *DIGIT` and the
-#             authority is well-formed, so an RFC 8089 narrowing may not gate
-#             the parse: ADR 0012 (owner-ruled) "Scheme-specific restrictions
-#             are overlays, not generic parse gates", and ADR 0012:63 has
-#             scheme-specific RFC violations surface as companion facts
-#             (ADR 0006).
-#
-# D5 lists userinfo, port, query and fragment TOGETHER. Three of the four were
-# already facts -- `file://u@example.com/p` parses and reports
-# `file-userinfo-extension`, `file:///p?q=1` reports
-# `file-component-outside-rfc8089` -- and port was the lone exception, gating
-# the parse instead (RURL-uhkofhjf). Same defect class as RURL-zyytztdd, where
-# WHATWG's localhost emptying had leaked into the grammar selector.
-.rfc_file_port_policy <- function(url_standard) {
-  if (identical(url_standard, "rfc3986")) "fact" else "reject"
-}
-
-# The vectorized caller has already cut the scheme and split the query and
-# fragment off what follows its colon (`rest` is what is left); an NA `scheme`
-# means the input is not a `file:` URL.
-.parse_rfc_file_url_one <- function(scheme, rest, query, fragment,
-                                    localhost_policy = "empty",
-                                    port_policy = "reject") {
+# The frozen `url_standard = NULL` profile also used this overlay, with
+# `localhost` emptied, a port rejected and the RUL-030 ASCII gate off. ADR 0020
+# retired that profile (RURL-mbhuhwzk), so the overlay is the `rfc3986` arm's
+# alone.
+.parse_rfc_file_url_one <- function(scheme, rest, query, fragment) {
   na <- NA_character_
   blank <- list(
     ok = FALSE, scheme = na, host = na, port = na, path = na, query = na,
@@ -1347,32 +1297,18 @@
     port <- parts$port
     userinfo <- parts$userinfo
     # Gate 2: RFC 8089 Section 2 admits no port, and no appendix supplies a
-    # production for one. Under `port_policy = "reject"` -- the NULL default,
-    # byte-frozen by ADR 0012 D4 -- a port is therefore a parse FAILURE.
-    # (Contrast userinfo, which App. E.1/F does supply a production for.)
-    #
-    # Under `"fact"` the RFC 8089 narrowing stops gating the parse and the port
-    # is surfaced as a diagnostic instead; see `.rfc_file_port_policy()`. The
+    # production for one, but that narrowing does not gate the parse: the port
+    # is surfaced as a diagnostic instead (see the header above). The
     # GENERIC production still applies, though -- RFC 3986 sec 3.2.3 is
     # `port = *DIGIT`, so a non-digit port is a grammar failure on this route
     # just as it is on every other, and only the SCHEME-specific narrowing is
     # lifted. `\A`/`\z`, not `^`/`$`: ICU's `$` matches before a trailing line
     # terminator, so `^[0-9]*$` would admit `1\v` (RURL-dergzwku).
-    if (!is.na(port)) {
-      if (identical(port_policy, "reject")) {
-        return(blank)
-      }
-      if (!isTRUE(.state_bytes_test(port, .RFC3986_PORT_RE))) {
-        return(blank)
-      }
+    if (!is.na(port) && !isTRUE(.state_bytes_test(port, .RFC3986_PORT_RE))) {
+      return(blank)
     }
-    # localhost (case-insensitive) collapses to an empty host where the selected
-    # standard asks for it; under `rfc3986` it falls through to the reg-name arm
-    # below and is reported as itself (see `.rfc_file_localhost_policy()`).
-    if (identical(localhost_policy, "empty") && !is.na(host) &&
-        identical(.ascii_tolower(host), "localhost")) {
-      host <- ""
-    } else if (nzchar(host)) {
+    # localhost is reported as itself, on the reg-name arm (see the header).
+    if (nzchar(host)) {
       hp <- .rfc_host_one(host)
       is_v6 <- hp$is_v6
       is_v4 <- hp$is_v4
@@ -1410,13 +1346,12 @@
 # Vectorized RFC 8089 `file:` overlay (ADR 0012 Layer 4b).
 #
 # Gate 1 lives HERE rather than in the caller so the overlay is self-contained:
-# it carries its own RFC 3986 validity contract wherever it is routed (general
-# acceptance, `rfc3986`, or the NULL selector), instead of depending on a caller
-# to have applied the generic gate first. Under `rfc3986` the caller's gate runs
-# too; that is idempotent, not a conflict.
-.parse_rfc_file_urls_vec <- function(url, url_standard = NULL) {
-  localhost_policy <- .rfc_file_localhost_policy(url_standard)
-  port_policy <- .rfc_file_port_policy(url_standard)
+# it carries its own RFC 3986 validity contract wherever it is routed (the
+# web and the general acceptance), instead of depending on a caller to have
+# applied the generic gate first. Where the caller's gate runs too, that is
+# idempotent, not a conflict. Only `url_standard = "rfc3986"` routes here;
+# WHATWG `file:` has its own state machine.
+.parse_rfc_file_urls_vec <- function(url) {
   n <- length(url)
   chr_fields <- c(
     "scheme", "host", "port", "path", "query", "fragment", "userinfo",
@@ -1451,8 +1386,7 @@
   qf <- .split_query_fragment_vec(rest)
   rows <- lapply(seq_len(n), function(i) {
     .parse_rfc_file_url_one(scheme[i], qf$rest[i], qf$query[i],
-                            qf$fragment[i], localhost_policy = localhost_policy,
-                            port_policy = port_policy)
+                            qf$fragment[i])
   })
   out <- list()
   for (f in lgl_fields) {
@@ -1462,12 +1396,9 @@
     out[[f]] <- vapply(rows, `[[`, character(1L), f, USE.NAMES = FALSE)
   }
   # Gate 1: a `file:` string that is not a valid RFC 3986 URI is a parse
-  # failure, whatever RFC 8089's appendices tolerate in the wild. Under
-  # `rfc3986` a raw non-ASCII code point fails it (RUL-030); under the frozen
-  # NULL selector the overlay keeps the historical tolerance (ADR 0016).
-  gate <- .rfc3986_generic_uri_ok(
-    url, ascii_only = identical(url_standard, "rfc3986")
-  )$ok
+  # failure, whatever RFC 8089's appendices tolerate in the wild. A raw
+  # non-ASCII code point fails it (RUL-030).
+  gate <- .rfc3986_generic_uri_ok(url)$ok
   gate[is.na(gate)] <- FALSE
   out$ok <- out$ok & gate
   out
@@ -1834,7 +1765,7 @@
   # `ok = FALSE` and the rest of the batch parses (RURL-otrpfhmq).
   is_file <- is_file & decodable
   if (any(is_file)) {
-    p <- .parse_rfc_file_urls_vec(url[is_file], url_standard)
+    p <- .parse_rfc_file_urls_vec(url[is_file])
     # Both parsers now supply `userinfo`, but they mean different things by it,
     # and the difference is honored downstream in R/parse.R rather than here:
     # the opaque parser's is a WHATWG authority userinfo (split at the first

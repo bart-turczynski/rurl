@@ -12,9 +12,9 @@
 # through COMPANION HELPERS -- get_host_type() and get_url_diagnostics() -- and
 # is deliberately NOT added as columns on safe_parse_urls() or fields on the
 # safe_parse_url() list, so those functions' output shapes stay fixed whatever
-# the selector says (ADR 0006). The helpers themselves now REQUIRE the selector
-# (ADR 0015), so this path never runs with url_standard = NULL; the parse
-# functions that still accept NULL simply never reach it.
+# the selector says (ADR 0006). A `url_standard = NULL` is read as "whatwg"
+# before it gets here (ADR 0020 D4), so this path always runs under a named
+# standard.
 
 # --- Vocabulary (single source of truth) -------------------------------------
 
@@ -91,7 +91,7 @@
 # emits exactly one of these per URL. Unlike host_type, the classification
 # itself (which scheme is WHATWG-special) does not differ between "rfc3986"
 # and "whatwg" -- it is a static fact about the resolved scheme, gated by
-# url_standard the same way host_type is gated (NA with no selector at all).
+# url_standard the same way host_type is.
 .SCHEME_CLASSES <- c("special", "non-special", "missing-or-error")
 
 # --- Diagnostics accumulator -------------------------------------------------
@@ -392,9 +392,7 @@
   # D5, RURL-sgjzbqzk). They are route-independent -- credentials in a parsed
   # authority; a malformed `%`-escape or a non-URL code point -- so they fire
   # whenever url_standard is WHATWG, INCLUDING the default `web` acceptance
-  # path, under either parser. The
-  # DEFAULT combo (web + url_standard = NULL) is untouched because is_whatwg is
-  # FALSE there, so the D4 byte-identity / CRAN contract holds. Credentials
+  # path, under either parser. Credentials
   # are an authority's userinfo, so they count only where the parse produced
   # an authority (`has_authority` above): the web route's special schemes and
   # a non-special `//` authority. A row with no authority has no username or
@@ -719,8 +717,8 @@
   n <- length(url)
   empty <- list(host_type = rep(NA_character_, n), diagnostics = .diag_new(n))
 
-  # No selector (or empty input): nothing to classify or flag.
-  if (is.null(opts$url_standard) || n == 0L) {
+  # Empty input: nothing to classify or flag.
+  if (n == 0L) {
     return(empty)
   }
 

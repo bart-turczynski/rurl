@@ -1514,7 +1514,7 @@
 .prepare_urls_for_parse_vec <- function(url,
                                        protocol_handling,
                                        scheme_relative_handling,
-                                       url_standard = NULL,
+                                       url_standard = "whatwg",
                                        scheme_policy = "infer",
                                        scheme_acceptance = "web",
                                        fixup_posture = "none") {
@@ -1663,11 +1663,8 @@
   # reg-name, WHATWG coerces it (and only the post-parse model, not this gate,
   # decides WHATWG-fatal cases like 256.1.1.1 / 1.2.3.4.5). So the reject is
   # suppressed for the ipv4-ish attempts; non-canonical IPv6 (ipv6ish) stays
-  # rejected in both modes. NULL selector keeps the historical hard reject.
-  bad_ip <- cls$is_ipish & !cls$is_canonical_ip
-  if (!is.null(url_standard)) {
-    bad_ip <- bad_ip & !cls$is_ipv4ish
-  }
+  # rejected in both modes.
+  bad_ip <- cls$is_ipish & !cls$is_canonical_ip & !cls$is_ipv4ish
   # A WHATWG `file:` row is never judged here (RURL-otfaotzq). The token above
   # is cut from text after "scheme://", so a host-less `file:C:/x` keeps its
   # scheme and reads as the IPv6 attempt "file:C", and the row failed before
@@ -1686,16 +1683,14 @@
 
   # D1: only fabricate a scheme when the token is host-shaped -- a canonical IP,
   # localhost, a dotted name, or an explicit host:port. Otherwise the input is
-  # not a URL (asdfghjkl, "hello world", /relative/path, bare 12345). Under a
-  # selector, a numeric IPv4 attempt (bare 2130706433, 0x7f000001) is host-like
-  # too, so scheme-less numeric hosts reach the host model rather than D1.
+  # not a URL (asdfghjkl, "hello world", /relative/path, bare 12345). A
+  # numeric IPv4 attempt (bare 2130706433, 0x7f000001) is host-like too, so
+  # scheme-less numeric hosts reach the host model rather than D1.
   host_like <- cls$is_canonical_ip |
     cls$is_localhost |
     cls$is_dotted_name |
-    looks_like_host_port
-  if (!is.null(url_standard)) {
-    host_like <- host_like | cls$is_ipv4ish
-  }
+    looks_like_host_port |
+    cls$is_ipv4ish
   rejected <- rejected | (add_http & !host_like)
 
   # scheme_policy == "require" (RURL-vzgeurae): strict acceptance. Scheme
@@ -2550,9 +2545,6 @@
   host <- engine_host
   is_ip <- is_ip_engine
   fatal <- rep(FALSE, n)
-  if (is.null(url_standard)) {
-    return(list(host = host, is_ip = is_ip, fatal = fatal))
-  }
 
   if (identical(url_standard, "rfc3986")) {
     # Reg-name: keep the original token; IP only if it was already canonical.
@@ -2706,7 +2698,7 @@
 # Under `whatwg` every policy but "none" reads the UTS-46-mapped host
 # (`.policy_host_vec()`, RURL-fobwctml).
 .apply_www_policy_vec <- function(raw_host, www_handling, is_ip_host,
-                                  engine = NULL, url_standard = NULL) {
+                                  engine = NULL, url_standard = "whatwg") {
   final_host <- raw_host
   elig <- !is_ip_host & !is.na(raw_host) & raw_host != ""
   if (!any(elig) || www_handling == "none") {
@@ -2790,7 +2782,7 @@
 
 # Phase 6 (scalar wrapper): delegates to .apply_www_policy_vec().
 .apply_www_policy <- function(raw_host, www_handling, is_ip_host,
-                              engine = NULL, url_standard = NULL) {
+                              engine = NULL, url_standard = "whatwg") {
   .apply_www_policy_vec(
     raw_host, www_handling, is_ip_host, engine, url_standard
   )
@@ -2917,7 +2909,8 @@
 # runs via vapply on the affected hosts only.
 .apply_subdomain_policy_vec <- function(final_host, domain,
                                         subdomain_levels_to_keep, is_ip_host,
-                                        engine = NULL, url_standard = NULL) {
+                                        engine = NULL,
+                                        url_standard = "whatwg") {
   if (is.null(subdomain_levels_to_keep)) {
     return(final_host)
   }
@@ -3008,7 +3001,7 @@
 # Phase 8 (scalar wrapper): delegates to .apply_subdomain_policy_vec().
 .apply_subdomain_policy <- function(final_host, domain,
                                     subdomain_levels_to_keep, is_ip_host,
-                                    engine = NULL, url_standard = NULL) {
+                                    engine = NULL, url_standard = "whatwg") {
   .apply_subdomain_policy_vec(
     final_host, domain, subdomain_levels_to_keep, is_ip_host, engine,
     url_standard = url_standard
@@ -3024,7 +3017,7 @@
 # no-op: it renders the UTS-46-mapped host (RUL-002; see
 # .whatwg_host_presentation_vec()).
 .apply_host_encoding_vec <- function(final_host, host_encoding, is_ip_host,
-                                     url_standard = NULL) {
+                                     url_standard = "whatwg") {
   host_for_clean <- final_host
   if (host_encoding == "keep" && !.is_whatwg(url_standard)) {
     return(host_for_clean)
@@ -3115,7 +3108,7 @@
 
 # Phase 9 (scalar wrapper): delegates to .apply_host_encoding_vec().
 .apply_host_encoding <- function(final_host, host_encoding, is_ip_host,
-                                 url_standard = NULL) {
+                                 url_standard = "whatwg") {
   .apply_host_encoding_vec(final_host, host_encoding, is_ip_host, url_standard)
 }
 
@@ -3355,7 +3348,7 @@
 .build_clean_url_vec <- function(scheme_output, host_output, path_output,
                                  trailing_slash_handling, query = NULL,
                                  port = NULL, port_handling = "exclude",
-                                 url_standard = NULL,
+                                 url_standard = "whatwg",
                                  port_scheme = scheme_output) {
   n <- length(host_output)
   clean_url <- rep(NA_character_, n)
@@ -3418,7 +3411,8 @@
 # unless a caller explicitly opts into the port arguments.
 .build_clean_url <- function(scheme_output, host_output, path_output,
                              trailing_slash_handling, port = NULL,
-                             port_handling = "exclude", url_standard = NULL) {
+                             port_handling = "exclude",
+                             url_standard = "whatwg") {
   .build_clean_url_vec(
     scheme_output, host_output, path_output, trailing_slash_handling,
     port = port, port_handling = port_handling, url_standard = url_standard

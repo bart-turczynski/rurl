@@ -485,7 +485,7 @@
 # The `host_pct` setting each selected standard asks for. One place, because
 # both the vectorized and the scalar route have to agree on it, and because a
 # mapping that lives at the call sites is a mapping that drifts between them.
-# The no-selector default stays `"decode"` -- the historical rendering.
+# `whatwg` decodes.
 .web_host_pct_policy <- function(url_standard) {
   if (identical(url_standard, "rfc3986")) "keep" else "decode"
 }
@@ -522,23 +522,17 @@
 # The `host_charset` setting each selected standard asks for -- the ACCEPTANCE
 # axis, kept apart from the rendering axis above for the reason ADR 0013
 # records: `rfc3986` wants RFC 3986 rendering with an 11-byte literal set,
-# `whatwg` wants decoded rendering with a 15-byte one, and the no-selector
-# baseline wants decoded rendering with neither. Three standards, two
-# independent answers each; one dial could only express the diagonal.
+# `whatwg` wants decoded rendering with a 15-byte one; one dial could only
+# express the diagonal. The parser's `"narrow"` set was the frozen
+# `url_standard = NULL` profile's (no literal set), which ADR 0020 retired, so
+# no selector asks for it.
 .web_host_charset_policy <- function(url_standard) {
-  if (.is_whatwg(url_standard)) {
-    "whatwg"
-  } else if (identical(url_standard, "rfc3986")) {
-    "rfc3986"
-  } else {
-    "narrow"
-  }
+  if (identical(url_standard, "rfc3986")) "rfc3986" else "whatwg"
 }
 
 # The `pqf_bytes` setting each selected standard asks for, for the same reason
 # as the mapper above: one place, so the vectorized and scalar routes cannot
-# drift. WHATWG escapes what it cannot write literally; RFC 3986 and the
-# no-selector baseline reject, which is the historical behavior.
+# drift. WHATWG escapes what it cannot write literally; RFC 3986 rejects.
 #
 # Note that the two routes DID drift while this was compensated for outside the
 # parser: the pqf fallback lived in the vectorized path only, so
@@ -557,16 +551,10 @@
 # Standard's query and fragment states copy "%" unchanged (it is in neither
 # encode set), so `whatwg` keeps an existing triplet's case too, but encodes
 # the bytes >= 0x80 that `"preserve"` would keep raw (RURL-djvqopjk). The
-# no-selector baseline keeps the normalized spelling it has always stored
-# (ADR 0007).
+# parser's `"normalize"` spelling was the frozen `url_standard = NULL`
+# profile's, which ADR 0020 retired, so no selector asks for it.
 .web_pqf_source_policy <- function(url_standard) {
-  if (identical(url_standard, "rfc3986")) {
-    "preserve"
-  } else if (.is_whatwg(url_standard)) {
-    "whatwg"
-  } else {
-    "normalize"
-  }
+  if (identical(url_standard, "rfc3986")) "preserve" else "whatwg"
 }
 
 # The `userinfo_source` setting each selected standard asks for -- whether an
@@ -576,14 +564,12 @@
 # 6.2.2.1 makes hex-digit case folding a NORMALIZATION, so under `rfc3986` it
 # belongs to `serialize_url(form = "normalized")` and the parse record follows
 # the `source` form, as the query and fragment do under `pqf_source`
-# (RUL-007, RUL-015; RURL-bxrbpzet). The no-selector baseline keeps the fold
-# it has always stored (ADR 0007).
+# (RUL-007, RUL-015; RURL-bxrbpzet). Both standards preserve; the parser's
+# `"normalize"` fold was the frozen `url_standard = NULL` profile's, which
+# ADR 0020 retired, so no selector asks for it.
 .web_userinfo_source_policy <- function(url_standard) {
-  if (.is_whatwg(url_standard) || identical(url_standard, "rfc3986")) {
-    "preserve"
-  } else {
-    "normalize"
-  }
+  force(url_standard)
+  "preserve"
 }
 
 # The `host_ipv4` setting each selected standard asks for -- which token shapes

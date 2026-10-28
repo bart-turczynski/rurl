@@ -50,11 +50,12 @@
                                port_handling = "exclude",
                                scheme_policy = "infer",
                                scheme_acceptance = "web",
-                               url_standard = NULL,
+                               url_standard = "whatwg",
                                fixup_posture = "none",
                                engine = NULL,
                                profile_authorized = NULL,
-                               credential_handling = "strip") {
+                               credential_handling = "strip",
+                               clean_only = NULL) {
   if (!is.character(url)) {
     stop(
       "`url` must be a character vector of URL strings; ",
@@ -92,7 +93,8 @@
     fixup_posture = fixup_posture,
     engine = engine,
     profile_authorized = profile_authorized,
-    credential_handling = credential_handling
+    credential_handling = credential_handling,
+    clean_only = clean_only
   )
   cols <- ._parse_urls_cached(url, opts)
 
@@ -146,7 +148,7 @@ get_parse_status <- function(url,
                              source = c("all", "private", "icann"),
                              scheme_policy = c("infer", "require"),
                              scheme_acceptance = c("web", "general"),
-                             url_standard = NULL) {
+                             url_standard = "whatwg") {
   source <- match.arg(source)
   url_standard <- .validate_url_standard(url_standard)
   # case_handling does not affect the parse_status output (it is derived from
@@ -241,11 +243,9 @@ get_parse_status <- function(url,
 #'   such as \code{\%C3} --- is left encoded with its hex digits uppercased.
 #'   It is applied \emph{before} dot-segment removal, so an encoded dot segment
 #'   (\code{\%2E} / \code{\%2E\%2E}) resolves like a literal one.
-#'   \item \code{url_standard = "whatwg"} preserves existing percent-triplets
-#'   byte-for-byte, hex case included, and resolves encoded dot segments
-#'   without any decode.
-#'   \item \code{url_standard = NULL} decodes nothing and canonicalizes triplet
-#'   hex case to uppercase.
+#'   \item \code{url_standard = "whatwg"} (the default; \code{NULL} means
+#'   the same) preserves existing percent-triplets byte-for-byte, hex case
+#'   included, and resolves encoded dot segments without any decode.
 #' }
 #'
 #' That normalization is part of the path a URL denotes.
@@ -350,7 +350,7 @@ get_clean_url <- function(url,
                           ),
                           scheme_policy = c("infer", "require"),
                           scheme_acceptance = c("web", "general"),
-                          url_standard = NULL,
+                          url_standard = "whatwg",
                           engine = NULL,
                           profile = NULL,
                           credential_handling = c("strip", "reject"),
@@ -376,14 +376,17 @@ get_clean_url <- function(url,
   empty_param_handling <- match.arg(empty_param_handling)
   port_handling <- match.arg(port_handling)
   credential_handling <- match.arg(credential_handling)
+  url_standard_supplied <- !missing(url_standard)
   url_standard <- .validate_url_standard(url_standard)
   profile <- .validate_profile(profile)
   # get_clean_url()'s governed formals default to scalars, so match.arg() needs
   # the explicit choice sets to resolve/validate a supplied value.
   # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
   # The conflict matrix is skipped on the profile path (see safe_parse_url()).
+  # ADR 0020 D4a: under "whatwg" a governed value that can be confined to
+  # clean_url comes back as `confined` and is applied below.
   if (is.null(profile)) {
-    .check_url_standard_conflicts(url_standard, .governed_supplied(
+    confined <- .check_url_standard_conflicts(url_standard, .governed_supplied(
       path_normalization = if (missing(path_normalization)) {
         NULL
       } else {
@@ -426,7 +429,9 @@ get_clean_url <- function(url,
     extract_args <- .merge_profile_args(extract_args, .resolve_profile(
       profile,
       list(
-        url_standard = url_standard,
+        # The profile's own standard holds unless the caller passed one; an
+        # explicit NULL is read as "whatwg" here too (ADR 0020 D4).
+        url_standard = if (url_standard_supplied) url_standard,
         scheme_acceptance = if (missing(scheme_acceptance)) {
           NULL
         } else {
@@ -486,6 +491,8 @@ get_clean_url <- function(url,
         }
       )
     ))
+  } else {
+    extract_args <- .apply_clean_only(extract_args, confined)
   }
   do.call(.extract_from_urls, extract_args)
 }
@@ -510,7 +517,7 @@ get_domain <- function(url,
                        host_encoding = c("keep", "idna", "unicode"),
                        scheme_policy = c("infer", "require"),
                        scheme_acceptance = c("web", "general"),
-                       url_standard = NULL,
+                       url_standard = "whatwg",
                        engine = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
@@ -559,7 +566,7 @@ get_scheme <- function(url, protocol_handling = "keep",
                        scheme_relative_handling = "keep",
                        scheme_policy = c("infer", "require"),
                        scheme_acceptance = c("web", "general"),
-                       url_standard = NULL) {
+                       url_standard = "whatwg") {
   url_standard <- .validate_url_standard(url_standard)
   # Scheme is unaffected by www/subdomain/case handling, so "lower" is pinned
   # here as a stable profile and never conflicts with `url_standard`.
@@ -596,7 +603,10 @@ get_scheme <- function(url, protocol_handling = "keep",
 #'   Subdomain trimming depends on which section is consulted, so pass
 #'   \code{source = "icann"} to exclude private suffixes (e.g. github.io).
 #' @param case_handling How to handle casing of the returned host. Defaults to
-#' "lower".
+#' "lower", which folds the host exactly as "lower_host" does. The host is a
+#' parsed component, and `url_standard` governs its case (ADR 0020 D4a), so
+#' "keep" and "upper" are an error under both standards; parse with
+#' `safe_parse_urls(profile = "rfc-syntax")` for the host as written.
 #' @return A character vector of URL hosts.
 #' @export
 #' @examples
@@ -634,16 +644,27 @@ get_host <- function(url,
                      host_encoding = c("keep", "idna", "unicode"),
                      scheme_policy = c("infer", "require"),
                      scheme_acceptance = c("web", "general"),
-                     url_standard = NULL,
+                     url_standard = "whatwg",
                      engine = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
   url_standard <- .validate_url_standard(url_standard)
   # missing() must be read before match.arg() reassigns case_handling below.
+  # The host is a parsed component, so no value is confined to clean_url here
+  # (ADR 0020 D4a). "lower" folds the host exactly as the governed
+  # "lower_host" does (they differ on the path only), so it is checked as
+  # that value.
+  supplied_case <- if (missing(case_handling)) {
+    NULL
+  } else {
+    match.arg(case_handling)
+  }
+  if (identical(supplied_case, "lower")) {
+    supplied_case <- "lower_host"
+  }
   .check_url_standard_conflicts(url_standard, .governed_supplied(
-    case_handling =
-      if (missing(case_handling)) NULL else match.arg(case_handling)
-  ))
+    case_handling = supplied_case
+  ), clean_only = FALSE)
   case_handling <- match.arg(case_handling)
   .extract_from_urls(url, "host",
     scheme_policy = scheme_policy,
@@ -667,7 +688,11 @@ get_host <- function(url,
 #' @inheritParams safe_parse_url
 #' @param case_handling How to handle casing of the returned path. Defaults to
 #' "lower_host", which preserves the path's original casing (paths are
-#' case-sensitive per RFC 3986 §6.2.2.1). Use "lower"/"upper" to force a case.
+#' case-sensitive per RFC 3986 §6.2.2.1), as "keep" does. The path is a parsed
+#' component, and `url_standard` governs it (ADR 0020 D4a): "lower" and
+#' "upper" are an error under both standards, and so is any
+#' `path_normalization` but "dot_segments". Use `get_clean_url()` for a
+#' case-folded or slash-collapsed cleaned URL.
 #' @return A character vector of URL paths.
 #' @export
 #' @examples
@@ -682,7 +707,7 @@ get_path <- function(
   path_encoding = c("keep", "encode", "decode"),
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general"),
-  url_standard = NULL,
+  url_standard = "whatwg",
   path_normalisation = NULL
 ) {
   # `path_normalisation` is the British-spelling alias (SEOR-oytkybis). The
@@ -697,12 +722,23 @@ get_path <- function(
   # match.arg() reassignments below (assignment can make missing() FALSE).
   url_standard <- .validate_url_standard(url_standard)
   # `path_encoding` is orthogonal (ADR 0011): not passed here, never conflicts.
+  # The path is a parsed component, so no value is confined to clean_url here
+  # (ADR 0020 D4a). "keep" leaves the path's case exactly as the governed
+  # "lower_host" does (they differ on the host only), so it is checked as
+  # that value.
+  supplied_case <- if (missing(case_handling)) {
+    NULL
+  } else {
+    match.arg(case_handling)
+  }
+  if (identical(supplied_case, "keep")) {
+    supplied_case <- "lower_host"
+  }
   .check_url_standard_conflicts(url_standard, .governed_supplied(
     path_normalization =
       if (missing(path_normalization)) NULL else match.arg(path_normalization),
-    case_handling =
-      if (missing(case_handling)) NULL else match.arg(case_handling)
-  ))
+    case_handling = supplied_case
+  ), clean_only = FALSE)
   case_handling <- match.arg(case_handling)
   trailing_slash_handling <- match.arg(trailing_slash_handling)
   index_page_handling <- match.arg(index_page_handling)
@@ -792,7 +828,7 @@ get_query <- function(url,
                       decode_plus = FALSE,
                       scheme_policy = c("infer", "require"),
                       scheme_acceptance = c("web", "general"),
-                      url_standard = NULL) {
+                      url_standard = "whatwg") {
   format <- match.arg(format)
   query_handling <- match.arg(query_handling)
   empty_param_handling <- match.arg(empty_param_handling)
@@ -990,8 +1026,8 @@ get_query <- function(url,
 #' percent-decoded. Under \code{url_standard = "whatwg"} it carries the
 #' standard's percent-encoded spelling (the fragment percent-encode set is
 #' applied, so a double-quote inside the fragment becomes \code{\%22}); under
-#' \code{url_standard = "rfc3986"} or no selector it is the raw source
-#' spelling, exactly as written in the URL.
+#' \code{url_standard = "rfc3986"} it is the raw source spelling, exactly as
+#' written in the URL.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -1003,7 +1039,7 @@ get_query <- function(url,
 get_fragment <- function(url, protocol_handling = "keep",
                          scheme_policy = c("infer", "require"),
                          scheme_acceptance = c("web", "general"),
-                         url_standard = NULL) {
+                         url_standard = "whatwg") {
   url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, "fragment",
     protocol_handling = protocol_handling,
@@ -1020,8 +1056,8 @@ get_fragment <- function(url, protocol_handling = "keep",
 #' Under \code{url_standard = "whatwg"} a port equal to the scheme's default is
 #' \emph{not part of the parsed URL} (the standard discards it during parsing),
 #' so \code{"http://example.com:80/"} reports \code{NA} rather than \code{80}.
-#' Under \code{url_standard = "rfc3986"} or no selector the written port is
-#' reported as-is. This is distinct from \code{port_handling}, a presentation
+#' Under \code{url_standard = "rfc3986"} the written port is reported as-is.
+#' This is distinct from \code{port_handling}, a presentation
 #' dial that governs whether a port is rendered into \code{clean_url}; the two
 #' are independent.
 #'
@@ -1035,7 +1071,7 @@ get_fragment <- function(url, protocol_handling = "keep",
 get_port <- function(url, protocol_handling = "keep",
                      scheme_policy = c("infer", "require"),
                      scheme_acceptance = c("web", "general"),
-                     url_standard = NULL) {
+                     url_standard = "whatwg") {
   url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, "port",
     null_value = NA_integer_,
@@ -1056,10 +1092,7 @@ get_port <- function(url, protocol_handling = "keep",
 #' percent-encoded spelling (WHATWG stores the username buffer encoded with the
 #' userinfo percent-encode set, so \code{"http://a^b@host/"} yields
 #' \code{"a\%5Eb"}); under \code{url_standard = "rfc3986"} it is the raw source
-#' spelling, exactly as written in the URL; under no selector it is the raw
-#' source spelling, except that for \code{http}, \code{https}, \code{ftp} and
-#' \code{ftps} the two characters after each \code{\%} are uppercased
-#' (\code{"a\%7Fb"}).
+#' spelling, exactly as written in the URL.
 #'
 #' Under \code{scheme_acceptance = "general"} the user of a \code{mailto:} URL's
 #' first recipient (its \code{addr-spec} local-part) is returned, mirroring how
@@ -1090,7 +1123,7 @@ get_port <- function(url, protocol_handling = "keep",
 get_user <- function(url, protocol_handling = "keep",
                      scheme_policy = c("infer", "require"),
                      scheme_acceptance = c("web", "general"),
-                     url_standard = NULL) {
+                     url_standard = "whatwg") {
   url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, "user",
     protocol_handling = protocol_handling,
@@ -1107,9 +1140,7 @@ get_user <- function(url, protocol_handling = "keep",
 #' standard's percent-encoded spelling (the userinfo percent-encode set is
 #' applied, so a ":" inside the password becomes \code{\%3A}); under
 #' \code{url_standard = "rfc3986"} it is the raw source spelling, exactly as
-#' written in the URL; under no selector the two characters after each
-#' \code{\%} are uppercased for \code{http}, \code{https}, \code{ftp} and
-#' \code{ftps}. This is the same contract as \code{\link{get_user}}.
+#' written in the URL. This is the same contract as \code{\link{get_user}}.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
@@ -1122,7 +1153,7 @@ get_user <- function(url, protocol_handling = "keep",
 get_password <- function(url, protocol_handling = "keep",
                          scheme_policy = c("infer", "require"),
                          scheme_acceptance = c("web", "general"),
-                         url_standard = NULL) {
+                         url_standard = "whatwg") {
   url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, "password",
     protocol_handling = protocol_handling,
@@ -1146,7 +1177,7 @@ get_password <- function(url, protocol_handling = "keep",
 get_userinfo <- function(url, protocol_handling = "keep",
                          scheme_policy = c("infer", "require"),
                          scheme_acceptance = c("web", "general"),
-                         url_standard = NULL) {
+                         url_standard = "whatwg") {
   url_standard <- .validate_url_standard(url_standard)
   .extract_from_urls(url, NULL,
     scheme_policy = scheme_policy,
@@ -1258,7 +1289,7 @@ get_subdomain <- function(url,
                           host_encoding = c("keep", "idna", "unicode"),
                           scheme_policy = c("infer", "require"),
                           scheme_acceptance = c("web", "general"),
-                          url_standard = NULL,
+                          url_standard = "whatwg",
                           engine = NULL) {
   source <- match.arg(source)
   format <- match.arg(format)
@@ -1314,7 +1345,7 @@ get_tld <- function(url, source = c("all", "private", "icann"),
                     host_encoding = c("keep", "idna", "unicode"),
                     scheme_policy = c("infer", "require"),
                     scheme_acceptance = c("web", "general"),
-                    url_standard = NULL,
+                    url_standard = "whatwg",
                     engine = NULL) {
   source <- match.arg(source)
   host_encoding <- match.arg(host_encoding)
@@ -1350,31 +1381,26 @@ get_tld <- function(url, source = c("all", "private", "icann"),
 #' (ADR 0006).
 #'
 #' @param url A character vector of URLs.
-#' @param url_standard Standard profile governing host interpretation: either
-#'   \code{"rfc3986"} or \code{"whatwg"}. \strong{Required, with no default}
-#'   (ADR 0015). The requirement is semantic, not stylistic: whether a host is
-#'   an IPv4 literal or a registered name is a question only a standard
-#'   answers, so there is no profile-neutral classification a default could
-#'   stand for. \code{\link{get_parse_verdicts}} is deliberately \emph{not}
-#'   gated this way --- its layers describe the parse that actually ran, which
-#'   is defined with or without a selector.
+#' @param url_standard Standard profile governing host interpretation:
+#'   \code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL} means
+#'   \code{"whatwg"} (ADR 0020, which supersedes ADR 0015's requirement to
+#'   name it). Whether a host is an IPv4 literal or a registered name is a
+#'   question only a standard answers, and the default names one.
 #' @inheritParams safe_parse_url
 #' @return A character vector the same length as \code{url}, each element one of
 #'   the \code{host_type} tokens above, or \code{NA} for a row that cannot be
 #'   classified under the selected standard.
 #'
 #'   \strong{\code{NA} means exactly one thing:} this row is unclassifiable
-#'   under the standard you named. It can no longer also mean \dQuote{no
-#'   selector was passed}, because omitting \code{url_standard} is an error
-#'   rather than a mode (ADR 0015). An all-\code{NA} result is therefore
-#'   evidence about the input, not about the call.
+#'   under the selected standard. An all-\code{NA} result is evidence about
+#'   the input, not about the call.
 #' @seealso \code{\link{get_url_diagnostics}}, \code{\link{get_parse_verdicts}},
 #'   \code{\link{safe_parse_url}}
 #' @export
 #' @examples
 #' get_host_type("http://example.com/", url_standard = "rfc3986")
 #' get_host_type("http://2130706433/", url_standard = "whatwg")
-get_host_type <- function(url, url_standard,
+get_host_type <- function(url, url_standard = "whatwg",
                           scheme_policy = c("infer", "require"),
                           scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
@@ -1384,8 +1410,7 @@ get_host_type <- function(url, url_standard,
       call. = FALSE
     )
   }
-  if (missing(url_standard)) url_standard <- NULL
-  url_standard <- .require_url_standard(url_standard, "Host type")
+  url_standard <- .validate_url_standard(url_standard)
   opts <- .parse_options(url_standard = url_standard,
     scheme_policy = scheme_policy, scheme_acceptance = scheme_acceptance)
   ._url_metadata_vec(url, opts)$host_type
@@ -1654,11 +1679,11 @@ get_host_type <- function(url, url_standard,
 #'   }
 #'
 #' @param url A character vector of URLs.
-#' @param url_standard Standard profile governing interpretation: either
-#'   \code{"rfc3986"} or \code{"whatwg"}. \strong{Required, with no default}
-#'   (ADR 0015): the vocabulary is profile-dependent --- several tokens fire
-#'   under one standard only --- so there is no profile-neutral set of findings
-#'   a default could stand for.
+#' @param url_standard Standard profile governing interpretation:
+#'   \code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL} means
+#'   \code{"whatwg"} (ADR 0020, which supersedes ADR 0015's requirement to
+#'   name it). The vocabulary is profile-dependent --- several tokens fire
+#'   under one standard only.
 #' @inheritParams safe_parse_url
 #' @return For a length-1 \code{url}, a character vector of zero or more
 #'   diagnostic tokens for that URL. For a length-n \code{url} (including
@@ -1666,10 +1691,8 @@ get_host_type <- function(url, url_standard,
 #'   vector of that URL's tokens (\code{character(0)} when it has none).
 #'
 #'   \strong{An empty result means exactly one thing:} that URL raised no
-#'   diagnostics under the standard you named. It can no longer also mean that
-#'   no selector was passed, because omitting \code{url_standard} is an error
-#'   rather than a mode (ADR 0015). \code{character(0)} is therefore evidence
-#'   that the URL is clean under that profile.
+#'   diagnostics under the selected standard. \code{character(0)} is
+#'   evidence that the URL is clean under that profile.
 #' @seealso \code{\link{get_host_type}}, \code{\link{safe_parse_url}}
 #' @export
 #' @examples
@@ -1678,7 +1701,7 @@ get_host_type <- function(url, url_standard,
 #'   c("http://example.com/", "http://2130706433/"),
 #'   url_standard = "whatwg"
 #' )
-get_url_diagnostics <- function(url, url_standard,
+get_url_diagnostics <- function(url, url_standard = "whatwg",
                                 scheme_policy = c("infer", "require"),
                                 scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
@@ -1688,8 +1711,7 @@ get_url_diagnostics <- function(url, url_standard,
       call. = FALSE
     )
   }
-  if (missing(url_standard)) url_standard <- NULL
-  url_standard <- .require_url_standard(url_standard, "A diagnostic vocabulary")
+  url_standard <- .validate_url_standard(url_standard)
   opts <- .parse_options(url_standard = url_standard,
     scheme_policy = scheme_policy, scheme_acceptance = scheme_acceptance)
   diagnostics <- ._url_metadata_vec(url, opts)$diagnostics
@@ -1712,10 +1734,9 @@ get_url_diagnostics <- function(url, url_standard,
 #' Unlike \code{\link{get_host_type}}, the classification itself does not vary
 #' between \code{"rfc3986"} and \code{"whatwg"} -- \dQuote{special scheme} is a
 #' WHATWG concept describing a fixed property of the scheme string, not
-#' something RFC 3986 redefines. \code{url_standard} is nonetheless required,
-#' mirroring \code{get_host_type()}'s contract: the resolved scheme this
-#' classification reads is itself produced by a profile-dependent parse, so the
-#' profile has to be named (ADR 0015).
+#' something RFC 3986 redefines. \code{url_standard} still matters: the
+#' resolved scheme this classification reads is itself produced by a
+#' profile-dependent parse.
 #'
 #' Within rurl's allowlist (\code{http}/\code{https}/\code{ftp}/\code{ftps}/
 #' \code{file}), \code{http}, \code{https}, \code{ftp}, and \code{file} are
@@ -1726,13 +1747,11 @@ get_url_diagnostics <- function(url, url_standard,
 #'
 #' @param url A character vector of URLs.
 #' @param url_standard Standard profile under which each URL is parsed before
-#'   its scheme is classified: either \code{"rfc3986"} or \code{"whatwg"}.
-#'   \strong{Required, with no default} (ADR 0015). The three tokens below do
+#'   its scheme is classified: \code{"whatwg"} (default) or
+#'   \code{"rfc3986"}; \code{NULL} means \code{"whatwg"} (ADR 0020, which
+#'   supersedes ADR 0015's requirement to name it). The three tokens below do
 #'   not differ between the profiles, but the parse that resolves the scheme
-#'   does, so the profile has to be named.
-#'   \code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
-#'   --- its layers describe the parse that actually ran, which is defined with
-#'   or without a selector.
+#'   does.
 #' @inheritParams safe_parse_url
 #' @return A character vector the same length as \code{url}, each element one
 #'   of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"}.
@@ -1740,8 +1759,7 @@ get_url_diagnostics <- function(url, url_standard,
 #'   \strong{Never \code{NA}.} Every element receives one of the three tokens
 #'   above --- input that is unparseable, scheme-less, empty or \code{NA}
 #'   classifies as \code{"missing-or-error"} rather than falling through to
-#'   \code{NA}. The one arm that used to return \code{NA} was the selector-less
-#'   call, which is now an error (ADR 0015).
+#'   \code{NA}.
 #' @details
 #' Under the default \code{scheme_acceptance = "web"} an opaque scheme such as
 #' \code{mailto:} is outside rurl's web allowlist and classifies as
@@ -1758,7 +1776,7 @@ get_url_diagnostics <- function(url, url_standard,
 #'   "mailto:jane@example.com",
 #'   url_standard = "rfc3986", scheme_acceptance = "general"
 #' )
-get_scheme_class <- function(url, url_standard,
+get_scheme_class <- function(url, url_standard = "whatwg",
                              scheme_policy = c("infer", "require"),
                              scheme_acceptance = c("web", "general")) {
   if (!is.character(url)) {
@@ -1768,10 +1786,7 @@ get_scheme_class <- function(url, url_standard,
       call. = FALSE
     )
   }
-  if (missing(url_standard)) url_standard <- NULL
-  url_standard <- .require_url_standard(
-    url_standard, "Special-scheme classification"
-  )
+  url_standard <- .validate_url_standard(url_standard)
   scheme <- get_scheme(url,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,

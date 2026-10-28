@@ -530,9 +530,8 @@
 #'
 #' @param url A character vector of URLs.
 #' @param standard The standard to serialize to: `"whatwg"` (default) or
-#'   `"rfc3986"`. Unlike the parse surface, `NULL` is not accepted: the parse
-#'   surface's `url_standard = NULL` is a frozen legacy profile that names no
-#'   standard (ADR 0007), so there is nothing to serialize *as*. Passing
+#'   `"rfc3986"`. `NULL` is not accepted here: a serialization names the
+#'   standard it is written in, so the argument must say which. Passing
 #'   `NULL` is an error rather than a silent `"whatwg"`.
 #' @param form For `standard = "rfc3986"` only, the RFC posture: `"source"`
 #'   (default, source-preserving) or `"normalized"`. Ignored for `"whatwg"`,
@@ -575,16 +574,14 @@ serialize_url <- function(url,
                           engine = NULL) {
   # `NULL` is rejected rather than absorbed, exactly as `url_key_policy()` does
   # (R/url-key.R). `match.arg(NULL, choices)` quietly returns `choices[[1]]`,
-  # which would make `standard = NULL` a silent "whatwg" -- and on the parse
-  # surface `url_standard = NULL` means the frozen legacy profile that names
-  # no standard at all (ADR 0007). A serialization *as* no standard does not
-  # exist, so the mistake is refused at the edge instead of guessed
-  # (RURL-ouorolhb).
+  # which would make `standard = NULL` a silent "whatwg". A serialization is
+  # written in a named standard, so the argument must name it (RURL-ouorolhb);
+  # the parse surface's `url_standard = NULL`, which reads as "whatwg"
+  # (ADR 0020 D4), is a parameter of a different function.
   if (is.null(standard)) {
     stop(
       "`standard` must be named; NULL is not accepted. ",
-      "url_standard = NULL is the frozen legacy parse profile, which names ",
-      "no standard to serialize as. Pass standard = \"whatwg\" or \"rfc3986\".",
+      "Pass standard = \"whatwg\" or \"rfc3986\".",
       call. = FALSE
     )
   }

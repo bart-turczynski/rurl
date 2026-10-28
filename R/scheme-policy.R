@@ -55,9 +55,8 @@
 #'   When \code{NULL} (default) no \code{allowed} column is emitted and no
 #'   allowlist judgment is made.
 #' @param url_standard Standard profile governing scheme interpretation:
-#'   \code{"whatwg"} (default) or \code{"rfc3986"}. Unlike most of the package
-#'   this argument has a non-\code{NULL} default, because a scheme
-#'   classification is undefined without a named standard.
+#'   \code{"whatwg"} (default) or \code{"rfc3986"}; \code{NULL} means
+#'   \code{"whatwg"} (ADR 0020).
 #' @inheritParams safe_parse_url
 #' @return A \code{data.frame} with one row per input URL (input order
 #'   preserved): \code{url}, \code{scheme} (the parsed scheme, lowercased, or

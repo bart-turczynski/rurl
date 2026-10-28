@@ -587,9 +587,9 @@ url_key_policy <- function(standard = c("whatwg", "rfc3986"),
                                                "http_https_missing")) {
   # `NULL` is rejected rather than absorbed. `match.arg(NULL, choices)` quietly
   # returns `choices[[1]]`, which would make `standard = NULL` a silent
-  # "whatwg" -- and on the parse surface `url_standard = NULL` means the
-  # OPPOSITE, "infer per input". A key cannot be minted under an unnamed
-  # standard, so the mistake is refused at the edge instead of guessed.
+  # "whatwg". A key's bytes are frozen under the standard it names, so a key
+  # cannot be minted under an unnamed one; the mistake is refused at the edge
+  # instead of guessed.
   if (is.null(standard) || is.null(scheme_equality)) {
     stop(
       "`standard` and `scheme_equality` must be named; NULL is not accepted. ",
