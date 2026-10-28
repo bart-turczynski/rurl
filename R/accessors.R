@@ -664,7 +664,7 @@ get_host <- function(url,
   }
   .check_url_standard_conflicts(url_standard, .governed_supplied(
     case_handling = supplied_case
-  ), clean_only = FALSE)
+  ), clean_only = FALSE, component = "host")
   case_handling <- match.arg(case_handling)
   .extract_from_urls(url, "host",
     scheme_policy = scheme_policy,
@@ -738,7 +738,7 @@ get_path <- function(
     path_normalization =
       if (missing(path_normalization)) NULL else match.arg(path_normalization),
     case_handling = supplied_case
-  ), clean_only = FALSE)
+  ), clean_only = FALSE, component = "path")
   case_handling <- match.arg(case_handling)
   trailing_slash_handling <- match.arg(trailing_slash_handling)
   index_page_handling <- match.arg(index_page_handling)

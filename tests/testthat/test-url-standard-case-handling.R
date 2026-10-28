@@ -94,6 +94,30 @@ test_that("get_host/get_path/get_clean_url enforce case_handling conflict", {
   )
 })
 
+test_that("the conflict error names a way out the caller can take", {
+  u <- "http://EX.com/Path"
+  # get_host() and get_path() take no `profile`, so they point at the
+  # safe_parse_urls() column instead.
+  expect_error(
+    get_host(u, case_handling = "upper"),
+    "safe_parse_urls(profile = \"rfc-syntax\")$host", fixed = TRUE
+  )
+  expect_error(
+    get_path(u, case_handling = "upper"),
+    "safe_parse_urls(profile = \"rfc-syntax\")$path", fixed = TRUE
+  )
+  # The escape says what else rfc-syntax changes, since following it can
+  # drop a scheme-less row.
+  expect_error(
+    get_clean_url(u, case_handling = "keep"),
+    "parse with profile = \"rfc-syntax\"", fixed = TRUE
+  )
+  expect_error(
+    get_clean_url(u, case_handling = "keep"),
+    "scheme_policy = \"require\"", fixed = TRUE
+  )
+})
+
 test_that("canonical_join() enforces case_handling conflict through `...`", {
   A <- data.frame(URL = "http://EX.com/a", ValA = 1L, stringsAsFactors = FALSE)
   B <- data.frame(URL = "http://EX.com/a", ValB = 2L, stringsAsFactors = FALSE)

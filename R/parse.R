@@ -1553,8 +1553,13 @@ safe_parse_urls <- function(url,
 # Every value is on offer under `profile = "rfc-syntax"`, which keeps the
 # conflict matrix off and lets an explicit knob override the bundle, so that
 # is the escape the message names (ADR 0020 D4a); dropping `url_standard` is
-# no escape any more, because the default is "whatwg".
-.url_standard_conflict_error <- function(url_standard, knob, value) {
+# no escape any more, because the default is "whatwg". The message also says
+# what else that profile changes, since following it can drop rows.
+# `component` names the column an accessor without a `profile` argument
+# returns (get_host(), get_path()), so the message can point at
+# `safe_parse_urls(profile = "rfc-syntax")$<component>` instead.
+.url_standard_conflict_error <- function(url_standard, knob, value,
+                                         component = NULL) {
   why <- if (identical(url_standard, "whatwg") &&
                value %in% .WHATWG_CLEAN_ONLY_VALUES[[knob]]) {
     sprintf(
@@ -1575,14 +1580,21 @@ safe_parse_urls <- function(url,
   } else {
     sprintf("the profile sets `%s`", knob)
   }
+  escape <- if (is.null(component)) {
+    "parse with profile = \"rfc-syntax\""
+  } else {
+    sprintf("use safe_parse_urls(profile = \"rfc-syntax\")$%s", component)
+  }
   stop(
     sprintf(
       paste0(
         "url_standard = \"%s\" governs `%s`: %s. Remove the explicit `%s` ",
-        "argument, or parse with profile = \"rfc-syntax\" (RFC 3986 syntax ",
-        "with no normalization; see url_profile()), which offers it."
+        "argument, or %s (RFC 3986 syntax with no normalization), which ",
+        "offers it. That profile also parses under url_standard = ",
+        "\"rfc3986\" with scheme_policy = \"require\" and scheme_acceptance ",
+        "= \"general\", so a scheme-less row fails; see url_profile()."
       ),
-      url_standard, knob, why, knob
+      url_standard, knob, why, knob, escape
     ),
     call. = FALSE
   )
@@ -1596,9 +1608,11 @@ safe_parse_urls <- function(url,
 # component). Any other value errors. `supplied` is a named list of resolved
 # governed values (from .governed_supplied()). Returns the named list of the
 # accepted clean_url-only values (empty when there are none), for the wrapper
-# to hand .parse_options() as `clean_only`.
+# to hand .parse_options() as `clean_only`. `component` is passed through to
+# the error (see .url_standard_conflict_error()).
 .check_url_standard_conflicts <- function(url_standard, supplied,
-                                          clean_only = TRUE) {
+                                          clean_only = TRUE,
+                                          component = NULL) {
   confined <- list()
   profile <- .URL_STANDARD_PROFILES[[url_standard]]
   for (knob in names(supplied)) {
@@ -1613,7 +1627,7 @@ safe_parse_urls <- function(url,
       confined[[knob]] <- value
       next
     }
-    .url_standard_conflict_error(url_standard, knob, value)
+    .url_standard_conflict_error(url_standard, knob, value, component)
   }
   confined
 }
