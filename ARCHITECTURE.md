@@ -90,7 +90,7 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   dials live as arguments (`host_charset`, `host_pct`, `last_at_userinfo`,
   `pqf_bytes`, `host_ipv4`), each fed by its `.web_*_policy()` mapper, plus the
   host parser (`.web_parse_host()`) and the IPv4/IPv6 canonicalizers. The
-  narrow (libcurl-style) IPv4 reading for `NULL` and `rfc3986` is in tree; the
+  narrow (libcurl-style) IPv4 reading for `rfc3986` is in tree; the
   WHATWG IPv4 reading is `raddr::addr_whatwg()` behind `.whatwg_ipv4_read()`
   (ADR 0018, amended 2026-10-09).
 - **R/parse-state.R** — the non-web parse routes and the state model they share
@@ -261,9 +261,10 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
 - `.host_is_ace()` (R/domain.R) — TRUE if any host label is an `xn--` A-label;
   drives the `host_encoding = "keep"` spelling choice.
 - `.apply_host_standard_model_vec()` (R/parse-phases.R) — the `url_standard`
-  host IPv4/reg-name model. No-op when `url_standard` is NULL; Stage-A-affecting
-  under a selector (enters the parse cache key). See ADR 0007; [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md)
-  makes `"whatwg"` the default and retires the `NULL` arm (RURL-mbhuhwzk). Under `whatwg`
+  host IPv4/reg-name model. Stage-A-affecting (`url_standard` enters the parse
+  cache key). See ADR 0007; [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md)
+  makes `"whatwg"` the default and reads `NULL` as `"whatwg"`, so there is no
+  unmodelled arm (RURL-mbhuhwzk). Under `whatwg`
   a host that ends in a number (`.host_ends_in_number_vec()`) is read by
   `.whatwg_ipv4_read()` (R/parse-web.R), the adapter over
   `raddr::addr_whatwg()`; an `NA` there is IPv4 failure and fails the URL.
@@ -377,8 +378,8 @@ only under `port_handling != "exclude"`.
   before the RFC 3986 §5 merge — a reference carrying the base's own special
   scheme is relative, `\` reads as `/`, leading slash runs are skipped, and
   leading/trailing C0-or-space is stripped. Under `"rfc3986"` the merge is RFC
-  3986 §5.2–§5.3. Under `NULL` it is byte-frozen (ADR 0007; retired by
-  [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md),
+  3986 §5.2–§5.3. `NULL` reads as `"whatwg"`, the default
+  ([ADR 0020](design/adr/0020-literal-execution-of-the-standards.md),
   RURL-mbhuhwzk). Only the scheme
   production (RFC 3986 §3.1) is shared by both named profiles, because the two
   standards agree on it. Measured over the WHATWG's own base-carrying corpus
@@ -437,19 +438,21 @@ only under `port_handling != "exclude"`.
   the parser as a dial and leave rendering to the serializer, escaping only the
   bytes whose **acceptance** the dial changes.
 
-- **The Appendix B scheme production holds the NULL freeze** (current code;
-  [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md) retires the
-  freeze, and RURL-mbhuhwzk removes this carve-out). `.split_uri_ref()`
-  (`R/resolve.R`) keeps RFC 3986 Appendix B's loose `[^:/?#]+` scheme group on
-  the `url_standard = NULL` path **deliberately**. It looks like an obvious bug
-  to tighten — Appendix B is self-described as non-validating — but the NULL path
-  is byte-frozen (ADR 0007) and the §3.1 grammar moves 13 references per base.
-  The §3.1 production therefore ships on `"whatwg"` and `"rfc3986"` only, the two
-  selectors that claim a standard; NULL claims none, so there is nothing for it
-  to be wrong against. `.split_after_scheme()` uses §3.1 *unconditionally*, and
-  that is correct precisely because both its call sites are already
-  selector-gated. **Which production belongs at a site is answered by which
-  selectors can reach it, never by which is more correct.**
+- **One scheme production, RFC 3986 §3.1's.** `.split_uri_ref()`
+  (`R/resolve.R`) and `.split_after_scheme()` both read
+  `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`, on which the two standards
+  agree. The frozen `NULL` profile kept RFC 3986 Appendix B's self-described
+  non-validating `[^:/?#]+` group, which reads `10.0.0.7:8080/x` as a scheme
+  and discards the base; [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md)
+  retired that profile and RURL-mbhuhwzk removed the carve-out, with every
+  other `NULL`-only path: the RFC 8089 `file:` overlay's `NULL` reading
+  (`localhost` emptied, a port rejected, the RUL-030 ASCII gate off), the
+  undecodable-path-octet escape (RUL-029), and the `NULL` arms of the
+  `.web_*_policy()` mappers. `.validate_url_standard()` reads `NULL` as
+  `"whatwg"`, so no code below a public entry point sees a `NULL` selector.
+  The web parser still carries the modes only that profile selected
+  (`host_charset = "narrow"`, `pqf_source`/`userinfo_source = "normalize"`);
+  no mapper asks for them.
 
 - **`rfc3986` means the generic syntax, scheme-agnostic.** Scheme-specific RFC
   constraints — RFC 9110 §4.2.1's empty-host MUST-reject, RFC 8089's file
