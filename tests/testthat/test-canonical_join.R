@@ -308,3 +308,23 @@ test_that("canonical_join 'ok_or_warning' joins warning statuses", {
   expect_equal(res$ValA[1], 1)
   expect_equal(res$ValB[1], "x")
 })
+
+test_that("canonical_join reads an abbreviated profile argument as R does", {
+  # `...` forwards `prof` to safe_parse_urls(), where R partial-matches it to
+  # `profile`; the pre-check must see the same profile, or it applies the
+  # default "whatwg" conflict rule to a knob rfc-syntax authorizes.
+  A <- data.frame(URL = "http://EX.com/a", ValA = 1, stringsAsFactors = FALSE)
+  B <- data.frame(URL = "http://ex.com/a", ValB = 2, stringsAsFactors = FALSE)
+  run <- function(...) {
+    suppressWarnings(
+      canonical_join(A, B, join = "inner", ...),
+      classes = c(
+        "rurl_canonical_join_deprecated", "rurl_legacy_join_dial_warning"
+      )
+    )
+  }
+  expect_identical(
+    run(prof = "rfc-syntax", case_handling = "keep"),
+    run(profile = "rfc-syntax", case_handling = "keep")
+  )
+})
