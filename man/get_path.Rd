@@ -14,7 +14,7 @@ get_path(
   path_encoding = c("keep", "encode", "decode"),
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general"),
-  url_standard = NULL,
+  url_standard = "whatwg",
   path_normalisation = NULL
 )
 }
@@ -46,7 +46,11 @@ NA).}
 
 \item{case_handling}{How to handle casing of the returned path. Defaults to
 "lower_host", which preserves the path's original casing (paths are
-case-sensitive per RFC 3986 §6.2.2.1). Use "lower"/"upper" to force a case.}
+case-sensitive per RFC 3986 §6.2.2.1), as "keep" does. The path is a parsed
+component, and \code{url_standard} governs it (ADR 0020 D4a): "lower" and
+"upper" are an error under both standards, and so is any
+\code{path_normalization} but "dot_segments". Use \code{get_clean_url()} for a
+case-folded or slash-collapsed cleaned URL.}
 
 \item{trailing_slash_handling}{A character string specifying how to handle
 trailing slashes in the path component of the cleaned URL. Defaults to
@@ -84,7 +88,16 @@ preserved exactly as written.}
 \item{"collapse_slashes": Collapse duplicate slashes in the path.}
 \item{"dot_segments": Resolve . and .. segments per RFC 3986.}
 \item{"both": Apply both collapse_slashes and dot_segments.}
-}}
+}
+\code{path_normalization} is governed by \code{url_standard} (ADR 0020 D4a): both
+standards resolve dot segments ("dot_segments"), so under the default
+\code{"whatwg"} the dot segments of the parsed \code{path} are always resolved, the
+WHATWG path state's way (\verb{\%2e} included), whatever this argument says.
+There an explicit \code{"both"} collapses repeated slashes in \code{clean_url}
+only, after the parse removed the dot segments; \code{"none"} and
+\code{"collapse_slashes"} are an error, since they ask for the dot segments
+the parse removed. Under \code{"rfc3986"} only \code{"dot_segments"} is accepted.
+\code{profile = "rfc-syntax"} takes any value; its own is \code{"none"}.}
 
 \item{path_encoding}{How to present the path percent-encoding in \code{clean_url}
 — the readable-vs-browser rendering choice (the path analog of
@@ -101,9 +114,8 @@ octet such as \verb{\%2F} stays encoded and never becomes a path-separating
 \itemize{
 \item{"keep": Leave the path percent-encoding untouched (the path is
 preserved as written in the URL, so \verb{\%2F} stays \verb{\%2F} rather than
-decoding into a path-separating \code{/}). With no \code{url_standard}, rurl keeps
-its historical RFC-style percent-hex case canonicalization, so \verb{\%2f}
-becomes \verb{\%2F}. Under \code{url_standard = "rfc3986"}, the profile's RFC 3986
+decoding into a path-separating \code{/}). Under \code{url_standard = "rfc3986"},
+the profile's RFC 3986
 §6.2.2.2 normalization applies: a triplet encoding an unreserved byte is
 decoded, every other triplet stays encoded with uppercased hex, so
 \verb{\%7E} becomes \code{~} while \verb{\%2F} stays \verb{\%2F}. Under
@@ -114,8 +126,7 @@ normalize which bytes are encoded.}
 every octet the selected standard does not allow in a path and decodes
 nothing, so a readable non-ASCII path is emitted in its percent-encoded
 UTF-8 form while \verb{\%2F}, \verb{/a//} and every other existing triplet stay as
-written (with no \code{url_standard}, hex case is uppercased as under
-"keep"). Under \code{url_standard = "whatwg"} the escaped octets are the
+written. Under \code{url_standard = "whatwg"} the escaped octets are the
 WHATWG path percent-encode set; otherwise they are those outside
 RFC 3986 \code{pchar} (sub-delimiters, \code{:} and \code{@} stay literal) and a \verb{\%}
 that does not begin a triplet, which becomes \verb{\%25}.
@@ -159,9 +170,9 @@ outside it is \code{parse_status = "error"}. This is the historical,
 byte-for-byte compatible behavior.}
 \item{"general": Admit any syntactically valid scheme token and parse
 opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
-Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
-decides the interpretation; \code{general} with \code{url_standard = NULL} is an
-error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+\code{url_standard} (\code{"whatwg"} by default, or \code{"rfc3986"}) decides the
+interpretation. Non-special / opaque hosts receive no www-stripping,
+no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.
 A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
 authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are
@@ -180,20 +191,20 @@ it reaches a remote SMB share. rurl parses \verb{file:} URLs; it never opens
 them. Restricting schemes before anything dereferences them is the
 caller's job — see \code{SECURITY.md}.}
 
-\item{url_standard}{Optional top-level standard profile: \code{NULL} (default),
-\code{"rfc3986"}, or \code{"whatwg"}. With \code{NULL} the behavior is exactly what the
-individual low-level options select (fully backward compatible). When set,
-it selects a coherent set of standard-conformant behaviors for the axes it
-governs — path percent/dot handling, the host IPv4/reg-name model, and
-\code{case_handling} — so callers do not have to hand-assemble the low-level
-knobs. Passing a governed low-level knob (\code{path_normalization} or
-\code{case_handling}) with a value the selected
-profile would not choose is an error; passing the value the profile would
-pick is accepted (only \code{case_handling = "lower_host"} is accepted under a
-selector — \code{"keep"}, \code{"lower"}, and \code{"upper"} all conflict, since \code{"lower"}
-also lowercases the path, which neither standard sanctions). Added as the
-last argument so existing positional calls keep their meaning; always
-pass it by name. Under \code{"whatwg"} the selector additionally recognizes a
+\item{url_standard}{The standard the URL is parsed under: \code{"whatwg"}
+(default; the WHATWG URL Standard, the URL behavior of the web) or
+\code{"rfc3986"}. \code{NULL} is accepted and means \code{"whatwg"} (ADR 0020). The
+standard selects a coherent set of standard-conformant behaviors for the
+axes it governs — path percent/dot handling, the host IPv4/reg-name
+model, and \code{case_handling} — so callers do not have to hand-assemble the
+low-level knobs. Passing a governed low-level knob (\code{path_normalization}
+or \code{case_handling}) with the value the standard would pick is accepted.
+Under \code{"whatwg"} a value that can shape \code{clean_url} alone
+(\code{case_handling = "lower"} or \code{"upper"}, \code{path_normalization = "both"})
+is applied to \code{clean_url} only, and the parsed components keep the WHATWG
+values; any other value, and any other value under \code{"rfc3986"}, is an
+error that names \code{profile = "rfc-syntax"}, which offers it. Always pass
+it by name. Under \code{"whatwg"} the selector additionally recognizes a
 literal backslash as a path separator for WHATWG-special schemes
 (\code{http}/\code{https}/\code{ftp}) and nulls default ports in parse output; use
 \code{port_handling = "strip_default"} for spec-style clean URL port rendering.

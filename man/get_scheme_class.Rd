@@ -6,7 +6,7 @@
 \usage{
 get_scheme_class(
   url,
-  url_standard,
+  url_standard = "whatwg",
   scheme_policy = c("infer", "require"),
   scheme_acceptance = c("web", "general")
 )
@@ -15,13 +15,11 @@ get_scheme_class(
 \item{url}{A character vector of URLs.}
 
 \item{url_standard}{Standard profile under which each URL is parsed before
-its scheme is classified: either \code{"rfc3986"} or \code{"whatwg"}.
-\strong{Required, with no default} (ADR 0015). The three tokens below do
+its scheme is classified: \code{"whatwg"} (default) or
+\code{"rfc3986"}; \code{NULL} means \code{"whatwg"} (ADR 0020, which
+supersedes ADR 0015's requirement to name it). The three tokens below do
 not differ between the profiles, but the parse that resolves the scheme
-does, so the profile has to be named.
-\code{\link{get_parse_verdicts}} is deliberately \emph{not} gated this way
---- its layers describe the parse that actually ran, which is defined with
-or without a selector.}
+does.}
 
 \item{scheme_policy}{Controls whether scheme-less, host-shaped input is
 \emph{accepted} (an input-acceptance axis, distinct from \code{protocol_handling},
@@ -49,9 +47,9 @@ outside it is \code{parse_status = "error"}. This is the historical,
 byte-for-byte compatible behavior.}
 \item{"general": Admit any syntactically valid scheme token and parse
 opaque (\code{mailto:x}), non-special (\verb{foo://host}), and RFC-generic URLs.
-Requires an explicit \code{url_standard} (\code{"rfc3986"} or \code{"whatwg"}), which
-decides the interpretation; \code{general} with \code{url_standard = NULL} is an
-error. Non-special / opaque hosts receive no www-stripping, no domain/TLD
+\code{url_standard} (\code{"whatwg"} by default, or \code{"rfc3986"}) decides the
+interpretation. Non-special / opaque hosts receive no www-stripping,
+no domain/TLD
 derivation, and are never run through the IDNA/punycode helpers.
 A non-special scheme with no \verb{//} is an \emph{opaque path}: it has no
 authority, so \code{host}, \code{user}, \code{port} and the \code{domain}/\code{tld} columns are
@@ -77,8 +75,7 @@ of \code{"special"}, \code{"non-special"}, or \code{"missing-or-error"}.
 \strong{Never \code{NA}.} Every element receives one of the three tokens
 above --- input that is unparseable, scheme-less, empty or \code{NA}
 classifies as \code{"missing-or-error"} rather than falling through to
-\code{NA}. The one arm that used to return \code{NA} was the selector-less
-call, which is now an error (ADR 0015).
+\code{NA}.
 }
 \description{
 Companion helper for the \code{url_standard} selector: reports whether each
@@ -92,10 +89,9 @@ scheme-relative URL under the default \code{scheme_relative_handling =
 Unlike \code{\link{get_host_type}}, the classification itself does not vary
 between \code{"rfc3986"} and \code{"whatwg"} -- \dQuote{special scheme} is a
 WHATWG concept describing a fixed property of the scheme string, not
-something RFC 3986 redefines. \code{url_standard} is nonetheless required,
-mirroring \code{get_host_type()}'s contract: the resolved scheme this
-classification reads is itself produced by a profile-dependent parse, so the
-profile has to be named (ADR 0015).
+something RFC 3986 redefines. \code{url_standard} still matters: the
+resolved scheme this classification reads is itself produced by a
+profile-dependent parse.
 
 Within rurl's allowlist (\code{http}/\code{https}/\code{ftp}/\code{ftps}/
 \code{file}), \code{http}, \code{https}, \code{ftp}, and \code{file} are
