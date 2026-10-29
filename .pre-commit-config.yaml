@@ -188,6 +188,24 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      # NEWS.md bullets are one terse line each (seor's fleet standard,
+      # "NEWS.md bullets"). Ported verbatim from seor's scripts/check-news.py;
+      # it takes milliseconds. Its self-test runs when the script changes.
+      - id: news-terse
+        name: NEWS.md bullets are one terse line
+        entry: python3 scripts/check-news.py NEWS.md
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: news-terse-self-test
+        name: check-news self-test
+        entry: python3 scripts/check-news.py --self-test
+        language: system
+        pass_filenames: false
+        files: ^scripts/check-news\.py$
+        stages: [pre-push]
+
       # bestpractices-url.py is a maintainer tool that reads the network, so the
       # hook runs only its offline self-test, and only when the script changes.
       - id: bestpractices-url-self-test
