@@ -284,6 +284,8 @@ gates:
 # It is stdlib-only, offline and instant, with the same shape as
 # check-citation.py, so it belongs in the job that already has a python3. A
 # separate job would pay the runner-pickup cost for about a second of work.
+# `check-news.py` (the news-terse hook, ported from seor) rides along for the
+# same reasons.
 citation-version:
   stage: gates
   image: python:3.14-alpine
@@ -292,6 +294,8 @@ citation-version:
     - python3 scripts/check-citation.py
     - python3 scripts/check-bugreports.py --self-test
     - python3 scripts/check-bugreports.py
+    - python3 scripts/check-news.py --self-test
+    - python3 scripts/check-news.py NEWS.md
 
 # The whole local gate, on every pipeline: `tools/verify.R` runs the manifest
 # gates, lint, spelling, `R CMD check --as-cran` through rcmdcheck, failing on

@@ -95,7 +95,7 @@ Before fixing, name the layer; three tickets were reverted for mixing them.
 - Oracle fixture edits touch only the columns scoped to the posture
   ([oracle-fixtures.md](oracle-fixtures.md)); a flipped row re-pins the sha256
   in **both** `oracle-provenance.json` and the register row.
-- A `NEWS.md` bullet cites the standard and the clause.
+- A `NEWS.md` bullet cites the standard as a short clause, such as "(RFC 3986 §3.2.2)".
 - `Rscript tools/verify.R` reports `0 failed`.
 - No ADR, decision record or worklog unless the change flips a contract claim
   or changes a user-visible default with no governing ADR.

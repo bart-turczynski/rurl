@@ -1,3319 +1,422 @@
 ## rurl (development version)
 
-- **Breaking: the default `url_standard` is now `"whatwg"`, and `NULL` means `"whatwg"`** (ADR 0020 D3, D4). rurl executes the standards literally, and the WHATWG URL Standard is the URL behavior of the web, so every function with a `url_standard` parameter now parses under it by default: `safe_parse_url()`, `safe_parse_urls()`, `get_clean_url()`, every `get_*()` accessor, `get_parse_verdicts()`, `resolve_url()`, `check_hosts()`, `check_schemes()`, `is_valid_host()`, and the three companion helpers `get_host_type()`, `get_url_diagnostics()` and `get_scheme_class()`, which no longer error when `url_standard` is missing or `NULL` (ADR 0015 is superseded). `get_mailto_recipients()` keeps its `"rfc3986"` default, but `get_mailto_recipients(x, url_standard = NULL)` now reads as WHATWG. The frozen pre-selector profile that `NULL` used to select is retired: it named no standard and gave, on 68 of 441 fixture inputs, an answer neither standard gives. Pass `url_standard = "rfc3986"` for the RFC 3986 reading. The other default dials do not change (`scheme_policy = "infer"`, `scheme_acceptance = "web"`, `scheme_relative_handling = "keep"`), so the bare default is still not `profile = "whatwg"`. On the fixture corpora (825 inputs), 231 rows move in the `safe_parse_urls()` or `get_clean_url()` output; what moves, by the WHATWG URL Standard clause that moves it:
-  - **Numeric and scheme-less hosts** (host parser, IPv4 parser): a host that ends in a number is read by the IPv4 parser, so shorthand the old profile rejected now parses (`http://0x7f.1/`, `http://127.1/` and `0x7f000001` are `127.0.0.1`; `http://192.168.010.1/` is `192.168.8.1`; `12345` is `0.0.48.57`) and one that is not a valid address fails (`http://0..0x300/`).
-  - **Host code points** (host parser, forbidden host code points, UTS #46): a host holding a forbidden code point fails, written or percent-encoded (`http://a|b/`, `http://ho%7Cst/`, `http://ho%7Fst/`, `https://%EF%BF%BD`); a host is UTS-46 mapped, so `http://127。0。0。1/` is `127.0.0.1` and `BÜCHER.example` renders `bücher.example` (RUL-002); and the sub-delimiters WHATWG keeps in a host (`!$&'()*+,;=` and others) parse instead of failing.
-  - **Paths** (path state): dot segments are resolved, their `%2e` spellings included (`/a/%2E./b` is `/b`); an existing percent-triplet keeps its spelling and hex case (`%7euser` is no longer `%7Euser`, `%2f` no longer `%2F`); a backslash is a path separator under a special scheme; and an octet that is not valid UTF-8 reads as U+FFFD.
-  - **Query, fragment and userinfo** (query, fragment and authority states): the WHATWG percent-encode sets apply (`"` is `%22`, a space `%20`, a `^` in a user `%5E`, a `:` inside a password `%3A`), and an existing triplet keeps its hex case (`get_query()` no longer turns `%zz` into `%ZZ`).
-  - **Default ports** (port state): a port equal to the special scheme's default is not part of the URL, so `get_port("http://example.com:80/")` and the `port` column are `NA`.
-  - **Input stripping** (basic URL parser step 1): leading and trailing C0-control-or-space and every tab, LF and CR are removed before parsing.
-  - **`file:` URLs** (file states): read by the WHATWG `file:` state machine instead of the RFC 8089 overlay, so `file://localhost/x` has an empty host and a drive letter is a path.
-  - **Reference resolution** (`resolve_url()`): the WHATWG reference-parsing rules apply by default: a reference with the base's own special scheme is relative, `\` reads as `/`, a base the parser refuses gives `NA`, and an opaque-path base takes only a fragment. RFC 3986 Appendix B's non-validating scheme group is gone, so `resolve_url("10.0.0.7:8080/x", "http://a/b/c")` is the relative path `http://a/b/10.0.0.7:8080/x`, and the `/.` guard applies. `resolve_url(output = "serialized")` no longer needs an explicit `url_standard`.
-  - **`scheme_acceptance = "general"`** no longer needs an explicit `url_standard`.
-  - **Governed knobs under the default** (ADR 0020 D4a, RUL-033). `case_handling` and `path_normalization` are governed by the standard, and the frozen profile was the way around that. Under `"whatwg"` an explicit `case_handling = "lower"` or `"upper"`, or `path_normalization = "both"`, now shapes `clean_url` only: the `scheme`, `host` and `path` columns keep the WHATWG values, and `"both"` collapses repeated slashes after the parse removed the dot segments and before index-page and trailing-slash handling (`/a//../b` cleans to `/a/b`, and `/a//` with `trailing_slash_handling = "strip"` to `/a`). `case_handling = "keep"`, `path_normalization = "none"` and `"collapse_slashes"` are an error, because they ask for case or dot segments the parsed URL no longer holds; the message names `profile = "rfc-syntax"`, which offers every value. `get_host()` and `get_path()` return a component, so a value that would change it is an error under both standards (`get_host(case_handling = "lower")` and `get_path(case_handling = "keep")`, which leave it as the default does, are accepted).
-  - **`profile = "rfc-syntax"` paths keep their hex case.** The frozen profile's conversion of a percent-triplet's hex digits to uppercase also ran under `rfc-syntax`, which is RFC 3986 syntax with no normalization, and that is RFC 3986 section 6.2.2.1 case normalization. `safe_parse_url("http://a.com/%7e", profile = "rfc-syntax")$path` is now `/%7e` (it was `/%7E`), under `path_encoding = "keep"` and `"encode"`, and a general-routed row's `path` column now matches its `clean_url`, which already kept the source spelling. For web rows `clean_url` moves too, so under `rfc-syntax` `get_clean_url()` and `canonical_join()` no longer treat `%2f` and `%2F` as the same key.
-  - An explicit `url_standard = NULL` beside a `profile` now overrides the bundle's standard as `"whatwg"` does; leaving `url_standard` out keeps the bundle's.
-
-  Rulings RUL-002, RUL-014, RUL-015, RUL-016, RUL-026, RUL-029 and RUL-030 are superseded on their `NULL` clauses by RUL-032 (`RURL-mbhuhwzk`).
-
-- **Breaking, under `path_encoding = "encode"` with `url_standard = "rfc3986"`:** `encode` now only adds escapes and never decodes, so the path names the same URL it was given. It used to percent-decode the whole path and escape each segment again, which changed the URL in three ways. An encoded slash became a separator: `http://h.de/a%2Fb/` gave the path `/a/b/`, though RFC 3986 section 2.2 makes a reserved character and its percent-encoded octet non-equivalent. Trailing empty segments were dropped: `/a//` gave `/a/` and `//` gave `/`, though section 3.3 makes an empty segment part of the path. And the characters RFC 3986 allows in a path segment (`pchar`: the sub-delimiters `!$&'()*+,;=`, `:` and `@`) were escaped: `/a;b=c` gave `/a%3Bb%3Dc`. Now every octet outside `pchar` is escaped and everything else stays as the `rfc3986` identity step left it (which decodes unreserved triplets and uppercases hex, section 6.2.2): `%2F`, `/a//`, `;` and `%00`. A `%` that does not begin a triplet becomes `%25`, as before. This reaches the `path` column of `safe_parse_urls()`, `get_path()` and `clean_url`. Under `url_standard = "whatwg"`, `encode` already used the WHATWG path percent-encode set without decoding and is unchanged; `"keep"` and `"decode"` are unchanged everywhere. rurl executes the standards literally (ADR 0020), so this changes output without a deprecation (`RURL-dbyavcjt`).
-- **Breaking, under `path_encoding = "decode"`:** `decode` now decodes only the triplets that RFC 3986 lets it decode without naming a different path: a triplet for an unreserved octet (`A-Z`, `a-z`, `0-9`, `-`, `.`, `_`, `~`), which RFC 3986 section 6.2.2.2 makes equivalent to its character, and a run of triplets that forms well-formed non-ASCII UTF-8, the readable rendering it gave before. Every other ASCII triplet now stays as written: the reserved octets (`%2F`, `%3F`, `%23`, `%40`, `%3D`, ...), `%25`, controls, space (`%20`) and the other octets outside unreserved. It used to decode every triplet, so `http://h.de/a%2Fb/c%3Fd%7E%C3%A4` gave the path `/a/b/c?d~ä`, a different path, since RFC 3986 section 2.2 makes a reserved character and its percent-encoded octet non-equivalent; it now gives `/a%2Fb/c%3Fd~ä`. `%2541` used to become `%41`, a triplet the input did not hold; it now stays `%2541`. A kept triplet keeps the hex case the selected standard left it in (uppercased under `"rfc3986"`, as written under `"whatwg"` and `profile = "rfc-syntax"`), and an octet that is not well-formed UTF-8 stays its uppercase triplet, as before. This holds under every `url_standard` and reaches the `path` column of `safe_parse_urls()`, `get_path()` and `clean_url`, so `canonical_join(path_encoding = "decode")` no longer matches `/a%2Fb` with `/a/b`. `decode` remains a display form: under `"whatwg"`, where two URLs are equal only when their serializations are, even a decoded unreserved triplet (`/a%41` shown as `/aA`) spells a different URL. ADR 0020 overrides ADR 0011 here, which documented `decode` folding `%2F` into a path-separating `/` (`RURL-eokizmdi`).
-- rurl now requires pslr 1.2.2 or later. pslr 1.2.1 could not load its bundled Public Suffix List under a Turkish or Azerbaijani locale on glibc, where `tolower("ICANN")` gives `"ıcann"`, so every parse failed in such a session; pslr 1.2.2 folds case in ASCII only (`RURL-tnsrcqwi`).
-- `get_mailto_recipients()` gains a `mailto_local_part_raw` column, placed before `mailto_local_part_form`, so every later column moves one place to the right: code that selects columns by position must be updated. It holds each recipient's local part as it stands in the URL's path, before any percent-decoding, or `NA` when the recipient has no single structural `@`. Under `url_standard = "rfc3986"`, the function's default, that is the input's own spelling; under `"whatwg"` it is the spelling the standard's parse gives the path, so `mailto:café@b.com` gives `caf%C3%A9` and a tab or newline is removed. A local part reported `"invalid"`, such as `a%00zz` or `a%FF`, used to be readable only inside the URL's `path`; it is now at hand per recipient. `get_user()` is unchanged, but its help page now gives the right reasons for its `NA` on such a local part: a null octet cannot be held in an R string, and RFC 6068 section 2 requires the decoded octets to be UTF-8. Neither is a mailbox-syntax ruling: RFC 5322's obsolete quoted-pair grammar (section 4.1, `obs-qp`) admits a null octet in a quoted local part, and the help no longer cites RFC 5322 section 3.2.3 for it (RURL-xwsyfkwh). Such a quoted local part is now a `"quoted-string"`: see the next entry.
-- `get_mailto_recipients()` now reports `mailto:%22%5C%00%22@b.com`, whose decoded local part is `"\<NUL>"`, as a `"quoted-string"`, not `"invalid"`; its `parse_status` was already `"ok"`. RFC 6068 section 2 takes `local-part = dot-atom-text / quoted-string` from RFC 5322 and forbids `<obs-local-part>` and `<NO-WS-CTL>` (item 2) and whitespace (item 3) in it. RFC 5322 section 4.1's obsolete quoted-pair `obs-qp` admits a backslash before a null octet, which neither ban reaches, so that form is valid. The other obsolete quoted forms stay `"invalid"`, as RFC 6068 requires: a C0 control or U+007F inside the quotes (`obs-qtext`, `%22%01%22`), or after a backslash (`%22%5C%01%22`), and an escaped carriage return or line feed (`%22%5C%0D%22`). A bare null octet inside the quotes (`%22%00%22`) or outside them (`a%00zz`) is no obsolete form and stays `"invalid"` too. RFC 5321 (section 4.1.2) has no obsolete forms, so under `smtp_wire = TRUE` such a local part has no SMTP wire projection: its wire columns are `"unavailable"` and `NA`. A quoted U+007F, which used to project as `"ascii"`, is `"unavailable"` too (RFC 6531's `UTF8-non-ascii` starts at U+0080). `get_user()` still gives `NA` for a local part holding a null octet, which an R string cannot hold, and a null octet in the domain stays `"invalid"` (RURL-mxsyzrho).
-- **Breaking, under `url_standard = "rfc3986"` only:** a directly written non-ASCII character is now a parse error in every component, under both `scheme_acceptance` values and under `profile = "rfc-syntax"`. RFC 3986 draws a URI from a subset of US-ASCII (section 2), writes non-ASCII data only as percent-encoded UTF-8 octets (section 2.5), and defines a host as `reg-name = *( unreserved / pct-encoded / sub-delims )`, all ASCII (section 3.2.2). rurl used to accept such input as a "Unicode-tolerant" extension (ADR 0012) and report it `ok`. Before: `safe_parse_urls(c("http://bücher.de/", "http://h.de/ä", "http://h.de/?q=ä", "http://ä@h.de/", "http://\ufeffh.de/"), url_standard = "rfc3986")$parse_status` was all `"ok"`, as were `foo:ä` and `foo://ä/x` under `scheme_acceptance = "general"`. After: each is `"error"`, and these surfaces follow the `rfc3986` parse: `clean_url` and every component are `NA`, `serialize_url(standard = "rfc3986")` gives `NA` in both forms, `get_url_key(policy = url_key_policy("rfc3986"))` reports `keyability` `"invalid-parse"`, `resolve_url(url_standard = "rfc3986")` gives `NA` for such a reference or base (the reference is checked as written, see the next entry), and `check_schemes(url_standard = "rfc3986")` reports `no-scheme`. `get_mailto_recipients()` still yields the recipients of such a `mailto:` row, as a diagnostic, and now says that the URL failed (see its own entry below). The percent-encoded spelling is valid and does not move: `http://h.de/%C3%A4` and `http://b%C3%BCcher.de/` still parse `ok`. To migrate, percent-encode the input as UTF-8 (`http://h.de/%C3%A4`), or parse Unicode input with `url_standard = "whatwg"`, which maps hosts through UTS #46 and percent-encodes the path, query and fragment; rurl adds no RFC 3987 (IRI) mode. `get_url_diagnostics(url_standard = "rfc3986")` now reports `unicode-outside-rfc3986-uri` as the reason such a row failed, under either acceptance value; it used to flag the accepted row under `scheme_acceptance = "general"` only. It fires only where percent-encoding is the fix, that is where the row's twin with each non-ASCII octet written as `%XX` parses under the same options: `hällo w` (not host-like), a scheme-less row under `scheme_policy = "require"`, `foo:ä` under `scheme_acceptance = "web"`, `http://h.de/ä|` and a row led by a non-ASCII character such as U+FEFF (its twin has no scheme) each fail for another reason as well and report no token. The token keeps its name, and a row that reports it reports it alone. `url_standard = "whatwg"` does not move. Owner ruling 2026-10-12, recorded as RUL-030 and as an amendment to ADR 0012 (`RURL-pntbujzc`).
-- Under `url_standard = "rfc3986"`, `resolve_url()` gives `NA` for a reference that is not an RFC 3986 URI-reference (section 4.1: `URI-reference = URI / relative-ref`). It used to check only the resolved URL, so a reference whose offending segment section 5.2.4's dot-segment removal deletes resolved: against `http://b.de/a/`, `ä/../b` gave `http://b.de/a/b`, `foo:/a/ä/../b` gave `foo:/a/b` under `output = "serialized"`, and `https://h.de/a/ä/../b`, `https://h.de/a/|/../b` and `/%zz/../b` resolved too, though none is URI syntax (a raw non-ASCII code point, sections 2 and 2.5; a `|`, which no production admits; a `%` that starts no triplet, section 2.1). Each is now `NA`. Section 4.2's rule on a relative-path reference applies as well: its first segment cannot hold a colon (`path-noscheme`), so `10.0.0.7:8080/foo.html`, which rurl 3.0.0 began resolving as a path under `"rfc3986"`, is now `NA`; write `./10.0.0.7:8080/foo.html`, which resolves as before. Valid references do not move (`g`, `../g`, `?q`, `#f`, `//h/p`, `%C3%A4/../b`), the check runs row by row, and `url_standard = "whatwg"` does not check the reference (`RURL-pntbujzc`).
-- `get_mailto_recipients()` gains two columns that say whether each recipient's source URL parses: `parse_status`, the URL's `safe_parse_urls()` status, and `url_diagnostics`, a list-column of its `get_url_diagnostics()` tokens, both under the call's own `url_standard`, `scheme_policy` and `scheme_acceptance`. The function reads the recipients from the `mailto:` path whatever the URL's verdict, so a URL the standard rejects still yields them, for diagnosis, and a recipient row no longer reads as a claim that its URL is valid. Under the default `url_standard = "rfc3986"`, `mailto:a@bücher.de` gives a recipient with `mailto_domain_form` `"idna2008-domain"`, `parse_status` `"error"` and the token `unicode-outside-rfc3986-uri`, since RFC 3986 (sections 2, 2.5) and RFC 6068 (section 2) write a non-ASCII character only percent-encoded as UTF-8; `mailto:a@b%C3%BCcher.de` gives the same domain form with `parse_status` `"ok"`. An ASCII grammar failure such as `mailto:a b@x.de` keeps its recipients too, with `parse_status` `"error"`. Filter on `parse_status` to keep only the recipients of URLs that parse. Under `url_standard = "whatwg"` the recipients are now split from the string the WHATWG basic URL parser reads, after its step 1 removes leading and trailing C0 controls and spaces and every ASCII tab or newline, as `safe_parse_urls()` already did: `mailto:a@b\t.de` and `mailto:a@b.de\n` had `mailto_domain_form` `"invalid"` though the URL parses, and now give `"ascii-dot-atom-text"` for `a@b.de`, and ` mailto:a@b.de` gave no row and now gives one. Under `"rfc3986"` the recipient columns do not change. Maintainer ruling 2026-10-25, recorded as RUL-031 (`RURL-pntbujzc`).
-- The `host_encoding` documentation now says that `"unicode"` is a display form, which under `url_standard = "rfc3986"` can present a host the same standard rejects on re-parse: `get_clean_url("http://xn--bcher-kva.de/", url_standard = "rfc3986", host_encoding = "unicode")` gives `http://bücher.de/`, which is a parse error there (RFC 3986 sections 2.5, 3.2.2), and `"idna"` or `"keep"` gives a host that parses again. `path_encoding = "decode"` is a display form of the path in the same way (`http://h.de/%C3%A4` presents as `http://h.de/ä`). Output does not change. Maintainer ruling 2026-10-25, RUL-031 (`RURL-pntbujzc`).
-- A URL whose authority or path runs to about ten million bytes now parses as a shorter one does, without a "PCRE error 'match limit exceeded'" warning. Several of the regular expressions that reproduce the old engine's matching gave a long row back byte by byte and hit the regex engine's limit: past that size the userinfo was read as part of the host, a `:port` was left on the host, and trailing C0-control-or-space runs were not trimmed. The URL Standard starts the host after the last "@" of the authority (authority state) and strips leading and trailing C0 controls and spaces (basic URL parser); the checks now find the last "@", the port and the trailing run in linear time. Below that size no row parses differently, in the C and UTF-8 locales (`RURL-atlidhyh`).
-- Under `url_standard = "whatwg"`, `resolve_url()` keeps a U+FEFF that starts a reference or base that is not valid UTF-8. The reference made of the bytes `EF BB BF 61 FF` against `http://h/d/` gave `http://h/d/a` followed by U+FFFD, dropping the mark, and now keeps U+FEFF before the `a`, as its U+200B twin already kept its mark; such a base had dropped its mark and become a base, and is now no base (the row is `NA`), as the same base without the bad octet already was. The U+FFFD decode read the leading mark as a byte-order mark (ADR 0019, RC2), but in a URL it is data: the URL Standard's basic URL parser strips only leading and trailing C0 controls and spaces, and its path percent-encode set covers U+FEFF, so the code point is kept and encoded, never removed. `"rfc3986"`, valid UTF-8 rows and rows not led by the mark do not move (`RURL-tfttelwo`).
-- `resolve_url()` no longer resolves against a base that the selected standard's parser refuses. Under `url_standard = "whatwg"`, `resolve_url("//o.com/y", "http://exa mple.com/a")` and the same call against `http://example.com:99999/cafe` gave `http://o.com/y`. The URL Standard's API URL parser parses the base first and returns failure when that fails, before it reads the input, so every row with such a base is now `NA`, an absolute reference included. That covers an empty or scheme-less base too: `resolve_url("https://z.com/q", "", url_standard = "whatwg")` gave `https://z.com/q` and is now `NA`, as `new URL("https://z.com/q", "")` throws; pass `NA` for a missing base to keep an absolute reference resolving. Under `"rfc3986"`, RFC 3986 section 5.1 requires a base URI to conform to `<absolute-URI>`, and section 5.2.2 reads the base only when the reference has no scheme. So a relative reference against such a base is now `NA` (`https://example.org/##link`, which a second `#` makes no RFC 3986 URI; a relative reference against `http://exa mple.com/a` was already `NA`), and an absolute reference still resolves. A port above 65535 is valid RFC 3986 syntax, so that base stays a base under `"rfc3986"`. "Refuses" means the standard's own parser (`serialize_url()` gives `NA`). It does not mean `get_parse_status()`, whose default `scheme_acceptance = "web"` also refuses valid URLs such as `non-spec:/p`, and those remain bases. The check runs row by row and parses each distinct base once (`RURL-vrvxxfvm`).
-- `get_mailto_recipients()` no longer stops the whole call on a recipient whose percent-decoded octets are not valid UTF-8. `mailto:a%E9@b.com` threw "invalid multibyte string, element 1", and so did a quoted local part (`%22a%E9%22`) and a bracketed domain (`[%E9]`), so every other row of the call was lost. RFC 6068 section 2 has every non-ASCII character of a `mailto` URI encoded as UTF-8 and then percent-encoded octet by octet, so such a field is no RFC 6068 (or RFC 5322 section 3.4.1) `addr-spec` part: that recipient's own `mailto_local_part_form` or `mailto_domain_form` (and `smtp_mailbox_rhs_syntax_form`) is `"invalid"` and, under `smtp_wire = TRUE`, the address gets no wire projection (`smtp_envelope_wire_mode` is `"unavailable"`), the same under the C and UTF-8 locales. Other rows and other recipients are unchanged (`RURL-lotjvpnt`).
-- The offset-bearing string calls of the general-route parser, the RFC 3986 grammar gate, the RFC 8089 `file:` overlay, the IPv6 literal serializer and `serialize_url()`'s source lexer moved from `stringi` to base R in byte mode (ADR 0019), so each locate and the cut that uses it count the same unit, bytes. No output changes: every row of the WPT inputs, the determinism corpus and the multibyte, U+FEFF, U+200B, line-terminator, invalid-UTF-8 and IPv6 probes parses, serializes and keys as before under `"whatwg"` and `"rfc3986"`, in the C and UTF-8 locales (`RURL-yqmoztoj`).
-- The browser fixer (`profile = "browser"`) repairs a `scheme;` or slash-less `scheme:` only for an ASCII case variant of a special scheme. Its match used ICU's case-insensitive `(?i)`, which also folds U+017F (long s) to `s`, U+00DF (sharp s) to `ss` and U+FB01 (the `fi` ligature) to `fi`, so `httpſ;h.com`, `wß;h` and `ﬁle;///a` were rewritten as if they named `https`, `wss` and `file`. The URL Standard matches a scheme ASCII case-insensitively ("ASCII case-insensitive"; RFC 3986 section 3.1 likewise), and none of those is a scheme. They are left as written now: `httpſ;h.com` parses as a host under the infer seam, which UTS #46 maps to `https;h.com`. This is the one output change from moving the detect, prefix-test and replace calls in the parse phases from `stringi` to base R in byte mode (ADR 0019); apart from the `host:port` and `encoded-dot-segment` rows of the end-of-input entry below, every other row of the WPT inputs, the determinism corpus and the U+FEFF, U+200B, line-terminator and invalid-UTF-8 probes parses as before, in the C and UTF-8 locales (`RURL-oahhlnvf`).
-- A host of very many dot-separated labels no longer makes the whole vector fail. The host-shape classifier that runs before every parse tested for a dotted name and for an IPv4 attempt with repeated-group regular expressions, and a host of about 4e5 labels overflowed their backtrack stack: `U_REGEX_STACK_OVERFLOW` threw under `"rfc3986"` and `"whatwg"`, and every other row of the call was lost with it. Both tests are linear checks now, and so are the RFC 3986 rootless-path carve-out's host-shaped segment test and the IPv4-shape test behind `get_url_diagnostics()`, which had the same shape. Such a host gets its own row, and no host is classified differently (`RURL-rrumztrf`).
-- Two end-of-input checks no longer read a trailing U+0085, U+2028 or U+2029 as the end of the URL: the bare `host:port` test, which runs both when the input is prepared and when its scheme is routed, and the `encoded-dot-segment` fact. They used the regex `$`, which in the old engine also matched before such a final line terminator; they now anchor at the true end (ADR 0019). With `scheme_acceptance = "general"`, under `url_standard = "whatwg"` or `"rfc3986"` (and so under `profile = "browser"` and `"rfc-syntax"`), `example.com:8080<U+2028>` and `tel:123<U+2028>` were taken for a bare `host:port` and then failed to parse. A port is ASCII digits only (WHATWG URL Standard, port state; RFC 3986 section 3.2.3), so such a row now parses as its non-digit sibling `example.com:8080x` does: scheme `example.com`, opaque path `8080%E2%80%A8`. `get_url_key()` gives it a key, and `get_url_diagnostics()` reports its scheme facts. The `encoded-dot-segment` fact no longer fires for a path ending in `/%2e<U+2028>`: that segment is not `%2e` (WHATWG URL Standard, "single-dot URL path segment"; RFC 3986 section 5.2.4). The `(?i)` keyword tests (`;phone-context=`, `%2f`, `%3f`, `%2e`) are now ASCII letter classes; no non-ASCII character folds to any of their letters, so no answer changes (`RURL-oahhlnvf`).
-- Under `url_standard = "rfc3986"` with `query_handling = "keep"`, `"filter"` or `"allow"`, a row whose query holds an octet that is not valid UTF-8 no longer stops `safe_parse_urls()` and `get_clean_url()` for the whole vector. `safe_parse_urls(c("http://a.example/", "http://h.example/p?q=\xe9"), url_standard = "rfc3986", query_handling = "keep")` threw "missing value where TRUE/FALSE needed", after the warning "input string 1 is invalid UTF-8", so every good row was lost; so did `"http://x.com/?\x80#\xff"` with `path_normalization = "dot_segments"`. RFC 3986 section 2 defines a URI as a sequence of characters, and such an octet encodes none, so the row is the rfc3986 parse error (`parse_status = "error"`, every component and `clean_url` `NA`) it already was under `query_handling = "drop"`, now under every `query_handling` and in every locale; its neighbors keep the values they have alone. The query filter split the query with a character-mode `strsplit()`, which gives `NA` for such a string; it now splits in bytes (ADR 0019), which on valid UTF-8 is the same split. No other row moves, and `url_standard = "whatwg"`, whose query reaches the filter percent-encoded, does not move (`RURL-kzbqvxpk`).
-- In `params_keep`, `params_drop` and the built-in query denylist, `*` now matches any run of characters in a decoded parameter name, line terminators included, as documented ("only `*` is special"). Before, it stopped at CR, LF, U+0085, U+2028 and U+2029, and a glob also matched a name with one of them at its end, so `utm_%0Ax` survived the denylist and `a%0A` was dropped by `params_drop = "a"`; now the first is dropped and the second is kept. Under `params_case_sensitive = TRUE` a name is now compared octet for octet, so a name that is not valid UTF-8 (from `%FF`) no longer matches a pattern spelled with U+FFFD. Case-insensitive matching is unchanged: Unicode full case folding (`"STRASSE"` matches `stra%C3%9Fe`, `"k"` matches the Kelvin sign), whatever the ICU default locale (`RURL-yyeohqah`).
-
-- A `%` in a long host no longer makes the parse quadratic in the host's length, under every `url_standard`. The host percent-decoding grew its output one byte at a time, so a 1.5e6-character host with one `%` took minutes under `"whatwg"` and `"rfc3986"`, and stalled every other row of the vector with it; the same host without the `%` took about two seconds. It now decodes in linear time, and such a host parses in about a second. No output moves: a `%` not followed by two hex digits still fails the host, the triplets that decoded still decode, and under `rfc3986` the ones kept encoded keep their uppercase hex. The 1.5e6-character host test of `RURL-vewhvxnb` (the entry below) now ends its tail-invalid host in a stray `%`, as its other components do (`RURL-adlwbqxn`).
-- `get_mailto_recipients()` splits a `mailto:` recipient list in time linear in its length. The lexer grew its vectors one element at a time, so the time grew with the square of a recipient's local part or domain: 5 s for a 2e4-character local part, over a minute for 8e4. A 2e5-character local part or domain now takes about 0.2 s once the package is warm. The same lexer finds the first recipient's host and user when a `mailto:` URL is parsed under `scheme_acceptance = "general"`, so `safe_parse_urls()` and the accessors speed up the same way on such a URL. Recipient output does not change (`RURL-tnlbvcpl`).
-- Under `url_standard = "rfc3986"` with `scheme_relative_handling = "http"` or `"https"`, a `//` row whose authority holds no host now parses as its spelled `http:` or `https:` twin does. Both settings read the row as if it began with that scheme, and RFC 3986 reads `http:///p` as an empty authority followed by the path `/p`: an authority follows `"//"` (section 4.2 for a network-path reference, section 3 for the hierarchical part), and the host of an authority may be empty (section 3.2), per the `RURL-kmkyicpt` ruling. The row was read with the special-scheme authority, which skips a run of slashes, so `///p` read as the host `p`, `clean_url` `http://p`. With `scheme_acceptance = "general"`, `///p` now has no host, the path `/p` and the `clean_url` `http:///p` (`https:///p` under `"https"`), and `////p`, `///`, `//`, `//?q`, `//u@/p` and `//:80/x`, which failed, now parse as their twins do. With the default `scheme_acceptance = "web"` every such row now fails, as `http:///p` already does there; `///p` and `///example.com/x` had parsed with the hosts `p` and `example.com`. A `//host` row keeps its parse. `scheme_relative_handling = "keep"` and `"error"` and `url_standard = "whatwg"` do not move, nor do `get_url_key()` and `serialize_url()`, whose `rfc3986` posture reads `//` rows under `"keep"` (`RURL-vubwgoxo`).
-- A URL element marked `"bytes"` (`Encoding(x) <- "bytes"`) no longer stops `serialize_url()`, `serialise_url()`, `format_url()`, `get_url_key()`, the `url_*_join()` family, `get_host_type()`, `get_url_diagnostics()`, `check_hosts()`, `is_valid_host()`, `check_schemes()`, `get_mailto_recipients()` or `resolve_url()` with "bytes encoding is not supported by this function", which lost every row of the call. R's `"bytes"` mark declares that a value is not text, so there is no reading of it as a URL. Such an element is now a row that does not parse, as it already was for `safe_parse_urls()` and the accessors: `NA` from the serializers, `format_url()` and the host type, no diagnostics, the `"invalid-parse"` reason from `get_url_key()`, no recipients, and a key no join matches. Its neighbors keep their values. Every entry point now prepares its URL strings in one place, so a latin1 element reads as its UTF-8 twin and an unmarked one is read as UTF-8 whatever the locale, at every entry point. Columns that echo the input (`url` in `check_schemes()`, `check_hosts()` and `get_mailto_recipients()`, `original_url` in `safe_parse_urls()`) still hold the caller's own element (`RURL-cwzickqy`).
-- `resolve_url()` reads both operands as the parser does, under every `url_standard`. A reference or base that is not valid UTF-8 (`"caf\xe9"`, `"http://example.com/caf\xe9"`, unmarked) stopped the whole call with "invalid multibyte string" or gave `NA` under a UTF-8 locale, and was split byte by byte under `LC_CTYPE=C`, under every standard; each standard now gives one answer in every locale. Under `"rfc3986"` such a reference gives `NA` and such a base is no base. A bytes-marked base, which `safe_parse_urls()` refuses, resolved as though it were text; it is now no base under every standard. An absolute reference still resolves without a base. An octet sequence that is not valid UTF-8 encodes no character, and RFC 3986 section 2 defines a URI reference as a sequence of characters, so there is nothing to split. Under `"whatwg"`, which parses a string of scalar values, an octet that is not valid UTF-8 reads as U+FFFD (UTF-8 decode with replacement), as `safe_parse_urls()` reads it: an invalid-UTF-8 reference still resolves with U+FFFD in place of the bad octets, and an invalid-UTF-8 base now resolves `"x"` to `http://example.com/x` in every locale (`RURL-cwzickqy`).
-- Under `url_standard = "rfc3986"`, `path_encoding = "encode"` and `"decode"` keep a path's `%E9` (any `%XX` that decodes to an octet that is not valid UTF-8) as `%E9`. `http://example.com/caf%E9` gave the path `/NA` with an "invalid UTF-8" warning under `"encode"`, and the raw octet in `path` and `clean_url` under `"decode"`; both now give `/caf%E9`. Under `"decode"` the other triplets in the path still decode (`RURL-yarkccco`).
-- Under `url_standard = "whatwg"`, a percent-encoded U+3002, U+FF0E or U+FF61 in a host is now a full stop, as its raw spelling already was on `http:` and `https:` (on `file:` both spellings failed, and both now parse): `http://example.com%E3%80%82/` gave a parse error and now has the host `example.com.`, as the WHATWG URL Standard gives, and `http://example%E3%80%82com/` keeps the host `example.com` with the status, domain and TLD of its raw twin (`ok`, not `warning-no-tld`). The host parser percent-decodes the host before domain to ASCII (WHATWG URL Standard, host parsing, steps 4-5), and UTS #46 maps the three code points to "." (section 4, step 1) (`RURL-esztpdhx`).
-- Under `url_standard = "whatwg"` (and `profile = "whatwg"`), `www_handling` and `subdomain_levels_to_keep` now act on the host that the WHATWG host parser defines. That host is the result of domain to ASCII, which runs UTS #46 section 4 processing, and its mapping step removes the code points UTS-46 ignores. The policies used to read the host before that mapping, so a host that starts with U+200B (zero-width space), U+00AD (soft hyphen) or U+FEFF was treated as a different host from the one WHATWG records. With `www_handling = "if_no_subdomain"`, `http://\u200bwww.com/` gave `www.www.com`, and `http://www.com/` gives `www.com`. With `"strip"`, `http://\u200bwww.example.com/` kept `www.example.com`, and `"keep"` gave `www.www.example.com`. With `subdomain_levels_to_keep = 0`, `http://\u200bwww.example.com/` gave `example.com`. Each of these now gives the same result as the host without the mark: `www.com`, `example.com`, `www.example.com` and `www.example.com`. The same holds for any first label that UTS-46 maps to `www`, not only one led by a code point UTS-46 ignores: a fullwidth `\uff37\uff37\uff37`, a circled `\u24e6\u24e6\u24e6`, a mark inside the label (`w\u200bww`) and a percent-encoded mark (`%E2%80%8Bwww`) now count as `www`, so with `"strip"` `http://\uff37\uff37\uff37.example.com/` gives `example.com`, where it gave `www.example.com`, and with `subdomain_levels_to_keep = 0` it keeps `www.example.com`, where it gave `example.com`. The trim of a host that mixes an ACE label with Unicode labels now follows the row's own `domain`. With the default `host_encoding = "keep"`, `https://xn--bcher-kva.\u043f\u0440.com/` at level 0 gave `\u043f\u0440.com`, a spelling that neither `host` nor `domain` holds. It now gives `xn--o1ac.com`, which matches the ACE spelling of `domain` and of the untrimmed host. The `rfc3986` arm does not change: RFC 3986 has no mapping step, and that arm keeps the code point as part of the first label (`RURL-fobwctml`).
-- Under `url_standard = "rfc3986"`, a long userinfo, host, path, query or fragment no longer makes the whole call fail in the RFC 3986 section 3 grammar check. That check matched each component against an anchored `*( data / pct-encoded )` regex, and ICU kept backtrack state for every repetition, so a component of about 500,000 characters stopped `safe_parse_url()` and `safe_parse_urls()` with "Regular expression backtrack stack overflow" and took every other row of the vector with it. The check now searches for the first character the component's production cannot hold (a character outside its section 2.2/2.3 class, or a `%` not followed by two hex digits), which runs in linear time, so each row gets its own verdict: a long row parses, and a long row that ends in a stray `%` fails alone. The grammar does not change, including the tolerance for directly written non-ASCII, and no verdict moves on shorter input. Other long-input limits remain: a host of several hundred thousand dot-separated labels still overflows in host classification (`RURL-vewhvxnb`).
-- Under its `whatwg` policy, `get_url_key()` now keys a query as the WHATWG URL Standard serializes it, so two URLs that standard serializes alike share a key. The query state percent-encodes each code point with the query percent-encode set, or with the special-query percent-encode set under a special scheme, and URL equality is equality of serializations. The key framed the query as written, so `foo:/p?\u200bq` and `foo:/p?%E2%80%8Bq` had two keys, though `serialize_url(standard = "whatwg")` gives `foo:/p?%E2%80%8Bq` for both and `safe_parse_urls(profile = "whatwg")` gives both the query `%E2%80%8Bq`. A space, `"`, `<` or `>` in a non-special query keyed apart from its escape the same way, and so did `'` and `"` in a special query (`http://h/p?'q` and `http://h/p?%27q`). Each pair now shares a key, and `duplicated()` and the `url_join` family follow. A row with no scheme keys its query under the `http` scheme it is read with, so `h.com/p?'q` keys like `h.com/p?%27q`. Pairs the standard serializes apart stay apart: a non-special query keeps `'` (`foo:/p?'q` is not `foo:/p?%27q`), and a percent-triplet keeps its hex case. The `rfc3986` policy still keys the query as written, and the path, the fragment, `serialize_url()`, `format_url()` and the parse record do not move. This is among the changes that key version 2, below, covers; the version is not bumped again (`RURL-pjrqnqvb`).
-- Under its `whatwg` policy, `get_url_key()` now keys a path as the WHATWG URL Standard serializes it, as it already keyed the query. The path state percent-encodes each code point of a list path with the path percent-encode set, so the URL record holds the path encoded, and URL equality is equality of serializations. The key framed the path as written, so `http://h/p{` and `http://h/p%7B` had two keys, though `serialize_url(standard = "whatwg")` gives `http://h/p%7B` for both, and so did a path holding non-ASCII and its escaped twin (`https://ex.com/école` and `https://ex.com/%C3%A9cole`, `foo:/p\u200b` and `foo:/p%E2%80%8B`, `file:///p\u200b` and `file:///p%E2%80%8B`), on the special, non-special and `file:` routes alike. Each pair now shares a key, and `duplicated()` and the `url_join` family follow: `url_inner_join()` now matches the `école` pair. The key and `serialize_url()` now take the path and the query from one step that encodes them as the standard's URL record holds them, which replaces the query-only fix above; the serializer then runs the same idempotent encoders over that output, which changes no byte, so the key and the serialization spell both components alike. An opaque path already keyed as its record holds it and does not move. Pairs the standard serializes apart stay apart: a percent-triplet keeps its hex case (`http://h/p%7b` is not `http://h/p%7B`), `%2F` is not `/`, and `http://h/?q{` is not `http://h/?q%7B`, since no query percent-encode set holds `{`. Authority-delimiter presence (`file:/p` against `file:///p`) and the `ftp`, `ws` and `wss` default ports stay key-policy facts, so those pairs still key apart. The `rfc3986` policy still keys the path as written, and `serialize_url()` under every standard and form, `format_url()` and the parse record do not move. This is among the changes that key version 2, below, covers; the version is not bumped again (`RURL-ommuyaqi`).
-- On R before 4.6.0, a URL component longer than 1,000,000 characters is no longer cut short. Before R 4.6.0, base `substring(x, first)` defaulted to `last = 1000000L` (R 4.6.0's NEWS, PR#18851, says `substr()` and `substring()` now accept `NULL` to mean "to the end of string"; on R 4.6.0, `args(substring)` shows the default as `last = NULL`), and `DESCRIPTION` admits R (>= 4.1.0). Thirty-two suffix cuts in the package relied on that default, so under `url_standard = "whatwg"` the path, query, fragment, password or host of a general-scheme URL such as `foo://h.example/...`, an opaque path, a WHATWG password through `serialize_url()`, and a `file:` path through `resolve_url()` all lost everything past character 1,000,000, and the mailto diagnostics judged an IPv6 address literal on its first 1,000,000 characters only. Every cut now passes `last` explicitly, as ADR 0005 requires, and `tools/substring-last-gate.R` fails the gate on any `substring()` call in `R/` that does not (`RURL-hxeaefzp`).
-- With `scheme_acceptance = "general"`, `path_normalization = "both"` or `"collapse_slashes"` no longer collapses duplicate slashes in the `path` column of a general-routed row, the route a non-special URL takes (and, under `rfc3986`, `ws:`, `file:` and an `http:` URL with fewer or more than two slashes), and the same `path` column no longer strips index pages, handles trailing slashes or folds case either. ADR 0012 D2 makes these hierarchical path transforms depend on an HTTP(S) URL, and the general route is not one: an `http:` URL with fewer or more than two slashes lacks the non-empty authority RFC 9110 section 4.2.1 requires of an `http` URI. RFC 3986 section 6.2.2 lists no normalization that merges empty segments either. The row's `clean_url` already kept the slashes, since only the identity and dot steps reach the general-route `clean_url` (RUL-027), so one row reported two different paths. `safe_parse_urls("foo://h/a//b/./c", profile = "rfc-syntax", path_normalization = "both")` had path `/a/b/c` beside `clean_url` `foo://h/a//b/c`; its path is now `/a//b/c`, and the same holds under `profile = "whatwg"`, `"browser"`, and `"seo"` or `"canonical"` with `scheme_acceptance = "general"`. `"collapse_slashes"` now leaves such a path as `"none"` does (`/a//b/./c`). A general-routed path with no authority now gets what `"dot_segments"` already gave: `foo:/a/..//p` has path `//p`, not `/p`. With `index_page_handling = "strip"`, `trailing_slash_handling = "strip"` and `case_handling = "lower"`, `foo://h/a/index.html`, `foo://h/a/` and `foo://h/A//B` keep those paths, as their `clean_url` does. A URL on the special-scheme route still collapses: `http://h.com/a//b/./c` has path `/a/b/c`, and under `whatwg` so do `ws:` and `file:` URLs. Slash collapsing and the case fold reach a general-routed row only through a named profile with an explicit dial (ADR 0012 D6); index and trailing-slash handling also reach one under `url_standard = "rfc3986"` or `"whatwg"` with `scheme_acceptance = "general"`, so `foo:/a/b/` with `trailing_slash_handling = "strip"` now keeps its path there (`RURL-kbjzwrkt`).
-- An octet that is not valid UTF-8 in a path, query or fragment no longer aborts the whole call under `url_standard = "rfc3986"`. One such row threw `invalid UTF-8 byte sequence detected` out of `safe_parse_urls()` and every accessor built on it, in every locale, so `get_host(c("https://www.example.com/a", "http://example.com/caf\xe9"))` lost both rows. The other rows now come back unchanged. A row that holds the octet in its path, query or fragment fails on its own (`parse_status = "error"`, every component `NA`) under `rfc3986`, on every route (the grammar gate, the RFC 8089 `file:` overlay and the general route). Under `rfc3986` that is the verdict the grammar gate already reached, since RFC 3986 has no rule for reading an octet that is not valid UTF-8. The `rfc3986` path-rootless form `http:example.com/caf\xe9` no longer throws `invalid multibyte string` either. `url_standard = "whatwg"` was already correct and does not move: it reads the octet as U+FFFD (`RURL-otrpfhmq`).
-- `case_handling`, `subdomain_levels_to_keep` and `www_handling = "if_no_subdomain"` now treat a U+FEFF (the byte-order mark) that starts a host or a path as data, as they already treated its U+200B twin. The WHATWG URL Standard does not strip a U+FEFF (it is not a C0 control or space), and the `rfc3986` arm keeps raw non-ASCII input as written rather than dropping it silently; each step instead tested or mapped the host or path with `stringi` functions that read past a U+FEFF that starts their input. With `case_handling = "upper"`, `http://\ufeffab.example/x` had host `AB.EXAMPLE` and now has `\ufeffAB.EXAMPLE` (`clean_url` follows), and `file:\ufeffaB` had path `AB` and now has `\ufeffAB`; `case_handling = "lower"` had path `ab` and now has `\ufeffab`. Unicode case mapping is kept. The subdomain trim took a host led by one U+FEFF and then `www.` for a www-prefixed host and cut the mark off with the prefix; the mark-led label is now a subdomain label like any other. A host whose rest is a registrable domain was kept whole: `http://\ufeffwww.example.com/` with `subdomain_levels_to_keep = 0` now trims to `example.com` (1 or more still keeps it whole). A host with more labels lost the mark and kept `www.`: `\ufeffwww.a.example.com` gave `www.example.com` with 0 and `www.a.example.com` with 1, and now gives `example.com` and `a.example.com`; with a value that trims none of its labels (2 or more) it gave `www.a.example.com` and is now left as written, `\ufeffwww.a.example.com`. Such a host is left as written whenever nothing is trimmed, so under `profile = "rfc-syntax"` `http://\ufeffWWW.Example.com/A` keeps its spelling with 1 or more, as it did. With `www_handling = "if_no_subdomain"`, the apex `http://\ufeffwww.com/` got no `www.` and now gets `www.\ufeffwww.com`. These rows move under `url_standard = "rfc3986"`, where `case_handling` takes a value other than the profile's only through `profile = "rfc-syntax"` with an explicit override. `url_standard = "whatwg"` does not move. The strict IP detector, the host-shape gate, the WHATWG host model and the WHATWG userinfo rewrite are guarded too; no output moves there (`RURL-opwjlnla`).
-- `serialize_url(standard = "rfc3986")` now returns `NA` for a `//host` network-path reference, under both forms, as it already did for other input with no scheme. A network-path reference is a relative reference (RFC 3986 section 4.2), not a URI, whose `scheme ":"` is mandatory (section 3), and with no base there is no absolute form to write. `serialize_url(c("//h/a/../b", "//h/p"), standard = "rfc3986")` returned `http:/a/../b` and `http:/p` (`http:/b` and `http:/p` with `form = "normalized"`): a scheme the input never spelled, and the host `h` dropped. `//u@h:8/p?q#f` gave `http:/p?q#f`, and `//h` and `///p` gave `http:`. The `rfc-syntax` posture parses such a row behind a stand-in `http:` prefix, and the serializer took that as the scheme. The parse surface does not move (`safe_parse_url("//h/p", profile = "rfc-syntax")` still has no scheme and host `h`), nor do `get_url_key()`, which keys the row as scheme-relative with its host, and `format_url()`. `standard = "whatwg"` already returned `NA` (`RURL-xjyrhqin`).
-- Under `url_standard = "rfc3986"` with `scheme_relative_handling = "keep"` (the `rfc-syntax` profile, and the `rfc3986` policy of `get_url_key()`), a `//` row whose authority holds no host now parses as RFC 3986 reads it. A network-path reference is `"//" authority path-abempty` (section 4.2), and the host of an authority may be empty (section 3.2), so `///p` is an empty authority followed by the path `/p`. The row was parsed behind a stand-in `http:` on the route that reads the special-scheme authority, which skips a run of slashes, so `///p` read as the host `p` with an empty path, the reading of `//p`, and `///example.com/x` as the host `example.com`. Under `profile = "rfc-syntax"`, `///p` now has no host, the path `/p`, the `clean_url` `http:///p`, as `http:///p` has, and the status `ok-scheme-relative`; `////p`, `///`, `//`, `//?q`, `//u@/p` and `//:80/x`, which failed, now parse the same way. Under `url_standard = "rfc3986"` with the default `scheme_acceptance = "web"`, every `///` row now fails, as `http:///p` already does there: `///p`, and `///example.com/x`, which had parsed with the host `example.com`. `get_url_key()` under `rfc3986` keys `///p` and `//p` apart, so the `url_join` family no longer matches them, and the key of every `//` row now frames no scheme and an authority delimiter: it framed the stand-in `http` and no delimiter, because the delimiter test looked for `scheme://`. A `//host` row keeps its parse, and `serialize_url()` still returns `NA` for every `//` row. `scheme_relative_handling = "http"`, `"https"` and `"error"` and `url_standard = "whatwg"` do not move (`"http"` and `"https"` move in the `RURL-vubwgoxo` entry above). This is among the changes that key version 2, below, covers; the version is not bumped again (`RURL-ozpxupgq`).
-- Under `url_standard = "rfc3986"`, a host that starts with U+FEFF (the byte-order mark) keeps the mark when it is lowercased in a vector that also holds a code point `chartr()` rejects, such as U+FFFF (a code point Unicode reserves as a non-character). One row no longer changes another row's result. The case map is ASCII-only, as RFC 3986 §6.2.2.1 makes only the host's case insignificant, and it already kept the mark when the row was alone. `get_clean_url(c("http://\ufeffH.example/", "http://\uffff.example/"))` returned `http://h.example/` for the first row; it now returns `http://\ufeffh.example/`, as it does for that row alone and for its U+200B twin. `safe_parse_urls()` moves the same way: only `host` and `clean_url` of such a row move, to the row's own value alone. `serialize_url(standard = "rfc3986", form = "normalized")` moves too. `chartr()` fails for the whole vector, so every row took the fallback of the ASCII case helpers, a `stringi` function that reads past a U+FEFF that starts its input. `url_standard = "whatwg"` does not move, since domain to ASCII maps the mark to nothing before the host is lowercased (`RURL-bqhfznkg`).
-- A latin1-marked reference or base now resolves as its UTF-8 twin in `resolve_url()`, under every `url_standard`, on both output surfaces and in every locale. A latin1 mark means octet `0xNN` is `U+00NN` (ISO 8859-1), and both URL standards spell a non-ASCII character as its UTF-8 octets (RFC 3986 §2.5; the WHATWG URL Standard's UTF-8 percent-encode). `resolve_url()` split, merged and recomposed the reference and the base as strings before any parse read the mark, so R translated them by locale. In a UTF-8 locale it read octets 0x80 to 0x9F as CP1252: the latin1 `"http://h.com/\x9f"` resolved to `http://h.com/` followed by U+0178 under `rfc3986`, where its twin `"http://h.com/\u009f"` keeps U+009F; `whatwg` already read a latin1 reference right, but not a latin1 base, whose 0x9F became U+0178 too (`%C5%B8` with `output = "serialized"`, not `%C2%9F`). In a C locale (`LC_ALL=C`) R translated the element to native text, so a relative reference went wrong under every `url_standard`: the latin1 `"h\xfc.com/p"` against `http://b.com/a` resolved to the text `http://b.com/h<fc>.com/p` under `whatwg`, and to `NA` under `rfc3986`, where its twin `"h\u00fc.com/p"` gives `http://b.com/hü.com/p`; a relative reference against a base with a latin1 non-ASCII host was `NA`, and one against a base with a latin1 non-ASCII path carried escape text such as `<9f>`. An absolute latin1 reference under `whatwg` was already read right there. A UTF-8 or ASCII reference and base do not move (`RURL-ummmdiwu`).
-- Under `url_standard = "rfc3986"`, `host_encoding = "unicode"` keeps a U+FEFF (the byte-order mark) that starts the host, and no longer decodes a first label led by the mark as an A-label. That arm keeps a raw non-ASCII host as written, though the RFC 3986 `reg-name` admits only its percent-encoded form (§3.2.2), and the mark is no exception; a label that starts with it does not start with the ACE prefix `xn--`, so it is not an A-label (RFC 5890 §2.3.2.1). `get_host("http://\ufeffxn--nxasmq6b.example/", url_standard = "rfc3986", host_encoding = "unicode")` returned the U-label `βόλοσ.example`; it now returns `\ufeffxn--nxasmq6b.example`, as `host_encoding = "keep"` does and like its U+200B twin (`\u200bxn--nxasmq6b.example`), and `http://\ufeffa.example./` keeps the mark in `\ufeffa.example.` rather than giving `a.example.`. The rendering split the host into labels with a `stringi` function that reads past a U+FEFF that starts its input. `url_standard = "whatwg"` does not move, since domain to ASCII maps the mark to nothing before the host is rendered (UTS #46 §4) (`RURL-tbmnnauj`).
-- `get_url_key()` keeps a U+FEFF (the byte-order mark) that starts a key field, under both its `rfc3986` and `whatwg` policies. A U+FEFF is ordinary URL data: RFC 3986 has no rule for it, and the WHATWG URL Standard strips only C0 controls and spaces (basic URL parser, step 1). The key framed each field with a `stringi` conversion to UTF-8 that read a leading U+FEFF as a byte-order mark and dropped it, so a marked field keyed like its unmarked twin. Under `rfc3986`, `\ufeffh.example.com/p` keyed like `h.example.com/p`, `foo:\ufeffa` like `foo:a` and `http://h/p?\ufeffq` like `http://h/p?q`; under `whatwg`, `mailto:a@b?\ufeffto=x` keyed like `mailto:a@b?to=x` and `foo:/p?\ufeffq` like `foo:/p?q`. Each pair now has two keys, as the U+200B twins already did, and `duplicated()` and the `url_join` family follow. A `whatwg` special host does not move, since UTS #46 maps U+FEFF to nothing (`\ufeffh.example.com/p` still keys as `h.example.com/p`), nor do keys whose fields hold no leading U+FEFF; the fragment and userinfo stay out of the key. The scheme-presence test no longer reads `\ufeff//h/p` as scheme-relative, which moves no key, as the row is not keyable. This is among the changes that key version 2, below, covers; the version is not bumped again (`RURL-dquaxcaz`).
-- Under `url_standard = "rfc3986"`, `get_subdomain()` keeps a U+FEFF (the byte-order mark) that starts the host, as the `host` column already does: that arm keeps the source spelling of a host whose `reg-name` RFC 3986 does not admit (§3.2.2 allows no raw non-ASCII code point), and no rule there removes the mark, so the subdomain cut from that host keeps it too. `get_subdomain("\ufeffh.example.com/p")` returned `h`; it now returns `\ufeffh`, like its U+200B twin (`\u200bh`), and `get_subdomain("http://\ufeffa.h.example.com/", format = "labels")` gives `\ufeffa` and `h`, not `a` and `h`. A lone `\ufeffwww` label is no longer read as `www` and dropped: `http://\ufeffwww.example.com/` gives `\ufeffwww`, not `NA`, with or without `include_www`. The suffix trim cut the host with a `stringi` function that reads past a U+FEFF that starts its input while measuring it with one that counts the mark. `url_standard = "whatwg"` does not move, since domain to ASCII (UTS-46) maps the mark to nothing before the host reaches the trim (host parsing) (`RURL-fyiadctm`).
-- Under `url_standard = "rfc3986"` with `scheme_acceptance = "general"`, `path_normalization` now decides what `clean_url` shows for a general-routed row, as it already decided the `path` column. The `rfc3986` bundle normalizes, so `foo:/a/../b` cleans to `foo:/b` (it gave `foo:/a/../b` beside path `/b`), `foo://h/a/%2e%2e/b` to `foo://h/b`, and `ws://` and `file:` URLs, which take the general route under `rfc3986`, follow. RFC 3986 §6.2.2.3 says a normalizing implementation should remove dot segments with the §5.2.4 algorithm, which makes no exception for a path without a leading `/`: `foo:a/../b` now cleans to `foo:/b` and `urn:a:b/../c` to `urn:/c`, an equivalence in the generic syntax that a scheme of its own may not share. Only the identity and dot steps reach `clean_url`; slash collapsing and the other path options do not. `profile = "rfc-syntax"` keeps the source path unless `path_normalization` is passed. Where removing dots would leave a path starting with `//` on a URL with no authority, `clean_url` keeps the source path, because §3.3 forbids that path: `foo:/a/..//p` cleans to itself (its `path` column still reports `//p`), and `serialize_url(standard = "rfc3986", form = "normalized")`, which turned it into `foo://p` (a URL with the host `p`), now returns it unchanged too. `url_standard = "whatwg"` does not move (RUL-027; `RURL-rwlrcvnh`, `RURL-dsjqseap`).
-- `serialize_url(standard = "rfc3986", form = "normalized")` now removes dot segments from a path without a leading `/` too, so on such a path it agrees with `resolve_url()` and with the `url_standard = "rfc3986"` general-route `clean_url`: `foo:a/../b` serializes to `foo:/b` (it was returned unchanged), `foo:a/./b/../c` to `foo:a/c` and `urn:a:b/../c` to `urn:/c`. RFC 3986 §6.2.2.3 tells a normalizing implementation to apply the §5.2.4 algorithm to the path, §5.2.2 runs it on every reference that has a scheme, and Appendix D.2 says it applies "to all URI reference paths"; none exempts a rootless path. The result is an equivalence in the generic syntax, which a scheme of its own may not share (§6.1). The §3.3 guard still holds: `foo:a/..//p` keeps its source path rather than becoming `foo://p`. (RUL-028; `RURL-yvaapvkg`).
-- Under `url_standard = "rfc3986"`, three path options keep a U+FEFF (the byte-order mark) that starts the path, as RFC 3986 requires: a U+FEFF is path data like any other code point (§3.3), so the encoder and the trailing-slash strip no longer give a path that does not begin with `/` a leading one, and the index strip keeps the mark in the directory it keeps. The WHATWG URL Standard keeps it too (path state). `safe_parse_url("file:\ufeff/a/index.html", url_standard = "rfc3986", index_page_handling = "strip")` had path `/a`; it now has `/\ufeff/a`, like its U+200B twin (`/\u200b/a`, as the strip makes the directory it keeps start with `/`), and `file:\ufeff/index.html` gives `/\ufeff`, not `/`. With `path_encoding = "encode"`, `file:\ufeff/a` had path `/%EF%BB%BF/a` and now has `%EF%BB%BF/a`. With `trailing_slash_handling = "strip"`, `file:\ufeff/a/` had path `/a/` and now has `\ufeff/a`. The three steps tested and cut the path with `stringi` functions that read past a U+FEFF that starts their input. `url_standard = "whatwg"` does not move, since its file state gives such a path a leading `/` first (`RURL-zxnxczsw`).
-- A latin1-marked input element now parses as its UTF-8 twin under every `url_standard`, in `safe_parse_urls()` and the functions built on it. A latin1 mark means octet `0xNN` is `U+00NN` (ISO 8859-1), and both URL standards spell a non-ASCII character as its UTF-8 octets (RFC 3986 §2.5; the WHATWG URL Standard's UTF-8 percent-encode). With `x` the latin1 `"http://h/?\xfc"`, `safe_parse_urls(x)` gave query `%FC` where `"http://h/?\u00fc"` gives `%C3%BC`, and under `url_standard = "rfc3986"` it gave a UTF-8-marked string holding the lone octet `0xFC`, which is not valid UTF-8. A latin1 non-ASCII host (`http://h\xfc.com/`) and every row on the `scheme_acceptance = "general"` route were parse errors. The twins share a parse-cache key, so whichever was parsed first was served to the other, and a row's value depended on call order. Octets 0x80 to 0x9F read as U+0080 to U+009F, as the `whatwg` route already read them, not as CP1252. `serialize_url()`, `get_host_type()`, `is_valid_host()`, `check_hosts()` and `get_mailto_recipients()` (which returned no row for a latin1 `mailto:\xfc@h.com`) follow; `original_url` still echoes the caller's latin1 element. `resolve_url()` follows too (see its own bullet above; `RURL-ummmdiwu`). The `whatwg` web route was already correct (`RURL-buemdwcq`).
-- Under `url_standard = "whatwg"` with `scheme_acceptance = "general"`, the `clean_url` of a non-special URL with a hierarchical path drops the `.` and `..` segments its `path` column already drops, as the WHATWG URL Standard requires: the path state removes them (and their `%2e` spellings, ASCII case-insensitively) while parsing, and the URL serializer writes the parsed path. `safe_parse_urls("foo:/a/../b", url_standard = "whatwg", scheme_acceptance = "general")` gave `path` `/b` but `clean_url` `foo:/a/../b`; `clean_url` is now `foo:/b`, `foo://h/a/%2e%2e/b` cleans to `foo://h/b`, and `foo:/a/..//p` to `foo:/.//p` (the serializer's `/.` guard). The general-route serializer was handed the source path rather than the parsed one. `resolve_url(output = "clean")` follows. An opaque path (`foo:a/../b`) keeps its segments (opaque path state), special schemes do not move, and neither does `url_standard = "rfc3986"`, whose generic serializer still writes the source path (`RURL-lzsjlxgu`).
-- Under `url_standard = "whatwg"`, `resolve_url()` reads a reference that has a scheme of its own, other than the base's special scheme, without the base, as the WHATWG URL Standard requires: the basic URL parser does not use the base for it, an opaque path keeps its `.` and `..` segments (opaque path state), and a hierarchical path loses them in the path state, where "shorten a URL's path" keeps a lone `file:` drive letter. `resolve_url("foo:a/../b", "http://h/y", url_standard = "whatwg", output = "serialized")` returned `foo:/b`; it now returns `foo:a/../b`, and `foo:\ufeff/../b` returns `foo:%EF%BB%BF/../b`, not `foo:/b`. `file:/C:/../x` against `http://h/y` returned `file:///x`; it now returns `file:///C:/x`, as it already did against `file:///y`, and so do `file:///C:/../x` and `file:C|/../x`. A special scheme with no `//` keeps its host: `http:/a/../b` against `https://h/y` returned `http://b/` and now returns `http://a/b`, and `ws:a/../b` returns `ws://a/b`, not `ws://b/`. `output = "clean"` follows (`file:///C:/x`, `http://a/b`); for a non-special scheme it is the reference's own `clean_url` (`foo:/b` for `foo:/a/../b` under `scheme_acceptance = "general"`, `RURL-lzsjlxgu`). Each such reference now resolves to what it parses to alone. `resolve_url()` ran RFC 3986 §5.2.4 dot-segment removal on the reference's path before the WHATWG parse, so it removed segments the opaque path state keeps, and it read a special scheme's host as a path segment. A reference with the base's own special scheme is still relative (`http:../x` against `http://h/a/b` is `http://h/x`). `rfc3986` does not move: RFC 3986 §5.2.2 removes the dot segments of a scheme-bearing reference's path, so under `rfc3986` `foo:a/../b` still resolves to `foo:/b` (`RURL-rdkewxlx`).
-- Under `url_standard = "whatwg"` with `scheme_acceptance = "general"` (as in `profile = "whatwg"`), a non-special URL with text after the `]` of a bracketed host, other than a `:port`, is now a parse failure, as the WHATWG URL Standard requires: the host state hands everything up to a `:` outside the brackets, `/`, `?`, `#` or the end to the host parser, which fails an input that starts with `[` and either does not end with `]` (`IPv6-unclosed`) or holds a code point the IPv6 parser rejects (host state; host parsing, IPv6 parser). `foo://[::1]x/`, `foo://[::1]]/`, `foo://u@[::1]x/` and `foo://[::1][::2]/` had status `ok` and host `[::1]`, the tail dropped, and `serialize_url(standard = "whatwg")` gave `foo://[::1]/` (`foo://u@[::1]/` for the one with userinfo); `foo://[::1]\x` gave `foo://[::1]`, since `\` ends no host for a non-special scheme. They now fail, like `foo://[1:]/`, `serialize_url()` returns `NA` for them, and `get_url_key()` and `get_host_type()` follow. `foo://[::1]/`, `foo://[::1]:80/` and `foo://[::1]?q` do not move, nor does `http://[::1]\x` (`http://[::1]/x`). `rfc3986` already rejected these rows, whose IP-literal is followed by neither `:port` nor the end of the authority (RFC 3986 §3.2.2), and the `file:` overlay does not move (`RURL-rrqzdahp`).
-- Under `url_standard = "whatwg"`, `get_url_diagnostics()` reports `leading-trailing-stripped` only where a leading or trailing C0 control or space was removed, as the WHATWG URL Standard defines the step it reports: the basic URL parser removes any leading and trailing C0 control or space from its input (basic URL parser, step 1). In a C locale (`LC_ALL=C`) the token fired on any native-encoded URL holding a non-ASCII character with nothing to strip, such as `http://h/?ü`, `http://h/ü` and `http://h/#ü`, and not in a UTF-8 locale. In every locale it also fired on a URL holding a byte that is not valid UTF-8, such as `http://h/` followed by byte `0x80`, which is read as U+FFFD. Neither now reports it; ` http://h/` and a URL ending in U+0001 still do, in every locale. No parse value moves, and `rfc3986`, which has no such step, never reports the token (`RURL-bnorcgbv`).
-- Under `profile = "browser"` with `url_standard = "rfc3986"`, a URL the browser fix-up rewrote (outer trim, `;` to `:`, `//` insertion) now parses as its fixed spelling typed directly; the values below are under the profile's `scheme_acceptance = "general"` unless `web` is named. A `file:` URL is then read as RFC 8089 requires, where after `//` the authority runs to the next `/` (§2 `file-hier-part = ( "//" auth-path ) / local-path`; RFC 3986 §3.2): `  file:///a/b` and `file;///a/b` had host `a` and path `/b` (`file://a/b`); they now have no host and path `/a/b`, like `file:///a/b`, and `  file:/a` is `file:/a`, not `file://a/a`. `file;p`, `  file:p` and `  file:` were parse failures; they now parse like `file:p` and `file:`. Trailing spaces no longer fail a row the general parser owns: `file:///a/b  ` parses like `file:///a/b`, under `web` too, and `foo://h/p  ` like `foo://h/p`; `  mailto:x@y.com` is `mailto:x@y.com`, and `  foo://h/p`, which the web parser read with status `warning-no-tld`, is `ok`. The `//` insertion now reaches every `http:`, `https:`, `ftp:`, `ws:` and `wss:` URL with no slash or one, not only a rewritten one: `http:a/b` has host `a` and path `/b`, not path `a/b`; `http:@h` has host `h`; `ftp:a` has host `a` and status `warning-no-tld`, not `ok`; `http::80` has port 80 and an empty host, not path `:80`; and `https:` and `https:/` have `clean_url` `https://`. Under `web` the first three now parse instead of failing. A single slash is completed to two, as a browser reads it (WHATWG special authority slashes state), not prefixed with two more: `http:/a`, `http;/a` and `  http:/a` are all `http://a`, with host `a`, where `http:/a` had path `/a` and `clean_url` `http:/a` and failed under `web`, and `http:/[::1]/p` parses instead of failing. Three slashes are left alone: `http;///a` and `  http:///a` had host `a`; they now have no host and path `/a`, like `http:///a`, whose authority is empty (RFC 3986 §3.2), and fail under `web`, which rejects an `http` URI with an empty host (RFC 9110 §4.2.1). `http:  `, `http;  ` and `  http:` are `http://`, `ok`, where they failed; they still fail under `web`. `ws:` and `wss:` are not web-route schemes under `rfc3986`, so a rewritten one now reads like its typed spelling, a generic URI whose host is not split against the public suffix list (ADR 0012 D2): `  wss://Sub.Example.co.uk/x` and `wss;Sub.Example.co.uk/x` had domain `example.co.uk`, tld `co.uk` and `clean_url` `wss://sub.example.co.uk/x`; they now have domain and tld `NA` and `clean_url` `wss://Sub.Example.co.uk/x`, like `wss://Sub.Example.co.uk/x`, `  ws://a.com/x` loses domain `a.com`, and `  ws:/a` is `ok`, not `warning-no-tld`. The general parser, which owns `file:`, `ws:`, `wss:` and the odd-slash `http:` rows under `rfc3986`, chose and parsed its rows from the raw input, so a rewritten row fell to the web parser, which reads `file:///a/b` the way it reads `http://a/b`, and a raw row it claimed never saw the fix-up. The browser profile's default `whatwg`, and every other profile, do not move (`RURL-vmsmlflr`).
-- Under `url_standard = "rfc3986"`, a percent-triplet already present in the userinfo keeps the case of its hex digits on the parse record for `http`, `https`, `ftp` and `ftps`, as it already did for every other scheme. RFC 3986 §6.2.2.1 makes the hex-digit case fold a normalization, so it belongs to `serialize_url(standard = "rfc3986", form = "normalized")`, and the `rfc3986` parse record follows the `source` form, as the query and the fragment already do (RUL-007, RUL-015). `http://a%7fb:c%c3d@h/` had user `a%7Fb` and password `c%C3d`; it now has user `a%7fb` and password `c%c3d`, like `ws://a%7fb:c%c3d@h/` with `scheme_acceptance = "general"`, and `get_user()`, `get_password()` and `get_userinfo()` follow. `serialize_url(standard = "rfc3986")` already wrote `http://a%7fb:c%c3d@h/` and `form = "normalized"` still writes `http://a%7Fb:c%C3d@h/`; `clean_url` and `get_url_key()` never carry the userinfo and do not move. A `%` that starts no triplet (`http://a%:b%g1@a.com/`) is still a parse failure, since RFC 3986 §3.2.1's `userinfo` admits `%` only in `pct-encoded`. `whatwg` already kept the triplet as written (`RURL-bxrbpzet`).
-- Under `url_standard = "whatwg"`, a `file:` URL whose host is an invalid bracketed IPv6 literal is now a parse failure, as the WHATWG URL Standard requires: the file host state hands its buffer to the host parser, which runs the IPv6 parser on a host that starts with `[` and fails when the parser does (host parsing, IPv6 parser). `file://[1:]/`, `file://[1::2::3]/`, `file://[:::]/`, `file://[12345::]/` and `file://[1:2:3:4:5:6:7:8:9]/` had status `ok`, with the literal as written in the host and in `clean_url`; they now fail, like their `http:` twins, and `serialize_url()` returns `NA` for them. A valid literal still serializes in compressed form: `file://[1:0::]/` is `file://[1::]/` and `file://[0:0:0:0:0:0:0:1]/` is `file://[::1]/`. `file://[::1/`, with no closing `]`, already failed and still does. `rfc3986` already rejected these literals and does not move (`RURL-ohtwkdgi`).
-- Under `url_standard = "whatwg"`, `resolve_url()` keeps a U+FEFF (the byte-order mark) that starts the path of a reference read as absolute, such as a `file:` reference against a base that is not `file:`, as the WHATWG URL Standard requires: the path state removes `.` and `..` segments and nothing else (path state). `resolve_url("file:\ufeff/./b", "http://h/y", url_standard = "whatwg", output = "serialized")` returned `file:///b`; it now returns `file:///%EF%BB%BF/b`, as it already did against `file:///y`, like its U+200B twin (`file:///%E2%80%8B/b`), and `output = "clean"` returns `file:///\ufeff/b`. Against an `http:` base, `file:\ufeff../x` and `file:\ufeff./x` returned `file:///x`; they now return `file:///%EF%BB%BF../x` and `file:///%EF%BB%BF./x`, and `foo:\ufeff../x` returns `foo:%EF%BB%BF../x`, not `foo:x`. `http:\ufeff/./b` against `file:///y` returned `http://b/`; it now fails, because its authority is the mark, which domain to ASCII maps to the empty string (host parsing). `http:\ufeff../x` and `http:\ufeff./x` against `file:///y` returned `http://x/` and now fail too; Node reads their hosts as `..` and `.` (`http://../x`), but rurl already rejects such a host under `whatwg` (`http://\ufeff../x` fails to parse), so they still differ from the standard. These references go through the RFC 3986 dot-segment walk, which tested and cut its prefixes with `stringi` functions that read past a U+FEFF that starts their input, so it read `\ufeff..` and `\ufeff.` as dot segments and dropped a mark followed by `/./`. RFC 3986 §5.2.4 removes only a whole `.` or `..` segment, so `rfc3986` moves too: with `url_standard = "rfc3986", output = "serialized"`, `foo:\ufeff../x` against `http://h/y` returned `foo:x` and now returns `foo:\ufeff../x`, and `file:\ufeff/./b` returns `file:\ufeff/b`, not `file:/b`. The dot-segment step of the parse runs the same walk, so `safe_parse_url("http:\ufeff/./b", url_standard = "rfc3986", scheme_acceptance = "general")` now has path `\ufeff/b`, not `/b` (`RURL-xrjtdnko`).
-- Under `url_standard = "whatwg"`, a percent-triplet already present in the query or the fragment keeps the case of its hex digits, as the WHATWG URL Standard requires: the query state and the fragment state percent-encode each code point with the query (or special-query) and fragment percent-encode sets, and none of them holds `%`, so an existing triplet is copied as written. `http://h/p%7f?q%7f#f%7f` had query `q%7F` and fragment `f%7F`; it now has query `q%7f` and fragment `f%7f`, and `serialize_url(standard = "whatwg")` gives `http://h/p%7f?q%7f#f%7f`, not `http://h/p%7f?q%7F#f%7F`. A raw non-ASCII byte is still written as its uppercase escape, now also right after a `%` that starts no triplet: `http://h/?a%2ü` has query `a%2%C3%BC`, where it had `a%2%c3%BC`. The two characters after a `%` that starts no triplet are no longer uppercased either: `http://h/?a%zz#b%zz` had query `a%ZZ` and fragment `b%ZZ`; it now has `a%zz` and `b%zz`. The path already kept its spelling, and a non-special scheme's query and fragment already kept theirs. `get_url_key()` under its default `whatwg` policy follows the query, so `http://h/?q%7f` and `http://h/?q%7F` no longer share a key, nor do `http://h/?a%zz` and `http://h/?a%ZZ` (among the reasons for key version 2, below). A `clean_url` that keeps the query still uppercases each triplet, so `http://h/?q%7f` still cleans to `http://h/?q%7F=`, but it follows the query on the other two rows: `http://h/?a%zz` cleans to `http://h/?a%zz=`, where it gave `http://h/?a%ZZ=`, and `http://h/?a%2ü` to `http://h/?a%2%C3%BC=`, where it gave `http://h/?a%2%c3%BC=`. `rfc3986` does not move (`RURL-djvqopjk`).
-- `profile = "browser"` no longer inserts `//` after a `file:` with no slashes, so `file:p` parses as `file:///p`, not as the host `p` (`file://p/`), and `file:ab:cd` parses instead of failing. The profile runs the WHATWG URL Standard, whose file state hands such input to the path state rather than reading a host; Chrome on macOS and Linux does the same. For the other special schemes the inserted `//` changed nothing (`RURL-anubcmpd`).
-- `profile = "browser"` now reads input that starts with a single `/` as a local file path, as a browser address bar does on macOS and Linux: `/Users/me/a.pdf` becomes `file:///Users/me/a.pdf` instead of failing. `//host` stays scheme-relative, and `~` is not expanded. The guess is a scheme inference, so an explicit `scheme_policy = "require"` turns it off, as does `url_standard = "rfc3986"` (`RURL-anubcmpd`).
-- Under `url_standard = "whatwg"`, a `file:` URL with no authority and a colon before any slash now parses, as the WHATWG URL Standard requires: the file state hands any code point other than `/` or `\` to the path state, which keeps a Windows drive letter as the first segment and reads anything else as an ordinary segment, so the colon is path data. `file:C:/x`, `file:C:x`, `file:a:/x`, `file:ab:cd` and `file:1:2` were parse failures; they now serialize as `file:///C:/x`, `file:///C:x`, `file:///a:/x`, `file:///ab:cd` and `file:///1:2`, like `file:C|/x` (`file:///C:/x`). A path led by U+FEFF or U+200B parses too: `file:\ufeffC:/x` is `file:///%EF%BB%BFC:/x`, and `file:\ufeff\C:/x` is `file:///%EF%BB%BF/C:/x`, with U+200B twins `file:///%E2%80%8BC:/x` and `file:///%E2%80%8B/C:/x`. The host-shape gate read the text before the colon, scheme included, as an IPv6 host attempt and failed the row before the `file:` parser ran; that parser now judges every `file:` row, so an authority such as `file://[::1x]/` or `file://1:2/` still fails. Under `profile = "browser"`, the fix-up that inserts `//` after a special scheme no longer does so after `file:` when two slashes, either of them a backslash, already follow, since the file slash state reads them as the authority's slashes: `file:\\[::1]/` gave `file:////[::1]/` and is now `file://[::1]/`, `file:/\h/p` is `file://h/p`, and `file:\\[::1x]\`, which this change would otherwise have let through as path data, still fails. `rfc3986` does not move (`RURL-otfaotzq`).
-- Under `url_standard = "whatwg"`, a percent-triplet already present in the userinfo keeps the case of its hex digits, as the WHATWG URL Standard requires: the authority state percent-encodes userinfo with the userinfo percent-encode set, which does not hold `%`, so an existing triplet is copied as written. `http://a%7fb:c%c3d@a.com/` had user `a%7Fb` and password `c%C3d`; it now has user `a%7fb` and password `c%c3d`, on both sides of the colon and after several `@` (`http://a%7f@b:c%7f@a.com/` has user `a%7f%40b`). A `%` that starts no triplet is copied as written too, so `http://a%:b%g1@a.com/` now has password `b%g1`, where it had `b%G1`. `serialize_url(standard = "whatwg")` already wrote the userinfo as written and does not move; `clean_url` and `get_url_key()` never carry the userinfo and do not move. `rfc3986` does not move (`RURL-jzwshyqb`).
-- Under `url_standard = "whatwg"`, `resolve_url()` against a `file:` base keeps a U+FEFF (the byte-order mark) that starts the first path segment of the result, as the WHATWG URL Standard requires: the path state removes `.` and `..` segments and nothing else (path state). `resolve_url("/\ufeffa/./b", "file:///x", url_standard = "whatwg")` and `resolve_url("\ufeffa/./b", "file:///", url_standard = "whatwg")` returned `file:///a/b`; they now return `file:///\ufeffa/b`, like their `http:` twin (`http://h/\ufeffa/b`) and their U+200B twin (`file:///\u200ba/b`), and with `output = "serialized"` they return `file:///%EF%BB%BFa/b`. A segment made of the mark alone was lost too: against `file:///x`, `/\ufeff/./b` returned `file:////b` and `\ufeff` returned `file:///`; they now return `file:///\ufeff/b` and `file:///\ufeff`. A base whose first segment starts with the mark lost it the same way: `resolve_url("z", "file:///\ufeffx/y", url_standard = "whatwg", output = "serialized")` returned `file:///x/z` and now returns `file:///%EF%BB%BFx/z`. A mark that starts a later segment, or follows an inherited drive letter, already survived. The `file:` dot-segment walk split the path with a `stringi` function that reads past a U+FEFF that starts its input. `rfc3986` does not run that walk and does not move (`RURL-dglgcwit`).
-- Under `url_standard = "whatwg"`, a `file:` URL with no authority whose path starts with U+FEFF (the byte-order mark) keeps the mark, as the WHATWG URL Standard requires: the file state hands the input to the path state, which percent-encodes it with the path percent-encode set and removes nothing (path state). `file:\ufeffp`, `file:\ufeff/p` and `file:\ufeff` serialized as `file:///p`, `file:///p` and `file:///`; they now serialize as `file:///%EF%BB%BFp`, `file:///%EF%BB%BF/p` and `file:///%EF%BB%BF`, like their U+200B twins (`file:///%E2%80%8Bp`) and like `file:/\ufeffp`. `file:\ufeff\p` is `file:///%EF%BB%BF/p` and `file:\ufeff?q` is `file:///%EF%BB%BF?q`. Of two leading marks one was dropped, along with the leading `/`, so `file:\ufeff\ufeff/p` serialized as `file://%EF%BB%BF/p`, which parses back with host `%EF%BB%BF`; it is now `file:///%EF%BB%BF%EF%BB%BF/p`. A path led by the mark does not start with a Windows drive letter: `file:\ufeffC|/x`, which was `file:///C:/x`, is now `file:///%EF%BB%BFC|/x`, and `file:\ufeff/C:/../x`, which was `file:///C:/x`, is now `file:///%EF%BB%BF/x`. The `file:` parser rewrote backslashes and tested for a leading `/` with `stringi` functions that read past a U+FEFF that starts their input. `rfc3986` does not run this parser and does not move (`RURL-rjpljsui`).
-- Under `url_standard = "whatwg"`, a `file:` URL whose empty host is introduced by a backslash now gets the path `/` when no separator follows the host, as the WHATWG URL Standard requires: the file slash state hands over to the file host state, which ends with an empty buffer (or `localhost`, replaced by the empty string), so the host is empty; the path start state then consumes one `/` or `\`, and the path state appends a single empty segment. `file:\\`, `file:/\`, `file:\/`, `file:\\localhost`, `file:\\\`, `file:\\localhost\` and `file://localhost\` had path `//` and serialized as `file:////`; they now serialize as `file:///`, like `file://`, `file:///` and `file://localhost/`, and `file:\\?q` as `file:///?q`. Rows with two separators after the host keep path `//`, as the pinned web-platform-tests rows require (`file:\\\\`, `file:\\//`, `file:\\localhost//`). A rule that set path `//` on a backslash-introduced empty host whose path was `/` is removed; the path cut from the raw input already counts the separators. `rfc3986` does not run this parser and does not move (`RURL-vhuozous`).
-- Under `url_standard = "whatwg"`, a userinfo that starts with U+FEFF (the byte-order mark) keeps the mark when it also holds a space, a C0 control or DEL, as the WHATWG URL Standard requires: the authority state percent-encodes userinfo with the userinfo percent-encode set and removes nothing. `http://\ufeffa b@a.com/` had user `a%20b`; it now has user `%EF%BB%BFa%20b`, like its U+200B twin (`%E2%80%8Ba%20b`) and like `http://\ufeffab@a.com/` (`%EF%BB%BFab`). The same holds for `http://\ufeffa\001b@a.com/` (`%EF%BB%BFa%01b`), DEL, and the scheme-relative `//\ufeffa b@a.com/`. Of two leading marks one was dropped, and a user made of the mark alone was lost: `http://\ufeff:a b@a.com/` had no user and now has user `%EF%BB%BF` and password `a%20b`. The encoder for these code points used a `stringi` function that reads past a U+FEFF that starts its input. `rfc3986` never runs that encoder and does not move (`RURL-rfgbozdr`).
-- Under `url_standard = "whatwg"`, a `file:` host that holds a `%` not followed by two hex digits is now a parse failure, as the WHATWG URL Standard requires: the host parser percent-decodes the host, which leaves such a `%` in place, and `%` is a forbidden domain code point ("If `asciiDomain` contains a forbidden domain code point, domain-invalid-code-point validation error, return failure", host parsing). A stray `%` after a valid percent-triplet was dropped by the decode, so `file://a%41%/p` and `file://%41%/p` had host `aa` and `a`; they now fail, like `http://a%41%/p` and `file://a%/p`. `file://a%41/p` keeps host `aa`. `rfc3986` does not run this parser and does not move (`RURL-zkirywwb`).
-- Under `url_standard = "whatwg"`, a `file:` URL whose host starts with U+FEFF (the byte-order mark) is now parsed as the WHATWG URL Standard requires: the file host state hands the whole buffer to the host parser, and domain to ASCII (UTS #46) maps the mark to nothing (host parsing). `file://\ufeffhost/p` and `file://\ufeffh\p` were parse failures; they now have host `host` or `h` and path `/p`, like their U+200B twins. A host made of the mark alone is now a parse failure, as `http://\ufeff/` already is: domain to ASCII returns the empty string, which fails. `file://\ufeff` and `file://\ufeff?q` had the empty host. A buffer such as `\ufeffC:` is not a Windows drive letter, so `file://\ufeffC:`, which had path `/C:`, now fails like any host holding `:`, a forbidden domain code point. `file://\ufefflocalhost/p` has the empty host, like `file://localhost/p`. A host that is the mark followed by an empty label (`file://\ufeff..`, which had host `..`) now fails, like other non-ASCII hosts with an empty label under punycoder 1.3.0 (`RURL-rqibprtg`). The `file:` parser cut the host and path with `stringi` functions that read past a U+FEFF that starts their input. `rfc3986` does not run this parser and does not move (`RURL-azcvukyh`).
-- Under `url_standard = "whatwg"`, a userinfo that starts with U+FEFF (the byte-order mark) keeps the mark when the host holds an alternative full stop (U+3002, U+FF0E or U+FF61), as the WHATWG URL Standard requires: the authority state percent-encodes userinfo with the userinfo percent-encode set and removes nothing, and only the host goes through domain to ASCII (host parsing). `http://\ufeffu@a。com/` had user `u`; it now has user `%EF%BB%BFu` and host `a.com`, like `http://\ufeffu@a.com/`. A host that is the mark followed by an empty label (`http://\ufeff\u3002com/`, which had host `.com`) now fails, like `http://\ufeff.com/` and other non-ASCII hosts with an empty label under punycoder 1.3.0 (`RURL-rqibprtg`). The full-stop mapping cut the authority with `stringi` functions that read past a U+FEFF that starts their input; it now cuts from the URL itself. `rfc3986` never runs that mapping and does not move (`RURL-exdlurql`).
-- Under `url_standard = "rfc3986"`, a URL that starts with U+FEFF (the byte-order mark) no longer has a scheme, as RFC 3986 requires: `scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`, so a scheme starts with an ASCII letter (§3.1). `\ufefffoo://a.com/p` under `scheme_acceptance = "general"` had scheme `foo` and host `a.com`, and `\ufeffhttp:a.com/p` had scheme `http` and path `a.com/p`; both are now parse failures under either `scheme_policy`. Under `"infer"` such a row reads like one led by any other code point that cannot start a scheme, such as U+200B: `\ufeffa.com:8080`, which failed, now has host `\ufeffa.com` and port `8080`, and under `scheme_acceptance = "general"`, `get_url_diagnostics()` no longer reports `unicode-outside-rfc3986-uri` for `\ufeffmailto:x@y.com`. On the routes rurl parses itself (the `file:` overlay under `rfc3986`, the RFC 3986 grammar gate, and the general route), an authority that starts with U+FEFF is now split in the right place. `file://\ufefflocalhost/path/to/file.txt` had host `localhos` and path `t/path/to/file.txt` under `rfc3986`, and under `whatwg` with `scheme_acceptance = "general"`, `ftps://\ufefffiles.example.org/pub/` lost the host's last `g` to the path. Under `rfc3986` the generic-syntax gate rejected every such authority with a port or a userinfo (`http://\ufeffa.com:8080/`, `http://\ufeffu:p@a.com/`); it now accepts them, as it accepts `http://\u200ba.com:8080/`. Under `whatwg` a non-special host made of the mark takes its port (`sc://\ufeff:12/` has host `%EF%BB%BF` and port `12`), and `sc://\ufeff@/` fails, because an `@` followed by an empty host is a failure (WHATWG URL Standard, authority state). The cause was `stringi` again: its `stri_locate_*_fixed()` functions, like its `stri_match_*_regex()` ones, read past a U+FEFF that starts their input (`RURL-biunpazk`).
-- Under `url_standard = "whatwg"`, a URL that starts with U+FEFF (the byte-order mark, as on the first line of a file saved with one) no longer has a scheme, as the WHATWG URL Standard requires: the basic URL parser strips only leading and trailing C0 control or space (step 1), and the scheme start state finds no ASCII alpha, so there is no scheme and, with no base, the parse fails. `\ufeffhttp://a.com/p` had host `a.com`; it is now a parse failure under `profile = "whatwg"`, `profile = "browser"` and the default `scheme_policy = "infer"` alike, and `serialize_url()` returns `NA` for it, where it wrote `http://a.com/p`. The same holds for `\ufefffoo://a.com/p` under `scheme_acceptance = "general"` and for a row with an alternative full stop in its host (`\ufeffhttp://a。com/p`). Under `"infer"` the row is read like one led by any other code point that cannot start a scheme, such as `é`: a dotted host-shaped row still gets an inferred `http://`, so `\ufeffa.com/p` keeps host `a.com` (UTS #46 maps the mark to nothing inside a host), but there is no scheme to carve a `host:port` out of, so `\ufefflocalhost:80/`, which had host `localhost`, now fails, as `élocalhost:80/` always did. Under every `url_standard`, a host that starts with U+FEFF no longer shortens the path by one character: `http://\ufeffa.com//x` has path `//x`, not `/x`, and under `whatwg` `http://\ufeffa.com/%7e` keeps `/%7e` instead of falling back to `/%7E`. The cause was `stringi`, some of whose functions read past a U+FEFF that starts their input, so the scheme checks skipped the mark and a path cut started one character late. Otherwise `rfc3986` does not move (`RURL-vhionecz`).
-- Under `url_standard = "whatwg"`, a host made only of U+FEFF (ZERO WIDTH NO-BREAK SPACE, the byte-order mark) is now a parse failure for its own row, as the WHATWG URL Standard requires: UTS #46 maps U+FEFF to nothing, so domain to ASCII returns the empty string, and "if result is the empty string, domain-to-ASCII validation error, return failure" (host parsing, domain to ASCII). The percent-encoded form stopped the whole vectorized call with "invalid first argument", losing every row: `get_host(c("http://a.com/", "http://%EF%BB%BF/"), url_standard = "whatwg")` now returns `"a.com"` and `NA`. The raw form lost the mark while backslashes were rewritten, so `http://\ufeff/p` read `p` as its host; it now fails too. A U+FEFF inside a longer label still maps away (`http://\ufeffa.com/` has host `a.com`). The cause was `stringi`, which drops a U+FEFF at the start of a string as a byte-order mark. The same drop made the caches file a URL or host that starts with U+FEFF under the same key as the string without it, so under `rfc3986` the answer depended on call order: once `\ufeffhttp://a.com/` had been parsed, `get_host("http://a.com/")` returned `NA`, and with `host_encoding = "idna"`, once `http://\ufeffa.com/` had been parsed, `http://a.com/` came back as `xn--a-6m0i.com`. Each now keeps its own entry, so results again match a parse with the caches off (`RURL-iiehsbfg`).
-- Under `url_standard = "rfc3986"`, an IPv6 literal whose last 32 bits are written as an IPv4 address now parses wherever RFC 3986 allows it, as the `IPv6address` production requires (§3.2.2: `ls32 = ( h16 ":" h16 ) / IPv4address`, after any number of `h16 ":"` pieces the alternative allows). `[fe80::5efe:1.2.3.4]`, `[1:2:3:4:5:6:1.2.3.4]` and `[::2:1.2.3.4]` were rejected, because a dotted tail was accepted only after `::`, `::ffff:` or `h16…::`. A dotted tail with a leading-zero octet is now rejected on every route, since `dec-octet` admits no leading zero: `foo://[::01.2.3.4]/` under `scheme_acceptance = "general"` had parsed, with host type `reg-name`. The `whatwg` arm checks the bracketed host of a non-special scheme with the same production, so under `scheme_acceptance = "general"` it now agrees with special schemes, as the WHATWG IPv6 parser requires (an IPv4 part may follow at most six pieces, and a leading-zero IPv4 piece fails): `foo://[fe80::5efe:1.2.3.4]/` now parses, with host `[fe80::5efe:102:304]`, and `foo://[::01.2.3.4]/` is now a parse failure (`RURL-escneidz`).
-- Under `url_standard = "whatwg"`, a host that ends in a number is now read as an IPv4 address by `raddr::addr_whatwg()`, `raddr`'s implementation of the WHATWG URL Standard's IPv4 parser (host parsing, IPv4 parser), instead of by a copy of that parser inside rurl, so the reading has one owner (ADR 0018, amended: `raddr` grows no URL-host curl dialect, and new address code goes to `raddr`). No result changes: `http://0x7f.1/` still has host `127.0.0.1` and `http://1.2.3/` host `1.2.0.3`, while `http://4294967296/` and `http://192.0.048.1/` still fail the parse. rurl still decides which hosts reach the IPv4 parser (the ends-in-a-number checker), so `0xg` and `0x1p` stay names, and it still strips tabs and newlines and percent-decodes the host first. `rfc3986` keeps rurl's own libcurl-style reading and does not move (`RURL-cbrfphfr`).
-- Under `url_standard = "whatwg"`, the alternative full stops U+3002, U+FF0E and U+FF61 are now mapped to `.` in the host only, as the WHATWG URL Standard requires: UTS #46 mapping belongs to domain to ASCII, which only a domain reaches (host parsing). An IPv6 literal goes to the IPv6 parser instead, which fails on any such code point, so `http://[::ffff:127。0。0。1]/` and `http://[::1．2.3.4]/` are now parse failures (IPv6 parser, IPv6-invalid-code-point, or IPv4-in-IPv6-invalid-code-point after an ASCII `.`); they had parsed to `[::ffff:7f00:1]` and `[::102:304]`. Userinfo is percent-encoded with the userinfo percent-encode set (authority state), so `http://a。b@example.com/` now has user `a%E3%80%82b`, not `a.b`. The host after userinfo is still mapped (`http://u@127。0。0。1/` has host `127.0.0.1`). `rfc3986` already rejected both IPv6 rows and does not move (`RURL-mkbfseqs`).
-- `url_key_policy()` and `get_url_key()` now carry key version 2 (was 1), because four IPv6 fixes, two query fixes and a path fix in this release change `whatwg` keys: a literal ending in `::` is now serialized, so URLs that compared unequal now share a key (`[1:2:3:4:5:6:7::]` keys as `[1:2:3:4:5:6:7:0]`, `[2001:DB8::]` as `[2001:db8::]`), and a key minted on R before 4.2 now writes the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`), so it matches one minted on a later R, an IPv6 literal holding an alternative full stop (`[::1．2.3.4]`) no longer parses, so it is no longer keyable, and a non-special scheme's IPv6 literal with an IPv4 tail can gain or lose its key (`foo://[fe80::5efe:1.2.3.4]/` gains a key, `foo://[::01.2.3.4]/` loses one), and the query keeps its spelling after a `%`, so `http://h/?q%7f` and `http://h/?q%7F` no longer share a key, nor do `http://h/?a%zz` and `http://h/?a%ZZ`, while `http://h/?a%2ü` and `http://h/?a%2%C3%BC` now do, and the query keys as the standard serializes it, so `foo:/p?\u200bq` and `foo:/p?%E2%80%8Bq` now share a key, as do `http://h/p?'q` and `http://h/p?%27q` (see the query bullet above), and the path keys as the standard serializes it too, so `http://h/p{` and `http://h/p%7B` now share a key, as do `https://ex.com/école` and `https://ex.com/%C3%A9cole` (see the path bullet above). A key field that starts with U+FEFF also keeps the mark now, under `rfc3986` as well as `whatwg`, so such a field no longer keys like its unmarked twin (see the U+FEFF bullet above). Under `rfc3986` the key of a `//` network-path reference now frames no scheme and an authority delimiter, where it framed a stand-in `http` and none, so `///p` no longer keys like `//p` (see the network-path bullet above). The version travels inside the key bytes and is shared by both standards, so no key minted by rurl 3.1.0 compares equal to one minted now, for any URL under either policy, `rfc3986` included: regenerate persisted keys from their URLs. The schema version stays 1, as the key layout does not change (`RURL-rntskojq`, `RURL-mkbfseqs`, `RURL-escneidz`, `RURL-djvqopjk`, `RURL-dquaxcaz`, `RURL-pjrqnqvb`, `RURL-ommuyaqi`, `RURL-ozpxupgq`).
-- `get_url_diagnostics()` now reports two IPv6 host facts, matching the seven `ipv4-*` ones, so a guard built on the diagnostics sees alternate IPv6 spellings of an address too. `ipv6-non-canonical` fires when the literal is not the WHATWG URL Standard's IPv6 serialization of its address (host serializing, IPv6 serializer; the rules of RFC 5952 §4, without §5's mixed notation): `[0:00::0:1]`, `[2001:DB8::1]`, `[::ffff:127.0.0.1]`. `ipv6-embedded-ipv4` fires when the address carries an IPv4 address in one of the embeddings `raddr::addr_embedded_kind()` recognizes: IPv4-mapped and IPv4-compatible (RFC 4291 §2.5.5), IPv4-translated (RFC 2765), NAT64 (RFC 6052, RFC 8215), 6to4 (RFC 3056), Teredo (RFC 4380) and ISATAP (RFC 5214), as in `[::ffff:7f00:1]` and `[64:ff9b::7f00:1]`. Both are keyed to the literal as written, fire under both standards, are complete for every literal the standard parses, and join `check_hosts()`'s `reasons`. Neither marks `[::1]`, and a network-specific NAT64 prefix (RFC 6052 §2.2) is invisible to the second, so an empty result does not make a host safe to fetch. No parse result or policy verdict changes. rurl now imports raddr (>= 0.1.2), which owns IP address semantics (ADR 0018, amended) (RURL-dxwsksor).
-- `get_url_diagnostics()` output for a host with an empty label depends on the installed punycoder. UTS #46 §4.2 step 4 rejects an empty label only when `VerifyDnsLength` is true, and punycoder from its `-v3` profile follows it, so the all-relaxed call that gates the hyphen, STD3 and length checks now succeeds on such a host and those checks run. A host that also has one of those defects then reports it as well: `http://-a..com/` reports `domain-empty-label` and `domain-hyphen-violation`, `http://a_b..com/` adds `domain-std3-violation`, and a 64-octet label or a name over 253 octets adds `domain-label-too-long` or `domain-name-too-long` (an empty label's dot counts toward the name's length). The same holds for a label that UTS #46 maps to nothing, such as a soft hyphen. Under punycoder 1.3.0 these hosts report `domain-empty-label` alone, as before, and `http://a..com/`, whose only defect is the empty label, reports it alone under either version. `check_hosts()` lists the added tokens in `reasons`. Under `url_standard = "whatwg"`, a non-ASCII host that holds an empty label, before or after mapping (`http://café..com/`, `http://a.com.%C2%AD/`), fails the parse under punycoder 1.3.0 and parses under the `-v3` profile, which is what the WHATWG URL Standard asks for; its diagnostics and `check_hosts()` verdicts move with it. rurl's own handling of such hosts is `RURL-rqibprtg`. A host that UTS #46 maps to nothing at all, such as `https://%C2%AD/` (a soft hyphen) or `file://%C2%AD/p`, stays a parse failure under either version, as the standard requires (domain to ASCII: "If result is the empty string, domain-to-ASCII validation error, return failure"): the `-v3` profile returns the empty string for it where 1.3.0 returned `NA`, and rurl had read only `NA` as that failure. rurl's tests accept either punycoder, telling them apart by the profile token (`RURL-tsmevksk`).
-- Under `url_standard = "whatwg"`, an IPv6 host that ends in `::` is now serialized like any other, as the WHATWG URL Standard's IPv6 serializer requires (host serializing): `http://[1:2:3:4:5:6:7::]/` has host `[1:2:3:4:5:6:7:0]`, because only a run of two or more zero pieces is compressed, and `foo://[2001:DB8::]/` under `scheme_acceptance = "general"` has host `[2001:db8::]`. The serializer dropped the empty side after the trailing `::` and returned such a literal as written. `serialize_url(standard = "whatwg")`, `clean_url` and `get_url_key()` under its default `whatwg` policy follow the host, so `http://[1:2:3:4:5:6:7::]/a` and `http://[1:2:3:4:5:6:7:0]/a` now share a key. `rfc3986` never runs that serializer and does not move (RURL-sqmhtldq).
+- The default `url_standard` is now `"whatwg"`, and `NULL` means `"whatwg"`, in every function that takes it; pass `url_standard = "rfc3986"` for the RFC 3986 reading (`RURL-mbhuhwzk`).
+- Under the new default, a host ending in a number goes through the IPv4 parser (`http://127.1/` is `127.0.0.1`), and forbidden host code points fail (WHATWG URL, host parsing).
+- Under the new default, hosts are UTS-46 mapped, `%2e` dot segments resolve, triplets keep their hex case, and a backslash separates path segments under a special scheme.
+- Under the new default, WHATWG percent-encode sets apply to query, fragment and userinfo, a default port is `NA`, and C0 controls, spaces, tabs and newlines are stripped.
+- Under the new default, `file:` URLs follow the WHATWG `file:` states and `resolve_url()` the WHATWG reference rules; `resolve_url(output = "serialized")` no longer needs `url_standard`.
+- Under `"whatwg"`, explicit `case_handling` or `path_normalization = "both"` shapes only `clean_url`; `case_handling = "keep"`, `path_normalization = "none"` and `"collapse_slashes"` are errors (ADR 0020).
+- `get_host()` and `get_path()` error on a `case_handling` value that would change the returned component, under both standards.
+- `profile = "rfc-syntax"` paths keep a percent-triplet's hex case (`/%7e` stays `/%7e`), so `get_clean_url()` no longer equates `%2f` and `%2F` there.
+- An explicit `url_standard = NULL` beside a `profile` overrides the bundle's standard as `"whatwg"` does.
+- Under `"rfc3986"`, `path_encoding = "encode"` only adds escapes: `%2F`, empty segments and `pchar` sub-delimiters survive (RFC 3986 §3.3) (`RURL-dbyavcjt`).
+- `path_encoding = "decode"` decodes only unreserved and non-ASCII UTF-8 triplets; reserved ones such as `%2F` and `%3F` stay encoded (RFC 3986 §2.2) (`RURL-eokizmdi`).
+- rurl now requires pslr 1.2.2 or later, which fixes every parse failing under a Turkish or Azerbaijani locale (`RURL-tnsrcqwi`).
+- `get_mailto_recipients()` gains a `mailto_local_part_raw` column before `mailto_local_part_form`, moving every later column one place right (`RURL-xwsyfkwh`).
+- `get_mailto_recipients()` reports a quoted local part holding a backslash-escaped null octet as `"quoted-string"`, not `"invalid"` (RFC 5322 §4.1) (`RURL-mxsyzrho`).
+- Under `"rfc3986"`, directly written non-ASCII is a parse error in every component; percent-encode it as UTF-8 or use `"whatwg"` (RFC 3986 §2.5) (`RURL-pntbujzc`).
+- `get_url_diagnostics(url_standard = "rfc3986")` reports `unicode-outside-rfc3986-uri` for such a failed row, under either `scheme_acceptance` value.
+- Under `"rfc3986"`, `resolve_url()` gives `NA` for a reference that is no URI-reference, such as `10.0.0.7:8080/foo.html` (RFC 3986 §4.1, §4.2) (`RURL-pntbujzc`).
+- `get_mailto_recipients()` gains `parse_status` and `url_diagnostics` columns; under `"whatwg"` it splits recipients after the parser's control and whitespace stripping (`RURL-pntbujzc`).
+- `resolve_url()` gives `NA` against a base the selected standard's parser refuses, an empty base under `"whatwg"` included; pass `NA` for a missing base (`RURL-vrvxxfvm`).
+- `get_mailto_recipients()` no longer errors on a recipient whose decoded octets are not valid UTF-8; that field is `"invalid"` (RFC 6068 §2) (`RURL-lotjvpnt`).
+- Under `"rfc3986"`, a row holding an octet that is not valid UTF-8 now fails alone instead of stopping the whole vector, in every `query_handling` (`RURL-otrpfhmq`).
+- Under `"rfc3986"`, `path_encoding = "encode"` and `"decode"` keep a `%XX` that decodes to invalid UTF-8 as written (`/caf%E9`) (`RURL-yarkccco`).
+- `resolve_url()` reads latin1 and invalid-UTF-8 references and bases as the parser does, with one answer in every locale (`RURL-ummmdiwu`).
+- An element marked `"bytes"` is now a row that does not parse in every function, instead of an error that lost the whole call (`RURL-cwzickqy`).
+- Very long components and hosts of very many labels now parse row by row in linear time, instead of failing the vector, mis-parsing or taking minutes (`RURL-vewhvxnb`).
+- On R before 4.6.0, a URL component longer than 1,000,000 characters is no longer truncated (`RURL-hxeaefzp`).
+- `profile = "browser"` repairs `scheme;` only for ASCII case variants of special schemes, so `httpſ;h.com` stays as written (WHATWG URL, ASCII case-insensitive) (`RURL-oahhlnvf`).
+- A trailing U+0085, U+2028 or U+2029 no longer ends the URL early: `example.com:8080<U+2028>` parses as scheme `example.com` under `scheme_acceptance = "general"` (`RURL-oahhlnvf`).
+- `*` in `params_keep`, `params_drop` and the built-in denylist now matches line terminators; `params_case_sensitive = TRUE` compares names octet for octet (`RURL-yyeohqah`).
+- Under `"rfc3986"`, a `//` row with an empty host (`///p`) reads as an empty authority and path `/p`, not host `p` (RFC 3986 §3.2) (`RURL-ozpxupgq`).
+- `serialize_url(standard = "rfc3986")` returns `NA` for a `//host` network-path reference instead of inventing an `http:` scheme (RFC 3986 §4.2) (`RURL-xjyrhqin`).
+- Under `"whatwg"`, a percent-encoded U+3002, U+FF0E or U+FF61 in a host is a full stop, as its raw spelling is (UTS #46 §4) (`RURL-esztpdhx`).
+- Under `"whatwg"`, `www_handling` and `subdomain_levels_to_keep` act on the UTS-46 mapped host, so a fullwidth or mark-led `www` counts as `www` (`RURL-fobwctml`).
+- Under its `whatwg` policy, `get_url_key()` keys path and query as the standard serializes them, so `http://h/p{` and `http://h/p%7B` share a key (`RURL-ommuyaqi`).
+- `path_normalization`, index-page, trailing-slash and case handling no longer alter the `path` of a general-routed row, which now matches its `clean_url` (`RURL-kbjzwrkt`).
+- A leading U+FEFF in a host or path is now data in `case_handling`, `subdomain_levels_to_keep`, `www_handling` and `get_subdomain()`, as U+200B already was (`RURL-opwjlnla`).
+- `get_url_key()`, `resolve_url()` under `"whatwg"` and `host_encoding = "unicode"` under `"rfc3986"` keep a leading U+FEFF instead of dropping it as a byte-order mark (`RURL-dquaxcaz`).
+- Under `url_standard = "rfc3986"` with `scheme_acceptance = "general"`, `path_normalization` now governs `clean_url` too: `foo:/a/../b` cleans to `foo:/b` (RFC 3986 §6.2.2.3) (`RURL-rwlrcvnh`).
+- `serialize_url(standard = "rfc3986", form = "normalized")` removes dot segments from rootless paths too (`foo:a/../b` gives `foo:/b`), but never leaves an authority-less path starting `//` (RFC 3986 §5.2.4, §3.3) (`RURL-yvaapvkg`).
+- Under `url_standard = "rfc3986"`, `path_encoding`, `trailing_slash_handling` and `index_page_handling` keep a U+FEFF that starts the path instead of adding a leading `/` (RFC 3986 §3.3) (`RURL-zxnxczsw`).
+- A latin1-marked input now parses as its UTF-8 twin under every `url_standard`, where it gave lone octets, parse errors or call-order-dependent results (RFC 3986 §2.5) (`RURL-buemdwcq`).
+- Under `url_standard = "whatwg"` with `scheme_acceptance = "general"`, a non-special hierarchical URL's `clean_url` drops the `.` and `..` segments its `path` drops: `foo:/a/../b` cleans to `foo:/b` (`RURL-lzsjlxgu`).
+- Under `url_standard = "whatwg"`, `resolve_url()` reads a reference with a scheme other than the base's special scheme alone: `foo:a/../b` stays `foo:a/../b`, `file:/C:/../x` gives `file:///C:/x` (`RURL-rdkewxlx`).
+- Under `url_standard = "whatwg"` with `scheme_acceptance = "general"`, a non-special URL with text after a bracketed host's `]`, such as `foo://[::1]x/`, now fails to parse (WHATWG host parsing) (`RURL-rrqzdahp`).
+- Under `url_standard = "whatwg"`, `get_url_diagnostics()` reports `leading-trailing-stripped` only when a leading or trailing C0 control or space was removed, not for non-ASCII URLs in a C locale (`RURL-bnorcgbv`).
+- Under `profile = "browser"` with `url_standard = "rfc3986"`, a fixed-up URL (trim, `;` to `:`, `//` insertion) parses as its fixed spelling typed directly, `file:`, `ws:` and `wss:` included (`RURL-vmsmlflr`).
+- Under that combination, `//` is completed on every `http:`, `https:`, `ftp:`, `ws:` and `wss:` URL with zero or one slash: `http:/a` and `http:a/b` now have host `a` (`RURL-vmsmlflr`).
+- Under `url_standard = "rfc3986"`, an existing percent-triplet in `http`, `https`, `ftp` and `ftps` userinfo keeps its hex-digit case; `form = "normalized"` still uppercases it (RFC 3986 §6.2.2.1) (`RURL-bxrbpzet`).
+- Under `url_standard = "whatwg"`, existing percent-triplets in the userinfo, query and fragment keep their hex-digit case, and a `%` starting no triplet is not uppercased; `get_url_key()` follows (`RURL-djvqopjk`).
+- Under `url_standard = "whatwg"`, a `file:` URL with an invalid bracketed IPv6 host, such as `file://[1:]/`, now fails to parse like its `http:` twin (WHATWG IPv6 parser) (`RURL-ohtwkdgi`).
+- `profile = "browser"` no longer inserts `//` after a slashless `file:`, so `file:p` parses as `file:///p`, not host `p` (WHATWG file state) (`RURL-anubcmpd`).
+- `profile = "browser"` reads input starting with a single `/` as a local file path (`file:///Users/me/a.pdf`); `scheme_policy = "require"` or `url_standard = "rfc3986"` turns this off (`RURL-anubcmpd`).
+- Under `url_standard = "whatwg"`, a `file:` URL with no authority and a colon before any slash now parses: `file:C:/x` is `file:///C:/x`, `file:ab:cd` is `file:///ab:cd` (WHATWG file state) (`RURL-otfaotzq`).
+- Under `url_standard = "whatwg"`, a `file:` URL with a backslash-introduced empty host and no following separator gets path `/`: `file:\\` serializes as `file:///`, not `file:////` (`RURL-vhuozous`).
+- Under `url_standard = "whatwg"`, a `file:` host holding a `%` not followed by two hex digits, such as `file://a%41%/p`, now fails to parse (WHATWG host parsing) (`RURL-zkirywwb`).
+- Under `url_standard = "whatwg"`, a leading U+FEFF is kept in a `file:` path and in userinfo and maps away in a `file:` host; a host of the mark alone fails (WHATWG host parsing) (`RURL-azcvukyh`).
+- `resolve_url()` keeps a U+FEFF that starts a path segment instead of dropping it or reading `\ufeff..` as a dot segment, under both standards (RFC 3986 §5.2.4) (`RURL-xrjtdnko`).
+- A URL that starts with U+FEFF no longer has a scheme under either `url_standard`, so `\ufeffhttp://a.com/p` fails, and a host starting with it no longer shortens the path (RFC 3986 §3.1) (`RURL-vhionecz`).
+- Under `url_standard = "whatwg"`, a host made only of U+FEFF fails its own row instead of erroring the whole call, and caches no longer confuse URLs differing by a leading U+FEFF (`RURL-iiehsbfg`).
+- Under `url_standard = "rfc3986"`, an IPv6 literal with an IPv4 tail parses wherever `IPv6address` allows (`[fe80::5efe:1.2.3.4]`), and a leading-zero octet is rejected on every route (RFC 3986 §3.2.2) (`RURL-escneidz`).
+- Under `url_standard = "whatwg"`, U+3002, U+FF0E and U+FF61 map to `.` in the host only: an IPv6 literal holding one fails, and userinfo percent-encodes them (WHATWG host parsing) (`RURL-mkbfseqs`).
+- Under `url_standard = "whatwg"`, an IPv6 host ending in `::` is serialized canonically (`[1:2:3:4:5:6:7::]` becomes `[1:2:3:4:5:6:7:0]`); `serialize_url()`, `clean_url` and `get_url_key()` follow (WHATWG IPv6 serializer) (`RURL-sqmhtldq`).
+- `url_key_policy()` and `get_url_key()` now carry key version 2: no key minted by rurl 3.1.0 matches a new one under either policy, so regenerate persisted keys from their URLs (`RURL-rntskojq`).
+- `get_url_diagnostics()` reports `ipv6-non-canonical` and `ipv6-embedded-ipv4`, which also join `check_hosts()`'s `reasons`; rurl now imports raddr (>= 0.1.2) (`RURL-dxwsksor`).
+- `get_url_diagnostics()` and `check_hosts()` results for a host with an empty label depend on the installed punycoder: its `-v3` profile also reports hyphen, STD3 and length defects (UTS #46 §4.2) (`RURL-tsmevksk`).
 - `rurl` now requires R >= 4.1.0 (was 4.0.0), as its dependency `pslr` already did (`SEOR-nxycpzlk`).
-- On R 4.1, `url_standard = "whatwg"` writes an IPv6 host with the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`), as the WHATWG URL Standard requires (host serializing, IPv6 serializer) (`SEOR-nxycpzlk`).
+- On R 4.1, `url_standard = "whatwg"` writes an IPv6 host with the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`) (WHATWG IPv6 serializer) (`SEOR-nxycpzlk`).
 - `check_schemes()` lowercases `allowed_schemes` as ASCII, so `"FILE"` admits `file:` URLs under a Turkish or Azeri locale (`SEOR-rxxuzhmc`).
-- Internal git anchors (`v3/cp-snapshot-*`, `v3-control-plane-final*`, `abandoned/*`) moved from tags to `refs/archive/<name>` on GitLab, so the tag list on GitLab and r-universe show only releases. `tools/mirror-refresh.sh` now fetches `refs/archive/*` from GitLab and pushes them to the local backup mirror; `design/backup-mirror.md` says how to fetch them (`RURL-bgsonqdo`).
-- `tools/local-ci-plan.R` now judges secret-gated CI jobs, not `tools/local-ci.sh`: `tools/local-ci.sh --list` shows a job whose CI secret is unset locally (`fossa` without `FOSSA_API_KEY`) as not judged and names the variable, as a real run already did. A `SECRET_JOBS` entry naming a job `.gitlab-ci.yml` lacks now stops the planner with exit status 2 instead of matching nothing, and the planner's self-test covers the skip, partial-skip and all-skipped outcomes (`RURL-bsfwpfil`).
-- `tools/local-ci.sh <ref>` now plans from the ref under test: every planner call runs that ref's `tools/local-ci-plan.R` against that ref's `.gitlab-ci.yml`, so the job list, images, scripts and the `SECRET_JOBS` gate match the commit the jobs run on, not whatever the checkout holds (`--all origin/main` from a feature branch used to mix the two). The header names the planned revision, uncommitted edits to either file no longer show in `--list`, and a ref lacking either file stops with exit status 2 naming it instead of falling back to the working tree. A ref whose planner predates `--not-judged` also stops with exit status 2, since that planner would answer with its job list and judges no secrets. The ref's planner runs on the host with the caller's environment, so run only refs whose code you trust (`RURL-ecwpdtci`).
-- `tools/verify.R` now selects a gate self-test when the diff touches any path in the paths filter that gates it in `tools/verify-manifest.yml`, not only the self-test's own script, so a change to `tools/local-ci.sh` alone runs `tools/local-ci-plan.R --self-test`, its only check. Filter entries may use `**` (crosses `/`) and `*` (does not). A self-test that maps to no filter, or whose filter uses glob syntax beyond those two, is selected and named rather than skipped; a renamed file counts under its old path as well as its new one; an edit to `tools/verify-manifest.yml` re-runs `tools/verify.R --self-test`, which checks that every self-test maps; `--list` marks the self-tests the current diff selects, and without the `yaml` package selection falls back to the script path and says so (`RURL-etafkksg`).
-- The pkgdown site now ships favicons, committed in `pkgdown/favicon/` and made from `man/figures/logo.svg` by `tools/build-favicons.sh`, offline. Without them, pkgdown uploaded the logo to `realfavicongenerator.net` whenever a build outside CI started from a tree with no `pkgdown/favicon/`, as every replay does, so `tools/local-ci.sh`'s `pages` replay failed whenever that service did, while the `pages` job on GitLab skipped the call and published no favicons (`RURL-ujczpkqm`).
-- `resolve_url()` now resolves under the standard a `profile` selects, as it already parsed under it: `profile = "rfc-syntax"` resolves as `url_standard = "rfc3986"`, and `"whatwg"`, `"browser"`, `"seo"` and `"canonical"` as `url_standard = "whatwg"`; an explicit `url_standard` still overrides the profile's, as in `safe_parse_url()`. The reference-resolution rules and the refused-base rule read only `url_standard`, so a profile row resolved under `url_standard`'s own default, ignoring the profile's standard. `resolve_url("g", "https://example.org/##link", profile = "rfc-syntax")` gave `"https://example.org/g"`; it is now `NA`, because a second `#` is not allowed in a fragment (RFC 3986 §3.5: `fragment = *( pchar / "/" / "?" )`) and a base must be an absolute URI (§5.1). `resolve_url("https://z.com/q", "http://exa mple.com/a", profile = "whatwg")` gave `"https://z.com/q"`; it is now `NA`, because the URL Standard's API URL parser returns failure when the base fails to parse, before it reads the input. The WHATWG reference-parsing rules apply too: `resolve_url("http:foo.com", "http://example.org/foo/bar", profile = "whatwg")` is now `"http://example.org/foo/foo.com"` (special relative or authority state), not `"http://foo.com/"`. Because a WHATWG-bundling profile now refuses a base its standard refuses, a scheme-less base gives `NA` even for an absolute reference: `resolve_url("https://x.com/y", "example.com/a/b", profile = "browser")` was `"https://x.com/y"`. An abbreviated `prof =` selects the standard as `profile =` does. A call without a `profile` does not move (`RURL-nwujwmft`).
-- `resolve_url()` with a `profile` no longer errors on a governed knob (`path_normalization`, `case_handling`, ...) passed beside an explicit `url_standard`. It ran the `url_standard` conflict check that `safe_parse_url()` and `canonical_join()` skip on the profile path, where a profile authorizes its own combination and an explicit knob overrides it, so `resolve_url("b", "https://example.org/a/", url_standard = "rfc3986", profile = "rfc-syntax", path_normalization = "none")` stopped with "url_standard = \"rfc3986\" governs `path_normalization`" where `safe_parse_url()` with the same arguments parses; it now gives `"https://example.org/a/b"`, and so does `url_standard = "whatwg", profile = "whatwg"`. The knob overrides the profile's value, as it does there: with `path_normalization = "collapse_slashes"`, `"a//b"` resolves to `"https://e.org/a/b"` against `"https://e.org/"`. Without a profile the check still runs, and such a call still errors, as it does in `safe_parse_url()` (`RURL-frwyfdhp`).
-
-- The WHATWG percent-encoding of paths, queries, fragments and credentials now runs once per call instead of once per row: `serialize_url()`, `safe_parse_urls()` under the WHATWG profile and `get_url_key()` under its `whatwg` policy encode every row in one pass over a byte table, where each row's bytes used to be walked one at a time in R. The encoding step alone is about 20 to 40 times faster (2,000 rows of 2 KB queries: about 3.8 s before, 0.13 s after); whole calls gain less, because the rest of the parse dominates. Output is unchanged (`RURL-khcicsca`).
-- Parsing a URL with a long run of spaces or other bytes that must be percent-encoded is faster: the percent-escape and hex-uppercase steps of the parser's path, query and fragment pass now work over a byte table instead of one R call per byte. A path with a million inner spaces parsed in about 6 s under `url_standard = "whatwg"` and now takes about 1 s. No output changes: every row of the WPT inputs, the determinism corpus and a byte fuzz parses, cleans and serializes as before under `"whatwg"` and `"rfc3986"`, values and encoding marks alike, in the C and UTF-8 locales (`RURL-iyjdljln`).
-- The last string operations outside ADR 0019's kept set moved off `stringi`: the host label split and the URL-key byte count are base R, and the `whatwg` leading trim runs in byte mode after an explicit UTF-8 decode, the same decode `resolve_url()` uses. `stringi` now does only NFC before Punycode, full case mapping, the case-insensitive parameter match and that UTF-8 decode. No output changes: the WPT inputs, the determinism corpus and a byte fuzz parse, clean, serialize, key and resolve as before under `"whatwg"` and `"rfc3986"`, values and encoding marks alike, in the C and UTF-8 locales (`RURL-dddxutjf`).
-- The parser's own byte-slicing helpers (`.byte_substring()`, `.first_byte_index()` and their vector forms) were folded into the byte layer's cut and locate (ADR 0019, decision 5), so a first-match locate and every cut now go through one pair of functions; the last-byte scan and the byte count stay as they were. No output changes, values and encoding marks alike, in the C and UTF-8 locales (`RURL-dddxutjf`).
-- `get_url_diagnostics()` no longer reports authority facts on a URL whose parse has no authority. Under `scheme_acceptance = "general"`, `get_url_diagnostics("mailto:a@x.de", url_standard = "whatwg", scheme_acceptance = "general")` gave `invalid-credentials` next to `transform-skipped-ineligible-scheme`, and `mailto:a@256.256.256.256` gave `ipv4-out-of-range` under both standards; the domain-shape facts (`domain-hyphen-violation` and its family) and the other `ipv4-*` tokens fired on a recipient domain the same way. The WHATWG URL Standard parses a non-special URL with no `//` into an opaque path (basic URL parser, "scheme state" and "opaque path state"), so it has no username, password or host and raises no invalid-credentials validation error; RFC 3986 section 3 reads `mailto:a@x.de` as `path-rootless` and `mailto:/a@x.de` as `path-absolute`, with no authority. ADR 0012 D7's recipient extraction had put the first recipient's local part and domain in the row's `user` and `host`, which the diagnostics read as an authority. A recipient's domain is not a URL host, so `domain-invalid-ace-label` no longer fires on it either; `get_mailto_recipients()` judges recipients. Each such row now gives `transform-skipped-ineligible-scheme` alone. The rule is the authority the parse found, not the scheme name: `sc:a@1.2.3.999` and `news:a@1.2.3.999` no longer report `ipv4-out-of-range`, and neither do `tel:a@256.1.1.1`, `file:u@1.2.3.999` under `"rfc3986"` and, under either acceptance, `file:u@1.2.3.999` under `"whatwg"`, whose host is `NA`; `mailto://u@h/`, `sc://u@1.2.3.999/` and every web URL keep their facts (`http://u@h/` still reports `invalid-credentials` under `"whatwg"`). `get_user()`, `get_host()`, `get_domain()` and `get_host_type()` on a `mailto:` URL do not move, and the `url_diagnostics` column of `get_mailto_recipients()` loses the same tokens (`RURL-cjxdaqym`).
-- `get_user()` on a `mailto:` URL is now `NA` when the first recipient's percent-decoded local part is not valid UTF-8. `get_user("mailto:a%E9@b.com", url_standard = "rfc3986", scheme_acceptance = "general")` gave `"a\xe9"`, a string that is not valid UTF-8, so `nchar()` on it threw "invalid multibyte string"; a truncated sequence (`a%C3`) and a quoted local part (`%22a%E9%22`) did the same. RFC 6068 section 2 has every non-ASCII character of a `mailto` URI encoded as UTF-8 and then percent-encoded, so such a local part is no `addr-spec` part: `get_mailto_recipients()` already reports it `"invalid"`, and `get_host()` was already `NA` for a domain that does not decode to UTF-8. `get_userinfo()` on the same rows is `NA` too, for the same reason. This is a UTF-8 check only: a local part that decodes to valid UTF-8 but is not a valid `addr-spec` local part (`a%20b`) is still returned. The result is the same under `"rfc3986"` and `"whatwg"` and under the C and UTF-8 locales, so no octet that is not valid UTF-8 leaves the parser. `get_host()` (`b.com` above), a valid percent-encoded UTF-8 local part (`a%C3%A9`) and later recipients do not move (`RURL-gndbrpam`).
-- Three more string paths are linear on multi-megabyte input. Under `scheme_acceptance = "general"`, a row such as `h:` followed by about ten million digits and a letter no longer warns "PCRE error 'match limit exceeded'" while the parser tests whether it is a scheme-less `host:port`, and the WHATWG IPv6 serializer no longer warns on a bracketed host of about ten million colons. Finding the last "@" or ":" of a string took time quadratic in the number of matches (a million "@" took about 15 s) and now takes a fraction of a second. Output is unchanged, over the WPT URL cases and the parse fixtures in the C and UTF-8 locales (`RURL-rweowcfz`).
-- Under `url_standard = "whatwg"` or a profile that selects it (`profile = "whatwg"`), `resolve_url()` now applies the URL Standard's basic URL parser step 1 to the base, as it already did to the reference: a leading or trailing run of C0 controls and spaces is removed, and so is every ASCII tab or newline. The API URL parser runs the basic URL parser on the base too. `resolve_url("g", " http://a/b/c ", url_standard = "whatwg", output = "serialized")` gave `NA` and now gives `http://a/b/g`, as `new URL("g", " http://a/b/c ")` does; so do a base such as `\thttp://a/b/c\r\n` and one with a tab or newline inside the scheme or the `//` (`h\nttp://a/b/c`), under `output = "clean"` as well. The refused-base check already parsed such a base this way, so a padded base is now neither refused nor left unresolved. `"rfc3986"`, which strips nothing (a space or control is no URI character, RFC 3986 section 2), does not move. A base the parser would otherwise respell has its own entry (`RURL-vgmyrgxb`). Under `"whatwg"`, a base with an opaque path now takes only a fragment, as the URL Standard's no scheme state requires: `resolve_url("g", "mailto:x", url_standard = "whatwg", output = "serialized")` gave `"mailto:g"` and is now `NA`, and so is any other relative reference against a base with an opaque path (`mailto:x`, `javascript:void(0)`, `data:,x`), padded or not; `mailto:/x` has no opaque path and still merges, while `"#f"` still gives `"mailto:x#f"` (`RURL-mvjgpthk`, `RURL-vuczsypb`).
-- A `%00` in a `mailto:` recipient's local part or domain now makes that half `"invalid"` in `get_mailto_recipients()` and `NA` from the accessors that read it: `get_user()` and `get_userinfo()` for the local part, `get_host()`, `get_domain()`, `get_tld()` and `get_subdomain()` for the domain. Percent-decoding stops at the decoded null octet, because an R string cannot hold one, so only the prefix before it was judged, as if it were the whole field: `get_mailto_recipients(c("mailto:a%00zz@b.com", "mailto:a@b.com%00evil"), smtp_wire = TRUE)` reported `dot-atom-text` and `ascii-dot-atom-text` with wire mode `"ascii"` and every length check `TRUE`, checked the second row's domain against the Public Suffix List as `b.com`, and `get_host("mailto:a@evil.com%00.good.com", url_standard = "rfc3986", scheme_acceptance = "general")` gave `"evil.com"`. The null octet (U+0000) is neither `atext` nor `dtext` (RFC 5322 sections 3.2.3 and 3.4.1, the `addr-spec` that RFC 6068 section 2 adopts), so such a half is now `"invalid"`, gets no SMTP wire projection (`smtp_envelope_wire_mode` `"unavailable"`; the length check of that half is `NA`), and is `NA` from the accessors, the same under `"rfc3986"` and `"whatwg"` and under the C and UTF-8 locales. Other control octets (`%01`) and spaces (`%20`) were already `"invalid"` and do not move, nor does an encoded percent sign followed by `00` (`a%2500`, the local part `a%00`), the other half of the address or the other recipients (`RURL-rujjbahq`).
-- Under `url_standard = "whatwg"` or `profile = "whatwg"`, `resolve_url()` merges against the base the URL Standard's parser produces, not the base as written. The API URL parser parses the base into a URL record before it reads the input, and a special-scheme base written with backslashes or without its slashes is respelled there: `http:\\a\b\c` is `http://a/b/c` (special authority slashes state) and `http:x` is `http://x/` (special relative or authority state). `resolve_url("g", "http:\\\\a\\b\\c", url_standard = "whatwg", output = "serialized")` gave `"http://g/"` and now gives `"http://a/b/g"`; against `http:x` it gave `"http://g/"` and now gives `"http://x/g"`, as `new URL("g", "http:x")` does; so do `http:/x/y`, `ws:/a`, `file:\\h\a\b` and `file:c:/x`, and `..` against such a base, which gave `NA`, now resolves. The same rows move under `output = "clean"`. A base that the parser only re-encodes (a Unicode host or path, `http://bücher.de/ä/b`) gives the same URL either way, and keeps its spelling under `output = "clean"`; a row that moves takes the parsed spelling, so `http:\\bücher.de\ä\b` gives `http://xn--bcher-kva.de/%C3%A4/g` there. `"rfc3986"` does not move, and neither does any row of the WPT base-relative suite (`RURL-vgmyrgxb`).
-- A `%00` in a path or query no longer cuts off what follows it when rurl percent-decodes the value. The null octet it decodes to cannot be held in an R string, and the decode used to stop there, so `get_clean_url("http://e.com/a%00b/c", path_encoding = "encode", url_standard = "rfc3986")` gave `"http://e.com/a"` (and the same under `path_encoding = "decode"`, under either standard), and `get_query("http://e.com/?a=b%00c&d%00x=1", url_standard = "rfc3986")` gave `"a=b"`, losing every later parameter, as did its `format = "list"` form. `%00` is URI data (RFC 3986 sections 2.1 and 2.4), so the triplet now stays as written and the rest still decodes: `"http://e.com/a%00b/c"` and `"a=b%00c&d%00x=1"`. Under `path_encoding = "encode"` the triplet stays too, every `/` is kept, and a `%2500` is still `%2500`. When the query is filtered or sorted (`query_handling = "filter"`, `sort_params = TRUE`), a key or value holding `%00` is matched and written as it stands, as one with a stray `%` already was: in the URL written back, `?a=b%00c` stays apart from `?a=b%2500c`; `params_drop = "ref"` does not match the key `ref%00x`, and `a=%00` is not an empty parameter. Elsewhere a decoded `%2500` reads the same as a kept `%00`: under `path_encoding = "decode"`, in `get_query()` and its `format = "list"` keys, in `query_param_summary()`, and for the names `params_keep` and `params_drop` match (`params_drop = "a%00"` drops the key `a%2500` too). Rows without a `%00` do not move, the same in the C and UTF-8 locales. The `mailto:` recipient halves keep their own rule: a `%00` makes the half invalid (`RURL-fpujlvoq`).
-
-- `tools/local-ci.sh --all` now runs the `pages` job on a container-local copy of the clone. On Docker Desktop for macOS the bind-mounted clone refused the permission change pkgdown makes on the `docs/` it creates, so the local `pages` replay failed with `EACCES` while the forge job passed. The job script is still the one in `.gitlab-ci.yml`, unchanged (`RURL-nviibwoo`).
+- `resolve_url()` now resolves under the standard its `profile` selects, as it already parsed; an explicit `url_standard` still overrides the profile's (`RURL-nwujwmft`).
+- `resolve_url()` with a `profile` no longer errors on a governed knob such as `path_normalization` passed beside an explicit `url_standard`, matching `safe_parse_url()` (`RURL-frwyfdhp`).
+- WHATWG percent-encoding in `serialize_url()`, `safe_parse_urls()` and `get_url_key()` runs once per call, about 20 to 40 times faster; long runs of bytes to escape parse faster too (`RURL-khcicsca`).
+- Multi-megabyte rows no longer warn "PCRE error 'match limit exceeded'", and finding the last `@` or `:` is no longer quadratic in the number of matches (`RURL-rweowcfz`).
+- `get_url_diagnostics()` no longer reports authority facts (`invalid-credentials`, `ipv4-*`, domain-shape tokens) on a URL whose parse has no authority, such as `mailto:a@x.de` (`RURL-cjxdaqym`).
+- `get_user()` and `get_userinfo()` on a `mailto:` URL return `NA` when the decoded local part is not valid UTF-8, instead of an invalid string (RFC 6068 §2) (`RURL-gndbrpam`).
+- Under `url_standard = "whatwg"`, `resolve_url()` merges against the parsed base: surrounding spaces, tabs and newlines are stripped and `http:x` becomes `http://x/`, as `new URL()` does (`RURL-vgmyrgxb`).
+- Under `url_standard = "whatwg"`, `resolve_url()` returns `NA` for a relative reference against a base with an opaque path (`mailto:x`); a fragment-only reference still resolves (WHATWG no scheme state) (`RURL-mvjgpthk`).
+- A `%00` in a `mailto:` recipient's local part or domain makes that half `"invalid"` in `get_mailto_recipients()` and `NA` from its accessors, instead of judging the truncated prefix (RFC 5322 §3.2.3) (`RURL-rujjbahq`).
+- A `%00` in a path or query no longer truncates the percent-decoded value in `get_clean_url()` or `get_query()`: the triplet stays as written and the rest decodes (RFC 3986 §2.4) (`RURL-fpujlvoq`).
 
 ### Deprecated
 
-- `canonical_join()` is deprecated and will be removed in rurl 4.0.0. Every call now emits one warning of class `rurl_canonical_join_deprecated`; results do not change. To join on URL identity, use the `url_*_join()` family (`url_inner_join()`, `url_left_join()`, `url_right_join()`, `url_full_join()`, `url_semi_join()`, `url_anti_join()`). To keep matching on cleaned URLs, build the key yourself: `A$k <- get_clean_url(A$URL); B$k <- get_clean_url(B$URL); merge(A, B, by = "k", incomparables = NA)`. Without `incomparables = NA`, `merge()` pairs the `NA` keys of URLs that have no clean form, which `canonical_join()` never matched. The recipe is an inner join; add `all.x`, `all.y` or `all = TRUE` for the others, and see `?canonical_join` for the remaining differences. A call that forwards a legacy presentation dial still gets the separate `rurl_legacy_join_dial_warning` after the deprecation, so code that mutes that class keeps working and still sees the deprecation. This replaces the planned migration to an identity key policy with a dual-key audit, which is withdrawn (`RURL-atrvocqe`).
+- `canonical_join()` is deprecated and will be removed in rurl 4.0.0; it warns with class `rurl_canonical_join_deprecated`. Use the `url_*_join()` family instead (`RURL-atrvocqe`).
 
 ## rurl 3.1.0
 
 ### New features
 
-- Exported names stay in US English, and their British spellings are now accepted as aliases: `serialise_url()` is the same function as `serialize_url()`, and `get_clean_url()`, `get_path()`, `safe_parse_url()` and `safe_parse_urls()` take `path_normalisation` as an alias of `path_normalization`. The alias is the last formal, so no positional call shifts; supplying both spellings is an error, and the alias counts as explicitly supplied in the `url_standard` conflict check. `url_profile()`, `canonical_join()` and `resolve_url()` accept it through `...`. An abbreviated argument such as `path_normal =` no longer partially matches, because it now fits both spellings; spell the name in full (`SEOR-qwomlgjd`, `SEOR-oytkybis`).
-- `check_schemes()` reports a sixth reasons token, `no-authority`, for a URL that has a scheme but carries no authority: `mailto:someone@example.com`, `javascript:alert(1)`, `foo:bar`. It is computed from the parse, not from `get_host()`, and never contradicts the parse record: under `url_standard = "whatwg"` only a non-special scheme can get it, because the WHATWG URL Standard gives every special-scheme URL a host with or without `//` (`http:example.com` has host `example.com`); under `"rfc3986"` an authority exists only after `//` (RFC 3986 §3), so `http:example.com` gets it there. A row with no scheme never does. `?check_schemes` and ruling RUL-021 had said such a token could not be computed because `get_host()` reads the `@` in `mailto:someone@example.com` as a userinfo delimiter. That was wrong: the parse record's `host` is `NA` there, and `get_host()` returns the recipient's domain as ADR 0012 D7 extraction metadata (evidence in RURL-hlbbbpdy). Ruling RUL-022 records the correction. No parse result changes (RURL-ktpjscne).
-- `get_url_diagnostics()` reports a new host fact, `domain-invalid-ace-label`, for a host with a label that begins `xn--` but is not a genuine A-label: its Punycode decode fails, or the decoded label fails the UTS #46 Validity Criteria (§4.1) under the WHATWG URL Standard's non-strict flags. `xn--a.example`, `xn--.example` and `xn--ASCII-.example` get it; `xn--bcher-kva.example` does not. Each label is judged alone, so a label that fails the Bidi rule only because of another label does not fire it. The parse does not move: the WHATWG host parser runs the domain parser with `beStrict` = false, which keeps an ASCII host lowercased when ToASCII fails, and WPT pins `https://xn--/` as a success. The token fires under both standards, like the rest of the `domain-*` family. Unlike the rest of the vocabulary, it is complete: it fires on every host meeting its predicate, so a consumer may rely on its absence. `check_hosts()` lists it among the `reasons`. rurl checks UTS #46 criterion 4 (a decoded label must not begin with `xn--`) itself, because punycoder 1.2.1 does not. Ruling RUL-023 records the scope (RURL-vicyvlvh).
+- British spellings are accepted as aliases: `serialise_url()` for `serialize_url()`, `path_normalisation` for `path_normalization`; supplying both is an error, and `path_normal =` no longer partially matches (SEOR-qwomlgjd).
+- `check_schemes()` reports a new reasons token, `no-authority`, for a URL with a scheme but no authority, such as `mailto:someone@example.com`, per RFC 3986 §3 or WHATWG (RURL-ktpjscne).
+- `get_url_diagnostics()` and `check_hosts()` report `domain-invalid-ace-label` for an `xn--` label that is not a genuine A-label, per UTS #46 §4.1; parsing is unchanged (RURL-vicyvlvh).
 
 ### Bug fixes
 
-- `host_encoding = "unicode"` again renders an A-label whose ASCII part holds a code point other than a letter, digit or hyphen: `get_host("http://xn--a_-wia.example/", host_encoding = "unicode")` is `a_ä.example` under every `url_standard`. punycoder 1.3.0 stopped decoding such labels, so the host kept its `xn--` spelling, although RFC 3492 §6.2 accepts any basic code point and UTS #46 §4 (ToUnicode, with `UseSTD3ASCIIRules` false, as the WHATWG URL Standard's domain to Unicode uses it) decodes them. rurl now decodes a label punycoder rejects with its own RFC 3492 decoder, and renders these hosts the same under punycoder 1.2.1 and 1.3.0. An A-label whose ASCII part holds `#`, `/`, `:`, `?` or `@` keeps its spelling, so a rendered host never gains a delimiter (RFC 3986 §3.2.2). Under punycoder 1.2.1 that moves one reachable case: `url_standard = "rfc3986"` with a percent-encoded colon, such as `xn--;~%3A_-8qa3179i`, which rendered a `:` inside the host. The frozen `NULL` profile renders as it did under punycoder 1.2.1 (RURL-oizpyvdz).
-- Under `url_standard = "whatwg"`, a host whose UTS-46 mapping produces a forbidden domain code point now fails the parse, as the WHATWG URL Standard's host parser requires: it tests for one on the result of domain to ASCII (host parsing, the "domain-invalid-code-point" step). The gate tested only the source spelling, so the fullwidth `＃` `／` `？` `：` `％` (U+FF03, U+FF0F, U+FF1F, U+FF1A, U+FF05) and the no-break and ideographic spaces (U+00A0, U+3000) passed layer 1, and `serialize_url()` wrote the mapped `#` `/` `?` `:` `%` or space into the host, where a re-parse reads a different host: `http://127.0.0.1＃.evil.com/` serialized to `http://127.0.0.1#.evil.com/`. These now get `layer1_syntax_verdict = "fail"`, `parse_status = "error"` and an `NA` serialization. `rfc3986` and the frozen `NULL` profile do not move (RURL-crsrkcoh).
-- `safe_parse_url()`, `safe_parse_urls()` and the accessors built on them no longer fail on a long URL with "variable names are limited to 10000 bytes". The caches store each entry under its key as an R variable name, which R caps at 10,000 bytes, and non-ASCII characters are escaped in the key at six bytes each, so the error came from about 9,900 ASCII characters or about 1,700 non-ASCII ones. An internationalized host whose ASCII form passed 10,000 bytes failed the same way through the Punycode cache, even with `rurl_cache_config(full_parse = FALSE)`. A key past the cap now skips the cache and is recomputed on every call; results are unchanged (RURL-tlmoybsl).
-
-### Documentation
-
-- `BugReports` points at `https://gitlab.com/bart-turczynski/rurl/-/issues`, the form R's CRAN incoming check requires for a gitlab.com tracker; a browser following that link is redirected to `/-/work_items` (RURL-nomzooml).
-- The human-facing tracker links in `SECURITY.md`, `codemeta.json` and `.bestpractices.json` now give `https://gitlab.com/bart-turczynski/rurl/-/work_items`, the address GitLab serves directly; `DESCRIPTION`'s `BugReports:` deliberately keeps the `/-/issues` form, because only that form clears the CRAN incoming check (RURL-ahatycrd).
-- The help pages and `NEWS.md` are now spelled in US English throughout, matching the package's declared `Language: en-US`, and `inst/WORDLIST` no longer admits British spellings (SEOR-kfiqpymb).
-
-### Internal
-
-- The agent instructions point at the house `agent-workflow` and `fp` skills for the git workflow, `.Rbuildignore` no longer lists the `FP_CLAUDE.md` file this repository never had, and `design/agent-workflow.md` records that an anonymous GitLab 404 needs a same-run control before it says anything about this project (SEOR-ipwcbcov, RURL-zrlkftor).
-- `scripts/bestpractices-url.py` is vendored from seor, with a pre-push hook that runs its offline self-test when the script changes. `.bestpractices.json` now names GitLab as the home of the project and GitHub only as its read-only mirror, and describes today's CI: GitLab pipelines on `main` run the consistency gates, while the test suite runs in the pre-push gate and in CI only on tags or by hand (SEOR-grrcptww).
-- `.gitlab-ci.yml` now carries a top-level `workflow:` block that suppresses both the branch pipeline and the merge-request pipeline, leaving exactly one pipeline per merge, on `main`. A feature-branch push and an API-triggered pipeline on a non-default branch now create no pipeline at all; a pipeline started by hand from Build > Pipelines > Run pipeline still works on any ref and runs `gates`, `citation-version` and `check` there, while `pages` is pinned to `main` so a branch can be verified but never published. The local pre-push gate remains the thing that verifies a change before it merges (SEOR-bmgkzhvy).
-- The OSS Index dependency audit in `tests/testthat/test-security.R` now scopes to hard dependencies (`Depends` + `Imports`) instead of the `Suggests` tree, which pulled in oysteR's own dependencies and failed the gate on a `curl` vulnerability that rurl does not ship (RURL-mafkcwnu).
-- The OSS Index audit in `tests/testthat/test-security.R` now requires every reported advisory to carry an explicit disposition in an allow-list (`tests/testthat/helper-security.R`, empty today because nothing is reported): an unlisted advisory fails, a listed advisory that is no longer reported fails, and a row past its review date warns. Under `OSSINDEX_AUDIT_REQUIRED=true` a missing `oysteR` or missing credentials fail instead of skipping. The pre-push gate's `LC_ALL=C` test cell no longer runs this audit or the OSV audit in `tests/testthat/test-osv.R`, so a new upstream advisory cannot block an unrelated push; run them with `testthat::test_local(filter = "^(security|osv)$")` (`SEOR-fftbjnpl`).
-- `scripts/check-bugreports.py`, ported from pagerankr, now guards the `BugReports` split: `DESCRIPTION` must keep the `/-/issues` form CRAN's incoming check accepts, `codemeta.json`, `SECURITY.md` and `.bestpractices.json` must link `/-/work_items`, and no other human-facing file may reintroduce a `/-/issues` link. It runs as its own pre-push hook next to `check-citation` and in the `citation-version` CI job (SEOR-ocbtrrnl).
-- `.gitlab-ci.yml` gains `osv-audit` and `security-audit` jobs that run `tests/testthat/test-osv.R` and `tests/testthat/test-security.R` against an installed rurl, only in a pipeline schedule that sets `SCHEDULE_KIND=dependency-audit`; `security-audit` sets `OSSINDEX_AUDIT_REQUIRED=true`, so missing OSS Index credentials fail the job instead of skipping. Nothing else runs these audits since they left the pre-push gate, and the schedule and the `OSSINDEX_USER`/`OSSINDEX_TOKEN` variables still have to be created on the project. `tools/local-ci.sh --all` leaves schedule-only jobs out (SEOR-fftbjnpl).
-- `tools/cran-comments-gate.R` no longer requires the `cran-comments.md` span pin to name the development version in `DESCRIPTION`. It checks the pin against the release that version names — `3.0.1` while at `3.0.1.9000` — so the release checklist's post-release version bump is executable, and `--online` compares whichever end of the span CRAN actually serves in each phase (RURL-efbcrhjc).
-- `tools/curl-zero-gate.R` now checks that rurl does not depend on curl, and no longer polices the word. The raw-text scan (C6), its path allowlist, the staleness check on that allowlist (C0) and the oracle-provenance exemption are gone, so a comment, NEWS entry, design note, fixture or `inst/WORDLIST` entry that names curl or libcurl passes. C5 now fails only on a `\link[curl]{...}` cross-reference or a curl call in an Rd file's `\examples` or `\usage`, not on prose. The DESCRIPTION, NAMESPACE, parsed-code and clean-room checks are unchanged, and the self-test now covers a curl load in the clean room (RURL-dtzvekmf).
-- `.lintr` no longer carries a `#` comment header: `read.dcf()` skips comment lines only from R 4.6, so on R 4.5 and older `lintr::lint_package()` aborted with `Invalid DCF format` and the package got no lint at all. The rationale for each deviation from the goodpractice linter set now lives in `design/verification.md`, with the rule to keep `.lintr` comment-free and ASCII-only (SEOR-qfxolldq).
-- `tools/local-ci.sh` now runs each job script with `bash` when the job's image has it and with POSIX `sh` otherwise, as the GitLab runner does. The `citation-version` job's image, `python:3.13-alpine`, ships only `sh`, so the runner failed that job before any of its commands ran. A failing command in a `sh`-only image still fails the job (RURL-dswufxky).
-- `tools/local-ci-plan.R` now plans a job whose `script:` holds a block-scalar (`- |`) entry, so `tools/local-ci.sh --all` no longer aborts at the `pages` job with "a script entry spans multiple lines". The block is emitted as one entry, verbatim, the way the GitLab runner writes it into the job shell: it runs as one unit, and a failing command inside it fails the job. `--list` shows it under a single `$`, and every job without a block entry plans byte-identically to before. A new `--self-test` mode pins the single-line and the block rendering, and runs both under `bash` (RURL-gysfdtcd).
-- The `check` and `pages` CI jobs install `hunspell` from CRAN over Debian's `r-cran-hunspell`. Debian's build drops the bundled dictionaries for the system `en_US.aff`, whose `WORDCHARS` keeps digits inside a token, so in the `r-base` container `spelling::spell_check_package()` flagged 61 words, such as `PV1` and `sha256`, that a CRAN build of `hunspell` checks as `PV` and `sha` and passes. The spelling step now reads the same dictionaries locally and in CI (RURL-czvqosis).
-- The gate now runs `Rscript tools/local-ci-plan.R --self-test`. `tools/verify-manifest.yml` declares it as a self-test-only `local-ci-plan` job, so `tools/verify.R` selects it whenever `tools/local-ci-plan.R` changes, runs it on `--release` and whenever it cannot tell what changed, and fails the run when a case fails. Until now nothing ran it (RURL-fzeadcfc).
+- `host_encoding = "unicode"` again decodes an A-label with non-LDH code points, `xn--a_-wia.example` to `a_ä.example`, under punycoder 1.3.0, per RFC 3492 §6.2 (RURL-oizpyvdz).
+- Under `url_standard = "whatwg"`, a host whose UTS-46 mapping yields a forbidden domain code point, such as fullwidth `＃`, now fails the parse, per WHATWG host parsing (RURL-crsrkcoh).
+- `safe_parse_url()`, `safe_parse_urls()` and their accessors no longer fail on very long URLs with "variable names are limited to 10000 bytes" (RURL-tlmoybsl).
 
 ## rurl 3.0.1
 
-### Internal
-
-- The external-url-vectors fixture is now read with `readBin()` and parsed from memory, so R's Windows text-mode file connection cannot drop bytes at the fixture's `0x1A` and shift the corpus out of register (RURL-gxgxyzpk).
-- The conformance corpus's shape is pinned by a test, so a row that mis-parses fails loudly instead of silently leaving the corpus every oracle test filters (RURL-gxgxyzpk).
+No user-facing changes.
 
 ## rurl 3.0.0
 
 ### Breaking changes
 
-- **`profile = "seo"` (and its `"canonical"` alias) now delivers rurl's
-  definition of a clean URL: a lossy policy projection of a WHATWG-parsed URL
-  (ADR 0017).** The
-  bundle gained two knobs, `url_standard = "whatwg"` and
-  `host_encoding = "unicode"`, so cleaned output resolves `.`/`..` folder
-  segments and renders the host in Unicode regardless of how the input spelled
-  it.
-
-  ```r
-  # before
-  get_clean_url("http://example.com/a/./b/../c", profile = "seo")
-  #> "https://example.com/a/./b/../c"
-  get_clean_url("https://xn--mnchen-3ya.de/a", profile = "seo")
-  #> "https://xn--mnchen-3ya.de/a"
-
-  # after
-  get_clean_url("http://example.com/a/./b/../c", profile = "seo")
-  #> "https://example.com/a/c"
-  get_clean_url("https://xn--mnchen-3ya.de/a", profile = "seo")
-  #> "https://münchen.de/a"
-  ```
-
-- **The trailing-slash strip on the cleaning surface no longer leaves an
-  authority that is only dots** (RUL-005, derived from ADR 0017 D1: a clean
-  URL is structurally valid *and* display-oriented, and `https://.` fails the
-  second half). For a host matching `^\.+$` under
-  `trailing_slash_handling = "strip"` the separator is kept; root-dot FQDNs
-  (`example.com.`) and a dots-only host with a non-empty path strip as before.
-  The parse is untouched (`host` stays `.` at `warning-invalid-tld`), and the
-  change is selector-independent: the `whatwg`, `rfc3986` and `NULL` arms all
-  moved by the same kept `/`, which ADR 0016 permits because the cause is a
-  clean-surface contract, not a standard's rule.
-
-  ```r
-  # before
-  get_clean_url("http://./", profile = "seo")
-  #> "https://."
-
-  # after
-  get_clean_url("http://./", profile = "seo")
-  #> "https://./"
-  get_clean_url("http://./x/", profile = "seo")
-  #> "https://./x"
-  ```
-
-  The Unicode host is the more consequential half: `host_encoding = "keep"`
-  echoed whichever spelling the input used, so the same site could yield
-  `xn--mnchen-3ya.de` from one row and `münchen.de` from the next. Cleaning the
-  Punycode and Unicode spellings of one host is now byte-identical.
-
-  This changes output only for callers who pass `profile = "seo"` or
-  `profile = "canonical"`. **Callers who pass no profile are unaffected**: the
-  `url_standard = NULL` default is frozen byte-for-byte (ADR 0007) and was
-  verified unchanged across the full fixture corpus. An explicit argument still
-  overrides the bundle, so `profile = "seo", host_encoding = "keep"` restores
-  the previous host rendering.
-
-- **`profile = "seo"` (and `"canonical"`) now drops only a *default* port and
-  keeps a non-default one; and `port_handling = "strip_default"` judges
-  default-ness on the scheme the input was parsed with, never on the scheme
-  `protocol_handling = "https"` renders** (RUL-016, RURL-msybcxgq; ADR 0017
-  D2 row 9 amended). RFC 3986 §6.2.3 (scheme-based normalization: the default
-  port is equivalent to no port) and the WHATWG URL Standard's port state (a
-  port equal to the scheme's default is set to null) sanction dropping a
-  default port; nothing sanctions dropping a non-default port, which names a
-  different origin (RFC 6454 §4). The bundle inherited the surface default
-  `port_handling = "exclude"`, and the port builder received the upgraded
-  scheme, so both halves folded origins.
-
-  ```r
-  # before
-  get_clean_url("http://example.com:8080/a", profile = "seo")
-  #> "https://example.com/a"
-  get_clean_url("http://example.com:443/a", url_standard = "whatwg",
-                port_handling = "strip_default", protocol_handling = "https")
-  #> "https://example.com/a"
-
-  # after
-  get_clean_url("http://example.com:8080/a", profile = "seo")
-  #> "https://example.com:8080/a"
-  get_clean_url("http://example.com:443/a", url_standard = "whatwg",
-                port_handling = "strip_default", protocol_handling = "https")
-  #> "https://example.com:443/a"
-  ```
-
-  `http://example.com:80/a` under the same dials now cleans to
-  `https://example.com/a` (it rendered `https://example.com:80/a`, a port the
-  WHATWG record holds as null), and under `url_standard = "whatwg"` the
-  parse-record `port` column agrees with `get_port()` regardless of
-  `protocol_handling`. The surface default `port_handling = "exclude"` and the
-  literal `"keep"` are byte-identical; `profile = "seo", port_handling =
-  "exclude"` restores the old fold. `strip_default` combined with a
-  scheme-rewriting `protocol_handling` moves under `url_standard = NULL` too —
-  a default-path defect fix under ADR 0016, with its witness and signature in
-  `tests/testthat/test-clean-url-port-strip-default.R`.
-
-- **Under `url_standard = "whatwg"` the host presentation now applies the
-  WHATWG host parser's UTS-46 mapping — on the default rendering and under
-  `host_encoding = "unicode"`, not only under `"idna"`** (RUL-002,
-  RURL-nuqhbxvc). The WHATWG URL Standard's host parser runs "domain to ASCII"
-  (UTS #46 §4 Processing and §4.2 ToASCII, with `Transitional_Processing`,
-  `CheckHyphens`, `UseSTD3ASCIIRules` and `VerifyDnsLength` all false) and the
-  URL record stores that ASCII host; "domain to Unicode" is §4.3 ToUnicode of
-  it. rurl applied the mapping only when asked for the A-label spelling, so the
-  default and Unicode renderings showed the *unmapped* source characters —
-  a full-width `ｅ`, an `ﬁ` ligature, a zero-width space — for a host whose
-  record already read `example.com`, `file.com`, `ab.com`:
-
-  ```r
-  # before                                        # after
-  get_host("https://BÜCHER.example/", url_standard = "whatwg")
-  #> "bÜcher.example"                             #> "bücher.example"
-  get_host("https://ﬁle.com/", url_standard = "whatwg")
-  #> "ﬁle.com"                                    #> "file.com"
-  get_host("https://ｅxample.com/", url_standard = "whatwg")
-  #> "ｅxample.com"                               #> "example.com"
-  ```
-
-  Both renderings are now `ToUnicode(ToASCII(host))`, so the Unicode
-  presentation of a host and of its own A-label spelling are identical, while
-  the default rendering keeps an input that was *written* as an A-label in
-  ASCII (as the `domain`/`tld` columns already did). `serialize_url(standard =
-  "whatwg")` and `get_url_key()` read the record's ASCII host and do not move.
-  The `rfc3986` arm and the `url_standard = NULL` default are byte-identical
-  (ADR 0016): their `idna`/`unicode` renderings stay the reversible Punycode
-  helpers of ADR 0002, which this change does not touch.
-
-- **`profile = "seo"` now drops the whole query, where it used to keep every
-  parameter it did not recognize as a tracker** (`query_handling` moves from
-  `"filter"` to `"drop"`, ADR 0017). This closes an anomaly in which asking for
-  the SEO preset bought *less* parameter cleaning than asking for nothing at
-  all: `get_clean_url()`'s own default is, and always was, `"drop"`.
-
-  ```r
-  # before
-  get_clean_url("https://example.com/p?utm_source=nl&id=7&ref=x", profile = "seo")
-  #> "https://example.com/p?id=7&ref=x"
-  get_clean_url("https://example.com/p?a=1&b=2", profile = "seo")
-  #> "https://example.com/p?a=1&b=2"      # no tracker present: untouched
-  get_clean_url("https://example.com/p?a=1&b=2")
-  #> "https://example.com/p"              # ...but the bare default cleaned it
-
-  # after -- all three are "https://example.com/p"
-  ```
-
-  `"filter"` was also less categorical than it read: it matches parameter
-  *names* against a built-in denylist, so `utm_source=nl` was dropped while
-  `utm=x` — not on the list — survived. Over the 482-row union of the fixture
-  corpora the change moves 25 rows, and every one of them loses a parameter
-  that is not on that denylist.
-
-  Tracker-only filtering is unchanged and still one argument away:
-  `get_clean_url(x, profile = "seo", query_handling = "filter")`. As above,
-  callers who pass no profile are unaffected.
-
-- **`rurl` no longer depends on `curl`.** URL parsing is now entirely in-tree.
-  `curl` is removed from `Imports`, so installing `rurl` no longer pulls it in
-  and no longer requires the system `libcurl` it links against.
-
-  The last route still handed to `curl::curl_parse_url()` — http/https/ftp/ftps
-  (plus ws/wss under `url_standard = "whatwg"`) — is now parsed by
-  `R/parse-web.R`. Every other route already had an in-tree parser.
-
-  **Output is unchanged.** This was verified as a behavior-preserving engine
-  swap before the dependency was dropped: 106,898 inputs were compared field by
-  field against `curl_parse_url()` — a structural grid, a per-octet sweep of
-  every URL position, an IPv6/IPv4/percent-escape fuzz corpus, the WPT
-  `urltestdata` corpus and every URL literal in the package's own tests —
-  including encoding marks, at **zero differences**. The full test suite, the
-  WPT suite, and the FSSS and `url_standard` conformance harnesses are all
-  unchanged.
-
-  This is flagged breaking only because a declared dependency disappears: code
-  that relied on `rurl` to load `curl` transitively must now declare `curl`
-  itself. Nothing in `rurl`'s own behavior changed.
-
-  One improvement falls out of it. A host or userinfo carrying invalid UTF-8
-  used to be accepted or rejected depending on the session locale, because
-  `curl_parse_url()`'s R binding threw under a UTF-8 locale but returned raw
-  bytes under `LC_ALL=C`; `rurl` pinned the UTF-8 outcome with an explicit
-  check bolted onto the seam. The in-tree parser enforces that boundary by
-  construction, so locale invariance there is no longer compensation.
-
-- **`canonical_join()` now warns when a legacy presentation dial is forwarded
-  through `...`.** `canonical_join()` matches on the canonicalized presentation
-  string (`clean_url`), so a presentation or cleaning dial passed through `...`
-  silently moves the comparison key and changes join cardinality — the same
-  inputs match a different number of rows because of dials that were never meant
-  to be identity inputs. Twenty-one such dials now emit one warning per call, of
-  class `"rurl_legacy_join_dial_warning"`. The four input and interpretation
-  axes — `url_standard`, `scheme_acceptance`, `scheme_policy` and
-  `scheme_relative_handling` — are legitimate inputs to identity and stay
-  silent.
-
-  **Results are unchanged.** The warning is purely additive, and byte-identical
-  output was verified across ten dial configurations, so no caller is silently
-  re-matched. This is flagged breaking only because a new condition is
-  *signaled*: code running under `options(warn = 2)`, or asserting with
-  `expect_silent()`, will now see an error where it previously saw none. Because
-  the condition is classed it can be silenced without hiding other warnings:
-
-  ```r
-  suppressWarnings(
-    canonical_join(A, B, www_handling = "strip"),
-    classes = "rurl_legacy_join_dial_warning"
-  )
-  ```
-
-  The per-dial classification is taken from the settled `key-affecting?` column
-  of the v3 cleaning-mutation contract rather than re-derived. Retaining
-  `canonical_join()` with a deprecation window and warnings — rather than
-  re-keying it in place — is the ratified disposition (P3.1 Q7/B7).
-
-- **`safe_parse_url()` no longer reports an authority for a `mailto:` URL under
-  `scheme_acceptance = "general"`.** A non-special scheme with no `//` is a
-  WHATWG *opaque path*, which has no authority — but the `@` in a recipient
-  address was re-surfacing as parsed authority, so
-  `safe_parse_urls("mailto:a@b.com", url_standard = "whatwg", scheme_acceptance = "general")`
-  reported `host = "b.com"`, `user = "a"`, `domain = "b.com"`, `tld = "com"`.
-  Those five columns (plus `domain_ascii` / `domain_unicode` / `tld_ascii` /
-  `tld_unicode`) are now `NA`, matching WHATWG and adaR. `path` and `clean_url`
-  already carried the address verbatim and are unchanged, as is every
-  non-`mailto:` opaque row (`tel:`, `data:`, `sc:`), which already reported no
-  authority.
-
-  **The accessors are deliberately unchanged.** `get_host()`, `get_domain()`,
-  `get_tld()`, `get_subdomain()` and `get_user()` still decompose a `mailto:`
-  recipient under `general` — through the same PSL seam a web host uses — as
-  shipped in 2.6.0 (ADR 0012 D7). A recipient domain is *extraction metadata
-  about an address*, not the URL's authority, so it is surfaced by the
-  accessors and by `get_mailto_recipients()` while the parse table stays
-  WHATWG-conformant. `safe_parse_url(u)$host` and `get_host(u)` therefore
-  disagree for a `mailto:` under `general`, by design — the same independence
-  D7 already declared between `get_host()` and `clean_url()`. Only the default
-  `scheme_acceptance = "web"` posture is untouched in every respect, since it
-  does not parse `mailto:` at all.
-
-- **`resolve_url()` reference resolution is now standard-*aware*.** It used to
-  run RFC 3986 §5 regardless of `url_standard`, on the reasoning that
-  decomposing WHATWG against §5.3 showed no genuinely new divergent behavior.
-  Measurement falsified that: over the 274 base-carrying rows of the WHATWG
-  suite's own `urltestdata.json`, 218 matched exactly and 56 differed. Under
-  `url_standard = "whatwg"` the WHATWG reference-*parsing* rules now run before
-  the merge:
-
-  ```r
-  # a reference carrying the base's own special scheme is relative, not absolute
-  resolve_url("http:g", "http://a/b/c/d", url_standard = "whatwg")
-  #> "http://a/b/c/g"
-
-  # `\` reads as `/`, and a leading run of slashes introduces an authority
-  resolve_url("..\\g", "http://a/b/c/d", url_standard = "whatwg")
-  #> "http://a/b/g"
-
-  # leading and trailing C0-or-space is stripped before the reference is read
-  resolve_url("  \n g ", "http://a/b/c/d", url_standard = "whatwg")
-  #> "http://a/b/c/g"
-  ```
-
-  Together with the scheme-production fix below and the three fixes under
-  *Bug fixes* (the `file:` drive-letter rules, the `/.` guard at the
-  recomposition seam, and the WHATWG host model's "ends in a number" order),
-  that corpus now scores **274 exact with no enumerated difference**. The
-  last one, the absolute reference `tel:1234567890`, was never a resolution
-  defect: it was the scheme-less host:port carve-out rejecting the absolute
-  parse, fixed under *Bug fixes* (RURL-lxdwuacn). Under `"rfc3986"` the
-  merge stays RFC 3986 §5.2–§5.3. **Under the default `url_standard = NULL`
-  nothing moves**: that path is byte-frozen (ADR 0007) and was verified
-  unchanged across the corpus.
-
-- **A colon in a relative path's first segment is no longer mistaken for a
-  scheme** (under the two named profiles). The reference splitter matched the
-  scheme with RFC 3986 *Appendix B*'s `[^:/?#]+`, a group the appendix itself
-  describes as non-validating and which §4.2 names as exactly this hazard: a
-  relative path that merely *contains* a colon was read as an absolute
-  reference, and the base was discarded outright.
-
-  ```r
-  # before: the base vanished
-  resolve_url("10.0.0.7:8080/foo.html", "file:///some/dir/bar.html",
-              url_standard = "rfc3986")
-  #> "http://10.0.0.7/foo.html"
-
-  # after: `10.0.0.7` is not a scheme, so the reference is relative
-  #> "file:///some/dir/10.0.0.7:8080/foo.html"
-  ```
-
-  The production is now §3.1's real one, `ALPHA *( ALPHA / DIGIT / "+" / "-" /
-  "." )`. It was tightened, not removed: a first segment that really is a valid
-  scheme still makes the reference absolute.
-
-  **The same tightening cuts the other way for a *base*.** A base whose scheme
-  existed only under Appendix B is not an absolute URL, so there is nothing to
-  resolve against, and both named profiles now return `NA`:
-
-  ```r
-  resolve_url("g", "10.0.0.7:8080/dir/x", url_standard = "rfc3986")
-  #> NA          # was "http://10.0.0.7/dir/g"
-  resolve_url("g", "10.0.0.7:8080/dir/x")
-  #> "http://10.0.0.7/dir/g"   # url_standard = NULL is unchanged
-  ```
-
-  `url_standard = NULL` keeps Appendix B's loose group. Tightening it there
-  would move frozen bytes rather than merely improve them, and the freeze
-  governs whether output may *move*, not whether it is right — so the fix ships
-  on the two selectors that claim a standard, and the one that claims none is
-  left alone.
-
-- **`url_standard` is now required on `get_host_type()`,
-  `get_url_diagnostics()` and `get_scheme_class()`.** All three defaulted to
-  `url_standard = NULL`, and under that default none of them could return
-  information for *any* input — measured, not estimated:
-
-  ```r
-  # before
-  get_host_type(c("http://example.com/", "http://2130706433/"))
-  #> NA NA
-  get_scheme_class(c("http://example.com/", "ftps://example.com/"))
-  #> NA NA
-  get_url_diagnostics("http://2130706433/")
-  #> character(0)
-
-  # after
-  get_host_type(c("http://example.com/", "http://2130706433/"))
-  #> Error: `url_standard` is required: pass "whatwg" or "rfc3986". Host type
-  #>   is a function of the standard profile, so there is no profile-neutral
-  #>   answer to report.
-  ```
-
-  There was no input for which the selector-less arm answered anything: it was
-  not a mode that answered a different question, it was a mode that could not
-  answer. Worse, on two of the three it collided with a real result.
-  `get_host_type()` returned `NA` both for a selector-less call and for a row
-  genuinely unclassifiable under the selector, so an all-`NA` result was never
-  evidence about the input; `get_url_diagnostics()` returned `character(0)`
-  both for a selector-less call and for a URL that raised no diagnostics, so an
-  empty result was never evidence that a URL was clean.
-
-  Both collisions are gone. `NA` from `get_host_type()` now means
-  *unclassifiable under the standard you named*, `character(0)` from
-  `get_url_diagnostics()` means *clean under the standard you named*, and
-  `get_scheme_class()` — which never returned `NA` once a selector was passed —
-  cannot return `NA` at all. Passing `url_standard = NULL` explicitly is the
-  same error as omitting it: the mode is gone, not merely undefaulted.
-
-  `get_scheme_class()` is included even though its `NA` was already
-  unambiguous. Sparing it would have made the argument requirement depend on
-  incidental return encoding rather than on meaning, and a caller who forgot
-  the argument still got no error and a column that answered nothing.
-
-  The selector was **not** simply defaulted to `"whatwg"` instead.
-  `is_valid_host()` and `check_hosts()` do default that way, but they are
-  policy APIs with a web-oriented posture; these three report profile-derived
-  facts, and there is no profile-neutral host type, diagnostic set or
-  special-scheme classification for a default to stand for. A silently-chosen
-  profile would let a plausible answer flow onward as authoritative while
-  concealing that no standard was named.
-
-  Every other function that takes `url_standard` is unaffected: parse
-  functions keep the `NULL` profile, and `get_parse_verdicts()` remains
-  deliberately ungated because its layers describe the parse that actually ran
-  (ADR 0015).
+- `profile = "seo"` (and `"canonical"`) now sets `url_standard = "whatwg"` and `host_encoding = "unicode"`, so cleaned URLs resolve `.`/`..` segments and render hosts in Unicode (ADR 0017).
+- `trailing_slash_handling = "strip"` keeps the `/` when the host is only dots: `get_clean_url("http://./", profile = "seo")` now returns `"https://./"` (ADR 0017).
+- `profile = "seo"` now keeps non-default ports, and `port_handling = "strip_default"` judges the default on the input scheme, not the rendered one, per RFC 3986 §6.2.3 (RURL-msybcxgq).
+- Under `url_standard = "whatwg"`, the default and `"unicode"` host renderings apply UTS-46 mapping, so `BÜCHER.example` renders `bücher.example`, per WHATWG host parsing (RURL-nuqhbxvc).
+- `profile = "seo"` now drops the whole query (`query_handling = "drop"`, was `"filter"`); pass `query_handling = "filter"` to keep non-tracker parameters (ADR 0017).
+- rurl no longer depends on `curl` or the system `libcurl`; parsing is in-tree with unchanged output, so code relying on rurl to load `curl` must declare it.
+- `canonical_join()` warns, with class `"rurl_legacy_join_dial_warning"`, when a presentation dial is passed through `...`; results are unchanged.
+- `safe_parse_url()` no longer reports `host`, `user`, `domain` or `tld` for a `mailto:` URL under `scheme_acceptance = "general"`; `get_host()` and the other accessors still decompose it.
+- Under `url_standard = "whatwg"`, `resolve_url()` applies WHATWG reference parsing before the merge, so `"http:g"` is relative and `\` reads as `/`; `NULL` is unchanged.
+- Under a named `url_standard`, `resolve_url()` matches a scheme per RFC 3986 §3.1, so a colon in a relative first segment is no longer a scheme; such a base returns `NA`.
+- `get_host_type()`, `get_url_diagnostics()` and `get_scheme_class()` now require `url_standard` (`"whatwg"` or `"rfc3986"`); omitting it or passing `NULL` is an error.
 
 ### Bug fixes
 
-- **`serialize_url(standard = "rfc3986", form = "source")` now reproduces the
-  input's scheme, query and fragment byte-for-byte, as it already did for the
-  path, userinfo and host** (RURL-gkmwqpos, ruling RUL-007). RFC 3986 §6.2.2.1
-  makes both the scheme case fold and the percent-encoding hex-digit case fold
-  *normalizations*, and §5.3 recomposes components as they are; a posture
-  documented as "no normalization" that applied half of §6.2.2.1 — on the
-  scheme and on the query/fragment triplets, but not on the path or host — was
-  defective under its own name. Measured over the 5,967-row RFC property
-  population, 316 rows did not round-trip; now none do.
-
-  ```r
-  # before
-  serialize_url("HTTP://EXAMPLE.COM/p%7ca?q=%7ca#f%7ca",
-                standard = "rfc3986", form = "source")
-  #> "http://EXAMPLE.COM/p%7ca?q=%7Ca#f%7Ca"
-
-  # after
-  serialize_url("HTTP://EXAMPLE.COM/p%7ca?q=%7ca#f%7ca",
-                standard = "rfc3986", form = "source")
-  #> "HTTP://EXAMPLE.COM/p%7ca?q=%7ca#f%7ca"
-  serialize_url("HTTP://EXAMPLE.COM/p%7ca?q=%7ca#f%7ca",
-                standard = "rfc3986", form = "normalized")
-  #> "http://example.com/p%7Ca?q=%7Ca#f%7Ca"      <- §6.2.2.1, where it belongs
-  ```
-
-  The parse record moves with it under `url_standard = "rfc3986"` only: the
-  `query` and `fragment` columns of `safe_parse_url()`, `get_query(decode =
-  FALSE)`, `get_fragment()` and the `rfc3986` URL key now carry the source hex
-  case (`q=%7ca`, not `q=%7Ca`), which is what the path column and the key
-  contract's "exact structural query" already did. `clean_url` does not move:
-  it is a lossy policy projection (ADR 0017) and canonicalizes query hex case
-  on the way out. The `scheme` column stays lower-case — it is the
-  classification token, and the key contract keeps scheme identity
-  case-insensitive; only the `source` serialization renders the spelling.
-  `url_standard = "whatwg"` and the frozen `url_standard = NULL` profile are
-  byte-identical to before on every surface, and `form = "normalized"` is
-  unchanged. This slice left one residual, closed by the next bullet: a raw
-  byte ≥ 0x80 in a query or fragment was still percent-encoded on the
-  `rfc3986` record while the path kept it raw.
-
-- **`serialize_url(standard = "rfc3986", form = "source")` now reproduces a
-  raw byte ≥ 0x80 in the query and fragment as written, as it already did in
-  the path** (RURL-bpfumnbj, ruling RUL-015, derived from RUL-007). RFC 3986
-  §2.1 defines a percent-encoding triplet as a *representation* of a data
-  octet, and §5.3 recomposes components as they are, so writing the octet as
-  `%XX` is a rendering choice of the same kind as the §6.2.2.1 hex-case fold
-  and belongs to the same place: `form = "normalized"`, which keeps encoding
-  it (uppercase), not the parse record or the source form.
-
-  ```r
-  serialize_url("https://x/ü?ü#ü", standard = "rfc3986", form = "source")
-  #> before: "https://x/ü?%C3%BC#%C3%BC"
-  #> after:  "https://x/ü?ü#ü"
-  serialize_url("https://x/ü?ü#ü", standard = "rfc3986", form = "normalized")
-  #> "https://x/ü?%C3%BC#%C3%BC"                 <- unchanged
-  ```
-
-  Under `url_standard = "rfc3986"` the `query` and `fragment` columns of
-  `safe_parse_url()`, `get_query(decode = FALSE)`, `get_fragment()` and the
-  `rfc3986` URL key carry the raw byte too (`q=ü`, not `q=%C3%BC`), which is
-  what the general route (`foo://h/p?q=ü`) and the path column already did.
-  `clean_url` does not move. `url_standard = "whatwg"` and the frozen
-  `url_standard = NULL` profile are byte-identical to before on every
-  surface, and `form = "normalized"` is byte-identical for every web-route
-  input. One consequence outside the web route: `form = "normalized"` now
-  percent-encodes a raw non-ASCII query or fragment byte on the general
-  route as well (`foo://h/p?q=ü` → `foo://h/p?q=%C3%BC`), where it used to
-  emit the byte raw — the normalized form is one function of the URL, not of
-  the route that parsed it. Three measured `fsss_rfc_source` cells of the
-  external-vector fixture moved (wptcf-025, wptcf-029, wptcf-043); no claim
-  column did.
-
-- **A dotted scheme token that looks like `host:port` now parses as a scheme
-  under `scheme_policy = "require"`** (`whatwg`; RURL-lxdwuacn, RUL-014). With
-  `profile = "whatwg"`, `tel:1234567890` and `www.php.net:80/index.php?test=1`
-  were rejected outright: the scheme-less `example.com:8080` carve-out matched
-  them and diverted them from the opaque parser to the web route, which
-  rejects those schemes. The WHATWG URL Standard's *scheme start state* and
-  *scheme state* read `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )` followed by
-  `:` as the scheme, with no exception for a token that looks like a host; RFC
-  3986 §3.1 carries the identical production, and the `rfc3986` arm already
-  read it that way. `serialize_url(x, standard = "whatwg")` now returns
-  `tel:1234567890` and `www.php.net:80/index.php?test=1` (scheme
-  `www.php.net`, opaque path `80/index.php`, query `test=1`) instead of `NA`.
-
-  The carve-out is the browser-omnibox affordance `scheme_policy = "infer"`
-  names (ADR 0010), so it is untouched there — `www.php.net:80/index.php?test=1`
-  still reads as host `www.php.net` — and untouched under the byte-frozen
-  `url_standard = NULL` (ADR 0007); both were measured byte-identical. Two
-  fixtures moved with it: the WPT base-relative corpus's last enumerated
-  difference (below) is discharged, and external vector `yal-009` no longer
-  records a deviation (RURL-yeikpnan) — its measured columns and the fixture's
-  sha256 pins were re-baselined per `design/oracle-fixtures.md`, and its
-  `whatwg_expected = "failure"` cell, which recorded rurl's own former output
-  as the standard's mandate, is now `"accept"`.
-
-- **`resolve_url()` no longer loses the `/.` guard when a resolved path's
-  first segment is empty** (both named profiles; RURL-bedensww). RFC 3986
-  §5.2.4 merges `/..//path` against `non-spec:/p` to the path `//path`, and
-  §3.3 forbids writing that after no authority ("the path cannot begin with two
-  slash characters"): recomposed verbatim, `non-spec://path` re-reads as the
-  *authority* `path`. `serialize_url()` already emitted the guard the WHATWG
-  URL serializer prescribes for this shape, but the resolver handed it the
-  unguarded string, so the guard was lost on the way through.
-
-  ```r
-  resolve_url("/..//path", "non-spec:/p", url_standard = "whatwg",
-              output = "serialized")
-  #> "non-spec:/.//path"    # was "non-spec://path"
-  ```
-
-  §5.3's recomposition now emits `/.` whenever a standard is selected and the
-  path begins with `//` after no authority. `url_standard = NULL` keeps the
-  unguarded string (ADR 0007).
-
-- **`resolve_url(url_standard = "whatwg")` applies the WHATWG `file:` state
-  machine's drive-letter rules** (RURL-ufsltsit). Against a `file:` base,
-  WHATWG's "file state" empties the base path when the reference *begins* with
-  a Windows drive letter, its "file slash state" gives a rooted reference the
-  base's drive letter, "shorten a URL's path" never removes a lone normalized
-  drive letter, and the "path state" normalizes `C|` to `C:` in the first
-  segment. Resolution had none of these, so a drive letter merged like any
-  other segment.
-
-  ```r
-  r <- function(ref, base) {
-    resolve_url(ref, base, url_standard = "whatwg", output = "serialized")
-  }
-  r("C|/foo/bar", "file:///tmp/mock/path")  #> "file:///C:/foo/bar"
-  r("..", "file:///C:/")                    #> "file:///C:/"   (was "file:///")
-  r("/", "file:///C:/a/b")                  #> "file:///C:/"   (was "file:///")
-  r("C|", "file://host/dir/file")           #> "file://host/C:"
-  ```
-
-  The "file host state" half -- a drive letter in the authority position is an
-  empty host plus a path segment -- was already in the absolute parser for the
-  `C|` spelling and missed `C:`, so `file://C:/` was rejected outright; it now
-  parses as `file:///C:/`, and a slash-less `file://d:` as `file:///d:`. All
-  of it is reachable only from `url_standard = "whatwg"` with a `file:` base;
-  `"rfc3986"` and the frozen `NULL` selector keep RFC 3986 §5.2's merge.
-
-- **The absolute WHATWG parser no longer shortens a `file:` path past a lone
-  drive letter** (RURL-msefniuz). The WHATWG URL Standard's "path state"
-  resolves `..` through "shorten a URL's path", which returns without removing
-  anything when "url's scheme is `file`, path's size is 1, and path[0] is a
-  normalized Windows drive letter". The resolver gained that rule for relative
-  references (above), but a `file:` URL parsed on its own still went through
-  RFC 3986 §5.2.4's remover, which knows no drive letter.
-
-  ```r
-  serialize_url("file:///C:/../", standard = "whatwg")
-  #> "file:///C:/"       (was "file:///")
-  serialize_url("file:///C:/a/../..", standard = "whatwg")
-  #> "file:///C:/"       (was "file:///")
-  serialize_url("file://host/C:/..", standard = "whatwg")
-  #> "file://host/C:/"   (was "file://host/")
-  serialize_url("http://h/C:/..", standard = "whatwg")
-  #> "http://h/"         (unchanged: the clause is keyed on the `file` scheme)
-  ```
-
-  Only a `file:` path whose first segment is a normalized drive letter is
-  affected, and only under `url_standard = "whatwg"`; `"rfc3986"` keeps
-  §5.2.4's shortening and the frozen `NULL` selector is untouched.
-
-- **The WHATWG host model reads "ends in a number" after percent-decoding and
-  UTS-46 mapping** (RURL-lxdwuacn). It used to read the trigger off the
-  *source* token, where the WHATWG host parser reads it after decoding and
-  domain-to-ASCII (#concept-host-parser steps 3--6).
-  `http://%30%78%63%30%2e%30%32%35%30.01` decodes to `0xc0.0250.01` and the
-  fullwidth `http://０Ｘｃ０．０２５０．０１` maps to it; the first was rejected
-  and the second accepted as a reg-name, and both are now `http://192.168.0.1/`
-  as WPT pins. The address grammar is the one already in tree
-  (`.web_ipv4_normalize()`); only the point at which the trigger is read
-  moved, and `R/parse-web.R`'s calibrated host parse is untouched (ADR 0018).
-  `"rfc3986"` and `NULL` are unchanged on every input above.
-
-- **`serialize_url(standard = NULL)` is now an error instead of a silent
-  `"whatwg"`.** `match.arg(NULL, choices)` returns the first choice, so the
-  serializer quietly rendered the WHATWG form for a selector value that, on
-  the parse surface, means the opposite: `url_standard = NULL` is the frozen
-  legacy profile that names no standard (ADR 0007), so there is nothing to
-  serialize *as*. The refusal mirrors `url_key_policy(standard = NULL)`, the
-  other surface that spells the axis as `standard`; the named arms and the
-  `"whatwg"` default are byte-identical to before (RURL-ouorolhb).
-
-- **`index_page_handling = "strip"` no longer emits a path ending in `.` or
-  `..`.** Dropping a terminal `index.*`/`default.*` page exposes dot segments
-  that the page name was hiding, and nothing re-normalized afterwards, so the
-  cleaner handed back paths no consumer should be given — including one that
-  escapes above the document root:
-
-  ```r
-  # before                                     # after
-  get_clean_url("http://example.com/a/./b/../index.html",
-                index_page_handling = "strip")
-  #> "http://example.com/a/./b/.."             #> "http://example.com/a/"
-  get_clean_url("http://example.com/../index.html",
-                index_page_handling = "strip")
-  #> "http://example.com/.."                   #> "http://example.com/"
-  ```
-
-  The processing order was not at fault: `path_normalization` (step 2)
-  correctly precedes `index_page_handling` (step 3). The bug was that step 3
-  had an unstated precondition — a resolved path — that step 2 does not
-  guarantee, because `path_normalization` defaults to `"none"`. Stripping now
-  resolves the remaining path when, and only when, it left a dot segment in
-  final position; dot segments that were already visible beforehand are still
-  untouched, so `path_normalization = "none"` keeps meaning none.
-
-  Output moves only for `index_page_handling = "strip"` with dot-segment
-  normalization off. `"keep"` is byte-identical, and `url_standard = "whatwg"`
-  and `"rfc3986"` cannot reach the new branch at all — both profiles set
-  `path_normalization = "dot_segments"`, which leaves the strip nothing to
-  expose. **ADR 0007 disposition: (ii).** `index_page_handling` is not in
-  `.URL_STANDARD_PROFILES` (whose governed axes are exactly `path_identity`,
-  `path_normalization` and `case_handling`), so it is an ungoverned
-  presentation axis in ADR 0011's sense; the ADR 0007 freeze binds
-  selector-driven drift, and a defect fix on an ungoverned axis may move
-  `url_standard = NULL` rows without an amendment. Measured over a conjunction
-  corpus of 840 URLs × 36 dial cells: 2160 violating rows before, 0 after, and
-  every changed row carries the defect's own signature.
-
-- **`host_encoding = "unicode"` no longer drops a trailing root-dot label.**
-  Rendering the host in Unicode is supposed to change how a label is *spelled*,
-  never how many labels the host has — but the decoder split the host with base
-  `strsplit(host, ".", fixed = TRUE)`, which discards the empty label after a
-  final dot, and then rejoined what was left as the output host:
-
-  ```r
-  # before                                     # after
-  get_host("https://example.com./", host_encoding = "unicode")
-  #> "example.com"                             #> "example.com."
-  ```
-
-  So a root-dot FQDN silently converged on the non-FQDN host that rurl's own
-  identity model holds distinct (`get_url_key()` keeps them apart), with no
-  diagnostic marking the collapse — and `unicode` was the only host rendering
-  that diverged from the WHATWG host parser, which does not strip a root dot
-  either. This reached every `profile = "seo"` caller, since that bundle now
-  sets `host_encoding = "unicode"`.
-
-  Only root-dot hosts under `host_encoding = "unicode"` change: `"keep"` and
-  `"idna"` are byte-identical, and across the fixture corpus under all three
-  `url_standard` values no other row moved.
-
-- **An error row no longer exposes a `clean_url`.** Under
-  `url_standard = "rfc3986"`, `file:.` was correctly classified as an error but
-  path normalization reduced `.` to an empty path, allowing the clean builder
-  to emit `file://`. Error rows now consistently return `NA` for `clean_url`;
-  valid hostless file URLs such as `file:///etc/passwd` are unchanged.
-
-- **Path presentation no longer changes which cleanup rules fire.** Combining
-  `path_encoding = "decode"` or `"encode"` with index-page or trailing-slash
-  stripping previously decoded `%2F` too early, turning data into a separator
-  before cleanup. For example, stripping the index from
-  `https://ex.com/a%2Findex.html` incorrectly produced `https://ex.com/a`.
-  Cleanup now inspects the pre-presentation path and path encoding runs last, so
-  the same call renders `https://ex.com/a/index.html` without treating the
-  encoded slash as structural.
-
-- **A bytes-marked input no longer aborts the whole vectorized call.** One
-  element carrying `Encoding(x) <- "bytes"` used to throw `bytes encoding is
-  not supported by this function` out of the entire batch, so a thousand-URL
-  `get_host()` lost all thousand because of one row:
-
-  ```r
-  u <- rawToChar(as.raw(c(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f,
-                          0x80, 0x2f, 0x70)))
-  Encoding(u) <- "bytes"
-
-  # before                                    # after
-  get_host(c("http://a.example.com/", u))
-  #> Error: bytes encoding is not               #> "a.example.com" NA
-  #>   supported by this function
-  ```
-
-  Such a row is now refused individually and reports `parse_status = "error"`,
-  the same as `NA` and `""` input. The verdict is unchanged in spirit —
-  `Encoding(x) <- "bytes"` is a declaration that the value is not text, so
-  rejecting it is correct — it is only the batch-wide throw that was the bug.
-  `original_url` still hands back the caller's exact bytes, so the refused
-  element remains identifiable.
-
-  This is the same broken promise as the `rfc3986` authority throw fixed
-  earlier in this release, at a different seam: `stringi` refuses a
-  bytes-marked string wholesale regardless of which octets it holds, so the
-  error arrived from cache-key construction before the parser ran, and the
-  earlier guards (which scope on `validUTF8()` and on `Encoding()` being
-  `"UTF-8"`/`"latin1"`) could not see it.
-
-- **`clean_url` no longer fabricates an authority for a hostless `file:` parse
-  error.** A hostless row is reassembled as `scheme://` + path, so a path that
-  did not begin with `/` landed in the authority position:
-
-  ```r
-  # before                                   # after
-  get_clean_url("file:C:/W")        # "file://C:/W"        -> NA
-  get_clean_url("file:etc/passwd")  # "file://etc/passwd"  -> NA
-  get_clean_url("file:.")           # "file://."           -> NA
-  ```
-
-  Every one of these inputs is already `parse_status = "error"`, and these were
-  the only rows in an error sweep that still emitted a `clean_url` — so the
-  emitted string was both unreachable as a canonical key and actively
-  misleading: `file://C:/W` re-reads as authority `C:`, and a `file:` URL with
-  an authority is an SMB fetch on Windows.
-
-  The `file:` carve-out that lets a *legitimately* hostless row build is
-  unchanged, because those paths are absolute: `file:///etc/passwd`,
-  `file:////server/share`, `file://server/share/x` and `file:///` all keep their
-  previous output, as do the WHATWG drive-letter forms (`file:C|/W` →
-  `file:///C:/W`). Found auditing `rurl` against curl's documented security
-  guidance.
-
-- **Under `url_standard = "rfc3986"`, an authority-only URL now has an EMPTY
-  path, not `"/"`.** RFC 3986 §3 gives `hier-part = "//" authority path-abempty`
-  with `path-abempty = *( "/" segment )` — zero or more, so the empty string is a
-  well-formed path, and Appendix B's group 5 `([^?#]*)` reads it that way. §6.2.3
-  *does* equate `http://example.com` with `http://example.com/`, but that
-  sentence sits under §6 "Normalization and Comparison", so the `"/"` is a
-  normalization, not a parse result.
-
-  Injecting it during the parse made two distinct URIs indistinguishable and
-  broke source preservation for the shape:
-
-  ```r
-  # before
-  serialize_url(c("https://example.com", "https://example.com/"),
-                standard = "rfc3986", form = "source")
-  #> "https://example.com/" "https://example.com/"   <- one URI lost
-
-  # after
-  serialize_url(c("https://example.com", "https://example.com/"),
-                standard = "rfc3986", form = "source")
-  #> "https://example.com"  "https://example.com/"
-  serialize_url("https://example.com", standard = "rfc3986",
-                form = "normalized")
-  #> "https://example.com/"                          <- §6.2.3, where it belongs
-  ```
-
-  `form = "normalized"` now applies §6.2.3's empty-path sentence explicitly
-  ("a URI that uses the generic syntax for authority with an empty path should be
-  normalized to a path of `/`"), keyed on the authority delimiter rather than on
-  the scheme — so it also fires on a non-special scheme (`foo://h` normalizes to
-  `foo://h/`), where the previous behavior depended on which parser owned the
-  row rather than on any rule. So `urn://:443` normalizes to `urn://:443/`, and
-  likewise for `mailto:` and `data:`. Scheme-specific conformance is orthogonal:
-  those strings remain invalid URNs, `mailto` URIs and data URLs under RFC 8141,
-  RFC 6068 and RFC 2397, and a future reader will report that as a fact
-  (`RURL-eqrpggvz`) — but scheme invalidity does not alter a URI's RFC 3986
-  generic-normalization spelling. ADR 0012 already settles this: scheme-specific
-  restrictions are overlays, not generic parse gates.
-
-  **`whatwg` and the no-selector default are unchanged** — WHATWG's path-start
-  state genuinely pushes an empty segment for a special scheme, so `"/"` is the
-  parse result there. Acceptance does not move on either profile: the WPT suite
-  stays at 336/336, and all three acceptance sweeps report identical accepted
-  counts and identical verdict/host/domain/TLD columns, with the injected `"/"`
-  as the only difference on 67 + 6 + 5 `rfc3986` rows. RFC 3986 decomposition
-  conformance rises from 379/519 to 444/519 grammar-valid rows, closing the
-  largest divergence class outright (path: 65 rows to 0). (`RURL-epoinamh`.)
-
-- **A percent-encoded internationalized host is classified again under
-  `url_standard = "rfc3986"`.** `domain` and `tld` are now derived from a
-  decoded *view* of the host, so a `reg-name` that spells its non-ASCII bytes as
-  percent-triplets is no longer left unclassified:
-
-  ```r
-  r <- safe_parse_url("http://a%C3%A9b.com/", url_standard = "rfc3986")
-  r$domain  # "aéb.com"  (was NA)
-  r$tld     # "com"      (was NA)
-  r$host    # "a%C3%A9b.com" -- unchanged, still source-preserving
-  ```
-
-  The host identity, the serialization, and which URLs are accepted are all
-  untouched: the decode happens once, as UTF-8, purely to build the annotation
-  candidate. An invalid-UTF-8 or non-domain result stays unknown (`NA`). Because
-  the candidate then takes the ordinary PSL path, an `rfc3986` host's
-  `domain`/`tld` now agree with what `"whatwg"` reports for the same host.
-
-  `parse_status` for these URLs changes from `warning-invalid-tld` to `ok`,
-  which is the status projection following the annotation it reports.
-
-  RFC 3986 §3.2.2 admits percent-encoded UTF-8 in `reg-name` and requires IDNA
-  transformation before a DNS lookup, while §6.2.2.2 authorizes only unreserved
-  decoding for URI normalization — so the decoded view is a sound basis for a
-  DNS-facing annotation without ever becoming the URL's identity.
-
-- **Whether a host may hold a literal `!`, `` ` ``, `;` … no longer depends on
-  the slash count, on a control character elsewhere in the URL, or on the
-  scheme.** Under `url_standard = "whatwg"` rurl accepts the 15 ASCII code
-  points WHATWG keeps in a host (`! " $ & ' ( ) * + , ; = `` ` `` { }`), and
-  under `"rfc3986"` the 11 RFC 3986 `sub-delims`. That acceptance was
-  implemented as a pre-parse rewrite (ADR 0009), and a rewrite needs an
-  eligibility test — which was a regex over the whole URL. So three unrelated
-  properties of the *rest* of the string were silently deciding it:
-
-  ```r
-  # all rejected before; all parse now
-  safe_parse_url("http:///a!b.com/p", url_standard = "rfc3986")  # 1 or 3 slashes
-  safe_parse_url("http://a!b.com/p\vq", url_standard = "whatwg") # VT/FF/NEL/LS/PS
-  safe_parse_url("ftps://a!b.com/p", url_standard = "whatwg")    # non-special scheme
-  ```
-
-  The pattern hard-required a literal `//`; it matched the post-authority
-  remainder with an ICU `.`, which excludes the Unicode line terminators; and
-  it was scoped to a scheme set, so `ftps` was refused under `whatwg` while
-  `rfc3986` allowed it. Removing the `\v` from the second URL made it parse.
-
-  Acceptance now lives in the parser, on a dial of its own, and applies to the
-  host regardless of what surrounds it (ADR 0013, superseding ADR 0009). The
-  **default profile is unaffected** — it never admitted these code points and
-  still does not. Measured on an extended octet-acceptance sweep: +90 accepted
-  rows under `whatwg`, +44 under `rfc3986`, +0 by default, zero rows narrowed,
-  and the moved byte sets are exactly the 15 and exactly the 11.
-
-- **A URL component ending in a raw line terminator is no longer accepted as
-  valid RFC 3986 syntax.** The in-tree RFC 3986 grammar transcription anchored
-  its component productions with `^`/`$`. ICU's `$` also matches *before* a
-  trailing line terminator, so every production silently admitted a component
-  ending in LF, VT, FF or CR — none of which appears in `unreserved`,
-  `sub-delims` or `pchar`, and none of which any RFC 3986 production allows. A
-  general-scheme userinfo accepted the control and emitted it verbatim, while
-  the special-scheme userinfo rejected all four:
-
-  ```r
-  # before                                          # after
-  serialize_url("foo://u\n@host/p",
-                standard = "rfc3986")  #> "foo://u\n@host/p" -> NA
-  serialize_url("http://u\n@host/p",
-                standard = "rfc3986")  #> NA                 -> NA (unchanged)
-  ```
-
-  RFC 3986 has no removal step, so the grammar **rejects** these rather than
-  stripping them the way the WHATWG parser strips tab, LF and CR. The
-  transcription now anchors on `\A`/`\z` throughout. The same `$` trap made the
-  general parser's WHATWG port check read `foo://h:80\v/` as port 80 — a silent
-  strip where the port state requires failure — and that is fixed too.
-
-  Acceptance was swept over 36,104 inputs (every octet 0–255 in both hex cases
-  and raw, at nine component positions across six schemes). Exactly 12 rows
-  move, all of them a host consisting solely of a trailing line terminator, all
-  `ok` → `error` under `rfc-syntax`. The `browser` and `whatwg` profiles are
-  unchanged row-for-row, and WHATWG serialization is byte-identical, including
-  336/336 `href` matches on the Web Platform Tests. This was the last enumerated
-  deviation in the RFC 3986 serialization property suite, which now carries
-  none.
-
-- **RFC 3986 §6.2.2.2 host normalization no longer depends on the scheme, and
-  no longer leaks into the source-preserving form.** Percent-decoding of the
-  host happened during the parse, inside a phase gated on rurl's supported
-  scheme set, rather than in the RFC serializer's `normalized` branch alongside
-  the other four components. Which decoding a host got therefore depended on
-  *its scheme* instead of the `form` the caller asked for, and it broke in both
-  directions at once:
-
-  ```r
-  # before                                                  # after
-  serialize_url("foo://ho%2Dst/p", standard = "rfc3986",
-                form = "normalized")   #> "foo://ho%2Dst/p" -> "foo://ho-st/p"
-  serialize_url("http://ho%41st/p", standard = "rfc3986",
-                form = "source")       #> "http://hoAst/p"  -> "http://ho%41st/p"
-  ```
-
-  A general-scheme host was the only position in a URL that skipped §6.2.2.2
-  (all 132 unreserved triplet spellings survived normalization there, and none
-  did anywhere else), while a special-scheme host was the only one that decoded
-  in `form = "source"`, which is documented as byte-preserving. Both are fixed:
-  §6.2.2.2 now runs in the serializer's `normalized` branch for every scheme,
-  and the RFC record takes the host's *source* spelling, recovered lexically
-  the way the undivided `userinfo` slice already was.
-
-  Two further consequences. A host triplet that does **not** encode an
-  unreserved octet now stays encoded, so `serialize_url("http://ho%7Cst/p",
-  standard = "rfc3986")` keeps `%7C` instead of emitting a literal `|` — output
-  that no RFC 3986 production admits and that did not re-parse. And `form =
-  "source"` is now byte-preserving at the host under both scheme classes, which
-  was one of the four places it was not.
-
-  Acceptance is unchanged: the fix is confined to the serializer-input record,
-  and an invariance sweep over every octet 0–255 in both hex cases at nine
-  component positions across six schemes (36,104 inputs) shows identical
-  accepted counts and identical per-row `parse_status` on all four parse
-  profiles, plus byte-identical WHATWG serialization and an unchanged 336/336
-  on the WHATWG web-platform-tests.
-
-- **A host-less `file:` URL now carries an empty host, not a null one, so
-  `serialize_url()` emits the authority the URL Standard requires.** WHATWG's
-  *file state* gives every `file:` URL a non-null host — the empty string when
-  no authority is written, and `localhost` maps to that same empty string — and
-  the serializer therefore always emits `//`. rurl recorded a null host
-  instead, so ten inputs serialized without it:
-
-  ```r
-  # before                             # after
-  serialize_url("file:C|/m/")          #> "file:/C:/m/"   -> "file:///C:/m/"
-  serialize_url("file:/example.com/")  #> "file:/example.com/"
-                                       #>                 -> "file:///example.com/"
-  serialize_url("file:?q=v")           #> "file:/?q=v"    -> "file:///?q=v"
-  serialize_url("file:/.//p")          #> "file:/.//p"    -> "file:////p"
-  ```
-
-  With this, **`serialize_url(standard = "whatwg")` reproduces the WHATWG URL
-  Standard's own recorded `href` on all 336 success rows of the full imported
-  web-platform-tests suite (was 326), and still rejects all 202 must-fail
-  rows.** No deviation family remains on that oracle. The ten inputs are
-  enumerated in `tests/testthat/test-wpt-full-suite.R` rather than counted, so
-  a regression has to name itself.
-
-  The defect was in the **parse record**, not the serializer: the fix teaches
-  the WHATWG `file:` parser to record the empty host, and the serializer's `//`
-  condition moves with it, from the source delimiter fact to the standard's own
-  rule — a non-null host (`#concept-url-serializer`). The RFC serializers keep
-  the delimiter fact, where the source spelling *is* what they render:
-  `file:/example.com/` has no authority under RFC 3986 and its `rfc3986`
-  serialization is unchanged.
-
-  **Nothing else moves.** Acceptance is byte-identical (859 accepted of 1460
-  probed inputs under `whatwg`, 1045 under `rfc3986`, before and after), both
-  RFC forms are unchanged on every row, and the public parse frame —
-  `parse_status`, `host`, `path`, `clean_url`, `domain`, `port` — is
-  byte-identical under all four profiles. In particular `get_host()` still
-  reports `NA` for an empty host: that collapse is a general accessor rule
-  (`foo:///bar` reports `NA` too), not part of this defect. (`RURL-uhwivndf`;
-  disposition P1.3, superseding P1.2 D-C for the WHATWG serializer.)
-
-- **Under `url_standard = "rfc3986"`, a percent-encoded DEL in the host no
-  longer decodes into the parsed host, and host percent-triplets keep uppercase
-  hex.** Two defects on the same RFC 3986 §6.2.2 rule, both invisible to the
-  existing harnesses because the RFC profile is scored on an *acceptance* axis,
-  which cannot see a bad output string on an accepted input.
-
-  libcurl percent-decodes every host triplet, including octets §6.2.2.2 forbids
-  decoding (only ALPHA / DIGIT / `-` / `.` / `_` / `~` may be decoded). DEL was
-  the one such octet libcurl also *admitted*, so it reached the parsed host as a
-  raw control byte:
-
-  ```r
-  # before
-  serialize_url("http://ho%7Fst/", standard = "rfc3986")
-  #> "http://ho\177st/"    <- raw DEL
-  serialize_url("http://ho\177st/", standard = "rfc3986")
-  #> NA                    <- the serializer's own output does not re-parse
-
-  # after
-  serialize_url("http://ho%7Fst/", standard = "rfc3986")
-  #> "http://ho%7Fst/"     <- re-parses to itself
-  ```
-
-  Besides breaking round-trip and idempotence, decoding the control byte is what
-  made an encoded host render as a clean-looking hostname.
-
-  Separately, host case folding lowercased the hex digits of a *surviving*
-  triplet, which §6.2.2.1 renders uppercase — the host was the only component
-  whose triplets escaped the hex normalization the path, query, fragment and
-  userinfo already got. `file://%43%7C` now normalizes to `file://%43%7C`
-  rather than `file://%43%7c`.
-
-  **Acceptance is unchanged.** Which URLs the RFC profile accepts or rejects is
-  byte-identical, verified over the full 0–255 host-octet range: every other
-  control octet is rejected once decoded, and the fix deliberately leaves those
-  rows on that path rather than admitting them. Non-control triplets keep the
-  established decode contract, so `host_encoding = "idna"` still sees real code
-  points. Five conformance-fixture expectations were re-baselined; their
-  `rfc3986_expected` cells are a *reading* of the RFC (the imported oracle
-  records `failure` with no value for those rows) and had transcribed the
-  retained triplets in lowercase, corrected here from the RFC text.
-
-  One defect of the same class remains open and is **not** fixed here: a
-  percent-encoded `|` (`%7C`) still decodes to a literal `|`, which is not an
-  RFC 3986 reg-name character, so that output does not re-parse either. Its
-  decoded spelling is pinned by existing fixtures, so changing it is a separate
-  decision.
-
-- **`serialize_url()` now reads the backslash-rewritten source, fixing two
-  hostname-confusion defects.** Both shipped with the serializer and were
-  invisible to every existing test, because `clean_url` drops userinfo so no
-  harness could observe them. The parse record was correct throughout; only the
-  serializer's lexical recovery was wrong.
-
-  `.fsss_source_lex()` read the *raw* source where the parser reads the source
-  after WHATWG's reverse-solidus rewrite, so a `\` the standard maps to the
-  authority/path boundary stayed inside the authority slice. The text before the
-  last `@` — which is **path** — was recovered as a userinfo the parser never
-  found, and the host was duplicated into the credentials:
-
-  ```r
-  serialize_url("http://google.com:80\\@yahoo.com")
-  #> was: "http://google.com:80%5C@google.com/@yahoo.com"
-  #> now: "http://google.com/@yahoo.com"
-  ```
-
-  Separately, `.has_explicit_authority()` greps a literal `://`, which an input
-  using WHATWG's special-authority-ignore-slashes state need not contain, so the
-  serializer emitted no `//` and **dropped the host** the parser had resolved:
-  `serialize_url("https:/\\/\\/\\github.com/foo/bar")` returned
-  `"https:/foo/bar"` and now returns `"https://github.com/foo/bar"`.
-
-  Both are confined to the serializer; `.has_explicit_authority()` itself is
-  unchanged, so the `mailto:` and Stage-B callers keep their behavior. The
-  rewrite is a no-op under `rfc3986`, which admits no raw `\` and rejects these
-  inputs outright. Found by the conformance re-baseline (RURL-yeikpnan): every
-  affected row is in the CVE-2020-26291 hostname-confusion family, and each now
-  agrees with its published oracle.
-
-- **`url_standard = "whatwg"` now applies the userinfo percent-encode set to the
-  `user` and `password` columns.** WHATWG's authority state fills its username
-  and password buffers by percent-encoding each code point with the userinfo
-  percent-encode set — the path set (SP `"` `#` `<` `>` `?` `^` `` ` `` `{` `}`)
-  plus `/` `:` `;` `=` `@` `[` `\` `]` `|` — so those are the parsed values the
-  standard stores. rurl applied no encode set at all, reporting the raw source
-  slice: `safe_parse_urls("http://a^b@host/", url_standard = "whatwg")$user` was
-  `a^b` where WHATWG stores `a%5Eb`, and a `:` inside a password was reported
-  literally instead of as `%3A`. **This is a user-visible output change under
-  `whatwg`** (spec exactness over output stability). Because the encode set
-  inherits the C0-control set, it also covers every C0 control, DEL and
-  **non-ASCII** byte, so a non-ASCII userinfo now gains UTF-8 escapes too:
-  `"http://éx@host/"` reports user `%C3%A9x`. Existing percent-triplets are
-  re-emitted verbatim, never decoded or double-encoded (`u%40ser` stays
-  `u%40ser`, `%25DOMAIN` stays `%25DOMAIN`), and a space already pre-encoded by
-  the userinfo charset shim stays `%20`. The transform is gated on `whatwg`
-  explicitly and applies only where the userinfo was actually split into a
-  username and a password: `url_standard = "rfc3986"` and the no-selector
-  default remain source-preserving and byte-for-byte unchanged, as do the
-  undivided RFC 8089 `file:` overlay and a `mailto:` recipient local-part,
-  which is not a URL userinfo.
-
-- **The general/opaque route no longer discards credentials.** For a
-  general-routed URL — any non-special scheme under
-  `scheme_acceptance = "general"` — the opaque parser computed the authority's
-  userinfo and then dropped it, so
-  `safe_parse_urls("sc://u:p@h/x", scheme_acceptance = "general",
-  url_standard = "rfc3986")` reported `user` and `password` as `NA` while the
-  same credentials on an `http:` URL were reported exactly. The userinfo is now
-  split at the **first** `:` per WHATWG's authority state, so `u:p:q` gives
-  user `u` and password `p:q`, and the userinfo percent-encode set applies here
-  on the same terms as the libcurl route (`p%3Aq` under `whatwg`, `p:q` under
-  `rfc3986` and the no-selector default).
-
-  Two producers deliberately stay undivided and unencoded: the RFC 8089
-  `file:` overlay, whose Appendix E.1 production is `[ userinfo "@" ]` with no
-  credentials split and which warns that a password there is "a serious
-  security exposure"; and a `mailto:` `user`, which is a recipient local-part
-  (ADR 0012 D7), not a URL userinfo at all.
-
-  `clean_url` is unaffected: it carries credentials on no route, including the
-  libcurl one. No scored conformance figure moved *at the time of this fix* —
-  because the parity oracle then compared only scheme, host, port, path, query
-  and fragment, so a credential fix and a credential regression were equally
-  invisible to it. That measurement gap is closed separately below; credentials
-  are now scored, and this fix passes on all 336 rows.
-
-- **`url_standard = "whatwg"` no longer rejects a URL whose userinfo carries a
-  space, a C0 control or DEL.** libcurl refuses an authority whose userinfo
-  contains any of 30 ASCII code points — SPACE (U+0020), the C0 controls
-  (U+0000–U+001F) and DEL (U+007F) — so rows the WHATWG parser accepts were
-  errored out entirely: `"http://a b@host/"` was a parse error (now accepted,
-  host `host`, user `a%20b`), as were the WPT punctuation-run rows
-  ``"wss:// !\"$%&'()*+,-.;<=>@[]^_`{|}~@host/"`` and its `joe:`-password variant
-  (both now host `host`, under `scheme_acceptance = "general"`). Those 30 code
-  points are now percent-encoded in the userinfo span before curl parses the
-  string. Every one of them is a member of the WHATWG userinfo percent-encode
-  set, so the encoded form is the spelling WHATWG stores and no restore step is
-  involved; `%` is not in the set, so an already-encoded userinfo
-  (`%25DOMAIN`, `u%40ser:p%40ss`) is never double-encoded. All other userinfo
-  bytes, including non-ASCII, already parsed and are untouched, as is the
-  pre-existing repeated-`@` recovery (`"http://username@@@@example.com"` still
-  reports user `username%40%40%40`). The rewrite is gated on `whatwg`
-  explicitly: `url_standard = "rfc3986"` — which has no userinfo production for
-  a space or a control byte — still rejects these inputs, and the no-selector
-  default is byte-for-byte unaffected. Acceptance does not launder the row's
-  facts: such rows report `invalid-credentials` and `invalid-URL-unit` from
-  `get_url_diagnostics()` as before.
-
-- **Leading and trailing C0-control-or-space is now stripped from the input
-  under `url_standard = "whatwg"`.** WHATWG's basic URL parser step 1 has two
-  halves — first remove any leading and trailing C0 control or space
-  (U+0000–U+0020) from the input, *then* remove every ASCII tab/LF/CR anywhere
-  in it. rurl implemented only the second half, so an input padded at either end
-  was mis-parsed: `"http://example.com/a  "` reported path `/a%20%20` (now
-  `/a`), `"  http://example.com/a"` was a parse error (now accepted, host
-  `example.com`), and under `scheme_acceptance = "general"`
-  `"non-special:opaque  "` reported path `opaque  ` (now `opaque`). Interior
-  spaces are untouched, and the trim runs in the spec's order, so a *leading*
-  tab is now removed by the first half rather than the second. The strip lives
-  in the single seam every route shares, so the libcurl route, the general route
-  and the Stage-B re-parse are fed identical input by construction.
-
-  The mutation is surfaced, not silent: a new `get_url_diagnostics()` token
-  **`leading-trailing-stripped`** fires exactly on the rows where a
-  leading/trailing run was removed. It is deliberately a separate token from
-  `control-char-stripped`, whose meaning is unchanged (an interior tab/LF/CR was
-  removed); a row that had both reports both. `url_standard = "rfc3986"` and the
-  default (no selector) are byte-for-byte unaffected — that profile has no strip
-  step and requires such bytes to be percent-encoded, so those inputs stay
-  errors. The frozen `analysis/parity` and `analysis/disagreement` studies are
-  byte-identical; WPT full-row parity on the excluded rows improves by one and
-  component mismatches go to zero. (RURL-yvxpanix.)
-
-- **Opaque paths are now percent-encoded, and `^` joins the path
-  percent-encode set.** Three related WHATWG encode-set gaps, all under
-  `scheme_acceptance = "general"` unless noted:
-
-  * **Opaque paths were carried verbatim.** WHATWG's opaque path state encodes
-    each code point with the C0-control percent-encode set as it is consumed,
-    so the stored path — what the `path` column reports — is already encoded.
-    rurl encoded only `clean_url`, so `wow:<U+FFFF>` reported path
-    `<U+FFFF>` where the serialized URL said `%EF%BF%BF`. The two now agree.
-    The C0 set is *not* the path set: printable ASCII that a hierarchical path
-    escapes (`^`, `{`, `}`, `<`, `>`) stays literal in an opaque path, and
-    existing `%xx` spellings are preserved. WHATWG also encodes the single
-    space immediately before the `?` or `#` that ends an opaque path — so that
-    a trailing space survives a re-parse — and `non-special:opaque  ?hi` now
-    yields path `opaque %20`, with interior spaces untouched.
-  * **`^` (U+005E) was missing from the path percent-encode set.** It applies
-    to *every* profile row under `url_standard = "whatwg"` with
-    `path_encoding = "encode"`, not just general-routed ones:
-    `http://ex.com/a^b` now presents `/a%5Eb`.
-  * **U+000B (VT) and U+000C (FF) broke decomposition entirely.** ICU counts
-    both as line terminators, so the `.`-based scheme/remainder split in the
-    general parser never matched them and the whole row failed — `sc://a<VT>b/`
-    was a parse error instead of host `a%0Bb`. WHATWG's step 1 strips only
-    tab/LF/CR; VT and FF are kept and percent-encoded. This also unblocks the
-    WPT C0-control host row, whose opaque host now encodes `%01`…`%1F%7F`
-    rather than being rejected.
-
-  `url_standard = "rfc3986"` is unaffected throughout — the `rfc-syntax`
-  posture disclaims this normalization. One cell of the frozen
-  `analysis/disagreement` study moves as a result, *converging* on the value
-  the WHATWG reference parser already reported; no count or ratio changes.
-  (RURL-qxpgcwie.)
-
-- **IPv6 hosts are now WHATWG-serialized for non-special schemes too.** The
-  WHATWG host parser stores an IPv6 literal as eight 16-bit pieces and
-  re-serializes it — longest zero run compressed to `::`, lowercase hex, no
-  dotted-quad tail — and that step is *scheme-independent*: the same host parser
-  runs for any scheme carrying an authority. rurl wired the serializer on the
-  special-scheme branch only, so under `scheme_acceptance = "general"` a
-  non-special host kept its input spelling:
-  `non-special://[1:2:0:0:5:0:0:0]/` reported `[1:2:0:0:5:0:0:0]` where
-  `http://[1:2:0:0:5:0:0:0]/` correctly reported `[1:2:0:0:5::]`. The two
-  branches now agree, and `[ABCD::1]` and `[::127.0.0.1]` render as `[abcd::1]`
-  and `[::7f00:1]` for non-special schemes as well.
-
-  The change is confined to the WHATWG opaque-host parse, so validation is
-  untouched — a malformed literal such as `[1:2:3:4]` is still a host parse
-  failure rather than a passthrough. `url_standard = "rfc3986"` is unaffected
-  and keeps the input spelling: the `rfc-syntax` posture disclaims host
-  normalization, which is the deliberate profile split. (RURL-cyxegfjs.)
-
-- **ASCII tab, LF and CR are now stripped for non-special schemes too.** The
-  WHATWG parser's very first step removes every ASCII tab (U+0009), LF
-  (U+000A) and CR (U+000D) from the input, everywhere, before any component is
-  parsed — and that step is *scheme-independent*. rurl applied it only on the
-  libcurl preparation path, so rows routed to the general parser under
-  `scheme_acceptance = "general"` were handed the raw string: `foo://ho<TAB>st/`
-  percent-encoded the tab into the host as `ho%09st`, and `foo://ho<LF>st/` was
-  rejected outright. All four spellings now agree with the clean input on host
-  `host`.
-
-  Only the strip is shared with the general route, deliberately not the rest of
-  the preparation: browser fixup and special-scheme backslash rewriting are
-  separate rules that must not begin firing on non-special schemes. Both parse
-  stages apply it identically, since they disagree about routing otherwise.
-  `url_standard = "rfc3986"` is unaffected and still rejects — RFC 3986 has no
-  strip step and requires such bytes to be percent-encoded, which is the
-  deliberate profile split. (RURL-lsgdeisl.)
-
-- **An opaque URL whose payload ends in `:<digits>` now parses.** Under
-  `scheme_acceptance = "general"`, `urn:ietf:rfc:2648` — the textbook URN form —
-  was rejected outright, as were `urn:a:1` and `sc:x:80`. A non-numeric tail
-  (`urn:ietf:rfc:abcd`) was fine, and so was a trailing query or fragment
-  (`urn:a:1?q`), which made the failure look arbitrary.
-
-  The cause is the carve-out that keeps the scheme-less `example.com:8080` form
-  out of the opaque parser. It is needed because a dot is a legal scheme
-  character, so `example.com:8080` also matches the scheme grammar — but its
-  authority part was matched colon-greedily, so `urn:ietf:rfc:2648` read as
-  "authority `urn:ietf:rfc`, port 2648". Such a row was withheld from the opaque
-  parser and fell through to the web path, which rejects `urn:`. The trailing
-  `?`/`#` cases escaped only because they broke the pattern's end anchor.
-
-  The authority part must be colon-free, which is what the scheme-less form
-  actually is. An opaque path has no authority, so a numeric tail in one is
-  never a port: `urn:ietf:rfc:2648` now parses with path `ietf:rfc:2648` and no
-  host or port. `example.com:8080` is unaffected and still reads as host plus
-  port. Pre-existing since general acceptance shipped — **not** introduced by
-  the host-missing-authority rule earlier in this cycle, verified against that
-  commit's parent. (RURL-jnvtttfm.)
-
-- **A `mailto:` URL carrying a real `//` authority no longer loses its host.**
-  Under `scheme_acceptance = "general"`,
-  `safe_parse_urls("mailto://example.com:8080/pathname")` reported
-  `host = NA` while still reporting `port = 8080` — an authority presenting a
-  port with no host to attach it to. WPT expects hostname `example.com`.
-
-  The WHATWG opaque-path rule has two halves — a non-special scheme **and** no
-  `//` — and only the first was being tested. ADR 0012 D7's recipient
-  decomposition is about the opaque form (`mailto:jane@example.com`, where the
-  payload is an `addr-spec`); running it over `mailto://host/pathname`
-  overwrote the authority the general parser had already parsed correctly with
-  the `NA` that decomposing `/pathname` yields, since a path is not an address.
-  Both the Stage A recipient write and the T1 parse-table mask now require the
-  `//` to be absent, so they agree on what "opaque" means.
-
-  Nothing about the opaque form changes: `mailto:jane@example.com` still
-  presents no authority in the parse table, and `get_host()` / `get_domain()`
-  still resolve the recipient through D7. This narrows the recipient rule to
-  the shape it was always specified for; it does not retire it. Introduced by
-  the D7 slice earlier in this same unreleased cycle, so no released version
-  carries it. (RURL-gmzipkyw.)
-
-- **`url_standard = "whatwg"` now rejects a host-missing authority under
-  `scheme_acceptance = "general"`.** `sc://@/`, `sc://te@s:t@/`, `sc://:/` and
-  `data://:` parsed as `ok` even though all four are host-missing authorities
-  that WHATWG requires be rejected — they are in the WPT must-fail set, and
-  adaR 0.3.5 rejects every one. The default `web` acceptance already rejected
-  them, so `general` was the *more* permissive route, which is backwards.
-
-  The earlier fix in this cycle keyed the host-missing rule off the *port having
-  content*, so an empty host followed by a bare `:` or `@` slipped through. The
-  trigger is really the **delimiter**: WHATWG's host state fails on the `:`
-  itself before any port is read, and its authority state fails when an `@` was
-  seen and the host after the last one is empty. A `//` authority holding
-  nothing else (`foo:///bar`) remains the one legal empty-host shape, and a
-  non-empty host with an empty port (`sc://host:/`), an IPv6 literal
-  (`sc://[::1]:/`) or userinfo (`sc://user@host/`) all stay legal.
-
-  `url_standard = "rfc3986"` is deliberately unaffected: its `reg-name` and
-  `port` productions are both `*`-quantified, so these are well-formed generic
-  syntax under the RFC.
-
-- **`url_standard = "rfc3986"` now applies RFC 3986's generic-URI grammar to
-  every scheme, not just `file:`.** The grammar gate traveled with the RFC 8089
-  `file:` overlay, so which parser happened to own a row decided whether the
-  selected standard was enforced: `file://C|/x` was an error while
-  `http://a|b/` parsed and reported `host = "a|b"` — though `"|"` is in none of
-  `unreserved` / `pct-encoded` / `sub-delims` / `pchar`, so no RFC 3986
-  production admits it either way. That is the wrong thing for a *selector* to
-  mean. Asking for a standard now gets that standard's grammar on every route
-  (libcurl, path-rootless, `file:`, general), which is also what a reference
-  RFC 3986 parser such as Ruby's `URI::RFC3986_Parser` does with both strings.
-
-  In practice this rejects raw bytes the grammar has no production for —
-  `"|"`, `"\"`, `"""`, and a repeated raw `"@"` in an authority — where the
-  rfc3986 profile previously carried them through or silently recovered a host
-  from them. That last case matters most: `https://n.pr\@e.gg` used to resolve
-  to host `e.gg` under rfc3986, reproducing what *permissive* RFC-style parsers
-  do rather than what the standard says, on exactly the inputs security papers
-  use to demonstrate host equivocation. The independent ABNF transcription of
-  RFC 3986 Appendix A that referees the project's oracle rejects all of them.
-
-  Deliberate acceptances are untouched: this adds only generic-*syntax*
-  rejections. A directly-written non-ASCII host stays accepted and flagged
-  (`http://exämple.com/`, ADR 0002/0011), a reg-name built from characters the
-  RFC admits stays accepted even where WHATWG forbids it (`http://a%7Cb/`), and
-  scheme inference remains the `scheme_policy` axis, so scheme-less input is
-  unaffected. `url_standard = "whatwg"` and the no-selector default are
-  byte-identical.
-
-- **A list element of the wrong length no longer aborts the whole
-  `safe_parse_urls()` call.** `safe_parse_urls(list("http://a.com/", c("b", "c")))`
-  failed the entire call with base R's untyped `"values must be length 1"`. A
-  list element of the wrong length is bad *data*, not a contract violation, so it
-  now recovers row-locally as an error row (`original_url = NA`,
-  `parse_status = "error"`) — matching what every other non-scalar shape (`NULL`,
-  length 0, a non-character vector) already did. Call-level errors stay reserved
-  for contract violations.
-
-- **Input names no longer leak into `safe_parse_urls()` row names.**
-  `safe_parse_urls(c(a = "http://example.com/", b = "http://ex.org/"))` promoted
-  the input's names to the result frame's row names, while the vectorized
-  accessors strip them. The public surface disagreed with itself, and leaked row
-  names are a silent correctness hazard rather than a cosmetic one — they survive
-  into joins and downstream frames as though they were a column. The frame now
-  always has ordinary sequential row names, matching the accessors, which return
-  unnamed vectors. Both halves are now pinned by test; the suite previously had
-  no named-vector coverage at all.
-
-- **`get_mailto_recipients()` no longer errors at its own documented
-  defaults.** Every call that did not pass `scheme_acceptance` explicitly —
-  including the plain `get_mailto_recipients("mailto:x@example.com")` — aborted
-  with base R's untyped `"'arg' must be of length 1"`. The helper's
-  `scheme_acceptance` formal deliberately lists `"general"` first, since mailto
-  is a general-scheme context, and that unresolved length-2 default was
-  forwarded to an internal whose own choices are ordered `"web"` first;
-  `match.arg()` tolerates a length > 1 value only when it is `identical()` to
-  the callee's choices, so the reversed order failed. The default is now
-  resolved against the helper's own formal before forwarding, leaving the
-  deliberate ordering intact. Broken since the helper shipped in 2.6.0; all
-  three documented examples pass the argument explicitly, so `R CMD check`
-  never exercised the default path.
+- `serialize_url(standard = "rfc3986", form = "source")` reproduces the input's scheme, query and fragment as written, including hex case and raw bytes ≥ 0x80 (RFC 3986 §5.3). (RURL-gkmwqpos)
+- Under `url_standard = "rfc3986"`, the `query` and `fragment` columns, `get_query(decode = FALSE)`, `get_fragment()` and the `rfc3986` URL key keep source hex case and raw non-ASCII bytes. (RURL-bpfumnbj)
+- `serialize_url(standard = "rfc3986", form = "normalized")` now percent-encodes raw non-ASCII query and fragment bytes on the general route too (`foo://h/p?q=ü` → `foo://h/p?q=%C3%BC`). (RURL-bpfumnbj)
+- With `profile = "whatwg"` and `scheme_policy = "require"`, a dotted scheme that looks like `host:port` (`www.php.net:80/index.php`) parses as a scheme instead of failing (WHATWG URL scheme state). (RURL-lxdwuacn)
+- `resolve_url()` keeps the `/.` guard when a resolved path starts with `//` and has no authority: `non-spec:/.//path`, not `non-spec://path` (RFC 3986 §3.3). (RURL-bedensww)
+- `resolve_url(url_standard = "whatwg")` applies the WHATWG `file:` drive-letter rules against a `file:` base, and `file://C:/` now parses as `file:///C:/`. (RURL-ufsltsit)
+- Under `url_standard = "whatwg"`, `..` no longer removes a lone drive letter from a `file:` path: `file:///C:/../` stays `file:///C:/` (WHATWG URL "shorten a URL's path"). (RURL-msefniuz)
+- The WHATWG host "ends in a number" check runs after percent-decoding and UTS-46 mapping, so encoded or fullwidth IPv4 hosts parse as addresses (WHATWG URL host parser). (RURL-lxdwuacn)
+- `serialize_url(standard = NULL)` is now an error instead of silently serializing as `"whatwg"`. (RURL-ouorolhb)
+- `index_page_handling = "strip"` no longer leaves a path ending in `.` or `..`: `http://example.com/../index.html` now cleans to `http://example.com/`.
+- `host_encoding = "unicode"`, and so `profile = "seo"`, keeps a trailing root dot: `example.com.` no longer becomes `example.com`.
+- Error rows, including hostless `file:` errors such as `file:C:/W` and `file:.`, now return `NA` for `clean_url` instead of a string with a fabricated authority.
+- Index-page and trailing-slash stripping no longer treat an encoded `%2F` as a path separator when combined with `path_encoding = "decode"` or `"encode"`.
+- An input element marked `Encoding(x) <- "bytes"` becomes a `parse_status = "error"` row instead of aborting the whole vectorized call.
+- Under `url_standard = "rfc3986"`, an authority-only URL has an empty path, not `"/"`; `form = "normalized"` adds the `/` for every scheme (RFC 3986 §6.2.3). (RURL-epoinamh)
+- Under `url_standard = "rfc3986"`, a percent-encoded internationalized host gets `domain` and `tld` again, and `parse_status` is `ok` instead of `warning-invalid-tld`.
+- Host acceptance of the 15 WHATWG code points (`whatwg`) and the 11 `sub-delims` (`rfc3986`) no longer depends on slash count, control characters elsewhere or the scheme. (ADR 0013)
+- Under `url_standard = "rfc3986"`, a component ending in a raw LF, VT, FF or CR is rejected, and `foo://h:80\v/` no longer reads as port 80.
+- Under `url_standard = "rfc3986"`, host percent-decoding happens only in `form = "normalized"`, for every scheme, and non-unreserved triplets like `%7C` stay encoded (RFC 3986 §6.2.2.2).
+- Under `url_standard = "rfc3986"`, a `%7F` in the host stays encoded instead of decoding to a raw DEL, and surviving host triplets keep uppercase hex (RFC 3986 §6.2.2).
+- A host-less `file:` URL has an empty host under `whatwg`, so `serialize_url()` emits `//`: `file:C|/m/` → `file:///C:/m/`. (RURL-uhwivndf)
+- `serialize_url()` no longer invents userinfo or drops the host for backslash inputs in the CVE-2020-26291 hostname-confusion family. (RURL-yeikpnan)
+- `url_standard = "whatwg"` percent-encodes the `user` and `password` columns with the userinfo percent-encode set: `a^b` becomes `a%5Eb`, `é` becomes `%C3%A9`.
+- The general/opaque route now reports `user` and `password` instead of `NA`, splitting the userinfo at the first `:`.
+- `url_standard = "whatwg"` accepts a userinfo containing a space, C0 control or DEL, percent-encoding it: `http://a b@host/` gives user `a%20b`.
+- `url_standard = "whatwg"` strips leading and trailing C0 control or space from the input and reports `leading-trailing-stripped` in `get_url_diagnostics()` (WHATWG URL basic parser step 1). (RURL-yvxpanix)
+- Under `scheme_acceptance = "general"`, opaque paths are C0-percent-encoded and VT or FF no longer fail the parse; under `whatwg`, `path_encoding = "encode"` encodes `^`. (RURL-qxpgcwie)
+- Under `scheme_acceptance = "general"`, non-special IPv6 hosts are WHATWG-serialized: `[1:2:0:0:5:0:0:0]` → `[1:2:0:0:5::]`. (RURL-cyxegfjs)
+- Under `scheme_acceptance = "general"`, tab, LF and CR are stripped for non-special schemes too, so `foo://ho<TAB>st/` gives host `host`. (RURL-lsgdeisl)
+- Under `scheme_acceptance = "general"`, an opaque URL ending in `:<digits>`, such as `urn:ietf:rfc:2648`, now parses instead of failing. (RURL-jnvtttfm)
+- `url_standard = "whatwg"` with `scheme_acceptance = "general"` rejects host-missing authorities such as `sc://@/`, `sc://:/` and `data://:` (WHATWG URL host state).
+- `url_standard = "rfc3986"` applies RFC 3986's generic grammar to every scheme, rejecting raw `|`, `\`, `"` and a repeated `@` in an authority (RFC 3986 Appendix A).
+- `safe_parse_urls()` turns a list element of the wrong length into an error row instead of failing the call.
+- `safe_parse_urls()` no longer copies input names into the result's row names.
+- `get_mailto_recipients()` no longer errors when `scheme_acceptance` is left at its default.
 
 ### New features
 
-- **`check_schemes()`, a scheme-axis policy companion** (RUL-021,
-  RURL-zfycisur). rurl already shipped an allowlist —
-  `scheme_acceptance = "web"` admits exactly `http`, `https`, `ftp`, `ftps` and
-  `file` — but not a parameterizable one. A caller needing a single scheme
-  outside those five had to move to `scheme_acceptance = "general"`, which
-  admits every syntactically valid scheme token at once, so `scp:`, `smb:`,
-  `javascript:` and `foo:` all arrived together. That is an all-or-nothing dial
-  where curl offers a set (`CURLOPT_PROTOCOLS_STR`).
-
-  `check_schemes()` reports the facts and lets the caller filter, mirroring
-  `check_hosts()` on the host axis:
-
-  ```r
-  check_schemes(
-    c("https://example.com/a", "scp://host/a", "javascript:alert(1)"),
-    allowed_schemes = c("https", "http")
-  )
-  #>                     url     scheme scheme_class web_scheme allowed
-  #> 1 https://example.com/a      https      special       TRUE    TRUE
-  #> 2          scp://host/a        scp  non-special      FALSE   FALSE
-  #> 3   javascript:alert(1) javascript  non-special      FALSE   FALSE
-  ```
-
-  It is a **policy** layer, not parser conformance: it never changes how a URL
-  parses. Rejecting a conformant scheme at parse time would make the parse
-  result a function of the caller's local policy rather than of the standard,
-  so the allowlist lives in a companion (ADR 0006).
-
-  The `reasons` vocabulary is descriptive by ruling —
-  `"special-scheme"`, `"non-special-scheme"`, `"outside-web-acceptance"`,
-  `"no-scheme"`, `"not-in-allowlist"` — and carries no risk label. Whether a
-  scheme is dangerous depends on what the caller does with the URL, which this
-  package cannot observe; the same reasoning `check_hosts()` already applies
-  with `ip-literal` and `not-registrable`.
-
-- **`credential_handling = c("strip", "reject")` on the clean surface**
-  (`get_clean_url()`, `safe_parse_url()`, `safe_parse_urls()` and every
-  `url_profile()` bundle; RUL-001, ADR 0017 mutation-table row 12,
-  RURL-kjrjbhef). `clean_url` has always dropped userinfo, so a URL carrying
-  credentials came back as a plausible-looking credential-free spelling with
-  nothing to say it had been collapsed. RFC 3986 section 3.2.1 deprecates the
-  `user:password` form and lets an application reject it, and sections 7.5
-  and 7.6 name what a silently collapsed spelling hides: the credential leak,
-  and the `https://example.com@evil.example/` semantic attack, where the text
-  before the `@` is the part a reader trusts. `"reject"` returns `NA` for any
-  row whose parsed authority carried a userinfo delimiter — `user@`,
-  `user:password@`, a bare `@`, `:@`, or a repeated `@`:
-
-  ```r
-  u <- c("https://example.com@evil.example/a", "http://@example.com/a",
-         "http://example.com/a")
-  get_clean_url(u)
-  #> "https://evil.example/a" "http://example.com/a" "http://example.com/a"
-  get_clean_url(u, credential_handling = "reject")
-  #> NA NA "http://example.com/a"
-  ```
-
-  Only `clean_url` moves. The `user` / `password` columns, `parse_status`, the
-  diagnostics, `serialize_url()` (which still carries the credentials under
-  both standards) and `get_url_key()` are unchanged, and there is no `"keep"`
-  value because those surfaces already are the way to keep them. The default
-  `"strip"` is byte-identical to before on every surface, including the
-  frozen `url_standard = NULL` arm (ADR 0007): the dial is policy, not a
-  standards axis, so it composes with every selector. Every profile bundle
-  keeps `"strip"`, and an explicit argument overrides the bundle as usual.
-
-- **URL identity is now a first-class surface: `get_url_key()`,
-  `url_key_policy()` and six identity-keyed joins.** Deciding whether two URLs
-  are the same resource used to mean comparing cleaned strings, and a cleaned
-  string is a display product, not an identity. `get_url_key()` projects a URL
-  onto a versioned, injectively framed comparison key derived from its canonical
-  state — after the standard has interpreted it, before any cleaning:
-
-  ```r
-  k <- get_url_key(c("http://example.com:80/a", "http://example.com/a"))
-  k[1] == k[2]
-  #> [1] TRUE
-  ```
-
-  No cleaning option can reach it. `www_handling`, `case_handling`,
-  `path_encoding`, `port_handling`, query cleaning and every `url_profile()`
-  bundle are structurally incapable of moving a key byte — `get_url_key()` has
-  no such argument to pass. The fragment and userinfo are excluded from
-  web-resource identity; query order and duplicates are significant; and ports
-  normalize only where the standard makes them redundant, so `ftp://h:21/` and
-  `ftp://h/` stay distinct.
-
-  A URL that cannot be parsed has no identity, so its key is `NA` and never
-  matches anything — with the reason kept rather than collapsed into the `NA`:
-
-  ```r
-  attr(get_url_key(c("http://example.com/", NA, "", ":::")), "keyability")
-  #> [1] "ok" "missing-input" "empty-input" "invalid-parse"
-  ```
-
-  `url_inner_join()`, `url_left_join()`, `url_right_join()`, `url_full_join()`,
-  `url_semi_join()` and `url_anti_join()` join two data frames on that key.
-  Against `canonical_join()`, which matches on the cleaned display string, two
-  differences show up immediately. Duplicate keys are a multiplicity fact, not
-  something to silently resolve:
-
-  ```r
-  x <- data.frame(URL = "http://example.com/a", clicks = 10)
-  y <- data.frame(URL = rep("http://example.com/a", 2), tag = c("t1", "t2"))
-
-  nrow(canonical_join(x, y))    # the second match is discarded
-  #> [1] 1
-  nrow(url_inner_join(x, y, by = "URL"))
-  #> [1] 2
-  ```
-
-  And cleaning overmatches, because dropping a query parameter is a display
-  decision that a join should not inherit:
-
-  ```r
-  p <- data.frame(URL = c("http://example.com/a?utm_source=x",
-                          "http://example.com/a"), clicks = c(1, 2))
-  q <- data.frame(URL = "http://example.com/a", title = "A")
-
-  canonical_join(p, q)$title_B      # the tracked URL matched the clean one
-  #> [1] "A"
-  url_left_join(p, q, by = "URL")$title
-  #> [1] NA  "A"
-  ```
-
-  Row order is contractual per join, not an artifact of `merge()`. Rows that
-  cannot be keyed and rows that parsed with a warning are governed by two
-  independent axes, `invalid = "keep"/"drop"/"error"` and
-  `warnings = "allow"/"reject"/"error"`, replacing `canonical_join()`'s single
-  `on_parse_error` dial; `relationship` is validated before the result is
-  materialized; and `multiple = "first"/"last"` is available but separately
-  named, because it is lossy. Failures raise typed conditions under
-  `rurl_url_join_error` that report row positions and truncated keys, never URL
-  content, so a credential in the input cannot leak into an error message.
-
-  `url_key_policy()` carries the two identity dials: `standard`
-  (`"whatwg"` by default, or `"rfc3986"`) and `scheme_equality`, where the
-  opt-in `"http_https"` treats `http` and `https` as one class and leaves every
-  other scheme exact. Both a key version and a schema version ride inside the
-  framed bytes, so no release can silently reinterpret a persisted key.
-
-  `canonical_join()` is unchanged and still matches on `clean_url`. It is
-  legacy, and its migration onto the identity key is a separate, later step.
-
-- **`serialize_url()` renders a URL the way its standard would.** rurl's only
-  full-string output was `get_clean_url()`, which is an SEO/canonicalization
-  product: it drops credentials and the fragment by design, and it is driven by
-  two dozen cleaning dials. That makes it the wrong thing to compare against a
-  standard. `serialize_url()` is the other surface — the full string, credentials
-  and fragment included, with no presentation dial at all:
-
-  ```r
-  serialize_url("http://user:pw@Example.COM:80/a/../b?q=1#frag")
-  #> [1] "http://user:pw@example.com/b?q=1#frag"
-  get_clean_url("http://user:pw@Example.COM:80/a/../b?q=1#frag")
-  #> [1] "http://example.com/a/../b"
-  ```
-
-  A present-but-empty delimiter carries information and survives, which no
-  cleaning surface can promise:
-
-  ```r
-  serialize_url(c("http://h/", "http://h/#", "http://h/?"))
-  #> [1] "http://h/"  "http://h/#" "http://h/?"
-  ```
-
-  `standard = "rfc3986"` selects RFC 3986 §5.3 recomposition, in either of two
-  postures: `form = "source"` (the default) normalizes nothing and emits the
-  undivided `userinfo` verbatim, while `form = "normalized"` applies §6.2.2
-  syntax-based normalization and §6.2.3 default-port elision.
-
-  ```r
-  serialize_url("HTTP://Example.COM:80/a/%7Euser/../x", standard = "rfc3986")
-  #> [1] "http://Example.COM:80/a/%7Euser/../x"
-  serialize_url("HTTP://Example.COM:80/a/%7Euser/../x", standard = "rfc3986",
-                form = "normalized")
-  #> [1] "http://example.com/a/x"
-  ```
-
-  Each standard is parsed under its own spec posture, so any scheme is accepted
-  and a scheme is *required*: neither standard defines a base-URL-free parse of
-  `example.com/x`, and rurl's `https://` prepend is browser-like fix-up that has
-  no business inside a standard serialization. Scheme-less input returns `NA`.
-
-  Two consequences are worth stating plainly. WHATWG credential serialization is
-  spec-exact and therefore lossy in one direction — `http://@h/` serializes as
-  `http://h/` and `http://u:@h/` as `http://u@h/`, both pinned by the Web
-  Platform Tests — and the losslessness lives in the parse record, which the RFC
-  `source` form renders verbatim. And `serialize_url()` emits WHATWG's ASCII
-  (punycode) host where `get_clean_url()` keeps the Unicode spelling; both are
-  correct for their surface.
-
-- **`format_url()` renders a URL for a human to read, safely.** Showing a URL to
-  a person is its own problem: a raw URL can carry credentials, and it can carry
-  code points that make the displayed string lie about where it points. Neither
-  `get_clean_url()` nor `serialize_url()` is the right tool — the first is a
-  cleaning product that drops information for SEO reasons, the second is exact
-  and therefore reproduces the hazard faithfully.
-
-  ```r
-  format_url("https://user:pw@example.com/a")
-  #> [1] "https://<redacted>@example.com/a"
-
-  format_url("https://example.com/p?x=a%26b%3Dc#%E2%80%AEevil")
-  #> [1] "https://example.com/p?x=a%26b%3Dc#<U+202E>evil"
-  ```
-
-  Four rules do the work. Credentials are replaced by a fixed-width
-  `<redacted>`, so the token leaks nothing — not even the secret's length.
-  Invisible, bidirectional-override and control code points become
-  `<U+XXXX>` tokens. Percent-encoded *delimiters* are deliberately left
-  encoded, because decoding them would fabricate structure the URL does not
-  have. And an octet that no valid UTF-8 sequence can contain is emitted as
-  `%XX` rather than decoded, replaced or dropped:
-
-  ```r
-  format_url(c("https://example.com/a%2Fb", "https://example.com/%FF%00"))
-  #> [1] "https://example.com/a%2Fb"       "https://example.com/%FF<U+0000>"
-  ```
-
-  An internationalized host is shown in **both** spellings whenever they
-  differ, since either one alone can mislead:
-
-  ```r
-  format_url("https://xn--mnchen-3ya.de/p")
-  #> [1] "https://münchen.de/p  [host: xn--mnchen-3ya.de]"
-  ```
-
-  The result is **display only**. It is not reparsable, has no round-trip
-  guarantee, and must never be fed back into `serialize_url()`, into a
-  comparison key, or into anything that treats it as an address — which is why
-  it takes no presentation dial: a `path_encoding = "decode"` would hand back
-  the exact hazard the delimiter rule exists to prevent. Input the WHATWG
-  parser does not accept returns `NA`.
-
-  The escape decision performs no runtime Unicode general-category lookup: the
-  code-point set is enumerated, so the same input renders identically no matter
-  which Unicode version the installed libraries carry.
-
-- **`resolve_url(output = "serialized")` returns the resolved URL as a standard
-  full string.** `resolve_url()` has always returned `clean_url`, which drops
-  credentials and the fragment — so RFC 3986 §5.4's own worked examples were not
-  reproducible on its output, and there was no way to ask for a surface they
-  were. `output = "serialized"` routes the resolved absolute string through
-  `serialize_url()` instead:
-
-  ```r
-  resolve_url("../g", "http://u:pw@a/b/c/d?q#f", url_standard = "whatwg")
-  #> [1] "http://a/b/g"
-  resolve_url("../g", "http://u:pw@a/b/c/d?q#f", url_standard = "whatwg",
-              output = "serialized")
-  #> [1] "http://u:pw@a/b/g"
-  ```
-
-  The default is unchanged (`output = "clean"`), and this is purely an
-  availability fix: cleaning and standard serialization stay distinct surfaces
-  rather than merging. `output = "serialized"` requires an explicit
-  `url_standard` — `NULL` selects no standard to serialize *to* — and rejects
-  the parser dots, since `serialize_url()` takes no presentation options and
-  silently discarding one would be worse than an error. `form =` passes through
-  for `"rfc3986"` and is inert for `"whatwg"`.
-
-- **`get_parse_verdicts()` reports the three verdicts `parse_status` collapses
-  into one.** A single status value answers three independent questions at
-  once — did the input present well-formed URL syntax (layer 1), was the parsed
-  object admitted under the active policy (layer 2), and what did the Public
-  Suffix List annotation find (layer 3) — so it is a *lossy* view of them. The
-  guaranteed loss is that a structural failure and a policy rejection both
-  report `"error"`:
-
-  ```r
-  get_parse_status(c("mailto:jane@example.com", "http://"))
-  #> [1] "error" "error"
-
-  get_parse_verdicts(c("mailto:jane@example.com", "http://"))
-  #>   layer1_syntax_verdict layer2_policy_verdict layer3_annotation_state
-  #> 1                  pass       rejected-scheme          not-applicable
-  #> 2                  fail              admitted          not-applicable
-  ```
-
-  The first was declined at admission; the second did not parse. Layer 3 also
-  makes the Public Suffix List result a *typed annotation* rather than a
-  warning: a host with no public suffix is `"unknown"`, while an IP literal or
-  a `file:` host is `"not-applicable"` (no registrable-domain concept at all),
-  and neither is ever fatal.
-
-  Like the other companion helpers it never widens the `safe_parse_url()`
-  frame — that keeps its 18 columns. Unlike `get_host_type()` and
-  `get_scheme_class()` it is fully defined without a `url_standard` selector,
-  since layers 1 and 2 describe the parse that actually occurred.
-
-  **`parse_status` is unchanged and is not deprecated.** It is now *derived* as
-  the projection of the three layers rather than computed separately, so there
-  is one status-deciding path and the two surfaces cannot drift apart.
-  Byte-identity was verified over 74,700 (`parse_status`, `clean_url`) cells —
-  the committed corpora under 60 option configurations — plus the whole suite.
-
-- **`get_password()`, `get_query()`, `get_fragment()` and `get_port()` gain the
-  standards axis (`url_standard`, `scheme_policy`, `scheme_acceptance`).** Each
-  of the four could previously take only presentation dials, so none of them
-  could return a value its own `safe_parse_url()` column carries:
-  `get_password()` could not reach the WHATWG userinfo spelling the `password`
-  column has carried since 3.0.0's userinfo encode set (`p:q` vs `p%3Aq`);
-  `get_query()` and `get_fragment()` could not reach the query and fragment
-  percent-encode-set spellings; and `get_port()` could not report the WHATWG
-  default-port drop, where `http://example.com:80/` parses to `NA` rather than
-  `80`. All fourteen accessors now expose all three axes.
-
-  **Purely additive.** The new arguments default to the source-preserving
-  behavior (`url_standard = NULL`), and output with the arguments omitted — or
-  passed at their defaults — is byte-identical to before, which is pinned by a
-  test.
-
-  The accessor↔option coverage oracle
-  (`tests/testthat/test-accessor-registry.R`) now covers these three axes, not
-  just the eleven presentation dials. Their absence from it is precisely why
-  all four gaps went unnoticed: no registry cell forced the arguments to exist.
+- New `check_schemes()` reports each URL's scheme, class and `allowed` status against an `allowed_schemes` allowlist; it never changes how a URL parses (ADR 0006). (RURL-zfycisur)
+- New `credential_handling = c("strip", "reject")` on `get_clean_url()`, `safe_parse_url()`, `safe_parse_urls()` and profiles; `"reject"` returns `NA` for URLs carrying userinfo (RFC 3986 §3.2.1). (RURL-kjrjbhef)
+- New `get_url_key()` and `url_key_policy()` return a versioned identity key that no cleaning option affects; unparseable input keys to `NA`, with the reason in `attr(, "keyability")`.
+- New `url_inner_join()`, `url_left_join()`, `url_right_join()`, `url_full_join()`, `url_semi_join()` and `url_anti_join()` join data frames on `get_url_key()`, keeping duplicate matches; `canonical_join()` is unchanged.
+- New `serialize_url()` returns the full standard serialization, credentials and fragment included; `standard = "rfc3986"` takes `form = "source"` or `"normalized"` (RFC 3986 §5.3, §6.2.2). Scheme-less input returns `NA`.
+- New `format_url()` renders a URL for display: credentials become `<redacted>`, invisible and bidi code points become `<U+XXXX>`, and IDN hosts show both spellings.
+- `resolve_url()` gains `output = "serialized"`, returning the resolved URL through `serialize_url()`; it requires an explicit `url_standard`. The default `output = "clean"` is unchanged.
+- New `get_parse_verdicts()` splits `parse_status` into syntax, policy and Public Suffix List annotation verdicts; `parse_status` is unchanged and not deprecated.
+- `get_password()`, `get_query()`, `get_fragment()` and `get_port()` gain `url_standard`, `scheme_policy` and `scheme_acceptance`; output at the defaults is unchanged.
 
 ### Documentation
 
-- **The documentation site moved to GitLab Pages:
-  <https://bart-turczynski.gitlab.io/rurl/>.** The former
-  `bart-turczynski.github.io/rurl` site had no publisher after the GitHub
-  account that built it was suspended. A `pages` job in `.gitlab-ci.yml` now
-  builds the pkgdown site on a tag or a hand-started pipeline, so the live site
-  documents the last release; `DESCRIPTION`'s `URL:` names it first
-  (RURL-vkltgopc).
-
-- **RFC 3986 now has a serialization oracle; it had only an acceptance axis.**
-  The conformance evidence has four quadrants — {WHATWG, RFC 3986} ×
-  {acceptance, full-string serialization} — and three were covered. Nothing in
-  the repository answered *what string does RFC 3986 require this URL to
-  serialize to*. That gap was not theoretical: the host-decoding defect fixed
-  earlier in this release produced output that does not re-parse, and passed
-  every harness here, because an acceptance metric cannot see a bad output
-  string on an input it accepts.
-
-  The new harness is **property-based and transcribes no expected strings**.
-  WHATWG ships a suite with recorded `href` values; RFC 3986 is prose plus
-  ABNF, and hand-transcribing expected strings is the move that produced 75
-  fixture rows where the oracle and the implementation confirmed each other and
-  their shared disagreement with the RFC stayed invisible. So §6.2.2/§6.2.3 are
-  stated as properties over a **generated** 6506-input population (256 octets ×
-  2 hex cases × 12 component positions × both scheme classes, plus 47
-  structural shapes): every output must be admitted by the RFC's own ABNF, must
-  re-parse to itself, and under `form = "normalized"` must satisfy §6.2.2.1
-  case, §6.2.2.2 unreserved decoding, §6.2.2.3 dot-segment removal and §6.2.3
-  default-port elision. A property needs no oracle, so it cannot co-confirm
-  with the implementation.
-
-  The one external judge is the independent RFC 3986 ABNF transcription that
-  already exists in the suite — normative grammar, sharing no code with rurl.
-
-  **What it is not.** These are properties of the output *string*. An output
-  can satisfy every one and still describe the wrong URL, because nothing here
-  checks that a component was sliced from the input correctly. This quadrant is
-  a necessary condition on RFC serialization, not a sufficient one, and the
-  oracle register records it that way (OR-023).
-
-  Running it found three defects with no oracle and no adjudication, each now
-  enumerated by input in the harness so a fix must delete its entry rather than
-  re-fit a total: the general-scheme host is the only component that skips
-  §6.2.2.2 unreserved decoding; a general-scheme userinfo admits raw
-  CR/LF/VT/FF and emits them verbatim, which no RFC 3986 production allows; and
-  `form = "source"`, documented as preserving source bytes, does not — 419 of
-  5668 accepted rows change, in four families. All three are filed, not fixed
-  here: the host seam is the one where a change silently widens *acceptance*
-  rather than only serialization, so it needs its own octet-invariance sweep.
-
-- **All conformance and benchmark evidence is re-baselined onto
-  `serialize_url()`; two headline figures now exist where one did.** Every
-  harness in the repository scored `clean_url`, which is output surface (c) —
-  "a policy-driven SEO/canonicalization product; **not** a serializer, identity,
-  redirect target, or conformance oracle" — and which P5.3 CLAIM-1 does not
-  admit as a claim substrate. Surface (b) did not exist when those harnesses
-  were written, so there was nothing admissible to score against. It does now.
-
-  **The previously published "158 conforming / 99 documented deviations" is an
-  RFC-3986-grammar *acceptance* count and is not replaced by the new figure.**
-  The two answer different questions:
-
-  | | axis 1 (new) | axis 2 |
-  |---|---|---|
-  | question | does rurl emit the standard's **serialization**? | does rurl **accept/reject** what the grammar does? |
-  | authority | `whatwg-wpt` | `rfc3986-grammar` |
-  | figure | **336 exact / 0 deviations** over the 336 WPT success rows, plus **202/202** must-fail rows rejected | 164/93 → **179/78** (like-for-like, 257-row scope) |
-
-  Axis 1 is new evidence: P5.3 §2.2 had already recorded that the FSSS
-  full-string headline did not yet exist. It is measured on the **WHATWG's own
-  test suite** — the imported web-platform-tests corpus in
-  `inst/bench/wpt-url-cases.json` — and scored against upstream's recorded
-  `href`, the standard's own serialization, rather than against a string
-  re-assembled from the component getters. That distinction is not cosmetic:
-  the component dump cannot tell a null host from an empty one, so a
-  re-assembly must guess the `//` delimiter, and doing so reported 40
-  differences where the authoritative oracle reports 13.
-
-  It is reported **by substrate** — serialization and acceptance are never
-  summed, because an aggregate would let must-fail rows inflate a
-  *serialization* result. All four `standard` × `form` configurations were
-  swept; under `whatwg` the two forms are identical on every row, and
-  acceptance never depends on `form`.
-
-  The measurement first reported 326 exact with 10 deviations — one family in
-  one scheme, the host-less `file:` URL parsed to a null host. That family is
-  **fixed in this same release** (see *Bug fixes*, `RURL-uhwivndf`), which is
-  what moves the figure above to 336 / 336. Non-special schemes were exact on
-  all 141 rows and special schemes with a host on all 159 before the fix as
-  well; the family was traced to the parse record rather than the serializer,
-  and was fixed there.
-
-  Axis 2 moves because fifteen rows stop being deviations. Every one is a case
-  where surface (c) declined **by policy** — the ADR 0004 closed scheme set, the
-  ADR 0002 reversible Unicode host, the readable-path default — and surface (b)
-  matches the grammar. rurl's parser never disagreed with the RFC on any of them.
-  The same effect empties the Ada watch list entirely (11 documented divergences
-  → 0): Ada is a conformant WHATWG parser and its `href` is a full serialization,
-  so that comparison was like-for-like for the first time.
-
-  **The corpus shape was distorted too, and is repaired.** It carried **zero**
-  expected values with a fragment or credentials, and the conformance fixture
-  contained **zero** `@` characters — because those are precisely the rows a
-  `clean_url` comparison could never have passed, so the corpus had grown into
-  the shape its harness could score. 43 rows are added from the committed WPT
-  import, with expected values assembled from WPT's own recorded components by
-  the WHATWG URL serializer (URL Standard §4.5). rurl matches all 43. The
-  string-valued substrate nearly doubles, 49 → 92 rows.
-
-  Two oracle repairs are not surface swaps. Host oracles now compare an
-  **extracted host** rather than asking `grepl(host, clean_url)`; on a
-  hostname-confusion corpus containment is the wrong question, since both
-  hostnames appear in `http://letsencrypt.org%2F@malware.testing.google.test/`
-  and it passes whether the parse is correct or inverted. And the conformance
-  fixture's `divergence_class` is derived from the **normalized** serialization
-  rather than the source form, which had misclassified 7 of 75 rows in both
-  directions. Disposition and full numbers: P5.4. (RURL-yeikpnan.)
-
-
-- **The diagnostics vocabulary now has one canonical, enforced enumeration.**
-  `?get_url_diagnostics` gains a *Diagnostic vocabulary (canonical)* section
-  listing all 32 tokens with their meanings and the postures they fire under.
-  Previously the only enumeration was the v1 selector PRD's section 7 table,
-  which — being a graduated, historical spec (ADR 0008) — had stopped tracking
-  the code: it was missing `control-char-stripped`, `host-charset-shimmed`,
-  `leading-trailing-stripped` and every Layer-5 token. A new CI gate,
-  `tools/diagnostics-doc-consistency.R`, now holds that section and the
-  `.URL_DIAGNOSTICS` registry to each other in both directions and rejects any
-  documented diagnostic literal that no longer resolves to a real token, so the
-  drift cannot recur silently. The test that claimed to check the PRD table was
-  renamed to what it actually does — pin the closed set.
-
-- **`safe_parse_url()`'s `query` and `fragment` columns are documented with the
-  two-branch encoding contract they actually have.** Both said the value is
-  returned "as written in the URL"; that stopped being true under
-  `url_standard = "whatwg"`, where the query and fragment percent-encode sets
-  are applied. `get_query()` and `get_fragment()` take no `url_standard` and so
-  do always return the raw source spelling — their documentation now says so
-  explicitly and points at the column for the WHATWG spelling, matching the
-  wording already used by `get_password()`.
-
-- **The conformance posture is now stated in one place, with its measurements
-  and its limits.** `vignette("url-standard")` gains a *Conformance posture*
-  section: against the WHATWG spec's own conformance suite the `"whatwg"`
-  profile is 378/378 (176 success rows at full component parity, 202 rejections)
-  and differs from the `adaR` reference on **two rows out of 336**, neither a
-  parsing disagreement; against RFC 3986 the `"rfc3986"` profile matches on
-  **164** of 257 oracled rows and departs on **93**, every departure attributed
-  to an ADR. The two boundaries that keep this honest are stated alongside the
-  numbers rather than buried: the WPT fixture covers **absolute** URLs only, so
-  the figures say nothing about base-relative resolution; and the profile is
-  WHATWG on its governed axes, **not** a full UTS-46 host mapping. (The success
-  figure was later widened to 336 rows — see the entry below.)
-
-- **"Full component parity" now scores credentials, so it means all eight
-  components rather than six.** `inst/bench/standard-parity.R` built its
-  per-row verdict from scheme, host, port, path, query and fragment;
-  `username` and `password` were never compared, in either posture. The
-  published headline — "336/336 accepted, 336/336 FULL component parity" — was
-  therefore silent on credentials, and the omission was not hypothetical: the
-  general/opaque route discarded userinfo entirely (fixed above), a
-  component-level non-conformance on the exact posture whose figure read 100%,
-  and **no scored number would have moved** either when it broke or when it was
-  fixed. A measurement whose name claims more than it checks.
-
-  The oracle was re-extracted at the **same** pinned upstream revision
-  (`181476aa`, from a raw file whose sha256 still matched the recorded
-  `raw_source_sha256` — a re-extraction, not a re-pin) so that
-  `make-wpt-fixture.py` carries upstream's `username`/`password`, which it had
-  been dropping: 24 rows carry a non-empty username and 13 a non-empty
-  password. No row was added or removed, so the case counts stay 336/202.
-
-  The headline is unchanged at **336/336**, but it is now a wider claim over a
-  stricter denominator, not the same claim restated — credentials are checked,
-  and they pass on every row at both postures. `analysis/parity/` was re-frozen:
-  the two success CSVs gained four columns, and the failure and RFC CSVs
-  reproduced byte-identically.
-
-- **The WPT success oracle now spans every scheme, and both scheme-acceptance
-  postures are scored.** The fixture generator used to keep only
-  `http`/`https`/`ftp`/`file` success rows, so the headline "176/176 full
-  component parity" was scored over a corpus that could not contain an opaque,
-  `ws:` or `wss:` URL — the carve-out the previous entry had to disclose as
-  *unmeasured*. Dropping it takes the success set from **176 to 336** rows (the
-  202 failure rows are unchanged), and `inst/bench/standard-parity.R` now passes
-  `scheme_acceptance` explicitly instead of inheriting the exported default,
-  scoring both postures side by side. At `scheme_acceptance = "general"` rurl
-  reaches **full component parity on all 336 rows** — across the six components
-  scored at the time (scheme, host, port, path, query, fragment; credentials
-  were added later in this release, see below) — with zero rejections of
-  WPT-valid input, and still
-  rejects **202/202** failure rows, for **538/538** overall. Widening the corpus
-  by 160 rows surfaced no new mismatch, so opaque, `ws:` and `wss:`
-  serialization is now measured-and-conformant rather than silently untested.
-  At the default `"web"` posture 160 of the 336 are declined by the ADR 0004
-  allowlist before the grammar is consulted; that is the allowlist working, and
-  `176/336` is not a conformance rate. Scoring the failure rows at `general`
-  also answers in band what previously needed the companion study: the 36
-  non-web-scheme failure rows are rejected by the **grammar**, not by the closed
-  scheme set. Only base-relative rows remain out of scope, because rurl parses
-  absolute URLs. Frozen in `analysis/parity/`.
-
-- **`scheme_acceptance` is documented as an axis in its own right.** The
-  vignette's *What the selector does not govern* section previously said the
-  selector "does not expand the allowed scheme set beyond
-  `http`/`https`/`ftp`/`ftps`" — which omitted `file` from the actual allowlist
-  and left readers with no way to discover that `scheme_acceptance = "general"`
-  parses `mailto:`, `data:` and `tel:`. The two axes are now described as
-  composing: `scheme_acceptance` decides what gets parsed, `url_standard`
-  decides how the result is read. A worked `mailto:` example shows the
-  opaque-path rule from the 3.0.0 breaking change — the parse table reports no
-  authority, while `get_host()` still extracts the recipient's host.
-
-- **`analysis/parity/README.md` now states its own posture and carries an
-  attributed ledger of what is left.** Every figure in it is scored at the
-  default `scheme_acceptance = "web"`, which was true but unstated; the success
-  fixture's scheme carve-out is now recorded as a *measurement limit* so the
-  silence on opaque schemes is not read as a pass. (Both of those were then
-  closed within this same release — the README now scores **both** postures over
-  a fixture with no scheme carve-out.) The residual deviations are
-  tabulated with their owning ADR and, where one exists, the argument that
-  reaches them — separating the one genuine gap (UTS-46 host mapping) from the
-  four deviations that are dials the caller chooses.
-
-- **A stale attribution of the RFC departures is corrected.** The 81 over-strict
-  rows were described as coming from "the ADR 0004 host-shape gate and the
-  closed scheme set". Re-derived from the audit rows, the closed scheme set
-  contributes **zero** of them: all 81 are the host/authority gate
-  (percent-encoded reg-names 48, other reg-name shapes 11, empty host 8,
-  userinfo 6, absent authority 5, port shape 3), and all 12 over-lenient rows
-  are the single `non-ascii-or-control` family. The corpus is 202/282
-  WPT-sourced and so almost entirely `http`/`https`/`file`, leaving the scheme
-  set no opportunity to fire. The 164/93 headline is unchanged. (RURL-vgovkcze.)
-
-### Internal
-
-- **The gate manifest moved to `tools/verify-manifest.yml`, and the dead GitHub
-  workflows are deleted (RURL-vunvxusf).** `tools/verify.R` still derives its
-  entire gate list from the manifest at run time, now from a forge-neutral
-  path; `Rscript tools/verify.R --list` prints the same plan before and after
-  the move. `.github/workflows/` is gone — none of it could fire on a
-  suspended account — with the determinism cell matrix kept as a record under
-  `tools/determinism/gha/`. `.gitlab-ci.yml` consumes the same manifest by
-  running the script, as before.
-
-- **The WHATWG conformance suite now runs under `R CMD check`.** Its fixture,
-  `inst/bench/wpt-url-cases.json` (the 336 success + 202 failure rows imported
-  from web-platform-tests `url/resources/urltestdata.json`), was excluded from
-  the built tarball by `.Rbuildignore`, so `tests/testthat/test-wpt-full-suite.R`
-  skipped every fixture-backed block against the installed package and the
-  headline conformance claim was checked only in the source tree. The fixture
-  now ships, the suite executes under `R CMD check --as-cran`, and the
-  fixture's BSD-3-Clause notice is recorded in `LICENSE.note`. No behavior
-  changed; the pinned bytes are the same bytes.
-
-- **The `Remotes:` block is gone; both siblings now install from CRAN.** `pslr`
-  and `punycoder` were pinned to GitHub tags because the versions the `Imports`
-  floors require (`pslr (>= 1.1.0)`, `punycoder (>= 1.2.0)`) had not reached
-  CRAN. They have: CRAN now serves `pslr` 1.1.1 and `punycoder` 1.2.1, both
-  above the floors. A source install of `rurl` therefore no longer depends on
-  GitHub being reachable, and downstream packages that pin `rurl` no longer
-  inherit two transitive GitHub pins. No version floor changed, so the resolved
-  dependency set is unchanged for anyone whose installed siblings already
-  satisfied the floors.
-
-- **The dependency floors now name the versions CRAN serves: `punycoder
-  (>= 1.2.1)` and `pslr (>= 1.1.1)`, up from `>= 1.2.0` / `>= 1.1.0`.**
-  Neither old floor was ever a CRAN release — `punycoder` 1.2.0 and `pslr`
-  1.1.0 exist only as git tags, and `tools/dependency-resolvability-gate.R`
-  reported each as "names a version that was never released" — so the floors
-  were satisfiable but not pinnable. The new floors are the lowest CRAN
-  releases that carry every capability rurl calls, read from the released
-  tarballs rather than the local library: `punycoder` 1.2.1 is the first CRAN
-  release whose `host_normalize()` takes `check_hyphens` / `use_std3` /
-  `verify_dns_length` (the CRAN-archived 1.1.0 has `strict =` only), and
-  `pslr` 1.1.1 is the first CRAN release with the `engine =` and `invalid =`
-  arguments. No code changed; a CRAN install already resolved to these
-  versions. In the same change, the punycoder characterization suite pins the
-  Unicode table version and profile token rurl inherits from
-  `punycoder::normalization_profile_info()`, so a future pin move in
-  `punycoder` fails there by name before it shows up as fixture diffs.
-
-- **Authority presence is now recorded as two independent facts instead of one
-  ambiguous enum.** The internal state model carried a single three-valued
-  `authority_kind`, which conflated *was a `//` delimiter present* with *did it
-  carry anything* and left its `empty` value unreachable: the general parser
-  called every `//` row authority-present, while the RFC 8089 `file:` overlay
-  called the identical shape authority-empty, so `foo:///bar` and `file:///bar`
-  disagreed. It is replaced by `authority_delimiter_present` (logical) and
-  `authority_payload_kind` (`empty`/`present`, `NA` when no delimiter was
-  present), with `host_kind` staying an independent axis — a payload can be
-  present while the host is empty (`foo://@/bar`, `foo://:80/bar`). The legacy
-  name survives only as a derived, read-only projection, whose `empty` value is
-  now reachable and defined. Both posture serializers emit `//` from the
-  recorded delimiter fact rather than re-deriving it from `host_kind`, which
-  could not tell a delimiter-present empty authority from a delimiter-absent
-  input.
-
-  **No public output changes.** These are internal state fields; the general
-  route's parsed columns and `clean_url` were verified byte-identical on both
-  postures across the opaque, empty-authority, `file:`, IPv6 and credential
-  shapes.
-
-- **The committed WHATWG conformance oracle
-  (`inst/bench/wpt-url-cases.json`) now covers every scheme, not four.** The
-  success arm of the fixture was carved out to `http`/`https`/`ftp`/`file`,
-  which silently dropped every non-special and opaque WPT success case — so
-  the oracle could not see a whole category of behavior that
-  `scheme_acceptance = "general"` parses. The generator's scheme filter is
-  removed entirely rather than extended with a list: WHATWG has exactly two
-  scheme categories, so "success = any base-null non-failure case" is the
-  selector that needs no maintenance. Success grows 176 → 336 across 54
-  schemes; the failure arm is unchanged at 202, having never been filtered by
-  scheme. Base-relative rows (the two `base = "about:blank"` fragment
-  references) are now excluded as out of scope: rurl is an absolute-only
-  parser and does no relative resolution, the same disposition
-  `external-url-vectors.csv` already records for such rows. The applicability
-  selector, counts and fixture hash in
-  `tests/testthat/fixtures/oracle-provenance.json` are re-cut to match.
-
-- **The cross-parser disagreement study now measures rurl at
-  `scheme_acceptance = "general"`, and `analysis/disagreement/` is re-frozen.**
-  Previous runs used the default `"web"` allowlist against adaR and
-  `urllib.parse`, which are *general* parsers — scoring ~19 opaque/non-special
-  rows as rurl rejections and measuring rurl's scheme-acceptance policy rather
-  than the `url_standard` interpretation the study is about. Held as a
-  documented axis alongside `scheme_policy = "require"`.
-
-  `rurl(whatwg)` vs adaR falls from **10 divergent rows to 2** (full-tuple
-  agreement 0.970 → 0.994), and neither remaining row is a parsing
-  disagreement: one is punycode-vs-Unicode host rendering (a `host_encoding`
-  choice, ADR 0002) and one is the held `scheme_policy` row. There is no
-  accept/reject, host-shape, port or path disagreement left against the WHATWG
-  reference on this corpus. The `rurl(rfc3986)` vs `curl` pairing moves the
-  other way (52 → 73) because libcurl is a web-scheme parser: 15 of those rows
-  are purely scheme acceptance and are enumerated as such in the README, so the
-  count is not read as RFC-interpretation divergence.
-
-  Two stale claims in the frozen README were corrected against the regenerated
-  matrix: the `http://ex.com:80/` row still said "adaR alone drops `:80`"
-  (`rurl(whatwg)` has elided since `RURL-uvilvhnm`), and the `%7e` percent-hex
-  caveat still claimed a residual path gap against adaR (closed —
-  path agreement is now 1.000). Analysis artifacts only; no package behavior
-  changes.
-
-- The documented `canonical_join()` example no longer passes presentation dials,
-  so the package's own headline usage no longer demonstrates the pattern that now
-  warns. Documentation and `README` only; no behavior change.
-
-- The four tests that pinned presentation dials moving the `canonical_join()`
-  comparison key now state that behavior as documented legacy that warns, rather
-  than endorsing the collapse as correct. Every value assertion is unchanged; the
-  rewrite to key invariance is deferred to the slice that introduces an explicit
-  identity key.
-
-- **The RFC 3986 probe set is now two-sided, and the published conformance
-  figure has moved.** `inst/bench/rfc3986-probes.csv` grew from 19 rows to 37.
-  Every one of the original 19 was an *accept* case, so the set could not detect
-  over-permissiveness at all — it could only fail to notice it. The 18 new rows
-  are rejection cases tagged by ABNF section, drawn from the audited conformance
-  fixture rather than invented, and each verified against both referees (the
-  transcribed RFC 3986 ABNF and Ruby's `URI::RFC3986_Parser`) before being
-  recorded.
-
-  Two properties keep the resulting number honest. Reject probes use only
-  `http`/`https`/`ftp`/`file`, so a rejection is attributable to the **grammar**
-  rather than to the ADR 0004 closed scheme set — otherwise the set would credit
-  rurl for rejecting `sc://…` for entirely the wrong reason. And five probes
-  record inputs the RFC grammar **admits** while rurl declines by policy; these
-  carry a `rurl_deviation` naming the owning ADR and are reported on their own
-  line, **excluded** from the conformance score. Counting them as conformance
-  would let rurl raise its own "RFC conformance" by rejecting more of what the
-  RFC allows — a metric that rewards the opposite of what it claims to measure.
-
-  Updated picture on the 257 rows carrying an RFC oracle: rurl matches the
-  standard on **164** and departs on **93** — 81 where it rejects what RFC 3986
-  admits, 12 where it accepts what RFC 3986 does not. The 2.7.0 figure was
-  158/99; binding the generic-URI gate uniformly (above) moved exactly six rows
-  from over-permissive to conformant-reject. Analysis only — no behavior
-  changed in this entry. (RURL-wlqhmbdw.)
-
-- **The oracle provenance record now states a second pinning duty, and every
-  source group must answer it.** `tests/testthat/fixtures/oracle-provenance.json`
-  pinned only *vendored bytes* (its section 2.3), so a group that vendored
-  nothing but derived its expected values from a standard's **text** was
-  reported fully provenanced — which is how `ip-obfuscation`'s unpinned in-repo
-  transcription, and six section citations that resolve to no revision of the
-  WHATWG URL Standard, survived review. Source pinning is now recorded per group
-  in `normative_dependencies`, and `conventions.normative_dependency_scope`
-  states it as universal *as a question*: the key is required on every source
-  group, and a group with no normative dependency answers with
-  `pin_status = "not-applicable"` and a reason rather than by omission, because
-  silence was the failure mode. `tools/oracle-provenance-gate.R` enforces both
-  halves — PV9 the shape of an answer, PV10 its presence on all 12 groups. Test
-  fixtures and CI only; no package behavior changes. (RURL-qhwktfcw.)
-
-- **A `not-applicable` source pin now has to say *why*, because its one enum
-  member was carrying two different questions.** `pin_status` mixed a status
-  axis (`verified`, `missing`) with a reason (`not-applicable`), and that reason
-  was glossed "the source is cited but nothing is derived from it" — which was
-  false for two of the eight entries carrying it. RFC 3986's 25 rows and PRD
-  §6.1's rows *are* hand-derived from their source's text; what is inapplicable
-  there is the **duty**, not the derivation, and both entry notes had to open by
-  contradicting the enum that classified them. A consumer reading `pin_status`
-  alone could not tell a group that transcribed 25 rows from one that
-  transcribed none — the same undifferentiated pass `normative_dependencies` was
-  added to close, one level down. The reasons were measured off the record
-  rather than enumerated in advance, and there are three: `no-derivation` (six
-  entries), `frozen-source` (a published, numbered document cannot be amended in
-  place), and `internal-source` (the source is in this repository and git-dated).
-  Recorded as a separate `not_applicable_reason` rather than as a fourth
-  `pin_status` member, since the status axis is closed while the reason axis is
-  open — it went from one recognized reason to three inside a single 13-entry
-  record. PV9 requires the key on exactly the `not-applicable` entries and
-  forbids it elsewhere, so a real pin cannot come to read as an exemption
-  through a stale copy-paste; its self-test grew 81 → 92 assertions. Test
-  fixtures and CI only; no package behavior changes. (RURL-ynirvjxb.)
-
-- **The last unpinned normative source, UTS #46, is now pinned — and was
-  verified before it was pinned.** The `ip-obfuscation` oracle transcribes one
-  slice of the IDNA mapping table (U+3002, U+FF0E and U+FF61 each mapping to
-  U+002E, plus ASCII uppercase), and three of its 24 rows are load-bearing on
-  it; no Unicode or UTS-46 version dated that. It is pinned at **UTS #46
-  revision 35 (2025-09-04), IDNA mapping table Unicode 16.0.0** — two
-  coordinates, because the document's revision numbering and the mapping
-  table's Unicode versioning run on independent cadences: at pinning time the
-  document had already moved to a revision dated in the Unicode 17 era while
-  `Public/idna/17.0.0/` still returned 404, so naming either axis alone would
-  have been a plausible pin to a different thing. Since `pin_status: verified`
-  asserts the derivation was *checked* against that revision, the check came
-  first and is re-derivable rather than prose: the new
-  `tools/oracle/check-uts46-mapping-pin.R` sweeps every `IdnaMappingTable.txt`
-  published under `Public/idna` (5.2.0 → 16.0.0) for all 29 transcribed
-  mappings and reports **493 checks, 0 mismatches**. The pin fixes *bytes*, not
-  just a name: `pinned_table_sha256` records the digest of the exact file
-  checked, verified before a single mapping is parsed, because Unicode's
-  versioned directories are only *intended* to be immutable and without a digest
-  an in-place reissue upstream would go undetected. That digest is a
-  verification record, not vendored provenance — no upstream bytes are in the
-  repository and the group stays `section_2_3_applies = false`. This replaces
-  this entry's
-  former unverifiable claim that the mappings "have been stable across every
-  Unicode version that defines them". The pin is deliberately narrow — UTS-46
-  *Processing* is not implemented and is not claimed; any other non-ASCII code
-  point aborts the derivation rather than being guessed. The checker reads
-  unicode.org, so it is run by hand like `pslr::psl_refresh()` and is not
-  wired into CI. No entry in the provenance record now carries
-  `pin_status: missing`. Test fixtures and tooling only; no package behavior
-  changes. (RURL-qhwktfcw.)
-
-- **Every oracle group is now re-derivable from a clean checkout, and the last
-  three exposed two record errors.** All seven per-source builders behind
-  `tests/testthat/fixtures/external-url-vectors.csv` lived in gitignored
-  `_scratch/`, so `generation_command` named paths no reviewer could run. The
-  final three — `wpt-urltestdata` (267 rows), `ada-extra-urltestdata` (24) and
-  `ada-verifydnslength` (17) — are the *tier-2* groups, whose upstream bytes are
-  pinned but deliberately not vendored. All three recorded `raw_source_sha256`
-  values were re-fetched and **reproduce byte-exact**, including both Ada files,
-  which had been gone from the machine that imported them; a shared resolver
-  (`tools/oracle/fetch-source.R`) reads each pin out of the record rather than
-  copying it, verifies the digest before parsing, and treats an unresolvable
-  source as exit 2 — never a pass. Because they read the network they are not
-  blocking CI gates, following `check-uts46-mapping-pin.R`; CI runs their
-  offline `--self-test`.
-
-  Two things the record asserted turned out to be false. **`ada-verifydnslength`
-  was not an imported oracle at all**: it declared `pin_status:
-  not-applicable` / `no-derivation` and "every expected value here is READ OUT
-  of vendored, hash-pinned bytes", but upstream marks 10 of its 17 entries
-  `failure: true` while the fixture records `accept` for all 17. Those ten
-  verdicts are hand-derived from the URL Standard — host parsing runs the domain
-  parser with `beStrict = false`, and ToASCII binds *VerifyDnsLength* to
-  `beStrict`, so the standard performs no DNS length check and Ada's is
-  optional. The group now carries a **verified** pin at `whatwg/url`
-  `9dc3827f…`, and its gate derives *both* readings, requiring the RFC 1035
-  §2.3.4 one to equal upstream's own verdict on every row, so the ten-row
-  disagreement is explained rather than tolerated. The lesson generalizes: PV10
-  makes the source-pinning question mandatory and PV9 makes the answer
-  well-formed, but this group answered in the required shape and answered
-  *wrongly*, while stating the derivation it denied two sentences later.
-
-  And **`ada-extra-urltestdata`'s pinned revision does not reproduce it**:
-  upstream commit `fbea5b01` re-expected one case and added three entries after
-  the import, so at the pin all 24 *inputs* re-locate and one *expected value*
-  does not. Both deltas are now exact ledgers — a ledger row that stops
-  disagreeing fails too, so the gap cannot be closed by adopting upstream's
-  current value. Sweeping all 17 commits that ever touched that path found
-  exactly one revision reproducing 24/24, which bounds the upstream **content
-  state** the block agrees with to `[2025-07-16, 2026-07-17)`. That bounds the
-  *bytes*, not the fetch and not the import revision — see the correction under
-  `RURL-drkcvzex` below.
-
-  One latent defect fell out of the reuse: `derive-ip-obfuscation.R`'s IPv4
-  number parser applied its double-precision guard *before* the digit-validity
-  check, so an over-long **non-numeric** label aborted instead of failing
-  cleanly. Fail-closed, so never a wrong answer, but a refusal to answer a
-  question the spec answers. Test fixtures and tooling only; no package behavior
-  changes. (RURL-ozdejfzl.)
-
-- **A dependency object is now attached to the group it describes, and the gate
-  says so.** The `ada-verifydnslength` repair above put its corrected, verified
-  `whatwg/url` `9dc3827f…` pin under **`ada-extra-urltestdata`** and left the
-  false `no-derivation` entry in place. The record then contradicted its own
-  `standard_version`, its README, its NEWS entry and its verifier — and PV1–PV10
-  were **green for the whole commit range**, because PV9 judges whether an
-  answer is well-formed and PV10 whether one exists, and a well-formed answer to
-  *another group's* question satisfies both.
-
-  Both groups now carry the claims that describe them: `ada-verifydnslength` the
-  verified pin with the `#concept-host-parser` and `#concept-domain-to-ascii`
-  anchors it actually reads, `ada-extra-urltestdata` a negative declaration for
-  the 24 expectations it copies out of hash-pinned Ada bytes. Every entry in the
-  record now declares `applies_to_fixture` and `applies_to_group` — a *pair*,
-  because two groups here are both called `wpt-urltestdata` — and new gate rule
-  **PV11** checks three things independently: that each object is nested under
-  the group it declares; that a 40-hex commit named in a group's
-  `standard_version` is pinned by a verified entry in **that same group** (which
-  is the check that fires on the original defect from the other side); and that
-  `normative_dependencies_note` declares itself a `NEGATIVE declaration` or a
-  `POSITIVE declaration` in agreement with its entries' `pin_status`. That last
-  one turns prose the record already wrote into a claim: the misfiled object sat
-  under "nothing derived from it. The array is a NEGATIVE declaration", above a
-  verified pin.
-
-  Falsified against the committed record, not only synthetically — the gate's
-  `--self-test` swaps the two Ada arrays, the actual defect, and asserts PV11
-  goes red while PV9 and PV10 stay green. The limit is recorded too: PV11
-  catches a *move*, where the object travels and its declaration does not. An
-  author who edits the declaration as well is rewriting the claim rather than
-  misfiling it, and no structural rule can referee that.
-
-  **Three more scope corrections in the same slice.**
-
-  *An implementation-conformance check is not an oracle check.* The
-  `fsss_whatwg` == `oracle_value` comparison was running inside the tier-2
-  restatement check, so the gates printed `ORACLE RE-LOCATION: PASS` over a set
-  of checks one of which grades a **captured `rurl` output column**. Not circular
-  — `oracle_value` is independent — but a conformance assertion under an oracle's
-  label invites the next reader to believe the oracle was checked against the
-  implementation. It now lives in `tools/oracle/check-fsss-conformance.R` behind
-  its own `IMPLEMENTATION FSSS CONFORMANCE` verdict. It stays **unconditional**
-  on `rurl_deviation`, and `ada-003`/`ada-006` are *named* rather than counted, so
-  the two rows the reasoning turns on cannot drop out and be replaced.
-
-  *`whatwg_expected` was ungraded for one good reason and one wrong one.* Its NA
-  **pattern** derives from `divergence_class`, a function of how `rurl` answers —
-  that still holds, and absence is still not graded. But the **value** is stated
-  by the pinned upstream bytes. Measured: corrupting it on `ada-003`, a
-  deviation-carrying row, left every gate green, because the fixture's own
-  assertions relate the column to `divergence_class` and `rfc3986_expected`
-  rather than to any upstream fact. It is now derived from pinned bytes only —
-  the current pin, or the second anchor on a drift-ledgered row — with floors on
-  both the row count and the deviating-row count.
-
-  *`import_command` is a sentinel again.* `RURL-ozdejfzl` had written a command
-  that merely re-fetches the pinned bytes into that field, with a note saying it
-  was not attested as the command originally run: honest prose in a
-  machine-readable field that then read as *filled*, so three sentinels
-  disappeared while the historical provenance stayed exactly as unrecorded. The
-  reproducing command moves to `pin_fetch_command`, and `PV5` refuses the
-  combination that would mask the gap again.
-
-  Two documentation claims were also stronger than their evidence. The 17-commit
-  Ada sweep bounds the upstream **content state** the block agrees with, not the
-  import: no commit touched the path inside the window, so every revision in it
-  carries the same bytes, and content agreement is not import provenance anyway.
-  `retrieval_date_bound` is renamed `content_state_bound`, and `RURL-vwurxmzm`'s
-  conclusion that the import revision cannot be resolved **stands** rather than
-  being narrowed. And `wpt_is_absolute` is renamed
-  `wpt_occupies_scheme_position`: it is fitted applicability metadata that
-  deliberately disagrees with WHATWG absoluteness (it says `TRUE` for
-  `schéme://example.com`, where WHATWG falls back to the base), and its agreement
-  with all 291 committed classifications is the **fit**, not validation — those
-  rows are the data it was fitted to.
-
-  Finally, the three full tier-2 verifiers now have an automated path at all:
-  `.github/workflows/oracle-upstream.yml` runs them weekly and on demand, failing
-  on a fixture disagreement (exit 1) while reporting an unresolvable upstream
-  source (exit 2) as `SOURCE UNAVAILABLE` — never as a pass, and never as a
-  blocking PR failure. It is a separate workflow so that it stays outside the
-  merge gate by construction, and so `tools/verify.R` cannot pick up a
-  network-reading check for the pre-push hook. Test fixtures, tooling and CI
-  only; no package behavior changes. (RURL-drkcvzex.)
+- The documentation site moved to <https://bart-turczynski.gitlab.io/rurl/>. (RURL-vkltgopc)
+- `?get_url_diagnostics` gains a canonical list of all 32 diagnostic tokens, their meanings and the postures they fire under.
+- `safe_parse_url()` documents that its `query` and `fragment` columns are percent-encoded under `url_standard = "whatwg"`.
+- `vignette("url-standard")` gains a *Conformance posture* section with the WHATWG and RFC 3986 conformance figures and their limits.
+- `vignette("url-standard")` documents `scheme_acceptance` as its own axis: `"general"` parses `mailto:`, `data:` and `tel:`, and `url_standard` decides how the result reads.
 
 ## rurl 2.7.0
 
 ### Breaking changes
 
-- **`file:` URLs are now parsed in rurl rather than by libcurl under
-  `url_standard = "rfc3986"` and the default (`NULL`) selector**, and are
-  decided by an explicit two-gate model. Previously these rows went to
-  `curl::curl_parse_url()`, whose `file:` behavior is a property of the libcurl
-  *build*: Windows builds enable drive-letter and `file://host` handling that
-  Unix builds reject, so identical input returned `ok` on Windows and `error`
-  on Linux/macOS. Parse output no longer depends on the operating system.
-  (`url_standard = "whatwg"` already had its own in-tree `file:` parser and is
-  unchanged.) The gates are:
-
-  - **Gate 1 — the string must be a valid RFC 3986 URI.** RFC 8089's normative
-    grammar is a strict *subset* of RFC 3986, but its Appendix E/F "nonstandard
-    variations" partly escape it: `drive-letter = ALPHA ":" / ALPHA "|"` is not
-    valid RFC 3986, because `|` is absent from `pchar`. So `file://C|/x`,
-    `file:///path\to\file` (Appendix E.4 calls the backslash "forbidden by both
-    [RFC1738] and [RFC3986]"), and a literal `file://[example]/` are now
-    errors. The percent-encoded forms remain valid — `file://C%7C` parses,
-    because percent-encoding is the legal way to carry `|` in a `reg-name`.
-  - **Gate 2 — RFC 8089 §2's narrowing of the authority is enforced.** A port
-    is now a parse error (`file://example.com:80/path`): §2's
-    `file-auth = "localhost" / host` has no port and no appendix supplies a
-    production for one. Userinfo is now *parsed* and surfaced in the `user`
-    column rather than silently discarded, because Appendix E.1/F does supply
-    `file-auth = "localhost" / [ userinfo "@" ] host`. Query and fragment are
-    unaffected: RFC 8089 never mentions either, so both are inherited generic
-    RFC 3986 components — and RFC 3986 §3.5 states fragment semantics "cannot
-    be redefined by scheme specifications", so RFC 8089 could not have
-    restricted the fragment even had it wanted to. `file:///doc.pdf#page=2`
-    therefore keeps working, which RFC 8118 §3 (`application/pdf`) depends on.
-
-  Verified against two independent implementations: Ruby's
-  `URI::RFC3986_Parser` draws the same accept/reject line on every applicable
-  case, and Node's WHATWG parser repairs exactly the forms the `whatwg` profile
-  repairs. (RURL-obsweger.)
-
-- The `file-forbidden-component` diagnostic is replaced by
-  **`file-userinfo-extension`** (userinfo present, permitted by RFC 8089
-  Appendix E.1's extended grammar) and **`file-component-outside-rfc8089`** (a
-  query or fragment, inherited from RFC 3986). The old name asserted something
-  the RFCs contradict: of the four components it covered, only `port` was ever
-  forbidden, and that is now a parse error rather than a diagnostic.
-
-- **Returned character components now carry an explicit `Encoding()` mark.**
-  Every character component returned by `safe_parse_url()`, `safe_parse_urls()`
-  and the accessors is declared UTF-8, so a value holding non-ASCII reports
-  `Encoding() == "UTF-8"` where it previously reported `"unknown"`. The
-  **bytes are unchanged** and `==` comparison is unaffected, but `identical()`
-  against an unmarked literal — and anything else that inspects the mark — can
-  change result. Pure-ASCII values still report `"unknown"`: that is simply how
-  R represents an ASCII string, not a missing declaration. This is the one part
-  of the locale-determinism fix below that is observable in a UTF-8 session;
-  everything else about that fix is a no-op there.
+- `file:` URLs under `url_standard = "rfc3986"` and the default (`NULL`) are parsed by rurl, not libcurl, so results no longer differ by operating system (RURL-obsweger).
+- `file:` URLs must be valid RFC 3986: `file://C|/x`, backslash paths and `file://[example]/` are errors; `file://C%7C` still parses (RFC 8089 Appendix E).
+- A port in a `file:` URL is a parse error, and userinfo is now reported in the `user` column (RFC 8089 §2, Appendix E.1).
+- Diagnostic `file-forbidden-component` is replaced by `file-userinfo-extension` and `file-component-outside-rfc8089`.
+- Returned non-ASCII character components are marked `Encoding() == "UTF-8"` (was `"unknown"`); bytes are unchanged, but `identical()` against unmarked strings can differ.
 
 ### New features
 
-- Domain, TLD, and subdomain extraction can now resolve against a caller-
-  supplied Public Suffix List **per request** via a new `engine` argument on
-  `safe_parse_url()`, `safe_parse_urls()`, `get_domain()`, `get_tld()`,
-  `get_subdomain()`, `get_host()`, and `get_clean_url()` (and, through `...`,
-  `canonical_join()`). Pass a `pslr::psl_engine()` snapshot to pin a specific
-  list version or load an alternate list — for example
-  `pslr::psl_engine(source = "path", path = ...)` — without mutating any global
-  state (`pslr::psl_use()` is never involved). The default, `engine = NULL`,
-  resolves against `pslr`'s session-global default list, exactly as before —
-  every existing call path is byte-identical. The engine identity is folded
-  into the parse cache key, so switching engines never reuses another engine's
-  memoized domain/TLD. Requires `pslr` (>= 1.1.0). **Process-local:** a
-  `psl_engine()` holds a C++ external pointer that does not serialize across R
-  sessions or parallel workers — build one in the process that uses it; never
-  cache it to disk or send it to a worker. (RURL-mhibnqbd; PSLR-onruvdfw.)
-
-- Under `scheme_acceptance = "general"`, the standard component accessors now
-  extract the web-y parts of a `mailto:` recipient: `get_host()`,
-  `get_domain()`, `get_tld()`, `get_subdomain()`, `get_user()`, and
-  `get_userinfo()` return the first recipient's domain / registrable domain /
-  public suffix / subdomain / local-part, decomposed by the same Public Suffix
-  List seam a web host uses (an email domain and an `http` host take identical
-  branches). This reuses the existing accessors rather than adding
-  email-specific equivalents, and unifies with the scheme-less `user@host`
-  behavior. `get_user()` / `get_userinfo()` gain the `scheme_policy` /
-  `scheme_acceptance` / `url_standard` arguments to reach it. Extraction is
-  metadata only — a `mailto:` `clean_url` and round-trip are unchanged — and is
-  a strict no-op under the default `scheme_acceptance = "web"`. See ADR 0012 D7.
-
-- New companion helper `get_mailto_recipients()` reports structural,
-  per-recipient **facts** about the positional recipient list of a `mailto:`
-  URL (the comma-separated `addr-spec`s before `?`, RFC 6068 §2). It returns a
-  `data.frame` with one row per recipient, classifying each against three
-  distinct, separately-named grammars — RFC 6068 `local-part` and domain form,
-  and the SMTP (RFC 5321) mailbox right-hand side — plus a non-validating
-  `public_suffix_known` flag. The positional list is tokenized on the raw
-  source *before* percent-decoding, so `%2C` is never a recipient separator and
-  an encoded quote/bracket (`%22`, `%5B`/`%5D`) still protects a raw comma.
-  Facts only, never a gate, and no new `safe_parse_url` columns (ADR 0006 /
-  0012 D7). An opt-in `smtp_wire = TRUE` argument adds the SMTP transport facts
-  that require a serialized wire projection — domain wire form (ASCII / A-label
-  / U-label / address-literal), the SMTPUTF8 envelope mode (RFC 6531/6530,
-  triggered by a non-ASCII local-part *or* a U-label domain), and the RFC 5321
-  64-octet local-part and 256-octet forward-path limits measured on UTF-8 wire
-  bytes. hfield (`to`/`cc`/`bcc`) address-lists remain out of scope.
-
-- New `scheme_acceptance` argument (`"web"` / `"general"`) on the parse and
-  accessor functions, controlling **which URL shapes are accepted at all**.
-  `"web"` (the default) keeps today's behavior byte-for-byte — only the
-  historical special-scheme web set parses. `"general"` turns rurl into a
-  general URL parser: opaque, non-special, RFC 3986-generic, and `file:` URLs
-  parse and round-trip, and `ws:` / `wss:` are recognized as WHATWG-special
-  schemes. This is a new axis, **orthogonal** to `url_standard` (which controls
-  *interpretation*) and `scheme_policy` (which controls input *leniency*). See
-  ADR 0012.
-
-- `get_scheme()` and `get_scheme_class()` now carry the `scheme_acceptance`
-  (and `scheme_policy` / `url_standard`) argument, completing the
-  `get_scheme` → `get_scheme_class` cascade for opaque and non-special
-  schemes. Under `scheme_acceptance = "general"`, `get_scheme("mailto:x",
-  url_standard = "rfc3986", scheme_acceptance = "general")` returns `"mailto"`
-  and `get_scheme_class()` classifies it as `"non-special"`; the default
-  `"web"` acceptance is unchanged (opaque schemes remain `NA` /
-  `"missing-or-error"`).
-
-- New `profile` argument (`"browser"` / `"whatwg"` / `"rfc-syntax"` / `"seo"`,
-  with `"canonical"` an alias of `"seo"`) on `safe_parse_url()`,
-  `safe_parse_urls()`, and `get_clean_url()`, plus a companion inspector
-  `url_profile()`. A profile is public sugar that bundles the acceptance,
-  interpretation, leniency, and canonicalization knobs the lower layers expose
-  under one **inspectable** name — `url_profile("browser")` returns the exact
-  `knob = value` set it resolves to. Explicit arguments always override the
-  profile (the "iron rule"), so a profile only fills slots you did not set
-  yourself. `"browser"` gives a browser-*like* posture (WHATWG interpretation,
-  general acceptance, scheme inference, and a bounded fixer for rurl's historical
-  scheme prepending); `"whatwg"` is the strict absolute-URL spec posture and
-  **rejects** scheme-less input; `"rfc-syntax"` parses RFC 3986 generic syntax as
-  *parsing*, not normalization (case and dot-segments preserved); `"seo"` names
-  rurl's origin-cleaning intent. `canonical_join()` also accepts `profile`,
-  forwarded through its `...` (like `url_standard`); on the profile path its
-  `url_standard` conflict check is skipped, matching `safe_parse_url()`. The
-  default (`profile = NULL`) is byte-for-byte unchanged. See ADR 0012.
-
-- `get_url_diagnostics()` gains 11 additional companion facts, surfaced only
-  under `scheme_acceptance = "general"`, describing outcomes specific to
-  general-mode parsing (opaque paths, non-special authorities, and the RFC 3986
-  grammar gate). As with all diagnostics these are companion facts only —
-  `safe_parse_url()`'s columns are unchanged (ADR 0006) — and under the default
-  `scheme_acceptance = "web"` the diagnostics surface is byte-identical to
-  before. See ADR 0012.
-
-- New practical host-validation **policy** helpers `is_valid_host()` and
-  `check_hosts()`. rurl's `url_standard` profiles deliberately match the URL
-  *standards*, so hosts such as `a+b.example` (a valid RFC 3986 reg-name),
-  `_dmarc.example.com` (a valid DNS owner name), and `-example.com` all parse
-  successfully. These helpers answer the separate, product-level question of
-  whether a parsed host is usable as a practical **web** hostname, **dns** owner
-  name, **registrable** site host, or **seo**-safe host (plus the loosest
-  **url** rule). `is_valid_host(url, rule = "web")` returns a logical vector;
-  `check_hosts(url, rules = ...)` returns a tabular report with a logical column
-  per rule and a `reasons` list-column of the host facts observed. This is a
-  policy layer on top of parsing, not parser conformance and not a conformance
-  oracle: it never changes `parse_status`, never widens `safe_parse_url()`
-  (ADR 0006), and the absence of a `reasons` token is not a validity claim
-  (ADR 0012 D5). They default to `url_standard = "whatwg"`.
+- New `engine` argument on `safe_parse_url()`, `get_domain()`, `get_tld()` and related functions resolves against a given `pslr::psl_engine()`; requires `pslr` (>= 1.1.0) (RURL-mhibnqbd).
+- New `scheme_acceptance` argument (`"web"` default, `"general"`): `"general"` parses opaque, non-special, generic and `file:` URLs, and recognizes `ws:`/`wss:` (ADR 0012).
+- Under `scheme_acceptance = "general"`, `get_host()`, `get_domain()`, `get_tld()`, `get_subdomain()`, `get_user()` and `get_userinfo()` extract a `mailto:` first recipient's parts (ADR 0012).
+- `get_scheme()` and `get_scheme_class()` gain `scheme_acceptance`, `scheme_policy` and `url_standard`; under `"general"` `mailto:` is `"mailto"` and `"non-special"`.
+- New `get_mailto_recipients()` returns one row of structural facts per `mailto:` recipient; `smtp_wire = TRUE` adds SMTP wire facts (RFC 6068 §2, RFC 5321).
+- New `profile` argument (`"browser"`, `"whatwg"`, `"rfc-syntax"`, `"seo"`/`"canonical"`) and `url_profile()` inspector; explicit arguments override the profile (ADR 0012).
+- `get_url_diagnostics()` reports 11 new facts for general-mode parsing, only under `scheme_acceptance = "general"` (ADR 0012).
+- New `is_valid_host()` and `check_hosts()` test whether a parsed host is a practical `web`, `dns`, `registrable`, `seo` or `url` host.
 
 ### Bug fixes
 
-- **rurl's output no longer depends on the R session's character set.**
-  Parsing the same URL in a non-UTF-8 session — `LC_ALL=C`, or the non-UTF-8
-  Windows locale that win-builder and many CRAN Windows checks run in —
-  returned different, and in several cases simply wrong, results from the same
-  call in a UTF-8 session. rurl handed strings to `pslr`, to `punycoder`, to
-  its own percent-encoder and to its own cache layer without ever declaring
-  their encoding, and the operations downstream (`enc2utf8()`, `utf8towcs()`,
-  environment-name lookup, libcurl's own host handling) each re-read those
-  bytes in whatever `LC_CTYPE` the session happened to have. The symptoms, all
-  measured:
-
-  - `domain`, `tld`, `domain_ascii`, `domain_unicode`, `tld_ascii` and
-    `tld_unicode` came back **`NA` for every non-ASCII (IDN) host**:
-    `get_domain("http://bücher.münchen.de/p")` returned `NA` under `LC_ALL=C`
-    and `"münchen.de"` under UTF-8, because `pslr` received an undeclared
-    string and re-decoded it in the session locale.
-  - A non-ASCII path was **corrupted**, not merely marked differently:
-    `/école` percent-encoded to `/%3Cc3%3E%3Ca9%3Ecole` instead of
-    `/%C3%A9cole`, because the encoder transcoded from the session locale
-    before reading the octets WHATWG's percent-encode set is defined over.
-  - `get_mailto_recipients()` **errored** — `invalid input '<U+FFFF>' in
-    'utf8towcs'` — on a recipient whose local part contained U+FFFF.
-  - A host that libcurl percent-decodes to invalid UTF-8, such as
-    `http://example.com%80/`, was **accepted** under `LC_ALL=C` and rejected in
-    a UTF-8 session: `curl::curl_parse_url()` is itself locale-dependent on
-    those bytes. rurl now pins curl's UTF-8-session outcome in every locale.
-  - Some `file:` URLs with percent-encoded non-ASCII hosts, such as
-    `file://a%C2%ADb/p`, were rejected under `LC_ALL=C` although they parse in
-    a UTF-8 session, because the decoded host missed the UTS-46 mapping its
-    literal form gets.
-
-  Encoding is now **declared** — with `Encoding<-`, never with `enc2utf8()`,
-  which transcodes from the session locale and was the defect in most of these
-  paths — at the points where a string enters the pipeline and at the two
-  points where a result is assembled. The cache layer additionally derives an
-  ASCII-safe key one seam beneath its callers, since an environment name is
-  rendered in the native encoding; that also removes 347 "unable to translate
-  ... to native encoding" warnings from a non-UTF-8 check run, which is its own
-  hazard on CRAN. The ADR 0002 Punycode helpers are untouched: every fix sits
-  upstream or downstream of them.
-
-  A UTF-8 session is byte-for-byte unaffected by the whole change set — every
-  fix makes a non-UTF-8 session behave the way a UTF-8 session already did.
-  Measured over the full test suite, `LC_ALL=C` moves from 99 failures and 348
-  warnings to 0 failures and 1 warning; the one remaining warning is upstream
-  in `pslr` and is filed there as PSLR-jzdhhugc. A new test file states the
-  contract as executable assertions — `Encoding()` marks, `charToRaw()` byte
-  equality, and each of the regressions above as a named case — and a
-  `Tests (LC_ALL=C)` CI job, which asserts the character set it actually
-  received before running anything, now runs the suite in a non-UTF-8 locale on
-  every push. (RURL-vzqmwthu.)
-
-- **Scheme and host normalization no longer depends on the R session's
-  locale.** rurl lowercased URL syntax with `stringi::stri_trans_tolower()`
-  without an explicit `locale=`, so it inherited ICU's locale-tailored case
-  mapping. In a Turkish or Azeri session (`tr`, `az`; Lithuanian `lt` is a
-  milder variant) ICU correctly maps `I` to `ı` (dotless i) — correct
-  orthography, but wrong for protocol syntax. The visible symptoms: under the
-  default `case_handling = "lower_host"`, `https://WIKI.example.com/p` returned
-  the host `wıkı.example.com`, a **different domain** than the one requested;
-  and `FILE:///tmp/x` returned `parse_status = "error"`, because scheme
-  recognition folded `FILE` to `fıle`, which is not a supported scheme (`file`
-  is the only supported scheme containing the letter `i`, so `HTTPS:` and
-  friends were unaffected). Scheme and host case normalization is defined over
-  an ASCII grammar — RFC 3986 §6.2.2.1 and the WHATWG URL Standard's "ASCII
-  lowercase" — so every URL-syntax case-mapping site now uses ASCII-only
-  mapping, which removes locale, ICU version, and Unicode version from that
-  path entirely. The one place a caller explicitly asks for case transformation
-  of free text, `case_handling` applied to the **path**, keeps full Unicode case
-  mapping but now pins a non-tailoring locale, so its result is likewise stable
-  across sessions. `case_handling = "upper"` applied to the host is a
-  presentation transform rather than protocol syntax — no standard uppercases a
-  host — so it too keeps full Unicode case mapping under the pinned locale, and
-  its output is unchanged (`bücher.example` still uppercases to
-  `BÜCHER.EXAMPLE`). (RURL-ugfpuotu.)
-
-### Internal
-
-- **The RFC 3986 conformance oracle has been audited and repaired.** No
-  behavior changed — but a published claim did. The `rfc3986_expected` column
-  of the external conformance fixture was transcribed from the WHATWG
-  web-platform-tests, whose must-fail expectations answer "what does the
-  *WHATWG* parser reject" — a different question from what RFC 3986 rejects. On
-  75 rows it therefore asserted the RFC rejects strings the RFC plainly accepts
-  (an empty `reg-name`, percent-encoded octets in a `reg-name`, which §3.2.2
-  does not decode for validity, and `path-rootless` forms misread as a
-  userinfo), and on 20 more it recorded rurl's tolerant *output* as though the
-  RFC had required it. Because rurl also declines most of the first 75 — by
-  **policy** (the ADR 0004 host-shape gate, the closed scheme set), not by
-  standard — the oracle and the implementation confirmed each other and the
-  test suite stayed green. Nothing was visibly wrong.
-
-  The underlying defect was the schema, not the cells: one `divergence_class`
-  column carried both how the two standards relate to each other *and* whether
-  rurl follows them, which made a policy rejection indistinguishable from a
-  conformance result. The two facts now sit on separate axes —
-  `divergence_class` is purely standard-versus-standard, and a new
-  `rurl_deviation` column names the ADR or ticket that owns each departure.
-  A new test checks the RFC column against a transcription of the RFC 3986 ABNF
-  itself, since a fixture cell cannot be validated by the parser it exists to
-  validate; the derivation is `tools/oracle-audit-rfc3986.R`, which scores every
-  row against two independent referees (that grammar and Ruby's
-  `URI::RFC3986_Parser`). They agree on all 282 runnable rows.
-
-  Honest picture on the 257 rows carrying an RFC oracle: rurl matches the
-  standard on 158 and departs on 99 — 81 where it rejects what RFC 3986 admits,
-  18 where it accepts what RFC 3986 does not. Each of the 99 now cites its
-  owner. (RURL-nknytzxz.)
+- Output no longer depends on the session character set: under `LC_ALL=C`, IDN `domain`/`tld` were `NA` and non-ASCII paths were mis-encoded (RURL-vzqmwthu).
+- Scheme and host lowercasing is ASCII-only (RFC 3986 §6.2.2.1), so Turkish or Azeri sessions no longer yield `wıkı.example.com` or reject `FILE:` (RURL-ugfpuotu).
 
 ## rurl 2.5.0
 
 ### New features
 
-- `path_encoding` (`"keep"` / `"encode"` / `"decode"`) is now an **orthogonal**
-  presentation knob that layers on any `url_standard` profile, mirroring
-  `host_encoding`. Previously, setting `url_standard` and an explicit
-  `path_encoding` together was an error (the profile "governed" the path
-  encoding). That asymmetry is gone: the profile now sets an internal path
-  *identity* mode, and the public `path_encoding` *presentation* applies on top.
-  So `get_path(u, url_standard = "whatwg", path_encoding = "encode")` emits the
-  WHATWG-parsed path in browser form (`/école` → `/%C3%A9cole`). Only `"keep"`
-  (the default) preserves a profile's canonical identity path verbatim;
-  `"encode"`/`"decode"` are presentation forms that may re-encode or decode
-  reserved octets (e.g. `%2F` ↔ `/`), independent of whether a profile is set.
-  Fully backward compatible — `url_standard = NULL` and profile + default
-  `"keep"` are byte-for-byte unchanged; only previously-rejected combinations
-  now compute. See ADR 0011.
+- `path_encoding` now combines with any `url_standard` profile instead of erroring; `"encode"` gives the browser form, e.g. `/école` to `/%C3%A9cole` (ADR 0011).
 
 ### Bug fixes
 
-- `url_standard = "rfc3986"` now accepts literal RFC 3986 `reg-name`
-  sub-delimiters in hosts (`! $ & ' ( ) * + , ; =`). These URLs previously
-  inherited libcurl's narrower host character set and returned `error`; they now
-  parse as RFC-legal registered names while `url_standard = NULL` keeps the
-  historical curl behavior. This moves the RFC 3986 parity probe set from 9/19
-  to 19/19.
-
-- `url_standard = "whatwg"` now accepts WPT-valid IPv4 hosts with empty hex
-  zero parts, such as `https://0x.0x.0` and `https://0x.0x.0x.0x`, and
-  serializes them as `0.0.0.0`.
-
-- `url_standard = "whatwg"` with `host_encoding = "idna"` now applies UTS-46
-  ignored-code-point mappings during IDNA presentation, so
-  `https://a%C2%ADb/` serializes canonically as `https://ab/` instead of
-  punycoding the soft hyphen.
+- `url_standard = "rfc3986"` accepts RFC 3986 `reg-name` sub-delimiters (`! $ & ' ( ) * + , ; =`) in hosts (RFC 3986 §3.2.2).
+- `url_standard = "whatwg"` accepts IPv4 hosts with empty hex parts, such as `https://0x.0x.0`, serialized as `0.0.0.0`.
+- `url_standard = "whatwg"` with `host_encoding = "idna"` applies UTS-46 ignored-code-point mappings, so `https://a%C2%ADb/` becomes `https://ab/`.
 
 ## rurl 2.4.0
 
 ### New features
 
-- New `scheme_policy` argument (`"infer"` / `"require"`) on the parse and
-  accessor functions, controlling whether scheme-less, host-shaped input is
-  **accepted**. `"infer"` (default) keeps today's behavior byte-for-byte —
-  scheme-less input like `example.com` gains a fabricated `http://` (a
-  browser-omnibox-style affordance) and parses. `"require"` opts out of that
-  inference: scheme-less host-shaped input becomes `parse_status = "error"`,
-  giving a strict, pure-parser posture. This is a new axis, **orthogonal** to
-  `protocol_handling` (which only controls how the scheme is *presented* in
-  `clean_url`, not whether input is accepted) and to `url_standard` (which
-  controls *interpretation*). Scheme-relative `//host` input keeps its own
-  dedicated axis, `scheme_relative_handling`, and is **not** governed by
-  `scheme_policy`. See ADR 0010. One practical consequence: rurl's
-  scheme-inference divergences from a pure WHATWG parser (e.g. accepting a
-  scheme-less backtick host under `url_standard = "whatwg"` where Ada rejects
-  the scheme-less form for want of a base URL) are now opt-out-able — under
-  `scheme_policy = "require"` rurl rejects them too, matching Ada on that axis.
+- New `scheme_policy` argument: `"infer"` (default) adds `http://` to scheme-less hosts, `"require"` makes them `parse_status = "error"` (ADR 0010).
 
 ## rurl 2.3.0
 
 ### Bug fixes
 
-- `url_standard = "whatwg"` now strips ASCII tab (`U+0009`), LF (`U+000A`), and
-  CR (`U+000D`) from the input before parsing, matching the WHATWG URL
-  Standard's first parse step. Previously rurl rejected a control character in
-  the authority (libcurl errors), so adversarial hosts that browsers accept
-  after stripping — `http://ex<TAB>ample.com/` → `example.com`,
-  `https://n.pr<LF>e.gg` → `n.pre.gg`, and CRLF-injection shapes like
-  `http://127.0.0.<CR><LF>1:6379…` → `127.0.0.1` — returned `error`. They now
-  parse under `"whatwg"`. The strip is **not silent**: it fires a new
-  `control-char-stripped` diagnostic (see `get_url_diagnostics()`), keeping with
-  the facts-not-policy design. `url_standard = "rfc3986"` and the default
-  (`NULL`) are unchanged — RFC 3986 has no strip step and requires such bytes to
-  be percent-encoded, so they still reject.
-
-- `url_standard = "whatwg"` now **rejects** WHATWG forbidden host/domain code
-  points instead of accepting them as registered names with `warning-no-tld`. A
-  special-scheme host is a domain, and WHATWG fails the host parse when
-  domain-to-ASCII yields a forbidden code point (`|`, `^`, DEL, space, …) or when
-  domain-to-ASCII itself fails (a disallowed code point such as U+FFFD/U+FFFF, or
-  a UTS-46-ignored code point like the U+00AD soft hyphen collapsing a label to
-  empty). These now return `parse_status = "error"` under `"whatwg"`, matching
-  the web-platform-tests failure corpus. `url_standard = "rfc3986"` and the
-  default (`NULL`) are unchanged — RFC 3986 has no forbidden-host-code-point
-  concept, so these stay permissive registered names there. The reversible-host
-  and Punycode helpers are untouched (ADR 0002); this is a separate reject gate.
-
-- `url_standard = "whatwg"` now maps the three UTS-46 alternative full-stop code
-  points — U+3002 (ideographic), U+FF0E (fullwidth), and U+FF61 (halfwidth
-  ideographic) — to ASCII `.` in the authority before parsing, matching
-  WHATWG domain-to-ASCII. Previously a Unicode-dot host such as
-  `http://127。0。0。1/` was kept as a literal registered name (`warning-no-tld`);
-  it now coerces to the canonical dotted-quad `http://127.0.0.1/`, closing an
-  SSRF-relevant loopback/metadata obfuscation that browsers resolve. IDN names
-  have their separators normalized the same way (`例え。jp` → `例え.jp`). The
-  mapping is scoped to the authority: a full-stop variant in the path, query, or
-  fragment is left literal. `url_standard = "rfc3986"` and the default (`NULL`)
-  are unchanged — RFC 3986 has no UTS-46 mapping, so these bytes stay literal.
-
-- `url_standard = "whatwg"` now **accepts** the 15 ASCII host code points that
-  libcurl rejects but the WHATWG URL Standard keeps in the host —
-  `! " $ & ' ( ) * + , ; = ` { }`. rurl delegates host parsing to libcurl, whose
-  host allowed-set is narrower than WHATWG's, so a host such as `http://a'b/`
-  (the residual behind the ada-008 boundary case) previously returned `error`.
-  A special-scheme URL whose host carries one of these code points now parses,
-  with the host preserved byte-for-byte (`http://a'b.example.com/` keeps
-  `a'b.example.com`). The fix is a pre-parse shim that lets libcurl read the URL
-  structure and then restores the true host, so every downstream check —
-  including the forbidden-host-code-point reject — still runs on the real host:
-  `%` (a forbidden domain code point) and `|`/`^` stay rejected. It fires a new
-  `host-charset-shimmed` diagnostic. `url_standard = "rfc3986"` and the default
-  (`NULL`) are unchanged — they inherit libcurl's stricter charset and still
-  reject. The reversible-host and Punycode helpers are untouched (ADR 0002); see
-  ADR 0009. This first slice covers WHATWG special schemes (http/https/ftp);
-  ftps and opaque hosts remain a documented follow-up.
+- `url_standard = "whatwg"` strips ASCII tab, LF and CR from input before parsing and reports `control-char-stripped` (WHATWG URL basic parser).
+- `url_standard = "whatwg"` rejects forbidden host code points and failed domain-to-ASCII hosts as `parse_status = "error"` (WHATWG URL host parsing).
+- `url_standard = "whatwg"` maps U+3002, U+FF0E and U+FF61 to `.` in the authority, so `http://127。0。0。1/` becomes `http://127.0.0.1/` (UTS-46).
+- `url_standard = "whatwg"` accepts host code points `! " $ & ' ( ) * + , ; = ` { }` that libcurl rejects and reports `host-charset-shimmed` (ADR 0009).
 
 ### Diagnostics
 
-- New `get_url_diagnostics()` token `control-char-stripped`, emitted under
-  `"whatwg"` on any URL from which an ASCII tab/LF/CR was removed.
-
-- New `get_url_diagnostics()` token `host-charset-shimmed`, emitted under
-  `"whatwg"` on any URL whose host carried a libcurl-rejected-but-WHATWG-valid
-  code point (`! " $ & ' ( ) * + , ; = ` { }`) that the shim accepted.
-
-### Documentation
-
-- Clarified `path_encoding` as the readable-vs-browser path *presentation*
-  choice (the analog of `host_encoding`): the default `"keep"` is a faithful
-  passthrough that forces neither form, `"encode"` renders the
-  browser/percent-encoded path (`/école` → `/%C3%A9cole`, `/"path"` →
-  `/%22path%22`), and `"decode"` renders the readable path. No behavior change —
-  the knob already existed; the docs now make the choice discoverable and note
-  that a `url_standard` profile does not switch the path to the browser-encoded
-  rendering (a readable path stays readable).
+- New `get_url_diagnostics()` tokens `control-char-stripped` and `host-charset-shimmed`, emitted under `"whatwg"`.
 
 ## rurl 2.2.2
 
 ### Bug fixes
 
-- `url_standard = "whatwg"` now rejects obfuscated numeric hosts that libcurl
-  leaves as registered names. WHATWG parses any host whose final label is a
-  number (decimal, or a `0x` hex literal) as an IPv4 address and fails the whole
-  host parse when that IPv4 parse is invalid. Previously rurl only applied this
-  rule to forms libcurl had already coerced to an IPv4 literal, so mixed
-  reg-name/number hosts (`http://foo.09`, `http://foo.0x4`), leading-zero /
-  invalid-octal octets (`http://1.2.3.08`), and `>4`-part or trailing-dot forms
-  (`http://0x1.2.3.4.5`, `http://1.2.3.08.`) slipped through as
-  `warning-invalid-tld` instead of `error`. They now return
-  `parse_status = "error"` under `"whatwg"`, matching the WHATWG URL Standard
-  and the web-platform-tests failure corpus. `url_standard = "rfc3986"` and the
-  default (`NULL`) are unchanged — RFC 3986 has no numeric-host rule, so these
-  remain valid registered names there.
+- `url_standard = "whatwg"` rejects hosts ending in an invalid numeric label, such as `http://foo.09` or `http://1.2.3.08` (WHATWG URL IPv4 parser).
 
 ## rurl 2.2.1
 
 ### Packaging
 
-- Pin the sibling `Remotes:` to release tags (`pslr@v1.0.2`,
-  `punycoder@v1.2.0`) to match the `Imports` version floors. The Remotes
-  previously tracked each sibling's default branch; once `pslr`'s development
-  head began pinning `punycoder@v1.2.0`, `pak` saw two conflicting sources for
-  `punycoder` and could not solve the dependency graph, breaking a fresh
-  install / CI resolution of `rurl` and of any package depending on it. No
-  user-facing code change.
+- `Remotes:` now pin `pslr@v1.0.2` and `punycoder@v1.2.0`, so a fresh `pak` install resolves again.
 
 ## rurl 2.2.0
 
 ### New features
 
-- New `url_standard` selector on `safe_parse_url()`, `safe_parse_urls()`, the
-  `get_*()` accessors, and `canonical_join()`: `NULL` (default), `"rfc3986"`, or
-  `"whatwg"`. It selects a coherent set of
-  standard-conformant behaviors for the axes it governs — path percent/dot
-  handling, the host IPv4/reg-name model, and `case_handling` — so callers no
-  longer hand-assemble the low-level knobs to approximate a standard. Passing a
-  governed low-level knob (`path_encoding`, `path_normalization`,
-  `case_handling`) with a value the selected profile would not choose is an
-  error (also across `canonical_join()`'s `...`). **`url_standard = NULL` is
-  fully backward compatible** — byte-for-byte identical output and unchanged
-  result shape; there is no default flip. Under `"rfc3986"` only unreserved path
-  bytes are decoded (`%2F` stays encoded) and numeric-looking non-IPv4 hosts are
-  parsed as `reg-name`; under `"whatwg"` encoded unreserved bytes are preserved
-  and valid numeric IPv4 forms are coerced per the WHATWG host model.
-- New standalone `port_handling` option controlling whether the port appears in
-  `clean_url`: `"exclude"` (default, today's behavior), `"keep"`,
-  `"strip_default"`, `"strip_all"`. It is editorial and
-  standard-independent; under `url_standard = "whatwg"`, `"keep"` elides a port
-  matching its special scheme's default (http:80, https:443, ftp:21).
-- Under `url_standard = "whatwg"`, a literal backslash is recognized as a path
-  separator for WHATWG-special schemes (`http`/`https`/`ftp`, not `ftps`), as
-  browsers do. `%5C` is never treated as a separator, and
-  `"rfc3986"` / no selector leave backslashes inert.
-- New `resolve_url(relative_or_absolute, base_url, url_standard = NULL, ...)`:
-  RFC 3986 §5 reference resolution (empty / fragment-only / query-only /
-  scheme-relative / absolute-path / relative-path merge) composed over the same
-  parsing machinery, returning the canonical `clean_url` of the resolved
-  reference. Vectorized, with the base recycled.
+- New `url_standard` selector (`NULL` default, `"rfc3986"`, `"whatwg"`) on the parsers, accessors and `canonical_join()`; conflicting `path_encoding`, `path_normalization` or `case_handling` values error.
+- New `port_handling` option for `clean_url`: `"exclude"` (default), `"keep"`, `"strip_default"`, `"strip_all"`.
+- Under `url_standard = "whatwg"`, a literal backslash is a path separator for `http`, `https` and `ftp`; `%5C` never is.
+- New `resolve_url()` resolves relative references against a base URL and returns the resolved `clean_url` (RFC 3986 §5).
 
 ### Diagnostics and classification helpers
 
-- New companion helpers, gated on `url_standard` (return `NA` with no selector),
-  surface metadata **without** widening the parse result shape:
-  `get_host_type()` (domain / ipv4 / ipv6 / reg-name / missing),
-  `get_scheme_class()` (WHATWG special / non-special / missing-or-error), and
-  `get_url_diagnostics()`.
-- Diagnostics vocabulary: `ipv4-*` numeric-host tokens, `encoded-dot-segment`,
-  `encoded-reserved-path-byte`, `explicit-default-port` / `non-default-port`,
-  `invalid-reverse-solidus`, and the DNS/UTS-46 tokens `domain-label-too-long`,
-  `domain-name-too-long`, `domain-empty-label`, `domain-hyphen-violation`,
-  `domain-std3-violation`. Diagnostics are **facts, not policy**:
-  a token describing an input shape fires identically under both standards, so a
-  link-graph builder can ignore them while an SSRF/allowlist guard rejects on
-  them.
+- New `get_host_type()`, `get_scheme_class()` and `get_url_diagnostics()`, returning `NA` unless `url_standard` is set.
 
 ### Documentation
 
-- New `url_standard` vignette walking through RFC 3986 vs WHATWG on the canonical
-  cases (`%41%42`, `%2F`, `2130706433`), the diagnostics, and the migration
-  notes (pin `url_standard = "whatwg"` for WHATWG-aligned link identity on the
-  governed axes; the interim `path_encoding = "keep"` stopgap is a collision fix,
-  not a full standard profile).
+- New `url_standard` vignette comparing RFC 3986 and WHATWG on canonical cases.
 
 ## rurl 2.1.0
 
 ### New features
 
-- `safe_parse_url()` and `safe_parse_urls()` gain four additive result columns —
-  `domain_ascii`, `domain_unicode`, `tld_ascii`, and `tld_unicode` — exposing
-  the registrable domain and public suffix in **both** canonical spellings,
-  independent of `host_encoding`. `host_encoding` is a
-  *rendering* choice, so the existing `domain`/`tld` columns follow it (under
-  the default `"keep"`, a Unicode host and its Punycode A-label render
-  differently and do not compare equal). The new columns are stable *identity*
-  keys instead: `http://münchen.de` and `http://xn--mnchen-3ya.de` share one
-  `domain_ascii` (`"xn--mnchen-3ya.de"`) and one `domain_unicode`
-  (`"münchen.de"`), so a consumer can build an encoding-independent key from a
-  single parse rather than re-parsing with a forced `host_encoding`. For
-  ASCII-only hosts the two spellings are equal; IP hosts and null rows yield
-  `NA`. The values were already computed internally, so this is purely additive
-  and existing `domain`/`tld` semantics are unchanged.
+- `safe_parse_url()` and `safe_parse_urls()` gain `domain_ascii`, `domain_unicode`, `tld_ascii` and `tld_unicode` columns, independent of `host_encoding`.
 
 ## rurl 2.0.0
 
 ### New features
 
-- `safe_parse_url()` and `safe_parse_urls()` gain opt-in query-string handling
-  for `clean_url`. New `query_handling` option:
-  `"drop"` (default — `clean_url` stays query-free, exactly as before),
-  `"filter"` (keep contentful params, drop known trackers such as `utm_*`,
-  `fbclid`, `gclid` via a built-in denylist), `"allow"` (keep only names in
-  `params_keep`), and `"keep"` (keep every param, canonicalized). Supporting
-  options: `params_keep`, `params_drop` (glob-aware, `*`-only), `sort_params`,
-  `empty_param_handling`, `params_case_sensitive`, and `decode_plus`. The raw
-  `query` result field is untouched — it always reports the faithful original.
-  All defaults preserve current output. Because `canonical_join()` forwards
-  `...` to `safe_parse_urls()`, these options also flow into the join key, so a
-  non-`"drop"` mode makes `?id=1`/`?id=2` stop collapsing while `utm`-only
-  differences still collapse under `"filter"`.
-- `get_clean_url()` gains the seven query-filter arguments (`query_handling`,
-  `params_keep`, `params_drop`, `params_case_sensitive`, `sort_params`,
-  `empty_param_handling`, `decode_plus`), reaching full parity with the parse
-  engine. A filtered cleaned URL is now available directly —
-  `get_clean_url(u, query_handling = "filter")` — instead of only via
-  `safe_parse_url(u, query_handling = "filter")$clean_url`. Defaults are
-  unchanged (`query_handling = "drop"`), so existing output is byte-identical.
-- `get_query()` gains the same query-filter engine arguments
-  (`query_handling`, `params_keep`, `params_drop`, `params_case_sensitive`,
-  `sort_params`, `empty_param_handling`, `decode_plus`), so a cleaned query can
-  be pulled directly without going through `clean_url`. It
-  defaults to `query_handling = "keep"` (an accessor returns the query as found
-  unless you ask it to filter), and the filter runs before rendering:
-  `decode = TRUE` gives the readable decoded form, `decode = FALSE` the
-  canonical re-encoded form. Every existing default is byte-for-byte unchanged.
-- New `query_param_summary()` introspection function tabulates the query
-  parameters across a set of URLs — which names appear, what values they take,
-  `n`/`n_urls` counts, and a `would_drop` column previewing what
-  `query_handling = "filter"` would remove. Returns a flat
-  (long) `data.frame` at `level = "param"` or `level = "value"`. Param names
-  are grouped faithfully (case-sensitively) while `would_drop` honors
-  `params_case_sensitive`, so you can audit a URL set before choosing a policy.
-- The `clean_url` query is deliberately **exempt from `case_handling`** (query
-  values are case-sensitive — tokens, IDs, signatures). Under
-  `case_handling = "lower"` or `"upper"` the scheme/host/path fold but the
-  appended query keeps its original case, so `clean_url` is no longer uniformly
-  cased in those modes.
+- New `query_handling` option (`"drop"` default, `"filter"`, `"allow"`, `"keep"`) with `params_keep`, `params_drop`, `sort_params` and related options keeps query parameters in `clean_url`.
+- `get_clean_url()` and `get_query()` gain the query-filter arguments; `get_query()` defaults to `query_handling = "keep"`.
+- New `query_param_summary()` tabulates query parameters across URLs, with a `would_drop` preview of `query_handling = "filter"`.
+- The `clean_url` query is exempt from `case_handling`.
 
 ### Breaking changes
 
-- `path_normalization = "none"` (the default) is now genuinely lossless for
-  path structure. The request path is read from the input
-  verbatim rather than from libcurl's pre-normalized path, so `.`/`..` segments
-  are preserved: `"http://ex.com/a/../b"` now yields `clean_url`
-  `"http://ex.com/a/../b"` instead of `"http://ex.com/b"`. Because `clean_url`
-  is a `canonical_join` key, dot-segment paths that previously collided no
-  longer do — pass `path_normalization = "dot_segments"` (or `"both"`) to
-  resolve them. rurl now owns dot-segment resolution (RFC 3986 §5.2.4, literal
-  `.`/`..` only), so a percent-encoded `%2e` is treated as an ordinary path
-  byte and is **never** resolved as traversal — closing the silent
-  `"/a/%2e%2e/b"` → `"/b"` rewrite libcurl used to perform. Percent-hex case is
-  still canonicalized to uppercase (`%2f` → `%2F`) under `"keep"`, so encoded
-  paths remain join-equivalent.
-- Non-compliant input handling is now consistent and strict.
-  rurl no longer fabricates an `http://` URL for scheme-less input that is not
-  host-shaped: nonsense tokens (`"asdfghjkl"`, `"example"`), free text
-  (`"hello world"`), and path fragments (`"/relative/path"`) now return
-  `parse_status = "error"` with `clean_url = NA`, matching the behavior of
-  inputs that already errored. An **explicit** supported scheme is still
-  trusted, so `"http://asdfghjkl/"` remains `warning-no-tld`. Scheme-less
-  `localhost` is accepted (the one allowlisted single-label host).
-- IP literals are validated strictly against the *input* rather than trusting
-  libcurl's legacy `inet_aton` coercion. Integer, hexadecimal, octal, and
-  short-form numbers (`"12345"` → `0.0.48.57`, `"0x7f000001"`, `"192.168"`),
-  out-of-range or wrong-arity dotted numbers (`"256.1.1.1"`, `"1.2.3.4.5"`),
-  and **leading-zero (octal) octets** (`"192.168.010.1"`, which silently means
-  `192.168.8.1`) now return `"error"` instead of a coerced address. Canonical
-  literals (`"1.2.3.4"`, `"[::1]"`) are unaffected. `.detect_ip_host_vec()` is
-  correspondingly tightened to reject zero-padded octets.
-- Only `http`, `https`, `ftp`, and `ftps` are supported schemes (now a single
-  source of truth, `.SUPPORTED_SCHEMES`). Scheme-bearing input with any other
-  scheme — opaque (`mailto:`, `tel:`, `data:`) or authority-based but
-  unsupported (`ws://`, `ssh://`, `redis://`) — returns `"error"`.
-- New `parse_status` value `"warning-userinfo"` for scheme-less input carrying
-  userinfo (e.g. `"user@example.com"`): `host`/`domain`/`tld`/`user` still
-  resolve, but `clean_url` is `NA` (rurl will not fabricate a canonical URL
-  from an ambiguous, email-shaped, scheme-less string). Such rows are
-  non-joinable in `canonical_join()`. Input with an explicit scheme
-  (`"http://user@example.com"`) is unchanged. Scheme-less `user:pass@host`
-  (indistinguishable from `scheme:opaque`) remains `"error"`; use the
-  scheme-relative form `//user:pass@host` to parse it.
+- `path_normalization = "none"` keeps `.`/`..` segments, and `%2e` is never resolved as traversal (RFC 3986 §5.2.4).
+- Scheme-less input that is not host-shaped, such as `"example"` or `"/relative/path"`, returns `parse_status = "error"`; `localhost` is still accepted.
+- Non-canonical IP literals (integer, hex, octal, short-form, out-of-range, leading-zero octets) return `"error"` instead of a coerced address.
+- Only `http`, `https`, `ftp` and `ftps` are supported; any other scheme, including `mailto:` and `ws://`, returns `"error"`.
+- New `parse_status` `"warning-userinfo"` for scheme-less userinfo input such as `"user@example.com"`, with `clean_url = NA`.
 
 ### Performance
 
-- The parse pipeline is split into an option-independent core (Stage A: curl
-  components, IP detection, the post-www host, and the PSL domain/TLD
-  decomposition) and a presentation stage (Stage B: path handling, case,
-  host-encoding spelling, subdomain trimming, clean-URL assembly, status). The
-  `full_parse` cache now stores Stage A, keyed only by URL, protocol/scheme
-  handling, `www_handling`, and `tld_source`. Calling several accessors with
-  different presentation profiles on the same URLs (e.g. `get_host()`,
-  `get_domain()`, `get_tld()`, `get_clean_url()`, `get_subdomain()`) now shares
-  one cache entry per URL and re-runs only the cheap Stage B, so the expensive
-  curl + PSL work happens once instead of once per profile. Output is unchanged.
-  Cache memory per URL also drops to a single (option-independent) entry.
-
-- `safe_parse_urls()` now de-duplicates its input, parsing each unique URL only
-  once (with cross-call reuse via the `full_parse` cache) and expanding the
-  results back with `match()`. Repeated / duplicate URLs cost only the match,
-  so warm and duplicate-heavy inputs are dramatically faster. `safe_parse_url()`
-  (scalar) shares the same cached code path.
-
-- Query-string parsing (`get_query(format = "list")`) is now linear in the
-  number of key/value pairs (previously quadratic from incremental list
-  growth), so URLs with very long query strings parse faster. Output is
-  unchanged.
+- `safe_parse_urls()` parses each unique URL once, and accessors with different options share one cache entry per URL.
 
 ### Behavior changes
 
-- Accessor results (`get_*()`) are no longer named by the input URLs. The
-  `get_*()` functions now parse their input in a single vectorized pass and
-  return plain unnamed vectors (or lists), instead of vectors carrying a
-  `names` attribute of the input URLs. Wrap in `stats::setNames(x, url)` if you
-  relied on the old names.
-
-- The `full_parse` memoization cache is now bounded by default at 100000 unique
-  url × option combinations (previously `Inf`), so parsing millions of unique
-  URLs can no longer grow the cache without limit. Override with
-  `rurl_cache_config(max_full_parse = Inf)` to restore the previous unbounded
-  behavior; the reset-watermark semantics are unchanged.
-
-- A present-but-empty `query`, `fragment`, `user`, or `password` component
-  (e.g. the query of `"https://example.com/?"`) is now reported as `NA`
-  consistently. `curl::curl_parse_url()` returns such components as `NULL` on
-  some libcurl versions and `""` on others; both now normalize to `NA`, so
-  output no longer depends on the installed libcurl version. This matches the
-  behavior already produced on platforms where curl returned `NULL`.
-
-### Behavior changes
-
-- `safe_parse_urls()` now accepts a factor input, coercing it to its character
-  labels up front (matching `canonical_join()`), instead of returning an
-  all-`error` row for every element.
+- `get_*()` accessors return unnamed vectors instead of vectors named by the input URLs.
+- The `full_parse` cache is bounded at 100000 entries by default; `rurl_cache_config(max_full_parse = Inf)` restores the old behavior.
+- An empty `query`, `fragment`, `user` or `password` is reported as `NA` on every libcurl version.
+- `safe_parse_urls()` accepts factor input.
 
 ### Bug fixes
 
-- Scheme-less `host:port` input (e.g. `"example.com:8080/x"`) is no longer
-  reported as `parse_status = "error"`. It parses correctly (valid host, path,
-  and `clean_url`) but the status-derivation phase mistook `example.com:` for
-  an unsupported scheme and demoted it, contradicting the emitted components.
-  It now reports `"ok"`, restoring the invariant that a present `clean_url`
-  implies a non-error status. Genuinely unsupported/opaque schemes
-  (`mailto:`, `user:pass@host`) still return `"error"`.
-- path/fragment/userinfo are no longer percent-decoded during parsing;
-  `path_encoding = 'keep'` now honors its contract (leaves the path
-  byte-for-byte); the raw query is preserved (`?flag` stays `flag`, not
-  `flag=`). NOTE: `clean_url` values change for URLs containing
-  percent-encoded path bytes — since `clean_url` is a `canonical_join` key,
-  `/a%2Fb` and `/a/b` no longer collide.
-
-### Documentation
-
-- Clarified the `path_normalization` and `path_encoding` docs to describe the
-  normalization the underlying parser (libcurl) applies before rurl sees the
-  path: RFC 3986 dot-segment resolution (`.`/`..`, including `%2e`/`%2E`) is
-  unconditional and cannot be disabled — so `path_normalization = "none"` still
-  resolves `/a/../b` to `/b` — and percent-encoding hex digits are normalized to
-  uppercase (`%2f` → `%2F`), an RFC 3986 §6.2.2.1 case canonicalization that
-  makes such paths compare equal in `canonical_join()`. Behavior is unchanged;
-  only the documentation now matches it.
+- Scheme-less `host:port` input such as `"example.com:8080/x"` now reports `"ok"` instead of `"error"`.
+- Path, fragment and userinfo are no longer percent-decoded during parsing, so `clean_url` changes for percent-encoded paths.
 
 ## rurl 1.4.1
 
 ### Bug fixes
 
-- `safe_parse_url()`/`safe_parse_urls()` now recognize IPv6 address literals
-  that carry an embedded dotted-quad IPv4 tail (RFC 4291 §2.2 form 3 / §2.5.5,
-  e.g. `[::ffff:127.0.0.1]`, `[64:ff9b::8.8.8.8]`). Previously these fell
-  through to the registered-name path, returning `is_ip_host = FALSE` and a
-  spurious `warning-invalid-tld` status; they now report `is_ip_host = TRUE`
-  and `parse_status = "ok"`. Both the dotted and hex-hextet spellings of the
-  same address (`[::ffff:0808:0808]` vs `[::ffff:7f00:1]`) now classify
-  identically. A malformed embedded tail (octet out of range) is still
-  rejected.
+- IPv6 literals with an embedded IPv4 tail, such as `[::ffff:127.0.0.1]`, report `is_ip_host = TRUE` and `"ok"` (RFC 4291 §2.2).
 
 ### Infrastructure
 
-- Added a dependency vulnerability audit against the Sonatype OSS Index via
-  `oysteR` (new `Suggests`). `tests/testthat/test-security.R` runs
-  `oysteR::expect_secure("rurl")` and a dedicated `security-audit.yml` workflow
-  (weekly + on demand) executes it with OSS Index credentials; the test skips
-  cleanly without credentials, offline, or on CRAN.
-- Added a second, token-free dependency vulnerability audit against the OSV
-  database (<https://osv.dev>) via `rosv` (new `Suggests`).
-  `tests/testthat/test-osv.R` checks the runtime dependency closure of rurl
-  (recursive `Depends` + `Imports`) at installed versions, and a dedicated
-  `osv-audit.yml` workflow (weekly + on demand) executes it with no secrets;
-  the test skips cleanly offline or on CRAN.
+- `oysteR` and `rosv` added to Suggests for dependency vulnerability audits.
 
 ## rurl 1.4.0
 
 ### Dependencies
 
-- The `pslr` dependency floor is now `>= 1.0.2` and the `punycoder` floor is
-  `>= 1.2.0`. Those releases form the coordinated `punycoder 1.2.0`
-  host-normalization API pair, so a fresh install pulls a compatible set;
-  `rurl` should be submitted after both dependency updates are on CRAN.
+- Requires `pslr` (>= 1.0.2) and `punycoder` (>= 1.2.0).
 
 ### Accessor improvements
 
-- `get_path()` gains `path_normalization`, `index_page_handling`,
-  `trailing_slash_handling`, and `path_encoding` arguments, matching
-  the corresponding options of `safe_parse_url()`.
-- `get_scheme()` gains `scheme_relative_handling`.
-- `get_parse_status()` gains `source` (mapped to `tld_source`) so
-  warning statuses can be queried under a specific PSL section.
-- `get_clean_url()` and `get_host()` gain `source` (mapped to `tld_source`).
-- `get_host()` gains `host_encoding`.
-- `get_domain()`, `get_tld()`, and `get_subdomain()` gain `host_encoding`,
-  mirroring `get_host()`.
-
-All new arguments default to the same values as `safe_parse_url()`, so
-existing calls are unaffected.
+- `get_path()` gains `path_normalization`, `index_page_handling`, `trailing_slash_handling` and `path_encoding`.
+- `get_scheme()` gains `scheme_relative_handling`; `get_parse_status()`, `get_clean_url()` and `get_host()` gain `source`.
+- `get_host()`, `get_domain()`, `get_tld()` and `get_subdomain()` gain `host_encoding`.
 
 ### Behavior change
 
-- The domain-family accessors (`get_domain()`, `get_tld()`,
-  `get_subdomain()`) now follow `host_encoding` (default `"keep"`) instead
-  of always returning Unicode. Under `"keep"` the emitted domain/TLD/
-  subdomain mirrors the input host's own spelling: an A-label (`xn--…`)
-  host yields A-label parts, a Unicode host yields Unicode parts. Pass
-  `host_encoding = "unicode"` for the previous always-decoded output, or
-  `"idna"` to force A-labels. This makes the domain accessors consistent
-  with `get_host()`, whose `host_encoding` already defaulted to `"keep"`.
-
-### Internal
-
-- Parse-status string literals replaced by named constants
-  (`R/status-constants.R`) and predicates (`.is_ok_status()`,
-  `.is_warning_status()`, `.is_joinable_status()`).
-- Cache touchpoints in `R/zzz.R` now driven from a single `.CACHE_REGISTRY`
-  instead of repeating cache names by hand.
-- Cleared the `lintr`/`goodpractice` findings across `R/` and the tests
-  (e.g. `fixed = TRUE` dot splits, condition-message construction, dropped
-  unnecessary lambdas) with no behavior change.
-- `.lintr` now mirrors `goodpractice`'s linter set, so a local
-  `lintr::lint_package()` matches the `goodpractice` report; intentional
-  test-idiom deviations are documented in the config header.
-- Restored 100% line coverage: added targeted tests for the
-  `.punycode_to_unicode("")`, `.host_is_ace()`, and `.cache_enabled()`
-  guard branches and the `derive_parse_status()` NA-host-dot fallback
-  (and fixed an over-escaped regex literal that left the scheme-slash NA
-  guard untested). The two genuinely unreachable `www`-prefix
-  regex-capture fallbacks are now marked `# nocov` with justification.
-- Reduced the cyclomatic complexity of `canonical_join()` (47→7),
-  `get_subdomain()` (26→6), `rurl_cache_config()` (23→5), and
-  `safe_parse_urls()` (19→3) by extracting named sub-helpers (e.g.
-  `.cj_validate_inputs()`/`.cj_resolve_sides()`/`.cj_build_join_df()`,
-  `.subdomain_labels()`, `.validate_max_full_parse()`,
-  `.spu_coerce_original()`). No behavior change; no function in the package
-  now exceeds the `goodpractice` cyclocomp threshold of 15.
+- `get_domain()`, `get_tld()` and `get_subdomain()` follow `host_encoding` (default `"keep"`); pass `"unicode"` for the previous output.
 
 ### Documentation & metadata
 
-- Added package-level documentation (`?rurl` / `man/rurl-package.Rd`) via a
-  `"_PACKAGE"` sentinel, so the maintainer ORCID, package URLs, and the
-  cross-promotion of `pslr`/`punycoder` now render on a help/landing page.
-- Enabled roxygen2 markdown (`Roxygen: list(markdown = TRUE)`), regenerating
-  all `man/*.Rd` (inline backticks now render as `\code{}`).
-- Fixed the stale `inst/CITATION`: it now reads the version from package
-  metadata (was hardcoded `0.2.0`), uses the correct title, and carries the
-  maintainer ORCID. Added a root `CITATION.cff`.
-- Added `X-schema.org-keywords`, the r-universe URL, and a `codemeta.json`
-  for discoverability.
-- Maintainer email simplified to `bartek@turczynski.pl`.
+- New package help page, `?rurl`.
 
 ## rurl 1.3.0
 
 ### Dependencies
 
-- Public Suffix List matching is now delegated to the `pslr` package
-  (`Imports: pslr (>= 1.0.1)`). `rurl` no longer ships its own processed copy of
-  the list (`R/sysdata.rda`) or its embedded matcher, and `data-raw/update_psl.R`
-  has been removed. `punycoder` is now required at `>= 1.1.0`.
+- Public Suffix List matching is delegated to `pslr` (>= 1.0.1); `punycoder` (>= 1.1.0) is required.
 
 ### Behavior changes (PSL correctness)
 
-The embedded matcher used through 1.2.0 was not fully spec-correct. Delegating
-to `pslr` fixes the following; outputs change accordingly:
-
-- **Wildcard rules (`*.`)** are now honored by TLD extraction. For example
-  `get_tld("a.b.kobe.jp")` is now `"b.kobe.jp"` (was `"kobe.jp"`).
-- **Exception rules (`!`)** are now honored by TLD extraction. For example
-  `get_tld("www.ck")` is now `"ck"` (was `"www.ck"`), and `get_tld("foo.ck")`
-  is now `"foo.ck"` (was `"ck"`).
-- **IDN hosts** now resolve a registered domain in every section. For example
-  `get_domain("example.рф")` is now `"example.рф"` (was `NA`).
-- `safe_parse_url()` / `safe_parse_urls()` now derive the `domain` field using
-  the requested `tld_source` rather than always using the combined list, so
-  `domain` and `tld` are consistent within a parse. Under
-  `tld_source = "private"` (or `"icann"`), a host with no suffix in that section
-  now has `domain = NA`; consequently `subdomain_levels_to_keep` is a no-op for
-  such hosts (there is no registered domain to trim toward). The default
-  `tld_source = "all"` is unaffected.
-- Hosts under an unknown TLD continue to return `NA` for both domain and TLD
-  (`rurl` queries `pslr` with `unknown = "na"`), rather than treating an unknown
-  single label as a public suffix.
+- Wildcard and exception rules are honored, e.g. `get_tld("a.b.kobe.jp")` is `"b.kobe.jp"` and `get_tld("www.ck")` is `"ck"`.
+- IDN hosts resolve a registered domain in every section, e.g. `get_domain("example.рф")`.
+- `domain` follows `tld_source`, so a host with no suffix in that section gets `domain = NA`.
 
 ### Cache changes
 
-- The per-host `domain` and `tld` memoization caches have been removed; `pslr`
-  caches its own query results. `rurl_cache_config()` and `rurl_cache_info()`
-  now cover only `full_parse`, `puny_encode`, and `puny_decode`, and the
-  `domain` / `tld` arguments to `rurl_cache_config()` no longer exist.
+- The `domain` and `tld` caches and their `rurl_cache_config()` arguments are removed.
 
 ## rurl 1.2.0
 
 ### Dependencies
 
-- `punycoder` (used for IDNA/Punycode encoding and decoding) is now on CRAN.
-  `DESCRIPTION` requires `punycoder (>= 1.0.0)`.
+- Requires `punycoder` (>= 1.0.0), now on CRAN.
 
 ### Behavior changes
 
-- The package-wide default for `case_handling` is now `"lower_host"` (was
-  `"keep"` for `safe_parse_url()`, `safe_parse_urls()`, `get_clean_url()`, and
-  the `get_*()` accessors, and `"lower"` for `get_path()`). This is the
-  RFC 3986 §6.2.2.1 normalization: the case-insensitive scheme and host fold to
-  lowercase while the case-sensitive path is preserved. With the previous
-  defaults, hosts such as `WWW.Example.COM` and `www.example.com` did not fold
-  to one identity, and `get_path()` silently lowercased paths (two pages that
-  differ only by path casing collapsed to one). Pass `case_handling = "keep"`
-  to restore the previous reconstruction, or `"lower"` to lowercase the whole
-  URL including the path.
+- `case_handling` defaults to `"lower_host"` everywhere, so `get_path()` no longer lowercases paths (RFC 3986 §6.2.2.1).
 
 ## rurl 1.1.0
 
 ### New features
 
-- `canonical_join()` gains `name_A` / `name_B` arguments to set the output
-  original-URL column names explicitly. They default to `NULL`, preserving the
-  previous `deparse(substitute())` behavior; supply them for stable names when
-  piping or passing anonymous inputs (e.g. `canonical_join(df[df$x > 1, ],
-  get_b())`), which otherwise produced unstable column names.
-- `canonical_join()` gains a `join_parse_status` argument controlling which
-  parse statuses yield joinable keys. The default `"ok"` preserves the previous
-  behavior (only `ok*` statuses join); `"ok_or_warning"` additionally treats
-  the parseable-but-suspicious `warning-*` statuses (`warning-no-tld`,
-  `warning-invalid-tld`, `warning-public-suffix`) as joinable, at the cost of
-  more potential false-positive matches.
-
-- Cache introspection and configuration. `rurl_cache_info()` reports the entry
-  count, enabled state, and any bound for each memoization cache
-  (`full_parse`, `domain`, `tld`). `rurl_cache_config()` enables or disables
-  individual caches and sets an optional `max_full_parse` bound on the
-  full-parse cache (default `Inf`, preserving the previous unbounded
-  behavior); when the bound is reached the cache is reset so peak memory stays
-  bounded. The `domain` and `tld` caches remain unbounded by design — they
-  grow with the number of unique hosts, not with URL/option combinations — and
-  can be disabled for workloads with very many unique hosts.
+- `canonical_join()` gains `name_A` and `name_B` to set output column names.
+- `canonical_join()` gains `join_parse_status`; `"ok_or_warning"` also joins `warning-*` rows.
+- New `rurl_cache_info()` and `rurl_cache_config()` inspect and configure the memoization caches.
 
 ### Bug fixes
 
-- `safe_parse_url()` now returns `port` as an integer (or `NA_integer_`), and
-  `safe_parse_urls()` no longer errors on URLs that contain an explicit port
-  (e.g. `http://example.com:8080/path`). Previously the scalar parser returned
-  the port as a character string and the vectorized parser aborted.
-- Bracketed IPv6 hosts (e.g. `http://[2001:db8::1]/`) are now correctly detected
-  as IP hosts: `is_ip_host` is `TRUE`, `parse_status` is `"ok"`, and no
-  TLD/domain derivation is attempted — matching how IPv4 hosts were already
-  handled. An over-escaped detection pattern previously prevented this.
+- `safe_parse_url()` returns `port` as an integer, and `safe_parse_urls()` no longer errors on URLs with a port.
+- Bracketed IPv6 hosts are detected as IP hosts, with `parse_status = "ok"`.
 
 ### Behavior changes (potentially breaking)
 
-- `subdomain_levels_to_keep = N` (for `N > 0`) now keeps the `N` rightmost
-  subdomain labels as documented, instead of silently retaining all subdomains.
-  For example, `safe_parse_url("http://deep.sub.domain.example.com",
-  subdomain_levels_to_keep = 1)` now returns host `domain.example.com` (was
-  `deep.sub.domain.example.com`). `N = 0` (strip all) is unchanged. Code that
-  relied on the previous no-op behavior for `N > 0` will see different output.
-
-### Documentation
-
-- Documented `clean_url` composition: it is a normalized canonical key built
-  from scheme, host, and path only. Port, query, fragment, and userinfo are
-  intentionally excluded, and with `path_encoding = "decode"` the path is shown
-  decoded (human-readable, not guaranteed URL-safe). This matches the existing
-  behavior and the key used by `canonical_join()` — no behavior change.
-  Corrected a `lower_host` description that implied userinfo could be retained
-  in `clean_url`, and fixed a README example whose input contained a literal
-  space (now percent-encoded) so it parses as documented.
+- `subdomain_levels_to_keep = N` keeps the `N` rightmost subdomain labels instead of all of them.
 
 ---
 
 ## rurl v1 (GitHub Release) - 2026-02-16
 
-- Published first stable GitHub release tag: `v1`.
-- Release notes added in `RELEASE_NOTES_v1.md`.
-- Release tag: <https://gitlab.com/bart-turczynski/rurl/-/tags/v1>
-- Package version for this release is `1.0.0` (see `DESCRIPTION`).
+- First stable release, tagged `v1` (package version `1.0.0`).
 
 ---
 
 ## rurl 0.3.0
 
-This release adds powerful capabilities for URL normalization and canonical dataset joining. It significantly improves robustness in handling malformed or inconsistent URLs.
-
 ### Highlights
 
-- New `case_handling` and `trailing_slash_handling` parameters in `safe_parse_url()` and `get_clean_url()` provide greater control over URL formatting.
-- Introduced `canonical_join()` for joining datasets on normalized URL keys.
-- Improved handling of non-standard or malformed schemes like `htp://`.
-- Fixed parsing for schemeless URLs with ports (e.g., `example.com:8080/path`).
-- More reliable fallback when `curl::curl_parse_url()` fails internally.
-- Corrected regular expressions for IPv6 parsing.
+- New `case_handling` and `trailing_slash_handling` parameters in `safe_parse_url()` and `get_clean_url()`.
+- New `canonical_join()` joins datasets on normalized URL keys.
+- Better handling of malformed schemes like `htp://`, scheme-less URLs with ports, and IPv6.
 
 ---
 
 ## rurl 0.2.0
 
-* First version for a potential CRAN submission.
-* Fully tested across macOS, Windows, and Linux.
-* Achieved 100% unit test coverage.
-* Improved README and documentation.
-
-This release adds robust support for internationalized domain names (IDNs),
-improves punycode handling, and ensures accurate extraction of TLDs and
-registered domains.
-
 ### Highlights
-- Accurate TLD extraction for both ASCII and Unicode domains
-- Graceful fallback when `urltools` is unavailable
-- NFC normalization with `stringi`
-- 100% test coverage with edge cases and punycode validation
-- Improved internal helpers and clearer test diagnostics
+
+- Accurate TLD extraction for ASCII and Unicode domains.
+- Falls back gracefully when `urltools` is unavailable.
+- NFC normalization with `stringi`.
 
 ## rurl 0.1.3
 
 ### Improvements
 
-- Removed the dependency on the `psl` package.
-- Implemented an internal registered domain extraction using the Public Suffix List.
-- Added internal `update_psl.R` script to fetch and process the PSL during development.
-- Improved test coverage to 100%.
-- Cleaned up exports and internal helpers.
-- Updated ignores.
-- Tested on macOS, Windows, and Linux via rhub and win-builder.
-- CRAN checks pass with 0 errors/warnings and only standard notes.
+- Dropped the `psl` dependency; registered domains come from a built-in Public Suffix List.
 
 ### Documentation
 
-- README updated to reflect the use of the PSL and internal domain logic.
-- LICENSE and attribution clarified for MIT + Mozilla Public Suffix List.
+- LICENSE clarifies MIT plus Mozilla Public Suffix List attribution.
 
 ## rurl 0.1.2
 
 ### Stabilization & Coverage
 
-- Achieved **100% test coverage**.
-- Added examples to all exported functions.
-- Improved documentation (`@param`, `@return`, etc.) for CRAN compliance.
-- Cleaned up `NAMESPACE` and removed unnecessary functions like `hello()`.
-- Refined URL parsing logic and improved output consistency.
+- Examples for all exported functions.
+- Removed `hello()`.
 
 ## rurl 0.1.0
 
-- All `get_*()` functions are now vectorized and work on character vectors.
-- Deprecated scalar-only behavior.
-- Internal parsing made more robust using `curl` and `psl`.
-- Ready for use in `mutate()` and other tidy workflows.
+- All `get_*()` functions are vectorized over character vectors.
+- Uses `curl` and `psl` for parsing.
