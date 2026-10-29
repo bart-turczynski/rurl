@@ -14,9 +14,9 @@
 - `path_encoding = "decode"` decodes only unreserved and non-ASCII UTF-8 triplets; reserved ones such as `%2F` and `%3F` stay encoded (RFC 3986 §2.2) (`RURL-eokizmdi`).
 - rurl now requires pslr 1.2.2 or later, which fixes every parse failing under a Turkish or Azerbaijani locale (`RURL-tnsrcqwi`).
 - `get_mailto_recipients()` gains a `mailto_local_part_raw` column before `mailto_local_part_form`, moving every later column one place right (`RURL-xwsyfkwh`).
-- `get_mailto_recipients()` reports a quoted local part holding a backslash-escaped null octet as `"quoted-string"`, not `"invalid"` (RFC 5322 §4.1) (`RURL-mxsyzrho`).
+- `get_mailto_recipients()` reports a backslash-escaped null octet in a quoted local part as `"quoted-string"`, and a quoted U+007F projects as `"unavailable"`, not `"ascii"` (RFC 5322 §4.1) (`RURL-mxsyzrho`).
 - Under `"rfc3986"`, directly written non-ASCII is a parse error in every component; percent-encode it as UTF-8 or use `"whatwg"` (RFC 3986 §2.5) (`RURL-pntbujzc`).
-- `get_url_diagnostics(url_standard = "rfc3986")` reports `unicode-outside-rfc3986-uri` for such a failed row, under either `scheme_acceptance` value.
+- `get_url_diagnostics(url_standard = "rfc3986")` reports `unicode-outside-rfc3986-uri` for such a failed row whose percent-encoded twin parses, under either `scheme_acceptance` value.
 - Under `"rfc3986"`, `resolve_url()` gives `NA` for a reference that is no URI-reference, such as `10.0.0.7:8080/foo.html` (RFC 3986 §4.1, §4.2) (`RURL-pntbujzc`).
 - `get_mailto_recipients()` gains `parse_status` and `url_diagnostics` columns; under `"whatwg"` it splits recipients after the parser's control and whitespace stripping (`RURL-pntbujzc`).
 - `resolve_url()` gives `NA` against a base the selected standard's parser refuses, an empty base under `"whatwg"` included; pass `NA` for a missing base (`RURL-vrvxxfvm`).
@@ -36,7 +36,7 @@
 - Under `"whatwg"`, a percent-encoded U+3002, U+FF0E or U+FF61 in a host is a full stop, as its raw spelling is (UTS #46 §4) (`RURL-esztpdhx`).
 - Under `"whatwg"`, `www_handling` and `subdomain_levels_to_keep` act on the UTS-46 mapped host, so a fullwidth or mark-led `www` counts as `www` (`RURL-fobwctml`).
 - Under its `whatwg` policy, `get_url_key()` keys path and query as the standard serializes them, so `http://h/p{` and `http://h/p%7B` share a key (`RURL-ommuyaqi`).
-- `path_normalization`, index-page, trailing-slash and case handling no longer alter the `path` of a general-routed row, which now matches its `clean_url` (`RURL-kbjzwrkt`).
+- Slash collapsing, index-page, trailing-slash and case handling no longer alter the `path` of a general-routed row; dot segments still resolve, so it matches its `clean_url` (`RURL-kbjzwrkt`).
 - A leading U+FEFF in a host or path is now data in `case_handling`, `subdomain_levels_to_keep`, `www_handling` and `get_subdomain()`, as U+200B already was (`RURL-opwjlnla`).
 - `get_url_key()`, `resolve_url()` under `"whatwg"` and `host_encoding = "unicode"` under `"rfc3986"` keep a leading U+FEFF instead of dropping it as a byte-order mark (`RURL-dquaxcaz`).
 - Under `url_standard = "rfc3986"` with `scheme_acceptance = "general"`, `path_normalization` now governs `clean_url` too: `foo:/a/../b` cleans to `foo:/b` (RFC 3986 §6.2.2.3) (`RURL-rwlrcvnh`).
@@ -66,7 +66,7 @@
 - Under `url_standard = "whatwg"`, an IPv6 host ending in `::` is serialized canonically (`[1:2:3:4:5:6:7::]` becomes `[1:2:3:4:5:6:7:0]`); `serialize_url()`, `clean_url` and `get_url_key()` follow (WHATWG IPv6 serializer) (`RURL-sqmhtldq`).
 - `url_key_policy()` and `get_url_key()` now carry key version 2: no key minted by rurl 3.1.0 matches a new one under either policy, so regenerate persisted keys from their URLs (`RURL-rntskojq`).
 - `get_url_diagnostics()` reports `ipv6-non-canonical` and `ipv6-embedded-ipv4`, which also join `check_hosts()`'s `reasons`; rurl now imports raddr (>= 0.1.2) (`RURL-dxwsksor`).
-- `get_url_diagnostics()` and `check_hosts()` results for a host with an empty label depend on the installed punycoder: its `-v3` profile also reports hyphen, STD3 and length defects (UTS #46 §4.2) (`RURL-tsmevksk`).
+- For a host with an empty label, `get_url_diagnostics()` and `check_hosts()` depend on punycoder: its `-v3` profile also reports hyphen, STD3 and length defects, and parses `http://café..com/` under `"whatwg"` (UTS #46 §4.2) (`RURL-tsmevksk`).
 - `rurl` now requires R >= 4.1.0 (was 4.0.0), as its dependency `pslr` already did (`SEOR-nxycpzlk`).
 - On R 4.1, `url_standard = "whatwg"` writes an IPv6 host with the shortest hexadecimal pieces (`[::7f00:1]`, not `[::7f00:0001]`) (WHATWG IPv6 serializer) (`SEOR-nxycpzlk`).
 - `check_schemes()` lowercases `allowed_schemes` as ASCII, so `"FILE"` admits `file:` URLs under a Turkish or Azeri locale (`SEOR-rxxuzhmc`).
@@ -79,7 +79,7 @@
 - `get_user()` and `get_userinfo()` on a `mailto:` URL return `NA` when the decoded local part is not valid UTF-8, instead of an invalid string (RFC 6068 §2) (`RURL-gndbrpam`).
 - Under `url_standard = "whatwg"`, `resolve_url()` merges against the parsed base: surrounding spaces, tabs and newlines are stripped and `http:x` becomes `http://x/`, as `new URL()` does (`RURL-vgmyrgxb`).
 - Under `url_standard = "whatwg"`, `resolve_url()` returns `NA` for a relative reference against a base with an opaque path (`mailto:x`); a fragment-only reference still resolves (WHATWG no scheme state) (`RURL-mvjgpthk`).
-- A `%00` in a `mailto:` recipient's local part or domain makes that half `"invalid"` in `get_mailto_recipients()` and `NA` from its accessors, instead of judging the truncated prefix (RFC 5322 §3.2.3) (`RURL-rujjbahq`).
+- A `%00` in a `mailto:` local part or domain, other than a backslash-escaped one in quotes, makes that half `"invalid"` and its accessors `NA` (RFC 5322 §3.2.3) (`RURL-rujjbahq`).
 - A `%00` in a path or query no longer truncates the percent-decoded value in `get_clean_url()` or `get_query()`: the triplet stays as written and the rest decodes (RFC 3986 §2.4) (`RURL-fpujlvoq`).
 
 ### Deprecated
