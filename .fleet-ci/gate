@@ -2,7 +2,9 @@
 """bin/gate: the fleet's local gate runner, T0 docs and T1 full (seor ADR 0012).
 
     gate [OPTIONS] docs|full|auto [--sha SHA] [--base SHA]
-    gate [OPTIONS] pre-push REMOTE [URL]     reads git's pre-push lines on stdin
+    gate [OPTIONS] pre-push REMOTE [URL]     reads git's pre-push lines on stdin;
+                                             a local URL (git's rule: a path, or
+                                             file:/// with no host) is skipped, exit 0
     gate --version
 
 OPTIONS: --repo DIR (default: the current repository), --dev (allow
@@ -37,8 +39,11 @@ What one run does, in order:
     pak download cache volume for that R version, architecture and variant,
     held under a lock;
   - fails on any failed gate, a check without a `Status:` line or with a
-    non-zero exit, an ERROR or WARNING, a missing testthat summary, and any
-    skip whose reason is not on .fleet-ci.yml's allowed_skips;
+    non-zero exit, an ERROR or WARNING, a NOTE no allowed_notes entry
+    matches (when .fleet-ci.yml sets allowed_notes), a missing testthat
+    summary, a testthat run reporting PASS 0 while a tests/testthat/test*.R
+    is left after exclude_tests, and any skip whose reason is not on
+    .fleet-ci.yml's allowed_skips;
   - after a pass, writes the stamp under $(git rev-parse --git-common-dir)/verify-pass.
 
 Before the digests are published, FLEET_CI_IMAGE_OVERRIDE=<local tag> names
@@ -48,6 +53,7 @@ pkg.lock, the .Rcheck directory) under <dir>/<sha>-<tier> for inspection.
 Exit 0 on a pass or a stamp hit, 1 on a failure, 2 on a usage or setup error.
 """
 
+import fnmatch
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -65,7 +71,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # bin/classify is loaded as a module below; write no __pycache__ next to it
 # (in a package, that would be an untracked file in .fleet-ci/).
 sys.dont_write_bytecode = True
-GATE_VERSION = "2"
+GATE_VERSION = "3"
 FLEET_PROJECT = "bart-turczynski/fleet-ci"
 VARIANT_VARS = {"fleet-r": "FLEET_IMAGE_R_RELEASE", "fleet-r-idn2": "FLEET_IMAGE_IDN2_RELEASE"}
 SCRUB_EXACT = ("R_PROFILE_USER", "R_ENVIRON_USER")
@@ -204,6 +210,20 @@ def check_pin(repo, sha, dev, variant="fleet-r"):
 
 
 # --- push shape ---------------------------------------------------------------------
+
+
+def is_local_mirror(url):
+    """A local push URL, by git's own rule: with `://`, only file:// with an
+    empty host (file:///path; file://host/path is not); without it, a URL
+    with no `:` before its first `/` (../x.git, /abs/x.git; host:path and
+    git@host:path are not). bin/pre-push has the same test;
+    tests/gate_test.py runs both over one table."""
+    if not url:
+        return False
+    if "://" in url:
+        return url.startswith("file:///")
+    colon, slash = url.find(":"), url.find("/")
+    return colon < 0 or 0 <= slash < colon
 
 
 def parse_push_lines(text):
@@ -486,6 +506,18 @@ def apply_exclusions(src, exclude_tests):
     return problems
 
 
+def has_test_files(src):
+    """Any tests/testthat/test*.R left in the export, after apply_exclusions:
+    a tree whose every test file is excluded runs no test, and PASS 0 is
+    then no empty suite."""
+    d = os.path.join(src, "tests", "testthat")
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return False
+    return any(fnmatch.fnmatchcase(n, "test*.R") and os.path.isfile(os.path.join(d, n)) for n in names)
+
+
 def run_host_gates(repo, sha, base, commands, workdir):
     """host_gates in a detached worktree of SHA, with history. Returns problems."""
     if not commands:
@@ -565,8 +597,43 @@ def verify_legs(status, config):
     return problems
 
 
-def verify_check(out, config):
-    """Problems with the container's full-tier result in OUT."""
+def one_line(text):
+    return " | ".join(l.strip() for l in text.splitlines() if l.strip())
+
+
+def verify_notes(check, config):
+    """With .fleet-ci.yml's allowed_notes set, every R CMD check NOTE must match
+    an entry (re.search on the NOTE's text); an entry that matched no NOTE is a
+    warning only. Without it, NOTEs never fail. Returns problems."""
+    allowed = config.get("allowed_notes")
+    if allowed is None or "error" in check:
+        return []
+    texts = check.get("note_texts") or []
+    if isinstance(texts, str):
+        texts = [texts]
+    problems = []
+    if len(texts) != (check.get("notes") or 0):
+        problems.append("R CMD check reported %s NOTE(s), but status.json carries the text of %d"
+                        % (check.get("notes"), len(texts)))
+    used = set()
+    for text in texts:
+        hits = [p for p in allowed if re.search(p, text)]
+        used.update(hits)
+        if hits:
+            say("allowed NOTE: %s" % one_line(text))
+        else:
+            problems.append("R CMD check NOTE not on allowed_notes: %s; allow it in .fleet-ci.yml "
+                            "allowed_notes, or fix it" % one_line(text))
+    for p in allowed:
+        if p not in used:
+            say("warning: allowed_notes entry matched no NOTE: %s" % p)
+    return problems
+
+
+def verify_check(out, config, has_testthat=True):
+    """Problems with the container's full-tier result in OUT. HAS_TESTTHAT:
+    the export, after exclude_tests, still holds a tests/testthat/test*.R
+    (has_test_files), so a run with no passing test is an empty suite."""
     problems = []
     try:
         with open(os.path.join(out, "status.json"), encoding="utf-8") as fh:
@@ -599,6 +666,7 @@ def verify_check(out, config):
         problems.append("R CMD check exited with status %s" % check.get("exit"))
     if "error" not in check and (check.get("errors") or check.get("warnings")):
         problems.append("R CMD check: %s ERROR(s), %s WARNING(s)" % (check.get("errors"), check.get("warnings")))
+    problems += verify_notes(check, config)
     tests = os.path.join(rcheck, "tests")
     rout = None
     for name in ("testthat.Rout", "testthat.Rout.fail"):
@@ -617,6 +685,9 @@ def verify_check(out, config):
     say("tests: FAIL %d | SKIP %d | PASS %d" % (nfail, nskip, npass))
     if nfail:
         problems.append("%d test(s) failed" % nfail)
+    if has_testthat and npass == 0:
+        problems.append("the test run reports PASS 0, but the package has tests/testthat: "
+                        "an empty suite proves nothing; make its tests run")
     if nskip:
         allowed = {a["reason"] for a in config["allowed_skips"]}
         skips = parse_skips(rtext)
@@ -724,6 +795,7 @@ def run_gate(repo, sha, base, tier, dev, override):
     with tempfile.TemporaryDirectory(prefix="fleet-gate-") as work:
         t0 = time.time()
         src = export_tree(repo, sha, os.path.join(work, "src"))
+        has_tests = False
         out = os.path.join(work, "out")
         os.makedirs(out)
         with open(os.path.join(out, "config.json"), "w", encoding="utf-8") as fh:
@@ -732,6 +804,7 @@ def run_gate(repo, sha, base, tier, dev, override):
         lock_hash = "-"
         if tier == "full":
             problems += apply_exclusions(src, config["exclude_tests"])
+            has_tests = has_test_files(src)
             t0 = time.time()
             problems += run_host_gates(repo, sha, base, config["host_gates"], work)
             lap("host gates", t0)
@@ -753,7 +826,7 @@ def run_gate(repo, sha, base, tier, dev, override):
         lap("container %s" % tier, t0)
         if code != 0:
             problems.append("the container step exited %d" % code)
-        problems += verify_check(out, config)
+        problems += verify_check(out, config, has_tests)
         keep = os.environ.get("FLEET_GATE_KEEP")
         if keep:
             dest = os.path.join(keep, "%s-%s" % (sha[:12], tier))
@@ -804,7 +877,14 @@ def main(argv):
             if len(argv) not in (2, 3):
                 raise GateError("usage: gate pre-push REMOTE [URL]")
             remote = argv[1]
-            refs = [r for r in parse_push_lines(sys.stdin.read()) if not is_zero(r["local_sha"])]
+            text = sys.stdin.read()
+            url = argv[2] if len(argv) == 3 else ""
+            if is_local_mirror(url):
+                # An archival mirror (the `backup` remote) only receives
+                # history already on origin, pre-migration refs included.
+                say("skipped, %s is a local mirror (%s)" % (remote, url))
+                return 0
+            refs = [r for r in parse_push_lines(text) if not is_zero(r["local_sha"])]
             problems = check_push_shape(repo, remote, refs, default_branch(repo, remote))
             if problems:
                 for p in problems:

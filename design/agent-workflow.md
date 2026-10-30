@@ -8,8 +8,10 @@ Rules that apply to one kind of task. `AGENTS.md` points here; the house
 - `pre-commit install` (the pre-commit, pre-push and post-merge hooks), then
   `.fleet-ci/pre-push --install`, which puts fleet-ci's local gate in front
   of pre-commit's pre-push stage. post-merge refreshes the `backup` mirror.
-- The gate has no destination predicate: it runs for every remote. Only the
-  owner pushes `backup`, with `--no-verify` (AGENTS.md).
+- The gate skips a push to a local mirror (a push URL that is a path, or
+  `file:///`), so `backup` needs no `--no-verify`, from the owner or an
+  agent; every other remote is gated. Under pre-commit's migration mode the
+  pre-commit pre-push stage still runs for it (design/backup-mirror.md).
 - `tools/verify-manifest.yml` holds the manifest gate list, which the gate
   runs through `tools/verify.R --gates`. Moving or deleting it breaks the
   gate.

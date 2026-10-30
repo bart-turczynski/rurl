@@ -91,6 +91,47 @@ if (step == "docs") {
 
 # --- full ---------------------------------------------------------------------
 
+# The glibc source localedef -i reads for locale l: the name before the dot
+# with l's @modifier (sr_RS.UTF-8@latin: sr_RS@latin).
+fleet_source <- function(l) {
+  s <- sub("[.].*$", "", sub("@.*$", "", l))
+  if (grepl("@", l, fixed = TRUE)) s <- paste0(s, "@", sub("^[^@]*@", "", l))
+  s
+}
+
+# The charmap localedef -f reads for locale l: the codeset between the dot
+# and any @modifier under its glibc charmap name. ISO8859-N and iso8859N (any
+# case, dash or not) are ISO-8859-N, utf8 and UTF8 are UTF-8, eucJP and
+# EUC-JP are EUC-JP, anything else is passed as written; localedef given a
+# name it has no charmap for still exits 0, with an ASCII locale.
+# templates/r-package.yml's t2-locale has the same mappings as shell
+# functions, fleet_source and fleet_charmap; bin/selftest runs both over
+# tests/charmap-table.txt.
+fleet_charmap <- function(l) {
+  cs <- sub("^[^.]*[.]", "", sub("@.*$", "", l))
+  if (grepl("^utf-?8$", cs, ignore.case = TRUE)) return("UTF-8")
+  if (grepl("^euc-?jp$", cs, ignore.case = TRUE)) return("EUC-JP")
+  if (grepl("^iso8859-?[0-9]{1,2}$", cs, ignore.case = TRUE)) {
+    return(sub("^iso8859-?", "ISO-8859-", cs, ignore.case = TRUE))
+  }
+  cs
+}
+
+# The name glibc also looks a locale up under: the codeset normalized as
+# _nl_normalize_codeset() does it (letters lowered, punctuation dropped, a
+# digits-only codeset prefixed with "iso"). setlocale() asked for
+# tr_TR.ISO8859-9 tries the directories tr_TR.ISO8859-9 and tr_TR.iso88599,
+# but asked for tr_TR.iso88599 only the latter; the locale archive files a
+# locale under both names, a LOCPATH directory only under the one it was
+# built as.
+fleet_locale_alias <- function(l) {
+  m <- regmatches(l, regexec("^([^.@]+)[.]([^@]+)(@.*)?$", l))[[1L]]
+  if (!length(m)) return(l)
+  cs <- tolower(gsub("[^[:alnum:]]", "", m[[3L]]))
+  if (grepl("^[0-9]+$", cs)) cs <- paste0("iso", cs)
+  paste0(m[[2L]], ".", cs, m[[4L]])
+}
+
 # The container runs as the invoking user, not root, so the locales are
 # compiled into a directory of their own and found through LOCPATH, which
 # every process started from here inherits. glibc then reads compiled
@@ -101,11 +142,15 @@ if (length(cfg$locales)) {
   locpath <- "/tmp/fleet-locales"
   dir.create(locpath, showWarnings = FALSE)
   for (l in cfg$locales) {
-    name <- sub("[.].*$", "", l)
-    charmap <- sub("^[^.]*[.]", "", l)
-    code <- system2("localedef", c("-c", "-i", name, "-f", charmap, file.path(locpath, l)))
+    code <- system2("localedef", c("-c", "-i", fleet_source(l), "-f", fleet_charmap(l), file.path(locpath, l)))
     # localedef -c exits 1 when it wrote the locale despite a warning.
     if (code > 1L) stop("localedef could not build ", l, " (exit ", code, ")", call. = FALSE)
+  }
+  # Built under the name the package wrote, each also answers to glibc's
+  # normalized name, as it does from the archive in t2-locale.
+  for (l in cfg$locales) {
+    alias <- fleet_locale_alias(l)
+    if (!file.exists(file.path(locpath, alias))) file.symlink(l, file.path(locpath, alias))
   }
   Sys.setenv(LOCPATH = locpath)
 }
@@ -159,6 +204,8 @@ if (inherits(res, "error")) {
   check$errors <- length(res$errors)
   check$warnings <- length(res$warnings)
   check$notes <- length(res$notes)
+  # Each NOTE's text, for allowed_notes; I() keeps a single one an array.
+  check$note_texts <- I(as.character(res$notes))
   print(res)
 }
 status$check <- check

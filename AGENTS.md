@@ -6,7 +6,7 @@
 - `NEWS.md` lists only what a package user acts on or notices, each bullet one terse line (at most 32 words). Cite a governing standard as a short clause, end with at most one issue or MR reference. No housekeeping bullets (CI, gates, lint, agent files, metadata), no Internal section; the `news-terse` hook enforces it.
 - Git follows the house `agent-workflow` skill. fp status changes stay decoupled from git (the `fp` skill's `references/decoupling.md`).
 - Frozen by ADR; read the ADR before editing: punycode helpers (0002) and the PSL seam (0001) in `R/domain.R`, retained base-R string operations (0005), `safe_parse_url()` columns (0006).
-- Push `backup` only as the owner, with `--no-verify` (`tools/mirror-refresh.sh` does, after a merge): the gate refuses a push to `main` that adds more than one merge, and every ref from before the fleet-ci migration. An agent asks first, as for any gate bypass.
+- `backup` is a local mirror, which fleet-ci's gate skips (a path URL), so neither the owner nor an agent passes `--no-verify` to push it; `tools/mirror-refresh.sh` refreshes it after a merge. Under pre-commit's migration mode the pre-commit pre-push stage still runs (design/backup-mirror.md).
 
 ## Verification
 

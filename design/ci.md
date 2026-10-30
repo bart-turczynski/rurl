@@ -41,11 +41,19 @@ either. Without `-f`, `pre-commit install` (with or without
 tree, tier, classifier version, image and (full tier) resolved dependency
 lock, and a stamped commit is skipped.
 
-The gate runs for every remote, `backup` included, and refuses a push to
-`main` that adds more than one merge and every ref from before the fleet-ci
-migration. `tools/mirror-refresh.sh`, the owner's post-merge refresh of the
-`backup` mirror, therefore pushes with `--no-verify`
+The gate skips a push to a local mirror: when the push URL is local by
+git's rule (a path such as `backup`'s, or `file:///` with an empty host) it
+prints `gate: skipped, <remote> is a local mirror` and exits 0. So
+`tools/mirror-refresh.sh`, the post-merge refresh of the `backup` mirror,
+pushes without `--no-verify`, and neither the owner nor an agent needs it
+there. Every other remote is gated, where the gate refuses a push to `main`
+that adds more than one merge and every ref from before the fleet-ci
+migration. Under pre-commit's migration mode the skip ends only the gate's
+hook, and `.pre-commit-config.yaml`'s pre-push stage still runs
 ([backup-mirror.md](backup-mirror.md)).
+
+NOTEs from `R CMD check` don't fail the gate, as before: `.fleet-ci.yml`
+sets no `allowed_notes`.
 
 ## Project settings CI depends on, which are not in this repository
 

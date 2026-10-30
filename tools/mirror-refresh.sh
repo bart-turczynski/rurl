@@ -14,15 +14,23 @@
 # that skipped the gate for a local-path destination.
 #
 # That wrapper went with the old verify hook. The pre-push hook is now
-# fleet-ci's local gate (.fleet-ci/pre-push), which gates every pushed ref
-# and has no destination predicate. It also refuses what an archival push
-# carries: a ref whose commit predates the fleet-ci migration (no
-# .fleet-ci.yml), which is every older branch `--all` pushes, and a push to
-# main that adds more than one first-parent merge. So every push below is
-# `git push --no-verify`: the mirror only receives history this clone already
-# holds, and main's has passed the gate on its way to origin. This is the
-# owner's backup push, which AGENTS.md reserves to the owner; the hook fires it
-# after a merge in the owner's clone.
+# fleet-ci's local gate (.fleet-ci/pre-push), and from fleet-ci v1.2.0 it has
+# its own destination predicate: a push URL that is local by git's rule (a
+# path, or file:/// with an empty host) is a local mirror, and the hook prints
+# "gate: skipped, <remote> is a local mirror" and exits 0 without gating
+# (fleet-ci README, "Local mirrors are not gated"). Without the skip the gate
+# would refuse what an archival push carries: every ref from before the
+# fleet-ci migration (no .fleet-ci.yml), which is every older branch `--all`
+# pushes, and a push to main that adds more than one first-parent merge. So
+# the pushes below are plain `git push`, with no --no-verify. Every mirror this
+# script picks has a directory path as its URL; an absolute path, as `backup`
+# has, is always local by that rule.
+#
+# One caveat: under pre-commit's migration mode (the gate's hook moved to
+# hooks/pre-push.legacy by a `pre-commit install` without -f) the skip ends
+# only the gate's hook, and .pre-commit-config.yaml's pre-push stage still
+# runs. A failure there blocks the refresh; fix it, or re-run
+# `.fleet-ci/pre-push --install`, rather than reaching for --no-verify.
 #
 # THE MECHANISM CHOSEN, of the three the issue allowed (post-merge/post-commit
 # hook, scheduled job, documented manual step):
@@ -146,10 +154,10 @@ for name in "${MIRRORS[@]}"; do
   # rebased since its last archival push is a non-fast-forward here and is
   # REPORTED, not forced: the mirror's copy of that tip may be the only one
   # left, and overwriting it would destroy the thing being backed up.
-  if ! git push --no-verify "$name" --all; then
+  if ! git push "$name" --all; then
     echo "mirror-refresh: WARNING pushing all local heads to '$name' did not fully succeed (a rebased branch is the usual cause). Nothing was forced; the mirror keeps its copy." >&2
   fi
-  if ! git push --no-verify "$name" --tags; then
+  if ! git push "$name" --tags; then
     echo "mirror-refresh: WARNING pushing tags to '$name' did not fully succeed." >&2
   fi
   # Archive anchors live under refs/archive/, which is neither heads nor tags,
@@ -157,7 +165,7 @@ for name in "${MIRRORS[@]}"; do
   # refspec that matches nothing is an error, and a clone that never fetched
   # refs/archive/* has nothing to add.
   if [ -n "$(git for-each-ref --count=1 refs/archive)" ] &&
-     ! git push --no-verify "$name" 'refs/archive/*:refs/archive/*'; then
+     ! git push "$name" 'refs/archive/*:refs/archive/*'; then
     echo "mirror-refresh: WARNING pushing refs/archive/* to '$name' did not fully succeed." >&2
   fi
 
@@ -170,7 +178,7 @@ for name in "${MIRRORS[@]}"; do
     git cat-file -e "$mirror_main^{commit}" 2>/dev/null &&
     git merge-base --is-ancestor "$UPSTREAM_SHA" "$mirror_main"; then
     echo "mirror-refresh: '$name' refs/heads/main already contains $UPSTREAM/main"
-  elif ! git push --no-verify "$name" "$UPSTREAM_REF:refs/heads/main"; then
+  elif ! git push "$name" "$UPSTREAM_REF:refs/heads/main"; then
     echo "mirror-refresh: FAIL could not advance '$name' refs/heads/main to $UPSTREAM/main (${UPSTREAM_SHA:0:8}). Not forcing -- resolve by hand." >&2
     FAILED=1
   fi

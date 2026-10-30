@@ -223,13 +223,13 @@ repos:
       # so a failure is loud but not blocking. The non-optional half is
       # tools/mirror-freshness.sh, which exits non-zero on drift.
       #
-      # The script pushes with `git push --no-verify`: the mirror receives
-      # only history this clone already holds, and fleet-ci's gate refuses
+      # The script pushes with a plain `git push`: fleet-ci's gate skips a
+      # push to a local mirror (a path URL, as backup's is), so it never sees
       # what an archival push carries (branches from before the fleet-ci
-      # migration, a push to main adding more than one merge). Only the owner
-      # pushes backup that way (AGENTS.md). Nothing is ever force-pushed or
-      # pruned -- the mirror holds refs found nowhere else
-      # (design/backup-mirror.md).
+      # migration, a push to main adding more than one merge). Under
+      # pre-commit's migration mode this file's pre-push stage still runs for
+      # it. Nothing is ever force-pushed or pruned -- the mirror holds refs
+      # found nowhere else (design/backup-mirror.md).
       - id: mirror-refresh
         name: refresh the local archival mirror
         entry: tools/mirror-refresh.sh

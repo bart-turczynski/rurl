@@ -30,6 +30,14 @@ that runs the checkout's own .fleet-ci/pre-push. It replaces pre-commit's
 pre-push hook (this one runs that stage), removes a pre-push.legacy that is
 this hook, and refuses any other existing hook or pre-push.legacy. Exit 0
 when the push may go on, non-zero otherwise.
+
+A push to a local URL (git's own rule: a path with no `:` before its first
+`/`, or file:/// with an empty host; such as a package's archival `backup`
+mirror, which only receives history already on origin) is not gated: the
+hook says so in one line and exits 0, running neither the gate nor
+pre-commit's stage (under migration mode, pre-commit's own pre-push hooks
+still run after it). Any URL with a host (ssh://, https://, file://host/,
+host:path, git@host:path) is gated.
 """
 
 import os
@@ -49,6 +57,18 @@ def say(msg):
 def git_out(*args):
     res = subprocess.run(["git"] + list(args), capture_output=True, text=True, check=False)
     return res.stdout.strip() if res.returncode == 0 else None
+
+
+def is_local_mirror(url):
+    """bin/gate's is_local_mirror(), repeated rather than imported, so the hook
+    decides before it starts the gate at all. tests/gate_test.py runs both
+    over one table."""
+    if not url:
+        return False
+    if "://" in url:
+        return url.startswith("file:///")
+    colon, slash = url.find(":"), url.find("/")
+    return colon < 0 or 0 <= slash < colon
 
 
 def install():
@@ -91,6 +111,9 @@ def main(argv):
         print(__doc__.strip(), file=sys.stderr)
         return 2
     lines = sys.stdin.buffer.read()
+    if len(argv) == 2 and is_local_mirror(argv[1]):
+        print("gate: skipped, %s is a local mirror (%s)" % (argv[0], argv[1]), file=sys.stderr, flush=True)
+        return 0
     gate = os.path.join(HERE, "gate")
     code = subprocess.run([gate, "pre-push"] + argv, input=lines, check=False).returncode
     if code != 0:
@@ -101,7 +124,7 @@ def main(argv):
         # hooks next; calling hook-impl from here would abort ("installed in
         # migration mode").
         return code
-    top =git_out("rev-parse", "--show-toplevel") or os.getcwd()
+    top = git_out("rev-parse", "--show-toplevel") or os.getcwd()
     config = os.path.join(top, ".pre-commit-config.yaml")
     if not os.path.isfile(config):
         return 0

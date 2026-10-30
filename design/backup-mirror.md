@@ -34,12 +34,24 @@ Both find the mirror by the same predicate — a remote whose **URL is a
 directory on this filesystem** — not by the name `backup`, which is a local
 alias anyone can rename.
 
-**The refresh pushes with `--no-verify`.** fleet-ci's gate runs for every
-remote and refuses what an archival push carries: every ref from before the
-fleet-ci migration (no `.fleet-ci.yml`) and a push to `main` that adds more
-than one merge. The mirror receives only history the clone already holds,
-and `main`'s passed the gate on its way to `origin`. Only the owner pushes
-`backup` (AGENTS.md); an agent asks first, as for any gate bypass.
+**The gate skips the mirror, so the refresh needs no `--no-verify`.** From
+fleet-ci v1.2.0, the pre-push hook treats a push URL that is local by git's
+rule (a path, or `file:///` with an empty host) as a local mirror: it prints
+`gate: skipped, <remote> is a local mirror (<url>)` and exits 0 without
+gating (fleet-ci README, "Local mirrors are not gated"). `backup`'s URL is
+an absolute path, so it qualifies, and neither the owner nor an agent passes
+`--no-verify` to push it. Without the skip the gate would refuse what an
+archival push carries: every ref from before the fleet-ci migration (no
+`.fleet-ci.yml`) and a push to `main` that adds more than one merge. The
+mirror receives only history the clone already holds, and `main`'s passed
+the gate on its way to `origin`.
+
+One caveat: under pre-commit's migration mode (the gate's hook moved to
+`hooks/pre-push.legacy` by a `pre-commit install` without `-f`), the skip
+ends only the gate's hook, and `.pre-commit-config.yaml`'s pre-push stage
+(the toolchain, citation, BugReports and NEWS checks) still runs. A failure
+there blocks the push; fix it, or re-run `.fleet-ci/pre-push --install`,
+rather than bypassing the hook.
 
 **What the hook does not guarantee.** It is installed per clone, so a fresh
 clone has it only once someone runs `pre-commit install`; it fires on `git

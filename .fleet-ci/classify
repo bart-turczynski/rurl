@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 import sys
+import warnings
 
 # Bump on any change to the allowlist or the rules below: the pass stamp
 # (bin/gate) is keyed on it, so a new classifier never reuses an old stamp.
@@ -43,7 +44,9 @@ REGULAR_MODES = ("100644", "100755")
 ZERO_MODE = "000000"
 
 # The .fleet-ci.yml schema, version 1. Every key is optional; an unknown key
-# is an error, so a typo never silently drops a setting.
+# is an error, so a typo never silently drops a setting. allowed_notes alone
+# gets no default: absent (NOTEs never fail) is not the same as [] (every
+# NOTE fails), so the normalized config carries it only when it is set.
 CONFIG_SCHEMA = {
     "version": "int",
     "variant": "variant",
@@ -57,6 +60,7 @@ CONFIG_SCHEMA = {
     "locale_legs": "strings",
     "exclude_tests": "path_why",
     "allowed_skips": "reason_why",
+    "allowed_notes": "regexes",
     "pages_keep": "strings",
 }
 VARIANTS = ("fleet-r", "fleet-r-idn2")
@@ -94,6 +98,57 @@ def matches_any(path, patterns):
     return any(glob_to_regex(p).match(path) for p in patterns)
 
 
+def check_regex(key, v):
+    """An allowed_notes entry must read alike in Python's re (the local gate)
+    and PCRE (CI's grepl(perl = TRUE)): no POSIX bracket class, which re takes
+    as a set of its characters, and nothing re warns about (a FutureWarning,
+    such as a possible nested set, marks a pattern whose meaning may change)."""
+    if "[[:" in v:
+        raise ConfigError(
+            ".fleet-ci.yml: %s entry %r uses a POSIX bracket class ([[:...:]]), which Python's re "
+            "and PCRE read differently; write the characters out (\\s, [0-9], ...)" % (key, v)
+        )
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            re.compile(v)
+    except re.error as err:
+        raise ConfigError(".fleet-ci.yml: %s entry %r is not a regular expression: %s" % (key, v, err))
+    except FutureWarning as err:
+        raise ConfigError(
+            ".fleet-ci.yml: %s entry %r: Python's re warns (%s); write it so re and PCRE read it alike"
+            % (key, v, err)
+        )
+
+
+def locale_glibc_name(l):
+    """The name glibc files locale L under: the codeset normalized as
+    _nl_normalize_codeset() does it (letters lowered, punctuation dropped, a
+    digits-only codeset prefixed with "iso"), the @modifier kept. bin/gate-run.R's
+    fleet_locale_alias() is the same mapping."""
+    m = re.match(r"^([^.@]+)[.]([^@]+)(@.*)?$", l)
+    if not m:
+        return l
+    cs = re.sub(r"[^0-9a-z]", "", m.group(2).lower())
+    if re.match(r"^[0-9]+$", cs):
+        cs = "iso" + cs
+    return "%s.%s%s" % (m.group(1), cs, m.group(3) or "")
+
+
+def check_locales(value):
+    """Two `locales` entries glibc files under one name would build one locale
+    twice, under two directories in the local gate and one in CI's archive."""
+    seen = {}
+    for l in value:
+        name = locale_glibc_name(l)
+        if name in seen:
+            raise ConfigError(
+                ".fleet-ci.yml: locales entries %r and %r are the same glibc locale (%s); keep one"
+                % (seen[name], l, name)
+            )
+        seen[name] = l
+
+
 def check_config(data):
     """Validate a parsed .fleet-ci.yml; return it with defaults filled."""
     if data is None:
@@ -113,9 +168,13 @@ def check_config(data):
         elif kind == "variant":
             if value not in VARIANTS:
                 raise ConfigError(".fleet-ci.yml: variant must be one of %s" % ", ".join(VARIANTS))
-        elif kind == "strings":
+        elif kind in ("strings", "regexes"):
             if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
                 raise ConfigError(".fleet-ci.yml: %s must be a list of non-empty strings" % key)
+            for v in value if kind == "regexes" else ():
+                check_regex(key, v)
+            if key == "locales":
+                check_locales(value)
         else:
             first = "path" if kind == "path_why" else "reason"
             if not isinstance(value, list):
