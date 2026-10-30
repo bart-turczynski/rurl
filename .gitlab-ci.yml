@@ -13,7 +13,7 @@
 # same SHA, in one merge request: .fleet-ci/VERSION must equal `ref:`.
 include:
   - project: bart-turczynski/fleet-ci
-    ref: 5665e94723729437a1bf272e5d1587481c075187
+    ref: 162f35db568426a44d796593c1c25955a9b2add3
     file: templates/r-package.yml
 
 variables:
